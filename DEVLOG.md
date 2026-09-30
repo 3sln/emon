@@ -2226,3 +2226,28 @@ avoids a second content pass later.
 pass, or a retrofit of P1.7); trust PDF/UA files outright (still wrong often
 enough to need verification).
 - [ ] **Signed off** (maintainer)
+
+### D077 — Corpus storage: an S3-compatible object store driven by `bb`, one zip per category, no LFS
+**Decision**: the 12 GB `corpus/` is gitignored and shared through any
+S3-compatible bucket (AWS, R2, MinIO, B2) by `bb corpus-push` / `bb
+corpus-pull` (`tools/corpus.clj`, pure babashka: SigV4 by `javax.crypto`,
+`babashka.http-client`; path-style URLs by default, virtual-hosted by
+`EMON_S3_PATH_STYLE=false`). Config is a gitignored `.env` (`.env.example`
+committed). One `<category>.zip` per top-level corpus dir (plus `_root.zip`
+for MANIFEST/fetch.sh; `_dl/` excluded) and an `index.json` (name, size,
+sha256, file count, push time, commit). Zips are deterministic (sorted,
+fixed mtimes, level 6), so sha256 equality means "unchanged"; a local state
+file with an mtime fingerprint avoids even zipping. Uploads over one part
+(64 MiB) use multipart with per-part retries and abort on failure; pull
+verifies sha256, extracts aside and renames, and takes category names for
+partial pulls. `.gitattributes` (the LFS rules) is deleted; `.env` and
+`corpus/` are ignored. Usage: SPEC 15.2.
+**Why**: the maintainer's LFS quota is tiny; per-category archives give
+partial pulls and small retries; no external CLI means nothing to install.
+**Tested** (not a gate; needs MinIO): `bb corpus-test` runs AWS's SigV4
+vectors, then push / re-push / one-file-change / pull / partial-pull on a
+fake corpus against a local MinIO. Costs of determinism: zip entries lose
+mtimes and empty directories; `.sh` files are re-marked executable on pull.
+**Alternatives**: Git LFS (quota); one monolithic zip; rclone or the aws CLI
+(a dependency); committing the corpus.
+- [ ] **Signed off** (maintainer)

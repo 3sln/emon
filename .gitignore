@@ -14,3 +14,7 @@ __pycache__/
 
 # Agent worktrees and local tooling.
 .claude/
+
+# Local S3 credentials and the sample corpus (never committed; bb corpus-push/pull, DEVLOG D077).
+.env
+/corpus
