@@ -3650,7 +3650,7 @@ overflow there is a wrap, found only as a difference from Rust's panic. Minimisa
 removal only: a mutated compressed stream does not shrink (the cmap crasher is 18 KB).
 - [ ] **Signed off** (maintainer)
 
-### D108 — The fuzz probe also runs page content interpretation and seeds from `test/pdf/p3`; one more overflow fixed (P2.12 merge)
+### D116 — The fuzz probe also runs page content interpretation and seeds from `test/pdf/p3`; one more overflow fixed (P2.12 merge)
 **Decision**: after merging P2.12 onto main (repair, encryption D097-D100, the content interpreter D101-D105), `fz-run`
 in `kin/fuzzprobe.kin` ends with `fz-content`: `pc-document` over the opened file, its status, warning bits, operator,
 glyph, word and span counts and a hash of every glyph's code point joining the answer line. The fixtures gain
