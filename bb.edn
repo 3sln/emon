@@ -2,7 +2,7 @@
 ;; this file mirrors nome's (D026). kin is on the PATH rather than in `:deps`
 ;; for nome's reason: nothing in the generation path needs a JVM, so the
 ;; generator must not either. `deps.edn` carries the Clojure-consumer form.
-{:paths ["kin/src" "../kin/src"]
+{:paths ["kin/src" "../kin/src" "tools" "tools/lib"]
  :tasks
  {gen   {:doc "Print what a source generates.   bb gen kin/hello.kin"
          :task (apply shell "kin/scripts/gen" *command-line-args*)}
@@ -21,7 +21,9 @@
   hosts {:doc "Do the four host trees agree, and do the call sites match?"
          :task (shell "kin/scripts/hosts")}
   accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (NOT a gate, D078).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
-            :task (apply shell "python3" "tools/accuracy/accuracy.py" *command-line-args*)}
+            :task (apply shell "bb" "tools/accuracy/accuracy.clj" *command-line-args*)}
+  import {:doc "Run every public-dataset importer into corpus/_gold/, validate, report counts (NOT a gate: the corpus is not in git).  bb import [--limit N] [name ...]"
+          :task (apply shell "bb" "tools/import/import_all.clj" *command-line-args*)}
   gates {:doc "Run every gate; fail if one exits non-zero or prints no score."
          :task (shell "kin/scripts/gates")}
   corpus-push {:doc "Zip each corpus category and push to S3-compatible storage (.env).  bb corpus-push [--dry-run] [category...]"

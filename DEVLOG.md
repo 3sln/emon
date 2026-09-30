@@ -686,16 +686,16 @@ analysis beyond "top-to-bottom lines on a single column".
   paragraph boundaries), `test/scoreboard.edn`, the ratchet rule. Built and
   proven on fixtures (oracle perfect, degraded worse); the real emon driver is a
   placeholder until P1.10, and `bb accuracy` is not in `bb gates` (D078).
-  `tools/accuracy/`: `score.py`, `accuracy.py`, `predict-*`, `test_score.py`
-  (run by `bb unit`).
+  `tools/accuracy/`: `score`, `accuracy`, `predict-*`, `test_score` (babashka since
+  D094; run by `bb unit`).
 - [ ] **P2.10 — Baselines against the field** (SPEC §14.4): pinned versions
   of 2–3 extractors, scored offline, committed as reference lines.
 - [x] **P2.11 — Public datasets: licence review and importers** (D086-D088).
   Licences verified per source and recorded with what may be committed and what
   is (nothing, no LFS) in `test/corpus/DATASETS.md`; importers
-  `tools/import/<dataset>.py` for FUNSD, XFUND, SROIE, CORD, DocLayNet, ICDAR
+  `tools/import/<dataset>.clj` for FUNSD, XFUND, SROIE, CORD, DocLayNet, ICDAR
   2013, cTDaR, FinTabNet-OTSL, pdfa-eng-wds (silver only) and a stamp set, output
-  under `corpus/_gold/` (outside git), all validating; `python3 tools/import/import_all.py` runs them (the `bb import` task is pending: adding `import` to `not_gates` in `kin/scripts/gates` was refused by the permission system, so `bb.edn` has no `import` task yet; not
+  under `corpus/_gold/` (outside git), all validating; `bb import` runs them (D094; not
   a gate). Seal set found: mapo80/stamps. Tobacco800 and PubTabNet not imported
   (login / not fetched).
 - [ ] **P2.12 — `bb fuzz`, first cut**: truncation and byte-flip mutation of
@@ -2008,7 +2008,7 @@ answering a code for the law to assert (what P1.2 did).
 
 ### D071 — The synthetic corpus: 36 semantic HTML documents, printed once by Chrome 154, committed beside their gold
 **Decision**: `test/corpus/synth/` holds `html/` (36 documents, authored by
-`tools/synth/make_html.py`, which is authoring tooling: the committed HTML is
+`tools/synth/make_html.clj`, which is authoring tooling: the committed HTML is
 the corpus), `pdf/` (headless Google Chrome 154.0.8037.59 `printToPDF`, Skia/PDF
 m154, **untagged** via `--disable-pdf-tagging`), `pdf-tagged/` (3 documents
 printed tagged, for later struct-tree work), `scan/` (image-only degraded
@@ -2059,7 +2059,7 @@ not claimed, so DocLayNet-style gold (no heading levels) and synthetic gold
 cannot leave gold behind silently. `kin/scripts/gold-check.py`, run by `bb unit`
 (beside json-check and html-check), validates every gold, checks ids, `ref`
 targets and the manifest's sha256s, and requires each gold to equal what
-`tools/synth/html2gold.py` says of the committed HTML plus the manifest's layout
+`tools/synth/html2gold.clj` says of the committed HTML plus the manifest's layout
 facts (page count and sizes; the page each row of a `data-multipage` table
 landed on, found once by pdftotext at print time). A scan variant shares its
 document's gold (its page sizes agree within a point).
@@ -2071,7 +2071,7 @@ storing facts inside each gold (mixes evidence with truth).
 - [ ] **Signed off** (maintainer)
 
 ### D073 — Conventions the gold had to choose (the SPEC is silent or ambiguous); maintainer to confirm
-**Decision**, each one encoded in `tools/synth/html2gold.py`:
+**Decision**, each one encoded in `tools/synth/html2gold.clj`:
 1. A heading's `level` is the HTML level; its printed number is `number`
    (punctuation stripped) and is not in `text`; `numbering` is `decimal`,
    `upper-roman`, `upper-alpha`, `lower-alpha` or `keyword`. Visual size is
@@ -2315,7 +2315,7 @@ enough to need verification).
 - [ ] **Signed off** (maintainer)
 
 ### D077 — The accuracy scorer: Python tooling, counts pooled then ratioed, normalization and match rule fixed
-**Decision**: `tools/accuracy/score.py` (stdlib Python, like json-check and
+**Decision**: `tools/accuracy/score.clj` (was stdlib Python; babashka since D094; like json-check and
 gold-check; SPEC 14 does not require the scorer to be kin) scores a predicted
 emon-1 Model against a gold file and returns COUNTS, pooled (micro-average)
 per `VARIANT/CATEGORY` before any ratio is taken. It honours `annotated`: a
@@ -2336,7 +2336,7 @@ folding, no locale; WER tokens are whitespace runs (CJK WER is line-level; read
 CER). MATCH RULE: blocks match kind-blind and kind is scored after; with `at` on
 both sides, per-page bbox IoU >= 0.5 (greedy); otherwise (the synthetic gold has
 no geometry) a monotone text alignment at similarity >= 0.5 (anchored by
-identical text, fuzzy in the gaps). Laws: `tools/accuracy/test_score.py`, hand
+identical text, fuzzy in the gaps). Laws: `tools/accuracy/test_score.clj`, hand
 computed, run by `bb unit`.
 **Why**: pooled counts make a category score a real micro-average and let a
 corpus be added without re-scoring; naming the match rule and the normalization
@@ -2553,7 +2553,7 @@ blocks because the gold's `model.furniture` has no `at`; FUNSD/XFUND questions
 become `field` nodes (name, value from linked answers), headers become headings
 without level; key-information labels (SROIE, CORD `gt_parse`) are not imported.
 Each transform was checked against the PDF (`pdftotext -bbox`) or an overlay
-(`tools/import/spotcheck.py`).
+(`tools/import/spotcheck.clj`).
 **Why**: the gold format lets a metric skip what is not claimed, so honesty in
 `annotated` is the whole value of an importer; geometry is most of what the
 public sets know.
@@ -2786,4 +2786,29 @@ pass, so GPU pays only for chained stages, heavy kernels, or batches.
 identity); move whole normalization into hosts with no kin reference (loses
 the identity oracle and the portable fallback); GPU-only fast path (not
 available on all targets).
+### D094 — Scripting is babashka; Python only for third-party oracles in `tools/oracle/`
+**Decision**: all emon scripting (importers, scorer, synthetic-corpus tooling, tests) is
+babashka. Python is allowed ONLY where the script's purpose is to use an independent external
+implementation as a reference oracle: pdfminer.six / pypdf cross-checks, the html5lib strict HTML
+parser, and the `jsonschema` 2020-12 validator. Those live in one place, `tools/oracle/`
+(so far `gold_validate.py`, called by `bb import`). Where a CLI does the job bb calls it
+(poppler `pdftotext -bbox` / `pdftoppm` / `pdfinfo`, ImageMagick `magick` for scan degradation, whose
+version is recorded). Ported in this pass: `tools/import/*` (+ a real `bb import` task, run into
+`corpus/_gold/`, validated, counts reported; not a gate), `tools/accuracy/*` (the tests are bb and
+`bb unit` still runs them) and `tools/synth/*`. Shared pieces: `tools/lib/pyjson.clj` (JSON
+byte-identical to Python's `json.dumps`, ordered objects, float `repr`), `tools/lib/pyrandom.clj`
+(CPython's Mersenne Twister, so the seeded synthetic HTML is unchanged) and `tools/lib/nfc.clj`
+(UAX #15 NFC, since babashka has no `java.text.Normalizer`). Output was proved identical: every
+`corpus/_gold/**` gold file (only `_summary.json`'s wall-clock `seconds` differs), the synthetic
+gold and manifest, `bb accuracy` output and `test/scoreboard.edn`. Not yet moved (they are in
+`kin/scripts/`, a later pass): the `jsonschema` step of `gold-check.py` and `json-check.py` and the
+html5lib step of `html-check.py` belong logically in `tools/oracle/`. `gold-check.py` and
+`kin/scripts/unit` needed one-line edits so they call the bb converter and bb tests instead of the
+deleted Python.
+**Why**: one scripting language means one toolchain for contributors (bb is already required), no
+second dialect of the same normalisation and JSON rules, and scripts that can be run and tested the
+same way as the gates; a reference oracle is the one place a second, independent language is the
+point, so those stay separate and labelled.
+**Alternatives**: leave Python as the tooling language (two toolchains, drift between the Python and
+kin implementations of the same rules); drop the oracles (loses the independent check).
 - [ ] **Signed off** (maintainer)

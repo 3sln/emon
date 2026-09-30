@@ -8,14 +8,14 @@
 #   1. headless Chromium/Chrome prints test/corpus/synth/html/STEM.html to
 #      pdf/STEM.pdf (untagged: no struct tree, so structure must come from the
 #      page) -- and, for the stems in TAGGED, also to pdf-tagged/STEM.pdf;
-#   2. degrade.py rasterises each PDF and writes scan/STEM.pdf, an image-only
+#   2. degrade.clj rasterises each PDF and writes scan/STEM.pdf, an image-only
 #      skewed/noisy/JPEG variant with the same gold;
-#   3. build.py extracts the layout facts (page count and size, the page each
+#   3. build.clj extracts the layout facts (page count and size, the page each
 #      multi-page table row landed on), writes MANIFEST.json (producer and
 #      version, sha256 of every file) and regenerates gold/STEM.gold.json.
 #
 # Needs: Chrome or Chromium ($CHROME, or found below), poppler (pdfinfo,
-# pdftotext, pdftoppm), ImageMagick (magick), python3.  Fonts are system
+# pdftotext, pdftoppm), ImageMagick (magick), babashka (bb).  Fonts are system
 # fonts only, so the output depends on the OS's fonts: PRODUCER.json records
 # the OS and the producer.
 set -e
@@ -53,5 +53,5 @@ for s in $stems; do
   echo "  printed $s"
 done
 
-python3 tools/synth/degrade.py $stems
-python3 tools/synth/build.py
+bb -cp tools:tools/lib -m synth.degrade $stems
+bb -cp tools:tools/lib -m synth.build
