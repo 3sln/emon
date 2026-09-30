@@ -1,0 +1,876 @@
+;; The HTML emitter (P1.9; SPEC 5, D013, D067-D070). emon's own module (D039).
+;;
+;; HTML IS THE LAST STEP AND A PURE FUNCTION OF THE MODEL. It adds no
+;; information and removes only what the options say. The consumer is a
+;; crawler or a scraper, so the output is semantic, clean by default and
+;; honest: `<b>`/`<i>` because emon knows the text was bold, not that the
+;; author meant importance; no `<img>`; no CSS; a live `<input>` never.
+;;
+;; `html-emit` writes the six arenas of `emon.model` to a `Text` sink, and the
+;; four targets must write the SAME BYTES (the same claim as `emon.json`,
+;; SPEC 4.1). Nothing formats a number or a string for a host to disagree
+;; about: integers are `text-i32`, code points are `text-cp`, centipoints are
+;; `js-cpt`, names are the `emon.model` enums' `emit-name`s, and everything
+;; else is an ASCII literal through `emit-ascii`.
+;;
+;; OPTIONS (SPEC 5.2) are a bitset, `ho-*` below, and a confidence threshold.
+;; Defaults are CLEAN HTML: no ids, no geometry, policy furniture, milestones
+;; on, compact. `pretty` puts every BLOCK element on its own line, indented
+;; two spaces a level (inline content stays on its element's line).
+;;
+;; ESCAPING (SPEC 5.2, D068): `&` `<` `>` `"` become `&amp;` `&lt;` `&gt;`
+;; `&quot;`, in text and in attribute values alike; attribute values are
+;; always double-quoted. A code point HTML forbids in the input stream (a C0
+;; or C1 control other than tab, LF, FF and CR; a surrogate; a noncharacter)
+;; is written as U+FFFD. Everything else is raw UTF-8, CR included (a parser
+;; folds it into an LF, and `&#13;` is itself a parse error).
+;;
+;; THE SHAPE, in document order: `<!doctype html>`, `<html lang>`, `<head>`
+;; (charset, title, generator and metadata as `<meta name>`), `<body><main>`,
+;; the furniture asides ONCE at the top, the body, then the dropped ledger as
+;; inert `<template>`s if asked. Milestones are `<span data-emon-page=...>`
+;; between blocks (a `break` node). An inline node never gets an `id`
+;; (D052's rule, kept); a note is always `id="fn-N"`.
+;;
+;; RECURSION DEPTH is bounded by the Model (`max-depth`): `node-new` refuses
+;; a deeper node, so a Model that was built cannot overflow a stack.
+(ns emon.html
+  (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32]]
+            [emon.port :refer [cells-at text-cp text-i32]]
+            [emon.json :refer [js-cpt]]
+            [emon.model :refer [node-count node-kind node-parent node-first-child
+                                node-next node-text-start node-text-len
+                                node-has-text node-region-head
+                                node-region-count node-conf node-sub
+                                node-attr attr-find attr-find-next attr-vkind
+                                attr-value attr-len nk-is-inline nk-emit-name
+                                fk-emit-name rl-emit-name fg-emit-name
+                                sl-emit-name dp-emit-name al-emit-name
+                                dr-emit-name ch-emit-name
+                                region-page region-x0 region-y0 region-x1
+                                region-y1 region-next
+                                ledger-count ledger-reason ledger-page
+                                ledger-text-start ledger-text-len
+                                av-text
+                                nk-section nk-heading nk-paragraph nk-list
+                                nk-item nk-table nk-rowgroup nk-row nk-cell
+                                nk-caption nk-figure nk-seal nk-formula
+                                nk-code nk-quote nk-note nk-field nk-furniture
+                                nk-break nk-text nk-span nk-link nk-ref
+                                nk-linebreak
+                                fk-level fk-number fk-start fk-scheme fk-marker
+                                fk-value fk-rowspan fk-colspan fk-label
+                                fk-target fk-alt fk-labels fk-name fk-date
+                                fk-color fk-href fk-title fk-lang fk-generator
+                                fk-author fk-subject fk-keywords fk-creator
+                                fk-producer fk-created fk-modified fk-type
+                                fk-checked fk-pages]]
+            [kin.lang :refer [defn declarefn return let set while if do comment
+                              + - * < > <= >= == != and or bit-and quot]]))
+
+(declarefn h-inline)
+(declarefn h-block)
+(declarefn h-body)
+(declarefn h-furniture-open)
+
+;; ---------------------------------------------------------------- options
+
+(defn ^:pub ^I32 ho-ids [] (return 1))
+(defn ^:pub ^I32 ho-geometry [] (return 2))
+(defn ^:pub ^I32 ho-confidence [] (return 4))
+(defn ^:pub ^I32 ho-ledger [] (return 8))
+(defn ^:pub ^I32 ho-pretty [] (return 16))
+(defn ^:pub ^I32 ho-furniture-drop [] (return 32))
+(defn ^:pub ^I32 ho-no-milestones [] (return 64))
+
+;; THE OPTIONS TRAVEL AS ONE INTEGER, `o`: the bits above in the low byte, and
+;; the confidence threshold (nodes with 0 <= conf < it get `data-emon-conf`)
+;; times 256 above them. One parameter fewer through every function.
+(defn ^I32 h-on [^I32 o ^I32 bit]
+  (if (!= (bit-and o bit) 0) (return 1))
+  (return 0))
+
+;; ------------------------------------------------------------ punctuation
+
+(defn ^I32 h-nl [^:mut ^Text t ^I32 o ^I32 d]
+  (comment "Pretty mode: a newline and d levels of two spaces. Compact: nothing.")
+  (let [^:mut ^I32 i 0]
+    (if (== (h-on o 16) 1)
+      (do (text-cp t 10)
+          (while (< i (* d 2))
+            (do (text-cp t 32)
+                (set i (+ i 1))))))
+    (return 0)))
+
+(defn ^:pub ^I32 h-cp [^:mut ^Text t ^I32 cp]
+  (comment "One code point in text or in a double-quoted attribute value.")
+  (if (== cp 38) (do (emit-ascii t "&amp;") (return 0)))
+  (if (== cp 60) (do (emit-ascii t "&lt;") (return 0)))
+  (if (== cp 62) (do (emit-ascii t "&gt;") (return 0)))
+  (if (== cp 34) (do (emit-ascii t "&quot;") (return 0)))
+  (if (and (< cp 32) (!= cp 9) (!= cp 10) (!= cp 12) (!= cp 13))
+    (do (text-cp t 65533) (return 0)))
+  (if (and (>= cp 127) (<= cp 159))
+    (do (text-cp t 65533) (return 0)))
+  (if (and (>= cp 55296) (<= cp 57343))
+    (do (text-cp t 65533) (return 0)))
+  (if (and (>= cp 64976) (<= cp 65007))
+    (do (text-cp t 65533) (return 0)))
+  (if (or (== (bit-and cp 65534) 65534) (> cp 1114111))
+    (do (text-cp t 65533) (return 0)))
+  (text-cp t cp)
+  (return 0))
+
+(defn ^I32 h-run [^:mut ^Text t ^Cells text ^I32 start ^I32 ln]
+  (comment "The text-arena run [start, start+ln), escaped.")
+  (let [^:mut ^I32 i start]
+    (while (< i (+ start ln))
+      (do (h-cp t (cells-at text i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 h-tattr [^Cells nodes ^Cells attrs ^I32 n ^I32 key]
+  (comment "The node's text attribute with `key`, or -1 (absent or not text).")
+  (let [^I32 a (node-attr nodes attrs n key)]
+    (if (< a 0) (return -1))
+    (if (!= (attr-vkind attrs a) (av-text)) (return -1))
+    (return a)))
+
+(defn ^I32 h-iattr [^Cells nodes ^Cells attrs ^I32 n ^I32 key]
+  (comment "The node's int, bool or node attribute with `key`, or -1.")
+  (let [^I32 a (node-attr nodes attrs n key)]
+    (if (< a 0) (return -1))
+    (if (== (attr-vkind attrs a) (av-text)) (return -1))
+    (return a)))
+
+;; -------------------------------------------------- what every element has
+
+(defn ^I32 h-common [^:mut ^Text t ^I32 o ^Cells nodes ^Cells regions ^I32 n]
+  (comment "The attributes the options add to the element of node n, last in")
+  (comment "the tag: `id` (blocks only, and never on a note, which has `fn-N`),")
+  (comment "`data-emon-at` (`page,x0,y0,x1,y1` per region, `;` between) and")
+  (comment "`data-emon-conf` (only below the threshold).")
+  (let [^:mut ^I32 r 0
+        ^:mut ^I32 i 0
+        ^I32 kind (node-kind nodes n)
+        ^I32 cf (node-conf nodes n)]
+    (if (and (== (h-on o 1) 1) (== (nk-is-inline kind) 0) (!= kind (nk-note)))
+      (do (emit-ascii t " id=\"emon-")
+          (text-i32 t n)
+          (emit-ascii t "\"")))
+    (if (and (== (h-on o 2) 1) (> (node-region-count nodes n) 0))
+      (do (emit-ascii t " data-emon-at=\"")
+          (set r (node-region-head nodes n))
+          (while (>= r 0)
+            (do (if (> i 0) (emit-ascii t ";"))
+                (text-i32 t (region-page regions r))
+                (emit-ascii t ",")
+                (js-cpt t (region-x0 regions r))
+                (emit-ascii t ",")
+                (js-cpt t (region-y0 regions r))
+                (emit-ascii t ",")
+                (js-cpt t (region-x1 regions r))
+                (emit-ascii t ",")
+                (js-cpt t (region-y1 regions r))
+                (set i (+ i 1))
+                (set r (region-next regions r))))
+          (emit-ascii t "\"")))
+    (if (and (== (h-on o 4) 1) (>= cf 0) (< cf (quot o 256)))
+      (do (emit-ascii t " data-emon-conf=\"")
+          (text-i32 t cf)
+          (emit-ascii t "\"")))
+    (return 0)))
+
+(defn ^I32 h-has-inline [^Cells nodes ^I32 n]
+  (let [^:mut ^I32 c (node-first-child nodes n)]
+    (while (>= c 0)
+      (do (if (== (nk-is-inline (node-kind nodes c)) 1) (return 1))
+          (set c (node-next nodes c))))
+    (return 0)))
+
+(defn ^I32 h-plain [^:mut ^Text t ^Cells nodes ^Cells text ^I32 n]
+  (comment "The plain text of a node: its own run, else its inline children's")
+  (comment "(a linebreak as a newline), escaped. For an attribute value.")
+  (let [^:mut ^I32 c (node-first-child nodes n)
+        ^:mut ^I32 kc 0]
+    (if (and (== (node-has-text nodes n) 1) (== (h-has-inline nodes n) 0))
+      (do (h-run t text (node-text-start nodes n) (node-text-len nodes n))
+          (return 0)))
+    (while (>= c 0)
+      (do (set kc (node-kind nodes c))
+          (if (== kc (nk-linebreak)) (text-cp t 10))
+          (if (== (nk-is-inline kc) 1)
+            (do (if (== (node-has-text nodes c) 1)
+                  (h-run t text (node-text-start nodes c) (node-text-len nodes c)))
+                (if (!= (node-first-child nodes c) -1)
+                  (h-plain t nodes text c))))
+          (set c (node-next nodes c))))
+    (return 0)))
+
+;; ---------------------------------------------------------------- inlines
+
+(defn ^I32 h-span-open [^:mut ^Text t ^I32 o ^Cells nodes ^Cells regions
+                        ^I32 n ^I32 bit ^I32 first]
+  (comment "Open the element of one style bit. The options' attributes go on")
+  (comment "the first element opened. Answers the new `first` (0).")
+  (if (== bit 1) (emit-ascii t "<b"))
+  (if (== bit 2) (emit-ascii t "<i"))
+  (if (== bit 4) (emit-ascii t "<u"))
+  (if (== bit 8) (emit-ascii t "<s"))
+  (if (== bit 16) (emit-ascii t "<sub"))
+  (if (== bit 32) (emit-ascii t "<sup"))
+  (if (== bit 64) (emit-ascii t "<code"))
+  (if (== bit 128) (emit-ascii t "<span data-emon-style=\"smallcaps\""))
+  (if (== first 1) (h-common t o nodes regions n))
+  (emit-ascii t ">")
+  (return 0))
+
+(defn ^I32 h-span-close [^:mut ^Text t ^I32 bit]
+  (if (== bit 1) (emit-ascii t "</b>"))
+  (if (== bit 2) (emit-ascii t "</i>"))
+  (if (== bit 4) (emit-ascii t "</u>"))
+  (if (== bit 8) (emit-ascii t "</s>"))
+  (if (== bit 16) (emit-ascii t "</sub>"))
+  (if (== bit 32) (emit-ascii t "</sup>"))
+  (if (== bit 64) (emit-ascii t "</code>"))
+  (if (== bit 128) (emit-ascii t "</span>"))
+  (return 0))
+
+(defn ^I32 h-inner [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
+                    ^Cells regions ^Cells text ^I32 n]
+  (comment "The content of an inline node or of a block's own line of text: its")
+  (comment "inline children if it has any, else its own run.")
+  (let [^:mut ^I32 c (node-first-child nodes n)]
+    (if (== (h-has-inline nodes n) 1)
+      (do (while (>= c 0)
+            (do (if (== (nk-is-inline (node-kind nodes c)) 1)
+                  (h-inline t o nodes attrs regions text c))
+                (set c (node-next nodes c))))
+          (return 0)))
+    (if (== (node-has-text nodes n) 1)
+      (h-run t text (node-text-start nodes n) (node-text-len nodes n)))
+    (return 0)))
+
+(defn ^I32 h-target-href [^:mut ^Text t ^Cells nodes ^I32 target]
+  (comment "An internal target: a note is `#fn-N` (its id is always there), any")
+  (comment "other node `#emon-N` (which resolves when the `ids` option is on).")
+  (if (== (node-kind nodes target) (nk-note))
+    (emit-ascii t "#fn-"))
+  (if (!= (node-kind nodes target) (nk-note))
+    (emit-ascii t "#emon-"))
+  (text-i32 t target)
+  (return 0))
+
+
+(defn ^I32 h-inline [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
+                     ^Cells regions ^Cells text ^I32 n]
+  (comment "One inline node: text, span, link, ref or linebreak (SPEC 5.1).")
+  (let [^I32 kind (node-kind nodes n)
+        ^I32 sub (node-sub nodes n)
+        ^:mut ^I32 a -1
+        ^:mut ^I32 b 0
+        ^:mut ^I32 bit 0
+        ^:mut ^I32 first 1]
+    (if (== kind (nk-text))
+      (do (if (== (node-has-text nodes n) 1)
+            (h-run t text (node-text-start nodes n) (node-text-len nodes n)))
+          (return 0)))
+    (if (== kind (nk-linebreak))
+      (do (emit-ascii t "<br")
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (return 0)))
+    (if (== kind (nk-span))
+      (do (if (== sub 0)
+            (do (emit-ascii t "<span")
+                (h-common t o nodes regions n)
+                (emit-ascii t ">")
+                (h-inner t o nodes attrs regions text n)
+                (emit-ascii t "</span>")
+                (return 0)))
+          (while (< b 8)
+            (do (set bit (shl32 1 b))
+                (if (!= (bit-and sub bit) 0)
+                  (set first (h-span-open t o nodes regions n bit first)))
+                (set b (+ b 1))))
+          (h-inner t o nodes attrs regions text n)
+          (set b 7)
+          (while (>= b 0)
+            (do (set bit (shl32 1 b))
+                (if (!= (bit-and sub bit) 0) (h-span-close t bit))
+                (set b (- b 1))))
+          (return 0)))
+    (if (== kind (nk-link))
+      (do (emit-ascii t "<a")
+          (set a (h-tattr nodes attrs n (fk-href)))
+          (if (>= a 0)
+            (do (emit-ascii t " href=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\""))
+            (do (set a (h-iattr nodes attrs n (fk-target)))
+                (if (>= a 0)
+                  (do (emit-ascii t " href=\"")
+                      (h-target-href t nodes (attr-value attrs a))
+                      (emit-ascii t "\"")))))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (h-inner t o nodes attrs regions text n)
+          (emit-ascii t "</a>")
+          (return 0)))
+    (if (== kind (nk-ref))
+      (do (set a (h-iattr nodes attrs n (fk-target)))
+          (if (>= a 0)
+            (do (emit-ascii t "<a role=\"doc-noteref\" href=\"")
+                (h-target-href t nodes (attr-value attrs a))
+                (emit-ascii t "\"")))
+          (if (< a 0) (emit-ascii t "<span role=\"doc-noteref\""))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (if (or (== (h-has-inline nodes n) 1) (== (node-has-text nodes n) 1))
+            (h-inner t o nodes attrs regions text n)
+            (do (set b (h-tattr nodes attrs n (fk-marker)))
+                (if (>= b 0)
+                  (h-run t text (attr-value attrs b) (attr-len attrs b)))))
+          (if (>= a 0) (emit-ascii t "</a>"))
+          (if (< a 0) (emit-ascii t "</span>"))
+          (return 0)))
+    (return 0)))
+
+;; ----------------------------------------------------------------- blocks
+
+(defn ^I32 h-blocks [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
+                     ^Cells regions ^Cells text ^I32 n ^I32 d]
+  (comment "Every non-inline child of n as a block at depth d. Answers how many")
+  (comment "wrote anything (a milestone turned off writes nothing).")
+  (let [^:mut ^I32 c (node-first-child nodes n)
+        ^:mut ^I32 k 0]
+    (while (>= c 0)
+      (do (if (== (nk-is-inline (node-kind nodes c)) 0)
+            (set k (+ k (h-block t o nodes attrs regions text c d))))
+          (set c (node-next nodes c))))
+    (return k)))
+
+(defn ^I32 h-body [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
+                   ^Cells regions ^Cells text ^I32 n ^I32 d]
+  (comment "What goes inside a block's element: its line of text (inline")
+  (comment "children, else its own run), then its block children at depth d.")
+  (comment "Answers how many block children were written, so the caller knows")
+  (comment "whether its closing tag starts a new line (pretty mode).")
+  (h-inner t o nodes attrs regions text n)
+  (return (h-blocks t o nodes attrs regions text n d)))
+
+(defn ^I32 h-list-type [^:mut ^Text t ^Cells nodes ^Cells attrs ^Cells text ^I32 n]
+  (comment "An ordered list's `type` from its scheme: `lower-alpha` a,")
+  (comment "`upper-alpha` A, `lower-roman` i, `upper-roman` I (`decimal` and")
+  (comment "anything else: none, the default is decimal). The scheme names are")
+  (comment "11 characters, told apart by the first and the seventh.")
+  (let [^I32 a (h-tattr nodes attrs n (fk-scheme))
+        ^:mut ^I32 c0 0
+        ^:mut ^I32 c6 0]
+    (if (< a 0) (return 0))
+    (if (!= (attr-len attrs a) 11) (return 0))
+    (set c0 (cells-at text (attr-value attrs a)))
+    (set c6 (cells-at text (+ (attr-value attrs a) 6)))
+    (if (and (== c0 108) (== c6 97)) (emit-ascii t " type=\"a\""))
+    (if (and (== c0 117) (== c6 97)) (emit-ascii t " type=\"A\""))
+    (if (and (== c0 108) (== c6 114)) (emit-ascii t " type=\"i\""))
+    (if (and (== c0 117) (== c6 114)) (emit-ascii t " type=\"I\""))
+    (return 0)))
+
+(defn ^I32 h-seal-word [^:mut ^Text t ^I32 sub]
+  (comment "A seal's kind as the start of its accessible name.")
+  (if (== sub 1) (emit-ascii t "Seal"))
+  (if (== sub 2) (emit-ascii t "Stamp"))
+  (if (== sub 3) (emit-ascii t "Signature"))
+  (if (== sub 4) (emit-ascii t "Initials"))
+  (if (== sub 5) (emit-ascii t "Digital signature"))
+  (if (or (< sub 1) (> sub 5)) (emit-ascii t "Seal"))
+  (return 0))
+
+(defn ^I32 h-block [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
+                    ^Cells regions ^Cells text ^I32 n ^I32 d]
+  (comment "One node as a block element at depth d (SPEC 5.1), on its own line")
+  (comment "in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline")
+  (comment "kind met where a block belongs is written as itself.")
+  (let [^I32 kind (node-kind nodes n)
+        ^I32 sub (node-sub nodes n)
+        ^:mut ^I32 hb 0
+        ^:mut ^I32 a -1
+        ^:mut ^I32 b -1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 pk 0]
+    (if (== (nk-is-inline kind) 1)
+      (do (h-nl t o d)
+          (h-inline t o nodes attrs regions text n)
+          (return 1)))
+    ;; ---- break: an empty milestone
+    (if (== kind (nk-break))
+      (do (if (== (h-on o 64) 1) (return 0))
+          (h-nl t o d)
+          (emit-ascii t "<span data-emon-page=\"")
+          (text-i32 t sub)
+          (emit-ascii t "\"")
+          (set a (h-tattr nodes attrs n (fk-label)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-page-label=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t "></span>")
+          (return 1)))
+    (h-nl t o d)
+    ;; ---- section
+    (if (== kind (nk-section))
+      (do (emit-ascii t "<section")
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</section>")
+          (return 1)))
+    ;; ---- heading: h1..h6, deeper levels are h6 with aria-level; the number
+    ;; is kept as data-emon-number and written in front of the text
+    (if (== kind (nk-heading))
+      (do (set lv sub)
+          (if (< lv 1) (set lv 1))
+          (set pk lv)
+          (if (> pk 6) (set pk 6))
+          (emit-ascii t "<h")
+          (text-i32 t pk)
+          (if (> lv 6)
+            (do (emit-ascii t " aria-level=\"")
+                (text-i32 t lv)
+                (emit-ascii t "\"")))
+          (set a (h-tattr nodes attrs n (fk-number)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-number=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (if (>= a 0)
+            (do (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t " ")))
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</h")
+          (text-i32 t pk)
+          (emit-ascii t ">")
+          (return 1)))
+    ;; ---- paragraph
+    (if (== kind (nk-paragraph))
+      (do (emit-ascii t "<p")
+          (if (> sub 0)
+            (do (emit-ascii t " data-emon-align=\"")
+                (al-emit-name t sub)
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</p>")
+          (return 1)))
+    ;; ---- list and item
+    (if (== kind (nk-list))
+      (do (if (== sub 2)
+            (do (emit-ascii t "<ol")
+                (set a (h-iattr nodes attrs n (fk-start)))
+                (if (>= a 0)
+                  (do (emit-ascii t " start=\"")
+                      (text-i32 t (attr-value attrs a))
+                      (emit-ascii t "\"")))
+                (h-list-type t nodes attrs text n)))
+          (if (!= sub 2) (emit-ascii t "<ul"))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (if (== sub 2) (emit-ascii t "</ol>"))
+          (if (!= sub 2) (emit-ascii t "</ul>"))
+          (return 1)))
+    (if (== kind (nk-item))
+      (do (emit-ascii t "<li")
+          (set a (h-iattr nodes attrs n (fk-value)))
+          (if (>= a 0)
+            (do (emit-ascii t " value=\"")
+                (text-i32 t (attr-value attrs a))
+                (emit-ascii t "\"")))
+          (set a (h-tattr nodes attrs n (fk-marker)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-marker=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</li>")
+          (return 1)))
+    ;; ---- table: the caption first (HTML wants it first), then the groups
+    (if (== kind (nk-table))
+      (do (emit-ascii t "<table")
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set c (node-first-child nodes n))
+          (while (>= c 0)
+            (do (if (== (node-kind nodes c) (nk-caption))
+                  (h-block t o nodes attrs regions text c (+ d 1)))
+                (set c (node-next nodes c))))
+          (set c (node-first-child nodes n))
+          (while (>= c 0)
+            (do (if (!= (node-kind nodes c) (nk-caption))
+                  (h-block t o nodes attrs regions text c (+ d 1)))
+                (set c (node-next nodes c))))
+          (h-nl t o d)
+          (emit-ascii t "</table>")
+          (return 1)))
+    (if (== kind (nk-rowgroup))
+      (do (if (== sub 1) (emit-ascii t "<thead"))
+          (if (== sub 3) (emit-ascii t "<tfoot"))
+          (if (and (!= sub 1) (!= sub 3)) (emit-ascii t "<tbody"))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (if (== sub 1) (emit-ascii t "</thead>"))
+          (if (== sub 3) (emit-ascii t "</tfoot>"))
+          (if (and (!= sub 1) (!= sub 3)) (emit-ascii t "</tbody>"))
+          (return 1)))
+    (if (== kind (nk-row))
+      (do (emit-ascii t "<tr")
+          (if (== sub 1) (emit-ascii t " data-emon-repeated=\"true\""))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</tr>")
+          (return 1)))
+    (if (== kind (nk-cell))
+      (do (if (> sub 0)
+            (do (emit-ascii t "<th scope=\"")
+                (ch-emit-name t sub)
+                (emit-ascii t "\"")))
+          (if (<= sub 0) (emit-ascii t "<td"))
+          (set a (h-iattr nodes attrs n (fk-rowspan)))
+          (if (and (>= a 0) (!= (attr-value attrs a) 1))
+            (do (emit-ascii t " rowspan=\"")
+                (text-i32 t (attr-value attrs a))
+                (emit-ascii t "\"")))
+          (set a (h-iattr nodes attrs n (fk-colspan)))
+          (if (and (>= a 0) (!= (attr-value attrs a) 1))
+            (do (emit-ascii t " colspan=\"")
+                (text-i32 t (attr-value attrs a))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (if (> sub 0) (emit-ascii t "</th>"))
+          (if (<= sub 0) (emit-ascii t "</td>"))
+          (return 1)))
+    ;; ---- caption: <caption> in a table, <figcaption> in a figure, else a p
+    (if (== kind (nk-caption))
+      (do (set pk 0)
+          (set a (node-parent nodes n))
+          (if (>= a 0)
+            (set pk (node-kind nodes a)))
+          (if (== pk (nk-table)) (emit-ascii t "<caption"))
+          (if (== pk (nk-figure)) (emit-ascii t "<figcaption"))
+          (if (and (!= pk (nk-table)) (!= pk (nk-figure)))
+            (emit-ascii t "<p data-emon=\"caption\""))
+          (set a (h-tattr nodes attrs n (fk-label)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-label=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (if (== pk (nk-table)) (emit-ascii t "</caption>"))
+          (if (== pk (nk-figure)) (emit-ascii t "</figcaption>"))
+          (if (and (!= pk (nk-table)) (!= pk (nk-figure)))
+            (emit-ascii t "</p>"))
+          (return 1)))
+    ;; ---- figure: no <img>, ever; the alt is the accessible name
+    (if (== kind (nk-figure))
+      (do (emit-ascii t "<figure data-emon-kind=\"")
+          (if (> sub 0) (fg-emit-name t sub))
+          (if (<= sub 0) (emit-ascii t "unknown"))
+          (emit-ascii t "\" role=\"img\"")
+          (set a (h-tattr nodes attrs n (fk-alt)))
+          (if (>= a 0)
+            (do (emit-ascii t " aria-label=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (set a (h-tattr nodes attrs n (fk-label)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-label=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (h-inner t o nodes attrs regions text n)
+          (set a (node-attr nodes attrs n (fk-labels)))
+          (while (>= a 0)
+            (do (emit-ascii t "<span data-emon=\"label\">")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "</span>")
+                (set a (attr-find-next attrs a (fk-labels)))))
+          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</figure>")
+          (return 1)))
+    ;; ---- seal: an empty figure; what it says is in its accessible name
+    (if (== kind (nk-seal))
+      (do (emit-ascii t "<figure data-emon-kind=\"")
+          (if (> sub 0) (sl-emit-name t sub))
+          (if (<= sub 0) (emit-ascii t "seal"))
+          (emit-ascii t "\"")
+          (set a (h-tattr nodes attrs n (fk-name)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-name=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (set b (h-tattr nodes attrs n (fk-date)))
+          (if (>= b 0)
+            (do (emit-ascii t " data-emon-date=\"")
+                (h-run t text (attr-value attrs b) (attr-len attrs b))
+                (emit-ascii t "\"")))
+          (set b (h-tattr nodes attrs n (fk-color)))
+          (if (>= b 0)
+            (do (emit-ascii t " data-emon-color=\"")
+                (h-run t text (attr-value attrs b) (attr-len attrs b))
+                (emit-ascii t "\"")))
+          (emit-ascii t " role=\"img\" aria-label=\"")
+          (h-seal-word t sub)
+          (if (or (== (node-has-text nodes n) 1) (>= a 0))
+            (emit-ascii t ": "))
+          (if (== (node-has-text nodes n) 1)
+            (h-run t text (node-text-start nodes n) (node-text-len nodes n)))
+          (if (and (== (node-has-text nodes n) 0) (>= a 0))
+            (h-run t text (attr-value attrs a) (attr-len attrs a)))
+          (emit-ascii t "\"")
+          (h-common t o nodes regions n)
+          (emit-ascii t "></figure>")
+          (return 1)))
+    ;; ---- formula: the linear text in aria-label (MathML is parked)
+    (if (== kind (nk-formula))
+      (do (emit-ascii t "<figure data-emon-kind=\"formula\"")
+          (if (> sub 0)
+            (do (emit-ascii t " data-emon-display=\"")
+                (dp-emit-name t sub)
+                (emit-ascii t "\"")))
+          (emit-ascii t " aria-label=\"")
+          (h-plain t nodes text n)
+          (emit-ascii t "\"")
+          (h-common t o nodes regions n)
+          (emit-ascii t "></figure>")
+          (return 1)))
+    ;; ---- code: <pre><code> (the `<code>` between them is also why a text
+    ;; starting with a newline survives: a parser drops only a newline that
+    ;; comes right after `<pre>`)
+    (if (== kind (nk-code))
+      (do (emit-ascii t "<pre")
+          (h-common t o nodes regions n)
+          (emit-ascii t "><code>")
+          (h-inner t o nodes attrs regions text n)
+          (emit-ascii t "</code>")
+          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</pre>")
+          (return 1)))
+    (if (== kind (nk-quote))
+      (do (emit-ascii t "<blockquote")
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</blockquote>")
+          (return 1)))
+    ;; ---- note: a footnote is reached by `ref` as #fn-N
+    (if (== kind (nk-note))
+      (do (if (== sub 5) (emit-ascii t "<aside role=\"doc-endnote\" id=\"fn-"))
+          (if (!= sub 5) (emit-ascii t "<aside role=\"doc-footnote\" id=\"fn-"))
+          (text-i32 t n)
+          (emit-ascii t "\"")
+          (set a (h-tattr nodes attrs n (fk-marker)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-marker=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</aside>")
+          (return 1)))
+    ;; ---- field: a span with the value, never a live <input>
+    (if (== kind (nk-field))
+      (do (emit-ascii t "<span data-emon=\"field\"")
+          (set a (h-tattr nodes attrs n (fk-name)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-name=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (set a (h-tattr nodes attrs n (fk-type)))
+          (if (>= a 0)
+            (do (emit-ascii t " data-emon-type=\"")
+                (h-run t text (attr-value attrs a) (attr-len attrs a))
+                (emit-ascii t "\"")))
+          (set a (h-iattr nodes attrs n (fk-checked)))
+          (if (>= a 0)
+            (do (if (!= (attr-value attrs a) 0)
+                  (emit-ascii t " data-emon-checked=\"true\""))
+                (if (== (attr-value attrs a) 0)
+                  (emit-ascii t " data-emon-checked=\"false\""))))
+          (h-common t o nodes regions n)
+          (emit-ascii t ">")
+          (set a (h-tattr nodes attrs n (fk-value)))
+          (if (>= a 0)
+            (h-run t text (attr-value attrs a) (attr-len attrs a)))
+          (if (< a 0) (h-inner t o nodes attrs regions text n))
+          (emit-ascii t "</span>")
+          (return 1)))
+    ;; ---- furniture: an aside (once, at the top of <main>, or in place)
+    (if (== kind (nk-furniture))
+      (do (h-furniture-open t o nodes attrs regions text n)
+          (if (== (node-has-text nodes n) 1)
+            (do (h-nl t o (+ d 1))
+                (emit-ascii t "<p>")
+                (h-run t text (node-text-start nodes n) (node-text-len nodes n))
+                (emit-ascii t "</p>")
+                (set hb 1)))
+          (set hb (+ hb (h-blocks t o nodes attrs regions text n (+ d 1))))
+          (if (> hb 0) (h-nl t o d))
+          (emit-ascii t "</aside>")
+          (return 1)))
+    ;; ---- anything else (a nested document): a generic block that says what
+    ;; it was, rather than nothing
+    (emit-ascii t "<div data-emon-kind=\"")
+    (nk-emit-name t kind)
+    (emit-ascii t "\"")
+    (h-common t o nodes regions n)
+    (emit-ascii t ">")
+    (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+    (if (> hb 0) (h-nl t o d))
+    (emit-ascii t "</div>")
+    (return 1)))
+
+(defn ^I32 h-furniture-open [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
+                             ^Cells regions ^Cells text ^I32 n]
+  (comment "`<aside data-emon=\"furniture\" data-emon-role=\"header\" ...>`:")
+  (comment "the role, the pages it was seen on, then the options' attributes.")
+  (let [^I32 sub (node-sub nodes n)
+        ^:mut ^I32 a (node-attr nodes attrs n (fk-pages))
+        ^:mut ^I32 i 0]
+    (emit-ascii t "<aside data-emon=\"furniture\"")
+    (if (> sub 0)
+      (do (emit-ascii t " data-emon-role=\"")
+          (rl-emit-name t sub)
+          (emit-ascii t "\"")))
+    (if (>= a 0)
+      (do (emit-ascii t " data-emon-pages=\"")
+          (while (>= a 0)
+            (do (if (> i 0) (emit-ascii t " "))
+                (text-i32 t (attr-value attrs a))
+                (set i (+ i 1))
+                (set a (attr-find-next attrs a (fk-pages)))))
+          (emit-ascii t "\"")))
+    (h-common t o nodes regions n)
+    (emit-ascii t ">")
+    (return 0)))
+
+;; ---------------------------------------------------------------- the page
+
+(defn ^I32 h-meta [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs ^Cells text
+                   ^I32 key]
+  (comment "`<meta name=\"author\" content=\"...\">` for a root attribute: the")
+  (comment "name is the JSON key's spelling (`author`, `created`, ...).")
+  (let [^I32 a (h-tattr nodes attrs 0 key)]
+    (if (< a 0) (return 0))
+    (h-nl t o 2)
+    (emit-ascii t "<meta name=\"")
+    (fk-emit-name t key)
+    (emit-ascii t "\" content=\"")
+    (h-run t text (attr-value attrs a) (attr-len attrs a))
+    (emit-ascii t "\">")
+    (return 1)))
+
+(defn ^:pub ^I32 html-emit [^:mut ^Text t ^I32 opts ^I32 conf-below ^Cells nodes
+                            ^Cells attrs ^Cells regions ^Cells text
+                            ^Cells ledger]
+  (comment "Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;")
+  (comment "`conf-below` is the threshold for `ho-confidence` (nodes with a")
+  (comment "conf under it get `data-emon-conf`). The root (node 0) must be a")
+  (comment "document: run `model-check` first on a Model of unknown origin.")
+  (comment "Answers 0.")
+  (let [^I32 o (+ (bit-and opts 255) (* conf-below 256))
+        ^I32 nn (node-count nodes)
+        ^I32 nl (ledger-count ledger)
+        ^:mut ^I32 a -1
+        ^:mut ^I32 i 0]
+    (emit-ascii t "<!doctype html>")
+    (h-nl t o 0)
+    (emit-ascii t "<html")
+    (set a (h-tattr nodes attrs 0 (fk-lang)))
+    (if (>= a 0)
+      (do (emit-ascii t " lang=\"")
+          (h-run t text (attr-value attrs a) (attr-len attrs a))
+          (emit-ascii t "\"")))
+    (emit-ascii t ">")
+    (h-nl t o 1)
+    (emit-ascii t "<head>")
+    (h-nl t o 2)
+    (emit-ascii t "<meta charset=\"utf-8\">")
+    (h-nl t o 2)
+    (emit-ascii t "<title>")
+    (set a (h-tattr nodes attrs 0 (fk-title)))
+    (if (>= a 0)
+      (h-run t text (attr-value attrs a) (attr-len attrs a)))
+    (emit-ascii t "</title>")
+    (h-meta t o nodes attrs text (fk-generator))
+    (h-meta t o nodes attrs text (fk-author))
+    (h-meta t o nodes attrs text (fk-subject))
+    (h-meta t o nodes attrs text (fk-keywords))
+    (h-meta t o nodes attrs text (fk-creator))
+    (h-meta t o nodes attrs text (fk-producer))
+    (h-meta t o nodes attrs text (fk-created))
+    (h-meta t o nodes attrs text (fk-modified))
+    (h-nl t o 1)
+    (emit-ascii t "</head>")
+    (h-nl t o 1)
+    (emit-ascii t "<body>")
+    (h-nl t o 2)
+    (emit-ascii t "<main>")
+    ;; the furniture templates, once, at the top
+    (if (== (h-on o 32) 0)
+      (do (set i 0)
+          (while (< i nn)
+            (do (if (and (== (node-kind nodes i) (nk-furniture))
+                         (== (node-parent nodes i) -1))
+                  (h-block t o nodes attrs regions text i 3))
+                (set i (+ i 1))))))
+    (h-blocks t o nodes attrs regions text 0 3)
+    ;; the ledger: what was dropped, inert but present
+    (if (== (h-on o 8) 1)
+      (do (set i 0)
+          (while (< i nl)
+            (do (h-nl t o 3)
+                (emit-ascii t "<template data-emon=\"dropped\" data-emon-reason=\"")
+                (dr-emit-name t (ledger-reason ledger i))
+                (emit-ascii t "\" data-emon-page=\"")
+                (text-i32 t (ledger-page ledger i))
+                (emit-ascii t "\">")
+                (if (>= (ledger-text-start ledger i) 0)
+                  (h-run t text (ledger-text-start ledger i) (ledger-text-len ledger i)))
+                (emit-ascii t "</template>")
+                (set i (+ i 1))))))
+    (h-nl t o 2)
+    (emit-ascii t "</main>")
+    (h-nl t o 1)
+    (emit-ascii t "</body>")
+    (h-nl t o 0)
+    (emit-ascii t "</html>")
+    (return 0)))

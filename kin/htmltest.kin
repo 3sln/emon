@@ -1,0 +1,183 @@
+;; Laws for `emon.html` (P1.9): golden files, byte for byte, on every target.
+;;
+;; A GOLDEN is a Model (the `test/json/NAME.model` line script that
+;; `emon.jsontest` already builds, parsed by `emon.mscript`: one Model, two
+;; serializations) and the exact bytes `html-emit` must write for it under one
+;; option set: `test/html/NAME.html` (defaults, compact), `.pretty.html`,
+;; `.full.html` (ids, geometry, confidence below 950, the ledger) and
+;; `.bare.html` (no furniture, no milestones). `kin/scripts/html-check.py`,
+;; run first by `bb unit`, writes them from the JSON goldens with an
+;; independent renderer and parses each with html5lib (D067).
+;;
+;; `ht-golden` IS A HELPER THAT ASSERTS: it takes the test handle as its
+;; first parameter, `emon-t` (Go spells it `emonT`), and the laws pass `(test-t)` (DEVLOG P0.5 audit:
+;; `emon.test`). Before that a shared builder had to answer a code for each
+;; law to assert.
+(ns emon.htmltest
+  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-text assert-text-span
+                               test-file test-t new-cells new-text text-blob
+                               Str TestT]]
+            [emon.port :refer [blob-len]]
+            [emon.mscript :refer [jt-build jt-end]]
+            [emon.model :refer [model-init node-new node-set-text node-set-sub
+                                node-set-conf node-add-region text-len
+                                text-append-utf8 model-check max-depth
+                                nk-section nk-heading nk-paragraph nk-break
+                                nk-furniture]]
+            [emon.html :refer [html-emit]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or]]))
+
+;; ---------------------------------------------------------------- helpers
+
+(defn ^I32 ht-golden [^TestT emon-t ^Str mfile ^Str hfile ^I32 opts ^I32 below]
+  (comment "Build the Model `mfile`, emit it under `opts`, and require the")
+  (comment "bytes of the golden `hfile`.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)
+        ^Text out (new-text)]
+    (assert-eq (jt-build (test-file mfile) nodes attrs regions text pages ledger st) 0 "the script builds")
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "the Model is well formed")
+    (assert-eq (html-emit out opts below nodes attrs regions text ledger) 0 "it emits")
+    (assert-text-span out (test-file hfile) 0 (jt-end (test-file hfile)) "the golden" 0)
+    (return 0)))
+
+(defn ^I32 ht-set [^:mut ^Cells nodes ^:mut ^Cells text ^I32 n ^Blob b]
+  (comment "Give node n the UTF-8 bytes of b as its text.")
+  (let [^I32 start (text-len text)]
+    (text-append-utf8 text b 0 (blob-len b))
+    (node-set-text nodes n start (- (text-len text) start))
+    (return 0)))
+
+;; ----------------------------------------------------------------- goldens
+
+(deftest test-golden-minimal
+  (ht-golden (test-t) "json/minimal.model" "html/minimal.html" 0 0)
+  (ht-golden (test-t) "json/minimal.model" "html/minimal.pretty.html" 16 0)
+  (ht-golden (test-t) "json/minimal.model" "html/minimal.full.html" 15 950)
+  (ht-golden (test-t) "json/minimal.model" "html/minimal.bare.html" 96 0))
+
+(deftest test-golden-sample
+  (ht-golden (test-t) "json/sample.model" "html/sample.html" 0 0)
+  (ht-golden (test-t) "json/sample.model" "html/sample.pretty.html" 16 0)
+  (ht-golden (test-t) "json/sample.model" "html/sample.full.html" 15 950)
+  (ht-golden (test-t) "json/sample.model" "html/sample.bare.html" 96 0))
+
+(deftest test-golden-kinds
+  (ht-golden (test-t) "json/kinds.model" "html/kinds.html" 0 0)
+  (ht-golden (test-t) "json/kinds.model" "html/kinds.pretty.html" 16 0)
+  (ht-golden (test-t) "json/kinds.model" "html/kinds.full.html" 15 950)
+  (ht-golden (test-t) "json/kinds.model" "html/kinds.bare.html" 96 0))
+
+(deftest test-golden-corners
+  (ht-golden (test-t) "json/corners.model" "html/corners.html" 0 0)
+  (ht-golden (test-t) "json/corners.model" "html/corners.pretty.html" 16 0)
+  (ht-golden (test-t) "json/corners.model" "html/corners.full.html" 15 950)
+  (ht-golden (test-t) "json/corners.model" "html/corners.bare.html" 96 0))
+
+(deftest test-golden-probe
+  (ht-golden (test-t) "json/probe.model" "html/probe.html" 0 0)
+  (ht-golden (test-t) "json/probe.model" "html/probe.pretty.html" 16 0)
+  (ht-golden (test-t) "json/probe.model" "html/probe.full.html" 15 950)
+  (ht-golden (test-t) "json/probe.model" "html/probe.bare.html" 96 0))
+
+;; ------------------------------------------------------------- the corners
+
+(deftest test-an-empty-document
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Text out (new-text)]
+    (model-init nodes attrs regions text pages ledger)
+    (html-emit out 0 0 nodes attrs regions text ledger)
+    (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>" "the smallest document")))
+
+(deftest test-heading-levels-and-escapes
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Text out (new-text)
+        ^:mut ^I32 h 0]
+    (model-init nodes attrs regions text pages ledger)
+    (set h (node-new nodes (nk-heading) 0))
+    (node-set-sub nodes h 1)
+    (ht-set nodes text h (text-blob "a & b"))
+    (set h (node-new nodes (nk-heading) 0))
+    (node-set-sub nodes h 6)
+    (ht-set nodes text h (text-blob "<six>"))
+    (set h (node-new nodes (nk-heading) 0))
+    (node-set-sub nodes h 7)
+    (ht-set nodes text h (text-blob "say \"seven\""))
+    (html-emit out 0 0 nodes attrs regions text ledger)
+    (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>" "levels, and the four escapes")))
+
+(deftest test-options-add-ids-geometry-and-confidence
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Text all (new-text)
+        ^Text none (new-text)
+        ^Text edge (new-text)
+        ^:mut ^I32 p 0]
+    (model-init nodes attrs regions text pages ledger)
+    (set p (node-new nodes (nk-paragraph) 0))
+    (ht-set nodes text p (text-blob "x"))
+    (node-add-region nodes regions p 1 7250 -5 54000 100)
+    (node-set-conf nodes p 500)
+    (html-emit all 7 600 nodes attrs regions text ledger)
+    (html-emit none 0 600 nodes attrs regions text ledger)
+    (html-emit edge 4 500 nodes attrs regions text ledger)
+    (assert-text all "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>" "all three options")
+    (assert-text none "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "clean by default")
+    (assert-text edge "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "conf is only written strictly below the threshold")))
+
+(deftest test-furniture-drops-and-milestones-switch-off
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Text kept (new-text)
+        ^Text bare (new-text)
+        ^:mut ^I32 n 0]
+    (model-init nodes attrs regions text pages ledger)
+    (set n (node-new nodes (nk-break) 0))
+    (node-set-sub nodes n 2)
+    (set n (node-new nodes (nk-furniture) -1))
+    (node-set-sub nodes n 7)
+    (html-emit kept 0 0 nodes attrs regions text ledger)
+    (html-emit bare 96 0 nodes attrs regions text ledger)
+    (assert-text kept "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>" "furniture once at the top, then the milestone")
+    (assert-text bare "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>" "both off")))
+
+(deftest test-the-deepest-tree-emits
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)
+        ^:mut ^I32 at 0]
+    (model-init nodes attrs regions text pages ledger)
+    (while (!= at -1)
+      (set at (node-new nodes (nk-section) at)))
+    (assert-eq (html-emit compact 0 0 nodes attrs regions text ledger) 0 "compact")
+    (assert-eq (html-emit pretty 16 0 nodes attrs regions text ledger) 0 "pretty")))

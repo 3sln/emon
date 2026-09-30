@@ -65,6 +65,12 @@ command -v python3 > /dev/null && python3 kin/scripts/pdfnames.py --check
 # schema/emon-1.json. Tooling, not runtime (D054, D055).
 command -v python3 > /dev/null && python3 kin/scripts/json-check.py
 
+# THE HTML GOLDENS' SECOND OPINION (P1.9): an independent renderer reads the
+# JSON goldens and must reproduce every test/html golden; each golden must
+# parse with html5lib in strict mode (zero errors) and match the JSON's
+# structure. Tooling, not runtime (D067).
+command -v python3 > /dev/null && python3 kin/scripts/html-check.py
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then

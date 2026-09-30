@@ -1,0 +1,337 @@
+{
+  "emon": "1.0",
+  "generator": "emon <0.1.0> & \"x\"",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "meta": {
+    "title": "A \"quoted\" <title> & more"
+  },
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector"
+    },
+    {
+      "n": 2,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector"
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 7,
+            "text": "Deep heading"
+          },
+          {
+            "id": 3,
+            "kind": "heading",
+            "text": "No level"
+          },
+          {
+            "id": 4,
+            "kind": "paragraph",
+            "text": "a & b < c > d \"e\" cr:\u000d nul:\u0000 c1: del: ctl:\u0001 ff:\u000c tab:\t lf:\n ls:\u2028 nc:￾ ﷐ 😀",
+            "at": [[1, 72, 90, 540, 120]],
+            "conf": 500
+          },
+          {
+            "id": 5,
+            "kind": "list",
+            "ordered": true,
+            "scheme": "lower-alpha",
+            "start": 5,
+            "children": [
+              {
+                "id": 6,
+                "kind": "item",
+                "text": "one"
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "kind": "list",
+            "ordered": true,
+            "scheme": "upper-roman",
+            "children": [
+              {
+                "id": 8,
+                "kind": "item",
+                "text": "two"
+              }
+            ]
+          },
+          {
+            "id": 9,
+            "kind": "list",
+            "ordered": true,
+            "scheme": "lower-roman",
+            "children": [
+              {
+                "id": 10,
+                "kind": "item",
+                "text": "three"
+              }
+            ]
+          },
+          {
+            "id": 11,
+            "kind": "list",
+            "ordered": true,
+            "scheme": "upper-alpha",
+            "children": [
+              {
+                "id": 12,
+                "kind": "item",
+                "text": "four"
+              }
+            ]
+          },
+          {
+            "id": 13,
+            "kind": "list",
+            "ordered": true,
+            "scheme": "decimal",
+            "children": [
+              {
+                "id": 14,
+                "kind": "item",
+                "text": "five"
+              }
+            ]
+          },
+          {
+            "id": 15,
+            "kind": "list",
+            "children": [
+              {
+                "id": 16,
+                "kind": "item",
+                "text": "six"
+              }
+            ]
+          },
+          {
+            "id": 17,
+            "kind": "code",
+            "text": "\nfirst line\nsecond"
+          },
+          {
+            "id": 18,
+            "kind": "paragraph",
+            "text": "allplainscbare linkown text link[2]\n",
+            "inlines": [
+              {
+                "kind": "span",
+                "style": ["bold", "italic", "underline", "strike", "sub", "sup", "mono", "smallcaps"],
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "all"
+                  }
+                ],
+                "at": [[1, 1, 2, 3, 4]],
+                "conf": 100
+              },
+              {
+                "kind": "span",
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "plain"
+                  }
+                ]
+              },
+              {
+                "kind": "span",
+                "style": ["smallcaps"],
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "sc"
+                  }
+                ]
+              },
+              {
+                "kind": "link",
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "bare link"
+                  }
+                ]
+              },
+              {
+                "kind": "link",
+                "href": "a\"b&c<d>",
+                "text": "own text link"
+              },
+              {
+                "kind": "ref",
+                "marker": "*"
+              },
+              {
+                "kind": "ref",
+                "target": 31,
+                "text": "[2]"
+              },
+              {
+                "kind": "linebreak"
+              }
+            ]
+          },
+          {
+            "id": 31,
+            "kind": "note",
+            "role": "endnote",
+            "marker": "2",
+            "children": [
+              {
+                "id": 32,
+                "kind": "paragraph",
+                "text": "endnote text"
+              }
+            ]
+          },
+          {
+            "id": 33,
+            "kind": "note",
+            "text": "bare note"
+          },
+          {
+            "id": 34,
+            "kind": "table",
+            "children": [
+              {
+                "id": 35,
+                "kind": "rowgroup",
+                "role": "foot",
+                "children": [
+                  {
+                    "id": 36,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 37,
+                        "kind": "cell",
+                        "rowspan": 1,
+                        "colspan": 1,
+                        "text": "cell"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": 38,
+                "kind": "rowgroup",
+                "children": [
+                  {
+                    "id": 39,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 40,
+                        "kind": "cell",
+                        "rowspan": 3,
+                        "header": "col",
+                        "text": "head"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": 41,
+            "kind": "figure",
+            "text": "figure text"
+          },
+          {
+            "id": 42,
+            "kind": "caption",
+            "label": "Fig. \"9\"",
+            "text": "loose caption"
+          },
+          {
+            "id": 43,
+            "kind": "seal"
+          },
+          {
+            "id": 44,
+            "kind": "seal",
+            "subkind": "signature",
+            "name": "J. \"Doe\""
+          },
+          {
+            "id": 45,
+            "kind": "seal",
+            "subkind": "digital-signature",
+            "name": "CA",
+            "text": "signed & sealed"
+          },
+          {
+            "id": 46,
+            "kind": "formula",
+            "display": "inline",
+            "text": "a < b"
+          },
+          {
+            "id": 47,
+            "kind": "field",
+            "checked": false,
+            "text": "field text"
+          },
+          {
+            "id": 48,
+            "kind": "break",
+            "page": 9
+          },
+          {
+            "id": 49,
+            "kind": "break",
+            "page": 10,
+            "label": "x<y"
+          }
+        ]
+      }
+    ]
+  },
+  "furniture": [
+    {
+      "id": 50
+    }
+  ],
+  "dropped": [
+    {
+      "reason": "background",
+      "page": 1,
+      "at": [1, 1, 2, 3, 4],
+      "text": "x & \"y\" <z>",
+      "conf": 500,
+      "src": ["ocr"]
+    },
+    {
+      "reason": "watermark",
+      "page": 2,
+      "at": [2, 0, 0, 0.1, 0.1]
+    }
+  ]
+}

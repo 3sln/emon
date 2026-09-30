@@ -518,6 +518,9 @@ elements as `<template data-emon="dropped">` so they are inert but present),
 `furniture` (`keep`/`drop`/`policy`), `pretty`. **Defaults are clean HTML**:
 no ids, no geometry, policy furniture, milestones on. Escaping: `&`, `<`, `>`,
 `"` and nothing else; attribute values always double-quoted.
+The rest of the mapping this table leaves open (extra `data-emon-*` attributes,
+forbidden code points, `pretty` layout, what a caption or a seal's label is)
+is DEVLOG D068-D069; the code is `kin/html.kin`.
 
 ---
 

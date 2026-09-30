@@ -27,7 +27,7 @@ not_gates="gen emit gates"
 fails=0
 
 # --- the list is complete: every bb.edn task is a gate or a named non-gate ---
-tasks=$(sed -n 's/^  \([a-z][a-z-]*\) *{:doc.*/\1/p' bb.edn)
+tasks=$(sed -n 's/^[ {]*\([a-z][a-z-]*\) *{:doc.*/\1/p' bb.edn | tr '\n' ' ')
 for t in $tasks; do
   case " $gates $not_gates " in
     *" $t "*) ;;

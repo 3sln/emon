@@ -1,0 +1,612 @@
+#!/usr/bin/env python3
+"""The HTML goldens' second opinion (DEVLOG P1.9, D067).
+
+    kin/scripts/html-check.py            check (what `bb unit` runs)
+    kin/scripts/html-check.py --write    (re)write the goldens from the reference
+
+`emon.html` (kin) is what ships; the `test/html/*.html` goldens are what the
+four targets must reproduce byte for byte. This script is a SECOND,
+INDEPENDENT implementation of SPEC 5 in Python, and it does not read the
+Model: it reads the committed JSON goldens (`test/json/NAME.json`, which
+`json-check.py` proves are right), so what it checks is that the HTML says what
+the JSON says. It shares no code with `kin/html.kin`. It does three things:
+
+  1. it renders every JSON golden under each option set in VARIANTS and
+     requires the result to equal the committed `test/html/NAME.VARIANT.html`;
+  2. it parses every golden with html5lib in STRICT mode (any parse error is
+     a failure: well-formedness) and compares what the parser saw with the
+     JSON: the census of elements per node kind, and the text of every
+     heading, paragraph and code block that has no inline structure;
+  3. it checks that a parse-and-reserialize is stable, i.e. the output is
+     already in the parser's own normal form for the tags it uses.
+
+`html5lib` is found on the path, else in `$EMON_PYLIB`, else in
+`~/.cache/emon/pylib`, else it is installed there once with pip (as
+`jsonschema` is, for json-check). If it cannot be had the parse step says
+SKIP, loudly, and the byte comparison still runs.
+"""
+import json
+import os
+import subprocess
+import sys
+from decimal import Decimal
+
+ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+JSON_DIR = os.path.join(ROOT, "test", "json")
+HTML_DIR = os.path.join(ROOT, "test", "html")
+
+# Option bits, transcribed from `kin/html.kin`'s header (the `ho-*` functions).
+IDS, GEOM, CONF, LEDGER, PRETTY, FURN_DROP, NO_MILE = 1, 2, 4, 8, 16, 32, 64
+# name -> (bits, confidence threshold)
+VARIANTS = {
+    "html": (0, 0),
+    "pretty.html": (PRETTY, 0),
+    "full.html": (IDS | GEOM | CONF | LEDGER, 950),
+    "bare.html": (FURN_DROP | NO_MILE, 0),
+}
+
+
+# ------------------------------------------------------------- escaping
+def esc_cp(c):
+    cp = ord(c)
+    if c == "&":
+        return "&amp;"
+    if c == "<":
+        return "&lt;"
+    if c == ">":
+        return "&gt;"
+    if c == '"':
+        return "&quot;"
+    if cp < 32 and cp not in (9, 10, 12, 13):
+        return "�"
+    if 127 <= cp <= 159:
+        return "�"
+    if 0xD800 <= cp <= 0xDFFF or 0xFDD0 <= cp <= 0xFDEF or (cp & 0xFFFE) == 0xFFFE or cp > 0x10FFFF:
+        return "�"
+    return c
+
+
+def esc(s):
+    return "".join(esc_cp(c) for c in s)
+
+
+def cpt(v):
+    return str(v) if isinstance(v, int) else format(v, "f")
+
+
+# ------------------------------------------------------------- the renderer
+BLOCKLESS = ("text", "span", "link", "ref", "linebreak")
+STYLE_OPEN = [("bold", "<b"), ("italic", "<i"), ("underline", "<u"), ("strike", "<s"),
+              ("sub", "<sub"), ("sup", "<sup"), ("mono", "<code"),
+              ("smallcaps", '<span data-emon-style="smallcaps"')]
+STYLE_CLOSE = {"bold": "</b>", "italic": "</i>", "underline": "</u>", "strike": "</s>",
+               "sub": "</sub>", "sup": "</sup>", "mono": "</code>", "smallcaps": "</span>"}
+SEAL_WORD = {"seal": "Seal", "stamp": "Stamp", "signature": "Signature",
+             "initials": "Initials", "digital-signature": "Digital signature"}
+
+
+class R:
+    def __init__(self, bits, conf_below, node_kinds):
+        self.o, self.cb, self.kinds = bits, conf_below, node_kinds
+
+    def on(self, bit):
+        return bool(self.o & bit)
+
+    def nl(self, d):
+        return "\n" + "  " * d if self.on(PRETTY) else ""
+
+    def common(self, n):
+        s = ""
+        inline = n["kind"] in BLOCKLESS
+        if self.on(IDS) and not inline and n["kind"] != "note":
+            s += ' id="emon-%d"' % n["id"]
+        if self.on(GEOM) and n.get("at"):
+            s += ' data-emon-at="%s"' % ";".join(
+                ",".join(cpt(x) for x in r) for r in n["at"])
+        if self.on(CONF) and "conf" in n and n["conf"] < self.cb:
+            s += ' data-emon-conf="%d"' % n["conf"]
+        return s
+
+    def target_href(self, t):
+        return ("#fn-%d" if self.kinds[t] == "note" else "#emon-%d") % t
+
+    # ---- inline content
+    def inner(self, n):
+        if "inlines" in n:
+            return "".join(self.inline(c) for c in n["inlines"])
+        if "children" in n and n["kind"] in BLOCKLESS:
+            return "".join(self.inline(c) for c in n["children"])
+        return esc(n["text"]) if "text" in n else ""
+
+    def inline(self, n):
+        k = n["kind"]
+        if k == "text":
+            return esc(n.get("text", ""))
+        if k == "linebreak":
+            return "<br%s>" % self.common(n)
+        if k == "span":
+            styles = n.get("style", [])
+            if not styles:
+                return "<span%s>%s</span>" % (self.common(n), self.inner(n))
+            out, first = "", True
+            for name, tag in STYLE_OPEN:
+                if name in styles:
+                    out += tag + (self.common(n) if first else "") + ">"
+                    first = False
+            out += self.inner(n)
+            for name, _ in reversed(STYLE_OPEN):
+                if name in styles:
+                    out += STYLE_CLOSE[name]
+            return out
+        if k == "link":
+            href = ""
+            if "href" in n:
+                href = ' href="%s"' % esc(n["href"])
+            elif "target" in n:
+                href = ' href="%s"' % self.target_href(n["target"])
+            return "<a%s%s>%s</a>" % (href, self.common(n), self.inner(n))
+        if k == "ref":
+            if "target" in n:
+                open_, close = '<a role="doc-noteref" href="%s"' % self.target_href(n["target"]), "</a>"
+            else:
+                open_, close = '<span role="doc-noteref"', "</span>"
+            if "children" in n or "text" in n:
+                body = self.inner(n)
+            else:
+                body = esc(n["marker"]) if "marker" in n else ""
+            return open_ + self.common(n) + ">" + body + close
+        raise ValueError(k)
+
+    # ---- blocks
+    def blocks(self, n, d, skip=None):
+        kids = n.get("children", [])
+        return [self.block(c, d, n["kind"]) for c in kids]
+
+    def body(self, n, d):
+        """Inline content, then the block children; answers (text, #blocks)."""
+        s = self.inner(n)
+        parts = [p for p in self.blocks(n, d) if p]
+        return s + "".join(parts), len(parts)
+
+    def wrap(self, open_, close, n, d):
+        s, hb = self.body(n, d + 1)
+        return open_ + s + (self.nl(d) if hb else "") + close
+
+    def attr(self, name, n, key, conv=esc):
+        return ' %s="%s"' % (name, conv(n[key])) if key in n else ""
+
+    def block(self, n, d, parent=None):
+        k = n["kind"]
+        if k in BLOCKLESS:
+            return self.nl(d) + self.inline(n)
+        if k == "break":
+            if self.on(NO_MILE):
+                return ""
+            s = '<span data-emon-page="%d"' % n["page"]
+            s += self.attr("data-emon-page-label", n, "label")
+            return self.nl(d) + s + self.common(n) + "></span>"
+        nl = self.nl(d)
+        c = self.common(n)
+        if k == "section":
+            return nl + self.wrap("<section%s>" % c, "</section>", n, d)
+        if k == "heading":
+            lv = max(n.get("level", 0), 1)
+            pk = min(lv, 6)
+            o = "<h%d" % pk
+            if lv > 6:
+                o += ' aria-level="%d"' % lv
+            o += self.attr("data-emon-number", n, "number")
+            o += c + ">"
+            if "number" in n:
+                o += esc(n["number"]) + " "
+            return nl + self.wrap(o, "</h%d>" % pk, n, d)
+        if k == "paragraph":
+            return nl + self.wrap("<p%s%s>" % (self.attr("data-emon-align", n, "align"), c), "</p>", n, d)
+        if k == "list":
+            if n.get("ordered"):
+                o = "<ol"
+                if "start" in n:
+                    o += ' start="%d"' % n["start"]
+                sc = n.get("scheme", "")
+                if len(sc) == 11:
+                    o += {("l", "a"): ' type="a"', ("u", "a"): ' type="A"',
+                          ("l", "r"): ' type="i"', ("u", "r"): ' type="I"'}.get((sc[0], sc[6]), "")
+                return nl + self.wrap(o + c + ">", "</ol>", n, d)
+            return nl + self.wrap("<ul%s>" % c, "</ul>", n, d)
+        if k == "item":
+            o = "<li"
+            if "value" in n:
+                o += ' value="%d"' % n["value"]
+            o += self.attr("data-emon-marker", n, "marker")
+            return nl + self.wrap(o + c + ">", "</li>", n, d)
+        if k == "table":
+            kids = n.get("children", [])
+            s = "<table%s>" % c
+            for ch in kids:
+                if ch["kind"] == "caption":
+                    s += self.block(ch, d + 1, "table")
+            for ch in kids:
+                if ch["kind"] != "caption":
+                    s += self.block(ch, d + 1, "table")
+            return nl + s + self.nl(d) + "</table>"
+        if k == "rowgroup":
+            tag = {"head": "thead", "foot": "tfoot"}.get(n.get("role"), "tbody")
+            return nl + self.children_only("<%s%s>" % (tag, c), "</%s>" % tag, n, d)
+        if k == "row":
+            o = "<tr" + (' data-emon-repeated="true"' if n.get("repeated") else "") + c + ">"
+            return nl + self.children_only(o, "</tr>", n, d)
+        if k == "cell":
+            hd = n.get("header")
+            tag = "th" if hd else "td"
+            o = '<th scope="%s"' % hd if hd else "<td"
+            for key in ("rowspan", "colspan"):
+                if key in n and n[key] != 1:
+                    o += ' %s="%d"' % (key, n[key])
+            return nl + self.wrap(o + c + ">", "</%s>" % tag, n, d)
+        if k == "caption":
+            tag = {"table": "caption", "figure": "figcaption"}.get(parent)
+            o = "<" + tag if tag else '<p data-emon="caption"'
+            o += self.attr("data-emon-label", n, "label") + c + ">"
+            return nl + self.wrap(o, "</%s>" % (tag or "p"), n, d)
+        if k == "figure":
+            o = '<figure data-emon-kind="%s" role="img"' % n.get("subkind", "unknown")
+            o += self.attr("aria-label", n, "alt")
+            o += self.attr("data-emon-label", n, "label") + c + ">"
+            s = self.inner(n)
+            for lb in n.get("labels", []):
+                s += '<span data-emon="label">%s</span>' % esc(lb)
+            parts = [p for p in self.blocks(n, d + 1) if p]
+            return nl + o + s + "".join(parts) + (self.nl(d) if parts else "") + "</figure>"
+        if k == "seal":
+            sk = n.get("subkind", "seal")
+            o = '<figure data-emon-kind="%s"' % sk
+            o += self.attr("data-emon-name", n, "name")
+            o += self.attr("data-emon-date", n, "date")
+            o += self.attr("data-emon-color", n, "color")
+            word = SEAL_WORD.get(sk, "Seal")
+            if "text" in n:
+                label = word + ": " + esc(n["text"])
+            elif "name" in n:
+                label = word + ": " + esc(n["name"])
+            else:
+                label = word
+            return nl + o + ' role="img" aria-label="%s"%s></figure>' % (label, c)
+        if k == "formula":
+            o = '<figure data-emon-kind="formula"'
+            o += self.attr("data-emon-display", n, "display")
+            return nl + o + ' aria-label="%s"%s></figure>' % (esc(n.get("text", "")), c)
+        if k == "code":
+            s = self.inner(n)
+            parts = [p for p in self.blocks(n, d + 1) if p]
+            return (nl + "<pre%s><code>" % c + s + "</code>" + "".join(parts)
+                    + (self.nl(d) if parts else "") + "</pre>")
+        if k == "quote":
+            return nl + self.wrap("<blockquote%s>" % c, "</blockquote>", n, d)
+        if k == "note":
+            role = "doc-endnote" if n.get("role") == "endnote" else "doc-footnote"
+            o = '<aside role="%s" id="fn-%d"' % (role, n["id"])
+            o += self.attr("data-emon-marker", n, "marker") + c + ">"
+            return nl + self.wrap(o, "</aside>", n, d)
+        if k == "field":
+            o = '<span data-emon="field"'
+            o += self.attr("data-emon-name", n, "name")
+            o += self.attr("data-emon-type", n, "type")
+            if "checked" in n:
+                o += ' data-emon-checked="%s"' % ("true" if n["checked"] else "false")
+            body = esc(n["value"]) if "value" in n else self.inner(n)
+            return nl + o + c + ">" + body + "</span>"
+        raise ValueError("kind " + k)
+
+    def children_only(self, open_, close, n, d):
+        parts = [p for p in self.blocks(n, d + 1) if p]
+        return open_ + "".join(parts) + (self.nl(d) if parts else "") + close
+
+    def furniture(self, f, d):
+        o = '<aside data-emon="furniture"'
+        o += self.attr("data-emon-role", f, "role")
+        if "pages" in f:
+            o += ' data-emon-pages="%s"' % " ".join(str(p) for p in f["pages"])
+        f = dict(f, kind="furniture")
+        o += self.common(f) + ">"
+        parts = []
+        if "template" in f:
+            parts.append(self.nl(d + 1) + "<p>%s</p>" % esc(f["template"]))
+        parts += [p for p in self.blocks(f, d + 1) if p]
+        return self.nl(d) + o + "".join(parts) + (self.nl(d) if parts else "") + "</aside>"
+
+
+def kind_index(doc):
+    idx = {}
+
+    def walk(n):
+        if "id" in n:
+            idx[n["id"]] = n["kind"]
+        for c in n.get("children", []):
+            walk(c)
+    walk(doc["body"])
+    for f in doc.get("furniture", []):
+        idx[f["id"]] = "furniture"
+        for c in f.get("children", []):
+            walk(c)
+    return idx
+
+
+def render(doc, bits, cb):
+    r = R(bits, cb, kind_index(doc))
+    src, meta = doc.get("source", {}), doc.get("meta", {})
+    nl = r.nl
+    out = "<!doctype html>" + nl(0) + "<html"
+    if "lang" in src:
+        out += ' lang="%s"' % esc(src["lang"])
+    out += ">" + nl(1) + "<head>" + nl(2) + '<meta charset="utf-8">' + nl(2)
+    out += "<title>%s</title>" % esc(meta.get("title", ""))
+    for name, val in (("generator", doc.get("generator")),) + tuple(
+            (k, meta.get(k)) for k in ("author", "subject", "keywords", "creator",
+                                       "producer", "created", "modified")):
+        if val is not None:
+            out += nl(2) + '<meta name="%s" content="%s">' % (name, esc(val))
+    out += nl(1) + "</head>" + nl(1) + "<body>" + nl(2) + "<main>"
+    if not bits & FURN_DROP:
+        for f in doc.get("furniture", []):
+            out += r.furniture(f, 3)
+    out += "".join(p for p in r.blocks(doc["body"], 3) if p)
+    if bits & LEDGER:
+        for d_ in doc.get("dropped", []):
+            out += nl(3) + '<template data-emon="dropped" data-emon-reason="%s" data-emon-page="%d">%s</template>' % (
+                d_["reason"], d_["page"], esc(d_["text"]) if "text" in d_ else "")
+    out += nl(2) + "</main>" + nl(1) + "</body>" + nl(0) + "</html>"
+    return out
+
+
+# ----------------------------------------------------------- html5lib checks
+def find_html5lib():
+    try:
+        import html5lib  # noqa
+        return html5lib
+    except ImportError:
+        pass
+    for lib in (os.environ.get("EMON_PYLIB"), os.path.expanduser("~/.cache/emon/pylib")):
+        if lib and os.path.isdir(lib):
+            sys.path.insert(0, lib)
+            try:
+                import html5lib  # noqa
+                return html5lib
+            except ImportError:
+                sys.path.pop(0)
+    lib = os.path.expanduser("~/.cache/emon/pylib")
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--target", lib,
+                        "html5lib"], capture_output=True, text=True)
+    if r.returncode == 0:
+        sys.path.insert(0, lib)
+        try:
+            import html5lib  # noqa
+            return html5lib
+        except ImportError:
+            pass
+    return None
+
+
+def text_of(el):
+    """textContent, with <br> as a newline (the JSON's derived text)."""
+    out = []
+
+    def walk(e):
+        if isinstance(e.tag, str) and e.tag.endswith("br"):
+            out.append("\n")
+        if e.text:
+            out.append(e.text)
+        for c in e:
+            walk(c)
+            if c.tail:
+                out.append(c.tail)
+    walk(el)
+    return "".join(out)
+
+
+def json_census(doc):
+    """Expected element counts, from the JSON: name -> count."""
+    cen = {}
+
+    def add(k, n=1):
+        cen[k] = cen.get(k, 0) + n
+
+    def walk(n, parent=None):
+        k = n["kind"]
+        if k == "section":
+            add("section")
+        elif k == "heading":
+            add("h%d" % min(max(n.get("level", 0), 1), 6))
+        elif k == "paragraph":
+            add("p")
+        elif k == "list":
+            add("ol" if n.get("ordered") else "ul")
+        elif k == "item":
+            add("li")
+        elif k == "table":
+            add("table")
+        elif k == "rowgroup":
+            add({"head": "thead", "foot": "tfoot"}.get(n.get("role"), "tbody"))
+        elif k == "row":
+            add("tr")
+        elif k == "cell":
+            add("th" if n.get("header") else "td")
+        elif k == "caption":
+            add({"table": "caption", "figure": "figcaption"}.get(parent, "p"))
+        elif k in ("figure", "seal", "formula"):
+            add("figure")
+        elif k == "code":
+            add("pre")
+        elif k == "quote":
+            add("blockquote")
+        elif k == "note":
+            add("aside")
+        elif k == "field":
+            add("span-field")
+        elif k == "break":
+            add("span-page")
+        elif k == "linebreak":
+            add("br")
+        elif k == "link":
+            add("a")
+        elif k == "ref":
+            add("a-or-span-noteref")
+        for key in ("children", "inlines"):
+            for c in n.get(key, []):
+                walk(c, k)
+        if k == "figure":
+            add("span-label", len(n.get("labels", [])))
+
+    walk(doc["body"])
+    for f in doc.get("furniture", []):
+        add("aside")
+        if "template" in f:
+            add("p")
+        for c in f.get("children", []):
+            walk(c, "furniture")
+    return cen
+
+
+def html_census(root):
+    cen = {}
+
+    def add(k):
+        cen[k] = cen.get(k, 0) + 1
+
+    def walk(e):
+        t = e.tag.split("}")[-1] if isinstance(e.tag, str) else ""
+        if t in ("section", "h1", "h2", "h3", "h4", "h5", "h6", "p", "ol", "ul", "li",
+                 "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
+                 "figcaption", "figure", "pre", "blockquote", "aside", "br", "a"):
+            add(t)
+        elif t == "span":
+            if e.get("data-emon") == "field":
+                add("span-field")
+            elif e.get("data-emon-page") is not None:
+                add("span-page")
+            elif e.get("data-emon") == "label":
+                add("span-label")
+            elif e.get("role") == "doc-noteref":
+                add("a-or-span-noteref")
+        for c in e:
+            walk(c)
+    walk(root)
+    # a ref is an <a> (counted above) or a span; link <a>s are the rest
+    return cen
+
+
+def structure_check(h5, name, html, doc, bits):
+    p = h5.HTMLParser(tree=h5.getTreeBuilder("etree"), strict=True,
+                      namespaceHTMLElements=False)
+    try:
+        tree = p.parse(html)
+    except Exception as e:  # html5lib raises ParseError in strict mode
+        return ["%s: parse error: %s" % (name, e)]
+    bad = []
+    main = tree.find(".//main")
+    if main is None:
+        return ["%s: no <main>" % name]
+    # ---- census (only for the variants that drop nothing the JSON lists)
+    if not bits & (FURN_DROP | NO_MILE):
+        want = json_census(doc)
+        # ledger templates are not in the census; aside/p of furniture are
+        want.setdefault("a", 0)
+        refs = want.pop("a-or-span-noteref", 0)
+        got = html_census(main)
+        got.pop("a-or-span-noteref", None)
+        got_refs = sum(1 for e in main.iter() if e.get("role") == "doc-noteref")
+        got["a"] = got.get("a", 0) - sum(1 for e in main.iter() if e.tag == "a" and e.get("role") == "doc-noteref")
+        if got_refs != refs:
+            bad.append("%s: %d noterefs, JSON has %d" % (name, got_refs, refs))
+        for k in sorted(set(want) | set(got)):
+            if want.get(k, 0) != got.get(k, 0):
+                bad.append("%s: %d <%s>, the JSON has %d" % (name, got.get(k, 0), k, want.get(k, 0)))
+    # ---- text: headings, paragraphs and code with no inline structure
+    want_txt = []
+
+    def walk(n):
+        k = n["kind"]
+        if k in ("heading", "paragraph", "code") and "inlines" not in n and "children" not in n:
+            t = n.get("text", "")
+            if k == "heading" and "number" in n:
+                t = n["number"] + " " + t
+            want_txt.append((k, t))
+        for c in n.get("children", []):
+            walk(c)
+    walk(doc["body"])
+    got_txt = []
+
+    def walk_h(e):
+        t = e.tag if isinstance(e.tag, str) else ""
+        if t in ("h1", "h2", "h3", "h4", "h5", "h6", "p", "pre") and e.get("data-emon") != "caption":
+            got_txt.append((t, text_of(e)))
+        for c in e:
+            walk_h(c)
+    walk_h(main)
+    kmap = {"heading": "h", "paragraph": "p", "code": "p"}
+    pos = 0
+    for k, t in want_txt:
+        # what a parser makes of what we wrote: forbidden characters were
+        # replaced, and a CR is folded into an LF
+        t = "".join(esc_cp(c) if c in '\ufffd' or esc_cp(c) == "\ufffd" else c for c in t)
+        t = t.replace("\r\n", "\n").replace("\r", "\n")
+        for j in range(pos, len(got_txt)):
+            tag, s = got_txt[j]
+            if tag[0] == kmap[k] and s == t:
+                pos = j + 1
+                break
+        else:
+            bad.append("%s: the JSON's %s %r is not in the HTML, in order" % (name, k, t[:40]))
+    return bad
+
+
+# ------------------------------------------------------------------- main
+def golden(path):
+    with open(path, encoding="utf-8", newline="") as f:
+        s = f.read()
+    return s[:-1] if s.endswith("\n") else s
+
+
+def main():
+    write = "--write" in sys.argv
+    names = sorted(f[:-5] for f in os.listdir(JSON_DIR)
+                   if f.endswith(".json") and not f.endswith(".pretty.json"))
+    os.makedirs(HTML_DIR, exist_ok=True)
+    h5 = None if write else find_html5lib()
+    bad, count = 0, 0
+    problems = []
+    for n in names:
+        with open(os.path.join(JSON_DIR, n + ".json"), encoding="utf-8") as f:
+            doc = json.load(f, parse_float=Decimal)
+        for v, (bits, cb) in VARIANTS.items():
+            want = render(doc, bits, cb)
+            path = os.path.join(HTML_DIR, "%s.%s" % (n, v))
+            count += 1
+            if write:
+                with open(path, "w", encoding="utf-8", newline="") as f:
+                    f.write(want + "\n")
+                continue
+            if not os.path.exists(path) or golden(path) != want:
+                print("  FAIL html-check: %s.%s differs from the reference renderer" % (n, v))
+                bad += 1
+            elif h5 is not None:
+                problems += structure_check(h5, "%s.%s" % (n, v), want, doc, bits)
+    if write:
+        print("  wrote %d goldens" % count)
+        return 0
+    if bad:
+        return 1
+    print("  ok   html-check: %d goldens (%d models x %d option sets) equal the reference" % (
+        count, len(names), len(VARIANTS)))
+    if h5 is None:
+        print("  SKIP html-check: no html5lib")
+        return 0
+    for p in problems[:10]:
+        print("  FAIL html-check: " + p)
+    if problems:
+        return 1
+    print("  ok   html-check: %d goldens parse with html5lib (strict, zero errors) and match the JSON's structure" % count)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

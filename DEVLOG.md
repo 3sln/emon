@@ -252,8 +252,10 @@ and whose gates exist before there is anything to gate.
   (its score) and no `FAIL`, and every `bb.edn` task must be in the list or in
   the named non-gates (`gen emit gates`), so a gate cannot be added and
   forgotten. Learnt: `bb check` runs `lang-test` itself, so it scores twice;
-  harmless, and cheaper than teaching the gate list who runs whom. Commit:
-  pending (D037).
+  harmless, and cheaper than teaching the gate list who runs whom. Fixed in
+  P1.9 (D070): the task-list check printed spurious `gate X is not a bb.edn
+  task` lines (newline-separated names tested with space-delimited patterns),
+  so `bb gates` is now a trustworthy single green or red. Commit: pending (D037).
 
 - [x] **P0.8 — README-free by design; SPEC and DEVLOG are the docs.** Confirm
   nothing else is needed for a newcomer to run `bb check`; if something is,
@@ -484,12 +486,29 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: the HTML-printed fixture's paragraphs equal the source HTML's `<p>`
   texts (script compares); the JSON is a golden.
 
-- [ ] **P1.9 — HTML emitter** (`kin/html.kin`, `emon.html`; SPEC §5).
+- [x] **P1.9 — HTML emitter** (`kin/html.kin`, `emon.html`; SPEC §5).
   *Brief*: the §5.1 mapping for the kinds that exist (and stubs for the rest
   that emit a comment-free placeholder, not nothing), escaping per §5.2, the
   `geometry`/`ids` options.
   *Done when*: HTML goldens for the fixtures; the output parses cleanly
   with html5lib (zero parse errors — tooling in the gate script).
+  *Done 2026-09-30.* `kin/html.kin` (`emon.html`, `html-emit t opts conf-below
+  nodes attrs regions text ledger`) writes SPEC 5 (D067-D069): byte-identical on
+  all four targets for five Models (`test/json/{minimal,sample,kinds,probe,
+  corners}.model`, the JSON goldens' own scripts, plus `corners`: every
+  escape, fallback and branch `kinds` does not reach) under four option sets
+  each (defaults compact, `pretty`, `full` = ids + geometry + confidence +
+  ledger, `bare` = furniture dropped + milestones off): 20 goldens under
+  `test/html/`, plus laws for the empty document, heading levels, escapes,
+  the options, and the 199-deep tree. `kin/scripts/html-check.py` (run first
+  by `bb unit`) is an independent Python renderer that reads the JSON goldens,
+  reproduces every HTML golden, parses each with html5lib in STRICT mode (zero
+  parse errors) and matches its element census and heading/paragraph/code
+  texts to the JSON's. Learnt: `&#13;` is itself a parse error (CR stays raw);
+  a `<code>` between `<pre>` and its text is why a leading newline survives;
+  the script parser moved from `emon.jsontest` to `emon.mscript` because a
+  test namespace cannot be imported in Go; a `deftest` helper can assert now
+  (D070). Commit: pending (D037).
 
 - [ ] **P1.10 — Rust host: Engine API and a driver.**
   *Brief*: `host/rust/src/{emon.rs,port.rs}`: `Engine::new(Config)`,
@@ -1778,6 +1797,93 @@ any list of files; no gate runs these scripts, the committed files are the truth
 only way to know it.
 **Alternatives**: committing corpus PDFs (licences); comparing text instead of
 boxes (P1.6+).
+- [ ] **Signed off** (maintainer)
+
+### D067 — HTML goldens reuse the JSON goldens' Models, in four option sets, with an independent renderer that reads the JSON
+**Decision**: `test/html/NAME.{html,pretty.html,full.html,bare.html}` for each
+`test/json/NAME.model`: the same Model `emon.jsontest` builds (the script
+parser is now the non-test module `emon.mscript`, which `emon.jsontest` and
+`emon.htmltest` both require; Go cannot import a test package), emitted under
+defaults / `pretty` / ids+geometry+confidence(<950)+ledger / furniture dropped
+and milestones off. A new `corners` Model (with its JSON goldens, also checked
+by `emon.jsontest`) covers what `kinds` does not. `kin/scripts/html-check.py`
+renders the JSON goldens with no code shared with `kin/html.kin` and requires
+the committed bytes; it then parses each with html5lib in strict mode (any
+parse error fails) and compares the element census and the plain text of
+structure-free headings, paragraphs and code with the JSON. `bb unit` runs it
+first; `html5lib` is installed once into `~/.cache/emon/pylib` like
+`jsonschema`, and its absence is a loud SKIP of the parse step only.
+**Why**: DEVLOG P1.9's done-when; reading the JSON rather than the Model makes
+the check that the HTML says what the JSON says, and needs no second Model
+parser. **Alternatives**: a Python Model builder (json-check already has one,
+but HTML is a projection of the JSON's content so the JSON is the simpler
+input); goldens for the three fixtures only.
+- [ ] **Signed off** (maintainer)
+
+### D068 — HTML escaping: the four characters, U+FFFD for what HTML forbids, raw CR; ids on blocks only
+**Decision**: SPEC 5.2's `& < > "` (in text and attribute values alike, values
+always double-quoted). Added: a code point HTML forbids in the input stream
+(C0 and C1 controls except tab, LF, FF and CR; surrogates; U+FDD0-FDEF; the
+last two code points of every plane) is written as U+FFFD, so the output is
+valid HTML5 whatever the Model holds (PDF text layers do hold NUL and C1).
+CR is written raw: `&#13;` is itself a parse error and a parser folds a raw CR
+into LF. `id="emon-N"` (option `ids`) goes on block elements only, as D052's
+JSON does; a `note` is always `id="fn-N"` (what `ref` points at) and never a
+second id; an internal `link.target` becomes `#fn-N` for a note and `#emon-N`
+otherwise (which resolves when `ids` is on).
+**Why**: a scraper's parser must not see parse errors; SPEC said "nothing
+else" but did not consider forbidden characters. **Alternatives**: escape
+controls as numeric references (parse errors too); drop them silently (loses
+the fact that something was there).
+- [ ] **Signed off** (maintainer)
+
+### D069 — The mapping SPEC 5.1 left open
+**Decision** (`kin/html.kin`; all else is SPEC 5.1 as written):
+`html-emit` takes `opts` (a bitset: `ho-ids 1`, `ho-geometry 2`,
+`ho-confidence 4`, `ho-ledger 8`, `ho-pretty 16`, `ho-furniture-drop 32`,
+`ho-no-milestones 64`) and `conf-below` (nodes with `0 <= conf < conf-below`
+get `data-emon-conf`); `keep` and `policy` furniture are the same here
+(policy is the Model's content, not the emitter's). `pretty` puts each block
+element on its own line, two spaces a level, inline content on its element's
+line. A heading's level < 1 is `<h1>`, > 6 is `<h6 aria-level>`, and its
+`number` is written in front of its text as well as in `data-emon-number`.
+An `ol` gets `start`, and `type` from `lower-alpha`/`upper-alpha`/`lower-roman`/
+`upper-roman` (decimal and unknown schemes: none). Attributes the SPEC did not
+list, so nothing the Model says is lost: `data-emon-marker` (item, note),
+`data-emon-label` (caption, figure), `data-emon-align`, `data-emon-repeated`,
+`data-emon-pages` and `data-emon-role` (furniture), `data-emon-date` and
+`-color` (seal), `data-emon-display` (formula), `data-emon-type` and
+`-checked` (field). A rowgroup is `thead`/`tfoot` by role, else `tbody`; a
+table's caption is written first; a caption is `<caption>` in a table,
+`<figcaption>` in a figure, else `<p data-emon="caption">`. A figure's
+`labels` are `<span data-emon="label">`s inside it; a seal is an empty
+`<figure>` whose `aria-label` is `Seal|Stamp|Signature|Initials|Digital
+signature` + `: ` + its text (else its name); a furniture aside holds its
+template as a `<p>` then its blocks; `ref` with no target is a `<span
+role="doc-noteref">`; a kind with no mapping would be a `<div
+data-emon-kind>` (none is left). The ledger is one inert `<template
+data-emon="dropped" data-emon-reason data-emon-page>` per row, at the end of
+`<main>`. `<title>` is always present (empty if the Model has none);
+metadata are `<meta name>` with the JSON key as the name.
+**Why**: each is the plainest reading of SPEC 5.1/5.2 that keeps the Model's
+information in a form a crawler can read. **Alternatives**: `<h2>` for an
+unnumbered heading (inventing a level); `<dl>` for a figure's labels.
+- [ ] **Signed off** (maintainer)
+
+### D070 — A `deftest` helper asserts by taking the test handle; the gates task list is read whole
+**Decision**: `emon.test` has a tag `TestT` (`*testing.T` in Go, an inert `I32`
+elsewhere) and a form `(test-t)` (`emonT` in Go, `0` elsewhere). A helper that
+asserts declares a parameter named `emon-t` (Go spells it `emonT`, the name the
+assert templates use) and the law passes `(test-t)`: `emon.htmltest`'s
+`ht-golden` is the first. Also, `kin/scripts/gates` read `bb.edn`'s task names
+into a newline-separated string and tested membership with space-delimited
+patterns, so the newlines were never spaces and it printed `gate X is not a
+bb.edn task` while every score was ok; it now reads the names as one
+space-separated line (and finds `gen`, whose line starts with the map's `{`).
+**Why**: the audit block in "Found in kin" (this was emon's vocabulary, not
+kin); a gate that cries wolf is a gate nobody trusts (D057).
+**Alternatives**: templates reading a scoped frame (kin has none); the helper
+answering a code for the law to assert (what P1.2 did).
 - [ ] **Signed off** (maintainer)
 
 ---

@@ -1,0 +1,141 @@
+# The corners of the HTML emitter (P1.9): every escape, every fallback, every
+# branch kinds.model does not reach. Codes as in kinds.model.
+# Keys: 4 number 15 scheme 16 start 17 marker 24 rowspan 25 colspan 28 label
+# 29 target 30 alt 32 name 37 href 39 title 44 generator 74 checked.
+at 0 44 emon <0.1.0> & "x"
+at 0 39 A "quoted" <title> & more
+pg 1 61200 79200 0 1
+pg 2 61200 79200 0 1
+# 1 section
+n 2 0
+# 2 heading level 7 (h6 + aria-level); 3 heading with no level
+n 3 1
+s 2 7
+t 2 Deep heading
+n 3 1
+t 3 No level
+# 4 paragraph: every character HTML treats specially, or forbids
+n 4 1
+t 4 a & b < c > d "e" cr:\u000d nul:\u0000 c1:\u0085 del:\u007f ctl:\u0001 ff:\u000c tab:\t lf:\n ls:  nc:￾ ﷐ \u{1F600}
+r 4 1 7200 9000 54000 12000
+c 4 500
+# 5..16 lists: every scheme
+n 5 1
+s 5 2
+at 5 15 lower-alpha
+ai 5 16 5
+n 6 5
+t 6 one
+n 5 1
+s 7 2
+at 7 15 upper-roman
+n 6 7
+t 8 two
+n 5 1
+s 9 2
+at 9 15 lower-roman
+n 6 9
+t 10 three
+n 5 1
+s 11 2
+at 11 15 upper-alpha
+n 6 11
+t 12 four
+n 5 1
+s 13 2
+at 13 15 decimal
+n 6 13
+t 14 five
+n 5 1
+n 6 15
+t 16 six
+# 17 code starting with a newline
+n 15 1
+t 17 \nfirst line\nsecond
+# 18 paragraph with every inline: 19 all styles, 21 none, 23 smallcaps, 25 a
+# bare link, 27 a link with a hostile href, 28 a ref with no target, 29 a ref
+# to the endnote (31), 30 a linebreak
+n 4 1
+n 22 18
+s 19 255
+r 19 1 100 200 300 400
+c 19 100
+n 21 19
+t 20 all
+n 22 18
+n 21 21
+t 22 plain
+n 22 18
+s 23 128
+n 21 23
+t 24 sc
+n 23 18
+n 21 25
+t 26 bare link
+n 23 18
+at 27 37 a"b&c<d>
+t 27 own text link
+n 24 18
+at 28 17 *
+n 24 18
+an 29 29 31
+t 29 [2]
+n 25 18
+# 31 endnote (with a paragraph, 32), 33 a note with no role and its own text
+n 17 1
+s 31 5
+at 31 17 2
+n 4 31
+t 32 endnote text
+n 17 1
+t 33 bare note
+# 34 table with a foot group first, plain cells, spans of 1 kept out, a header
+# cell with a rowspan
+n 7 1
+n 8 34
+s 35 3
+n 9 35
+n 10 36
+ai 37 25 1
+ai 37 24 1
+t 37 cell
+n 8 34
+n 9 38
+n 10 39
+s 40 1
+ai 40 24 3
+t 40 head
+# 41 figure with no kind and no alt, its own text; 42 a caption outside any
+# table or figure
+n 12 1
+t 41 figure text
+n 11 1
+at 42 28 Fig. "9"
+t 42 loose caption
+# 43 seal of no kind; 44 a signature with a name only; 45 a digital signature
+# with text and a name; 46 an inline formula; 47 a field with its own text
+n 13 1
+n 13 1
+s 44 3
+at 44 32 J. "Doe"
+n 13 1
+s 45 5
+at 45 32 CA
+t 45 signed & sealed
+n 14 1
+s 46 2
+t 46 a < b
+n 18 1
+ab 47 74 0
+t 47 field text
+# 48 a milestone with no label, 49 one with a label
+n 20 1
+s 48 9
+n 20 1
+s 49 10
+at 49 28 x<y
+# 50 furniture with nothing on it
+n 19 -1
+d 2 1 100 200 300 400 500 4
+dt 0 x & "y" <z>
+d 1 2 0 0 10 10 -1 0

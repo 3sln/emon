@@ -35,6 +35,24 @@
    :types {:rust "&str" :go "string" :java "String" :csharp "string"}
    :zero {:go "\"\""}})
 
+;; A HELPER THAT ASSERTS (DEVLOG "Found in kin", audit 2026-09-30). The
+;; assertion forms reach Go's `*testing.T` by the NAME `emonT`, which only the
+;; `deftest` frame binds; a helper `defn` has no such binding. So a helper that
+;; asserts TAKES THE HANDLE AS A PARAMETER NAMED `emon-t` and the law passes
+;; `(test-t)`:
+;;
+;;     (defn ^I32 check-row [^TestT emon-t ^I32 row] (assert-eq ... "law") ...)
+;;     (deftest test-a-law (check-row (test-t) 3))
+;;
+;; `TestT` is `*testing.T` in Go and an inert `I32` elsewhere (Rust, Java and
+;; C# assertions throw or panic and need no handle). The parameter's NAME is
+;; the contract: Go's templates spell `emonT` (kin's `emon-t`), so a helper that names it
+;; otherwise does not compile, which is loud and immediate.
+(def TestT
+  {:name 'TestT
+   :types {:rust "i32" :go "*testing.T" :java "int" :csharp "int"}
+   :zero {:go "nil"}})
+
 (defn- frame
   "The lines each framework wants around a test body: opening lines and a
   close. A vector of lines, since each is emitted at the current indent."
@@ -74,10 +92,13 @@
 (def vocabulary
   {:namespace 'emon.test
    :targets #{:rust :go :java :csharp}
-   :tags {'Str Str}
+   :tags {'Str Str 'TestT TestT}
    :names {}
    :forms
    {'deftest deftest
+    ;; The handle a helper that asserts is given: `(helper (test-t) ...)`.
+    'test-t (kl/call {:go "emonT" :rust "0" :java "0" :csharp "0"}
+                     {:tag TestT :arity 0})
     ;; `assert-eq got want "law"` -- I32s.
     'assert-eq (kl/call {:go "port.AssertEq(emonT, {0}, {1}, {2})"
                          :rust "crate::testport::assert_eq({0}, {1}, {2})"

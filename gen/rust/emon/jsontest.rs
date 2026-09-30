@@ -3,302 +3,8 @@
 
 use crate::emon::json::*;
 use crate::emon::model::*;
+use crate::emon::mscript::*;
 
-pub(crate) fn jt_eol(b: &[u8], from: i32) -> i32 {
-    // Index of the next newline at or after `from`, or the blob's length.
-    let mut k: i32 = from;
-    while (k < crate::port::blob_len(b)) && (crate::port::blob_u8(b, k) != 10) {
-        k += 1;
-    }
-    return k;
-}
-pub(crate) fn jt_skip(b: &[u8], end: i32, mut st: &mut crate::port::Cells) -> i32 {
-    // Step the cursor (st[0]) over spaces.
-    let mut k: i32 = crate::port::cells_at(st, 0);
-    while (k < end) && (crate::port::blob_u8(b, k) == 32) {
-        k += 1;
-    }
-    crate::port::cells_set(st, 0, k);
-    return k;
-}
-pub(crate) fn jt_int(b: &[u8], end: i32, mut st: &mut crate::port::Cells) -> i32 {
-    // The next decimal integer on the line, with an optional minus. It is
-    // accumulated NEGATIVELY so that -2147483648 does not overflow.
-    let mut k: i32 = jt_skip(b, end, st);
-    let mut v: i32 = 0;
-    let mut neg: i32 = 0;
-    if (k < end) && (crate::port::blob_u8(b, k) == 45) {
-        neg = 1;
-        k += 1;
-    }
-    while (k < end) && (crate::port::blob_u8(b, k) >= 48) && (crate::port::blob_u8(b, k) <= 57) {
-        v = (v * 10) - (crate::port::blob_u8(b, k) - 48);
-        k += 1;
-    }
-    crate::port::cells_set(st, 0, k);
-    if neg == 1 {
-        return v;
-    }
-    return 0 - v;
-}
-pub(crate) fn jt_hexval(c: i32) -> i32 {
-    if (c >= 48) && (c <= 57) {
-        return c - 48;
-    }
-    if (c >= 97) && (c <= 102) {
-        return c - 87;
-    }
-    if (c >= 65) && (c <= 70) {
-        return c - 55;
-    }
-    return -1;
-}
-pub(crate) fn jt_text(b: &[u8], end: i32, mut st: &mut crate::port::Cells, mut text: &mut crate::port::Cells) -> i32 {
-    // The rest of the line as text, escapes decoded, appended to the text
-    // arena. Answers the index the run starts at.
-    let start: i32 = text_len(text);
-    let mut i: i32 = jt_skip(b, end, st);
-    let mut seg: i32 = 0;
-    let mut e: i32 = 0;
-    let mut cp: i32 = 0;
-    let mut h: i32 = 0;
-    while i < end {
-        seg = i;
-        while (i < end) && (crate::port::blob_u8(b, i) != 92) {
-            i += 1;
-        }
-        text_append_utf8(text, b, seg, i);
-        if i < end {
-            e = crate::port::blob_u8(b, i + 1);
-            i += 2;
-            if e == 110 {
-                text_append_cp(text, 10);
-            }
-            if e == 116 {
-                text_append_cp(text, 9);
-            }
-            if e == 92 {
-                text_append_cp(text, 92);
-            }
-            if e == 117 {
-                cp = 0;
-                if crate::port::blob_u8(b, i) == 123 {
-                    i += 1;
-                    while crate::port::blob_u8(b, i) != 125 {
-                        cp = (cp * 16) + jt_hexval(crate::port::blob_u8(b, i));
-                        i += 1;
-                    }
-                    i += 1;
-                } else {
-                    h = 0;
-                    while h < 4 {
-                        cp = (cp * 16) + jt_hexval(crate::port::blob_u8(b, i + h));
-                        h += 1;
-                    }
-                    i += 4;
-                }
-                text_append_cp(text, cp);
-            }
-        }
-    }
-    crate::port::cells_set(st, 0, end);
-    return start;
-}
-pub(crate) fn jt_line(b: &[u8], from: i32, end: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
-    // Run one command. Answers 0, or 1 when it is unknown or refused.
-    let c0: i32 = crate::port::blob_u8(b, from);
-    let mut c1: i32 = 0;
-    let mut code: i32 = 0;
-    let mut a: i32 = 0;
-    let mut k: i32 = 0;
-    let mut v: i32 = 0;
-    let mut w: i32 = 0;
-    let mut x: i32 = 0;
-    let mut y: i32 = 0;
-    let mut z: i32 = 0;
-    let mut q: i32 = 0;
-    crate::port::cells_set(st, 0, from + 1);
-    if (from + 1) < end {
-        if crate::port::blob_u8(b, from + 1) != 32 {
-            c1 = crate::port::blob_u8(b, from + 1);
-            crate::port::cells_set(st, 0, from + 2);
-        }
-    }
-    code = (c0 * 256) + c1;
-    if code == 28160 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        if node_new(nodes, a, k) < 0 {
-            return 1;
-        }
-        return 0;
-    }
-    if code == 29696 {
-        a = jt_int(b, end, st);
-        v = jt_text(b, end, st, text);
-        node_set_text(nodes, a, v, text_len(text) - v);
-        return 0;
-    }
-    if code == 29440 {
-        a = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_sub(nodes, a, v);
-        return 0;
-    }
-    if code == 30720 {
-        a = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_aux(nodes, a, v);
-        return 0;
-    }
-    if code == 25344 {
-        a = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_conf(nodes, a, v);
-        return 0;
-    }
-    if code == 26112 {
-        a = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_flags(nodes, a, v);
-        return 0;
-    }
-    if code == 29554 {
-        a = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_src(nodes, a, v);
-        return 0;
-    }
-    if code == 29184 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        w = jt_int(b, end, st);
-        x = jt_int(b, end, st);
-        y = jt_int(b, end, st);
-        node_add_region(nodes, regions, a, k, v, w, x, y);
-        return 0;
-    }
-    if code == 24937 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_attr_int(nodes, attrs, a, k, v);
-        return 0;
-    }
-    if code == 24930 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_attr_bool(nodes, attrs, a, k, v);
-        return 0;
-    }
-    if code == 24942 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_set_attr_node(nodes, attrs, a, k, v);
-        return 0;
-    }
-    if code == 28265 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        node_add_attr_int(nodes, attrs, a, k, v);
-        return 0;
-    }
-    if code == 24948 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_text(b, end, st, text);
-        node_set_attr_text(nodes, attrs, a, k, v, text_len(text) - v);
-        return 0;
-    }
-    if code == 28276 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_text(b, end, st, text);
-        node_add_attr_text(nodes, attrs, a, k, v, text_len(text) - v);
-        return 0;
-    }
-    if code == 28775 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        w = jt_int(b, end, st);
-        x = jt_int(b, end, st);
-        page_new(pages, a, k, v, w, x);
-        return 0;
-    }
-    if code == 28780 {
-        a = jt_int(b, end, st);
-        v = jt_text(b, end, st, text);
-        page_set_label(pages, a, v, text_len(text) - v);
-        return 0;
-    }
-    if code == 28776 {
-        a = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        page_set_health(pages, a, v);
-        return 0;
-    }
-    if code == 28772 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        w = jt_int(b, end, st);
-        page_set_resolution(pages, a, k, v, w);
-        return 0;
-    }
-    if code == 25600 {
-        a = jt_int(b, end, st);
-        k = jt_int(b, end, st);
-        v = jt_int(b, end, st);
-        w = jt_int(b, end, st);
-        x = jt_int(b, end, st);
-        y = jt_int(b, end, st);
-        z = jt_int(b, end, st);
-        q = jt_int(b, end, st);
-        ledger_add(ledger, a, k, v, w, x, y, z, q);
-        return 0;
-    }
-    if code == 25716 {
-        a = jt_int(b, end, st);
-        v = jt_text(b, end, st, text);
-        ledger_set_text(ledger, a, v, text_len(text) - v);
-        return 0;
-    }
-    return 1;
-}
-pub(crate) fn jt_build(b: &[u8], mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
-    // Build the Model a script describes. 0, or the first bad line.
-    let mut pos: i32 = 0;
-    let mut e: i32 = 0;
-    let mut lineno: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
-    crate::port::cells_drop(st, 0);
-    crate::port::cells_push(st, 0);
-    while pos < crate::port::blob_len(b) {
-        e = jt_eol(b, pos);
-        lineno += 1;
-        if (pos < e) && (crate::port::blob_u8(b, pos) != 35) {
-            if jt_line(b, pos, e, nodes, attrs, regions, text, pages, ledger, st) == 1 {
-                return lineno;
-            }
-        }
-        pos = e + 1;
-    }
-    return 0;
-}
-pub(crate) fn jt_end(b: &[u8]) -> i32 {
-    // The end of a golden's bytes: its length less one final newline, so
-    // the files end the way an editor leaves them and the JSON has none.
-    let n: i32 = crate::port::blob_len(b);
-    if (n > 0) && (crate::port::blob_u8(b, n - 1) == 10) {
-        return n - 1;
-    }
-    return n;
-}
 #[test]
 fn test_golden_minimal() {
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -352,6 +58,24 @@ fn test_golden_kinds() {
     js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
     crate::testport::assert_text_span(compact, &crate::testport::test_file("json/kinds.json")[..], 0, jt_end(&crate::testport::test_file("json/kinds.json")[..]), "compact", 0);
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/kinds.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/kinds.pretty.json")[..]), "pretty", 0);
+}
+#[test]
+fn test_golden_corners() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let compact: &mut String = &mut crate::port::new_text();
+    let pretty: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/corners.model")[..], nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
+    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger);
+    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_text_span(compact, &crate::testport::test_file("json/corners.json")[..], 0, jt_end(&crate::testport::test_file("json/corners.json")[..]), "compact", 0);
+    crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/corners.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/corners.pretty.json")[..]), "pretty", 0);
 }
 #[test]
 fn test_centipoints_print_as_points() {
