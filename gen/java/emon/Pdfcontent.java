@@ -2475,6 +2475,9 @@ public final class Pdfcontent {
         if (sz > 200000) {
             sz = 200000;
         }
+        if (sz < (0 - 200000)) {
+            sz = 0 - 200000;
+        }
         off = pcCl(pcPairOff(gl, p, g, axis));
         if ((off * 1000) > (sz * OFFSET_PM)) {
             return 0;
@@ -2822,6 +2825,9 @@ public final class Pdfcontent {
                     }
                     if (sz > 200000) {
                         sz = 200000;
+                    }
+                    if (sz < (0 - 200000)) {
+                        sz = 0 - 200000;
                     }
                     glast = (Evidence.wdGet(wd, prev, Evidence.wfGfirst()) + Evidence.wdGet(wd, prev, Evidence.wfGcount())) - 1;
                     off = pcCl(pcPairOff(gl, glast, gf0, axis));

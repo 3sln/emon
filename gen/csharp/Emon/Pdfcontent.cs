@@ -2475,6 +2475,9 @@ public static class Pdfcontent {
         if (sz > 200000) {
             sz = 200000;
         }
+        if (sz < (0 - 200000)) {
+            sz = 0 - 200000;
+        }
         off = PcCl(PcPairOff(gl, p, g, axis));
         if ((off * 1000) > (sz * OffsetPm)) {
             return 0;
@@ -2822,6 +2825,9 @@ public static class Pdfcontent {
                     }
                     if (sz > 200000) {
                         sz = 200000;
+                    }
+                    if (sz < (0 - 200000)) {
+                        sz = 0 - 200000;
                     }
                     glast = (Evidence.WdGet(wd, prev, Evidence.WfGfirst()) + Evidence.WdGet(wd, prev, Evidence.WfGcount())) - 1;
                     off = PcCl(PcPairOff(gl, glast, gf0, axis));

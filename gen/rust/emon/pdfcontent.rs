@@ -2480,6 +2480,9 @@ pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     if sz > 200000 {
         sz = 200000;
     }
+    if sz < (0 - 200000) {
+        sz = 0 - 200000;
+    }
     off = pc_cl(pc_pair_off(gl, p, g, axis));
     if (off * 1000) > (sz * OFFSET_PM) {
         return 0;
@@ -2827,6 +2830,9 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
                 }
                 if sz > 200000 {
                     sz = 200000;
+                }
+                if sz < (0 - 200000) {
+                    sz = 0 - 200000;
                 }
                 glast = (wd_get(wd, prev, wf_gfirst()) + wd_get(wd, prev, wf_gcount())) - 1;
                 off = pc_cl(pc_pair_off(gl, glast, gf0, axis));

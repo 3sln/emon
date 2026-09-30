@@ -216,7 +216,8 @@ The Model is the product. JSON and HTML are views of it.
    headers, page numbers, background images — goes to a **ledger** with the
    reason (§3.7). A scraper that disagrees with a drop can find it.
 4. **Placeholders say what they replace.** A chart becomes an empty `figure`
-   with `kind: chart`, not nothing and not pixels (§10.6).
+   with `kind: chart`, not nothing and not pixels (§10.6). Pixels are an
+   opt-in (`assets`, §10.11, D117): they ride beside the tree, never inside it.
 5. **Output-agnostic.** No node kind exists because HTML has an element for
    it, and none is missing because HTML lacks one (`seal`, `furniture`).
 
@@ -230,21 +231,21 @@ API expose.
 | --- | --- | --- |
 | `document` | blocks, `section`s | `title`, `lang`, metadata |
 | `section` | `heading` then blocks, nested `section`s | `level` |
-| `heading` | inlines | `level` (1..n, unbounded), `number` (e.g. `"3.2.1"`), `numbering` (scheme) |
-| `paragraph` | inlines | `align` (`start`/`center`/`end`/`justify`, when informative) |
+| `heading` | inlines | `level` (1..n, unbounded), `number` (e.g. `"3.2.1"`), `numbering` (scheme), `align` (as `paragraph`) |
+| `paragraph` | inlines | `align` (`start`/`center`/`end`/`justify`: logical, only when detected with confidence; §10.10, D110) |
 | `list` | `item`s | `ordered`, `scheme` (`decimal`, `lower-alpha`, `upper-roman`, `bullet`, …), `start` |
 | `item` | inlines, nested blocks | `marker` (the literal marker text), `value` |
 | `table` | `caption`?, `rowgroup`s | `profile` (§10.5), `continued` (pages spanned), `columns` |
 | `rowgroup` | `row`s | `role`: `head` / `body` / `foot` |
 | `row` | `cell`s | `repeated` (a recurring header row that was de-duplicated) |
-| `cell` | inlines or blocks | `rowspan`, `colspan`, `header` (`col`/`row`/none), `empty` |
-| `caption` | inlines | `label` (e.g. `"Table 3"`), `target` (node id) |
-| `figure` | `caption`? | `subkind` (§10.6; D053), `label`, `alt` (from the PDF, if any), `labels` (text found inside, optional) |
-| `seal` | — | `subkind` (`seal`/`stamp`/`signature`/`initials`/`digital-signature`; D053), `name`, `text`, `date`, `color` |
+| `cell` | inlines or blocks | `rowspan`, `colspan`, `header` (`col`/`row`/none), `empty`, `align` (`start`/`center`/`end`; §10.10) |
+| `caption` | inlines | `label` (e.g. `"Table 3"`), `target` (node id), `align` |
+| `figure` | `caption`? | `subkind` (§10.6; D053), `label`, `alt` (from the PDF, if any), `labels` (text found inside, optional), `asset` / `noasset` (§10.11; only when `assets` is not `none`) |
+| `seal` | — | `subkind` (`seal`/`stamp`/`signature`/`initials`/`digital-signature`; D053), `name`, `text`, `date`, `color`, `asset` / `noasset` (§10.11) |
 | `formula` | — | `text` (best-effort linear text), `display` (block/inline) |
 | `code` | inlines | — (monospace block with preserved whitespace) |
 | `quote` | blocks | — |
-| `note` | blocks | `role`: `footnote` / `endnote` / `margin`; `marker` |
+| `note` | blocks | `role`: `footnote` / `endnote` / `margin` / `sidebar` (§10.1.1, D111); `marker` |
 | `field` | inlines | form field: `name`, `type`, `value`, `checked` |
 | `furniture` | blocks | running header/footer kept by policy (§10.2): `role`, `pages` |
 | `break` | — | page milestone: `page`, `label` (the printed page label) |
@@ -252,6 +253,7 @@ API expose.
 | `span` | inlines | `style` flags: `bold`, `italic`, `underline`, `strike`, `sub`, `sup`, `mono`, `smallcaps` |
 | `link` | inlines | `href` (URI) or `target` (node id, internal) |
 | `ref` | — | a note reference: `marker`, `target` |
+| `initial` | inlines | a typographic initial (drop cap and kin) at the start of its block: `form` (`drop`/`raised`/`margin`), `lines` (lines it spans, `drop`/`margin`). Its text is part of the block's `text`, joined to the first word as printed (§10.9, D108-D109) |
 | `linebreak` | — | a hard line break that is meaningful (addresses, poetry, table cells) |
 
 ### 3.3 Fields every node has
@@ -260,7 +262,7 @@ API expose.
 | --- | --- |
 | `id` | Integer, unique in the Model, assigned in document order. **Stable for the same input and settings**, so ids are citeable across runs and across targets. |
 | `kind` | From §3.2. |
-| `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages has one region per page. Inline `text` nodes have regions only at `detail: words` (§13). |
+| `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages or columns has one region per **fragment** (per page and column, in reading order; D112); the column of a region is the page's `layout` cell that contains it (§3.7). Inline `text` nodes have regions only at `detail: words` (§13). |
 | `src` | Provenance: the set of sources that contributed (§3.5). |
 | `conf` | Confidence, integer 0..1000 (§3.5). |
 | `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`. |
@@ -321,6 +323,13 @@ header says `"conf": "uncalibrated"`.
   without a locale the hyphen is kept and the words joined without a space
   (`multi-page` survives; `infor-mation` survives as written, flagged). Wrong
   dehyphenation corrupts real compounds; kept hyphens are merely ugly.
+  A column or page break inside a paragraph is a line end for this rule,
+  nothing more (D112).
+* **Initials** (drop caps, §10.9): the initial's text is the start of the
+  block's text and is joined to what follows as printed — `O` + `nce upon`
+  is `Once upon`, never `O nce upon` and never a separate block. Whether a
+  one-letter initial is a word of its own (`A` + `long time`) cannot be
+  seen on the page; it is joined unless a tagged tree says otherwise (D108).
 * **Right-to-left** text stored in *logical* order. PDFs frequently store
   visual order; stage 2 reorders with UAX #9 (emon's `bidi`).
 * **Whitespace** is normalized: one space between words, line breaks inside a
@@ -335,12 +344,21 @@ The Model has three top-level collections besides the tree:
   detected page number, else none), size, rotation, source kind (`vector`,
   `scanned`, `mixed`, `image`), resolution (raster), text-layer health (§9.3),
   and per-page variable furniture (e.g. a Bates number) that policy kept
-  (§10.2).
+  (§10.2); and the page's **`layout`**, the column map reading order was
+  decided over (§10.1.1, D111): one cell per column fragment, `band` (the
+  horizontal band, top first), `col` (its column in the band, in reading
+  order), `role` (`body`, `sidebar`, `margin`) and `box`. Absent when the page
+  is one plain column.
 * **`furniture`**: running headers/footers retained once, as templates.
 * **`dropped`**: the ledger — every suppressed element with `reason`
   (`watermark`, `background`, `page-number`, `running-title`, `bleed-through`,
   `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`),
   its region, its text if any, and the confidence of the decision.
+* **`assets`** (only when the `assets` setting is not `none`, §10.11): the
+  table of pixel assets — id, file name, media type, origin, byte size,
+  SHA-256, pixel size and the regions that use it. The bytes themselves are
+  **out of band**: the library hands them over, HTML may inline them, JSON
+  never carries them.
 
 ### 3.8 Representation in kin (D011)
 
@@ -356,9 +374,14 @@ kin cannot allocate: no arrays, no collections, no constructors (nome
     text     one code point per cell; every string in the Model is a run here
     pages    stride 16
     ledger   stride 10
+    layout   stride 8:  page, band, col, role, x0, y0, x1, y1 (D111; a
+             page's cells are one contiguous run, named from its pages row)
+    assets   stride 24 (§10.11, D117; empty unless `assets` is on)
+    uses     stride 8:  asset, node, page, x0, y0, x1, y1, next
+    abytes   a `Buf` (§7.2): every asset's encoded bytes, back to back
 
 A node is its index. Four languages cannot disagree about an index, and a
-Model that is six integer runs is trivially serializable and trivially cheap
+Model that is a few integer runs is trivially serializable and trivially cheap
 to hand across a WASM or C boundary.
 
 Evidence and PageLayer are arenas of the same kind, defined in
@@ -384,6 +407,11 @@ cannot drift the way nome's did.
     model.pages() / model.furniture() / model.dropped()
     model.find(kind)                   → document-order iterable
     model.to_json() / model.to_html(options)
+    model.assets()                     → iterable Asset (§10.11)
+    model.asset(id) / node.asset()     → Asset or absent
+    asset.id() / .name() / .media_type() / .origin() / .sha256()
+         / .width() / .height() / .uses() / .bytes()   (a borrow; JS: a copy or a Blob)
+    model.asset_files()                → iterable (name, media type, bytes): the sidecar
 
 ---
 
@@ -448,6 +476,16 @@ Rules:
   says what they are) and write `template` for their text. `settings` always
   carries `locale`; `furniture` and `dropped` are always present, `[]` when
   empty (D051).
+* An **`initial`** inline (§10.9) carries `form` and `lines` and its text as
+  `children`, like a `span`; its presence makes `inlines` informative, and
+  `text` still reads `Once upon` (D109). A page's `layout` is
+  `[{"band":0,"col":0,"role":"body","box":[x0,y0,x1,y1]}, …]` in reading
+  order (D111).
+* **`assets`** (D117) is written after `dropped` only when the `assets`
+  setting is not `none` (then always, `[]` when empty), with the asset
+  settings in `settings`; with `assets: none` the JSON is byte-for-byte
+  what it would be without the feature. It holds metadata only — never
+  bytes, never base64 (§10.11).
 
 ### 4.3 Canonical bytes
 
@@ -502,8 +540,8 @@ information and removes only what the options say.
 | `paragraph` | `<p>` |
 | `list` / `item` | `<ul>` / `<ol start type>`; `<li value>` |
 | `table` | `<table>` with `<caption>`, `<thead>`/`<tbody>`/`<tfoot>`, `<tr>`, `<th scope>` / `<td rowspan colspan>` |
-| `figure` | `<figure data-emon-kind="chart" role="img" aria-label="…">` + `<figcaption>`; **no `<img>`** |
-| `seal` | `<figure data-emon-kind="stamp" data-emon-name="…" role="img" aria-label="Stamp: …"></figure>` |
+| `figure` | `<figure data-emon-kind="chart" role="img" aria-label="…">` + `<figcaption>`; **no `<img>`** unless it has an asset (§10.11): then `<figure data-emon-kind="chart"><img src alt width height>…<figcaption>` |
+| `seal` | `<figure data-emon-kind="stamp" data-emon-name="…" role="img" aria-label="Stamp: …"></figure>`; with an asset, the label moves to the `<img alt>` as for a figure |
 | `formula` | `<figure data-emon-kind="formula">` with the linear text in `aria-label` (MathML parked) |
 | `code` | `<pre><code>` |
 | `quote` | `<blockquote>` |
@@ -514,6 +552,10 @@ information and removes only what the options say.
 | `span` styles | `<b>`, `<i>`, `<u>`, `<s>`, `<sub>`, `<sup>`, `<code>`, `<span data-emon-style="smallcaps">` |
 | `link` | `<a href>`; internal targets become `#emon-ID` |
 | `linebreak` | `<br>` |
+| `initial` | `<span data-emon="initial" data-emon-form="drop" data-emon-lines="3">O</span>nce` — no styling, the text intact; option `initials: plain` writes the bare text (D109) |
+| `align` | `data-emon-align` (D069); with option `align-style` also `style="text-align:…"` and `dir="auto"` (D110) |
+| `note` `margin`/`sidebar` | `<aside data-emon-role="margin">` in reading order, no `doc-footnote` role (D113) |
+| column fragments | nothing by default: **one logical flow in reading order**; with `geometry`, `data-emon-col="page:band:col"` on each block (D113) |
 
 `<b>`/`<i>` rather than `<strong>`/`<em>`: emon knows the text was bold, not
 that the author meant importance. HTML should not claim what emon cannot know.
@@ -523,7 +565,12 @@ that the author meant importance. HTML should not claim what emon cannot know.
 `geometry` (adds `data-emon-at`), `ids` (adds `id="emon-N"` on every node),
 `confidence` (`data-emon-conf` on nodes below a threshold), `ledger` (dropped
 elements as `<template data-emon="dropped">` so they are inert but present),
-`furniture` (`keep`/`drop`/`policy`), `pretty`. **Defaults are clean HTML**:
+`furniture` (`keep`/`drop`/`policy`), `pretty`, `align-style` (inline
+`text-align`, off), `initials` (`span`/`plain`, default `span`), `assets` (`inline` —
+the default: `data:` URIs — / `external`: `src` is `asset-prefix` + the
+asset's file name, the caller writes the files / `omit`: placeholders as if
+no asset existed; a Model without assets emits the same HTML under all three;
+§10.11), `asset-prefix` (a string, default empty). **Defaults are clean HTML**:
 no ids, no geometry, policy furniture, milestones on. Escaping: `&`, `<`, `>`,
 `"` and nothing else; attribute values always double-quoted.
 The rest of the mapping this table leaves open (extra `data-emon-*` attributes,
@@ -654,6 +701,9 @@ host implement it however it likes.
   clustering / ink-layer separation, adaptive binarisation (integer Sauvola),
   deskew, connected components, contour tracing, rule detection, shape
   primitives, the seal polar-unwarp (§10.7).
+* **Asset pixels and bytes** (D117): PDF image samples, `/Decode`, colour
+  spaces, masks, orientation and crops; the canonical PNG writer and its
+  DEFLATE compressor; base64; the JPEG marker walk that allows a passthrough.
 * **All fusion, all analysis, all emission**, and the Unicode machinery they
   need — normalization, bidi, script, grapheme and word segmentation,
   hyphenation — written in emon (§7.5).
@@ -666,6 +716,7 @@ host implement it however it likes.
 | `Src` | an input byte source (§13.1, D058): `src-len`, `src-u8` (may miss), `src-missed`, `src-slice` (span → `Blob`), `src-of-cells`, `src-of-blob`, `src-hint`; the PDF code reads it through `emon.pdfsrc` (`ps-len`, `ps-u8`, `ps-missed`, `ps-hint`) and the forms `src-slice` and `src-of-cells`, which return borrows and so are forms, not functions (D074) | the chunk cache, and whether a read can block or must be awaited, are the host's |
 | `Cells` | growable `i32` arena: len, at, set, push, drop | kin cannot allocate (nome) |
 | `Text` | append code point / ASCII literal / decimal; host encodes UTF-8 | output buffers differ; the *format* is kin's |
+| `Buf` | growable **byte** buffer: `buf-len`, `buf-at`, `buf-push`, `buf-set`, `buf-append-blob` (a span of a `Blob`), `buf-blob` (borrow as a `Blob`, a form); what asset bytes and the PNG encoder write into (D117) | `Cells` spends four bytes a byte, which a 32 MiB asset budget cannot afford in a browser |
 | `Bitmap` | 8-bit gray or RGB, row-major, top-left; new/read/write | pixel buffers differ; decoding is a codec's job |
 | `ImageDecode` | encoded bytes → frames → `Bitmap` + resolution | four mature codec stacks exist; includes PDF's `DCTDecode`, `JPXDecode`, `JBIG2Decode`, `CCITTFaxDecode` (D005) |
 | `Renderer` | PDF page + resolution → `Bitmap` | a correct PDF rasteriser is pdfium/MuPDF-sized (D007) |
@@ -697,7 +748,13 @@ host implement it however it likes.
   — where the engine supports it (pdfium does). The without-text render is
   what the tracer and graphic classifier want; the text-only render is how a
   broken text layer is re-read by OCR without the background (§9.5). An
-  engine that cannot mask says so and kin plans around it.
+  engine that cannot mask says so and kin plans around it. It must also
+  answer a **crop** (D117): the pixel rectangle `px py pw ph` of the page as
+  it would be rendered whole at that resolution and layer — the same pixels,
+  cut out, never a re-fit — with annotations' normal appearances painted (a
+  stamp is often an annotation). pdfium does this directly
+  (`FPDF_RenderPageBitmapWithMatrix` with a translation and a clip); an
+  engine that cannot may render the page and cut.
 * **`Ocr`** must: take a `Bitmap` and a request (languages, page-segmentation
   mode, region, whether symbol alternatives are wanted); return integers only
   — boxes in the *request bitmap's* pixels, confidences ×10 as integers,
@@ -750,6 +807,16 @@ plus one lossless PNG per bitmap. Replay looks a request up by its whole record
 and answers `transcript-miss` rather than guess. `max-rounds` and `fetch-rounds`
 are named limits of the host loop.
 
+Assets (D117) add two kinds, both transcribed like `render`: **`crop`** 5
+(`input page dpi layer px py pw ph`, answered as a render) and
+**`decode-img`** 6 (a PDF image codestream with the parameters a codec
+needs — filter, size, components, bits, CCITT `K`/`Columns`/`Rows`/flags —
+and where its bytes are: a span of an input, or a span of the unit's
+**payload** `Buf` when kin produced them (decrypted, or behind a Flate
+filter), named by its SHA-256 so the record, and so the transcript key,
+never holds the bytes; a second such span for `JBIG2Globals`). A payload is
+input-derived, like a `bytes` answer, so it is never written to a transcript.
+
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.
 
@@ -773,7 +840,10 @@ fetch rounds per unit (D058);
 decompressed bytes per stream and in total (the zip-bomb bound);
 object count; indirect-reference depth; content-stream operators per page;
 XObject/Form nesting depth; pattern/Type3 recursion; pages; pixels per render
-and in total; OCR requests and rounds; wall-clock per stage (host-enforced).
+and in total; OCR requests and rounds; wall-clock per stage (host-enforced);
+and, when assets are on, pixels and bytes per asset and bytes per document
+(§10.11) — which, unlike the others, degrade to a `noasset` reason and never
+fail a page.
 
 **Failure is per page** (D030): a page whose content stream is corrupt
 yields a `pages` entry with an `error` and an empty contribution; the rest of
@@ -1156,7 +1226,8 @@ artifact span always has a nonzero type and `mk-artifact-of` answers 0 only for
 
 Annotations (P3.8: their own arena then), the structure tree (P3.7 joins on
 `marks.mcid`; the tree is P3.7's arena), shadings as painted regions beyond
-their box (a `paths` row of kind `other` until P3.5), the Model-level
+their box (a `paths` row of kind `other` until P3.5), a font's `/CapHeight`
+and `/XHeight` (read by §10.9; a minor addition to `fonts`, D108), the Model-level
 page source kind (analysis, not evidence), and fusion's own output
 (correspondence groups and the PageLayer are P7.1's arenas, built on the
 heads above).
@@ -1267,14 +1338,102 @@ diagram in the DEVLOG entry.
 * **Lines** from fused words by baseline and direction; **blocks** by
   spacing, alignment and style continuity (leading jumps, indentation, font
   change, rules between).
-* **Columns and reading order**: recursive XY-cut over whitespace, refined
-  for elements spanning columns (titles, full-width figures and tables), then
-  column-major ordering; RTL scripts flip the horizontal order. Priors, in
-  order of trust when healthy: tagged-PDF order, content-stream order, then
-  geometry. They are *compared*, and disagreement lowers block confidence.
+* **Columns and reading order**: gutters first, then the elements that
+  span them, then a cut tree whose leaves are column fragments, read
+  column-major (§10.1.1). Priors, in order of trust when healthy: tagged-PDF
+  order, content-stream order, then geometry. They are *compared*, and
+  disagreement lowers block confidence.
+* **Paragraphs continue** across column and page breaks and are joined into
+  one (§10.1.2).
 * **Meaningful line breaks** are kept (`linebreak`) where lines are
   consistently short and ragged in a way paragraphs are not: addresses,
   verse, signature blocks.
+* **Order within the stage**, per page: lines (D104) → initials (§10.9: a
+  local test, and before anything that measures indents or styles) →
+  furniture candidates excluded (§10.2's recurrence and gutter line numbers)
+  → columns (§10.1.1) → blocks → alignment (§10.10); then, document-wide,
+  continuation (§10.1.2), style inventory and headings (§10.3).
+
+#### 10.1.1 Columns (D111)
+
+The column map is what reading order is decided over, and it is kept: it is
+the page's `layout` (§3.7).
+
+1. **Gutters.** Over the page's words (not lines: a producer that writes a
+   row across two columns in one run, or a gutter narrower than D104's two
+   sizes, gives lines that cross it), sweep line rows top to bottom and keep
+   the x-intervals free of ink that persist for at least 3 consecutive rows
+   on both sides and are at least `gutter-min` wide (the larger of 0.6 body
+   size and 1.5 times the median word gap of the rows beside it): the tall,
+   narrow maximal whitespace rectangles of the page. A vertical rule
+   (`paths`, `rules`) with text on both sides for 3 rows is a gutter at any
+   width. Rivers in justified text do not persist 3 rows at that width; a
+   gutter holding only numbers at a regular pitch (line numbers in patents
+   and pleadings) is furniture (`margin`) and is removed first.
+2. **Split** every line that crosses a gutter.
+3. **Spanning elements.** A line, figure, table or rule whose box crosses a
+   gutter's x-interval inside the gutter's vertical extent ends the gutter
+   there; titles, `column-span` figures and tables, and full-width
+   footnote areas are found this way, not by kind.
+4. **The cut tree.** Recursively: when a gutter runs the full height of the
+   region, cut vertically (column-major); otherwise cut horizontally, but
+   **only** at the top or bottom of a spanning element or at a full-width
+   gap wider than 1.5 times the median paragraph gap. Horizontal gaps that
+   happen to line up across columns (balanced columns with the same leading
+   do this) are never cuts: that is classic XY-cut's reading-order failure.
+   A three-column page with a figure across columns 1-2 cuts at the 2|3
+   gutter first and at the figure inside the left part, so column 3 is not
+   split.
+5. **Order.** Vertical cuts in the page's dominant direction (left first for
+   left-to-right, right first for right-to-left, by the direction of the
+   majority of its lines, D104), horizontal cuts top first. Leaves are
+   **column fragments**, numbered `band` (the index of the horizontal cut
+   that contains them, top first) and `col` (reading order within it).
+6. **Roles.** A fragment is `sidebar` when it is narrower than a third of its
+   band and differs from the body in style or sits in a box or fill (a
+   sidebar); `margin` when it lies outside the document's body text block
+   (the union of body fragments over all pages) and holds short small-type
+   blocks beside body paragraphs (margin notes). Sidebar and margin content
+   becomes `note` blocks (`sidebar`, `margin`) placed after the body block
+   being read where it begins, never inside a paragraph.
+7. **Furniture** is taken out before gutters are sought (it would bridge
+   them) and after it is recognised by recurrence (§10.2); a first-page
+   masthead that recurs nowhere is ordinary content and a spanning element.
+8. **Footnotes** are fragments like any other: per-column notes at the foot
+   of their column, full-width notes as the last band. §10.8 classifies them;
+   D073's reading position stands.
+9. **Priors.** A healthy tagged tree's order wins and lowers the confidence of
+   the blocks it moves; content-stream order breaks ties between two cut
+   trees of nearly equal score. Newspaper jumps (`continued on page 4`) are
+   not followed: the two parts stay two blocks.
+
+#### 10.1.2 Continuation across column and page breaks (D112)
+
+Between the last body block of a fragment and the first body block of the
+next one in reading order (next column, or the first column of the next
+page, furniture skipped), a paragraph continues when the evidence says so.
+Signals, integer points against a named threshold (`join-min`):
+
+| Signal | Points |
+| --- | --- |
+| the same tagged `P` holds both (healthy tree) | decisive |
+| last line ends in a hyphen after a letter | strong + |
+| last line reaches the column's end edge (within the §10.10 tolerance) | medium + |
+| last line is short (more than 20 % of the column width free) | strong − |
+| last line ends without terminal punctuation | medium + |
+| next line starts with a lowercase letter (cased scripts) | strong + |
+| next line is indented where the document's paragraphs use first-line indents | strong − |
+| next line starts with a list marker or is a heading candidate | strong − |
+| a different style class | strong − |
+| the next fragment's first glyph follows the last one in content-stream order | weak + |
+
+Joined, it is **one paragraph** with one region per fragment; a page break
+inside it is the inline `break` milestone (as today), a column break is
+recorded only by its regions and the page `layout`; hyphenation at the break
+follows §3.6 exactly. Blocks that sit between the two fragments in reading
+order (a note, a figure, a table, a caption) move after the joined
+paragraph, in their order. A join near the threshold lowers the paragraph's
+confidence.
 
 ### 10.2 Running headers, footers and page numbers (D017)
 
@@ -1322,6 +1481,11 @@ system**, not of one line. So emon builds the system first.
 2. **Candidate headings**: lines or short blocks that are standalone, short,
    followed by body text, rarely ending in terminal punctuation, and whose
    style differs from body — *or* that start with a numbering pattern.
+   **Never** an initial (§10.9: its glyphs are not in the inventory either,
+   so a 40 pt letter is not a style class), and never a block of one or two
+   code points that sits beside or inside a paragraph's first lines. A
+   letter divider in a glossary or index (`A`, then `Aardvark …` on the
+   line below, full width) is a heading: it wraps nothing.
 3. **Numbering schemes**: `1`, `1.2`, `1.2.3`, `I.`, `A.`, `a)`, `(i)`, `§ 4`,
    and — with a locale hint — keyword forms (`Chapter`, `Article`, `Kapitel`,
    `Artículo`, …). Hierarchical numbering (`2.3.1` → depth 3) is the
@@ -1389,8 +1553,9 @@ page's last body block was a table, and:
 ### 10.6 Figures and graphics placeholders (D020)
 
 Non-text regions are classified, and each becomes an **empty `figure`** with
-a `kind` and a confidence — never pixels (a scraper does not want them; an
-embedder who does has the region and can crop):
+a `kind` and a confidence — no pixels by default (a scraper does not want
+them; an embedder who does has the region and can crop, or turns on
+`assets`, §10.11):
 
 | `kind` | Signals |
 | --- | --- |
@@ -1438,6 +1603,310 @@ small-font block in the page's bottom band starting with the same marker →
 "Notes" section. Captions: §10.6 and tables. Links: from annotations (§8.1),
 plus bare URLs and e-mail addresses in text (a conservative recogniser; not a
 guess at every dotted string).
+
+### 10.9 Initials: drop caps and their kin (D108, D109)
+
+A paragraph may open with a letter (or a word) printed far larger than its
+body: a **drop** initial sinking into the first N lines, which wrap around
+it; a **raised** initial standing on the first baseline and rising above it;
+a **margin** initial hanging outside the column beside the first lines. It
+is typography, not structure: the letter is the first letter of the text.
+
+**Detection** runs per page right after lines (§10.1), before blocks,
+indents or styles are measured, and is local:
+
+1. **Candidates**: a run of 1-3 code points (a letter or digit, with the
+   opening or closing punctuation CSS `::first-letter` would take: `“N`),
+   or a whole first word, whose size is at least `initial-min` (2.0) times
+   the median size of the lines beside it; or a non-text ink region of that
+   size (a vector path cluster, an image) in the same position (below).
+2. **Drop**: the candidate's cap top (its baseline minus the font's
+   `/CapHeight`, else 0.7 of its size; the tracer's ink box on raster) is
+   within half a body size of the first line's cap top; its ink bottom lies
+   within line N's vertical band (N >= 2); lines 1..N start after its end
+   edge within 1.5 body sizes, and line N+1 starts back at its start edge.
+   Baselines need not agree: a CSS float sits between two baselines (Chrome's
+   `printToPDF` puts a three-line `O` 6.75 pt above line 3's baseline).
+3. **Raised**: the candidate shares the first line's baseline (D104 already
+   puts it in the first word), and line 2 starts at its start edge.
+4. **Margin**: as drop or raised, but its end edge is before the column's
+   start edge and the lines are not indented.
+5. **First word**: an enlarged whole word (`IT`) is an initial of that word;
+   a small-caps lead-in after an initial (`T` + `HE BUREAU`) is an ordinary
+   `smallcaps` span.
+6. **Direction**: in a right-to-left paragraph mirror every edge.
+7. **Not an initial**: a large letter with nothing wrapping it or beside it
+   (a letter divider), a logo letter, a big page number, a letter inside a
+   figure. Stream order is no help: Chrome paints every float of a page
+   before its text.
+
+**Glyphs that are not text.** An initial drawn as vector outlines, as an
+image, or in a Type 3 font with no usable Unicode has the geometry above
+and no code point. The letter is recovered, strongest first, from the
+tagged tree (`/ActualText`, `/Alt` of its marked content), from a targeted
+OCR pass on the region as a single character (pass kind `initial`, the
+paragraph's script; Tesseract's own drop-cap flag, `osyms` `os` bit, is
+corroboration), then from the tracer's components. With no candidate above
+the threshold the inline holds U+FFFD, flagged `low-conf`: a character was
+there and emon says so. A decorated initial's ornament is not a `figure`.
+
+**Joining.** The initial's text is prepended to the first line, with no
+space: `O` + `nce upon` → `Once upon`. The page cannot say whether a
+one-letter initial is a word of its own: Chrome writes `A long time` and
+`Once upon` with the same 4.5 pt gap and no space glyph. So: a space only
+when a healthy tagged tree or `/ActualText` holds one; otherwise joined, and
+flagged `low-conf` when the letter is a word in its own right in the
+locale's one-letter-word table (`A`, `I`, `O` for English; without a
+locale, the union of the tables emon ships). Joining is the better default
+(`It`, `In`, `At`, `As` outnumber `I` and `A` as openings); a per-locale
+lexicon that could decide it is an open question (D108).
+
+**Effects on the rest of analysis.** For indents, lines 1..N start at the
+initial's start edge; the paragraph-gap rule measures from line 1, not from
+a raised initial's top; the initial's box is part of the paragraph's region;
+its glyphs are left out of the style inventory, the body-size statistics and
+feature column 18 of its line.
+
+### 10.10 Alignment (D110)
+
+Per block, from its lines against the **box of the fragment it sits in**
+(the column fragment of §10.1.1; a cell's box for a cell), never its own
+bounding box (against which everything is justified). Let *t* be a quarter
+of the body size; for each line, the start gap *S* and end gap *E* in the
+writing direction; a first-line indent is removed from line 1's *S*; the
+last line is excluded from the justify and ragged tests:
+
+| Value | Test |
+| --- | --- |
+| `justify` | ≥ 2 non-last lines, every one with *S* ≤ *t* and *E* ≤ *t*, the last line's *S* ≤ *t* |
+| `start` | every *S* ≤ *t*, and *E* varies by more than 2*t* over the non-last lines, or the block is ragged |
+| `end` | every *E* ≤ *t* and *S* varies by more than 2*t* |
+| `center` | \|*S* − *E*\| ≤ *t* on every line, and *S* varies (or a single line with *S*, *E* ≥ 4*t*) |
+
+A single-line block can only be `center` or `end` from its own geometry; a
+single flush-start line is `start` only when its style class's
+paragraphs are, and at lower confidence. Values are **logical**:
+`start`/`end` mean left/right in a left-to-right block and the reverse in a
+right-to-left one (its base direction, UAX #9 P2-P3 over its text).
+Confidence rises with the lines that pass and the margin by which they
+pass; `align` is written only at or above `align-min` (setting). **Table
+cells** are decided per table column over all its body cells together (the
+column's text extent is its box): numeric columns are usually `end`, and a
+decimal-aligned column whose end edges disagree gets none (there is no
+`decimal` value: the numbers read the same). Headings and captions are
+tested like paragraphs.
+
+### 10.11 Assets: opt-in pixels for figures and seals (D117)
+
+A crawler wants placeholders (§10.6). A caller converting for *reading* —
+PDF → EPUB, an archive viewer — wants the pictures. The setting `assets`
+lets it ask. Off, nothing in this section runs and every output is
+byte-identical to a run without it.
+
+| `assets` | Which nodes get pixels |
+| --- | --- |
+| `none` (default) | none |
+| `images` | a `figure` or `seal` whose content **is one image the document embeds** gets that image: its original bytes where a browser shows them as the PDF did, else its pixels as PNG. No region detection decides the pixels, only which image. |
+| `figures` | as `images`, plus **every other** `figure`/`seal`: cut from the image it lies in (a scan, a raster input, a large composite) or rendered by the host `Renderer` (vector art, charts, diagrams, composites, anything drawn over an image) |
+
+Settings that go with it (named, defaulted, in the header when `assets` is
+on; §7.4): `asset-dpi` (render crops; default 150, 36..600),
+`asset-pixels` (per asset; default 4,194,304 = 2048²), `asset-bytes` (per
+encoded asset; default 4 MiB), `assets-bytes` (per document; default
+32 MiB), `asset-signatures` (`off`/`on`, default `off`: a handwritten
+signature's pixels are a forgery kit, and a crawl should not spread them by
+accident).
+
+**Which source, per node** (`emon.asset`, in node-id order). Candidates are
+the node's page's `images` rows (§8.4.3) that passed P3.6's checks and
+overlap its region. Thresholds are named constants of `emon.asset`
+(`asset-cover` 950 ‰, `asset-whole` 980 ‰, `asset-overlay` 20 ‰), not
+settings.
+
+1. `seal` of subkind `signature`/`initials` with `asset-signatures` off →
+   `noasset: "withheld"`; `digital-signature` has no pixels and no field.
+2. **Whole image** — exactly one candidate, its visible box (box ∩ clip
+   box) covers ≥ `asset-cover` of the region and the region ≥
+   `asset-cover` of it → `embedded` or `decoded`, below. At `figures` it is
+   `rendered` instead when what the reader saw is not the image alone:
+   paint (paths, shadings, images, visible text) drawn over it covering more
+   than `asset-overlay` of it, a clip that is not a rectangle, or a
+   placement that is not one of the eight rectilinear orientations. At
+   `images` the image is kept and flagged (`overlaid`, `clip-bbox`,
+   `transformed`).
+3. **Part of an image** — the region lies inside one candidate's visible box
+   (≥ `asset-cover` of the region) but is a small part of it: at `figures`,
+   `cropped` from that image's pixels (this is the scanned page and the
+   raster input: their page image is the candidate); at `images`,
+   `noasset: "part"`.
+4. **Anything else** (no image, several, vector art): at `figures`,
+   `rendered`; at `images`, `noasset: "vector"` or `"composite"`.
+
+**Origins** — every asset has one:
+
+* **`embedded`: the document's own bytes, passed through.** Only a
+  `DCTDecode` image (after kin's non-image filters and decryption) whose
+  JPEG a browser shows as the PDF painted it: baseline or progressive
+  Huffman (no arithmetic coding), 1 or 3 components, colour space
+  `DeviceGray`, `DeviceRGB`, `CalGray`/`CalRGB` or `ICCBased` with `/N` 1 or
+  3 (the PDF's profile is not carried: flag `icc`), 8 bits, no `/Decode` but
+  the default, no `/SMask`, no `/Mask`, not `/ImageMask`, no EXIF orientation
+  other than 1 (browsers apply it and PDF viewers do not), its SOF size equal
+  to `/Width`/`/Height`, whole (visible ≥ `asset-whole` of it), upright, and
+  within `asset-pixels`. kin checks this by walking the JPEG's markers; the
+  bytes are never decoded. JPEG 2000, JBIG2 and CCITT never pass through (no
+  browser or EPUB reader can be relied on to show them).
+* **`decoded`: the image's pixels, as PNG.** Samples come from kin (raw,
+  Flate, LZW, RunLength, with predictors) or from the host (`decode-img`,
+  §7.3: DCT that cannot pass through, JPX, JBIG2 with its globals, CCITT
+  with its parameters — the host's pixels are the codestream's, and they are
+  transcribed). kin then applies, in integers and in this order: unpacking
+  (1, 2, 4, 8, 16 bits; 16 → 8 as `(v·255 + 32767) / 65535`); `/Decode`;
+  the colour space (Gray, RGB; CMYK by ISO 32000's naive formula `r = 255 −
+  min(255, c + k)`; `Indexed` over those; `ICCBased` by `/N`, flag `icc`;
+  `Separation`, `DeviceN`, `Lab` and a 4-component DCT with a non-default
+  `/Decode` are `noasset: "colorspace"` at `images` and `rendered` at
+  `figures`); masks into an alpha channel (`/ImageMask` as a stencil in the
+  fill colour; `/Mask` colour-key ranges; `/Mask` stencil; `/SMask` with
+  `/Matte` un-premultiplied, `c = m + (c' − m)·255 / α`, 0 where α is 0); the
+  placement's orientation (one of the eight rectilinear ones, exact); and,
+  when the visible part is under `asset-whole` of the image, a cut to the
+  clip's box mapped into image pixels (floor at the low edge, ceiling at the
+  high). The result is written as PNG (below). A skewed or rotated image at
+  `images` is written unrotated, flag `transformed`.
+* **`cropped`: a rectangle of an image's pixels.** The region, mapped into
+  the image's pixels (for a raster input or a scan, through its view's
+  cpt → px transform, §8.4.2), floor/ceiling, exact samples: **no
+  resampling and no deskew** (a crop records what was scanned). Quarter
+  turns the page was given (orientation) are applied.
+* **`rendered`: the host `Renderer`**, through a `crop` request (§7.3): layer
+  **with text**, because a chart's axis labels are part of the picture — the
+  node's `labels` are a text *copy* for search and accessibility, not a
+  replacement, and a without-text render would also keep text drawn as
+  outlines, so it could not be consistent anyway. The pixel rectangle is the
+  region padded by 2 pt (clipped to the page), at `d = asset-dpi`: `px =
+  floor(x0·d / 7200)`, `px1 = ceil(x1·d / 7200)`, likewise y, `pw = px1 −
+  px`. While `pw·ph > asset-pixels`, `d ← d·3/4` (integer) and recompute; below
+  36 dpi it is `noasset: "too-large"`. When body text (not the node's own
+  labels) lies inside the rectangle the asset is kept and flagged
+  `text-overlap`. Renders are the host's opinion: planned, fulfilled and
+  transcribed like every render (D008).
+
+**The canonical PNG.** Every asset that is not `embedded` is written by
+kin's own encoder (`emon.png` over `emon.deflate`), so that its bytes are a
+function of (input, transcript, settings) on every target and its SHA-256
+can be in the JSON: colour types 0 (gray, and 1-bit gray for bilevel
+images), 2 (RGB), 3 (palette, for an `Indexed` image with no alpha), 4 and 6
+(with alpha); chunks `IHDR`, `PLTE`/`tRNS` for a palette, `pHYs` when the
+resolution is known, `IDAT`s of at most 65,536 bytes, `IEND`, and nothing
+else (no `tIME`, no text, no gamma). Each row's filter is the one of the
+five with the smallest sum of absolute signed bytes, ties to the lower
+filter, filter 0 for palette and sub-byte images. The zlib stream: header
+`78 01`, a greedy LZ77 with one step of lazy matching over a 32 KiB window,
+3-byte hash, chain limit 32, matches 3..258, a block every 16,384 symbols,
+each block stored, fixed or dynamic by fewest bits (ties in that order),
+dynamic lengths by package-merge limited to 15 (7 for the code-length code),
+ties by symbol, Adler-32. The encoder streams a row at a time, so its
+working set is the window and its tables (under 1 MiB), not the image.
+Changing any of this changes every committed asset hash, and is a reviewed
+change like any output change.
+
+**Admission, in node-id order.** An asset whose bytes equal an earlier one's
+(same SHA-256 and length) is that asset, with one more use — a logo on every
+page is one file. A new asset larger than `asset-bytes` is `noasset:
+"too-large"`; decoded and cropped pixels larger than `asset-pixels` are first
+reduced by the smallest integer factor *k* that fits (box mean over *k*×*k*,
+partial blocks over the pixels they have, rounded half up; flag `scaled`). The
+first new asset that would take the total over `assets-bytes` closes the
+budget: it and every later new asset are `noasset: "budget"` (reuses still
+admitted, they cost nothing). A decode or render that fails or is
+unsupported is `noasset: "codec"` or `"render"`. **An asset never fails a
+page**: every problem is a `noasset` reason.
+
+**The Model and JSON.** Asset ids are 0.. in admission order; the file name
+is `a<id>.jpg` or `a<id>.png`. A `figure` or `seal` has `asset` (an id) or
+`noasset` (a reason: `withheld`, `part`, `vector`, `composite`,
+`colorspace`, `codec`, `render`, `too-large`, `budget`), and neither when
+`assets` is `none`. The top-level `assets` array (§4.2), fields in this
+order:
+
+```json
+"assets":[
+ {"id":0,"name":"a0.jpg","type":"image/jpeg","origin":"embedded","from":"dct",
+  "object":41,"bytes":48213,"sha256":"9f2c…(64 hex)","w":1200,"h":800,
+  "uses":[{"node":12,"at":[3,72,140,540,452]}]},
+ {"id":1,"name":"a1.png","type":"image/png","origin":"rendered","from":"render",
+  "bytes":20511,"sha256":"…","w":938,"h":521,"dpi":150,"flags":["text-overlap"],
+  "uses":[{"node":19,"at":[4,70,98,522,348]},{"node":27,"at":[5,70,98,522,348]}]}]
+```
+
+`from` is what the pixels were before (`dct`, `jpx`, `jbig2`, `ccitt`,
+`flate`, `lzw`, `runlength`, `raw`, `png`, `jpeg`, `tiff`, `render`); `object` the image XObject's object number (absent for inline
+images, raster inputs and renders); `dpi` the render's resolution (rendered
+only); `flags` from `overlaid`, `clip-bbox`, `transformed`, `icc`, `scaled`,
+`text-overlap`; each use's `at` the page region the asset's pixels map to.
+`sha256` is over the **encoded bytes**, lower-case hex, computed with the
+`Crypto` port. The settings are written as `"assets":"figures"`,
+`"asset-dpi"`, `"asset-pixels"`, `"asset-bytes"`, `"assets-bytes"`,
+`"asset-signatures"`.
+
+**HTML** (option `assets`, §5.2):
+
+```html
+<figure data-emon-kind="chart"><img src="data:image/png;base64,iVBOR…"
+ alt="Revenue by quarter" width="603" height="333" data-emon-asset="1">
+ <span data-emon="label">Q1</span>…<figcaption>Figure 3. Revenue</figcaption></figure>
+```
+
+* The `<img>` is the figure's first child; the rest is the placeholder's
+  content in its usual order (labels, `<figcaption>`). `role="img"` and
+  `aria-label` leave the `<figure>` (the `<img>` is now the image; both
+  would announce it twice).
+* `alt` is exactly the text the placeholder's `aria-label` would have had —
+  the PDF's `/Alt` (D076) first, a seal's `Stamp: …` label (D069) — and
+  when that is empty, `alt=""` if there is a `<figcaption>` (the caption is
+  the description), else `alt=""` and `data-emon-alt="missing"` so an EPUB
+  pipeline can find every image that needs one. emon does not invent alt
+  text.
+* `width`/`height` are the use's region in CSS pixels (`cpt·4/300`,
+  rounded half up, at least 1): the size the picture had on the page, so a
+  reader reserves the space and a 150-dpi asset is sharp on a dense screen.
+* `inline`: `data:<type>;base64,` + RFC 4648 base64 (standard alphabet,
+  padded, no line breaks, not wrapped by `pretty`), written by kin. A reused
+  asset is inlined again at each use (a `data:` URI cannot be shared), which
+  is what `external` is for.
+* `external`: `src` is `asset-prefix` + name, escaped as any attribute; the
+  caller writes `model.asset_files()` beside the HTML. This is the form for
+  EPUB (the files go in the container, `type` goes in the OPF manifest) and
+  for size.
+* A node with `noasset` keeps its placeholder and gains
+  `data-emon-noasset="<reason>"`.
+
+**The library hands the bytes over.** `model.assets()` and `node.asset()`
+(§3.9) give each asset's metadata and a borrow of its bytes; the bytes live
+in the Model's `abytes` `Buf` and are never copied by emon. JSON never carries
+them (a caller who wants one self-contained JSON file base64-encodes them
+itself).
+
+**The browser (WASM).** Everything above is kin, so the WASM build does the
+same; the costs are memory. The `abytes` `Buf` lives in linear memory, up to
+`assets-bytes`; `to_html` with `inline` adds 4/3 of that again as UTF-8, and
+the JS string another 2× (UTF-16), so 32 MiB of assets is about 150 MB of
+peak heap. The JS SDK therefore documents `external` as the browser form:
+`asset.blob()` returns a `Blob` of the right `type` (one copy out of linear
+memory), for `URL.createObjectURL` or a zip writer, and `asset-prefix` plus
+a name map does the rest. Crop bitmaps are freed with their unit; decoding
+a Flate image still inflates it whole into `Cells` (four bytes a sample),
+which `asset-pixels` bounds (about 50 MB at the default for RGB) until
+`inflate` can write a `Buf`.
+
+**Identity.** Embedded bytes are the input's; decoded, cropped and rendered
+pixels come from kin or from transcribed answers; the PNG and the base64 are
+kin's. So (input, transcript, settings) → the same JSON, the same HTML in
+all three `assets` modes, and the same asset files, byte for byte, on every
+target; the identity gate compares all of them (§14.1). What the gate does
+*not* claim: two live hosts' `Renderer`s or codecs agree on pixels (they
+need not; that is the transcript's job, as for OCR).
 
 ---
 
@@ -1646,6 +2115,12 @@ Settings (all named, all with defaults, all in the Model header):
 | `figure-text` | `omit` / `labels` | `labels` |
 | `ledger` | on / off in outputs | on in JSON, off in HTML |
 | `max-rounds` | plan/fulfil rounds | 3 |
+| `assets` | `none` / `images` / `figures` (§10.11, D117) | `none` |
+| `asset-dpi` | render-crop resolution | 150 |
+| `asset-pixels` | pixels per asset | 4,194,304 |
+| `asset-bytes` | encoded bytes per asset | 4 MiB |
+| `assets-bytes` | encoded bytes per document | 32 MiB |
+| `asset-signatures` | `off` / `on`: pixels for handwritten signatures and initials | `off` |
 
 ---
 
@@ -1667,7 +2142,9 @@ Two different questions, kept apart: **is emon the same everywhere**
 5. **identity** — the corpus is **(input bytes, transcript)** pairs. Every
    host's driver replays each and must produce **byte-identical Model JSON
    and HTML**. Transcripts store bitmaps losslessly (PNG) so that no lossy
-   decoder is part of the comparison.
+   decoder is part of the comparison. With `assets` on (D117) it also
+   requires byte-identical asset files and HTML in each of the `inline`,
+   `external` and `omit` modes, and checks each `sha256` independently.
 6. **repeat** — serial vs parallel, run vs run, forwards vs reversed page
    submission: byte-identical.
 7. **schema** — every JSON output validates against `schema/emon-N.json`.
@@ -1695,6 +2172,9 @@ commit (the ratchet). Metrics:
 | Figures | detection P/R; `kind` accuracy |
 | Seals/signatures | detection P/R; `name`/`text` CER |
 | Artifacts | watermark/ghost P/R — specifically, **body-text contamination rate**: characters of watermark/seal text that leaked into the body |
+| Initials | detection P/R; first-word accuracy; single-letter false headings (D115) |
+| Alignment | accuracy and coverage per kind (paragraph, heading, cell) (D115) |
+| Columns | fragment column accuracy; continuation join P/R; hyphen resolution at breaks (D115) |
 | Confidence | expected calibration error per kind |
 
 ### 14.3 Ground truth
@@ -1702,7 +2182,9 @@ commit (the ratchet). Metrics:
 1. **The synthetic round trip** (D041) — emon's best oracle. An HTML corpus
    (headings of known level, lists, tables including multi-page tables with
    and without `thead` repetition, running headers and page numbers,
-   footnotes, figures with `data-` kinds) is printed to PDF by **external
+   footnotes, figures with `data-` kinds, drop caps and other initials,
+   every alignment, multi-column layouts with spanning elements and
+   paragraphs continuing across columns and pages; D114) is printed to PDF by **external
    tools at development time** — headless Chromium's `printToPDF` as the
    primary producer, and optionally others (nome, WeasyPrint, LibreOffice)
    so emon does not overfit to one producer's idioms. The HTML *is* the
@@ -1845,8 +2327,9 @@ permissions on encrypted PDFs (→ ignored, D040), the Java build machine
 byte sources with lazy range reads, required; PDFs and images may be mixed
 in one conversion; D058).
 
-1. **Figure pixels**: placeholders only (as specified), or an opt-in to emit
-   crops through the host?
+1. ~~**Figure pixels**: placeholders only, or an opt-in to emit crops
+   through the host?~~ Answered: an opt-in, `assets` (§10.11, D117);
+   placeholders stay the default.
 2. **Renderer in kin**: a kin PDF renderer would make the raster path deterministic across
    hosts and remove a port — at the cost of implementing PDF painting
    (shadings, blend modes, image codecs still host). Parked; revisit after
@@ -1854,3 +2337,8 @@ in one conversion; D058).
 3. **nome as an optional corpus producer** (D041): may nome be one of the
    external dev-time PDF producers for the synthetic corpus (never a
    dependency), or should it be excluded?
+4. **A lexicon for initials** (D108): may emon ship a small per-locale word
+   list (the most frequent few thousand words, a `defdata` table per locale,
+   used only when a locale hint is given) to decide whether a one-letter
+   initial is a word (`A` + `long` vs `A` + `t the`)? Without one, it is
+   joined and flagged.

@@ -720,6 +720,12 @@ analysis beyond "top-to-bottom lines on a single column".
   structure — calibration is Phase 10).
   *Done when*: the HTML-printed fixture's paragraphs equal the source HTML's `<p>`
   texts (script compares); the JSON is a golden.
+  *Note (D108-D112)*: initials, columns, continuation across columns and
+  alignment are NOT this item's (P4.10, P4.1, P4.11): do not special-case
+  them. Two things only, so they need no rework later: write `at` as a LIST
+  of regions (one per page now, one per column fragment after P4.1), and do
+  not read the first line of a paragraph from content-stream order (Chrome
+  paints every float, e.g. a drop cap, before the page's text: D108 (a)).
 
 - [x] **P1.9 — HTML emitter** (`kin/html.kin`, `emon.html`; SPEC §5).
   *Brief*: the §5.1 mapping for the kinds that exist (and stubs for the rest
@@ -772,6 +778,45 @@ analysis beyond "top-to-bottom lines on a single column".
   spooled-`Read` adapters with identical JSON.
   **This is the first vertical slice.** Record
   timings for the fixtures (baseline, not a target).
+
+- [ ] **P1.13 — The Model's vocabulary for initials, alignment and layout**
+  (`kin/model.kin`, `kin/json.kin`, `kin/html.kin`, `kin/mscript.kin`, their
+  tests; SPEC 3.2, 3.7, 3.8, 4.2, 5; D109-D111, D113). **Independent of P1.8
+  and P1.12; take after P2.13's step 1 (the schema) is on main**, because
+  the JSON goldens validate against it.
+  *Brief*: (1) `model.kin`, codes appended, never renumbered (D050):
+  `nk-initial 26 "initial"`; `fk` rows `form 76`, `lines 77`, `layout 78`,
+  `band 79`, `col 80`, `box 81`; `rl-sidebar 9 "sidebar"`; a new enum
+  `ifm` (`drop 1`, `raised 2`, `margin 3`); an `initial` is an inline whose
+  `sub` is its form and `aux` its lines (0 = absent); `align` on heading,
+  caption and cell is an attribute (`fk-align`, value an `al` code; `cell`
+  never `justify`, the builder refuses it); a seventh arena `layout`
+  (stride 8: page, band, col, role (`rl`: body 2, sidebar 9, margin 6), x0
+  y0 x1 y1) with `lay-add` and, on the `pages` row, two spare cells naming
+  the page's contiguous run (first, count). (2) `json.kin`: `initial` as
+  SPEC 4.2 (after `kind`: `form`, `lines`, then `children`); `inlines` is
+  informative when any `initial` is present; `align` in each kind's field
+  order after its kind-specific fields; `pages[].layout` as
+  `[{"band","col","role","box":[x0,y0,x1,y1]}]` in run order, omitted when
+  the run is empty; the version string becomes `"1.1"` (every JSON golden
+  changes by that string only; say so in the entry). (3) `html.kin`: the SPEC
+  5.1 rows (the unstyled `<span data-emon="initial" data-emon-form
+  data-emon-lines>`; `ho-initials-plain 128` writes the bare text;
+  `ho-align-style 256` adds `style="text-align:…" dir="auto"` wherever
+  `align` is; `note` roles `margin`/`sidebar` are `<aside
+  data-emon-role>` with no `doc-footnote` role and no `fn-` id unless a
+  `ref` targets it; with `ho-geometry`, `data-emon-col` / `data-emon-cols`
+  from the page `layout` cell containing each region's centre). (4)
+  `mscript` lines for the new kinds and fields; the `corners` Model gains a
+  drop, a raised and a margin initial (one inside a paragraph with a
+  smallcaps span after it), aligned heading, caption and cells, a sidebar
+  and a margin note, and a two-page layout of two bands; `kinds` gains one
+  of each. (5) `json-check.py` and `html-check.py` learn the same (they are
+  the independent references, D054, D067).
+  *Done when*: `bb unit` green on four targets with the new goldens (JSON,
+  pretty JSON, the four HTML option sets, plus a fifth HTML set with
+  `ho-initials-plain | ho-align-style | ho-geometry`), html5lib strict parse
+  clean, schema-valid against the 1.1 `schema/emon-1.json`.
 
 ---
 
@@ -950,10 +995,110 @@ analysis beyond "top-to-bottom lines on a single column".
   under `corpus/_gold/` (outside git), all validating; `bb import` runs them (D094; not
   a gate). Seal set found: mapo80/stamps. Tobacco800 and PubTabNet not imported
   (login / not fetched).
-- [ ] **P2.12 — `bb fuzz`, first cut**: truncation and byte-flip mutation of
-  the PDF fixtures through both hosts; no panic, no hang, same error name;
+- [x] **P2.12 — `bb fuzz`, first cut** (D106, D107): truncation and byte-flip
+  mutation of the PDF fixtures through both hosts; no panic, no hang, same error name;
   also under the 512-byte async source (a miss must never surface as an
   error, D058).
+  *Done*: `kin/fuzzprobe.kin` (one kin unit on every host: open, pages, decode every
+  stream, load every dictionary as a font and map every code, one line out; the same
+  pass through a 512-byte async source that is re-run until it does not miss), four
+  drivers (`test/fuzz/{rust,go,java,cs}`), and `tools/fuzz/` (babashka: SplitMix64
+  mutators, the harness with a per-case timeout and resumption after a kill, a
+  minimiser, and `--selftest` against a fake host that hangs/crashes/panics/disagrees
+  on demand). Mutators: truncation, byte flips, splices, and structure-aware ones
+  (xref entry numbers, `/Length` direct and indirect, `N G obj` headers, `stream` /
+  `endstream` boundaries, `/Size /Prev /Root /First /N /Kids /W /Index startxref`).
+  `bb fuzz` (no arguments) is the gate: selftest, every fixture unmutated, 300 seeded
+  mutants, every file under `test/fuzz/crashers/`, on Rust and Go, memory and async.
+  `bb fuzz --long N [--seed S] [--hosts all]` is not a gate. Found and fixed: three
+  signed-overflow sites that panic in a checked Rust build (a header shift added to a
+  saturated xref offset, an `/Index` start plus an entry number, a CMap number of ten
+  digits; D107), each kept as a reproducer in `test/fuzz/crashers/`. No hang, no
+  cross-host status difference and no async/memory difference was found. The content interpreter is not merged
+  (P1.7), so it is not in the probe yet: add its entry point to `fz-run` when it is.
+- [ ] **P2.13 — Synthetic corpus: initials, alignment, columns** (D114; SPEC
+  14.3; `tools/synth/`, `schema/`, `test/corpus/synth/`, `kin/scripts/
+  gold-check.py`). **Can start now**: babashka, plus Chrome, poppler and
+  ImageMagick at authoring time only (D041, D071); no kin.
+  *Brief*, in this order, each step its own commit:
+  1. **Schemas (commit this first; P1.13 waits on it).** `schema/emon-1.json`,
+     additively: `emon` accepts `"1.0"` and `"1.1"`; the inline kind
+     `initial` (fields `form` enum drop/raised/margin, `lines` integer >= 2,
+     plus the common inline fields and `children`); `align` allowed on
+     heading, caption and cell (`cell`: start/center/end only); `note.role`
+     gains `sidebar`; `page.layout` (array of `{band, col, role
+     (body|sidebar|margin), box: [4 cpt]}`, closed). `schema/emon-gold-1.json`:
+     `model.emon` the same two versions; optional top-level `facts`
+     (`frags`: object id → array of `[page, band, col]`; `lines`: object id →
+     integer; `hyphens`: array of `{id, printed, word}`); `annotated.layout`
+     boolean; `annotated.attributes` accepts the key `initial`. Every
+     committed JSON golden, HTML-check input and gold still validates
+     (`bb unit`).
+  2. **Authoring** (`make_html.clj`): the 19 documents of D114, deterministic
+     text from fixed seeds as today, with the authoring attributes D114 lists
+     (`data-initial`, `data-lines`, `data-initial-text`, `data-align`,
+     `data-cols`). Choose font sizes and line heights so each drop cap spans
+     the lines it declares; `initial-image`'s tile is written by `magick`
+     (a Georgia letter on a bordered, filled square, 300 dpi) to
+     `test/corpus/synth/html/img/initial-W.png` and referenced relatively;
+     `initial-vector` draws its letters as SVG `<path>` fills (rectangles
+     for `T` and `L`), never `<text>`. `columns-continue` must really break
+     paragraphs across a column AND a page (fixed-height column containers or
+     enough text; the facts in step 4 prove it, and the build fails if not).
+  3. **Gold** (`html2gold.clj`): the `initial` inline (the `::first-letter`
+     extent for a `<p data-initial>`: preceding punctuation (Unicode Ps, Pi,
+     Pf, Po), one grapheme cluster, following punctuation without a space
+     between; for an element: its text, `alt` or `data-initial-text`);
+     `align` from `data-align`; the D114 conventions 9-12; `annotated` grows
+     for the new documents only (existing golds unchanged, byte for byte).
+  4. **Facts** (`build.clj`): per new document, from `pdftotext -bbox-layout`:
+     `frags` (anchor each leaf block's words by unique 4-grams, split its
+     located words into runs by page and by column, the column being the
+     index of the run's x among the container's column starts found from its
+     lines' left edges, `band` counting column sets top down), `lines` and
+     `hyphens` (a line-final word ending in U+002D or U+2010 whose join with
+     the next line's first word equals an HTML word). Fail the build when a
+     block cannot be anchored, when a drop cap's box does not overlap exactly
+     `data-lines` lines, or when `columns-continue` has no paragraph with
+     fragments on two pages.
+  5. **Print** with `print.sh` (all 19 stems; existing PDFs are NOT
+     reprinted), scans by `degrade.clj`, `MANIFEST.json`. Then
+     `kin/scripts/content-goldens` for `test/content/synth.txt`, and
+     `kin/scripts/synth-extras.edn` gains the new documents' printer
+     glyphs; `content-check` must allow the letters of `initial-image` and
+     `initial-vector` to have no glyph (declare them the way the Devanagari
+     exceptions are, with the reason).
+  6. **Check** (`gold-check.py`): the new keys, `facts` ids resolve, `frags`
+     only on documents with `annotated.layout`, and re-derivation equality
+     as for every gold.
+  *Done when*: `bb unit` green (gold-check re-derives all 55 golds; json and
+  html checks untouched); `bb accuracy` (oracle) scores every new document
+  perfect; the entry reports, per new document, pages, fragments, hyphen
+  points and the line count of each initial, and says anything Chrome did
+  that D108's probe did not predict.
+- [ ] **P2.14 — Scorer metrics for initials, alignment and columns** (D115;
+  `tools/accuracy/score.clj`, `test_score.clj`, `predict_degraded.clj`,
+  `accuracy.clj`). **Can start now** with hand-built golds in the laws; the
+  corpus run needs P2.13.
+  *Brief*: the D115 metrics exactly as named, counts pooled then ratioed
+  (D077), each absent when the gold does not annotate it; the no-locale
+  hyphen rewrite of D114 convention 12 applied before CER/WER when the
+  predicted Model's `settings.locale` is null; `cer`/`wer` otherwise
+  unchanged. `frag-col-acc` maps a predicted region to the predicted page's
+  `layout` cell containing its centre; a prediction without `layout` scores
+  0 on layout documents (not absent). The degraded predictor learns three
+  damages so every metric moves: split each initial into its own
+  single-letter heading, drop every `align`, split every multi-fragment
+  paragraph at its first fragment boundary. Ratchet direction: the
+  lower-is-better list gains `initial-false-heading` and `align-wrong`;
+  categories gain `initials` and `align` (D079).
+  *Done when*: `bb unit` runs new hand-computed laws in `test_score.clj`
+  (at least: an initial split off, an initial moved to line 3, `A long` →
+  `Along`, a single-line `justify` gold scored against `start`, a column
+  continuation joined and split, a hyphen kept and joined with and without
+  a locale); `bb accuracy` oracle is perfect and degraded strictly worse on
+  each new metric; the scoreboard's committed fixtures entries are updated
+  in the same commit.
 
 ## Phase 3 — PDF breadth
 
@@ -1047,11 +1192,170 @@ analysis beyond "top-to-bottom lines on a single column".
 - [ ] P3.10 — Text-layer oracle (SPEC §14.5): per-character comparison
   against a pinned reference extractor on a born-digital corpus; committed
   expectations.
+- [ ] **P3.11 — Canonical PNG writer, DEFLATE compressor, and the `Buf` port**
+  (D117, SPEC §10.11). No dependency: may be taken at any time.
+  *Brief*: (a) **`Buf` port**, in all four host port files beside `Cells`, with
+  `@kin:link` annotations and a `Buf` tag in `emon.lang`: `buf-len b`, `buf-at b i`
+  (0..255), `buf-push b v` (low 8 bits; answers the new length, as `cells-push`),
+  `buf-set b i v`, `buf-truncate b n`, `buf-append-blob b blob start end`, and the
+  form `buf-blob b` (a borrow as a `Blob`, spelled like `src-slice`). Host types: Rust
+  `pub struct Buf(Vec<u8>)`, Go `*Buf` over `[]byte`, Java `emon.Buf` (byte[] +
+  length, doubling), C# `Emon.Buf`. Laws in `kin/porttest.kin`. (b) **`kin/deflate.kin`**
+  (`emon.deflate`), a zlib writer that streams: `df-init ws` (a `Cells` workspace:
+  32 KiB window ring, `head` 32,768 and `prev` 32,768 hash chains, a pending-symbol
+  buffer of 16,384, frequency tables), `df-write-cells ws out cells start end`,
+  `df-write-blob ws out blob start end`, `df-finish ws out`. Parameters exactly as
+  SPEC §10.11: header `78 01`; hash `((b0 << 10) ^ (b1 << 5) ^ b2) & 32767`; chain
+  limit 32; greedy with one step of lazy matching (take the next position's match
+  only if strictly longer); matches 3..258, nearest first on equal length; a block
+  every 16,384 symbols and at the end; each block stored, fixed or dynamic by
+  fewest bits (ties: stored, fixed, dynamic); dynamic lengths by package-merge,
+  limit 15 (7 for the code-length code), frequency ties by symbol; code-length
+  runs greedy with 16/17/18; Adler-32. A test-only `df-force` mode forces one block
+  type. (c) **`kin/png.kin`** (`emon.png`): `png-begin ws out z w h ctype depth
+  dpi100 pal npal trns` (writes signature, `IHDR`, `PLTE`/`tRNS`, `pHYs` when
+  `dpi100 > 0` as `(dpi100·100 + 127) / 254` pixels per metre, unit 1), `png-row ws
+  out z cells start` (one row of packed samples; filter chosen per SPEC §10.11; the
+  filtered row goes to deflate, whose output goes to the scratch `Buf` `z`; every
+  65,536 bytes of `z` become one `IDAT` in `out`, the remainder moved to `z`'s
+  front and `buf-truncate`d), `png-end ws out z` (last `IDAT`, `IEND`). CRC-32
+  table computed in `ws` at `png-begin` (polynomial `EDB88320`). (d) Tests:
+  `kin/deflatetest.kin` (round trip through `emon.inflate`: empty, 1 byte, 300
+  repeats, 1 MiB of splitmix bytes, 64 KiB of text, each forced block type, a
+  match at distance 32,768); `kin/pngtest.kin` (12 images generated from splitmix
+  in the test: gray 1×1, RGB 97×61, RGBA 97×61, gray+alpha 97×61, 1-bit gray 33×17,
+  palette of 16 with `tRNS`, RGB 3000×1, gray 1×3000, a 2481×64 strip of the bench
+  page, and three more of the implementer's choosing; each decoded again by a
+  test-only reader (inflate + unfilter) to the same samples, and its SHA-256
+  through `crypto-sha256` equal to the committed value); `kin/pngprobe.kin` in
+  `bb check` prints the 12 digests, which the four targets must agree on.
+  `kin/scripts/png-check` (bb) writes the 12 files from the Rust probe and decodes
+  each with ImageMagick (`magick x.png rgba:-`, version recorded) and with
+  `java.util.zip.Inflater`, comparing to the generator's samples. (e) Measure
+  (D092's rule, not a gate): ms per target for the 2481×3508 gray bench page and a
+  1200×800 RGB photo, and size against `java.util.zip.Deflater` level 6 on the
+  same filtered rows; record it here.
+  *Files*: `host/*/port.*`, `kin/deflate.kin`, `kin/png.kin`, `kin/deflatetest.kin`,
+  `kin/pngtest.kin`, `kin/pngprobe.kin`, `kin/porttest.kin`, `kin/scripts/png-check`.
+  *Done when*: `bb unit` green on every arm, `bb hosts` agrees on the `Buf` forms,
+  the probe's 12 digests are equal on four targets, `png-check` green, and the
+  measurement is written here. **Not** in scope: transcript PNGs (D090) keep
+  stored blocks until a decision moves them to this writer.
+- [ ] **P3.12 — PDF image pixels in kin** (D117, SPEC §10.11 "embedded" and
+  "decoded"). Depends on P3.5 (image placements with CTM and clip in `images`
+  rows) and P3.11.
+  *Brief*: `kin/pdfimage.kin` (`emon.pdfimage`). (1) `pi-info`: an image XObject or
+  an inline image (`BI`…`EI`, whose abbreviations `/W /H /BPC /CS /D /F /DP /IM`
+  and abbreviated filter and colour-space names are expanded) → a `Cells` record:
+  object number (-1 inline), w, h, bpc, colour-space class, base and `/N`, an
+  `Indexed` palette (hival and its bytes from a string or stream), `/Decode` as `Fx`
+  pairs (default by class), `/ImageMask`, `/Mask` (colour-key ranges or a stencil
+  handle), `/SMask` handle and `/Matte`, the filter chain and `DecodeParms`, the
+  stream span, and whether its bytes are the input's own (not encrypted, the image
+  filter alone) or kin's (decrypted or pre-filtered). (2) `pi-passthrough`: SPEC
+  §10.11's JPEG conditions by a marker walk (SOF0/1/2 allowed; SOF3, 5-7, 9-11,
+  13-15 refused; component count; APP1 Exif tag 0x0112; SOF size against
+  `/Width`/`/Height`), answering 0 or a `pv` `defenum` reason. (3) `pi-samples`:
+  raw, Flate, LZW, RunLength with predictors through the existing filters; for DCT
+  that cannot pass through, JPX, JBIG2 and CCITT, plan a `decode-img` request
+  instead. (4) `pi-pixels`: samples (or the answer's `Bitmap`) → a gray or RGB
+  `Bitmap` plus a one-channel alpha `Bitmap` (host-allocated), applying unpack, 16 →
+  8 rounding, `/Decode` (Fx, rounded half up), colour (CMYK naive, `Indexed`,
+  `ICCBased` by `/N`), masks (a mask of another size mapped by nearest neighbour,
+  `floor(x·mw / w)`), `/Matte`; `Separation`/`DeviceN`/`Lab` answer `colorspace`.
+  (5) `pi-orient`: the eight rectilinear orientations from the signs and zeros of
+  the placement's `Fx` matrix (else `transformed`), and the visible crop (clip box
+  ∩ image box mapped into image pixels, floor/ceiling) under `asset-whole`. (6)
+  `decode-img` (kind 6) in `kin/plan.kin`: `rq-decode-img` and readers, args
+  `filter w h comps bpc k columns rows ccitt-flags where offset length sha×8
+  gwhere goffset glength gsha×8` (`where`: input index ≥ 0, -2 the unit's payload
+  `Buf`, -1 none; `sha` zero for an input span), answered as `decode`; laws in
+  `kin/plantest.kin`; the Rust and Go loops (`host/rust/src/plan.rs`,
+  `host/go/port/plan.go`) hand the unit's payload `Buf` to the fulfiller and never
+  write it to a transcript (a payload whose SHA-256 differs is a different key, so
+  a replay answers `transcript-miss`). Fixtures: `kin/scripts/asset-fixtures`
+  (bb, in the manner of `pdf-p3-fixtures`) writes `test/assets/*.pdf` from source
+  images it generates deterministically (JPEGs by ImageMagick, committed, version
+  recorded): DCT passthrough; DCT with `/Decode [1 0 1 0 1 0]`; CMYK DCT with an
+  Adobe marker; DCT with EXIF orientation 6; arithmetic-coded DCT; Flate RGB 8 and
+  16 bits; gray 1, 2, 4 bits; `Indexed` 16 over RGB; `/ImageMask` in red; `/Mask`
+  colour key; `/Mask` stencil of another size; `/SMask` with and without `/Matte`;
+  an inline image; an image in a Form XObject; drawn rotated 90°, flipped, and
+  skewed; clipped to a rectangle and to a circle; drawn twice; an encrypted
+  (AES-128) copy of the Flate case; JPX, JBIG2 with globals, CCITT G4 (from
+  `magick -compress Group4`), for the request record only. Expected pixels are
+  computed by the generator itself (Clojure, from the source samples and the rules
+  above) and committed as the SHA-256 of RGBA8 row-major bytes, beside an
+  ImageMagick PNG for eyes.
+  *Files*: `kin/pdfimage.kin`, `kin/pdfimagetest.kin`, `kin/plan.kin`,
+  `kin/plantest.kin`, `host/rust/src/plan.rs`, `host/go/port/plan.go`,
+  `kin/scripts/asset-fixtures`, `test/assets/`.
+  *Done when*: every kin-decodable case's pixel hash equals the generator's on every
+  arm (`bb unit`); passthrough bytes equal poppler's `pdfimages -all` output byte for
+  byte; unmasked decoded cases equal `pdfimages -png` (`magick compare -metric AE`
+  0); every codec case plans the expected `decode-img` record; `bb plan` still green.
+- [ ] **P3.13 — Assets in the Model, JSON, HTML and the API, level `images`**
+  (D117, SPEC §3.7-3.9, §4.2, §5, §10.11). Depends on P1.10, P3.6, P3.12 (P2.1 for
+  the Go arm).
+  *Brief*: (1) Settings `assets`, `asset-dpi`, `asset-pixels`, `asset-bytes`,
+  `assets-bytes`, `asset-signatures` through `setting-of` and the Engine `Config`.
+  (2) `kin/model.kin`: arenas `assets` (stride 24: type, origin, from, object, byte
+  start, byte length, sha256 ×8, w, h, dpi, flags, use head, use count, 4 spare)
+  and `uses` (stride 8), the `abytes` `Buf`; `defenum`s for type, origin, from,
+  flags and `noasset` reasons (codes forever, D050); `model-check` and
+  `model-hash` cover them. (3) **Provisional figures** until P8.1: an image
+  placement that passed P3.6, covers < 800 ‰ of its page (else it is a scan or a
+  background) and has both sides ≥ 18 pt becomes a `figure` of subkind `unknown`,
+  placed in reading order by its top edge. This is SPEC §10.6's placeholder, owed
+  with or without `assets`; P8.1 replaces the rule. (4) `kin/asset.kin`
+  (`emon.asset`): per node in id order, SPEC §10.11 steps 1-4 at `images`
+  (`part`/`vector`/`composite` otherwise), passthrough bytes by `buf-append-blob`,
+  decoded pixels through `emon.png`, `asset-pixels` scaling, dedup by SHA-256 and
+  length, `asset-bytes` and the first-overflow `assets-bytes` rule, uses. Codec
+  images answer `noasset: "codec"` until P6.1a. (5) `kin/json.kin`: the `assets`
+  array, `asset`/`noasset`, the settings keys, all in SPEC §10.11's order;
+  `schema/emon-1.json` extended additively (D055); goldens
+  `test/json/assets-*.{model.edn,json}` with the independent Python reference
+  (D054) extended. (6) `kin/html.kin`: `ho-assets-external` 128, `ho-assets-omit`
+  256 (neither: inline), an `asset-prefix` text argument, the mapping and `alt`
+  rule of SPEC §10.11, base64 in kin; HTML goldens in the three modes and D067's
+  independent renderer extended; html5lib check. (7) Rust and Go API (`Asset`,
+  `assets()`, `asset()`, `asset_files()`); driver flags `--assets=images|figures`,
+  `--html-assets=inline|external|omit`, `--asset-dir=D` (the driver writes the
+  files; the library never does). (8) End to end: P3.12's fixtures, and four new
+  synthetic documents in `tools/synth` with `<img>` of known PNG and JPEG sources
+  (whether Chrome passes a JPEG through is measured and recorded; a PNG must come
+  back with equal pixels).
+  *Files*: `kin/model.kin`, `kin/asset.kin`, `kin/assettest.kin`, `kin/json.kin`,
+  `kin/html.kin`, `schema/emon-1.json`, `host/rust/src/emon.rs`, the Go host,
+  `test/json/`, `test/html/`, `test/assets/`, `tools/synth/`.
+  *Done when*: `bb slice` with `--assets=images` green on Rust and Go; the identity
+  arm gives byte-identical JSON, HTML in three modes and asset files across hosts,
+  in memory and through the 512-byte async source; a bb check recomputes every
+  `sha256` from the files and every PNG decodes (ImageMagick) to the expected
+  pixels; the schema gate passes; with `assets: none` every existing golden is
+  unchanged except where a provisional figure now appears.
 
 ## Phase 4 — Layout and structure, on the text layer
 
 - [ ] P4.1 — Blocks and reading order: XY-cut with spanning elements,
   multi-column, RTL (emon's own UAX #9 `bidi`), priors compared (SPEC §10.1).
+  *Brief (D111, D112)*: after P1.8 and P1.12 (v2 words and lines), and
+  after P4.10 runs (initials before indents are measured) and P4.3's
+  recurrence pass (furniture out before gutters are sought). SPEC 10.1.1
+  steps 1-9 as written: gutters over words (named settings `gutter-min`,
+  `gutter-rows` 3), lines split at gutters, spanning elements, the
+  vertical-first cut tree, `band`/`col` numbering, roles and the
+  sidebar/margin `note`s, the page `layout` arena (P1.13); then SPEC
+  10.1.2 continuation with `join-min` and its signal points as a `defdata`
+  table, one region per fragment, blocks between fragments moved after the
+  joined paragraph. The evidence dump (or a debug line format) prints each
+  page's cut tree and every join score.
+  *Done when*: on P2.13's layout documents and `columns-two`,
+  `columns-three-news`: `frag-col-acc` and `join-r` at least 0.95, Kendall
+  tau at least 0.95, no `join-p` below 0.95; on `layout/arxiv` 1512.03385,
+  1810.04805 and 2206.01062 a person reads the HTML in order and the entry
+  lists what is wrong; first numbers recorded in the scoreboard (D023).
 - [ ] P4.2 — Style inventory and body style (SPEC §10.3.1).
 - [ ] P4.3 — Running furniture: candidates, templates, decomposition,
   policy (D017); page labels from detected numbers.
@@ -1065,12 +1369,42 @@ analysis beyond "top-to-bottom lines on a single column".
   zh, ja), dehyphenation with emon's own Liang `hyphen` (D021, D029).
 - [ ] P4.9 — Code blocks, quotes, formulas (placeholder by font/glyph
   signals), form fields into the flow.
+- [ ] P4.10 — Initials on the text layer (SPEC 10.9, D108, D109; new
+  `kin/initial.kin`). *After P1.8 and P1.12* (it reads v2 glyph sizes,
+  baselines and fonts), *before P4.2 and P4.4* (the inventory and heading
+  candidates must already exclude initials). *Brief*: the candidate, drop,
+  raised, margin, first-word, RTL and not-an-initial rules of SPEC 10.9 as
+  written, with `initial-min` and the tolerances as named settings;
+  `/CapHeight` and `/XHeight` read into `fonts` (D108; 0.7 of the size when
+  absent); the join rule (no space unless a tagged tree or `/ActualText`
+  holds one; `low-conf` for one-letter words, with one-letter-word tables
+  for the P4.8 locales as `defdata`); the paragraph builder of P1.8 told
+  where lines 1..N start and from which line the gap is measured; the
+  `initial` inline written (P1.13). Glyph-less initials (outlines, images,
+  Type 3 without Unicode) are P6.7's; here such a paragraph just starts
+  without its letter, and the entry counts them. *Done when*: on P2.13's
+  text-layer initials documents (`initial-firstletter`, `-raised`,
+  `-firstword`, `-columns`, `-rtl`, `-cjk`): `initial-p`/`-r` 1.0,
+  `first-word-acc` 1.0 except the declared `A`/`I` word cases,
+  `initial-false-heading` 0, and `initial-letter-headings` keeps its three
+  headings; the four real files of D108 are checked by hand in the entry.
+- [ ] P4.11 — Alignment (SPEC 10.10, D110; `kin/align.kin`). *After P4.1*
+  (it needs the fragment boxes); the cell part is P5.3's. *Brief*: the
+  SPEC 10.10 tests and single-line rules, tolerance and `align-min` as
+  named settings, base direction by P4.1's `bidi` (UAX #9 P2-P3); `align`
+  on paragraph, heading and caption. *Done when*: on `align-paragraphs`,
+  `align-justify-hyphen`, `align-rtl` and the column documents: `align-acc`
+  at least 0.98 and `align-wrong` at most 0.01; `align-cov` recorded
+  (single lines lower it by design).
 
 ## Phase 5 — Tables
 
 - [ ] P5.1 — `ruled` profile from vector rules: lattice, cells, spans.
 - [ ] P5.2 — `partial`, `shaded` and `whitespace` profiles; profile scoring.
-- [ ] P5.3 — Header rows, row groups, numeric columns, captions.
+- [ ] P5.3 — Header rows, row groups, numeric columns, captions. Also
+  cell `align` per table column (SPEC 10.10, D110): measured over the
+  column's body cells against its text extent; header cells separately;
+  `align-table-numeric` scores it (`align-acc` for cells at least 0.98).
 - [ ] P5.4 — Tables across pages: with and without recurring headers,
   "continued" markers, split rows (D019).
 - [ ] P5.5 — `struct` (tagged) tables verified against geometry; `form`
@@ -1085,6 +1419,21 @@ analysis beyond "top-to-bottom lines on a single column".
   several inputs, mixable with PDFs (D058, SPEC §2.0); codecs read the
   host's byte source (forward or by offset, awaited in async hosts), and kin
   only sniffs the first chunk.
+- [ ] **P6.1a — Host decoding for assets: `decode-img`** (D117). Depends on P6.1
+  and P3.12.
+  *Brief*: Rust and Go fulfil kind 6: DCT (Rust `zune-jpeg`; Go `image/jpeg`), JPX
+  (Rust through OpenJPEG; Go `unsupported` unless a pure-Go decoder is adopted),
+  JBIG2 with its globals (Rust through `jbig2dec`; Go `unsupported`), CCITT G3/G4
+  with `K`, `Columns`, `Rows`, `BlackIs1`, `EncodedByteAlign` (Rust `fax`; Go
+  `golang.org/x/image/ccitt`). The answer is the codestream's pixels (8-bit, gray or
+  RGB, `bilevel` flag), never with the PDF's `/Decode` or masks applied (those are
+  kin's); an engine that cannot is `ps-unsupported`, which becomes `noasset:
+  "codec"`. A 4-component DCT is converted to RGB honouring the Adobe APP14 marker.
+  Record a transcript of P3.12's codec cases live on Rust into
+  `test/assets/transcripts/` and replay it on Rust and Go.
+  *Done when*: JPX (lossless), JBIG2 and CCITT cases equal the generator's pixels
+  exactly, DCT within 2 per channel of `pdfimages -png`; the replay's JSON, HTML and
+  asset files are byte-identical on Rust and Go.
 - [ ] P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
   available (D007); pdfium loads through its custom-loader callback over the
   byte source, not a path or a whole-file copy (D058).
@@ -1111,6 +1460,17 @@ analysis beyond "top-to-bottom lines on a single column".
   (Rust only) and fill `xo-*` column 11 and 12 once P6.3 has kin's ink.
 - [ ] P6.6 — Degraded corpus from the synthetic round trip (SPEC §14.3.1);
   scanned-document baselines in the scoreboard.
+- [ ] P6.7 — Initials from ink (SPEC 10.9, D108): the geometry test of P4.10
+  over non-text ink (a vector path cluster, an image placement, a Type 3
+  glyph without Unicode, the tracer's components on raster pages); the
+  letter from `/ActualText` or `/Alt`, then a planned OCR request of pass kind
+  `initial` (a new `op` row; psm 10, the paragraph's script) on the
+  region, then the tracer; U+FFFD and `low-conf` when nothing passes; the
+  ornament is not a `figure`. *After P6.4, P6.5a and P7.4* (targeted
+  rounds). *Done when*: `initial-image` and `initial-vector` score
+  `initial-r` 1.0 and `first-word-acc` 1.0 on `pdf/` and `scan/`, and the
+  scanned variants of every P2.13 initials document have no single-letter
+  heading.
 
 ## Phase 7 — Fusion and artifacts
 
@@ -1133,6 +1493,32 @@ analysis beyond "top-to-bottom lines on a single column".
   P3.8) into `seal` nodes.
 - [ ] P8.4 — Logos, including recurrence across pages (and their removal from
   furniture templates).
+- [ ] **P8.5 — Region assets at `figures`: cropped and rendered** (D117, SPEC
+  §10.11). Depends on P8.1, P6.1a and P6.2 (seals: P8.2, P8.3).
+  *Brief*: (1) `crop` (kind 5) in `kin/plan.kin` (`input page dpi layer px py pw
+  ph`, answered as `render`), fulfilled in Rust and Go by pdfium
+  (`FPDF_RenderPageBitmapWithMatrix`: scale `dpi/72`, translate `(-px, -py)`, clip
+  `(0, 0, pw, ph)`, white fill, `FPDF_ANNOT`), with a law that a crop equals the
+  same rectangle of the whole-page render on each host. (2) `emon.asset` at
+  `figures`: steps 2-4 in full — the overlay test over `z` (paths, shadings, images
+  and visible glyphs painted after the image over more than `asset-overlay` of
+  it), the non-rectangular clip (the `clip` `paths` row is not an axis-aligned
+  rectangle), the rectilinear test; `cropped` from P3.12/P6.1a pixels or from a
+  raster input's or scan's decode answer through its view (no resampling, no
+  deskew); `rendered` with the 2 pt pad and the `d·3/4` step-down;
+  `text-overlap`; the `seal` policy (`asset-signatures`). (3) Fixtures: synthetic
+  documents (`tools/synth`) with inline-SVG charts and diagrams (vector), an image
+  clipped by `border-radius` (non-rectangular), one rotated 10° by CSS, text over a
+  photo, a logo on every page (one asset, many uses); raster pages composed by bb
+  (ImageMagick) from a known figure image pasted at a known offset into a lossless
+  PNG and TIFF page; the mapo80 stamps (D088) for seals.
+  *Done when*: a law crops a fixed region of a raster fixture and gets exactly the
+  pasted pixels; end to end, each raster figure's crop has IoU ≥ 0.9 with the paste
+  box and equals the page's pixels over it; each render crop has the computed pixel
+  size and a mean absolute difference ≤ 8 per channel from `pdftoppm -r 150 -x -y
+  -W -H` over the same rectangle (different rasterisers: a sanity bound, not
+  identity); a transcript recorded live on Rust replays byte-identical JSON, HTML
+  (three modes) and asset files on Rust and Go; the logo fixture has one asset.
 
 ## Phase 9 — The remaining host layers and bindings
 
@@ -1148,6 +1534,12 @@ analysis beyond "top-to-bottom lines on a single column".
   identical JSON from each adapter in a headless browser, a URL fixture
   fetches measurably less than its length for a one-page conversion, and
   the wasm build links no filesystem import (`wasm32-unknown-unknown`).
+  **Assets (D117)**: `asset.bytes()` (a `Uint8Array` copy) and `asset.blob()`
+  (a `Blob` of the asset's type), `external` documented as the browser form; the
+  P3.13/P8.5 asset fixtures give identical JSON, HTML and asset files in a
+  headless browser, and the peak JS heap for a document at the 32 MiB
+  `assets-bytes` default is measured in `inline` and `external` modes and written
+  here.
 - [ ] P9.4 — C binding; babashka pod.
 - [ ] P9.5 — `bb identity` over all four hosts and three bindings.
 - [x] ~~P9.6 — Ranged inputs, optional~~ — **promoted into the main design**
@@ -1430,6 +1822,9 @@ chart is there and what it is about, not its pixels.
 question SPEC §17.1); dropping graphics entirely (loses that a chart existed
 and its caption association).
 - [ ] **Signed off** (maintainer)
+**Open item resolved by D117**: pixels are an opt-in (`assets`: `none` /
+`images` / `figures`, SPEC §10.11); the placeholder stays the default and the
+Model never carries bytes.
 
 ### D021 — Locale is an optional hint; absent means locale-independent, not English
 **Decision**: SPEC §11. Without a hint: script-driven OCR model selection and
@@ -2738,8 +3133,8 @@ them; offer them upstream when they have proved general.
   error; caller-supplied password (D040).
 - [x] **Java toolchain**: a JDK exists at `/opt/homebrew/opt/openjdk` and
   `bb check` already runs the Java arm.
-- [?] **Figure crops**: placeholders only for now (D020); opt-in pixels
-  undecided (SPEC §17.1).
+- [x] **Figure crops**: an opt-in, `assets` = `none` (default) / `images` /
+  `figures`, with bytes out of band (D117, SPEC §10.11; resolves D020's open item).
 - [x] **Inputs**: Blob-like byte sources with async slice reads; lazy range
   reading required; PDFs and images may be mixed in one conversion (D058
   revised).
@@ -3554,4 +3949,401 @@ files and on the tagged fixtures; `test/content/real.txt` ratchets 120 pages who
 **Why**: the goldens are kin's own output, so they are worth what is held against them (the maintainer's policy: bb
 for emon's scripting, Python only where a third-party reference must be driven, under `tools/oracle/`).
 **Alternatives**: committing the corpus's glyph streams (not committable); checking the goldens only against themselves.
+- [ ] **Signed off** (maintainer)
+
+### D106 — `bb fuzz`: one kin probe on every host, a babashka harness that judges by the whole answer line, and a smoke subset as a gate (P2.12)
+**Decision**: (1) What runs on a host is `kin/fuzzprobe.kin`'s `fz-case`: the PDF layer's
+whole read path (open, page table, every stream the cross-reference names decoded, every
+dictionary loaded as a font with every one-byte code mapped) folded into ONE text line
+(status name, page count, warning bits, hashes of geometry, objects, decoded bytes and font
+answers). With a `chunk` it reads through D058's async source, re-running on a fresh view
+until a run does not miss, then once more into the answer. The four drivers
+(`test/fuzz/{rust,go,java,cs}`) read file names on stdin and print `name TAB memory-line
+TAB async-line` per file, flushing each, a panic/exception caught and printed as `PANIC
+...` (Rust prints the `gen/` file:line). (2) The harness is `tools/fuzz/` (babashka, SplitMix64
+per D094 and `kin/splitmix.kin`): case i of seed S is a pure function of (S, i, fixture bytes)
+(`sm-at`), so `bb fuzz --seed S --only I --dump F` reproduces it. Mutators are truncation
+(uniform, near the end, near `xref`/`endobj`/`endstream`), 1 to 8 byte flips, splices
+(delete/duplicate/insert/swap) and structure-aware edits of xref entries, `/Length` (direct and
+`N 0 R`), object headers, `stream`/`endstream` boundaries and the trailer/object-stream numbers
+(`/Size /Prev /Root /First /N /Count /XRefStm`, `startxref`, `/W`, `/Index`, `/Kids`). Each case
+applies one to three. (3) A verdict is a failure when a host panics or throws, hangs (no answer
+within `--timeout-ms`, 10 s: the host is killed and the batch resumes after that case), dies
+(a Rust or Go stack overflow is not a panic), gives a line different from another host's (a
+`status-mismatch` when the `pd-status` name differs, a `detail-mismatch` when only the hashes do),
+or gives an async line different from its own memory line: a miss must never surface as an
+answer. Rust is built with overflow and bounds checks ON (as `pdf-sweep` is). (4) A failing
+mutant is minimised (spans removed while the same set of verdicts holds; 60 s budget) and saved
+as `test/fuzz/crashers/NAME.pdf` plus `NAME.edn` (seed, index, fixture, operations, verdicts,
+`:status :open|:fixed`). Every crasher is replayed on every run: `:fixed` must pass, `:open` is
+reported and does not gate. (5) `bb fuzz` with no arguments is the gate (`fuzz` in `bb gates`): a
+self-test of the harness against `tools/fuzz/fakehost.clj` (hang, crash, panic, both mismatches, an
+async miss, resumption after a kill, the minimiser), every fixture unmutated, 300 mutants of seed 1,
+and the crashers, on Rust and Go, about 15 s. `bb fuzz --long N` (every toolchain present, no gate)
+and `--hosts all` for Java and C# are not gates: Java and C# add about 25 s per 1000 files.
+**Why**: a line that carries every answer makes "the same status and error name on every host" the
+weakest of several checks rather than the only one, and puts the loop that D058 leaves to the host
+in kin once, where the four hosts share it. Seeds per case (not one stream per run) keep a case
+reproducible after the run that found it. A gate that cannot fail is not a gate, so the harness is
+tested against a host built to misbehave.
+**Alternatives**: one kin-side fuzz loop over SplitMix (`pdfdoctest`'s `dt-corruptions` already
+does this for fault-freedom, but it cannot see a hang, a cross-host difference or a process that
+dies, and it only flips bytes); comparing only the status name (hides a font or stream decode that
+differs); killing a hang with a thread in the host (a stack overflow or an infinite loop in kin
+does not yield).
+**Open**: the content interpreter (P1.7) is not merged, so `fz-run` does not run it; corpus PDFs
+(`corpus/`, real damaged files, P3.1) are not among the seeds; coverage is not measured (no
+instrumented build), so "how much of the PDF layer do 300 cases reach" is unanswered; a
+grammar-aware generator of whole objects (rather than mutation) is not built.
+- [ ] **Signed off** (maintainer)
+
+### D107 — Three signed-overflow sites in the PDF layer now saturate at 2^31-1 (found by `bb fuzz`, P2.12)
+**Decision**: hostile numbers reached integer additions that overflowed I32: a panic in a
+checked Rust build, a silent wrap in Go, Java and C# (so, with overflow checks on, a different
+answer from Rust). Each is now saturating and has a committed reproducer in
+`test/fuzz/crashers/`. (1) `pd-shifted` (`kin/pdfdoc.kin`) adds the header shift to a file offset
+and saturates; the five places that added the shift to an offset use it (`pd-open` for `startxref`,
+`pd-load-direct`, the `/XRefStm` position, `pd-hint-extents`, `pd-section`). The lexer already
+saturates integers, so `startxref 9999999999` or an xref entry `04000000054 0 n` is 2147483647, and
+adding a header shift of 1 overflowed (`xref-offset-overflow-s11-i983`,
+`startxref-offset-overflow-s21-i118`). (2) `pd-xfill`: with `/Index [2147483647 n]` an entry's
+object number `first + k` overflowed; the put is skipped for object numbers past 2^31-1 (they name
+nothing; `pd-ent-put` would drop them) and the entry is still consumed, so the byte position of
+the next subsection is unchanged (`xrefstream-index-overflow-s31-i12269`). (3) The CMap number
+lexer in `kin/pdffont.kin` clamped to 214748364 and then computed `x10 + d`, which overflows for a
+digit of 8 or 9; it now saturates at 2147483647 and is otherwise the same for every number that fit
+(`cmap-number-overflow-s41-i1146`, a mutated real font).
+**Why**: the fixes are what the lexer's own rule ("integers saturate at 2^31-1") implies and change
+no result that did not overflow (every unit law and fixture is unchanged). Another agent is changing
+`pdfdoc.kin` (xref repair, encryption): from `pdfdoc.kin` this is one helper, its five call sites
+and one guard in `pd-xfill`.
+**Alternatives**: wrapping arithmetic for offsets and object numbers (keeps the negative-position
+behaviour that only happened to be safe); rejecting the entry when it is parsed (a policy change
+for P3.1's repair to make). Release builds (no overflow checks) wrapped and did not crash, so
+these are robustness fixes (no panic under checks, one answer on every host), not a correctness
+regression.
+**Open**: the long runs (about 55,000 mutants over seeds 7, 11, 21, 31 and 41 on Rust and Go, 7,000
+of them on all four hosts) found only these three; Java and C# are not overflow-checked, so an
+overflow there is a wrap, found only as a difference from Rust's panic. Minimisation is span
+removal only: a mutated compressed stream does not shrink (the cmap crasher is 18 KB).
+- [ ] **Signed off** (maintainer)
+
+### D108 — Initials (drop caps) are found locally, right after lines, and joined to the first word; a letter that is not text is recovered, never lost
+**Decision**: SPEC 10.9. Three forms: `drop` (sinks into the first N lines, which wrap it), `raised` (stands on the
+first baseline), `margin` (hangs outside the column beside the first lines); a whole enlarged first word is an initial
+of that word; a small-caps lead-in after it is an ordinary `smallcaps` span. Detection is a local, per-page test that
+runs after lines (D104) and BEFORE blocks, indents, styles and headings are measured: a run of 1-3 code points (with
+the punctuation `::first-letter` would take: `“N`) or a first word at least `initial-min` (2.0) times the size of the
+lines beside it, whose cap top meets the first line's cap top within half a body size and whose ink bottom falls in
+line N's band, lines 1..N starting after its end edge and line N+1 back at its start edge (drop); or on line 1's
+baseline with line 2 at its start edge (raised); mirrored for right-to-left. Cap tops come from the font's
+`/CapHeight` (else 0.7 of the size) or, on raster, the tracer's ink box; `fonts` gains `/CapHeight` and `/XHeight`
+(1/1000 em, -1 absent) as a minor addition (spare cells if P1.12 has not landed; P1.12's owner decides where). An
+initial drawn as outlines, as an image, or in a Type 3 font without Unicode is recovered from `/ActualText` or `/Alt`,
+then a targeted single-character OCR pass (a new `op` pass kind `initial`; Tesseract's drop-cap bit in `osyms`
+corroborates), then the tracer; failing all, U+FFFD flagged `low-conf`. Joining: the initial's text is prepended with
+NO space unless a healthy tagged tree or `/ActualText` holds one; when the letter is itself a word in the locale's
+one-letter-word table (`A`, `I`, `O` for English; with no locale, the union of the shipped tables) the join is
+flagged `low-conf`. Consequences elsewhere (SPEC 10.1, 10.3): lines 1..N start at the initial's start edge for the
+indent rule, the paragraph-gap rule measures from line 1, the initial's glyphs are excluded from the style inventory,
+the body-size statistics and feature column 18; a heading candidate is never an initial nor a 1-2 code-point block
+beside or inside a paragraph's first lines, while a glossary letter divider (`A` above `Aardvark …`, wrapping
+nothing) stays a heading.
+**Found** (a probe page printed by Chrome's `printToPDF` on this machine and read by P1.7's interpreter through
+`kin/scripts/content-sweep`; not committed, P2.13 makes it corpus): with
+`p::first-letter{float:left;font-size:4.1em;line-height:.8}` in Georgia 11 pt, (a) Chrome paints all three floats of
+the page before any in-flow text, so content-stream order puts `O`, `A` and `“N` first on the page: stream order
+cannot place an initial; (b) `A` + `long time` and `O` + `nce upon` have the same 4.5 pt gap and no space glyph
+(the page has 189 space glyphs, none there): whether the letter is a word is not on the page; (c) the float's
+baseline is 6.75 pt above line 3's, on no line's baseline; its font box starts 5.8 pt above line 1's, but the cap
+tops agree within 1.9 pt; (d) `::first-letter` takes the opening quote (`“N`, two code points); (e) a raised initial
+(`font-size:3em`, not floated) is already joined by D104 into the word `Raised`; (f) `hyphens:auto` prints U+002D,
+not U+00AD, so SPEC 3.6's locale rule governs dehyphenation. **Real corpus**: pdfminer.six over the first 4 pages of
+3,190 PDFs in `corpus/layout` and `corpus/multilingual`: 184 hits of "a letter at least 2.2 times the page's median
+size with body text to its right and below it" in 37 files, most of them titles and logos; true drop caps checked by
+hand in `layout/pdfa-eng-wds` 0182448 (p1 `T` + small-caps `HE BUREAU`, two lines), 4271234 (p2 `B`, journal
+style, 4.7 times body), 0795114 (p2 `W`) and 0116458 (p1 `O`, p3 `I`, p4 `G`, Caslon; pdfminer glued its `O` into
+a headline's line). Rare in a web crawl (about 1 file in 800), common in the novels and magazines the maintainer
+names.
+**Why**: a mishandled initial costs a word per paragraph (`O` `nce`: one substitution and one insertion), usually a
+false one-letter heading and a false paragraph break, and, placed by its baseline, a letter moved to line 3; local
+detection before blocks is the one place no later stage has already mis-grouped it. Joining is the better default
+(`It`, `In`, `At`, `As` open more paragraphs than `I` and `A` alone).
+**Alternatives**: detect after blocks (the heading and paragraph stages have already split it off); use stream order
+(wrong for Chrome); insert a space by default (wrong for most openings); drop an unreadable initial (a character
+silently lost); a per-locale lexicon to decide `A long` vs `At the` (SPEC 17.4: the maintainer's call).
+- [ ] **Signed off** (maintainer)
+
+### D109 — An initial is an inline `initial` in the Model; its text stays in `text`; HTML wraps it in an unstyled span
+**Decision**: a new inline kind `initial` (`nk` 26; schema minor 1.1) whose children are its text inlines, with
+`form` (`drop`/`raised`/`margin`: a new enum `ifm`, codes 1-3, in the node's `sub`) and `lines` (N for `drop` and
+`margin`, absent for `raised`; the node's `aux`), and the ordinary inline `src`/`conf`/`flags` (`["vector","ocr",
+"infer"]` for an outline letter read by OCR; `low-conf` as D108 says). New `fk` rows: `form` 76, `lines` 77. Its
+presence makes `inlines` informative; `text` is unchanged (`Once upon`). Its box is in the paragraph's `at` (and its
+own at `detail: words`). HTML: `<span data-emon="initial" data-emon-form="drop" data-emon-lines="3">O</span>nce`, no
+style; `html-emit` option bit `ho-initials-plain` 128 writes the bare text instead. The seal subkind `initials`
+(handwritten initials, D016) is unrelated and keeps its name.
+**Why**: the `text` a scraper reads 90 % of the time is right either way; the fact is kept for the converters that
+want it (a novel converted to an e-book re-styles it); an inline marks the exact extent (a quote mark, a whole word,
+a small-caps lead-in beside it) where a paragraph attribute would need a character offset.
+**Alternatives**: a paragraph field `initial: {len, form, lines}` (an offset into `text`, awkward when `inlines`
+already splits the first word); a `span` style bit `initial` (no room for `form` and `lines`); no representation
+(loses what the maintainer asked to keep); `<span style="float:left;font-size:…">` (styling the SPEC does not make).
+- [ ] **Signed off** (maintainer)
+
+### D110 — Alignment is logical, measured against the fragment's box, written only when confident; HTML adds style only on request
+**Decision**: SPEC 10.10. `align` on `paragraph` (exists, `al`), and newly on `heading`, `caption` and `cell` (as an
+attribute: their `sub` is taken), values `start`/`center`/`end`/`justify` (no `justify` for cells), LOGICAL: start
+and end resolve by the block's base direction (UAX #9 P2-P3 over its text), never `left`/`right`. The test runs
+against the column fragment's box (a cell's: the table column's text extent over its body cells), with a tolerance of
+a quarter body size, the last line out of the justify and ragged tests, a first-line indent removed; a single-line
+block is `center` or `end` from geometry, `start` only by its style class's majority, at lower confidence. Written
+only at or above `align-min` (setting, default 800 while uncalibrated); there is no separate confidence field (the
+evidence dump explains a decision). Decimal-aligned numeric columns whose end edges disagree get no value. HTML:
+`data-emon-align` as D069 already writes; `html-emit` option bit `ho-align-style` 256 adds
+`style="text-align:start|center|end|justify"` and `dir="auto"` (so start and end resolve for right-to-left text in
+a browser).
+**Why**: the maintainer asked for it where feasible: it is, from geometry alone, for any block of two or more lines;
+crawlers mostly ignore it, converters want it; logical values are correct under right-to-left and are what the Model
+already said; a confidently wrong alignment is worse than none.
+**Alternatives**: `left`/`right` (wrong under RTL); a document default plus deviations (consumers must resolve
+inheritance); a `decimal` value for cells (nothing consumes it and the numbers read the same); inline style by
+default (not clean HTML, D013); measuring against the block's own box (every block looks justified).
+- [ ] **Signed off** (maintainer)
+
+### D111 — Columns: gutters from words, spanning elements, a vertical-first cut tree; the column map is kept as the page `layout`
+**Decision**: SPEC 10.1.1. Gutters are the tall, narrow whitespace rectangles over WORDS persisting 3 rows (or a
+vertical rule with text on both sides); lines crossing a gutter are split; an element crossing a gutter ends it and
+is a spanning element; the cut tree cuts vertically whenever a gutter runs the region's full height and
+horizontally only at spanning elements or at full-width gaps over 1.5 times the median paragraph gap; leaves are
+column fragments numbered `band`/`col` in reading order (RTL: right first). Fragment roles `body`/`sidebar`/`margin`;
+sidebar and margin content become `note` blocks with the new role `sidebar` (`rl` 9) or `margin`, placed after the
+body block being read where they begin. Gutter line numbers are furniture (`margin`) and are removed first, as
+recurring furniture is. The map is kept: a Model arena `layout` (stride 8: page, band, col, role, x0 y0 x1 y1; a
+page's cells contiguous, its `pages` row naming the run in two spare cells), JSON `pages[].layout` (`fk` `layout` 78,
+`band` 79, `col` 80, `box` 81), and a node's regions are one per fragment. Checked on the probe of D108: Chrome
+writes one line per column run, so D104 does not merge columns there; a producer that writes rows across columns,
+or a gutter under D104's two sizes (the synthetic 3-column paper sets 9.5 pt with a 0.25 in gap: 1.89 sizes), would,
+which is why gutters are sought over words.
+**Why**: plain recursive XY-cut fails in exactly two common ways: paragraph gaps that line up across balanced
+columns (it reads the top halves of both columns first) and a figure spanning two of three columns (it cuts the third
+column too); restricting horizontal cuts to spanning elements fixes both. Keeping the map costs one small arena and
+lets a consumer check or re-render what emon decided.
+**Alternatives**: plain XY-cut; Breuel's full whitespace cover with constrained text-line finding (the gutter sweep
+is its tall-narrow special case, simpler in integers); Docstrum or Voronoi segmentation (bottom-up, for skewed scans;
+parked as a fallback for pages the cut tree scores badly); a learned layout model (not kin, not identical across
+hosts); discarding the map after ordering (then no consumer can recover it).
+- [ ] **Signed off** (maintainer)
+
+### D112 — A paragraph broken by a column or a page is one paragraph; the break lives in its regions; hyphenation follows SPEC 3.6
+**Decision**: SPEC 10.1.2: integer points over named signals (a shared tagged `P` decides; a final hyphen, a last line
+reaching the column's end edge, no terminal punctuation, a lowercase continuation and a content-stream continuation
+add; a short last line, an indented continuation where paragraphs are indented, a list marker, a heading candidate or
+another style class subtract) against `join-min`. Joined: one paragraph, one region per fragment, the page break as
+the inline `break` milestone (as P1.8 already does across pages), a column break recorded only by the regions and the
+page `layout`; the break is a line end for dehyphenation, nothing more. Blocks that fall between the fragments in
+reading order (note, figure, table, caption) move after the paragraph, in their order. A join near the threshold
+lowers the paragraph's confidence.
+**Why**: SPEC 3.1.1 already makes a page-crossing paragraph one node; columns are the same case, more often.
+**Alternatives**: a `break` milestone with a `column` field (puts a layout fact the regions already hold into the
+inline text); joining whenever the last line has no terminal punctuation (joins every paragraph of an unindented,
+spaced style that happens to start at a column top); splitting and flagging (a crawler sees half-sentences).
+- [ ] **Signed off** (maintainer)
+
+### D113 — HTML for columns: one logical flow in reading order; the column structure only as metadata
+**Decision**: no CSS columns and no per-page wrappers. Blocks are written in reading order, a joined paragraph once.
+With the `geometry` option every block also gets `data-emon-col="page:band:col"` (its first fragment) and, when it
+has more than one, `data-emon-cols` (space-separated, in order); the page map itself stays in JSON. Sidebar and
+margin notes are `<aside data-emon-role="sidebar|margin">` in reading order, without `role="doc-footnote"`.
+**Why**: the maintainer's own observation: columns only work with a page boundary to wrap on; a crawler and a screen
+read a flow, and the Model's tree is logical (D011).
+**Alternatives**: (a) per-page `<section data-emon-page>` with CSS `column-count`: reproduces the look but fights the
+heading-built sections, splits paragraphs at pages, and makes a crawler index pages; (b) CSS columns around logical
+runs as an opt-in "visual" option: without a page height a column is as tall as the article, so the reader scrolls
+down and back up; parked; (c) `<aside>` for side columns: adopted, for the roles above; (d) `<article>` per newspaper
+story: the Model has no article kind; parked until the corpus shows the need.
+- [ ] **Signed off** (maintainer)
+
+### D114 — The synthetic corpus grows by 19 documents for initials, alignment and columns; the gold gains `facts`
+**Decision**: P2.13 adds to `test/corpus/synth/` (authored by `tools/synth/make_html.clj`, printed by `print.sh`,
+gold by `html2gold.clj`/`build.clj`, D071-D073):
+* initials: `initial-firstletter` (`::first-letter` floats of 2, 3 and 4 lines; an `A` and an `I` that are words and
+  an `I` + `t` and `A` + `t` that are not; `“N`; a small-caps lead-in), `initial-raised`, `initial-image` (a PNG made
+  by ImageMagick at authoring time: a letter on an ornamented tile, `alt` the letter), `initial-vector` (an inline
+  SVG whose `T` and `L` are filled paths, never `<text>`), `initial-firstword` (a floated enlarged first word),
+  `initial-columns` (a 3-line drop cap in each column of a two-column page, one of them at a column top),
+  `initial-rtl` (Hebrew, floated right), `initial-cjk` (Japanese, a three-line first character, no join space) and
+  `initial-letter-headings` (the negative control: a glossary whose `A`, `B`, `C` dividers are headings);
+* alignment: `align-paragraphs` (start, end, center and justify, each multi-line; single-line center and end; a
+  justified paragraph of one line; centered headings and a caption), `align-justify-hyphen` (narrow justified
+  columns, `hyphens:auto`, `lang="en"`), `align-table-numeric` (right-aligned numeric columns, a centered header
+  row, a decimal column with mixed decimals, left text columns) and `align-rtl` (Hebrew start, end, center,
+  justify);
+* columns: `columns-continue` (two columns over three pages, justified and hyphenated, paragraphs continuing across
+  column AND page breaks, a heading mid-column, page footnotes), `columns-uneven` (a 2fr/1fr grid: body plus a
+  boxed sidebar with its own heading), `columns-span-figure` (a `column-span:all` figure and table mid-flow, and a
+  figure inside one column), `columns-mid-page` (full width, then 2 columns, full width, then 3, on one page),
+  `columns-margin-notes` (notes absolutely positioned in the outer margin beside paragraphs), and
+  `columns-newspaper` (masthead, a headline over three of five columns, several stories, a column rule, a
+  `Continued on page 2` jump that stays two blocks).
+Authoring attributes html2gold reads (it never computes CSS): `data-initial="drop|raised|margin"` with `data-lines`
+(on a `<p>`: html2gold takes the CSS `::first-letter` extent, leading and trailing punctuation plus one grapheme; on
+a `<span>`, `<img>` or `<svg>`: that element, its text from content, `alt` or `data-initial-text`), `data-align`
+(logical values), and `data-cols` on a column container. Gold conventions (D073 continued): 9. an initial is an
+`initial` inline wrapping its text, and the paragraph's `text` reads through it with no space unless the HTML has
+one; 10. `align` is annotated only where authored, and a justified block that printed as one line is `start`; 11.
+the gold gains an optional top-level `facts` object, found at print time by `build.clj` and committed in
+`MANIFEST.json` as `rows` is: `frags` (for layout documents, every leaf block's fragments `[page, band, col]` in
+order, located by anchoring its words' unique 4-grams in `pdftotext -bbox-layout` output), `lines` (the printed line
+count of every block that has `align` or an initial; `build.clj` also fails if a drop cap does not span the
+`data-lines` it declares), and `hyphens` (`{id, printed, word}` for every word the printer hyphenated at a line or
+column end); `annotated` gains `layout` (boolean: `facts.frags` is exhaustive) and attribute keys `initial` (`form`,
+`lines`) and `align` for paragraph, heading, caption and cell; 12. the gold text is the HTML's (no printed hyphens);
+a run with no locale is scored against gold words rewritten to their `printed` form at `facts.hyphens`, because SPEC
+3.6 requires emon to keep them; a run with `locale: en` against the gold as written. Existing golds do not change
+(optionally, `align: end` on the `td.r` cells of `invoice` and `bank-statement`, a reviewed regeneration).
+**Real documents that exercise these** (never committed, D086): drop caps in `layout/pdfa-eng-wds` 0182448,
+4271234, 0795114 and 0116458 (D108); two columns in `layout/arxiv` 1512.03385, 1810.04805 and 2206.01062, and the
+scientific, patent (gutter line numbers) and financial-report pages of `layout/doclaynet-v1.2`, whose `Text`,
+`Section-header`, `Page-header`/`-footer` and `Footnote` boxes score reading order and column assignment by IoU;
+right-aligned numeric cells in `tables/icdar2013`, `tables/gov-reports` and `financial/bank-statement-benchmark`;
+Hebrew and Arabic alignment in `multilingual/udhr`.
+**Why**: each feature gets a positive case, the producer's idiom (floats, `column-span`, `hyphens:auto`) and a
+negative control; the facts are what only the print knows, found once, like D072's `rows`.
+**Alternatives**: computing layout facts in a gate (needs poppler in every gate; D041 forbids it); annotating
+alignment from computed CSS (html2gold would need a cascade); one big document per feature (worse localisation).
+- [ ] **Signed off** (maintainer)
+
+### D115 — Scorer metrics for initials, alignment and columns
+**Decision**: `tools/accuracy/score.clj` (D077's pooled counts, match rule unchanged) gains, each honouring
+`annotated`: `initial-p`/`-r` (a predicted `initial` in a block matched to a gold block with one), `initial-form-acc`,
+`first-word-acc` (over gold blocks with an initial: the matched prediction's first whitespace token equals the
+gold's), `initial-false-heading` (predicted headings of 1-3 code points equal to a gold initial's text or the prefix
+of a gold first word; lower is better); `align-acc` and `align-cov` per kind (paragraph, heading, caption, cell:
+accuracy over matched blocks both annotate; coverage = gold-aligned blocks the prediction aligns) and `align-wrong`
+(predicted aligns the gold contradicts, per predicted aligned block; lower is better); `frag-col-acc` (matched leaf
+blocks whose predicted fragments, mapped to columns through the predicted page `layout`, equal `facts.frags` in band
+and col), `join-p`/`-r` (positives: gold blocks with two or more fragments; a hit is one predicted block holding all
+of it; a false join is a predicted block spanning a gold block boundary that falls on a fragment boundary) and
+`hyphen-acc` (at `facts.hyphens`: the printed form without a locale, the joined word with one). Reading-order Kendall
+tau is unchanged and is reported for the `columns` category. D079's categories gain `initials` and `align`.
+Lower-is-better metrics join `cer`, `wer`, `watermark-leak` in the ratchet's direction table. What a mishandled
+initial costs, for reading the board: as its own block, WER +2 and CER +1 per paragraph, a paragraph-boundary false
+positive and usually a false heading; placed on line N, WER +3 and a moved letter; unrecovered, CER +1 and WER +1;
+`A long` read as `Along`, CER +1 and WER +2.
+**Why**: CER and WER already see these errors but cannot say which feature caused them; a metric per feature makes a
+ratchet move attributable.
+**Alternatives**: CER, WER and paragraph boundaries alone (an initials fix and a columns regression would net out);
+scoring alignment only on multi-line blocks (hides the single-line policy).
+- [ ] **Signed off** (maintainer)
+
+### D116 — The fuzz probe also runs page content interpretation and seeds from `test/pdf/p3`; one more overflow fixed (P2.12 merge)
+**Decision**: after merging P2.12 onto main (repair, encryption D097-D100, the content interpreter D101-D105), `fz-run`
+in `kin/fuzzprobe.kin` ends with `fz-content`: `pc-document` over the opened file, its status, warning bits, operator,
+glyph, word and span counts and a hash of every glyph's code point joining the answer line. The fixtures gain
+`test/pdf/p3/*.pdf` (the encrypted and repair files). The branch's overflow fixes were re-applied to main's `pdfdoc`
+(the startxref shift now in `pd-open-normal`, beside the others). The first content run found one panic: a negative
+glyph size was clamped above only (`pc-continues` and the line join in `pdfcontent.kin`), so `sz * 450` overflowed;
+clamped to +-200000 now, reproducer `test/fuzz/crashers/content-size-overflow-s1-i76.pdf`.
+**Open**: `bb fuzz --long 5000 --seed 101` (Rust, Java, C#; Go skipped that run on a build-cache error) found nothing further.
+- [ ] **Signed off** (maintainer)
+
+### D117 — Assets: opt-in pixels for figures and seals, bytes out of band, a canonical PNG written by kin (resolves D020's open item)
+**Decision** (SPEC §10.11; items P3.11-P3.13, P6.1a, P8.5, P9.3). The maintainer asked for "a
+flag to let it try and isolate and clip/crop graphics/art from the pdf/image and retain it in
+the output html as base64 … not needed for most cases, but could be useful for like a pdf →
+epub conversion".
+1. **Option.** `assets` = `none` (default: nothing runs, every output byte-identical to a run
+   without the feature) / `images` (a figure or seal whose content is one embedded image gets
+   that image) / `figures` (also every other figure or seal, cut from the image it lies in or
+   rendered). Limits `asset-dpi` 150, `asset-pixels` 4,194,304, `asset-bytes` 4 MiB,
+   `assets-bytes` 32 MiB; `asset-signatures` off. Limits degrade to a `noasset` reason and
+   never fail a page.
+2. **Sources and origins.** `embedded` (a JPEG passed through, only when a browser shows it as
+   the PDF painted it: SPEC §10.11's list — including no non-default `/Decode`, no masks, no
+   EXIF rotation, no arithmetic coding, 1 or 3 components); `decoded` (pixels from kin's
+   filters or the host's `decode-img`, with `/Decode`, colour, masks, `/Matte`, orientation
+   and the visible crop applied by kin in integers, then PNG); `cropped` (an exact rectangle of
+   an image's pixels: scans, raster inputs, a figure inside a larger image; no resampling, no
+   deskew); `rendered` (a `crop` request to the host `Renderer`, with text, 2 pt pad, dpi
+   stepped down by 3/4 to fit `asset-pixels`). A clipped image is kept whole when its visible
+   part is ≥ 98 % of it and cut to the clip's box otherwise; a non-rectangular clip, a skew,
+   or paint over the image sends it to `rendered` at `figures` and is flagged at `images`.
+   Crops keep the text: a chart's labels are the picture; `labels` stays a text copy.
+3. **Model.** Bytes are out of band: arenas `assets` (24) and `uses` (8) and one `Buf` of bytes
+   in the Model; JSON gets a top-level `assets` array (metadata: id, name, type, origin,
+   from, object, bytes, sha256, w, h, dpi, flags, uses with node and region) only when
+   `assets` is on, and figure/seal nodes get `asset` or `noasset`. Identical bytes are one
+   asset with several uses (a logo on every page is one file). Admission is in node-id order;
+   the first new asset that overflows `assets-bytes` closes the budget.
+4. **Serialization.** HTML option `assets`: `inline` (default; `data:` URIs), `external`
+   (`src` = `asset-prefix` + `a<id>.png|jpg`, the caller writes `model.asset_files()`: the EPUB
+   and browser form) or `omit`. `<figure><img src alt width height data-emon-asset>` then the
+   placeholder's content; `alt` is the PDF's `/Alt` (D076) or the seal label, else empty
+   (`data-emon-alt="missing"` when there is no caption either); `width`/`height` are the
+   on-page size in CSS pixels. The library API hands out borrows of the bytes. JSON never
+   carries bytes.
+5. **Identity.** Every byte of an asset is kin's or the input's: passthrough bytes are the
+   input's, pixels come from kin or from transcribed answers (`crop` 5 and `decode-img` 6 are
+   transcribed like `render`; `decode-img`'s kin-made payload is named by its SHA-256 in the
+   record and never transcribed, like `bytes`), and the PNG, DEFLATE and base64 writers are
+   kin. So `sha256` is over the **encoded bytes**, and the identity gate compares JSON, HTML
+   in all three modes and the asset files byte for byte, and recomputes each hash. Tests
+   additionally compare **decoded pixels** against independently generated originals.
+6. **The canonical PNG** is fully specified in SPEC §10.11 (filters, LZ77 parameters, block
+   choice, package-merge, chunks) so a change to it is a visible, reviewed change of every
+   asset hash.
+
+**Why**: (a) *Opt-in, three levels*: most callers are crawlers (D020 stands for them), and
+`images` is cheap, exact and available before P6 (no Renderer, no region detection deciding
+pixels), while `figures` needs P6.2 and P8.1 and is where the EPUB case really lives (charts
+are vector). (b) *Out of band*: the Model is integer arenas that must cross WASM and C cheaply
+(§3.8), and JSON is a scraper's format and the gate subject; base64 in it would multiply its
+size by the images' and make every consumer pay for what one wanted. (c) *Kin writes the PNG*:
+the maintainer's question was whether to compare pixel hashes or mandate a canonical
+encoding. Comparing pixels only would leave HTML with `data:` URIs, and the `sha256` field,
+different per host, so the byte-identity claim of §12.2 would silently exclude the one output
+the maintainer asked for. A host zlib cannot be mandated to agree byte for byte (D090 found
+the same); a kin DEFLATE agrees by construction, costs one module of about the size of
+`inflate`, and is also the writer D090 and D095 left open for transcripts. (d) *Passthrough
+only for JPEG, and only when faithful*: JPEG is the one PDF image codec every browser and EPUB
+reader shows, and passing it through is lossless and small; JPX, JBIG2 and CCITT are not
+shown reliably, and a JPEG with inverted `/Decode`, CMYK, masks or an EXIF rotation would
+display differently from the PDF, which for a converter is an accuracy bug. (e) *Crops keep
+text*: the Renderer's layer mask is all text or none, so "remove only the re-emitted words" is
+not expressible; without text a chart loses its axes, and text drawn as outlines would stay
+anyway. (f) *Signatures withheld by default*: a crawler that turned on `figures` for charts
+should not start publishing handwritten signatures; a converter that wants them says so.
+(g) *Dedup and first-overflow budget*: deterministic, cheap, and a repeated logo costs once.
+
+**Alternatives**: (1) always emit crops (rejected: D020's crawlers pay in size for pixels
+they do not want); (2) bytes as base64 in the JSON (rejected, above) or a second JSON
+document with them (a format nobody reads; the API and the sidecar do it better); (3) host
+PNG encoders and a gate over decoded pixels (rejected: HTML and `sha256` would differ per
+host); (4) stored-block PNGs as in D090 (canonical and trivial, but 3-10× larger, which is
+exactly what `data:` URIs cannot afford); (5) always transcode to PNG, no passthrough
+(canonical and simpler, but photos grow several times and the author's JPEG was already
+the best version there is); (6) WebP or AVIF output (not universally readable in EPUB 3
+readers; no encoder anyone would write in kin); (7) a Renderer crop for every figure,
+embedded images included (uniform, but lossy against the original, host-dependent pixels
+where exact bytes were available, and impossible before P6.2); (8) rendering crops without
+text, or with the figure's labels masked out (not expressible with the port's layer mask,
+and wrong for charts); (9) the full image always, even when clipped (shows what the author
+hid) or always the clipped part (re-encodes a JPEG to drop a 1 % sliver: hence the 98 %
+rule); (10) first-fit budget packing (deterministic too, but "why is figure 40 present when
+figure 12 is missing" is harder to explain than a budget that closes); (11) content-addressed
+file names (`<sha>.png`: dedup across documents, but long, and the `sha256` field already
+gives a caller that); (12) inventing alt text from `labels` or the subkind (emon says what it
+knows, D013).
+
+**Consequences**: two plan kinds (`crop` 5, `decode-img` 6) and a payload `Buf` per unit in
+the host loops; a `Buf` port in four hosts; the Model grows two arenas and a byte store; the
+schema gains `assets`, `asset`, `noasset` and six settings additively (D055; pre-release, so
+the version string stays `1.0`); P3.13 also brings provisional image figures before P8.1,
+so PDFs with images gain `figure` placeholders in default output then (owed by SPEC §10.6
+anyway). A later decision may move D090's transcript PNGs to this writer (every committed
+transcript would change once). Flate images are still inflated whole into `Cells` (four bytes
+a sample), bounded by `asset-pixels`, until `inflate` can write a `Buf`. In the browser,
+`inline` HTML at the 32 MiB budget peaks near 150 MB of heap, so the JS SDK documents
+`external` plus `asset.blob()` (P9.3).
 - [ ] **Signed off** (maintainer)

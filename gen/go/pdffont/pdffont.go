@@ -736,10 +736,12 @@ func pfnTok(f *port.Cells, d []byte) int32 {
 		if (c >= 48) && (c <= 57) {
 			seendig = 1
 			if frac == 0 {
-				if val > 214748363 {
-					val = 214748364
+				// Saturate at 2^31-1 (P2.12, D107): the old clamp to 214748364, then x10+d, overflowed for d of 8 or 9.
+				if (val > 214748364) || ((val == 214748364) && (c > 55)) {
+					val = 2147483647
+				} else {
+					val = (val * 10) + (c - 48)
 				}
-				val = (val * 10) + (c - 48)
 			}
 		} else if c == 46 {
 			frac = 1
@@ -1669,6 +1671,13 @@ func pfnMicro(ar *port.Cells, h int32) int32 {
 
 func pfnRound100(cu int32) int32 {
 	// Hundredths to units, half away from zero.
+	// The two ends are answered directly: cu + 50 overflowed for a saturated cu (P2.12, D107).
+	if cu > 2147483597 {
+		return 21474836
+	}
+	if cu < -2147483597 {
+		return -21474836
+	}
 	if cu < 0 {
 		return 0 - (((0 - cu) + 50) / 100)
 	}

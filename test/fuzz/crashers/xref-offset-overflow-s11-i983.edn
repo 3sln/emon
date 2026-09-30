@@ -1,0 +1,4 @@
+;; Saved by `bb fuzz` (D106). Reproduce the unminimised mutant with
+;;   bb fuzz --seed 11 --only 983 --dump /tmp/mutant.pdf
+;; Fixed in kin/pdfdoc.kin (`pd-shifted`, D107); replayed on every `bb fuzz` and must pass.
+{:index 983, :signature ["panic:rust:async" "panic:rust:mem"], :ops ["flip x4" "trailer-num@168 1"], :seed 11, :status :fixed, :original-bytes 391, :bytes 221, :fixture "test/pdf/junk-header.pdf", :detail ["panic rust: mem PANIC attempt to add with overflow" "panic rust: async PANIC attempt to add with overflow"]}

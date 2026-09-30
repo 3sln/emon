@@ -189,6 +189,14 @@
   (comment "One more than the highest object number the cross-reference names.")
   (return (cells-at dc D_NENT)))
 
+(defn ^I32 pd-shifted [^I32 off ^I32 shift]
+  (comment "A file offset plus the header shift, SATURATING at 2^31-1 (P2.12, D107):")
+  (comment "a hostile xref offset is the lexer's saturated 2147483647, and adding a")
+  (comment "positive shift to it overflowed I32 (a panic in a checked Rust build, a")
+  (comment "wrap to a negative position elsewhere). 2^31-1 is past any source.")
+  (if (> off (- 2147483647 shift)) (return 2147483647))
+  (return (+ off shift)))
+
 (defn ^I32 pd-warn-set [^Src src ^:mut ^Cells dc ^I32 bit]
   (comment "Note a tolerated damage. NOT while the source has missed: what looks")
   (comment "like damage may be zeros standing in for bytes that have not arrived.")
@@ -342,7 +350,7 @@
   (let [^I32 n (ps-len src)
         ^:mut ^I32 h 0]
     (pl-seek ar 0 n)
-    (set h (pl-parse-indirect src ar (+ off (cells-at dc D_SHIFT))))
+    (set h (pl-parse-indirect src ar (pd-shifted off (cells-at dc D_SHIFT))))
     (if (and (!= h 0) (== (pl-objnum ar) num)) (return h))
     (pd-warn-set src dc 32)
     (return 0)))
@@ -946,7 +954,7 @@
     (if (and (!= xs 0) (== (pl-kind-of ar xs) 2))
       (do (pd-warn-set src dc 2)
           (comment "An unreadable /XRefStm costs only the objects it lists.")
-          (set xpos (+ (pl-int-value ar xs) (cells-at dc D_SHIFT)))
+          (set xpos (pd-shifted (pl-int-value ar xs) (cells-at dc D_SHIFT)))
           (pd-xstream src ar dc a b st xpos 1)))
     (comment "CHECKPOINT: after the trailer (and the /XRefStm it named).")
     (if (ps-missed src) (return (pd-need-bytes)))
@@ -980,16 +988,19 @@
         ^:mut ^I32 k 0
         ^:mut ^I32 ty 0
         ^:mut ^I32 f1 0
-        ^:mut ^I32 f2 0]
+        ^:mut ^I32 f2 0
+        ^:mut ^I32 room 0]
     (if (or (< first 0) (< count 0)) (return at0))
+    (comment "Object numbers past 2^31-1 name nothing (D107): skip the put, not the entry.")
+    (set room (- 2147483647 first))
     (while (and (< k count) (<= (+ at rec) ln))
       (do (set ty 1)
           (if (> w0 0) (set ty (pd-rd a at w0)))
           (set f1 (pd-rd a (+ at w0) w1))
           (set f2 (pd-rd a (+ (+ at w0) w1) w2))
-          (if (== ty 0) (pd-ent-put dc (+ first k) 1 f1 f2 mode))
-          (if (== ty 1) (pd-ent-put dc (+ first k) 2 f1 f2 mode))
-          (if (== ty 2) (pd-ent-put dc (+ first k) 3 f1 f2 mode))
+          (if (and (== ty 0) (< k room)) (pd-ent-put dc (+ first k) 1 f1 f2 mode))
+          (if (and (== ty 1) (< k room)) (pd-ent-put dc (+ first k) 2 f1 f2 mode))
+          (if (and (== ty 2) (< k room)) (pd-ent-put dc (+ first k) 3 f1 f2 mode))
           (set at (+ at rec))
           (set k (+ k 1))))
     (return at)))
@@ -1131,7 +1142,7 @@
     (while (< i nent)
       (do (set at (+ D_FIRST (* i 5)))
           (if (== (cells-at dc at) 2)
-            (do (set o (+ (cells-at dc (+ at 1)) shift))
+            (do (set o (pd-shifted (cells-at dc (+ at 1)) shift))
                 (if (and (>= o 0) (< o n))
                   (cells-push b o))))
           (set i (+ i 1))))
@@ -1151,7 +1162,7 @@
 (defn ^I32 pd-section [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                        ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 off]
   (comment "Read the section at file offset `off` (shifted): a table or a stream.")
-  (let [^I32 pos (+ off (cells-at dc D_SHIFT))
+  (let [^I32 pos (pd-shifted off (cells-at dc D_SHIFT))
         ^I32 k (pd-kind-at src ar pos)]
     (if (== k 1) (return (pd-table src ar dc a b st pos)))
     (if (== k 2) (return (pd-xstream src ar dc a b st pos 0)))
@@ -1640,7 +1651,7 @@
       (comment "from the header: whichever finds a section at `startxref`.")
       (if (!= (pd-kind-at src ar off) 0)
         (cells-set dc D_SHIFT 0)
-        (if (and (> base 0) (!= (pd-kind-at src ar (+ off base)) 0))
+        (if (and (> base 0) (!= (pd-kind-at src ar (pd-shifted off base)) 0))
           (do (cells-set dc D_SHIFT base)
               (pd-warn-set src dc 1))
           (return (pd-stop src 3)))))

@@ -215,6 +215,16 @@ pub fn pd_object_count(dc: &mut crate::port::Cells) -> i32 {
     // One more than the highest object number the cross-reference names.
     return crate::port::cells_at(dc, D_NENT);
 }
+pub(crate) fn pd_shifted(off: i32, shift: i32) -> i32 {
+    // A file offset plus the header shift, SATURATING at 2^31-1 (P2.12, D107):
+    // a hostile xref offset is the lexer's saturated 2147483647, and adding a
+    // positive shift to it overflowed I32 (a panic in a checked Rust build, a
+    // wrap to a negative position elsewhere). 2^31-1 is past any source.
+    if off > (2147483647 - shift) {
+        return 2147483647;
+    }
+    return off + shift;
+}
 pub(crate) fn pd_warn_set(src: &crate::port::Src, mut dc: &mut crate::port::Cells, bit: i32) -> i32 {
     // Note a tolerated damage. NOT while the source has missed: what looks
     // like damage may be zeros standing in for bytes that have not arrived.
@@ -403,7 +413,7 @@ pub(crate) fn pd_load_direct(src: &crate::port::Src, mut ar: &mut crate::port::C
     let n: i32 = ps_len(src);
     let mut h: i32 = 0;
     pl_seek(ar, 0, n);
-    h = pl_parse_indirect(src, ar, off + crate::port::cells_at(dc, D_SHIFT));
+    h = pl_parse_indirect(src, ar, pd_shifted(off, crate::port::cells_at(dc, D_SHIFT)));
     if (h != 0) && (pl_objnum(ar) == num) {
         return h;
     }
@@ -1165,7 +1175,7 @@ pub(crate) fn pd_table(src: &crate::port::Src, mut ar: &mut crate::port::Cells, 
     if (xs != 0) && (pl_kind_of(ar, xs) == 2) {
         pd_warn_set(src, dc, 2);
         // An unreadable /XRefStm costs only the objects it lists.
-        xpos = pl_int_value(ar, xs) + crate::port::cells_at(dc, D_SHIFT);
+        xpos = pd_shifted(pl_int_value(ar, xs), crate::port::cells_at(dc, D_SHIFT));
         pd_xstream(src, ar, dc, a, b, st, xpos, 1);
     }
     // CHECKPOINT: after the trailer (and the /XRefStm it named).
@@ -1209,9 +1219,12 @@ pub(crate) fn pd_xfill(mut dc: &mut crate::port::Cells, a: &mut crate::port::Cel
     let mut ty: i32 = 0;
     let mut f1: i32 = 0;
     let mut f2: i32 = 0;
+    let mut room: i32 = 0;
     if (first < 0) || (count < 0) {
         return at0;
     }
+    // Object numbers past 2^31-1 name nothing (D107): skip the put, not the entry.
+    room = 2147483647 - first;
     while (k < count) && ((at + rec) <= ln) {
         ty = 1;
         if w0 > 0 {
@@ -1219,13 +1232,13 @@ pub(crate) fn pd_xfill(mut dc: &mut crate::port::Cells, a: &mut crate::port::Cel
         }
         f1 = pd_rd(a, at + w0, w1);
         f2 = pd_rd(a, (at + w0) + w1, w2);
-        if ty == 0 {
+        if (ty == 0) && (k < room) {
             pd_ent_put(dc, first + k, 1, f1, f2, mode);
         }
-        if ty == 1 {
+        if (ty == 1) && (k < room) {
             pd_ent_put(dc, first + k, 2, f1, f2, mode);
         }
-        if ty == 2 {
+        if (ty == 2) && (k < room) {
             pd_ent_put(dc, first + k, 3, f1, f2, mode);
         }
         at += rec;
@@ -1403,7 +1416,7 @@ pub(crate) fn pd_hint_extents(src: &crate::port::Src, dc: &mut crate::port::Cell
     while i < nent {
         at = D_FIRST + (i * 5);
         if crate::port::cells_at(dc, at) == 2 {
-            o = crate::port::cells_at(dc, at + 1) + shift;
+            o = pd_shifted(crate::port::cells_at(dc, at + 1), shift);
             if (o >= 0) && (o < n) {
                 crate::port::cells_push(b, o);
             }
@@ -1429,7 +1442,7 @@ pub(crate) fn pd_hint_extents(src: &crate::port::Src, dc: &mut crate::port::Cell
 }
 pub(crate) fn pd_section(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, off: i32) -> i32 {
     // Read the section at file offset `off` (shifted): a table or a stream.
-    let pos: i32 = off + crate::port::cells_at(dc, D_SHIFT);
+    let pos: i32 = pd_shifted(off, crate::port::cells_at(dc, D_SHIFT));
     let k: i32 = pd_kind_at(src, ar, pos);
     if k == 1 {
         return pd_table(src, ar, dc, a, b, st, pos);
@@ -2090,7 +2103,7 @@ pub(crate) fn pd_open_normal(src: &crate::port::Src, pw: &crate::port::Src, plen
     // from the header: whichever finds a section at `startxref`.
     if pd_kind_at(src, ar, off) != 0 {
         crate::port::cells_set(dc, D_SHIFT, 0);
-    } else if (base > 0) && (pd_kind_at(src, ar, off + base) != 0) {
+    } else if (base > 0) && (pd_kind_at(src, ar, pd_shifted(off, base)) != 0) {
         crate::port::cells_set(dc, D_SHIFT, base);
         pd_warn_set(src, dc, 1);
     } else {
