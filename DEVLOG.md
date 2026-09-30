@@ -495,8 +495,11 @@ analysis beyond "top-to-bottom lines on a single column".
 - [ ] **P1.7 — Content-stream interpreter, text subset**
   (`kin/pdfcontent.kin`, `kin/fx.kin`).
   *Brief*: operators `q Q cm BT ET Tf Tm Td TD T* TL Tc Tw Tz Ts Tr Tj TJ ' "`,
-  `Do` for Form XObjects (recursive, depth-limited), `BDC/BMC/EMC` (record
-  `/Artifact`), and skip-with-balance for everything else. `Fx` 16.16 matrix
+  `Do` for Form XObjects (recursive, depth-limited), `BDC/BMC/EMC` — record
+  every marked-content span with its tag, `/MCID`, `/Artifact` and its
+  `/Type`/`/Subtype` (Pagination/Header/Footer/Watermark/Background/Layout),
+  `/ActualText`, `/Alt`, `/E` and `/Lang` (property lists inline or via
+  `/Properties`), so P3.7 is a tree-reader + join only (D076) — and skip-with-balance for everything else. `Fx` 16.16 matrix
   arithmetic in `I64` (`fx.kin`); page space conversion to centipoints,
   top-left origin, `/Rotate` applied (SPEC §3.4). Glyph boxes from widths and
   font ascent/descent. Fill the evidence `glyphs` arena; group into `words`
@@ -654,7 +657,13 @@ analysis beyond "top-to-bottom lines on a single column".
   white-on-white, covered-by-later-opaque-paint, invisible mode.
 - [ ] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
   `/Alt`, `/ActualText` (use it when present — it is the author's answer),
-  informativeness score (D034).
+  informativeness score (D034). Also (D076): Artifact subtypes as
+  furniture/watermark evidence; `H`/`H1`–`H6` as heading-level priors;
+  `Table`/`TH`/`TD` `/Scope` `/Headers` `/RowSpan` `/ColSpan` `/Summary`;
+  `L`/`LI`/`Lbl` + `/ListNumbering`; `Figure`/`Formula` `/Alt` → placeholder
+  description; `Caption`, `Note`, `Reference`, `Link`; per-element `/Lang`;
+  `/E` expansions; PDF/UA identification (XMP `pdfuaid:part`) as a trust
+  signal. Test with synth pairs: correctly tagged vs deliberately mis-tagged.
 - [ ] P3.8 — Annotations: links (URI, GoTo, named dests — ISO 32000-1
   §12.3.2 destination arrays), Watermark/Stamp annotations, widgets + AcroForm values,
   signature dictionaries.
@@ -2197,3 +2206,23 @@ them; offer them upstream when they have proved general.
 - **Key/value extraction** for scanned forms (FUNSD-style) beyond AcroForm.
 - **Other inputs**: XPS/OXPS (fixed-layout like PDF), DjVu.
 - **Signature validation** (cryptographic) — out of scope unless asked.
+
+### D076 — Accessibility data (tagged PDF) is captured from P1.7, used from P3.7
+**Decision**: the content interpreter (P1.7) records every marked-content
+span (tag, MCID, Artifact type/subtype, ActualText, Alt, E, Lang) into
+evidence from the start; P3.7 then reads the structure tree and joins on
+MCID. Beyond roles, emon uses: Artifact subtypes (Pagination, Header, Footer,
+Watermark, Background) as direct evidence for furniture removal and watermark
+dropping; heading roles as level priors; table attributes (Scope, Headers,
+spans, Summary) for table structure; list numbering; figure Alt as the
+placeholder's description; per-element Lang; abbreviation expansions (E);
+PDF/UA identification as a trust signal raising the tree's prior. All still
+verified, not obeyed (D034).
+**Why**: maintainer asked to tap accessibility data where available; it is
+the author's own statement of structure, and Artifact subtypes answer the
+header/footer and watermark questions directly. Capturing spans in P1.7
+avoids a second content pass later.
+**Alternatives**: parse marked content only in P3.7 (second interpreter
+pass, or a retrofit of P1.7); trust PDF/UA files outright (still wrong often
+enough to need verification).
+- [ ] **Signed off** (maintainer)
