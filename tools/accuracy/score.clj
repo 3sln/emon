@@ -44,7 +44,7 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
 (def CONTAINERS #{"figure" "table" "list" "note"})
 (def IOU 0.5)
 (def SIM 0.5)
-(def LOWER-IS-BETTER #{"cer" "wer" "watermark-leak"})
+(def LOWER-IS-BETTER #{"cer" "wer" "watermark-leak" "initial-false-heading" "align-wrong"})
 
 ;; ------------------------------------------------------------ python-isms ----
 
@@ -460,6 +460,182 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
    "seals.name-cer: seal name/text CER is not split out of block text"
    "gold has no geometry: the IoU >= 0.5 rule is implemented and unit-tested but unexercised on the synthetic corpus"])
 
+;; ---------------------------------------------------- layout features (D115) ----
+;; Initials, alignment, columns and continuation. Every metric here is gated by
+;; what the gold claims: an attribute key in `annotated.attributes` (`initial`,
+;; `align`), `annotated.layout` with `facts.frags`, and `facts.hyphens`.
+
+(def COVER 0.9)   ; share of a gold block's words one predicted block must hold to "hold it"
+
+(defn- attr? [ann kind a] (contains? (set (get-in ann ["attributes" kind])) a))
+
+(defn- leaf-text
+  "The text of an inline subtree: its own `text`, else its leaves' in order."
+  [n]
+  (if (string? (get n "text"))
+    (get n "text")
+    (str/join (for [d (rest (walk n)) :when (and (string? (get d "text")) (empty? (get d "children")))]
+                (get d "text")))))
+
+(defn initial-of
+  "The first `initial` inline of a block, or nil."
+  [n]
+  (first (filter #(= "initial" (get % "kind")) (mapcat walk (get n "inlines")))))
+
+(defn- word-at? [^String t i n]
+  (let [j (+ i n)]
+    (and (or (zero? i) (not (Character/isLetterOrDigit (.charAt t (dec i)))))
+         (or (>= j (count t)) (not (Character/isLetterOrDigit (.charAt t j)))))))
+
+(defn- rewrite-text
+  "Replace, left to right, each hyphenated `word` by its `printed` form."
+  [^String t pairs]
+  (loop [t t, from 0, ps pairs]
+    (if-let [[printed word] (first ps)]
+      (let [i (loop [f from]
+                (let [i (.indexOf t ^String word (int f))]
+                  (cond (neg? i) -1
+                        (word-at? t i (count word)) i
+                        :else (recur (inc i)))))]
+        (if (neg? i)
+          (recur t from (rest ps))
+          (recur (str (subs t 0 i) printed (subs t (+ i (count word)))) (+ i (count printed)) (rest ps))))
+      t)))
+
+(defn rewrite-hyphens
+  "D114 convention 12: the gold text as a no-locale run must read it, every
+  `facts.hyphens` word in its printed form (hyphen kept, joined, SPEC 3.6)."
+  [body hyphens]
+  (let [by-id (reduce (fn [m h] (update m (str (get h "id")) (fnil conj []) [(get h "printed") (get h "word")]))
+                      {} hyphens)]
+    (if (empty? by-id)
+      body
+      ((fn go [n]
+         (let [n (if-let [ps (and (string? (get n "text")) (get by-id (str (get n "id"))))]
+                   (assoc n "text" (rewrite-text (get n "text") ps))
+                   n)]
+           (if (contains? n "children") (assoc n "children" (mapv go (get n "children"))) n)))
+       body))))
+
+(defn frag-map
+  "facts.frags as {id-string [[page band col] ...]}: a map keyed by block id, or a
+  list of {id, frags}."
+  [facts]
+  (let [f (get facts "frags")]
+    (cond (map? f) (into {} (for [[k v] f] [(str k) (mapv vec v)]))
+          (sequential? f) (into {} (for [e f] [(str (get e "id")) (mapv vec (or (get e "frags") (get e "at")))]))
+          :else {})))
+
+(defn- pred-frags
+  "Each region of a predicted block as [page band col], through the predicted page's
+  `layout` cell containing the region's centre; nil where there is no such cell."
+  [pred n]
+  (let [cells (into {} (for [pg (or (get pred "pages") [])] [(get pg "n") (get pg "layout")]))]
+    (vec (for [[pg x0 y0 x1 y1] (get n "at")]
+           (let [cx (/ (+ x0 x1) 2.0) cy (/ (+ y0 y1) 2.0)]
+             (when-let [c (first (filter (fn [c] (let [[a b c2 d] (get c "box")]
+                                                  (and a (<= a cx c2) (<= b cy d))))
+                                         (get cells pg)))]
+               [pg (get c "band") (get c "col")]))))))
+
+(defn- cover-ratio [gw pw]
+  (if (empty? gw) 0.0 (div (reduce + (map #(nth % 2) (matching-blocks gw pw))) (count gw))))
+
+(defn- sub-seq? [needle hay]
+  (let [n (count needle)]
+    (boolean (and (pos? n) (some #(= needle (subvec hay % (+ % n))) (range 0 (inc (- (count hay) n))))))))
+
+(defn- cells-of [t]
+  (vec (for [r (filter #(= "row" (get % "kind")) (walk t))]
+         (vec (filter #(= "cell" (get % "kind")) (get r "children"))))))
+
+(def ALIGN-KINDS ["paragraph" "heading" "caption" "cell"])
+
+(defn feature-counts!
+  "Adds the initial, alignment, column and continuation counts. `g` and `p` are the
+  gold and predicted blocks of the annotated kinds, `pairs` the match [[gi pj]]."
+  [add ann gold pred g p pairs]
+  (let [structure (set (get ann "structure"))
+        pairs (vec pairs)
+        gtext (mapv block-text g) ptext (mapv block-text p)
+        by-g (into {} pairs)
+        ikinds (set (filter #(and (contains? structure %) (attr? ann % "initial")) BLOCK-KINDS))]
+    ;; ---- initials
+    (when (seq ikinds)
+      (let [gi (vec (for [[i n] (map-indexed vector g) :when (and (ikinds (get n "kind")) (initial-of n))] i))
+            pi (vec (for [[j n] (map-indexed vector p) :when (initial-of n)] j))
+            both (filter (fn [i] (when-let [j (by-g i)] (initial-of (p j)))) gi)
+            g-init-text (set (for [i gi] (norm (leaf-text (initial-of (g i))))))
+            g-first (set (for [i gi :let [w (first (split-ws (gtext i)))] :when w] w))
+            g-heading (set (for [[i j] pairs :when (= "heading" (get-in g [i "kind"]))] j))
+            fh (count (for [[j n] (map-indexed vector p)
+                            :when (and (= "heading" (get n "kind")) (not (g-heading j))
+                                       (<= 1 (nlen (ptext j)) 3)
+                                       (or (g-init-text (ptext j)) (some #(str/starts-with? % (ptext j)) g-first)))]
+                        j))]
+        (add "initial.tp" (count both)) (add "initial.gold" (count gi)) (add "initial.pred" (count pi))
+        (add "initial.form.n" (count both))
+        (add "initial.form.ok" (count (filter (fn [i] (pyeq (get (initial-of (g i)) "form")
+                                                            (get (initial-of (p (by-g i))) "form")))
+                                              both)))
+        (add "initial.fw.n" (count gi))
+        (add "initial.fw.ok" (count (filter (fn [i] (when-let [j (by-g i)]
+                                                      (= (first (split-ws (gtext i))) (first (split-ws (ptext j))))))
+                                            gi)))
+        (add "initial.fh" fh)))
+    ;; ---- alignment
+    (let [akinds (vec (filter #(and (contains? structure %) (attr? ann % "align")) ALIGN-KINDS))]
+      (when (seq akinds)
+        (let [tabs (filter (fn [[i j]] (and (= "table" (get-in g [i "kind"])) (= "table" (get-in p [j "kind"])))) pairs)
+              items (concat
+                     (for [[i j] pairs :when (not= "cell" (get-in g [i "kind"]))]
+                       [(get-in g [i "kind"]) (g i) (p j)])
+                     (for [[i j] tabs
+                           :let [gc (cells-of (g i)) pc (cells-of (p j))]
+                           ri (range (min (count gc) (count pc)))
+                           ci (range (min (count (gc ri)) (count (pc ri))))]
+                       ["cell" (get-in gc [ri ci]) (get-in pc [ri ci])]))
+              all (fn [body k] (filter #(= k (get %  "kind")) (walk body)))
+              gall (fn [k] (if (= k "cell") (all (get-in gold ["model" "body"]) k) (filter #(= k (get % "kind")) g)))
+              pall (fn [k] (if (= k "cell") (all (or (get pred "body") {}) k) (filter #(= k (get % "kind")) p)))]
+          (doseq [k akinds]
+            (let [its (filter (fn [[kk gn pn]] (and (= kk k) (get gn "align") (get pn "align"))) items)
+                  ng (count (filter #(get % "align") (gall k)))
+                  np (count (filter #(get % "align") (pall k)))
+                  ok (count (filter (fn [[_ gn pn]] (= (get gn "align") (get pn "align"))) its))]
+              (add (str "align." k ".gold") ng) (add (str "align." k ".n") (count its))
+              (add (str "align." k ".ok") ok)
+              (add "align.gold" ng) (add "align.n" (count its)) (add "align.ok" ok) (add "align.pred" np))))))
+    ;; ---- columns and continuation
+    (let [facts (get gold "facts")
+          frags (frag-map facts)
+          fg (vec (for [[i n] (map-indexed vector g) :when (contains? frags (str (get n "id")))] i))
+          fid (fn [i] (frags (str (get-in g [i "id"]))))]
+      (when (and (get ann "layout") (seq frags))
+        (add "frag.n" (count fg))
+        (add "frag.ok" (count (filter (fn [i] (when-let [j (by-g i)] (= (fid i) (pred-frags pred (p j))))) fg)))
+        (let [gw (mapv split-ws gtext) pw (mapv split-ws ptext)
+              multi (filter #(>= (count (fid %)) 2) fg)
+              hits (count (filter (fn [i] (some #(>= (cover-ratio (gw i) (pw %)) COVER) (range (count p)))) multi))
+              ;; consecutive gold blocks whose boundary falls on a fragment boundary
+              bnds (for [[a b] (partition 2 1 fg) :when (not= (peek (fid a)) (first (fid b)))] [a b])
+              spanning (set (for [[a b] bnds
+                                  :when (and (seq (gw a)) (seq (gw b)))
+                                  :let [needle (vec (concat (take-last 2 (gw a)) (take 2 (gw b))))]
+                                  j (range (count p))
+                                  :when (sub-seq? needle (pw j))]
+                              j))]
+          (add "join.gold" (count multi)) (add "join.tp" hits) (add "join.pred" (+ hits (count spanning)))))
+      (when-let [hy (seq (get facts "hyphens"))]
+        (let [nolocale (nil? (get-in pred ["settings" "locale"]))]
+          (add "hyphen.n" (count hy))
+          (add "hyphen.ok"
+               (count (filter (fn [h]
+                                (let [gi (first (keep-indexed (fn [i n] (when (= (str (get n "id")) (str (get h "id"))) i)) g))
+                                      j (when gi (by-g gi))]
+                                  (boolean (and j (str/includes? (ptext j) (norm (get h (if nolocale "printed" "word"))))))))
+                              hy))))))))
+
 ;; ----------------------------------------------------------------- score ----
 
 (defn score
@@ -467,7 +643,9 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
   [pred gold]
   (let [ann (get gold "annotated")
         gm (get gold "model")
-        gb (get gm "body")
+        gb (let [b (get gm "body") hy (get-in gold ["facts" "hyphens"])]
+             ;; a run with no locale keeps printed hyphens (SPEC 3.6): read the gold that way (D114 12)
+             (if (and (seq hy) (nil? (get-in pred ["settings" "locale"]))) (rewrite-hyphens b hy) b))
         pb (or (get pred "body") {"id" 0 "kind" "document"})
         attrs (get ann "attributes" {})
         c (atom (array-map))
@@ -497,6 +675,7 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
             (add (str "block." k ".tp") tp) (add (str "block." k ".gold") ng) (add (str "block." k ".pred") npd))))
       (when-let [t (kendall-tau pairs)]
         (add "order.tau-sum" t) (add "order.docs"))
+      (feature-counts! add ann gold pred g p pairs)
       ;; headings
       (when (and (contains? kset "heading") (contains? (set (get attrs "heading")) "level"))
         (let [hp (filter (fn [[i j]] (and (= (gk i) "heading") (= "heading" (pk j)))) pairs)]
@@ -603,6 +782,39 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
         m (prf m c "furniture" "furniture")
         m (if (pos? (get c "pages.label.n" 0))
             (set* m "page-label-acc" (div (c "pages.label.ok") (c "pages.label.n")))
+            m)
+        m (if (contains? c "initial.gold")
+            (-> m
+                (prf c "initial" "initial")
+                ;; an initial the gold has and nothing found scores 0 here, not absent
+                (set* "initial-form-acc" (if (pos? (c "initial.form.n"))
+                                           (div (c "initial.form.ok") (c "initial.form.n"))
+                                           (when (pos? (c "initial.gold")) 0.0)))
+                (set* "first-word-acc" (ratio (c "initial.fw.ok") (c "initial.fw.n")))
+                (set* "initial-false-heading" (or (ratio (c "initial.fh") (c "initial.gold")) 0.0)))
+            m)
+        m (if (contains? c "align.gold")
+            (let [acc (fn [n ok g] (if (pos? n) (div ok n) (when (pos? g) 0.0)))
+                  m (-> m
+                        (set* "align-acc" (acc (c "align.n") (c "align.ok") (c "align.gold")))
+                        (set* "align-cov" (ratio (c "align.n") (c "align.gold")))
+                        (set* "align-wrong" (or (ratio (- (c "align.n") (c "align.ok")) (c "align.pred")) 0.0)))]
+              (reduce (fn [m k]
+                        (if (contains? c (str "align." k ".gold"))
+                          (let [n (c (str "align." k ".n")) g (c (str "align." k ".gold"))]
+                            (-> m
+                                (set* (str "align-acc-" k) (acc n (c (str "align." k ".ok")) g))
+                                (set* (str "align-cov-" k) (ratio n g))))
+                          m))
+                      m ALIGN-KINDS))
+            m)
+        m (if (contains? c "frag.n")
+            (-> m
+                (set* "frag-col-acc" (ratio (c "frag.ok") (c "frag.n")))
+                (prf c "join" "join"))
+            m)
+        m (if (contains? c "hyphen.n")
+            (set* m "hyphen-acc" (ratio (c "hyphen.ok") (c "hyphen.n")))
             m)
         m (if (contains? c "contam.leak-chars")
             (set* m "watermark-leak" (or (ratio (c "contam.leak-chars") (c "contam.body-chars")) 0.0))

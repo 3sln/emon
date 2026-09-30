@@ -8,6 +8,9 @@ group, which checks the oracle and the degraded fixture on real documents.
 (The random cases of the old Python suite use java.util.Random: the coverage is
 the same, the stream is not Python's.)"
   (:require [accuracy.accuracy :as A]
+            [accuracy.predict-degraded :as D]
+            [accuracy.predict-oracle :as O]
+            [clojure.string :as str]
             [accuracy.score :as S]
             [clojure.test :refer [deftest is run-tests]]
             [pyjson]))
@@ -249,6 +252,237 @@ the same, the stream is not Python's.)"
     ;; a table missed entirely scores 0
     (is (= 0.0 ((M (counts g (pred [(P "a b c d")]))) "table-teds-lite")))))
 
+;; ------------------------------------------------------ Layout features (D115) ----
+;; Hand-built golds; every expected number is worked out in the comment beside it.
+
+(def FEAT {"paragraph" ["initial" "align"] "heading" ["level" "align"] "caption" ["align"]
+           "cell" ["align"] "figure" ["subkind"]})
+
+(defn fgold
+  "A gold that annotates initials and alignment (and layout when `facts` has frags)."
+  ([children] (fgold children nil))
+  ([children facts]
+   (cond-> (gold children :attributes FEAT)
+     facts (-> (assoc "facts" facts) (assoc-in ["annotated" "layout"] (contains? facts "frags"))))))
+
+(defn INI [t form lines] {"kind" "initial" "form" form "lines" lines "children" [{"kind" "text" "text" t}]})
+(defn TX [t] {"kind" "text" "text" t})
+(defn PI
+  "A paragraph whose text is `text` and whose first inline is an initial."
+  [id text ini rest-text & {:as extra}]
+  (merge {"kind" "paragraph" "id" id "text" text "inlines" [ini (TX rest-text)]} extra))
+(defn PA [t al] (assoc (P t) "align" al))
+
+(deftest initial-split-off
+  ;; gold `Once upon a time` with a 3-line drop `O`; pred: a heading `O` then `nce upon a time`
+  (let [g (fgold [(PI 1 "Once upon a time" (INI "O" "drop" 3) "nce upon a time")])
+        c (counts g (pred [(H "O" 2) (P "nce upon a time")]))
+        m (M c)]
+    (is (= [0 1 0] [(c "initial.tp") (c "initial.gold") (c "initial.pred")]))
+    (is (= 0.0 (m "initial-r")))
+    (is (= 0.0 (m "initial-p")))             ; nothing predicted, one expected
+    (is (= 0.0 (m "initial-form-acc")))      ; gold has an initial, none was found: 0, not absent
+    (is (= 0.0 (m "first-word-acc")))        ; `Once` vs `nce`
+    (is (= 1.0 (m "initial-false-heading"))) ; the heading `O` is a gold initial's text: 1 of 1 gold initials
+    ;; CER +1 (the space), WER +2 (`Once` -> `O`, insert `nce`): 1/16 and 2/4
+    (is (almost= (/ 1.0 16) (m "cer")))
+    (is (almost= 0.5 (m "wer")))))
+
+(deftest initial-false-heading-spares-a-real-heading
+  ;; the negative control: the gold's `A` really is a heading, so a predicted heading `A` is right
+  (let [g (fgold [(P "An intro that opens the text") (H "A" 2) (P "Apples grow on trees")])
+        c (counts g (pred [(P "An intro that opens the text") (H "A" 2) (P "Apples grow on trees")]))]
+    (is (= 0 (c "initial.fh")))
+    (is (= 0 (c "initial.gold")))
+    (is (= 0.0 ((M c) "initial-false-heading")))))
+
+(deftest initial-moved-to-line-three
+  ;; found, right form, but the letter sits inside the text: `nce upon O a time`
+  (let [g (fgold [(PI 1 "Once upon a time" (INI "O" "drop" 3) "nce upon a time")])
+        c (counts g (pred [(PI 1 "nce upon O a time" (INI "O" "drop" 3) "nce upon ")]))
+        m (M c)]
+    (is (= [1 1 1] [(c "initial.tp") (c "initial.gold") (c "initial.pred")]))
+    (is (= [1.0 1.0 1.0] (map m ["initial-p" "initial-r" "initial-form-acc"])))
+    (is (= 0.0 (m "first-word-acc")))        ; `Once` vs `nce`
+    (is (= 0.0 (m "initial-false-heading")))
+    ;; a wrong form on the same initial
+    (is (= 0.0 ((M (counts g (pred [(PI 1 "Once upon a time" (INI "O" "raised" nil) "nce upon a time")])))
+                "initial-form-acc")))))
+
+(deftest a-long-read-as-along
+  ;; `A long time` with a one-letter-word initial read as `Along time`: CER +1, WER +2
+  (let [g (fgold [(PI 1 "A long time" (INI "A" "drop" 2) " long time")])
+        c (counts g (pred [(PI 1 "Along time" (INI "A" "drop" 2) "long time")]))
+        m (M c)]
+    (is (= 1.0 (m "initial-p")))
+    (is (= 0.0 (m "first-word-acc")))        ; `A` vs `Along`
+    (is (almost= (/ 1.0 11) (m "cer")))      ; one deleted space in 11 characters
+    (is (almost= (/ 2.0 3) (m "wer")))))     ; [A long time] -> [Along time]: substitute, delete
+
+(deftest initial-perfect-and-unannotated
+  (let [g (fgold [(PI 1 "Once upon a time" (INI "O" "drop" 3) "nce upon a time")])
+        m (M (counts g (pred [(PI 1 "Once upon a time" (INI "O" "drop" 3) "nce upon a time")])))]
+    (is (= [1.0 1.0 1.0 1.0 0.0] (map m ["initial-p" "initial-r" "initial-form-acc" "first-word-acc" "initial-false-heading"]))))
+  ;; a gold that does not annotate the attribute: no initial metric at all
+  (let [c (counts (gold [(PI 1 "Once upon a time" (INI "O" "drop" 3) "nce upon a time")])
+                  (pred [(H "O" 2) (P "nce upon a time")]))]
+    (is (not-any? #(str/starts-with? % "initial.") (keys c)))
+    (is (not-any? #(str/starts-with? % "initial") (keys (M c))))))
+
+(deftest alignment-single-line-justify-against-start
+  ;; a single-line block the gold calls `justify`, scored against `start`
+  (let [g (fgold [(PA "One line only" "justify")])
+        c (counts g (pred [(PA "One line only" "start")]))
+        m (M c)]
+    (is (= [1 1 1 1 0] (map c ["align.gold" "align.pred" "align.n" "align.paragraph.n" "align.ok"])))
+    (is (= 0.0 (m "align-acc")))
+    (is (= 1.0 (m "align-cov")))             ; it is aligned, just wrongly
+    (is (= 1.0 (m "align-wrong")))           ; 1 wrong of 1 predicted aligned
+    (is (= 0.0 (m "align-acc-paragraph"))))
+  ;; no alignment predicted: coverage 0, accuracy 0 (not absent), nothing wrong
+  (let [m (M (counts (fgold [(PA "One line only" "justify")]) (pred [(P "One line only")])))]
+    (is (= [0.0 0.0 0.0] (map m ["align-acc" "align-cov" "align-wrong"]))))
+  ;; right
+  (let [m (M (counts (fgold [(PA "One line only" "justify")]) (pred [(PA "One line only" "justify")])))]
+    (is (= [1.0 1.0 0.0] (map m ["align-acc" "align-cov" "align-wrong"])))))
+
+(deftest alignment-per-kind-and-cells
+  ;; gold: paragraph `start`, heading `center`, cells `end` and `center`. pred: the paragraph right,
+  ;; the heading `start` (wrong), the cells `end` (right) and `end` (wrong), and one extra aligned paragraph.
+  (let [cell (fn [t a] {"kind" "cell" "text" t "align" a})
+        tbl (fn [a b] {"kind" "table" "children" [{"kind" "rowgroup" "children" [{"kind" "row" "children" [(cell "1" a) (cell "2" b)]}]}]})
+        g (fgold [(PA "First paragraph here" "start") (assoc (H "Heading words" 1) "align" "center") (tbl "end" "center")])
+        c (counts g (pred [(PA "First paragraph here" "start") (assoc (H "Heading words" 1) "align" "start") (tbl "end" "end")
+                           (PA "An extra paragraph" "center")]))
+        m (M c)]
+    ;; paragraph: both 1, ok 1; heading: both 1, ok 0; cell: both 2, ok 1
+    (is (= [1.0 0.0 0.5] (map m ["align-acc-paragraph" "align-acc-heading" "align-acc-cell"])))
+    (is (= [1.0 1.0 1.0] (map m ["align-cov-paragraph" "align-cov-heading" "align-cov-cell"])))
+    ;; pooled: n 4 (1+1+2), ok 2 (1+0+1), gold 4, predicted aligned 5 (2 paragraphs, 1 heading, 2 cells)
+    (is (= [4 2 4 5] (map c ["align.n" "align.ok" "align.gold" "align.pred"])))
+    (is (almost= 0.5 (m "align-acc")))
+    (is (almost= 0.4 (m "align-wrong")))))     ; (4 - 2) / 5
+
+(deftest alignment-unannotated-is-absent
+  (let [c (counts (gold [(PA "One line only" "justify")]) (pred [(PA "One line only" "start")]))]
+    (is (not-any? #(str/starts-with? % "align") (keys c)))
+    (is (not-any? #(str/starts-with? % "align") (keys (M c))))))
+
+(def LAYOUT-PAGE
+  {"n" 1 "layout" [{"band" 0 "col" 0 "role" "body" "box" [0 0 90 90]}
+                   {"band" 0 "col" 1 "role" "body" "box" [100 0 190 90]}]})
+(def C0 [1 0 0 90 90])
+(def C1 [1 100 0 190 90])
+(defn AT [n & regions] (assoc n "at" (vec regions)))
+(defn IDP [id t] (assoc (P t) "id" id))
+
+(def COLS-GOLD
+  ;; paragraph 1 runs from the bottom of column 0 to the top of column 1; paragraph 2 is in column 1
+  (fgold [(IDP 1 "alpha beta gamma delta epsilon zeta") (IDP 2 "eta theta iota kappa")]
+         {"frags" {"1" [[1 0 0] [1 0 1]] "2" [[1 0 1]]}}))
+
+(deftest column-continuation-joined
+  (let [c (counts COLS-GOLD
+                  (pred [(AT (P "alpha beta gamma delta epsilon zeta") C0 C1) (AT (P "eta theta iota kappa") C1)]
+                        :pages [LAYOUT-PAGE]))
+        m (M c)]
+    (is (= [2 2] [(c "frag.n") (c "frag.ok")]))
+    (is (= 1.0 (m "frag-col-acc")))
+    (is (= [1 1 1] [(c "join.gold") (c "join.tp") (c "join.pred")]))
+    (is (= [1.0 1.0] [(m "join-p") (m "join-r")]))))
+
+(deftest column-continuation-split
+  ;; pred cuts paragraph 1 at the column break: each half holds 3 of its 6 words, so none holds it
+  (let [c (counts COLS-GOLD
+                  (pred [(AT (P "alpha beta gamma") C0) (AT (P "delta epsilon zeta") C1) (AT (P "eta theta iota kappa") C1)]
+                        :pages [LAYOUT-PAGE]))
+        m (M c)]
+    ;; paragraph 1 (35 chars) is under 0.5 similar to either half (16 and 18 chars): unmatched, a miss
+    (is (= [2 1] [(c "frag.n") (c "frag.ok")]))
+    (is (= 0.5 (m "frag-col-acc")))
+    (is (= [1 0 0] [(c "join.gold") (c "join.tp") (c "join.pred")]))
+    (is (= [0.0 0.0] [(m "join-p") (m "join-r")]))))
+
+(deftest column-false-join
+  ;; two single-fragment paragraphs, the second starting a new column; pred runs them together
+  (let [g (fgold [(IDP 1 "alpha beta gamma delta") (IDP 2 "epsilon zeta eta theta")]
+                 {"frags" {"1" [[1 0 0]] "2" [[1 0 1]]}})
+        c (counts g (pred [(AT (P "alpha beta gamma delta epsilon zeta eta theta") C0 C1)] :pages [LAYOUT-PAGE]))]
+    ;; the boundary falls on a fragment boundary and one predicted block spans `gamma delta epsilon zeta`
+    (is (= [0 0 1] [(c "join.gold") (c "join.tp") (c "join.pred")]))
+    (is (= 0.0 ((M c) "join-p")))
+    ;; the same two paragraphs kept apart are not a false join
+    (let [c (counts g (pred [(AT (P "alpha beta gamma delta") C0) (AT (P "epsilon zeta eta theta") C1)] :pages [LAYOUT-PAGE]))]
+      (is (= [0 0 0] [(c "join.gold") (c "join.tp") (c "join.pred")]))
+      (is (= 1.0 ((M c) "frag-col-acc"))))))
+
+(deftest layout-missing-scores-zero-not-absent
+  ;; no `layout` on the predicted page: no region maps to a cell, every layout block misses
+  (let [m (M (counts COLS-GOLD (pred [(AT (P "alpha beta gamma delta epsilon zeta") C0 C1) (AT (P "eta theta iota kappa") C1)])))]
+    (is (= 0.0 (m "frag-col-acc")))
+    (is (= 1.0 (m "join-r"))))                ; the text is one block whatever the layout
+  ;; a gold that is not a layout document has no column metric
+  (let [g (fgold [(IDP 1 "alpha beta") (IDP 2 "gamma delta")] {"frags" {"1" [[1 0 0]] "2" [[1 0 0]]}})
+        g (assoc-in g ["annotated" "layout"] false)
+        c (counts g (pred [(P "alpha beta") (P "gamma delta")]))]
+    (is (not-any? #(or (str/starts-with? % "frag") (str/starts-with? % "join")) (keys c)))))
+
+(def HY-GOLD
+  (fgold [(IDP 1 "a hyphenated word")] {"hyphens" [{"id" 1 "printed" "hy-phenated" "word" "hyphenated"}]}))
+(defn with-locale [p loc] (assoc p "settings" {"locale" loc}))
+
+(deftest hyphen-kept-and-joined
+  ;; no locale: emon keeps the printed hyphen (SPEC 3.6) and the gold is read in its printed form
+  (let [c (counts HY-GOLD (with-locale (pred [(P "a hy-phenated word")]) nil))]
+    (is (= [1 1] [(c "hyphen.n") (c "hyphen.ok")]))
+    (is (= 0 (c "text.char-err")))
+    (is (= 0 (c "text.word-err"))))
+  ;; no locale but the word joined: CER 1 of 18 (`a hy-phenated word`), hyphen wrong
+  (let [c (counts HY-GOLD (with-locale (pred [(P "a hyphenated word")]) nil))]
+    (is (= [1 0] [(c "hyphen.n") (c "hyphen.ok")]))
+    (is (= [1 18] [(c "text.char-err") (c "text.chars")])))
+  ;; locale en: the gold as written, the joined word is right
+  (let [c (counts HY-GOLD (with-locale (pred [(P "a hyphenated word")]) "en"))]
+    (is (= [1 1 0] [(c "hyphen.n") (c "hyphen.ok") (c "text.char-err")])))
+  ;; locale en but the hyphen kept: CER 1 of 17, hyphen wrong
+  (let [c (counts HY-GOLD (with-locale (pred [(P "a hy-phenated word")]) "en"))]
+    (is (= [1 0 1 17] [(c "hyphen.n") (c "hyphen.ok") (c "text.char-err") (c "text.chars")])))
+  ;; a gold without facts is scored as written whatever the locale
+  (is (= 1 ((counts (gold [(P "a hyphenated word")]) (with-locale (pred [(P "a hy-phenated word")]) nil)) "text.char-err"))))
+
+(def BIG-GOLD
+  (let [cell (fn [t a] {"kind" "cell" "text" t "align" a})]
+    (-> (fgold [(PI 1 "Once upon a time there was a king" (INI "O" "drop" 3) "nce upon a time there was a king" :align "start")
+                (assoc (H "Chapter" 1) "id" 2 "align" "center")
+                (assoc (IDP 3 "alpha beta gamma delta epsilon zeta") "align" "justify")
+                (assoc (IDP 4 "eta theta iota kappa") "align" "end")
+                (IDP 5 "a hyphenated word here")
+                {"kind" "table" "id" 6 "children" [{"kind" "rowgroup" "children"
+                                                    [{"kind" "row" "children" [(cell "1" "end") (cell "2" "center")]}]}]}]
+               {"frags" {"1" [[1 0 0]] "2" [[1 0 0]] "3" [[1 0 0] [1 0 1]] "4" [[1 0 1]] "5" [[1 0 1]]}
+                "hyphens" [{"id" 5 "printed" "hy-phenated" "word" "hyphenated"}]})
+        (assoc-in ["model" "settings"] {"locale" nil}))))
+
+(def NEW-METRICS ["initial-p" "initial-r" "initial-form-acc" "first-word-acc" "align-acc" "align-cov"
+                  "align-acc-paragraph" "align-acc-heading" "align-acc-cell" "frag-col-acc" "join-p" "join-r" "hyphen-acc"])
+
+(deftest oracle-perfect-and-degraded-worse-on-layout-features
+  (let [o (M (get (S/score (O/predict-gold BIG-GOLD) BIG-GOLD) "counts"))
+        d (M (get (S/score (D/predict-gold BIG-GOLD "pdf") BIG-GOLD) "counts"))]
+    (is (= 0.0 (o "cer")))
+    (is (= 0.0 (o "wer")))
+    (doseq [k NEW-METRICS] (is (= 1.0 (o k)) k))
+    (is (= 0.0 (o "initial-false-heading")))
+    (is (= 0.0 (o "align-wrong")))
+    ;; every damage moves its metrics
+    (doseq [k NEW-METRICS] (is (< (d k) 1.0) k))
+    (is (> (d "initial-false-heading") 0.0))   ; the split-off `O` heading
+    (is (= 0.0 (d "initial-r")))
+    (is (= 0.0 (d "align-cov")))               ; every align dropped
+    (is (= 0.0 (d "frag-col-acc")))            ; no layout
+    (is (= 0.0 (d "join-r")))                  ; the multi-fragment paragraph is cut
+    (is (> (d "cer") 0.0))))
+
 ;; --------------------------------------------------------------- Ratchet ----
 
 (deftest edn-round-trip
@@ -292,7 +526,7 @@ the same, the stream is not Python's.)"
     (let [o (run-pred "oracle" doc) d (run-pred "degraded" doc)]
       (is (= 0.0 (o "cer")) doc)
       (is (= 0.0 (o "wer")) doc)
-      (doseq [[k v] o :when (not (#{"cer" "wer" "watermark-leak"} k))]
+      (doseq [[k v] o :when (not (S/LOWER-IS-BETTER k))]
         (is (= 1.0 v) (pr-str [doc k])))
       (is (> (d "cer") 0.0) doc)))
   (let [dh (run-pred "degraded" "h-numbered")]     ; many headings: levels and kinds get damaged
@@ -316,7 +550,14 @@ the same, the stream is not Python's.)"
 (deftest placeholder-is-not-a-failure
   (is (nil? (first (A/run-predictor (A/PREDICTORS "emon") "x" "pdf" "x" "x")))))
 
-(let [res (binding [clojure.test/*test-out* *err*] (run-tests 'accuracy.test-score))]
+(let [res (binding [clojure.test/*test-out* *err*]
+             (if-let [only (System/getenv "EMON_TEST_ONLY")]
+               (let [vs (vec (filter #(re-find (re-pattern only) (str %)) (vals (ns-publics (quote accuracy.test-score)))))]
+                 (binding [*out* *err*] (println "running" (count vs) "tests"))
+                 (binding [clojure.test/*report-counters* (ref clojure.test/*initial-report-counters*)]
+                   (clojure.test/test-vars vs)
+                   @clojure.test/*report-counters*))
+               (run-tests (quote accuracy.test-score))))]
   (if (zero? (+ (:fail res) (:error res)))
     (println (format "  ok   accuracy-test: %d laws of the scorer and the ratchet hold (CER/WER, P/R/F1, heading level, boundaries, IoU, ledger, oracle perfect, degraded worse)" (:test res)))
     (do (println (format "  FAIL accuracy-test: %d failure(s)" (+ (:fail res) (:error res))))

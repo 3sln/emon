@@ -11,10 +11,15 @@ scoreboard entry is reproducible; the `scan` variant is damaged harder:
   tables     the last cell of every table loses its text (TEDS-lite)
   furniture  running-title/page-number entries of page 2+ are dropped (furniture recall)
   watermark  a watermark's text is appended to the first paragraph (leak)
+  initials   each initial is split into its own single-letter heading (D115)
+  align      every `align` is dropped
+  columns    every multi-fragment paragraph (gold `facts.frags`) is cut in two at
+             its first fragment boundary (the middle word: the gold has no offsets)
 Nothing here looks at the input file.
 
     bb -cp tools:tools/lib tools/accuracy/predict_degraded.clj ID VARIANT INPUT GOLD"
   (:require [accuracy.score :as S]
+            [clojure.string :as str]
             [pyjson]))
 
 (defn damage [s every]
@@ -85,12 +90,47 @@ Nothing here looks at the input file.
          :else (map-children n go)))
      body)))
 
-(defn predict
-  "In-process form: (predict id variant input gold-path) -> the damaged Model map."
-  [_id variant _input gold-path]
-  (let [m (get (pyjson/parse-file gold-path) "model")
+(defn- split-initials
+  "Each initial becomes a heading of its own letter before its paragraph, which loses the letter."
+  [n]
+  (let [n (map-children n (fn [c] c))
+        ch (kids n)
+        out (mapcat (fn [c]
+                      (if-let [i (and (= "paragraph" (get c "kind")) (S/initial-of c))]
+                        (let [t (S/norm (S/leaf-text i))
+                              k (count (.toArray (.codePoints ^String t)))
+                              rest-text (let [x (get c "text" "")] (.substring ^String x (.offsetByCodePoints ^String x 0 (min k (S/nlen x)))))]
+                          [{"kind" "heading" "level" 2 "text" t}
+                           (-> c (assoc "text" rest-text) (dissoc "inlines" "align"))])
+                        [(split-initials c)]))
+                    ch)]
+    (if (contains? n "children") (assoc n "children" (vec out)) n)))
+
+(defn- drop-align [n]
+  (map-children (dissoc n "align") drop-align))
+
+(defn- split-fragments
+  "A paragraph with two or more gold fragments is cut into two paragraphs at the middle word."
+  [n frags]
+  (let [ch (kids n)
+        out (mapcat (fn [c]
+                      (let [ws (S/split-ws (get c "text" ""))]
+                        (if (and (= "paragraph" (get c "kind")) (>= (count (get frags (str (get c "id")))) 2) (>= (count ws) 2))
+                          (let [k (quot (count ws) 2)]
+                            [(assoc c "text" (str/join " " (take k ws)))
+                             (-> c (assoc "text" (str/join " " (drop k ws))) (dissoc "id"))])
+                          [(split-fragments c frags)])))
+                    ch)]
+    (if (contains? n "children") (assoc n "children" (vec out)) n)))
+
+(defn predict-gold
+  "The damaged Model of a parsed gold map."
+  [gold variant]
+  (let [m (get gold "model")
+        frags (S/frag-map (get gold "facts"))
         every (if (= variant "pdf") 40 15)            ; scan: harsher
-        body (-> (get m "body") (text-and-headings every) merge-paragraphs tables)
+        body (-> (get m "body") split-initials (text-and-headings every) merge-paragraphs tables drop-align
+                 (split-fragments frags))
         dropped (vec (remove #(and (contains? #{"running-title" "page-number"} (get % "reason"))
                                    (>= (get % "page") 2))
                              (or (get m "dropped") [])))
@@ -100,6 +140,11 @@ Nothing here looks at the input file.
                              #(assoc % "text" (str (get % "text") " " (get (first wm) "text" ""))))
                body)]
     (assoc m "body" body "dropped" dropped)))
+
+(defn predict
+  "In-process form: (predict id variant input gold-path) -> the damaged Model map."
+  [_id variant _input gold-path]
+  (predict-gold (pyjson/parse-file gold-path) variant))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (let [[id variant inp gold] *command-line-args*]
