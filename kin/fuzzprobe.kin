@@ -35,7 +35,7 @@
                                  pd-object-count]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.pdfcontent :refer [pc-document pc-warn pc-ops]]
-            [emon.evidence :refer [gl-count gl-get wd-count sp-count gf-cp]]
+            [emon.evidence :refer [gl-count gl-get wd-count mk-count ch-cp]]
             [emon.pdflex :refer [pl-kind-of]]
             [emon.pdffont :refer [pfn-load pfn-map pfn-cp pfn-how-of pfn-width
                                   pfn-warn pfn-kind-of]]
@@ -102,17 +102,18 @@
         ^Cells f3 (new-cells)
         ^Cells gl (new-cells)
         ^Cells et (new-cells)
-        ^Cells sp (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
-        ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+        ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln)
         ^:mut ^I32 g 0
         ^:mut ^I32 h 7]
     (emit-ascii t " content=")
     (text-i32 t s)
     (if (== s 0)
       (do (while (< g (gl-count gl))
-            (do (set h (fz-mix h (gl-get gl g (gf-cp))))
+            (do (set h (fz-mix h (gl-get gl g (ch-cp))))
                 (set g (+ g 1))))
           (emit-ascii t " cwarn=")
           (text-i32 t (pc-warn cx))
@@ -122,8 +123,8 @@
           (text-i32 t (gl-count gl))
           (emit-ascii t " words=")
           (text-i32 t (wd-count wd))
-          (emit-ascii t " spans=")
-          (text-i32 t (sp-count sp))
+          (emit-ascii t " marks=")
+          (text-i32 t (mk-count mk))
           (emit-ascii t " cps=")
           (text-i32 t h)))
     (return s)))

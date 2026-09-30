@@ -61,9 +61,9 @@ public final class Evidencetest {
         Evidence.epSet(epages, 0, Evidence.epfDpi(), 15000);
         Evidence.vwNew(views, 1, Evidence.vkRender(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
         Evidence.vwNew(views, 1, Evidence.vkEngineBinary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, Evidence.vgEngineBinary());
-        Evidence.ptNew(pts, 7200, 12000, Evidence.poMove());
-        Evidence.ptNew(pts, 20000, 12000, Evidence.poLine());
-        Evidence.ptNew(pts, 20000, 14000, Evidence.poClose());
+        Evidence.ptAdd(pts, 7200, 12000, Evidence.poMove());
+        Evidence.ptAdd(pts, 20000, 12000, Evidence.poLine());
+        Evidence.ptAdd(pts, 20000, 14000, Evidence.poClose());
         Evidence.rfAdd(refs, Evidence.eaComponents(), 0);
         Evidence.rfAdd(refs, Evidence.eaComponents(), 0);
         Evidence.rfAdd(refs, Evidence.eaComponents(), 0);
@@ -80,6 +80,8 @@ public final class Evidencetest {
         Evidence.foSet(fonts, 0, Evidence.fnfItalic(), -1200);
         Evidence.foSet(fonts, 0, Evidence.fnfStemv(), 80);
         Evidence.foSet(fonts, 0, Evidence.fnfStyle(), Model.syBold());
+        Evidence.foSet(fonts, 0, Evidence.fnfCapheight(), 716);
+        Evidence.foSet(fonts, 0, Evidence.fnfXheight(), 519);
         Evidence.foNew(fonts, 7, Evidence.ftType0());
         // marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
         Evidence.mkOpen(marks, 1, Evidence.mkTag(), tP, 1, -1, 0, 0);
@@ -569,6 +571,8 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfEnc()), -1, "no base encoding");
         emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfSpace()), -1, "no space width");
         emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfStemv()), -1, "no stem");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfCapheight()), -1, "no cap height");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfXheight()), -1, "no x-height");
         emon.Testport.assertEq(Evidence.paNew(paths, 3, Evidence.paRect(), 1, 2, 3, 4), 0, "first path");
         emon.Testport.assertEq(emon.Port.cellsLen(paths), 24, "24 cells");
         emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfFill()), -1, "not filled");
@@ -1193,7 +1197,7 @@ public final class Evidencetest {
                 emon.Testport.assertEq(cells, 24, "marks: every cell");
             }
             if (ea == 11) {
-                emon.Testport.assertEq(Evidence.EV_STRIDES[10] - cells, 2, "fonts: two spare");
+                emon.Testport.assertEq(cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)");
             }
             if (ea == 12) {
                 emon.Testport.assertEq(Evidence.EV_STRIDES[11] - cells, 5, "paths: five spare");

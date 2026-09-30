@@ -61,9 +61,9 @@ public static class Evidencetest {
         Evidence.EpSet(epages, 0, Evidence.EpfDpi(), 15000);
         Evidence.VwNew(views, 1, Evidence.VkRender(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
         Evidence.VwNew(views, 1, Evidence.VkEngineBinary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, Evidence.VgEngineBinary());
-        Evidence.PtNew(pts, 7200, 12000, Evidence.PoMove());
-        Evidence.PtNew(pts, 20000, 12000, Evidence.PoLine());
-        Evidence.PtNew(pts, 20000, 14000, Evidence.PoClose());
+        Evidence.PtAdd(pts, 7200, 12000, Evidence.PoMove());
+        Evidence.PtAdd(pts, 20000, 12000, Evidence.PoLine());
+        Evidence.PtAdd(pts, 20000, 14000, Evidence.PoClose());
         Evidence.RfAdd(refs, Evidence.EaComponents(), 0);
         Evidence.RfAdd(refs, Evidence.EaComponents(), 0);
         Evidence.RfAdd(refs, Evidence.EaComponents(), 0);
@@ -80,6 +80,8 @@ public static class Evidencetest {
         Evidence.FoSet(fonts, 0, Evidence.FnfItalic(), -1200);
         Evidence.FoSet(fonts, 0, Evidence.FnfStemv(), 80);
         Evidence.FoSet(fonts, 0, Evidence.FnfStyle(), Model.SyBold());
+        Evidence.FoSet(fonts, 0, Evidence.FnfCapheight(), 716);
+        Evidence.FoSet(fonts, 0, Evidence.FnfXheight(), 519);
         Evidence.FoNew(fonts, 7, Evidence.FtType0());
         // marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
         Evidence.MkOpen(marks, 1, Evidence.MkTag(), tP, 1, -1, 0, 0);
@@ -573,6 +575,8 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfEnc()), -1, "no base encoding");
         emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfSpace()), -1, "no space width");
         emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfStemv()), -1, "no stem");
+        emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfCapheight()), -1, "no cap height");
+        emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfXheight()), -1, "no x-height");
         emon.Testport.AssertEq(Evidence.PaNew(paths, 3, Evidence.PaRect(), 1, 2, 3, 4), 0, "first path");
         emon.Testport.AssertEq(emon.Port.CellsLen(paths), 24, "24 cells");
         emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfFill()), -1, "not filled");
@@ -1211,7 +1215,7 @@ public static class Evidencetest {
                 emon.Testport.AssertEq(cells, 24, "marks: every cell");
             }
             if (ea == 11) {
-                emon.Testport.AssertEq(Evidence.EvStrides[10] - cells, 2, "fonts: two spare");
+                emon.Testport.AssertEq(cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)");
             }
             if (ea == 12) {
                 emon.Testport.AssertEq(Evidence.EvStrides[11] - cells, 5, "paths: five spare");

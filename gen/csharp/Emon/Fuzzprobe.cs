@@ -68,17 +68,18 @@ public static class Fuzzprobe {
         emon.Port.Cells f3 = emon.Port.NewCells();
         emon.Port.Cells gl = emon.Port.NewCells();
         emon.Port.Cells et = emon.Port.NewCells();
-        emon.Port.Cells sp = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells fnt = emon.Port.NewCells();
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();
-        int s = Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln);
+        int s = Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
         int g = 0;
         int h = 7;
         emon.Port.TextAscii(t, " content=");
         emon.Port.TextI32(t, s);
         if (s == 0) {
             while (g < Evidence.GlCount(gl)) {
-                h = FzMix(h, Evidence.GlGet(gl, g, Evidence.GfCp()));
+                h = FzMix(h, Evidence.GlGet(gl, g, Evidence.ChCp()));
                 g += 1;
             }
             emon.Port.TextAscii(t, " cwarn=");
@@ -89,8 +90,8 @@ public static class Fuzzprobe {
             emon.Port.TextI32(t, Evidence.GlCount(gl));
             emon.Port.TextAscii(t, " words=");
             emon.Port.TextI32(t, Evidence.WdCount(wd));
-            emon.Port.TextAscii(t, " spans=");
-            emon.Port.TextI32(t, Evidence.SpCount(sp));
+            emon.Port.TextAscii(t, " marks=");
+            emon.Port.TextI32(t, Evidence.MkCount(mk));
             emon.Port.TextAscii(t, " cps=");
             emon.Port.TextI32(t, h);
         }

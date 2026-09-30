@@ -68,9 +68,9 @@ func EtBuild(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.
 	evidence.EpSet(epages, 0, evidence.EpfDpi(), 15000)
 	evidence.VwNew(views, 1, evidence.VkRender(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0)
 	evidence.VwNew(views, 1, evidence.VkEngineBinary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, evidence.VgEngineBinary())
-	evidence.PtNew(pts, 7200, 12000, evidence.PoMove())
-	evidence.PtNew(pts, 20000, 12000, evidence.PoLine())
-	evidence.PtNew(pts, 20000, 14000, evidence.PoClose())
+	evidence.PtAdd(pts, 7200, 12000, evidence.PoMove())
+	evidence.PtAdd(pts, 20000, 12000, evidence.PoLine())
+	evidence.PtAdd(pts, 20000, 14000, evidence.PoClose())
 	evidence.RfAdd(refs, evidence.EaComponents(), 0)
 	evidence.RfAdd(refs, evidence.EaComponents(), 0)
 	evidence.RfAdd(refs, evidence.EaComponents(), 0)
@@ -87,6 +87,8 @@ func EtBuild(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.
 	evidence.FoSet(fonts, 0, evidence.FnfItalic(), -1200)
 	evidence.FoSet(fonts, 0, evidence.FnfStemv(), 80)
 	evidence.FoSet(fonts, 0, evidence.FnfStyle(), model.SyBold())
+	evidence.FoSet(fonts, 0, evidence.FnfCapheight(), 716)
+	evidence.FoSet(fonts, 0, evidence.FnfXheight(), 519)
 	evidence.FoNew(fonts, 7, evidence.FtType0())
 	// marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
 	evidence.MkOpen(marks, 1, evidence.MkTag(), tP, 1, -1, 0, 0)
@@ -584,6 +586,8 @@ func TestBuildersSetTheLayoutAndItsDefaults(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfEnc()), -1, "no base encoding")
 	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfSpace()), -1, "no space width")
 	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfStemv()), -1, "no stem")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfCapheight()), -1, "no cap height")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfXheight()), -1, "no x-height")
 	port.AssertEq(emonT, evidence.PaNew(paths, 3, evidence.PaRect(), 1, 2, 3, 4), 0, "first path")
 	port.AssertEq(emonT, port.CellsLen(paths), 24, "24 cells")
 	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfFill()), -1, "not filled")
@@ -1226,7 +1230,7 @@ func TestEveryCellOfEveryStrideIsPrintedOrSpare(emonT *testing.T) {
 			port.AssertEq(emonT, cells, 24, "marks: every cell")
 		}
 		if ea == 11 {
-			port.AssertEq(emonT, evidence.EvStrides[10]-cells, 2, "fonts: two spare")
+			port.AssertEq(emonT, cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)")
 		}
 		if ea == 12 {
 			port.AssertEq(emonT, evidence.EvStrides[11]-cells, 5, "paths: five spare")

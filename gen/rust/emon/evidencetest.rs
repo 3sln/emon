@@ -60,9 +60,9 @@ pub fn et_build(mut epages: &mut crate::port::Cells, mut views: &mut crate::port
     ep_set(epages, 0, epf_dpi(), 15000);
     vw_new(views, 1, vk_render(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
     vw_new(views, 1, vk_engine_binary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, vg_engine_binary());
-    pt_new(pts, 7200, 12000, po_move());
-    pt_new(pts, 20000, 12000, po_line());
-    pt_new(pts, 20000, 14000, po_close());
+    pt_add(pts, 7200, 12000, po_move());
+    pt_add(pts, 20000, 12000, po_line());
+    pt_add(pts, 20000, 14000, po_close());
     rf_add(refs, ea_components(), 0);
     rf_add(refs, ea_components(), 0);
     rf_add(refs, ea_components(), 0);
@@ -79,6 +79,8 @@ pub fn et_build(mut epages: &mut crate::port::Cells, mut views: &mut crate::port
     fo_set(fonts, 0, fnf_italic(), -1200);
     fo_set(fonts, 0, fnf_stemv(), 80);
     fo_set(fonts, 0, fnf_style(), sy_bold());
+    fo_set(fonts, 0, fnf_capheight(), 716);
+    fo_set(fonts, 0, fnf_xheight(), 519);
     fo_new(fonts, 7, ft_type0());
     // marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
     mk_open(marks, 1, mk_tag(), t_p, 1, -1, 0, 0);
@@ -572,6 +574,8 @@ fn test_builders_set_the_layout_and_its_defaults() {
     crate::testport::assert_eq(fo_get(fonts, 0, fnf_enc()), -1, "no base encoding");
     crate::testport::assert_eq(fo_get(fonts, 0, fnf_space()), -1, "no space width");
     crate::testport::assert_eq(fo_get(fonts, 0, fnf_stemv()), -1, "no stem");
+    crate::testport::assert_eq(fo_get(fonts, 0, fnf_capheight()), -1, "no cap height");
+    crate::testport::assert_eq(fo_get(fonts, 0, fnf_xheight()), -1, "no x-height");
     crate::testport::assert_eq(pa_new(paths, 3, pa_rect(), 1, 2, 3, 4), 0, "first path");
     crate::testport::assert_eq(crate::port::cells_len(paths), 24, "24 cells");
     crate::testport::assert_eq(pa_get(paths, 0, pf_fill()), -1, "not filled");
@@ -1210,7 +1214,7 @@ fn test_every_cell_of_every_stride_is_printed_or_spare() {
             crate::testport::assert_eq(cells, 24, "marks: every cell");
         }
         if ea == 11 {
-            crate::testport::assert_eq(EV_STRIDES[(10) as usize] - cells, 2, "fonts: two spare");
+            crate::testport::assert_eq(cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)");
         }
         if ea == 12 {
             crate::testport::assert_eq(EV_STRIDES[(11) as usize] - cells, 5, "paths: five spare");

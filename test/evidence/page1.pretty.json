@@ -275,7 +275,9 @@
       "space": 27800,
       "italic": -12,
       "stemv": 80,
-      "style": ["bold"]
+      "style": ["bold"],
+      "capheight": 716,
+      "xheight": 519
     },
     {
       "obj": 7,

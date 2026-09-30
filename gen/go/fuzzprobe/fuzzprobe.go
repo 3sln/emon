@@ -80,17 +80,18 @@ func fzContent(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	var f3 *port.Cells = port.NewCells()
 	var gl *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
-	var sp *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
-	var s int32 = pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
+	var s int32 = pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 	var g int32 = 0
 	var h int32 = 7
 	port.TextAscii(t, " content=")
 	port.TextI32(t, s)
 	if s == 0 {
 		for g < evidence.GlCount(gl) {
-			h = fzMix(h, evidence.GlGet(gl, g, evidence.GfCp()))
+			h = fzMix(h, evidence.GlGet(gl, g, evidence.ChCp()))
 			g += 1
 		}
 		port.TextAscii(t, " cwarn=")
@@ -101,8 +102,8 @@ func fzContent(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 		port.TextI32(t, evidence.GlCount(gl))
 		port.TextAscii(t, " words=")
 		port.TextI32(t, evidence.WdCount(wd))
-		port.TextAscii(t, " spans=")
-		port.TextI32(t, evidence.SpCount(sp))
+		port.TextAscii(t, " marks=")
+		port.TextI32(t, evidence.MkCount(mk))
 		port.TextAscii(t, " cps=")
 		port.TextI32(t, h)
 	}

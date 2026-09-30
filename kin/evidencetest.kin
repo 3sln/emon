@@ -24,57 +24,57 @@
                                    ev-ck-count ev-cos ev-emit ev-fd-at ev-feat-ocr ev-floordiv
                                    ev-fx-at ev-init ev-overlap-small ev-peek ev-poke ev-rows
                                    ev-sin ev-strides-at ev-strides-count fe-get fe-new fe-set
-                                   fnf-asc fnf-desc fnf-enc fnf-flags fnf-italic fnf-space
-                                   fnf-stemv fnf-style fnf-tlen fnf-tounicode fnf-tstart fo-get
-                                   fo-new fo-set ft-type0 ft-type1 gf-asc gf-bx0
-                                   gf-bx1 gf-by0 gf-by1 gf-clip gf-cs gf-desc
-                                   gf-falpha gf-fill gf-font gf-how gf-mark gf-mode
-                                   gf-ocg gf-rot gf-salpha gf-size gf-stroke gf-vby
-                                   gf-vchk gf-vis gf-z gh-glyphname gh-tounicode gl-count
-                                   gl-get gl-new gl-set hd-bx0 hd-by1 hd-conf
-                                   hd-dir hd-feat hd-line hd-page hd-rot hd-tlen
-                                   hd-tstart hd-x0 hd-y1 ik-get ik-new ik-set
-                                   ikf-chroma ikf-color ikf-count ikf-light ikf-mask ikf-role
-                                   ikf-spread im-get im-new im-set ir-body lf-order
-                                   lf-src lh-bx0 lh-by1 lh-count lh-dir lh-first
-                                   lh-page lh-rot lh-x0 lh-y1 ln-get ln-new
-                                   ln-set mc-inline mc-unterminated mf-alpha mf-flags mf-obj
-                                   mf-vby mf-vchk mf-z mg-smask mk-artifact mk-artifact-class
-                                   mk-artifact-of mk-close mk-get mk-new mk-ocg-of mk-open
-                                   mk-optional-content mk-set mk-tag mkf-actual mkf-actuallen mkf-alt
-                                   mkf-altlen mkf-arsub mkf-artype mkf-exp mkf-explen mkf-flags
-                                   mkf-gcount mkf-gfirst mkf-lang mkf-langlen mkf-mcid mkf-ocg
-                                   mkf-ocgdef mkf-parent mkf-stm mkf-zfirst mkf-zlast oa-add
-                                   oa-get oaf-conf ob-block ob-get ob-new ob-paragraph
-                                   ob-set obf-conf obf-count obf-first oe-dictionary ol-get
-                                   ol-new ol-set olf-asc olf-desc olf-par olf-ph
-                                   olf-pw olf-px olf-py olf-run olf-xheight op-first
-                                   op-region or-get or-new or-set orf-bcount orf-bfirst
-                                   orf-bview orf-deskew orf-flags orf-lang orf-langlen orf-lcount
-                                   orf-lfirst orf-oconf orf-osd orf-pass orf-psm orf-request
-                                   orf-round orf-sconf orf-script orf-wcount orf-wfirst os-get
-                                   os-new os-set os-superscript osf-acount osf-afirst osf-conf
-                                   osf-flags osf-ph osf-pw osf-px osf-py ow-get
-                                   ow-new ow-set owf-flags owf-lang owf-ph owf-psize
-                                   owf-pw owf-px owf-py owf-run owf-scount owf-sfirst
-                                   owf-style pa-get pa-line pa-new pa-rect pa-set
-                                   pf-clip pf-dash pf-falpha pf-fill pf-flags pf-pcount
-                                   pf-pfirst pf-stroke pf-width pf-z pg-clip pg-closed
-                                   pm-circle pm-get pm-new pm-set pmf-color pmf-conf
-                                   pmf-cx pmf-cy pmf-ink pmf-pcount pmf-pfirst pmf-rcount
-                                   pmf-rfirst pmf-rx pmf-ry pmf-stroke pmf-view po-close
-                                   po-line po-move pt-new rf-add rf-get rl-get
-                                   rl-new rl-set rlf-color rlf-conf rlf-ink rlf-lx0
-                                   rlf-lx1 rlf-ly0 rlf-ly1 rlf-rcount rlf-rfirst rlf-style
-                                   rlf-thick rs-dashed tl-get tl-new tl-set tlf-conf
-                                   tlf-gap tlf-height tlf-ink vc-clip vg-engine-binary vk-engine-binary
-                                   vk-render vw-box-to-cpt vw-cpt-to-px vw-get vw-new vw-px-to-cpt
-                                   vwf-a vwf-b vwf-c vwf-d vwf-e vz-clipped
-                                   wb-line-end wb-space wd-get wd-new wd-set wf-font
-                                   wf-gap wf-gcount wf-gfirst wf-size wf-src wf-style
-                                   wf-wbreak xo-ambiguous xo-angle xo-base-dev xo-conf xo-edge
-                                   xo-engine-flags xo-implausible xo-length xo-margin xo-rel-height xo-spacing
-                                   xo-sym-mean xo-sym-min xt-trust]]
+                                   fnf-asc fnf-capheight fnf-desc fnf-enc fnf-flags fnf-italic
+                                   fnf-space fnf-stemv fnf-style fnf-tlen fnf-tounicode fnf-tstart
+                                   fnf-xheight fo-get fo-new fo-set ft-type0 ft-type1
+                                   gf-asc gf-bx0 gf-bx1 gf-by0 gf-by1 gf-clip
+                                   gf-cs gf-desc gf-falpha gf-fill gf-font gf-how
+                                   gf-mark gf-mode gf-ocg gf-rot gf-salpha gf-size
+                                   gf-stroke gf-vby gf-vchk gf-vis gf-z gh-glyphname
+                                   gh-tounicode gl-count gl-get gl-new gl-set hd-bx0
+                                   hd-by1 hd-conf hd-dir hd-feat hd-line hd-page
+                                   hd-rot hd-tlen hd-tstart hd-x0 hd-y1 ik-get
+                                   ik-new ik-set ikf-chroma ikf-color ikf-count ikf-light
+                                   ikf-mask ikf-role ikf-spread im-get im-new im-set
+                                   ir-body lf-order lf-src lh-bx0 lh-by1 lh-count
+                                   lh-dir lh-first lh-page lh-rot lh-x0 lh-y1
+                                   ln-get ln-new ln-set mc-inline mc-unterminated mf-alpha
+                                   mf-flags mf-obj mf-vby mf-vchk mf-z mg-smask
+                                   mk-artifact mk-artifact-class mk-artifact-of mk-close mk-get mk-new
+                                   mk-ocg-of mk-open mk-optional-content mk-set mk-tag mkf-actual
+                                   mkf-actuallen mkf-alt mkf-altlen mkf-arsub mkf-artype mkf-exp
+                                   mkf-explen mkf-flags mkf-gcount mkf-gfirst mkf-lang mkf-langlen
+                                   mkf-mcid mkf-ocg mkf-ocgdef mkf-parent mkf-stm mkf-zfirst
+                                   mkf-zlast oa-add oa-get oaf-conf ob-block ob-get
+                                   ob-new ob-paragraph ob-set obf-conf obf-count obf-first
+                                   oe-dictionary ol-get ol-new ol-set olf-asc olf-desc
+                                   olf-par olf-ph olf-pw olf-px olf-py olf-run
+                                   olf-xheight op-first op-region or-get or-new or-set
+                                   orf-bcount orf-bfirst orf-bview orf-deskew orf-flags orf-lang
+                                   orf-langlen orf-lcount orf-lfirst orf-oconf orf-osd orf-pass
+                                   orf-psm orf-request orf-round orf-sconf orf-script orf-wcount
+                                   orf-wfirst os-get os-new os-set os-superscript osf-acount
+                                   osf-afirst osf-conf osf-flags osf-ph osf-pw osf-px
+                                   osf-py ow-get ow-new ow-set owf-flags owf-lang
+                                   owf-ph owf-psize owf-pw owf-px owf-py owf-run
+                                   owf-scount owf-sfirst owf-style pa-get pa-line pa-new
+                                   pa-rect pa-set pf-clip pf-dash pf-falpha pf-fill
+                                   pf-flags pf-pcount pf-pfirst pf-stroke pf-width pf-z
+                                   pg-clip pg-closed pm-circle pm-get pm-new pm-set
+                                   pmf-color pmf-conf pmf-cx pmf-cy pmf-ink pmf-pcount
+                                   pmf-pfirst pmf-rcount pmf-rfirst pmf-rx pmf-ry pmf-stroke
+                                   pmf-view po-close po-line po-move pt-add pt-new
+                                   rf-add rf-get rl-get rl-new rl-set rlf-color
+                                   rlf-conf rlf-ink rlf-lx0 rlf-lx1 rlf-ly0 rlf-ly1
+                                   rlf-rcount rlf-rfirst rlf-style rlf-thick rs-dashed tl-get
+                                   tl-new tl-set tlf-conf tlf-gap tlf-height tlf-ink
+                                   vc-clip vg-engine-binary vk-engine-binary vk-render vw-box-to-cpt vw-cpt-to-px
+                                   vw-get vw-new vw-px-to-cpt vwf-a vwf-b vwf-c
+                                   vwf-d vwf-e vz-clipped wb-line-end wb-space wd-get
+                                   wd-new wd-set wf-font wf-gap wf-gcount wf-gfirst
+                                   wf-size wf-src wf-style wf-wbreak xo-ambiguous xo-angle
+                                   xo-base-dev xo-conf xo-edge xo-engine-flags xo-implausible xo-length
+                                   xo-margin xo-rel-height xo-spacing xo-sym-mean xo-sym-min xt-trust]]
             [emon.model :refer [sr-text sr-hidden-text fl-low-conf sy-bold sy-italic]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -119,9 +119,9 @@
     (ep-set epages 0 (epf-dpi) 15000)
     (vw-new views 1 (vk-render) 7 -1 1275 1650 15000 0 -1 0 0 0 0 0)
     (vw-new views 1 (vk-engine-binary) 7 0 640 480 30000 0 -1 1 85 100 200 (vg-engine-binary))
-    (pt-new pts 7200 12000 (po-move))
-    (pt-new pts 20000 12000 (po-line))
-    (pt-new pts 20000 14000 (po-close))
+    (pt-add pts 7200 12000 (po-move))
+    (pt-add pts 20000 12000 (po-line))
+    (pt-add pts 20000 14000 (po-close))
     (rf-add refs (ea-components) 0)
     (rf-add refs (ea-components) 0)
     (rf-add refs (ea-components) 0)
@@ -138,6 +138,8 @@
     (fo-set fonts 0 (fnf-italic) -1200)
     (fo-set fonts 0 (fnf-stemv) 80)
     (fo-set fonts 0 (fnf-style) (sy-bold))
+    (fo-set fonts 0 (fnf-capheight) 716)
+    (fo-set fonts 0 (fnf-xheight) 519)
     (fo-new fonts 7 (ft-type0))
     (comment "marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact")
     (mk-open marks 1 (mk-tag) t-p 1 -1 0 0)
@@ -628,6 +630,8 @@
     (assert-eq (fo-get fonts 0 (fnf-enc)) -1 "no base encoding")
     (assert-eq (fo-get fonts 0 (fnf-space)) -1 "no space width")
     (assert-eq (fo-get fonts 0 (fnf-stemv)) -1 "no stem")
+    (assert-eq (fo-get fonts 0 (fnf-capheight)) -1 "no cap height")
+    (assert-eq (fo-get fonts 0 (fnf-xheight)) -1 "no x-height")
     (assert-eq (pa-new paths 3 (pa-rect) 1 2 3 4) 0 "first path")
     (assert-eq (cells-len paths) 24 "24 cells")
     (assert-eq (pa-get paths 0 (pf-fill)) -1 "not filled")
@@ -1192,7 +1196,7 @@
           (if (== ea 8) (assert-eq cells 24 "words: every cell"))
           (if (== ea 9) (assert-eq (- (ev-strides-at 0 8) cells) 1 "lines: one spare"))
           (if (== ea 10) (assert-eq cells 24 "marks: every cell"))
-          (if (== ea 11) (assert-eq (- (ev-strides-at 0 10) cells) 2 "fonts: two spare"))
+          (if (== ea 11) (assert-eq cells 16 "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)"))
           (if (== ea 12) (assert-eq (- (ev-strides-at 0 11) cells) 5 "paths: five spare"))
           (if (== ea 13) (assert-eq (- (ev-strides-at 0 12) cells) 1 "images: one spare"))
           (if (== ea 14) (assert-eq cells 28 "oruns: every cell"))

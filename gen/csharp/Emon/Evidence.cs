@@ -1443,110 +1443,113 @@ public static class Evidence {
     public static int EkStemv() {
         return 114;
     }
-    public static int EkDash() {
+    public static int EkCapheight() {
         return 115;
     }
-    public static int EkSkewed() {
+    public static int EkXheight() {
         return 116;
     }
-    public static int EkView() {
+    public static int EkDash() {
         return 117;
     }
-    public static int EkBinarised() {
+    public static int EkSkewed() {
         return 118;
     }
-    public static int EkRound() {
+    public static int EkView() {
         return 119;
     }
-    public static int EkPsm() {
+    public static int EkBinarised() {
         return 120;
     }
-    public static int EkRegion() {
+    public static int EkRound() {
         return 121;
     }
-    public static int EkOrient() {
+    public static int EkPsm() {
         return 122;
     }
-    public static int EkWdir() {
+    public static int EkRegion() {
         return 123;
     }
-    public static int EkLorder() {
+    public static int EkOrient() {
         return 124;
     }
-    public static int EkOsd() {
+    public static int EkWdir() {
         return 125;
     }
-    public static int EkScript() {
+    public static int EkLorder() {
         return 126;
     }
-    public static int EkSconf() {
+    public static int EkOsd() {
         return 127;
     }
-    public static int EkOconf() {
+    public static int EkScript() {
         return 128;
     }
-    public static int EkBlocks() {
+    public static int EkSconf() {
         return 129;
     }
-    public static int EkBtype() {
+    public static int EkOconf() {
         return 130;
     }
-    public static int EkChildren() {
+    public static int EkBlocks() {
         return 131;
     }
-    public static int EkPar() {
+    public static int EkBtype() {
         return 132;
     }
-    public static int EkXheight() {
+    public static int EkChildren() {
         return 133;
     }
-    public static int EkSyms() {
+    public static int EkPar() {
         return 134;
     }
-    public static int EkPsize() {
+    public static int EkSyms() {
         return 135;
     }
-    public static int EkLight() {
+    public static int EkPsize() {
         return 136;
     }
-    public static int EkChroma() {
+    public static int EkLight() {
         return 137;
     }
-    public static int EkCount() {
+    public static int EkChroma() {
         return 138;
     }
-    public static int EkRole() {
+    public static int EkCount() {
         return 139;
     }
-    public static int EkMask() {
+    public static int EkRole() {
         return 140;
     }
-    public static int EkSpread() {
+    public static int EkMask() {
         return 141;
     }
-    public static int EkContour() {
+    public static int EkSpread() {
         return 142;
     }
-    public static int EkHoles() {
+    public static int EkContour() {
         return 143;
     }
-    public static int EkGray() {
+    public static int EkHoles() {
         return 144;
     }
-    public static int EkThick() {
+    public static int EkGray() {
         return 145;
     }
-    public static int EkMembers() {
+    public static int EkThick() {
         return 146;
     }
-    public static int EkCenter() {
+    public static int EkMembers() {
         return 147;
     }
-    public static int EkRadii() {
+    public static int EkCenter() {
         return 148;
     }
-    public static int EkOutline() {
+    public static int EkRadii() {
         return 149;
+    }
+    public static int EkOutline() {
+        return 150;
     }
     public static int EkEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
@@ -2006,142 +2009,146 @@ public static class Evidence {
             return 1;
         }
         if (code == 115) {
-            emon.Port.TextAscii(t, "dash");
+            emon.Port.TextAscii(t, "capheight");
             return 1;
         }
         if (code == 116) {
-            emon.Port.TextAscii(t, "skewed");
-            return 1;
-        }
-        if (code == 117) {
-            emon.Port.TextAscii(t, "view");
-            return 1;
-        }
-        if (code == 118) {
-            emon.Port.TextAscii(t, "binarised");
-            return 1;
-        }
-        if (code == 119) {
-            emon.Port.TextAscii(t, "round");
-            return 1;
-        }
-        if (code == 120) {
-            emon.Port.TextAscii(t, "psm");
-            return 1;
-        }
-        if (code == 121) {
-            emon.Port.TextAscii(t, "region");
-            return 1;
-        }
-        if (code == 122) {
-            emon.Port.TextAscii(t, "orient");
-            return 1;
-        }
-        if (code == 123) {
-            emon.Port.TextAscii(t, "wdir");
-            return 1;
-        }
-        if (code == 124) {
-            emon.Port.TextAscii(t, "lorder");
-            return 1;
-        }
-        if (code == 125) {
-            emon.Port.TextAscii(t, "osd");
-            return 1;
-        }
-        if (code == 126) {
-            emon.Port.TextAscii(t, "script");
-            return 1;
-        }
-        if (code == 127) {
-            emon.Port.TextAscii(t, "sconf");
-            return 1;
-        }
-        if (code == 128) {
-            emon.Port.TextAscii(t, "oconf");
-            return 1;
-        }
-        if (code == 129) {
-            emon.Port.TextAscii(t, "blocks");
-            return 1;
-        }
-        if (code == 130) {
-            emon.Port.TextAscii(t, "btype");
-            return 1;
-        }
-        if (code == 131) {
-            emon.Port.TextAscii(t, "children");
-            return 1;
-        }
-        if (code == 132) {
-            emon.Port.TextAscii(t, "par");
-            return 1;
-        }
-        if (code == 133) {
             emon.Port.TextAscii(t, "xheight");
             return 1;
         }
+        if (code == 117) {
+            emon.Port.TextAscii(t, "dash");
+            return 1;
+        }
+        if (code == 118) {
+            emon.Port.TextAscii(t, "skewed");
+            return 1;
+        }
+        if (code == 119) {
+            emon.Port.TextAscii(t, "view");
+            return 1;
+        }
+        if (code == 120) {
+            emon.Port.TextAscii(t, "binarised");
+            return 1;
+        }
+        if (code == 121) {
+            emon.Port.TextAscii(t, "round");
+            return 1;
+        }
+        if (code == 122) {
+            emon.Port.TextAscii(t, "psm");
+            return 1;
+        }
+        if (code == 123) {
+            emon.Port.TextAscii(t, "region");
+            return 1;
+        }
+        if (code == 124) {
+            emon.Port.TextAscii(t, "orient");
+            return 1;
+        }
+        if (code == 125) {
+            emon.Port.TextAscii(t, "wdir");
+            return 1;
+        }
+        if (code == 126) {
+            emon.Port.TextAscii(t, "lorder");
+            return 1;
+        }
+        if (code == 127) {
+            emon.Port.TextAscii(t, "osd");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.TextAscii(t, "script");
+            return 1;
+        }
+        if (code == 129) {
+            emon.Port.TextAscii(t, "sconf");
+            return 1;
+        }
+        if (code == 130) {
+            emon.Port.TextAscii(t, "oconf");
+            return 1;
+        }
+        if (code == 131) {
+            emon.Port.TextAscii(t, "blocks");
+            return 1;
+        }
+        if (code == 132) {
+            emon.Port.TextAscii(t, "btype");
+            return 1;
+        }
+        if (code == 133) {
+            emon.Port.TextAscii(t, "children");
+            return 1;
+        }
         if (code == 134) {
-            emon.Port.TextAscii(t, "syms");
+            emon.Port.TextAscii(t, "par");
             return 1;
         }
         if (code == 135) {
-            emon.Port.TextAscii(t, "psize");
+            emon.Port.TextAscii(t, "syms");
             return 1;
         }
         if (code == 136) {
-            emon.Port.TextAscii(t, "light");
+            emon.Port.TextAscii(t, "psize");
             return 1;
         }
         if (code == 137) {
-            emon.Port.TextAscii(t, "chroma");
+            emon.Port.TextAscii(t, "light");
             return 1;
         }
         if (code == 138) {
-            emon.Port.TextAscii(t, "count");
+            emon.Port.TextAscii(t, "chroma");
             return 1;
         }
         if (code == 139) {
-            emon.Port.TextAscii(t, "role");
+            emon.Port.TextAscii(t, "count");
             return 1;
         }
         if (code == 140) {
-            emon.Port.TextAscii(t, "mask");
+            emon.Port.TextAscii(t, "role");
             return 1;
         }
         if (code == 141) {
-            emon.Port.TextAscii(t, "spread");
+            emon.Port.TextAscii(t, "mask");
             return 1;
         }
         if (code == 142) {
-            emon.Port.TextAscii(t, "contour");
+            emon.Port.TextAscii(t, "spread");
             return 1;
         }
         if (code == 143) {
-            emon.Port.TextAscii(t, "holes");
+            emon.Port.TextAscii(t, "contour");
             return 1;
         }
         if (code == 144) {
-            emon.Port.TextAscii(t, "gray");
+            emon.Port.TextAscii(t, "holes");
             return 1;
         }
         if (code == 145) {
-            emon.Port.TextAscii(t, "thick");
+            emon.Port.TextAscii(t, "gray");
             return 1;
         }
         if (code == 146) {
-            emon.Port.TextAscii(t, "members");
+            emon.Port.TextAscii(t, "thick");
             return 1;
         }
         if (code == 147) {
-            emon.Port.TextAscii(t, "center");
+            emon.Port.TextAscii(t, "members");
             return 1;
         }
         if (code == 148) {
-            emon.Port.TextAscii(t, "radii");
+            emon.Port.TextAscii(t, "center");
             return 1;
         }
         if (code == 149) {
+            emon.Port.TextAscii(t, "radii");
+            return 1;
+        }
+        if (code == 150) {
             emon.Port.TextAscii(t, "outline");
             return 1;
         }
@@ -3051,6 +3058,12 @@ public static class Evidence {
     public static int FnfStyle() {
         return 13;
     }
+    public static int FnfCapheight() {
+        return 14;
+    }
+    public static int FnfXheight() {
+        return 15;
+    }
     public static int PfPage() {
         return 0;
     }
@@ -3729,6 +3742,8 @@ public static class Evidence {
         11, 11, 2, 113, 0, 0,
         11, 12, 1, 114, -1, 0,
         11, 13, 9, 43, 0, 3,
+        11, 14, 1, 115, -1, 0,
+        11, 15, 1, 116, -1, 0,
         12, 0, 1, 9, -2147483648, 0,
         12, 1, 8, 31, 0, 5,
         12, 2, 3, 15, -2147483648, 0,
@@ -3743,7 +3758,7 @@ public static class Evidence {
         12, 14, 1, 100, -1, 0,
         12, 15, 1, 101, -1, 0,
         12, 16, 7, 57, -1, 0,
-        12, 18, 2, 115, 0, 0,
+        12, 18, 2, 117, 0, 0,
         13, 0, 1, 9, -2147483648, 0,
         13, 1, 3, 15, -2147483648, 0,
         13, 5, 1, 35, -2147483648, 0,
@@ -3751,7 +3766,7 @@ public static class Evidence {
         13, 8, 1, 19, 1000, 0,
         13, 9, 9, 28, 0, 5,
         13, 10, 2, 17, 0, 0,
-        13, 11, 1, 116, 0, 0,
+        13, 11, 1, 118, 0, 0,
         13, 12, 1, 98, -1, 0,
         13, 13, 1, 99, -1, 0,
         13, 14, 1, 100, -1, 0,
@@ -3760,24 +3775,24 @@ public static class Evidence {
         13, 17, 1, 102, -1, 0,
         13, 18, 9, 103, 0, 11,
         14, 0, 1, 9, -2147483648, 0,
-        14, 1, 1, 117, -1, 0,
-        14, 2, 1, 118, -1, 0,
+        14, 1, 1, 119, -1, 0,
+        14, 2, 1, 120, -1, 0,
         14, 3, 1, 77, -1, 0,
-        14, 4, 1, 119, 0, 0,
+        14, 4, 1, 121, 0, 0,
         14, 5, 8, 40, 0, 10,
-        14, 6, 1, 120, 0, 0,
-        14, 7, 10, 121, -2147483648, 0,
+        14, 6, 1, 122, 0, 0,
+        14, 7, 10, 123, -2147483648, 0,
         14, 11, 6, 41, -2147483648, 0,
-        14, 13, 1, 122, 0, 0,
-        14, 14, 1, 123, 0, 0,
-        14, 15, 1, 124, 0, 0,
+        14, 13, 1, 124, 0, 0,
+        14, 14, 1, 125, 0, 0,
+        14, 15, 1, 126, 0, 0,
         14, 16, 2, 79, 0, 0,
-        14, 17, 1, 125, -1, 0,
-        14, 18, 11, 126, -2147483648, 0,
-        14, 19, 1, 127, -1, 0,
-        14, 20, 1, 128, -1, 0,
+        14, 17, 1, 127, -1, 0,
+        14, 18, 11, 128, -2147483648, 0,
+        14, 19, 1, 129, -1, 0,
+        14, 20, 1, 130, -1, 0,
         14, 21, 1, 28, 0, 0,
-        14, 22, 7, 129, 0, 0,
+        14, 22, 7, 131, 0, 0,
         14, 24, 7, 4, 0, 0,
         14, 26, 7, 3, 0, 0,
         15, 0, 1, 9, -2147483648, 0,
@@ -3785,10 +3800,10 @@ public static class Evidence {
         15, 5, 8, 31, 0, 9,
         15, 6, 1, 48, -1, 0,
         15, 7, 1, 45, -1, 0,
-        15, 8, 1, 130, 0, 0,
-        15, 9, 1, 122, 0, 0,
-        15, 10, 1, 123, 0, 0,
-        15, 11, 7, 131, -1, 0,
+        15, 8, 1, 132, 0, 0,
+        15, 9, 1, 124, 0, 0,
+        15, 10, 1, 125, 0, 0,
+        15, 11, 7, 133, -1, 0,
         15, 13, 1, 27, -1, 0,
         16, 0, 1, 9, -2147483648, 0,
         16, 1, 3, 15, -2147483648, 0,
@@ -3796,10 +3811,10 @@ public static class Evidence {
         16, 9, 2, 17, 0, 0,
         16, 10, 8, 30, 0, 4,
         16, 11, 7, 3, -1, 0,
-        16, 13, 1, 132, -1, 0,
+        16, 13, 1, 134, -1, 0,
         16, 14, 1, 45, -1, 0,
         16, 15, 1, 27, -1, 0,
-        16, 16, 2, 133, -1, 0,
+        16, 16, 2, 116, -1, 0,
         16, 17, 2, 94, -1, 0,
         16, 18, 2, 95, -1, 0,
         16, 19, 10, 36, -2147483648, 0,
@@ -3814,10 +3829,10 @@ public static class Evidence {
         17, 15, 1, 104, -1, 0,
         17, 16, 9, 43, 0, 3,
         17, 17, 1, 45, -1, 0,
-        17, 18, 7, 134, -1, 0,
+        17, 18, 7, 135, -1, 0,
         17, 20, 11, 41, -2147483648, 0,
         17, 21, 9, 28, 0, 9,
-        17, 22, 2, 135, -1, 0,
+        17, 22, 2, 136, -1, 0,
         17, 23, 10, 36, -2147483648, 0,
         18, 0, 1, 9, -2147483648, 0,
         18, 1, 3, 15, -2147483648, 0,
@@ -3832,17 +3847,17 @@ public static class Evidence {
         19, 1, 6, 11, -2147483648, 0,
         19, 3, 1, 27, -1, 0,
         20, 0, 1, 9, -2147483648, 0,
-        20, 1, 1, 117, -1, 0,
+        20, 1, 1, 119, -1, 0,
         20, 2, 5, 18, -2147483648, 0,
-        20, 3, 1, 136, 0, 0,
-        20, 4, 1, 137, 0, 0,
-        20, 5, 1, 138, 0, 0,
-        20, 6, 8, 139, 0, 14,
-        20, 7, 1, 140, -1, 0,
-        20, 8, 1, 141, 0, 0,
+        20, 3, 1, 137, 0, 0,
+        20, 4, 1, 138, 0, 0,
+        20, 5, 1, 139, 0, 0,
+        20, 6, 8, 140, 0, 14,
+        20, 7, 1, 141, -1, 0,
+        20, 8, 1, 142, 0, 0,
         21, 0, 1, 9, -2147483648, 0,
         21, 1, 3, 15, -2147483648, 0,
-        21, 5, 1, 117, -1, 0,
+        21, 5, 1, 119, -1, 0,
         21, 6, 10, 36, -2147483648, 0,
         21, 10, 1, 37, 0, 0,
         21, 11, 1, 32, 0, 0,
@@ -3852,35 +3867,35 @@ public static class Evidence {
         21, 15, 8, 31, 0, 6,
         21, 16, 1, 27, -1, 0,
         21, 17, 9, 28, 0, 2,
-        21, 18, 7, 142, -1, 0,
+        21, 18, 7, 143, -1, 0,
         21, 20, 1, 48, -1, 0,
-        21, 21, 1, 143, 0, 0,
-        21, 22, 1, 144, -1, 0,
+        21, 21, 1, 144, 0, 0,
+        21, 22, 1, 145, -1, 0,
         22, 0, 1, 9, -2147483648, 0,
         22, 1, 3, 15, -2147483648, 0,
-        22, 5, 1, 117, -1, 0,
+        22, 5, 1, 119, -1, 0,
         22, 6, 4, 25, -2147483648, 0,
-        22, 10, 2, 145, 0, 0,
+        22, 10, 2, 146, 0, 0,
         22, 11, 5, 18, -2147483648, 0,
         22, 12, 1, 78, -1, 0,
         22, 13, 8, 43, 0, 15,
         22, 14, 1, 27, -1, 0,
-        22, 15, 7, 146, -1, 0,
+        22, 15, 7, 147, -1, 0,
         22, 17, 1, 28, 0, 0,
         23, 0, 1, 9, -2147483648, 0,
         23, 1, 3, 15, -2147483648, 0,
-        23, 5, 1, 117, -1, 0,
+        23, 5, 1, 119, -1, 0,
         23, 6, 8, 31, 0, 16,
-        23, 7, 13, 147, 0, 0,
-        23, 9, 13, 148, 0, 0,
+        23, 7, 13, 148, 0, 0,
+        23, 9, 13, 149, 0, 0,
         23, 11, 2, 17, 0, 0,
         23, 12, 2, 33, 0, 0,
         23, 13, 5, 18, -2147483648, 0,
         23, 14, 1, 78, -1, 0,
         23, 15, 1, 32, 0, 0,
         23, 16, 1, 27, -1, 0,
-        23, 17, 7, 149, -1, 0,
-        23, 19, 7, 146, -1, 0,
+        23, 17, 7, 150, -1, 0,
+        23, 19, 7, 147, -1, 0,
         23, 21, 1, 28, 0, 0,
         24, 0, 1, 9, -2147483648, 0,
         24, 1, 3, 15, -2147483648, 0,
@@ -3904,20 +3919,20 @@ public static class Evidence {
         56, 16,
         72, 8,
         80, 17,
-        97, 13,
-        110, 15,
-        125, 15,
-        140, 21,
-        161, 10,
-        171, 13,
-        184, 16,
-        200, 9,
-        209, 3,
-        212, 9,
-        221, 16,
-        237, 11,
-        248, 15,
-        263, 10
+        97, 15,
+        112, 15,
+        127, 15,
+        142, 21,
+        163, 10,
+        173, 13,
+        186, 16,
+        202, 9,
+        211, 3,
+        214, 9,
+        223, 16,
+        239, 11,
+        250, 15,
+        265, 10
     };
     public static readonly int[] EvStrides = new int[] {
         12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
@@ -4280,6 +4295,8 @@ public static class Evidence {
         EvSet(c, 16, r, 6, -1);
         EvSet(c, 16, r, 10, -1);
         EvSet(c, 16, r, 12, -1);
+        EvSet(c, 16, r, 14, -1);
+        EvSet(c, 16, r, 15, -1);
         return r;
     }
     public static int PaCount(emon.Port.Cells c) {
@@ -4760,6 +4777,10 @@ public static class Evidence {
         EvSet(c, 2, r, 0, ea);
         EvSet(c, 2, r, 1, index);
         return r;
+    }
+    public static int PtAdd(emon.Port.Cells pts, int x, int y, int op) {
+        // Append a point of a path or contour (x y in centipoints, `op` a `po`); answers its row. (`pt-new`.)
+        return PtNew(pts, x, y, op);
     }
     public static int FeCount(emon.Port.Cells c) {
         return EvCount(c, 32);

@@ -1065,7 +1065,7 @@ linear-part cells.
 | `words` | 24 | word head (16); style (`sy`, from the font); `gfirst gcount` (its glyphs); `font`, `size` (dominant); `gap` (cpt to the next word, -1); `wbreak` (`wb`: why it ended: space glyph, gap, `TJ` offset, line end, font change, mark boundary); `src` (`sr`: `text` or `hidden-text`) |
 | `lines` | 16 | line head (13); `src`; `order` (content-stream index of its first glyph, the weak reading-order signal); spare |
 | `marks` | 24 | page, kind (`mk`: artifact, optional-content, tag), tag `tstart tlen`, parent span, `mcid`, artifact `/Type` (`ar`), artifact `/Subtype` (`as`), `/ActualText`, `/Alt`, `/E`, `/Lang` (each an `etext` run: 8 cells), OCG or OCMD object number, its default state (1 on, 0 off, -1 unknown), `gfirst gcount` (glyphs inside), `zfirst zlast` (painted objects inside), flags (`/Properties` reference, inline dictionary, name not found, closed by the page end), `stm` (the object number of the Form XObject whose stream the span is in, 0 the page's: P3.7 joins a structure element's MCID on `(stm, mcid)`, D101) |
-| `fonts` | 16 | object number, subtype (`ft`), descriptor `/Flags` verbatim, embedded program kind (0 none), has `ToUnicode`, base encoding, `/BaseFont` `tstart tlen`, ascent, descent (1/1000 em), space width (D083 units), italic angle (centi-degrees), `/StemV`, style (`sy` inferred from flags and name), spare |
+| `fonts` | 16 | object number, subtype (`ft`), descriptor `/Flags` verbatim, embedded program kind (0 none), has `ToUnicode`, base encoding, `/BaseFont` `tstart tlen`, ascent, descent (1/1000 em), space width (D083 units), italic angle (centi-degrees), `/StemV`, style (`sy` inferred from flags and name), `/CapHeight`, `/XHeight` (1/1000 em, -1 absent: the initials rule of §10.9 needs them, P4.10 reads them into the two cells that were spare) |
 | `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), spare |
 | `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, spare |
 
@@ -1226,8 +1226,8 @@ artifact span always has a nonzero type and `mk-artifact-of` answers 0 only for
 
 Annotations (P3.8: their own arena then), the structure tree (P3.7 joins on
 `marks.mcid`; the tree is P3.7's arena), shadings as painted regions beyond
-their box (a `paths` row of kind `other` until P3.5), a font's `/CapHeight`
-and `/XHeight` (read by §10.9; a minor addition to `fonts`, D108), the Model-level
+their box (a `paths` row of kind `other` until P3.5), the VALUES of a font's `/CapHeight`
+and `/XHeight` (their cells exist and are -1 until P4.10 reads them, D108), the Model-level
 page source kind (analysis, not evidence), and fusion's own output
 (correspondence groups and the PageLayer are P7.1's arenas, built on the
 heads above).

@@ -1443,110 +1443,113 @@ pub fn ek_italic() -> i32 {
 pub fn ek_stemv() -> i32 {
     return 114;
 }
-pub fn ek_dash() -> i32 {
+pub fn ek_capheight() -> i32 {
     return 115;
 }
-pub fn ek_skewed() -> i32 {
+pub fn ek_xheight() -> i32 {
     return 116;
 }
-pub fn ek_view() -> i32 {
+pub fn ek_dash() -> i32 {
     return 117;
 }
-pub fn ek_binarised() -> i32 {
+pub fn ek_skewed() -> i32 {
     return 118;
 }
-pub fn ek_round() -> i32 {
+pub fn ek_view() -> i32 {
     return 119;
 }
-pub fn ek_psm() -> i32 {
+pub fn ek_binarised() -> i32 {
     return 120;
 }
-pub fn ek_region() -> i32 {
+pub fn ek_round() -> i32 {
     return 121;
 }
-pub fn ek_orient() -> i32 {
+pub fn ek_psm() -> i32 {
     return 122;
 }
-pub fn ek_wdir() -> i32 {
+pub fn ek_region() -> i32 {
     return 123;
 }
-pub fn ek_lorder() -> i32 {
+pub fn ek_orient() -> i32 {
     return 124;
 }
-pub fn ek_osd() -> i32 {
+pub fn ek_wdir() -> i32 {
     return 125;
 }
-pub fn ek_script() -> i32 {
+pub fn ek_lorder() -> i32 {
     return 126;
 }
-pub fn ek_sconf() -> i32 {
+pub fn ek_osd() -> i32 {
     return 127;
 }
-pub fn ek_oconf() -> i32 {
+pub fn ek_script() -> i32 {
     return 128;
 }
-pub fn ek_blocks() -> i32 {
+pub fn ek_sconf() -> i32 {
     return 129;
 }
-pub fn ek_btype() -> i32 {
+pub fn ek_oconf() -> i32 {
     return 130;
 }
-pub fn ek_children() -> i32 {
+pub fn ek_blocks() -> i32 {
     return 131;
 }
-pub fn ek_par() -> i32 {
+pub fn ek_btype() -> i32 {
     return 132;
 }
-pub fn ek_xheight() -> i32 {
+pub fn ek_children() -> i32 {
     return 133;
 }
-pub fn ek_syms() -> i32 {
+pub fn ek_par() -> i32 {
     return 134;
 }
-pub fn ek_psize() -> i32 {
+pub fn ek_syms() -> i32 {
     return 135;
 }
-pub fn ek_light() -> i32 {
+pub fn ek_psize() -> i32 {
     return 136;
 }
-pub fn ek_chroma() -> i32 {
+pub fn ek_light() -> i32 {
     return 137;
 }
-pub fn ek_count() -> i32 {
+pub fn ek_chroma() -> i32 {
     return 138;
 }
-pub fn ek_role() -> i32 {
+pub fn ek_count() -> i32 {
     return 139;
 }
-pub fn ek_mask() -> i32 {
+pub fn ek_role() -> i32 {
     return 140;
 }
-pub fn ek_spread() -> i32 {
+pub fn ek_mask() -> i32 {
     return 141;
 }
-pub fn ek_contour() -> i32 {
+pub fn ek_spread() -> i32 {
     return 142;
 }
-pub fn ek_holes() -> i32 {
+pub fn ek_contour() -> i32 {
     return 143;
 }
-pub fn ek_gray() -> i32 {
+pub fn ek_holes() -> i32 {
     return 144;
 }
-pub fn ek_thick() -> i32 {
+pub fn ek_gray() -> i32 {
     return 145;
 }
-pub fn ek_members() -> i32 {
+pub fn ek_thick() -> i32 {
     return 146;
 }
-pub fn ek_center() -> i32 {
+pub fn ek_members() -> i32 {
     return 147;
 }
-pub fn ek_radii() -> i32 {
+pub fn ek_center() -> i32 {
     return 148;
 }
-pub fn ek_outline() -> i32 {
+pub fn ek_radii() -> i32 {
     return 149;
+}
+pub fn ek_outline() -> i32 {
+    return 150;
 }
 pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
@@ -2006,142 +2009,146 @@ pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
         return 1;
     }
     if code == 115 {
-        crate::port::text_ascii(t, "dash");
+        crate::port::text_ascii(t, "capheight");
         return 1;
     }
     if code == 116 {
-        crate::port::text_ascii(t, "skewed");
-        return 1;
-    }
-    if code == 117 {
-        crate::port::text_ascii(t, "view");
-        return 1;
-    }
-    if code == 118 {
-        crate::port::text_ascii(t, "binarised");
-        return 1;
-    }
-    if code == 119 {
-        crate::port::text_ascii(t, "round");
-        return 1;
-    }
-    if code == 120 {
-        crate::port::text_ascii(t, "psm");
-        return 1;
-    }
-    if code == 121 {
-        crate::port::text_ascii(t, "region");
-        return 1;
-    }
-    if code == 122 {
-        crate::port::text_ascii(t, "orient");
-        return 1;
-    }
-    if code == 123 {
-        crate::port::text_ascii(t, "wdir");
-        return 1;
-    }
-    if code == 124 {
-        crate::port::text_ascii(t, "lorder");
-        return 1;
-    }
-    if code == 125 {
-        crate::port::text_ascii(t, "osd");
-        return 1;
-    }
-    if code == 126 {
-        crate::port::text_ascii(t, "script");
-        return 1;
-    }
-    if code == 127 {
-        crate::port::text_ascii(t, "sconf");
-        return 1;
-    }
-    if code == 128 {
-        crate::port::text_ascii(t, "oconf");
-        return 1;
-    }
-    if code == 129 {
-        crate::port::text_ascii(t, "blocks");
-        return 1;
-    }
-    if code == 130 {
-        crate::port::text_ascii(t, "btype");
-        return 1;
-    }
-    if code == 131 {
-        crate::port::text_ascii(t, "children");
-        return 1;
-    }
-    if code == 132 {
-        crate::port::text_ascii(t, "par");
-        return 1;
-    }
-    if code == 133 {
         crate::port::text_ascii(t, "xheight");
         return 1;
     }
+    if code == 117 {
+        crate::port::text_ascii(t, "dash");
+        return 1;
+    }
+    if code == 118 {
+        crate::port::text_ascii(t, "skewed");
+        return 1;
+    }
+    if code == 119 {
+        crate::port::text_ascii(t, "view");
+        return 1;
+    }
+    if code == 120 {
+        crate::port::text_ascii(t, "binarised");
+        return 1;
+    }
+    if code == 121 {
+        crate::port::text_ascii(t, "round");
+        return 1;
+    }
+    if code == 122 {
+        crate::port::text_ascii(t, "psm");
+        return 1;
+    }
+    if code == 123 {
+        crate::port::text_ascii(t, "region");
+        return 1;
+    }
+    if code == 124 {
+        crate::port::text_ascii(t, "orient");
+        return 1;
+    }
+    if code == 125 {
+        crate::port::text_ascii(t, "wdir");
+        return 1;
+    }
+    if code == 126 {
+        crate::port::text_ascii(t, "lorder");
+        return 1;
+    }
+    if code == 127 {
+        crate::port::text_ascii(t, "osd");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "script");
+        return 1;
+    }
+    if code == 129 {
+        crate::port::text_ascii(t, "sconf");
+        return 1;
+    }
+    if code == 130 {
+        crate::port::text_ascii(t, "oconf");
+        return 1;
+    }
+    if code == 131 {
+        crate::port::text_ascii(t, "blocks");
+        return 1;
+    }
+    if code == 132 {
+        crate::port::text_ascii(t, "btype");
+        return 1;
+    }
+    if code == 133 {
+        crate::port::text_ascii(t, "children");
+        return 1;
+    }
     if code == 134 {
-        crate::port::text_ascii(t, "syms");
+        crate::port::text_ascii(t, "par");
         return 1;
     }
     if code == 135 {
-        crate::port::text_ascii(t, "psize");
+        crate::port::text_ascii(t, "syms");
         return 1;
     }
     if code == 136 {
-        crate::port::text_ascii(t, "light");
+        crate::port::text_ascii(t, "psize");
         return 1;
     }
     if code == 137 {
-        crate::port::text_ascii(t, "chroma");
+        crate::port::text_ascii(t, "light");
         return 1;
     }
     if code == 138 {
-        crate::port::text_ascii(t, "count");
+        crate::port::text_ascii(t, "chroma");
         return 1;
     }
     if code == 139 {
-        crate::port::text_ascii(t, "role");
+        crate::port::text_ascii(t, "count");
         return 1;
     }
     if code == 140 {
-        crate::port::text_ascii(t, "mask");
+        crate::port::text_ascii(t, "role");
         return 1;
     }
     if code == 141 {
-        crate::port::text_ascii(t, "spread");
+        crate::port::text_ascii(t, "mask");
         return 1;
     }
     if code == 142 {
-        crate::port::text_ascii(t, "contour");
+        crate::port::text_ascii(t, "spread");
         return 1;
     }
     if code == 143 {
-        crate::port::text_ascii(t, "holes");
+        crate::port::text_ascii(t, "contour");
         return 1;
     }
     if code == 144 {
-        crate::port::text_ascii(t, "gray");
+        crate::port::text_ascii(t, "holes");
         return 1;
     }
     if code == 145 {
-        crate::port::text_ascii(t, "thick");
+        crate::port::text_ascii(t, "gray");
         return 1;
     }
     if code == 146 {
-        crate::port::text_ascii(t, "members");
+        crate::port::text_ascii(t, "thick");
         return 1;
     }
     if code == 147 {
-        crate::port::text_ascii(t, "center");
+        crate::port::text_ascii(t, "members");
         return 1;
     }
     if code == 148 {
-        crate::port::text_ascii(t, "radii");
+        crate::port::text_ascii(t, "center");
         return 1;
     }
     if code == 149 {
+        crate::port::text_ascii(t, "radii");
+        return 1;
+    }
+    if code == 150 {
         crate::port::text_ascii(t, "outline");
         return 1;
     }
@@ -3051,6 +3058,12 @@ pub fn fnf_stemv() -> i32 {
 pub fn fnf_style() -> i32 {
     return 13;
 }
+pub fn fnf_capheight() -> i32 {
+    return 14;
+}
+pub fn fnf_xheight() -> i32 {
+    return 15;
+}
 pub fn pf_page() -> i32 {
     return 0;
 }
@@ -3618,7 +3631,7 @@ pub fn tlf_gap() -> i32 {
 pub fn tlf_conf() -> i32 {
     return 16;
 }
-pub static EV_FD: [i32; 1638] = [
+pub static EV_FD: [i32; 1650] = [
     1, 0, 1, 9, -2147483648, 0,
     1, 1, 2, 34, 0, 0,
     1, 2, 2, 74, 0, 0,
@@ -3729,6 +3742,8 @@ pub static EV_FD: [i32; 1638] = [
     11, 11, 2, 113, 0, 0,
     11, 12, 1, 114, -1, 0,
     11, 13, 9, 43, 0, 3,
+    11, 14, 1, 115, -1, 0,
+    11, 15, 1, 116, -1, 0,
     12, 0, 1, 9, -2147483648, 0,
     12, 1, 8, 31, 0, 5,
     12, 2, 3, 15, -2147483648, 0,
@@ -3743,7 +3758,7 @@ pub static EV_FD: [i32; 1638] = [
     12, 14, 1, 100, -1, 0,
     12, 15, 1, 101, -1, 0,
     12, 16, 7, 57, -1, 0,
-    12, 18, 2, 115, 0, 0,
+    12, 18, 2, 117, 0, 0,
     13, 0, 1, 9, -2147483648, 0,
     13, 1, 3, 15, -2147483648, 0,
     13, 5, 1, 35, -2147483648, 0,
@@ -3751,7 +3766,7 @@ pub static EV_FD: [i32; 1638] = [
     13, 8, 1, 19, 1000, 0,
     13, 9, 9, 28, 0, 5,
     13, 10, 2, 17, 0, 0,
-    13, 11, 1, 116, 0, 0,
+    13, 11, 1, 118, 0, 0,
     13, 12, 1, 98, -1, 0,
     13, 13, 1, 99, -1, 0,
     13, 14, 1, 100, -1, 0,
@@ -3760,24 +3775,24 @@ pub static EV_FD: [i32; 1638] = [
     13, 17, 1, 102, -1, 0,
     13, 18, 9, 103, 0, 11,
     14, 0, 1, 9, -2147483648, 0,
-    14, 1, 1, 117, -1, 0,
-    14, 2, 1, 118, -1, 0,
+    14, 1, 1, 119, -1, 0,
+    14, 2, 1, 120, -1, 0,
     14, 3, 1, 77, -1, 0,
-    14, 4, 1, 119, 0, 0,
+    14, 4, 1, 121, 0, 0,
     14, 5, 8, 40, 0, 10,
-    14, 6, 1, 120, 0, 0,
-    14, 7, 10, 121, -2147483648, 0,
+    14, 6, 1, 122, 0, 0,
+    14, 7, 10, 123, -2147483648, 0,
     14, 11, 6, 41, -2147483648, 0,
-    14, 13, 1, 122, 0, 0,
-    14, 14, 1, 123, 0, 0,
-    14, 15, 1, 124, 0, 0,
+    14, 13, 1, 124, 0, 0,
+    14, 14, 1, 125, 0, 0,
+    14, 15, 1, 126, 0, 0,
     14, 16, 2, 79, 0, 0,
-    14, 17, 1, 125, -1, 0,
-    14, 18, 11, 126, -2147483648, 0,
-    14, 19, 1, 127, -1, 0,
-    14, 20, 1, 128, -1, 0,
+    14, 17, 1, 127, -1, 0,
+    14, 18, 11, 128, -2147483648, 0,
+    14, 19, 1, 129, -1, 0,
+    14, 20, 1, 130, -1, 0,
     14, 21, 1, 28, 0, 0,
-    14, 22, 7, 129, 0, 0,
+    14, 22, 7, 131, 0, 0,
     14, 24, 7, 4, 0, 0,
     14, 26, 7, 3, 0, 0,
     15, 0, 1, 9, -2147483648, 0,
@@ -3785,10 +3800,10 @@ pub static EV_FD: [i32; 1638] = [
     15, 5, 8, 31, 0, 9,
     15, 6, 1, 48, -1, 0,
     15, 7, 1, 45, -1, 0,
-    15, 8, 1, 130, 0, 0,
-    15, 9, 1, 122, 0, 0,
-    15, 10, 1, 123, 0, 0,
-    15, 11, 7, 131, -1, 0,
+    15, 8, 1, 132, 0, 0,
+    15, 9, 1, 124, 0, 0,
+    15, 10, 1, 125, 0, 0,
+    15, 11, 7, 133, -1, 0,
     15, 13, 1, 27, -1, 0,
     16, 0, 1, 9, -2147483648, 0,
     16, 1, 3, 15, -2147483648, 0,
@@ -3796,10 +3811,10 @@ pub static EV_FD: [i32; 1638] = [
     16, 9, 2, 17, 0, 0,
     16, 10, 8, 30, 0, 4,
     16, 11, 7, 3, -1, 0,
-    16, 13, 1, 132, -1, 0,
+    16, 13, 1, 134, -1, 0,
     16, 14, 1, 45, -1, 0,
     16, 15, 1, 27, -1, 0,
-    16, 16, 2, 133, -1, 0,
+    16, 16, 2, 116, -1, 0,
     16, 17, 2, 94, -1, 0,
     16, 18, 2, 95, -1, 0,
     16, 19, 10, 36, -2147483648, 0,
@@ -3814,10 +3829,10 @@ pub static EV_FD: [i32; 1638] = [
     17, 15, 1, 104, -1, 0,
     17, 16, 9, 43, 0, 3,
     17, 17, 1, 45, -1, 0,
-    17, 18, 7, 134, -1, 0,
+    17, 18, 7, 135, -1, 0,
     17, 20, 11, 41, -2147483648, 0,
     17, 21, 9, 28, 0, 9,
-    17, 22, 2, 135, -1, 0,
+    17, 22, 2, 136, -1, 0,
     17, 23, 10, 36, -2147483648, 0,
     18, 0, 1, 9, -2147483648, 0,
     18, 1, 3, 15, -2147483648, 0,
@@ -3832,17 +3847,17 @@ pub static EV_FD: [i32; 1638] = [
     19, 1, 6, 11, -2147483648, 0,
     19, 3, 1, 27, -1, 0,
     20, 0, 1, 9, -2147483648, 0,
-    20, 1, 1, 117, -1, 0,
+    20, 1, 1, 119, -1, 0,
     20, 2, 5, 18, -2147483648, 0,
-    20, 3, 1, 136, 0, 0,
-    20, 4, 1, 137, 0, 0,
-    20, 5, 1, 138, 0, 0,
-    20, 6, 8, 139, 0, 14,
-    20, 7, 1, 140, -1, 0,
-    20, 8, 1, 141, 0, 0,
+    20, 3, 1, 137, 0, 0,
+    20, 4, 1, 138, 0, 0,
+    20, 5, 1, 139, 0, 0,
+    20, 6, 8, 140, 0, 14,
+    20, 7, 1, 141, -1, 0,
+    20, 8, 1, 142, 0, 0,
     21, 0, 1, 9, -2147483648, 0,
     21, 1, 3, 15, -2147483648, 0,
-    21, 5, 1, 117, -1, 0,
+    21, 5, 1, 119, -1, 0,
     21, 6, 10, 36, -2147483648, 0,
     21, 10, 1, 37, 0, 0,
     21, 11, 1, 32, 0, 0,
@@ -3852,35 +3867,35 @@ pub static EV_FD: [i32; 1638] = [
     21, 15, 8, 31, 0, 6,
     21, 16, 1, 27, -1, 0,
     21, 17, 9, 28, 0, 2,
-    21, 18, 7, 142, -1, 0,
+    21, 18, 7, 143, -1, 0,
     21, 20, 1, 48, -1, 0,
-    21, 21, 1, 143, 0, 0,
-    21, 22, 1, 144, -1, 0,
+    21, 21, 1, 144, 0, 0,
+    21, 22, 1, 145, -1, 0,
     22, 0, 1, 9, -2147483648, 0,
     22, 1, 3, 15, -2147483648, 0,
-    22, 5, 1, 117, -1, 0,
+    22, 5, 1, 119, -1, 0,
     22, 6, 4, 25, -2147483648, 0,
-    22, 10, 2, 145, 0, 0,
+    22, 10, 2, 146, 0, 0,
     22, 11, 5, 18, -2147483648, 0,
     22, 12, 1, 78, -1, 0,
     22, 13, 8, 43, 0, 15,
     22, 14, 1, 27, -1, 0,
-    22, 15, 7, 146, -1, 0,
+    22, 15, 7, 147, -1, 0,
     22, 17, 1, 28, 0, 0,
     23, 0, 1, 9, -2147483648, 0,
     23, 1, 3, 15, -2147483648, 0,
-    23, 5, 1, 117, -1, 0,
+    23, 5, 1, 119, -1, 0,
     23, 6, 8, 31, 0, 16,
-    23, 7, 13, 147, 0, 0,
-    23, 9, 13, 148, 0, 0,
+    23, 7, 13, 148, 0, 0,
+    23, 9, 13, 149, 0, 0,
     23, 11, 2, 17, 0, 0,
     23, 12, 2, 33, 0, 0,
     23, 13, 5, 18, -2147483648, 0,
     23, 14, 1, 78, -1, 0,
     23, 15, 1, 32, 0, 0,
     23, 16, 1, 27, -1, 0,
-    23, 17, 7, 149, -1, 0,
-    23, 19, 7, 146, -1, 0,
+    23, 17, 7, 150, -1, 0,
+    23, 19, 7, 147, -1, 0,
     23, 21, 1, 28, 0, 0,
     24, 0, 1, 9, -2147483648, 0,
     24, 1, 3, 15, -2147483648, 0,
@@ -3904,20 +3919,20 @@ pub static EV_FX: [i32; 48] = [
     56, 16,
     72, 8,
     80, 17,
-    97, 13,
-    110, 15,
-    125, 15,
-    140, 21,
-    161, 10,
-    171, 13,
-    184, 16,
-    200, 9,
-    209, 3,
-    212, 9,
-    221, 16,
-    237, 11,
-    248, 15,
-    263, 10
+    97, 15,
+    112, 15,
+    127, 15,
+    142, 21,
+    163, 10,
+    173, 13,
+    186, 16,
+    202, 9,
+    211, 3,
+    214, 9,
+    223, 16,
+    239, 11,
+    250, 15,
+    265, 10
 ];
 pub static EV_STRIDES: [i32; 24] = [
     12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
@@ -4280,6 +4295,8 @@ pub fn fo_new(mut c: &mut crate::port::Cells, v_obj: i32, v_subtype: i32) -> i32
     ev_set(c, 16, r, 6, -1);
     ev_set(c, 16, r, 10, -1);
     ev_set(c, 16, r, 12, -1);
+    ev_set(c, 16, r, 14, -1);
+    ev_set(c, 16, r, 15, -1);
     return r;
 }
 pub fn pa_count(c: &mut crate::port::Cells) -> i32 {
@@ -4760,6 +4777,10 @@ pub fn rf_add(mut c: &mut crate::port::Cells, ea: i32, index: i32) -> i32 {
     ev_set(c, 2, r, 0, ea);
     ev_set(c, 2, r, 1, index);
     return r;
+}
+pub fn pt_add(mut pts: &mut crate::port::Cells, x: i32, y: i32, op: i32) -> i32 {
+    // Append a point of a path or contour (x y in centipoints, `op` a `po`); answers its row. (`pt-new`.)
+    return pt_new(pts, x, y, op);
 }
 pub fn fe_count(c: &mut crate::port::Cells) -> i32 {
     return ev_count(c, 32);
