@@ -14,7 +14,8 @@
 # `hosts`, `drift`, P0.3/P0.6 `lang-test`, P0.5 `unit`) and nothing that only
 # writes (`gen`, `emit`). A gate added to bb.edn and not to this list is
 # caught below: every bb.edn task must be either a gate here or named in
-# `not_gates`.
+# `not_gates`. (`accuracy` is one: it needs the real pipeline, P1.10, to mean
+# anything; until then it scores fixtures only. D078.)
 #
 # `check` and `unit` are slow (they compile four languages); the rest are
 # seconds. The order is cheapest first, so a stale generated tree fails fast.
@@ -22,7 +23,7 @@ set -e
 cd "$(dirname "$0")/../.."
 
 gates="hosts drift lang-test check unit"
-not_gates="gen emit gates"
+not_gates="gen emit gates accuracy"
 
 fails=0
 

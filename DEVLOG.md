@@ -619,9 +619,13 @@ analysis beyond "top-to-bottom lines on a single column".
   invokes a producer; an HTML → gold-Model
   converter; the gold format defined (`schema/emon-gold-1.json`: a partial
   Model plus a declaration of what is annotated).
-- [ ] **P2.9 — `bb accuracy` and the scoreboard** (D023): metrics of SPEC
+- [x] **P2.9 — `bb accuracy` and the scoreboard** (D023, D077-D079): metrics of SPEC
   §14.2 that the slice can already be scored on (CER/WER, block P/R,
-  paragraph boundaries), `test/scoreboard.edn`, the ratchet rule.
+  paragraph boundaries), `test/scoreboard.edn`, the ratchet rule. Built and
+  proven on fixtures (oracle perfect, degraded worse); the real emon driver is a
+  placeholder until P1.10, and `bb accuracy` is not in `bb gates` (D078).
+  `tools/accuracy/`: `score.py`, `accuracy.py`, `predict-*`, `test_score.py`
+  (run by `bb unit`).
 - [ ] **P2.10 — Baselines against the field** (SPEC §14.4): pinned versions
   of 2–3 extractors, scored offline, committed as reference lines.
 - [ ] **P2.11 — Public datasets: licence review and importers.** DocLayNet,
@@ -2225,4 +2229,71 @@ avoids a second content pass later.
 **Alternatives**: parse marked content only in P3.7 (second interpreter
 pass, or a retrofit of P1.7); trust PDF/UA files outright (still wrong often
 enough to need verification).
+- [ ] **Signed off** (maintainer)
+
+### D077 — The accuracy scorer: Python tooling, counts pooled then ratioed, normalization and match rule fixed
+**Decision**: `tools/accuracy/score.py` (stdlib Python, like json-check and
+gold-check; SPEC 14 does not require the scorer to be kin) scores a predicted
+emon-1 Model against a gold file and returns COUNTS, pooled (micro-average)
+per `VARIANT/CATEGORY` before any ratio is taken. It honours `annotated`: a
+metric the gold does not claim is absent, not zero. Implemented: CER, WER,
+bag-of-words P/R/F1 (reading-order text units joined by newline); Kendall tau
+over matched blocks; per-kind block P/R/F1 (heading, paragraph, list, item,
+table, figure, caption, seal, note, code, quote; presence AND absence);
+heading detection P/R and heading LEVEL accuracy three ways (`-acc` on matched
+headings, `-near` within one level, `-e2e` charged against every gold heading,
+so a missed heading counts); paragraph-boundary P/R/F1 (word-stream alignment);
+`table-teds-lite` and `table-teds-struct-lite` (cell-sequence stand-ins) and
+`table-continued-acc`; figure subkind accuracy; furniture/dropped-ledger P/R
+(templates expanded per page) and page-label accuracy; watermark leak
+(`watermark-leak`, characters leaked / body characters). Marked stubs (in
+`score.STUBS`): real TEDS, hierarchy TEDS, calibration ECE, seal name CER.
+NORMALIZATION: NFC, every Unicode whitespace run is one space, trimmed; no case
+folding, no locale; WER tokens are whitespace runs (CJK WER is line-level; read
+CER). MATCH RULE: blocks match kind-blind and kind is scored after; with `at` on
+both sides, per-page bbox IoU >= 0.5 (greedy); otherwise (the synthetic gold has
+no geometry) a monotone text alignment at similarity >= 0.5 (anchored by
+identical text, fuzzy in the gaps). Laws: `tools/accuracy/test_score.py`, hand
+computed, run by `bb unit`.
+**Why**: pooled counts make a category score a real micro-average and let a
+corpus be added without re-scoring; naming the match rule and the normalization
+once keeps scores comparable when P1.10 and the public-dataset importers arrive.
+**Alternatives**: a kin scorer (slower to write, no benefit: it is tooling);
+macro-averaging per document (lets tiny documents dominate); Levenshtein by DP
+(too slow on long documents; a bit-parallel version is used).
+- [ ] **Signed off** (maintainer)
+
+### D078 — `bb accuracy` is NOT part of `bb gates` until the real pipeline exists
+**Decision**: `bb accuracy` is a named non-gate in `kin/scripts/gates`. It runs a
+pluggable predictor (`CMD ID VARIANT INPUT GOLD` -> Model JSON; exit 3 = not
+yet available) over every committed PDF/scan of the synthetic corpus
+(`pdf`, `scan`, `pdf-tagged`). Predictors: `oracle` (gold -> Model; must be
+perfect, else the scorer is wrong), `degraded` (deterministically damaged gold;
+proves the metrics move), and `emon` (placeholder, exits 3, reported "not yet
+available" and exit 0). `bb accuracy --predictor fixtures` ratchets the two
+fixtures; `--update` records improvements and new entries. The scorer's own laws
+run in `bb unit`, which is a gate. When P1.10 lands: point `predict-emon.sh` at
+the driver, run `bb accuracy --update` to record the first measurement (D023),
+and decide whether `accuracy` joins the gates list.
+**Why**: a gate that scores the oracle only proves the scorer; a gate over a
+missing pipeline would either fail always or pass vacuously (nome's lesson, D818).
+**Alternatives**: gating the fixtures (adds seconds and no claim about emon).
+- [ ] **Signed off** (maintainer)
+
+### D079 — The ratchet: absolute tolerance, improvements-only update, vanished metrics fail
+**Decision**: `test/scoreboard.edn` maps predictor -> `"VARIANT/CATEGORY"` ->
+metric -> value (six decimals), with `:tolerance` 0.002 absolute (file-level). A
+run FAILS if any committed metric is worse by more than the tolerance (direction
+per metric: `cer`, `wer`, `watermark-leak` lower is better), or a committed
+metric/category is absent from the run. `--update` only ever moves a recorded
+value toward better (plus adds new entries); regressions are never written, so
+lowering a threshold is a hand edit whose diff is reviewed. A predictor with no
+committed entry reports "no baseline" and does not fail. Categories are the
+document id's family (headings, tables, furniture, figures, lists, scripts,
+columns, footnotes, seals, watermarks, forms) and `all`. The committed board
+holds only the `oracle` and `degraded` fixtures; `emon` has none until P1.10.
+**Why**: SPEC 14.2 (the ratchet) and D023 (thresholds from the first measurement,
+only rising).
+**Alternatives**: relative tolerance (hides small-base regressions); per-metric
+tolerances (premature before there are real numbers).
 - [ ] **Signed off** (maintainer)

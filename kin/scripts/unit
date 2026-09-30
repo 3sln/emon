@@ -77,6 +77,12 @@ command -v python3 > /dev/null && python3 kin/scripts/html-check.py
 # producer and no PDF tool is invoked. Tooling, not runtime.
 command -v python3 > /dev/null && python3 kin/scripts/gold-check.py
 
+# THE ACCURACY SCORER'S OWN LAWS (P2.9, D077): hand-computed CER/WER, P/R/F1,
+# heading-level, boundary and ledger cases; the ratchet's comparison rules;
+# and the oracle predictor scoring perfect on real gold while the degraded
+# fixture does not. `bb accuracy` itself is NOT a gate (D078).
+command -v python3 > /dev/null && python3 tools/accuracy/test_score.py
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then
