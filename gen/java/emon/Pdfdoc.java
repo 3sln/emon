@@ -29,6 +29,15 @@ public final class Pdfdoc {
     public static int pdNeedBytes() {
         return 7;
     }
+    public static int pdPasswordRequired() {
+        return 8;
+    }
+    public static int pdPasswordIncorrect() {
+        return 9;
+    }
+    public static int pdEncryptionUnsupported() {
+        return 10;
+    }
     public static int pdStatusEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "ok");
@@ -62,6 +71,18 @@ public final class Pdfdoc {
             emon.Port.textAscii(t, "need-bytes");
             return 1;
         }
+        if (code == 8) {
+            emon.Port.textAscii(t, "password-required");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.textAscii(t, "password-incorrect");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.textAscii(t, "encryption-unsupported");
+            return 1;
+        }
         return 0;
     }
     public static int pdWShifted() {
@@ -90,6 +111,9 @@ public final class Pdfdoc {
     }
     public static int pdWBox() {
         return 256;
+    }
+    public static int pdWRepaired() {
+        return 512;
     }
     public static int pdWarningEmitName(StringBuilder t, int code) {
         if (code == 1) {
@@ -128,6 +152,10 @@ public final class Pdfdoc {
             emon.Port.textAscii(t, "a page box was missing or invalid and defaulted");
             return 1;
         }
+        if (code == 512) {
+            emon.Port.textAscii(t, "the cross-reference was rebuilt by scanning for objects");
+            return 1;
+        }
         return 0;
     }
     public static final int D_BASE = 0;
@@ -144,9 +172,12 @@ public final class Pdfdoc {
     public static final int D_DEPTH = 11;
     public static final int D_PREV = 12;
     public static final int D_REFLIM = 13;
+    public static final int D_CATNUM = 14;
+    public static final int D_SLIST = 15;
     public static final int D_TRAIL = 16;
     public static final int D_SEEN = 32;
-    public static final int D_FIRST = 96;
+    public static final int D_CR = 96;
+    public static final int D_FIRST = 448;
     public static final int PAGE_STRIDE = 16;
     public static int pdInit(emon.Port.Cells dc) {
         // An empty document: a zeroed header and no entries.
@@ -168,8 +199,8 @@ public final class Pdfdoc {
         return emon.Port.cellsAt(dc, D_VMIN);
     }
     public static int pdEncrypted(emon.Port.Cells dc) {
-        // 1 when the trailer has an /Encrypt entry (P3.2 decrypts; nothing
-        // here does).
+        // 1 when the trailer has an /Encrypt entry: the document IS encrypted,
+        // whether or not a password opened it (P3.2 decrypts what it can).
         if (emon.Port.cellsAt(dc, D_ENC) != 0) {
             return 1;
         }
@@ -206,7 +237,8 @@ public final class Pdfdoc {
     public static int pdEntPut(emon.Port.Cells dc, int num, int kind, int f1, int f2, int mode) {
         // Store an entry, unless an entry is already there: mode 0 stores
         // only where none is (newest wins), mode 1 also over a free one (a
-        // hybrid file's /XRefStm). Answers 1 when it stored.
+        // hybrid file's /XRefStm), mode 2 over anything (a rebuilt table: the
+        // LAST object in the file wins). Answers 1 when it stored.
         if (num < 0) {
             return 0;
         }
@@ -221,7 +253,7 @@ public final class Pdfdoc {
             emon.Port.cellsSet(dc, D_NENT, num + 1);
         }
         int old = emon.Port.cellsAt(dc, at);
-        if ((old == 0) || ((mode == 1) && (old == 1))) {
+        if ((old == 0) || (mode == 2) || ((mode == 1) && (old == 1))) {
             emon.Port.cellsSet(dc, at, kind);
             emon.Port.cellsSet(dc, at + 1, f1);
             emon.Port.cellsSet(dc, at + 2, f2);
@@ -468,6 +500,97 @@ public final class Pdfdoc {
         pdParseObjstm(emon.Port.srcOfCells(a), ar, dc, sn, nn, first);
         return emon.Port.cellsAt(dc, at + 3);
     }
+    public static int pdDecString(emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int h) {
+        // Decrypt the string object h in place, under the object key the region
+        // holds; an AES string loses its IV and padding (it only gets shorter).
+        int mode = Pdfcrypt.crStringMode(dc, D_CR);
+        int n = Pdflex.plStrLen(ar, h);
+        int i = 0;
+        int kn = 0;
+        int m = 0;
+        int v = 0;
+        if (mode == 0) {
+            return 0;
+        }
+        if (n == 0) {
+            return 0;
+        }
+        kn = Pdfcrypt.crOkeyInto(dc, D_CR, st);
+        emon.Port.cellsDrop(a, 0);
+        while (i < n) {
+            v = Pdflex.plStrByte(ar, h, i);
+            emon.Port.cellsPush(a, v);
+            i += 1;
+        }
+        emon.Port.cellsDrop(b, 0);
+        m = Pdfcrypt.crDecrypt(mode, st, kn, emon.Port.cellsBytes(a), 0, n, b);
+        i = 0;
+        while (i < m) {
+            v = emon.Port.cellsAt(b, i);
+            Pdflex.plStrSetByte(ar, h, i, v);
+            i += 1;
+        }
+        Pdflex.plStrSetLen(ar, h, m);
+        return 0;
+    }
+    public static int pdDecWalk(emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int h, int depth) {
+        // Decrypt every string under h: the elements of arrays, the values of
+        // dictionaries, a stream's dictionary.
+        if (h == 0) {
+            return 0;
+        }
+        if (depth > 100) {
+            return 0;
+        }
+        int kind = Pdflex.plKindOf(ar, h);
+        int k = 0;
+        int d = 0;
+        if (kind == 5) {
+            return pdDecString(ar, dc, a, b, st, h);
+        }
+        if ((kind == 6) || (kind == 7)) {
+            k = Pdflex.plFirst(ar, h);
+            while (k != 0) {
+                pdDecWalk(ar, dc, a, b, st, k, depth + 1);
+                k = Pdflex.plNext(ar, k);
+            }
+            return 0;
+        }
+        if (kind == 8) {
+            d = Pdflex.plStreamDict(ar, h);
+            pdDecWalk(ar, dc, a, b, st, d, depth + 1);
+        }
+        return 0;
+    }
+    public static int pdSecure(emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int h, int num) {
+        // Object `num`, just loaded from the file as `h`: when the document is
+        // encrypted, tag a stream with its number and decrypt the strings. An XRef
+        // stream is never encrypted and is left alone.
+        if (Pdfcrypt.crActive(dc, D_CR) == 0) {
+            return 0;
+        }
+        int at = D_FIRST + (num * 5);
+        int gen = emon.Port.cellsAt(dc, at + 2);
+        int smode = Pdfcrypt.crStringMode(dc, D_CR);
+        int d = 0;
+        int ty = 0;
+        if (Pdflex.plKindOf(ar, h) == 8) {
+            d = Pdflex.plStreamDict(ar, h);
+            ty = Pdflex.plDictGet(ar, d, Pdfnames.pnType());
+            if (ty != 0) {
+                if (Pdflex.plNameIs(ar, ty, Pdfnames.pnXRef()) == 1) {
+                    return 0;
+                }
+            }
+            Pdflex.plStreamSetNum(ar, h, num);
+        }
+        if (smode == 0) {
+            return 0;
+        }
+        Pdfcrypt.crObjectKey(dc, D_CR, smode, num, gen, a, b);
+        pdDecWalk(ar, dc, a, b, st, h, 0);
+        return 0;
+    }
     public static int pdGet(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int num) {
         // Object `num` as a handle in `ar`, loaded on first use and cached;
         // 0 when it is free, missing, at the wrong offset, or being loaded
@@ -499,6 +622,9 @@ public final class Pdfdoc {
         emon.Port.cellsSet(dc, at + 4, emon.Port.cellsAt(dc, at + 4) + 1);
         if (kind == 2) {
             h = pdLoadDirect(src, ar, dc, num, emon.Port.cellsAt(dc, at + 1));
+            if (h != 0) {
+                pdSecure(ar, dc, a, b, st, h, num);
+            }
         }
         if (kind == 3) {
             h = pdLoadCompressed(src, ar, dc, a, b, st, num);
@@ -608,6 +734,66 @@ public final class Pdfdoc {
         }
         return 0;
     }
+    public static int pdPlanCrypt(emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, int plan, int sh, int hascrypt) {
+        // Append the DECRYPTION part of a stream's plan (P3.2): 0 when the stream
+        // is read as it is, else the mode (1 RC4, 2 AES-128, 3 AES-256), the key
+        // length and the key of this object, three bytes to an integer. Not
+        // decrypted: a stream the document layer did not tag with an object number
+        // (an XRef stream), one with a /Crypt filter (taken as the identity filter,
+        // which is what every producer writes), and the /Metadata stream of a file
+        // whose /EncryptMetadata is false. The key is worked out HERE, where the
+        // region is, so `pd-run-plan` needs nothing but the plan.
+        int num = Pdflex.plStreamNum(ar, sh);
+        int dm = Pdfcrypt.crStreamMode(dc, D_CR);
+        int kn = 0;
+        int i = 0;
+        int x = 0;
+        int ty = 0;
+        int sd = 0;
+        int gen = 0;
+        if (Pdfcrypt.crActive(dc, D_CR) == 0) {
+            dm = 0;
+        }
+        if (num == 0) {
+            dm = 0;
+        }
+        if (hascrypt == 1) {
+            dm = 0;
+        }
+        if (dm != 0) {
+            if (Pdfcrypt.crEncryptMetadata(dc, D_CR) == 0) {
+                sd = Pdflex.plStreamDict(ar, sh);
+                ty = Pdflex.plDictGet(ar, sd, Pdfnames.pnType());
+                if (ty != 0) {
+                    if (Pdflex.plNameIs(ar, ty, Pdfnames.pnMetadata()) == 1) {
+                        dm = 0;
+                    }
+                }
+            }
+        }
+        if (dm == 0) {
+            Pdflex.plAppendInt(ar, plan, 0);
+            return 0;
+        }
+        gen = emon.Port.cellsAt(dc, (D_FIRST + (num * 5)) + 2);
+        kn = Pdfcrypt.crObjectKey(dc, D_CR, dm, num, gen, a, b);
+        Pdfcrypt.crOkeyInto(dc, D_CR, b);
+        Pdflex.plAppendInt(ar, plan, dm);
+        Pdflex.plAppendInt(ar, plan, kn);
+        while (i < kn) {
+            x = emon.Port.cellsAt(b, i) * 65536;
+            if ((i + 1) < kn) {
+                x += emon.Port.cellsAt(b, i + 1) * 256;
+            }
+            if ((i + 2) < kn) {
+                x += emon.Port.cellsAt(b, i + 2);
+            }
+            Pdflex.plAppendInt(ar, plan, x);
+            i += 3;
+        }
+        emon.Port.cellsDrop(b, 0);
+        return 0;
+    }
     public static int pdStreamPlan(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh) {
         // Plan the decoding of stream `sh`: resolve /Filter and /DecodeParms
         // (and /Length, when it is a reference) and record the chain. Answers
@@ -627,6 +813,7 @@ public final class Pdfdoc {
         int s2 = 0;
         int code = 0;
         int nst = 0;
+        int hascrypt = 0;
         int more = 1;
         Pdflex.plAppend(ar, plan, sth);
         Pdflex.plAppend(ar, plan, nsh);
@@ -695,10 +882,14 @@ public final class Pdfdoc {
                     Pdflex.plAppendInt(ar, plan, 1);
                     Pdflex.plAppendInt(ar, plan, 1);
                 }
+                if (code == 6) {
+                    hascrypt = 1;
+                }
                 nst += 1;
                 i += 1;
             }
         }
+        pdPlanCrypt(ar, dc, a, b, plan, sh, hascrypt);
         Pdflex.plSetInt(ar, sth, status);
         Pdflex.plSetInt(ar, nsh, nst);
         return plan;
@@ -727,10 +918,39 @@ public final class Pdfdoc {
         int bpc = 8;
         int columns = 1;
         int early = 1;
+        int kt = Pdflex.plNext(ar, h1);
+        int dm = 0;
+        int kn = 0;
+        int j = 0;
+        int x = 0;
         emon.Port.cellsDrop(out, 0);
         // CHECKPOINT: the plan and the span may be made of zeros.
         if (Pdfsrc.psMissed(src)) {
             return 12;
+        }
+        // The decryption the plan carries, after its stages: the stream's bytes are
+        // decrypted into `out` first and the filter chain then runs over `out`.
+        while (j < (ns * 6)) {
+            kt = Pdflex.plNext(ar, kt);
+            j += 1;
+        }
+        dm = Pdflex.plIntValue(ar, kt);
+        if (dm != 0) {
+            kt = Pdflex.plNext(ar, kt);
+            kn = Pdflex.plIntValue(ar, kt);
+            emon.Port.cellsDrop(st, 0);
+            j = 0;
+            while (j < kn) {
+                kt = Pdflex.plNext(ar, kt);
+                x = Pdflex.plIntValue(ar, kt);
+                emon.Port.cellsPush(st, x / 65536);
+                emon.Port.cellsPush(st, (x / 256) % 256);
+                emon.Port.cellsPush(st, x % 256);
+                j += 3;
+            }
+            Pdfcrypt.crDecrypt(dm, st, kn, emon.Port.srcSlice(src, start, end), 0, end - start, out);
+            emon.Port.cellsDrop(st, 0);
+            cur = 1;
         }
         while (i < ns) {
             code = Pdflex.plIntValue(ar, k);
@@ -792,7 +1012,7 @@ public final class Pdfdoc {
             }
             i += 1;
         }
-        if (ns == 0) {
+        if ((ns == 0) && (cur == 0)) {
             pdSpan(src, start, end, out);
         }
         if (cur == 2) {
@@ -1264,33 +1484,509 @@ public final class Pdfdoc {
     }
     public static int pdUnreadable(emon.Port.Src src, emon.Port.Cells dc, int status) {
         // The status to answer when the catalog or the page tree could not be
-        // read: `encrypted` (6) if the trailer has /Encrypt, else `status`; and
-        // `need-bytes` before either when the source has missed.
+        // read: `need-bytes` when the source has missed, else `status`. (A file
+        // whose key was found and whose objects still cannot be read is damaged,
+        // not locked: encryption is reported by `pd-crypt-setup`, before this.)
         if (Pdfsrc.psMissed(src)) {
             return 7;
         }
-        if (emon.Port.cellsAt(dc, D_ENC) != 0) {
-            return 6;
-        }
         return status;
     }
-    public static int pdOpen(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
-        // Open a document: find the header and `startxref`, read every
-        // cross-reference section and trailer, check that there is a catalog
-        // with a page tree. Answers a `pd-status` (0 ok). Nothing is decoded
-        // but the cross-reference streams and what they need.
+    public static int pdCget(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int dict, int id) {
+        // The RESOLVED value under the `emon.pdfcrypt` name `id`, 0 when absent.
+        int raw = Pdfcrypt.crDictGet(ar, dict, id);
+        return pdResolve(src, ar, dc, a, b, st, raw);
+    }
+    public static int pdCint(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int dict, int id, int dflt) {
+        // An integer under an `emon.pdfcrypt` name, else dflt.
+        int v = pdCget(src, ar, dc, a, b, st, dict, id);
+        if (v == 0) {
+            return dflt;
+        }
+        if (Pdflex.plKindOf(ar, v) == 2) {
+            return Pdflex.plIntValue(ar, v);
+        }
+        return dflt;
+    }
+    public static int pdCfMode(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int cf, int nameh) {
+        // The mode of the crypt filter the name object `nameh` (a /StmF or /StrF)
+        // names in the /CF dictionary `cf`: 0 none, 1 RC4, 2 AES-128, 3 AES-256;
+        // -1 for a filter that is not there or that emon cannot read. An absent
+        // name and /Identity are 0 (the data is not encrypted).
+        if (nameh == 0) {
+            return 0;
+        }
+        if (Pdfcrypt.crNameIs(ar, nameh, Pdfcrypt.cnIdentity()) == 1) {
+            return 0;
+        }
+        int raw = Pdfcrypt.crDictGetByName(ar, cf, nameh);
+        int ent = 0;
+        int m = 0;
+        ent = pdResolve(src, ar, dc, a, b, st, raw);
+        if (ent == 0) {
+            return -1;
+        }
+        m = pdCget(src, ar, dc, a, b, st, ent, Pdfcrypt.cnCfm());
+        if (m == 0) {
+            return -1;
+        }
+        if (Pdfcrypt.crNameIs(ar, m, Pdfcrypt.cnNone()) == 1) {
+            return 0;
+        }
+        if (Pdfcrypt.crNameIs(ar, m, Pdfcrypt.cnV2()) == 1) {
+            return 1;
+        }
+        if (Pdfcrypt.crNameIs(ar, m, Pdfcrypt.cnAesv2()) == 1) {
+            return 2;
+        }
+        if (Pdfcrypt.crNameIs(ar, m, Pdfcrypt.cnAesv3()) == 1) {
+            return 3;
+        }
+        return -1;
+    }
+    public static int pdCryptSetup(emon.Port.Src src, emon.Port.Src pw, int plen, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int enc) {
+        // Read the encryption dictionary `enc` (the trailer's /Encrypt), decide
+        // what is supported, and find the file key with the password (`plen`
+        // bytes of `pw`, none when 0; D040: the empty user password first). Answers
+        // 0 (keys in the region, objects loaded from now on are decrypted), 8
+        // password-required, 9 password-incorrect, 10 encryption-unsupported, or
+        // 7 need-bytes.
+        int e = 0;
+        int fl = 0;
+        int v = 0;
+        int r = 0;
+        int lenbits = 0;
+        int p = 0;
+        int ph = 0;
+        int mh = 0;
+        int meta = 1;
+        int stm = 1;
+        int str = 1;
+        int klen = 5;
+        int cf = 0;
+        int nh = 0;
+        int oh = 0;
+        int idh = 0;
+        int ok = 0;
+        e = pdResolve(src, ar, dc, a, b, st, enc);
+        if (Pdfsrc.psMissed(src)) {
+            return 7;
+        }
+        if (e == 0) {
+            return 10;
+        }
+        if (Pdflex.plKindOf(ar, e) != 7) {
+            return 10;
+        }
+        fl = pdDget(src, ar, dc, a, b, st, e, Pdfnames.pnFilter());
+        if (Pdfcrypt.crNameIs(ar, fl, Pdfcrypt.cnStandard()) == 0) {
+            return 10;
+        }
+        v = pdCint(src, ar, dc, a, b, st, e, Pdfcrypt.cnV(), 0);
+        r = pdCint(src, ar, dc, a, b, st, e, Pdfcrypt.cnR(), 0);
+        lenbits = pdCint(src, ar, dc, a, b, st, e, Pdfcrypt.cnLength(), -1);
+        // /P is a 32-bit pattern, often written unsigned (4294965956): the
+        // integer object saturated, its wrapped value is the pattern.
+        ph = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnP());
+        if (ph != 0) {
+            if (Pdflex.plKindOf(ar, ph) == 2) {
+                p = Pdflex.plIntValue(ar, ph);
+                if (p == 2147483647) {
+                    p = Pdflex.plIntWrapped(ar, ph);
+                }
+            }
+        }
+        mh = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnEncryptMetadata());
+        if (mh != 0) {
+            if (Pdflex.plKindOf(ar, mh) == 1) {
+                if (Pdflex.plIntValue(ar, mh) == 0) {
+                    meta = 0;
+                }
+            }
+        }
+        if (Pdfsrc.psMissed(src)) {
+            return 7;
+        }
+        if ((r < 2) || (r > 6)) {
+            return 10;
+        }
+        if ((v < 5) && (r >= 5)) {
+            return 10;
+        }
+        if ((v == 5) && (r < 5)) {
+            return 10;
+        }
+        if (v == 1) {
+            stm = 1;
+            str = 1;
+            klen = 5;
+        }
+        if (v == 2) {
+            stm = 1;
+            str = 1;
+            if (lenbits < 0) {
+                lenbits = 40;
+            }
+            klen = lenbits / 8;
+        }
+        if ((v == 4) || (v == 5)) {
+            cf = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnCf());
+            nh = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnStmf());
+            stm = pdCfMode(src, ar, dc, a, b, st, cf, nh);
+            nh = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnStrf());
+            str = pdCfMode(src, ar, dc, a, b, st, cf, nh);
+            if ((stm < 0) || (str < 0)) {
+                return 10;
+            }
+            if (Pdfsrc.psMissed(src)) {
+                return 7;
+            }
+            // A V4 file with an RC4 crypt filter has the key length in /Length.
+            klen = 16;
+            if (v == 4) {
+                if ((stm == 1) || (str == 1)) {
+                    if ((lenbits >= 40) && (lenbits <= 128)) {
+                        klen = lenbits / 8;
+                    }
+                }
+            }
+            if (v == 5) {
+                klen = 32;
+            }
+        }
+        if ((v == 4) && ((stm == 3) || (str == 3))) {
+            return 10;
+        }
+        if ((v == 5) && ((stm == 1) || (stm == 2) || (str == 1) || (str == 2))) {
+            return 10;
+        }
+        if ((v < 1) || (v == 3) || (v > 5)) {
+            return 10;
+        }
+        if (v < 5) {
+            if (klen < 5) {
+                klen = 5;
+            }
+            if (klen > 16) {
+                klen = 16;
+            }
+        }
+        if (r == 2) {
+            klen = 5;
+        }
+        Pdfcrypt.crReset(dc, D_CR);
+        Pdfcrypt.crParams(dc, D_CR, v, r, klen, meta, p, stm, str);
+        oh = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnO());
+        Pdfcrypt.crLoad(dc, D_CR, 0, ar, oh);
+        oh = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnU());
+        Pdfcrypt.crLoad(dc, D_CR, 1, ar, oh);
+        oh = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnOe());
+        Pdfcrypt.crLoad(dc, D_CR, 2, ar, oh);
+        oh = pdCget(src, ar, dc, a, b, st, e, Pdfcrypt.cnUe());
+        Pdfcrypt.crLoad(dc, D_CR, 3, ar, oh);
+        // The first string of the trailer's /ID, an array of two.
+        idh = pdTrailerGet(ar, dc, Pdfnames.pnId());
+        idh = pdResolve(src, ar, dc, a, b, st, idh);
+        if (Pdfsrc.psMissed(src)) {
+            return 7;
+        }
+        oh = 0;
+        if (idh != 0) {
+            if (Pdflex.plKindOf(ar, idh) == 6) {
+                oh = Pdflex.plFirst(ar, idh);
+                oh = pdResolve(src, ar, dc, a, b, st, oh);
+            }
+        }
+        Pdfcrypt.crLoad(dc, D_CR, 4, ar, oh);
+        if (Pdfsrc.psMissed(src)) {
+            return 7;
+        }
+        ok = Pdfcrypt.crAuthenticate(dc, D_CR, pw, plen, a, b, st);
+        if (ok == 1) {
+            return 0;
+        }
+        if (plen > 0) {
+            return 9;
+        }
+        return 8;
+    }
+    public static int pdBoundary(emon.Port.Src src, int i) {
+        // 1 when an object or a keyword may start at i: at the start of the file,
+        // after white space, or after the delimiter that closes a dictionary,
+        // an array or a string (`>>endobj`).
+        if (i == 0) {
+            return 1;
+        }
+        int c = Pdfsrc.psU8(src, i - 1);
+        if (Pdflex.plIsWs(c) == 1) {
+            return 1;
+        }
+        if ((c == 62) || (c == 93) || (c == 41)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int pdRebuild(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc) {
+        // Scan the source and rebuild the cross-reference into `dc` (already
+        // initialized): every `N G obj` (the last wins), every trailer (newest
+        // first, at most 16), the last catalog, the numbers of the object
+        // streams. Answers 0, 3 (`bad-xref`: no object at all) or 7.
+        int n = Pdfsrc.psLen(src);
+        int tl = Pdflex.plMakeArray(ar);
+        int sl = Pdflex.plMakeArray(ar);
+        int i = 0;
+        int c = 0;
+        int h = 0;
+        int d = 0;
+        int ty = 0;
+        int nx = 0;
+        int num = 0;
+        int handled = 0;
+        int kind = 0;
+        int cnt = 0;
+        int j = 0;
+        int lo = 0;
+        int tr = 0;
+        emon.Port.cellsSet(dc, D_SLIST, sl);
+        while (i < n) {
+            handled = 0;
+            if ((i % 4096) == 0) {
+                if (Pdfsrc.psMissed(src)) {
+                    return 7;
+                }
+            }
+            c = Pdfsrc.psU8(src, i);
+            if ((c >= 48) && (c <= 57)) {
+                if (pdBoundary(src, i) == 1) {
+                    Pdflex.plSeek(ar, 0, n);
+                    h = Pdflex.plParseIndirect(src, ar, i);
+                    if (Pdfsrc.psMissed(src)) {
+                        return 7;
+                    }
+                    if (h != 0) {
+                        handled = 1;
+                        num = Pdflex.plObjnum(ar);
+                        nx = Pdflex.plPos(ar);
+                        kind = Pdflex.plKindOf(ar, h);
+                        tr = Pdflex.plObjgen(ar);
+                        pdEntPut(dc, num, 2, i, tr, 2);
+                        if ((kind == 7) || (kind == 8)) {
+                            d = h;
+                            if (kind == 8) {
+                                d = Pdflex.plStreamDict(ar, h);
+                            }
+                            ty = Pdflex.plDictGet(ar, d, Pdfnames.pnType());
+                            if (ty != 0) {
+                                if (Pdflex.plNameIs(ar, ty, Pdfnames.pnXRef()) == 1) {
+                                    if (Pdflex.plDictGet(ar, d, Pdfnames.pnRoot()) != 0) {
+                                        Pdflex.plAppend(ar, tl, d);
+                                    }
+                                }
+                                if (Pdflex.plNameIs(ar, ty, Pdfnames.pnObjStm()) == 1) {
+                                    Pdflex.plAppendInt(ar, sl, num);
+                                }
+                                if (Pdflex.plNameIs(ar, ty, Pdfnames.pnCatalog()) == 1) {
+                                    emon.Port.cellsSet(dc, D_CATNUM, num);
+                                }
+                            }
+                        }
+                        if (kind == 8) {
+                            if (Pdflex.plStreamFlags(ar, h) == 2) {
+                                j = Pdflex.plStreamRescan(src, ar, h);
+                                nx = Pdflex.plStreamStart(ar, h) + j;
+                            }
+                        }
+                        if (nx <= i) {
+                            nx = i + 1;
+                        }
+                        i = nx;
+                    }
+                }
+            }
+            if (handled == 0) {
+                if (c == 116) {
+                    if (pdBoundary(src, i) == 1) {
+                        if (Pdflex.plKwAt(src, i, n, 10) == 1) {
+                            Pdflex.plSeek(ar, i + 7, n);
+                            d = Pdflex.plParse(src, ar);
+                            if (Pdfsrc.psMissed(src)) {
+                                return 7;
+                            }
+                            if (d != 0) {
+                                if (Pdflex.plKindOf(ar, d) == 7) {
+                                    Pdflex.plAppend(ar, tl, d);
+                                }
+                            }
+                            handled = 1;
+                            nx = Pdflex.plPos(ar);
+                            if (nx < (i + 7)) {
+                                nx = i + 7;
+                            }
+                            i = nx;
+                        }
+                    }
+                }
+                if (handled == 0) {
+                    i += 1;
+                }
+            }
+        }
+        if (Pdfsrc.psMissed(src)) {
+            return 7;
+        }
+        if (emon.Port.cellsAt(dc, D_NENT) == 0) {
+            return 3;
+        }
+        cnt = Pdflex.plCount(ar, tl);
+        lo = cnt - 16;
+        if (lo < 0) {
+            lo = 0;
+        }
+        j = cnt - 1;
+        while (j >= lo) {
+            d = pdNth(ar, tl, j);
+            pdAddTrailer(dc, d);
+            j -= 1;
+        }
+        return 0;
+    }
+    public static int pdEntCompressed(emon.Port.Cells dc, int onum, int sn, int idx) {
+        // Enter object `onum` as number `idx` of object stream `sn`: over nothing,
+        // a free entry, or an older object (an entry whose file offset is smaller
+        // than the stream's own). The file's LAST version of an object wins.
+        int old = pdEntKind(dc, onum);
+        int offn = emon.Port.cellsAt(dc, (D_FIRST + (sn * 5)) + 1);
+        int tk = 0;
+        int offo = 0;
+        int os = 0;
+        if ((old == 0) || (old == 1)) {
+            tk = 1;
+        }
+        if (old == 2) {
+            if (emon.Port.cellsAt(dc, (D_FIRST + (onum * 5)) + 1) < offn) {
+                tk = 1;
+            }
+        }
+        if (old == 3) {
+            os = emon.Port.cellsAt(dc, (D_FIRST + (onum * 5)) + 1);
+            offo = emon.Port.cellsAt(dc, (D_FIRST + (os * 5)) + 1);
+            if (offo <= offn) {
+                tk = 1;
+            }
+        }
+        if (tk == 1) {
+            pdEntPut(dc, onum, 3, sn, idx, 2);
+            if (onum <= emon.Port.cellsAt(dc, D_LIMENT)) {
+                emon.Port.cellsSet(dc, (D_FIRST + (onum * 5)) + 3, 0);
+            }
+        }
+        return 0;
+    }
+    public static int pdRegisterObjstm(emon.Port.Src data, emon.Port.Cells ar, emon.Port.Cells dc, int sn, int nn) {
+        // Enter the objects an object stream holds, from its table of N pairs of
+        // (object number, offset), the stream's decoded bytes being `data`.
+        int n = Pdfsrc.psLen(data);
+        int i = 0;
+        int hpos = 0;
+        int onum = 0;
+        int tk = 0;
+        while (i < nn) {
+            Pdflex.plSeek(ar, hpos, n);
+            tk = Pdflex.plLex(data, ar);
+            if (tk != 1) {
+                return 0;
+            }
+            onum = Pdflex.plTokenA(ar);
+            tk = Pdflex.plLex(data, ar);
+            if (tk != 1) {
+                return 0;
+            }
+            hpos = Pdflex.plPos(ar);
+            if (onum >= 0) {
+                pdEntCompressed(dc, onum, sn, i);
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int pdRebuildObjstms(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+        // Second half of a repair, once the key is known: decode each object
+        // stream found, in file order, and enter its objects. Answers 7 when the
+        // source missed.
+        int sl = emon.Port.cellsAt(dc, D_SLIST);
+        int k = Pdflex.plFirst(ar, sl);
+        int sn = 0;
+        int sh = 0;
+        int d = 0;
+        int nn = 0;
+        int first = 0;
+        int plan = 0;
+        int status = 0;
+        while (k != 0) {
+            sn = Pdflex.plIntValue(ar, k);
+            sh = pdGet(src, ar, dc, a, b, st, sn);
+            if (Pdfsrc.psMissed(src)) {
+                return 7;
+            }
+            if (sh != 0) {
+                if (Pdflex.plKindOf(ar, sh) == 8) {
+                    d = Pdflex.plStreamDict(ar, sh);
+                    nn = pdDint(src, ar, dc, a, b, st, d, Pdfnames.pnN(), 0);
+                    first = pdDint(src, ar, dc, a, b, st, d, Pdfnames.pnFirst(), 0);
+                    if ((nn >= 1) && (first >= 0)) {
+                        plan = pdStreamPlan(src, ar, dc, a, b, st, sh);
+                        status = pdRunPlan(src, ar, plan, sh, b, st, a);
+                        if (Pdfsrc.psMissed(src)) {
+                            return 7;
+                        }
+                        if ((status == 0) || (status == 1) || (status == 5) || (status == 7)) {
+                            pdRegisterObjstm(emon.Port.srcOfCells(a), ar, dc, sn, nn);
+                        }
+                    }
+                }
+            }
+            k = Pdflex.plNext(ar, k);
+        }
+        return 0;
+    }
+    public static int pdFindCatalog(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+        // Repair, when no trailer names a usable /Root: the first object, by
+        // number, that is a dictionary with /Type /Catalog (objects inside object
+        // streams included). 0 when there is none.
+        int nent = emon.Port.cellsAt(dc, D_NENT);
+        int num = 1;
+        int h = 0;
+        int ty = 0;
+        while ((num < nent) && (num < 200000)) {
+            if (pdEntKind(dc, num) >= 2) {
+                h = pdGet(src, ar, dc, a, b, st, num);
+                if (Pdfsrc.psMissed(src)) {
+                    return 0;
+                }
+                if (h != 0) {
+                    if (Pdflex.plKindOf(ar, h) == 7) {
+                        ty = Pdflex.plDictGet(ar, h, Pdfnames.pnType());
+                        if (ty != 0) {
+                            if (Pdflex.plNameIs(ar, ty, Pdfnames.pnCatalog()) == 1) {
+                                return h;
+                            }
+                        }
+                    }
+                }
+            }
+            num += 1;
+        }
+        return 0;
+    }
+    public static int pdBegin(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc) {
+        // Start over: an empty arena and document, the header's place and the
+        // version, the limits. Answers 0, or 1 (`no-header`; `need-bytes` when
+        // the source missed).
         Pdflex.plInit(ar);
         pdInit(dc);
         int n = Pdfsrc.psLen(src);
         int base = pdFindHeader(src);
-        int sx = 0;
-        int off = 0;
-        int tk = 0;
         int lim = 0;
-        int status = 0;
-        int root = 0;
-        int pages = 0;
-        int enc = 0;
         if (base < 0) {
             return pdStop(src, 1);
         }
@@ -1307,6 +2003,77 @@ public final class Pdfdoc {
         }
         emon.Port.cellsSet(dc, D_LIMENT, lim);
         emon.Port.cellsSet(dc, D_REFLIM, emon.Port.limitOf(4));
+        return 0;
+    }
+    public static int pdOpenTail(emon.Port.Src src, emon.Port.Src pw, int plen, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int repaired) {
+        // What follows a cross-reference, read or rebuilt: the trailer's
+        // /Encrypt (and the key), the catalog and its page tree.
+        int enc = 0;
+        int status = 0;
+        int root = 0;
+        int pages = 0;
+        // The cross-reference is read: say where each object ends.
+        pdHintExtents(src, dc, b);
+        enc = pdTrailerGet(ar, dc, Pdfnames.pnEncrypt());
+        if (enc != 0) {
+            emon.Port.cellsSet(dc, D_ENC, enc);
+            status = pdCryptSetup(src, pw, plen, ar, dc, a, b, st, enc);
+            if (status != 0) {
+                return pdStop(src, status);
+            }
+        }
+        if (repaired == 1) {
+            pdRebuildObjstms(src, ar, dc, a, b, st);
+            if (Pdfsrc.psMissed(src)) {
+                return 7;
+            }
+        }
+        root = pdTrailerGet(ar, dc, Pdfnames.pnRoot());
+        if ((root == 0) && (repaired == 0)) {
+            return pdStop(src, 4);
+        }
+        if (root != 0) {
+            root = pdResolve(src, ar, dc, a, b, st, root);
+        }
+        // A rebuilt file's /Root may name a lost object: take the catalog found.
+        if (repaired == 1) {
+            if (root == 0) {
+                if (emon.Port.cellsAt(dc, D_CATNUM) > 0) {
+                    root = pdGet(src, ar, dc, a, b, st, emon.Port.cellsAt(dc, D_CATNUM));
+                }
+            }
+            if (root == 0) {
+                root = pdFindCatalog(src, ar, dc, a, b, st);
+            }
+        }
+        if (root == 0) {
+            return pdUnreadable(src, dc, 4);
+        }
+        if (Pdflex.plKindOf(ar, root) != 7) {
+            return pdUnreadable(src, dc, 4);
+        }
+        emon.Port.cellsSet(dc, D_ROOT, root);
+        pages = pdDget(src, ar, dc, a, b, st, root, Pdfnames.pnPages());
+        if (pages == 0) {
+            return pdUnreadable(src, dc, 5);
+        }
+        if (Pdflex.plKindOf(ar, pages) != 7) {
+            return pdUnreadable(src, dc, 5);
+        }
+        return 0;
+    }
+    public static int pdOpenNormal(emon.Port.Src src, emon.Port.Src pw, int plen, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+        // The ordinary open: `startxref`, the chain of sections, the trailer.
+        int n = Pdfsrc.psLen(src);
+        int sx = 0;
+        int off = 0;
+        int tk = 0;
+        int status = 0;
+        status = pdBegin(src, ar, dc);
+        if (status != 0) {
+            return status;
+        }
+        int base = emon.Port.cellsAt(dc, D_BASE);
         sx = pdFindStartxref(src);
         if (sx < 0) {
             return pdStop(src, 2);
@@ -1334,34 +2101,61 @@ public final class Pdfdoc {
         if (emon.Port.cellsAt(dc, D_NTRAIL) == 0) {
             return pdStop(src, 3);
         }
-        // The cross-reference is read: say where each object ends.
-        pdHintExtents(src, dc, b);
-        enc = pdTrailerGet(ar, dc, Pdfnames.pnEncrypt());
-        if (enc != 0) {
-            emon.Port.cellsSet(dc, D_ENC, enc);
+        return pdOpenTail(src, pw, plen, ar, dc, a, b, st, 0);
+    }
+    public static int pdOpenRepair(emon.Port.Src src, emon.Port.Src pw, int plen, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+        // Rebuild the cross-reference by scanning, then open as usual.
+        int status = 0;
+        status = pdBegin(src, ar, dc);
+        if (status != 0) {
+            return status;
         }
-        root = pdTrailerGet(ar, dc, Pdfnames.pnRoot());
-        if (root == 0) {
-            return pdStop(src, 4);
+        status = pdRebuild(src, ar, dc);
+        if (status != 0) {
+            return status;
         }
-        root = pdResolve(src, ar, dc, a, b, st, root);
-        // When the file is encrypted, what cannot be read is probably
-        // encrypted (object streams are, whole): say so, and let P3.2 decrypt.
-        if (root == 0) {
-            return pdUnreadable(src, dc, 4);
+        pdWarnSet(src, dc, 512);
+        return pdOpenTail(src, pw, plen, ar, dc, a, b, st, 1);
+    }
+    public static int pdOpenRun(emon.Port.Src src, emon.Port.Src pw, int plen, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+        // The ordinary open; when the cross-reference or the catalog cannot be
+        // used, a repair by scanning; when that does not help, the ordinary answer.
+        int status = 0;
+        int s2 = 0;
+        status = pdOpenNormal(src, pw, plen, ar, dc, a, b, st);
+        if ((status == 2) || (status == 3) || (status == 4) || (status == 5)) {
+            s2 = pdOpenRepair(src, pw, plen, ar, dc, a, b, st);
+            if (s2 == 0) {
+                return 0;
+            }
+            if (Pdfsrc.psMissed(src)) {
+                return 7;
+            }
+            if ((s2 == 8) || (s2 == 9) || (s2 == 10)) {
+                return s2;
+            }
         }
-        if (Pdflex.plKindOf(ar, root) != 7) {
-            return pdUnreadable(src, dc, 4);
-        }
-        emon.Port.cellsSet(dc, D_ROOT, root);
-        pages = pdDget(src, ar, dc, a, b, st, root, Pdfnames.pnPages());
-        if (pages == 0) {
-            return pdUnreadable(src, dc, 5);
-        }
-        if (Pdflex.plKindOf(ar, pages) != 7) {
-            return pdUnreadable(src, dc, 5);
-        }
-        return 0;
+        return status;
+    }
+    public static int pdOpen(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+        // Open a document: find the header and `startxref`, read every
+        // cross-reference section and trailer (rebuilding them by scanning when
+        // they are unusable), decrypt with the EMPTY user password when the file
+        // is encrypted, check that there is a catalog with a page tree. Answers a
+        // `pd-status` (0 ok). Nothing is decoded but the cross-reference streams,
+        // what they need and, for a rebuilt table, the object streams.
+        return pdOpenRun(src, src, 0, ar, dc, a, b, st);
+    }
+    public static int pdOpenPw(emon.Port.Src src, emon.Port.Src pw, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+        // `pd-open` with a PASSWORD: the bytes of the source `pw`, tried as the
+        // user password and then as the owner password after the empty user
+        // password (D040). R2 to R4 use the bytes as given (PDFDocEncoding, in
+        // practice Latin-1), R5 and R6 as UTF-8. The password is read only while
+        // the key is found and is never stored (D058): not in `ar`, `dc`, a dump
+        // or a transcript. A file the password does not open answers
+        // `password-incorrect`; one that needs a password and was given none,
+        // `password-required`; another handler, `encryption-unsupported`.
+        return pdOpenRun(src, pw, Pdfsrc.psLen(pw), ar, dc, a, b, st);
     }
     public static int pdElem(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int arr, int i) {
         // The i-th element of an array, resolved; 0 when absent.

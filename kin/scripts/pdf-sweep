@@ -5,6 +5,10 @@
 #
 #     find corpus -name '*.pdf' | kin/scripts/pdf-sweep
 #
+# A line may be `path<TAB>password`: the password is handed to `pd_open_pw` (P3.2),
+# as the host would hand a per-input password (D058). Without one the file is
+# opened with `pd_open` (the empty user password is tried, D040).
+#
 # A DEVELOPMENT TOOL, run by a person and by `kin/scripts/pdf-corpus.py`; no
 # gate runs it. `digest` is the 23-bit hash of every page's boxes in whole
 # points and its rotation (see kin/pdfdoctest.kin); a fault in the parser is a
@@ -31,7 +35,10 @@ use std::io::BufRead;
 fn main() {
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
-        let path = line.unwrap();
+        let line = line.unwrap();
+        let mut parts = line.splitn(2, '\t');
+        let path = parts.next().unwrap().to_string();
+        let password: Option<String> = parts.next().map(|s| s.to_string());
         let data = match std::fs::read(&path) {
             Ok(d) => d,
             Err(_) => { println!("{}\tioerror\t0\t0\t0\t0\t0", path); continue; }
@@ -42,7 +49,13 @@ fn main() {
             let mut a = port::Cells::new(); let mut b = port::Cells::new();
             let mut st = port::Cells::new(); let mut pg = port::Cells::new();
             let src = port::Src::of_bytes(data.clone());
-            let status = pd_open(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st);
+            let status = match &password {
+                Some(pw) => {
+                    let pws = port::Src::of_bytes(pw.clone().into_bytes());
+                    pd_open_pw(&src, &pws, &mut ar, &mut dc, &mut a, &mut b, &mut st)
+                }
+                None => pd_open(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st),
+            };
             let mut t = String::new();
             pd_status_emit_name(&mut t, status);
             let mut n = 0;

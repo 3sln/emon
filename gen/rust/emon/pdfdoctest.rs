@@ -489,9 +489,11 @@ fn test_no_truncation_of_a_fixture_faults() {
     let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cut: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    // Every byte of the two small files, and the whole of each: the
-    // full file opens, anything cut before its xref does not.
-    crate::testport::assert_eq(dt_truncations(&crate::testport::test_file("pdf/minimal.pdf")[..], 1, ar, dc, a, b, st, pg, out, cut), 8, "minimal: the whole file, and the seven cuts inside its last line (`%%EOF`)");
+    // Every byte of the small file, and the whole of each other: none may
+    // fault. With repair by scanning (P3.1) a cut opens as soon as it holds
+    // the catalog and the page tree: minimal.pdf's second object ends at 110,
+    // and a cut at 103, before its `endobj`, still parses.
+    crate::testport::assert_eq(dt_truncations(&crate::testport::test_file("pdf/minimal.pdf")[..], 1, ar, dc, a, b, st, pg, out, cut), 457, "minimal: every cut from 103 bytes on (560 bytes: 457 cuts)");
     crate::testport::assert_that(dt_truncations(&crate::testport::test_file("pdf/xrefstream.pdf")[..], 1, ar, dc, a, b, st, pg, out, cut) >= 1, "xref stream file");
     crate::testport::assert_that(dt_truncations(&crate::testport::test_file("pdf/hybrid.pdf")[..], 1, ar, dc, a, b, st, pg, out, cut) >= 1, "hybrid file");
     crate::testport::assert_that(dt_truncations(&crate::testport::test_file("pdf/incremental.pdf")[..], 1, ar, dc, a, b, st, pg, out, cut) >= 1, "incremental file");
@@ -915,9 +917,13 @@ fn test_a_named_missing_chunk_is_need_bytes_until_it_is_resident() {
     crate::testport::assert_eq(pd_pg_count(pg), 1, "one page");
 }
 #[test]
-fn test_a_damaged_file_is_still_bad_xref_once_its_chunks_are_resident() {
-    // badxref.pdf's real status is bad-xref. On a cold source the answer
-    // is need-bytes; only a run that read every byte it used may say bad-xref.
+fn test_a_damaged_file_is_repaired_once_its_chunks_are_resident() {
+    // badxref.pdf's startxref leads nowhere, so the cross-reference is rebuilt
+    // by scanning the whole file (P3.1, D099). On a cold source the answer is
+    // need-bytes; a full scan is legitimately a read of everything, which the
+    // host's doubling read-ahead does in a few rounds, and then the file opens
+    // with the `repaired` warning. A file with no object at all stays bad-xref,
+    // and only a run that read every byte it used may say so.
     let f: &[u8] = &crate::testport::test_file("pdf/badxref.pdf")[..];
     let base: &crate::port::Src = &crate::testport::src_chunked(f, 64, 0);
     let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -930,8 +936,13 @@ fn test_a_damaged_file_is_still_bad_xref_once_its_chunks_are_resident() {
     let v: &crate::port::Src = &crate::testport::src_view(base);
     crate::testport::assert_eq(dt_open(v, ar, dc, a, b, st, pg), 7, "cold: need-bytes");
     crate::testport::assert_eq(dt_m(v), 1, "missed");
-    crate::testport::assert_eq(dt_open_async(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 3, "warm: bad-xref");
+    crate::testport::assert_eq(dt_open_async(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 0, "warm: repaired, it opens");
     crate::testport::assert_that(crate::port::cells_at(ctr, 0) >= 1, "it took a round");
+    crate::testport::assert_eq(crate::port::cells_at(ctr, 1), 0, "no attempt that missed reported a status");
+    crate::testport::assert_eq(crate::port::cells_at(ctr, 2), 0, "or a warning");
+    crate::testport::assert_eq(pd_warn(dc), 512, "the repair is the one warning");
+    crate::testport::assert_eq(pd_pg_count(pg), 1, "one page");
+    crate::testport::assert_eq(dt_open_async(&crate::testport::text_blob("%PDF-1.4\nstartxref\n17\n%%EOF\n")[..], 64, 0, ar, dc, a, b, st, pg, ctr), 3, "no object to rebuild from: still bad-xref");
 }
 pub(crate) fn dt_same_sync(bytes: &[u8], mut ctr: &mut crate::port::Cells) -> i32 {
     // Open in memory and through a SYNC chunked source: 0 when the arena,

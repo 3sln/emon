@@ -496,4 +496,137 @@ public static class Port {
             default: return 0;
         }
     }
+
+    // ------------------------------------------------------------- Crypto
+    //
+    // THE `Crypto` PORT: see the Rust half (host/rust/src/port.rs) for the
+    // contract. System.Security.Cryptography has MD5, SHA-2 and AES; RC4 is
+    // written out (.NET has none). Every form takes a span of a Blob and
+    // APPENDS its output to a Cells, answering how many cells it appended, or
+    // -1 for an unusable key.
+
+    private static int PushBytes(Cells o, byte[] b, int n) {
+        for (int i = 0; i < n; i++) {
+            CellsPush(o, b[i]);
+        }
+        return n;
+    }
+
+    // @kin:link:form:crypto-md5: {:template "emon.Port.CryptoMd5({0}, {1}, {2}, {3})" :arity 4}
+    public static int CryptoMd5(byte[] data, int off, int len, Cells o) {
+        byte[] h = System.Security.Cryptography.MD5.HashData(new System.ReadOnlySpan<byte>(data, off, len));
+        return PushBytes(o, h, h.Length);
+    }
+
+    // @kin:link:form:crypto-sha256: {:template "emon.Port.CryptoSha256({0}, {1}, {2}, {3})" :arity 4}
+    public static int CryptoSha256(byte[] data, int off, int len, Cells o) {
+        byte[] h = System.Security.Cryptography.SHA256.HashData(new System.ReadOnlySpan<byte>(data, off, len));
+        return PushBytes(o, h, h.Length);
+    }
+
+    // @kin:link:form:crypto-sha384: {:template "emon.Port.CryptoSha384({0}, {1}, {2}, {3})" :arity 4}
+    public static int CryptoSha384(byte[] data, int off, int len, Cells o) {
+        byte[] h = System.Security.Cryptography.SHA384.HashData(new System.ReadOnlySpan<byte>(data, off, len));
+        return PushBytes(o, h, h.Length);
+    }
+
+    // @kin:link:form:crypto-sha512: {:template "emon.Port.CryptoSha512({0}, {1}, {2}, {3})" :arity 4}
+    public static int CryptoSha512(byte[] data, int off, int len, Cells o) {
+        byte[] h = System.Security.Cryptography.SHA512.HashData(new System.ReadOnlySpan<byte>(data, off, len));
+        return PushBytes(o, h, h.Length);
+    }
+
+    // @kin:link:form:crypto-rc4: {:template "emon.Port.CryptoRc4({0}, {1}, {2}, {3}, {4}, {5}, {6})" :arity 7}
+    public static int CryptoRc4(byte[] key, int koff, int klen, byte[] data, int doff, int dlen, Cells o) {
+        if (klen < 1 || klen > 256) {
+            return -1;
+        }
+        if (koff < 0 || koff + klen > key.Length || doff < 0 || dlen < 0 || doff + dlen > data.Length) {
+            throw new System.IndexOutOfRangeException();
+        }
+        int[] s = new int[256];
+        for (int i = 0; i < 256; i++) {
+            s[i] = i;
+        }
+        int j = 0;
+        for (int i = 0; i < 256; i++) {
+            j = (j + s[i] + key[koff + (i % klen)]) & 255;
+            int t = s[i];
+            s[i] = s[j];
+            s[j] = t;
+        }
+        int a = 0;
+        int b = 0;
+        for (int n = 0; n < dlen; n++) {
+            a = (a + 1) & 255;
+            b = (b + s[a]) & 255;
+            int t = s[a];
+            s[a] = s[b];
+            s[b] = t;
+            CellsPush(o, data[doff + n] ^ s[(s[a] + s[b]) & 255]);
+        }
+        return dlen;
+    }
+
+    private static System.Security.Cryptography.Aes AesKey(byte[] key, int koff, int klen) {
+        var aes = System.Security.Cryptography.Aes.Create();
+        aes.Key = new System.ReadOnlySpan<byte>(key, koff, klen).ToArray();
+        return aes;
+    }
+
+    // @kin:link:form:crypto-aes-decrypt: {:template "emon.Port.CryptoAesDecrypt({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})" :arity 8}
+    public static int CryptoAesDecrypt(byte[] key, int koff, int klen, byte[] data, int doff, int dlen, int pad, Cells o) {
+        if (!(klen == 16 || klen == 24 || klen == 32)) {
+            return -1;
+        }
+        if (doff < 0 || dlen < 0 || doff + dlen > data.Length) {
+            throw new System.IndexOutOfRangeException();
+        }
+        if (dlen < 32) {
+            return 0;
+        }
+        int n = (dlen - 16) / 16;
+        using var aes = AesKey(key, koff, klen);
+        byte[] plain = aes.DecryptEcb(new System.ReadOnlySpan<byte>(data, doff + 16, n * 16),
+                                      System.Security.Cryptography.PaddingMode.None);
+        for (int b = 0; b < n; b++) {
+            for (int i = 0; i < 16; i++) {
+                plain[b * 16 + i] ^= data[doff + b * 16 + i];
+            }
+        }
+        int len = plain.Length;
+        if (pad == 1 && len > 0) {
+            int p = plain[len - 1];
+            if (p >= 1 && p <= 16 && p <= len) {
+                len -= p;
+            }
+        }
+        return PushBytes(o, plain, len);
+    }
+
+    // @kin:link:form:crypto-aes-encrypt: {:template "emon.Port.CryptoAesEncrypt({0}, {1}, {2}, {3}, {4}, {5}, {6})" :arity 7}
+    public static int CryptoAesEncrypt(byte[] key, int koff, int klen, byte[] data, int doff, int dlen, Cells o) {
+        if (!(klen == 16 || klen == 24 || klen == 32)) {
+            return -1;
+        }
+        if (doff < 0 || dlen < 0 || doff + dlen > data.Length) {
+            throw new System.IndexOutOfRangeException();
+        }
+        if (dlen < 16) {
+            return 0;
+        }
+        int n = (dlen - 16) / 16;
+        using var aes = AesKey(key, koff, klen);
+        byte[] prev = new System.ReadOnlySpan<byte>(data, doff, 16).ToArray();
+        byte[] ct = new byte[n * 16];
+        byte[] blk = new byte[16];
+        for (int b = 0; b < n; b++) {
+            for (int i = 0; i < 16; i++) {
+                blk[i] = (byte) (data[doff + 16 + b * 16 + i] ^ prev[i]);
+            }
+            prev = aes.EncryptEcb(blk, System.Security.Cryptography.PaddingMode.None);
+            System.Array.Copy(prev, 0, ct, b * 16, 16);
+        }
+        return PushBytes(o, ct, ct.Length);
+    }
 }

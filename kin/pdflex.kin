@@ -45,7 +45,8 @@
 ;; LIMITS: objects are bounded by `limit-of` OBJECTS (a breach never returns);
 ;; container nesting by 128, a `nesting-too-deep` status.
 (ns emon.pdflex
-  (:require [emon.lang :refer [I32 Src Cells Text defenum emit-ascii]]
+  (:require [emon.lang :refer [I32 I64 Src Cells Text defenum emit-ascii i64 i32
+                                 add64 mul64]]
             [emon.pdfsrc :refer [ps-len ps-u8 ps-missed]]
             [emon.port :refer [cells-len cells-at cells-set
                                cells-push cells-drop limit-of limit-breach
@@ -344,6 +345,10 @@
 (defn ^:pub ^I32 pl-count [^Cells ar ^I32 h]
   (comment "Children of an array; for a dictionary, keys plus values.")
   (return (cells-at ar (+ h R_B))))
+(defn ^:pub ^I32 pl-int-wrapped [^Cells ar ^I32 h]
+  (comment "An int's value modulo 2^32 as a signed 32-bit pattern: what `pl-int-value`")
+  (comment "saturated away (4294965956 is -1340 here).")
+  (return (cells-at ar (+ h R_C))))
 (defn ^:pub ^I32 pl-int-value [^Cells ar ^I32 h]
   (comment "An int's value; a bool's 0 or 1; a ref's object number.")
   (return (cells-at ar (+ h R_A))))
@@ -355,6 +360,16 @@
 (defn ^:pub ^I32 pl-str-len [^Cells ar ^I32 h] (return (cells-at ar (+ h R_B))))
 (defn ^:pub ^I32 pl-str-byte [^Cells ar ^I32 h ^I32 i]
   (return (cells-at ar (+ (cells-at ar (+ h R_A)) i))))
+(defn ^:pub ^I32 pl-str-set-byte [^:mut ^Cells ar ^I32 h ^I32 i ^I32 v]
+  (comment "Overwrite byte i of a string: decryption (P3.2) replaces a string's")
+  (comment "bytes in place, never growing it.")
+  (let [^I32 at (cells-at ar (+ h R_A))]
+    (cells-set ar (+ at i) v)
+    (return 0)))
+(defn ^:pub ^I32 pl-str-set-len [^:mut ^Cells ar ^I32 h ^I32 n]
+  (comment "Shorten a string to n bytes (decrypted AES strings lose IV and padding).")
+  (cells-set ar (+ h R_B) n)
+  (return 0))
 (defn ^:pub ^I32 pl-stream-dict [^Cells ar ^I32 h] (return (cells-at ar (+ h R_A))))
 (defn ^:pub ^I32 pl-stream-start [^Cells ar ^I32 h] (return (cells-at ar (+ h R_B))))
 (defn ^:pub ^I32 pl-stream-len [^Cells ar ^I32 h] (return (cells-at ar (+ h R_C))))
@@ -366,6 +381,15 @@
 (defn ^:pub ^I32 pl-stream-set-len [^:mut ^Cells ar ^I32 h ^I32 ln]
   (cells-set ar (+ h R_C) ln)
   (cells-set ar (+ h R_D) 0)
+  (return 0))
+(defn ^:pub ^I32 pl-stream-num [^Cells ar ^I32 h]
+  (comment "The object number the document layer recorded for a stream it loaded")
+  (comment "(P3.2, D098): it names the stream's decryption key. 0 when none was")
+  (comment "recorded. A stream is never a child of a container, so the record's")
+  (comment "sibling link, which only children use, is free for it.")
+  (return (cells-at ar (+ h R_NEXT))))
+(defn ^:pub ^I32 pl-stream-set-num [^:mut ^Cells ar ^I32 h ^I32 num]
+  (cells-set ar (+ h R_NEXT) num)
   (return 0))
 (defn ^:pub ^I32 pl-kw-id [^Cells ar ^I32 h] (return (cells-at ar (+ h R_C))))
 
@@ -564,6 +588,7 @@
         ^:mut ^I32 scale 0
         ^:mut ^I32 nd 0
         ^:mut ^I32 dot 0
+        ^:mut ^I64 wv (i64 0)
         ^:mut ^I32 d 0]
     (while (and (< q end)
                 (or (== (ps-u8 src q) 43) (== (ps-u8 src q) 45)))
@@ -577,6 +602,7 @@
           (if (<= m 99999999)
             (set m (+ (* m 10) d))
             (set scale -1000))
+          (set wv (add64 (mul64 wv (i64 10)) (i64 d)))
           (set nd (+ nd 1))
           (set q (+ q 1))))
     (if (and (< q end) (== (ps-u8 src q) 46))
@@ -592,7 +618,10 @@
     (if (== nd 0) (return 0))
     (if (== dot 0)
       (do (if (== neg 1) (set iv (- 0 iv)))
-          (return (pl-tok ar 1 s q iv 0 0))))
+          (comment "The token's third value keeps the integer modulo 2^32, as a signed")
+          (comment "pattern: /P in an encryption dictionary is often written unsigned")
+          (comment "(4294965956 for -1340) and `iv` has saturated by then (P3.2).")
+          (return (pl-tok ar 1 s q iv 0 (i32 wv)))))
     (comment "An integer part too long for nine digits saturates.")
     (if (< scale 0)
       (do (set m 999999999) (set scale 0)))
@@ -848,7 +877,7 @@
     (if (== st 2) (return 0))
     (return d)))
 
-(defn ^I32 pl-ref-or-int [^Src src ^:mut ^Cells ar ^I32 num]
+(defn ^I32 pl-ref-or-int [^Src src ^:mut ^Cells ar ^I32 num ^I32 wrapped]
   (comment "An integer has just been read. `num 0 R` is a reference: look")
   (comment "ahead two tokens, and only if a digit follows, so a string or a")
   (comment "dictionary is never lexed twice.")
@@ -858,10 +887,10 @@
         ^:mut ^I32 t2 0
         ^:mut ^I32 t3 0
         ^:mut ^I32 gen 0]
-    (if (< num 0) (return (pl-new ar 2 num 0 0)))
-    (if (>= p end) (return (pl-new ar 2 num 0 0)))
+    (if (< num 0) (return (pl-new ar 2 num 0 wrapped)))
+    (if (>= p end) (return (pl-new ar 2 num 0 wrapped)))
     (if (or (< (ps-u8 src p) 48) (> (ps-u8 src p) 57))
-      (return (pl-new ar 2 num 0 0)))
+      (return (pl-new ar 2 num 0 wrapped)))
     (set t2 (pl-lex src ar))
     (if (== t2 1)
       (do (set gen (cells-at ar A_TA))
@@ -870,7 +899,7 @@
                 (if (and (== t3 11) (== (cells-at ar A_TC) 8))
                   (return (pl-new ar 9 num gen 0)))))))
     (cells-set ar A_POS after)
-    (return (pl-new ar 2 num 0 0))))
+    (return (pl-new ar 2 num 0 wrapped))))
 
 (defn ^I32 pl-value [^Src src ^:mut ^Cells ar ^I32 tk]
   (comment "The object whose first token `tk` has just been lexed, or 0.")
@@ -882,7 +911,7 @@
         ^:mut ^I32 at 0]
     (if (== tk 0) (return (pl-fail ar 1)))
     (if (== tk 12) (return 0))
-    (if (== tk 1) (return (pl-ref-or-int src ar ta)))
+    (if (== tk 1) (return (pl-ref-or-int src ar ta tc)))
     (if (== tk 2) (return (pl-new ar 3 ta tb 0)))
     (if (== tk 3) (return (pl-new ar 4 ta tb 0)))
     (if (== tk 4) (return (pl-new ar 5 ta tb tc)))

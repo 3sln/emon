@@ -476,9 +476,11 @@ public final class Pdfdoctest {
         emon.Port.Cells pg = emon.Port.newCells();
         emon.Port.Cells out = emon.Port.newCells();
         emon.Port.Cells cut = emon.Port.newCells();
-        // Every byte of the two small files, and the whole of each: the
-        // full file opens, anything cut before its xref does not.
-        emon.Testport.assertEq(dtTruncations(emon.Testport.testFile("pdf/minimal.pdf"), 1, ar, dc, a, b, st, pg, out, cut), 8, "minimal: the whole file, and the seven cuts inside its last line (`%%EOF`)");
+        // Every byte of the small file, and the whole of each other: none may
+        // fault. With repair by scanning (P3.1) a cut opens as soon as it holds
+        // the catalog and the page tree: minimal.pdf's second object ends at 110,
+        // and a cut at 103, before its `endobj`, still parses.
+        emon.Testport.assertEq(dtTruncations(emon.Testport.testFile("pdf/minimal.pdf"), 1, ar, dc, a, b, st, pg, out, cut), 457, "minimal: every cut from 103 bytes on (560 bytes: 457 cuts)");
         emon.Testport.assertThat(dtTruncations(emon.Testport.testFile("pdf/xrefstream.pdf"), 1, ar, dc, a, b, st, pg, out, cut) >= 1, "xref stream file");
         emon.Testport.assertThat(dtTruncations(emon.Testport.testFile("pdf/hybrid.pdf"), 1, ar, dc, a, b, st, pg, out, cut) >= 1, "hybrid file");
         emon.Testport.assertThat(dtTruncations(emon.Testport.testFile("pdf/incremental.pdf"), 1, ar, dc, a, b, st, pg, out, cut) >= 1, "incremental file");
@@ -893,9 +895,13 @@ public final class Pdfdoctest {
         emon.Testport.assertEq(dtM(y), 0, "without a miss");
         emon.Testport.assertEq(Pdfdoc.pdPgCount(pg), 1, "one page");
     }
-    public static void testADamagedFileIsStillBadXrefOnceItsChunksAreResident() {
-        // badxref.pdf's real status is bad-xref. On a cold source the answer
-        // is need-bytes; only a run that read every byte it used may say bad-xref.
+    public static void testADamagedFileIsRepairedOnceItsChunksAreResident() {
+        // badxref.pdf's startxref leads nowhere, so the cross-reference is rebuilt
+        // by scanning the whole file (P3.1, D099). On a cold source the answer is
+        // need-bytes; a full scan is legitimately a read of everything, which the
+        // host's doubling read-ahead does in a few rounds, and then the file opens
+        // with the `repaired` warning. A file with no object at all stays bad-xref,
+        // and only a run that read every byte it used may say so.
         byte[] f = emon.Testport.testFile("pdf/badxref.pdf");
         emon.Port.Src base = emon.Testport.srcChunked(f, 64, 0);
         emon.Port.Cells ar = emon.Port.newCells();
@@ -908,8 +914,13 @@ public final class Pdfdoctest {
         emon.Port.Src v = emon.Testport.srcView(base);
         emon.Testport.assertEq(dtOpen(v, ar, dc, a, b, st, pg), 7, "cold: need-bytes");
         emon.Testport.assertEq(dtM(v), 1, "missed");
-        emon.Testport.assertEq(dtOpenAsync(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 3, "warm: bad-xref");
+        emon.Testport.assertEq(dtOpenAsync(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 0, "warm: repaired, it opens");
         emon.Testport.assertThat(emon.Port.cellsAt(ctr, 0) >= 1, "it took a round");
+        emon.Testport.assertEq(emon.Port.cellsAt(ctr, 1), 0, "no attempt that missed reported a status");
+        emon.Testport.assertEq(emon.Port.cellsAt(ctr, 2), 0, "or a warning");
+        emon.Testport.assertEq(Pdfdoc.pdWarn(dc), 512, "the repair is the one warning");
+        emon.Testport.assertEq(Pdfdoc.pdPgCount(pg), 1, "one page");
+        emon.Testport.assertEq(dtOpenAsync(emon.Testport.textBlob("%PDF-1.4\nstartxref\n17\n%%EOF\n"), 64, 0, ar, dc, a, b, st, pg, ctr), 3, "no object to rebuild from: still bad-xref");
     }
     public static int dtSameSync(byte[] bytes, emon.Port.Cells ctr) {
         // Open in memory and through a SYNC chunked source: 0 when the arena,

@@ -1,0 +1,661 @@
+;; The PDF standard security handler (P3.2): key derivation, password checks,
+;; per-object keys. emon's own module (D039), written from ISO 32000-1 7.6
+;; (algorithms 1 to 7, revisions 2 to 4) and ISO 32000-2 7.6.4 (revisions 5 and
+;; 6, algorithm 2.A and 2.B), with Adobe's extension level 3 for R5.
+;;
+;; THE SPLIT (D006, D097): THE HANDLER IS KIN, THE PRIMITIVES ARE THE HOST'S.
+;; Every byte-level operation goes through the `Crypto` port (`crypto-md5`,
+;; `-sha256/384/512`, `-rc4`, `-aes-decrypt`, `-aes-encrypt`, in `emon.port`),
+;; pure functions over bytes that all four hosts answer identically
+;; (kin/cryptotest.kin holds them to the published vectors). What this file
+;; owns is everything PDF-specific, which is where the bugs live: the padding
+;; string, the order of the pieces that are hashed, the 50 and the 20 rounds,
+;; the R6 hash that chooses its own algorithm, owner-to-user recovery, the
+;; per-object key salt.
+;;
+;; WHAT IT DOES NOT DO. It never consults the permission flags `/P` for
+;; anything but the key (D040: extract whenever decryptable). It does not read
+;; the `/Encrypt` dictionary: `emon.pdfdoc` resolves references and hands the
+;; values over (`cr-params`, `cr-load`), so this module has no arena beyond
+;; the name lookups below.
+;;
+;; THE STATE is a region of the document's own `Cells` (`dc`), `at` cells
+;; wide (`(cr-size)`): the revision and modes, the file key once found, the
+;; strings the algorithms read (`O`, `U`, `OE`, `UE`, the first `/ID`), and the
+;; key of the object being read. THE PASSWORD IS NOT KEPT (D058): it is read
+;; from the caller's `Src` when a candidate is tried and copied only into the
+;; scratch cells, which `cr-authenticate` zeroes before it returns. Nothing
+;; here writes it to the arena, the Model, a dump or a transcript.
+;;
+;; SCRATCH. The algorithms need three byte buffers (`a`, `b`, `st`): the
+;; hash input, the hash or cipher output, and a third for the RC4 rounds.
+;; `emon.pdfdoc` passes its own three. RC4 and the hashes are called as
+;; `(f (cells-bytes x) ... y)`: a snapshot of one cells in, appended to another,
+;; so input and output are always different cells.
+;;
+;; THE MODES (per use, stream and string, since a V4/V5 file names a crypt
+;; filter for each): 0 none (Identity), 1 RC4, 2 AES-128-CBC (AESV2), 3
+;; AES-256-CBC (AESV3).
+(ns emon.pdfcrypt
+  (:require [emon.lang :refer [I32 Src Blob Cells Text defenum emit-ascii sar32]]
+            [emon.pdfsrc :refer [ps-u8]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+                               cells-bytes crypto-md5 crypto-sha256 crypto-sha384
+                               crypto-sha512 crypto-rc4 crypto-aes-decrypt
+                               crypto-aes-encrypt]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-name-len
+                                 pl-name-byte pl-str-len pl-str-byte
+                                 pl-stream-dict]]
+            [kin.lang :refer [defn defconst defdata return let set while if
+                              comment do + - * < > <= >= == != and or quot rem
+                              bit-and bit-xor]]))
+
+;; ------------------------------------------------ the region of the document
+
+(defconst ^I32 C_ACTIVE 0)   ;; 1 once a password has opened the document
+(defconst ^I32 C_V 1)
+(defconst ^I32 C_R 2)
+(defconst ^I32 C_STM 3)      ;; mode for streams
+(defconst ^I32 C_STR 4)      ;; mode for strings
+(defconst ^I32 C_KLEN 5)     ;; file key length, bytes (5 for R2)
+(defconst ^I32 C_META 6)     ;; /EncryptMetadata (1 when absent)
+(defconst ^I32 C_P 7)        ;; /P, the 32-bit pattern
+(defconst ^I32 C_OLEN 8)     ;; bytes held of O, U, OE, UE, the first ID
+(defconst ^I32 C_ULEN 9)
+(defconst ^I32 C_OELEN 10)
+(defconst ^I32 C_UELEN 11)
+(defconst ^I32 C_IDLEN 12)
+(defconst ^I32 C_OKLEN 13)   ;; length of the object key held
+(defconst ^I32 C_KEY 16)     ;; 32 cells: the file key
+(defconst ^I32 C_O 48)       ;; 48 cells
+(defconst ^I32 C_U 96)       ;; 48
+(defconst ^I32 C_OE 144)     ;; 32
+(defconst ^I32 C_UE 176)     ;; 32
+(defconst ^I32 C_ID 208)     ;; 64
+(defconst ^I32 C_PAD 272)    ;; 32: the padded user password being tried
+(defconst ^I32 C_OKEY 304)   ;; 32: the key of the object being decrypted
+(defconst ^I32 C_SIZE 352)
+
+(defn ^:pub ^I32 cr-size [] (return 352))
+
+(defn ^:pub ^I32 cr-reset [^:mut ^Cells dc ^I32 at]
+  (comment "Zero the region at dc[at, at + size).")
+  (let [^:mut ^I32 i 0]
+    (while (< i C_SIZE)
+      (do (cells-set dc (+ at i) 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 cr-active [^Cells dc ^I32 at] (return (cells-at dc (+ at C_ACTIVE))))
+(defn ^:pub ^I32 cr-stream-mode [^Cells dc ^I32 at] (return (cells-at dc (+ at C_STM))))
+(defn ^:pub ^I32 cr-string-mode [^Cells dc ^I32 at] (return (cells-at dc (+ at C_STR))))
+(defn ^:pub ^I32 cr-encrypt-metadata [^Cells dc ^I32 at] (return (cells-at dc (+ at C_META))))
+(defn ^:pub ^I32 cr-revision [^Cells dc ^I32 at] (return (cells-at dc (+ at C_R))))
+(defn ^:pub ^I32 cr-okey-len [^Cells dc ^I32 at] (return (cells-at dc (+ at C_OKLEN))))
+
+(defn ^:pub ^I32 cr-params [^:mut ^Cells dc ^I32 at ^I32 v ^I32 r ^I32 klen
+                            ^I32 meta ^I32 p ^I32 stm ^I32 str]
+  (comment "What the /Encrypt dictionary said: /V, /R, the file key length in")
+  (comment "bytes, /EncryptMetadata, /P, and the modes for streams and strings.")
+  (cells-set dc (+ at C_V) v)
+  (cells-set dc (+ at C_R) r)
+  (cells-set dc (+ at C_KLEN) klen)
+  (cells-set dc (+ at C_META) meta)
+  (cells-set dc (+ at C_P) p)
+  (cells-set dc (+ at C_STM) stm)
+  (cells-set dc (+ at C_STR) str)
+  (return 0))
+
+;; ----------------------------------------------------------------- names
+;;
+;; The names of the /Encrypt dictionary. `emon.pdfnames` is generated and
+;; shared, so these are emon.pdfcrypt's own, compared byte by byte.
+
+(defenum ^:pub cn
+  [[cn-standard 0 "Standard"]
+   [cn-v 1 "V"]
+   [cn-r 2 "R"]
+   [cn-o 3 "O"]
+   [cn-u 4 "U"]
+   [cn-oe 5 "OE"]
+   [cn-ue 6 "UE"]
+   [cn-p 7 "P"]
+   [cn-perms 8 "Perms"]
+   [cn-cf 9 "CF"]
+   [cn-stmf 10 "StmF"]
+   [cn-strf 11 "StrF"]
+   [cn-cfm 12 "CFM"]
+   [cn-v2 13 "V2"]
+   [cn-aesv2 14 "AESV2"]
+   [cn-aesv3 15 "AESV3"]
+   [cn-none 16 "None"]
+   [cn-identity 17 "Identity"]
+   [cn-encrypt-metadata 18 "EncryptMetadata"]
+   [cn-length 19 "Length"]])
+
+(defdata cr-chars
+  :emitter kin.lang/flat-array
+  :data [83 116 97 110 100 97 114 100 86 82 79 85 79 69 85 69 80 80 101 114 109 115 67 70 83 116 109 70 83 116 114 70 67 70 77 86 50 65 69 83 86 50 65 69 83 86 51 78 111 110 101 73 100 101 110 116 105 116 121 69 110 99 114 121 112 116 77 101 116 97 100 97 116 97 76 101 110 103 116 104]
+  :accessors {^I32 cr-chars-at [^I32 ignored ^I32 i]})
+
+;; start and length in cr-chars of each cn name
+(defdata cr-span
+  :emitter kin.lang/flat-array
+  :stride 2
+  :data [0 8 8 1 9 1 10 1 11 1 12 2 14 2 16 1 17 5 22 2 24 4 28 4 32 3 35 2 37 5 42 5 47 4 51 8 59 15 74 6]
+  :accessors {^I32 cr-span-at [^I32 ignored ^I32 row ^I32 field]})
+
+;; ISO 32000-1 7.6.3.3 algorithm 2 step a: the padding string
+(defdata cr-pad
+  :emitter kin.lang/flat-array
+  :data [40 191 78 94 78 117 138 65 100 0 78 86 255 250 1 8 46 46 0 182 208 104 62 128 47 12 169 254 100 83 105 122]
+  :accessors {^I32 cr-pad-at [^I32 ignored ^I32 i]})
+
+(defn ^:pub ^I32 cr-name-is [^Cells ar ^I32 h ^I32 id]
+  (comment "1 when h is a name object spelled like the `cn` name `id`.")
+  (if (== h 0) (return 0))
+  (if (!= (pl-kind-of ar h) 4) (return 0))
+  (let [^I32 start (cr-span-at 0 id 0)
+        ^I32 ln (cr-span-at 0 id 1)
+        ^:mut ^I32 k 0]
+    (if (!= (pl-name-len ar h) ln) (return 0))
+    (while (< k ln)
+      (do (if (!= (pl-name-byte ar h k) (cr-chars-at 0 (+ start k)))
+            (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 cr-names-equal [^Cells ar ^I32 h1 ^I32 h2]
+  (comment "1 when two name objects are spelled the same.")
+  (if (== h1 0) (return 0))
+  (if (== h2 0) (return 0))
+  (if (!= (pl-kind-of ar h1) 4) (return 0))
+  (if (!= (pl-kind-of ar h2) 4) (return 0))
+  (let [^I32 ln (pl-name-len ar h1)
+        ^:mut ^I32 k 0]
+    (if (!= (pl-name-len ar h2) ln) (return 0))
+    (while (< k ln)
+      (do (if (!= (pl-name-byte ar h1 k) (pl-name-byte ar h2 k))
+            (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 cr-dict-get [^Cells ar ^I32 dict ^I32 id]
+  (comment "The value, unresolved, under the key spelled like the `cn` name `id`;")
+  (comment "the last of a repeated key; 0 when absent or when `dict` is not a")
+  (comment "dictionary (a stream answers from its dictionary).")
+  (if (== dict 0) (return 0))
+  (let [^:mut ^I32 d dict
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 found 0]
+    (if (== (pl-kind-of ar d) 8) (set d (pl-stream-dict ar d)))
+    (if (!= (pl-kind-of ar d) 7) (return 0))
+    (set k (pl-first ar d))
+    (while (!= k 0)
+      (do (set v (pl-next ar k))
+          (if (== (cr-name-is ar k id) 1) (set found v))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (return found)))
+
+(defn ^:pub ^I32 cr-dict-get-by-name [^Cells ar ^I32 dict ^I32 nameh]
+  (comment "The value, unresolved, under the key spelled like the name OBJECT")
+  (comment "`nameh` (a crypt filter's name in /CF is arbitrary: /StdCF).")
+  (if (== dict 0) (return 0))
+  (let [^:mut ^I32 d dict
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 found 0]
+    (if (!= (pl-kind-of ar d) 7) (return 0))
+    (set k (pl-first ar d))
+    (while (!= k 0)
+      (do (set v (pl-next ar k))
+          (if (== (cr-names-equal ar k nameh) 1) (set found v))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (return found)))
+
+(defn ^:pub ^I32 cr-load [^:mut ^Cells dc ^I32 at ^I32 which ^Cells ar ^I32 h]
+  (comment "Copy the bytes of the string object `h` of the arena into the slot")
+  (comment "`which` (0 O, 1 U, 2 OE, 3 UE, 4 the first /ID), keeping what fits, and")
+  (comment "record how many. Answers that count; 0 when `h` is not a string.")
+  (let [^:mut ^I32 base C_O
+        ^:mut ^I32 room 48
+        ^:mut ^I32 lenslot C_OLEN
+        ^:mut ^I32 n 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (if (== which 1) (do (set base C_U) (set room 48) (set lenslot C_ULEN)))
+    (if (== which 2) (do (set base C_OE) (set room 32) (set lenslot C_OELEN)))
+    (if (== which 3) (do (set base C_UE) (set room 32) (set lenslot C_UELEN)))
+    (if (== which 4) (do (set base C_ID) (set room 64) (set lenslot C_IDLEN)))
+    (cells-set dc (+ at lenslot) 0)
+    (if (== h 0) (return 0))
+    (if (!= (pl-kind-of ar h) 5) (return 0))
+    (set n (pl-str-len ar h))
+    (if (> n room) (set n room))
+    (while (< i n)
+      (do (set v (pl-str-byte ar h i))
+          (cells-set dc (+ (+ at base) i) v)
+          (set i (+ i 1))))
+    (cells-set dc (+ at lenslot) n)
+    (return n)))
+
+;; ------------------------------------------------------------ small helpers
+
+(defn ^I32 cr-copy [^Cells from ^I32 fs ^I32 n ^:mut ^Cells to]
+  (comment "Append from[fs, fs + n) to `to`.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (while (< i n)
+      (do (set v (cells-at from (+ fs i)))
+          (cells-push to v)
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 cr-wipe [^:mut ^Cells c]
+  (comment "Overwrite with zeros and empty: the password passed through here.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (cells-set c i 0)
+          (set i (+ i 1))))
+    (cells-drop c 0)
+    (return 0)))
+
+(defn ^I32 cr-hash [^I32 alg ^Cells from ^I32 n ^:mut ^Cells to]
+  (comment "`to` (cleared) gets the hash of from[0, n): 0 MD5, 1 SHA-256, 2 SHA-384,")
+  (comment "3 SHA-512. Answers its length.")
+  (cells-drop to 0)
+  (if (== alg 0) (return (crypto-md5 (cells-bytes from) 0 n to)))
+  (if (== alg 1) (return (crypto-sha256 (cells-bytes from) 0 n to)))
+  (if (== alg 2) (return (crypto-sha384 (cells-bytes from) 0 n to)))
+  (return (crypto-sha512 (cells-bytes from) 0 n to)))
+
+(defn ^I32 cr-rc4 [^Cells key ^I32 kn ^Cells data ^I32 dn ^:mut ^Cells out]
+  (comment "`out` (cleared) gets RC4 of data[0, dn) under key[0, kn).")
+  (cells-drop out 0)
+  (return (crypto-rc4 (cells-bytes key) 0 kn (cells-bytes data) 0 dn out)))
+
+(defn ^I32 cr-match [^Cells dc ^I32 at ^Cells c ^I32 n]
+  (comment "1 when dc[at, at + n) equals c[0, n).")
+  (let [^:mut ^I32 i 0]
+    (if (< (cells-len c) n) (return 0))
+    (while (< i n)
+      (do (if (!= (cells-at dc (+ at i)) (cells-at c i)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 cr-pw-into [^Src pw ^I32 plen ^I32 maxn ^:mut ^Cells to]
+  (comment "Append the first min(plen, maxn) bytes of the password. Answers how many.")
+  (let [^:mut ^I32 n plen
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (if (> n maxn) (set n maxn))
+    (while (< i n)
+      (do (set v (ps-u8 pw i))
+          (cells-push to v)
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 cr-pad32 [^Src pw ^I32 plen ^:mut ^Cells to]
+  (comment "`to` (cleared) gets the password padded or cut to 32 bytes (algorithm 2).")
+  (cells-drop to 0)
+  (let [^I32 n (cr-pw-into pw plen 32 to)
+        ^:mut ^I32 i n]
+    (while (< i 32)
+      (do (cells-push to (cr-pad-at 0 (- i n)))
+          (set i (+ i 1))))
+    (return 32)))
+
+;; ------------------------------------------------------ revisions 2 to 4
+
+(defn ^I32 cr-legacy-key [^:mut ^Cells dc ^I32 at ^:mut ^Cells a ^:mut ^Cells b]
+  (comment "Algorithm 2: the file key from the PADDED password in dc[at + C_PAD].")
+  (comment "MD5 of password, O, P (little-endian), the first /ID and, for R4")
+  (comment "without encrypted metadata, four 0xFF; R3 and later stretch it with 50")
+  (comment "more MD5s of the first n bytes. The key is stored in the region.")
+  (let [^I32 r (cells-at dc (+ at C_R))
+        ^I32 p (cells-at dc (+ at C_P))
+        ^I32 idn (cells-at dc (+ at C_IDLEN))
+        ^I32 n (cells-at dc (+ at C_KLEN))
+        ^I32 meta (cells-at dc (+ at C_META))
+        ^:mut ^I32 an 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (cells-drop a 0)
+    (cr-copy dc (+ at C_PAD) 32 a)
+    (cr-copy dc (+ at C_O) 32 a)
+    (cells-push a (bit-and p 255))
+    (cells-push a (bit-and (sar32 p 8) 255))
+    (cells-push a (bit-and (sar32 p 16) 255))
+    (cells-push a (bit-and (sar32 p 24) 255))
+    (cr-copy dc (+ at C_ID) idn a)
+    (if (and (>= r 4) (== meta 0))
+      (do (cells-push a 255)
+          (cells-push a 255)
+          (cells-push a 255)
+          (cells-push a 255)))
+    (set an (cells-len a))
+    (cr-hash 0 a an b)
+    (if (>= r 3)
+      (while (< i 50)
+        (do (cells-drop a 0)
+            (cr-copy b 0 n a)
+            (cr-hash 0 a n b)
+            (set i (+ i 1)))))
+    (set i 0)
+    (while (< i n)
+      (do (set v (cells-at b i))
+          (cells-set dc (+ (+ at C_KEY) i) v)
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 cr-check-user [^:mut ^Cells dc ^I32 at ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "Algorithms 4 and 5: does the file key in the region reproduce /U?")
+  (comment "R2 encrypts the padding string; R3 and later hash padding and /ID, then")
+  (comment "run RC4 twenty times with the key xor 0, 1, ..., 19 and compare 16 bytes.")
+  (let [^I32 r (cells-at dc (+ at C_R))
+        ^I32 n (cells-at dc (+ at C_KLEN))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 an 0]
+    (if (== r 2)
+      (do (cells-drop a 0)
+          (cr-copy dc (+ at C_KEY) n a)
+          (cells-drop b 0)
+          (while (< i 32)
+            (do (cells-push b (cr-pad-at 0 i))
+                (set i (+ i 1))))
+          (cr-rc4 a n b 32 st)
+          (return (cr-match dc (+ at C_U) st 32))))
+    (cells-drop a 0)
+    (while (< i 32)
+      (do (cells-push a (cr-pad-at 0 i))
+          (set i (+ i 1))))
+    (cr-copy dc (+ at C_ID) (cells-at dc (+ at C_IDLEN)) a)
+    (set an (cells-len a))
+    (cr-hash 0 a an b)
+    (cells-drop a 0)
+    (cr-copy dc (+ at C_KEY) n a)
+    (cr-rc4 a n b 16 st)
+    (set i 1)
+    (while (< i 20)
+      (do (cells-drop a 0)
+          (set j 0)
+          (while (< j n)
+            (do (cells-push a (bit-xor (cells-at dc (+ (+ at C_KEY) j)) i))
+                (set j (+ j 1))))
+          (cells-drop b 0)
+          (cr-copy st 0 16 b)
+          (cr-rc4 a n b 16 st)
+          (set i (+ i 1))))
+    (return (cr-match dc (+ at C_U) st 16))))
+
+(defn ^I32 cr-owner-pad [^:mut ^Cells dc ^I32 at ^Src pw ^I32 plen
+                         ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "Algorithm 7 run backwards: from an OWNER password to the padded USER")
+  (comment "password stored in /O. MD5 of the padded owner password (R3 and later:")
+  (comment "50 more MD5s of all 16 bytes) is an RC4 key; RC4 of /O under it (R3 and")
+  (comment "later: twenty rounds with the key xor 19 down to 0) is the padded user")
+  (comment "password, left in dc[at + C_PAD].")
+  (let [^I32 r (cells-at dc (+ at C_R))
+        ^I32 n (cells-at dc (+ at C_KLEN))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 top 0
+        ^:mut ^I32 v 0]
+    (cr-pad32 pw plen a)
+    (cr-hash 0 a 32 b)
+    (if (>= r 3)
+      (while (< i 50)
+        (do (cells-drop a 0)
+            (cr-copy b 0 16 a)
+            (cr-hash 0 a 16 b)
+            (set i (+ i 1)))))
+    (comment "The key is parked in the region's pad slot while the rounds run.")
+    (set i 0)
+    (while (< i n)
+      (do (set v (cells-at b i))
+          (cells-set dc (+ (+ at C_PAD) i) v)
+          (set i (+ i 1))))
+    (cells-drop b 0)
+    (cr-copy dc (+ at C_O) 32 b)
+    (if (>= r 3) (set top 19))
+    (set i top)
+    (while (>= i 0)
+      (do (cells-drop a 0)
+          (set j 0)
+          (while (< j n)
+            (do (cells-push a (bit-xor (cells-at dc (+ (+ at C_PAD) j)) i))
+                (set j (+ j 1))))
+          (cr-rc4 a n b 32 st)
+          (cells-drop b 0)
+          (cr-copy st 0 32 b)
+          (set i (- i 1))))
+    (set i 0)
+    (while (< i 32)
+      (do (set v (cells-at b i))
+          (cells-set dc (+ (+ at C_PAD) i) v)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 cr-try-legacy [^:mut ^Cells dc ^I32 at ^Src pw ^I32 plen ^I32 owner
+                          ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "R2 to R4: try `pw` as the user password (owner 0) or the owner")
+  (comment "password (owner 1). 1 when it opens the document, with the key stored.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (if (== owner 0)
+      (do (cr-pad32 pw plen a)
+          (while (< i 32)
+            (do (set v (cells-at a i))
+                (cells-set dc (+ (+ at C_PAD) i) v)
+                (set i (+ i 1)))))
+      (cr-owner-pad dc at pw plen a b st))
+    (cr-legacy-key dc at a b)
+    (return (cr-check-user dc at a b st))))
+
+;; ------------------------------------------------------ revisions 5 and 6
+
+(defn ^I32 cr-hash56 [^:mut ^Cells dc ^I32 at ^Src pw ^I32 plen ^I32 saltat
+                      ^I32 uat ^I32 ul ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "The password hash of R5 (SHA-256 of password, salt, user data) and R6")
+  (comment "(ISO 32000-2 algorithm 2.B: at least 64 rounds of AES-128-CBC over 64")
+  (comment "copies of password, K and user data, the next hash chosen by the sum of")
+  (comment "the first 16 bytes mod 3, until the last byte is small enough).")
+  (comment "The salt is dc[saltat, +8), the user data dc[uat, +ul). The first 32")
+  (comment "bytes of the answer are left in `b`.")
+  (let [^I32 r (cells-at dc (+ at C_R))
+        ^:mut ^I32 an 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 kn 0
+        ^:mut ^I32 en 0
+        ^:mut ^I32 sum 0
+        ^:mut ^I32 last 0
+        ^:mut ^I32 more 1]
+    (cells-drop a 0)
+    (cr-pw-into pw plen 127 a)
+    (cr-copy dc saltat 8 a)
+    (cr-copy dc uat ul a)
+    (set an (cells-len a))
+    (cr-hash 1 a an b)
+    (if (== r 6)
+      (while (== more 1)
+        (do (cells-drop a 0)
+            (cr-copy b 16 16 a)
+            (set kn (cells-len b))
+            (set j 0)
+            (while (< j 64)
+              (do (cr-pw-into pw plen 127 a)
+                  (cr-copy b 0 kn a)
+                  (cr-copy dc uat ul a)
+                  (set j (+ j 1))))
+            (set an (cells-len a))
+            (cells-drop st 0)
+            (crypto-aes-encrypt (cells-bytes b) 0 16 (cells-bytes a) 0 an st)
+            (set en (cells-len st))
+            (set sum 0)
+            (set j 0)
+            (while (< j 16)
+              (do (set sum (+ sum (cells-at st j)))
+                  (set j (+ j 1))))
+            (set last (cells-at st (- en 1)))
+            (cr-hash (+ (rem sum 3) 1) st en b)
+            (set i (+ i 1))
+            (if (and (>= i 64) (<= last (- i 32)))
+              (set more 0)))))
+    (cells-drop b 32)
+    (return 32)))
+
+(defn ^I32 cr-try-56 [^:mut ^Cells dc ^I32 at ^Src pw ^I32 plen ^I32 owner
+                      ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "R5 and R6, algorithm 2.A: the owner password is checked against /O")
+  (comment "with /U as extra data, the user password against /U; the file key is")
+  (comment "/UE (or /OE) decrypted by AES-256-CBC, no padding, zero IV, under the")
+  (comment "hash of the password and the key salt.")
+  (let [^:mut ^I32 obase (+ at C_U)
+        ^:mut ^I32 ebase (+ at C_UE)
+        ^:mut ^I32 uat 0
+        ^:mut ^I32 ul 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (if (== owner 1)
+      (do (set obase (+ at C_O))
+          (set ebase (+ at C_OE))
+          (set uat (+ at C_U))
+          (set ul 48)))
+    (if (< (cells-at dc (+ at C_ULEN)) 48) (return 0))
+    (if (== owner 1)
+      (if (< (cells-at dc (+ at C_OLEN)) 48) (return 0)))
+    (cr-hash56 dc at pw plen (+ obase 32) uat ul a b st)
+    (if (== (cr-match dc obase b 32) 0) (return 0))
+    (cr-hash56 dc at pw plen (+ obase 40) uat ul a b st)
+    (cells-drop a 0)
+    (while (< i 16)
+      (do (cells-push a 0)
+          (set i (+ i 1))))
+    (cr-copy dc ebase 32 a)
+    (cells-drop st 0)
+    (crypto-aes-decrypt (cells-bytes b) 0 32 (cells-bytes a) 0 48 0 st)
+    (set i 0)
+    (while (< i 32)
+      (do (set v (cells-at st i))
+          (cells-set dc (+ (+ at C_KEY) i) v)
+          (set i (+ i 1))))
+    (return 1)))
+
+;; ---------------------------------------------------------- authenticating
+
+(defn ^I32 cr-try [^:mut ^Cells dc ^I32 at ^Src pw ^I32 plen ^I32 owner
+                   ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (if (>= (cells-at dc (+ at C_R)) 5)
+    (return (cr-try-56 dc at pw plen owner a b st)))
+  (return (cr-try-legacy dc at pw plen owner a b st)))
+
+(defn ^I32 cr-reset-secrets [^:mut ^Cells dc ^I32 at ^I32 keep-key]
+  (comment "What an attempt leaves behind is wiped: the padded password candidate (a")
+  (comment "password, or the user password recovered from /O by the owner's) always;")
+  (comment "the file key unless it was found (`keep-key` 1).")
+  (let [^:mut ^I32 i 0]
+    (while (< i 32)
+      (do (if (== keep-key 0)
+            (cells-set dc (+ (+ at C_KEY) i) 0))
+          (cells-set dc (+ (+ at C_PAD) i) 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 cr-authenticate [^:mut ^Cells dc ^I32 at ^Src pw ^I32 plen
+                                  ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "Find the file key. Tried in order (D040): the empty USER password (a")
+  (comment "document that opens for anyone), the supplied password as the user")
+  (comment "password, the supplied password as the owner password, and the empty")
+  (comment "owner password. `plen` is the length of the password held in `pw`; 0")
+  (comment "means none supplied, and `pw` is then never read. Answers 1 and marks")
+  (comment "the region active, or 0. The scratch cells are zeroed either way.")
+  (let [^:mut ^I32 ok 0]
+    (set ok (cr-try dc at pw 0 0 a b st))
+    (if (and (== ok 0) (> plen 0))
+      (set ok (cr-try dc at pw plen 0 a b st)))
+    (if (and (== ok 0) (> plen 0))
+      (set ok (cr-try dc at pw plen 1 a b st)))
+    (if (== ok 0)
+      (set ok (cr-try dc at pw 0 1 a b st)))
+    (cr-wipe a)
+    (cr-wipe b)
+    (cr-wipe st)
+    (cr-reset-secrets dc at ok)
+    (if (== ok 1)
+      (cells-set dc (+ at C_ACTIVE) 1))
+    (return ok)))
+
+;; ------------------------------------------------ per-object keys, decrypting
+
+(defn ^:pub ^I32 cr-object-key [^:mut ^Cells dc ^I32 at ^I32 mode ^I32 num ^I32 gen
+                                ^:mut ^Cells a ^:mut ^Cells b]
+  (comment "Algorithm 1 (and 1.A): the key of object `num` `gen`, stored in the")
+  (comment "region (`cr-okey-into` reads it back). RC4 and AES-128 hash the file key")
+  (comment "with the low three bytes of the object number, the low two of the")
+  (comment "generation and, for AES, the salt `sAlT`, and keep min(n + 5, 16) bytes;")
+  (comment "AES-256 uses the file key itself. Answers the length; 0 for mode 0.")
+  (cells-set dc (+ at C_OKLEN) 0)
+  (if (== mode 0) (return 0))
+  (let [^I32 n (cells-at dc (+ at C_KLEN))
+        ^:mut ^I32 an 0
+        ^:mut ^I32 kl 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (if (== mode 3)
+      (do (while (< i n)
+            (do (set v (cells-at dc (+ (+ at C_KEY) i)))
+                (cells-set dc (+ (+ at C_OKEY) i) v)
+                (set i (+ i 1))))
+          (cells-set dc (+ at C_OKLEN) n)
+          (return n)))
+    (cells-drop a 0)
+    (cr-copy dc (+ at C_KEY) n a)
+    (cells-push a (bit-and num 255))
+    (cells-push a (bit-and (sar32 num 8) 255))
+    (cells-push a (bit-and (sar32 num 16) 255))
+    (cells-push a (bit-and gen 255))
+    (cells-push a (bit-and (sar32 gen 8) 255))
+    (if (== mode 2)
+      (do (cells-push a 115)
+          (cells-push a 65)
+          (cells-push a 108)
+          (cells-push a 84)))
+    (set an (cells-len a))
+    (cr-hash 0 a an b)
+    (set kl (+ n 5))
+    (if (> kl 16) (set kl 16))
+    (while (< i kl)
+      (do (set v (cells-at b i))
+          (cells-set dc (+ (+ at C_OKEY) i) v)
+          (set i (+ i 1))))
+    (cells-set dc (+ at C_OKLEN) kl)
+    (cr-wipe a)
+    (cr-wipe b)
+    (return kl)))
+
+(defn ^:pub ^I32 cr-okey-into [^Cells dc ^I32 at ^:mut ^Cells to]
+  (comment "`to` (cleared) gets the object key `cr-object-key` stored. Answers its length.")
+  (cells-drop to 0)
+  (let [^I32 n (cells-at dc (+ at C_OKLEN))]
+    (cr-copy dc (+ at C_OKEY) n to)
+    (return n)))
+
+(defn ^:pub ^I32 cr-decrypt [^I32 mode ^Cells key ^I32 kn ^Blob data ^I32 doff
+                             ^I32 dlen ^:mut ^Cells out]
+  (comment "Decrypt data[doff, doff + dlen) under `key[0, kn)` into `out`, APPENDING:")
+  (comment "RC4 for mode 1; for the AES modes the first 16 bytes are the IV and the")
+  (comment "padding is removed. Answers how many bytes it appended (0 for mode 0,")
+  (comment "which appends nothing: the caller keeps the data as it is).")
+  (if (== mode 1)
+    (return (crypto-rc4 (cells-bytes key) 0 kn data doff dlen out)))
+  (if (>= mode 2)
+    (return (crypto-aes-decrypt (cells-bytes key) 0 kn data doff dlen 1 out)))
+  (return 0))

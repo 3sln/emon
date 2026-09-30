@@ -588,6 +588,12 @@ func PlCount(ar *port.Cells, h int32) int32 {
 	return port.CellsAt(ar, h+rB)
 }
 
+func PlIntWrapped(ar *port.Cells, h int32) int32 {
+	// An int's value modulo 2^32 as a signed 32-bit pattern: what `pl-int-value`
+	// saturated away (4294965956 is -1340 here).
+	return port.CellsAt(ar, h+rC)
+}
+
 func PlIntValue(ar *port.Cells, h int32) int32 {
 	// An int's value; a bool's 0 or 1; a ref's object number.
 	return port.CellsAt(ar, h+rA)
@@ -617,6 +623,20 @@ func PlStrByte(ar *port.Cells, h int32, i int32) int32 {
 	return port.CellsAt(ar, port.CellsAt(ar, h+rA)+i)
 }
 
+func PlStrSetByte(ar *port.Cells, h int32, i int32, v int32) int32 {
+	// Overwrite byte i of a string: decryption (P3.2) replaces a string's
+	// bytes in place, never growing it.
+	var at int32 = port.CellsAt(ar, h+rA)
+	port.CellsSet(ar, at+i, v)
+	return 0
+}
+
+func PlStrSetLen(ar *port.Cells, h int32, n int32) int32 {
+	// Shorten a string to n bytes (decrypted AES strings lose IV and padding).
+	port.CellsSet(ar, h+rB, n)
+	return 0
+}
+
 func PlStreamDict(ar *port.Cells, h int32) int32 {
 	return port.CellsAt(ar, h+rA)
 }
@@ -639,6 +659,19 @@ func PlStreamFlags(ar *port.Cells, h int32) int32 {
 func PlStreamSetLen(ar *port.Cells, h int32, ln int32) int32 {
 	port.CellsSet(ar, h+rC, ln)
 	port.CellsSet(ar, h+rD, 0)
+	return 0
+}
+
+func PlStreamNum(ar *port.Cells, h int32) int32 {
+	// The object number the document layer recorded for a stream it loaded
+	// (P3.2, D098): it names the stream's decryption key. 0 when none was
+	// recorded. A stream is never a child of a container, so the record's
+	// sibling link, which only children use, is free for it.
+	return port.CellsAt(ar, h+rNext)
+}
+
+func PlStreamSetNum(ar *port.Cells, h int32, num int32) int32 {
+	port.CellsSet(ar, h+rNext, num)
 	return 0
 }
 
@@ -948,6 +981,7 @@ func plLexNumber(src *port.Src, ar *port.Cells, s int32, end int32) int32 {
 	var scale int32 = 0
 	var nd int32 = 0
 	var dot int32 = 0
+	var wv int64 = int64(0)
 	var d int32 = 0
 	for (q < end) && ((pdfsrc.PsU8(src, q) == 43) || (pdfsrc.PsU8(src, q) == 45)) {
 		if pdfsrc.PsU8(src, q) == 45 {
@@ -967,6 +1001,7 @@ func plLexNumber(src *port.Src, ar *port.Cells, s int32, end int32) int32 {
 		} else {
 			scale = -1000
 		}
+		wv = (wv * int64(10)) + int64(d)
 		nd += 1
 		q += 1
 	}
@@ -990,7 +1025,10 @@ func plLexNumber(src *port.Src, ar *port.Cells, s int32, end int32) int32 {
 		if neg == 1 {
 			iv = 0 - iv
 		}
-		return plTok(ar, 1, s, q, iv, 0, 0)
+		// The token's third value keeps the integer modulo 2^32, as a signed
+		// pattern: /P in an encryption dictionary is often written unsigned
+		// (4294965956 for -1340) and `iv` has saturated by then (P3.2).
+		return plTok(ar, 1, s, q, iv, 0, int32(wv))
 	}
 	// An integer part too long for nine digits saturates.
 	if scale < 0 {
@@ -1345,7 +1383,7 @@ func plDict(src *port.Src, ar *port.Cells) int32 {
 	return d
 }
 
-func plRefOrInt(src *port.Src, ar *port.Cells, num int32) int32 {
+func plRefOrInt(src *port.Src, ar *port.Cells, num int32, wrapped int32) int32 {
 	// An integer has just been read. `num 0 R` is a reference: look
 	// ahead two tokens, and only if a digit follows, so a string or a
 	// dictionary is never lexed twice.
@@ -1356,13 +1394,13 @@ func plRefOrInt(src *port.Src, ar *port.Cells, num int32) int32 {
 	var t3 int32 = 0
 	var gen int32 = 0
 	if num < 0 {
-		return plNew(ar, 2, num, 0, 0)
+		return plNew(ar, 2, num, 0, wrapped)
 	}
 	if p >= end {
-		return plNew(ar, 2, num, 0, 0)
+		return plNew(ar, 2, num, 0, wrapped)
 	}
 	if (pdfsrc.PsU8(src, p) < 48) || (pdfsrc.PsU8(src, p) > 57) {
-		return plNew(ar, 2, num, 0, 0)
+		return plNew(ar, 2, num, 0, wrapped)
 	}
 	t2 = PlLex(src, ar)
 	if t2 == 1 {
@@ -1375,7 +1413,7 @@ func plRefOrInt(src *port.Src, ar *port.Cells, num int32) int32 {
 		}
 	}
 	port.CellsSet(ar, aPos, after)
-	return plNew(ar, 2, num, 0, 0)
+	return plNew(ar, 2, num, 0, wrapped)
 }
 
 func plValue(src *port.Src, ar *port.Cells, tk int32) int32 {
@@ -1393,7 +1431,7 @@ func plValue(src *port.Src, ar *port.Cells, tk int32) int32 {
 		return 0
 	}
 	if tk == 1 {
-		return plRefOrInt(src, ar, ta)
+		return plRefOrInt(src, ar, ta, tc)
 	}
 	if tk == 2 {
 		return plNew(ar, 3, ta, tb, 0)

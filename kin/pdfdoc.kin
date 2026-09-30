@@ -3,8 +3,9 @@
 ;; written from ISO 32000-1 7.5 (file structure), 7.3.8 (streams), 7.4
 ;; (filters) and 7.7.3 (the page tree).
 ;;
-;;   (pd-open src ar dc a b st)        read the xref chain and the trailer;
-;;                                     answers a `pd-status`
+;;   (pd-open src ar dc a b st)        read the xref chain and the trailer (or
+;;                                     rebuild them); answers a `pd-status`
+;;   (pd-open-pw src pw ar dc a b st)  the same with a password, a `Src` (D098)
 ;;   (pd-get src ar dc a b st num)     object `num` as a handle in `ar` (0: none)
 ;;   (pd-resolve ... h)                follow references to a value
 ;;   (pd-stream-data ... sh out)       a stream's decoded bytes into `out`
@@ -33,13 +34,25 @@
 ;; offset is then taken relative to the header if that is where the table is),
 ;; a subsection that starts at 1 when it means 0, a count larger than its
 ;; entries, a chain of `/Prev` that loops or breaks after the first section, a
-;; page tree that cycles or has damaged kids. WHAT IS NOT: a file whose
-;; `startxref` does not lead to a table or stream is `bad-xref`. Rebuilding
-;; the table by scanning for `N G obj` is DEVLOG P3.1 and is not here.
+;; page tree that cycles or has damaged kids.
 ;;
-;; ENCRYPTION (P3.2) is not here either: an `/Encrypt` entry in the trailer is
-;; REPORTED (`pd-encrypted`) and the structure is read as it is, which works
-;; for the plain parts of the file and fails on the encrypted ones.
+;; REPAIR (P3.1, D099). A file whose `startxref` does not lead to a table or
+;; stream, that has none, or whose trailer names no catalog that can be read,
+;; is not failed: `pd-open` REBUILDS the table by scanning the whole source for
+;; `N G obj` (the last of an object number wins; streams are skipped by their
+;; length; `trailer` and XRef-stream dictionaries supply /Root, /Encrypt and
+;; /ID; the objects of object streams are entered once the key is known) and
+;; notes it in the warning bit 512. Only when that finds no object, no catalog
+;; or no pages does the ordinary answer (`bad-xref` and friends) stand.
+;;
+;; ENCRYPTION (P3.2, D040, D098). The standard security handler, R2 to R6, is
+;; in `emon.pdfcrypt` (the primitives are the `Crypto` port, D097). `pd-open`
+;; tries the empty user password; `pd-open-pw` takes a password (a `Src`, never
+;; kept). From then on every object loaded from the file is decrypted as it is
+;; loaded. A password that is needed and absent, one that does not open the
+;; file, and a handler emon does not read are the statuses `password-required`,
+;; `password-incorrect` and `encryption-unsupported`. Permission flags are
+;; never consulted.
 ;;
 ;; A SOURCE THAT MISSES (D058, D074, D075). `src` is a `Src`, and a read of
 ;; bytes that have not arrived answers 0 and sets the view's missed flag. Every
@@ -74,7 +87,8 @@
                                    pn-root pn-encrypt pn-size pn-prev
                                    pn-x-ref-stm pn-w pn-index pn-n pn-first
                                    pn-pages pn-kids pn-media-box pn-crop-box
-                                   pn-rotate pn-resources pn-contents]]
+                                   pn-rotate pn-resources pn-contents pn-id
+                                   pn-x-ref pn-obj-stm pn-catalog pn-metadata]]
             [emon.pdflex :refer [pl-init pl-seek pl-pos pl-lex pl-parse
                                  pl-parse-indirect pl-unread pl-kind-of
                                  pl-first pl-next pl-count pl-int-value
@@ -84,7 +98,19 @@
                                  pl-make-int pl-append pl-append-int pl-set-int
                                  pl-kw-at pl-token-a pl-token-c pl-k-int
                                  pl-k-real pl-k-array pl-k-dict pl-k-stream
-                                 pl-k-ref pl-k-name]]
+                                 pl-k-ref pl-k-name pl-stream-num
+                                 pl-stream-set-num pl-str-len pl-str-byte
+                                 pl-str-set-byte pl-str-set-len pl-objgen pl-int-wrapped
+                                 pl-is-ws]]
+            [emon.pdfcrypt :refer [cr-size cr-reset cr-active cr-stream-mode
+                                   cr-string-mode cr-encrypt-metadata cr-params
+                                   cr-load cr-authenticate cr-object-key
+                                   cr-decrypt cr-okey-into cr-name-is cr-dict-get
+                                   cr-dict-get-by-name cn-standard cn-v cn-r
+                                   cn-o cn-u cn-oe cn-ue cn-p cn-cf cn-stmf
+                                   cn-strf cn-cfm cn-v2 cn-aesv2 cn-aesv3
+                                   cn-none cn-identity cn-encrypt-metadata
+                                   cn-length]]
             [emon.pdffilter :refer [pf-run pf-predict]]
             [kin.lang :refer [defn defconst declarefn return let set while if
                               comment do + - * < > <= >= == != and or quot rem
@@ -98,7 +124,10 @@
    [pd-no-root 4 "no-root"]
    [pd-no-pages 5 "no-pages"]
    [pd-encrypted-unread 6 "encrypted"]
-   [pd-need-bytes 7 "need-bytes"]])
+   [pd-need-bytes 7 "need-bytes"]
+   [pd-password-required 8 "password-required"]
+   [pd-password-incorrect 9 "password-incorrect"]
+   [pd-encryption-unsupported 10 "encryption-unsupported"]])
 
 ;; Bits of `(pd-warn dc)`.
 (defenum ^:pub pd-warning
@@ -110,7 +139,8 @@
    [pd-w-missing 32 "an object is missing or at the wrong offset"]
    [pd-w-objstm 64 "an object stream could not be read"]
    [pd-w-kids 128 "a page-tree entry is damaged or repeated"]
-   [pd-w-box 256 "a page box was missing or invalid and defaulted"]])
+   [pd-w-box 256 "a page box was missing or invalid and defaulted"]
+   [pd-w-repaired 512 "the cross-reference was rebuilt by scanning for objects"]])
 
 ;; ---------------------------------------------------------- the document
 
@@ -128,9 +158,12 @@
 (defconst ^I32 D_DEPTH 11)   ;; reference depth now
 (defconst ^I32 D_PREV 12)    ;; /Prev of the section just read, -1 for none
 (defconst ^I32 D_REFLIM 13)  ;; limit-of REF_DEPTH, read once
+(defconst ^I32 D_CATNUM 14)  ;; repair: number of the last /Type /Catalog object seen, 0 for none
+(defconst ^I32 D_SLIST 15)   ;; repair: handle of the array of ObjStm numbers found
 (defconst ^I32 D_TRAIL 16)   ;; 16 trailer dictionaries, newest first
 (defconst ^I32 D_SEEN 32)    ;; 64 section offsets already read
-(defconst ^I32 D_FIRST 96)   ;; the first entry
+(defconst ^I32 D_CR 96)      ;; the security handler's region, `(cr-size)` cells (emon.pdfcrypt)
+(defconst ^I32 D_FIRST 448)  ;; the first entry (96 + 352)
 
 (defconst ^I32 PAGE_STRIDE 16)        ;; cells a page record takes
 
@@ -147,8 +180,8 @@
 (defn ^:pub ^I32 pd-version-major [^Cells dc] (return (cells-at dc D_VMAJ)))
 (defn ^:pub ^I32 pd-version-minor [^Cells dc] (return (cells-at dc D_VMIN)))
 (defn ^:pub ^I32 pd-encrypted [^Cells dc]
-  (comment "1 when the trailer has an /Encrypt entry (P3.2 decrypts; nothing")
-  (comment "here does).")
+  (comment "1 when the trailer has an /Encrypt entry: the document IS encrypted,")
+  (comment "whether or not a password opened it (P3.2 decrypts what it can).")
   (if (!= (cells-at dc D_ENC) 0) (return 1))
   (return 0))
 (defn ^:pub ^I32 pd-root [^Cells dc] (return (cells-at dc D_ROOT)))
@@ -175,7 +208,8 @@
 (defn ^I32 pd-ent-put [^:mut ^Cells dc ^I32 num ^I32 kind ^I32 f1 ^I32 f2 ^I32 mode]
   (comment "Store an entry, unless an entry is already there: mode 0 stores")
   (comment "only where none is (newest wins), mode 1 also over a free one (a")
-  (comment "hybrid file's /XRefStm). Answers 1 when it stored.")
+  (comment "hybrid file's /XRefStm), mode 2 over anything (a rebuilt table: the")
+  (comment "LAST object in the file wins). Answers 1 when it stored.")
   (if (< num 0) (return 0))
   (if (> num (cells-at dc D_LIMENT)) (return 0))
   (let [^I32 at (+ D_FIRST (* num 5))]
@@ -184,7 +218,7 @@
     (if (>= num (cells-at dc D_NENT))
       (cells-set dc D_NENT (+ num 1)))
     (let [^I32 old (cells-at dc at)]
-      (if (or (== old 0) (and (== mode 1) (== old 1)))
+      (if (or (== old 0) (== mode 2) (and (== mode 1) (== old 1)))
         (do (cells-set dc at kind)
             (cells-set dc (+ at 1) f1)
             (cells-set dc (+ at 2) f2)
@@ -383,6 +417,87 @@
     (pd-parse-objstm (src-of-cells a) ar dc sn nn first)
     (return (cells-at dc (+ at 3)))))
 
+;; ------------------------------------------------------ decrypting objects
+;;
+;; Once the security handler has a key (`pd-crypt-setup`), every object LOADED
+;; FROM THE FILE is decrypted as it comes in (`pd-secure`, from `pd-get`):
+;; its strings in place, and a stream is tagged with its object number so that
+;; its filter plan can carry the key (`pd-stream-plan`). Objects inside an
+;; object stream are not decrypted one by one: the stream they live in was.
+
+(declarefn pd-dec-walk)
+
+(defn ^I32 pd-dec-string [^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^I32 h]
+  (comment "Decrypt the string object h in place, under the object key the region")
+  (comment "holds; an AES string loses its IV and padding (it only gets shorter).")
+  (let [^I32 mode (cr-string-mode dc D_CR)
+        ^I32 n (pl-str-len ar h)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 kn 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 v 0]
+    (if (== mode 0) (return 0))
+    (if (== n 0) (return 0))
+    (set kn (cr-okey-into dc D_CR st))
+    (cells-drop a 0)
+    (while (< i n)
+      (do (set v (pl-str-byte ar h i))
+          (cells-push a v)
+          (set i (+ i 1))))
+    (cells-drop b 0)
+    (set m (cr-decrypt mode st kn (cells-bytes a) 0 n b))
+    (set i 0)
+    (while (< i m)
+      (do (set v (cells-at b i))
+          (pl-str-set-byte ar h i v)
+          (set i (+ i 1))))
+    (pl-str-set-len ar h m)
+    (return 0)))
+
+(defn ^I32 pd-dec-walk [^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                        ^:mut ^Cells st ^I32 h ^I32 depth]
+  (comment "Decrypt every string under h: the elements of arrays, the values of")
+  (comment "dictionaries, a stream's dictionary.")
+  (if (== h 0) (return 0))
+  (if (> depth 100) (return 0))
+  (let [^I32 kind (pl-kind-of ar h)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 d 0]
+    (if (== kind 5) (return (pd-dec-string ar dc a b st h)))
+    (if (or (== kind 6) (== kind 7))
+      (do (set k (pl-first ar h))
+          (while (!= k 0)
+            (do (pd-dec-walk ar dc a b st k (+ depth 1))
+                (set k (pl-next ar k))))
+          (return 0)))
+    (if (== kind 8)
+      (do (set d (pl-stream-dict ar h))
+          (pd-dec-walk ar dc a b st d (+ depth 1))))
+    (return 0)))
+
+(defn ^I32 pd-secure [^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                      ^:mut ^Cells st ^I32 h ^I32 num]
+  (comment "Object `num`, just loaded from the file as `h`: when the document is")
+  (comment "encrypted, tag a stream with its number and decrypt the strings. An XRef")
+  (comment "stream is never encrypted and is left alone.")
+  (if (== (cr-active dc D_CR) 0) (return 0))
+  (let [^I32 at (+ D_FIRST (* num 5))
+        ^I32 gen (cells-at dc (+ at 2))
+        ^I32 smode (cr-string-mode dc D_CR)
+        ^:mut ^I32 d 0
+        ^:mut ^I32 ty 0]
+    (if (== (pl-kind-of ar h) 8)
+      (do (set d (pl-stream-dict ar h))
+          (set ty (pl-dict-get ar d (pn-type)))
+          (if (!= ty 0)
+            (if (== (pl-name-is ar ty (pn-x-ref)) 1) (return 0)))
+          (pl-stream-set-num ar h num)))
+    (if (== smode 0) (return 0))
+    (cr-object-key dc D_CR smode num gen a b)
+    (pd-dec-walk ar dc a b st h 0)
+    (return 0)))
+
 (defn ^:pub ^I32 pd-get [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                          ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 num]
   (comment "Object `num` as a handle in `ar`, loaded on first use and cached;")
@@ -402,7 +517,9 @@
     (cells-set dc D_DEPTH (+ depth 1))
     (cells-set dc (+ at 4) (+ (cells-at dc (+ at 4)) 1))
     (if (== kind 2)
-      (set h (pd-load-direct src ar dc num (cells-at dc (+ at 1)))))
+      (do (set h (pd-load-direct src ar dc num (cells-at dc (+ at 1))))
+          (if (!= h 0)
+            (pd-secure ar dc a b st h num))))
     (if (== kind 3)
       (set h (pd-load-compressed src ar dc a b st num)))
     (cells-set dc (+ at 4) (- (cells-at dc (+ at 4)) 1))
@@ -485,6 +602,50 @@
           (set i (+ i 1))))
     (return 0)))
 
+(defn ^I32 pd-plan-crypt [^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                          ^I32 plan ^I32 sh ^I32 hascrypt]
+  (comment "Append the DECRYPTION part of a stream's plan (P3.2): 0 when the stream")
+  (comment "is read as it is, else the mode (1 RC4, 2 AES-128, 3 AES-256), the key")
+  (comment "length and the key of this object, three bytes to an integer. Not")
+  (comment "decrypted: a stream the document layer did not tag with an object number")
+  (comment "(an XRef stream), one with a /Crypt filter (taken as the identity filter,")
+  (comment "which is what every producer writes), and the /Metadata stream of a file")
+  (comment "whose /EncryptMetadata is false. The key is worked out HERE, where the")
+  (comment "region is, so `pd-run-plan` needs nothing but the plan.")
+  (let [^I32 num (pl-stream-num ar sh)
+        ^:mut ^I32 dm (cr-stream-mode dc D_CR)
+        ^:mut ^I32 kn 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 gen 0]
+    (if (== (cr-active dc D_CR) 0) (set dm 0))
+    (if (== num 0) (set dm 0))
+    (if (== hascrypt 1) (set dm 0))
+    (if (!= dm 0)
+      (if (== (cr-encrypt-metadata dc D_CR) 0)
+        (do (set sd (pl-stream-dict ar sh))
+            (set ty (pl-dict-get ar sd (pn-type)))
+            (if (!= ty 0)
+              (if (== (pl-name-is ar ty (pn-metadata)) 1) (set dm 0))))))
+    (if (== dm 0)
+      (do (pl-append-int ar plan 0)
+          (return 0)))
+    (set gen (cells-at dc (+ (+ D_FIRST (* num 5)) 2)))
+    (set kn (cr-object-key dc D_CR dm num gen a b))
+    (cr-okey-into dc D_CR b)
+    (pl-append-int ar plan dm)
+    (pl-append-int ar plan kn)
+    (while (< i kn)
+      (do (set x (* (cells-at b i) 65536))
+          (if (< (+ i 1) kn) (set x (+ x (* (cells-at b (+ i 1)) 256))))
+          (if (< (+ i 2) kn) (set x (+ x (cells-at b (+ i 2)))))
+          (pl-append-int ar plan x)
+          (set i (+ i 3))))
+    (cells-drop b 0)
+    (return 0)))
+
 ;; THE PLAN. Reading a stream's filters means resolving references (/Filter,
 ;; /DecodeParms and their numbers may all be indirect), and resolving can load
 ;; an object stream, which decodes another stream into the same scratch cells
@@ -496,7 +657,9 @@
 ;;     status  stages  (code pred colors bpc columns early) * stages
 ;;
 ;; with `status` a `pf-status` for a chain that could not be planned past its
-;; last stage (an unknown filter, a bad spec) and `code` a `pf-filter`.
+;; last stage (an unknown filter, a bad spec) and `code` a `pf-filter`; after
+;; the stages comes the stream's DECRYPTION (`pd-plan-crypt`): 0, or mode, key
+;; length and the key packed three bytes to an integer.
 
 (defn ^:pub ^I32 pd-stream-plan [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                                  ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 sh]
@@ -518,6 +681,7 @@
         ^:mut ^I32 s2 0
         ^:mut ^I32 code 0
         ^:mut ^I32 nst 0
+        ^:mut ^I32 hascrypt 0
         ^:mut ^I32 more 1]
     (pl-append ar plan sth)
     (pl-append ar plan nsh)
@@ -565,8 +729,10 @@
                       (pl-append-int ar plan 8)
                       (pl-append-int ar plan 1)
                       (pl-append-int ar plan 1)))
+                (if (== code 6) (set hascrypt 1))
                 (set nst (+ nst 1))
                 (set i (+ i 1))))))
+    (pd-plan-crypt ar dc a b plan sh hascrypt)
     (pl-set-int ar sth status)
     (pl-set-int ar nsh nst)
     (return plan)))
@@ -595,10 +761,36 @@
         ^:mut ^I32 colors 1
         ^:mut ^I32 bpc 8
         ^:mut ^I32 columns 1
-        ^:mut ^I32 early 1]
+        ^:mut ^I32 early 1
+        ^:mut ^I32 kt (pl-next ar h1)
+        ^:mut ^I32 dm 0
+        ^:mut ^I32 kn 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 x 0]
     (cells-drop out 0)
     (comment "CHECKPOINT: the plan and the span may be made of zeros.")
     (if (ps-missed src) (return 12))
+    (comment "The decryption the plan carries, after its stages: the stream's bytes are")
+    (comment "decrypted into `out` first and the filter chain then runs over `out`.")
+    (while (< j (* ns 6))
+      (do (set kt (pl-next ar kt))
+          (set j (+ j 1))))
+    (set dm (pl-int-value ar kt))
+    (if (!= dm 0)
+      (do (set kt (pl-next ar kt))
+          (set kn (pl-int-value ar kt))
+          (cells-drop st 0)
+          (set j 0)
+          (while (< j kn)
+            (do (set kt (pl-next ar kt))
+                (set x (pl-int-value ar kt))
+                (cells-push st (quot x 65536))
+                (cells-push st (rem (quot x 256) 256))
+                (cells-push st (rem x 256))
+                (set j (+ j 3))))
+          (cr-decrypt dm st kn (src-slice src start end) 0 (- end start) out)
+          (cells-drop st 0)
+          (set cur 1)))
     (while (< i ns)
       (do (set code (pl-int-value ar k))
           (set k (pl-next ar k))
@@ -642,7 +834,7 @@
                   (set cur 1))))
           (if (== status 0) (set status s2))
           (set i (+ i 1))))
-    (if (== ns 0)
+    (if (and (== ns 0) (== cur 0))
       (pd-span src start end out))
     (if (== cur 2) (pd-copy b out))
     (if (== status 0) (set status pstatus))
@@ -668,7 +860,7 @@
           (cells-set dc D_NTRAIL (+ n 1))))
     (return 0)))
 
-(defn ^I32 pd-trailer-get [^Cells ar ^Cells dc ^I32 id]
+(defn ^:pub ^I32 pd-trailer-get [^Cells ar ^Cells dc ^I32 id]
   (comment "The first value under a well-known key among the trailers, newest")
   (comment "first, or 0. (An incremental update's trailer repeats /Root; a")
   (comment "damaged one may not.)")
@@ -1001,30 +1193,382 @@
 
 (defn ^I32 pd-unreadable [^Src src ^Cells dc ^I32 status]
   (comment "The status to answer when the catalog or the page tree could not be")
-  (comment "read: `encrypted` (6) if the trailer has /Encrypt, else `status`; and")
-  (comment "`need-bytes` before either when the source has missed.")
+  (comment "read: `need-bytes` when the source has missed, else `status`. (A file")
+  (comment "whose key was found and whose objects still cannot be read is damaged,")
+  (comment "not locked: encryption is reported by `pd-crypt-setup`, before this.)")
   (if (ps-missed src) (return 7))
-  (if (!= (cells-at dc D_ENC) 0) (return 6))
   (return status))
 
-(defn ^:pub ^I32 pd-open [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
-                          ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
-  (comment "Open a document: find the header and `startxref`, read every")
-  (comment "cross-reference section and trailer, check that there is a catalog")
-  (comment "with a page tree. Answers a `pd-status` (0 ok). Nothing is decoded")
-  (comment "but the cross-reference streams and what they need.")
+;; ---------------------------------------------------------------- encryption
+;;
+;; THE /Encrypt DICTIONARY is read here, where references can be followed, and
+;; handed to `emon.pdfcrypt` as plain integers and byte strings (P3.2, D040,
+;; D098). What is supported: the standard security handler, V 1 (RC4 40), V 2
+;; (RC4 40 to 128), V 4 (crypt filters: RC4, AES-128, or none for streams and
+;; strings separately) and V 5 (AES-256, R5 and R6). What is not is
+;; `encryption-unsupported`: another handler (public-key: /Adobe.PubSec), V 0
+;; and 3, R outside 2 to 6, a crypt filter of another method. A wrong or
+;; missing password is `password-incorrect` or `password-required`.
+
+(defn ^I32 pd-cget [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
+                    ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                    ^I32 dict ^I32 id]
+  (comment "The RESOLVED value under the `emon.pdfcrypt` name `id`, 0 when absent.")
+  (let [^I32 raw (cr-dict-get ar dict id)]
+    (return (pd-resolve src ar dc a b st raw))))
+
+(defn ^I32 pd-cint [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
+                    ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                    ^I32 dict ^I32 id ^I32 dflt]
+  (comment "An integer under an `emon.pdfcrypt` name, else dflt.")
+  (let [^I32 v (pd-cget src ar dc a b st dict id)]
+    (if (== v 0) (return dflt))
+    (if (== (pl-kind-of ar v) 2) (return (pl-int-value ar v)))
+    (return dflt)))
+
+(defn ^I32 pd-cf-mode [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
+                       ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                       ^I32 cf ^I32 nameh]
+  (comment "The mode of the crypt filter the name object `nameh` (a /StmF or /StrF)")
+  (comment "names in the /CF dictionary `cf`: 0 none, 1 RC4, 2 AES-128, 3 AES-256;")
+  (comment "-1 for a filter that is not there or that emon cannot read. An absent")
+  (comment "name and /Identity are 0 (the data is not encrypted).")
+  (if (== nameh 0) (return 0))
+  (if (== (cr-name-is ar nameh (cn-identity)) 1) (return 0))
+  (let [^I32 raw (cr-dict-get-by-name ar cf nameh)
+        ^:mut ^I32 ent 0
+        ^:mut ^I32 m 0]
+    (set ent (pd-resolve src ar dc a b st raw))
+    (if (== ent 0) (return -1))
+    (set m (pd-cget src ar dc a b st ent (cn-cfm)))
+    (if (== m 0) (return -1))
+    (if (== (cr-name-is ar m (cn-none)) 1) (return 0))
+    (if (== (cr-name-is ar m (cn-v2)) 1) (return 1))
+    (if (== (cr-name-is ar m (cn-aesv2)) 1) (return 2))
+    (if (== (cr-name-is ar m (cn-aesv3)) 1) (return 3))
+    (return -1)))
+
+(defn ^I32 pd-crypt-setup [^Src src ^Src pw ^I32 plen ^:mut ^Cells ar ^:mut ^Cells dc
+                           ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 enc]
+  (comment "Read the encryption dictionary `enc` (the trailer's /Encrypt), decide")
+  (comment "what is supported, and find the file key with the password (`plen`")
+  (comment "bytes of `pw`, none when 0; D040: the empty user password first). Answers")
+  (comment "0 (keys in the region, objects loaded from now on are decrypted), 8")
+  (comment "password-required, 9 password-incorrect, 10 encryption-unsupported, or")
+  (comment "7 need-bytes.")
+  (let [^:mut ^I32 e 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 lenbits 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 mh 0
+        ^:mut ^I32 meta 1
+        ^:mut ^I32 stm 1
+        ^:mut ^I32 str 1
+        ^:mut ^I32 klen 5
+        ^:mut ^I32 cf 0
+        ^:mut ^I32 nh 0
+        ^:mut ^I32 oh 0
+        ^:mut ^I32 idh 0
+        ^:mut ^I32 ok 0]
+    (set e (pd-resolve src ar dc a b st enc))
+    (if (ps-missed src) (return 7))
+    (if (== e 0) (return 10))
+    (if (!= (pl-kind-of ar e) 7) (return 10))
+    (set fl (pd-dget src ar dc a b st e (pn-filter)))
+    (if (== (cr-name-is ar fl (cn-standard)) 0) (return 10))
+    (set v (pd-cint src ar dc a b st e (cn-v) 0))
+    (set r (pd-cint src ar dc a b st e (cn-r) 0))
+    (set lenbits (pd-cint src ar dc a b st e (cn-length) -1))
+    (comment "/P is a 32-bit pattern, often written unsigned (4294965956): the")
+    (comment "integer object saturated, its wrapped value is the pattern.")
+    (set ph (pd-cget src ar dc a b st e (cn-p)))
+    (if (!= ph 0)
+      (if (== (pl-kind-of ar ph) 2)
+        (do (set p (pl-int-value ar ph))
+            (if (== p 2147483647) (set p (pl-int-wrapped ar ph))))))
+    (set mh (pd-cget src ar dc a b st e (cn-encrypt-metadata)))
+    (if (!= mh 0)
+      (if (== (pl-kind-of ar mh) 1)
+        (if (== (pl-int-value ar mh) 0) (set meta 0))))
+    (if (ps-missed src) (return 7))
+    (if (or (< r 2) (> r 6)) (return 10))
+    (if (and (< v 5) (>= r 5)) (return 10))
+    (if (and (== v 5) (< r 5)) (return 10))
+    (if (== v 1)
+      (do (set stm 1) (set str 1) (set klen 5)))
+    (if (== v 2)
+      (do (set stm 1) (set str 1)
+          (if (< lenbits 0) (set lenbits 40))
+          (set klen (quot lenbits 8))))
+    (if (or (== v 4) (== v 5))
+      (do (set cf (pd-cget src ar dc a b st e (cn-cf)))
+          (set nh (pd-cget src ar dc a b st e (cn-stmf)))
+          (set stm (pd-cf-mode src ar dc a b st cf nh))
+          (set nh (pd-cget src ar dc a b st e (cn-strf)))
+          (set str (pd-cf-mode src ar dc a b st cf nh))
+          (if (or (< stm 0) (< str 0)) (return 10))
+          (if (ps-missed src) (return 7))
+          (comment "A V4 file with an RC4 crypt filter has the key length in /Length.")
+          (set klen 16)
+          (if (== v 4)
+            (if (or (== stm 1) (== str 1))
+              (if (and (>= lenbits 40) (<= lenbits 128))
+                (set klen (quot lenbits 8)))))
+          (if (== v 5) (set klen 32))))
+    (if (and (== v 4) (or (== stm 3) (== str 3))) (return 10))
+    (if (and (== v 5) (or (== stm 1) (== stm 2) (== str 1) (== str 2))) (return 10))
+    (if (or (< v 1) (== v 3) (> v 5)) (return 10))
+    (if (< v 5)
+      (do (if (< klen 5) (set klen 5))
+          (if (> klen 16) (set klen 16))))
+    (if (== r 2) (set klen 5))
+    (cr-reset dc D_CR)
+    (cr-params dc D_CR v r klen meta p stm str)
+    (set oh (pd-cget src ar dc a b st e (cn-o)))
+    (cr-load dc D_CR 0 ar oh)
+    (set oh (pd-cget src ar dc a b st e (cn-u)))
+    (cr-load dc D_CR 1 ar oh)
+    (set oh (pd-cget src ar dc a b st e (cn-oe)))
+    (cr-load dc D_CR 2 ar oh)
+    (set oh (pd-cget src ar dc a b st e (cn-ue)))
+    (cr-load dc D_CR 3 ar oh)
+    (comment "The first string of the trailer's /ID, an array of two.")
+    (set idh (pd-trailer-get ar dc (pn-id)))
+    (set idh (pd-resolve src ar dc a b st idh))
+    (if (ps-missed src) (return 7))
+    (set oh 0)
+    (if (!= idh 0)
+      (if (== (pl-kind-of ar idh) 6)
+        (do (set oh (pl-first ar idh))
+            (set oh (pd-resolve src ar dc a b st oh)))))
+    (cr-load dc D_CR 4 ar oh)
+    (if (ps-missed src) (return 7))
+    (set ok (cr-authenticate dc D_CR pw plen a b st))
+    (if (== ok 1) (return 0))
+    (if (> plen 0) (return 9))
+    (return 8)))
+
+;; ------------------------------------------------------------------ repair
+;;
+;; P3.1: when the cross-reference cannot be used, REBUILD IT BY SCANNING the
+;; whole file for `N G obj` (and for `trailer` and cross-reference stream
+;; dictionaries, which carry /Root, /Encrypt and /ID), the way every viewer
+;; does: the LAST `N G obj` in the file wins an object number (incremental
+;; updates), a stream is skipped by its length (or by `endstream` when the
+;; length is wrong) so text inside it is not mistaken for objects, and the
+;; objects of every object stream are entered from the stream's own table once
+;; the key is known (an encrypted file's object streams are encrypted). The
+;; scan is legitimately a read of the whole file: over a source that misses it
+;; checks `ps-missed` every 4 KiB and answers `need-bytes` (D075) so the host's
+;; doubling read-ahead fetches it in a few rounds. Repair is tried when the
+;; ordinary open answers `no-startxref`, `bad-xref`, `no-root` or `no-pages`;
+;; when it does not help, the ordinary answer stands.
+
+(defn ^I32 pd-boundary [^Src src ^I32 i]
+  (comment "1 when an object or a keyword may start at i: at the start of the file,")
+  (comment "after white space, or after the delimiter that closes a dictionary,")
+  (comment "an array or a string (`>>endobj`).")
+  (if (== i 0) (return 1))
+  (let [^I32 c (ps-u8 src (- i 1))]
+    (if (== (pl-is-ws c) 1) (return 1))
+    (if (or (== c 62) (== c 93) (== c 41)) (return 1))
+    (return 0)))
+
+(defn ^I32 pd-rebuild [^Src src ^:mut ^Cells ar ^:mut ^Cells dc]
+  (comment "Scan the source and rebuild the cross-reference into `dc` (already")
+  (comment "initialized): every `N G obj` (the last wins), every trailer (newest")
+  (comment "first, at most 16), the last catalog, the numbers of the object")
+  (comment "streams. Answers 0, 3 (`bad-xref`: no object at all) or 7.")
+  (let [^I32 n (ps-len src)
+        ^I32 tl (pl-make-array ar)
+        ^I32 sl (pl-make-array ar)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 nx 0
+        ^:mut ^I32 num 0
+        ^:mut ^I32 handled 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 tr 0]
+    (cells-set dc D_SLIST sl)
+    (while (< i n)
+      (do (set handled 0)
+          (if (== (rem i 4096) 0)
+            (if (ps-missed src) (return 7)))
+          (set c (ps-u8 src i))
+          (if (and (>= c 48) (<= c 57))
+            (if (== (pd-boundary src i) 1)
+              (do (pl-seek ar 0 n)
+                  (set h (pl-parse-indirect src ar i))
+                  (if (ps-missed src) (return 7))
+                  (if (!= h 0)
+                    (do (set handled 1)
+                        (set num (pl-objnum ar))
+                        (set nx (pl-pos ar))
+                        (set kind (pl-kind-of ar h))
+                        (set tr (pl-objgen ar))
+                        (pd-ent-put dc num 2 i tr 2)
+                        (if (or (== kind 7) (== kind 8))
+                          (do (set d h)
+                              (if (== kind 8) (set d (pl-stream-dict ar h)))
+                              (set ty (pl-dict-get ar d (pn-type)))
+                              (if (!= ty 0)
+                                (do (if (== (pl-name-is ar ty (pn-x-ref)) 1)
+                                      (if (!= (pl-dict-get ar d (pn-root)) 0)
+                                        (pl-append ar tl d)))
+                                    (if (== (pl-name-is ar ty (pn-obj-stm)) 1)
+                                      (pl-append-int ar sl num))
+                                    (if (== (pl-name-is ar ty (pn-catalog)) 1)
+                                      (cells-set dc D_CATNUM num))))))
+                        (if (== kind 8)
+                          (if (== (pl-stream-flags ar h) 2)
+                            (do (set j (pl-stream-rescan src ar h))
+                                (set nx (+ (pl-stream-start ar h) j)))))
+                        (if (<= nx i) (set nx (+ i 1)))
+                        (set i nx))))))
+          (if (== handled 0)
+            (do (if (== c 116)
+                  (if (== (pd-boundary src i) 1)
+                    (if (== (pl-kw-at src i n 10) 1)
+                      (do (pl-seek ar (+ i 7) n)
+                          (set d (pl-parse src ar))
+                          (if (ps-missed src) (return 7))
+                          (if (!= d 0)
+                            (if (== (pl-kind-of ar d) 7)
+                              (pl-append ar tl d)))
+                          (set handled 1)
+                          (set nx (pl-pos ar))
+                          (if (< nx (+ i 7)) (set nx (+ i 7)))
+                          (set i nx)))))
+                (if (== handled 0) (set i (+ i 1)))))))
+    (if (ps-missed src) (return 7))
+    (if (== (cells-at dc D_NENT) 0) (return 3))
+    (set cnt (pl-count ar tl))
+    (set lo (- cnt 16))
+    (if (< lo 0) (set lo 0))
+    (set j (- cnt 1))
+    (while (>= j lo)
+      (do (set d (pd-nth ar tl j))
+          (pd-add-trailer dc d)
+          (set j (- j 1))))
+    (return 0)))
+
+(defn ^I32 pd-ent-compressed [^:mut ^Cells dc ^I32 onum ^I32 sn ^I32 idx]
+  (comment "Enter object `onum` as number `idx` of object stream `sn`: over nothing,")
+  (comment "a free entry, or an older object (an entry whose file offset is smaller")
+  (comment "than the stream's own). The file's LAST version of an object wins.")
+  (let [^I32 old (pd-ent-kind dc onum)
+        ^I32 offn (cells-at dc (+ (+ D_FIRST (* sn 5)) 1))
+        ^:mut ^I32 tk 0
+        ^:mut ^I32 offo 0
+        ^:mut ^I32 os 0]
+    (if (or (== old 0) (== old 1)) (set tk 1))
+    (if (== old 2)
+      (if (< (cells-at dc (+ (+ D_FIRST (* onum 5)) 1)) offn) (set tk 1)))
+    (if (== old 3)
+      (do (set os (cells-at dc (+ (+ D_FIRST (* onum 5)) 1)))
+          (set offo (cells-at dc (+ (+ D_FIRST (* os 5)) 1)))
+          (if (<= offo offn) (set tk 1))))
+    (if (== tk 1)
+      (do (pd-ent-put dc onum 3 sn idx 2)
+          (if (<= onum (cells-at dc D_LIMENT))
+            (cells-set dc (+ (+ D_FIRST (* onum 5)) 3) 0))))
+    (return 0)))
+
+(defn ^I32 pd-register-objstm [^Src data ^:mut ^Cells ar ^:mut ^Cells dc ^I32 sn ^I32 nn]
+  (comment "Enter the objects an object stream holds, from its table of N pairs of")
+  (comment "(object number, offset), the stream's decoded bytes being `data`.")
+  (let [^I32 n (ps-len data)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 hpos 0
+        ^:mut ^I32 onum 0
+        ^:mut ^I32 tk 0]
+    (while (< i nn)
+      (do (pl-seek ar hpos n)
+          (set tk (pl-lex data ar))
+          (if (!= tk 1) (return 0))
+          (set onum (pl-token-a ar))
+          (set tk (pl-lex data ar))
+          (if (!= tk 1) (return 0))
+          (set hpos (pl-pos ar))
+          (if (>= onum 0)
+            (pd-ent-compressed dc onum sn i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 pd-rebuild-objstms [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
+                               ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "Second half of a repair, once the key is known: decode each object")
+  (comment "stream found, in file order, and enter its objects. Answers 7 when the")
+  (comment "source missed.")
+  (let [^I32 sl (cells-at dc D_SLIST)
+        ^:mut ^I32 k (pl-first ar sl)
+        ^:mut ^I32 sn 0
+        ^:mut ^I32 sh 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 nn 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 plan 0
+        ^:mut ^I32 status 0]
+    (while (!= k 0)
+      (do (set sn (pl-int-value ar k))
+          (set sh (pd-get src ar dc a b st sn))
+          (if (ps-missed src) (return 7))
+          (if (!= sh 0)
+            (if (== (pl-kind-of ar sh) 8)
+              (do (set d (pl-stream-dict ar sh))
+                  (set nn (pd-dint src ar dc a b st d (pn-n) 0))
+                  (set first (pd-dint src ar dc a b st d (pn-first) 0))
+                  (if (and (>= nn 1) (>= first 0))
+                    (do (set plan (pd-stream-plan src ar dc a b st sh))
+                        (set status (pd-run-plan src ar plan sh b st a))
+                        (if (ps-missed src) (return 7))
+                        (if (or (== status 0) (== status 1) (== status 5) (== status 7))
+                          (pd-register-objstm (src-of-cells a) ar dc sn nn)))))))
+          (set k (pl-next ar k))))
+    (return 0)))
+
+(defn ^I32 pd-find-catalog [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
+                            ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "Repair, when no trailer names a usable /Root: the first object, by")
+  (comment "number, that is a dictionary with /Type /Catalog (objects inside object")
+  (comment "streams included). 0 when there is none.")
+  (let [^I32 nent (cells-at dc D_NENT)
+        ^:mut ^I32 num 1
+        ^:mut ^I32 h 0
+        ^:mut ^I32 ty 0]
+    (while (and (< num nent) (< num 200000))
+      (do (if (>= (pd-ent-kind dc num) 2)
+            (do (set h (pd-get src ar dc a b st num))
+                (if (ps-missed src) (return 0))
+                (if (!= h 0)
+                  (if (== (pl-kind-of ar h) 7)
+                    (do (set ty (pl-dict-get ar h (pn-type)))
+                        (if (!= ty 0)
+                          (if (== (pl-name-is ar ty (pn-catalog)) 1)
+                            (return h))))))))
+          (set num (+ num 1))))
+    (return 0)))
+
+;; -------------------------------------------------------------------- open
+
+(defn ^I32 pd-begin [^Src src ^:mut ^Cells ar ^:mut ^Cells dc]
+  (comment "Start over: an empty arena and document, the header's place and the")
+  (comment "version, the limits. Answers 0, or 1 (`no-header`; `need-bytes` when")
+  (comment "the source missed).")
   (pl-init ar)
   (pd-init dc)
   (let [^I32 n (ps-len src)
         ^I32 base (pd-find-header src)
-        ^:mut ^I32 sx 0
-        ^:mut ^I32 off 0
-        ^:mut ^I32 tk 0
-        ^:mut ^I32 lim 0
-        ^:mut ^I32 status 0
-        ^:mut ^I32 root 0
-        ^:mut ^I32 pages 0
-        ^:mut ^I32 enc 0]
+        ^:mut ^I32 lim 0]
     (if (< base 0) (return (pd-stop src 1)))
     (cells-set dc D_BASE base)
     (if (< (+ base 7) n)
@@ -1036,32 +1580,37 @@
         (set lim (+ 65536 (* 64 n)))))
     (cells-set dc D_LIMENT lim)
     (cells-set dc D_REFLIM (limit-of 4))
-    (set sx (pd-find-startxref src))
-    (if (< sx 0) (return (pd-stop src 2)))
-    (pl-seek ar (+ sx 9) n)
-    (set tk (pl-lex src ar))
-    (if (!= tk 1) (return (pd-stop src 3)))
-    (set off (pl-token-a ar))
-    (comment "Offsets are from the start of the file, or (junk before the header)")
-    (comment "from the header: whichever finds a section at `startxref`.")
-    (if (!= (pd-kind-at src ar off) 0)
-      (cells-set dc D_SHIFT 0)
-      (if (and (> base 0) (!= (pd-kind-at src ar (+ off base)) 0))
-        (do (cells-set dc D_SHIFT base)
-            (pd-warn-set src dc 1))
-        (return (pd-stop src 3))))
-    (set status (pd-chain src ar dc a b st off))
-    (if (!= status 0) (return status))
-    (if (== (cells-at dc D_NTRAIL) 0) (return (pd-stop src 3)))
+    (return 0)))
+
+(defn ^I32 pd-open-tail [^Src src ^Src pw ^I32 plen ^:mut ^Cells ar ^:mut ^Cells dc
+                         ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 repaired]
+  (comment "What follows a cross-reference, read or rebuilt: the trailer's")
+  (comment "/Encrypt (and the key), the catalog and its page tree.")
+  (let [^:mut ^I32 enc 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 root 0
+        ^:mut ^I32 pages 0]
     (comment "The cross-reference is read: say where each object ends.")
     (pd-hint-extents src dc b)
     (set enc (pd-trailer-get ar dc (pn-encrypt)))
-    (if (!= enc 0) (cells-set dc D_ENC enc))
+    (if (!= enc 0)
+      (do (cells-set dc D_ENC enc)
+          (set status (pd-crypt-setup src pw plen ar dc a b st enc))
+          (if (!= status 0) (return (pd-stop src status)))))
+    (if (== repaired 1)
+      (do (pd-rebuild-objstms src ar dc a b st)
+          (if (ps-missed src) (return 7))))
     (set root (pd-trailer-get ar dc (pn-root)))
-    (if (== root 0) (return (pd-stop src 4)))
-    (set root (pd-resolve src ar dc a b st root))
-    (comment "When the file is encrypted, what cannot be read is probably")
-    (comment "encrypted (object streams are, whole): say so, and let P3.2 decrypt.")
+    (if (and (== root 0) (== repaired 0)) (return (pd-stop src 4)))
+    (if (!= root 0)
+      (set root (pd-resolve src ar dc a b st root)))
+    (comment "A rebuilt file's /Root may name a lost object: take the catalog found.")
+    (if (== repaired 1)
+      (do (if (== root 0)
+            (if (> (cells-at dc D_CATNUM) 0)
+              (set root (pd-get src ar dc a b st (cells-at dc D_CATNUM)))))
+          (if (== root 0)
+            (set root (pd-find-catalog src ar dc a b st)))))
     (if (== root 0) (return (pd-unreadable src dc 4)))
     (if (!= (pl-kind-of ar root) 7) (return (pd-unreadable src dc 4)))
     (cells-set dc D_ROOT root)
@@ -1069,6 +1618,83 @@
     (if (== pages 0) (return (pd-unreadable src dc 5)))
     (if (!= (pl-kind-of ar pages) 7) (return (pd-unreadable src dc 5)))
     (return 0)))
+
+(defn ^I32 pd-open-normal [^Src src ^Src pw ^I32 plen ^:mut ^Cells ar ^:mut ^Cells dc
+                           ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "The ordinary open: `startxref`, the chain of sections, the trailer.")
+  (let [^I32 n (ps-len src)
+        ^:mut ^I32 sx 0
+        ^:mut ^I32 off 0
+        ^:mut ^I32 tk 0
+        ^:mut ^I32 status 0]
+    (set status (pd-begin src ar dc))
+    (if (!= status 0) (return status))
+    (let [^I32 base (cells-at dc D_BASE)]
+      (set sx (pd-find-startxref src))
+      (if (< sx 0) (return (pd-stop src 2)))
+      (pl-seek ar (+ sx 9) n)
+      (set tk (pl-lex src ar))
+      (if (!= tk 1) (return (pd-stop src 3)))
+      (set off (pl-token-a ar))
+      (comment "Offsets are from the start of the file, or (junk before the header)")
+      (comment "from the header: whichever finds a section at `startxref`.")
+      (if (!= (pd-kind-at src ar off) 0)
+        (cells-set dc D_SHIFT 0)
+        (if (and (> base 0) (!= (pd-kind-at src ar (+ off base)) 0))
+          (do (cells-set dc D_SHIFT base)
+              (pd-warn-set src dc 1))
+          (return (pd-stop src 3)))))
+    (set status (pd-chain src ar dc a b st off))
+    (if (!= status 0) (return status))
+    (if (== (cells-at dc D_NTRAIL) 0) (return (pd-stop src 3)))
+    (return (pd-open-tail src pw plen ar dc a b st 0))))
+
+(defn ^I32 pd-open-repair [^Src src ^Src pw ^I32 plen ^:mut ^Cells ar ^:mut ^Cells dc
+                           ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "Rebuild the cross-reference by scanning, then open as usual.")
+  (let [^:mut ^I32 status 0]
+    (set status (pd-begin src ar dc))
+    (if (!= status 0) (return status))
+    (set status (pd-rebuild src ar dc))
+    (if (!= status 0) (return status))
+    (pd-warn-set src dc 512)
+    (return (pd-open-tail src pw plen ar dc a b st 1))))
+
+(defn ^I32 pd-open-run [^Src src ^Src pw ^I32 plen ^:mut ^Cells ar ^:mut ^Cells dc
+                        ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "The ordinary open; when the cross-reference or the catalog cannot be")
+  (comment "used, a repair by scanning; when that does not help, the ordinary answer.")
+  (let [^:mut ^I32 status 0
+        ^:mut ^I32 s2 0]
+    (set status (pd-open-normal src pw plen ar dc a b st))
+    (if (or (== status 2) (== status 3) (== status 4) (== status 5))
+      (do (set s2 (pd-open-repair src pw plen ar dc a b st))
+          (if (== s2 0) (return 0))
+          (if (ps-missed src) (return 7))
+          (if (or (== s2 8) (== s2 9) (== s2 10)) (return s2))))
+    (return status)))
+
+(defn ^:pub ^I32 pd-open [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
+                          ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "Open a document: find the header and `startxref`, read every")
+  (comment "cross-reference section and trailer (rebuilding them by scanning when")
+  (comment "they are unusable), decrypt with the EMPTY user password when the file")
+  (comment "is encrypted, check that there is a catalog with a page tree. Answers a")
+  (comment "`pd-status` (0 ok). Nothing is decoded but the cross-reference streams,")
+  (comment "what they need and, for a rebuilt table, the object streams.")
+  (return (pd-open-run src src 0 ar dc a b st)))
+
+(defn ^:pub ^I32 pd-open-pw [^Src src ^Src pw ^:mut ^Cells ar ^:mut ^Cells dc
+                             ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
+  (comment "`pd-open` with a PASSWORD: the bytes of the source `pw`, tried as the")
+  (comment "user password and then as the owner password after the empty user")
+  (comment "password (D040). R2 to R4 use the bytes as given (PDFDocEncoding, in")
+  (comment "practice Latin-1), R5 and R6 as UTF-8. The password is read only while")
+  (comment "the key is found and is never stored (D058): not in `ar`, `dc`, a dump")
+  (comment "or a transcript. A file the password does not open answers")
+  (comment "`password-incorrect`; one that needs a password and was given none,")
+  (comment "`password-required`; another handler, `encryption-unsupported`.")
+  (return (pd-open-run src pw (ps-len pw) ar dc a b st)))
 
 ;; ------------------------------------------------------------- the pages
 ;;

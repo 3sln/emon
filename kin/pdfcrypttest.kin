@@ -1,0 +1,688 @@
+;; Laws for repair by scanning (P3.1) and the standard security handler (P3.2):
+;; `emon.pdfdoc` and `emon.pdfcrypt` over the fixtures of
+;; `kin/scripts/pdf-p3-fixtures` (babashka, qpdf and poppler).
+;;
+;; THE CORPUS is `test/pdf/p3.txt`: one row per (file, password): the status
+;; emon must answer, the page count and the digest of the page geometry (as
+;; poppler reports them, with the same password), and the PLAIN TWIN, the
+;; unencrypted, undamaged file the same qpdf wrote from the same source. There
+;; are files for every revision and algorithm (RC4-40 R2, RC4-128 R3, RC4-128
+;; through crypt filters R4, AES-128 R4, AES-256 R5 and R6), each with the empty
+;; user password and with one; with object streams (encrypted whole), with
+;; clear-text metadata, with a long and a non-ASCII password, with the
+;; extraction and printing flags forbidden (D040: never consulted); public-key
+;; and other handlers, V3, an unknown crypt filter method (`encryption-
+;; unsupported`); and damaged files of every kind repair handles, encrypted
+;; ones among them.
+;;
+;; WHAT A ROW PROVES. The status and page geometry are poppler's. The plain
+;; twin proves the DECRYPTION: a deep hash of the catalog and of the Info
+;; dictionary, following every reference (pages, annotations, fonts, content
+;; streams decoded, every string), must equal the twin's, and the first bytes
+;; of page 1's content and the Info /Title are checked against literals.
+;; A file rebuilt by scanning must give the same.
+(ns emon.pdfcrypttest
+  (:require [emon.lang :refer [I32 I64 Blob Src Cells Text emit-ascii i64]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               assert-that-at assert-text assert-text-span
+                               assert-cells-hex text-blob new-cells new-text
+                               test-file test-file-span cells-blob
+                               test-src-chunked test-src-view test-src-ctl]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
+                               cells-push cells-drop src-of-blob src-slice]]
+            [emon.splitmix :refer [sm-seed sm-below]]
+            [emon.pdfdoc :refer [pd-open pd-open-pw pd-get pd-resolve pd-pages
+                                 pd-stream-data pd-pg-count pd-pg-media
+                                 pd-pg-crop pd-pg-rotate pd-pg-contents
+                                 pd-status-emit-name pd-encrypted pd-warn pd-root
+                                 pd-trailer-get pd-object-count pd-source-json]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfnames :refer [pn-info pn-title]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value
+                                 pl-num-cp pl-name-len pl-name-byte pl-str-len
+                                 pl-str-byte pl-stream-dict pl-dict-get]]
+            [kin.lang :refer [defn declarefn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem bit-or]]))
+
+;; ------------------------------------------------------------ row helpers
+
+(defn ^I32 ct-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ct-tab [^Blob b ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ct-dec [^Blob b ^I32 from ^I32 to]
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0]
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 ct-dash [^Blob b ^I32 from ^I32 to]
+  (comment "1 when b[from, to) is the single byte `-`: no password, no twin.")
+  (if (and (== (- to from) 1) (== (blob-u8 b from) 45)) (return 1))
+  (return 0))
+
+(defn ^I32 ct-pts [^I32 cp]
+  (let [^I32 x (+ cp 50)
+        ^:mut ^I32 q (quot x 100)]
+    (if (< (rem x 100) 0) (set q (- q 1)))
+    (return q)))
+
+(defn ^I32 ct-digest [^Cells pg]
+  (comment "The 23-bit rolling hash of every page's boxes in whole points and its")
+  (comment "rotation, as `kin/pdfdoctest.kin` and `tools/pdfinfo.clj` compute it.")
+  (let [^I32 n (pd-pg-count pg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 v 0]
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 9)
+            (do (if (< k 4) (set v (ct-pts (pd-pg-media pg i k))))
+                (if (and (>= k 4) (< k 8)) (set v (ct-pts (pd-pg-crop pg i (- k 4)))))
+                (if (== k 8) (set v (pd-pg-rotate pg i)))
+                (set v (rem v 8388593))
+                (if (< v 0) (set v (+ v 8388593)))
+                (set h (rem (+ (* h 131) v) 8388593))
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (return h)))
+
+;; ---------------------------------------------------------- opening a row
+
+(defn ^I32 ct-open [^Blob file ^Blob rows ^I32 ps ^I32 pe ^:mut ^Cells ar
+                    ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                    ^:mut ^Cells pg]
+  (comment "Open `file` with the password rows[ps, pe) (`-`: none) and list its pages.")
+  (comment "Answers the pd-status.")
+  (let [^:mut ^I32 status 0]
+    (if (== (ct-dash rows ps pe) 1)
+      (set status (pd-open (src-of-blob file) ar dc a b st))
+      (set status (pd-open-pw (src-of-blob file)
+                              (src-of-blob (src-slice (src-of-blob rows) ps pe))
+                              ar dc a b st)))
+    (cells-drop pg 0)
+    (if (== status 0)
+      (pd-pages (src-of-blob file) ar dc a b st pg))
+    (return status)))
+
+;; ------------------------------------------------------------- deep hash
+
+(defn ^I32 ct-mix [^I32 acc ^I32 v]
+  (let [^:mut ^I32 x (rem v 8388593)]
+    (if (< x 0) (set x (+ x 8388593)))
+    (return (rem (+ (* acc 131) x) 8388593))))
+
+(declarefn ct-deep)
+
+(defn ^I32 ct-is-extensions [^Cells ar ^I32 k]
+  (comment "1 when k is the name /Extensions: qpdf adds it to the catalog of an R5")
+  (comment "file (`/ADBE /ExtensionLevel 3`), which says how the file is encrypted and")
+  (comment "not what it holds.")
+  (if (!= (pl-kind-of ar k) 4) (return 0))
+  (if (!= (pl-name-len ar k) 10) (return 0))
+  (if (!= (pl-name-byte ar k 0) 69) (return 0))
+  (if (!= (pl-name-byte ar k 1) 120) (return 0))
+  (if (!= (pl-name-byte ar k 2) 116) (return 0))
+  (if (!= (pl-name-byte ar k 3) 101) (return 0))
+  (if (!= (pl-name-byte ar k 4) 110) (return 0))
+  (if (!= (pl-name-byte ar k 5) 115) (return 0))
+  (if (!= (pl-name-byte ar k 6) 105) (return 0))
+  (if (!= (pl-name-byte ar k 7) 111) (return 0))
+  (if (!= (pl-name-byte ar k 8) 110) (return 0))
+  (if (!= (pl-name-byte ar k 9) 115) (return 0))
+  (return 1))
+
+(defn ^I32 ct-is-length [^Cells ar ^I32 k]
+  (comment "1 when k is the name /Length: an AES stream is longer than its plain twin")
+  (comment "(an IV and padding), so the length is the one thing that is not content.")
+  (if (!= (pl-kind-of ar k) 4) (return 0))
+  (if (!= (pl-name-len ar k) 6) (return 0))
+  (if (!= (pl-name-byte ar k 0) 76) (return 0))
+  (if (!= (pl-name-byte ar k 1) 101) (return 0))
+  (if (!= (pl-name-byte ar k 2) 110) (return 0))
+  (if (!= (pl-name-byte ar k 3) 103) (return 0))
+  (if (!= (pl-name-byte ar k 4) 116) (return 0))
+  (if (!= (pl-name-byte ar k 5) 104) (return 0))
+  (return 1))
+
+(defn ^I32 ct-deep [^Src pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                    ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out
+                    ^:mut ^Cells ctr ^I32 h0 ^I32 depth ^I32 acc0]
+  (comment "A hash of the VALUE of object h0: kinds, numbers, the bytes of names and")
+  (comment "strings, arrays and dictionaries in order, every reference followed (to")
+  (comment "a depth of nine: pages point back to their parent), a stream's")
+  (comment "dictionary and DECODED bytes. Handles and object numbers do not enter,")
+  (comment "so two files with the same content hash alike. ctr[0] counts the nodes")
+  (comment "visited and ctr[1] the stream bytes, so that \"equal\" cannot be empty.")
+  (let [^:mut ^I32 h h0
+        ^:mut ^I32 acc acc0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 status 0]
+    (if (== h 0) (return (ct-mix acc 1)))
+    (cells-set ctr 0 (+ (cells-at ctr 0) 1))
+    (set kind (pl-kind-of ar h))
+    (set acc (ct-mix acc (+ kind 20)))
+    (if (== kind 9)
+      (do (if (>= depth 9) (return (ct-mix acc 9)))
+          (set h (pd-resolve pdf ar dc a b st h))
+          (return (ct-deep pdf ar dc a b st out ctr h (+ depth 1) acc))))
+    (if (or (== kind 1) (== kind 2))
+      (return (ct-mix acc (pl-int-value ar h))))
+    (if (== kind 3)
+      (return (ct-mix acc (pl-num-cp ar h))))
+    (if (== kind 4)
+      (do (set n (pl-name-len ar h))
+          (while (< i n)
+            (do (set acc (ct-mix acc (pl-name-byte ar h i)))
+                (set i (+ i 1))))
+          (return acc)))
+    (if (== kind 5)
+      (do (set n (pl-str-len ar h))
+          (set acc (ct-mix acc n))
+          (while (< i n)
+            (do (set acc (ct-mix acc (pl-str-byte ar h i)))
+                (set i (+ i 1))))
+          (return acc)))
+    (if (== kind 6)
+      (do (set k (pl-first ar h))
+          (while (!= k 0)
+            (do (set acc (ct-deep pdf ar dc a b st out ctr k (+ depth 1) acc))
+                (set k (pl-next ar k))))
+          (return acc)))
+    (if (== kind 7)
+      (do (set k (pl-first ar h))
+          (while (!= k 0)
+            (do (set v (pl-next ar k))
+                (if (== (ct-is-extensions ar k) 0)
+                  (do (set acc (ct-deep pdf ar dc a b st out ctr k (+ depth 1) acc))
+                      (set acc (ct-deep pdf ar dc a b st out ctr v (+ depth 1) acc))))
+                (if (== v 0)
+                  (set k 0)
+                  (set k (pl-next ar v)))))
+          (return acc)))
+    (if (== kind 8)
+      (do (set d (pl-stream-dict ar h))
+          (set k (pl-first ar d))
+          (while (!= k 0)
+            (do (set v (pl-next ar k))
+                (if (== (ct-is-length ar k) 0)
+                  (do (set acc (ct-deep pdf ar dc a b st out ctr k (+ depth 1) acc))
+                      (set acc (ct-deep pdf ar dc a b st out ctr v (+ depth 1) acc))))
+                (if (== v 0)
+                  (set k 0)
+                  (set k (pl-next ar v)))))
+          (set status (pd-stream-data pdf ar dc a b st h out))
+          (set acc (ct-mix acc status))
+          (set n (cells-len out))
+          (cells-set ctr 1 (+ (cells-at ctr 1) n))
+          (while (< i n)
+            (do (set acc (ct-mix acc (cells-at out i)))
+                (set i (+ i 1))))
+          (return acc)))
+    (return acc)))
+
+(defn ^I32 ct-hash-root [^Src pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out
+                         ^:mut ^Cells ctr]
+  (comment "The deep hash of the catalog of an opened document.")
+  (let [^I32 r (pd-root dc)]
+    (return (ct-deep pdf ar dc a b st out ctr r 0 0))))
+
+(defn ^I32 ct-hash-info [^Src pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out
+                         ^:mut ^Cells ctr]
+  (comment "The deep hash of the trailer's /Info, 0 when there is none (a rebuilt")
+  (comment "file whose trailer was lost).")
+  (let [^I32 i (pd-trailer-get ar dc (pn-info))]
+    (if (== i 0) (return 0))
+    (return (ct-deep pdf ar dc a b st out ctr i 0 0))))
+
+(defn ^I32 ct-str-is [^Cells ar ^I32 h ^Blob want]
+  (comment "1 when h is a string object whose bytes are the blob `want`.")
+  (if (== h 0) (return 0))
+  (if (!= (pl-kind-of ar h) 5) (return 0))
+  (let [^I32 n (pl-str-len ar h)
+        ^:mut ^I32 i 0]
+    (if (!= n (blob-len want)) (return 0))
+    (while (< i n)
+      (do (if (!= (pl-str-byte ar h i) (blob-u8 want i)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+;; -------------------------------------------------- what an opened row is
+
+(defn ^I32 ct-verify [^Blob file ^Blob twin ^I32 twin-known ^I32 pages ^I32 digest
+                      ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg
+                      ^:mut ^Cells out ^:mut ^Cells ctr]
+  (comment "`file` is open (ar, dc, pg). A verdict: 0 all good; 1 page count; 2")
+  (comment "geometry digest; 3 the catalog differs from the twin's; 4 the Info")
+  (comment "dictionary does; 5 page 1's content does not begin `BT /F1 12 Tf`; 6 the")
+  (comment "Info /Title is not `The Secret Title`; 7 too little was compared.")
+  (let [^Src pdf (src-of-blob file)
+        ^Cells ar2 (new-cells)
+        ^Cells dc2 (new-cells)
+        ^Cells a2 (new-cells)
+        ^Cells b2 (new-cells)
+        ^Cells st2 (new-cells)
+        ^Cells ctr2 (new-cells)
+        ^:mut ^I32 hr 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 hr2 0
+        ^:mut ^I32 hi2 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 con 0]
+    (if (!= (pd-pg-count pg) pages) (return 1))
+    (if (!= (ct-digest pg) digest) (return 2))
+    (comment "Page 1's first content stream, decoded, begins with the operators we wrote.")
+    (set con (pd-pg-contents pg 0))
+    (if (== con 0) (return 5))
+    (if (!= (pl-kind-of ar con) 8) (return 5))
+    (pd-stream-data pdf ar dc a b st con out)
+    (if (< (cells-len out) 12) (return 5))
+    (if (!= (cells-at out 0) 66) (return 5))
+    (if (!= (cells-at out 1) 84) (return 5))
+    (if (!= (cells-at out 3) 47) (return 5))
+    (if (!= (cells-at out 4) 70) (return 5))
+    (comment "The Info /Title, a string in an encrypted object.")
+    (set hi (pd-trailer-get ar dc (pn-info)))
+    (if (!= hi 0)
+      (do (set hi (pd-resolve pdf ar dc a b st hi))
+          (set t (pl-dict-get ar hi (pn-title)))
+          (set t (pd-resolve pdf ar dc a b st t))
+          (if (== (ct-str-is ar t (text-blob "The Secret Title")) 0) (return 6))))
+    (cells-drop ctr 0)
+    (cells-push ctr 0)
+    (cells-push ctr 0)
+    (set hr (ct-hash-root pdf ar dc a b st out ctr))
+    (set hi (ct-hash-info pdf ar dc a b st out ctr))
+    (comment "The plain twin: the same content, never encrypted, never damaged.")
+    (if (== twin-known 1)
+      (do (cells-push ctr2 0)
+          (cells-push ctr2 0)
+          (pd-open (src-of-blob twin) ar2 dc2 a2 b2 st2)
+          (set hr2 (ct-hash-root (src-of-blob twin) ar2 dc2 a2 b2 st2 out ctr2))
+          (set hi2 (ct-hash-info (src-of-blob twin) ar2 dc2 a2 b2 st2 out ctr2))
+          (if (!= hr hr2) (return 3))
+          (if (and (!= hi 0) (!= hi hi2)) (return 4))
+          (if (< (cells-at ctr 0) 60) (return 7))
+          (if (< (cells-at ctr 1) 300) (return 7))))
+    (return 0)))
+
+(deftest test-every-row-opens-or-fails-as-named-and-decrypts-to-its-twin
+  (comment "Row: file, password, status, pages, digest, twin.")
+  (let [^Blob f (test-file "pdf/p3.txt")
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells out (new-cells)
+        ^Cells ctr (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 opened 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 status 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (ct-tab f pos e))
+                (set s1 (ct-tab f (+ s0 1) e))
+                (set s2 (ct-tab f (+ s1 1) e))
+                (set s3 (ct-tab f (+ s2 1) e))
+                (set s4 (ct-tab f (+ s3 1) e))
+                (let [^Text t (new-text)
+                      ^Blob file (test-file-span f pos s0)]
+                  (set status (ct-open file f (+ s0 1) s1 ar dc a b st pg))
+                  (pd-status-emit-name t status)
+                  (assert-text-span t f (+ s1 1) s2 "status" line)
+                  (if (== status 0)
+                    (do (set opened (+ opened 1))
+                        (if (== (ct-dash f (+ s4 1) e) 1)
+                          (assert-eq-at (ct-verify file file 0 (ct-dec f (+ s2 1) s3) (ct-dec f (+ s3 1) s4)
+                                                   ar dc a b st pg out ctr)
+                                        0 "pages, geometry, content, title" line)
+                          (assert-eq-at (ct-verify file (test-file-span f (+ s4 1) e) 1
+                                                   (ct-dec f (+ s2 1) s3) (ct-dec f (+ s3 1) s4)
+                                                   ar dc a b st pg out ctr)
+                                        0 "pages, geometry, content, title, equal to the twin" line)))))))
+          (set pos (+ e 1))))
+    (assert-that (> rows 70) "the rows were read")
+    (assert-that (> opened 50) "most rows open")))
+
+;; ----------------------------------------------- a password is never kept
+
+(defn ^I32 ct-window-in [^Cells c ^Blob rows ^I32 ps ^I32 pe]
+  (comment "1 when the first (up to 8) bytes of the password rows[ps, pe) occur, in")
+  (comment "a row, among the cells of c.")
+  (let [^:mut ^I32 w (- pe ps)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 same 0]
+    (if (> w 8) (set w 8))
+    (if (< w 4) (return 0))
+    (while (<= (+ i w) (cells-len c))
+      (do (set same 1)
+          (set k 0)
+          (while (and (== same 1) (< k w))
+            (do (if (!= (cells-at c (+ i k)) (blob-u8 rows (+ ps k))) (set same 0))
+                (set k (+ k 1))))
+          (if (== same 1) (return 1))
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-a-password-is-not-left-in-the-arena-the-document-or-the-scratch
+  (comment "D058: the password rides with the input and is never written down. After")
+  (comment "a complete open, the page walk and a read of page 1's content, none of")
+  (comment "the cells kin holds contains it (its first bytes: 8 at most).")
+  (let [^Blob f (test-file "pdf/p3.txt")
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells out (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 checked 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 con 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set s0 (ct-tab f pos e))
+                (set s1 (ct-tab f (+ s0 1) e))
+                (if (== (ct-dash f (+ s0 1) s1) 0)
+                  (let [^Blob file (test-file-span f pos s0)]
+                    (set status (ct-open file f (+ s0 1) s1 ar dc a b st pg))
+                    (if (== status 0)
+                      (do (set con (pd-pg-contents pg 0))
+                          (if (!= con 0)
+                            (pd-stream-data (src-of-blob file) ar dc a b st con out))))
+                    (set checked (+ checked 1))
+                    (assert-eq-at (ct-window-in ar f (+ s0 1) s1) 0 "not in the arena" line)
+                    (assert-eq-at (ct-window-in dc f (+ s0 1) s1) 0 "not in the document" line)
+                    (assert-eq-at (ct-window-in a f (+ s0 1) s1) 0 "not in scratch a" line)
+                    (assert-eq-at (ct-window-in b f (+ s0 1) s1) 0 "not in scratch b" line)
+                    (assert-eq-at (ct-window-in st f (+ s0 1) s1) 0 "not in scratch st" line)
+                    (assert-eq-at (ct-window-in pg f (+ s0 1) s1) 0 "not in the page table" line)))))
+          (set pos (+ e 1))))
+    (assert-that (> checked 40) "rows with a password were checked")))
+
+;; ---------------------------------------- a source that misses, end to end
+
+(defn ^I32 ct-diff [^Cells x ^Cells y]
+  (let [^I32 n (cells-len x)
+        ^:mut ^I32 i 0]
+    (if (!= n (cells-len y)) (return -2))
+    (while (< i n)
+      (do (if (!= (cells-at x i) (cells-at y i)) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 ct-same-async [^Blob file ^Blob rows ^I32 ps ^I32 pe ^I32 chunk]
+  (comment "Open in memory and through an async source of `chunk`-byte chunks, with")
+  (comment "the password: a verdict, 0 for the same. 1 the status differs; 2, 3, 4 the")
+  (comment "arena, document or page table; 5 an attempt that missed reported a status")
+  (comment "other than need-bytes; 6 it reported a warning the real run lacks; 7 more")
+  (comment "than 24 rounds (FETCH_ROUNDS).")
+  (let [^Cells ar1 (new-cells)
+        ^Cells dc1 (new-cells)
+        ^Cells a1 (new-cells)
+        ^Cells b1 (new-cells)
+        ^Cells st1 (new-cells)
+        ^Cells pg1 (new-cells)
+        ^Cells ar2 (new-cells)
+        ^Cells dc2 (new-cells)
+        ^Cells a2 (new-cells)
+        ^Cells b2 (new-cells)
+        ^Cells st2 (new-cells)
+        ^Cells pg2 (new-cells)
+        ^Src base (test-src-chunked file chunk 0)
+        ^I32 s1 (ct-open file rows ps pe ar1 dc1 a1 b1 st1 pg1)
+        ^I32 wf (pd-warn dc1)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 badstatus 0
+        ^:mut ^I32 badwarn 0]
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)]
+            (if (== (ct-dash rows ps pe) 1)
+              (set s2 (pd-open v ar2 dc2 a2 b2 st2))
+              (set s2 (pd-open-pw v (src-of-blob (src-slice (src-of-blob rows) ps pe)) ar2 dc2 a2 b2 st2)))
+            (cells-drop pg2 0)
+            (if (== s2 0) (pd-pages v ar2 dc2 a2 b2 st2 pg2))
+            (if (ps-missed v)
+              (do (set w (pd-warn dc2))
+                  (if (and (!= s2 0) (!= s2 7)) (set badstatus 1))
+                  (if (!= (bit-or w wf) wf) (set badwarn 1))
+                  (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 40) (set more 0)))
+              (set more 0)))))
+    (if (!= s1 s2) (return 1))
+    (if (== badstatus 1) (return 5))
+    (if (== badwarn 1) (return 6))
+    (if (> round 24) (return 7))
+    (if (!= (ct-diff ar1 ar2) -1) (return 2))
+    (if (!= (ct-diff dc1 dc2) -1) (return 3))
+    (if (!= (ct-diff pg1 pg2) -1) (return 4))
+    (return 0)))
+
+(deftest test-every-row-is-the-same-through-an-async-source-of-512-byte-chunks
+  (comment "D058 and D075 over repair and decryption: a scan of the whole file and the")
+  (comment "key derivation happen on a source that misses, and what is kept is the")
+  (comment "in-memory run cell for cell; no miss ever becomes a status, a warning,")
+  (comment "or a wrong password.")
+  (let [^Blob f (test-file "pdf/p3.txt")
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (ct-tab f pos e))
+                (set s1 (ct-tab f (+ s0 1) e))
+                (assert-eq-at (ct-same-async (test-file-span f pos s0) f (+ s0 1) s1 512)
+                              0 "async equals in-memory" line)))
+          (set pos (+ e 1))))
+    (assert-that (> rows 70) "the rows were read")))
+
+(deftest test-a-repaired-file-is-the-same-through-an-async-source-of-64-byte-chunks
+  (let [^Blob f (test-file "pdf/p3.txt")
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set s0 (ct-tab f pos e))
+                (set s1 (ct-tab f (+ s0 1) e))
+                (if (== (blob-u8 f (+ pos 7)) 114)
+                  (do (set rows (+ rows 1))
+                      (assert-eq-at (ct-same-async (test-file-span f pos s0) f (+ s0 1) s1 64)
+                                    0 "async equals in-memory" line)))))
+          (set pos (+ e 1))))
+    (comment "`pdf/p3/repair-...`: the eighth byte of the row is the `r`.")
+    (assert-that (> rows 10) "the repair rows were read")))
+
+;; ------------------------------------------------------- what is reported
+
+(defn ^I32 ct-info [^Blob file ^I32 which]
+  (comment "Open without a password (the empty user password is tried) and answer")
+  (comment "1 the pd-status, 2 `pd-encrypted`, 3 the warning bits.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^I32 status (pd-open (src-of-blob file) ar dc a b st)]
+    (if (== which 1) (return status))
+    (if (== which 2) (return (pd-encrypted dc)))
+    (return (pd-warn dc))))
+
+(deftest test-repair-is-noted-and-only-where-it-happened
+  (assert-eq (ct-info (test-file "pdf/p3/plain.pdf") 3) 0 "an undamaged file has no warning")
+  (assert-eq (ct-info (test-file "pdf/p3/repair-startxref-wrong.pdf") 3) 512 "the table was rebuilt")
+  (assert-eq (ct-info (test-file "pdf/p3/repair-startxref-past-end.pdf") 3) 512 "a startxref past the end")
+  (assert-eq (ct-info (test-file "pdf/p3/repair-cut-before-xref.pdf") 3) 512 "no startxref at all")
+  (assert-eq (ct-info (test-file "pdf/p3/repair-offsets-shifted.pdf") 1) 0 "shifted offsets: it opens")
+  (assert-eq (ct-info (test-file "pdf/p3/crypt-aes-128-empty.pdf") 3) 0 "decryption is not damage"))
+
+(deftest test-an-encrypted-file-says-so-whether-or-not-it-opens
+  (assert-eq (ct-info (test-file "pdf/p3/plain.pdf") 2) 0 "a plain file is not encrypted")
+  (assert-eq (ct-info (test-file "pdf/p3/crypt-aes-128-empty.pdf") 2) 1 "opened by the empty password")
+  (assert-eq (ct-info (test-file "pdf/p3/crypt-aes-128-user.pdf") 2) 1 "locked")
+  (assert-eq (ct-info (test-file "pdf/p3/crypt-aes-128-user.pdf") 1) 8 "password-required is status 8")
+  (assert-eq (ct-info (test-file "pdf/p3/unsupported-pubsec.pdf") 1) 10 "encryption-unsupported is status 10"))
+
+(deftest test-the-wrong-password-is-incorrect-and-no-password-is-required
+  (comment "Three errors, distinct from each other and from a damaged file (D040).")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Blob locked (test-file "pdf/p3/crypt-aes-256-r6-user.pdf")]
+    (assert-eq (pd-open (src-of-blob locked) ar dc a b st) 8 "none supplied: password-required")
+    (assert-eq (pd-open-pw (src-of-blob locked) (src-of-blob (text-blob "wrong-password")) ar dc a b st) 9
+               "a wrong one: password-incorrect")
+    (assert-eq (pd-open-pw (src-of-blob locked) (src-of-blob (text-blob "user-secret")) ar dc a b st) 0
+               "the user password opens it")
+    (assert-eq (pd-open-pw (src-of-blob locked) (src-of-blob (text-blob "owner-secret")) ar dc a b st) 0
+               "and so does the owner password")
+    (assert-eq (pd-open-pw (src-of-blob locked) (src-of-blob (text-blob "")) ar dc a b st) 8
+               "an empty password is none supplied")
+    (assert-eq (pd-open (src-of-blob (test-file "pdf/p3/crypt-rc4-40-user.pdf")) ar dc a b st) 8
+               "RC4-40: password-required")
+    (assert-eq (pd-open-pw (src-of-blob (test-file "pdf/p3/crypt-rc4-40-user.pdf"))
+                           (src-of-blob (text-blob "owner-secret")) ar dc a b st) 0
+               "RC4-40: the owner password recovers the user password from /O")))
+
+;; ------------------------------------------------------------------- fuzz
+
+(defn ^I32 ct-survive [^Blob file ^Blob rows ^I32 ps ^I32 pe ^:mut ^Cells ar
+                       ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                       ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells out]
+  (comment "Open (with the password), list the pages and decode every stream the")
+  (comment "cross-reference names: none of it may fault. Answers the pd-status.")
+  (let [^I32 status (ct-open file rows ps pe ar dc a b st pg)
+        ^Src pdf (src-of-blob file)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 h 0]
+    (if (== status 0)
+      (while (< i (pd-object-count dc))
+        (do (set h (pd-get pdf ar dc a b st i))
+            (if (!= h 0)
+              (if (== (pl-kind-of ar h) 8)
+                (pd-stream-data pdf ar dc a b st h out)))
+            (set i (+ i 1)))))
+    (return status)))
+
+
+(defn ^I32 ct-fuzz [^Blob f ^Blob pw ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                    ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells out
+                    ^:mut ^Cells cut ^:mut ^Cells rng]
+  (comment "Every 37th truncation of f and sixty copies with three random bytes")
+  (comment "replaced, each opened with the password `pw` and read through: none may")
+  (comment "fault. Answers how many were tried.")
+  (let [^I32 n (blob-len f)
+        ^I32 pn (blob-len pw)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 total 0]
+    (while (<= k n)
+      (do (cells-drop cut 0)
+          (set j 0)
+          (while (< j k)
+            (do (cells-push cut (blob-u8 f j))
+                (set j (+ j 1))))
+          (ct-survive (cells-blob cut) pw 0 pn ar dc a b st pg out)
+          (set total (+ total 1))
+          (set k (+ k 37))))
+    (while (< r 60)
+      (do (cells-drop cut 0)
+          (set j 0)
+          (while (< j n)
+            (do (cells-push cut (blob-u8 f j))
+                (set j (+ j 1))))
+          (set j 0)
+          (while (< j 3)
+            (do (set at (sm-below rng n))
+                (cells-set cut at (sm-below rng 256))
+                (set j (+ j 1))))
+          (ct-survive (cells-blob cut) pw 0 pn ar dc a b st pg out)
+          (set total (+ total 1))
+          (set r (+ r 1))))
+    (return total)))
+
+(deftest test-a-damaged-encrypted-file-never-faults
+  (comment "Truncations and random corruptions (SplitMix: every target damages the")
+  (comment "same bytes) of an RC4, an AES-128, an AES-256 and an AES-256 object-stream")
+  (comment "file, with their passwords: a flipped byte in the /Encrypt dictionary, the")
+  (comment "cipher text, the object stream or the table is an error or a different")
+  (comment "answer, never a fault, and the repair scan that follows it terminates.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells out (new-cells)
+        ^Cells cut (new-cells)
+        ^Cells rng (new-cells)
+        ^:mut ^I32 total 0]
+    (sm-seed rng (i64 11))
+    (set total (+ total (ct-fuzz (test-file "pdf/p3/crypt-rc4-128-user.pdf") (text-blob "user-secret") ar dc a b st pg out cut rng)))
+    (set total (+ total (ct-fuzz (test-file "pdf/p3/crypt-aes-128-user.pdf") (text-blob "user-secret") ar dc a b st pg out cut rng)))
+    (set total (+ total (ct-fuzz (test-file "pdf/p3/crypt-aes-256-r6-user.pdf") (text-blob "user-secret") ar dc a b st pg out cut rng)))
+    (set total (+ total (ct-fuzz (test-file "pdf/p3/crypt-aes-128-objstm-user.pdf") (text-blob "user-secret") ar dc a b st pg out cut rng)))
+    (assert-that (> total 200) "the damaged files were opened")))
