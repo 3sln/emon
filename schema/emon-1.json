@@ -1,0 +1,1432 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://emon.dev/schema/emon-1.json",
+  "title": "emon document model, JSON form, version 1.0 (SPEC 4; D012, D055)",
+  "description": "Canonical JSON for an emon Model. Every field not listed in `required` is omitted when absent (SPEC 4.2). Closed: an unknown key is a failure of THIS version's output; consumers of a later minor version must ignore what they do not know (SPEC 4.4), which is why a minor version edits this file additively.",
+  "type": "object",
+  "required": [
+    "emon",
+    "settings",
+    "conf",
+    "pages",
+    "body",
+    "furniture",
+    "dropped"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "emon": {
+      "const": "1.0"
+    },
+    "generator": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "format": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tagged": {
+          "type": "boolean"
+        },
+        "encrypted": {
+          "type": "boolean"
+        },
+        "lang": {
+          "type": "string"
+        }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "required": [
+        "locale"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "locale": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ocr": {
+          "enum": [
+            "always",
+            "auto",
+            "never"
+          ]
+        },
+        "detail": {
+          "enum": [
+            "blocks",
+            "lines",
+            "words"
+          ]
+        }
+      }
+    },
+    "conf": {
+      "const": "uncalibrated"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "keywords": {
+          "type": "string"
+        },
+        "creator": {
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        }
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    },
+    "body": {
+      "$ref": "#/$defs/document"
+    },
+    "furniture": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/furnitureItem"
+      }
+    },
+    "dropped": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/droppedItem"
+      }
+    }
+  },
+  "$defs": {
+    "cpt": {
+      "type": "number",
+      "description": "Points, at most two decimals (converted from centipoints in integers, SPEC 3.4)."
+    },
+    "at": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/region"
+      }
+    },
+    "region": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "$ref": "#/$defs/cpt"
+        },
+        {
+          "$ref": "#/$defs/cpt"
+        },
+        {
+          "$ref": "#/$defs/cpt"
+        },
+        {
+          "$ref": "#/$defs/cpt"
+        }
+      ],
+      "description": "[page, x0, y0, x1, y1] in page space (SPEC 3.4)."
+    },
+    "src": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "text",
+          "hidden-text",
+          "ocr",
+          "trace",
+          "vector",
+          "struct",
+          "annot",
+          "outline",
+          "infer"
+        ]
+      }
+    },
+    "flags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "low-conf",
+          "ocr-only",
+          "text-layer-suspect",
+          "reconstructed",
+          "dpi-unknown",
+          "rotated",
+          "vertical"
+        ]
+      }
+    },
+    "conf": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "page": {
+      "type": "object",
+      "required": [
+        "n",
+        "w",
+        "h",
+        "rot"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "w": {
+          "$ref": "#/$defs/cpt"
+        },
+        "h": {
+          "$ref": "#/$defs/cpt"
+        },
+        "rot": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "kind": {
+          "enum": [
+            "vector",
+            "scanned",
+            "mixed",
+            "image"
+          ]
+        },
+        "health": {
+          "$ref": "#/$defs/conf"
+        },
+        "dpi": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "px": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "droppedItem": {
+      "type": "object",
+      "required": [
+        "reason",
+        "page",
+        "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "enum": [
+            "watermark",
+            "background",
+            "page-number",
+            "running-title",
+            "bleed-through",
+            "duplicate-header-row",
+            "ocr-ghost",
+            "clipped",
+            "offpage",
+            "invisible"
+          ]
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "at": {
+          "$ref": "#/$defs/region"
+        },
+        "text": {
+          "type": "string"
+        },
+        "conf": {
+          "$ref": "#/$defs/conf"
+        },
+        "src": {
+          "$ref": "#/$defs/src"
+        }
+      }
+    },
+    "furnitureItem": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "role": {
+          "enum": [
+            "header",
+            "footer",
+            "margin"
+          ]
+        },
+        "template": {
+          "type": "string"
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "minItems": 1
+        },
+        "at": {
+          "$ref": "#/$defs/at"
+        },
+        "src": {
+          "$ref": "#/$defs/src"
+        },
+        "conf": {
+          "$ref": "#/$defs/conf"
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
+        }
+      }
+    },
+    "document": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "const": 0
+        },
+        "kind": {
+          "const": "document"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "minItems": 1
+        },
+        "at": {
+          "$ref": "#/$defs/at"
+        },
+        "src": {
+          "$ref": "#/$defs/src"
+        },
+        "conf": {
+          "$ref": "#/$defs/conf"
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
+        },
+        "text": {
+          "type": "string"
+        },
+        "inlines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/inline"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "document",
+            "section",
+            "heading",
+            "paragraph",
+            "list",
+            "item",
+            "table",
+            "rowgroup",
+            "row",
+            "cell",
+            "caption",
+            "figure",
+            "seal",
+            "formula",
+            "code",
+            "quote",
+            "note",
+            "field",
+            "furniture",
+            "break"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "at": {
+          "$ref": "#/$defs/at"
+        },
+        "src": {
+          "$ref": "#/$defs/src"
+        },
+        "conf": {
+          "$ref": "#/$defs/conf"
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
+        },
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inlines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/inline"
+          },
+          "minItems": 1
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "minItems": 1
+        },
+        "align": {
+          "enum": [
+            "start",
+            "center",
+            "end",
+            "justify"
+          ]
+        },
+        "alt": {
+          "type": "string"
+        },
+        "checked": {
+          "type": "boolean"
+        },
+        "color": {
+          "type": "string"
+        },
+        "colspan": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "continued": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "date": {
+          "type": "string"
+        },
+        "display": {
+          "enum": [
+            "block",
+            "inline"
+          ]
+        },
+        "empty": {
+          "type": "boolean"
+        },
+        "header": {
+          "enum": [
+            "col",
+            "row"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "marker": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "string"
+        },
+        "numbering": {
+          "type": "string"
+        },
+        "ordered": {
+          "type": "boolean"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1
+        },
+        "profile": {
+          "enum": [
+            "ruled",
+            "partial",
+            "shaded",
+            "whitespace",
+            "form",
+            "struct"
+          ]
+        },
+        "repeated": {
+          "type": "boolean"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "head",
+                "body",
+                "foot"
+              ]
+            },
+            {
+              "enum": [
+                "footnote",
+                "endnote",
+                "margin"
+              ]
+            },
+            {
+              "enum": [
+                "header",
+                "footer",
+                "margin"
+              ]
+            }
+          ]
+        },
+        "rowspan": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "scheme": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer"
+        },
+        "subkind": {
+          "anyOf": [
+            {
+              "enum": [
+                "chart",
+                "diagram",
+                "photo",
+                "logo",
+                "map",
+                "illustration",
+                "screenshot",
+                "qr",
+                "barcode",
+                "unknown"
+              ]
+            },
+            {
+              "enum": [
+                "seal",
+                "stamp",
+                "signature",
+                "initials",
+                "digital-signature"
+              ]
+            }
+          ]
+        },
+        "target": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "document"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "section"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "level"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "heading"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "level",
+                "number",
+                "numbering"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "paragraph"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "align"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "list"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "ordered",
+                "scheme",
+                "start"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "item"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "marker",
+                "value"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "table"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "profile",
+                "continued",
+                "columns"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rowgroup"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "role"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "row"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "repeated"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cell"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "rowspan",
+                "colspan",
+                "header",
+                "empty"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "caption"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "label",
+                "target"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "figure"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "subkind",
+                "label",
+                "alt",
+                "labels"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "seal"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "subkind",
+                "name",
+                "date",
+                "color"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "formula"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "display"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "code"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "quote"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "note"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "role",
+                "marker"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "field"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "name",
+                "type",
+                "value",
+                "checked"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "furniture"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "role",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "id",
+                "kind",
+                "text",
+                "inlines",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "page",
+                "label"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "inline": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "text",
+            "span",
+            "link",
+            "ref",
+            "linebreak"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "at": {
+          "$ref": "#/$defs/at"
+        },
+        "src": {
+          "$ref": "#/$defs/src"
+        },
+        "conf": {
+          "$ref": "#/$defs/conf"
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/inline"
+          },
+          "minItems": 1
+        },
+        "href": {
+          "type": "string"
+        },
+        "marker": {
+          "type": "string"
+        },
+        "style": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "bold",
+              "italic",
+              "underline",
+              "strike",
+              "sub",
+              "sup",
+              "mono",
+              "smallcaps"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "target": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "text"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "kind",
+                "text",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "span"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "kind",
+                "text",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "style"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "link"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "kind",
+                "text",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "href",
+                "target"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "ref"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "kind",
+                "text",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "marker",
+                "target"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "linebreak"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "kind",
+                "text",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

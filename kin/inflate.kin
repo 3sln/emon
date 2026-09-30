@@ -1,0 +1,479 @@
+;; DEFLATE and zlib decompression (P0.4). emon's own module (D039), written
+;; from RFC 1951 and RFC 1950 (vendored under `test/inflate/`).
+;;
+;; WHY: PDF's `FlateDecode` is the filter behind nearly every content stream,
+;; object stream, xref stream and embedded font (D005), so it is the first
+;; thing a born-digital PDF needs and it must be identical on four targets.
+;;
+;; API, all over a `Blob` in and a `Cells` out (kin cannot allocate; each
+;; output cell holds one byte, 0..255):
+;;
+;;   (iz-zlib src start end out st)   an RFC 1950 stream: header, deflate, Adler-32
+;;   (iz-raw  src start end out st)   a bare RFC 1951 stream
+;;
+;; Both APPEND to `out` and answer a status (the `iz-status` table below); `st`
+;; is scratch state, any `Cells`, cleared on entry. After a call `(iz-consumed
+;; st)` is the index of the first byte after the stream (for trailing data)
+;; and `out` holds every byte decoded BEFORE any error -- on corrupt or
+;; truncated input the prefix is kept, because a PDF with a damaged stream
+;; still wants what could be read (D030), and the caller decides. The FIRST
+;; error is the one reported: after a bad code every further read is a
+;; consequence, and naming the consequence would hide the cause.
+;;
+;; THREE BIT RULES (RFC 1951 3.1.1), and they are not one rule: bits leave a
+;; byte from the LEAST significant end; a number (header field, extra bits)
+;; accumulates low bit first; a HUFFMAN CODE accumulates high bit first. Reading
+;; a code the way a number is read gives a decoder that works on some streams.
+;;
+;; A HUFFMAN TABLE IS ITS CODE LENGTHS (3.2.2): codes of one length are
+;; consecutive and in symbol order, and shorter codes precede longer, so the
+;; table is a count per length and the symbols sorted by (length, symbol), and
+;; decoding needs no tree -- walk the bits keeping the code so far, the first
+;; code of this length and where this length's symbols begin. That is the
+;; technique of Mark Adler's `puff.c`, which RFC 1951's authors point at;
+;; this is a from-scratch rewrite in kin. It reads one bit at a time: the
+;; simplest form that is provably right on four targets, and the place to
+;; optimise (a lookup table) once a measurement says so (DEVLOG P0.4).
+;;
+;; THE OUTPUT LIMIT is `limit-of` STREAM_BYTES (SPEC 7.4): a deflate stream
+;; can expand ~1000:1, so a bound on the OUTPUT is the only protection against
+;; a bomb. Breaching it is `limit-breach` (never returns), not a status: a
+;; limit is a bound on emon and is named as one.
+;;
+;; ARITHMETIC NEVER LEAVES 32-BIT RANGE: the bit buffer holds at most 23 bits,
+;; and Rust's debug build traps overflow, so the tests exercise that too.
+(ns emon.inflate
+  (:require [emon.lang :refer [I32 Blob Cells defenum shl32 sar32]]
+            [emon.port :refer [blob-len blob-u8 blob-u16 blob-u16le
+                               cells-len cells-at cells-set cells-push
+                               cells-drop limit-of limit-breach]]
+            [kin.lang :refer [defn defconst defdata return let set while if
+                              comment do + - * < > <= >= == != and or
+                              bit-and quot rem]]))
+
+(defenum ^:pub iz-status
+  [[iz-ok 0 "ok"]
+   [iz-truncated 1 "truncated"]
+   [iz-bad-block-type 2 "bad-block-type"]
+   [iz-bad-stored-length 3 "bad-stored-length"]
+   [iz-bad-code 4 "bad-code"]
+   [iz-bad-distance 5 "bad-distance"]
+   [iz-bad-code-lengths 6 "bad-code-lengths"]
+   [iz-bad-header 7 "bad-header"]
+   [iz-need-dict 8 "need-dict"]
+   [iz-bad-checksum 9 "bad-checksum"]
+   [iz-bad-counts 10 "bad-counts"]])
+
+;; ------------------------------------------------------ RFC 1951 constants
+
+(defdata iz-lbase
+  :emitter kin.lang/flat-array
+  :data [3 4 5 6 7 8 9 10 11 13 15 17 19 23 27 31 35 43 51 59 67 83 99 115
+         131 163 195 227 258]
+  :accessors {^I32 iz-lbase-at [^I32 ignored ^I32 i]})
+
+(defdata iz-lext
+  :emitter kin.lang/flat-array
+  :data [0 0 0 0 0 0 0 0 1 1 1 1 2 2 2 2 3 3 3 3 4 4 4 4 5 5 5 5 0]
+  :accessors {^I32 iz-lext-at [^I32 ignored ^I32 i]})
+
+(defdata iz-dbase
+  :emitter kin.lang/flat-array
+  :data [1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025
+         1537 2049 3073 4097 6145 8193 12289 16385 24577]
+  :accessors {^I32 iz-dbase-at [^I32 ignored ^I32 i]})
+
+(defdata iz-dext
+  :emitter kin.lang/flat-array
+  :data [0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13]
+  :accessors {^I32 iz-dext-at [^I32 ignored ^I32 i]})
+
+;; The order the 19 code-length code lengths are stored in (3.2.7).
+(defdata iz-order
+  :emitter kin.lang/flat-array
+  :data [16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15]
+  :accessors {^I32 iz-order-at [^I32 ignored ^I32 i]})
+
+;; ------------------------------------------------------------ the state
+;;
+;; ONE `Cells` holds the reader and both Huffman tables. A kin function
+;; answers one number, and the reader is several, moved by every read; an
+;; arena is how kin says "mutable record".
+
+(defconst ^I32 W_POS 0)      ;; next byte of src to load into the bit buffer
+(defconst ^I32 W_BUF 1)      ;; the bit buffer (at most 23 bits, never negative)
+(defconst ^I32 W_CNT 2)      ;; bits in the buffer (0..7 between reads)
+(defconst ^I32 W_END 3)      ;; end index of src
+(defconst ^I32 W_ERR 4)      ;; the first error, 0 for none
+(defconst ^I32 W_LIMIT 5)    ;; output bound, from `limit-of`
+(defconst ^I32 W_BASE 6)     ;; length of `out` at entry
+(defconst ^I32 W_OFF 16)     ;; 16 running offsets while a table is built
+(defconst ^I32 W_LC 32)      ;; literal/length code: counts for lengths 0..15
+(defconst ^I32 W_LS 48)      ;; ... and its symbols (288)
+(defconst ^I32 W_DC 336)     ;; distance code: counts 0..15
+(defconst ^I32 W_DS 352)     ;; ... and its symbols (30)
+(defconst ^I32 W_LEN 384)    ;; code lengths being read: up to 286 + 30
+(defconst ^I32 W_SIZE 704)
+
+(defn ^I32 iz-init [^:mut ^Cells st ^I32 start ^I32 end ^Cells out]
+  (let [^:mut ^I32 i 0]
+    (cells-drop st 0)
+    (while (< i W_SIZE)
+      (do (cells-push st 0)
+          (set i (+ i 1))))
+    (cells-set st W_POS start)
+    (cells-set st W_END end)
+    (cells-set st W_LIMIT (limit-of 1))
+    (cells-set st W_BASE (cells-len out))
+    (return 0)))
+
+(defn ^I32 iz-fail [^:mut ^Cells st ^I32 code]
+  (comment "Latch the FIRST error only.")
+  (if (== (cells-at st W_ERR) 0)
+    (cells-set st W_ERR code))
+  (return 0))
+
+(defn ^:pub ^I32 iz-consumed [^Cells st]
+  (comment "The index of the first byte after the stream just decoded.")
+  (return (cells-at st W_POS)))
+
+;; ---------------------------------------------------------------- bits
+
+(defn ^I32 iz-bits [^:mut ^Cells st ^Blob src ^I32 n]
+  (comment "n bits (0..16), low bit first, as a number. Answers 0 and latches")
+  (comment "`truncated` when the input ends first.")
+  (let [^:mut ^I32 buf (cells-at st W_BUF)
+        ^:mut ^I32 cnt (cells-at st W_CNT)
+        ^:mut ^I32 pos (cells-at st W_POS)
+        ^I32 end (cells-at st W_END)]
+    (while (< cnt n)
+      (do (if (>= pos end)
+            (do (iz-fail st (iz-truncated))
+                (return 0)))
+          (set buf (+ buf (shl32 (blob-u8 src pos) cnt)))
+          (set pos (+ pos 1))
+          (set cnt (+ cnt 8))))
+    (let [^I32 v (bit-and buf (- (shl32 1 n) 1))]
+      (cells-set st W_BUF (sar32 buf n))
+      (cells-set st W_CNT (- cnt n))
+      (cells-set st W_POS pos)
+      (return v))))
+
+;; -------------------------------------------------------------- tables
+
+(defn ^I32 iz-build [^:mut ^Cells st ^I32 cbase ^I32 sbase ^I32 lbase ^I32 n]
+  (comment "Build a table from the n code lengths at st[lbase..]: counts per")
+  (comment "length at st[cbase..cbase+16), symbols sorted by (length, symbol)")
+  (comment "at st[sbase..]. Answers 0 for a complete code, < 0 for an")
+  (comment "over-subscribed one (more codes than the length has room for), > 0")
+  (comment "for an incomplete one.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 left 1]
+    (while (< i 16)
+      (do (cells-set st (+ cbase i) 0)
+          (set i (+ i 1))))
+    (while (< s n)
+      (do (set ln (cells-at st (+ lbase s)))
+          (cells-set st (+ cbase ln) (+ (cells-at st (+ cbase ln)) 1))
+          (set s (+ s 1))))
+    (if (== (cells-at st cbase) n)
+      (return 0))
+    (set ln 1)
+    (while (< ln 16)
+      (do (set left (- (* left 2) (cells-at st (+ cbase ln))))
+          (if (< left 0) (return left))
+          (set ln (+ ln 1))))
+    (cells-set st (+ W_OFF 1) 0)
+    (set ln 1)
+    (while (< ln 15)
+      (do (cells-set st (+ W_OFF (+ ln 1))
+                     (+ (cells-at st (+ W_OFF ln))
+                        (cells-at st (+ cbase ln))))
+          (set ln (+ ln 1))))
+    (set s 0)
+    (while (< s n)
+      (do (set ln (cells-at st (+ lbase s)))
+          (if (!= ln 0)
+            (do (let [^I32 o (cells-at st (+ W_OFF ln))]
+                  (cells-set st (+ sbase o) s)
+                  (cells-set st (+ W_OFF ln) (+ o 1)))))
+          (set s (+ s 1))))
+    (return left)))
+
+(defn ^I32 iz-decode [^:mut ^Cells st ^Blob src ^I32 cbase ^I32 sbase]
+  (comment "One symbol, or -1 with an error latched. RFC 1951 3.1.1: a code")
+  (comment "is packed MOST significant bit first, so each bit read is the next")
+  (comment "one DOWN and the code grows by doubling. `code - count < first`")
+  (comment "says the code is among this length's `count` codes, and")
+  (comment "`code - first` is then its rank among them.")
+  (let [^:mut ^I32 code 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 index 0
+        ^:mut ^I32 ln 1
+        ^:mut ^I32 count 0]
+    (while (<= ln 15)
+      (do (set code (+ code (iz-bits st src 1)))
+          (if (!= (cells-at st W_ERR) 0) (return -1))
+          (set count (cells-at st (+ cbase ln)))
+          (if (< (- code count) first)
+            (return (cells-at st (+ sbase (+ index (- code first))))))
+          (set index (+ index count))
+          (set first (* (+ first count) 2))
+          (set code (* code 2))
+          (set ln (+ ln 1))))
+    (iz-fail st (iz-bad-code))
+    (return -1)))
+
+;; --------------------------------------------------------------- blocks
+
+(defn ^I32 iz-put [^:mut ^Cells st ^:mut ^Cells out ^I32 b]
+  (comment "Append one output byte, under the limit.")
+  (if (>= (- (cells-len out) (cells-at st W_BASE)) (cells-at st W_LIMIT))
+    (limit-breach 1 (+ (- (cells-len out) (cells-at st W_BASE)) 1)))
+  (cells-push out b)
+  (return 0))
+
+(defn ^I32 iz-codes [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
+  (comment "The symbols of one compressed block, up to its end-of-block.")
+  (let [^:mut ^I32 sym 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 dsym 0
+        ^:mut ^I32 dist 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 at 0]
+    (while (== (cells-at st W_ERR) 0)
+      (do (set sym (iz-decode st src W_LC W_LS))
+          (if (!= (cells-at st W_ERR) 0) (return 0))
+          (if (< sym 256)
+            (iz-put st out sym))
+          (if (== sym 256) (return 0))
+          (if (> sym 256)
+            (do (set sym (- sym 257))
+                (if (>= sym 29)
+                  (do (iz-fail st (iz-bad-code)) (return 0)))
+                (set ln (+ (iz-lbase-at 0 sym)
+                            (iz-bits st src (iz-lext-at 0 sym))))
+                (set dsym (iz-decode st src W_DC W_DS))
+                (if (!= (cells-at st W_ERR) 0) (return 0))
+                (if (>= dsym 30)
+                  (do (iz-fail st (iz-bad-code)) (return 0)))
+                (set dist (+ (iz-dbase-at 0 dsym)
+                             (iz-bits st src (iz-dext-at 0 dsym))))
+                (if (!= (cells-at st W_ERR) 0) (return 0))
+                (if (> dist (- (cells-len out) (cells-at st W_BASE)))
+                  (do (iz-fail st (iz-bad-distance)) (return 0)))
+                (set k 0)
+                (while (< k ln)
+                  (do (set at (cells-at out (- (cells-len out) dist)))
+                      (iz-put st out at)
+                      (set k (+ k 1))))))))
+    (return 0)))
+
+(defn ^I32 iz-stored [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
+  (comment "A stored block: drop the rest of the current byte, then LEN, NLEN")
+  (comment "(its ones' complement -- the one check DEFLATE carries) and LEN")
+  (comment "raw bytes. Bytes present before the input ends are kept.")
+  (let [^:mut ^I32 pos (cells-at st W_POS)
+        ^I32 end (cells-at st W_END)
+        ^:mut ^I32 n 0
+        ^:mut ^I32 k 0]
+    (cells-set st W_BUF 0)
+    (cells-set st W_CNT 0)
+    (if (> (+ pos 4) end)
+      (do (cells-set st W_POS end)
+          (iz-fail st (iz-truncated))
+          (return 0)))
+    (set n (blob-u16le src pos))
+    (if (!= n (- 65535 (blob-u16le src (+ pos 2))))
+      (do (cells-set st W_POS (+ pos 4))
+          (iz-fail st (iz-bad-stored-length))
+          (return 0)))
+    (set pos (+ pos 4))
+    (while (and (< k n) (< (+ pos k) end))
+      (do (iz-put st out (blob-u8 src (+ pos k)))
+          (set k (+ k 1))))
+    (cells-set st W_POS (+ pos k))
+    (if (< k n) (iz-fail st (iz-truncated)))
+    (return 0)))
+
+(defn ^I32 iz-fixed [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
+  (comment "A block with the fixed codes (3.2.6): literals 0-143 have length 8,")
+  (comment "144-255 length 9, 256-279 length 7, 280-287 length 8; distances")
+  (comment "are 30 codes of length 5 (symbols 30 and 31 never occur).")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 w 8]
+    (while (< s 288)
+      (do (set w 8)
+          (if (>= s 144) (set w 9))
+          (if (>= s 256) (set w 7))
+          (if (>= s 280) (set w 8))
+          (cells-set st (+ W_LEN s) w)
+          (set s (+ s 1))))
+    (iz-build st W_LC W_LS W_LEN 288)
+    (set s 0)
+    (while (< s 30)
+      (do (cells-set st (+ W_LEN s) 5)
+          (set s (+ s 1))))
+    (iz-build st W_DC W_DS W_LEN 30)
+    (return (iz-codes st src out))))
+
+(defn ^I32 iz-dynamic [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
+  (comment "A block with its own codes (3.2.7): HLIT, HDIST, HCLEN, the code-length")
+  (comment "code's lengths in a fixed permuted order, then the literal/length and")
+  (comment "distance code lengths coded with that code (16 repeats the previous")
+  (comment "length, 17 and 18 repeat zero). Every way the header can be wrong is")
+  (comment "a named status; nothing here indexes past what it has checked.")
+  (let [^I32 nlen (+ (iz-bits st src 5) 257)
+        ^I32 ndist (+ (iz-bits st src 5) 1)
+        ^I32 ncode (+ (iz-bits st src 4) 4)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 idx 0
+        ^:mut ^I32 sym 0
+        ^:mut ^I32 prev 0
+        ^:mut ^I32 rep 0
+        ^:mut ^I32 left 0]
+    (if (!= (cells-at st W_ERR) 0) (return 0))
+    (if (or (> nlen 286) (> ndist 30))
+      (do (iz-fail st (iz-bad-counts)) (return 0)))
+    (while (< i 19)
+      (do (cells-set st (+ W_LEN i) 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i ncode)
+      (do (set sym (iz-bits st src 3))
+          (cells-set st (+ W_LEN (iz-order-at 0 i)) sym)
+          (set i (+ i 1))))
+    (if (!= (cells-at st W_ERR) 0) (return 0))
+    (comment "The code-length code must be COMPLETE: unlike the other two it")
+    (comment "has no legitimate incomplete form.")
+    (set left (iz-build st W_LC W_LS W_LEN 19))
+    (if (!= left 0)
+      (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+    (comment "The lengths overwrite the 19 just used, which are finished with.")
+    (while (< idx (+ nlen ndist))
+      (do (set sym (iz-decode st src W_LC W_LS))
+          (if (!= (cells-at st W_ERR) 0) (return 0))
+          (if (< sym 16)
+            (do (cells-set st (+ W_LEN idx) sym)
+                (set idx (+ idx 1)))
+            (do (set prev 0)
+                (if (== sym 16)
+                  (do (if (== idx 0)
+                        (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+                      (set prev (cells-at st (+ W_LEN (- idx 1))))
+                      (set rep (+ 3 (iz-bits st src 2)))))
+                (if (== sym 17) (set rep (+ 3 (iz-bits st src 3))))
+                (if (== sym 18) (set rep (+ 11 (iz-bits st src 7))))
+                (if (!= (cells-at st W_ERR) 0) (return 0))
+                (if (> (+ idx rep) (+ nlen ndist))
+                  (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+                (while (> rep 0)
+                  (do (cells-set st (+ W_LEN idx) prev)
+                      (set idx (+ idx 1))
+                      (set rep (- rep 1))))))))
+    (comment "Without a code for end-of-block the block could never end.")
+    (if (== (cells-at st (+ W_LEN 256)) 0)
+      (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+    (comment "An INCOMPLETE code is allowed only in its degenerate form: no")
+    (comment "codes, or one code of length 1. Over-subscribed never is.")
+    (set left (iz-build st W_LC W_LS W_LEN nlen))
+    (if (< left 0)
+      (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+    (if (and (> left 0)
+             (!= nlen (+ (cells-at st W_LC) (cells-at st (+ W_LC 1)))))
+      (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+    (comment "The distance lengths follow the literal ones in the same run.")
+    (set i 0)
+    (while (< i ndist)
+      (do (cells-set st (+ W_LEN i) (cells-at st (+ W_LEN (+ nlen i))))
+          (set i (+ i 1))))
+    (set left (iz-build st W_DC W_DS W_LEN ndist))
+    (if (< left 0)
+      (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+    (if (and (> left 0)
+             (!= ndist (+ (cells-at st W_DC) (cells-at st (+ W_DC 1)))))
+      (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+    (return (iz-codes st src out))))
+
+;; ------------------------------------------------------------- the stream
+
+(defn ^I32 iz-blocks [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
+  (comment "Blocks until one says it is the last: BFINAL, then BTYPE (0 stored,")
+  (comment "1 fixed, 2 dynamic, 3 reserved and an error).")
+  (let [^:mut ^I32 last 0
+        ^:mut ^I32 kind 0]
+    (while (== last 0)
+      (do (set last (iz-bits st src 1))
+          (set kind (iz-bits st src 2))
+          (if (!= (cells-at st W_ERR) 0) (return (cells-at st W_ERR)))
+          (if (== kind 0) (iz-stored st src out))
+          (if (== kind 1) (iz-fixed st src out))
+          (if (== kind 2) (iz-dynamic st src out))
+          (if (== kind 3) (iz-fail st (iz-bad-block-type)))
+          (if (!= (cells-at st W_ERR) 0) (return (cells-at st W_ERR)))))
+    (return 0)))
+
+(defn ^:pub ^I32 iz-raw [^Blob src ^I32 start ^I32 end ^:mut ^Cells out ^:mut ^Cells st]
+  (comment "Inflate a bare RFC 1951 stream in src[start, end). See the head")
+  (comment "of the file for what `out`, `st` and the answer mean.")
+  (iz-init st start end out)
+  (return (iz-blocks st src out)))
+
+(defn ^I32 iz-adler [^Cells out ^I32 from]
+  (comment "Adler-32 of out[from..]: answers the two 16-bit halves as")
+  (comment "b * 65536 + a would overflow, so `iz-zlib` compares them apart.")
+  (comment "This answers `a`; `iz-adler-b` answers `b`.")
+  (let [^:mut ^I32 a 1
+        ^:mut ^I32 i from]
+    (while (< i (cells-len out))
+      (do (set a (rem (+ a (cells-at out i)) 65521))
+          (set i (+ i 1))))
+    (return a)))
+
+(defn ^I32 iz-adler-b [^Cells out ^I32 from]
+  (let [^:mut ^I32 a 1
+        ^:mut ^I32 b 0
+        ^:mut ^I32 i from]
+    (while (< i (cells-len out))
+      (do (set a (rem (+ a (cells-at out i)) 65521))
+          (set b (rem (+ b a) 65521))
+          (set i (+ i 1))))
+    (return b)))
+
+(defn ^:pub ^I32 iz-zlib [^Blob src ^I32 start ^I32 end ^:mut ^Cells out ^:mut ^Cells st]
+  (comment "Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the")
+  (comment "big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most")
+  (comment "7, and CMF*256+FLG a multiple of 31; FDICT means a preset")
+  (comment "dictionary the stream does not carry (`need-dict`). §2.3 says a")
+  (comment "decompressor MUST check the Adler-32; a mismatch is `bad-checksum`")
+  (comment "and the output is kept.")
+  (iz-init st start end out)
+  (if (< (- end start) 2)
+    (do (cells-set st W_POS end)
+        (iz-fail st (iz-truncated))
+        (return (iz-truncated))))
+  (let [^I32 cmf (blob-u8 src start)
+        ^I32 flg (blob-u8 src (+ start 1))
+        ^:mut ^I32 status 0
+        ^:mut ^I32 pos 0]
+    (cells-set st W_POS (+ start 2))
+    (if (or (!= (bit-and cmf 15) 8)
+            (> (quot cmf 16) 7)
+            (!= (rem (+ (* cmf 256) flg) 31) 0))
+      (do (iz-fail st (iz-bad-header)) (return (iz-bad-header))))
+    (if (!= (bit-and flg 32) 0)
+      (do (iz-fail st (iz-need-dict)) (return (iz-need-dict))))
+    (set status (iz-blocks st src out))
+    (if (!= status 0) (return status))
+    (set pos (cells-at st W_POS))
+    (if (> (+ pos 4) end)
+      (do (cells-set st W_POS end)
+          (iz-fail st (iz-truncated))
+          (return (iz-truncated))))
+    (cells-set st W_POS (+ pos 4))
+    (if (or (!= (blob-u16 src pos) (iz-adler-b out (cells-at st W_BASE)))
+            (!= (blob-u16 src (+ pos 2)) (iz-adler out (cells-at st W_BASE))))
+      (do (iz-fail st (iz-bad-checksum)) (return (iz-bad-checksum))))
+    (return 0)))

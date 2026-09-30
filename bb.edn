@@ -1,0 +1,22 @@
+;; emon is a LIBRARY in four languages, generated from one source tree, and
+;; this file mirrors nome's (D026). kin is on the PATH rather than in `:deps`
+;; for nome's reason: nothing in the generation path needs a JVM, so the
+;; generator must not either. `deps.edn` carries the Clojure-consumer form.
+{:paths ["kin/src" "../kin/src"]
+ :tasks
+ {gen   {:doc "Print what a source generates.   bb gen kin/hello.kin"
+         :task (apply shell "kin/scripts/gen" *command-line-args*)}
+  emit  {:doc "Write every source's modules into gen/."
+         :task (shell "kin/scripts/emit")}
+  lang-test {:doc "Generation-time refusals of emit-ascii and defenum."
+             :task (shell "kin/scripts/lang-test")}
+  check {:doc "Generate, compile and run every target; require one answer."
+         :task (shell "kin/scripts/check")}
+  unit  {:doc "Do the laws hold as native tests on every target?  bb unit [go|rust|java|csharp|red]"
+         :task (apply shell "kin/scripts/unit" *command-line-args*)}
+  drift {:doc "Is the committed generated code what the sources say?"
+         :task (shell "kin/scripts/drift")}
+  hosts {:doc "Do the four host trees agree, and do the call sites match?"
+         :task (shell "kin/scripts/hosts")}
+  gates {:doc "Run every gate; fail if one exits non-zero or prints no score."
+         :task (shell "kin/scripts/gates")}}}

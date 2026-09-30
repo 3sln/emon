@@ -1,0 +1,251 @@
+#!/bin/sh
+# Do emon's LAWS hold, as a native test suite on every target?
+#
+#     kin/scripts/unit               all four arms
+#     kin/scripts/unit go            one arm (go rust java csharp): the fast loop
+#     kin/scripts/unit red           the NEGATIVE CHECK: every law inverted,
+#                                    and every arm must FAIL
+#
+# A gate: non-zero on any failure. DEVLOG P0.5, D044.
+#
+# A LAW is a kin function fed literal inputs (or a corpus file under `test/`)
+# and checked against literal answers, in a source whose namespace requires
+# `emon.test`. Written in kin it runs in FOUR languages, and a failure names a
+# LAW and a sentence (and, for a corpus, a row) rather than an offset.
+#
+# FOUR ARMS. Go has `go test`, Rust `cargo test`, C# xunit. JAVA HAS A JDK HERE
+# AND NO JUNIT, so its arm compiles the generated laws with a ~25-line
+# reflection runner (below) that calls every public static no-argument
+# `test*` method and counts the ones that do not throw (D044).
+#
+# THE FRAMEWORK DECIDES WHERE THE FILE LIVES AND kin DOES NOT: a test namespace
+# emits an ordinary module and this puts it where each framework wants it (Go
+# wants `_test.go`; emitting that directly would leave a Go package with no
+# non-test file in it). WHICH NAMESPACES ARE LAWS IS DERIVED, not listed: a
+# `kin/*.kin` whose `ns` form requires `emon.test`. `porttest` (a probe, D035)
+# does not, so it is not one; adding a law file is adding a file.
+#
+# THE COUNT IS OF LAWS, and prints the same number in every arm; a differing
+# count is a failure of its own (an arm that silently skipped a law).
+#
+# `unit red` sets EMON_TEST_INVERT=1, which every assertion honours by flipping
+# its verdict: it proves a broken law FAILS on every target without editing a
+# source (P0.5's "fails when the law is broken").
+set -e
+cd "$(dirname "$0")/../.."
+repo=$(pwd)
+emon_cap="$repo/kin/scripts/cap"
+
+mode=normal
+arms=all
+case "${1:-all}" in
+  all) ;;
+  red) mode=red ;;
+  go|rust|java|csharp) arms=$1 ;;
+  *) echo "unit: unknown arm $1 (go rust java csharp red)"; exit 2 ;;
+esac
+[ "$arms" = all ] && arms="go rust java csharp"
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/emon-unit.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+
+./kin/scripts/emit > /dev/null
+
+# THE NORMALIZATION TABLE IS GENERATED from the vendored UCD files, and a
+# table that no longer says what its generator says is a law failing for a
+# reason nobody would find: check it first. (The inflate corpus has no such
+# check -- zlib's output differs between zlib versions, so the committed
+# file is authoritative and the script only regenerates it, D046.)
+command -v python3 > /dev/null && python3 kin/scripts/ucd.py --check
+# THE PDF NAME TABLE (P1.4) is generated too, and checked the same way.
+command -v python3 > /dev/null && python3 kin/scripts/pdfnames.py --check
+
+# THE JSON GOLDENS' SECOND OPINION (P1.2): an independent serializer must
+# reproduce every test/json golden, and each must validate against
+# schema/emon-1.json. Tooling, not runtime (D054, D055).
+command -v python3 > /dev/null && python3 kin/scripts/json-check.py
+
+tests=""
+for f in kin/*.kin; do
+  if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then
+    tests="$tests $(basename "$f" .kin)"
+  fi
+done
+if [ -z "$tests" ]; then
+  echo "  FAIL no kin/*.kin requires emon.test"
+  exit 1
+fi
+
+export EMON_TEST_DIR="$repo/test"
+[ "$mode" = red ] && export EMON_TEST_INVERT=1
+
+fails=0
+counts=""
+
+# finish <arm> <rc> <count> <output>
+finish() {
+  arm=$1; rc=$2; count=$3; out=$4
+  if [ "$mode" = red ]; then
+    if [ "$rc" -ne 0 ]; then
+      echo "  ok   $arm    broken laws fail ($count laws inverted)"
+    else
+      echo "  FAIL $arm    every law was inverted and the arm still passed"
+      fails=$((fails+1))
+    fi
+  elif [ "$rc" -eq 0 ]; then
+    echo "  ok   $arm    $count laws"
+    counts="$counts $count"
+  else
+    echo "  FAIL $arm"
+    printf '%s\n' "$out" | sed 's/^/    /' | head -40
+    fails=$((fails+1))
+  fi
+}
+
+# --- Go ---------------------------------------------------------------------
+case "$arms" in *go*)
+  if command -v go > /dev/null; then
+    mkdir -p "$work/go"
+    for m in $(ls gen/go); do
+      mkdir -p "$work/go/$m"
+      cp "gen/go/$m/$m.go" "$work/go/$m/"
+    done
+    mkdir -p "$work/go/port"
+    cp host/go/port/*.go "$work/go/port/"
+    printf 'module emon\n\ngo 1.21\n' > "$work/go/go.mod"
+    pkgs=""
+    for tns in $tests; do
+      mv "$work/go/$tns/$tns.go" "$work/go/$tns/${tns}_test.go"
+      pkgs="$pkgs ./$tns"
+    done
+    rc=0; out=$(cd "$work/go" && go test -v $pkgs 2>&1) || rc=$?
+    n=$(printf '%s\n' "$out" | grep -c '^--- \(PASS\|FAIL\)' || true)
+    finish go "$rc" "$n" "$out"
+  else
+    echo "  SKIP go     -- go not on PATH"
+  fi ;;
+esac
+
+# --- Rust -------------------------------------------------------------------
+# A CARGO CRATE, thrown away: `cargo test` is the harness, not rustc's.
+case "$arms" in *rust*)
+  if command -v cargo > /dev/null; then
+    mkdir -p "$work/rust/src/emon"
+    cp gen/rust/emon/*.rs "$work/rust/src/emon/"
+    cp host/rust/src/port.rs host/rust/src/testport.rs "$work/rust/src/"
+    ( for f in gen/rust/emon/*.rs; do echo "pub mod $(basename "$f" .rs);"; done
+    ) > "$work/rust/src/emon.rs"
+    printf 'pub mod emon;\npub mod port;\npub mod testport;\n' > "$work/rust/src/lib.rs"
+    cat > "$work/rust/Cargo.toml" <<'TOML'
+[package]
+name = "emon"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+TOML
+    # WARNINGS OFF so a failure is the first thing in the excerpt: a generator
+    # that emits one shape for four languages leaves unused imports and
+    # needless `mut`s, and forty lines of them in front of a panic hide it.
+    rc=0; out=$(cd "$work/rust" && RUSTFLAGS="-A warnings" cargo test --offline -q -- --test-threads=1 2>&1) || rc=$?
+    n=$(printf '%s\n' "$out" | sed -n 's/^test result: [a-zA-Z]*\. \([0-9]*\) passed; \([0-9]*\) failed.*/\1 \2/p' | awk '{n+=$1+$2} END {print n+0}')
+    finish rust "$rc" "$n" "$out"
+  else
+    echo "  SKIP rust   -- cargo not on PATH"
+  fi ;;
+esac
+
+# --- Java -------------------------------------------------------------------
+# macOS's /usr/bin/javac is a STUB, so the test is that it RUNS (see check).
+case "$arms" in *java*)
+  JDK="${EMON_JDK:-/opt/homebrew/opt/openjdk}"
+  [ -x "$JDK/bin/javac" ] || JDK=$(/usr/libexec/java_home 2>/dev/null || true)
+  if [ -x "$JDK/bin/javac" ] && "$JDK/bin/javac" -version > /dev/null 2>&1; then
+    mkdir -p "$work/java/emon"
+    cp gen/java/emon/*.java host/java/emon/*.java "$work/java/emon/"
+    cat > "$work/java/Runner.java" <<'RUNNER'
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.Comparator;
+
+public class Runner {
+    public static void main(String[] classes) throws Exception {
+        int pass = 0, fail = 0;
+        for (String name : classes) {
+            Method[] ms = Class.forName("emon." + name).getDeclaredMethods();
+            Arrays.sort(ms, Comparator.comparing(Method::getName));
+            for (Method m : ms) {
+                if (!Modifier.isPublic(m.getModifiers()) || !Modifier.isStatic(m.getModifiers())
+                    || m.getParameterCount() != 0 || !m.getName().startsWith("test")) {
+                    continue;
+                }
+                try {
+                    m.invoke(null);
+                    pass++;
+                } catch (InvocationTargetException e) {
+                    fail++;
+                    System.out.println("FAIL " + name + "." + m.getName() + ": " + e.getCause());
+                }
+            }
+        }
+        System.out.println("laws: " + (pass + fail) + " passed: " + pass + " failed: " + fail);
+        System.exit(fail == 0 ? 0 : 1);
+    }
+}
+RUNNER
+    cls=""
+    for tns in $tests; do
+      cls="$cls $(printf '%s' "$tns" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+    done
+    rc=0
+    out=$(cd "$work/java" && "$JDK/bin/javac" -encoding UTF-8 -d . emon/*.java Runner.java 2>&1 \
+          && "$JDK/bin/java" -cp . Runner $cls 2>&1) || rc=$?
+    n=$(printf '%s\n' "$out" | sed -n 's/^laws: \([0-9]*\) .*/\1/p')
+    finish java "$rc" "${n:-0}" "$out"
+  else
+    echo "  SKIP java   -- no working JDK found (set EMON_JDK)"
+  fi ;;
+esac
+
+# --- C# ---------------------------------------------------------------------
+case "$arms" in *csharp*)
+  if command -v dotnet > /dev/null; then
+    mkdir -p "$work/cs"
+    cp gen/csharp/Emon/*.cs "$work/cs/"
+    cp gen/csharp/Tests/*.cs "$work/cs/"
+    cp host/csharp/Emon/*.cs "$work/cs/"
+    cat > "$work/cs/cs.csproj" <<'PROJ'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CS1717;CS0164;CS0162;CS0219</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
+  </ItemGroup>
+</Project>
+PROJ
+    rc=0; out=$(cd "$work/cs" && "$emon_cap" 900 dotnet test -v q --nologo 2>&1) || rc=$?
+    n=$(printf '%s\n' "$out" | grep -o '\(Passed\|Failed\): *[0-9]*' | grep -o '[0-9]*$' | awk '{n+=$1} END {print n+0}')
+    finish csharp "$rc" "$n" "$out"
+  else
+    echo "  SKIP csharp -- dotnet not on PATH"
+  fi ;;
+esac
+
+[ "$fails" -eq 0 ] || exit 1
+if [ "$mode" != red ]; then
+  distinct=$(printf '%s\n' $counts | sort -u | wc -l | tr -d ' ')
+  if [ "$distinct" -gt 1 ]; then
+    echo "  FAIL the arms ran different numbers of laws:$counts"
+    exit 1
+  fi
+  echo "  ok   one law set, every arm, one count"
+fi

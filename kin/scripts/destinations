@@ -1,0 +1,28 @@
+#!/usr/bin/env bb
+;; Every [target path] this project would write. The drift gate's input.
+;;
+;; AND IT REFUSES A SHORT ANSWER, which is the whole reason this script has
+;; more than four lines in it. `kp/destinations` analyses each source on its
+;; own; a source that requires a sibling cannot BE analysed that way, so for
+;; most of a project it threw, was swallowed, and was simply absent. The
+;; list said 244 where the tree holds 532, and the two gates downstream
+;; compared their halves and reported `ok`. kin resolves the exports first
+;; now, and this says so out loud if anything is still missing: a gate whose
+;; input can shrink silently is not a gate. (D386.)
+(require '[kin.project :as kp] '[emon.project :as p])
+(let [{:keys [destinations unanalysable unresolved]}
+      (kp/destination-report @p/project)]
+  (when unresolved
+    (binding [*out* *err*]
+      (println "  FAIL the project's exports will not resolve, so this list is")
+      (println "       a fraction of the truth:" unresolved))
+    (System/exit 1))
+  (when (seq unanalysable)
+    (binding [*out* *err*]
+      (println "  FAIL" (count unanalysable)
+               "sources cannot be analysed, so they name no destination:")
+      (doseq [[label msg] unanalysable]
+        (println "   " label "--" msg)))
+    (System/exit 1))
+  (doseq [[t path] destinations]
+    (println (format "  %-7s %s" (name t) path))))

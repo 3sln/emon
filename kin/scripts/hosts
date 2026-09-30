@@ -1,0 +1,35 @@
+#!/usr/bin/env bb
+;; Do the four host trees agree about what they expose?
+;;
+;;     kin/scripts/hosts
+;;
+;; THIS IS THE CHECK ANNOTATIONS EXIST FOR. A hand-written table saying "this
+;; kin name calls that function, spelled thus per target" drifts silently: an
+;; entry is only exercised once some source happens to call it, which may be
+;; many commits after the function it describes changed. Moving the statement
+;; next to the code fixes the drift; this fixes the other half, which is a
+;; function ported to three runtimes with the fourth's annotation never
+;; written.
+(require '[kin.host] '[kin.project :as kp] '[emon.targets :as t] '[emon.project :as p])
+
+(let [scans @t/scans
+      bad (kin.host/disagreements scans)]
+  (if (seq bad)
+    (do (println "  FAIL the host trees do not agree:")
+        ;; `explain` takes ONE disagreement, not the collection. Passing the
+        ;; vector gave `No matching clause:` from its own `case` -- a gate
+        ;; that went red for the wrong reason and said nothing useful.
+        (doseq [d bad] (println "   " (kin.host/explain d)))
+        (System/exit 1))
+    (println "  ok   the four host trees agree about what they expose"))
+
+  ;; AND THE CALL SITES. Four targets can agree perfectly that `utf8-len`
+  ;; takes one argument and a source can still call it with two -- until now
+  ;; the first thing to notice would be a host compiler, or on the target
+  ;; whose call happened to still type-check, nothing at all.
+  (let [problems (kp/usage-problems @p/project)]
+    (if (seq problems)
+      (do (println "  FAIL a call does not match what the host declares:")
+          (doseq [x problems] (println "   " (pr-str x)))
+          (System/exit 1))
+      (println "  ok   every call matches the arity the host declares"))))

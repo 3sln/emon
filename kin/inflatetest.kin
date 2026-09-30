@@ -1,0 +1,197 @@
+;; Laws and the row corpus for `emon.inflate` (P0.4).
+;;
+;; THE CORPUS is `test/inflate/streams.txt`, written by
+;; `kin/scripts/inflate-corpus.py` from streams a HOST TOOL produced (CPython's
+;; zlib, at levels 0/1/6/9, every strategy and several window sizes) plus
+;; hand-built and truncated ones; see that script for the row format and for
+;; how each damaged row is also rejected by zlib. Every target reads the same
+;; file and must answer the same status, the same consumed count and the same
+;; bytes on every row.
+;;
+;; THE DRIVER IS KIN: the file is read as a `Blob` and parsed here, so the
+;; four targets also agree about the row parser. A failure names the LINE of
+;; the file (1-based) and the field that differed.
+(ns emon.inflatetest
+  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               assert-cells-hex assert-text hex-blob new-cells
+                               new-text test-file cells-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
+                               cells-drop text-i32]]
+            [emon.inflate :refer [iz-zlib iz-raw iz-consumed iz-status-emit-name
+                                  iz-ok iz-truncated iz-bad-header iz-bad-checksum
+                                  iz-bad-distance iz-bad-block-type]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot]]))
+
+;; ---------------------------------------------------------- row parsing
+
+(defn ^I32 it-nl [^Blob b ^I32 i]
+  (comment "Index of the next newline at or after i, or the blob's length.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 it-semi [^Blob b ^I32 i ^I32 lim]
+  (comment "Index of the next `;` in [i, lim), or lim.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 59))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 it-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (return -1))
+
+(defn ^I32 it-dec [^Blob b ^I32 from ^I32 to]
+  (comment "A decimal integer, with an optional leading minus.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0
+        ^:mut ^I32 neg 0]
+    (if (and (< k to) (== (blob-u8 b k) 45))
+      (do (set neg 1) (set k (+ k 1))))
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (if (== neg 1) (return (- 0 v)))
+    (return v)))
+
+(defn ^I32 it-hex-into [^Blob b ^I32 from ^I32 to ^:mut ^Cells c]
+  (comment "Decode the hex pairs in b[from, to) into c (cleared first).")
+  (let [^:mut ^I32 k from]
+    (cells-drop c 0)
+    (while (< (+ k 1) (+ to 0))
+      (do (cells-push c (+ (* (it-hexval (blob-u8 b k)) 16)
+                           (it-hexval (blob-u8 b (+ k 1)))))
+          (set k (+ k 2))))
+    (return (cells-len c))))
+
+(defn ^I32 it-compare [^Cells out ^Blob b ^I32 from ^I32 to ^I32 exact]
+  (comment "-1 when `out` matches the hex in b[from, to): exactly, or (exact =")
+  (comment "0) as a PREFIX of it. -2 for a length problem; otherwise the")
+  (comment "index of the first differing byte.")
+  (let [^I32 n (quot (- to from) 2)
+        ^:mut ^I32 i 0]
+    (if (> (cells-len out) n) (return -2))
+    (if (and (== exact 1) (!= (cells-len out) n)) (return -2))
+    (while (< i (cells-len out))
+      (do (if (!= (cells-at out i)
+                  (+ (* (it-hexval (blob-u8 b (+ from (* i 2)))) 16)
+                     (it-hexval (blob-u8 b (+ from (+ (* i 2) 1))))))
+            (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+;; ------------------------------------------------------------- the corpus
+
+(deftest test-every-row-of-the-zlib-corpus
+  (comment "Fields: name ; kind ; status ; consumed ; stream-hex ; output-hex.")
+  (let [^Blob f (test-file "inflate/streams.txt")
+        ^Cells src (new-cells)
+        ^Cells out (new-cells)
+        ^Cells st (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 consumed 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 slen 0
+        ^:mut ^I32 exact 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (it-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (it-semi f pos e))
+                (set s1 (it-semi f (+ s0 1) e))
+                (set s2 (it-semi f (+ s1 1) e))
+                (set s3 (it-semi f (+ s2 1) e))
+                (set s4 (it-semi f (+ s3 1) e))
+                (set kind (blob-u8 f (+ s0 1)))
+                (set status (it-dec f (+ s1 1) s2))
+                (set consumed (it-dec f (+ s2 1) s3))
+                (set slen (it-hex-into f (+ s3 1) s4 src))
+                (cells-drop out 0)
+                (if (or (== kind 122) (== kind 90))
+                  (set got (iz-zlib (cells-blob src) 0 slen out st))
+                  (set got (iz-raw (cells-blob src) 0 slen out st)))
+                (assert-eq-at got status "status" line)
+                (if (>= consumed 0)
+                  (assert-eq-at (iz-consumed st) consumed "consumed" line))
+                (set exact 0)
+                (if (or (== kind 90) (== kind 82)) (set exact 1))
+                (assert-eq-at (it-compare out f (+ s4 1) e exact)
+                              -1 "output" line)))
+          (set pos (+ e 1))))
+    (assert-eq rows 346 "the corpus has this many rows")))
+
+;; ---------------------------------------------------------- readable laws
+
+(deftest test-the-classic-stored-hello
+  (comment "zlib.compress(b'hello', 0): header, one stored block, Adler-32.")
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (assert-eq (iz-zlib (hex-blob "7801 010500faff 68656c6c6f 062c0215") 0 16 out st)
+               (iz-ok) "status")
+    (assert-cells-hex out "68656c6c6f" "hello")
+    (assert-eq (iz-consumed st) 16 "consumed")))
+
+(deftest test-the-classic-fixed-hello
+  (comment "zlib.compress(b'hello', 1) is a fixed-Huffman block.")
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (assert-eq (iz-zlib (hex-blob "7801 cb48cdc9c90700 062c0215") 0 13 out st)
+               (iz-ok) "status")
+    (assert-cells-hex out "68656c6c6f" "hello")))
+
+(deftest test-a-partial-result-survives-damage
+  (comment "The first bytes decoded before the fault are kept.")
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (assert-eq (iz-zlib (hex-blob "7801 cb48cdc9c9") 0 7 out st) (iz-truncated) "truncated")
+    (assert-eq (cells-len out) 4 "four bytes came out before the end")
+    (assert-eq (iz-zlib (hex-blob "7801 cb48cdc9c90700 062c0216") 0 13 out st)
+               (iz-bad-checksum) "bad checksum")
+    (assert-eq (cells-len out) 9 "and the output is kept")))
+
+(deftest test-the-input-range-is-respected
+  (comment "Only src[start, end) is read: junk before start and after end is")
+  (comment "never seen, and `consumed` is an index into the whole blob.")
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (assert-eq (iz-zlib (hex-blob "ffff 7801 cb48cdc9c90700 062c0215 ffff") 2 15 out st)
+               (iz-ok) "status")
+    (assert-eq (iz-consumed st) 15 "consumed is absolute")
+    (assert-cells-hex out "68656c6c6f" "hello")
+    (assert-eq (iz-zlib (hex-blob "7801 cb48cdc9c90700 062c0215") 0 12 out st)
+               (iz-truncated) "one byte short of the trailer")))
+
+(deftest test-output-appends-to-what-is-there
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (cells-push out 33)
+    (assert-eq (iz-zlib (hex-blob "7801 cb48cdc9c90700 062c0215") 0 13 out st)
+               (iz-ok) "status")
+    (assert-cells-hex out "2168656c6c6f" "appended after the existing byte")))
+
+(deftest test-status-names-are-the-table
+  (let [^Text t (new-text)]
+    (iz-status-emit-name t 0)
+    (emit-ascii t " ")
+    (iz-status-emit-name t 1)
+    (emit-ascii t " ")
+    (iz-status-emit-name t 5)
+    (emit-ascii t " ")
+    (iz-status-emit-name t 9)
+    (assert-text t "ok truncated bad-distance bad-checksum" "names")))

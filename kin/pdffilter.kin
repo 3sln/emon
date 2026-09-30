@@ -1,0 +1,485 @@
+;; PDF stream filters that are not images (P1.5, D005, D064). emon's own
+;; module (D039), written from ISO 32000-1 7.4 and the PNG (RFC 2083 6) and
+;; TIFF 6.0 predictor definitions.
+;;
+;;   pf-hex      ASCIIHexDecode          7.4.2
+;;   pf-a85      ASCII85Decode           7.4.3
+;;   pf-lzw      LZWDecode               7.4.4 (with /EarlyChange)
+;;   pf-rl       RunLengthDecode         7.4.5
+;;   pf-flate    FlateDecode             7.4.4, over `emon.inflate`
+;;   pf-predict  the /Predictor of Flate and LZW (7.4.4.4): PNG 10-15, TIFF 2
+;;
+;; THE SHAPE IS `emon.inflate`'s (D047): a `Blob` span in, bytes APPENDED to a
+;; caller-owned `Cells` out (one byte per cell), a `pf-status` answered, and
+;; everything decoded BEFORE an error KEPT in `out` (D030: a damaged stream
+;; still yields what could be read; the caller decides what a status means).
+;; The predictor reads a `Cells`, since what it undoes is the output of the
+;; filter before it.
+;;
+;; BEING LENIENT WHERE EVERY READER IS. A missing end-of-data marker is not an
+;; error (`>` for hex, `~>` for ASCII85, 128 for run length, 257 for LZW: the
+;; data simply ends); hex digits may be odd in number; white space is ignored
+;; everywhere it is ignorable. What is an error is data that cannot mean
+;; anything: a character outside `!`..`u` in ASCII85, a group above 2^32-1, a
+;; code not yet in the LZW table, a PNG row whose filter byte is above 4.
+;;
+;; OUTPUT BOUNDS: LZW and run length can expand their input by a factor of
+;; thousands, so both count what they produce against `limit-of` STREAM_BYTES
+;; (SPEC 7.4) and breach it with `limit-breach`, which never returns. Flate
+;; does its own (inflate).
+(ns emon.pdffilter
+  (:require [emon.lang :refer [I32 Blob Cells defenum shl32 sar32]]
+            [emon.pdfsrc :refer [ps-len ps-u8]]
+            [emon.port :refer [cells-len cells-at cells-set
+                               cells-push cells-drop limit-of limit-breach]]
+            [emon.inflate :refer [iz-zlib iz-ok iz-truncated iz-bad-header
+                                  iz-bad-checksum]]
+            [kin.lang :refer [defn defconst return let set while if comment do
+                              + - * < > <= >= == != and or quot rem
+                              bit-and bit-or]]))
+
+(defenum ^:pub pf-status
+  [[pf-ok 0 "ok"]
+   [pf-truncated 1 "truncated"]
+   [pf-bad-ascii85 2 "bad-ascii85"]
+   [pf-bad-lzw 3 "bad-lzw"]
+   [pf-bad-predictor 4 "bad-predictor"]
+   [pf-flate-truncated 5 "flate-truncated"]
+   [pf-flate-bad-header 6 "flate-bad-header"]
+   [pf-flate-bad-checksum 7 "flate-bad-checksum"]
+   [pf-flate-error 8 "flate-error"]
+   [pf-unsupported 9 "unsupported-filter"]
+   [pf-image-filter 10 "image-filter"]
+   [pf-bad-spec 11 "bad-filter-spec"]])
+
+;; The filters, as the document layer numbers them after resolving a name
+;; (and, for an inline image, its abbreviation).
+(defenum ^:pub pf-filter
+  [[pf-f-hex 1 "ASCIIHexDecode"]
+   [pf-f-a85 2 "ASCII85Decode"]
+   [pf-f-lzw 3 "LZWDecode"]
+   [pf-f-flate 4 "FlateDecode"]
+   [pf-f-rl 5 "RunLengthDecode"]
+   [pf-f-crypt 6 "Crypt"]
+   [pf-f-dct 7 "DCTDecode"]
+   [pf-f-jpx 8 "JPXDecode"]
+   [pf-f-ccitt 9 "CCITTFaxDecode"]
+   [pf-f-jbig2 10 "JBIG2Decode"]])
+
+(defn ^I32 pf-room [^Cells out ^I32 base ^I32 n]
+  (comment "Refuse (a limit breach, not a status) to grow `out` past")
+  (comment "STREAM_BYTES bytes above its length at entry, `base`.")
+  (let [^I32 lim (limit-of 1)
+        ^I32 have (- (cells-len out) base)]
+    (if (> n (- lim have))
+      (limit-breach 1 (+ have n)))
+    (return 0)))
+
+;; ------------------------------------------------------------ ASCIIHex
+
+(defn ^I32 pf-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^:pub ^I32 pf-hex [^Blob src ^I32 s ^I32 e ^:mut ^Cells out]
+  (comment "ASCIIHexDecode. `>` ends the data; white space and any other")
+  (comment "non-hex byte are skipped; an odd last digit is followed by 0.")
+  (let [^:mut ^I32 i s
+        ^:mut ^I32 half -1
+        ^:mut ^I32 v 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 done 0]
+    (while (and (< i e) (== done 0))
+      (do (set c (ps-u8 src i))
+          (set i (+ i 1))
+          (if (== c 62)
+            (set done 1)
+            (do (set v (pf-hexval c))
+                (if (>= v 0)
+                  (if (< half 0)
+                    (set half v)
+                    (do (cells-push out (+ (* half 16) v))
+                        (set half -1))))))))
+    (if (>= half 0) (cells-push out (* half 16)))
+    (return 0)))
+
+;; ---------------------------------------------------------- ASCII85
+
+(defn ^I32 pf-a85-put [^:mut ^Cells out ^I32 acc ^I32 last ^I32 nbytes]
+  (comment "Emit the first nbytes of the group whose first four digits make")
+  (comment "`acc` (at most 84*85^3 + ... < 2^26) and whose fifth is `last`.")
+  (comment "Answers 1 when the group is above 2^32-1. The value is held as")
+  (comment "two 16-bit halves: nothing here leaves 32-bit range.")
+  (let [^I32 th (quot acc 65536)
+        ^I32 tl (rem acc 65536)
+        ^I32 lo0 (+ (* tl 85) last)
+        ^I32 hi (+ (* th 85) (quot lo0 65536))
+        ^I32 lo (rem lo0 65536)]
+    (if (> hi 65535) (return 1))
+    (if (>= nbytes 1) (cells-push out (quot hi 256)))
+    (if (>= nbytes 2) (cells-push out (rem hi 256)))
+    (if (>= nbytes 3) (cells-push out (quot lo 256)))
+    (if (>= nbytes 4) (cells-push out (rem lo 256)))
+    (return 0)))
+
+(defn ^:pub ^I32 pf-a85 [^Blob src ^I32 s ^I32 e ^:mut ^Cells out]
+  (comment "ASCII85Decode. A leading `<~` is skipped; `~` ends the data; `z`")
+  (comment "at a group start is four zero bytes; a final group of 2-4")
+  (comment "characters gives 1-3 bytes; a lone final character is an error, as")
+  (comment "is anything outside `!`..`u`, a `z` inside a group, and a group")
+  (comment "above 2^32-1. Complete groups before an error are kept.")
+  (let [^:mut ^I32 i s
+        ^:mut ^I32 n 0
+        ^:mut ^I32 acc 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 done 0
+        ^:mut ^I32 pad 0]
+    (comment "Skip white space and a `<~` prefix.")
+    (while (and (< i e)
+                (or (== (ps-u8 src i) 32) (== (ps-u8 src i) 10)
+                    (== (ps-u8 src i) 13) (== (ps-u8 src i) 9)
+                    (== (ps-u8 src i) 12) (== (ps-u8 src i) 0)))
+      (set i (+ i 1)))
+    (if (and (< (+ i 1) e) (== (ps-u8 src i) 60) (== (ps-u8 src (+ i 1)) 126))
+      (set i (+ i 2)))
+    (while (and (< i e) (== done 0))
+      (do (set c (ps-u8 src i))
+          (set i (+ i 1))
+          (if (== c 126)
+            (set done 1)
+            (if (or (== c 32) (== c 10) (== c 13) (== c 9) (== c 12) (== c 0))
+              (set n n)
+              (if (== c 122)
+                (do (if (!= n 0) (return 2))
+                    (cells-push out 0)
+                    (cells-push out 0)
+                    (cells-push out 0)
+                    (cells-push out 0))
+                (do (if (or (< c 33) (> c 117)) (return 2))
+                    (if (< n 4)
+                      (do (set acc (+ (* acc 85) (- c 33)))
+                          (set n (+ n 1)))
+                      (do (if (== (pf-a85-put out acc (- c 33) 4) 1)
+                            (return 2))
+                          (set acc 0)
+                          (set n 0)))))))))
+    (if (== n 1) (return 2))
+    (if (> n 1)
+      (do (set pad n)
+          (while (< pad 4)
+            (do (set acc (+ (* acc 85) 84))
+                (set pad (+ pad 1))))
+          (if (== (pf-a85-put out acc 84 (- n 1)) 1)
+            (return 2))))
+    (return 0)))
+
+;; ------------------------------------------------------- RunLength
+
+(defn ^:pub ^I32 pf-rl [^Blob src ^I32 s ^I32 e ^:mut ^Cells out]
+  (comment "RunLengthDecode: a length byte L then L+1 literal bytes (0-127),")
+  (comment "or 257-L copies of the next byte (129-255); 128 ends the data.")
+  (let [^I32 base (cells-len out)
+        ^:mut ^I32 i s
+        ^:mut ^I32 l 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 b 0]
+    (while (< i e)
+      (do (set l (ps-u8 src i))
+          (set i (+ i 1))
+          (if (== l 128) (return 0))
+          (if (< l 128)
+            (do (pf-room out base (+ l 1))
+                (set k 0)
+                (while (<= k l)
+                  (do (if (>= i e) (return 1))
+                      (cells-push out (ps-u8 src i))
+                      (set i (+ i 1))
+                      (set k (+ k 1)))))
+            (do (if (>= i e) (return 1))
+                (set b (ps-u8 src i))
+                (set i (+ i 1))
+                (pf-room out base (- 257 l))
+                (set k 0)
+                (while (< k (- 257 l))
+                  (do (cells-push out b)
+                      (set k (+ k 1))))))))
+    (return 0)))
+
+;; -------------------------------------------------------------- LZW
+;;
+;; THE TABLE lives in the caller's scratch `Cells` `st`, four cells an entry:
+;; prefix code, suffix byte, length of the string, and its first byte. A
+;; string is written by walking the prefix chain from the END, into cells
+;; reserved for it, so no stack is needed.
+
+(defconst ^I32 L_SIZE 16384)
+
+(defn ^I32 pf-lzw-string [^:mut ^Cells st ^:mut ^Cells out ^I32 code]
+  (comment "Append the string of `code` (0..255 a byte, 258.. a table entry).")
+  (let [^I32 ln (cells-at st (+ (* code 4) 2))
+        ^I32 base (cells-len out)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 x code
+        ^:mut ^I32 at 0]
+    (while (< k ln)
+      (do (cells-push out 0)
+          (set k (+ k 1))))
+    (set at (- (+ base ln) 1))
+    (while (>= at base)
+      (do (cells-set out at (cells-at st (+ (* x 4) 1)))
+          (set x (cells-at st (* x 4)))
+          (set at (- at 1))))
+    (return ln)))
+
+(defn ^I32 pf-lzw-clear [^:mut ^Cells st]
+  (comment "256 literal entries; 256 and 257 are codes, not strings.")
+  (let [^:mut ^I32 i 0]
+    (while (< i 256)
+      (do (cells-set st (* i 4) 0)
+          (cells-set st (+ (* i 4) 1) i)
+          (cells-set st (+ (* i 4) 2) 1)
+          (cells-set st (+ (* i 4) 3) i)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 pf-lzw-width [^I32 nxt ^I32 early]
+  (comment "The code width once the table holds `nxt` entries.")
+  (if (>= (+ nxt early) 2048) (return 12))
+  (if (>= (+ nxt early) 1024) (return 11))
+  (if (>= (+ nxt early) 512) (return 10))
+  (return 9))
+
+(defn ^I32 pf-lzw-step [^:mut ^Cells st ^:mut ^Cells out ^I32 base ^I32 code ^I32 prev ^I32 nxt]
+  (comment "One ordinary code after the first: add the entry `prev + first of")
+  (comment "code` (when the table has room) and write the string of `code`.")
+  (comment "Answers the new `nxt`, or -1 for a code beyond the table.")
+  (let [^:mut ^I32 first 0
+        ^:mut ^I32 ln 0]
+    (if (> code nxt) (return -1))
+    (if (< code nxt)
+      (set first (cells-at st (+ (* code 4) 3)))
+      (set first (cells-at st (+ (* prev 4) 3))))
+    (if (< nxt 4096)
+      (do (set ln (+ (cells-at st (+ (* prev 4) 2)) 1))
+          (cells-set st (* nxt 4) prev)
+          (cells-set st (+ (* nxt 4) 1) first)
+          (cells-set st (+ (* nxt 4) 2) ln)
+          (cells-set st (+ (* nxt 4) 3) (cells-at st (+ (* prev 4) 3)))))
+    (pf-room out base (cells-at st (+ (* code 4) 2)))
+    (pf-lzw-string st out code)
+    (if (< nxt 4096) (return (+ nxt 1)))
+    (return nxt)))
+
+(defn ^:pub ^I32 pf-lzw [^Blob src ^I32 s ^I32 e ^:mut ^Cells out ^:mut ^Cells st ^I32 early]
+  (comment "LZWDecode: codes of 9-12 bits, most significant bit first; 256")
+  (comment "clears the table, 257 ends the data. `early` is /EarlyChange")
+  (comment "(1 by default: the code width grows one entry sooner). A table")
+  (comment "that is full is left as it is, as the encoders do.")
+  (let [^I32 base (cells-len out)
+        ^:mut ^I32 i s
+        ^:mut ^I32 acc 0
+        ^:mut ^I32 nbits 0
+        ^:mut ^I32 width 9
+        ^:mut ^I32 nxt 258
+        ^:mut ^I32 prev -1
+        ^:mut ^I32 code 0
+        ^:mut ^I32 n2 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 done 0
+        ^:mut ^I32 k 0]
+    (cells-drop st 0)
+    (while (< k L_SIZE)
+      (do (cells-push st 0)
+          (set k (+ k 1))))
+    (pf-lzw-clear st)
+    (while (== done 0)
+      (do (while (and (< nbits width) (< i e))
+            (do (set acc (+ (* acc 256) (ps-u8 src i)))
+                (set i (+ i 1))
+                (set nbits (+ nbits 8))))
+          (if (< nbits width)
+            (set done 1)
+            (do (set code (bit-and (sar32 acc (- nbits width)) (- (shl32 1 width) 1)))
+                (set nbits (- nbits width))
+                (set acc (bit-and acc (- (shl32 1 nbits) 1)))
+                (if (== code 256)
+                  (do (set nxt 258)
+                      (set width 9)
+                      (set prev -1))
+                  (if (== code 257)
+                    (set done 1)
+                    (if (== prev -1)
+                      (if (> code 255)
+                        (do (set status 3) (set done 1))
+                        (do (pf-room out base 1)
+                            (pf-lzw-string st out code)
+                            (set prev code)))
+                      (do (set n2 (pf-lzw-step st out base code prev nxt))
+                          (if (< n2 0)
+                            (do (set status 3) (set done 1))
+                            (do (set nxt n2)
+                                (set width (pf-lzw-width nxt early))
+                                (set prev code)))))))))))
+    (return status)))
+
+;; -------------------------------------------------------------- Flate
+
+(defn ^:pub ^I32 pf-flate [^Blob src ^I32 s ^I32 e ^:mut ^Cells out ^:mut ^Cells st]
+  (comment "FlateDecode: a zlib stream (inflate's status, renamed). No input at")
+  (comment "all is an empty stream, not a truncated one (a form XObject written with")
+  (comment "/Length 0 and a /Filter is common).")
+  (if (<= e s) (return 0))
+  (let [^I32 z (iz-zlib src s e out st)]
+    (if (== z (iz-ok)) (return 0))
+    (if (== z (iz-truncated)) (return 5))
+    (if (== z (iz-bad-header)) (return 6))
+    (if (== z (iz-bad-checksum)) (return 7))
+    (return 8)))
+
+;; ----------------------------------------------------------- predictors
+
+(defn ^I32 pf-paeth [^I32 a ^I32 b ^I32 c]
+  (comment "PNG's Paeth predictor: whichever of left, above, upper-left is")
+  (comment "closest to left + above - upper-left, ties to left then above.")
+  (let [^I32 p (- (+ a b) c)
+        ^:mut ^I32 pa (- p a)
+        ^:mut ^I32 pb (- p b)
+        ^:mut ^I32 pc (- p c)]
+    (if (< pa 0) (set pa (- 0 pa)))
+    (if (< pb 0) (set pb (- 0 pb)))
+    (if (< pc 0) (set pc (- 0 pc)))
+    (if (and (<= pa pb) (<= pa pc)) (return a))
+    (if (<= pb pc) (return b))
+    (return c)))
+
+(defn ^I32 pf-png [^Cells in ^I32 from ^I32 to ^:mut ^Cells out ^I32 rowb ^I32 bpp]
+  (comment "Undo PNG prediction: each row is a filter byte (0 none, 1 sub,")
+  (comment "2 up, 3 average, 4 Paeth) and `rowb` bytes. A short last row is")
+  (comment "decoded as far as it goes. Answers 4 for a filter byte above 4.")
+  (let [^I32 base0 (cells-len out)
+        ^:mut ^I32 pos from
+        ^:mut ^I32 t 0
+        ^:mut ^I32 avail 0
+        ^:mut ^I32 rb 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 has-prev 0
+        ^:mut ^I32 v 0]
+    (while (< pos to)
+      (do (set t (cells-at in pos))
+          (set pos (+ pos 1))
+          (if (> t 4) (return 4))
+          (set rb (cells-len out))
+          (set has-prev 0)
+          (if (>= (- rb base0) rowb) (set has-prev 1))
+          (set avail (- to pos))
+          (if (> avail rowb) (set avail rowb))
+          (set i 0)
+          (while (< i avail)
+            (do (set x (cells-at in (+ pos i)))
+                (set a 0)
+                (set b 0)
+                (set c 0)
+                (if (>= i bpp) (set a (cells-at out (- (+ rb i) bpp))))
+                (if (== has-prev 1)
+                  (do (set b (cells-at out (- (+ rb i) rowb)))
+                      (if (>= i bpp)
+                        (set c (cells-at out (- (- (+ rb i) rowb) bpp))))))
+                (set v x)
+                (if (== t 1) (set v (+ x a)))
+                (if (== t 2) (set v (+ x b)))
+                (if (== t 3) (set v (+ x (quot (+ a b) 2))))
+                (if (== t 4) (set v (+ x (pf-paeth a b c))))
+                (cells-push out (bit-and v 255))
+                (set i (+ i 1))))
+          (set pos (+ pos avail))))
+    (return 0)))
+
+(defn ^I32 pf-tiff [^Cells in ^I32 from ^I32 to ^:mut ^Cells out ^I32 rowb ^I32 colors ^I32 bpc]
+  (comment "Undo TIFF predictor 2 for 8- and 16-bit samples: each sample is")
+  (comment "the difference from the same component of the pixel to its left.")
+  (let [^:mut ^I32 pos from
+        ^:mut ^I32 i 0
+        ^:mut ^I32 avail 0
+        ^:mut ^I32 rb 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w 0
+        ^I32 step (* colors (quot bpc 8))]
+    (while (< pos to)
+      (do (set avail (- to pos))
+          (if (> avail rowb) (set avail rowb))
+          (set rb (cells-len out))
+          (set i 0)
+          (while (< i avail)
+            (do (if (== bpc 8)
+                  (do (set v (cells-at in (+ pos i)))
+                      (if (>= i step)
+                        (set v (bit-and (+ v (cells-at out (- (+ rb i) step))) 255)))
+                      (cells-push out v)
+                      (set i (+ i 1)))
+                  (do (comment "16 bits, big endian: add the whole sample to the left one")
+                      (if (< (+ i 1) avail)
+                        (do (set v (+ (* (cells-at in (+ pos i)) 256) (cells-at in (+ (+ pos i) 1))))
+                            (if (>= i step)
+                              (do (set w (+ (* (cells-at out (- (+ rb i) step)) 256)
+                                            (cells-at out (+ (- (+ rb i) step) 1))))
+                                  (set v (bit-and (+ v w) 65535))))
+                            (cells-push out (quot v 256))
+                            (cells-push out (rem v 256)))
+                        (cells-push out (cells-at in (+ pos i))))
+                      (set i (+ i 2))))))
+          (set pos (+ pos avail))))
+    (return 0)))
+
+(defn ^:pub ^I32 pf-predict [^Cells in ^I32 from ^I32 to ^:mut ^Cells out
+                             ^I32 pred ^I32 colors ^I32 bpc ^I32 columns]
+  (comment "Apply /Predictor to in[from, to), appending to out: 1 is no")
+  (comment "prediction, 2 TIFF (8 or 16 bits), 10-15 PNG. The parameters are")
+  (comment "validated: colors 1-32, bpc 1/2/4/8/16, columns 1 to 2^24, and a")
+  (comment "row no larger than 2^28 bits; anything else is `bad-predictor`.")
+  (if (== pred 1)
+    (do (let [^:mut ^I32 k from]
+          (while (< k to)
+            (do (cells-push out (cells-at in k))
+                (set k (+ k 1)))))
+        (return 0)))
+  (if (or (< colors 1) (> colors 32) (< columns 1) (> columns 16777216))
+    (return 4))
+  (if (and (!= bpc 1) (!= bpc 2) (!= bpc 4) (!= bpc 8) (!= bpc 16))
+    (return 4))
+  (let [^I32 rowb (quot (+ (* (* colors bpc) columns) 7) 8)
+        ^I32 bpp (quot (+ (* colors bpc) 7) 8)]
+    (if (>= pred 10)
+      (return (pf-png in from to out rowb bpp)))
+    (if (and (== pred 2) (or (== bpc 8) (== bpc 16)))
+      (return (pf-tiff in from to out rowb colors bpc)))
+    (return 4)))
+
+;; ------------------------------------------------------------ dispatch
+
+(defn ^:pub ^I32 pf-run [^I32 code ^Blob src ^I32 s ^I32 e ^:mut ^Cells out
+                         ^:mut ^Cells st ^I32 early]
+  (comment "Run the filter `code` (a `pf-filter`) over src[s, e), appending to")
+  (comment "out; `st` is scratch for LZW and Flate. Crypt is the identity (an")
+  (comment "encrypted document is decrypted before its filters run). The image")
+  (comment "codecs (DCT, JPX, CCITT, JBIG2) are not here: `image-filter`, and")
+  (comment "`out` is untouched, for the caller to hand to the host's")
+  (comment "`ImageDecode` (D005). Anything else is `unsupported-filter`.")
+  (if (== code 1) (return (pf-hex src s e out)))
+  (if (== code 2) (return (pf-a85 src s e out)))
+  (if (== code 3) (return (pf-lzw src s e out st early)))
+  (if (== code 4) (return (pf-flate src s e out st)))
+  (if (== code 5) (return (pf-rl src s e out)))
+  (if (== code 6)
+    (do (let [^:mut ^I32 k s]
+          (while (< k e)
+            (do (cells-push out (ps-u8 src k))
+                (set k (+ k 1)))))
+        (return 0)))
+  (if (and (>= code 7) (<= code 10)) (return 10))
+  (return 9))

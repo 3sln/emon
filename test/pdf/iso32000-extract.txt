@@ -1,0 +1,81 @@
+# ISO 32000-1:2008 worked examples, written out from the standard's text (clause
+# numbers on each group), as rows in the format of objects.txt. The expected
+# column is what the STANDARD says the example means, worked by hand and
+# written before the parser was run against it: it is the parser that is being
+# checked. Hex strings are dumped as hex, so a string's bytes are read off as
+# 2 digits each.
+#
+# ---- 7.3.2 Boolean and null objects
+true	true
+false	false
+null	null
+# ---- 7.3.3 Numeric objects: integers 123 43445 +17 -98 0
+123	123
+43445	43445
++17	17
+-98	-98
+0	0
+# ---- 7.3.3 reals 34.5 -3.62 +123.6 4. -.002 0.0
+34.5	34.5
+-3.62	-3.62
++123.6	123.6
+4.	4.
+-.002	-0.002
+0.0	0.0
+# ---- 7.3.4.2 Literal strings
+(This is a string)	<54686973206973206120737472696e67>
+(Strings may contain newlines\nand such.)	<537472696e6773206d617920636f6e7461696e206e65776c696e65730a616e6420737563682e>
+(Strings may contain balanced parentheses ( ) and special\ncharacters ( * ! & } ^ % and so on ) .)	<537472696e6773206d617920636f6e7461696e2062616c616e63656420706172656e7468657365732028202920616e64207370656369616c0a636861726163746572732028202a20212026207d205e202520616e6420736f206f6e2029202e>
+(The following is an empty string .)()	<54686520666f6c6c6f77696e6720697320616e20656d70747920737472696e67202e>
+()	<>
+(It has zero ( 0 ) length .)	<497420686173207a65726f202820302029206c656e677468202e>
+# ---- 7.3.4.2 A backslash before an end of line continues the string
+(These \\\ntwo strings \\\nare the same.)	<54686573652074776f20737472696e677320617265207468652073616d652e>
+(These two strings are the same.)	<54686573652074776f20737472696e677320617265207468652073616d652e>
+# ---- 7.3.4.2 An unescaped end of line is one LF: CR, LF and CRLF are all the same
+(This string has an end-of-line at the end of it .\n)	<5468697320737472696e672068617320616e20656e642d6f662d6c696e652061742074686520656e64206f66206974202e0a>
+(So does this one .\\n)	<536f20646f65732074686973206f6e65202e0a>
+(a\rb)	<610a62>
+(a\r\nb)	<610a62>
+(a\nb)	<610a62>
+# ---- 7.3.4.2 Escape sequences
+(\\n\\r\\t\\b\\f\\(\\)\\\\)	<0a0d09080c28295c>
+# ---- 7.3.4.2 Octal: \ddd, one to three digits, high-order overflow ignored
+(This string contains \\245two octal characters\\307 .)	<5468697320737472696e6720636f6e7461696e7320a574776f206f6374616c2063686172616374657273c7202e>
+(\\0053)	<0533>
+(\\053)	<2b>
+(\\53)	<2b>
+(\\400)	<00>
+# ---- 7.3.4.3 Hexadecimal strings
+<4E6F762073686D6F7A206B6120706F702E>	<4e6f762073686d6f7a206b6120706f702e>
+<901FA3>	<901fa3>
+<901FA>	<901fa0>
+<90 1F A3>	<901fa3>
+<>	<>
+# ---- 7.3.5 Name objects
+/Name1	/Name1
+/ASomewhatLongerName	/ASomewhatLongerName
+/A;Name_With-Various***Characters?	/A;Name_With-Various***Characters?
+/1.2	/1.2
+/$$	/$$
+/@pattern	/@pattern
+/.notdef	/.notdef
+/Lime#20Green	/Lime#20Green
+/paired#28#29parentheses	/paired#28#29parentheses
+/The_Key_of_F#23_Minor	/The_Key_of_F#23_Minor
+/A#42	/AB
+/	/
+# ---- 7.3.6 Array objects
+[549 3.14 false (Ralph) /SomeName]	[549 3.14 false <52616c7068> /SomeName]
+# ---- 7.3.7 Dictionary objects
+<< /Type /Example\n/Subtype /DictionaryExample\n/Version 0.01\n/IntegerItem 12\n/StringItem (a string)\n/Subdictionary << /Item1 0.4\n/Item2 true\n/LastItem (not!)\n/VeryLastItem (OK)\n>>\n>>	<< /Type /Example /Subtype /DictionaryExample /Version 0.01 /IntegerItem 12 /StringItem <6120737472696e67> /Subdictionary << /Item1 0.4 /Item2 true /LastItem <6e6f7421> /VeryLastItem <4f4b> >> >>
+# ---- 7.3.8 Stream objects (Length direct)
+!indirect
+1 0 obj\n<< /Length 6 >>\nstream\nABCDEF\nendstream\nendobj	<< /Length 6 >> stream@31+6
+# ---- 7.3.10 Indirect objects and references
+12 0 obj\n(Brillig)\nendobj	<4272696c6c6967>
+12 0 obj\n12 0 R\nendobj	12 0 R
+4 0 obj\n<< /Length 4 0 R >>\nstream\nq\nendstream\nendobj	<< /Length 4 0 R >> stream@35+0~ref
+3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj	<< /Type /Page /Parent 2 0 R >>
+!direct
+12 0 R	12 0 R

@@ -1,0 +1,253 @@
+;; Laws and the conformance corpus for `emon.normalize` (P0.4).
+;;
+;; THE CORPUS is the Unicode Consortium's own `NormalizationTest.txt`
+;; (vendored, unmodified, at `test/normalize/`), every line of it. For a line
+;; `c1;c2;c3;c4;c5` UAX #15 requires, for the two forms emon implements:
+;;
+;;   NFC   c2 == NFC(c1) == NFC(c2) == NFC(c3)      c4 == NFC(c4) == NFC(c5)
+;;   NFD   c3 == NFD(c1) == NFD(c2) == NFD(c3)      c5 == NFD(c4) == NFD(c5)
+;;
+;; (NFKC and NFKD columns are input here, not output: SPEC 3.6 has no NFKC.)
+;; A failing line reports its 1-based line number and a BITMASK of the ten
+;; checks that failed (bit 0..4 the NFC ones in the order above, 5..9 the NFD
+;; ones), which is enough to tell "composition" from "ordering" from "data".
+(ns emon.normalizetest
+  (:require [emon.lang :refer [I32 Blob Cells]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               text-blob new-cells test-file]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
+                               cells-drop]]
+            [emon.normalize :refer [nz-nfd nz-nfc nz-ccc nz-compose-pair
+                                    nz-flag-ligatures nz-flag-soft-hyphens]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------ text -> code points
+
+(defn ^I32 nt-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (return -1))
+
+(defn ^I32 nt-cps [^Blob b ^I32 from ^I32 to ^:mut ^Cells c]
+  (comment "Parse the hex numbers separated by spaces in b[from, to) into c,")
+  (comment "cleared first. Answers how many.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0
+        ^:mut ^I32 in 0
+        ^:mut ^I32 d 0]
+    (cells-drop c 0)
+    (while (< k to)
+      (do (set d (nt-hexval (blob-u8 b k)))
+          (if (>= d 0)
+            (do (set v (+ (* v 16) d)) (set in 1))
+            (if (== in 1)
+              (do (cells-push c v) (set v 0) (set in 0))))
+          (set k (+ k 1))))
+    (if (== in 1) (cells-push c v))
+    (return (cells-len c))))
+
+(defn ^I32 nt-lit [^Blob b ^:mut ^Cells c]
+  (comment "A whole text of hex code points, for the readable laws.")
+  (return (nt-cps b 0 (blob-len b) c)))
+
+(defn ^I32 nt-semi [^Blob b ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 59))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 nt-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 nt-same [^Cells a ^Cells b]
+  (comment "1 when the two code point runs are equal.")
+  (let [^:mut ^I32 i 0]
+    (if (!= (cells-len a) (cells-len b)) (return 0))
+    (while (< i (cells-len a))
+      (do (if (!= (cells-at a i) (cells-at b i)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 nt-nfc-is [^Cells src ^Cells want ^:mut ^Cells out ^:mut ^Cells tmp]
+  (comment "1 when NFC(src) == want, with no flags.")
+  (cells-drop out 0)
+  (nz-nfc src 0 (cells-len src) out tmp 0)
+  (return (nt-same out want)))
+
+(defn ^I32 nt-nfd-is [^Cells src ^Cells want ^:mut ^Cells out]
+  (comment "1 when NFD(src) == want, with no flags.")
+  (cells-drop out 0)
+  (nz-nfd src 0 (cells-len src) out 0)
+  (return (nt-same out want)))
+
+;; -------------------------------------------------------------- the corpus
+
+(deftest test-every-line-of-normalization-test-txt
+  (let [^Blob f (test-file "normalize/NormalizationTest.txt")
+        ^Cells c1 (new-cells)
+        ^Cells c2 (new-cells)
+        ^Cells c3 (new-cells)
+        ^Cells c4 (new-cells)
+        ^Cells c5 (new-cells)
+        ^Cells c2b (new-cells)
+        ^Cells c3b (new-cells)
+        ^Cells c4b (new-cells)
+        ^Cells c5b (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 s5 0
+        ^:mut ^I32 bad 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (nt-nl f pos))
+          (comment "Skip blank lines, `#` comments and `@Part` headings.")
+          (if (and (< pos e) (!= (blob-u8 f pos) 35) (!= (blob-u8 f pos) 64))
+            (do (set rows (+ rows 1))
+                (set s1 (nt-semi f pos e))
+                (set s2 (nt-semi f (+ s1 1) e))
+                (set s3 (nt-semi f (+ s2 1) e))
+                (set s4 (nt-semi f (+ s3 1) e))
+                (set s5 (nt-semi f (+ s4 1) e))
+                (nt-cps f pos s1 c1)
+                (nt-cps f (+ s1 1) s2 c2)
+                (nt-cps f (+ s2 1) s3 c3)
+                (nt-cps f (+ s3 1) s4 c4)
+                (nt-cps f (+ s4 1) s5 c5)
+                (comment "Rust takes every `Cells` as `&mut`, so one can not be passed")
+                (comment "twice in a call: the pairs that compare a column with itself")
+                (comment "get a second copy.")
+                (nt-cps f (+ s1 1) s2 c2b)
+                (nt-cps f (+ s2 1) s3 c3b)
+                (nt-cps f (+ s3 1) s4 c4b)
+                (nt-cps f (+ s4 1) s5 c5b)
+                (set bad 0)
+                (if (== (nt-nfc-is c1 c2 out tmp) 0) (set bad (+ bad 1)))
+                (if (== (nt-nfc-is c2 c2b out tmp) 0) (set bad (+ bad 2)))
+                (if (== (nt-nfc-is c3 c2 out tmp) 0) (set bad (+ bad 4)))
+                (if (== (nt-nfc-is c4 c4b out tmp) 0) (set bad (+ bad 8)))
+                (if (== (nt-nfc-is c5 c4 out tmp) 0) (set bad (+ bad 16)))
+                (if (== (nt-nfd-is c1 c3 out) 0) (set bad (+ bad 32)))
+                (if (== (nt-nfd-is c2 c3 out) 0) (set bad (+ bad 64)))
+                (if (== (nt-nfd-is c3 c3b out) 0) (set bad (+ bad 128)))
+                (if (== (nt-nfd-is c4 c5 out) 0) (set bad (+ bad 256)))
+                (if (== (nt-nfd-is c5 c5b out) 0) (set bad (+ bad 512)))
+                (assert-eq-at bad 0 "failed checks (bitmask)" line)))
+          (set pos (+ e 1))))
+    (assert-eq rows 20171 "the corpus has this many test lines")))
+
+;; ------------------------------------------------------- readable examples
+;;
+;; Each is written as a text of hex code points, parsed by the same `nt-cps`.
+
+(deftest test-e-acute-composes-and-decomposes
+  (let [^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)]
+    (nt-lit (text-blob "0065 0301") src)
+    (nt-lit (text-blob "00E9") want)
+    (assert-eq (nt-nfc-is src want out tmp) 1 "e + acute is U+00E9 in NFC")
+    (assert-eq (nt-nfd-is want src out) 1 "U+00E9 is e + acute in NFD")))
+
+(deftest test-marks-are-put-in-canonical-order-before-composing
+  (comment "q, dot above (230), dot below (220): no precomposed form, so the")
+  (comment "marks only REORDER, dot below first. With an `a` the dot below")
+  (comment "then composes (U+1EA1) and the dot above is left over.")
+  (let [^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)]
+    (nt-lit (text-blob "0071 0307 0323") src)
+    (nt-lit (text-blob "0071 0323 0307") want)
+    (assert-eq (nt-nfc-is src want out tmp) 1 "q dot-above dot-below -> q dot-below dot-above")
+    (nt-lit (text-blob "0061 0307 0323") src)
+    (nt-lit (text-blob "1EA1 0307") want)
+    (assert-eq (nt-nfc-is src want out tmp) 1 "a dot-above dot-below -> U+1EA1 dot-above")))
+
+(deftest test-hangul-is-arithmetic-both-ways
+  (let [^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)]
+    (nt-lit (text-blob "1112 1161 11AB") src)
+    (nt-lit (text-blob "D55C") want)
+    (assert-eq (nt-nfc-is src want out tmp) 1 "L V T -> LVT syllable")
+    (assert-eq (nt-nfd-is want src out) 1 "LVT syllable -> L V T")
+    (nt-lit (text-blob "1100 1161") src)
+    (nt-lit (text-blob "AC00") want)
+    (assert-eq (nt-nfc-is src want out tmp) 1 "L V -> LV syllable")
+    (assert-eq (nz-compose-pair 1100 1) -1 "no pair for a plain letter")))
+
+(deftest test-composition-exclusions-stay-decomposed
+  (comment "U+0958 decomposes to U+0915 U+093C and is in Full_Composition_Exclusion,")
+  (comment "so NFC leaves it decomposed -- else normalizing twice would change it.")
+  (let [^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)]
+    (nt-lit (text-blob "0958") src)
+    (nt-lit (text-blob "0915 093C") want)
+    (assert-eq (nt-nfc-is src want out tmp) 1 "NFC(U+0958) is its decomposition")
+    (assert-eq (nt-nfd-is src want out) 1 "and so is NFD")
+    (nt-lit (text-blob "212B") src)
+    (nt-lit (text-blob "00C5") want)
+    (assert-eq (nt-nfc-is src want out tmp) 1 "a singleton (angstrom sign) goes to its canonical equivalent")))
+
+(deftest test-combining-classes
+  (assert-eq (nz-ccc 65) 0 "A")
+  (assert-eq (nz-ccc 768) 230 "grave accent")
+  (assert-eq (nz-ccc 803) 220 "dot below")
+  (assert-eq (nz-ccc 1456) 10 "hebrew sheva")
+  (assert-eq (nz-ccc 12441) 8 "kana voiced sound mark"))
+
+(deftest test-ligatures-and-soft-hyphens-are-flags
+  (let [^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)]
+    (nt-lit (text-blob "FB00 FB01 FB02 FB03 FB04 FB05 FB06") src)
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 1)
+    (nt-lit (text-blob "66 66 66 69 66 6C 66 66 69 66 66 6C 73 74 73 74") want)
+    (assert-eq (nt-same out want) 1 "FB00..FB06 expand with the ligature flag")
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 0)
+    (assert-eq (nt-same out src) 1 "and stay as they are without it")
+    (nt-lit (text-blob "61 AD 62") src)
+    (nt-lit (text-blob "61 62") want)
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 2)
+    (assert-eq (nt-same out want) 1 "U+00AD is dropped with the soft-hyphen flag")
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 0)
+    (assert-eq (nt-same out src) 1 "and kept without it")
+    (nt-lit (text-blob "FB01 65 301") src)
+    (nt-lit (text-blob "66 69 E9") want)
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 3)
+    (assert-eq (nt-same out want) 1 "flags compose with NFC: fi + e-acute")))
+
+(deftest test-a-span-is-normalized-and-output-is-appended
+  (let [^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)]
+    (nt-lit (text-blob "61 65 301 62") src)
+    (cells-push out 7)
+    (nz-nfc src 1 3 out tmp 0)
+    (nt-lit (text-blob "07 E9") want)
+    (assert-eq (nt-same out want) 1 "only src[1,3) is read, and appended after the 7")))

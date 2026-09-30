@@ -1,0 +1,378 @@
+;; Laws for `emon.json` (P1.2): golden files, byte for byte, on every target.
+;;
+;; A GOLDEN IS A PAIR OF FILES under `test/json/`: `NAME.model`, a line script
+;; that BUILDS a Model through the builder functions of `emon.model`, and
+;; `NAME.json` / `NAME.pretty.json`, the exact bytes `js-emit` must write for
+;; it. DEVLOG P1.2 said the script would be EDN; it is a line script because
+;; kin parses it (so four targets agree about the parser too, D046) and a
+;; parser for EDN is not what is being tested (D054).
+;;
+;; THE SCRIPT LANGUAGE, one command per line, `#` starts a comment line, a
+;; blank line is nothing. Integers are decimal; TEXT runs to the end of the
+;; line, with `\n` `\t` `\\` `\uXXXX` and `\u{X...}` escapes and everything
+;; else UTF-8. Node numbers are the indexes `node-new` answers, in order, the
+;; root being 0. Keys and kinds are the codes of `emon.model` (`fk`, `nk`).
+;;
+;;   n KIND PARENT          node-new (PARENT -1 is a new root)
+;;   t NODE text            the node's own text
+;;   s NODE v   x NODE v    sub, aux
+;;   sr NODE bits           the source bitset (set)
+;;   c NODE v   f NODE bits conf, flags
+;;   r NODE page x0 y0 x1 y1        add a region (centipoints)
+;;   ai NODE KEY int       ab NODE KEY 0|1        an NODE KEY node
+;;   at NODE KEY text      set an attribute (replacing one with the key)
+;;   ni NODE KEY int       nt NODE KEY text       ADD one (a repeated key)
+;;   pg NUM W H ROT KIND   pl IDX text   ph IDX health   pd IDX dpi pxw pxh
+;;   d REASON PAGE X0 Y0 X1 Y1 CONF SRC           ledger-add
+;;   dt IDX text           the ledger row's text
+;;
+;; `jt-build` answers 0, or the 1-based number of the first line that is
+;; wrong (an unknown command, or a node the Model refused).
+(ns emon.jsontest
+  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-text assert-text-span
+                               test-file new-cells new-text]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
+                               cells-push cells-drop]]
+            [emon.model :refer [model-init node-new node-set-text node-set-sub
+                                node-set-aux node-set-src node-set-conf
+                                node-set-flags node-add-region
+                                node-set-attr-int node-set-attr-bool
+                                node-set-attr-node node-set-attr-text
+                                node-add-attr-int node-add-attr-text
+                                text-len text-append-cp text-append-utf8
+                                page-new page-set-label page-set-health
+                                page-set-resolution ledger-add ledger-set-text
+                                model-check max-depth nk-section]]
+            [emon.json :refer [js-emit js-cpt js-str]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or]]))
+
+;; ------------------------------------------------------------ the parser
+
+(defn ^I32 jt-eol [^Blob b ^I32 from]
+  (comment "Index of the next newline at or after `from`, or the blob's length.")
+  (let [^:mut ^I32 k from]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 jt-skip [^Blob b ^I32 end ^:mut ^Cells st]
+  (comment "Step the cursor (st[0]) over spaces.")
+  (let [^:mut ^I32 k (cells-at st 0)]
+    (while (and (< k end) (== (blob-u8 b k) 32))
+      (set k (+ k 1)))
+    (cells-set st 0 k)
+    (return k)))
+
+(defn ^I32 jt-int [^Blob b ^I32 end ^:mut ^Cells st]
+  (comment "The next decimal integer on the line, with an optional minus. It is")
+  (comment "accumulated NEGATIVELY so that -2147483648 does not overflow.")
+  (let [^:mut ^I32 k (jt-skip b end st)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 neg 0]
+    (if (and (< k end) (== (blob-u8 b k) 45))
+      (do (set neg 1) (set k (+ k 1))))
+    (while (and (< k end) (>= (blob-u8 b k) 48) (<= (blob-u8 b k) 57))
+      (do (set v (- (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (cells-set st 0 k)
+    (if (== neg 1) (return v))
+    (return (- 0 v))))
+
+(defn ^I32 jt-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^I32 jt-text [^Blob b ^I32 end ^:mut ^Cells st ^:mut ^Cells text]
+  (comment "The rest of the line as text, escapes decoded, appended to the text")
+  (comment "arena. Answers the index the run starts at.")
+  (let [^I32 start (text-len text)
+        ^:mut ^I32 i (jt-skip b end st)
+        ^:mut ^I32 seg 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 h 0]
+    (while (< i end)
+      (do (set seg i)
+          (while (and (< i end) (!= (blob-u8 b i) 92))
+            (set i (+ i 1)))
+          (text-append-utf8 text b seg i)
+          (if (< i end)
+            (do (set e (blob-u8 b (+ i 1)))
+                (set i (+ i 2))
+                (if (== e 110) (text-append-cp text 10))
+                (if (== e 116) (text-append-cp text 9))
+                (if (== e 92) (text-append-cp text 92))
+                (if (== e 117)
+                  (do (set cp 0)
+                      (if (== (blob-u8 b i) 123)
+                        (do (set i (+ i 1))
+                            (while (!= (blob-u8 b i) 125)
+                              (do (set cp (+ (* cp 16) (jt-hexval (blob-u8 b i))))
+                                  (set i (+ i 1))))
+                            (set i (+ i 1)))
+                        (do (set h 0)
+                            (while (< h 4)
+                              (do (set cp (+ (* cp 16) (jt-hexval (blob-u8 b (+ i h)))))
+                                  (set h (+ h 1))))
+                            (set i (+ i 4))))
+                      (text-append-cp text cp)))))))
+    (cells-set st 0 end)
+    (return start)))
+
+;; ---------------------------------------------------------- one command
+
+(defn ^I32 jt-line [^Blob b ^I32 from ^I32 end ^:mut ^Cells nodes
+                    ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                    ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells st]
+  (comment "Run one command. Answers 0, or 1 when it is unknown or refused.")
+  (let [^I32 c0 (blob-u8 b from)
+        ^:mut ^I32 c1 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 z 0
+        ^:mut ^I32 q 0]
+    (cells-set st 0 (+ from 1))
+    (if (< (+ from 1) end)
+      (if (!= (blob-u8 b (+ from 1)) 32)
+        (do (set c1 (blob-u8 b (+ from 1)))
+            (cells-set st 0 (+ from 2)))))
+    (set code (+ (* c0 256) c1))
+    ;; n KIND PARENT
+    (if (== code 28160)
+      (do (set a (jt-int b end st))
+          (set k (jt-int b end st))
+          (if (< (node-new nodes a k) 0) (return 1))
+          (return 0)))
+    ;; t NODE text
+    (if (== code 29696)
+      (do (set a (jt-int b end st))
+          (set v (jt-text b end st text))
+          (node-set-text nodes a v (- (text-len text) v))
+          (return 0)))
+    ;; s, x, c, f, sr NODE v
+    (if (== code 29440)
+      (do (set a (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-sub nodes a v) (return 0)))
+    (if (== code 30720)
+      (do (set a (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-aux nodes a v) (return 0)))
+    (if (== code 25344)
+      (do (set a (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-conf nodes a v) (return 0)))
+    (if (== code 26112)
+      (do (set a (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-flags nodes a v) (return 0)))
+    (if (== code 29554)
+      (do (set a (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-src nodes a v) (return 0)))
+    ;; r NODE page x0 y0 x1 y1
+    (if (== code 29184)
+      (do (set a (jt-int b end st))
+          (set k (jt-int b end st))
+          (set v (jt-int b end st))
+          (set w (jt-int b end st))
+          (set x (jt-int b end st))
+          (set y (jt-int b end st))
+          (node-add-region nodes regions a k v w x y)
+          (return 0)))
+    ;; ai, ab, an, ni NODE KEY int
+    (if (== code 24937)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-attr-int nodes attrs a k v) (return 0)))
+    (if (== code 24930)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-attr-bool nodes attrs a k v) (return 0)))
+    (if (== code 24942)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
+          (node-set-attr-node nodes attrs a k v) (return 0)))
+    (if (== code 28265)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
+          (node-add-attr-int nodes attrs a k v) (return 0)))
+    ;; at, nt NODE KEY text
+    (if (== code 24948)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st))
+          (set v (jt-text b end st text))
+          (node-set-attr-text nodes attrs a k v (- (text-len text) v))
+          (return 0)))
+    (if (== code 28276)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st))
+          (set v (jt-text b end st text))
+          (node-add-attr-text nodes attrs a k v (- (text-len text) v))
+          (return 0)))
+    ;; pg NUM W H ROT KIND
+    (if (== code 28775)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
+          (set w (jt-int b end st)) (set x (jt-int b end st))
+          (page-new pages a k v w x) (return 0)))
+    ;; pl IDX text
+    (if (== code 28780)
+      (do (set a (jt-int b end st))
+          (set v (jt-text b end st text))
+          (page-set-label pages a v (- (text-len text) v))
+          (return 0)))
+    ;; ph IDX health
+    (if (== code 28776)
+      (do (set a (jt-int b end st)) (set v (jt-int b end st))
+          (page-set-health pages a v) (return 0)))
+    ;; pd IDX dpi pxw pxh
+    (if (== code 28772)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st))
+          (set v (jt-int b end st)) (set w (jt-int b end st))
+          (page-set-resolution pages a k v w) (return 0)))
+    ;; d REASON PAGE X0 Y0 X1 Y1 CONF SRC
+    (if (== code 25600)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
+          (set w (jt-int b end st)) (set x (jt-int b end st)) (set y (jt-int b end st))
+          (set z (jt-int b end st)) (set q (jt-int b end st))
+          (ledger-add ledger a k v w x y z q) (return 0)))
+    ;; dt IDX text
+    (if (== code 25716)
+      (do (set a (jt-int b end st))
+          (set v (jt-text b end st text))
+          (ledger-set-text ledger a v (- (text-len text) v))
+          (return 0)))
+    (return 1)))
+
+(defn ^I32 jt-build [^Blob b ^:mut ^Cells nodes ^:mut ^Cells attrs
+                     ^:mut ^Cells regions ^:mut ^Cells text ^:mut ^Cells pages
+                     ^:mut ^Cells ledger ^:mut ^Cells st]
+  (comment "Build the Model a script describes. 0, or the first bad line.")
+  (let [^:mut ^I32 pos 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 lineno 0]
+    (model-init nodes attrs regions text pages ledger)
+    (cells-drop st 0)
+    (cells-push st 0)
+    (while (< pos (blob-len b))
+      (do (set e (jt-eol b pos))
+          (set lineno (+ lineno 1))
+          (if (and (< pos e) (!= (blob-u8 b pos) 35))
+            (if (== (jt-line b pos e nodes attrs regions text pages ledger st) 1)
+              (return lineno)))
+          (set pos (+ e 1))))
+    (return 0)))
+
+(defn ^I32 jt-end [^Blob b]
+  (comment "The end of a golden's bytes: its length less one final newline, so")
+  (comment "the files end the way an editor leaves them and the JSON has none.")
+  (let [^I32 n (blob-len b)]
+    (if (and (> n 0) (== (blob-u8 b (- n 1)) 10)) (return (- n 1)))
+    (return n)))
+
+;; ----------------------------------------------------------------- goldens
+
+(deftest test-golden-minimal
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)]
+    (assert-eq (jt-build (test-file "json/minimal.model") nodes attrs regions text pages ledger st) 0 "the script builds")
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "the Model is well formed")
+    (js-emit compact 0 nodes attrs regions text pages ledger)
+    (js-emit pretty 1 nodes attrs regions text pages ledger)
+    (assert-text-span compact (test-file "json/minimal.json") 0 (jt-end (test-file "json/minimal.json")) "compact" 0)
+    (assert-text-span pretty (test-file "json/minimal.pretty.json") 0 (jt-end (test-file "json/minimal.pretty.json")) "pretty" 0)))
+
+(deftest test-golden-sample
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)]
+    (assert-eq (jt-build (test-file "json/sample.model") nodes attrs regions text pages ledger st) 0 "the script builds")
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "the Model is well formed")
+    (js-emit compact 0 nodes attrs regions text pages ledger)
+    (js-emit pretty 1 nodes attrs regions text pages ledger)
+    (assert-text-span compact (test-file "json/sample.json") 0 (jt-end (test-file "json/sample.json")) "compact" 0)
+    (assert-text-span pretty (test-file "json/sample.pretty.json") 0 (jt-end (test-file "json/sample.pretty.json")) "pretty" 0)))
+
+(deftest test-golden-kinds
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)]
+    (assert-eq (jt-build (test-file "json/kinds.model") nodes attrs regions text pages ledger st) 0 "the script builds")
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "the Model is well formed")
+    (js-emit compact 0 nodes attrs regions text pages ledger)
+    (js-emit pretty 1 nodes attrs regions text pages ledger)
+    (assert-text-span compact (test-file "json/kinds.json") 0 (jt-end (test-file "json/kinds.json")) "compact" 0)
+    (assert-text-span pretty (test-file "json/kinds.pretty.json") 0 (jt-end (test-file "json/kinds.pretty.json")) "pretty" 0)))
+
+;; ------------------------------------------------------------- the corners
+
+(deftest test-centipoints-print-as-points
+  (let [^Text t (new-text)]
+    (js-cpt t 7250) (emit-ascii t " ")
+    (js-cpt t 7200) (emit-ascii t " ")
+    (js-cpt t -5) (emit-ascii t " ")
+    (js-cpt t 0) (emit-ascii t " ")
+    (js-cpt t 12) (emit-ascii t " ")
+    (js-cpt t 10) (emit-ascii t " ")
+    (js-cpt t 5) (emit-ascii t " ")
+    (js-cpt t 99) (emit-ascii t " ")
+    (js-cpt t 100) (emit-ascii t " ")
+    (js-cpt t 101) (emit-ascii t " ")
+    (js-cpt t 1234) (emit-ascii t " ")
+    (js-cpt t -150) (emit-ascii t " ")
+    (js-cpt t -100) (emit-ascii t " ")
+    (js-cpt t -2147483648) (emit-ascii t " ")
+    (js-cpt t 2147483647)
+    (assert-text t "72.5 72 -0.05 0 0.12 0.1 0.05 0.99 1 1.01 12.34 -1.5 -1 -21474836.48 21474836.47" "points")))
+
+(deftest test-strings-escape-what-SPEC-4-3-says
+  (let [^Cells text (new-cells)
+        ^Text t (new-text)]
+    (text-append-cp text 34)
+    (text-append-cp text 92)
+    (text-append-cp text 10)
+    (text-append-cp text 9)
+    (text-append-cp text 13)
+    (text-append-cp text 0)
+    (text-append-cp text 31)
+    (text-append-cp text 8232)
+    (text-append-cp text 8233)
+    (text-append-cp text 47)
+    (text-append-cp text 32)
+    (js-str t text 0 11)
+    (assert-text t "\"\\\"\\\\\\n\\t\\u000d\\u0000\\u001f\\u2028\\u2029/ \"" "escapes")))
+
+(deftest test-the-deepest-tree-serializes
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)
+        ^:mut ^I32 at 0]
+    (model-init nodes attrs regions text pages ledger)
+    (while (!= at -1)
+      (set at (node-new nodes (nk-section) at)))
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "well formed")
+    (assert-eq (js-emit compact 0 nodes attrs regions text pages ledger) 0 "compact")
+    (assert-eq (js-emit pretty 1 nodes attrs regions text pages ledger) 0 "pretty")))

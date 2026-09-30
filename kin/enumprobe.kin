@@ -1,0 +1,30 @@
+;; `defenum` (P0.6): one table, the constants AND the spelling.
+;;
+;; This source refers neither `text-ascii` nor `if` beyond what it uses
+;; itself, on purpose: `defenum` and `emit-ascii` must work from what they
+;; carry. Codes are deliberately sparse and unordered so a `case`-by-index
+;; implementation could not pass by accident.
+(ns emon.enumprobe
+  (:require [emon.lang :refer [I32 Text emit-ascii defenum]]
+            [emon.port :refer [text-i32]]
+            [kin.lang :refer [defn return let set while if + < ==]]))
+
+(defenum ^:pub nk
+  [[nk-document 1 "document"]
+   [nk-paragraph 3 "paragraph"]
+   [nk-text 4 "text"]
+   [nk-break 7 "break"]])
+
+;; Codes 0..8 through the emitter: known ones print their spelling, unknown
+;; ones write nothing and answer 0 (printed as `?`).
+(defn ^:pub ^I32 probe [^:mut ^Text t]
+  (let [^:mut ^I32 i 0]
+    (while (< i 9)
+      (text-i32 t i)
+      (emit-ascii t "=")
+      (if (== (nk-emit-name t i) 0) (emit-ascii t "?"))
+      (emit-ascii t " ")
+      (set i (+ i 1))))
+  (emit-ascii t "sum:")
+  (text-i32 t (+ (+ (nk-document) (nk-paragraph)) (+ (nk-text) (nk-break))))
+  (return 0))

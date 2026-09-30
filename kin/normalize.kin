@@ -1,0 +1,241 @@
+;; Unicode normalization, UAX #15: NFD and NFC (P0.4). emon's own module
+;; (D039), data from `emon.nftable`, which `kin/scripts/ucd.py` generates
+;; from the UCD files vendored under `test/normalize/`.
+;;
+;; WHAT SPEC 3.6 ASKS FOR (D029) and so what is here: NFC, plus the
+;; decomposition of the seven Latin ligatures U+FB00..FB06 (`ﬁ` -> `fi`) and
+;; removal of soft hyphens (U+00AD). NOT NFKC: full-width forms, superscripts
+;; and the like are content. So there is no compatibility data beyond those
+;; seven ligatures. NFD is here because NFC is defined through it.
+;;
+;; WHY NFC MATTERS TO A PDF READER. A PDF draws glyphs, not characters: the
+;; text layer for `é` may be the precomposed U+00E9 or `e` + U+0301, chosen
+;; by whatever produced the file, and a scraper searching for one must find
+;; the other. Normalizing makes the model's text canonical.
+;;
+;; TWO STEPS, IN THIS ORDER. NFD is decompose (recursively, through the
+;; canonical mappings) then put runs of combining marks into canonical
+;; order (by Canonical_Combining_Class, stably). NFC is NFD then compose.
+;; Composing before ordering gives a different answer for `q` U+0307 U+0323:
+;; the dot below must move in front of the dot above before anything can
+;; combine. HANGUL is arithmetic (UAX #15 section 3.12), in no table.
+;;
+;; WHAT IT TAKES AND GIVES: code points in a `Cells` (one per cell, the
+;; model's text representation, SPEC 3.6) over a span [from, to), APPENDED to
+;; an output `Cells`. NFC needs a scratch `Cells` for the decomposed text
+;; (kin cannot allocate). `flags`: 1 expands ligatures, 2 drops U+00AD; the
+;; caller decides WHICH soft hyphens, since removing them only "at line
+;; ends" (SPEC 3.6) needs the layout this module cannot see.
+(ns emon.normalize
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.nftable :refer [nf-ccc-count nf-ccc-at nf-dec-count nf-dec-at
+                                  nf-pool-at nf-comp-count nf-comp-at
+                                  nf-lig-count nf-lig-at]]
+            [kin.lang :refer [defn defconst return let set while if comment do
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ---------------------------------------------------------------- Hangul
+
+(defconst ^I32 S_BASE 44032)
+(defconst ^I32 L_BASE 4352)
+(defconst ^I32 V_BASE 4449)
+(defconst ^I32 T_BASE 4519)
+(defconst ^I32 L_COUNT 19)
+(defconst ^I32 V_COUNT 21)
+(defconst ^I32 T_COUNT 28)
+(defconst ^I32 N_COUNT 588)
+(defconst ^I32 S_COUNT 11172)
+
+(defn ^:pub ^I32 nz-flag-ligatures [] (return 1))
+(defn ^:pub ^I32 nz-flag-soft-hyphens [] (return 2))
+
+;; ---------------------------------------------------------- the lookups
+
+(defn ^:pub ^I32 nz-ccc [^I32 cp]
+  (comment "Canonical_Combining_Class: 0 for nearly everything, which is why")
+  (comment "the table is ranges of the exceptions, none below U+0300.")
+  (if (< cp 768) (return 0))
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (nf-ccc-count 0) 1)
+        ^:mut ^I32 mid 0]
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (if (< cp (nf-ccc-at 0 mid 0))
+            (set hi (- mid 1))
+            (if (> cp (nf-ccc-at 0 mid 1))
+              (set lo (+ mid 1))
+              (return (nf-ccc-at 0 mid 2))))))
+    (return 0)))
+
+(defn ^I32 nz-dec-row [^I32 cp]
+  (comment "The row of `nf-dec` for cp, or -1. No canonical mapping starts")
+  (comment "below U+00C0.")
+  (if (< cp 192) (return -1))
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (nf-dec-count 0) 1)
+        ^:mut ^I32 mid 0]
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (if (< cp (nf-dec-at 0 mid 0))
+            (set hi (- mid 1))
+            (if (> cp (nf-dec-at 0 mid 0))
+              (set lo (+ mid 1))
+              (return mid)))))
+    (return -1)))
+
+(defn ^:pub ^I32 nz-compose-pair [^I32 a ^I32 b]
+  (comment "The primary composite of the pair (a, b), or -1: what `a` followed")
+  (comment "by `b` composes to.")
+  (comment "")
+  (comment "Hangul first: L + V -> LV and LV + T -> LVT, where an LV syllable")
+  (comment "is one whose index is a multiple of T_COUNT and T_BASE itself is not")
+  (comment "a trailing consonant (hence `b > T_BASE`).")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (nf-comp-count 0) 1)
+        ^:mut ^I32 mid 0]
+    (if (and (>= a L_BASE) (< a (+ L_BASE L_COUNT))
+             (>= b V_BASE) (< b (+ V_BASE V_COUNT)))
+      (return (+ S_BASE (* (+ (* (- a L_BASE) V_COUNT) (- b V_BASE)) T_COUNT))))
+    (if (and (>= a S_BASE) (< a (+ S_BASE S_COUNT))
+             (== (rem (- a S_BASE) T_COUNT) 0)
+             (> b T_BASE) (< b (+ T_BASE T_COUNT)))
+      (return (+ a (- b T_BASE))))
+    (comment "Every other second character is a combining mark, U+0300 or above.")
+    (if (< b 768) (return -1))
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (if (or (< a (nf-comp-at 0 mid 0))
+                  (and (== a (nf-comp-at 0 mid 0)) (< b (nf-comp-at 0 mid 1))))
+            (set hi (- mid 1))
+            (if (or (> a (nf-comp-at 0 mid 0))
+                    (and (== a (nf-comp-at 0 mid 0)) (> b (nf-comp-at 0 mid 1))))
+              (set lo (+ mid 1))
+              (return (nf-comp-at 0 mid 2))))))
+    (return -1)))
+
+;; ------------------------------------------------------------------ NFD
+
+(defn ^I32 nz-put-full [^I32 cp ^:mut ^Cells out]
+  (comment "Append the full canonical decomposition of cp (cp itself when it")
+  (comment "has none). The tables are already flattened, so this is one step.")
+  (if (and (>= cp S_BASE) (< cp (+ S_BASE S_COUNT)))
+    (do (let [^I32 si (- cp S_BASE)
+              ^I32 tail (rem si T_COUNT)]
+          (cells-push out (+ L_BASE (quot si N_COUNT)))
+          (cells-push out (+ V_BASE (quot (rem si N_COUNT) T_COUNT)))
+          (if (> tail 0) (cells-push out (+ T_BASE tail)))
+          (return 0))))
+  (let [^I32 row (nz-dec-row cp)
+        ^:mut ^I32 k 0]
+    (if (< row 0)
+      (do (cells-push out cp) (return 0)))
+    (while (< k (nf-dec-at 0 row 2))
+      (do (cells-push out (nf-pool-at 0 (+ (nf-dec-at 0 row 1) k)))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 nz-put-ligature [^I32 cp ^:mut ^Cells out]
+  (comment "Append the expansion of a U+FB00..FB06 ligature and answer 1, or")
+  (comment "answer 0 and append nothing.")
+  (if (< cp 64256) (return 0))
+  (if (> cp 64262) (return 0))
+  (let [^I32 row (- cp 64256)
+        ^:mut ^I32 k 0]
+    (while (< k (nf-lig-at 0 row 1))
+      (do (cells-push out (nf-lig-at 0 row (+ 2 k)))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 nz-order [^:mut ^Cells out ^I32 start]
+  (comment "Canonical ordering of out[start..]: within each run of non-starters")
+  (comment "(ccc != 0) a STABLE sort by ccc. An insertion sort: runs are a")
+  (comment "handful of marks, and stability is what the standard requires.")
+  (let [^:mut ^I32 i start
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cc 0
+        ^:mut ^I32 cur 0
+        ^:mut ^I32 prev 0]
+    (while (< i (cells-len out))
+      (do (set cur (cells-at out i))
+          (set cc (nz-ccc cur))
+          (if (!= cc 0)
+            (do (set j i)
+                (while (and (> j start) (> (nz-ccc (cells-at out (- j 1))) cc))
+                  (do (set prev (cells-at out (- j 1)))
+                      (cells-set out j prev)
+                      (set j (- j 1))))
+                (cells-set out j cur)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 nz-nfd [^Cells src ^I32 from ^I32 to ^:mut ^Cells out ^I32 flags]
+  (comment "Append NFD(src[from, to)) to out. `flags` as in the head.")
+  (let [^I32 start (cells-len out)
+        ^:mut ^I32 i from
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 lig 0]
+    (while (< i to)
+      (do (set cp (cells-at src i))
+          (set lig 0)
+          (if (and (== (rem flags 2) 1) (>= cp 64256))
+            (set lig (nz-put-ligature cp out)))
+          (if (and (== lig 0) (== cp 173) (>= flags 2))
+            (set lig 1))
+          (if (== lig 0) (nz-put-full cp out))
+          (set i (+ i 1))))
+    (nz-order out start)
+    (return 0)))
+
+;; ------------------------------------------------------------------ NFC
+
+(defn ^I32 nz-compose [^:mut ^Cells buf]
+  (comment "Compose `buf` (an NFD string) in place and leave it its NFC. The")
+  (comment "algorithm is the sample in UAX #15 section 13: keep the last")
+  (comment "starter and the combining class of the last character kept after")
+  (comment "it; a character composes into the starter when the pair has a")
+  (comment "primary composite and nothing kept in between BLOCKS it (a blocker")
+  (comment "is a character of class 0, or of class >= the new one).")
+  (let [^I32 n (cells-len buf)
+        ^:mut ^I32 starter_pos 0
+        ^:mut ^I32 starter 0
+        ^:mut ^I32 last_class 0
+        ^:mut ^I32 comp_pos 1
+        ^:mut ^I32 i 1
+        ^:mut ^I32 ch 0
+        ^:mut ^I32 ch_class 0
+        ^:mut ^I32 composite 0]
+    (if (< n 2) (return 0))
+    (set starter (cells-at buf 0))
+    (comment "A buffer that starts with a non-starter has no starter to")
+    (comment "compose into: 256 is above every class, so nothing composes.")
+    (set last_class (nz-ccc starter))
+    (if (!= last_class 0) (set last_class 256))
+    (while (< i n)
+      (do (set ch (cells-at buf i))
+          (set ch_class (nz-ccc ch))
+          (set composite (nz-compose-pair starter ch))
+          (if (and (>= composite 0) (or (< last_class ch_class) (== last_class 0)))
+            (do (cells-set buf starter_pos composite)
+                (set starter composite))
+            (do (if (== ch_class 0)
+                  (do (set starter_pos comp_pos)
+                      (set starter ch)))
+                (set last_class ch_class)
+                (cells-set buf comp_pos ch)
+                (set comp_pos (+ comp_pos 1))))
+          (set i (+ i 1))))
+    (cells-drop buf comp_pos)
+    (return 0)))
+
+(defn ^:pub ^I32 nz-nfc [^Cells src ^I32 from ^I32 to ^:mut ^Cells out ^:mut ^Cells tmp ^I32 flags]
+  (comment "Append NFC(src[from, to)) to out, using `tmp` (cleared here) for")
+  (comment "the decomposed text. `flags` as in the head.")
+  (let [^:mut ^I32 i 0]
+    (cells-drop tmp 0)
+    (nz-nfd src from to tmp flags)
+    (nz-compose tmp)
+    (while (< i (cells-len tmp))
+      (do (cells-push out (cells-at tmp i))
+          (set i (+ i 1))))
+    (return 0)))

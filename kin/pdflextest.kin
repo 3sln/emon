@@ -1,0 +1,365 @@
+;; Laws and the row corpus for `emon.pdflex` (P1.4).
+;;
+;; THE CORPUS is `test/pdf/objects.txt`: one PDF object snippet per row, its
+;; canonical dump, and optionally where the parse stopped and which tolerance
+;; bits it set (the header of that file says how a row reads). Every target
+;; reads the same file and must give the same dump on every row. THE DRIVER IS
+;; KIN, so the four targets also agree about the row parser and the escapes.
+;;
+;; THE FUZZ LAW is DEVLOG P1.4's "1,000 truncations of a fixture never panic":
+;; `test/pdf/minimal.pdf` cut at every length, each cut a REAL shorter blob (a
+;; parser that read past `end` into the bytes that were cut off would read
+;; out of range here, on every target).
+(ns emon.pdflextest
+  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               assert-that-at assert-text assert-text-span
+                               text-blob new-cells new-text test-file
+                               cells-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
+                               cells-drop text-i32]]
+            [emon.pdfnames :refer [pn-type pn-length pn-kids pn-count
+                                   pn-media-box]]
+            [emon.pdflex :refer [pl-init pl-seek pl-parse pl-parse-indirect
+                                 pl-dump pl-pos pl-err pl-warn pl-status-emit-name
+                                 pl-kind-of pl-first pl-next pl-count pl-name-is
+                                 pl-dict-get pl-dict-find pl-wk pl-num-cp
+                                 pl-int-value pl-name-entry pl-objnum pl-objgen
+                                 pl-stream-start pl-stream-len pl-stream-flags
+                                 pl-stream-dict pl-skip pl-lex
+                                 pl-k-dict pl-k-array pl-k-stream pl-k-int
+                                 pl-k-name pl-k-ref pl-k-real pl-k-string
+                                 pl-eof pl-bad-token pl-unterminated-array]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ---------------------------------------------------------- row parsing
+
+(defn ^I32 pt-nl [^Blob b ^I32 i]
+  (comment "Index of the next newline at or after i, or the blob's length.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 pt-tab [^Blob b ^I32 i ^I32 lim]
+  (comment "Index of the next tab in [i, lim), or lim.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 pt-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^I32 pt-dec [^Blob b ^I32 from ^I32 to]
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0]
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 pt-unescape [^Blob b ^I32 from ^I32 to ^:mut ^Cells out]
+  (comment "b[from, to) with \\n \\r \\t \\\\ and \\xHH turned into bytes, into out.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 c 0]
+    (cells-drop out 0)
+    (while (< k to)
+      (do (set c (blob-u8 b k))
+          (set k (+ k 1))
+          (if (== c 92)
+            (do (set c (blob-u8 b k))
+                (set k (+ k 1))
+                (if (== c 110) (cells-push out 10))
+                (if (== c 114) (cells-push out 13))
+                (if (== c 116) (cells-push out 9))
+                (if (== c 92) (cells-push out 92))
+                (if (== c 120)
+                  (do (cells-push out (+ (* (pt-hexval (blob-u8 b k)) 16)
+                                         (pt-hexval (blob-u8 b (+ k 1)))))
+                      (set k (+ k 2)))))
+            (cells-push out c))))
+    (return (cells-len out))))
+
+;; ------------------------------------------------------------- the corpus
+
+(defn ^I32 pt-do-row [^Blob f ^I32 from ^I32 to ^I32 indirect ^:mut ^Cells inp
+                      ^:mut ^Cells ar ^:mut ^Text t]
+  (comment "Unescape the row's input, parse it, and write its dump (or")
+  (comment "`!status`) to t.")
+  (let [^:mut ^I32 h 0]
+    (pt-unescape f from to inp)
+    (pl-init ar)
+    (pl-seek ar 0 (cells-len inp))
+    (if (== indirect 1)
+      (set h (pl-parse-indirect (cells-blob inp) ar 0))
+      (set h (pl-parse (cells-blob inp) ar)))
+    (if (== h 0)
+      (do (emit-ascii t "!")
+          (pl-status-emit-name t (pl-err ar)))
+      (pl-dump t ar h))
+    (return h)))
+
+(defn ^I32 pt-row-fields [^Blob f ^I32 pos ^I32 e ^I32 which]
+  (comment "The tab positions of the row at [pos, e): which 0..3.")
+  (let [^I32 s0 (pt-tab f pos e)
+        ^I32 s1 (pt-tab f (+ s0 1) e)
+        ^I32 s2 (pt-tab f (+ s1 1) e)]
+    (if (== which 0) (return s0))
+    (if (== which 1) (return s1))
+    (if (== which 2) (return s2))
+    (return (pt-tab f (+ s2 1) e))))
+
+(defn ^I32 pt-is-row [^Blob f ^I32 pos ^I32 e]
+  (comment "0 for a blank line, a comment or a directive.")
+  (if (>= pos e) (return 0))
+  (if (== (blob-u8 f pos) 35) (return 0))
+  (if (== (blob-u8 f pos) 33) (return 0))
+  (return 1))
+
+(defn ^I32 pt-mode [^Blob f ^I32 pos ^I32 e ^I32 old]
+  (comment "The mode after the line at pos: 1 after `!indirect`, 0 after")
+  (comment "`!direct`, otherwise unchanged.")
+  (if (>= pos e) (return old))
+  (if (!= (blob-u8 f pos) 33) (return old))
+  (if (== (blob-u8 f (+ pos 1)) 105) (return 1))
+  (return 0))
+
+(defn ^I32 pt-rows [^Blob f]
+  (comment "The number of rows in a corpus file.")
+  (let [^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 rows 0]
+    (while (< pos n)
+      (do (set e (pt-nl f pos))
+          (set rows (+ rows (pt-is-row f pos e)))
+          (set pos (+ e 1))))
+    (return rows)))
+
+(deftest test-every-row-of-the-object-corpus
+  (let [^Blob f (test-file "pdf/objects.txt")
+        ^Cells inp (new-cells)
+        ^Cells ar (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 indirect 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (pt-nl f pos))
+          (set indirect (pt-mode f pos e indirect))
+          (if (== (pt-is-row f pos e) 1)
+            (do (set s0 (pt-row-fields f pos e 0))
+                (set s1 (pt-row-fields f pos e 1))
+                (set s2 (pt-row-fields f pos e 2))
+                (set s3 (pt-row-fields f pos e 3))
+                (let [^Text t (new-text)
+                      ^I32 h (pt-do-row f pos s0 indirect inp ar t)]
+                  (assert-that-at (>= h 0) "parsed" line)
+                  (assert-text-span t f (+ s0 1) s1 "object dump" line))
+                (if (< s1 e)
+                  (assert-eq-at (pl-pos ar) (pt-dec f (+ s1 1) s2) "end position" line))
+                (if (< s2 e)
+                  (assert-eq-at (pl-warn ar) (pt-dec f (+ s2 1) s3) "warning bits" line))))
+          (set pos (+ e 1))))
+    (assert-that (> (pt-rows f) 150) "the corpus was read")))
+
+(deftest test-every-row-of-the-iso-32000-extract
+  (let [^Blob f (test-file "pdf/iso32000-extract.txt")
+        ^Cells inp (new-cells)
+        ^Cells ar (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 indirect 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (pt-nl f pos))
+          (set indirect (pt-mode f pos e indirect))
+          (if (== (pt-is-row f pos e) 1)
+            (do (set s0 (pt-row-fields f pos e 0))
+                (set s1 (pt-row-fields f pos e 1))
+                (let [^Text t (new-text)
+                      ^I32 h (pt-do-row f pos s0 indirect inp ar t)]
+                  (assert-that-at (>= h 0) "parsed" line)
+                  (assert-text-span t f (+ s0 1) s1 "ISO 32000-1 example" line))))
+          (set pos (+ e 1))))
+    (assert-that (> (pt-rows f) 50) "the extract was read")))
+
+;; ------------------------------------------------------------------- laws
+
+(defn ^I32 pt-parse-text [^Blob b ^:mut ^Cells ar]
+  (pl-init ar)
+  (pl-seek ar 0 (blob-len b))
+  (return (pl-parse b ar)))
+
+(deftest test-names-are-interned-and-well-known-ids-resolve
+  (let [^Cells ar (new-cells)
+        ^I32 d (pt-parse-text (text-blob "<</Type /Page /Kids [1 0 R] /Type#20X /Type /Media#42ox [0 0 612.5 792]>>") ar)
+        ^I32 ty (pl-dict-get ar d (pn-type))
+        ^I32 kids (pl-dict-get ar d (pn-kids))
+        ^I32 mb (pl-dict-get ar d (pn-media-box))
+        ^I32 kid0 (pl-first ar kids)]
+    (assert-that (!= d 0) "parsed")
+    (assert-eq (pl-kind-of ar d) (pl-k-dict) "a dictionary")
+    (assert-eq (pl-kind-of ar ty) (pl-k-name) "/Type is a name")
+    (assert-that (== (pl-name-is ar ty (pn-type)) 0) "/Page is not /Type")
+    (assert-eq (pl-dict-get ar d (pn-length)) 0 "an absent key answers 0")
+    (assert-eq (pl-kind-of ar kids) (pl-k-array) "/Kids is an array")
+    (assert-eq (pl-count ar kids) 1 "one kid")
+    (assert-eq (pl-kind-of ar kid0) (pl-k-ref) "a reference")
+    (assert-eq (pl-int-value ar kid0) 1 "to object 1")
+    (comment "`/Media#42ox` is `/MediaBox`: the escape is decoded BEFORE interning.")
+    (assert-that (!= mb 0) "/Media#42ox finds /MediaBox")
+    (assert-eq (pl-count ar mb) 4 "four numbers")
+    (comment "The first /Type is /Page, the key written twice is /Type#20X, and")
+    (comment "the last /Type wins: its value is the LAST one.")
+    (assert-eq (pl-kind-of ar ty) (pl-k-name) "last /Type")))
+
+(deftest test-the-last-duplicate-key-wins
+  (let [^Cells ar (new-cells)
+        ^I32 d (pt-parse-text (text-blob "<</Count 1 /Count 2 /Count 3>>") ar)
+        ^I32 c (pl-dict-get ar d (pn-count))]
+    (assert-eq (pl-int-value ar c) 3 "last of three")))
+
+(defn ^I32 pt-cp [^Blob b]
+  (let [^Cells ar (new-cells)
+        ^I32 h (pt-parse-text b ar)]
+    (return (pl-num-cp ar h))))
+
+(deftest test-numbers-convert-to-centipoints
+  (assert-eq (pt-cp (text-blob "612")) 61200 "an integer")
+  (assert-eq (pt-cp (text-blob "-5")) -500 "a negative integer")
+  (assert-eq (pt-cp (text-blob "595.276")) 59528 "rounds up")
+  (assert-eq (pt-cp (text-blob "841.89")) 84189 "exact")
+  (assert-eq (pt-cp (text-blob "0.004")) 0 "rounds down")
+  (assert-eq (pt-cp (text-blob "0.005")) 1 "half rounds away")
+  (assert-eq (pt-cp (text-blob "-0.005")) -1 "half rounds away from zero")
+  (assert-eq (pt-cp (text-blob "12.5")) 1250 "one decimal")
+  (assert-eq (pt-cp (text-blob "0.1234567")) 12 "many decimals")
+  (assert-eq (pt-cp (text-blob "99999999999")) 2147483647 "saturates")
+  (assert-eq (pt-cp (text-blob "/Name")) 0 "not a number"))
+
+(deftest test-an-arena-holds-many-distinct-names
+  (comment "300 names, each twice: interning must not merge distinct names")
+  (comment "(bucket collisions) nor split equal ones.")
+  (let [^Cells ar (new-cells)
+        ^Cells txt (new-cells)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 ea 0
+        ^:mut ^I32 eb 0]
+    (pl-init ar)
+    (while (< i 300)
+      (do (cells-drop txt 0)
+          (cells-push txt 47)
+          (cells-push txt (+ 97 (rem i 26)))
+          (cells-push txt (+ 97 (rem (quot i 26) 26)))
+          (cells-push txt (+ 48 (rem (quot i 7) 10)))
+          (cells-push txt (+ 48 (quot i 100)))
+          (pl-seek ar 0 (cells-len txt))
+          (set a (pl-parse (cells-blob txt) ar))
+          (pl-seek ar 0 (cells-len txt))
+          (set b (pl-parse (cells-blob txt) ar))
+          (set ea (pl-name-entry ar a))
+          (set eb (pl-name-entry ar b))
+          (assert-eq-at ea eb "equal names share an entry" i)
+          (set i (+ i 1))))
+    (comment "and a neighbour differs")
+    (pl-init ar)
+    (pl-seek ar 0 5)
+    (set a (pl-parse (text-blob "/x /y") ar))
+    (set b (pl-parse (text-blob "/x /y") ar))
+    (assert-that (!= (pl-name-entry ar a) (pl-name-entry ar b)) "/x and /y differ")))
+
+(defn ^I32 pt-prep [^:mut ^Cells ar ^Blob src]
+  (pl-init ar)
+  (pl-seek ar 0 (blob-len src))
+  (return 0))
+
+(defn ^I32 pt-sf [^Blob src ^I32 which]
+  (comment "One field of the stream parsed from src (an indirect object).")
+  (let [^Cells ar (new-cells)
+        ^I32 z (pt-prep ar src)
+        ^I32 s (pl-parse-indirect src ar 0)
+        ^I32 sd (pl-stream-dict ar s)
+        ^I32 lh (pl-dict-get ar sd (pn-length))]
+    (if (!= z 0) (return -1))
+    (if (== which 0) (return (pl-objnum ar)))
+    (if (== which 1) (return (pl-objgen ar)))
+    (if (== which 2) (return (pl-kind-of ar s)))
+    (if (== which 3) (return (pl-stream-start ar s)))
+    (if (== which 4) (return (pl-stream-len ar s)))
+    (if (== which 5) (return (pl-stream-flags ar s)))
+    (return (pl-int-value ar lh))))
+
+(deftest test-stream-fields-of-an-indirect-object
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj\n") 0) 7 "object number")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj\n") 1) 2 "generation")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj\n") 2) (pl-k-stream) "a stream")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj\n") 3) 29 "data starts after the end of line")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj\n") 4) 5 "five bytes")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj\n") 5) 0 "length trusted")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj\n") 6) 5 "the dictionary")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 3>>\nstream\nhello\nendstream\nendobj\n") 5) 1 "a wrong length is scanned")
+  (assert-eq (pt-sf (text-blob "7 2 obj\n<</Length 3>>\nstream\nhello\nendstream\nendobj\n") 4) 5 "and the real length found"))
+
+(deftest test-a-limit-on-objects-is-a-breach-not-a-status
+  (comment "OBJECTS defaults to 10 million; a small array is nowhere near it.")
+  (let [^Cells ar (new-cells)
+        ^I32 a (pt-parse-text (text-blob "[1 2 3 4 5 6 7 8 9 10]") ar)]
+    (assert-eq (pl-count ar a) 10 "ten elements")))
+
+;; ------------------------------------------------------------------- fuzz
+
+(deftest test-every-truncation-of-a-fixture-parses-or-names-an-error
+  (let [^Blob f (test-file "pdf/minimal.pdf")
+        ^I32 n (blob-len f)
+        ^Cells cut (new-cells)
+        ^Cells ar (new-cells)
+        ^:mut ^I32 cutn 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 guard 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 before 0]
+    (while (< cutn (+ n 1))
+      (do (cells-drop cut 0)
+          (set i 0)
+          (while (< i cutn)
+            (do (cells-push cut (blob-u8 f i))
+                (set i (+ i 1))))
+          (comment "As a token-level object stream from 0.")
+          (pl-init ar)
+          (pl-seek ar 0 cutn)
+          (set guard 0)
+          (set h 1)
+          (while (and (!= h 0) (< guard 2000))
+            (do (set before (pl-pos ar))
+                (set h (pl-parse (cells-blob cut) ar))
+                (if (and (!= h 0) (<= (pl-pos ar) before)) (set h 0))
+                (set guard (+ guard 1))))
+          (comment "And as an indirect object at the start of every line.")
+          (set at 0)
+          (while (< at cutn)
+            (do (pl-init ar)
+                (pl-seek ar 0 cutn)
+                (pl-parse-indirect (cells-blob cut) ar at)
+                (comment "a stream's data ends inside the blob")
+                (assert-that (<= (pl-pos ar) cutn) "the parse never ran past the end")
+                (set at (+ (pt-nl f at) 1))))
+          (set cutn (+ cutn 1))))))

@@ -1,0 +1,827 @@
+;; Canonical JSON (P1.2; SPEC 4, D012). emon's own module (D039).
+;;
+;; THE MODEL, AS BYTES. `js-emit` writes the six arenas of `emon.model` to a
+;; `Text` sink, and the four targets must write the SAME BYTES: that one
+;; comparison is the whole cross-language claim (SPEC 4.1). Nothing here
+;; formats a number or a string for a host to disagree about: integers are
+;; `text-i32`, code points are `text-cp`, and everything else is an ASCII
+;; literal through `emit-ascii`.
+;;
+;; THE SHAPE is SPEC 4.2: a header (`emon`, `generator`, `source`,
+;; `settings`, `conf`, `meta`), `pages`, `body` (the tree), `furniture`,
+;; `dropped`. In a node: `id`, `kind`, the kind's own fields, `text`,
+;; `inlines`, `children`, `at`, `src`, `conf`, `flags`, in that order, every
+;; one omitted when absent (D012, SPEC 4.2). Key spellings are `emon.model`'s
+;; `fk` table: the same table names an attribute in the arena.
+;;
+;; CANONICAL BYTES (SPEC 4.3). Keys in the fixed order above, never a hash
+;; map's. No insignificant whitespace; `pretty` adds two-space indentation:
+;; every object member and every element of an array of objects on its own
+;; line, `"key": value` with one space, arrays of numbers or strings flat as
+;; `[1, 2]`, empty containers as `{}` / `[]`, no trailing newline (D051).
+;; Strings escape `"` `\`, U+0000-U+001F (`\n` and `\t` short, the rest
+;; `\u00xx` in LOWER-case hex), and U+2028/U+2029 (` `, ` `); every
+;; other scalar value is raw UTF-8 (the host encodes `text-cp`). Integers
+;; only, plus centipoints as the two-decimal form: 7250 -> `72.5`, -5 ->
+;; `-0.05`, 0 -> `0`, never an exponent, never `-0`.
+;;
+;; INLINE NODES carry no `id` (D052): SPEC 4.2's example has none, and they
+;; are not cited, blocks are. A block's `text` is its own text run; its
+;; `inlines` are written only when they carry information (a span, link,
+;; ref or linebreak, or a geometry of their own), and when a block has
+;; inline children but no run of its own, `text` is DERIVED by concatenating
+;; them. A figure's or seal's own kind is `subkind` (D053): `kind` is taken.
+;;
+;; RECURSION DEPTH is bounded by the Model (`max-depth`), not here: `node-new`
+;; refuses a deeper node, so a Model that was built cannot overflow a stack.
+(ns emon.json
+  (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32]]
+            [emon.port :refer [cells-len cells-at text-cp text-i32]]
+            [emon.model :refer [node-count node-kind node-parent node-first-child
+                                node-next node-text-start node-text-len
+                                node-has-text node-region-head
+                                node-region-count node-src node-conf node-flags
+                                node-sub node-aux node-attr attr-find
+                                attr-find-next attr-vkind attr-value attr-len
+                                nk-is-inline nk-emit-name fk-emit-name sr-emit-name
+                                fl-emit-name sy-emit-name al-emit-name
+                                rl-emit-name fg-emit-name sl-emit-name
+                                dp-emit-name ch-emit-name pk-emit-name
+                                dr-emit-name
+                                region-page region-x0 region-y0 region-x1
+                                region-y1 region-next
+                                page-count page-number page-label-start
+                                page-label-len page-w page-h page-rot page-kind
+                                page-health page-dpi page-px-w page-px-h
+                                ledger-count ledger-reason ledger-page
+                                ledger-x0 ledger-y0 ledger-x1 ledger-y1
+                                ledger-text-start ledger-text-len ledger-conf
+                                ledger-src
+                                av-text av-int av-bool av-node
+                                nk-span nk-text nk-ref nk-linebreak nk-list
+                                nk-heading nk-section nk-paragraph nk-item
+                                nk-table nk-rowgroup nk-row nk-cell nk-caption
+                                nk-figure nk-seal nk-formula nk-note nk-field
+                                nk-furniture nk-break nk-link
+                                fk-id fk-kind fk-level fk-number fk-numbering
+                                fk-text fk-inlines fk-children fk-at fk-src
+                                fk-conf fk-flags fk-align fk-ordered fk-scheme
+                                fk-start fk-marker fk-value fk-profile
+                                fk-continued fk-columns fk-role fk-repeated
+                                fk-rowspan fk-colspan fk-header fk-empty
+                                fk-label fk-target fk-alt fk-labels fk-name
+                                fk-date fk-color fk-display fk-style fk-href
+                                fk-page fk-title fk-lang fk-template fk-pages
+                                fk-emon fk-generator fk-source fk-settings
+                                fk-meta fk-body fk-furniture fk-dropped
+                                fk-reason fk-n fk-w fk-h fk-rot fk-health
+                                fk-dpi fk-px fk-format fk-version fk-tagged
+                                fk-encrypted fk-locale fk-ocr fk-detail
+                                fk-author fk-subject fk-keywords fk-creator
+                                fk-producer fk-created fk-modified fk-type
+                                fk-checked fk-subkind fk-conf]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or bit-and quot rem]]))
+
+;; ---------------------------------------------------------- punctuation
+
+(defn ^:pub ^I32 js-indent [^:mut ^Text t ^I32 d]
+  (comment "A newline and d levels of two spaces (pretty mode only).")
+  (let [^:mut ^I32 i 0]
+    (text-cp t 10)
+    (while (< i (* d 2))
+      (do (text-cp t 32)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 js-key [^:mut ^Text t ^I32 code]
+  (emit-ascii t "\"")
+  (fk-emit-name t code)
+  (emit-ascii t "\":")
+  (return 0))
+
+(defn ^I32 js-begin [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 code]
+  (comment "Start an object member of an object at depth d: the separator if")
+  (comment "a member came before, the line break and indent in pretty mode,")
+  (comment "then the key. Answers 1 (\"a member has been written\").")
+  (if (== started 1) (emit-ascii t ","))
+  (if (== pr 1) (js-indent t (+ d 1)))
+  (js-key t code)
+  (if (== pr 1) (emit-ascii t " "))
+  (return 1))
+
+(defn ^:pub ^I32 js-close [^:mut ^Text t ^I32 pr ^I32 d ^I32 started]
+  (comment "Close an object at depth d. An object with no members is `{}`.")
+  (if (and (== pr 1) (== started 1)) (js-indent t d))
+  (emit-ascii t "}")
+  (return 0))
+
+(defn ^:pub ^I32 js-aelem [^:mut ^Text t ^I32 pr ^I32 da ^I32 i]
+  (comment "Start element i of an array of objects at depth da.")
+  (if (> i 0) (emit-ascii t ","))
+  (if (== pr 1) (js-indent t (+ da 1)))
+  (return 0))
+
+(defn ^:pub ^I32 js-aend [^:mut ^Text t ^I32 pr ^I32 da ^I32 n]
+  (comment "Close an array of objects holding n elements.")
+  (if (and (== pr 1) (> n 0)) (js-indent t da))
+  (emit-ascii t "]")
+  (return 0))
+
+(defn ^:pub ^I32 js-fsep [^:mut ^Text t ^I32 pr ^I32 i]
+  (comment "Between the elements of a flat array.")
+  (if (> i 0)
+    (do (emit-ascii t ",")
+        (if (== pr 1) (emit-ascii t " "))))
+  (return 0))
+
+(defn ^I32 js-quote [^:mut ^Text t]
+  (emit-ascii t "\"")
+  (return 0))
+
+;; ---------------------------------------------------------------- scalars
+
+(defn ^:pub ^I32 js-cpt [^:mut ^Text t ^I32 v]
+  (comment "Centipoints as points: at most two fractional digits, trailing")
+  (comment "zeros dropped, no exponent, no `-0`. 7250 -> 72.5, -5 -> -0.05.")
+  (comment "`quot` and `rem` truncate toward zero in all four languages, so a")
+  (comment "negative value splits into two non-positive parts with no overflow")
+  (comment "even for the most negative I32.")
+  (let [^I32 q (quot v 100)
+        ^I32 r (rem v 100)
+        ^:mut ^I32 ip q
+        ^:mut ^I32 fr r]
+    (if (< v 0)
+      (do (emit-ascii t "-")
+          (set ip (- 0 q))
+          (set fr (- 0 r))))
+    (text-i32 t ip)
+    (if (!= fr 0)
+      (do (emit-ascii t ".")
+          (text-i32 t (quot fr 10))
+          (if (!= (rem fr 10) 0)
+            (text-i32 t (rem fr 10)))))
+    (return 0)))
+
+(defn ^:pub ^I32 js-hex [^:mut ^Text t ^I32 v]
+  (comment "One lower-case hex digit.")
+  (if (< v 10) (text-cp t (+ 48 v)))
+  (if (>= v 10) (text-cp t (+ 87 v)))
+  (return 0))
+
+(defn ^I32 js-cp [^:mut ^Text t ^I32 cp]
+  (comment "One code point inside a JSON string (SPEC 4.3).")
+  (if (== cp 34) (do (emit-ascii t "\\\"") (return 0)))
+  (if (== cp 92) (do (emit-ascii t "\\\\") (return 0)))
+  (if (== cp 10) (do (emit-ascii t "\\n") (return 0)))
+  (if (== cp 9) (do (emit-ascii t "\\t") (return 0)))
+  (if (< cp 32)
+    (do (emit-ascii t "\\u00")
+        (js-hex t (quot cp 16))
+        (js-hex t (rem cp 16))
+        (return 0)))
+  (if (== cp 8232) (do (emit-ascii t "\\u2028") (return 0)))
+  (if (== cp 8233) (do (emit-ascii t "\\u2029") (return 0)))
+  (text-cp t cp)
+  (return 0))
+
+(defn ^I32 js-run [^:mut ^Text t ^Cells text ^I32 start ^I32 ln]
+  (comment "The text-arena run [start, start+ln), escaped, without quotes.")
+  (let [^:mut ^I32 i start]
+    (while (< i (+ start ln))
+      (do (js-cp t (cells-at text i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 js-str [^:mut ^Text t ^Cells text ^I32 start ^I32 ln]
+  (emit-ascii t "\"")
+  (js-run t text start ln)
+  (emit-ascii t "\"")
+  (return 0))
+
+(defn ^I32 js-bool [^:mut ^Text t ^I32 v]
+  (if (!= v 0) (emit-ascii t "true"))
+  (if (== v 0) (emit-ascii t "false"))
+  (return 0))
+
+;; ------------------------------------------------------ optional fields
+;;
+;; Each writes `"key":value` when the node has the attribute, and answers the
+;; new `started` (1 once any member has been written). A missing or
+;; differently-kinded attribute writes nothing: absent fields are omitted.
+
+(defn ^I32 js-ftext [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                     ^Cells text ^I32 n ^I32 key ^I32 started]
+  (let [^I32 a (node-attr nodes attrs n key)]
+    (if (< a 0) (return started))
+    (if (!= (attr-vkind attrs a) (av-text)) (return started))
+    (js-begin t pr d started key)
+    (js-str t text (attr-value attrs a) (attr-len attrs a))
+    (return 1)))
+
+(defn ^I32 js-fint [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                    ^I32 n ^I32 key ^I32 started]
+  (comment "An int or node attribute, as a bare integer.")
+  (let [^I32 a (node-attr nodes attrs n key)]
+    (if (< a 0) (return started))
+    (if (== (attr-vkind attrs a) (av-text)) (return started))
+    (js-begin t pr d started key)
+    (text-i32 t (attr-value attrs a))
+    (return 1)))
+
+(defn ^I32 js-fbool [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                     ^I32 n ^I32 key ^I32 started]
+  (let [^I32 a (node-attr nodes attrs n key)]
+    (if (< a 0) (return started))
+    (if (== (attr-vkind attrs a) (av-text)) (return started))
+    (js-begin t pr d started key)
+    (js-bool t (attr-value attrs a))
+    (return 1)))
+
+(defn ^I32 js-farr-int [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                        ^I32 n ^I32 key ^I32 started]
+  (comment "Every int attribute with the key, in order, as a flat array.")
+  (let [^:mut ^I32 a (node-attr nodes attrs n key)
+        ^:mut ^I32 i 0]
+    (if (< a 0) (return started))
+    (js-begin t pr d started key)
+    (emit-ascii t "[")
+    (while (>= a 0)
+      (do (js-fsep t pr i)
+          (text-i32 t (attr-value attrs a))
+          (set i (+ i 1))
+          (set a (attr-find-next attrs a key))))
+    (emit-ascii t "]")
+    (return 1)))
+
+(defn ^I32 js-farr-text [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                         ^Cells text ^I32 n ^I32 key ^I32 started]
+  (comment "Every text attribute with the key, in order, as a flat array.")
+  (let [^:mut ^I32 a (node-attr nodes attrs n key)
+        ^:mut ^I32 i 0]
+    (if (< a 0) (return started))
+    (js-begin t pr d started key)
+    (emit-ascii t "[")
+    (while (>= a 0)
+      (do (js-fsep t pr i)
+          (js-str t text (attr-value attrs a) (attr-len attrs a))
+          (set i (+ i 1))
+          (set a (attr-find-next attrs a key))))
+    (emit-ascii t "]")
+    (return 1)))
+
+;; A name from a bitset, one function per table: a function cannot be passed
+;; an emitter, so each table has its own small loop over its bits, lowest
+;; first, which is the fixed order.
+
+(defn ^:pub ^I32 js-bits-src [^:mut ^Text t ^I32 pr ^I32 bits]
+  (let [^:mut ^I32 b 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 bit 0]
+    (emit-ascii t "[")
+    (while (< b 9)
+      (do (set bit (shl32 1 b))
+          (if (!= (bit-and bits bit) 0)
+            (do (js-fsep t pr k)
+                (emit-ascii t "\"")
+                (sr-emit-name t bit)
+                (emit-ascii t "\"")
+                (set k (+ k 1))))
+          (set b (+ b 1))))
+    (emit-ascii t "]")
+    (return 0)))
+
+(defn ^:pub ^I32 js-bits-flags [^:mut ^Text t ^I32 pr ^I32 bits]
+  (let [^:mut ^I32 b 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 bit 0]
+    (emit-ascii t "[")
+    (while (< b 7)
+      (do (set bit (shl32 1 b))
+          (if (!= (bit-and bits bit) 0)
+            (do (js-fsep t pr k)
+                (emit-ascii t "\"")
+                (fl-emit-name t bit)
+                (emit-ascii t "\"")
+                (set k (+ k 1))))
+          (set b (+ b 1))))
+    (emit-ascii t "]")
+    (return 0)))
+
+(defn ^:pub ^I32 js-bits-style [^:mut ^Text t ^I32 pr ^I32 bits]
+  (let [^:mut ^I32 b 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 bit 0]
+    (emit-ascii t "[")
+    (while (< b 8)
+      (do (set bit (shl32 1 b))
+          (if (!= (bit-and bits bit) 0)
+            (do (js-fsep t pr k)
+                (emit-ascii t "\"")
+                (sy-emit-name t bit)
+                (emit-ascii t "\"")
+                (set k (+ k 1))))
+          (set b (+ b 1))))
+    (emit-ascii t "]")
+    (return 0)))
+
+;; Enumerated fields kept in a node's `sub`: the key, then the table's name.
+;; A code the table does not know writes `""` (valid JSON, and the schema
+;; rejects it), which is what the checker's job would otherwise be.
+
+(defn ^I32 js-e-role [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
+  (if (<= v 0) (return started))
+  (js-begin t pr d started (fk-role))
+  (emit-ascii t "\"")
+  (rl-emit-name t v)
+  (emit-ascii t "\"")
+  (return 1))
+
+(defn ^I32 js-e-align [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
+  (if (<= v 0) (return started))
+  (js-begin t pr d started (fk-align))
+  (emit-ascii t "\"")
+  (al-emit-name t v)
+  (emit-ascii t "\"")
+  (return 1))
+
+(defn ^I32 js-e-header [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
+  (if (<= v 0) (return started))
+  (js-begin t pr d started (fk-header))
+  (emit-ascii t "\"")
+  (ch-emit-name t v)
+  (emit-ascii t "\"")
+  (return 1))
+
+(defn ^I32 js-e-figure [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
+  (if (<= v 0) (return started))
+  (js-begin t pr d started (fk-subkind))
+  (emit-ascii t "\"")
+  (fg-emit-name t v)
+  (emit-ascii t "\"")
+  (return 1))
+
+(defn ^I32 js-e-seal [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
+  (if (<= v 0) (return started))
+  (js-begin t pr d started (fk-subkind))
+  (emit-ascii t "\"")
+  (sl-emit-name t v)
+  (emit-ascii t "\"")
+  (return 1))
+
+(defn ^I32 js-e-display [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
+  (if (<= v 0) (return started))
+  (js-begin t pr d started (fk-display))
+  (emit-ascii t "\"")
+  (dp-emit-name t v)
+  (emit-ascii t "\"")
+  (return 1))
+
+;; ------------------------------------------------------- kind-specific
+
+(defn ^I32 js-kfields [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                       ^Cells text ^I32 n ^I32 kind ^I32 started]
+  (comment "The fields only this kind has, in the order SPEC 3.2 lists them.")
+  (comment "WHERE EACH LIVES in the arena: a level, an alignment, a role, a")
+  (comment "figure or seal kind, a span's style, a break's page and a list's")
+  (comment "`ordered` are the node's `sub`; a row's `repeated` is `sub` 1 and")
+  (comment "a cell's `empty` is `aux` 1; every other field is an attribute.")
+  (let [^I32 sub (node-sub nodes n)
+        ^I32 aux (node-aux nodes n)
+        ^:mut ^I32 s started]
+    (if (or (== kind (nk-section)) (== kind (nk-heading)))
+      (if (> sub 0)
+        (do (set s (js-begin t pr d s (fk-level)))
+            (text-i32 t sub))))
+    (if (== kind (nk-heading))
+      (do (set s (js-ftext t pr d nodes attrs text n (fk-number) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-numbering) s))))
+    (if (== kind (nk-paragraph))
+      (set s (js-e-align t pr d s sub)))
+    (if (== kind (nk-list))
+      (do (if (> sub 0)
+            (do (set s (js-begin t pr d s (fk-ordered)))
+                (js-bool t (- sub 1))))
+          (set s (js-ftext t pr d nodes attrs text n (fk-scheme) s))
+          (set s (js-fint t pr d nodes attrs n (fk-start) s))))
+    (if (== kind (nk-item))
+      (do (set s (js-ftext t pr d nodes attrs text n (fk-marker) s))
+          (set s (js-fint t pr d nodes attrs n (fk-value) s))))
+    (if (== kind (nk-table))
+      (do (set s (js-ftext t pr d nodes attrs text n (fk-profile) s))
+          (set s (js-fint t pr d nodes attrs n (fk-continued) s))
+          (set s (js-fint t pr d nodes attrs n (fk-columns) s))))
+    (if (== kind (nk-rowgroup))
+      (set s (js-e-role t pr d s sub)))
+    (if (== kind (nk-row))
+      (if (== sub 1)
+        (do (set s (js-begin t pr d s (fk-repeated)))
+            (emit-ascii t "true"))))
+    (if (== kind (nk-cell))
+      (do (set s (js-fint t pr d nodes attrs n (fk-rowspan) s))
+          (set s (js-fint t pr d nodes attrs n (fk-colspan) s))
+          (set s (js-e-header t pr d s sub))
+          (if (== aux 1)
+            (do (set s (js-begin t pr d s (fk-empty)))
+                (emit-ascii t "true")))))
+    (if (== kind (nk-caption))
+      (do (set s (js-ftext t pr d nodes attrs text n (fk-label) s))
+          (set s (js-fint t pr d nodes attrs n (fk-target) s))))
+    (if (== kind (nk-figure))
+      (do (set s (js-e-figure t pr d s sub))
+          (set s (js-ftext t pr d nodes attrs text n (fk-label) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-alt) s))
+          (set s (js-farr-text t pr d nodes attrs text n (fk-labels) s))))
+    (if (== kind (nk-seal))
+      (do (set s (js-e-seal t pr d s sub))
+          (set s (js-ftext t pr d nodes attrs text n (fk-name) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-date) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-color) s))))
+    (if (== kind (nk-formula))
+      (set s (js-e-display t pr d s sub)))
+    (if (== kind (nk-note))
+      (do (set s (js-e-role t pr d s sub))
+          (set s (js-ftext t pr d nodes attrs text n (fk-marker) s))))
+    (if (== kind (nk-field))
+      (do (set s (js-ftext t pr d nodes attrs text n (fk-name) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-type) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-value) s))
+          (set s (js-fbool t pr d nodes attrs n (fk-checked) s))))
+    (if (== kind (nk-furniture))
+      (do (set s (js-e-role t pr d s sub))
+          (set s (js-farr-int t pr d nodes attrs n (fk-pages) s))))
+    (if (== kind (nk-break))
+      (do (set s (js-begin t pr d s (fk-page)))
+          (text-i32 t sub)
+          (set s (js-ftext t pr d nodes attrs text n (fk-label) s))))
+    (if (== kind (nk-span))
+      (if (> sub 0)
+        (do (set s (js-begin t pr d s (fk-style)))
+            (js-bits-style t pr sub))))
+    (if (== kind (nk-link))
+      (do (set s (js-ftext t pr d nodes attrs text n (fk-href) s))
+          (set s (js-fint t pr d nodes attrs n (fk-target) s))))
+    (if (== kind (nk-ref))
+      (do (set s (js-ftext t pr d nodes attrs text n (fk-marker) s))
+          (set s (js-fint t pr d nodes attrs n (fk-target) s))))
+    (return s)))
+
+;; ------------------------------------------------------------------ a node
+
+(defn ^I32 js-informative [^Cells nodes ^Cells regions ^I32 n]
+  (comment "1 when a block's inline children carry information: any that is")
+  (comment "not a plain `text` node, or has a geometry of its own (SPEC 4.2).")
+  (let [^:mut ^I32 c (node-first-child nodes n)]
+    (while (>= c 0)
+      (do (if (== (nk-is-inline (node-kind nodes c)) 1)
+            (do (if (!= (node-kind nodes c) (nk-text)) (return 1))
+                (if (> (node-region-count nodes c) 0) (return 1))))
+          (set c (node-next nodes c))))
+    (return 0)))
+
+(defn ^I32 js-has-inline [^Cells nodes ^I32 n]
+  (let [^:mut ^I32 c (node-first-child nodes n)]
+    (while (>= c 0)
+      (do (if (== (nk-is-inline (node-kind nodes c)) 1) (return 1))
+          (set c (node-next nodes c))))
+    (return 0)))
+
+(defn ^I32 js-derived [^:mut ^Text t ^Cells nodes ^Cells text ^I32 n]
+  (comment "The plain text of a node's inline children, written (escaped) into")
+  (comment "a JSON string: a text or ref node's own run, a linebreak as a")
+  (comment "newline, and a span or link by descending into its children.")
+  (let [^:mut ^I32 c (node-first-child nodes n)
+        ^:mut ^I32 kc 0]
+    (while (>= c 0)
+      (do (set kc (node-kind nodes c))
+          (if (== kc (nk-linebreak)) (emit-ascii t "\\n"))
+          (if (== (nk-is-inline kc) 1)
+            (do (if (== (node-has-text nodes c) 1)
+                  (js-run t text (node-text-start nodes c) (node-text-len nodes c)))
+                (if (!= (node-first-child nodes c) -1)
+                  (js-derived t nodes text c))))
+          (set c (node-next nodes c))))
+    (return 0)))
+
+(defn ^I32 js-at [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells regions
+                  ^I32 n ^I32 started]
+  (let [^:mut ^I32 r (node-region-head nodes n)
+        ^:mut ^I32 i 0]
+    (if (== (node-region-count nodes n) 0) (return started))
+    (js-begin t pr d started (fk-at))
+    (emit-ascii t "[")
+    (while (>= r 0)
+      (do (js-fsep t pr i)
+          (emit-ascii t "[")
+          (text-i32 t (region-page regions r))
+          (js-fsep t pr 1)
+          (js-cpt t (region-x0 regions r))
+          (js-fsep t pr 1)
+          (js-cpt t (region-y0 regions r))
+          (js-fsep t pr 1)
+          (js-cpt t (region-x1 regions r))
+          (js-fsep t pr 1)
+          (js-cpt t (region-y1 regions r))
+          (emit-ascii t "]")
+          (set i (+ i 1))
+          (set r (region-next regions r))))
+    (emit-ascii t "]")
+    (return 1)))
+
+(defn ^I32 js-tail [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells regions
+                    ^I32 n ^I32 started]
+  (comment "`at`, `src`, `conf`, `flags`: the provenance every node may carry.")
+  (let [^:mut ^I32 s started
+        ^I32 sr (node-src nodes n)
+        ^I32 cf (node-conf nodes n)
+        ^I32 fg (node-flags nodes n)]
+    (set s (js-at t pr d nodes regions n s))
+    (if (!= sr 0)
+      (do (set s (js-begin t pr d s (fk-src)))
+          (js-bits-src t pr sr)))
+    (if (>= cf 0)
+      (do (set s (js-begin t pr d s (fk-conf)))
+          (text-i32 t cf)))
+    (if (!= fg 0)
+      (do (set s (js-begin t pr d s (fk-flags)))
+          (js-bits-flags t pr fg)))
+    (return s)))
+
+(defn ^I32 js-node [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                    ^Cells regions ^Cells text ^I32 n]
+  (comment "One node, block or inline, at depth d (its members at d+1). A block")
+  (comment "writes its inline children as `inlines` (when informative) and its")
+  (comment "others as `children`; an inline writes all of its children as")
+  (comment "`children`. Recursive: `node-new` bounds the depth.")
+  (let [^I32 kind (node-kind nodes n)
+        ^I32 inl (nk-is-inline kind)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 k 0
+        ^I32 info (js-informative nodes regions n)
+        ^I32 hasin (js-has-inline nodes n)]
+    (emit-ascii t "{")
+    (if (== inl 0)
+      (do (set s (js-begin t pr d s (fk-id)))
+          (text-i32 t n)))
+    (set s (js-begin t pr d s (fk-kind)))
+    (emit-ascii t "\"")
+    (nk-emit-name t kind)
+    (emit-ascii t "\"")
+    (set s (js-kfields t pr d nodes attrs text n kind s))
+    (if (== (node-has-text nodes n) 1)
+      (do (set s (js-begin t pr d s (fk-text)))
+          (js-str t text (node-text-start nodes n) (node-text-len nodes n)))
+      (if (and (== inl 0) (== hasin 1))
+        (do (set s (js-begin t pr d s (fk-text)))
+            (emit-ascii t "\"")
+            (js-derived t nodes text n)
+            (emit-ascii t "\""))))
+    (if (and (== inl 0) (== info 1))
+      (do (set s (js-begin t pr d s (fk-inlines)))
+          (emit-ascii t "[")
+          (set c (node-first-child nodes n))
+          (while (>= c 0)
+            (do (if (== (nk-is-inline (node-kind nodes c)) 1)
+                  (do (js-aelem t pr (+ d 1) k)
+                      (js-node t pr (+ d 2) nodes attrs regions text c)
+                      (set k (+ k 1))))
+                (set c (node-next nodes c))))
+          (js-aend t pr (+ d 1) k)))
+    (set k 0)
+    (set c (node-first-child nodes n))
+    (while (>= c 0)
+      (do (if (or (== inl 1) (== (nk-is-inline (node-kind nodes c)) 0))
+            (do (if (== k 0)
+                  (do (set s (js-begin t pr d s (fk-children)))
+                      (emit-ascii t "[")))
+                (js-aelem t pr (+ d 1) k)
+                (js-node t pr (+ d 2) nodes attrs regions text c)
+                (set k (+ k 1))))
+          (set c (node-next nodes c))))
+    (if (> k 0) (js-aend t pr (+ d 1) k))
+    (set s (js-tail t pr d nodes regions n s))
+    (js-close t pr d s)
+    (return 0)))
+
+;; ---------------------------------------------------- furniture and pages
+
+(defn ^I32 js-furniture [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                         ^Cells regions ^Cells text ^I32 n]
+  (comment "A furniture root as SPEC 4.2 writes it: `id`, `role`, `template`")
+  (comment "(its own text), `pages`, then any blocks it holds and the")
+  (comment "provenance. No `kind`: the array says what it is.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 k 0]
+    (emit-ascii t "{")
+    (set s (js-begin t pr d s (fk-id)))
+    (text-i32 t n)
+    (set s (js-e-role t pr d s (node-sub nodes n)))
+    (if (== (node-has-text nodes n) 1)
+      (do (set s (js-begin t pr d s (fk-template)))
+          (js-str t text (node-text-start nodes n) (node-text-len nodes n))))
+    (set s (js-farr-int t pr d nodes attrs n (fk-pages) s))
+    (set c (node-first-child nodes n))
+    (while (>= c 0)
+      (do (if (== k 0)
+            (do (set s (js-begin t pr d s (fk-children)))
+                (emit-ascii t "[")))
+          (js-aelem t pr (+ d 1) k)
+          (js-node t pr (+ d 2) nodes attrs regions text c)
+          (set k (+ k 1))
+          (set c (node-next nodes c))))
+    (if (> k 0) (js-aend t pr (+ d 1) k))
+    (set s (js-tail t pr d nodes regions n s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 js-page [^:mut ^Text t ^I32 pr ^I32 d ^Cells pages ^Cells text ^I32 p]
+  (comment "One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,")
+  (comment "`health`, `dpi`, `px` (the pixel size of a raster page).")
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (js-begin t pr d s (fk-n)))
+    (text-i32 t (page-number pages p))
+    (if (>= (page-label-start pages p) 0)
+      (do (set s (js-begin t pr d s (fk-label)))
+          (js-str t text (page-label-start pages p) (page-label-len pages p))))
+    (set s (js-begin t pr d s (fk-w)))
+    (js-cpt t (page-w pages p))
+    (set s (js-begin t pr d s (fk-h)))
+    (js-cpt t (page-h pages p))
+    (set s (js-begin t pr d s (fk-rot)))
+    (text-i32 t (page-rot pages p))
+    (if (> (page-kind pages p) 0)
+      (do (set s (js-begin t pr d s (fk-kind)))
+          (emit-ascii t "\"")
+          (pk-emit-name t (page-kind pages p))
+          (emit-ascii t "\"")))
+    (if (>= (page-health pages p) 0)
+      (do (set s (js-begin t pr d s (fk-health)))
+          (text-i32 t (page-health pages p))))
+    (if (> (page-dpi pages p) 0)
+      (do (set s (js-begin t pr d s (fk-dpi)))
+          (text-i32 t (page-dpi pages p))))
+    (if (or (> (page-px-w pages p) 0) (> (page-px-h pages p) 0))
+      (do (set s (js-begin t pr d s (fk-px)))
+          (emit-ascii t "[")
+          (text-i32 t (page-px-w pages p))
+          (js-fsep t pr 1)
+          (text-i32 t (page-px-h pages p))
+          (emit-ascii t "]")))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 js-dropped [^:mut ^Text t ^I32 pr ^I32 d ^Cells ledger ^Cells text ^I32 l]
+  (comment "One ledger row: `reason`, `page`, `at` (one region, page first),")
+  (comment "`text`, `conf`, `src` (SPEC 4.2).")
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (js-begin t pr d s (fk-reason)))
+    (emit-ascii t "\"")
+    (dr-emit-name t (ledger-reason ledger l))
+    (emit-ascii t "\"")
+    (set s (js-begin t pr d s (fk-page)))
+    (text-i32 t (ledger-page ledger l))
+    (set s (js-begin t pr d s (fk-at)))
+    (emit-ascii t "[")
+    (text-i32 t (ledger-page ledger l))
+    (js-fsep t pr 1)
+    (js-cpt t (ledger-x0 ledger l))
+    (js-fsep t pr 1)
+    (js-cpt t (ledger-y0 ledger l))
+    (js-fsep t pr 1)
+    (js-cpt t (ledger-x1 ledger l))
+    (js-fsep t pr 1)
+    (js-cpt t (ledger-y1 ledger l))
+    (emit-ascii t "]")
+    (if (>= (ledger-text-start ledger l) 0)
+      (do (set s (js-begin t pr d s (fk-text)))
+          (js-str t text (ledger-text-start ledger l) (ledger-text-len ledger l))))
+    (if (>= (ledger-conf ledger l) 0)
+      (do (set s (js-begin t pr d s (fk-conf)))
+          (text-i32 t (ledger-conf ledger l))))
+    (if (!= (ledger-src ledger l) 0)
+      (do (set s (js-begin t pr d s (fk-src)))
+          (js-bits-src t pr (ledger-src ledger l))))
+    (js-close t pr d s)
+    (return 0)))
+
+;; ------------------------------------------------------------ the header
+
+(defn ^I32 js-has [^Cells nodes ^Cells attrs ^I32 key]
+  (if (>= (node-attr nodes attrs 0 key) 0) (return 1))
+  (return 0))
+
+(defn ^I32 js-source [^:mut ^Text t ^I32 pr ^Cells nodes ^Cells attrs ^Cells text]
+  (comment "`source`, from the root's attributes: format, version, pages,")
+  (comment "tagged, encrypted, lang. Depth 1 (a member of the top object).")
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-format) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-version) s))
+    (set s (js-fint t pr 1 nodes attrs 0 (fk-pages) s))
+    (set s (js-fbool t pr 1 nodes attrs 0 (fk-tagged) s))
+    (set s (js-fbool t pr 1 nodes attrs 0 (fk-encrypted) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-lang) s))
+    (js-close t pr 1 s)
+    (return 0)))
+
+(defn ^I32 js-settings [^:mut ^Text t ^I32 pr ^Cells nodes ^Cells attrs ^Cells text]
+  (comment "`settings`: `locale` is ALWAYS written, `null` when there is none")
+  (comment "(SPEC 4.2: null is itself the answer); `ocr` and `detail` if set.")
+  (let [^:mut ^I32 s 0
+        ^I32 a (node-attr nodes attrs 0 (fk-locale))]
+    (emit-ascii t "{")
+    (set s (js-begin t pr 1 s (fk-locale)))
+    (if (< a 0) (emit-ascii t "null"))
+    (if (>= a 0) (js-str t text (attr-value attrs a) (attr-len attrs a)))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-ocr) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-detail) s))
+    (js-close t pr 1 s)
+    (return 0)))
+
+(defn ^I32 js-meta [^:mut ^Text t ^I32 pr ^Cells nodes ^Cells attrs ^Cells text]
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-title) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-author) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-subject) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-keywords) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-creator) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-producer) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-created) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-modified) s))
+    (js-close t pr 1 s)
+    (return 0)))
+
+;; ------------------------------------------------------------- the whole
+
+(defn ^:pub ^I32 js-emit [^:mut ^Text t ^I32 pretty ^Cells nodes ^Cells attrs
+                          ^Cells regions ^Cells text ^Cells pages ^Cells ledger]
+  (comment "Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1")
+  (comment "for the indented form, 0 for the compact one. The root (node 0)")
+  (comment "must be a document: run `model-check` first on a Model of unknown")
+  (comment "origin. Answers 0.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^I32 nn (node-count nodes)
+        ^I32 np (page-count pages)
+        ^I32 nl (ledger-count ledger)]
+    (emit-ascii t "{")
+    (set s (js-begin t pretty 0 s (fk-emon)))
+    (emit-ascii t "\"1.0\"")
+    (set s (js-ftext t pretty 0 nodes attrs text 0 (fk-generator) s))
+    (if (or (== (js-has nodes attrs (fk-format)) 1)
+            (== (js-has nodes attrs (fk-version)) 1)
+            (== (js-has nodes attrs (fk-pages)) 1)
+            (== (js-has nodes attrs (fk-tagged)) 1)
+            (== (js-has nodes attrs (fk-encrypted)) 1)
+            (== (js-has nodes attrs (fk-lang)) 1))
+      (do (set s (js-begin t pretty 0 s (fk-source)))
+          (js-source t pretty nodes attrs text)))
+    (set s (js-begin t pretty 0 s (fk-settings)))
+    (js-settings t pretty nodes attrs text)
+    (set s (js-begin t pretty 0 s (fk-conf)))
+    (emit-ascii t "\"uncalibrated\"")
+    (if (or (== (js-has nodes attrs (fk-title)) 1)
+            (== (js-has nodes attrs (fk-author)) 1)
+            (== (js-has nodes attrs (fk-subject)) 1)
+            (== (js-has nodes attrs (fk-keywords)) 1)
+            (== (js-has nodes attrs (fk-creator)) 1)
+            (== (js-has nodes attrs (fk-producer)) 1)
+            (== (js-has nodes attrs (fk-created)) 1)
+            (== (js-has nodes attrs (fk-modified)) 1))
+      (do (set s (js-begin t pretty 0 s (fk-meta)))
+          (js-meta t pretty nodes attrs text)))
+    (set s (js-begin t pretty 0 s (fk-pages)))
+    (emit-ascii t "[")
+    (while (< i np)
+      (do (js-aelem t pretty 1 i)
+          (js-page t pretty 2 pages text i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 np)
+    (set s (js-begin t pretty 0 s (fk-body)))
+    (js-node t pretty 1 nodes attrs regions text 0)
+    (set s (js-begin t pretty 0 s (fk-furniture)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i nn)
+      (do (if (and (== (node-kind nodes i) (nk-furniture)) (== (node-parent nodes i) -1))
+            (do (js-aelem t pretty 1 k)
+                (js-furniture t pretty 2 nodes attrs regions text i)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (js-aend t pretty 1 k)
+    (set s (js-begin t pretty 0 s (fk-dropped)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i nl)
+      (do (js-aelem t pretty 1 i)
+          (js-dropped t pretty 2 ledger text i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 nl)
+    (js-close t pretty 0 s)
+    (return 0)))

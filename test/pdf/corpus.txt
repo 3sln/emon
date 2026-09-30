@@ -1,0 +1,108 @@
+# emon P1.5: real files from corpus/ (read-only), kin/pdfdoctest.kin. Written by kin/scripts/pdf-corpus.py.
+# path (relative to test/) <TAB> emon status <TAB> pages <TAB> digest of boxes in whole points + rotation.
+# Pages and digest are what poppler reports and emon must match; a status other than ok is a ratchet.
+../corpus/financial/agami-indian-bank-statements/train/India_Bank_Statement_Digital_Type1/00035.pdf	ok	6	3938597
+../corpus/financial/agami-indian-bank-statements/train/India_Bank_Statement_Scanned_Type1/00076.pdf	ok	6	7255589
+../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	ok	152	1053361
+../corpus/financial/bank-statement-benchmark/datasets/basic/bsb-004/bsb-004-statement.pdf	ok	5	1498516
+../corpus/formats/derived/scanned-receipts-6p.pdf	ok	6	4905384
+../corpus/formats/derived/sroie_00000.ocr-layer.pdf	ok	1	3543808
+../corpus/forms/irs/f1120.pdf	ok	6	5857979
+../corpus/forms/irs/i1040gi.pdf	ok	126	4838590
+../corpus/layout/arxiv/1409.1556.pdf	ok	14	5917833
+../corpus/layout/arxiv/1512.03385.pdf	ok	12	6074146
+../corpus/layout/arxiv/1706.03762.pdf	ok	15	868966
+../corpus/layout/arxiv/2005.14165.pdf	ok	75	2582249
+../corpus/layout/arxiv/2103.00020.pdf	ok	48	4614143
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Co_Branding/PcquoteComInc_19990721_S-1A_EX-10.11_6377149_EX-10.11_Co-Branding Agreement2.pdf	ok	2	2143787
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	ok	12	7023374
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/ThriventVariableInsuranceAccountB_20190701_N-6_EX-99.D(IV)_11720968_EX-99.D(IV)_Endorsement Agreement.pdf	ok	3	6413046
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/IP/ArmstrongFlooringInc_20190107_8-K_EX-10.2_11471795_EX-10.2_Intellectual Property Agreement.pdf	ok	40	1564471
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Joint Venture/IMPCOTECHNOLOGIESINC_04_15_2003-EX-10.65-JOINT VENTURE AGREEMENT.PDF	ok	28	5829341
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/License_Agreements/GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content License Agreement1.pdf	ok	47	2387835
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Service/FEDERATEDGOVERNMENTINCOMESECURITIESINC_04_28_2020-EX-99.SERV AGREE-SERVICES AGREEMENT_AMENDMENT.pdf	ok	1	5504369
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Sponsorship/CANOPETROLEUM,INC_12_13_2007-EX-10.1-Sponsorship Agreement.PDF	ok	4	3166994
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	ok	32	6368933
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	ok	4	3166994
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Marketing/Principal Life Insurance Company - Broker Dealer Marketing and Servicing Agreement .PDF	ok	13	7958642
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Outsourcing/HUBEIMINKANGPHARMACEUTICALLTD_09_19_2006-EX-10.1-OUTSOURCING AGREEMENT.PDF	ok	5	1498516
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Strategic Alliance/REWALKROBOTICSLTD_07_10_2014-EX-10.2-STRATEGIC ALLIANCE AGREEMENT.PDF	ok	7	5313018
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00338.pdf	ok	1	5344181
+../corpus/layout/gov-reports/berkshire-2023-letter.pdf	ok	16	5315297
+../corpus/layout/gov-reports/fomc-minutes-20240918.pdf	ok	16	4119528
+../corpus/layout/gov-reports/gao-24-106540.pdf	ok	45	6049680
+../corpus/layout/pdfa-eng-wds/0090578.pdf	ok	6	5857979
+../corpus/layout/pdfa-eng-wds/0101299.pdf	ok	2	8313652
+../corpus/layout/pdfa-eng-wds/0182448.pdf	ok	2	1390758
+../corpus/layout/pdfa-eng-wds/0206032.pdf	bad-xref	-	-
+../corpus/layout/pdfa-eng-wds/0299923.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/0401258.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/0798598.pdf	ok	4	1054689
+../corpus/layout/pdfa-eng-wds/0895053.pdf	ok	4	1054689
+../corpus/layout/pdfa-eng-wds/1118746.pdf	ok	2	7699689
+../corpus/layout/pdfa-eng-wds/1149465.pdf	ok	32	3107988
+../corpus/layout/pdfa-eng-wds/1291700.pdf	ok	42	5028308
+../corpus/layout/pdfa-eng-wds/1481937.pdf	ok	2	5027805
+../corpus/layout/pdfa-eng-wds/1497817.pdf	ok	1	5344181
+../corpus/layout/pdfa-eng-wds/1996867.pdf	bad-xref	-	-
+../corpus/layout/pdfa-eng-wds/2077768.pdf	ok	24	4766355
+../corpus/layout/pdfa-eng-wds/2149817.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/2316977.pdf	ok	1	5344181
+../corpus/layout/pdfa-eng-wds/2388991.pdf	ok	6	5857979
+../corpus/layout/pdfa-eng-wds/2760333.pdf	ok	1	5344181
+../corpus/layout/pdfa-eng-wds/2854487.pdf	ok	4	1651417
+../corpus/layout/pdfa-eng-wds/2940901.pdf	ok	2	2143787
+../corpus/layout/pdfa-eng-wds/2987875.pdf	ok	12	6074146
+../corpus/layout/pdfa-eng-wds/3047324.pdf	ok	2	8313652
+../corpus/layout/pdfa-eng-wds/3190370.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/3374361.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/3383892.pdf	ok	30	1202823
+../corpus/layout/pdfa-eng-wds/3547773.pdf	ok	11	3103808
+../corpus/layout/pdfa-eng-wds/3560255.pdf	ok	2	2199850
+../corpus/layout/pdfa-eng-wds/3766304.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/3968111.pdf	no-startxref	-	-
+../corpus/layout/pdfa-eng-wds/4164802.pdf	ok	1	4975813
+../corpus/layout/pdfa-eng-wds/4334768.pdf	ok	32	5327411
+../corpus/layout/pdfa-eng-wds/4770394.pdf	ok	45	5926599
+../corpus/layout/pdfa-eng-wds/4823941.pdf	ok	1	4104493
+../corpus/layout/pdfa-eng-wds/4865180.pdf	ok	13	4666153
+../corpus/layout/pdfa-eng-wds/4936269.pdf	ok	2	3831699
+../corpus/layout/pdfa-eng-wds/5171302.pdf	ok	3	4518858
+../corpus/layout/pdfa-eng-wds/5394642.pdf	ok	2	7699689
+../corpus/layout/pdfa-eng-wds/5443628.pdf	ok	6	5857979
+../corpus/layout/pdfa-eng-wds/5748150.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/5981447.pdf	bad-xref	-	-
+../corpus/layout/pdfa-eng-wds/6010082.pdf	ok	9	6983669
+../corpus/layout/pdfa-eng-wds/6368978.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/6523733.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/6523894.pdf	ok	2	8313652
+../corpus/layout/pdfa-eng-wds/6547262.pdf	ok	2	8313652
+../corpus/layout/pdfa-eng-wds/6579860.pdf	ok	3	7620844
+../corpus/layout/pdfa-eng-wds/6635499.pdf	ok	8	2472821
+../corpus/layout/pdfa-eng-wds/6693456.pdf	ok	9	6276514
+../corpus/layout/pdfa-eng-wds/6722851.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/6772189.pdf	ok	2	7699689
+../corpus/layout/pdfa-eng-wds/7128830.pdf	no-pages	-	-
+../corpus/layout/pdfa-eng-wds/7191610.pdf	ok	2	8313652
+../corpus/layout/pdfa-eng-wds/7283874.pdf	encrypted	-	-
+../corpus/layout/pdfa-eng-wds/7405284.pdf	ok	7	5284146
+../corpus/layout/pdfa-eng-wds/7513059.pdf	encrypted	-	-
+../corpus/multilingual/udhr/amh.pdf	ok	6	5857979
+../corpus/multilingual/udhr/ar-wikipedia-udhr.pdf	ok	6	4493369
+../corpus/multilingual/udhr/chn.pdf	ok	7	5284146
+../corpus/multilingual/udhr/hbr.pdf	ok	4	1054689
+../corpus/multilingual/udhr/hnd.pdf	ok	5	2796814
+../corpus/multilingual/udhr/khm.pdf	ok	25	3368663
+../corpus/multilingual/udhr/prs.pdf	ok	12	7023374
+../corpus/multilingual/udhr/tam.pdf	ok	6	2781731
+../corpus/multilingual/udhr/ukr.pdf	ok	2	2143787
+../corpus/multilingual/udhr/un-booklet-ar.pdf	ok	74	6828719
+../corpus/multilingual/udhr/urd.pdf	ok	7	6611587
+../corpus/tables/gov-reports/bls-cpi.pdf	ok	38	5731213
+../corpus/tables/gov-reports/eia-steo-full.pdf	ok	56	5036362
+../corpus/tables/gov-reports/uscourts-jb-c1-2023.pdf	ok	4	4317340
+../corpus/tables/icdar2013/competition-dataset-eu/eu-003.pdf	ok	1	5344181
+../corpus/tables/icdar2013/competition-dataset-eu/eu-008.pdf	ok	1	5504369
+../corpus/tables/icdar2013/competition-dataset-eu/eu-015.pdf	ok	2	1529824
+../corpus/tables/icdar2013/competition-dataset-us/us-001.pdf	ok	3	3923023
+../corpus/tables/icdar2013/competition-dataset-us/us-029.pdf	ok	3	3923023

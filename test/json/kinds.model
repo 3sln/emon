@@ -1,0 +1,200 @@
+# Every node kind, every kind-specific field, and the corners of the format.
+# Codes: nk (kinds) 1 document 2 section 3 heading 4 paragraph 5 list 6 item
+# 7 table 8 rowgroup 9 row 10 cell 11 caption 12 figure 13 seal 14 formula
+# 15 code 16 quote 17 note 18 field 19 furniture 20 break 21 text 22 span
+# 23 link 24 ref 25 linebreak.  fk (keys) are in emon.model.
+#
+# THE HEADER: everything the root can carry.
+at 0 44 emon 0.1.0
+at 0 59 pdf
+at 0 60 2.0
+ai 0 42 4
+ab 0 61 1
+ab 0 62 0
+at 0 40 de
+at 0 63 de-CH
+at 0 64 never
+at 0 65 words
+at 0 39 T\u00e4glicher Bericht
+at 0 66 Ada Lovelace
+at 0 67 Notes
+at 0 68 a, b, c
+at 0 69 Writer
+at 0 70 emon test suite
+at 0 71 2025-03-01T10:00:00Z
+at 0 72 2025-03-02T11:30:00+01:00
+# THE PAGE TABLE: each source kind, a label or none, health 0, a raster page.
+pg 1 61200 79200 0 1
+pl 0 1
+ph 0 987
+pg 2 79200 61200 90 2
+pl 1 ii
+ph 1 0
+pd 1 300 2480 3508
+pg 3 59500 84100 0 3
+pg 4 100000 100000 270 4
+pd 3 72 800 800
+# THE BODY.
+# 1 section, level 1, on two pages
+n 2 0
+s 1 1
+r 1 1 7200 9000 54000 75000
+r 1 2 7200 6000 54000 20000
+sr 1 1
+c 1 900
+# 2 heading: number and numbering
+n 3 1
+s 2 3
+at 2 4 3.2.1
+at 2 5 decimal
+t 2 Background
+# 3 paragraph: every escape, an informative inline set. 4..10 are its inlines.
+n 4 1
+s 3 4
+t 3 He said "hi" \\ path\ttab\nnl \u0001 \u001f \u2028 \u2029 \u00e9 \u{1F600} end
+f 3 33
+sr 3 5
+c 3 0
+r 3 1 -5 0 7250 12
+r 3 2 10 100 1234 -150
+n 21 3
+t 4 He said "hi" \\ path\ttab
+n 23 3
+at 5 37 https://example.com/a?b=c&d=e
+n 21 5
+t 6 link
+n 24 3
+at 7 17 1
+an 7 29 17
+n 25 3
+n 22 3
+s 9 33
+n 21 9
+t 10 emph
+# 11 paragraph with plain inlines only: no `inlines` array, `text` derived
+n 4 1
+s 11 2
+n 21 11
+t 12 ab
+n 21 11
+t 13 cd
+# 14 list: ordered, decimal, start 3; 15 and 16 items; 17 nested list
+n 5 1
+s 14 2
+at 14 15 decimal
+ai 14 16 3
+n 6 14
+at 15 17 3.
+ai 15 18 3
+t 15 first
+n 6 14
+at 16 17 4.
+ai 16 18 4
+t 16 second
+n 5 16
+s 17 1
+at 17 15 bullet
+n 6 17
+at 18 17 \u2022
+t 18 nested
+# 19 quote holding a paragraph; 21 code with preserved whitespace
+n 16 1
+n 4 19
+t 20 quoted
+n 15 1
+t 21 x = 1\n  y = 2
+# 22 second section, no level
+n 2 0
+# 23 table and its structure: caption, head group with a repeated row
+n 7 22
+at 23 19 ruled
+ai 23 20 2
+ai 23 21 3
+n 11 23
+at 24 28 Table 3
+an 24 29 23
+t 24 Results
+n 8 23
+s 25 1
+n 9 25
+s 26 1
+n 10 26
+s 27 1
+ai 27 25 2
+t 27 Name
+n 10 26
+x 28 1
+ai 28 24 2
+n 8 23
+s 29 2
+n 9 29
+n 10 30
+s 31 2
+t 31 a
+n 10 30
+t 32 1
+# 33 figure with labels, and a caption child
+n 12 22
+s 33 1
+at 33 28 Figure 1
+at 33 30 A chart
+nt 33 31 x axis
+nt 33 31 y axis
+n 11 33
+at 34 28 Figure 1
+t 34 A chart of things
+# 35 seal, 36 formula, 37 note (+38 its paragraph), 39 field, 40 break
+n 13 22
+s 35 2
+at 35 32 ACME
+at 35 33 2025-01-02
+at 35 34 red
+t 35 PAID
+n 14 22
+s 36 1
+t 36 E = mc^2
+n 17 22
+s 37 4
+at 37 17 1
+n 4 37
+t 38 a note
+n 18 22
+at 39 32 agree
+at 39 73 checkbox
+at 39 18 yes
+ab 39 74 1
+n 20 22
+s 40 2
+at 40 28 ii
+# 41 paragraph: flags, sources, a region with the extreme values
+n 4 22
+t 41 extremes
+f 41 127
+sr 41 511
+c 41 1000
+r 41 4 -2147483648 2147483647 100 -100
+# 42 paragraph whose inlines carry their own regions (detail: words)
+n 4 22
+n 21 42
+t 43 two
+r 43 1 1000 2000 1500 2500
+n 21 42
+t 44 words
+r 44 1 1600 2000 2400 2500
+# FURNITURE, after the body: two more roots.
+n 19 -1
+s 45 8
+t 45 Page template
+ni 45 42 1
+ni 45 42 2
+ni 45 42 3
+n 4 45
+t 46 child
+n 19 -1
+s 47 6
+# THE LEDGER.
+d 1 1 1000 2000 99000 50000 870 12
+dt 0 DRAFT
+d 3 2 -5 0 10 7 -1 0
+d 10 3 100 200 300 400 1000 511
+dt 2 say "x"

@@ -1,0 +1,86 @@
+;; SplitMix64 (P0.4). emon's own module (D039).
+;;
+;; WHAT IT IS FOR. Determinism is a contract (SPEC 12.2): the same input and
+;; the same settings give the same bytes on every target and every run. A
+;; component that wants pseudo-randomness -- a tie-break that must not favour
+;; the first candidate, a sampling of pixels for a health score, a fallback
+;; document id -- takes its numbers from a SEEDED generator, never a clock,
+;; and this is that generator. It is Steele, Lea & Flood's SplitMix64 (the
+;; reference output for seed 0 begins E220A8397B1DCDAF, 6E789E6AA1B965F4).
+;;
+;; THE STATE IS TWO CELLS, the high and the low 32 bits, because a kin
+;; function cannot own state and a `Cells` holds 32-bit integers. The caller
+;; supplies the `Cells`; `sm-seed` fills it. One generator per stage, threaded
+;; explicitly: shared global state would make the output depend on call order
+;; across threads, and D022 keeps the core single-threaded but does not let
+;; that be relied on.
+;;
+;; SIXTY-FOUR BIT ARITHMETIC IS WRAPPING (`add64`, `mul64`) AND THE SHIFTS ARE
+;; LOGICAL (`shr64`): SplitMix is defined on u64, and an arithmetic shift of a
+;; negative value keeps its sign bits and gives a different number.
+(ns emon.splitmix
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 add64 mul64 shl64 shr64]]
+            [emon.port :refer [cells-at cells-set cells-push cells-drop]]
+            [kin.lang :refer [defn return let if comment + - * bit-xor rem <=]]))
+
+;; The three constants as signed 64-bit values: 0x9E3779B97F4A7C15,
+;; 0xBF58476D1CE4E5B9 and 0x94D049BB133111EB.
+(defn ^I64 sm-golden [] (return -7046029254386353131))
+(defn ^I64 sm-mix-a [] (return -4658895280553007687))
+(defn ^I64 sm-mix-b [] (return -7723592293110705685))
+
+(defn ^:pub ^I64 sm-mix [^I64 z]
+  (comment "The output function: two xorshift-multiply rounds and a final")
+  (comment "xorshift. A pure function of z, and what makes consecutive")
+  (comment "counter values look unrelated.")
+  (let [^I64 a (mul64 (bit-xor z (shr64 z 30)) (sm-mix-a))
+        ^I64 b (mul64 (bit-xor a (shr64 a 27)) (sm-mix-b))]
+    (return (bit-xor b (shr64 b 31)))))
+
+(defn ^:pub ^I64 sm-at [^I64 seed ^I32 i]
+  (comment "The i-th output (0-based) of a generator seeded with `seed`,")
+  (comment "with no state: the state after i+1 steps is seed + (i+1)*golden.")
+  (comment "For a caller that wants a random-access value, not a stream.")
+  (return (sm-mix (add64 seed (mul64 (i64 (+ i 1)) (sm-golden))))))
+
+;; ------------------------------------------------------------- the stream
+
+(defn ^:pub ^I32 sm-seed [^:mut ^Cells st ^I64 seed]
+  (comment "Start (or restart) a generator. The state cells are [hi, lo].")
+  (cells-drop st 0)
+  (cells-push st (i32 (shr64 seed 32)))
+  (cells-push st (i32 seed))
+  (return 0))
+
+(defn ^I64 sm-state [^Cells st]
+  (comment "The 64-bit state from its halves. The low half is read as")
+  (comment "UNSIGNED by shifting it to the top and back down, which needs")
+  (comment "no 64-bit mask literal.")
+  (let [^I64 hi (shl64 (i64 (cells-at st 0)) 32)
+        ^I64 lo (shr64 (shl64 (i64 (cells-at st 1)) 32) 32)]
+    (return (add64 hi lo))))
+
+(defn ^:pub ^I64 sm-next [^:mut ^Cells st]
+  (comment "Advance the generator and answer the next 64-bit output.")
+  (let [^I64 s (add64 (sm-state st) (sm-golden))]
+    (cells-set st 0 (i32 (shr64 s 32)))
+    (cells-set st 1 (i32 s))
+    (return (sm-mix s))))
+
+(defn ^:pub ^I32 sm-hi [^I64 v]
+  (comment "The high 32 bits of an output, as a signed I32.")
+  (return (i32 (shr64 v 32))))
+
+(defn ^:pub ^I32 sm-lo [^I64 v]
+  (comment "The low 32 bits of an output, as a signed I32.")
+  (return (i32 v)))
+
+(defn ^:pub ^I32 sm-below [^:mut ^Cells st ^I32 n]
+  (comment "The next value in 0..n-1, or 0 when n <= 0. Takes the top 31")
+  (comment "bits of an output and reduces by `rem`: for n far below 2^31 the")
+  (comment "modulo bias is below n / 2^31, which no use here can see. Every")
+  (comment "call advances the generator, so a caller cannot make the stream")
+  (comment "depend on the value of n.")
+  (let [^I32 v (i32 (shr64 (sm-next st) 33))]
+    (if (<= n 0) (return 0))
+    (return (rem v n))))

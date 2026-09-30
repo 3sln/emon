@@ -1,0 +1,131 @@
+;; Reading bytes (P0.4). emon's own module, written for emon (D039).
+;;
+;; THE PORT GIVES THE RAW READS -- `blob-u8`, `blob-u16`, `blob-u32` and their
+;; little-endian twins, where Java's signed `byte` and the 32-bit pattern are
+;; already settled (D036). What a PDF parser needs on top of them is the part
+;; every format reader writes again: SIGNED reads (a TrueType delta is a
+;; two's-complement 16-bit), 24-bit reads (a CFF offset), UNSIGNED 32-bit
+;; values that do not fit in an `I32` (a table length near 4 GiB is a real
+;; input, and a hostile one), BOUNDS QUESTIONS (a PDF is untrusted; asking
+;; whether a read is in range must not itself read out of range), and a
+;; substring search (`startxref` is found by searching backwards from the end).
+;;
+;; THE PORT'S READS THROW ON AN OUT-OF-RANGE INDEX, and failure is per page
+;; (D030). The `-or` forms below are for the places where running off the end
+;; is an expected answer rather than a failed page: they answer a default.
+;;
+;; EVERY NAME IS `by-` because a kin module's exports share one namespace of
+;; names per target (Go and C# have no module prefix on a bare function).
+(ns emon.bytes
+  (:require [emon.lang :refer [I32 I64 Blob i64 add64 mul64]]
+            [emon.port :refer [blob-len blob-u8 blob-u16 blob-u32
+                               blob-u16le blob-u32le]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or bit-and bit-or]]))
+
+(defn ^:pub ^I32 by-in [^Blob b ^I32 i ^I32 n]
+  (comment "1 when the n bytes at i are all inside the blob, else 0. Written")
+  (comment "as `n <= len - i` and not `i + n <= len`, so that a hostile n near")
+  (comment "2^31 cannot wrap the sum and pass.")
+  (if (< i 0) (return 0))
+  (if (< n 0) (return 0))
+  (if (> i (blob-len b)) (return 0))
+  (if (> n (- (blob-len b) i)) (return 0))
+  (return 1))
+
+;; ------------------------------------------------------------- signed reads
+
+(defn ^:pub ^I32 by-i8 [^Blob b ^I32 i]
+  (comment "One byte as two's complement: 0x80 is -128, 0xFF is -1.")
+  (let [^I32 v (blob-u8 b i)]
+    (if (>= v 128) (return (- v 256)))
+    (return v)))
+
+(defn ^:pub ^I32 by-i16 [^Blob b ^I32 i]
+  (comment "Big-endian 16-bit, signed.")
+  (let [^I32 v (blob-u16 b i)]
+    (if (>= v 32768) (return (- v 65536)))
+    (return v)))
+
+(defn ^:pub ^I32 by-i16le [^Blob b ^I32 i]
+  (comment "Little-endian 16-bit, signed.")
+  (let [^I32 v (blob-u16le b i)]
+    (if (>= v 32768) (return (- v 65536)))
+    (return v)))
+
+;; ---------------------------------------------------------- 24-bit reads
+
+(defn ^:pub ^I32 by-u24 [^Blob b ^I32 i]
+  (comment "Big-endian 24-bit, unsigned (a CFF offset of size 3).")
+  (return (+ (* (blob-u8 b i) 65536) (blob-u16 b (+ i 1)))))
+
+(defn ^:pub ^I32 by-u24le [^Blob b ^I32 i]
+  (comment "Little-endian 24-bit, unsigned.")
+  (return (+ (* (blob-u8 b (+ i 2)) 65536) (blob-u16le b i))))
+
+;; ------------------------------------------------- unsigned 32-bit, widened
+
+(defn ^:pub ^I64 by-u32-64 [^Blob b ^I32 i]
+  (comment "Big-endian 32-bit as the UNSIGNED value it is, in an I64. Built")
+  (comment "from two 16-bit halves: every intermediate stays in range on all")
+  (comment "four targets, and a literal above 2^31 is never written.")
+  (return (add64 (mul64 (i64 (blob-u16 b i)) (i64 65536))
+                 (i64 (blob-u16 b (+ i 2))))))
+
+(defn ^:pub ^I64 by-u32le-64 [^Blob b ^I32 i]
+  (comment "Little-endian 32-bit as an unsigned value in an I64.")
+  (return (add64 (mul64 (i64 (blob-u16le b (+ i 2))) (i64 65536))
+                 (i64 (blob-u16le b i)))))
+
+;; ------------------------------------------------------ reads with a default
+
+(defn ^:pub ^I32 by-u8-or [^Blob b ^I32 i ^I32 dflt]
+  (if (== (by-in b i 1) 0) (return dflt))
+  (return (blob-u8 b i)))
+
+(defn ^:pub ^I32 by-u16-or [^Blob b ^I32 i ^I32 dflt]
+  (if (== (by-in b i 2) 0) (return dflt))
+  (return (blob-u16 b i)))
+
+(defn ^:pub ^I32 by-u32-or [^Blob b ^I32 i ^I32 dflt]
+  (comment "The 32-bit PATTERN, as `blob-u32` answers it (D036).")
+  (if (== (by-in b i 4) 0) (return dflt))
+  (return (blob-u32 b i)))
+
+;; --------------------------------------------------------------- comparing
+
+(defn ^:pub ^I32 by-match-at [^Blob hay ^I32 i ^Blob needle]
+  (comment "1 when `needle` occurs in `hay` exactly at i. An empty needle")
+  (comment "matches anywhere in range; a needle that runs past the end does")
+  (comment "not match.")
+  (let [^I32 n (blob-len needle)
+        ^:mut ^I32 k 0]
+    (if (== (by-in hay i n) 0) (return 0))
+    (while (< k n)
+      (do (if (!= (blob-u8 hay (+ i k)) (blob-u8 needle k)) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 by-find [^Blob hay ^I32 from ^Blob needle]
+  (comment "The first index >= from where `needle` occurs, or -1. A negative")
+  (comment "`from` starts at 0.")
+  (let [^I32 n (blob-len needle)
+        ^I32 last (- (blob-len hay) n)
+        ^:mut ^I32 i from]
+    (if (< i 0) (set i 0))
+    (while (<= i last)
+      (do (if (== (by-match-at hay i needle) 1) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 by-find-back [^Blob hay ^I32 from ^Blob needle]
+  (comment "The LAST index <= from where `needle` occurs, or -1: how")
+  (comment "`startxref` is found, searching backwards from the end. A `from`")
+  (comment "past the last possible start begins at the last possible start.")
+  (let [^I32 last (- (blob-len hay) (blob-len needle))
+        ^:mut ^I32 i from]
+    (if (> i last) (set i last))
+    (while (>= i 0)
+      (do (if (== (by-match-at hay i needle) 1) (return i))
+          (set i (- i 1))))
+    (return -1)))

@@ -1,0 +1,27 @@
+;; The four-language hello: one source, four modules, one answer (P0.1).
+;;
+;; It exists to prove the arrangement end to end before anything real is
+;; written against it -- that `kin.lang` answers for four targets out of two
+;; maps, that `emon.lang`'s tags carry a type for each, that each target
+;; writes a module where `emon.targets` says, and that the four agree.
+;;
+;; `gcd` because it needs a loop, a reassignment and a local whose type is
+;; inferred, which is most of what a shape vocabulary has to get right.
+(ns emon.hello
+  (:require [emon.lang :refer [I32]]
+            [kin.lang :refer [defn return let set while comment != rem]]))
+
+(defn ^:pub ^I32 gcd [^I32 a ^I32 b]
+  (comment "Euclid's algorithm, by repeated remainder.")
+  ;; `^:mut` BECAUSE RUST ALONE HAS TO SAY SO: the source states that this
+  ;; binding is reassigned and each target spends what it must.
+  (let [^:mut ^I32 x a
+        ^:mut ^I32 y b]
+    (while (!= y 0)
+      ;; `^I32` IS NOT DECORATION: `kin.lang`'s operators do not tag their
+      ;; product and ship no default tag, so an unannotated local has nothing
+      ;; to infer from and Rust emits `let t:  = x % y;`.
+      (let [^I32 t (rem x y)]
+        (set x y)
+        (set y t)))
+    (return x)))

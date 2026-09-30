@@ -1,0 +1,336 @@
+;; Laws for `emon.evidence` (P1.3): the builders, the accessors, the checker,
+;; and the dump of a hand-built page as a golden file (`test/evidence/`).
+;;
+;; THE HAND-BUILT PAGE is one page of every kind of evidence, each field set
+;; to something a reader could check against the layout in `evidence.kin`:
+;; two text-layer words ("Hi" and a ligature "fi"), one line over them, a
+;; rule and a filled rectangle as paths, an image placement, a tracer
+;; component, and an OCR word with two alternative readings.
+(ns emon.evidencetest
+  (:require [emon.lang :refer [I32 Blob Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-text-span test-file
+                               new-cells new-text]]
+            [emon.port :refer [blob-len blob-u8 cells-len]]
+            [emon.evidence :refer [ev-init etx-append-cp etx-len
+                                   gl-new gl-get gl-set gl-count
+                                   wd-new wd-get wd-set wd-count
+                                   ln-new ln-get ln-set ln-count
+                                   pa-new pa-get pa-set pa-count
+                                   im-new im-get im-set im-count
+                                   co-new co-get co-set co-count
+                                   ow-new ow-get ow-set ow-count
+                                   alt-add alt-get alt-count ev-check ev-emit
+                                   gf-page gf-cp gf-tstart gf-tlen gf-how gf-font
+                                   gf-size gf-x0 gf-y0 gf-x1 gf-y1 gf-baseline
+                                   gf-rot gf-color gf-alpha gf-mode gf-vis
+                                   gf-artifact gf-mcid gf-word
+                                   wf-gfirst wf-gcount wf-tstart wf-tlen wf-line
+                                   wf-src wf-conf wf-gap wf-font wf-size
+                                   lf-wfirst lf-wcount lf-baseline lf-src
+                                   pf-kind pf-fill pf-stroke pf-width pf-alpha
+                                   pf-flags pf-mcid
+                                   mf-obj mf-pxw mf-pxh mf-flags mf-artifact mf-mcid
+                                   cf-pxx cf-pxw cf-area cf-fill cf-stroke cf-color
+                                   cf-layer cf-kind cf-conf cf-flags
+                                   of-tstart of-tlen of-conf of-althead of-altcount
+                                   of-line of-block of-baseline of-flags of-pass
+                                   of-lang af-sym af-cp af-conf af-next
+                                   gh-tounicode gh-glyphname gh-unknown vz-clipped
+                                   ar-watermark ar-background pa-line pa-rect
+                                   pg-closed pg-clip mg-smask ck-rule-h]]
+            [emon.model :refer [sr-text sr-hidden-text fl-low-conf sy-bold]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or]]))
+
+;; Build the page. `st` is unused scratch; nothing here can fail.
+(defn ^I32 et-build [^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                     ^:mut ^Cells paths ^:mut ^Cells images
+                     ^:mut ^Cells components ^:mut ^Cells ocrwords
+                     ^:mut ^Cells alts ^:mut ^Cells etext]
+  (ev-init glyphs words lines paths images components ocrwords alts etext)
+  ;; etext: "Hi" 0..2, "fi" 2..4, "Hi" 4..6 (the OCR word)
+  (etx-append-cp etext 72)
+  (etx-append-cp etext 105)
+  (etx-append-cp etext 102)
+  (etx-append-cp etext 105)
+  (etx-append-cp etext 72)
+  (etx-append-cp etext 105)
+  ;; glyphs: H, i, the ligature, a hidden watermark glyph
+  (gl-new glyphs 1 72 1 1200 7200 9000 8000 10200)
+  (gl-set glyphs 0 (gf-how) (gh-tounicode))
+  (gl-set glyphs 0 (gf-color) 0)
+  (gl-set glyphs 0 (gf-baseline) 10000)
+  (gl-set glyphs 0 (gf-word) 0)
+  (gl-new glyphs 1 105 1 1200 8000 9000 8400 10200)
+  (gl-set glyphs 1 (gf-how) (gh-tounicode))
+  (gl-set glyphs 1 (gf-color) 0)
+  (gl-set glyphs 1 (gf-baseline) 10000)
+  (gl-set glyphs 1 (gf-word) 0)
+  (gl-new glyphs 1 102 1 1200 9000 9000 10000 10200)
+  (gl-set glyphs 2 (gf-how) (gh-glyphname))
+  (gl-set glyphs 2 (gf-tstart) 2)
+  (gl-set glyphs 2 (gf-tlen) 2)
+  (gl-set glyphs 2 (gf-color) 2236962)
+  (gl-set glyphs 2 (gf-baseline) 10000)
+  (gl-set glyphs 2 (gf-word) 1)
+  (gl-new glyphs 1 -1 2 4800 -2000 -3000 5000 500)
+  (gl-set glyphs 3 (gf-rot) 4500)
+  (gl-set glyphs 3 (gf-color) 16711680)
+  (gl-set glyphs 3 (gf-alpha) 500)
+  (gl-set glyphs 3 (gf-mode) 3)
+  (gl-set glyphs 3 (gf-vis) (vz-clipped))
+  (gl-set glyphs 3 (gf-artifact) (ar-watermark))
+  (gl-set glyphs 3 (gf-mcid) 7)
+  ;; words
+  (wd-new words 1 7200 9000 8400 10200 0 2)
+  (wd-set words 0 (wf-tstart) 0)
+  (wd-set words 0 (wf-tlen) 2)
+  (wd-set words 0 (wf-line) 0)
+  (wd-set words 0 (wf-gap) 600)
+  (wd-set words 0 (wf-font) 1)
+  (wd-set words 0 (wf-size) 1200)
+  (wd-new words 1 9000 9000 10000 10200 2 1)
+  (wd-set words 1 (wf-tstart) 2)
+  (wd-set words 1 (wf-tlen) 2)
+  (wd-set words 1 (wf-line) 0)
+  (wd-set words 1 (wf-conf) 990)
+  (wd-set words 1 (wf-font) 1)
+  (wd-set words 1 (wf-size) 1200)
+  ;; one line over both words
+  (ln-new lines 1 7200 9000 10000 10200 0 2 10000)
+  ;; paths: a rule, a filled translucent rectangle
+  (pa-new paths 1 (pa-line) 7200 11000 54000 11050)
+  (pa-set paths 0 (pf-stroke) 3355443)
+  (pa-set paths 0 (pf-width) 50)
+  (pa-new paths 1 (pa-rect) 7200 12000 20000 14000)
+  (pa-set paths 1 (pf-fill) 16772778)
+  (pa-set paths 1 (pf-alpha) 500)
+  (pa-set paths 1 (pf-flags) 5)
+  (pa-set paths 1 (pf-mcid) 0)
+  ;; an image placement
+  (im-new images 1 7200 20000 30000 40000 12 640 480)
+  (im-set images 0 (mf-flags) (mg-smask))
+  (im-set images 0 (mf-artifact) (ar-background))
+  (im-set images 0 (mf-mcid) 3)
+  ;; a tracer component: a horizontal rule, with its pixel box and ink
+  (co-new components 1 (ck-rule-h) 7200 11000 54000 11050)
+  (co-set components 0 (cf-pxx) 100)
+  (co-set components 0 (cf-pxw) 300)
+  (co-set components 0 (cf-area) 1200)
+  (co-set components 0 (cf-fill) 950)
+  (co-set components 0 (cf-stroke) 50)
+  (co-set components 0 (cf-color) 255)
+  (co-set components 0 (cf-layer) 2)
+  (co-set components 0 (cf-conf) 880)
+  (co-set components 0 (cf-flags) (fl-low-conf))
+  ;; an OCR word, and two alternative readings for its symbols
+  (ow-new ocrwords 1 7190 9010 8410 10190 910)
+  (ow-set ocrwords 0 (of-tstart) 4)
+  (ow-set ocrwords 0 (of-tlen) 2)
+  (ow-set ocrwords 0 (of-line) 0)
+  (ow-set ocrwords 0 (of-block) 0)
+  (ow-set ocrwords 0 (of-baseline) 10000)
+  (ow-set ocrwords 0 (of-flags) (sy-bold))
+  (ow-set ocrwords 0 (of-pass) 1)
+  (ow-set ocrwords 0 (of-lang) 3)
+  (alt-add ocrwords alts 0 0 72 900)
+  (alt-add ocrwords alts 0 1 108 250)
+  (return 0))
+
+(defn ^I32 et-end [^Blob b]
+  (comment "A golden's end: its length less one final newline (see jsontest).")
+  (let [^I32 n (blob-len b)]
+    (if (and (> n 0) (== (blob-u8 b (- n 1)) 10)) (return (- n 1)))
+    (return n)))
+
+(deftest test-builders-set-the-layout-and-its-defaults
+  (let [^Cells glyphs (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells paths (new-cells)
+        ^Cells images (new-cells)
+        ^Cells components (new-cells)
+        ^Cells ocrwords (new-cells)
+        ^Cells alts (new-cells)
+        ^Cells etext (new-cells)]
+    (ev-init glyphs words lines paths images components ocrwords alts etext)
+    (assert-eq (gl-count glyphs) 0 "no glyphs")
+    (assert-eq (gl-new glyphs 3 65 9 1000 100 200 300 400) 0 "first glyph")
+    (assert-eq (cells-len glyphs) 20 "twenty cells")
+    (assert-eq (gl-get glyphs 0 (gf-page)) 3 "page")
+    (assert-eq (gl-get glyphs 0 (gf-cp)) 65 "cp")
+    (assert-eq (gl-get glyphs 0 (gf-tstart)) -1 "no text run")
+    (assert-eq (gl-get glyphs 0 (gf-tlen)) 0 "no text length")
+    (assert-eq (gl-get glyphs 0 (gf-how)) 5 "how defaults to unknown, code 5")
+    (assert-eq (gl-get glyphs 0 (gf-font)) 9 "font")
+    (assert-eq (gl-get glyphs 0 (gf-size)) 1000 "size")
+    (assert-eq (gl-get glyphs 0 (gf-x0)) 100 "x0")
+    (assert-eq (gl-get glyphs 0 (gf-y0)) 200 "y0")
+    (assert-eq (gl-get glyphs 0 (gf-x1)) 300 "x1")
+    (assert-eq (gl-get glyphs 0 (gf-y1)) 400 "y1")
+    (assert-eq (gl-get glyphs 0 (gf-baseline)) 400 "baseline defaults to the box's bottom")
+    (assert-eq (gl-get glyphs 0 (gf-rot)) 0 "no rotation")
+    (assert-eq (gl-get glyphs 0 (gf-color)) -1 "no colour")
+    (assert-eq (gl-get glyphs 0 (gf-alpha)) 1000 "opaque")
+    (assert-eq (gl-get glyphs 0 (gf-mode)) 0 "render mode 0")
+    (assert-eq (gl-get glyphs 0 (gf-vis)) 0 "visible")
+    (assert-eq (gl-get glyphs 0 (gf-artifact)) 0 "not an artifact")
+    (assert-eq (gl-get glyphs 0 (gf-mcid)) -1 "no mcid")
+    (assert-eq (gl-get glyphs 0 (gf-word)) -1 "in no word")
+    (assert-eq (wd-new words 3 1 2 3 4 0 1) 0 "first word")
+    (assert-eq (cells-len words) 16 "sixteen cells")
+    (assert-eq (wd-get words 0 (wf-tstart)) -1 "no text")
+    (assert-eq (wd-get words 0 (wf-line)) -1 "no line")
+    (assert-eq (wd-get words 0 (wf-src)) 1 "source text")
+    (assert-eq (wd-get words 0 (wf-conf)) -1 "no confidence")
+    (assert-eq (wd-get words 0 (wf-gap)) -1 "no gap")
+    (assert-eq (wd-get words 0 (wf-font)) -1 "no font")
+    (assert-eq (wd-get words 0 (wf-gcount)) 1 "glyph count")
+    (assert-eq (ln-new lines 3 1 2 3 4 0 1 400) 0 "first line")
+    (assert-eq (cells-len lines) 12 "twelve cells")
+    (assert-eq (ln-get lines 0 (lf-src)) 1 "source text")
+    (assert-eq (ln-get lines 0 (lf-baseline)) 400 "baseline")
+    (assert-eq (pa-new paths 3 (pa-rect) 1 2 3 4) 0 "first path")
+    (assert-eq (cells-len paths) 16 "sixteen cells")
+    (assert-eq (pa-get paths 0 (pf-fill)) -1 "not filled")
+    (assert-eq (pa-get paths 0 (pf-stroke)) -1 "not stroked")
+    (assert-eq (pa-get paths 0 (pf-alpha)) 1000 "opaque")
+    (assert-eq (pa-get paths 0 (pf-mcid)) -1 "no mcid")
+    (assert-eq (im-new images 3 1 2 3 4 17 10 20) 0 "first image")
+    (assert-eq (cells-len images) 12 "twelve cells")
+    (assert-eq (im-get images 0 (mf-obj)) 17 "object number")
+    (assert-eq (im-get images 0 (mf-pxw)) 10 "pixel width")
+    (assert-eq (im-get images 0 (mf-pxh)) 20 "pixel height")
+    (assert-eq (im-get images 0 (mf-mcid)) -1 "no mcid")
+    (assert-eq (co-new components 3 (ck-rule-h) 1 2 3 4) 0 "first component")
+    (assert-eq (cells-len components) 20 "twenty cells")
+    (assert-eq (co-get components 0 (cf-color)) -1 "no colour")
+    (assert-eq (co-get components 0 (cf-layer)) -1 "no layer")
+    (assert-eq (co-get components 0 (cf-kind)) 2 "rule-h is code 2")
+    (assert-eq (co-get components 0 (cf-conf)) -1 "no confidence")
+    (assert-eq (ow-new ocrwords 3 1 2 3 4 850) 0 "first OCR word")
+    (assert-eq (cells-len ocrwords) 16 "sixteen cells")
+    (assert-eq (ow-get ocrwords 0 (of-conf)) 850 "confidence")
+    (assert-eq (ow-get ocrwords 0 (of-tstart)) -1 "no text")
+    (assert-eq (ow-get ocrwords 0 (of-althead)) -1 "no alternatives")
+    (assert-eq (ow-get ocrwords 0 (of-altcount)) 0 "none counted")
+    (assert-eq (ow-get ocrwords 0 (of-line)) -1 "no line")
+    (assert-eq (ow-get ocrwords 0 (of-lang)) -1 "no language")))
+
+(deftest test-setters-and-the-alternative-chain
+  (let [^Cells glyphs (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells paths (new-cells)
+        ^Cells images (new-cells)
+        ^Cells components (new-cells)
+        ^Cells ocrwords (new-cells)
+        ^Cells alts (new-cells)
+        ^Cells etext (new-cells)]
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (assert-eq (gl-count glyphs) 4 "four glyphs")
+    (assert-eq (wd-count words) 2 "two words")
+    (assert-eq (ln-count lines) 1 "one line")
+    (assert-eq (pa-count paths) 2 "two paths")
+    (assert-eq (im-count images) 1 "one image")
+    (assert-eq (co-count components) 1 "one component")
+    (assert-eq (ow-count ocrwords) 1 "one OCR word")
+    (assert-eq (alt-count alts) 2 "two alternatives")
+    (assert-eq (etx-len etext) 6 "six text cells")
+    (assert-eq (gl-get glyphs 2 (gf-tstart)) 2 "the ligature's text run")
+    (assert-eq (gl-get glyphs 2 (gf-tlen)) 2 "two code points")
+    (assert-eq (gl-get glyphs 3 (gf-rot)) 4500 "45 degrees in centi-degrees")
+    (assert-eq (gl-get glyphs 3 (gf-vis)) 1 "clipped is code 1")
+    (assert-eq (gl-get glyphs 3 (gf-artifact)) 2 "watermark is code 2")
+    (assert-eq (wd-get words 1 (wf-conf)) 990 "word confidence")
+    (assert-eq (ln-get lines 0 (lf-wcount)) 2 "the line has two words")
+    (assert-eq (pa-get paths 1 (pf-flags)) 5 "closed and clip")
+    (assert-eq (im-get images 0 (mf-flags)) 2 "smask")
+    (assert-eq (co-get components 0 (cf-flags)) 1 "low-conf")
+    (assert-eq (ow-get ocrwords 0 (of-althead)) 0 "the chain starts at 0")
+    (assert-eq (ow-get ocrwords 0 (of-altcount)) 2 "two alternatives")
+    (assert-eq (alt-get alts 0 (af-sym)) 0 "first alternative: symbol 0")
+    (assert-eq (alt-get alts 0 (af-cp)) 72 "it reads H")
+    (assert-eq (alt-get alts 0 (af-conf)) 900 "at 900")
+    (assert-eq (alt-get alts 0 (af-next)) 1 "then the second")
+    (assert-eq (alt-get alts 1 (af-cp)) 108 "which reads l")
+    (assert-eq (alt-get alts 1 (af-next)) -1 "and ends the chain")
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 0 "the page is well formed")))
+
+(deftest test-evidence-text-is-scalar-values-only
+  (let [^Cells etext (new-cells)]
+    (assert-eq (etx-append-cp etext 65) 0 "index written")
+    (etx-append-cp etext 55296)
+    (etx-append-cp etext 128512)
+    (assert-eq (etx-len etext) 3 "three cells")))
+
+(deftest test-check-names-what-is-wrong
+  (let [^Cells glyphs (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells paths (new-cells)
+        ^Cells images (new-cells)
+        ^Cells components (new-cells)
+        ^Cells ocrwords (new-cells)
+        ^Cells alts (new-cells)
+        ^Cells etext (new-cells)]
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (gl-set glyphs 2 (gf-tlen) 9)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 2 "a glyph's text run past the arena")
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (wd-set words 1 (wf-gcount) 9)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 3 "a word's glyph run past the arena")
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (wd-set words 0 (wf-tlen) 40)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 4 "a word's text run past the arena")
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (ln-set lines 0 (lf-wcount) 3)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 5 "a line's word run past the arena")
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (ow-set ocrwords 0 (of-tlen) 50)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 6 "an OCR word's text run past the arena")
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (ow-set ocrwords 0 (of-altcount) 3)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 7 "an alternative count that is not the chain")
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (wd-set words 0 (wf-line) 4)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 8 "a word in a line that is not there")
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (gl-set glyphs 0 (gf-word) 5)
+    (assert-eq (ev-check glyphs words lines paths images components ocrwords alts etext) 9 "a glyph in a word that is not there")))
+
+(deftest test-golden-page
+  (let [^Cells glyphs (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells paths (new-cells)
+        ^Cells images (new-cells)
+        ^Cells components (new-cells)
+        ^Cells ocrwords (new-cells)
+        ^Cells alts (new-cells)
+        ^Cells etext (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)]
+    (et-build glyphs words lines paths images components ocrwords alts etext)
+    (ev-emit compact 0 glyphs words lines paths images components ocrwords alts etext)
+    (ev-emit pretty 1 glyphs words lines paths images components ocrwords alts etext)
+    (assert-text-span compact (test-file "evidence/page1.json") 0 (et-end (test-file "evidence/page1.json")) "compact" 0)
+    (assert-text-span pretty (test-file "evidence/page1.pretty.json") 0 (et-end (test-file "evidence/page1.pretty.json")) "pretty" 0)))
+
+(deftest test-an-empty-evidence-dump
+  (let [^Cells glyphs (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells paths (new-cells)
+        ^Cells images (new-cells)
+        ^Cells components (new-cells)
+        ^Cells ocrwords (new-cells)
+        ^Cells alts (new-cells)
+        ^Cells etext (new-cells)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)]
+    (ev-init glyphs words lines paths images components ocrwords alts etext)
+    (ev-emit compact 0 glyphs words lines paths images components ocrwords alts etext)
+    (ev-emit pretty 1 glyphs words lines paths images components ocrwords alts etext)
+    (assert-text-span compact (test-file "evidence/empty.json") 0 (et-end (test-file "evidence/empty.json")) "compact" 0)
+    (assert-text-span pretty (test-file "evidence/empty.pretty.json") 0 (et-end (test-file "evidence/empty.pretty.json")) "pretty" 0)))

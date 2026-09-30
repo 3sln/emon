@@ -1,0 +1,190 @@
+;; Laws and the row corpus for `emon.pdffilter` (P1.5).
+;;
+;; THE CORPUS is `test/pdf/filters.txt`, which `kin/scripts/pdf-fixtures.py`
+;; writes from PYTHON encoders that share no code with emon (zlib, base64's
+;; ASCII85, and LZW, run-length and PNG/TIFF-predictor encoders written in that
+;; script): each row is a filter, its parameters, an encoded input, and the
+;; status and bytes a decoder must give, damaged inputs included. The same file
+;; is read by all four targets.
+(ns emon.pdffiltertest
+  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               assert-text assert-text-span hex-blob text-blob new-cells
+                               new-text test-file cells-blob assert-cells-hex]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
+                               cells-drop]]
+            [emon.pdffilter :refer [pf-run pf-predict pf-status-emit-name
+                                    pf-hex pf-a85 pf-rl pf-lzw pf-flate
+                                    pf-ok pf-truncated pf-bad-ascii85 pf-bad-lzw
+                                    pf-bad-predictor pf-unsupported
+                                    pf-image-filter pf-f-hex pf-f-a85 pf-f-lzw
+                                    pf-f-flate pf-f-rl pf-f-crypt pf-f-dct]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 ft-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ft-tab [^Blob b ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ft-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (return -1))
+
+(defn ^I32 ft-hex-into [^Blob b ^I32 from ^I32 to ^:mut ^Cells c]
+  (comment "Decode the hex pairs in b[from, to) into c (cleared first); `-` is")
+  (comment "the empty string.")
+  (let [^:mut ^I32 k from]
+    (cells-drop c 0)
+    (if (and (== (- to from) 1) (== (blob-u8 b from) 45))
+      (return 0))
+    (while (< (+ k 1) (+ to 0))
+      (do (cells-push c (+ (* (ft-hexval (blob-u8 b k)) 16)
+                           (ft-hexval (blob-u8 b (+ k 1)))))
+          (set k (+ k 2))))
+    (return (cells-len c))))
+
+(defn ^I32 ft-compare [^Cells out ^Blob b ^I32 from ^I32 to]
+  (comment "-1 when `out` is exactly the hex in b[from, to) (`-` is empty); -2")
+  (comment "for a length difference; else the index of the first differing byte.")
+  (let [^:mut ^I32 n (quot (- to from) 2)
+        ^:mut ^I32 i 0]
+    (if (and (== (- to from) 1) (== (blob-u8 b from) 45)) (set n 0))
+    (if (!= (cells-len out) n) (return -2))
+    (while (< i n)
+      (do (if (!= (cells-at out i)
+                  (+ (* (ft-hexval (blob-u8 b (+ from (* i 2)))) 16)
+                     (ft-hexval (blob-u8 b (+ from (+ (* i 2) 1))))))
+            (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 ft-dec [^Blob b ^I32 from ^I32 to]
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0]
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 ft-filter [^Blob b ^I32 from ^I32 to]
+  (comment "The `pf-filter` code for a filter name, told apart by length.")
+  (let [^I32 n (- to from)]
+    (if (== n 14) (return (pf-f-hex)))
+    (if (== n 13) (return (pf-f-a85)))
+    (if (== n 9) (return (pf-f-lzw)))
+    (if (== n 11) (return (pf-f-flate)))
+    (if (== n 15) (return 5))
+    (return 0)))
+
+(defn ^I32 ft-parm [^Blob b ^I32 from ^I32 to ^I32 key ^I32 dflt]
+  (comment "The value of `key` in `P=1,C=2` parameters (`-` for none): the key is")
+  (comment "named by its first letter and, for C, its fourth (Columns / Colors).")
+  (comment "Keys: 80 Predictor, 67 Columns, 99 Colors, 66 BitsPerComponent,")
+  (comment "69 EarlyChange.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 e 0
+        ^:mut ^I32 eq 0
+        ^:mut ^I32 id 0]
+    (while (< k to)
+      (do (set e k)
+          (while (and (< e to) (!= (blob-u8 b e) 44))
+            (set e (+ e 1)))
+          (set eq k)
+          (while (and (< eq e) (!= (blob-u8 b eq) 61))
+            (set eq (+ eq 1)))
+          (if (< eq e)
+            (do (set id (blob-u8 b k))
+                (if (== id 67)
+                  (if (== (blob-u8 b (+ k 3)) 111) (set id 99)))
+                (if (== id key)
+                  (return (ft-dec b (+ eq 1) e)))))
+          (set k (+ e 1))))
+    (return dflt)))
+
+(defn ^I32 ft-run [^Blob f ^I32 s1 ^I32 s2 ^I32 s3 ^I32 s4 ^:mut ^Cells inp
+                   ^:mut ^Cells out ^:mut ^Cells tmp ^:mut ^Cells st]
+  (comment "Run the row whose filter is f[s1+1, s2), parameters f[s2+1, s3) and")
+  (comment "input hex f[s3+1, s4): the filter, then a predictor when /Predictor")
+  (comment "says so. Answers the first non-zero status, with out filled.")
+  (let [^I32 code (ft-filter f (+ s1 1) s2)
+        ^I32 pred (ft-parm f (+ s2 1) s3 80 1)
+        ^I32 early (ft-parm f (+ s2 1) s3 69 1)
+        ^:mut ^I32 status 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 p 0]
+    (set n (ft-hex-into f (+ s3 1) s4 inp))
+    (cells-drop out 0)
+    (cells-drop tmp 0)
+    (if (> pred 1)
+      (do (set status (pf-run code (cells-blob inp) 0 n tmp st early))
+          (set p (pf-predict tmp 0 (cells-len tmp) out pred
+                             (ft-parm f (+ s2 1) s3 99 1)
+                             (ft-parm f (+ s2 1) s3 66 8)
+                             (ft-parm f (+ s2 1) s3 67 1)))
+          (if (== status 0) (set status p)))
+      (set status (pf-run code (cells-blob inp) 0 n out st early)))
+    (return status)))
+
+(deftest test-every-row-of-the-filter-corpus
+  (let [^Blob f (test-file "pdf/filters.txt")
+        ^Cells inp (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells st (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 s5 0
+        ^:mut ^I32 status 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s1 (ft-tab f pos e))
+                (set s2 (ft-tab f (+ s1 1) e))
+                (set s3 (ft-tab f (+ s2 1) e))
+                (set s4 (ft-tab f (+ s3 1) e))
+                (set s5 (ft-tab f (+ s4 1) e))
+                (set status (ft-run f s1 s2 s3 s4 inp out tmp st))
+                (let [^Text t (new-text)]
+                  (pf-status-emit-name t status)
+                  (assert-text-span t f (+ s4 1) s5 "status" line))
+                (assert-eq-at (ft-compare out f (+ s5 1) e) -1 "output" line)))
+          (set pos (+ e 1))))
+    (assert-that (> rows 60) "the corpus was read")))
+
+(deftest test-filters-append-to-what-is-there
+  (let [^Cells out (new-cells)]
+    (cells-push out 33)
+    (assert-eq (pf-hex (text-blob "4849>") 0 5 out) 0 "status")
+    (assert-cells-hex out "214849" "appended after the existing byte")))
+
+(deftest test-the-input-range-is-respected
+  (let [^Cells out (new-cells)]
+    (assert-eq (pf-a85 (text-blob "xx87cURDZ~>xx") 2 11 out) 0 "a85 status")
+    (assert-cells-hex out "48656c6c6f" "a85 range")))
+
+(deftest test-crypt-is-the-identity-and-image-filters-are-declined
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (assert-eq (pf-run (pf-f-crypt) (hex-blob "0102") 0 2 out st 1) 0 "crypt")
+    (assert-cells-hex out "0102" "unchanged")
+    (assert-eq (pf-run (pf-f-dct) (hex-blob "ffd8") 0 2 out st 1) (pf-image-filter) "dct declined")
+    (assert-eq (cells-len out) 2 "out untouched by an image filter")
+    (assert-eq (pf-run 99 (hex-blob "00") 0 1 out st 1) (pf-unsupported) "unknown")))

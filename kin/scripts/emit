@@ -1,0 +1,95 @@
+#!/usr/bin/env bb
+;; Write EVERY source's modules into gen/.   kin/scripts/emit
+;;
+;; ALL OF THEM, ALWAYS, and not one named on the command line. A namespace
+;; that references another is resolved against what that other EXPORTS, and a
+;; generated namespace's exports only exist once it has been analysed -- so
+;; `emit-all!` walks the dependency DAG and emits in order. Emitting one file
+;; alone cannot see a sibling's exports and reports `no vocabulary emon.cmap`,
+;; which is true and unhelpful.
+;;
+;; It is also ATOMIC over the whole batch: every source and every target, or
+;; nothing. A partial tree is a state nobody designed and no gate describes.
+;;
+;; AND THEN LET GOFMT FORMAT THE GO, which is a decision rather than a
+;; convenience. `gofmt` spaces a binary operator by the DEPTH of the
+;; expression it sits in, and reproducing go/printer's heuristic inside a code
+;; generator is a job for a formatter, not for a vocabulary. kin emits Go that
+;; is correct and close; gofmt makes it canonical. Safe because gofmt is
+;; deterministic and idempotent, so the committed output is still a pure
+;; function of the sources and the drift gate still means what it says.
+;;
+;; ---------------------------------------------------------------------------
+;;
+;; AND IT SKIPS THE WHOLE BATCH WHEN NOTHING THAT FEEDS IT HAS CHANGED, which
+;; is worth more to this repository than it looks. EVERY GATE RUNS THIS FIRST
+;; -- and in nome the work was 83 to 142 seconds, so a seven-gate sweep
+;; spent most of its time writing bytes it had just written. The
+;; compilers were never the cost (D565).
+;;
+;; THE STAMP IS OVER THE INPUTS AND NOT OVER `gen/`, because `gen/` being
+;; right is `bb drift`'s question and this is not the place to answer it
+;; twice. What feeds an emission is: every `kin/*.kin`, every vocabulary
+;; under `kin/src`, the kin library itself, this file, and `gofmt` -- whose
+;; VERSION is in the stamp because a formatter upgrade changes the output
+;; with no source changing, and a cache that missed that would hide it from
+;; drift as well.
+;;
+;; AND THE COUNT OF WHAT WAS WRITTEN IS IN IT TOO, so a `gen/` somebody
+;; deleted re-emits rather than being declared current. A hand-EDITED `gen/`
+;; is still drift's to report; a MISSING one would otherwise fail every gate
+;; at once with an error about a package that is not in std.
+;;
+;; A HIT COSTS 0.3s, WHICH IS THE REQUIRES. Loading `kin.project` and
+;; `emon.project` is measured at 0.30s and emitting at 83, so the check does
+;; not need to dodge the requires to be worth having -- and dodging them
+;; meant resolving vars by name, which is cleverness for 0.3 of a second.
+;; See D566.
+(require '[babashka.fs :as fs] '[clojure.string :as str]
+         '[babashka.process :refer [shell]]
+         '[kin.project :as kp] '[emon.project :as p])
+
+(def stamp-file ".emit-stamp")
+
+(defn- inputs []
+  (sort (map str (concat (fs/glob "kin" "*.kin")
+                         (fs/glob "kin/src" "**.cljc")
+                         (fs/glob "kin/src" "**.clj")
+                         (fs/glob "../kin/src" "**.cljc")
+                         (fs/glob "../kin/src" "**.clj")
+                         [(fs/path "kin/scripts/emit")]))))
+
+(defn- gofmt-version []
+  (try (:out (shell {:continue true :out :string :err :string}
+                    "gofmt" "-h"))
+       (catch Exception _ ""))
+  (try (str/trim (:out (shell {:continue true :out :string :err :string}
+                              "go" "version")))
+       (catch Exception _ "")))
+
+(defn- emitted-count []
+  (count (filter #(.isFile (fs/file %)) (file-seq (fs/file "gen")))))
+
+(defn- input-stamp []
+  (str (hash (mapv (fn [f] [f (hash (slurp f))]) (inputs)))
+       ":" (hash (gofmt-version))))
+
+(let [want (input-stamp)
+      have (when (fs/exists? stamp-file) (str/trim (slurp stamp-file)))
+      [old-stamp old-count] (when have (str/split have #" " 2))]
+  (if (and old-stamp
+           (= old-stamp want)
+           (= old-count (str (emitted-count))))
+    (println "  ok      gen/ is current -- nothing that feeds it has changed")
+    (do
+      (let [{:keys [order emitted]} (kp/emit-all! @p/project)]
+        (doseq [label order
+                r (get emitted label)]
+          (println (format "  %-7s %s" (name (:target r))
+                           (or (:path r) "(nowhere)"))))
+        (shell {:continue true :out :string :err :string} "gofmt" "-w" "gen/go")
+        ;; WRITTEN LAST AND ATOMICALLY. A stamp written before the work would
+        ;; declare a half-emitted tree current if anything interrupted it.
+        (let [tmp (str stamp-file ".tmp")]
+          (spit tmp (str want " " (emitted-count)))
+          (fs/move tmp stamp-file {:replace-existing true}))))))

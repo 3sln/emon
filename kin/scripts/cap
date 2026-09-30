@@ -1,0 +1,90 @@
+#!/bin/sh
+# Run a command with a WALL-CLOCK CAP, because a gate that hangs is worse than a
+# gate that fails.
+#
+#     kin/scripts/cap SECONDS command [args...]
+#
+# WHY THIS EXISTS. A `dotnet` arm of `bb embedders` hung on the cascade corpus and
+# ran for TWENTY-FIVE HOURS at a full core and seven gigabytes, and nothing
+# noticed: the gate's own shell sat in `wait` the whole time. Two things follow
+# from that and neither is about C#.
+#
+# A GATE THAT NEVER EXITS NEVER CLEANS UP. Every gate here does its work in a
+# `mktemp -d` and removes it with `trap ... EXIT`, and a trap fires on exit --
+# so a process that does not exit leaks its directory for as long as it lives.
+# Twenty-seven of them had accumulated, at 263 megabytes.
+#
+# AND A HANG IS INVISIBLE WHERE A FAILURE IS NOT. Every other way a gate can go
+# wrong ends with a non-zero status and a line of output. A hang ends with
+# nothing, so the only thing that reports it is a person looking at `ps`.
+#
+# THERE IS NO `timeout(1)` ON THIS MACHINE, and that is why this is a script
+# rather than a one-word prefix: GNU coreutils' `timeout` is not in a macOS base
+# system and `gtimeout` is not installed. So the cap is a watchdog subshell, which
+# is portable POSIX shell and needs nothing installed.
+#
+# SIGTERM FIRST AND SIGKILL SECOND, which is the part that fixes the leak: a gate
+# killed with SIGTERM runs its `trap ... EXIT` and removes its directory, and one
+# killed with SIGKILL cannot. The two seconds between them are for the trap.
+#
+# IT REPORTS 124, which is what `timeout(1)` uses for the same thing -- so a
+# caller that grows a special case for it later will not have to choose a number.
+set -e
+
+if [ "$#" -lt 2 ]; then
+  echo "usage: kin/scripts/cap SECONDS command [args...]" >&2
+  exit 2
+fi
+secs=$1
+shift
+
+# THE JOB GETS A PROCESS GROUP OF ITS OWN, and the watchdog signals the GROUP.
+# That is the difference between capping a command and capping what it started:
+# `go run` builds a binary and runs it as a CHILD, so signalling `go run` alone
+# leaves the binary running -- and one did, for eleven and a half hours at forty
+# per cent of a core, after its parent was killed. A `dotnet out/x.dll` is its
+# own process and would not have needed this; everything that compiles and then
+# execs does.
+#
+# `set -m` IS POSIX JOB CONTROL, which in a non-interactive shell is what puts a
+# background job in its own group -- `setsid(1)` would say it more plainly and is
+# not on this machine either. It is switched off again at once so the watchdog
+# below stays in THIS shell's group and is not a target of its own signal.
+set -m
+"$@" &
+job=$!
+set +m
+
+# THE WATCHDOG POLLS RATHER THAN SLEEPING THE WHOLE CAP, so that a command which
+# finishes early does not leave a `sleep 600` behind it: `kill -0` asks whether
+# the job is still there without signalling it.
+(
+  waited=0
+  while [ "$waited" -lt "$secs" ]; do
+    kill -0 "$job" 2>/dev/null || exit 0
+    sleep 1
+    waited=$((waited + 1))
+  done
+  # A NEGATIVE PID IS A PROCESS GROUP, so these reach every process the job
+  # started and not only the job itself.
+  kill -TERM -- "-$job" 2>/dev/null || true
+  sleep 2
+  kill -KILL -- "-$job" 2>/dev/null || true
+) &
+watchdog=$!
+
+# `set -e` WOULD ABORT ON A FAILING JOB, and the status is the thing this has to
+# pass through -- so the wait is guarded and the status taken by hand.
+rc=0
+wait "$job" || rc=$?
+kill "$watchdog" 2>/dev/null || true
+wait "$watchdog" 2>/dev/null || true
+
+# A STATUS ABOVE 128 IS A SIGNAL, which for a capped command is the watchdog's.
+# Reporting it as the cap rather than as the command's own failure is the point:
+# `FAIL` with no explanation is what a hang used to look like.
+if [ "$rc" -gt 128 ]; then
+  echo "  FAIL capped after ${secs}s: $*" >&2
+  exit 124
+fi
+exit "$rc"

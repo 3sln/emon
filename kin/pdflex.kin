@@ -1,0 +1,1174 @@
+;; The PDF lexer and object parser (P1.4). emon's own module (D039), written
+;; from ISO 32000-1 sections 7.2 (lexical conventions) and 7.3 (objects).
+;;
+;; WHAT IT IS. `(pl-init ar)` makes an empty ARENA; `(pl-seek ar pos end)` says
+;; where in a `Blob` to read; `(pl-parse src ar)` parses ONE object there and
+;; answers its HANDLE (0 when it failed, with `(pl-err ar)` naming why);
+;; `(pl-parse-indirect src ar pos)` parses `N G obj ... endobj`, stream
+;; included. `(pl-dump t ar h)` writes an object as text, which is what the
+;; row corpus (`test/pdf/objects.txt`) compares.
+;;
+;; ONE ARENA, ONE `Cells`. kin cannot allocate, and a parser needs three kinds
+;; of storage -- object records, the bytes of names and strings, and a place to
+;; keep its own position -- so all three live in one `Cells`, `ar`, and a
+;; HANDLE is an index into it. The first 464 cells are a header (the parser's
+;; state, the name-intern buckets, the ids of the well-known names); every
+;; object after it is a six-cell RECORD
+;;
+;;     kind  a  b  c  next  d
+;;
+;; with the meaning of `a b c d` per kind in `pl-kind` below. Containers are
+;; linked lists (`a` first child, `next` sibling, `d` last child, `b` count):
+;; a dictionary is an array of alternating key, value. Bytes of strings and
+;; name entries are pushed at the tail WHEREVER the parser is; nothing relies
+;; on records being contiguous, only on each handle staying put.
+;;
+;; NAMES ARE INTERNED: a name object's `a` is the ENTRY of its decoded bytes
+;; (`#20` already turned into a space), and two names are equal exactly when
+;; their entries are. kin has no string literals, so the names the code
+;; compares against (`/Type`, `/Length`) are interned first, from the
+;; generated `emon.pdfnames`, in a fixed order: `(pn-type)` is the id of
+;; `/Type`, and `(pl-wk ar (pn-type))` is its entry in THIS arena.
+;;
+;; TOLERANCE, WITH A RECORD OF IT. Real PDFs are damaged (SPEC 7.4, D030) and
+;; a reader that refuses them reads nothing. Where the intent is unambiguous
+;; the parser carries on and sets a bit in `(pl-warn ar)`: a container closed
+;; by `endobj`, a junk token where a dictionary key should be, a stream whose
+;; `/Length` is wrong (the bytes are found by scanning for `endstream`), a
+;; missing `endobj`. Where it is not, it fails with a `pl-status`: the FIRST
+;; error is kept.
+;;
+;; NUMBERS are integers (saturating at 2^31-1) and reals held as a signed
+;; mantissa of at most nine digits and a count of fractional digits: there are
+;; no floats (D009). `(pl-num-cp ar h)` converts either to centipoints.
+;;
+;; LIMITS: objects are bounded by `limit-of` OBJECTS (a breach never returns);
+;; container nesting by 128, a `nesting-too-deep` status.
+(ns emon.pdflex
+  (:require [emon.lang :refer [I32 Blob Cells Text defenum emit-ascii]]
+            [emon.pdfsrc :refer [ps-len ps-u8]]
+            [emon.port :refer [cells-len cells-at cells-set
+                               cells-push cells-drop limit-of limit-breach
+                               text-cp text-i32]]
+            [emon.pdfnames :refer [pn-span-count pn-span-at pn-chars-at
+                                   pk-span-count pk-span-at pk-chars-at
+                                   pn-length]]
+            [kin.lang :refer [defn defconst declarefn return let set while if
+                              comment do + - * < > <= >= == != and or quot rem
+                              bit-and]]))
+
+;; `pl-value` and the two container parsers call each other.
+(declarefn pl-value)
+
+(defenum ^:pub pl-status
+  [[pl-ok 0 "ok"]
+   [pl-eof 1 "eof"]
+   [pl-bad-token 2 "bad-token"]
+   [pl-unterminated-string 3 "unterminated-string"]
+   [pl-unterminated-array 4 "unterminated-array"]
+   [pl-unterminated-dict 5 "unterminated-dict"]
+   [pl-nesting-too-deep 6 "nesting-too-deep"]
+   [pl-bad-object-header 7 "bad-object-header"]
+   [pl-bad-stream 8 "bad-stream"]])
+
+(defenum ^:pub pl-kind
+  [[pl-k-null 0 "null"]
+   [pl-k-bool 1 "bool"]
+   [pl-k-int 2 "int"]
+   [pl-k-real 3 "real"]
+   [pl-k-name 4 "name"]
+   [pl-k-string 5 "string"]
+   [pl-k-array 6 "array"]
+   [pl-k-dict 7 "dict"]
+   [pl-k-stream 8 "stream"]
+   [pl-k-ref 9 "ref"]
+   [pl-k-keyword 10 "keyword"]])
+
+;; Warning bits, `(pl-warn ar)`.
+(defenum ^:pub pl-warning
+  [[pl-w-unterminated 1 "container closed by a keyword"]
+   [pl-w-junk 2 "junk token skipped"]
+   [pl-w-length 4 "stream length wrong or unusable"]
+   [pl-w-no-endstream 8 "no endstream"]
+   [pl-w-no-endobj 16 "no endobj"]
+   [pl-w-stream-eol 32 "stream keyword not followed by an end of line"]])
+
+;; ------------------------------------------------------------ the header
+
+(defconst ^I32 A_POS 0)      ;; where the next token starts
+(defconst ^I32 A_END 1)      ;; end of the readable span of the Blob
+(defconst ^I32 A_ERR 2)      ;; the first error, a pl-status
+(defconst ^I32 A_WARN 3)     ;; warning bits
+(defconst ^I32 A_NOBJ 4)     ;; object records made
+(defconst ^I32 A_TK 5)       ;; the last token: kind
+(defconst ^I32 A_TS 6)       ;; ... where it started
+(defconst ^I32 A_TA 7)       ;; ... and its values
+(defconst ^I32 A_TB 8)
+(defconst ^I32 A_TC 9)
+(defconst ^I32 A_DEPTH 10)   ;; container nesting now
+(defconst ^I32 A_OBJNUM 11)  ;; of the last indirect object
+(defconst ^I32 A_OBJGEN 12)
+(defconst ^I32 A_HASH 13)    ;; intern in progress: hash so far
+(defconst ^I32 A_ISAVE 14)   ;; ... and where its entry starts
+(defconst ^I32 A_OBJLIM 15)  ;; limit-of OBJECTS, read once
+(defconst ^I32 A_HEADS 16)   ;; 256 intern buckets
+(defconst ^I32 A_WK 272)     ;; 192 entries of the well-known names
+(defconst ^I32 A_FIRST 464)  ;; the first record
+
+(defconst ^I32 R_KIND 0)
+(defconst ^I32 R_A 1)
+(defconst ^I32 R_B 2)
+(defconst ^I32 R_C 3)
+(defconst ^I32 R_NEXT 4)
+(defconst ^I32 R_D 5)
+
+;; Token kinds.
+(defconst ^I32 T_EOF 0)
+(defconst ^I32 T_INT 1)
+(defconst ^I32 T_REAL 2)
+(defconst ^I32 T_NAME 3)
+(defconst ^I32 T_STR 4)
+(defconst ^I32 T_AOPEN 5)
+(defconst ^I32 T_ACLOSE 6)
+(defconst ^I32 T_DOPEN 7)
+(defconst ^I32 T_DCLOSE 8)
+(defconst ^I32 T_BOPEN 9)
+(defconst ^I32 T_BCLOSE 10)
+(defconst ^I32 T_KW 11)
+(defconst ^I32 T_ERR 12)
+
+(defconst ^I32 MAX_NEST 128)
+
+;; Keyword ids, which are `emon.pdfnames`' `pk` codes.
+(defconst ^I32 K_TRUE 1)
+(defconst ^I32 K_FALSE 2)
+(defconst ^I32 K_NULL 3)
+(defconst ^I32 K_OBJ 4)
+(defconst ^I32 K_ENDOBJ 5)
+(defconst ^I32 K_STREAM 6)
+(defconst ^I32 K_ENDSTREAM 7)
+(defconst ^I32 K_R 8)
+
+;; ------------------------------------------------------------- arena
+
+(defn ^:pub ^I32 pl-token-eof [] (return 0))
+(defn ^:pub ^I32 pl-token-int [] (return 1))
+(defn ^:pub ^I32 pl-token-real [] (return 2))
+(defn ^:pub ^I32 pl-token-name [] (return 3))
+(defn ^:pub ^I32 pl-token-string [] (return 4))
+(defn ^:pub ^I32 pl-token-aopen [] (return 5))
+(defn ^:pub ^I32 pl-token-aclose [] (return 6))
+(defn ^:pub ^I32 pl-token-dopen [] (return 7))
+(defn ^:pub ^I32 pl-token-dclose [] (return 8))
+(defn ^:pub ^I32 pl-token-bopen [] (return 9))
+(defn ^:pub ^I32 pl-token-bclose [] (return 10))
+(defn ^:pub ^I32 pl-token-keyword [] (return 11))
+(defn ^:pub ^I32 pl-token-error [] (return 12))
+
+(defn ^I32 pl-ib [^:mut ^Cells ar ^I32 b]
+  (comment "Push one byte of the name being interned and fold it into the hash.")
+  (cells-push ar b)
+  (let [^I32 h (cells-at ar A_HASH)]
+    (cells-set ar A_HASH (bit-and (+ (* h 31) (+ b 1)) 1048575))
+    (return 0)))
+
+(defn ^I32 pl-intern-begin [^:mut ^Cells ar]
+  (comment "An entry is [next, length, bytes...]; nothing else may be pushed")
+  (comment "between begin and end.")
+  (cells-set ar A_ISAVE (cells-len ar))
+  (cells-set ar A_HASH 0)
+  (cells-push ar 0)
+  (cells-push ar 0)
+  (return 0))
+
+(defn ^I32 pl-intern-end [^:mut ^Cells ar]
+  (comment "Answer the ENTRY of the name just pushed: an earlier identical one")
+  (comment "when there is one (the new bytes are dropped), else this one.")
+  (let [^I32 e (cells-at ar A_ISAVE)
+        ^I32 n (- (cells-len ar) (+ e 2))
+        ^I32 bucket (+ A_HEADS (bit-and (cells-at ar A_HASH) 255))
+        ^:mut ^I32 p (cells-at ar bucket)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 same 0
+        ^I32 head (cells-at ar bucket)]
+    (while (!= p 0)
+      (do (if (== (cells-at ar (+ p 1)) n)
+            (do (set k 0)
+                (set same 1)
+                (while (and (== same 1) (< k n))
+                  (do (if (!= (cells-at ar (+ p (+ 2 k)))
+                              (cells-at ar (+ e (+ 2 k))))
+                        (set same 0))
+                      (set k (+ k 1))))
+                (if (== same 1)
+                  (do (cells-drop ar e)
+                      (return p)))))
+          (set p (cells-at ar p))))
+    (cells-set ar (+ e 1) n)
+    (cells-set ar e head)
+    (cells-set ar bucket e)
+    (return e)))
+
+(defn ^:pub ^I32 pl-init [^:mut ^Cells ar]
+  (comment "An empty arena with the well-known names interned.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 start 0
+        ^:mut ^I32 ent 0
+        ^:mut ^I32 ln 0]
+    (cells-drop ar 0)
+    (while (< i A_FIRST)
+      (do (cells-push ar 0)
+          (set i (+ i 1))))
+    (cells-set ar A_OBJLIM (limit-of 3))
+    (set i 0)
+    (while (< i (pn-span-count 0))
+      (do (set start (pn-span-at 0 i 0))
+          (set ln (pn-span-at 0 i 1))
+          (pl-intern-begin ar)
+          (set k 0)
+          (while (< k ln)
+            (do (pl-ib ar (pn-chars-at 0 (+ start k)))
+                (set k (+ k 1))))
+          (set ent (pl-intern-end ar))
+          (cells-set ar (+ A_WK i) ent)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 pl-clamp [^I32 pos ^I32 end]
+  (if (< pos 0) (return end))
+  (if (> pos end) (return end))
+  (return pos))
+
+(defn ^:pub ^I32 pl-seek [^:mut ^Cells ar ^I32 pos ^I32 end]
+  (comment "Read from pos, stopping at end. Clears the error but not the")
+  (comment "warnings. A pos outside [0, end] (a damaged offset) reads as the")
+  (comment "end: end of input, never an out-of-range read.")
+  (cells-set ar A_POS (pl-clamp pos end))
+  (cells-set ar A_END end)
+  (cells-set ar A_ERR 0)
+  (cells-set ar A_DEPTH 0)
+  (return 0))
+
+(defn ^:pub ^I32 pl-pos [^Cells ar] (return (cells-at ar A_POS)))
+(defn ^:pub ^I32 pl-err [^Cells ar] (return (cells-at ar A_ERR)))
+(defn ^:pub ^I32 pl-warn [^Cells ar] (return (cells-at ar A_WARN)))
+(defn ^:pub ^I32 pl-clear-warn [^:mut ^Cells ar]
+  (cells-set ar A_WARN 0)
+  (return 0))
+(defn ^:pub ^I32 pl-objnum [^Cells ar] (return (cells-at ar A_OBJNUM)))
+(defn ^:pub ^I32 pl-objgen [^Cells ar] (return (cells-at ar A_OBJGEN)))
+(defn ^:pub ^I32 pl-wk [^Cells ar ^I32 id]
+  (comment "The entry of a well-known name (`emon.pdfnames`' `pn` id).")
+  (return (cells-at ar (+ A_WK id))))
+
+(defn ^I32 pl-fail [^:mut ^Cells ar ^I32 code]
+  (comment "Latch the FIRST error; answer 0, the handle of nothing.")
+  (if (== (cells-at ar A_ERR) 0)
+    (cells-set ar A_ERR code))
+  (return 0))
+
+(defn ^I32 pl-warn-set [^:mut ^Cells ar ^I32 bit]
+  (let [^I32 w (cells-at ar A_WARN)]
+    (if (== (bit-and (quot w bit) 1) 0)
+      (cells-set ar A_WARN (+ w bit)))
+    (return 0)))
+
+(defn ^I32 pl-new [^:mut ^Cells ar ^I32 kind ^I32 a ^I32 b ^I32 c]
+  (comment "Append a record and answer its handle, under the OBJECTS limit.")
+  (let [^I32 n (+ (cells-at ar A_NOBJ) 1)
+        ^I32 h (cells-len ar)]
+    (if (> n (cells-at ar A_OBJLIM))
+      (limit-breach 3 n))
+    (cells-set ar A_NOBJ n)
+    (cells-push ar kind)
+    (cells-push ar a)
+    (cells-push ar b)
+    (cells-push ar c)
+    (cells-push ar 0)
+    (cells-push ar 0)
+    (return h)))
+
+(defn ^I32 pl-add-child [^:mut ^Cells ar ^I32 cont ^I32 child]
+  (comment "Append child as the last child of the array or dictionary `cont`.")
+  (let [^I32 last (cells-at ar (+ cont R_D))
+        ^I32 n (cells-at ar (+ cont R_B))]
+    (if (== last 0)
+      (cells-set ar (+ cont R_A) child)
+      (cells-set ar (+ last R_NEXT) child))
+    (cells-set ar (+ cont R_D) child)
+    (cells-set ar (+ cont R_B) (+ n 1))
+    (return 0)))
+
+;; ------------------------------------------------ builders for other layers
+;;
+;; `emon.pdfdoc` writes its own small records into the arena (the plan of a
+;; stream's filter chain), so the record builders are public.
+
+(defn ^:pub ^I32 pl-make-array [^:mut ^Cells ar]
+  (comment "A new empty array; answers its handle.")
+  (return (pl-new ar 6 0 0 0)))
+
+(defn ^:pub ^I32 pl-make-int [^:mut ^Cells ar ^I32 v]
+  (comment "A new integer object.")
+  (return (pl-new ar 2 v 0 0)))
+
+(defn ^:pub ^I32 pl-append [^:mut ^Cells ar ^I32 arr ^I32 child]
+  (comment "Append `child` to the array `arr`.")
+  (return (pl-add-child ar arr child)))
+
+(defn ^:pub ^I32 pl-append-int [^:mut ^Cells ar ^I32 arr ^I32 v]
+  (comment "Append a new integer object to the array `arr`.")
+  (let [^I32 h (pl-new ar 2 v 0 0)]
+    (return (pl-add-child ar arr h))))
+
+(defn ^:pub ^I32 pl-set-int [^:mut ^Cells ar ^I32 h ^I32 v]
+  (comment "Change the value of an integer object.")
+  (cells-set ar (+ h R_A) v)
+  (return 0))
+
+;; ---------------------------------------------------------- accessors
+
+(defn ^:pub ^I32 pl-kind-of [^Cells ar ^I32 h] (return (cells-at ar (+ h R_KIND))))
+(defn ^:pub ^I32 pl-next [^Cells ar ^I32 h] (return (cells-at ar (+ h R_NEXT))))
+(defn ^:pub ^I32 pl-first [^Cells ar ^I32 h]
+  (comment "First child of an array or dictionary, 0 if none.")
+  (return (cells-at ar (+ h R_A))))
+(defn ^:pub ^I32 pl-count [^Cells ar ^I32 h]
+  (comment "Children of an array; for a dictionary, keys plus values.")
+  (return (cells-at ar (+ h R_B))))
+(defn ^:pub ^I32 pl-int-value [^Cells ar ^I32 h]
+  (comment "An int's value; a bool's 0 or 1; a ref's object number.")
+  (return (cells-at ar (+ h R_A))))
+(defn ^:pub ^I32 pl-ref-gen [^Cells ar ^I32 h] (return (cells-at ar (+ h R_B))))
+(defn ^:pub ^I32 pl-name-entry [^Cells ar ^I32 h] (return (cells-at ar (+ h R_A))))
+(defn ^:pub ^I32 pl-name-len [^Cells ar ^I32 h] (return (cells-at ar (+ h R_B))))
+(defn ^:pub ^I32 pl-name-byte [^Cells ar ^I32 h ^I32 i]
+  (return (cells-at ar (+ (cells-at ar (+ h R_A)) (+ 2 i)))))
+(defn ^:pub ^I32 pl-str-len [^Cells ar ^I32 h] (return (cells-at ar (+ h R_B))))
+(defn ^:pub ^I32 pl-str-byte [^Cells ar ^I32 h ^I32 i]
+  (return (cells-at ar (+ (cells-at ar (+ h R_A)) i))))
+(defn ^:pub ^I32 pl-stream-dict [^Cells ar ^I32 h] (return (cells-at ar (+ h R_A))))
+(defn ^:pub ^I32 pl-stream-start [^Cells ar ^I32 h] (return (cells-at ar (+ h R_B))))
+(defn ^:pub ^I32 pl-stream-len [^Cells ar ^I32 h] (return (cells-at ar (+ h R_C))))
+(defn ^:pub ^I32 pl-stream-flags [^Cells ar ^I32 h]
+  (comment "1: /Length was wrong or missing and the end was found by scanning;")
+  (comment "2: /Length is an indirect reference the parser could not resolve,")
+  (comment "so the end was found by scanning (the document layer may override).")
+  (return (cells-at ar (+ h R_D))))
+(defn ^:pub ^I32 pl-stream-set-len [^:mut ^Cells ar ^I32 h ^I32 ln]
+  (cells-set ar (+ h R_C) ln)
+  (cells-set ar (+ h R_D) 0)
+  (return 0))
+(defn ^:pub ^I32 pl-kw-id [^Cells ar ^I32 h] (return (cells-at ar (+ h R_C))))
+
+(defn ^:pub ^I32 pl-name-is [^Cells ar ^I32 h ^I32 id]
+  (comment "1 when h is the name whose well-known id is `id` (`(pn-type)`).")
+  (if (!= (cells-at ar (+ h R_KIND)) 4) (return 0))
+  (if (== (cells-at ar (+ h R_A)) (cells-at ar (+ A_WK id)))
+    (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 pl-dict-find [^Cells ar ^I32 dict ^I32 entry]
+  (comment "The value under the key whose name ENTRY is given, or 0. A key")
+  (comment "that occurs twice answers its LAST value.")
+  (if (!= (cells-at ar (+ dict R_KIND)) 7)
+    (if (!= (cells-at ar (+ dict R_KIND)) 8)
+      (return 0)))
+  (let [^:mut ^I32 d dict
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 found 0]
+    (if (== (cells-at ar (+ dict R_KIND)) 8)
+      (set d (cells-at ar (+ dict R_A))))
+    (set k (cells-at ar (+ d R_A)))
+    (while (!= k 0)
+      (do (set v (cells-at ar (+ k R_NEXT)))
+          (if (== (cells-at ar (+ k R_A)) entry)
+            (set found v))
+          (if (== v 0)
+            (set k 0)
+            (set k (cells-at ar (+ v R_NEXT))))))
+    (return found)))
+
+(defn ^:pub ^I32 pl-dict-get [^Cells ar ^I32 dict ^I32 id]
+  (comment "The value under a well-known key (`(pn-type)`), or 0. A stream")
+  (comment "answers from its dictionary.")
+  (return (pl-dict-find ar dict (cells-at ar (+ A_WK id)))))
+
+(defn ^:pub ^I32 pl-num-cp [^Cells ar ^I32 h]
+  (comment "An int or real as centipoints, rounded half away from zero,")
+  (comment "saturating at +-2^31-1. Anything else is 0.")
+  (let [^I32 kind (cells-at ar (+ h R_KIND))
+        ^I32 a (cells-at ar (+ h R_A))
+        ^I32 sc (cells-at ar (+ h R_B))
+        ^:mut ^I32 m 0
+        ^:mut ^I32 neg 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 rest 0]
+    (if (== kind 2)
+      (do (if (> a 21474836) (return 2147483647))
+          (if (< a -21474836) (return -2147483647))
+          (return (* a 100))))
+    (if (!= kind 3) (return 0))
+    (set m a)
+    (if (< m 0) (do (set neg 1) (set m (- 0 m))))
+    (comment "value = m / 10^sc. Times 100: drop sc-2 digits, rounding on the")
+    (comment "first dropped one.")
+    (set s sc)
+    (while (> s 2)
+      (do (set rest (rem m 10))
+          (set m (quot m 10))
+          (set s (- s 1))
+          (if (== s 2)
+            (if (>= rest 5) (set m (+ m 1))))))
+    (while (< s 2)
+      (do (if (> m 21474836) (set m 21474836))
+          (set m (* m 10))
+          (set s (+ s 1))))
+    (if (== neg 1) (return (- 0 m)))
+    (return m)))
+
+;; ------------------------------------------------------------- bytes
+
+(defn ^:pub ^I32 pl-is-ws [^I32 c]
+  (if (== c 32) (return 1))
+  (if (== c 10) (return 1))
+  (if (== c 13) (return 1))
+  (if (== c 9) (return 1))
+  (if (== c 0) (return 1))
+  (if (== c 12) (return 1))
+  (return 0))
+
+(defn ^I32 pl-is-delim [^I32 c]
+  (comment "( ) < > [ ] { } / %")
+  (if (== c 40) (return 1))
+  (if (== c 41) (return 1))
+  (if (== c 60) (return 1))
+  (if (== c 62) (return 1))
+  (if (== c 91) (return 1))
+  (if (== c 93) (return 1))
+  (if (== c 123) (return 1))
+  (if (== c 125) (return 1))
+  (if (== c 47) (return 1))
+  (if (== c 37) (return 1))
+  (return 0))
+
+(defn ^I32 pl-regular [^I32 c]
+  (if (== (pl-is-ws c) 1) (return 0))
+  (if (== (pl-is-delim c) 1) (return 0))
+  (return 1))
+
+(defn ^I32 pl-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (return -1))
+
+(defn ^:pub ^I32 pl-skip [^Blob src ^I32 from ^I32 end]
+  (comment "The first index >= from that is neither white space nor inside a")
+  (comment "comment (`%` to the end of the line), or end.")
+  (let [^:mut ^I32 p from
+        ^:mut ^I32 c 0]
+    (while (< p end)
+      (do (set c (ps-u8 src p))
+          (if (== (pl-is-ws c) 1)
+            (set p (+ p 1))
+            (if (== c 37)
+              (do (while (and (< p end)
+                              (!= (ps-u8 src p) 10)
+                              (!= (ps-u8 src p) 13))
+                    (set p (+ p 1))))
+              (return p)))))
+    (return p)))
+
+(defn ^:pub ^I32 pl-kw-at [^Blob src ^I32 p ^I32 end ^I32 id]
+  (comment "1 when the bytes of keyword `id` (an `emon.pdfnames` `pk` code)")
+  (comment "are at p. No delimiter check: `endstream` is found inside data.")
+  (let [^I32 start (pk-span-at 0 (- id 1) 0)
+        ^I32 ln (pk-span-at 0 (- id 1) 1)
+        ^:mut ^I32 k 0]
+    (if (> (+ p ln) end) (return 0))
+    (while (< k ln)
+      (do (if (!= (ps-u8 src (+ p k)) (pk-chars-at 0 (+ start k)))
+            (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 pl-kw-id-of [^Blob src ^I32 s ^I32 n]
+  (comment "The `pk` id of the keyword in src[s, s+n), 0 for any other.")
+  (let [^:mut ^I32 row 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 same 0]
+    (while (< row (pk-span-count 0))
+      (do (if (== (pk-span-at 0 row 1) n)
+            (do (set same 1)
+                (set k 0)
+                (while (and (== same 1) (< k n))
+                  (do (if (!= (ps-u8 src (+ s k))
+                              (pk-chars-at 0 (+ (pk-span-at 0 row 0) k)))
+                        (set same 0))
+                      (set k (+ k 1))))
+                (if (== same 1) (return (+ row 1)))))
+          (set row (+ row 1))))
+    (return 0)))
+
+;; -------------------------------------------------------------- lexer
+
+(defn ^:pub ^I32 pl-token-start [^Cells ar] (return (cells-at ar A_TS)))
+(defn ^:pub ^I32 pl-token-a [^Cells ar] (return (cells-at ar A_TA)))
+(defn ^:pub ^I32 pl-token-c [^Cells ar] (return (cells-at ar A_TC)))
+
+(defn ^I32 pl-tok [^:mut ^Cells ar ^I32 kind ^I32 s ^I32 e ^I32 a ^I32 b ^I32 c]
+  (comment "Record a token, advance to its end, answer its kind.")
+  (cells-set ar A_TK kind)
+  (cells-set ar A_TS s)
+  (cells-set ar A_TA a)
+  (cells-set ar A_TB b)
+  (cells-set ar A_TC c)
+  (cells-set ar A_POS e)
+  (return kind))
+
+(defn ^I32 pl-tok-err [^:mut ^Cells ar ^I32 s ^I32 e ^I32 code]
+  (pl-fail ar code)
+  (return (pl-tok ar 12 s e 0 0 0)))
+
+(defn ^I32 pl-lex-number [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+  (comment "A number starting at s, or 0 (nothing consumed) when it is not one.")
+  (comment "Tolerated: several signs (`--5` is -5), `.5`, `5.`, and trailing")
+  (comment "junk (`12abc` is 12 and then `abc`). Integers saturate at 2^31-1;")
+  (comment "a real keeps at most nine significant digits and twelve fractional.")
+  (let [^:mut ^I32 q s
+        ^:mut ^I32 neg 0
+        ^:mut ^I32 iv 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 scale 0
+        ^:mut ^I32 nd 0
+        ^:mut ^I32 dot 0
+        ^:mut ^I32 d 0]
+    (while (and (< q end)
+                (or (== (ps-u8 src q) 43) (== (ps-u8 src q) 45)))
+      (do (if (== (ps-u8 src q) 45) (set neg 1))
+          (set q (+ q 1))))
+    (while (and (< q end) (>= (ps-u8 src q) 48) (<= (ps-u8 src q) 57))
+      (do (set d (- (ps-u8 src q) 48))
+          (if (<= iv 214748363)
+            (set iv (+ (* iv 10) d))
+            (set iv 2147483647))
+          (if (<= m 99999999)
+            (set m (+ (* m 10) d))
+            (set scale -1000))
+          (set nd (+ nd 1))
+          (set q (+ q 1))))
+    (if (and (< q end) (== (ps-u8 src q) 46))
+      (do (set dot 1)
+          (set q (+ q 1))
+          (while (and (< q end) (>= (ps-u8 src q) 48) (<= (ps-u8 src q) 57))
+            (do (set d (- (ps-u8 src q) 48))
+                (if (and (<= m 99999999) (>= scale 0) (< scale 12))
+                  (do (set m (+ (* m 10) d))
+                      (set scale (+ scale 1))))
+                (set nd (+ nd 1))
+                (set q (+ q 1))))))
+    (if (== nd 0) (return 0))
+    (if (== dot 0)
+      (do (if (== neg 1) (set iv (- 0 iv)))
+          (return (pl-tok ar 1 s q iv 0 0))))
+    (comment "An integer part too long for nine digits saturates.")
+    (if (< scale 0)
+      (do (set m 999999999) (set scale 0)))
+    (if (== neg 1) (set m (- 0 m)))
+    (return (pl-tok ar 2 s q m scale 0))))
+
+(defn ^I32 pl-lex-name [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+  (comment "A name; s is the index of the byte AFTER the slash. `#xx` becomes")
+  (comment "a byte when two hex digits follow, else the `#` is kept.")
+  (let [^:mut ^I32 q s
+        ^:mut ^I32 c 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 lo 0]
+    (pl-intern-begin ar)
+    (while (and (< q end) (== (pl-regular (ps-u8 src q)) 1))
+      (do (set c (ps-u8 src q))
+          (set q (+ q 1))
+          (if (and (== c 35) (< (+ q 1) end))
+            (do (set hi (pl-hexval (ps-u8 src q)))
+                (set lo (pl-hexval (ps-u8 src (+ q 1))))
+                (if (and (>= hi 0) (>= lo 0))
+                  (do (set c (+ (* hi 16) lo))
+                      (set q (+ q 2))))))
+          (pl-ib ar c)))
+    (let [^I32 e (pl-intern-end ar)]
+      (return (pl-tok ar 3 (- s 1) q e (cells-at ar (+ e 1)) 0)))))
+
+(defn ^I32 pl-lex-lit [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+  (comment "A literal string; s is the index of the byte AFTER the `(`.")
+  (comment "Escapes \\n \\r \\t \\b \\f \\( \\) \\\\ and \\ddd (one to three octal")
+  (comment "digits, high bits dropped); a backslash before an end of line is a")
+  (comment "continuation; an unknown escape keeps the character. An end of line")
+  (comment "inside the string reads as one LF. Parentheses nest.")
+  (let [^I32 start (cells-len ar)
+        ^:mut ^I32 q s
+        ^:mut ^I32 depth 1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 n 0]
+    (while (< q end)
+      (do (set c (ps-u8 src q))
+          (set q (+ q 1))
+          (if (== c 92)
+            (do (if (>= q end)
+                  (do (pl-tok-err ar (- s 1) end 3) (return 12)))
+                (set c (ps-u8 src q))
+                (set q (+ q 1))
+                (if (== c 110) (cells-push ar 10)
+                  (if (== c 114) (cells-push ar 13)
+                    (if (== c 116) (cells-push ar 9)
+                      (if (== c 98) (cells-push ar 8)
+                        (if (== c 102) (cells-push ar 12)
+                          (if (and (>= c 48) (<= c 55))
+                            (do (set v (- c 48))
+                                (set n 1)
+                                (while (and (< n 3) (< q end)
+                                            (>= (ps-u8 src q) 48)
+                                            (<= (ps-u8 src q) 55))
+                                  (do (set v (+ (* v 8) (- (ps-u8 src q) 48)))
+                                      (set q (+ q 1))
+                                      (set n (+ n 1))))
+                                (cells-push ar (bit-and v 255)))
+                            (if (== c 13)
+                              (do (if (and (< q end) (== (ps-u8 src q) 10))
+                                    (set q (+ q 1))))
+                              (if (== c 10)
+                                (set q (+ q 0))
+                                (cells-push ar c))))))))))
+            (if (== c 40)
+              (do (set depth (+ depth 1))
+                  (cells-push ar 40))
+              (if (== c 41)
+                (do (set depth (- depth 1))
+                    (if (== depth 0)
+                      (return (pl-tok ar 4 (- s 1) q start
+                                      (- (cells-len ar) start) 0)))
+                    (cells-push ar 41))
+                (if (== c 13)
+                  (do (if (and (< q end) (== (ps-u8 src q) 10))
+                        (set q (+ q 1)))
+                      (cells-push ar 10))
+                  (cells-push ar c)))))))
+    (cells-drop ar start)
+    (pl-tok-err ar (- s 1) end 3)
+    (return 12)))
+
+(defn ^I32 pl-lex-hex [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+  (comment "A hex string; s is the index of the byte AFTER the `<`. White space")
+  (comment "and any non-hex byte are ignored; an odd last digit is followed by 0.")
+  (let [^I32 start (cells-len ar)
+        ^:mut ^I32 q s
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 half -1]
+    (while (< q end)
+      (do (set c (ps-u8 src q))
+          (set q (+ q 1))
+          (if (== c 62)
+            (do (if (>= half 0) (cells-push ar (* half 16)))
+                (return (pl-tok ar 4 (- s 1) q start
+                                (- (cells-len ar) start) 1))))
+          (set v (pl-hexval c))
+          (if (>= v 0)
+            (if (< half 0)
+              (set half v)
+              (do (cells-push ar (+ (* half 16) v))
+                  (set half -1))))))
+    (cells-drop ar start)
+    (pl-tok-err ar (- s 1) end 3)
+    (return 12)))
+
+(defn ^:pub ^I32 pl-lex [^Blob src ^:mut ^Cells ar]
+  (comment "The next token: answers its kind (T_*) and leaves its values in the")
+  (comment "header. At the end of input, T_EOF. A lexical error (an unterminated")
+  (comment "string) is T_ERR with the status latched.")
+  (let [^I32 end (cells-at ar A_END)
+        ^I32 p (pl-skip src (cells-at ar A_POS) end)
+        ^:mut ^I32 c 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 t 0]
+    (if (>= p end) (return (pl-tok ar 0 p p 0 0 0)))
+    (set c (ps-u8 src p))
+    (if (== c 47) (return (pl-lex-name src ar (+ p 1) end)))
+    (if (== c 40) (return (pl-lex-lit src ar (+ p 1) end)))
+    (if (== c 91) (return (pl-tok ar 5 p (+ p 1) 0 0 0)))
+    (if (== c 93) (return (pl-tok ar 6 p (+ p 1) 0 0 0)))
+    (if (== c 123) (return (pl-tok ar 9 p (+ p 1) 0 0 0)))
+    (if (== c 125) (return (pl-tok ar 10 p (+ p 1) 0 0 0)))
+    (if (== c 60)
+      (do (if (and (< (+ p 1) end) (== (ps-u8 src (+ p 1)) 60))
+            (return (pl-tok ar 7 p (+ p 2) 0 0 0)))
+          (return (pl-lex-hex src ar (+ p 1) end))))
+    (if (== c 62)
+      (do (if (and (< (+ p 1) end) (== (ps-u8 src (+ p 1)) 62))
+            (return (pl-tok ar 8 p (+ p 2) 0 0 0)))
+          (return (pl-tok-err ar p (+ p 1) 2))))
+    (if (== c 41) (return (pl-tok-err ar p (+ p 1) 2)))
+    (if (or (== c 43) (== c 45) (== c 46)
+            (and (>= c 48) (<= c 57)))
+      (do (set t (pl-lex-number src ar p end))
+          (if (!= t 0) (return t))))
+    (comment "A keyword: the run of regular characters.")
+    (set q p)
+    (while (and (< q end) (== (pl-regular (ps-u8 src q)) 1))
+      (set q (+ q 1)))
+    (return (pl-tok ar 11 p q p (- q p) (pl-kw-id-of src p (- q p))))))
+
+;; ------------------------------------------------------------- parser
+
+(defn ^:pub ^I32 pl-unread [^:mut ^Cells ar]
+  (comment "Put the last token back: the next `pl-lex` reads it again.")
+  (cells-set ar A_POS (cells-at ar A_TS))
+  (return 0))
+
+(defn ^I32 pl-ends-container [^Cells ar ^I32 tk]
+  (comment "1 when the token is one that closes a container the wrong way:")
+  (comment "a dictionary's `>>` inside an array, or `endobj`, `endstream`,")
+  (comment "`stream` or `obj`, which only ever occur outside one.")
+  (if (== tk 8) (return 1))
+  (if (== tk 11)
+    (do (let [^I32 id (cells-at ar A_TC)]
+          (if (or (== id 4) (== id 5))
+            (return 1))
+          (if (or (== id 6) (== id 7))
+            (return 1)))))
+  (return 0))
+
+(defn ^I32 pl-array-step [^Blob src ^:mut ^Cells ar ^I32 arr]
+  (comment "One element of an array: 0 carry on, 1 the array is complete, 2 failed.")
+  (let [^I32 tk (pl-lex src ar)
+        ^:mut ^I32 v 0]
+    (if (== tk 6) (return 1))
+    (if (== tk 0)
+      (do (pl-fail ar 4)
+          (return 2)))
+    (if (== tk 12) (return 2))
+    (if (== (pl-ends-container ar tk) 1)
+      (do (pl-unread ar)
+          (pl-warn-set ar 1)
+          (return 1)))
+    (set v (pl-value src ar tk))
+    (if (== v 0) (return 2))
+    (pl-add-child ar arr v)
+    (return 0)))
+
+(defn ^I32 pl-array [^Blob src ^:mut ^Cells ar]
+  (comment "After `[`: the elements up to `]`. Answers the array, or 0.")
+  (let [^I32 arr (pl-new ar 6 0 0 0)
+        ^:mut ^I32 st 0]
+    (while (== st 0)
+      (set st (pl-array-step src ar arr)))
+    (if (== st 2) (return 0))
+    (return arr)))
+
+(defn ^I32 pl-dict-step [^Blob src ^:mut ^Cells ar ^I32 d]
+  (comment "One key/value pair of a dictionary: 0 carry on, 1 the dictionary is")
+  (comment "complete, 2 failed. A key that is not a name is skipped (with its")
+  (comment "value, if it starts one); a key with no value gets null.")
+  (let [^I32 tk (pl-lex src ar)
+        ^:mut ^I32 tv 0
+        ^:mut ^I32 key 0
+        ^:mut ^I32 nv 0
+        ^:mut ^I32 v 0]
+    (if (== tk 8) (return 1))
+    (if (== tk 0)
+      (do (pl-fail ar 5)
+          (return 2)))
+    (if (== tk 12) (return 2))
+    (if (== (pl-ends-container ar tk) 1)
+      (do (pl-unread ar)
+          (pl-warn-set ar 1)
+          (return 1)))
+    (if (!= tk 3)
+      (do (pl-warn-set ar 2)
+          (if (and (!= tk 6) (!= tk 10))
+            (do (set v (pl-value src ar tk))
+                (if (== v 0) (return 2))))
+          (return 0)))
+    (set key (pl-value src ar tk))
+    (set tv (pl-lex src ar))
+    (if (== tv 8)
+      (do (set nv (pl-new ar 0 0 0 0))
+          (pl-add-child ar d key)
+          (pl-add-child ar d nv)
+          (return 1)))
+    (if (== tv 0)
+      (do (pl-fail ar 5)
+          (return 2)))
+    (if (== tv 12) (return 2))
+    (if (== (pl-ends-container ar tv) 1)
+      (do (pl-unread ar)
+          (pl-warn-set ar 1)
+          (set nv (pl-new ar 0 0 0 0))
+          (pl-add-child ar d key)
+          (pl-add-child ar d nv)
+          (return 1)))
+    (set v (pl-value src ar tv))
+    (if (== v 0) (return 2))
+    (pl-add-child ar d key)
+    (pl-add-child ar d v)
+    (return 0)))
+
+(defn ^I32 pl-dict [^Blob src ^:mut ^Cells ar]
+  (comment "After `<<`: the pairs up to `>>`. Answers the dictionary, or 0.")
+  (let [^I32 d (pl-new ar 7 0 0 0)
+        ^:mut ^I32 st 0]
+    (while (== st 0)
+      (set st (pl-dict-step src ar d)))
+    (if (== st 2) (return 0))
+    (return d)))
+
+(defn ^I32 pl-ref-or-int [^Blob src ^:mut ^Cells ar ^I32 num]
+  (comment "An integer has just been read. `num 0 R` is a reference: look")
+  (comment "ahead two tokens, and only if a digit follows, so a string or a")
+  (comment "dictionary is never lexed twice.")
+  (let [^I32 end (cells-at ar A_END)
+        ^I32 after (cells-at ar A_POS)
+        ^I32 p (pl-skip src after end)
+        ^:mut ^I32 t2 0
+        ^:mut ^I32 t3 0
+        ^:mut ^I32 gen 0]
+    (if (< num 0) (return (pl-new ar 2 num 0 0)))
+    (if (>= p end) (return (pl-new ar 2 num 0 0)))
+    (if (or (< (ps-u8 src p) 48) (> (ps-u8 src p) 57))
+      (return (pl-new ar 2 num 0 0)))
+    (set t2 (pl-lex src ar))
+    (if (== t2 1)
+      (do (set gen (cells-at ar A_TA))
+          (if (>= gen 0)
+            (do (set t3 (pl-lex src ar))
+                (if (and (== t3 11) (== (cells-at ar A_TC) 8))
+                  (return (pl-new ar 9 num gen 0)))))))
+    (cells-set ar A_POS after)
+    (return (pl-new ar 2 num 0 0))))
+
+(defn ^I32 pl-value [^Blob src ^:mut ^Cells ar ^I32 tk]
+  (comment "The object whose first token `tk` has just been lexed, or 0.")
+  (let [^I32 ta (cells-at ar A_TA)
+        ^I32 tb (cells-at ar A_TB)
+        ^I32 tc (cells-at ar A_TC)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 at 0]
+    (if (== tk 0) (return (pl-fail ar 1)))
+    (if (== tk 12) (return 0))
+    (if (== tk 1) (return (pl-ref-or-int src ar ta)))
+    (if (== tk 2) (return (pl-new ar 3 ta tb 0)))
+    (if (== tk 3) (return (pl-new ar 4 ta tb 0)))
+    (if (== tk 4) (return (pl-new ar 5 ta tb tc)))
+    (if (or (== tk 5) (== tk 7))
+      (do (if (>= (cells-at ar A_DEPTH) MAX_NEST)
+            (return (pl-fail ar 6)))
+          (cells-set ar A_DEPTH (+ (cells-at ar A_DEPTH) 1))
+          (if (== tk 5)
+            (set v (pl-array src ar))
+            (set v (pl-dict src ar)))
+          (cells-set ar A_DEPTH (- (cells-at ar A_DEPTH) 1))
+          (return v)))
+    (if (== tk 11)
+      (do (if (== tc K_TRUE) (return (pl-new ar 1 1 0 0)))
+          (if (== tc K_FALSE) (return (pl-new ar 1 0 0 0)))
+          (if (== tc K_NULL) (return (pl-new ar 0 0 0 0)))
+          (comment "Any other keyword is an object of its own (a content-stream")
+          (comment "operator); its bytes are copied into the arena.")
+          (set at (cells-len ar))
+          (set k 0)
+          (while (< k tb)
+            (do (cells-push ar (ps-u8 src (+ ta k)))
+                (set k (+ k 1))))
+          (return (pl-new ar 10 at tb tc))))
+    (return (pl-fail ar 2))))
+
+(defn ^:pub ^I32 pl-parse [^Blob src ^:mut ^Cells ar]
+  (comment "Parse one object at the current position. Answers its handle, or 0")
+  (comment "with `(pl-err ar)` set. A keyword that is not true, false or null")
+  (comment "(an operator, or `endobj`) answers a keyword object, so a content")
+  (comment "stream can be read as operands followed by one.")
+  (cells-set ar A_DEPTH 0)
+  (let [^I32 tk (pl-lex src ar)]
+    (return (pl-value src ar tk))))
+
+;; ---------------------------------------------------- indirect objects
+
+(defn ^I32 pl-find-endstream [^Blob src ^I32 from ^I32 end]
+  (comment "The index of the first `endstream` at or after from, or -1.")
+  (let [^:mut ^I32 i from]
+    (while (< i end)
+      (do (if (== (ps-u8 src i) 101)
+            (if (== (pl-kw-at src i end K_ENDSTREAM) 1)
+              (return i)))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 pl-find-endobj [^Blob src ^I32 from ^I32 end]
+  (let [^:mut ^I32 i from]
+    (while (< i end)
+      (do (if (== (ps-u8 src i) 101)
+            (if (== (pl-kw-at src i end K_ENDOBJ) 1)
+              (return i)))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 pl-scan [^Blob src ^:mut ^Cells ar ^I32 start ^I32 end]
+  (comment "The data length of a stream starting at `start`, found by scanning for")
+  (comment "`endstream` (none: `endobj`, none: the end), with one end of line")
+  (comment "before it dropped. The index after what the scan found is left in the")
+  (comment "header's token slot B for the caller. THE ONE WHOLE-STREAM SCAN: it")
+  (comment "runs only when /Length is wrong or missing, never for a good one.")
+  (let [^:mut ^I32 e (pl-find-endstream src start end)
+        ^:mut ^I32 z 0
+        ^:mut ^I32 after 0]
+    (if (< e 0)
+      (do (pl-warn-set ar 8)
+          (set e (pl-find-endobj src start end))
+          (if (< e 0) (set e end))
+          (set after e))
+      (set after (+ e 9)))
+    (set z e)
+    (if (and (> z start) (== (ps-u8 src (- z 1)) 10))
+      (set z (- z 1)))
+    (if (and (> z start) (== (ps-u8 src (- z 1)) 13))
+      (set z (- z 1)))
+    (cells-set ar A_TB after)
+    (return (- z start))))
+
+(defn ^:pub ^I32 pl-stream-rescan [^Blob src ^:mut ^Cells ar ^I32 sh]
+  (comment "Find a stream's length by scanning, for the caller that could not use")
+  (comment "an indirect /Length: sets the length and marks it scanned (flags 1).")
+  (let [^I32 start (cells-at ar (+ sh R_B))
+        ^I32 dlen (pl-scan src ar start (ps-len src))]
+    (cells-set ar (+ sh R_C) dlen)
+    (cells-set ar (+ sh R_D) 1)
+    (pl-warn-set ar 4)
+    (return dlen)))
+
+(defn ^I32 pl-stream [^Blob src ^:mut ^Cells ar ^I32 dict]
+  (comment "After the `stream` keyword: the data span. The keyword is followed")
+  (comment "by CRLF or LF (a lone CR, and spaces before the end of line, are")
+  (comment "tolerated and noted). A direct /Length is trusted only when")
+  (comment "`endstream` follows the data it names; a wrong or missing one is")
+  (comment "replaced by a scan for `endstream`. An INDIRECT /Length cannot be")
+  (comment "resolved here and is NOT scanned for: the stream is marked (flags 2)")
+  (comment "with length 0 and the document layer resolves the reference, or calls")
+  (comment "`pl-stream-rescan` when that fails. Reading a file does not read")
+  (comment "through every stream.")
+  (let [^I32 end (cells-at ar A_END)
+        ^I32 kw-end (cells-at ar A_POS)
+        ^:mut ^I32 p kw-end
+        ^:mut ^I32 start 0
+        ^:mut ^I32 flags 0
+        ^:mut ^I32 dlen -1
+        ^:mut ^I32 lh 0
+        ^:mut ^I32 lk 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 z 0
+        ^:mut ^I32 sh 0
+        ^:mut ^I32 after 0]
+    (while (and (< p end) (or (== (ps-u8 src p) 32) (== (ps-u8 src p) 9)))
+      (set p (+ p 1)))
+    (if (and (< p end) (== (ps-u8 src p) 13))
+      (do (set p (+ p 1))
+          (if (and (< p end) (== (ps-u8 src p) 10))
+            (set p (+ p 1))
+            (pl-warn-set ar 32)))
+      (if (and (< p end) (== (ps-u8 src p) 10))
+        (set p (+ p 1))
+        (do (set p kw-end)
+            (pl-warn-set ar 32))))
+    (set start p)
+    (set lh (pl-dict-get ar dict (pn-length)))
+    (if (!= lh 0)
+      (do (set lk (cells-at ar (+ lh R_KIND)))
+          (if (== lk 2)
+            (do (set n (cells-at ar (+ lh R_A)))
+                (if (and (>= n 0) (<= n (- end start)))
+                  (do (set z (pl-skip src (+ start n) end))
+                      (if (== (pl-kw-at src z end K_ENDSTREAM) 1)
+                        (do (set dlen n)
+                            (set after (+ z 9))))))))
+          (if (== lk 9)
+            (do (set flags 2)
+                (set dlen 0)
+                (set after start)))))
+    (if (< dlen 0)
+      (do (set flags 1)
+          (pl-warn-set ar 4)
+          (set dlen (pl-scan src ar start end))
+          (set after (cells-at ar A_TB))))
+    (cells-set ar A_POS after)
+    (set sh (pl-new ar 8 dict start dlen))
+    (cells-set ar (+ sh R_D) flags)
+    (return sh)))
+
+(defn ^:pub ^I32 pl-parse-indirect [^Blob src ^:mut ^Cells ar ^I32 pos]
+  (comment "Parse `N G obj <object> [stream ... endstream] endobj` at pos.")
+  (comment "Answers the object (a stream object when there is a stream) and")
+  (comment "leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched")
+  (comment "otherwise. The position after it is `pl-pos`.")
+  (cells-set ar A_POS (pl-clamp pos (cells-at ar A_END)))
+  (cells-set ar A_ERR 0)
+  (cells-set ar A_DEPTH 0)
+  (let [^:mut ^I32 tk (pl-lex src ar)
+        ^:mut ^I32 num 0
+        ^:mut ^I32 gen 0
+        ^:mut ^I32 v 0
+    ]
+    (if (!= tk 1) (return (pl-fail ar 7)))
+    (set num (cells-at ar A_TA))
+    (set tk (pl-lex src ar))
+    (if (!= tk 1) (return (pl-fail ar 7)))
+    (set gen (cells-at ar A_TA))
+    (set tk (pl-lex src ar))
+    (if (or (!= tk 11) (!= (cells-at ar A_TC) K_OBJ))
+      (return (pl-fail ar 7)))
+    (if (or (< num 0) (< gen 0)) (return (pl-fail ar 7)))
+    (cells-set ar A_OBJNUM num)
+    (cells-set ar A_OBJGEN gen)
+    (set tk (pl-lex src ar))
+    (set v (pl-value src ar tk))
+    (if (== v 0) (return 0))
+    (if (== (cells-at ar (+ v R_KIND)) 7)
+      (do (set tk (pl-lex src ar))
+          (if (and (== tk 11) (== (cells-at ar A_TC) K_STREAM))
+            (set v (pl-stream src ar v))
+            (pl-unread ar))))
+    (comment "An indirect-length stream's end is not known yet: the next bytes are")
+    (comment "its data, not an `endobj`.")
+    (if (and (== (cells-at ar (+ v R_KIND)) 8) (== (cells-at ar (+ v R_D)) 2))
+      (return v))
+    (set tk (pl-lex src ar))
+    (if (or (!= tk 11) (!= (cells-at ar A_TC) K_ENDOBJ))
+      (do (pl-warn-set ar 16)
+          (pl-unread ar)))
+    (return v)))
+
+;; ---------------------------------------------------------------- dump
+
+(defn ^I32 pl-hex-digit [^:mut ^Text t ^I32 v]
+  (if (< v 10)
+    (text-cp t (+ 48 v))
+    (text-cp t (+ 87 v)))
+  (return 0))
+
+(defn ^I32 pl-digit-at [^I32 m ^I32 i]
+  (comment "The decimal digit of m at position i from the right (0 is the units).")
+  (let [^:mut ^I32 x m
+        ^:mut ^I32 k 0]
+    (while (< k i)
+      (do (set x (quot x 10))
+          (set k (+ k 1))))
+    (return (rem x 10))))
+
+(defn ^I32 pl-dump-real [^:mut ^Text t ^I32 a ^I32 scale]
+  (comment "mantissa a over 10^scale, as the digits it was written with.")
+  (let [^:mut ^I32 m a
+        ^:mut ^I32 nd 1
+        ^:mut ^I32 x 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 i 0]
+    (if (< m 0)
+      (do (emit-ascii t "-")
+          (set m (- 0 m))))
+    (set x (quot m 10))
+    (while (> x 0)
+      (do (set nd (+ nd 1))
+          (set x (quot x 10))))
+    (set total nd)
+    (if (< total (+ scale 1)) (set total (+ scale 1)))
+    (set i (- total 1))
+    (while (>= i 0)
+      (do (text-cp t (+ 48 (pl-digit-at m i)))
+          (if (and (== i scale) (>= scale 0))
+            (emit-ascii t "."))
+          (set i (- i 1))))
+    (return 0)))
+
+(defn ^I32 pl-dump-name [^:mut ^Text t ^Cells ar ^I32 h]
+  (let [^I32 n (cells-at ar (+ h R_B))
+        ^I32 e (cells-at ar (+ h R_A))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 c 0]
+    (emit-ascii t "/")
+    (while (< i n)
+      (do (set c (cells-at ar (+ e (+ 2 i))))
+          (if (or (<= c 32) (>= c 127) (== (pl-is-delim c) 1) (== c 35))
+            (do (emit-ascii t "#")
+                (pl-hex-digit t (quot c 16))
+                (pl-hex-digit t (rem c 16)))
+            (text-cp t c))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pl-dump [^:mut ^Text t ^Cells ar ^I32 h]
+  (comment "An object as canonical text: `null`, `true`, `-12`, `3.50`,")
+  (comment "`/Na#20me`, `<48656c>` (every string in hex), `[1 2]`, `<< /A 1 >>`,")
+  (comment "`3 0 R`, `stream@start+length` after the dictionary (`~scan` or")
+  (comment "`~ref` when the length was not trusted), and `kw:name` for a")
+  (comment "keyword. Answers 0.")
+  (let [^I32 kind (cells-at ar (+ h R_KIND))
+        ^I32 a (cells-at ar (+ h R_A))
+        ^I32 b (cells-at ar (+ h R_B))
+        ^I32 c (cells-at ar (+ h R_C))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 first 1]
+    (if (== kind 0) (emit-ascii t "null"))
+    (if (== kind 1)
+      (if (== a 1) (emit-ascii t "true") (emit-ascii t "false")))
+    (if (== kind 2) (text-i32 t a))
+    (if (== kind 3) (pl-dump-real t a b))
+    (if (== kind 4) (pl-dump-name t ar h))
+    (if (== kind 5)
+      (do (emit-ascii t "<")
+          (set k 0)
+          (while (< k b)
+            (do (set x (cells-at ar (+ a k)))
+                (pl-hex-digit t (quot x 16))
+                (pl-hex-digit t (rem x 16))
+                (set k (+ k 1))))
+          (emit-ascii t ">")))
+    (if (== kind 6)
+      (do (emit-ascii t "[")
+          (set k a)
+          (while (!= k 0)
+            (do (if (== first 0) (emit-ascii t " "))
+                (set first 0)
+                (pl-dump t ar k)
+                (set k (cells-at ar (+ k R_NEXT)))))
+          (emit-ascii t "]")))
+    (if (== kind 7)
+      (do (emit-ascii t "<<")
+          (set k a)
+          (while (!= k 0)
+            (do (emit-ascii t " ")
+                (pl-dump t ar k)
+                (set k (cells-at ar (+ k R_NEXT)))))
+          (emit-ascii t " >>")))
+    (if (== kind 8)
+      (do (pl-dump t ar a)
+          (emit-ascii t " stream@")
+          (text-i32 t b)
+          (emit-ascii t "+")
+          (text-i32 t c)
+          (set x (cells-at ar (+ h R_D)))
+          (if (== x 1) (emit-ascii t "~scan"))
+          (if (== x 2) (emit-ascii t "~ref"))))
+    (if (== kind 9)
+      (do (text-i32 t a)
+          (emit-ascii t " ")
+          (text-i32 t b)
+          (emit-ascii t " R")))
+    (if (== kind 10)
+      (do (emit-ascii t "kw:")
+          (set k 0)
+          (while (< k b)
+            (do (text-cp t (cells-at ar (+ a k)))
+                (set k (+ k 1))))))
+    (return 0)))

@@ -1,0 +1,962 @@
+;; The evidence schema (P1.3; SPEC 2.1, 8, 9, 4.5). emon's own module (D039).
+;;
+;; EVIDENCE IS RAW OBSERVATION IN PAGE SPACE, with a source and no
+;; interpretation beyond what the source itself asserts (SPEC 2.1). Stage 1
+;; writes it, stage 2 compares it across sources, and the debug dump below is
+;; what a fusion test is written against. It is arenas of integers, like the
+;; Model (`emon.model`, D011): kin cannot allocate, so the host hands in
+;; `Cells` and kin fills them.
+;;
+;; THE NINE ARENAS (`ev-init` clears them all) and their strides:
+;;
+;;   glyphs      20   one per shown glyph       (text layer, SPEC 8.1)
+;;   words       16   glyphs grouped by gap analysis
+;;   lines       12   words grouped by baseline and direction
+;;   paths       16   vector paths              (kind, box, fill, stroke)
+;;   images      12   image placements
+;;   components  20   the tracer's shapes and connected components (SPEC 8.2)
+;;   ocrwords    16   OCR's words               (SPEC 8.3)
+;;   alts         4   per-symbol alternatives, chained from an OCR word
+;;   etext        1   one code point per cell: the text of words, OCR words,
+;;                    and any glyph that stands for more than one (a ligature)
+;;
+;; THE FIELDS ARE DESIGNED FOR ALL THREE SOURCES NOW (DEVLOG P1.3, ordering
+;; principle 3): in Phase 1 only the text layer fills them, but an OCR word has
+;; its confidence and alternatives head, a component its pixel box and ink
+;; statistics, and a path its stroke, from the start. Adding a column later
+;; would renumber every reader.
+;;
+;; UNITS. Page space is top-left, y down, in centipoints (SPEC 3.4, D009);
+;; `Px` fields are raster pixels and say so in their names. Angles are
+;; CENTI-DEGREES (9000 = 90 degrees) so there is no float. Colour is
+;; 0xRRGGBB in one cell, -1 for none. Confidence is per-mille, -1 absent.
+;; ABSENT IS -1 for an index or a value that may be missing; a count is 0.
+;;
+;; A WORD'S GLYPHS ARE A CONTIGUOUS RUN of the glyph arena, and a line's words
+;; a contiguous run of the word arena: the text layer is built in content-stream
+;; order and grouped in place, and a run is two cells where a list is a chain.
+;; `ev-check` verifies that every run is inside its arena.
+;;
+;; THE DUMP is `emon-evidence` (SPEC 4.5): canonical JSON under the Model's
+;; rules (fixed key order, absent fields omitted, no insignificant whitespace,
+;; `pretty` optional), version "0" -- not a public contract, it changes as the
+;; algorithms do. It shares the Model serializer's punctuation and escaping
+;; (`emon.json`), so there is one implementation of "what a string looks like".
+(ns emon.evidence
+  (:require [emon.lang :refer [I32 Cells Text defenum emit-ascii sar32]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push
+                               cells-drop text-i32]]
+            [emon.model :refer [text-append-cp]]
+            [emon.json :refer [js-indent js-close js-aelem js-aend js-fsep
+                               js-cpt js-str js-hex js-bits-src js-bits-flags
+                               js-bits-style]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem
+                              bit-and]]))
+
+;; ------------------------------------------------------------- the tables
+;; Codes are assigned once and never reused (D050).
+
+;; How a glyph's Unicode value was obtained (SPEC 8.1).
+(defenum ^:pub gh
+  [[gh-tounicode 1 "tounicode"]
+   [gh-encoding 2 "encoding"]
+   [gh-glyphname 3 "glyphname"]
+   [gh-cid 4 "cid"]
+   [gh-unknown 5 "unknown"]])
+
+;; Why a glyph is not visible (SPEC 8.1); 0 is "visible" and is not written.
+;; Render mode 3 is NOT here: it is the `hidden-text` source, not invisibility.
+(defenum ^:pub vz
+  [[vz-clipped 1 "clipped"]
+   [vz-offpage 2 "offpage"]
+   [vz-white 3 "white-on-white"]
+   [vz-zero-size 4 "zero-size"]
+   [vz-occluded 5 "occluded"]])
+
+;; An `/Artifact` subtype (SPEC 8.1); 0 is "none".
+(defenum ^:pub ar
+  [[ar-pagination 1 "pagination"]
+   [ar-watermark 2 "watermark"]
+   [ar-layout 3 "layout"]
+   [ar-background 4 "background"]])
+
+;; A line's direction (SPEC 10.1); 0 is left-to-right and is not written.
+(defenum ^:pub ld
+  [[ld-rtl 1 "rtl"]
+   [ld-ttb 2 "ttb"]
+   [ld-btt 3 "btt"]])
+
+;; A vector path's kind.
+(defenum ^:pub pa
+  [[pa-line 1 "line"]
+   [pa-rect 2 "rect"]
+   [pa-curve 3 "curve"]
+   [pa-other 4 "other"]])
+
+;; What the tracer found (SPEC 8.2).
+(defenum ^:pub ck
+  [[ck-blob 1 "blob"]
+   [ck-rule-h 2 "rule-h"]
+   [ck-rule-v 3 "rule-v"]
+   [ck-box 4 "box"]
+   [ck-ellipse 5 "ellipse"]
+   [ck-arrow 6 "arrow"]
+   [ck-curve 7 "curve"]
+   [ck-text-like 8 "text-like"]])
+
+;; Path flag bits, image flag bits.
+(defenum ^:pub pg
+  [[pg-closed 1 "closed"]
+   [pg-evenodd 2 "evenodd"]
+   [pg-clip 4 "clip"]])
+
+(defenum ^:pub mg
+  [[mg-mask 1 "mask"]
+   [mg-smask 2 "smask"]
+   [mg-inline 4 "inline"]])
+
+;; The dump's keys. One table spells them, as `fk` does for the Model.
+(defenum ^:pub ek
+  [[ek-version 1 "emon-evidence"]
+   [ek-glyphs 2 "glyphs"]
+   [ek-words 3 "words"]
+   [ek-lines 4 "lines"]
+   [ek-paths 5 "paths"]
+   [ek-images 6 "images"]
+   [ek-components 7 "components"]
+   [ek-ocrwords 8 "ocrwords"]
+   [ek-page 9 "page"]
+   [ek-cp 10 "cp"]
+   [ek-text 11 "text"]
+   [ek-how 12 "how"]
+   [ek-font 13 "font"]
+   [ek-size 14 "size"]
+   [ek-box 15 "box"]
+   [ek-baseline 16 "baseline"]
+   [ek-rot 17 "rot"]
+   [ek-color 18 "color"]
+   [ek-alpha 19 "alpha"]
+   [ek-mode 20 "mode"]
+   [ek-vis 21 "vis"]
+   [ek-artifact 22 "artifact"]
+   [ek-mcid 23 "mcid"]
+   [ek-word 24 "word"]
+   [ek-line 25 "line"]
+   [ek-src 26 "src"]
+   [ek-conf 27 "conf"]
+   [ek-flags 28 "flags"]
+   [ek-gap 29 "gap"]
+   [ek-dir 30 "dir"]
+   [ek-kind 31 "kind"]
+   [ek-fill 32 "fill"]
+   [ek-stroke 33 "stroke"]
+   [ek-width 34 "width"]
+   [ek-obj 35 "obj"]
+   [ek-px 36 "px"]
+   [ek-area 37 "area"]
+   [ek-layer 38 "layer"]
+   [ek-alts 39 "alts"]
+   [ek-pass 40 "pass"]
+   [ek-lang 41 "lang"]
+   [ek-block 42 "block"]
+   [ek-style 43 "style"]
+   [ek-sym 44 "sym"]
+   [ek-run 45 "run"]])
+
+;; ------------------------------------------------------------- the layouts
+
+(defn ^:pub ^I32 gl-stride [] (return 20))
+(defn ^:pub ^I32 wd-stride [] (return 16))
+(defn ^:pub ^I32 ln-stride [] (return 12))
+(defn ^:pub ^I32 pa-stride [] (return 16))
+(defn ^:pub ^I32 im-stride [] (return 12))
+(defn ^:pub ^I32 co-stride [] (return 20))
+(defn ^:pub ^I32 ow-stride [] (return 16))
+(defn ^:pub ^I32 alt-stride [] (return 4))
+
+;; glyph fields
+(defn ^:pub ^I32 gf-page [] (return 0))
+(defn ^:pub ^I32 gf-cp [] (return 1))          ;; first code point, -1 unknown
+(defn ^:pub ^I32 gf-tstart [] (return 2))      ;; etext run when it stands for several
+(defn ^:pub ^I32 gf-tlen [] (return 3))
+(defn ^:pub ^I32 gf-how [] (return 4))         ;; `gh`
+(defn ^:pub ^I32 gf-font [] (return 5))        ;; font id
+(defn ^:pub ^I32 gf-size [] (return 6))        ;; Cpt, in page space
+(defn ^:pub ^I32 gf-x0 [] (return 7))
+(defn ^:pub ^I32 gf-y0 [] (return 8))
+(defn ^:pub ^I32 gf-x1 [] (return 9))
+(defn ^:pub ^I32 gf-y1 [] (return 10))
+(defn ^:pub ^I32 gf-baseline [] (return 11))   ;; Cpt y of the baseline
+(defn ^:pub ^I32 gf-rot [] (return 12))        ;; centi-degrees
+(defn ^:pub ^I32 gf-color [] (return 13))      ;; 0xRRGGBB, -1 none
+(defn ^:pub ^I32 gf-alpha [] (return 14))      ;; per-mille
+(defn ^:pub ^I32 gf-mode [] (return 15))       ;; PDF text render mode 0..7
+(defn ^:pub ^I32 gf-vis [] (return 16))        ;; `vz`, 0 visible
+(defn ^:pub ^I32 gf-artifact [] (return 17))   ;; `ar`, 0 none
+(defn ^:pub ^I32 gf-mcid [] (return 18))       ;; marked-content id, -1 none
+(defn ^:pub ^I32 gf-word [] (return 19))       ;; the word it was grouped into, -1
+
+;; word fields
+(defn ^:pub ^I32 wf-page [] (return 0))
+(defn ^:pub ^I32 wf-x0 [] (return 1))
+(defn ^:pub ^I32 wf-y0 [] (return 2))
+(defn ^:pub ^I32 wf-x1 [] (return 3))
+(defn ^:pub ^I32 wf-y1 [] (return 4))
+(defn ^:pub ^I32 wf-gfirst [] (return 5))      ;; its glyphs: a run of `glyphs`
+(defn ^:pub ^I32 wf-gcount [] (return 6))
+(defn ^:pub ^I32 wf-tstart [] (return 7))      ;; its text: a run of `etext`
+(defn ^:pub ^I32 wf-tlen [] (return 8))
+(defn ^:pub ^I32 wf-line [] (return 9))        ;; -1 none
+(defn ^:pub ^I32 wf-src [] (return 10))        ;; `sr` bits
+(defn ^:pub ^I32 wf-conf [] (return 11))       ;; -1 absent
+(defn ^:pub ^I32 wf-flags [] (return 12))      ;; `fl` bits
+(defn ^:pub ^I32 wf-gap [] (return 13))        ;; Cpt to the next word, -1 none
+(defn ^:pub ^I32 wf-font [] (return 14))       ;; dominant font id, -1
+(defn ^:pub ^I32 wf-size [] (return 15))       ;; dominant size, Cpt
+
+;; line fields
+(defn ^:pub ^I32 lf-page [] (return 0))
+(defn ^:pub ^I32 lf-x0 [] (return 1))
+(defn ^:pub ^I32 lf-y0 [] (return 2))
+(defn ^:pub ^I32 lf-x1 [] (return 3))
+(defn ^:pub ^I32 lf-y1 [] (return 4))
+(defn ^:pub ^I32 lf-wfirst [] (return 5))      ;; its words: a run of `words`
+(defn ^:pub ^I32 lf-wcount [] (return 6))
+(defn ^:pub ^I32 lf-baseline [] (return 7))
+(defn ^:pub ^I32 lf-dir [] (return 8))         ;; `ld`
+(defn ^:pub ^I32 lf-rot [] (return 9))         ;; centi-degrees
+(defn ^:pub ^I32 lf-src [] (return 10))
+(defn ^:pub ^I32 lf-conf [] (return 11))
+
+;; path fields
+(defn ^:pub ^I32 pf-page [] (return 0))
+(defn ^:pub ^I32 pf-kind [] (return 1))        ;; `pa`
+(defn ^:pub ^I32 pf-x0 [] (return 2))
+(defn ^:pub ^I32 pf-y0 [] (return 3))
+(defn ^:pub ^I32 pf-x1 [] (return 4))
+(defn ^:pub ^I32 pf-y1 [] (return 5))
+(defn ^:pub ^I32 pf-fill [] (return 6))        ;; colour, -1 not filled
+(defn ^:pub ^I32 pf-stroke [] (return 7))      ;; colour, -1 not stroked
+(defn ^:pub ^I32 pf-width [] (return 8))       ;; Cpt stroke width
+(defn ^:pub ^I32 pf-alpha [] (return 9))
+(defn ^:pub ^I32 pf-flags [] (return 10))      ;; `pg` bits
+(defn ^:pub ^I32 pf-artifact [] (return 11))
+(defn ^:pub ^I32 pf-mcid [] (return 12))
+
+;; image fields
+(defn ^:pub ^I32 mf-page [] (return 0))
+(defn ^:pub ^I32 mf-x0 [] (return 1))
+(defn ^:pub ^I32 mf-y0 [] (return 2))
+(defn ^:pub ^I32 mf-x1 [] (return 3))
+(defn ^:pub ^I32 mf-y1 [] (return 4))
+(defn ^:pub ^I32 mf-obj [] (return 5))         ;; the image XObject's object number
+(defn ^:pub ^I32 mf-pxw [] (return 6))         ;; its own pixel size
+(defn ^:pub ^I32 mf-pxh [] (return 7))
+(defn ^:pub ^I32 mf-alpha [] (return 8))
+(defn ^:pub ^I32 mf-flags [] (return 9))       ;; `mg` bits
+(defn ^:pub ^I32 mf-artifact [] (return 10))
+(defn ^:pub ^I32 mf-mcid [] (return 11))
+
+;; component fields (the tracer, SPEC 8.2)
+(defn ^:pub ^I32 cf-page [] (return 0))
+(defn ^:pub ^I32 cf-x0 [] (return 1))          ;; page space, Cpt
+(defn ^:pub ^I32 cf-y0 [] (return 2))
+(defn ^:pub ^I32 cf-x1 [] (return 3))
+(defn ^:pub ^I32 cf-y1 [] (return 4))
+(defn ^:pub ^I32 cf-pxx [] (return 5))         ;; the same box in raster pixels
+(defn ^:pub ^I32 cf-pxy [] (return 6))
+(defn ^:pub ^I32 cf-pxw [] (return 7))
+(defn ^:pub ^I32 cf-pxh [] (return 8))
+(defn ^:pub ^I32 cf-area [] (return 9))        ;; ink pixels
+(defn ^:pub ^I32 cf-fill [] (return 10))       ;; per-mille of the box that is ink
+(defn ^:pub ^I32 cf-stroke [] (return 11))     ;; stroke width, Cpt (distance transform)
+(defn ^:pub ^I32 cf-color [] (return 12))      ;; the ink colour
+(defn ^:pub ^I32 cf-layer [] (return 13))      ;; ink layer id, -1
+(defn ^:pub ^I32 cf-kind [] (return 14))       ;; `ck`
+(defn ^:pub ^I32 cf-conf [] (return 15))
+(defn ^:pub ^I32 cf-flags [] (return 16))
+
+;; OCR word fields (SPEC 8.3)
+(defn ^:pub ^I32 of-page [] (return 0))
+(defn ^:pub ^I32 of-x0 [] (return 1))
+(defn ^:pub ^I32 of-y0 [] (return 2))
+(defn ^:pub ^I32 of-x1 [] (return 3))
+(defn ^:pub ^I32 of-y1 [] (return 4))
+(defn ^:pub ^I32 of-tstart [] (return 5))      ;; its text: a run of `etext`
+(defn ^:pub ^I32 of-tlen [] (return 6))
+(defn ^:pub ^I32 of-conf [] (return 7))        ;; the engine's, per-mille
+(defn ^:pub ^I32 of-althead [] (return 8))     ;; first of its `alts`, -1
+(defn ^:pub ^I32 of-altcount [] (return 9))
+(defn ^:pub ^I32 of-line [] (return 10))       ;; the engine's line id, -1
+(defn ^:pub ^I32 of-block [] (return 11))      ;; the engine's block id, -1
+(defn ^:pub ^I32 of-baseline [] (return 12))
+(defn ^:pub ^I32 of-flags [] (return 13))      ;; `sy` bits (bold, italic, ...)
+(defn ^:pub ^I32 of-pass [] (return 14))       ;; which OCR pass produced it
+(defn ^:pub ^I32 of-lang [] (return 15))       ;; the engine's language id, -1
+
+;; alternative fields: symbol `sym` of the word might instead be `cp`
+(defn ^:pub ^I32 af-sym [] (return 0))
+(defn ^:pub ^I32 af-cp [] (return 1))
+(defn ^:pub ^I32 af-conf [] (return 2))
+(defn ^:pub ^I32 af-next [] (return 3))
+
+;; -------------------------------------------------------------- generic
+
+(defn ^I32 ev-get [^Cells c ^I32 stride ^I32 row ^I32 f]
+  (return (cells-at c (+ (* row stride) f))))
+
+(defn ^I32 ev-set [^:mut ^Cells c ^I32 stride ^I32 row ^I32 f ^I32 v]
+  (cells-set c (+ (* row stride) f) v)
+  (return 0))
+
+(defn ^I32 ev-count [^Cells c ^I32 stride]
+  (return (quot (cells-len c) stride)))
+
+(defn ^I32 ev-push [^:mut ^Cells c ^I32 stride]
+  (comment "Append a row of zeros and answer its index.")
+  (let [^I32 row (quot (cells-len c) stride)
+        ^:mut ^I32 i 0]
+    (while (< i stride)
+      (do (cells-push c 0)
+          (set i (+ i 1))))
+    (return row)))
+
+(defn ^:pub ^I32 ev-init [^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                          ^:mut ^Cells paths ^:mut ^Cells images
+                          ^:mut ^Cells components ^:mut ^Cells ocrwords
+                          ^:mut ^Cells alts ^:mut ^Cells etext]
+  (comment "Empty all nine arenas.")
+  (cells-drop glyphs 0)
+  (cells-drop words 0)
+  (cells-drop lines 0)
+  (cells-drop paths 0)
+  (cells-drop images 0)
+  (cells-drop components 0)
+  (cells-drop ocrwords 0)
+  (cells-drop alts 0)
+  (cells-drop etext 0)
+  (return 0))
+
+(defn ^:pub ^I32 etx-append-cp [^:mut ^Cells etext ^I32 cp]
+  (comment "Append a code point to the evidence text arena (non-scalars become")
+  (comment "U+FFFD, as in the Model's text arena); answer the index it went to.")
+  (return (text-append-cp etext cp)))
+
+(defn ^:pub ^I32 etx-len [^Cells etext] (return (cells-len etext)))
+
+;; ---------------------------------------------------------------- glyphs
+
+(defn ^:pub ^I32 gl-count [^Cells glyphs] (return (ev-count glyphs 20)))
+(defn ^:pub ^I32 gl-get [^Cells glyphs ^I32 g ^I32 f] (return (ev-get glyphs 20 g f)))
+(defn ^:pub ^I32 gl-set [^:mut ^Cells glyphs ^I32 g ^I32 f ^I32 v] (return (ev-set glyphs 20 g f v)))
+
+(defn ^:pub ^I32 gl-new [^:mut ^Cells glyphs ^I32 page ^I32 cp ^I32 font ^I32 size
+                         ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Append a glyph. Defaults: `how` unknown, baseline at the box's")
+  (comment "bottom, no rotation, colour none, opaque, render mode 0, visible,")
+  (comment "not an artifact, no marked-content id, in no word.")
+  (let [^I32 g (ev-push glyphs 20)]
+    (ev-set glyphs 20 g 0 page)
+    (ev-set glyphs 20 g 1 cp)
+    (ev-set glyphs 20 g 2 -1)
+    (ev-set glyphs 20 g 4 (gh-unknown))
+    (ev-set glyphs 20 g 5 font)
+    (ev-set glyphs 20 g 6 size)
+    (ev-set glyphs 20 g 7 x0)
+    (ev-set glyphs 20 g 8 y0)
+    (ev-set glyphs 20 g 9 x1)
+    (ev-set glyphs 20 g 10 y1)
+    (ev-set glyphs 20 g 11 y1)
+    (ev-set glyphs 20 g 13 -1)
+    (ev-set glyphs 20 g 14 1000)
+    (ev-set glyphs 20 g 18 -1)
+    (ev-set glyphs 20 g 19 -1)
+    (return g)))
+
+;; ----------------------------------------------------------------- words
+
+(defn ^:pub ^I32 wd-count [^Cells words] (return (ev-count words 16)))
+(defn ^:pub ^I32 wd-get [^Cells words ^I32 w ^I32 f] (return (ev-get words 16 w f)))
+(defn ^:pub ^I32 wd-set [^:mut ^Cells words ^I32 w ^I32 f ^I32 v] (return (ev-set words 16 w f v)))
+
+(defn ^:pub ^I32 wd-new [^:mut ^Cells words ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                         ^I32 gfirst ^I32 gcount]
+  (comment "Append a word over a run of glyphs. Defaults: no text, in no line,")
+  (comment "source `text` (1), no confidence, no flags, no gap, font -1.")
+  (let [^I32 w (ev-push words 16)]
+    (ev-set words 16 w 0 page)
+    (ev-set words 16 w 1 x0)
+    (ev-set words 16 w 2 y0)
+    (ev-set words 16 w 3 x1)
+    (ev-set words 16 w 4 y1)
+    (ev-set words 16 w 5 gfirst)
+    (ev-set words 16 w 6 gcount)
+    (ev-set words 16 w 7 -1)
+    (ev-set words 16 w 9 -1)
+    (ev-set words 16 w 10 1)
+    (ev-set words 16 w 11 -1)
+    (ev-set words 16 w 13 -1)
+    (ev-set words 16 w 14 -1)
+    (return w)))
+
+;; ----------------------------------------------------------------- lines
+
+(defn ^:pub ^I32 ln-count [^Cells lines] (return (ev-count lines 12)))
+(defn ^:pub ^I32 ln-get [^Cells lines ^I32 l ^I32 f] (return (ev-get lines 12 l f)))
+(defn ^:pub ^I32 ln-set [^:mut ^Cells lines ^I32 l ^I32 f ^I32 v] (return (ev-set lines 12 l f v)))
+
+(defn ^:pub ^I32 ln-new [^:mut ^Cells lines ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                         ^I32 wfirst ^I32 wcount ^I32 baseline]
+  (comment "Append a line over a run of words. Defaults: left to right, no")
+  (comment "rotation, source `text` (1), no confidence.")
+  (let [^I32 l (ev-push lines 12)]
+    (ev-set lines 12 l 0 page)
+    (ev-set lines 12 l 1 x0)
+    (ev-set lines 12 l 2 y0)
+    (ev-set lines 12 l 3 x1)
+    (ev-set lines 12 l 4 y1)
+    (ev-set lines 12 l 5 wfirst)
+    (ev-set lines 12 l 6 wcount)
+    (ev-set lines 12 l 7 baseline)
+    (ev-set lines 12 l 10 1)
+    (ev-set lines 12 l 11 -1)
+    (return l)))
+
+;; ----------------------------------------------------------------- paths
+
+(defn ^:pub ^I32 pa-count [^Cells paths] (return (ev-count paths 16)))
+(defn ^:pub ^I32 pa-get [^Cells paths ^I32 p ^I32 f] (return (ev-get paths 16 p f)))
+(defn ^:pub ^I32 pa-set [^:mut ^Cells paths ^I32 p ^I32 f ^I32 v] (return (ev-set paths 16 p f v)))
+
+(defn ^:pub ^I32 pa-new [^:mut ^Cells paths ^I32 page ^I32 kind ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Append a vector path. Defaults: neither filled nor stroked, opaque,")
+  (comment "no flags, not an artifact, no marked-content id.")
+  (let [^I32 p (ev-push paths 16)]
+    (ev-set paths 16 p 0 page)
+    (ev-set paths 16 p 1 kind)
+    (ev-set paths 16 p 2 x0)
+    (ev-set paths 16 p 3 y0)
+    (ev-set paths 16 p 4 x1)
+    (ev-set paths 16 p 5 y1)
+    (ev-set paths 16 p 6 -1)
+    (ev-set paths 16 p 7 -1)
+    (ev-set paths 16 p 9 1000)
+    (ev-set paths 16 p 12 -1)
+    (return p)))
+
+;; ---------------------------------------------------------------- images
+
+(defn ^:pub ^I32 im-count [^Cells images] (return (ev-count images 12)))
+(defn ^:pub ^I32 im-get [^Cells images ^I32 m ^I32 f] (return (ev-get images 12 m f)))
+(defn ^:pub ^I32 im-set [^:mut ^Cells images ^I32 m ^I32 f ^I32 v] (return (ev-set images 12 m f v)))
+
+(defn ^:pub ^I32 im-new [^:mut ^Cells images ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                         ^I32 obj ^I32 pxw ^I32 pxh]
+  (comment "Append an image placement. Defaults: opaque, no flags, not an")
+  (comment "artifact, no marked-content id.")
+  (let [^I32 m (ev-push images 12)]
+    (ev-set images 12 m 0 page)
+    (ev-set images 12 m 1 x0)
+    (ev-set images 12 m 2 y0)
+    (ev-set images 12 m 3 x1)
+    (ev-set images 12 m 4 y1)
+    (ev-set images 12 m 5 obj)
+    (ev-set images 12 m 6 pxw)
+    (ev-set images 12 m 7 pxh)
+    (ev-set images 12 m 8 1000)
+    (ev-set images 12 m 11 -1)
+    (return m)))
+
+;; ------------------------------------------------------------ components
+
+(defn ^:pub ^I32 co-count [^Cells components] (return (ev-count components 20)))
+(defn ^:pub ^I32 co-get [^Cells components ^I32 c ^I32 f] (return (ev-get components 20 c f)))
+(defn ^:pub ^I32 co-set [^:mut ^Cells components ^I32 c ^I32 f ^I32 v] (return (ev-set components 20 c f v)))
+
+(defn ^:pub ^I32 co-new [^:mut ^Cells components ^I32 page ^I32 kind ^I32 x0 ^I32 y0
+                         ^I32 x1 ^I32 y1]
+  (comment "Append a tracer component. Defaults: no pixel box, no ink")
+  (comment "statistics, colour none, layer -1, no confidence, no flags.")
+  (let [^I32 c (ev-push components 20)]
+    (ev-set components 20 c 0 page)
+    (ev-set components 20 c 1 x0)
+    (ev-set components 20 c 2 y0)
+    (ev-set components 20 c 3 x1)
+    (ev-set components 20 c 4 y1)
+    (ev-set components 20 c 12 -1)
+    (ev-set components 20 c 13 -1)
+    (ev-set components 20 c 14 kind)
+    (ev-set components 20 c 15 -1)
+    (return c)))
+
+;; -------------------------------------------------------------- OCR words
+
+(defn ^:pub ^I32 ow-count [^Cells ocrwords] (return (ev-count ocrwords 16)))
+(defn ^:pub ^I32 ow-get [^Cells ocrwords ^I32 w ^I32 f] (return (ev-get ocrwords 16 w f)))
+(defn ^:pub ^I32 ow-set [^:mut ^Cells ocrwords ^I32 w ^I32 f ^I32 v] (return (ev-set ocrwords 16 w f v)))
+
+(defn ^:pub ^I32 ow-new [^:mut ^Cells ocrwords ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                         ^I32 conf]
+  (comment "Append an OCR word with the engine's confidence (per-mille).")
+  (comment "Defaults: no text, no alternatives, line and block -1, pass 0,")
+  (comment "language -1.")
+  (let [^I32 w (ev-push ocrwords 16)]
+    (ev-set ocrwords 16 w 0 page)
+    (ev-set ocrwords 16 w 1 x0)
+    (ev-set ocrwords 16 w 2 y0)
+    (ev-set ocrwords 16 w 3 x1)
+    (ev-set ocrwords 16 w 4 y1)
+    (ev-set ocrwords 16 w 5 -1)
+    (ev-set ocrwords 16 w 7 conf)
+    (ev-set ocrwords 16 w 8 -1)
+    (ev-set ocrwords 16 w 10 -1)
+    (ev-set ocrwords 16 w 11 -1)
+    (ev-set ocrwords 16 w 15 -1)
+    (return w)))
+
+(defn ^:pub ^I32 alt-count [^Cells alts] (return (quot (cells-len alts) 4)))
+(defn ^:pub ^I32 alt-get [^Cells alts ^I32 a ^I32 f] (return (ev-get alts 4 a f)))
+
+(defn ^:pub ^I32 alt-add [^:mut ^Cells ocrwords ^:mut ^Cells alts ^I32 w ^I32 sym
+                          ^I32 cp ^I32 conf]
+  (comment "Add an alternative reading to OCR word w: symbol `sym` (an index")
+  (comment "into the word's text) might instead be `cp`, at `conf`. They chain")
+  (comment "in the order added. Answers the alternative's index.")
+  (let [^I32 a (quot (cells-len alts) 4)
+        ^I32 head (ev-get ocrwords 16 w 8)
+        ^I32 cnt (ev-get ocrwords 16 w 9)
+        ^:mut ^I32 t head]
+    (cells-push alts sym)
+    (cells-push alts cp)
+    (cells-push alts conf)
+    (cells-push alts -1)
+    (if (< head 0)
+      (ev-set ocrwords 16 w 8 a)
+      (do (while (>= (cells-at alts (+ (* t 4) 3)) 0)
+            (set t (cells-at alts (+ (* t 4) 3))))
+          (cells-set alts (+ (* t 4) 3) a)))
+    (ev-set ocrwords 16 w 9 (+ cnt 1))
+    (return a)))
+
+;; ------------------------------------------------------------------ check
+
+(defn ^:pub ^I32 ev-run-ok [^I32 start ^I32 n ^I32 total]
+  (comment "1 when [start, start+n) lies inside [0, total), or the run is empty")
+  (comment "and absent (start -1, n 0 -- or any start with n 0).")
+  (if (< n 0) (return 0))
+  (if (== n 0) (return 1))
+  (if (< start 0) (return 0))
+  (if (> start total) (return 0))
+  (if (> n (- total start)) (return 0))
+  (return 1))
+
+(defn ^:pub ^I32 ev-check [^Cells glyphs ^Cells words ^Cells lines ^Cells paths
+                           ^Cells images ^Cells components ^Cells ocrwords
+                           ^Cells alts ^Cells etext]
+  (comment "0 when every run and link is inside its arena; otherwise a code:")
+  (comment "1 a stride, 2 a glyph's text run, 3 a word's glyph run, 4 a word's")
+  (comment "text run, 5 a line's word run, 6 an OCR word's text run, 7 an")
+  (comment "alternative chain, 8 a word's line, 9 a glyph's word.")
+  (let [^I32 ng (quot (cells-len glyphs) 20)
+        ^I32 nw (quot (cells-len words) 16)
+        ^I32 nl (quot (cells-len lines) 12)
+        ^I32 no (quot (cells-len ocrwords) 16)
+        ^I32 na (quot (cells-len alts) 4)
+        ^I32 nt (cells-len etext)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 steps 0]
+    (if (!= (rem (cells-len glyphs) 20) 0) (return 1))
+    (if (!= (rem (cells-len words) 16) 0) (return 1))
+    (if (!= (rem (cells-len lines) 12) 0) (return 1))
+    (if (!= (rem (cells-len paths) 16) 0) (return 1))
+    (if (!= (rem (cells-len images) 12) 0) (return 1))
+    (if (!= (rem (cells-len components) 20) 0) (return 1))
+    (if (!= (rem (cells-len ocrwords) 16) 0) (return 1))
+    (if (!= (rem (cells-len alts) 4) 0) (return 1))
+    (while (< i ng)
+      (do (if (>= (ev-get glyphs 20 i 2) 0)
+            (if (== (ev-run-ok (ev-get glyphs 20 i 2) (ev-get glyphs 20 i 3) nt) 0) (return 2)))
+          (if (or (< (ev-get glyphs 20 i 19) -1) (>= (ev-get glyphs 20 i 19) nw)) (return 9))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nw)
+      (do (if (== (ev-run-ok (ev-get words 16 i 5) (ev-get words 16 i 6) ng) 0) (return 3))
+          (if (>= (ev-get words 16 i 7) 0)
+            (if (== (ev-run-ok (ev-get words 16 i 7) (ev-get words 16 i 8) nt) 0) (return 4)))
+          (if (or (< (ev-get words 16 i 9) -1) (>= (ev-get words 16 i 9) nl)) (return 8))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nl)
+      (do (if (== (ev-run-ok (ev-get lines 12 i 5) (ev-get lines 12 i 6) nw) 0) (return 5))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i no)
+      (do (if (>= (ev-get ocrwords 16 i 5) 0)
+            (if (== (ev-run-ok (ev-get ocrwords 16 i 5) (ev-get ocrwords 16 i 6) nt) 0) (return 6)))
+          (set a (ev-get ocrwords 16 i 8))
+          (set steps 0)
+          (while (>= a 0)
+            (do (if (>= a na) (return 7))
+                (if (> steps na) (return 7))
+                (set steps (+ steps 1))
+                (set a (ev-get alts 4 a 3))))
+          (if (!= steps (ev-get ocrwords 16 i 9)) (return 7))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------- dump
+;;
+;; Fixed key order per row, absent (default) fields omitted, exactly the
+;; Model's rules (`emon.json`). `ev-key` is `js-begin` with THIS module's
+;; key table.
+
+(defn ^I32 ev-begin [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 code]
+  (if (== started 1) (emit-ascii t ","))
+  (if (== pr 1) (js-indent t (+ d 1)))
+  (emit-ascii t "\"")
+  (ek-emit-name t code)
+  (emit-ascii t "\":")
+  (if (== pr 1) (emit-ascii t " "))
+  (return 1))
+
+(defn ^I32 ev-fint [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                    ^I32 f ^I32 key ^I32 dflt ^I32 started]
+  (comment "`\"key\":value` when the field is not its default.")
+  (let [^I32 v (ev-get c stride row f)]
+    (if (== v dflt) (return started))
+    (ev-begin t pr d started key)
+    (text-i32 t v)
+    (return 1)))
+
+(defn ^I32 ev-fcpt [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                    ^I32 f ^I32 key ^I32 dflt ^I32 started]
+  (comment "As `ev-fint`, written in points (centipoints or centi-degrees).")
+  (let [^I32 v (ev-get c stride row f)]
+    (if (== v dflt) (return started))
+    (ev-begin t pr d started key)
+    (js-cpt t v)
+    (return 1)))
+
+(defn ^I32 ev-fbox [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                    ^I32 f ^I32 started]
+  (comment "`\"box\":[x0,y0,x1,y1]`, fields f..f+3.")
+  (ev-begin t pr d started (ek-box))
+  (emit-ascii t "[")
+  (js-cpt t (ev-get c stride row f))
+  (js-fsep t pr 1)
+  (js-cpt t (ev-get c stride row (+ f 1)))
+  (js-fsep t pr 1)
+  (js-cpt t (ev-get c stride row (+ f 2)))
+  (js-fsep t pr 1)
+  (js-cpt t (ev-get c stride row (+ f 3)))
+  (emit-ascii t "]")
+  (return 1))
+
+(defn ^I32 ev-fcolor [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                      ^I32 f ^I32 key ^I32 started]
+  (comment "A colour as `\"#rrggbb\"`; -1 (none) is omitted.")
+  (let [^I32 v (ev-get c stride row f)]
+    (if (< v 0) (return started))
+    (ev-begin t pr d started key)
+    (emit-ascii t "\"#")
+    (js-hex t (bit-and (sar32 v 20) 15))
+    (js-hex t (bit-and (sar32 v 16) 15))
+    (js-hex t (bit-and (sar32 v 12) 15))
+    (js-hex t (bit-and (sar32 v 8) 15))
+    (js-hex t (bit-and (sar32 v 4) 15))
+    (js-hex t (bit-and v 15))
+    (emit-ascii t "\"")
+    (return 1)))
+
+(defn ^I32 ev-ftext [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                     ^I32 fstart ^I32 flen ^Cells etext ^I32 started]
+  (comment "A text run of `etext` as `\"text\"`; an absent run (start -1) is omitted.")
+  (let [^I32 s (ev-get c stride row fstart)]
+    (if (< s 0) (return started))
+    (ev-begin t pr d started (ek-text))
+    (js-str t etext s (ev-get c stride row flen))
+    (return 1)))
+
+(defn ^I32 ev-frun [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                    ^I32 f ^I32 key ^I32 started]
+  (comment "A run as `\"key\":[first,count]`.")
+  (ev-begin t pr d started key)
+  (emit-ascii t "[")
+  (text-i32 t (ev-get c stride row f))
+  (js-fsep t pr 1)
+  (text-i32 t (ev-get c stride row (+ f 1)))
+  (emit-ascii t "]")
+  (return 1))
+
+(defn ^I32 ev-fbits [^:mut ^Text t ^I32 pr ^I32 d ^Cells c ^I32 stride ^I32 row
+                     ^I32 f ^I32 which ^I32 started]
+  (comment "A bitset as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`,")
+  (comment "5 `mg`. Zero is omitted.")
+  (let [^I32 v (ev-get c stride row f)
+        ^:mut ^I32 key (ek-src)
+        ^:mut ^I32 b 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 bit 1]
+    (if (== v 0) (return started))
+    (if (!= which 1) (set key (ek-flags)))
+    (if (== which 3) (set key (ek-style)))
+    (ev-begin t pr d started key)
+    (if (== which 1) (js-bits-src t pr v))
+    (if (== which 2) (js-bits-flags t pr v))
+    (if (== which 3) (js-bits-style t pr v))
+    (if (or (== which 4) (== which 5))
+      (do (emit-ascii t "[")
+          (while (< b 3)
+            (do (if (!= (bit-and v bit) 0)
+                  (do (js-fsep t pr k)
+                      (emit-ascii t "\"")
+                      (if (== which 4) (pg-emit-name t bit))
+                      (if (== which 5) (mg-emit-name t bit))
+                      (emit-ascii t "\"")
+                      (set k (+ k 1))))
+                (set bit (* bit 2))
+                (set b (+ b 1))))
+          (emit-ascii t "]")))
+    (return 1)))
+
+(defn ^I32 ev-fenum [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 key ^I32 which ^I32 v]
+  (comment "An enumerated code as its name. which: 1 `gh`, 2 `vz`, 3 `ar`, 4 `ld`,")
+  (comment "5 `pa`, 6 `ck`. Code 0 is \"none\" and is omitted.")
+  (if (== v 0) (return started))
+  (ev-begin t pr d started key)
+  (emit-ascii t "\"")
+  (if (== which 1) (gh-emit-name t v))
+  (if (== which 2) (vz-emit-name t v))
+  (if (== which 3) (ar-emit-name t v))
+  (if (== which 4) (ld-emit-name t v))
+  (if (== which 5) (pa-emit-name t v))
+  (if (== which 6) (ck-emit-name t v))
+  (emit-ascii t "\"")
+  (return 1))
+
+(defn ^I32 ev-glyph [^:mut ^Text t ^I32 pr ^I32 d ^Cells glyphs ^Cells etext ^I32 g]
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-fint t pr d glyphs 20 g 0 (ek-page) -2147483648 s))
+    (set s (ev-fint t pr d glyphs 20 g 1 (ek-cp) -1 s))
+    (set s (ev-ftext t pr d glyphs 20 g 2 3 etext s))
+    (set s (ev-fenum t pr d s (ek-how) 1 (ev-get glyphs 20 g 4)))
+    (set s (ev-fint t pr d glyphs 20 g 5 (ek-font) -2147483648 s))
+    (set s (ev-fcpt t pr d glyphs 20 g 6 (ek-size) -2147483648 s))
+    (set s (ev-fbox t pr d glyphs 20 g 7 s))
+    (set s (ev-fcpt t pr d glyphs 20 g 11 (ek-baseline) -2147483648 s))
+    (set s (ev-fcpt t pr d glyphs 20 g 12 (ek-rot) 0 s))
+    (set s (ev-fcolor t pr d glyphs 20 g 13 (ek-color) s))
+    (set s (ev-fint t pr d glyphs 20 g 14 (ek-alpha) 1000 s))
+    (set s (ev-fint t pr d glyphs 20 g 15 (ek-mode) 0 s))
+    (set s (ev-fenum t pr d s (ek-vis) 2 (ev-get glyphs 20 g 16)))
+    (set s (ev-fenum t pr d s (ek-artifact) 3 (ev-get glyphs 20 g 17)))
+    (set s (ev-fint t pr d glyphs 20 g 18 (ek-mcid) -1 s))
+    (set s (ev-fint t pr d glyphs 20 g 19 (ek-word) -1 s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 ev-word [^:mut ^Text t ^I32 pr ^I32 d ^Cells words ^Cells etext ^I32 w]
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-fint t pr d words 16 w 0 (ek-page) -2147483648 s))
+    (set s (ev-ftext t pr d words 16 w 7 8 etext s))
+    (set s (ev-fbox t pr d words 16 w 1 s))
+    (set s (ev-frun t pr d words 16 w 5 (ek-glyphs) s))
+    (set s (ev-fint t pr d words 16 w 9 (ek-line) -1 s))
+    (set s (ev-fbits t pr d words 16 w 10 1 s))
+    (set s (ev-fint t pr d words 16 w 11 (ek-conf) -1 s))
+    (set s (ev-fbits t pr d words 16 w 12 2 s))
+    (set s (ev-fcpt t pr d words 16 w 13 (ek-gap) -1 s))
+    (set s (ev-fint t pr d words 16 w 14 (ek-font) -1 s))
+    (set s (ev-fcpt t pr d words 16 w 15 (ek-size) 0 s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 ev-line [^:mut ^Text t ^I32 pr ^I32 d ^Cells lines ^I32 l]
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-fint t pr d lines 12 l 0 (ek-page) -2147483648 s))
+    (set s (ev-fbox t pr d lines 12 l 1 s))
+    (set s (ev-frun t pr d lines 12 l 5 (ek-words) s))
+    (set s (ev-fcpt t pr d lines 12 l 7 (ek-baseline) -2147483648 s))
+    (set s (ev-fenum t pr d s (ek-dir) 4 (ev-get lines 12 l 8)))
+    (set s (ev-fcpt t pr d lines 12 l 9 (ek-rot) 0 s))
+    (set s (ev-fbits t pr d lines 12 l 10 1 s))
+    (set s (ev-fint t pr d lines 12 l 11 (ek-conf) -1 s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 ev-path [^:mut ^Text t ^I32 pr ^I32 d ^Cells paths ^I32 p]
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-fint t pr d paths 16 p 0 (ek-page) -2147483648 s))
+    (set s (ev-fenum t pr d s (ek-kind) 5 (ev-get paths 16 p 1)))
+    (set s (ev-fbox t pr d paths 16 p 2 s))
+    (set s (ev-fcolor t pr d paths 16 p 6 (ek-fill) s))
+    (set s (ev-fcolor t pr d paths 16 p 7 (ek-stroke) s))
+    (set s (ev-fcpt t pr d paths 16 p 8 (ek-width) 0 s))
+    (set s (ev-fint t pr d paths 16 p 9 (ek-alpha) 1000 s))
+    (set s (ev-fbits t pr d paths 16 p 10 4 s))
+    (set s (ev-fenum t pr d s (ek-artifact) 3 (ev-get paths 16 p 11)))
+    (set s (ev-fint t pr d paths 16 p 12 (ek-mcid) -1 s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 ev-image [^:mut ^Text t ^I32 pr ^I32 d ^Cells images ^I32 m]
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-fint t pr d images 12 m 0 (ek-page) -2147483648 s))
+    (set s (ev-fbox t pr d images 12 m 1 s))
+    (set s (ev-fint t pr d images 12 m 5 (ek-obj) -2147483648 s))
+    (set s (ev-begin t pr d s (ek-px)))
+    (emit-ascii t "[")
+    (text-i32 t (ev-get images 12 m 6))
+    (js-fsep t pr 1)
+    (text-i32 t (ev-get images 12 m 7))
+    (emit-ascii t "]")
+    (set s (ev-fint t pr d images 12 m 8 (ek-alpha) 1000 s))
+    (set s (ev-fbits t pr d images 12 m 9 5 s))
+    (set s (ev-fenum t pr d s (ek-artifact) 3 (ev-get images 12 m 10)))
+    (set s (ev-fint t pr d images 12 m 11 (ek-mcid) -1 s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 ev-component [^:mut ^Text t ^I32 pr ^I32 d ^Cells components ^I32 c]
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-fint t pr d components 20 c 0 (ek-page) -2147483648 s))
+    (set s (ev-fenum t pr d s (ek-kind) 6 (ev-get components 20 c 14)))
+    (set s (ev-fbox t pr d components 20 c 1 s))
+    (if (or (> (ev-get components 20 c 7) 0) (> (ev-get components 20 c 8) 0))
+      (do (set s (ev-begin t pr d s (ek-px)))
+          (emit-ascii t "[")
+          (text-i32 t (ev-get components 20 c 5))
+          (js-fsep t pr 1)
+          (text-i32 t (ev-get components 20 c 6))
+          (js-fsep t pr 1)
+          (text-i32 t (ev-get components 20 c 7))
+          (js-fsep t pr 1)
+          (text-i32 t (ev-get components 20 c 8))
+          (emit-ascii t "]")))
+    (set s (ev-fint t pr d components 20 c 9 (ek-area) 0 s))
+    (set s (ev-fint t pr d components 20 c 10 (ek-fill) 0 s))
+    (set s (ev-fcpt t pr d components 20 c 11 (ek-stroke) 0 s))
+    (set s (ev-fcolor t pr d components 20 c 12 (ek-color) s))
+    (set s (ev-fint t pr d components 20 c 13 (ek-layer) -1 s))
+    (set s (ev-fint t pr d components 20 c 15 (ek-conf) -1 s))
+    (set s (ev-fbits t pr d components 20 c 16 2 s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 ev-ocrword [^:mut ^Text t ^I32 pr ^I32 d ^Cells ocrwords ^Cells alts
+                       ^Cells etext ^I32 w]
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 a (ev-get ocrwords 16 w 8)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 ast 0]
+    (emit-ascii t "{")
+    (set s (ev-fint t pr d ocrwords 16 w 0 (ek-page) -2147483648 s))
+    (set s (ev-ftext t pr d ocrwords 16 w 5 6 etext s))
+    (set s (ev-fbox t pr d ocrwords 16 w 1 s))
+    (set s (ev-fint t pr d ocrwords 16 w 7 (ek-conf) -1 s))
+    (if (>= a 0)
+      (do (set s (ev-begin t pr d s (ek-alts)))
+          (emit-ascii t "[")
+          (while (>= a 0)
+            (do (js-aelem t pr (+ d 1) i)
+                (emit-ascii t "{")
+                (set ast 0)
+                (set ast (ev-fint t pr (+ d 2) alts 4 a 0 (ek-sym) -2147483648 ast))
+                (set ast (ev-fint t pr (+ d 2) alts 4 a 1 (ek-cp) -2147483648 ast))
+                (set ast (ev-fint t pr (+ d 2) alts 4 a 2 (ek-conf) -1 ast))
+                (js-close t pr (+ d 2) ast)
+                (set i (+ i 1))
+                (set a (ev-get alts 4 a 3))))
+          (js-aend t pr (+ d 1) i)))
+    (set s (ev-fint t pr d ocrwords 16 w 10 (ek-line) -1 s))
+    (set s (ev-fint t pr d ocrwords 16 w 11 (ek-block) -1 s))
+    (set s (ev-fcpt t pr d ocrwords 16 w 12 (ek-baseline) 0 s))
+    (set s (ev-fbits t pr d ocrwords 16 w 13 3 s))
+    (set s (ev-fint t pr d ocrwords 16 w 14 (ek-pass) 0 s))
+    (set s (ev-fint t pr d ocrwords 16 w 15 (ek-lang) -1 s))
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^:pub ^I32 ev-emit [^:mut ^Text t ^I32 pretty ^Cells glyphs ^Cells words
+                          ^Cells lines ^Cells paths ^Cells images
+                          ^Cells components ^Cells ocrwords ^Cells alts
+                          ^Cells etext]
+  (comment "Write the evidence as `emon-evidence` JSON (SPEC 4.5): version, then")
+  (comment "the seven row arrays, each row in its fixed key order.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 i 0
+        ^I32 ng (quot (cells-len glyphs) 20)
+        ^I32 nw (quot (cells-len words) 16)
+        ^I32 nl (quot (cells-len lines) 12)
+        ^I32 np (quot (cells-len paths) 16)
+        ^I32 nm (quot (cells-len images) 12)
+        ^I32 nc (quot (cells-len components) 20)
+        ^I32 no (quot (cells-len ocrwords) 16)]
+    (emit-ascii t "{")
+    (set s (ev-begin t pretty 0 s (ek-version)))
+    (emit-ascii t "\"0\"")
+    (set s (ev-begin t pretty 0 s (ek-glyphs)))
+    (emit-ascii t "[")
+    (while (< i ng)
+      (do (js-aelem t pretty 1 i)
+          (ev-glyph t pretty 2 glyphs etext i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 ng)
+    (set s (ev-begin t pretty 0 s (ek-words)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i nw)
+      (do (js-aelem t pretty 1 i)
+          (ev-word t pretty 2 words etext i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 nw)
+    (set s (ev-begin t pretty 0 s (ek-lines)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i nl)
+      (do (js-aelem t pretty 1 i)
+          (ev-line t pretty 2 lines i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 nl)
+    (set s (ev-begin t pretty 0 s (ek-paths)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i np)
+      (do (js-aelem t pretty 1 i)
+          (ev-path t pretty 2 paths i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 np)
+    (set s (ev-begin t pretty 0 s (ek-images)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i nm)
+      (do (js-aelem t pretty 1 i)
+          (ev-image t pretty 2 images i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 nm)
+    (set s (ev-begin t pretty 0 s (ek-components)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i nc)
+      (do (js-aelem t pretty 1 i)
+          (ev-component t pretty 2 components i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 nc)
+    (set s (ev-begin t pretty 0 s (ek-ocrwords)))
+    (emit-ascii t "[")
+    (set i 0)
+    (while (< i no)
+      (do (js-aelem t pretty 1 i)
+          (ev-ocrword t pretty 2 ocrwords alts etext i)
+          (set i (+ i 1))))
+    (js-aend t pretty 1 no)
+    (js-close t pretty 0 s)
+    (return 0)))

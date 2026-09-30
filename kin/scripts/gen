@@ -1,0 +1,7 @@
+#!/usr/bin/env bb
+;; Print what a source generates, for every target.   kin/scripts/gen kin/hello.kin
+(require '[kin.project :as kp] '[emon.project :as p])
+(let [[path] *command-line-args*]
+  (doseq [[t text] (kp/generate @p/project (slurp path) path)]
+    (println (str "==== " (name t) " ====================================="))
+    (print text)))

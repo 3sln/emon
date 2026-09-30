@@ -1,0 +1,589 @@
+;; Laws for `emon.model` (P1.1). Every expectation is written out, not read
+;; back from the code under test; the fingerprint at the end was computed in
+;; Python over arena contents worked out by hand from the layout in
+;; `model.kin`, so a change to a slot's meaning fails here on all four targets.
+(ns emon.modeltest
+  (:require [emon.lang :refer [I32 I64 Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-eq64
+                               assert-that assert-text new-cells new-text hex-blob]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push]]
+            [emon.model :refer [model-init node-new node-count node-kind
+                                node-parent node-first-child node-last-child
+                                node-next node-prev node-attr-head
+                                node-text-start node-text-len
+                                node-region-head node-region-count node-src
+                                node-conf node-flags node-sub node-aux
+                                node-has-text node-child-count node-depth
+                                node-set-text node-set-sub node-set-aux
+                                node-set-src node-set-flags node-set-conf
+                                node-add-src node-add-flag
+                                text-len text-at text-append-cp
+                                text-append-utf8
+                                node-add-region region-count region-page
+                                region-x0 region-y0 region-x1 region-y1
+                                region-next
+                                attr-find attr-find-next node-attr
+                                node-attr-int-or attr-count attr-key
+                                attr-vkind attr-value attr-len attr-next
+                                node-set-attr-int node-set-attr-bool
+                                node-set-attr-node node-set-attr-text
+                                node-add-attr-int node-add-attr-text
+                                page-new page-set-label page-set-health
+                                page-set-resolution page-count page-number
+                                page-label-start page-label-len page-w page-h
+                                page-rot page-kind page-health page-dpi
+                                page-px-w page-px-h
+                                ledger-add ledger-set-text ledger-count
+                                ledger-reason ledger-page ledger-x0 ledger-y0
+                                ledger-x1 ledger-y1 ledger-text-start
+                                ledger-text-len ledger-conf ledger-src
+                                model-check model-hash max-depth
+                                nk-is-inline nk-emit-name fk-emit-name
+                                nk-document nk-section nk-heading nk-paragraph
+                                nk-list nk-item nk-text nk-span nk-furniture
+                                nk-linebreak nk-break nk-linebreak
+                                fk-level fk-label fk-target fk-checked fk-pages
+                                fk-labels fk-name fk-alt sr-text sr-infer sr-ocr
+                                fl-low-conf fl-rotated pk-vector pk-scanned
+                                dr-page-number mc-ok mc-bad-link mc-bad-tree
+                                mc-bad-text mc-bad-attr mc-bad-region
+                                mc-bad-conf mc-not-preorder mc-bad-page
+                                mc-bad-ledger mc-no-root mc-bad-stride
+                                av-int av-text av-node av-bool sy-bold sy-sup]]
+            [kin.lang :refer [defn return let set while if do comment + - * < >= == != and or]]))
+
+;; `n` placeholder code points, so a run inside the arena is a real run.
+(defn ^I32 mt-text [^:mut ^Cells text ^I32 n]
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (text-append-cp text 97)
+          (set i (+ i 1))))
+    (return 0)))
+
+;; -------------------------------------------------- a three-level tree
+;;
+;;   0 document
+;;     1 section
+;;       2 heading
+;;       3 paragraph
+;;         4 text
+;;         5 span
+;;           6 text
+;;       7 list
+;;         8 item
+;;         9 item
+;;     10 section
+
+(defn ^I32 mt-tree [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                    ^:mut ^Cells text ^:mut ^Cells pages ^:mut ^Cells ledger]
+  (model-init nodes attrs regions text pages ledger)
+  (node-new nodes (nk-section) 0)
+  (node-new nodes (nk-heading) 1)
+  (node-new nodes (nk-paragraph) 1)
+  (node-new nodes (nk-text) 3)
+  (node-new nodes (nk-span) 3)
+  (node-new nodes (nk-text) 5)
+  (node-new nodes (nk-list) 1)
+  (node-new nodes (nk-item) 7)
+  (node-new nodes (nk-item) 7)
+  (node-new nodes (nk-section) 0)
+  (return 0))
+
+(deftest test-a-new-model-is-one-document-root
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (model-init nodes attrs regions text pages ledger)
+    (assert-eq (node-count nodes) 1 "one node")
+    (assert-eq (cells-len nodes) 16 "a node is sixteen cells")
+    (assert-eq (node-kind nodes 0) 1 "the root is a document, code 1")
+    (assert-eq (node-parent nodes 0) -1 "the root has no parent")
+    (assert-eq (node-first-child nodes 0) -1 "no children yet")
+    (assert-eq (node-last-child nodes 0) -1 "no last child yet")
+    (assert-eq (node-next nodes 0) -1 "no sibling")
+    (assert-eq (node-prev nodes 0) -1 "no sibling before")
+    (assert-eq (node-attr-head nodes 0) -1 "no attributes")
+    (assert-eq (node-text-start nodes 0) -1 "no text run")
+    (assert-eq (node-text-len nodes 0) 0 "empty text run")
+    (assert-eq (node-has-text nodes 0) 0 "no text")
+    (assert-eq (node-region-head nodes 0) -1 "no regions")
+    (assert-eq (node-region-count nodes 0) 0 "no regions counted")
+    (assert-eq (node-src nodes 0) 0 "no sources")
+    (assert-eq (node-conf nodes 0) -1 "confidence absent")
+    (assert-eq (node-flags nodes 0) 0 "no flags")
+    (assert-eq (node-sub nodes 0) 0 "sub zero")
+    (assert-eq (node-aux nodes 0) 0 "aux zero")
+    (assert-eq (cells-len attrs) 0 "attrs empty")
+    (assert-eq (cells-len regions) 0 "regions empty")
+    (assert-eq (cells-len text) 0 "text empty")
+    (assert-eq (page-count pages) 0 "no pages")
+    (assert-eq (ledger-count ledger) 0 "nothing dropped")
+    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+
+(deftest test-model-init-empties-a-used-model
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger)
+    (text-append-cp text 65)
+    (page-new pages 1 100 100 0 1)
+    (ledger-add ledger 1 1 0 0 1 1 500 0)
+    (model-init nodes attrs regions text pages ledger)
+    (assert-eq (node-count nodes) 1 "back to the root")
+    (assert-eq (cells-len text) 0 "text cleared")
+    (assert-eq (page-count pages) 0 "pages cleared")
+    (assert-eq (ledger-count ledger) 0 "ledger cleared")))
+
+(deftest test-the-tree-links-agree-in-every-direction
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (node-count nodes) 11 "eleven nodes")
+    (assert-eq (node-first-child nodes 0) 1 "document first child")
+    (assert-eq (node-last-child nodes 0) 10 "document last child")
+    (assert-eq (node-next nodes 1) 10 "section 1 is followed by section 10")
+    (assert-eq (node-prev nodes 10) 1 "section 10 follows section 1")
+    (assert-eq (node-next nodes 10) -1 "nothing after the last child")
+    (assert-eq (node-prev nodes 1) -1 "nothing before the first child")
+    (assert-eq (node-first-child nodes 1) 2 "section first child is the heading")
+    (assert-eq (node-last-child nodes 1) 7 "section last child is the list")
+    (assert-eq (node-next nodes 2) 3 "heading then paragraph")
+    (assert-eq (node-next nodes 3) 7 "paragraph then list")
+    (assert-eq (node-prev nodes 7) 3 "list after paragraph")
+    (assert-eq (node-prev nodes 3) 2 "paragraph after heading")
+    (assert-eq (node-first-child nodes 3) 4 "paragraph's first inline")
+    (assert-eq (node-last-child nodes 3) 5 "paragraph's last inline")
+    (assert-eq (node-parent nodes 6) 5 "the inner text is in the span")
+    (assert-eq (node-parent nodes 5) 3 "the span is in the paragraph")
+    (assert-eq (node-parent nodes 10) 0 "section 10 is under the document")
+    (assert-eq (node-first-child nodes 2) -1 "a leaf has no children")
+    (assert-eq (node-child-count nodes 0) 2 "document has two children")
+    (assert-eq (node-child-count nodes 7) 2 "list has two items")
+    (assert-eq (node-child-count nodes 9) 0 "an item here is a leaf")
+    (assert-eq (node-depth nodes 0) 0 "depth of the root")
+    (assert-eq (node-depth nodes 6) 4 "depth of the innermost text")
+    (assert-eq (node-kind nodes 5) 22 "span is code 22")
+    (assert-eq (node-kind nodes 7) 5 "list is code 5")
+    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+
+(deftest test-node-new-refuses-what-it-cannot-place
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (model-init nodes attrs regions text pages ledger)
+    (assert-eq (node-new nodes (nk-paragraph) 5) -1 "a parent that does not exist")
+    (assert-eq (node-new nodes (nk-paragraph) -2) -1 "a parent below -1")
+    (assert-eq (node-new nodes 0 0) -1 "kind 0 is unknown")
+    (assert-eq (node-new nodes 26 0) -1 "kind 26 is unknown")
+    (assert-eq (node-count nodes) 1 "a refusal adds nothing")
+    (assert-eq (node-new nodes (nk-furniture) -1) 1 "a second root is allowed")
+    (assert-eq (node-parent nodes 1) -1 "furniture has no parent")
+    (assert-eq (node-prev nodes 1) -1 "a root has no prev")))
+
+(deftest test-nesting-stops-at-max-depth
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 made 0]
+    (model-init nodes attrs regions text pages ledger)
+    (while (!= at -1)
+      (do (set at (node-new nodes (nk-section) at))
+          (if (!= at -1) (set made (+ made 1)))))
+    (assert-eq made (- (max-depth) 1) "a chain of sections ends at max-depth - 1 below the root")
+    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "still well formed")))
+
+(deftest test-fields-are-set-and-read-back
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger)
+    (node-set-text nodes 3 7 5)
+    (assert-eq (node-text-start nodes 3) 7 "text start")
+    (assert-eq (node-text-len nodes 3) 5 "text len")
+    (assert-eq (node-has-text nodes 3) 1 "has text")
+    (node-set-sub nodes 2 3)
+    (node-set-aux nodes 2 9)
+    (assert-eq (node-sub nodes 2) 3 "sub")
+    (assert-eq (node-aux nodes 2) 9 "aux")
+    (node-add-src nodes 3 (sr-text))
+    (node-add-src nodes 3 (sr-infer))
+    (node-add-src nodes 3 (sr-text))
+    (assert-eq (node-src nodes 3) 257 "sources are a bitset: adding twice is adding once")
+    (node-set-src nodes 3 4)
+    (assert-eq (node-src nodes 3) 4 "set replaces")
+    (node-add-flag nodes 3 (fl-low-conf))
+    (node-add-flag nodes 3 (fl-rotated))
+    (assert-eq (node-flags nodes 3) 33 "flags are a bitset")
+    (node-set-flags nodes 3 0)
+    (assert-eq (node-flags nodes 3) 0 "flags set")
+    (node-set-conf nodes 3 950)
+    (assert-eq (node-conf nodes 3) 950 "conf")
+    (node-set-conf nodes 3 1001)
+    (assert-eq (node-conf nodes 3) 1000 "conf clamps high")
+    (node-set-conf nodes 3 -40)
+    (assert-eq (node-conf nodes 3) -1 "conf clamps low to absent")
+    (node-set-conf nodes 3 0)
+    (assert-eq (node-conf nodes 3) 0 "zero is a confidence, not absence")))
+
+(deftest test-inline-kinds
+  (assert-eq (nk-is-inline (nk-text)) 1 "text")
+  (assert-eq (nk-is-inline (nk-span)) 1 "span")
+  (assert-eq (nk-is-inline 23) 1 "link")
+  (assert-eq (nk-is-inline 24) 1 "ref")
+  (assert-eq (nk-is-inline (nk-linebreak)) 1 "linebreak")
+  (assert-eq (nk-is-inline (nk-paragraph)) 0 "paragraph is a block")
+  (assert-eq (nk-is-inline (nk-break)) 0 "a break is a milestone, not an inline")
+  (assert-eq (nk-is-inline (nk-document)) 0 "document"))
+
+(deftest test-regions-chain-in-the-order-added
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (node-add-region nodes regions 3 1 7200 9000 54000 11000) 0 "first region is 0")
+    (assert-eq (node-add-region nodes regions 2 1 100 200 300 400) 1 "another node's region is 1")
+    (assert-eq (node-add-region nodes regions 3 2 7200 6000 54000 8000) 2 "a second page for the paragraph")
+    (assert-eq (node-add-region nodes regions 3 3 1 2 3 4) 3 "a third")
+    (assert-eq (region-count regions) 4 "four regions in all")
+    (assert-eq (node-region-count nodes 3) 3 "the paragraph spans three pages")
+    (assert-eq (node-region-count nodes 2) 1 "the heading has one")
+    (assert-eq (node-region-head nodes 3) 0 "head is the first added")
+    (assert-eq (region-next regions 0) 2 "chain skips another node's region")
+    (assert-eq (region-next regions 2) 3 "chain continues")
+    (assert-eq (region-next regions 3) -1 "chain ends")
+    (assert-eq (region-page regions 2) 2 "page")
+    (assert-eq (region-x0 regions 2) 7200 "x0")
+    (assert-eq (region-y0 regions 2) 6000 "y0")
+    (assert-eq (region-x1 regions 2) 54000 "x1")
+    (assert-eq (region-y1 regions 2) 8000 "y1")
+    (assert-eq (region-page regions 1) 1 "the heading's page")
+    (assert-eq (node-region-head nodes 2) 1 "the heading's head")
+    (assert-eq (node-region-head nodes 4) -1 "a node with none")
+    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+
+(deftest test-attributes-set-replace-and-repeat
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^:mut ^I32 a 0]
+    (mt-tree nodes attrs regions text pages ledger)
+    (mt-text text 20)
+    (assert-eq (node-attr nodes attrs 2 (fk-level)) -1 "no attribute yet")
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-level) 77) 77 "default when absent")
+    (node-set-attr-int nodes attrs 2 (fk-level) 4)
+    (node-set-attr-text nodes attrs 2 (fk-label) 10 6)
+    (node-set-attr-node nodes attrs 2 (fk-target) 7)
+    (node-set-attr-bool nodes attrs 2 (fk-checked) 5)
+    (assert-eq (attr-count attrs) 4 "four attributes")
+    (assert-eq (node-attr-head nodes 2) 0 "head is the first")
+    (set a (node-attr nodes attrs 2 (fk-label)))
+    (assert-eq a 1 "label is attr 1")
+    (assert-eq (attr-key attrs a) (fk-label) "key")
+    (assert-eq (attr-vkind attrs a) (av-text) "a text value")
+    (assert-eq (attr-value attrs a) 10 "run start")
+    (assert-eq (attr-len attrs a) 6 "run length")
+    (assert-eq (attr-next attrs a) 2 "chain order is insertion order")
+    (set a (node-attr nodes attrs 2 (fk-target)))
+    (assert-eq (attr-vkind attrs a) (av-node) "a node value")
+    (assert-eq (attr-value attrs a) 7 "target node")
+    (set a (node-attr nodes attrs 2 (fk-checked)))
+    (assert-eq (attr-vkind attrs a) (av-bool) "a bool value")
+    (assert-eq (attr-value attrs a) 1 "non-zero is stored as 1")
+    (assert-eq (attr-next attrs a) -1 "the chain ends")
+    (node-set-attr-int nodes attrs 2 (fk-level) 5)
+    (assert-eq (attr-count attrs) 4 "set replaced in place")
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-level) 77) 5 "the new value")
+    (node-set-attr-text nodes attrs 2 (fk-level) 3 2)
+    (assert-eq (attr-vkind attrs 0) (av-text) "set may change the value kind")
+    (assert-eq (attr-len attrs 0) 2 "and the length")
+    (node-set-attr-bool nodes attrs 2 (fk-checked) 0)
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-checked) 9) 0 "false is 0")
+    (node-add-attr-int nodes attrs 7 (fk-pages) 1)
+    (node-add-attr-int nodes attrs 7 (fk-pages) 2)
+    (node-add-attr-int nodes attrs 7 (fk-pages) 9)
+    (node-add-attr-text nodes attrs 7 (fk-labels) 0 1)
+    (assert-eq (attr-count attrs) 8 "add always appends")
+    (set a (node-attr nodes attrs 7 (fk-pages)))
+    (assert-eq (attr-value attrs a) 1 "first of the repeated key")
+    (set a (attr-find-next attrs a (fk-pages)))
+    (assert-eq (attr-value attrs a) 2 "second")
+    (set a (attr-find-next attrs a (fk-pages)))
+    (assert-eq (attr-value attrs a) 9 "third")
+    (assert-eq (attr-find-next attrs a (fk-pages)) -1 "no fourth")
+    (assert-eq (node-attr nodes attrs 7 (fk-alt)) -1 "a key never set")
+    (assert-eq (node-attr nodes attrs 3 (fk-pages)) -1 "another node's chain is its own")
+    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+
+(deftest test-text-arena-holds-scalar-values-only
+  (let [^Cells text (new-cells)]
+    (assert-eq (text-append-cp text 72) 0 "index written")
+    (assert-eq (text-append-cp text 233) 1 "index written")
+    (text-append-cp text 128512)
+    (text-append-cp text -1)
+    (text-append-cp text 55296)
+    (text-append-cp text 57343)
+    (text-append-cp text 1114111)
+    (text-append-cp text 1114112)
+    (text-append-cp text 0)
+    (assert-eq (text-len text) 9 "nine cells")
+    (assert-eq (text-at text 0) 72 "H")
+    (assert-eq (text-at text 1) 233 "e acute")
+    (assert-eq (text-at text 2) 128512 "a code point past the BMP is one cell")
+    (assert-eq (text-at text 3) 65533 "negative becomes U+FFFD")
+    (assert-eq (text-at text 4) 65533 "a high surrogate becomes U+FFFD")
+    (assert-eq (text-at text 5) 65533 "a low surrogate becomes U+FFFD")
+    (assert-eq (text-at text 6) 1114111 "U+10FFFF is kept")
+    (assert-eq (text-at text 7) 65533 "past U+10FFFF becomes U+FFFD")
+    (assert-eq (text-at text 8) 0 "NUL is a scalar value")))
+
+(deftest test-utf8-valid-and-invalid-sequences
+  (let [^Cells text (new-cells)
+        ^I32 n (text-append-utf8 text (hex-blob "41c3a9e282acf09f988080c0e080eda080f4908080 41") 0 22)]
+    (assert-eq n 16 "sixteen code points: four good, eleven replacements, one more")
+    (assert-eq (text-len text) 16 "and sixteen cells")
+    (assert-eq (text-at text 0) 65 "ASCII")
+    (assert-eq (text-at text 1) 233 "two bytes")
+    (assert-eq (text-at text 2) 8364 "three bytes")
+    (assert-eq (text-at text 3) 128512 "four bytes")
+    (assert-eq (text-at text 4) 65533 "a stray continuation byte")
+    (assert-eq (text-at text 5) 65533 "C0 is never a lead")
+    (assert-eq (text-at text 6) 65533 "E0 followed by 80 is overlong: E0 is one replacement")
+    (assert-eq (text-at text 7) 65533 "and the 80 is a stray")
+    (assert-eq (text-at text 8) 65533 "ED A0 is a surrogate: ED is one replacement")
+    (assert-eq (text-at text 9) 65533 "A0 is a stray")
+    (assert-eq (text-at text 10) 65533 "80 is a stray")
+    (assert-eq (text-at text 11) 65533 "F4 90 is past U+10FFFF: F4 is one replacement")
+    (assert-eq (text-at text 12) 65533 "90 is a stray")
+    (assert-eq (text-at text 13) 65533 "80 is a stray")
+    (assert-eq (text-at text 14) 65533 "80 is a stray")
+    (assert-eq (text-at text 15) 65 "decoding resumes")))
+
+(deftest test-utf8-truncation-and-spans
+  (let [^Cells text (new-cells)
+        ^I32 n1 (text-append-utf8 text (hex-blob "41e282") 0 3)
+        ^I32 n2 (text-append-utf8 text (hex-blob "41c3a942") 1 3)
+        ^I32 n3 (text-append-utf8 text (hex-blob "f09f98") 0 3)
+        ^I32 n4 (text-append-utf8 text (hex-blob "f09f9880") 0 0)]
+    (assert-eq n1 2 "A, then a cut-short three-byte sequence is one replacement")
+    (assert-eq n2 1 "the span is [1,3): just the two bytes of e acute")
+    (assert-eq n3 1 "a cut-short four-byte sequence is one replacement")
+    (assert-eq n4 0 "an empty span")
+    (assert-eq (text-len text) 4 "four cells in all")
+    (assert-eq (text-at text 0) 65 "A")
+    (assert-eq (text-at text 1) 65533 "replacement")
+    (assert-eq (text-at text 2) 233 "e acute")
+    (assert-eq (text-at text 3) 65533 "replacement")))
+
+(deftest test-pages-and-ledger-rows
+  (let [^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (assert-eq (page-new pages 1 61200 79200 0 (pk-vector)) 0 "first page")
+    (assert-eq (page-new pages 2 79200 61200 90 (pk-scanned)) 1 "second page")
+    (assert-eq (page-count pages) 2 "two pages")
+    (assert-eq (cells-len pages) 32 "sixteen cells each")
+    (assert-eq (page-number pages 1) 2 "number")
+    (assert-eq (page-w pages 1) 79200 "w")
+    (assert-eq (page-h pages 1) 61200 "h")
+    (assert-eq (page-rot pages 1) 90 "rot")
+    (assert-eq (page-kind pages 1) 2 "scanned is code 2")
+    (assert-eq (page-label-start pages 1) -1 "no label")
+    (assert-eq (page-label-len pages 1) 0 "no label length")
+    (assert-eq (page-health pages 1) -1 "no health")
+    (assert-eq (page-dpi pages 1) 0 "no resolution")
+    (page-set-label pages 1 40 3)
+    (page-set-health pages 1 987)
+    (page-set-resolution pages 1 300 2480 3508)
+    (assert-eq (page-label-start pages 1) 40 "label start")
+    (assert-eq (page-label-len pages 1) 3 "label len")
+    (assert-eq (page-health pages 1) 987 "health")
+    (assert-eq (page-dpi pages 1) 300 "dpi")
+    (assert-eq (page-px-w pages 1) 2480 "px w")
+    (assert-eq (page-px-h pages 1) 3508 "px h")
+    (assert-eq (page-health pages 0) -1 "the other page is untouched")
+    (assert-eq (ledger-add ledger (dr-page-number) 1 29000 76000 32200 77200 998 (sr-text)) 0 "first row")
+    (assert-eq (ledger-add ledger 1 2 0 0 1 1 -1 0) 1 "second row")
+    (assert-eq (ledger-count ledger) 2 "two rows")
+    (assert-eq (cells-len ledger) 20 "ten cells each")
+    (assert-eq (ledger-reason ledger 0) 3 "page-number is code 3")
+    (assert-eq (ledger-page ledger 0) 1 "page")
+    (assert-eq (ledger-x0 ledger 0) 29000 "x0")
+    (assert-eq (ledger-y0 ledger 0) 76000 "y0")
+    (assert-eq (ledger-x1 ledger 0) 32200 "x1")
+    (assert-eq (ledger-y1 ledger 0) 77200 "y1")
+    (assert-eq (ledger-conf ledger 0) 998 "conf")
+    (assert-eq (ledger-src ledger 0) 1 "src")
+    (assert-eq (ledger-text-start ledger 0) -1 "no text")
+    (ledger-set-text ledger 0 5 1)
+    (assert-eq (ledger-text-start ledger 0) 5 "text start")
+    (assert-eq (ledger-text-len ledger 0) 1 "text len")
+    (assert-eq (ledger-conf ledger 1) -1 "an absent confidence")))
+
+(deftest test-names-come-from-the-tables
+  (let [^Text t (new-text)]
+    (nk-emit-name t 4)
+    (emit-ascii t " ")
+    (nk-emit-name t 25)
+    (emit-ascii t " ")
+    (fk-emit-name t 1)
+    (emit-ascii t " ")
+    (fk-emit-name t 74)
+    (assert-text t "paragraph linebreak id checked" "spellings")
+    (assert-eq (nk-emit-name t 26) 0 "an unknown kind writes nothing")
+    (assert-eq (nk-emit-name t 0) 0 "kind 0 is unknown")))
+
+;; ---------------------------------------------------- the fingerprint
+
+(defn ^I32 mt-tiny [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                    ^:mut ^Cells text ^:mut ^Cells pages ^:mut ^Cells ledger]
+  (model-init nodes attrs regions text pages ledger)
+  (node-new nodes (nk-paragraph) 0)
+  (text-append-cp text 72)
+  (text-append-cp text 105)
+  (node-set-text nodes 1 0 2)
+  (node-add-region nodes regions 1 1 7200 9000 54000 11000)
+  (node-set-conf nodes 1 950)
+  (node-add-src nodes 1 (sr-text))
+  (node-add-src nodes 1 (sr-infer))
+  (node-set-attr-int nodes attrs 1 (fk-level) 2)
+  (page-new pages 1 61200 79200 0 (pk-vector))
+  (page-set-health pages 0 987)
+  (ledger-add ledger (dr-page-number) 1 29000 76000 32200 77200 998 (sr-text))
+  (return 0))
+
+(deftest test-the-tiny-model-has-the-arenas-the-layout-says
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)]
+    (mt-tiny nodes attrs regions text pages ledger)
+    (assert-eq (cells-len nodes) 32 "two nodes")
+    (assert-eq (cells-at nodes 2) 1 "root first child")
+    (assert-eq (cells-at nodes 3) 1 "root last child")
+    (assert-eq (cells-at nodes 16) 4 "paragraph kind")
+    (assert-eq (cells-at nodes 17) 0 "paragraph parent")
+    (assert-eq (cells-at nodes 22) 0 "paragraph attr head")
+    (assert-eq (cells-at nodes 24) 2 "paragraph text length")
+    (assert-eq (cells-at nodes 25) 0 "paragraph region head")
+    (assert-eq (cells-at nodes 26) 1 "paragraph region count")
+    (assert-eq (cells-at nodes 27) 257 "paragraph src")
+    (assert-eq (cells-at nodes 28) 950 "paragraph conf")
+    (assert-eq (cells-len attrs) 5 "one attr")
+    (assert-eq (cells-len regions) 6 "one region")
+    (assert-eq (cells-at regions 4) 11000 "region y1")
+    (assert-eq (cells-len pages) 16 "one page")
+    (assert-eq (cells-at pages 7) 987 "page health")
+    (assert-eq (cells-len ledger) 10 "one ledger row")
+    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")
+    (assert-eq64 (model-hash nodes attrs regions text pages ledger) -413424005450145991 "fingerprint")))
+
+;; ---------------------------------------------------------- the checker
+
+(deftest test-check-names-each-way-a-model-can-be-wrong
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger)
+    (text-append-cp text 65)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "well formed to begin with")
+    (cells-push nodes 0)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-stride) "a stray cell")
+    (mt-tree nodes attrs regions text pages ledger)
+    (cells-set nodes 17 99)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-link) "a parent out of range")
+    (assert-eq (cells-at st 0) 1 "names node 1")
+    (mt-tree nodes attrs regions text pages ledger)
+    (cells-set nodes (+ (* 3 16) 1) 2)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-tree) "a child that points at another parent")
+    (mt-tree nodes attrs regions text pages ledger)
+    (cells-set nodes (+ (* 3 16) 7) 0)
+    (cells-set nodes (+ (* 3 16) 8) 5)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-text) "a text run past the arena")
+    (assert-eq (cells-at st 0) 3 "names node 3")
+    (mt-tree nodes attrs regions text pages ledger)
+    (node-set-conf nodes 3 10)
+    (cells-set nodes (+ (* 3 16) 12) 1001)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-conf) "a confidence of 1001")
+    (mt-tree nodes attrs regions text pages ledger)
+    (cells-set nodes 0 2)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-no-root) "a root that is not a document")
+    (mt-tree nodes attrs regions text pages ledger)
+    (cells-set nodes (+ (* 4 16) 0) 40)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 3 "an unknown kind is mc-bad-kind")
+    (mt-tree nodes attrs regions text pages ledger)
+    (node-set-attr-text nodes attrs 3 (fk-label) 0 4)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-attr) "an attribute run past the arena")
+    (mt-tree nodes attrs regions text pages ledger)
+    (node-add-region nodes regions 3 1 0 0 1 1)
+    (cells-set nodes (+ (* 3 16) 10) 2)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-region) "a region count that is not the chain")
+    (mt-tree nodes attrs regions text pages ledger)
+    (page-new pages 1 100 100 0 1)
+    (page-set-label pages 0 0 3)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-page) "a page label past the arena")
+    (mt-tree nodes attrs regions text pages ledger)
+    (ledger-add ledger 1 1 0 0 1 1 2000 0)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-ledger) "a ledger confidence of 2000")))
+
+(deftest test-check-requires-preorder-ids
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)]
+    (model-init nodes attrs regions text pages ledger)
+    (node-new nodes (nk-section) 0)
+    (node-new nodes (nk-section) 0)
+    (node-new nodes (nk-paragraph) 1)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-not-preorder) "a child created after its parent's next sibling")
+    (assert-eq (cells-at st 0) 3 "names node 3")))
+
+(deftest test-check-accepts-furniture-as-a-second-root
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells st (new-cells)]
+    (model-init nodes attrs regions text pages ledger)
+    (node-new nodes (nk-paragraph) 0)
+    (node-new nodes (nk-furniture) -1)
+    (node-new nodes (nk-paragraph) 2)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "two trees, each in pre-order")
+    (node-new nodes (nk-furniture) -1)
+    (node-new nodes (nk-paragraph) 0)
+    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-not-preorder) "a body node added after the furniture")))

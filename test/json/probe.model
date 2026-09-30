@@ -1,0 +1,14 @@
+# The `bb check` probe (kin/modelprobe.kin) builds THIS model in code and
+# prints its JSON and a fingerprint of its arenas; `bb check` compares the
+# JSON line with probe.json on all four targets. Keep the two in step: the
+# law `test-the-tiny-model-has-the-arenas-the-layout-says` pins the fingerprint.
+n 4 0
+t 1 Hi
+r 1 1 7200 9000 54000 11000
+c 1 950
+sr 1 257
+ai 1 3 2
+pg 1 61200 79200 0 1
+ph 0 987
+d 3 1 29000 76000 32200 77200 998 1
+dt 0 1

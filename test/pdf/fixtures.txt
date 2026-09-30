@@ -1,0 +1,27 @@
+# emon P1.5 fixtures (kin/pdfdoctest.kin). Written by kin/scripts/pdf-fixtures.py.
+# file <TAB> status <TAB> pages <TAB> digest of the boxes. `status` is a `pd-status`; pages and
+# digest are - where the file cannot be opened. Cross-checked against pdfinfo when present.
+pdf/badlength.pdf	ok	1	5936741
+pdf/badxref.pdf	bad-xref	-	-
+pdf/badxrefstream.pdf	bad-xref	-	-
+pdf/boxes.pdf	ok	7	1073151
+pdf/crlf.pdf	ok	1	5936741
+pdf/empty.pdf	no-header	-	-
+pdf/encrypt-flag.pdf	ok	1	5936741
+pdf/filters.pdf	ok	1	5936741
+pdf/gs-xrefstream.pdf	ok	2	894493
+pdf/html-chrome.pdf	ok	2	894493
+pdf/hybrid.pdf	ok	2	5103995
+pdf/incremental-cut.pdf	ok	2	1188396
+pdf/incremental.pdf	ok	3	2116900
+pdf/inherit.pdf	ok	4	4571311
+pdf/junk-header.pdf	ok	1	5936741
+pdf/kids-cycle.pdf	ok	2	7991708
+pdf/kids-damaged.pdf	ok	2	7991708
+pdf/minimal.pdf	ok	1	5936741
+pdf/no-pages.pdf	no-pages	-	-
+pdf/no-root.pdf	no-root	-	-
+pdf/nostartxref.pdf	no-startxref	-	-
+pdf/notpdf.pdf	no-header	-	-
+pdf/prev-loop.pdf	ok	1	5936741
+pdf/xrefstream.pdf	ok	2	4701884

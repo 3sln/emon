@@ -1,0 +1,1885 @@
+# emon — DEVLOG
+
+The live tracker. `SPEC.md` says what emon is and changes only when a decision
+changes; this file says what is being built, in what order, and why that
+order. Steps, findings and decisions are added here as work happens. Modelled
+on nome's `ROADMAP.md`.
+
+**Status keys:** `[ ]` not started · `[~]` in progress · `[x]` done ·
+`[!]` blocked (say on what) · `[?]` open question, must be answered before the
+item starts.
+
+**How to take an item.** Every Phase 0 and Phase 1 item has a *Brief* (what
+to build), *Files* (where), and *Done when* (the check that goes green). An
+item is done when its check is green **and** its entry here says what was
+learnt, with the commit. A decision taken while doing it gets the next `D###`
+in the Decisions section — decisions do not block work, but they must be
+written down.
+
+---
+
+## Current milestones
+
+The next five pieces of work, in the order they should be taken. Each is also
+filed under its phase; this block exists so the ORDER survives. Cross off here
+and in the phase item both.
+
+1. [x] **P0.1 — Skeleton that generates four targets and agrees.**
+   `bb check` green on a `hello.kin`.
+2. [x] **P0.2 — The host-port vocabulary**: `emon.lang` tags, `emon.port`
+   annotations in four host trees (Blob, Cells, Text, limits), the
+   `emit-ascii` form; `bb hosts` green.
+3. [x] **P0.3 + P0.6 — The two vocabulary extensions**: `emit-ascii`
+   (literal → text sink, ASCII-checked at generation time) and `defenum`
+   (kind code ↔ JSON spelling from one table).
+4. [x] **P0.4 + P0.5 — emon's own substrate modules and `bb unit`**:
+   `bytes`, `inflate`, `normalize` + tables, `splitmix`, written in emon
+   (no code shared with nome, D039); `emon.test` laws running natively on
+   every target with a framework.
+5. [x] **P1.1 — The Model in kin** (`emon.model`): arenas, builder, accessors,
+   and laws in `bb unit`.
+
+After these: P1.2 (canonical JSON) → P1.10 in order (P1.11, the `Src`
+port of D058, goes in before P1.4/P1.5 close), which completes the
+first vertical slice (a born-digital PDF's text layer → Model → JSON and
+HTML, on the Rust host). P0.7/P0.8 are hygiene and can be taken by anyone
+between items.
+
+---
+
+## The ordering principle
+
+**1. Every target exists from day one; every host layer does not** (nome's
+rule, D002). The core generates into Rust, Go, Java and C# from the first
+commit and `bb check` compiles all four. Host layers arrive in order: Rust,
+then Go, then Java and C#. Go is second because it is the proof the kin
+arrangement survives a different error model; and **the cross-target identity
+gate exists before the second host layer does anything else.**
+
+**2. Measure before you guess** (D031). Accuracy is the product, and
+heuristics tuned without a scoreboard are tuned to whatever document the
+developer last looked at. So the ground-truth pipeline (the synthetic round
+trip, D041; the gold format, `bb accuracy`) is built in Phase 2 — **before** the first
+heading, table or fusion heuristic in Phases 4–7.
+
+**3. Clean evidence before noisy evidence.** Structure recovery (blocks,
+headings, lists, tables, furniture) is developed first on born-digital text
+layers, where the evidence is exact, so an algorithm's errors are the
+algorithm's. OCR and the tracer then feed the *same* evidence layer, and what
+changes in the scores is attributable to the source. The risk this ordering
+carries — an evidence schema designed without OCR in mind — is paid down in
+Phase 1 by defining the evidence schema with OCR's fields from the start
+(P1.3), and in Phase 2 by the transcript spike (P2.6).
+
+**4. A vertical slice before breadth.** The first slice is thin and goes all
+the way through: bytes → Source → Evidence → Model → JSON/HTML → a gate. Every
+later item widens a stage that already exists end to end.
+
+---
+
+## Phase 0 — Foundations
+
+No PDF. The goal: an emon repository whose kin sources generate four modules
+that compile, run and agree; whose host trees declare their ports and agree;
+and whose gates exist before there is anything to gate.
+
+- [x] **P0.1 — Project skeleton, following nome's conventions.**
+  *Brief*: create the repository layout of SPEC §15. The layout follows
+  nome's conventions, but every file is emon's own; nothing is shared with
+  nome and nothing references `../nome` (D039): `bb.edn` with tasks `gen`, `emit`, `check`, `drift`, `hosts`
+  (and nothing else yet); `deps.edn` (`{:paths ["kin/src"] :deps
+  {io.github.3sln/kin {:local/root "../kin"}}}`); `kin/src/emon/project.cljc`
+  (vocabularies `[emon.lang emon.test kin.lang]`, targets, `:sources` over
+  `kin/*.kin`, `:host` scans); `kin/src/emon/targets.cljc` (the same
+  pattern nome uses, with `go-module "emon"` and `gen/` paths; C# test
+  modules to `Tests/`); `kin/src/emon/lang.cljc` with the plain tags (`I32
+  U32 I64 Bool Blob Cells Sink`, each with four `:types` and a Go `:zero`)
+  and emon's own cast forms; `kin/scripts/{gen,emit,check,drift}` written for
+  emon (with a gofmt step and an input-hash cache, the ideas behind nome's
+  D566); `kin/hello.kin` (gcd
+  or similar); `.gitignore`; `git init` with `gen/` committed (nome D26).
+  *Files*: everything above; `gen/{rust,go,java,csharp}/` emitted.
+  *Done when*: `bb emit` writes four modules; `bb check` compiles and runs
+  Rust, Go, C# (and Java where a JDK exists — record which) and all print the
+  expected answer; `bb drift` is green and turns red on a hand edit to `gen/`
+  (test that it does — nome D27/D28).
+  *Done 2026-09-30.* `bb emit` writes four modules per source; `bb check` compiles and runs
+  Rust, Go, Java (JDK at `/opt/homebrew/opt/openjdk`; `/usr/bin/java` is the
+  macOS stub, so `check` tests that `javac -version` runs) and C#, all agree;
+  `bb drift` green and red on a hand edit to `gen/` (verified). Learnt: drift's
+  1a ("re-emit changed nothing") is blind to a hand edit when emit's stamp cache
+  says "current" -- 1b (diff vs the index) is what catches it, as in nome.
+  `gen/` is **staged, not committed** (the task forbade commits): drift compares
+  against the git index, so staging is enough for it to work. Commit: pending
+  (see D037). `check` copies whole `gen/<target>/` trees instead of nome's
+  hand-listed modules.
+
+- [x] **P0.2 — Host ports, declared at the host.**
+  *Brief*: the minimal port set every target needs to run kin code:
+  `blob-len`, `blob-u8`, `blob-u16`, `blob-u32` (big-endian) and little-endian
+  twins (TIFF-in-PDF and image headers need both); `cells-len/at/set/push/drop`;
+  the **`Text` sink**: `text-cp` (append a code point as UTF-8), `text-ascii`
+  (append an ASCII literal), `text-i32` (decimal); `limit-of`,
+  `limit-breach`, `setting-of`. Each is a hand-written function with an
+  `@kin:link:form:` annotation in `host/rust/src/port.rs`,
+  `host/go/port/port.go`, `host/java/emon/Port.java`,
+  `host/csharp/Emon/Port.cs` — nome's exact pattern (`:template`, `:arity`,
+  `:throws`, Go's `:import`). Add tags `Text`, `Cpt`, `Px`, `Fx`, `Conf` to
+  `emon.lang` (SPEC §6.3). Add `kin/scripts/hosts` (`kin.host/check-agreement`
+  + `kp/check-usage`).
+  *Files*: `host/*/…/port.*`, `kin/src/emon/lang.cljc`, `kin/scripts/hosts`.
+  *Done when*: `bb hosts` green; deleting one annotation from one host turns it
+  red naming the form and the target; a `kin/porttest.kin` using every form
+  runs in `bb check` on every target with one answer.
+  *Done 2026-09-30.* `bb hosts` green; deleting `blob-u32le`'s annotation from
+  Java turned it red: "emon.port/blob-u32le (form) is declared by csharp go
+  rust and not by java". `kin/porttest.kin` uses all 22 forms and prints one
+  text line, compared on four targets against an expected string worked out by
+  hand (D036). Not added (not in the brief): `Bitmap` tag/forms (P6.1),
+  `text-len`, `sink-i32`.
+
+- [x] **P0.3 — The `emit-ascii` vocabulary extension** (SPEC §6.3.1, D028).
+  *Brief*: a project-local form in `emon.lang`: `(emit-ascii t "literal")`
+  checks at *generation time* that the literal is printable ASCII (0x20–0x7E)
+  and refuses by name otherwise, then renders the target's call to the host's
+  `text-ascii` with the literal spelled by `pr-str` (valid in all four
+  languages for printable ASCII — verify `\"` and `\\` in each). Write the
+  generation-time refusal as a Clojure test beside the vocabulary.
+  *Files*: `kin/src/emon/lang.cljc`, `kin/src/emon/lang_test.clj` (or the kin
+  test idiom nome uses), a probe in `kin/porttest.kin`.
+  *Done when*: probe prints `{"a\"b\\c":1}` identically on every target; a
+  non-ASCII literal fails generation with a message naming the form and file.
+  *Done 2026-09-30.* `emit-ascii` in `emon.lang`; `probe-ascii` in
+  `kin/porttest.kin` prints `{"a\"b\\c":1}` on all four targets (`bb check`
+  now compares four lines per target). `bb lang-test`
+  (`kin/src/emon/lang_test.clj`, run first by `bb check`) shows the refusals:
+  `emon: (emit-ascii t "é") in emon.x: the literal "é" is not printable ASCII
+  (0x20-0x7E): U+00E9 at index 0`. It names the NAMESPACE, not the file path:
+  kin's context carries no source label (D042).
+
+- [x] **P0.4 — emon's own substrate modules for the first slice** (D039,
+  which supersedes D024).
+  *Brief*: write, in emon, the substrate the slice needs: `bytes`
+  (big/little-endian reads over `Blob`), `inflate` (RFC 1950/1951, including
+  the fixed and dynamic Huffman paths and stored blocks), `normalize` (UAX #15
+  NFC plus the ligature decomposition of SPEC §3.6) with its data tables
+  generated by an emon script from the Unicode Character Database, and
+  `splitmix`. **No code is copied from nome and nothing references
+  `../nome`**; nome's modules may be read as reference, as any other
+  implementation of the same specification may. Vendor the *specifications*
+  (RFC 1951 text, UCD files) under `test/`, as the source of truth for tests.
+  *Files*: `kin/{bytes,inflate,normalize,nftable,splitmix}.kin`,
+  `kin/scripts/ucd.py` (table generator), `test/inflate/`, `test/normalize/`.
+  *Done when*: all modules emit and compile on four targets; `bb check` runs
+  an inflate probe over zlib-produced streams (levels 0, 1, 6, 9) and the
+  UCD's `NormalizationTest.txt` NFC column, one answer on every target.
+  *Done 2026-09-30.* All four modules emit and compile on four targets, and
+  their laws and row corpora run in `bb unit`, 39 laws on each of Go, Rust,
+  Java and C#, same count. The "done when" asked for a probe in `bb check`;
+  the corpora are row drivers written in kin and run under `bb unit`
+  instead (D046), which is the stronger check (status, consumed count and
+  bytes per row, not one answer line). Per module:
+  `bytes` (signed/24-bit/unsigned-32-widened reads, bounds questions,
+  defaults, `by-find`/`by-find-back`; D049), `splitmix` (SplitMix64 stream,
+  pure `sm-at`, `sm-below`; checked against the reference vectors for five
+  seeds; D049), `inflate` (RFC 1950/1951 over a `Blob`; D047; 346-row corpus
+  from CPython's zlib at levels 0/1/6/9, five strategies, window sizes, flush
+  modes, plus hand-built, damaged and truncated streams (most of the rows) that zlib also
+  rejects), `normalize` + `nftable` (NFD/NFC plus the ligature fold, D048;
+  the whole of Unicode 18.0.0's `NormalizationTest.txt`, 20171 lines, NFC
+  and NFD invariants). Files: `kin/{bytes,inflate,normalize,nftable,splitmix}.kin`
+  (+ `*test.kin` beside each), `kin/scripts/{ucd.py,inflate-corpus.py}`,
+  `test/inflate/{rfc1950.txt,rfc1951.txt,streams.txt}`,
+  `test/normalize/{UnicodeData,DerivedNormalizationProps,NormalizationTest}.txt`
+  (official, unmodified, fetched from unicode.org `latest/ucd`; RFCs from
+  rfc-editor.org). Learnt: writing the corpus generator found two of my own
+  wrong expectations (an "unassigned code" row that is really an incomplete
+  code set; a stream whose padding bits are read as the next block) -- each
+  caught because zlib itself is asserted to agree. Not done, on purpose:
+  output-limit breach (`limit-breach`) has no law, since a law cannot change
+  the environment per test; decoding is one bit at a time (D047); NormalizationTest's
+  "every other code point is unchanged" invariant (Part 2 preamble) is not
+  checked. Commit: pending (D037).
+
+- [x] **P0.5 — `emon.test`: laws as native tests.**
+  *Brief*: write `emon.test` (a `deftest` form + assertion forms through the
+  port — the same shape nome's test vocabulary has, written fresh), three targets (Rust, Go, C#) plus
+  Java if a JDK and JUnit are available here. `kin/scripts/unit` copies
+  generated test modules where each framework wants them and runs them.
+  *Done when*: `bb unit` runs a trivial law on every framework target and
+  fails when the law is broken.
+  *Done 2026-09-30.* `bb unit [go|rust|java|csharp|red]` runs every `kin/*.kin`
+  whose `ns` requires `emon.test` as native tests on **all four** targets, Java
+  included (D044: no JUnit here, so a reflection runner). Forms: `deftest`,
+  `assert-eq`, `assert-eq-at` (a row index), `assert-eq64`, `assert-that`,
+  `assert-that-at`, `assert-text`, `assert-cells-hex`, and the inputs
+  `text-blob`, `hex-blob`, `test-file`, `cells-blob`, `new-cells`, `new-text`.
+  `bb unit red` flips every assertion (`EMON_TEST_INVERT=1`) and requires each
+  arm to fail: that is the "fails when the law is broken" check, permanent
+  and on all four. Also broke `iz-lbase` and `nz-order` by hand: both turned
+  the suite red with the row named. The count of laws is compared across arms.
+  Host support is in `host/*/testport.*`, beside the ports. Learnt: Go's
+  test parameter must not be `t` (a law's text sink is the natural `t`), so it
+  is `emonT`; kin's `let` is function-flat in Java and C#, so one function may
+  not bind the same local name twice (Rust and Go shadow; see "Found in kin");
+  Rust takes every `Cells` as `&mut`, so one `Cells` cannot be passed twice in
+  one call. Commit: pending (D037).
+
+- [x] **P0.6 — `defenum`: kinds as one table** (D028, SPEC §6.3.1 item 4).
+  *Brief*: a form (in `emon.lang`) taking a name and a vector of
+  `[symbol code "json-spelling"]` rows, generating one `^:pub` constant
+  function per row (`nk-paragraph` → 3) *and* a `…-emit-name` function that
+  writes the spelling for a code to a `Text` sink through `emit-ascii`
+  (a `case` over codes). Refuse duplicate codes or spellings at generation
+  time.
+  *Done when*: a probe enum round-trips code → spelling on every target;
+  duplicate rows fail generation by name. If it proves awkward, record why
+  and fall back to nome's hand-written constants plus a generated table.
+  *Done 2026-09-30.* `(defenum ^:pub nk [[nk-paragraph 3 "paragraph"] ...])`
+  in `emon.lang` (D042, D043). `kin/enumprobe.kin` round-trips codes 0..8
+  through `nk-emit-name` and sums the constants; all four targets print the
+  same line, checked in `bb check`. Duplicate symbol/code/spelling, a bad row,
+  a non-ASCII or quote/backslash spelling fail generation naming the form and
+  namespace (`bb lang-test`). The probe is `enumprobe`, not `enumtest`: a C#
+  namespace ending in `test` goes to `Tests/` (D035).
+
+- [x] **P0.7 — `bb` hygiene gates from day one.** `drift` (P0.1), `hosts`
+  (P0.2), and a `bb gates` meta-task that runs every gate listed in this file
+  and fails if a gate prints no score (nome's `bb scores` lesson, D818 there:
+  a gate nobody runs is not a gate).
+  *Done 2026-09-30.* `bb gates` (`kin/scripts/gates`, D057) runs `hosts drift
+  lang-test check unit`; each must exit 0, print at least one `  ok ` line
+  (its score) and no `FAIL`, and every `bb.edn` task must be in the list or in
+  the named non-gates (`gen emit gates`), so a gate cannot be added and
+  forgotten. Learnt: `bb check` runs `lang-test` itself, so it scores twice;
+  harmless, and cheaper than teaching the gate list who runs whom. Commit:
+  pending (D037).
+
+- [x] **P0.8 — README-free by design; SPEC and DEVLOG are the docs.** Confirm
+  nothing else is needed for a newcomer to run `bb check`; if something is,
+  it goes in SPEC §15, not in a new file.
+  *Done 2026-09-30.* What a newcomer needs is now SPEC 15.1 (tools, sibling
+  `../kin`, which toolchains are optional and skipped loudly, Python for
+  tooling only); nothing else was missing except that `git` is required by
+  `drift` and `python3` by `unit`. No README was added. Commit: pending (D037).
+
+---
+
+## Phase 1 — The first vertical slice
+
+**Scope, and what is out of it.** A born-digital PDF with: a classic xref
+table (or an xref stream — nome writes classic; many producers write
+streams), Flate-compressed or uncompressed content, simple fonts (Type 1 /
+TrueType with standard encodings or `Differences`) **and** Type0/Identity-H
+with `ToUnicode` (because HTML printed to PDF by Chromium — the round-trip corpus's producer,
+D041 — is exactly that), single column, text only. Output: a Model with `document`,
+`paragraph`, `text`, `break` nodes and the `pages` table → JSON and HTML, on
+the **Rust host only** (the core still generates and compiles for all four).
+No headings, lists, tables, OCR, raster, encryption, repair, or reading-order
+analysis beyond "top-to-bottom lines on a single column".
+
+- [x] **P1.1 — The Model in kin** (`kin/model.kin`, `emon.model`; SPEC §3.8).
+  *Brief*: node kinds via `defenum` (all of SPEC §3.2 now, even if unused —
+  codes are forever); the arenas (`nodes` stride 16, `attrs`, `regions`,
+  `text`, `pages`, `ledger`) as field-offset constant functions; builder
+  functions (`model-init`, `node-new kind parent` appending as last child,
+  `node-add-region`, `node-set-conf`, `node-add-src`, `node-set-attr-int`,
+  `node-set-attr-text`, `text-append-cp`, `page-new`, `ledger-add`) and
+  accessors (`node-kind`, `node-parent`, `node-first-child`, `node-next`, …,
+  `node-text-start/len`, `region-*`). The host allocates the arenas and passes
+  them in (a `Model` struct in the host holds six `Cells`).
+  *Done when*: `kin/modeltest.kin` laws in `bb unit` (build a 3-level tree,
+  walk it, check parent/sibling links, region chaining, attr lookup on every
+  target); `bb check` probe hashes a built model identically everywhere.
+  *Done 2026-09-30.* `kin/model.kin` (`emon.model`): 25 kinds and 13 more
+  `defenum` tables (D050), six arenas as field-offset constants and
+  accessors, builders (`model-init`, `node-new`, `node-set-*`, `node-add-src`,
+  `node-add-flag`, `node-add-region`, `node-set-attr-int|text|node|bool`,
+  `node-add-attr-*` for repeated keys, `text-append-cp`, `text-append-utf8`,
+  `page-new` + setters, `ledger-add` + `ledger-set-text`), `model-check`
+  (strides, links, child chains, runs, conf, pre-order ids, pages, ledger,
+  answering a code and the node), and `model-hash` (FNV-1a over all six
+  arenas). `kin/modeltest.kin`: 3-level tree walked in every direction, region
+  chaining, attribute set/replace/repeat, text arena, WHATWG UTF-8 decoding,
+  pages and ledger, every way `model-check` can fail, and a fingerprint worked
+  out in Python from the hand-derived arenas. `bb check` probe
+  (`kin/modelprobe.kin`): all four targets print the same fingerprint and the
+  same JSON. The `Model` struct of six `Cells` is host work and arrives with
+  P1.10. Learnt: no forward references (every helper before its caller);
+  `len` is refused as a name by Go; a read nested in a call that also takes the
+  same `Cells` does not compile in Rust (bind it first). Commit: pending (D037).
+
+- [x] **P1.2 — Canonical JSON** (`kin/json.kin`, `emon.json`; SPEC §4).
+  *Brief*: serialize a Model to a `Text` sink following §4.2/§4.3 exactly:
+  fixed key order per kind, omission of absent fields, string escaping
+  (including U+2028/2029), centipoint → decimal-point formatting (`7250` →
+  `72.5`, `-5` → `-0.05`, `0` → `0`), leaf `text` and conditional `inlines`,
+  `pretty` mode. Write `schema/emon-1.json` (JSON Schema 2020-12) for the
+  §3.2 kinds. Golden files: `test/json/*.model.edn` (a small EDN description
+  of a Model built through the host) → `*.json` expected.
+  *Done when*: goldens byte-equal on Rust (and on every target via
+  `bb check`'s probe); the output validates against the schema with a
+  standard validator (a Python `jsonschema` or `ajv` call in the gate script
+  is fine — tooling, not runtime).
+  *Done 2026-09-30.* `kin/json.kin` (`emon.json`, `js-emit t pretty nodes
+  attrs regions text pages ledger`) writes SPEC 4.2/4.3 (D051-D053):
+  byte-identical on all four targets for three goldens in compact and pretty
+  form (`test/json/{minimal,sample,kinds}.*`: `sample` is SPEC 4.2's example;
+  `kinds` has every node kind and field, every escape, the extreme
+  centipoints, inline and block children, furniture and a ledger), plus laws
+  for centipoint printing, string escaping and a chain of 199 nested sections.
+  `schema/emon-1.json` (D055) and `kin/scripts/json-check.py` (D054): an
+  independent Python serializer reproduces every golden and every golden
+  validates against the schema (`jsonschema`, draft 2020-12). Goldens are line
+  scripts rather than EDN (D054). Learnt: SPEC's figure/seal `kind` collided
+  with the node `kind` (D053); recursion was written self-recursive only (one function
+  writes both inline and block nodes) — unnecessary, `declarefn` allows mutual recursion; an `I32` predicate cannot be an `if`
+  condition, it must be compared. Commit: pending (D037).
+
+- [x] **P1.3 — The evidence schema** (`kin/evidence.kin`, `emon.evidence`;
+  SPEC §2.1, §3.8).
+  *Brief*: arenas for `glyphs`, `words`, `lines`, `paths`, `images`,
+  `components`, `ocrwords` with **all** the fields SPEC §8 lists, including
+  OCR's (confidence, symbol alternatives head) and the tracer's, even though
+  only the text layer fills them in Phase 1 — this is ordering principle 3's
+  payment. Plus the `emon-evidence` debug serializer (§4.5).
+  *Done when*: laws for builders/accessors; the evidence dump of a
+  hand-built page is a golden file.
+  *Done 2026-09-30.* `kin/evidence.kin` (`emon.evidence`, D056): nine arenas
+  with every field SPEC 8 lists, OCR's and the tracer's included, builders
+  (`gl-new`, `wd-new`, `ln-new`, `pa-new`, `im-new`, `co-new`, `ow-new`,
+  `alt-add`), accessors (`*-get`, `*-set` with `gf-` .. `af-` field constants),
+  `ev-check` and the `emon-evidence` dump (`ev-emit`, compact and pretty).
+  `kin/evidencetest.kin`: defaults, setters, the alternative chain, every
+  `ev-check` code, and the dump of a hand-built page (`test/evidence/page1.*`,
+  the pretty file being derived from the compact one by `json-check.py`'s own
+  dumper). Not modelled yet: contour polygons, annotations, the structure-tree
+  mapping (D056). Commit: pending (D037).
+
+- [ ] **P1.11 — The `Src` port** (D058 revised, SPEC §13.1; take BEFORE
+  P1.4/P1.5 close). *Brief*: tag `Src` in `emon.lang` (four `:types`, Go
+  `:zero`); forms `src-len`, `src-u8`, `src-missed`, `src-slice` (span →
+  `Blob` snapshot), `src-of-cells`, `src-of-blob`, `src-hint` in all four
+  `host/*/port.*`, over a per-input chunk cache (64 KiB) with a per-unit
+  view; a sync backing fills misses inline, an async one records them.
+  Test port: a `Src` over a test file that misses a named chunk set.
+  *Files*: `kin/src/emon/lang.cljc`, `host/*/…/port.*`, `host/*/…/testport.*`,
+  `kin/porttest.kin`. *Done when*: `bb hosts` green; `porttest` exercises
+  every form, a miss included, with one answer on four targets.
+
+- [x] **P1.4 — PDF lexer and object parser** (`kin/pdflex.kin`, with
+  `kin/pdfsrc.kin` and `kin/pdfnames.kin`; `pdfobj` is part of `pdflex`, D059).
+  *Done (P1.4)*: `test/pdf/objects.txt` (199 rows: numbers, names, strings,
+  containers, references, indirect objects, streams with every length case,
+  nesting limits, damaged input) and `test/pdf/iso32000-extract.txt` (the standard's
+  own worked examples, expectations written from the text before the parser ran)
+  are read by kin on all four targets; the fuzz law cuts `minimal.pdf` at every
+  length (a real shorter blob each time) and parses tokens and an indirect object at
+  every line start; `bb unit` 94 laws on four targets, broken laws fail on all four.
+  NOT done: D058's `Src` checklist below (steps 1-8) and its chunked-source law,
+  which wait for P1.11's `Src`; `pdfsrc` already cites D058 and every read is through it.
+  *Input (D058 revised) — checklist, in order, for `pdfsrc`/`pdflex`/`pdfdoc`*:
+  1. After P1.11: in `pdfsrc.kin` retag `ps-len`/`ps-u8` to `^Src`; add
+     `ps-missed`, `ps-slice src s e` (→ `Blob`), `ps-of-cells`, `ps-hint`;
+     cite D058 (not D052) in its header.
+  2. Retag every `^Blob src` in `pdflex.kin` and `pdfdoc.kin` that is the
+     file or object-stream data to `^Src` (mechanical; `pdffilter`,
+     `inflate`, `bytes` stay `Blob`).
+  3. `pdfdoc`: object-stream data goes to `pdflex` via `ps-of-cells`, not
+     `cells-bytes`; stream spans go to `pf-run` as `ps-slice` (a `Blob`
+     indexed 0..len), not the file with `s`/`e`.
+  4. Add `need-bytes` to `pd-status` (and `pl-status` if the lexer answers
+     statuses to callers that must stop). Checkpoint `ps-missed` after each
+     `pl-parse-indirect`, each xref table/stream section, the trailer, each
+     stream span and each page-tree node; on a miss return `need-bytes` to
+     the top without further work.
+  5. Check `ps-missed` BEFORE classifying a failure (`bad-xref`, a warning
+     bit, a tolerated repair): garbage from a miss must never become a
+     status or warning.
+  6. No state outside the caller's `Cells`; never mutate `Cells` passed in
+     as another unit's result (a page unit copies intake's arena first).
+  7. After the xref is read, `ps-hint` each object's extent (offset to the
+     next-larger offset) — may follow the slice as an optimization.
+  8. Tests: build sources with `src-of-blob`; add laws that a missing chunk
+     yields `need-bytes` (never a crash, status or warning) and that the
+     result is identical once the chunk is resident.
+  *Brief*: ISO 32000-1 §7.2–7.3 tokens and objects into an **object arena**
+  (kind, value/offset/len, first-child/next for arrays and dicts, name
+  interning into a names arena); indirect references; streams with `/Length`
+  (direct or indirect — and tolerant of a wrong `/Length` by scanning for
+  `endstream`, since producers get it wrong). Vendor ISO 32000-1 extracts the
+  way nome did, as emon's own `test/pdf/iso32000-extract.txt` (extracted
+  from the specification here, not copied from nome). Every
+  malformed input a named error (`^:throws`), bounded by limits.
+  *Done when*: a row corpus of object snippets → object-arena dumps, golden,
+  on every target (nome's row-driver idea: input, expectation, one line
+  each); fuzz-lite: 1,000 truncations of a fixture never panic (Rust host).
+
+- [x] **P1.5 — xref, trailer, page tree, filters** (`kin/pdfdoc.kin`,
+  `kin/pdffilter.kin`).
+  *Done (P1.5)*: Source goldens `test/pdf/source/{minimal,html-chrome,gs-xrefstream,
+  inherit,boxes}.json` (a Chrome/Skia file, a hand-written minimal file, a Ghostscript
+  xref-stream file, inheritance, odd boxes) equal on four targets; 24 fixtures
+  (`test/pdf/fixtures.txt`), 53 object/stream resolution rows, 72 filter rows, 105
+  real files from `corpus/` cross-checked against poppler, truncation of five fixtures
+  at every byte and 2,400 random corruptions (SplitMix) never fault. **Real files**: of
+  the 4,000 PDFs under `corpus/`, 3,976 open with the page count AND every page's
+  MediaBox, CropBox and rotation (whole points) equal to `pdfinfo`'s; 12 are encrypted and
+  unreadable without decryption (status `encrypted`, P3.2), 3 have a `startxref` that
+  does not lead to a section and 1 a wrong `/Prev` (P3.1 repair; poppler rebuilds them);
+  none fault. Of ~125,600 streams in them 119,759 decode `ok`, 5,586 are image codecs
+  (declined) and the rest are damaged or encrypted (15 in unencrypted files: truncated,
+  a wrong checksum, a double `FlateDecode` over 12 bytes, garbage headers). 190 real
+  LZW/ASCII85/ASCIIHex/RunLength/Flate streams and 47 PNG-predictor streams are
+  byte-identical to independent Python decoders. Opening all 4,000 takes 64 ms of
+  parsing in release. NOT done: D058's chunked-source law (needs P1.11's `Src`).
+  *Input (D058 revised)*: P1.4's checklist covers `pdfdoc` too (steps 2–7).
+  *Done when* also: the three fixtures give the same `Source` JSON from a
+  512-byte-chunk async test source as from memory.
+  *Brief*: `startxref` → classic xref table *and* xref streams (with
+  `/W`, `/Index`, predictors) → object lookup (with object streams
+  `/ObjStm`); trailer → catalog → page tree with inherited attributes
+  (ISO 32000-1 §7.7.3.4's inheritable attributes); `MediaBox`/
+  `CropBox`/`Rotate`; filters `FlateDecode` (P0.4's inflate) + PNG
+  predictors, `ASCIIHexDecode`, `ASCII85Decode`; the Source value (SPEC §2.0)
+  for these files. Incremental updates: follow `/Prev`.
+  *Done when*: `Source` for three fixtures (an HTML-printed PDF, a
+  hand-written minimal PDF, one xref-stream PDF from a mainstream producer —
+  licence-clean) is a golden JSON on every target.
+
+- [ ] **P1.6 — Fonts and encodings, first cut** (`kin/pdffont.kin`,
+  `kin/agl.kin`, `kin/encodings.kin`).
+  *Brief*: simple fonts (StandardEncoding, WinAnsi, MacRoman,
+  `Differences`), glyph-name → Unicode via the Adobe Glyph List (generated
+  `defdata` table from AGL + `uniXXXX`/`uXXXXX` rules), `ToUnicode` CMap
+  parsing (`bfchar`, `bfrange` incl. array form, codespace ranges), Type0 with
+  Identity-H and ToUnicode, `/Widths`, `/W` arrays, `/FontDescriptor` ascent/
+  descent. Record per glyph *how* its Unicode was obtained (SPEC §8.1).
+  *Done when*: a font corpus (the fixtures' fonts) produces the expected code
+  points for every glyph; laws for CMap range edge cases.
+
+- [ ] **P1.7 — Content-stream interpreter, text subset**
+  (`kin/pdfcontent.kin`, `kin/fx.kin`).
+  *Brief*: operators `q Q cm BT ET Tf Tm Td TD T* TL Tc Tw Tz Ts Tr Tj TJ ' "`,
+  `Do` for Form XObjects (recursive, depth-limited), `BDC/BMC/EMC` (record
+  `/Artifact`), and skip-with-balance for everything else. `Fx` 16.16 matrix
+  arithmetic in `I64` (`fx.kin`); page space conversion to centipoints,
+  top-left origin, `/Rotate` applied (SPEC §3.4). Glyph boxes from widths and
+  font ascent/descent. Fill the evidence `glyphs` arena; group into `words`
+  (gap vs space width and `TJ` offsets) and `lines` (baseline + direction).
+  *Done when*: evidence dumps of the three fixtures are goldens on every
+  target; for the HTML-printed fixture, every glyph's code point matches the
+  source HTML's text (a script can check this directly — the HTML is the
+  truth).
+
+- [ ] **P1.8 — Naive analysis: lines → paragraphs** (`kin/para.kin`).
+  *Brief*: single-column assumption; lines in top-to-bottom order; a new
+  paragraph on a vertical gap larger than 1.5× the median line gap or on an
+  indent change; `break` milestones at page boundaries (inline when a
+  paragraph continues across the break); `text` normalization per SPEC §3.6
+  using P0.4's `normalize` (NFC + ligature decomposition, soft hyphen
+  removal; no dehyphenation). Every node gets `at`, `src = {text, infer}` and
+  a placeholder `conf` (1000 for text-layer glyph content, 500 for inferred
+  structure — calibration is Phase 10).
+  *Done when*: the HTML-printed fixture's paragraphs equal the source HTML's `<p>`
+  texts (script compares); the JSON is a golden.
+
+- [ ] **P1.9 — HTML emitter** (`kin/html.kin`, `emon.html`; SPEC §5).
+  *Brief*: the §5.1 mapping for the kinds that exist (and stubs for the rest
+  that emit a comment-free placeholder, not nothing), escaping per §5.2, the
+  `geometry`/`ids` options.
+  *Done when*: HTML goldens for the fixtures; the output parses cleanly
+  with html5lib (zero parse errors — tooling in the gate script).
+
+- [ ] **P1.10 — Rust host: Engine API and a driver.**
+  *Brief*: `host/rust/src/{emon.rs,port.rs}`: `Engine::new(Config)`,
+  `intake`, `convert` (plan/fulfil loop present but with zero requests in this
+  slice), `Model` wrapper with the §3.9 accessors, `to_json`, `to_html`. A
+  test-only CLI `test/driver/rust` (`driver --out=json|html|evidence
+  <file>`), whose stdout is the only thing gates read — nome's driver shape.
+  `bb slice` runs the three fixtures through the driver and compares goldens.
+  **Inputs are byte sources, never paths** (D058, SPEC §13.1): add
+  `host/rust/src/source.rs` with `trait ByteSource { len, read_at }` and
+  adapters for `&[u8]`/`Vec<u8>`, `Read + Seek` and `Read` (spooled);
+  `Input { source, password: Option<..> }`; the Engine takes one `Input` or a
+  list and gives kin a `Src` per input (P1.11; input-bytes limit checked
+  against `len()` first; a short or changed read is `source-changed`). The
+  engine loop runs each unit, and on `need-bytes` fetches the missed ranges
+  (doubling read-ahead, coalesced, `FETCH_ROUNDS`) and re-runs it (D058
+  revised) — with an async-simulating source in Rust, since Rust's real
+  sources are sync. Nothing under `host/rust/src/` may name `std::fs` or
+  `Path`; the driver (test-only) reads the file and passes bytes, and takes
+  `--chunk=N --async` to run through the simulated async source.
+  *Done when*: `bb slice` green both in memory and with `--chunk=512
+  --async` (identical JSON/HTML; rounds and bytes fetched printed to stderr),
+  and a law feeds one fixture through the bytes, `Read + Seek` and
+  spooled-`Read` adapters with identical JSON.
+  **This is the first vertical slice.** Record
+  timings for the fixtures (baseline, not a target).
+
+---
+
+## Phase 2 — Second host, identity, measurement, spikes
+
+- [ ] **P2.1 — Go host layer, thin**: ports (already there from P0.2),
+  Engine/Model wrapper, driver; inputs as `io.ReaderAt` + size (D058).
+  *Done when*: `bb slice` passes on Go too.
+- [ ] **P2.2 — `bb identity`**: every driver arm over the corpus of (input,
+  transcript) pairs; byte-identical JSON and HTML required (SPEC §14.1.5).
+  Transcripts are empty in this phase; the format is fixed now (P2.5).
+  Each arm also runs every input through a 512-byte-chunk async test
+  source and must match its in-memory run (D058).
+- [ ] **P2.3 — `bb embedders`**: compare the Rust and Go public API surfaces
+  (names, arities) against SPEC §3.9/§13. nome learnt this late (its D568).
+  Includes the `Input`/byte-source surface (§13.1) and a check that no host
+  library file names a filesystem type (D058).
+- [ ] **P2.4 — `bb repeat`**: run vs run, and pages submitted in reverse,
+  byte-identical.
+- [ ] **P2.5 — The plan/fulfil protocol and transcript format** (D008):
+  request/answer record layouts in `emon.plan` (render, decode, ocr; `bytes`
+  issued by the D058 re-run loop, never transcribed, not counted in
+  `max-rounds`; render/decode name the input
+  by index), the
+  loop in both hosts, transcript read/write (a directory: `transcript.edn` of
+  records + lossless PNGs for bitmaps). Zero requests are issued by the
+  slice; the protocol is exercised by a synthetic probe.
+- [ ] **P2.6 — Spike: OCR through the transcript.** Rust host binds
+  Tesseract (C API), records one page's OCR into a transcript; kin reads the
+  answer into `ocrwords` evidence; the Go host replays it and produces the
+  same evidence dump. *Answers*: is the OCR answer layout sufficient
+  (symbols, alternatives, baselines)? Does replay make identity exact?
+- [ ] **P2.7 — Spike: per-pixel cost** (SPEC §12.3). Binarise and label
+  connected components of a 300-dpi A4 page in kin through `bitmap-u8`; a
+  hand-written Rust comparator of the same algorithm; record the ratio in
+  Rust, Go, C#. *Answers*: do we need bulk `Bitmap` forms, and which?
+- [ ] **P2.8 — Ground truth: the synthetic round trip** (D041, revising
+  D032). An HTML corpus
+  (start with ~30 documents covering headings to depth 4 with and without
+  numbering, lists, simple tables, a multi-page table with repeated `thead`
+  and one without, `@page` running headers and page numbers, footnotes,
+  figures) printed to PDF at dev time by an external producer (headless
+  Chromium first; others optional) and **committed** to
+  `test/corpus/synth/` with the producer and version recorded — no gate
+  invokes a producer; an HTML → gold-Model
+  converter; the gold format defined (`schema/emon-gold-1.json`: a partial
+  Model plus a declaration of what is annotated).
+- [ ] **P2.9 — `bb accuracy` and the scoreboard** (D023): metrics of SPEC
+  §14.2 that the slice can already be scored on (CER/WER, block P/R,
+  paragraph boundaries), `test/scoreboard.edn`, the ratchet rule.
+- [ ] **P2.10 — Baselines against the field** (SPEC §14.4): pinned versions
+  of 2–3 extractors, scored offline, committed as reference lines.
+- [ ] **P2.11 — Public datasets: licence review and importers.** DocLayNet,
+  PubTabNet/FinTabNet, ICDAR 2013/cTDaR, FUNSD, Tobacco800; find and verify
+  a seal/stamp dataset. Record each licence and what may be committed (likely
+  importers + manifests only, datasets fetched by a script).
+- [ ] **P2.12 — `bb fuzz`, first cut**: truncation and byte-flip mutation of
+  the PDF fixtures through both hosts; no panic, no hang, same error name;
+  also under the 512-byte async source (a miss must never surface as an
+  error, D058).
+
+## Phase 3 — PDF breadth
+
+- [ ] P3.1 — xref repair by scanning (`N G obj`), broken `startxref`, broken
+  `/Length`; `bb fuzz` corpus grows with real damaged PDFs.
+- [ ] P3.2 — Encryption: standard security handler R2–R6 in kin; `Crypto`
+  port (MD5, RC4, AES-CBC, SHA-2) in both hosts; embedder password; the
+  password handling and the distinct `password-required` /
+  `password-incorrect` / `encryption-unsupported` errors; permission flags
+  ignored (SPEC §16, D040).
+- [ ] P3.3 — Remaining non-image filters: `LZWDecode` (early change),
+  `RunLengthDecode`, TIFF predictor 2; `Crypt` filter identity.
+- [ ] P3.4 — Fonts, the long tail: predefined CJK CMaps (as `defdata`),
+  CID orderings → Unicode (Adobe-Japan1/GB1/CNS1/Korea1 tables), embedded font
+  program glyph names (emon's own `cff`, `cmap`, a Type 1 eexec reader, TrueType
+  `post`), Type 3 fonts, symbolic fonts, the "no mapping at all" path
+  (flagged; OCR's problem later).
+- [ ] P3.5 — Full graphics state: clipping paths (visibility), colour spaces
+  (to classify ink colour), `ExtGState` alpha, render modes, paths recorded as
+  `vector` evidence (lines, rects, fills), image placements (`Do` image,
+  inline `BI…EI`), shadings as filled regions.
+- [ ] P3.6 — Visibility classification (SPEC §8.1): clipped, off-page,
+  white-on-white, covered-by-later-opaque-paint, invisible mode.
+- [ ] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
+  `/Alt`, `/ActualText` (use it when present — it is the author's answer),
+  informativeness score (D034).
+- [ ] P3.8 — Annotations: links (URI, GoTo, named dests — ISO 32000-1
+  §12.3.2 destination arrays), Watermark/Stamp annotations, widgets + AcroForm values,
+  signature dictionaries.
+- [ ] P3.9 — Outlines, page labels (`/PageLabels` number trees), Info + XMP
+  metadata.
+- [ ] P3.10 — Text-layer oracle (SPEC §14.5): per-character comparison
+  against a pinned reference extractor on a born-digital corpus; committed
+  expectations.
+
+## Phase 4 — Layout and structure, on the text layer
+
+- [ ] P4.1 — Blocks and reading order: XY-cut with spanning elements,
+  multi-column, RTL (emon's own UAX #9 `bidi`), priors compared (SPEC §10.1).
+- [ ] P4.2 — Style inventory and body style (SPEC §10.3.1).
+- [ ] P4.3 — Running furniture: candidates, templates, decomposition,
+  policy (D017); page labels from detected numbers.
+- [ ] P4.4 — Headings: candidates, numbering schemes, priors (tagged, outline,
+  TOC detection), global level assignment, sections (D018).
+- [ ] P4.5 — Lists: markers, nesting, continuation across breaks.
+- [ ] P4.6 — Footnotes/endnotes and references; captions; bare URLs.
+- [ ] P4.7 — Inline styles (bold/italic from font flags, names and stem
+  widths; sub/sup from baseline shift; mono; small caps), links onto words.
+- [ ] P4.8 — Locale: keyword tables (start with en, de, fr, es, pt, it, nl,
+  zh, ja), dehyphenation with emon's own Liang `hyphen` (D021, D029).
+- [ ] P4.9 — Code blocks, quotes, formulas (placeholder by font/glyph
+  signals), form fields into the flow.
+
+## Phase 5 — Tables
+
+- [ ] P5.1 — `ruled` profile from vector rules: lattice, cells, spans.
+- [ ] P5.2 — `partial`, `shaded` and `whitespace` profiles; profile scoring.
+- [ ] P5.3 — Header rows, row groups, numeric columns, captions.
+- [ ] P5.4 — Tables across pages: with and without recurring headers,
+  "continued" markers, split rows (D019).
+- [ ] P5.5 — `struct` (tagged) tables verified against geometry; `form`
+  profile.
+- [ ] P5.6 — TEDS in `bb accuracy`; PubTabNet/FinTabNet/ICDAR scored.
+
+## Phase 6 — Raster, tracer, OCR
+
+- [ ] P6.1 — `Bitmap` port + `ImageDecode` port (Rust: `image`/`tiff`
+  crates + a JBIG2/CCITT decoder; Go: stdlib + x/image) under SPEC §7.2's
+  contract; raster intake for PNG/JPEG/TIFF/multi-page TIFF; image sets as
+  several inputs, mixable with PDFs (D058, SPEC §2.0); codecs read the
+  host's byte source (forward or by offset, awaited in async hosts), and kin
+  only sniffs the first chunk.
+- [ ] P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
+  available (D007); pdfium loads through its custom-loader callback over the
+  byte source, not a path or a whole-file copy (D058).
+- [ ] P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew,
+  orientation (SPEC §8.2.1).
+- [ ] P6.4 — Tracer: components, contours, rules, primitives (SPEC §8.2.2).
+- [ ] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
+  first-pass plan; OCR-only pipeline for images and scanned PDFs (D033).
+- [ ] P6.6 — Degraded corpus from the synthetic round trip (SPEC §14.3.1);
+  scanned-document baselines in the scoreboard.
+
+## Phase 7 — Fusion and artifacts
+
+- [ ] P7.1 — Alignment and correspondence groups (SPEC §9.2).
+- [ ] P7.2 — Health scores per source and region (SPEC §9.3).
+- [ ] P7.3 — Arbitration rules as data; explanation in the evidence dump
+  (SPEC §9.4, D014).
+- [ ] P7.4 — Targeted re-OCR rounds (text-only renders, body-ink layer,
+  single-line cells).
+- [ ] P7.5 — Watermarks, backgrounds, bleed-through, ghosts: the six
+  defences of SPEC §9.5 (D015); contamination rate in the scoreboard.
+- [ ] P7.6 — `hidden-text` handling (prior OCR layers).
+
+## Phase 8 — Figures, seals, signatures
+
+- [ ] P8.1 — Figure classification and placeholders (SPEC §10.6, D020).
+- [ ] P8.2 — Seals and stamps: detection, polar unwarp, targeted OCR, name
+  and date extraction (D016).
+- [ ] P8.3 — Handwritten signatures and initials; digital signatures (from
+  P3.8) into `seal` nodes.
+- [ ] P8.4 — Logos, including recurrence across pages (and their removal from
+  furniture templates).
+
+## Phase 9 — The remaining host layers and bindings
+
+- [ ] P9.1 — Java host (ports, Engine, Tesseract binding, pdfium binding).
+- [ ] P9.2 — C# host.
+- [ ] P9.3 — WASM binding, JS SDK, tesseract.js through plan/fulfil.
+  Inputs (D058, SPEC §13.1): JS byte sources `{size, read(off, len)}` with
+  adapters for `ArrayBuffer`/`Uint8Array`, `Blob`/`File`, URL (`fetch` +
+  `Range`, validator pinned, `source-changed` on a change) and
+  `ReadableStream` (spooled), and any `{size, read}` object; kin reads a
+  `Src` over them and the JS side owns the await-and-re-run loop (D058
+  revised) — no whole-file read. *Done when*: the slice fixtures give
+  identical JSON from each adapter in a headless browser, a URL fixture
+  fetches measurably less than its length for a one-page conversion, and
+  the wasm build links no filesystem import (`wasm32-unknown-unknown`).
+- [ ] P9.4 — C binding; babashka pod.
+- [ ] P9.5 — `bb identity` over all four hosts and three bindings.
+- [x] ~~P9.6 — Ranged inputs, optional~~ — **promoted into the main design**
+  by D058's revision (maintainer: lazy range reads are required): now
+  P1.11 (the `Src` port), P1.4/P1.5's checklist, P1.10's re-run loop, P2.2's
+  async-source arm and P9.3's JS sources.
+
+## Phase 10 — Calibration, performance, hardening
+
+- [ ] P10.1 — Confidence calibration per kind; reliability diagrams (SPEC §9.6).
+- [ ] P10.2 — Parallel runners in the hosts; `bb repeat` serial vs parallel;
+  default stays serial until a benchmark on a real document says otherwise
+  (nome §6).
+- [ ] P10.3 — Performance: comparators per bet, the 2× rule.
+- [ ] P10.4 — Limits: every bound wired, configurable, named alike in four
+  hosts (nome's `bb limits`).
+- [ ] P10.5 — Fuzz at scale, cross-host error agreement.
+
+---
+
+## Decisions
+
+Append-only. Each entry says what was decided, why, and what else was
+considered, so a later reader does not reopen it by accident.
+
+**Every one of these was taken autonomously during the founding design pass
+(2026-09-30), and the sign-off box is the maintainer's.** An unticked box is
+not a complaint — it is a decision that has not been read yet. Sign-offs do
+**not** block work. Rejecting one means striking it through with a line
+saying what replaces it, so the reasoning survives the reversal.
+
+The four most expensive to reverse, if you read nothing else: **D008**
+(plan/fulfil and transcripts — every host port and the whole identity story
+hang on it), **D011** (the Model's shape and arena representation), **D012**
+(JSON as the serialization and gate subject), and **D003/D004** (the kin/host
+line, which decides that the PDF parser is ours).
+
+### D001 — Targets are Rust, Go, Java, C#; JS/C/Clojure are bindings over Rust
+**Decision**: same four targets as nome; WASM, C and a babashka pod wrap the
+Rust build and add no kin arm.
+**Why**: the maintainer asked for nome's targets; a binding costs nothing per
+feature, a target costs vocabulary arms once.
+**Alternatives**: a JS target in kin (rejected: the WASM build is the same
+code, and a fifth arm is a fifth thing to keep identical).
+- [ ] **Signed off** (maintainer)
+
+### D002 — Rust is the reference target; host layers arrive Rust → Go → Java/C#
+**Decision**: Rust host first; Go host second and immediately gated by
+identity; Java and C# after the core algorithms exist.
+**Why**: nome's ordering principle, for nome's reasons — Go is the different
+one, so surviving Go proves the arrangement. Rust also has the easiest
+Tesseract and pdfium bindings, which the first spikes need.
+**Alternatives**: Go first (its cgo Tesseract binding, gosseract, is mature —
+but Rust is what the bindings build from); all four at once (rejected: host
+layers are the expensive part and the first slice would take four times as
+long to reach).
+- [ ] **Signed off** (maintainer)
+
+### D003 — kin code never names a library type
+**Decision**: nome's line, unchanged. Every external capability is an
+emon-owned abstraction with a kin tag, implemented per host.
+**Why**: it is what makes four identical cores possible at all.
+**Alternatives**: none seriously; restated so it is signed.
+- [ ] **Signed off** (maintainer)
+
+### D004 — The PDF parser, fonts and content-stream interpreter are kin
+**Decision**: everything that turns PDF bytes into text-layer evidence is
+written in kin: lexer, objects, xref (and repair), streams, page tree,
+content streams, fonts, encodings, CMaps, AGL, structure tree, annotations.
+**Why**: the text layer is the most accurate source emon has, and its
+interpretation *is* the product — glyph positions, encodings and visibility
+decide what a word is. Delegating it to pdfium/pdfbox/PdfPig per host would
+give four different text layers and defeat the identity gate; nome already
+has much of the substrate (inflate, cff, cmap, pdfpage).
+**Alternatives**: a host `PdfParser` port (rejected for the reason above; a
+parser's *choices* — word gaps, broken-encoding fallbacks — are exactly what
+must be identical); Rust-only parser exposed to other hosts via C ABI
+(rejected: breaks "one source, four targets" and pulls a native library into
+Java/C#/Go builds).
+- [ ] **Signed off** (maintainer)
+
+### D005 — Non-image stream filters in kin; image codecs through `ImageDecode`
+**Decision**: Flate, LZW, ASCII85, ASCIIHex, RunLength and predictors in kin
+(Flate from nome); DCT, JPX, JBIG2 and CCITTFax go to the host's
+`ImageDecode` port.
+**Why**: content streams and fonts need the first group to be *exactly*
+right and they are small; the second group are image codecs the maintainer
+assigned to the host, and their output only feeds pixel analysis, whose
+cross-host variance transcripts absorb (D008).
+**Alternatives**: all filters host-side (rejected: text extraction would
+depend on the host); CCITT/JBIG2 in kin because bilevel decoding is exact
+(deferred — attractive later, not needed for correctness now).
+- [ ] **Signed off** (maintainer)
+
+### D006 — Encryption: handler logic in kin, primitives through `Crypto`
+**Decision**: the standard security handler (R2–R6 key derivation,
+per-object keys) is kin; MD5, RC4, AES-CBC and SHA-2 are a host port.
+**Why**: primitives are in every standard library and are pure functions; the
+handler logic is where PDF-specific bugs live and should exist once.
+**Alternatives**: primitives in kin (possible — MD5/RC4 are tiny, AES is not
+big — but the not-worse rule would likely keep AES hand-written anyway);
+refusing encrypted PDFs (rejected: owner-password-only PDFs are common and
+readable by everyone).
+- [ ] **Signed off** (maintainer)
+
+### D007 — Page rendering is a host `Renderer` port; a kin renderer is parked
+**Decision**: rasterising a PDF page for OCR/tracing uses a host engine
+(pdfium by default), with layer masks (with/without/only text) where
+available.
+**Why**: a correct PDF painter (shadings, blend modes, transparency groups,
+Type 3, every image codec) is pdfium-sized. Rendered pixels only feed OCR and
+the tracer, whose cross-host variance is captured by transcripts.
+**Alternatives**: an emon-written kin renderer (nome's rasteriser as
+reference only, D039) (deterministic across hosts, no native
+dependency — genuinely attractive; parked as SPEC §17.2 until Phase 6
+measurements say whether host render variance matters to accuracy).
+- [ ] **Signed off** (maintainer)
+
+### D008 — Plan/fulfil: kin never calls an expensive port; answers are transcripts
+**Decision**: `Renderer`, `Ocr` and `ImageDecode` are never called from kin.
+kin emits requests; the host fulfils them (concurrently, asynchronously,
+however); answers go back as integer records; the full answer set for a run
+is a **transcript**; (input, transcript) → Model is a pure function.
+**Why**: gives the host concurrency (the maintainer's "run concurrently"),
+makes WASM/async hosts possible (nome §5.3 rule 8 found this the hard way),
+makes the cross-target identity gate test emon and not whichever Tesseract is
+installed, and makes second-opinion OCR rounds natural.
+**Alternatives**: synchronous port calls from kin as nome's `resource-get`
+(rejected: blocks, cannot be async, and identity would need identical OCR
+builds on four platforms); host runs all OCR up front with no kin planning
+(rejected: loses targeted re-OCR, which is where fusion earns its accuracy).
+- [ ] **Signed off** (maintainer)
+
+### D009 — Geometry: centipoints, top-left origin, no floats
+**Decision**: page space is top-left, y-down, as displayed; the unit is
+1/100 pt in `i32` (`Cpt`); matrices are 16.16 fixed point in `i64` (`Fx`);
+no floats in kin; JSON prints points with ≤ 2 decimals.
+**Why**: floats disagree across languages (nome §7); centipoints print
+exactly in decimal, which consumers want; top-left is what every consumer of
+HTML and image coordinates expects.
+**Alternatives**: nome's 1/64 unit (prints as ugly binary fractions);
+bottom-left PDF space (every image- and web-oriented consumer would convert);
+integer points (too coarse for sub/superscript and kerning signals).
+- [ ] **Signed off** (maintainer)
+
+### D010 — Provenance is a source bitset; confidence is calibrated per-mille
+**Decision**: every node carries `src` (bitset of SPEC §3.5 sources) and
+`conf` 0..1000, whose meaning is calibrated per kind on the corpora; until
+calibration, the Model says `"conf":"uncalibrated"`.
+**Why**: a scraper needs to know what to trust; an uncalibrated score that
+looks like a probability is worse than none.
+**Alternatives**: float probabilities (floats); per-source confidence vectors
+on every node (heavy; available in the evidence dump instead); no confidence
+(rejected: accuracy is the product, and confidence is how consumers act on
+partial accuracy).
+- [ ] **Signed off** (maintainer)
+
+### D011 — The Model: a logical tree + page table + ledger, stored as integer arenas
+**Decision**: SPEC §3 — reading-order tree of sections/blocks/inlines with
+regions per node, a `pages` table, `furniture`, and a `dropped` ledger; in
+kin, six `Cells` arenas with a node stride of 16.
+**Why**: consumers crawl logical structure; pages are metadata of it.
+Regions-per-node keep paragraphs and tables whole across page breaks. The
+ledger makes every drop auditable. Arenas are the only representation kin
+can build (it cannot allocate) and are trivially serializable.
+**Alternatives**: page-major tree (pages → blocks) as in hOCR/ALTO — easier
+to produce, worse to crawl, and breaks multi-page tables; a flat block list
+with levels (loses nesting of sections/lists/cells); a DOM-shaped model (ties
+the model to HTML, which the maintainer ruled out).
+- [ ] **Signed off** (maintainer)
+
+### D012 — Serialization is canonical JSON, and it is also the gate subject
+**Decision**: SPEC §4: nested JSON, ids on every node, fixed key order, no
+insignificant whitespace, leaf `text` + conditional `inlines`, versioned
+with a committed JSON Schema; byte-identical across targets.
+**Why**: the most parseable/navigable format there is; `jq`-friendly;
+kin can write it deterministically, so one comparison is the whole
+cross-language claim.
+**Alternatives**: CBOR/protobuf (binary, not inspectable, needs schema
+tooling — can be added as an exporter); XML/hOCR/ALTO/PAGE (verbose; parked
+as exporters for interop); JSON Lines of flat nodes (better for streaming
+huge documents; parked); nome's integer stream (for gates only).
+- [ ] **Signed off** (maintainer)
+
+### D013 — HTML is a pure projection: semantic, clean by default, honest
+**Decision**: SPEC §5 mapping; no layout CSS; no images; `<b>`/`<i>` not
+`<strong>`/`<em>`; `data-emon-*` for things HTML lacks; ids/geometry/
+confidence opt-in; milestones for pages.
+**Why**: the consumer is a scraper; clean semantic HTML is what scrapers
+handle best, and emitting semantics emon cannot know (emphasis vs bold) would
+be inventing information.
+**Alternatives**: absolutely positioned HTML (pdf2htmlEX-style — visually
+faithful, structurally useless); ids always on (noisy; opt-in instead).
+- [ ] **Signed off** (maintainer)
+
+### D014 — Fusion: three concurrent sources, aligned, health-scored, arbitrated by explicit rules
+**Decision**: text layer + OCR + tracer run concurrently; stage 2 aligns them
+into correspondence groups, scores per-region health, and arbitrates by an
+ordered, data-driven rule table (SPEC §9); the winning evidence and the
+reasons are recorded.
+**Why**: the maintainer's strategy, made precise. Rules first because they
+are explainable, deterministic in integers, and debuggable from the evidence
+dump; health-per-region because a PDF's text layer is often good on some
+fonts and garbage on one.
+**Alternatives**: always trust the text layer when present (fails on broken
+encodings and hidden OCR layers); always OCR (throws away exact born-digital
+text); a learned arbiter (parked: admissible later only as a recorded host
+port, per SPEC §1.1).
+- [ ] **Signed off** (maintainer)
+
+### D015 — Watermark/background/ghost defence is layered, strongest signal first
+**Decision**: SPEC §9.5's six defences — PDF artifact markings, cross-page
+recurrence, ink-layer separation with OCR on the body-ink image, geometry,
+seal overlap, plausibility — each recorded in the ledger with its reason.
+**Why**: no single signal is reliable; each catches what the others miss, and
+the ordered list means the cheap exact ones (the PDF saying so) pre-empt the
+expensive heuristic ones.
+**Alternatives**: OCR only the text-only render (depends on renderer layer
+masks, unavailable for scans); drop low-confidence OCR words (drops real
+faint text too).
+- [ ] **Signed off** (maintainer)
+
+### D016 — Seals, stamps and signatures become `seal` nodes with extracted details
+**Decision**: one node kind with `kind` ∈ seal/stamp/signature/initials/
+digital-signature and optional `name`, `text`, `date`, `color`; digital
+signatures from `/Sig` dictionaries; circular seals read via polar unwarp +
+targeted OCR; OCR text inside a seal never enters the body.
+**Why**: the maintainer asked for a semantic element with details when
+detectable; one kind keeps consumers' queries simple.
+**Alternatives**: separate kinds per variety (more kinds, same fields);
+treating seals as figures (loses the semantics scrapers of legal/government
+documents care about).
+- [ ] **Signed off** (maintainer)
+
+### D017 — Running furniture: drop what the output already says; keep once what is invariant; keep per page what varies
+**Decision**: SPEC §10.2. Page numbers become page labels (not dropped from
+the Model — dropped from the flow); document/section titles are dropped
+(the heading tree says them); other invariant content becomes one
+`furniture` node; varying content (Bates numbers, per-page IDs) stays per
+page. Everything dropped is in the ledger; policy is overridable.
+**Why**: it is the maintainer's rule generalised into a principle that
+decides the cases the rule does not name, and it never destroys information
+a scraper might need (citations need page labels; legal scrapers need Bates
+numbers).
+**Alternatives**: always drop headers/footers (loses Bates numbers,
+confidentiality labels); always keep per page (floods the output with
+repeats); keep as per-page asides (the maintainer's "maybe" — kept only for
+the varying content, where it is actually per-page information).
+- [ ] **Signed off** (maintainer)
+
+### D018 — Heading levels come from the document's system, not from size
+**Decision**: document-wide style inventory, numbering schemes, external
+priors (tagged, outline, detected TOC), then a global integer-penalty level
+assignment over style classes, with size/weight as the weakest signal.
+**Why**: the maintainer's observation that higher-level headings can be
+visually smaller; only a document-wide model can see that a class is a
+parent of another.
+**Alternatives**: rank by font size (the naive approach, wrong in exactly the
+cases the maintainer named); per-page decisions (inconsistent across a
+document).
+- [ ] **Signed off** (maintainer)
+
+### D019 — Tables: competing profiles; cross-page merge by header equality or column geometry
+**Decision**: SPEC §10.5 — six profiles scored independently; continuation
+merged with recurring headers (header rows de-duplicated to the ledger) or
+without (column-geometry agreement, nothing between); split rows merged and
+flagged.
+**Why**: real documents mix table styles in one file; a single detector tuned
+for ruled tables misses the rest.
+**Alternatives**: a single lattice detector (misses whitespace tables);
+per-page tables only (the maintainer explicitly wants multi-page).
+- [ ] **Signed off** (maintainer)
+
+### D020 — Graphics become empty `figure` placeholders with a kind; no pixels
+**Decision**: SPEC §10.6 kinds; captions linked; inner text kept as
+`labels` by default; alt text kept when the PDF supplies it.
+**Why**: the maintainer's placeholder requirement; scrapers want to know a
+chart is there and what it is about, not its pixels.
+**Alternatives**: emitting crops as data URIs (bloats output; left as open
+question SPEC §17.1); dropping graphics entirely (loses that a chart existed
+and its caption association).
+- [ ] **Signed off** (maintainer)
+
+### D021 — Locale is an optional hint; absent means locale-independent, not English
+**Decision**: SPEC §11. Without a hint: script-driven OCR model selection and
+language-neutral patterns only. With a hint: keyword tables, dehyphenation,
+OCR languages. A PDF's `/Lang` does not enable keyword tables by itself.
+**Why**: the maintainer's requirement; `/Lang` is too often wrong to drive
+keyword matching.
+**Alternatives**: default to `en` (biases every non-English document);
+language identification from text (parked — possible later via n-gram
+tables, but a wrong guess would silently enable wrong keywords).
+- [ ] **Signed off** (maintainer)
+
+### D022 — Stages 1–2 are per page; stage 3 is document-wide; the kin core is single-threaded
+**Decision**: concurrency is the host's via `Task` and plan/fulfil; merge in
+submission order; serial default until a benchmark says otherwise.
+**Why**: nome §6, plus the fact that running headers, heading systems and
+continuing tables are cross-page by nature.
+**Alternatives**: streaming stage 3 (page-at-a-time output for huge
+documents — parked; it needs a two-pass furniture detector).
+- [ ] **Signed off** (maintainer)
+
+### D023 — Exact gates and accuracy gates are separate; accuracy ratchets from a measured baseline
+**Decision**: SPEC §14: identity/determinism/drift/schema/fuzz gates are
+exact; `bb accuracy` scores metrics against a committed scoreboard and fails
+on regression; thresholds are set from the first measurement and only rise.
+**Why**: "same everywhere" and "right" are different claims — four
+identically wrong answers agree perfectly (nome's `check` comment).
+Pre-committed thresholds would be guesses.
+**Alternatives**: target numbers up front (arbitrary); no gating on accuracy
+(regressions would go unseen).
+- [ ] **Signed off** (maintainer)
+
+### D024 — ~~Reuse nome's kin modules by rewrite-copy with provenance, for now~~
+**SUPERSEDED by D039** (maintainer, 2026-09-30: "Don't share code, they're
+completely independent projects."). Kept below so the reasoning survives.
+**Decision (struck)**: `kin/scripts/vendor` copies named nome modules into
+`kin/vendor/` with `nome.`→`emon.` rewriting and a commit stamp; `bb vendor`
+reports divergence.
+**Why**: zero changes to nome today, explicit about what is shared, and the
+drift report keeps the copies honest.
+**Alternatives**: a shared kin library used by both (the right end state —
+open question for the maintainer, SPEC §17.2); including nome's sources
+directly in emon's kin project (couples emon's build to nome's working tree
+and emits `nome.*` modules into emon's `gen/`).
+- [ ] **Signed off** (maintainer)
+
+### D025 — The first vertical slice: born-digital text layer → Model → JSON + HTML, Rust host
+**Decision**: Phase 1 as written: classic or stream xref, Flate, simple fonts
+and Type0/Identity-H with ToUnicode, single column, paragraphs only; Rust
+host; all four targets generated and compiled.
+**Why**: it exercises every stage boundary (Source, Evidence, Model, JSON,
+HTML, driver, gate) with the least algorithmic risk, on documents whose truth
+is known (the HTML they were printed from, D041).
+**Alternatives**: OCR-first slice on a PNG (exercises ports and plan/fulfil
+earlier, but the Model and emitters would be built against noisy evidence;
+OCR is spiked in P2.6 instead).
+- [ ] **Signed off** (maintainer)
+
+### D026 — The repository follows nome's conventions, and emon is a library only
+**Decision**: SPEC §15 layout; generated code committed; no `emon`
+executable in the deliverable (drivers exist under `test/`).
+**Why**: one toolchain, one set of habits across both projects; nome's
+reasons for committing `gen/` (a build must not need babashka) apply
+unchanged.
+**Alternatives**: a CLI in the deliverable (a consumer writes one in ten
+lines over the library; shipping one commits emon to a CLI surface).
+- [ ] **Signed off** (maintainer)
+
+### D027 — Decisions carry a sign-off box and never block work
+**Decision**: this section's format.
+**Why**: the maintainer asked for it; nome's SIGNED column proved the habit.
+**Alternatives**: nome's one-line table (kept for brevity there; emon's
+founding decisions warrant alternatives written out).
+- [ ] **Signed off** (maintainer)
+
+### D028 — emon's vocabularies: `emon.lang`, `emon.port` (scanned), `emon.test`; four extensions
+**Decision**: SPEC §6.3. Tags `Cpt`, `Px`, `Fx`, `Conf`, `Bitmap`, `Text`
+beside nome's; host-linked `Text` and `Bitmap` forms; the `emit-ascii` form
+with a generation-time ASCII check; a `defenum` form for kind tables.
+**Why**: the JSON and HTML emitters are made of literals, and nome's
+generated-word-table approach does not scale to them; distinct geometry tags
+make unit mixing visible; `defenum` ties a kind code to its serialization so
+neither can be added without the other.
+**Alternatives**: generated code-point tables for every literal (nome's
+`pdfwords` approach — workable, unreadable for an emitter); a `Str` tag and
+string values in kin (a larger kin change; not needed — emon only *writes*
+literals); hand-written emitters per host (four implementations that must
+agree byte for byte — the risk kin exists to remove).
+- [ ] **Signed off** (maintainer)
+
+### D029 — Text normalization: NFC, ligatures decomposed, soft hyphens removed, dehyphenation only with a locale
+**Decision**: SPEC §3.6.
+**Why**: scrapers search for `fi`, not `ﬁ`; aggressive dehyphenation without
+a dictionary corrupts real compounds, which is worse than a kept hyphen.
+**Alternatives**: NFKC everywhere (destroys superscripts, full-width forms and
+other content); always join hyphenated line ends (wrong for `multi-page`).
+- [ ] **Signed off** (maintainer)
+
+### D030 — Failure is per page
+**Decision**: a corrupt page yields an error entry for that page and the
+rest of the Model; only intake-level failure (no pages at all, a limit on
+the whole document) fails the conversion.
+**Why**: crawling at scale wants 199 good pages of 200.
+**Alternatives**: fail the document (nome's model, right for a renderer,
+wrong for a reader).
+- [ ] **Signed off** (maintainer)
+
+### D031 — Phase order: foundations → slice → identity + measurement → PDF breadth → structure → tables → raster/OCR → fusion → figures/seals → hosts → hardening
+**Decision**: the phases in this file, under the ordering principle's four
+rules.
+**Why**: measurement before heuristics; clean evidence before noisy; the
+second host and identity gate before breadth.
+**Alternatives**: OCR/fusion earlier, since it is the maintainer's headline
+strategy (the counter-argument is real: fusion is where accuracy is won on
+scans. Mitigated by P1.3's OCR-ready evidence schema and P2.6's spike; if
+the maintainer's corpus is mostly scans, swap Phases 4–5 with 6–7).
+**Update 2026-09-30**: the maintainer says the crawl mix is mixed, so the order
+stands.
+- [ ] **Signed off** (maintainer)
+
+### D032 — ~~The nome round trip is the primary ground-truth source~~
+**REVISED by D041**: nome would have been a dependency; the round trip now
+uses external producers at dev time, with committed output.
+**Decision (struck)**: HTML → nome → PDF (→ render → degrade) gives documents whose
+structure is known exactly; public datasets and a hand-labelled set
+complement it; Chromium's `printToPDF` gives a second producer.
+**Why**: labelling is the expensive part of accuracy work, and a sibling
+project that writes PDFs from known structure makes it nearly free.
+**Alternatives**: public datasets only (licences, annotation schemes that do
+not match the Model, no multi-page tables with known headers); hand
+labelling only (slow, small).
+- [ ] **Signed off** (maintainer)
+
+### D033 — OCR is engine-agnostic behind `Ocr`; Tesseract is the default binding
+**Decision**: the port's contract is SPEC §7.2; every host ships a Tesseract
+binding; embedders may register another engine.
+**Why**: the maintainer named Tesseract; keeping the port generic lets a
+stronger engine be swapped in per deployment without touching kin.
+**Alternatives**: shelling out to the `tesseract` CLI (simple, slow,
+process-per-call; acceptable as a fallback binding, not the default).
+- [ ] **Signed off** (maintainer)
+
+### D034 — External priors are verified, not obeyed
+**Decision**: tagged-PDF roles, outlines, `/Lang`, `/ActualText`, AcroForm
+appearances are strong *evidence* scored for informativeness and agreement
+with geometry — never taken as truth without that check.
+**Why**: producers routinely emit uniform `P` tags, stale bookmarks and wrong
+`/Lang`; obeying them would import their errors wholesale.
+**Alternatives**: trust tagged PDFs fully (fast path, frequently wrong);
+ignore them (throws away the author's own answer when it is right).
+- [ ] **Signed off** (maintainer)
+
+### D035 — `porttest` is the one named exception to the `Tests/` path rule
+**Decision**: `emon.targets` keeps nome's C# rule (a namespace whose leaf ends
+in `test` emits to `gen/csharp/Tests/`, because it needs xunit) with one named
+exception set, `probe-modules` = `#{"porttest"}`.
+**Why**: DEVLOG P0.2 fixes the probe's name as `kin/porttest.kin`, and it is a
+plain probe that `bb check` must compile in the ordinary build, not a unit
+test.
+**Alternatives**: rename to `ports.kin` (departs from the DEVLOG); key the rule
+on requiring `emon.test` (kin gives the path fn only the namespace name).
+- [ ] **Signed off** (maintainer)
+
+### D036 — Port conventions the four hosts are held to
+**Decision**: 32-bit blob readers (`blob-u32`, `-le`) answer an `I32` carrying
+the 32-bit *pattern* (high bit set = negative on every target); an invalid
+code point in `text-cp` (negative, > U+10FFFF, surrogate) appends U+FFFD on
+every target; `text-i32` is decimal, invariant-culture, no separator; limit
+and setting *kinds* are integers numbered in each host (11 limits from SPEC
+7.4, env `EMON_LIMIT_<NAME>`; settings `OCR_MODE`=0 auto/1 always/2 never
+and `TASKS`=0 serial/1 parallel, env `EMON_SETTING_<NAME>`; placeholder
+tables, they grow per phase); `limit-breach` never returns (panic / throw).
+`emon.lang` has no `F64`/`Str` tags and no `Bitmap` tag yet (arrives with the
+`Bitmap` port, P6.1); `emon.test` is a placeholder vocabulary until P0.5.
+**Why**: nome's conventions where they exist; `hosts` cannot compare the
+numbering tables, so `porttest` exercises the kinds it lists on all four.
+**Alternatives**: `U32`-typed readers (Java/C# cannot type it anyway);
+throwing on invalid code points (would differ per host).
+- [ ] **Signed off** (maintainer)
+
+### D037 — `gen/` is staged, not committed, until the maintainer commits
+**Decision**: this pass staged `gen/` (`git add gen`) so `bb drift`, which
+diffs against the git index, works; nothing was committed. The first commit
+must include `gen/` (nome D26).
+**Why**: instructed not to commit; the index is what drift reads.
+**Alternatives**: committing (forbidden here); a drift that snapshots instead
+of asking git (flint's way; nome rejected it).
+- [ ] **Signed off** (maintainer)
+
+### D038 — OCR policy defaults to `always`: every page, born-digital included
+**Decision**: by default OCR, the tracer and the structured parser all run
+on every page, born-digital pages included, and the results are fused. `auto`
+(OCR only where text-layer health, image coverage or hidden text call for it)
+and `never` stay as documented options. Resolves the open question in SPEC
+§17 (maintainer, 2026-09-30).
+**Why**: the maintainer's choice; accuracy over cost. OCR on born-digital
+pages is what catches broken encodings, text in images and outlined text,
+and it gives the health scores (SPEC §9.3) an agreement rate on every page.
+**Alternatives**: `auto` as default (roughly 1–3 s/page cheaper, but misses
+failures the health heuristics cannot see without a second witness).
+- [ ] **Signed off** (maintainer)
+
+### D039 — emon and nome are independent: no shared code, no dependency (supersedes D024)
+**Decision**: emon shares no code with nome and has no build, test or runtime
+dependency on it: no vendoring, no provenance tracking, no `bb vendor`, no
+shared library, no script path into `../nome`. emon writes its own inflate,
+font readers, Unicode machinery, hyphenation and the rest. It may follow
+nome's conventions and read nome's modules as reference or inspiration when
+writing its own (SPEC §7.5).
+**Why**: the maintainer's instruction: completely independent projects.
+Each can change its substrate on its own schedule, and neither can break the
+other's build.
+**Alternatives**: rewrite-copy with provenance (D024, struck); a shared kin
+library (rejected by the maintainer).
+- [ ] **Signed off** (maintainer)
+
+### D040 — Encrypted PDFs: extract whenever possible, ignore permission flags; `password-required` is a distinct error
+**Decision**: emon decrypts and extracts whenever it can and never consults
+the `/P` permission flags. An empty user password is tried automatically. A
+caller may pass a password alongside the document; emon tries it as the
+user password, then as the owner password. The named errors are
+`password-required` (a password is needed and none was supplied),
+`password-incorrect` (the supplied password does not open the document) and
+`encryption-unsupported` (public-key or custom handlers). Each is
+distinguishable from every other failure (SPEC §16).
+**Why**: the maintainer's instruction. Crawlers need to route "needs a
+password" separately from "broken file".
+**Alternatives**: honour "no extraction" by default or expose it as a
+setting (rejected by the maintainer); a single generic decryption error
+(callers could not tell a missing password from a corrupt file).
+- [ ] **Signed off** (maintainer)
+
+### D041 — Synthetic ground truth from external producers at dev time, committed (revises D032)
+**Decision**: the HTML → PDF → (render → degrade) round trip stays the
+primary ground-truth source. PDFs are printed by **external tools at
+development time**: headless Chromium's `printToPDF` is the primary producer,
+and others (nome, WeasyPrint, LibreOffice) are optional so emon does not
+overfit to one producer. The generated PDFs, images and gold Models are
+**committed**, together with the producer and version. No gate, build or test
+invokes any producer. Regenerating is a reviewed human action.
+**Why**: D032 made nome a dependency of emon's test pipeline, which D039
+rules out. Producing the corpus offline and committing it keeps the oracle
+and removes the dependency: a missing producer only stops *regeneration*,
+never testing. Naming Chromium as primary means nome is not even needed for
+that.
+**Maintainer answer (2026-09-30)**: nome may be an *optional* external
+corpus producer (a dev-time tool, never a dependency), but it is not
+complete yet, so adding it is deferred (parking lot).
+**Alternatives**: an emon-owned test-only PDF writer that prints gold Models
+directly (independent, but an extra component with narrow producer
+realism); public datasets only (no multi-page tables with known headers).
+- [ ] **Signed off** (maintainer)
+
+### D042 — `emit-ascii` and `defenum` are project-local forms that rewrite into existing forms
+**Decision**: both live in `emon.lang`'s `:forms` (no kin change). `emit-ascii`
+checks its literal (a string literal, printable ASCII 0x20-0x7E) and then
+dispatches `emon.port/text-ascii`; `defenum` builds ordinary `kin.lang/defn`
+forms and links (`:declare`) and emits (`:generate`) them, so the constants
+are locals, exports and `declared-names` like any `defn`. The rewritten heads
+are fully qualified and injected into the context's `:scope-syms`, so a source
+need not refer `text-ascii`, `defn`, `if` for these forms to work. Refusals
+name the form and the NAMESPACE (`emon.x`), not the file: kin's `ctx` has no
+source label, only `:kin/ns`; a namespace names its file. Tests: `bb lang-test`.
+**Why**: kin has no macros, but a form is `(fn [ctx form])` and may dispatch
+other forms through the same context; this keeps four spellings in the forms
+that own them.
+**Alternatives**: templates per target inside `emit-ascii` (duplicates the
+port annotation's spelling); a generated `.kin` from a table (a second source
+of truth). If the file path in the message matters, kin would need to put the
+label on the context (see "Found in kin").
+- [ ] **Signed off** (maintainer)
+
+### D043 — `defenum` shape: `(defenum ^:pub nk [[sym code "spelling"] ...])`, emitter a flat `if` run
+**Decision**: one `defn` per row answering its code, plus `nk-emit-name [t code]`
+(name = enum name + `-emit-name`) that writes the spelling and answers 1, or
+writes nothing and answers 0 for an unknown code. `^:pub` on the enum name makes
+every generated function public. Refused at generation time: duplicate symbol,
+code or spelling; a non-integer code; a spelling that is non-ASCII or holds `"`
+or `\` (it is written between JSON quotes unescaped); a row named
+`<enum>-emit-name`. The emitter is a chain of `if (code == N) {...; return 1;}`
+and NOT a `case`, because kin's `case` arms are values and an arm here is a
+statement; cost is linear in the number of kinds (about 30), fine for
+serialization, and revisitable if measurement says otherwise.
+**Why**: brief said "a `case` over codes"; that is not expressible, this is the
+plainest equivalent that all four targets agree on.
+**Alternatives**: a private helper per row so `case` arms are calls (doubles the
+functions); returning a row index and mapping it in the host (the spelling
+would leave kin).
+- [ ] **Signed off** (maintainer)
+
+### D044 — `emon.test` is four-target; Java runs without JUnit; test support lives in `testport`
+**Decision**: `emon.test` targets Rust, Go, Java and C#. Java has a JDK here
+and no JUnit, so a `deftest` is a `public static void testXxx()` and
+`kin/scripts/unit` compiles the generated laws with a small reflection runner
+that calls every public static no-argument `test*` method and counts the ones
+that do not throw. Assertions throw (Java `AssertionError`, C# `Exception`,
+Rust `panic!`) or call `Errorf` through a `Failer` interface (Go, so the
+production `port` package does not import `testing`). They live in
+`host/{rust/src/testport.rs,go/port/testport.go,java/emon/Testport.java,
+csharp/Emon/Testport.cs}` and not in `Port`, so the library's port surface
+stays the ports; `bb check` copies them so generated test modules compile in
+the ordinary build. Go's test parameter is `emonT`. Which sources are laws is
+derived (their `ns` requires `emon.test`), not listed. `bb unit red` sets
+`EMON_TEST_INVERT=1`, which every assertion honours by flipping its verdict,
+and requires every arm to fail.
+**Why**: the brief said "all targets"; the Java arm costs 25 lines. Keeping
+test helpers out of `Port` keeps them out of what a host author must port.
+**Alternatives**: skip Java (nome's choice, where no JDK exists); install
+JUnit (a network dependency in a gate); put the assertions in `Port`.
+- [ ] **Signed off** (maintainer)
+
+### D045 — `shl32` and `sar32` join `emon.lang`
+**Decision**: two 32-bit shift forms (`(shl32 x n)`, `(sar32 x n)`) in
+`emon.lang`, defined for a count of 0..31; `sar32` is the arithmetic shift
+(equal to logical for the non-negative values a bit reader holds). They are
+`<<` and `>>` in all four languages (Go casts the count to `uint`).
+**Why**: `kin.lang` ships no shifts (they depend on the tag's signedness in
+Rust), and inflate's bit reader is shifts; multiplying by a power-of-two
+table would be slower and less clear. Go folds a shift of two constants at
+compile time and rejects `1 << 31` as an `int32` overflow, so laws pass the
+operands as locals; real call sites pass variables.
+**Alternatives**: `quot`/`*` by `pow2`; `shr64` on widened values.
+- [ ] **Signed off** (maintainer)
+
+### D046 — Row corpora are read by kin from `test/` through `test-file`; `bb unit` replaces the `bb check` probe
+**Decision**: a corpus is a text file under `test/`, read whole as a `Blob`
+through the test port `test-file` (directory from `EMON_TEST_DIR`, which
+`bb unit` sets) and parsed by a driver written in kin, so four targets also
+agree about the row parser. P0.4's "done when" said `bb check` would run an
+inflate probe and the NFC column; both run under `bb unit` instead, per row
+(status, consumed, bytes), with the failing line number. `kin/scripts/
+inflate-corpus.py` generates `test/inflate/streams.txt` from CPython's zlib
+and hand-built streams (and asserts zlib also rejects each damaged one); the
+committed file is authoritative and is NOT regenerated or checked by any gate,
+because compressed bytes differ between zlib versions and builds. `kin/scripts/
+ucd.py --check` (deterministic) runs at the start of `bb unit`. The UCD files
+are vendored unmodified under `test/normalize/`, Unicode 18.0.0.
+**Why**: a row corpus says which row failed; four-target agreement on the
+parser is free; the tests need no second harness per language.
+**Alternatives**: a probe in `bb check`; corpus rows compiled into kin
+sources (megabytes of string literals); Python-side harness.
+- [ ] **Signed off** (maintainer)
+
+### D047 — `emon.inflate`: Blob in, Cells out, a status per failure, the prefix kept, bit-at-a-time
+**Decision**: `(iz-zlib src start end out st)` and `(iz-raw ...)` read a
+`Blob` span and APPEND bytes (one per cell) to a caller-supplied `Cells`;
+`st` is scratch state. They answer an `iz-status` code (`defenum`: ok,
+truncated, bad-block-type, bad-stored-length, bad-code, bad-distance,
+bad-code-lengths, bad-header, need-dict, bad-checksum, bad-counts); the FIRST
+error is the one reported; everything decoded before it stays in `out`
+(PDFs with a damaged stream still yield what could be read, D030);
+`(iz-consumed st)` gives the index after the stream. Acceptance follows
+zlib's: code-length code must be complete; literal/length and distance codes
+may be incomplete only with no codes or one code of length 1; end-of-block
+must have a code; symbols 286/287 and distance symbols 30/31 are errors;
+Adler-32 is checked; `FDICT` is `need-dict`. The output bound is `limit-of`
+STREAM_BYTES via `limit-breach` (a limit, not a status). Decoding walks one
+bit at a time (puff's canonical method, from scratch): simplest to get right
+on four targets; a lookup-table decoder is the optimisation if measurement
+says so. A source `Blob` only: a later filter stage reading an earlier one's
+`Cells` needs a `Cells`-to-`Blob` port or a `Cells` overload, to be added
+with P1's filter chain. One known difference from zlib: for a dynamic-header
+fault found only by reading more bits than remain, `truncated` can be answered
+where zlib answers a code error.
+**Why**: PDF streams arrive as a span of the file (a `Blob`); kin cannot
+allocate, so output is caller-owned.
+**Alternatives**: `Cells` source (nome's shape; needs a copy in from the file);
+raising on error and dropping the prefix.
+- [ ] **Signed off** (maintainer)
+
+### D048 — `emon.normalize`: NFD/NFC over canonical data only, ligature fold and soft-hyphen removal as flags
+**Decision**: SPEC 3.6 asks for NFC plus U+FB00-FB06 and soft hyphens, not
+NFKC (D029), so `emon.nftable` (generated by `kin/scripts/ucd.py` from
+`UnicodeData.txt` and `DerivedNormalizationProps.txt`) holds canonical data
+only: combining-class ranges, flattened canonical decompositions, primary
+composites (two-code-point mappings outside Full_Composition_Exclusion) and a
+seven-row ligature table taken from the compatibility mappings. Hangul is
+arithmetic. `(nz-nfd src from to out flags)` and `(nz-nfc src from to out tmp
+flags)` append to `out`; flag 1 expands ligatures, flag 2 drops U+00AD. The
+caller decides WHICH soft hyphens (SPEC says "at line ends", which needs
+layout). U+FB05 (long s t) expands to `st`, not `<long s>t`, as NFKC would
+fold long s to s; the generator asserts all seven rows. Not built: NFKC/NFKD,
+a quick-check property, locale-sensitive anything.
+**Why**: the narrowest thing that does what D029 says, and ~100 KB of tables
+instead of ~500 KB. The whole of `NormalizationTest.txt` passes on all four
+targets for the two forms emon implements.
+**Alternatives**: NFKC then restore content (destroys superscripts and
+full-width forms, D029); a ligature table by hand (the generator derives it).
+- [ ] **Signed off** (maintainer)
+
+### D049 — `emon.bytes` and `emon.splitmix` API shapes
+**Decision**: `bytes` (`by-` prefix) adds what the raw ports lack: signed
+reads (`by-i8`, `by-i16[le]`), 24-bit (`by-u24[le]`), unsigned 32-bit widened
+to `I64` (`by-u32-64`, `by-u32le-64`, built from 16-bit halves), bounds
+questions (`by-in`, overflow-safe), reads with a default (`by-u8-or`,
+`by-u16-or`, `by-u32-or`) and substring search (`by-find`, `by-find-back`).
+`splitmix` (`sm-`) is SplitMix64 as a stream over a two-cell state in a
+`Cells` (`sm-seed`, `sm-next`, `sm-below`) plus the stateless `sm-at seed i`
+(the i-th word of the stream) and `sm-mix`; constants are written as signed
+64-bit literals (kin emits them correctly in all four). `sm-below` reduces the
+top 31 bits by `rem`, a bias below n/2^31, documented.
+**Why**: the same reasons a PDF/font reader writes these anyway; per-stage
+generators threaded explicitly keep determinism (SPEC 12.2) independent of
+call order.
+**Alternatives**: a global generator; `sm-below` by rejection sampling (a
+data-dependent number of steps per call).
+- [ ] **Signed off** (maintainer)
+
+### D050 — The Model's arena conventions: codes forever, `sub`/`aux`/attrs, ids are pre-order indices, furniture is a second root
+**Decision**: `kin/model.kin` (`emon.model`). Node kinds 1..25 in SPEC 3.2's
+table order; every enum (`nk fk sr fl sy al rl fg sl dp ch pk dr mc`) is a
+`defenum`, its codes assigned once and never reused, new rows only at the end.
+Absent is -1 (links, runs, conf) and count 0. A node's kind-specific small
+integer is its `sub` (a level, align, role, figure/seal subkind, formula
+display, span style bits, break page, list `ordered` 0/1=unordered/2=ordered,
+cell `header`, row `repeated`) and `aux` (a cell's `empty`); every other
+field is an attribute (`key, value-kind int|text|node|bool, value, len,
+next`), a repeated key (`labels`, `pages`) being repeated attributes. Attribute
+keys ARE the JSON field names (`fk`): one table spells both. A node's `id` is
+its index, and ids are in document order because the builder appends and trees
+are built in pre-order; `model-check` verifies it (`mc-not-preorder`). A
+`furniture` node is a second ROOT (parent -1), listed in the JSON `furniture`
+array, so the body's ids stay contiguous. Document-level title, lang and
+metadata are attributes of node 0 and serialize in the header (`source.lang`,
+`meta.*`), not on the body node (no second copy). Pages are stride 16
+(slots 11..15 reserved, zero) and the ledger stride 10, per SPEC 3.8. Nesting
+is bounded at `max-depth` 200: `node-new` answers -1 beyond it, which is what
+lets the serializer recurse without a depth check of its own. Every Cells
+function takes all the arenas it touches as parameters (the host's `Model` is
+six `Cells`); `text-append-cp` stores U+FFFD for anything that is not a scalar
+value and `text-append-utf8` decodes per the WHATWG rule.
+**Why**: the layout is SPEC 3.8's, made exact; absent-as-minus-one gives one
+spelling of "omit" from arena to JSON; ids that are indices cost nothing and
+cannot drift across targets; a second root keeps the body's ids a clean
+range.
+**Alternatives**: every field as an attribute (uniform, but one extra walk per
+level/role read and more cells); furniture as children of a hidden root (ids
+interleave); ids assigned at serialization (no `link.target` until then).
+- [ ] **Signed off** (maintainer)
+
+### D051 — Canonical JSON details the SPEC left open
+**Decision**: `kin/json.kin`. Top-level key order `emon, generator, source,
+settings, conf, meta, pages, body, furniture, dropped`; in a node `id, kind,
+the kind's fields (SPEC 3.2 order), text, inlines, children, at, src, conf,
+flags`. `generator`, `source` and `meta` are omitted when empty; `settings`
+always, with `locale` always (`null` when none); `pages`, `furniture` and
+`dropped` always, `[]` when empty. `src` and `flags` list names in bit order;
+`at` is `[[page,x0,y0,x1,y1],...]`; a `dropped` entry is `reason, page, at
+(page first, as SPEC 4.2's example), text, conf, src`. String escapes: `"`
+`\` `\n` `\t` short, every other U+0000-U+001F (including `\r`, `\b`, `\f`)
+as `\u00xx` in LOWER-case hex, U+2028/U+2029 as `\u2028`/`\u2029`, U+007F and
+above raw. Centipoints print as points: `7250` -> `72.5`, `-5` -> `-0.05`, `0`
+-> `0` (`quot`/`rem` truncation, exact for the most negative I32). Pretty mode:
+two-space indent, `"key": value`, every member and every element of an array
+of objects on its own line, arrays of numbers or strings (and of such arrays)
+flat as `[1, 2]`, empty containers `{}`/`[]`, no trailing newline in either
+mode; the goldens carry one editor newline and the comparison drops it. A
+code an enum does not know is written as `""` (valid JSON; the schema rejects
+it) rather than guessed.
+**Why**: SPEC 4.3 fixes the principle and leaves these to `emon.json`; each is
+the plainest rule that four targets and a Python reference implement
+identically.
+**Alternatives**: short escapes for `\r \b \f` (more table, no gain); uppercase
+hex; pretty arrays one element per line (the `at` regions become unreadable).
+- [ ] **Signed off** (maintainer)
+
+### D052 — Inline nodes carry no `id`; `inlines` only when informative; `text` is derived if a block has none
+**Decision**: SPEC 4.2's example writes inline nodes as `{"kind":"text",
+"text":"..."}` with no `id`, `at`, `src` or `conf`, while 3.3 says every node
+has an id. The JSON follows the example: blocks have ids, inline nodes do not
+(they are not cited); any of `at`/`src`/`conf`/`flags` that an inline node
+does carry is written. A block writes its inline children as `inlines` only
+when one is not a plain `text` node or has a region of its own (the `detail:
+words` case), and its other children as `children`; an inline node writes all
+its children as `children`. A block's `text` is its own text run; if it has
+inline children and no run, `text` is their concatenation (a linebreak as
+`\n`). When both exist the stage must keep them equal (`model-check` does not
+yet verify it).
+**Why**: the example is the only normative JSON in the SPEC; ids on the
+hundreds of inline nodes of a page are noise a scraper never uses.
+**Alternatives**: ids on every node (bigger output, contradicts the example);
+make `text` mandatory on the node (forces every stage to write it twice).
+- [ ] **Signed off** (maintainer)
+
+### D053 — `figure` and `seal` kinds are `subkind` in JSON
+**Decision**: SPEC 3.2 gave `figure` and `seal` a field called `kind` and
+3.3 gives every node a `kind`: one object cannot carry both. The field is
+`subkind` (`"kind":"figure","subkind":"chart"`); SPEC 3.2 is amended. HTML's
+`data-emon-kind` is unchanged.
+**Why**: a duplicate key is not JSON. **Alternatives**: rename the node kind
+key (`type`, which `field` already uses); nest (`"figure":{"kind":...}`).
+- [ ] **Signed off** (maintainer)
+
+### D054 — JSON goldens are line scripts read by kin, with an independent Python reference and schema check
+**Decision**: DEVLOG P1.2 said `test/json/*.model.edn`. A golden is instead
+`test/json/NAME.model` (a line script of builder calls, documented in
+`kin/jsontest.kin`) plus `NAME.json` and `NAME.pretty.json`. kin parses the
+script (so four targets also agree about the parser, D046), builds the Model
+through the real builders, and `assert-text-span` compares the serializer's
+bytes with the golden on all four arms. `kin/scripts/json-check.py`, run first
+by `bb unit`, is a second implementation of the serializer written from the
+SPEC that must reproduce every golden byte for byte, and validates them
+against `schema/emon-1.json` with `jsonschema` (found on the path, in
+`$EMON_PYLIB`, or installed once into `~/.cache/emon/pylib`; SKIP, loudly,
+otherwise). `probe.model` is also what `bb check` builds in code
+(`kin/modelprobe.kin`): it compares the model's arena fingerprint
+(independently computed) and its JSON line across targets.
+**Why**: an EDN reader in kin is not what is under test; a golden that is
+"whatever kin printed" proves nothing, and two implementations agreeing does.
+**Alternatives**: EDN read by a Clojure harness (not four-target); goldens
+only.
+- [ ] **Signed off** (maintainer)
+
+### D055 — `schema/emon-1.json` is closed, and edited additively on a minor version
+**Decision**: draft 2020-12, `additionalProperties: false` throughout, `emon`
+a `const "1.0"`, per-kind allowed keys enforced with `if/then` over
+`propertyNames`. SPEC 4.4 says consumers must ignore unknown fields; that
+binds consumers, not the validator of THIS version's output, where an unknown
+key is a typo in emon. A minor version adds to the file in place.
+**Why**: the gate exists to catch emitter mistakes. **Alternatives**: open
+schema (catches nothing); one file per minor.
+- [ ] **Signed off** (maintainer)
+
+### D056 — The evidence schema: nine arenas, contiguous runs, centi-degrees, a version-0 dump
+**Decision**: `kin/evidence.kin`. Arenas `glyphs` (stride 20), `words` (16),
+`lines` (12), `paths` (16), `images` (12), `components` (20, the tracer),
+`ocrwords` (16), `alts` (4, per-symbol alternatives chained from an OCR word)
+and `etext` (text runs; one cell per scalar value). A word's glyphs are a
+contiguous run of `glyphs` and a line's words of `words` (`ev-check`
+verifies runs and chains). Page space in centipoints; `Px` fields say so;
+angles are centi-degrees; colour is `0xRRGGBB` in one cell; confidence is
+per-mille, -1 absent; how a glyph's Unicode was obtained is `gh`, invisibility
+`vz`, artifact subtype `ar`. OCR words carry engine confidence, an alternatives
+head and count, line and block ids, baseline, style bits, pass and language;
+components carry page box, pixel box, ink area, fill, stroke width, colour,
+layer and kind; a stride wider than its fields (paths, components) leaves spare zero
+columns at the end. Not modelled yet: contour
+polygons (P6), per-glyph `Tz`/char-spacing, annotations and the structure-tree
+mapping (P3). The dump (`emon-evidence`, version "0") uses the Model
+serializer's punctuation and escaping, fixed key order, omits defaults,
+prints colours as `"#rrggbb"` and centi-units as points.
+**Why**: ordering principle 3: OCR's and the tracer's fields exist before
+OCR does. **Alternatives**: one evidence row type with a source column
+(wide and mostly empty); a chain for a word's glyphs (two cells beat a
+list).
+- [ ] **Signed off** (maintainer)
+
+### D057 — `bb gates` and SPEC 15.1 (P0.7, P0.8)
+**Decision**: `kin/scripts/gates` runs `hosts drift lang-test check unit`,
+requires each to exit 0, print at least one `  ok ` line and no `FAIL`, and
+fails if a `bb.edn` task is neither in its list nor in a named non-gate list.
+What a newcomer needs is written in SPEC 15.1; there is no README.
+**Why**: nome's lesson: a gate that prints nothing is not a gate, and a gate
+not in the list is not run. **Alternatives**: a `gates` that only chains tasks.
+- [ ] **Signed off** (maintainer)
+
+### D058 — Inputs are Blob-like async byte sources; kin reads a `Src` that may miss; a unit that missed is re-run (REVISED)
+**Revised** (maintainer, 2026-09-30: "an abstract interface akin to JS's
+Blob is probably what we need. Something that lets us read slices and jump
+around; but doesn't guarantee synchronous in-memory access."). The first
+version below materialized every input into a `Blob` before kin ran; that
+is now only the trivial in-memory source. What replaces it (SPEC §13.1):
+- **kin reads a new tag `Src`**, not a `Blob`: `src-len`, `src-u8` (may
+  miss), `src-missed`, `src-slice` (resident span → `Blob`), `src-of-cells`
+  (decoded object-stream bytes → an in-memory `Src`), `src-of-blob`,
+  `src-hint` (prefetch, may be a no-op). `Blob` stays for in-memory bytes, so
+  `bytes`, `inflate` and the filters are unchanged. A `Src` is a per-unit view
+  of a per-input host chunk cache (64 KiB chunks).
+- **Miss, abort, re-run.** A sync source fills a missing chunk inline (never
+  a round). An async one answers 0, sets the view's missed flag and records
+  the chunk; kin checks `src-missed` at checkpoints (after each indirect
+  object, xref section, trailer, stream span) and returns `need-bytes` to the
+  unit's top; the host awaits the missed ranges (a `bytes` plan/fulfil
+  request, never transcribed, not counted in `max-rounds`) and re-runs the
+  unit from scratch on fresh or copied `Cells`. Only a miss-free attempt is
+  kept, so the kept run IS the in-memory run: determinism and identity need
+  no new argument. A breach or error in an attempt that missed counts as a
+  miss. Units must not mutate `Cells` they did not create or copy.
+- **Bounds**: read-ahead doubles per round (≥ 64 KiB · 2^r around each miss,
+  coalesced), so a unit takes ≤ ⌈log2(len / 64 KiB)⌉ + 2 rounds and fetches
+  at most ~2× what it touched; `FETCH_ROUNDS` (default 24) is a named limit.
+  Intake prefetches the first and last chunk; after the xref, kin hints each
+  object's extent (offset to the next xref offset).
+- **Images/TIFF**: kin only sniffs; `ImageDecode` reads the source in the
+  host, forward or by offset, awaited inside fulfilment.
+- **Answered**: lazy ranged reading is required (not the optional P9.6);
+  PDFs and images may be mixed in one conversion.
+- **Gate**: every driver also runs each fixture through a simulated async
+  source with 512-byte chunks; JSON/HTML must equal the in-memory run.
+**Why this and not the alternatives**: resumable state machines (every
+parser rewritten as explicit continuations in a language with no closures,
+no forward references and four targets — the in-flight lexer would be
+thrown away); a kin-managed window with explicit "need range" returns at
+every read (every read site becomes fallible and must propagate, where
+checkpoints only make a handful of sites do so, and correctness does not
+depend on getting them all: a missed checkpoint only wastes an attempt);
+materializing (the maintainer rejected it). The cost of re-running is
+compute proportional to rounds, and each discarded attempt stops at its
+first checkpoint after the miss.
+
+*History — the first version, kept for the record (superseded where it
+conflicts with the above):*
+**Decision** (SPEC §13.1): the library and the Engine API take `Input`s — a
+host **byte source** (known `length`, `read_at(offset, buf)`; each host's
+idiom: a Rust trait, Go `io.ReaderAt`, Java `SeekableByteChannel`, C# seekable
+`Stream`, JS `{size, read(off, len) → Promise}`) plus an optional password
+(D040) — and never a path, a file handle opened by emon, or a network call.
+Adapters (in-memory, seekable, forward stream spooled into memory under the
+input-bytes limit; in JS `Blob`/`File`, `ArrayBuffer`, `fetch` ranges,
+`ReadableStream`) are host code. **kin is unchanged**: each input is
+MATERIALIZED into one immutable `Blob` before intake (awaited in JS), and the
+PDF code reads it only through `emon.pdfsrc` (`ps-len`, `ps-u8`), the seam
+already in P1.4/P1.5. A later **ranged mode** (P9.6) backs the `Blob` with a
+host window; a miss poisons the unit, which is re-run after the missed ranges
+arrive as `bytes` plan/fulfil answers — sound because units are pure (D008,
+D022), and checked by ranged == materialized. Several inputs make one
+document (pages concatenated in order); the password rides with its input and
+is never written to the Model header, the dump or a transcript; transcripts
+record input index and length only. A source that changes mid-run is the
+named error `source-changed`; input is capped at 2^31 − 1 bytes (`Blob`
+offsets are `I32`), enforced by the input-bytes limit against the declared
+length. The name is "byte source"/`Input`, because "Source" is already stage
+0's value and "sources" are text/OCR/trace.
+**Why**: the maintainer: "Try to keep the inputs/sources for files abstract,
+some kind of streamable/byte stream interface. I want to be able to compile
+this to wasm and run it in the browser, so try to avoid depending on a
+concrete filesystem." PDF and TIFF need random access (xref at the end,
+objects and IFDs by offset), so random access is the contract and forward
+streams are an adapter. kin is synchronous and cannot suspend on a promise
+(D008), so the await belongs in the host; materializing first costs the
+file's size in memory (fine for the crawl mix, and what every browser PDF
+tool does for `File`s) and changes no kin code, no in-flight parser, no gate.
+Determinism is untouched: kin sees the same bytes however they came.
+**Alternatives**: (a) a pure forward stream — cannot read a PDF without
+spooling it all anyway; (b) a kin-side window cache with a `src-read off len`
+port into a `Cells` window — every parser would thread a window and re-check
+bounds, the lexer's index style would be rewritten mid-flight, and a
+synchronous port still cannot await a browser read; (c) every read as a
+plan/fulfil request with a resumable parser — kin cannot suspend, so the
+parser would be rewritten as a state machine; (d) retagging `Blob`'s host type
+as an abstract reader now — a virtual call per byte in `inflate`'s
+bit-at-a-time loop, unmeasured; deferred to P9.6, where the miss-and-rerun
+design needs it anyway; (e) `Engine.convert(path)` for convenience — the
+requirement forbids it in the library; drivers and CLIs read files.
+- [ ] **Signed off** (maintainer)
+
+### D059 — The PDF object arena is one `Cells`; a handle is an offset; parse state lives in its header
+**Decision**: `emon.pdflex` parses into ONE `Cells` (`ar`): a 464-cell header
+(position, end, first error, warning bits, token registers, name-intern
+buckets, the ids of the well-known names) then six-cell records `kind a b c
+next d` (`a` first child or value, `d` last child; a dictionary is an array of
+alternating key and value). Strings and interned names are pushed inline at the
+tail; a stream record holds only the file span (`start`, `len`, flags). A handle
+is the record's index, 0 is "none". Every function takes the arena and the source
+and nothing else: no hidden state, so a unit can be re-run from scratch (D058).
+`emon.pdfdoc` writes its own small records into the same arena (the filter plan).
+Names are compared by entry (interned, `#xx` already decoded); duplicate
+dictionary keys answer the LAST value. `kin/pdfobj.kin` (named in P1.4) is not
+a separate file: objects, lexer and parser are one module.
+**Why**: kin cannot allocate; three separate arenas made every signature carry
+three `Cells` and Rust refuses the same `Cells` twice, so one arena with
+offsets as handles is the smallest shape that works on four targets.
+**Alternatives**: separate object/text/name arenas (more parameters, same
+limits); records in a fixed stride with strings in a side arena.
+- [ ] **Signed off** (maintainer)
+
+### D060 — The PDF names and keywords the code compares against are a generated table, interned first
+**Decision**: kin has no string values, so `/Type` cannot be written in a
+source. `kin/scripts/pdfnames.py` generates `kin/pdfnames.kin`: a `defenum pn`
+(the id of each well-known name as a constant function, `(pn-type)`), the bytes
+of every name, and the lexer's 13 keywords (`pk`). `pl-init` interns the names
+in table order, so an id is a position (append-only) and `(pl-wk ar (pn-type))`
+is that name's entry in the arena; `bb unit` runs `pdfnames.py --check` as it
+does `ucd.py --check`.
+**Why**: the alternative is byte-number literals scattered through the parser.
+**Alternatives**: a `defname` form in `emon.lang` (shared file, another agent
+editing it); comparing names through `Text` (no read port).
+- [ ] **Signed off** (maintainer)
+
+### D061 — Parsing is lenient, records what it forgave in warning bits, and fails with a named status
+**Decision**: errors are `defenum` codes answered to the caller (`pl-status`,
+`pd-status`, `pf-status`; first error kept, output so far kept), NOT `^:throws`:
+there is no host function for kin to propagate a failure from (D047's rule).
+What every reader forgives is forgiven and noted in `(pl-warn ar)` /
+`(pd-warn dc)`: a container closed by `endobj`, a junk dictionary key, a wrong
+`/Length`, a missing `endobj`, `stream` without an end of line. Integers saturate
+at 2^31-1 (`--5` is -5, `12abc` is 12 then `abc`); a real is a signed mantissa
+of at most nine digits and a count of fractional digits (no floats, D009);
+`pl-num-cp` converts to centipoints, half away from zero. Container nesting is
+bounded at 128 (`nesting-too-deep`), objects by the OBJECTS limit.
+A position outside the source reads as its end: a damaged offset never reads out of
+range.
+**Why**: a crawler wants what can be read (D030); accuracy on damaged files
+matters more than purity.
+**Alternatives**: `^:throws` per error (needs a port to originate them); strict
+parsing with repair only (P3.1).
+- [ ] **Signed off** (maintainer)
+
+### D062 — A stream's length: a direct one is trusted only if `endstream` follows; an indirect one is resolved by the document layer
+**Decision**: `pl-stream` trusts a direct `/Length` only when `endstream`
+follows the data it names (one read past the span); a wrong or missing one is
+replaced by a scan (`pl-scan`, flags 1, warning bit 4). An INDIRECT `/Length`
+cannot be resolved by the parser and is not scanned for: the stream is marked
+(flags 2, length 0, the parse stops at the data) and `pd-fix-length` resolves
+it and checks for `endstream`, scanning (`pl-stream-rescan`) only when that
+fails. So reading a file never reads through a good stream.
+**Why**: the maintainer's input rule (D058): bounded reads, not whole-file scans,
+outside repair.
+**Alternatives**: scan at parse time (simpler, reads every stream with an indirect length).
+- [ ] **Signed off** (maintainer)
+
+### D063 — The document layer: a workspace of five cells, newest entry wins, no repair, no decryption
+**Decision**: `emon.pdfdoc` takes `(src ar dc a b st)`: the arena, the document
+(a header then five cells per object number: kind, two fields, cache, flags),
+and three scratch cells (`a` decodes an object stream, `b` and `st` are the
+filter chain's). Sections are read newest first (`startxref`, each `/Prev`;
+a loop or a failing older section ends the chain with a warning); an entry is
+stored only where none is, so a newer free entry hides an older in-use one; a
+hybrid file's `/XRefStm` overrides only the table's FREE entries (the table lists
+object-stream objects as free for older readers); offsets are taken relative to
+a header that is not at 0 when `startxref` only leads to a section that way;
+classic entries are read as tokens (not 20-byte cells), a subsection that starts
+at 1 over the free head means 0. An object is parsed on first use and cached by
+number; an entry that points at a different object number is treated as missing;
+an object stream is decoded once and every object in it cached where the
+cross-reference says it lives there. Numbers above 65536 + 64 x file length (or
+the OBJECTS limit) are ignored. `pd-open` answers `no-header`, `no-startxref`,
+`bad-xref`, `no-root`, `no-pages`, or `encrypted` when the trailer names
+`/Encrypt` and the catalog or page tree could not be read: encryption is REPORTED
+(`pd-encrypted`), not handled (P3.2, D040); repair by scanning is P3.1 and is
+not here, so a file whose `startxref` does not lead to a section is `bad-xref`.
+A stream's filter chain is PLANNED first (`pd-stream-plan` resolves `/Filter`,
+`/DecodeParms` and their numbers into integers in the arena) and then RUN
+(`pd-run-plan`), because resolving can load an object stream, which decodes into
+the scratch cells the chain is using, and because Rust refuses the same `Cells`
+as two parameters.
+**Why**: one set of rules that reproduces poppler's page count on 3976 of 4000
+real files and names the rest.
+**Alternatives**: a struct of cells (kin has none); decoding while resolving.
+- [ ] **Signed off** (maintainer)
+
+### D064 — Filters: LZW, RunLength and TIFF predictor 2 are here, pulled forward from P3.3; lenient semantics; image codecs are declined, not failed
+**Decision**: `emon.pdffilter` has ASCIIHex, ASCII85, LZW (with `/EarlyChange`),
+RunLength, Flate (inflate's status renamed; EMPTY input is an empty stream, not
+truncated), Crypt (identity), and the predictors: PNG 10-15 and TIFF 2 at 8 and
+16 bits per component (other depths: `bad-predictor`). A missing end marker is
+not an error; ASCII85 stops at the first bad group and keeps the complete groups
+before it; a PNG row with a filter byte above 4 ends the output there. An image
+codec (DCT, JPX, CCITT, JBIG2) stops the chain: `image-filter`, with `out`
+holding the data as it was when the codec was reached (for the host's
+`ImageDecode`, D005); an unknown filter answers `unsupported-filter` the same
+way. LZW, RunLength and the predictor output are bounded by STREAM_BYTES.
+**Why**: the brief asked for LZW and TIFF is a dozen lines beside PNG; real files
+use both (P3.3 will find them done).
+**Alternatives**: leave them for P3.3; fail on an image codec.
+- [ ] **Signed off** (maintainer)
+
+### D065 — Page tree: inheritance, box normalization, what is skipped, and the `Source` JSON
+**Decision**: a node with `/Kids` is an intermediate node whatever its `/Type`,
+any other is a page; `/MediaBox`, `/CropBox`, `/Rotate` and `/Resources` are
+inherited from the nearest ancestor; boxes are normalized (x0 < x1, y0 < y1) in
+centipoints with references allowed per number; an absent or zero-area MediaBox
+is US Letter and sets a warning; the CropBox is clipped to the MediaBox (the
+MediaBox when empty); `/Rotate` wraps to 0/90/180/270 and a non-multiple of 90
+is 0 (poppler reports 45; pdf.js reads 0); a node reached twice, a missing or
+non-dictionary kid, and depth beyond 64 are skipped with a warning; pages are
+bounded by the PAGES limit. The page count is the walk's, not `/Count`'s (poppler
+reports `/Count`, so they differ only on a damaged tree). `pd-source-json` writes
+the `Source` value (SPEC 2.0) as JSON itself, with its own centipoint formatter:
+the format, header version, `encrypted`, and every page's boxes and rotation.
+More fields join it in P3.7-P3.9, appended in that order.
+**Why**: what every viewer agrees on, and the one place emon differs on purpose.
+**Alternatives**: `emon.json` for the output (P1.2 is a Model serializer).
+- [ ] **Signed off** (maintainer)
+
+### D066 — Tooling for P1.4/P1.5: `cells-bytes`, `assert-text-span`, `test-file-span`, generated fixtures, a real-file corpus, and two digests
+**Decision**: one port form, `cells-bytes`, in all four host trees: a Blob VIEW
+(a snapshot copy) of a `Cells` of bytes, for an object stream's decoded bytes
+and a filter chain's next stage (in Rust the template borrows a temporary, so it
+is called nested, never bound by `let`). All PDF reads go through
+`emon.pdfsrc` (`ps-len`, `ps-u8`), D058. The test vocabulary gained
+`assert-text-span` (a `Text` against a span of a `Blob`, as UTF-8) and
+`test-file-span` (a corpus file named by bytes of a row). `kin/scripts/
+pdf-fixtures.py` writes the hand-built fixtures under `test/pdf/` (classic,
+xref stream + object streams, hybrid, incremental, inherited attributes, odd
+boxes, bad lengths, junk header, CRLF, a cyclic tree, damaged kids, a filter chain,
+and malformed ones) and their expectations, which are known by construction and
+cross-checked against `pdfinfo` (poppler) where it can read them; the Chrome and
+Ghostscript fixtures take theirs from `pdfinfo`. Filter rows come from Python
+encoders that share no code with emon. `kin/scripts/pdf-corpus.py` cross-checks
+every real PDF under `corpus/` (read-only) and writes `test/pdf/corpus.txt`:
+page count and a digest of every page's boxes and rotation IN WHOLE POINTS
+(poppler prints two binary-rounded decimals, so an exact-centipoint digest
+differs by one on 8 of 4000 files), plus files emon cannot open with their
+status, as a RATCHET (repair and decryption will change them). Fixtures use
+the exact-centipoint digest. `kin/scripts/pdf-sweep` runs the generated Rust over
+any list of files; no gate runs these scripts, the committed files are the truth.
+**Why**: accuracy on real files is the point, and an independent oracle is the
+only way to know it.
+**Alternatives**: committing corpus PDFs (licences); comparing text instead of
+boxes (P1.6+).
+- [ ] **Signed off** (maintainer)
+
+---
+
+## Found in kin, not ours to fix here
+
+**Audit (2026-09-30, coordinator; checked against kin's source and nome):**
+- Forward refs / mutual recursion — **WRONG**: `declarefn` (kin `src/kin.cljc` `declare!`).
+- Rust `&mut Cells` (can't pass twice, nested read E0499) — **emon's own tag, not kin**:
+  the `&mut` is the `:rust` string of emon's `Cells` tag. Fix in emon: add a
+  read-only tag (e.g. `CellsRo` → `&crate::port::Cells`, host accessors `&self`);
+  writers keep `^:mut ^Cells`. Until then, bind inner reads first.
+- `let` function-flat in Java/C# — **REAL**. Workarounds: unique names, or
+  `(local ^:mut ^T x)` + `set`, or a per-target `:local-name` hook.
+- `I32` predicate as `if` test — **not a gap**: declare predicates `^Bool`
+  (`(defn ^Bool p ...)`) or use the `(== (p x) 1)` idiom.
+- `deftest` helpers can't assert — **emon's `emon.test` vocab, not kin**: Go
+  assert templates hardcode `t`; fix in `emon.test` (helpers take `t`, or
+  templates read a scoped frame).
+- Go refuses `len`/`cap`/`new` — **REAL, by design** (`go-reserved`); rename.
+- No source label on the generation context — **REAL, kin one-liner**:
+  `render-open` (kin `project.cljc`) never sets `:kin/label`, though
+  `kin.cljc` already reads it. Maintainer to decide on patching kin.
+- Recursive `disk-vfs` listing — **REAL**, deliberately minimal glob.
+
+Things emon needs that might belong in `../kin` rather than here. Record
+them; offer them upstream when they have proved general.
+
+- The `emit-ascii` generation-time literal check (D028) may be general.
+- kin's generation context carries no source label (only `:kin/ns`), so a
+  form's refusal cannot name the file, only the namespace (D042).
+- A recursive `kin.vfs/disk-vfs` listing, if emon's sources ever need more
+  than one directory level (nome hit the same one-level limit for host scans).
+- `let` bindings are flat per function in the Java and C# targets: binding
+  the same local name twice in one function (even in separate nested `let`s)
+  emits two declarations (`long w = ...` twice) and fails to compile there,
+  while Rust and Go shadow. emon works around it with unique names (P0.4 laws).
+  Worth either scoping the Java/C# emission in braces or refusing the
+  duplicate at generation time.
+- `Cells` is `&mut` in Rust (emon.lang's tag), so a function that only READS
+  two arenas still cannot be given the same arena twice; a `&` tag for
+  read-only parameters would need kin to tell read from write.
+- The same tag makes `(f cells (g cells))` fail in Rust (E0499: the outer
+  call reborrows `cells` mutably before the inner read), and every serializer
+  of a Model then needs `&mut` access to something it only reads. Both are the
+  read-only-parameter question again (P1.1, P1.2).
+- ~~kin has no forward reference~~ **CORRECTED (maintainer, 2026-09-30):**
+  kin supports forward references and mutual recursion via `(declarefn sym)`
+  (same-namespace) and `(declarefn other.ns/sym)` (cross-namespace), with
+  Clojure `declare` semantics — see `declare!` in kin's `src/kin.cljc`; nome
+  uses it (e.g. `kin/geom.kin`). The earlier note was wrong. emon's serializer
+  (P1.2) may be split into mutually recursive inline/block writers if clearer.
+- A predicate answering an `I32` cannot be an `if` condition (`expected bool,
+  found i32` in Rust only); it is written `(== (pred x) 1)` everywhere. kin has
+  no `I32` -> `Bool` form, and `emon.lang` has none to borrow.
+- A `deftest` helper function cannot use `assert-*`: the forms expand to the
+  test parameter (`emonT` in Go) which is only in scope in the `deftest`
+  itself, so a shared builder must answer a code and the law asserts (P1.2's
+  `jt-build`).
+- Go refuses `len` (and `cap`, `new`, ...) as a parameter name at generation
+  time, with a clear message; Java and C# would accept `len`. A source that
+  names a local `len` is portable only if it is checked for Go, which it is.
+- A `defconst` named `PG` and a parameter named `pg` collide in Go (generated
+  package-level names are folded, so the compiler reports `mismatched types
+  int32 and *port.Cells`); nothing at generation time says so. Named the
+  constant `PAGE_STRIDE`. Worth a generation-time check of constants against
+  parameters per target.
+- A `let` binding that is never read is a compile error in Go only (`declared
+  and not used`); the other three targets accept it. Tests that bind a scratch
+  cell they do not use fail on Go alone.
+- A `(while 1 ...)` with statements after it would be unreachable code in Java
+  (a constant condition); kin has no `loop`/`forever` the four targets agree
+  on, so loops with several exits use a `done` flag.
+
+## Open questions for the maintainer
+
+- [x] **OCR default**: `always`, every page, born-digital included (D038).
+- [x] **Sharing with nome**: none; independent projects (D039, D024 struck).
+- [x] **Crawl mix**: mixed; D031's phase order stands.
+- [x] **Encrypted PDFs**: extract, ignore permissions; `password-required`
+  error; caller-supplied password (D040).
+- [x] **Java toolchain**: a JDK exists at `/opt/homebrew/opt/openjdk` and
+  `bb check` already runs the Java arm.
+- [?] **Figure crops**: placeholders only for now (D020); opt-in pixels
+  undecided (SPEC §17.1).
+- [x] **Inputs**: Blob-like byte sources with async slice reads; lazy range
+  reading required; PDFs and images may be mixed in one conversion (D058
+  revised).
+
+## Parking lot
+
+- **nome as an optional corpus producer** (D041): allowed by the maintainer
+  as an external dev-time tool; deferred until nome is complete.
+- **A kin PDF renderer**, written in emon (nome's rasteriser as reference
+  only) (D007, D039, SPEC §17.2).
+- **Learned components as recorded host ports** — layout detection (a
+  DocLayNet-trained detector), table-structure models — admissible only
+  through plan/fulfil so identity still holds (SPEC §1.1).
+- **Exporters**: hOCR, ALTO, PAGE XML, Markdown, JSON Lines.
+- **Streaming stage 3** for very large documents (D022).
+- **MathML** for formulas; **QR/barcode decoding**; **CCITT/JBIG2 in kin**.
+- **Language identification** from text via n-gram tables (D021).
+- **Key/value extraction** for scanned forms (FUNSD-style) beyond AcroForm.
+- **Other inputs**: XPS/OXPS (fixed-layout like PDF), DjVu.
+- **Signature validation** (cryptographic) — out of scope unless asked.

@@ -1,0 +1,4 @@
+# A document with one paragraph and nothing else: the header's defaults
+# (locale null, no source, no meta), empty page table, furniture and ledger.
+n 4 0
+t 1 Hello

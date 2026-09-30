@@ -1,0 +1,2 @@
+{:paths ["kin/src"]
+ :deps {io.github.3sln/kin {:local/root "../kin"}}}

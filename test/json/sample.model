@@ -1,0 +1,50 @@
+# SPEC 4.2's example, built through the builders. Node numbers:
+#   0 document  1 section  2 heading  3 paragraph  4 text  5 span  6 text
+#   7 text  8 furniture (a second root)
+# Attribute keys (emon.model `fk`): 39 title 40 lang 42 pages 44 generator
+# 59 format 60 version 61 tagged 62 encrypted 64 ocr 65 detail 66 author
+# 71 created 4 number 41 template.
+at 0 44 emon 0.1.0
+at 0 59 pdf
+at 0 60 1.7
+ai 0 42 2
+ab 0 61 0
+ab 0 62 0
+at 0 40 en
+at 0 64 always
+at 0 65 blocks
+at 0 39 Annual Report 2025
+at 0 66 A. N. Author
+at 0 71 2025-03-01T10:00:00Z
+pg 1 61200 79200 0 1
+pl 0 1
+ph 0 987
+n 2 0
+s 1 1
+n 3 1
+s 2 1
+at 2 4 1
+t 2 Introduction
+r 2 1 7200 9050 54000 11025
+sr 2 261
+c 2 962
+n 4 1
+t 3 Revenue grew by 12% \u2026
+r 3 1 7200 12000 54000 18800
+sr 3 261
+c 3 991
+n 21 3
+t 4 Revenue grew by\u0020
+n 22 3
+s 5 1
+n 21 5
+t 6 12%
+n 21 3
+t 7 \u0020\u2026
+n 19 -1
+s 8 7
+t 8 ACME Corp \u2014 Confidential
+ni 8 42 1
+ni 8 42 2
+d 3 1 29000 76000 32200 77200 998 0
+dt 0 1

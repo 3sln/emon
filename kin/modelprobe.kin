@@ -1,0 +1,54 @@
+;; The model probe for `bb check` (P1.1, P1.2): build one small Model in code,
+;; then write (a) a fingerprint of its six arenas and (b) its canonical JSON,
+;; one line each, so the gate can compare four targets with one expectation.
+;;
+;; The model is `test/json/probe.model`, written as calls. It is the "tiny
+;; model" of `modeltest.kin`, whose arenas are worked out by hand there.
+(ns emon.modelprobe
+  (:require [emon.lang :refer [I32 I64 Cells Text emit-ascii i32]]
+            [emon.port :refer [text-i32]]
+            [emon.model :refer [model-init node-new node-set-text node-add-region
+                                node-set-conf node-add-src node-set-attr-int
+                                page-new page-set-health ledger-add
+                                ledger-set-text text-append-cp model-hash
+                                nk-paragraph sr-text sr-infer fk-level
+                                pk-vector dr-page-number]]
+            [emon.json :refer [js-emit]]
+            [emon.splitmix :refer [sm-hi sm-lo]]
+            [kin.lang :refer [defn return let comment]]))
+
+(defn ^:pub ^I32 probe-build [^:mut ^Cells nodes ^:mut ^Cells attrs
+                              ^:mut ^Cells regions ^:mut ^Cells text
+                              ^:mut ^Cells pages ^:mut ^Cells ledger]
+  (model-init nodes attrs regions text pages ledger)
+  (node-new nodes (nk-paragraph) 0)
+  (text-append-cp text 72)
+  (text-append-cp text 105)
+  (node-set-text nodes 1 0 2)
+  (node-add-region nodes regions 1 1 7200 9000 54000 11000)
+  (node-set-conf nodes 1 950)
+  (node-add-src nodes 1 (sr-text))
+  (node-add-src nodes 1 (sr-infer))
+  (node-set-attr-int nodes attrs 1 (fk-level) 2)
+  (page-new pages 1 61200 79200 0 (pk-vector))
+  (page-set-health pages 0 987)
+  (ledger-add ledger (dr-page-number) 1 29000 76000 32200 77200 998 (sr-text))
+  (text-append-cp text 49)
+  (ledger-set-text ledger 0 2 1)
+  (return 0))
+
+(defn ^:pub ^I32 probe-hash [^:mut ^Text t ^Cells nodes ^Cells attrs
+                             ^Cells regions ^Cells text ^Cells pages
+                             ^Cells ledger]
+  (comment "`model: HI LO`, the two signed 32-bit halves of `model-hash`.")
+  (let [^I64 h (model-hash nodes attrs regions text pages ledger)]
+    (emit-ascii t "model: ")
+    (text-i32 t (sm-hi h))
+    (emit-ascii t " ")
+    (text-i32 t (sm-lo h))
+    (return 0)))
+
+(defn ^:pub ^I32 probe-json [^:mut ^Text t ^Cells nodes ^Cells attrs
+                             ^Cells regions ^Cells text ^Cells pages
+                             ^Cells ledger]
+  (return (js-emit t 0 nodes attrs regions text pages ledger)))

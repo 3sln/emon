@@ -1,0 +1,130 @@
+#!/bin/sh
+# Is the committed generated code what the sources say it should be?
+#
+#     kin/scripts/drift
+#
+# GENERATED CODE IS COMMITTED (SPEC 3.1), so it can go stale two ways and
+# neither says anything at the time: somebody edits a file under `gen/`, or a
+# vocabulary changes and nothing re-emits. This is the check that notices.
+#
+# IT USES GIT AS THE COMPARISON, which flint's equivalent cannot. flint splices
+# kin's output into hand-written files, so it has to snapshot, re-emit, diff and
+# put the originals back. Everything under `gen/` here is kin's outright, so
+# re-emitting and asking git what moved is the whole of it -- and a check with
+# no snapshot has no way to leave the tree dirty if it dies partway.
+#
+# THREE QUESTIONS, because there are three ways to be wrong:
+#
+#   1a. did re-emitting change the working tree?   (a hand edit)
+#   1b. does every source still produce what is COMMITTED?  (a stale commit)
+#   2. is there a file under `gen/` that no source produces?  (an orphan --
+#      a namespace was renamed or deleted and its output stayed)
+#   3. is there a destination a source claims that is not committed?  (the
+#      inverse: somebody emitted, did not add, and the gate must not be
+#      satisfied by a file only their working tree has)
+set -e
+cd "$(dirname "$0")/../.."
+
+fails=0
+
+# --- 1. What the working tree holds NOW, before anything overwrites it. -----
+#
+# THE ORDER HERE IS THE WHOLE POINT, and the first version of this script had
+# it wrong. It re-emitted and then asked git what moved -- which cannot see a
+# hand edit, because re-emitting OVERWRITES one. Appending a line to a
+# generated file and running the gate reported `ok`, having silently thrown
+# the line away. A gate that destroys the evidence it is looking for is worse
+# than one that misses it.
+#
+# So: hash first, emit, then ask two different questions of the two diffs.
+before=$(mktemp); trap 'rm -f "$before"' EXIT
+git ls-files gen/ | sort | xargs shasum > "$before" 2>/dev/null || true
+
+# ONCE, NOT ONCE PER SOURCE. `kin/scripts/emit` writes every module whatever
+# it is handed -- it says so in its own first line, because a namespace can
+# only be resolved against what its siblings EXPORT, so the emitter walks the
+# whole dependency DAG or none of it. This loop used to run it once per `.kin`
+# file, which did the identical work eighty times and took half an hour; the
+# gate now costs what emitting costs. See D308.
+./kin/scripts/emit > /dev/null
+
+# 1a. Did emitting CHANGE anything in the working tree? Then the tree held
+#     content the sources do not produce -- a hand edit, or a source that was
+#     edited without re-emitting. Either way somebody has to look.
+if ! git ls-files gen/ | sort | xargs shasum 2>/dev/null | diff -q "$before" - > /dev/null; then
+  echo "  FAIL re-emitting changed the working tree, so it held something the"
+  echo "       sources do not produce -- a hand edit, or an un-emitted change:"
+  git ls-files gen/ | sort | xargs shasum 2>/dev/null | diff "$before" - \
+    | grep '^[<>]' | sed 's/^/    /'
+  fails=$((fails+1))
+else
+  echo "  ok   re-emitting changed nothing -- no hand edits"
+fi
+
+# 1b. And is what is COMMITTED what the sources say? A vocabulary can change
+#     and leave every committed file stale without anybody touching gen/.
+if ! git diff --quiet -- gen/; then
+  echo "  FAIL the committed output is not what the sources say:"
+  git diff --stat -- gen/ | sed 's/^/    /'
+  echo "       (re-run kin/scripts/emit and commit)"
+  fails=$((fails+1))
+else
+  echo "  ok   every committed module matches its source"
+fi
+
+# --- 2 and 3. The two directions of "which files should exist". -------------
+# `destinations` answers every [target path] the project would write, which is
+# the only place that question is answerable without a table.
+want=$(mktemp); have=$(mktemp)
+trap 'rm -f "$want" "$have"' EXIT
+./kin/scripts/destinations | awk '{print $1 "/" $2}' | sort > "$want"
+git ls-files gen/ | sed 's|^gen/||' | sort -u > "$have"
+
+# A GATE THAT PASSES ON AN EMPTY INPUT IS NOT A GATE. The first version of
+# this script asked `destinations` for the list and got nothing, because the
+# project had no `:sources` vfs and the script's error went to stderr -- so
+# both comparisons below passed by comparing nothing against nothing and the
+# whole check reported `ok`. Counting first is the fix, and the lesson is that
+# `it said ok` and `it checked something` are different claims.
+if [ ! -s "$want" ]; then
+  echo "  FAIL destinations named no file at all -- the gate has no input"
+  exit 1
+fi
+echo "  ok   $(wc -l < "$want" | tr -d ' ') destinations to account for"
+
+if orphans=$(git ls-files --others --exclude-standard gen/) && [ -n "$orphans" ]; then
+  echo "  FAIL a file under gen/ is not tracked -- emitted but never added:"
+  printf '%s\n' "$orphans" | sed 's/^/    /'
+  fails=$((fails+1))
+else
+  echo "  ok   nothing under gen/ is untracked"
+fi
+
+# AND THE OTHER DIRECTION, which this script has claimed to check since it
+# was written and did not. `want` was a third of the tree -- kin analysed
+# each source alone, a source that requires a sibling threw, and the throw
+# was swallowed -- so a comparison in this direction would have called 288
+# perfectly good files orphans. It is real now that `destinations` refuses a
+# short answer, and what it catches is a namespace that was renamed or
+# deleted while its output stayed committed. (D386.)
+orphaned=$(comm -13 "$want" "$have" || true)
+if [ -n "$orphaned" ]; then
+  echo "  FAIL a file under gen/ is produced by no source -- a namespace was"
+  echo "       renamed or deleted and its output stayed:"
+  printf '%s\n' "$orphaned" | sed 's/^/    /'
+  fails=$((fails+1))
+else
+  echo "  ok   every committed file under gen/ has a source that produces it"
+fi
+
+missing=$(comm -23 "$want" "$have" || true)
+if [ -n "$missing" ]; then
+  echo "  FAIL a source claims a destination that is not committed:"
+  printf '%s\n' "$missing" | sed 's/^/    /'
+  fails=$((fails+1))
+else
+  echo "  ok   every destination a source claims is committed"
+fi
+
+[ "$fails" -eq 0 ] || exit 1
+echo "  ok   no drift"

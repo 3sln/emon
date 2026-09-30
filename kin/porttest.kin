@@ -1,0 +1,79 @@
+;; Every host port, used once, and one answer from four hosts (P0.2).
+;;
+;; `probe` WRITES ITS ANSWER TO A TEXT SINK, which is the port under test
+;; being used as its own oracle: a blob reader that disagreed across hosts
+;; changes the text, and the text is what `kin/scripts/check` compares. The
+;; bytes are chosen to catch the ways the hosts differ -- Java's signed
+;; `byte`, a high bit in a 32-bit read (the pattern must come out negative),
+;; both byte orders, a code point outside the BMP (a surrogate pair in the
+;; UTF-16 hosts, one scalar in the others), an invalid code point (U+FFFD on
+;; every host) and a literal with a quote and a backslash in it.
+;;
+;; `limit-breach` is referenced and NOT reached: a breach never returns, so
+;; a probe that reached one would have no answer to compare.
+(ns emon.porttest
+  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+            [emon.port :refer [blob-len blob-u8 blob-u16 blob-u32
+                               blob-u16le blob-u32le
+                               cells-len cells-at cells-set cells-push cells-drop
+                               text-cp text-ascii text-i32
+                               limit-of limit-breach setting-of]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < >]]))
+
+(defn ^I32 sp [^:mut ^Text t]
+  (text-cp t 32)
+  (return 0))
+
+(defn ^I32 guard [^I32 n]
+  (comment "Never true for the small n `probe` passes; here so the form is used.")
+  (if (> n 2000000000) (limit-breach 8 n))
+  (return n))
+
+(defn ^:pub ^I32 probe [^Blob b ^:mut ^Cells c ^:mut ^Text t]
+  (comment "Bytes 00 01 80 FF 12 34 FE DC in, and one line of text out.")
+  (text-ascii t "blob:")
+  (sp t) (text-i32 t (blob-len b))
+  (sp t) (text-i32 t (blob-u8 b 3))
+  (sp t) (text-i32 t (blob-u16 b 2))
+  (sp t) (text-i32 t (blob-u32 b 2))
+  (sp t) (text-i32 t (blob-u16le b 2))
+  (sp t) (text-i32 t (blob-u32le b 4))
+  (text-ascii t " cells:")
+  (let [^I32 i0 (cells-push c 10)
+        ^I32 i1 (cells-push c 20)
+        ^I32 i2 (cells-push c 30)
+        ^I32 got (cells-at c 1)]
+    (cells-set c 0 (+ got 1))
+    (sp t) (text-i32 t i0)
+    (sp t) (text-i32 t i1)
+    (sp t) (text-i32 t i2)
+    (sp t) (text-i32 t (cells-at c 0))
+    (cells-drop c 2)
+    (sp t) (text-i32 t (cells-len c)))
+  (text-ascii t " limits:")
+  (sp t) (text-i32 t (limit-of 0))
+  (sp t) (text-i32 t (limit-of 4))
+  (sp t) (text-i32 t (limit-of 8))
+  (sp t) (text-i32 t (limit-of 10))
+  (text-ascii t " settings:")
+  (sp t) (text-i32 t (setting-of 0))
+  (sp t) (text-i32 t (setting-of 1))
+  (text-ascii t " text:")
+  (sp t) (text-cp t 233)
+  (text-cp t 128512)
+  (text-cp t 55296)
+  (text-cp t -1)
+  (text-ascii t " {\"a\\b\":")
+  (text-i32 t -42)
+  (text-ascii t "}")
+  (return (guard (cells-len c))))
+
+;; `emit-ascii` (P0.3): a literal through the checked form. The one string
+;; that matters is one with a quote AND a backslash in it -- `pr-str` must
+;; spell both so that all four languages read back `{"a\"b\\c":1}`.
+(defn ^:pub ^I32 probe-ascii [^:mut ^Text t]
+  (emit-ascii t "{\"a\\\"b\\\\c\":")
+  (text-i32 t 1)
+  (emit-ascii t "}")
+  (return 0))

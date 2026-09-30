@@ -1,0 +1,66 @@
+#!/bin/sh
+# Run EVERY gate, and fail if any gate prints no score.   bb gates
+#
+# DEVLOG P0.7, and nome's lesson (its D818): a gate nobody runs is not a gate,
+# and a gate that exits 0 having checked nothing is worse. So this runs each
+# gate listed below and requires three things of it:
+#
+#   1. it exits 0;
+#   2. it prints at least one `  ok ` line -- its SCORE, the claim it made;
+#   3. it prints no `FAIL` line (a gate may SKIP a missing toolchain, loudly,
+#      but not fail quietly).
+#
+# THE LIST IS THE DEVLOG'S: every gate named in DEVLOG (P0.1 `check`, P0.2
+# `hosts`, `drift`, P0.3/P0.6 `lang-test`, P0.5 `unit`) and nothing that only
+# writes (`gen`, `emit`). A gate added to bb.edn and not to this list is
+# caught below: every bb.edn task must be either a gate here or named in
+# `not_gates`.
+#
+# `check` and `unit` are slow (they compile four languages); the rest are
+# seconds. The order is cheapest first, so a stale generated tree fails fast.
+set -e
+cd "$(dirname "$0")/../.."
+
+gates="hosts drift lang-test check unit"
+not_gates="gen emit gates"
+
+fails=0
+
+# --- the list is complete: every bb.edn task is a gate or a named non-gate ---
+tasks=$(sed -n 's/^  \([a-z][a-z-]*\) *{:doc.*/\1/p' bb.edn)
+for t in $tasks; do
+  case " $gates $not_gates " in
+    *" $t "*) ;;
+    *) echo "  FAIL bb.edn task \`$t\` is neither a gate nor a named non-gate (kin/scripts/gates)"
+       fails=$((fails+1)) ;;
+  esac
+done
+for g in $gates; do
+  case " $tasks " in
+    *" $g "*) ;;
+    *) echo "  FAIL gate \`$g\` is not a bb.edn task"; fails=$((fails+1)) ;;
+  esac
+done
+
+# --- each gate: exit 0, a score, no FAIL ---
+log=$(mktemp "${TMPDIR:-/tmp}/emon-gates.XXXXXX")
+trap 'rm -f "$log"' EXIT
+for g in $gates; do
+  rc=0
+  bb "$g" > "$log" 2>&1 || rc=$?
+  scores=$(grep -c '^  ok ' "$log" || true)
+  failed=$(grep -c 'FAIL' "$log" || true)
+  if [ "$rc" -ne 0 ] || [ "$failed" -ne 0 ]; then
+    echo "  FAIL gate $g: exit $rc, $failed FAIL line(s)"
+    tail -15 "$log" | sed 's/^/    /'
+    fails=$((fails+1))
+  elif [ "$scores" -eq 0 ]; then
+    echo "  FAIL gate $g exited 0 and printed no score (no \`  ok \` line): it checked nothing it could say"
+    fails=$((fails+1))
+  else
+    echo "  ok   gate $g: $scores score line(s)"
+  fi
+done
+
+[ "$fails" -eq 0 ] || exit 1
+echo "  ok   every gate ran and printed a score"

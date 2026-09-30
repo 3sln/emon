@@ -1,0 +1,290 @@
+#!/bin/sh
+# Generate, COMPILE and RUN every target, and require the same answer.
+#
+#     kin/scripts/check
+#
+# nome's first gate, adapted (nome D26). kin makes it easy to generate four
+# files that all look plausible; only compiling and running them says whether
+# four languages agree. TWO CHECKS, NOT ONE: that the targets agree is the
+# claim; that they agree on the RIGHT answer is a separate claim -- four
+# identically wrong answers agree perfectly.
+#
+# WHAT IT RUNS. Two lines from every target:
+#   1. `emon.hello` -- gcd(12,18) gcd(42,63)                     (P0.1)
+#   2. `emon.porttest` -- every host port, answered as TEXT       (P0.2)
+#   3. `emon.porttest` `probe-ascii` -- `emit-ascii` with " and \     (P0.3)
+#   4. `emon.enumprobe` -- `defenum`, code -> spelling, and constants (P0.6)
+#   5. `emon.modelprobe` -- the fingerprint of a built Model's six arenas (P1.1)
+#   6. `emon.modelprobe` -- that Model's canonical JSON, byte for byte (P1.2)
+#
+# THE MODULE LISTS ARE NOT WRITTEN OUT, unlike nome's: each arm copies the
+# whole of `gen/<target>/` and the host port beside it, so a new module is
+# compiled the day it is emitted. Only the probes CALLED are listed, in the
+# four `main`s below. A module that stops compiling fails every gate at once,
+# which is the point.
+#
+# A TARGET WITHOUT ITS TOOLCHAIN IS SKIPPED, LOUDLY, and does not fail the
+# gate (nome does the same for Java). SKIP says which.
+set -e
+cd "$(dirname "$0")/../.."
+emon_cap="$(pwd)/kin/scripts/cap"
+work=$(mktemp -d "${TMPDIR:-/tmp}/emon-check.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+
+# The port probe's input, byte for byte: 00 01 80 FF 12 34 FE DC.
+#
+# THE EXPECTED TEXT, written out. Worked by hand and not copied from a run:
+#   u32 BE at 2 = 0x80FF1234 = 2164199988 - 2^32 -> -2130767308 (the 32-bit PATTERN, high bit set)
+#   u16 LE at 2 = 0xFF80 = 65408; u32 LE at 4 = 0xDCFE3412 = 3707646994 - 2^32 -> -587320302
+#   cells: pushed 0 1 2, cell 0 set to 20+1, dropped to length 2
+#   limits 0 4 8 10 and settings 0 1 at their defaults (nothing sets EMON_*)
+#   text: e-acute, U+1F600, then U+FFFD twice (a surrogate and -1)
+want1="6 21"
+want2='blob: 8 255 33023 -2130767308 65408 -587320302 cells: 0 1 2 21 2 limits: 1073741824 64 100000 100000 settings: 0 0 text: é😀'"$(printf '\357\277\275\357\277\275')"' {"a\b":-42}'
+
+# P0.3: a literal holding a quote and a backslash, through `emit-ascii`.
+want3='{"a\"b\\c":1}'
+# P0.6: codes 0..8 through one table; 1 3 4 7 are known, the rest write
+# nothing; and the constants sum to 1+3+4+7.
+want4='0=? 1=document 2=? 3=paragraph 4=text 5=? 6=? 7=break 8=? sum:15'
+
+# P1.1: FNV-1a over the six arenas of the model `test/json/probe.model` builds
+# (kin/modelprobe.kin), as the two signed halves. Worked out independently in
+# Python from the arena layout in kin/model.kin, not printed by a target.
+want5='model: -540963052 -987379065'
+# P1.2: that model's canonical JSON, from the committed golden (the reference
+# serializer `kin/scripts/json-check.py` agrees with it, and so must every target).
+want6=$(cat test/json/probe.json)
+
+fails=0
+report() {                      # report <target> <output>
+  # THE LAST TWO LINES: a compiler that has something to say says it on
+  # stdout in front of the program's own output.
+  four=$(printf '%s\n' "$2" | tail -6)
+  l1=$(printf '%s\n' "$four" | sed -n 1p)
+  l2=$(printf '%s\n' "$four" | sed -n 2p)
+  l3=$(printf '%s\n' "$four" | sed -n 3p)
+  l4=$(printf '%s\n' "$four" | sed -n 4p)
+  l5=$(printf '%s\n' "$four" | sed -n 5p)
+  l6=$(printf '%s\n' "$four" | sed -n 6p)
+  printf '%s\n' "  $1 $l1 | $l2 | $l3 | $l4 | $l5 | $(printf '%s' "$l6" | cut -c1-60)..."
+  [ "$l1" = "$want1" ] || { printf '%s\n' "    FAIL hello: expected \`$want1\`"; fails=$((fails+1)); }
+  [ "$l2" = "$want2" ] || { printf '%s\n' "    FAIL porttest: expected \`$want2\`"; fails=$((fails+1)); }
+  [ "$l3" = "$want3" ] || { printf '%s\n' "    FAIL emit-ascii: expected \`$want3\`"; fails=$((fails+1)); }
+  [ "$l4" = "$want4" ] || { printf '%s\n' "    FAIL defenum: expected \`$want4\`"; fails=$((fails+1)); }
+  [ "$l5" = "$want5" ] || { printf '%s\n' "    FAIL model fingerprint: expected \`$want5\`"; fails=$((fails+1)); }
+  [ "$l6" = "$want6" ] || { printf '%s\n' "    FAIL model JSON: expected \`$want6\` got \`$l6\`"; fails=$((fails+1)); }
+}
+refused() {                     # refused <target> <compiler output>
+  echo "  FAIL $1 refused the generated code:"
+  printf '%s\n' "$2" | sed 's/^/    /'
+  fails=$((fails+1))
+}
+
+# THE NEGATIVE CASES FIRST: a non-ASCII literal or a duplicate enum row must
+# fail generation (P0.3, P0.6); that is not something four compilers can show.
+./kin/scripts/lang-test
+
+./kin/scripts/emit > /dev/null
+
+# --- Rust -------------------------------------------------------------------
+# THE HARNESS MIRRORS THE REAL LAYOUT: kin puts `emon.hello` at
+# `gen/rust/emon/hello.rs`, so a crate rooted at `gen/rust` reaches it as
+# `crate::emon::hello`, which is what the generated `crate::port::...` calls
+# and any `use crate::emon::x::*` say.
+if command -v rustc > /dev/null 2>&1; then
+  mkdir -p "$work/rust/emon"
+  cp gen/rust/emon/*.rs "$work/rust/emon/"
+  cp host/rust/src/port.rs "$work/rust/port.rs"
+  cp host/rust/src/testport.rs "$work/rust/testport.rs"
+  ( for f in gen/rust/emon/*.rs; do echo "pub mod $(basename "$f" .rs);"; done ) > "$work/rust/emon.rs"
+  cat > "$work/rust/main.rs" <<'MAIN'
+#![allow(dead_code, unused_mut, unused_variables)]
+mod emon;
+mod port;
+mod testport;
+fn main() {
+    println!("{} {}", emon::hello::gcd(12, 18), emon::hello::gcd(42, 63));
+    let mut c = port::Cells::new();
+    let mut t = String::new();
+    emon::porttest::probe(&[0x00, 0x01, 0x80, 0xFF, 0x12, 0x34, 0xFE, 0xDC], &mut c, &mut t);
+    println!("{}", t);
+    let mut a = String::new();
+    emon::porttest::probe_ascii(&mut a);
+    println!("{}", a);
+    let mut e = String::new();
+    emon::enumprobe::probe(&mut e);
+    println!("{}", e);
+    let (mut mn, mut ma, mut mr, mut mt, mut mp, mut ml) = (port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new());
+    emon::modelprobe::probe_build(&mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml);
+    let mut h = String::new();
+    emon::modelprobe::probe_hash(&mut h, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml);
+    println!("{}", h);
+    let mut j = String::new();
+    emon::modelprobe::probe_json(&mut j, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml);
+    println!("{}", j);
+}
+MAIN
+  if build=$(cd "$work/rust" && rustc -O -o prog main.rs 2>&1); then
+    report "rust   " "$(cd "$work/rust" && ./prog)"
+  else
+    refused rust "$build"
+  fi
+else
+  echo "  SKIP rust   -- rustc not on PATH"
+fi
+
+# --- Go ---------------------------------------------------------------------
+if command -v go > /dev/null 2>&1; then
+  mkdir -p "$work/go"
+  cp -R gen/go/. "$work/go/"
+  mkdir -p "$work/go/port"
+  cp host/go/port/*.go "$work/go/port/"
+  cat > "$work/go/go.mod" <<'MOD'
+module emon
+
+go 1.21
+MOD
+  cat > "$work/go/main.go" <<'MAIN'
+package main
+
+import (
+	"fmt"
+	"strings"
+
+	"emon/enumprobe"
+	"emon/hello"
+	"emon/modelprobe"
+	"emon/port"
+	"emon/porttest"
+)
+
+func main() {
+	fmt.Println(hello.Gcd(12, 18), hello.Gcd(42, 63))
+	var t strings.Builder
+	porttest.Probe([]byte{0x00, 0x01, 0x80, 0xFF, 0x12, 0x34, 0xFE, 0xDC}, port.NewCells(), &t)
+	fmt.Println(t.String())
+	var a strings.Builder
+	porttest.ProbeAscii(&a)
+	fmt.Println(a.String())
+	var e strings.Builder
+	enumprobe.Probe(&e)
+	fmt.Println(e.String())
+	mn, ma, mr, mt, mp, ml := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
+	modelprobe.ProbeBuild(mn, ma, mr, mt, mp, ml)
+	var h strings.Builder
+	modelprobe.ProbeHash(&h, mn, ma, mr, mt, mp, ml)
+	fmt.Println(h.String())
+	var j strings.Builder
+	modelprobe.ProbeJson(&j, mn, ma, mr, mt, mp, ml)
+	fmt.Println(j.String())
+}
+MAIN
+  # gofmt is the tightest check on the Go side and it is free.
+  gofmt -l gen/go/ | while read -r f; do echo "  FAIL gofmt would rewrite $f"; exit 1; done
+  if out=$(cd "$work/go" && go run . 2>&1); then
+    report "go     " "$out"
+  else
+    refused go "$out"
+  fi
+else
+  echo "  SKIP go     -- go not on PATH"
+fi
+
+# --- Java -------------------------------------------------------------------
+# macOS's /usr/bin/javac is a STUB that exists whether or not a JDK does, so
+# the test is that it RUNS (nome, and DEVLOG's open question on Java).
+JDK="${EMON_JDK:-/opt/homebrew/opt/openjdk}"
+[ -x "$JDK/bin/javac" ] || JDK=$(/usr/libexec/java_home 2>/dev/null || true)
+if [ -x "$JDK/bin/javac" ] && "$JDK/bin/javac" -version > /dev/null 2>&1; then
+  mkdir -p "$work/java/emon"
+  cp gen/java/emon/*.java "$work/java/emon/"
+  cp host/java/emon/*.java "$work/java/emon/"
+  cat > "$work/java/Main.java" <<'MAIN'
+public class Main {
+    public static void main(String[] a) throws Exception {
+        java.io.PrintStream out = new java.io.PrintStream(System.out, true, "UTF-8");
+        out.println(emon.Hello.gcd(12, 18) + " " + emon.Hello.gcd(42, 63));
+        StringBuilder t = new StringBuilder();
+        emon.Porttest.probe(new byte[] {
+            0x00, 0x01, (byte) 0x80, (byte) 0xFF, 0x12, 0x34, (byte) 0xFE, (byte) 0xDC },
+            emon.Port.newCells(), t);
+        out.println(t.toString());
+        StringBuilder pa = new StringBuilder();
+        emon.Porttest.probeAscii(pa);
+        out.println(pa.toString());
+        StringBuilder pe = new StringBuilder();
+        emon.Enumprobe.probe(pe);
+        out.println(pe.toString());
+        emon.Port.Cells mn = emon.Port.newCells(), ma = emon.Port.newCells(), mr = emon.Port.newCells(),
+            mt = emon.Port.newCells(), mp = emon.Port.newCells(), ml = emon.Port.newCells();
+        emon.Modelprobe.probeBuild(mn, ma, mr, mt, mp, ml);
+        StringBuilder ph = new StringBuilder();
+        emon.Modelprobe.probeHash(ph, mn, ma, mr, mt, mp, ml);
+        out.println(ph.toString());
+        StringBuilder pj = new StringBuilder();
+        emon.Modelprobe.probeJson(pj, mn, ma, mr, mt, mp, ml);
+        out.println(pj.toString());
+    }
+}
+MAIN
+  if out=$(cd "$work/java" && "$JDK/bin/javac" -encoding UTF-8 -d . emon/*.java Main.java 2>&1 \
+           && "$JDK/bin/java" -cp . Main 2>&1); then
+    report "java   " "$out"
+  else
+    refused java "$out"
+  fi
+else
+  echo "  SKIP java   -- no working JDK found (set EMON_JDK)"
+fi
+
+# --- C# ---------------------------------------------------------------------
+# `gen/csharp/Tests/` is NOT copied: a generated test needs xunit, and this
+# csproj has no reason to grow one (nome's targets.cljc says why).
+if command -v dotnet > /dev/null 2>&1; then
+  mkdir -p "$work/cs"
+  cp gen/csharp/Emon/*.cs "$work/cs/"
+  cp host/csharp/Emon/*.cs "$work/cs/"
+  cat > "$work/cs/Program.cs" <<'MAIN'
+System.Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+System.Console.WriteLine(emon.Hello.Gcd(12, 18) + " " + emon.Hello.Gcd(42, 63));
+var t = new System.Text.StringBuilder();
+emon.Porttest.Probe(new byte[] { 0x00, 0x01, 0x80, 0xFF, 0x12, 0x34, 0xFE, 0xDC },
+                    emon.Port.NewCells(), t);
+System.Console.WriteLine(t.ToString());
+var a = new System.Text.StringBuilder();
+emon.Porttest.ProbeAscii(a);
+System.Console.WriteLine(a.ToString());
+var e = new System.Text.StringBuilder();
+emon.Enumprobe.Probe(e);
+System.Console.WriteLine(e.ToString());
+var mn = emon.Port.NewCells(); var ma = emon.Port.NewCells(); var mr = emon.Port.NewCells();
+var mt = emon.Port.NewCells(); var mp = emon.Port.NewCells(); var ml = emon.Port.NewCells();
+emon.Modelprobe.ProbeBuild(mn, ma, mr, mt, mp, ml);
+var h = new System.Text.StringBuilder();
+emon.Modelprobe.ProbeHash(h, mn, ma, mr, mt, mp, ml);
+System.Console.WriteLine(h.ToString());
+var j = new System.Text.StringBuilder();
+emon.Modelprobe.ProbeJson(j, mn, ma, mr, mt, mp, ml);
+System.Console.WriteLine(j.ToString());
+MAIN
+  cat > "$work/cs/cs.csproj" <<'PROJ'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+</Project>
+PROJ
+  if out=$(cd "$work/cs" && "$emon_cap" 900 dotnet run -v q 2>&1); then
+    report "csharp " "$out"
+  else
+    refused csharp "$out"
+  fi
+else
+  echo "  SKIP csharp -- dotnet not on PATH"
+fi
+
+[ "$fails" -eq 0 ] || exit 1
+echo "  ok   one source, four languages, one answer"

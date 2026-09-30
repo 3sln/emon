@@ -1,0 +1,45 @@
+;; The first laws (P0.5): the unit arm runs them as native tests on every
+;; target. They test `emon.hello` (P0.1) and the assertion forms themselves.
+(ns emon.hellotest
+  (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32 sar32]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text
+                               assert-eq-at hex-blob new-text]]
+            [emon.port :refer [blob-u16 text-i32]]
+            [emon.hello :refer [gcd]]
+            [kin.lang :refer [let set while comment + <]]))
+
+(deftest test-gcd-of-twelve-and-eighteen-is-six
+  (assert-eq (gcd 12 18) 6 "gcd(12,18)")
+  (assert-eq (gcd 42 63) 21 "gcd(42,63)"))
+
+(deftest test-gcd-with-zero-is-the-other
+  (assert-eq (gcd 0 9) 9 "gcd(0,9)")
+  (assert-eq (gcd 9 0) 9 "gcd(9,0)"))
+
+(deftest test-a-hex-blob-reads-big-endian
+  (assert-eq (blob-u16 (hex-blob "80 ff") 0) 33023 "u16 of 80ff"))
+
+(deftest test-a-row-loop-names-its-row
+  (let [^:mut ^I32 i 0]
+    (while (< i 3)
+      (assert-eq-at (gcd (+ i 1) 1) 1 "gcd(n,1)" i)
+      (set i (+ i 1)))))
+
+(deftest test-a-text-sink-compares-with-a-literal
+  (let [^:mut ^Text t (new-text)]
+    (emit-ascii t "n=")
+    (text-i32 t 42)
+    (assert-text t "n=42" "text")
+    (assert-that (< 1 2) "one is less than two")))
+
+(deftest test-32-bit-shifts-lose-bits-off-the-top-and-keep-the-sign
+  (comment "Operands are LOCALS: Go folds a constant shift at compile time and")
+  (comment "refuses `1 << 31` as an int32 overflow, where a variable wraps.")
+  (let [^I32 one 1
+        ^I32 three 3
+        ^I32 neg -16]
+    (assert-eq (shl32 one 4) 16 "1 << 4")
+    (assert-eq (shl32 one 31) -2147483648 "1 << 31 is the sign bit")
+    (assert-eq (shl32 three 30) -1073741824 "3 << 30 drops the top bit")
+    (assert-eq (sar32 neg 2) -4 "arithmetic right shift keeps the sign")
+    (assert-eq (sar32 4096 12) 1 "4096 >> 12")))

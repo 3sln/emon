@@ -1,0 +1,904 @@
+;; The Model (P1.1; SPEC 3, D011). emon's own module (D039).
+;;
+;; THE MODEL IS THE PRODUCT: every stage after evidence writes into it and
+;; every consumer reads it, so this module is the one whose codes are forever.
+;; Kin cannot allocate, so the Model is SIX ARENAS OF INTEGERS -- `Cells` the
+;; host allocates and this module fills. A node is its index; four languages
+;; cannot disagree about an index.
+;;
+;;   nodes    stride 16   the tree
+;;   attrs    stride 5    kind-specific fields that are not one integer
+;;   regions  stride 6    where a node is: page, x0, y0, x1, y1 (centipoints)
+;;   text     stride 1    one Unicode scalar value per cell; EVERY string in the
+;;                        Model is a run (start, length) in here
+;;   pages    stride 16   the page table
+;;   ledger   stride 10   what was dropped, and why
+;;
+;; NO LINK IS A POINTER. A missing link, run, or value is -1; a count is 0.
+;; A field that is -1 is OMITTED from the JSON (SPEC 4.2), so "absent" has one
+;; spelling in the arena and one in the output.
+;;
+;; THE NODE, slot by slot (SPEC 3.8):
+;;   0 kind   1 parent   2 first-child   3 last-child   4 next   5 prev
+;;   6 attr-head   7 text-start   8 text-len   9 region-head   10 region-count
+;;   11 src (bitset)   12 conf (-1 absent, else 0..1000)   13 flags (bitset)
+;;   14 sub   15 aux
+;; `sub` and `aux` are the kind-specific small integers, and WHICH field they
+;; are is fixed per kind (table at `nk-...` below and in D050): a level, a role,
+;; a figure kind, a span's style bits. Everything else kind-specific is an
+;; attribute, because a field with a string value cannot live in one cell.
+;;
+;; IDS. The `id` of a node IS ITS INDEX, and the builder appends, so ids are
+;; assigned in creation order. SPEC 3.3 says ids are in DOCUMENT order; this
+;; holds if every tree is built in pre-order, and `model-check` verifies that it
+;; was (each tree's indices are consecutive in pre-order). A stage that builds
+;; out of order gets `mc-not-preorder` from the check rather than an id that
+;; is not stable.
+;;
+;; TREES. Node 0 is the `document`; its subtree is the body. A `furniture`
+;; node is a SECOND ROOT (parent -1): it is not in the flow, it is a template
+;; kept once (SPEC 3.7, 10.2), and the JSON lists it in `furniture`.
+;;
+;; ATTRIBUTE KEYS are the JSON field names (`fk`): one table spells the key in
+;; the arena and the key in the output, so they cannot disagree.
+(ns emon.model
+  (:require [emon.lang :refer [I32 I64 Blob Cells Text defenum i64 add64 mul64
+                               shl32 sar32]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push
+                               cells-drop blob-u8]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or bit-and bit-or
+                              bit-xor quot rem]]))
+
+;; ------------------------------------------------------------ the tables
+;;
+;; Every code below is ASSIGNED ONCE and never reused (D050). New rows go on
+;; the end of a table; a minor schema version may add, never renumber.
+
+(defenum ^:pub nk
+  [[nk-document 1 "document"]
+   [nk-section 2 "section"]
+   [nk-heading 3 "heading"]
+   [nk-paragraph 4 "paragraph"]
+   [nk-list 5 "list"]
+   [nk-item 6 "item"]
+   [nk-table 7 "table"]
+   [nk-rowgroup 8 "rowgroup"]
+   [nk-row 9 "row"]
+   [nk-cell 10 "cell"]
+   [nk-caption 11 "caption"]
+   [nk-figure 12 "figure"]
+   [nk-seal 13 "seal"]
+   [nk-formula 14 "formula"]
+   [nk-code 15 "code"]
+   [nk-quote 16 "quote"]
+   [nk-note 17 "note"]
+   [nk-field 18 "field"]
+   [nk-furniture 19 "furniture"]
+   [nk-break 20 "break"]
+   [nk-text 21 "text"]
+   [nk-span 22 "span"]
+   [nk-link 23 "link"]
+   [nk-ref 24 "ref"]
+   [nk-linebreak 25 "linebreak"]])
+
+;; The JSON field names. A node's attribute key is one of these.
+(defenum ^:pub fk
+  [[fk-id 1 "id"]
+   [fk-kind 2 "kind"]
+   [fk-level 3 "level"]
+   [fk-number 4 "number"]
+   [fk-numbering 5 "numbering"]
+   [fk-text 6 "text"]
+   [fk-inlines 7 "inlines"]
+   [fk-children 8 "children"]
+   [fk-at 9 "at"]
+   [fk-src 10 "src"]
+   [fk-conf 11 "conf"]
+   [fk-flags 12 "flags"]
+   [fk-align 13 "align"]
+   [fk-ordered 14 "ordered"]
+   [fk-scheme 15 "scheme"]
+   [fk-start 16 "start"]
+   [fk-marker 17 "marker"]
+   [fk-value 18 "value"]
+   [fk-profile 19 "profile"]
+   [fk-continued 20 "continued"]
+   [fk-columns 21 "columns"]
+   [fk-role 22 "role"]
+   [fk-repeated 23 "repeated"]
+   [fk-rowspan 24 "rowspan"]
+   [fk-colspan 25 "colspan"]
+   [fk-header 26 "header"]
+   [fk-empty 27 "empty"]
+   [fk-label 28 "label"]
+   [fk-target 29 "target"]
+   [fk-alt 30 "alt"]
+   [fk-labels 31 "labels"]
+   [fk-name 32 "name"]
+   [fk-date 33 "date"]
+   [fk-color 34 "color"]
+   [fk-display 35 "display"]
+   [fk-style 36 "style"]
+   [fk-href 37 "href"]
+   [fk-page 38 "page"]
+   [fk-title 39 "title"]
+   [fk-lang 40 "lang"]
+   [fk-template 41 "template"]
+   [fk-pages 42 "pages"]
+   [fk-emon 43 "emon"]
+   [fk-generator 44 "generator"]
+   [fk-source 45 "source"]
+   [fk-settings 46 "settings"]
+   [fk-meta 47 "meta"]
+   [fk-body 48 "body"]
+   [fk-furniture 49 "furniture"]
+   [fk-dropped 50 "dropped"]
+   [fk-reason 51 "reason"]
+   [fk-n 52 "n"]
+   [fk-w 53 "w"]
+   [fk-h 54 "h"]
+   [fk-rot 55 "rot"]
+   [fk-health 56 "health"]
+   [fk-dpi 57 "dpi"]
+   [fk-px 58 "px"]
+   [fk-format 59 "format"]
+   [fk-version 60 "version"]
+   [fk-tagged 61 "tagged"]
+   [fk-encrypted 62 "encrypted"]
+   [fk-locale 63 "locale"]
+   [fk-ocr 64 "ocr"]
+   [fk-detail 65 "detail"]
+   [fk-author 66 "author"]
+   [fk-subject 67 "subject"]
+   [fk-keywords 68 "keywords"]
+   [fk-creator 69 "creator"]
+   [fk-producer 70 "producer"]
+   [fk-created 71 "created"]
+   [fk-modified 72 "modified"]
+   [fk-type 73 "type"]
+   [fk-checked 74 "checked"]
+   [fk-subkind 75 "subkind"]])
+
+;; Provenance bits (SPEC 3.5). The code IS the bit.
+(defenum ^:pub sr
+  [[sr-text 1 "text"]
+   [sr-hidden-text 2 "hidden-text"]
+   [sr-ocr 4 "ocr"]
+   [sr-trace 8 "trace"]
+   [sr-vector 16 "vector"]
+   [sr-struct 32 "struct"]
+   [sr-annot 64 "annot"]
+   [sr-outline 128 "outline"]
+   [sr-infer 256 "infer"]])
+
+;; Warning bits (SPEC 3.3).
+(defenum ^:pub fl
+  [[fl-low-conf 1 "low-conf"]
+   [fl-ocr-only 2 "ocr-only"]
+   [fl-text-layer-suspect 4 "text-layer-suspect"]
+   [fl-reconstructed 8 "reconstructed"]
+   [fl-dpi-unknown 16 "dpi-unknown"]
+   [fl-rotated 32 "rotated"]
+   [fl-vertical 64 "vertical"]])
+
+;; A span's `style` bits, stored in its `sub`.
+(defenum ^:pub sy
+  [[sy-bold 1 "bold"]
+   [sy-italic 2 "italic"]
+   [sy-underline 4 "underline"]
+   [sy-strike 8 "strike"]
+   [sy-sub 16 "sub"]
+   [sy-sup 32 "sup"]
+   [sy-mono 64 "mono"]
+   [sy-smallcaps 128 "smallcaps"]])
+
+;; A paragraph's `align` (its `sub`; 0 is "not informative", omitted).
+(defenum ^:pub al
+  [[al-start 1 "start"]
+   [al-center 2 "center"]
+   [al-end 3 "end"]
+   [al-justify 4 "justify"]])
+
+;; `role`: a rowgroup's, a note's, a furniture's. One table, distinct codes.
+(defenum ^:pub rl
+  [[rl-head 1 "head"]
+   [rl-body 2 "body"]
+   [rl-foot 3 "foot"]
+   [rl-footnote 4 "footnote"]
+   [rl-endnote 5 "endnote"]
+   [rl-margin 6 "margin"]
+   [rl-header 7 "header"]
+   [rl-footer 8 "footer"]])
+
+;; A figure's `kind` (SPEC 10.6; its `sub`).
+(defenum ^:pub fg
+  [[fg-chart 1 "chart"]
+   [fg-diagram 2 "diagram"]
+   [fg-photo 3 "photo"]
+   [fg-logo 4 "logo"]
+   [fg-map 5 "map"]
+   [fg-illustration 6 "illustration"]
+   [fg-screenshot 7 "screenshot"]
+   [fg-qr 8 "qr"]
+   [fg-barcode 9 "barcode"]
+   [fg-unknown 10 "unknown"]])
+
+;; A seal's `kind` (SPEC 10.7; its `sub`).
+(defenum ^:pub sl
+  [[sl-seal 1 "seal"]
+   [sl-stamp 2 "stamp"]
+   [sl-signature 3 "signature"]
+   [sl-initials 4 "initials"]
+   [sl-digital-signature 5 "digital-signature"]])
+
+;; A formula's `display` (its `sub`).
+(defenum ^:pub dp
+  [[dp-block 1 "block"]
+   [dp-inline 2 "inline"]])
+
+;; A cell's `header` (its `sub`).
+(defenum ^:pub ch
+  [[ch-col 1 "col"]
+   [ch-row 2 "row"]])
+
+;; A page's source kind (SPEC 3.7).
+(defenum ^:pub pk
+  [[pk-vector 1 "vector"]
+   [pk-scanned 2 "scanned"]
+   [pk-mixed 3 "mixed"]
+   [pk-image 4 "image"]])
+
+;; Why something was dropped (SPEC 3.7).
+(defenum ^:pub dr
+  [[dr-watermark 1 "watermark"]
+   [dr-background 2 "background"]
+   [dr-page-number 3 "page-number"]
+   [dr-running-title 4 "running-title"]
+   [dr-bleed-through 5 "bleed-through"]
+   [dr-duplicate-header-row 6 "duplicate-header-row"]
+   [dr-ocr-ghost 7 "ocr-ghost"]
+   [dr-clipped 8 "clipped"]
+   [dr-offpage 9 "offpage"]
+   [dr-invisible 10 "invisible"]])
+
+;; What a `model-check` found wrong. 0 is fine; the node is in `st[0]`.
+(defenum ^:pub mc
+  [[mc-ok 0 "ok"]
+   [mc-bad-stride 1 "bad-stride"]
+   [mc-no-root 2 "no-root"]
+   [mc-bad-kind 3 "bad-kind"]
+   [mc-bad-link 4 "bad-link"]
+   [mc-bad-tree 5 "bad-tree"]
+   [mc-bad-text 6 "bad-text"]
+   [mc-bad-attr 7 "bad-attr"]
+   [mc-bad-region 8 "bad-region"]
+   [mc-bad-conf 9 "bad-conf"]
+   [mc-not-preorder 10 "not-preorder"]
+   [mc-bad-page 11 "bad-page"]
+   [mc-bad-ledger 12 "bad-ledger"]])
+
+;; Attribute value kinds. A `node` value is a node id (`caption.target`).
+(defn ^:pub ^I32 av-int [] (return 0))
+(defn ^:pub ^I32 av-text [] (return 1))
+(defn ^:pub ^I32 av-node [] (return 2))
+(defn ^:pub ^I32 av-bool [] (return 3))
+
+;; Strides.
+(defn ^:pub ^I32 nodes-stride [] (return 16))
+(defn ^:pub ^I32 attrs-stride [] (return 5))
+(defn ^:pub ^I32 regions-stride [] (return 6))
+(defn ^:pub ^I32 pages-stride [] (return 16))
+(defn ^:pub ^I32 ledger-stride [] (return 10))
+
+;; The deepest a tree may nest. `node-new` refuses a deeper node (answers -1),
+;; which is what lets every walker recurse without a stack of its own.
+(defn ^:pub ^I32 max-depth [] (return 200))
+
+;; ----------------------------------------------------------- node fields
+
+(defn ^I32 nget [^Cells nodes ^I32 n ^I32 f]
+  (return (cells-at nodes (+ (* n 16) f))))
+
+(defn ^I32 nput [^:mut ^Cells nodes ^I32 n ^I32 f ^I32 v]
+  (cells-set nodes (+ (* n 16) f) v)
+  (return 0))
+
+(defn ^:pub ^I32 node-count [^Cells nodes] (return (quot (cells-len nodes) 16)))
+(defn ^:pub ^I32 node-kind [^Cells nodes ^I32 n] (return (nget nodes n 0)))
+(defn ^:pub ^I32 node-parent [^Cells nodes ^I32 n] (return (nget nodes n 1)))
+(defn ^:pub ^I32 node-first-child [^Cells nodes ^I32 n] (return (nget nodes n 2)))
+(defn ^:pub ^I32 node-last-child [^Cells nodes ^I32 n] (return (nget nodes n 3)))
+(defn ^:pub ^I32 node-next [^Cells nodes ^I32 n] (return (nget nodes n 4)))
+(defn ^:pub ^I32 node-prev [^Cells nodes ^I32 n] (return (nget nodes n 5)))
+(defn ^:pub ^I32 node-attr-head [^Cells nodes ^I32 n] (return (nget nodes n 6)))
+(defn ^:pub ^I32 node-text-start [^Cells nodes ^I32 n] (return (nget nodes n 7)))
+(defn ^:pub ^I32 node-text-len [^Cells nodes ^I32 n] (return (nget nodes n 8)))
+(defn ^:pub ^I32 node-region-head [^Cells nodes ^I32 n] (return (nget nodes n 9)))
+(defn ^:pub ^I32 node-region-count [^Cells nodes ^I32 n] (return (nget nodes n 10)))
+(defn ^:pub ^I32 node-src [^Cells nodes ^I32 n] (return (nget nodes n 11)))
+(defn ^:pub ^I32 node-conf [^Cells nodes ^I32 n] (return (nget nodes n 12)))
+(defn ^:pub ^I32 node-flags [^Cells nodes ^I32 n] (return (nget nodes n 13)))
+(defn ^:pub ^I32 node-sub [^Cells nodes ^I32 n] (return (nget nodes n 14)))
+(defn ^:pub ^I32 node-aux [^Cells nodes ^I32 n] (return (nget nodes n 15)))
+
+(defn ^:pub ^I32 node-has-text [^Cells nodes ^I32 n]
+  (comment "1 when the node carries a text run (even an empty one).")
+  (if (>= (nget nodes n 7) 0) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 nk-is-inline [^I32 kind]
+  (comment "1 for the kinds that live inside a block's text: text, span, link,")
+  (comment "ref, linebreak (SPEC 3.2). A `break` is a milestone, not an inline.")
+  (if (== kind (nk-text)) (return 1))
+  (if (== kind (nk-span)) (return 1))
+  (if (== kind (nk-link)) (return 1))
+  (if (== kind (nk-ref)) (return 1))
+  (if (== kind (nk-linebreak)) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 node-child-count [^Cells nodes ^I32 n]
+  (let [^:mut ^I32 c (nget nodes n 2)
+        ^:mut ^I32 k 0]
+    (while (>= c 0)
+      (do (set k (+ k 1))
+          (set c (nget nodes c 4))))
+    (return k)))
+
+(defn ^:pub ^I32 node-depth [^Cells nodes ^I32 n]
+  (comment "Edges from the node to its root: the root is 0.")
+  (let [^:mut ^I32 p (nget nodes n 1)
+        ^:mut ^I32 d 0]
+    (while (>= p 0)
+      (do (set d (+ d 1))
+          (set p (nget nodes p 1))))
+    (return d)))
+
+;; --------------------------------------------------------------- builders
+
+(defn ^:pub ^I32 node-new [^:mut ^Cells nodes ^I32 kind ^I32 parent]
+  (comment "Append a node as the LAST child of `parent` (-1: a new root) and")
+  (comment "answer its index, or -1 when `parent` is not a node, the kind is")
+  (comment "unknown, or the node would nest deeper than `max-depth`. A new")
+  (comment "node has no text, no regions, no attributes, `src` 0, `conf` -1")
+  (comment "(absent), `flags` 0, `sub` 0, `aux` 0.")
+  (let [^I32 n (quot (cells-len nodes) 16)
+        ^:mut ^I32 last -1]
+    (if (or (< kind 1) (> kind 25)) (return -1))
+    (if (< parent -1) (return -1))
+    (if (>= parent n) (return -1))
+    (if (>= parent 0)
+      (do (if (>= (node-depth nodes parent) (- (max-depth) 1)) (return -1))
+          (set last (nget nodes parent 3))))
+    (cells-push nodes kind)
+    (cells-push nodes parent)
+    (cells-push nodes -1)
+    (cells-push nodes -1)
+    (cells-push nodes -1)
+    (cells-push nodes last)
+    (cells-push nodes -1)
+    (cells-push nodes -1)
+    (cells-push nodes 0)
+    (cells-push nodes -1)
+    (cells-push nodes 0)
+    (cells-push nodes 0)
+    (cells-push nodes -1)
+    (cells-push nodes 0)
+    (cells-push nodes 0)
+    (cells-push nodes 0)
+    (if (>= parent 0)
+      (do (if (< last 0)
+            (nput nodes parent 2 n)
+            (nput nodes last 4 n))
+          (nput nodes parent 3 n)))
+    (return n)))
+
+(defn ^:pub ^I32 model-init [^:mut ^Cells nodes ^:mut ^Cells attrs
+                             ^:mut ^Cells regions ^:mut ^Cells text
+                             ^:mut ^Cells pages ^:mut ^Cells ledger]
+  (comment "Empty all six arenas and create the `document` root, node 0.")
+  (cells-drop nodes 0)
+  (cells-drop attrs 0)
+  (cells-drop regions 0)
+  (cells-drop text 0)
+  (cells-drop pages 0)
+  (cells-drop ledger 0)
+  (node-new nodes (nk-document) -1)
+  (return 0))
+
+(defn ^:pub ^I32 node-set-text [^:mut ^Cells nodes ^I32 n ^I32 start ^I32 ln]
+  (comment "The node's own text is the run [start, start+length) of the text arena.")
+  (nput nodes n 7 start)
+  (nput nodes n 8 ln)
+  (return 0))
+
+(defn ^:pub ^I32 node-set-sub [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 14 v)))
+(defn ^:pub ^I32 node-set-aux [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 15 v)))
+(defn ^:pub ^I32 node-set-src [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 11 v)))
+(defn ^:pub ^I32 node-set-flags [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 13 v)))
+
+(defn ^:pub ^I32 node-set-conf [^:mut ^Cells nodes ^I32 n ^I32 v]
+  (comment "0..1000, or -1 for absent. Anything else is clamped to that range.")
+  (if (< v -1) (return (nput nodes n 12 -1)))
+  (if (> v 1000) (return (nput nodes n 12 1000)))
+  (return (nput nodes n 12 v)))
+
+(defn ^:pub ^I32 node-add-src [^:mut ^Cells nodes ^I32 n ^I32 bits]
+  (let [^I32 old (nget nodes n 11)]
+    (return (nput nodes n 11 (bit-or old bits)))))
+
+(defn ^:pub ^I32 node-add-flag [^:mut ^Cells nodes ^I32 n ^I32 bits]
+  (let [^I32 old (nget nodes n 13)]
+    (return (nput nodes n 13 (bit-or old bits)))))
+
+;; ---------------------------------------------------------------- text
+
+(defn ^:pub ^I32 text-len [^Cells text] (return (cells-len text)))
+(defn ^:pub ^I32 text-at [^Cells text ^I32 i] (return (cells-at text i)))
+
+(defn ^:pub ^I32 text-append-cp [^:mut ^Cells text ^I32 cp]
+  (comment "Append one Unicode scalar value; answer the index it went to.")
+  (comment "Anything that is not a scalar value (negative, past U+10FFFF, a")
+  (comment "surrogate) is stored as U+FFFD, so the arena only ever holds")
+  (comment "what SPEC 3.6 says it holds.")
+  (if (< cp 0) (return (cells-push text 65533)))
+  (if (> cp 1114111) (return (cells-push text 65533)))
+  (if (and (>= cp 55296) (<= cp 57343)) (return (cells-push text 65533)))
+  (return (cells-push text cp)))
+
+;; Decode one UTF-8 sequence. WHATWG's rule, because it is the one every
+;; browser and `String::from_utf8_lossy` agree on: a lead byte fixes how many
+;; continuation bytes follow and, for four leads, the range of the FIRST one
+;; (E0 A0..BF, ED 80..9F, F0 90..BF, F4 80..8F -- which is what excludes
+;; overlong forms, surrogates and values past U+10FFFF). The first byte that
+;; is not acceptable ends the sequence WITHOUT being consumed.
+(defn ^:pub ^I32 text-append-utf8 [^:mut ^Cells text ^Blob b ^I32 from ^I32 to]
+  (comment "Decode b[from, to) as UTF-8 onto the text arena; answer the number")
+  (comment "of code points appended. Invalid input becomes U+FFFD (SPEC 4.3:")
+  (comment "'invalid input decodes to U+FFFD at the source'), ONE per maximal")
+  (comment "invalid subpart: a stray continuation byte, a bad lead, or a")
+  (comment "sequence cut short is a single replacement, and decoding resumes")
+  (comment "at the first byte that was not part of it.")
+  (let [^:mut ^I32 i from
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 need 0
+        ^:mut ^I32 lo 128
+        ^:mut ^I32 hi 191
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 x 0]
+    (while (< i to)
+      (do (set c (blob-u8 b i))
+          (set i (+ i 1))
+          (set need 0)
+          (set lo 128)
+          (set hi 191)
+          (set ok 1)
+          (set cp c)
+          (if (>= c 128)
+            (do (set ok 0)
+                (if (and (>= c 194) (<= c 223))
+                  (do (set need 1) (set cp (bit-and c 31)) (set ok 1)))
+                (if (and (>= c 224) (<= c 239))
+                  (do (set need 2) (set cp (bit-and c 15)) (set ok 1)
+                      (if (== c 224) (set lo 160))
+                      (if (== c 237) (set hi 159))))
+                (if (and (>= c 240) (<= c 244))
+                  (do (set need 3) (set cp (bit-and c 7)) (set ok 1)
+                      (if (== c 240) (set lo 144))
+                      (if (== c 244) (set hi 143))))))
+          (while (and (== ok 1) (> need 0))
+            (do (if (< i to)
+                  (do (set x (blob-u8 b i))
+                      (if (and (>= x lo) (<= x hi))
+                        (do (set cp (+ (* cp 64) (bit-and x 63)))
+                            (set i (+ i 1))
+                            (set need (- need 1))
+                            (set lo 128)
+                            (set hi 191))
+                        (set ok 0)))
+                  (set ok 0))))
+          (if (== ok 0) (set cp 65533))
+          (text-append-cp text cp)
+          (set k (+ k 1))))
+    (return k)))
+
+;; ---------------------------------------------------------------- regions
+
+(defn ^:pub ^I32 node-add-region [^:mut ^Cells nodes ^:mut ^Cells regions ^I32 n
+                                  ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Append a region to the node's chain (in the order added: a node")
+  (comment "spanning pages has one region per page, in page order) and answer")
+  (comment "the region's index.")
+  (let [^I32 r (quot (cells-len regions) 6)
+        ^I32 cnt (nget nodes n 10)
+        ^:mut ^I32 t (nget nodes n 9)]
+    (cells-push regions page)
+    (cells-push regions x0)
+    (cells-push regions y0)
+    (cells-push regions x1)
+    (cells-push regions y1)
+    (cells-push regions -1)
+    (if (== cnt 0)
+      (nput nodes n 9 r)
+      (do (while (>= (cells-at regions (+ (* t 6) 5)) 0)
+            (set t (cells-at regions (+ (* t 6) 5))))
+          (cells-set regions (+ (* t 6) 5) r)))
+    (nput nodes n 10 (+ cnt 1))
+    (return r)))
+
+(defn ^I32 rget [^Cells regions ^I32 r ^I32 f]
+  (return (cells-at regions (+ (* r 6) f))))
+
+(defn ^:pub ^I32 region-count [^Cells regions] (return (quot (cells-len regions) 6)))
+(defn ^:pub ^I32 region-page [^Cells regions ^I32 r] (return (rget regions r 0)))
+(defn ^:pub ^I32 region-x0 [^Cells regions ^I32 r] (return (rget regions r 1)))
+(defn ^:pub ^I32 region-y0 [^Cells regions ^I32 r] (return (rget regions r 2)))
+(defn ^:pub ^I32 region-x1 [^Cells regions ^I32 r] (return (rget regions r 3)))
+(defn ^:pub ^I32 region-y1 [^Cells regions ^I32 r] (return (rget regions r 4)))
+(defn ^:pub ^I32 region-next [^Cells regions ^I32 r] (return (rget regions r 5)))
+
+;; ------------------------------------------------------------- attributes
+
+(defn ^I32 aget [^Cells attrs ^I32 a ^I32 f]
+  (return (cells-at attrs (+ (* a 5) f))))
+
+(defn ^:pub ^I32 attr-count [^Cells attrs] (return (quot (cells-len attrs) 5)))
+(defn ^:pub ^I32 attr-key [^Cells attrs ^I32 a] (return (aget attrs a 0)))
+(defn ^:pub ^I32 attr-vkind [^Cells attrs ^I32 a] (return (aget attrs a 1)))
+(defn ^:pub ^I32 attr-value [^Cells attrs ^I32 a] (return (aget attrs a 2)))
+(defn ^:pub ^I32 attr-len [^Cells attrs ^I32 a] (return (aget attrs a 3)))
+(defn ^:pub ^I32 attr-next [^Cells attrs ^I32 a] (return (aget attrs a 4)))
+
+(defn ^:pub ^I32 attr-find [^Cells attrs ^I32 head ^I32 key]
+  (comment "The first attribute with `key` in the chain from `head`, or -1.")
+  (let [^:mut ^I32 a head]
+    (while (>= a 0)
+      (do (if (== (aget attrs a 0) key) (return a))
+          (set a (aget attrs a 4))))
+    (return -1)))
+
+(defn ^:pub ^I32 attr-find-next [^Cells attrs ^I32 a ^I32 key]
+  (comment "The next attribute with `key` AFTER a (a key may repeat: a")
+  (comment "figure's `labels`, a furniture's `pages`), or -1.")
+  (let [^I32 nx (aget attrs a 4)]
+    (return (attr-find attrs nx key))))
+
+(defn ^:pub ^I32 node-attr [^Cells nodes ^Cells attrs ^I32 n ^I32 key]
+  (comment "The node's first attribute with `key`, or -1.")
+  (return (attr-find attrs (nget nodes n 6) key)))
+
+(defn ^:pub ^I32 node-attr-int-or [^Cells nodes ^Cells attrs ^I32 n ^I32 key ^I32 dflt]
+  (comment "An int, bool or node attribute's value, or `dflt` when absent.")
+  (let [^I32 a (attr-find attrs (nget nodes n 6) key)]
+    (if (< a 0) (return dflt))
+    (return (aget attrs a 2))))
+
+(defn ^I32 attr-put [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key
+                     ^I32 vkind ^I32 value ^I32 ln ^I32 replace]
+  (comment "Set (replace = 1: overwrite the first attribute with the key, if")
+  (comment "there is one) or add (replace = 0: always append) an attribute.")
+  (let [^I32 head (nget nodes n 6)
+        ^I32 found (attr-find attrs head key)
+        ^I32 a (quot (cells-len attrs) 5)
+        ^:mut ^I32 t head]
+    (if (and (== replace 1) (>= found 0))
+      (do (cells-set attrs (+ (* found 5) 1) vkind)
+          (cells-set attrs (+ (* found 5) 2) value)
+          (cells-set attrs (+ (* found 5) 3) ln)
+          (return found)))
+    (cells-push attrs key)
+    (cells-push attrs vkind)
+    (cells-push attrs value)
+    (cells-push attrs ln)
+    (cells-push attrs -1)
+    (if (< head 0)
+      (nput nodes n 6 a)
+      (do (while (>= (cells-at attrs (+ (* t 5) 4)) 0)
+            (set t (cells-at attrs (+ (* t 5) 4))))
+          (cells-set attrs (+ (* t 5) 4) a)))
+    (return a)))
+
+(defn ^:pub ^I32 node-set-attr-int [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 v]
+  (return (attr-put nodes attrs n key 0 v 0 1)))
+(defn ^:pub ^I32 node-set-attr-bool [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 v]
+  (comment "Any non-zero v is stored as 1.")
+  (if (!= v 0) (return (attr-put nodes attrs n key 3 1 0 1)))
+  (return (attr-put nodes attrs n key 3 0 0 1)))
+(defn ^:pub ^I32 node-set-attr-node [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 target]
+  (return (attr-put nodes attrs n key 2 target 0 1)))
+(defn ^:pub ^I32 node-set-attr-text [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 start ^I32 ln]
+  (comment "The value is the run [start, start+length) of the text arena.")
+  (return (attr-put nodes attrs n key 1 start ln 1)))
+(defn ^:pub ^I32 node-add-attr-int [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 v]
+  (comment "Append, even if the key is already there (a repeated key).")
+  (return (attr-put nodes attrs n key 0 v 0 0)))
+(defn ^:pub ^I32 node-add-attr-text [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 start ^I32 ln]
+  (return (attr-put nodes attrs n key 1 start ln 0)))
+
+;; ------------------------------------------------------------------ pages
+;;
+;;   0 number (1-based, as the JSON `n`)  1 label-start (-1 none)  2 label-len
+;;   3 w  4 h (centipoints)  5 rot (0, 90, 180, 270)  6 kind (`pk`)
+;;   7 health (0..1000, -1 absent)  8 dpi (0 unknown)  9 px-w  10 px-h
+;;   11..15 reserved, 0 (D050): room for per-page fields without a new stride.
+
+(defn ^:pub ^I32 page-new [^:mut ^Cells pages ^I32 number ^I32 w ^I32 h ^I32 rot ^I32 kind]
+  (comment "Append a page-table row and answer its index. A new row has no")
+  (comment "label, no health and no resolution.")
+  (let [^I32 p (quot (cells-len pages) 16)
+        ^:mut ^I32 i 0]
+    (cells-push pages number)
+    (cells-push pages -1)
+    (cells-push pages 0)
+    (cells-push pages w)
+    (cells-push pages h)
+    (cells-push pages rot)
+    (cells-push pages kind)
+    (cells-push pages -1)
+    (cells-push pages 0)
+    (cells-push pages 0)
+    (cells-push pages 0)
+    (while (< i 5)
+      (do (cells-push pages 0)
+          (set i (+ i 1))))
+    (return p)))
+
+(defn ^I32 pset [^:mut ^Cells pages ^I32 p ^I32 f ^I32 v]
+  (cells-set pages (+ (* p 16) f) v)
+  (return 0))
+
+(defn ^I32 pget [^Cells pages ^I32 p ^I32 f]
+  (return (cells-at pages (+ (* p 16) f))))
+
+(defn ^:pub ^I32 page-set-label [^:mut ^Cells pages ^I32 p ^I32 start ^I32 ln]
+  (pset pages p 1 start)
+  (return (pset pages p 2 ln)))
+(defn ^:pub ^I32 page-set-health [^:mut ^Cells pages ^I32 p ^I32 v]
+  (return (pset pages p 7 v)))
+(defn ^:pub ^I32 page-set-resolution [^:mut ^Cells pages ^I32 p ^I32 dpi ^I32 pxw ^I32 pxh]
+  (pset pages p 8 dpi)
+  (pset pages p 9 pxw)
+  (return (pset pages p 10 pxh)))
+
+(defn ^:pub ^I32 page-count [^Cells pages] (return (quot (cells-len pages) 16)))
+(defn ^:pub ^I32 page-number [^Cells pages ^I32 p] (return (pget pages p 0)))
+(defn ^:pub ^I32 page-label-start [^Cells pages ^I32 p] (return (pget pages p 1)))
+(defn ^:pub ^I32 page-label-len [^Cells pages ^I32 p] (return (pget pages p 2)))
+(defn ^:pub ^I32 page-w [^Cells pages ^I32 p] (return (pget pages p 3)))
+(defn ^:pub ^I32 page-h [^Cells pages ^I32 p] (return (pget pages p 4)))
+(defn ^:pub ^I32 page-rot [^Cells pages ^I32 p] (return (pget pages p 5)))
+(defn ^:pub ^I32 page-kind [^Cells pages ^I32 p] (return (pget pages p 6)))
+(defn ^:pub ^I32 page-health [^Cells pages ^I32 p] (return (pget pages p 7)))
+(defn ^:pub ^I32 page-dpi [^Cells pages ^I32 p] (return (pget pages p 8)))
+(defn ^:pub ^I32 page-px-w [^Cells pages ^I32 p] (return (pget pages p 9)))
+(defn ^:pub ^I32 page-px-h [^Cells pages ^I32 p] (return (pget pages p 10)))
+
+;; ----------------------------------------------------------------- ledger
+;;
+;;   0 reason (`dr`)  1 page  2 x0  3 y0  4 x1  5 y1  6 text-start (-1 none)
+;;   7 text-len  8 conf (0..1000, -1 absent)  9 src (bitset)
+
+(defn ^:pub ^I32 ledger-add [^:mut ^Cells ledger ^I32 reason ^I32 page
+                             ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 conf ^I32 src]
+  (comment "Append a ledger row (no text yet) and answer its index.")
+  (let [^I32 l (quot (cells-len ledger) 10)]
+    (cells-push ledger reason)
+    (cells-push ledger page)
+    (cells-push ledger x0)
+    (cells-push ledger y0)
+    (cells-push ledger x1)
+    (cells-push ledger y1)
+    (cells-push ledger -1)
+    (cells-push ledger 0)
+    (cells-push ledger conf)
+    (cells-push ledger src)
+    (return l)))
+
+(defn ^I32 lget [^Cells ledger ^I32 l ^I32 f]
+  (return (cells-at ledger (+ (* l 10) f))))
+
+(defn ^:pub ^I32 ledger-set-text [^:mut ^Cells ledger ^I32 l ^I32 start ^I32 ln]
+  (cells-set ledger (+ (* l 10) 6) start)
+  (cells-set ledger (+ (* l 10) 7) ln)
+  (return 0))
+
+(defn ^:pub ^I32 ledger-count [^Cells ledger] (return (quot (cells-len ledger) 10)))
+(defn ^:pub ^I32 ledger-reason [^Cells ledger ^I32 l] (return (lget ledger l 0)))
+(defn ^:pub ^I32 ledger-page [^Cells ledger ^I32 l] (return (lget ledger l 1)))
+(defn ^:pub ^I32 ledger-x0 [^Cells ledger ^I32 l] (return (lget ledger l 2)))
+(defn ^:pub ^I32 ledger-y0 [^Cells ledger ^I32 l] (return (lget ledger l 3)))
+(defn ^:pub ^I32 ledger-x1 [^Cells ledger ^I32 l] (return (lget ledger l 4)))
+(defn ^:pub ^I32 ledger-y1 [^Cells ledger ^I32 l] (return (lget ledger l 5)))
+(defn ^:pub ^I32 ledger-text-start [^Cells ledger ^I32 l] (return (lget ledger l 6)))
+(defn ^:pub ^I32 ledger-text-len [^Cells ledger ^I32 l] (return (lget ledger l 7)))
+(defn ^:pub ^I32 ledger-conf [^Cells ledger ^I32 l] (return (lget ledger l 8)))
+(defn ^:pub ^I32 ledger-src [^Cells ledger ^I32 l] (return (lget ledger l 9)))
+
+;; ------------------------------------------------------------------ check
+;;
+;; `model-check` answers 0 when the six arenas are a well-formed Model and an
+;; `mc` code when not, with the offending index in `st[0]` (`st` is any
+;; `Cells`, cleared on entry). It is what a stage runs on its own output
+;; before handing it on, and what a fuzzer asserts: a Model that passes cannot
+;; make a walker or the serializer read out of range.
+
+(defn ^I32 mc-fail [^:mut ^Cells st ^I32 code ^I32 at]
+  (cells-set st 0 at)
+  (return code))
+
+(defn ^I32 mc-link-ok [^I32 v ^I32 n]
+  (comment "1 when v is -1 or an index below n.")
+  (if (< v -1) (return 0))
+  (if (>= v n) (return 0))
+  (return 1))
+
+(defn ^I32 mc-run-ok [^I32 start ^I32 ln ^I32 tl]
+  (comment "1 for an absent run (start -1, ln 0) or one inside [0, tl).")
+  (if (== start -1)
+    (do (if (== ln 0) (return 1))
+        (return 0)))
+  (if (< start 0) (return 0))
+  (if (< ln 0) (return 0))
+  (if (> start tl) (return 0))
+  (if (> ln (- tl start)) (return 0))
+  (return 1))
+
+(defn ^I32 mc-check-node [^Cells nodes ^Cells attrs ^Cells regions
+                          ^Cells text ^I32 n ^I32 nn]
+  (comment "One node's own fields. 0 or an `mc` code.")
+  (let [^I32 kind (nget nodes n 0)
+        ^I32 cnt (nget nodes n 10)
+        ^I32 conf (nget nodes n 12)
+        ^:mut ^I32 a (nget nodes n 6)
+        ^:mut ^I32 r (nget nodes n 9)
+        ^:mut ^I32 steps 0
+        ^I32 na (quot (cells-len attrs) 5)
+        ^I32 nr (quot (cells-len regions) 6)
+        ^I32 tl (cells-len text)]
+    (if (or (< kind 1) (> kind 25)) (return (mc-bad-kind)))
+    (if (== (mc-link-ok (nget nodes n 1) nn) 0) (return (mc-bad-link)))
+    (if (== (mc-link-ok (nget nodes n 2) nn) 0) (return (mc-bad-link)))
+    (if (== (mc-link-ok (nget nodes n 3) nn) 0) (return (mc-bad-link)))
+    (if (== (mc-link-ok (nget nodes n 4) nn) 0) (return (mc-bad-link)))
+    (if (== (mc-link-ok (nget nodes n 5) nn) 0) (return (mc-bad-link)))
+    (if (== (mc-run-ok (nget nodes n 7) (nget nodes n 8) tl) 0) (return (mc-bad-text)))
+    (if (or (< conf -1) (> conf 1000)) (return (mc-bad-conf)))
+    (while (>= a 0)
+      (do (if (>= a na) (return (mc-bad-attr)))
+          (if (> steps na) (return (mc-bad-attr)))
+          (set steps (+ steps 1))
+          (if (== (aget attrs a 1) 1)
+            (if (== (mc-run-ok (aget attrs a 2) (aget attrs a 3) tl) 0)
+              (return (mc-bad-attr))))
+          (if (== (mc-link-ok (aget attrs a 4) na) 0) (return (mc-bad-attr)))
+          (if (or (< (aget attrs a 1) 0) (> (aget attrs a 1) 3)) (return (mc-bad-attr)))
+          (set a (aget attrs a 4))))
+    (set steps 0)
+    (while (>= r 0)
+      (do (if (>= r nr) (return (mc-bad-region)))
+          (if (> steps nr) (return (mc-bad-region)))
+          (set steps (+ steps 1))
+          (if (== (mc-link-ok (rget regions r 5) nr) 0) (return (mc-bad-region)))
+          (set r (rget regions r 5))))
+    (if (!= steps cnt) (return (mc-bad-region)))
+    (return 0)))
+
+(defn ^I32 mc-check-children [^Cells nodes ^I32 n ^I32 nn]
+  (comment "The child chain of n: every child points back at n, prev links")
+  (comment "agree, `last-child` is the end of the chain. Answers the number of")
+  (comment "children, or -1 when the chain is wrong.")
+  (let [^:mut ^I32 c (nget nodes n 2)
+        ^:mut ^I32 prev -1
+        ^:mut ^I32 k 0]
+    (while (>= c 0)
+      (do (if (> k nn) (return -1))
+          (if (!= (nget nodes c 1) n) (return -1))
+          (if (!= (nget nodes c 5) prev) (return -1))
+          (set k (+ k 1))
+          (set prev c)
+          (set c (nget nodes c 4))))
+    (if (!= (nget nodes n 3) prev) (return -1))
+    (return k)))
+
+(defn ^I32 mc-check-order [^Cells nodes ^I32 nn ^:mut ^Cells st]
+  (comment "Pre-order ids: walking each tree in pre-order, from its root,")
+  (comment "visits the indices consecutively, and the trees follow each other")
+  (comment "in index order. So an id is the node's position in document")
+  (comment "order (SPEC 3.3).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 expect 0
+        ^:mut ^I32 cur 0]
+    (while (< i nn)
+      (do (if (== (nget nodes i 1) -1)
+            (do (if (!= i expect) (return (mc-fail st (mc-not-preorder) i)))
+                (set cur i)
+                (while (>= cur 0)
+                  (do (if (!= cur expect) (return (mc-fail st (mc-not-preorder) cur)))
+                      (set expect (+ expect 1))
+                      (if (>= (nget nodes cur 2) 0)
+                        (set cur (nget nodes cur 2))
+                        (do (while (and (>= cur 0) (!= cur i) (< (nget nodes cur 4) 0))
+                              (set cur (nget nodes cur 1)))
+                            (if (== cur i)
+                              (set cur -1)
+                              (if (>= cur 0)
+                                (set cur (nget nodes cur 4))))))))))
+          (set i (+ i 1))))
+    (if (!= expect nn) (return (mc-fail st (mc-not-preorder) expect)))
+    (return 0)))
+
+(defn ^:pub ^I32 model-check [^Cells nodes ^Cells attrs ^Cells regions ^Cells text
+                              ^Cells pages ^Cells ledger ^:mut ^Cells st]
+  (let [^I32 nn (quot (cells-len nodes) 16)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 kids 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 nonroot 0
+        ^I32 tl (cells-len text)]
+    (cells-drop st 0)
+    (cells-push st 0)
+    (if (!= (rem (cells-len nodes) 16) 0) (return (mc-fail st (mc-bad-stride) 0)))
+    (if (!= (rem (cells-len attrs) 5) 0) (return (mc-fail st (mc-bad-stride) 0)))
+    (if (!= (rem (cells-len regions) 6) 0) (return (mc-fail st (mc-bad-stride) 0)))
+    (if (!= (rem (cells-len pages) 16) 0) (return (mc-fail st (mc-bad-stride) 0)))
+    (if (!= (rem (cells-len ledger) 10) 0) (return (mc-fail st (mc-bad-stride) 0)))
+    (if (< nn 1) (return (mc-fail st (mc-no-root) 0)))
+    (if (!= (nget nodes 0 0) (nk-document)) (return (mc-fail st (mc-no-root) 0)))
+    (if (!= (nget nodes 0 1) -1) (return (mc-fail st (mc-no-root) 0)))
+    (while (< i nn)
+      (do (set rc (mc-check-node nodes attrs regions text i nn))
+          (if (!= rc 0) (return (mc-fail st rc i)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nn)
+      (do (set kids (mc-check-children nodes i nn))
+          (if (< kids 0) (return (mc-fail st (mc-bad-tree) i)))
+          (set total (+ total kids))
+          (if (>= (nget nodes i 1) 0) (set nonroot (+ nonroot 1)))
+          (set i (+ i 1))))
+    (if (!= total nonroot) (return (mc-fail st (mc-bad-tree) 0)))
+    (set rc (mc-check-order nodes nn st))
+    (if (!= rc 0) (return rc))
+    (set i 0)
+    (while (< i (quot (cells-len pages) 16))
+      (do (if (== (mc-run-ok (pget pages i 1) (pget pages i 2) tl) 0)
+            (return (mc-fail st (mc-bad-page) i)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (quot (cells-len ledger) 10))
+      (do (if (== (mc-run-ok (lget ledger i 6) (lget ledger i 7) tl) 0)
+            (return (mc-fail st (mc-bad-ledger) i)))
+          (if (or (< (lget ledger i 8) -1) (> (lget ledger i 8) 1000))
+            (return (mc-fail st (mc-bad-ledger) i)))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------- hash
+
+(defn ^I64 mh-fold [^I64 h ^Cells c]
+  (comment "FNV-1a over the cells of one arena, each as a 32-bit pattern, then")
+  (comment "the arena's length -- so two arenas that differ only in where one")
+  (comment "ends and the next begins do not collide.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I64 acc h]
+    (while (< i (cells-len c))
+      (do (set acc (mul64 (bit-xor acc (i64 (cells-at c i))) 1099511628211))
+          (set i (+ i 1))))
+    (return (mul64 (bit-xor acc (i64 (cells-len c))) 1099511628211))))
+
+(defn ^:pub ^I64 model-hash [^Cells nodes ^Cells attrs ^Cells regions ^Cells text
+                             ^Cells pages ^Cells ledger]
+  (comment "A 64-bit fingerprint of the whole Model: the gate's proof that four")
+  (comment "targets built the same six arenas. FNV-1a, offset basis")
+  (comment "14695981039346656037 (as a signed value) and prime 1099511628211.")
+  (let [^:mut ^I64 h -3750763034362895579]
+    (set h (mh-fold h nodes))
+    (set h (mh-fold h attrs))
+    (set h (mh-fold h regions))
+    (set h (mh-fold h text))
+    (set h (mh-fold h pages))
+    (set h (mh-fold h ledger))
+    (return h)))

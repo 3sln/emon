@@ -1,0 +1,201 @@
+# emon P1.4 row corpus: one PDF object snippet per row (kin/pdflextest.kin).
+#
+# FIELDS, tab separated:  input <TAB> expected [<TAB> end [<TAB> warn]]
+#   input     bytes, with the escapes \n \r \t \\ and \xHH
+#   expected  `pl-dump` of the object parsed at offset 0, or `!status` for a
+#             named parse failure (`pl-status`)
+#   end       (optional) the offset the parse stopped at
+#   warn      (optional) the tolerance bits set, the sum of `pl-warning`
+# Lines starting with # are comments. `!indirect` / `!direct` switch what the
+# following rows exercise. The expectations were written by running the parser
+# and then READ ROW BY ROW against ISO 32000-1 7.2-7.3 and pdf.js's behaviour
+# for the tolerated cases; the four targets must all agree with them.
+#
+# ---- keywords, booleans, null
+true	true	4	0
+false	false	5	0
+null	null	4	0
+  \r\n%comment\nnull	null	17	0
+% only a comment\n	!eof	17	0
+foo	kw:foo	3	0
+Tj	kw:Tj	2	0
+# ---- integers
+0	0	1	0
+42	42	2	0
+-17	-17	3	0
++5	5	2	0
+--5	-5	3	0
+007	7	3	0
+2147483647	2147483647	10	0
+2147483648	2147483647	10	0
+99999999999999999999	2147483647	20	0
+-99999999999999999999	-2147483647	21	0
+0000000000	0	10	0
+12abc	12	2	0
+# ---- reals
+3.14	3.14	4	0
+-0.5	-0.5	4	0
+.5	0.5	2	0
+-.5	-0.5	3	0
+5.	5.	2	0
+0.0	0.0	3	0
++.5	0.5	3	0
+1.2.3	1.2	3	0
+00012.5000	12.5000	10	0
+123456789.123456789	123456789.	19	0
+0.000000000001234	0.000000000001	17	0
+1234567890123.5	999999999.	15	0
+4.	4.	2	0
+# ---- names
+/Name	/Name	5	0
+/A#20B	/A#20B	6	0
+/A#2	/A#232	4	0
+/A#zz	/A#23zz	5	0
+/#	/#23	2	0
+/Name#	/Name#23	6	0
+/	/	1	0
+/Name/Other	/Name	5	0
+/A(B	/A	2	0
+/Type[1]	/Type	5	0
+/Lime#20Green	/Lime#20Green	13	0
+/#00	/#00	4	0
+/#ff	/#ff	4	0
+/ÿ	/#c3#bf	3	0
+# ---- literal strings
+(hello)	<68656c6c6f>	7	0
+(a (nested (deep)) b)	<6120286e657374656420286465657029292062>	21	0
+(esc \\( \\) \\\\)	<65736320282029205c>	14	0
+(\\n\\r\\t\\b\\f)	<0a0d09080c>	12	0
+(\\101\\102)	<4142>	10	0
+(\\1012)	<4132>	7	0
+(\\7)	<07>	4	0
+(\\377\\400)	<ff00>	10	0
+(line\\\nbreak)	<6c696e65627265616b>	13	0
+(line\\\r\nbreak)	<6c696e65627265616b>	14	0
+(cr\rlf\r\nend)	<63720a6c660a656e64>	12	0
+(unknown \\q escape)	<756e6b6e6f776e207120657363617065>	19	0
+(unterminated	!unterminated-string	13	0
+(back\\	!unterminated-string	6	0
+()	<>	2	0
+(\\)	!unterminated-string	3	0
+# ---- hex strings
+<48656c6c6f>	<48656c6c6f>	12	0
+<48 65 6C 6c>	<48656c6c>	13	0
+<4>	<40>	3	0
+<>	<>	2	0
+<48656c6c6>	<48656c6c60>	11	0
+<4x8>	<48>	5	0
+<4865	!unterminated-string	5	0
+# ---- arrays
+[]	[]	2	0
+[1 2 3]	[1 2 3]	7	0
+[ /A (b) <63> [4] << /E 5 >> null true ]	[/A <62> <63> [4] << /E 5 >> null true]	40	0
+[1 0 R 2 0 R]	[1 0 R 2 0 R]	13	0
+[1 0 2 R]	[1 0 2 R]	9	0
+[1 2 R 3]	[1 2 R 3]	9	0
+[[[[]]]]	[[[[]]]]	8	0
+[1 2	!unterminated-array	4	0
+[1 2 endobj	[1 2]	5	1
+[1 >> x	[1]	3	1
+[1.5 -2 .5]	[1.5 -2 0.5]	11	0
+# ---- dictionaries
+<<>>	<< >>	4	0
+<< >>	<< >>	5	0
+<</Type/Page/Count 3>>	<< /Type /Page /Count 3 >>	22	0
+<< /Type /Page /Parent 1 0 R /Kids [2 0 R 3 0 R] >>	<< /Type /Page /Parent 1 0 R /Kids [2 0 R 3 0 R] >>	51	0
+<</A 1/A 2>>	<< /A 1 /A 2 >>	12	0
+<</A>>	<< /A null >>	6	0
+<</A >>	<< /A null >>	7	0
+<</A 1 /B>>	<< /A 1 /B null >>	11	0
+<</A 1 2 /B 3>>	<< /A 1 /B 3 >>	15	2
+<</A 1 (x) /B 3>>	<< /A 1 /B 3 >>	17	2
+<</A<</B<</C 1>>>>>>	<< /A << /B << /C 1 >> >> >>	20	0
+<</A 1	!unterminated-dict	6	0
+<</A 1 endobj	<< /A 1 >>	7	1
+<</A /B /C>>	<< /A /B /C null >>	12	0
+<</N#20A 1>>	<< /N#20A 1 >>	12	0
+<</A [1 2]/B(s)/C<0a>/D 1.5>>	<< /A [1 2] /B <73> /C <0a> /D 1.5 >>	29	0
+<</A 1>> junk	<< /A 1 >>	8	0
+<</A (unterminated	!unterminated-string	18	0
+<< /A 1 ] /B 2 >>	<< /A 1 /B 2 >>	17	2
+# ---- references
+1 0 R	1 0 R	5	0
+12 34 R	12 34 R	7	0
+0 0 R	0 0 R	5	0
+1 0 R 2 0 R	1 0 R	5	0
+1 0 RR	1	1	0
+1 0 r	1	1	0
+1 -1 R	1	1	0
+-1 0 R	-1	2	0
+1 0	1	1	0
+1 (x) R	1	1	0
+1.0 0 R	1.0	3	0
+1 0 obj	1	1	0
+# ---- objects as operands: the parse stops after ONE object
+12 13 14	12	2	0
+/A /B	/A	2	0
+1 0 R /A	1 0 R	5	0
+# ---- nesting: 128 deep is the limit
+[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]	[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]	256	0
+[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]	!nesting-too-deep	129	0
+<</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <<>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>	<< /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << /A << >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>	893	0
+<</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <</A <<>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>	!nesting-too-deep	642	0
+# ---- errors
+)	!bad-token	1	0
+>	!bad-token	1	0
+>>	!bad-token	2	0
+]	!bad-token	1	0
+}	!bad-token	1	0
+{	!bad-token	1	0
+<</A 1 >> >>	<< /A 1 >>	9	0
+# ---- indirect objects: `!indirect` switches the driver to `pl-parse-indirect`
+!indirect
+1 0 obj\n<</A 1>>\nendobj	<< /A 1 >>	23	0
+1 0 obj\n42\nendobj	42	17	0
+1 0 obj 42 endobj	42	17	0
+1 0 obj null endobj	null	19	0
+12 3 obj\n[1 2 3]\nendobj\n	[1 2 3]	23	0
+1 0 obj\n(x)\n	<78>	12	16
+1 0 obj\n(x)\nendobj extra	<78>	18	0
+1 0 obj\n<</A 1>>	<< /A 1 >>	16	16
+1 0 obj\n12 0 R\nendobj	12 0 R	21	0
+1 0 obj endobj	kw:endobj	14	16
+1 0 obj	!eof	7	0
+# ---- bad headers
+1 obj 5 endobj	!bad-object-header	5	0
+x 0 obj 5 endobj	!bad-object-header	1	0
+1 0 foo 5 endobj	!bad-object-header	7	0
+-1 0 obj 5 endobj	!bad-object-header	8	0
+1 -2 obj 5 endobj	!bad-object-header	8	0
+obj	!bad-object-header	3	0
+# ---- streams
+1 0 obj\n<</Length 5>>\nstream\nhello\nendstream\nendobj	<< /Length 5 >> stream@29+5	51	0
+1 0 obj\n<</Length 5>>\r\nstream\r\nhello\r\nendstream\r\nendobj	<< /Length 5 >> stream@31+5	55	0
+1 0 obj\n<</Length 5>>\nstream\rhello\nendstream\nendobj	<< /Length 5 >> stream@29+5	51	32
+1 0 obj\n<</Length 5>>\nstream \nhello\nendstream\nendobj	<< /Length 5 >> stream@30+5	52	0
+1 0 obj\n<</Length 5>>\nstreamhello\nendstream\nendobj	<< /Length 5 >>	22	16
+1 0 obj\n<</Length 5>>\nstream\nhello endstream\nendobj	<< /Length 5 >> stream@29+5	51	0
+1 0 obj\n<</Length 5>>\nstream\nhello\n\nendstream\nendobj	<< /Length 5 >> stream@29+5	52	0
+1 0 obj\n<</Length 0>>\nstream\nendstream\nendobj	<< /Length 0 >> stream@29+0	45	0
+1 0 obj\n<</Length 0>>\nstream\n\nendstream\nendobj	<< /Length 0 >> stream@29+0	46	0
+1 0 obj\n<</Length 3>>\nstream\nhello\nendstream\nendobj	<< /Length 3 >> stream@29+5~scan	51	4
+1 0 obj\n<</Length 50>>\nstream\nhello\nendstream\nendobj	<< /Length 50 >> stream@30+5~scan	52	4
+1 0 obj\n<</Length -1>>\nstream\nhello\nendstream\nendobj	<< /Length -1 >> stream@30+5~scan	52	4
+1 0 obj\n<</Length 2147483647>>\nstream\nhello\nendstream\nendobj	<< /Length 2147483647 >> stream@38+5~scan	60	4
+1 0 obj\n<<>>\nstream\nhello\nendstream\nendobj	<< >> stream@20+5~scan	42	4
+1 0 obj\n<</Length (x)>>\nstream\nhello\nendstream\nendobj	<< /Length <78> >> stream@31+5~scan	53	4
+1 0 obj\n<</Length 9 0 R>>\nstream\nhello\nendstream\nendobj	<< /Length 9 0 R >> stream@33+0~ref	33	0
+1 0 obj\n<</Length 5>>\nstream\nhello	<< /Length 5 >> stream@29+5~scan	34	28
+1 0 obj\n<</Length 5>>\nstream\nhello\nendobj	<< /Length 5 >> stream@29+5~scan	41	12
+1 0 obj\n<</Length 5>>\nstream\nhello\nendstream	<< /Length 5 >> stream@29+5	44	16
+1 0 obj\n<</Length 5>>\nstream\nhello	<< /Length 5 >> stream@29+5~scan	34	28
+1 0 obj\n<</Length 14>>\nstream\nab endstream cd\nendstream\nendobj	<< /Length 14 >> stream@30+3~scan	43	20
+1 0 obj\n<</Length 15>>\nstream\nab endstream cd\nendstream\nendobj	<< /Length 15 >> stream@30+15	62	0
+1 0 obj\n<</Length 4>>\nstream\n\x00\x01\x02\xff\nendstream\nendobj	<< /Length 4 >> stream@29+4	50	0
+1 0 obj\n<</Length 4>>\nstream\n\x00\x01\x02\xff\nendstream endobj	<< /Length 4 >> stream@29+4	50	0
+1 0 obj\n<</Length 3 /Filter /FlateDecode /A [1 2]>>\nstream\nabc\nendstream\nendobj	<< /Length 3 /Filter /FlateDecode /A [1 2] >> stream@59+3	79	0
+1 0 obj\n<</Length 5\nstream\nhello\nendstream\nendobj	<< /Length 5 >> stream@27+5	49	1
+1 0 obj\n<</Length 5>>\nstream	<< /Length 5 >> stream@28+0~scan	28	60
+1 0 obj\n<</Length 5>>\nstream\n	<< /Length 5 >> stream@29+0~scan	29	28
+# a stream keyword after a non-dictionary is not a stream
+1 0 obj\n[1 2]\nstream\nhello\nendstream\nendobj	[1 2]	14	16

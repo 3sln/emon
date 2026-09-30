@@ -1,0 +1,13 @@
+# Build output. The GENERATED code in gen/ is committed on purpose (nome D26,
+# SPEC 3.1): a runtime build must not need babashka. What is ignored here is
+# what a compiler produces, not what kin does.
+target/
+*.class
+bin/
+obj/
+.DS_Store
+__pycache__/
+# The emit input-hash cache (nome D566): a fact about this checkout, not the project.
+.emit-stamp
+.emit-stamp.tmp
+.cache/

@@ -1,0 +1,32 @@
+;; THE ONE PLACE THE PDF CODE READS ITS INPUT (P1.4, D058).
+;;
+;; `emon.pdflex`, `emon.pdfdoc` and `emon.pdffilter` never call `blob-len` or
+;; `blob-u8` themselves: they read the file, an object stream's decoded bytes
+;; and a filter's input through the two functions below. emon's input is an
+;; ABSTRACT BYTE SOURCE (no path, no file system: the library has to run in
+;; WASM in a browser, where the bytes may arrive in ranges, not as one slab),
+;; and the day the source becomes a window or a range reader, this is the file
+;; that changes; nothing that parses a PDF does.
+;;
+;; TODAY A SOURCE IS A `Blob`, a whole file in memory, and both functions are
+;; the port's reads. The contract a richer source must keep: `(ps-len src)` is
+;; the number of bytes; `(ps-u8 src i)` is the byte at an index 0 <= i <
+;; `(ps-len src)` and raises (the port's out-of-range) outside it. No parser
+;; reads out of range on purpose: each bounds its reads by `ps-len` or by the
+;; `end` it was given.
+;;
+;; THE OTHER HALF IS `cells-bytes` (emon.port): it makes a source out of bytes
+;; kin built in a `Cells` (a decoded object stream, the next stage of a filter
+;; chain). A windowed source would provide its own version of that.
+(ns emon.pdfsrc
+  (:require [emon.lang :refer [I32 Blob]]
+            [emon.port :refer [blob-len blob-u8]]
+            [kin.lang :refer [defn return comment]]))
+
+(defn ^:pub ^I32 ps-len [^Blob src]
+  (comment "The number of bytes in the source.")
+  (return (blob-len src)))
+
+(defn ^:pub ^I32 ps-u8 [^Blob src ^I32 i]
+  (comment "The byte at index i, 0..255.")
+  (return (blob-u8 src i)))

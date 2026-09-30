@@ -1,0 +1,102 @@
+{
+  "emon": "1.0",
+  "generator": "emon 0.1.0",
+  "source": {
+    "format": "pdf",
+    "version": "1.7",
+    "pages": 2,
+    "tagged": false,
+    "encrypted": false,
+    "lang": "en"
+  },
+  "settings": {
+    "locale": null,
+    "ocr": "always",
+    "detail": "blocks"
+  },
+  "conf": "uncalibrated",
+  "meta": {
+    "title": "Annual Report 2025",
+    "author": "A. N. Author",
+    "created": "2025-03-01T10:00:00Z"
+  },
+  "pages": [
+    {
+      "n": 1,
+      "label": "1",
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "health": 987
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "number": "1",
+            "text": "Introduction",
+            "at": [[1, 72, 90.5, 540, 110.25]],
+            "src": ["text", "ocr", "infer"],
+            "conf": 962
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "Revenue grew by 12% …",
+            "inlines": [
+              {
+                "kind": "text",
+                "text": "Revenue grew by "
+              },
+              {
+                "kind": "span",
+                "style": ["bold"],
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "12%"
+                  }
+                ]
+              },
+              {
+                "kind": "text",
+                "text": " …"
+              }
+            ],
+            "at": [[1, 72, 120, 540, 188]],
+            "src": ["text", "ocr", "infer"],
+            "conf": 991
+          }
+        ]
+      }
+    ]
+  },
+  "furniture": [
+    {
+      "id": 8,
+      "role": "header",
+      "template": "ACME Corp — Confidential",
+      "pages": [1, 2]
+    }
+  ],
+  "dropped": [
+    {
+      "reason": "page-number",
+      "page": 1,
+      "at": [1, 290, 760, 322, 772],
+      "text": "1",
+      "conf": 998
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+#!/bin/sh
+# Open every PDF named on stdin with the GENERATED RUST and print one row each:
+#
+#     path  status  pages  digest  warn  encrypted  ms
+#
+#     find corpus -name '*.pdf' | kin/scripts/pdf-sweep
+#
+# A DEVELOPMENT TOOL, run by a person and by `kin/scripts/pdf-corpus.py`; no
+# gate runs it. `digest` is the 23-bit hash of every page's boxes in whole
+# points and its rotation (see kin/pdfdoctest.kin); a fault in the parser is a
+# `PANIC` status rather than a crash, so one bad file does not hide the rest.
+# It builds with overflow checks and bounds checks ON.
+set -e
+cd "$(dirname "$0")/../.."
+repo=$(pwd)
+./kin/scripts/emit > /dev/null
+work=$(mktemp -d "${TMPDIR:-/tmp}/emon-sweep.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/emon"
+cp gen/rust/emon/*.rs "$work/emon/"
+cp host/rust/src/port.rs host/rust/src/testport.rs "$work/"
+( for f in gen/rust/emon/*.rs; do echo "pub mod $(basename "$f" .rs);"; done ) > "$work/emon.rs"
+cat > "$work/main.rs" <<'MAIN'
+#![allow(dead_code, unused_mut, unused_variables, unused_imports)]
+mod emon;
+mod port;
+mod testport;
+use emon::pdfdoc::*;
+use std::io::BufRead;
+
+fn main() {
+    let stdin = std::io::stdin();
+    for line in stdin.lock().lines() {
+        let path = line.unwrap();
+        let data = match std::fs::read(&path) {
+            Ok(d) => d,
+            Err(_) => { println!("{}\tioerror\t0\t0\t0\t0\t0", path); continue; }
+        };
+        let t0 = std::time::Instant::now();
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut ar = port::Cells::new(); let mut dc = port::Cells::new();
+            let mut a = port::Cells::new(); let mut b = port::Cells::new();
+            let mut st = port::Cells::new(); let mut pg = port::Cells::new();
+            let status = pd_open(&data, &mut ar, &mut dc, &mut a, &mut b, &mut st);
+            let mut t = String::new();
+            pd_status_emit_name(&mut t, status);
+            let mut n = 0;
+            let mut h: i64 = 0;
+            if status == 0 {
+                n = pd_pages(&data, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg);
+                for i in 0..n {
+                    let mut vals = vec![];
+                    for k in 0..4 { vals.push(pd_pg_media(&mut pg, i, k)); }
+                    for k in 0..4 { vals.push(pd_pg_crop(&mut pg, i, k)); }
+                    for (j, v) in vals.iter().enumerate() {
+                        let p = ((*v as i64) + 50).div_euclid(100);
+                        h = (h * 131 + p.rem_euclid(8388593)) % 8388593;
+                        if j == 7 { h = (h * 131 + (pd_pg_rotate(&mut pg, i) as i64)) % 8388593; }
+                    }
+                }
+            }
+            (t, n, h, pd_warn(&mut dc), pd_encrypted(&mut dc))
+        }));
+        let ms = t0.elapsed().as_millis();
+        match res {
+            Ok((t, n, h, w, e)) => println!("{}\t{}\t{}\t{}\t{}\t{}\t{}", path, t, n, h, w, e, ms),
+            Err(p) => {
+                let m = if let Some(s) = p.downcast_ref::<String>() { s.clone() }
+                        else if let Some(s) = p.downcast_ref::<&str>() { s.to_string() }
+                        else { "?".to_string() };
+                println!("{}\tPANIC {}\t0\t0\t0\t0\t{}", path, m.replace('\n', " ").replace('\t', " "), ms)
+            }
+        }
+    }
+}
+MAIN
+( cd "$work" && rustc -O -C debug-assertions=on -C overflow-checks=on -o sweep main.rs 2>&1 | grep -E '^error' -A8 || true )
+"$work/sweep"
