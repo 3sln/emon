@@ -155,7 +155,8 @@ work starts.
 ### 2.1 Stage 1 — Evidence
 
 Evidence is **raw observations in page space** (§3.4) with a source tag and
-no interpretation beyond what the source itself asserts. Each source's
+no interpretation beyond what the source itself asserts; its schema is §8.4
+(D056, revised by D096). Each source's
 evidence is separately serializable (`emon-evidence` JSON, §4.5), which is
 what makes fusion testable against recorded inputs.
 
@@ -360,8 +361,9 @@ A node is its index. Four languages cannot disagree about an index, and a
 Model that is six integer runs is trivially serializable and trivially cheap
 to hand across a WASM or C boundary.
 
-Evidence and PageLayer are arenas of the same kind (`glyphs`, `words`,
-`lines`, `paths`, `components`, `images`), defined in `emon.evidence`.
+Evidence and PageLayer are arenas of the same kind, defined in
+`emon.evidence`; the evidence arenas, their strides and the conventions
+that let three sources be aligned are §8.4.
 
 ### 3.9 Walking the Model from the library
 
@@ -475,7 +477,8 @@ it.
 Evidence and PageLayer have their own debug serialization (`emon-evidence`),
 with the same canonical rules. It is not a public contract — it changes as the
 algorithms do — but it is what fusion tests are written against, and what a
-maintainer reads to answer "why did emon think that".
+maintainer reads to answer "why did emon think that". Its version is "1"
+(§8.4.6, D096).
 
 ---
 
@@ -885,6 +888,262 @@ cheaply (text rendered as outlines, images of tables, scanned inserts).
   scripts. With nothing detectable, the engine's default is used and the
   Model records which languages were actually applied.
 
+### 8.4 The evidence schema, v2 (D056, revised by D096)
+
+Evidence is what fusion (§9) reads, so its shape is set by what fusion must
+decide: which source is right about a word, and whether a word is body text,
+furniture, watermark, seal or ghost. v1 (D056, dump version "0") was designed
+before OCR existed; the OCR spike (D095) showed it could not hold symbol boxes,
+baseline slope, the paragraph and block hierarchy, orientation, script,
+multi-character alternatives or the engine's binarised image, and that raw
+engine confidence cannot carry the §9.4 rules. v2 is the revision. It is
+integer arenas in `Cells`, as the Model is (§3.8, D011, D050): kin cannot
+allocate, the host allocates and kin fills, a row is its index, absent is
+-1, a count is 0, codes are `defenum` rows assigned once and never reused.
+
+#### 8.4.1 Conventions every source follows
+
+* **Space.** Every row that has a place on the page carries `page` and an
+  axis-aligned **box** `x0 y0 x1 y1` in page space (§3.4: centipoints,
+  top-left, y down), `x0 <= x1`, `y0 <= y1`, the smallest box containing the
+  thing's quad. A box is half-open for area arithmetic (`x1 - x0` is the
+  width). Rotated things are not described by their box alone; see baselines.
+* **Baselines are two points.** Every glyph, word and line of every source
+  (an OCR symbol uses its word's) carries a baseline **segment** `bx0 by0
+  bx1 by1` in page space, running the way its glyphs advance (text space +x for the text
+  layer; first symbol to last for OCR; first component to last for the
+  tracer). Slope is the segment, never a single y. `rot` is the segment's
+  angle in centi-degrees, counter-clockwise **as displayed**, `0 <= rot <
+  36000`, computed by `ev-angle dx dy` (below) so every source spells it the
+  same way; `dir` (`ld`) says how characters progress along it.
+* **Raster geometry is kept exact.** A row derived from pixels (OCR, the
+  tracer) also names its **view** (§8.4.2) — through its run for OCR — and,
+  where its table lists a pixel box, keeps its box in that view's pixels;
+  its page box is *derived* by `vw-box-to-cpt`: the four
+  corners mapped, the smallest box around them. Pixels are the observation;
+  centipoints are the common space.
+* **One way to refer to anything.** A reference to a row of any arena is the
+  pair `(ea, index)`, `ea` being the arena's code (§8.4.6). Many-to-many
+  lists (a primitive's member components, a tracer line's components) are
+  runs of the `refs` arena, two cells a reference. Every run is `first,
+  count` over a contiguous stretch of one arena (D056's rule, kept), and
+  `ev-check` verifies every run and every reference.
+* **Pages and regions.** Arenas may hold several pages and later OCR rounds
+  append, so rows of one page need not be contiguous; fusion works a page at
+  a time and a region at a time by `page` and box. The per-page spatial index
+  over the heads is fusion's (P7.1), not evidence.
+* **Paint order.** Every painted object of the text layer (glyph, path,
+  image, shading) carries `z`, its 0-based paint sequence number on its page.
+  `z` identifies a painted object uniquely within a page and is what P3.6's
+  occlusion test and a marked-content span's extent are written in.
+* **Shared heads.** Word-like and line-like rows of every source begin with
+  the same fields, so alignment (§9.2) is written once over `(Cells,
+  stride)`:
+  * **word head** (16 cells): `page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir
+    tstart tlen line conf feat` — text as an `etext` run; `line` the row of
+    its line in the same source; `conf` the source's **raw** confidence
+    (per-mille, -1 when the source has none: the text layer); `feat` its
+    `feats` row (§8.4.5), -1 until computed.
+  * **line head** (13 cells): `page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first
+    count` — `first, count` the run of its words (or, for the tracer, of
+    `refs`).
+  * **char head** (9 cells): `page x0 y0 x1 y1 cp tstart tlen word` — `cp`
+    the first code point (-1 unknown), `tstart tlen` an `etext` run when it
+    stands for more than one (a ligature; a multi-character OCR symbol).
+* **Normative helpers** live in `emon.evidence` and are the only way these
+  numbers are computed: `ev-angle dx dy` (integer atan2 to centi-degrees:
+  octant reduction and a generated 1025-row table of `atan(i/1024)`, error
+  under 0.03 degree), `ev-sin`/`ev-cos` (16.16, a generated table per
+  centi-degree over 0..9000 and symmetry), `vw-px-to-cpt`, `vw-box-to-cpt`,
+  `vw-cpt-to-px` (I64 arithmetic, rounding `floor((v + 2^15) / 2^16)` with
+  floor division), `ev-overlap-small` (intersection over the smaller box,
+  per-mille), `ev-baseline-at` (a segment's y at x, integer interpolation).
+
+#### 8.4.2 Shared arenas
+
+| arena | stride | fields |
+| --- | --- | --- |
+| `epages` | 12 | page, width, height (cpt, as displayed), quarter turns of `/Rotate` applied, flags (`has-text-layer`, `raster`, `dpi-unknown`), raster dpi x100 (0 unknown), spare |
+| `views` | 24 | page, kind (`vk`), request id whose bitmap it is (-1 when kin made it), parent view, pixel width, height, dpi x100, render layer (`lay-*`, D089), ink row (an ink-mask view's `inks` row, -1), quarter turns applied, deskew applied (centi-degrees), crop origin x y (cpt), px→cpt linear part a b c d (16.16) and translation e f (cpt), cpt→px inverse a' b' c' d' (16.16), flags (`bilevel`, `nonaffine`, `engine-binary`) |
+| `pts` | 3 | x, y (cpt), op (`po`: move, line, curve-control, close) — path and contour geometry |
+| `refs` | 2 | `ea`, index |
+| `etext` | 1 | one code point per cell (D056, unchanged) |
+| `feats` | 32 | subject `ea`, subject index, 30 feature columns (§8.4.5) |
+
+A **view** is any raster kin reasoned about: a render (with its layer mask),
+a decoded image, the OCR engine's own binarised image (answered as a bitmap
+next to its words, D095's open item), and every raster kin derives
+(grayscale, Sauvola binary, an ink-layer mask, a deskewed or cropped copy, a
+polar-unwarped seal strip). `views` is the binarised-image provenance: an OCR
+run names the view it read and the view the engine thresholded it into, and
+that view's `parent` chain ends at a render or decode request. `vw-new`
+computes the 16.16 parts from the integer parameters once, so every reader
+uses the same numbers. A `nonaffine` view (a polar strip, P8.2) maps back
+through a kind-specific function named with its kind; its parameters use the
+linear-part cells.
+
+#### 8.4.3 The text layer (§8.1)
+
+| arena | stride | fields |
+| --- | --- | --- |
+| `glyphs` | 32 | char head (9); baseline segment `bx0 by0 bx1 by1` = origin to origin + advance (without `Tc`/`Tw`, so spacing is the gap to the next origin); `asc`, `desc` (cpt, perpendicular to the baseline: with it they give the glyph's exact quad); `rot`; `how` (`gh`); `font` (`fonts` row); `size` (cpt); render `mode` 0..7; fill colour, stroke colour (0xRRGGBB, -1 none); fill alpha, stroke alpha (per-mille); colour-space class (`cs`: gray, rgb, cmyk, spot, pattern, other); `z`; `clip` (the `paths` row of the clip in force, -1 the page); `mark` (innermost `marks` row, -1); `ocg` (innermost optional-content span, a `marks` row, -1); `vis` (`vz`); `vby` (the `z` of the occluder, -1); `vchk` (bits of the P3.6 checks that have run) |
+| `words` | 24 | word head (16); style (`sy`, from the font); `gfirst gcount` (its glyphs); `font`, `size` (dominant); `gap` (cpt to the next word, -1); `wbreak` (`wb`: why it ended: space glyph, gap, `TJ` offset, line end, font change, mark boundary); `src` (`sr`: `text` or `hidden-text`) |
+| `lines` | 16 | line head (13); `src`; `order` (content-stream index of its first glyph, the weak reading-order signal); spare |
+| `marks` | 24 | page, kind (`mk`: artifact, optional-content, tag), tag `tstart tlen`, parent span, `mcid`, artifact `/Type` (`ar`), artifact `/Subtype` (`as`), `/ActualText`, `/Alt`, `/E`, `/Lang` (each an `etext` run: 8 cells), OCG or OCMD object number, its default state (1 on, 0 off, -1 unknown), `gfirst gcount` (glyphs inside), `zfirst zlast` (painted objects inside), flags (`/Properties` reference, inline dictionary, closed by the page end), spare |
+| `fonts` | 16 | object number, subtype (`ft`), descriptor `/Flags` verbatim, embedded program kind (0 none), has `ToUnicode`, base encoding, `/BaseFont` `tstart tlen`, ascent, descent (1/1000 em), space width (D083 units), italic angle (centi-degrees), `/StemV`, style (`sy` inferred from flags and name), spare |
+| `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), spare |
+| `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, spare |
+
+**Visibility hooks (P3.6).** P1.7 writes `vis` 0, `vby` -1, `vchk` 0 (nothing
+checked). Each P3.6 check sets its `vchk` bit when it has run (`clip` 1,
+`offpage` 2, `white` 4, `zero-size` 8, `occlusion` 16); `vis` names the first
+check that failed, `vby` the occluder's `z`. So `vis` 0 means "passed the
+checks in `vchk`", never "visible" outright, and fusion can tell an
+unchecked glyph from a checked one. Render mode 3 is never `vis`: it is the
+`hidden-text` source (§3.5).
+
+**Colour and layer.** A glyph's ink is its fill colour for modes 0, 2, 4, 6
+and its stroke colour for 1, 5 (both for 2, 6); the colour-space class says
+whether it came from a pattern or a spot colour, which a watermark often
+does. "Layer" in the PDF sense is optional content: the innermost `/OC` span
+is on every glyph, path and image as `ocg`, and its `marks` row carries the
+OCG and whether it is on by default (a watermark OCG is often off in print).
+The raster sense of layer (an ink cluster) is `inks` (§8.4.4).
+
+**Marked content (D076).** Every `BDC`/`BMC` becomes a `marks` row when it
+opens, `EMC` closes it; spans nest by `parent`. Glyphs inside a span are a
+contiguous run because glyphs are appended in content-stream order, and the
+span's `zfirst zlast` covers its paths and images. P3.7 joins `mcid` to the
+structure tree; §9.5 defence 1 walks a glyph's `mark` chain for an
+`/Artifact` of type `Pagination` or subtype `Watermark`, and its `ocg`.
+
+#### 8.4.4 OCR (§8.3) and the tracer (§8.2)
+
+| arena | stride | fields |
+| --- | --- | --- |
+| `oruns` | 28 | page, view read, binarised view (the engine's thresholded image, -1 not asked), request id, round, pass kind (`op`: first, region, line, cell, seal-strip, body-ink, text-only, re-rotated), `psm`, region x y w h (view px), languages `tstart tlen` ("eng+deu"), orientation (quarter turns clockwise to upright), writing direction, line order, deskew (centi-degrees), OSD degrees (-1 none), script (ISO 15924 packed), script confidence, orientation confidence (x10, -1), request flags, `bfirst bcount`, `lfirst lcount`, `wfirst wcount` |
+| `oblocks` | 16 | page, box, kind (`ob`: block, paragraph), parent block (-1), run, block type (`bt`, D095), orientation, writing direction (per block: Tesseract reports them per block), child run `first count` (a block's paragraphs, a paragraph's lines), raw confidence, spare |
+| `olines` | 24 | line head (13); paragraph (`oblocks` row); run; raw confidence; x-height, ascender, descender (cpt, -1 unknown); pixel box x y w h; spare |
+| `owords` | 28 | word head (16); style (`sy`); run; `sfirst scount` (its symbols); language (packed); engine flags (`ow`: from-dictionary, numeric, from the engine's fallback model); engine point size (cpt, -1); pixel box x y w h; spare |
+| `osyms` | 20 | char head (9); raw confidence; `afirst acount` (its alternatives); flags (`os`: superscript, subscript, drop-cap); pixel box x y w h; spare |
+| `oalts` | 4 | symbol, `tstart tlen` (the candidate's text: any number of code points), confidence (x10) — a contiguous run per symbol, in engine order, verbatim |
+| `inks` | 12 | page, view clustered, centroid colour, lightness (0..1000), chroma, pixel count, role guess (`ir`: body, light, colour, background, unknown), mask view (-1), spread, spare |
+| `components` | 24 | page, box, view, pixel box x y w h, ink pixels, fill (per-mille of the box), stroke width (cpt, distance transform), colour, ink row, kind (`ck`), confidence, flags, contour `pfirst pcount`, parent (the component it lies in, -1), holes, mean gray of its ink (0..255), spare |
+| `rules` | 20 | page, box, view, centre-line endpoints x0 y0 x1 y1 (cpt), thickness (cpt), colour, ink row, style (`rs`: solid, dashed, dotted, double), confidence, member components `rfirst rcount`, flags, spare |
+| `prims` | 24 | page, box, view, kind (`pm`: rect, ellipse, circle, arrow, curve, polygon, ring), centre x y, radii rx ry, `rot`, stroke width, colour, ink row, fill (per-mille), confidence, fitted outline `pfirst pcount`, members `rfirst rcount`, flags (closed, filled, double ring), spare |
+| `tlines` | 20 | line head (13; `first count` is a `refs` run of its text-like components); ink row; mean component height (cpt); mean gap (cpt); confidence; spare |
+
+**Hierarchy.** An OCR run's blocks, paragraphs, lines, words, symbols and
+alternatives are each a contiguous run, nested in that order: a run is built
+from one answer in the engine's iteration order, so every level is a range
+of the level below and `ev-check` verifies the nesting. Block and paragraph
+share `oblocks` (a `kind` column) because both are few and have the same
+fields.
+
+**Alternatives.** An alternative is text, not a code point, and a symbol's
+alternatives are a run, not a chain; the engine's own list is kept verbatim
+(including a candidate equal to the chosen text). What fusion derives from
+them (margins, ambiguity) is a feature.
+
+**Tracer text lines.** `tlines` are text-like components grouped into lines
+with a fitted baseline, by the tracer alone. They are the third witness of
+geometry: a faint diagonal watermark that OCR does not read at all (D095
+finding (e)) still shows up as a `tlines` row at its angle, on its ink layer.
+
+#### 8.4.5 Features, and where confidence comes from
+
+Raw confidence is kept (the `conf` of every head, verbatim) and **never used
+as a probability**: the spike scored a correct heading 0 and a misspelling
+554 (D095). A word's trustworthiness is instead a **feature vector** in
+`feats`, integers computed by named kin functions, each column -1 until the
+stage that can compute it has run:
+
+| column | OCR word (`xo-*`) | text-layer word (`xt-*`) | filled by |
+| --- | --- | --- | --- |
+| 2 | engine word confidence (raw) | glyphs whose `how` is `tounicode` or `encoding`, per-mille | stage 1 |
+| 3 | lowest symbol confidence | glyphs that are PUA, control or U+FFFD, per-mille | stage 1 |
+| 4 | mean symbol confidence | worst overlap between neighbouring glyph boxes, per-mille | stage 1 |
+| 5 | smallest alternative margin: top minus best *differing* alternative, over symbols | worst gap anomaly: largest inter-glyph gap over the font's space width, per-mille | stage 1 |
+| 6 | ambiguous symbols: a differing alternative within `alt-close` of the top | worst `vis` of its glyphs | stage 1 |
+| 7 | engine flags (dictionary, numeric) | render mode class (fill, stroke, clip, invisible) | stage 1 |
+| 8 | implausible character-class transitions, per-mille of pairs | lowest alpha | stage 1 |
+| 9 | code points in the dominant script of its line, per-mille | ink contrast: luminance of fill against the page background under it | stage 1 |
+| 10 | kin ink under the box (Sauvola on the source view), per-mille | kin ink under the box on the with-text render, per-mille | P6.3 |
+| 11 | engine-binary ink under the box, per-mille | ink under the box on the without-text render (text drawn over ink) | P6.5a / P6.3 |
+| 12 | Jaccard of kin and engine ink inside the box, per-mille | share of its ink in the body ink layer | P6.3 |
+| 13 | share of its ink in the body ink layer | the font's health on this page (col 2 pooled over font × page) | P6.3 |
+| 14 | text-like components centred in the box | text-like components centred in the box | P6.4 |
+| 15 | components over symbols, per-mille | components over glyphs, per-mille | P6.4 |
+| 16 | mean gray of its ink against background | inside an artifact span or watermark-like OCG (0/1) | P6.3 / stage 1 |
+| 17 | height over its line's median, per-mille | height over its line's median, per-mille | stage 1 |
+| 18 | x-height over the page's body x-height, per-mille | size over the page's body size, per-mille | P4.2 |
+| 19 | angle to the page's dominant text angle (centi-degrees) | the same | stage 1 |
+| 20 | baseline deviation from its line (cpt) | the same | stage 1 |
+| 21 | mean inter-symbol gap over mean symbol width, per-mille | mean inter-glyph gap over mean glyph width, per-mille | stage 1 |
+| 22 | overlap with a seal-candidate primitive, per-mille | the same | P8.2 |
+| 23 | overlap with artifact/watermark paint of the text layer, per-mille | overlap with an OCR-free `tlines` row at another angle | stage 1 / P6.4 |
+| 24 | similarity to the aligned text-layer word(s), per-mille (1000 minus normalized edit distance) | similarity to the aligned OCR word(s) | P7.1 |
+| 25 | similarity to aligned `hidden-text` | similarity to a second OCR pass | P7.1 |
+| 26 | agreement with other OCR runs over the same region | — | P7.4 |
+| 27 | pages on which the same text recurs at the same place (stage 3 feedback) | the same | P4.3 / P7.5 |
+| 28 | its code point count | its code point count | stage 1 |
+| 29 | distance to the nearest page edge (cpt) | the same | stage 1 |
+| 30-31 | spare (zero) | spare | — |
+
+Components, rules and primitives carry their own statistics as fields
+(ink, fill, stroke width, gray, confidence of a fit) and have no `feats`
+row. A text-layer glyph has none either: its word's row speaks for it.
+
+**Calibrated confidence** is derived from features, never read from an
+engine. Per subject kind (OCR word, text-layer word, and later the fused
+PageLayer word), a **scorecard** — for each feature column, integer bin edges
+and integer points per bin, a `defdata` table — sums to a raw score; the
+per-kind isotonic map of §9.6 turns the score into per-mille. Both tables are
+fitted offline (`bb calibrate`, P10.1) on words labelled right or wrong by
+the gold (the synthetic round trip and its degraded copies, SPEC 14.3), and
+committed; a refit is a reviewed change with its reliability diagram. A
+scorecard rather than a learned model because it is integer, exact on four
+targets, and explainable column by column in the evidence dump, which is
+what §9.4's "every decision can be explained" asks. Until P10.1, the §9.4
+and §9.5 rules read feature columns against named thresholds (settings), and
+the Model says `"conf": "uncalibrated"` (D010).
+
+**Ghosts and watermarks** (§9.5) are decided from features, not from raw
+confidence: a word with engine ink (col 11) but no kin ink (col 10) is an
+engine artefact; one with ink only outside the body layer (col 13 low) is
+the watermark's or the seal's; one at an angle to the page (col 19) on a
+light layer with a matching `tlines` row is a diagonal watermark read as
+text; one with no ink at all on either image is a ghost.
+
+#### 8.4.6 Bundles, codes and the dump
+
+The arenas travel in **four bundles** the host holds as structs, and a kin
+function takes only the arenas it touches (D050's rule): *shared* (`epages
+views pts refs etext feats`), *text* (`glyphs words lines marks fonts paths
+images`), *ocr* (`oruns oblocks olines owords osyms oalts`), *trace* (`inks
+components rules prims tlines`). `ea` codes, in this order from 1: `epages
+views pts refs etext feats glyphs words lines marks fonts paths images oruns
+oblocks olines owords osyms oalts inks components rules prims tlines`.
+`ev-init` empties them all; `ev-check` answers 0 or the first broken run,
+reference, nesting or stride, by a numbered code.
+
+The dump (`emon-evidence`, §4.5) is **version "1"**: one key per arena in the
+`ea` order above, an empty arena printed as `[]`, fields in stride order
+under the names of the `ek` table, defaults omitted, runs as `[first,
+count]`, references as `["arena", index]`, baselines as `[x0, y0, x1, y1]`,
+centi-units as points, colours as `"#rrggbb"`, packed ASCII (script,
+language) as strings, and `feats` rows with their column names. It is not a
+public contract.
+
+#### 8.4.7 What v2 does not hold yet
+
+Annotations (P3.8: their own arena then), the structure tree (P3.7 joins on
+`marks.mcid`; the tree is P3.7's arena), shadings as painted regions beyond
+their box (a `paths` row of kind `other` until P3.5), the Model-level
+page source kind (analysis, not evidence), and fusion's own output
+(correspondence groups and the PageLayer are P7.1's arenas, built on the
+heads above).
+
 ---
 
 ## 9. Fusion and arbitration (D014)
@@ -913,10 +1172,12 @@ for the text layer):
   characters; CID-without-mapping patterns (`(cid:12)` garbage); impossible
   widths (glyph boxes overlapping heavily or with enormous gaps); and, once
   OCR is in, the **agreement rate** with OCR over words both see.
-* **OCR**: engine confidence, dictionary-free plausibility (character-class
-  transitions, e.g. `l1Il|` soup), ink support from the tracer (a word over
-  blank paper is a ghost), and whether the region overlaps a seal, watermark
-  or background layer.
+* **OCR**: the feature vector of §8.4.5, not engine confidence alone:
+  symbol confidences and alternative margins, dictionary-free plausibility
+  (character-class transitions, e.g. `l1Il|` soup), ink support from kin's
+  and the engine's own binarisation (a word over blank paper is a ghost),
+  its ink layer, and whether the region overlaps a seal, watermark or
+  background layer.
 * **Structure tree**: role diversity; agreement of its reading order with
   geometry; coverage (fraction of visible text reachable from it).
 
@@ -975,7 +1236,9 @@ classified by (3) and (6).
 
 Raw scores from each rule are combined and **calibrated per node kind** by
 isotonic mapping fitted on the evaluation corpora (§14), then committed as a
-`defdata` table. Recalibration is a reviewed change with its reliability
+`defdata` table. For evidence words the raw score is the per-kind integer
+scorecard over the feature columns of §8.4.5 (D096); an engine's own
+confidence is one column of it, never the answer. Recalibration is a reviewed change with its reliability
 diagram in the DEVLOG entry.
 
 ---

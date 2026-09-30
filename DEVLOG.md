@@ -39,7 +39,8 @@ and in the phase item both.
 5. [x] **P1.1 — The Model in kin** (`emon.model`): arenas, builder, accessors,
    and laws in `bb unit`.
 
-After these: P1.2 (canonical JSON) → P1.10 in order (P1.11, the `Src`
+After these: P1.2 (canonical JSON) → P1.10 in order, with P1.12 (evidence
+v2, D096) taken right after P1.7 merges (P1.11, the `Src`
 port of D058, went in before P1.4/P1.5 closed: done), which completes the
 first vertical slice (a born-digital PDF's text layer → Model → JSON and
 HTML, on the Rust host). P0.7/P0.8 are hygiene and can be taken by anyone
@@ -540,6 +541,151 @@ analysis beyond "top-to-bottom lines on a single column".
   target; for the HTML-printed fixture, every glyph's code point matches the
   source HTML's text (a script can check this directly — the HTML is the
   truth).
+  *Note (D096)*: P1.7 writes D056's v0 evidence; do not pre-empt v2. P1.12
+  migrates the interpreter and its goldens after P1.7 merges.
+
+- [ ] **P1.12 — Evidence v2** (`kin/evidence.kin`, `kin/trig.kin`,
+  `kin/evidencetest.kin`, `kin/ocrprobe.kin`, P1.7's `kin/pdfcontent.kin`;
+  SPEC §8.4, D096). **Take after P1.7 merges on main**, and before P1.8 if
+  both are free (P1.8 then reads v2 words and lines from the start). One
+  branch; nothing else touches `emon.evidence` meanwhile.
+  *Brief*, in this order:
+  1. **Record the v0 baseline first.** On the branch, before editing, copy
+     every file that holds a v0 dump to `test/evidence/v0/` (not committed
+     at the end; it is the migration's reference): `test/evidence/*.json`,
+     `test/ocr/h-keyword.dump`, the plan gate's expected output if it holds
+     evidence (`kin/scripts/plan`, `test/plan/`), and P1.7's three fixture
+     evidence goldens (wherever P1.7 put them; `git log` on main says).
+     List them in the entry.
+  2. **Tables and trigonometry.** `kin/scripts/trigdata` (bb) generates
+     `kin/trig.kin` (`emon.trig`, `defdata`): `atan(i/1024)` in centi-degrees
+     for i = 0..1024, and `sin` in 16.16 per centi-degree over 0..9000, each
+     rounded half away from zero from the double value; committed, and
+     `bb drift` regenerates and compares. `ev-angle dx dy` (octant
+     reduction, `i = round(1024 * min / max)`, answer in [0, 36000),
+     counter-clockwise as displayed, i.e. with `-dy`; `ev-angle 0 0` is 0),
+     `ev-sin`, `ev-cos` (any integer centi-degree, by symmetry).
+  3. **`emon.evidence` rewritten to SPEC §8.4 exactly.** 24 arenas in the
+     `ea` order of §8.4.6, strides as the tables say, spare cells zero. Field
+     constants: the three heads once (`hd-*` word head 0..15, `lh-*` line
+     head 0..12, `ch-*` char head 0..8), then per arena from where its head
+     ends, with a prefix per arena (`gf- wf- lf- mkf- fnf- pf- mf- epf- vwf-
+     ptf- rff- xf- orf- obf- olf- owf- osf- oaf- ikf- cf- rlf- pmf- tlf-`;
+     rename if one collides, and say so). Feature columns `xo-*`, `xt-*` as
+     §8.4.5 numbers them. New `defenum` tables: `ea vk po cs wb mk as ob op
+     oe os ir rs pm ft vc` (spellings = the SPEC's words, lowercase,
+     hyphenated). `ar` keeps its four rows (codes are forever); v2 writes
+     only `pagination` 1, `layout` 3, `background` 4 and a new `page` 5 as
+     `/Type`, and `watermark` 2 is never written again (the subtype is `as`),
+     which the table's comment says. Builders `*-new` per arena taking the
+     head fields and setting every other field to the SPEC's default
+     (-1 absent, 0 counts, `vis` 0, `vchk` 0, alpha 1000); `*-get`/`*-set`/
+     `*-count` as today; `rf-add`, `pt-add`, `etx-append-*` (unchanged),
+     `mk-open`/`mk-close` (a span stack in the caller's hands: `mk-open`
+     answers the row, `mk-close` fills `gcount`/`zlast`), `mk-artifact-of`
+     (walk a glyph's mark chain: the `/Type` and `/Subtype` of the nearest
+     artifact span, packed `type*16+subtype`, 0 none), `oa-add` (alternatives
+     as a run: a symbol's alternatives must be added before the next symbol
+     starts; `ev-check` enforces it). `vw-new` takes the integer parameters
+     and computes the 16.16 linear part (scale `720000 * 65536 / dpi100` in
+     I64, times `ev-cos`/`ev-sin` of the deskew, composed with the quarter
+     turns) and its
+     inverse. `vw-px-to-cpt`, `vw-cpt-to-px` (I64; `floor((v + 32768) /
+     65536)` with FLOOR division — write `ev-floordiv`, `quot` truncates),
+     `vw-box-to-cpt` (four corners, smallest box), `ev-overlap-small`,
+     `ev-baseline-at`. Bundle inits `evs-init evt-init evo-init evr-init`
+     (shared, text, ocr, trace) and `ev-check` over all four with a
+     numbered code per failure (strides; each run; each reference's `ea` and
+     index; the OCR nesting block ⊇ paragraph ⊇ line ⊇ word ⊇ symbol ⊇
+     alternative; `feats` subject). Parameters are listed in bundle order,
+     arenas in `ea` order.
+  4. **The dump, version "1"**, per SPEC §8.4.6: keys from `ek` (new rows at
+     the end; the `ocrwords` key 8 stays in the table unused), one array per
+     arena in `ea` order, runs `[first, count]`, references `["arena", i]`,
+     baselines `[x0, y0, x1, y1]`, packed ASCII as strings, `feats` rows with
+     column names chosen by subject arena. `kin/scripts/json-check.py` keeps
+     deriving the pretty files; check whether it knows evidence keys and
+     update it if so.
+  5. **Laws** (`kin/evidencetest.kin`): defaults of every builder; every
+     `ev-check` code; `ev-angle` exact at every multiple of 45 degrees and
+     monotonic over a sweep; `vw` round trip px → cpt → px within 1 px for
+     dpi 72, 96, 150, 200, 300, 400, 600 × deskew 0, ±85, ±300 centi-degrees
+     × quarter turns 0..3, and exact (no rounding at all) at 150 and 300 dpi
+     with no deskew; a head-uniformity law (one generic reader over
+     `(Cells, stride)` reads page, box and baseline alike from `words`,
+     `owords`, `lines`, `olines`, `tlines`); the hand-built golden page
+     (`test/evidence/page1.*`, rebuilt with at least one row in EVERY arena,
+     a two-span nested mark, a clip, a multi-character alternative, and one
+     `feats` row of each subject) and `empty.*`.
+  6. **OCR (`kin/ocrprobe.kin`) reads everything the D095 extension
+     carries**: one `views` row for the render (kind render, dpi 150, layer
+     full) and the probe's image placement; one `oruns` row (orientation,
+     writing direction, line order, deskew, OSD degrees, script, both
+     confidences, languages as the request's text); `oblocks` for blocks and
+     paragraphs grouped from the lines' `block`/`par` ids (box = union of
+     their lines, `btype` from the lines, orientation from the run: the
+     extension has no per-block value yet); `olines` with the two-point
+     baseline mapped through the view; `owords` with the line's baseline
+     evaluated at the word's x0 and x1 (in pixels, then mapped), style,
+     language, symbol run, pixel box; `osyms` with boxes, text runs,
+     confidence; `oalts` with the full candidate text. Then the answer-only
+     OCR features (`xo-*` columns 2-8, 17, 19, 20, 21, 28, 29) by
+     `ev-feat-ocr`, precisely: col 5 = min over symbols of (symbol conf −
+     max conf of its alternatives whose text differs from the symbol's), -1
+     if no symbol has one; col 6 = symbols whose margin ≤ `alt-close`
+     (setting, default 100); col 8 = per-mille of adjacent code-point pairs
+     that are letter↔digit or lowercase→uppercase (not at position 0), over
+     ASCII and Latin-1 letters and digits only (anything else is never
+     implausible), 0 for one code point; col 19 against the run's lower-median
+     line `rot`; col 20 = |word baseline midpoint y − its line's baseline at
+     that x|; cols 9-16, 18, 22-27 stay -1 (their stages come later; col 9
+     needs a script table emon does not have yet). Also look, in
+     `host/rust/src/tess.rs`, at WHY correct words score 0 (is word
+     confidence read after the `lstm_choice_mode` choice iterator, or at the
+     wrong level?) and record the answer; fix nothing in the host here (that
+     is P6.5a).
+  7. **Text layer (P1.7's interpreter) writes v2**: per glyph the baseline
+     segment `Trm·(0,0)` → `Trm·(w0,0)` (`w0` the width without `Tc`/`Tw`,
+     text-space units, so spacing stays measurable), `asc`/`desc` from the
+     font's ascent/descent × size along the up-vector, `rot` by `ev-angle`,
+     fill and stroke colour and alpha where P1.7 tracks them (else -1 / 1000;
+     P3.5 fills the rest), colour-space class -1 if unknown, `z` from a
+     per-page paint counter over glyphs, paths and images, `clip` -1 until
+     P3.5, `mark` and `ocg` from the open-span stack, `vis` 0 / `vby` -1 /
+     `vchk` 0. P1.7's marked-content records move to `marks` (every field of
+     D076; if P1.7 stored them in a shape of its own, map it field by field
+     and write the mapping in the entry). `fonts` gets a row per font on first
+     use from P1.6's `pfn-*` readers; a glyph's `font` is that row. Words:
+     baseline from the first glyph's origin to the last glyph's end, `wbreak`
+     set where the grouping decides, `src`. Lines: baseline first word start
+     to last word end, `order`.
+  8. **Consumers**: `tools/ocr/cer.clj` reads `owords`; the comments and
+     expectations of `kin/scripts/ocr` and `kin/scripts/plan`; every host
+     driver that allocates the nine v0 arenas (`test/plan/{rust,go}`,
+     `test/ocr/{rust,go}`, P1.7's fixture drivers, P1.10's engine if it has
+     started, and any Java/C# `bb unit` arm) allocates the four bundles as
+     structs named `EvShared`, `EvText`, `EvOcr`, `EvTrace`.
+  9. **Migrate the goldens and prove nothing was lost.** `tools/evidence/
+     v0.clj` (bb, stays in the tree, not a gate) reads a v1 dump and prints
+     the v0 dump of the same evidence, by D096's v0 → v1 table; regenerate
+     every golden from step 1 with the new code (the OCR transcript
+     `test/ocr/h-keyword/` is NOT re-recorded: its answer is unchanged, only
+     the dump is), run `v0.clj` on each and diff against `test/evidence/v0/`.
+     The only differences allowed are the ones D096 lists (an OCR word's
+     `baseline` ±1 cpt, from mapping before interpolating; the glyph
+     `artifact` value `watermark` now reached through the mark chain).
+     Report the diff counts per file in the entry, then delete
+     `test/evidence/v0/`.
+  *Done when*: `bb unit` (the laws above, four targets, the same count in
+  each), `bb ocr` (Rust and Go replays print the identical v1 dump; the dump
+  holds 24 `olines`, 199 `owords`, one `oruns` row with orientation and
+  script, every symbol and every alternative's full text; CER unchanged at
+  2.05%; a changed request still `transcript-miss`), `bb plan`, P1.7's
+  fixture gates and `bb gates` are green; `ev-check` answers 0 on every
+  golden; step 9's diff report is in the entry.
+  *Not in this item*: the OCR answer extension v2 and re-recording (P6.5a),
+  ink and tracer features (P6.3, P6.4), fusion's arenas (P7.1), calibration
+  (P10.1).
 
 - [ ] **P1.8 — Naive analysis: lines → paragraphs** (`kin/para.kin`).
   *Brief*: single-column assumption; lines in top-to-bottom order; a new
@@ -808,7 +954,9 @@ analysis beyond "top-to-bottom lines on a single column".
   `vector` evidence (lines, rects, fills), image placements (`Do` image,
   inline `BI…EI`), shadings as filled regions.
 - [ ] P3.6 — Visibility classification (SPEC §8.1): clipped, off-page,
-  white-on-white, covered-by-later-opaque-paint, invisible mode.
+  white-on-white, covered-by-later-opaque-paint, invisible mode. Writes the
+  evidence hooks `vis`, `vby` (the occluder's `z`) and `vchk` on glyphs and
+  images (SPEC §8.4.3, D096).
 - [ ] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
   `/Alt`, `/ActualText` (use it when present — it is the author's answer),
   informativeness score (D034). Also (D076): Artifact subtypes as
@@ -879,6 +1027,15 @@ analysis beyond "top-to-bottom lines on a single column".
 - [ ] P6.4 — Tracer: components, contours, rules, primitives (SPEC §8.2.2).
 - [ ] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
   first-pass plan; OCR-only pipeline for images and scanned PDFs (D033).
+- [ ] P6.5a — The OCR answer extension v2 (D095 open items, D096): `ox`
+  version 2 carries the engine's thresholded image as a bitmap answer (a
+  `views` row of kind engine-binary, named by the `oruns` row), per-line
+  row attributes (x-height, ascenders, descenders), per-block box,
+  orientation and writing direction, per-word dictionary/numeric flags and
+  point size; `transcript.edn` gains a `:producer` map (`TessVersion()`,
+  model hashes); the word-confidence-of-0 finding of P1.12 step 6 is fixed
+  in `tess.rs` if it is a reading bug. Re-record `test/ocr/h-keyword/` live
+  (Rust only) and fill `xo-*` column 11 and 12 once P6.3 has kin's ink.
 - [ ] P6.6 — Degraded corpus from the synthetic round trip (SPEC §14.3.1);
   scanned-document baselines in the scoreboard.
 
@@ -1745,6 +1902,7 @@ prints colours as `"#rrggbb"` and centi-units as points.
 OCR does. **Alternatives**: one evidence row type with a source column
 (wide and mostly empty); a chain for a word's glyphs (two cells beat a
 list).
+**Revised by D096** (evidence v2, SPEC §8.4; implemented by P1.12).
 - [ ] **Signed off** (maintainer)
 
 ### D057 — `bb gates` and SPEC 15.1 (P0.7, P0.8)
@@ -2932,9 +3090,128 @@ and every recorded transcript); `tesseract-sys` or `leptess` (a build script and
 Leptonica; the C API is small enough to declare); the gate running live Tesseract (makes the
 gates machine-dependent, which D008 exists to prevent); recording with the CLI's hOCR/TSV
 (no symbol alternatives, no OSD in one call).
-**Open**: a D056 revision for the fields above; a `:producer` map in `transcript.edn`; a
+**Open**: a D056 revision for the fields above (→ D096, P1.12); a `:producer` map in `transcript.edn`; a
 compressed PNG writer or bitmap-free OCR entries (the stored PNG is 2.1 MB a page); the
 kin side of acting on OSD (a page at 180 degrees reads as noise until re-rendered rotated);
 the engine's binarised image as a bitmap answer for ghost detection (SPEC 9.5); a real
 `Renderer` in place of the extracted scan image.
+- [ ] **Signed off** (maintainer)
+
+### D096 — Evidence v2: 24 arenas in four bundles, shared heads, two-point baselines, views for raster provenance, features instead of engine confidence (revises D056)
+**Decision**: SPEC §8.4 replaces D056's nine arenas; P1.12 implements it after
+P1.7 merges. In short:
+1. **Common geometry.** Every placed row has `page` and an axis-aligned box in
+   centipoints (D009). Every glyph, word and line, whatever its source, has a
+   **baseline segment** (two points) and a `rot` computed from it by one
+   integer `ev-angle` (centi-degrees, counter-clockwise as displayed); the
+   glyph adds `asc`/`desc`, so its quad is exact. Raster rows keep their box in
+   pixels and name the **view** they came from; the page box is derived through
+   the view's 16.16 transform, computed once by `vw-new`.
+2. **Shared heads.** Word-like rows of every source start with the same 16
+   cells (page, box, baseline, rot, dir, text run, line, raw conf, feats row),
+   line-like rows with the same 13, char-like rows with the same 9, so
+   alignment (P7.1) is written once over `(Cells, stride)`.
+3. **Common identifiers.** Any row is `(ea, index)`; many-to-many lists are
+   runs of `refs`; runs stay contiguous (D056's rule); text-layer painted
+   objects carry a page-unique paint order `z`.
+4. **Text layer**: glyph (32) with render mode, fill and stroke colour and
+   alpha, colour-space class, `z`, `clip` (a clip is a `paths` row), `mark`
+   and `ocg`, and P3.6's hooks `vis`/`vby`/`vchk` (a check records that it
+   ran, so "unchecked" is distinguishable from "visible"); words with
+   `wbreak`; lines with content-stream `order`; `marks` for D076's spans
+   (nesting, glyph run, z range, ActualText/Alt/E/Lang, OCG and its default
+   state); `fonts`; `paths` with exact geometry in `pts`; `images` with `z`
+   and visibility.
+5. **OCR**: `oruns` (view read, the engine's binarised view, request, round,
+   pass kind, psm, region, languages, orientation, direction, deskew, OSD,
+   script, confidences) → `oblocks` (blocks and paragraphs, one arena, a kind
+   column) → `olines` → `owords` → `osyms` (boxes) → `oalts` (candidate TEXT,
+   a run per symbol), each level a contiguous range of the one below.
+6. **Tracer**: `inks` (ink layers), `components` (with contour in `pts` and
+   containment), `rules` (centre-line endpoints, thickness, style),
+   `prims` (fitted shapes with members in `refs`), and `tlines` (text-like
+   components grouped into lines with a fitted baseline: an OCR-free witness
+   of a text line's angle and ink layer).
+7. **Views** record every raster kin reasons about (render with its layer,
+   decode, the engine's thresholded image, kin's gray/binary/ink-mask/
+   deskewed/polar derivatives) with a parent chain to the request: this is
+   the binarised-image provenance D095 asked for.
+8. **Confidence**: every head keeps the source's raw confidence verbatim; a
+   `feats` row per word holds 28 integer features (§8.4.5: symbol confidence
+   minimum and mean, alternative margin and ambiguity, dictionary flags,
+   character-class plausibility, script consistency, kin ink, engine-binary
+   ink and their Jaccard, body-ink share, component support, contrast,
+   relative height and x-height, angle to the page, baseline deviation,
+   spacing, seal and artifact overlap, cross-source similarities,
+   recurrence, length, edge distance; the text layer's mirror set), each
+   column filled by a named stage and -1 before it. Calibrated confidence is
+   a per-kind integer scorecard over the columns followed by §9.6's isotonic
+   map, both fitted offline (P10.1) and committed; the rules of §9.4-9.5 read
+   feature columns against named thresholds until then.
+9. **Bundles**: the arenas travel as four host structs (shared, text, ocr,
+   trace); a kin function takes only the arenas it touches.
+10. **Dump** version "1" (D056's was "0"), `ea` order, not a contract.
+
+**v0 → v1 field map** (what `tools/evidence/v0.clj` inverts, P1.12 step 9):
+glyph `page cp tstart tlen how font size box color alpha mode vis mcid word`
+→ the same names (`color` = fill colour; `mcid` = the innermost mark's
+`mcid`); glyph `baseline` → `by0`; glyph `rot` → `rot`; glyph `artifact` →
+`mk-artifact-of` (v0's `watermark` 2 was a subtype stored as a type; v1 finds
+it as `as` watermark and the projection prints it back as `watermark`).
+word `page box glyphs text line src conf gap font size` → the same;
+word `flags` (`fl`, never written by P1.7) → dropped. line `page box words
+baseline dir rot src conf` → same, `baseline` = `by0`. path and image fields →
+the same names. component fields → the same names plus `view`. ocrword
+`page box text conf line block flags pass lang` → `owords` head, `line`
+(its index within its run), the block of its line's paragraph (index within
+the run), `style`, `oruns.pass`, `lang`; `baseline` → the word's
+baseline at its centre x (±1 cpt, since v1 maps the endpoints then
+interpolates where v0 interpolated in pixels then mapped); `alts` `{sym cp
+conf}` → `oalts` with `sym` re-expressed as the code-point offset in the
+word and `cp` as the candidate's first code point (v0 cut it there).
+
+**Why**: fusion (§9) decides per word and per region which source is right and
+whether ink is body text, furniture, watermark, seal or ghost. That needs, from
+all three sources in one shape, what D095 found missing: symbol boxes,
+slopes, the block/paragraph/line hierarchy, orientation and script,
+multi-character alternatives, the engine's binarised image, and a way to
+trust a word that does not depend on an engine confidence that scored a
+correct heading 0. Two-point baselines are the smallest change that carries
+slope for every source, and they are what the watermark (angle) and seal (arc)
+defences read. Shared heads make alignment one piece of code instead of three.
+Keeping pixel boxes and views makes the OCR and tracer evidence exact and
+re-mappable, so a round-2 request can be planned in the pixels of the image
+it will be asked about. Features rather than a single number keep each
+signal explainable in the dump (§9.4's promise) and let calibration be
+integer and exact on four targets. The cost is paid now because only one
+probe, one OCR probe and two hand-built goldens use D056, and P1.7 is the
+first real writer; after P1.8 and P6 every renumbering costs more.
+**Alternatives**: (a) extend D056 in place with more columns: slope, symbols,
+the hierarchy and views need new arenas regardless, and a v0-shaped `ocrwords`
+with a chained single-code-point alternative list would still be wrong;
+(b) let fusion read the OCR answer (the transcript's `emon.ocr` layout)
+directly: couples fusion to one engine's layout and pixel space, and leaves
+the three sources in three shapes; (c) one generic evidence-node arena with a
+kind column, like the Model's nodes: simpler signatures, but a glyph would
+pay for the widest row and every reader would check kinds (adopted only where
+the rows really are alike: blocks and paragraphs); (d) one `Cells` per
+source with a table directory in its header, as D059 does for PDF objects:
+the text layer appends glyphs, marks, paths and images interleaved, which a
+single growing buffer of fixed tables cannot hold; (e) one reference cell
+packing arena and index (`ea << 24 | i`): caps an arena at 16 M rows and adds
+an unpacking rule, to save one cell per reference; (f) boxes only in page
+space (loses the exact pixel geometry OCR and the tracer measured) or only in
+pixels (three sources would not share a space); (g) calibrated confidence
+from the engine's number, or from a learned model (logistic regression,
+boosted trees): the first is what D095 showed to fail, the second needs
+floats and cannot say why; a scorecard plus isotonic map is integer and
+readable, and a learned arbiter stays parked as SPEC §1.1 says; (h) baseline
+as a y plus an angle: an angle needs trigonometry to reconstruct the line and
+loses the endpoints the engine actually gave.
+**Consequences**: glyphs grow from 20 to 32 cells (a 5,000-glyph page is 160 K
+cells); kin signatures that take all arenas take 24 `Cells` (only `ev-init`,
+`ev-check`, the dump and the probes do); `ar` row 2 is retired, not reused;
+the OCR answer extension gains the fields the schema now has room for in
+P6.5a (binarised image, row attributes, per-block orientation, word dictionary
+flags, point size, a `:producer` map), until then they are -1.
 - [ ] **Signed off** (maintainer)
