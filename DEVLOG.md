@@ -720,6 +720,12 @@ analysis beyond "top-to-bottom lines on a single column".
   structure — calibration is Phase 10).
   *Done when*: the HTML-printed fixture's paragraphs equal the source HTML's `<p>`
   texts (script compares); the JSON is a golden.
+  *Note (D108-D112)*: initials, columns, continuation across columns and
+  alignment are NOT this item's (P4.10, P4.1, P4.11): do not special-case
+  them. Two things only, so they need no rework later: write `at` as a LIST
+  of regions (one per page now, one per column fragment after P4.1), and do
+  not read the first line of a paragraph from content-stream order (Chrome
+  paints every float, e.g. a drop cap, before the page's text: D108 (a)).
 
 - [x] **P1.9 — HTML emitter** (`kin/html.kin`, `emon.html`; SPEC §5).
   *Brief*: the §5.1 mapping for the kinds that exist (and stubs for the rest
@@ -772,6 +778,45 @@ analysis beyond "top-to-bottom lines on a single column".
   spooled-`Read` adapters with identical JSON.
   **This is the first vertical slice.** Record
   timings for the fixtures (baseline, not a target).
+
+- [ ] **P1.13 — The Model's vocabulary for initials, alignment and layout**
+  (`kin/model.kin`, `kin/json.kin`, `kin/html.kin`, `kin/mscript.kin`, their
+  tests; SPEC 3.2, 3.7, 3.8, 4.2, 5; D109-D111, D113). **Independent of P1.8
+  and P1.12; take after P2.13's step 1 (the schema) is on main**, because
+  the JSON goldens validate against it.
+  *Brief*: (1) `model.kin`, codes appended, never renumbered (D050):
+  `nk-initial 26 "initial"`; `fk` rows `form 76`, `lines 77`, `layout 78`,
+  `band 79`, `col 80`, `box 81`; `rl-sidebar 9 "sidebar"`; a new enum
+  `ifm` (`drop 1`, `raised 2`, `margin 3`); an `initial` is an inline whose
+  `sub` is its form and `aux` its lines (0 = absent); `align` on heading,
+  caption and cell is an attribute (`fk-align`, value an `al` code; `cell`
+  never `justify`, the builder refuses it); a seventh arena `layout`
+  (stride 8: page, band, col, role (`rl`: body 2, sidebar 9, margin 6), x0
+  y0 x1 y1) with `lay-add` and, on the `pages` row, two spare cells naming
+  the page's contiguous run (first, count). (2) `json.kin`: `initial` as
+  SPEC 4.2 (after `kind`: `form`, `lines`, then `children`); `inlines` is
+  informative when any `initial` is present; `align` in each kind's field
+  order after its kind-specific fields; `pages[].layout` as
+  `[{"band","col","role","box":[x0,y0,x1,y1]}]` in run order, omitted when
+  the run is empty; the version string becomes `"1.1"` (every JSON golden
+  changes by that string only; say so in the entry). (3) `html.kin`: the SPEC
+  5.1 rows (the unstyled `<span data-emon="initial" data-emon-form
+  data-emon-lines>`; `ho-initials-plain 128` writes the bare text;
+  `ho-align-style 256` adds `style="text-align:…" dir="auto"` wherever
+  `align` is; `note` roles `margin`/`sidebar` are `<aside
+  data-emon-role>` with no `doc-footnote` role and no `fn-` id unless a
+  `ref` targets it; with `ho-geometry`, `data-emon-col` / `data-emon-cols`
+  from the page `layout` cell containing each region's centre). (4)
+  `mscript` lines for the new kinds and fields; the `corners` Model gains a
+  drop, a raised and a margin initial (one inside a paragraph with a
+  smallcaps span after it), aligned heading, caption and cells, a sidebar
+  and a margin note, and a two-page layout of two bands; `kinds` gains one
+  of each. (5) `json-check.py` and `html-check.py` learn the same (they are
+  the independent references, D054, D067).
+  *Done when*: `bb unit` green on four targets with the new goldens (JSON,
+  pretty JSON, the four HTML option sets, plus a fifth HTML set with
+  `ho-initials-plain | ho-align-style | ho-geometry`), html5lib strict parse
+  clean, schema-valid against the 1.1 `schema/emon-1.json`.
 
 ---
 
@@ -971,6 +1016,89 @@ analysis beyond "top-to-bottom lines on a single column".
   digits; D107), each kept as a reproducer in `test/fuzz/crashers/`. No hang, no
   cross-host status difference and no async/memory difference was found. The content interpreter is not merged
   (P1.7), so it is not in the probe yet: add its entry point to `fz-run` when it is.
+- [ ] **P2.13 — Synthetic corpus: initials, alignment, columns** (D114; SPEC
+  14.3; `tools/synth/`, `schema/`, `test/corpus/synth/`, `kin/scripts/
+  gold-check.py`). **Can start now**: babashka, plus Chrome, poppler and
+  ImageMagick at authoring time only (D041, D071); no kin.
+  *Brief*, in this order, each step its own commit:
+  1. **Schemas (commit this first; P1.13 waits on it).** `schema/emon-1.json`,
+     additively: `emon` accepts `"1.0"` and `"1.1"`; the inline kind
+     `initial` (fields `form` enum drop/raised/margin, `lines` integer >= 2,
+     plus the common inline fields and `children`); `align` allowed on
+     heading, caption and cell (`cell`: start/center/end only); `note.role`
+     gains `sidebar`; `page.layout` (array of `{band, col, role
+     (body|sidebar|margin), box: [4 cpt]}`, closed). `schema/emon-gold-1.json`:
+     `model.emon` the same two versions; optional top-level `facts`
+     (`frags`: object id → array of `[page, band, col]`; `lines`: object id →
+     integer; `hyphens`: array of `{id, printed, word}`); `annotated.layout`
+     boolean; `annotated.attributes` accepts the key `initial`. Every
+     committed JSON golden, HTML-check input and gold still validates
+     (`bb unit`).
+  2. **Authoring** (`make_html.clj`): the 19 documents of D114, deterministic
+     text from fixed seeds as today, with the authoring attributes D114 lists
+     (`data-initial`, `data-lines`, `data-initial-text`, `data-align`,
+     `data-cols`). Choose font sizes and line heights so each drop cap spans
+     the lines it declares; `initial-image`'s tile is written by `magick`
+     (a Georgia letter on a bordered, filled square, 300 dpi) to
+     `test/corpus/synth/html/img/initial-W.png` and referenced relatively;
+     `initial-vector` draws its letters as SVG `<path>` fills (rectangles
+     for `T` and `L`), never `<text>`. `columns-continue` must really break
+     paragraphs across a column AND a page (fixed-height column containers or
+     enough text; the facts in step 4 prove it, and the build fails if not).
+  3. **Gold** (`html2gold.clj`): the `initial` inline (the `::first-letter`
+     extent for a `<p data-initial>`: preceding punctuation (Unicode Ps, Pi,
+     Pf, Po), one grapheme cluster, following punctuation without a space
+     between; for an element: its text, `alt` or `data-initial-text`);
+     `align` from `data-align`; the D114 conventions 9-12; `annotated` grows
+     for the new documents only (existing golds unchanged, byte for byte).
+  4. **Facts** (`build.clj`): per new document, from `pdftotext -bbox-layout`:
+     `frags` (anchor each leaf block's words by unique 4-grams, split its
+     located words into runs by page and by column, the column being the
+     index of the run's x among the container's column starts found from its
+     lines' left edges, `band` counting column sets top down), `lines` and
+     `hyphens` (a line-final word ending in U+002D or U+2010 whose join with
+     the next line's first word equals an HTML word). Fail the build when a
+     block cannot be anchored, when a drop cap's box does not overlap exactly
+     `data-lines` lines, or when `columns-continue` has no paragraph with
+     fragments on two pages.
+  5. **Print** with `print.sh` (all 19 stems; existing PDFs are NOT
+     reprinted), scans by `degrade.clj`, `MANIFEST.json`. Then
+     `kin/scripts/content-goldens` for `test/content/synth.txt`, and
+     `kin/scripts/synth-extras.edn` gains the new documents' printer
+     glyphs; `content-check` must allow the letters of `initial-image` and
+     `initial-vector` to have no glyph (declare them the way the Devanagari
+     exceptions are, with the reason).
+  6. **Check** (`gold-check.py`): the new keys, `facts` ids resolve, `frags`
+     only on documents with `annotated.layout`, and re-derivation equality
+     as for every gold.
+  *Done when*: `bb unit` green (gold-check re-derives all 55 golds; json and
+  html checks untouched); `bb accuracy` (oracle) scores every new document
+  perfect; the entry reports, per new document, pages, fragments, hyphen
+  points and the line count of each initial, and says anything Chrome did
+  that D108's probe did not predict.
+- [ ] **P2.14 — Scorer metrics for initials, alignment and columns** (D115;
+  `tools/accuracy/score.clj`, `test_score.clj`, `predict_degraded.clj`,
+  `accuracy.clj`). **Can start now** with hand-built golds in the laws; the
+  corpus run needs P2.13.
+  *Brief*: the D115 metrics exactly as named, counts pooled then ratioed
+  (D077), each absent when the gold does not annotate it; the no-locale
+  hyphen rewrite of D114 convention 12 applied before CER/WER when the
+  predicted Model's `settings.locale` is null; `cer`/`wer` otherwise
+  unchanged. `frag-col-acc` maps a predicted region to the predicted page's
+  `layout` cell containing its centre; a prediction without `layout` scores
+  0 on layout documents (not absent). The degraded predictor learns three
+  damages so every metric moves: split each initial into its own
+  single-letter heading, drop every `align`, split every multi-fragment
+  paragraph at its first fragment boundary. Ratchet direction: the
+  lower-is-better list gains `initial-false-heading` and `align-wrong`;
+  categories gain `initials` and `align` (D079).
+  *Done when*: `bb unit` runs new hand-computed laws in `test_score.clj`
+  (at least: an initial split off, an initial moved to line 3, `A long` →
+  `Along`, a single-line `justify` gold scored against `start`, a column
+  continuation joined and split, a hyphen kept and joined with and without
+  a locale); `bb accuracy` oracle is perfect and degraded strictly worse on
+  each new metric; the scoreboard's committed fixtures entries are updated
+  in the same commit.
 
 ## Phase 3 — PDF breadth
 
@@ -1069,6 +1197,22 @@ analysis beyond "top-to-bottom lines on a single column".
 
 - [ ] P4.1 — Blocks and reading order: XY-cut with spanning elements,
   multi-column, RTL (emon's own UAX #9 `bidi`), priors compared (SPEC §10.1).
+  *Brief (D111, D112)*: after P1.8 and P1.12 (v2 words and lines), and
+  after P4.10 runs (initials before indents are measured) and P4.3's
+  recurrence pass (furniture out before gutters are sought). SPEC 10.1.1
+  steps 1-9 as written: gutters over words (named settings `gutter-min`,
+  `gutter-rows` 3), lines split at gutters, spanning elements, the
+  vertical-first cut tree, `band`/`col` numbering, roles and the
+  sidebar/margin `note`s, the page `layout` arena (P1.13); then SPEC
+  10.1.2 continuation with `join-min` and its signal points as a `defdata`
+  table, one region per fragment, blocks between fragments moved after the
+  joined paragraph. The evidence dump (or a debug line format) prints each
+  page's cut tree and every join score.
+  *Done when*: on P2.13's layout documents and `columns-two`,
+  `columns-three-news`: `frag-col-acc` and `join-r` at least 0.95, Kendall
+  tau at least 0.95, no `join-p` below 0.95; on `layout/arxiv` 1512.03385,
+  1810.04805 and 2206.01062 a person reads the HTML in order and the entry
+  lists what is wrong; first numbers recorded in the scoreboard (D023).
 - [ ] P4.2 — Style inventory and body style (SPEC §10.3.1).
 - [ ] P4.3 — Running furniture: candidates, templates, decomposition,
   policy (D017); page labels from detected numbers.
@@ -1082,12 +1226,42 @@ analysis beyond "top-to-bottom lines on a single column".
   zh, ja), dehyphenation with emon's own Liang `hyphen` (D021, D029).
 - [ ] P4.9 — Code blocks, quotes, formulas (placeholder by font/glyph
   signals), form fields into the flow.
+- [ ] P4.10 — Initials on the text layer (SPEC 10.9, D108, D109; new
+  `kin/initial.kin`). *After P1.8 and P1.12* (it reads v2 glyph sizes,
+  baselines and fonts), *before P4.2 and P4.4* (the inventory and heading
+  candidates must already exclude initials). *Brief*: the candidate, drop,
+  raised, margin, first-word, RTL and not-an-initial rules of SPEC 10.9 as
+  written, with `initial-min` and the tolerances as named settings;
+  `/CapHeight` and `/XHeight` read into `fonts` (D108; 0.7 of the size when
+  absent); the join rule (no space unless a tagged tree or `/ActualText`
+  holds one; `low-conf` for one-letter words, with one-letter-word tables
+  for the P4.8 locales as `defdata`); the paragraph builder of P1.8 told
+  where lines 1..N start and from which line the gap is measured; the
+  `initial` inline written (P1.13). Glyph-less initials (outlines, images,
+  Type 3 without Unicode) are P6.7's; here such a paragraph just starts
+  without its letter, and the entry counts them. *Done when*: on P2.13's
+  text-layer initials documents (`initial-firstletter`, `-raised`,
+  `-firstword`, `-columns`, `-rtl`, `-cjk`): `initial-p`/`-r` 1.0,
+  `first-word-acc` 1.0 except the declared `A`/`I` word cases,
+  `initial-false-heading` 0, and `initial-letter-headings` keeps its three
+  headings; the four real files of D108 are checked by hand in the entry.
+- [ ] P4.11 — Alignment (SPEC 10.10, D110; `kin/align.kin`). *After P4.1*
+  (it needs the fragment boxes); the cell part is P5.3's. *Brief*: the
+  SPEC 10.10 tests and single-line rules, tolerance and `align-min` as
+  named settings, base direction by P4.1's `bidi` (UAX #9 P2-P3); `align`
+  on paragraph, heading and caption. *Done when*: on `align-paragraphs`,
+  `align-justify-hyphen`, `align-rtl` and the column documents: `align-acc`
+  at least 0.98 and `align-wrong` at most 0.01; `align-cov` recorded
+  (single lines lower it by design).
 
 ## Phase 5 — Tables
 
 - [ ] P5.1 — `ruled` profile from vector rules: lattice, cells, spans.
 - [ ] P5.2 — `partial`, `shaded` and `whitespace` profiles; profile scoring.
-- [ ] P5.3 — Header rows, row groups, numeric columns, captions.
+- [ ] P5.3 — Header rows, row groups, numeric columns, captions. Also
+  cell `align` per table column (SPEC 10.10, D110): measured over the
+  column's body cells against its text extent; header cells separately;
+  `align-table-numeric` scores it (`align-acc` for cells at least 0.98).
 - [ ] P5.4 — Tables across pages: with and without recurring headers,
   "continued" markers, split rows (D019).
 - [ ] P5.5 — `struct` (tagged) tables verified against geometry; `form`
@@ -1128,6 +1302,17 @@ analysis beyond "top-to-bottom lines on a single column".
   (Rust only) and fill `xo-*` column 11 and 12 once P6.3 has kin's ink.
 - [ ] P6.6 — Degraded corpus from the synthetic round trip (SPEC §14.3.1);
   scanned-document baselines in the scoreboard.
+- [ ] P6.7 — Initials from ink (SPEC 10.9, D108): the geometry test of P4.10
+  over non-text ink (a vector path cluster, an image placement, a Type 3
+  glyph without Unicode, the tracer's components on raster pages); the
+  letter from `/ActualText` or `/Alt`, then a planned OCR request of pass kind
+  `initial` (a new `op` row; psm 10, the paragraph's script) on the
+  region, then the tracer; U+FFFD and `low-conf` when nothing passes; the
+  ornament is not a `figure`. *After P6.4, P6.5a and P7.4* (targeted
+  rounds). *Done when*: `initial-image` and `initial-vector` score
+  `initial-r` 1.0 and `first-word-acc` 1.0 on `pdf/` and `scan/`, and the
+  scanned variants of every P2.13 initials document have no single-letter
+  heading.
 
 ## Phase 7 — Fusion and artifacts
 
@@ -3648,6 +3833,215 @@ regression.
 of them on all four hosts) found only these three; Java and C# are not overflow-checked, so an
 overflow there is a wrap, found only as a difference from Rust's panic. Minimisation is span
 removal only: a mutated compressed stream does not shrink (the cmap crasher is 18 KB).
+- [ ] **Signed off** (maintainer)
+
+### D108 — Initials (drop caps) are found locally, right after lines, and joined to the first word; a letter that is not text is recovered, never lost
+**Decision**: SPEC 10.9. Three forms: `drop` (sinks into the first N lines, which wrap it), `raised` (stands on the
+first baseline), `margin` (hangs outside the column beside the first lines); a whole enlarged first word is an initial
+of that word; a small-caps lead-in after it is an ordinary `smallcaps` span. Detection is a local, per-page test that
+runs after lines (D104) and BEFORE blocks, indents, styles and headings are measured: a run of 1-3 code points (with
+the punctuation `::first-letter` would take: `“N`) or a first word at least `initial-min` (2.0) times the size of the
+lines beside it, whose cap top meets the first line's cap top within half a body size and whose ink bottom falls in
+line N's band, lines 1..N starting after its end edge and line N+1 back at its start edge (drop); or on line 1's
+baseline with line 2 at its start edge (raised); mirrored for right-to-left. Cap tops come from the font's
+`/CapHeight` (else 0.7 of the size) or, on raster, the tracer's ink box; `fonts` gains `/CapHeight` and `/XHeight`
+(1/1000 em, -1 absent) as a minor addition (spare cells if P1.12 has not landed; P1.12's owner decides where). An
+initial drawn as outlines, as an image, or in a Type 3 font without Unicode is recovered from `/ActualText` or `/Alt`,
+then a targeted single-character OCR pass (a new `op` pass kind `initial`; Tesseract's drop-cap bit in `osyms`
+corroborates), then the tracer; failing all, U+FFFD flagged `low-conf`. Joining: the initial's text is prepended with
+NO space unless a healthy tagged tree or `/ActualText` holds one; when the letter is itself a word in the locale's
+one-letter-word table (`A`, `I`, `O` for English; with no locale, the union of the shipped tables) the join is
+flagged `low-conf`. Consequences elsewhere (SPEC 10.1, 10.3): lines 1..N start at the initial's start edge for the
+indent rule, the paragraph-gap rule measures from line 1, the initial's glyphs are excluded from the style inventory,
+the body-size statistics and feature column 18; a heading candidate is never an initial nor a 1-2 code-point block
+beside or inside a paragraph's first lines, while a glossary letter divider (`A` above `Aardvark …`, wrapping
+nothing) stays a heading.
+**Found** (a probe page printed by Chrome's `printToPDF` on this machine and read by P1.7's interpreter through
+`kin/scripts/content-sweep`; not committed, P2.13 makes it corpus): with
+`p::first-letter{float:left;font-size:4.1em;line-height:.8}` in Georgia 11 pt, (a) Chrome paints all three floats of
+the page before any in-flow text, so content-stream order puts `O`, `A` and `“N` first on the page: stream order
+cannot place an initial; (b) `A` + `long time` and `O` + `nce upon` have the same 4.5 pt gap and no space glyph
+(the page has 189 space glyphs, none there): whether the letter is a word is not on the page; (c) the float's
+baseline is 6.75 pt above line 3's, on no line's baseline; its font box starts 5.8 pt above line 1's, but the cap
+tops agree within 1.9 pt; (d) `::first-letter` takes the opening quote (`“N`, two code points); (e) a raised initial
+(`font-size:3em`, not floated) is already joined by D104 into the word `Raised`; (f) `hyphens:auto` prints U+002D,
+not U+00AD, so SPEC 3.6's locale rule governs dehyphenation. **Real corpus**: pdfminer.six over the first 4 pages of
+3,190 PDFs in `corpus/layout` and `corpus/multilingual`: 184 hits of "a letter at least 2.2 times the page's median
+size with body text to its right and below it" in 37 files, most of them titles and logos; true drop caps checked by
+hand in `layout/pdfa-eng-wds` 0182448 (p1 `T` + small-caps `HE BUREAU`, two lines), 4271234 (p2 `B`, journal
+style, 4.7 times body), 0795114 (p2 `W`) and 0116458 (p1 `O`, p3 `I`, p4 `G`, Caslon; pdfminer glued its `O` into
+a headline's line). Rare in a web crawl (about 1 file in 800), common in the novels and magazines the maintainer
+names.
+**Why**: a mishandled initial costs a word per paragraph (`O` `nce`: one substitution and one insertion), usually a
+false one-letter heading and a false paragraph break, and, placed by its baseline, a letter moved to line 3; local
+detection before blocks is the one place no later stage has already mis-grouped it. Joining is the better default
+(`It`, `In`, `At`, `As` open more paragraphs than `I` and `A` alone).
+**Alternatives**: detect after blocks (the heading and paragraph stages have already split it off); use stream order
+(wrong for Chrome); insert a space by default (wrong for most openings); drop an unreadable initial (a character
+silently lost); a per-locale lexicon to decide `A long` vs `At the` (SPEC 17.4: the maintainer's call).
+- [ ] **Signed off** (maintainer)
+
+### D109 — An initial is an inline `initial` in the Model; its text stays in `text`; HTML wraps it in an unstyled span
+**Decision**: a new inline kind `initial` (`nk` 26; schema minor 1.1) whose children are its text inlines, with
+`form` (`drop`/`raised`/`margin`: a new enum `ifm`, codes 1-3, in the node's `sub`) and `lines` (N for `drop` and
+`margin`, absent for `raised`; the node's `aux`), and the ordinary inline `src`/`conf`/`flags` (`["vector","ocr",
+"infer"]` for an outline letter read by OCR; `low-conf` as D108 says). New `fk` rows: `form` 76, `lines` 77. Its
+presence makes `inlines` informative; `text` is unchanged (`Once upon`). Its box is in the paragraph's `at` (and its
+own at `detail: words`). HTML: `<span data-emon="initial" data-emon-form="drop" data-emon-lines="3">O</span>nce`, no
+style; `html-emit` option bit `ho-initials-plain` 128 writes the bare text instead. The seal subkind `initials`
+(handwritten initials, D016) is unrelated and keeps its name.
+**Why**: the `text` a scraper reads 90 % of the time is right either way; the fact is kept for the converters that
+want it (a novel converted to an e-book re-styles it); an inline marks the exact extent (a quote mark, a whole word,
+a small-caps lead-in beside it) where a paragraph attribute would need a character offset.
+**Alternatives**: a paragraph field `initial: {len, form, lines}` (an offset into `text`, awkward when `inlines`
+already splits the first word); a `span` style bit `initial` (no room for `form` and `lines`); no representation
+(loses what the maintainer asked to keep); `<span style="float:left;font-size:…">` (styling the SPEC does not make).
+- [ ] **Signed off** (maintainer)
+
+### D110 — Alignment is logical, measured against the fragment's box, written only when confident; HTML adds style only on request
+**Decision**: SPEC 10.10. `align` on `paragraph` (exists, `al`), and newly on `heading`, `caption` and `cell` (as an
+attribute: their `sub` is taken), values `start`/`center`/`end`/`justify` (no `justify` for cells), LOGICAL: start
+and end resolve by the block's base direction (UAX #9 P2-P3 over its text), never `left`/`right`. The test runs
+against the column fragment's box (a cell's: the table column's text extent over its body cells), with a tolerance of
+a quarter body size, the last line out of the justify and ragged tests, a first-line indent removed; a single-line
+block is `center` or `end` from geometry, `start` only by its style class's majority, at lower confidence. Written
+only at or above `align-min` (setting, default 800 while uncalibrated); there is no separate confidence field (the
+evidence dump explains a decision). Decimal-aligned numeric columns whose end edges disagree get no value. HTML:
+`data-emon-align` as D069 already writes; `html-emit` option bit `ho-align-style` 256 adds
+`style="text-align:start|center|end|justify"` and `dir="auto"` (so start and end resolve for right-to-left text in
+a browser).
+**Why**: the maintainer asked for it where feasible: it is, from geometry alone, for any block of two or more lines;
+crawlers mostly ignore it, converters want it; logical values are correct under right-to-left and are what the Model
+already said; a confidently wrong alignment is worse than none.
+**Alternatives**: `left`/`right` (wrong under RTL); a document default plus deviations (consumers must resolve
+inheritance); a `decimal` value for cells (nothing consumes it and the numbers read the same); inline style by
+default (not clean HTML, D013); measuring against the block's own box (every block looks justified).
+- [ ] **Signed off** (maintainer)
+
+### D111 — Columns: gutters from words, spanning elements, a vertical-first cut tree; the column map is kept as the page `layout`
+**Decision**: SPEC 10.1.1. Gutters are the tall, narrow whitespace rectangles over WORDS persisting 3 rows (or a
+vertical rule with text on both sides); lines crossing a gutter are split; an element crossing a gutter ends it and
+is a spanning element; the cut tree cuts vertically whenever a gutter runs the region's full height and
+horizontally only at spanning elements or at full-width gaps over 1.5 times the median paragraph gap; leaves are
+column fragments numbered `band`/`col` in reading order (RTL: right first). Fragment roles `body`/`sidebar`/`margin`;
+sidebar and margin content become `note` blocks with the new role `sidebar` (`rl` 9) or `margin`, placed after the
+body block being read where they begin. Gutter line numbers are furniture (`margin`) and are removed first, as
+recurring furniture is. The map is kept: a Model arena `layout` (stride 8: page, band, col, role, x0 y0 x1 y1; a
+page's cells contiguous, its `pages` row naming the run in two spare cells), JSON `pages[].layout` (`fk` `layout` 78,
+`band` 79, `col` 80, `box` 81), and a node's regions are one per fragment. Checked on the probe of D108: Chrome
+writes one line per column run, so D104 does not merge columns there; a producer that writes rows across columns,
+or a gutter under D104's two sizes (the synthetic 3-column paper sets 9.5 pt with a 0.25 in gap: 1.89 sizes), would,
+which is why gutters are sought over words.
+**Why**: plain recursive XY-cut fails in exactly two common ways: paragraph gaps that line up across balanced
+columns (it reads the top halves of both columns first) and a figure spanning two of three columns (it cuts the third
+column too); restricting horizontal cuts to spanning elements fixes both. Keeping the map costs one small arena and
+lets a consumer check or re-render what emon decided.
+**Alternatives**: plain XY-cut; Breuel's full whitespace cover with constrained text-line finding (the gutter sweep
+is its tall-narrow special case, simpler in integers); Docstrum or Voronoi segmentation (bottom-up, for skewed scans;
+parked as a fallback for pages the cut tree scores badly); a learned layout model (not kin, not identical across
+hosts); discarding the map after ordering (then no consumer can recover it).
+- [ ] **Signed off** (maintainer)
+
+### D112 — A paragraph broken by a column or a page is one paragraph; the break lives in its regions; hyphenation follows SPEC 3.6
+**Decision**: SPEC 10.1.2: integer points over named signals (a shared tagged `P` decides; a final hyphen, a last line
+reaching the column's end edge, no terminal punctuation, a lowercase continuation and a content-stream continuation
+add; a short last line, an indented continuation where paragraphs are indented, a list marker, a heading candidate or
+another style class subtract) against `join-min`. Joined: one paragraph, one region per fragment, the page break as
+the inline `break` milestone (as P1.8 already does across pages), a column break recorded only by the regions and the
+page `layout`; the break is a line end for dehyphenation, nothing more. Blocks that fall between the fragments in
+reading order (note, figure, table, caption) move after the paragraph, in their order. A join near the threshold
+lowers the paragraph's confidence.
+**Why**: SPEC 3.1.1 already makes a page-crossing paragraph one node; columns are the same case, more often.
+**Alternatives**: a `break` milestone with a `column` field (puts a layout fact the regions already hold into the
+inline text); joining whenever the last line has no terminal punctuation (joins every paragraph of an unindented,
+spaced style that happens to start at a column top); splitting and flagging (a crawler sees half-sentences).
+- [ ] **Signed off** (maintainer)
+
+### D113 — HTML for columns: one logical flow in reading order; the column structure only as metadata
+**Decision**: no CSS columns and no per-page wrappers. Blocks are written in reading order, a joined paragraph once.
+With the `geometry` option every block also gets `data-emon-col="page:band:col"` (its first fragment) and, when it
+has more than one, `data-emon-cols` (space-separated, in order); the page map itself stays in JSON. Sidebar and
+margin notes are `<aside data-emon-role="sidebar|margin">` in reading order, without `role="doc-footnote"`.
+**Why**: the maintainer's own observation: columns only work with a page boundary to wrap on; a crawler and a screen
+read a flow, and the Model's tree is logical (D011).
+**Alternatives**: (a) per-page `<section data-emon-page>` with CSS `column-count`: reproduces the look but fights the
+heading-built sections, splits paragraphs at pages, and makes a crawler index pages; (b) CSS columns around logical
+runs as an opt-in "visual" option: without a page height a column is as tall as the article, so the reader scrolls
+down and back up; parked; (c) `<aside>` for side columns: adopted, for the roles above; (d) `<article>` per newspaper
+story: the Model has no article kind; parked until the corpus shows the need.
+- [ ] **Signed off** (maintainer)
+
+### D114 — The synthetic corpus grows by 19 documents for initials, alignment and columns; the gold gains `facts`
+**Decision**: P2.13 adds to `test/corpus/synth/` (authored by `tools/synth/make_html.clj`, printed by `print.sh`,
+gold by `html2gold.clj`/`build.clj`, D071-D073):
+* initials: `initial-firstletter` (`::first-letter` floats of 2, 3 and 4 lines; an `A` and an `I` that are words and
+  an `I` + `t` and `A` + `t` that are not; `“N`; a small-caps lead-in), `initial-raised`, `initial-image` (a PNG made
+  by ImageMagick at authoring time: a letter on an ornamented tile, `alt` the letter), `initial-vector` (an inline
+  SVG whose `T` and `L` are filled paths, never `<text>`), `initial-firstword` (a floated enlarged first word),
+  `initial-columns` (a 3-line drop cap in each column of a two-column page, one of them at a column top),
+  `initial-rtl` (Hebrew, floated right), `initial-cjk` (Japanese, a three-line first character, no join space) and
+  `initial-letter-headings` (the negative control: a glossary whose `A`, `B`, `C` dividers are headings);
+* alignment: `align-paragraphs` (start, end, center and justify, each multi-line; single-line center and end; a
+  justified paragraph of one line; centered headings and a caption), `align-justify-hyphen` (narrow justified
+  columns, `hyphens:auto`, `lang="en"`), `align-table-numeric` (right-aligned numeric columns, a centered header
+  row, a decimal column with mixed decimals, left text columns) and `align-rtl` (Hebrew start, end, center,
+  justify);
+* columns: `columns-continue` (two columns over three pages, justified and hyphenated, paragraphs continuing across
+  column AND page breaks, a heading mid-column, page footnotes), `columns-uneven` (a 2fr/1fr grid: body plus a
+  boxed sidebar with its own heading), `columns-span-figure` (a `column-span:all` figure and table mid-flow, and a
+  figure inside one column), `columns-mid-page` (full width, then 2 columns, full width, then 3, on one page),
+  `columns-margin-notes` (notes absolutely positioned in the outer margin beside paragraphs), and
+  `columns-newspaper` (masthead, a headline over three of five columns, several stories, a column rule, a
+  `Continued on page 2` jump that stays two blocks).
+Authoring attributes html2gold reads (it never computes CSS): `data-initial="drop|raised|margin"` with `data-lines`
+(on a `<p>`: html2gold takes the CSS `::first-letter` extent, leading and trailing punctuation plus one grapheme; on
+a `<span>`, `<img>` or `<svg>`: that element, its text from content, `alt` or `data-initial-text`), `data-align`
+(logical values), and `data-cols` on a column container. Gold conventions (D073 continued): 9. an initial is an
+`initial` inline wrapping its text, and the paragraph's `text` reads through it with no space unless the HTML has
+one; 10. `align` is annotated only where authored, and a justified block that printed as one line is `start`; 11.
+the gold gains an optional top-level `facts` object, found at print time by `build.clj` and committed in
+`MANIFEST.json` as `rows` is: `frags` (for layout documents, every leaf block's fragments `[page, band, col]` in
+order, located by anchoring its words' unique 4-grams in `pdftotext -bbox-layout` output), `lines` (the printed line
+count of every block that has `align` or an initial; `build.clj` also fails if a drop cap does not span the
+`data-lines` it declares), and `hyphens` (`{id, printed, word}` for every word the printer hyphenated at a line or
+column end); `annotated` gains `layout` (boolean: `facts.frags` is exhaustive) and attribute keys `initial` (`form`,
+`lines`) and `align` for paragraph, heading, caption and cell; 12. the gold text is the HTML's (no printed hyphens);
+a run with no locale is scored against gold words rewritten to their `printed` form at `facts.hyphens`, because SPEC
+3.6 requires emon to keep them; a run with `locale: en` against the gold as written. Existing golds do not change
+(optionally, `align: end` on the `td.r` cells of `invoice` and `bank-statement`, a reviewed regeneration).
+**Real documents that exercise these** (never committed, D086): drop caps in `layout/pdfa-eng-wds` 0182448,
+4271234, 0795114 and 0116458 (D108); two columns in `layout/arxiv` 1512.03385, 1810.04805 and 2206.01062, and the
+scientific, patent (gutter line numbers) and financial-report pages of `layout/doclaynet-v1.2`, whose `Text`,
+`Section-header`, `Page-header`/`-footer` and `Footnote` boxes score reading order and column assignment by IoU;
+right-aligned numeric cells in `tables/icdar2013`, `tables/gov-reports` and `financial/bank-statement-benchmark`;
+Hebrew and Arabic alignment in `multilingual/udhr`.
+**Why**: each feature gets a positive case, the producer's idiom (floats, `column-span`, `hyphens:auto`) and a
+negative control; the facts are what only the print knows, found once, like D072's `rows`.
+**Alternatives**: computing layout facts in a gate (needs poppler in every gate; D041 forbids it); annotating
+alignment from computed CSS (html2gold would need a cascade); one big document per feature (worse localisation).
+- [ ] **Signed off** (maintainer)
+
+### D115 — Scorer metrics for initials, alignment and columns
+**Decision**: `tools/accuracy/score.clj` (D077's pooled counts, match rule unchanged) gains, each honouring
+`annotated`: `initial-p`/`-r` (a predicted `initial` in a block matched to a gold block with one), `initial-form-acc`,
+`first-word-acc` (over gold blocks with an initial: the matched prediction's first whitespace token equals the
+gold's), `initial-false-heading` (predicted headings of 1-3 code points equal to a gold initial's text or the prefix
+of a gold first word; lower is better); `align-acc` and `align-cov` per kind (paragraph, heading, caption, cell:
+accuracy over matched blocks both annotate; coverage = gold-aligned blocks the prediction aligns) and `align-wrong`
+(predicted aligns the gold contradicts, per predicted aligned block; lower is better); `frag-col-acc` (matched leaf
+blocks whose predicted fragments, mapped to columns through the predicted page `layout`, equal `facts.frags` in band
+and col), `join-p`/`-r` (positives: gold blocks with two or more fragments; a hit is one predicted block holding all
+of it; a false join is a predicted block spanning a gold block boundary that falls on a fragment boundary) and
+`hyphen-acc` (at `facts.hyphens`: the printed form without a locale, the joined word with one). Reading-order Kendall
+tau is unchanged and is reported for the `columns` category. D079's categories gain `initials` and `align`.
+Lower-is-better metrics join `cer`, `wer`, `watermark-leak` in the ratchet's direction table. What a mishandled
+initial costs, for reading the board: as its own block, WER +2 and CER +1 per paragraph, a paragraph-boundary false
+positive and usually a false heading; placed on line N, WER +3 and a moved letter; unrecovered, CER +1 and WER +1;
+`A long` read as `Along`, CER +1 and WER +2.
+**Why**: CER and WER already see these errors but cannot say which feature caused them; a metric per feature makes a
+ratchet move attributable.
+**Alternatives**: CER, WER and paragraph boundaries alone (an initials fix and a columns regression would net out);
+scoring alignment only on multi-line blocks (hides the single-line policy).
 - [ ] **Signed off** (maintainer)
 
 ### D116 — The fuzz probe also runs page content interpretation and seeds from `test/pdf/p3`; one more overflow fixed (P2.12 merge)

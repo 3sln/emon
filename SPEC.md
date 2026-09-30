@@ -230,21 +230,21 @@ API expose.
 | --- | --- | --- |
 | `document` | blocks, `section`s | `title`, `lang`, metadata |
 | `section` | `heading` then blocks, nested `section`s | `level` |
-| `heading` | inlines | `level` (1..n, unbounded), `number` (e.g. `"3.2.1"`), `numbering` (scheme) |
-| `paragraph` | inlines | `align` (`start`/`center`/`end`/`justify`, when informative) |
+| `heading` | inlines | `level` (1..n, unbounded), `number` (e.g. `"3.2.1"`), `numbering` (scheme), `align` (as `paragraph`) |
+| `paragraph` | inlines | `align` (`start`/`center`/`end`/`justify`: logical, only when detected with confidence; §10.10, D110) |
 | `list` | `item`s | `ordered`, `scheme` (`decimal`, `lower-alpha`, `upper-roman`, `bullet`, …), `start` |
 | `item` | inlines, nested blocks | `marker` (the literal marker text), `value` |
 | `table` | `caption`?, `rowgroup`s | `profile` (§10.5), `continued` (pages spanned), `columns` |
 | `rowgroup` | `row`s | `role`: `head` / `body` / `foot` |
 | `row` | `cell`s | `repeated` (a recurring header row that was de-duplicated) |
-| `cell` | inlines or blocks | `rowspan`, `colspan`, `header` (`col`/`row`/none), `empty` |
-| `caption` | inlines | `label` (e.g. `"Table 3"`), `target` (node id) |
+| `cell` | inlines or blocks | `rowspan`, `colspan`, `header` (`col`/`row`/none), `empty`, `align` (`start`/`center`/`end`; §10.10) |
+| `caption` | inlines | `label` (e.g. `"Table 3"`), `target` (node id), `align` |
 | `figure` | `caption`? | `subkind` (§10.6; D053), `label`, `alt` (from the PDF, if any), `labels` (text found inside, optional) |
 | `seal` | — | `subkind` (`seal`/`stamp`/`signature`/`initials`/`digital-signature`; D053), `name`, `text`, `date`, `color` |
 | `formula` | — | `text` (best-effort linear text), `display` (block/inline) |
 | `code` | inlines | — (monospace block with preserved whitespace) |
 | `quote` | blocks | — |
-| `note` | blocks | `role`: `footnote` / `endnote` / `margin`; `marker` |
+| `note` | blocks | `role`: `footnote` / `endnote` / `margin` / `sidebar` (§10.1.1, D111); `marker` |
 | `field` | inlines | form field: `name`, `type`, `value`, `checked` |
 | `furniture` | blocks | running header/footer kept by policy (§10.2): `role`, `pages` |
 | `break` | — | page milestone: `page`, `label` (the printed page label) |
@@ -252,6 +252,7 @@ API expose.
 | `span` | inlines | `style` flags: `bold`, `italic`, `underline`, `strike`, `sub`, `sup`, `mono`, `smallcaps` |
 | `link` | inlines | `href` (URI) or `target` (node id, internal) |
 | `ref` | — | a note reference: `marker`, `target` |
+| `initial` | inlines | a typographic initial (drop cap and kin) at the start of its block: `form` (`drop`/`raised`/`margin`), `lines` (lines it spans, `drop`/`margin`). Its text is part of the block's `text`, joined to the first word as printed (§10.9, D108-D109) |
 | `linebreak` | — | a hard line break that is meaningful (addresses, poetry, table cells) |
 
 ### 3.3 Fields every node has
@@ -260,7 +261,7 @@ API expose.
 | --- | --- |
 | `id` | Integer, unique in the Model, assigned in document order. **Stable for the same input and settings**, so ids are citeable across runs and across targets. |
 | `kind` | From §3.2. |
-| `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages has one region per page. Inline `text` nodes have regions only at `detail: words` (§13). |
+| `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages or columns has one region per **fragment** (per page and column, in reading order; D112); the column of a region is the page's `layout` cell that contains it (§3.7). Inline `text` nodes have regions only at `detail: words` (§13). |
 | `src` | Provenance: the set of sources that contributed (§3.5). |
 | `conf` | Confidence, integer 0..1000 (§3.5). |
 | `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`. |
@@ -321,6 +322,13 @@ header says `"conf": "uncalibrated"`.
   without a locale the hyphen is kept and the words joined without a space
   (`multi-page` survives; `infor-mation` survives as written, flagged). Wrong
   dehyphenation corrupts real compounds; kept hyphens are merely ugly.
+  A column or page break inside a paragraph is a line end for this rule,
+  nothing more (D112).
+* **Initials** (drop caps, §10.9): the initial's text is the start of the
+  block's text and is joined to what follows as printed — `O` + `nce upon`
+  is `Once upon`, never `O nce upon` and never a separate block. Whether a
+  one-letter initial is a word of its own (`A` + `long time`) cannot be
+  seen on the page; it is joined unless a tagged tree says otherwise (D108).
 * **Right-to-left** text stored in *logical* order. PDFs frequently store
   visual order; stage 2 reorders with UAX #9 (emon's `bidi`).
 * **Whitespace** is normalized: one space between words, line breaks inside a
@@ -335,7 +343,11 @@ The Model has three top-level collections besides the tree:
   detected page number, else none), size, rotation, source kind (`vector`,
   `scanned`, `mixed`, `image`), resolution (raster), text-layer health (§9.3),
   and per-page variable furniture (e.g. a Bates number) that policy kept
-  (§10.2).
+  (§10.2); and the page's **`layout`**, the column map reading order was
+  decided over (§10.1.1, D111): one cell per column fragment, `band` (the
+  horizontal band, top first), `col` (its column in the band, in reading
+  order), `role` (`body`, `sidebar`, `margin`) and `box`. Absent when the page
+  is one plain column.
 * **`furniture`**: running headers/footers retained once, as templates.
 * **`dropped`**: the ledger — every suppressed element with `reason`
   (`watermark`, `background`, `page-number`, `running-title`, `bleed-through`,
@@ -356,9 +368,11 @@ kin cannot allocate: no arrays, no collections, no constructors (nome
     text     one code point per cell; every string in the Model is a run here
     pages    stride 16
     ledger   stride 10
+    layout   stride 8:  page, band, col, role, x0, y0, x1, y1 (D111; a
+             page's cells are one contiguous run, named from its pages row)
 
 A node is its index. Four languages cannot disagree about an index, and a
-Model that is six integer runs is trivially serializable and trivially cheap
+Model that is a few integer runs is trivially serializable and trivially cheap
 to hand across a WASM or C boundary.
 
 Evidence and PageLayer are arenas of the same kind, defined in
@@ -448,6 +462,11 @@ Rules:
   says what they are) and write `template` for their text. `settings` always
   carries `locale`; `furniture` and `dropped` are always present, `[]` when
   empty (D051).
+* An **`initial`** inline (§10.9) carries `form` and `lines` and its text as
+  `children`, like a `span`; its presence makes `inlines` informative, and
+  `text` still reads `Once upon` (D109). A page's `layout` is
+  `[{"band":0,"col":0,"role":"body","box":[x0,y0,x1,y1]}, …]` in reading
+  order (D111).
 
 ### 4.3 Canonical bytes
 
@@ -514,6 +533,10 @@ information and removes only what the options say.
 | `span` styles | `<b>`, `<i>`, `<u>`, `<s>`, `<sub>`, `<sup>`, `<code>`, `<span data-emon-style="smallcaps">` |
 | `link` | `<a href>`; internal targets become `#emon-ID` |
 | `linebreak` | `<br>` |
+| `initial` | `<span data-emon="initial" data-emon-form="drop" data-emon-lines="3">O</span>nce` — no styling, the text intact; option `initials: plain` writes the bare text (D109) |
+| `align` | `data-emon-align` (D069); with option `align-style` also `style="text-align:…"` and `dir="auto"` (D110) |
+| `note` `margin`/`sidebar` | `<aside data-emon-role="margin">` in reading order, no `doc-footnote` role (D113) |
+| column fragments | nothing by default: **one logical flow in reading order**; with `geometry`, `data-emon-col="page:band:col"` on each block (D113) |
 
 `<b>`/`<i>` rather than `<strong>`/`<em>`: emon knows the text was bold, not
 that the author meant importance. HTML should not claim what emon cannot know.
@@ -523,7 +546,8 @@ that the author meant importance. HTML should not claim what emon cannot know.
 `geometry` (adds `data-emon-at`), `ids` (adds `id="emon-N"` on every node),
 `confidence` (`data-emon-conf` on nodes below a threshold), `ledger` (dropped
 elements as `<template data-emon="dropped">` so they are inert but present),
-`furniture` (`keep`/`drop`/`policy`), `pretty`. **Defaults are clean HTML**:
+`furniture` (`keep`/`drop`/`policy`), `pretty`, `align-style` (inline
+`text-align`, off), `initials` (`span`/`plain`, default `span`). **Defaults are clean HTML**:
 no ids, no geometry, policy furniture, milestones on. Escaping: `&`, `<`, `>`,
 `"` and nothing else; attribute values always double-quoted.
 The rest of the mapping this table leaves open (extra `data-emon-*` attributes,
@@ -1144,7 +1168,8 @@ public contract.
 
 Annotations (P3.8: their own arena then), the structure tree (P3.7 joins on
 `marks.mcid`; the tree is P3.7's arena), shadings as painted regions beyond
-their box (a `paths` row of kind `other` until P3.5), the Model-level
+their box (a `paths` row of kind `other` until P3.5), a font's `/CapHeight`
+and `/XHeight` (read by §10.9; a minor addition to `fonts`, D108), the Model-level
 page source kind (analysis, not evidence), and fusion's own output
 (correspondence groups and the PageLayer are P7.1's arenas, built on the
 heads above).
@@ -1255,14 +1280,102 @@ diagram in the DEVLOG entry.
 * **Lines** from fused words by baseline and direction; **blocks** by
   spacing, alignment and style continuity (leading jumps, indentation, font
   change, rules between).
-* **Columns and reading order**: recursive XY-cut over whitespace, refined
-  for elements spanning columns (titles, full-width figures and tables), then
-  column-major ordering; RTL scripts flip the horizontal order. Priors, in
-  order of trust when healthy: tagged-PDF order, content-stream order, then
-  geometry. They are *compared*, and disagreement lowers block confidence.
+* **Columns and reading order**: gutters first, then the elements that
+  span them, then a cut tree whose leaves are column fragments, read
+  column-major (§10.1.1). Priors, in order of trust when healthy: tagged-PDF
+  order, content-stream order, then geometry. They are *compared*, and
+  disagreement lowers block confidence.
+* **Paragraphs continue** across column and page breaks and are joined into
+  one (§10.1.2).
 * **Meaningful line breaks** are kept (`linebreak`) where lines are
   consistently short and ragged in a way paragraphs are not: addresses,
   verse, signature blocks.
+* **Order within the stage**, per page: lines (D104) → initials (§10.9: a
+  local test, and before anything that measures indents or styles) →
+  furniture candidates excluded (§10.2's recurrence and gutter line numbers)
+  → columns (§10.1.1) → blocks → alignment (§10.10); then, document-wide,
+  continuation (§10.1.2), style inventory and headings (§10.3).
+
+#### 10.1.1 Columns (D111)
+
+The column map is what reading order is decided over, and it is kept: it is
+the page's `layout` (§3.7).
+
+1. **Gutters.** Over the page's words (not lines: a producer that writes a
+   row across two columns in one run, or a gutter narrower than D104's two
+   sizes, gives lines that cross it), sweep line rows top to bottom and keep
+   the x-intervals free of ink that persist for at least 3 consecutive rows
+   on both sides and are at least `gutter-min` wide (the larger of 0.6 body
+   size and 1.5 times the median word gap of the rows beside it): the tall,
+   narrow maximal whitespace rectangles of the page. A vertical rule
+   (`paths`, `rules`) with text on both sides for 3 rows is a gutter at any
+   width. Rivers in justified text do not persist 3 rows at that width; a
+   gutter holding only numbers at a regular pitch (line numbers in patents
+   and pleadings) is furniture (`margin`) and is removed first.
+2. **Split** every line that crosses a gutter.
+3. **Spanning elements.** A line, figure, table or rule whose box crosses a
+   gutter's x-interval inside the gutter's vertical extent ends the gutter
+   there; titles, `column-span` figures and tables, and full-width
+   footnote areas are found this way, not by kind.
+4. **The cut tree.** Recursively: when a gutter runs the full height of the
+   region, cut vertically (column-major); otherwise cut horizontally, but
+   **only** at the top or bottom of a spanning element or at a full-width
+   gap wider than 1.5 times the median paragraph gap. Horizontal gaps that
+   happen to line up across columns (balanced columns with the same leading
+   do this) are never cuts: that is classic XY-cut's reading-order failure.
+   A three-column page with a figure across columns 1-2 cuts at the 2|3
+   gutter first and at the figure inside the left part, so column 3 is not
+   split.
+5. **Order.** Vertical cuts in the page's dominant direction (left first for
+   left-to-right, right first for right-to-left, by the direction of the
+   majority of its lines, D104), horizontal cuts top first. Leaves are
+   **column fragments**, numbered `band` (the index of the horizontal cut
+   that contains them, top first) and `col` (reading order within it).
+6. **Roles.** A fragment is `sidebar` when it is narrower than a third of its
+   band and differs from the body in style or sits in a box or fill (a
+   sidebar); `margin` when it lies outside the document's body text block
+   (the union of body fragments over all pages) and holds short small-type
+   blocks beside body paragraphs (margin notes). Sidebar and margin content
+   becomes `note` blocks (`sidebar`, `margin`) placed after the body block
+   being read where it begins, never inside a paragraph.
+7. **Furniture** is taken out before gutters are sought (it would bridge
+   them) and after it is recognised by recurrence (§10.2); a first-page
+   masthead that recurs nowhere is ordinary content and a spanning element.
+8. **Footnotes** are fragments like any other: per-column notes at the foot
+   of their column, full-width notes as the last band. §10.8 classifies them;
+   D073's reading position stands.
+9. **Priors.** A healthy tagged tree's order wins and lowers the confidence of
+   the blocks it moves; content-stream order breaks ties between two cut
+   trees of nearly equal score. Newspaper jumps (`continued on page 4`) are
+   not followed: the two parts stay two blocks.
+
+#### 10.1.2 Continuation across column and page breaks (D112)
+
+Between the last body block of a fragment and the first body block of the
+next one in reading order (next column, or the first column of the next
+page, furniture skipped), a paragraph continues when the evidence says so.
+Signals, integer points against a named threshold (`join-min`):
+
+| Signal | Points |
+| --- | --- |
+| the same tagged `P` holds both (healthy tree) | decisive |
+| last line ends in a hyphen after a letter | strong + |
+| last line reaches the column's end edge (within the §10.10 tolerance) | medium + |
+| last line is short (more than 20 % of the column width free) | strong − |
+| last line ends without terminal punctuation | medium + |
+| next line starts with a lowercase letter (cased scripts) | strong + |
+| next line is indented where the document's paragraphs use first-line indents | strong − |
+| next line starts with a list marker or is a heading candidate | strong − |
+| a different style class | strong − |
+| the next fragment's first glyph follows the last one in content-stream order | weak + |
+
+Joined, it is **one paragraph** with one region per fragment; a page break
+inside it is the inline `break` milestone (as today), a column break is
+recorded only by its regions and the page `layout`; hyphenation at the break
+follows §3.6 exactly. Blocks that sit between the two fragments in reading
+order (a note, a figure, a table, a caption) move after the joined
+paragraph, in their order. A join near the threshold lowers the paragraph's
+confidence.
 
 ### 10.2 Running headers, footers and page numbers (D017)
 
@@ -1310,6 +1423,11 @@ system**, not of one line. So emon builds the system first.
 2. **Candidate headings**: lines or short blocks that are standalone, short,
    followed by body text, rarely ending in terminal punctuation, and whose
    style differs from body — *or* that start with a numbering pattern.
+   **Never** an initial (§10.9: its glyphs are not in the inventory either,
+   so a 40 pt letter is not a style class), and never a block of one or two
+   code points that sits beside or inside a paragraph's first lines. A
+   letter divider in a glossary or index (`A`, then `Aardvark …` on the
+   line below, full width) is a heading: it wraps nothing.
 3. **Numbering schemes**: `1`, `1.2`, `1.2.3`, `I.`, `A.`, `a)`, `(i)`, `§ 4`,
    and — with a locale hint — keyword forms (`Chapter`, `Article`, `Kapitel`,
    `Artículo`, …). Hierarchical numbering (`2.3.1` → depth 3) is the
@@ -1426,6 +1544,98 @@ small-font block in the page's bottom band starting with the same marker →
 "Notes" section. Captions: §10.6 and tables. Links: from annotations (§8.1),
 plus bare URLs and e-mail addresses in text (a conservative recogniser; not a
 guess at every dotted string).
+
+### 10.9 Initials: drop caps and their kin (D108, D109)
+
+A paragraph may open with a letter (or a word) printed far larger than its
+body: a **drop** initial sinking into the first N lines, which wrap around
+it; a **raised** initial standing on the first baseline and rising above it;
+a **margin** initial hanging outside the column beside the first lines. It
+is typography, not structure: the letter is the first letter of the text.
+
+**Detection** runs per page right after lines (§10.1), before blocks,
+indents or styles are measured, and is local:
+
+1. **Candidates**: a run of 1-3 code points (a letter or digit, with the
+   opening or closing punctuation CSS `::first-letter` would take: `“N`),
+   or a whole first word, whose size is at least `initial-min` (2.0) times
+   the median size of the lines beside it; or a non-text ink region of that
+   size (a vector path cluster, an image) in the same position (below).
+2. **Drop**: the candidate's cap top (its baseline minus the font's
+   `/CapHeight`, else 0.7 of its size; the tracer's ink box on raster) is
+   within half a body size of the first line's cap top; its ink bottom lies
+   within line N's vertical band (N >= 2); lines 1..N start after its end
+   edge within 1.5 body sizes, and line N+1 starts back at its start edge.
+   Baselines need not agree: a CSS float sits between two baselines (Chrome's
+   `printToPDF` puts a three-line `O` 6.75 pt above line 3's baseline).
+3. **Raised**: the candidate shares the first line's baseline (D104 already
+   puts it in the first word), and line 2 starts at its start edge.
+4. **Margin**: as drop or raised, but its end edge is before the column's
+   start edge and the lines are not indented.
+5. **First word**: an enlarged whole word (`IT`) is an initial of that word;
+   a small-caps lead-in after an initial (`T` + `HE BUREAU`) is an ordinary
+   `smallcaps` span.
+6. **Direction**: in a right-to-left paragraph mirror every edge.
+7. **Not an initial**: a large letter with nothing wrapping it or beside it
+   (a letter divider), a logo letter, a big page number, a letter inside a
+   figure. Stream order is no help: Chrome paints every float of a page
+   before its text.
+
+**Glyphs that are not text.** An initial drawn as vector outlines, as an
+image, or in a Type 3 font with no usable Unicode has the geometry above
+and no code point. The letter is recovered, strongest first, from the
+tagged tree (`/ActualText`, `/Alt` of its marked content), from a targeted
+OCR pass on the region as a single character (pass kind `initial`, the
+paragraph's script; Tesseract's own drop-cap flag, `osyms` `os` bit, is
+corroboration), then from the tracer's components. With no candidate above
+the threshold the inline holds U+FFFD, flagged `low-conf`: a character was
+there and emon says so. A decorated initial's ornament is not a `figure`.
+
+**Joining.** The initial's text is prepended to the first line, with no
+space: `O` + `nce upon` → `Once upon`. The page cannot say whether a
+one-letter initial is a word of its own: Chrome writes `A long time` and
+`Once upon` with the same 4.5 pt gap and no space glyph. So: a space only
+when a healthy tagged tree or `/ActualText` holds one; otherwise joined, and
+flagged `low-conf` when the letter is a word in its own right in the
+locale's one-letter-word table (`A`, `I`, `O` for English; without a
+locale, the union of the tables emon ships). Joining is the better default
+(`It`, `In`, `At`, `As` outnumber `I` and `A` as openings); a per-locale
+lexicon that could decide it is an open question (D108).
+
+**Effects on the rest of analysis.** For indents, lines 1..N start at the
+initial's start edge; the paragraph-gap rule measures from line 1, not from
+a raised initial's top; the initial's box is part of the paragraph's region;
+its glyphs are left out of the style inventory, the body-size statistics and
+feature column 18 of its line.
+
+### 10.10 Alignment (D110)
+
+Per block, from its lines against the **box of the fragment it sits in**
+(the column fragment of §10.1.1; a cell's box for a cell), never its own
+bounding box (against which everything is justified). Let *t* be a quarter
+of the body size; for each line, the start gap *S* and end gap *E* in the
+writing direction; a first-line indent is removed from line 1's *S*; the
+last line is excluded from the justify and ragged tests:
+
+| Value | Test |
+| --- | --- |
+| `justify` | ≥ 2 non-last lines, every one with *S* ≤ *t* and *E* ≤ *t*, the last line's *S* ≤ *t* |
+| `start` | every *S* ≤ *t*, and *E* varies by more than 2*t* over the non-last lines, or the block is ragged |
+| `end` | every *E* ≤ *t* and *S* varies by more than 2*t* |
+| `center` | \|*S* − *E*\| ≤ *t* on every line, and *S* varies (or a single line with *S*, *E* ≥ 4*t*) |
+
+A single-line block can only be `center` or `end` from its own geometry; a
+single flush-start line is `start` only when its style class's
+paragraphs are, and at lower confidence. Values are **logical**:
+`start`/`end` mean left/right in a left-to-right block and the reverse in a
+right-to-left one (its base direction, UAX #9 P2-P3 over its text).
+Confidence rises with the lines that pass and the margin by which they
+pass; `align` is written only at or above `align-min` (setting). **Table
+cells** are decided per table column over all its body cells together (the
+column's text extent is its box): numeric columns are usually `end`, and a
+decimal-aligned column whose end edges disagree gets none (there is no
+`decimal` value: the numbers read the same). Headings and captions are
+tested like paragraphs.
 
 ---
 
@@ -1683,6 +1893,9 @@ commit (the ratchet). Metrics:
 | Figures | detection P/R; `kind` accuracy |
 | Seals/signatures | detection P/R; `name`/`text` CER |
 | Artifacts | watermark/ghost P/R — specifically, **body-text contamination rate**: characters of watermark/seal text that leaked into the body |
+| Initials | detection P/R; first-word accuracy; single-letter false headings (D115) |
+| Alignment | accuracy and coverage per kind (paragraph, heading, cell) (D115) |
+| Columns | fragment column accuracy; continuation join P/R; hyphen resolution at breaks (D115) |
 | Confidence | expected calibration error per kind |
 
 ### 14.3 Ground truth
@@ -1690,7 +1903,9 @@ commit (the ratchet). Metrics:
 1. **The synthetic round trip** (D041) — emon's best oracle. An HTML corpus
    (headings of known level, lists, tables including multi-page tables with
    and without `thead` repetition, running headers and page numbers,
-   footnotes, figures with `data-` kinds) is printed to PDF by **external
+   footnotes, figures with `data-` kinds, drop caps and other initials,
+   every alignment, multi-column layouts with spanning elements and
+   paragraphs continuing across columns and pages; D114) is printed to PDF by **external
    tools at development time** — headless Chromium's `printToPDF` as the
    primary producer, and optionally others (nome, WeasyPrint, LibreOffice)
    so emon does not overfit to one producer's idioms. The HTML *is* the
@@ -1842,3 +2057,8 @@ in one conversion; D058).
 3. **nome as an optional corpus producer** (D041): may nome be one of the
    external dev-time PDF producers for the synthetic corpus (never a
    dependency), or should it be excluded?
+4. **A lexicon for initials** (D108): may emon ship a small per-locale word
+   list (the most frequent few thousand words, a `defdata` table per locale,
+   used only when a locale hint is given) to decide whether a one-letter
+   initial is a word (`A` + `long` vs `A` + `t the`)? Without one, it is
+   joined and flagged.
