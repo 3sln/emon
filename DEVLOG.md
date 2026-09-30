@@ -785,6 +785,13 @@ analysis beyond "top-to-bottom lines on a single column".
   byte source, not a path or a whole-file copy (D058).
 - [ ] P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew,
   orientation (SPEC §8.2.1).
+- [ ] P6.3a — Raster kernels as host-accelerable whole-stage forms (D093).
+  Measure which normalization/tracer stages dominate (ink-layer separation,
+  Sauvola, morphology, binarise+label), then define whole-stage forms (e.g.
+  `ink-mask`, `binarise-label`) with an exact integer spec and a kin
+  reference implementation. Hosts may accelerate (SIMD first; optional GPU:
+  wgpu in Rust, WebGPU in the browser). Gate: every accelerated
+  implementation is bit-identical to the kin reference over the corpus.
 - [ ] P6.4 — Tracer: components, contours, rules, primitives (SPEC §8.2.2).
 - [ ] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
   first-pass plan; OCR-only pipeline for images and scanned PDFs (D033).
@@ -2758,4 +2765,25 @@ only stages worth a bulk form are whole-page streaming ones.
 per-host tracer is four implementations that must agree byte for byte); no bulk forms
 (rejected: binarise and zero-fill break the rule by 18-60x in three hosts); a run-based
 labeller now (premature: nothing measured wants it).
+- [ ] **Signed off** (maintainer)
+
+### D093 — Pixel-parallel work is exposed as whole-stage host forms with a kin reference; kin stays device-agnostic
+**Decision**: GPU/SIMD acceleration of raster work (threshold, histogram,
+integral images, morphology, ink-layer separation, binarise+label) happens
+behind host-implemented forms, never inside kin. Forms are whole stages (so a
+GPU host can keep pixels on-device across steps) with an exact integer
+definition; kin keeps a reference implementation of each, which is the spec,
+the fallback where no accelerator exists (servers, WASM without WebGPU), and
+the identity oracle: accelerated output must be bit-identical. Acceleration
+is optional per host; SIMD first, GPU later. Per-pixel `bitmap-u8` reads from
+kin are for sparse access only (e.g. the tracer walking a finished mask).
+**Why**: maintainer asked whether thresholding/masking should use the GPU
+and where the seam is. The P2.7 bulk forms already put these passes behind
+host ports; making kin device-aware would break the one-source/four-targets
+identity model. At one 300-dpi page (~9 Mpx), transfer cost rivals a SIMD
+pass, so GPU pays only for chained stages, heavy kernels, or batches.
+**Alternatives**: kin-level GPU vocabulary (no device model in kin; breaks
+identity); move whole normalization into hosts with no kin reference (loses
+the identity oracle and the portable fallback); GPU-only fast path (not
+available on all targets).
 - [ ] **Signed off** (maintainer)
