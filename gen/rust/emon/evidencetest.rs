@@ -4,14 +4,49 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 
-pub(crate) fn et_build(mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, mut etext: &mut crate::port::Cells) -> i32 {
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+pub(crate) fn et_build(mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut spans: &mut crate::port::Cells) -> i32 {
+    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     etx_append_cp(etext, 72);
     etx_append_cp(etext, 105);
     etx_append_cp(etext, 102);
     etx_append_cp(etext, 105);
     etx_append_cp(etext, 72);
     etx_append_cp(etext, 105);
+    etx_append_cp(etext, 80);
+    etx_append_cp(etext, 101);
+    etx_append_cp(etext, 110);
+    etx_append_cp(etext, 65);
+    etx_append_cp(etext, 114);
+    etx_append_cp(etext, 116);
+    etx_append_cp(etext, 105);
+    etx_append_cp(etext, 102);
+    etx_append_cp(etext, 97);
+    etx_append_cp(etext, 99);
+    etx_append_cp(etext, 116);
+    etx_append_cp(etext, 80);
+    etx_append_cp(etext, 97);
+    etx_append_cp(etext, 103);
+    etx_append_cp(etext, 105);
+    etx_append_cp(etext, 110);
+    etx_append_cp(etext, 97);
+    etx_append_cp(etext, 116);
+    etx_append_cp(etext, 105);
+    etx_append_cp(etext, 111);
+    etx_append_cp(etext, 110);
+    etx_append_cp(etext, 87);
+    etx_append_cp(etext, 97);
+    etx_append_cp(etext, 116);
+    etx_append_cp(etext, 101);
+    etx_append_cp(etext, 114);
+    etx_append_cp(etext, 109);
+    etx_append_cp(etext, 97);
+    etx_append_cp(etext, 114);
+    etx_append_cp(etext, 107);
+    etx_append_cp(etext, 68);
+    etx_append_cp(etext, 82);
+    etx_append_cp(etext, 65);
+    etx_append_cp(etext, 70);
+    etx_append_cp(etext, 84);
     gl_new(glyphs, 1, 72, 1, 1200, 7200, 9000, 8000, 10200);
     gl_set(glyphs, 0, gf_how(), gh_tounicode());
     gl_set(glyphs, 0, gf_color(), 0);
@@ -85,6 +120,23 @@ pub(crate) fn et_build(mut glyphs: &mut crate::port::Cells, mut words: &mut crat
     ow_set(ocrwords, 0, of_lang(), 3);
     alt_add(ocrwords, alts, 0, 0, 72, 900);
     alt_add(ocrwords, alts, 0, 1, 108, 250);
+    sp_new(spans, 1, 6, 1, -1, 0);
+    sp_set(spans, 0, sf_mcid(), 0);
+    sp_set(spans, 0, sf_lang(), 7);
+    sp_set(spans, 0, sf_langlen(), 2);
+    sp_set(spans, 0, sf_gcount(), 2);
+    sp_set(spans, 0, sf_flags(), mc_inline());
+    sp_new(spans, 1, 9, 8, -1, 3);
+    sp_set(spans, 1, sf_artifact(), ar_watermark());
+    sp_set(spans, 1, sf_type(), 17);
+    sp_set(spans, 1, sf_typelen(), 10);
+    sp_set(spans, 1, sf_subtype(), 27);
+    sp_set(spans, 1, sf_subtypelen(), 9);
+    sp_set(spans, 1, sf_actual(), 36);
+    sp_set(spans, 1, sf_actuallen(), 5);
+    sp_set(spans, 1, sf_gcount(), 1);
+    sp_set(spans, 1, sf_stm(), 12);
+    sp_set(spans, 1, sf_flags(), mc_unterminated());
     return 0;
 }
 pub(crate) fn et_end(b: &[u8]) -> i32 {
@@ -106,7 +158,8 @@ fn test_builders_set_the_layout_and_its_defaults() {
     let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     crate::testport::assert_eq(gl_count(glyphs), 0, "no glyphs");
     crate::testport::assert_eq(gl_new(glyphs, 3, 65, 9, 1000, 100, 200, 300, 400), 0, "first glyph");
     crate::testport::assert_eq(crate::port::cells_len(glyphs), 20, "twenty cells");
@@ -130,6 +183,16 @@ fn test_builders_set_the_layout_and_its_defaults() {
     crate::testport::assert_eq(gl_get(glyphs, 0, gf_artifact()), 0, "not an artifact");
     crate::testport::assert_eq(gl_get(glyphs, 0, gf_mcid()), -1, "no mcid");
     crate::testport::assert_eq(gl_get(glyphs, 0, gf_word()), -1, "in no word");
+    crate::testport::assert_eq(sp_new(spans, 3, 10, 1, -1, 4), 0, "first span");
+    crate::testport::assert_eq(crate::port::cells_len(spans), 22, "twenty-two cells");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_mcid()), -1, "no MCID");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_artifact()), 0, "not an artifact");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_type()), -1, "no type");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_actual()), -1, "no ActualText");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_lang()), -1, "no language");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_gfirst()), 4, "opened at glyph 4");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_parent()), -1, "no parent");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_stm()), 0, "the page's own stream");
     crate::testport::assert_eq(wd_new(words, 3, 1, 2, 3, 4, 0, 1), 0, "first word");
     crate::testport::assert_eq(crate::port::cells_len(words), 16, "sixteen cells");
     crate::testport::assert_eq(wd_get(words, 0, wf_tstart()), -1, "no text");
@@ -181,7 +244,8 @@ fn test_setters_and_the_alternative_chain() {
     let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     crate::testport::assert_eq(gl_count(glyphs), 4, "four glyphs");
     crate::testport::assert_eq(wd_count(words), 2, "two words");
     crate::testport::assert_eq(ln_count(lines), 1, "one line");
@@ -190,7 +254,12 @@ fn test_setters_and_the_alternative_chain() {
     crate::testport::assert_eq(co_count(components), 1, "one component");
     crate::testport::assert_eq(ow_count(ocrwords), 1, "one OCR word");
     crate::testport::assert_eq(alt_count(alts), 2, "two alternatives");
-    crate::testport::assert_eq(etx_len(etext), 6, "six text cells");
+    crate::testport::assert_eq(etx_len(etext), 41, "the text cells");
+    crate::testport::assert_eq(sp_count(spans), 2, "two spans");
+    crate::testport::assert_eq(sp_get(spans, 0, sf_mcid()), 0, "the paragraph's MCID");
+    crate::testport::assert_eq(sp_get(spans, 1, sf_mcid()), -1, "the artifact has none");
+    crate::testport::assert_eq(sp_get(spans, 1, sf_artifact()), 2, "watermark");
+    crate::testport::assert_eq(sp_get(spans, 1, sf_stm()), 12, "a form's span");
     crate::testport::assert_eq(gl_get(glyphs, 2, gf_tstart()), 2, "the ligature's text run");
     crate::testport::assert_eq(gl_get(glyphs, 2, gf_tlen()), 2, "two code points");
     crate::testport::assert_eq(gl_get(glyphs, 3, gf_rot()), 4500, "45 degrees in centi-degrees");
@@ -209,7 +278,7 @@ fn test_setters_and_the_alternative_chain() {
     crate::testport::assert_eq(alt_get(alts, 0, af_next()), 1, "then the second");
     crate::testport::assert_eq(alt_get(alts, 1, af_cp()), 108, "which reads l");
     crate::testport::assert_eq(alt_get(alts, 1, af_next()), -1, "and ends the chain");
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 0, "the page is well formed");
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 0, "the page is well formed");
 }
 #[test]
 fn test_evidence_text_is_scalar_values_only() {
@@ -230,30 +299,40 @@ fn test_check_names_what_is_wrong() {
     let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-    gl_set(glyphs, 2, gf_tlen(), 9);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 2, "a glyph's text run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    gl_set(glyphs, 2, gf_tlen(), 99);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 2, "a glyph's text run past the arena");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     wd_set(words, 1, wf_gcount(), 9);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 3, "a word's glyph run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-    wd_set(words, 0, wf_tlen(), 40);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 4, "a word's text run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 3, "a word's glyph run past the arena");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    wd_set(words, 0, wf_tlen(), 99);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 4, "a word's text run past the arena");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     ln_set(lines, 0, lf_wcount(), 3);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 5, "a line's word run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 5, "a line's word run past the arena");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     ow_set(ocrwords, 0, of_tlen(), 50);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 6, "an OCR word's text run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 6, "an OCR word's text run past the arena");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     ow_set(ocrwords, 0, of_altcount(), 3);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 7, "an alternative count that is not the chain");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 7, "an alternative count that is not the chain");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     wd_set(words, 0, wf_line(), 4);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 8, "a word in a line that is not there");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 8, "a word in a line that is not there");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     gl_set(glyphs, 0, gf_word(), 5);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 9, "a glyph in a word that is not there");
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 9, "a glyph in a word that is not there");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    sp_set(spans, 1, sf_gcount(), 9);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's glyph run past the arena");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    sp_set(spans, 1, sf_actuallen(), 99);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's string past the arena");
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    sp_set(spans, 0, sf_parent(), 0);
+    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span that is its own parent");
 }
 #[test]
 fn test_golden_page() {
@@ -266,11 +345,12 @@ fn test_golden_page() {
     let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-    ev_emit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-    ev_emit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    ev_emit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    ev_emit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     crate::testport::assert_text_span(compact, &crate::testport::test_file("evidence/page1.json")[..], 0, et_end(&crate::testport::test_file("evidence/page1.json")[..]), "compact", 0);
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("evidence/page1.pretty.json")[..], 0, et_end(&crate::testport::test_file("evidence/page1.pretty.json")[..]), "pretty", 0);
 }
@@ -285,11 +365,12 @@ fn test_an_empty_evidence_dump() {
     let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-    ev_emit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-    ev_emit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    ev_emit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    ev_emit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     crate::testport::assert_text_span(compact, &crate::testport::test_file("evidence/empty.json")[..], 0, et_end(&crate::testport::test_file("evidence/empty.json")[..]), "compact", 0);
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("evidence/empty.pretty.json")[..], 0, et_end(&crate::testport::test_file("evidence/empty.pretty.json")[..]), "pretty", 0);
 }

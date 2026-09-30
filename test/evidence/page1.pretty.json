@@ -153,5 +153,26 @@
       "pass": 1,
       "lang": 3
     }
+  ],
+  "spans": [
+    {
+      "page": 1,
+      "tag": "P",
+      "mcid": 0,
+      "lang": "en",
+      "glyphs": [0, 2],
+      "flags": ["inline"]
+    },
+    {
+      "page": 1,
+      "tag": "Artifact",
+      "artifact": "watermark",
+      "type": "Pagination",
+      "subtype": "Watermark",
+      "actual": "DRAFT",
+      "glyphs": [3, 1],
+      "flags": ["unterminated"],
+      "stm": 12
+    }
   ]
 }

@@ -1,0 +1,354 @@
+;; 16.16 fixed-point arithmetic and affine matrices (P1.7; SPEC 3.4, D009).
+;; emon's own module (D039).
+;;
+;; THERE ARE NO FLOATS IN KIN (four languages do not agree on them), so a
+;; PDF real, a matrix entry and a font size are `Fx`: a 16.16 fixed-point number
+;; held in an `I64` (`emon.lang`'s tag). One unit is 65536. The page's own unit
+;; in the evidence is the CENTIPOINT, and the interpreter's base matrix carries
+;; that scale, so an `Fx` that is a page coordinate is a centipoint count times
+;; 65536 and `fx-round` turns it into the `Cpt` the evidence stores.
+;;
+;; THE ARITHMETIC IS WRAPPING (`add64`, `mul64`, as SplitMix's is), because a
+;; hostile file can ask for `1e9 1e9 mul` and three of the four targets wrap
+;; silently where Rust (debug) panics: only the wrapping forms make the four
+;; agree on garbage, and a value is CLAMPED to +-2^44 (about 2.7e8 centipoints)
+;; before it is stored in a matrix so garbage does not compound.
+;;
+;; A `Cells` HOLDS 32-BIT CELLS, so an `Fx` is stored as two (high half first,
+;; `fx-put` / `fx-get`), and a matrix as twelve (`a b c d e f`). A matrix lives
+;; at an offset inside the caller's `Cells` (the interpreter keeps them all in
+;; one, so `mx-mul` can write a product over one of its operands without two
+;; borrows of the same array).
+;;
+;; MATRICES ARE PDF'S: a point is a row vector, `[x y 1] x M`,
+;;     x' = a x + c y + e        y' = b x + d y + f
+;; and `(mx-mul c dst x y)` is `dst = X x Y`, that is, X applied first.
+;;
+;; ANGLES are integer too: `fx-atan2` answers CENTI-DEGREES by CORDIC (sixteen
+;; shifts and adds and a table, so it is the same on every target); `fx-hypot`
+;; and `fx-sqrt` are integer square roots. Nothing here rounds differently on
+;; different targets: division is `quot` (truncating) with the rounding written
+;; out.
+(ns emon.fx
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 add64 mul64 shl64 shr64]]
+            [emon.port :refer [cells-at cells-set cells-push cells-drop]]
+            [kin.lang :refer [defn defdata return let set while if comment do
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; atan(2^-i) in 1e-5 degrees, i = 0..15
+(defdata fx-atan
+  :emitter kin.lang/flat-array
+  :data [4500000 2656505 1403624 712502 357633 178991 89517 44761
+         22381 11191 5595 2798 1399 699 350 175]
+  :accessors {^I32 fx-atan-at [^I32 ignored ^I32 i]})
+
+(defn ^:pub ^I64 fx-one [] (return (i64 65536)))
+
+(defn ^:pub ^I64 fx-of-int [^I32 v]
+  (comment "An integer as Fx.")
+  (return (mul64 (i64 v) (i64 65536))))
+
+(defn ^:pub ^I64 fx-clamp [^I64 v]
+  (comment "Limit to +-2^44: what a matrix entry or a coordinate may hold.")
+  (if (> v (i64 17592186044416)) (return (i64 17592186044416)))
+  (if (< v (i64 -17592186044416)) (return (i64 -17592186044416)))
+  (return v))
+
+(defn ^:pub ^I64 fx-mul [^I64 a ^I64 b]
+  (comment "a * b, rounded half away from zero.")
+  (let [^I64 p (mul64 a b)]
+    (if (>= p (i64 0))
+      (return (quot (add64 p (i64 32768)) (i64 65536))))
+    (return (- (i64 0) (quot (add64 (- (i64 0) p) (i64 32768)) (i64 65536))))))
+
+(defn ^:pub ^I64 fx-muldiv [^I64 a ^I64 b ^I64 c]
+  (comment "a * b / c (all plain integers, or all Fx), rounded half away from zero;")
+  (comment "0 when c is 0.")
+  (let [^I64 p (mul64 a b)
+        ^:mut ^I64 ap p
+        ^:mut ^I64 ac c
+        ^:mut ^I32 neg 0
+        ^:mut ^I64 q (i64 0)]
+    (if (== c (i64 0)) (return (i64 0)))
+    (if (< ap (i64 0)) (do (set ap (- (i64 0) ap)) (set neg 1)))
+    (if (< ac (i64 0)) (do (set ac (- (i64 0) ac)) (set neg (- 1 neg))))
+    (set q (quot (add64 ap (quot ac (i64 2))) ac))
+    (if (== neg 1) (return (- (i64 0) q)))
+    (return q)))
+
+(defn ^:pub ^I64 fx-div [^I64 a ^I64 b]
+  (comment "a / b as Fx; 0 when b is 0.")
+  (return (fx-muldiv a (i64 65536) b)))
+
+(defn ^I64 fx-pow10 [^I32 n]
+  (let [^:mut ^I64 p (i64 1)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (set p (mul64 p (i64 10)))
+          (set i (+ i 1))))
+    (return p)))
+
+(defn ^:pub ^I64 fx-of-real [^I32 mant ^I32 scale]
+  (comment "The real mant / 10^scale (`emon.pdflex`'s mantissa and count of")
+  (comment "fractional digits) as Fx, rounded.")
+  (return (fx-muldiv (i64 mant) (i64 65536) (fx-pow10 scale))))
+
+(defn ^:pub ^I32 fx-round [^I64 v]
+  (comment "Fx to the nearest integer (half up), saturating to +-(2^31-1).")
+  (let [^I64 s (add64 v (i64 32768))
+        ^:mut ^I64 q (i64 0)]
+    (if (>= s (i64 0))
+      (set q (quot s (i64 65536)))
+      (set q (- (i64 0) (quot (add64 (- (i64 0) s) (i64 65535)) (i64 65536)))))
+    (if (> q (i64 2147483647)) (return 2147483647))
+    (if (< q (i64 -2147483647)) (return -2147483647))
+    (return (i32 q))))
+
+(defn ^:pub ^I32 fx-floor [^I64 v]
+  (comment "Fx to the integer below it, saturating as `fx-round` does.")
+  (let [^:mut ^I64 q (i64 0)]
+    (if (>= v (i64 0))
+      (set q (quot v (i64 65536)))
+      (set q (- (i64 0) (quot (add64 (- (i64 0) v) (i64 65535)) (i64 65536)))))
+    (if (> q (i64 2147483647)) (return 2147483647))
+    (if (< q (i64 -2147483647)) (return -2147483647))
+    (return (i32 q))))
+
+(defn ^:pub ^I64 fx-abs [^I64 v]
+  (if (< v (i64 0)) (return (- (i64 0) v)))
+  (return v))
+
+(defn ^:pub ^I64 fx-isqrt [^I64 v]
+  (comment "floor(sqrt(v)) of a non-negative integer, by the bit-by-bit method")
+  (comment "(no division, no float); 0 for v <= 0.")
+  (let [^:mut ^I64 rem-v v
+        ^:mut ^I64 root (i64 0)
+        ^:mut ^I64 bit (i64 4611686018427387904)]
+    (if (<= v (i64 0)) (return (i64 0)))
+    (while (> bit rem-v)
+      (set bit (quot bit (i64 4))))
+    (while (> bit (i64 0))
+      (do (if (>= rem-v (add64 root bit))
+            (do (set rem-v (- rem-v (add64 root bit)))
+                (set root (add64 (quot root (i64 2)) bit)))
+            (set root (quot root (i64 2))))
+          (set bit (quot bit (i64 4)))))
+    (return root)))
+
+(defn ^:pub ^I64 fx-sqrt [^I64 v]
+  (comment "sqrt of an Fx as Fx: isqrt(v * 65536), or isqrt(v) * 256 when v is")
+  (comment "too large for the product.")
+  (if (<= v (i64 0)) (return (i64 0)))
+  (if (> v (i64 140737488355328))
+    (return (mul64 (fx-isqrt v) (i64 256))))
+  (return (fx-isqrt (mul64 v (i64 65536)))))
+
+(defn ^:pub ^I64 fx-hypot [^I64 x ^I64 y]
+  (comment "sqrt(x^2 + y^2) in the units of x and y, to about nine significant")
+  (comment "digits: both are scaled down until their squares fit an I64.")
+  (let [^:mut ^I64 ax (fx-abs x)
+        ^:mut ^I64 ay (fx-abs y)
+        ^:mut ^I32 k 0]
+    (while (or (> ax (i64 1073741824)) (> ay (i64 1073741824)))
+      (do (set ax (quot ax (i64 2)))
+          (set ay (quot ay (i64 2)))
+          (set k (+ k 1))))
+    (let [^:mut ^I64 r (fx-isqrt (add64 (mul64 ax ax) (mul64 ay ay)))]
+      (while (> k 0)
+        (do (set r (mul64 r (i64 2)))
+            (set k (- k 1))))
+      (return r))))
+
+(defn ^:pub ^I32 fx-atan2 [^I64 y ^I64 x]
+  (comment "The angle of the vector (x, y) in CENTI-DEGREES, counter-clockwise from")
+  (comment "the +x axis, in [0, 36000). Exact at the four axes; between them by")
+  (comment "CORDIC to within one centi-degree. The zero vector is 0.")
+  (let [^:mut ^I64 cx x
+        ^:mut ^I64 cy y
+        ^:mut ^I64 z (i64 0)
+        ^:mut ^I32 base 0
+        ^:mut ^I32 i 0
+        ^:mut ^I64 nx (i64 0)
+        ^:mut ^I64 ny (i64 0)
+        ^:mut ^I64 m (i64 0)
+        ^:mut ^I32 ang 0]
+    (if (and (== x (i64 0)) (== y (i64 0))) (return 0))
+    (if (== y (i64 0))
+      (do (if (> x (i64 0)) (return 0))
+          (return 18000)))
+    (if (== x (i64 0))
+      (do (if (> y (i64 0)) (return 9000))
+          (return 27000)))
+    (comment "Into the right half-plane (x > 0).")
+    (if (< cx (i64 0))
+      (do (set cx (- (i64 0) cx))
+          (set cy (- (i64 0) cy))
+          (set base 18000)))
+    (comment "Normalise the magnitude into [2^26, 2^28].")
+    (set m (fx-abs cx))
+    (if (> (fx-abs cy) m) (set m (fx-abs cy)))
+    (while (> m (i64 268435456))
+      (do (set cx (quot cx (i64 2)))
+          (set cy (quot cy (i64 2)))
+          (set m (quot m (i64 2)))))
+    (while (< m (i64 67108864))
+      (do (set cx (mul64 cx (i64 2)))
+          (set cy (mul64 cy (i64 2)))
+          (set m (mul64 m (i64 2)))))
+    (while (< i 16)
+      (do (if (> cy (i64 0))
+            (do (set nx (add64 cx (quot cy (shl64 (i64 1) i))))
+                (set ny (- cy (quot cx (shl64 (i64 1) i))))
+                (set z (add64 z (i64 (fx-atan-at 0 i)))))
+            (do (set nx (- cx (quot cy (shl64 (i64 1) i))))
+                (set ny (add64 cy (quot cx (shl64 (i64 1) i))))
+                (set z (- z (i64 (fx-atan-at 0 i))))))
+          (set cx nx)
+          (set cy ny)
+          (set i (+ i 1))))
+    (comment "z is in 1e-5 degrees: round to centi-degrees (1000 of them).")
+    (if (>= z (i64 0))
+      (set ang (i32 (quot (add64 z (i64 500)) (i64 1000))))
+      (set ang (- 0 (i32 (quot (add64 (- (i64 0) z) (i64 500)) (i64 1000))))))
+    (set ang (+ ang base))
+    (while (< ang 0)
+      (set ang (+ ang 36000)))
+    (while (>= ang 36000)
+      (set ang (- ang 36000)))
+    (return ang)))
+
+(defn ^I64 fx-cordic [^I32 cdeg ^I32 which]
+  (comment "cos (which 0) or sin (which 1) of an angle in CENTI-DEGREES, as Fx, by CORDIC")
+  (comment "in rotation mode (sixteen shift-and-add steps, gain folded into the start):")
+  (comment "exact at the axes, within about 3e-5 between.")
+  (let [^:mut ^I32 ang (- cdeg (* (quot cdeg 36000) 36000))
+        ^:mut ^I64 cx (i64 652032874)
+        ^:mut ^I64 cy (i64 0)
+        ^:mut ^I64 z (i64 0)
+        ^:mut ^I64 nx (i64 0)
+        ^:mut ^I64 ny (i64 0)
+        ^:mut ^I32 q 0
+        ^:mut ^I32 i 0
+        ^:mut ^I64 c (i64 0)
+        ^:mut ^I64 sn (i64 0)]
+    (if (< ang 0) (set ang (+ ang 36000)))
+    (set q (quot ang 9000))
+    (set z (mul64 (i64 (- ang (* q 9000))) (i64 1000)))
+    (if (== z (i64 0))
+      (do (set cx (i64 1073741824))
+          (set cy (i64 0))
+          (set i 16)))
+    (while (< i 16)
+      (do (if (>= z (i64 0))
+            (do (set nx (- cx (quot cy (shl64 (i64 1) i))))
+                (set ny (add64 cy (quot cx (shl64 (i64 1) i))))
+                (set z (- z (i64 (fx-atan-at 0 i)))))
+            (do (set nx (add64 cx (quot cy (shl64 (i64 1) i))))
+                (set ny (- cy (quot cx (shl64 (i64 1) i))))
+                (set z (add64 z (i64 (fx-atan-at 0 i))))))
+          (set cx nx)
+          (set cy ny)
+          (set i (+ i 1))))
+    (comment "2^30 to 2^16, rounded half away from zero.")
+    (set c (fx-muldiv cx (i64 1) (i64 16384)))
+    (set sn (fx-muldiv cy (i64 1) (i64 16384)))
+    (if (== q 0) (do (if (== which 0) (return c)) (return sn)))
+    (if (== q 1) (do (if (== which 0) (return (- (i64 0) sn))) (return c)))
+    (if (== q 2) (do (if (== which 0) (return (- (i64 0) c))) (return (- (i64 0) sn))))
+    (if (== which 0) (return sn))
+    (return (- (i64 0) c))))
+
+(defn ^:pub ^I64 fx-cos [^I32 cdeg]
+  (comment "cos of an angle in centi-degrees, as Fx.")
+  (return (fx-cordic cdeg 0)))
+
+(defn ^:pub ^I64 fx-sin [^I32 cdeg]
+  (comment "sin of an angle in centi-degrees, as Fx.")
+  (return (fx-cordic cdeg 1)))
+
+;; ------------------------------------------------------ Fx in a Cells
+
+(defn ^:pub ^I64 fx-join [^I32 hi ^I32 lo]
+  (comment "An Fx from its two 32-bit halves (the low half is unsigned).")
+  (return (add64 (shl64 (i64 hi) 32) (shr64 (shl64 (i64 lo) 32) 32))))
+
+(defn ^:pub ^I32 fx-hi [^I64 v]
+  (comment "The high 32 bits of an Fx (an arithmetic result, as a signed I32).")
+  (return (i32 (shr64 v 32))))
+
+(defn ^:pub ^I32 fx-lo [^I64 v]
+  (comment "The low 32 bits of an Fx, as a signed I32.")
+  (return (i32 v)))
+
+(defn ^:pub ^I64 fx-get [^Cells c ^I32 i]
+  (comment "The Fx stored in cells i (high half) and i+1 (low half).")
+  (return (fx-join (cells-at c i) (cells-at c (+ i 1)))))
+
+(defn ^:pub ^I32 fx-put [^:mut ^Cells c ^I32 i ^I64 v]
+  (cells-set c i (i32 (shr64 v 32)))
+  (cells-set c (+ i 1) (i32 v))
+  (return 0))
+
+(defn ^:pub ^I32 fx-push [^:mut ^Cells c ^I64 v]
+  (comment "Append an Fx as two cells; answers the index of the first.")
+  (let [^I32 at (cells-push c (i32 (shr64 v 32)))]
+    (cells-push c (i32 v))
+    (return at)))
+
+;; ------------------------------------------------------------- matrices
+
+(defn ^:pub ^I32 mx-set [^:mut ^Cells c ^I32 o ^I64 a ^I64 b ^I64 cc ^I64 d ^I64 e ^I64 f]
+  (fx-put c o a)
+  (fx-put c (+ o 2) b)
+  (fx-put c (+ o 4) cc)
+  (fx-put c (+ o 6) d)
+  (fx-put c (+ o 8) e)
+  (fx-put c (+ o 10) f)
+  (return 0))
+
+(defn ^:pub ^I32 mx-ident [^:mut ^Cells c ^I32 o]
+  (return (mx-set c o (i64 65536) (i64 0) (i64 0) (i64 65536) (i64 0) (i64 0))))
+
+(defn ^:pub ^I32 mx-copy [^:mut ^Cells c ^I32 dst ^I32 src]
+  (let [^:mut ^I32 i 0]
+    (while (< i 12)
+      (do (cells-set c (+ dst i) (cells-at c (+ src i)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 mx-mul [^:mut ^Cells c ^I32 dst ^I32 x ^I32 y]
+  (comment "dst = X x Y (X applied first). dst may be X or Y.")
+  (let [^I64 xa (fx-get c x)
+        ^I64 xb (fx-get c (+ x 2))
+        ^I64 xc (fx-get c (+ x 4))
+        ^I64 xd (fx-get c (+ x 6))
+        ^I64 xe (fx-get c (+ x 8))
+        ^I64 xf (fx-get c (+ x 10))
+        ^I64 ya (fx-get c y)
+        ^I64 yb (fx-get c (+ y 2))
+        ^I64 yc (fx-get c (+ y 4))
+        ^I64 yd (fx-get c (+ y 6))
+        ^I64 ye (fx-get c (+ y 8))
+        ^I64 yf (fx-get c (+ y 10))]
+    (mx-set c dst
+            (fx-clamp (add64 (fx-mul xa ya) (fx-mul xb yc)))
+            (fx-clamp (add64 (fx-mul xa yb) (fx-mul xb yd)))
+            (fx-clamp (add64 (fx-mul xc ya) (fx-mul xd yc)))
+            (fx-clamp (add64 (fx-mul xc yb) (fx-mul xd yd)))
+            (fx-clamp (add64 (add64 (fx-mul xe ya) (fx-mul xf yc)) ye))
+            (fx-clamp (add64 (add64 (fx-mul xe yb) (fx-mul xf yd)) yf)))
+    (return 0)))
+
+(defn ^:pub ^I64 mx-x [^Cells c ^I32 o ^I64 px ^I64 py]
+  (comment "The x of the point (px, py) through the matrix at o.")
+  (return (fx-clamp (add64 (add64 (fx-mul (fx-get c o) px) (fx-mul (fx-get c (+ o 4)) py))
+                           (fx-get c (+ o 8))))))
+
+(defn ^:pub ^I64 mx-y [^Cells c ^I32 o ^I64 px ^I64 py]
+  (comment "The y of the point (px, py) through the matrix at o.")
+  (return (fx-clamp (add64 (add64 (fx-mul (fx-get c (+ o 2)) px) (fx-mul (fx-get c (+ o 6)) py))
+                           (fx-get c (+ o 10))))))
+
+(defn ^:pub ^I32 mx-translate [^:mut ^Cells c ^I32 o ^I64 tx ^I64 ty]
+  (comment "Set the matrix at o to a translation.")
+  (return (mx-set c o (i64 65536) (i64 0) (i64 0) (i64 65536) tx ty)))

@@ -377,6 +377,57 @@ func PnIdentityH() int32 {
 func PnIdentityV() int32 {
 	return 122
 }
+func PnMatrix() int32 {
+	return 123
+}
+func PnBBox() int32 {
+	return 124
+}
+func PnMcid() int32 {
+	return 125
+}
+func PnActualText() int32 {
+	return 126
+}
+func PnAlt() int32 {
+	return 127
+}
+func PnE() int32 {
+	return 128
+}
+func PnArtifact() int32 {
+	return 129
+}
+func PnPagination() int32 {
+	return 130
+}
+func PnLayout() int32 {
+	return 131
+}
+func PnBackground() int32 {
+	return 132
+}
+func PnWatermark() int32 {
+	return 133
+}
+func PnHeader() int32 {
+	return 134
+}
+func PnFooter() int32 {
+	return 135
+}
+func PnDeviceGray() int32 {
+	return 136
+}
+func PnDeviceRgb() int32 {
+	return 137
+}
+func PnDeviceCmyk() int32 {
+	return 138
+}
+func PnCa() int32 {
+	return 139
+}
 func PnEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "Type")
@@ -870,10 +921,78 @@ func PnEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "Identity-V")
 		return 1
 	}
+	if code == 123 {
+		port.TextAscii(t, "Matrix")
+		return 1
+	}
+	if code == 124 {
+		port.TextAscii(t, "BBox")
+		return 1
+	}
+	if code == 125 {
+		port.TextAscii(t, "MCID")
+		return 1
+	}
+	if code == 126 {
+		port.TextAscii(t, "ActualText")
+		return 1
+	}
+	if code == 127 {
+		port.TextAscii(t, "Alt")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "E")
+		return 1
+	}
+	if code == 129 {
+		port.TextAscii(t, "Artifact")
+		return 1
+	}
+	if code == 130 {
+		port.TextAscii(t, "Pagination")
+		return 1
+	}
+	if code == 131 {
+		port.TextAscii(t, "Layout")
+		return 1
+	}
+	if code == 132 {
+		port.TextAscii(t, "Background")
+		return 1
+	}
+	if code == 133 {
+		port.TextAscii(t, "Watermark")
+		return 1
+	}
+	if code == 134 {
+		port.TextAscii(t, "Header")
+		return 1
+	}
+	if code == 135 {
+		port.TextAscii(t, "Footer")
+		return 1
+	}
+	if code == 136 {
+		port.TextAscii(t, "DeviceGray")
+		return 1
+	}
+	if code == 137 {
+		port.TextAscii(t, "DeviceRGB")
+		return 1
+	}
+	if code == 138 {
+		port.TextAscii(t, "DeviceCMYK")
+		return 1
+	}
+	if code == 139 {
+		port.TextAscii(t, "ca")
+		return 1
+	}
 	return 0
 }
 
-var PnChars [924]int32 = [924]int32{
+var PnChars [1038]int32 = [1038]int32{
 	84, 121, 112, 101, 76, 101, 110, 103, 116, 104, 70, 105, 108, 116, 101, 114,
 	68, 101, 99, 111, 100, 101, 80, 97, 114, 109, 115, 70, 80, 114, 101, 100,
 	105, 99, 116, 111, 114, 67, 111, 108, 111, 114, 115, 66, 105, 116, 115, 80,
@@ -931,10 +1050,17 @@ var PnChars [924]int32 = [924]int32{
 	110, 99, 111, 100, 105, 110, 103, 83, 116, 97, 110, 100, 97, 114, 100, 69,
 	110, 99, 111, 100, 105, 110, 103, 77, 97, 99, 69, 120, 112, 101, 114, 116,
 	69, 110, 99, 111, 100, 105, 110, 103, 73, 100, 101, 110, 116, 105, 116, 121,
-	45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86,
+	45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86, 77, 97, 116, 114,
+	105, 120, 66, 66, 111, 120, 77, 67, 73, 68, 65, 99, 116, 117, 97, 108,
+	84, 101, 120, 116, 65, 108, 116, 69, 65, 114, 116, 105, 102, 97, 99, 116,
+	80, 97, 103, 105, 110, 97, 116, 105, 111, 110, 76, 97, 121, 111, 117, 116,
+	66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 87, 97, 116, 101, 114, 109,
+	97, 114, 107, 72, 101, 97, 100, 101, 114, 70, 111, 111, 116, 101, 114, 68,
+	101, 118, 105, 99, 101, 71, 114, 97, 121, 68, 101, 118, 105, 99, 101, 82,
+	71, 66, 68, 101, 118, 105, 99, 101, 67, 77, 89, 75, 99, 97,
 }
 
-var PnSpan [246]int32 = [246]int32{
+var PnSpan [280]int32 = [280]int32{
 	0, 4,
 	4, 6,
 	10, 6,
@@ -1058,6 +1184,23 @@ var PnSpan [246]int32 = [246]int32{
 	887, 17,
 	904, 10,
 	914, 10,
+	924, 6,
+	930, 4,
+	934, 4,
+	938, 10,
+	948, 3,
+	951, 1,
+	952, 8,
+	960, 10,
+	970, 6,
+	976, 10,
+	986, 9,
+	995, 6,
+	1001, 6,
+	1007, 10,
+	1017, 9,
+	1026, 10,
+	1036, 2,
 }
 
 func PkTrue() int32 {

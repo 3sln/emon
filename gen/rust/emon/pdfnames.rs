@@ -370,6 +370,57 @@ pub fn pn_identity_h() -> i32 {
 pub fn pn_identity_v() -> i32 {
     return 122;
 }
+pub fn pn_matrix() -> i32 {
+    return 123;
+}
+pub fn pn_b_box() -> i32 {
+    return 124;
+}
+pub fn pn_mcid() -> i32 {
+    return 125;
+}
+pub fn pn_actual_text() -> i32 {
+    return 126;
+}
+pub fn pn_alt() -> i32 {
+    return 127;
+}
+pub fn pn_e() -> i32 {
+    return 128;
+}
+pub fn pn_artifact() -> i32 {
+    return 129;
+}
+pub fn pn_pagination() -> i32 {
+    return 130;
+}
+pub fn pn_layout() -> i32 {
+    return 131;
+}
+pub fn pn_background() -> i32 {
+    return 132;
+}
+pub fn pn_watermark() -> i32 {
+    return 133;
+}
+pub fn pn_header() -> i32 {
+    return 134;
+}
+pub fn pn_footer() -> i32 {
+    return 135;
+}
+pub fn pn_device_gray() -> i32 {
+    return 136;
+}
+pub fn pn_device_rgb() -> i32 {
+    return 137;
+}
+pub fn pn_device_cmyk() -> i32 {
+    return 138;
+}
+pub fn pn_ca() -> i32 {
+    return 139;
+}
 pub fn pn_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "Type");
@@ -863,9 +914,77 @@ pub fn pn_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "Identity-V");
         return 1;
     }
+    if code == 123 {
+        crate::port::text_ascii(t, "Matrix");
+        return 1;
+    }
+    if code == 124 {
+        crate::port::text_ascii(t, "BBox");
+        return 1;
+    }
+    if code == 125 {
+        crate::port::text_ascii(t, "MCID");
+        return 1;
+    }
+    if code == 126 {
+        crate::port::text_ascii(t, "ActualText");
+        return 1;
+    }
+    if code == 127 {
+        crate::port::text_ascii(t, "Alt");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "E");
+        return 1;
+    }
+    if code == 129 {
+        crate::port::text_ascii(t, "Artifact");
+        return 1;
+    }
+    if code == 130 {
+        crate::port::text_ascii(t, "Pagination");
+        return 1;
+    }
+    if code == 131 {
+        crate::port::text_ascii(t, "Layout");
+        return 1;
+    }
+    if code == 132 {
+        crate::port::text_ascii(t, "Background");
+        return 1;
+    }
+    if code == 133 {
+        crate::port::text_ascii(t, "Watermark");
+        return 1;
+    }
+    if code == 134 {
+        crate::port::text_ascii(t, "Header");
+        return 1;
+    }
+    if code == 135 {
+        crate::port::text_ascii(t, "Footer");
+        return 1;
+    }
+    if code == 136 {
+        crate::port::text_ascii(t, "DeviceGray");
+        return 1;
+    }
+    if code == 137 {
+        crate::port::text_ascii(t, "DeviceRGB");
+        return 1;
+    }
+    if code == 138 {
+        crate::port::text_ascii(t, "DeviceCMYK");
+        return 1;
+    }
+    if code == 139 {
+        crate::port::text_ascii(t, "ca");
+        return 1;
+    }
     return 0;
 }
-pub static PN_CHARS: [i32; 924] = [
+pub static PN_CHARS: [i32; 1038] = [
     84, 121, 112, 101, 76, 101, 110, 103, 116, 104, 70, 105, 108, 116, 101, 114,
     68, 101, 99, 111, 100, 101, 80, 97, 114, 109, 115, 70, 80, 114, 101, 100,
     105, 99, 116, 111, 114, 67, 111, 108, 111, 114, 115, 66, 105, 116, 115, 80,
@@ -923,9 +1042,16 @@ pub static PN_CHARS: [i32; 924] = [
     110, 99, 111, 100, 105, 110, 103, 83, 116, 97, 110, 100, 97, 114, 100, 69,
     110, 99, 111, 100, 105, 110, 103, 77, 97, 99, 69, 120, 112, 101, 114, 116,
     69, 110, 99, 111, 100, 105, 110, 103, 73, 100, 101, 110, 116, 105, 116, 121,
-    45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86
+    45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86, 77, 97, 116, 114,
+    105, 120, 66, 66, 111, 120, 77, 67, 73, 68, 65, 99, 116, 117, 97, 108,
+    84, 101, 120, 116, 65, 108, 116, 69, 65, 114, 116, 105, 102, 97, 99, 116,
+    80, 97, 103, 105, 110, 97, 116, 105, 111, 110, 76, 97, 121, 111, 117, 116,
+    66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 87, 97, 116, 101, 114, 109,
+    97, 114, 107, 72, 101, 97, 100, 101, 114, 70, 111, 111, 116, 101, 114, 68,
+    101, 118, 105, 99, 101, 71, 114, 97, 121, 68, 101, 118, 105, 99, 101, 82,
+    71, 66, 68, 101, 118, 105, 99, 101, 67, 77, 89, 75, 99, 97
 ];
-pub static PN_SPAN: [i32; 246] = [
+pub static PN_SPAN: [i32; 280] = [
     0, 4,
     4, 6,
     10, 6,
@@ -1048,7 +1174,24 @@ pub static PN_SPAN: [i32; 246] = [
     871, 16,
     887, 17,
     904, 10,
-    914, 10
+    914, 10,
+    924, 6,
+    930, 4,
+    934, 4,
+    938, 10,
+    948, 3,
+    951, 1,
+    952, 8,
+    960, 10,
+    970, 6,
+    976, 10,
+    986, 9,
+    995, 6,
+    1001, 6,
+    1007, 10,
+    1017, 9,
+    1026, 10,
+    1036, 2
 ];
 pub fn pk_true() -> i32 {
     return 1;

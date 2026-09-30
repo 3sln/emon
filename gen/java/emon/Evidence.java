@@ -93,6 +93,9 @@ public final class Evidence {
     public static int arBackground() {
         return 4;
     }
+    public static int arOther() {
+        return 5;
+    }
     public static int arEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "pagination");
@@ -108,6 +111,10 @@ public final class Evidence {
         }
         if (code == 4) {
             emon.Port.textAscii(t, "background");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.textAscii(t, "other");
             return 1;
         }
         return 0;
@@ -274,6 +281,37 @@ public final class Evidence {
         }
         return 0;
     }
+    public static int mcInline() {
+        return 1;
+    }
+    public static int mcResource() {
+        return 2;
+    }
+    public static int mcUnresolved() {
+        return 4;
+    }
+    public static int mcUnterminated() {
+        return 8;
+    }
+    public static int mcEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "inline");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "resource");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "unresolved");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "unterminated");
+            return 1;
+        }
+        return 0;
+    }
     public static int ekVersion() {
         return 1;
     }
@@ -408,6 +446,33 @@ public final class Evidence {
     }
     public static int ekRun() {
         return 45;
+    }
+    public static int ekSpans() {
+        return 46;
+    }
+    public static int ekTag() {
+        return 47;
+    }
+    public static int ekParent() {
+        return 48;
+    }
+    public static int ekType() {
+        return 49;
+    }
+    public static int ekSubtype() {
+        return 50;
+    }
+    public static int ekActual() {
+        return 51;
+    }
+    public static int ekAlt() {
+        return 52;
+    }
+    public static int ekExp() {
+        return 53;
+    }
+    public static int ekStm() {
+        return 54;
     }
     public static int ekEmitName(StringBuilder t, int code) {
         if (code == 1) {
@@ -590,6 +655,42 @@ public final class Evidence {
             emon.Port.textAscii(t, "run");
             return 1;
         }
+        if (code == 46) {
+            emon.Port.textAscii(t, "spans");
+            return 1;
+        }
+        if (code == 47) {
+            emon.Port.textAscii(t, "tag");
+            return 1;
+        }
+        if (code == 48) {
+            emon.Port.textAscii(t, "parent");
+            return 1;
+        }
+        if (code == 49) {
+            emon.Port.textAscii(t, "type");
+            return 1;
+        }
+        if (code == 50) {
+            emon.Port.textAscii(t, "subtype");
+            return 1;
+        }
+        if (code == 51) {
+            emon.Port.textAscii(t, "actual");
+            return 1;
+        }
+        if (code == 52) {
+            emon.Port.textAscii(t, "alt");
+            return 1;
+        }
+        if (code == 53) {
+            emon.Port.textAscii(t, "exp");
+            return 1;
+        }
+        if (code == 54) {
+            emon.Port.textAscii(t, "stm");
+            return 1;
+        }
         return 0;
     }
     public static int glStride() {
@@ -615,6 +716,9 @@ public final class Evidence {
     }
     public static int altStride() {
         return 4;
+    }
+    public static int spStride() {
+        return 22;
     }
     public static int gfPage() {
         return 0;
@@ -946,6 +1050,72 @@ public final class Evidence {
     public static int afNext() {
         return 3;
     }
+    public static int sfPage() {
+        return 0;
+    }
+    public static int sfTag() {
+        return 1;
+    }
+    public static int sfTaglen() {
+        return 2;
+    }
+    public static int sfParent() {
+        return 3;
+    }
+    public static int sfMcid() {
+        return 4;
+    }
+    public static int sfArtifact() {
+        return 5;
+    }
+    public static int sfType() {
+        return 6;
+    }
+    public static int sfTypelen() {
+        return 7;
+    }
+    public static int sfSubtype() {
+        return 8;
+    }
+    public static int sfSubtypelen() {
+        return 9;
+    }
+    public static int sfActual() {
+        return 10;
+    }
+    public static int sfActuallen() {
+        return 11;
+    }
+    public static int sfAlt() {
+        return 12;
+    }
+    public static int sfAltlen() {
+        return 13;
+    }
+    public static int sfExp() {
+        return 14;
+    }
+    public static int sfExplen() {
+        return 15;
+    }
+    public static int sfLang() {
+        return 16;
+    }
+    public static int sfLanglen() {
+        return 17;
+    }
+    public static int sfGfirst() {
+        return 18;
+    }
+    public static int sfGcount() {
+        return 19;
+    }
+    public static int sfFlags() {
+        return 20;
+    }
+    public static int sfStm() {
+        return 21;
+    }
     public static int evGet(emon.Port.Cells c, int stride, int row, int f) {
         return emon.Port.cellsAt(c, (row * stride) + f);
     }
@@ -966,8 +1136,8 @@ public final class Evidence {
         }
         return row;
     }
-    public static int evInit(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
-        // Empty all nine arenas.
+    public static int evInit(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
+        // Empty all ten arenas.
         emon.Port.cellsDrop(glyphs, 0);
         emon.Port.cellsDrop(words, 0);
         emon.Port.cellsDrop(lines, 0);
@@ -977,6 +1147,7 @@ public final class Evidence {
         emon.Port.cellsDrop(ocrwords, 0);
         emon.Port.cellsDrop(alts, 0);
         emon.Port.cellsDrop(etext, 0);
+        emon.Port.cellsDrop(spans, 0);
         return 0;
     }
     public static int etxAppendCp(emon.Port.Cells etext, int cp) {
@@ -1201,6 +1372,34 @@ public final class Evidence {
         evSet(ocrwords, 16, w, 9, cnt + 1);
         return a;
     }
+    public static int spCount(emon.Port.Cells spans) {
+        return evCount(spans, 22);
+    }
+    public static int spGet(emon.Port.Cells spans, int s, int f) {
+        return evGet(spans, 22, s, f);
+    }
+    public static int spSet(emon.Port.Cells spans, int s, int f, int v) {
+        return evSet(spans, 22, s, f, v);
+    }
+    public static int spNew(emon.Port.Cells spans, int page, int tag, int taglen, int parent, int gfirst) {
+        // Append a marked-content span opened at glyph `gfirst`. Defaults: no
+        // MCID, not an artifact, no strings, no glyphs yet, no flags, the page's
+        // own content stream.
+        int s = evPush(spans, 22);
+        evSet(spans, 22, s, 0, page);
+        evSet(spans, 22, s, 1, tag);
+        evSet(spans, 22, s, 2, taglen);
+        evSet(spans, 22, s, 3, parent);
+        evSet(spans, 22, s, 4, -1);
+        evSet(spans, 22, s, 6, -1);
+        evSet(spans, 22, s, 8, -1);
+        evSet(spans, 22, s, 10, -1);
+        evSet(spans, 22, s, 12, -1);
+        evSet(spans, 22, s, 14, -1);
+        evSet(spans, 22, s, 16, -1);
+        evSet(spans, 22, s, 18, gfirst);
+        return s;
+    }
     public static int evRunOk(int start, int n, int total) {
         // 1 when [start, start+n) lies inside [0, total), or the run is empty
         // and absent (start -1, n 0 -- or any start with n 0).
@@ -1221,17 +1420,19 @@ public final class Evidence {
         }
         return 1;
     }
-    public static int evCheck(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
+    public static int evCheck(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
         // 0 when every run and link is inside its arena; otherwise a code:
         // 1 a stride, 2 a glyph's text run, 3 a word's glyph run, 4 a word's
         // text run, 5 a line's word run, 6 an OCR word's text run, 7 an
-        // alternative chain, 8 a word's line, 9 a glyph's word.
+        // alternative chain, 8 a word's line, 9 a glyph's word, 10 a span's text
+        // run, glyph run or parent.
         int ng = emon.Port.cellsLen(glyphs) / 20;
         int nw = emon.Port.cellsLen(words) / 16;
         int nl = emon.Port.cellsLen(lines) / 12;
         int no = emon.Port.cellsLen(ocrwords) / 16;
         int na = emon.Port.cellsLen(alts) / 4;
         int nt = emon.Port.cellsLen(etext);
+        int ns = emon.Port.cellsLen(spans) / 22;
         int i = 0;
         int a = 0;
         int steps = 0;
@@ -1257,6 +1458,9 @@ public final class Evidence {
             return 1;
         }
         if ((emon.Port.cellsLen(alts) % 4) != 0) {
+            return 1;
+        }
+        if ((emon.Port.cellsLen(spans) % 22) != 0) {
             return 1;
         }
         while (i < ng) {
@@ -1313,6 +1517,28 @@ public final class Evidence {
             }
             if (steps != evGet(ocrwords, 16, i, 9)) {
                 return 7;
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < ns) {
+            if (evRunOk(evGet(spans, 22, i, 18), evGet(spans, 22, i, 19), ng) == 0) {
+                return 10;
+            }
+            if ((evGet(spans, 22, i, 3) < -1) || (evGet(spans, 22, i, 3) >= i)) {
+                return 10;
+            }
+            if (evRunOk(evGet(spans, 22, i, 1), evGet(spans, 22, i, 2), nt) == 0) {
+                return 10;
+            }
+            a = 6;
+            while (a <= 16) {
+                if (evGet(spans, 22, i, a) >= 0) {
+                    if (evRunOk(evGet(spans, 22, i, a), evGet(spans, 22, i, a + 1), nt) == 0) {
+                        return 10;
+                    }
+                }
+                a += 2;
             }
             i += 1;
         }
@@ -1394,6 +1620,16 @@ public final class Evidence {
         Json.jsStr(t, etext, s, evGet(c, stride, row, flen));
         return 1;
     }
+    public static int evFtextk(StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int fstart, int flen, emon.Port.Cells etext, int key, int started) {
+        // As `ev-ftext` under any key.
+        int s = evGet(c, stride, row, fstart);
+        if (s < 0) {
+            return started;
+        }
+        evBegin(t, pr, d, started, key);
+        Json.jsStr(t, etext, s, evGet(c, stride, row, flen));
+        return 1;
+    }
     public static int evFrun(StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int started) {
         // A run as `"key":[first,count]`.
         evBegin(t, pr, d, started, key);
@@ -1406,7 +1642,7 @@ public final class Evidence {
     }
     public static int evFbits(StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int which, int started) {
         // A bitset as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`,
-        // 5 `mg`. Zero is omitted.
+        // 5 `mg`, 6 `mc`. Zero is omitted.
         int v = evGet(c, stride, row, f);
         int key = ekSrc();
         int b = 0;
@@ -1431,9 +1667,9 @@ public final class Evidence {
         if (which == 3) {
             Json.jsBitsStyle(t, pr, v);
         }
-        if ((which == 4) || (which == 5)) {
+        if ((which == 4) || ((which == 5) || (which == 6))) {
             emon.Port.textAscii(t, "[");
-            while (b < 3) {
+            while (b < 4) {
                 if ((v & bit) != 0) {
                     Json.jsFsep(t, pr, k);
                     emon.Port.textAscii(t, "\"");
@@ -1442,6 +1678,9 @@ public final class Evidence {
                     }
                     if (which == 5) {
                         mgEmitName(t, bit);
+                    }
+                    if (which == 6) {
+                        mcEmitName(t, bit);
                     }
                     emon.Port.textAscii(t, "\"");
                     k += 1;
@@ -1633,9 +1872,29 @@ public final class Evidence {
         Json.jsClose(t, pr, d, s);
         return 0;
     }
-    public static int evEmit(StringBuilder t, int pretty, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
+    public static int evSpan(StringBuilder t, int pr, int d, emon.Port.Cells spans, emon.Port.Cells etext, int i) {
+        int s = 0;
+        emon.Port.textAscii(t, "{");
+        s = evFint(t, pr, d, spans, 22, i, 0, ekPage(), -2147483648, s);
+        s = evFtextk(t, pr, d, spans, 22, i, 1, 2, etext, ekTag(), s);
+        s = evFint(t, pr, d, spans, 22, i, 3, ekParent(), -1, s);
+        s = evFint(t, pr, d, spans, 22, i, 4, ekMcid(), -1, s);
+        s = evFenum(t, pr, d, s, ekArtifact(), 3, evGet(spans, 22, i, 5));
+        s = evFtextk(t, pr, d, spans, 22, i, 6, 7, etext, ekType(), s);
+        s = evFtextk(t, pr, d, spans, 22, i, 8, 9, etext, ekSubtype(), s);
+        s = evFtextk(t, pr, d, spans, 22, i, 10, 11, etext, ekActual(), s);
+        s = evFtextk(t, pr, d, spans, 22, i, 12, 13, etext, ekAlt(), s);
+        s = evFtextk(t, pr, d, spans, 22, i, 14, 15, etext, ekExp(), s);
+        s = evFtextk(t, pr, d, spans, 22, i, 16, 17, etext, ekLang(), s);
+        s = evFrun(t, pr, d, spans, 22, i, 18, ekGlyphs(), s);
+        s = evFbits(t, pr, d, spans, 22, i, 20, 6, s);
+        s = evFint(t, pr, d, spans, 22, i, 21, ekStm(), 0, s);
+        Json.jsClose(t, pr, d, s);
+        return 0;
+    }
+    public static int evEmit(StringBuilder t, int pretty, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
         // Write the evidence as `emon-evidence` JSON (SPEC 4.5): version, then
-        // the seven row arrays, each row in its fixed key order.
+        // the eight row arrays, each row in its fixed key order.
         int s = 0;
         int i = 0;
         int ng = emon.Port.cellsLen(glyphs) / 20;
@@ -1645,6 +1904,7 @@ public final class Evidence {
         int nm = emon.Port.cellsLen(images) / 12;
         int nc = emon.Port.cellsLen(components) / 20;
         int no = emon.Port.cellsLen(ocrwords) / 16;
+        int nsp = emon.Port.cellsLen(spans) / 22;
         emon.Port.textAscii(t, "{");
         s = evBegin(t, pretty, 0, s, ekVersion());
         emon.Port.textAscii(t, "\"0\"");
@@ -1710,6 +1970,15 @@ public final class Evidence {
             i += 1;
         }
         Json.jsAend(t, pretty, 1, no);
+        s = evBegin(t, pretty, 0, s, ekSpans());
+        emon.Port.textAscii(t, "[");
+        i = 0;
+        while (i < nsp) {
+            Json.jsAelem(t, pretty, 1, i);
+            evSpan(t, pretty, 2, spans, etext, i);
+            i += 1;
+        }
+        Json.jsAend(t, pretty, 1, nsp);
         Json.jsClose(t, pretty, 0, s);
         return 0;
     }

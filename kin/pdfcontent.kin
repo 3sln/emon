@@ -1,0 +1,2153 @@
+;; The content-stream interpreter, text subset (P1.7; SPEC 3.4, 8.1; D076, D085-D088).
+;; emon's own module (D039), written from ISO 32000-1 section 8 (graphics) and
+;; 9 (text), 14.6-14.8 (marked content, tagged PDF) and Annex D.
+;;
+;;   (pc-init cx ox)                        once per document (fonts forgotten)
+;;   (pc-page W pg pi page wd ln)           one page: glyphs, spans, words, lines
+;;   (pc-document W pg wd ln)               every page of an opened document
+;;
+;; `W` is the workspace every function takes, in this order (kin cannot allocate
+;; and a Rust `Cells` cannot be borrowed twice, so every array is a parameter):
+;;
+;;   src ar dc a b st       the file and the document layer's workspace (`emon.pdfdoc`)
+;;   cx                     the interpreter: one `Cells` of scalars, the graphics-state
+;;                          stack, the font slots (layout below)
+;;   ox                     the operands of the operator being read
+;;   cs                     the decoded content bytes, one cell each: the page's
+;;                          streams, then each Form XObject being run, on top
+;;   out                    scratch for a decoded stream and for `pfn-load`
+;;   f0 f1 f2 f3            FOUR FONT SLOTS (`emon.pdffont` keeps a font in one
+;;                          `Cells`); least-recently-used replacement, so a page
+;;                          that alternates among more than four fonts reloads them
+;;   gl et sp               the evidence's `glyphs`, `etext` and `spans` (D056, D085)
+;;
+;; WHAT IT DOES, per operator. `q Q cm` (the graphics-state stack, depth 256),
+;; `BT ET Tf Tc Tw Tz TL Ts Tr Td TD Tm T* Tj TJ ' "` (the text state and every
+;; glyph shown, with its code point(s) and how they were obtained, from
+;; `emon.pdffont`), `Do` on a Form XObject (recursive to FORM_DEPTH, its `/Matrix`
+;; and `/Resources` applied, and a cycle skipped), `BDC BMC EMC` (every
+;; marked-content span recorded with its tag, `/MCID`, `/Artifact` Type and
+;; Subtype, `/ActualText`, `/Alt`, `/E`, `/Lang`, from an inline property list or
+;; through `/Properties`, D076/D085), `g rg k sc scn cs` (the fill colour of a
+;; glyph) and `gs` (`/ca`). Everything else (paths, images, shading, clipping, the
+;; stroking colours, compatibility sections) is skipped with its operands
+;; dropped; an inline image is skipped whole.
+;;
+;; THE PAGE SPACE is D009's: the crop box applied, `/Rotate` applied, origin at
+;; the top left, y down, centipoints. It is done ONCE, in the base matrix the
+;; current transformation matrix starts as, so every later coordinate is already
+;; a page coordinate. Matrices are 16.16 fixed point in `I64` (`emon.fx`).
+;; A glyph's box is the bounding box, in page space, of its cell: its width from
+;; the font, its height from the font's ascent and descent (NOT from the size).
+;;
+;; A SOURCE THAT MISSES (D058, D074, D075): after every object the document layer
+;; loads for this module (a font, a resource, a stream) the view is checked, and on
+;; a miss the run stops and answers `need-bytes` (7): nothing it wrote is to be
+;; used, the caller re-runs on a fresh view. A miss is never taken for a missing
+;; font or a short stream.
+;;
+;; BOUNDS: operands per operator 4,096 (the rest dropped, warning bit 2);
+;; containers nest 16 deep; graphics states 256; marked-content spans 256 deep;
+;; forms FORM_DEPTH (limit 6; deeper ones are skipped with warning bit 16, since
+;; a cycle in a damaged file is not a reason to refuse the page); operators per
+;; page OPERATORS (limit 5; a breach never returns).
+(ns emon.pdfcontent
+  (:require [emon.lang :refer [I32 I64 Src Cells i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+                               limit-of limit-breach]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfnames :refer [pn-font pn-x-object pn-ext-g-state pn-properties
+                                   pn-subtype pn-form pn-matrix pn-resources pn-type
+                                   pn-lang pn-mcid pn-actual-text pn-alt pn-e
+                                   pn-artifact pn-pagination pn-layout pn-background
+                                   pn-watermark pn-header pn-footer pn-page
+                                   pn-device-gray pn-device-rgb pn-device-cmyk pn-ca
+                                   pn-span-at pn-chars-at]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-count pl-int-value
+                                 pl-name-is pl-name-len pl-name-byte pl-str-len
+                                 pl-str-byte pl-stream-dict pl-dict-get pl-num-cp pl-ref-gen]]
+            [emon.pdfdoc :refer [pd-resolve pd-dget pd-get pd-stream-data pd-pg-count
+                                 pd-pg-crop pd-pg-rotate pd-pg-resources
+                                 pd-pg-contents pd-pages]]
+            [emon.pdffont :refer [pfn-init pfn-load pfn-map pfn-cp pfn-how-of
+                                  pfn-width pfn-code-len pfn-ascent pfn-descent
+                                  pfn-vertical pfn-dw2-v pfn-dw2-w pfn-kind-of]]
+            [emon.model :refer [sr-hidden-text]]
+            [emon.evidence :refer [gl-new gl-set gl-get gl-count etx-append-cp
+                                   wd-new wd-get wd-set wd-count ln-new ln-set
+                                   wf-gfirst wf-gcount wf-x0 wf-y0 wf-x1 wf-y1
+                                   wf-tstart wf-tlen wf-font wf-size wf-src wf-gap
+                                   wf-line lf-rot
+                                   sp-new sp-get sp-set sp-count
+                                   gf-tstart gf-tlen gf-how gf-baseline gf-rot
+                                   gf-color gf-alpha gf-mode gf-artifact gf-mcid
+                                   gf-x0 gf-y0 gf-x1 gf-y1 gf-cp gf-font gf-size
+                                   gf-word gf-page
+                                   sf-tag sf-taglen sf-mcid sf-artifact sf-type
+                                   sf-typelen sf-subtype sf-subtypelen sf-actual
+                                   sf-actuallen sf-alt sf-altlen sf-exp sf-explen
+                                   sf-lang sf-langlen sf-gfirst sf-gcount sf-flags
+                                   sf-parent sf-stm
+                                   mc-inline mc-resource mc-unresolved mc-unterminated
+                                   ar-pagination ar-watermark ar-layout ar-background
+                                   ar-other]]
+            [emon.fx :refer [fx-of-int fx-mul fx-div fx-muldiv fx-of-real fx-round
+                             fx-abs fx-hypot fx-atan2 fx-cos fx-sin fx-get fx-put fx-push fx-join
+                             fx-clamp fx-hi fx-lo mx-set mx-ident mx-mul mx-x mx-y mx-translate mx-copy]]
+            [kin.lang :refer [defn defconst defdata declarefn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; `pc-do` runs a form's stream, which `pc-run` reads, and `pc-op` calls `pc-do`.
+(declarefn pc-run)
+
+(defconst ^I32 OP_SAVE 113)        ;; q
+(defconst ^I32 OP_RESTORE 81)      ;; Q
+(defconst ^I32 OP_CM 28003)
+(defconst ^I32 OP_BT 21570)
+(defconst ^I32 OP_ET 21573)
+(defconst ^I32 OP_TF 26196)
+(defconst ^I32 OP_TCHAR 25428)     ;; Tc
+(defconst ^I32 OP_TWORD 30548)     ;; Tw
+(defconst ^I32 OP_TSCALE 31316)    ;; Tz
+(defconst ^I32 OP_TLEAD 19540)     ;; TL
+(defconst ^I32 OP_TRISE 29524)     ;; Ts
+(defconst ^I32 OP_TMODE 29268)     ;; Tr
+(defconst ^I32 OP_TD 25684)        ;; Td
+(defconst ^I32 OP_TDL 17492)       ;; TD
+(defconst ^I32 OP_TM 27988)
+(defconst ^I32 OP_TSTAR 10836)     ;; T*
+(defconst ^I32 OP_SHOW 27220)      ;; Tj
+(defconst ^I32 OP_SHOWARR 19028)   ;; TJ
+(defconst ^I32 OP_QUOTE 39)        ;; '
+(defconst ^I32 OP_DQUOTE 34)       ;; "
+(defconst ^I32 OP_DO 28484)
+(defconst ^I32 OP_BDC 4408386)
+(defconst ^I32 OP_BMC 4410690)
+(defconst ^I32 OP_EMC 4410693)
+(defconst ^I32 OP_BI 18754)
+(defconst ^I32 OP_GS 29543)
+(defconst ^I32 OP_GRAY 103)        ;; g
+(defconst ^I32 OP_RGB 26482)       ;; rg
+(defconst ^I32 OP_CMYK 107)        ;; k
+(defconst ^I32 OP_SC 25459)
+(defconst ^I32 OP_SCN 7234419)
+(defconst ^I32 OP_CS 29539)        ;; cs
+
+;; ------------------------------------------------------ the interpreter's cells
+;; Document part: survives `pc-page`.
+(defconst ^I32 C_NFONT 0)        ;; font ids handed out
+(defconst ^I32 C_CLOCK 1)        ;; the slots' use counter
+(defconst ^I32 C_SLOTS 8)        ;; four slots of SLOT_STRIDE cells
+(defconst ^I32 SLOT_STRIDE 12)
+(defconst ^I32 S_KEY 0)          ;; the font dictionary's handle, 0 empty
+(defconst ^I32 S_ID 1)           ;; the font's id in the evidence
+(defconst ^I32 S_USE 2)
+(defconst ^I32 S_STATUS 3)       ;; `pfn-load`'s
+(defconst ^I32 S_ASC 4)          ;; 1/1000 em
+(defconst ^I32 S_DESC 5)
+(defconst ^I32 S_VERT 6)
+(defconst ^I32 S_DW2V 7)         ;; hundredths of 1/1000 em
+(defconst ^I32 S_DW2W 8)
+(defconst ^I32 C_FIDS 64)        ;; 512 font handles: a font's id is its index
+(defconst ^I32 MAX_FIDS 512)
+;; Page part, reset by `pc-page`.
+(defconst ^I32 C_PAGE 576)
+(defconst ^I32 C_WARN 577)
+(defconst ^I32 C_OPS 578)
+(defconst ^I32 C_OPLIM 579)
+(defconst ^I32 C_ABORT 580)      ;; 1: the source missed
+(defconst ^I32 C_POS 581)        ;; the lexer: where in `cs`, and where it ends
+(defconst ^I32 C_END 582)
+(defconst ^I32 C_OXN 583)        ;; operand entries now
+(defconst ^I32 C_CDEPTH 584)     ;; open containers
+(defconst ^I32 C_OP 585)         ;; the operator just read
+(defconst ^I32 C_RES 586)        ;; the Resources dictionary in force (a handle, 0 none)
+(defconst ^I32 C_SLOT 587)       ;; the slot of the current font
+(defconst ^I32 C_DEPTH 588)      ;; graphics states saved
+(defconst ^I32 C_FDEPTH 589)     ;; Form XObjects being run
+(defconst ^I32 C_STM 590)        ;; the object number of the stream being run, 0 the page's
+(defconst ^I32 C_MCTOP 591)      ;; the innermost open span, -1
+(defconst ^I32 C_MCDEPTH 592)
+(defconst ^I32 C_MCBASE 593)     ;; the depth this stream started at
+(defconst ^I32 C_MCOVER 594)     ;; BDCs ignored for depth, waiting for their EMC
+(defconst ^I32 C_CURMCID 595)
+(defconst ^I32 C_CURART 596)
+(defconst ^I32 C_FLIM 597)       ;; limit-of FORM_DEPTH
+(defconst ^I32 C_INTEXT 598)
+(defconst ^I32 C_GSBASE 599)
+(defconst ^I32 C_SSTAT 602)      ;; the last non-zero status of a stream decode (`pf-status`)
+(defconst ^I32 C_TOK 601)        ;; what `pc-lex-one` read     ;; the depth this stream started at
+(defconst ^I32 C_FSTACK 600)     ;; 32 object numbers of the forms being run
+(defconst ^I32 MAX_FORMS 32)
+(defconst ^I32 C_CSTACK 640)     ;; 16 open containers' entry indices
+(defconst ^I32 MAX_CONT 16)
+(defconst ^I32 C_TM 664)         ;; the text matrix, 12 cells
+(defconst ^I32 C_TLM 676)        ;; the text line matrix
+(defconst ^I32 C_M 688)          ;; text matrix x CTM, kept current while a string is shown
+(defconst ^I32 C_BASE 700)       ;; the page's base matrix
+(defconst ^I32 C_TMP 712)        ;; scratch matrix
+(defconst ^I32 C_CUR 728)        ;; the current graphics state (GS_STRIDE cells)
+(defconst ^I32 C_STACK 768)      ;; 256 saved states
+(defconst ^I32 MAX_GS 256)
+(defconst ^I32 C_SIZE 8960)      ;; 768 + 256 * 32
+(defconst ^I32 MAX_MC 256)
+
+;; A graphics state: what `q` saves.
+(defconst ^I32 GS_STRIDE 32)
+(defconst ^I32 G_CTM 0)          ;; 12 cells
+(defconst ^I32 G_TC 12)          ;; Fx (2 cells each)
+(defconst ^I32 G_TW 14)
+(defconst ^I32 G_TH 16)          ;; horizontal scale as a ratio, 1.0
+(defconst ^I32 G_TL 18)
+(defconst ^I32 G_RISE 20)
+(defconst ^I32 G_FS 22)
+(defconst ^I32 G_MODE 24)
+(defconst ^I32 G_FONT 25)        ;; the font dictionary's handle, 0 none
+(defconst ^I32 G_COLOR 26)       ;; fill colour 0xRRGGBB
+(defconst ^I32 G_ALPHA 27)       ;; per-mille
+(defconst ^I32 G_FAM 28)         ;; fill colour space: 0 unknown, 1 gray, 2 rgb, 3 cmyk
+
+;; Operands: entries of four cells, then the bytes of names and strings.
+(defconst ^I32 MAX_ENT 4096)
+(defconst ^I32 OX_BASE 16384)    ;; MAX_ENT * 4: the first byte cell
+(defconst ^I32 K_NUM 1)          ;; [1 hi lo isint]
+(defconst ^I32 K_NAME 2)         ;; [2 start length 0]
+(defconst ^I32 K_STR 3)
+(defconst ^I32 K_ARR 4)          ;; [4 entries that follow, 0 0]
+(defconst ^I32 K_DICT 5)
+(defconst ^I32 K_BOOL 6)         ;; [6 value 0 0]; null is 0
+
+;; Bits of the page's warnings (`pc-warn`).
+(defconst ^I32 W_STREAM 1)       ;; a content stream did not decode cleanly
+(defconst ^I32 W_OPERANDS 2)     ;; an operator had more operands than fit
+(defconst ^I32 W_FONT 4)         ;; Tf named a font that is not there, or is no font
+(defconst ^I32 W_FORM 8)         ;; a Form XObject was missing or damaged
+(defconst ^I32 W_DEPTH 16)       ;; a form was too deep, or drew itself
+(defconst ^I32 W_STATES 32)      ;; a `q` past 256 or a `Q` with nothing saved
+(defconst ^I32 W_MC 64)          ;; an unbalanced EMC, too deep, or unterminated
+(defconst ^I32 W_WIDTH 128)      ;; a glyph of unknown width took half an em
+(defconst ^I32 W_TEXT 256)       ;; a show operator outside BT or with no font
+(defconst ^I32 W_PROPS 512)      ;; a /Properties name was not found
+
+;; ------------------------------------------------------------- small things
+
+(defn ^I32 pc-ws [^I32 c]
+  (if (or (== c 32) (or (== c 10) (or (== c 13) (or (== c 9) (or (== c 12) (== c 0))))))
+    (return 1))
+  (return 0))
+
+(defn ^I32 pc-delim [^I32 c]
+  (if (or (== c 40) (or (== c 41) (or (== c 60) (or (== c 62) (or (== c 91) (== c 93))))))
+    (return 1))
+  (if (or (== c 123) (or (== c 125) (or (== c 47) (== c 37))))
+    (return 1))
+  (return 0))
+
+(defn ^I32 pc-reg [^I32 c]
+  (if (== (pc-ws c) 1) (return 0))
+  (if (== (pc-delim c) 1) (return 0))
+  (return 1))
+
+(defn ^I32 pc-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^I32 pc-copy-cells [^:mut ^Cells c ^I32 dst ^I32 src ^I32 n]
+  (comment "n cells from src to dst within one Cells (the ranges do not overlap).")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (cells-set c (+ dst i) (cells-at c (+ src i)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 pc-warn-set [^:mut ^Cells cx ^I32 bit]
+  (let [^I32 w (cells-at cx C_WARN)]
+    (if (== (rem (quot w bit) 2) 0)
+      (cells-set cx C_WARN (+ w bit)))
+    (return 0)))
+
+(defn ^:pub ^I32 pc-warn [^Cells cx] (return (cells-at cx C_WARN)))
+(defn ^:pub ^I32 pc-ops [^Cells cx] (return (cells-at cx C_OPS)))
+(defn ^:pub ^I32 pc-fonts [^Cells cx] (return (cells-at cx C_NFONT)))
+(defn ^:pub ^I32 pc-stream-status [^Cells cx] (return (cells-at cx C_SSTAT)))
+
+;; --------------------------------------------------------------- the operands
+
+(defn ^I32 pc-ox-push [^:mut ^Cells cx ^:mut ^Cells ox ^I32 kind ^I32 a1 ^I32 a2 ^I32 a3]
+  (comment "Append an operand entry; answers its index, or -1 when they are full.")
+  (let [^I32 n (cells-at cx C_OXN)]
+    (if (>= n MAX_ENT)
+      (do (pc-warn-set cx W_OPERANDS)
+          (return -1)))
+    (cells-set ox (* n 4) kind)
+    (cells-set ox (+ (* n 4) 1) a1)
+    (cells-set ox (+ (* n 4) 2) a2)
+    (cells-set ox (+ (* n 4) 3) a3)
+    (cells-set cx C_OXN (+ n 1))
+    (return n)))
+
+(defn ^I32 pc-ox-clear [^:mut ^Cells cx ^:mut ^Cells ox]
+  (cells-drop ox OX_BASE)
+  (cells-set cx C_OXN 0)
+  (cells-set cx C_CDEPTH 0)
+  (return 0))
+
+(defn ^I32 pc-kind [^Cells ox ^I32 i] (return (cells-at ox (* i 4))))
+(defn ^I32 pc-ea [^Cells ox ^I32 i] (return (cells-at ox (+ (* i 4) 1))))
+(defn ^I32 pc-eb [^Cells ox ^I32 i] (return (cells-at ox (+ (* i 4) 2))))
+
+(defn ^I64 pc-num [^Cells ox ^I32 n ^I32 i]
+  (comment "Operand i as an Fx, 0 when it is absent or not a number.")
+  (if (>= i n) (return (i64 0)))
+  (if (!= (pc-kind ox i) K_NUM) (return (i64 0)))
+  (return (fx-join (pc-ea ox i) (pc-eb ox i))))
+
+(defn ^I32 pc-esize [^Cells ox ^I32 i]
+  (comment "Entries taken by operand i and everything inside it.")
+  (let [^I32 k (pc-kind ox i)]
+    (if (or (== k K_ARR) (== k K_DICT))
+      (return (+ 1 (pc-ea ox i))))
+    (return 1)))
+
+(defn ^I32 pc-name-eq [^Cells ox ^I32 start ^I32 ln ^I32 id]
+  (comment "1 when the bytes ox[start, start+ln) are the name with `emon.pdfnames` id.")
+  (let [^I32 s (pn-span-at 0 id 0)
+        ^:mut ^I32 k 0]
+    (if (!= (pn-span-at 0 id 1) ln) (return 0))
+    (while (< k ln)
+      (do (if (!= (cells-at ox (+ start k)) (pn-chars-at 0 (+ s k)))
+            (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 pc-entry-name-is [^Cells ox ^I32 i ^I32 id]
+  (comment "1 when operand i is the name with `emon.pdfnames` id `id`.")
+  (let [^I32 s (pc-ea ox i)
+        ^I32 ln (pc-eb ox i)]
+    (if (!= (pc-kind ox i) K_NAME) (return 0))
+    (return (pc-name-eq ox s ln id))))
+
+;; ----------------------------------------------------------------- the lexer
+;; The content stream is bytes in `cs`, one per cell. `pc-lex` reads ONE token:
+;; 0 at the end, 1 when it pushed an operand (containers included, tracked so
+;; that their entry counts are right), 2 when it read an operator, whose code
+;; (up to three characters, the first in the low byte) is in C_OP.
+
+(defn ^I32 pc-skip [^Cells cs ^I32 pos ^I32 end]
+  (comment "Past white space and comments.")
+  (let [^:mut ^I32 p pos
+        ^:mut ^I32 c 0]
+    (while (< p end)
+      (do (set c (cells-at cs p))
+          (if (== (pc-ws c) 1)
+            (set p (+ p 1))
+            (if (== c 37)
+              (while (and (< p end) (and (!= (cells-at cs p) 10) (!= (cells-at cs p) 13)))
+                (set p (+ p 1)))
+              (return p)))))
+    (return p)))
+
+(defn ^I32 pc-lex-number [^:mut ^Cells cx ^:mut ^Cells ox ^Cells cs ^I32 s ^I32 end]
+  (comment "A number at s as an operand; its end, or -1 when it is not one. As")
+  (comment "`emon.pdflex` does: several signs are one, `.5` and `5.` are numbers, and a")
+  (comment "run of digits too long for nine significant places saturates.")
+  (let [^:mut ^I32 q s
+        ^:mut ^I32 neg 0
+        ^:mut ^I32 mant 0
+        ^:mut ^I32 scale 0
+        ^:mut ^I32 nd 0
+        ^:mut ^I32 dot 0
+        ^:mut ^I32 big 0
+        ^:mut ^I32 d 0
+        ^:mut ^I64 v (i64 0)]
+    (while (and (< q end) (or (== (cells-at cs q) 43) (== (cells-at cs q) 45)))
+      (do (if (== (cells-at cs q) 45) (set neg 1))
+          (set q (+ q 1))))
+    (while (and (< q end) (and (>= (cells-at cs q) 48) (<= (cells-at cs q) 57)))
+      (do (set d (- (cells-at cs q) 48))
+          (if (<= mant 99999999)
+            (set mant (+ (* mant 10) d))
+            (set big 1))
+          (set nd (+ nd 1))
+          (set q (+ q 1))))
+    (if (and (< q end) (== (cells-at cs q) 46))
+      (do (set dot 1)
+          (set q (+ q 1))
+          (while (and (< q end) (and (>= (cells-at cs q) 48) (<= (cells-at cs q) 57)))
+            (do (set d (- (cells-at cs q) 48))
+                (if (and (<= mant 99999999) (and (== big 0) (< scale 9)))
+                  (do (set mant (+ (* mant 10) d))
+                      (set scale (+ scale 1))))
+                (set nd (+ nd 1))
+                (set q (+ q 1))))))
+    (if (== nd 0) (return -1))
+    (if (== big 1)
+      (do (set mant 999999999)
+          (set scale 0)))
+    (set v (fx-of-real mant scale))
+    (if (== neg 1) (set v (- (i64 0) v)))
+    (if (== dot 1)
+      (pc-ox-push cx ox K_NUM (fx-hi v) (fx-lo v) 0)
+      (pc-ox-push cx ox K_NUM (fx-hi v) (fx-lo v) 1))
+    (return q)))
+
+(defn ^I32 pc-lex-name [^:mut ^Cells cx ^:mut ^Cells ox ^Cells cs ^I32 s ^I32 end]
+  (comment "A name; s is the byte after the slash. `#xx` is a byte. Answers its end.")
+  (let [^I32 start (cells-len ox)
+        ^:mut ^I32 q s
+        ^:mut ^I32 c 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 lo 0]
+    (while (and (< q end) (== (pc-reg (cells-at cs q)) 1))
+      (do (set c (cells-at cs q))
+          (set q (+ q 1))
+          (if (and (== c 35) (< (+ q 1) end))
+            (do (set hi (pc-hexval (cells-at cs q)))
+                (set lo (pc-hexval (cells-at cs (+ q 1))))
+                (if (and (>= hi 0) (>= lo 0))
+                  (do (set c (+ (* hi 16) lo))
+                      (set q (+ q 2))))))
+          (cells-push ox c)))
+    (pc-ox-push cx ox K_NAME start (- (cells-len ox) start) 0)
+    (return q)))
+
+(defn ^I32 pc-lex-lit [^:mut ^Cells cx ^:mut ^Cells ox ^Cells cs ^I32 s ^I32 end]
+  (comment "A literal string; s is the byte after the `(`. Escapes, octal, line")
+  (comment "continuations and nesting as `emon.pdflex`; an unterminated string runs")
+  (comment "to the end of the stream. Answers its end.")
+  (let [^I32 start (cells-len ox)
+        ^:mut ^I32 q s
+        ^:mut ^I32 depth 1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 n 0]
+    (while (and (< q end) (> depth 0))
+      (do (set c (cells-at cs q))
+          (set q (+ q 1))
+          (if (== c 92)
+            (do (if (< q end)
+                  (do (set c (cells-at cs q))
+                      (set q (+ q 1))
+                      (if (== c 110) (cells-push ox 10)
+                        (if (== c 114) (cells-push ox 13)
+                          (if (== c 116) (cells-push ox 9)
+                            (if (== c 98) (cells-push ox 8)
+                              (if (== c 102) (cells-push ox 12)
+                                (if (and (>= c 48) (<= c 55))
+                                  (do (set v (- c 48))
+                                      (set n 1)
+                                      (while (and (< n 3) (and (< q end) (and (>= (cells-at cs q) 48) (<= (cells-at cs q) 55))))
+                                        (do (set v (+ (* v 8) (- (cells-at cs q) 48)))
+                                            (set q (+ q 1))
+                                            (set n (+ n 1))))
+                                      (cells-push ox (bit-and v 255)))
+                                  (if (== c 13)
+                                    (if (and (< q end) (== (cells-at cs q) 10))
+                                      (set q (+ q 1)))
+                                    (if (== c 10)
+                                      (set n 0)
+                                      (cells-push ox c))))))))))))
+            (if (== c 40)
+              (do (set depth (+ depth 1))
+                  (cells-push ox 40))
+              (if (== c 41)
+                (do (set depth (- depth 1))
+                    (if (> depth 0) (cells-push ox 41)))
+                (if (== c 13)
+                  (do (if (and (< q end) (== (cells-at cs q) 10))
+                        (set q (+ q 1)))
+                      (cells-push ox 10))
+                  (cells-push ox c)))))))
+    (pc-ox-push cx ox K_STR start (- (cells-len ox) start) 0)
+    (return q)))
+
+(defn ^I32 pc-lex-hex [^:mut ^Cells cx ^:mut ^Cells ox ^Cells cs ^I32 s ^I32 end]
+  (comment "A hex string; s is the byte after the `<`. Non-hex bytes are skipped, an")
+  (comment "odd last digit is followed by 0. Answers its end.")
+  (let [^I32 start (cells-len ox)
+        ^:mut ^I32 q s
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 half -1
+        ^:mut ^I32 done 0]
+    (while (and (< q end) (== done 0))
+      (do (set c (cells-at cs q))
+          (set q (+ q 1))
+          (if (== c 62)
+            (set done 1)
+            (do (set v (pc-hexval c))
+                (if (>= v 0)
+                  (if (< half 0)
+                    (set half v)
+                    (do (cells-push ox (+ (* half 16) v))
+                        (set half -1))))))))
+    (if (>= half 0) (cells-push ox (* half 16)))
+    (pc-ox-push cx ox K_STR start (- (cells-len ox) start) 0)
+    (return q)))
+
+(defn ^I32 pc-open [^:mut ^Cells cx ^:mut ^Cells ox ^I32 kind]
+  (comment "An array or dictionary opens: its entry, and a note of where it is.")
+  (let [^I32 idx (pc-ox-push cx ox kind 0 0 0)
+        ^I32 d (cells-at cx C_CDEPTH)]
+    (if (and (>= idx 0) (< d MAX_CONT))
+      (do (cells-set cx (+ C_CSTACK d) idx)
+          (cells-set cx C_CDEPTH (+ d 1))))
+    (return 0)))
+
+(defn ^I32 pc-close [^:mut ^Cells cx ^:mut ^Cells ox]
+  (comment "A container closes: its entry learns how many entries it holds.")
+  (let [^I32 d (cells-at cx C_CDEPTH)]
+    (if (> d 0)
+      (do (let [^I32 idx (cells-at cx (+ C_CSTACK (- d 1)))
+                ^I32 n (cells-at cx C_OXN)]
+            (cells-set ox (+ (* idx 4) 1) (- (- n idx) 1))
+            (cells-set cx C_CDEPTH (- d 1)))))
+    (return 0)))
+
+(defn ^I32 pc-close-all [^:mut ^Cells cx ^:mut ^Cells ox]
+  (comment "An operator arrived with containers still open (a missing `]`): close them.")
+  (while (> (cells-at cx C_CDEPTH) 0)
+    (pc-close cx ox))
+  (return 0))
+
+(defn ^I32 pc-tok [^:mut ^Cells cx ^I32 tok ^I32 p]
+  (comment "Note what kind of token was read (0 nothing: junk was skipped, 1 an operand,")
+  (comment "2 an operator) and answer where reading goes on.")
+  (cells-set cx C_TOK tok)
+  (return p))
+
+(defn ^I32 pc-lex-one [^:mut ^Cells cx ^:mut ^Cells ox ^Cells cs ^I32 p ^I32 end]
+  (comment "One token at p (a byte that is neither white space nor the end).")
+  (let [^I32 c (cells-at cs p)
+        ^:mut ^I32 q 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 code 0]
+    (if (== c 47)
+      (do (set q (pc-lex-name cx ox cs (+ p 1) end))
+          (return (pc-tok cx 1 q))))
+    (if (== c 40)
+      (do (set q (pc-lex-lit cx ox cs (+ p 1) end))
+          (return (pc-tok cx 1 q))))
+    (if (== c 91)
+      (do (pc-open cx ox K_ARR)
+          (return (pc-tok cx 1 (+ p 1)))))
+    (if (== c 93)
+      (do (pc-close cx ox)
+          (return (pc-tok cx 1 (+ p 1)))))
+    (if (== c 60)
+      (do (if (and (< (+ p 1) end) (== (cells-at cs (+ p 1)) 60))
+            (do (pc-open cx ox K_DICT)
+                (return (pc-tok cx 1 (+ p 2)))))
+          (set q (pc-lex-hex cx ox cs (+ p 1) end))
+          (return (pc-tok cx 1 q))))
+    (if (== c 62)
+      (do (if (and (< (+ p 1) end) (== (cells-at cs (+ p 1)) 62))
+            (do (pc-close cx ox)
+                (return (pc-tok cx 1 (+ p 2)))))
+          (return (pc-tok cx 0 (+ p 1)))))
+    (if (or (== c 41) (or (== c 123) (== c 125)))
+      (return (pc-tok cx 0 (+ p 1))))
+    (if (or (or (== c 43) (== c 45)) (or (== c 46) (and (>= c 48) (<= c 57))))
+      (do (set q (pc-lex-number cx ox cs p end))
+          (if (>= q 0)
+            (return (pc-tok cx 1 q)))))
+    (comment "A keyword: the run of regular characters.")
+    (set s0 p)
+    (set q p)
+    (while (and (< q end) (== (pc-reg (cells-at cs q)) 1))
+      (set q (+ q 1)))
+    (set k (- q s0))
+    (if (<= k 3)
+      (do (set code (cells-at cs s0))
+          (if (>= k 2) (set code (+ code (* (cells-at cs (+ s0 1)) 256))))
+          (if (>= k 3) (set code (+ code (* (cells-at cs (+ s0 2)) 65536))))))
+    (comment "true, false and null are operands.")
+    (if (and (== k 4) (and (== (cells-at cs s0) 116) (== (cells-at cs (+ s0 1)) 114)))
+      (do (pc-ox-push cx ox K_BOOL 1 0 0)
+          (return (pc-tok cx 1 q))))
+    (if (and (== k 5) (== (cells-at cs s0) 102))
+      (do (pc-ox-push cx ox K_BOOL 0 0 0)
+          (return (pc-tok cx 1 q))))
+    (if (and (== k 4) (== (cells-at cs s0) 110))
+      (do (pc-ox-push cx ox K_BOOL 0 0 0)
+          (return (pc-tok cx 1 q))))
+    (pc-close-all cx ox)
+    (cells-set cx C_OP code)
+    (return (pc-tok cx 2 q))))
+
+(defn ^I32 pc-lex [^:mut ^Cells cx ^:mut ^Cells ox ^Cells cs]
+  (comment "Read tokens until one is an operand or an operator: 0 at the end of the")
+  (comment "stream, 1 when an operand was pushed, 2 when an operator was read (its code,")
+  (comment "up to three characters, the first in the low byte, is in C_OP).")
+  (let [^I32 end (cells-at cx C_END)
+        ^:mut ^I32 p (pc-skip cs (cells-at cx C_POS) end)
+        ^:mut ^I32 tok 0]
+    (while (and (< p end) (== tok 0))
+      (do (set p (pc-lex-one cx ox cs p end))
+          (set tok (cells-at cx C_TOK))
+          (if (== tok 0)
+            (set p (pc-skip cs p end)))))
+    (cells-set cx C_POS p)
+    (return tok)))
+
+;; ------------------------------------------------------------ initialization
+
+(defn ^:pub ^I32 pc-init [^:mut ^Cells cx ^:mut ^Cells ox]
+  (comment "Empty the interpreter for a new document: zeroed cells, no fonts known.")
+  (let [^:mut ^I32 i 0]
+    (cells-drop cx 0)
+    (while (< i C_SIZE)
+      (do (cells-push cx 0)
+          (set i (+ i 1))))
+    (cells-drop ox 0)
+    (set i 0)
+    (while (< i OX_BASE)
+      (do (cells-push ox 0)
+          (set i (+ i 1))))
+    (cells-set cx C_OPLIM (limit-of 5))
+    (cells-set cx C_FLIM (limit-of 6))
+    (cells-set cx C_MCTOP -1)
+    (return 0)))
+
+(defn ^I32 pc-gs-reset [^:mut ^Cells cx]
+  (comment "The initial graphics state: the base matrix, black, opaque, no font.")
+  (mx-copy cx (+ C_CUR G_CTM) C_BASE)
+  (fx-put cx (+ C_CUR G_TC) (i64 0))
+  (fx-put cx (+ C_CUR G_TW) (i64 0))
+  (fx-put cx (+ C_CUR G_TH) (i64 65536))
+  (fx-put cx (+ C_CUR G_TL) (i64 0))
+  (fx-put cx (+ C_CUR G_RISE) (i64 0))
+  (fx-put cx (+ C_CUR G_FS) (i64 0))
+  (cells-set cx (+ C_CUR G_MODE) 0)
+  (cells-set cx (+ C_CUR G_FONT) 0)
+  (cells-set cx (+ C_CUR G_COLOR) 0)
+  (cells-set cx (+ C_CUR G_ALPHA) 1000)
+  (cells-set cx (+ C_CUR G_FAM) 1)
+  (return 0))
+
+(defn ^I32 pc-base-matrix [^:mut ^Cells cx ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 rot]
+  (comment "The matrix from user space (points) to page space (centipoints, y down,")
+  (comment "the crop box's corner at the origin, /Rotate applied). x0..y1 are the crop")
+  (comment "box in centipoints.")
+  (let [^I64 h (i64 6553600)
+        ^I64 nh (i64 -6553600)]
+    (if (== rot 90)
+      (mx-set cx C_BASE (i64 0) h h (i64 0) (fx-of-int (- 0 y0)) (fx-of-int (- 0 x0))))
+    (if (== rot 180)
+      (mx-set cx C_BASE nh (i64 0) (i64 0) h (fx-of-int x1) (fx-of-int (- 0 y0))))
+    (if (== rot 270)
+      (mx-set cx C_BASE (i64 0) nh nh (i64 0) (fx-of-int y1) (fx-of-int x1)))
+    (if (and (!= rot 90) (and (!= rot 180) (!= rot 270)))
+      (mx-set cx C_BASE h (i64 0) (i64 0) nh (fx-of-int (- 0 x0)) (fx-of-int y1)))
+    (return 0)))
+
+;; ----------------------------------------------------- the graphics-state stack
+
+(defn ^I32 pc-save [^:mut ^Cells cx]
+  (let [^I32 d (cells-at cx C_DEPTH)]
+    (if (>= d MAX_GS)
+      (do (pc-warn-set cx W_STATES)
+          (return 0)))
+    (pc-copy-cells cx (+ C_STACK (* d GS_STRIDE)) C_CUR GS_STRIDE)
+    (cells-set cx C_DEPTH (+ d 1))
+    (return 1)))
+
+(defn ^I32 pc-restore [^:mut ^Cells cx]
+  (comment "Q: pops only what this stream pushed.")
+  (let [^I32 d (cells-at cx C_DEPTH)
+        ^I32 base (cells-at cx C_GSBASE)]
+    (if (<= d base)
+      (do (pc-warn-set cx W_STATES)
+          (return 0)))
+    (pc-copy-cells cx C_CUR (+ C_STACK (* (- d 1) GS_STRIDE)) GS_STRIDE)
+    (cells-set cx C_DEPTH (- d 1))
+    (return 1)))
+
+;; ------------------------------------------------------------- the text state
+
+(defn ^I32 pc-update-m [^:mut ^Cells cx]
+  (comment "M = Tm x CTM, the matrix from text space to page space.")
+  (mx-mul cx C_M C_TM (+ C_CUR G_CTM))
+  (return 0))
+
+(defn ^I32 pc-advance [^:mut ^Cells cx ^I64 dx ^I64 dy]
+  (comment "Move the text position by (dx, dy) in TEXT space: Tm and M both translate")
+  (comment "by the vector through their own linear parts.")
+  (let [^I64 ta (fx-get cx C_TM)
+        ^I64 tb (fx-get cx (+ C_TM 2))
+        ^I64 tc (fx-get cx (+ C_TM 4))
+        ^I64 td (fx-get cx (+ C_TM 6))
+        ^I64 te (fx-get cx (+ C_TM 8))
+        ^I64 tf (fx-get cx (+ C_TM 10))
+        ^I64 ma (fx-get cx C_M)
+        ^I64 mb (fx-get cx (+ C_M 2))
+        ^I64 mc (fx-get cx (+ C_M 4))
+        ^I64 md (fx-get cx (+ C_M 6))
+        ^I64 me (fx-get cx (+ C_M 8))
+        ^I64 mf (fx-get cx (+ C_M 10))]
+    (fx-put cx (+ C_TM 8) (fx-clamp (add64 te (add64 (fx-mul dx ta) (fx-mul dy tc)))))
+    (fx-put cx (+ C_TM 10) (fx-clamp (add64 tf (add64 (fx-mul dx tb) (fx-mul dy td)))))
+    (fx-put cx (+ C_M 8) (fx-clamp (add64 me (add64 (fx-mul dx ma) (fx-mul dy mc)))))
+    (fx-put cx (+ C_M 10) (fx-clamp (add64 mf (add64 (fx-mul dx mb) (fx-mul dy md)))))
+    (return 0)))
+
+(defn ^I32 pc-td [^:mut ^Cells cx ^I64 tx ^I64 ty]
+  (comment "Td: the line matrix moves by (tx, ty) in its own space; the text matrix")
+  (comment "starts over there.")
+  (mx-translate cx C_TMP tx ty)
+  (mx-mul cx C_TLM C_TMP C_TLM)
+  (mx-copy cx C_TM C_TLM)
+  (return 0))
+
+(defn ^I32 pc-set-tm [^:mut ^Cells cx ^I64 a ^I64 b ^I64 c ^I64 d ^I64 e ^I64 f]
+  (mx-set cx C_TM a b c d e f)
+  (mx-copy cx C_TLM C_TM)
+  (return 0))
+
+(defn ^I32 pc-next-line [^:mut ^Cells cx]
+  (comment "T*: down by the leading.")
+  (let [^I64 tl (fx-get cx (+ C_CUR G_TL))]
+    (pc-td cx (i64 0) (- (i64 0) tl))
+    (return 0)))
+
+;; ------------------------------------------------------------ colour and alpha
+
+(defn ^I32 pc-byte [^I64 v]
+  (comment "A colour component in 0..1 (an Fx) as 0..255, rounded.")
+  (let [^I32 n (fx-round (fx-mul v (fx-of-int 255)))]
+    (if (< n 0) (return 0))
+    (if (> n 255) (return 255))
+    (return n)))
+
+(defn ^I32 pc-rgb [^I32 r ^I32 g ^I32 bl]
+  (return (+ (* r 65536) (+ (* g 256) bl))))
+
+(defn ^I32 pc-set-color [^:mut ^Cells cx ^Cells ox ^I32 n]
+  (comment "sc / scn / g / rg / k: set the fill colour from n operands by their count")
+  (comment "(1 gray, 3 RGB, 4 CMYK). A component list of another length (a pattern, an")
+  (comment "Indexed or Separation colour) leaves the colour as it was.")
+  (let [^I64 o0 (pc-num ox n 0)
+        ^I64 o1 (pc-num ox n 1)
+        ^I64 o2 (pc-num ox n 2)
+        ^I64 o3 (pc-num ox n 3)
+        ^I64 one (i64 65536)]
+    (if (== n 1)
+      (do (let [^I32 gy (pc-byte o0)]
+            (cells-set cx (+ C_CUR G_COLOR) (pc-rgb gy gy gy)))
+          (return 0)))
+    (if (== n 3)
+      (do (cells-set cx (+ C_CUR G_COLOR) (pc-rgb (pc-byte o0) (pc-byte o1) (pc-byte o2)))
+          (return 0)))
+    (if (== n 4)
+      (do (let [^I64 kk (- one o3)]
+            (cells-set cx (+ C_CUR G_COLOR)
+                       (pc-rgb (pc-byte (fx-mul (- one o0) kk))
+                               (pc-byte (fx-mul (- one o1) kk))
+                               (pc-byte (fx-mul (- one o2) kk)))))
+          (return 0)))
+    (return 0)))
+
+;; --------------------------------------------------- resources and dictionaries
+
+(defn ^I32 pc-dict-lookup [^Cells ar ^I32 dict ^Cells ox ^I32 ns ^I32 nl]
+  (comment "The value (unresolved) under the key spelled ox[ns, ns+nl), or 0. The")
+  (comment "last of a repeated key wins.")
+  (let [^:mut ^I32 k (pl-first ar dict)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 found 0
+        ^:mut ^I32 same 0
+        ^:mut ^I32 i 0]
+    (if (!= (pl-kind-of ar dict) 7) (return 0))
+    (while (!= k 0)
+      (do (set v (pl-next ar k))
+          (if (and (== (pl-kind-of ar k) 4) (== (pl-name-len ar k) nl))
+            (do (set same 1)
+                (set i 0)
+                (while (and (== same 1) (< i nl))
+                  (do (if (!= (pl-name-byte ar k i) (cells-at ox (+ ns i)))
+                        (set same 0))
+                      (set i (+ i 1))))
+                (if (== same 1) (set found v))))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (return found)))
+
+(defn ^I32 pc-res-entry [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^Cells cx ^Cells ox
+                         ^I32 kind-id ^I32 ei]
+  (comment "The UNRESOLVED entry named by operand ei (a name) in the current Resources'")
+  (comment "sub-dictionary `kind-id` (`(pn-font)`, `(pn-x-object)`, ...), 0 when none.")
+  (let [^I32 res (cells-at cx C_RES)
+        ^I32 ns (pc-ea ox ei)
+        ^I32 nl (pc-eb ox ei)]
+    (if (== res 0) (return 0))
+    (let [^I32 sub (pd-dget src ar dc a b st res kind-id)]
+      (if (== sub 0) (return 0))
+      (return (pc-dict-lookup ar sub ox ns nl)))))
+
+;; ---------------------------------------------------------------------- fonts
+
+(defn ^I32 pc-f-load [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out
+                      ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                      ^I32 slot ^I32 fh]
+  (if (== slot 0) (return (pfn-load src ar dc a b st f0 out fh)))
+  (if (== slot 1) (return (pfn-load src ar dc a b st f1 out fh)))
+  (if (== slot 2) (return (pfn-load src ar dc a b st f2 out fh)))
+  (return (pfn-load src ar dc a b st f3 out fh)))
+
+(defn ^I32 pc-f-q [^Cells f0 ^Cells f1 ^Cells f2 ^Cells f3 ^I32 slot ^I32 which]
+  (comment "A font's metric: which 0 ascent, 1 descent, 2 vertical, 3 DW2 v, 4 DW2 w.")
+  (if (== slot 0)
+    (do (if (== which 0) (return (pfn-ascent f0)))
+        (if (== which 1) (return (pfn-descent f0)))
+        (if (== which 2) (return (pfn-vertical f0)))
+        (if (== which 3) (return (pfn-dw2-v f0)))
+        (return (pfn-dw2-w f0))))
+  (if (== slot 1)
+    (do (if (== which 0) (return (pfn-ascent f1)))
+        (if (== which 1) (return (pfn-descent f1)))
+        (if (== which 2) (return (pfn-vertical f1)))
+        (if (== which 3) (return (pfn-dw2-v f1)))
+        (return (pfn-dw2-w f1))))
+  (if (== slot 2)
+    (do (if (== which 0) (return (pfn-ascent f2)))
+        (if (== which 1) (return (pfn-descent f2)))
+        (if (== which 2) (return (pfn-vertical f2)))
+        (if (== which 3) (return (pfn-dw2-v f2)))
+        (return (pfn-dw2-w f2))))
+  (if (== which 0) (return (pfn-ascent f3)))
+  (if (== which 1) (return (pfn-descent f3)))
+  (if (== which 2) (return (pfn-vertical f3)))
+  (if (== which 3) (return (pfn-dw2-v f3)))
+  (return (pfn-dw2-w f3)))
+
+(defn ^I32 pc-f-code-len [^Cells f0 ^Cells f1 ^Cells f2 ^Cells f3 ^I32 slot
+                          ^I32 b0 ^I32 b1 ^I32 b2 ^I32 b3]
+  (if (== slot 0) (return (pfn-code-len f0 b0 b1 b2 b3)))
+  (if (== slot 1) (return (pfn-code-len f1 b0 b1 b2 b3)))
+  (if (== slot 2) (return (pfn-code-len f2 b0 b1 b2 b3)))
+  (return (pfn-code-len f3 b0 b1 b2 b3)))
+
+(defn ^I32 pc-f-map [^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                     ^I32 slot ^I32 code]
+  (comment "The code points of a code: their count (`pfn-map`).")
+  (if (== slot 0) (return (pfn-map f0 code)))
+  (if (== slot 1) (return (pfn-map f1 code)))
+  (if (== slot 2) (return (pfn-map f2 code)))
+  (return (pfn-map f3 code)))
+
+(defn ^I32 pc-f-cp [^Cells f0 ^Cells f1 ^Cells f2 ^Cells f3 ^I32 slot ^I32 i]
+  (if (== slot 0) (return (pfn-cp f0 i)))
+  (if (== slot 1) (return (pfn-cp f1 i)))
+  (if (== slot 2) (return (pfn-cp f2 i)))
+  (return (pfn-cp f3 i)))
+
+(defn ^I32 pc-f-how [^Cells f0 ^Cells f1 ^Cells f2 ^Cells f3 ^I32 slot]
+  (if (== slot 0) (return (pfn-how-of f0)))
+  (if (== slot 1) (return (pfn-how-of f1)))
+  (if (== slot 2) (return (pfn-how-of f2)))
+  (return (pfn-how-of f3)))
+
+(defn ^I32 pc-f-width [^Cells f0 ^Cells f1 ^Cells f2 ^Cells f3 ^I32 slot ^I32 code]
+  (if (== slot 0) (return (pfn-width f0 code)))
+  (if (== slot 1) (return (pfn-width f1 code)))
+  (if (== slot 2) (return (pfn-width f2 code)))
+  (return (pfn-width f3 code)))
+
+(defn ^I32 pc-font-id [^:mut ^Cells cx ^I32 key]
+  (comment "The evidence id of a font dictionary: its index in the order the")
+  (comment "document first showed it (-1 past 512 fonts).")
+  (let [^I32 n (cells-at cx C_NFONT)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (cells-at cx (+ C_FIDS i)) key) (return i))
+          (set i (+ i 1))))
+    (if (>= n MAX_FIDS) (return -1))
+    (cells-set cx (+ C_FIDS n) key)
+    (cells-set cx C_NFONT (+ n 1))
+    (return n)))
+
+(defn ^I32 pc-ensure-font [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                           ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx
+                           ^:mut ^Cells out
+                           ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3]
+  (comment "Make the current font (the graphics state's) resident in a slot and set")
+  (comment "C_SLOT to it, -1 when there is none. A font is loaded once and kept; the")
+  (comment "slot that has gone unused longest is the one replaced.")
+  (let [^I32 key (cells-at cx (+ C_CUR G_FONT))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 pick 0
+        ^:mut ^I32 best 2147483647
+        ^:mut ^I32 status 0
+        ^:mut ^I32 fid 0
+        ^:mut ^I32 clock (cells-at cx C_CLOCK)]
+    (if (== key 0)
+      (do (cells-set cx C_SLOT -1)
+          (return 0)))
+    (set clock (+ clock 1))
+    (cells-set cx C_CLOCK clock)
+    (while (< i 4)
+      (do (set at (+ C_SLOTS (* i SLOT_STRIDE)))
+          (if (== (cells-at cx (+ at S_KEY)) key)
+            (do (cells-set cx (+ at S_USE) clock)
+                (cells-set cx C_SLOT i)
+                (return 0)))
+          (if (< (cells-at cx (+ at S_USE)) best)
+            (do (set best (cells-at cx (+ at S_USE)))
+                (set pick i)))
+          (set i (+ i 1))))
+    (set at (+ C_SLOTS (* pick SLOT_STRIDE)))
+    (set status (pc-f-load src ar dc a b st out f0 f1 f2 f3 pick key))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (cells-set cx (+ at S_KEY) 0)
+          (cells-set cx C_SLOT -1)
+          (return 0)))
+    (cells-set cx (+ at S_KEY) key)
+    (cells-set cx (+ at S_USE) clock)
+    (cells-set cx (+ at S_STATUS) status)
+    (set fid (pc-font-id cx key))
+    (cells-set cx (+ at S_ID) fid)
+    (if (== status 0)
+      (do (cells-set cx (+ at S_ASC) (pc-f-q f0 f1 f2 f3 pick 0))
+          (cells-set cx (+ at S_DESC) (pc-f-q f0 f1 f2 f3 pick 1))
+          (cells-set cx (+ at S_VERT) (pc-f-q f0 f1 f2 f3 pick 2))
+          (cells-set cx (+ at S_DW2V) (pc-f-q f0 f1 f2 f3 pick 3))
+          (cells-set cx (+ at S_DW2W) (pc-f-q f0 f1 f2 f3 pick 4)))
+      (do (cells-set cx (+ at S_ASC) 0)
+          (cells-set cx (+ at S_DESC) 0)
+          (cells-set cx (+ at S_VERT) 0)))
+    (cells-set cx C_SLOT pick)
+    (return 0)))
+
+(defn ^I32 pc-tf [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                  ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^Cells ox ^I32 n]
+  (comment "Tf: the font named by operand 0 from the current Resources, at the size of")
+  (comment "operand 1. The dictionary is resolved here and loaded at the first glyph.")
+  (let [^I64 size (pc-num ox n 1)
+        ^:mut ^I32 fh 0
+        ^:mut ^I32 raw 0]
+    (fx-put cx (+ C_CUR G_FS) size)
+    (if (and (>= n 1) (== (pc-kind ox 0) K_NAME))
+      (do (set raw (pc-res-entry src ar dc a b st cx ox (pn-font) 0))
+          (if (!= raw 0)
+            (set fh (pd-resolve src ar dc a b st raw)))))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (if (== fh 0)
+      (pc-warn-set cx W_FONT)
+      (if (!= (pl-kind-of ar fh) 7)
+        (do (set fh 0)
+            (pc-warn-set cx W_FONT))))
+    (cells-set cx (+ C_CUR G_FONT) fh)
+    (return 0)))
+
+;; ------------------------------------------------------------------- glyphs
+
+(defn ^I64 pc-min4 [^I64 p ^I64 q ^I64 r ^I64 s]
+  (let [^:mut ^I64 m p]
+    (if (< q m) (set m q))
+    (if (< r m) (set m r))
+    (if (< s m) (set m s))
+    (return m)))
+
+(defn ^I64 pc-max4 [^I64 p ^I64 q ^I64 r ^I64 s]
+  (let [^:mut ^I64 m p]
+    (if (> q m) (set m q))
+    (if (> r m) (set m r))
+    (if (> s m) (set m s))
+    (return m)))
+
+(defn ^I32 pc-glyph [^:mut ^Cells cx ^:mut ^Cells gl ^:mut ^Cells et
+                     ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                     ^I32 code ^I32 ncode]
+  (comment "One shown glyph: look the code up, put its cell in page space, record it,")
+  (comment "advance the text position by its width, the character and word spacing.")
+  (let [^I32 slot (cells-at cx C_SLOT)
+        ^I64 fs (fx-get cx (+ C_CUR G_FS))
+        ^I64 th (fx-get cx (+ C_CUR G_TH))
+        ^I64 tc (fx-get cx (+ C_CUR G_TC))
+        ^I64 tw (fx-get cx (+ C_CUR G_TW))
+        ^I64 rise (fx-get cx (+ C_CUR G_RISE))
+        ^:mut ^I32 sat 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 cp0 -1
+        ^:mut ^I32 how 5
+        ^:mut ^I32 w -1
+        ^:mut ^I32 asc 0
+        ^:mut ^I32 desc 0
+        ^:mut ^I32 vert 0
+        ^:mut ^I32 dwv -100000
+        ^:mut ^I32 fid -1
+        ^:mut ^I32 tstart -1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 idx 0]
+    (if (>= slot 0)
+      (do (set sat (+ C_SLOTS (* slot SLOT_STRIDE)))
+          (set fid (cells-at cx (+ sat S_ID)))
+          (if (== (cells-at cx (+ sat S_STATUS)) 0)
+            (do (set cnt (pc-f-map f0 f1 f2 f3 slot code))
+                (set how (pc-f-how f0 f1 f2 f3 slot))
+                (set w (pc-f-width f0 f1 f2 f3 slot code))
+                (set asc (cells-at cx (+ sat S_ASC)))
+                (set desc (cells-at cx (+ sat S_DESC)))
+                (set vert (cells-at cx (+ sat S_VERT)))
+                (set dwv (cells-at cx (+ sat S_DW2W)))))))
+    (if (> cnt 0) (set cp0 (pc-f-cp f0 f1 f2 f3 slot 0)))
+    (if (< w 0)
+      (do (set w 50000)
+          (pc-warn-set cx W_WIDTH)))
+    (if (and (== asc 0) (== desc 0))
+      (do (set asc 800)
+          (set desc -200)))
+    (let [^I64 wfx (fx-muldiv (i64 w) fs (i64 100000))
+          ^:mut ^I64 x0t (i64 0)
+          ^:mut ^I64 x1t (i64 0)
+          ^:mut ^I64 y0t (i64 0)
+          ^:mut ^I64 y1t (i64 0)]
+      (if (== vert 0)
+        (do (set x1t (fx-mul wfx th))
+            (set y0t (add64 (fx-muldiv (i64 desc) fs (i64 1000)) rise))
+            (set y1t (add64 (fx-muldiv (i64 asc) fs (i64 1000)) rise)))
+        (do (set x0t (- (i64 0) (quot wfx (i64 2))))
+            (set x1t (quot wfx (i64 2)))
+            (set y0t (add64 (fx-muldiv (i64 dwv) fs (i64 100000)) rise))
+            (set y1t rise)))
+      (let [^I64 p0x (mx-x cx C_M x0t y0t)
+            ^I64 p0y (mx-y cx C_M x0t y0t)
+            ^I64 p1x (mx-x cx C_M x1t y0t)
+            ^I64 p1y (mx-y cx C_M x1t y0t)
+            ^I64 p2x (mx-x cx C_M x0t y1t)
+            ^I64 p2y (mx-y cx C_M x0t y1t)
+            ^I64 p3x (mx-x cx C_M x1t y1t)
+            ^I64 p3y (mx-y cx C_M x1t y1t)
+            ^I64 ma (fx-get cx C_M)
+            ^I64 mb (fx-get cx (+ C_M 2))
+            ^I64 mc (fx-get cx (+ C_M 4))
+            ^I64 md (fx-get cx (+ C_M 6))
+            ^I32 size (fx-round (fx-mul (fx-hypot mc md) (fx-abs fs)))
+            ^I32 rot (fx-atan2 (- (i64 0) mb) ma)
+            ^I32 bline (fx-round (mx-y cx C_M (i64 0) rise))
+            ^I32 g (gl-new gl (cells-at cx C_PAGE) cp0 fid size
+                           (fx-round (pc-min4 p0x p1x p2x p3x)) (fx-round (pc-min4 p0y p1y p2y p3y))
+                           (fx-round (pc-max4 p0x p1x p2x p3x)) (fx-round (pc-max4 p0y p1y p2y p3y)))]
+        (gl-set gl g (gf-how) how)
+        (gl-set gl g (gf-baseline) bline)
+        (gl-set gl g (gf-rot) rot)
+        (gl-set gl g (gf-color) (cells-at cx (+ C_CUR G_COLOR)))
+        (gl-set gl g (gf-alpha) (cells-at cx (+ C_CUR G_ALPHA)))
+        (gl-set gl g (gf-mode) (cells-at cx (+ C_CUR G_MODE)))
+        (gl-set gl g (gf-artifact) (cells-at cx C_CURART))
+        (gl-set gl g (gf-mcid) (cells-at cx C_CURMCID))
+        (if (> cnt 1)
+          (do (set i 0)
+              (while (< i cnt)
+                (do (set idx (etx-append-cp et (pc-f-cp f0 f1 f2 f3 slot i)))
+                    (if (== i 0) (set tstart idx))
+                    (set i (+ i 1))))
+              (gl-set gl g (gf-tstart) tstart)
+              (gl-set gl g (gf-tlen) cnt))))
+      (comment "The advance: tx = (w0 * Tfs + Tc + Tw) * Th, or ty = w1 * Tfs + Tc + Tw.")
+      (let [^:mut ^I64 adv (i64 0)]
+        (if (== vert 0)
+          (set adv (add64 wfx tc))
+          (set adv (add64 (fx-muldiv (i64 dwv) fs (i64 100000)) tc)))
+        (if (and (== code 32) (== ncode 1))
+          (set adv (add64 adv tw)))
+        (if (== vert 0)
+          (pc-advance cx (fx-mul adv th) (i64 0))
+          (pc-advance cx (i64 0) adv))
+        (return 0)))))
+
+(defn ^I32 pc-show-str [^:mut ^Cells cx ^Cells ox ^:mut ^Cells gl ^:mut ^Cells et
+                        ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                        ^I32 s]
+  (comment "Show the string operand s: split it into codes by the font's codespace.")
+  (let [^I32 start (pc-ea ox s)
+        ^I32 ln (pc-eb ox s)
+        ^I32 slot (cells-at cx C_SLOT)
+        ^:mut ^I32 okfont 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 1
+        ^:mut ^I32 code 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 b0 0
+        ^:mut ^I32 b1 -1
+        ^:mut ^I32 b2 -1
+        ^:mut ^I32 b3 -1]
+    (if (>= slot 0)
+      (if (== (cells-at cx (+ (+ C_SLOTS (* slot SLOT_STRIDE)) S_STATUS)) 0)
+        (set okfont 1)))
+    (while (< i ln)
+      (do (set b0 (cells-at ox (+ start i)))
+          (set b1 -1)
+          (set b2 -1)
+          (set b3 -1)
+          (if (< (+ i 1) ln) (set b1 (cells-at ox (+ start (+ i 1)))))
+          (if (< (+ i 2) ln) (set b2 (cells-at ox (+ start (+ i 2)))))
+          (if (< (+ i 3) ln) (set b3 (cells-at ox (+ start (+ i 3)))))
+          (set n 1)
+          (if (== okfont 1)
+            (set n (pc-f-code-len f0 f1 f2 f3 slot b0 b1 b2 b3)))
+          (if (< n 1) (set n 1))
+          (if (> n 4) (set n 4))
+          (if (> (+ i n) ln) (set n (- ln i)))
+          (set code 0)
+          (set k 0)
+          (while (< k n)
+            (do (if (and (== n 4) (and (== k 0) (>= (cells-at ox (+ start i)) 128)))
+                  (set code (* (- (cells-at ox (+ start i)) 256) 16777216))
+                  (set code (+ (* code 256) (cells-at ox (+ start (+ i k))))))
+                (set k (+ k 1))))
+          (pc-glyph cx gl et f0 f1 f2 f3 code n)
+          (set i (+ i n))))
+    (return 0)))
+
+(defn ^I32 pc-show-arr [^:mut ^Cells cx ^Cells ox ^:mut ^Cells gl ^:mut ^Cells et
+                        ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                        ^I32 s]
+  (comment "TJ: strings and adjustments. An adjustment n moves the position by")
+  (comment "-n/1000 of the font size (along x, scaled by Th; along y in vertical mode).")
+  (let [^I32 cnt (pc-ea ox s)
+        ^I32 slot (cells-at cx C_SLOT)
+        ^I64 fs (fx-get cx (+ C_CUR G_FS))
+        ^I64 th (fx-get cx (+ C_CUR G_TH))
+        ^:mut ^I32 vert 0
+        ^:mut ^I32 j (+ s 1)
+        ^:mut ^I32 k 0
+        ^:mut ^I64 delta (i64 0)]
+    (if (>= slot 0)
+      (set vert (cells-at cx (+ (+ C_SLOTS (* slot SLOT_STRIDE)) S_VERT))))
+    (while (< j (+ (+ s 1) cnt))
+      (do (set k (pc-kind ox j))
+          (if (== k K_STR)
+            (pc-show-str cx ox gl et f0 f1 f2 f3 j))
+          (if (== k K_NUM)
+            (do (set delta (- (i64 0) (fx-muldiv (fx-mul (fx-join (pc-ea ox j) (pc-eb ox j)) fs) (i64 1) (i64 1000))))
+                (if (== vert 0)
+                  (pc-advance cx (fx-mul delta th) (i64 0))
+                  (pc-advance cx (i64 0) delta))))
+          (set j (+ j (pc-esize ox j)))))
+    (return 0)))
+
+;; ------------------------------------------------------ marked content (D076)
+
+(defdata pc-pdfdoc-tab
+  :emitter kin.lang/flat-array
+  :data [728 711 710 729 733 731 730 732 8226 8224 8225 8230 8212 8211 402 8260
+         8249 8250 8722 8240 8222 8220 8221 8216 8217 8218 8482 64257 64258 321 338 352
+         376 381 305 322 339 353 382 65533 8364]
+  :accessors {^I32 pc-pdfdoc-at [^I32 ignored ^I32 i]})
+
+(defn ^I32 pc-pdfdoc [^I32 c]
+  (comment "PDFDocEncoding (Annex D.2) to Unicode: Latin-1 except 0x18-0x1F, 0x80-0xA0.")
+  (if (and (>= c 24) (<= c 31)) (return (pc-pdfdoc-at 0 (- c 24))))
+  (if (and (>= c 128) (<= c 160)) (return (pc-pdfdoc-at 0 (+ 8 (- c 128)))))
+  (return c))
+
+(defn ^I32 pc-push-bytes [^:mut ^Cells et ^Cells ox ^I32 start ^I32 ln]
+  (comment "A name's bytes as code points (Latin-1), into the evidence text. Answers")
+  (comment "the index of the first.")
+  (let [^I32 at (cells-len et)
+        ^:mut ^I32 k 0]
+    (while (< k ln)
+      (do (etx-append-cp et (cells-at ox (+ start k)))
+          (set k (+ k 1))))
+    (return at)))
+
+(defn ^I32 pc-push-entry [^:mut ^Cells et ^Cells ox ^I32 i]
+  (comment "The bytes of name operand i into the evidence text; the index of the first.")
+  (let [^I32 s (pc-ea ox i)
+        ^I32 ln (pc-eb ox i)]
+    (return (pc-push-bytes et ox s ln))))
+
+(defn ^I32 pc-push-utf16 [^:mut ^Cells et ^Cells ox ^I32 start ^I32 ln ^I32 little]
+  (comment "UTF-16 text from ox[start, start+ln) (after the byte order mark), into")
+  (comment "the evidence text: surrogate pairs joined, a lone surrogate U+FFFD, and")
+  (comment "the language escapes of PDF 2.0 (U+001B ... U+001B) dropped.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 u2 0
+        ^:mut ^I32 skip 0]
+    (while (< (+ k 1) ln)
+      (do (if (== little 1)
+            (set u (+ (cells-at ox (+ start k)) (* (cells-at ox (+ start (+ k 1))) 256)))
+            (set u (+ (* (cells-at ox (+ start k)) 256) (cells-at ox (+ start (+ k 1))))))
+          (set k (+ k 2))
+          (if (and (>= u 55296) (<= u 56319) (< (+ k 1) ln))
+            (do (if (== little 1)
+                  (set u2 (+ (cells-at ox (+ start k)) (* (cells-at ox (+ start (+ k 1))) 256)))
+                  (set u2 (+ (* (cells-at ox (+ start k)) 256) (cells-at ox (+ start (+ k 1))))))
+                (if (and (>= u2 56320) (<= u2 57343))
+                  (do (set u (+ 65536 (+ (* (- u 55296) 1024) (- u2 56320))))
+                      (set k (+ k 2))))))
+          (if (== u 27)
+            (set skip (- 1 skip))
+            (if (== skip 0)
+              (etx-append-cp et u)))))
+    (return 0)))
+
+(defn ^I32 pc-push-utf8 [^:mut ^Cells et ^Cells ox ^I32 start ^I32 ln]
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 need 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ok 0]
+    (while (< k ln)
+      (do (set c (cells-at ox (+ start k)))
+          (set k (+ k 1))
+          (set need 0)
+          (set v c)
+          (if (>= c 240) (do (set need 3) (set v (- c 240)))
+            (if (>= c 224) (do (set need 2) (set v (- c 224)))
+              (if (>= c 192) (do (set need 1) (set v (- c 192))))))
+          (set ok 1)
+          (if (and (>= c 128) (< c 192)) (set ok 0))
+          (if (> c 247) (set ok 0))
+          (set j 0)
+          (while (and (== ok 1) (< j need))
+            (do (if (and (< k ln) (and (>= (cells-at ox (+ start k)) 128) (< (cells-at ox (+ start k)) 192)))
+                  (do (set v (+ (* v 64) (- (cells-at ox (+ start k)) 128)))
+                      (set k (+ k 1)))
+                  (set ok 0))
+                (set j (+ j 1))))
+          (if (== ok 1)
+            (etx-append-cp et v)
+            (etx-append-cp et 65533))))
+    (return 0)))
+
+(defn ^I32 pc-push-text [^:mut ^Cells et ^Cells ox ^I32 start ^I32 ln]
+  (comment "A PDF text string (UTF-16BE or LE with a byte order mark, UTF-8 with its")
+  (comment "BOM, else PDFDocEncoding) into the evidence text. Answers the first index.")
+  (let [^I32 at (cells-len et)
+        ^:mut ^I32 k 0]
+    (if (and (>= ln 2) (and (== (cells-at ox start) 254) (== (cells-at ox (+ start 1)) 255)))
+      (do (pc-push-utf16 et ox (+ start 2) (- ln 2) 0)
+          (return at)))
+    (if (and (>= ln 2) (and (== (cells-at ox start) 255) (== (cells-at ox (+ start 1)) 254)))
+      (do (pc-push-utf16 et ox (+ start 2) (- ln 2) 1)
+          (return at)))
+    (if (and (>= ln 3) (and (== (cells-at ox start) 239) (and (== (cells-at ox (+ start 1)) 187) (== (cells-at ox (+ start 2)) 191))))
+      (do (pc-push-utf8 et ox (+ start 3) (- ln 3))
+          (return at)))
+    (while (< k ln)
+      (do (etx-append-cp et (pc-pdfdoc (cells-at ox (+ start k))))
+          (set k (+ k 1))))
+    (return at)))
+
+(defn ^I64 pc-ar-fx64 [^Cells ar ^I32 h]
+  (let [^I32 kind (pl-kind-of ar h)]
+    (if (== kind 2) (return (fx-of-int (pl-int-value ar h))))
+    (if (== kind 3) (return (fx-of-real (pl-int-value ar h) (pl-ref-gen ar h))))
+    (return (i64 0))))
+
+(defn ^I32 pc-ingest-props [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
+                            ^I32 dict]
+  (comment "Copy the pairs of a /Properties dictionary that marked content reads")
+  (comment "into the operand entries as a dictionary entry, so one reader serves an")
+  (comment "inline property list and a named one. Answers the entry's index.")
+  (let [^I32 d (pc-ox-push cx ox K_DICT 0 0 0)
+        ^:mut ^I32 k (pl-first ar dict)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 vr 0
+        ^:mut ^I32 want 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I64 fxv (i64 0)]
+    (if (< d 0) (return -1))
+    (while (!= k 0)
+      (do (set v (pl-next ar k))
+          (set want 0)
+          (if (== (pl-kind-of ar k) 4)
+            (if (or (== (pl-name-is ar k (pn-mcid)) 1) (or (== (pl-name-is ar k (pn-actual-text)) 1) (or (== (pl-name-is ar k (pn-alt)) 1) (or (== (pl-name-is ar k (pn-e)) 1) (or (== (pl-name-is ar k (pn-lang)) 1) (or (== (pl-name-is ar k (pn-type)) 1) (== (pl-name-is ar k (pn-subtype)) 1)))))))
+              (set want 1)))
+          (if (and (== want 1) (!= v 0))
+            (do (set vr (pd-resolve src ar dc a b st v))
+                (set kind 0)
+                (if (!= vr 0) (set kind (pl-kind-of ar vr)))
+                (if (or (== kind 2) (== kind 3))
+                  (do (set fxv (pc-ar-fx64 ar vr))
+                      (comment "The key, then the number.")
+                      (set ln (pl-name-len ar k))
+                      (set at (cells-len ox))
+                      (set j 0)
+                      (while (< j ln)
+                        (do (cells-push ox (pl-name-byte ar k j))
+                            (set j (+ j 1))))
+                      (pc-ox-push cx ox K_NAME at ln 0)
+                      (pc-ox-push cx ox K_NUM (fx-hi fxv) (fx-lo fxv) 1)))
+                (if (or (== kind 4) (== kind 5))
+                  (do (set ln (pl-name-len ar k))
+                      (set at (cells-len ox))
+                      (set j 0)
+                      (while (< j ln)
+                        (do (cells-push ox (pl-name-byte ar k j))
+                            (set j (+ j 1))))
+                      (pc-ox-push cx ox K_NAME at ln 0)
+                      (set ln (pl-str-len ar vr))
+                      (set at (cells-len ox))
+                      (set j 0)
+                      (if (== kind 4)
+                        (while (< j ln)
+                          (do (cells-push ox (pl-name-byte ar vr j))
+                              (set j (+ j 1))))
+                        (while (< j ln)
+                          (do (cells-push ox (pl-str-byte ar vr j))
+                              (set j (+ j 1)))))
+                      (if (== kind 4)
+                        (pc-ox-push cx ox K_NAME at ln 0)
+                        (pc-ox-push cx ox K_STR at ln 0))))))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (cells-set ox (+ (* d 4) 1) (- (- (cells-at cx C_OXN) d) 1))
+    (return d)))
+
+(defn ^I32 pc-read-props [^:mut ^Cells et ^:mut ^Cells sp ^Cells ox ^I32 span ^I32 d]
+  (comment "Fill the span's fields from the dictionary entry d of the operands: MCID,")
+  (comment "Type, Subtype, ActualText, Alt, E, Lang. Answers a code for the artifact's")
+  (comment "class: 1 watermark, 2 background, 3 pagination, 4 layout, 5 another")
+  (comment "named type or subtype, 0 none.")
+  (let [^I32 end (+ (+ d 1) (pc-ea ox d))
+        ^:mut ^I32 j (+ d 1)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 ks 0
+        ^:mut ^I32 kl 0
+        ^:mut ^I32 vs 0
+        ^:mut ^I32 vl 0
+        ^:mut ^I32 vk 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 cls 0]
+    (while (< j end)
+      (do (set v (+ j 1))
+          (if (and (== (pc-kind ox j) K_NAME) (< v end))
+            (do (set ks (pc-ea ox j))
+                (set kl (pc-eb ox j))
+                (set vk (pc-kind ox v))
+                (set vs (pc-ea ox v))
+                (set vl (pc-eb ox v))
+                (if (and (== (pc-name-eq ox ks kl (pn-mcid)) 1) (== vk K_NUM))
+                  (sp-set sp span (sf-mcid) (fx-round (fx-join vs vl))))
+                (if (and (== (pc-name-eq ox ks kl (pn-type)) 1) (== vk K_NAME))
+                  (do (set at (pc-push-bytes et ox vs vl))
+                      (sp-set sp span (sf-type) at)
+                      (sp-set sp span (sf-typelen) vl)
+                      (if (== (pc-name-eq ox vs vl (pn-pagination)) 1) (if (== cls 0) (set cls 3)))
+                      (if (== (pc-name-eq ox vs vl (pn-layout)) 1) (if (== cls 0) (set cls 4)))
+                      (if (== (pc-name-eq ox vs vl (pn-background)) 1) (if (!= cls 1) (set cls 2)))
+                      (if (== cls 0) (set cls 5))))
+                (if (and (== (pc-name-eq ox ks kl (pn-subtype)) 1) (== vk K_NAME))
+                  (do (set at (pc-push-bytes et ox vs vl))
+                      (sp-set sp span (sf-subtype) at)
+                      (sp-set sp span (sf-subtypelen) vl)
+                      (if (== (pc-name-eq ox vs vl (pn-watermark)) 1) (set cls 1))
+                      (if (== (pc-name-eq ox vs vl (pn-background)) 1) (if (!= cls 1) (set cls 2)))
+                      (if (or (== (pc-name-eq ox vs vl (pn-header)) 1) (== (pc-name-eq ox vs vl (pn-footer)) 1))
+                        (if (or (== cls 0) (== cls 5)) (set cls 3)))
+                      (if (== cls 0) (set cls 5))))
+                (if (or (== vk K_STR) (== vk K_NAME))
+                  (do (if (== (pc-name-eq ox ks kl (pn-actual-text)) 1)
+                        (do (set at (pc-push-text et ox vs vl))
+                            (sp-set sp span (sf-actual) at)
+                            (sp-set sp span (sf-actuallen) (- (cells-len et) at))))
+                      (if (== (pc-name-eq ox ks kl (pn-alt)) 1)
+                        (do (set at (pc-push-text et ox vs vl))
+                            (sp-set sp span (sf-alt) at)
+                            (sp-set sp span (sf-altlen) (- (cells-len et) at))))
+                      (if (== (pc-name-eq ox ks kl (pn-e)) 1)
+                        (do (set at (pc-push-text et ox vs vl))
+                            (sp-set sp span (sf-exp) at)
+                            (sp-set sp span (sf-explen) (- (cells-len et) at))))
+                      (if (== (pc-name-eq ox ks kl (pn-lang)) 1)
+                        (do (set at (pc-push-text et ox vs vl))
+                            (sp-set sp span (sf-lang) at)
+                            (sp-set sp span (sf-langlen) (- (cells-len et) at))))))
+                (set j (+ v (pc-esize ox v))))
+            (set j (+ j (pc-esize ox j))))))
+    (return cls)))
+
+(defn ^I32 pc-mc-recompute [^:mut ^Cells cx ^Cells sp]
+  (comment "The innermost MCID and artifact class in force: walk the open spans.")
+  (let [^:mut ^I32 t (cells-at cx C_MCTOP)
+        ^:mut ^I32 mcid -1
+        ^:mut ^I32 art 0
+        ^:mut ^I32 guard 0
+        ^:mut ^I32 m 0]
+    (while (and (>= t 0) (<= guard MAX_MC))
+      (do (if (< mcid 0)
+            (do (set m (sp-get sp t (sf-mcid)))
+                (if (>= m 0) (set mcid m))))
+          (if (== art 0)
+            (set art (sp-get sp t (sf-artifact))))
+          (set t (sp-get sp t (sf-parent)))
+          (set guard (+ guard 1))))
+    (cells-set cx C_CURMCID mcid)
+    (cells-set cx C_CURART art)
+    (return 0)))
+
+(defn ^I32 pc-mc-pop [^:mut ^Cells cx ^:mut ^Cells sp ^Cells gl ^I32 unterminated]
+  (comment "Close the innermost open span: its glyphs are those shown since it opened.")
+  (let [^I32 t (cells-at cx C_MCTOP)]
+    (if (< t 0) (return 0))
+    (let [^I32 g (gl-count gl)
+          ^I32 gf (sp-get sp t (sf-gfirst))
+          ^I32 par (sp-get sp t (sf-parent))]
+      (sp-set sp t (sf-gcount) (- g gf))
+      (if (== unterminated 1)
+        (do (let [^I32 fl (sp-get sp t (sf-flags))]
+              (sp-set sp t (sf-flags) (bit-or fl (mc-unterminated))))))
+      (cells-set cx C_MCTOP par)
+      (cells-set cx C_MCDEPTH (- (cells-at cx C_MCDEPTH) 1))
+      (pc-mc-recompute cx sp)
+      (return 0))))
+
+(defn ^I32 pc-mc-begin [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                        ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
+                        ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^I32 n ^I32 props]
+  (comment "BMC / BDC: open a span with the tag of operand 0 and, for BDC, the")
+  (comment "properties of operand 1 (an inline dictionary, or a name in /Properties).")
+  (let [^I32 depth (cells-at cx C_MCDEPTH)
+        ^:mut ^I32 tstart 0
+        ^:mut ^I32 tlen 0
+        ^:mut ^I32 span 0
+        ^:mut ^I32 d -1
+        ^:mut ^I32 cls 0
+        ^:mut ^I32 raw 0
+        ^:mut ^I32 dh 0
+        ^:mut ^I32 isart 0
+        ^:mut ^I32 flags 0]
+    (if (>= depth MAX_MC)
+      (do (cells-set cx C_MCOVER (+ (cells-at cx C_MCOVER) 1))
+          (pc-warn-set cx W_MC)
+          (return 0)))
+    (set tstart (cells-len et))
+    (if (and (>= n 1) (== (pc-kind ox 0) K_NAME))
+      (do (set tstart (pc-push-entry et ox 0))
+          (set tlen (pc-eb ox 0))
+          (if (== (pc-entry-name-is ox 0 (pn-artifact)) 1)
+            (set isart 1))))
+    (set span (sp-new sp (cells-at cx C_PAGE) tstart tlen (cells-at cx C_MCTOP) (gl-count gl)))
+    (sp-set sp span (sf-stm) (cells-at cx C_STM))
+    (if (== isart 1) (sp-set sp span (sf-artifact) (ar-other)))
+    (if (and (== props 1) (>= n 2))
+      (do (if (== (pc-kind ox 1) K_DICT)
+            (do (set d 1)
+                (set flags (mc-inline))))
+          (if (== (pc-kind ox 1) K_NAME)
+            (do (set raw (pc-res-entry src ar dc a b st cx ox (pn-properties) 1))
+                (if (!= raw 0)
+                  (set dh (pd-resolve src ar dc a b st raw)))
+                (if (ps-missed src)
+                  (cells-set cx C_ABORT 1))
+                (if (and (!= dh 0) (== (pl-kind-of ar dh) 7))
+                  (do (set d (pc-ingest-props src ar dc a b st cx ox dh))
+                      (set flags (mc-resource)))
+                  (do (set flags (mc-unresolved))
+                      (pc-warn-set cx W_PROPS)))))
+          (sp-set sp span (sf-flags) flags)
+          (if (>= d 0)
+            (do (set cls (pc-read-props et sp ox span d))
+                (if (== isart 1)
+                  (do (if (== cls 1) (sp-set sp span (sf-artifact) (ar-watermark)))
+                      (if (== cls 2) (sp-set sp span (sf-artifact) (ar-background)))
+                      (if (== cls 3) (sp-set sp span (sf-artifact) (ar-pagination)))
+                      (if (== cls 4) (sp-set sp span (sf-artifact) (ar-layout)))))))))
+    (cells-set cx C_MCTOP span)
+    (cells-set cx C_MCDEPTH (+ depth 1))
+    (pc-mc-recompute cx sp)
+    (return 0)))
+
+(defn ^I32 pc-mc-end [^:mut ^Cells cx ^:mut ^Cells sp ^Cells gl]
+  (comment "EMC: close the innermost span this stream opened; a BDC that was too deep")
+  (comment "to record is balanced first; an EMC with nothing to close is ignored.")
+  (let [^I32 over (cells-at cx C_MCOVER)]
+    (if (> over 0)
+      (do (cells-set cx C_MCOVER (- over 1))
+          (return 0)))
+    (if (<= (cells-at cx C_MCDEPTH) (cells-at cx C_MCBASE))
+      (do (pc-warn-set cx W_MC)
+          (return 0)))
+    (return (pc-mc-pop cx sp gl 0))))
+
+;; ------------------------------------------------------------ inline images
+
+(defn ^I32 pc-skip-inline [^:mut ^Cells cx ^Cells cs]
+  (comment "BI: skip to the end of the inline image: find `ID` and its one white")
+  (comment "space, then the first `EI` that stands alone (white space before and white")
+  (comment "space or the end after). Binary data rarely contains one; if it does the")
+  (comment "rest is read as operators and skipped as unknown ones.")
+  (let [^I32 end (cells-at cx C_END)
+        ^:mut ^I32 p (cells-at cx C_POS)
+        ^:mut ^I32 found 0]
+    (while (and (< (+ p 2) end) (== found 0))
+      (do (if (and (== (pc-ws (cells-at cs p)) 1)
+                   (and (== (cells-at cs (+ p 1)) 73)
+                        (and (== (cells-at cs (+ p 2)) 68)
+                             (or (>= (+ p 3) end) (== (pc-ws (cells-at cs (+ p 3))) 1)))))
+            (do (set found 1)
+                (set p (+ p 4)))
+            (set p (+ p 1)))))
+    (if (== found 0)
+      (do (cells-set cx C_POS end)
+          (return 0)))
+    (set found 0)
+    (while (and (< (+ p 1) end) (== found 0))
+      (do (if (and (== (cells-at cs p) 69)
+                   (and (== (cells-at cs (+ p 1)) 73)
+                        (and (or (== p 0) (== (pc-ws (cells-at cs (- p 1))) 1))
+                             (or (>= (+ p 2) end) (== (pc-ws (cells-at cs (+ p 2))) 1)))))
+            (do (set found 1)
+                (set p (+ p 2)))
+            (set p (+ p 1)))))
+    (if (== found 0) (set p end))
+    (cells-set cx C_POS p)
+    (return 0)))
+
+;; ----------------------------------------------------------- Form XObjects
+
+(defn ^I32 pc-append-stream [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                             ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx
+                             ^:mut ^Cells out ^:mut ^Cells cs ^I32 sh]
+  (comment "Decode stream sh and append its bytes (and a line feed) to `cs`. Answers")
+  (comment "the filter chain's status (0 ok), or -1 when the source missed.")
+  (let [^I32 status (pd-stream-data src ar dc a b st sh out)
+        ^I32 n (cells-len out)
+        ^:mut ^I32 i 0]
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return -1)))
+    (if (!= status 0)
+      (do (pc-warn-set cx W_STREAM)
+          (cells-set cx C_SSTAT status)))
+    (while (< i n)
+      (do (cells-push cs (cells-at out i))
+          (set i (+ i 1))))
+    (cells-push cs 10)
+    (return status)))
+
+(defn ^I32 pc-do [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                  ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
+                  ^:mut ^Cells cs ^:mut ^Cells out
+                  ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                  ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^I32 n]
+  (comment "Do: run the Form XObject named by operand 0. Images and everything that is")
+  (comment "not a form are skipped. The form's /Matrix is concatenated to the CTM, its")
+  (comment "/Resources replace the current ones (else they are inherited), and it runs")
+  (comment "inside its own `q`/`Q`.")
+  (if (< n 1) (return 0))
+  (if (!= (pc-kind ox 0) K_NAME) (return 0))
+  (let [^I32 raw (pc-res-entry src ar dc a b st cx ox (pn-x-object) 0)
+        ^:mut ^I32 objnum 0
+        ^:mut ^I32 xh 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 fd 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 mat 0
+        ^:mut ^I32 el 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 res 0
+        ^:mut ^I32 oldres 0
+        ^:mut ^I32 oldstm 0
+        ^:mut ^I32 start 0
+        ^:mut ^I32 endcs 0
+        ^:mut ^I32 status 0]
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (if (== raw 0)
+      (do (pc-warn-set cx W_FORM)
+          (return 0)))
+    (if (== (pl-kind-of ar raw) 9)
+      (set objnum (pl-int-value ar raw)))
+    (set xh (pd-resolve src ar dc a b st raw))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (if (== xh 0)
+      (do (pc-warn-set cx W_FORM)
+          (return 0)))
+    (if (!= (pl-kind-of ar xh) 8) (return 0))
+    (set sub (pd-dget src ar dc a b st xh (pn-subtype)))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (if (== sub 0) (return 0))
+    (if (== (pl-name-is ar sub (pn-form)) 0) (return 0))
+    (comment "Depth and cycles: a form deeper than FORM_DEPTH, or already running, is skipped.")
+    (set fd (cells-at cx C_FDEPTH))
+    (if (or (>= fd MAX_FORMS) (>= fd (cells-at cx C_FLIM)))
+      (do (pc-warn-set cx W_DEPTH)
+          (return 0)))
+    (if (!= objnum 0)
+      (while (< i fd)
+        (do (if (== (cells-at cx (+ C_FSTACK i)) objnum)
+              (do (pc-warn-set cx W_DEPTH)
+                  (return 0)))
+            (set i (+ i 1)))))
+    (comment "Its /Matrix (six numbers, else the identity).")
+    (mx-ident cx C_TMP)
+    (set mat (pd-dget src ar dc a b st xh (pn-matrix)))
+    (if (and (!= mat 0) (== (pl-kind-of ar mat) 6))
+      (do (set el (pl-first ar mat))
+          (set got 0)
+          (while (and (!= el 0) (< got 6))
+            (do (fx-put cx (+ C_TMP (* got 2)) (pc-ar-fx64 ar el))
+                (set el (pl-next ar el))
+                (set got (+ got 1))))
+          (if (< got 6) (mx-ident cx C_TMP))))
+    (set res (pd-dget src ar dc a b st xh (pn-resources)))
+    (set oldres (cells-at cx C_RES))
+    (set oldstm (cells-at cx C_STM))
+    (if (and (!= res 0) (== (pl-kind-of ar res) 7))
+      (cells-set cx C_RES res))
+    (set start (cells-len cs))
+    (set status (pc-append-stream src ar dc a b st cx out cs xh))
+    (if (== status -1) (return 0))
+    (pc-save cx)
+    (mx-mul cx (+ C_CUR G_CTM) C_TMP (+ C_CUR G_CTM))
+    (cells-set cx (+ C_FSTACK fd) objnum)
+    (cells-set cx C_FDEPTH (+ fd 1))
+    (cells-set cx C_STM objnum)
+    (set endcs (cells-len cs))
+    (pc-run src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp start endcs)
+    (cells-set cx C_FDEPTH fd)
+    (cells-set cx C_STM oldstm)
+    (cells-set cx C_RES oldres)
+    (pc-restore cx)
+    (cells-drop cs start)
+    (return 0)))
+
+;; ------------------------------------------------------------------- operators
+
+(defn ^I32 pc-prep [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                    ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells out
+                    ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3]
+  (comment "Before a string is shown: the font resident, and M = Tm x CTM current.")
+  (pc-ensure-font src ar dc a b st cx out f0 f1 f2 f3)
+  (pc-update-m cx)
+  (if (< (cells-at cx C_SLOT) 0)
+    (pc-warn-set cx W_TEXT))
+  (return 0))
+
+(defn ^I32 pc-op [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                  ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
+                  ^:mut ^Cells cs ^:mut ^Cells out
+                  ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                  ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^I32 op ^I32 n]
+  (comment "Execute one operator; `ox` holds its n operands. Unknown operators do")
+  (comment "nothing (their operands are dropped by the caller).")
+  (if (== op OP_SAVE)
+    (do (pc-save cx) (return 0)))
+  (if (== op OP_RESTORE)
+    (do (pc-restore cx) (return 0)))
+  (if (== op OP_CM)
+    (do (if (>= n 6)
+          (do (mx-set cx C_TMP (pc-num ox n 0) (pc-num ox n 1) (pc-num ox n 2)
+                      (pc-num ox n 3) (pc-num ox n 4) (pc-num ox n 5))
+              (mx-mul cx (+ C_CUR G_CTM) C_TMP (+ C_CUR G_CTM))))
+        (return 0)))
+  (if (== op OP_BT)
+    (do (mx-ident cx C_TM)
+        (mx-ident cx C_TLM)
+        (cells-set cx C_INTEXT 1)
+        (return 0)))
+  (if (== op OP_ET)
+    (do (cells-set cx C_INTEXT 0) (return 0)))
+  (if (== op OP_TF)
+    (do (pc-tf src ar dc a b st cx ox n) (return 0)))
+  (if (== op OP_TCHAR)
+    (do (fx-put cx (+ C_CUR G_TC) (pc-num ox n 0)) (return 0)))
+  (if (== op OP_TWORD)
+    (do (fx-put cx (+ C_CUR G_TW) (pc-num ox n 0)) (return 0)))
+  (if (== op OP_TSCALE)
+    (do (fx-put cx (+ C_CUR G_TH) (fx-muldiv (pc-num ox n 0) (i64 1) (i64 100))) (return 0)))
+  (if (== op OP_TLEAD)
+    (do (fx-put cx (+ C_CUR G_TL) (pc-num ox n 0)) (return 0)))
+  (if (== op OP_TRISE)
+    (do (fx-put cx (+ C_CUR G_RISE) (pc-num ox n 0)) (return 0)))
+  (if (== op OP_TMODE)
+    (do (cells-set cx (+ C_CUR G_MODE) (fx-round (pc-num ox n 0))) (return 0)))
+  (if (== op OP_TD)
+    (do (pc-td cx (pc-num ox n 0) (pc-num ox n 1)) (return 0)))
+  (if (== op OP_TDL)
+    (do (fx-put cx (+ C_CUR G_TL) (- (i64 0) (pc-num ox n 1)))
+        (pc-td cx (pc-num ox n 0) (pc-num ox n 1))
+        (return 0)))
+  (if (== op OP_TM)
+    (do (if (>= n 6)
+          (pc-set-tm cx (pc-num ox n 0) (pc-num ox n 1) (pc-num ox n 2)
+                     (pc-num ox n 3) (pc-num ox n 4) (pc-num ox n 5)))
+        (return 0)))
+  (if (== op OP_TSTAR)
+    (do (pc-next-line cx) (return 0)))
+  (if (== op OP_SHOW)
+    (do (if (and (>= n 1) (== (pc-kind ox 0) K_STR))
+          (do (pc-prep src ar dc a b st cx out f0 f1 f2 f3)
+              (pc-show-str cx ox gl et f0 f1 f2 f3 0)))
+        (return 0)))
+  (if (== op OP_SHOWARR)
+    (do (if (and (>= n 1) (== (pc-kind ox 0) K_ARR))
+          (do (pc-prep src ar dc a b st cx out f0 f1 f2 f3)
+              (pc-show-arr cx ox gl et f0 f1 f2 f3 0)))
+        (return 0)))
+  (if (== op OP_QUOTE)
+    (do (if (and (>= n 1) (== (pc-kind ox 0) K_STR))
+          (do (pc-next-line cx)
+              (pc-prep src ar dc a b st cx out f0 f1 f2 f3)
+              (pc-show-str cx ox gl et f0 f1 f2 f3 0)))
+        (return 0)))
+  (if (== op OP_DQUOTE)
+    (do (if (and (>= n 3) (== (pc-kind ox 2) K_STR))
+          (do (fx-put cx (+ C_CUR G_TW) (pc-num ox n 0))
+              (fx-put cx (+ C_CUR G_TC) (pc-num ox n 1))
+              (pc-next-line cx)
+              (pc-prep src ar dc a b st cx out f0 f1 f2 f3)
+              (pc-show-str cx ox gl et f0 f1 f2 f3 2)))
+        (return 0)))
+  (if (== op OP_DO)
+    (do (pc-do src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp n) (return 0)))
+  (if (== op OP_BDC)
+    (do (pc-mc-begin src ar dc a b st cx ox gl et sp n 1) (return 0)))
+  (if (== op OP_BMC)
+    (do (pc-mc-begin src ar dc a b st cx ox gl et sp n 0) (return 0)))
+  (if (== op OP_EMC)
+    (do (pc-mc-end cx sp gl) (return 0)))
+  (if (== op OP_BI)
+    (do (pc-skip-inline cx cs) (return 0)))
+  (if (or (== op OP_GRAY) (or (== op OP_RGB) (or (== op OP_CMYK) (or (== op OP_SC) (== op OP_SCN)))))
+    (do (pc-set-color cx ox n) (return 0)))
+  (if (== op OP_CS)
+    (do (cells-set cx (+ C_CUR G_COLOR) 0)
+        (if (and (>= n 1) (== (pc-kind ox 0) K_NAME))
+          (do (cells-set cx (+ C_CUR G_FAM) 0)
+              (if (== (pc-entry-name-is ox 0 (pn-device-gray)) 1)
+                (cells-set cx (+ C_CUR G_FAM) 1))
+              (if (== (pc-entry-name-is ox 0 (pn-device-rgb)) 1)
+                (cells-set cx (+ C_CUR G_FAM) 2))
+              (if (== (pc-entry-name-is ox 0 (pn-device-cmyk)) 1)
+                (cells-set cx (+ C_CUR G_FAM) 3))))
+        (return 0)))
+  (if (== op OP_GS)
+    (do (if (and (>= n 1) (== (pc-kind ox 0) K_NAME))
+          (do (let [^I32 raw (pc-res-entry src ar dc a b st cx ox (pn-ext-g-state) 0)]
+                (if (!= raw 0)
+                  (do (let [^I32 gd (pd-resolve src ar dc a b st raw)]
+                        (if (!= gd 0)
+                          (do (let [^I32 cav (pd-dget src ar dc a b st gd (pn-ca))]
+                                (if (!= cav 0)
+                                  (do (let [^I32 al (fx-round (fx-mul (pc-ar-fx64 ar cav) (fx-of-int 1000)))]
+                                        (if (< al 0) (cells-set cx (+ C_CUR G_ALPHA) 0)
+                                          (if (> al 1000) (cells-set cx (+ C_CUR G_ALPHA) 1000)
+                                            (cells-set cx (+ C_CUR G_ALPHA) al)))))))))))))
+              (if (ps-missed src)
+                (cells-set cx C_ABORT 1))))
+        (return 0)))
+  (return 0))
+
+;; ------------------------------------------------------------------ the loop
+
+(defn ^I32 pc-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                   ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
+                   ^:mut ^Cells cs ^:mut ^Cells out
+                   ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                   ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp
+                   ^I32 start ^I32 end]
+  (comment "Run the content bytes cs[start, end): read operands, then execute each")
+  (comment "operator. The caller's lexer position, graphics-state floor and marked-")
+  (comment "content floor are kept and restored, so a form can run inside an operator.")
+  (let [^I32 oldpos (cells-at cx C_POS)
+        ^I32 oldend (cells-at cx C_END)
+        ^I32 oldgs (cells-at cx C_GSBASE)
+        ^I32 oldmcb (cells-at cx C_MCBASE)
+        ^I32 oldover (cells-at cx C_MCOVER)
+        ^I32 oldtop (cells-at cx C_MCTOP)
+        ^:mut ^I32 r 1
+        ^:mut ^I32 opc 0
+        ^:mut ^I32 nop 0
+        ^:mut ^I32 ops 0]
+    (cells-set cx C_POS start)
+    (cells-set cx C_END end)
+    (cells-set cx C_GSBASE (cells-at cx C_DEPTH))
+    (cells-set cx C_MCBASE (cells-at cx C_MCDEPTH))
+    (cells-set cx C_MCOVER 0)
+    (pc-ox-clear cx ox)
+    (while (and (!= r 0) (== (cells-at cx C_ABORT) 0))
+      (do (set r (pc-lex cx ox cs))
+          (if (== r 2)
+            (do (set ops (+ (cells-at cx C_OPS) 1))
+                (cells-set cx C_OPS ops)
+                (if (> ops (cells-at cx C_OPLIM))
+                  (limit-breach 5 ops))
+                (set opc (cells-at cx C_OP))
+                (set nop (cells-at cx C_OXN))
+                (pc-op src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp opc nop)
+                (pc-ox-clear cx ox)))))
+    (comment "What the stream left open: spans, graphics states.")
+    (while (> (cells-at cx C_MCDEPTH) (cells-at cx C_MCBASE))
+      (do (pc-warn-set cx W_MC)
+          (pc-mc-pop cx sp gl 1)))
+    (while (> (cells-at cx C_DEPTH) (cells-at cx C_GSBASE))
+      (cells-set cx C_DEPTH (- (cells-at cx C_DEPTH) 1)))
+    (cells-set cx C_MCTOP oldtop)
+    (pc-mc-recompute cx sp)
+    (cells-set cx C_MCOVER oldover)
+    (cells-set cx C_MCBASE oldmcb)
+    (cells-set cx C_GSBASE oldgs)
+    (cells-set cx C_POS oldpos)
+    (cells-set cx C_END oldend)
+    (return 0)))
+
+;; --------------------------------------------------------- words and lines
+;; Grouping is done in page space from the glyph boxes, after the page is read,
+;; in the order the content stream showed the glyphs (SPEC 8.1: the stream order is
+;; kept as one weak reading-order signal; ordering the lines on the page is P1.8's).
+;; The four WRITING AXES are the multiples of 90 degrees the glyphs' rotation is
+;; nearest to: 0 runs left to right, 1 bottom to top (rot 90), 2 right to left,
+;; 3 top to bottom. A glyph's DISPLACEMENT is measured along the axis, and its
+;; OFFSET across it: the baseline's y for 0 and 2, the box's right edge (the
+;; baseline, since the glyph's top points left) for 1, its left edge for 3.
+
+(defconst ^I32 WORD_GAP_PM 160)      ;; a gap wider than this per-mille of the size ends a word
+(defconst ^I32 WORD_BACK_PM 400)     ;; going back further than this per-mille of the size ends a word
+(defconst ^I32 OFFSET_PM 450)        ;; an offset across the axis beyond this ends a word or a line
+(defconst ^I32 LINE_BACK_PM 600)
+(defconst ^I32 LINE_GAP_PM 2000)     ;; a gap beyond 2 sizes ends a line (as pdfminer's char_margin)
+
+(defn ^I32 pc-axis [^I32 rot]
+  (comment "The writing axis a rotation is within three degrees of, else -1 (a glyph run")
+  (comment "at another angle is measured along its own direction, `pc-rot-gap`).")
+  (let [^I32 a (rem (quot (+ rot 4500) 9000) 4)
+        ^:mut ^I32 d (- rot (* a 9000))]
+    (if (< d 0) (set d (- 0 d)))
+    (if (> d 18000) (set d (- 36000 d)))
+    (if (<= d 300) (return a))
+    (return -1)))
+
+(defn ^I32 pc-offset [^Cells gl ^I32 j ^I32 axis]
+  (comment "Where glyph j's baseline is across its writing axis, in centipoints.")
+  (if (== axis 1) (return (gl-get gl j (gf-x1))))
+  (if (== axis 3) (return (gl-get gl j (gf-x0))))
+  (return (gl-get gl j (gf-baseline))))
+
+(defn ^I32 pc-gap [^Cells gl ^I32 p ^I32 g ^I32 axis]
+  (comment "The space along the axis between glyph p and the glyph g after it")
+  (comment "(negative when they overlap or g is before p).")
+  (if (== axis 0) (return (- (gl-get gl g (gf-x0)) (gl-get gl p (gf-x1)))))
+  (if (== axis 2) (return (- (gl-get gl p (gf-x0)) (gl-get gl g (gf-x1)))))
+  (if (== axis 1) (return (- (gl-get gl p (gf-y0)) (gl-get gl g (gf-y1)))))
+  (return (- (gl-get gl g (gf-y0)) (gl-get gl p (gf-y1)))))
+
+(defn ^I32 pc-rot-gap [^Cells gl ^I32 p ^I32 g ^I32 size]
+  (comment "For text at an arbitrary angle: the distance between glyph p's centre and")
+  (comment "glyph g's, along the writing direction, less 55 percent of the size (the")
+  (comment "two half-advances of adjacent letters), so it reads as `pc-gap` does.")
+  (let [^I32 rot (gl-get gl p (gf-rot))
+        ^I64 ux (fx-cos rot)
+        ^I64 uy (- (i64 0) (fx-sin rot))
+        ^I32 dx2 (- (+ (gl-get gl g (gf-x0)) (gl-get gl g (gf-x1))) (+ (gl-get gl p (gf-x0)) (gl-get gl p (gf-x1))))
+        ^I32 dy2 (- (+ (gl-get gl g (gf-y0)) (gl-get gl g (gf-y1))) (+ (gl-get gl p (gf-y0)) (gl-get gl p (gf-y1))))
+        ^I64 al2 (add64 (fx-mul (fx-of-int dx2) ux) (fx-mul (fx-of-int dy2) uy))]
+    (return (- (fx-round (quot al2 (i64 2))) (quot (* size 550) 1000)))))
+
+(defn ^I32 pc-rot-off [^Cells gl ^I32 p ^I32 g]
+  (comment "The distance between the two glyphs' centres across the writing direction.")
+  (let [^I32 rot (gl-get gl p (gf-rot))
+        ^I64 sn (fx-sin rot)
+        ^I64 cs (fx-cos rot)
+        ^I32 dx2 (- (+ (gl-get gl g (gf-x0)) (gl-get gl g (gf-x1))) (+ (gl-get gl p (gf-x0)) (gl-get gl p (gf-x1))))
+        ^I32 dy2 (- (+ (gl-get gl g (gf-y0)) (gl-get gl g (gf-y1))) (+ (gl-get gl p (gf-y0)) (gl-get gl p (gf-y1))))
+        ^I32 pe (fx-round (quot (add64 (fx-mul (fx-of-int dx2) sn) (fx-mul (fx-of-int dy2) cs)) (i64 2)))]
+    (if (< pe 0) (return (- 0 pe)))
+    (return pe)))
+
+(defn ^I32 pc-pair-gap [^Cells gl ^I32 p ^I32 g ^I32 axis ^I32 size]
+  (if (< axis 0) (return (pc-rot-gap gl p g size)))
+  (return (pc-gap gl p g axis)))
+
+(defn ^I32 pc-pair-off [^Cells gl ^I32 p ^I32 g ^I32 axis]
+  (comment "How far glyph g's baseline is from glyph p's, across the writing axis.")
+  (if (< axis 0) (return (pc-rot-off gl p g)))
+  (let [^I32 d (- (pc-offset gl p axis) (pc-offset gl g axis))]
+    (if (< d 0) (return (- 0 d)))
+    (return d)))
+
+(defn ^I32 pc-space-cp [^I32 cp]
+  (comment "1 for a code point that separates words: the spaces (U+0020, U+00A0,")
+  (comment "U+1680, U+2000..200A, U+202F, U+205F, U+3000) and the tab.")
+  (if (or (== cp 32) (or (== cp 160) (or (== cp 9) (or (== cp 5760) (or (== cp 8239) (or (== cp 8287) (== cp 12288)))))))
+    (return 1))
+  (if (and (>= cp 8192) (<= cp 8202)) (return 1))
+  (return 0))
+
+(defn ^I32 pc-cl [^I32 v]
+  (comment "Clamp a distance to +-1,000,000 centipoints so a per-mille product fits an I32.")
+  (if (> v 1000000) (return 1000000))
+  (if (< v -1000000) (return -1000000))
+  (return v))
+
+(defn ^I32 pc-rot-same [^I32 r1 ^I32 r2]
+  (comment "1 when two rotations (centi-degrees) agree to half a degree.")
+  (let [^:mut ^I32 d (- r1 r2)]
+    (if (< d 0) (set d (- 0 d)))
+    (if (> d 18000) (set d (- 36000 d)))
+    (if (<= d 50) (return 1))
+    (return 0)))
+
+(defn ^I32 pc-continues [^Cells gl ^I32 p ^I32 g]
+  (comment "1 when glyph g continues the word glyph p is in: the same rotation, on the")
+  (comment "same baseline (to 45 percent of the size: sub- and superscripts stay), and")
+  (comment "the gap along the axis neither a word space nor a step back.")
+  (let [^I32 rot (gl-get gl p (gf-rot))
+        ^I32 axis (pc-axis rot)
+        ^I32 size (gl-get gl g (gf-size))
+        ^I32 sizep (gl-get gl p (gf-size))
+        ^:mut ^I32 sz size
+        ^:mut ^I32 gap 0
+        ^:mut ^I32 off 0]
+    (if (== (pc-rot-same rot (gl-get gl g (gf-rot))) 0) (return 0))
+    (if (> sizep sz) (set sz sizep))
+    (if (> sz 200000) (set sz 200000))
+    (set off (pc-cl (pc-pair-off gl p g axis)))
+    (if (> (* off 1000) (* sz OFFSET_PM)) (return 0))
+    (set gap (pc-cl (pc-pair-gap gl p g axis sz)))
+    (if (> (* gap 1000) (* sz WORD_GAP_PM)) (return 0))
+    (if (< (* gap 1000) (- 0 (* sz WORD_BACK_PM))) (return 0))
+    (return 1)))
+
+(defn ^I32 pc-emit-word [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd
+                         ^I32 page ^I32 gfst ^I32 glst]
+  (comment "Record glyphs [first, last] as a word: the union of their boxes, their text")
+  (comment "(a glyph of unknown value is U+FFFD), the dominant font and size of the")
+  (comment "first, and `hidden-text` as its source when every glyph is render mode 3.")
+  (let [^:mut ^I32 x0 (gl-get gl gfst (gf-x0))
+        ^:mut ^I32 y0 (gl-get gl gfst (gf-y0))
+        ^:mut ^I32 x1 (gl-get gl gfst (gf-x1))
+        ^:mut ^I32 y1 (gl-get gl gfst (gf-y1))
+        ^:mut ^I32 j gfst
+        ^:mut ^I32 tstart -1
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 visible 0
+        ^:mut ^I32 cpv 0
+        ^:mut ^I32 cp 0]
+    (set tstart (cells-len et))
+    (while (<= j glst)
+      (do (if (< (gl-get gl j (gf-x0)) x0) (set x0 (gl-get gl j (gf-x0))))
+          (if (< (gl-get gl j (gf-y0)) y0) (set y0 (gl-get gl j (gf-y0))))
+          (if (> (gl-get gl j (gf-x1)) x1) (set x1 (gl-get gl j (gf-x1))))
+          (if (> (gl-get gl j (gf-y1)) y1) (set y1 (gl-get gl j (gf-y1))))
+          (if (!= (gl-get gl j (gf-mode)) 3) (set visible 1))
+          (set ts (gl-get gl j (gf-tstart)))
+          (set tl (gl-get gl j (gf-tlen)))
+          (set cp (gl-get gl j (gf-cp)))
+          (if (and (>= ts 0) (> tl 0))
+            (do (set k 0)
+                (while (< k tl)
+                  (do (set cpv (cells-at et (+ ts k)))
+                      (etx-append-cp et cpv)
+                      (set k (+ k 1)))))
+            (if (>= cp 0)
+              (etx-append-cp et cp)
+              (etx-append-cp et 65533)))
+          (set j (+ j 1))))
+    (let [^I32 w (wd-new wd page x0 y0 x1 y1 gfst (+ (- glst gfst) 1))]
+      (wd-set wd w (wf-tstart) tstart)
+      (wd-set wd w (wf-tlen) (- (cells-len et) tstart))
+      (wd-set wd w (wf-font) (gl-get gl gfst (gf-font)))
+      (wd-set wd w (wf-size) (gl-get gl gfst (gf-size)))
+      (if (== visible 0) (wd-set wd w (wf-src) (sr-hidden-text)))
+      (set j gfst)
+      (while (<= j glst)
+        (do (gl-set gl j (gf-word) w)
+            (set j (+ j 1))))
+      (return w))))
+
+(defn ^:pub ^I32 pc-group [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd ^:mut ^Cells ln
+                           ^I32 page ^I32 g0 ^I32 w0]
+  (comment "Group the glyphs from g0 on into words, and the words from w0 on into lines.")
+  (let [^I32 g1 (gl-count gl)
+        ^:mut ^I32 i g0
+        ^:mut ^I32 cur -1]
+    (while (< i g1)
+      (do (if (== (pc-space-cp (gl-get gl i (gf-cp))) 1)
+            (do (if (>= cur 0)
+                  (do (pc-emit-word gl et wd page cur (- i 1))
+                      (set cur -1))))
+            (do (if (>= cur 0)
+                  (if (== (pc-continues gl (- i 1) i) 0)
+                    (do (pc-emit-word gl et wd page cur (- i 1))
+                        (set cur -1))))
+                (if (< cur 0) (set cur i))))
+          (set i (+ i 1))))
+    (if (>= cur 0)
+      (do (pc-emit-word gl et wd page cur (- g1 1))
+          (set cur -1)))
+    (comment "Lines: consecutive words on one baseline, in order.")
+    (let [^I32 nw (wd-count wd)
+          ^:mut ^I32 j w0
+          ^:mut ^I32 lfirst -1
+          ^:mut ^I32 prev -1
+          ^:mut ^I32 lnx 0
+          ^:mut ^I32 x0 0
+          ^:mut ^I32 y0 0
+          ^:mut ^I32 x1 0
+          ^:mut ^I32 y1 0
+          ^:mut ^I32 gf0 0
+          ^:mut ^I32 gfp 0
+          ^:mut ^I32 glast 0
+          ^:mut ^I32 axis 0
+          ^:mut ^I32 joins 0
+          ^:mut ^I32 gap 0
+          ^:mut ^I32 sz 0
+          ^:mut ^I32 off 0]
+      (while (<= j nw)
+        (do (set joins 0)
+            (if (and (< j nw) (>= prev 0))
+              (do (set gf0 (wd-get wd j (wf-gfirst)))
+                  (set gfp (wd-get wd prev (wf-gfirst)))
+                  (set axis (pc-axis (gl-get gl gfp (gf-rot))))
+                  (if (== (pc-rot-same (gl-get gl gfp (gf-rot)) (gl-get gl gf0 (gf-rot))) 1)
+                    (do (set sz (gl-get gl gf0 (gf-size)))
+                        (if (> (gl-get gl gfp (gf-size)) sz) (set sz (gl-get gl gfp (gf-size))))
+                        (if (> sz 200000) (set sz 200000))
+                        (set glast (- (+ (wd-get wd prev (wf-gfirst)) (wd-get wd prev (wf-gcount))) 1))
+                        (set off (pc-cl (pc-pair-off gl glast gf0 axis)))
+                        (comment "The gap is between the previous word's LAST glyph and this word's first.")
+                        (set gap (pc-cl (pc-pair-gap gl glast gf0 axis sz)))
+                        (if (<= (* off 1000) (* sz OFFSET_PM))
+                          (if (>= (* gap 1000) (- 0 (* sz LINE_BACK_PM)))
+                            (if (<= (* gap 1000) (* sz LINE_GAP_PM))
+                              (set joins 1))))))))
+            (if (== joins 1)
+              (do (wd-set wd prev (wf-gap) gap)
+                  (set prev j))
+              (do (comment "The line so far ends at `prev`: record it, then start a new one at j.")
+                  (if (>= lfirst 0)
+                    (do (set x0 (wd-get wd lfirst (wf-x0)))
+                        (set y0 (wd-get wd lfirst (wf-y0)))
+                        (set x1 (wd-get wd lfirst (wf-x1)))
+                        (set y1 (wd-get wd lfirst (wf-y1)))
+                        (set lnx lfirst)
+                        (while (<= lnx prev)
+                          (do (if (< (wd-get wd lnx (wf-x0)) x0) (set x0 (wd-get wd lnx (wf-x0))))
+                              (if (< (wd-get wd lnx (wf-y0)) y0) (set y0 (wd-get wd lnx (wf-y0))))
+                              (if (> (wd-get wd lnx (wf-x1)) x1) (set x1 (wd-get wd lnx (wf-x1))))
+                              (if (> (wd-get wd lnx (wf-y1)) y1) (set y1 (wd-get wd lnx (wf-y1))))
+                              (set lnx (+ lnx 1))))
+                        (set gfp (wd-get wd lfirst (wf-gfirst)))
+                        (set axis (pc-axis (gl-get gl gfp (gf-rot))))
+                        (set lnx (ln-new ln page x0 y0 x1 y1 lfirst (+ (- prev lfirst) 1)
+                                         (pc-offset gl gfp axis)))
+                        (ln-set ln lnx (lf-rot) (gl-get gl gfp (gf-rot)))
+                        (set gfp lfirst)
+                        (while (<= gfp prev)
+                          (do (wd-set wd gfp (wf-line) lnx)
+                              (set gfp (+ gfp 1))))))
+                  (set lfirst j)
+                  (set prev j)))
+            (set j (+ j 1))))
+      (return 0))))
+
+;; ------------------------------------------------------------- pages and documents
+
+(defn ^I32 pc-begin-page [^:mut ^Cells cx ^I32 page]
+  (comment "Reset everything a page owns; the fonts (the document's) stay.")
+  (cells-set cx C_PAGE page)
+  (cells-set cx C_WARN 0)
+  (cells-set cx C_OPS 0)
+  (cells-set cx C_ABORT 0)
+  (cells-set cx C_POS 0)
+  (cells-set cx C_END 0)
+  (cells-set cx C_OXN 0)
+  (cells-set cx C_CDEPTH 0)
+  (cells-set cx C_OP 0)
+  (cells-set cx C_RES 0)
+  (cells-set cx C_SLOT -1)
+  (cells-set cx C_DEPTH 0)
+  (cells-set cx C_FDEPTH 0)
+  (cells-set cx C_STM 0)
+  (cells-set cx C_MCTOP -1)
+  (cells-set cx C_MCDEPTH 0)
+  (cells-set cx C_MCBASE 0)
+  (cells-set cx C_MCOVER 0)
+  (cells-set cx C_CURMCID -1)
+  (cells-set cx C_CURART 0)
+  (cells-set cx C_INTEXT 0)
+  (cells-set cx C_GSBASE 0)
+  (mx-ident cx C_TM)
+  (mx-ident cx C_TLM)
+  (mx-ident cx C_M)
+  (return 0))
+
+(defn ^:pub ^I32 pc-page [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
+                          ^:mut ^Cells cs ^:mut ^Cells out
+                          ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                          ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp
+                          ^Cells pg ^I32 pi ^I32 page ^:mut ^Cells wd ^:mut ^Cells ln]
+  (comment "Interpret page index pi of the page table pg (page number `page`, 1-based, is")
+  (comment "what the evidence records): its content streams, then the words and lines.")
+  (comment "Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is")
+  (comment "to be used and the caller re-runs on a fresh view (D075).")
+  (let [^I32 con (pd-pg-contents pg pi)
+        ^I32 g0 (gl-count gl)
+        ^I32 w0 (wd-count wd)
+        ^:mut ^I32 el 0
+        ^:mut ^I32 eh 0
+        ^:mut ^I32 endcs 0]
+    (pc-begin-page cx page)
+    (pc-base-matrix cx (pd-pg-crop pg pi 0) (pd-pg-crop pg pi 1) (pd-pg-crop pg pi 2)
+                    (pd-pg-crop pg pi 3) (pd-pg-rotate pg pi))
+    (pc-gs-reset cx)
+    (cells-set cx C_RES (pd-pg-resources pg pi))
+    (cells-drop cs 0)
+    (if (!= con 0)
+      (do (if (== (pl-kind-of ar con) 8)
+            (pc-append-stream src ar dc a b st cx out cs con))
+          (if (== (pl-kind-of ar con) 6)
+            (do (set el (pl-first ar con))
+                (while (and (!= el 0) (== (cells-at cx C_ABORT) 0))
+                  (do (set eh (pd-resolve src ar dc a b st el))
+                      (if (ps-missed src)
+                        (cells-set cx C_ABORT 1))
+                      (if (and (!= eh 0) (== (pl-kind-of ar eh) 8))
+                        (pc-append-stream src ar dc a b st cx out cs eh))
+                      (set el (pl-next ar el))))))))
+    (if (== (cells-at cx C_ABORT) 1) (return 7))
+    (set endcs (cells-len cs))
+    (pc-run src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp 0 endcs)
+    (if (== (cells-at cx C_ABORT) 1) (return 7))
+    (if (ps-missed src) (return 7))
+    (pc-group gl et wd ln page g0 w0)
+    (return 0)))
+
+(defn ^:pub ^I32 pc-document [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                              ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
+                              ^:mut ^Cells cs ^:mut ^Cells out
+                              ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                              ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp
+                              ^:mut ^Cells pg ^:mut ^Cells wd ^:mut ^Cells ln]
+  (comment "Every page of an opened document (`pd-open` has answered 0): clears `cx`,")
+  (comment "then `pc-page` for each page. Answers 0, or 7 when the source missed.")
+  (pc-init cx ox)
+  (let [^I32 n (pd-pages src ar dc a b st pg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 status 0]
+    (if (< n 0) (return 7))
+    (while (< i n)
+      (do (set status (pc-page src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg i (+ i 1) wd ln))
+          (if (== status 7) (return 7))
+          (set i (+ i 1))))
+    (return 0)))

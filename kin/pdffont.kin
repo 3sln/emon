@@ -1204,6 +1204,36 @@
     (if (< x -2000000) (set x -2000000))
     (return (+ (* (quot x 1000) am) (quot (* (rem x 1000) am) 1000)))))
 
+(defn ^I32 pfn-t3-bbox [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                        ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells f ^I32 fh]
+  (comment "A Type 3 font with no descriptor: its cell's height is its /FontBBox (glyph")
+  (comment "space) times the FontMatrix, in thousandths of a text unit like every")
+  (comment "other font's ascent and descent (P1.7 needs a glyph's box, D085).")
+  (let [^I32 bb (pd-dget src ar dc a b st fh (pn-font-b-box))
+        ^:mut ^I32 asc 0
+        ^:mut ^I32 dsc 0
+        ^:mut ^I32 el 0
+        ^:mut ^I32 ev 0]
+    (if (and (!= bb 0) (== (pl-kind-of ar bb) 6))
+      (do (set el (pl-first ar bb))
+          (set el (pl-next ar el))
+          (if (!= el 0)
+            (do (set ev (pd-resolve src ar dc a b st el))
+                (if (== (pfn-isnum ar ev) 1)
+                  (set dsc (pfn-round100 (pl-num-cp ar ev))))
+                (set el (pl-next ar el))
+                (set el (pl-next ar el))
+                (if (!= el 0)
+                  (do (set ev (pd-resolve src ar dc a b st el))
+                      (if (== (pfn-isnum ar ev) 1)
+                        (set asc (pfn-round100 (pl-num-cp ar ev))))))))))
+    (if (> dsc 0) (set dsc (- 0 dsc)))
+    (set asc (quot (pfn-scale-width f (* asc 100)) 100))
+    (set dsc (quot (pfn-scale-width f (* dsc 100)) 100))
+    (cells-set f H_ASC asc)
+    (cells-set f H_DESC dsc)
+    (return 0)))
+
 (defn ^I32 pfn-load-widths [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                             ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells f ^I32 fh]
   (comment "/FirstChar, /LastChar and /Widths of a simple font into the table.")
@@ -1480,7 +1510,9 @@
             (do (set k (pl-first ar ev))
                 (set ev (pd-resolve src ar dc a b st k))
                 (if (== (pfn-isnum ar ev) 1)
-                  (cells-set f H_T3SCALE (pfn-micro ar ev)))))))
+                  (cells-set f H_T3SCALE (pfn-micro ar ev)))))
+          (if (and (== (cells-at f H_ASC) 0) (== (cells-at f H_DESC) 0))
+            (pfn-t3-bbox src ar dc a b st f fh))))
     (pfn-load-widths src ar dc a b st f fh)
     (pfn-width-fallbacks f)
     (return 0)))

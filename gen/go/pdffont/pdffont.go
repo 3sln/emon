@@ -1733,6 +1733,43 @@ func pfnScaleWidth(f *port.Cells, w int32) int32 {
 	return ((x / 1000) * am) + (((x % 1000) * am) / 1000)
 }
 
+func pfnT3Bbox(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, f *port.Cells, fh int32) int32 {
+	// A Type 3 font with no descriptor: its cell's height is its /FontBBox (glyph
+	// space) times the FontMatrix, in thousandths of a text unit like every
+	// other font's ascent and descent (P1.7 needs a glyph's box, D085).
+	var bb int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, fh, pdfnames.PnFontBBox())
+	var asc int32 = 0
+	var dsc int32 = 0
+	var el int32 = 0
+	var ev int32 = 0
+	if (bb != 0) && (pdflex.PlKindOf(ar, bb) == 6) {
+		el = pdflex.PlFirst(ar, bb)
+		el = pdflex.PlNext(ar, el)
+		if el != 0 {
+			ev = pdfdoc.PdResolve(src, ar, dc, a, b, st, el)
+			if pfnIsnum(ar, ev) == 1 {
+				dsc = pfnRound100(pdflex.PlNumCp(ar, ev))
+			}
+			el = pdflex.PlNext(ar, el)
+			el = pdflex.PlNext(ar, el)
+			if el != 0 {
+				ev = pdfdoc.PdResolve(src, ar, dc, a, b, st, el)
+				if pfnIsnum(ar, ev) == 1 {
+					asc = pfnRound100(pdflex.PlNumCp(ar, ev))
+				}
+			}
+		}
+	}
+	if dsc > 0 {
+		dsc = 0 - dsc
+	}
+	asc = pfnScaleWidth(f, asc*100) / 100
+	dsc = pfnScaleWidth(f, dsc*100) / 100
+	port.CellsSet(f, hAsc, asc)
+	port.CellsSet(f, hDesc, dsc)
+	return 0
+}
+
 func pfnLoadWidths(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, f *port.Cells, fh int32) int32 {
 	// /FirstChar, /LastChar and /Widths of a simple font into the table.
 	var wa int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, fh, pdfnames.PnWidths())
@@ -2100,6 +2137,9 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 			if pfnIsnum(ar, ev) == 1 {
 				port.CellsSet(f, hT3scale, pfnMicro(ar, ev))
 			}
+		}
+		if (port.CellsAt(f, hAsc) == 0) && (port.CellsAt(f, hDesc) == 0) {
+			pfnT3Bbox(src, ar, dc, a, b, st, f, fh)
 		}
 	}
 	pfnLoadWidths(src, ar, dc, a, b, st, f, fh)

@@ -1,0 +1,166 @@
+;; Laws for `emon.fx` (P1.7): the 16.16 arithmetic, its rounding at the edges, the
+;; integer square root and angle, the two-cell storage, and matrix composition in
+;; PDF's row-vector order. Every answer is checked as an I32 (an Fx rounded, or
+;; a count of 1/65536 units) because that is what every target can assert.
+(ns emon.fxtest
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that new-cells]]
+            [emon.port :refer [cells-len]]
+            [emon.fx :refer [fx-one fx-of-int fx-mul fx-div fx-muldiv fx-of-real
+                             fx-round fx-floor fx-isqrt fx-sqrt fx-hypot fx-atan2
+                             fx-get fx-put fx-push fx-join fx-clamp fx-cos fx-sin
+                             mx-set mx-ident mx-copy mx-mul mx-x mx-y mx-translate]]
+            [kin.lang :refer [defn return let set while do if comment + - * < <= == quot]]))
+
+(defn ^I32 fxt-raw [^I64 v]
+  (comment "An Fx as its raw count of 1/65536 units, when that fits an I32.")
+  (return (i32 v)))
+
+(deftest test-integers-and-reals-become-fx
+  (assert-eq (fxt-raw (fx-of-int 3)) 196608 "3 is 3*65536")
+  (assert-eq (fxt-raw (fx-of-int -2)) -131072 "-2")
+  (assert-eq (fxt-raw (fx-of-real 5 1)) 32768 "0.5 is 32768")
+  (assert-eq (fxt-raw (fx-of-real 25 2)) 16384 "0.25")
+  (assert-eq (fxt-raw (fx-of-real -75 2)) -49152 "-0.75")
+  (assert-eq (fxt-raw (fx-of-real 1 5)) 1 "0.00001 rounds to 1 unit (0.655)")
+  (assert-eq (fxt-raw (fx-of-real 1 6)) 0 "0.000001 is under half a unit")
+  (assert-eq (fxt-raw (fx-of-real 1234567 3)) 80908583 "1234.567 is 80908583 units")
+  (assert-eq (fx-round (fx-of-real 149 2)) 1 "1.49 rounds to 1")
+  (assert-eq (fx-round (fx-of-real 150 2)) 2 "1.50 rounds up")
+  (assert-eq (fx-round (fx-of-real -150 2)) -1 "-1.50 rounds up, toward positive")
+  (assert-eq (fx-round (fx-of-real -151 2)) -2 "-1.51")
+  (assert-eq (fx-floor (fx-of-real -1 1)) -1 "floor of -0.1 is -1")
+  (assert-eq (fx-floor (fx-of-real 19 1)) 1 "floor of 1.9"))
+
+(deftest test-multiplication-and-division-round-half-away-from-zero
+  (assert-eq (fxt-raw (fx-mul (fx-of-int 3) (fx-of-int 4))) 786432 "3*4")
+  (assert-eq (fxt-raw (fx-mul (fx-of-real 5 1) (fx-of-real 5 1))) 16384 "0.5*0.5")
+  (assert-eq (fxt-raw (fx-mul (fx-of-int -3) (fx-of-real 5 1))) -98304 "-3*0.5")
+  (assert-eq (fxt-raw (fx-mul (i64 1) (i64 32768))) 1 "half a unit rounds away: 1")
+  (assert-eq (fxt-raw (fx-mul (i64 -1) (i64 32768))) -1 "and -1")
+  (assert-eq (fxt-raw (fx-mul (i64 1) (i64 32767))) 0 "under half: 0")
+  (assert-eq (fxt-raw (fx-div (fx-of-int 1) (fx-of-int 4))) 16384 "1/4")
+  (assert-eq (fxt-raw (fx-div (fx-of-int 10) (fx-of-int -4))) -163840 "10/-4")
+  (assert-eq (fxt-raw (fx-div (fx-of-int 1) (i64 0))) 0 "division by zero is 0, not a fault")
+  (assert-eq (fxt-raw (fx-muldiv (i64 27783) (fx-of-int 12) (i64 100000))) 218494 "a glyph width: 277.83/1000 em at 12 is 3.334")
+  (assert-eq (fxt-raw (fx-muldiv (i64 -7) (i64 1) (i64 2))) -4 "-3.5 rounds away")
+  (assert-eq (fxt-raw (fx-muldiv (i64 7) (i64 1) (i64 -2))) -4 "3.5 over -1 ... away")
+  (assert-eq (fxt-raw (fx-muldiv (i64 -7) (i64 1) (i64 -2))) 4 "positive again"))
+
+(deftest test-hostile-magnitudes-wrap-and-clamp-but-never-fault
+  (assert-eq (fx-round (fx-clamp (fx-of-int 2147483647))) 268435456 "a huge integer is clamped to 2^28")
+  (assert-that (== (fx-clamp (i64 9000000000000000)) (i64 17592186044416)) "clamped above")
+  (assert-that (== (fx-clamp (i64 -9000000000000000)) (i64 -17592186044416)) "clamped below")
+  (assert-eq (fx-round (fx-of-int 2147483647)) 2147483647 "the largest integer")
+  (assert-eq (fx-round (fx-of-int 2147483647)) 2147483647 "saturation in the round"))
+
+(deftest test-square-roots-and-lengths
+  (assert-eq (i32 (fx-isqrt (i64 0))) 0 "isqrt 0")
+  (assert-eq (i32 (fx-isqrt (i64 1))) 1 "isqrt 1")
+  (assert-eq (i32 (fx-isqrt (i64 15))) 3 "isqrt 15")
+  (assert-eq (i32 (fx-isqrt (i64 16))) 4 "isqrt 16")
+  (assert-eq (i32 (fx-isqrt (i64 2147395600))) 46340 "isqrt of 46340^2")
+  (assert-eq (fxt-raw (fx-sqrt (fx-of-int 4))) 131072 "sqrt 4 = 2")
+  (assert-eq (fxt-raw (fx-sqrt (fx-of-int 2))) 92681 "sqrt 2 = 1.41421 (floor of 92681.9)")
+  (assert-eq (fxt-raw (fx-sqrt (i64 -5))) 0 "sqrt of a negative is 0")
+  (assert-eq (fx-round (fx-hypot (fx-of-int 3) (fx-of-int 4))) 5 "3-4-5")
+  (assert-eq (fx-round (fx-hypot (fx-of-int -3) (fx-of-int 4))) 5 "signs do not matter")
+  (assert-eq (fx-round (fx-hypot (fx-of-int 0) (fx-of-int 0))) 0 "the zero vector")
+  (assert-eq (fx-round (fx-hypot (fx-of-int 1000000) (fx-of-int 1000000))) 1414214 "large vectors keep nine digits"))
+
+(deftest test-atan2-is-exact-on-the-axes-and-close-between
+  (assert-eq (fx-atan2 (i64 0) (fx-of-int 1)) 0 "east")
+  (assert-eq (fx-atan2 (fx-of-int 1) (i64 0)) 9000 "north")
+  (assert-eq (fx-atan2 (i64 0) (fx-of-int -1)) 18000 "west")
+  (assert-eq (fx-atan2 (fx-of-int -1) (i64 0)) 27000 "south")
+  (assert-eq (fx-atan2 (i64 0) (i64 0)) 0 "the zero vector")
+  (assert-eq (fx-atan2 (fx-of-int 1) (fx-of-int 1)) 4500 "45")
+  (assert-eq (fx-atan2 (fx-of-int 1) (fx-of-int -1)) 13500 "135")
+  (assert-eq (fx-atan2 (fx-of-int -1) (fx-of-int -1)) 22500 "225")
+  (assert-eq (fx-atan2 (fx-of-int -1) (fx-of-int 1)) 31500 "315")
+  (assert-eq (fx-atan2 (fx-of-int 1) (fx-of-int 2)) 2656 "atan(0.5) = 26.565 degrees (CORDIC: within a centi-degree)")
+  (assert-eq (fx-atan2 (fx-of-int 3) (fx-of-int 4)) 3687 "atan(3/4) = 36.87 degrees")
+  (assert-eq (fx-atan2 (fx-of-int 1) (fx-of-int 100)) 57 "atan(0.01) = 0.573 degrees")
+  (assert-eq (fx-atan2 (i64 1) (fx-of-int 100)) 0 "a hair above east is still 0")
+  (assert-eq (fx-atan2 (fx-of-int -1) (fx-of-int 100)) 35943 "a hair below east wraps to 359.43")
+  (assert-eq (fx-atan2 (i64 1099511627776) (i64 1099511627776)) 4500 "huge vectors are normalised")
+  (assert-eq (fx-atan2 (i64 3) (i64 4)) 3687 "tiny vectors are normalised"))
+
+(deftest test-an-fx-is-two-cells
+  (let [^Cells c (new-cells)
+        ^I64 big (i64 98765432109)
+        ^I64 neg (i64 -98765432109)]
+    (assert-eq (fx-push c big) 0 "first at 0")
+    (assert-eq (fx-push c neg) 2 "second at 2")
+    (assert-eq (cells-len c) 4 "four cells")
+    (assert-that (== (fx-get c 0) big) "a positive value above 2^32 survives")
+    (assert-that (== (fx-get c 2) neg) "and a negative one")
+    (fx-put c 0 (i64 -1))
+    (assert-that (== (fx-get c 0) (i64 -1)) "minus one (all ones in the low half)")
+    (fx-put c 0 (i64 2147483648))
+    (assert-that (== (fx-get c 0) (i64 2147483648)) "2^31: the low half's sign bit is not a sign")
+    (assert-that (== (fx-join 0 -1) (i64 4294967295)) "join reads the low half unsigned")))
+
+(deftest test-matrices-compose-in-pdf-order
+  (let [^Cells c (new-cells)
+        ^:mut ^I32 i 0]
+    (while (< i 48)
+      (do (fx-push c (i64 0))
+          (set i (+ i 2))))
+    (comment "0: translate (10, 20); 12: scale 2 by 3; 24: result")
+    (mx-translate c 0 (fx-of-int 10) (fx-of-int 20))
+    (mx-set c 12 (fx-of-int 2) (i64 0) (i64 0) (fx-of-int 3) (i64 0) (i64 0))
+    (comment "translate then scale: (1,1) -> (11,21) -> (22,63)")
+    (mx-mul c 24 0 12)
+    (assert-eq (fx-round (mx-x c 24 (fx-of-int 1) (fx-of-int 1))) 22 "x")
+    (assert-eq (fx-round (mx-y c 24 (fx-of-int 1) (fx-of-int 1))) 63 "y")
+    (comment "scale then translate: (1,1) -> (2,3) -> (12,23)")
+    (mx-mul c 24 12 0)
+    (assert-eq (fx-round (mx-x c 24 (fx-of-int 1) (fx-of-int 1))) 12 "x, other order")
+    (assert-eq (fx-round (mx-y c 24 (fx-of-int 1) (fx-of-int 1))) 23 "y, other order")
+    (comment "a product written over an operand")
+    (mx-mul c 12 12 0)
+    (assert-eq (fx-round (mx-x c 12 (fx-of-int 1) (fx-of-int 1))) 12 "dst is x")
+    (mx-ident c 36)
+    (mx-mul c 36 36 36)
+    (assert-eq (fx-round (mx-x c 36 (fx-of-int 7) (fx-of-int 9))) 7 "the identity squared")
+    (assert-eq (fx-round (mx-y c 36 (fx-of-int 7) (fx-of-int 9))) 9 "is the identity")))
+
+(deftest test-a-rotation-by-90-turns-the-axes
+  (let [^Cells c (new-cells)
+        ^:mut ^I32 i 0]
+    (while (< i 24)
+      (do (fx-push c (i64 0))
+          (set i (+ i 2))))
+    (comment "[0 1 -1 0 0 0]: x axis to y, y axis to -x")
+    (mx-set c 0 (i64 0) (fx-of-int 1) (fx-of-int -1) (i64 0) (i64 0) (i64 0))
+    (assert-eq (fx-round (mx-x c 0 (fx-of-int 1) (i64 0))) 0 "(1,0) x")
+    (assert-eq (fx-round (mx-y c 0 (fx-of-int 1) (i64 0))) 1 "(1,0) y")
+    (assert-eq (fx-round (mx-x c 0 (i64 0) (fx-of-int 1))) -1 "(0,1) x")
+    (mx-copy c 12 0)
+    (mx-mul c 12 12 0)
+    (assert-eq (fx-round (mx-x c 12 (fx-of-int 1) (i64 0))) -1 "twice is 180 degrees")))
+
+(defn ^I32 fxt-dist [^I64 v ^I32 want]
+  (comment "|v - want| in raw Fx units.")
+  (let [^I32 d (- (i32 v) want)]
+    (if (< d 0) (return (- 0 d)))
+    (return d)))
+
+(deftest test-sine-and-cosine-are-exact-at-the-axes-and-close-between
+  (assert-eq (fxt-raw (fx-cos 0)) 65536 "cos 0")
+  (assert-eq (fxt-raw (fx-sin 0)) 0 "sin 0")
+  (assert-eq (fxt-raw (fx-cos 9000)) 0 "cos 90")
+  (assert-eq (fxt-raw (fx-sin 9000)) 65536 "sin 90")
+  (assert-eq (fxt-raw (fx-cos 18000)) -65536 "cos 180")
+  (assert-eq (fxt-raw (fx-sin 18000)) 0 "sin 180")
+  (assert-eq (fxt-raw (fx-cos 27000)) 0 "cos 270")
+  (assert-eq (fxt-raw (fx-sin 27000)) -65536 "sin 270")
+  (assert-that (<= (fxt-dist (fx-sin 4500) 46341) 2) "sin 45 = 0.70711")
+  (assert-that (<= (fxt-dist (fx-cos 4500) 46341) 2) "cos 45")
+  (assert-that (<= (fxt-dist (fx-sin 3000) 32768) 2) "sin 30 = 0.5")
+  (assert-that (<= (fxt-dist (fx-cos 6000) 32768) 2) "cos 60 = 0.5")
+  (assert-that (<= (fxt-dist (fx-cos 13500) -46341) 2) "cos 135")
+  (assert-that (<= (fxt-dist (fx-sin 31500) -46341) 2) "sin 315")
+  (assert-that (<= (fxt-dist (fx-sin -4500) -46341) 2) "a negative angle")
+  (assert-that (<= (fxt-dist (fx-cos 40500) 46341) 2) "an angle past a turn"))
