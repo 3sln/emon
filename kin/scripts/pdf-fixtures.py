@@ -418,11 +418,11 @@ def malformed():
     good.set(2, '<</Type/Pages/Kids[3 0 R]/Count 1>>')
     good.set(3, '<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>')
     base = classic(good, '/Root 1 0 R')
-    # startxref points into the middle of an object
+    # startxref points into the middle of an object: the cross-reference is rebuilt by scanning (P3.1)
     bad = re.sub(rb'startxref\n\d+', b'startxref\n17', base)
-    emit('badxref.pdf', bad, 'bad-xref', None)
-    # no startxref at all (a download cut short)
-    emit('nostartxref.pdf', base[:base.index(b'startxref')], 'no-startxref', None)
+    emit('badxref.pdf', bad, 'ok', [LETTER])
+    # no startxref at all (a download cut short): rebuilt by scanning too
+    emit('nostartxref.pdf', base[:base.index(b'startxref')], 'ok', [LETTER])
     # not a PDF
     emit('notpdf.pdf', b'<html><body>not a pdf</body></html>\n', 'no-header', None)
     emit('empty.pdf', b'', 'no-header', None)
@@ -457,17 +457,18 @@ def malformed():
     emit('no-pages.pdf', classic(d, '/Root 1 0 R'), 'no-pages', None)
     # no /Root in the trailer
     d = Doc(); d.set(1, '<</Type/Catalog/Pages 2 0 R>>'); d.set(2, '<</Type/Pages/Kids[]/Count 0>>')
-    emit('no-root.pdf', classic(d, ''), 'no-root', None)
-    # an /Encrypt entry: the structure is readable, `encrypted` is reported
+    # (the scan finds the /Type /Catalog object, P3.1: a document of no pages; poppler refuses it)
+    emit('no-root.pdf', classic(d, ''), 'ok', [])
+    # an /Encrypt entry whose strings are nonsense: no password opens it (P3.2), and `encrypted` is reported
     d = Doc()
     d.set(1, '<</Type/Catalog/Pages 2 0 R>>')
     d.set(2, '<</Type/Pages/Kids[3 0 R]/Count 1>>')
     d.set(3, '<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>')
     d.set(4, '<</Filter/Standard/V 1/R 2/O (x)/U (y)/P -4>>')
-    emit('encrypt-flag.pdf', classic(d, '/Root 1 0 R/Encrypt 4 0 R'), 'ok', [LETTER])
-    # xref stream whose /W is damaged
+    emit('encrypt-flag.pdf', classic(d, '/Root 1 0 R/Encrypt 4 0 R'), 'password-required', None)
+    # xref stream whose /W is damaged: rebuilt by scanning, object streams and all (P3.1)
     xs = open(os.path.join(OUT, 'xrefstream.pdf'), 'rb').read()
-    emit('badxrefstream.pdf', xs.replace(b'/W[1 3 1]', b'/W[1 3 9]'), 'bad-xref', None)
+    emit('badxrefstream.pdf', xs.replace(b'/W[1 3 1]', b'/W[1 3 9]'), 'ok', written['xrefstream.pdf'][1])
 
 # ----------------------------------------------------------- host fixtures
 

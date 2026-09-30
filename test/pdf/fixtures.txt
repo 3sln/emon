@@ -2,12 +2,12 @@
 # file <TAB> status <TAB> pages <TAB> digest of the boxes. `status` is a `pd-status`; pages and
 # digest are - where the file cannot be opened. Cross-checked against pdfinfo when present.
 pdf/badlength.pdf	ok	1	5936741
-pdf/badxref.pdf	bad-xref	-	-
-pdf/badxrefstream.pdf	bad-xref	-	-
+pdf/badxref.pdf	ok	1	5936741
+pdf/badxrefstream.pdf	ok	2	4701884
 pdf/boxes.pdf	ok	7	1073151
 pdf/crlf.pdf	ok	1	5936741
 pdf/empty.pdf	no-header	-	-
-pdf/encrypt-flag.pdf	ok	1	5936741
+pdf/encrypt-flag.pdf	password-required	-	-
 pdf/filters.pdf	ok	1	5936741
 pdf/gs-xrefstream.pdf	ok	2	894493
 pdf/html-chrome.pdf	ok	2	894493
@@ -20,8 +20,8 @@ pdf/kids-cycle.pdf	ok	2	7991708
 pdf/kids-damaged.pdf	ok	2	7991708
 pdf/minimal.pdf	ok	1	5936741
 pdf/no-pages.pdf	no-pages	-	-
-pdf/no-root.pdf	no-root	-	-
-pdf/nostartxref.pdf	no-startxref	-	-
+pdf/no-root.pdf	ok	0	0
+pdf/nostartxref.pdf	ok	1	5936741
 pdf/notpdf.pdf	no-header	-	-
 pdf/prev-loop.pdf	ok	1	5936741
 pdf/xrefstream.pdf	ok	2	4701884

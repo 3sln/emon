@@ -492,6 +492,11 @@ pub fn pl_count(ar: &mut crate::port::Cells, h: i32) -> i32 {
     // Children of an array; for a dictionary, keys plus values.
     return crate::port::cells_at(ar, h + R_B);
 }
+pub fn pl_int_wrapped(ar: &mut crate::port::Cells, h: i32) -> i32 {
+    // An int's value modulo 2^32 as a signed 32-bit pattern: what `pl-int-value`
+    // saturated away (4294965956 is -1340 here).
+    return crate::port::cells_at(ar, h + R_C);
+}
 pub fn pl_int_value(ar: &mut crate::port::Cells, h: i32) -> i32 {
     // An int's value; a bool's 0 or 1; a ref's object number.
     return crate::port::cells_at(ar, h + R_A);
@@ -514,6 +519,18 @@ pub fn pl_str_len(ar: &mut crate::port::Cells, h: i32) -> i32 {
 pub fn pl_str_byte(ar: &mut crate::port::Cells, h: i32, i: i32) -> i32 {
     return crate::port::cells_at(ar, crate::port::cells_at(ar, h + R_A) + i);
 }
+pub fn pl_str_set_byte(mut ar: &mut crate::port::Cells, h: i32, i: i32, v: i32) -> i32 {
+    // Overwrite byte i of a string: decryption (P3.2) replaces a string's
+    // bytes in place, never growing it.
+    let at: i32 = crate::port::cells_at(ar, h + R_A);
+    crate::port::cells_set(ar, at + i, v);
+    return 0;
+}
+pub fn pl_str_set_len(mut ar: &mut crate::port::Cells, h: i32, n: i32) -> i32 {
+    // Shorten a string to n bytes (decrypted AES strings lose IV and padding).
+    crate::port::cells_set(ar, h + R_B, n);
+    return 0;
+}
 pub fn pl_stream_dict(ar: &mut crate::port::Cells, h: i32) -> i32 {
     return crate::port::cells_at(ar, h + R_A);
 }
@@ -532,6 +549,17 @@ pub fn pl_stream_flags(ar: &mut crate::port::Cells, h: i32) -> i32 {
 pub fn pl_stream_set_len(mut ar: &mut crate::port::Cells, h: i32, ln: i32) -> i32 {
     crate::port::cells_set(ar, h + R_C, ln);
     crate::port::cells_set(ar, h + R_D, 0);
+    return 0;
+}
+pub fn pl_stream_num(ar: &mut crate::port::Cells, h: i32) -> i32 {
+    // The object number the document layer recorded for a stream it loaded
+    // (P3.2, D098): it names the stream's decryption key. 0 when none was
+    // recorded. A stream is never a child of a container, so the record's
+    // sibling link, which only children use, is free for it.
+    return crate::port::cells_at(ar, h + R_NEXT);
+}
+pub fn pl_stream_set_num(mut ar: &mut crate::port::Cells, h: i32, num: i32) -> i32 {
+    crate::port::cells_set(ar, h + R_NEXT, num);
     return 0;
 }
 pub fn pl_kw_id(ar: &mut crate::port::Cells, h: i32) -> i32 {
@@ -822,6 +850,7 @@ pub(crate) fn pl_lex_number(src: &crate::port::Src, mut ar: &mut crate::port::Ce
     let mut scale: i32 = 0;
     let mut nd: i32 = 0;
     let mut dot: i32 = 0;
+    let mut wv: i64 = 0 as i64;
     let mut d: i32 = 0;
     while (q < end) && ((ps_u8(src, q) == 43) || (ps_u8(src, q) == 45)) {
         if ps_u8(src, q) == 45 {
@@ -841,6 +870,7 @@ pub(crate) fn pl_lex_number(src: &crate::port::Src, mut ar: &mut crate::port::Ce
         } else {
             scale = -1000;
         }
+        wv = ((wv).wrapping_mul(10 as i64)).wrapping_add(d as i64);
         nd += 1;
         q += 1;
     }
@@ -864,7 +894,10 @@ pub(crate) fn pl_lex_number(src: &crate::port::Src, mut ar: &mut crate::port::Ce
         if neg == 1 {
             iv = 0 - iv;
         }
-        return pl_tok(ar, 1, s, q, iv, 0, 0);
+        // The token's third value keeps the integer modulo 2^32, as a signed
+        // pattern: /P in an encryption dictionary is often written unsigned
+        // (4294965956 for -1340) and `iv` has saturated by then (P3.2).
+        return pl_tok(ar, 1, s, q, iv, 0, wv as i32);
     }
     // An integer part too long for nine digits saturates.
     if scale < 0 {
@@ -1208,7 +1241,7 @@ pub(crate) fn pl_dict(src: &crate::port::Src, mut ar: &mut crate::port::Cells) -
     }
     return d;
 }
-pub(crate) fn pl_ref_or_int(src: &crate::port::Src, mut ar: &mut crate::port::Cells, num: i32) -> i32 {
+pub(crate) fn pl_ref_or_int(src: &crate::port::Src, mut ar: &mut crate::port::Cells, num: i32, wrapped: i32) -> i32 {
     // An integer has just been read. `num 0 R` is a reference: look
     // ahead two tokens, and only if a digit follows, so a string or a
     // dictionary is never lexed twice.
@@ -1219,13 +1252,13 @@ pub(crate) fn pl_ref_or_int(src: &crate::port::Src, mut ar: &mut crate::port::Ce
     let mut t3: i32 = 0;
     let mut gen: i32 = 0;
     if num < 0 {
-        return pl_new(ar, 2, num, 0, 0);
+        return pl_new(ar, 2, num, 0, wrapped);
     }
     if p >= end {
-        return pl_new(ar, 2, num, 0, 0);
+        return pl_new(ar, 2, num, 0, wrapped);
     }
     if (ps_u8(src, p) < 48) || (ps_u8(src, p) > 57) {
-        return pl_new(ar, 2, num, 0, 0);
+        return pl_new(ar, 2, num, 0, wrapped);
     }
     t2 = pl_lex(src, ar);
     if t2 == 1 {
@@ -1238,7 +1271,7 @@ pub(crate) fn pl_ref_or_int(src: &crate::port::Src, mut ar: &mut crate::port::Ce
         }
     }
     crate::port::cells_set(ar, A_POS, after);
-    return pl_new(ar, 2, num, 0, 0);
+    return pl_new(ar, 2, num, 0, wrapped);
 }
 pub(crate) fn pl_value(src: &crate::port::Src, mut ar: &mut crate::port::Cells, tk: i32) -> i32 {
     // The object whose first token `tk` has just been lexed, or 0.
@@ -1255,7 +1288,7 @@ pub(crate) fn pl_value(src: &crate::port::Src, mut ar: &mut crate::port::Cells, 
         return 0;
     }
     if tk == 1 {
-        return pl_ref_or_int(src, ar, ta);
+        return pl_ref_or_int(src, ar, ta, tc);
     }
     if tk == 2 {
         return pl_new(ar, 3, ta, tb, 0);

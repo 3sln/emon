@@ -665,7 +665,7 @@ host implement it however it likes.
 | `ImageDecode` | encoded bytes → frames → `Bitmap` + resolution | four mature codec stacks exist; includes PDF's `DCTDecode`, `JPXDecode`, `JBIG2Decode`, `CCITTFaxDecode` (D005) |
 | `Renderer` | PDF page + resolution → `Bitmap` | a correct PDF rasteriser is pdfium/MuPDF-sized (D007) |
 | `Ocr` | `Bitmap` + request → words/lines/symbols with boxes and confidences | Tesseract is a C++ library; any engine may be substituted |
-| `Crypto` | MD5, RC4, AES-128/256-CBC decrypt, SHA-256/384/512 | every standard library has them |
+| `Crypto` | MD5, SHA-256/384/512, RC4, AES-CBC decrypt, and AES-CBC encrypt (R6's hash): seven `crypto-*` forms over spans of a `Blob`, appending to a `Cells` (D097) | every standard library has them but Rust's, whose host writes them out |
 | `Task` | structured fork/join (§12) | four unrelated concurrency models (nome) |
 | `Limits`, `Settings` | `limit-of`, `setting-of`, named breach | nome §5.5's pattern, unchanged |
 

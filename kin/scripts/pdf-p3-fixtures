@@ -1,0 +1,351 @@
+#!/usr/bin/env bb
+;; Write P3.1 and P3.2's fixtures: damaged files for xref repair, and encrypted
+;; files for every revision and algorithm the standard security handler has.
+;;
+;;     bb kin/scripts/pdf-p3-fixtures
+;;
+;; A DEVELOPMENT TOOL (babashka; needs `qpdf` and `pdfinfo` on the PATH; `brew
+;; install qpdf`), run by a person, not a gate. The fixtures are COMMITTED
+;; (test/pdf/p3/*.pdf) so a test run needs neither tool. It writes
+;;
+;;   test/pdf/p3/*.pdf     the files
+;;   test/pdf/p3.txt       one row per (file, password): the status emon must
+;;                         answer, the page count and geometry digest, and the
+;;                         plain twin whose objects the decrypted ones must equal
+;;                         (kin/pdfcrypttest.kin)
+;;
+;; THE ORACLES ARE POPPLER AND QPDF, NOT EMON. Every file that should open is
+;; opened by `pdfinfo` (with the password the row names) and must report the
+;; page count and digest the plain twin has, and `qpdf --show-encryption` must
+;; say what the file was made with. The encrypted files are qpdf's; the damaged
+;; ones are qpdf's output with bytes broken here.
+;;
+;; THE PASSWORDS ARE TEST DATA and are written in rows, which is fine: what
+;; D058 forbids is a password in a Model, a dump or a transcript, and the
+;; laws check that one left in neither the arena nor the document.
+(require '[babashka.process :as p]
+         '[babashka.fs :as fs]
+         '[clojure.string :as str])
+
+(def root (-> *file* java.io.File. .getCanonicalFile .getParentFile .getParentFile .getParent))
+(load-file (str root "/tools/pdfinfo.clj"))
+(def out-dir (str root "/test/pdf/p3"))
+(fs/create-dirs out-dir)
+
+(defn bytes-of [s] (.getBytes ^String s "ISO-8859-1"))
+(defn slurp-bytes [f] (fs/read-all-bytes f))
+(defn str-of [bs] (String. ^bytes bs "ISO-8859-1"))
+(defn sh [& args] (apply p/shell {:out :string :err :string :continue true :dir root} args))
+(defn path [name] (str out-dir "/" name))
+
+(defn qpdf! [& args]
+  (let [r (apply sh "qpdf" args)]
+    (when-not (#{0 3} (:exit r))                       ; 3 is warnings, not failure
+      (throw (ex-info (str "qpdf failed: " (pr-str args) "\n" (:err r)) {})))
+    r))
+
+;; ---------------------------------------------------------------- the base
+
+(def passage "The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. ")
+
+(defn content [n]
+  (str "BT /F1 12 Tf 72 720 Td (Page " n ": " passage ") Tj\n0 -16 Td (" passage passage ") Tj ET\n"))
+
+(defn build-pdf
+  "Classic-xref PDF bytes from [[num body] ...]; a body is a string, or
+  [dict-string stream-string] for a stream with its /Length filled in."
+  [objs trailer-extra]
+  (let [sb (StringBuilder. "%PDF-1.4\n%âãÏÓ\n")
+        offs (volatile! {})]
+    (doseq [[num body] objs]
+      (vswap! offs assoc num (.length sb))
+      (.append sb (str num " 0 obj\n"))
+      (if (vector? body)
+        (let [[d s] body]
+          (.append sb (str "<<" d "/Length " (count s) ">>\nstream\n" s "\nendstream\n")))
+        (.append sb (str body "\n")))
+      (.append sb "endobj\n"))
+    (let [xr (.length sb)
+          size (inc (apply max (keys @offs)))]
+      (.append sb (str "xref\n0 " size "\n0000000000 65535 f \n"))
+      (doseq [i (range 1 size)]
+        (.append sb (if-let [o (@offs i)] (format "%010d 00000 n \n" o) "0000000000 00000 f \n")))
+      (.append sb (str "trailer\n<</Size " size trailer-extra ">>\nstartxref\n" xr "\n%%EOF\n"))
+      (bytes-of (str sb)))))
+
+(def base-objs
+  [[1 "<</Type/Catalog/Pages 2 0 R/Lang (en-US)>>"]
+   [2 "<</Type/Pages/Kids[3 0 R 4 0 R 5 0 R]/Count 3>>"]
+   [3 "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 6 0 R/Resources<</Font<</F1 9 0 R>>>>/Annots[10 0 R]>>"]
+   [4 "<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Rotate 90/Contents 7 0 R/Resources<</Font<</F1 9 0 R>>>>>>"]
+   [5 "<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 400]/CropBox[10 10 290 390]/Contents 8 0 R/Resources<</Font<</F1 9 0 R>>>>>>"]
+   [6 ["" (content 1)]]
+   [7 ["" (content 2)]]
+   [8 ["" (content 3)]]
+   [9 "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>"]
+   [10 "<</Type/Annot/Subtype/Text/Rect[10 10 30 30]/Contents (A secret note on page one)>>"]
+   [11 "<</Title (The Secret Title)/Author (Emon Test \\(P3.2\\))>>"]])
+
+(def base-file (path "base.pdf"))
+(fs/write-bytes base-file (build-pdf base-objs "/Root 1 0 R/Info 11 0 R"))
+
+;; ------------------------------------------------------------ the rows
+
+(def rows (atom []))        ; [file password status pages digest twin]
+
+(defn add-row! [file password status info twin]
+  ;; paths are relative to test/, where kin's `test-file` looks: pdf/p3/x.pdf
+  (swap! rows conj [(str "pdf/" file) (or password "-") status
+                    (if info (str (:pages info)) "-") (if info (str (:digest info)) "-")
+                    (if (and twin (not= twin "-")) (str "pdf/" twin) "-")]))
+
+(defn check-open!
+  "poppler must open `file` with `password` and report `info`. Where poppler's
+  own password handling gives up (its R6 check refuses some long passwords that
+  qpdf and Acrobat accept), qpdf decrypts the file to a scratch copy and poppler
+  reads that: the oracle is still not emon."
+  [file password info]
+  (let [got (or (emon.pdfinfo/pdfinfo root (path file) {:password password})
+                (let [tmp (path "_scratch.pdf")]
+                  (when (#{0 3} (:exit (sh "qpdf" "--decrypt" (str "--password=" password) (path file) tmp)))
+                    (try (emon.pdfinfo/pdfinfo root tmp) (finally (fs/delete-if-exists tmp))))))]
+    (when (not= got info)
+      (throw (ex-info (str "pdfinfo disagrees on " file " (password " (pr-str password) "): " (pr-str got) " vs " (pr-str info)) {})))))
+
+;; ---------------------------------------------------------------- twins
+
+;; A plain twin is what a decrypted file must equal: the same base through the
+;; same qpdf writer, so the two number their objects alike.
+(def twin (path "plain.pdf"))
+(qpdf! "--static-id" "--object-streams=disable" base-file twin)
+(def twin-objstm (path "plain-objstm.pdf"))
+(qpdf! "--static-id" "--object-streams=generate" base-file twin-objstm)
+(def info (emon.pdfinfo/pdfinfo root twin))
+(assert (= 3 (:pages info)))
+
+(add-row! "p3/plain.pdf" nil "ok" info "-")
+(add-row! "p3/plain-objstm.pdf" nil "ok" info "-")
+
+;; ------------------------------------------------------------- encrypted
+
+(defn encrypt!
+  "Write `name` from the base with qpdf; `opts` are qpdf's encryption flags."
+  [name user owner bits opts & {:keys [objstm weak]}]
+  (apply qpdf! "--static-id" "--static-aes-iv"
+         (concat (when weak ["--allow-weak-crypto"])
+                 [(str "--object-streams=" (if objstm "generate" "disable"))
+                  "--encrypt" user owner (str bits)]
+                 opts
+                 ["--" base-file (path name)])))
+
+(defn show-enc [name] (:out (sh "qpdf" "--show-encryption" (path name))))
+
+(defn expect-enc! [name & needles]
+  (let [s (show-enc name)]
+    (doseq [n needles]
+      (when-not (str/includes? s n)
+        (throw (ex-info (str name ": qpdf --show-encryption lacks " (pr-str n) "\n" s) {}))))))
+
+(defn rows-for!
+  "The rows of one encrypted file: with an empty user password it opens for
+  anyone (and for a wrong password, and with the owner password); with a user
+  password it needs one, and the wrong one is a distinct error."
+  [name user owner twin-file]
+  (let [t (str "p3/" (fs/file-name twin-file))]
+    (if (= user "")
+      (do (check-open! name nil info)
+          (add-row! (str "p3/" name) nil "ok" info t)
+          (check-open! name owner info)
+          (add-row! (str "p3/" name) owner "ok" info t)
+          (add-row! (str "p3/" name) "not-the-password" "ok" info t))
+      (do (check-open! name user info)
+          (check-open! name owner info)
+          (add-row! (str "p3/" name) nil "password-required" nil "-")
+          (add-row! (str "p3/" name) "wrong-password" "password-incorrect" nil "-")
+          (add-row! (str "p3/" name) user "ok" info t)
+          (add-row! (str "p3/" name) owner "ok" info t)))))
+
+;; Every revision and algorithm: RC4-40 (V1 R2), RC4-128 (V2 R3), RC4-128 through
+;; crypt filters (V4 R4), AES-128 (V4 R4), AES-256 R5 (Adobe extension level 3),
+;; AES-256 R6 (ISO 32000-2); each with the empty user password and with one.
+(def algos
+  [["rc4-40"       40  ["--extract=n" "--print=n"] {:weak true}                      "R = 2" "RC4"]
+   ["rc4-128"      128 ["--use-aes=n"]             {:weak true}                      "R = 3" "RC4"]
+   ["rc4-128-v4"   128 ["--use-aes=n" "--force-V4"] {:weak true}                     "R = 4" "RC4"]
+   ["aes-128"      128 ["--use-aes=y"]             {}                                "R = 4" "AESV2"]
+   ["aes-256-r5"   256 ["--force-R5"]              {}                                "R = 5" "AESV3"]
+   ["aes-256-r6"   256 []                          {}                                "R = 6" "AESV3"]])
+
+(doseq [[algo bits opts flags r-needle _] algos
+        [upw upass] [["empty" ""] ["user" "user-secret"]]]
+  (let [name (str "crypt-" algo "-" upw ".pdf")
+        owner "owner-secret"]
+    (encrypt! name upass owner bits (concat opts
+                                            ;; permissions are NOT consulted (D040): forbid extraction and printing
+                                            (when (> bits 40) ["--extract=n" "--print=none" "--modify=none"]))
+              :weak (:weak flags))
+    (expect-enc! name r-needle)
+    (rows-for! name upass owner twin)))
+
+;; Variants: clear-text metadata (EncryptMetadata false), encrypted object
+;; streams (xref stream + /ObjStm, which are encrypted whole), a long password,
+;; a non-ASCII password (R6 is UTF-8).
+(encrypt! "crypt-aes-128-clearmeta-empty.pdf" "" "owner-secret" 128 ["--use-aes=y" "--cleartext-metadata"])
+(expect-enc! "crypt-aes-128-clearmeta-empty.pdf" "R = 4")
+(rows-for! "crypt-aes-128-clearmeta-empty.pdf" "" "owner-secret" twin)
+
+(encrypt! "crypt-aes-128-objstm-user.pdf" "user-secret" "owner-secret" 128 ["--use-aes=y"] :objstm true)
+(rows-for! "crypt-aes-128-objstm-user.pdf" "user-secret" "owner-secret" twin-objstm)
+
+(encrypt! "crypt-aes-256-r6-objstm-empty.pdf" "" "owner-secret" 256 [] :objstm true)
+(rows-for! "crypt-aes-256-r6-objstm-empty.pdf" "" "owner-secret" twin-objstm)
+
+(encrypt! "crypt-rc4-128-objstm-user.pdf" "user-secret" "owner-secret" 128 ["--use-aes=n" "--force-V4"] :objstm true :weak true)
+(rows-for! "crypt-rc4-128-objstm-user.pdf" "user-secret" "owner-secret" twin-objstm)
+
+(def long-pw "correct horse battery staple, 4 words, 1 comma")
+(encrypt! "crypt-aes-256-r6-longpw.pdf" long-pw "owner-secret" 256 [])
+(rows-for! "crypt-aes-256-r6-longpw.pdf" long-pw "owner-secret" twin)
+
+(def utf8-pw "pässwörd-üß-中文")
+(encrypt! "crypt-aes-256-r6-utf8pw.pdf" utf8-pw "owner-secret" 256 [])
+(rows-for! "crypt-aes-256-r6-utf8pw.pdf" utf8-pw "owner-secret" twin)
+
+;; ------------------------------------------------------ unsupported handlers
+
+(defn with-encrypt-dict
+  "The plain twin with an /Encrypt dictionary of our own in the classic layout."
+  [name dict]
+  (let [objs (conj base-objs [12 dict])]
+    (fs/write-bytes (path name) (build-pdf objs "/Root 1 0 R/Info 11 0 R/Encrypt 12 0 R/ID[<00112233445566778899aabbccddeeff><00112233445566778899aabbccddeeff>]"))
+    (add-row! (str "p3/" name) nil "encryption-unsupported" nil "-")))
+
+;; public-key security (a certificate, not a password), another named handler,
+;; the unpublished V 3, a crypt filter of a method emon does not know, R outside 2-6
+(with-encrypt-dict "unsupported-pubsec.pdf"
+  "<</Filter/Adobe.PubSec/SubFilter/adbe.pkcs7.s5/V 4/Length 128/CF<</DefaultCryptFilter<</CFM/AESV2/Length 16/Recipients[<00>]>>>>/StmF/DefaultCryptFilter/StrF/DefaultCryptFilter>>")
+(with-encrypt-dict "unsupported-handler.pdf"
+  "<</Filter/ExampleCorpSecurity/V 1/R 2/Length 40>>")
+(with-encrypt-dict "unsupported-v3.pdf"
+  "<</Filter/Standard/V 3/R 3/Length 128/O <00000000000000000000000000000000> /U <00000000000000000000000000000000> /P -4>>")
+(with-encrypt-dict "unsupported-cfm.pdf"
+  "<</Filter/Standard/V 4/R 4/Length 128/O <00000000000000000000000000000000> /U <00000000000000000000000000000000> /P -4/CF<</StdCF<</CFM/ExampleCipher/Length 16>>>>/StmF/StdCF/StrF/StdCF>>")
+(with-encrypt-dict "unsupported-r7.pdf"
+  "<</Filter/Standard/V 5/R 7/Length 256/O <00> /U <00> /OE <00> /UE <00> /P -4>>")
+
+;; ------------------------------------------------------------- damaged files
+;;
+;; Each is made from qpdf's own output and broken by hand; poppler must open
+;; every one (it rebuilds the table too), and so must emon, by scanning.
+
+(defn replace-once [bs from to]
+  (let [s (str-of bs) i (.indexOf s ^String from)]
+    (when (neg? i) (throw (ex-info (str "no " from) {})))
+    (bytes-of (str (subs s 0 i) to (subs s (+ i (count from)))))))
+
+(defn write! [name bs] (fs/write-bytes (path name) bs))
+
+(defn damaged!
+  "Write `name`, check poppler opens it like the twin (unless `:oracle false`:
+  the file is one no other tool can rebuild), add the row."
+  [name bs pw twin-file & {:keys [oracle] :or {oracle true}}]
+  (write! name bs)
+  (when oracle (check-open! name pw info))
+  (add-row! (str "p3/" name) pw "ok" info (str "p3/" (fs/file-name twin-file))))
+
+(def plain-bytes (slurp-bytes twin))
+(def plain-str (str-of plain-bytes))
+(defn startxref-at [s] (.lastIndexOf ^String s "startxref"))
+
+;; startxref leads into the middle of an object
+(damaged! "repair-startxref-wrong.pdf"
+          (bytes-of (str/replace plain-str #"startxref\n\d+" "startxref\n23")) nil twin)
+;; startxref leads past the end of the file
+(damaged! "repair-startxref-past-end.pdf"
+          (bytes-of (str/replace plain-str #"startxref\n\d+" "startxref\n99999999")) nil twin)
+;; no startxref, no trailer: a download cut short right after the last object
+(damaged! "repair-cut-before-xref.pdf"
+          (bytes-of (subs plain-str 0 (.indexOf ^String plain-str "xref\n0 "))) nil twin)
+;; a cut in the middle of the cross-reference table
+(damaged! "repair-cut-in-xref.pdf"
+          (bytes-of (subs plain-str 0 (+ (.indexOf ^String plain-str "xref\n0 ") 60))) nil twin)
+;; junk appended after %%EOF, and a startxref that no longer finds its table
+(damaged! "repair-junk-tail.pdf"
+          (bytes-of (str (str/replace plain-str #"startxref\n\d+" "startxref\n5")
+                         (apply str (repeat 400 "JUNK JUNK JUNK 0 obj \n")))) nil twin)
+;; the xref table's offsets all wrong (every entry shifted), startxref right
+(damaged! "repair-offsets-shifted.pdf"
+          (bytes-of (str/replace plain-str #"(\d{10}) 00000 n " (fn [[_ o]] (format "%010d 00000 n " (+ 7 (parse-long (str/replace o #"^0+(?=\d)" ""))))))) nil twin)
+;; text that looks like an object inside a stream must not be taken for one. NO
+;; ORACLE HERE: poppler and qpdf rebuild line by line and ARE fooled (the decoy
+;; `2 0 obj` is the newest page tree, so they find no pages); emon skips a
+;; stream by its length, so its answer is the file's by construction: the three
+;; pages of the twin.
+(let [decoy (str "\n7 0 obj\n<</Type/Catalog/Pages 99 0 R>>\nendobj\n2 0 obj\n<</Type/Pages/Kids[]/Count 0>>\nendobj\n")
+      objs (vec (map (fn [[n b]] (if (= n 6) [6 ["" (str (content 1) decoy)]] [n b])) base-objs))
+      bs (build-pdf objs "/Root 1 0 R/Info 11 0 R")
+      bs (bytes-of (str/replace (str-of bs) #"startxref\n\d+" "startxref\n1"))]
+  (write! "repair-decoy-in-stream.pdf" bs)
+  (add-row! "p3/repair-decoy-in-stream.pdf" nil "ok" info "-"))
+
+;; an incremental update whose /Prev is wrong: the update lists only what it
+;; changed, so the catalog lives in a section the reader cannot find
+(let [head (str-of (slurp-bytes twin))
+      ;; the update: a new /Pages with a fourth page (object 100, the page 1 content again)
+      prev-xref (Long/parseLong (second (re-find #"startxref\n(\d+)" head)))
+      upd-base (.length head)
+      pages-num (Long/parseLong (second (re-find #"/Pages (\d+) 0 R" head)))
+      page1 (Long/parseLong (second (re-find #"/Kids\s*\[\s*(\d+) 0 R" head)))
+      new-pages (str pages-num " 0 obj\n<</Type/Pages/Kids[" page1 " 0 R 100 0 R]/Count 2>>\nendobj\n")
+      new-page (str "100 0 obj\n<</Type/Page/Parent " pages-num " 0 R/MediaBox[0 0 200 200]>>\nendobj\n")
+      off-pages (+ upd-base 0)
+      off-page (+ upd-base (count new-pages))
+      xr (+ upd-base (count new-pages) (count new-page))
+      sect (str "xref\n" pages-num " 1\n" (format "%010d 00000 n \n" off-pages)
+                "100 1\n" (format "%010d 00000 n \n" off-page))
+      root-num (Long/parseLong (second (re-find #"/Root (\d+) 0 R" head)))
+      trailer (str "trailer\n<</Size 101/Root " root-num " 0 R/Prev 13>>\nstartxref\n" xr "\n%%EOF\n")
+      bs (bytes-of (str head new-pages new-page sect trailer))]
+  (write! "repair-prev-wrong.pdf" bs)
+  (let [i2 (emon.pdfinfo/pdfinfo root (path "repair-prev-wrong.pdf"))]
+    (assert (= 2 (:pages i2)) (str "poppler on repair-prev-wrong: " (pr-str i2)))
+    (add-row! "p3/repair-prev-wrong.pdf" nil "ok" i2 "-")))
+
+;; object streams: the xref stream and the last objects are lost, the catalog
+;; lives inside an object stream, the trailer's /Root with them
+(let [s (str-of (slurp-bytes twin-objstm))
+      i (.indexOf ^String s "/Type /XRef")
+      o (.lastIndexOf ^String s " 0 obj" i)
+      ls (.lastIndexOf ^String s "\n" o)]
+  (when (neg? i) (throw (ex-info "no xref stream" {})))
+  ;; cut before the xref stream's object begins. NO ORACLE: with the trailer gone
+  ;; poppler and qpdf both give up (they find no /Root); emon takes the catalog
+  ;; out of the object stream.
+  (damaged! "repair-objstm-no-xref-stream.pdf" (bytes-of (subs s 0 (inc ls))) nil twin-objstm :oracle false))
+
+;; the same through encryption: AES-256 and AES-128 with object streams and
+;; startxref broken, and RC4 with the table cut off. Each needs the key BEFORE
+;; the object streams can be read.
+(let [s (str-of (slurp-bytes (path "crypt-aes-256-r6-objstm-empty.pdf")))]
+  (damaged! "repair-crypt-aes256-objstm-startxref.pdf"
+            (bytes-of (str/replace s #"startxref\n\d+" "startxref\n11")) nil twin-objstm)
+  (damaged! "repair-crypt-aes128-objstm-user-startxref.pdf"
+            (bytes-of (str/replace (str-of (slurp-bytes (path "crypt-aes-128-objstm-user.pdf"))) #"startxref\n\d+" "startxref\n11"))
+            "user-secret" twin-objstm))
+(let [s (str-of (slurp-bytes (path "crypt-rc4-128-empty.pdf")))]
+  ;; the table and startxref cut off, the trailer (with /Encrypt and /ID) kept. (An
+  ;; encrypted file whose trailer is lost cannot be decrypted by anyone: the key
+  ;; needs the /ID. Its page tree still opens, its content is noise.)
+  (damaged! "repair-crypt-rc4-128-no-startxref.pdf" (bytes-of (subs s 0 (.indexOf ^String s "startxref"))) nil twin))
+
+;; ---------------------------------------------------------------- write rows
+
+(spit (str root "/test/pdf/p3.txt")          ; UTF-8: a password may be any text
+  (do
+    (str "# emon P3.1/P3.2: repaired and encrypted files (test/pdf/p3/*.pdf), kin/pdfcrypttest.kin.\n"
+         "# Written by kin/scripts/pdf-p3-fixtures (babashka; qpdf and poppler are the oracles).\n"
+         "# file (relative to test/) <TAB> password ('-' for none) <TAB> the status emon answers <TAB> pages <TAB> digest of\n"
+         "# the boxes in whole points + rotation (as pdfinfo reports) <TAB> the plain twin its objects must equal ('-' for none)\n"
+         (str/join "\n" (map #(str/join "\t" %) @rows)) "\n")))
+
+(println (count @rows) "rows," (count (fs/list-dir out-dir)) "files")

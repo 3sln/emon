@@ -513,9 +513,11 @@ func TestNoTruncationOfAFixtureFaults(emonT *testing.T) {
 	var pg *port.Cells = port.NewCells()
 	var out *port.Cells = port.NewCells()
 	var cut *port.Cells = port.NewCells()
-	// Every byte of the two small files, and the whole of each: the
-	// full file opens, anything cut before its xref does not.
-	port.AssertEq(emonT, dtTruncations(port.TestFile("pdf/minimal.pdf"), 1, ar, dc, a, b, st, pg, out, cut), 8, "minimal: the whole file, and the seven cuts inside its last line (`%%EOF`)")
+	// Every byte of the small file, and the whole of each other: none may
+	// fault. With repair by scanning (P3.1) a cut opens as soon as it holds
+	// the catalog and the page tree: minimal.pdf's second object ends at 110,
+	// and a cut at 103, before its `endobj`, still parses.
+	port.AssertEq(emonT, dtTruncations(port.TestFile("pdf/minimal.pdf"), 1, ar, dc, a, b, st, pg, out, cut), 457, "minimal: every cut from 103 bytes on (560 bytes: 457 cuts)")
 	port.AssertThat(emonT, dtTruncations(port.TestFile("pdf/xrefstream.pdf"), 1, ar, dc, a, b, st, pg, out, cut) >= 1, "xref stream file")
 	port.AssertThat(emonT, dtTruncations(port.TestFile("pdf/hybrid.pdf"), 1, ar, dc, a, b, st, pg, out, cut) >= 1, "hybrid file")
 	port.AssertThat(emonT, dtTruncations(port.TestFile("pdf/incremental.pdf"), 1, ar, dc, a, b, st, pg, out, cut) >= 1, "incremental file")
@@ -946,9 +948,13 @@ func TestANamedMissingChunkIsNeedBytesUntilItIsResident(emonT *testing.T) {
 	port.AssertEq(emonT, pdfdoc.PdPgCount(pg), 1, "one page")
 }
 
-func TestADamagedFileIsStillBadXrefOnceItsChunksAreResident(emonT *testing.T) {
-	// badxref.pdf's real status is bad-xref. On a cold source the answer
-	// is need-bytes; only a run that read every byte it used may say bad-xref.
+func TestADamagedFileIsRepairedOnceItsChunksAreResident(emonT *testing.T) {
+	// badxref.pdf's startxref leads nowhere, so the cross-reference is rebuilt
+	// by scanning the whole file (P3.1, D099). On a cold source the answer is
+	// need-bytes; a full scan is legitimately a read of everything, which the
+	// host's doubling read-ahead does in a few rounds, and then the file opens
+	// with the `repaired` warning. A file with no object at all stays bad-xref,
+	// and only a run that read every byte it used may say so.
 	var f []byte = port.TestFile("pdf/badxref.pdf")
 	var base *port.Src = port.SrcChunked(f, 64, 0)
 	var ar *port.Cells = port.NewCells()
@@ -961,8 +967,13 @@ func TestADamagedFileIsStillBadXrefOnceItsChunksAreResident(emonT *testing.T) {
 	var v *port.Src = port.SrcView(base)
 	port.AssertEq(emonT, dtOpen(v, ar, dc, a, b, st, pg), 7, "cold: need-bytes")
 	port.AssertEq(emonT, dtM(v), 1, "missed")
-	port.AssertEq(emonT, dtOpenAsync(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 3, "warm: bad-xref")
+	port.AssertEq(emonT, dtOpenAsync(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 0, "warm: repaired, it opens")
 	port.AssertThat(emonT, port.CellsAt(ctr, 0) >= 1, "it took a round")
+	port.AssertEq(emonT, port.CellsAt(ctr, 1), 0, "no attempt that missed reported a status")
+	port.AssertEq(emonT, port.CellsAt(ctr, 2), 0, "or a warning")
+	port.AssertEq(emonT, pdfdoc.PdWarn(dc), 512, "the repair is the one warning")
+	port.AssertEq(emonT, pdfdoc.PdPgCount(pg), 1, "one page")
+	port.AssertEq(emonT, dtOpenAsync(port.TextBlob("%PDF-1.4\nstartxref\n17\n%%EOF\n"), 64, 0, ar, dc, a, b, st, pg, ctr), 3, "no object to rebuild from: still bad-xref")
 }
 
 func dtSameSync(bytes []byte, ctr *port.Cells) int32 {

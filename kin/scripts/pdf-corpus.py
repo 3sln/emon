@@ -11,8 +11,9 @@ generated Rust (`kin/scripts/pdf-sweep`) for what emon makes of the same file.
 The two must agree, to the whole point: poppler prints boxes with two binary-
 rounded decimals, so a box that is 68.315 in the file is 68.31 to poppler and
 68.32 to emon. A disagreement is printed and the script exits 1 without
-writing; a file emon cannot open (`bad-xref`: no repair yet, P3.1; `encrypted`:
-no decryption yet, P3.2) is written with its status and is a ratchet.
+writing; a file emon cannot open (none in `corpus/` now: repair by scanning is
+P3.1 and decryption P3.2, D099, D098) would be written with its status and is a
+ratchet. `kin/scripts/pdf-compare` (babashka) is the whole-corpus cross-check.
 
 `test/pdf/corpus.txt` rows: path (relative to test/), emon's status, pages,
 digest. SELECTION is deterministic (paths ordered by SHA-1) and aims at

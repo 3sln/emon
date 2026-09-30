@@ -5,6 +5,10 @@
 package port
 
 import (
+	"crypto/aes"
+	"crypto/md5"
+	"crypto/sha256"
+	"crypto/sha512"
 	"fmt"
 	"os"
 	"strconv"
@@ -444,4 +448,127 @@ func settingSpec(kind int32) (string, int32) {
 		return "TASKS", 0
 	}
 	return "UNKNOWN", 0
+}
+
+// ------------------------------------------------------------------- Crypto
+//
+// THE `Crypto` PORT: see the Rust half (host/rust/src/port.rs) for the
+// contract. Go's standard library has MD5, SHA-2 and AES; RC4 is written out
+// (crypto/rc4 is deprecated and a host may drop it). Every form takes a span
+// of a Blob and APPENDS its output to a Cells, answering how many cells it
+// appended, or -1 for an unusable key.
+
+func pushBytes(out *Cells, b []byte) int32 {
+	for _, x := range b {
+		out.V = append(out.V, int32(x))
+	}
+	return int32(len(b))
+}
+
+// @kin:link:form:crypto-md5: {:template "port.CryptoMd5({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
+func CryptoMd5(data []byte, off int32, length int32, out *Cells) int32 {
+	h := md5.Sum(data[off : off+length])
+	return pushBytes(out, h[:])
+}
+
+// @kin:link:form:crypto-sha256: {:template "port.CryptoSha256({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
+func CryptoSha256(data []byte, off int32, length int32, out *Cells) int32 {
+	h := sha256.Sum256(data[off : off+length])
+	return pushBytes(out, h[:])
+}
+
+// @kin:link:form:crypto-sha384: {:template "port.CryptoSha384({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
+func CryptoSha384(data []byte, off int32, length int32, out *Cells) int32 {
+	h := sha512.Sum384(data[off : off+length])
+	return pushBytes(out, h[:])
+}
+
+// @kin:link:form:crypto-sha512: {:template "port.CryptoSha512({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
+func CryptoSha512(data []byte, off int32, length int32, out *Cells) int32 {
+	h := sha512.Sum512(data[off : off+length])
+	return pushBytes(out, h[:])
+}
+
+// @kin:link:form:crypto-rc4: {:template "port.CryptoRc4({0}, {1}, {2}, {3}, {4}, {5}, {6})" :import "emon/port" :arity 7}
+func CryptoRc4(key []byte, koff int32, klen int32, data []byte, doff int32, dlen int32, out *Cells) int32 {
+	if klen < 1 || klen > 256 {
+		return -1
+	}
+	k := key[koff : koff+klen]
+	d := data[doff : doff+dlen]
+	var s [256]byte
+	for i := 0; i < 256; i++ {
+		s[i] = byte(i)
+	}
+	j := 0
+	for i := 0; i < 256; i++ {
+		j = (j + int(s[i]) + int(k[i%len(k)])) & 255
+		s[i], s[j] = s[j], s[i]
+	}
+	i, j := 0, 0
+	for _, b := range d {
+		i = (i + 1) & 255
+		j = (j + int(s[i])) & 255
+		s[i], s[j] = s[j], s[i]
+		out.V = append(out.V, int32(b^s[(int(s[i])+int(s[j]))&255]))
+	}
+	return dlen
+}
+
+// @kin:link:form:crypto-aes-decrypt: {:template "port.CryptoAesDecrypt({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})" :import "emon/port" :arity 8}
+func CryptoAesDecrypt(key []byte, koff int32, klen int32, data []byte, doff int32, dlen int32, pad int32, out *Cells) int32 {
+	if !(klen == 16 || klen == 24 || klen == 32) {
+		return -1
+	}
+	d := data[doff : doff+dlen]
+	if len(d) < 32 {
+		return 0
+	}
+	blk, _ := aes.NewCipher(key[koff : koff+klen])
+	n := (len(d) - 16) / 16
+	plain := make([]byte, 0, n*16)
+	prev := d[:16]
+	for b := 0; b < n; b++ {
+		ct := d[16+b*16 : 32+b*16]
+		var t [16]byte
+		blk.Decrypt(t[:], ct)
+		for i := 0; i < 16; i++ {
+			t[i] ^= prev[i]
+		}
+		plain = append(plain, t[:]...)
+		prev = ct
+	}
+	if pad == 1 && len(plain) > 0 {
+		p := int(plain[len(plain)-1])
+		if p >= 1 && p <= 16 && p <= len(plain) {
+			plain = plain[:len(plain)-p]
+		}
+	}
+	return pushBytes(out, plain)
+}
+
+// @kin:link:form:crypto-aes-encrypt: {:template "port.CryptoAesEncrypt({0}, {1}, {2}, {3}, {4}, {5}, {6})" :import "emon/port" :arity 7}
+func CryptoAesEncrypt(key []byte, koff int32, klen int32, data []byte, doff int32, dlen int32, out *Cells) int32 {
+	if !(klen == 16 || klen == 24 || klen == 32) {
+		return -1
+	}
+	d := data[doff : doff+dlen]
+	if len(d) < 16 {
+		return 0
+	}
+	blk, _ := aes.NewCipher(key[koff : koff+klen])
+	n := (len(d) - 16) / 16
+	ct := make([]byte, 0, n*16)
+	var prev [16]byte
+	copy(prev[:], d[:16])
+	for b := 0; b < n; b++ {
+		var t [16]byte
+		for i := 0; i < 16; i++ {
+			t[i] = d[16+b*16+i] ^ prev[i]
+		}
+		blk.Encrypt(t[:], t[:])
+		ct = append(ct, t[:]...)
+		prev = t
+	}
+	return pushBytes(out, ct)
 }

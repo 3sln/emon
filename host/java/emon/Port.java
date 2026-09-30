@@ -502,4 +502,158 @@ public final class Port {
             default: return 0;
         }
     }
+
+    // ------------------------------------------------------------- Crypto
+    //
+    // THE `Crypto` PORT: see the Rust half (host/rust/src/port.rs) for the
+    // contract. java.security and javax.crypto have MD5, SHA-2 and AES; RC4 is
+    // written out. Every form takes a span of a Blob and APPENDS its output to
+    // a Cells, answering how many cells it appended, or -1 for an unusable key.
+
+    private static int pushBytes(Cells out, byte[] b, int n) {
+        for (int i = 0; i < n; i++) {
+            cellsPush(out, b[i] & 0xFF);
+        }
+        return n;
+    }
+
+    private static byte[] digest(String alg, byte[] data, int off, int len) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance(alg);
+            md.update(data, off, len);
+            return md.digest();
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    // @kin:link:form:crypto-md5: {:template "emon.Port.cryptoMd5({0}, {1}, {2}, {3})" :arity 4}
+    public static int cryptoMd5(byte[] data, int off, int len, Cells out) {
+        byte[] h = digest("MD5", data, off, len);
+        return pushBytes(out, h, h.length);
+    }
+
+    // @kin:link:form:crypto-sha256: {:template "emon.Port.cryptoSha256({0}, {1}, {2}, {3})" :arity 4}
+    public static int cryptoSha256(byte[] data, int off, int len, Cells out) {
+        byte[] h = digest("SHA-256", data, off, len);
+        return pushBytes(out, h, h.length);
+    }
+
+    // @kin:link:form:crypto-sha384: {:template "emon.Port.cryptoSha384({0}, {1}, {2}, {3})" :arity 4}
+    public static int cryptoSha384(byte[] data, int off, int len, Cells out) {
+        byte[] h = digest("SHA-384", data, off, len);
+        return pushBytes(out, h, h.length);
+    }
+
+    // @kin:link:form:crypto-sha512: {:template "emon.Port.cryptoSha512({0}, {1}, {2}, {3})" :arity 4}
+    public static int cryptoSha512(byte[] data, int off, int len, Cells out) {
+        byte[] h = digest("SHA-512", data, off, len);
+        return pushBytes(out, h, h.length);
+    }
+
+    // @kin:link:form:crypto-rc4: {:template "emon.Port.cryptoRc4({0}, {1}, {2}, {3}, {4}, {5}, {6})" :arity 7}
+    public static int cryptoRc4(byte[] key, int koff, int klen, byte[] data, int doff, int dlen, Cells out) {
+        if (klen < 1 || klen > 256) {
+            return -1;
+        }
+        if (koff < 0 || koff + klen > key.length || doff < 0 || dlen < 0 || doff + dlen > data.length) {
+            throw new IndexOutOfBoundsException();
+        }
+        int[] s = new int[256];
+        for (int i = 0; i < 256; i++) {
+            s[i] = i;
+        }
+        int j = 0;
+        for (int i = 0; i < 256; i++) {
+            j = (j + s[i] + (key[koff + (i % klen)] & 0xFF)) & 255;
+            int t = s[i];
+            s[i] = s[j];
+            s[j] = t;
+        }
+        int a = 0;
+        int b = 0;
+        for (int n = 0; n < dlen; n++) {
+            a = (a + 1) & 255;
+            b = (b + s[a]) & 255;
+            int t = s[a];
+            s[a] = s[b];
+            s[b] = t;
+            cellsPush(out, (data[doff + n] & 0xFF) ^ s[(s[a] + s[b]) & 255]);
+        }
+        return dlen;
+    }
+
+    private static javax.crypto.Cipher aesEcb(int mode, byte[] key, int koff, int klen) {
+        try {
+            javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/ECB/NoPadding");
+            c.init(mode, new javax.crypto.spec.SecretKeySpec(key, koff, klen, "AES"));
+            return c;
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    // @kin:link:form:crypto-aes-decrypt: {:template "emon.Port.cryptoAesDecrypt({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})" :arity 8}
+    public static int cryptoAesDecrypt(byte[] key, int koff, int klen, byte[] data, int doff, int dlen, int pad, Cells out) {
+        if (!(klen == 16 || klen == 24 || klen == 32)) {
+            return -1;
+        }
+        if (doff < 0 || dlen < 0 || doff + dlen > data.length) {
+            throw new IndexOutOfBoundsException();
+        }
+        if (dlen < 32) {
+            return 0;
+        }
+        int n = (dlen - 16) / 16;
+        javax.crypto.Cipher c = aesEcb(javax.crypto.Cipher.DECRYPT_MODE, key, koff, klen);
+        byte[] plain;
+        try {
+            plain = c.doFinal(data, doff + 16, n * 16);
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+        for (int b = 0; b < n; b++) {
+            for (int i = 0; i < 16; i++) {
+                plain[b * 16 + i] ^= data[doff + b * 16 + i];
+            }
+        }
+        int len = plain.length;
+        if (pad == 1 && len > 0) {
+            int p = plain[len - 1] & 0xFF;
+            if (p >= 1 && p <= 16 && p <= len) {
+                len -= p;
+            }
+        }
+        return pushBytes(out, plain, len);
+    }
+
+    // @kin:link:form:crypto-aes-encrypt: {:template "emon.Port.cryptoAesEncrypt({0}, {1}, {2}, {3}, {4}, {5}, {6})" :arity 7}
+    public static int cryptoAesEncrypt(byte[] key, int koff, int klen, byte[] data, int doff, int dlen, Cells out) {
+        if (!(klen == 16 || klen == 24 || klen == 32)) {
+            return -1;
+        }
+        if (doff < 0 || dlen < 0 || doff + dlen > data.length) {
+            throw new IndexOutOfBoundsException();
+        }
+        if (dlen < 16) {
+            return 0;
+        }
+        int n = (dlen - 16) / 16;
+        javax.crypto.Cipher c = aesEcb(javax.crypto.Cipher.ENCRYPT_MODE, key, koff, klen);
+        byte[] prev = java.util.Arrays.copyOfRange(data, doff, doff + 16);
+        byte[] ct = new byte[n * 16];
+        byte[] blk = new byte[16];
+        try {
+            for (int b = 0; b < n; b++) {
+                for (int i = 0; i < 16; i++) {
+                    blk[i] = (byte) (data[doff + 16 + b * 16 + i] ^ prev[i]);
+                }
+                prev = c.doFinal(blk);
+                System.arraycopy(prev, 0, ct, b * 16, 16);
+            }
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+        return pushBytes(out, ct, ct.length);
+    }
 }

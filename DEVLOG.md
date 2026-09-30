@@ -935,13 +935,64 @@ analysis beyond "top-to-bottom lines on a single column".
 
 ## Phase 3 — PDF breadth
 
-- [ ] P3.1 — xref repair by scanning (`N G obj`), broken `startxref`, broken
+- [x] P3.1 — xref repair by scanning (`N G obj`), broken `startxref`, broken
   `/Length`; `bb fuzz` corpus grows with real damaged PDFs.
-- [ ] P3.2 — Encryption: standard security handler R2–R6 in kin; `Crypto`
+  *Done (P3.1, D099)*: when the ordinary open answers `no-startxref`, `bad-xref`,
+  `no-root` or `no-pages`, `pd-open` rebuilds the cross-reference by scanning the whole
+  source for `N G obj` (the last version of an object wins; a stream is skipped by its
+  length, so text in it is not mistaken for an object; `trailer` and XRef-stream
+  dictionaries supply /Root, /Encrypt and /ID; object streams are entered after the key
+  is known, and a catalog inside one is found) and notes it in the warning bit 512. Over
+  a source that misses the scan answers `need-bytes` every 4 KiB (D075). A wrong
+  `/Length` was already P1.4's (D062); a wrong `/Prev` is repaired when the catalog is in
+  the section the chain lost. **Real files**: of the 4,000 PDFs under `corpus/` the sweep
+  found 17 unreadable (12 encrypted, 3 with a `startxref` that leads nowhere, 1 with none,
+  1 with a wrong `/Prev`); all open now, with the page count and every page's boxes and
+  rotation equal to `pdfinfo`'s: `bb kin/scripts/pdf-compare` says **4,000 of 4,000 agree**
+  (before: 3,983 of 4,000). **Fixtures** (`kin/scripts/pdf-p3-fixtures`, test/pdf/p3/):
+  startxref wrong or past the end, cut before the xref, cut inside the table, junk tail,
+  every offset shifted, a decoy `N G obj` inside a stream, an incremental update with a
+  wrong `/Prev`, an object-stream file whose xref stream is gone, and encrypted ones
+  (AES-256 and AES-128 with object streams and a broken `startxref`, RC4 with the table
+  cut): poppler opens each like the plain twin except the two no other tool can rebuild,
+  and emon's answer equals the twin's object for object. The committed fixtures
+  (`test/pdf/fixtures.txt`) were updated where repair changes the answer: `badxref`,
+  `nostartxref`, `badxrefstream` and `no-root` open; `encrypt-flag` is
+  `password-required`. The 512-byte and 64-byte async laws cover repair and
+  decryption cell for cell. **Not done**: `bb fuzz` (P2.12) is another item; the
+  truncation and corruption laws of `pdfdoctest` and `pdfcrypttest` are its seed.
+- [x] P3.2 — Encryption: standard security handler R2–R6 in kin; `Crypto`
   port (MD5, RC4, AES-CBC, SHA-2) in both hosts; embedder password; the
   password handling and the distinct `password-required` /
   `password-incorrect` / `encryption-unsupported` errors; permission flags
   ignored (SPEC §16, D040).
+  *Done (P3.2, D097, D098)*: `kin/pdfcrypt.kin` is the standard security handler (R2 to
+  R4: algorithms 1 to 7; R5 and R6: algorithms 2.A and 2.B) over the `Crypto` port, seven
+  pure forms in all four host trees (`crypto-md5`, `-sha256`, `-sha384`, `-sha512`,
+  `-rc4`, `-aes-decrypt`, `-aes-encrypt`); Go, Java and C# call their libraries (RC4
+  written out), Rust's are hand-written because its standard library has none.
+  `kin/cryptotest.kin`: 20 laws against the published vectors (RFC 1321, FIPS 180-4, RFC
+  6229, FIPS 197, SP 800-38A F.2 at 128, 192 and 256 bits) pass on all four targets.
+  `pd-open-pw src pw ...` takes the password as a `Src` (never kept: a law finds it in none
+  of the arena, document, scratch or page table); `pd-open` tries the empty user password;
+  order: empty user, supplied as user, supplied as owner, empty owner. Statuses
+  `password-required` (8), `password-incorrect` (9), `encryption-unsupported` (10).
+  Permissions are never consulted. Objects are decrypted as they are loaded (strings in
+  place, streams through their plan). **Fixtures** (qpdf, checked by `pdfinfo` with the
+  same password): RC4-40 R2, RC4-128 R3, RC4-128 R4 (crypt filters), AES-128 R4, AES-256
+  R5 and R6, each with the empty user password and with one (and the owner password
+  opens each), with object streams (RC4, AES-128, AES-256), clear-text metadata, a
+  46-byte and a non-ASCII password, extraction and printing forbidden; five kinds of
+  `encryption-unsupported` (public-key, another handler, V3, an unknown crypt filter
+  method, R7). `kin/pdfcrypttest.kin` (8 laws, 83 rows): status, page geometry, the
+  first bytes of page 1's content, the Info `/Title`, and a deep hash of the catalog and
+  Info (every reference followed, every string, every stream decoded) equal to the plain
+  twin's; async-source identity at 512 and 64 bytes; truncation and corruption never
+  fault. The 12 encrypted real files (RC4 128-bit, owner-locked) open and decode every
+  stream (0 bad; 35 image streams declined) and were the first sweep's failures; two
+  more files, whose `/P` is written unsigned (4294965956), found the lexer's saturating
+  integers: an int object now keeps its value modulo 2^32 too (`pl-int-wrapped`).
+  **Gates**: `bb unit` 192 laws on every arm; `bb unit red` fails on every arm.
 - [ ] P3.3 — Remaining non-image filters: `LZWDecode` (early change),
   `RunLengthDecode`, TIFF predictor 2; `Crypt` filter identity.
 - [ ] P3.4 — Fonts, the long tail: predefined CJK CMaps (as `defdata`),
@@ -2070,6 +2121,8 @@ outside repair.
 - [ ] **Signed off** (maintainer)
 
 ### D063 — The document layer: a workspace of five cells, newest entry wins, no repair, no decryption
+**Superseded in part (P3.1, P3.2)**: repair by scanning is D099, decryption D098; the
+workspace is now 448 header cells (the security region sits before the entries).
 **Decision**: `emon.pdfdoc` takes `(src ar dc a b st)`: the arena, the document
 (a header then five cells per object number: kind, two fields, cache, flags),
 and three scratch cells (`a` decodes an object stream, `b` and `st` are the
@@ -2420,6 +2473,154 @@ file's; the gate compares arenas, so a leak shows.
 **Alternatives**: a check in every read (every in-memory byte pays); returning
 statuses only from the top (garbage between miss and checkpoint is unbounded,
 see (4)); hints as one whole-file range (defeats lazy reading).
+- [ ] **Signed off** (maintainer)
+
+### D097 — The `Crypto` port is seven pure forms over bytes; the four hosts agree on every byte; Rust's are written out
+**Decision** (P3.2, D006). `emon.port` gains `crypto-md5`, `crypto-sha256`,
+`crypto-sha384`, `crypto-sha512`, `crypto-rc4`, `crypto-aes-decrypt` and
+`crypto-aes-encrypt`, in all four host trees. Each takes its input as a span of a
+`Blob` (`data off len`; RC4 and AES also a key span) and APPENDS its output to a
+`Cells`, one byte per cell, answering how many it appended, or -1 for a key it
+cannot use (RC4: 1 to 256 bytes; AES: 16, 24 or 32). AES-CBC takes the IV as the
+FIRST 16 bytes of the data, for both directions, so one calling convention serves
+a PDF string (IV first), an R6 key unwrap (a zero IV prepended) and the R6 hash
+(`encrypt` uses the IV and answers the ciphertext only). Decrypt strips PKCS#5
+padding when asked (`pad` 1): a last byte of 1 to 16 removes that many bytes, any
+other value removes none (what readers do with a damaged padding is keep the data),
+and a ragged tail shorter than a block is dropped. Encrypt does not pad. Go, Java
+and C# call their standard libraries (MD5, SHA-2, AES-ECB per block under a CBC
+loop the port owns); RC4 is ten lines in each (`crypto/rc4` is deprecated, .NET has
+none). **Rust's standard library has none of the six, and emon's Rust host has no
+dependencies, so `host/rust/src/port.rs` carries MD5, SHA-256/384/512, RC4 and AES
+itself** (the S-box is derived, not typed; the SHA and MD5 constants come from
+`tools/crypto-constants.clj`, which derives them exactly from their definitions).
+`kin/cryptotest.kin` holds all four hosts to the published vectors: RFC 1321 (MD5),
+FIPS 180-4 (one-, two-block and 896-bit messages, SHA-256/384/512), the published RC4
+vectors and RFC 6229's first bytes, FIPS 197 C.1-C.3 and NIST SP 800-38A F.2 (CBC,
+128, 192 and 256 bits, four blocks), and padded ciphertext made by the JDK.
+**The split** is D006's: primitives are the host's (pure functions over bytes, SPEC
+7.2: a host must not substitute a "compatible" algorithm); the standard security
+handler (padding string, the order of what is hashed, the 50 and 20 rounds, R6's
+self-selecting hash, owner-to-user recovery, per-object keys) is kin, once, in
+`kin/pdfcrypt.kin`.
+**Why**: primitives are in every standard library but Rust's, and pure; an API of
+"span in, cells out" needs no new tag and reuses `cells-bytes` for kin-built keys.
+**Alternatives**: primitives in kin (AES and SHA-512 are not small, and the
+not-worse rule would keep hand-written ones anyway); a Rust crate (emon's Rust host
+is dependency-free, and `bb unit` builds `--offline`); separate IV and data
+parameters (every call site would copy to split them).
+- [ ] **Signed off** (maintainer)
+
+### D098 — Encryption: one region of the document's cells, the password read from a `Src` and never kept, three distinct errors, decryption where an object is loaded
+**Decision** (P3.2, D040, D058). **API** (additive): `pd-open-pw src pw ar dc a b st`,
+where `pw` is a `Src` (an in-memory source over the bytes the embedder supplied with
+the input); `pd-open` is the same with no password. New `pd-status` values: 8
+`password-required`, 9 `password-incorrect`, 10 `encryption-unsupported`; 6
+(`encrypted`) is no longer answered. **Order tried** (D040): the empty user password
+(a file that opens for anyone, which is what `pdfinfo` does and what crawlers meet),
+the supplied password as the user password, as the owner password, and the empty
+owner password. `password-incorrect` is answered only when a password was supplied
+(an empty one is none supplied), else `password-required`. Permission flags are read
+for one thing, the key (`/P` is part of it); never for policy. **Supported**: the
+standard handler, V1 (RC4-40), V2 (RC4 40 to 128), V4 (crypt filters; RC4 or AES-128,
+streams and strings separately, `/Identity` and `/None` meaning not encrypted), V5
+(AES-256, R5 and R6); `/EncryptMetadata false`; `/P` written unsigned (4294965956: the
+lexer's integers saturate, so an int object now also keeps its value modulo 2^32,
+`pl-int-wrapped`). **`encryption-unsupported`**: another `/Filter` (public-key
+handlers), V0, V3, V beyond 5, R outside 2 to 6 or not matching V, a crypt filter whose
+`/CFM` is not `V2`, `AESV2`, `AESV3` or `None`, or one the dictionary lacks.
+**Where**: `pd-crypt-setup` (in `pd-open`, after the trailers, before the catalog)
+reads `/Encrypt` and the first `/ID`, copies `O U OE UE ID` into a 352-cell region of
+`dc` (`D_CR`, `kin/pdfcrypt.kin`), authenticates, and leaves the file key there.
+From then on `pd-get` decrypts each object it LOADS FROM THE FILE: its strings in
+place (`pd-secure`; an object inside an object stream is not, the stream was), and a
+stream is tagged with its object number (`pl-stream-num`, in the record's sibling
+link, which only container children use); `pd-stream-plan` appends the stream's
+decryption to its plan (mode, key length, this object's key, three bytes to an
+integer) so `pd-run-plan` needs nothing but the plan, and decrypts the span into its
+output before the filter chain runs. Not decrypted: an XRef stream, a stream with a
+`/Crypt` filter (taken as the identity, which every producer writes), the `/Metadata`
+stream when `/EncryptMetadata` is false, and the `/Encrypt` dictionary itself (loaded
+before the key exists, cached undecrypted). **The password is never kept**: it is read
+from its `Src` while a candidate is tried, copied only into the three scratch cells
+(zeroed before `cr-authenticate` returns), and the padded candidate parked in the
+region (or the user password recovered from `/O`) is zeroed too; a law checks that the
+first bytes of every password are found in none of the arena, the document, the
+scratch or the page table after an open (D058: not in a Model, a dump or a transcript;
+kin never has a place to write one). R2 to R4 take the password's bytes as given
+(PDFDocEncoding, in practice Latin-1), R5 and R6 as UTF-8 cut to 127 bytes (SASLprep
+is the embedder's). **Not handled**: an encrypted file whose trailer is lost (the key
+needs the `/ID`: its page tree opens, its content is noise), embedded-file streams
+with their own crypt filter names, `/Perms` validation.
+**Why**: the maintainer's D040; decrypting at load keeps every reader above `pdfdoc`
+(`pdffont`, content interpretation) unchanged, and the plan carrying the key keeps the
+two-phase plan/run split that resolving references forced (D063).
+**Alternatives**: the password stored in `dc` (rejected by D058); a decrypting `Src`
+wrapper (a stream's key depends on its object, not on a byte offset); decrypting
+strings lazily at each read (every consumer would need the object number).
+- [ ] **Signed off** (maintainer)
+
+### D099 — Repair by scanning: when the cross-reference or the catalog cannot be used, rebuild the table from `N G obj`; the last version of an object wins; a full scan is a legitimate read of the whole file
+**Decision** (P3.1, D075). `pd-open` is unchanged for a good file. When it answers
+`no-startxref`, `bad-xref`, `no-root` or `no-pages`, it REBUILDS the table by scanning
+the whole source once (`pd-rebuild`) and opens again; when that does not help (no
+object at all, no catalog, no pages), the ordinary answer stands. `need-bytes` and the
+password errors are never repaired. **The scan** looks for `N G obj` at a token
+boundary (start of file, after white space, or after the `>`, `]` or `)` that closes a
+container), parses each with `pl-parse-indirect` and jumps to its end, so a stream is
+skipped by its `/Length` (by `endstream` when that is wrong, and by a rescan when it is
+indirect) and text in a stream that looks like an object is not taken for one (poppler
+and qpdf, which rebuild line by line, ARE fooled by that: the fixture has no oracle).
+The LAST `N G obj` in the file wins an object number (an incremental update); a
+`trailer` keyword's dictionary and an XRef stream's dictionary that has a `/Root` are
+collected, newest first (at most 16, as for a chain); the last `/Type /Catalog` object is
+remembered; every `/Type /ObjStm` number is noted. **Object streams** are entered AFTER
+the key is known (an encrypted file's are encrypted), in file order, from each stream's
+own table, and an entry replaces an older object (by file offset) and never a newer
+one. **The catalog**: the trailer's `/Root`; else the remembered catalog; else the first
+object by number that is a `/Type /Catalog` dictionary, object-stream members included
+(neither poppler nor qpdf does that last: a file cut before its xref stream, with the
+catalog in an object stream, opens). The warning bit 512 (`the cross-reference was
+rebuilt by scanning`) says it happened. **Over a source that misses** the scan checks
+`ps-missed` every 4 KiB and answers `need-bytes` (D075 (3)): the host's doubling
+read-ahead fetches the whole file in a few rounds, and a law holds the repair, the
+encrypted repair and the 64- and 512-byte chunk sources to the in-memory run cell for
+cell. **Cost**: nothing for a good file; a bad one is read through once more
+(lexing every digit that starts a token). What is NOT repaired: a `/Length` is still
+only trusted when `endstream` follows (D062), and an older section that fails to read
+is still a warning, not a repair (the corpus's wrong `/Prev` file opens through the
+scan because its catalog is in the section the chain lost).
+**Why**: `bb` sweeps of the 4,000 real files found 17 unreadable by the ordinary path
+(12 encrypted, 3 with a `startxref` that leads nowhere, 1 with a wrong `/Prev`, 1
+with no `startxref`); poppler opens all of them.
+**Alternatives**: repair always (every good file would pay a whole-file read, against
+D058); a line-based scan (fooled by a stream's text); repair only the table and leave
+object streams unindexed (the encrypted and xref-stream cases would fail).
+- [ ] **Signed off** (maintainer)
+
+### D100 — P3's tooling: poppler and qpdf are the oracles, in babashka; fixtures are committed; the sweep takes a password
+**Decision**. `kin/scripts/pdf-compare` (babashka) sweeps `corpus/` through `pdf-sweep`
+and `pdfinfo` and classes every file (`agree`, `disagree`, `distinct` error, ...);
+`tools/pdfinfo.clj` is the shared geometry digest. `kin/scripts/pdf-sweep` reads
+`path<TAB>password` lines. `kin/scripts/pdf-p3-fixtures` (babashka) writes
+`test/pdf/p3/*.pdf` and `test/pdf/p3.txt` from a base PDF it builds: qpdf encrypts
+it for every revision and algorithm (RC4-40 R2, RC4-128 R3, RC4-128 R4 through
+crypt filters, AES-128 R4, AES-256 R5 and R6), each with the empty user password and
+with one, with extraction, printing and modification forbidden, with object streams,
+with clear-text metadata, with a long and a non-ASCII password; the damaged files are
+qpdf's output broken by hand; the unsupported ones carry hand-made `/Encrypt`
+dictionaries. Every file that should open is opened by `pdfinfo` with the same
+password (or, where poppler's own R6 password check refuses a long one, by poppler
+reading qpdf's decryption of it), and must report the page count and geometry digest
+of the plain twin. The laws (`kin/pdfcrypttest.kin`) check the status, the geometry,
+the first bytes of page 1's content, the Info `/Title`, and a deep hash of the catalog
+and Info (every reference followed, every string and decoded stream) against the
+plain twin's. Two fixtures have NO oracle, by design (a decoy object inside a stream;
+a file cut before its xref stream); their answers are the files' by construction.
+The committed fixtures mean a test run needs neither tool. `qpdf` was installed with
+`brew install --build-from-source qpdf` (no bottle for this macOS).
+**Why**: an independent implementation must say what emon's key derivation and
+repair should have produced; emon cannot be its own oracle.
 - [ ] **Signed off** (maintainer)
 
 ---

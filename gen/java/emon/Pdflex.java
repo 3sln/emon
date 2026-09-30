@@ -493,6 +493,11 @@ public final class Pdflex {
         // Children of an array; for a dictionary, keys plus values.
         return emon.Port.cellsAt(ar, h + R_B);
     }
+    public static int plIntWrapped(emon.Port.Cells ar, int h) {
+        // An int's value modulo 2^32 as a signed 32-bit pattern: what `pl-int-value`
+        // saturated away (4294965956 is -1340 here).
+        return emon.Port.cellsAt(ar, h + R_C);
+    }
     public static int plIntValue(emon.Port.Cells ar, int h) {
         // An int's value; a bool's 0 or 1; a ref's object number.
         return emon.Port.cellsAt(ar, h + R_A);
@@ -515,6 +520,18 @@ public final class Pdflex {
     public static int plStrByte(emon.Port.Cells ar, int h, int i) {
         return emon.Port.cellsAt(ar, emon.Port.cellsAt(ar, h + R_A) + i);
     }
+    public static int plStrSetByte(emon.Port.Cells ar, int h, int i, int v) {
+        // Overwrite byte i of a string: decryption (P3.2) replaces a string's
+        // bytes in place, never growing it.
+        int at = emon.Port.cellsAt(ar, h + R_A);
+        emon.Port.cellsSet(ar, at + i, v);
+        return 0;
+    }
+    public static int plStrSetLen(emon.Port.Cells ar, int h, int n) {
+        // Shorten a string to n bytes (decrypted AES strings lose IV and padding).
+        emon.Port.cellsSet(ar, h + R_B, n);
+        return 0;
+    }
     public static int plStreamDict(emon.Port.Cells ar, int h) {
         return emon.Port.cellsAt(ar, h + R_A);
     }
@@ -533,6 +550,17 @@ public final class Pdflex {
     public static int plStreamSetLen(emon.Port.Cells ar, int h, int ln) {
         emon.Port.cellsSet(ar, h + R_C, ln);
         emon.Port.cellsSet(ar, h + R_D, 0);
+        return 0;
+    }
+    public static int plStreamNum(emon.Port.Cells ar, int h) {
+        // The object number the document layer recorded for a stream it loaded
+        // (P3.2, D098): it names the stream's decryption key. 0 when none was
+        // recorded. A stream is never a child of a container, so the record's
+        // sibling link, which only children use, is free for it.
+        return emon.Port.cellsAt(ar, h + R_NEXT);
+    }
+    public static int plStreamSetNum(emon.Port.Cells ar, int h, int num) {
+        emon.Port.cellsSet(ar, h + R_NEXT, num);
         return 0;
     }
     public static int plKwId(emon.Port.Cells ar, int h) {
@@ -823,6 +851,7 @@ public final class Pdflex {
         int scale = 0;
         int nd = 0;
         int dot = 0;
+        long wv = (long) 0;
         int d = 0;
         while ((q < end) && ((Pdfsrc.psU8(src, q) == 43) || (Pdfsrc.psU8(src, q) == 45))) {
             if (Pdfsrc.psU8(src, q) == 45) {
@@ -842,6 +871,7 @@ public final class Pdflex {
             } else {
                 scale = -1000;
             }
+            wv = (wv * ((long) 10)) + ((long) d);
             nd += 1;
             q += 1;
         }
@@ -865,7 +895,10 @@ public final class Pdflex {
             if (neg == 1) {
                 iv = 0 - iv;
             }
-            return plTok(ar, 1, s, q, iv, 0, 0);
+            // The token's third value keeps the integer modulo 2^32, as a signed
+            // pattern: /P in an encryption dictionary is often written unsigned
+            // (4294965956 for -1340) and `iv` has saturated by then (P3.2).
+            return plTok(ar, 1, s, q, iv, 0, (int) wv);
         }
         // An integer part too long for nine digits saturates.
         if (scale < 0) {
@@ -1209,7 +1242,7 @@ public final class Pdflex {
         }
         return d;
     }
-    public static int plRefOrInt(emon.Port.Src src, emon.Port.Cells ar, int num) {
+    public static int plRefOrInt(emon.Port.Src src, emon.Port.Cells ar, int num, int wrapped) {
         // An integer has just been read. `num 0 R` is a reference: look
         // ahead two tokens, and only if a digit follows, so a string or a
         // dictionary is never lexed twice.
@@ -1220,13 +1253,13 @@ public final class Pdflex {
         int t3 = 0;
         int gen = 0;
         if (num < 0) {
-            return plNew(ar, 2, num, 0, 0);
+            return plNew(ar, 2, num, 0, wrapped);
         }
         if (p >= end) {
-            return plNew(ar, 2, num, 0, 0);
+            return plNew(ar, 2, num, 0, wrapped);
         }
         if ((Pdfsrc.psU8(src, p) < 48) || (Pdfsrc.psU8(src, p) > 57)) {
-            return plNew(ar, 2, num, 0, 0);
+            return plNew(ar, 2, num, 0, wrapped);
         }
         t2 = plLex(src, ar);
         if (t2 == 1) {
@@ -1239,7 +1272,7 @@ public final class Pdflex {
             }
         }
         emon.Port.cellsSet(ar, A_POS, after);
-        return plNew(ar, 2, num, 0, 0);
+        return plNew(ar, 2, num, 0, wrapped);
     }
     public static int plValue(emon.Port.Src src, emon.Port.Cells ar, int tk) {
         // The object whose first token `tk` has just been lexed, or 0.
@@ -1256,7 +1289,7 @@ public final class Pdflex {
             return 0;
         }
         if (tk == 1) {
-            return plRefOrInt(src, ar, ta);
+            return plRefOrInt(src, ar, ta, tc);
         }
         if (tk == 2) {
             return plNew(ar, 3, ta, tb, 0);

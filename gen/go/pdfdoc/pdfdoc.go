@@ -4,6 +4,7 @@
 package pdfdoc
 
 import (
+	"emon/pdfcrypt"
 	"emon/pdffilter"
 	"emon/pdflex"
 	"emon/pdfnames"
@@ -35,6 +36,15 @@ func PdEncryptedUnread() int32 {
 }
 func PdNeedBytes() int32 {
 	return 7
+}
+func PdPasswordRequired() int32 {
+	return 8
+}
+func PdPasswordIncorrect() int32 {
+	return 9
+}
+func PdEncryptionUnsupported() int32 {
+	return 10
 }
 func PdStatusEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
@@ -69,6 +79,18 @@ func PdStatusEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "need-bytes")
 		return 1
 	}
+	if code == 8 {
+		port.TextAscii(t, "password-required")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "password-incorrect")
+		return 1
+	}
+	if code == 10 {
+		port.TextAscii(t, "encryption-unsupported")
+		return 1
+	}
 	return 0
 }
 
@@ -98,6 +120,9 @@ func PdWKids() int32 {
 }
 func PdWBox() int32 {
 	return 256
+}
+func PdWRepaired() int32 {
+	return 512
 }
 func PdWarningEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
@@ -136,6 +161,10 @@ func PdWarningEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "a page box was missing or invalid and defaulted")
 		return 1
 	}
+	if code == 512 {
+		port.TextAscii(t, "the cross-reference was rebuilt by scanning for objects")
+		return 1
+	}
 	return 0
 }
 
@@ -167,11 +196,17 @@ const dPrev int32 = 12
 
 const dReflim int32 = 13
 
+const dCatnum int32 = 14
+
+const dSlist int32 = 15
+
 const dTrail int32 = 16
 
 const dSeen int32 = 32
 
-const dFirst int32 = 96
+const dCr int32 = 96
+
+const dFirst int32 = 448
 
 const pageStride int32 = 16
 
@@ -199,8 +234,8 @@ func PdVersionMinor(dc *port.Cells) int32 {
 }
 
 func PdEncrypted(dc *port.Cells) int32 {
-	// 1 when the trailer has an /Encrypt entry (P3.2 decrypts; nothing
-	// here does).
+	// 1 when the trailer has an /Encrypt entry: the document IS encrypted,
+	// whether or not a password opened it (P3.2 decrypts what it can).
 	if port.CellsAt(dc, dEnc) != 0 {
 		return 1
 	}
@@ -242,7 +277,8 @@ func pdStop(src *port.Src, status int32) int32 {
 func pdEntPut(dc *port.Cells, num int32, kind int32, f1 int32, f2 int32, mode int32) int32 {
 	// Store an entry, unless an entry is already there: mode 0 stores
 	// only where none is (newest wins), mode 1 also over a free one (a
-	// hybrid file's /XRefStm). Answers 1 when it stored.
+	// hybrid file's /XRefStm), mode 2 over anything (a rebuilt table: the
+	// LAST object in the file wins). Answers 1 when it stored.
 	if num < 0 {
 		return 0
 	}
@@ -257,7 +293,7 @@ func pdEntPut(dc *port.Cells, num int32, kind int32, f1 int32, f2 int32, mode in
 		port.CellsSet(dc, dNent, num+1)
 	}
 	var old int32 = port.CellsAt(dc, at)
-	if (old == 0) || ((mode == 1) && (old == 1)) {
+	if (old == 0) || (mode == 2) || ((mode == 1) && (old == 1)) {
 		port.CellsSet(dc, at, kind)
 		port.CellsSet(dc, at+1, f1)
 		port.CellsSet(dc, at+2, f2)
@@ -515,6 +551,100 @@ func pdLoadCompressed(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cel
 	return port.CellsAt(dc, at+3)
 }
 
+func pdDecString(ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, h int32) int32 {
+	// Decrypt the string object h in place, under the object key the region
+	// holds; an AES string loses its IV and padding (it only gets shorter).
+	var mode int32 = pdfcrypt.CrStringMode(dc, dCr)
+	var n int32 = pdflex.PlStrLen(ar, h)
+	var i int32 = 0
+	var kn int32 = 0
+	var m int32 = 0
+	var v int32 = 0
+	if mode == 0 {
+		return 0
+	}
+	if n == 0 {
+		return 0
+	}
+	kn = pdfcrypt.CrOkeyInto(dc, dCr, st)
+	port.CellsDrop(a, 0)
+	for i < n {
+		v = pdflex.PlStrByte(ar, h, i)
+		port.CellsPush(a, v)
+		i += 1
+	}
+	port.CellsDrop(b, 0)
+	m = pdfcrypt.CrDecrypt(mode, st, kn, port.CellsBytes(a), 0, n, b)
+	i = 0
+	for i < m {
+		v = port.CellsAt(b, i)
+		pdflex.PlStrSetByte(ar, h, i, v)
+		i += 1
+	}
+	pdflex.PlStrSetLen(ar, h, m)
+	return 0
+}
+
+func pdDecWalk(ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, h int32, depth int32) int32 {
+	// Decrypt every string under h: the elements of arrays, the values of
+	// dictionaries, a stream's dictionary.
+	if h == 0 {
+		return 0
+	}
+	if depth > 100 {
+		return 0
+	}
+	var kind int32 = pdflex.PlKindOf(ar, h)
+	var k int32 = 0
+	var d int32 = 0
+	if kind == 5 {
+		return pdDecString(ar, dc, a, b, st, h)
+	}
+	if (kind == 6) || (kind == 7) {
+		k = pdflex.PlFirst(ar, h)
+		for k != 0 {
+			pdDecWalk(ar, dc, a, b, st, k, depth+1)
+			k = pdflex.PlNext(ar, k)
+		}
+		return 0
+	}
+	if kind == 8 {
+		d = pdflex.PlStreamDict(ar, h)
+		pdDecWalk(ar, dc, a, b, st, d, depth+1)
+	}
+	return 0
+}
+
+func pdSecure(ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, h int32, num int32) int32 {
+	// Object `num`, just loaded from the file as `h`: when the document is
+	// encrypted, tag a stream with its number and decrypt the strings. An XRef
+	// stream is never encrypted and is left alone.
+	if pdfcrypt.CrActive(dc, dCr) == 0 {
+		return 0
+	}
+	var at int32 = dFirst + (num * 5)
+	var gen int32 = port.CellsAt(dc, at+2)
+	var smode int32 = pdfcrypt.CrStringMode(dc, dCr)
+	var d int32 = 0
+	var ty int32 = 0
+	if pdflex.PlKindOf(ar, h) == 8 {
+		d = pdflex.PlStreamDict(ar, h)
+		ty = pdflex.PlDictGet(ar, d, pdfnames.PnType())
+		if ty != 0 {
+			if pdflex.PlNameIs(ar, ty, pdfnames.PnXRef()) == 1 {
+				return 0
+			}
+		}
+		pdflex.PlStreamSetNum(ar, h, num)
+	}
+	if smode == 0 {
+		return 0
+	}
+	pdfcrypt.CrObjectKey(dc, dCr, smode, num, gen, a, b)
+	pdDecWalk(ar, dc, a, b, st, h, 0)
+	return 0
+}
+
 func PdGet(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, num int32) int32 {
 	// Object `num` as a handle in `ar`, loaded on first use and cached;
 	// 0 when it is free, missing, at the wrong offset, or being loaded
@@ -546,6 +676,9 @@ func PdGet(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port
 	port.CellsSet(dc, at+4, port.CellsAt(dc, at+4)+1)
 	if kind == 2 {
 		h = pdLoadDirect(src, ar, dc, num, port.CellsAt(dc, at+1))
+		if h != 0 {
+			pdSecure(ar, dc, a, b, st, h, num)
+		}
 	}
 	if kind == 3 {
 		h = pdLoadCompressed(src, ar, dc, a, b, st, num)
@@ -661,6 +794,67 @@ func pdSpan(src *port.Src, s int32, e int32, to *port.Cells) int32 {
 	return 0
 }
 
+func pdPlanCrypt(ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, plan int32, sh int32, hascrypt int32) int32 {
+	// Append the DECRYPTION part of a stream's plan (P3.2): 0 when the stream
+	// is read as it is, else the mode (1 RC4, 2 AES-128, 3 AES-256), the key
+	// length and the key of this object, three bytes to an integer. Not
+	// decrypted: a stream the document layer did not tag with an object number
+	// (an XRef stream), one with a /Crypt filter (taken as the identity filter,
+	// which is what every producer writes), and the /Metadata stream of a file
+	// whose /EncryptMetadata is false. The key is worked out HERE, where the
+	// region is, so `pd-run-plan` needs nothing but the plan.
+	var num int32 = pdflex.PlStreamNum(ar, sh)
+	var dm int32 = pdfcrypt.CrStreamMode(dc, dCr)
+	var kn int32 = 0
+	var i int32 = 0
+	var x int32 = 0
+	var ty int32 = 0
+	var sd int32 = 0
+	var gen int32 = 0
+	if pdfcrypt.CrActive(dc, dCr) == 0 {
+		dm = 0
+	}
+	if num == 0 {
+		dm = 0
+	}
+	if hascrypt == 1 {
+		dm = 0
+	}
+	if dm != 0 {
+		if pdfcrypt.CrEncryptMetadata(dc, dCr) == 0 {
+			sd = pdflex.PlStreamDict(ar, sh)
+			ty = pdflex.PlDictGet(ar, sd, pdfnames.PnType())
+			if ty != 0 {
+				if pdflex.PlNameIs(ar, ty, pdfnames.PnMetadata()) == 1 {
+					dm = 0
+				}
+			}
+		}
+	}
+	if dm == 0 {
+		pdflex.PlAppendInt(ar, plan, 0)
+		return 0
+	}
+	gen = port.CellsAt(dc, (dFirst+(num*5))+2)
+	kn = pdfcrypt.CrObjectKey(dc, dCr, dm, num, gen, a, b)
+	pdfcrypt.CrOkeyInto(dc, dCr, b)
+	pdflex.PlAppendInt(ar, plan, dm)
+	pdflex.PlAppendInt(ar, plan, kn)
+	for i < kn {
+		x = port.CellsAt(b, i) * 65536
+		if (i + 1) < kn {
+			x += port.CellsAt(b, i+1) * 256
+		}
+		if (i + 2) < kn {
+			x += port.CellsAt(b, i+2)
+		}
+		pdflex.PlAppendInt(ar, plan, x)
+		i += 3
+	}
+	port.CellsDrop(b, 0)
+	return 0
+}
+
 func PdStreamPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32) int32 {
 	// Plan the decoding of stream `sh`: resolve /Filter and /DecodeParms
 	// (and /Length, when it is a reference) and record the chain. Answers
@@ -680,6 +874,7 @@ func PdStreamPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 	var s2 int32 = 0
 	var code int32 = 0
 	var nst int32 = 0
+	var hascrypt int32 = 0
 	var more int32 = 1
 	pdflex.PlAppend(ar, plan, sth)
 	pdflex.PlAppend(ar, plan, nsh)
@@ -748,10 +943,14 @@ func PdStreamPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 				pdflex.PlAppendInt(ar, plan, 1)
 				pdflex.PlAppendInt(ar, plan, 1)
 			}
+			if code == 6 {
+				hascrypt = 1
+			}
 			nst += 1
 			i += 1
 		}
 	}
+	pdPlanCrypt(ar, dc, a, b, plan, sh, hascrypt)
 	pdflex.PlSetInt(ar, sth, status)
 	pdflex.PlSetInt(ar, nsh, nst)
 	return plan
@@ -781,10 +980,39 @@ func PdRunPlan(src *port.Src, ar *port.Cells, plan int32, sh int32, b *port.Cell
 	var bpc int32 = 8
 	var columns int32 = 1
 	var early int32 = 1
+	var kt int32 = pdflex.PlNext(ar, h1)
+	var dm int32 = 0
+	var kn int32 = 0
+	var j int32 = 0
+	var x int32 = 0
 	port.CellsDrop(out, 0)
 	// CHECKPOINT: the plan and the span may be made of zeros.
 	if pdfsrc.PsMissed(src) {
 		return 12
+	}
+	// The decryption the plan carries, after its stages: the stream's bytes are
+	// decrypted into `out` first and the filter chain then runs over `out`.
+	for j < (ns * 6) {
+		kt = pdflex.PlNext(ar, kt)
+		j += 1
+	}
+	dm = pdflex.PlIntValue(ar, kt)
+	if dm != 0 {
+		kt = pdflex.PlNext(ar, kt)
+		kn = pdflex.PlIntValue(ar, kt)
+		port.CellsDrop(st, 0)
+		j = 0
+		for j < kn {
+			kt = pdflex.PlNext(ar, kt)
+			x = pdflex.PlIntValue(ar, kt)
+			port.CellsPush(st, x/65536)
+			port.CellsPush(st, (x/256)%256)
+			port.CellsPush(st, x%256)
+			j += 3
+		}
+		pdfcrypt.CrDecrypt(dm, st, kn, port.SrcSlice(src, start, end), 0, end-start, out)
+		port.CellsDrop(st, 0)
+		cur = 1
 	}
 	for i < ns {
 		code = pdflex.PlIntValue(ar, k)
@@ -846,7 +1074,7 @@ func PdRunPlan(src *port.Src, ar *port.Cells, plan int32, sh int32, b *port.Cell
 		}
 		i += 1
 	}
-	if ns == 0 {
+	if (ns == 0) && (cur == 0) {
 		pdSpan(src, start, end, out)
 	}
 	if cur == 2 {
@@ -879,7 +1107,7 @@ func pdAddTrailer(dc *port.Cells, dict int32) int32 {
 	return 0
 }
 
-func pdTrailerGet(ar *port.Cells, dc *port.Cells, id int32) int32 {
+func PdTrailerGet(ar *port.Cells, dc *port.Cells, id int32) int32 {
 	// The first value under a well-known key among the trailers, newest
 	// first, or 0. (An incremental update's trailer repeats /Root; a
 	// damaged one may not.)
@@ -1334,34 +1562,520 @@ func pdChain(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *po
 
 func pdUnreadable(src *port.Src, dc *port.Cells, status int32) int32 {
 	// The status to answer when the catalog or the page tree could not be
-	// read: `encrypted` (6) if the trailer has /Encrypt, else `status`; and
-	// `need-bytes` before either when the source has missed.
+	// read: `need-bytes` when the source has missed, else `status`. (A file
+	// whose key was found and whose objects still cannot be read is damaged,
+	// not locked: encryption is reported by `pd-crypt-setup`, before this.)
 	if pdfsrc.PsMissed(src) {
 		return 7
-	}
-	if port.CellsAt(dc, dEnc) != 0 {
-		return 6
 	}
 	return status
 }
 
-func PdOpen(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
-	// Open a document: find the header and `startxref`, read every
-	// cross-reference section and trailer, check that there is a catalog
-	// with a page tree. Answers a `pd-status` (0 ok). Nothing is decoded
-	// but the cross-reference streams and what they need.
+func pdCget(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, dict int32, id int32) int32 {
+	// The RESOLVED value under the `emon.pdfcrypt` name `id`, 0 when absent.
+	var raw int32 = pdfcrypt.CrDictGet(ar, dict, id)
+	return PdResolve(src, ar, dc, a, b, st, raw)
+}
+
+func pdCint(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, dict int32, id int32, dflt int32) int32 {
+	// An integer under an `emon.pdfcrypt` name, else dflt.
+	var v int32 = pdCget(src, ar, dc, a, b, st, dict, id)
+	if v == 0 {
+		return dflt
+	}
+	if pdflex.PlKindOf(ar, v) == 2 {
+		return pdflex.PlIntValue(ar, v)
+	}
+	return dflt
+}
+
+func pdCfMode(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cf int32, nameh int32) int32 {
+	// The mode of the crypt filter the name object `nameh` (a /StmF or /StrF)
+	// names in the /CF dictionary `cf`: 0 none, 1 RC4, 2 AES-128, 3 AES-256;
+	// -1 for a filter that is not there or that emon cannot read. An absent
+	// name and /Identity are 0 (the data is not encrypted).
+	if nameh == 0 {
+		return 0
+	}
+	if pdfcrypt.CrNameIs(ar, nameh, pdfcrypt.CnIdentity()) == 1 {
+		return 0
+	}
+	var raw int32 = pdfcrypt.CrDictGetByName(ar, cf, nameh)
+	var ent int32 = 0
+	var m int32 = 0
+	ent = PdResolve(src, ar, dc, a, b, st, raw)
+	if ent == 0 {
+		return -1
+	}
+	m = pdCget(src, ar, dc, a, b, st, ent, pdfcrypt.CnCfm())
+	if m == 0 {
+		return -1
+	}
+	if pdfcrypt.CrNameIs(ar, m, pdfcrypt.CnNone()) == 1 {
+		return 0
+	}
+	if pdfcrypt.CrNameIs(ar, m, pdfcrypt.CnV2()) == 1 {
+		return 1
+	}
+	if pdfcrypt.CrNameIs(ar, m, pdfcrypt.CnAesv2()) == 1 {
+		return 2
+	}
+	if pdfcrypt.CrNameIs(ar, m, pdfcrypt.CnAesv3()) == 1 {
+		return 3
+	}
+	return -1
+}
+
+func pdCryptSetup(src *port.Src, pw *port.Src, plen int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, enc int32) int32 {
+	// Read the encryption dictionary `enc` (the trailer's /Encrypt), decide
+	// what is supported, and find the file key with the password (`plen`
+	// bytes of `pw`, none when 0; D040: the empty user password first). Answers
+	// 0 (keys in the region, objects loaded from now on are decrypted), 8
+	// password-required, 9 password-incorrect, 10 encryption-unsupported, or
+	// 7 need-bytes.
+	var e int32 = 0
+	var fl int32 = 0
+	var v int32 = 0
+	var r int32 = 0
+	var lenbits int32 = 0
+	var p int32 = 0
+	var ph int32 = 0
+	var mh int32 = 0
+	var meta int32 = 1
+	var stm int32 = 1
+	var str int32 = 1
+	var klen int32 = 5
+	var cf int32 = 0
+	var nh int32 = 0
+	var oh int32 = 0
+	var idh int32 = 0
+	var ok int32 = 0
+	e = PdResolve(src, ar, dc, a, b, st, enc)
+	if pdfsrc.PsMissed(src) {
+		return 7
+	}
+	if e == 0 {
+		return 10
+	}
+	if pdflex.PlKindOf(ar, e) != 7 {
+		return 10
+	}
+	fl = PdDget(src, ar, dc, a, b, st, e, pdfnames.PnFilter())
+	if pdfcrypt.CrNameIs(ar, fl, pdfcrypt.CnStandard()) == 0 {
+		return 10
+	}
+	v = pdCint(src, ar, dc, a, b, st, e, pdfcrypt.CnV(), 0)
+	r = pdCint(src, ar, dc, a, b, st, e, pdfcrypt.CnR(), 0)
+	lenbits = pdCint(src, ar, dc, a, b, st, e, pdfcrypt.CnLength(), -1)
+	// /P is a 32-bit pattern, often written unsigned (4294965956): the
+	// integer object saturated, its wrapped value is the pattern.
+	ph = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnP())
+	if ph != 0 {
+		if pdflex.PlKindOf(ar, ph) == 2 {
+			p = pdflex.PlIntValue(ar, ph)
+			if p == 2147483647 {
+				p = pdflex.PlIntWrapped(ar, ph)
+			}
+		}
+	}
+	mh = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnEncryptMetadata())
+	if mh != 0 {
+		if pdflex.PlKindOf(ar, mh) == 1 {
+			if pdflex.PlIntValue(ar, mh) == 0 {
+				meta = 0
+			}
+		}
+	}
+	if pdfsrc.PsMissed(src) {
+		return 7
+	}
+	if (r < 2) || (r > 6) {
+		return 10
+	}
+	if (v < 5) && (r >= 5) {
+		return 10
+	}
+	if (v == 5) && (r < 5) {
+		return 10
+	}
+	if v == 1 {
+		stm = 1
+		str = 1
+		klen = 5
+	}
+	if v == 2 {
+		stm = 1
+		str = 1
+		if lenbits < 0 {
+			lenbits = 40
+		}
+		klen = lenbits / 8
+	}
+	if (v == 4) || (v == 5) {
+		cf = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnCf())
+		nh = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnStmf())
+		stm = pdCfMode(src, ar, dc, a, b, st, cf, nh)
+		nh = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnStrf())
+		str = pdCfMode(src, ar, dc, a, b, st, cf, nh)
+		if (stm < 0) || (str < 0) {
+			return 10
+		}
+		if pdfsrc.PsMissed(src) {
+			return 7
+		}
+		// A V4 file with an RC4 crypt filter has the key length in /Length.
+		klen = 16
+		if v == 4 {
+			if (stm == 1) || (str == 1) {
+				if (lenbits >= 40) && (lenbits <= 128) {
+					klen = lenbits / 8
+				}
+			}
+		}
+		if v == 5 {
+			klen = 32
+		}
+	}
+	if (v == 4) && ((stm == 3) || (str == 3)) {
+		return 10
+	}
+	if (v == 5) && ((stm == 1) || (stm == 2) || (str == 1) || (str == 2)) {
+		return 10
+	}
+	if (v < 1) || (v == 3) || (v > 5) {
+		return 10
+	}
+	if v < 5 {
+		if klen < 5 {
+			klen = 5
+		}
+		if klen > 16 {
+			klen = 16
+		}
+	}
+	if r == 2 {
+		klen = 5
+	}
+	pdfcrypt.CrReset(dc, dCr)
+	pdfcrypt.CrParams(dc, dCr, v, r, klen, meta, p, stm, str)
+	oh = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnO())
+	pdfcrypt.CrLoad(dc, dCr, 0, ar, oh)
+	oh = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnU())
+	pdfcrypt.CrLoad(dc, dCr, 1, ar, oh)
+	oh = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnOe())
+	pdfcrypt.CrLoad(dc, dCr, 2, ar, oh)
+	oh = pdCget(src, ar, dc, a, b, st, e, pdfcrypt.CnUe())
+	pdfcrypt.CrLoad(dc, dCr, 3, ar, oh)
+	// The first string of the trailer's /ID, an array of two.
+	idh = PdTrailerGet(ar, dc, pdfnames.PnId())
+	idh = PdResolve(src, ar, dc, a, b, st, idh)
+	if pdfsrc.PsMissed(src) {
+		return 7
+	}
+	oh = 0
+	if idh != 0 {
+		if pdflex.PlKindOf(ar, idh) == 6 {
+			oh = pdflex.PlFirst(ar, idh)
+			oh = PdResolve(src, ar, dc, a, b, st, oh)
+		}
+	}
+	pdfcrypt.CrLoad(dc, dCr, 4, ar, oh)
+	if pdfsrc.PsMissed(src) {
+		return 7
+	}
+	ok = pdfcrypt.CrAuthenticate(dc, dCr, pw, plen, a, b, st)
+	if ok == 1 {
+		return 0
+	}
+	if plen > 0 {
+		return 9
+	}
+	return 8
+}
+
+func pdBoundary(src *port.Src, i int32) int32 {
+	// 1 when an object or a keyword may start at i: at the start of the file,
+	// after white space, or after the delimiter that closes a dictionary,
+	// an array or a string (`>>endobj`).
+	if i == 0 {
+		return 1
+	}
+	var c int32 = pdfsrc.PsU8(src, i-1)
+	if pdflex.PlIsWs(c) == 1 {
+		return 1
+	}
+	if (c == 62) || (c == 93) || (c == 41) {
+		return 1
+	}
+	return 0
+}
+
+func pdRebuild(src *port.Src, ar *port.Cells, dc *port.Cells) int32 {
+	// Scan the source and rebuild the cross-reference into `dc` (already
+	// initialized): every `N G obj` (the last wins), every trailer (newest
+	// first, at most 16), the last catalog, the numbers of the object
+	// streams. Answers 0, 3 (`bad-xref`: no object at all) or 7.
+	var n int32 = pdfsrc.PsLen(src)
+	var tl int32 = pdflex.PlMakeArray(ar)
+	var sl int32 = pdflex.PlMakeArray(ar)
+	var i int32 = 0
+	var c int32 = 0
+	var h int32 = 0
+	var d int32 = 0
+	var ty int32 = 0
+	var nx int32 = 0
+	var num int32 = 0
+	var handled int32 = 0
+	var kind int32 = 0
+	var cnt int32 = 0
+	var j int32 = 0
+	var lo int32 = 0
+	var tr int32 = 0
+	port.CellsSet(dc, dSlist, sl)
+	for i < n {
+		handled = 0
+		if (i % 4096) == 0 {
+			if pdfsrc.PsMissed(src) {
+				return 7
+			}
+		}
+		c = pdfsrc.PsU8(src, i)
+		if (c >= 48) && (c <= 57) {
+			if pdBoundary(src, i) == 1 {
+				pdflex.PlSeek(ar, 0, n)
+				h = pdflex.PlParseIndirect(src, ar, i)
+				if pdfsrc.PsMissed(src) {
+					return 7
+				}
+				if h != 0 {
+					handled = 1
+					num = pdflex.PlObjnum(ar)
+					nx = pdflex.PlPos(ar)
+					kind = pdflex.PlKindOf(ar, h)
+					tr = pdflex.PlObjgen(ar)
+					pdEntPut(dc, num, 2, i, tr, 2)
+					if (kind == 7) || (kind == 8) {
+						d = h
+						if kind == 8 {
+							d = pdflex.PlStreamDict(ar, h)
+						}
+						ty = pdflex.PlDictGet(ar, d, pdfnames.PnType())
+						if ty != 0 {
+							if pdflex.PlNameIs(ar, ty, pdfnames.PnXRef()) == 1 {
+								if pdflex.PlDictGet(ar, d, pdfnames.PnRoot()) != 0 {
+									pdflex.PlAppend(ar, tl, d)
+								}
+							}
+							if pdflex.PlNameIs(ar, ty, pdfnames.PnObjStm()) == 1 {
+								pdflex.PlAppendInt(ar, sl, num)
+							}
+							if pdflex.PlNameIs(ar, ty, pdfnames.PnCatalog()) == 1 {
+								port.CellsSet(dc, dCatnum, num)
+							}
+						}
+					}
+					if kind == 8 {
+						if pdflex.PlStreamFlags(ar, h) == 2 {
+							j = pdflex.PlStreamRescan(src, ar, h)
+							nx = pdflex.PlStreamStart(ar, h) + j
+						}
+					}
+					if nx <= i {
+						nx = i + 1
+					}
+					i = nx
+				}
+			}
+		}
+		if handled == 0 {
+			if c == 116 {
+				if pdBoundary(src, i) == 1 {
+					if pdflex.PlKwAt(src, i, n, 10) == 1 {
+						pdflex.PlSeek(ar, i+7, n)
+						d = pdflex.PlParse(src, ar)
+						if pdfsrc.PsMissed(src) {
+							return 7
+						}
+						if d != 0 {
+							if pdflex.PlKindOf(ar, d) == 7 {
+								pdflex.PlAppend(ar, tl, d)
+							}
+						}
+						handled = 1
+						nx = pdflex.PlPos(ar)
+						if nx < (i + 7) {
+							nx = i + 7
+						}
+						i = nx
+					}
+				}
+			}
+			if handled == 0 {
+				i += 1
+			}
+		}
+	}
+	if pdfsrc.PsMissed(src) {
+		return 7
+	}
+	if port.CellsAt(dc, dNent) == 0 {
+		return 3
+	}
+	cnt = pdflex.PlCount(ar, tl)
+	lo = cnt - 16
+	if lo < 0 {
+		lo = 0
+	}
+	j = cnt - 1
+	for j >= lo {
+		d = pdNth(ar, tl, j)
+		pdAddTrailer(dc, d)
+		j -= 1
+	}
+	return 0
+}
+
+func pdEntCompressed(dc *port.Cells, onum int32, sn int32, idx int32) int32 {
+	// Enter object `onum` as number `idx` of object stream `sn`: over nothing,
+	// a free entry, or an older object (an entry whose file offset is smaller
+	// than the stream's own). The file's LAST version of an object wins.
+	var old int32 = PdEntKind(dc, onum)
+	var offn int32 = port.CellsAt(dc, (dFirst+(sn*5))+1)
+	var tk int32 = 0
+	var offo int32 = 0
+	var os int32 = 0
+	if (old == 0) || (old == 1) {
+		tk = 1
+	}
+	if old == 2 {
+		if port.CellsAt(dc, (dFirst+(onum*5))+1) < offn {
+			tk = 1
+		}
+	}
+	if old == 3 {
+		os = port.CellsAt(dc, (dFirst+(onum*5))+1)
+		offo = port.CellsAt(dc, (dFirst+(os*5))+1)
+		if offo <= offn {
+			tk = 1
+		}
+	}
+	if tk == 1 {
+		pdEntPut(dc, onum, 3, sn, idx, 2)
+		if onum <= port.CellsAt(dc, dLiment) {
+			port.CellsSet(dc, (dFirst+(onum*5))+3, 0)
+		}
+	}
+	return 0
+}
+
+func pdRegisterObjstm(data *port.Src, ar *port.Cells, dc *port.Cells, sn int32, nn int32) int32 {
+	// Enter the objects an object stream holds, from its table of N pairs of
+	// (object number, offset), the stream's decoded bytes being `data`.
+	var n int32 = pdfsrc.PsLen(data)
+	var i int32 = 0
+	var hpos int32 = 0
+	var onum int32 = 0
+	var tk int32 = 0
+	for i < nn {
+		pdflex.PlSeek(ar, hpos, n)
+		tk = pdflex.PlLex(data, ar)
+		if tk != 1 {
+			return 0
+		}
+		onum = pdflex.PlTokenA(ar)
+		tk = pdflex.PlLex(data, ar)
+		if tk != 1 {
+			return 0
+		}
+		hpos = pdflex.PlPos(ar)
+		if onum >= 0 {
+			pdEntCompressed(dc, onum, sn, i)
+		}
+		i += 1
+	}
+	return 0
+}
+
+func pdRebuildObjstms(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+	// Second half of a repair, once the key is known: decode each object
+	// stream found, in file order, and enter its objects. Answers 7 when the
+	// source missed.
+	var sl int32 = port.CellsAt(dc, dSlist)
+	var k int32 = pdflex.PlFirst(ar, sl)
+	var sn int32 = 0
+	var sh int32 = 0
+	var d int32 = 0
+	var nn int32 = 0
+	var first int32 = 0
+	var plan int32 = 0
+	var status int32 = 0
+	for k != 0 {
+		sn = pdflex.PlIntValue(ar, k)
+		sh = PdGet(src, ar, dc, a, b, st, sn)
+		if pdfsrc.PsMissed(src) {
+			return 7
+		}
+		if sh != 0 {
+			if pdflex.PlKindOf(ar, sh) == 8 {
+				d = pdflex.PlStreamDict(ar, sh)
+				nn = PdDint(src, ar, dc, a, b, st, d, pdfnames.PnN(), 0)
+				first = PdDint(src, ar, dc, a, b, st, d, pdfnames.PnFirst(), 0)
+				if (nn >= 1) && (first >= 0) {
+					plan = PdStreamPlan(src, ar, dc, a, b, st, sh)
+					status = PdRunPlan(src, ar, plan, sh, b, st, a)
+					if pdfsrc.PsMissed(src) {
+						return 7
+					}
+					if (status == 0) || (status == 1) || (status == 5) || (status == 7) {
+						pdRegisterObjstm(port.SrcOfCells(a), ar, dc, sn, nn)
+					}
+				}
+			}
+		}
+		k = pdflex.PlNext(ar, k)
+	}
+	return 0
+}
+
+func pdFindCatalog(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+	// Repair, when no trailer names a usable /Root: the first object, by
+	// number, that is a dictionary with /Type /Catalog (objects inside object
+	// streams included). 0 when there is none.
+	var nent int32 = port.CellsAt(dc, dNent)
+	var num int32 = 1
+	var h int32 = 0
+	var ty int32 = 0
+	for (num < nent) && (num < 200000) {
+		if PdEntKind(dc, num) >= 2 {
+			h = PdGet(src, ar, dc, a, b, st, num)
+			if pdfsrc.PsMissed(src) {
+				return 0
+			}
+			if h != 0 {
+				if pdflex.PlKindOf(ar, h) == 7 {
+					ty = pdflex.PlDictGet(ar, h, pdfnames.PnType())
+					if ty != 0 {
+						if pdflex.PlNameIs(ar, ty, pdfnames.PnCatalog()) == 1 {
+							return h
+						}
+					}
+				}
+			}
+		}
+		num += 1
+	}
+	return 0
+}
+
+func pdBegin(src *port.Src, ar *port.Cells, dc *port.Cells) int32 {
+	// Start over: an empty arena and document, the header's place and the
+	// version, the limits. Answers 0, or 1 (`no-header`; `need-bytes` when
+	// the source missed).
 	pdflex.PlInit(ar)
 	PdInit(dc)
 	var n int32 = pdfsrc.PsLen(src)
 	var base int32 = pdFindHeader(src)
-	var sx int32 = 0
-	var off int32 = 0
-	var tk int32 = 0
 	var lim int32 = 0
-	var status int32 = 0
-	var root int32 = 0
-	var pages int32 = 0
-	var enc int32 = 0
 	if base < 0 {
 		return pdStop(src, 1)
 	}
@@ -1378,6 +2092,79 @@ func PdOpen(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	}
 	port.CellsSet(dc, dLiment, lim)
 	port.CellsSet(dc, dReflim, port.LimitOf(4))
+	return 0
+}
+
+func pdOpenTail(src *port.Src, pw *port.Src, plen int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, repaired int32) int32 {
+	// What follows a cross-reference, read or rebuilt: the trailer's
+	// /Encrypt (and the key), the catalog and its page tree.
+	var enc int32 = 0
+	var status int32 = 0
+	var root int32 = 0
+	var pages int32 = 0
+	// The cross-reference is read: say where each object ends.
+	pdHintExtents(src, dc, b)
+	enc = PdTrailerGet(ar, dc, pdfnames.PnEncrypt())
+	if enc != 0 {
+		port.CellsSet(dc, dEnc, enc)
+		status = pdCryptSetup(src, pw, plen, ar, dc, a, b, st, enc)
+		if status != 0 {
+			return pdStop(src, status)
+		}
+	}
+	if repaired == 1 {
+		pdRebuildObjstms(src, ar, dc, a, b, st)
+		if pdfsrc.PsMissed(src) {
+			return 7
+		}
+	}
+	root = PdTrailerGet(ar, dc, pdfnames.PnRoot())
+	if (root == 0) && (repaired == 0) {
+		return pdStop(src, 4)
+	}
+	if root != 0 {
+		root = PdResolve(src, ar, dc, a, b, st, root)
+	}
+	// A rebuilt file's /Root may name a lost object: take the catalog found.
+	if repaired == 1 {
+		if root == 0 {
+			if port.CellsAt(dc, dCatnum) > 0 {
+				root = PdGet(src, ar, dc, a, b, st, port.CellsAt(dc, dCatnum))
+			}
+		}
+		if root == 0 {
+			root = pdFindCatalog(src, ar, dc, a, b, st)
+		}
+	}
+	if root == 0 {
+		return pdUnreadable(src, dc, 4)
+	}
+	if pdflex.PlKindOf(ar, root) != 7 {
+		return pdUnreadable(src, dc, 4)
+	}
+	port.CellsSet(dc, dRoot, root)
+	pages = PdDget(src, ar, dc, a, b, st, root, pdfnames.PnPages())
+	if pages == 0 {
+		return pdUnreadable(src, dc, 5)
+	}
+	if pdflex.PlKindOf(ar, pages) != 7 {
+		return pdUnreadable(src, dc, 5)
+	}
+	return 0
+}
+
+func pdOpenNormal(src *port.Src, pw *port.Src, plen int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+	// The ordinary open: `startxref`, the chain of sections, the trailer.
+	var n int32 = pdfsrc.PsLen(src)
+	var sx int32 = 0
+	var off int32 = 0
+	var tk int32 = 0
+	var status int32 = 0
+	status = pdBegin(src, ar, dc)
+	if status != 0 {
+		return status
+	}
+	var base int32 = port.CellsAt(dc, dBase)
 	sx = pdFindStartxref(src)
 	if sx < 0 {
 		return pdStop(src, 2)
@@ -1405,34 +2192,65 @@ func PdOpen(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	if port.CellsAt(dc, dNtrail) == 0 {
 		return pdStop(src, 3)
 	}
-	// The cross-reference is read: say where each object ends.
-	pdHintExtents(src, dc, b)
-	enc = pdTrailerGet(ar, dc, pdfnames.PnEncrypt())
-	if enc != 0 {
-		port.CellsSet(dc, dEnc, enc)
+	return pdOpenTail(src, pw, plen, ar, dc, a, b, st, 0)
+}
+
+func pdOpenRepair(src *port.Src, pw *port.Src, plen int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+	// Rebuild the cross-reference by scanning, then open as usual.
+	var status int32 = 0
+	status = pdBegin(src, ar, dc)
+	if status != 0 {
+		return status
 	}
-	root = pdTrailerGet(ar, dc, pdfnames.PnRoot())
-	if root == 0 {
-		return pdStop(src, 4)
+	status = pdRebuild(src, ar, dc)
+	if status != 0 {
+		return status
 	}
-	root = PdResolve(src, ar, dc, a, b, st, root)
-	// When the file is encrypted, what cannot be read is probably
-	// encrypted (object streams are, whole): say so, and let P3.2 decrypt.
-	if root == 0 {
-		return pdUnreadable(src, dc, 4)
+	pdWarnSet(src, dc, 512)
+	return pdOpenTail(src, pw, plen, ar, dc, a, b, st, 1)
+}
+
+func pdOpenRun(src *port.Src, pw *port.Src, plen int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+	// The ordinary open; when the cross-reference or the catalog cannot be
+	// used, a repair by scanning; when that does not help, the ordinary answer.
+	var status int32 = 0
+	var s2 int32 = 0
+	status = pdOpenNormal(src, pw, plen, ar, dc, a, b, st)
+	if (status == 2) || (status == 3) || (status == 4) || (status == 5) {
+		s2 = pdOpenRepair(src, pw, plen, ar, dc, a, b, st)
+		if s2 == 0 {
+			return 0
+		}
+		if pdfsrc.PsMissed(src) {
+			return 7
+		}
+		if (s2 == 8) || (s2 == 9) || (s2 == 10) {
+			return s2
+		}
 	}
-	if pdflex.PlKindOf(ar, root) != 7 {
-		return pdUnreadable(src, dc, 4)
-	}
-	port.CellsSet(dc, dRoot, root)
-	pages = PdDget(src, ar, dc, a, b, st, root, pdfnames.PnPages())
-	if pages == 0 {
-		return pdUnreadable(src, dc, 5)
-	}
-	if pdflex.PlKindOf(ar, pages) != 7 {
-		return pdUnreadable(src, dc, 5)
-	}
-	return 0
+	return status
+}
+
+func PdOpen(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+	// Open a document: find the header and `startxref`, read every
+	// cross-reference section and trailer (rebuilding them by scanning when
+	// they are unusable), decrypt with the EMPTY user password when the file
+	// is encrypted, check that there is a catalog with a page tree. Answers a
+	// `pd-status` (0 ok). Nothing is decoded but the cross-reference streams,
+	// what they need and, for a rebuilt table, the object streams.
+	return pdOpenRun(src, src, 0, ar, dc, a, b, st)
+}
+
+func PdOpenPw(src *port.Src, pw *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+	// `pd-open` with a PASSWORD: the bytes of the source `pw`, tried as the
+	// user password and then as the owner password after the empty user
+	// password (D040). R2 to R4 use the bytes as given (PDFDocEncoding, in
+	// practice Latin-1), R5 and R6 as UTF-8. The password is read only while
+	// the key is found and is never stored (D058): not in `ar`, `dc`, a dump
+	// or a transcript. A file the password does not open answers
+	// `password-incorrect`; one that needs a password and was given none,
+	// `password-required`; another handler, `encryption-unsupported`.
+	return pdOpenRun(src, pw, pdfsrc.PsLen(pw), ar, dc, a, b, st)
 }
 
 func pdElem(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, arr int32, i int32) int32 {

@@ -1,0 +1,63 @@
+#!/usr/bin/env bb
+;; Cross-check emon's opening of every corpus PDF against poppler (P1.5, P3.1, P3.2).
+;;
+;;     bb kin/scripts/pdf-compare              every PDF under corpus/
+;;     bb kin/scripts/pdf-compare PATH...      just these files
+;;     EMON_PASSWORDS=tools/passwords.edn ...  (see pdf-sweep: a map of path -> password)
+;;
+;; A DEVELOPMENT TOOL, not a gate (babashka, D-tooling rule: no Python here).
+;; For each file it runs the generated Rust through `kin/scripts/pdf-sweep` and
+;; `pdfinfo -box`, and classes the pair:
+;;
+;;   agree      emon ok, page count and the digest of every page's MediaBox,
+;;              CropBox (whole points) and rotation equal pdfinfo's
+;;   disagree   emon ok and pdfinfo ok but they differ  (a regression)
+;;   both-fail  neither opens it
+;;   distinct   pdfinfo wants a password (or cannot) and emon says a distinct
+;;              error: password-required / password-incorrect / encryption-unsupported
+;;   emon-fails emon reports another status and pdfinfo opens the file
+;;   PANIC      a fault in emon
+;;
+;; It prints the class counts and every file not in `agree`.
+(require '[babashka.process :as p]
+         '[clojure.string :as str])
+
+(def root (-> *file* java.io.File. .getCanonicalFile .getParentFile .getParentFile .getParent))
+(load-file (str root "/tools/pdfinfo.clj"))   ; poppler's page count and geometry digest
+(defn pdfinfo [path] (emon.pdfinfo/pdfinfo root path))
+
+(defn corpus-paths []
+  (->> (:out (p/shell {:out :string :dir root} "find" "-L" "corpus" "-iname" "*.pdf" "-not" "-path" "*/_dl/*"))
+       str/split-lines (remove str/blank?) sort))
+
+(let [args *command-line-args*
+      paths (if (seq args) (vec args) (vec (corpus-paths)))
+      input (str (str/join "\n" paths) "\n")
+      sweep (p/shell {:out :string :in input :dir root} (str root "/kin/scripts/pdf-sweep"))
+      rows (into {} (for [l (str/split-lines (:out sweep))
+                          :let [f (str/split l #"\t")]]
+                      [(first f) {:status (nth f 1) :pages (parse-long (nth f 2)) :digest (parse-long (nth f 3))
+                                  :warn (parse-long (nth f 4)) :enc (parse-long (nth f 5))}]))
+      info (into {} (pmap (fn [x] [x (pdfinfo x)]) paths))
+      classify (fn [x]
+                 (let [e (rows x) i (info x)]
+                   (cond
+                     (nil? e) :no-row
+                     (str/starts-with? (:status e) "PANIC") :PANIC
+                     (= "ok" (:status e))
+                     (cond (nil? i) :emon-ok-pdfinfo-fails
+                           (and (= (:pages e) (:pages i)) (= (:digest e) (:digest i))) :agree
+                           :else :disagree)
+                     (#{"password-required" "password-incorrect" "encryption-unsupported"} (:status e))
+                     (if i :distinct-but-pdfinfo-opens :distinct)
+                     (nil? i) :both-fail
+                     :else :emon-fails)))
+      cls (into {} (map (fn [x] [x (classify x)]) paths))
+      counts (frequencies (vals cls))]
+  (println (count paths) "files")
+  (doseq [[k v] (sort-by (comp str key) counts)] (println (format "  %-28s %d" (name k) v)))
+  (doseq [x paths :when (not= :agree (cls x))]
+    (let [e (rows x) i (info x)]
+      (println (format "%-22s %s  emon=%s pages=%s  pdfinfo=%s" (name (cls x)) x
+                       (:status e) (:pages e) (some-> i :pages)))))
+  (println (format "  ok   %d of %d agree with poppler" (get counts :agree 0) (count paths))))
