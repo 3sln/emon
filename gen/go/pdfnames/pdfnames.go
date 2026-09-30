@@ -275,6 +275,108 @@ func PnCreationDate() int32 {
 func PnModDate() int32 {
 	return 88
 }
+func PnBaseFont() int32 {
+	return 89
+}
+func PnEncoding() int32 {
+	return 90
+}
+func PnDifferences() int32 {
+	return 91
+}
+func PnBaseEncoding() int32 {
+	return 92
+}
+func PnToUnicode() int32 {
+	return 93
+}
+func PnWidths() int32 {
+	return 94
+}
+func PnFirstChar() int32 {
+	return 95
+}
+func PnLastChar() int32 {
+	return 96
+}
+func PnFontDescriptor() int32 {
+	return 97
+}
+func PnFlags() int32 {
+	return 98
+}
+func PnMissingWidth() int32 {
+	return 99
+}
+func PnAscent() int32 {
+	return 100
+}
+func PnDescent() int32 {
+	return 101
+}
+func PnFontBBox() int32 {
+	return 102
+}
+func PnFontMatrix() int32 {
+	return 103
+}
+func PnDescendantFonts() int32 {
+	return 104
+}
+func PnDw() int32 {
+	return 105
+}
+func PnDw2() int32 {
+	return 106
+}
+func PnCidSystemInfo() int32 {
+	return 107
+}
+func PnOrdering() int32 {
+	return 108
+}
+func PnWMode() int32 {
+	return 109
+}
+func PnType0() int32 {
+	return 110
+}
+func PnType1() int32 {
+	return 111
+}
+func PnMmType1() int32 {
+	return 112
+}
+func PnTrueType() int32 {
+	return 113
+}
+func PnType3() int32 {
+	return 114
+}
+func PnCidFontType0() int32 {
+	return 115
+}
+func PnCidFontType2() int32 {
+	return 116
+}
+func PnWinAnsiEncoding() int32 {
+	return 117
+}
+func PnMacRomanEncoding() int32 {
+	return 118
+}
+func PnStandardEncoding() int32 {
+	return 119
+}
+func PnMacExpertEncoding() int32 {
+	return 120
+}
+func PnIdentityH() int32 {
+	return 121
+}
+func PnIdentityV() int32 {
+	return 122
+}
 func PnEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "Type")
@@ -632,10 +734,146 @@ func PnEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "ModDate")
 		return 1
 	}
+	if code == 89 {
+		port.TextAscii(t, "BaseFont")
+		return 1
+	}
+	if code == 90 {
+		port.TextAscii(t, "Encoding")
+		return 1
+	}
+	if code == 91 {
+		port.TextAscii(t, "Differences")
+		return 1
+	}
+	if code == 92 {
+		port.TextAscii(t, "BaseEncoding")
+		return 1
+	}
+	if code == 93 {
+		port.TextAscii(t, "ToUnicode")
+		return 1
+	}
+	if code == 94 {
+		port.TextAscii(t, "Widths")
+		return 1
+	}
+	if code == 95 {
+		port.TextAscii(t, "FirstChar")
+		return 1
+	}
+	if code == 96 {
+		port.TextAscii(t, "LastChar")
+		return 1
+	}
+	if code == 97 {
+		port.TextAscii(t, "FontDescriptor")
+		return 1
+	}
+	if code == 98 {
+		port.TextAscii(t, "Flags")
+		return 1
+	}
+	if code == 99 {
+		port.TextAscii(t, "MissingWidth")
+		return 1
+	}
+	if code == 100 {
+		port.TextAscii(t, "Ascent")
+		return 1
+	}
+	if code == 101 {
+		port.TextAscii(t, "Descent")
+		return 1
+	}
+	if code == 102 {
+		port.TextAscii(t, "FontBBox")
+		return 1
+	}
+	if code == 103 {
+		port.TextAscii(t, "FontMatrix")
+		return 1
+	}
+	if code == 104 {
+		port.TextAscii(t, "DescendantFonts")
+		return 1
+	}
+	if code == 105 {
+		port.TextAscii(t, "DW")
+		return 1
+	}
+	if code == 106 {
+		port.TextAscii(t, "DW2")
+		return 1
+	}
+	if code == 107 {
+		port.TextAscii(t, "CIDSystemInfo")
+		return 1
+	}
+	if code == 108 {
+		port.TextAscii(t, "Ordering")
+		return 1
+	}
+	if code == 109 {
+		port.TextAscii(t, "WMode")
+		return 1
+	}
+	if code == 110 {
+		port.TextAscii(t, "Type0")
+		return 1
+	}
+	if code == 111 {
+		port.TextAscii(t, "Type1")
+		return 1
+	}
+	if code == 112 {
+		port.TextAscii(t, "MMType1")
+		return 1
+	}
+	if code == 113 {
+		port.TextAscii(t, "TrueType")
+		return 1
+	}
+	if code == 114 {
+		port.TextAscii(t, "Type3")
+		return 1
+	}
+	if code == 115 {
+		port.TextAscii(t, "CIDFontType0")
+		return 1
+	}
+	if code == 116 {
+		port.TextAscii(t, "CIDFontType2")
+		return 1
+	}
+	if code == 117 {
+		port.TextAscii(t, "WinAnsiEncoding")
+		return 1
+	}
+	if code == 118 {
+		port.TextAscii(t, "MacRomanEncoding")
+		return 1
+	}
+	if code == 119 {
+		port.TextAscii(t, "StandardEncoding")
+		return 1
+	}
+	if code == 120 {
+		port.TextAscii(t, "MacExpertEncoding")
+		return 1
+	}
+	if code == 121 {
+		port.TextAscii(t, "Identity-H")
+		return 1
+	}
+	if code == 122 {
+		port.TextAscii(t, "Identity-V")
+		return 1
+	}
 	return 0
 }
 
-var PnChars [607]int32 = [607]int32{
+var PnChars [924]int32 = [924]int32{
 	84, 121, 112, 101, 76, 101, 110, 103, 116, 104, 70, 105, 108, 116, 101, 114,
 	68, 101, 99, 111, 100, 101, 80, 97, 114, 109, 115, 70, 80, 114, 101, 100,
 	105, 99, 116, 111, 114, 67, 111, 108, 111, 114, 115, 66, 105, 116, 115, 80,
@@ -673,10 +911,30 @@ var PnChars [607]int32 = [607]int32{
 	103, 104, 116, 84, 105, 116, 108, 101, 65, 117, 116, 104, 111, 114, 83, 117,
 	98, 106, 101, 99, 116, 75, 101, 121, 119, 111, 114, 100, 115, 67, 114, 101,
 	97, 116, 111, 114, 80, 114, 111, 100, 117, 99, 101, 114, 67, 114, 101, 97,
-	116, 105, 111, 110, 68, 97, 116, 101, 77, 111, 100, 68, 97, 116, 101,
+	116, 105, 111, 110, 68, 97, 116, 101, 77, 111, 100, 68, 97, 116, 101, 66,
+	97, 115, 101, 70, 111, 110, 116, 69, 110, 99, 111, 100, 105, 110, 103, 68,
+	105, 102, 102, 101, 114, 101, 110, 99, 101, 115, 66, 97, 115, 101, 69, 110,
+	99, 111, 100, 105, 110, 103, 84, 111, 85, 110, 105, 99, 111, 100, 101, 87,
+	105, 100, 116, 104, 115, 70, 105, 114, 115, 116, 67, 104, 97, 114, 76, 97,
+	115, 116, 67, 104, 97, 114, 70, 111, 110, 116, 68, 101, 115, 99, 114, 105,
+	112, 116, 111, 114, 70, 108, 97, 103, 115, 77, 105, 115, 115, 105, 110, 103,
+	87, 105, 100, 116, 104, 65, 115, 99, 101, 110, 116, 68, 101, 115, 99, 101,
+	110, 116, 70, 111, 110, 116, 66, 66, 111, 120, 70, 111, 110, 116, 77, 97,
+	116, 114, 105, 120, 68, 101, 115, 99, 101, 110, 100, 97, 110, 116, 70, 111,
+	110, 116, 115, 68, 87, 68, 87, 50, 67, 73, 68, 83, 121, 115, 116, 101,
+	109, 73, 110, 102, 111, 79, 114, 100, 101, 114, 105, 110, 103, 87, 77, 111,
+	100, 101, 84, 121, 112, 101, 48, 84, 121, 112, 101, 49, 77, 77, 84, 121,
+	112, 101, 49, 84, 114, 117, 101, 84, 121, 112, 101, 84, 121, 112, 101, 51,
+	67, 73, 68, 70, 111, 110, 116, 84, 121, 112, 101, 48, 67, 73, 68, 70,
+	111, 110, 116, 84, 121, 112, 101, 50, 87, 105, 110, 65, 110, 115, 105, 69,
+	110, 99, 111, 100, 105, 110, 103, 77, 97, 99, 82, 111, 109, 97, 110, 69,
+	110, 99, 111, 100, 105, 110, 103, 83, 116, 97, 110, 100, 97, 114, 100, 69,
+	110, 99, 111, 100, 105, 110, 103, 77, 97, 99, 69, 120, 112, 101, 114, 116,
+	69, 110, 99, 111, 100, 105, 110, 103, 73, 100, 101, 110, 116, 105, 116, 121,
+	45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86,
 }
 
-var PnSpan [178]int32 = [178]int32{
+var PnSpan [246]int32 = [246]int32{
 	0, 4,
 	4, 6,
 	10, 6,
@@ -766,6 +1024,40 @@ var PnSpan [178]int32 = [178]int32{
 	580, 8,
 	588, 12,
 	600, 7,
+	607, 8,
+	615, 8,
+	623, 11,
+	634, 12,
+	646, 9,
+	655, 6,
+	661, 9,
+	670, 8,
+	678, 14,
+	692, 5,
+	697, 12,
+	709, 6,
+	715, 7,
+	722, 8,
+	730, 10,
+	740, 15,
+	755, 2,
+	757, 3,
+	760, 13,
+	773, 8,
+	781, 5,
+	786, 5,
+	791, 5,
+	796, 7,
+	803, 8,
+	811, 5,
+	816, 12,
+	828, 12,
+	840, 15,
+	855, 16,
+	871, 16,
+	887, 17,
+	904, 10,
+	914, 10,
 }
 
 func PkTrue() int32 {

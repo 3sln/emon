@@ -23,6 +23,12 @@ BleedBox TrimBox ArtBox UserUnit Names Outlines PageLabels Metadata Fields
 Font XObject ExtGState ColorSpace Pattern Shading Properties ProcSet
 Subtype Form Image Width Height
 Title Author Subject Keywords Creator Producer CreationDate ModDate
+BaseFont Encoding Differences BaseEncoding ToUnicode Widths FirstChar LastChar
+FontDescriptor Flags MissingWidth Ascent Descent FontBBox FontMatrix
+DescendantFonts DW DW2 CIDSystemInfo Ordering WMode
+Type0 Type1 MMType1 TrueType Type3 CIDFontType0 CIDFontType2
+WinAnsiEncoding MacRomanEncoding StandardEncoding MacExpertEncoding
+Identity-H Identity-V
 """.split()
 
 # Keywords the lexer recognises by id (0 is "any other keyword").

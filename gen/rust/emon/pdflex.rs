@@ -343,7 +343,7 @@ pub fn pl_init(mut ar: &mut crate::port::Cells) -> i32 {
     }
     crate::port::cells_set(ar, A_OBJLIM, crate::port::limit_of(3));
     i = 0;
-    while i < 89 {
+    while i < 123 {
         start = PN_SPAN[(i * 2 + 0) as usize];
         ln = PN_SPAN[(i * 2 + 1) as usize];
         pl_intern_begin(ar);

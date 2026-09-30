@@ -1,0 +1,172 @@
+# Written by kin/scripts/font-fixtures.py; read by kin/pdffonttest.kin (DEVLOG P1.6).
+# font: file, object, load status, kind, ascent, descent, warning bits, vertical, standard font
+# code: hex code, code points (hex, `+` joined, `-` none), how, width in 1/100000 em (`-` none)
+# len: hex bytes, length of the code at their start;  cid: hex code, cid;  dw2: font, v, w1
+font	fonts/fonts.pdf	1	0	simple	718	-207	16	0	4
+code	41	0041	encoding	66700
+code	80	20AC	encoding	55600
+code	92	2019	encoding	22200
+code	7F	2022	encoding	35000
+code	81	2022	encoding	35000
+code	27	0027	encoding	19100
+code	E9	00E9	encoding	55600
+code	AD	002D	encoding	33300
+code	FB	00FB	encoding	55600
+code	A0	0020	encoding	27800
+code	60	0060	encoding	33300
+code	96	2013	encoding	55600
+code	DF	00DF	encoding	61100
+code	B5	00B5	encoding	55600
+code	0	-	unknown	-
+code	1F	-	unknown	-
+len	41	1
+font	fonts/fonts.pdf	2	0	simple	683	-217	16	0	8
+code	27	2019	encoding	33300
+code	60	2018	encoding	33300
+code	AE	FB01	encoding	55600
+code	AF	FB02	encoding	55600
+code	C1	0060	encoding	33300
+code	E1	00C6	encoding	88900
+code	A4	2044	encoding	16700
+code	A9	0027	encoding	18000
+code	20	0020	encoding	25000
+code	FB	00DF	encoding	50000
+code	D0	2014	encoding	100000
+code	80	-	unknown	-
+font	fonts/fonts.pdf	4	0	simple	900	-200	0	0	-1
+code	1	20AC	glyphname	27783
+code	2	20AC	glyphname	50000
+code	41	0066+0066+0069	glyphname	61250
+code	42	0041	glyphname	50000
+code	43	FB03	glyphname	50000
+code	44	-	unknown	50000
+code	45	1F600	glyphname	50000
+code	46	-	unknown	50000
+code	47	0066+0066	glyphname	30000
+code	48	-	unknown	30000
+code	49	-	unknown	30000
+code	4A	0061+0062	glyphname	30000
+code	4B	FB00	glyphname	30000
+code	4C	0041+0042+0043	glyphname	30000
+code	4D	0041	glyphname	30000
+code	4E	-	unknown	30000
+code	3	-	unknown	50000
+code	20	0020	encoding	50000
+code	61	0061	encoding	30000
+code	69	0069	encoding	30000
+font	fonts/fonts.pdf	6	0	simple	905	-212	0	0	4
+code	93	201C	encoding	33300
+code	22	0022	encoding	35500
+code	20	0020	encoding	27800
+code	41	0041	encoding	66700
+font	fonts/fonts.pdf	7	0	simple	1010	-293	16	0	12
+code	20	0020	encoding	25000
+code	22	2200	encoding	71300
+code	41	0391	encoding	72200
+code	57	2126	encoding	76800
+code	61	03B1	encoding	63100
+code	A5	221E	encoding	71300
+code	B7	2022	encoding	46000
+code	E5	2211	encoding	71300
+font	fonts/fonts.pdf	8	0	simple	820	-143	16	0	13
+code	21	2701	encoding	97400
+code	22	2702	encoding	96100
+code	6C	25CF	encoding	79100
+code	75	25C6	encoding	78800
+code	A1	2761	encoding	73200
+code	FE	27BE	encoding	91800
+code	20	0020	encoding	27800
+font	fonts/fonts.pdf	10	0	simple	718	-207	0	0	4
+code	41	0058	tounicode	70000
+code	42	0061	tounicode	70100
+code	43	0062	tounicode	70200
+code	44	0063	tounicode	70300
+code	45	0066+0066	tounicode	70400
+code	46	0046	encoding	70500
+code	47	0047	encoding	70600
+code	48	0048	encoding	70700
+code	49	0049	encoding	27800
+code	4A	1F600	tounicode	50000
+code	4B	0041	tounicode	66700
+code	4C	0042+0043	tounicode	55600
+code	4D	0044	tounicode	83300
+code	50	0052	tounicode	66700
+font	fonts/fonts.pdf	14	0	composite	880	-120	0	0	-1
+code	1	0041	tounicode	50000
+code	2	00E9	tounicode	60000
+code	3	-	unknown	100000
+code	10	0061	tounicode	75000
+code	12	0063	tounicode	75000
+code	14	-	unknown	75000
+code	15	-	unknown	100000
+code	20	05D0	tounicode	100000
+code	21	05D1	tounicode	100000
+code	1E	-	unknown	33350
+code	FFFF	-	unknown	100000
+len	0001	2
+len	00	2
+cid	2	2
+cid	1234	4660
+font	fonts/fonts.pdf	16	0	composite	0	0	0	1	-1
+code	41	-	unknown	100000
+dw2	16	90000	-110000
+font	fonts/fonts.pdf	19	0	composite	0	0	0	1	-1
+cid	41	34
+cid	20	1
+cid	7E	95
+cid	7F	0
+cid	8140	500
+cid	8141	0
+code	41	-	unknown	65000
+code	20	-	unknown	90000
+len	41	1
+len	8140	2
+len	81	2
+len	A0	1
+len	7F81	1
+len	9FFC	2
+font	fonts/fonts.pdf	21	0	composite	0	0	1	0	-1
+code	3042	3042	encoding	100000
+code	41	0041	encoding	100000
+code	D800	-	unknown	100000
+len	3042	2
+font	fonts/fonts.pdf	22	0	composite	0	0	1	1	-1
+code	3042	3042	encoding	100000
+len	D83DDE00	4
+len	0041	2
+len	E000	2
+font	fonts/fonts.pdf	23	0	composite	0	0	1	0	-1
+code	82A0	-	unknown	100000
+font	fonts/fonts.pdf	24	0	simple	0	0	0	0	-1
+code	61	0061	glyphname	50000
+code	62	0062	glyphname	60500
+code	63	-	unknown	-
+font	fonts/fonts.pdf	25	0	simple	718	-207	0	0	5
+code	41	0041	encoding	70000
+code	42	0042	encoding	71000
+code	43	0043	encoding	72200
+font	fonts/fonts.pdf	26	0	simple	683	-217	16	0	11
+code	41	0041	encoding	66700
+font	fonts/fonts.pdf	28	0	simple	800	-200	272	0	-1
+code	41	0041	unknown	-
+code	20	0020	unknown	-
+font	fonts/fonts.pdf	29	0	simple	718	-207	16	0	4
+code	41	0041	encoding	66700
+code	C1	0060	encoding	33300
+font	fonts/fonts.pdf	30	0	simple	683	-217	16	0	8
+code	8E	00E9	encoding	44400
+code	CA	0020	encoding	25000
+code	DB	00A4	encoding	50000
+code	A5	2022	encoding	35000
+code	D2	201C	encoding	44400
+code	DE	FB01	encoding	55600
+code	C6	2206	encoding	61200
+code	BD	03A9	encoding	-
+font	fonts/fonts.pdf	31	0	simple	718	-207	16	0	4
+code	8E	0160	glyphname	66700
+code	8F	00E8	encoding	55600
+font	fonts/fonts.pdf	32	0	simple	718	-207	24	0	4
+code	41	0041	unknown	66700
+font	fonts/fonts.pdf	33	1	none	0	0	0	0	-1
+font	fonts/fonts.pdf	34	0	composite	0	0	32	0	-1
+code	1	-	unknown	100000
