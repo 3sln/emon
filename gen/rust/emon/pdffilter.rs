@@ -2,7 +2,6 @@
 // source: emon.pdffilter
 
 use crate::emon::inflate::*;
-use crate::emon::pdfsrc::*;
 
 pub fn pf_ok() -> i32 {
     return 0;
@@ -39,6 +38,9 @@ pub fn pf_image_filter() -> i32 {
 }
 pub fn pf_bad_spec() -> i32 {
     return 11;
+}
+pub fn pf_need_bytes() -> i32 {
+    return 12;
 }
 pub fn pf_status_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
@@ -87,6 +89,10 @@ pub fn pf_status_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 11 {
         crate::port::text_ascii(t, "bad-filter-spec");
+        return 1;
+    }
+    if code == 12 {
+        crate::port::text_ascii(t, "need-bytes");
         return 1;
     }
     return 0;
@@ -195,7 +201,7 @@ pub fn pf_hex(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells) -> i
     let mut c: i32 = 0;
     let mut done: i32 = 0;
     while (i < e) && (done == 0) {
-        c = ps_u8(src, i);
+        c = crate::port::blob_u8(src, i);
         i += 1;
         if c == 62 {
             done = 1;
@@ -256,14 +262,14 @@ pub fn pf_a85(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells) -> i
     let mut done: i32 = 0;
     let mut pad: i32 = 0;
     // Skip white space and a `<~` prefix.
-    while (i < e) && ((ps_u8(src, i) == 32) || (ps_u8(src, i) == 10) || (ps_u8(src, i) == 13) || (ps_u8(src, i) == 9) || (ps_u8(src, i) == 12) || (ps_u8(src, i) == 0)) {
+    while (i < e) && ((crate::port::blob_u8(src, i) == 32) || (crate::port::blob_u8(src, i) == 10) || (crate::port::blob_u8(src, i) == 13) || (crate::port::blob_u8(src, i) == 9) || (crate::port::blob_u8(src, i) == 12) || (crate::port::blob_u8(src, i) == 0)) {
         i += 1;
     }
-    if ((i + 1) < e) && (ps_u8(src, i) == 60) && (ps_u8(src, i + 1) == 126) {
+    if ((i + 1) < e) && (crate::port::blob_u8(src, i) == 60) && (crate::port::blob_u8(src, i + 1) == 126) {
         i += 2;
     }
     while (i < e) && (done == 0) {
-        c = ps_u8(src, i);
+        c = crate::port::blob_u8(src, i);
         i += 1;
         if c == 126 {
             done = 1;
@@ -317,7 +323,7 @@ pub fn pf_rl(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells) -> i3
     let mut k: i32 = 0;
     let mut b: i32 = 0;
     while i < e {
-        l = ps_u8(src, i);
+        l = crate::port::blob_u8(src, i);
         i += 1;
         if l == 128 {
             return 0;
@@ -329,7 +335,7 @@ pub fn pf_rl(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells) -> i3
                 if i >= e {
                     return 1;
                 }
-                crate::port::cells_push(out, ps_u8(src, i));
+                crate::port::cells_push(out, crate::port::blob_u8(src, i));
                 i += 1;
                 k += 1;
             }
@@ -337,7 +343,7 @@ pub fn pf_rl(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells) -> i3
             if i >= e {
                 return 1;
             }
-            b = ps_u8(src, i);
+            b = crate::port::blob_u8(src, i);
             i += 1;
             pf_room(out, base, 257 - l);
             k = 0;
@@ -447,7 +453,7 @@ pub fn pf_lzw(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells, mut 
     pf_lzw_clear(st);
     while done == 0 {
         while (nbits < width) && (i < e) {
-            acc = (acc * 256) + ps_u8(src, i);
+            acc = (acc * 256) + crate::port::blob_u8(src, i);
             i += 1;
             nbits += 8;
         }
@@ -698,7 +704,7 @@ pub fn pf_run(code: i32, src: &[u8], s: i32, e: i32, mut out: &mut crate::port::
     if code == 6 {
         let mut k: i32 = s;
         while k < e {
-            crate::port::cells_push(out, ps_u8(src, k));
+            crate::port::cells_push(out, crate::port::blob_u8(src, k));
             k += 1;
         }
         return 0;

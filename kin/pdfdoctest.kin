@@ -20,23 +20,25 @@
 ;; centipoints) and Rotate: one number that says every page's geometry, and
 ;; one the generating script computes independently in Python.
 (ns emon.pdfdoctest
-  (:require [emon.lang :refer [I32 I64 Blob Cells Text emit-ascii i64]]
+  (:require [emon.lang :refer [I32 I64 Blob Src Cells Text emit-ascii i64]]
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that
                                assert-that-at assert-text assert-text-span
                                text-blob new-cells new-text test-file
-                               test-file-span cells-blob]]
+                               test-file-span cells-blob test-src-chunked
+                               test-src-view test-src-ctl]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
-                               cells-push cells-drop]]
+                               cells-push cells-drop src-of-blob]]
             [emon.splitmix :refer [sm-seed sm-next sm-below]]
             [emon.pdfdoc :refer [pd-open pd-get pd-resolve pd-pages pd-stream-data
                                  pd-pg-count pd-pg-media pd-pg-crop pd-pg-rotate
                                  pd-source-json pd-status-emit-name pd-encrypted
                                  pd-version-major pd-version-minor pd-warn
                                  pd-ent-kind pd-object-count]]
+            [emon.pdfsrc :refer [ps-missed]]
             [emon.pdflex :refer [pl-dump pl-kind-of pl-k-stream]]
             [emon.pdffilter :refer [pf-status-emit-name]]
             [kin.lang :refer [defn return let set while if comment do
-                              + - * < > <= >= == != and or quot rem]]))
+                              + - * < > <= >= == != and or quot rem bit-or]]))
 
 ;; ------------------------------------------------------------ row helpers
 
@@ -133,7 +135,7 @@
 
 ;; ------------------------------------------------------ one document, all
 
-(defn ^I32 dt-open [^Blob pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+(defn ^I32 dt-open [^Src pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                     ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg]
   (comment "Open a document and list its pages (an empty `pg` when it will not")
   (comment "open). Answers the `pd-status`.")
@@ -149,7 +151,7 @@
                                 ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
                                 ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Text t]
   (comment "Open the file named by names[from, to) and write its status.")
-  (let [^Blob pdf (test-file-span names from to)
+  (let [^Src pdf (src-of-blob (test-file-span names from to))
         ^I32 status (dt-open pdf ar dc a b st pg)]
     (pd-status-emit-name t status)
     (return status)))
@@ -196,7 +198,7 @@
   (comment "Open the file, then: kind 111 (o) dumps object num into t (`!missing`")
   (comment "when there is none); kind 115 (s) decodes it into `out` and writes the")
   (comment "status name to t. Answers the pd-open status (non-zero: not opened).")
-  (let [^Blob pdf (test-file-span names from to)
+  (let [^Src pdf (src-of-blob (test-file-span names from to))
         ^I32 status (pd-open pdf ar dc a b st)
         ^:mut ^I32 h 0
         ^:mut ^I32 s 0]
@@ -259,7 +261,7 @@
                           ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
                           ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Text t]
   (comment "Open a real file and write its status name to t.")
-  (let [^Blob pdf (test-file-span names from to)
+  (let [^Src pdf (src-of-blob (test-file-span names from to))
         ^I32 status (dt-open pdf ar dc a b st pg)]
     (pd-status-emit-name t status)
     (return status)))
@@ -304,7 +306,7 @@
 
 ;; ------------------------------------------------------------ the Source
 
-(defn ^I32 dt-source [^Blob pdf ^:mut ^Text t]
+(defn ^I32 dt-source [^Src pdf ^:mut ^Text t]
   (let [^Cells ar (new-cells)
         ^Cells dc (new-cells)
         ^Cells a (new-cells)
@@ -319,41 +321,41 @@
 (deftest test-source-of-minimal-pdf
   (let [^Blob want (test-file "pdf/source/minimal.json")
         ^Text t (new-text)
-        ^I32 status (dt-source (test-file "pdf/minimal.pdf") t)]
+        ^I32 status (dt-source (src-of-blob (test-file "pdf/minimal.pdf")) t)]
     (assert-eq status 0 "opens")
     (assert-text-span t want 0 (- (blob-len want) 1) "Source JSON" 0)))
 
 (deftest test-source-of-html-chrome-pdf
   (let [^Blob want (test-file "pdf/source/html-chrome.json")
         ^Text t (new-text)
-        ^I32 status (dt-source (test-file "pdf/html-chrome.pdf") t)]
+        ^I32 status (dt-source (src-of-blob (test-file "pdf/html-chrome.pdf")) t)]
     (assert-eq status 0 "opens")
     (assert-text-span t want 0 (- (blob-len want) 1) "Source JSON" 0)))
 
 (deftest test-source-of-ghostscript-xref-stream-pdf
   (let [^Blob want (test-file "pdf/source/gs-xrefstream.json")
         ^Text t (new-text)
-        ^I32 status (dt-source (test-file "pdf/gs-xrefstream.pdf") t)]
+        ^I32 status (dt-source (src-of-blob (test-file "pdf/gs-xrefstream.pdf")) t)]
     (assert-eq status 0 "opens")
     (assert-text-span t want 0 (- (blob-len want) 1) "Source JSON" 0)))
 
 (deftest test-source-with-inherited-attributes
   (let [^Blob want (test-file "pdf/source/inherit.json")
         ^Text t (new-text)
-        ^I32 status (dt-source (test-file "pdf/inherit.pdf") t)]
+        ^I32 status (dt-source (src-of-blob (test-file "pdf/inherit.pdf")) t)]
     (assert-eq status 0 "opens")
     (assert-text-span t want 0 (- (blob-len want) 1) "Source JSON" 0)))
 
 (deftest test-source-with-odd-boxes-and-rotations
   (let [^Blob want (test-file "pdf/source/boxes.json")
         ^Text t (new-text)
-        ^I32 status (dt-source (test-file "pdf/boxes.pdf") t)]
+        ^I32 status (dt-source (src-of-blob (test-file "pdf/boxes.pdf")) t)]
     (assert-eq status 0 "opens")
     (assert-text-span t want 0 (- (blob-len want) 1) "Source JSON" 0)))
 
 ;; ------------------------------------------------------------------- laws
 
-(defn ^I32 dt-info [^Blob pdf ^I32 which]
+(defn ^I32 dt-info [^Src pdf ^I32 which]
   (comment "A fact about a document: 0 status, 1 encrypted, 2 version major,")
   (comment "3 version minor, 4 warning bits, 5 highest object number + 1.")
   (let [^Cells ar (new-cells)
@@ -371,24 +373,24 @@
     (return (pd-object-count dc))))
 
 (deftest test-header-version-and-encryption-are-reported
-  (assert-eq (dt-info (test-file "pdf/minimal.pdf") 2) 1 "major")
-  (assert-eq (dt-info (test-file "pdf/minimal.pdf") 3) 4 "minor")
-  (assert-eq (dt-info (test-file "pdf/xrefstream.pdf") 3) 5 "minor of a 1.5 file")
-  (assert-eq (dt-info (test-file "pdf/minimal.pdf") 1) 0 "not encrypted")
-  (assert-eq (dt-info (test-file "pdf/encrypt-flag.pdf") 1) 1 "an /Encrypt entry is reported")
-  (assert-eq (dt-info (test-file "pdf/minimal.pdf") 5) 6 "objects 0 to 5"))
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/minimal.pdf")) 2) 1 "major")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/minimal.pdf")) 3) 4 "minor")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/xrefstream.pdf")) 3) 5 "minor of a 1.5 file")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/minimal.pdf")) 1) 0 "not encrypted")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/encrypt-flag.pdf")) 1) 1 "an /Encrypt entry is reported")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/minimal.pdf")) 5) 6 "objects 0 to 5"))
 
 (deftest test-tolerated-damage-is-recorded-as-warnings
-  (assert-eq (dt-info (test-file "pdf/minimal.pdf") 4) 0 "no warnings")
-  (assert-eq (dt-info (test-file "pdf/junk-header.pdf") 4) 1 "offsets relative to a header at 0 + 81")
-  (assert-eq (dt-info (test-file "pdf/hybrid.pdf") 4) 2 "hybrid-reference file")
-  (assert-eq (dt-info (test-file "pdf/prev-loop.pdf") 4) 4 "a /Prev loop is cut")
-  (assert-eq (dt-info (test-file "pdf/kids-cycle.pdf") 4) 128 "a cyclic page tree is cut")
-  (assert-eq (dt-info (test-file "pdf/boxes.pdf") 4) 256 "a missing MediaBox is defaulted"))
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/minimal.pdf")) 4) 0 "no warnings")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/junk-header.pdf")) 4) 1 "offsets relative to a header at 0 + 81")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/hybrid.pdf")) 4) 2 "hybrid-reference file")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/prev-loop.pdf")) 4) 4 "a /Prev loop is cut")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/kids-cycle.pdf")) 4) 128 "a cyclic page tree is cut")
+  (assert-eq (dt-info (src-of-blob (test-file "pdf/boxes.pdf")) 4) 256 "a missing MediaBox is defaulted"))
 
 ;; ------------------------------------------------------------------- fuzz
 
-(defn ^I32 dt-survive [^Blob pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+(defn ^I32 dt-survive [^Src pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                        ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells out]
   (comment "Open, list the pages, and decode every stream the cross-reference")
   (comment "names: none of it may fault. Answers the pd-open status.")
@@ -423,7 +425,7 @@
         ^:mut ^I32 ok 0]
     (while (<= k n)
       (do (dt-cut f k cut)
-          (if (== (dt-survive (cells-blob cut) ar dc a b st pg out) 0)
+          (if (== (dt-survive (src-of-blob (cells-blob cut)) ar dc a b st pg out) 0)
             (set ok (+ ok 1)))
           (set k (+ k step))))
     (return ok)))
@@ -447,7 +449,7 @@
             (do (set at (sm-below rng n))
                 (cells-set cut at (sm-below rng 256))
                 (set j (+ j 1))))
-          (if (== (dt-survive (cells-blob cut) ar dc a b st pg out) 0)
+          (if (== (dt-survive (src-of-blob (cells-blob cut)) ar dc a b st pg out) 0)
             (set ok (+ ok 1)))
           (set r (+ r 1))))
     (return ok)))
@@ -485,3 +487,423 @@
     (assert-that (>= (dt-corruptions (test-file "pdf/incremental.pdf") 400 3 4 ar dc a b st pg out cut rng) 0) "incremental")
     (assert-that (>= (dt-corruptions (test-file "pdf/filters.pdf") 400 3 5 ar dc a b st pg out cut rng) 0) "filters")
     (assert-that (>= (dt-corruptions (test-file "pdf/inherit.pdf") 400 3 6 ar dc a b st pg out cut rng) 0) "inherit")))
+
+;; ------------------------------------------------ a source that misses (P1.11)
+;;
+;; D058's gate: every committed PDF, read through a simulated ASYNC source
+;; with tiny chunks, must give the in-memory result. The source is
+;; `test-src-chunked`: nothing resident at first, a read in a missing chunk
+;; answers 0 and sets the view's flag; between attempts the host (here
+;; `dt-open-async`) fetches what was missed, with a read-ahead that doubles
+;; per round, and re-runs the unit from scratch on a FRESH VIEW. Only an
+;; attempt that did not miss is kept. The kept attempt must equal the
+;; in-memory run CELL FOR CELL (the object arena, the document, the page
+;; table), and every attempt that missed must have answered `need-bytes` (or
+;; opened, and missed after) and no warning the real run does not have: zeros
+;; must never become a status or a warning.
+;;
+;; A helper cannot assert (emon.test's forms name the test parameter), so the
+;; helpers answer a verdict code and the law asserts: 0 identical; 1 a
+;; different status; 2, 3, 4 the arena, the document, the page table differ;
+;; 5 a missed attempt reported a status other than need-bytes or ok; 6 a
+;; missed attempt reported a warning the real run does not; 7 more than
+;; FETCH_ROUNDS (24) rounds.
+
+(defn ^I32 dt-open-async [^Blob bytes ^I32 chunk ^I32 wf ^:mut ^Cells ar
+                          ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                          ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells ctr]
+  (comment "Open `bytes` through an async source of `chunk`-byte chunks, re-running")
+  (comment "until an attempt does not miss. `wf` is the real run's warning bits.")
+  (comment "Answers the kept attempt's status; `ctr` gets [rounds, status")
+  (comment "violations, warning violations, hints received].")
+  (let [^Src base (test-src-chunked bytes chunk 0)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 w 0]
+    (cells-drop ctr 0)
+    (cells-push ctr 0)
+    (cells-push ctr 0)
+    (cells-push ctr 0)
+    (cells-push ctr 0)
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)]
+            (set status (dt-open v ar dc a b st pg))
+            (if (ps-missed v)
+              (do (set w (pd-warn dc))
+                  (if (and (!= status 0) (!= status 7))
+                    (cells-set ctr 1 (+ (cells-at ctr 1) 1)))
+                  (if (!= (bit-or w wf) wf)
+                    (cells-set ctr 2 (+ (cells-at ctr 2) 1)))
+                  (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 40) (set more 0)))
+              (set more 0)))))
+    (cells-set ctr 0 round)
+    (cells-set ctr 3 (test-src-ctl base 6 0))
+    (return status)))
+
+(defn ^I32 dt-diff [^Cells x ^Cells y]
+  (comment "-1 when x and y hold the same cells, -2 when they differ in length,")
+  (comment "else the first index where they differ.")
+  (let [^I32 n (cells-len x)
+        ^:mut ^I32 i 0]
+    (if (!= n (cells-len y)) (return -2))
+    (while (< i n)
+      (do (if (!= (cells-at x i) (cells-at y i)) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 dt-same-row [^Blob bytes ^I32 chunk ^:mut ^Cells ctr]
+  (comment "Open `bytes` in memory and through an async source; a verdict code")
+  (comment "(see above), 0 for the same. `ctr` is `dt-open-async`'s.")
+  (let [^Cells ar1 (new-cells)
+        ^Cells dc1 (new-cells)
+        ^Cells a1 (new-cells)
+        ^Cells b1 (new-cells)
+        ^Cells st1 (new-cells)
+        ^Cells pg1 (new-cells)
+        ^Cells ar2 (new-cells)
+        ^Cells dc2 (new-cells)
+        ^Cells a2 (new-cells)
+        ^Cells b2 (new-cells)
+        ^Cells st2 (new-cells)
+        ^Cells pg2 (new-cells)
+        ^Src mem (src-of-blob bytes)
+        ^I32 s1 (dt-open mem ar1 dc1 a1 b1 st1 pg1)
+        ^I32 s2 (dt-open-async bytes chunk (pd-warn dc1) ar2 dc2 a2 b2 st2 pg2 ctr)]
+    (if (!= s1 s2) (return 1))
+    (if (!= (cells-at ctr 1) 0) (return 5))
+    (if (!= (cells-at ctr 2) 0) (return 6))
+    (if (> (cells-at ctr 0) 24) (return 7))
+    (if (!= (dt-diff ar1 ar2) -1) (return 2))
+    (if (!= (dt-diff dc1 dc2) -1) (return 3))
+    (if (!= (dt-diff pg1 pg2) -1) (return 4))
+    (return 0)))
+
+(deftest test-every-fixture-is-the-same-through-an-async-source-of-64-byte-chunks
+  (comment "Every row of the fixtures, damaged files included: the same arena,")
+  (comment "document and page table, and a status per failure that is the file's,")
+  (comment "never a miss's.")
+  (let [^Blob f (test-file "pdf/fixtures.txt")
+        ^Cells ctr (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (dt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (dt-tab f pos e))
+                (assert-eq-at (dt-same-row (test-file-span f pos s0) 64 ctr) 0 "async equals in-memory" line)))
+          (set pos (+ e 1))))
+    (assert-that (> rows 20) "the fixtures were read")))
+
+(deftest test-every-fixture-is-the-same-through-an-async-source-of-512-byte-chunks
+  (let [^Blob f (test-file "pdf/fixtures.txt")
+        ^Cells ctr (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (dt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (dt-tab f pos e))
+                (assert-eq-at (dt-same-row (test-file-span f pos s0) 512 ctr) 0 "async equals in-memory" line)))
+          (set pos (+ e 1))))
+    (assert-that (> rows 20) "the fixtures were read")))
+
+(deftest test-every-real-file-is-the-same-through-an-async-source-of-512-byte-chunks
+  (comment "THE D058 GATE on the committed real-file rows: identical to the")
+  (comment "in-memory run, within FETCH_ROUNDS, with the object extents hinted")
+  (comment "once the cross-reference was read, and the big files really did need")
+  (comment "several rounds.")
+  (let [^Blob f (test-file "pdf/corpus.txt")
+        ^Cells ctr (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 maxr 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (dt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (dt-tab f pos e))
+                (assert-eq-at (dt-same-row (test-file-span f pos s0) 512 ctr) 0 "async equals in-memory" line)
+                (if (> (cells-at ctr 0) maxr) (set maxr (cells-at ctr 0)))
+                (if (== (blob-u8 f (+ s0 1)) 111)
+                  (assert-that-at (> (cells-at ctr 3) 0) "the object extents were hinted" line))))
+          (set pos (+ e 1))))
+    (assert-that (> rows 100) "the real files were read")
+    (assert-that (>= maxr 4) "the big files took several rounds")))
+
+(defn ^I32 dt-source-async [^Blob bytes ^I32 chunk ^:mut ^Text t]
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells ctr (new-cells)
+        ^I32 status (dt-open-async bytes chunk 1023 ar dc a b st pg ctr)]
+    (if (!= status 0) (return status))
+    (pd-source-json t dc pg)
+    (return 0)))
+
+(deftest test-the-source-goldens-are-the-same-from-a-512-byte-async-source
+  (comment "P1.5's done-when: three (here five) fixtures give the same `Source`")
+  (comment "JSON from a 512-byte-chunk async source as from memory.")
+  (let [^Text t1 (new-text)
+        ^Text t2 (new-text)
+        ^Text t3 (new-text)
+        ^Text t4 (new-text)
+        ^Text t5 (new-text)]
+    (assert-eq (dt-source-async (test-file "pdf/minimal.pdf") 512 t1) 0 "minimal opens")
+    (assert-text-span t1 (test-file "pdf/source/minimal.json") 0 (- (blob-len (test-file "pdf/source/minimal.json")) 1) "minimal" 0)
+    (assert-eq (dt-source-async (test-file "pdf/html-chrome.pdf") 512 t2) 0 "chrome opens")
+    (assert-text-span t2 (test-file "pdf/source/html-chrome.json") 0 (- (blob-len (test-file "pdf/source/html-chrome.json")) 1) "html-chrome" 0)
+    (assert-eq (dt-source-async (test-file "pdf/gs-xrefstream.pdf") 512 t3) 0 "ghostscript opens")
+    (assert-text-span t3 (test-file "pdf/source/gs-xrefstream.json") 0 (- (blob-len (test-file "pdf/source/gs-xrefstream.json")) 1) "gs-xrefstream" 0)
+    (assert-eq (dt-source-async (test-file "pdf/inherit.pdf") 512 t4) 0 "inherit opens")
+    (assert-text-span t4 (test-file "pdf/source/inherit.json") 0 (- (blob-len (test-file "pdf/source/inherit.json")) 1) "inherit" 0)
+    (assert-eq (dt-source-async (test-file "pdf/boxes.pdf") 512 t5) 0 "boxes opens")
+    (assert-text-span t5 (test-file "pdf/source/boxes.json") 0 (- (blob-len (test-file "pdf/source/boxes.json")) 1) "boxes" 0)))
+
+;; ---------------------------------------------- objects and stream data
+
+(defn ^I32 dt-object-on [^Src pdf ^I32 num ^I32 kind ^:mut ^Cells ar
+                         ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                         ^:mut ^Cells st ^:mut ^Cells out ^:mut ^Text t]
+  (comment "`dt-object-row` on an open source: dump object num (kind 111) or")
+  (comment "decode it (115) into t, after opening the document.")
+  (let [^I32 status (pd-open pdf ar dc a b st)
+        ^:mut ^I32 h 0
+        ^:mut ^I32 s 0]
+    (if (!= status 0) (return status))
+    (set h (pd-get pdf ar dc a b st num))
+    (if (== kind 111)
+      (if (== h 0)
+        (emit-ascii t "!missing")
+        (pl-dump t ar h)))
+    (if (== kind 115)
+      (do (cells-drop out 0)
+          (if (== h 0)
+            (emit-ascii t "!missing")
+            (do (set s (pd-stream-data pdf ar dc a b st h out))
+                (pf-status-emit-name t s)))))
+    (return 0)))
+
+(defn ^I32 dt-object-async [^Blob bytes ^I32 chunk ^I32 num ^I32 kind
+                            ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out
+                            ^:mut ^Text t]
+  (comment "The same through an async source: attempts that miss are thrown away")
+  (comment "(into a scratch sink) until one does not, then the answer is made once")
+  (comment "more on a fresh view of the now-resident cache, into t. -1 when that")
+  (comment "last run still missed.")
+  (let [^Src base (test-src-chunked bytes chunk 0)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 opened 0]
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)
+                ^Text scratch (new-text)]
+            (set opened (dt-object-on v num kind ar dc a b st out scratch))
+            (if (ps-missed v)
+              (do (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 40) (set more 0)))
+              (set more 0)))))
+    (let [^Src fin (test-src-view base)]
+      (set opened (dt-object-on fin num kind ar dc a b st out t))
+      (if (ps-missed fin) (return -1))
+      (return opened))))
+
+(deftest test-every-object-resolves-the-same-through-an-async-source
+  (comment "Objects in object streams and decoded streams (Flate, LZW, ASCII85,")
+  (comment "RunLength, predictors), from 64-byte chunks: the stream spans are cut")
+  (comment "with `src-slice` and the object streams parsed through `src-of-cells`.")
+  (let [^Blob f (test-file "pdf/objects-in-files.txt")
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells out (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 opened 0
+        ^:mut ^I32 kind 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (dt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (dt-tab f pos e))
+                (set s1 (dt-tab f (+ s0 1) e))
+                (set s2 (dt-tab f (+ s1 1) e))
+                (set s3 (dt-tab f (+ s2 1) e))
+                (set kind (blob-u8 f (+ s1 1)))
+                (let [^Text t (new-text)]
+                  (set opened (dt-object-async (test-file-span f pos s0) 64 (dt-dec f (+ s0 1) s1) kind ar dc a b st out t))
+                  (assert-eq-at opened 0 "the file opens, and the last run did not miss" line)
+                  (if (== kind 111)
+                    (assert-text-span t f (+ s3 1) e "object" line))
+                  (if (== kind 115)
+                    (do (assert-text-span t f (+ s2 1) s3 "stream status" line)
+                        (assert-eq-at (dt-compare-hex out f (+ s3 1) e) -1 "decoded bytes" line))))))
+          (set pos (+ e 1))))
+    (assert-that (> rows 40) "the rows were read")))
+
+;; ------------------------------------------------------- what a miss is
+
+(defn ^I32 dt-m [^Src s]
+  (if (ps-missed s) (return 1))
+  (return 0))
+
+(deftest test-a-cold-source-answers-need-bytes-and-no-warning-and-no-pages
+  (comment "Nothing resident: the first read misses, and what comes back is the")
+  (comment "status `need-bytes` (7), no warning bit and no page, even for the")
+  (comment "files whose real status is bad-xref or no-startxref, because the")
+  (comment "zeros the miss read are not a file's damage.")
+  (let [^Blob f (test-file "pdf/fixtures.txt")
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 missed 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 status 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (dt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (dt-tab f pos e))
+                (let [^Src v (test-src-view (test-src-chunked (test-file-span f pos s0) 64 0))]
+                  (set status (dt-open v ar dc a b st pg))
+                  (if (== (dt-m v) 1)
+                    (do (set missed (+ missed 1))
+                        (assert-eq-at status 7 "need-bytes" line)
+                        (assert-eq-at (pd-warn dc) 0 "no warning" line)
+                        (assert-eq-at (pd-pg-count pg) 0 "no page" line))))))
+          (set pos (+ e 1))))
+    (assert-that (> rows 20) "the fixtures were read")
+    (assert-that (> missed 20) "nearly every file missed on a cold source")))
+
+(deftest test-a-named-missing-chunk-is-need-bytes-until-it-is-resident
+  (let [^Blob f (test-file "pdf/minimal.pdf")
+        ^Src base (test-src-chunked f 64 0)
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^I32 last (- (test-src-ctl base 8 0) 1)]
+    (assert-that (> last 4) "the fixture spans several chunks")
+    (test-src-ctl base 3 0)
+    (let [^Src v (test-src-view base)]
+      (assert-eq (dt-open v ar dc a b st pg) 0 "opens with everything resident")
+      (assert-eq (dt-m v) 0 "without a miss")
+      (assert-eq (pd-pg-count pg) 1 "one page"))
+    (test-src-ctl base 2 0)
+    (let [^Src w (test-src-view base)]
+      (assert-eq (dt-open w ar dc a b st pg) 7 "the header's chunk is missing")
+      (assert-eq (dt-m w) 1 "and the view says so")
+      (assert-eq (pd-warn dc) 0 "with no warning")
+      (assert-eq (test-src-ctl base 4 0) 1 "one chunk is pending"))
+    (test-src-ctl base 1 0)
+    (test-src-ctl base 2 last)
+    (let [^Src x (test-src-view base)]
+      (assert-eq (dt-open x ar dc a b st pg) 7 "the last chunk (startxref) is missing")
+      (assert-eq (dt-m x) 1 "and the view says so"))
+    (test-src-ctl base 1 last)
+    (let [^Src y (test-src-view base)]
+      (assert-eq (dt-open y ar dc a b st pg) 0 "opens again once both are resident")
+      (assert-eq (dt-m y) 0 "without a miss")
+      (assert-eq (pd-pg-count pg) 1 "one page"))))
+
+(deftest test-a-damaged-file-is-still-bad-xref-once-its-chunks-are-resident
+  (comment "badxref.pdf's real status is bad-xref. On a cold source the answer")
+  (comment "is need-bytes; only a run that read every byte it used may say bad-xref.")
+  (let [^Blob f (test-file "pdf/badxref.pdf")
+        ^Src base (test-src-chunked f 64 0)
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells ctr (new-cells)]
+    (let [^Src v (test-src-view base)]
+      (assert-eq (dt-open v ar dc a b st pg) 7 "cold: need-bytes")
+      (assert-eq (dt-m v) 1 "missed"))
+    (assert-eq (dt-open-async f 64 1023 ar dc a b st pg ctr) 3 "warm: bad-xref")
+    (assert-that (>= (cells-at ctr 0) 1) "it took a round")))
+
+(defn ^I32 dt-same-sync [^Blob bytes ^:mut ^Cells ctr]
+  (comment "Open in memory and through a SYNC chunked source: 0 when the arena,")
+  (comment "the document and the page table are the same and the view never")
+  (comment "missed; the chunks filled inline are left in ctr[0].")
+  (let [^Cells ar1 (new-cells)
+        ^Cells dc1 (new-cells)
+        ^Cells a1 (new-cells)
+        ^Cells b1 (new-cells)
+        ^Cells st1 (new-cells)
+        ^Cells pg1 (new-cells)
+        ^Cells ar2 (new-cells)
+        ^Cells dc2 (new-cells)
+        ^Cells a2 (new-cells)
+        ^Cells b2 (new-cells)
+        ^Cells st2 (new-cells)
+        ^Cells pg2 (new-cells)
+        ^Src base (test-src-chunked bytes 64 1)
+        ^Src v (test-src-view base)
+        ^Src mem (src-of-blob bytes)
+        ^I32 s1 (dt-open mem ar1 dc1 a1 b1 st1 pg1)
+        ^I32 s2 (dt-open v ar2 dc2 a2 b2 st2 pg2)]
+    (cells-drop ctr 0)
+    (cells-push ctr (test-src-ctl base 7 0))
+    (if (!= s1 s2) (return 1))
+    (if (ps-missed v) (return 5))
+    (if (!= (dt-diff ar1 ar2) -1) (return 2))
+    (if (!= (dt-diff dc1 dc2) -1) (return 3))
+    (if (!= (dt-diff pg1 pg2) -1) (return 4))
+    (return 0)))
+
+(deftest test-a-sync-source-is-the-in-memory-run-with-no-rounds
+  (let [^Cells ctr (new-cells)]
+    (assert-eq (dt-same-sync (test-file "pdf/minimal.pdf") ctr) 0 "minimal")
+    (assert-that (> (cells-at ctr 0) 0) "chunks were filled inline")
+    (assert-eq (dt-same-sync (test-file "pdf/gs-xrefstream.pdf") ctr) 0 "xref stream and object streams")
+    (assert-eq (dt-same-sync (test-file "pdf/html-chrome.pdf") ctr) 0 "chrome")
+    (assert-eq (dt-same-sync (test-file "pdf/incremental.pdf") ctr) 0 "incremental")
+    (assert-eq (dt-same-sync (test-file "pdf/badxref.pdf") ctr) 0 "a damaged file")))

@@ -92,6 +92,95 @@ func CellsBytes(c *Cells) []byte {
 	return b
 }
 
+// ------------------------------------------------------------------ the Src
+//
+// An input byte source as kin sees it: a per-unit view over a backing that
+// may miss (see the Rust half for the contract). `Src.View` is a fresh view
+// of the same backing, for the host's re-run.
+
+// SrcBacking is the host's chunk cache, or plain bytes.
+type SrcBacking interface {
+	Len() int32
+	// At is the byte 0..255, or -1 when it is not resident (the backing records the miss).
+	At(i int32) int32
+	// Span fills buf from s; false when any of it is not resident (recorded).
+	Span(s int32, buf []byte) bool
+	// Hint says bytes [s, e) will be wanted. May be ignored.
+	Hint(s int32, e int32)
+}
+
+type memBacking struct{ v []byte }
+
+func (m *memBacking) Len() int32       { return int32(len(m.v)) }
+func (m *memBacking) At(i int32) int32 { return int32(m.v[i]) }
+func (m *memBacking) Span(s int32, buf []byte) bool {
+	copy(buf, m.v[s:int(s)+len(buf)])
+	return true
+}
+func (m *memBacking) Hint(s int32, e int32) {}
+
+type Src struct {
+	B      SrcBacking
+	missed bool
+}
+
+func NewSrc(b SrcBacking) *Src { return &Src{B: b} }
+
+// View is a fresh view of the same backing: the missed flag is clear.
+func (s *Src) View() *Src { return &Src{B: s.B} }
+
+func (s *Src) Missed() bool { return s.missed }
+
+// @kin:link:form:src-len: {:template "port.SrcLen({0})" :import "emon/port" :arity 1}
+func SrcLen(s *Src) int32 {
+	return s.B.Len()
+}
+
+// @kin:link:form:src-u8: {:template "port.SrcU8({0}, {1})" :import "emon/port" :arity 2}
+func SrcU8(s *Src, i int32) int32 {
+	if i < 0 || i >= s.B.Len() {
+		panic(fmt.Sprintf("source index %d is outside 0..%d", i, s.B.Len()))
+	}
+	v := s.B.At(i)
+	if v < 0 {
+		s.missed = true
+		return 0
+	}
+	return v
+}
+
+// @kin:link:form:src-missed: {:template "port.SrcMissed({0})" :import "emon/port" :arity 1}
+func SrcMissed(s *Src) bool {
+	return s.missed
+}
+
+// @kin:link:form:src-slice: {:template "port.SrcSlice({0}, {1}, {2})" :import "emon/port" :arity 3}
+func SrcSlice(s *Src, a int32, b int32) []byte {
+	if a < 0 || b < a || b > s.B.Len() {
+		panic(fmt.Sprintf("source span %d..%d is outside 0..%d", a, b, s.B.Len()))
+	}
+	buf := make([]byte, b-a)
+	if !s.B.Span(a, buf) {
+		s.missed = true
+	}
+	return buf
+}
+
+// @kin:link:form:src-of-cells: {:template "port.SrcOfCells({0})" :import "emon/port" :arity 1}
+func SrcOfCells(c *Cells) *Src {
+	return NewSrc(&memBacking{v: CellsBytes(c)})
+}
+
+// @kin:link:form:src-of-blob: {:template "port.SrcOfBlob({0})" :import "emon/port" :arity 1}
+func SrcOfBlob(b []byte) *Src {
+	return NewSrc(&memBacking{v: b})
+}
+
+// @kin:link:form:src-hint: {:template "port.SrcHint({0}, {1}, {2})" :import "emon/port" :arity 3}
+func SrcHint(s *Src, a int32, b int32) {
+	s.B.Hint(a, b)
+}
+
 // ------------------------------------------------------------------ the Text sink
 
 // @kin:link:form:text-cp: {:template "port.TextCp({0}, {1})" :import "emon/port" :arity 2}

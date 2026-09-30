@@ -17,7 +17,7 @@
                                text-blob new-cells new-text test-file
                                cells-blob]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
-                               cells-drop text-i32]]
+                               cells-drop text-i32 src-of-blob]]
             [emon.pdfnames :refer [pn-type pn-length pn-kids pn-count
                                    pn-media-box]]
             [emon.pdflex :refer [pl-init pl-seek pl-parse pl-parse-indirect
@@ -96,8 +96,8 @@
     (pl-init ar)
     (pl-seek ar 0 (cells-len inp))
     (if (== indirect 1)
-      (set h (pl-parse-indirect (cells-blob inp) ar 0))
-      (set h (pl-parse (cells-blob inp) ar)))
+      (set h (pl-parse-indirect (src-of-blob (cells-blob inp)) ar 0))
+      (set h (pl-parse (src-of-blob (cells-blob inp)) ar)))
     (if (== h 0)
       (do (emit-ascii t "!")
           (pl-status-emit-name t (pl-err ar)))
@@ -204,7 +204,7 @@
 (defn ^I32 pt-parse-text [^Blob b ^:mut ^Cells ar]
   (pl-init ar)
   (pl-seek ar 0 (blob-len b))
-  (return (pl-parse b ar)))
+  (return (pl-parse (src-of-blob b) ar)))
 
 (deftest test-names-are-interned-and-well-known-ids-resolve
   (let [^Cells ar (new-cells)
@@ -272,9 +272,9 @@
           (cells-push txt (+ 48 (rem (quot i 7) 10)))
           (cells-push txt (+ 48 (quot i 100)))
           (pl-seek ar 0 (cells-len txt))
-          (set a (pl-parse (cells-blob txt) ar))
+          (set a (pl-parse (src-of-blob (cells-blob txt)) ar))
           (pl-seek ar 0 (cells-len txt))
-          (set b (pl-parse (cells-blob txt) ar))
+          (set b (pl-parse (src-of-blob (cells-blob txt)) ar))
           (set ea (pl-name-entry ar a))
           (set eb (pl-name-entry ar b))
           (assert-eq-at ea eb "equal names share an entry" i)
@@ -282,8 +282,8 @@
     (comment "and a neighbour differs")
     (pl-init ar)
     (pl-seek ar 0 5)
-    (set a (pl-parse (text-blob "/x /y") ar))
-    (set b (pl-parse (text-blob "/x /y") ar))
+    (set a (pl-parse (src-of-blob (text-blob "/x /y")) ar))
+    (set b (pl-parse (src-of-blob (text-blob "/x /y")) ar))
     (assert-that (!= (pl-name-entry ar a) (pl-name-entry ar b)) "/x and /y differ")))
 
 (defn ^I32 pt-prep [^:mut ^Cells ar ^Blob src]
@@ -295,7 +295,7 @@
   (comment "One field of the stream parsed from src (an indirect object).")
   (let [^Cells ar (new-cells)
         ^I32 z (pt-prep ar src)
-        ^I32 s (pl-parse-indirect src ar 0)
+        ^I32 s (pl-parse-indirect (src-of-blob src) ar 0)
         ^I32 sd (pl-stream-dict ar s)
         ^I32 lh (pl-dict-get ar sd (pn-length))]
     (if (!= z 0) (return -1))
@@ -350,7 +350,7 @@
           (set h 1)
           (while (and (!= h 0) (< guard 2000))
             (do (set before (pl-pos ar))
-                (set h (pl-parse (cells-blob cut) ar))
+                (set h (pl-parse (src-of-blob (cells-blob cut)) ar))
                 (if (and (!= h 0) (<= (pl-pos ar) before)) (set h 0))
                 (set guard (+ guard 1))))
           (comment "And as an indirect object at the start of every line.")
@@ -358,7 +358,7 @@
           (while (< at cutn)
             (do (pl-init ar)
                 (pl-seek ar 0 cutn)
-                (pl-parse-indirect (cells-blob cut) ar at)
+                (pl-parse-indirect (src-of-blob (cells-blob cut)) ar at)
                 (comment "a stream's data ends inside the blob")
                 (assert-that (<= (pl-pos ar) cutn) "the parse never ran past the end")
                 (set at (+ (pt-nl f at) 1))))

@@ -47,6 +47,25 @@ public static class Porttest {
         emon.Port.CellsDrop(c, 2);
         Sp(t);
         emon.Port.TextI32(t, emon.Port.CellsLen(c));
+        emon.Port.TextAscii(t, " src:");
+        emon.Port.Src s = emon.Port.SrcOfBlob(b);
+        emon.Port.SrcHint(s, 0, 4);
+        Sp(t);
+        emon.Port.TextI32(t, emon.Port.SrcLen(s));
+        Sp(t);
+        emon.Port.TextI32(t, emon.Port.SrcU8(s, 3));
+        Sp(t);
+        emon.Port.TextI32(t, emon.Port.BlobU32(emon.Port.SrcSlice(s, 2, 6), 0));
+        Sp(t);
+        emon.Port.TextI32(t, emon.Port.SrcLen(emon.Port.SrcOfCells(c)));
+        Sp(t);
+        emon.Port.TextI32(t, emon.Port.SrcU8(emon.Port.SrcOfCells(c), 0));
+        Sp(t);
+        if (emon.Port.SrcMissed(s)) {
+            emon.Port.TextI32(t, 1);
+        } else {
+            emon.Port.TextI32(t, 0);
+        }
         emon.Port.TextAscii(t, " limits:");
         Sp(t);
         emon.Port.TextI32(t, emon.Port.LimitOf(0));

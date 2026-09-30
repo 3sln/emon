@@ -4,6 +4,7 @@
 use crate::emon::pdfdoc::*;
 use crate::emon::pdffilter::*;
 use crate::emon::pdflex::*;
+use crate::emon::pdfsrc::*;
 use crate::emon::splitmix::*;
 
 pub(crate) fn dt_nl(b: &[u8], i: i32) -> i32 {
@@ -130,7 +131,7 @@ pub(crate) fn dt_digest(pg: &mut crate::port::Cells) -> i32 {
     }
     return h;
 }
-pub(crate) fn dt_open(pdf: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells) -> i32 {
+pub(crate) fn dt_open(pdf: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells) -> i32 {
     // Open a document and list its pages (an empty `pg` when it will not
     // open). Answers the `pd-status`.
     let status: i32 = pd_open(pdf, ar, dc, a, b, st);
@@ -142,7 +143,7 @@ pub(crate) fn dt_open(pdf: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut 
 }
 pub(crate) fn dt_run_fixtures_row(names: &[u8], from: i32, to: i32, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut t: &mut String) -> i32 {
     // Open the file named by names[from, to) and write its status.
-    let pdf: &[u8] = &crate::testport::test_file_span(names, from, to)[..];
+    let pdf: &crate::port::Src = &crate::port::src_of_blob(&crate::testport::test_file_span(names, from, to)[..]);
     let status: i32 = dt_open(pdf, ar, dc, a, b, st, pg);
     pd_status_emit_name(t, status);
     return status;
@@ -190,7 +191,7 @@ pub(crate) fn dt_object_row(names: &[u8], from: i32, to: i32, num: i32, kind: i3
     // Open the file, then: kind 111 (o) dumps object num into t (`!missing`
     // when there is none); kind 115 (s) decodes it into `out` and writes the
     // status name to t. Answers the pd-open status (non-zero: not opened).
-    let pdf: &[u8] = &crate::testport::test_file_span(names, from, to)[..];
+    let pdf: &crate::port::Src = &crate::port::src_of_blob(&crate::testport::test_file_span(names, from, to)[..]);
     let status: i32 = pd_open(pdf, ar, dc, a, b, st);
     let mut h: i32 = 0;
     let mut s: i32 = 0;
@@ -264,7 +265,7 @@ fn test_every_object_resolves_as_built() {
 }
 pub(crate) fn dt_corpus_row(names: &[u8], from: i32, to: i32, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut t: &mut String) -> i32 {
     // Open a real file and write its status name to t.
-    let pdf: &[u8] = &crate::testport::test_file_span(names, from, to)[..];
+    let pdf: &crate::port::Src = &crate::port::src_of_blob(&crate::testport::test_file_span(names, from, to)[..]);
     let status: i32 = dt_open(pdf, ar, dc, a, b, st, pg);
     pd_status_emit_name(t, status);
     return status;
@@ -311,7 +312,7 @@ fn test_every_real_file_opens_with_the_page_count_pdfinfo_reports() {
     }
     crate::testport::assert_that(rows > 100, "the real files were read");
 }
-pub(crate) fn dt_source(pdf: &[u8], mut t: &mut String) -> i32 {
+pub(crate) fn dt_source(pdf: &crate::port::Src, mut t: &mut String) -> i32 {
     let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -329,7 +330,7 @@ pub(crate) fn dt_source(pdf: &[u8], mut t: &mut String) -> i32 {
 fn test_source_of_minimal_pdf() {
     let want: &[u8] = &crate::testport::test_file("pdf/source/minimal.json")[..];
     let t: &mut String = &mut crate::port::new_text();
-    let status: i32 = dt_source(&crate::testport::test_file("pdf/minimal.pdf")[..], t);
+    let status: i32 = dt_source(&crate::port::src_of_blob(&crate::testport::test_file("pdf/minimal.pdf")[..]), t);
     crate::testport::assert_eq(status, 0, "opens");
     crate::testport::assert_text_span(t, want, 0, crate::port::blob_len(want) - 1, "Source JSON", 0);
 }
@@ -337,7 +338,7 @@ fn test_source_of_minimal_pdf() {
 fn test_source_of_html_chrome_pdf() {
     let want: &[u8] = &crate::testport::test_file("pdf/source/html-chrome.json")[..];
     let t: &mut String = &mut crate::port::new_text();
-    let status: i32 = dt_source(&crate::testport::test_file("pdf/html-chrome.pdf")[..], t);
+    let status: i32 = dt_source(&crate::port::src_of_blob(&crate::testport::test_file("pdf/html-chrome.pdf")[..]), t);
     crate::testport::assert_eq(status, 0, "opens");
     crate::testport::assert_text_span(t, want, 0, crate::port::blob_len(want) - 1, "Source JSON", 0);
 }
@@ -345,7 +346,7 @@ fn test_source_of_html_chrome_pdf() {
 fn test_source_of_ghostscript_xref_stream_pdf() {
     let want: &[u8] = &crate::testport::test_file("pdf/source/gs-xrefstream.json")[..];
     let t: &mut String = &mut crate::port::new_text();
-    let status: i32 = dt_source(&crate::testport::test_file("pdf/gs-xrefstream.pdf")[..], t);
+    let status: i32 = dt_source(&crate::port::src_of_blob(&crate::testport::test_file("pdf/gs-xrefstream.pdf")[..]), t);
     crate::testport::assert_eq(status, 0, "opens");
     crate::testport::assert_text_span(t, want, 0, crate::port::blob_len(want) - 1, "Source JSON", 0);
 }
@@ -353,7 +354,7 @@ fn test_source_of_ghostscript_xref_stream_pdf() {
 fn test_source_with_inherited_attributes() {
     let want: &[u8] = &crate::testport::test_file("pdf/source/inherit.json")[..];
     let t: &mut String = &mut crate::port::new_text();
-    let status: i32 = dt_source(&crate::testport::test_file("pdf/inherit.pdf")[..], t);
+    let status: i32 = dt_source(&crate::port::src_of_blob(&crate::testport::test_file("pdf/inherit.pdf")[..]), t);
     crate::testport::assert_eq(status, 0, "opens");
     crate::testport::assert_text_span(t, want, 0, crate::port::blob_len(want) - 1, "Source JSON", 0);
 }
@@ -361,11 +362,11 @@ fn test_source_with_inherited_attributes() {
 fn test_source_with_odd_boxes_and_rotations() {
     let want: &[u8] = &crate::testport::test_file("pdf/source/boxes.json")[..];
     let t: &mut String = &mut crate::port::new_text();
-    let status: i32 = dt_source(&crate::testport::test_file("pdf/boxes.pdf")[..], t);
+    let status: i32 = dt_source(&crate::port::src_of_blob(&crate::testport::test_file("pdf/boxes.pdf")[..]), t);
     crate::testport::assert_eq(status, 0, "opens");
     crate::testport::assert_text_span(t, want, 0, crate::port::blob_len(want) - 1, "Source JSON", 0);
 }
-pub(crate) fn dt_info(pdf: &[u8], which: i32) -> i32 {
+pub(crate) fn dt_info(pdf: &crate::port::Src, which: i32) -> i32 {
     // A fact about a document: 0 status, 1 encrypted, 2 version major,
     // 3 version minor, 4 warning bits, 5 highest object number + 1.
     let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -394,23 +395,23 @@ pub(crate) fn dt_info(pdf: &[u8], which: i32) -> i32 {
 }
 #[test]
 fn test_header_version_and_encryption_are_reported() {
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/minimal.pdf")[..], 2), 1, "major");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/minimal.pdf")[..], 3), 4, "minor");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/xrefstream.pdf")[..], 3), 5, "minor of a 1.5 file");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/minimal.pdf")[..], 1), 0, "not encrypted");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/encrypt-flag.pdf")[..], 1), 1, "an /Encrypt entry is reported");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/minimal.pdf")[..], 5), 6, "objects 0 to 5");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/minimal.pdf")[..]), 2), 1, "major");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/minimal.pdf")[..]), 3), 4, "minor");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/xrefstream.pdf")[..]), 3), 5, "minor of a 1.5 file");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/minimal.pdf")[..]), 1), 0, "not encrypted");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/encrypt-flag.pdf")[..]), 1), 1, "an /Encrypt entry is reported");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/minimal.pdf")[..]), 5), 6, "objects 0 to 5");
 }
 #[test]
 fn test_tolerated_damage_is_recorded_as_warnings() {
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/minimal.pdf")[..], 4), 0, "no warnings");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/junk-header.pdf")[..], 4), 1, "offsets relative to a header at 0 + 81");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/hybrid.pdf")[..], 4), 2, "hybrid-reference file");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/prev-loop.pdf")[..], 4), 4, "a /Prev loop is cut");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/kids-cycle.pdf")[..], 4), 128, "a cyclic page tree is cut");
-    crate::testport::assert_eq(dt_info(&crate::testport::test_file("pdf/boxes.pdf")[..], 4), 256, "a missing MediaBox is defaulted");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/minimal.pdf")[..]), 4), 0, "no warnings");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/junk-header.pdf")[..]), 4), 1, "offsets relative to a header at 0 + 81");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/hybrid.pdf")[..]), 4), 2, "hybrid-reference file");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/prev-loop.pdf")[..]), 4), 4, "a /Prev loop is cut");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/kids-cycle.pdf")[..]), 4), 128, "a cyclic page tree is cut");
+    crate::testport::assert_eq(dt_info(&crate::port::src_of_blob(&crate::testport::test_file("pdf/boxes.pdf")[..]), 4), 256, "a missing MediaBox is defaulted");
 }
-pub(crate) fn dt_survive(pdf: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
+pub(crate) fn dt_survive(pdf: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
     // Open, list the pages, and decode every stream the cross-reference
     // names: none of it may fault. Answers the pd-open status.
     let status: i32 = dt_open(pdf, ar, dc, a, b, st, pg);
@@ -447,7 +448,7 @@ pub(crate) fn dt_truncations(f: &[u8], step: i32, mut ar: &mut crate::port::Cell
     let mut ok: i32 = 0;
     while k <= n {
         dt_cut(f, k, cut);
-        if dt_survive(&crate::testport::cells_blob(cut)[..], ar, dc, a, b, st, pg, out) == 0 {
+        if dt_survive(&crate::port::src_of_blob(&crate::testport::cells_blob(cut)[..]), ar, dc, a, b, st, pg, out) == 0 {
             ok += 1;
         }
         k += step;
@@ -471,7 +472,7 @@ pub(crate) fn dt_corruptions(f: &[u8], rounds: i32, flips: i32, seed: i32, mut a
             crate::port::cells_set(cut, at, sm_below(rng, 256));
             j += 1;
         }
-        if dt_survive(&crate::testport::cells_blob(cut)[..], ar, dc, a, b, st, pg, out) == 0 {
+        if dt_survive(&crate::port::src_of_blob(&crate::testport::cells_blob(cut)[..]), ar, dc, a, b, st, pg, out) == 0 {
             ok += 1;
         }
         r += 1;
@@ -513,4 +514,472 @@ fn test_no_corruption_of_a_fixture_faults() {
     crate::testport::assert_that(dt_corruptions(&crate::testport::test_file("pdf/incremental.pdf")[..], 400, 3, 4, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "incremental");
     crate::testport::assert_that(dt_corruptions(&crate::testport::test_file("pdf/filters.pdf")[..], 400, 3, 5, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "filters");
     crate::testport::assert_that(dt_corruptions(&crate::testport::test_file("pdf/inherit.pdf")[..], 400, 3, 6, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "inherit");
+}
+pub(crate) fn dt_open_async(bytes: &[u8], chunk: i32, wf: i32, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut ctr: &mut crate::port::Cells) -> i32 {
+    // Open `bytes` through an async source of `chunk`-byte chunks, re-running
+    // until an attempt does not miss. `wf` is the real run's warning bits.
+    // Answers the kept attempt's status; `ctr` gets [rounds, status
+    // violations, warning violations, hints received].
+    let base: &crate::port::Src = &crate::testport::src_chunked(bytes, chunk, 0);
+    let mut round: i32 = 0;
+    let mut status: i32 = 0;
+    let mut more: i32 = 1;
+    let mut w: i32 = 0;
+    crate::port::cells_drop(ctr, 0);
+    crate::port::cells_push(ctr, 0);
+    crate::port::cells_push(ctr, 0);
+    crate::port::cells_push(ctr, 0);
+    crate::port::cells_push(ctr, 0);
+    while more == 1 {
+        let v: &crate::port::Src = &crate::testport::src_view(base);
+        status = dt_open(v, ar, dc, a, b, st, pg);
+        if ps_missed(v) {
+            w = pd_warn(dc);
+            if (status != 0) && (status != 7) {
+                crate::port::cells_set(ctr, 1, crate::port::cells_at(ctr, 1) + 1);
+            }
+            if (w | wf) != wf {
+                crate::port::cells_set(ctr, 2, crate::port::cells_at(ctr, 2) + 1);
+            }
+            crate::testport::src_ctl(base, 0, round);
+            round += 1;
+            if round > 40 {
+                more = 0;
+            }
+        } else {
+            more = 0;
+        }
+    }
+    crate::port::cells_set(ctr, 0, round);
+    crate::port::cells_set(ctr, 3, crate::testport::src_ctl(base, 6, 0));
+    return status;
+}
+pub(crate) fn dt_diff(x: &mut crate::port::Cells, y: &mut crate::port::Cells) -> i32 {
+    // -1 when x and y hold the same cells, -2 when they differ in length,
+    // else the first index where they differ.
+    let n: i32 = crate::port::cells_len(x);
+    let mut i: i32 = 0;
+    if n != crate::port::cells_len(y) {
+        return -2;
+    }
+    while i < n {
+        if crate::port::cells_at(x, i) != crate::port::cells_at(y, i) {
+            return i;
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn dt_same_row(bytes: &[u8], chunk: i32, mut ctr: &mut crate::port::Cells) -> i32 {
+    // Open `bytes` in memory and through an async source; a verdict code
+    // (see above), 0 for the same. `ctr` is `dt-open-async`'s.
+    let ar1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ar2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mem: &crate::port::Src = &crate::port::src_of_blob(bytes);
+    let s1: i32 = dt_open(mem, ar1, dc1, a1, b1, st1, pg1);
+    let s2: i32 = dt_open_async(bytes, chunk, pd_warn(dc1), ar2, dc2, a2, b2, st2, pg2, ctr);
+    if s1 != s2 {
+        return 1;
+    }
+    if crate::port::cells_at(ctr, 1) != 0 {
+        return 5;
+    }
+    if crate::port::cells_at(ctr, 2) != 0 {
+        return 6;
+    }
+    if crate::port::cells_at(ctr, 0) > 24 {
+        return 7;
+    }
+    if dt_diff(ar1, ar2) != -1 {
+        return 2;
+    }
+    if dt_diff(dc1, dc2) != -1 {
+        return 3;
+    }
+    if dt_diff(pg1, pg2) != -1 {
+        return 4;
+    }
+    return 0;
+}
+#[test]
+fn test_every_fixture_is_the_same_through_an_async_source_of_64_byte_chunks() {
+    // Every row of the fixtures, damaged files included: the same arena,
+    // document and page table, and a status per failure that is the file's,
+    // never a miss's.
+    let f: &[u8] = &crate::testport::test_file("pdf/fixtures.txt")[..];
+    let ctr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let n: i32 = crate::port::blob_len(f);
+    let mut pos: i32 = 0;
+    let mut line: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut e: i32 = 0;
+    let mut s0: i32 = 0;
+    while pos < n {
+        line += 1;
+        e = dt_nl(f, pos);
+        if (pos < e) && (crate::port::blob_u8(f, pos) != 35) {
+            rows += 1;
+            s0 = dt_tab(f, pos, e);
+            crate::testport::assert_eq_at(dt_same_row(&crate::testport::test_file_span(f, pos, s0)[..], 64, ctr), 0, "async equals in-memory", line);
+        }
+        pos = e + 1;
+    }
+    crate::testport::assert_that(rows > 20, "the fixtures were read");
+}
+#[test]
+fn test_every_fixture_is_the_same_through_an_async_source_of_512_byte_chunks() {
+    let f: &[u8] = &crate::testport::test_file("pdf/fixtures.txt")[..];
+    let ctr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let n: i32 = crate::port::blob_len(f);
+    let mut pos: i32 = 0;
+    let mut line: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut e: i32 = 0;
+    let mut s0: i32 = 0;
+    while pos < n {
+        line += 1;
+        e = dt_nl(f, pos);
+        if (pos < e) && (crate::port::blob_u8(f, pos) != 35) {
+            rows += 1;
+            s0 = dt_tab(f, pos, e);
+            crate::testport::assert_eq_at(dt_same_row(&crate::testport::test_file_span(f, pos, s0)[..], 512, ctr), 0, "async equals in-memory", line);
+        }
+        pos = e + 1;
+    }
+    crate::testport::assert_that(rows > 20, "the fixtures were read");
+}
+#[test]
+fn test_every_real_file_is_the_same_through_an_async_source_of_512_byte_chunks() {
+    // THE D058 GATE on the committed real-file rows: identical to the
+    // in-memory run, within FETCH_ROUNDS, with the object extents hinted
+    // once the cross-reference was read, and the big files really did need
+    // several rounds.
+    let f: &[u8] = &crate::testport::test_file("pdf/corpus.txt")[..];
+    let ctr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let n: i32 = crate::port::blob_len(f);
+    let mut pos: i32 = 0;
+    let mut line: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut e: i32 = 0;
+    let mut s0: i32 = 0;
+    let mut maxr: i32 = 0;
+    while pos < n {
+        line += 1;
+        e = dt_nl(f, pos);
+        if (pos < e) && (crate::port::blob_u8(f, pos) != 35) {
+            rows += 1;
+            s0 = dt_tab(f, pos, e);
+            crate::testport::assert_eq_at(dt_same_row(&crate::testport::test_file_span(f, pos, s0)[..], 512, ctr), 0, "async equals in-memory", line);
+            if crate::port::cells_at(ctr, 0) > maxr {
+                maxr = crate::port::cells_at(ctr, 0);
+            }
+            if crate::port::blob_u8(f, s0 + 1) == 111 {
+                crate::testport::assert_that_at(crate::port::cells_at(ctr, 3) > 0, "the object extents were hinted", line);
+            }
+        }
+        pos = e + 1;
+    }
+    crate::testport::assert_that(rows > 100, "the real files were read");
+    crate::testport::assert_that(maxr >= 4, "the big files took several rounds");
+}
+pub(crate) fn dt_source_async(bytes: &[u8], chunk: i32, mut t: &mut String) -> i32 {
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ctr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let status: i32 = dt_open_async(bytes, chunk, 1023, ar, dc, a, b, st, pg, ctr);
+    if status != 0 {
+        return status;
+    }
+    pd_source_json(t, dc, pg);
+    return 0;
+}
+#[test]
+fn test_the_source_goldens_are_the_same_from_a_512_byte_async_source() {
+    // P1.5's done-when: three (here five) fixtures give the same `Source`
+    // JSON from a 512-byte-chunk async source as from memory.
+    let t1: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    let t3: &mut String = &mut crate::port::new_text();
+    let t4: &mut String = &mut crate::port::new_text();
+    let t5: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(dt_source_async(&crate::testport::test_file("pdf/minimal.pdf")[..], 512, t1), 0, "minimal opens");
+    crate::testport::assert_text_span(t1, &crate::testport::test_file("pdf/source/minimal.json")[..], 0, crate::port::blob_len(&crate::testport::test_file("pdf/source/minimal.json")[..]) - 1, "minimal", 0);
+    crate::testport::assert_eq(dt_source_async(&crate::testport::test_file("pdf/html-chrome.pdf")[..], 512, t2), 0, "chrome opens");
+    crate::testport::assert_text_span(t2, &crate::testport::test_file("pdf/source/html-chrome.json")[..], 0, crate::port::blob_len(&crate::testport::test_file("pdf/source/html-chrome.json")[..]) - 1, "html-chrome", 0);
+    crate::testport::assert_eq(dt_source_async(&crate::testport::test_file("pdf/gs-xrefstream.pdf")[..], 512, t3), 0, "ghostscript opens");
+    crate::testport::assert_text_span(t3, &crate::testport::test_file("pdf/source/gs-xrefstream.json")[..], 0, crate::port::blob_len(&crate::testport::test_file("pdf/source/gs-xrefstream.json")[..]) - 1, "gs-xrefstream", 0);
+    crate::testport::assert_eq(dt_source_async(&crate::testport::test_file("pdf/inherit.pdf")[..], 512, t4), 0, "inherit opens");
+    crate::testport::assert_text_span(t4, &crate::testport::test_file("pdf/source/inherit.json")[..], 0, crate::port::blob_len(&crate::testport::test_file("pdf/source/inherit.json")[..]) - 1, "inherit", 0);
+    crate::testport::assert_eq(dt_source_async(&crate::testport::test_file("pdf/boxes.pdf")[..], 512, t5), 0, "boxes opens");
+    crate::testport::assert_text_span(t5, &crate::testport::test_file("pdf/source/boxes.json")[..], 0, crate::port::blob_len(&crate::testport::test_file("pdf/source/boxes.json")[..]) - 1, "boxes", 0);
+}
+pub(crate) fn dt_object_on(pdf: &crate::port::Src, num: i32, kind: i32, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut t: &mut String) -> i32 {
+    // `dt-object-row` on an open source: dump object num (kind 111) or
+    // decode it (115) into t, after opening the document.
+    let status: i32 = pd_open(pdf, ar, dc, a, b, st);
+    let mut h: i32 = 0;
+    let mut s: i32 = 0;
+    if status != 0 {
+        return status;
+    }
+    h = pd_get(pdf, ar, dc, a, b, st, num);
+    if kind == 111 {
+        if h == 0 {
+            crate::port::text_ascii(t, "!missing");
+        } else {
+            pl_dump(t, ar, h);
+        }
+    }
+    if kind == 115 {
+        crate::port::cells_drop(out, 0);
+        if h == 0 {
+            crate::port::text_ascii(t, "!missing");
+        } else {
+            s = pd_stream_data(pdf, ar, dc, a, b, st, h, out);
+            pf_status_emit_name(t, s);
+        }
+    }
+    return 0;
+}
+pub(crate) fn dt_object_async(bytes: &[u8], chunk: i32, num: i32, kind: i32, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut t: &mut String) -> i32 {
+    // The same through an async source: attempts that miss are thrown away
+    // (into a scratch sink) until one does not, then the answer is made once
+    // more on a fresh view of the now-resident cache, into t. -1 when that
+    // last run still missed.
+    let base: &crate::port::Src = &crate::testport::src_chunked(bytes, chunk, 0);
+    let mut round: i32 = 0;
+    let mut more: i32 = 1;
+    let mut opened: i32 = 0;
+    while more == 1 {
+        let v: &crate::port::Src = &crate::testport::src_view(base);
+        let scratch: &mut String = &mut crate::port::new_text();
+        opened = dt_object_on(v, num, kind, ar, dc, a, b, st, out, scratch);
+        if ps_missed(v) {
+            crate::testport::src_ctl(base, 0, round);
+            round += 1;
+            if round > 40 {
+                more = 0;
+            }
+        } else {
+            more = 0;
+        }
+    }
+    let fin: &crate::port::Src = &crate::testport::src_view(base);
+    opened = dt_object_on(fin, num, kind, ar, dc, a, b, st, out, t);
+    if ps_missed(fin) {
+        return -1;
+    }
+    return opened;
+}
+#[test]
+fn test_every_object_resolves_the_same_through_an_async_source() {
+    // Objects in object streams and decoded streams (Flate, LZW, ASCII85,
+    // RunLength, predictors), from 64-byte chunks: the stream spans are cut
+    // with `src-slice` and the object streams parsed through `src-of-cells`.
+    let f: &[u8] = &crate::testport::test_file("pdf/objects-in-files.txt")[..];
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let n: i32 = crate::port::blob_len(f);
+    let mut pos: i32 = 0;
+    let mut line: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut e: i32 = 0;
+    let mut s0: i32 = 0;
+    let mut s1: i32 = 0;
+    let mut s2: i32 = 0;
+    let mut s3: i32 = 0;
+    let mut opened: i32 = 0;
+    let mut kind: i32 = 0;
+    while pos < n {
+        line += 1;
+        e = dt_nl(f, pos);
+        if (pos < e) && (crate::port::blob_u8(f, pos) != 35) {
+            rows += 1;
+            s0 = dt_tab(f, pos, e);
+            s1 = dt_tab(f, s0 + 1, e);
+            s2 = dt_tab(f, s1 + 1, e);
+            s3 = dt_tab(f, s2 + 1, e);
+            kind = crate::port::blob_u8(f, s1 + 1);
+            let t: &mut String = &mut crate::port::new_text();
+            opened = dt_object_async(&crate::testport::test_file_span(f, pos, s0)[..], 64, dt_dec(f, s0 + 1, s1), kind, ar, dc, a, b, st, out, t);
+            crate::testport::assert_eq_at(opened, 0, "the file opens, and the last run did not miss", line);
+            if kind == 111 {
+                crate::testport::assert_text_span(t, f, s3 + 1, e, "object", line);
+            }
+            if kind == 115 {
+                crate::testport::assert_text_span(t, f, s2 + 1, s3, "stream status", line);
+                crate::testport::assert_eq_at(dt_compare_hex(out, f, s3 + 1, e), -1, "decoded bytes", line);
+            }
+        }
+        pos = e + 1;
+    }
+    crate::testport::assert_that(rows > 40, "the rows were read");
+}
+pub(crate) fn dt_m(s: &crate::port::Src) -> i32 {
+    if ps_missed(s) {
+        return 1;
+    }
+    return 0;
+}
+#[test]
+fn test_a_cold_source_answers_need_bytes_and_no_warning_and_no_pages() {
+    // Nothing resident: the first read misses, and what comes back is the
+    // status `need-bytes` (7), no warning bit and no page, even for the
+    // files whose real status is bad-xref or no-startxref, because the
+    // zeros the miss read are not a file's damage.
+    let f: &[u8] = &crate::testport::test_file("pdf/fixtures.txt")[..];
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let n: i32 = crate::port::blob_len(f);
+    let mut pos: i32 = 0;
+    let mut line: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut missed: i32 = 0;
+    let mut e: i32 = 0;
+    let mut s0: i32 = 0;
+    let mut status: i32 = 0;
+    while pos < n {
+        line += 1;
+        e = dt_nl(f, pos);
+        if (pos < e) && (crate::port::blob_u8(f, pos) != 35) {
+            rows += 1;
+            s0 = dt_tab(f, pos, e);
+            let v: &crate::port::Src = &crate::testport::src_view(&crate::testport::src_chunked(&crate::testport::test_file_span(f, pos, s0)[..], 64, 0));
+            status = dt_open(v, ar, dc, a, b, st, pg);
+            if dt_m(v) == 1 {
+                missed += 1;
+                crate::testport::assert_eq_at(status, 7, "need-bytes", line);
+                crate::testport::assert_eq_at(pd_warn(dc), 0, "no warning", line);
+                crate::testport::assert_eq_at(pd_pg_count(pg), 0, "no page", line);
+            }
+        }
+        pos = e + 1;
+    }
+    crate::testport::assert_that(rows > 20, "the fixtures were read");
+    crate::testport::assert_that(missed > 20, "nearly every file missed on a cold source");
+}
+#[test]
+fn test_a_named_missing_chunk_is_need_bytes_until_it_is_resident() {
+    let f: &[u8] = &crate::testport::test_file("pdf/minimal.pdf")[..];
+    let base: &crate::port::Src = &crate::testport::src_chunked(f, 64, 0);
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let last: i32 = crate::testport::src_ctl(base, 8, 0) - 1;
+    crate::testport::assert_that(last > 4, "the fixture spans several chunks");
+    crate::testport::src_ctl(base, 3, 0);
+    let v: &crate::port::Src = &crate::testport::src_view(base);
+    crate::testport::assert_eq(dt_open(v, ar, dc, a, b, st, pg), 0, "opens with everything resident");
+    crate::testport::assert_eq(dt_m(v), 0, "without a miss");
+    crate::testport::assert_eq(pd_pg_count(pg), 1, "one page");
+    crate::testport::src_ctl(base, 2, 0);
+    let w: &crate::port::Src = &crate::testport::src_view(base);
+    crate::testport::assert_eq(dt_open(w, ar, dc, a, b, st, pg), 7, "the header's chunk is missing");
+    crate::testport::assert_eq(dt_m(w), 1, "and the view says so");
+    crate::testport::assert_eq(pd_warn(dc), 0, "with no warning");
+    crate::testport::assert_eq(crate::testport::src_ctl(base, 4, 0), 1, "one chunk is pending");
+    crate::testport::src_ctl(base, 1, 0);
+    crate::testport::src_ctl(base, 2, last);
+    let x: &crate::port::Src = &crate::testport::src_view(base);
+    crate::testport::assert_eq(dt_open(x, ar, dc, a, b, st, pg), 7, "the last chunk (startxref) is missing");
+    crate::testport::assert_eq(dt_m(x), 1, "and the view says so");
+    crate::testport::src_ctl(base, 1, last);
+    let y: &crate::port::Src = &crate::testport::src_view(base);
+    crate::testport::assert_eq(dt_open(y, ar, dc, a, b, st, pg), 0, "opens again once both are resident");
+    crate::testport::assert_eq(dt_m(y), 0, "without a miss");
+    crate::testport::assert_eq(pd_pg_count(pg), 1, "one page");
+}
+#[test]
+fn test_a_damaged_file_is_still_bad_xref_once_its_chunks_are_resident() {
+    // badxref.pdf's real status is bad-xref. On a cold source the answer
+    // is need-bytes; only a run that read every byte it used may say bad-xref.
+    let f: &[u8] = &crate::testport::test_file("pdf/badxref.pdf")[..];
+    let base: &crate::port::Src = &crate::testport::src_chunked(f, 64, 0);
+    let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ctr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let v: &crate::port::Src = &crate::testport::src_view(base);
+    crate::testport::assert_eq(dt_open(v, ar, dc, a, b, st, pg), 7, "cold: need-bytes");
+    crate::testport::assert_eq(dt_m(v), 1, "missed");
+    crate::testport::assert_eq(dt_open_async(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 3, "warm: bad-xref");
+    crate::testport::assert_that(crate::port::cells_at(ctr, 0) >= 1, "it took a round");
+}
+pub(crate) fn dt_same_sync(bytes: &[u8], mut ctr: &mut crate::port::Cells) -> i32 {
+    // Open in memory and through a SYNC chunked source: 0 when the arena,
+    // the document and the page table are the same and the view never
+    // missed; the chunks filled inline are left in ctr[0].
+    let ar1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ar2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dc2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let b2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pg2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let base: &crate::port::Src = &crate::testport::src_chunked(bytes, 64, 1);
+    let v: &crate::port::Src = &crate::testport::src_view(base);
+    let mem: &crate::port::Src = &crate::port::src_of_blob(bytes);
+    let s1: i32 = dt_open(mem, ar1, dc1, a1, b1, st1, pg1);
+    let s2: i32 = dt_open(v, ar2, dc2, a2, b2, st2, pg2);
+    crate::port::cells_drop(ctr, 0);
+    crate::port::cells_push(ctr, crate::testport::src_ctl(base, 7, 0));
+    if s1 != s2 {
+        return 1;
+    }
+    if ps_missed(v) {
+        return 5;
+    }
+    if dt_diff(ar1, ar2) != -1 {
+        return 2;
+    }
+    if dt_diff(dc1, dc2) != -1 {
+        return 3;
+    }
+    if dt_diff(pg1, pg2) != -1 {
+        return 4;
+    }
+    return 0;
+}
+#[test]
+fn test_a_sync_source_is_the_in_memory_run_with_no_rounds() {
+    let ctr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(dt_same_sync(&crate::testport::test_file("pdf/minimal.pdf")[..], ctr), 0, "minimal");
+    crate::testport::assert_that(crate::port::cells_at(ctr, 0) > 0, "chunks were filled inline");
+    crate::testport::assert_eq(dt_same_sync(&crate::testport::test_file("pdf/gs-xrefstream.pdf")[..], ctr), 0, "xref stream and object streams");
+    crate::testport::assert_eq(dt_same_sync(&crate::testport::test_file("pdf/html-chrome.pdf")[..], ctr), 0, "chrome");
+    crate::testport::assert_eq(dt_same_sync(&crate::testport::test_file("pdf/incremental.pdf")[..], ctr), 0, "incremental");
+    crate::testport::assert_eq(dt_same_sync(&crate::testport::test_file("pdf/badxref.pdf")[..], ctr), 0, "a damaged file");
 }

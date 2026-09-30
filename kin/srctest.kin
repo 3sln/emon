@@ -1,0 +1,158 @@
+;; Laws for the `Src` port (P1.11, D058 revised): every form, a miss included,
+;; and one answer on four targets.
+;;
+;; A `Src` is an input byte source that MAY MISS. The in-memory ones
+;; (`src-of-blob`, `src-of-cells`) read like a `Blob` and never miss. The test
+;; source (`test-src-chunked`, emon.test) serves a blob in fixed-size chunks
+;; of which only some are RESIDENT: a read in a missing chunk answers 0, sets
+;; the view's missed flag and records the chunk as pending; `(test-src-ctl
+;; base 0 round)` is what a host does between attempts. The laws here pin the
+;; contract the PDF code is written to: a miss is 0 plus a sticky per-view
+;; flag; the cache grows between attempts; a fresh view starts clean; a sync
+;; source never misses.
+(ns emon.srctest
+  (:require [emon.lang :refer [I32 Blob Src Cells]]
+            [emon.test :refer [deftest assert-eq assert-that text-blob hex-blob
+                               new-cells test-src-chunked test-src-view
+                               test-src-ctl]]
+            [emon.port :refer [src-len src-u8 src-missed src-slice src-of-cells
+                               src-of-blob src-hint blob-len blob-u8 cells-push]]
+            [kin.lang :refer [defn return let if comment do + - * < > == !=]]))
+
+(defn ^I32 st-m [^Src s]
+  (comment "1 when the view has missed, else 0.")
+  (if (src-missed s) (return 1))
+  (return 0))
+
+(deftest test-an-in-memory-source-reads-like-a-blob
+  (let [^Src s (src-of-blob (text-blob "0123456789"))]
+    (assert-eq (src-len s) 10 "length")
+    (assert-eq (src-u8 s 0) 48 "first byte")
+    (assert-eq (src-u8 s 9) 57 "last byte")
+    (assert-eq (blob-len (src-slice s 2 5)) 3 "a span's length")
+    (assert-eq (blob-u8 (src-slice s 2 5) 0) 50 "a span's first byte")
+    (assert-eq (blob-u8 (src-slice s 2 5) 2) 52 "a span's last byte")
+    (assert-eq (blob-len (src-slice s 4 4)) 0 "an empty span")
+    (assert-eq (blob-len (src-slice s 0 10)) 10 "the whole source")
+    (src-hint s 0 5)
+    (assert-eq (src-u8 s 3) 51 "a hint changes nothing")
+    (assert-eq (st-m s) 0 "an in-memory source never misses")))
+
+(deftest test-bytes-above-127-are-not-negative
+  (let [^Src s (src-of-blob (hex-blob "00ff80"))]
+    (assert-eq (src-u8 s 1) 255 "ff")
+    (assert-eq (src-u8 s 2) 128 "80")
+    (assert-eq (blob-u8 (src-slice s 1 3) 0) 255 "ff in a span")
+    (assert-eq (blob-u8 (src-slice s 1 3) 1) 128 "80 in a span")))
+
+(deftest test-a-source-of-cells-takes-the-low-eight-bits
+  (let [^Cells c (new-cells)]
+    (cells-push c 7)
+    (cells-push c 300)
+    (cells-push c 255)
+    (assert-eq (src-len (src-of-cells c)) 3 "length")
+    (assert-eq (src-u8 (src-of-cells c) 0) 7 "first")
+    (assert-eq (src-u8 (src-of-cells c) 1) 44 "300 is 0x12c: 0x2c")
+    (assert-eq (src-u8 (src-of-cells c) 2) 255 "last")
+    (assert-eq (st-m (src-of-cells c)) 0 "never misses")))
+
+(deftest test-a-read-in-a-missing-chunk-answers-zero-and-sets-the-flag
+  (let [^Src base (test-src-chunked (text-blob "0123456789abcdef") 4 0)
+        ^Src v (test-src-view base)]
+    (assert-eq (src-len v) 16 "the length is known before any byte is")
+    (assert-eq (test-src-ctl base 8 0) 4 "four chunks")
+    (assert-eq (st-m v) 0 "no miss yet")
+    (assert-eq (src-u8 v 5) 0 "a miss answers 0")
+    (assert-eq (st-m v) 1 "and sets the flag")
+    (assert-eq (test-src-ctl base 4 0) 1 "one chunk is pending")
+    (assert-eq (src-u8 v 6) 0 "the same chunk again")
+    (assert-eq (test-src-ctl base 4 0) 1 "a chunk is recorded once")
+    (assert-eq (src-u8 v 0) 0 "another chunk")
+    (assert-eq (test-src-ctl base 4 0) 2 "two pending")
+    (assert-eq (test-src-ctl base 0 0) 2 "a fetch makes the pending chunks resident")
+    (assert-eq (test-src-ctl base 4 0) 0 "and nothing is pending")
+    (assert-eq (st-m v) 1 "the view that missed stays missed")
+    (assert-eq (src-u8 v 5) 53 "the cache grew: the byte is there now")
+    (let [^Src w (test-src-view base)]
+      (assert-eq (st-m w) 0 "a fresh view starts clean")
+      (assert-eq (src-u8 w 5) 53 "it reads the resident byte")
+      (assert-eq (src-u8 w 0) 48 "both resident chunks")
+      (assert-eq (st-m w) 0 "without a miss")
+      (assert-eq (src-u8 w 9) 0 "a chunk still missing")
+      (assert-eq (st-m w) 1 "misses again")
+      (assert-eq (st-m v) 1 "and the views are independent"))))
+
+(deftest test-a-span-over-a-missing-chunk-is-zero-there-and-sets-the-flag
+  (let [^Src base (test-src-chunked (text-blob "0123456789abcdef") 4 0)]
+    (test-src-ctl base 1 1)
+    (let [^Src v (test-src-view base)]
+      (assert-eq (blob-u8 (src-slice v 4 8) 0) 52 "a resident span reads as it is")
+      (assert-eq (st-m v) 0 "without a miss")
+      (assert-eq (blob-u8 (src-slice v 2 10) 2) 52 "the resident part is true")
+      (assert-eq (blob-u8 (src-slice v 2 10) 5) 55 "to its end")
+      (assert-eq (blob-u8 (src-slice v 2 10) 0) 0 "the missing head is zero")
+      (assert-eq (blob-u8 (src-slice v 2 10) 7) 0 "so is the missing tail")
+      (assert-eq (blob-len (src-slice v 2 10)) 8 "the length is the span's")
+      (assert-eq (st-m v) 1 "the flag is set")
+      (assert-eq (test-src-ctl base 4 0) 2 "the head and tail chunks are pending"))
+    (test-src-ctl base 0 0)
+    (let [^Src w (test-src-view base)]
+      (assert-eq (blob-u8 (src-slice w 2 10) 0) 50 "after the fetch: the head")
+      (assert-eq (blob-u8 (src-slice w 2 10) 7) 57 "and the tail")
+      (assert-eq (st-m w) 0 "without a miss"))))
+
+(deftest test-a-sync-source-fills-inline-and-never-misses
+  (let [^Src base (test-src-chunked (text-blob "0123456789abcdef") 4 1)
+        ^Src v (test-src-view base)]
+    (assert-eq (src-u8 v 5) 53 "the byte, at once")
+    (assert-eq (st-m v) 0 "no miss")
+    (assert-eq (test-src-ctl base 7 0) 1 "one chunk filled")
+    (assert-eq (src-u8 v 6) 54 "the same chunk")
+    (assert-eq (test-src-ctl base 7 0) 1 "is not filled twice")
+    (assert-eq (blob-u8 (src-slice v 0 16) 15) 102 "a span across every chunk")
+    (assert-eq (test-src-ctl base 7 0) 4 "fills the rest")
+    (assert-eq (test-src-ctl base 4 0) 0 "nothing is ever pending")
+    (assert-eq (st-m v) 0 "no miss")))
+
+(deftest test-named-chunks-can-be-made-to-miss
+  (let [^Src base (test-src-chunked (text-blob "0123456789abcdef") 4 0)]
+    (test-src-ctl base 3 0)
+    (test-src-ctl base 2 2)
+    (assert-eq (test-src-ctl base 5 0) 3 "three chunks resident")
+    (let [^Src v (test-src-view base)]
+      (assert-eq (src-u8 v 0) 48 "chunk 0")
+      (assert-eq (src-u8 v 7) 55 "chunk 1")
+      (assert-eq (src-u8 v 15) 102 "chunk 3")
+      (assert-eq (st-m v) 0 "none of them missed")
+      (assert-eq (src-u8 v 9) 0 "chunk 2 is evicted")
+      (assert-eq (st-m v) 1 "and misses")
+      (assert-eq (test-src-ctl base 4 0) 1 "chunk 2 is pending"))
+    (test-src-ctl base 1 2)
+    (assert-eq (test-src-ctl base 4 0) 0 "making it resident clears it")
+    (let [^Src w (test-src-view base)]
+      (assert-eq (src-u8 w 9) 57 "now it reads")
+      (assert-eq (st-m w) 0 "without a miss"))))
+
+(deftest test-read-ahead-doubles-per-round
+  (let [^Src base (test-src-chunked (text-blob "0123456789012345678901234567890123456789012345678901234567890123") 4 0)
+        ^Src v (test-src-view base)]
+    (assert-eq (test-src-ctl base 8 0) 16 "sixteen chunks")
+    (assert-eq (src-u8 v 32) 0 "a miss in chunk 8")
+    (assert-eq (test-src-ctl base 0 0) 1 "round 0 fetches the chunk alone")
+    (assert-eq (src-u8 v 0) 0 "a miss in chunk 0")
+    (assert-eq (test-src-ctl base 0 1) 2 "round 1: one each side, clipped at the start")
+    (assert-eq (src-u8 v 60) 0 "a miss in chunk 15")
+    (assert-eq (test-src-ctl base 0 2) 4 "round 2: three each side, clipped at the end")
+    (assert-eq (src-u8 v 20) 0 "a miss in chunk 5")
+    (assert-eq (test-src-ctl base 0 5) 9 "round 5 covers what is left: sixteen less the seven resident")
+    (assert-eq (test-src-ctl base 5 0) 16 "every chunk is resident")))
+
+(deftest test-hints-are-accepted-and-counted
+  (let [^Src base (test-src-chunked (text-blob "0123456789abcdef") 4 0)
+        ^Src v (test-src-view base)]
+    (src-hint v 0 8)
+    (src-hint v 8 16)
+    (src-hint v 4 4)
+    (assert-eq (test-src-ctl base 6 0) 3 "three hints were received")
+    (assert-eq (st-m v) 0 "a hint never misses")
+    (assert-eq (test-src-ctl base 4 0) 0 "and fetches nothing")))

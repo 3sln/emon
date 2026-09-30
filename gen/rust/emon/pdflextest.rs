@@ -82,9 +82,9 @@ pub(crate) fn pt_do_row(f: &[u8], from: i32, to: i32, indirect: i32, mut inp: &m
     pl_init(ar);
     pl_seek(ar, 0, crate::port::cells_len(inp));
     if indirect == 1 {
-        h = pl_parse_indirect(&crate::testport::cells_blob(inp)[..], ar, 0);
+        h = pl_parse_indirect(&crate::port::src_of_blob(&crate::testport::cells_blob(inp)[..]), ar, 0);
     } else {
-        h = pl_parse(&crate::testport::cells_blob(inp)[..], ar);
+        h = pl_parse(&crate::port::src_of_blob(&crate::testport::cells_blob(inp)[..]), ar);
     }
     if h == 0 {
         crate::port::text_ascii(t, "!");
@@ -219,7 +219,7 @@ fn test_every_row_of_the_iso_32000_extract() {
 pub(crate) fn pt_parse_text(b: &[u8], mut ar: &mut crate::port::Cells) -> i32 {
     pl_init(ar);
     pl_seek(ar, 0, crate::port::blob_len(b));
-    return pl_parse(b, ar);
+    return pl_parse(&crate::port::src_of_blob(b), ar);
 }
 #[test]
 fn test_names_are_interned_and_well_known_ids_resolve() {
@@ -291,9 +291,9 @@ fn test_an_arena_holds_many_distinct_names() {
         crate::port::cells_push(txt, 48 + ((i / 7) % 10));
         crate::port::cells_push(txt, 48 + (i / 100));
         pl_seek(ar, 0, crate::port::cells_len(txt));
-        a = pl_parse(&crate::testport::cells_blob(txt)[..], ar);
+        a = pl_parse(&crate::port::src_of_blob(&crate::testport::cells_blob(txt)[..]), ar);
         pl_seek(ar, 0, crate::port::cells_len(txt));
-        b = pl_parse(&crate::testport::cells_blob(txt)[..], ar);
+        b = pl_parse(&crate::port::src_of_blob(&crate::testport::cells_blob(txt)[..]), ar);
         ea = pl_name_entry(ar, a);
         eb = pl_name_entry(ar, b);
         crate::testport::assert_eq_at(ea, eb, "equal names share an entry", i);
@@ -302,8 +302,8 @@ fn test_an_arena_holds_many_distinct_names() {
     // and a neighbour differs
     pl_init(ar);
     pl_seek(ar, 0, 5);
-    a = pl_parse(&crate::testport::text_blob("/x /y")[..], ar);
-    b = pl_parse(&crate::testport::text_blob("/x /y")[..], ar);
+    a = pl_parse(&crate::port::src_of_blob(&crate::testport::text_blob("/x /y")[..]), ar);
+    b = pl_parse(&crate::port::src_of_blob(&crate::testport::text_blob("/x /y")[..]), ar);
     crate::testport::assert_that(pl_name_entry(ar, a) != pl_name_entry(ar, b), "/x and /y differ");
 }
 pub(crate) fn pt_prep(mut ar: &mut crate::port::Cells, src: &[u8]) -> i32 {
@@ -315,7 +315,7 @@ pub(crate) fn pt_sf(src: &[u8], which: i32) -> i32 {
     // One field of the stream parsed from src (an indirect object).
     let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let z: i32 = pt_prep(ar, src);
-    let s: i32 = pl_parse_indirect(src, ar, 0);
+    let s: i32 = pl_parse_indirect(&crate::port::src_of_blob(src), ar, 0);
     let sd: i32 = pl_stream_dict(ar, s);
     let lh: i32 = pl_dict_get(ar, sd, pn_length());
     if z != 0 {
@@ -386,7 +386,7 @@ fn test_every_truncation_of_a_fixture_parses_or_names_an_error() {
         h = 1;
         while (h != 0) && (guard < 2000) {
             before = pl_pos(ar);
-            h = pl_parse(&crate::testport::cells_blob(cut)[..], ar);
+            h = pl_parse(&crate::port::src_of_blob(&crate::testport::cells_blob(cut)[..]), ar);
             if (h != 0) && (pl_pos(ar) <= before) {
                 h = 0;
             }
@@ -397,7 +397,7 @@ fn test_every_truncation_of_a_fixture_parses_or_names_an_error() {
         while at < cutn {
             pl_init(ar);
             pl_seek(ar, 0, cutn);
-            pl_parse_indirect(&crate::testport::cells_blob(cut)[..], ar, at);
+            pl_parse_indirect(&crate::port::src_of_blob(&crate::testport::cells_blob(cut)[..]), ar, at);
             // a stream's data ends inside the blob
             crate::testport::assert_that(pl_pos(ar) <= cutn, "the parse never ran past the end");
             at = pt_nl(f, at) + 1;

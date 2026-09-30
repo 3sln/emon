@@ -12,10 +12,12 @@
 ;; `limit-breach` is referenced and NOT reached: a breach never returns, so
 ;; a probe that reached one would have no answer to compare.
 (ns emon.porttest
-  (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
+  (:require [emon.lang :refer [I32 Blob Src Cells Text emit-ascii]]
             [emon.port :refer [blob-len blob-u8 blob-u16 blob-u32
                                blob-u16le blob-u32le
                                cells-len cells-at cells-set cells-push cells-drop
+                               src-len src-u8 src-missed src-slice src-of-cells
+                               src-of-blob src-hint
                                text-cp text-ascii text-i32
                                limit-of limit-breach setting-of]]
             [kin.lang :refer [defn return let set while if comment do
@@ -51,6 +53,16 @@
     (sp t) (text-i32 t (cells-at c 0))
     (cells-drop c 2)
     (sp t) (text-i32 t (cells-len c)))
+  (text-ascii t " src:")
+  (let [^Src s (src-of-blob b)]
+    (src-hint s 0 4)
+    (sp t) (text-i32 t (src-len s))
+    (sp t) (text-i32 t (src-u8 s 3))
+    (sp t) (text-i32 t (blob-u32 (src-slice s 2 6) 0))
+    (sp t) (text-i32 t (src-len (src-of-cells c)))
+    (sp t) (text-i32 t (src-u8 (src-of-cells c) 0))
+    (sp t)
+    (if (src-missed s) (text-i32 t 1) (text-i32 t 0)))
   (text-ascii t " limits:")
   (sp t) (text-i32 t (limit-of 0))
   (sp t) (text-i32 t (limit-of 4))

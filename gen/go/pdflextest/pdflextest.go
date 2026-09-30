@@ -94,9 +94,9 @@ func ptDoRow(f []byte, from int32, to int32, indirect int32, inp *port.Cells, ar
 	pdflex.PlInit(ar)
 	pdflex.PlSeek(ar, 0, port.CellsLen(inp))
 	if indirect == 1 {
-		h = pdflex.PlParseIndirect(port.CellsBlob(inp), ar, 0)
+		h = pdflex.PlParseIndirect(port.SrcOfBlob(port.CellsBlob(inp)), ar, 0)
 	} else {
-		h = pdflex.PlParse(port.CellsBlob(inp), ar)
+		h = pdflex.PlParse(port.SrcOfBlob(port.CellsBlob(inp)), ar)
 	}
 	if h == 0 {
 		port.TextAscii(t, "!")
@@ -236,7 +236,7 @@ func TestEveryRowOfTheIso32000Extract(emonT *testing.T) {
 func ptParseText(b []byte, ar *port.Cells) int32 {
 	pdflex.PlInit(ar)
 	pdflex.PlSeek(ar, 0, port.BlobLen(b))
-	return pdflex.PlParse(b, ar)
+	return pdflex.PlParse(port.SrcOfBlob(b), ar)
 }
 
 func TestNamesAreInternedAndWellKnownIdsResolve(emonT *testing.T) {
@@ -309,9 +309,9 @@ func TestAnArenaHoldsManyDistinctNames(emonT *testing.T) {
 		port.CellsPush(txt, 48+((i/7)%10))
 		port.CellsPush(txt, 48+(i/100))
 		pdflex.PlSeek(ar, 0, port.CellsLen(txt))
-		a = pdflex.PlParse(port.CellsBlob(txt), ar)
+		a = pdflex.PlParse(port.SrcOfBlob(port.CellsBlob(txt)), ar)
 		pdflex.PlSeek(ar, 0, port.CellsLen(txt))
-		b = pdflex.PlParse(port.CellsBlob(txt), ar)
+		b = pdflex.PlParse(port.SrcOfBlob(port.CellsBlob(txt)), ar)
 		ea = pdflex.PlNameEntry(ar, a)
 		eb = pdflex.PlNameEntry(ar, b)
 		port.AssertEqAt(emonT, ea, eb, "equal names share an entry", i)
@@ -320,8 +320,8 @@ func TestAnArenaHoldsManyDistinctNames(emonT *testing.T) {
 	// and a neighbour differs
 	pdflex.PlInit(ar)
 	pdflex.PlSeek(ar, 0, 5)
-	a = pdflex.PlParse(port.TextBlob("/x /y"), ar)
-	b = pdflex.PlParse(port.TextBlob("/x /y"), ar)
+	a = pdflex.PlParse(port.SrcOfBlob(port.TextBlob("/x /y")), ar)
+	b = pdflex.PlParse(port.SrcOfBlob(port.TextBlob("/x /y")), ar)
 	port.AssertThat(emonT, pdflex.PlNameEntry(ar, a) != pdflex.PlNameEntry(ar, b), "/x and /y differ")
 }
 
@@ -335,7 +335,7 @@ func ptSf(src []byte, which int32) int32 {
 	// One field of the stream parsed from src (an indirect object).
 	var ar *port.Cells = port.NewCells()
 	var z int32 = ptPrep(ar, src)
-	var s int32 = pdflex.PlParseIndirect(src, ar, 0)
+	var s int32 = pdflex.PlParseIndirect(port.SrcOfBlob(src), ar, 0)
 	var sd int32 = pdflex.PlStreamDict(ar, s)
 	var lh int32 = pdflex.PlDictGet(ar, sd, pdfnames.PnLength())
 	if z != 0 {
@@ -406,7 +406,7 @@ func TestEveryTruncationOfAFixtureParsesOrNamesAnError(emonT *testing.T) {
 		h = 1
 		for (h != 0) && (guard < 2000) {
 			before = pdflex.PlPos(ar)
-			h = pdflex.PlParse(port.CellsBlob(cut), ar)
+			h = pdflex.PlParse(port.SrcOfBlob(port.CellsBlob(cut)), ar)
 			if (h != 0) && (pdflex.PlPos(ar) <= before) {
 				h = 0
 			}
@@ -417,7 +417,7 @@ func TestEveryTruncationOfAFixtureParsesOrNamesAnError(emonT *testing.T) {
 		for at < cutn {
 			pdflex.PlInit(ar)
 			pdflex.PlSeek(ar, 0, cutn)
-			pdflex.PlParseIndirect(port.CellsBlob(cut), ar, at)
+			pdflex.PlParseIndirect(port.SrcOfBlob(port.CellsBlob(cut)), ar, at)
 			// a stream's data ends inside the blob
 			port.AssertThat(emonT, pdflex.PlPos(ar) <= cutn, "the parse never ran past the end")
 			at = ptNl(f, at) + 1

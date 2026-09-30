@@ -4,12 +4,22 @@
 namespace emon;
 
 public static class Pdfsrc {
-    public static int PsLen(byte[] src) {
+    public static int PsLen(emon.Port.Src src) {
         // The number of bytes in the source.
-        return emon.Port.BlobLen(src);
+        return emon.Port.SrcLen(src);
     }
-    public static int PsU8(byte[] src, int i) {
-        // The byte at index i, 0..255.
-        return emon.Port.BlobU8(src, i);
+    public static int PsU8(emon.Port.Src src, int i) {
+        // The byte at index i, 0..255; 0 and a miss when it is not resident.
+        return emon.Port.SrcU8(src, i);
+    }
+    public static bool PsMissed(emon.Port.Src src) {
+        // True when a read through this view has missed: what it answered
+        // since may be wrong, and the unit must return `need-bytes`.
+        return emon.Port.SrcMissed(src);
+    }
+    public static int PsHint(emon.Port.Src src, int s, int e) {
+        // A prefetch hint: bytes [s, e) will probably be wanted. Answers 0.
+        emon.Port.SrcHint(src, s, e);
+        return 0;
     }
 }

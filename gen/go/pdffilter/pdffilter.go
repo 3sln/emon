@@ -5,7 +5,6 @@ package pdffilter
 
 import (
 	"emon/inflate"
-	"emon/pdfsrc"
 	"emon/port"
 	"strings"
 )
@@ -45,6 +44,9 @@ func PfImageFilter() int32 {
 }
 func PfBadSpec() int32 {
 	return 11
+}
+func PfNeedBytes() int32 {
+	return 12
 }
 func PfStatusEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
@@ -93,6 +95,10 @@ func PfStatusEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 11 {
 		port.TextAscii(t, "bad-filter-spec")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "need-bytes")
 		return 1
 	}
 	return 0
@@ -205,7 +211,7 @@ func PfHex(src []byte, s int32, e int32, out *port.Cells) int32 {
 	var c int32 = 0
 	var done int32 = 0
 	for (i < e) && (done == 0) {
-		c = pdfsrc.PsU8(src, i)
+		c = port.BlobU8(src, i)
 		i += 1
 		if c == 62 {
 			done = 1
@@ -268,14 +274,14 @@ func PfA85(src []byte, s int32, e int32, out *port.Cells) int32 {
 	var done int32 = 0
 	var pad int32 = 0
 	// Skip white space and a `<~` prefix.
-	for (i < e) && ((pdfsrc.PsU8(src, i) == 32) || (pdfsrc.PsU8(src, i) == 10) || (pdfsrc.PsU8(src, i) == 13) || (pdfsrc.PsU8(src, i) == 9) || (pdfsrc.PsU8(src, i) == 12) || (pdfsrc.PsU8(src, i) == 0)) {
+	for (i < e) && ((port.BlobU8(src, i) == 32) || (port.BlobU8(src, i) == 10) || (port.BlobU8(src, i) == 13) || (port.BlobU8(src, i) == 9) || (port.BlobU8(src, i) == 12) || (port.BlobU8(src, i) == 0)) {
 		i += 1
 	}
-	if ((i + 1) < e) && (pdfsrc.PsU8(src, i) == 60) && (pdfsrc.PsU8(src, i+1) == 126) {
+	if ((i + 1) < e) && (port.BlobU8(src, i) == 60) && (port.BlobU8(src, i+1) == 126) {
 		i += 2
 	}
 	for (i < e) && (done == 0) {
-		c = pdfsrc.PsU8(src, i)
+		c = port.BlobU8(src, i)
 		i += 1
 		if c == 126 {
 			done = 1
@@ -330,7 +336,7 @@ func PfRl(src []byte, s int32, e int32, out *port.Cells) int32 {
 	var k int32 = 0
 	var b int32 = 0
 	for i < e {
-		l = pdfsrc.PsU8(src, i)
+		l = port.BlobU8(src, i)
 		i += 1
 		if l == 128 {
 			return 0
@@ -342,7 +348,7 @@ func PfRl(src []byte, s int32, e int32, out *port.Cells) int32 {
 				if i >= e {
 					return 1
 				}
-				port.CellsPush(out, pdfsrc.PsU8(src, i))
+				port.CellsPush(out, port.BlobU8(src, i))
 				i += 1
 				k += 1
 			}
@@ -350,7 +356,7 @@ func PfRl(src []byte, s int32, e int32, out *port.Cells) int32 {
 			if i >= e {
 				return 1
 			}
-			b = pdfsrc.PsU8(src, i)
+			b = port.BlobU8(src, i)
 			i += 1
 			pfRoom(out, base, 257-l)
 			k = 0
@@ -466,7 +472,7 @@ func PfLzw(src []byte, s int32, e int32, out *port.Cells, st *port.Cells, early 
 	pfLzwClear(st)
 	for done == 0 {
 		for (nbits < width) && (i < e) {
-			acc = (acc * 256) + pdfsrc.PsU8(src, i)
+			acc = (acc * 256) + port.BlobU8(src, i)
 			i += 1
 			nbits += 8
 		}
@@ -723,7 +729,7 @@ func PfRun(code int32, src []byte, s int32, e int32, out *port.Cells, st *port.C
 	if code == 6 {
 		var k int32 = s
 		for k < e {
-			port.CellsPush(out, pdfsrc.PsU8(src, k))
+			port.CellsPush(out, port.BlobU8(src, k))
 			k += 1
 		}
 		return 0

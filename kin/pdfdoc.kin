@@ -41,7 +41,16 @@
 ;; REPORTED (`pd-encrypted`) and the structure is read as it is, which works
 ;; for the plain parts of the file and fails on the encrypted ones.
 ;;
-;; THE DECISIONS are D059-D066 in DEVLOG (arena, names, leniency, stream lengths,
+;; A SOURCE THAT MISSES (D058, D074, D075). `src` is a `Src`, and a read of
+;; bytes that have not arrived answers 0 and sets the view's missed flag. Every
+;; function here checks `ps-missed` at its checkpoints (each object loaded, each
+;; xref section, the trailer, each stream span, each page-tree node) and stops,
+;; `pd-open` answering `need-bytes` (7) and `pd-pages` -1; a failure is never
+;; classified (`bad-xref`, a warning bit, a repair) while the view has missed,
+;; because what looks like damage may be zeros. The caller re-runs on a fresh
+;; view once the bytes are there; nothing persists outside its `Cells`.
+;;
+;; THE DECISIONS are D059-D066, D074, D075 in DEVLOG (arena, names, leniency, stream lengths,
 ;; this layer, filters, pages, tooling).
 ;;
 ;; BOUNDS: object numbers above 65536 + 64 * file length (or the OBJECTS
@@ -49,10 +58,10 @@
 ;; cannot fill; references are followed to REF_DEPTH; the page walk to depth
 ;; 64 and PAGES pages (a limit breach never returns).
 (ns emon.pdfdoc
-  (:require [emon.lang :refer [I32 Blob Cells Text defenum emit-ascii]]
-            [emon.pdfsrc :refer [ps-len ps-u8]]
+  (:require [emon.lang :refer [I32 Src Cells Text defenum emit-ascii]]
+            [emon.pdfsrc :refer [ps-len ps-u8 ps-missed ps-hint]]
             [emon.port :refer [cells-len cells-at cells-set
-                               cells-push cells-drop cells-bytes limit-of
+                               cells-push cells-drop cells-bytes src-slice src-of-cells limit-of
                                limit-breach text-cp text-i32]]
             [emon.pdfnames :refer [pn-type pn-length pn-filter pn-decode-parms
                                    pn-predictor pn-colors pn-bits-per-component
@@ -88,7 +97,8 @@
    [pd-bad-xref 3 "bad-xref"]
    [pd-no-root 4 "no-root"]
    [pd-no-pages 5 "no-pages"]
-   [pd-encrypted-unread 6 "encrypted"]])
+   [pd-encrypted-unread 6 "encrypted"]
+   [pd-need-bytes 7 "need-bytes"]])
 
 ;; Bits of `(pd-warn dc)`.
 (defenum ^:pub pd-warning
@@ -146,11 +156,21 @@
   (comment "One more than the highest object number the cross-reference names.")
   (return (cells-at dc D_NENT)))
 
-(defn ^I32 pd-warn-set [^:mut ^Cells dc ^I32 bit]
+(defn ^I32 pd-warn-set [^Src src ^:mut ^Cells dc ^I32 bit]
+  (comment "Note a tolerated damage. NOT while the source has missed: what looks")
+  (comment "like damage may be zeros standing in for bytes that have not arrived.")
+  (if (ps-missed src) (return 0))
   (let [^I32 w (cells-at dc D_WARN)]
     (if (== (bit-and (quot w bit) 1) 0)
       (cells-set dc D_WARN (+ w bit)))
     (return 0)))
+
+(defn ^I32 pd-stop [^Src src ^I32 status]
+  (comment "The status to report for a failure: `need-bytes` when the source has")
+  (comment "missed (the failure may be the miss), else `status`. THE CHECK BEFORE")
+  (comment "CLASSIFYING (D058): every `bad-xref` and friends goes through here.")
+  (if (ps-missed src) (return 7))
+  (return status))
 
 (defn ^I32 pd-ent-put [^:mut ^Cells dc ^I32 num ^I32 kind ^I32 f1 ^I32 f2 ^I32 mode]
   (comment "Store an entry, unless an entry is already there: mode 0 stores")
@@ -179,7 +199,7 @@
 
 ;; ------------------------------------------------- the file's two anchors
 
-(defn ^I32 pd-find-header [^Blob src]
+(defn ^I32 pd-find-header [^Src src]
   (comment "The index of `%PDF-` within the first 1024 bytes (Acrobat accepts")
   (comment "junk before it), or -1.")
   (let [^I32 n (ps-len src)
@@ -196,7 +216,7 @@
           (set i (+ i 1))))
     (return -1)))
 
-(defn ^I32 pd-find-startxref [^Blob src]
+(defn ^I32 pd-find-startxref [^Src src]
   (comment "The index of the LAST `startxref`: within the last 1100 bytes, then")
   (comment "within the last 64 KiB (junk appended after %%EOF). -1 for none.")
   (comment "A TAIL, not the file: only the end of the source is read.")
@@ -210,6 +230,9 @@
       (do (if (== (ps-u8 src i) 115)
             (if (== (pl-kw-at src i n 11) 1) (return i)))
           (set i (- i 1))))
+    (comment "Nothing in the last 1100 bytes: if a miss is why, do not go on to")
+    (comment "ask for 64 KiB of zeros.")
+    (if (ps-missed src) (return -1))
     (set i (- stop 1))
     (while (>= i floor)
       (do (if (== (ps-u8 src i) 115)
@@ -217,7 +240,7 @@
           (set i (- i 1))))
     (return -1)))
 
-(defn ^I32 pd-kind-at [^Blob src ^:mut ^Cells ar ^I32 pos]
+(defn ^I32 pd-kind-at [^Src src ^:mut ^Cells ar ^I32 pos]
   (comment "What starts at pos: 1 for `xref` (a table), 2 for `N G obj` (a")
   (comment "cross-reference stream), 0 for anything else.")
   (let [^I32 n (ps-len src)
@@ -242,7 +265,7 @@
 (declarefn pd-stream-data)
 (declarefn pd-xstream)
 
-(defn ^:pub ^I32 pd-resolve [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-resolve [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                              ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 h0]
   (comment "Follow references from h0 to a value: 0 when the chain ends in a")
   (comment "missing object, is too deep, or cycles. A value that is not a")
@@ -257,7 +280,7 @@
           (set guard (+ guard 1))))
     (return h)))
 
-(defn ^:pub ^I32 pd-dget [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-dget [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                           ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                           ^I32 dict ^I32 id]
   (comment "The RESOLVED value under a well-known key of a dictionary (or of a")
@@ -265,7 +288,7 @@
   (let [^I32 v (pl-dict-get ar dict id)]
     (return (pd-resolve src ar dc a b st v))))
 
-(defn ^:pub ^I32 pd-dint [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-dint [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                           ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                           ^I32 dict ^I32 id ^I32 dflt]
   (comment "An integer value under a well-known key, else dflt. A real that is")
@@ -279,7 +302,7 @@
           (if (== (rem cp 100) 0) (return (quot cp 100)))))
     (return dflt)))
 
-(defn ^I32 pd-load-direct [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc ^I32 num ^I32 off]
+(defn ^I32 pd-load-direct [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^I32 num ^I32 off]
   (comment "Parse `num G obj ...` at file offset off. The object number found")
   (comment "must be num: a table entry that points at another object is wrong.")
   (let [^I32 n (ps-len src)
@@ -287,10 +310,10 @@
     (pl-seek ar 0 n)
     (set h (pl-parse-indirect src ar (+ off (cells-at dc D_SHIFT))))
     (if (and (!= h 0) (== (pl-objnum ar) num)) (return h))
-    (pd-warn-set dc 32)
+    (pd-warn-set src dc 32)
     (return 0)))
 
-(defn ^I32 pd-parse-objstm [^Blob data ^:mut ^Cells ar ^:mut ^Cells dc ^I32 sn ^I32 nn ^I32 first]
+(defn ^I32 pd-parse-objstm [^Src data ^:mut ^Cells ar ^:mut ^Cells dc ^I32 sn ^I32 nn ^I32 first]
   (comment "Every object of an object stream, from its decoded bytes: N pairs")
   (comment "of (object number, offset from /First), then the objects. Each is")
   (comment "cached in the cross-reference where that entry says it lives in")
@@ -326,7 +349,7 @@
           (set i (+ i 1))))
     (return 0)))
 
-(defn ^I32 pd-load-compressed [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-load-compressed [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                                ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 num]
   (comment "Object `num` lives in an object stream: decode that stream once,")
   (comment "parse every object in it, and answer the cache of `num`.")
@@ -353,13 +376,14 @@
     (if (or (< nn 1) (< first 0)) (return 0))
     (set plan (pd-stream-plan src ar dc a b st sh))
     (set status (pd-run-plan src ar plan sh b st a))
+    (if (ps-missed src) (return 0))
     (comment "A truncated or badly-checksummed stream still has its objects.")
     (if (and (!= status 0) (!= status 1) (!= status 5) (!= status 7))
-      (do (pd-warn-set dc 64) (return 0)))
-    (pd-parse-objstm (cells-bytes a) ar dc sn nn first)
+      (do (pd-warn-set src dc 64) (return 0)))
+    (pd-parse-objstm (src-of-cells a) ar dc sn nn first)
     (return (cells-at dc (+ at 3)))))
 
-(defn ^:pub ^I32 pd-get [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-get [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                          ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 num]
   (comment "Object `num` as a handle in `ar`, loaded on first use and cached;")
   (comment "0 when it is free, missing, at the wrong offset, or being loaded")
@@ -383,6 +407,8 @@
       (set h (pd-load-compressed src ar dc a b st num)))
     (cells-set dc (+ at 4) (- (cells-at dc (+ at 4)) 1))
     (cells-set dc D_DEPTH depth)
+    (comment "CHECKPOINT: an object that may be zeros is not cached.")
+    (if (ps-missed src) (return 0))
     (if (!= h 0) (cells-set dc (+ at 3) h))
     (return h)))
 
@@ -419,7 +445,7 @@
   (if (== (pl-name-is ar h (pn-jbig2-decode)) 1) (return 10))
   (return 0))
 
-(defn ^I32 pd-fix-length [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-fix-length [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                           ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 sh]
   (comment "A stream whose /Length is an indirect reference was parsed without a")
   (comment "length (flags 2). Follow the reference: if the length it names is")
@@ -431,11 +457,14 @@
         ^I32 start (pl-stream-start ar sh)
         ^I32 ln (pd-dint src ar dc a b st d (pn-length) -1)
         ^:mut ^I32 z 0]
+    (if (ps-missed src) (return 0))
     (if (and (>= ln 0) (<= ln (- n start)))
       (do (set z (pl-skip src (+ start ln) n))
           (if (== (pl-kw-at src z n 7) 1)
             (do (pl-stream-set-len ar sh ln)
                 (return 0)))))
+    (comment "The rescan reads forward, perhaps to the end: not on a guess.")
+    (if (ps-missed src) (return 0))
     (pl-stream-rescan src ar sh)
     (return 0)))
 
@@ -448,7 +477,7 @@
           (set i (+ i 1))))
     (return 0)))
 
-(defn ^I32 pd-span [^Blob src ^I32 s ^I32 e ^:mut ^Cells to]
+(defn ^I32 pd-span [^Src src ^I32 s ^I32 e ^:mut ^Cells to]
   (let [^:mut ^I32 i s]
     (cells-drop to 0)
     (while (< i e)
@@ -469,7 +498,7 @@
 ;; with `status` a `pf-status` for a chain that could not be planned past its
 ;; last stage (an unknown filter, a bad spec) and `code` a `pf-filter`.
 
-(defn ^:pub ^I32 pd-stream-plan [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-stream-plan [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                                  ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 sh]
   (comment "Plan the decoding of stream `sh`: resolve /Filter and /DecodeParms")
   (comment "(and /Length, when it is a reference) and record the chain. Answers")
@@ -542,7 +571,7 @@
     (pl-set-int ar nsh nst)
     (return plan)))
 
-(defn ^:pub ^I32 pd-run-plan [^Blob src ^:mut ^Cells ar ^I32 plan ^I32 sh
+(defn ^:pub ^I32 pd-run-plan [^Src src ^:mut ^Cells ar ^I32 plan ^I32 sh
                               ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out]
   (comment "Run a plan over stream `sh` into `out` (cleared first), with `b` and")
   (comment "`st` as scratch. Answers a `pf-status`: the FIRST error, from a")
@@ -568,6 +597,8 @@
         ^:mut ^I32 columns 1
         ^:mut ^I32 early 1]
     (cells-drop out 0)
+    (comment "CHECKPOINT: the plan and the span may be made of zeros.")
+    (if (ps-missed src) (return 12))
     (while (< i ns)
       (do (set code (pl-int-value ar k))
           (set k (pl-next ar k))
@@ -589,7 +620,7 @@
                 (return status)))
           (comment "cur: 0 the file's span, 1 the data is in out, 2 it is in b.")
           (if (== cur 0)
-            (do (set s2 (pf-run code src start end out st early))
+            (do (set s2 (pf-run code (src-slice src start end) 0 (- end start) out st early))
                 (set cur 1))
             (if (== cur 1)
               (do (cells-drop b 0)
@@ -615,9 +646,11 @@
       (pd-span src start end out))
     (if (== cur 2) (pd-copy b out))
     (if (== status 0) (set status pstatus))
+    (comment "CHECKPOINT: after the stream span.")
+    (if (ps-missed src) (return 12))
     (return status)))
 
-(defn ^:pub ^I32 pd-stream-data [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-stream-data [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                                  ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                                  ^I32 sh ^:mut ^Cells out]
   (comment "The DECODED bytes of stream `sh` into `out` (cleared first), by")
@@ -655,7 +688,7 @@
         (cells-set dc D_PREV (pl-int-value ar p))))
     (return 0)))
 
-(defn ^I32 pd-table [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-table [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                      ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 pos]
   (comment "A classic section: `xref`, subsections `first count` of `offset gen")
   (comment "n|f` entries, `trailer`, the trailer dictionary. Entries are read")
@@ -680,29 +713,31 @@
     (set tk (pl-lex src ar))
     (while (== more 1)
       (do (set tk (pl-lex src ar))
+          (if (ps-missed src) (return (pd-need-bytes)))
           (if (and (== tk 11) (== (pl-token-c ar) 10))
             (set more 0)
-            (do (if (!= tk 1) (return 3))
+            (do (if (!= tk 1) (return (pd-stop src 3)))
                 (set first (pl-token-a ar))
                 (set tk (pl-lex src ar))
-                (if (!= tk 1) (return 3))
+                (if (!= tk 1) (return (pd-stop src 3)))
                 (set count (pl-token-a ar))
                 (set i 0)
                 (set inner 1)
                 (while (and (< i count) (== inner 1))
                   (do (set tk (pl-lex src ar))
+                      (if (ps-missed src) (return (pd-need-bytes)))
                       (if (and (== tk 11) (== (pl-token-c ar) 10))
                         (do (pl-unread ar)
                             (set inner 0))
-                        (do (if (!= tk 1) (return 3))
+                        (do (if (!= tk 1) (return (pd-stop src 3)))
                             (set eoff (pl-token-a ar))
                             (set tk (pl-lex src ar))
-                            (if (!= tk 1) (return 3))
+                            (if (!= tk 1) (return (pd-stop src 3)))
                             (set egen (pl-token-a ar))
                             (set tk (pl-lex src ar))
-                            (if (!= tk 11) (return 3))
+                            (if (!= tk 11) (return (pd-stop src 3)))
                             (set ek (pl-token-c ar))
-                            (if (and (!= ek 12) (!= ek 13)) (return 3))
+                            (if (and (!= ek 12) (!= ek 13)) (return (pd-stop src 3)))
                             (if (and (== i 0) (== first 1) (== ek 12) (== egen 65535))
                               (set first 0))
                             (if (== ek 13)
@@ -710,16 +745,19 @@
                               (pd-ent-put dc (+ first i) 1 eoff egen 0))
                             (set i (+ i 1))))))))))
     (set d (pl-parse src ar))
-    (if (== d 0) (return 3))
-    (if (!= (pl-kind-of ar d) 7) (return 3))
+    (if (ps-missed src) (return (pd-need-bytes)))
+    (if (== d 0) (return (pd-stop src 3)))
+    (if (!= (pl-kind-of ar d) 7) (return (pd-stop src 3)))
     (pd-add-trailer dc d)
     (pd-set-prev ar dc d)
     (set xs (pl-dict-get ar d (pn-x-ref-stm)))
     (if (and (!= xs 0) (== (pl-kind-of ar xs) 2))
-      (do (pd-warn-set dc 2)
+      (do (pd-warn-set src dc 2)
           (comment "An unreadable /XRefStm costs only the objects it lists.")
           (set xpos (+ (pl-int-value ar xs) (cells-at dc D_SHIFT)))
           (pd-xstream src ar dc a b st xpos 1)))
+    (comment "CHECKPOINT: after the trailer (and the /XRefStm it named).")
+    (if (ps-missed src) (return (pd-need-bytes)))
     (return 0)))
 
 (defn ^I32 pd-rd [^Cells c ^I32 at ^I32 w]
@@ -764,16 +802,16 @@
           (set k (+ k 1))))
     (return at)))
 
-(defn ^I32 pd-xfinish [^Cells ar ^:mut ^Cells dc ^I32 d ^I32 mode]
+(defn ^I32 pd-xfinish [^Src src ^Cells ar ^:mut ^Cells dc ^I32 d ^I32 mode]
   (comment "A chain section (mode 0) registers its dictionary as a trailer and")
   (comment "names its /Prev; an /XRefStm (mode 1) does neither.")
   (if (== mode 0)
     (do (pd-add-trailer dc d)
         (pd-set-prev ar dc d)
-        (pd-warn-set dc 16)))
+        (pd-warn-set src dc 16)))
   (return 0))
 
-(defn ^I32 pd-xstream [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-xstream [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                        ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 pos ^I32 mode]
   (comment "A cross-reference STREAM: a stream object whose decoded data is")
   (comment "entries of widths /W [t o g] for each (first, count) of /Index")
@@ -801,26 +839,28 @@
         ^:mut ^I32 e2 0]
     (pl-seek ar pos n)
     (set h (pl-parse-indirect src ar pos))
-    (if (== h 0) (return 3))
-    (if (!= (pl-kind-of ar h) 8) (return 3))
+    (if (ps-missed src) (return (pd-need-bytes)))
+    (if (== h 0) (return (pd-stop src 3)))
+    (if (!= (pl-kind-of ar h) 8) (return (pd-stop src 3)))
     (set d (pl-stream-dict ar h))
     (set wa (pd-dget src ar dc a b st d (pn-w)))
-    (if (== wa 0) (return 3))
-    (if (!= (pl-kind-of ar wa) 6) (return 3))
-    (if (< (pl-count ar wa) 3) (return 3))
+    (if (== wa 0) (return (pd-stop src 3)))
+    (if (!= (pl-kind-of ar wa) 6) (return (pd-stop src 3)))
+    (if (< (pl-count ar wa) 3) (return (pd-stop src 3)))
     (set e0 (pd-nth ar wa 0))
     (set e1 (pd-nth ar wa 1))
     (set e2 (pd-nth ar wa 2))
     (set w0 (pd-ival ar e0))
     (set w1 (pd-ival ar e1))
     (set w2 (pd-ival ar e2))
-    (if (or (< w0 0) (> w0 4) (< w1 0) (> w1 4) (< w2 0) (> w2 4)) (return 3))
-    (if (== (+ (+ w0 w1) w2) 0) (return 3))
+    (if (or (< w0 0) (> w0 4) (< w1 0) (> w1 4) (< w2 0) (> w2 4)) (return (pd-stop src 3)))
+    (if (== (+ (+ w0 w1) w2) 0) (return (pd-stop src 3)))
     (set size (pd-dint src ar dc a b st d (pn-size) 0))
     (set plan (pd-stream-plan src ar dc a b st h))
     (set status (pd-run-plan src ar plan h b st a))
+    (if (ps-missed src) (return (pd-need-bytes)))
     (comment "A cut-short or badly-checksummed stream still holds entries.")
-    (if (and (!= status 0) (!= status 1) (!= status 5) (!= status 7)) (return 3))
+    (if (and (!= status 0) (!= status 1) (!= status 5) (!= status 7)) (return (pd-stop src 3)))
     (set ix (pd-dget src ar dc a b st d (pn-index)))
     (if (and (!= ix 0) (== (pl-kind-of ar ix) 6))
       (do (set ip (pl-first ar ix))
@@ -832,20 +872,100 @@
                       (set ip (pl-next ar ip))
                       (set at (pd-xfill dc a at first count w0 w1 w2 mode)))))))
       (pd-xfill dc a 0 0 size w0 w1 w2 mode))
-    (return (pd-xfinish ar dc d mode))))
+    (return (pd-xfinish src ar dc d mode))))
 
 ;; ------------------------------------------------------------------ open
 
-(defn ^I32 pd-section [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-sift-down [^:mut ^Cells b ^I32 lo ^I32 n]
+  (comment "Heap sort's sift-down over b[0, n), for `pd-hint-extents`.")
+  (let [^:mut ^I32 root lo
+        ^:mut ^I32 child 0
+        ^:mut ^I32 sw 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 more 1]
+    (while (== more 1)
+      (do (set child (+ (* root 2) 1))
+          (if (>= child n)
+            (set more 0)
+            (do (set sw root)
+                (if (< (cells-at b sw) (cells-at b child)) (set sw child))
+                (if (< (+ child 1) n)
+                  (if (< (cells-at b sw) (cells-at b (+ child 1)))
+                    (set sw (+ child 1))))
+                (if (== sw root)
+                  (set more 0)
+                  (do (set x (cells-at b root))
+                      (set y (cells-at b sw))
+                      (cells-set b root y)
+                      (cells-set b sw x)
+                      (set root sw)))))))
+    (return 0)))
+
+(defn ^I32 pd-sort [^:mut ^Cells b ^I32 n]
+  (comment "Sort b[0, n) ascending, in place (heap sort: no recursion, no extra")
+  (comment "storage, and the same order on every target).")
+  (let [^:mut ^I32 i (- (quot n 2) 1)
+        ^:mut ^I32 e (- n 1)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (>= i 0)
+      (do (pd-sift-down b i n)
+          (set i (- i 1))))
+    (while (> e 0)
+      (do (set x (cells-at b 0))
+          (set y (cells-at b e))
+          (cells-set b 0 y)
+          (cells-set b e x)
+          (pd-sift-down b 0 e)
+          (set e (- e 1))))
+    (return 0)))
+
+(defn ^I32 pd-hint-extents [^Src src ^Cells dc ^:mut ^Cells b]
+  (comment "Once the cross-reference is read, every object's EXTENT is known: from")
+  (comment "its offset to the next larger offset (or the end of the source). Tell")
+  (comment "the source, so a miss on an object can fetch the whole object, not a")
+  (comment "guess (D058). `b` is scratch. Answers the number of hints.")
+  (let [^I32 n (ps-len src)
+        ^I32 nent (cells-at dc D_NENT)
+        ^I32 shift (cells-at dc D_SHIFT)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 nx 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 hints 0]
+    (cells-drop b 0)
+    (while (< i nent)
+      (do (set at (+ D_FIRST (* i 5)))
+          (if (== (cells-at dc at) 2)
+            (do (set o (+ (cells-at dc (+ at 1)) shift))
+                (if (and (>= o 0) (< o n))
+                  (cells-push b o))))
+          (set i (+ i 1))))
+    (set cnt (cells-len b))
+    (pd-sort b cnt)
+    (set i 0)
+    (while (< i cnt)
+      (do (set o (cells-at b i))
+          (set nx n)
+          (if (< (+ i 1) cnt) (set nx (cells-at b (+ i 1))))
+          (if (> nx o)
+            (do (ps-hint src o nx)
+                (set hints (+ hints 1))))
+          (set i (+ i 1))))
+    (return hints)))
+
+(defn ^I32 pd-section [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                        ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 off]
   (comment "Read the section at file offset `off` (shifted): a table or a stream.")
   (let [^I32 pos (+ off (cells-at dc D_SHIFT))
         ^I32 k (pd-kind-at src ar pos)]
     (if (== k 1) (return (pd-table src ar dc a b st pos)))
     (if (== k 2) (return (pd-xstream src ar dc a b st pos 0)))
-    (return 3)))
+    (return (pd-stop src 3))))
 
-(defn ^I32 pd-chain [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-chain [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                      ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 off0]
   (comment "The sections, newest first: the one `startxref` names, then each")
   (comment "/Prev. A section already read ends the chain (a loop); a failure in")
@@ -863,27 +983,31 @@
             (do (if (== (cells-at dc (+ D_SEEN j)) off) (set seen 1))
                 (set j (+ j 1))))
           (if (== seen 1)
-            (do (pd-warn-set dc 4)
+            (do (pd-warn-set src dc 4)
                 (set off -1))
             (do (cells-set dc (+ D_SEEN guard) off)
                 (cells-set dc D_NSEEN (+ guard 1))
                 (cells-set dc D_PREV -1)
                 (set status (pd-section src ar dc a b st off))
+                (comment "CHECKPOINT: after each xref section.")
+                (if (ps-missed src) (return (pd-need-bytes)))
                 (if (!= status 0)
                   (do (if (== guard 0) (return status))
-                      (pd-warn-set dc 8)
+                      (pd-warn-set src dc 8)
                       (set off -1))
                   (set off (cells-at dc D_PREV)))
                 (set guard (+ guard 1))))))
     (return 0)))
 
-(defn ^I32 pd-unreadable [^Cells dc ^I32 status]
+(defn ^I32 pd-unreadable [^Src src ^Cells dc ^I32 status]
   (comment "The status to answer when the catalog or the page tree could not be")
-  (comment "read: `encrypted` (6) if the trailer has /Encrypt, else `status`.")
+  (comment "read: `encrypted` (6) if the trailer has /Encrypt, else `status`; and")
+  (comment "`need-bytes` before either when the source has missed.")
+  (if (ps-missed src) (return 7))
   (if (!= (cells-at dc D_ENC) 0) (return 6))
   (return status))
 
-(defn ^:pub ^I32 pd-open [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-open [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                           ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st]
   (comment "Open a document: find the header and `startxref`, read every")
   (comment "cross-reference section and trailer, check that there is a catalog")
@@ -901,7 +1025,7 @@
         ^:mut ^I32 root 0
         ^:mut ^I32 pages 0
         ^:mut ^I32 enc 0]
-    (if (< base 0) (return 1))
+    (if (< base 0) (return (pd-stop src 1)))
     (cells-set dc D_BASE base)
     (if (< (+ base 7) n)
       (do (cells-set dc D_VMAJ (- (ps-u8 src (+ base 5)) 48))
@@ -913,10 +1037,10 @@
     (cells-set dc D_LIMENT lim)
     (cells-set dc D_REFLIM (limit-of 4))
     (set sx (pd-find-startxref src))
-    (if (< sx 0) (return 2))
+    (if (< sx 0) (return (pd-stop src 2)))
     (pl-seek ar (+ sx 9) n)
     (set tk (pl-lex src ar))
-    (if (!= tk 1) (return 3))
+    (if (!= tk 1) (return (pd-stop src 3)))
     (set off (pl-token-a ar))
     (comment "Offsets are from the start of the file, or (junk before the header)")
     (comment "from the header: whichever finds a section at `startxref`.")
@@ -924,24 +1048,26 @@
       (cells-set dc D_SHIFT 0)
       (if (and (> base 0) (!= (pd-kind-at src ar (+ off base)) 0))
         (do (cells-set dc D_SHIFT base)
-            (pd-warn-set dc 1))
-        (return 3)))
+            (pd-warn-set src dc 1))
+        (return (pd-stop src 3))))
     (set status (pd-chain src ar dc a b st off))
     (if (!= status 0) (return status))
-    (if (== (cells-at dc D_NTRAIL) 0) (return 3))
+    (if (== (cells-at dc D_NTRAIL) 0) (return (pd-stop src 3)))
+    (comment "The cross-reference is read: say where each object ends.")
+    (pd-hint-extents src dc b)
     (set enc (pd-trailer-get ar dc (pn-encrypt)))
     (if (!= enc 0) (cells-set dc D_ENC enc))
     (set root (pd-trailer-get ar dc (pn-root)))
-    (if (== root 0) (return 4))
+    (if (== root 0) (return (pd-stop src 4)))
     (set root (pd-resolve src ar dc a b st root))
     (comment "When the file is encrypted, what cannot be read is probably")
     (comment "encrypted (object streams are, whole): say so, and let P3.2 decrypt.")
-    (if (== root 0) (return (pd-unreadable dc 4)))
-    (if (!= (pl-kind-of ar root) 7) (return (pd-unreadable dc 4)))
+    (if (== root 0) (return (pd-unreadable src dc 4)))
+    (if (!= (pl-kind-of ar root) 7) (return (pd-unreadable src dc 4)))
     (cells-set dc D_ROOT root)
     (set pages (pd-dget src ar dc a b st root (pn-pages)))
-    (if (== pages 0) (return (pd-unreadable dc 5)))
-    (if (!= (pl-kind-of ar pages) 7) (return (pd-unreadable dc 5)))
+    (if (== pages 0) (return (pd-unreadable src dc 5)))
+    (if (!= (pl-kind-of ar pages) 7) (return (pd-unreadable src dc 5)))
     (return 0)))
 
 ;; ------------------------------------------------------------- the pages
@@ -957,7 +1083,7 @@
 
 (declarefn pd-walk)
 
-(defn ^I32 pd-elem [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-elem [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                     ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 arr ^I32 i]
   (comment "The i-th element of an array, resolved; 0 when absent.")
   (let [^I32 h (pd-nth ar arr i)]
@@ -973,7 +1099,7 @@
   (if (== (pl-kind-of ar h) 3) (return 1))
   (return 0))
 
-(defn ^I32 pd-read-box [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-read-box [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                         ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                         ^I32 boxh ^:mut ^Cells pg ^I32 at]
   (comment "Read a box (four numbers, any of which may be a reference) into")
@@ -1014,7 +1140,7 @@
     (cells-set pg (+ at 3) y1)
     (return 1)))
 
-(defn ^I32 pd-rotation [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-rotation [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                         ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st ^I32 rh]
   (comment "/Rotate as 0, 90, 180 or 270. Negative values wrap; a value that")
   (comment "is not a multiple of 90 (poppler keeps 45, pdf.js reads 0) is 0.")
@@ -1029,7 +1155,7 @@
     (if (!= (rem deg 90) 0) (return 0))
     (return deg)))
 
-(defn ^I32 pd-add-page [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-add-page [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                         ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                         ^:mut ^Cells pg ^I32 node ^I32 num
                         ^I32 im ^I32 ic ^I32 ir ^I32 ires]
@@ -1059,7 +1185,7 @@
           (cells-set pg (+ at 3) 61200)
           (cells-set pg (+ at 4) 79200)
           (set flags 1)
-          (pd-warn-set dc 256)))
+          (pd-warn-set src dc 256)))
     (set ok (pd-read-box src ar dc a b st ic pg (+ at 5)))
     (if (== ok 1)
       (do (comment "The CropBox is clipped to the MediaBox.")
@@ -1092,7 +1218,7 @@
     (cells-set pg (+ at 12) flags)
     (return 0)))
 
-(defn ^I32 pd-walk [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^I32 pd-walk [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                     ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                     ^:mut ^Cells pg ^I32 node ^I32 num ^I32 depth
                     ^I32 im ^I32 ic ^I32 ir ^I32 ires]
@@ -1102,8 +1228,10 @@
   (comment "page. A node met twice, a depth beyond 64, a kid that is missing or")
   (comment "not a dictionary: skipped, with a warning.")
   (if (> depth 64) (return 0))
+  (comment "CHECKPOINT: at each page-tree node.")
+  (if (ps-missed src) (return 0))
   (if (!= (pl-kind-of ar node) 7)
-    (do (pd-warn-set dc 128) (return 0)))
+    (do (pd-warn-set src dc 128) (return 0)))
   (let [^:mut ^I32 at 0
         ^:mut ^I32 m im
         ^:mut ^I32 c ic
@@ -1118,7 +1246,7 @@
     (if (> num 0)
       (do (set at (+ D_FIRST (* num 5)))
           (if (== (bit-and (quot (cells-at dc (+ at 4)) 4) 1) 1)
-            (do (pd-warn-set dc 128) (return 0)))
+            (do (pd-warn-set src dc 128) (return 0)))
           (cells-set dc (+ at 4) (+ (cells-at dc (+ at 4)) 4))))
     (set v (pl-dict-get ar node (pn-media-box)))
     (if (!= v 0) (set m v))
@@ -1137,27 +1265,30 @@
                   (do (set kn (pl-int-value ar k))
                       (set kh (pd-get src ar dc a b st kn))
                       (if (== kh 0)
-                        (pd-warn-set dc 128)
+                        (pd-warn-set src dc 128)
                         (pd-walk src ar dc a b st pg kh kn (+ depth 1) m c r res)))
                   (if (== kk 7)
                     (pd-walk src ar dc a b st pg k 0 (+ depth 1) m c r res)
-                    (pd-warn-set dc 128)))
+                    (pd-warn-set src dc 128)))
+                (if (ps-missed src) (return 0))
                 (set k (pl-next ar k))))
           (return 0)))
     (pd-add-page src ar dc a b st pg node num m c r res)
     (return 0)))
 
-(defn ^:pub ^I32 pd-pages [^Blob src ^:mut ^Cells ar ^:mut ^Cells dc
+(defn ^:pub ^I32 pd-pages [^Src src ^:mut ^Cells ar ^:mut ^Cells dc
                            ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                            ^:mut ^Cells pg]
   (comment "Walk the page tree from the catalog into `pg` (cleared first) and")
-  (comment "answer the number of pages. Call it after a successful `pd-open`.")
+  (comment "answer the number of pages, or -1 when the source missed (then `pg` is")
+  (comment "not to be used: re-run). Call it after a successful `pd-open`.")
   (cells-drop pg 0)
   (let [^I32 root (cells-at dc D_ROOT)
         ^I32 raw (pl-dict-get ar root (pn-pages))
         ^I32 top (pd-resolve src ar dc a b st raw)
         ^:mut ^I32 num 0
         ^:mut ^I32 i 0]
+    (if (ps-missed src) (return -1))
     (if (== top 0) (return 0))
     (comment "Clear the `visited` marks of an earlier walk.")
     (while (< i (cells-at dc D_NENT))
@@ -1167,6 +1298,7 @@
           (set i (+ i 1))))
     (if (== (pl-kind-of ar raw) 9) (set num (pl-int-value ar raw)))
     (pd-walk src ar dc a b st pg top num 0 0 0 0 0)
+    (if (ps-missed src) (return -1))
     (return (quot (cells-len pg) PAGE_STRIDE))))
 
 ;; ----------------------------------------------------- reading the pages

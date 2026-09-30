@@ -37,6 +37,9 @@ func PlBadObjectHeader() int32 {
 func PlBadStream() int32 {
 	return 8
 }
+func PlNeedBytes() int32 {
+	return 9
+}
 func PlStatusEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "ok")
@@ -72,6 +75,10 @@ func PlStatusEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 8 {
 		port.TextAscii(t, "bad-stream")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "need-bytes")
 		return 1
 	}
 	return 0
@@ -490,6 +497,13 @@ func plFail(ar *port.Cells, code int32) int32 {
 	return 0
 }
 
+func plMiss(ar *port.Cells) int32 {
+	// The source missed: what was read is not to be trusted. Latch
+	// `need-bytes` over whatever garbage error the zeros made, answer 0.
+	port.CellsSet(ar, aErr, 9)
+	return 0
+}
+
 func plWarnSet(ar *port.Cells, bit int32) int32 {
 	var w int32 = port.CellsAt(ar, aWarn)
 	if ((w / bit) & 1) == 0 {
@@ -812,17 +826,37 @@ func plHexval(c int32) int32 {
 	return -1
 }
 
-func PlSkip(src []byte, from int32, end int32) int32 {
+func plStalled(src *port.Src, p int32) int32 {
+	// 1 when a LONG SCAN at index p should give up: the source has missed.
+	// Checked every 1 KiB. Zeros, which is what a miss reads, are white
+	// space to this lexer, so without it a scan would run to the end of the
+	// source over bytes that have not arrived, and ask for all of them (D058:
+	// an attempt stops at its first checkpoint after the miss).
+	if (p & 1023) == 0 {
+		if pdfsrc.PsMissed(src) {
+			return 1
+		}
+	}
+	return 0
+}
+
+func PlSkip(src *port.Src, from int32, end int32) int32 {
 	// The first index >= from that is neither white space nor inside a
 	// comment (`%` to the end of the line), or end.
 	var p int32 = from
 	var c int32 = 0
 	for p < end {
 		c = pdfsrc.PsU8(src, p)
+		if plStalled(src, p) == 1 {
+			return end
+		}
 		if PlIsWs(c) == 1 {
 			p += 1
 		} else if c == 37 {
 			for (p < end) && (pdfsrc.PsU8(src, p) != 10) && (pdfsrc.PsU8(src, p) != 13) {
+				if plStalled(src, p) == 1 {
+					return end
+				}
 				p += 1
 			}
 		} else {
@@ -832,7 +866,7 @@ func PlSkip(src []byte, from int32, end int32) int32 {
 	return p
 }
 
-func PlKwAt(src []byte, p int32, end int32, id int32) int32 {
+func PlKwAt(src *port.Src, p int32, end int32, id int32) int32 {
 	// 1 when the bytes of keyword `id` (an `emon.pdfnames` `pk` code)
 	// are at p. No delimiter check: `endstream` is found inside data.
 	var start int32 = pdfnames.PkSpan[(id-1)*2+0]
@@ -850,7 +884,7 @@ func PlKwAt(src []byte, p int32, end int32, id int32) int32 {
 	return 1
 }
 
-func plKwIdOf(src []byte, s int32, n int32) int32 {
+func plKwIdOf(src *port.Src, s int32, n int32) int32 {
 	// The `pk` id of the keyword in src[s, s+n), 0 for any other.
 	var row int32 = 0
 	var k int32 = 0
@@ -902,7 +936,7 @@ func plTokErr(ar *port.Cells, s int32, e int32, code int32) int32 {
 	return plTok(ar, 12, s, e, 0, 0, 0)
 }
 
-func plLexNumber(src []byte, ar *port.Cells, s int32, end int32) int32 {
+func plLexNumber(src *port.Src, ar *port.Cells, s int32, end int32) int32 {
 	// A number starting at s, or 0 (nothing consumed) when it is not one.
 	// Tolerated: several signs (`--5` is -5), `.5`, `5.`, and trailing
 	// junk (`12abc` is 12 and then `abc`). Integers saturate at 2^31-1;
@@ -969,7 +1003,7 @@ func plLexNumber(src []byte, ar *port.Cells, s int32, end int32) int32 {
 	return plTok(ar, 2, s, q, m, scale, 0)
 }
 
-func plLexName(src []byte, ar *port.Cells, s int32, end int32) int32 {
+func plLexName(src *port.Src, ar *port.Cells, s int32, end int32) int32 {
 	// A name; s is the index of the byte AFTER the slash. `#xx` becomes
 	// a byte when two hex digits follow, else the `#` is kept.
 	var q int32 = s
@@ -994,7 +1028,7 @@ func plLexName(src []byte, ar *port.Cells, s int32, end int32) int32 {
 	return plTok(ar, 3, s-1, q, e, port.CellsAt(ar, e+1), 0)
 }
 
-func plLexLit(src []byte, ar *port.Cells, s int32, end int32) int32 {
+func plLexLit(src *port.Src, ar *port.Cells, s int32, end int32) int32 {
 	// A literal string; s is the index of the byte AFTER the `(`.
 	// Escapes \n \r \t \b \f \( \) \\ and \ddd (one to three octal
 	// digits, high bits dropped); a backslash before an end of line is a
@@ -1009,6 +1043,10 @@ func plLexLit(src []byte, ar *port.Cells, s int32, end int32) int32 {
 	for q < end {
 		c = pdfsrc.PsU8(src, q)
 		q += 1
+		if plStalled(src, q) == 1 {
+			port.CellsDrop(ar, start)
+			return 12
+		}
 		if c == 92 {
 			if q >= end {
 				plTokErr(ar, s-1, end, 3)
@@ -1067,7 +1105,7 @@ func plLexLit(src []byte, ar *port.Cells, s int32, end int32) int32 {
 	return 12
 }
 
-func plLexHex(src []byte, ar *port.Cells, s int32, end int32) int32 {
+func plLexHex(src *port.Src, ar *port.Cells, s int32, end int32) int32 {
 	// A hex string; s is the index of the byte AFTER the `<`. White space
 	// and any non-hex byte are ignored; an odd last digit is followed by 0.
 	var start int32 = port.CellsLen(ar)
@@ -1078,6 +1116,10 @@ func plLexHex(src []byte, ar *port.Cells, s int32, end int32) int32 {
 	for q < end {
 		c = pdfsrc.PsU8(src, q)
 		q += 1
+		if plStalled(src, q) == 1 {
+			port.CellsDrop(ar, start)
+			return 12
+		}
 		if c == 62 {
 			if half >= 0 {
 				port.CellsPush(ar, half*16)
@@ -1099,7 +1141,7 @@ func plLexHex(src []byte, ar *port.Cells, s int32, end int32) int32 {
 	return 12
 }
 
-func PlLex(src []byte, ar *port.Cells) int32 {
+func PlLex(src *port.Src, ar *port.Cells) int32 {
 	// The next token: answers its kind (T_*) and leaves its values in the
 	// header. At the end of input, T_EOF. A lexical error (an unterminated
 	// string) is T_ERR with the status latched.
@@ -1184,7 +1226,7 @@ func plEndsContainer(ar *port.Cells, tk int32) int32 {
 	return 0
 }
 
-func plArrayStep(src []byte, ar *port.Cells, arr int32) int32 {
+func plArrayStep(src *port.Src, ar *port.Cells, arr int32) int32 {
 	// One element of an array: 0 carry on, 1 the array is complete, 2 failed.
 	var tk int32 = PlLex(src, ar)
 	var v int32 = 0
@@ -1211,7 +1253,7 @@ func plArrayStep(src []byte, ar *port.Cells, arr int32) int32 {
 	return 0
 }
 
-func plArray(src []byte, ar *port.Cells) int32 {
+func plArray(src *port.Src, ar *port.Cells) int32 {
 	// After `[`: the elements up to `]`. Answers the array, or 0.
 	var arr int32 = plNew(ar, 6, 0, 0, 0)
 	var st int32 = 0
@@ -1224,7 +1266,7 @@ func plArray(src []byte, ar *port.Cells) int32 {
 	return arr
 }
 
-func plDictStep(src []byte, ar *port.Cells, d int32) int32 {
+func plDictStep(src *port.Src, ar *port.Cells, d int32) int32 {
 	// One key/value pair of a dictionary: 0 carry on, 1 the dictionary is
 	// complete, 2 failed. A key that is not a name is skipped (with its
 	// value, if it starts one); a key with no value gets null.
@@ -1290,7 +1332,7 @@ func plDictStep(src []byte, ar *port.Cells, d int32) int32 {
 	return 0
 }
 
-func plDict(src []byte, ar *port.Cells) int32 {
+func plDict(src *port.Src, ar *port.Cells) int32 {
 	// After `<<`: the pairs up to `>>`. Answers the dictionary, or 0.
 	var d int32 = plNew(ar, 7, 0, 0, 0)
 	var st int32 = 0
@@ -1303,7 +1345,7 @@ func plDict(src []byte, ar *port.Cells) int32 {
 	return d
 }
 
-func plRefOrInt(src []byte, ar *port.Cells, num int32) int32 {
+func plRefOrInt(src *port.Src, ar *port.Cells, num int32) int32 {
 	// An integer has just been read. `num 0 R` is a reference: look
 	// ahead two tokens, and only if a digit follows, so a string or a
 	// dictionary is never lexed twice.
@@ -1336,7 +1378,7 @@ func plRefOrInt(src []byte, ar *port.Cells, num int32) int32 {
 	return plNew(ar, 2, num, 0, 0)
 }
 
-func plValue(src []byte, ar *port.Cells, tk int32) int32 {
+func plValue(src *port.Src, ar *port.Cells, tk int32) int32 {
 	// The object whose first token `tk` has just been lexed, or 0.
 	var ta int32 = port.CellsAt(ar, aTa)
 	var tb int32 = port.CellsAt(ar, aTb)
@@ -1398,17 +1440,21 @@ func plValue(src []byte, ar *port.Cells, tk int32) int32 {
 	return plFail(ar, 2)
 }
 
-func PlParse(src []byte, ar *port.Cells) int32 {
+func PlParse(src *port.Src, ar *port.Cells) int32 {
 	// Parse one object at the current position. Answers its handle, or 0
 	// with `(pl-err ar)` set. A keyword that is not true, false or null
 	// (an operator, or `endobj`) answers a keyword object, so a content
 	// stream can be read as operands followed by one.
 	port.CellsSet(ar, aDepth, 0)
 	var tk int32 = PlLex(src, ar)
-	return plValue(src, ar, tk)
+	var v int32 = plValue(src, ar, tk)
+	if pdfsrc.PsMissed(src) {
+		return plMiss(ar)
+	}
+	return v
 }
 
-func plFindEndstream(src []byte, from int32, end int32) int32 {
+func plFindEndstream(src *port.Src, from int32, end int32) int32 {
 	// The index of the first `endstream` at or after from, or -1.
 	var i int32 = from
 	for i < end {
@@ -1417,12 +1463,15 @@ func plFindEndstream(src []byte, from int32, end int32) int32 {
 				return i
 			}
 		}
+		if plStalled(src, i) == 1 {
+			return -1
+		}
 		i += 1
 	}
 	return -1
 }
 
-func plFindEndobj(src []byte, from int32, end int32) int32 {
+func plFindEndobj(src *port.Src, from int32, end int32) int32 {
 	var i int32 = from
 	for i < end {
 		if pdfsrc.PsU8(src, i) == 101 {
@@ -1430,12 +1479,15 @@ func plFindEndobj(src []byte, from int32, end int32) int32 {
 				return i
 			}
 		}
+		if plStalled(src, i) == 1 {
+			return -1
+		}
 		i += 1
 	}
 	return -1
 }
 
-func plScan(src []byte, ar *port.Cells, start int32, end int32) int32 {
+func plScan(src *port.Src, ar *port.Cells, start int32, end int32) int32 {
 	// The data length of a stream starting at `start`, found by scanning for
 	// `endstream` (none: `endobj`, none: the end), with one end of line
 	// before it dropped. The index after what the scan found is left in the
@@ -1465,7 +1517,7 @@ func plScan(src []byte, ar *port.Cells, start int32, end int32) int32 {
 	return z - start
 }
 
-func PlStreamRescan(src []byte, ar *port.Cells, sh int32) int32 {
+func PlStreamRescan(src *port.Src, ar *port.Cells, sh int32) int32 {
 	// Find a stream's length by scanning, for the caller that could not use
 	// an indirect /Length: sets the length and marks it scanned (flags 1).
 	var start int32 = port.CellsAt(ar, sh+rB)
@@ -1476,7 +1528,7 @@ func PlStreamRescan(src []byte, ar *port.Cells, sh int32) int32 {
 	return dlen
 }
 
-func plStream(src []byte, ar *port.Cells, dict int32) int32 {
+func plStream(src *port.Src, ar *port.Cells, dict int32) int32 {
 	// After the `stream` keyword: the data span. The keyword is followed
 	// by CRLF or LF (a lone CR, and spaces before the end of line, are
 	// tolerated and noted). A direct /Length is trusted only when
@@ -1546,11 +1598,8 @@ func plStream(src []byte, ar *port.Cells, dict int32) int32 {
 	return sh
 }
 
-func PlParseIndirect(src []byte, ar *port.Cells, pos int32) int32 {
-	// Parse `N G obj <object> [stream ... endstream] endobj` at pos.
-	// Answers the object (a stream object when there is a stream) and
-	// leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched
-	// otherwise. The position after it is `pl-pos`.
+func plParseIndirectRun(src *port.Src, ar *port.Cells, pos int32) int32 {
+	// `pl-parse-indirect` without its checkpoint.
 	port.CellsSet(ar, aPos, plClamp(pos, port.CellsAt(ar, aEnd)))
 	port.CellsSet(ar, aErr, 0)
 	port.CellsSet(ar, aDepth, 0)
@@ -1598,6 +1647,20 @@ func PlParseIndirect(src []byte, ar *port.Cells, pos int32) int32 {
 	if (tk != 11) || (port.CellsAt(ar, aTc) != kEndobj) {
 		plWarnSet(ar, 16)
 		PlUnread(ar)
+	}
+	return v
+}
+
+func PlParseIndirect(src *port.Src, ar *port.Cells, pos int32) int32 {
+	// Parse `N G obj <object> [stream ... endstream] endobj` at pos.
+	// Answers the object (a stream object when there is a stream) and
+	// leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched
+	// otherwise. The position after it is `pl-pos`. A CHECKPOINT (D058):
+	// when a read of `src` missed, the answer is 0 and the error
+	// `need-bytes`, whatever the zeros looked like.
+	var v int32 = plParseIndirectRun(src, ar, pos)
+	if pdfsrc.PsMissed(src) {
+		return plMiss(ar)
 	}
 	return v
 }

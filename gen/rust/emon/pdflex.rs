@@ -31,6 +31,9 @@ pub fn pl_bad_object_header() -> i32 {
 pub fn pl_bad_stream() -> i32 {
     return 8;
 }
+pub fn pl_need_bytes() -> i32 {
+    return 9;
+}
 pub fn pl_status_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "ok");
@@ -66,6 +69,10 @@ pub fn pl_status_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 8 {
         crate::port::text_ascii(t, "bad-stream");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "need-bytes");
         return 1;
     }
     return 0;
@@ -407,6 +414,12 @@ pub(crate) fn pl_fail(mut ar: &mut crate::port::Cells, code: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn pl_miss(mut ar: &mut crate::port::Cells) -> i32 {
+    // The source missed: what was read is not to be trusted. Latch
+    // `need-bytes` over whatever garbage error the zeros made, answer 0.
+    crate::port::cells_set(ar, A_ERR, 9);
+    return 0;
+}
 pub(crate) fn pl_warn_set(mut ar: &mut crate::port::Cells, bit: i32) -> i32 {
     let w: i32 = crate::port::cells_at(ar, A_WARN);
     if ((w / bit) & 1) == 0 {
@@ -696,17 +709,36 @@ pub(crate) fn pl_hexval(c: i32) -> i32 {
     }
     return -1;
 }
-pub fn pl_skip(src: &[u8], from: i32, end: i32) -> i32 {
+pub(crate) fn pl_stalled(src: &crate::port::Src, p: i32) -> i32 {
+    // 1 when a LONG SCAN at index p should give up: the source has missed.
+    // Checked every 1 KiB. Zeros, which is what a miss reads, are white
+    // space to this lexer, so without it a scan would run to the end of the
+    // source over bytes that have not arrived, and ask for all of them (D058:
+    // an attempt stops at its first checkpoint after the miss).
+    if (p & 1023) == 0 {
+        if ps_missed(src) {
+            return 1;
+        }
+    }
+    return 0;
+}
+pub fn pl_skip(src: &crate::port::Src, from: i32, end: i32) -> i32 {
     // The first index >= from that is neither white space nor inside a
     // comment (`%` to the end of the line), or end.
     let mut p: i32 = from;
     let mut c: i32 = 0;
     while p < end {
         c = ps_u8(src, p);
+        if pl_stalled(src, p) == 1 {
+            return end;
+        }
         if pl_is_ws(c) == 1 {
             p += 1;
         } else if c == 37 {
             while (p < end) && (ps_u8(src, p) != 10) && (ps_u8(src, p) != 13) {
+                if pl_stalled(src, p) == 1 {
+                    return end;
+                }
                 p += 1;
             }
         } else {
@@ -715,7 +747,7 @@ pub fn pl_skip(src: &[u8], from: i32, end: i32) -> i32 {
     }
     return p;
 }
-pub fn pl_kw_at(src: &[u8], p: i32, end: i32, id: i32) -> i32 {
+pub fn pl_kw_at(src: &crate::port::Src, p: i32, end: i32, id: i32) -> i32 {
     // 1 when the bytes of keyword `id` (an `emon.pdfnames` `pk` code)
     // are at p. No delimiter check: `endstream` is found inside data.
     let start: i32 = PK_SPAN[((id - 1) * 2 + 0) as usize];
@@ -732,7 +764,7 @@ pub fn pl_kw_at(src: &[u8], p: i32, end: i32, id: i32) -> i32 {
     }
     return 1;
 }
-pub(crate) fn pl_kw_id_of(src: &[u8], s: i32, n: i32) -> i32 {
+pub(crate) fn pl_kw_id_of(src: &crate::port::Src, s: i32, n: i32) -> i32 {
     // The `pk` id of the keyword in src[s, s+n), 0 for any other.
     let mut row: i32 = 0;
     let mut k: i32 = 0;
@@ -778,7 +810,7 @@ pub(crate) fn pl_tok_err(mut ar: &mut crate::port::Cells, s: i32, e: i32, code: 
     pl_fail(ar, code);
     return pl_tok(ar, 12, s, e, 0, 0, 0);
 }
-pub(crate) fn pl_lex_number(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
+pub(crate) fn pl_lex_number(src: &crate::port::Src, mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
     // A number starting at s, or 0 (nothing consumed) when it is not one.
     // Tolerated: several signs (`--5` is -5), `.5`, `5.`, and trailing
     // junk (`12abc` is 12 and then `abc`). Integers saturate at 2^31-1;
@@ -844,7 +876,7 @@ pub(crate) fn pl_lex_number(src: &[u8], mut ar: &mut crate::port::Cells, s: i32,
     }
     return pl_tok(ar, 2, s, q, m, scale, 0);
 }
-pub(crate) fn pl_lex_name(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
+pub(crate) fn pl_lex_name(src: &crate::port::Src, mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
     // A name; s is the index of the byte AFTER the slash. `#xx` becomes
     // a byte when two hex digits follow, else the `#` is kept.
     let mut q: i32 = s;
@@ -868,7 +900,7 @@ pub(crate) fn pl_lex_name(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, e
     let e: i32 = pl_intern_end(ar);
     return pl_tok(ar, 3, s - 1, q, e, crate::port::cells_at(ar, e + 1), 0);
 }
-pub(crate) fn pl_lex_lit(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
+pub(crate) fn pl_lex_lit(src: &crate::port::Src, mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
     // A literal string; s is the index of the byte AFTER the `(`.
     // Escapes \n \r \t \b \f \( \) \\ and \ddd (one to three octal
     // digits, high bits dropped); a backslash before an end of line is a
@@ -883,6 +915,10 @@ pub(crate) fn pl_lex_lit(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, en
     while q < end {
         c = ps_u8(src, q);
         q += 1;
+        if pl_stalled(src, q) == 1 {
+            crate::port::cells_drop(ar, start);
+            return 12;
+        }
         if c == 92 {
             if q >= end {
                 pl_tok_err(ar, s - 1, end, 3);
@@ -940,7 +976,7 @@ pub(crate) fn pl_lex_lit(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, en
     pl_tok_err(ar, s - 1, end, 3);
     return 12;
 }
-pub(crate) fn pl_lex_hex(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
+pub(crate) fn pl_lex_hex(src: &crate::port::Src, mut ar: &mut crate::port::Cells, s: i32, end: i32) -> i32 {
     // A hex string; s is the index of the byte AFTER the `<`. White space
     // and any non-hex byte are ignored; an odd last digit is followed by 0.
     let start: i32 = crate::port::cells_len(ar);
@@ -951,6 +987,10 @@ pub(crate) fn pl_lex_hex(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, en
     while q < end {
         c = ps_u8(src, q);
         q += 1;
+        if pl_stalled(src, q) == 1 {
+            crate::port::cells_drop(ar, start);
+            return 12;
+        }
         if c == 62 {
             if half >= 0 {
                 crate::port::cells_push(ar, half * 16);
@@ -971,7 +1011,7 @@ pub(crate) fn pl_lex_hex(src: &[u8], mut ar: &mut crate::port::Cells, s: i32, en
     pl_tok_err(ar, s - 1, end, 3);
     return 12;
 }
-pub fn pl_lex(src: &[u8], mut ar: &mut crate::port::Cells) -> i32 {
+pub fn pl_lex(src: &crate::port::Src, mut ar: &mut crate::port::Cells) -> i32 {
     // The next token: answers its kind (T_*) and leaves its values in the
     // header. At the end of input, T_EOF. A lexical error (an unterminated
     // string) is T_ERR with the status latched.
@@ -1053,7 +1093,7 @@ pub(crate) fn pl_ends_container(ar: &mut crate::port::Cells, tk: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn pl_array_step(src: &[u8], mut ar: &mut crate::port::Cells, arr: i32) -> i32 {
+pub(crate) fn pl_array_step(src: &crate::port::Src, mut ar: &mut crate::port::Cells, arr: i32) -> i32 {
     // One element of an array: 0 carry on, 1 the array is complete, 2 failed.
     let tk: i32 = pl_lex(src, ar);
     let mut v: i32 = 0;
@@ -1079,7 +1119,7 @@ pub(crate) fn pl_array_step(src: &[u8], mut ar: &mut crate::port::Cells, arr: i3
     pl_add_child(ar, arr, v);
     return 0;
 }
-pub(crate) fn pl_array(src: &[u8], mut ar: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pl_array(src: &crate::port::Src, mut ar: &mut crate::port::Cells) -> i32 {
     // After `[`: the elements up to `]`. Answers the array, or 0.
     let arr: i32 = pl_new(ar, 6, 0, 0, 0);
     let mut st: i32 = 0;
@@ -1091,7 +1131,7 @@ pub(crate) fn pl_array(src: &[u8], mut ar: &mut crate::port::Cells) -> i32 {
     }
     return arr;
 }
-pub(crate) fn pl_dict_step(src: &[u8], mut ar: &mut crate::port::Cells, d: i32) -> i32 {
+pub(crate) fn pl_dict_step(src: &crate::port::Src, mut ar: &mut crate::port::Cells, d: i32) -> i32 {
     // One key/value pair of a dictionary: 0 carry on, 1 the dictionary is
     // complete, 2 failed. A key that is not a name is skipped (with its
     // value, if it starts one); a key with no value gets null.
@@ -1156,7 +1196,7 @@ pub(crate) fn pl_dict_step(src: &[u8], mut ar: &mut crate::port::Cells, d: i32) 
     pl_add_child(ar, d, v);
     return 0;
 }
-pub(crate) fn pl_dict(src: &[u8], mut ar: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pl_dict(src: &crate::port::Src, mut ar: &mut crate::port::Cells) -> i32 {
     // After `<<`: the pairs up to `>>`. Answers the dictionary, or 0.
     let d: i32 = pl_new(ar, 7, 0, 0, 0);
     let mut st: i32 = 0;
@@ -1168,7 +1208,7 @@ pub(crate) fn pl_dict(src: &[u8], mut ar: &mut crate::port::Cells) -> i32 {
     }
     return d;
 }
-pub(crate) fn pl_ref_or_int(src: &[u8], mut ar: &mut crate::port::Cells, num: i32) -> i32 {
+pub(crate) fn pl_ref_or_int(src: &crate::port::Src, mut ar: &mut crate::port::Cells, num: i32) -> i32 {
     // An integer has just been read. `num 0 R` is a reference: look
     // ahead two tokens, and only if a digit follows, so a string or a
     // dictionary is never lexed twice.
@@ -1200,7 +1240,7 @@ pub(crate) fn pl_ref_or_int(src: &[u8], mut ar: &mut crate::port::Cells, num: i3
     crate::port::cells_set(ar, A_POS, after);
     return pl_new(ar, 2, num, 0, 0);
 }
-pub(crate) fn pl_value(src: &[u8], mut ar: &mut crate::port::Cells, tk: i32) -> i32 {
+pub(crate) fn pl_value(src: &crate::port::Src, mut ar: &mut crate::port::Cells, tk: i32) -> i32 {
     // The object whose first token `tk` has just been lexed, or 0.
     let ta: i32 = crate::port::cells_at(ar, A_TA);
     let tb: i32 = crate::port::cells_at(ar, A_TB);
@@ -1261,16 +1301,20 @@ pub(crate) fn pl_value(src: &[u8], mut ar: &mut crate::port::Cells, tk: i32) -> 
     }
     return pl_fail(ar, 2);
 }
-pub fn pl_parse(src: &[u8], mut ar: &mut crate::port::Cells) -> i32 {
+pub fn pl_parse(src: &crate::port::Src, mut ar: &mut crate::port::Cells) -> i32 {
     // Parse one object at the current position. Answers its handle, or 0
     // with `(pl-err ar)` set. A keyword that is not true, false or null
     // (an operator, or `endobj`) answers a keyword object, so a content
     // stream can be read as operands followed by one.
     crate::port::cells_set(ar, A_DEPTH, 0);
     let tk: i32 = pl_lex(src, ar);
-    return pl_value(src, ar, tk);
+    let v: i32 = pl_value(src, ar, tk);
+    if ps_missed(src) {
+        return pl_miss(ar);
+    }
+    return v;
 }
-pub(crate) fn pl_find_endstream(src: &[u8], from: i32, end: i32) -> i32 {
+pub(crate) fn pl_find_endstream(src: &crate::port::Src, from: i32, end: i32) -> i32 {
     // The index of the first `endstream` at or after from, or -1.
     let mut i: i32 = from;
     while i < end {
@@ -1279,11 +1323,14 @@ pub(crate) fn pl_find_endstream(src: &[u8], from: i32, end: i32) -> i32 {
                 return i;
             }
         }
+        if pl_stalled(src, i) == 1 {
+            return -1;
+        }
         i += 1;
     }
     return -1;
 }
-pub(crate) fn pl_find_endobj(src: &[u8], from: i32, end: i32) -> i32 {
+pub(crate) fn pl_find_endobj(src: &crate::port::Src, from: i32, end: i32) -> i32 {
     let mut i: i32 = from;
     while i < end {
         if ps_u8(src, i) == 101 {
@@ -1291,11 +1338,14 @@ pub(crate) fn pl_find_endobj(src: &[u8], from: i32, end: i32) -> i32 {
                 return i;
             }
         }
+        if pl_stalled(src, i) == 1 {
+            return -1;
+        }
         i += 1;
     }
     return -1;
 }
-pub(crate) fn pl_scan(src: &[u8], mut ar: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
+pub(crate) fn pl_scan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
     // The data length of a stream starting at `start`, found by scanning for
     // `endstream` (none: `endobj`, none: the end), with one end of line
     // before it dropped. The index after what the scan found is left in the
@@ -1324,7 +1374,7 @@ pub(crate) fn pl_scan(src: &[u8], mut ar: &mut crate::port::Cells, start: i32, e
     crate::port::cells_set(ar, A_TB, after);
     return z - start;
 }
-pub fn pl_stream_rescan(src: &[u8], mut ar: &mut crate::port::Cells, sh: i32) -> i32 {
+pub fn pl_stream_rescan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, sh: i32) -> i32 {
     // Find a stream's length by scanning, for the caller that could not use
     // an indirect /Length: sets the length and marks it scanned (flags 1).
     let start: i32 = crate::port::cells_at(ar, sh + R_B);
@@ -1334,7 +1384,7 @@ pub fn pl_stream_rescan(src: &[u8], mut ar: &mut crate::port::Cells, sh: i32) ->
     pl_warn_set(ar, 4);
     return dlen;
 }
-pub(crate) fn pl_stream(src: &[u8], mut ar: &mut crate::port::Cells, dict: i32) -> i32 {
+pub(crate) fn pl_stream(src: &crate::port::Src, mut ar: &mut crate::port::Cells, dict: i32) -> i32 {
     // After the `stream` keyword: the data span. The keyword is followed
     // by CRLF or LF (a lone CR, and spaces before the end of line, are
     // tolerated and noted). A direct /Length is trusted only when
@@ -1403,11 +1453,8 @@ pub(crate) fn pl_stream(src: &[u8], mut ar: &mut crate::port::Cells, dict: i32) 
     crate::port::cells_set(ar, sh + R_D, flags);
     return sh;
 }
-pub fn pl_parse_indirect(src: &[u8], mut ar: &mut crate::port::Cells, pos: i32) -> i32 {
-    // Parse `N G obj <object> [stream ... endstream] endobj` at pos.
-    // Answers the object (a stream object when there is a stream) and
-    // leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched
-    // otherwise. The position after it is `pl-pos`.
+pub(crate) fn pl_parse_indirect_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, pos: i32) -> i32 {
+    // `pl-parse-indirect` without its checkpoint.
     crate::port::cells_set(ar, A_POS, pl_clamp(pos, crate::port::cells_at(ar, A_END)));
     crate::port::cells_set(ar, A_ERR, 0);
     crate::port::cells_set(ar, A_DEPTH, 0);
@@ -1455,6 +1502,19 @@ pub fn pl_parse_indirect(src: &[u8], mut ar: &mut crate::port::Cells, pos: i32) 
     if (tk != 11) || (crate::port::cells_at(ar, A_TC) != K_ENDOBJ) {
         pl_warn_set(ar, 16);
         pl_unread(ar);
+    }
+    return v;
+}
+pub fn pl_parse_indirect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, pos: i32) -> i32 {
+    // Parse `N G obj <object> [stream ... endstream] endobj` at pos.
+    // Answers the object (a stream object when there is a stream) and
+    // leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched
+    // otherwise. The position after it is `pl-pos`. A CHECKPOINT (D058):
+    // when a read of `src` missed, the answer is 0 and the error
+    // `need-bytes`, whatever the zeros looked like.
+    let v: i32 = pl_parse_indirect_run(src, ar, pos);
+    if ps_missed(src) {
+        return pl_miss(ar);
     }
     return v;
 }

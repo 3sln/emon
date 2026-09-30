@@ -653,7 +653,7 @@ host implement it however it likes.
 | Port | Answers | Why not ported |
 | --- | --- | --- |
 | `Blob` | immutable bytes **in memory**, read by index (big- and little-endian helpers): decoded streams, spans cut from a `Src`, test files | every language's byte buffer differs (nome) |
-| `Src` | an input byte source (§13.1, D058): `src-len`, `src-u8` (may miss), `src-missed`, `src-slice` (span → `Blob`), `src-of-cells`, `src-of-blob`, `src-hint`; the PDF code reads it only through `emon.pdfsrc` | the chunk cache, and whether a read can block or must be awaited, are the host's |
+| `Src` | an input byte source (§13.1, D058): `src-len`, `src-u8` (may miss), `src-missed`, `src-slice` (span → `Blob`), `src-of-cells`, `src-of-blob`, `src-hint`; the PDF code reads it through `emon.pdfsrc` (`ps-len`, `ps-u8`, `ps-missed`, `ps-hint`) and the forms `src-slice` and `src-of-cells`, which return borrows and so are forms, not functions (D074) | the chunk cache, and whether a read can block or must be awaited, are the host's |
 | `Cells` | growable `i32` arena: len, at, set, push, drop | kin cannot allocate (nome) |
 | `Text` | append code point / ASCII literal / decimal; host encodes UTF-8 | output buffers differ; the *format* is kin's |
 | `Bitmap` | 8-bit gray or RGB, row-major, top-left; new/read/write | pixel buffers differ; decoding is a codec's job |

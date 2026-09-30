@@ -115,3 +115,142 @@ func CellsBlob(c *Cells) []byte {
 }
 
 func NewText() *strings.Builder { return &strings.Builder{} }
+
+// ------------------------------------------------------ a source that misses
+//
+// A Src over a blob, served in fixed-size CHUNKS of which only some are
+// RESIDENT (P1.11, D058); see the Rust half. Tests only.
+
+type chunkedBacking struct {
+	data     []byte
+	chunk    int32
+	sync     bool
+	resident []bool
+	pending  []int32
+	fills    int32
+	hints    int32
+}
+
+func (b *chunkedBacking) nchunks() int32 {
+	return (int32(len(b.data)) + b.chunk - 1) / b.chunk
+}
+
+func (b *chunkedBacking) touch(c int32) bool {
+	if b.resident[c] {
+		return true
+	}
+	if b.sync {
+		b.resident[c] = true
+		b.fills++
+		return true
+	}
+	for _, p := range b.pending {
+		if p == c {
+			return false
+		}
+	}
+	b.pending = append(b.pending, c)
+	return false
+}
+
+func (b *chunkedBacking) Len() int32 { return int32(len(b.data)) }
+
+func (b *chunkedBacking) At(i int32) int32 {
+	if b.touch(i / b.chunk) {
+		return int32(b.data[i])
+	}
+	return -1
+}
+
+func (b *chunkedBacking) Span(s int32, buf []byte) bool {
+	n := int32(len(buf))
+	if n == 0 {
+		return true
+	}
+	ok := true
+	for c := s / b.chunk; c <= (s+n-1)/b.chunk; c++ {
+		if b.touch(c) {
+			lo, hi := max(s, c*b.chunk), min(s+n, (c+1)*b.chunk)
+			for k := lo; k < hi; k++ {
+				buf[k-s] = b.data[k]
+			}
+		} else {
+			ok = false
+		}
+	}
+	return ok
+}
+
+func (b *chunkedBacking) Hint(s int32, e int32) { b.hints++ }
+
+// SrcChunked is a source over b, in chunks of `chunk` bytes, none resident;
+// sync 1 fills inline.
+func SrcChunked(b []byte, chunk int32, sync int32) *Src {
+	n := (int32(len(b)) + chunk - 1) / chunk
+	return NewSrc(&chunkedBacking{data: b, chunk: chunk, sync: sync == 1, resident: make([]bool, n)})
+}
+
+// SrcView is a fresh view (missed flag clear) of the same chunk cache.
+func SrcView(s *Src) *Src { return s.View() }
+
+// SrcCtl controls the cache: op 0 fetch (a is the round: read-ahead of 2^a - 1
+// chunks each side of every pending chunk; answers the chunks made resident),
+// 1 make chunk a resident, 2 evict chunk a, 3 make every chunk resident, 4 the
+// pending count, 5 the resident count, 6 the hints received, 7 the chunks a
+// sync source filled inline, 8 the chunk count.
+func SrcCtl(s *Src, op int32, a int32) int32 {
+	b := s.B.(*chunkedBacking)
+	n := b.nchunks()
+	switch op {
+	case 0:
+		r := int32(1)<<min(a, 20) - 1
+		pend := b.pending
+		b.pending = nil
+		made := int32(0)
+		for _, c := range pend {
+			for k := max(0, c-r); k <= min(n-1, c+r); k++ {
+				if !b.resident[k] {
+					b.resident[k] = true
+					made++
+				}
+			}
+		}
+		return made
+	case 1:
+		b.resident[a] = true
+		keep := b.pending[:0]
+		for _, c := range b.pending {
+			if c != a {
+				keep = append(keep, c)
+			}
+		}
+		b.pending = keep
+		return 0
+	case 2:
+		b.resident[a] = false
+		return 0
+	case 3:
+		for k := range b.resident {
+			b.resident[k] = true
+		}
+		b.pending = nil
+		return 0
+	case 4:
+		return int32(len(b.pending))
+	case 5:
+		c := int32(0)
+		for _, r := range b.resident {
+			if r {
+				c++
+			}
+		}
+		return c
+	case 6:
+		return b.hints
+	case 7:
+		return b.fills
+	case 8:
+		return n
+	}
+	panic(fmt.Sprintf("SrcCtl: no op %d", op))
+}

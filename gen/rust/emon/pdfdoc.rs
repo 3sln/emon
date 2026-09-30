@@ -27,6 +27,9 @@ pub fn pd_no_pages() -> i32 {
 pub fn pd_encrypted_unread() -> i32 {
     return 6;
 }
+pub fn pd_need_bytes() -> i32 {
+    return 7;
+}
 pub fn pd_status_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "ok");
@@ -54,6 +57,10 @@ pub fn pd_status_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 6 {
         crate::port::text_ascii(t, "encrypted");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "need-bytes");
         return 1;
     }
     return 0;
@@ -176,12 +183,26 @@ pub fn pd_object_count(dc: &mut crate::port::Cells) -> i32 {
     // One more than the highest object number the cross-reference names.
     return crate::port::cells_at(dc, D_NENT);
 }
-pub(crate) fn pd_warn_set(mut dc: &mut crate::port::Cells, bit: i32) -> i32 {
+pub(crate) fn pd_warn_set(src: &crate::port::Src, mut dc: &mut crate::port::Cells, bit: i32) -> i32 {
+    // Note a tolerated damage. NOT while the source has missed: what looks
+    // like damage may be zeros standing in for bytes that have not arrived.
+    if ps_missed(src) {
+        return 0;
+    }
     let w: i32 = crate::port::cells_at(dc, D_WARN);
     if ((w / bit) & 1) == 0 {
         crate::port::cells_set(dc, D_WARN, w + bit);
     }
     return 0;
+}
+pub(crate) fn pd_stop(src: &crate::port::Src, status: i32) -> i32 {
+    // The status to report for a failure: `need-bytes` when the source has
+    // missed (the failure may be the miss), else `status`. THE CHECK BEFORE
+    // CLASSIFYING (D058): every `bad-xref` and friends goes through here.
+    if ps_missed(src) {
+        return 7;
+    }
+    return status;
 }
 pub(crate) fn pd_ent_put(mut dc: &mut crate::port::Cells, num: i32, kind: i32, f1: i32, f2: i32, mode: i32) -> i32 {
     // Store an entry, unless an entry is already there: mode 0 stores
@@ -219,7 +240,7 @@ pub fn pd_ent_kind(dc: &mut crate::port::Cells, num: i32) -> i32 {
     }
     return crate::port::cells_at(dc, D_FIRST + (num * 5));
 }
-pub(crate) fn pd_find_header(src: &[u8]) -> i32 {
+pub(crate) fn pd_find_header(src: &crate::port::Src) -> i32 {
     // The index of `%PDF-` within the first 1024 bytes (Acrobat accepts
     // junk before it), or -1.
     let n: i32 = ps_len(src);
@@ -236,7 +257,7 @@ pub(crate) fn pd_find_header(src: &[u8]) -> i32 {
     }
     return -1;
 }
-pub(crate) fn pd_find_startxref(src: &[u8]) -> i32 {
+pub(crate) fn pd_find_startxref(src: &crate::port::Src) -> i32 {
     // The index of the LAST `startxref`: within the last 1100 bytes, then
     // within the last 64 KiB (junk appended after %%EOF). -1 for none.
     // A TAIL, not the file: only the end of the source is read.
@@ -258,6 +279,11 @@ pub(crate) fn pd_find_startxref(src: &[u8]) -> i32 {
         }
         i -= 1;
     }
+    // Nothing in the last 1100 bytes: if a miss is why, do not go on to
+    // ask for 64 KiB of zeros.
+    if ps_missed(src) {
+        return -1;
+    }
     i = stop - 1;
     while i >= floor {
         if ps_u8(src, i) == 115 {
@@ -269,7 +295,7 @@ pub(crate) fn pd_find_startxref(src: &[u8]) -> i32 {
     }
     return -1;
 }
-pub(crate) fn pd_kind_at(src: &[u8], mut ar: &mut crate::port::Cells, pos: i32) -> i32 {
+pub(crate) fn pd_kind_at(src: &crate::port::Src, mut ar: &mut crate::port::Cells, pos: i32) -> i32 {
     // What starts at pos: 1 for `xref` (a table), 2 for `N G obj` (a
     // cross-reference stream), 0 for anything else.
     let n: i32 = ps_len(src);
@@ -296,7 +322,7 @@ pub(crate) fn pd_kind_at(src: &[u8], mut ar: &mut crate::port::Cells, pos: i32) 
     }
     return 0;
 }
-pub fn pd_resolve(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, h0: i32) -> i32 {
+pub fn pd_resolve(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, h0: i32) -> i32 {
     // Follow references from h0 to a value: 0 when the chain ends in a
     // missing object, is too deep, or cycles. A value that is not a
     // reference is answered as it is.
@@ -313,13 +339,13 @@ pub fn pd_resolve(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crat
     }
     return h;
 }
-pub fn pd_dget(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, dict: i32, id: i32) -> i32 {
+pub fn pd_dget(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, dict: i32, id: i32) -> i32 {
     // The RESOLVED value under a well-known key of a dictionary (or of a
     // stream's dictionary), 0 when absent.
     let v: i32 = pl_dict_get(ar, dict, id);
     return pd_resolve(src, ar, dc, a, b, st, v);
 }
-pub fn pd_dint(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, dict: i32, id: i32, dflt: i32) -> i32 {
+pub fn pd_dint(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, dict: i32, id: i32, dflt: i32) -> i32 {
     // An integer value under a well-known key, else dflt. A real that is
     // a whole number counts.
     let v: i32 = pd_dget(src, ar, dc, a, b, st, dict, id);
@@ -338,7 +364,7 @@ pub fn pd_dint(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::
     }
     return dflt;
 }
-pub(crate) fn pd_load_direct(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, num: i32, off: i32) -> i32 {
+pub(crate) fn pd_load_direct(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, num: i32, off: i32) -> i32 {
     // Parse `num G obj ...` at file offset off. The object number found
     // must be num: a table entry that points at another object is wrong.
     let n: i32 = ps_len(src);
@@ -348,10 +374,10 @@ pub(crate) fn pd_load_direct(src: &[u8], mut ar: &mut crate::port::Cells, mut dc
     if (h != 0) && (pl_objnum(ar) == num) {
         return h;
     }
-    pd_warn_set(dc, 32);
+    pd_warn_set(src, dc, 32);
     return 0;
 }
-pub(crate) fn pd_parse_objstm(data: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, sn: i32, nn: i32, first: i32) -> i32 {
+pub(crate) fn pd_parse_objstm(data: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, sn: i32, nn: i32, first: i32) -> i32 {
     // Every object of an object stream, from its decoded bytes: N pairs
     // of (object number, offset from /First), then the objects. Each is
     // cached in the cross-reference where that entry says it lives in
@@ -394,7 +420,7 @@ pub(crate) fn pd_parse_objstm(data: &[u8], mut ar: &mut crate::port::Cells, mut 
     }
     return 0;
 }
-pub(crate) fn pd_load_compressed(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, num: i32) -> i32 {
+pub(crate) fn pd_load_compressed(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, num: i32) -> i32 {
     // Object `num` lives in an object stream: decode that stream once,
     // parse every object in it, and answer the cache of `num`.
     let at: i32 = D_FIRST + (num * 5);
@@ -432,15 +458,18 @@ pub(crate) fn pd_load_compressed(src: &[u8], mut ar: &mut crate::port::Cells, mu
     }
     plan = pd_stream_plan(src, ar, dc, a, b, st, sh);
     status = pd_run_plan(src, ar, plan, sh, b, st, a);
-    // A truncated or badly-checksummed stream still has its objects.
-    if (status != 0) && (status != 1) && (status != 5) && (status != 7) {
-        pd_warn_set(dc, 64);
+    if ps_missed(src) {
         return 0;
     }
-    pd_parse_objstm(&crate::port::cells_bytes(a)[..], ar, dc, sn, nn, first);
+    // A truncated or badly-checksummed stream still has its objects.
+    if (status != 0) && (status != 1) && (status != 5) && (status != 7) {
+        pd_warn_set(src, dc, 64);
+        return 0;
+    }
+    pd_parse_objstm(&crate::port::src_of_cells(a), ar, dc, sn, nn, first);
     return crate::port::cells_at(dc, at + 3);
 }
-pub fn pd_get(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, num: i32) -> i32 {
+pub fn pd_get(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, num: i32) -> i32 {
     // Object `num` as a handle in `ar`, loaded on first use and cached;
     // 0 when it is free, missing, at the wrong offset, or being loaded
     // already (a cycle).
@@ -477,6 +506,10 @@ pub fn pd_get(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::p
     }
     crate::port::cells_set(dc, at + 4, crate::port::cells_at(dc, at + 4) - 1);
     crate::port::cells_set(dc, D_DEPTH, depth);
+    // CHECKPOINT: an object that may be zeros is not cached.
+    if ps_missed(src) {
+        return 0;
+    }
     if h != 0 {
         crate::port::cells_set(dc, at + 3, h);
     }
@@ -527,7 +560,7 @@ pub(crate) fn pd_filter_code(ar: &mut crate::port::Cells, h: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn pd_fix_length(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, sh: i32) -> i32 {
+pub(crate) fn pd_fix_length(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, sh: i32) -> i32 {
     // A stream whose /Length is an indirect reference was parsed without a
     // length (flags 2). Follow the reference: if the length it names is
     // followed by `endstream` that is the length, read at two places and
@@ -540,12 +573,19 @@ pub(crate) fn pd_fix_length(src: &[u8], mut ar: &mut crate::port::Cells, mut dc:
     let start: i32 = pl_stream_start(ar, sh);
     let ln: i32 = pd_dint(src, ar, dc, a, b, st, d, pn_length(), -1);
     let mut z: i32 = 0;
+    if ps_missed(src) {
+        return 0;
+    }
     if (ln >= 0) && (ln <= (n - start)) {
         z = pl_skip(src, start + ln, n);
         if pl_kw_at(src, z, n, 7) == 1 {
             pl_stream_set_len(ar, sh, ln);
             return 0;
         }
+    }
+    // The rescan reads forward, perhaps to the end: not on a guess.
+    if ps_missed(src) {
+        return 0;
     }
     pl_stream_rescan(src, ar, sh);
     return 0;
@@ -560,7 +600,7 @@ pub(crate) fn pd_copy(from: &mut crate::port::Cells, mut to: &mut crate::port::C
     }
     return 0;
 }
-pub(crate) fn pd_span(src: &[u8], s: i32, e: i32, mut to: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pd_span(src: &crate::port::Src, s: i32, e: i32, mut to: &mut crate::port::Cells) -> i32 {
     let mut i: i32 = s;
     crate::port::cells_drop(to, 0);
     while i < e {
@@ -569,7 +609,7 @@ pub(crate) fn pd_span(src: &[u8], s: i32, e: i32, mut to: &mut crate::port::Cell
     }
     return 0;
 }
-pub fn pd_stream_plan(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, sh: i32) -> i32 {
+pub fn pd_stream_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, sh: i32) -> i32 {
     // Plan the decoding of stream `sh`: resolve /Filter and /DecodeParms
     // (and /Length, when it is a reference) and record the chain. Answers
     // the plan's handle in `ar`. `a`, `b` and `st` may be overwritten.
@@ -664,7 +704,7 @@ pub fn pd_stream_plan(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut 
     pl_set_int(ar, nsh, nst);
     return plan;
 }
-pub fn pd_run_plan(src: &[u8], mut ar: &mut crate::port::Cells, plan: i32, sh: i32, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
+pub fn pd_run_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, plan: i32, sh: i32, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
     // Run a plan over stream `sh` into `out` (cleared first), with `b` and
     // `st` as scratch. Answers a `pf-status`: the FIRST error, from a
     // stage or from the plan; whatever was decoded stays in `out`. An
@@ -689,6 +729,10 @@ pub fn pd_run_plan(src: &[u8], mut ar: &mut crate::port::Cells, plan: i32, sh: i
     let mut columns: i32 = 1;
     let mut early: i32 = 1;
     crate::port::cells_drop(out, 0);
+    // CHECKPOINT: the plan and the span may be made of zeros.
+    if ps_missed(src) {
+        return 12;
+    }
     while i < ns {
         code = pl_int_value(ar, k);
         k = pl_next(ar, k);
@@ -717,7 +761,7 @@ pub fn pd_run_plan(src: &[u8], mut ar: &mut crate::port::Cells, plan: i32, sh: i
         }
         // cur: 0 the file's span, 1 the data is in out, 2 it is in b.
         if cur == 0 {
-            s2 = pf_run(code, src, start, end, out, st, early);
+            s2 = pf_run(code, &crate::port::src_slice(src, start, end)[..], 0, end - start, out, st, early);
             cur = 1;
         } else if cur == 1 {
             crate::port::cells_drop(b, 0);
@@ -758,9 +802,13 @@ pub fn pd_run_plan(src: &[u8], mut ar: &mut crate::port::Cells, plan: i32, sh: i
     if status == 0 {
         status = pstatus;
     }
+    // CHECKPOINT: after the stream span.
+    if ps_missed(src) {
+        return 12;
+    }
     return status;
 }
-pub fn pd_stream_data(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, sh: i32, mut out: &mut crate::port::Cells) -> i32 {
+pub fn pd_stream_data(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, sh: i32, mut out: &mut crate::port::Cells) -> i32 {
     // The DECODED bytes of stream `sh` into `out` (cleared first), by
     // planning the chain and running it. `out` must not be `a`, `b` or
     // `st` (they are overwritten); answers a `pf-status`, the first error.
@@ -800,7 +848,7 @@ pub(crate) fn pd_set_prev(ar: &mut crate::port::Cells, mut dc: &mut crate::port:
     }
     return 0;
 }
-pub(crate) fn pd_table(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, pos: i32) -> i32 {
+pub(crate) fn pd_table(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, pos: i32) -> i32 {
     // A classic section: `xref`, subsections `first count` of `offset gen
     // n|f` entries, `trailer`, the trailer dictionary. Entries are read
     // as tokens, so the 20-byte layout is not insisted on. A count larger
@@ -824,42 +872,48 @@ pub(crate) fn pd_table(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut
     tk = pl_lex(src, ar);
     while more == 1 {
         tk = pl_lex(src, ar);
+        if ps_missed(src) {
+            return pd_need_bytes();
+        }
         if (tk == 11) && (pl_token_c(ar) == 10) {
             more = 0;
         } else {
             if tk != 1 {
-                return 3;
+                return pd_stop(src, 3);
             }
             first = pl_token_a(ar);
             tk = pl_lex(src, ar);
             if tk != 1 {
-                return 3;
+                return pd_stop(src, 3);
             }
             count = pl_token_a(ar);
             i = 0;
             inner = 1;
             while (i < count) && (inner == 1) {
                 tk = pl_lex(src, ar);
+                if ps_missed(src) {
+                    return pd_need_bytes();
+                }
                 if (tk == 11) && (pl_token_c(ar) == 10) {
                     pl_unread(ar);
                     inner = 0;
                 } else {
                     if tk != 1 {
-                        return 3;
+                        return pd_stop(src, 3);
                     }
                     eoff = pl_token_a(ar);
                     tk = pl_lex(src, ar);
                     if tk != 1 {
-                        return 3;
+                        return pd_stop(src, 3);
                     }
                     egen = pl_token_a(ar);
                     tk = pl_lex(src, ar);
                     if tk != 11 {
-                        return 3;
+                        return pd_stop(src, 3);
                     }
                     ek = pl_token_c(ar);
                     if (ek != 12) && (ek != 13) {
-                        return 3;
+                        return pd_stop(src, 3);
                     }
                     if (i == 0) && (first == 1) && (ek == 12) && (egen == 65535) {
                         first = 0;
@@ -875,20 +929,27 @@ pub(crate) fn pd_table(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut
         }
     }
     d = pl_parse(src, ar);
+    if ps_missed(src) {
+        return pd_need_bytes();
+    }
     if d == 0 {
-        return 3;
+        return pd_stop(src, 3);
     }
     if pl_kind_of(ar, d) != 7 {
-        return 3;
+        return pd_stop(src, 3);
     }
     pd_add_trailer(dc, d);
     pd_set_prev(ar, dc, d);
     xs = pl_dict_get(ar, d, pn_x_ref_stm());
     if (xs != 0) && (pl_kind_of(ar, xs) == 2) {
-        pd_warn_set(dc, 2);
+        pd_warn_set(src, dc, 2);
         // An unreadable /XRefStm costs only the objects it lists.
         xpos = pl_int_value(ar, xs) + crate::port::cells_at(dc, D_SHIFT);
         pd_xstream(src, ar, dc, a, b, st, xpos, 1);
+    }
+    // CHECKPOINT: after the trailer (and the /XRefStm it named).
+    if ps_missed(src) {
+        return pd_need_bytes();
     }
     return 0;
 }
@@ -951,17 +1012,17 @@ pub(crate) fn pd_xfill(mut dc: &mut crate::port::Cells, a: &mut crate::port::Cel
     }
     return at;
 }
-pub(crate) fn pd_xfinish(ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, d: i32, mode: i32) -> i32 {
+pub(crate) fn pd_xfinish(src: &crate::port::Src, ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, d: i32, mode: i32) -> i32 {
     // A chain section (mode 0) registers its dictionary as a trailer and
     // names its /Prev; an /XRefStm (mode 1) does neither.
     if mode == 0 {
         pd_add_trailer(dc, d);
         pd_set_prev(ar, dc, d);
-        pd_warn_set(dc, 16);
+        pd_warn_set(src, dc, 16);
     }
     return 0;
 }
-pub(crate) fn pd_xstream(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, pos: i32, mode: i32) -> i32 {
+pub(crate) fn pd_xstream(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, pos: i32, mode: i32) -> i32 {
     // A cross-reference STREAM: a stream object whose decoded data is
     // entries of widths /W [t o g] for each (first, count) of /Index
     // (default [0 /Size]): type 0 free, 1 in use (offset, generation), 2
@@ -988,22 +1049,25 @@ pub(crate) fn pd_xstream(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &m
     let mut e2: i32 = 0;
     pl_seek(ar, pos, n);
     h = pl_parse_indirect(src, ar, pos);
+    if ps_missed(src) {
+        return pd_need_bytes();
+    }
     if h == 0 {
-        return 3;
+        return pd_stop(src, 3);
     }
     if pl_kind_of(ar, h) != 8 {
-        return 3;
+        return pd_stop(src, 3);
     }
     d = pl_stream_dict(ar, h);
     wa = pd_dget(src, ar, dc, a, b, st, d, pn_w());
     if wa == 0 {
-        return 3;
+        return pd_stop(src, 3);
     }
     if pl_kind_of(ar, wa) != 6 {
-        return 3;
+        return pd_stop(src, 3);
     }
     if pl_count(ar, wa) < 3 {
-        return 3;
+        return pd_stop(src, 3);
     }
     e0 = pd_nth(ar, wa, 0);
     e1 = pd_nth(ar, wa, 1);
@@ -1012,17 +1076,20 @@ pub(crate) fn pd_xstream(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &m
     w1 = pd_ival(ar, e1);
     w2 = pd_ival(ar, e2);
     if (w0 < 0) || (w0 > 4) || (w1 < 0) || (w1 > 4) || (w2 < 0) || (w2 > 4) {
-        return 3;
+        return pd_stop(src, 3);
     }
     if ((w0 + w1) + w2) == 0 {
-        return 3;
+        return pd_stop(src, 3);
     }
     size = pd_dint(src, ar, dc, a, b, st, d, pn_size(), 0);
     plan = pd_stream_plan(src, ar, dc, a, b, st, h);
     status = pd_run_plan(src, ar, plan, h, b, st, a);
+    if ps_missed(src) {
+        return pd_need_bytes();
+    }
     // A cut-short or badly-checksummed stream still holds entries.
     if (status != 0) && (status != 1) && (status != 5) && (status != 7) {
-        return 3;
+        return pd_stop(src, 3);
     }
     ix = pd_dget(src, ar, dc, a, b, st, d, pn_index());
     if (ix != 0) && (pl_kind_of(ar, ix) == 6) {
@@ -1039,9 +1106,107 @@ pub(crate) fn pd_xstream(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &m
     } else {
         pd_xfill(dc, a, 0, 0, size, w0, w1, w2, mode);
     }
-    return pd_xfinish(ar, dc, d, mode);
+    return pd_xfinish(src, ar, dc, d, mode);
 }
-pub(crate) fn pd_section(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, off: i32) -> i32 {
+pub(crate) fn pd_sift_down(mut b: &mut crate::port::Cells, lo: i32, n: i32) -> i32 {
+    // Heap sort's sift-down over b[0, n), for `pd-hint-extents`.
+    let mut root: i32 = lo;
+    let mut child: i32 = 0;
+    let mut sw: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut more: i32 = 1;
+    while more == 1 {
+        child = (root * 2) + 1;
+        if child >= n {
+            more = 0;
+        } else {
+            sw = root;
+            if crate::port::cells_at(b, sw) < crate::port::cells_at(b, child) {
+                sw = child;
+            }
+            if (child + 1) < n {
+                if crate::port::cells_at(b, sw) < crate::port::cells_at(b, child + 1) {
+                    sw = child + 1;
+                }
+            }
+            if sw == root {
+                more = 0;
+            } else {
+                x = crate::port::cells_at(b, root);
+                y = crate::port::cells_at(b, sw);
+                crate::port::cells_set(b, root, y);
+                crate::port::cells_set(b, sw, x);
+                root = sw;
+            }
+        }
+    }
+    return 0;
+}
+pub(crate) fn pd_sort(mut b: &mut crate::port::Cells, n: i32) -> i32 {
+    // Sort b[0, n) ascending, in place (heap sort: no recursion, no extra
+    // storage, and the same order on every target).
+    let mut i: i32 = (n / 2) - 1;
+    let mut e: i32 = n - 1;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while i >= 0 {
+        pd_sift_down(b, i, n);
+        i -= 1;
+    }
+    while e > 0 {
+        x = crate::port::cells_at(b, 0);
+        y = crate::port::cells_at(b, e);
+        crate::port::cells_set(b, 0, y);
+        crate::port::cells_set(b, e, x);
+        pd_sift_down(b, 0, e);
+        e -= 1;
+    }
+    return 0;
+}
+pub(crate) fn pd_hint_extents(src: &crate::port::Src, dc: &mut crate::port::Cells, mut b: &mut crate::port::Cells) -> i32 {
+    // Once the cross-reference is read, every object's EXTENT is known: from
+    // its offset to the next larger offset (or the end of the source). Tell
+    // the source, so a miss on an object can fetch the whole object, not a
+    // guess (D058). `b` is scratch. Answers the number of hints.
+    let n: i32 = ps_len(src);
+    let nent: i32 = crate::port::cells_at(dc, D_NENT);
+    let shift: i32 = crate::port::cells_at(dc, D_SHIFT);
+    let mut i: i32 = 0;
+    let mut at: i32 = 0;
+    let mut o: i32 = 0;
+    let mut nx: i32 = 0;
+    let mut cnt: i32 = 0;
+    let mut hints: i32 = 0;
+    crate::port::cells_drop(b, 0);
+    while i < nent {
+        at = D_FIRST + (i * 5);
+        if crate::port::cells_at(dc, at) == 2 {
+            o = crate::port::cells_at(dc, at + 1) + shift;
+            if (o >= 0) && (o < n) {
+                crate::port::cells_push(b, o);
+            }
+        }
+        i += 1;
+    }
+    cnt = crate::port::cells_len(b);
+    pd_sort(b, cnt);
+    i = 0;
+    while i < cnt {
+        o = crate::port::cells_at(b, i);
+        nx = n;
+        if (i + 1) < cnt {
+            nx = crate::port::cells_at(b, i + 1);
+        }
+        if nx > o {
+            ps_hint(src, o, nx);
+            hints += 1;
+        }
+        i += 1;
+    }
+    return hints;
+}
+pub(crate) fn pd_section(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, off: i32) -> i32 {
     // Read the section at file offset `off` (shifted): a table or a stream.
     let pos: i32 = off + crate::port::cells_at(dc, D_SHIFT);
     let k: i32 = pd_kind_at(src, ar, pos);
@@ -1051,9 +1216,9 @@ pub(crate) fn pd_section(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &m
     if k == 2 {
         return pd_xstream(src, ar, dc, a, b, st, pos, 0);
     }
-    return 3;
+    return pd_stop(src, 3);
 }
-pub(crate) fn pd_chain(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, off0: i32) -> i32 {
+pub(crate) fn pd_chain(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, off0: i32) -> i32 {
     // The sections, newest first: the one `startxref` names, then each
     // /Prev. A section already read ends the chain (a loop); a failure in
     // the first section is the answer, in a later one only a warning: the
@@ -1073,18 +1238,22 @@ pub(crate) fn pd_chain(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut
             j += 1;
         }
         if seen == 1 {
-            pd_warn_set(dc, 4);
+            pd_warn_set(src, dc, 4);
             off = -1;
         } else {
             crate::port::cells_set(dc, D_SEEN + guard, off);
             crate::port::cells_set(dc, D_NSEEN, guard + 1);
             crate::port::cells_set(dc, D_PREV, -1);
             status = pd_section(src, ar, dc, a, b, st, off);
+            // CHECKPOINT: after each xref section.
+            if ps_missed(src) {
+                return pd_need_bytes();
+            }
             if status != 0 {
                 if guard == 0 {
                     return status;
                 }
-                pd_warn_set(dc, 8);
+                pd_warn_set(src, dc, 8);
                 off = -1;
             } else {
                 off = crate::port::cells_at(dc, D_PREV);
@@ -1094,15 +1263,19 @@ pub(crate) fn pd_chain(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut
     }
     return 0;
 }
-pub(crate) fn pd_unreadable(dc: &mut crate::port::Cells, status: i32) -> i32 {
+pub(crate) fn pd_unreadable(src: &crate::port::Src, dc: &mut crate::port::Cells, status: i32) -> i32 {
     // The status to answer when the catalog or the page tree could not be
-    // read: `encrypted` (6) if the trailer has /Encrypt, else `status`.
+    // read: `encrypted` (6) if the trailer has /Encrypt, else `status`; and
+    // `need-bytes` before either when the source has missed.
+    if ps_missed(src) {
+        return 7;
+    }
     if crate::port::cells_at(dc, D_ENC) != 0 {
         return 6;
     }
     return status;
 }
-pub fn pd_open(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
+pub fn pd_open(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     // Open a document: find the header and `startxref`, read every
     // cross-reference section and trailer, check that there is a catalog
     // with a page tree. Answers a `pd-status` (0 ok). Nothing is decoded
@@ -1120,7 +1293,7 @@ pub fn pd_open(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::
     let mut pages: i32 = 0;
     let mut enc: i32 = 0;
     if base < 0 {
-        return 1;
+        return pd_stop(src, 1);
     }
     crate::port::cells_set(dc, D_BASE, base);
     if (base + 7) < n {
@@ -1137,12 +1310,12 @@ pub fn pd_open(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::
     crate::port::cells_set(dc, D_REFLIM, crate::port::limit_of(4));
     sx = pd_find_startxref(src);
     if sx < 0 {
-        return 2;
+        return pd_stop(src, 2);
     }
     pl_seek(ar, sx + 9, n);
     tk = pl_lex(src, ar);
     if tk != 1 {
-        return 3;
+        return pd_stop(src, 3);
     }
     off = pl_token_a(ar);
     // Offsets are from the start of the file, or (junk before the header)
@@ -1151,45 +1324,47 @@ pub fn pd_open(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::
         crate::port::cells_set(dc, D_SHIFT, 0);
     } else if (base > 0) && (pd_kind_at(src, ar, off + base) != 0) {
         crate::port::cells_set(dc, D_SHIFT, base);
-        pd_warn_set(dc, 1);
+        pd_warn_set(src, dc, 1);
     } else {
-        return 3;
+        return pd_stop(src, 3);
     }
     status = pd_chain(src, ar, dc, a, b, st, off);
     if status != 0 {
         return status;
     }
     if crate::port::cells_at(dc, D_NTRAIL) == 0 {
-        return 3;
+        return pd_stop(src, 3);
     }
+    // The cross-reference is read: say where each object ends.
+    pd_hint_extents(src, dc, b);
     enc = pd_trailer_get(ar, dc, pn_encrypt());
     if enc != 0 {
         crate::port::cells_set(dc, D_ENC, enc);
     }
     root = pd_trailer_get(ar, dc, pn_root());
     if root == 0 {
-        return 4;
+        return pd_stop(src, 4);
     }
     root = pd_resolve(src, ar, dc, a, b, st, root);
     // When the file is encrypted, what cannot be read is probably
     // encrypted (object streams are, whole): say so, and let P3.2 decrypt.
     if root == 0 {
-        return pd_unreadable(dc, 4);
+        return pd_unreadable(src, dc, 4);
     }
     if pl_kind_of(ar, root) != 7 {
-        return pd_unreadable(dc, 4);
+        return pd_unreadable(src, dc, 4);
     }
     crate::port::cells_set(dc, D_ROOT, root);
     pages = pd_dget(src, ar, dc, a, b, st, root, pn_pages());
     if pages == 0 {
-        return pd_unreadable(dc, 5);
+        return pd_unreadable(src, dc, 5);
     }
     if pl_kind_of(ar, pages) != 7 {
-        return pd_unreadable(dc, 5);
+        return pd_unreadable(src, dc, 5);
     }
     return 0;
 }
-pub(crate) fn pd_elem(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, arr: i32, i: i32) -> i32 {
+pub(crate) fn pd_elem(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, arr: i32, i: i32) -> i32 {
     // The i-th element of an array, resolved; 0 when absent.
     let h: i32 = pd_nth(ar, arr, i);
     return pd_resolve(src, ar, dc, a, b, st, h);
@@ -1210,7 +1385,7 @@ pub(crate) fn pd_is_num(ar: &mut crate::port::Cells, h: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn pd_read_box(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, boxh: i32, mut pg: &mut crate::port::Cells, at: i32) -> i32 {
+pub(crate) fn pd_read_box(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, boxh: i32, mut pg: &mut crate::port::Cells, at: i32) -> i32 {
     // Read a box (four numbers, any of which may be a reference) into
     // pg[at, at+4) as x0 y0 x1 y1 with x0 < x1 and y0 < y1. Answers 1 when
     // it is a box with a positive area, else 0 and pg untouched.
@@ -1275,7 +1450,7 @@ pub(crate) fn pd_read_box(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &
     crate::port::cells_set(pg, at + 3, y1);
     return 1;
 }
-pub(crate) fn pd_rotation(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, rh: i32) -> i32 {
+pub(crate) fn pd_rotation(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, rh: i32) -> i32 {
     // /Rotate as 0, 90, 180 or 270. Negative values wrap; a value that
     // is not a multiple of 90 (poppler keeps 45, pdf.js reads 0) is 0.
     let h: i32 = pd_resolve(src, ar, dc, a, b, st, rh);
@@ -1297,7 +1472,7 @@ pub(crate) fn pd_rotation(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &
     }
     return deg;
 }
-pub(crate) fn pd_add_page(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, node: i32, num: i32, im: i32, ic: i32, ir: i32, ires: i32) -> i32 {
+pub(crate) fn pd_add_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, node: i32, num: i32, im: i32, ic: i32, ir: i32, ires: i32) -> i32 {
     // Append the page record for a leaf `node` with its inherited
     // attributes (handles, 0 when no ancestor has one).
     let at: i32 = crate::port::cells_len(pg);
@@ -1326,7 +1501,7 @@ pub(crate) fn pd_add_page(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &
         crate::port::cells_set(pg, at + 3, 61200);
         crate::port::cells_set(pg, at + 4, 79200);
         flags = 1;
-        pd_warn_set(dc, 256);
+        pd_warn_set(src, dc, 256);
     }
     ok = pd_read_box(src, ar, dc, a, b, st, ic, pg, at + 5);
     if ok == 1 {
@@ -1375,7 +1550,7 @@ pub(crate) fn pd_add_page(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &
     crate::port::cells_set(pg, at + 12, flags);
     return 0;
 }
-pub(crate) fn pd_walk(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, node: i32, num: i32, depth: i32, im: i32, ic: i32, ir: i32, ires: i32) -> i32 {
+pub(crate) fn pd_walk(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, node: i32, num: i32, depth: i32, im: i32, ic: i32, ir: i32, ires: i32) -> i32 {
     // One node of the page tree. `im ic ir ires` are the nearest
     // ancestor's /MediaBox /CropBox /Rotate /Resources (handles, 0 for
     // none). A node with /Kids is an intermediate node, any other is a
@@ -1384,8 +1559,12 @@ pub(crate) fn pd_walk(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut 
     if depth > 64 {
         return 0;
     }
+    // CHECKPOINT: at each page-tree node.
+    if ps_missed(src) {
+        return 0;
+    }
     if pl_kind_of(ar, node) != 7 {
-        pd_warn_set(dc, 128);
+        pd_warn_set(src, dc, 128);
         return 0;
     }
     let mut at: i32 = 0;
@@ -1402,7 +1581,7 @@ pub(crate) fn pd_walk(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut 
     if num > 0 {
         at = D_FIRST + (num * 5);
         if ((crate::port::cells_at(dc, at + 4) / 4) & 1) == 1 {
-            pd_warn_set(dc, 128);
+            pd_warn_set(src, dc, 128);
             return 0;
         }
         crate::port::cells_set(dc, at + 4, crate::port::cells_at(dc, at + 4) + 4);
@@ -1432,14 +1611,17 @@ pub(crate) fn pd_walk(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut 
                 kn = pl_int_value(ar, k);
                 kh = pd_get(src, ar, dc, a, b, st, kn);
                 if kh == 0 {
-                    pd_warn_set(dc, 128);
+                    pd_warn_set(src, dc, 128);
                 } else {
                     pd_walk(src, ar, dc, a, b, st, pg, kh, kn, depth + 1, m, c, r, res);
                 }
             } else if kk == 7 {
                 pd_walk(src, ar, dc, a, b, st, pg, k, 0, depth + 1, m, c, r, res);
             } else {
-                pd_warn_set(dc, 128);
+                pd_warn_set(src, dc, 128);
+            }
+            if ps_missed(src) {
+                return 0;
             }
             k = pl_next(ar, k);
         }
@@ -1448,15 +1630,19 @@ pub(crate) fn pd_walk(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut 
     pd_add_page(src, ar, dc, a, b, st, pg, node, num, m, c, r, res);
     return 0;
 }
-pub fn pd_pages(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells) -> i32 {
+pub fn pd_pages(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells) -> i32 {
     // Walk the page tree from the catalog into `pg` (cleared first) and
-    // answer the number of pages. Call it after a successful `pd-open`.
+    // answer the number of pages, or -1 when the source missed (then `pg` is
+    // not to be used: re-run). Call it after a successful `pd-open`.
     crate::port::cells_drop(pg, 0);
     let root: i32 = crate::port::cells_at(dc, D_ROOT);
     let raw: i32 = pl_dict_get(ar, root, pn_pages());
     let top: i32 = pd_resolve(src, ar, dc, a, b, st, raw);
     let mut num: i32 = 0;
     let mut i: i32 = 0;
+    if ps_missed(src) {
+        return -1;
+    }
     if top == 0 {
         return 0;
     }
@@ -1471,6 +1657,9 @@ pub fn pd_pages(src: &[u8], mut ar: &mut crate::port::Cells, mut dc: &mut crate:
         num = pl_int_value(ar, raw);
     }
     pd_walk(src, ar, dc, a, b, st, pg, top, num, 0, 0, 0, 0, 0);
+    if ps_missed(src) {
+        return -1;
+    }
     return crate::port::cells_len(pg) / PAGE_STRIDE;
 }
 pub fn pd_pg_count(pg: &mut crate::port::Cells) -> i32 {
