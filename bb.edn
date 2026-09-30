@@ -18,5 +18,7 @@
          :task (shell "kin/scripts/drift")}
   hosts {:doc "Do the four host trees agree, and do the call sites match?"
          :task (shell "kin/scripts/hosts")}
+  accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (NOT a gate, D075).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
+            :task (apply shell "python3" "tools/accuracy/accuracy.py" *command-line-args*)}
   gates {:doc "Run every gate; fail if one exits non-zero or prints no score."
          :task (shell "kin/scripts/gates")}}}
