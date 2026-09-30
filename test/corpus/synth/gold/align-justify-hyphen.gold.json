@@ -1,0 +1,433 @@
+{
+ "emon-gold": "1.0",
+ "id": "align-justify-hyphen",
+ "provenance": {
+  "html": "html/align-justify-hyphen.html",
+  "pdf": "pdf/align-justify-hyphen.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/align-justify-hyphen.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering",
+    "align"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ],
+   "paragraph": [
+    "align"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "facts": {
+  "lines": {
+   "9": 11,
+   "4": 1,
+   "8": 1,
+   "14": 8,
+   "17": 13,
+   "5": 11,
+   "18": 10,
+   "12": 1,
+   "13": 13,
+   "6": 11,
+   "2": 1,
+   "16": 1,
+   "10": 7
+  },
+  "hyphens": [
+   {
+    "id": 5,
+    "printed": "oppor-tunities",
+    "word": "opportunities"
+   },
+   {
+    "id": 5,
+    "printed": "re-sponsibility.",
+    "word": "responsibility."
+   },
+   {
+    "id": 5,
+    "printed": "de-velopment",
+    "word": "development"
+   },
+   {
+    "id": 5,
+    "printed": "organiza-tion",
+    "word": "organization"
+   },
+   {
+    "id": 5,
+    "printed": "in-formation",
+    "word": "information"
+   },
+   {
+    "id": 6,
+    "printed": "opportu-nities",
+    "word": "opportunities"
+   },
+   {
+    "id": 6,
+    "printed": "in-frastructure",
+    "word": "infrastructure"
+   },
+   {
+    "id": 6,
+    "printed": "im-plementation",
+    "word": "implementation"
+   },
+   {
+    "id": 6,
+    "printed": "trans-portation",
+    "word": "transportation"
+   },
+   {
+    "id": 6,
+    "printed": "imple-mentation",
+    "word": "implementation"
+   },
+   {
+    "id": 9,
+    "printed": "environmen-tal",
+    "word": "environmental"
+   },
+   {
+    "id": 9,
+    "printed": "opportu-nities",
+    "word": "opportunities"
+   },
+   {
+    "id": 10,
+    "printed": "in-ternational",
+    "word": "international"
+   },
+   {
+    "id": 13,
+    "printed": "docu-mentation",
+    "word": "documentation"
+   },
+   {
+    "id": 13,
+    "printed": "admin-istration",
+    "word": "administration"
+   },
+   {
+    "id": 13,
+    "printed": "or-ganization.",
+    "word": "organization."
+   },
+   {
+    "id": 13,
+    "printed": "docu-mentation",
+    "word": "documentation"
+   },
+   {
+    "id": 13,
+    "printed": "communica-tion",
+    "word": "communication"
+   },
+   {
+    "id": 13,
+    "printed": "doc-umentation",
+    "word": "documentation"
+   },
+   {
+    "id": 13,
+    "printed": "in-ternational",
+    "word": "international"
+   },
+   {
+    "id": 14,
+    "printed": "sto-ry",
+    "word": "story"
+   },
+   {
+    "id": 14,
+    "printed": "docu-mentation",
+    "word": "documentation"
+   },
+   {
+    "id": 14,
+    "printed": "us-ing",
+    "word": "using"
+   },
+   {
+    "id": 17,
+    "printed": "trans-portation",
+    "word": "transportation"
+   },
+   {
+    "id": 17,
+    "printed": "opportu-nities",
+    "word": "opportunities"
+   },
+   {
+    "id": 17,
+    "printed": "transporta-tion",
+    "word": "transportation"
+   },
+   {
+    "id": 17,
+    "printed": "environ-mental",
+    "word": "environmental"
+   },
+   {
+    "id": 17,
+    "printed": "informa-tion",
+    "word": "information"
+   },
+   {
+    "id": 18,
+    "printed": "be-cause",
+    "word": "because"
+   },
+   {
+    "id": 18,
+    "printed": "devel-opment",
+    "word": "development"
+   },
+   {
+    "id": 18,
+    "printed": "cir-cumstances",
+    "word": "circumstances"
+   }
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "align": "start",
+       "text": "Justified and Hyphenated"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "Method"
+        },
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "Organization for circumstances opportunities in live of place one sea next responsibility. People international same may opportunities out want development saw down. Were organization against policy around people pay whole documentation say back big information need. So performance asked being end home still need off found read transportation used development through."
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "Organization then circumstances just representative sun performance just never representative consideration find. Help environmental sea opportunities before these information infrastructure line implementation implementation should against transportation communication. Opportunities consideration last would of understanding own implementation form."
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 8,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "Findings"
+        },
+        {
+         "id": 9,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "To day upon sure upon best name write investigation just out thing get side. Implementation transportation responsibility tell look whole enough may such opportunities. Environmental such during top see change and representative should like performance own. Above environmental above back understanding opportunities understanding environmental come responsibility."
+        },
+        {
+         "id": 10,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "Transportation responsibility because us hand transportation can hard went my few important. Here those boy house policy international so to large. High but responsibility international face with organization later be international understanding line just."
+        }
+       ]
+      },
+      {
+       "id": 11,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 12,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "Discussion"
+        },
+        {
+         "id": 13,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "International through circumstances representative characteristics documentation she administration administration try responsibility country organization. When could near documentation performance development communication almost is communication measure or. Earth revenue move know which country understanding move man much communication documentation administration can man. Consideration documentation say international first if large went one even."
+        },
+        {
+         "id": 14,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "Representative understanding sample sentence transportation light picture transportation what. Show is back story performance today important into characteristics communication documentation documentation. Most need city when international well each using so investigation transportation."
+        }
+       ]
+      },
+      {
+       "id": 15,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 16,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "Limits"
+        },
+        {
+         "id": 17,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "Communication administration transportation characteristics far opportunities understanding off transportation transportation hard information learn pay true. Same market more small line region good during both consideration opportunities environmental over transportation. Ever time example sometimes two land information feet while set should work knew long leave. With sentence being heard representative after method very best made because will international."
+        },
+        {
+         "id": 18,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "Understanding could transportation infrastructure environmental set because big high investigation those. Who infrastructure communication here year new red responsibility development found not circumstances. Here organization understanding in international best looked them circumstances between not then near must."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "Justified and Hyphenated"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

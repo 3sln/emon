@@ -51,7 +51,7 @@
 (defn -main []
   (let [hdr (fn [what] (str "# emon P1.7: " what "\n# Written by kin/scripts/content-goldens from the generated Rust; do not edit.\n"
                             "# F path (relative to test/), P page glyph text, T page line text (words joined by a space, lines by U+2028), S span (emon.contentrows). See kin/pdfcontenttest.kin.\n"))]
-    (write "synth.txt" (str (hdr "the glyph text of each page of the 36 Chrome-printed synthetic documents")
+    (write "synth.txt" (str (hdr "the glyph text of each page of the 55 Chrome-printed synthetic documents")
                             (rows-file (pdfs "corpus/synth/pdf") false)))
     (write "tagged.txt" (str (hdr "the glyph text of each page and every marked-content span of the 3 tagged PDFs")
                              (rows-file (pdfs "corpus/synth/pdf-tagged") true)))

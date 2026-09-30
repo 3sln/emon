@@ -1,0 +1,243 @@
+{
+ "emon-gold": "1.0",
+ "id": "align-rtl",
+ "provenance": {
+  "html": "html/align-rtl.html",
+  "pdf": "pdf/align-rtl.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/align-rtl.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering",
+    "align"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ],
+   "paragraph": [
+    "align"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "facts": {
+  "lines": {
+   "4": 1,
+   "8": 4,
+   "14": 6,
+   "7": 1,
+   "5": 4,
+   "13": 1,
+   "11": 4,
+   "2": 1,
+   "10": 1
+  },
+  "hyphens": []
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "align": "center",
+       "text": "יישור בעברית"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "התחלה"
+        },
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "align": "start",
+         "text": "בחודשים בשיפור בחודשים והגדלת הקבוצה עובדים בחודשים עובדים השירות את. שנה מיליון לשפר הצוותים הדוח באזור הארגונים הישן מכל של של מכל הרבעון על. הדוח הרבעון נתונים והתרחבה והגדלת מתמקדת הלקוחות שנה הפגישה. השבועית באזור ולהציע השבועית מיליון המנהל קטנה המנהל הרצון מונחים."
+        }
+       ]
+      },
+      {
+       "id": 6,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 7,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "סוף"
+        },
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "align": "end",
+         "text": "הלקוחות הסניפים לפני שנה העבודה לשפר דרכים מיליון והגדלת הצוותים. בהדרגה הארגונים הגדולים קיימה והתרחבה להגיש בחודשים מתמקדת הפגישה הרצון. החוף הארגונים המנהל המנהל השירות בהדרגה הצוותים החוף ועל. ולהציע הקבוצה שנה קטנה מיליון השירות של בשיפור שביעות בהדרגה בעיר שקלים כולל באזור."
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 10,
+         "kind": "heading",
+         "level": 2,
+         "align": "center",
+         "text": "מרכז"
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "align": "center",
+         "text": "המנהל הסניפים שקלים הסניפים הפחתת דוחות והגדלת הנמל הדוח בבניין הוקמה מונחים. להגיש לשנת הנמל הבאים ביקש הארגונים באזור הרבעון בבניין בתוצאות. קיימה ודנה הצוותים לצד של דוחות והתרחבה קיימה הרצון בתוצאות עובדים שקלים דוחות ביקש. הבאים ועל עלויות נתונים העבודה בתוצאות החברה כמו החוף באזור."
+        }
+       ]
+      },
+      {
+       "id": 12,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 13,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "יישור דו-צדדי"
+        },
+        {
+         "id": 14,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "חמישים מיליון התוכנית חמישים בשיפור הוקמה ליד דרכים קטנה ודנה עובדים בחודשים חמישים השירות. הרבעון שביעות הצוותים לאחד דוחות התוכנית העבודה לאחד לשנת החברה התוכנית הרבעון הלקוחות המנהל. הבאים עלויות לפני באזור ודנה האחרון הקבוצה הוקמה לשפר קיימה הסניפים הנמל נתונים. תקציב חמישים התוכנית המנהל בתוצאות והגדלת ולהציע התוכנית בהדרגה הפחתת לפני. הגדולים קיימה להגיש הפגישה בהדרגה בכל קטנה ודנה הקבוצה להגיש ודנה והתרחבה."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "יישור"
+  },
+  "settings": {
+   "locale": "he"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "he"
+  }
+ }
+}

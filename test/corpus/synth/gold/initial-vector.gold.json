@@ -1,0 +1,204 @@
+{
+ "emon-gold": "1.0",
+ "id": "initial-vector",
+ "provenance": {
+  "html": "html/initial-vector.html",
+  "pdf": "pdf/initial-vector.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/initial-vector.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ],
+   "initial": [
+    "form",
+    "lines"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "facts": {
+  "lines": {
+   "4": 8,
+   "5": 7
+  },
+  "hyphens": []
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Vector Initials"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Out best far live another but boy who region may did something where out. Made report hear could just first another is place second went sea year it down across. Then money paper almost such white thing then there well read page any. Work did both growth better night own this results red face results sure play region her. Answer form this school year hard us time up long were in."
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "The lamplighter came at the same hour each evening, and the children learned to tell the time by the order in which the windows woke. Seen picture growth father better than number some came other not well way number off. Without water high find her with until your night learn better between well found market. Men between group do not more knew out too tell began write name. Himself live us left cut red move turn part this can. People review let people down pay sentence learn review might country them. Below but one used year market sea still back over example measure put. Should room red might him way four figure big never far said much both story morning always.",
+       "inlines": [
+        {
+         "kind": "initial",
+         "form": "drop",
+         "lines": 3,
+         "children": [
+          {
+           "kind": "text",
+           "text": "T"
+          }
+         ]
+        },
+        {
+         "kind": "text",
+         "text": "he lamplighter came at the same hour each evening, and the children learned to tell the time by the order in which the windows woke. Seen picture growth father better than number some came other not well way number off. Without water high find her with until your night learn better between well found market. Men between group do not more knew out too tell began write name. Himself live us left cut red move turn part this can. People review let people down pay sentence learn review might country them. Below but one used year market sea still back over example measure put. Should room red might him way four figure big never far said much both story morning always."
+        }
+       ]
+      },
+      {
+       "id": 5,
+       "kind": "paragraph",
+       "text": "Long before the railway arrived the valley had its own calendar, kept in the names of the fields. Try take so the once does what here measure boy from hard ever. Red sample large car now as if get away still any morning out hear set through. Upon kind sun write must most off once no back up be by. More back story any morning soon water both be quarter city come. Change however so four friend will two true be him said. Or the so your might such over using room answer over cut saw good. Earth hear water word this live work been city again from.",
+       "inlines": [
+        {
+         "kind": "initial",
+         "form": "drop",
+         "lines": 2,
+         "children": [
+          {
+           "kind": "text",
+           "text": "L"
+          }
+         ]
+        },
+        {
+         "kind": "text",
+         "text": "ong before the railway arrived the valley had its own calendar, kept in the names of the fields. Try take so the once does what here measure boy from hard ever. Red sample large car now as if get away still any morning out hear set through. Upon kind sun write must most off once no back up be by. More back story any morning soon water both be quarter city come. Change however so four friend will two true be him said. Or the so your might such over using room answer over cut saw good. Earth hear water word this live work been city again from."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "Vector Initials"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

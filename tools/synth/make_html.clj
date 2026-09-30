@@ -10,7 +10,8 @@
   Hebrew, Hiragino Sans, Devanagari Sangam MN): nothing is fetched, so a render is reproducible on the
   same OS.  No text is `text-transform`ed: what prints is what the source says.  See html2gold.clj for
   the HTML subset."
-  (:require [clojure.java.io :as io]
+  (:require [babashka.process :as p]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [pyfmt :refer [fmt]]
             [pyfmt]
@@ -227,8 +228,8 @@ figcaption{font:italic 9.5pt %s;margin-top:.3em}
 
 (def PAGENUM-HINT (om "labels" "arabic" "dropped" [(om "reason" "page-number" "text" "{n}")]))
 
-(defn build
-  "All documents as {name html}."
+(defn build-p28
+  "The 36 documents of P2.8 as {name html}."
   []
   (let [docs (atom {})
         add (fn [name title body & [opts]] (swap! docs assoc name (doc title body (or opts {}))))
@@ -592,10 +593,419 @@ h1{font:bold 20pt %s} h2{font:bold 14pt %s}" SERIF SANS SANS SANS)
          {:css (fmt "table{width:100%%;font-family:'Geeza Pro','Hiragino Sans GB','Devanagari Sangam MN',Helvetica,sans-serif} th,td{border:1px solid #000} h1{font:bold 20pt %s}" SANS)})
     @docs))
 
+;; =====================================================================================================
+;; P2.13 (D114): initials, alignment and columns.  19 documents.
+;;
+;; Authoring attributes html2gold reads (it never computes CSS): data-initial / data-lines /
+;; data-initial-text, data-align, data-cols / data-span, data-note="sidebar|margin".  A drop cap is sized
+;; so that its float is 2 pt shorter than n body lines (so exactly n lines wrap it, and build.clj checks
+;; that they do): the glyph's baseline lands on line n's, its cap top near line 1's.
+;; =====================================================================================================
+
+(def LONGW ["understanding" "administration" "communication" "organization" "responsibility"
+            "environmental" "opportunities" "development" "international" "performance"
+            "information" "transportation" "investigation" "representative" "infrastructure"
+            "consideration" "implementation" "characteristics" "circumstances" "documentation"])
+
+(defn- mixed-pick [r] (if (zero? (rnd/randint r 0 2)) (rnd/choice r LONGW) (rnd/choice r WORDS)))
+
+(defn- sentence-with [r lo hi pick]
+  (let [n (rnd/randint r lo hi)
+        s (str/join " " (vec (repeatedly n #(pick r))))
+        s (str (str/upper-case (subs s 0 1)) (subs s 1) ".")]
+    (-> s (str/replace " i " " I ") (str/replace "don't" "do not") (str/replace "didn't" "did not"))))
+
+(defn para-mixed
+  "A paragraph in which a third of the words are long ones (for hyphenation)."
+  [seed n lo hi]
+  (let [r (rnd/make seed)] (str/join " " (vec (repeatedly n #(sentence-with r lo hi mixed-pick))))))
+
+(defn lead
+  "A hand-written first sentence, then n generated ones."
+  [sentence seed n lo hi]
+  (str sentence " " (para seed n lo hi)))
+
+(defn Pa
+  "<p> with a class and extra attributes (a string beginning with a space)."
+  [cls text & [extra]]
+  (str "<p" (when cls (str " class=\"" cls "\"")) (or extra "") ">" text "</p>"))
+
+(defn dropcap-css
+  "Declarations for a float spanning n lines of a `body` pt font on a `lh` pt line: its height n*lh-2,
+  its font size such that the baseline is line n's (metrics a, d: ascent and descent in em; `:f` forces
+  a size; `:side` is left or right)."
+  [n body lh & {:keys [a d pad f side] :or {a 0.917 d 0.219 pad 5 side "left"}}]
+  (let [h (- (* n lh) 2.0)
+        b (+ (* (dec n) lh) (/ (- lh (* (+ a d) body)) 2.0) (* a body))
+        fs (or f (/ (- b (/ h 2.0)) (/ (- a d) 2.0)))]
+    (fmt "float:%s;font-size:%.2fpt;line-height:%.2fpt;padding:%s;margin:0" side fs h
+         (if (= side "left") (fmt "0 %dpt 0 0" pad) (fmt "0 0 0 %dpt" pad)))))
+
+(def JA
+  ["彼は朝早く港の近くの小さな店に入り、温かいお茶を頼んだ。"
+   "窓の外では漁師たちが網を直しながら、昨夜の嵐について話していた。"
+   "店の主人は古い時計を見上げて、今日は風が変わるだろうと言った。"
+   "海の色は刻々と変わり、やがて空との境がわからなくなった。"
+   "旅人は地図を広げ、次の町までの道を指でたどっていった。"
+   "山のふもとには小さな畑が広がり、黄色い花が風に揺れていた。"
+   "子どもたちは川辺に集まり、平らな石を投げて遊んでいた。"
+   "夕方になると、遠くの寺の鐘がゆっくりと三度鳴った。"
+   "老人は縁側に座り、庭の梅の木をいつまでも眺めていた。"
+   "市場には季節の果物が並び、売り声が通りに響いていた。"
+   "図書館の奥には、誰も読まなくなった古い地図が眠っている。"
+   "春の雨は静かに降り、屋根の上で小さな音を立てていた。"
+   "列車は定刻に駅を出て、雪におおわれた谷へと入っていった。"
+   "彼女は手紙を書き終えると、ゆっくりとペンを置いて息をついた。"
+   "港の灯台は夜ごとに光を回し、遠い船に道を教えている。"
+   "新しい橋が完成した日、町じゅうの人々が川のほとりに集まった。"
+   "雲の切れ間から朝日が差し込み、濡れた石畳が金色に光った。"
+   "彼は古い鞄を肩にかけ、誰にも告げずに村を出ていった。"
+   "台所からは煮物のやさしい匂いが流れ、家じゅうに広がった。"
+   "湖の向こうの山々は、夏でも頂に白い雪をかぶっている。"
+   "先生は黒板に大きく円を描いて、ゆっくりと説明を始めた。"
+   "祭りの夜には提灯がともり、通りは人の波でいっぱいになった。"
+   "猫は日だまりで丸くなり、午後の時間をのんびりと過ごしていた。"
+   "冬の朝の空気は澄み渡り、遠くの山の輪郭がくっきりと見えた。"])
+
+(def HE-WORDS
+  (vec (distinct (filter #(re-matches #"[א-ת]+" %)
+                         (mapcat #(str/split (str/replace % #"[,.]" "") #"\s+")
+                                 (concat HE-P ["הקבוצה קיימה את הפגישה השבועית בבניין הישן ליד הנמל ודנה בתוצאות הרבעון האחרון"
+                                               "המנהל ביקש מכל הצוותים להגיש דוחות מסודרים ולהציע דרכים לשפר את העבודה בחודשים הבאים"]))))))
+
+(defn he-para [seed n lo hi]
+  (let [r (rnd/make seed)]
+    (str/join " " (vec (repeatedly n #(let [k (rnd/randint r lo hi)]
+                                        (str (str/join " " (vec (repeatedly k (fn [] (rnd/choice r HE-WORDS))))) ".")))))))
+
+(defn ja-paras
+  "Paragraphs of the Japanese pool, n sentences each, from sentence index `from`, optionally led by a bracket."
+  [from n]
+  (str/join "" (subvec JA from (+ from n))))
+
+(defn initial-tile!
+  "The PNG of initial-image: a Georgia W on a bordered, filled square at 300 dpi, made by ImageMagick."
+  [out-dir]
+  (let [dir (io/file out-dir "img")
+        f (io/file dir "initial-W.png")]
+    (.mkdirs dir)
+    (let [r (p/sh "magick" "-size" "192x192" "xc:#7a1f1f"
+                  "-font" "/System/Library/Fonts/Supplemental/Georgia.ttf" "-pointsize" "132"
+                  "-fill" "#f4e8c8" "-gravity" "center" "-annotate" "+0+6" "W"
+                  "-fill" "none" "-stroke" "#f4e8c8" "-strokewidth" "5" "-draw" "rectangle 9,9 182,182"
+                  "-units" "PixelsPerInch" "-density" "300" "-strip" (str f))]
+      (when-not (zero? (:exit r)) (throw (ex-info (str "magick failed: " (:err r)) r))))))
+
+(defn build-d114
+  "The 19 documents of D114 as {name html}."
+  []
+  (let [docs (atom {})
+        add (fn [name title body & [opts]] (swap! docs assoc name (doc title body (or opts {}))))
+        LAYOUT (om "layout" true)
+        ;; --- Georgia 11 pt on a 15.95 pt line
+        B 11 LH 15.95
+        ini (fn [n] (dropcap-css n B LH))]
+
+    ;; ------------------------------------------------------------------------------ initials
+    (add "initial-firstletter" "Notes on Openings"
+         (str "<h1>Notes on Openings</h1>"
+              (Pa "d2" (lead "It was the first warm evening of the year, and the harbour lights were already burning." 5001 7 11 17)
+                  " data-initial=\"drop\" data-lines=\"2\"")
+              (Pa "d3" (lead "A long time ago, in a valley far from the nearest road, there stood a mill that nobody remembered building." 5002 7 11 17)
+                  " data-initial=\"drop\" data-lines=\"3\"")
+              (Pa "d4" (lead "I remember the harbour as it was before the new pier, when the boats still came in at dusk and the gulls followed them." 5003 8 11 17)
+                  " data-initial=\"drop\" data-lines=\"4\"")
+              (Pa "d3" (lead "At the edge of the old town, where the lane narrows between the tannery and the chapel, a single lamp has burned every night since the war." 5004 7 11 17)
+                  " data-initial=\"drop\" data-lines=\"3\"")
+              (Pa "d2" (lead "“Nothing here is what it seems,” said the clerk, folding the ledger shut and looking past the visitor at the rain." 5005 7 11 17)
+                  " data-initial=\"drop\" data-lines=\"2\"")
+              (Pa "d3" (str "T<span class=\"sc\">HE BUREAU</span> of Weights and Measures opened its doors at nine, as it had every morning for sixty years. " (para 5006 7 11 17))
+                  " data-initial=\"drop\" data-lines=\"3\""))
+         {
+          :css (str "h1{font:bold 20pt " SANS "} .sc{font-size:.82em;letter-spacing:.05em}"
+                    " p.d2::first-letter{" (ini 2) "} p.d3::first-letter{" (ini 3) "} p.d4::first-letter{" (ini 4) "}")})
+
+    (add "initial-raised" "Raised Initials"
+         (str "<h1>Raised Initials</h1>"
+              (Pa "r" (str "<span class=\"ri\" data-initial=\"raised\">T</span>he morning train was late again, and the platform filled slowly with people who knew better than to complain. " (para 5101 6 11 17)))
+              (Pa nil (para 5102 5 11 17))
+              (Pa "r" (str "<span class=\"ri\" data-initial=\"raised\">S</span>omewhere beyond the orchard the river turned south, and nobody who lived there had ever followed it to the sea. " (para 5103 6 11 17)))
+              (Pa "r" (str "<span class=\"ri\" data-initial=\"raised\">L</span>ater that week the council met to discuss the bridge, the budget and the vexed question of the clock. " (para 5104 6 11 17)))
+              (Pa nil (para 5105 5 11 17))
+              (Pa "r" (str "<span class=\"ri\" data-initial=\"raised\">M</span>any of the letters were never answered, though the postmaster kept every one of them in a drawer by the stove. " (para 5106 6 11 17))))
+         {:css (str "h1{font:bold 20pt " SANS "} p.r{margin-top:1.5em} .ri{font-size:2.7em;line-height:0;font-weight:bold;color:#7a1f1f}")})
+
+    (add "initial-image" "An Image Initial"
+         (str "<h1>An Image Initial</h1>"
+              (Pa nil (para 5201 5 11 17))
+              "<p><img class=\"dc\" src=\"img/initial-W.png\" alt=\"W\" data-initial=\"drop\" data-lines=\"3\">hen the last boat had gone out, the town went quiet in a way that visitors found hard to describe. " (para 5202 7 11 17) "</p>"
+              (Pa nil (para 5203 5 11 17)))
+         {:css (str "h1{font:bold 20pt " SANS "} img.dc{float:left;width:45.85pt;height:45.85pt;margin:0 6pt 0 0}")})
+
+    (let [svg (fn [size letter path]
+                (str "<svg class=\"dc\" data-initial=\"drop\" data-lines=\"" (if (= size 45.85) 3 2) "\" data-initial-text=\"" letter
+                     "\" width=\"" size "pt\" height=\"" size "pt\" viewBox=\"0 0 46 46\"><path fill=\"#7a1f1f\" d=\"" path "\"/></svg>"))
+          T "M3,3 H43 V12 H27 V43 H19 V12 H3 Z"
+          L "M8,3 H18 V34 H42 V43 H8 Z"]
+      (add "initial-vector" "Vector Initials"
+           (str "<h1>Vector Initials</h1>"
+                (Pa nil (para 5301 5 11 17))
+                "<p>" (svg 45.85 "T" T) "he lamplighter came at the same hour each evening, and the children learned to tell the time by the order in which the windows woke. " (para 5302 7 11 17) "</p>"
+                "<p>" (svg 29.9 "L" L) "ong before the railway arrived the valley had its own calendar, kept in the names of the fields. " (para 5303 7 11 17) "</p>")
+           {:css (str "h1{font:bold 20pt " SANS "} svg.dc{float:left;margin:0 6pt 0 0}")}))
+
+    (add "initial-firstword" "First Words"
+         (str "<h1>First Words</h1>"
+              "<p><span class=\"fw\" data-initial=\"drop\" data-lines=\"2\">IT</span> was a bright cold day in April, and the clocks were striking thirteen. " (para 5401 7 11 17) "</p>"
+              "<p><span class=\"fw\" data-initial=\"drop\" data-lines=\"2\">ONCE</span> there lived a miller whose three sons could not agree about anything at all. " (para 5402 7 11 17) "</p>"
+              "<p><span class=\"fw\" data-initial=\"drop\" data-lines=\"2\">WHEN</span> the snow came that winter it came all at once, and the road to the mill was gone by morning. " (para 5403 7 11 17) "</p>")
+         {:css (str "h1{font:bold 20pt " SANS "} span.fw{float:left;font:bold 30pt/29.9pt Georgia,serif;line-height:29.9pt;margin:0 7pt 0 0;color:#7a1f1f}")})
+
+    (add "initial-columns" "Drop Caps in Columns"
+         (str "<h1>Drop Caps in Columns</h1><div class=\"cols\" data-cols=\"2\">"
+              (Pa nil (para 5501 3 10 15))
+              (Pa "d3" (lead "Everything about the harbour had been measured, and nothing about it was certain." 5502 4 10 15)
+                  " data-initial=\"drop\" data-lines=\"3\"")
+              (Pa nil (para 5504 3 10 15))
+              (Pa "d3 cb" (lead "Nobody argued with the tide, which came in twice a day and left the evidence." 5503 5 10 15)
+                  " data-initial=\"drop\" data-lines=\"3\"")
+              (Pa nil (para 5505 4 10 15))
+              "</div>")
+         {:h LAYOUT
+          :css (str "h1{font:bold 20pt " SANS "} .cols{column-count:2;column-gap:.4in;height:6in;column-fill:auto} .cb{break-before:column}"
+                    " p.d3::first-letter{" (ini 3) "}")})
+
+    (add "initial-rtl" "פתיחות"
+         (str "<h1>פתיחות בעברית</h1>"
+              (Pa "d3" (he-para 5601 6 9 14) " data-initial=\"drop\" data-lines=\"3\"")
+              (Pa nil (he-para 5602 4 9 14))
+              (Pa "d3" (he-para 5603 6 9 14) " data-initial=\"drop\" data-lines=\"3\""))
+         {:lang "he" :dir "rtl"
+          :css (str "html{font-family:'Arial Hebrew','Arial',sans-serif;font-size:13pt;line-height:1.7} h1{font-size:22pt;font-weight:bold}"
+                    " p.d3::first-letter{" (dropcap-css 3 13 22.1 :side "right" :a 0.9 :d 0.3) "}")})
+
+    (add "initial-cjk" "港町の一日"
+         (str "<h1>港町の一日</h1>"
+              (Pa nil (ja-paras 0 8) " data-initial=\"drop\" data-lines=\"3\"")
+              (Pa nil (str "「今日は風が強いですね」と店の主人が言った。" (ja-paras 8 7)) " data-initial=\"drop\" data-lines=\"3\"")
+              (Pa nil (ja-paras 15 9) " data-initial=\"drop\" data-lines=\"3\""))
+         {:lang "ja"
+          :css (str "html{font-family:'Hiragino Sans GB','Hiragino Sans',sans-serif;font-size:12pt;line-height:1.8} h1{font-size:22pt;font-weight:bold}"
+                    " p::first-letter{" (dropcap-css 3 12 21.6 :f 56 :pad 6) "}")})
+
+    (add "initial-letter-headings" "Glossary of Field Terms"
+         (str "<h1>Glossary of Field Terms</h1>"
+              "<h2 class=\"dv\">A</h2>"
+              "<p><b>Aardvark</b> A burrowing animal that feeds at night on ants and termites. " (para 5701 1 10 14) "</p>"
+              "<p><b>Abacus</b> A frame of beads used for counting before printed tables were common. " (para 5702 1 10 14) "</p>"
+              "<p><b>Anchorage</b> A place where a vessel may lie safely on its cable. " (para 5703 1 10 14) "</p>"
+              "<h2 class=\"dv\">B</h2>"
+              "<p><b>Barometer</b> An instrument for reading the weight of the air. " (para 5704 1 10 14) "</p>"
+              "<p><b>Basalt</b> A dark volcanic rock that cools into close columns. " (para 5705 1 10 14) "</p>"
+              "<p><b>Beacon</b> A fire or lamp set on a height to warn or to guide. " (para 5706 1 10 14) "</p>"
+              "<h2 class=\"dv\">C</h2>"
+              "<p><b>Cairn</b> A heap of stones raised as a landmark or a grave. " (para 5707 1 10 14) "</p>"
+              "<p><b>Compass</b> A needle that turns to the north and so tells a traveller where he is. " (para 5708 1 10 14) "</p>"
+              "<p><b>Contour</b> A line on a map joining points of equal height. " (para 5709 1 10 14) "</p>")
+         {:h (om "initial" true)
+          :css (str "h1{font:bold 20pt " SANS "} h2.dv{font:bold 30pt " SERIF ";margin:.9em 0 .25em;color:#7a1f1f}")})
+
+    ;; ------------------------------------------------------------------------------ alignment
+    (let [al (fn [tag kind text] (str "<" tag " class=\"a-" kind "\" data-align=\"" kind "\">" text "</" tag ">"))
+          css (str ".a-start{text-align:start} .a-end{text-align:end} .a-center{text-align:center} .a-justify{text-align:justify}"
+                   " h1{font:bold 20pt " SANS "} h2{font:bold 13pt " SANS "} figcaption{font:italic 9.5pt " SANS "}")]
+      (add "align-paragraphs" "Notes on Alignment"
+           (str (al "h1" "center" "Notes on Alignment")
+                (al "h2" "start" "Start") (al "p" "start" (para 6001 4 11 17))
+                (al "h2" "start" "End") (al "p" "end" (para 6002 4 11 17))
+                (al "h2" "center" "Center") (al "p" "center" (para 6003 4 11 17))
+                (al "h2" "start" "Justify") (al "p" "justify" (para 6004 5 11 17))
+                (al "h2" "center" "Single lines")
+                (al "p" "center" "A single line, centred.")
+                (al "p" "end" "A single line at the end edge.")
+                (al "p" "justify" "A justified paragraph that happens to be one line.")
+                "<figure data-figure=\"chart\">" (bar-chart 360 170 [120 180 150 220] ["Q1" "Q2" "Q3" "Q4"] "Units (thousands)")
+                "<figcaption class=\"a-center\" data-align=\"center\">Figure 1. Units sold per quarter</figcaption></figure>")
+           {:css css}))
+
+    (add "align-justify-hyphen" "Justified and Hyphenated"
+         (str "<h1 data-align=\"start\">Justified and Hyphenated</h1><div class=\"n\" data-cols=\"2\">"
+              (apply str (for [i (range 4)]
+                           (str "<h2 data-align=\"start\">" (nth ["Method" "Findings" "Discussion" "Limits"] i) "</h2>"
+                                "<p data-align=\"justify\">" (para-mixed (+ 6100 (* i 2)) 4 9 15) "</p>"
+                                "<p data-align=\"justify\">" (para-mixed (+ 6101 (* i 2)) 3 9 15) "</p>")))
+              "</div>")
+         {:lang "en" :margin "1in 1.6in"
+          :css (str "h1{font:bold 18pt " SANS "} h2{font:bold 11pt " SANS ";break-after:avoid;hyphens:none}"
+                    " .n{column-count:2;column-gap:.3in} .n p{text-align:justify;hyphens:auto;font-size:10.5pt;margin:0 0 .6em}")})
+
+    (let [rows (let [r (rnd/make 6201)
+                     items ["Pipe" "Elbow" "Flux" "Tape" "Valve" "Gasket" "Clamp" "Filter" "Nozzle" "Bracket"]
+                     regions ["North" "South" "East" "West"]]
+                 (vec (for [i (range 10)]
+                        (let [units (rnd/randint r 12 9800)
+                              rev (rnd/randint r 1000 480000)
+                              cents (rnd/randint r 0 99)
+                              g (rnd/randint r 1 3)
+                              gw (rnd/randint r -9 19)
+                              gf (case g 1 "" 2 (str "." (rnd/randint r 1 9)) (str "." (rnd/randint r 10 99)))]
+                          [(nth items i) (rnd/choice r regions) (pyfmt/commas units 0)
+                           (pyfmt/commas (+ rev (/ cents 100.0)) 2) (str gw) gf]))))
+          cell (fn [tag a cls txt] (str "<" tag " class=\"" cls "\" data-align=\"" a "\">" txt "</" tag ">"))]
+      (add "align-table-numeric" "Sales by Region"
+           (str "<h1 data-align=\"start\">Sales by Region</h1>"
+                "<p data-align=\"start\">Units are whole numbers, revenue is to the cent, and growth is shown to its own precision, with the point lined up.</p>"
+                "<table data-profile=\"ruled\"><thead><tr>"
+                (apply str (for [h ["Item" "Region" "Units" "Revenue" "Growth %"]] (cell "th" "center" "c" h)))
+                "</tr></thead><tbody>"
+                (apply str (for [[it rg un rv gw gf] rows]
+                             (str "<tr>" (cell "td" "start" "l" it) (cell "td" "start" "l" rg) (cell "td" "end" "r" un) (cell "td" "end" "r" rv)
+                                  "<td class=\"dec\" data-align=\"none\"><span class=\"ip\">" gw "</span><span class=\"fp\">" gf "</span></td></tr>")))
+                "</tbody></table>")
+           {:css (str "h1{font:bold 20pt " SANS "} table{width:100%;font:10.5pt " SANS "} th,td{border-bottom:1px solid #bbb;padding:4px 10px}"
+                      " thead th{border-bottom:2px solid #333;background:#eee} td.l{text-align:left} td.r{text-align:right} th.c{text-align:center}"
+                      " td.dec{text-align:right;white-space:nowrap} .dec .fp{display:inline-block;width:2.2em;text-align:left}")}))
+
+    (let [al (fn [tag kind text] (str "<" tag " class=\"a-" kind "\" data-align=\"" kind "\">" text "</" tag ">"))]
+      (add "align-rtl" "יישור"
+           (str (al "h1" "center" "יישור בעברית")
+                (al "h2" "start" "התחלה") (al "p" "start" (he-para 6301 4 9 14))
+                (al "h2" "start" "סוף") (al "p" "end" (he-para 6302 4 9 14))
+                (al "h2" "center" "מרכז") (al "p" "center" (he-para 6303 4 9 14))
+                (al "h2" "start" "יישור דו-צדדי") (al "p" "justify" (he-para 6304 5 9 14)))
+           {:lang "he" :dir "rtl"
+            :css (str ".a-start{text-align:start} .a-end{text-align:end} .a-center{text-align:center} .a-justify{text-align:justify}"
+                      " html{font-family:'Arial Hebrew','Arial',sans-serif;font-size:13pt;line-height:1.7} h1{font-size:22pt;font-weight:bold} h2{font-size:15pt;font-weight:bold}")}))
+
+    ;; ------------------------------------------------------------------------------ columns
+    (add "columns-continue" "Notes on Continuation"
+         (str "<h1>Notes on Continuation</h1>"
+              "<div class=\"cols\" data-cols=\"2\">"
+              (P 6401 5 11 17)
+              (str "<h2>First Findings</h2>")
+              (str "<p>" (para 6402 4 11 17) (ref- 1) " " (para 6403 4 11 17) "</p>")
+              (P 6404 5 11 17) (P 6405 5 11 17)
+              (str "<p>" (para 6406 4 11 17) (ref- 2) " " (para 6407 3 11 17) "</p>")
+              (P 6408 5 11 17) (P 6409 5 11 17)
+              (str "<h2>Second Findings</h2>")
+              (P 6410 5 11 17) (P 6411 5 11 17) (P 6412 5 11 17)
+              "<div class=\"notes\" data-span=\"all\">"
+              (fn- 1 "Source: the regional survey office, 2025.") (fn- 2 "Seasonally adjusted and rounded.")
+              "</div>"
+              (P 6413 5 11 17) (P 6414 5 11 17)
+              (str "<h2>Conclusions</h2>")
+              (str "<p>" (para 6415 4 11 17) (ref- 3) " " (para 6416 3 11 17) "</p>")
+              (P 6417 5 11 17) (P 6418 5 11 17)
+              "<div class=\"notes\" data-span=\"all\">"
+              (fn- 3 "Excludes provisional returns.")
+              "</div></div>")
+         {:h LAYOUT :lang "en"
+          :css (str "h1{font:bold 20pt " SANS ";text-align:center} h2{font:bold 12pt " SANS ";break-after:avoid;hyphens:none;margin:1em 0 .4em}"
+                    " .cols{column-count:2;column-gap:.35in} .cols p{text-align:justify;hyphens:auto;margin:0 0 .6em}"
+                    " .notes{column-span:all;border-top:1px solid #000;width:2.4in;margin-top:.6em;padding-top:4px}"
+                    " .fn{font:8.5pt " SANS ";margin:2px 0}")})
+
+    (add "columns-uneven" "A Field Report with a Sidebar"
+         (str "<h1>A Field Report with a Sidebar</h1>"
+              "<div class=\"g\" data-cols=\"2\">"
+              "<p class=\"b1\">" (para 6501 4 11 17) "</p>"
+              "<p class=\"b2\">" (para 6502 4 11 17) "</p>"
+              "<aside data-note=\"sidebar\"><h3>Method in brief</h3><p>" (para 6503 4 9 14) "</p><p>" (para 6504 3 9 14) "</p></aside>"
+              "<p class=\"b3\">" (para 6505 4 11 17) "</p>"
+              "<p class=\"b4\">" (para 6506 4 11 17) "</p>"
+              "<p class=\"b5\">" (para 6507 4 11 17) "</p></div>")
+         {:h LAYOUT
+          :css (str "h1{font:bold 20pt " SANS "} .g{display:grid;grid-template-columns:2fr 1fr;column-gap:.3in;align-items:start}"
+                    " .g p{grid-column:1} .b1{grid-row:1} .b2{grid-row:2} .b3{grid-row:3} .b4{grid-row:4} .b5{grid-row:5}"
+                    " aside{grid-column:2;grid-row:2 / span 3;border:1px solid #567;background:#eef2f7;padding:8px 10px;font:9.5pt/1.35 " SANS "}"
+                    " aside h3{font:bold 11pt " SANS ";margin:0 0 .4em} aside p{margin:0 0 .5em;grid-column:auto}")})
+
+    (add "columns-span-figure" "Spanning Elements"
+         (str "<h1>Spanning Elements</h1>"
+              "<div class=\"cols\" data-cols=\"2\">"
+              (P 6601 5 11 17) (P 6602 5 11 17)
+              "<figure class=\"sp\" data-figure=\"chart\" data-span=\"all\">"
+              (bar-chart 420 190 [120 180 150 220] ["Q1" "Q2" "Q3" "Q4"] "Units (thousands)")
+              "<figcaption>Figure 1. Units sold per quarter</figcaption></figure>"
+              (P 6603 5 11 17) (P 6604 5 11 17)
+              "<figure data-figure=\"chart\">" (line-chart 280 150) "<figcaption>Figure 2. Monthly revenue trend</figcaption></figure>"
+              (P 6605 5 11 17)
+              "<table class=\"sp\" data-span=\"all\" data-profile=\"ruled\"><caption>Table 1. Quarterly results</caption><thead>"
+              (tr ["Quarter" "Units" "Revenue" "Margin"] "th" #{1 2 3}) "</thead><tbody>"
+              (tr ["First" "1,200" "14,400" "12.5"] "td" #{1 2 3}) (tr ["Second" "1,800" "21,600" "13.1"] "td" #{1 2 3})
+              (tr ["Third" "1,500" "18,000" "12.8"] "td" #{1 2 3}) (tr ["Fourth" "2,200" "26,400" "14.0"] "td" #{1 2 3})
+              "</tbody></table>"
+              (P 6606 5 11 17) (P 6607 5 11 17) (P 6608 5 11 17)
+              "</div>")
+         {:h LAYOUT
+          :css (str "h1{font:bold 20pt " SANS "} .cols{column-count:2;column-gap:.35in}"
+                    " .cols figure{break-inside:avoid;margin:.6em 0} .sp{column-span:all} table.sp{width:100%;margin:.8em 0}"
+                    " table.sp caption{font:italic 9.5pt " SANS ";text-align:left;padding:2px 0}"
+                    " table.sp th,table.sp td{border-bottom:1px solid #bbb} table.sp thead th{border-bottom:2px solid #333}")})
+
+    (add "columns-mid-page" "Changing Columns"
+         (str "<h1>Changing Columns</h1>"
+              (P 6701 3 11 17)
+              "<div class=\"c2\" data-cols=\"2\">" (P 6702 4 11 17) (P 6703 4 11 17) (P 6704 4 11 17) "</div>"
+              "<h2>A Full-Width Interlude</h2>" (P 6705 3 11 17)
+              "<div class=\"c3\" data-cols=\"3\">" (P 6706 3 11 17) (P 6707 3 11 17) (P 6708 3 11 17) (P 6709 3 11 17) "</div>")
+         {:h LAYOUT
+          :css (str "h1{font:bold 20pt " SANS "} h2{font:bold 13pt " SANS "} .c2{column-count:2;column-gap:.35in;margin-bottom:.8em}"
+                    " .c3{column-count:3;column-gap:.25in;font-size:10pt}")})
+
+    (add "columns-margin-notes" "An Essay with Margin Notes"
+         (str "<h1>An Essay with Margin Notes</h1>"
+              "<div class=\"mn\" data-cols=\"2\">"
+              (apply str
+                     (for [i (range 5)]
+                       (str "<div class=\"it\"><p>" (para (+ 6800 i) 5 11 17) "</p>"
+                            "<aside data-note=\"margin\"><p>"
+                            (nth ["See the survey of 1925, p. 14." "An earlier draft said the opposite."
+                                  "The figure is disputed; compare the tax rolls." "Not in the first edition."
+                                  "Cf. the harbour master's log."] i)
+                            "</p></aside></div>")))
+              "</div>")
+         {:h LAYOUT
+          :css (str "h1{font:bold 20pt " SANS "} .mn{width:4.3in} .it{position:relative} .it p{margin:0 0 .8em}"
+                    " aside{position:absolute;left:4.6in;top:0;width:1.9in;font:italic 8.5pt/1.3 " SANS ";color:#444}"
+                    " aside p{margin:0}")})
+
+    (add "columns-newspaper" "The Harbour Courier"
+         (str "<h1 class=\"mast\">The Harbour Courier</h1><p class=\"dateline\">Vol. 12 - Saturday, 14 March 2026 - Price 2d</p>"
+              "<div class=\"paper\" data-cols=\"5\">"
+              "<div class=\"lead\"><h2 class=\"hl\">New Pier To Open After Six Years</h2>"
+              (P 6901 4 10 15) (P 6902 3 10 15) (P 6903 3 10 15) (P 6904 2 10 15)
+              "<p class=\"jump\">Continued on page 2</p></div>"
+              "<div class=\"s s2\"><h2>Gulls Return Early</h2>" (P 6905 3 9 14) (P 6906 2 9 14) "</div>"
+              "<div class=\"s s3\"><h2>Bridge Toll Unchanged</h2>" (P 6907 3 9 14) (P 6908 2 9 14) "</div>"
+              "<div class=\"s s4\"><h2>Market Prices</h2>" (P 6909 3 9 14) (P 6910 2 9 14) "</div>"
+              "<div class=\"s s5\"><h2>Letters to the Editor</h2>" (P 6911 4 9 14) (P 6912 3 9 14) "</div>"
+              "<div class=\"s s6\"><h2>Shipping News</h2>" (P 6913 3 9 14) (P 6914 2 9 14) "</div>"
+              "</div>")
+         {:h LAYOUT :margin "0.6in"
+          :css (str "html{font:9pt/1.3 " SERIF "} h1.mast{font:bold 40pt " SERIF ";text-align:center;margin:0;border-bottom:3px double #000}"
+                    " .dateline{text-align:center;font:italic 9pt " SERIF ";margin:.2em 0 .8em;border-bottom:1px solid #000;padding-bottom:3px}"
+                    " .paper{display:grid;grid-template-columns:repeat(5,1fr);column-gap:.22in;row-gap:.3in;align-items:start}"
+                    " .lead{grid-column:1 / span 3;column-count:3;column-gap:.22in;column-rule:1px solid #999}"
+                    " .lead h2.hl{column-span:all;font:bold 22pt " SERIF ";margin:0 0 .4em;line-height:1.1}"
+                    " .s2{grid-column:4;grid-row:1} .s3{grid-column:5;grid-row:1}"
+                    " .s4{grid-column:1;grid-row:2} .s5{grid-column:2 / span 2;grid-row:2} .s6{grid-column:4 / span 2;grid-row:2}"
+                    " .s{border-left:1px solid #999;margin-left:-.11in;padding-left:.11in} .s h2{font:bold 11pt " SERIF ";margin:0 0 .3em}"
+                    " p{margin:0 0 .5em;text-align:justify;hyphens:auto} .jump{font-style:italic;text-align:right;margin:0}")
+          :lang "en"})
+
+    @docs))
+
+(defn build
+  "Every document: the 36 of P2.8 and the 19 of P2.13 (D114), as {name html}."
+  []
+  (merge (build-p28) (build-d114)))
+
 (defn -main [& args]
   (let [out (or (first args) "test/corpus/synth/html")
         docs (build)]
     (.mkdirs (io/file out))
     (doseq [[name html] (sort-by key docs)]
       (spit (io/file out (str name ".html")) html :encoding "UTF-8"))
+    (initial-tile! out)
     (println (fmt "wrote %d documents to %s" (count docs) out))))

@@ -1,0 +1,259 @@
+{
+ "emon-gold": "1.0",
+ "id": "initial-columns",
+ "provenance": {
+  "html": "html/initial-columns.html",
+  "pdf": "pdf/initial-columns.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/initial-columns.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ],
+   "initial": [
+    "form",
+    "lines"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ],
+  "layout": true
+ },
+ "facts": {
+  "frags": {
+   "2": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "3": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "4": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "5": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "6": [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   "7": [
+    [
+     1,
+     1,
+     1
+    ]
+   ]
+  },
+  "lines": {
+   "4": 9,
+   "6": 11
+  },
+  "hyphens": []
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Drop Caps in Columns"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Does father food these other and who report show night the think. Our over day words again sun still tell that before children your father if word. Point him people year review without how about old think animal kind revenue might."
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "Everything about the harbour had been measured, and nothing about it was certain. Words those but enough again right hand red three does later. Land face and to during right using so only asked it and. Turn need during during well for come house door whole sentence last well. Use air us heard began above seen look too her.",
+       "inlines": [
+        {
+         "kind": "initial",
+         "form": "drop",
+         "lines": 3,
+         "children": [
+          {
+           "kind": "text",
+           "text": "E"
+          }
+         ]
+        },
+        {
+         "kind": "text",
+         "text": "verything about the harbour had been measured, and nothing about it was certain. Words those but enough again right hand red three does later. Land face and to during right using so only asked it and. Turn need during during well for come house door whole sentence last well. Use air us heard began above seen look too her."
+        }
+       ]
+      },
+      {
+       "id": 5,
+       "kind": "paragraph",
+       "text": "Make up near want country night get pay father against. Their color country would good of during could upon together. Year do not was word figure two often them no done most be picture all."
+      },
+      {
+       "id": 6,
+       "kind": "paragraph",
+       "text": "Nobody argued with the tide, which came in twice a day and left the evidence. Is when by very high little around told study no or. Look review said end too give went have long country me point told little. Told method with want never market example may big life answer let. Going it often take its did go too good try should part great city. She results an began color get let above away can against found show with in.",
+       "inlines": [
+        {
+         "kind": "initial",
+         "form": "drop",
+         "lines": 3,
+         "children": [
+          {
+           "kind": "text",
+           "text": "N"
+          }
+         ]
+        },
+        {
+         "kind": "text",
+         "text": "obody argued with the tide, which came in twice a day and left the evidence. Is when by very high little around told study no or. Look review said end too give went have long country me point told little. Told method with want never market example may big life answer let. Going it often take its did go too good try should part great city. She results an began color get let above away can against found show with in."
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "paragraph",
+       "text": "Being was however thing right must policy policy much last night other do not. Had do story go paper world let with change knew take too. Mother has sea head second while many made air long revenue. Something city cut work several long friend has which near."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "Drop Caps in Columns"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

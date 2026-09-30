@@ -43,12 +43,20 @@ printf '{"name":"headless Chromium printToPDF","binary":"%s","version":"%s","os"
 stems="$*"
 [ -n "$stems" ] || stems=$(cd "$corpus/html" && ls *.html | sed 's/\.html$//')
 
+# Chrome's exit status is not the answer (headless=new can exit 2 after a "teardown watchdog" with the
+# PDF written): the answer is a non-empty PDF that was not there before this run.
+print_pdf() { # print_pdf OUT [flags...]
+  out=$1; shift
+  rm -f "$out"
+  "$chrome" --headless=new --disable-gpu --no-pdf-header-footer "$@" \
+    --print-to-pdf="$out" "file://$(pwd)/$corpus/html/$s.html" > /dev/null 2>&1 || true
+  [ -s "$out" ] || { echo "print.sh: Chrome wrote no PDF for $s ($out)" >&2; exit 1; }
+}
+
 for s in $stems; do
-  "$chrome" --headless=new --disable-gpu --no-pdf-header-footer --disable-pdf-tagging \
-    --print-to-pdf="$corpus/pdf/$s.pdf" "file://$(pwd)/$corpus/html/$s.html" > /dev/null 2>&1
+  print_pdf "$corpus/pdf/$s.pdf" --disable-pdf-tagging
   case " $TAGGED " in
-    *" $s "*) "$chrome" --headless=new --disable-gpu --no-pdf-header-footer \
-        --print-to-pdf="$corpus/pdf-tagged/$s.pdf" "file://$(pwd)/$corpus/html/$s.html" > /dev/null 2>&1 ;;
+    *" $s "*) print_pdf "$corpus/pdf-tagged/$s.pdf" ;;
   esac
   echo "  printed $s"
 done

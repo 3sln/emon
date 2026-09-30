@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://emon.dev/schema/emon-1.json",
-  "title": "emon document model, JSON form, version 1.0 (SPEC 4; D012, D055)",
+  "title": "emon document model, JSON form, versions 1.0 and 1.1 (SPEC 4; D012, D055; 1.1 adds the initial inline, align on heading, caption and cell, note role sidebar and page layout, D108-D113)",
   "description": "Canonical JSON for an emon Model. Every field not listed in `required` is omitted when absent (SPEC 4.2). Closed: an unknown key is a failure of THIS version's output; consumers of a later minor version must ignore what they do not know (SPEC 4.4), which is why a minor version edits this file additively.",
   "type": "object",
   "required": [
@@ -16,7 +16,10 @@
   "additionalProperties": false,
   "properties": {
     "emon": {
-      "const": "1.0"
+      "enum": [
+        "1.0",
+        "1.1"
+      ]
     },
     "generator": {
       "type": "string"
@@ -260,6 +263,46 @@
           "items": {
             "type": "integer",
             "minimum": 0
+          }
+        },
+        "layout": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The column map reading order was decided over (SPEC 3.4, 10.1.1, D111): one cell per column fragment. Absent when the page is one plain column.",
+          "items": {
+            "type": "object",
+            "required": [
+              "band",
+              "col",
+              "role",
+              "box"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "band": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "col": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "role": {
+                "enum": [
+                  "body",
+                  "sidebar",
+                  "margin"
+                ]
+              },
+              "box": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "$ref": "#/$defs/cpt"
+                }
+              }
+            }
           }
         }
       }
@@ -579,7 +622,8 @@
               "enum": [
                 "footnote",
                 "endnote",
-                "margin"
+                "margin",
+                "sidebar"
               ]
             },
             {
@@ -727,7 +771,8 @@
                 "flags",
                 "level",
                 "number",
-                "numbering"
+                "numbering",
+                "align"
               ]
             }
           }
@@ -931,8 +976,18 @@
                 "rowspan",
                 "colspan",
                 "header",
-                "empty"
+                "empty",
+                "align"
               ]
+            },
+            "properties": {
+              "align": {
+                "enum": [
+                  "start",
+                  "center",
+                  "end"
+                ]
+              }
             }
           }
         },
@@ -960,7 +1015,8 @@
                 "conf",
                 "flags",
                 "label",
-                "target"
+                "target",
+                "align"
               ]
             }
           }
@@ -1242,7 +1298,8 @@
             "span",
             "link",
             "ref",
-            "linebreak"
+            "linebreak",
+            "initial"
           ]
         },
         "text": {
@@ -1293,9 +1350,47 @@
         "target": {
           "type": "integer",
           "minimum": 0
+        },
+        "form": {
+          "enum": [
+            "drop",
+            "raised",
+            "margin"
+          ]
+        },
+        "lines": {
+          "type": "integer",
+          "minimum": 2
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "initial"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "kind",
+                "text",
+                "children",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "form",
+                "lines"
+              ]
+            }
+          }
+        },
         {
           "if": {
             "properties": {

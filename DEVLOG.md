@@ -1016,7 +1016,7 @@ analysis beyond "top-to-bottom lines on a single column".
   digits; D107), each kept as a reproducer in `test/fuzz/crashers/`. No hang, no
   cross-host status difference and no async/memory difference was found. The content interpreter is not merged
   (P1.7), so it is not in the probe yet: add its entry point to `fz-run` when it is.
-- [ ] **P2.13 — Synthetic corpus: initials, alignment, columns** (D114; SPEC
+- [x] **P2.13 — Synthetic corpus: initials, alignment, columns** (D114; SPEC
   14.3; `tools/synth/`, `schema/`, `test/corpus/synth/`, `kin/scripts/
   gold-check.py`). **Can start now**: babashka, plus Chrome, poppler and
   ImageMagick at authoring time only (D041, D071); no kin.
@@ -1076,6 +1076,73 @@ analysis beyond "top-to-bottom lines on a single column".
   perfect; the entry reports, per new document, pages, fragments, hyphen
   points and the line count of each initial, and says anything Chrome did
   that D108's probe did not predict.
+  **Done** (branch `worktree-agent-adc4d1cc70612e1aa`, one commit per step, schema first:
+  `f3bc765`). 19 documents, 4.5 MB (html, pdf, scan, the PNG and the golds: 4,349,703 bytes of
+  committed files plus 156,419 of gold); the 36 old documents, their PDFs, scans and golds are
+  byte-identical. `bb unit` is green with gold-check re-deriving all 55 golds; `bb accuracy
+  --predictor oracle` scores every new document 1.0 on pdf, scan and tagged; content-check: 55
+  documents. Per document (pages; fragments = the sum of `facts.frags` lengths; hyphen points =
+  `facts.hyphens`; initials as form and lines, and the lines beside each cap as `build.clj` counted
+  them, equal to what was declared or the build fails):
+
+  | document | pages | fragments | hyphens | initials |
+  | --- | --- | --- | --- | --- |
+  | `initial-firstletter` | 2 | - | 0 | drop 2, 3, 4, 3, 2, 3 (`It` `A long` `I remember` `At` `“Nothing` `T`+`HE BUREAU`) |
+  | `initial-raised` | 2 | - | 0 | raised x 4 |
+  | `initial-image` | 1 | - | 0 | drop 3 (PNG, no glyph) |
+  | `initial-vector` | 1 | - | 0 | drop 3, 2 (filled paths, no glyph) |
+  | `initial-firstword` | 1 | - | 0 | drop 2 x 3 (`IT` `ONCE` `WHEN`) |
+  | `initial-columns` | 1 | 6 | 0 | drop 3, 3 (one at the top of column 2) |
+  | `initial-rtl` | 1 | - | 0 | drop 3, 3 (Hebrew, float right) |
+  | `initial-cjk` | 1 | - | 0 | drop 3 x 3 (`彼` `「今` `新`) |
+  | `initial-letter-headings` | 1 | - | 0 | none (three headings; annotated absence) |
+  | `align-paragraphs` | 2 | - | 0 | - |
+  | `align-justify-hyphen` | 2 | - | 31 | - |
+  | `align-table-numeric` | 1 | - | 0 | - |
+  | `align-rtl` | 1 | - | 0 | - |
+  | `columns-continue` | 3 | 25 | 11 | - |
+  | `columns-uneven` | 1 | 9 | 0 | - |
+  | `columns-span-figure` | 2 | 36 | 0 | - |
+  | `columns-mid-page` | 1 | 14 | 0 | - |
+  | `columns-margin-notes` | 1 | 11 | 0 | - |
+  | `columns-newspaper` | 1 | 25 | 12 | - |
+
+  `columns-continue` has one paragraph that crossed a page (page 1 right column to page 2 left) and
+  two that broke between columns (both on page 2; the build requires at least one of each), a
+  heading in mid-column, footnote references and their notes. The glyph-less initials are three (`initial-image` one, `initial-vector` two); the P4.10
+  and P6.7 done-whens count them. **What was not in D108's probe or the design**:
+  (1) Chrome 154 has no per-page footnote area in a multicol flow (no `float: footnote`), an
+  absolutely positioned box whose top falls past the page bottom moves to the next page, and a
+  multicol box with a fixed `height` does not continue on the next page (its overflow columns go off
+  the sheet; only an auto-height one fragments), so `columns-continue`'s footnotes are
+  `column-span:all` blocks that end a column set: the columns balance above them, a paragraph cannot
+  cross them, and they sit mid-page, not at the page foot. (2) Headless Chrome exits 2 after a
+  "teardown watchdog" with the PDF complete (this machine under load); `print.sh` now judges a print
+  by the PDF it wrote. (3) The PDF's hyphen from `hyphens:auto` is U+002D (ToUnicode `<0010> <0011>
+  <002D>`, as D108 (f) said); poppler reports it as U+2010, so `build.clj` maps it back, and the
+  printer's extras in `synth-extras.edn` (31, 11, 12 U+002D glyphs) equal `facts.hyphens` counts
+  exactly. (4) poppler splits a justified line with wide word gaps into several `<line>` elements, reads
+  right-to-left text in visual order, and reads a table row as one line; `build.clj` anchors by
+  characters, not by poppler's words or order. (5) Every drop cap of a float `n*lh - 2 pt` tall
+  (font size from the baseline of line n) had exactly n lines beside it, in Georgia, Arial Hebrew and
+  Hiragino Sans alike; `::first-letter` took `「今` whole and `“N` whole as D108 (d) said; a `Q`'s tail
+  crosses the fourth line, so no `Q` (an artefact of the letter, not a finding). (6) D108 (a) holds
+  for every text initial: its glyphs come before the page's text, which is why the content-check
+  in-order counts of those documents are small and are not a claim.
+  **Conventions the design left open** (all in `html2gold.clj`/`build.clj`, read by `gold-check.py`):
+  `data-align="none"` is an annotated absence (the decimal column of `align-table-numeric`); a kind
+  is annotated for `align` only when every node of the kind says, and the build fails otherwise; the
+  hint `"initial": true` annotates initials that are absent (`initial-letter-headings`) and `"layout":
+  true` marks a layout document; `data-span="all"` on a child of a `data-cols` container cuts its
+  segment; a band is the rank, top down, of a segment among those with lines on the page, a column
+  the index of a line's left edge (its first piece, for a row poppler split) among the container's N
+  most common edges; `lines` counts printed rows (a drop cap's own glyph is not one); margin and
+  sidebar notes have no reference and sit in column 1 beside the body's column 0; a caption's or
+  heading's printed number and label are part of what is anchored. **Scoreboard**: `accuracy
+  [degraded]` now reports 26 regressions and 41 improvements against `test/scoreboard.edn` because
+  the fixture's pooled counts moved with 19 more documents (the oracle entries are unchanged and
+  perfect); it is not a gate, and P2.14, which rewrites the categories (`initials`, `align`; the
+  new documents are `other` or `columns` until then) and the board, re-records it.
 - [ ] **P2.14 — Scorer metrics for initials, alignment and columns** (D115;
   `tools/accuracy/score.clj`, `test_score.clj`, `predict_degraded.clj`,
   `accuracy.clj`). **Can start now** with hand-built golds in the laws; the
