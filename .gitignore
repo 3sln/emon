@@ -17,4 +17,6 @@ __pycache__/
 
 # Local S3 credentials and the sample corpus (never committed; bb corpus-push/pull, DEVLOG D085).
 .env
+
+# The downloaded public-dataset corpus and importer output (DEVLOG D086): never committed.
 /corpus

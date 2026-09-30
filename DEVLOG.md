@@ -660,10 +660,14 @@ analysis beyond "top-to-bottom lines on a single column".
   (run by `bb unit`).
 - [ ] **P2.10 — Baselines against the field** (SPEC §14.4): pinned versions
   of 2–3 extractors, scored offline, committed as reference lines.
-- [ ] **P2.11 — Public datasets: licence review and importers.** DocLayNet,
-  PubTabNet/FinTabNet, ICDAR 2013/cTDaR, FUNSD, Tobacco800; find and verify
-  a seal/stamp dataset. Record each licence and what may be committed (likely
-  importers + manifests only, datasets fetched by a script).
+- [x] **P2.11 — Public datasets: licence review and importers** (D086-D088).
+  Licences verified per source and recorded with what may be committed and what
+  is (nothing, no LFS) in `test/corpus/DATASETS.md`; importers
+  `tools/import/<dataset>.py` for FUNSD, XFUND, SROIE, CORD, DocLayNet, ICDAR
+  2013, cTDaR, FinTabNet-OTSL, pdfa-eng-wds (silver only) and a stamp set, output
+  under `corpus/_gold/` (outside git), all validating; `python3 tools/import/import_all.py` runs them (the `bb import` task is pending: adding `import` to `not_gates` in `kin/scripts/gates` was refused by the permission system, so `bb.edn` has no `import` task yet; not
+  a gate). Seal set found: mapo80/stamps. Tobacco800 and PubTabNet not imported
+  (login / not fetched).
 - [ ] **P2.12 — `bb fuzz`, first cut**: truncation and byte-flip mutation of
   the PDF fixtures through both hosts; no panic, no hang, same error name;
   also under the 512-byte async source (a miss must never surface as an
@@ -2469,4 +2473,65 @@ fake corpus against a local MinIO. Costs of determinism: zip entries lose
 mtimes and empty directories; `.sh` files are re-marked executable on pull.
 **Alternatives**: Git LFS (quota); one monolithic zip; rclone or the aws CLI
 (a dependency); committing the corpus.
+
+### D086 — Public datasets: licence review; nothing from any of them is committed
+**Decision**: each source's licence was verified from its primary source
+(`test/corpus/DATASETS.md`). Research-only, non-commercial, share-alike (GPL,
+CC BY-SA, CC BY-NC-SA), missing or unverified licences mean fetch-only. Two
+manifest errors corrected: XFUND is CC BY-NC-SA 4.0 (not MIT); FinTabNet_OTSL's
+card says `other` (CDLA-Permissive-1.0 is believed for IBM's original, not
+verified). By licence alone, committable would be: everything for CORD,
+katanaml, agami, bank-statement-benchmark, IRS and the US-government PDFs;
+derived gold only for DocLayNet, ICDAR 2013 and CUAD; nothing for the rest.
+**We commit none of it**: Git LFS is unavailable (maintainer), so only importers,
+manifests and fetch scripts are committed; `/corpus` is git-ignored, importer
+output stays under `corpus/_gold/`. Options without LFS, none set up: a pinned
+HF revision plus sha256 per file in `fetch.sh`; release assets or a data repo
+for the small permissive sources; an object-store bucket.
+**Why**: a wrong guess on a licence is irreversible in git history; nothing
+needs the content in git since `fetch.sh` reproduces it.
+**Alternatives**: commit derived gold for the permissive sets (derived text and
+geometry inherit the source's terms, and source-page copyright is not covered
+by CDLA); commit small samples (same, and size).
+- [ ] **Signed off** (maintainer)
+
+### D087 — Importer conventions: what the gold claims, units, and the pseudo-fields `at` and `text`
+**Decision**: importers write `annotated` from what the source truly labels:
+no structure is claimed that the source does not annotate (SROIE/CORD claim no
+structure; pdfa-eng-wds claims only its page table because its lines are the PDF
+text layer with heuristic reading order, i.e. silver). `attributes[kind]` may
+list `at` (region annotated) and `text` (the node's own text annotated); the
+global `annotated.text` is set only for SROIE. PDF-backed sources are in points
+after converting their own origin (ICDAR 2013 is bottom-left; DocLayNet is a
+stretched 1025x1025 canvas; pdfa fractions); raster sources are in pixels with
+the page at a nominal 1 px = 1 pt, `px` recorded, `dpi` unclaimed, so a scorer
+rescales by page width. DocLayNet furniture stays in the body as `furniture`
+blocks because the gold's `model.furniture` has no `at`; FUNSD/XFUND questions
+become `field` nodes (name, value from linked answers), headers become headings
+without level; key-information labels (SROIE, CORD `gt_parse`) are not imported.
+Each transform was checked against the PDF (`pdftotext -bbox`) or an overlay
+(`tools/import/spotcheck.py`).
+**Why**: the gold format lets a metric skip what is not claimed, so honesty in
+`annotated` is the whole value of an importer; geometry is most of what the
+public sets know.
+**Alternatives**: extending the gold schema with `at` on furniture and a
+`units` field (a schema change for the maintainer); importing KIE labels as
+fields (not document structure).
+- [ ] **Signed off** (maintainer)
+
+### D088 — Seal/stamp truth: mapo80/stamps fetched and imported; signatures remain a gap
+**Decision**: Tobacco800, StaVer and SPODS need logins. `mapo80/stamps` (HF,
+CC-BY-4.0, anonymous) is added to `corpus/` (val + test, 1571 images, YOLO
+stamp boxes), `fetch.sh stamps` and the manifest, and imported to `seal` nodes
+(subkind `stamp`, region). Fetch-only: its positives aggregate community sets
+with unverified licences and its 250 negatives come from RVL-CDIP and FUNSD.
+It labels stamps only, so a scorer compares emon `seal` nodes of subkind
+`stamp` (signatures on an image are absent from the gold). Exact seal text,
+name and date come only from the synthetic corpus (`tools/synth`, `data-seal`).
+Signatures: `tech4humans/signature-detection` (Apache-2.0, on HF) is a
+candidate, not fetched.
+**Why**: a real-stamp detection set is the only way to see stamp recall on
+real scans; text-bearing truth is synthesized.
+**Alternatives**: synthesize only (no real-world check); register for the
+login-gated sets (not reproducible by script).
 - [ ] **Signed off** (maintainer)
