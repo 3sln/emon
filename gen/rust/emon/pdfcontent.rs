@@ -76,8 +76,8 @@ pub(crate) const C_MCTOP: i32 = 591;
 pub(crate) const C_MCDEPTH: i32 = 592;
 pub(crate) const C_MCBASE: i32 = 593;
 pub(crate) const C_MCOVER: i32 = 594;
-pub(crate) const C_CURMCID: i32 = 595;
-pub(crate) const C_CURART: i32 = 596;
+pub(crate) const C_CUROCG: i32 = 595;
+pub(crate) const C_Z: i32 = 596;
 pub(crate) const C_FLIM: i32 = 597;
 pub(crate) const C_INTEXT: i32 = 598;
 pub(crate) const C_GSBASE: i32 = 599;
@@ -110,6 +110,7 @@ pub(crate) const G_FONT: i32 = 25;
 pub(crate) const G_COLOR: i32 = 26;
 pub(crate) const G_ALPHA: i32 = 27;
 pub(crate) const G_FAM: i32 = 28;
+pub(crate) const G_FOBJ: i32 = 29;
 pub(crate) const MAX_ENT: i32 = 4096;
 pub(crate) const OX_BASE: i32 = 16384;
 pub(crate) const K_NUM: i32 = 1;
@@ -937,6 +938,162 @@ pub(crate) fn pc_f_width(f0: &mut crate::port::Cells, f1: &mut crate::port::Cell
     }
     return pfn_width(f3, code);
 }
+pub(crate) fn pc_f_r(f0: &mut crate::port::Cells, f1: &mut crate::port::Cells, f2: &mut crate::port::Cells, f3: &mut crate::port::Cells, slot: i32, which: i32) -> i32 {
+    // A font's descriptor facts for the `fonts` row: which 0 subtype, 1 /Flags, 2 has a ToUnicode,
+    // 3 base encoding, 4 kind (1 simple).
+    if slot == 0 {
+        if which == 0 {
+            return pfn_subtype(f0);
+        }
+        if which == 1 {
+            return pfn_flags(f0);
+        }
+        if which == 2 {
+            return pfn_has_tounicode(f0);
+        }
+        if which == 3 {
+            return pfn_encoding(f0);
+        }
+        return pfn_kind_of(f0);
+    }
+    if slot == 1 {
+        if which == 0 {
+            return pfn_subtype(f1);
+        }
+        if which == 1 {
+            return pfn_flags(f1);
+        }
+        if which == 2 {
+            return pfn_has_tounicode(f1);
+        }
+        if which == 3 {
+            return pfn_encoding(f1);
+        }
+        return pfn_kind_of(f1);
+    }
+    if slot == 2 {
+        if which == 0 {
+            return pfn_subtype(f2);
+        }
+        if which == 1 {
+            return pfn_flags(f2);
+        }
+        if which == 2 {
+            return pfn_has_tounicode(f2);
+        }
+        if which == 3 {
+            return pfn_encoding(f2);
+        }
+        return pfn_kind_of(f2);
+    }
+    if which == 0 {
+        return pfn_subtype(f3);
+    }
+    if which == 1 {
+        return pfn_flags(f3);
+    }
+    if which == 2 {
+        return pfn_has_tounicode(f3);
+    }
+    if which == 3 {
+        return pfn_encoding(f3);
+    }
+    return pfn_kind_of(f3);
+}
+pub(crate) fn pc_name_find(ar: &mut crate::port::Cells, nh: i32, n: i32, c0: i32, c1: i32, c2: i32, c3: i32, c4: i32, c5: i32, c6: i32) -> i32 {
+    // 1 when the name nh contains the n (1..7) characters c0.. in a row.
+    let ln: i32 = pl_name_len(ar, nh);
+    let mut i: i32 = 0;
+    let mut ok: i32 = 1;
+    while (i + n) <= ln {
+        ok = 1;
+        if pl_name_byte(ar, nh, i) != c0 {
+            ok = 0;
+        }
+        if (n > 1) && (pl_name_byte(ar, nh, i + 1) != c1) {
+            ok = 0;
+        }
+        if (n > 2) && (pl_name_byte(ar, nh, i + 2) != c2) {
+            ok = 0;
+        }
+        if (n > 3) && (pl_name_byte(ar, nh, i + 3) != c3) {
+            ok = 0;
+        }
+        if (n > 4) && (pl_name_byte(ar, nh, i + 4) != c4) {
+            ok = 0;
+        }
+        if (n > 5) && (pl_name_byte(ar, nh, i + 5) != c5) {
+            ok = 0;
+        }
+        if (n > 6) && (pl_name_byte(ar, nh, i + 6) != c6) {
+            ok = 0;
+        }
+        if ok == 1 {
+            return 1;
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn pc_font_row(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, slot: i32, status: i32, key: i32) -> i32 {
+    // The `fonts` row of a font the document shows for the first time (its row is its id): object
+    // number, subtype, /Flags, whether it has a ToUnicode, base encoding, /BaseFont, ascent, descent,
+    // the width of a space (simple fonts), and a style from the flags and the name. P1.6 reads no
+    // font programs, /ItalicAngle or /StemV (`pdfnames` has no such names): program 0, italic angle 0,
+    // stem -1. A font that would not load has subtype 0 and no metrics.
+    let row: i32 = fo_new(fnt, crate::port::cells_at(cx, C_CUR + G_FOBJ), 0);
+    let nh: i32 = pd_dget(src, ar, dc, a, b, st, key, pn_base_font());
+    let mut flags: i32 = 0;
+    let mut sty: i32 = 0;
+    let mut i: i32 = 0;
+    let mut start: i32 = 0;
+    let mut ln: i32 = 0;
+    if status == 0 {
+        fo_set(fnt, row, fnf_subtype(), pc_f_r(f0, f1, f2, f3, slot, 0));
+        flags = pc_f_r(f0, f1, f2, f3, slot, 1);
+        fo_set(fnt, row, fnf_flags(), flags);
+        fo_set(fnt, row, fnf_tounicode(), pc_f_r(f0, f1, f2, f3, slot, 2));
+        fo_set(fnt, row, fnf_enc(), pc_f_r(f0, f1, f2, f3, slot, 3));
+        fo_set(fnt, row, fnf_asc(), pc_f_q(f0, f1, f2, f3, slot, 0));
+        fo_set(fnt, row, fnf_desc(), pc_f_q(f0, f1, f2, f3, slot, 1));
+        if pc_f_r(f0, f1, f2, f3, slot, 4) == 1 {
+            fo_set(fnt, row, fnf_space(), pc_f_width(f0, f1, f2, f3, slot, 32));
+        }
+    }
+    if (nh != 0) && (pl_kind_of(ar, nh) == 4) {
+        ln = pl_name_len(ar, nh);
+        start = crate::port::cells_len(et);
+        while i < ln {
+            etx_append_cp(et, pl_name_byte(ar, nh, i));
+            i += 1;
+        }
+        fo_set(fnt, row, fnf_tstart(), start);
+        fo_set(fnt, row, fnf_tlen(), ln);
+        if pc_name_find(ar, nh, 4, 66, 111, 108, 100, 0, 0, 0) == 1 {
+            sty |= sy_bold();
+        }
+        if pc_name_find(ar, nh, 6, 73, 116, 97, 108, 105, 99, 0) == 1 {
+            sty |= sy_italic();
+        }
+        if pc_name_find(ar, nh, 7, 79, 98, 108, 105, 113, 117, 101) == 1 {
+            sty |= sy_italic();
+        }
+    }
+    if (flags & 1) != 0 {
+        sty |= sy_mono();
+    }
+    if (flags & 64) != 0 {
+        sty |= sy_italic();
+    }
+    if (flags & 131072) != 0 {
+        sty |= sy_smallcaps();
+    }
+    if (flags & 262144) != 0 {
+        sty |= sy_bold();
+    }
+    fo_set(fnt, row, fnf_style(), sty);
+    return row;
+}
 pub(crate) fn pc_font_id(mut cx: &mut crate::port::Cells, key: i32) -> i32 {
     // The evidence id of a font dictionary: its index in the order the
     // document first showed it (-1 past 512 fonts).
@@ -955,7 +1112,7 @@ pub(crate) fn pc_font_id(mut cx: &mut crate::port::Cells, key: i32) -> i32 {
     crate::port::cells_set(cx, C_NFONT, n + 1);
     return n;
 }
-pub(crate) fn pc_ensure_font(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pc_ensure_font(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut et: &mut crate::port::Cells) -> i32 {
     // Make the current font (the graphics state's) resident in a slot and set
     // C_SLOT to it, -1 when there is none. A font is loaded once and kept; the
     // slot that has gone unused longest is the one replaced.
@@ -966,6 +1123,7 @@ pub(crate) fn pc_ensure_font(src: &crate::port::Src, mut ar: &mut crate::port::C
     let mut best: i32 = 2147483647;
     let mut status: i32 = 0;
     let mut fid: i32 = 0;
+    let nbefore: i32 = crate::port::cells_at(cx, C_NFONT);
     let mut clock: i32 = crate::port::cells_at(cx, C_CLOCK);
     if key == 0 {
         crate::port::cells_set(cx, C_SLOT, -1);
@@ -999,6 +1157,10 @@ pub(crate) fn pc_ensure_font(src: &crate::port::Src, mut ar: &mut crate::port::C
     crate::port::cells_set(cx, at + S_STATUS, status);
     fid = pc_font_id(cx, key);
     crate::port::cells_set(cx, at + S_ID, fid);
+    // A font the document has not shown before gets its `fonts` row, which is its id.
+    if (fid >= 0) && (fid == nbefore) {
+        pc_font_row(src, ar, dc, a, b, st, cx, fnt, et, f0, f1, f2, f3, pick, status, key);
+    }
     if status == 0 {
         crate::port::cells_set(cx, at + S_ASC, pc_f_q(f0, f1, f2, f3, pick, 0));
         crate::port::cells_set(cx, at + S_DESC, pc_f_q(f0, f1, f2, f3, pick, 1));
@@ -1011,6 +1173,9 @@ pub(crate) fn pc_ensure_font(src: &crate::port::Src, mut ar: &mut crate::port::C
         crate::port::cells_set(cx, at + S_VERT, 0);
     }
     crate::port::cells_set(cx, C_SLOT, pick);
+    if ps_missed(src) {
+        crate::port::cells_set(cx, C_ABORT, 1);
+    }
     return 0;
 }
 pub(crate) fn pc_tf(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32) -> i32 {
@@ -1037,6 +1202,12 @@ pub(crate) fn pc_tf(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
         pc_warn_set(cx, W_FONT);
     }
     crate::port::cells_set(cx, C_CUR + G_FONT, fh);
+    crate::port::cells_set(cx, C_CUR + G_FOBJ, 0);
+    if (fh != 0) && (raw != 0) {
+        if pl_kind_of(ar, raw) == 9 {
+            crate::port::cells_set(cx, C_CUR + G_FOBJ, pl_int_value(ar, raw));
+        }
+    }
     return 0;
 }
 pub(crate) fn pc_min4(p: i64, q: i64, r: i64, s: i64) -> i64 {
@@ -1065,9 +1236,40 @@ pub(crate) fn pc_max4(p: i64, q: i64, r: i64, s: i64) -> i64 {
     }
     return m;
 }
+pub(crate) fn pc_dir_angle(a: i64, b: i64) -> i32 {
+    // The angle of the direction (a, b) in page space (y down), by `ev-angle`: halve both until the
+    // larger fits 30 bits, so the angle of a matrix axis in 24-bit fixed point keeps all its precision.
+    let mut x: i64 = a;
+    let mut y: i64 = b;
+    let mut m: i64 = 0 as i64;
+    if x < (0 as i64) {
+        m = (0 as i64) - x;
+    } else {
+        m = x;
+    }
+    if y < (0 as i64) {
+        if ((0 as i64) - y) > m {
+            m = (0 as i64) - y;
+        }
+    } else if y > m {
+        m = y;
+    }
+    while m > (1073741824 as i64) {
+        x = x / (2 as i64);
+        y = y / (2 as i64);
+        m = m / (2 as i64);
+    }
+    return ev_angle(x as i32, y as i32);
+}
 pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, code: i32, ncode: i32) -> i32 {
     // One shown glyph: look the code up, put its cell in page space, record it,
     // advance the text position by its width, the character and word spacing.
+    // Recorded (SPEC 8.4.3): the box of its cell; its baseline segment from its origin to its origin plus
+    // its advance without Tc and Tw (text space +x, so the spacing stays measurable); `asc` and `desc`
+    // (signed distances from the baseline along the up vector, from the font's ascent and descent); `rot`
+    // by `ev-angle` from the exact direction of the text matrix's x axis; its fill colour and alpha; the
+    // colour-space class when the colour operators said (gray, rgb, cmyk); `z`, the page's paint counter;
+    // `mark` (the innermost open mark) and `ocg` (the innermost optional-content mark).
     let slot: i32 = crate::port::cells_at(cx, C_SLOT);
     let fs: i64 = fx_get(cx, C_CUR + G_FS);
     let th: i64 = fx_get(cx, C_CUR + G_TH);
@@ -1145,18 +1347,43 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
     let mb: i64 = fx_get(cx, C_M + 2);
     let mc: i64 = fx_get(cx, C_M + 4);
     let md: i64 = fx_get(cx, C_M + 6);
-    let size: i32 = fx_round(fx_mul(fx_hypot(mc, md), fx_abs(fs)));
-    let rot: i32 = fx_atan2((0 as i64) - mb, ma);
-    let bline: i32 = fx_round(mx_y(cx, C_M, 0 as i64, rise));
-    let g: i32 = gl_new(gl, crate::port::cells_at(cx, C_PAGE), cp0, fid, size, fx_round(pc_min4(p0x, p1x, p2x, p3x)), fx_round(pc_min4(p0y, p1y, p2y, p3y)), fx_round(pc_max4(p0x, p1x, p2x, p3x)), fx_round(pc_max4(p0y, p1y, p2y, p3y)));
+    let hyp: i64 = fx_hypot(mc, md);
+    let size: i32 = fx_round(fx_mul(hyp, fx_abs(fs)));
+    let rot: i32 = pc_dir_angle(ma, mb);
+    let bx0: i32 = fx_round(mx_x(cx, C_M, 0 as i64, rise));
+    let by0: i32 = fx_round(mx_y(cx, C_M, 0 as i64, rise));
+    let bx1: i32 = fx_round(mx_x(cx, C_M, fx_mul(wfx, th), rise));
+    let by1: i32 = fx_round(mx_y(cx, C_M, fx_mul(wfx, th), rise));
+    let up: i32 = fx_round(fx_mul(y1t - rise, hyp));
+    let down: i32 = fx_round(fx_mul(y0t - rise, hyp));
+    let fam: i32 = crate::port::cells_at(cx, C_CUR + G_FAM);
+    let z: i32 = crate::port::cells_at(cx, C_Z);
+    let g: i32 = gl_new(gl, crate::port::cells_at(cx, C_PAGE), fx_round(pc_min4(p0x, p1x, p2x, p3x)), fx_round(pc_min4(p0y, p1y, p2y, p3y)), fx_round(pc_max4(p0x, p1x, p2x, p3x)), fx_round(pc_max4(p0y, p1y, p2y, p3y)), cp0, -1, 0, -1);
     gl_set(gl, g, gf_how(), how);
-    gl_set(gl, g, gf_baseline(), bline);
+    gl_set(gl, g, gf_font(), fid);
+    gl_set(gl, g, gf_size(), size);
+    gl_set(gl, g, gf_bx0(), bx0);
+    gl_set(gl, g, gf_by0(), by0);
+    gl_set(gl, g, gf_bx1(), bx1);
+    gl_set(gl, g, gf_by1(), by1);
+    if up >= down {
+        gl_set(gl, g, gf_asc(), up);
+        gl_set(gl, g, gf_desc(), down);
+    } else {
+        gl_set(gl, g, gf_asc(), down);
+        gl_set(gl, g, gf_desc(), up);
+    }
     gl_set(gl, g, gf_rot(), rot);
-    gl_set(gl, g, gf_color(), crate::port::cells_at(cx, C_CUR + G_COLOR));
-    gl_set(gl, g, gf_alpha(), crate::port::cells_at(cx, C_CUR + G_ALPHA));
+    gl_set(gl, g, gf_fill(), crate::port::cells_at(cx, C_CUR + G_COLOR));
+    gl_set(gl, g, gf_falpha(), crate::port::cells_at(cx, C_CUR + G_ALPHA));
     gl_set(gl, g, gf_mode(), crate::port::cells_at(cx, C_CUR + G_MODE));
-    gl_set(gl, g, gf_artifact(), crate::port::cells_at(cx, C_CURART));
-    gl_set(gl, g, gf_mcid(), crate::port::cells_at(cx, C_CURMCID));
+    if fam > 0 {
+        gl_set(gl, g, gf_cs(), fam);
+    }
+    gl_set(gl, g, gf_z(), z);
+    crate::port::cells_set(cx, C_Z, z + 1);
+    gl_set(gl, g, gf_mark(), crate::port::cells_at(cx, C_MCTOP));
+    gl_set(gl, g, gf_ocg(), crate::port::cells_at(cx, C_CUROCG));
     if cnt > 1 {
         i = 0;
         while i < cnt {
@@ -1166,8 +1393,8 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
             }
             i += 1;
         }
-        gl_set(gl, g, gf_tstart(), tstart);
-        gl_set(gl, g, gf_tlen(), cnt);
+        gl_set(gl, g, ch_tstart(), tstart);
+        gl_set(gl, g, ch_tlen(), cnt);
     }
     // The advance: tx = (w0 * Tfs + Tc + Tw) * Th, or ty = w1 * Tfs + Tc + Tw.
     let mut adv: i64 = 0 as i64;
@@ -1507,11 +1734,11 @@ pub(crate) fn pc_ingest_props(src: &crate::port::Src, mut ar: &mut crate::port::
     crate::port::cells_set(ox, (d * 4) + 1, (crate::port::cells_at(cx, C_OXN) - d) - 1);
     return d;
 }
-pub(crate) fn pc_read_props(mut et: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, ox: &mut crate::port::Cells, span: i32, d: i32) -> i32 {
-    // Fill the span's fields from the dictionary entry d of the operands: MCID,
-    // Type, Subtype, ActualText, Alt, E, Lang. Answers a code for the artifact's
-    // class: 1 watermark, 2 background, 3 pagination, 4 layout, 5 another
-    // named type or subtype, 0 none.
+pub(crate) fn pc_read_props(mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, ox: &mut crate::port::Cells, span: i32, d: i32, isart: i32) -> i32 {
+    // Fill the mark's fields from the dictionary entry d of the operands: MCID, ActualText, Alt, E, Lang;
+    // and, for an /Artifact, its /Type and /Subtype as codes (`ar`: pagination, layout, background, page,
+    // else `other`; `as`: header, footer, watermark, else `other`). A name that is none of the known ones
+    // is not kept (SPEC 8.4.3 holds codes, D101 held the name).
     let end: i32 = (d + 1) + pc_ea(ox, d);
     let mut j: i32 = d + 1;
     let mut v: i32 = 0;
@@ -1521,7 +1748,6 @@ pub(crate) fn pc_read_props(mut et: &mut crate::port::Cells, mut sp: &mut crate:
     let mut vl: i32 = 0;
     let mut vk: i32 = 0;
     let mut at: i32 = 0;
-    let mut cls: i32 = 0;
     while j < end {
         v = j + 1;
         if (pc_kind(ox, j) == K_NAME) && (v < end) {
@@ -1531,72 +1757,55 @@ pub(crate) fn pc_read_props(mut et: &mut crate::port::Cells, mut sp: &mut crate:
             vs = pc_ea(ox, v);
             vl = pc_eb(ox, v);
             if (pc_name_eq(ox, ks, kl, pn_mcid()) == 1) && (vk == K_NUM) {
-                sp_set(sp, span, sf_mcid(), fx_round(fx_join(vs, vl)));
+                mk_set(mk, span, mkf_mcid(), fx_round(fx_join(vs, vl)));
             }
-            if (pc_name_eq(ox, ks, kl, pn_type()) == 1) && (vk == K_NAME) {
-                at = pc_push_bytes(et, ox, vs, vl);
-                sp_set(sp, span, sf_type(), at);
-                sp_set(sp, span, sf_typelen(), vl);
+            if (isart == 1) && ((pc_name_eq(ox, ks, kl, pn_type()) == 1) && (vk == K_NAME)) {
+                mk_set(mk, span, mkf_artype(), ar_other());
                 if pc_name_eq(ox, vs, vl, pn_pagination()) == 1 {
-                    if cls == 0 {
-                        cls = 3;
-                    }
+                    mk_set(mk, span, mkf_artype(), ar_pagination());
                 }
                 if pc_name_eq(ox, vs, vl, pn_layout()) == 1 {
-                    if cls == 0 {
-                        cls = 4;
-                    }
+                    mk_set(mk, span, mkf_artype(), ar_layout());
                 }
                 if pc_name_eq(ox, vs, vl, pn_background()) == 1 {
-                    if cls != 1 {
-                        cls = 2;
-                    }
+                    mk_set(mk, span, mkf_artype(), ar_background());
                 }
-                if cls == 0 {
-                    cls = 5;
+                if pc_name_eq(ox, vs, vl, pn_page()) == 1 {
+                    mk_set(mk, span, mkf_artype(), ar_page());
                 }
             }
-            if (pc_name_eq(ox, ks, kl, pn_subtype()) == 1) && (vk == K_NAME) {
-                at = pc_push_bytes(et, ox, vs, vl);
-                sp_set(sp, span, sf_subtype(), at);
-                sp_set(sp, span, sf_subtypelen(), vl);
+            if (isart == 1) && ((pc_name_eq(ox, ks, kl, pn_subtype()) == 1) && (vk == K_NAME)) {
+                mk_set(mk, span, mkf_arsub(), as_other());
+                if pc_name_eq(ox, vs, vl, pn_header()) == 1 {
+                    mk_set(mk, span, mkf_arsub(), as_header());
+                }
+                if pc_name_eq(ox, vs, vl, pn_footer()) == 1 {
+                    mk_set(mk, span, mkf_arsub(), as_footer());
+                }
                 if pc_name_eq(ox, vs, vl, pn_watermark()) == 1 {
-                    cls = 1;
-                }
-                if pc_name_eq(ox, vs, vl, pn_background()) == 1 {
-                    if cls != 1 {
-                        cls = 2;
-                    }
-                }
-                if (pc_name_eq(ox, vs, vl, pn_header()) == 1) || (pc_name_eq(ox, vs, vl, pn_footer()) == 1) {
-                    if (cls == 0) || (cls == 5) {
-                        cls = 3;
-                    }
-                }
-                if cls == 0 {
-                    cls = 5;
+                    mk_set(mk, span, mkf_arsub(), as_watermark());
                 }
             }
             if (vk == K_STR) || (vk == K_NAME) {
                 if pc_name_eq(ox, ks, kl, pn_actual_text()) == 1 {
                     at = pc_push_text(et, ox, vs, vl);
-                    sp_set(sp, span, sf_actual(), at);
-                    sp_set(sp, span, sf_actuallen(), crate::port::cells_len(et) - at);
+                    mk_set(mk, span, mkf_actual(), at);
+                    mk_set(mk, span, mkf_actuallen(), crate::port::cells_len(et) - at);
                 }
                 if pc_name_eq(ox, ks, kl, pn_alt()) == 1 {
                     at = pc_push_text(et, ox, vs, vl);
-                    sp_set(sp, span, sf_alt(), at);
-                    sp_set(sp, span, sf_altlen(), crate::port::cells_len(et) - at);
+                    mk_set(mk, span, mkf_alt(), at);
+                    mk_set(mk, span, mkf_altlen(), crate::port::cells_len(et) - at);
                 }
                 if pc_name_eq(ox, ks, kl, pn_e()) == 1 {
                     at = pc_push_text(et, ox, vs, vl);
-                    sp_set(sp, span, sf_exp(), at);
-                    sp_set(sp, span, sf_explen(), crate::port::cells_len(et) - at);
+                    mk_set(mk, span, mkf_exp(), at);
+                    mk_set(mk, span, mkf_explen(), crate::port::cells_len(et) - at);
                 }
                 if pc_name_eq(ox, ks, kl, pn_lang()) == 1 {
                     at = pc_push_text(et, ox, vs, vl);
-                    sp_set(sp, span, sf_lang(), at);
-                    sp_set(sp, span, sf_langlen(), crate::port::cells_len(et) - at);
+                    mk_set(mk, span, mkf_lang(), at);
+                    mk_set(mk, span, mkf_langlen(), crate::port::cells_len(et) - at);
                 }
             }
             j = v + pc_esize(ox, v);
@@ -1604,63 +1813,45 @@ pub(crate) fn pc_read_props(mut et: &mut crate::port::Cells, mut sp: &mut crate:
             j += pc_esize(ox, j);
         }
     }
-    return cls;
-}
-pub(crate) fn pc_mc_recompute(mut cx: &mut crate::port::Cells, sp: &mut crate::port::Cells) -> i32 {
-    // The innermost MCID and artifact class in force: walk the open spans.
-    let mut t: i32 = crate::port::cells_at(cx, C_MCTOP);
-    let mut mcid: i32 = -1;
-    let mut art: i32 = 0;
-    let mut guard: i32 = 0;
-    let mut m: i32 = 0;
-    while (t >= 0) && (guard <= MAX_MC) {
-        if mcid < 0 {
-            m = sp_get(sp, t, sf_mcid());
-            if m >= 0 {
-                mcid = m;
-            }
-        }
-        if art == 0 {
-            art = sp_get(sp, t, sf_artifact());
-        }
-        t = sp_get(sp, t, sf_parent());
-        guard += 1;
-    }
-    crate::port::cells_set(cx, C_CURMCID, mcid);
-    crate::port::cells_set(cx, C_CURART, art);
     return 0;
 }
-pub(crate) fn pc_mc_pop(mut cx: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, gl: &mut crate::port::Cells, unterminated: i32) -> i32 {
-    // Close the innermost open span: its glyphs are those shown since it opened.
+pub(crate) fn pc_mc_pop(mut cx: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, gl: &mut crate::port::Cells, unterminated: i32) -> i32 {
+    // Close the innermost open mark: its glyphs are those shown since it opened, its painted objects
+    // those numbered since (`mk-close`).
     let t: i32 = crate::port::cells_at(cx, C_MCTOP);
     if t < 0 {
         return 0;
     }
     let g: i32 = gl_count(gl);
-    let gf: i32 = sp_get(sp, t, sf_gfirst());
-    let par: i32 = sp_get(sp, t, sf_parent());
-    sp_set(sp, t, sf_gcount(), g - gf);
+    let par: i32 = mk_get(mk, t, mkf_parent());
+    mk_close(mk, t, g, crate::port::cells_at(cx, C_Z));
     if unterminated == 1 {
-        let fl: i32 = sp_get(sp, t, sf_flags());
-        sp_set(sp, t, sf_flags(), fl | mc_unterminated());
+        let fl: i32 = mk_get(mk, t, mkf_flags());
+        mk_set(mk, t, mkf_flags(), fl | mc_unterminated());
     }
     crate::port::cells_set(cx, C_MCTOP, par);
     crate::port::cells_set(cx, C_MCDEPTH, crate::port::cells_at(cx, C_MCDEPTH) - 1);
-    pc_mc_recompute(cx, sp);
+    if crate::port::cells_at(cx, C_CUROCG) == t {
+        crate::port::cells_set(cx, C_CUROCG, mk_ocg_of(mk, par));
+    }
     return 0;
 }
-pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, n: i32, props: i32) -> i32 {
-    // BMC / BDC: open a span with the tag of operand 0 and, for BDC, the
-    // properties of operand 1 (an inline dictionary, or a name in /Properties).
+pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, n: i32, props: i32) -> i32 {
+    // BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an
+    // inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,
+    // `optional-content` for /OC (its object number is the /Properties entry's, when that is a
+    // reference), else `tag`.
     let depth: i32 = crate::port::cells_at(cx, C_MCDEPTH);
     let mut tstart: i32 = 0;
     let mut tlen: i32 = 0;
     let mut span: i32 = 0;
     let mut d: i32 = -1;
-    let mut cls: i32 = 0;
     let mut raw: i32 = 0;
     let mut dh: i32 = 0;
     let mut isart: i32 = 0;
+    let mut isoc: i32 = 0;
+    let mut t0: i32 = 0;
+    let mut kind: i32 = 3;
     let mut flags: i32 = 0;
     if depth >= MAX_MC {
         crate::port::cells_set(cx, C_MCOVER, crate::port::cells_at(cx, C_MCOVER) + 1);
@@ -1674,11 +1865,21 @@ pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cell
         if pc_entry_name_is(ox, 0, pn_artifact()) == 1 {
             isart = 1;
         }
+        t0 = pc_ea(ox, 0);
+        if (tlen == 2) && ((crate::port::cells_at(ox, t0) == 79) && (crate::port::cells_at(ox, t0 + 1) == 67)) {
+            isoc = 1;
+        }
     }
-    span = sp_new(sp, crate::port::cells_at(cx, C_PAGE), tstart, tlen, crate::port::cells_at(cx, C_MCTOP), gl_count(gl));
-    sp_set(sp, span, sf_stm(), crate::port::cells_at(cx, C_STM));
     if isart == 1 {
-        sp_set(sp, span, sf_artifact(), ar_other());
+        kind = mk_artifact();
+    }
+    if isoc == 1 {
+        kind = mk_optional_content();
+    }
+    span = mk_open(mk, crate::port::cells_at(cx, C_PAGE), kind, tstart, tlen, crate::port::cells_at(cx, C_MCTOP), gl_count(gl), crate::port::cells_at(cx, C_Z));
+    mk_set(mk, span, mkf_stm(), crate::port::cells_at(cx, C_STM));
+    if isart == 1 {
+        mk_set(mk, span, mkf_artype(), ar_other());
     }
     if (props == 1) && (n >= 2) {
         if pc_kind(ox, 1) == K_DICT {
@@ -1693,6 +1894,11 @@ pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cell
             if ps_missed(src) {
                 crate::port::cells_set(cx, C_ABORT, 1);
             }
+            if (isoc == 1) && (raw != 0) {
+                if pl_kind_of(ar, raw) == 9 {
+                    mk_set(mk, span, mkf_ocg(), pl_int_value(ar, raw));
+                }
+            }
             if (dh != 0) && (pl_kind_of(ar, dh) == 7) {
                 d = pc_ingest_props(src, ar, dc, a, b, st, cx, ox, dh);
                 flags = mc_resource();
@@ -1701,32 +1907,20 @@ pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cell
                 pc_warn_set(cx, W_PROPS);
             }
         }
-        sp_set(sp, span, sf_flags(), flags);
+        mk_set(mk, span, mkf_flags(), flags);
         if d >= 0 {
-            cls = pc_read_props(et, sp, ox, span, d);
-            if isart == 1 {
-                if cls == 1 {
-                    sp_set(sp, span, sf_artifact(), ar_watermark());
-                }
-                if cls == 2 {
-                    sp_set(sp, span, sf_artifact(), ar_background());
-                }
-                if cls == 3 {
-                    sp_set(sp, span, sf_artifact(), ar_pagination());
-                }
-                if cls == 4 {
-                    sp_set(sp, span, sf_artifact(), ar_layout());
-                }
-            }
+            pc_read_props(et, mk, ox, span, d, isart);
         }
     }
     crate::port::cells_set(cx, C_MCTOP, span);
     crate::port::cells_set(cx, C_MCDEPTH, depth + 1);
-    pc_mc_recompute(cx, sp);
+    if isoc == 1 {
+        crate::port::cells_set(cx, C_CUROCG, span);
+    }
     return 0;
 }
-pub(crate) fn pc_mc_end(mut cx: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, gl: &mut crate::port::Cells) -> i32 {
-    // EMC: close the innermost span this stream opened; a BDC that was too deep
+pub(crate) fn pc_mc_end(mut cx: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, gl: &mut crate::port::Cells) -> i32 {
+    // EMC: close the innermost mark this stream opened; a BDC that was too deep
     // to record is balanced first; an EMC with nothing to close is ignored.
     let over: i32 = crate::port::cells_at(cx, C_MCOVER);
     if over > 0 {
@@ -1737,7 +1931,7 @@ pub(crate) fn pc_mc_end(mut cx: &mut crate::port::Cells, mut sp: &mut crate::por
         pc_warn_set(cx, W_MC);
         return 0;
     }
-    return pc_mc_pop(cx, sp, gl, 0);
+    return pc_mc_pop(cx, mk, gl, 0);
 }
 pub(crate) fn pc_skip_inline(mut cx: &mut crate::port::Cells, cs: &mut crate::port::Cells) -> i32 {
     // BI: skip to the end of the inline image: find `ID` and its one white
@@ -1795,7 +1989,7 @@ pub(crate) fn pc_append_stream(src: &crate::port::Src, mut ar: &mut crate::port:
     crate::port::cells_push(cs, 10);
     return status;
 }
-pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, n: i32) -> i32 {
+pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, n: i32) -> i32 {
     // Do: run the Form XObject named by operand 0. Images and everything that is
     // not a form are skipped. The form's /Matrix is concatenated to the CTM, its
     // /Resources replace the current ones (else they are inherited), and it runs
@@ -1902,7 +2096,7 @@ pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
     crate::port::cells_set(cx, C_FDEPTH, fd + 1);
     crate::port::cells_set(cx, C_STM, objnum);
     endcs = crate::port::cells_len(cs);
-    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, start, endcs);
+    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, start, endcs);
     crate::port::cells_set(cx, C_FDEPTH, fd);
     crate::port::cells_set(cx, C_STM, oldstm);
     crate::port::cells_set(cx, C_RES, oldres);
@@ -1910,16 +2104,16 @@ pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
     crate::port::cells_drop(cs, start);
     return 0;
 }
-pub(crate) fn pc_prep(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pc_prep(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut et: &mut crate::port::Cells) -> i32 {
     // Before a string is shown: the font resident, and M = Tm x CTM current.
-    pc_ensure_font(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+    pc_ensure_font(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
     pc_update_m(cx);
     if crate::port::cells_at(cx, C_SLOT) < 0 {
         pc_warn_set(cx, W_TEXT);
     }
     return 0;
 }
-pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, op: i32, n: i32) -> i32 {
+pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, op: i32, n: i32) -> i32 {
     // Execute one operator; `ox` holds its n operands. Unknown operators do
     // nothing (their operands are dropped by the caller).
     if op == OP_SAVE {
@@ -1996,14 +2190,14 @@ pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
     }
     if op == OP_SHOW {
         if (n >= 1) && (pc_kind(ox, 0) == K_STR) {
-            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
             pc_show_str(cx, ox, gl, et, f0, f1, f2, f3, 0);
         }
         return 0;
     }
     if op == OP_SHOWARR {
         if (n >= 1) && (pc_kind(ox, 0) == K_ARR) {
-            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
             pc_show_arr(cx, ox, gl, et, f0, f1, f2, f3, 0);
         }
         return 0;
@@ -2011,7 +2205,7 @@ pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
     if op == OP_QUOTE {
         if (n >= 1) && (pc_kind(ox, 0) == K_STR) {
             pc_next_line(cx);
-            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
             pc_show_str(cx, ox, gl, et, f0, f1, f2, f3, 0);
         }
         return 0;
@@ -2021,25 +2215,25 @@ pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
             fx_put(cx, C_CUR + G_TW, pc_num(ox, n, 0));
             fx_put(cx, C_CUR + G_TC, pc_num(ox, n, 1));
             pc_next_line(cx);
-            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+            pc_prep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
             pc_show_str(cx, ox, gl, et, f0, f1, f2, f3, 2);
         }
         return 0;
     }
     if op == OP_DO {
-        pc_do(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, n);
+        pc_do(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, n);
         return 0;
     }
     if op == OP_BDC {
-        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 1);
+        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 1);
         return 0;
     }
     if op == OP_BMC {
-        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 0);
+        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 0);
         return 0;
     }
     if op == OP_EMC {
-        pc_mc_end(cx, sp, gl);
+        pc_mc_end(cx, mk, gl);
         return 0;
     }
     if op == OP_BI {
@@ -2093,7 +2287,7 @@ pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
     }
     return 0;
 }
-pub(crate) fn pc_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
+pub(crate) fn pc_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
     // Run the content bytes cs[start, end): read operands, then execute each
     // operator. The caller's lexer position, graphics-state floor and marked-
     // content floor are kept and restored, so a form can run inside an operator.
@@ -2123,20 +2317,20 @@ pub(crate) fn pc_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mu
             }
             opc = crate::port::cells_at(cx, C_OP);
             nop = crate::port::cells_at(cx, C_OXN);
-            pc_op(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, opc, nop);
+            pc_op(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, opc, nop);
             pc_ox_clear(cx, ox);
         }
     }
     // What the stream left open: spans, graphics states.
     while crate::port::cells_at(cx, C_MCDEPTH) > crate::port::cells_at(cx, C_MCBASE) {
         pc_warn_set(cx, W_MC);
-        pc_mc_pop(cx, sp, gl, 1);
+        pc_mc_pop(cx, mk, gl, 1);
     }
     while crate::port::cells_at(cx, C_DEPTH) > crate::port::cells_at(cx, C_GSBASE) {
         crate::port::cells_set(cx, C_DEPTH, crate::port::cells_at(cx, C_DEPTH) - 1);
     }
     crate::port::cells_set(cx, C_MCTOP, oldtop);
-    pc_mc_recompute(cx, sp);
+    crate::port::cells_set(cx, C_CUROCG, mk_ocg_of(mk, oldtop));
     crate::port::cells_set(cx, C_MCOVER, oldover);
     crate::port::cells_set(cx, C_MCBASE, oldmcb);
     crate::port::cells_set(cx, C_GSBASE, oldgs);
@@ -2168,26 +2362,26 @@ pub(crate) fn pc_axis(rot: i32) -> i32 {
 pub(crate) fn pc_offset(gl: &mut crate::port::Cells, j: i32, axis: i32) -> i32 {
     // Where glyph j's baseline is across its writing axis, in centipoints.
     if axis == 1 {
-        return gl_get(gl, j, gf_x1());
+        return gl_get(gl, j, ch_x1());
     }
     if axis == 3 {
-        return gl_get(gl, j, gf_x0());
+        return gl_get(gl, j, ch_x0());
     }
-    return gl_get(gl, j, gf_baseline());
+    return gl_get(gl, j, gf_by0());
 }
 pub(crate) fn pc_gap(gl: &mut crate::port::Cells, p: i32, g: i32, axis: i32) -> i32 {
     // The space along the axis between glyph p and the glyph g after it
     // (negative when they overlap or g is before p).
     if axis == 0 {
-        return gl_get(gl, g, gf_x0()) - gl_get(gl, p, gf_x1());
+        return gl_get(gl, g, ch_x0()) - gl_get(gl, p, ch_x1());
     }
     if axis == 2 {
-        return gl_get(gl, p, gf_x0()) - gl_get(gl, g, gf_x1());
+        return gl_get(gl, p, ch_x0()) - gl_get(gl, g, ch_x1());
     }
     if axis == 1 {
-        return gl_get(gl, p, gf_y0()) - gl_get(gl, g, gf_y1());
+        return gl_get(gl, p, ch_y0()) - gl_get(gl, g, ch_y1());
     }
-    return gl_get(gl, g, gf_y0()) - gl_get(gl, p, gf_y1());
+    return gl_get(gl, g, ch_y0()) - gl_get(gl, p, ch_y1());
 }
 pub(crate) fn pc_rot_gap(gl: &mut crate::port::Cells, p: i32, g: i32, size: i32) -> i32 {
     // For text at an arbitrary angle: the distance between glyph p's centre and
@@ -2196,8 +2390,8 @@ pub(crate) fn pc_rot_gap(gl: &mut crate::port::Cells, p: i32, g: i32, size: i32)
     let rot: i32 = gl_get(gl, p, gf_rot());
     let ux: i64 = fx_cos(rot);
     let uy: i64 = (0 as i64) - fx_sin(rot);
-    let dx2: i32 = (gl_get(gl, g, gf_x0()) + gl_get(gl, g, gf_x1())) - (gl_get(gl, p, gf_x0()) + gl_get(gl, p, gf_x1()));
-    let dy2: i32 = (gl_get(gl, g, gf_y0()) + gl_get(gl, g, gf_y1())) - (gl_get(gl, p, gf_y0()) + gl_get(gl, p, gf_y1()));
+    let dx2: i32 = (gl_get(gl, g, ch_x0()) + gl_get(gl, g, ch_x1())) - (gl_get(gl, p, ch_x0()) + gl_get(gl, p, ch_x1()));
+    let dy2: i32 = (gl_get(gl, g, ch_y0()) + gl_get(gl, g, ch_y1())) - (gl_get(gl, p, ch_y0()) + gl_get(gl, p, ch_y1()));
     let al2: i64 = (fx_mul(fx_of_int(dx2), ux)).wrapping_add(fx_mul(fx_of_int(dy2), uy));
     return fx_round(al2 / (2 as i64)) - ((size * 600) / 1000);
 }
@@ -2206,8 +2400,8 @@ pub(crate) fn pc_rot_off(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     let rot: i32 = gl_get(gl, p, gf_rot());
     let sn: i64 = fx_sin(rot);
     let cs: i64 = fx_cos(rot);
-    let dx2: i32 = (gl_get(gl, g, gf_x0()) + gl_get(gl, g, gf_x1())) - (gl_get(gl, p, gf_x0()) + gl_get(gl, p, gf_x1()));
-    let dy2: i32 = (gl_get(gl, g, gf_y0()) + gl_get(gl, g, gf_y1())) - (gl_get(gl, p, gf_y0()) + gl_get(gl, p, gf_y1()));
+    let dx2: i32 = (gl_get(gl, g, ch_x0()) + gl_get(gl, g, ch_x1())) - (gl_get(gl, p, ch_x0()) + gl_get(gl, p, ch_x1()));
+    let dy2: i32 = (gl_get(gl, g, ch_y0()) + gl_get(gl, g, ch_y1())) - (gl_get(gl, p, ch_y0()) + gl_get(gl, p, ch_y1()));
     let pe: i32 = fx_round((fx_mul(fx_of_int(dx2), sn)).wrapping_add(fx_mul(fx_of_int(dy2), cs)) / (2 as i64));
     if pe < 0 {
         return 0 - pe;
@@ -2325,13 +2519,13 @@ pub(crate) fn pc_cls(cp: i32) -> i32 {
     return 0;
 }
 pub(crate) fn pc_gcls(gl: &mut crate::port::Cells, j: i32) -> i32 {
-    return pc_cls(gl_get(gl, j, gf_cp()));
+    return pc_cls(gl_get(gl, j, ch_cp()));
 }
 pub(crate) fn pc_glyph_out(mut et: &mut crate::port::Cells, gl: &mut crate::port::Cells, j: i32) -> i32 {
     // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
-    let ts: i32 = gl_get(gl, j, gf_tstart());
-    let tl: i32 = gl_get(gl, j, gf_tlen());
-    let cp: i32 = gl_get(gl, j, gf_cp());
+    let ts: i32 = gl_get(gl, j, ch_tstart());
+    let tl: i32 = gl_get(gl, j, ch_tlen());
+    let cp: i32 = gl_get(gl, j, ch_cp());
     let mut k: i32 = 0;
     let mut cpv: i32 = 0;
     if (ts >= 0) && (tl > 0) {
@@ -2349,17 +2543,17 @@ pub(crate) fn pc_glyph_out(mut et: &mut crate::port::Cells, gl: &mut crate::port
     }
     return 0;
 }
-pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, page: i32, gfst: i32, glst: i32) -> i32 {
+pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, page: i32, gfst: i32, glst: i32, wbk: i32) -> i32 {
     // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
     // dominant font and size of the first, and `hidden-text` as its source when every
     // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
     // page (visual order, as Skia and most producers write them) has its TEXT written in
     // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
     // turned back. The glyphs themselves stay as they were shown.
-    let mut x0: i32 = gl_get(gl, gfst, gf_x0());
-    let mut y0: i32 = gl_get(gl, gfst, gf_y0());
-    let mut x1: i32 = gl_get(gl, gfst, gf_x1());
-    let mut y1: i32 = gl_get(gl, gfst, gf_y1());
+    let mut x0: i32 = gl_get(gl, gfst, ch_x0());
+    let mut y0: i32 = gl_get(gl, gfst, ch_y0());
+    let mut x1: i32 = gl_get(gl, gfst, ch_x1());
+    let mut y1: i32 = gl_get(gl, gfst, ch_y1());
     let mut j: i32 = gfst;
     let mut tstart: i32 = -1;
     let mut visible: i32 = 0;
@@ -2370,17 +2564,17 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
     let mut kk: i32 = 0;
     let mut m: i32 = 0;
     while j <= glst {
-        if gl_get(gl, j, gf_x0()) < x0 {
-            x0 = gl_get(gl, j, gf_x0());
+        if gl_get(gl, j, ch_x0()) < x0 {
+            x0 = gl_get(gl, j, ch_x0());
         }
-        if gl_get(gl, j, gf_y0()) < y0 {
-            y0 = gl_get(gl, j, gf_y0());
+        if gl_get(gl, j, ch_y0()) < y0 {
+            y0 = gl_get(gl, j, ch_y0());
         }
-        if gl_get(gl, j, gf_x1()) > x1 {
-            x1 = gl_get(gl, j, gf_x1());
+        if gl_get(gl, j, ch_x1()) > x1 {
+            x1 = gl_get(gl, j, ch_x1());
         }
-        if gl_get(gl, j, gf_y1()) > y1 {
-            y1 = gl_get(gl, j, gf_y1());
+        if gl_get(gl, j, ch_y1()) > y1 {
+            y1 = gl_get(gl, j, ch_y1());
         }
         if gl_get(gl, j, gf_mode()) != 3 {
             visible = 1;
@@ -2396,7 +2590,7 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
     }
     if (nr > nl) && (glst > gfst) {
         if pc_axis(gl_get(gl, gfst, gf_rot())) == 0 {
-            if gl_get(gl, glst, gf_x0()) >= gl_get(gl, gfst, gf_x0()) {
+            if gl_get(gl, glst, ch_x0()) >= gl_get(gl, gfst, ch_x0()) {
                 rtlw = 1;
             }
         }
@@ -2428,17 +2622,25 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
             }
         }
     }
-    let w: i32 = wd_new(wd, page, x0, y0, x1, y1, gfst, (glst - gfst) + 1);
-    wd_set(wd, w, wf_tstart(), tstart);
-    wd_set(wd, w, wf_tlen(), crate::port::cells_len(et) - tstart);
-    wd_set(wd, w, wf_font(), gl_get(gl, gfst, gf_font()));
+    let w: i32 = wd_new(wd, page, x0, y0, x1, y1, gl_get(gl, gfst, gf_bx0()), gl_get(gl, gfst, gf_by0()), gl_get(gl, glst, gf_bx1()), gl_get(gl, glst, gf_by1()), gl_get(gl, gfst, gf_rot()), 0, tstart, crate::port::cells_len(et) - tstart, -1, -1, -1);
+    let fo: i32 = gl_get(gl, gfst, gf_font());
+    if rtlw == 1 {
+        wd_set(wd, w, hd_dir(), ld_rtl());
+    }
+    wd_set(wd, w, wf_gfirst(), gfst);
+    wd_set(wd, w, wf_gcount(), (glst - gfst) + 1);
+    wd_set(wd, w, wf_font(), fo);
     wd_set(wd, w, wf_size(), gl_get(gl, gfst, gf_size()));
+    if (fo >= 0) && (fo < fo_count(fnt)) {
+        wd_set(wd, w, wf_style(), fo_get(fnt, fo, fnf_style()));
+    }
+    wd_set(wd, w, wf_wbreak(), wbk);
     if visible == 0 {
         wd_set(wd, w, wf_src(), sr_hidden_text());
     }
     j = gfst;
     while j <= glst {
-        gl_set(gl, j, gf_word(), w);
+        gl_set(gl, j, ch_word(), w);
         j += 1;
     }
     return w;
@@ -2447,11 +2649,11 @@ pub(crate) fn pc_swap_rows(mut wd: &mut crate::port::Cells, i: i32, j: i32) -> i
     let mut k: i32 = 0;
     let mut u: i32 = 0;
     let mut v: i32 = 0;
-    while k < 16 {
-        u = crate::port::cells_at(wd, (i * 16) + k);
-        v = crate::port::cells_at(wd, (j * 16) + k);
-        crate::port::cells_set(wd, (i * 16) + k, v);
-        crate::port::cells_set(wd, (j * 16) + k, u);
+    while k < 24 {
+        u = crate::port::cells_at(wd, (i * 24) + k);
+        v = crate::port::cells_at(wd, (j * 24) + k);
+        crate::port::cells_set(wd, (i * 24) + k, v);
+        crate::port::cells_set(wd, (j * 24) + k, u);
         k += 1;
     }
     return 0;
@@ -2523,11 +2725,11 @@ pub(crate) fn pc_line_bidi(mut gl: &mut crate::port::Cells, mut wd: &mut crate::
     if nr <= nl {
         return 0;
     }
-    ln_set(ln, lidx, lf_dir(), ld_rtl());
+    ln_set(ln, lidx, lh_dir(), ld_rtl());
     if pc_axis(gl_get(gl, wd_get(wd, wfst, wf_gfirst()), gf_rot())) != 0 {
         return 0;
     }
-    if wd_get(wd, wlst, wf_x0()) < wd_get(wd, wfst, wf_x0()) {
+    if wd_get(wd, wlst, hd_x0()) < wd_get(wd, wfst, hd_x0()) {
         return 0;
     }
     if wfst == wlst {
@@ -2553,33 +2755,33 @@ pub(crate) fn pc_line_bidi(mut gl: &mut crate::port::Cells, mut wd: &mut crate::
         gn = wd_get(wd, w, wf_gcount());
         j = 0;
         while j < gn {
-            gl_set(gl, g0 + j, gf_word(), w);
+            gl_set(gl, g0 + j, ch_word(), w);
             j += 1;
         }
         z = -1;
         if w < wlst {
-            z = wd_get(wd, w, wf_x0()) - wd_get(wd, w + 1, wf_x1());
+            z = wd_get(wd, w, hd_x0()) - wd_get(wd, w + 1, hd_x1());
         }
         wd_set(wd, w, wf_gap(), z);
         w += 1;
     }
     return 0;
 }
-pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, page: i32, g0: i32, w0: i32) -> i32 {
+pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, page: i32, g0: i32, w0: i32) -> i32 {
     // Group the glyphs from g0 on into words, and the words from w0 on into lines.
     let g1: i32 = gl_count(gl);
     let mut i: i32 = g0;
     let mut cur: i32 = -1;
     while i < g1 {
-        if pc_space_cp(gl_get(gl, i, gf_cp())) == 1 {
+        if pc_space_cp(gl_get(gl, i, ch_cp())) == 1 {
             if cur >= 0 {
-                pc_emit_word(gl, et, wd, page, cur, i - 1);
+                pc_emit_word(gl, et, wd, fnt, page, cur, i - 1, wb_space());
                 cur = -1;
             }
         } else {
             if cur >= 0 {
                 if pc_continues(gl, i - 1, i) == 0 {
-                    pc_emit_word(gl, et, wd, page, cur, i - 1);
+                    pc_emit_word(gl, et, wd, fnt, page, cur, i - 1, wb_gap());
                     cur = -1;
                 }
             }
@@ -2590,7 +2792,7 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
         i += 1;
     }
     if cur >= 0 {
-        pc_emit_word(gl, et, wd, page, cur, g1 - 1);
+        pc_emit_word(gl, et, wd, fnt, page, cur, g1 - 1, wb_line_end());
         cur = -1;
     }
     // Lines: consecutive words on one baseline, in order.
@@ -2610,6 +2812,7 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
     let mut joins: i32 = 0;
     let mut gap: i32 = 0;
     let mut sz: i32 = 0;
+    let mut ord: i32 = 0;
     let mut off: i32 = 0;
     while j <= nw {
         joins = 0;
@@ -2644,34 +2847,45 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
         } else {
             // The line so far ends at `prev`: record it, then start a new one at j.
             if lfirst >= 0 {
-                x0 = wd_get(wd, lfirst, wf_x0());
-                y0 = wd_get(wd, lfirst, wf_y0());
-                x1 = wd_get(wd, lfirst, wf_x1());
-                y1 = wd_get(wd, lfirst, wf_y1());
+                x0 = wd_get(wd, lfirst, hd_x0());
+                y0 = wd_get(wd, lfirst, hd_y0());
+                x1 = wd_get(wd, lfirst, hd_x1());
+                y1 = wd_get(wd, lfirst, hd_y1());
                 lnx = lfirst;
                 while lnx <= prev {
-                    if wd_get(wd, lnx, wf_x0()) < x0 {
-                        x0 = wd_get(wd, lnx, wf_x0());
+                    if wd_get(wd, lnx, hd_x0()) < x0 {
+                        x0 = wd_get(wd, lnx, hd_x0());
                     }
-                    if wd_get(wd, lnx, wf_y0()) < y0 {
-                        y0 = wd_get(wd, lnx, wf_y0());
+                    if wd_get(wd, lnx, hd_y0()) < y0 {
+                        y0 = wd_get(wd, lnx, hd_y0());
                     }
-                    if wd_get(wd, lnx, wf_x1()) > x1 {
-                        x1 = wd_get(wd, lnx, wf_x1());
+                    if wd_get(wd, lnx, hd_x1()) > x1 {
+                        x1 = wd_get(wd, lnx, hd_x1());
                     }
-                    if wd_get(wd, lnx, wf_y1()) > y1 {
-                        y1 = wd_get(wd, lnx, wf_y1());
+                    if wd_get(wd, lnx, hd_y1()) > y1 {
+                        y1 = wd_get(wd, lnx, hd_y1());
                     }
                     lnx += 1;
                 }
                 gfp = wd_get(wd, lfirst, wf_gfirst());
                 axis = pc_axis(gl_get(gl, gfp, gf_rot()));
-                lnx = ln_new(ln, page, x0, y0, x1, y1, lfirst, (prev - lfirst) + 1, pc_offset(gl, gfp, axis));
-                ln_set(ln, lnx, lf_rot(), gl_get(gl, gfp, gf_rot()));
+                ord = wd_get(wd, lfirst, wf_gfirst());
+                lnx = lfirst;
+                while lnx <= prev {
+                    if wd_get(wd, lnx, wf_gfirst()) < ord {
+                        ord = wd_get(wd, lnx, wf_gfirst());
+                    }
+                    lnx += 1;
+                }
+                // The baseline runs from the first word's start to the last word's end, in the
+                // order the words were SHOWN (the bidi step below re-orders the rows, not the page).
+                lnx = ln_new(ln, page, x0, y0, x1, y1, wd_get(wd, lfirst, hd_bx0()), wd_get(wd, lfirst, hd_by0()), wd_get(wd, prev, hd_bx1()), wd_get(wd, prev, hd_by1()), gl_get(gl, gfp, gf_rot()), 0, lfirst, (prev - lfirst) + 1);
+                ln_set(ln, lnx, lf_order(), ord);
                 pc_line_bidi(gl, wd, ln, lnx, lfirst, prev);
+                wd_set(wd, prev, wf_wbreak(), wb_line_end());
                 gfp = lfirst;
                 while gfp <= prev {
-                    wd_set(wd, gfp, wf_line(), lnx);
+                    wd_set(wd, gfp, hd_line(), lnx);
                     gfp += 1;
                 }
             }
@@ -2702,8 +2916,8 @@ pub(crate) fn pc_begin_page(mut cx: &mut crate::port::Cells, page: i32) -> i32 {
     crate::port::cells_set(cx, C_MCDEPTH, 0);
     crate::port::cells_set(cx, C_MCBASE, 0);
     crate::port::cells_set(cx, C_MCOVER, 0);
-    crate::port::cells_set(cx, C_CURMCID, -1);
-    crate::port::cells_set(cx, C_CURART, 0);
+    crate::port::cells_set(cx, C_CUROCG, -1);
+    crate::port::cells_set(cx, C_Z, 0);
     crate::port::cells_set(cx, C_INTEXT, 0);
     crate::port::cells_set(cx, C_GSBASE, 0);
     mx_ident(cx, C_TM);
@@ -2711,7 +2925,7 @@ pub(crate) fn pc_begin_page(mut cx: &mut crate::port::Cells, page: i32) -> i32 {
     mx_ident(cx, C_M);
     return 0;
 }
-pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, pg: &mut crate::port::Cells, pi: i32, page: i32, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, pg: &mut crate::port::Cells, pi: i32, page: i32, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
     // Interpret page index pi of the page table pg (page number `page`, 1-based, is
     // what the evidence records): its content streams, then the words and lines.
     // Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is
@@ -2749,20 +2963,21 @@ pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
         return 7;
     }
     endcs = crate::port::cells_len(cs);
-    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, 0, endcs);
+    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, 0, endcs);
     if crate::port::cells_at(cx, C_ABORT) == 1 {
         return 7;
     }
     if ps_missed(src) {
         return 7;
     }
-    pc_group(gl, et, wd, ln, page, g0, w0);
+    pc_group(gl, et, wd, ln, fnt, page, g0, w0);
     return 0;
 }
-pub fn pc_document(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+pub fn pc_document(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
     // Every page of an opened document (`pd-open` has answered 0): clears `cx`,
     // then `pc-page` for each page. Answers 0, or 7 when the source missed.
     pc_init(cx, ox);
+    crate::port::cells_drop(fnt, 0);
     let n: i32 = pd_pages(src, ar, dc, a, b, st, pg);
     let mut i: i32 = 0;
     let mut status: i32 = 0;
@@ -2770,7 +2985,7 @@ pub fn pc_document(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut 
         return 7;
     }
     while i < n {
-        status = pc_page(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, i, i + 1, wd, ln);
+        status = pc_page(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i + 1, wd, ln);
         if status == 7 {
             return 7;
         }

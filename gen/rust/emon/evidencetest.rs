@@ -4,139 +4,364 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 
-pub(crate) fn et_build(mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut spans: &mut crate::port::Cells) -> i32 {
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    etx_append_cp(etext, 72);
-    etx_append_cp(etext, 105);
-    etx_append_cp(etext, 102);
-    etx_append_cp(etext, 105);
-    etx_append_cp(etext, 72);
-    etx_append_cp(etext, 105);
-    etx_append_cp(etext, 80);
-    etx_append_cp(etext, 101);
-    etx_append_cp(etext, 110);
-    etx_append_cp(etext, 65);
-    etx_append_cp(etext, 114);
-    etx_append_cp(etext, 116);
-    etx_append_cp(etext, 105);
-    etx_append_cp(etext, 102);
-    etx_append_cp(etext, 97);
-    etx_append_cp(etext, 99);
-    etx_append_cp(etext, 116);
-    etx_append_cp(etext, 80);
-    etx_append_cp(etext, 97);
-    etx_append_cp(etext, 103);
-    etx_append_cp(etext, 105);
-    etx_append_cp(etext, 110);
-    etx_append_cp(etext, 97);
-    etx_append_cp(etext, 116);
-    etx_append_cp(etext, 105);
-    etx_append_cp(etext, 111);
-    etx_append_cp(etext, 110);
-    etx_append_cp(etext, 87);
-    etx_append_cp(etext, 97);
-    etx_append_cp(etext, 116);
-    etx_append_cp(etext, 101);
-    etx_append_cp(etext, 114);
-    etx_append_cp(etext, 109);
-    etx_append_cp(etext, 97);
-    etx_append_cp(etext, 114);
-    etx_append_cp(etext, 107);
-    etx_append_cp(etext, 68);
-    etx_append_cp(etext, 82);
-    etx_append_cp(etext, 65);
-    etx_append_cp(etext, 70);
-    etx_append_cp(etext, 84);
-    gl_new(glyphs, 1, 72, 1, 1200, 7200, 9000, 8000, 10200);
+pub(crate) fn et_txt(mut etext: &mut crate::port::Cells, c0: i32, c1: i32, c2: i32, c3: i32, c4: i32, c5: i32, c6: i32, c7: i32, c8: i32) -> i32 {
+    // Append the non-negative code points among the nine arguments; answer where the first went.
+    let at: i32 = etx_len(etext);
+    if c0 >= 0 {
+        etx_append_cp(etext, c0);
+    }
+    if c1 >= 0 {
+        etx_append_cp(etext, c1);
+    }
+    if c2 >= 0 {
+        etx_append_cp(etext, c2);
+    }
+    if c3 >= 0 {
+        etx_append_cp(etext, c3);
+    }
+    if c4 >= 0 {
+        etx_append_cp(etext, c4);
+    }
+    if c5 >= 0 {
+        etx_append_cp(etext, c5);
+    }
+    if c6 >= 0 {
+        etx_append_cp(etext, c6);
+    }
+    if c7 >= 0 {
+        etx_append_cp(etext, c7);
+    }
+    if c8 >= 0 {
+        etx_append_cp(etext, c8);
+    }
+    return at;
+}
+pub fn et_build(mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    ev_init(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    let t_hi: i32 = et_txt(etext, 72, 105, -1, -1, -1, -1, -1, -1, -1);
+    let t_fi: i32 = et_txt(etext, 102, 105, -1, -1, -1, -1, -1, -1, -1);
+    let t_p: i32 = et_txt(etext, 80, -1, -1, -1, -1, -1, -1, -1, -1);
+    let t_span: i32 = et_txt(etext, 83, 112, 97, 110, -1, -1, -1, -1, -1);
+    let t_en: i32 = et_txt(etext, 101, 110, -1, -1, -1, -1, -1, -1, -1);
+    let t_art: i32 = et_txt(etext, 65, 114, 116, 105, 102, 97, 99, 116, -1);
+    let t_draft: i32 = et_txt(etext, 68, 82, 65, 70, 84, -1, -1, -1, -1);
+    let t_oc: i32 = et_txt(etext, 79, 67, -1, -1, -1, -1, -1, -1, -1);
+    let t_alt: i32 = et_txt(etext, 65, 108, 116, -1, -1, -1, -1, -1, -1);
+    let t_exp: i32 = et_txt(etext, 69, 120, 112, -1, -1, -1, -1, -1, -1);
+    let t_arial: i32 = et_txt(etext, 65, 114, 105, 97, 108, -1, -1, -1, -1);
+    let t_eng: i32 = et_txt(etext, 101, 110, 103, -1, -1, -1, -1, -1, -1);
+    let t_ok: i32 = et_txt(etext, 111, 107, -1, -1, -1, -1, -1, -1, -1);
+    let t_ri: i32 = et_txt(etext, 114, 105, -1, -1, -1, -1, -1, -1, -1);
+    let t_bh: i32 = et_txt(etext, 72, -1, -1, -1, -1, -1, -1, -1, -1);
+    let t_bl: i32 = et_txt(etext, 108, -1, -1, -1, -1, -1, -1, -1, -1);
+    // shared: the page, two views, three points, three references
+    ep_new(epages, 1, 61200, 79200);
+    ep_set(epages, 0, epf_flags(), eg_text_layer() + eg_raster());
+    ep_set(epages, 0, epf_dpi(), 15000);
+    vw_new(views, 1, vk_render(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
+    vw_new(views, 1, vk_engine_binary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, vg_engine_binary());
+    pt_new(pts, 7200, 12000, po_move());
+    pt_new(pts, 20000, 12000, po_line());
+    pt_new(pts, 20000, 14000, po_close());
+    rf_add(refs, ea_components(), 0);
+    rf_add(refs, ea_components(), 0);
+    rf_add(refs, ea_components(), 0);
+    // fonts: a simple one and a composite one
+    fo_new(fonts, 5, ft_type1());
+    fo_set(fonts, 0, fnf_flags(), 32);
+    fo_set(fonts, 0, fnf_tounicode(), 1);
+    fo_set(fonts, 0, fnf_enc(), 1);
+    fo_set(fonts, 0, fnf_tstart(), t_arial);
+    fo_set(fonts, 0, fnf_tlen(), 5);
+    fo_set(fonts, 0, fnf_asc(), 905);
+    fo_set(fonts, 0, fnf_desc(), -212);
+    fo_set(fonts, 0, fnf_space(), 27800);
+    fo_set(fonts, 0, fnf_italic(), -1200);
+    fo_set(fonts, 0, fnf_stemv(), 80);
+    fo_set(fonts, 0, fnf_style(), sy_bold());
+    fo_new(fonts, 7, ft_type0());
+    // marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
+    mk_open(marks, 1, mk_tag(), t_p, 1, -1, 0, 0);
+    mk_set(marks, 0, mkf_mcid(), 0);
+    mk_set(marks, 0, mkf_lang(), t_en);
+    mk_set(marks, 0, mkf_langlen(), 2);
+    mk_set(marks, 0, mkf_flags(), mc_inline());
+    mk_open(marks, 1, mk_tag(), t_span, 4, 0, 0, 0);
+    mk_set(marks, 1, mkf_mcid(), 1);
+    mk_set(marks, 1, mkf_alt(), t_alt);
+    mk_set(marks, 1, mkf_altlen(), 3);
+    mk_set(marks, 1, mkf_exp(), t_exp);
+    mk_set(marks, 1, mkf_explen(), 3);
+    mk_close(marks, 1, 2, 2);
+    mk_close(marks, 0, 3, 3);
+    mk_open(marks, 1, mk_artifact(), t_art, 8, -1, 3, 3);
+    mk_set(marks, 2, mkf_artype(), ar_pagination());
+    mk_set(marks, 2, mkf_arsub(), as_watermark());
+    mk_set(marks, 2, mkf_actual(), t_draft);
+    mk_set(marks, 2, mkf_actuallen(), 5);
+    mk_set(marks, 2, mkf_stm(), 12);
+    mk_set(marks, 2, mkf_flags(), mc_unterminated());
+    mk_open(marks, 1, mk_optional_content(), t_oc, 2, 2, 3, 3);
+    mk_set(marks, 3, mkf_ocg(), 42);
+    mk_set(marks, 3, mkf_ocgdef(), 0);
+    mk_close(marks, 3, 4, 4);
+    mk_close(marks, 2, 4, 4);
+    // glyphs: H, i, the ligature fi, and a hidden diagonal one inside the optional-content span
+    gl_new(glyphs, 1, 7200, 9000, 8000, 10200, 72, -1, 0, 0);
+    gl_set(glyphs, 0, gf_bx0(), 7200);
+    gl_set(glyphs, 0, gf_by0(), 10000);
+    gl_set(glyphs, 0, gf_bx1(), 8000);
+    gl_set(glyphs, 0, gf_by1(), 10000);
+    gl_set(glyphs, 0, gf_asc(), 1000);
+    gl_set(glyphs, 0, gf_desc(), -200);
     gl_set(glyphs, 0, gf_how(), gh_tounicode());
-    gl_set(glyphs, 0, gf_color(), 0);
-    gl_set(glyphs, 0, gf_baseline(), 10000);
-    gl_set(glyphs, 0, gf_word(), 0);
-    gl_new(glyphs, 1, 105, 1, 1200, 8000, 9000, 8400, 10200);
+    gl_set(glyphs, 0, gf_font(), 0);
+    gl_set(glyphs, 0, gf_size(), 1200);
+    gl_set(glyphs, 0, gf_fill(), 0);
+    gl_set(glyphs, 0, gf_cs(), cs_rgb());
+    gl_set(glyphs, 0, gf_z(), 0);
+    gl_set(glyphs, 0, gf_mark(), 1);
+    gl_new(glyphs, 1, 8000, 9000, 8400, 10200, 105, -1, 0, 0);
+    gl_set(glyphs, 1, gf_bx0(), 8000);
+    gl_set(glyphs, 1, gf_by0(), 10000);
+    gl_set(glyphs, 1, gf_bx1(), 8400);
+    gl_set(glyphs, 1, gf_by1(), 10000);
+    gl_set(glyphs, 1, gf_asc(), 1000);
+    gl_set(glyphs, 1, gf_desc(), -200);
     gl_set(glyphs, 1, gf_how(), gh_tounicode());
-    gl_set(glyphs, 1, gf_color(), 0);
-    gl_set(glyphs, 1, gf_baseline(), 10000);
-    gl_set(glyphs, 1, gf_word(), 0);
-    gl_new(glyphs, 1, 102, 1, 1200, 9000, 9000, 10000, 10200);
+    gl_set(glyphs, 1, gf_font(), 0);
+    gl_set(glyphs, 1, gf_size(), 1200);
+    gl_set(glyphs, 1, gf_fill(), 0);
+    gl_set(glyphs, 1, gf_z(), 1);
+    gl_set(glyphs, 1, gf_mark(), 1);
+    gl_new(glyphs, 1, 9000, 9000, 10000, 10200, 102, t_fi, 2, 1);
+    gl_set(glyphs, 2, gf_bx0(), 9000);
+    gl_set(glyphs, 2, gf_by0(), 10000);
+    gl_set(glyphs, 2, gf_bx1(), 10000);
+    gl_set(glyphs, 2, gf_by1(), 10000);
+    gl_set(glyphs, 2, gf_asc(), 1000);
+    gl_set(glyphs, 2, gf_desc(), -200);
     gl_set(glyphs, 2, gf_how(), gh_glyphname());
-    gl_set(glyphs, 2, gf_tstart(), 2);
-    gl_set(glyphs, 2, gf_tlen(), 2);
-    gl_set(glyphs, 2, gf_color(), 2236962);
-    gl_set(glyphs, 2, gf_baseline(), 10000);
-    gl_set(glyphs, 2, gf_word(), 1);
-    gl_new(glyphs, 1, -1, 2, 4800, -2000, -3000, 5000, 500);
+    gl_set(glyphs, 2, gf_font(), 0);
+    gl_set(glyphs, 2, gf_size(), 1200);
+    gl_set(glyphs, 2, gf_fill(), 2236962);
+    gl_set(glyphs, 2, gf_z(), 2);
+    gl_set(glyphs, 2, gf_mark(), 0);
+    gl_new(glyphs, 1, 1000, 2000, 3000, 4000, -1, -1, 0, 2);
+    gl_set(glyphs, 3, gf_bx0(), 1000);
+    gl_set(glyphs, 3, gf_by0(), 4000);
+    gl_set(glyphs, 3, gf_bx1(), 3000);
+    gl_set(glyphs, 3, gf_by1(), 2000);
+    gl_set(glyphs, 3, gf_asc(), 400);
+    gl_set(glyphs, 3, gf_desc(), -100);
     gl_set(glyphs, 3, gf_rot(), 4500);
-    gl_set(glyphs, 3, gf_color(), 16711680);
-    gl_set(glyphs, 3, gf_alpha(), 500);
+    gl_set(glyphs, 3, gf_font(), 1);
+    gl_set(glyphs, 3, gf_size(), 1400);
     gl_set(glyphs, 3, gf_mode(), 3);
+    gl_set(glyphs, 3, gf_fill(), 16711680);
+    gl_set(glyphs, 3, gf_stroke(), 255);
+    gl_set(glyphs, 3, gf_falpha(), 500);
+    gl_set(glyphs, 3, gf_salpha(), 250);
+    gl_set(glyphs, 3, gf_z(), 3);
+    gl_set(glyphs, 3, gf_clip(), 1);
+    gl_set(glyphs, 3, gf_mark(), 3);
+    gl_set(glyphs, 3, gf_ocg(), 3);
     gl_set(glyphs, 3, gf_vis(), vz_clipped());
-    gl_set(glyphs, 3, gf_artifact(), ar_watermark());
-    gl_set(glyphs, 3, gf_mcid(), 7);
-    wd_new(words, 1, 7200, 9000, 8400, 10200, 0, 2);
-    wd_set(words, 0, wf_tstart(), 0);
-    wd_set(words, 0, wf_tlen(), 2);
-    wd_set(words, 0, wf_line(), 0);
-    wd_set(words, 0, wf_gap(), 600);
-    wd_set(words, 0, wf_font(), 1);
+    gl_set(glyphs, 3, gf_vby(), 4);
+    gl_set(glyphs, 3, gf_vchk(), vc_clip());
+    // words: Hi, the ligature, and the hidden one; two lines
+    wd_new(words, 1, 7200, 9000, 8400, 10200, 7200, 10000, 8400, 10000, 0, 0, t_hi, 2, 0, -1, -1);
+    wd_set(words, 0, wf_style(), sy_bold());
+    wd_set(words, 0, wf_gfirst(), 0);
+    wd_set(words, 0, wf_gcount(), 2);
+    wd_set(words, 0, wf_font(), 0);
     wd_set(words, 0, wf_size(), 1200);
-    wd_new(words, 1, 9000, 9000, 10000, 10200, 2, 1);
-    wd_set(words, 1, wf_tstart(), 2);
-    wd_set(words, 1, wf_tlen(), 2);
-    wd_set(words, 1, wf_line(), 0);
-    wd_set(words, 1, wf_conf(), 990);
-    wd_set(words, 1, wf_font(), 1);
+    wd_set(words, 0, wf_gap(), 600);
+    wd_set(words, 0, wf_wbreak(), wb_space());
+    wd_new(words, 1, 9000, 9000, 10000, 10200, 9000, 10000, 10000, 10000, 0, 0, t_fi, 2, 0, -1, -1);
+    wd_set(words, 1, wf_gfirst(), 2);
+    wd_set(words, 1, wf_gcount(), 1);
+    wd_set(words, 1, wf_font(), 0);
     wd_set(words, 1, wf_size(), 1200);
-    ln_new(lines, 1, 7200, 9000, 10000, 10200, 0, 2, 10000);
+    wd_set(words, 1, wf_wbreak(), wb_line_end());
+    wd_new(words, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, -1, 0, 1, -1, -1);
+    wd_set(words, 2, wf_gfirst(), 3);
+    wd_set(words, 2, wf_gcount(), 1);
+    wd_set(words, 2, wf_font(), 1);
+    wd_set(words, 2, wf_size(), 1400);
+    wd_set(words, 2, wf_src(), sr_hidden_text());
+    ln_new(lines, 1, 7200, 9000, 10000, 10200, 7200, 10000, 10000, 10000, 0, 0, 0, 2);
+    ln_set(lines, 0, lf_order(), 0);
+    ln_new(lines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1);
+    ln_set(lines, 1, lf_order(), 3);
+    // paths: a rule and a clip rectangle with its outline in pts; an image
     pa_new(paths, 1, pa_line(), 7200, 11000, 54000, 11050);
     pa_set(paths, 0, pf_stroke(), 3355443);
     pa_set(paths, 0, pf_width(), 50);
+    pa_set(paths, 0, pf_z(), 4);
+    pa_set(paths, 0, pf_dash(), 300);
     pa_new(paths, 1, pa_rect(), 7200, 12000, 20000, 14000);
     pa_set(paths, 1, pf_fill(), 16772778);
-    pa_set(paths, 1, pf_alpha(), 500);
-    pa_set(paths, 1, pf_flags(), 5);
-    pa_set(paths, 1, pf_mcid(), 0);
+    pa_set(paths, 1, pf_falpha(), 500);
+    pa_set(paths, 1, pf_flags(), pg_closed() + pg_clip());
+    pa_set(paths, 1, pf_pfirst(), 0);
+    pa_set(paths, 1, pf_pcount(), 3);
     im_new(images, 1, 7200, 20000, 30000, 40000, 12, 640, 480);
     im_set(images, 0, mf_flags(), mg_smask());
-    im_set(images, 0, mf_artifact(), ar_background());
-    im_set(images, 0, mf_mcid(), 3);
-    co_new(components, 1, ck_rule_h(), 7200, 11000, 54000, 11050);
+    im_set(images, 0, mf_z(), 5);
+    im_set(images, 0, mf_vchk(), vc_clip());
+    // OCR: one run over two blocks; a second, empty run
+    or_new(oruns, 1, 0);
+    or_set(oruns, 0, orf_bview(), 1);
+    or_set(oruns, 0, orf_request(), 2);
+    or_set(oruns, 0, orf_round(), 1);
+    or_set(oruns, 0, orf_pass(), op_first());
+    or_set(oruns, 0, orf_psm(), 3);
+    or_set(oruns, 0, orf_lang(), t_eng);
+    or_set(oruns, 0, orf_langlen(), 3);
+    or_set(oruns, 0, orf_deskew(), 35);
+    or_set(oruns, 0, orf_osd(), 0);
+    or_set(oruns, 0, orf_script(), 1281455214);
+    or_set(oruns, 0, orf_sconf(), 950);
+    or_set(oruns, 0, orf_oconf(), 880);
+    or_set(oruns, 0, orf_flags(), 3);
+    or_set(oruns, 0, orf_bfirst(), 0);
+    or_set(oruns, 0, orf_bcount(), 4);
+    or_set(oruns, 0, orf_lfirst(), 0);
+    or_set(oruns, 0, orf_lcount(), 3);
+    or_set(oruns, 0, orf_wfirst(), 0);
+    or_set(oruns, 0, orf_wcount(), 3);
+    or_new(oruns, 1, 0);
+    or_set(oruns, 1, orf_pass(), op_region());
+    or_set(oruns, 1, orf_round(), 2);
+    ob_new(oblocks, 1, 7200, 9000, 12000, 15000, ob_block(), -1, 0);
+    ob_set(oblocks, 0, obf_first(), 1);
+    ob_set(oblocks, 0, obf_count(), 1);
+    ob_new(oblocks, 1, 7200, 9000, 12000, 12000, ob_paragraph(), 0, 0);
+    ob_set(oblocks, 1, obf_first(), 0);
+    ob_set(oblocks, 1, obf_count(), 2);
+    ob_set(oblocks, 1, obf_conf(), 910);
+    ob_new(oblocks, 1, 7200, 13000, 12000, 15000, ob_block(), -1, 0);
+    ob_set(oblocks, 2, obf_first(), 3);
+    ob_set(oblocks, 2, obf_count(), 1);
+    ob_new(oblocks, 1, 7200, 13000, 12000, 15000, ob_paragraph(), 2, 0);
+    ob_set(oblocks, 3, obf_first(), 2);
+    ob_set(oblocks, 3, obf_count(), 1);
+    ol_new(olines, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, 0, 1);
+    ol_set(olines, 0, olf_par(), 1);
+    ol_set(olines, 0, olf_run(), 0);
+    ol_set(olines, 0, olf_xheight(), 500);
+    ol_set(olines, 0, olf_asc(), 1000);
+    ol_set(olines, 0, olf_desc(), -200);
+    ol_set(olines, 0, olf_px(), 150);
+    ol_set(olines, 0, olf_py(), 187);
+    ol_set(olines, 0, olf_pw(), 50);
+    ol_set(olines, 0, olf_ph(), 25);
+    ol_new(olines, 1, 7200, 11000, 12000, 12000, 7200, 12000, 12000, 12000, 0, 0, 1, 1);
+    ol_set(olines, 1, olf_par(), 1);
+    ol_set(olines, 1, olf_run(), 0);
+    ol_new(olines, 1, 7200, 13000, 12000, 15000, 7200, 15000, 12000, 15000, 0, 0, 2, 1);
+    ol_set(olines, 2, olf_par(), 3);
+    ol_set(olines, 2, olf_run(), 0);
+    ow_new(owords, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, t_hi, 2, 0, 870, -1);
+    ow_set(owords, 0, owf_run(), 0);
+    ow_set(owords, 0, owf_sfirst(), 0);
+    ow_set(owords, 0, owf_scount(), 2);
+    ow_set(owords, 0, owf_lang(), 6647399);
+    ow_set(owords, 0, owf_style(), sy_italic());
+    ow_set(owords, 0, owf_flags(), oe_dictionary());
+    ow_set(owords, 0, owf_px(), 150);
+    ow_set(owords, 0, owf_py(), 187);
+    ow_set(owords, 0, owf_pw(), 50);
+    ow_set(owords, 0, owf_ph(), 25);
+    ow_new(owords, 1, 7200, 11000, 9600, 12000, 7200, 12000, 9600, 12000, 0, 0, t_fi, 2, 1, 950, -1);
+    ow_set(owords, 1, owf_run(), 0);
+    ow_set(owords, 1, owf_sfirst(), 2);
+    ow_set(owords, 1, owf_scount(), 1);
+    ow_new(owords, 1, 7200, 13000, 9600, 15000, 7200, 15000, 9600, 15000, 0, 0, t_ok, 2, 2, 0, -1);
+    ow_set(owords, 2, owf_run(), 0);
+    ow_set(owords, 2, owf_sfirst(), 3);
+    ow_set(owords, 2, owf_scount(), 1);
+    os_new(osyms, 1, 7200, 9000, 8400, 10200, 72, -1, 0, 0);
+    os_set(osyms, 0, osf_conf(), 910);
+    os_set(osyms, 0, osf_afirst(), 0);
+    os_set(osyms, 0, osf_acount(), 2);
+    os_set(osyms, 0, osf_px(), 150);
+    os_set(osyms, 0, osf_py(), 187);
+    os_set(osyms, 0, osf_pw(), 25);
+    os_set(osyms, 0, osf_ph(), 25);
+    os_new(osyms, 1, 8400, 9000, 9600, 10200, 105, -1, 0, 0);
+    os_set(osyms, 1, osf_conf(), 880);
+    os_set(osyms, 1, osf_afirst(), 2);
+    os_set(osyms, 1, osf_acount(), 1);
+    os_set(osyms, 1, osf_flags(), os_superscript());
+    os_new(osyms, 1, 7200, 11000, 9600, 12000, 102, t_fi, 2, 1);
+    os_set(osyms, 2, osf_conf(), 700);
+    os_new(osyms, 1, 7200, 13000, 9600, 15000, 111, -1, 0, 2);
+    os_set(osyms, 3, osf_conf(), 990);
+    oa_add(oalts, 0, t_bh, 1, 900);
+    oa_add(oalts, 0, t_ri, 2, 250);
+    oa_add(oalts, 1, t_bl, 1, 40);
+    // the tracer: an ink layer, a component, a rule, a primitive and a text line
+    ik_new(inks, 1, 0);
+    ik_set(inks, 0, ikf_color(), 8421504);
+    ik_set(inks, 0, ikf_light(), 500);
+    ik_set(inks, 0, ikf_chroma(), 20);
+    ik_set(inks, 0, ikf_count(), 1200);
+    ik_set(inks, 0, ikf_role(), ir_body());
+    ik_set(inks, 0, ikf_mask(), 1);
+    ik_set(inks, 0, ikf_spread(), 5);
+    co_new(components, 1, 7200, 11000, 54000, 11050, ck_rule_h());
+    co_set(components, 0, cf_view(), 0);
     co_set(components, 0, cf_pxx(), 100);
     co_set(components, 0, cf_pxw(), 300);
+    co_set(components, 0, cf_pxh(), 3);
     co_set(components, 0, cf_area(), 1200);
     co_set(components, 0, cf_fill(), 950);
     co_set(components, 0, cf_stroke(), 50);
     co_set(components, 0, cf_color(), 255);
-    co_set(components, 0, cf_layer(), 2);
+    co_set(components, 0, cf_ink(), 0);
     co_set(components, 0, cf_conf(), 880);
     co_set(components, 0, cf_flags(), fl_low_conf());
-    ow_new(ocrwords, 1, 7190, 9010, 8410, 10190, 910);
-    ow_set(ocrwords, 0, of_tstart(), 4);
-    ow_set(ocrwords, 0, of_tlen(), 2);
-    ow_set(ocrwords, 0, of_line(), 0);
-    ow_set(ocrwords, 0, of_block(), 0);
-    ow_set(ocrwords, 0, of_baseline(), 10000);
-    ow_set(ocrwords, 0, of_flags(), sy_bold());
-    ow_set(ocrwords, 0, of_pass(), 1);
-    ow_set(ocrwords, 0, of_lang(), 3);
-    alt_add(ocrwords, alts, 0, 0, 72, 900);
-    alt_add(ocrwords, alts, 0, 1, 108, 250);
-    sp_new(spans, 1, 6, 1, -1, 0);
-    sp_set(spans, 0, sf_mcid(), 0);
-    sp_set(spans, 0, sf_lang(), 7);
-    sp_set(spans, 0, sf_langlen(), 2);
-    sp_set(spans, 0, sf_gcount(), 2);
-    sp_set(spans, 0, sf_flags(), mc_inline());
-    sp_new(spans, 1, 9, 8, -1, 3);
-    sp_set(spans, 1, sf_artifact(), ar_watermark());
-    sp_set(spans, 1, sf_type(), 17);
-    sp_set(spans, 1, sf_typelen(), 10);
-    sp_set(spans, 1, sf_subtype(), 27);
-    sp_set(spans, 1, sf_subtypelen(), 9);
-    sp_set(spans, 1, sf_actual(), 36);
-    sp_set(spans, 1, sf_actuallen(), 5);
-    sp_set(spans, 1, sf_gcount(), 1);
-    sp_set(spans, 1, sf_stm(), 12);
-    sp_set(spans, 1, sf_flags(), mc_unterminated());
+    co_set(components, 0, cf_pfirst(), 0);
+    co_set(components, 0, cf_pcount(), 3);
+    co_set(components, 0, cf_gray(), 90);
+    rl_new(rules, 1, 7200, 11000, 54000, 11050, 0);
+    rl_set(rules, 0, rlf_lx0(), 7200);
+    rl_set(rules, 0, rlf_ly0(), 11025);
+    rl_set(rules, 0, rlf_lx1(), 54000);
+    rl_set(rules, 0, rlf_ly1(), 11025);
+    rl_set(rules, 0, rlf_thick(), 50);
+    rl_set(rules, 0, rlf_color(), 3355443);
+    rl_set(rules, 0, rlf_ink(), 0);
+    rl_set(rules, 0, rlf_style(), rs_dashed());
+    rl_set(rules, 0, rlf_conf(), 880);
+    rl_set(rules, 0, rlf_rfirst(), 0);
+    rl_set(rules, 0, rlf_rcount(), 1);
+    pm_new(prims, 1, 17000, 12000, 23000, 18000, pm_circle());
+    pm_set(prims, 0, pmf_view(), 0);
+    pm_set(prims, 0, pmf_cx(), 20000);
+    pm_set(prims, 0, pmf_cy(), 15000);
+    pm_set(prims, 0, pmf_rx(), 3000);
+    pm_set(prims, 0, pmf_ry(), 3000);
+    pm_set(prims, 0, pmf_stroke(), 40);
+    pm_set(prims, 0, pmf_color(), 65280);
+    pm_set(prims, 0, pmf_ink(), 0);
+    pm_set(prims, 0, pmf_conf(), 700);
+    pm_set(prims, 0, pmf_pfirst(), 0);
+    pm_set(prims, 0, pmf_pcount(), 3);
+    pm_set(prims, 0, pmf_rfirst(), 1);
+    pm_set(prims, 0, pmf_rcount(), 1);
+    tl_new(tlines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1);
+    tl_set(tlines, 0, tlf_ink(), 0);
+    tl_set(tlines, 0, tlf_height(), 1200);
+    tl_set(tlines, 0, tlf_gap(), 300);
+    tl_set(tlines, 0, tlf_conf(), 600);
+    // features: a text-layer word and an OCR word, one row each
+    fe_new(feats, ea_words(), 0);
+    fe_set(feats, 0, xt_trust(), 1000);
+    wd_set(words, 0, hd_feat(), 0);
+    ev_feat_ocr(feats, epages, etext, olines, owords, osyms, oalts, 0, 0, 100);
     return 0;
 }
 pub(crate) fn et_end(b: &[u8]) -> i32 {
@@ -148,137 +373,955 @@ pub(crate) fn et_end(b: &[u8]) -> i32 {
     return n;
 }
 #[test]
-fn test_builders_set_the_layout_and_its_defaults() {
-    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    crate::testport::assert_eq(gl_count(glyphs), 0, "no glyphs");
-    crate::testport::assert_eq(gl_new(glyphs, 3, 65, 9, 1000, 100, 200, 300, 400), 0, "first glyph");
-    crate::testport::assert_eq(crate::port::cells_len(glyphs), 20, "twenty cells");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_page()), 3, "page");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_cp()), 65, "cp");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_tstart()), -1, "no text run");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_tlen()), 0, "no text length");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_how()), 5, "how defaults to unknown, code 5");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_font()), 9, "font");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_size()), 1000, "size");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_x0()), 100, "x0");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_y0()), 200, "y0");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_x1()), 300, "x1");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_y1()), 400, "y1");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_baseline()), 400, "baseline defaults to the box's bottom");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_rot()), 0, "no rotation");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_color()), -1, "no colour");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_alpha()), 1000, "opaque");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_mode()), 0, "render mode 0");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_vis()), 0, "visible");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_artifact()), 0, "not an artifact");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_mcid()), -1, "no mcid");
-    crate::testport::assert_eq(gl_get(glyphs, 0, gf_word()), -1, "in no word");
-    crate::testport::assert_eq(sp_new(spans, 3, 10, 1, -1, 4), 0, "first span");
-    crate::testport::assert_eq(crate::port::cells_len(spans), 22, "twenty-two cells");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_mcid()), -1, "no MCID");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_artifact()), 0, "not an artifact");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_type()), -1, "no type");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_actual()), -1, "no ActualText");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_lang()), -1, "no language");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_gfirst()), 4, "opened at glyph 4");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_parent()), -1, "no parent");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_stm()), 0, "the page's own stream");
-    crate::testport::assert_eq(wd_new(words, 3, 1, 2, 3, 4, 0, 1), 0, "first word");
-    crate::testport::assert_eq(crate::port::cells_len(words), 16, "sixteen cells");
-    crate::testport::assert_eq(wd_get(words, 0, wf_tstart()), -1, "no text");
-    crate::testport::assert_eq(wd_get(words, 0, wf_line()), -1, "no line");
-    crate::testport::assert_eq(wd_get(words, 0, wf_src()), 1, "source text");
-    crate::testport::assert_eq(wd_get(words, 0, wf_conf()), -1, "no confidence");
-    crate::testport::assert_eq(wd_get(words, 0, wf_gap()), -1, "no gap");
-    crate::testport::assert_eq(wd_get(words, 0, wf_font()), -1, "no font");
-    crate::testport::assert_eq(wd_get(words, 0, wf_gcount()), 1, "glyph count");
-    crate::testport::assert_eq(ln_new(lines, 3, 1, 2, 3, 4, 0, 1, 400), 0, "first line");
-    crate::testport::assert_eq(crate::port::cells_len(lines), 12, "twelve cells");
-    crate::testport::assert_eq(ln_get(lines, 0, lf_src()), 1, "source text");
-    crate::testport::assert_eq(ln_get(lines, 0, lf_baseline()), 400, "baseline");
-    crate::testport::assert_eq(pa_new(paths, 3, pa_rect(), 1, 2, 3, 4), 0, "first path");
-    crate::testport::assert_eq(crate::port::cells_len(paths), 16, "sixteen cells");
-    crate::testport::assert_eq(pa_get(paths, 0, pf_fill()), -1, "not filled");
-    crate::testport::assert_eq(pa_get(paths, 0, pf_stroke()), -1, "not stroked");
-    crate::testport::assert_eq(pa_get(paths, 0, pf_alpha()), 1000, "opaque");
-    crate::testport::assert_eq(pa_get(paths, 0, pf_mcid()), -1, "no mcid");
-    crate::testport::assert_eq(im_new(images, 3, 1, 2, 3, 4, 17, 10, 20), 0, "first image");
-    crate::testport::assert_eq(crate::port::cells_len(images), 12, "twelve cells");
-    crate::testport::assert_eq(im_get(images, 0, mf_obj()), 17, "object number");
-    crate::testport::assert_eq(im_get(images, 0, mf_pxw()), 10, "pixel width");
-    crate::testport::assert_eq(im_get(images, 0, mf_pxh()), 20, "pixel height");
-    crate::testport::assert_eq(im_get(images, 0, mf_mcid()), -1, "no mcid");
-    crate::testport::assert_eq(co_new(components, 3, ck_rule_h(), 1, 2, 3, 4), 0, "first component");
-    crate::testport::assert_eq(crate::port::cells_len(components), 20, "twenty cells");
-    crate::testport::assert_eq(co_get(components, 0, cf_color()), -1, "no colour");
-    crate::testport::assert_eq(co_get(components, 0, cf_layer()), -1, "no layer");
-    crate::testport::assert_eq(co_get(components, 0, cf_kind()), 2, "rule-h is code 2");
-    crate::testport::assert_eq(co_get(components, 0, cf_conf()), -1, "no confidence");
-    crate::testport::assert_eq(ow_new(ocrwords, 3, 1, 2, 3, 4, 850), 0, "first OCR word");
-    crate::testport::assert_eq(crate::port::cells_len(ocrwords), 16, "sixteen cells");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_conf()), 850, "confidence");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_tstart()), -1, "no text");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_althead()), -1, "no alternatives");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_altcount()), 0, "none counted");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_line()), -1, "no line");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_lang()), -1, "no language");
+fn test_every_arena_has_the_stride_the_spec_gives() {
+    crate::testport::assert_eq(24, 24, "24 arenas");
+    crate::testport::assert_eq(EV_STRIDES[(0) as usize], 12, "epages");
+    crate::testport::assert_eq(EV_STRIDES[(1) as usize], 24, "views");
+    crate::testport::assert_eq(EV_STRIDES[(2) as usize], 3, "pts");
+    crate::testport::assert_eq(EV_STRIDES[(3) as usize], 2, "refs");
+    crate::testport::assert_eq(EV_STRIDES[(4) as usize], 1, "etext");
+    crate::testport::assert_eq(EV_STRIDES[(5) as usize], 32, "feats");
+    crate::testport::assert_eq(EV_STRIDES[(6) as usize], 32, "glyphs");
+    crate::testport::assert_eq(EV_STRIDES[(7) as usize], 24, "words");
+    crate::testport::assert_eq(EV_STRIDES[(8) as usize], 16, "lines");
+    crate::testport::assert_eq(EV_STRIDES[(9) as usize], 24, "marks");
+    crate::testport::assert_eq(EV_STRIDES[(10) as usize], 16, "fonts");
+    crate::testport::assert_eq(EV_STRIDES[(11) as usize], 24, "paths");
+    crate::testport::assert_eq(EV_STRIDES[(12) as usize], 20, "images");
+    crate::testport::assert_eq(EV_STRIDES[(13) as usize], 28, "oruns");
+    crate::testport::assert_eq(EV_STRIDES[(14) as usize], 16, "oblocks");
+    crate::testport::assert_eq(EV_STRIDES[(15) as usize], 24, "olines");
+    crate::testport::assert_eq(EV_STRIDES[(16) as usize], 28, "owords");
+    crate::testport::assert_eq(EV_STRIDES[(17) as usize], 20, "osyms");
+    crate::testport::assert_eq(EV_STRIDES[(18) as usize], 4, "oalts");
+    crate::testport::assert_eq(EV_STRIDES[(19) as usize], 12, "inks");
+    crate::testport::assert_eq(EV_STRIDES[(20) as usize], 24, "components");
+    crate::testport::assert_eq(EV_STRIDES[(21) as usize], 20, "rules");
+    crate::testport::assert_eq(EV_STRIDES[(22) as usize], 24, "prims");
+    crate::testport::assert_eq(EV_STRIDES[(23) as usize], 20, "tlines");
 }
 #[test]
-fn test_setters_and_the_alternative_chain() {
+fn test_the_three_heads_are_one_layout() {
+    crate::testport::assert_eq(hd_page(), 0, "word head: page");
+    crate::testport::assert_eq(hd_x0(), 1, "x0");
+    crate::testport::assert_eq(hd_by1(), 8, "baseline ends at 8");
+    crate::testport::assert_eq(hd_rot(), 9, "rot");
+    crate::testport::assert_eq(hd_dir(), 10, "dir");
+    crate::testport::assert_eq(hd_tstart(), 11, "text start");
+    crate::testport::assert_eq(hd_line(), 13, "line");
+    crate::testport::assert_eq(hd_conf(), 14, "conf");
+    crate::testport::assert_eq(hd_feat(), 15, "a word head is 16 cells");
+    crate::testport::assert_eq(lh_page(), hd_page(), "line head: page");
+    crate::testport::assert_eq(lh_x0(), hd_x0(), "x0");
+    crate::testport::assert_eq(lh_y1(), hd_y1(), "y1");
+    crate::testport::assert_eq(lh_bx0(), hd_bx0(), "baseline");
+    crate::testport::assert_eq(lh_by1(), hd_by1(), "baseline end");
+    crate::testport::assert_eq(lh_rot(), hd_rot(), "rot");
+    crate::testport::assert_eq(lh_dir(), hd_dir(), "dir");
+    crate::testport::assert_eq(lh_first(), 11, "first");
+    crate::testport::assert_eq(lh_count(), 12, "a line head is 13 cells");
+    crate::testport::assert_eq(ch_page(), 0, "char head: page");
+    crate::testport::assert_eq(ch_y1(), 4, "box");
+    crate::testport::assert_eq(ch_cp(), 5, "cp");
+    crate::testport::assert_eq(ch_tstart(), 6, "text run");
+    crate::testport::assert_eq(ch_word(), 8, "a char head is 9 cells");
+}
+pub(crate) fn et_head_page(c: &mut crate::port::Cells, stride: i32, row: i32) -> i32 {
+    // ONE reader over (Cells, stride): a word-like or line-like row's page.
+    return crate::port::cells_at(c, (row * stride) + hd_page());
+}
+pub(crate) fn et_head_box(c: &mut crate::port::Cells, stride: i32, row: i32, k: i32) -> i32 {
+    return crate::port::cells_at(c, (row * stride) + (hd_x0() + k));
+}
+pub(crate) fn et_head_base(c: &mut crate::port::Cells, stride: i32, row: i32, k: i32) -> i32 {
+    return crate::port::cells_at(c, (row * stride) + (hd_bx0() + k));
+}
+#[test]
+fn test_one_reader_reads_the_head_of_every_word_like_and_line_like_arena() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    // words (24), owords (28), lines (16), olines (24), tlines (20): row 0 of each shares the head layout
+    crate::testport::assert_eq(et_head_page(words, 24, 0), 1, "words page");
+    crate::testport::assert_eq(et_head_page(owords, 28, 0), 1, "owords page");
+    crate::testport::assert_eq(et_head_page(lines, 16, 0), 1, "lines page");
+    crate::testport::assert_eq(et_head_page(olines, 24, 0), 1, "olines page");
+    crate::testport::assert_eq(et_head_page(tlines, 20, 0), 1, "tlines page");
+    crate::testport::assert_eq(et_head_box(words, 24, 0, 0), 7200, "words x0");
+    crate::testport::assert_eq(et_head_box(owords, 28, 0, 0), 7200, "owords x0");
+    crate::testport::assert_eq(et_head_box(lines, 16, 0, 0), 7200, "lines x0");
+    crate::testport::assert_eq(et_head_box(olines, 24, 0, 0), 7200, "olines x0");
+    crate::testport::assert_eq(et_head_box(tlines, 20, 0, 0), 1000, "tlines x0");
+    crate::testport::assert_eq(et_head_box(words, 24, 0, 3), 10200, "words y1");
+    crate::testport::assert_eq(et_head_box(owords, 28, 0, 3), 10200, "owords y1");
+    crate::testport::assert_eq(et_head_box(lines, 16, 0, 3), 10200, "lines y1");
+    crate::testport::assert_eq(et_head_box(olines, 24, 0, 3), 10200, "olines y1");
+    crate::testport::assert_eq(et_head_box(tlines, 20, 0, 3), 4000, "tlines y1");
+    crate::testport::assert_eq(et_head_base(words, 24, 0, 2), 8400, "words baseline x1");
+    crate::testport::assert_eq(et_head_base(owords, 28, 0, 2), 9600, "owords baseline x1");
+    crate::testport::assert_eq(et_head_base(lines, 16, 0, 2), 10000, "lines baseline x1");
+    crate::testport::assert_eq(et_head_base(olines, 24, 0, 2), 9600, "olines baseline x1");
+    crate::testport::assert_eq(et_head_base(tlines, 20, 0, 2), 3000, "tlines baseline x1");
+    crate::testport::assert_eq(et_head_base(tlines, 20, 0, 3), 2000, "tlines baseline y1 (a diagonal)");
+    crate::testport::assert_eq(ev_angle(et_head_base(tlines, 20, 0, 2) - et_head_base(tlines, 20, 0, 0), et_head_base(tlines, 20, 0, 3) - et_head_base(tlines, 20, 0, 1)), 4500, "its angle is 45 degrees");
+}
+#[test]
+fn test_builders_set_the_layout_and_its_defaults() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    crate::testport::assert_eq(gl_count(glyphs), 4, "four glyphs");
-    crate::testport::assert_eq(wd_count(words), 2, "two words");
-    crate::testport::assert_eq(ln_count(lines), 1, "one line");
-    crate::testport::assert_eq(pa_count(paths), 2, "two paths");
-    crate::testport::assert_eq(im_count(images), 1, "one image");
-    crate::testport::assert_eq(co_count(components), 1, "one component");
-    crate::testport::assert_eq(ow_count(ocrwords), 1, "one OCR word");
-    crate::testport::assert_eq(alt_count(alts), 2, "two alternatives");
-    crate::testport::assert_eq(etx_len(etext), 41, "the text cells");
-    crate::testport::assert_eq(sp_count(spans), 2, "two spans");
-    crate::testport::assert_eq(sp_get(spans, 0, sf_mcid()), 0, "the paragraph's MCID");
-    crate::testport::assert_eq(sp_get(spans, 1, sf_mcid()), -1, "the artifact has none");
-    crate::testport::assert_eq(sp_get(spans, 1, sf_artifact()), 2, "watermark");
-    crate::testport::assert_eq(sp_get(spans, 1, sf_stm()), 12, "a form's span");
-    crate::testport::assert_eq(gl_get(glyphs, 2, gf_tstart()), 2, "the ligature's text run");
-    crate::testport::assert_eq(gl_get(glyphs, 2, gf_tlen()), 2, "two code points");
-    crate::testport::assert_eq(gl_get(glyphs, 3, gf_rot()), 4500, "45 degrees in centi-degrees");
-    crate::testport::assert_eq(gl_get(glyphs, 3, gf_vis()), 1, "clipped is code 1");
-    crate::testport::assert_eq(gl_get(glyphs, 3, gf_artifact()), 2, "watermark is code 2");
-    crate::testport::assert_eq(wd_get(words, 1, wf_conf()), 990, "word confidence");
-    crate::testport::assert_eq(ln_get(lines, 0, lf_wcount()), 2, "the line has two words");
-    crate::testport::assert_eq(pa_get(paths, 1, pf_flags()), 5, "closed and clip");
-    crate::testport::assert_eq(im_get(images, 0, mf_flags()), 2, "smask");
-    crate::testport::assert_eq(co_get(components, 0, cf_flags()), 1, "low-conf");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_althead()), 0, "the chain starts at 0");
-    crate::testport::assert_eq(ow_get(ocrwords, 0, of_altcount()), 2, "two alternatives");
-    crate::testport::assert_eq(alt_get(alts, 0, af_sym()), 0, "first alternative: symbol 0");
-    crate::testport::assert_eq(alt_get(alts, 0, af_cp()), 72, "it reads H");
-    crate::testport::assert_eq(alt_get(alts, 0, af_conf()), 900, "at 900");
-    crate::testport::assert_eq(alt_get(alts, 0, af_next()), 1, "then the second");
-    crate::testport::assert_eq(alt_get(alts, 1, af_cp()), 108, "which reads l");
-    crate::testport::assert_eq(alt_get(alts, 1, af_next()), -1, "and ends the chain");
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 0, "the page is well formed");
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ev_init(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(gl_count(glyphs), 0, "no glyphs");
+    crate::testport::assert_eq(gl_new(glyphs, 3, 100, 200, 300, 400, 65, -1, 0, -1), 0, "first glyph");
+    crate::testport::assert_eq(crate::port::cells_len(glyphs), 32, "32 cells");
+    crate::testport::assert_eq(gl_get(glyphs, 0, ch_page()), 3, "page");
+    crate::testport::assert_eq(gl_get(glyphs, 0, ch_cp()), 65, "cp");
+    crate::testport::assert_eq(gl_get(glyphs, 0, ch_tstart()), -1, "no text run");
+    crate::testport::assert_eq(gl_get(glyphs, 0, ch_word()), -1, "in no word");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_bx0()), 100, "baseline starts at the box's left");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_by0()), 400, "on the box's bottom");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_bx1()), 300, "and ends at its right");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_by1()), 400, "on the bottom");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_asc()), 0, "asc 0");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_rot()), 0, "no rotation");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_how()), 5, "how defaults to unknown, code 5");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_font()), -1, "no font");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_mode()), 0, "render mode 0");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_fill()), -1, "no fill colour");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_stroke()), -1, "no stroke colour");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_falpha()), 1000, "opaque fill");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_salpha()), 1000, "opaque stroke");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_cs()), -1, "colour space unknown");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_clip()), -1, "no clip");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_mark()), -1, "no mark");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_ocg()), -1, "no optional content");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_vis()), 0, "unchecked counts as visible");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_vby()), -1, "no occluder");
+    crate::testport::assert_eq(gl_get(glyphs, 0, gf_vchk()), 0, "no check has run");
+    crate::testport::assert_eq(wd_new(words, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, -1, -1), 0, "first word");
+    crate::testport::assert_eq(crate::port::cells_len(words), 24, "24 cells");
+    crate::testport::assert_eq(wd_get(words, 0, hd_tstart()), -1, "no text");
+    crate::testport::assert_eq(wd_get(words, 0, hd_line()), -1, "no line");
+    crate::testport::assert_eq(wd_get(words, 0, hd_conf()), -1, "no confidence");
+    crate::testport::assert_eq(wd_get(words, 0, hd_feat()), -1, "no features yet");
+    crate::testport::assert_eq(wd_get(words, 0, wf_src()), 1, "source text");
+    crate::testport::assert_eq(wd_get(words, 0, wf_gap()), -1, "no gap");
+    crate::testport::assert_eq(wd_get(words, 0, wf_font()), -1, "no font");
+    crate::testport::assert_eq(wd_get(words, 0, wf_wbreak()), 0, "no word break said");
+    crate::testport::assert_eq(ln_new(lines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first line");
+    crate::testport::assert_eq(crate::port::cells_len(lines), 16, "16 cells");
+    crate::testport::assert_eq(ln_get(lines, 0, lf_src()), 1, "source text");
+    crate::testport::assert_eq(ln_get(lines, 0, lf_order()), -1, "no order");
+    crate::testport::assert_eq(mk_new(marks, 3, mk_tag(), -1, 0, -1, 4), 0, "first mark");
+    crate::testport::assert_eq(crate::port::cells_len(marks), 24, "24 cells");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_mcid()), -1, "no MCID");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_artype()), 0, "no /Type");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_actual()), -1, "no ActualText");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_lang()), -1, "no language");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_ocg()), -1, "no optional content");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_ocgdef()), -1, "its default state unknown");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_gfirst()), 4, "opened at glyph 4");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_zfirst()), -1, "no paint numbers yet");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_stm()), 0, "the page's own stream");
+    crate::testport::assert_eq(fo_new(fonts, 7, 3), 0, "first font");
+    crate::testport::assert_eq(crate::port::cells_len(fonts), 16, "16 cells");
+    crate::testport::assert_eq(fo_get(fonts, 0, fnf_tstart()), -1, "no name");
+    crate::testport::assert_eq(fo_get(fonts, 0, fnf_enc()), -1, "no base encoding");
+    crate::testport::assert_eq(fo_get(fonts, 0, fnf_space()), -1, "no space width");
+    crate::testport::assert_eq(fo_get(fonts, 0, fnf_stemv()), -1, "no stem");
+    crate::testport::assert_eq(pa_new(paths, 3, pa_rect(), 1, 2, 3, 4), 0, "first path");
+    crate::testport::assert_eq(crate::port::cells_len(paths), 24, "24 cells");
+    crate::testport::assert_eq(pa_get(paths, 0, pf_fill()), -1, "not filled");
+    crate::testport::assert_eq(pa_get(paths, 0, pf_stroke()), -1, "not stroked");
+    crate::testport::assert_eq(pa_get(paths, 0, pf_falpha()), 1000, "opaque");
+    crate::testport::assert_eq(pa_get(paths, 0, pf_z()), -1, "no paint number");
+    crate::testport::assert_eq(pa_get(paths, 0, pf_clip()), -1, "no clip");
+    crate::testport::assert_eq(pa_get(paths, 0, pf_pfirst()), -1, "no geometry");
+    crate::testport::assert_eq(im_new(images, 3, 1, 2, 3, 4, 17, 10, 20), 0, "first image");
+    crate::testport::assert_eq(crate::port::cells_len(images), 20, "20 cells");
+    crate::testport::assert_eq(im_get(images, 0, mf_obj()), 17, "object number");
+    crate::testport::assert_eq(im_get(images, 0, mf_alpha()), 1000, "opaque");
+    crate::testport::assert_eq(im_get(images, 0, mf_z()), -1, "no paint number");
+    crate::testport::assert_eq(im_get(images, 0, mf_vby()), -1, "no occluder");
+    crate::testport::assert_eq(or_new(oruns, 3, 0), 0, "first run");
+    crate::testport::assert_eq(crate::port::cells_len(oruns), 28, "28 cells");
+    crate::testport::assert_eq(or_get(oruns, 0, orf_bview()), -1, "no binarised view");
+    crate::testport::assert_eq(or_get(oruns, 0, orf_request()), -1, "no request");
+    crate::testport::assert_eq(or_get(oruns, 0, orf_lang()), -1, "no languages");
+    crate::testport::assert_eq(or_get(oruns, 0, orf_osd()), -1, "no OSD");
+    crate::testport::assert_eq(or_get(oruns, 0, orf_sconf()), -1, "no script confidence");
+    crate::testport::assert_eq(ob_new(oblocks, 3, 1, 2, 3, 4, ob_block(), -1, 0), 0, "first block");
+    crate::testport::assert_eq(crate::port::cells_len(oblocks), 16, "16 cells");
+    crate::testport::assert_eq(ob_get(oblocks, 0, obf_conf()), -1, "no confidence");
+    crate::testport::assert_eq(ol_new(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line");
+    crate::testport::assert_eq(crate::port::cells_len(olines), 24, "24 cells");
+    crate::testport::assert_eq(ol_get(olines, 0, olf_par()), -1, "in no paragraph");
+    crate::testport::assert_eq(ol_get(olines, 0, olf_xheight()), -1, "x-height unknown");
+    crate::testport::assert_eq(ow_new(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word");
+    crate::testport::assert_eq(crate::port::cells_len(owords), 28, "28 cells");
+    crate::testport::assert_eq(ow_get(owords, 0, hd_conf()), 850, "confidence");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_psize()), -1, "point size unknown");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_sfirst()), -1, "no symbols");
+    crate::testport::assert_eq(os_new(osyms, 3, 1, 2, 3, 4, 65, -1, 0, 0), 0, "first symbol");
+    crate::testport::assert_eq(crate::port::cells_len(osyms), 20, "20 cells");
+    crate::testport::assert_eq(os_get(osyms, 0, osf_conf()), -1, "no confidence");
+    crate::testport::assert_eq(os_get(osyms, 0, osf_afirst()), -1, "no alternatives");
+    crate::testport::assert_eq(oa_add(oalts, 0, -1, 0, 55), 0, "first alternative");
+    crate::testport::assert_eq(crate::port::cells_len(oalts), 4, "4 cells");
+    crate::testport::assert_eq(oa_get(oalts, 0, oaf_conf()), 55, "its confidence");
+    crate::testport::assert_eq(ik_new(inks, 3, 0), 0, "first ink");
+    crate::testport::assert_eq(crate::port::cells_len(inks), 12, "12 cells");
+    crate::testport::assert_eq(ik_get(inks, 0, ikf_color()), -1, "no colour");
+    crate::testport::assert_eq(ik_get(inks, 0, ikf_mask()), -1, "no mask view");
+    crate::testport::assert_eq(co_new(components, 3, 1, 2, 3, 4, ck_rule_h()), 0, "first component");
+    crate::testport::assert_eq(crate::port::cells_len(components), 24, "24 cells");
+    crate::testport::assert_eq(co_get(components, 0, cf_color()), -1, "no colour");
+    crate::testport::assert_eq(co_get(components, 0, cf_ink()), -1, "no ink layer");
+    crate::testport::assert_eq(co_get(components, 0, cf_kind()), 2, "rule-h is code 2");
+    crate::testport::assert_eq(co_get(components, 0, cf_parent()), -1, "no parent");
+    crate::testport::assert_eq(co_get(components, 0, cf_gray()), -1, "no gray");
+    crate::testport::assert_eq(rl_new(rules, 3, 1, 2, 3, 4, 0), 0, "first rule");
+    crate::testport::assert_eq(crate::port::cells_len(rules), 20, "20 cells");
+    crate::testport::assert_eq(rl_get(rules, 0, rlf_color()), -1, "no colour");
+    crate::testport::assert_eq(pm_new(prims, 3, 1, 2, 3, 4, pm_circle()), 0, "first primitive");
+    crate::testport::assert_eq(crate::port::cells_len(prims), 24, "24 cells");
+    crate::testport::assert_eq(pm_get(prims, 0, pmf_ink()), -1, "no ink layer");
+    crate::testport::assert_eq(tl_new(tlines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0), 0, "first text line");
+    crate::testport::assert_eq(crate::port::cells_len(tlines), 20, "20 cells");
+    crate::testport::assert_eq(tl_get(tlines, 0, tlf_ink()), -1, "no ink layer");
+    crate::testport::assert_eq(pt_new(pts, 5, 6, po_line()), 0, "first point");
+    crate::testport::assert_eq(crate::port::cells_len(pts), 3, "3 cells");
+    crate::testport::assert_eq(rf_add(refs, ea_glyphs(), 4), 0, "first reference");
+    crate::testport::assert_eq(rf_get(refs, 0, 1), 4, "its index");
+    crate::testport::assert_eq(ep_new(epages, 3, 61200, 79200), 0, "first page");
+    crate::testport::assert_eq(crate::port::cells_len(epages), 12, "12 cells");
+}
+#[test]
+fn test_the_hand_built_page_has_a_row_in_every_arena_and_is_well_formed() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_rows(1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "epages");
+    crate::testport::assert_eq(ev_rows(2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "views");
+    crate::testport::assert_eq(ev_rows(3, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "pts");
+    crate::testport::assert_eq(ev_rows(4, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "refs");
+    crate::testport::assert_eq(ev_rows(5, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), etx_len(etext), "etext");
+    crate::testport::assert_eq(ev_rows(6, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "feats");
+    crate::testport::assert_eq(ev_rows(7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "glyphs");
+    crate::testport::assert_eq(ev_rows(8, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "words");
+    crate::testport::assert_eq(ev_rows(9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "lines");
+    crate::testport::assert_eq(ev_rows(10, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "marks");
+    crate::testport::assert_eq(ev_rows(11, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "fonts");
+    crate::testport::assert_eq(ev_rows(12, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "paths");
+    crate::testport::assert_eq(ev_rows(13, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "images");
+    crate::testport::assert_eq(ev_rows(14, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "oruns");
+    crate::testport::assert_eq(ev_rows(15, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "oblocks");
+    crate::testport::assert_eq(ev_rows(16, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "olines");
+    crate::testport::assert_eq(ev_rows(17, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "owords");
+    crate::testport::assert_eq(ev_rows(18, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "osyms");
+    crate::testport::assert_eq(ev_rows(19, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "oalts");
+    crate::testport::assert_eq(ev_rows(20, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "inks");
+    crate::testport::assert_eq(ev_rows(21, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "components");
+    crate::testport::assert_eq(ev_rows(22, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "rules");
+    crate::testport::assert_eq(ev_rows(23, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "prims");
+    crate::testport::assert_eq(ev_rows(24, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "tlines");
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed");
+    // the marks nest, and a glyph's chain finds its artifact
+    crate::testport::assert_eq(mk_get(marks, 1, mkf_parent()), 0, "the span is in the paragraph");
+    crate::testport::assert_eq(mk_get(marks, 3, mkf_parent()), 2, "the optional-content span is in the artifact");
+    crate::testport::assert_eq(mk_artifact_of(marks, 3), 19, "glyph 3's nearest artifact: pagination (1) * 16 + watermark (3)");
+    crate::testport::assert_eq(mk_artifact_of(marks, 1), 0, "glyph 0's chain holds none");
+    crate::testport::assert_eq(mk_artifact_of(marks, -1), 0, "no mark, no artifact");
+    crate::testport::assert_eq(mk_ocg_of(marks, 3), 3, "the optional-content mark");
+    crate::testport::assert_eq(mk_ocg_of(marks, 1), -1, "none");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_gcount()), 3, "the paragraph holds three glyphs");
+    crate::testport::assert_eq(mk_get(marks, 1, mkf_gcount()), 2, "the span two");
+    crate::testport::assert_eq(mk_get(marks, 0, mkf_zlast()), 2, "the paragraph's last paint number");
+    crate::testport::assert_eq(mk_get(marks, 3, mkf_zfirst()), 3, "the optional-content span paints object 3");
+    crate::testport::assert_eq(mk_get(marks, 3, mkf_zlast()), 3, "and only it");
+    crate::testport::assert_eq(mk_artifact_class(mk_artifact(), ar_pagination(), as_watermark()), 2, "the D101 class: watermark");
+    crate::testport::assert_eq(mk_artifact_class(mk_artifact(), ar_background(), 0), 4, "background");
+    crate::testport::assert_eq(mk_artifact_class(mk_artifact(), ar_pagination(), 0), 1, "pagination");
+    crate::testport::assert_eq(mk_artifact_class(mk_artifact(), ar_other(), as_header()), 1, "a header is pagination");
+    crate::testport::assert_eq(mk_artifact_class(mk_artifact(), ar_layout(), 0), 3, "layout");
+    crate::testport::assert_eq(mk_artifact_class(mk_artifact(), ar_page(), 0), 5, "/Type /Page says nothing more: other");
+    crate::testport::assert_eq(mk_artifact_class(mk_tag(), ar_pagination(), 0), 0, "a tag is no artifact");
+}
+pub(crate) fn et_poke_check(emon_t: i32, k: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // Break the page the way check row k says and require that code: the table is the spec of `ev-check`.
+    let code: i32 = EV_CK[(k * 6 + 0) as usize];
+    let ea: i32 = EV_CK[(k * 6 + 1) as usize];
+    let kind: i32 = EV_CK[(k * 6 + 2) as usize];
+    let f1: i32 = EV_CK[(k * 6 + 3) as usize];
+    let f2: i32 = EV_CK[(k * 6 + 4) as usize];
+    let tg: i32 = EV_CK[(k * 6 + 5) as usize];
+    let mut row: i32 = 0;
+    let mut v: i32 = 0;
+    let mut off: i32 = 0;
+    let mut cand: i32 = 0;
+    let mut n: i32 = 0;
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq_at(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed before it is broken", code);
+    if kind == 1 {
+        n = ev_rows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        while (row < n) && (ev_peek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0) {
+            row += 1;
+        }
+        crate::testport::assert_that_at(row < n, "a row with the text run exists", code);
+        ev_poke(ea, row, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    }
+    if kind == 2 {
+        ev_poke(ea, 0, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    }
+    if kind == 3 {
+        ev_poke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    }
+    if kind == 4 {
+        ev_poke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    }
+    if kind == 5 {
+        ev_poke(ea, 0, f1, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    }
+    if kind == 8 {
+        ev_poke(ea, 0, f1, 1000000000, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    }
+    if kind == 6 {
+        n = ev_rows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        row = 0;
+        while (row < n) && (ev_peek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0) {
+            row += 1;
+        }
+        crate::testport::assert_that_at(row < n, "a row with a back pointer exists", code);
+        v = ev_peek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        n = ev_rows(tg, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        // another row of the target whose run does not hold this row
+        off = 1;
+        cand = (v + 1) % n;
+        while (off < n) && ((row >= ev_peek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)) && (row < (ev_peek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) + ev_peek(tg, cand, f2 + 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)))) {
+            off += 1;
+            cand = (v + off) % n;
+        }
+        crate::testport::assert_that_at(off < n, "a row that does not hold it exists", code);
+        ev_poke(ea, row, f1, cand, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    }
+    crate::testport::assert_eq_at(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), code, "the code of the row that was broken", code);
+    return 0;
+}
+#[test]
+fn test_ev_check_answers_every_code_of_its_table() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut k: i32 = 0;
+    crate::testport::assert_eq(88, 88, "88 table checks, codes 2..89");
+    while k < 88 {
+        et_poke_check(0, k, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        k += 1;
+    }
+}
+#[test]
+fn test_ev_check_answers_the_codes_outside_its_table() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::port::cells_push(glyphs, 0);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "a stride broken: a glyph arena that is not a whole number of rows");
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::port::cells_push(etext, 0);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "an etext arena has no stride to break");
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_poke(4, 1, 0, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to an arena that is none");
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_poke(4, 1, 1, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to a row that is not there");
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_poke(6, 0, 0, 7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is a glyph");
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_poke(6, 1, 1, 9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is not there");
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_poke(8, 0, 15, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "a word whose feature row names another word");
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_poke(17, 0, 15, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "an OCR word pointing at the text layer's feature row");
+}
+#[test]
+fn test_ev_angle_is_exact_at_every_multiple_of_45_degrees() {
+    crate::testport::assert_eq(ev_angle(0, 0), 0, "the zero vector");
+    crate::testport::assert_eq(ev_angle(100, 0), 0, "east");
+    crate::testport::assert_eq(ev_angle(100, -100), 4500, "north-east (y is down: -dy is up)");
+    crate::testport::assert_eq(ev_angle(0, -100), 9000, "north");
+    crate::testport::assert_eq(ev_angle(-100, -100), 13500, "north-west");
+    crate::testport::assert_eq(ev_angle(-100, 0), 18000, "west");
+    crate::testport::assert_eq(ev_angle(-100, 100), 22500, "south-west");
+    crate::testport::assert_eq(ev_angle(0, 100), 27000, "south");
+    crate::testport::assert_eq(ev_angle(100, 100), 31500, "south-east");
+    crate::testport::assert_eq(ev_angle(7, -7), 4500, "any length");
+    crate::testport::assert_eq(ev_angle(2147483647, -2147483647), 4500, "the largest");
+    crate::testport::assert_eq(ev_angle(-2147483648, 0), 18000, "the smallest does not overflow");
+    crate::testport::assert_eq(ev_angle(0, -2147483648), 9000, "nor -dy");
+}
+pub(crate) fn et_sweep(emon_t: i32) -> i32 {
+    // Every centi-degree: the angle of (cos, -sin) in 16.16 is within 3 of it, and never goes down.
+    let mut a: i32 = 0;
+    let mut got: i32 = 0;
+    let mut prev: i32 = 0;
+    let mut d: i32 = 0;
+    while a < 36000 {
+        got = ev_angle(ev_cos(a), 0 - ev_sin(a));
+        if (got == 0) && (a > 18000) {
+            got = 36000;
+        }
+        d = got - a;
+        if d < 0 {
+            d = 0 - d;
+        }
+        crate::testport::assert_that_at(d <= 3, "within 3 centi-degrees (0.03 degree)", a);
+        crate::testport::assert_that_at(got >= prev, "monotonic over the sweep", a);
+        prev = got;
+        a += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_ev_angle_is_monotonic_and_within_3_centi_degrees_over_the_whole_circle() {
+    et_sweep(0);
+}
+#[test]
+fn test_sine_and_cosine_come_from_a_table_and_symmetry() {
+    crate::testport::assert_eq(ev_sin(0), 0, "sin 0");
+    crate::testport::assert_eq(ev_sin(9000), 65536, "sin 90 degrees is 1.0");
+    crate::testport::assert_eq(ev_sin(4500), 46341, "sin 45 degrees");
+    crate::testport::assert_eq(ev_sin(3000), 32768, "sin 30 degrees is one half");
+    crate::testport::assert_eq(ev_sin(18000), 0, "sin 180");
+    crate::testport::assert_eq(ev_sin(27000), -65536, "sin 270");
+    crate::testport::assert_eq(ev_sin(-9000), -65536, "sin -90");
+    crate::testport::assert_eq(ev_sin(45000), 65536, "sin 450 is sin 90");
+    crate::testport::assert_eq(ev_cos(0), 65536, "cos 0");
+    crate::testport::assert_eq(ev_cos(9000), 0, "cos 90");
+    crate::testport::assert_eq(ev_cos(18000), -65536, "cos 180");
+    crate::testport::assert_eq(ev_cos(-4500), 46341, "cos -45");
+    crate::testport::assert_eq(ev_sin(12000), ev_sin(6000), "sin 120 is sin 60");
+    crate::testport::assert_eq(ev_sin(24000), 0 - ev_sin(6000), "sin 240 is -sin 60");
+}
+#[test]
+fn test_floor_division_rounds_toward_minus_infinity() {
+    crate::testport::assert_eq(ev_floordiv(7 as i64, 2 as i64) as i32, 3, "7 / 2");
+    crate::testport::assert_eq(ev_floordiv(-7 as i64, 2 as i64) as i32, -4, "-7 / 2 floors to -4 where `quot` truncates to -3");
+    crate::testport::assert_eq(ev_floordiv(-8 as i64, 2 as i64) as i32, -4, "exact");
+    crate::testport::assert_eq(ev_floordiv(0 as i64, 5 as i64) as i32, 0, "0");
+}
+#[test]
+fn test_overlap_and_baselines() {
+    crate::testport::assert_eq(ev_overlap_small(0, 0, 100, 100, 50, 50, 150, 150), 250, "a quarter of the smaller");
+    crate::testport::assert_eq(ev_overlap_small(0, 0, 100, 100, 10, 10, 20, 20), 1000, "a box inside another is all of the smaller");
+    crate::testport::assert_eq(ev_overlap_small(0, 0, 100, 100, 200, 200, 300, 300), 0, "disjoint");
+    crate::testport::assert_eq(ev_overlap_small(0, 0, 100, 100, 100, 0, 200, 100), 0, "touching is no overlap");
+    crate::testport::assert_eq(ev_overlap_small(0, 0, 0, 0, 0, 0, 100, 100), 0, "an empty box overlaps nothing");
+    crate::testport::assert_eq(ev_baseline_at(0, 100, 1000, 200, 500), 150, "the middle of a rising segment");
+    crate::testport::assert_eq(ev_baseline_at(0, 100, 1000, 100, 777), 100, "a level one");
+    crate::testport::assert_eq(ev_baseline_at(0, 100, 1000, 0, 250), 75, "a falling one, truncating");
+    crate::testport::assert_eq(ev_baseline_at(50, 70, 50, 90, 50), 90, "a vertical segment answers its end");
+}
+pub(crate) fn et_abs(v: i32) -> i32 {
+    if v < 0 {
+        return 0 - v;
+    }
+    return v;
+}
+pub(crate) fn et_view_grid(emon_t: i32, views: &mut crate::port::Cells, dpi: i32, deskew: i32, turns: i32) -> i32 {
+    // px -> cpt -> px lands within one pixel for a grid over a US Letter page, at every resolution (the 16.16
+    // inverse is good to 2^-17 of the distance from the origin: 0.6 pixel at 792 points); and
+    // EXACTLY at 150 and 300 dpi with no deskew (the scale is 48 or 24 centipoints a pixel, exactly).
+    let pw: i32 = (dpi * 17) / 2;
+    let ph: i32 = dpi * 11;
+    let v: i32 = vw_new(views, 1, vk_render(), 1, -1, pw, ph, dpi * 100, 0, -1, turns, deskew, 0, 0, 0);
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut px: i32 = 0;
+    let mut py: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut bx: i32 = 0;
+    let mut by: i32 = 0;
+    let mut dx: i32 = 0;
+    let mut dy: i32 = 0;
+    while i < 6 {
+        j = 0;
+        while j < 5 {
+            px = (i * pw) / 5;
+            py = (j * ph) / 4;
+            x = vw_px_to_cpt(views, v, 0, px, py);
+            y = vw_px_to_cpt(views, v, 1, px, py);
+            bx = vw_cpt_to_px(views, v, 0, x, y);
+            by = vw_cpt_to_px(views, v, 1, x, y);
+            dx = et_abs(bx - px);
+            dy = et_abs(by - py);
+            crate::testport::assert_that_at(dx <= 1, "x within one pixel", (dpi * 10) + i);
+            crate::testport::assert_that_at(dy <= 1, "y within one pixel", (dpi * 10) + j);
+            if (deskew == 0) && ((dpi == 150) || (dpi == 300)) {
+                crate::testport::assert_eq_at(bx, px, "x exactly", (dpi * 10) + i);
+                crate::testport::assert_eq_at(by, py, "y exactly", (dpi * 10) + j);
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_a_view_maps_pixels_to_centipoints_and_back() {
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut di: i32 = 0;
+    let mut ki: i32 = 0;
+    let mut q: i32 = 0;
+    let mut dpi: i32 = 0;
+    let mut dsk: i32 = 0;
+    while di < 7 {
+        if di == 0 {
+            dpi = 72;
+        }
+        if di == 1 {
+            dpi = 96;
+        }
+        if di == 2 {
+            dpi = 150;
+        }
+        if di == 3 {
+            dpi = 200;
+        }
+        if di == 4 {
+            dpi = 300;
+        }
+        if di == 5 {
+            dpi = 400;
+        }
+        if di == 6 {
+            dpi = 600;
+        }
+        ki = 0;
+        while ki < 5 {
+            dsk = 0;
+            if ki == 1 {
+                dsk = 85;
+            }
+            if ki == 2 {
+                dsk = -85;
+            }
+            if ki == 3 {
+                dsk = 300;
+            }
+            if ki == 4 {
+                dsk = -300;
+            }
+            q = 0;
+            while q < 4 {
+                et_view_grid(0, views, dpi, dsk, q);
+                q += 1;
+            }
+            ki += 1;
+        }
+        di += 1;
+    }
+}
+#[test]
+fn test_a_view_at_150_dpi_is_exactly_48_centipoints_a_pixel() {
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let v: i32 = vw_new(views, 1, vk_render(), 1, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
+    let w: i32 = vw_new(views, 1, vk_render(), 1, -1, 1275, 1650, 30000, 0, -1, 0, 0, 0, 0, 0);
+    crate::testport::assert_eq(vw_get(views, v, vwf_a()), 3145728, "a = 48.0 in 16.16");
+    crate::testport::assert_eq(vw_get(views, v, vwf_b()), 0, "b = 0");
+    crate::testport::assert_eq(vw_get(views, v, vwf_c()), 0, "c = 0");
+    crate::testport::assert_eq(vw_get(views, v, vwf_d()), 3145728, "d = 48.0");
+    crate::testport::assert_eq(vw_get(views, v, vwf_e()), 0, "e = 0");
+    crate::testport::assert_eq(vw_px_to_cpt(views, v, 0, 100, 200), 4800, "x = 100 * 48");
+    crate::testport::assert_eq(vw_px_to_cpt(views, v, 1, 100, 200), 9600, "y = 200 * 48");
+    crate::testport::assert_eq(vw_cpt_to_px(views, v, 0, 4800, 9600), 100, "and back");
+    crate::testport::assert_eq(vw_get(views, w, vwf_a()), 1572864, "at 300 dpi 24.0");
+    crate::testport::assert_eq(vw_px_to_cpt(views, w, 0, 100, 200), 2400, "x = 100 * 24");
+    crate::testport::assert_eq(vw_box_to_cpt(views, v, 0, 10, 20, 30, 40), 480, "a pixel box's x0");
+    crate::testport::assert_eq(vw_box_to_cpt(views, v, 1, 10, 20, 30, 40), 960, "y0");
+    crate::testport::assert_eq(vw_box_to_cpt(views, v, 2, 10, 20, 30, 40), 1920, "x1");
+    crate::testport::assert_eq(vw_box_to_cpt(views, v, 3, 10, 20, 30, 40), 2880, "y1");
+}
+#[test]
+fn test_quarter_turns_put_the_origin_at_the_right_corner_and_keep_boxes_boxes() {
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: i32 = vw_new(views, 1, vk_render(), 1, -1, 100, 200, 15000, 0, -1, 1, 0, 1000, 2000, 0);
+    let t2: i32 = vw_new(views, 1, vk_render(), 1, -1, 100, 200, 15000, 0, -1, 2, 0, 1000, 2000, 0);
+    let t3: i32 = vw_new(views, 1, vk_render(), 1, -1, 100, 200, 15000, 0, -1, 3, 0, 1000, 2000, 0);
+    // a raster turned a quarter clockwise: its (0,0) is the region's bottom-left; x grows up the page
+    crate::testport::assert_eq(vw_px_to_cpt(views, t1, 0, 0, 0), 1000, "t1 origin x");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t1, 1, 0, 0), 6800, "t1 origin y = cropy + 100 * 48");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t1, 0, 10, 0), 1000, "moving right on the raster moves up the page: x the same");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t1, 1, 10, 0), 6320, "and y less by 10 * 48");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t1, 0, 0, 10), 1480, "moving down the raster moves right on the page");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t2, 0, 0, 0), 5800, "t2 origin: the opposite corner");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t2, 1, 0, 0), 11600, "t2 origin y");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t3, 0, 0, 0), 10600, "t3 origin x = cropx + 200 * 48");
+    crate::testport::assert_eq(vw_px_to_cpt(views, t3, 1, 0, 0), 2000, "t3 origin y");
+    crate::testport::assert_eq(vw_box_to_cpt(views, t1, 0, 0, 0, 10, 20), 1000, "a box turned: its smallest box, x0");
+    crate::testport::assert_eq(vw_box_to_cpt(views, t1, 2, 0, 0, 10, 20), 1960, "x1 = 1000 + 20 * 48");
+    crate::testport::assert_eq(vw_box_to_cpt(views, t1, 1, 0, 0, 10, 20), 6320, "y0 = 6800 - 10 * 48, the smallest y of the four corners");
+    crate::testport::assert_eq(vw_box_to_cpt(views, t1, 3, 0, 0, 10, 20), 6800, "y1");
+}
+#[test]
+fn test_stage_1_features_of_an_ocr_word() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    // owords[0] is Hi with H at 910 (alternatives H 900, ri 250) and i at 880 (alternative l 40)
+    crate::testport::assert_eq(fe_get(feats, 1, 0), 17, "the subject is an OCR word");
+    crate::testport::assert_eq(fe_get(feats, 1, 1), 0, "word 0");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_conf()), 870, "the raw confidence, verbatim");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_sym_min()), 880, "the lowest symbol");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_sym_mean()), 895, "the mean of 910 and 880");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_margin()), 660, "the smallest margin: 910 less the differing alternative 'ri' at 250 is 660, 880 less 'l' at 40 is 840");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_ambiguous()), 0, "no margin within 100");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_engine_flags()), 1, "the dictionary flag");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_implausible()), 0, "Hi is plausible");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_length()), 2, "two code points");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_angle()), 0, "a level word on a level page");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_spacing()), 0, "two symbols of 1200 width with no gap between them");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_rel_height()), 1000, "the only word of its line");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_base_dev()), 0, "on its line's baseline");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_edge()), 7200, "the nearest page edge is the left one");
+    crate::testport::assert_eq(fe_get(feats, 1, 9), -1, "a column of a later stage is -1");
+    crate::testport::assert_eq(fe_get(feats, 1, 31), -1, "a spare column is -1");
+    crate::testport::assert_eq(ow_get(owords, 0, hd_feat()), 1, "the word names its feature row");
+}
+#[test]
+fn test_implausible_transitions_are_letter_digit_and_lower_to_upper() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    // a word r1Il0 (a letter, a digit, a capital, a lower-case letter, a digit): every adjacent pair but l-0
+    etx_append_cp(etext, 114);
+    etx_append_cp(etext, 49);
+    etx_append_cp(etext, 73);
+    etx_append_cp(etext, 108);
+    etx_append_cp(etext, 48);
+    let at: i32 = etx_len(etext) - 5;
+    ow_set(owords, 1, hd_tstart(), at);
+    ow_set(owords, 1, hd_tlen(), 5);
+    ev_feat_ocr(feats, epages, etext, olines, owords, osyms, oalts, 1, 0, 100);
+    // pairs r1 (letter-digit), 1I (digit-letter), Il (upper-lower: fine), l0 (letter-digit): 3 of 4
+    crate::testport::assert_eq(fe_get(feats, 2, xo_implausible()), 750, "three of four pairs");
+    crate::testport::assert_eq(fe_get(feats, 2, xo_length()), 5, "five code points");
+}
+#[test]
+fn test_every_cell_of_every_stride_is_printed_or_spare() {
+    // Count the cells each arena's field table prints (a box 4, a pair 2, a run 2, a text run 2) and
+    // require the rest to be the spare cells SPEC 8.4 names: no cell is printed twice or forgotten.
+    let mut ea: i32 = 1;
+    let mut r: i32 = 0;
+    let mut cells: i32 = 0;
+    let mut kind: i32 = 0;
+    while ea <= 24 {
+        cells = 0;
+        r = EV_FX[((ea - 1) * 2 + 0) as usize];
+        while r < (EV_FX[((ea - 1) * 2 + 0) as usize] + EV_FX[((ea - 1) * 2 + 1) as usize]) {
+            kind = EV_FD[(r * 6 + 2) as usize];
+            if (kind == 3) || ((kind == 4) || (kind == 10)) {
+                cells += 4;
+            }
+            if (kind == 6) || ((kind == 7) || ((kind == 12) || (kind == 13))) {
+                cells += 2;
+            }
+            if (kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || (kind == 11))))) {
+                cells += 1;
+            }
+            r += 1;
+        }
+        if ea == 1 {
+            crate::testport::assert_eq(EV_STRIDES[(0) as usize] - cells, 6, "epages: six spare cells");
+        }
+        if ea == 2 {
+            crate::testport::assert_eq(cells, 24, "views: every cell");
+        }
+        if ea == 3 {
+            crate::testport::assert_eq(cells, 3, "pts: every cell");
+        }
+        if ea == 7 {
+            crate::testport::assert_eq(cells, 32, "glyphs: every cell");
+        }
+        if ea == 8 {
+            crate::testport::assert_eq(cells, 24, "words: every cell");
+        }
+        if ea == 9 {
+            crate::testport::assert_eq(EV_STRIDES[(8) as usize] - cells, 1, "lines: one spare");
+        }
+        if ea == 10 {
+            crate::testport::assert_eq(cells, 24, "marks: every cell");
+        }
+        if ea == 11 {
+            crate::testport::assert_eq(EV_STRIDES[(10) as usize] - cells, 2, "fonts: two spare");
+        }
+        if ea == 12 {
+            crate::testport::assert_eq(EV_STRIDES[(11) as usize] - cells, 5, "paths: five spare");
+        }
+        if ea == 13 {
+            crate::testport::assert_eq(EV_STRIDES[(12) as usize] - cells, 1, "images: one spare");
+        }
+        if ea == 14 {
+            crate::testport::assert_eq(cells, 28, "oruns: every cell");
+        }
+        if ea == 15 {
+            crate::testport::assert_eq(EV_STRIDES[(14) as usize] - cells, 2, "oblocks: two spare");
+        }
+        if ea == 16 {
+            crate::testport::assert_eq(EV_STRIDES[(15) as usize] - cells, 1, "olines: one spare");
+        }
+        if ea == 17 {
+            crate::testport::assert_eq(EV_STRIDES[(16) as usize] - cells, 1, "owords: one spare");
+        }
+        if ea == 18 {
+            crate::testport::assert_eq(EV_STRIDES[(17) as usize] - cells, 3, "osyms: three spare");
+        }
+        if ea == 19 {
+            crate::testport::assert_eq(cells, 4, "oalts: every cell");
+        }
+        if ea == 20 {
+            crate::testport::assert_eq(EV_STRIDES[(19) as usize] - cells, 3, "inks: three spare");
+        }
+        if ea == 21 {
+            crate::testport::assert_eq(EV_STRIDES[(20) as usize] - cells, 1, "components: one spare");
+        }
+        if ea == 22 {
+            crate::testport::assert_eq(EV_STRIDES[(21) as usize] - cells, 2, "rules: two spare");
+        }
+        if ea == 23 {
+            crate::testport::assert_eq(EV_STRIDES[(22) as usize] - cells, 2, "prims: two spare");
+        }
+        if ea == 24 {
+            crate::testport::assert_eq(EV_STRIDES[(23) as usize] - cells, 3, "tlines: three spare");
+        }
+        ea += 1;
+    }
+}
+#[test]
+fn test_golden_page() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let compact: &mut String = &mut crate::port::new_text();
+    let pretty: &mut String = &mut crate::port::new_text();
+    et_build(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_emit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_emit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_text_span(compact, &crate::testport::test_file("evidence/page1.json")[..], 0, et_end(&crate::testport::test_file("evidence/page1.json")[..]), "compact", 0);
+    crate::testport::assert_text_span(pretty, &crate::testport::test_file("evidence/page1.pretty.json")[..], 0, et_end(&crate::testport::test_file("evidence/page1.pretty.json")[..]), "pretty", 0);
+}
+#[test]
+fn test_an_empty_evidence_dump() {
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let compact: &mut String = &mut crate::port::new_text();
+    let pretty: &mut String = &mut crate::port::new_text();
+    ev_init(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_eq(ev_check(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "nothing is well formed");
+    ev_emit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    ev_emit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::testport::assert_text_span(compact, &crate::testport::test_file("evidence/empty.json")[..], 0, et_end(&crate::testport::test_file("evidence/empty.json")[..]), "compact", 0);
+    crate::testport::assert_text_span(pretty, &crate::testport::test_file("evidence/empty.pretty.json")[..], 0, et_end(&crate::testport::test_file("evidence/empty.pretty.json")[..]), "pretty", 0);
 }
 #[test]
 fn test_evidence_text_is_scalar_values_only() {
@@ -287,90 +1330,5 @@ fn test_evidence_text_is_scalar_values_only() {
     etx_append_cp(etext, 55296);
     etx_append_cp(etext, 128512);
     crate::testport::assert_eq(etx_len(etext), 3, "three cells");
-}
-#[test]
-fn test_check_names_what_is_wrong() {
-    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    gl_set(glyphs, 2, gf_tlen(), 99);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 2, "a glyph's text run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    wd_set(words, 1, wf_gcount(), 9);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 3, "a word's glyph run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    wd_set(words, 0, wf_tlen(), 99);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 4, "a word's text run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    ln_set(lines, 0, lf_wcount(), 3);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 5, "a line's word run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    ow_set(ocrwords, 0, of_tlen(), 50);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 6, "an OCR word's text run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    ow_set(ocrwords, 0, of_altcount(), 3);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 7, "an alternative count that is not the chain");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    wd_set(words, 0, wf_line(), 4);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 8, "a word in a line that is not there");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    gl_set(glyphs, 0, gf_word(), 5);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 9, "a glyph in a word that is not there");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    sp_set(spans, 1, sf_gcount(), 9);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's glyph run past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    sp_set(spans, 1, sf_actuallen(), 99);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's string past the arena");
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    sp_set(spans, 0, sf_parent(), 0);
-    crate::testport::assert_eq(ev_check(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span that is its own parent");
-}
-#[test]
-fn test_golden_page() {
-    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let compact: &mut String = &mut crate::port::new_text();
-    let pretty: &mut String = &mut crate::port::new_text();
-    et_build(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    ev_emit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    ev_emit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    crate::testport::assert_text_span(compact, &crate::testport::test_file("evidence/page1.json")[..], 0, et_end(&crate::testport::test_file("evidence/page1.json")[..]), "compact", 0);
-    crate::testport::assert_text_span(pretty, &crate::testport::test_file("evidence/page1.pretty.json")[..], 0, et_end(&crate::testport::test_file("evidence/page1.pretty.json")[..]), "pretty", 0);
-}
-#[test]
-fn test_an_empty_evidence_dump() {
-    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ocrwords: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let alts: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let spans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let compact: &mut String = &mut crate::port::new_text();
-    let pretty: &mut String = &mut crate::port::new_text();
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    ev_emit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    ev_emit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-    crate::testport::assert_text_span(compact, &crate::testport::test_file("evidence/empty.json")[..], 0, et_end(&crate::testport::test_file("evidence/empty.json")[..]), "compact", 0);
-    crate::testport::assert_text_span(pretty, &crate::testport::test_file("evidence/empty.pretty.json")[..], 0, et_end(&crate::testport::test_file("evidence/empty.pretty.json")[..]), "pretty", 0);
+    crate::testport::assert_eq(crate::port::cells_at(etext, 1), 65533, "a surrogate became U+FFFD");
 }

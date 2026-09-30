@@ -3,6 +3,7 @@
 
 use crate::emon::json::*;
 use crate::emon::model::*;
+use crate::emon::trig::*;
 
 pub fn gh_tounicode() -> i32 {
     return 1;
@@ -95,6 +96,9 @@ pub fn ar_background() -> i32 {
 pub fn ar_other() -> i32 {
     return 5;
 }
+pub fn ar_page() -> i32 {
+    return 6;
+}
 pub fn ar_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "pagination");
@@ -113,6 +117,41 @@ pub fn ar_emit_name(mut t: &mut String, code: i32) -> i32 {
         return 1;
     }
     if code == 5 {
+        crate::port::text_ascii(t, "other");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "page");
+        return 1;
+    }
+    return 0;
+}
+pub fn as_header() -> i32 {
+    return 1;
+}
+pub fn as_footer() -> i32 {
+    return 2;
+}
+pub fn as_watermark() -> i32 {
+    return 3;
+}
+pub fn as_other() -> i32 {
+    return 4;
+}
+pub fn as_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "header");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "footer");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "watermark");
+        return 1;
+    }
+    if code == 4 {
         crate::port::text_ascii(t, "other");
         return 1;
     }
@@ -311,6 +350,757 @@ pub fn mc_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     return 0;
 }
+pub fn eg_text_layer() -> i32 {
+    return 1;
+}
+pub fn eg_raster() -> i32 {
+    return 2;
+}
+pub fn eg_dpi_unknown() -> i32 {
+    return 4;
+}
+pub fn eg_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "text-layer");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "raster");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "dpi-unknown");
+        return 1;
+    }
+    return 0;
+}
+pub fn vg_bilevel() -> i32 {
+    return 1;
+}
+pub fn vg_nonaffine() -> i32 {
+    return 2;
+}
+pub fn vg_engine_binary() -> i32 {
+    return 4;
+}
+pub fn vg_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "bilevel");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "nonaffine");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "engine-binary");
+        return 1;
+    }
+    return 0;
+}
+pub fn oe_dictionary() -> i32 {
+    return 1;
+}
+pub fn oe_numeric() -> i32 {
+    return 2;
+}
+pub fn oe_fallback() -> i32 {
+    return 4;
+}
+pub fn oe_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "dictionary");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "numeric");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "fallback");
+        return 1;
+    }
+    return 0;
+}
+pub fn os_superscript() -> i32 {
+    return 1;
+}
+pub fn os_subscript() -> i32 {
+    return 2;
+}
+pub fn os_drop_cap() -> i32 {
+    return 4;
+}
+pub fn os_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "superscript");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "subscript");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "drop-cap");
+        return 1;
+    }
+    return 0;
+}
+pub fn vc_clip() -> i32 {
+    return 1;
+}
+pub fn vc_offpage() -> i32 {
+    return 2;
+}
+pub fn vc_white() -> i32 {
+    return 4;
+}
+pub fn vc_zero_size() -> i32 {
+    return 8;
+}
+pub fn vc_occlusion() -> i32 {
+    return 16;
+}
+pub fn vc_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "clip");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "offpage");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "white");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "zero-size");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "occlusion");
+        return 1;
+    }
+    return 0;
+}
+pub fn ea_epages() -> i32 {
+    return 1;
+}
+pub fn ea_views() -> i32 {
+    return 2;
+}
+pub fn ea_pts() -> i32 {
+    return 3;
+}
+pub fn ea_refs() -> i32 {
+    return 4;
+}
+pub fn ea_etext() -> i32 {
+    return 5;
+}
+pub fn ea_feats() -> i32 {
+    return 6;
+}
+pub fn ea_glyphs() -> i32 {
+    return 7;
+}
+pub fn ea_words() -> i32 {
+    return 8;
+}
+pub fn ea_lines() -> i32 {
+    return 9;
+}
+pub fn ea_marks() -> i32 {
+    return 10;
+}
+pub fn ea_fonts() -> i32 {
+    return 11;
+}
+pub fn ea_paths() -> i32 {
+    return 12;
+}
+pub fn ea_images() -> i32 {
+    return 13;
+}
+pub fn ea_oruns() -> i32 {
+    return 14;
+}
+pub fn ea_oblocks() -> i32 {
+    return 15;
+}
+pub fn ea_olines() -> i32 {
+    return 16;
+}
+pub fn ea_owords() -> i32 {
+    return 17;
+}
+pub fn ea_osyms() -> i32 {
+    return 18;
+}
+pub fn ea_oalts() -> i32 {
+    return 19;
+}
+pub fn ea_inks() -> i32 {
+    return 20;
+}
+pub fn ea_components() -> i32 {
+    return 21;
+}
+pub fn ea_rules() -> i32 {
+    return 22;
+}
+pub fn ea_prims() -> i32 {
+    return 23;
+}
+pub fn ea_tlines() -> i32 {
+    return 24;
+}
+pub fn ea_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "epages");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "views");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "pts");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "refs");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "etext");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "feats");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "glyphs");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "words");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "lines");
+        return 1;
+    }
+    if code == 10 {
+        crate::port::text_ascii(t, "marks");
+        return 1;
+    }
+    if code == 11 {
+        crate::port::text_ascii(t, "fonts");
+        return 1;
+    }
+    if code == 12 {
+        crate::port::text_ascii(t, "paths");
+        return 1;
+    }
+    if code == 13 {
+        crate::port::text_ascii(t, "images");
+        return 1;
+    }
+    if code == 14 {
+        crate::port::text_ascii(t, "oruns");
+        return 1;
+    }
+    if code == 15 {
+        crate::port::text_ascii(t, "oblocks");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "olines");
+        return 1;
+    }
+    if code == 17 {
+        crate::port::text_ascii(t, "owords");
+        return 1;
+    }
+    if code == 18 {
+        crate::port::text_ascii(t, "osyms");
+        return 1;
+    }
+    if code == 19 {
+        crate::port::text_ascii(t, "oalts");
+        return 1;
+    }
+    if code == 20 {
+        crate::port::text_ascii(t, "inks");
+        return 1;
+    }
+    if code == 21 {
+        crate::port::text_ascii(t, "components");
+        return 1;
+    }
+    if code == 22 {
+        crate::port::text_ascii(t, "rules");
+        return 1;
+    }
+    if code == 23 {
+        crate::port::text_ascii(t, "prims");
+        return 1;
+    }
+    if code == 24 {
+        crate::port::text_ascii(t, "tlines");
+        return 1;
+    }
+    return 0;
+}
+pub fn vk_render() -> i32 {
+    return 1;
+}
+pub fn vk_decode() -> i32 {
+    return 2;
+}
+pub fn vk_engine_binary() -> i32 {
+    return 3;
+}
+pub fn vk_gray() -> i32 {
+    return 4;
+}
+pub fn vk_binary() -> i32 {
+    return 5;
+}
+pub fn vk_ink_mask() -> i32 {
+    return 6;
+}
+pub fn vk_deskewed() -> i32 {
+    return 7;
+}
+pub fn vk_cropped() -> i32 {
+    return 8;
+}
+pub fn vk_polar() -> i32 {
+    return 9;
+}
+pub fn vk_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "render");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "decode");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "engine-binary");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "gray");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "binary");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "ink-mask");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "deskewed");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "cropped");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "polar");
+        return 1;
+    }
+    return 0;
+}
+pub fn po_move() -> i32 {
+    return 1;
+}
+pub fn po_line() -> i32 {
+    return 2;
+}
+pub fn po_curve() -> i32 {
+    return 3;
+}
+pub fn po_close() -> i32 {
+    return 4;
+}
+pub fn po_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "move");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "line");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "curve");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "close");
+        return 1;
+    }
+    return 0;
+}
+pub fn cs_gray() -> i32 {
+    return 1;
+}
+pub fn cs_rgb() -> i32 {
+    return 2;
+}
+pub fn cs_cmyk() -> i32 {
+    return 3;
+}
+pub fn cs_spot() -> i32 {
+    return 4;
+}
+pub fn cs_pattern() -> i32 {
+    return 5;
+}
+pub fn cs_other() -> i32 {
+    return 6;
+}
+pub fn cs_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "gray");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "rgb");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "cmyk");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "spot");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "pattern");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "other");
+        return 1;
+    }
+    return 0;
+}
+pub fn wb_space() -> i32 {
+    return 1;
+}
+pub fn wb_gap() -> i32 {
+    return 2;
+}
+pub fn wb_tj_offset() -> i32 {
+    return 3;
+}
+pub fn wb_line_end() -> i32 {
+    return 4;
+}
+pub fn wb_font_change() -> i32 {
+    return 5;
+}
+pub fn wb_mark_boundary() -> i32 {
+    return 6;
+}
+pub fn wb_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "space");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "gap");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "tj-offset");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "line-end");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "font-change");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "mark-boundary");
+        return 1;
+    }
+    return 0;
+}
+pub fn mk_artifact() -> i32 {
+    return 1;
+}
+pub fn mk_optional_content() -> i32 {
+    return 2;
+}
+pub fn mk_tag() -> i32 {
+    return 3;
+}
+pub fn mk_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "artifact");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "optional-content");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "tag");
+        return 1;
+    }
+    return 0;
+}
+pub fn ob_block() -> i32 {
+    return 1;
+}
+pub fn ob_paragraph() -> i32 {
+    return 2;
+}
+pub fn ob_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "block");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "paragraph");
+        return 1;
+    }
+    return 0;
+}
+pub fn op_first() -> i32 {
+    return 1;
+}
+pub fn op_region() -> i32 {
+    return 2;
+}
+pub fn op_line() -> i32 {
+    return 3;
+}
+pub fn op_cell() -> i32 {
+    return 4;
+}
+pub fn op_seal_strip() -> i32 {
+    return 5;
+}
+pub fn op_body_ink() -> i32 {
+    return 6;
+}
+pub fn op_text_only() -> i32 {
+    return 7;
+}
+pub fn op_re_rotated() -> i32 {
+    return 8;
+}
+pub fn op_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "first");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "region");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "line");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "cell");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "seal-strip");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "body-ink");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "text-only");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "re-rotated");
+        return 1;
+    }
+    return 0;
+}
+pub fn ir_body() -> i32 {
+    return 1;
+}
+pub fn ir_light() -> i32 {
+    return 2;
+}
+pub fn ir_color() -> i32 {
+    return 3;
+}
+pub fn ir_background() -> i32 {
+    return 4;
+}
+pub fn ir_unknown() -> i32 {
+    return 5;
+}
+pub fn ir_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "body");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "light");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "color");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "background");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "unknown");
+        return 1;
+    }
+    return 0;
+}
+pub fn rs_solid() -> i32 {
+    return 1;
+}
+pub fn rs_dashed() -> i32 {
+    return 2;
+}
+pub fn rs_dotted() -> i32 {
+    return 3;
+}
+pub fn rs_double() -> i32 {
+    return 4;
+}
+pub fn rs_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "solid");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "dashed");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "dotted");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "double");
+        return 1;
+    }
+    return 0;
+}
+pub fn pm_rect() -> i32 {
+    return 1;
+}
+pub fn pm_ellipse() -> i32 {
+    return 2;
+}
+pub fn pm_circle() -> i32 {
+    return 3;
+}
+pub fn pm_arrow() -> i32 {
+    return 4;
+}
+pub fn pm_curve() -> i32 {
+    return 5;
+}
+pub fn pm_polygon() -> i32 {
+    return 6;
+}
+pub fn pm_ring() -> i32 {
+    return 7;
+}
+pub fn pm_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "rect");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "ellipse");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "circle");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "arrow");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "curve");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "polygon");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "ring");
+        return 1;
+    }
+    return 0;
+}
+pub fn ft_type1() -> i32 {
+    return 1;
+}
+pub fn ft_mmtype1() -> i32 {
+    return 2;
+}
+pub fn ft_truetype() -> i32 {
+    return 3;
+}
+pub fn ft_type3() -> i32 {
+    return 4;
+}
+pub fn ft_type0() -> i32 {
+    return 5;
+}
+pub fn ft_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "type1");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "mmtype1");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "truetype");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "type3");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "type0");
+        return 1;
+    }
+    return 0;
+}
 pub fn ek_version() -> i32 {
     return 1;
 }
@@ -332,7 +1122,7 @@ pub fn ek_images() -> i32 {
 pub fn ek_components() -> i32 {
     return 7;
 }
-pub fn ek_ocrwords() -> i32 {
+pub fn ek_ocrwords_v0() -> i32 {
     return 8;
 }
 pub fn ek_page() -> i32 {
@@ -446,7 +1236,7 @@ pub fn ek_sym() -> i32 {
 pub fn ek_run() -> i32 {
     return 45;
 }
-pub fn ek_spans() -> i32 {
+pub fn ek_spans_v0() -> i32 {
     return 46;
 }
 pub fn ek_tag() -> i32 {
@@ -472,6 +1262,291 @@ pub fn ek_exp() -> i32 {
 }
 pub fn ek_stm() -> i32 {
     return 54;
+}
+pub fn ek_epages() -> i32 {
+    return 55;
+}
+pub fn ek_views() -> i32 {
+    return 56;
+}
+pub fn ek_pts() -> i32 {
+    return 57;
+}
+pub fn ek_refs() -> i32 {
+    return 58;
+}
+pub fn ek_etext() -> i32 {
+    return 59;
+}
+pub fn ek_feats() -> i32 {
+    return 60;
+}
+pub fn ek_marks() -> i32 {
+    return 61;
+}
+pub fn ek_fonts() -> i32 {
+    return 62;
+}
+pub fn ek_oruns() -> i32 {
+    return 63;
+}
+pub fn ek_oblocks() -> i32 {
+    return 64;
+}
+pub fn ek_olines() -> i32 {
+    return 65;
+}
+pub fn ek_owords() -> i32 {
+    return 66;
+}
+pub fn ek_osyms() -> i32 {
+    return 67;
+}
+pub fn ek_oalts() -> i32 {
+    return 68;
+}
+pub fn ek_inks() -> i32 {
+    return 69;
+}
+pub fn ek_rules() -> i32 {
+    return 70;
+}
+pub fn ek_prims() -> i32 {
+    return 71;
+}
+pub fn ek_tlines() -> i32 {
+    return 72;
+}
+pub fn ek_subject() -> i32 {
+    return 73;
+}
+pub fn ek_height() -> i32 {
+    return 74;
+}
+pub fn ek_turns() -> i32 {
+    return 75;
+}
+pub fn ek_dpi() -> i32 {
+    return 76;
+}
+pub fn ek_request() -> i32 {
+    return 77;
+}
+pub fn ek_ink() -> i32 {
+    return 78;
+}
+pub fn ek_deskew() -> i32 {
+    return 79;
+}
+pub fn ek_crop() -> i32 {
+    return 80;
+}
+pub fn ek_a() -> i32 {
+    return 81;
+}
+pub fn ek_b() -> i32 {
+    return 82;
+}
+pub fn ek_c() -> i32 {
+    return 83;
+}
+pub fn ek_d() -> i32 {
+    return 84;
+}
+pub fn ek_e() -> i32 {
+    return 85;
+}
+pub fn ek_f() -> i32 {
+    return 86;
+}
+pub fn ek_ia() -> i32 {
+    return 87;
+}
+pub fn ek_ib() -> i32 {
+    return 88;
+}
+pub fn ek_ic() -> i32 {
+    return 89;
+}
+pub fn ek_id() -> i32 {
+    return 90;
+}
+pub fn ek_x() -> i32 {
+    return 91;
+}
+pub fn ek_y() -> i32 {
+    return 92;
+}
+pub fn ek_op() -> i32 {
+    return 93;
+}
+pub fn ek_asc() -> i32 {
+    return 94;
+}
+pub fn ek_desc() -> i32 {
+    return 95;
+}
+pub fn ek_salpha() -> i32 {
+    return 96;
+}
+pub fn ek_cs() -> i32 {
+    return 97;
+}
+pub fn ek_z() -> i32 {
+    return 98;
+}
+pub fn ek_clip() -> i32 {
+    return 99;
+}
+pub fn ek_mark() -> i32 {
+    return 100;
+}
+pub fn ek_ocg() -> i32 {
+    return 101;
+}
+pub fn ek_vby() -> i32 {
+    return 102;
+}
+pub fn ek_vchk() -> i32 {
+    return 103;
+}
+pub fn ek_feat() -> i32 {
+    return 104;
+}
+pub fn ek_wbreak() -> i32 {
+    return 105;
+}
+pub fn ek_order() -> i32 {
+    return 106;
+}
+pub fn ek_ocgdef() -> i32 {
+    return 107;
+}
+pub fn ek_program() -> i32 {
+    return 108;
+}
+pub fn ek_tounicode() -> i32 {
+    return 109;
+}
+pub fn ek_encoding() -> i32 {
+    return 110;
+}
+pub fn ek_name() -> i32 {
+    return 111;
+}
+pub fn ek_space() -> i32 {
+    return 112;
+}
+pub fn ek_italic() -> i32 {
+    return 113;
+}
+pub fn ek_stemv() -> i32 {
+    return 114;
+}
+pub fn ek_dash() -> i32 {
+    return 115;
+}
+pub fn ek_skewed() -> i32 {
+    return 116;
+}
+pub fn ek_view() -> i32 {
+    return 117;
+}
+pub fn ek_binarised() -> i32 {
+    return 118;
+}
+pub fn ek_round() -> i32 {
+    return 119;
+}
+pub fn ek_psm() -> i32 {
+    return 120;
+}
+pub fn ek_region() -> i32 {
+    return 121;
+}
+pub fn ek_orient() -> i32 {
+    return 122;
+}
+pub fn ek_wdir() -> i32 {
+    return 123;
+}
+pub fn ek_lorder() -> i32 {
+    return 124;
+}
+pub fn ek_osd() -> i32 {
+    return 125;
+}
+pub fn ek_script() -> i32 {
+    return 126;
+}
+pub fn ek_sconf() -> i32 {
+    return 127;
+}
+pub fn ek_oconf() -> i32 {
+    return 128;
+}
+pub fn ek_blocks() -> i32 {
+    return 129;
+}
+pub fn ek_btype() -> i32 {
+    return 130;
+}
+pub fn ek_children() -> i32 {
+    return 131;
+}
+pub fn ek_par() -> i32 {
+    return 132;
+}
+pub fn ek_xheight() -> i32 {
+    return 133;
+}
+pub fn ek_syms() -> i32 {
+    return 134;
+}
+pub fn ek_psize() -> i32 {
+    return 135;
+}
+pub fn ek_light() -> i32 {
+    return 136;
+}
+pub fn ek_chroma() -> i32 {
+    return 137;
+}
+pub fn ek_count() -> i32 {
+    return 138;
+}
+pub fn ek_role() -> i32 {
+    return 139;
+}
+pub fn ek_mask() -> i32 {
+    return 140;
+}
+pub fn ek_spread() -> i32 {
+    return 141;
+}
+pub fn ek_contour() -> i32 {
+    return 142;
+}
+pub fn ek_holes() -> i32 {
+    return 143;
+}
+pub fn ek_gray() -> i32 {
+    return 144;
+}
+pub fn ek_thick() -> i32 {
+    return 145;
+}
+pub fn ek_members() -> i32 {
+    return 146;
+}
+pub fn ek_center() -> i32 {
+    return 147;
+}
+pub fn ek_radii() -> i32 {
+    return 148;
+}
+pub fn ek_outline() -> i32 {
+    return 149;
 }
 pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
@@ -690,178 +1765,1291 @@ pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "stm");
         return 1;
     }
+    if code == 55 {
+        crate::port::text_ascii(t, "epages");
+        return 1;
+    }
+    if code == 56 {
+        crate::port::text_ascii(t, "views");
+        return 1;
+    }
+    if code == 57 {
+        crate::port::text_ascii(t, "pts");
+        return 1;
+    }
+    if code == 58 {
+        crate::port::text_ascii(t, "refs");
+        return 1;
+    }
+    if code == 59 {
+        crate::port::text_ascii(t, "etext");
+        return 1;
+    }
+    if code == 60 {
+        crate::port::text_ascii(t, "feats");
+        return 1;
+    }
+    if code == 61 {
+        crate::port::text_ascii(t, "marks");
+        return 1;
+    }
+    if code == 62 {
+        crate::port::text_ascii(t, "fonts");
+        return 1;
+    }
+    if code == 63 {
+        crate::port::text_ascii(t, "oruns");
+        return 1;
+    }
+    if code == 64 {
+        crate::port::text_ascii(t, "oblocks");
+        return 1;
+    }
+    if code == 65 {
+        crate::port::text_ascii(t, "olines");
+        return 1;
+    }
+    if code == 66 {
+        crate::port::text_ascii(t, "owords");
+        return 1;
+    }
+    if code == 67 {
+        crate::port::text_ascii(t, "osyms");
+        return 1;
+    }
+    if code == 68 {
+        crate::port::text_ascii(t, "oalts");
+        return 1;
+    }
+    if code == 69 {
+        crate::port::text_ascii(t, "inks");
+        return 1;
+    }
+    if code == 70 {
+        crate::port::text_ascii(t, "rules");
+        return 1;
+    }
+    if code == 71 {
+        crate::port::text_ascii(t, "prims");
+        return 1;
+    }
+    if code == 72 {
+        crate::port::text_ascii(t, "tlines");
+        return 1;
+    }
+    if code == 73 {
+        crate::port::text_ascii(t, "subject");
+        return 1;
+    }
+    if code == 74 {
+        crate::port::text_ascii(t, "height");
+        return 1;
+    }
+    if code == 75 {
+        crate::port::text_ascii(t, "turns");
+        return 1;
+    }
+    if code == 76 {
+        crate::port::text_ascii(t, "dpi");
+        return 1;
+    }
+    if code == 77 {
+        crate::port::text_ascii(t, "request");
+        return 1;
+    }
+    if code == 78 {
+        crate::port::text_ascii(t, "ink");
+        return 1;
+    }
+    if code == 79 {
+        crate::port::text_ascii(t, "deskew");
+        return 1;
+    }
+    if code == 80 {
+        crate::port::text_ascii(t, "crop");
+        return 1;
+    }
+    if code == 81 {
+        crate::port::text_ascii(t, "a");
+        return 1;
+    }
+    if code == 82 {
+        crate::port::text_ascii(t, "b");
+        return 1;
+    }
+    if code == 83 {
+        crate::port::text_ascii(t, "c");
+        return 1;
+    }
+    if code == 84 {
+        crate::port::text_ascii(t, "d");
+        return 1;
+    }
+    if code == 85 {
+        crate::port::text_ascii(t, "e");
+        return 1;
+    }
+    if code == 86 {
+        crate::port::text_ascii(t, "f");
+        return 1;
+    }
+    if code == 87 {
+        crate::port::text_ascii(t, "ia");
+        return 1;
+    }
+    if code == 88 {
+        crate::port::text_ascii(t, "ib");
+        return 1;
+    }
+    if code == 89 {
+        crate::port::text_ascii(t, "ic");
+        return 1;
+    }
+    if code == 90 {
+        crate::port::text_ascii(t, "id");
+        return 1;
+    }
+    if code == 91 {
+        crate::port::text_ascii(t, "x");
+        return 1;
+    }
+    if code == 92 {
+        crate::port::text_ascii(t, "y");
+        return 1;
+    }
+    if code == 93 {
+        crate::port::text_ascii(t, "op");
+        return 1;
+    }
+    if code == 94 {
+        crate::port::text_ascii(t, "asc");
+        return 1;
+    }
+    if code == 95 {
+        crate::port::text_ascii(t, "desc");
+        return 1;
+    }
+    if code == 96 {
+        crate::port::text_ascii(t, "salpha");
+        return 1;
+    }
+    if code == 97 {
+        crate::port::text_ascii(t, "cs");
+        return 1;
+    }
+    if code == 98 {
+        crate::port::text_ascii(t, "z");
+        return 1;
+    }
+    if code == 99 {
+        crate::port::text_ascii(t, "clip");
+        return 1;
+    }
+    if code == 100 {
+        crate::port::text_ascii(t, "mark");
+        return 1;
+    }
+    if code == 101 {
+        crate::port::text_ascii(t, "ocg");
+        return 1;
+    }
+    if code == 102 {
+        crate::port::text_ascii(t, "vby");
+        return 1;
+    }
+    if code == 103 {
+        crate::port::text_ascii(t, "vchk");
+        return 1;
+    }
+    if code == 104 {
+        crate::port::text_ascii(t, "feat");
+        return 1;
+    }
+    if code == 105 {
+        crate::port::text_ascii(t, "wbreak");
+        return 1;
+    }
+    if code == 106 {
+        crate::port::text_ascii(t, "order");
+        return 1;
+    }
+    if code == 107 {
+        crate::port::text_ascii(t, "ocgdef");
+        return 1;
+    }
+    if code == 108 {
+        crate::port::text_ascii(t, "program");
+        return 1;
+    }
+    if code == 109 {
+        crate::port::text_ascii(t, "tounicode");
+        return 1;
+    }
+    if code == 110 {
+        crate::port::text_ascii(t, "encoding");
+        return 1;
+    }
+    if code == 111 {
+        crate::port::text_ascii(t, "name");
+        return 1;
+    }
+    if code == 112 {
+        crate::port::text_ascii(t, "space");
+        return 1;
+    }
+    if code == 113 {
+        crate::port::text_ascii(t, "italic");
+        return 1;
+    }
+    if code == 114 {
+        crate::port::text_ascii(t, "stemv");
+        return 1;
+    }
+    if code == 115 {
+        crate::port::text_ascii(t, "dash");
+        return 1;
+    }
+    if code == 116 {
+        crate::port::text_ascii(t, "skewed");
+        return 1;
+    }
+    if code == 117 {
+        crate::port::text_ascii(t, "view");
+        return 1;
+    }
+    if code == 118 {
+        crate::port::text_ascii(t, "binarised");
+        return 1;
+    }
+    if code == 119 {
+        crate::port::text_ascii(t, "round");
+        return 1;
+    }
+    if code == 120 {
+        crate::port::text_ascii(t, "psm");
+        return 1;
+    }
+    if code == 121 {
+        crate::port::text_ascii(t, "region");
+        return 1;
+    }
+    if code == 122 {
+        crate::port::text_ascii(t, "orient");
+        return 1;
+    }
+    if code == 123 {
+        crate::port::text_ascii(t, "wdir");
+        return 1;
+    }
+    if code == 124 {
+        crate::port::text_ascii(t, "lorder");
+        return 1;
+    }
+    if code == 125 {
+        crate::port::text_ascii(t, "osd");
+        return 1;
+    }
+    if code == 126 {
+        crate::port::text_ascii(t, "script");
+        return 1;
+    }
+    if code == 127 {
+        crate::port::text_ascii(t, "sconf");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "oconf");
+        return 1;
+    }
+    if code == 129 {
+        crate::port::text_ascii(t, "blocks");
+        return 1;
+    }
+    if code == 130 {
+        crate::port::text_ascii(t, "btype");
+        return 1;
+    }
+    if code == 131 {
+        crate::port::text_ascii(t, "children");
+        return 1;
+    }
+    if code == 132 {
+        crate::port::text_ascii(t, "par");
+        return 1;
+    }
+    if code == 133 {
+        crate::port::text_ascii(t, "xheight");
+        return 1;
+    }
+    if code == 134 {
+        crate::port::text_ascii(t, "syms");
+        return 1;
+    }
+    if code == 135 {
+        crate::port::text_ascii(t, "psize");
+        return 1;
+    }
+    if code == 136 {
+        crate::port::text_ascii(t, "light");
+        return 1;
+    }
+    if code == 137 {
+        crate::port::text_ascii(t, "chroma");
+        return 1;
+    }
+    if code == 138 {
+        crate::port::text_ascii(t, "count");
+        return 1;
+    }
+    if code == 139 {
+        crate::port::text_ascii(t, "role");
+        return 1;
+    }
+    if code == 140 {
+        crate::port::text_ascii(t, "mask");
+        return 1;
+    }
+    if code == 141 {
+        crate::port::text_ascii(t, "spread");
+        return 1;
+    }
+    if code == 142 {
+        crate::port::text_ascii(t, "contour");
+        return 1;
+    }
+    if code == 143 {
+        crate::port::text_ascii(t, "holes");
+        return 1;
+    }
+    if code == 144 {
+        crate::port::text_ascii(t, "gray");
+        return 1;
+    }
+    if code == 145 {
+        crate::port::text_ascii(t, "thick");
+        return 1;
+    }
+    if code == 146 {
+        crate::port::text_ascii(t, "members");
+        return 1;
+    }
+    if code == 147 {
+        crate::port::text_ascii(t, "center");
+        return 1;
+    }
+    if code == 148 {
+        crate::port::text_ascii(t, "radii");
+        return 1;
+    }
+    if code == 149 {
+        crate::port::text_ascii(t, "outline");
+        return 1;
+    }
     return 0;
 }
-pub fn gl_stride() -> i32 {
-    return 20;
+pub fn xo_conf() -> i32 {
+    return 2;
 }
-pub fn wd_stride() -> i32 {
-    return 16;
+pub fn xo_sym_min() -> i32 {
+    return 3;
 }
-pub fn ln_stride() -> i32 {
+pub fn xo_sym_mean() -> i32 {
+    return 4;
+}
+pub fn xo_margin() -> i32 {
+    return 5;
+}
+pub fn xo_ambiguous() -> i32 {
+    return 6;
+}
+pub fn xo_engine_flags() -> i32 {
+    return 7;
+}
+pub fn xo_implausible() -> i32 {
+    return 8;
+}
+pub fn xo_script() -> i32 {
+    return 9;
+}
+pub fn xo_kin_ink() -> i32 {
+    return 10;
+}
+pub fn xo_engine_ink() -> i32 {
+    return 11;
+}
+pub fn xo_jaccard() -> i32 {
     return 12;
 }
-pub fn pa_stride() -> i32 {
+pub fn xo_body_share() -> i32 {
+    return 13;
+}
+pub fn xo_components() -> i32 {
+    return 14;
+}
+pub fn xo_comp_ratio() -> i32 {
+    return 15;
+}
+pub fn xo_ink_gray() -> i32 {
     return 16;
 }
+pub fn xo_rel_height() -> i32 {
+    return 17;
+}
+pub fn xo_rel_xheight() -> i32 {
+    return 18;
+}
+pub fn xo_angle() -> i32 {
+    return 19;
+}
+pub fn xo_base_dev() -> i32 {
+    return 20;
+}
+pub fn xo_spacing() -> i32 {
+    return 21;
+}
+pub fn xo_seal() -> i32 {
+    return 22;
+}
+pub fn xo_artifact() -> i32 {
+    return 23;
+}
+pub fn xo_sim_text() -> i32 {
+    return 24;
+}
+pub fn xo_sim_hidden() -> i32 {
+    return 25;
+}
+pub fn xo_agree() -> i32 {
+    return 26;
+}
+pub fn xo_recur() -> i32 {
+    return 27;
+}
+pub fn xo_length() -> i32 {
+    return 28;
+}
+pub fn xo_edge() -> i32 {
+    return 29;
+}
+pub fn xo_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 2 {
+        crate::port::text_ascii(t, "conf");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "sym-min");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "sym-mean");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "margin");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "ambiguous");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "engine-flags");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "implausible");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "script");
+        return 1;
+    }
+    if code == 10 {
+        crate::port::text_ascii(t, "kin-ink");
+        return 1;
+    }
+    if code == 11 {
+        crate::port::text_ascii(t, "engine-ink");
+        return 1;
+    }
+    if code == 12 {
+        crate::port::text_ascii(t, "jaccard");
+        return 1;
+    }
+    if code == 13 {
+        crate::port::text_ascii(t, "body-share");
+        return 1;
+    }
+    if code == 14 {
+        crate::port::text_ascii(t, "components");
+        return 1;
+    }
+    if code == 15 {
+        crate::port::text_ascii(t, "comp-ratio");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "ink-gray");
+        return 1;
+    }
+    if code == 17 {
+        crate::port::text_ascii(t, "rel-height");
+        return 1;
+    }
+    if code == 18 {
+        crate::port::text_ascii(t, "rel-xheight");
+        return 1;
+    }
+    if code == 19 {
+        crate::port::text_ascii(t, "angle");
+        return 1;
+    }
+    if code == 20 {
+        crate::port::text_ascii(t, "base-dev");
+        return 1;
+    }
+    if code == 21 {
+        crate::port::text_ascii(t, "spacing");
+        return 1;
+    }
+    if code == 22 {
+        crate::port::text_ascii(t, "seal");
+        return 1;
+    }
+    if code == 23 {
+        crate::port::text_ascii(t, "artifact");
+        return 1;
+    }
+    if code == 24 {
+        crate::port::text_ascii(t, "sim-text");
+        return 1;
+    }
+    if code == 25 {
+        crate::port::text_ascii(t, "sim-hidden");
+        return 1;
+    }
+    if code == 26 {
+        crate::port::text_ascii(t, "agree");
+        return 1;
+    }
+    if code == 27 {
+        crate::port::text_ascii(t, "recur");
+        return 1;
+    }
+    if code == 28 {
+        crate::port::text_ascii(t, "length");
+        return 1;
+    }
+    if code == 29 {
+        crate::port::text_ascii(t, "edge");
+        return 1;
+    }
+    return 0;
+}
+pub fn xt_trust() -> i32 {
+    return 2;
+}
+pub fn xt_bad_cp() -> i32 {
+    return 3;
+}
+pub fn xt_overlap() -> i32 {
+    return 4;
+}
+pub fn xt_gap_anomaly() -> i32 {
+    return 5;
+}
+pub fn xt_vis() -> i32 {
+    return 6;
+}
+pub fn xt_mode_class() -> i32 {
+    return 7;
+}
+pub fn xt_alpha() -> i32 {
+    return 8;
+}
+pub fn xt_contrast() -> i32 {
+    return 9;
+}
+pub fn xt_kin_ink() -> i32 {
+    return 10;
+}
+pub fn xt_ink_without_text() -> i32 {
+    return 11;
+}
+pub fn xt_body_share() -> i32 {
+    return 12;
+}
+pub fn xt_font_health() -> i32 {
+    return 13;
+}
+pub fn xt_components() -> i32 {
+    return 14;
+}
+pub fn xt_comp_ratio() -> i32 {
+    return 15;
+}
+pub fn xt_in_artifact() -> i32 {
+    return 16;
+}
+pub fn xt_rel_height() -> i32 {
+    return 17;
+}
+pub fn xt_rel_size() -> i32 {
+    return 18;
+}
+pub fn xt_angle() -> i32 {
+    return 19;
+}
+pub fn xt_base_dev() -> i32 {
+    return 20;
+}
+pub fn xt_spacing() -> i32 {
+    return 21;
+}
+pub fn xt_seal() -> i32 {
+    return 22;
+}
+pub fn xt_tline_overlap() -> i32 {
+    return 23;
+}
+pub fn xt_sim_ocr() -> i32 {
+    return 24;
+}
+pub fn xt_sim_ocr2() -> i32 {
+    return 25;
+}
+pub fn xt_recur() -> i32 {
+    return 27;
+}
+pub fn xt_length() -> i32 {
+    return 28;
+}
+pub fn xt_edge() -> i32 {
+    return 29;
+}
+pub fn xt_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 2 {
+        crate::port::text_ascii(t, "trust");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "bad-cp");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "overlap");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "gap-anomaly");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "vis");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "mode-class");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "alpha");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "contrast");
+        return 1;
+    }
+    if code == 10 {
+        crate::port::text_ascii(t, "kin-ink");
+        return 1;
+    }
+    if code == 11 {
+        crate::port::text_ascii(t, "ink-without-text");
+        return 1;
+    }
+    if code == 12 {
+        crate::port::text_ascii(t, "body-share");
+        return 1;
+    }
+    if code == 13 {
+        crate::port::text_ascii(t, "font-health");
+        return 1;
+    }
+    if code == 14 {
+        crate::port::text_ascii(t, "components");
+        return 1;
+    }
+    if code == 15 {
+        crate::port::text_ascii(t, "comp-ratio");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "in-artifact");
+        return 1;
+    }
+    if code == 17 {
+        crate::port::text_ascii(t, "rel-height");
+        return 1;
+    }
+    if code == 18 {
+        crate::port::text_ascii(t, "rel-size");
+        return 1;
+    }
+    if code == 19 {
+        crate::port::text_ascii(t, "angle");
+        return 1;
+    }
+    if code == 20 {
+        crate::port::text_ascii(t, "base-dev");
+        return 1;
+    }
+    if code == 21 {
+        crate::port::text_ascii(t, "spacing");
+        return 1;
+    }
+    if code == 22 {
+        crate::port::text_ascii(t, "seal");
+        return 1;
+    }
+    if code == 23 {
+        crate::port::text_ascii(t, "tline-overlap");
+        return 1;
+    }
+    if code == 24 {
+        crate::port::text_ascii(t, "sim-ocr");
+        return 1;
+    }
+    if code == 25 {
+        crate::port::text_ascii(t, "sim-ocr2");
+        return 1;
+    }
+    if code == 27 {
+        crate::port::text_ascii(t, "recur");
+        return 1;
+    }
+    if code == 28 {
+        crate::port::text_ascii(t, "length");
+        return 1;
+    }
+    if code == 29 {
+        crate::port::text_ascii(t, "edge");
+        return 1;
+    }
+    return 0;
+}
+pub fn ep_stride() -> i32 {
+    return 12;
+}
+pub fn vw_stride() -> i32 {
+    return 24;
+}
+pub fn pt_stride() -> i32 {
+    return 3;
+}
+pub fn rf_stride() -> i32 {
+    return 2;
+}
+pub fn etx_stride() -> i32 {
+    return 1;
+}
+pub fn fe_stride() -> i32 {
+    return 32;
+}
+pub fn gl_stride() -> i32 {
+    return 32;
+}
+pub fn wd_stride() -> i32 {
+    return 24;
+}
+pub fn ln_stride() -> i32 {
+    return 16;
+}
+pub fn mk_stride() -> i32 {
+    return 24;
+}
+pub fn fo_stride() -> i32 {
+    return 16;
+}
+pub fn pa_stride() -> i32 {
+    return 24;
+}
 pub fn im_stride() -> i32 {
+    return 20;
+}
+pub fn or_stride() -> i32 {
+    return 28;
+}
+pub fn ob_stride() -> i32 {
+    return 16;
+}
+pub fn ol_stride() -> i32 {
+    return 24;
+}
+pub fn ow_stride() -> i32 {
+    return 28;
+}
+pub fn os_stride() -> i32 {
+    return 20;
+}
+pub fn oa_stride() -> i32 {
+    return 4;
+}
+pub fn ik_stride() -> i32 {
     return 12;
 }
 pub fn co_stride() -> i32 {
+    return 24;
+}
+pub fn rl_stride() -> i32 {
     return 20;
 }
-pub fn ow_stride() -> i32 {
-    return 16;
+pub fn pm_stride() -> i32 {
+    return 24;
 }
-pub fn alt_stride() -> i32 {
-    return 4;
+pub fn tl_stride() -> i32 {
+    return 20;
 }
-pub fn sp_stride() -> i32 {
-    return 22;
-}
-pub fn gf_page() -> i32 {
+pub fn hd_page() -> i32 {
     return 0;
 }
-pub fn gf_cp() -> i32 {
+pub fn hd_x0() -> i32 {
     return 1;
 }
-pub fn gf_tstart() -> i32 {
+pub fn hd_y0() -> i32 {
     return 2;
 }
-pub fn gf_tlen() -> i32 {
+pub fn hd_x1() -> i32 {
     return 3;
 }
-pub fn gf_how() -> i32 {
+pub fn hd_y1() -> i32 {
     return 4;
 }
-pub fn gf_font() -> i32 {
+pub fn hd_bx0() -> i32 {
     return 5;
 }
-pub fn gf_size() -> i32 {
+pub fn hd_by0() -> i32 {
     return 6;
 }
-pub fn gf_x0() -> i32 {
+pub fn hd_bx1() -> i32 {
     return 7;
 }
-pub fn gf_y0() -> i32 {
+pub fn hd_by1() -> i32 {
     return 8;
 }
-pub fn gf_x1() -> i32 {
+pub fn hd_rot() -> i32 {
     return 9;
 }
-pub fn gf_y1() -> i32 {
+pub fn hd_dir() -> i32 {
     return 10;
 }
-pub fn gf_baseline() -> i32 {
+pub fn hd_tstart() -> i32 {
     return 11;
 }
-pub fn gf_rot() -> i32 {
+pub fn hd_tlen() -> i32 {
     return 12;
 }
-pub fn gf_color() -> i32 {
+pub fn hd_line() -> i32 {
     return 13;
 }
-pub fn gf_alpha() -> i32 {
+pub fn hd_conf() -> i32 {
     return 14;
 }
-pub fn gf_mode() -> i32 {
+pub fn hd_feat() -> i32 {
     return 15;
 }
-pub fn gf_vis() -> i32 {
+pub fn lh_page() -> i32 {
+    return 0;
+}
+pub fn lh_x0() -> i32 {
+    return 1;
+}
+pub fn lh_y0() -> i32 {
+    return 2;
+}
+pub fn lh_x1() -> i32 {
+    return 3;
+}
+pub fn lh_y1() -> i32 {
+    return 4;
+}
+pub fn lh_bx0() -> i32 {
+    return 5;
+}
+pub fn lh_by0() -> i32 {
+    return 6;
+}
+pub fn lh_bx1() -> i32 {
+    return 7;
+}
+pub fn lh_by1() -> i32 {
+    return 8;
+}
+pub fn lh_rot() -> i32 {
+    return 9;
+}
+pub fn lh_dir() -> i32 {
+    return 10;
+}
+pub fn lh_first() -> i32 {
+    return 11;
+}
+pub fn lh_count() -> i32 {
+    return 12;
+}
+pub fn ch_page() -> i32 {
+    return 0;
+}
+pub fn ch_x0() -> i32 {
+    return 1;
+}
+pub fn ch_y0() -> i32 {
+    return 2;
+}
+pub fn ch_x1() -> i32 {
+    return 3;
+}
+pub fn ch_y1() -> i32 {
+    return 4;
+}
+pub fn ch_cp() -> i32 {
+    return 5;
+}
+pub fn ch_tstart() -> i32 {
+    return 6;
+}
+pub fn ch_tlen() -> i32 {
+    return 7;
+}
+pub fn ch_word() -> i32 {
+    return 8;
+}
+pub fn epf_page() -> i32 {
+    return 0;
+}
+pub fn epf_width() -> i32 {
+    return 1;
+}
+pub fn epf_height() -> i32 {
+    return 2;
+}
+pub fn epf_turns() -> i32 {
+    return 3;
+}
+pub fn epf_flags() -> i32 {
+    return 4;
+}
+pub fn epf_dpi() -> i32 {
+    return 5;
+}
+pub fn vwf_page() -> i32 {
+    return 0;
+}
+pub fn vwf_kind() -> i32 {
+    return 1;
+}
+pub fn vwf_request() -> i32 {
+    return 2;
+}
+pub fn vwf_parent() -> i32 {
+    return 3;
+}
+pub fn vwf_pxw() -> i32 {
+    return 4;
+}
+pub fn vwf_pxh() -> i32 {
+    return 5;
+}
+pub fn vwf_dpi() -> i32 {
+    return 6;
+}
+pub fn vwf_layer() -> i32 {
+    return 7;
+}
+pub fn vwf_ink() -> i32 {
+    return 8;
+}
+pub fn vwf_turns() -> i32 {
+    return 9;
+}
+pub fn vwf_deskew() -> i32 {
+    return 10;
+}
+pub fn vwf_cropx() -> i32 {
+    return 11;
+}
+pub fn vwf_cropy() -> i32 {
+    return 12;
+}
+pub fn vwf_a() -> i32 {
+    return 13;
+}
+pub fn vwf_b() -> i32 {
+    return 14;
+}
+pub fn vwf_c() -> i32 {
+    return 15;
+}
+pub fn vwf_d() -> i32 {
     return 16;
 }
-pub fn gf_artifact() -> i32 {
+pub fn vwf_e() -> i32 {
     return 17;
 }
-pub fn gf_mcid() -> i32 {
+pub fn vwf_f() -> i32 {
     return 18;
 }
-pub fn gf_word() -> i32 {
+pub fn vwf_ia() -> i32 {
     return 19;
 }
-pub fn wf_page() -> i32 {
+pub fn vwf_ib() -> i32 {
+    return 20;
+}
+pub fn vwf_ic() -> i32 {
+    return 21;
+}
+pub fn vwf_id() -> i32 {
+    return 22;
+}
+pub fn vwf_flags() -> i32 {
+    return 23;
+}
+pub fn ptf_x() -> i32 {
     return 0;
 }
-pub fn wf_x0() -> i32 {
+pub fn ptf_y() -> i32 {
     return 1;
 }
-pub fn wf_y0() -> i32 {
+pub fn ptf_op() -> i32 {
     return 2;
 }
-pub fn wf_x1() -> i32 {
-    return 3;
+pub fn rff_ea() -> i32 {
+    return 0;
 }
-pub fn wf_y1() -> i32 {
-    return 4;
+pub fn rff_index() -> i32 {
+    return 1;
 }
-pub fn wf_gfirst() -> i32 {
-    return 5;
+pub fn xf_subject() -> i32 {
+    return 0;
 }
-pub fn wf_gcount() -> i32 {
-    return 6;
+pub fn xf_index() -> i32 {
+    return 1;
 }
-pub fn wf_tstart() -> i32 {
-    return 7;
+pub fn xf_col() -> i32 {
+    return 2;
 }
-pub fn wf_tlen() -> i32 {
-    return 8;
-}
-pub fn wf_line() -> i32 {
+pub fn gf_bx0() -> i32 {
     return 9;
 }
-pub fn wf_src() -> i32 {
+pub fn gf_by0() -> i32 {
     return 10;
 }
-pub fn wf_conf() -> i32 {
+pub fn gf_bx1() -> i32 {
     return 11;
 }
-pub fn wf_flags() -> i32 {
+pub fn gf_by1() -> i32 {
     return 12;
 }
-pub fn wf_gap() -> i32 {
+pub fn gf_asc() -> i32 {
     return 13;
 }
-pub fn wf_font() -> i32 {
+pub fn gf_desc() -> i32 {
     return 14;
 }
-pub fn wf_size() -> i32 {
+pub fn gf_rot() -> i32 {
     return 15;
 }
-pub fn lf_page() -> i32 {
-    return 0;
+pub fn gf_how() -> i32 {
+    return 16;
 }
-pub fn lf_x0() -> i32 {
-    return 1;
+pub fn gf_font() -> i32 {
+    return 17;
 }
-pub fn lf_y0() -> i32 {
-    return 2;
+pub fn gf_size() -> i32 {
+    return 18;
 }
-pub fn lf_x1() -> i32 {
-    return 3;
+pub fn gf_mode() -> i32 {
+    return 19;
 }
-pub fn lf_y1() -> i32 {
-    return 4;
+pub fn gf_fill() -> i32 {
+    return 20;
 }
-pub fn lf_wfirst() -> i32 {
-    return 5;
+pub fn gf_stroke() -> i32 {
+    return 21;
 }
-pub fn lf_wcount() -> i32 {
-    return 6;
+pub fn gf_falpha() -> i32 {
+    return 22;
 }
-pub fn lf_baseline() -> i32 {
-    return 7;
+pub fn gf_salpha() -> i32 {
+    return 23;
 }
-pub fn lf_dir() -> i32 {
-    return 8;
+pub fn gf_cs() -> i32 {
+    return 24;
 }
-pub fn lf_rot() -> i32 {
-    return 9;
+pub fn gf_z() -> i32 {
+    return 25;
+}
+pub fn gf_clip() -> i32 {
+    return 26;
+}
+pub fn gf_mark() -> i32 {
+    return 27;
+}
+pub fn gf_ocg() -> i32 {
+    return 28;
+}
+pub fn gf_vis() -> i32 {
+    return 29;
+}
+pub fn gf_vby() -> i32 {
+    return 30;
+}
+pub fn gf_vchk() -> i32 {
+    return 31;
+}
+pub fn wf_style() -> i32 {
+    return 16;
+}
+pub fn wf_gfirst() -> i32 {
+    return 17;
+}
+pub fn wf_gcount() -> i32 {
+    return 18;
+}
+pub fn wf_font() -> i32 {
+    return 19;
+}
+pub fn wf_size() -> i32 {
+    return 20;
+}
+pub fn wf_gap() -> i32 {
+    return 21;
+}
+pub fn wf_wbreak() -> i32 {
+    return 22;
+}
+pub fn wf_src() -> i32 {
+    return 23;
 }
 pub fn lf_src() -> i32 {
+    return 13;
+}
+pub fn lf_order() -> i32 {
+    return 14;
+}
+pub fn mkf_page() -> i32 {
+    return 0;
+}
+pub fn mkf_kind() -> i32 {
+    return 1;
+}
+pub fn mkf_tstart() -> i32 {
+    return 2;
+}
+pub fn mkf_tlen() -> i32 {
+    return 3;
+}
+pub fn mkf_parent() -> i32 {
+    return 4;
+}
+pub fn mkf_mcid() -> i32 {
+    return 5;
+}
+pub fn mkf_artype() -> i32 {
+    return 6;
+}
+pub fn mkf_arsub() -> i32 {
+    return 7;
+}
+pub fn mkf_actual() -> i32 {
+    return 8;
+}
+pub fn mkf_actuallen() -> i32 {
+    return 9;
+}
+pub fn mkf_alt() -> i32 {
     return 10;
 }
-pub fn lf_conf() -> i32 {
+pub fn mkf_altlen() -> i32 {
     return 11;
+}
+pub fn mkf_exp() -> i32 {
+    return 12;
+}
+pub fn mkf_explen() -> i32 {
+    return 13;
+}
+pub fn mkf_lang() -> i32 {
+    return 14;
+}
+pub fn mkf_langlen() -> i32 {
+    return 15;
+}
+pub fn mkf_ocg() -> i32 {
+    return 16;
+}
+pub fn mkf_ocgdef() -> i32 {
+    return 17;
+}
+pub fn mkf_gfirst() -> i32 {
+    return 18;
+}
+pub fn mkf_gcount() -> i32 {
+    return 19;
+}
+pub fn mkf_zfirst() -> i32 {
+    return 20;
+}
+pub fn mkf_zlast() -> i32 {
+    return 21;
+}
+pub fn mkf_flags() -> i32 {
+    return 22;
+}
+pub fn mkf_stm() -> i32 {
+    return 23;
+}
+pub fn fnf_obj() -> i32 {
+    return 0;
+}
+pub fn fnf_subtype() -> i32 {
+    return 1;
+}
+pub fn fnf_flags() -> i32 {
+    return 2;
+}
+pub fn fnf_program() -> i32 {
+    return 3;
+}
+pub fn fnf_tounicode() -> i32 {
+    return 4;
+}
+pub fn fnf_enc() -> i32 {
+    return 5;
+}
+pub fn fnf_tstart() -> i32 {
+    return 6;
+}
+pub fn fnf_tlen() -> i32 {
+    return 7;
+}
+pub fn fnf_asc() -> i32 {
+    return 8;
+}
+pub fn fnf_desc() -> i32 {
+    return 9;
+}
+pub fn fnf_space() -> i32 {
+    return 10;
+}
+pub fn fnf_italic() -> i32 {
+    return 11;
+}
+pub fn fnf_stemv() -> i32 {
+    return 12;
+}
+pub fn fnf_style() -> i32 {
+    return 13;
 }
 pub fn pf_page() -> i32 {
     return 0;
@@ -890,17 +3078,35 @@ pub fn pf_stroke() -> i32 {
 pub fn pf_width() -> i32 {
     return 8;
 }
-pub fn pf_alpha() -> i32 {
+pub fn pf_falpha() -> i32 {
     return 9;
 }
-pub fn pf_flags() -> i32 {
+pub fn pf_salpha() -> i32 {
     return 10;
 }
-pub fn pf_artifact() -> i32 {
+pub fn pf_flags() -> i32 {
     return 11;
 }
-pub fn pf_mcid() -> i32 {
+pub fn pf_z() -> i32 {
     return 12;
+}
+pub fn pf_clip() -> i32 {
+    return 13;
+}
+pub fn pf_mark() -> i32 {
+    return 14;
+}
+pub fn pf_ocg() -> i32 {
+    return 15;
+}
+pub fn pf_pfirst() -> i32 {
+    return 16;
+}
+pub fn pf_pcount() -> i32 {
+    return 17;
+}
+pub fn pf_dash() -> i32 {
+    return 18;
 }
 pub fn mf_page() -> i32 {
     return 0;
@@ -932,11 +3138,284 @@ pub fn mf_alpha() -> i32 {
 pub fn mf_flags() -> i32 {
     return 9;
 }
-pub fn mf_artifact() -> i32 {
+pub fn mf_rot() -> i32 {
     return 10;
 }
-pub fn mf_mcid() -> i32 {
+pub fn mf_skewed() -> i32 {
     return 11;
+}
+pub fn mf_z() -> i32 {
+    return 12;
+}
+pub fn mf_clip() -> i32 {
+    return 13;
+}
+pub fn mf_mark() -> i32 {
+    return 14;
+}
+pub fn mf_ocg() -> i32 {
+    return 15;
+}
+pub fn mf_vis() -> i32 {
+    return 16;
+}
+pub fn mf_vby() -> i32 {
+    return 17;
+}
+pub fn mf_vchk() -> i32 {
+    return 18;
+}
+pub fn orf_page() -> i32 {
+    return 0;
+}
+pub fn orf_view() -> i32 {
+    return 1;
+}
+pub fn orf_bview() -> i32 {
+    return 2;
+}
+pub fn orf_request() -> i32 {
+    return 3;
+}
+pub fn orf_round() -> i32 {
+    return 4;
+}
+pub fn orf_pass() -> i32 {
+    return 5;
+}
+pub fn orf_psm() -> i32 {
+    return 6;
+}
+pub fn orf_rx() -> i32 {
+    return 7;
+}
+pub fn orf_ry() -> i32 {
+    return 8;
+}
+pub fn orf_rw() -> i32 {
+    return 9;
+}
+pub fn orf_rh() -> i32 {
+    return 10;
+}
+pub fn orf_lang() -> i32 {
+    return 11;
+}
+pub fn orf_langlen() -> i32 {
+    return 12;
+}
+pub fn orf_orient() -> i32 {
+    return 13;
+}
+pub fn orf_wdir() -> i32 {
+    return 14;
+}
+pub fn orf_lorder() -> i32 {
+    return 15;
+}
+pub fn orf_deskew() -> i32 {
+    return 16;
+}
+pub fn orf_osd() -> i32 {
+    return 17;
+}
+pub fn orf_script() -> i32 {
+    return 18;
+}
+pub fn orf_sconf() -> i32 {
+    return 19;
+}
+pub fn orf_oconf() -> i32 {
+    return 20;
+}
+pub fn orf_flags() -> i32 {
+    return 21;
+}
+pub fn orf_bfirst() -> i32 {
+    return 22;
+}
+pub fn orf_bcount() -> i32 {
+    return 23;
+}
+pub fn orf_lfirst() -> i32 {
+    return 24;
+}
+pub fn orf_lcount() -> i32 {
+    return 25;
+}
+pub fn orf_wfirst() -> i32 {
+    return 26;
+}
+pub fn orf_wcount() -> i32 {
+    return 27;
+}
+pub fn obf_page() -> i32 {
+    return 0;
+}
+pub fn obf_x0() -> i32 {
+    return 1;
+}
+pub fn obf_y0() -> i32 {
+    return 2;
+}
+pub fn obf_x1() -> i32 {
+    return 3;
+}
+pub fn obf_y1() -> i32 {
+    return 4;
+}
+pub fn obf_kind() -> i32 {
+    return 5;
+}
+pub fn obf_parent() -> i32 {
+    return 6;
+}
+pub fn obf_run() -> i32 {
+    return 7;
+}
+pub fn obf_btype() -> i32 {
+    return 8;
+}
+pub fn obf_orient() -> i32 {
+    return 9;
+}
+pub fn obf_wdir() -> i32 {
+    return 10;
+}
+pub fn obf_first() -> i32 {
+    return 11;
+}
+pub fn obf_count() -> i32 {
+    return 12;
+}
+pub fn obf_conf() -> i32 {
+    return 13;
+}
+pub fn olf_par() -> i32 {
+    return 13;
+}
+pub fn olf_run() -> i32 {
+    return 14;
+}
+pub fn olf_conf() -> i32 {
+    return 15;
+}
+pub fn olf_xheight() -> i32 {
+    return 16;
+}
+pub fn olf_asc() -> i32 {
+    return 17;
+}
+pub fn olf_desc() -> i32 {
+    return 18;
+}
+pub fn olf_px() -> i32 {
+    return 19;
+}
+pub fn olf_py() -> i32 {
+    return 20;
+}
+pub fn olf_pw() -> i32 {
+    return 21;
+}
+pub fn olf_ph() -> i32 {
+    return 22;
+}
+pub fn owf_style() -> i32 {
+    return 16;
+}
+pub fn owf_run() -> i32 {
+    return 17;
+}
+pub fn owf_sfirst() -> i32 {
+    return 18;
+}
+pub fn owf_scount() -> i32 {
+    return 19;
+}
+pub fn owf_lang() -> i32 {
+    return 20;
+}
+pub fn owf_flags() -> i32 {
+    return 21;
+}
+pub fn owf_psize() -> i32 {
+    return 22;
+}
+pub fn owf_px() -> i32 {
+    return 23;
+}
+pub fn owf_py() -> i32 {
+    return 24;
+}
+pub fn owf_pw() -> i32 {
+    return 25;
+}
+pub fn owf_ph() -> i32 {
+    return 26;
+}
+pub fn osf_conf() -> i32 {
+    return 9;
+}
+pub fn osf_afirst() -> i32 {
+    return 10;
+}
+pub fn osf_acount() -> i32 {
+    return 11;
+}
+pub fn osf_flags() -> i32 {
+    return 12;
+}
+pub fn osf_px() -> i32 {
+    return 13;
+}
+pub fn osf_py() -> i32 {
+    return 14;
+}
+pub fn osf_pw() -> i32 {
+    return 15;
+}
+pub fn osf_ph() -> i32 {
+    return 16;
+}
+pub fn oaf_sym() -> i32 {
+    return 0;
+}
+pub fn oaf_tstart() -> i32 {
+    return 1;
+}
+pub fn oaf_tlen() -> i32 {
+    return 2;
+}
+pub fn oaf_conf() -> i32 {
+    return 3;
+}
+pub fn ikf_page() -> i32 {
+    return 0;
+}
+pub fn ikf_view() -> i32 {
+    return 1;
+}
+pub fn ikf_color() -> i32 {
+    return 2;
+}
+pub fn ikf_light() -> i32 {
+    return 3;
+}
+pub fn ikf_chroma() -> i32 {
+    return 4;
+}
+pub fn ikf_count() -> i32 {
+    return 5;
+}
+pub fn ikf_role() -> i32 {
+    return 6;
+}
+pub fn ikf_mask() -> i32 {
+    return 7;
+}
+pub fn ikf_spread() -> i32 {
+    return 8;
 }
 pub fn cf_page() -> i32 {
     return 0;
@@ -953,168 +3432,587 @@ pub fn cf_x1() -> i32 {
 pub fn cf_y1() -> i32 {
     return 4;
 }
-pub fn cf_pxx() -> i32 {
+pub fn cf_view() -> i32 {
     return 5;
+}
+pub fn cf_pxx() -> i32 {
+    return 6;
 }
 pub fn cf_pxy() -> i32 {
-    return 6;
+    return 7;
 }
 pub fn cf_pxw() -> i32 {
-    return 7;
+    return 8;
 }
 pub fn cf_pxh() -> i32 {
-    return 8;
+    return 9;
 }
 pub fn cf_area() -> i32 {
-    return 9;
+    return 10;
 }
 pub fn cf_fill() -> i32 {
-    return 10;
+    return 11;
 }
 pub fn cf_stroke() -> i32 {
-    return 11;
+    return 12;
 }
 pub fn cf_color() -> i32 {
-    return 12;
-}
-pub fn cf_layer() -> i32 {
     return 13;
+}
+pub fn cf_ink() -> i32 {
+    return 14;
 }
 pub fn cf_kind() -> i32 {
-    return 14;
+    return 15;
 }
 pub fn cf_conf() -> i32 {
-    return 15;
+    return 16;
 }
 pub fn cf_flags() -> i32 {
-    return 16;
-}
-pub fn of_page() -> i32 {
-    return 0;
-}
-pub fn of_x0() -> i32 {
-    return 1;
-}
-pub fn of_y0() -> i32 {
-    return 2;
-}
-pub fn of_x1() -> i32 {
-    return 3;
-}
-pub fn of_y1() -> i32 {
-    return 4;
-}
-pub fn of_tstart() -> i32 {
-    return 5;
-}
-pub fn of_tlen() -> i32 {
-    return 6;
-}
-pub fn of_conf() -> i32 {
-    return 7;
-}
-pub fn of_althead() -> i32 {
-    return 8;
-}
-pub fn of_altcount() -> i32 {
-    return 9;
-}
-pub fn of_line() -> i32 {
-    return 10;
-}
-pub fn of_block() -> i32 {
-    return 11;
-}
-pub fn of_baseline() -> i32 {
-    return 12;
-}
-pub fn of_flags() -> i32 {
-    return 13;
-}
-pub fn of_pass() -> i32 {
-    return 14;
-}
-pub fn of_lang() -> i32 {
-    return 15;
-}
-pub fn af_sym() -> i32 {
-    return 0;
-}
-pub fn af_cp() -> i32 {
-    return 1;
-}
-pub fn af_conf() -> i32 {
-    return 2;
-}
-pub fn af_next() -> i32 {
-    return 3;
-}
-pub fn sf_page() -> i32 {
-    return 0;
-}
-pub fn sf_tag() -> i32 {
-    return 1;
-}
-pub fn sf_taglen() -> i32 {
-    return 2;
-}
-pub fn sf_parent() -> i32 {
-    return 3;
-}
-pub fn sf_mcid() -> i32 {
-    return 4;
-}
-pub fn sf_artifact() -> i32 {
-    return 5;
-}
-pub fn sf_type() -> i32 {
-    return 6;
-}
-pub fn sf_typelen() -> i32 {
-    return 7;
-}
-pub fn sf_subtype() -> i32 {
-    return 8;
-}
-pub fn sf_subtypelen() -> i32 {
-    return 9;
-}
-pub fn sf_actual() -> i32 {
-    return 10;
-}
-pub fn sf_actuallen() -> i32 {
-    return 11;
-}
-pub fn sf_alt() -> i32 {
-    return 12;
-}
-pub fn sf_altlen() -> i32 {
-    return 13;
-}
-pub fn sf_exp() -> i32 {
-    return 14;
-}
-pub fn sf_explen() -> i32 {
-    return 15;
-}
-pub fn sf_lang() -> i32 {
-    return 16;
-}
-pub fn sf_langlen() -> i32 {
     return 17;
 }
-pub fn sf_gfirst() -> i32 {
+pub fn cf_pfirst() -> i32 {
     return 18;
 }
-pub fn sf_gcount() -> i32 {
+pub fn cf_pcount() -> i32 {
     return 19;
 }
-pub fn sf_flags() -> i32 {
+pub fn cf_parent() -> i32 {
     return 20;
 }
-pub fn sf_stm() -> i32 {
+pub fn cf_holes() -> i32 {
     return 21;
 }
+pub fn cf_gray() -> i32 {
+    return 22;
+}
+pub fn rlf_page() -> i32 {
+    return 0;
+}
+pub fn rlf_x0() -> i32 {
+    return 1;
+}
+pub fn rlf_y0() -> i32 {
+    return 2;
+}
+pub fn rlf_x1() -> i32 {
+    return 3;
+}
+pub fn rlf_y1() -> i32 {
+    return 4;
+}
+pub fn rlf_view() -> i32 {
+    return 5;
+}
+pub fn rlf_lx0() -> i32 {
+    return 6;
+}
+pub fn rlf_ly0() -> i32 {
+    return 7;
+}
+pub fn rlf_lx1() -> i32 {
+    return 8;
+}
+pub fn rlf_ly1() -> i32 {
+    return 9;
+}
+pub fn rlf_thick() -> i32 {
+    return 10;
+}
+pub fn rlf_color() -> i32 {
+    return 11;
+}
+pub fn rlf_ink() -> i32 {
+    return 12;
+}
+pub fn rlf_style() -> i32 {
+    return 13;
+}
+pub fn rlf_conf() -> i32 {
+    return 14;
+}
+pub fn rlf_rfirst() -> i32 {
+    return 15;
+}
+pub fn rlf_rcount() -> i32 {
+    return 16;
+}
+pub fn rlf_flags() -> i32 {
+    return 17;
+}
+pub fn pmf_page() -> i32 {
+    return 0;
+}
+pub fn pmf_x0() -> i32 {
+    return 1;
+}
+pub fn pmf_y0() -> i32 {
+    return 2;
+}
+pub fn pmf_x1() -> i32 {
+    return 3;
+}
+pub fn pmf_y1() -> i32 {
+    return 4;
+}
+pub fn pmf_view() -> i32 {
+    return 5;
+}
+pub fn pmf_kind() -> i32 {
+    return 6;
+}
+pub fn pmf_cx() -> i32 {
+    return 7;
+}
+pub fn pmf_cy() -> i32 {
+    return 8;
+}
+pub fn pmf_rx() -> i32 {
+    return 9;
+}
+pub fn pmf_ry() -> i32 {
+    return 10;
+}
+pub fn pmf_rot() -> i32 {
+    return 11;
+}
+pub fn pmf_stroke() -> i32 {
+    return 12;
+}
+pub fn pmf_color() -> i32 {
+    return 13;
+}
+pub fn pmf_ink() -> i32 {
+    return 14;
+}
+pub fn pmf_fill() -> i32 {
+    return 15;
+}
+pub fn pmf_conf() -> i32 {
+    return 16;
+}
+pub fn pmf_pfirst() -> i32 {
+    return 17;
+}
+pub fn pmf_pcount() -> i32 {
+    return 18;
+}
+pub fn pmf_rfirst() -> i32 {
+    return 19;
+}
+pub fn pmf_rcount() -> i32 {
+    return 20;
+}
+pub fn pmf_flags() -> i32 {
+    return 21;
+}
+pub fn tlf_ink() -> i32 {
+    return 13;
+}
+pub fn tlf_height() -> i32 {
+    return 14;
+}
+pub fn tlf_gap() -> i32 {
+    return 15;
+}
+pub fn tlf_conf() -> i32 {
+    return 16;
+}
+pub static EV_FD: [i32; 1638] = [
+    1, 0, 1, 9, -2147483648, 0,
+    1, 1, 2, 34, 0, 0,
+    1, 2, 2, 74, 0, 0,
+    1, 3, 1, 75, 0, 0,
+    1, 4, 9, 28, 0, 7,
+    1, 5, 1, 76, 0, 0,
+    2, 0, 1, 9, -2147483648, 0,
+    2, 1, 8, 31, 0, 19,
+    2, 2, 1, 77, -1, 0,
+    2, 3, 1, 48, -1, 0,
+    2, 4, 12, 36, 0, 0,
+    2, 6, 1, 76, 0, 0,
+    2, 7, 1, 38, 0, 0,
+    2, 8, 1, 78, -1, 0,
+    2, 9, 1, 75, 0, 0,
+    2, 10, 2, 79, 0, 0,
+    2, 11, 13, 80, 0, 0,
+    2, 13, 1, 81, 0, 0,
+    2, 14, 1, 82, 0, 0,
+    2, 15, 1, 83, 0, 0,
+    2, 16, 1, 84, 0, 0,
+    2, 17, 2, 85, 0, 0,
+    2, 18, 2, 86, 0, 0,
+    2, 19, 1, 87, 0, 0,
+    2, 20, 1, 88, 0, 0,
+    2, 21, 1, 89, 0, 0,
+    2, 22, 1, 90, 0, 0,
+    2, 23, 9, 28, 0, 8,
+    3, 0, 2, 91, -2147483648, 0,
+    3, 1, 2, 92, -2147483648, 0,
+    3, 2, 8, 93, 0, 17,
+    7, 0, 1, 9, -2147483648, 0,
+    7, 1, 3, 15, -2147483648, 0,
+    7, 5, 1, 10, -1, 0,
+    7, 6, 6, 11, -2147483648, 0,
+    7, 8, 1, 24, -1, 0,
+    7, 9, 4, 16, -2147483648, 0,
+    7, 13, 2, 94, 0, 0,
+    7, 14, 2, 95, 0, 0,
+    7, 15, 2, 17, 0, 0,
+    7, 16, 8, 12, 0, 1,
+    7, 17, 1, 13, -1, 0,
+    7, 18, 2, 14, -2147483648, 0,
+    7, 19, 1, 20, 0, 0,
+    7, 20, 5, 18, -2147483648, 0,
+    7, 21, 5, 33, -2147483648, 0,
+    7, 22, 1, 19, 1000, 0,
+    7, 23, 1, 96, 1000, 0,
+    7, 24, 8, 97, -1, 13,
+    7, 25, 1, 98, -2147483648, 0,
+    7, 26, 1, 99, -1, 0,
+    7, 27, 1, 100, -1, 0,
+    7, 28, 1, 101, -1, 0,
+    7, 29, 8, 21, 0, 2,
+    7, 30, 1, 102, -1, 0,
+    7, 31, 9, 103, 0, 11,
+    8, 0, 1, 9, -2147483648, 0,
+    8, 1, 3, 15, -2147483648, 0,
+    8, 5, 4, 16, -2147483648, 0,
+    8, 9, 2, 17, 0, 0,
+    8, 10, 8, 30, 0, 4,
+    8, 11, 6, 11, -2147483648, 0,
+    8, 13, 1, 25, -1, 0,
+    8, 14, 1, 27, -1, 0,
+    8, 15, 1, 104, -1, 0,
+    8, 16, 9, 43, 0, 3,
+    8, 17, 7, 2, -1, 0,
+    8, 19, 1, 13, -1, 0,
+    8, 20, 2, 14, 0, 0,
+    8, 21, 2, 29, -1, 0,
+    8, 22, 8, 105, 0, 12,
+    8, 23, 9, 26, 0, 1,
+    9, 0, 1, 9, -2147483648, 0,
+    9, 1, 3, 15, -2147483648, 0,
+    9, 5, 4, 16, -2147483648, 0,
+    9, 9, 2, 17, 0, 0,
+    9, 10, 8, 30, 0, 4,
+    9, 11, 7, 3, -1, 0,
+    9, 13, 9, 26, 0, 1,
+    9, 14, 1, 106, -1, 0,
+    10, 0, 1, 9, -2147483648, 0,
+    10, 1, 8, 31, 0, 7,
+    10, 2, 6, 47, -2147483648, 0,
+    10, 4, 1, 48, -1, 0,
+    10, 5, 1, 23, -1, 0,
+    10, 6, 8, 49, 0, 3,
+    10, 7, 8, 50, 0, 8,
+    10, 8, 6, 51, -2147483648, 0,
+    10, 10, 6, 52, -2147483648, 0,
+    10, 12, 6, 53, -2147483648, 0,
+    10, 14, 6, 41, -2147483648, 0,
+    10, 16, 1, 101, -1, 0,
+    10, 17, 1, 107, -1, 0,
+    10, 18, 7, 2, -1, 0,
+    10, 20, 12, 98, -1, -1,
+    10, 22, 9, 28, 0, 6,
+    10, 23, 1, 54, 0, 0,
+    11, 0, 1, 35, 0, 0,
+    11, 1, 8, 50, 0, 11,
+    11, 2, 1, 28, 0, 0,
+    11, 3, 1, 108, 0, 0,
+    11, 4, 1, 109, 0, 0,
+    11, 5, 1, 110, -1, 0,
+    11, 6, 6, 111, -2147483648, 0,
+    11, 8, 1, 94, 0, 0,
+    11, 9, 1, 95, 0, 0,
+    11, 10, 1, 112, -1, 0,
+    11, 11, 2, 113, 0, 0,
+    11, 12, 1, 114, -1, 0,
+    11, 13, 9, 43, 0, 3,
+    12, 0, 1, 9, -2147483648, 0,
+    12, 1, 8, 31, 0, 5,
+    12, 2, 3, 15, -2147483648, 0,
+    12, 6, 5, 32, -2147483648, 0,
+    12, 7, 5, 33, -2147483648, 0,
+    12, 8, 2, 34, 0, 0,
+    12, 9, 1, 19, 1000, 0,
+    12, 10, 1, 96, 1000, 0,
+    12, 11, 9, 28, 0, 4,
+    12, 12, 1, 98, -1, 0,
+    12, 13, 1, 99, -1, 0,
+    12, 14, 1, 100, -1, 0,
+    12, 15, 1, 101, -1, 0,
+    12, 16, 7, 57, -1, 0,
+    12, 18, 2, 115, 0, 0,
+    13, 0, 1, 9, -2147483648, 0,
+    13, 1, 3, 15, -2147483648, 0,
+    13, 5, 1, 35, -2147483648, 0,
+    13, 6, 12, 36, 0, 0,
+    13, 8, 1, 19, 1000, 0,
+    13, 9, 9, 28, 0, 5,
+    13, 10, 2, 17, 0, 0,
+    13, 11, 1, 116, 0, 0,
+    13, 12, 1, 98, -1, 0,
+    13, 13, 1, 99, -1, 0,
+    13, 14, 1, 100, -1, 0,
+    13, 15, 1, 101, -1, 0,
+    13, 16, 8, 21, 0, 2,
+    13, 17, 1, 102, -1, 0,
+    13, 18, 9, 103, 0, 11,
+    14, 0, 1, 9, -2147483648, 0,
+    14, 1, 1, 117, -1, 0,
+    14, 2, 1, 118, -1, 0,
+    14, 3, 1, 77, -1, 0,
+    14, 4, 1, 119, 0, 0,
+    14, 5, 8, 40, 0, 10,
+    14, 6, 1, 120, 0, 0,
+    14, 7, 10, 121, -2147483648, 0,
+    14, 11, 6, 41, -2147483648, 0,
+    14, 13, 1, 122, 0, 0,
+    14, 14, 1, 123, 0, 0,
+    14, 15, 1, 124, 0, 0,
+    14, 16, 2, 79, 0, 0,
+    14, 17, 1, 125, -1, 0,
+    14, 18, 11, 126, -2147483648, 0,
+    14, 19, 1, 127, -1, 0,
+    14, 20, 1, 128, -1, 0,
+    14, 21, 1, 28, 0, 0,
+    14, 22, 7, 129, 0, 0,
+    14, 24, 7, 4, 0, 0,
+    14, 26, 7, 3, 0, 0,
+    15, 0, 1, 9, -2147483648, 0,
+    15, 1, 3, 15, -2147483648, 0,
+    15, 5, 8, 31, 0, 9,
+    15, 6, 1, 48, -1, 0,
+    15, 7, 1, 45, -1, 0,
+    15, 8, 1, 130, 0, 0,
+    15, 9, 1, 122, 0, 0,
+    15, 10, 1, 123, 0, 0,
+    15, 11, 7, 131, -1, 0,
+    15, 13, 1, 27, -1, 0,
+    16, 0, 1, 9, -2147483648, 0,
+    16, 1, 3, 15, -2147483648, 0,
+    16, 5, 4, 16, -2147483648, 0,
+    16, 9, 2, 17, 0, 0,
+    16, 10, 8, 30, 0, 4,
+    16, 11, 7, 3, -1, 0,
+    16, 13, 1, 132, -1, 0,
+    16, 14, 1, 45, -1, 0,
+    16, 15, 1, 27, -1, 0,
+    16, 16, 2, 133, -1, 0,
+    16, 17, 2, 94, -1, 0,
+    16, 18, 2, 95, -1, 0,
+    16, 19, 10, 36, -2147483648, 0,
+    17, 0, 1, 9, -2147483648, 0,
+    17, 1, 3, 15, -2147483648, 0,
+    17, 5, 4, 16, -2147483648, 0,
+    17, 9, 2, 17, 0, 0,
+    17, 10, 8, 30, 0, 4,
+    17, 11, 6, 11, -2147483648, 0,
+    17, 13, 1, 25, -1, 0,
+    17, 14, 1, 27, -1, 0,
+    17, 15, 1, 104, -1, 0,
+    17, 16, 9, 43, 0, 3,
+    17, 17, 1, 45, -1, 0,
+    17, 18, 7, 134, -1, 0,
+    17, 20, 11, 41, -2147483648, 0,
+    17, 21, 9, 28, 0, 9,
+    17, 22, 2, 135, -1, 0,
+    17, 23, 10, 36, -2147483648, 0,
+    18, 0, 1, 9, -2147483648, 0,
+    18, 1, 3, 15, -2147483648, 0,
+    18, 5, 1, 10, -1, 0,
+    18, 6, 6, 11, -2147483648, 0,
+    18, 8, 1, 24, -1, 0,
+    18, 9, 1, 27, -1, 0,
+    18, 10, 7, 39, -1, 0,
+    18, 12, 9, 28, 0, 10,
+    18, 13, 10, 36, -2147483648, 0,
+    19, 0, 1, 44, -2147483648, 0,
+    19, 1, 6, 11, -2147483648, 0,
+    19, 3, 1, 27, -1, 0,
+    20, 0, 1, 9, -2147483648, 0,
+    20, 1, 1, 117, -1, 0,
+    20, 2, 5, 18, -2147483648, 0,
+    20, 3, 1, 136, 0, 0,
+    20, 4, 1, 137, 0, 0,
+    20, 5, 1, 138, 0, 0,
+    20, 6, 8, 139, 0, 14,
+    20, 7, 1, 140, -1, 0,
+    20, 8, 1, 141, 0, 0,
+    21, 0, 1, 9, -2147483648, 0,
+    21, 1, 3, 15, -2147483648, 0,
+    21, 5, 1, 117, -1, 0,
+    21, 6, 10, 36, -2147483648, 0,
+    21, 10, 1, 37, 0, 0,
+    21, 11, 1, 32, 0, 0,
+    21, 12, 2, 33, 0, 0,
+    21, 13, 5, 18, -2147483648, 0,
+    21, 14, 1, 78, -1, 0,
+    21, 15, 8, 31, 0, 6,
+    21, 16, 1, 27, -1, 0,
+    21, 17, 9, 28, 0, 2,
+    21, 18, 7, 142, -1, 0,
+    21, 20, 1, 48, -1, 0,
+    21, 21, 1, 143, 0, 0,
+    21, 22, 1, 144, -1, 0,
+    22, 0, 1, 9, -2147483648, 0,
+    22, 1, 3, 15, -2147483648, 0,
+    22, 5, 1, 117, -1, 0,
+    22, 6, 4, 25, -2147483648, 0,
+    22, 10, 2, 145, 0, 0,
+    22, 11, 5, 18, -2147483648, 0,
+    22, 12, 1, 78, -1, 0,
+    22, 13, 8, 43, 0, 15,
+    22, 14, 1, 27, -1, 0,
+    22, 15, 7, 146, -1, 0,
+    22, 17, 1, 28, 0, 0,
+    23, 0, 1, 9, -2147483648, 0,
+    23, 1, 3, 15, -2147483648, 0,
+    23, 5, 1, 117, -1, 0,
+    23, 6, 8, 31, 0, 16,
+    23, 7, 13, 147, 0, 0,
+    23, 9, 13, 148, 0, 0,
+    23, 11, 2, 17, 0, 0,
+    23, 12, 2, 33, 0, 0,
+    23, 13, 5, 18, -2147483648, 0,
+    23, 14, 1, 78, -1, 0,
+    23, 15, 1, 32, 0, 0,
+    23, 16, 1, 27, -1, 0,
+    23, 17, 7, 149, -1, 0,
+    23, 19, 7, 146, -1, 0,
+    23, 21, 1, 28, 0, 0,
+    24, 0, 1, 9, -2147483648, 0,
+    24, 1, 3, 15, -2147483648, 0,
+    24, 5, 4, 16, -2147483648, 0,
+    24, 9, 2, 17, 0, 0,
+    24, 10, 8, 30, 0, 4,
+    24, 11, 7, 7, -1, 0,
+    24, 13, 1, 78, -1, 0,
+    24, 14, 2, 74, 0, 0,
+    24, 15, 2, 29, 0, 0,
+    24, 16, 1, 27, -1, 0
+];
+pub static EV_FX: [i32; 48] = [
+    0, 6,
+    6, 22,
+    28, 3,
+    0, 0,
+    0, 0,
+    0, 0,
+    31, 25,
+    56, 16,
+    72, 8,
+    80, 17,
+    97, 13,
+    110, 15,
+    125, 15,
+    140, 21,
+    161, 10,
+    171, 13,
+    184, 16,
+    200, 9,
+    209, 3,
+    212, 9,
+    221, 16,
+    237, 11,
+    248, 15,
+    263, 10
+];
+pub static EV_STRIDES: [i32; 24] = [
+    12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
+    28, 20, 4, 12, 24, 20, 24, 20
+];
+pub static EV_CK: [i32; 528] = [
+    2, 7, 1, 6, 7, 5,
+    3, 8, 1, 11, 12, 5,
+    4, 10, 1, 2, 3, 5,
+    5, 10, 1, 8, 9, 5,
+    6, 10, 1, 10, 11, 5,
+    7, 10, 1, 12, 13, 5,
+    8, 10, 1, 14, 15, 5,
+    9, 11, 1, 6, 7, 5,
+    10, 14, 1, 11, 12, 5,
+    11, 17, 1, 11, 12, 5,
+    12, 18, 1, 6, 7, 5,
+    13, 19, 1, 1, 2, 5,
+    14, 8, 2, 17, 18, 7,
+    15, 9, 2, 11, 12, 8,
+    16, 10, 2, 18, 19, 7,
+    17, 12, 2, 16, 17, 3,
+    18, 21, 2, 18, 19, 3,
+    19, 22, 2, 15, 16, 4,
+    20, 23, 2, 17, 18, 3,
+    21, 23, 2, 19, 20, 4,
+    22, 14, 2, 22, 23, 15,
+    23, 14, 2, 24, 25, 16,
+    24, 14, 2, 26, 27, 17,
+    25, 16, 2, 11, 12, 17,
+    26, 17, 2, 18, 19, 18,
+    27, 18, 2, 10, 11, 19,
+    28, 24, 2, 11, 12, 4,
+    29, 7, 3, 8, 0, 8,
+    30, 7, 3, 17, 0, 11,
+    31, 7, 3, 26, 0, 12,
+    32, 7, 3, 27, 0, 10,
+    33, 7, 3, 28, 0, 10,
+    34, 8, 3, 13, 0, 9,
+    35, 8, 3, 15, 0, 6,
+    36, 10, 5, 4, 0, 10,
+    37, 12, 3, 13, 0, 12,
+    38, 12, 3, 14, 0, 10,
+    39, 12, 3, 15, 0, 10,
+    40, 13, 3, 13, 0, 12,
+    41, 13, 3, 14, 0, 10,
+    42, 13, 3, 15, 0, 10,
+    43, 14, 3, 1, 0, 2,
+    44, 14, 3, 2, 0, 2,
+    45, 16, 3, 13, 0, 15,
+    46, 16, 3, 14, 0, 14,
+    47, 17, 3, 13, 0, 16,
+    48, 17, 3, 15, 0, 6,
+    49, 17, 3, 17, 0, 14,
+    50, 15, 3, 6, 0, 15,
+    51, 15, 3, 7, 0, 14,
+    52, 18, 4, 8, 0, 17,
+    53, 19, 4, 0, 0, 18,
+    54, 2, 3, 3, 0, 2,
+    55, 2, 3, 8, 0, 20,
+    56, 21, 3, 5, 0, 2,
+    57, 21, 3, 14, 0, 20,
+    58, 21, 3, 20, 0, 21,
+    59, 22, 3, 5, 0, 2,
+    60, 22, 3, 12, 0, 20,
+    61, 23, 3, 5, 0, 2,
+    62, 23, 3, 14, 0, 20,
+    63, 20, 3, 1, 0, 2,
+    64, 20, 3, 7, 0, 2,
+    65, 24, 3, 13, 0, 20,
+    66, 7, 6, 8, 17, 8,
+    67, 7, 6, 27, 18, 10,
+    68, 8, 6, 13, 11, 9,
+    69, 15, 6, 6, 11, 15,
+    70, 16, 6, 13, 11, 15,
+    71, 17, 6, 13, 11, 16,
+    72, 18, 6, 8, 18, 17,
+    73, 19, 6, 0, 10, 18,
+    74, 15, 6, 7, 22, 14,
+    75, 16, 6, 14, 24, 14,
+    76, 17, 6, 17, 26, 14,
+    77, 7, 8, 1, 0, 7,
+    78, 8, 8, 1, 0, 8,
+    79, 9, 8, 1, 0, 9,
+    80, 12, 8, 2, 0, 12,
+    81, 13, 8, 1, 0, 13,
+    82, 15, 8, 1, 0, 15,
+    83, 16, 8, 1, 0, 16,
+    84, 17, 8, 1, 0, 17,
+    85, 18, 8, 1, 0, 18,
+    86, 21, 8, 1, 0, 21,
+    87, 22, 8, 1, 0, 22,
+    88, 23, 8, 1, 0, 23,
+    89, 24, 8, 1, 0, 24
+];
 pub(crate) fn ev_get(c: &mut crate::port::Cells, stride: i32, row: i32, f: i32) -> i32 {
     return crate::port::cells_at(c, (row * stride) + f);
 }
@@ -1135,18 +4033,52 @@ pub(crate) fn ev_push(mut c: &mut crate::port::Cells, stride: i32) -> i32 {
     }
     return row;
 }
-pub fn ev_init(mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut spans: &mut crate::port::Cells) -> i32 {
-    // Empty all ten arenas.
+pub fn evs_init(mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells) -> i32 {
+    // Empty the shared bundle.
+    crate::port::cells_drop(epages, 0);
+    crate::port::cells_drop(views, 0);
+    crate::port::cells_drop(pts, 0);
+    crate::port::cells_drop(refs, 0);
+    crate::port::cells_drop(etext, 0);
+    crate::port::cells_drop(feats, 0);
+    return 0;
+}
+pub fn evt_init(mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells) -> i32 {
+    // Empty the text bundle.
     crate::port::cells_drop(glyphs, 0);
     crate::port::cells_drop(words, 0);
     crate::port::cells_drop(lines, 0);
+    crate::port::cells_drop(marks, 0);
+    crate::port::cells_drop(fonts, 0);
     crate::port::cells_drop(paths, 0);
     crate::port::cells_drop(images, 0);
+    return 0;
+}
+pub fn evo_init(mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells) -> i32 {
+    // Empty the OCR bundle.
+    crate::port::cells_drop(oruns, 0);
+    crate::port::cells_drop(oblocks, 0);
+    crate::port::cells_drop(olines, 0);
+    crate::port::cells_drop(owords, 0);
+    crate::port::cells_drop(osyms, 0);
+    crate::port::cells_drop(oalts, 0);
+    return 0;
+}
+pub fn evr_init(mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // Empty the trace bundle.
+    crate::port::cells_drop(inks, 0);
     crate::port::cells_drop(components, 0);
-    crate::port::cells_drop(ocrwords, 0);
-    crate::port::cells_drop(alts, 0);
-    crate::port::cells_drop(etext, 0);
-    crate::port::cells_drop(spans, 0);
+    crate::port::cells_drop(rules, 0);
+    crate::port::cells_drop(prims, 0);
+    crate::port::cells_drop(tlines, 0);
+    return 0;
+}
+pub fn ev_init(mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // Empty all 24 arenas.
+    evs_init(epages, views, pts, refs, etext, feats);
+    evt_init(glyphs, words, lines, marks, fonts, paths, images);
+    evo_init(oruns, oblocks, olines, owords, osyms, oalts);
+    evr_init(inks, components, rules, prims, tlines);
     return 0;
 }
 pub fn etx_append_cp(mut etext: &mut crate::port::Cells, cp: i32) -> i32 {
@@ -1157,247 +4089,1556 @@ pub fn etx_append_cp(mut etext: &mut crate::port::Cells, cp: i32) -> i32 {
 pub fn etx_len(etext: &mut crate::port::Cells) -> i32 {
     return crate::port::cells_len(etext);
 }
-pub fn gl_count(glyphs: &mut crate::port::Cells) -> i32 {
-    return ev_count(glyphs, 20);
+pub fn ep_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 12);
 }
-pub fn gl_get(glyphs: &mut crate::port::Cells, g: i32, f: i32) -> i32 {
-    return ev_get(glyphs, 20, g, f);
+pub fn ep_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 12, i, f);
 }
-pub fn gl_set(mut glyphs: &mut crate::port::Cells, g: i32, f: i32, v: i32) -> i32 {
-    return ev_set(glyphs, 20, g, f, v);
+pub fn ep_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 12, i, f, v);
 }
-pub fn gl_new(mut glyphs: &mut crate::port::Cells, page: i32, cp: i32, font: i32, size: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
-    // Append a glyph. Defaults: `how` unknown, baseline at the box's
-    // bottom, no rotation, colour none, opaque, render mode 0, visible,
-    // not an artifact, no marked-content id, in no word.
-    let g: i32 = ev_push(glyphs, 20);
-    ev_set(glyphs, 20, g, 0, page);
-    ev_set(glyphs, 20, g, 1, cp);
-    ev_set(glyphs, 20, g, 2, -1);
-    ev_set(glyphs, 20, g, 4, gh_unknown());
-    ev_set(glyphs, 20, g, 5, font);
-    ev_set(glyphs, 20, g, 6, size);
-    ev_set(glyphs, 20, g, 7, x0);
-    ev_set(glyphs, 20, g, 8, y0);
-    ev_set(glyphs, 20, g, 9, x1);
-    ev_set(glyphs, 20, g, 10, y1);
-    ev_set(glyphs, 20, g, 11, y1);
-    ev_set(glyphs, 20, g, 13, -1);
-    ev_set(glyphs, 20, g, 14, 1000);
-    ev_set(glyphs, 20, g, 18, -1);
-    ev_set(glyphs, 20, g, 19, -1);
-    return g;
+pub fn ep_new(mut c: &mut crate::port::Cells, v_page: i32, v_width: i32, v_height: i32) -> i32 {
+    // Append a row of epages: page width height; every other field is its default.
+    let r: i32 = ev_push(c, 12);
+    ev_set(c, 12, r, 0, v_page);
+    ev_set(c, 12, r, 1, v_width);
+    ev_set(c, 12, r, 2, v_height);
+    return r;
 }
-pub fn wd_count(words: &mut crate::port::Cells) -> i32 {
-    return ev_count(words, 16);
+pub fn vw_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 24);
 }
-pub fn wd_get(words: &mut crate::port::Cells, w: i32, f: i32) -> i32 {
-    return ev_get(words, 16, w, f);
+pub fn vw_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 24, i, f);
 }
-pub fn wd_set(mut words: &mut crate::port::Cells, w: i32, f: i32, v: i32) -> i32 {
-    return ev_set(words, 16, w, f, v);
+pub fn vw_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 24, i, f, v);
 }
-pub fn wd_new(mut words: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, gfirst: i32, gcount: i32) -> i32 {
-    // Append a word over a run of glyphs. Defaults: no text, in no line,
-    // source `text` (1), no confidence, no flags, no gap, font -1.
-    let w: i32 = ev_push(words, 16);
-    ev_set(words, 16, w, 0, page);
-    ev_set(words, 16, w, 1, x0);
-    ev_set(words, 16, w, 2, y0);
-    ev_set(words, 16, w, 3, x1);
-    ev_set(words, 16, w, 4, y1);
-    ev_set(words, 16, w, 5, gfirst);
-    ev_set(words, 16, w, 6, gcount);
-    ev_set(words, 16, w, 7, -1);
-    ev_set(words, 16, w, 9, -1);
-    ev_set(words, 16, w, 10, 1);
-    ev_set(words, 16, w, 11, -1);
-    ev_set(words, 16, w, 13, -1);
-    ev_set(words, 16, w, 14, -1);
-    return w;
+pub fn pt_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 3);
 }
-pub fn ln_count(lines: &mut crate::port::Cells) -> i32 {
-    return ev_count(lines, 12);
+pub fn pt_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 3, i, f);
 }
-pub fn ln_get(lines: &mut crate::port::Cells, l: i32, f: i32) -> i32 {
-    return ev_get(lines, 12, l, f);
+pub fn pt_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 3, i, f, v);
 }
-pub fn ln_set(mut lines: &mut crate::port::Cells, l: i32, f: i32, v: i32) -> i32 {
-    return ev_set(lines, 12, l, f, v);
+pub fn pt_new(mut c: &mut crate::port::Cells, v_x: i32, v_y: i32, v_op: i32) -> i32 {
+    // Append a row of pts: x y op; every other field is its default.
+    let r: i32 = ev_push(c, 3);
+    ev_set(c, 3, r, 0, v_x);
+    ev_set(c, 3, r, 1, v_y);
+    ev_set(c, 3, r, 2, v_op);
+    return r;
 }
-pub fn ln_new(mut lines: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, wfirst: i32, wcount: i32, baseline: i32) -> i32 {
-    // Append a line over a run of words. Defaults: left to right, no
-    // rotation, source `text` (1), no confidence.
-    let l: i32 = ev_push(lines, 12);
-    ev_set(lines, 12, l, 0, page);
-    ev_set(lines, 12, l, 1, x0);
-    ev_set(lines, 12, l, 2, y0);
-    ev_set(lines, 12, l, 3, x1);
-    ev_set(lines, 12, l, 4, y1);
-    ev_set(lines, 12, l, 5, wfirst);
-    ev_set(lines, 12, l, 6, wcount);
-    ev_set(lines, 12, l, 7, baseline);
-    ev_set(lines, 12, l, 10, 1);
-    ev_set(lines, 12, l, 11, -1);
-    return l;
+pub fn gl_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 32);
 }
-pub fn pa_count(paths: &mut crate::port::Cells) -> i32 {
-    return ev_count(paths, 16);
+pub fn gl_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 32, i, f);
 }
-pub fn pa_get(paths: &mut crate::port::Cells, p: i32, f: i32) -> i32 {
-    return ev_get(paths, 16, p, f);
+pub fn gl_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 32, i, f, v);
 }
-pub fn pa_set(mut paths: &mut crate::port::Cells, p: i32, f: i32, v: i32) -> i32 {
-    return ev_set(paths, 16, p, f, v);
+pub fn gl_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_cp: i32, v_tstart: i32, v_tlen: i32, v_word: i32) -> i32 {
+    // Append a row of glyphs: page x0 y0 x1 y1 cp tstart tlen word; every other field is its default.
+    let r: i32 = ev_push(c, 32);
+    ev_set(c, 32, r, 0, v_page);
+    ev_set(c, 32, r, 1, v_x0);
+    ev_set(c, 32, r, 2, v_y0);
+    ev_set(c, 32, r, 3, v_x1);
+    ev_set(c, 32, r, 4, v_y1);
+    ev_set(c, 32, r, 5, v_cp);
+    ev_set(c, 32, r, 6, v_tstart);
+    ev_set(c, 32, r, 7, v_tlen);
+    ev_set(c, 32, r, 8, v_word);
+    ev_set(c, 32, r, 16, 5);
+    ev_set(c, 32, r, 17, -1);
+    ev_set(c, 32, r, 20, -1);
+    ev_set(c, 32, r, 21, -1);
+    ev_set(c, 32, r, 22, 1000);
+    ev_set(c, 32, r, 23, 1000);
+    ev_set(c, 32, r, 24, -1);
+    ev_set(c, 32, r, 26, -1);
+    ev_set(c, 32, r, 27, -1);
+    ev_set(c, 32, r, 28, -1);
+    ev_set(c, 32, r, 30, -1);
+    ev_set(c, 32, r, 9, v_x0);
+    ev_set(c, 32, r, 10, v_y1);
+    ev_set(c, 32, r, 11, v_x1);
+    ev_set(c, 32, r, 12, v_y1);
+    return r;
 }
-pub fn pa_new(mut paths: &mut crate::port::Cells, page: i32, kind: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
-    // Append a vector path. Defaults: neither filled nor stroked, opaque,
-    // no flags, not an artifact, no marked-content id.
-    let p: i32 = ev_push(paths, 16);
-    ev_set(paths, 16, p, 0, page);
-    ev_set(paths, 16, p, 1, kind);
-    ev_set(paths, 16, p, 2, x0);
-    ev_set(paths, 16, p, 3, y0);
-    ev_set(paths, 16, p, 4, x1);
-    ev_set(paths, 16, p, 5, y1);
-    ev_set(paths, 16, p, 6, -1);
-    ev_set(paths, 16, p, 7, -1);
-    ev_set(paths, 16, p, 9, 1000);
-    ev_set(paths, 16, p, 12, -1);
-    return p;
+pub fn wd_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 24);
 }
-pub fn im_count(images: &mut crate::port::Cells) -> i32 {
-    return ev_count(images, 12);
+pub fn wd_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 24, i, f);
 }
-pub fn im_get(images: &mut crate::port::Cells, m: i32, f: i32) -> i32 {
-    return ev_get(images, 12, m, f);
+pub fn wd_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 24, i, f, v);
 }
-pub fn im_set(mut images: &mut crate::port::Cells, m: i32, f: i32, v: i32) -> i32 {
-    return ev_set(images, 12, m, f, v);
+pub fn wd_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_bx0: i32, v_by0: i32, v_bx1: i32, v_by1: i32, v_rot: i32, v_dir: i32, v_tstart: i32, v_tlen: i32, v_line: i32, v_conf: i32, v_feat: i32) -> i32 {
+    // Append a row of words: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+    let r: i32 = ev_push(c, 24);
+    ev_set(c, 24, r, 0, v_page);
+    ev_set(c, 24, r, 1, v_x0);
+    ev_set(c, 24, r, 2, v_y0);
+    ev_set(c, 24, r, 3, v_x1);
+    ev_set(c, 24, r, 4, v_y1);
+    ev_set(c, 24, r, 5, v_bx0);
+    ev_set(c, 24, r, 6, v_by0);
+    ev_set(c, 24, r, 7, v_bx1);
+    ev_set(c, 24, r, 8, v_by1);
+    ev_set(c, 24, r, 9, v_rot);
+    ev_set(c, 24, r, 10, v_dir);
+    ev_set(c, 24, r, 11, v_tstart);
+    ev_set(c, 24, r, 12, v_tlen);
+    ev_set(c, 24, r, 13, v_line);
+    ev_set(c, 24, r, 14, v_conf);
+    ev_set(c, 24, r, 15, v_feat);
+    ev_set(c, 24, r, 17, -1);
+    ev_set(c, 24, r, 19, -1);
+    ev_set(c, 24, r, 21, -1);
+    ev_set(c, 24, r, 23, 1);
+    return r;
 }
-pub fn im_new(mut images: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, obj: i32, pxw: i32, pxh: i32) -> i32 {
-    // Append an image placement. Defaults: opaque, no flags, not an
-    // artifact, no marked-content id.
-    let m: i32 = ev_push(images, 12);
-    ev_set(images, 12, m, 0, page);
-    ev_set(images, 12, m, 1, x0);
-    ev_set(images, 12, m, 2, y0);
-    ev_set(images, 12, m, 3, x1);
-    ev_set(images, 12, m, 4, y1);
-    ev_set(images, 12, m, 5, obj);
-    ev_set(images, 12, m, 6, pxw);
-    ev_set(images, 12, m, 7, pxh);
-    ev_set(images, 12, m, 8, 1000);
-    ev_set(images, 12, m, 11, -1);
-    return m;
+pub fn ln_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 16);
 }
-pub fn co_count(components: &mut crate::port::Cells) -> i32 {
-    return ev_count(components, 20);
+pub fn ln_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 16, i, f);
 }
-pub fn co_get(components: &mut crate::port::Cells, c: i32, f: i32) -> i32 {
-    return ev_get(components, 20, c, f);
+pub fn ln_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 16, i, f, v);
 }
-pub fn co_set(mut components: &mut crate::port::Cells, c: i32, f: i32, v: i32) -> i32 {
-    return ev_set(components, 20, c, f, v);
+pub fn ln_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_bx0: i32, v_by0: i32, v_bx1: i32, v_by1: i32, v_rot: i32, v_dir: i32, v_first: i32, v_count: i32) -> i32 {
+    // Append a row of lines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+    let r: i32 = ev_push(c, 16);
+    ev_set(c, 16, r, 0, v_page);
+    ev_set(c, 16, r, 1, v_x0);
+    ev_set(c, 16, r, 2, v_y0);
+    ev_set(c, 16, r, 3, v_x1);
+    ev_set(c, 16, r, 4, v_y1);
+    ev_set(c, 16, r, 5, v_bx0);
+    ev_set(c, 16, r, 6, v_by0);
+    ev_set(c, 16, r, 7, v_bx1);
+    ev_set(c, 16, r, 8, v_by1);
+    ev_set(c, 16, r, 9, v_rot);
+    ev_set(c, 16, r, 10, v_dir);
+    ev_set(c, 16, r, 11, v_first);
+    ev_set(c, 16, r, 12, v_count);
+    ev_set(c, 16, r, 13, 1);
+    ev_set(c, 16, r, 14, -1);
+    return r;
 }
-pub fn co_new(mut components: &mut crate::port::Cells, page: i32, kind: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
-    // Append a tracer component. Defaults: no pixel box, no ink
-    // statistics, colour none, layer -1, no confidence, no flags.
-    let c: i32 = ev_push(components, 20);
-    ev_set(components, 20, c, 0, page);
-    ev_set(components, 20, c, 1, x0);
-    ev_set(components, 20, c, 2, y0);
-    ev_set(components, 20, c, 3, x1);
-    ev_set(components, 20, c, 4, y1);
-    ev_set(components, 20, c, 12, -1);
-    ev_set(components, 20, c, 13, -1);
-    ev_set(components, 20, c, 14, kind);
-    ev_set(components, 20, c, 15, -1);
-    return c;
+pub fn mk_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 24);
 }
-pub fn ow_count(ocrwords: &mut crate::port::Cells) -> i32 {
-    return ev_count(ocrwords, 16);
+pub fn mk_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 24, i, f);
 }
-pub fn ow_get(ocrwords: &mut crate::port::Cells, w: i32, f: i32) -> i32 {
-    return ev_get(ocrwords, 16, w, f);
+pub fn mk_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 24, i, f, v);
 }
-pub fn ow_set(mut ocrwords: &mut crate::port::Cells, w: i32, f: i32, v: i32) -> i32 {
-    return ev_set(ocrwords, 16, w, f, v);
+pub fn mk_new(mut c: &mut crate::port::Cells, v_page: i32, v_kind: i32, v_tstart: i32, v_tlen: i32, v_parent: i32, v_gfirst: i32) -> i32 {
+    // Append a row of marks: page kind tstart tlen parent gfirst; every other field is its default.
+    let r: i32 = ev_push(c, 24);
+    ev_set(c, 24, r, 0, v_page);
+    ev_set(c, 24, r, 1, v_kind);
+    ev_set(c, 24, r, 2, v_tstart);
+    ev_set(c, 24, r, 3, v_tlen);
+    ev_set(c, 24, r, 4, v_parent);
+    ev_set(c, 24, r, 5, -1);
+    ev_set(c, 24, r, 8, -1);
+    ev_set(c, 24, r, 10, -1);
+    ev_set(c, 24, r, 12, -1);
+    ev_set(c, 24, r, 14, -1);
+    ev_set(c, 24, r, 16, -1);
+    ev_set(c, 24, r, 17, -1);
+    ev_set(c, 24, r, 18, v_gfirst);
+    ev_set(c, 24, r, 20, -1);
+    ev_set(c, 24, r, 21, -1);
+    return r;
 }
-pub fn ow_new(mut ocrwords: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, conf: i32) -> i32 {
-    // Append an OCR word with the engine's confidence (per-mille).
-    // Defaults: no text, no alternatives, line and block -1, pass 0,
-    // language -1.
-    let w: i32 = ev_push(ocrwords, 16);
-    ev_set(ocrwords, 16, w, 0, page);
-    ev_set(ocrwords, 16, w, 1, x0);
-    ev_set(ocrwords, 16, w, 2, y0);
-    ev_set(ocrwords, 16, w, 3, x1);
-    ev_set(ocrwords, 16, w, 4, y1);
-    ev_set(ocrwords, 16, w, 5, -1);
-    ev_set(ocrwords, 16, w, 7, conf);
-    ev_set(ocrwords, 16, w, 8, -1);
-    ev_set(ocrwords, 16, w, 10, -1);
-    ev_set(ocrwords, 16, w, 11, -1);
-    ev_set(ocrwords, 16, w, 15, -1);
-    return w;
+pub fn fo_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 16);
 }
-pub fn alt_count(alts: &mut crate::port::Cells) -> i32 {
-    return crate::port::cells_len(alts) / 4;
+pub fn fo_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 16, i, f);
 }
-pub fn alt_get(alts: &mut crate::port::Cells, a: i32, f: i32) -> i32 {
-    return ev_get(alts, 4, a, f);
+pub fn fo_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 16, i, f, v);
 }
-pub fn alt_add(mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, w: i32, sym: i32, cp: i32, conf: i32) -> i32 {
-    // Add an alternative reading to OCR word w: symbol `sym` (an index
-    // into the word's text) might instead be `cp`, at `conf`. They chain
-    // in the order added. Answers the alternative's index.
-    let a: i32 = crate::port::cells_len(alts) / 4;
-    let head: i32 = ev_get(ocrwords, 16, w, 8);
-    let cnt: i32 = ev_get(ocrwords, 16, w, 9);
-    let mut t: i32 = head;
-    crate::port::cells_push(alts, sym);
-    crate::port::cells_push(alts, cp);
-    crate::port::cells_push(alts, conf);
-    crate::port::cells_push(alts, -1);
-    if head < 0 {
-        ev_set(ocrwords, 16, w, 8, a);
-    } else {
-        while crate::port::cells_at(alts, (t * 4) + 3) >= 0 {
-            t = crate::port::cells_at(alts, (t * 4) + 3);
-        }
-        crate::port::cells_set(alts, (t * 4) + 3, a);
+pub fn fo_new(mut c: &mut crate::port::Cells, v_obj: i32, v_subtype: i32) -> i32 {
+    // Append a row of fonts: obj subtype; every other field is its default.
+    let r: i32 = ev_push(c, 16);
+    ev_set(c, 16, r, 0, v_obj);
+    ev_set(c, 16, r, 1, v_subtype);
+    ev_set(c, 16, r, 5, -1);
+    ev_set(c, 16, r, 6, -1);
+    ev_set(c, 16, r, 10, -1);
+    ev_set(c, 16, r, 12, -1);
+    return r;
+}
+pub fn pa_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 24);
+}
+pub fn pa_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 24, i, f);
+}
+pub fn pa_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 24, i, f, v);
+}
+pub fn pa_new(mut c: &mut crate::port::Cells, v_page: i32, v_kind: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32) -> i32 {
+    // Append a row of paths: page kind x0 y0 x1 y1; every other field is its default.
+    let r: i32 = ev_push(c, 24);
+    ev_set(c, 24, r, 0, v_page);
+    ev_set(c, 24, r, 1, v_kind);
+    ev_set(c, 24, r, 2, v_x0);
+    ev_set(c, 24, r, 3, v_y0);
+    ev_set(c, 24, r, 4, v_x1);
+    ev_set(c, 24, r, 5, v_y1);
+    ev_set(c, 24, r, 6, -1);
+    ev_set(c, 24, r, 7, -1);
+    ev_set(c, 24, r, 9, 1000);
+    ev_set(c, 24, r, 10, 1000);
+    ev_set(c, 24, r, 12, -1);
+    ev_set(c, 24, r, 13, -1);
+    ev_set(c, 24, r, 14, -1);
+    ev_set(c, 24, r, 15, -1);
+    ev_set(c, 24, r, 16, -1);
+    return r;
+}
+pub fn im_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 20);
+}
+pub fn im_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 20, i, f);
+}
+pub fn im_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 20, i, f, v);
+}
+pub fn im_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_obj: i32, v_pxw: i32, v_pxh: i32) -> i32 {
+    // Append a row of images: page x0 y0 x1 y1 obj pxw pxh; every other field is its default.
+    let r: i32 = ev_push(c, 20);
+    ev_set(c, 20, r, 0, v_page);
+    ev_set(c, 20, r, 1, v_x0);
+    ev_set(c, 20, r, 2, v_y0);
+    ev_set(c, 20, r, 3, v_x1);
+    ev_set(c, 20, r, 4, v_y1);
+    ev_set(c, 20, r, 5, v_obj);
+    ev_set(c, 20, r, 6, v_pxw);
+    ev_set(c, 20, r, 7, v_pxh);
+    ev_set(c, 20, r, 8, 1000);
+    ev_set(c, 20, r, 12, -1);
+    ev_set(c, 20, r, 13, -1);
+    ev_set(c, 20, r, 14, -1);
+    ev_set(c, 20, r, 15, -1);
+    ev_set(c, 20, r, 17, -1);
+    return r;
+}
+pub fn or_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 28);
+}
+pub fn or_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 28, i, f);
+}
+pub fn or_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 28, i, f, v);
+}
+pub fn or_new(mut c: &mut crate::port::Cells, v_page: i32, v_view: i32) -> i32 {
+    // Append a row of oruns: page view; every other field is its default.
+    let r: i32 = ev_push(c, 28);
+    ev_set(c, 28, r, 0, v_page);
+    ev_set(c, 28, r, 1, v_view);
+    ev_set(c, 28, r, 2, -1);
+    ev_set(c, 28, r, 3, -1);
+    ev_set(c, 28, r, 11, -1);
+    ev_set(c, 28, r, 17, -1);
+    ev_set(c, 28, r, 19, -1);
+    ev_set(c, 28, r, 20, -1);
+    return r;
+}
+pub fn ob_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 16);
+}
+pub fn ob_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 16, i, f);
+}
+pub fn ob_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 16, i, f, v);
+}
+pub fn ob_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_kind: i32, v_parent: i32, v_run: i32) -> i32 {
+    // Append a row of oblocks: page x0 y0 x1 y1 kind parent run; every other field is its default.
+    let r: i32 = ev_push(c, 16);
+    ev_set(c, 16, r, 0, v_page);
+    ev_set(c, 16, r, 1, v_x0);
+    ev_set(c, 16, r, 2, v_y0);
+    ev_set(c, 16, r, 3, v_x1);
+    ev_set(c, 16, r, 4, v_y1);
+    ev_set(c, 16, r, 5, v_kind);
+    ev_set(c, 16, r, 6, v_parent);
+    ev_set(c, 16, r, 7, v_run);
+    ev_set(c, 16, r, 11, -1);
+    ev_set(c, 16, r, 13, -1);
+    return r;
+}
+pub fn ol_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 24);
+}
+pub fn ol_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 24, i, f);
+}
+pub fn ol_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 24, i, f, v);
+}
+pub fn ol_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_bx0: i32, v_by0: i32, v_bx1: i32, v_by1: i32, v_rot: i32, v_dir: i32, v_first: i32, v_count: i32) -> i32 {
+    // Append a row of olines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+    let r: i32 = ev_push(c, 24);
+    ev_set(c, 24, r, 0, v_page);
+    ev_set(c, 24, r, 1, v_x0);
+    ev_set(c, 24, r, 2, v_y0);
+    ev_set(c, 24, r, 3, v_x1);
+    ev_set(c, 24, r, 4, v_y1);
+    ev_set(c, 24, r, 5, v_bx0);
+    ev_set(c, 24, r, 6, v_by0);
+    ev_set(c, 24, r, 7, v_bx1);
+    ev_set(c, 24, r, 8, v_by1);
+    ev_set(c, 24, r, 9, v_rot);
+    ev_set(c, 24, r, 10, v_dir);
+    ev_set(c, 24, r, 11, v_first);
+    ev_set(c, 24, r, 12, v_count);
+    ev_set(c, 24, r, 13, -1);
+    ev_set(c, 24, r, 14, -1);
+    ev_set(c, 24, r, 15, -1);
+    ev_set(c, 24, r, 16, -1);
+    ev_set(c, 24, r, 17, -1);
+    ev_set(c, 24, r, 18, -1);
+    return r;
+}
+pub fn ow_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 28);
+}
+pub fn ow_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 28, i, f);
+}
+pub fn ow_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 28, i, f, v);
+}
+pub fn ow_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_bx0: i32, v_by0: i32, v_bx1: i32, v_by1: i32, v_rot: i32, v_dir: i32, v_tstart: i32, v_tlen: i32, v_line: i32, v_conf: i32, v_feat: i32) -> i32 {
+    // Append a row of owords: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+    let r: i32 = ev_push(c, 28);
+    ev_set(c, 28, r, 0, v_page);
+    ev_set(c, 28, r, 1, v_x0);
+    ev_set(c, 28, r, 2, v_y0);
+    ev_set(c, 28, r, 3, v_x1);
+    ev_set(c, 28, r, 4, v_y1);
+    ev_set(c, 28, r, 5, v_bx0);
+    ev_set(c, 28, r, 6, v_by0);
+    ev_set(c, 28, r, 7, v_bx1);
+    ev_set(c, 28, r, 8, v_by1);
+    ev_set(c, 28, r, 9, v_rot);
+    ev_set(c, 28, r, 10, v_dir);
+    ev_set(c, 28, r, 11, v_tstart);
+    ev_set(c, 28, r, 12, v_tlen);
+    ev_set(c, 28, r, 13, v_line);
+    ev_set(c, 28, r, 14, v_conf);
+    ev_set(c, 28, r, 15, v_feat);
+    ev_set(c, 28, r, 17, -1);
+    ev_set(c, 28, r, 18, -1);
+    ev_set(c, 28, r, 22, -1);
+    return r;
+}
+pub fn os_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 20);
+}
+pub fn os_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 20, i, f);
+}
+pub fn os_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 20, i, f, v);
+}
+pub fn os_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_cp: i32, v_tstart: i32, v_tlen: i32, v_word: i32) -> i32 {
+    // Append a row of osyms: page x0 y0 x1 y1 cp tstart tlen word; every other field is its default.
+    let r: i32 = ev_push(c, 20);
+    ev_set(c, 20, r, 0, v_page);
+    ev_set(c, 20, r, 1, v_x0);
+    ev_set(c, 20, r, 2, v_y0);
+    ev_set(c, 20, r, 3, v_x1);
+    ev_set(c, 20, r, 4, v_y1);
+    ev_set(c, 20, r, 5, v_cp);
+    ev_set(c, 20, r, 6, v_tstart);
+    ev_set(c, 20, r, 7, v_tlen);
+    ev_set(c, 20, r, 8, v_word);
+    ev_set(c, 20, r, 9, -1);
+    ev_set(c, 20, r, 10, -1);
+    return r;
+}
+pub fn oa_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 4);
+}
+pub fn oa_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 4, i, f);
+}
+pub fn oa_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 4, i, f, v);
+}
+pub fn oa_new(mut c: &mut crate::port::Cells, v_sym: i32, v_tstart: i32, v_tlen: i32, v_conf: i32) -> i32 {
+    // Append a row of oalts: sym tstart tlen conf; every other field is its default.
+    let r: i32 = ev_push(c, 4);
+    ev_set(c, 4, r, 0, v_sym);
+    ev_set(c, 4, r, 1, v_tstart);
+    ev_set(c, 4, r, 2, v_tlen);
+    ev_set(c, 4, r, 3, v_conf);
+    return r;
+}
+pub fn ik_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 12);
+}
+pub fn ik_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 12, i, f);
+}
+pub fn ik_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 12, i, f, v);
+}
+pub fn ik_new(mut c: &mut crate::port::Cells, v_page: i32, v_view: i32) -> i32 {
+    // Append a row of inks: page view; every other field is its default.
+    let r: i32 = ev_push(c, 12);
+    ev_set(c, 12, r, 0, v_page);
+    ev_set(c, 12, r, 1, v_view);
+    ev_set(c, 12, r, 2, -1);
+    ev_set(c, 12, r, 7, -1);
+    return r;
+}
+pub fn co_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 24);
+}
+pub fn co_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 24, i, f);
+}
+pub fn co_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 24, i, f, v);
+}
+pub fn co_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_kind: i32) -> i32 {
+    // Append a row of components: page x0 y0 x1 y1 kind; every other field is its default.
+    let r: i32 = ev_push(c, 24);
+    ev_set(c, 24, r, 0, v_page);
+    ev_set(c, 24, r, 1, v_x0);
+    ev_set(c, 24, r, 2, v_y0);
+    ev_set(c, 24, r, 3, v_x1);
+    ev_set(c, 24, r, 4, v_y1);
+    ev_set(c, 24, r, 5, -1);
+    ev_set(c, 24, r, 13, -1);
+    ev_set(c, 24, r, 14, -1);
+    ev_set(c, 24, r, 15, v_kind);
+    ev_set(c, 24, r, 16, -1);
+    ev_set(c, 24, r, 18, -1);
+    ev_set(c, 24, r, 20, -1);
+    ev_set(c, 24, r, 22, -1);
+    return r;
+}
+pub fn rl_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 20);
+}
+pub fn rl_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 20, i, f);
+}
+pub fn rl_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 20, i, f, v);
+}
+pub fn rl_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_view: i32) -> i32 {
+    // Append a row of rules: page x0 y0 x1 y1 view; every other field is its default.
+    let r: i32 = ev_push(c, 20);
+    ev_set(c, 20, r, 0, v_page);
+    ev_set(c, 20, r, 1, v_x0);
+    ev_set(c, 20, r, 2, v_y0);
+    ev_set(c, 20, r, 3, v_x1);
+    ev_set(c, 20, r, 4, v_y1);
+    ev_set(c, 20, r, 5, v_view);
+    ev_set(c, 20, r, 11, -1);
+    ev_set(c, 20, r, 12, -1);
+    ev_set(c, 20, r, 14, -1);
+    ev_set(c, 20, r, 15, -1);
+    return r;
+}
+pub fn pm_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 24);
+}
+pub fn pm_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 24, i, f);
+}
+pub fn pm_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 24, i, f, v);
+}
+pub fn pm_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_kind: i32) -> i32 {
+    // Append a row of prims: page x0 y0 x1 y1 kind; every other field is its default.
+    let r: i32 = ev_push(c, 24);
+    ev_set(c, 24, r, 0, v_page);
+    ev_set(c, 24, r, 1, v_x0);
+    ev_set(c, 24, r, 2, v_y0);
+    ev_set(c, 24, r, 3, v_x1);
+    ev_set(c, 24, r, 4, v_y1);
+    ev_set(c, 24, r, 5, -1);
+    ev_set(c, 24, r, 6, v_kind);
+    ev_set(c, 24, r, 13, -1);
+    ev_set(c, 24, r, 14, -1);
+    ev_set(c, 24, r, 16, -1);
+    ev_set(c, 24, r, 17, -1);
+    ev_set(c, 24, r, 19, -1);
+    return r;
+}
+pub fn tl_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 20);
+}
+pub fn tl_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 20, i, f);
+}
+pub fn tl_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 20, i, f, v);
+}
+pub fn tl_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32, v_x1: i32, v_y1: i32, v_bx0: i32, v_by0: i32, v_bx1: i32, v_by1: i32, v_rot: i32, v_dir: i32, v_first: i32, v_count: i32) -> i32 {
+    // Append a row of tlines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+    let r: i32 = ev_push(c, 20);
+    ev_set(c, 20, r, 0, v_page);
+    ev_set(c, 20, r, 1, v_x0);
+    ev_set(c, 20, r, 2, v_y0);
+    ev_set(c, 20, r, 3, v_x1);
+    ev_set(c, 20, r, 4, v_y1);
+    ev_set(c, 20, r, 5, v_bx0);
+    ev_set(c, 20, r, 6, v_by0);
+    ev_set(c, 20, r, 7, v_bx1);
+    ev_set(c, 20, r, 8, v_by1);
+    ev_set(c, 20, r, 9, v_rot);
+    ev_set(c, 20, r, 10, v_dir);
+    ev_set(c, 20, r, 11, v_first);
+    ev_set(c, 20, r, 12, v_count);
+    ev_set(c, 20, r, 13, -1);
+    ev_set(c, 20, r, 16, -1);
+    return r;
+}
+pub(crate) fn ev_ratio(lo: i32, hi: i32) -> i32 {
+    // round(1024 * lo / hi) for 0 <= lo <= hi, hi > 0 (half up), in 64 bits.
+    return (((lo as i64).wrapping_mul(2048 as i64)).wrapping_add(hi as i64) / (hi as i64).wrapping_mul(2 as i64)) as i32;
+}
+pub fn ev_angle(dx: i32, dy: i32) -> i32 {
+    // The angle of the vector (dx, dy), in page space (y DOWN), in centi-degrees
+    // counter-clockwise AS DISPLAYED, in [0, 36000): integer atan2 of (dx, -dy) by octant
+    // reduction and the table of atan(i/1024), i = round(1024 * min / max); the error is
+    // under 0.03 degree and exact at every multiple of 45. The zero vector is 0. Every source
+    // spells `rot` with this and nothing else (SPEC 8.4.1).
+    let mut x: i32 = dx;
+    let mut y: i32 = dy;
+    let mut ax: i32 = 0;
+    let mut ay: i32 = 0;
+    let mut t: i32 = 0;
+    let mut a: i32 = 0;
+    if x == -2147483648 {
+        x = -2147483647;
     }
-    ev_set(ocrwords, 16, w, 9, cnt + 1);
+    if y == -2147483648 {
+        y = -2147483647;
+    }
+    y = 0 - y;
+    ax = x;
+    if ax < 0 {
+        ax = 0 - ax;
+    }
+    ay = y;
+    if ay < 0 {
+        ay = 0 - ay;
+    }
+    if (ax == 0) && (ay == 0) {
+        return 0;
+    }
+    if ay <= ax {
+        t = EV_ATAN[(ev_ratio(ay, ax)) as usize];
+    } else {
+        t = 9000 - EV_ATAN[(ev_ratio(ax, ay)) as usize];
+    }
+    if (x >= 0) && (y >= 0) {
+        a = t;
+    }
+    if (x < 0) && (y >= 0) {
+        a = 18000 - t;
+    }
+    if (x < 0) && (y < 0) {
+        a = 18000 + t;
+    }
+    if (x >= 0) && (y < 0) {
+        a = 36000 - t;
+    }
+    if a >= 36000 {
+        a -= 36000;
+    }
     return a;
 }
-pub fn sp_count(spans: &mut crate::port::Cells) -> i32 {
-    return ev_count(spans, 22);
+pub fn ev_sin(cdeg: i32) -> i32 {
+    // sin of an angle in centi-degrees, in 16.16 (65536 is 1): a generated table over 0..9000
+    // and the symmetries, for any integer angle.
+    let mut a: i32 = cdeg % 36000;
+    if a < 0 {
+        a += 36000;
+    }
+    if a <= 9000 {
+        return EV_SIN_TAB[(a) as usize];
+    }
+    if a <= 18000 {
+        return EV_SIN_TAB[(18000 - a) as usize];
+    }
+    if a <= 27000 {
+        return 0 - EV_SIN_TAB[(a - 18000) as usize];
+    }
+    return 0 - EV_SIN_TAB[(36000 - a) as usize];
 }
-pub fn sp_get(spans: &mut crate::port::Cells, s: i32, f: i32) -> i32 {
-    return ev_get(spans, 22, s, f);
+pub fn ev_cos(cdeg: i32) -> i32 {
+    // cos of an angle in centi-degrees, in 16.16.
+    return ev_sin((cdeg % 36000) + 9000);
 }
-pub fn sp_set(mut spans: &mut crate::port::Cells, s: i32, f: i32, v: i32) -> i32 {
-    return ev_set(spans, 22, s, f, v);
+pub fn ev_floordiv(a: i64, b: i64) -> i64 {
+    // a / b rounded toward minus infinity, for b > 0 (`quot` truncates toward zero).
+    let q: i64 = a / b;
+    if (a - (q).wrapping_mul(b)) < (0 as i64) {
+        return q - (1 as i64);
+    }
+    return q;
 }
-pub fn sp_new(mut spans: &mut crate::port::Cells, page: i32, tag: i32, taglen: i32, parent: i32, gfirst: i32) -> i32 {
-    // Append a marked-content span opened at glyph `gfirst`. Defaults: no
-    // MCID, not an artifact, no strings, no glyphs yet, no flags, the page's
-    // own content stream.
-    let s: i32 = ev_push(spans, 22);
-    ev_set(spans, 22, s, 0, page);
-    ev_set(spans, 22, s, 1, tag);
-    ev_set(spans, 22, s, 2, taglen);
-    ev_set(spans, 22, s, 3, parent);
-    ev_set(spans, 22, s, 4, -1);
-    ev_set(spans, 22, s, 6, -1);
-    ev_set(spans, 22, s, 8, -1);
-    ev_set(spans, 22, s, 10, -1);
-    ev_set(spans, 22, s, 12, -1);
-    ev_set(spans, 22, s, 14, -1);
-    ev_set(spans, 22, s, 16, -1);
-    ev_set(spans, 22, s, 18, gfirst);
-    return s;
+pub(crate) fn ev_round16(v: i64) -> i64 {
+    // floor((v + 2^15) / 2^16): a 16.16 value to the nearest integer, halves up (D096).
+    return ev_floordiv((v).wrapping_add(32768 as i64), 65536 as i64);
+}
+pub fn ev_overlap_small(ax0: i32, ay0: i32, ax1: i32, ay1: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
+    // Intersection area over the SMALLER box's area, per-mille; 0 when they miss or the smaller is empty.
+    let mut x0: i32 = ax0;
+    let mut y0: i32 = ay0;
+    let mut x1: i32 = ax1;
+    let mut y1: i32 = ay1;
+    if bx0 > x0 {
+        x0 = bx0;
+    }
+    if by0 > y0 {
+        y0 = by0;
+    }
+    if bx1 < x1 {
+        x1 = bx1;
+    }
+    if by1 < y1 {
+        y1 = by1;
+    }
+    if (x0 >= x1) || (y0 >= y1) {
+        return 0;
+    }
+    let inter: i64 = ((x1 - x0) as i64).wrapping_mul((y1 - y0) as i64);
+    let areaa: i64 = ((ax1 - ax0) as i64).wrapping_mul((ay1 - ay0) as i64);
+    let areab: i64 = ((bx1 - bx0) as i64).wrapping_mul((by1 - by0) as i64);
+    let mut small: i64 = areaa;
+    if areab < small {
+        small = areab;
+    }
+    if small <= (0 as i64) {
+        return 0;
+    }
+    return ((inter).wrapping_mul(1000 as i64) / small) as i32;
+}
+pub fn ev_baseline_at(bx0: i32, by0: i32, bx1: i32, by1: i32, x: i32) -> i32 {
+    // The segment's y at x, by integer interpolation (truncating); a vertical segment answers by1.
+    if bx1 <= bx0 {
+        return by1;
+    }
+    return by0 + ((((by1 - by0) as i64).wrapping_mul((x - bx0) as i64) / ((bx1 - bx0) as i64)) as i32);
+}
+pub fn rf_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 2);
+}
+pub fn rf_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 2, i, f);
+}
+pub fn rf_add(mut c: &mut crate::port::Cells, ea: i32, index: i32) -> i32 {
+    // Append a reference `(ea, index)` to any row of any arena; answers its row.
+    let r: i32 = ev_push(c, 2);
+    ev_set(c, 2, r, 0, ea);
+    ev_set(c, 2, r, 1, index);
+    return r;
+}
+pub fn fe_count(c: &mut crate::port::Cells) -> i32 {
+    return ev_count(c, 32);
+}
+pub fn fe_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return ev_get(c, 32, i, f);
+}
+pub fn fe_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    return ev_set(c, 32, i, f, v);
+}
+pub fn fe_new(mut c: &mut crate::port::Cells, ea: i32, index: i32) -> i32 {
+    // Append a feature row for the word at `(ea, index)`, every column -1 (not computed yet).
+    let r: i32 = ev_push(c, 32);
+    let mut k: i32 = 2;
+    ev_set(c, 32, r, 0, ea);
+    ev_set(c, 32, r, 1, index);
+    while k < 32 {
+        ev_set(c, 32, r, k, -1);
+        k += 1;
+    }
+    return r;
+}
+pub fn oa_add(mut oalts: &mut crate::port::Cells, sym: i32, tstart: i32, tlen: i32, conf: i32) -> i32 {
+    // Append an alternative of symbol `sym`. A symbol's alternatives are a run, so they must all be
+    // added before the next symbol's are (and the symbol's `afirst acount` set to the run);
+    // `ev-check` holds it by asking every alternative to lie in its symbol's run.
+    let r: i32 = ev_push(oalts, 4);
+    ev_set(oalts, 4, r, 0, sym);
+    ev_set(oalts, 4, r, 1, tstart);
+    ev_set(oalts, 4, r, 2, tlen);
+    ev_set(oalts, 4, r, 3, conf);
+    return r;
+}
+pub fn mk_open(mut marks: &mut crate::port::Cells, page: i32, kind: i32, tstart: i32, tlen: i32, parent: i32, gfirst: i32, zfirst: i32) -> i32 {
+    // Open a marked-content row (the caller keeps the stack of open rows: the `parent` it passes is
+    // the innermost open one, -1 at the top). `gfirst` is the next glyph, `zfirst` the next paint
+    // number. Answers the row. `mk-close` fills `gcount` and `zlast`.
+    let r: i32 = mk_new(marks, page, kind, tstart, tlen, parent, gfirst);
+    ev_set(marks, 24, r, 20, zfirst);
+    return r;
+}
+pub fn mk_close(mut marks: &mut crate::port::Cells, row: i32, gnext: i32, znext: i32) -> i32 {
+    // Close the row: `gnext` the next glyph index and `znext` the next paint number AT THE CLOSE.
+    // `gcount` = `gnext` - `gfirst`; `zlast` = `znext` - 1 (so a span that painted nothing has
+    // `zlast` < `zfirst`).
+    let gfirst: i32 = ev_get(marks, 24, row, 18);
+    ev_set(marks, 24, row, 19, gnext - gfirst);
+    ev_set(marks, 24, row, 21, znext - 1);
+    return 0;
+}
+pub fn mk_artifact_of(marks: &mut crate::port::Cells, mark: i32) -> i32 {
+    // The nearest artifact row on `mark`'s chain (itself, then its parents): its `/Type` * 16 +
+    // its `/Subtype`, packed; 0 when none of the chain is an artifact. (SPEC 9.5 defence 1.)
+    let mut t: i32 = mark;
+    while t >= 0 {
+        if ev_get(marks, 24, t, 1) == 1 {
+            return (ev_get(marks, 24, t, 6) * 16) + ev_get(marks, 24, t, 7);
+        }
+        t = ev_get(marks, 24, t, 4);
+    }
+    return 0;
+}
+pub fn mk_artifact_class(kind: i32, ty: i32, su: i32) -> i32 {
+    // D101's artifact class of a mark row, from its kind, /Type and /Subtype codes: 0 when it is not an
+    // /Artifact; else `watermark` (the subtype), `background`, `pagination` (the type, or the subtype
+    // header or footer), `layout`, else `other`. What v0 stored in a glyph's `artifact`.
+    if kind != 1 {
+        return 0;
+    }
+    if su == 3 {
+        return ar_watermark();
+    }
+    if ty == 4 {
+        return ar_background();
+    }
+    if (ty == 1) || ((su == 1) || (su == 2)) {
+        return ar_pagination();
+    }
+    if ty == 3 {
+        return ar_layout();
+    }
+    return ar_other();
+}
+pub fn mk_ocg_of(marks: &mut crate::port::Cells, mark: i32) -> i32 {
+    // The innermost optional-content row on `mark`'s chain, -1 when none.
+    let mut t: i32 = mark;
+    while t >= 0 {
+        if ev_get(marks, 24, t, 1) == 2 {
+            return t;
+        }
+        t = ev_get(marks, 24, t, 4);
+    }
+    return -1;
+}
+pub fn vw_new(mut views: &mut crate::port::Cells, page: i32, kind: i32, request: i32, parent: i32, pxw: i32, pxh: i32, dpi100: i32, layer: i32, ink: i32, turns: i32, deskew: i32, cropx: i32, cropy: i32, flags: i32) -> i32 {
+    // Append a view (SPEC 8.4.2) and compute its transform ONCE, from the integer parameters, so every
+    // reader uses the same numbers. The raster shows the page region whose top-left is (cropx, cropy)
+    // centipoints, turned `turns` quarter turns CLOCKWISE (as displayed) and its rows rotated `deskew`
+    // centi-degrees counter-clockwise; `dpi100` is the resolution x100. px -> cpt is
+    // x = e + (a*px + c*py) / 2^16, y = f + (b*px + d*py) / 2^16 (16.16 a b c d, e f centipoints), its
+    // inverse px = (a'*dx + c'*dy) / 2^16, py = (b'*dx + d'*dy) / 2^16 with dx, dy from (e, f): stored at
+    // `vwf-ia..id`. The scale is 720000 * 65536 / dpi100 in 64 bits; the quarter turns are exact; the
+    // deskew is `ev-cos`/`ev-sin`. There is NO rounding at all at 72, 96, 150, 200, 300, 400 and 600 dpi
+    // with no deskew.
+    let r: i32 = ev_push(views, 24);
+    let mut dpi: i32 = dpi100;
+    let mut q: i32 = turns % 4;
+    let mut xx: i32 = 1;
+    let mut xy: i32 = 0;
+    let mut yx: i32 = 0;
+    let mut yy: i32 = 1;
+    if dpi < 1 {
+        dpi = 7200;
+    }
+    if q < 0 {
+        q += 4;
+    }
+    if q == 1 {
+        xx = 0;
+        xy = -1;
+        yx = 1;
+        yy = 0;
+    }
+    if q == 2 {
+        xx = -1;
+        xy = 0;
+        yx = 0;
+        yy = -1;
+    }
+    if q == 3 {
+        xx = 0;
+        xy = 1;
+        yx = -1;
+        yy = 0;
+    }
+    let s16: i64 = ((1440000 as i64).wrapping_mul(65536 as i64)).wrapping_add(dpi as i64) / (2 as i64).wrapping_mul(dpi as i64);
+    let co: i32 = ev_cos(deskew);
+    let si: i32 = ev_sin(deskew);
+    let ux: i32 = (xx * co) + (xy * si);
+    let uy: i32 = (xy * co) + (0 - (xx * si));
+    let vx: i32 = (yx * co) + (yy * si);
+    let vy: i32 = (yy * co) + (0 - (yx * si));
+    // 16.16 unit vectors of the raster's x and y axes in page space: (ux, uy) and (vx, vy).
+    ev_set(views, 24, r, 0, page);
+    ev_set(views, 24, r, 1, kind);
+    ev_set(views, 24, r, 2, request);
+    ev_set(views, 24, r, 3, parent);
+    ev_set(views, 24, r, 4, pxw);
+    ev_set(views, 24, r, 5, pxh);
+    ev_set(views, 24, r, 6, dpi100);
+    ev_set(views, 24, r, 7, layer);
+    ev_set(views, 24, r, 8, ink);
+    ev_set(views, 24, r, 9, turns);
+    ev_set(views, 24, r, 10, deskew);
+    ev_set(views, 24, r, 11, cropx);
+    ev_set(views, 24, r, 12, cropy);
+    ev_set(views, 24, r, 13, ev_round16((s16).wrapping_mul(ux as i64)) as i32);
+    ev_set(views, 24, r, 14, ev_round16((s16).wrapping_mul(uy as i64)) as i32);
+    ev_set(views, 24, r, 15, ev_round16((s16).wrapping_mul(vx as i64)) as i32);
+    ev_set(views, 24, r, 16, ev_round16((s16).wrapping_mul(vy as i64)) as i32);
+    // The inverse of a rotation times a scale is its transpose over the scale squared.
+    ev_set(views, 24, r, 19, ev_floordiv(((ux as i64).wrapping_mul(65536 as i64)).wrapping_add(s16 / (2 as i64)), s16) as i32);
+    ev_set(views, 24, r, 20, ev_floordiv(((vx as i64).wrapping_mul(65536 as i64)).wrapping_add(s16 / (2 as i64)), s16) as i32);
+    ev_set(views, 24, r, 21, ev_floordiv(((uy as i64).wrapping_mul(65536 as i64)).wrapping_add(s16 / (2 as i64)), s16) as i32);
+    ev_set(views, 24, r, 22, ev_floordiv(((vy as i64).wrapping_mul(65536 as i64)).wrapping_add(s16 / (2 as i64)), s16) as i32);
+    ev_set(views, 24, r, 23, flags);
+    // The page position of pixel (0, 0): a corner of the region, by the quarter turns.
+    let wcpt: i32 = ev_round16((s16).wrapping_mul(pxw as i64)) as i32;
+    let hcpt: i32 = ev_round16((s16).wrapping_mul(pxh as i64)) as i32;
+    let mut e: i32 = cropx;
+    let mut f: i32 = cropy;
+    if q == 1 {
+        f = cropy + wcpt;
+    }
+    if q == 2 {
+        e = cropx + wcpt;
+        f = cropy + hcpt;
+    }
+    if q == 3 {
+        e = cropx + hcpt;
+    }
+    ev_set(views, 24, r, 17, e);
+    ev_set(views, 24, r, 18, f);
+    return r;
+}
+pub fn vw_px_to_cpt(views: &mut crate::port::Cells, v: i32, axis: i32, px: i32, py: i32) -> i32 {
+    // A pixel position of view `v` as page space: `axis` 0 the x, 1 the y, in centipoints (64-bit
+    // arithmetic, round half up with FLOOR division, D096).
+    if axis == 0 {
+        return ev_get(views, 24, v, 17) + (ev_round16(((ev_get(views, 24, v, 13) as i64).wrapping_mul(px as i64)).wrapping_add((ev_get(views, 24, v, 15) as i64).wrapping_mul(py as i64))) as i32);
+    }
+    return ev_get(views, 24, v, 18) + (ev_round16(((ev_get(views, 24, v, 14) as i64).wrapping_mul(px as i64)).wrapping_add((ev_get(views, 24, v, 16) as i64).wrapping_mul(py as i64))) as i32);
+}
+pub fn vw_cpt_to_px(views: &mut crate::port::Cells, v: i32, axis: i32, x: i32, y: i32) -> i32 {
+    // A page position as a pixel of view `v` (the inverse; `axis` 0 the x, 1 the y).
+    let dx: i64 = (x - ev_get(views, 24, v, 17)) as i64;
+    let dy: i64 = (y - ev_get(views, 24, v, 18)) as i64;
+    if axis == 0 {
+        return ev_round16(((ev_get(views, 24, v, 19) as i64).wrapping_mul(dx)).wrapping_add((ev_get(views, 24, v, 21) as i64).wrapping_mul(dy))) as i32;
+    }
+    return ev_round16(((ev_get(views, 24, v, 20) as i64).wrapping_mul(dx)).wrapping_add((ev_get(views, 24, v, 22) as i64).wrapping_mul(dy))) as i32;
+}
+pub fn vw_box_to_cpt(views: &mut crate::port::Cells, v: i32, k: i32, px: i32, py: i32, pw: i32, ph: i32) -> i32 {
+    // The page box of a pixel box `x y w h` of view `v`: the four corners mapped, the smallest box
+    // around them. `k` picks the answer: 0 x0, 1 y0, 2 x1, 3 y1.
+    let xa: i32 = vw_px_to_cpt(views, v, 0, px, py);
+    let xb: i32 = vw_px_to_cpt(views, v, 0, px + pw, py);
+    let xc: i32 = vw_px_to_cpt(views, v, 0, px, py + ph);
+    let xd: i32 = vw_px_to_cpt(views, v, 0, px + pw, py + ph);
+    let ya: i32 = vw_px_to_cpt(views, v, 1, px, py);
+    let yb: i32 = vw_px_to_cpt(views, v, 1, px + pw, py);
+    let yc: i32 = vw_px_to_cpt(views, v, 1, px, py + ph);
+    let yd: i32 = vw_px_to_cpt(views, v, 1, px + pw, py + ph);
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 0;
+    if k == 0 {
+        lo = xa;
+        if xb < lo {
+            lo = xb;
+        }
+        if xc < lo {
+            lo = xc;
+        }
+        if xd < lo {
+            lo = xd;
+        }
+        return lo;
+    }
+    if k == 1 {
+        lo = ya;
+        if yb < lo {
+            lo = yb;
+        }
+        if yc < lo {
+            lo = yc;
+        }
+        if yd < lo {
+            lo = yd;
+        }
+        return lo;
+    }
+    if k == 2 {
+        hi = xa;
+        if xb > hi {
+            hi = xb;
+        }
+        if xc > hi {
+            hi = xc;
+        }
+        if xd > hi {
+            hi = xd;
+        }
+        return hi;
+    }
+    hi = ya;
+    if yb > hi {
+        hi = yb;
+    }
+    if yc > hi {
+        hi = yc;
+    }
+    if yd > hi {
+        hi = yd;
+    }
+    return hi;
+}
+pub fn ev_len(ea: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // The number of cells of arena `ea` (its `ea` code, SPEC 8.4.6); 0 for a code that is none.
+    if ea == 1 {
+        return crate::port::cells_len(epages);
+    }
+    if ea == 2 {
+        return crate::port::cells_len(views);
+    }
+    if ea == 3 {
+        return crate::port::cells_len(pts);
+    }
+    if ea == 4 {
+        return crate::port::cells_len(refs);
+    }
+    if ea == 5 {
+        return crate::port::cells_len(etext);
+    }
+    if ea == 6 {
+        return crate::port::cells_len(feats);
+    }
+    if ea == 7 {
+        return crate::port::cells_len(glyphs);
+    }
+    if ea == 8 {
+        return crate::port::cells_len(words);
+    }
+    if ea == 9 {
+        return crate::port::cells_len(lines);
+    }
+    if ea == 10 {
+        return crate::port::cells_len(marks);
+    }
+    if ea == 11 {
+        return crate::port::cells_len(fonts);
+    }
+    if ea == 12 {
+        return crate::port::cells_len(paths);
+    }
+    if ea == 13 {
+        return crate::port::cells_len(images);
+    }
+    if ea == 14 {
+        return crate::port::cells_len(oruns);
+    }
+    if ea == 15 {
+        return crate::port::cells_len(oblocks);
+    }
+    if ea == 16 {
+        return crate::port::cells_len(olines);
+    }
+    if ea == 17 {
+        return crate::port::cells_len(owords);
+    }
+    if ea == 18 {
+        return crate::port::cells_len(osyms);
+    }
+    if ea == 19 {
+        return crate::port::cells_len(oalts);
+    }
+    if ea == 20 {
+        return crate::port::cells_len(inks);
+    }
+    if ea == 21 {
+        return crate::port::cells_len(components);
+    }
+    if ea == 22 {
+        return crate::port::cells_len(rules);
+    }
+    if ea == 23 {
+        return crate::port::cells_len(prims);
+    }
+    if ea == 24 {
+        return crate::port::cells_len(tlines);
+    }
+    return 0;
+}
+pub fn ev_peek(ea: i32, row: i32, f: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // Cell `f` of row `row` of arena `ea`.
+    if ea == 1 {
+        return crate::port::cells_at(epages, (row * 12) + f);
+    }
+    if ea == 2 {
+        return crate::port::cells_at(views, (row * 24) + f);
+    }
+    if ea == 3 {
+        return crate::port::cells_at(pts, (row * 3) + f);
+    }
+    if ea == 4 {
+        return crate::port::cells_at(refs, (row * 2) + f);
+    }
+    if ea == 5 {
+        return crate::port::cells_at(etext, (row * 1) + f);
+    }
+    if ea == 6 {
+        return crate::port::cells_at(feats, (row * 32) + f);
+    }
+    if ea == 7 {
+        return crate::port::cells_at(glyphs, (row * 32) + f);
+    }
+    if ea == 8 {
+        return crate::port::cells_at(words, (row * 24) + f);
+    }
+    if ea == 9 {
+        return crate::port::cells_at(lines, (row * 16) + f);
+    }
+    if ea == 10 {
+        return crate::port::cells_at(marks, (row * 24) + f);
+    }
+    if ea == 11 {
+        return crate::port::cells_at(fonts, (row * 16) + f);
+    }
+    if ea == 12 {
+        return crate::port::cells_at(paths, (row * 24) + f);
+    }
+    if ea == 13 {
+        return crate::port::cells_at(images, (row * 20) + f);
+    }
+    if ea == 14 {
+        return crate::port::cells_at(oruns, (row * 28) + f);
+    }
+    if ea == 15 {
+        return crate::port::cells_at(oblocks, (row * 16) + f);
+    }
+    if ea == 16 {
+        return crate::port::cells_at(olines, (row * 24) + f);
+    }
+    if ea == 17 {
+        return crate::port::cells_at(owords, (row * 28) + f);
+    }
+    if ea == 18 {
+        return crate::port::cells_at(osyms, (row * 20) + f);
+    }
+    if ea == 19 {
+        return crate::port::cells_at(oalts, (row * 4) + f);
+    }
+    if ea == 20 {
+        return crate::port::cells_at(inks, (row * 12) + f);
+    }
+    if ea == 21 {
+        return crate::port::cells_at(components, (row * 24) + f);
+    }
+    if ea == 22 {
+        return crate::port::cells_at(rules, (row * 20) + f);
+    }
+    if ea == 23 {
+        return crate::port::cells_at(prims, (row * 24) + f);
+    }
+    if ea == 24 {
+        return crate::port::cells_at(tlines, (row * 20) + f);
+    }
+    return 0;
+}
+pub fn ev_poke(ea: i32, row: i32, f: i32, v: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // Set cell `f` of row `row` of arena `ea` to `v` (the laws break a page with it).
+    if ea == 1 {
+        crate::port::cells_set(epages, (row * 12) + f, v);
+        return 0;
+    }
+    if ea == 2 {
+        crate::port::cells_set(views, (row * 24) + f, v);
+        return 0;
+    }
+    if ea == 3 {
+        crate::port::cells_set(pts, (row * 3) + f, v);
+        return 0;
+    }
+    if ea == 4 {
+        crate::port::cells_set(refs, (row * 2) + f, v);
+        return 0;
+    }
+    if ea == 5 {
+        crate::port::cells_set(etext, (row * 1) + f, v);
+        return 0;
+    }
+    if ea == 6 {
+        crate::port::cells_set(feats, (row * 32) + f, v);
+        return 0;
+    }
+    if ea == 7 {
+        crate::port::cells_set(glyphs, (row * 32) + f, v);
+        return 0;
+    }
+    if ea == 8 {
+        crate::port::cells_set(words, (row * 24) + f, v);
+        return 0;
+    }
+    if ea == 9 {
+        crate::port::cells_set(lines, (row * 16) + f, v);
+        return 0;
+    }
+    if ea == 10 {
+        crate::port::cells_set(marks, (row * 24) + f, v);
+        return 0;
+    }
+    if ea == 11 {
+        crate::port::cells_set(fonts, (row * 16) + f, v);
+        return 0;
+    }
+    if ea == 12 {
+        crate::port::cells_set(paths, (row * 24) + f, v);
+        return 0;
+    }
+    if ea == 13 {
+        crate::port::cells_set(images, (row * 20) + f, v);
+        return 0;
+    }
+    if ea == 14 {
+        crate::port::cells_set(oruns, (row * 28) + f, v);
+        return 0;
+    }
+    if ea == 15 {
+        crate::port::cells_set(oblocks, (row * 16) + f, v);
+        return 0;
+    }
+    if ea == 16 {
+        crate::port::cells_set(olines, (row * 24) + f, v);
+        return 0;
+    }
+    if ea == 17 {
+        crate::port::cells_set(owords, (row * 28) + f, v);
+        return 0;
+    }
+    if ea == 18 {
+        crate::port::cells_set(osyms, (row * 20) + f, v);
+        return 0;
+    }
+    if ea == 19 {
+        crate::port::cells_set(oalts, (row * 4) + f, v);
+        return 0;
+    }
+    if ea == 20 {
+        crate::port::cells_set(inks, (row * 12) + f, v);
+        return 0;
+    }
+    if ea == 21 {
+        crate::port::cells_set(components, (row * 24) + f, v);
+        return 0;
+    }
+    if ea == 22 {
+        crate::port::cells_set(rules, (row * 20) + f, v);
+        return 0;
+    }
+    if ea == 23 {
+        crate::port::cells_set(prims, (row * 24) + f, v);
+        return 0;
+    }
+    if ea == 24 {
+        crate::port::cells_set(tlines, (row * 20) + f, v);
+        return 0;
+    }
+    return 0;
+}
+pub static EV_EA_KEY: [i32; 24] = [
+    55, 56, 57, 58, 59, 60, 2, 3, 4, 61, 62, 5, 6, 63, 64, 65,
+    66, 67, 68, 69, 7, 70, 71, 72
+];
+pub fn ev_page_row(epages: &mut crate::port::Cells, page: i32) -> i32 {
+    // The `epages` row of `page`, -1 when there is none.
+    let n: i32 = crate::port::cells_len(epages) / 12;
+    let mut i: i32 = 0;
+    while i < n {
+        if ev_get(epages, 12, i, epf_page()) == page {
+            return i;
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn ev_lower_median(c: &mut crate::port::Cells, stride: i32, first: i32, cnt: i32, f: i32) -> i32 {
+    // The LOWER MEDIAN of cell `f` of rows [first, first + cnt) of an arena: the ((cnt - 1) / 2)th smallest;
+    // 0 for no rows.
+    let k: i32 = (cnt - 1) / 2;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut less: i32 = 0;
+    let mut leq: i32 = 0;
+    let mut r: i32 = 0;
+    let mut rj: i32 = 0;
+    if cnt <= 0 {
+        return 0;
+    }
+    while i < cnt {
+        r = ev_get(c, stride, first + i, f);
+        less = 0;
+        leq = 0;
+        j = 0;
+        while j < cnt {
+            rj = ev_get(c, stride, first + j, f);
+            if rj < r {
+                less += 1;
+            }
+            if rj <= r {
+                leq += 1;
+            }
+            j += 1;
+        }
+        if (less <= k) && (k < leq) {
+            return r;
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn ev_rot_median(olines: &mut crate::port::Cells, first: i32, cnt: i32) -> i32 {
+    // The page's dominant text angle for `xo-angle`: the lower median of the `rot` of the OCR lines
+    // [first, first + cnt) (an OCR run's); 0 for no line.
+    return ev_lower_median(olines, 24, first, cnt, lh_rot());
+}
+pub(crate) fn ev_word_cls(c: i32) -> i32 {
+    // A code point's class for `xo-implausible`: 1 lowercase letter, 2 uppercase letter, 3 digit, 0 anything
+    // else (only ASCII and Latin-1 are classed: what is not is never implausible).
+    if (c >= 97) && (c <= 122) {
+        return 1;
+    }
+    if (c >= 65) && (c <= 90) {
+        return 2;
+    }
+    if (c >= 48) && (c <= 57) {
+        return 3;
+    }
+    if c == 223 {
+        return 1;
+    }
+    if (c >= 224) && (c <= 246) {
+        return 1;
+    }
+    if (c >= 248) && (c <= 255) {
+        return 1;
+    }
+    if (c >= 192) && (c <= 214) {
+        return 2;
+    }
+    if (c >= 216) && (c <= 222) {
+        return 2;
+    }
+    return 0;
+}
+pub(crate) fn ev_implausible(etext: &mut crate::port::Cells, ts: i32, n: i32) -> i32 {
+    // Per-mille of the adjacent code-point pairs of etext[ts, ts + n) that are letter <-> digit or
+    // lowercase -> uppercase (floor); 0 for one code point or none.
+    let mut i: i32 = 1;
+    let mut bad: i32 = 0;
+    let mut p: i32 = 0;
+    let mut q: i32 = 0;
+    if n < 2 {
+        return 0;
+    }
+    while i < n {
+        p = ev_word_cls(crate::port::cells_at(etext, ts + (i - 1)));
+        q = ev_word_cls(crate::port::cells_at(etext, ts + i));
+        if (p != 0) && (q != 0) {
+            if (p == 3) && (q != 3) {
+                bad += 1;
+            }
+            if (p != 3) && (q == 3) {
+                bad += 1;
+            }
+            if (p == 1) && (q == 2) {
+                bad += 1;
+            }
+        }
+        i += 1;
+    }
+    return (bad * 1000) / (n - 1);
+}
+pub(crate) fn ev_sym_alt_same(osyms: &mut crate::port::Cells, oalts: &mut crate::port::Cells, etext: &mut crate::port::Cells, s: i32, a: i32) -> i32 {
+    // 1 when alternative a has the same text as symbol s: the symbol's `etext` run when it has one (a
+    // ligature), else its one code point.
+    let ts: i32 = ev_get(osyms, 20, s, ch_tstart());
+    let tl: i32 = ev_get(osyms, 20, s, ch_tlen());
+    let cp: i32 = ev_get(osyms, 20, s, ch_cp());
+    let r#as: i32 = ev_get(oalts, 4, a, oaf_tstart());
+    let al: i32 = ev_get(oalts, 4, a, oaf_tlen());
+    let mut sl: i32 = 1;
+    let mut k: i32 = 0;
+    if (ts >= 0) && (tl > 0) {
+        sl = tl;
+    }
+    if (ts < 0) && (cp < 0) {
+        sl = 0;
+    }
+    if sl != al {
+        return 0;
+    }
+    while k < al {
+        if (ts >= 0) && (tl > 0) {
+            if crate::port::cells_at(etext, ts + k) != crate::port::cells_at(etext, r#as + k) {
+                return 0;
+            }
+        } else if cp != crate::port::cells_at(etext, r#as + k) {
+            return 0;
+        }
+        k += 1;
+    }
+    return 1;
+}
+pub(crate) fn ev_sym_start(osyms: &mut crate::port::Cells, s: i32, q: i32) -> i32 {
+    // Where symbol s begins along a line whose direction is quadrant q (0 right, 1 up, 2 left, 3 down).
+    if q == 0 {
+        return ev_get(osyms, 20, s, ch_x0());
+    }
+    if q == 1 {
+        return 0 - ev_get(osyms, 20, s, ch_y1());
+    }
+    if q == 2 {
+        return 0 - ev_get(osyms, 20, s, ch_x1());
+    }
+    return ev_get(osyms, 20, s, ch_y0());
+}
+pub(crate) fn ev_sym_end(osyms: &mut crate::port::Cells, s: i32, q: i32) -> i32 {
+    if q == 0 {
+        return ev_get(osyms, 20, s, ch_x1());
+    }
+    if q == 1 {
+        return 0 - ev_get(osyms, 20, s, ch_y0());
+    }
+    if q == 2 {
+        return 0 - ev_get(osyms, 20, s, ch_x0());
+    }
+    return ev_get(osyms, 20, s, ch_y1());
+}
+pub(crate) fn ev_spacing(osyms: &mut crate::port::Cells, sf: i32, sn: i32, rot: i32) -> i32 {
+    // The mean gap between consecutive symbols over the mean symbol width, per-mille, both along the
+    // word's writing direction (the quadrant of `rot`); -1 for fewer than two symbols or no width.
+    let mut q: i32 = ((rot + 4500) / 9000) % 4;
+    let mut gaps: i64 = 0 as i64;
+    let mut widths: i64 = 0 as i64;
+    let mut i: i32 = 0;
+    if sn < 2 {
+        return -1;
+    }
+    while i < sn {
+        widths = (widths).wrapping_add((ev_sym_end(osyms, sf + i, q) - ev_sym_start(osyms, sf + i, q)) as i64);
+        if (i + 1) < sn {
+            gaps = (gaps).wrapping_add((ev_sym_start(osyms, sf + (i + 1), q) - ev_sym_end(osyms, sf + i, q)) as i64);
+        }
+        i += 1;
+    }
+    if widths <= (0 as i64) {
+        return -1;
+    }
+    return (((gaps).wrapping_mul(1000 as i64)).wrapping_mul(sn as i64) / (widths).wrapping_mul((sn - 1) as i64)) as i32;
+}
+pub(crate) fn ev_height_median(owords: &mut crate::port::Cells, first: i32, cnt: i32) -> i32 {
+    // The lower median of the box heights of OCR words [first, first + cnt); 0 for none.
+    let k: i32 = (cnt - 1) / 2;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut less: i32 = 0;
+    let mut leq: i32 = 0;
+    let mut h: i32 = 0;
+    let mut hj: i32 = 0;
+    if cnt <= 0 {
+        return 0;
+    }
+    while i < cnt {
+        h = ev_get(owords, 28, first + i, hd_y1()) - ev_get(owords, 28, first + i, hd_y0());
+        less = 0;
+        leq = 0;
+        j = 0;
+        while j < cnt {
+            hj = ev_get(owords, 28, first + j, hd_y1()) - ev_get(owords, 28, first + j, hd_y0());
+            if hj < h {
+                less += 1;
+            }
+            if hj <= h {
+                leq += 1;
+            }
+            j += 1;
+        }
+        if (less <= k) && (k < leq) {
+            return h;
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn ev_feat_ocr(mut feats: &mut crate::port::Cells, epages: &mut crate::port::Cells, etext: &mut crate::port::Cells, olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, oalts: &mut crate::port::Cells, w: i32, rotmed: i32, altclose: i32) -> i32 {
+    // Stage 1 features of OCR word w (SPEC 8.4.5): a new `feats` row, the word's `feat` pointed at it,
+    // columns 2-8, 17, 19, 20, 21, 28 and 29 computed from the answer alone (the others -1).
+    // 2 the raw word confidence; 3 the lowest and 4 the mean (floor) symbol confidence; 5 the smallest
+    // MARGIN: over the symbols that have a differing alternative, the symbol's confidence less the best
+    // differing alternative's (-1 if none has one); 6 the symbols whose margin is at most `altclose`;
+    // 7 the engine's flags; 8 the implausible class transitions; 17 the height over its line's median,
+    // per-mille; 19 the angle to `rotmed`, the run's dominant line angle; 20 the distance of the word's
+    // baseline midpoint from its line's baseline there; 21 the mean gap between symbols over their mean
+    // width, per-mille (along the writing direction); 28 the code points; 29 the distance to the nearest page
+    // edge. The text is `etext`'s.
+    let row: i32 = fe_new(feats, 17, w);
+    let sf: i32 = ev_get(owords, 28, w, owf_sfirst());
+    let sn: i32 = ev_get(owords, 28, w, owf_scount());
+    let ts: i32 = ev_get(owords, 28, w, hd_tstart());
+    let tl: i32 = ev_get(owords, 28, w, hd_tlen());
+    let pg: i32 = ev_get(owords, 28, w, hd_page());
+    let lineix: i32 = ev_get(owords, 28, w, hd_line());
+    let rot: i32 = ev_get(owords, 28, w, hd_rot());
+    let mut s: i32 = 0;
+    let mut lo: i32 = -1;
+    let mut sum: i32 = 0;
+    let mut nconf: i32 = 0;
+    let mut minmargin: i32 = 2147483647;
+    let mut nmargin: i32 = 0;
+    let mut ambiguous: i32 = 0;
+    let mut a: i32 = 0;
+    let mut af: i32 = 0;
+    let mut ac: i32 = 0;
+    let mut best: i32 = -1;
+    let mut sc: i32 = 0;
+    let mut marg: i32 = 0;
+    let mut d: i32 = 0;
+    let mut med: i32 = 0;
+    let mut lf: i32 = 0;
+    let mut lc: i32 = 0;
+    let mut xm: i32 = 0;
+    let mut ym: i32 = 0;
+    let mut ep: i32 = 0;
+    ev_set(owords, 28, w, hd_feat(), row);
+    fe_set(feats, row, xo_conf(), ev_get(owords, 28, w, hd_conf()));
+    s = sf;
+    while s < (sf + sn) {
+        sc = ev_get(osyms, 20, s, osf_conf());
+        if sc >= 0 {
+            sum += sc;
+            nconf += 1;
+            if (lo < 0) || (sc < lo) {
+                lo = sc;
+            }
+        }
+        af = ev_get(osyms, 20, s, osf_afirst());
+        ac = ev_get(osyms, 20, s, osf_acount());
+        best = -1;
+        a = af;
+        while a < (af + ac) {
+            if ev_sym_alt_same(osyms, oalts, etext, s, a) == 0 {
+                if ev_get(oalts, 4, a, oaf_conf()) > best {
+                    best = ev_get(oalts, 4, a, oaf_conf());
+                }
+            }
+            a += 1;
+        }
+        if (best >= 0) && (sc >= 0) {
+            marg = sc - best;
+            nmargin += 1;
+            if marg < minmargin {
+                minmargin = marg;
+            }
+            if marg <= altclose {
+                ambiguous += 1;
+            }
+        }
+        s += 1;
+    }
+    if nconf > 0 {
+        fe_set(feats, row, xo_sym_min(), lo);
+        fe_set(feats, row, xo_sym_mean(), sum / nconf);
+    }
+    if nmargin > 0 {
+        fe_set(feats, row, xo_margin(), minmargin);
+        fe_set(feats, row, xo_ambiguous(), ambiguous);
+    }
+    fe_set(feats, row, xo_engine_flags(), ev_get(owords, 28, w, owf_flags()));
+    fe_set(feats, row, xo_implausible(), ev_implausible(etext, ts, tl));
+    d = rot - rotmed;
+    if d < 0 {
+        d = 0 - d;
+    }
+    if d > 18000 {
+        d = 36000 - d;
+    }
+    fe_set(feats, row, xo_angle(), d);
+    fe_set(feats, row, xo_spacing(), ev_spacing(osyms, sf, sn, rot));
+    fe_set(feats, row, xo_length(), tl);
+    if lineix >= 0 {
+        lf = ev_get(olines, 24, lineix, lh_first());
+        lc = ev_get(olines, 24, lineix, lh_count());
+        med = ev_height_median(owords, lf, lc);
+        if med > 0 {
+            fe_set(feats, row, xo_rel_height(), (((ev_get(owords, 28, w, hd_y1()) - ev_get(owords, 28, w, hd_y0())) as i64).wrapping_mul(1000 as i64) / (med as i64)) as i32);
+        }
+        xm = (ev_get(owords, 28, w, hd_bx0()) + ev_get(owords, 28, w, hd_bx1())) / 2;
+        ym = (ev_get(owords, 28, w, hd_by0()) + ev_get(owords, 28, w, hd_by1())) / 2;
+        d = ym - ev_baseline_at(ev_get(olines, 24, lineix, lh_bx0()), ev_get(olines, 24, lineix, lh_by0()), ev_get(olines, 24, lineix, lh_bx1()), ev_get(olines, 24, lineix, lh_by1()), xm);
+        if d < 0 {
+            d = 0 - d;
+        }
+        fe_set(feats, row, xo_base_dev(), d);
+    }
+    ep = ev_page_row(epages, pg);
+    if ep >= 0 {
+        d = ev_get(owords, 28, w, hd_x0());
+        if ev_get(owords, 28, w, hd_y0()) < d {
+            d = ev_get(owords, 28, w, hd_y0());
+        }
+        if (ev_get(epages, 12, ep, epf_width()) - ev_get(owords, 28, w, hd_x1())) < d {
+            d = ev_get(epages, 12, ep, epf_width()) - ev_get(owords, 28, w, hd_x1());
+        }
+        if (ev_get(epages, 12, ep, epf_height()) - ev_get(owords, 28, w, hd_y1())) < d {
+            d = ev_get(epages, 12, ep, epf_height()) - ev_get(owords, 28, w, hd_y1());
+        }
+        if d < 0 {
+            d = 0;
+        }
+        fe_set(feats, row, xo_edge(), d);
+    }
+    return row;
+}
+pub fn ev_rows(ea: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // The rows of arena `ea` (its length over its stride); 0 for a code that is none.
+    if (ea < 1) || (ea > 24) {
+        return 0;
+    }
+    let nlen: i32 = ev_len(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    return nlen / EV_STRIDES[(ea - 1) as usize];
 }
 pub fn ev_run_ok(start: i32, n: i32, total: i32) -> i32 {
     // 1 when [start, start+n) lies inside [0, total), or the run is empty
@@ -1419,125 +5660,140 @@ pub fn ev_run_ok(start: i32, n: i32, total: i32) -> i32 {
     }
     return 1;
 }
-pub fn ev_check(glyphs: &mut crate::port::Cells, words: &mut crate::port::Cells, lines: &mut crate::port::Cells, paths: &mut crate::port::Cells, images: &mut crate::port::Cells, components: &mut crate::port::Cells, ocrwords: &mut crate::port::Cells, alts: &mut crate::port::Cells, etext: &mut crate::port::Cells, spans: &mut crate::port::Cells) -> i32 {
-    // 0 when every run and link is inside its arena; otherwise a code:
-    // 1 a stride, 2 a glyph's text run, 3 a word's glyph run, 4 a word's
-    // text run, 5 a line's word run, 6 an OCR word's text run, 7 an
-    // alternative chain, 8 a word's line, 9 a glyph's word, 10 a span's text
-    // run, glyph run or parent.
-    let ng: i32 = crate::port::cells_len(glyphs) / 20;
-    let nw: i32 = crate::port::cells_len(words) / 16;
-    let nl: i32 = crate::port::cells_len(lines) / 12;
-    let no: i32 = crate::port::cells_len(ocrwords) / 16;
-    let na: i32 = crate::port::cells_len(alts) / 4;
-    let nt: i32 = crate::port::cells_len(etext);
-    let ns: i32 = crate::port::cells_len(spans) / 22;
+pub fn ev_check(mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // 0 when the evidence is well formed; otherwise the code of the first thing that is not.
+    // 1: an arena whose length is not a whole number of rows. 2..89: the rows of `ev-ck` in order (a
+    // text run, a run, an index, an index to an earlier row, a back pointer that the row it points to
+    // does not cover, a box with x0 > x1 or y0 > y1: read its row for which). 100: a `refs` row
+    // whose arena or index is none; 101: a `feats` row whose subject is not a word; 102: a word whose
+    // `feat` row does not name it. The OCR nesting block > paragraph > line > word > symbol >
+    // alternative is the back-pointer rows: a child lies in the run of the row it points to, and in
+    // its run's range, so nothing is counted twice and nothing is orphaned.
+    let mut ea: i32 = 1;
+    let mut k: i32 = 0;
     let mut i: i32 = 0;
-    let mut a: i32 = 0;
-    let mut steps: i32 = 0;
-    if (crate::port::cells_len(glyphs) % 20) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(words) % 16) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(lines) % 12) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(paths) % 16) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(images) % 12) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(components) % 20) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(ocrwords) % 16) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(alts) % 4) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(spans) % 22) != 0 {
-        return 1;
-    }
-    while i < ng {
-        if ev_get(glyphs, 20, i, 2) >= 0 {
-            if ev_run_ok(ev_get(glyphs, 20, i, 2), ev_get(glyphs, 20, i, 3), nt) == 0 {
-                return 2;
-            }
+    let mut n: i32 = 0;
+    let mut nt: i32 = 0;
+    let mut kind: i32 = 0;
+    let mut f1: i32 = 0;
+    let mut f2: i32 = 0;
+    let mut tg: i32 = 0;
+    let mut v1: i32 = 0;
+    let mut v2: i32 = 0;
+    let mut nlen: i32 = 0;
+    let mut sea: i32 = 0;
+    while ea <= 24 {
+        nlen = ev_len(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        if (nlen % EV_STRIDES[(ea - 1) as usize]) != 0 {
+            return 1;
         }
-        if (ev_get(glyphs, 20, i, 19) < -1) || (ev_get(glyphs, 20, i, 19) >= nw) {
-            return 9;
-        }
-        i += 1;
+        ea += 1;
     }
-    i = 0;
-    while i < nw {
-        if ev_run_ok(ev_get(words, 16, i, 5), ev_get(words, 16, i, 6), ng) == 0 {
-            return 3;
-        }
-        if ev_get(words, 16, i, 7) >= 0 {
-            if ev_run_ok(ev_get(words, 16, i, 7), ev_get(words, 16, i, 8), nt) == 0 {
-                return 4;
-            }
-        }
-        if (ev_get(words, 16, i, 9) < -1) || (ev_get(words, 16, i, 9) >= nl) {
-            return 8;
-        }
-        i += 1;
-    }
-    i = 0;
-    while i < nl {
-        if ev_run_ok(ev_get(lines, 12, i, 5), ev_get(lines, 12, i, 6), nw) == 0 {
-            return 5;
-        }
-        i += 1;
-    }
-    i = 0;
-    while i < no {
-        if ev_get(ocrwords, 16, i, 5) >= 0 {
-            if ev_run_ok(ev_get(ocrwords, 16, i, 5), ev_get(ocrwords, 16, i, 6), nt) == 0 {
-                return 6;
-            }
-        }
-        a = ev_get(ocrwords, 16, i, 8);
-        steps = 0;
-        while a >= 0 {
-            if a >= na {
-                return 7;
-            }
-            if steps > na {
-                return 7;
-            }
-            steps += 1;
-            a = ev_get(alts, 4, a, 3);
-        }
-        if steps != ev_get(ocrwords, 16, i, 9) {
-            return 7;
-        }
-        i += 1;
-    }
-    i = 0;
-    while i < ns {
-        if ev_run_ok(ev_get(spans, 22, i, 18), ev_get(spans, 22, i, 19), ng) == 0 {
-            return 10;
-        }
-        if (ev_get(spans, 22, i, 3) < -1) || (ev_get(spans, 22, i, 3) >= i) {
-            return 10;
-        }
-        if ev_run_ok(ev_get(spans, 22, i, 1), ev_get(spans, 22, i, 2), nt) == 0 {
-            return 10;
-        }
-        a = 6;
-        while a <= 16 {
-            if ev_get(spans, 22, i, a) >= 0 {
-                if ev_run_ok(ev_get(spans, 22, i, a), ev_get(spans, 22, i, a + 1), nt) == 0 {
-                    return 10;
+    k = 0;
+    while k < 88 {
+        ea = EV_CK[(k * 6 + 1) as usize];
+        kind = EV_CK[(k * 6 + 2) as usize];
+        f1 = EV_CK[(k * 6 + 3) as usize];
+        f2 = EV_CK[(k * 6 + 4) as usize];
+        tg = EV_CK[(k * 6 + 5) as usize];
+        n = ev_rows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        nt = ev_rows(tg, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        i = 0;
+        while i < n {
+            v1 = ev_peek(ea, i, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            if (kind == 1) || (kind == 2) {
+                v2 = ev_peek(ea, i, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                if (v1 >= 0) || (kind == 2) {
+                    if ev_run_ok(v1, v2, nt) == 0 {
+                        return EV_CK[(k * 6 + 0) as usize];
+                    }
                 }
             }
-            a += 2;
+            if kind == 3 {
+                if (v1 < -1) || (v1 >= nt) {
+                    return EV_CK[(k * 6 + 0) as usize];
+                }
+            }
+            if kind == 4 {
+                if (v1 < 0) || (v1 >= nt) {
+                    return EV_CK[(k * 6 + 0) as usize];
+                }
+            }
+            if kind == 5 {
+                if (v1 < -1) || (v1 >= i) {
+                    return EV_CK[(k * 6 + 0) as usize];
+                }
+            }
+            if kind == 6 {
+                if v1 >= 0 {
+                    if v1 >= nt {
+                        return EV_CK[(k * 6 + 0) as usize];
+                    }
+                    v2 = ev_peek(tg, v1, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                    nlen = ev_peek(tg, v1, f2 + 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                    if (i < v2) || (i >= (v2 + nlen)) {
+                        return EV_CK[(k * 6 + 0) as usize];
+                    }
+                }
+            }
+            if kind == 8 {
+                v2 = ev_peek(ea, i, f1 + 2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                if v1 > v2 {
+                    return EV_CK[(k * 6 + 0) as usize];
+                }
+                v1 = ev_peek(ea, i, f1 + 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                v2 = ev_peek(ea, i, f1 + 3, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                if v1 > v2 {
+                    return EV_CK[(k * 6 + 0) as usize];
+                }
+            }
+            i += 1;
+        }
+        k += 1;
+    }
+    // references: the arena and the row exist
+    i = 0;
+    while i < (crate::port::cells_len(refs) / 2) {
+        ea = crate::port::cells_at(refs, i * 2);
+        if (ea < 1) || (ea > 24) {
+            return 100;
+        }
+        n = ev_rows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        if (crate::port::cells_at(refs, (i * 2) + 1) < 0) || (crate::port::cells_at(refs, (i * 2) + 1) >= n) {
+            return 100;
+        }
+        i += 1;
+    }
+    // features: the subject is a word (text layer or OCR) that exists, and it names its row back
+    i = 0;
+    while i < (crate::port::cells_len(feats) / 32) {
+        sea = crate::port::cells_at(feats, i * 32);
+        if (sea != 8) && (sea != 17) {
+            return 101;
+        }
+        n = ev_rows(sea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        if (crate::port::cells_at(feats, (i * 32) + 1) < 0) || (crate::port::cells_at(feats, (i * 32) + 1) >= n) {
+            return 101;
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < (crate::port::cells_len(words) / 24) {
+        v1 = crate::port::cells_at(words, (i * 24) + 15);
+        if v1 >= 0 {
+            if (crate::port::cells_at(feats, v1 * 32) != 8) || (crate::port::cells_at(feats, (v1 * 32) + 1) != i) {
+                return 102;
+            }
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < (crate::port::cells_len(owords) / 28) {
+        v1 = crate::port::cells_at(owords, (i * 28) + 15);
+        if v1 >= 0 {
+            if (crate::port::cells_at(feats, v1 * 32) != 17) || (crate::port::cells_at(feats, (v1 * 32) + 1) != i) {
+                return 102;
+            }
         }
         i += 1;
     }
@@ -1578,9 +5834,9 @@ pub(crate) fn ev_fcpt(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::
     js_cpt(t, v);
     return 1;
 }
-pub(crate) fn ev_fbox(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, started: i32) -> i32 {
-    // `"box":[x0,y0,x1,y1]`, fields f..f+3.
-    ev_begin(t, pr, d, started, ek_box());
+pub(crate) fn ev_fquad(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, key: i32, started: i32) -> i32 {
+    // `"key":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.
+    ev_begin(t, pr, d, started, key);
     crate::port::text_ascii(t, "[");
     js_cpt(t, ev_get(c, stride, row, f));
     js_fsep(t, pr, 1);
@@ -1589,6 +5845,44 @@ pub(crate) fn ev_fbox(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::
     js_cpt(t, ev_get(c, stride, row, f + 2));
     js_fsep(t, pr, 1);
     js_cpt(t, ev_get(c, stride, row, f + 3));
+    crate::port::text_ascii(t, "]");
+    return 1;
+}
+pub(crate) fn ev_fpx4(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, key: i32, started: i32) -> i32 {
+    // A pixel box `"key":[x,y,w,h]` in integers; omitted when it has no area (w and h 0).
+    if (ev_get(c, stride, row, f + 2) == 0) && (ev_get(c, stride, row, f + 3) == 0) {
+        return started;
+    }
+    ev_begin(t, pr, d, started, key);
+    crate::port::text_ascii(t, "[");
+    crate::port::text_i32(t, ev_get(c, stride, row, f));
+    js_fsep(t, pr, 1);
+    crate::port::text_i32(t, ev_get(c, stride, row, f + 1));
+    js_fsep(t, pr, 1);
+    crate::port::text_i32(t, ev_get(c, stride, row, f + 2));
+    js_fsep(t, pr, 1);
+    crate::port::text_i32(t, ev_get(c, stride, row, f + 3));
+    crate::port::text_ascii(t, "]");
+    return 1;
+}
+pub(crate) fn ev_fpair(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, key: i32, d1: i32, d2: i32, pts: i32, started: i32) -> i32 {
+    // Two cells as `"key":[a,b]`, integers (pts 0) or points (pts 1); omitted when they are (d1, d2).
+    if (ev_get(c, stride, row, f) == d1) && (ev_get(c, stride, row, f + 1) == d2) {
+        return started;
+    }
+    ev_begin(t, pr, d, started, key);
+    crate::port::text_ascii(t, "[");
+    if pts == 1 {
+        js_cpt(t, ev_get(c, stride, row, f));
+    } else {
+        crate::port::text_i32(t, ev_get(c, stride, row, f));
+    }
+    js_fsep(t, pr, 1);
+    if pts == 1 {
+        js_cpt(t, ev_get(c, stride, row, f + 1));
+    } else {
+        crate::port::text_i32(t, ev_get(c, stride, row, f + 1));
+    }
     crate::port::text_ascii(t, "]");
     return 1;
 }
@@ -1609,24 +5903,36 @@ pub(crate) fn ev_fcolor(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port
     crate::port::text_ascii(t, "\"");
     return 1;
 }
-pub(crate) fn ev_ftext(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, fstart: i32, flen: i32, etext: &mut crate::port::Cells, started: i32) -> i32 {
-    // A text run of `etext` as `"text"`; an absent run (start -1) is omitted.
-    let s: i32 = ev_get(c, stride, row, fstart);
-    if s < 0 {
+pub(crate) fn ev_fpacked(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, key: i32, started: i32) -> i32 {
+    // Up to four ASCII characters packed big-endian in one cell (a script, a language) as a string; 0 is omitted.
+    let v: i32 = ev_get(c, stride, row, f);
+    let mut sh: i32 = 24;
+    let mut ch: i32 = 0;
+    if v == 0 {
         return started;
     }
-    ev_begin(t, pr, d, started, ek_text());
-    js_str(t, etext, s, ev_get(c, stride, row, flen));
+    ev_begin(t, pr, d, started, key);
+    crate::port::text_ascii(t, "\"");
+    while sh >= 0 {
+        ch = ((v) >> (sh)) & 255;
+        if (ch > 31) && (ch < 127) {
+            if (ch != 34) && (ch != 92) {
+                crate::port::text_cp(t, ch);
+            }
+        }
+        sh -= 8;
+    }
+    crate::port::text_ascii(t, "\"");
     return 1;
 }
-pub(crate) fn ev_ftextk(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, fstart: i32, flen: i32, etext: &mut crate::port::Cells, key: i32, started: i32) -> i32 {
-    // As `ev-ftext` under any key.
+pub(crate) fn ev_ftextk(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, fstart: i32, etext: &mut crate::port::Cells, key: i32, started: i32) -> i32 {
+    // A text run of `etext` (cells fstart, fstart+1) as a string; an absent run (start -1) is omitted.
     let s: i32 = ev_get(c, stride, row, fstart);
     if s < 0 {
         return started;
     }
     ev_begin(t, pr, d, started, key);
-    js_str(t, etext, s, ev_get(c, stride, row, flen));
+    js_str(t, etext, s, ev_get(c, stride, row, fstart + 1));
     return 1;
 }
 pub(crate) fn ev_frun(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, key: i32, started: i32) -> i32 {
@@ -1639,22 +5945,15 @@ pub(crate) fn ev_frun(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::
     crate::port::text_ascii(t, "]");
     return 1;
 }
-pub(crate) fn ev_fbits(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, which: i32, started: i32) -> i32 {
-    // A bitset as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`,
-    // 5 `mg`, 6 `mc`. Zero is omitted.
+pub(crate) fn ev_fbits(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, stride: i32, row: i32, f: i32, which: i32, key: i32, started: i32) -> i32 {
+    // A bit set as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`, 5 `mg`, 6 `mc`, 7 `eg`, 8 `vg`,
+    // 9 `oe`, 10 `os`, 11 `vc`. Zero is omitted.
     let v: i32 = ev_get(c, stride, row, f);
-    let mut key: i32 = ek_src();
     let mut b: i32 = 0;
     let mut k: i32 = 0;
     let mut bit: i32 = 1;
     if v == 0 {
         return started;
-    }
-    if which != 1 {
-        key = ek_flags();
-    }
-    if which == 3 {
-        key = ek_style();
     }
     ev_begin(t, pr, d, started, key);
     if which == 1 {
@@ -1666,9 +5965,9 @@ pub(crate) fn ev_fbits(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port:
     if which == 3 {
         js_bits_style(t, pr, v);
     }
-    if (which == 4) || ((which == 5) || (which == 6)) {
+    if which > 3 {
         crate::port::text_ascii(t, "[");
-        while b < 4 {
+        while b < 8 {
             if (v & bit) != 0 {
                 js_fsep(t, pr, k);
                 crate::port::text_ascii(t, "\"");
@@ -1681,6 +5980,21 @@ pub(crate) fn ev_fbits(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port:
                 if which == 6 {
                     mc_emit_name(t, bit);
                 }
+                if which == 7 {
+                    eg_emit_name(t, bit);
+                }
+                if which == 8 {
+                    vg_emit_name(t, bit);
+                }
+                if which == 9 {
+                    oe_emit_name(t, bit);
+                }
+                if which == 10 {
+                    os_emit_name(t, bit);
+                }
+                if which == 11 {
+                    vc_emit_name(t, bit);
+                }
                 crate::port::text_ascii(t, "\"");
                 k += 1;
             }
@@ -1692,9 +6006,10 @@ pub(crate) fn ev_fbits(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port:
     return 1;
 }
 pub(crate) fn ev_fenum(mut t: &mut String, pr: i32, d: i32, started: i32, key: i32, which: i32, v: i32) -> i32 {
-    // An enumerated code as its name. which: 1 `gh`, 2 `vz`, 3 `ar`, 4 `ld`,
-    // 5 `pa`, 6 `ck`. Code 0 is "none" and is omitted.
-    if v == 0 {
+    // An enumerated code as its name. which: 1 `gh`, 2 `vz`, 3 `ar`, 4 `ld`, 5 `pa`, 6 `ck`, 7 `mk`, 8 `as`,
+    // 9 `ob`, 10 `op`, 11 `ft`, 12 `wb`, 13 `cs`, 14 `ir`, 15 `rs`, 16 `pm`, 17 `po`, 18 `ea`, 19 `vk`.
+    // Code 0 is "none" and -1 "unknown": neither is written.
+    if v <= 0 {
         return started;
     }
     ev_begin(t, pr, d, started, key);
@@ -1717,267 +6032,246 @@ pub(crate) fn ev_fenum(mut t: &mut String, pr: i32, d: i32, started: i32, key: i
     if which == 6 {
         ck_emit_name(t, v);
     }
+    if which == 7 {
+        mk_emit_name(t, v);
+    }
+    if which == 8 {
+        as_emit_name(t, v);
+    }
+    if which == 9 {
+        ob_emit_name(t, v);
+    }
+    if which == 10 {
+        op_emit_name(t, v);
+    }
+    if which == 11 {
+        ft_emit_name(t, v);
+    }
+    if which == 12 {
+        wb_emit_name(t, v);
+    }
+    if which == 13 {
+        cs_emit_name(t, v);
+    }
+    if which == 14 {
+        ir_emit_name(t, v);
+    }
+    if which == 15 {
+        rs_emit_name(t, v);
+    }
+    if which == 16 {
+        pm_emit_name(t, v);
+    }
+    if which == 17 {
+        po_emit_name(t, v);
+    }
+    if which == 18 {
+        ea_emit_name(t, v);
+    }
+    if which == 19 {
+        vk_emit_name(t, v);
+    }
     crate::port::text_ascii(t, "\"");
     return 1;
 }
-pub(crate) fn ev_glyph(mut t: &mut String, pr: i32, d: i32, glyphs: &mut crate::port::Cells, etext: &mut crate::port::Cells, g: i32) -> i32 {
-    let mut s: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, glyphs, 20, g, 0, ek_page(), -2147483648, s);
-    s = ev_fint(t, pr, d, glyphs, 20, g, 1, ek_cp(), -1, s);
-    s = ev_ftext(t, pr, d, glyphs, 20, g, 2, 3, etext, s);
-    s = ev_fenum(t, pr, d, s, ek_how(), 1, ev_get(glyphs, 20, g, 4));
-    s = ev_fint(t, pr, d, glyphs, 20, g, 5, ek_font(), -2147483648, s);
-    s = ev_fcpt(t, pr, d, glyphs, 20, g, 6, ek_size(), -2147483648, s);
-    s = ev_fbox(t, pr, d, glyphs, 20, g, 7, s);
-    s = ev_fcpt(t, pr, d, glyphs, 20, g, 11, ek_baseline(), -2147483648, s);
-    s = ev_fcpt(t, pr, d, glyphs, 20, g, 12, ek_rot(), 0, s);
-    s = ev_fcolor(t, pr, d, glyphs, 20, g, 13, ek_color(), s);
-    s = ev_fint(t, pr, d, glyphs, 20, g, 14, ek_alpha(), 1000, s);
-    s = ev_fint(t, pr, d, glyphs, 20, g, 15, ek_mode(), 0, s);
-    s = ev_fenum(t, pr, d, s, ek_vis(), 2, ev_get(glyphs, 20, g, 16));
-    s = ev_fenum(t, pr, d, s, ek_artifact(), 3, ev_get(glyphs, 20, g, 17));
-    s = ev_fint(t, pr, d, glyphs, 20, g, 18, ek_mcid(), -1, s);
-    s = ev_fint(t, pr, d, glyphs, 20, g, 19, ek_word(), -1, s);
-    js_close(t, pr, d, s);
-    return 0;
-}
-pub(crate) fn ev_word(mut t: &mut String, pr: i32, d: i32, words: &mut crate::port::Cells, etext: &mut crate::port::Cells, w: i32) -> i32 {
-    let mut s: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, words, 16, w, 0, ek_page(), -2147483648, s);
-    s = ev_ftext(t, pr, d, words, 16, w, 7, 8, etext, s);
-    s = ev_fbox(t, pr, d, words, 16, w, 1, s);
-    s = ev_frun(t, pr, d, words, 16, w, 5, ek_glyphs(), s);
-    s = ev_fint(t, pr, d, words, 16, w, 9, ek_line(), -1, s);
-    s = ev_fbits(t, pr, d, words, 16, w, 10, 1, s);
-    s = ev_fint(t, pr, d, words, 16, w, 11, ek_conf(), -1, s);
-    s = ev_fbits(t, pr, d, words, 16, w, 12, 2, s);
-    s = ev_fcpt(t, pr, d, words, 16, w, 13, ek_gap(), -1, s);
-    s = ev_fint(t, pr, d, words, 16, w, 14, ek_font(), -1, s);
-    s = ev_fcpt(t, pr, d, words, 16, w, 15, ek_size(), 0, s);
-    js_close(t, pr, d, s);
-    return 0;
-}
-pub(crate) fn ev_line(mut t: &mut String, pr: i32, d: i32, lines: &mut crate::port::Cells, l: i32) -> i32 {
-    let mut s: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, lines, 12, l, 0, ek_page(), -2147483648, s);
-    s = ev_fbox(t, pr, d, lines, 12, l, 1, s);
-    s = ev_frun(t, pr, d, lines, 12, l, 5, ek_words(), s);
-    s = ev_fcpt(t, pr, d, lines, 12, l, 7, ek_baseline(), -2147483648, s);
-    s = ev_fenum(t, pr, d, s, ek_dir(), 4, ev_get(lines, 12, l, 8));
-    s = ev_fcpt(t, pr, d, lines, 12, l, 9, ek_rot(), 0, s);
-    s = ev_fbits(t, pr, d, lines, 12, l, 10, 1, s);
-    s = ev_fint(t, pr, d, lines, 12, l, 11, ek_conf(), -1, s);
-    js_close(t, pr, d, s);
-    return 0;
-}
-pub(crate) fn ev_path(mut t: &mut String, pr: i32, d: i32, paths: &mut crate::port::Cells, p: i32) -> i32 {
-    let mut s: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, paths, 16, p, 0, ek_page(), -2147483648, s);
-    s = ev_fenum(t, pr, d, s, ek_kind(), 5, ev_get(paths, 16, p, 1));
-    s = ev_fbox(t, pr, d, paths, 16, p, 2, s);
-    s = ev_fcolor(t, pr, d, paths, 16, p, 6, ek_fill(), s);
-    s = ev_fcolor(t, pr, d, paths, 16, p, 7, ek_stroke(), s);
-    s = ev_fcpt(t, pr, d, paths, 16, p, 8, ek_width(), 0, s);
-    s = ev_fint(t, pr, d, paths, 16, p, 9, ek_alpha(), 1000, s);
-    s = ev_fbits(t, pr, d, paths, 16, p, 10, 4, s);
-    s = ev_fenum(t, pr, d, s, ek_artifact(), 3, ev_get(paths, 16, p, 11));
-    s = ev_fint(t, pr, d, paths, 16, p, 12, ek_mcid(), -1, s);
-    js_close(t, pr, d, s);
-    return 0;
-}
-pub(crate) fn ev_image(mut t: &mut String, pr: i32, d: i32, images: &mut crate::port::Cells, m: i32) -> i32 {
-    let mut s: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, images, 12, m, 0, ek_page(), -2147483648, s);
-    s = ev_fbox(t, pr, d, images, 12, m, 1, s);
-    s = ev_fint(t, pr, d, images, 12, m, 5, ek_obj(), -2147483648, s);
-    s = ev_begin(t, pr, d, s, ek_px());
-    crate::port::text_ascii(t, "[");
-    crate::port::text_i32(t, ev_get(images, 12, m, 6));
-    js_fsep(t, pr, 1);
-    crate::port::text_i32(t, ev_get(images, 12, m, 7));
-    crate::port::text_ascii(t, "]");
-    s = ev_fint(t, pr, d, images, 12, m, 8, ek_alpha(), 1000, s);
-    s = ev_fbits(t, pr, d, images, 12, m, 9, 5, s);
-    s = ev_fenum(t, pr, d, s, ek_artifact(), 3, ev_get(images, 12, m, 10));
-    s = ev_fint(t, pr, d, images, 12, m, 11, ek_mcid(), -1, s);
-    js_close(t, pr, d, s);
-    return 0;
-}
-pub(crate) fn ev_component(mut t: &mut String, pr: i32, d: i32, components: &mut crate::port::Cells, c: i32) -> i32 {
-    let mut s: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, components, 20, c, 0, ek_page(), -2147483648, s);
-    s = ev_fenum(t, pr, d, s, ek_kind(), 6, ev_get(components, 20, c, 14));
-    s = ev_fbox(t, pr, d, components, 20, c, 1, s);
-    if (ev_get(components, 20, c, 7) > 0) || (ev_get(components, 20, c, 8) > 0) {
-        s = ev_begin(t, pr, d, s, ek_px());
-        crate::port::text_ascii(t, "[");
-        crate::port::text_i32(t, ev_get(components, 20, c, 5));
-        js_fsep(t, pr, 1);
-        crate::port::text_i32(t, ev_get(components, 20, c, 6));
-        js_fsep(t, pr, 1);
-        crate::port::text_i32(t, ev_get(components, 20, c, 7));
-        js_fsep(t, pr, 1);
-        crate::port::text_i32(t, ev_get(components, 20, c, 8));
-        crate::port::text_ascii(t, "]");
+pub(crate) fn ev_field(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port::Cells, etext: &mut crate::port::Cells, stride: i32, row: i32, r: i32, started: i32) -> i32 {
+    // One printed field of a row, by its row `r` of `ev-fd`: [arena first-cell kind key default arg].
+    let f: i32 = EV_FD[(r * 6 + 1) as usize];
+    let kind: i32 = EV_FD[(r * 6 + 2) as usize];
+    let key: i32 = EV_FD[(r * 6 + 3) as usize];
+    let dflt: i32 = EV_FD[(r * 6 + 4) as usize];
+    let arg: i32 = EV_FD[(r * 6 + 5) as usize];
+    if kind == 1 {
+        return ev_fint(t, pr, d, c, stride, row, f, key, dflt, started);
     }
-    s = ev_fint(t, pr, d, components, 20, c, 9, ek_area(), 0, s);
-    s = ev_fint(t, pr, d, components, 20, c, 10, ek_fill(), 0, s);
-    s = ev_fcpt(t, pr, d, components, 20, c, 11, ek_stroke(), 0, s);
-    s = ev_fcolor(t, pr, d, components, 20, c, 12, ek_color(), s);
-    s = ev_fint(t, pr, d, components, 20, c, 13, ek_layer(), -1, s);
-    s = ev_fint(t, pr, d, components, 20, c, 15, ek_conf(), -1, s);
-    s = ev_fbits(t, pr, d, components, 20, c, 16, 2, s);
-    js_close(t, pr, d, s);
-    return 0;
-}
-pub(crate) fn ev_ocrword(mut t: &mut String, pr: i32, d: i32, ocrwords: &mut crate::port::Cells, alts: &mut crate::port::Cells, etext: &mut crate::port::Cells, w: i32) -> i32 {
-    let mut s: i32 = 0;
-    let mut a: i32 = ev_get(ocrwords, 16, w, 8);
-    let mut i: i32 = 0;
-    let mut ast: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, ocrwords, 16, w, 0, ek_page(), -2147483648, s);
-    s = ev_ftext(t, pr, d, ocrwords, 16, w, 5, 6, etext, s);
-    s = ev_fbox(t, pr, d, ocrwords, 16, w, 1, s);
-    s = ev_fint(t, pr, d, ocrwords, 16, w, 7, ek_conf(), -1, s);
-    if a >= 0 {
-        s = ev_begin(t, pr, d, s, ek_alts());
-        crate::port::text_ascii(t, "[");
-        while a >= 0 {
-            js_aelem(t, pr, d + 1, i);
-            crate::port::text_ascii(t, "{");
-            ast = 0;
-            ast = ev_fint(t, pr, d + 2, alts, 4, a, 0, ek_sym(), -2147483648, ast);
-            ast = ev_fint(t, pr, d + 2, alts, 4, a, 1, ek_cp(), -2147483648, ast);
-            ast = ev_fint(t, pr, d + 2, alts, 4, a, 2, ek_conf(), -1, ast);
-            js_close(t, pr, d + 2, ast);
-            i += 1;
-            a = ev_get(alts, 4, a, 3);
+    if kind == 2 {
+        return ev_fcpt(t, pr, d, c, stride, row, f, key, dflt, started);
+    }
+    if (kind == 3) || (kind == 4) {
+        return ev_fquad(t, pr, d, c, stride, row, f, key, started);
+    }
+    if kind == 5 {
+        return ev_fcolor(t, pr, d, c, stride, row, f, key, started);
+    }
+    if kind == 6 {
+        return ev_ftextk(t, pr, d, c, stride, row, f, etext, key, started);
+    }
+    if kind == 7 {
+        if (ev_get(c, stride, row, f) == dflt) && (ev_get(c, stride, row, f + 1) == arg) {
+            return started;
         }
-        js_aend(t, pr, d + 1, i);
+        return ev_frun(t, pr, d, c, stride, row, f, key, started);
     }
-    s = ev_fint(t, pr, d, ocrwords, 16, w, 10, ek_line(), -1, s);
-    s = ev_fint(t, pr, d, ocrwords, 16, w, 11, ek_block(), -1, s);
-    s = ev_fcpt(t, pr, d, ocrwords, 16, w, 12, ek_baseline(), 0, s);
-    s = ev_fbits(t, pr, d, ocrwords, 16, w, 13, 3, s);
-    s = ev_fint(t, pr, d, ocrwords, 16, w, 14, ek_pass(), 0, s);
-    s = ev_fint(t, pr, d, ocrwords, 16, w, 15, ek_lang(), -1, s);
-    js_close(t, pr, d, s);
-    return 0;
+    if kind == 8 {
+        return ev_fenum(t, pr, d, started, key, arg, ev_get(c, stride, row, f));
+    }
+    if kind == 9 {
+        return ev_fbits(t, pr, d, c, stride, row, f, arg, key, started);
+    }
+    if kind == 10 {
+        return ev_fpx4(t, pr, d, c, stride, row, f, key, started);
+    }
+    if kind == 11 {
+        return ev_fpacked(t, pr, d, c, stride, row, f, key, started);
+    }
+    if kind == 12 {
+        return ev_fpair(t, pr, d, c, stride, row, f, key, dflt, arg, 0, started);
+    }
+    if kind == 13 {
+        return ev_fpair(t, pr, d, c, stride, row, f, key, dflt, arg, 1, started);
+    }
+    return started;
 }
-pub(crate) fn ev_span(mut t: &mut String, pr: i32, d: i32, spans: &mut crate::port::Cells, etext: &mut crate::port::Cells, i: i32) -> i32 {
+pub(crate) fn ev_row(mut t: &mut String, pr: i32, d: i32, ea: i32, c: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
+    // One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
+    let stride: i32 = EV_STRIDES[(ea - 1) as usize];
+    let first: i32 = EV_FX[((ea - 1) * 2 + 0) as usize];
+    let cnt: i32 = EV_FX[((ea - 1) * 2 + 1) as usize];
     let mut s: i32 = 0;
+    let mut k: i32 = 0;
     crate::port::text_ascii(t, "{");
-    s = ev_fint(t, pr, d, spans, 22, i, 0, ek_page(), -2147483648, s);
-    s = ev_ftextk(t, pr, d, spans, 22, i, 1, 2, etext, ek_tag(), s);
-    s = ev_fint(t, pr, d, spans, 22, i, 3, ek_parent(), -1, s);
-    s = ev_fint(t, pr, d, spans, 22, i, 4, ek_mcid(), -1, s);
-    s = ev_fenum(t, pr, d, s, ek_artifact(), 3, ev_get(spans, 22, i, 5));
-    s = ev_ftextk(t, pr, d, spans, 22, i, 6, 7, etext, ek_type(), s);
-    s = ev_ftextk(t, pr, d, spans, 22, i, 8, 9, etext, ek_subtype(), s);
-    s = ev_ftextk(t, pr, d, spans, 22, i, 10, 11, etext, ek_actual(), s);
-    s = ev_ftextk(t, pr, d, spans, 22, i, 12, 13, etext, ek_alt(), s);
-    s = ev_ftextk(t, pr, d, spans, 22, i, 14, 15, etext, ek_exp(), s);
-    s = ev_ftextk(t, pr, d, spans, 22, i, 16, 17, etext, ek_lang(), s);
-    s = ev_frun(t, pr, d, spans, 22, i, 18, ek_glyphs(), s);
-    s = ev_fbits(t, pr, d, spans, 22, i, 20, 6, s);
-    s = ev_fint(t, pr, d, spans, 22, i, 21, ek_stm(), 0, s);
+    while k < cnt {
+        s = ev_field(t, pr, d, c, etext, stride, row, first + k, s);
+        k += 1;
+    }
     js_close(t, pr, d, s);
     return 0;
 }
-pub fn ev_emit(mut t: &mut String, pretty: i32, glyphs: &mut crate::port::Cells, words: &mut crate::port::Cells, lines: &mut crate::port::Cells, paths: &mut crate::port::Cells, images: &mut crate::port::Cells, components: &mut crate::port::Cells, ocrwords: &mut crate::port::Cells, alts: &mut crate::port::Cells, etext: &mut crate::port::Cells, spans: &mut crate::port::Cells) -> i32 {
-    // Write the evidence as `emon-evidence` JSON (SPEC 4.5): version, then
-    // the eight row arrays, each row in its fixed key order.
-    let mut s: i32 = 0;
+pub(crate) fn ev_arena(mut t: &mut String, pr: i32, started: i32, ea: i32, c: &mut crate::port::Cells, etext: &mut crate::port::Cells) -> i32 {
+    // `"arena":[row, ...]` for any arena with a field table.
+    let n: i32 = crate::port::cells_len(c) / EV_STRIDES[(ea - 1) as usize];
     let mut i: i32 = 0;
-    let ng: i32 = crate::port::cells_len(glyphs) / 20;
-    let nw: i32 = crate::port::cells_len(words) / 16;
-    let nl: i32 = crate::port::cells_len(lines) / 12;
-    let np: i32 = crate::port::cells_len(paths) / 16;
-    let nm: i32 = crate::port::cells_len(images) / 12;
-    let nc: i32 = crate::port::cells_len(components) / 20;
-    let no: i32 = crate::port::cells_len(ocrwords) / 16;
-    let nsp: i32 = crate::port::cells_len(spans) / 22;
+    ev_begin(t, pr, 0, started, EV_EA_KEY[(ea - 1) as usize]);
+    crate::port::text_ascii(t, "[");
+    while i < n {
+        js_aelem(t, pr, 1, i);
+        ev_row(t, pr, 2, ea, c, etext, i);
+        i += 1;
+    }
+    js_aend(t, pr, 1, n);
+    return 1;
+}
+pub(crate) fn ev_arena_refs(mut t: &mut String, pr: i32, started: i32, refs: &mut crate::port::Cells) -> i32 {
+    // `"refs":[["arena",index], ...]`: an array of flat arrays is flat, so it stays on one line in
+    // the pretty form too (`kin/scripts/json-check.py`).
+    let n: i32 = crate::port::cells_len(refs) / 2;
+    let mut i: i32 = 0;
+    ev_begin(t, pr, 0, started, EV_EA_KEY[(3) as usize]);
+    crate::port::text_ascii(t, "[");
+    while i < n {
+        js_fsep(t, pr, i);
+        crate::port::text_ascii(t, "[\"");
+        ea_emit_name(t, crate::port::cells_at(refs, i * 2));
+        crate::port::text_ascii(t, "\",");
+        if pr == 1 {
+            crate::port::text_ascii(t, " ");
+        }
+        crate::port::text_i32(t, crate::port::cells_at(refs, (i * 2) + 1));
+        crate::port::text_ascii(t, "]");
+        i += 1;
+    }
+    crate::port::text_ascii(t, "]");
+    return 1;
+}
+pub(crate) fn ev_arena_etext(mut t: &mut String, pr: i32, started: i32, etext: &mut crate::port::Cells) -> i32 {
+    // `"etext":["all the text"]`, the whole arena as one string; `[]` when it is empty.
+    let n: i32 = crate::port::cells_len(etext);
+    ev_begin(t, pr, 0, started, EV_EA_KEY[(4) as usize]);
+    crate::port::text_ascii(t, "[");
+    if n > 0 {
+        js_str(t, etext, 0, n);
+    }
+    crate::port::text_ascii(t, "]");
+    return 1;
+}
+pub(crate) fn ev_arena_feats(mut t: &mut String, pr: i32, started: i32, feats: &mut crate::port::Cells) -> i32 {
+    // `"feats":[{"subject":["owords",i],"conf":..., ...}]`: a column under its name (`xo` for OCR
+    // words, `xt` for text-layer words, `cN` for a column with none), -1 (not computed) omitted.
+    let n: i32 = crate::port::cells_len(feats) / 32;
+    let mut i: i32 = 0;
+    let mut col: i32 = 0;
+    let mut s: i32 = 0;
+    let mut sea: i32 = 0;
+    ev_begin(t, pr, 0, started, EV_EA_KEY[(5) as usize]);
+    crate::port::text_ascii(t, "[");
+    while i < n {
+        js_aelem(t, pr, 1, i);
+        sea = ev_get(feats, 32, i, 0);
+        crate::port::text_ascii(t, "{");
+        s = 0;
+        s = ev_begin(t, pr, 2, s, ek_subject());
+        crate::port::text_ascii(t, "[\"");
+        ea_emit_name(t, sea);
+        crate::port::text_ascii(t, "\",");
+        if pr == 1 {
+            crate::port::text_ascii(t, " ");
+        }
+        crate::port::text_i32(t, ev_get(feats, 32, i, 1));
+        crate::port::text_ascii(t, "]");
+        col = 2;
+        while col < 32 {
+            if ev_get(feats, 32, i, col) != -1 {
+                if s == 1 {
+                    crate::port::text_ascii(t, ",");
+                }
+                if pr == 1 {
+                    js_indent(t, 3);
+                }
+                crate::port::text_ascii(t, "\"");
+                if sea == 8 {
+                    if xt_emit_name(t, col) == 0 {
+                        crate::port::text_ascii(t, "c");
+                        crate::port::text_i32(t, col);
+                    }
+                } else if xo_emit_name(t, col) == 0 {
+                    crate::port::text_ascii(t, "c");
+                    crate::port::text_i32(t, col);
+                }
+                crate::port::text_ascii(t, "\":");
+                if pr == 1 {
+                    crate::port::text_ascii(t, " ");
+                }
+                crate::port::text_i32(t, ev_get(feats, 32, i, col));
+            }
+            col += 1;
+        }
+        js_close(t, pr, 2, s);
+        i += 1;
+    }
+    js_aend(t, pr, 1, n);
+    return 1;
+}
+pub fn ev_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+    // in the order of the `ea` codes, each row in its fixed key order.
+    let mut s: i32 = 0;
     crate::port::text_ascii(t, "{");
     s = ev_begin(t, pretty, 0, s, ek_version());
-    crate::port::text_ascii(t, "\"0\"");
-    s = ev_begin(t, pretty, 0, s, ek_glyphs());
-    crate::port::text_ascii(t, "[");
-    while i < ng {
-        js_aelem(t, pretty, 1, i);
-        ev_glyph(t, pretty, 2, glyphs, etext, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, ng);
-    s = ev_begin(t, pretty, 0, s, ek_words());
-    crate::port::text_ascii(t, "[");
-    i = 0;
-    while i < nw {
-        js_aelem(t, pretty, 1, i);
-        ev_word(t, pretty, 2, words, etext, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, nw);
-    s = ev_begin(t, pretty, 0, s, ek_lines());
-    crate::port::text_ascii(t, "[");
-    i = 0;
-    while i < nl {
-        js_aelem(t, pretty, 1, i);
-        ev_line(t, pretty, 2, lines, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, nl);
-    s = ev_begin(t, pretty, 0, s, ek_paths());
-    crate::port::text_ascii(t, "[");
-    i = 0;
-    while i < np {
-        js_aelem(t, pretty, 1, i);
-        ev_path(t, pretty, 2, paths, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, np);
-    s = ev_begin(t, pretty, 0, s, ek_images());
-    crate::port::text_ascii(t, "[");
-    i = 0;
-    while i < nm {
-        js_aelem(t, pretty, 1, i);
-        ev_image(t, pretty, 2, images, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, nm);
-    s = ev_begin(t, pretty, 0, s, ek_components());
-    crate::port::text_ascii(t, "[");
-    i = 0;
-    while i < nc {
-        js_aelem(t, pretty, 1, i);
-        ev_component(t, pretty, 2, components, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, nc);
-    s = ev_begin(t, pretty, 0, s, ek_ocrwords());
-    crate::port::text_ascii(t, "[");
-    i = 0;
-    while i < no {
-        js_aelem(t, pretty, 1, i);
-        ev_ocrword(t, pretty, 2, ocrwords, alts, etext, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, no);
-    s = ev_begin(t, pretty, 0, s, ek_spans());
-    crate::port::text_ascii(t, "[");
-    i = 0;
-    while i < nsp {
-        js_aelem(t, pretty, 1, i);
-        ev_span(t, pretty, 2, spans, etext, i);
-        i += 1;
-    }
-    js_aend(t, pretty, 1, nsp);
+    crate::port::text_ascii(t, "\"1\"");
+    s = ev_arena(t, pretty, s, 1, epages, etext);
+    s = ev_arena(t, pretty, s, 2, views, etext);
+    s = ev_arena(t, pretty, s, 3, pts, etext);
+    s = ev_arena_refs(t, pretty, s, refs);
+    s = ev_arena_etext(t, pretty, s, etext);
+    s = ev_arena_feats(t, pretty, s, feats);
+    s = ev_arena(t, pretty, s, 7, glyphs, etext);
+    s = ev_arena(t, pretty, s, 8, words, etext);
+    s = ev_arena(t, pretty, s, 9, lines, etext);
+    s = ev_arena(t, pretty, s, 10, marks, etext);
+    s = ev_arena(t, pretty, s, 11, fonts, etext);
+    s = ev_arena(t, pretty, s, 12, paths, etext);
+    s = ev_arena(t, pretty, s, 13, images, etext);
+    s = ev_arena(t, pretty, s, 14, oruns, etext);
+    s = ev_arena(t, pretty, s, 15, oblocks, etext);
+    s = ev_arena(t, pretty, s, 16, olines, etext);
+    s = ev_arena(t, pretty, s, 17, owords, etext);
+    s = ev_arena(t, pretty, s, 18, osyms, etext);
+    s = ev_arena(t, pretty, s, 19, oalts, etext);
+    s = ev_arena(t, pretty, s, 20, inks, etext);
+    s = ev_arena(t, pretty, s, 21, components, etext);
+    s = ev_arena(t, pretty, s, 22, rules, etext);
+    s = ev_arena(t, pretty, s, 23, prims, etext);
+    s = ev_arena(t, pretty, s, 24, tlines, etext);
     js_close(t, pretty, 0, s);
     return 0;
 }

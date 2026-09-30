@@ -153,18 +153,32 @@ public static class Plantest {
     }
     internal static int PtUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells etext, System.Text.StringBuilder t) {
         // Run the probe once over fresh arenas; with `us-done`, dump the evidence.
-        emon.Port.Cells g = emon.Port.NewCells();
-        emon.Port.Cells wd = emon.Port.NewCells();
-        emon.Port.Cells ln = emon.Port.NewCells();
-        emon.Port.Cells pa = emon.Port.NewCells();
-        emon.Port.Cells im = emon.Port.NewCells();
-        emon.Port.Cells co = emon.Port.NewCells();
-        emon.Port.Cells ow = emon.Port.NewCells();
-        emon.Port.Cells al = emon.Port.NewCells();
-        emon.Port.Cells sp = emon.Port.NewCells();
-        int st = Planprobe.PpUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp);
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        int st = Planprobe.PpUnit(s, an, rq, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         if (st == Plan.UsDone()) {
-            Evidence.EvEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp);
+            Evidence.EvEmit(t, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         }
         return st;
     }

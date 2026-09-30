@@ -1,0 +1,60 @@
+#!/usr/bin/env bb
+;; Write the hand-built evidence page's goldens from the generated Rust (DEVLOG P1.12).
+;;
+;;     kin/scripts/evidence-goldens            write test/evidence/{page1,empty}{,.pretty}.json
+;;
+;; A DEVELOPMENT SCRIPT, run by a person after the schema changed on purpose; no gate runs it (`bb unit`'s laws
+;; in kin/evidencetest.kin compare every target with what it wrote, and kin/scripts/json-check.py holds each
+;; golden canonical). The page is `emon.evidencetest/et-build`: a row in every one of the 24 arenas.
+(require '[clojure.string :as str]
+         '[clojure.java.io :as io]
+         '[babashka.fs :as fs]
+         '[clojure.java.shell :as sh])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+(def names ["epages" "views" "pts" "refs" "etext" "feats" "glyphs" "words" "lines" "marks" "fonts" "paths" "images"
+            "oruns" "oblocks" "olines" "owords" "osyms" "oalts" "inks" "components" "rules" "prims" "tlines"])
+
+(defn sh! [dir & cmd]
+  (let [r (apply sh/sh (concat cmd [:dir dir]))]
+    (when-not (zero? (:exit r)) (println (:err r) (:out r)) (System/exit 1))
+    (:out r)))
+
+(def main-rs
+  (str "#![allow(dead_code, unused_mut, unused_variables, unused_imports)]\n"
+       "mod emon;\nmod port;\nmod testport;\n"
+       "fn main() {\n"
+       (str/join "" (map #(str "    let mut " % " = port::Cells::new();\n") names))
+       "    let args: Vec<String> = std::env::args().collect();\n"
+       "    if args[1] == \"page\" {\n"
+       "        emon::evidencetest::et_build(" (str/join ", " (map #(str "&mut " %) names)) ");\n"
+       "    } else {\n"
+       "        emon::evidence::ev_init(" (str/join ", " (map #(str "&mut " %) names)) ");\n"
+       "    }\n"
+       "    let check = emon::evidence::ev_check(" (str/join ", " (map #(str "&mut " %) names)) ");\n"
+       "    assert_eq!(check, 0, \"the evidence is well formed\");\n"
+       "    let mut t = String::new();\n"
+       "    emon::evidence::ev_emit(&mut t, args[2].parse().unwrap(), " (str/join ", " (map #(str "&mut " %) names)) ");\n"
+       "    println!(\"{}\", t);\n"
+       "}\n"))
+
+(defn -main []
+  (sh! root "kin/scripts/emit")
+  (let [work (str (fs/create-temp-dir {:prefix "emon-evgold."}))]
+    (try
+      (fs/create-dirs (str work "/emon"))
+      (doseq [f (fs/glob (str root "/gen/rust/emon") "*.rs")] (fs/copy f (str work "/emon/" (fs/file-name f))))
+      (doseq [f ["port.rs" "testport.rs"]] (fs/copy (str root "/host/rust/src/" f) (str work "/" f)))
+      (spit (str work "/emon.rs")
+            (apply str (for [f (sort (map fs/file-name (fs/glob (str root "/gen/rust/emon") "*.rs")))]
+                         (str "pub mod " (str/replace f #"\.rs$" "") ";\n"))))
+      (spit (str work "/main.rs") main-rs)
+      (sh! work "rustc" "--edition" "2021" "-O" "-A" "warnings" "-o" "prog" "main.rs")
+      (doseq [[what mode suffix] [["page" "0" "page1.json"] ["page" "1" "page1.pretty.json"]
+                                  ["empty" "0" "empty.json"] ["empty" "1" "empty.pretty.json"]]]
+        (let [out (sh! work (str work "/prog") what mode)]
+          (spit (str root "/test/evidence/" suffix) out)
+          (println "wrote test/evidence/" suffix (count out) "bytes")))
+      (finally (fs/delete-tree work)))))
+
+(-main)

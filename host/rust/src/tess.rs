@@ -234,6 +234,15 @@ impl Tess {
                 TessBaseAPIDelete(h);
                 return None;
             }
+            // FINDING (P1.12 step 6): words that score confidence 0 ("Chapter", "1" on
+            // h-keyword) are NOT a reading bug here. The stock `tesseract` 5.5.3 CLI gives the
+            // same 0.0 for them (tsv, word level) with lstm_choice_mode 0 and 2 alike, so the
+            // choice mode and RIL_WORD vs RIL_SYMBOL order do not matter. Tesseract derives
+            // word confidence from the LSTM word certainty, clipped to 0..100, so any word
+            // whose certainty is poor scores exactly 0 while a misspelling can score high.
+            // Alternatives under mode 2 are path-cost derived, so all but the best are
+            // almost always 0 (1765 of the dump's alt confs). Confidence is an unreliable
+            // signal; P6.5a should carry it verbatim and not treat 0 as "wrong word".
             // Alternatives: the final beam-search candidates per symbol, not one per timestep.
             let n = CString::new("lstm_choice_mode").unwrap();
             let v = CString::new("2").unwrap();

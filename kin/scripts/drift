@@ -126,5 +126,10 @@ else
   echo "  ok   every destination a source claims is committed"
 fi
 
+# --- 4. The generated TRIG TABLES (P1.12): kin/trig.kin is what kin/scripts/trigdata writes. ----
+# (babashka, like every script of ours; it only reads, and prints an `ok` or a `FAIL`.)
+trig=$(./kin/scripts/trigdata --check) || fails=$((fails+1))
+echo "$trig"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "  ok   no drift"

@@ -18,6 +18,24 @@ import (
 	"emon/port"
 )
 
+// The evidence arenas travel in four bundles, held by the host as structs (SPEC 8.4.6, D096).
+type EvShared struct{ Epages, Views, Pts, Refs, Etext, Feats *port.Cells }
+func NewEvShared() EvShared {
+	return EvShared{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
+}
+type EvText struct{ Glyphs, Words, Lines, Marks, Fonts, Paths, Images *port.Cells }
+func NewEvText() EvText {
+	return EvText{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
+}
+type EvOcr struct{ Oruns, Oblocks, Olines, Owords, Osyms, Oalts *port.Cells }
+func NewEvOcr() EvOcr {
+	return EvOcr{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
+}
+type EvTrace struct{ Inks, Components, Rules, Prims, Tlines *port.Cells }
+func NewEvTrace() EvTrace {
+	return EvTrace{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
+}
+
 func fnv(b []byte) uint32 {
 	h := uint32(0x811C9DC5)
 	for _, x := range b {
@@ -90,12 +108,11 @@ func main() {
 	var evBuf strings.Builder
 	unit := func(an, rq *port.Cells) int32 {
 		view := base.View()
-		g, w, l, p, i, co, ow, al, et, sp := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(),
-			port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
-		st := ocrprobe.OpUnit(view, an, rq, g, w, l, p, i, co, ow, al, et, sp)
+		sh, tx, oc, tr := NewEvShared(), NewEvText(), NewEvOcr(), NewEvTrace()
+		st := ocrprobe.OpUnit(view, an, rq, sh.Epages, sh.Views, sh.Pts, sh.Refs, sh.Etext, sh.Feats, tx.Glyphs, tx.Words, tx.Lines, tx.Marks, tx.Fonts, tx.Paths, tx.Images, oc.Oruns, oc.Oblocks, oc.Olines, oc.Owords, oc.Osyms, oc.Oalts, tr.Inks, tr.Components, tr.Rules, tr.Prims, tr.Tlines)
 		if st == port.PlanUnitDone {
 			evBuf.Reset()
-			evidence.EvEmit(&evBuf, 0, g, w, l, p, i, co, ow, al, et, sp)
+			evidence.EvEmit(&evBuf, 0, sh.Epages, sh.Views, sh.Pts, sh.Refs, sh.Etext, sh.Feats, tx.Glyphs, tx.Words, tx.Lines, tx.Marks, tx.Fonts, tx.Paths, tx.Images, oc.Oruns, oc.Oblocks, oc.Olines, oc.Owords, oc.Osyms, oc.Oalts, tr.Inks, tr.Components, tr.Rules, tr.Prims, tr.Tlines)
 		}
 		return st
 	}

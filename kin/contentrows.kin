@@ -15,19 +15,18 @@
 (ns emon.contentrows
   (:require [emon.lang :refer [I32 Cells Text emit-ascii]]
             [emon.port :refer [cells-len cells-at text-cp text-i32]]
-            [emon.evidence :refer [gl-count gl-get sp-get wd-get wf-tstart wf-tlen ln-count ln-get lf-page lf-wfirst lf-wcount gf-page gf-cp gf-tstart gf-tlen
-                                   sf-tag sf-taglen sf-mcid sf-artifact sf-type sf-typelen
-                                   sf-subtype sf-subtypelen sf-actual sf-actuallen sf-alt
-                                   sf-altlen sf-exp sf-explen sf-lang sf-langlen sf-gfirst
-                                   sf-gcount sf-flags sf-stm sf-parent ar-emit-name]]
+            [emon.evidence :refer [gl-count gl-get mk-get mk-artifact-class wd-get hd-tstart hd-tlen ln-count ln-get lh-page lh-first lh-count
+                                   ch-page ch-cp ch-tstart ch-tlen mkf-kind mkf-artype mkf-arsub
+                                   mkf-tstart mkf-tlen mkf-mcid mkf-actual mkf-actuallen mkf-alt mkf-altlen mkf-exp mkf-explen
+                                   mkf-lang mkf-langlen mkf-gfirst mkf-gcount mkf-flags mkf-stm mkf-parent ar-emit-name]]
             [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or
                               quot rem bit-and]]))
 
 (defn ^:pub ^I32 cr-glyph-text [^:mut ^Text t ^Cells gl ^Cells et ^I32 g]
   (comment "The text of glyph g: its code points, or U+FFFD.")
-  (let [^I32 ts (gl-get gl g (gf-tstart))
-        ^I32 tl (gl-get gl g (gf-tlen))
-        ^I32 cp (gl-get gl g (gf-cp))
+  (let [^I32 ts (gl-get gl g (ch-tstart))
+        ^I32 tl (gl-get gl g (ch-tlen))
+        ^I32 cp (gl-get gl g (ch-cp))
         ^:mut ^I32 k 0]
     (if (and (>= ts 0) (> tl 0))
       (do (while (< k tl)
@@ -45,7 +44,7 @@
   (let [^I32 n (gl-count gl)
         ^:mut ^I32 g 0]
     (while (< g n)
-      (do (if (== (gl-get gl g (gf-page)) page)
+      (do (if (== (gl-get gl g (ch-page)) page)
             (cr-glyph-text t gl et g))
           (set g (+ g 1))))
     (return 0)))
@@ -61,8 +60,8 @@
 
 (defn ^:pub ^I32 cr-word [^:mut ^Text t ^Cells wd ^Cells et ^I32 w]
   (comment "The text of word w.")
-  (let [^I32 s (wd-get wd w (wf-tstart))
-        ^I32 n (wd-get wd w (wf-tlen))
+  (let [^I32 s (wd-get wd w (hd-tstart))
+        ^I32 n (wd-get wd w (hd-tlen))
         ^:mut ^I32 k 0]
     (if (< s 0) (return 0))
     (while (< k n)
@@ -91,10 +90,10 @@
         ^:mut ^I32 cp 0
         ^:mut ^I32 k 0]
     (while (< g n)
-      (do (if (== (gl-get gl g (gf-page)) page)
-            (do (set ts (gl-get gl g (gf-tstart)))
-                (set tl (gl-get gl g (gf-tlen)))
-                (set cp (gl-get gl g (gf-cp)))
+      (do (if (== (gl-get gl g (ch-page)) page)
+            (do (set ts (gl-get gl g (ch-tstart)))
+                (set tl (gl-get gl g (ch-tlen)))
+                (set cp (gl-get gl g (ch-cp)))
                 (if (and (>= ts 0) (> tl 0))
                   (do (set k 0)
                       (while (< k tl)
@@ -117,41 +116,81 @@
           (set k (+ k 1))))
     (return 0)))
 
-(defn ^:pub ^I32 cr-span [^:mut ^Text t ^Cells sp ^Cells et ^I32 i]
-  (comment "Span i as one row, without a newline: index, tag, MCID, artifact, type, subtype,")
-  (comment "ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated.")
-  (let [^I32 art (sp-get sp i (sf-artifact))]
+(defn ^I32 cr-type-name [^:mut ^Text t ^I32 ty]
+  (comment "A marked-content /Type as the PDF spells it; `-` for none or for a name that is none of them.")
+  (if (== ty 1) (do (emit-ascii t "Pagination") (return 0)))
+  (if (== ty 3) (do (emit-ascii t "Layout") (return 0)))
+  (if (== ty 4) (do (emit-ascii t "Background") (return 0)))
+  (if (== ty 6) (do (emit-ascii t "Page") (return 0)))
+  (emit-ascii t "-")
+  (return 0))
+
+(defn ^I32 cr-subtype-name [^:mut ^Text t ^I32 su]
+  (comment "A marked-content /Subtype as the PDF spells it; `-` for none or another name.")
+  (if (== su 1) (do (emit-ascii t "Header") (return 0)))
+  (if (== su 2) (do (emit-ascii t "Footer") (return 0)))
+  (if (== su 3) (do (emit-ascii t "Watermark") (return 0)))
+  (emit-ascii t "-")
+  (return 0))
+
+(defn ^:pub ^I32 cr-span [^:mut ^Text t ^Cells mk ^Cells et ^I32 i]
+  (comment "Mark i as one row, without a newline: index, tag, MCID, artifact class, /Type, /Subtype,")
+  (comment "ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated. The class")
+  (comment "is the D101 one, made from the mark's (/Type, /Subtype) by `mk-artifact-class`; the type and")
+  (comment "subtype are the PDF's names for the codes (a name that is none of them prints `-`).")
+  (let [^I32 art (mk-artifact-class (mk-get mk i (mkf-kind)) (mk-get mk i (mkf-artype)) (mk-get mk i (mkf-arsub)))]
     (text-i32 t i)
     (text-cp t 9)
-    (cr-run t et (sp-get sp i (sf-tag)) (sp-get sp i (sf-taglen)))
+    (cr-run t et (mk-get mk i (mkf-tstart)) (mk-get mk i (mkf-tlen)))
     (text-cp t 9)
-    (text-i32 t (sp-get sp i (sf-mcid)))
+    (text-i32 t (mk-get mk i (mkf-mcid)))
     (text-cp t 9)
     (if (== art 0)
       (emit-ascii t "-")
       (ar-emit-name t art))
     (text-cp t 9)
-    (cr-run t et (sp-get sp i (sf-type)) (sp-get sp i (sf-typelen)))
+    (cr-type-name t (mk-get mk i (mkf-artype)))
     (text-cp t 9)
-    (cr-run t et (sp-get sp i (sf-subtype)) (sp-get sp i (sf-subtypelen)))
+    (cr-subtype-name t (mk-get mk i (mkf-arsub)))
     (text-cp t 9)
-    (cr-run t et (sp-get sp i (sf-actual)) (sp-get sp i (sf-actuallen)))
+    (cr-run t et (mk-get mk i (mkf-actual)) (mk-get mk i (mkf-actuallen)))
     (text-cp t 9)
-    (cr-run t et (sp-get sp i (sf-alt)) (sp-get sp i (sf-altlen)))
+    (cr-run t et (mk-get mk i (mkf-alt)) (mk-get mk i (mkf-altlen)))
     (text-cp t 9)
-    (cr-run t et (sp-get sp i (sf-exp)) (sp-get sp i (sf-explen)))
+    (cr-run t et (mk-get mk i (mkf-exp)) (mk-get mk i (mkf-explen)))
     (text-cp t 9)
-    (cr-run t et (sp-get sp i (sf-lang)) (sp-get sp i (sf-langlen)))
+    (cr-run t et (mk-get mk i (mkf-lang)) (mk-get mk i (mkf-langlen)))
     (text-cp t 9)
-    (text-i32 t (sp-get sp i (sf-gfirst)))
+    (text-i32 t (mk-get mk i (mkf-gfirst)))
     (text-cp t 9)
-    (text-i32 t (sp-get sp i (sf-gcount)))
+    (text-i32 t (mk-get mk i (mkf-gcount)))
     (text-cp t 9)
-    (text-i32 t (sp-get sp i (sf-flags)))
+    (text-i32 t (mk-get mk i (mkf-flags)))
     (text-cp t 9)
-    (text-i32 t (sp-get sp i (sf-stm)))
+    (text-i32 t (mk-get mk i (mkf-stm)))
     (text-cp t 9)
-    (text-i32 t (sp-get sp i (sf-parent)))
+    (text-i32 t (mk-get mk i (mkf-parent)))
+    (return 0)))
+
+(defn ^:pub ^I32 cr-mark-mcid [^Cells mk ^I32 mark]
+  (comment "What v0 stored in a glyph's `mcid` (D101): the MCID of the innermost mark on the chain that has one,")
+  (comment "-1 when none does.")
+  (let [^:mut ^I32 t mark
+        ^:mut ^I32 m -1]
+    (while (>= t 0)
+      (do (set m (mk-get mk t (mkf-mcid)))
+          (if (>= m 0) (return m))
+          (set t (mk-get mk t (mkf-parent)))))
+    (return -1)))
+
+(defn ^:pub ^I32 cr-mark-class [^Cells mk ^I32 mark]
+  (comment "What v0 stored in a glyph's `artifact` (D101): the class of the nearest /Artifact mark on the chain")
+  (comment "(`mk-artifact-class`), 0 when none is.")
+  (let [^:mut ^I32 t mark]
+    (while (>= t 0)
+      (do (if (== (mk-get mk t (mkf-kind)) 1)
+            (return (mk-artifact-class 1 (mk-get mk t (mkf-artype)) (mk-get mk t (mkf-arsub)))))
+          (set t (mk-get mk t (mkf-parent)))))
     (return 0)))
 
 (defn ^:pub ^I32 cr-page-lines [^:mut ^Text t ^Cells wd ^Cells ln ^Cells et ^I32 page]
@@ -164,11 +203,11 @@
         ^:mut ^I32 wn 0
         ^:mut ^I32 firstline 1]
     (while (< l nl)
-      (do (if (== (ln-get ln l (lf-page)) page)
+      (do (if (== (ln-get ln l (lh-page)) page)
             (do (if (== firstline 0) (text-cp t 8232))
                 (set firstline 0)
-                (set w0 (ln-get ln l (lf-wfirst)))
-                (set wn (ln-get ln l (lf-wcount)))
+                (set w0 (ln-get ln l (lh-first)))
+                (set wn (ln-get ln l (lh-count)))
                 (set w 0)
                 (while (< w wn)
                   (do (if (> w 0) (text-cp t 32))

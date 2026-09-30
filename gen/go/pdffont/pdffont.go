@@ -359,6 +359,14 @@ func PfnHasTounicode(f *port.Cells) int32 {
 	return port.CellsAt(f, hHastu)
 }
 
+func PfnFlags(f *port.Cells) int32 {
+	return port.CellsAt(f, hFlags)
+}
+
+func PfnEncoding(f *port.Cells) int32 {
+	return port.CellsAt(f, hEnc)
+}
+
 func PfnDw2V(f *port.Cells) int32 {
 	return port.CellsAt(f, hDw2v)
 }

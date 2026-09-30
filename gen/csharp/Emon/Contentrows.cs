@@ -7,9 +7,9 @@ namespace emon;
 public static class Contentrows {
     public static int CrGlyphText(System.Text.StringBuilder t, emon.Port.Cells gl, emon.Port.Cells et, int g) {
         // The text of glyph g: its code points, or U+FFFD.
-        int ts = Evidence.GlGet(gl, g, Evidence.GfTstart());
-        int tl = Evidence.GlGet(gl, g, Evidence.GfTlen());
-        int cp = Evidence.GlGet(gl, g, Evidence.GfCp());
+        int ts = Evidence.GlGet(gl, g, Evidence.ChTstart());
+        int tl = Evidence.GlGet(gl, g, Evidence.ChTlen());
+        int cp = Evidence.GlGet(gl, g, Evidence.ChCp());
         int k = 0;
         if ((ts >= 0) && (tl > 0)) {
             while (k < tl) {
@@ -31,7 +31,7 @@ public static class Contentrows {
         int n = Evidence.GlCount(gl);
         int g = 0;
         while (g < n) {
-            if (Evidence.GlGet(gl, g, Evidence.GfPage()) == page) {
+            if (Evidence.GlGet(gl, g, Evidence.ChPage()) == page) {
                 CrGlyphText(t, gl, et, g);
             }
             g += 1;
@@ -50,8 +50,8 @@ public static class Contentrows {
     }
     public static int CrWord(System.Text.StringBuilder t, emon.Port.Cells wd, emon.Port.Cells et, int w) {
         // The text of word w.
-        int s = Evidence.WdGet(wd, w, Evidence.WfTstart());
-        int n = Evidence.WdGet(wd, w, Evidence.WfTlen());
+        int s = Evidence.WdGet(wd, w, Evidence.HdTstart());
+        int n = Evidence.WdGet(wd, w, Evidence.HdTlen());
         int k = 0;
         if (s < 0) {
             return 0;
@@ -87,10 +87,10 @@ public static class Contentrows {
         int cp = 0;
         int k = 0;
         while (g < n) {
-            if (Evidence.GlGet(gl, g, Evidence.GfPage()) == page) {
-                ts = Evidence.GlGet(gl, g, Evidence.GfTstart());
-                tl = Evidence.GlGet(gl, g, Evidence.GfTlen());
-                cp = Evidence.GlGet(gl, g, Evidence.GfCp());
+            if (Evidence.GlGet(gl, g, Evidence.ChPage()) == page) {
+                ts = Evidence.GlGet(gl, g, Evidence.ChTstart());
+                tl = Evidence.GlGet(gl, g, Evidence.ChTlen());
+                cp = Evidence.GlGet(gl, g, Evidence.ChCp());
                 if ((ts >= 0) && (tl > 0)) {
                     k = 0;
                     while (k < tl) {
@@ -127,15 +127,55 @@ public static class Contentrows {
         }
         return 0;
     }
-    public static int CrSpan(System.Text.StringBuilder t, emon.Port.Cells sp, emon.Port.Cells et, int i) {
-        // Span i as one row, without a newline: index, tag, MCID, artifact, type, subtype,
-        // ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated.
-        int art = Evidence.SpGet(sp, i, Evidence.SfArtifact());
+    internal static int CrTypeName(System.Text.StringBuilder t, int ty) {
+        // A marked-content /Type as the PDF spells it; `-` for none or for a name that is none of them.
+        if (ty == 1) {
+            emon.Port.TextAscii(t, "Pagination");
+            return 0;
+        }
+        if (ty == 3) {
+            emon.Port.TextAscii(t, "Layout");
+            return 0;
+        }
+        if (ty == 4) {
+            emon.Port.TextAscii(t, "Background");
+            return 0;
+        }
+        if (ty == 6) {
+            emon.Port.TextAscii(t, "Page");
+            return 0;
+        }
+        emon.Port.TextAscii(t, "-");
+        return 0;
+    }
+    internal static int CrSubtypeName(System.Text.StringBuilder t, int su) {
+        // A marked-content /Subtype as the PDF spells it; `-` for none or another name.
+        if (su == 1) {
+            emon.Port.TextAscii(t, "Header");
+            return 0;
+        }
+        if (su == 2) {
+            emon.Port.TextAscii(t, "Footer");
+            return 0;
+        }
+        if (su == 3) {
+            emon.Port.TextAscii(t, "Watermark");
+            return 0;
+        }
+        emon.Port.TextAscii(t, "-");
+        return 0;
+    }
+    public static int CrSpan(System.Text.StringBuilder t, emon.Port.Cells mk, emon.Port.Cells et, int i) {
+        // Mark i as one row, without a newline: index, tag, MCID, artifact class, /Type, /Subtype,
+        // ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated. The class
+        // is the D101 one, made from the mark's (/Type, /Subtype) by `mk-artifact-class`; the type and
+        // subtype are the PDF's names for the codes (a name that is none of them prints `-`).
+        int art = Evidence.MkArtifactClass(Evidence.MkGet(mk, i, Evidence.MkfKind()), Evidence.MkGet(mk, i, Evidence.MkfArtype()), Evidence.MkGet(mk, i, Evidence.MkfArsub()));
         emon.Port.TextI32(t, i);
         emon.Port.TextCp(t, 9);
-        CrRun(t, et, Evidence.SpGet(sp, i, Evidence.SfTag()), Evidence.SpGet(sp, i, Evidence.SfTaglen()));
+        CrRun(t, et, Evidence.MkGet(mk, i, Evidence.MkfTstart()), Evidence.MkGet(mk, i, Evidence.MkfTlen()));
         emon.Port.TextCp(t, 9);
-        emon.Port.TextI32(t, Evidence.SpGet(sp, i, Evidence.SfMcid()));
+        emon.Port.TextI32(t, Evidence.MkGet(mk, i, Evidence.MkfMcid()));
         emon.Port.TextCp(t, 9);
         if (art == 0) {
             emon.Port.TextAscii(t, "-");
@@ -143,27 +183,53 @@ public static class Contentrows {
             Evidence.ArEmitName(t, art);
         }
         emon.Port.TextCp(t, 9);
-        CrRun(t, et, Evidence.SpGet(sp, i, Evidence.SfType()), Evidence.SpGet(sp, i, Evidence.SfTypelen()));
+        CrTypeName(t, Evidence.MkGet(mk, i, Evidence.MkfArtype()));
         emon.Port.TextCp(t, 9);
-        CrRun(t, et, Evidence.SpGet(sp, i, Evidence.SfSubtype()), Evidence.SpGet(sp, i, Evidence.SfSubtypelen()));
+        CrSubtypeName(t, Evidence.MkGet(mk, i, Evidence.MkfArsub()));
         emon.Port.TextCp(t, 9);
-        CrRun(t, et, Evidence.SpGet(sp, i, Evidence.SfActual()), Evidence.SpGet(sp, i, Evidence.SfActuallen()));
+        CrRun(t, et, Evidence.MkGet(mk, i, Evidence.MkfActual()), Evidence.MkGet(mk, i, Evidence.MkfActuallen()));
         emon.Port.TextCp(t, 9);
-        CrRun(t, et, Evidence.SpGet(sp, i, Evidence.SfAlt()), Evidence.SpGet(sp, i, Evidence.SfAltlen()));
+        CrRun(t, et, Evidence.MkGet(mk, i, Evidence.MkfAlt()), Evidence.MkGet(mk, i, Evidence.MkfAltlen()));
         emon.Port.TextCp(t, 9);
-        CrRun(t, et, Evidence.SpGet(sp, i, Evidence.SfExp()), Evidence.SpGet(sp, i, Evidence.SfExplen()));
+        CrRun(t, et, Evidence.MkGet(mk, i, Evidence.MkfExp()), Evidence.MkGet(mk, i, Evidence.MkfExplen()));
         emon.Port.TextCp(t, 9);
-        CrRun(t, et, Evidence.SpGet(sp, i, Evidence.SfLang()), Evidence.SpGet(sp, i, Evidence.SfLanglen()));
+        CrRun(t, et, Evidence.MkGet(mk, i, Evidence.MkfLang()), Evidence.MkGet(mk, i, Evidence.MkfLanglen()));
         emon.Port.TextCp(t, 9);
-        emon.Port.TextI32(t, Evidence.SpGet(sp, i, Evidence.SfGfirst()));
+        emon.Port.TextI32(t, Evidence.MkGet(mk, i, Evidence.MkfGfirst()));
         emon.Port.TextCp(t, 9);
-        emon.Port.TextI32(t, Evidence.SpGet(sp, i, Evidence.SfGcount()));
+        emon.Port.TextI32(t, Evidence.MkGet(mk, i, Evidence.MkfGcount()));
         emon.Port.TextCp(t, 9);
-        emon.Port.TextI32(t, Evidence.SpGet(sp, i, Evidence.SfFlags()));
+        emon.Port.TextI32(t, Evidence.MkGet(mk, i, Evidence.MkfFlags()));
         emon.Port.TextCp(t, 9);
-        emon.Port.TextI32(t, Evidence.SpGet(sp, i, Evidence.SfStm()));
+        emon.Port.TextI32(t, Evidence.MkGet(mk, i, Evidence.MkfStm()));
         emon.Port.TextCp(t, 9);
-        emon.Port.TextI32(t, Evidence.SpGet(sp, i, Evidence.SfParent()));
+        emon.Port.TextI32(t, Evidence.MkGet(mk, i, Evidence.MkfParent()));
+        return 0;
+    }
+    public static int CrMarkMcid(emon.Port.Cells mk, int mark) {
+        // What v0 stored in a glyph's `mcid` (D101): the MCID of the innermost mark on the chain that has one,
+        // -1 when none does.
+        int t = mark;
+        int m = -1;
+        while (t >= 0) {
+            m = Evidence.MkGet(mk, t, Evidence.MkfMcid());
+            if (m >= 0) {
+                return m;
+            }
+            t = Evidence.MkGet(mk, t, Evidence.MkfParent());
+        }
+        return -1;
+    }
+    public static int CrMarkClass(emon.Port.Cells mk, int mark) {
+        // What v0 stored in a glyph's `artifact` (D101): the class of the nearest /Artifact mark on the chain
+        // (`mk-artifact-class`), 0 when none is.
+        int t = mark;
+        while (t >= 0) {
+            if (Evidence.MkGet(mk, t, Evidence.MkfKind()) == 1) {
+                return Evidence.MkArtifactClass(1, Evidence.MkGet(mk, t, Evidence.MkfArtype()), Evidence.MkGet(mk, t, Evidence.MkfArsub()));
+            }
+            t = Evidence.MkGet(mk, t, Evidence.MkfParent());
+        }
         return 0;
     }
     public static int CrPageLines(System.Text.StringBuilder t, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int page) {
@@ -176,13 +242,13 @@ public static class Contentrows {
         int wn = 0;
         int firstline = 1;
         while (l < nl) {
-            if (Evidence.LnGet(ln, l, Evidence.LfPage()) == page) {
+            if (Evidence.LnGet(ln, l, Evidence.LhPage()) == page) {
                 if (firstline == 0) {
                     emon.Port.TextCp(t, 8232);
                 }
                 firstline = 0;
-                w0 = Evidence.LnGet(ln, l, Evidence.LfWfirst());
-                wn = Evidence.LnGet(ln, l, Evidence.LfWcount());
+                w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+                wn = Evidence.LnGet(ln, l, Evidence.LhCount());
                 w = 0;
                 while (w < wn) {
                     if (w > 0) {

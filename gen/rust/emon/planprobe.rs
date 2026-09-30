@@ -4,18 +4,24 @@
 use crate::emon::evidence::*;
 use crate::emon::plan::*;
 
-pub(crate) fn pp_words(an: &mut crate::port::Cells, at: i32, page: i32, dpi100: i32, mut ocrwords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells) -> i32 {
-    // One OCR answer's words as OCR evidence on `page`; `dpi100` is the
-    // resolution (x100) of the bitmap the boxes are in.
+pub(crate) fn pp_words(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, request: i32, psm: i32, mut views: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells) -> i32 {
+    // One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
     let nw: i32 = an_ocr_count(an, at);
+    let run: i32 = or_new(oruns, page, view);
+    let w0: i32 = ow_count(owords);
     let mut w: i32 = an_ocr_first(an, at);
     let mut i: i32 = 0;
+    or_set(oruns, run, orf_request(), request);
+    or_set(oruns, run, orf_psm(), psm);
     while i < nw {
-        let x0: i32 = (aw_get(an, w, aw_x()) * 720000) / dpi100;
-        let y0: i32 = (aw_get(an, w, aw_y()) * 720000) / dpi100;
-        let x1: i32 = ((aw_get(an, w, aw_x()) + aw_get(an, w, aw_w())) * 720000) / dpi100;
-        let y1: i32 = ((aw_get(an, w, aw_y()) + aw_get(an, w, aw_h())) * 720000) / dpi100;
-        let ow: i32 = ow_new(ocrwords, page, x0, y0, x1, y1, aw_get(an, w, aw_conf()));
+        let px: i32 = aw_get(an, w, aw_x());
+        let py: i32 = aw_get(an, w, aw_y());
+        let pw: i32 = aw_get(an, w, aw_w());
+        let ph: i32 = aw_get(an, w, aw_h());
+        let x0: i32 = vw_box_to_cpt(views, view, 0, px, py, pw, ph);
+        let y0: i32 = vw_box_to_cpt(views, view, 1, px, py, pw, ph);
+        let x1: i32 = vw_box_to_cpt(views, view, 2, px, py, pw, ph);
+        let y1: i32 = vw_box_to_cpt(views, view, 3, px, py, pw, ph);
         let ts: i32 = etx_len(etext);
         let nc: i32 = aw_get(an, w, aw_len());
         let mut k: i32 = 0;
@@ -23,18 +29,18 @@ pub(crate) fn pp_words(an: &mut crate::port::Cells, at: i32, page: i32, dpi100: 
             etx_append_cp(etext, aw_cp(an, w, k));
             k += 1;
         }
-        ow_set(ocrwords, ow, of_tstart(), ts);
-        ow_set(ocrwords, ow, of_tlen(), nc);
-        ow_set(ocrwords, ow, of_line(), aw_get(an, w, aw_line()));
-        ow_set(ocrwords, ow, of_block(), aw_get(an, w, aw_block()));
+        let ow: i32 = ow_new(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, aw_get(an, w, aw_conf()), -1);
+        ow_set(owords, ow, owf_run(), run);
         w = aw_next(an, w);
         i += 1;
     }
+    or_set(oruns, run, orf_wfirst(), w0);
+    or_set(oruns, run, orf_wcount(), nw);
     return 0;
 }
-pub fn pp_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut spans: &mut crate::port::Cells) -> i32 {
+pub fn pp_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
     // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+    ev_init(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
     let n: i32 = crate::port::src_len(s);
     let mid: i32 = crate::port::src_u8(s, n / 2);
     let tail: i32 = crate::port::src_u8(s, n - 1);
@@ -81,9 +87,10 @@ pub fn pp_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut c
         if dd1 < 1 {
             dd1 = 7200;
         }
+        let v1: i32 = vw_new(views, 1, vk_render(), 1, -1, w1, h1, dd1, lay_full(), -1, 0, 0, 0, 0, 0);
         im_new(images, 1, 0, 0, (w1 * 720000) / dd1, (h1 * 720000) / dd1, mid, w1, h1);
         if an_ok(an, o3) == 1 {
-            pp_words(an, o3, 1, dd1, ocrwords, etext);
+            pp_words(an, o3, 1, v1, 3, 6, views, oruns, owords, etext);
         }
     }
     if an_ok(an, r2) == 1 {
@@ -93,9 +100,10 @@ pub fn pp_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut c
         if dd2 < 1 {
             dd2 = 7200;
         }
+        let v2: i32 = vw_new(views, 2, vk_decode(), 2, -1, w2, h2, dd2, lay_full(), -1, 0, 0, 0, 0, 0);
         im_new(images, 2, 0, 0, (w2 * 720000) / dd2, (h2 * 720000) / dd2, tail, w2, h2);
         if an_ok(an, o4) == 1 {
-            pp_words(an, o4, 2, dd2, ocrwords, etext);
+            pp_words(an, o4, 2, v2, 4, 3, views, oruns, owords, etext);
         }
     }
     return us_done();

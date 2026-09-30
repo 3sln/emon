@@ -160,18 +160,32 @@ func TestBeginAndEndMakeAnyRecord(emonT *testing.T) {
 
 func ptUnit(s *port.Src, an *port.Cells, rq *port.Cells, etext *port.Cells, t *strings.Builder) int32 {
 	// Run the probe once over fresh arenas; with `us-done`, dump the evidence.
-	var g *port.Cells = port.NewCells()
-	var wd *port.Cells = port.NewCells()
-	var ln *port.Cells = port.NewCells()
-	var pa *port.Cells = port.NewCells()
-	var im *port.Cells = port.NewCells()
-	var co *port.Cells = port.NewCells()
-	var ow *port.Cells = port.NewCells()
-	var al *port.Cells = port.NewCells()
-	var sp *port.Cells = port.NewCells()
-	var st int32 = planprobe.PpUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp)
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var st int32 = planprobe.PpUnit(s, an, rq, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	if st == plan.UsDone() {
-		evidence.EvEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp)
+		evidence.EvEmit(t, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	}
 	return st
 }

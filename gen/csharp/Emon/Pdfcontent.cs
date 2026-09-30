@@ -71,8 +71,8 @@ public static class Pdfcontent {
     internal const int CMcdepth = 592;
     internal const int CMcbase = 593;
     internal const int CMcover = 594;
-    internal const int CCurmcid = 595;
-    internal const int CCurart = 596;
+    internal const int CCurocg = 595;
+    internal const int CZ = 596;
     internal const int CFlim = 597;
     internal const int CIntext = 598;
     internal const int CGsbase = 599;
@@ -105,6 +105,7 @@ public static class Pdfcontent {
     internal const int GColor = 26;
     internal const int GAlpha = 27;
     internal const int GFam = 28;
+    internal const int GFobj = 29;
     internal const int MaxEnt = 4096;
     internal const int OxBase = 16384;
     internal const int KNum = 1;
@@ -932,6 +933,162 @@ public static class Pdfcontent {
         }
         return Pdffont.PfnWidth(f3, code);
     }
+    internal static int PcFR(emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int which) {
+        // A font's descriptor facts for the `fonts` row: which 0 subtype, 1 /Flags, 2 has a ToUnicode,
+        // 3 base encoding, 4 kind (1 simple).
+        if (slot == 0) {
+            if (which == 0) {
+                return Pdffont.PfnSubtype(f0);
+            }
+            if (which == 1) {
+                return Pdffont.PfnFlags(f0);
+            }
+            if (which == 2) {
+                return Pdffont.PfnHasTounicode(f0);
+            }
+            if (which == 3) {
+                return Pdffont.PfnEncoding(f0);
+            }
+            return Pdffont.PfnKindOf(f0);
+        }
+        if (slot == 1) {
+            if (which == 0) {
+                return Pdffont.PfnSubtype(f1);
+            }
+            if (which == 1) {
+                return Pdffont.PfnFlags(f1);
+            }
+            if (which == 2) {
+                return Pdffont.PfnHasTounicode(f1);
+            }
+            if (which == 3) {
+                return Pdffont.PfnEncoding(f1);
+            }
+            return Pdffont.PfnKindOf(f1);
+        }
+        if (slot == 2) {
+            if (which == 0) {
+                return Pdffont.PfnSubtype(f2);
+            }
+            if (which == 1) {
+                return Pdffont.PfnFlags(f2);
+            }
+            if (which == 2) {
+                return Pdffont.PfnHasTounicode(f2);
+            }
+            if (which == 3) {
+                return Pdffont.PfnEncoding(f2);
+            }
+            return Pdffont.PfnKindOf(f2);
+        }
+        if (which == 0) {
+            return Pdffont.PfnSubtype(f3);
+        }
+        if (which == 1) {
+            return Pdffont.PfnFlags(f3);
+        }
+        if (which == 2) {
+            return Pdffont.PfnHasTounicode(f3);
+        }
+        if (which == 3) {
+            return Pdffont.PfnEncoding(f3);
+        }
+        return Pdffont.PfnKindOf(f3);
+    }
+    internal static int PcNameFind(emon.Port.Cells ar, int nh, int n, int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
+        // 1 when the name nh contains the n (1..7) characters c0.. in a row.
+        int ln = Pdflex.PlNameLen(ar, nh);
+        int i = 0;
+        int ok = 1;
+        while ((i + n) <= ln) {
+            ok = 1;
+            if (Pdflex.PlNameByte(ar, nh, i) != c0) {
+                ok = 0;
+            }
+            if ((n > 1) && (Pdflex.PlNameByte(ar, nh, i + 1) != c1)) {
+                ok = 0;
+            }
+            if ((n > 2) && (Pdflex.PlNameByte(ar, nh, i + 2) != c2)) {
+                ok = 0;
+            }
+            if ((n > 3) && (Pdflex.PlNameByte(ar, nh, i + 3) != c3)) {
+                ok = 0;
+            }
+            if ((n > 4) && (Pdflex.PlNameByte(ar, nh, i + 4) != c4)) {
+                ok = 0;
+            }
+            if ((n > 5) && (Pdflex.PlNameByte(ar, nh, i + 5) != c5)) {
+                ok = 0;
+            }
+            if ((n > 6) && (Pdflex.PlNameByte(ar, nh, i + 6) != c6)) {
+                ok = 0;
+            }
+            if (ok == 1) {
+                return 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int PcFontRow(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells fnt, emon.Port.Cells et, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int status, int key) {
+        // The `fonts` row of a font the document shows for the first time (its row is its id): object
+        // number, subtype, /Flags, whether it has a ToUnicode, base encoding, /BaseFont, ascent, descent,
+        // the width of a space (simple fonts), and a style from the flags and the name. P1.6 reads no
+        // font programs, /ItalicAngle or /StemV (`pdfnames` has no such names): program 0, italic angle 0,
+        // stem -1. A font that would not load has subtype 0 and no metrics.
+        int row = Evidence.FoNew(fnt, emon.Port.CellsAt(cx, CCur + GFobj), 0);
+        int nh = Pdfdoc.PdDget(src, ar, dc, a, b, st, key, Pdfnames.PnBaseFont());
+        int flags = 0;
+        int sty = 0;
+        int i = 0;
+        int start = 0;
+        int ln = 0;
+        if (status == 0) {
+            Evidence.FoSet(fnt, row, Evidence.FnfSubtype(), PcFR(f0, f1, f2, f3, slot, 0));
+            flags = PcFR(f0, f1, f2, f3, slot, 1);
+            Evidence.FoSet(fnt, row, Evidence.FnfFlags(), flags);
+            Evidence.FoSet(fnt, row, Evidence.FnfTounicode(), PcFR(f0, f1, f2, f3, slot, 2));
+            Evidence.FoSet(fnt, row, Evidence.FnfEnc(), PcFR(f0, f1, f2, f3, slot, 3));
+            Evidence.FoSet(fnt, row, Evidence.FnfAsc(), PcFQ(f0, f1, f2, f3, slot, 0));
+            Evidence.FoSet(fnt, row, Evidence.FnfDesc(), PcFQ(f0, f1, f2, f3, slot, 1));
+            if (PcFR(f0, f1, f2, f3, slot, 4) == 1) {
+                Evidence.FoSet(fnt, row, Evidence.FnfSpace(), PcFWidth(f0, f1, f2, f3, slot, 32));
+            }
+        }
+        if ((nh != 0) && (Pdflex.PlKindOf(ar, nh) == 4)) {
+            ln = Pdflex.PlNameLen(ar, nh);
+            start = emon.Port.CellsLen(et);
+            while (i < ln) {
+                Evidence.EtxAppendCp(et, Pdflex.PlNameByte(ar, nh, i));
+                i += 1;
+            }
+            Evidence.FoSet(fnt, row, Evidence.FnfTstart(), start);
+            Evidence.FoSet(fnt, row, Evidence.FnfTlen(), ln);
+            if (PcNameFind(ar, nh, 4, 66, 111, 108, 100, 0, 0, 0) == 1) {
+                sty |= Model.SyBold();
+            }
+            if (PcNameFind(ar, nh, 6, 73, 116, 97, 108, 105, 99, 0) == 1) {
+                sty |= Model.SyItalic();
+            }
+            if (PcNameFind(ar, nh, 7, 79, 98, 108, 105, 113, 117, 101) == 1) {
+                sty |= Model.SyItalic();
+            }
+        }
+        if ((flags & 1) != 0) {
+            sty |= Model.SyMono();
+        }
+        if ((flags & 64) != 0) {
+            sty |= Model.SyItalic();
+        }
+        if ((flags & 131072) != 0) {
+            sty |= Model.SySmallcaps();
+        }
+        if ((flags & 262144) != 0) {
+            sty |= Model.SyBold();
+        }
+        Evidence.FoSet(fnt, row, Evidence.FnfStyle(), sty);
+        return row;
+    }
     internal static int PcFontId(emon.Port.Cells cx, int key) {
         // The evidence id of a font dictionary: its index in the order the
         // document first showed it (-1 past 512 fonts).
@@ -950,7 +1107,7 @@ public static class Pdfcontent {
         emon.Port.CellsSet(cx, CNfont, n + 1);
         return n;
     }
-    internal static int PcEnsureFont(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3) {
+    internal static int PcEnsureFont(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells fnt, emon.Port.Cells et) {
         // Make the current font (the graphics state's) resident in a slot and set
         // C_SLOT to it, -1 when there is none. A font is loaded once and kept; the
         // slot that has gone unused longest is the one replaced.
@@ -961,6 +1118,7 @@ public static class Pdfcontent {
         int best = 2147483647;
         int status = 0;
         int fid = 0;
+        int nbefore = emon.Port.CellsAt(cx, CNfont);
         int clock = emon.Port.CellsAt(cx, CClock);
         if (key == 0) {
             emon.Port.CellsSet(cx, CSlot, -1);
@@ -994,6 +1152,10 @@ public static class Pdfcontent {
         emon.Port.CellsSet(cx, at + SStatus, status);
         fid = PcFontId(cx, key);
         emon.Port.CellsSet(cx, at + SId, fid);
+        // A font the document has not shown before gets its `fonts` row, which is its id.
+        if ((fid >= 0) && (fid == nbefore)) {
+            PcFontRow(src, ar, dc, a, b, st, cx, fnt, et, f0, f1, f2, f3, pick, status, key);
+        }
         if (status == 0) {
             emon.Port.CellsSet(cx, at + SAsc, PcFQ(f0, f1, f2, f3, pick, 0));
             emon.Port.CellsSet(cx, at + SDesc, PcFQ(f0, f1, f2, f3, pick, 1));
@@ -1006,6 +1168,9 @@ public static class Pdfcontent {
             emon.Port.CellsSet(cx, at + SVert, 0);
         }
         emon.Port.CellsSet(cx, CSlot, pick);
+        if (Pdfsrc.PsMissed(src)) {
+            emon.Port.CellsSet(cx, CAbort, 1);
+        }
         return 0;
     }
     internal static int PcTf(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, int n) {
@@ -1032,6 +1197,12 @@ public static class Pdfcontent {
             PcWarnSet(cx, WFont);
         }
         emon.Port.CellsSet(cx, CCur + GFont, fh);
+        emon.Port.CellsSet(cx, CCur + GFobj, 0);
+        if ((fh != 0) && (raw != 0)) {
+            if (Pdflex.PlKindOf(ar, raw) == 9) {
+                emon.Port.CellsSet(cx, CCur + GFobj, Pdflex.PlIntValue(ar, raw));
+            }
+        }
         return 0;
     }
     internal static long PcMin4(long p, long q, long r, long s) {
@@ -1060,9 +1231,40 @@ public static class Pdfcontent {
         }
         return m;
     }
+    internal static int PcDirAngle(long a, long b) {
+        // The angle of the direction (a, b) in page space (y down), by `ev-angle`: halve both until the
+        // larger fits 30 bits, so the angle of a matrix axis in 24-bit fixed point keeps all its precision.
+        long x = a;
+        long y = b;
+        long m = (long) 0;
+        if (x < ((long) 0)) {
+            m = ((long) 0) - x;
+        } else {
+            m = x;
+        }
+        if (y < ((long) 0)) {
+            if ((((long) 0) - y) > m) {
+                m = ((long) 0) - y;
+            }
+        } else if (y > m) {
+            m = y;
+        }
+        while (m > ((long) 1073741824)) {
+            x = x / ((long) 2);
+            y = y / ((long) 2);
+            m = m / ((long) 2);
+        }
+        return Evidence.EvAngle((int) x, (int) y);
+    }
     internal static int PcGlyph(emon.Port.Cells cx, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int code, int ncode) {
         // One shown glyph: look the code up, put its cell in page space, record it,
         // advance the text position by its width, the character and word spacing.
+        // Recorded (SPEC 8.4.3): the box of its cell; its baseline segment from its origin to its origin plus
+        // its advance without Tc and Tw (text space +x, so the spacing stays measurable); `asc` and `desc`
+        // (signed distances from the baseline along the up vector, from the font's ascent and descent); `rot`
+        // by `ev-angle` from the exact direction of the text matrix's x axis; its fill colour and alpha; the
+        // colour-space class when the colour operators said (gray, rgb, cmyk); `z`, the page's paint counter;
+        // `mark` (the innermost open mark) and `ocg` (the innermost optional-content mark).
         int slot = emon.Port.CellsAt(cx, CSlot);
         long fs = Fx.FxGet(cx, CCur + GFs);
         long th = Fx.FxGet(cx, CCur + GTh);
@@ -1140,18 +1342,43 @@ public static class Pdfcontent {
         long mb = Fx.FxGet(cx, CM + 2);
         long mc = Fx.FxGet(cx, CM + 4);
         long md = Fx.FxGet(cx, CM + 6);
-        int size = Fx.FxRound(Fx.FxMul(Fx.FxHypot(mc, md), Fx.FxAbs(fs)));
-        int rot = Fx.FxAtan2(((long) 0) - mb, ma);
-        int bline = Fx.FxRound(Fx.MxY(cx, CM, (long) 0, rise));
-        int g = Evidence.GlNew(gl, emon.Port.CellsAt(cx, CPage), cp0, fid, size, Fx.FxRound(PcMin4(p0x, p1x, p2x, p3x)), Fx.FxRound(PcMin4(p0y, p1y, p2y, p3y)), Fx.FxRound(PcMax4(p0x, p1x, p2x, p3x)), Fx.FxRound(PcMax4(p0y, p1y, p2y, p3y)));
+        long hyp = Fx.FxHypot(mc, md);
+        int size = Fx.FxRound(Fx.FxMul(hyp, Fx.FxAbs(fs)));
+        int rot = PcDirAngle(ma, mb);
+        int bx0 = Fx.FxRound(Fx.MxX(cx, CM, (long) 0, rise));
+        int by0 = Fx.FxRound(Fx.MxY(cx, CM, (long) 0, rise));
+        int bx1 = Fx.FxRound(Fx.MxX(cx, CM, Fx.FxMul(wfx, th), rise));
+        int by1 = Fx.FxRound(Fx.MxY(cx, CM, Fx.FxMul(wfx, th), rise));
+        int up = Fx.FxRound(Fx.FxMul(y1t - rise, hyp));
+        int down = Fx.FxRound(Fx.FxMul(y0t - rise, hyp));
+        int fam = emon.Port.CellsAt(cx, CCur + GFam);
+        int z = emon.Port.CellsAt(cx, CZ);
+        int g = Evidence.GlNew(gl, emon.Port.CellsAt(cx, CPage), Fx.FxRound(PcMin4(p0x, p1x, p2x, p3x)), Fx.FxRound(PcMin4(p0y, p1y, p2y, p3y)), Fx.FxRound(PcMax4(p0x, p1x, p2x, p3x)), Fx.FxRound(PcMax4(p0y, p1y, p2y, p3y)), cp0, -1, 0, -1);
         Evidence.GlSet(gl, g, Evidence.GfHow(), how);
-        Evidence.GlSet(gl, g, Evidence.GfBaseline(), bline);
+        Evidence.GlSet(gl, g, Evidence.GfFont(), fid);
+        Evidence.GlSet(gl, g, Evidence.GfSize(), size);
+        Evidence.GlSet(gl, g, Evidence.GfBx0(), bx0);
+        Evidence.GlSet(gl, g, Evidence.GfBy0(), by0);
+        Evidence.GlSet(gl, g, Evidence.GfBx1(), bx1);
+        Evidence.GlSet(gl, g, Evidence.GfBy1(), by1);
+        if (up >= down) {
+            Evidence.GlSet(gl, g, Evidence.GfAsc(), up);
+            Evidence.GlSet(gl, g, Evidence.GfDesc(), down);
+        } else {
+            Evidence.GlSet(gl, g, Evidence.GfAsc(), down);
+            Evidence.GlSet(gl, g, Evidence.GfDesc(), up);
+        }
         Evidence.GlSet(gl, g, Evidence.GfRot(), rot);
-        Evidence.GlSet(gl, g, Evidence.GfColor(), emon.Port.CellsAt(cx, CCur + GColor));
-        Evidence.GlSet(gl, g, Evidence.GfAlpha(), emon.Port.CellsAt(cx, CCur + GAlpha));
+        Evidence.GlSet(gl, g, Evidence.GfFill(), emon.Port.CellsAt(cx, CCur + GColor));
+        Evidence.GlSet(gl, g, Evidence.GfFalpha(), emon.Port.CellsAt(cx, CCur + GAlpha));
         Evidence.GlSet(gl, g, Evidence.GfMode(), emon.Port.CellsAt(cx, CCur + GMode));
-        Evidence.GlSet(gl, g, Evidence.GfArtifact(), emon.Port.CellsAt(cx, CCurart));
-        Evidence.GlSet(gl, g, Evidence.GfMcid(), emon.Port.CellsAt(cx, CCurmcid));
+        if (fam > 0) {
+            Evidence.GlSet(gl, g, Evidence.GfCs(), fam);
+        }
+        Evidence.GlSet(gl, g, Evidence.GfZ(), z);
+        emon.Port.CellsSet(cx, CZ, z + 1);
+        Evidence.GlSet(gl, g, Evidence.GfMark(), emon.Port.CellsAt(cx, CMctop));
+        Evidence.GlSet(gl, g, Evidence.GfOcg(), emon.Port.CellsAt(cx, CCurocg));
         if (cnt > 1) {
             i = 0;
             while (i < cnt) {
@@ -1161,8 +1388,8 @@ public static class Pdfcontent {
                 }
                 i += 1;
             }
-            Evidence.GlSet(gl, g, Evidence.GfTstart(), tstart);
-            Evidence.GlSet(gl, g, Evidence.GfTlen(), cnt);
+            Evidence.GlSet(gl, g, Evidence.ChTstart(), tstart);
+            Evidence.GlSet(gl, g, Evidence.ChTlen(), cnt);
         }
         // The advance: tx = (w0 * Tfs + Tc + Tw) * Th, or ty = w1 * Tfs + Tc + Tw.
         long adv = (long) 0;
@@ -1502,11 +1729,11 @@ public static class Pdfcontent {
         emon.Port.CellsSet(ox, (d * 4) + 1, (emon.Port.CellsAt(cx, COxn) - d) - 1);
         return d;
     }
-    internal static int PcReadProps(emon.Port.Cells et, emon.Port.Cells sp, emon.Port.Cells ox, int span, int d) {
-        // Fill the span's fields from the dictionary entry d of the operands: MCID,
-        // Type, Subtype, ActualText, Alt, E, Lang. Answers a code for the artifact's
-        // class: 1 watermark, 2 background, 3 pagination, 4 layout, 5 another
-        // named type or subtype, 0 none.
+    internal static int PcReadProps(emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells ox, int span, int d, int isart) {
+        // Fill the mark's fields from the dictionary entry d of the operands: MCID, ActualText, Alt, E, Lang;
+        // and, for an /Artifact, its /Type and /Subtype as codes (`ar`: pagination, layout, background, page,
+        // else `other`; `as`: header, footer, watermark, else `other`). A name that is none of the known ones
+        // is not kept (SPEC 8.4.3 holds codes, D101 held the name).
         int end = (d + 1) + PcEa(ox, d);
         int j = d + 1;
         int v = 0;
@@ -1516,7 +1743,6 @@ public static class Pdfcontent {
         int vl = 0;
         int vk = 0;
         int at = 0;
-        int cls = 0;
         while (j < end) {
             v = j + 1;
             if ((PcKind(ox, j) == KName) && (v < end)) {
@@ -1526,72 +1752,55 @@ public static class Pdfcontent {
                 vs = PcEa(ox, v);
                 vl = PcEb(ox, v);
                 if ((PcNameEq(ox, ks, kl, Pdfnames.PnMcid()) == 1) && (vk == KNum)) {
-                    Evidence.SpSet(sp, span, Evidence.SfMcid(), Fx.FxRound(Fx.FxJoin(vs, vl)));
+                    Evidence.MkSet(mk, span, Evidence.MkfMcid(), Fx.FxRound(Fx.FxJoin(vs, vl)));
                 }
-                if ((PcNameEq(ox, ks, kl, Pdfnames.PnType()) == 1) && (vk == KName)) {
-                    at = PcPushBytes(et, ox, vs, vl);
-                    Evidence.SpSet(sp, span, Evidence.SfType(), at);
-                    Evidence.SpSet(sp, span, Evidence.SfTypelen(), vl);
+                if ((isart == 1) && ((PcNameEq(ox, ks, kl, Pdfnames.PnType()) == 1) && (vk == KName))) {
+                    Evidence.MkSet(mk, span, Evidence.MkfArtype(), Evidence.ArOther());
                     if (PcNameEq(ox, vs, vl, Pdfnames.PnPagination()) == 1) {
-                        if (cls == 0) {
-                            cls = 3;
-                        }
+                        Evidence.MkSet(mk, span, Evidence.MkfArtype(), Evidence.ArPagination());
                     }
                     if (PcNameEq(ox, vs, vl, Pdfnames.PnLayout()) == 1) {
-                        if (cls == 0) {
-                            cls = 4;
-                        }
+                        Evidence.MkSet(mk, span, Evidence.MkfArtype(), Evidence.ArLayout());
                     }
                     if (PcNameEq(ox, vs, vl, Pdfnames.PnBackground()) == 1) {
-                        if (cls != 1) {
-                            cls = 2;
-                        }
+                        Evidence.MkSet(mk, span, Evidence.MkfArtype(), Evidence.ArBackground());
                     }
-                    if (cls == 0) {
-                        cls = 5;
+                    if (PcNameEq(ox, vs, vl, Pdfnames.PnPage()) == 1) {
+                        Evidence.MkSet(mk, span, Evidence.MkfArtype(), Evidence.ArPage());
                     }
                 }
-                if ((PcNameEq(ox, ks, kl, Pdfnames.PnSubtype()) == 1) && (vk == KName)) {
-                    at = PcPushBytes(et, ox, vs, vl);
-                    Evidence.SpSet(sp, span, Evidence.SfSubtype(), at);
-                    Evidence.SpSet(sp, span, Evidence.SfSubtypelen(), vl);
+                if ((isart == 1) && ((PcNameEq(ox, ks, kl, Pdfnames.PnSubtype()) == 1) && (vk == KName))) {
+                    Evidence.MkSet(mk, span, Evidence.MkfArsub(), Evidence.AsOther());
+                    if (PcNameEq(ox, vs, vl, Pdfnames.PnHeader()) == 1) {
+                        Evidence.MkSet(mk, span, Evidence.MkfArsub(), Evidence.AsHeader());
+                    }
+                    if (PcNameEq(ox, vs, vl, Pdfnames.PnFooter()) == 1) {
+                        Evidence.MkSet(mk, span, Evidence.MkfArsub(), Evidence.AsFooter());
+                    }
                     if (PcNameEq(ox, vs, vl, Pdfnames.PnWatermark()) == 1) {
-                        cls = 1;
-                    }
-                    if (PcNameEq(ox, vs, vl, Pdfnames.PnBackground()) == 1) {
-                        if (cls != 1) {
-                            cls = 2;
-                        }
-                    }
-                    if ((PcNameEq(ox, vs, vl, Pdfnames.PnHeader()) == 1) || (PcNameEq(ox, vs, vl, Pdfnames.PnFooter()) == 1)) {
-                        if ((cls == 0) || (cls == 5)) {
-                            cls = 3;
-                        }
-                    }
-                    if (cls == 0) {
-                        cls = 5;
+                        Evidence.MkSet(mk, span, Evidence.MkfArsub(), Evidence.AsWatermark());
                     }
                 }
                 if ((vk == KStr) || (vk == KName)) {
                     if (PcNameEq(ox, ks, kl, Pdfnames.PnActualText()) == 1) {
                         at = PcPushText(et, ox, vs, vl);
-                        Evidence.SpSet(sp, span, Evidence.SfActual(), at);
-                        Evidence.SpSet(sp, span, Evidence.SfActuallen(), emon.Port.CellsLen(et) - at);
+                        Evidence.MkSet(mk, span, Evidence.MkfActual(), at);
+                        Evidence.MkSet(mk, span, Evidence.MkfActuallen(), emon.Port.CellsLen(et) - at);
                     }
                     if (PcNameEq(ox, ks, kl, Pdfnames.PnAlt()) == 1) {
                         at = PcPushText(et, ox, vs, vl);
-                        Evidence.SpSet(sp, span, Evidence.SfAlt(), at);
-                        Evidence.SpSet(sp, span, Evidence.SfAltlen(), emon.Port.CellsLen(et) - at);
+                        Evidence.MkSet(mk, span, Evidence.MkfAlt(), at);
+                        Evidence.MkSet(mk, span, Evidence.MkfAltlen(), emon.Port.CellsLen(et) - at);
                     }
                     if (PcNameEq(ox, ks, kl, Pdfnames.PnE()) == 1) {
                         at = PcPushText(et, ox, vs, vl);
-                        Evidence.SpSet(sp, span, Evidence.SfExp(), at);
-                        Evidence.SpSet(sp, span, Evidence.SfExplen(), emon.Port.CellsLen(et) - at);
+                        Evidence.MkSet(mk, span, Evidence.MkfExp(), at);
+                        Evidence.MkSet(mk, span, Evidence.MkfExplen(), emon.Port.CellsLen(et) - at);
                     }
                     if (PcNameEq(ox, ks, kl, Pdfnames.PnLang()) == 1) {
                         at = PcPushText(et, ox, vs, vl);
-                        Evidence.SpSet(sp, span, Evidence.SfLang(), at);
-                        Evidence.SpSet(sp, span, Evidence.SfLanglen(), emon.Port.CellsLen(et) - at);
+                        Evidence.MkSet(mk, span, Evidence.MkfLang(), at);
+                        Evidence.MkSet(mk, span, Evidence.MkfLanglen(), emon.Port.CellsLen(et) - at);
                     }
                 }
                 j = v + PcEsize(ox, v);
@@ -1599,63 +1808,45 @@ public static class Pdfcontent {
                 j += PcEsize(ox, j);
             }
         }
-        return cls;
-    }
-    internal static int PcMcRecompute(emon.Port.Cells cx, emon.Port.Cells sp) {
-        // The innermost MCID and artifact class in force: walk the open spans.
-        int t = emon.Port.CellsAt(cx, CMctop);
-        int mcid = -1;
-        int art = 0;
-        int guard = 0;
-        int m = 0;
-        while ((t >= 0) && (guard <= MaxMc)) {
-            if (mcid < 0) {
-                m = Evidence.SpGet(sp, t, Evidence.SfMcid());
-                if (m >= 0) {
-                    mcid = m;
-                }
-            }
-            if (art == 0) {
-                art = Evidence.SpGet(sp, t, Evidence.SfArtifact());
-            }
-            t = Evidence.SpGet(sp, t, Evidence.SfParent());
-            guard += 1;
-        }
-        emon.Port.CellsSet(cx, CCurmcid, mcid);
-        emon.Port.CellsSet(cx, CCurart, art);
         return 0;
     }
-    internal static int PcMcPop(emon.Port.Cells cx, emon.Port.Cells sp, emon.Port.Cells gl, int unterminated) {
-        // Close the innermost open span: its glyphs are those shown since it opened.
+    internal static int PcMcPop(emon.Port.Cells cx, emon.Port.Cells mk, emon.Port.Cells gl, int unterminated) {
+        // Close the innermost open mark: its glyphs are those shown since it opened, its painted objects
+        // those numbered since (`mk-close`).
         int t = emon.Port.CellsAt(cx, CMctop);
         if (t < 0) {
             return 0;
         }
         int g = Evidence.GlCount(gl);
-        int gf = Evidence.SpGet(sp, t, Evidence.SfGfirst());
-        int par = Evidence.SpGet(sp, t, Evidence.SfParent());
-        Evidence.SpSet(sp, t, Evidence.SfGcount(), g - gf);
+        int par = Evidence.MkGet(mk, t, Evidence.MkfParent());
+        Evidence.MkClose(mk, t, g, emon.Port.CellsAt(cx, CZ));
         if (unterminated == 1) {
-            int fl = Evidence.SpGet(sp, t, Evidence.SfFlags());
-            Evidence.SpSet(sp, t, Evidence.SfFlags(), fl | Evidence.McUnterminated());
+            int fl = Evidence.MkGet(mk, t, Evidence.MkfFlags());
+            Evidence.MkSet(mk, t, Evidence.MkfFlags(), fl | Evidence.McUnterminated());
         }
         emon.Port.CellsSet(cx, CMctop, par);
         emon.Port.CellsSet(cx, CMcdepth, emon.Port.CellsAt(cx, CMcdepth) - 1);
-        PcMcRecompute(cx, sp);
+        if (emon.Port.CellsAt(cx, CCurocg) == t) {
+            emon.Port.CellsSet(cx, CCurocg, Evidence.MkOcgOf(mk, par));
+        }
         return 0;
     }
-    internal static int PcMcBegin(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int n, int props) {
-        // BMC / BDC: open a span with the tag of operand 0 and, for BDC, the
-        // properties of operand 1 (an inline dictionary, or a name in /Properties).
+    internal static int PcMcBegin(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int n, int props) {
+        // BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an
+        // inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,
+        // `optional-content` for /OC (its object number is the /Properties entry's, when that is a
+        // reference), else `tag`.
         int depth = emon.Port.CellsAt(cx, CMcdepth);
         int tstart = 0;
         int tlen = 0;
         int span = 0;
         int d = -1;
-        int cls = 0;
         int raw = 0;
         int dh = 0;
         int isart = 0;
+        int isoc = 0;
+        int t0 = 0;
+        int kind = 3;
         int flags = 0;
         if (depth >= MaxMc) {
             emon.Port.CellsSet(cx, CMcover, emon.Port.CellsAt(cx, CMcover) + 1);
@@ -1669,11 +1860,21 @@ public static class Pdfcontent {
             if (PcEntryNameIs(ox, 0, Pdfnames.PnArtifact()) == 1) {
                 isart = 1;
             }
+            t0 = PcEa(ox, 0);
+            if ((tlen == 2) && ((emon.Port.CellsAt(ox, t0) == 79) && (emon.Port.CellsAt(ox, t0 + 1) == 67))) {
+                isoc = 1;
+            }
         }
-        span = Evidence.SpNew(sp, emon.Port.CellsAt(cx, CPage), tstart, tlen, emon.Port.CellsAt(cx, CMctop), Evidence.GlCount(gl));
-        Evidence.SpSet(sp, span, Evidence.SfStm(), emon.Port.CellsAt(cx, CStm));
         if (isart == 1) {
-            Evidence.SpSet(sp, span, Evidence.SfArtifact(), Evidence.ArOther());
+            kind = Evidence.MkArtifact();
+        }
+        if (isoc == 1) {
+            kind = Evidence.MkOptionalContent();
+        }
+        span = Evidence.MkOpen(mk, emon.Port.CellsAt(cx, CPage), kind, tstart, tlen, emon.Port.CellsAt(cx, CMctop), Evidence.GlCount(gl), emon.Port.CellsAt(cx, CZ));
+        Evidence.MkSet(mk, span, Evidence.MkfStm(), emon.Port.CellsAt(cx, CStm));
+        if (isart == 1) {
+            Evidence.MkSet(mk, span, Evidence.MkfArtype(), Evidence.ArOther());
         }
         if ((props == 1) && (n >= 2)) {
             if (PcKind(ox, 1) == KDict) {
@@ -1688,6 +1889,11 @@ public static class Pdfcontent {
                 if (Pdfsrc.PsMissed(src)) {
                     emon.Port.CellsSet(cx, CAbort, 1);
                 }
+                if ((isoc == 1) && (raw != 0)) {
+                    if (Pdflex.PlKindOf(ar, raw) == 9) {
+                        Evidence.MkSet(mk, span, Evidence.MkfOcg(), Pdflex.PlIntValue(ar, raw));
+                    }
+                }
                 if ((dh != 0) && (Pdflex.PlKindOf(ar, dh) == 7)) {
                     d = PcIngestProps(src, ar, dc, a, b, st, cx, ox, dh);
                     flags = Evidence.McResource();
@@ -1696,32 +1902,20 @@ public static class Pdfcontent {
                     PcWarnSet(cx, WProps);
                 }
             }
-            Evidence.SpSet(sp, span, Evidence.SfFlags(), flags);
+            Evidence.MkSet(mk, span, Evidence.MkfFlags(), flags);
             if (d >= 0) {
-                cls = PcReadProps(et, sp, ox, span, d);
-                if (isart == 1) {
-                    if (cls == 1) {
-                        Evidence.SpSet(sp, span, Evidence.SfArtifact(), Evidence.ArWatermark());
-                    }
-                    if (cls == 2) {
-                        Evidence.SpSet(sp, span, Evidence.SfArtifact(), Evidence.ArBackground());
-                    }
-                    if (cls == 3) {
-                        Evidence.SpSet(sp, span, Evidence.SfArtifact(), Evidence.ArPagination());
-                    }
-                    if (cls == 4) {
-                        Evidence.SpSet(sp, span, Evidence.SfArtifact(), Evidence.ArLayout());
-                    }
-                }
+                PcReadProps(et, mk, ox, span, d, isart);
             }
         }
         emon.Port.CellsSet(cx, CMctop, span);
         emon.Port.CellsSet(cx, CMcdepth, depth + 1);
-        PcMcRecompute(cx, sp);
+        if (isoc == 1) {
+            emon.Port.CellsSet(cx, CCurocg, span);
+        }
         return 0;
     }
-    internal static int PcMcEnd(emon.Port.Cells cx, emon.Port.Cells sp, emon.Port.Cells gl) {
-        // EMC: close the innermost span this stream opened; a BDC that was too deep
+    internal static int PcMcEnd(emon.Port.Cells cx, emon.Port.Cells mk, emon.Port.Cells gl) {
+        // EMC: close the innermost mark this stream opened; a BDC that was too deep
         // to record is balanced first; an EMC with nothing to close is ignored.
         int over = emon.Port.CellsAt(cx, CMcover);
         if (over > 0) {
@@ -1732,7 +1926,7 @@ public static class Pdfcontent {
             PcWarnSet(cx, WMc);
             return 0;
         }
-        return PcMcPop(cx, sp, gl, 0);
+        return PcMcPop(cx, mk, gl, 0);
     }
     internal static int PcSkipInline(emon.Port.Cells cx, emon.Port.Cells cs) {
         // BI: skip to the end of the inline image: find `ID` and its one white
@@ -1790,7 +1984,7 @@ public static class Pdfcontent {
         emon.Port.CellsPush(cs, 10);
         return status;
     }
-    internal static int PcDo(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int n) {
+    internal static int PcDo(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int n) {
         // Do: run the Form XObject named by operand 0. Images and everything that is
         // not a form are skipped. The form's /Matrix is concatenated to the CTM, its
         // /Resources replace the current ones (else they are inherited), and it runs
@@ -1897,7 +2091,7 @@ public static class Pdfcontent {
         emon.Port.CellsSet(cx, CFdepth, fd + 1);
         emon.Port.CellsSet(cx, CStm, objnum);
         endcs = emon.Port.CellsLen(cs);
-        PcRun(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, sp, start, endcs);
+        PcRun(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, start, endcs);
         emon.Port.CellsSet(cx, CFdepth, fd);
         emon.Port.CellsSet(cx, CStm, oldstm);
         emon.Port.CellsSet(cx, CRes, oldres);
@@ -1905,16 +2099,16 @@ public static class Pdfcontent {
         emon.Port.CellsDrop(cs, start);
         return 0;
     }
-    internal static int PcPrep(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3) {
+    internal static int PcPrep(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells fnt, emon.Port.Cells et) {
         // Before a string is shown: the font resident, and M = Tm x CTM current.
-        PcEnsureFont(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3);
+        PcEnsureFont(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3, fnt, et);
         PcUpdateM(cx);
         if (emon.Port.CellsAt(cx, CSlot) < 0) {
             PcWarnSet(cx, WText);
         }
         return 0;
     }
-    internal static int PcOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int op, int n) {
+    internal static int PcOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int op, int n) {
         // Execute one operator; `ox` holds its n operands. Unknown operators do
         // nothing (their operands are dropped by the caller).
         if (op == OpSave) {
@@ -1991,14 +2185,14 @@ public static class Pdfcontent {
         }
         if (op == OpShow) {
             if ((n >= 1) && (PcKind(ox, 0) == KStr)) {
-                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3);
+                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3, fnt, et);
                 PcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 0);
             }
             return 0;
         }
         if (op == OpShowarr) {
             if ((n >= 1) && (PcKind(ox, 0) == KArr)) {
-                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3);
+                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3, fnt, et);
                 PcShowArr(cx, ox, gl, et, f0, f1, f2, f3, 0);
             }
             return 0;
@@ -2006,7 +2200,7 @@ public static class Pdfcontent {
         if (op == OpQuote) {
             if ((n >= 1) && (PcKind(ox, 0) == KStr)) {
                 PcNextLine(cx);
-                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3);
+                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3, fnt, et);
                 PcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 0);
             }
             return 0;
@@ -2016,25 +2210,25 @@ public static class Pdfcontent {
                 Fx.FxPut(cx, CCur + GTw, PcNum(ox, n, 0));
                 Fx.FxPut(cx, CCur + GTc, PcNum(ox, n, 1));
                 PcNextLine(cx);
-                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3);
+                PcPrep(src, ar, dc, a, b, st, cx, @out, f0, f1, f2, f3, fnt, et);
                 PcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 2);
             }
             return 0;
         }
         if (op == OpDo) {
-            PcDo(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, sp, n);
+            PcDo(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, n);
             return 0;
         }
         if (op == OpBdc) {
-            PcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 1);
+            PcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 1);
             return 0;
         }
         if (op == OpBmc) {
-            PcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 0);
+            PcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 0);
             return 0;
         }
         if (op == OpEmc) {
-            PcMcEnd(cx, sp, gl);
+            PcMcEnd(cx, mk, gl);
             return 0;
         }
         if (op == OpBi) {
@@ -2088,7 +2282,7 @@ public static class Pdfcontent {
         }
         return 0;
     }
-    internal static int PcRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int start, int end) {
+    internal static int PcRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int start, int end) {
         // Run the content bytes cs[start, end): read operands, then execute each
         // operator. The caller's lexer position, graphics-state floor and marked-
         // content floor are kept and restored, so a form can run inside an operator.
@@ -2118,20 +2312,20 @@ public static class Pdfcontent {
                 }
                 opc = emon.Port.CellsAt(cx, COp);
                 nop = emon.Port.CellsAt(cx, COxn);
-                PcOp(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, sp, opc, nop);
+                PcOp(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, opc, nop);
                 PcOxClear(cx, ox);
             }
         }
         // What the stream left open: spans, graphics states.
         while (emon.Port.CellsAt(cx, CMcdepth) > emon.Port.CellsAt(cx, CMcbase)) {
             PcWarnSet(cx, WMc);
-            PcMcPop(cx, sp, gl, 1);
+            PcMcPop(cx, mk, gl, 1);
         }
         while (emon.Port.CellsAt(cx, CDepth) > emon.Port.CellsAt(cx, CGsbase)) {
             emon.Port.CellsSet(cx, CDepth, emon.Port.CellsAt(cx, CDepth) - 1);
         }
         emon.Port.CellsSet(cx, CMctop, oldtop);
-        PcMcRecompute(cx, sp);
+        emon.Port.CellsSet(cx, CCurocg, Evidence.MkOcgOf(mk, oldtop));
         emon.Port.CellsSet(cx, CMcover, oldover);
         emon.Port.CellsSet(cx, CMcbase, oldmcb);
         emon.Port.CellsSet(cx, CGsbase, oldgs);
@@ -2163,26 +2357,26 @@ public static class Pdfcontent {
     internal static int PcOffset(emon.Port.Cells gl, int j, int axis) {
         // Where glyph j's baseline is across its writing axis, in centipoints.
         if (axis == 1) {
-            return Evidence.GlGet(gl, j, Evidence.GfX1());
+            return Evidence.GlGet(gl, j, Evidence.ChX1());
         }
         if (axis == 3) {
-            return Evidence.GlGet(gl, j, Evidence.GfX0());
+            return Evidence.GlGet(gl, j, Evidence.ChX0());
         }
-        return Evidence.GlGet(gl, j, Evidence.GfBaseline());
+        return Evidence.GlGet(gl, j, Evidence.GfBy0());
     }
     internal static int PcGap(emon.Port.Cells gl, int p, int g, int axis) {
         // The space along the axis between glyph p and the glyph g after it
         // (negative when they overlap or g is before p).
         if (axis == 0) {
-            return Evidence.GlGet(gl, g, Evidence.GfX0()) - Evidence.GlGet(gl, p, Evidence.GfX1());
+            return Evidence.GlGet(gl, g, Evidence.ChX0()) - Evidence.GlGet(gl, p, Evidence.ChX1());
         }
         if (axis == 2) {
-            return Evidence.GlGet(gl, p, Evidence.GfX0()) - Evidence.GlGet(gl, g, Evidence.GfX1());
+            return Evidence.GlGet(gl, p, Evidence.ChX0()) - Evidence.GlGet(gl, g, Evidence.ChX1());
         }
         if (axis == 1) {
-            return Evidence.GlGet(gl, p, Evidence.GfY0()) - Evidence.GlGet(gl, g, Evidence.GfY1());
+            return Evidence.GlGet(gl, p, Evidence.ChY0()) - Evidence.GlGet(gl, g, Evidence.ChY1());
         }
-        return Evidence.GlGet(gl, g, Evidence.GfY0()) - Evidence.GlGet(gl, p, Evidence.GfY1());
+        return Evidence.GlGet(gl, g, Evidence.ChY0()) - Evidence.GlGet(gl, p, Evidence.ChY1());
     }
     internal static int PcRotGap(emon.Port.Cells gl, int p, int g, int size) {
         // For text at an arbitrary angle: the distance between glyph p's centre and
@@ -2191,8 +2385,8 @@ public static class Pdfcontent {
         int rot = Evidence.GlGet(gl, p, Evidence.GfRot());
         long ux = Fx.FxCos(rot);
         long uy = ((long) 0) - Fx.FxSin(rot);
-        int dx2 = (Evidence.GlGet(gl, g, Evidence.GfX0()) + Evidence.GlGet(gl, g, Evidence.GfX1())) - (Evidence.GlGet(gl, p, Evidence.GfX0()) + Evidence.GlGet(gl, p, Evidence.GfX1()));
-        int dy2 = (Evidence.GlGet(gl, g, Evidence.GfY0()) + Evidence.GlGet(gl, g, Evidence.GfY1())) - (Evidence.GlGet(gl, p, Evidence.GfY0()) + Evidence.GlGet(gl, p, Evidence.GfY1()));
+        int dx2 = (Evidence.GlGet(gl, g, Evidence.ChX0()) + Evidence.GlGet(gl, g, Evidence.ChX1())) - (Evidence.GlGet(gl, p, Evidence.ChX0()) + Evidence.GlGet(gl, p, Evidence.ChX1()));
+        int dy2 = (Evidence.GlGet(gl, g, Evidence.ChY0()) + Evidence.GlGet(gl, g, Evidence.ChY1())) - (Evidence.GlGet(gl, p, Evidence.ChY0()) + Evidence.GlGet(gl, p, Evidence.ChY1()));
         long al2 = unchecked(Fx.FxMul(Fx.FxOfInt(dx2), ux) + Fx.FxMul(Fx.FxOfInt(dy2), uy));
         return Fx.FxRound(al2 / ((long) 2)) - ((size * 600) / 1000);
     }
@@ -2201,8 +2395,8 @@ public static class Pdfcontent {
         int rot = Evidence.GlGet(gl, p, Evidence.GfRot());
         long sn = Fx.FxSin(rot);
         long cs = Fx.FxCos(rot);
-        int dx2 = (Evidence.GlGet(gl, g, Evidence.GfX0()) + Evidence.GlGet(gl, g, Evidence.GfX1())) - (Evidence.GlGet(gl, p, Evidence.GfX0()) + Evidence.GlGet(gl, p, Evidence.GfX1()));
-        int dy2 = (Evidence.GlGet(gl, g, Evidence.GfY0()) + Evidence.GlGet(gl, g, Evidence.GfY1())) - (Evidence.GlGet(gl, p, Evidence.GfY0()) + Evidence.GlGet(gl, p, Evidence.GfY1()));
+        int dx2 = (Evidence.GlGet(gl, g, Evidence.ChX0()) + Evidence.GlGet(gl, g, Evidence.ChX1())) - (Evidence.GlGet(gl, p, Evidence.ChX0()) + Evidence.GlGet(gl, p, Evidence.ChX1()));
+        int dy2 = (Evidence.GlGet(gl, g, Evidence.ChY0()) + Evidence.GlGet(gl, g, Evidence.ChY1())) - (Evidence.GlGet(gl, p, Evidence.ChY0()) + Evidence.GlGet(gl, p, Evidence.ChY1()));
         int pe = Fx.FxRound(unchecked(Fx.FxMul(Fx.FxOfInt(dx2), sn) + Fx.FxMul(Fx.FxOfInt(dy2), cs)) / ((long) 2));
         if (pe < 0) {
             return 0 - pe;
@@ -2320,13 +2514,13 @@ public static class Pdfcontent {
         return 0;
     }
     internal static int PcGcls(emon.Port.Cells gl, int j) {
-        return PcCls(Evidence.GlGet(gl, j, Evidence.GfCp()));
+        return PcCls(Evidence.GlGet(gl, j, Evidence.ChCp()));
     }
     internal static int PcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j) {
         // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
-        int ts = Evidence.GlGet(gl, j, Evidence.GfTstart());
-        int tl = Evidence.GlGet(gl, j, Evidence.GfTlen());
-        int cp = Evidence.GlGet(gl, j, Evidence.GfCp());
+        int ts = Evidence.GlGet(gl, j, Evidence.ChTstart());
+        int tl = Evidence.GlGet(gl, j, Evidence.ChTlen());
+        int cp = Evidence.GlGet(gl, j, Evidence.ChCp());
         int k = 0;
         int cpv = 0;
         if ((ts >= 0) && (tl > 0)) {
@@ -2344,17 +2538,17 @@ public static class Pdfcontent {
         }
         return 0;
     }
-    internal static int PcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, int page, int gfst, int glst) {
+    internal static int PcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells fnt, int page, int gfst, int glst, int wbk) {
         // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
         // dominant font and size of the first, and `hidden-text` as its source when every
         // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
         // page (visual order, as Skia and most producers write them) has its TEXT written in
         // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
         // turned back. The glyphs themselves stay as they were shown.
-        int x0 = Evidence.GlGet(gl, gfst, Evidence.GfX0());
-        int y0 = Evidence.GlGet(gl, gfst, Evidence.GfY0());
-        int x1 = Evidence.GlGet(gl, gfst, Evidence.GfX1());
-        int y1 = Evidence.GlGet(gl, gfst, Evidence.GfY1());
+        int x0 = Evidence.GlGet(gl, gfst, Evidence.ChX0());
+        int y0 = Evidence.GlGet(gl, gfst, Evidence.ChY0());
+        int x1 = Evidence.GlGet(gl, gfst, Evidence.ChX1());
+        int y1 = Evidence.GlGet(gl, gfst, Evidence.ChY1());
         int j = gfst;
         int tstart = -1;
         int visible = 0;
@@ -2365,17 +2559,17 @@ public static class Pdfcontent {
         int kk = 0;
         int m = 0;
         while (j <= glst) {
-            if (Evidence.GlGet(gl, j, Evidence.GfX0()) < x0) {
-                x0 = Evidence.GlGet(gl, j, Evidence.GfX0());
+            if (Evidence.GlGet(gl, j, Evidence.ChX0()) < x0) {
+                x0 = Evidence.GlGet(gl, j, Evidence.ChX0());
             }
-            if (Evidence.GlGet(gl, j, Evidence.GfY0()) < y0) {
-                y0 = Evidence.GlGet(gl, j, Evidence.GfY0());
+            if (Evidence.GlGet(gl, j, Evidence.ChY0()) < y0) {
+                y0 = Evidence.GlGet(gl, j, Evidence.ChY0());
             }
-            if (Evidence.GlGet(gl, j, Evidence.GfX1()) > x1) {
-                x1 = Evidence.GlGet(gl, j, Evidence.GfX1());
+            if (Evidence.GlGet(gl, j, Evidence.ChX1()) > x1) {
+                x1 = Evidence.GlGet(gl, j, Evidence.ChX1());
             }
-            if (Evidence.GlGet(gl, j, Evidence.GfY1()) > y1) {
-                y1 = Evidence.GlGet(gl, j, Evidence.GfY1());
+            if (Evidence.GlGet(gl, j, Evidence.ChY1()) > y1) {
+                y1 = Evidence.GlGet(gl, j, Evidence.ChY1());
             }
             if (Evidence.GlGet(gl, j, Evidence.GfMode()) != 3) {
                 visible = 1;
@@ -2391,7 +2585,7 @@ public static class Pdfcontent {
         }
         if ((nr > nl) && (glst > gfst)) {
             if (PcAxis(Evidence.GlGet(gl, gfst, Evidence.GfRot())) == 0) {
-                if (Evidence.GlGet(gl, glst, Evidence.GfX0()) >= Evidence.GlGet(gl, gfst, Evidence.GfX0())) {
+                if (Evidence.GlGet(gl, glst, Evidence.ChX0()) >= Evidence.GlGet(gl, gfst, Evidence.ChX0())) {
                     rtlw = 1;
                 }
             }
@@ -2423,17 +2617,25 @@ public static class Pdfcontent {
                 }
             }
         }
-        int w = Evidence.WdNew(wd, page, x0, y0, x1, y1, gfst, (glst - gfst) + 1);
-        Evidence.WdSet(wd, w, Evidence.WfTstart(), tstart);
-        Evidence.WdSet(wd, w, Evidence.WfTlen(), emon.Port.CellsLen(et) - tstart);
-        Evidence.WdSet(wd, w, Evidence.WfFont(), Evidence.GlGet(gl, gfst, Evidence.GfFont()));
+        int w = Evidence.WdNew(wd, page, x0, y0, x1, y1, Evidence.GlGet(gl, gfst, Evidence.GfBx0()), Evidence.GlGet(gl, gfst, Evidence.GfBy0()), Evidence.GlGet(gl, glst, Evidence.GfBx1()), Evidence.GlGet(gl, glst, Evidence.GfBy1()), Evidence.GlGet(gl, gfst, Evidence.GfRot()), 0, tstart, emon.Port.CellsLen(et) - tstart, -1, -1, -1);
+        int fo = Evidence.GlGet(gl, gfst, Evidence.GfFont());
+        if (rtlw == 1) {
+            Evidence.WdSet(wd, w, Evidence.HdDir(), Evidence.LdRtl());
+        }
+        Evidence.WdSet(wd, w, Evidence.WfGfirst(), gfst);
+        Evidence.WdSet(wd, w, Evidence.WfGcount(), (glst - gfst) + 1);
+        Evidence.WdSet(wd, w, Evidence.WfFont(), fo);
         Evidence.WdSet(wd, w, Evidence.WfSize(), Evidence.GlGet(gl, gfst, Evidence.GfSize()));
+        if ((fo >= 0) && (fo < Evidence.FoCount(fnt))) {
+            Evidence.WdSet(wd, w, Evidence.WfStyle(), Evidence.FoGet(fnt, fo, Evidence.FnfStyle()));
+        }
+        Evidence.WdSet(wd, w, Evidence.WfWbreak(), wbk);
         if (visible == 0) {
             Evidence.WdSet(wd, w, Evidence.WfSrc(), Model.SrHiddenText());
         }
         j = gfst;
         while (j <= glst) {
-            Evidence.GlSet(gl, j, Evidence.GfWord(), w);
+            Evidence.GlSet(gl, j, Evidence.ChWord(), w);
             j += 1;
         }
         return w;
@@ -2442,11 +2644,11 @@ public static class Pdfcontent {
         int k = 0;
         int u = 0;
         int v = 0;
-        while (k < 16) {
-            u = emon.Port.CellsAt(wd, (i * 16) + k);
-            v = emon.Port.CellsAt(wd, (j * 16) + k);
-            emon.Port.CellsSet(wd, (i * 16) + k, v);
-            emon.Port.CellsSet(wd, (j * 16) + k, u);
+        while (k < 24) {
+            u = emon.Port.CellsAt(wd, (i * 24) + k);
+            v = emon.Port.CellsAt(wd, (j * 24) + k);
+            emon.Port.CellsSet(wd, (i * 24) + k, v);
+            emon.Port.CellsSet(wd, (j * 24) + k, u);
             k += 1;
         }
         return 0;
@@ -2518,11 +2720,11 @@ public static class Pdfcontent {
         if (nr <= nl) {
             return 0;
         }
-        Evidence.LnSet(ln, lidx, Evidence.LfDir(), Evidence.LdRtl());
+        Evidence.LnSet(ln, lidx, Evidence.LhDir(), Evidence.LdRtl());
         if (PcAxis(Evidence.GlGet(gl, Evidence.WdGet(wd, wfst, Evidence.WfGfirst()), Evidence.GfRot())) != 0) {
             return 0;
         }
-        if (Evidence.WdGet(wd, wlst, Evidence.WfX0()) < Evidence.WdGet(wd, wfst, Evidence.WfX0())) {
+        if (Evidence.WdGet(wd, wlst, Evidence.HdX0()) < Evidence.WdGet(wd, wfst, Evidence.HdX0())) {
             return 0;
         }
         if (wfst == wlst) {
@@ -2548,33 +2750,33 @@ public static class Pdfcontent {
             gn = Evidence.WdGet(wd, w, Evidence.WfGcount());
             j = 0;
             while (j < gn) {
-                Evidence.GlSet(gl, g0 + j, Evidence.GfWord(), w);
+                Evidence.GlSet(gl, g0 + j, Evidence.ChWord(), w);
                 j += 1;
             }
             z = -1;
             if (w < wlst) {
-                z = Evidence.WdGet(wd, w, Evidence.WfX0()) - Evidence.WdGet(wd, w + 1, Evidence.WfX1());
+                z = Evidence.WdGet(wd, w, Evidence.HdX0()) - Evidence.WdGet(wd, w + 1, Evidence.HdX1());
             }
             Evidence.WdSet(wd, w, Evidence.WfGap(), z);
             w += 1;
         }
         return 0;
     }
-    public static int PcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, int page, int g0, int w0) {
+    public static int PcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells fnt, int page, int g0, int w0) {
         // Group the glyphs from g0 on into words, and the words from w0 on into lines.
         int g1 = Evidence.GlCount(gl);
         int i = g0;
         int cur = -1;
         while (i < g1) {
-            if (PcSpaceCp(Evidence.GlGet(gl, i, Evidence.GfCp())) == 1) {
+            if (PcSpaceCp(Evidence.GlGet(gl, i, Evidence.ChCp())) == 1) {
                 if (cur >= 0) {
-                    PcEmitWord(gl, et, wd, page, cur, i - 1);
+                    PcEmitWord(gl, et, wd, fnt, page, cur, i - 1, Evidence.WbSpace());
                     cur = -1;
                 }
             } else {
                 if (cur >= 0) {
                     if (PcContinues(gl, i - 1, i) == 0) {
-                        PcEmitWord(gl, et, wd, page, cur, i - 1);
+                        PcEmitWord(gl, et, wd, fnt, page, cur, i - 1, Evidence.WbGap());
                         cur = -1;
                     }
                 }
@@ -2585,7 +2787,7 @@ public static class Pdfcontent {
             i += 1;
         }
         if (cur >= 0) {
-            PcEmitWord(gl, et, wd, page, cur, g1 - 1);
+            PcEmitWord(gl, et, wd, fnt, page, cur, g1 - 1, Evidence.WbLineEnd());
             cur = -1;
         }
         // Lines: consecutive words on one baseline, in order.
@@ -2605,6 +2807,7 @@ public static class Pdfcontent {
         int joins = 0;
         int gap = 0;
         int sz = 0;
+        int ord = 0;
         int off = 0;
         while (j <= nw) {
             joins = 0;
@@ -2639,34 +2842,45 @@ public static class Pdfcontent {
             } else {
                 // The line so far ends at `prev`: record it, then start a new one at j.
                 if (lfirst >= 0) {
-                    x0 = Evidence.WdGet(wd, lfirst, Evidence.WfX0());
-                    y0 = Evidence.WdGet(wd, lfirst, Evidence.WfY0());
-                    x1 = Evidence.WdGet(wd, lfirst, Evidence.WfX1());
-                    y1 = Evidence.WdGet(wd, lfirst, Evidence.WfY1());
+                    x0 = Evidence.WdGet(wd, lfirst, Evidence.HdX0());
+                    y0 = Evidence.WdGet(wd, lfirst, Evidence.HdY0());
+                    x1 = Evidence.WdGet(wd, lfirst, Evidence.HdX1());
+                    y1 = Evidence.WdGet(wd, lfirst, Evidence.HdY1());
                     lnx = lfirst;
                     while (lnx <= prev) {
-                        if (Evidence.WdGet(wd, lnx, Evidence.WfX0()) < x0) {
-                            x0 = Evidence.WdGet(wd, lnx, Evidence.WfX0());
+                        if (Evidence.WdGet(wd, lnx, Evidence.HdX0()) < x0) {
+                            x0 = Evidence.WdGet(wd, lnx, Evidence.HdX0());
                         }
-                        if (Evidence.WdGet(wd, lnx, Evidence.WfY0()) < y0) {
-                            y0 = Evidence.WdGet(wd, lnx, Evidence.WfY0());
+                        if (Evidence.WdGet(wd, lnx, Evidence.HdY0()) < y0) {
+                            y0 = Evidence.WdGet(wd, lnx, Evidence.HdY0());
                         }
-                        if (Evidence.WdGet(wd, lnx, Evidence.WfX1()) > x1) {
-                            x1 = Evidence.WdGet(wd, lnx, Evidence.WfX1());
+                        if (Evidence.WdGet(wd, lnx, Evidence.HdX1()) > x1) {
+                            x1 = Evidence.WdGet(wd, lnx, Evidence.HdX1());
                         }
-                        if (Evidence.WdGet(wd, lnx, Evidence.WfY1()) > y1) {
-                            y1 = Evidence.WdGet(wd, lnx, Evidence.WfY1());
+                        if (Evidence.WdGet(wd, lnx, Evidence.HdY1()) > y1) {
+                            y1 = Evidence.WdGet(wd, lnx, Evidence.HdY1());
                         }
                         lnx += 1;
                     }
                     gfp = Evidence.WdGet(wd, lfirst, Evidence.WfGfirst());
                     axis = PcAxis(Evidence.GlGet(gl, gfp, Evidence.GfRot()));
-                    lnx = Evidence.LnNew(ln, page, x0, y0, x1, y1, lfirst, (prev - lfirst) + 1, PcOffset(gl, gfp, axis));
-                    Evidence.LnSet(ln, lnx, Evidence.LfRot(), Evidence.GlGet(gl, gfp, Evidence.GfRot()));
+                    ord = Evidence.WdGet(wd, lfirst, Evidence.WfGfirst());
+                    lnx = lfirst;
+                    while (lnx <= prev) {
+                        if (Evidence.WdGet(wd, lnx, Evidence.WfGfirst()) < ord) {
+                            ord = Evidence.WdGet(wd, lnx, Evidence.WfGfirst());
+                        }
+                        lnx += 1;
+                    }
+                    // The baseline runs from the first word's start to the last word's end, in the
+                    // order the words were SHOWN (the bidi step below re-orders the rows, not the page).
+                    lnx = Evidence.LnNew(ln, page, x0, y0, x1, y1, Evidence.WdGet(wd, lfirst, Evidence.HdBx0()), Evidence.WdGet(wd, lfirst, Evidence.HdBy0()), Evidence.WdGet(wd, prev, Evidence.HdBx1()), Evidence.WdGet(wd, prev, Evidence.HdBy1()), Evidence.GlGet(gl, gfp, Evidence.GfRot()), 0, lfirst, (prev - lfirst) + 1);
+                    Evidence.LnSet(ln, lnx, Evidence.LfOrder(), ord);
                     PcLineBidi(gl, wd, ln, lnx, lfirst, prev);
+                    Evidence.WdSet(wd, prev, Evidence.WfWbreak(), Evidence.WbLineEnd());
                     gfp = lfirst;
                     while (gfp <= prev) {
-                        Evidence.WdSet(wd, gfp, Evidence.WfLine(), lnx);
+                        Evidence.WdSet(wd, gfp, Evidence.HdLine(), lnx);
                         gfp += 1;
                     }
                 }
@@ -2697,8 +2911,8 @@ public static class Pdfcontent {
         emon.Port.CellsSet(cx, CMcdepth, 0);
         emon.Port.CellsSet(cx, CMcbase, 0);
         emon.Port.CellsSet(cx, CMcover, 0);
-        emon.Port.CellsSet(cx, CCurmcid, -1);
-        emon.Port.CellsSet(cx, CCurart, 0);
+        emon.Port.CellsSet(cx, CCurocg, -1);
+        emon.Port.CellsSet(cx, CZ, 0);
         emon.Port.CellsSet(cx, CIntext, 0);
         emon.Port.CellsSet(cx, CGsbase, 0);
         Fx.MxIdent(cx, CTm);
@@ -2706,7 +2920,7 @@ public static class Pdfcontent {
         Fx.MxIdent(cx, CM);
         return 0;
     }
-    public static int PcPage(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, emon.Port.Cells pg, int pi, int page, emon.Port.Cells wd, emon.Port.Cells ln) {
+    public static int PcPage(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, int pi, int page, emon.Port.Cells wd, emon.Port.Cells ln) {
         // Interpret page index pi of the page table pg (page number `page`, 1-based, is
         // what the evidence records): its content streams, then the words and lines.
         // Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is
@@ -2744,20 +2958,21 @@ public static class Pdfcontent {
             return 7;
         }
         endcs = emon.Port.CellsLen(cs);
-        PcRun(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, sp, 0, endcs);
+        PcRun(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, 0, endcs);
         if (emon.Port.CellsAt(cx, CAbort) == 1) {
             return 7;
         }
         if (Pdfsrc.PsMissed(src)) {
             return 7;
         }
-        PcGroup(gl, et, wd, ln, page, g0, w0);
+        PcGroup(gl, et, wd, ln, fnt, page, g0, w0);
         return 0;
     }
-    public static int PcDocument(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
+    public static int PcDocument(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
         // Every page of an opened document (`pd-open` has answered 0): clears `cx`,
         // then `pc-page` for each page. Answers 0, or 7 when the source missed.
         PcInit(cx, ox);
+        emon.Port.CellsDrop(fnt, 0);
         int n = Pdfdoc.PdPages(src, ar, dc, a, b, st, pg);
         int i = 0;
         int status = 0;
@@ -2765,7 +2980,7 @@ public static class Pdfcontent {
             return 7;
         }
         while (i < n) {
-            status = PcPage(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, sp, pg, i, i + 1, wd, ln);
+            status = PcPage(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i + 1, wd, ln);
             if (status == 7) {
                 return 7;
             }

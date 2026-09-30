@@ -277,6 +277,12 @@ pub fn pfn_standard_font(f: &mut crate::port::Cells) -> i32 {
 pub fn pfn_has_tounicode(f: &mut crate::port::Cells) -> i32 {
     return crate::port::cells_at(f, H_HASTU);
 }
+pub fn pfn_flags(f: &mut crate::port::Cells) -> i32 {
+    return crate::port::cells_at(f, H_FLAGS);
+}
+pub fn pfn_encoding(f: &mut crate::port::Cells) -> i32 {
+    return crate::port::cells_at(f, H_ENC);
+}
 pub fn pfn_dw2_v(f: &mut crate::port::Cells) -> i32 {
     return crate::port::cells_at(f, H_DW2V);
 }

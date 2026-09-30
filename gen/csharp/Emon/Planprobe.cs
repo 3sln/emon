@@ -5,18 +5,24 @@ namespace emon;
 
 
 public static class Planprobe {
-    internal static int PpWords(emon.Port.Cells an, int at, int page, int dpi100, emon.Port.Cells ocrwords, emon.Port.Cells etext) {
-        // One OCR answer's words as OCR evidence on `page`; `dpi100` is the
-        // resolution (x100) of the bitmap the boxes are in.
+    internal static int PpWords(emon.Port.Cells an, int at, int page, int view, int request, int psm, emon.Port.Cells views, emon.Port.Cells oruns, emon.Port.Cells owords, emon.Port.Cells etext) {
+        // One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
         int nw = Plan.AnOcrCount(an, at);
+        int run = Evidence.OrNew(oruns, page, view);
+        int w0 = Evidence.OwCount(owords);
         int w = Plan.AnOcrFirst(an, at);
         int i = 0;
+        Evidence.OrSet(oruns, run, Evidence.OrfRequest(), request);
+        Evidence.OrSet(oruns, run, Evidence.OrfPsm(), psm);
         while (i < nw) {
-            int x0 = (Plan.AwGet(an, w, Plan.AwX()) * 720000) / dpi100;
-            int y0 = (Plan.AwGet(an, w, Plan.AwY()) * 720000) / dpi100;
-            int x1 = ((Plan.AwGet(an, w, Plan.AwX()) + Plan.AwGet(an, w, Plan.AwW())) * 720000) / dpi100;
-            int y1 = ((Plan.AwGet(an, w, Plan.AwY()) + Plan.AwGet(an, w, Plan.AwH())) * 720000) / dpi100;
-            int ow = Evidence.OwNew(ocrwords, page, x0, y0, x1, y1, Plan.AwGet(an, w, Plan.AwConf()));
+            int px = Plan.AwGet(an, w, Plan.AwX());
+            int py = Plan.AwGet(an, w, Plan.AwY());
+            int pw = Plan.AwGet(an, w, Plan.AwW());
+            int ph = Plan.AwGet(an, w, Plan.AwH());
+            int x0 = Evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph);
+            int y0 = Evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph);
+            int x1 = Evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph);
+            int y1 = Evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph);
             int ts = Evidence.EtxLen(etext);
             int nc = Plan.AwGet(an, w, Plan.AwLen());
             int k = 0;
@@ -24,18 +30,18 @@ public static class Planprobe {
                 Evidence.EtxAppendCp(etext, Plan.AwCp(an, w, k));
                 k += 1;
             }
-            Evidence.OwSet(ocrwords, ow, Evidence.OfTstart(), ts);
-            Evidence.OwSet(ocrwords, ow, Evidence.OfTlen(), nc);
-            Evidence.OwSet(ocrwords, ow, Evidence.OfLine(), Plan.AwGet(an, w, Plan.AwLine()));
-            Evidence.OwSet(ocrwords, ow, Evidence.OfBlock(), Plan.AwGet(an, w, Plan.AwBlock()));
+            int ow = Evidence.OwNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, Plan.AwGet(an, w, Plan.AwConf()), -1);
+            Evidence.OwSet(owords, ow, Evidence.OwfRun(), run);
             w = Plan.AwNext(an, w);
             i += 1;
         }
+        Evidence.OrSet(oruns, run, Evidence.OrfWfirst(), w0);
+        Evidence.OrSet(oruns, run, Evidence.OrfWcount(), nw);
         return 0;
     }
-    public static int PpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
+    public static int PpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
         // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         int n = emon.Port.SrcLen(s);
         int mid = emon.Port.SrcU8(s, n / 2);
         int tail = emon.Port.SrcU8(s, n - 1);
@@ -82,9 +88,10 @@ public static class Planprobe {
             if (dd1 < 1) {
                 dd1 = 7200;
             }
+            int v1 = Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, w1, h1, dd1, Plan.LayFull(), -1, 0, 0, 0, 0, 0);
             Evidence.ImNew(images, 1, 0, 0, (w1 * 720000) / dd1, (h1 * 720000) / dd1, mid, w1, h1);
             if (Plan.AnOk(an, o3) == 1) {
-                PpWords(an, o3, 1, dd1, ocrwords, etext);
+                PpWords(an, o3, 1, v1, 3, 6, views, oruns, owords, etext);
             }
         }
         if (Plan.AnOk(an, r2) == 1) {
@@ -94,9 +101,10 @@ public static class Planprobe {
             if (dd2 < 1) {
                 dd2 = 7200;
             }
+            int v2 = Evidence.VwNew(views, 2, Evidence.VkDecode(), 2, -1, w2, h2, dd2, Plan.LayFull(), -1, 0, 0, 0, 0, 0);
             Evidence.ImNew(images, 2, 0, 0, (w2 * 720000) / dd2, (h2 * 720000) / dd2, tail, w2, h2);
             if (Plan.AnOk(an, o4) == 1) {
-                PpWords(an, o4, 2, dd2, ocrwords, etext);
+                PpWords(an, o4, 2, v2, 4, 3, views, oruns, owords, etext);
             }
         }
         return Plan.UsDone();

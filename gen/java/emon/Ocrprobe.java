@@ -8,70 +8,275 @@ public final class Ocrprobe {
     public static int opCpt(int px, int dpi) {
         return (px * 7200) / dpi;
     }
-    public static int opBaseline(emon.Port.Cells an, int ext, int line, int cx, int dflt) {
-        // The line's baseline at pixel column `cx` (two points, integer interpolation), or `dflt`.
-        if (ext < 0) {
-            return dflt;
+    public static int opLd(int wdir) {
+        // The engine's writing direction as `ld`: 0 left to right, 1 right to left, 2 top to bottom.
+        if (wdir == 1) {
+            return Evidence.ldRtl();
         }
-        int l = Ocr.oxLineAt(an, ext, line);
-        int bx0 = emon.Port.cellsAt(an, l + 4);
-        int by0 = emon.Port.cellsAt(an, l + 5);
-        int bx1 = emon.Port.cellsAt(an, l + 6);
-        int by1 = emon.Port.cellsAt(an, l + 7);
-        if (bx1 <= bx0) {
-            return by1;
+        if (wdir == 2) {
+            return Evidence.ldTtb();
         }
-        return by0 + (((by1 - by0) * (cx - bx0)) / (bx1 - bx0));
+        return 0;
     }
-    public static int opWords(emon.Port.Cells an, int at, int page, int dpi, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
+    public static int opGrow(emon.Port.Cells oblocks, int row, int x0, int y0, int x1, int y1) {
+        // Grow block (or paragraph) `row`'s box to hold the box (x0 y0 x1 y1).
+        if (x0 < Evidence.obGet(oblocks, row, Evidence.obfX0())) {
+            Evidence.obSet(oblocks, row, Evidence.obfX0(), x0);
+        }
+        if (y0 < Evidence.obGet(oblocks, row, Evidence.obfY0())) {
+            Evidence.obSet(oblocks, row, Evidence.obfY0(), y0);
+        }
+        if (x1 > Evidence.obGet(oblocks, row, Evidence.obfX1())) {
+            Evidence.obSet(oblocks, row, Evidence.obfX1(), x1);
+        }
+        if (y1 > Evidence.obGet(oblocks, row, Evidence.obfY1())) {
+            Evidence.obSet(oblocks, row, Evidence.obfY1(), y1);
+        }
+        return 0;
+    }
+    public static int opLines(emon.Port.Cells an, int ext, int view, int run, emon.Port.Cells views, emon.Port.Cells oblocks, emon.Port.Cells olines) {
+        // The blocks, paragraphs and lines of the extension, in its order. A block is a run of lines with the
+        // same block id, a paragraph a run of them with the same paragraph id inside it (-1 is an id like
+        // another); a block is followed by its paragraphs, a paragraph's lines are the rows that follow it.
+        int nl = Ocr.oxNlines(an, ext);
+        int orient = Ocr.oxOrient(an, ext);
+        int wdir = Ocr.oxWdir(an, ext);
+        int k = 0;
+        int l = 0;
+        int px = 0;
+        int py = 0;
+        int pw = 0;
+        int ph = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int bx0 = 0;
+        int by0 = 0;
+        int bx1 = 0;
+        int by1 = 0;
+        int blk = 0;
+        int par = 0;
+        int bty = 0;
+        int curblk = -2;
+        int curpar = -2;
+        int brow = -1;
+        int prow = -1;
+        int lrow = 0;
+        int bcnt = 0;
+        int fresh = 0;
+        while (k < nl) {
+            l = Ocr.oxLineAt(an, ext, k);
+            px = emon.Port.cellsAt(an, l);
+            py = emon.Port.cellsAt(an, l + 1);
+            pw = emon.Port.cellsAt(an, l + 2);
+            ph = emon.Port.cellsAt(an, l + 3);
+            x0 = Evidence.vwBoxToCpt(views, view, 0, px, py, pw, ph);
+            y0 = Evidence.vwBoxToCpt(views, view, 1, px, py, pw, ph);
+            x1 = Evidence.vwBoxToCpt(views, view, 2, px, py, pw, ph);
+            y1 = Evidence.vwBoxToCpt(views, view, 3, px, py, pw, ph);
+            bx0 = Evidence.vwPxToCpt(views, view, 0, emon.Port.cellsAt(an, l + 4), emon.Port.cellsAt(an, l + 5));
+            by0 = Evidence.vwPxToCpt(views, view, 1, emon.Port.cellsAt(an, l + 4), emon.Port.cellsAt(an, l + 5));
+            bx1 = Evidence.vwPxToCpt(views, view, 0, emon.Port.cellsAt(an, l + 6), emon.Port.cellsAt(an, l + 7));
+            by1 = Evidence.vwPxToCpt(views, view, 1, emon.Port.cellsAt(an, l + 6), emon.Port.cellsAt(an, l + 7));
+            blk = emon.Port.cellsAt(an, l + 8);
+            par = emon.Port.cellsAt(an, l + 9);
+            bty = emon.Port.cellsAt(an, l + 10);
+            fresh = 0;
+            if ((k == 0) || (blk != curblk)) {
+                brow = Evidence.obNew(oblocks, 1, x0, y0, x1, y1, Evidence.obBlock(), -1, run);
+                Evidence.obSet(oblocks, brow, Evidence.obfBtype(), bty);
+                Evidence.obSet(oblocks, brow, Evidence.obfOrient(), orient);
+                Evidence.obSet(oblocks, brow, Evidence.obfWdir(), wdir);
+                Evidence.obSet(oblocks, brow, Evidence.obfFirst(), brow + 1);
+                curblk = blk;
+                curpar = -2;
+            }
+            if (par != curpar) {
+                prow = Evidence.obNew(oblocks, 1, x0, y0, x1, y1, Evidence.obParagraph(), brow, run);
+                Evidence.obSet(oblocks, prow, Evidence.obfBtype(), bty);
+                Evidence.obSet(oblocks, prow, Evidence.obfOrient(), orient);
+                Evidence.obSet(oblocks, prow, Evidence.obfWdir(), wdir);
+                Evidence.obSet(oblocks, prow, Evidence.obfFirst(), Evidence.olCount(olines));
+                bcnt = Evidence.obGet(oblocks, brow, Evidence.obfCount());
+                Evidence.obSet(oblocks, brow, Evidence.obfCount(), bcnt + 1);
+                curpar = par;
+                fresh = 1;
+            }
+            if (fresh == 0) {
+                opGrow(oblocks, prow, x0, y0, x1, y1);
+                opGrow(oblocks, brow, x0, y0, x1, y1);
+            }
+            lrow = Evidence.olNew(olines, 1, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.evAngle(bx1 - bx0, by1 - by0), opLd(wdir), -1, 0);
+            Evidence.olSet(olines, lrow, Evidence.olfPar(), prow);
+            Evidence.olSet(olines, lrow, Evidence.olfRun(), run);
+            Evidence.olSet(olines, lrow, Evidence.olfPx(), px);
+            Evidence.olSet(olines, lrow, Evidence.olfPy(), py);
+            Evidence.olSet(olines, lrow, Evidence.olfPw(), pw);
+            Evidence.olSet(olines, lrow, Evidence.olfPh(), ph);
+            bcnt = Evidence.obGet(oblocks, prow, Evidence.obfCount());
+            Evidence.obSet(oblocks, prow, Evidence.obfCount(), bcnt + 1);
+            k += 1;
+        }
+        return nl;
+    }
+    public static int opWords(emon.Port.Cells an, int at, int ext, int view, int run, int l0, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts) {
+        // The words of the answer with their symbols and alternatives. A word's line is the extension's
+        // line index (an olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 in
+        // pixels, then mapped through the view (a word without a line has its box's bottom edge).
         int nw = Plan.anOcrCount(an, at);
-        int ext = Ocr.oxFind(an, at);
-        int wx = -1;
+        int nl = 0;
+        int wdir = 0;
+        int tlen = 0;
         int w = Plan.anOcrFirst(an, at);
+        int wx = -1;
         int i = 0;
+        int px = 0;
+        int py = 0;
+        int pw = 0;
+        int ph = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int bx0 = 0;
+        int by0 = 0;
+        int bx1 = 0;
+        int by1 = 0;
+        int ln = 0;
+        int lx0 = 0;
+        int ly0 = 0;
+        int lx1 = 0;
+        int ly1 = 0;
+        int lrow = -1;
+        int ts = 0;
+        int nc = 0;
+        int k = 0;
+        int ow = 0;
+        int j = 0;
+        int ns = 0;
+        int sy = 0;
+        int sym = 0;
+        int ncp = 0;
+        int nalt = 0;
+        int a = 0;
+        int m = 0;
+        int acp = 0;
+        int cpv = 0;
+        int a0 = 0;
+        int lcnt = 0;
         if (ext >= 0) {
             wx = Ocr.oxFirstWord(an, ext);
+            nl = Ocr.oxNlines(an, ext);
+            wdir = Ocr.oxWdir(an, ext);
         }
         while (i < nw) {
-            int px = Plan.awGet(an, w, Plan.awX());
-            int py = Plan.awGet(an, w, Plan.awY());
-            int pw = Plan.awGet(an, w, Plan.awW());
-            int ph = Plan.awGet(an, w, Plan.awH());
-            int ln = Plan.awGet(an, w, Plan.awLine());
-            int ow = Evidence.owNew(ocrwords, page, opCpt(px, dpi), opCpt(py, dpi), opCpt(px + pw, dpi), opCpt(py + ph, dpi), Plan.awGet(an, w, Plan.awConf()));
-            int ts = Evidence.etxLen(etext);
-            int nc = Plan.awGet(an, w, Plan.awLen());
-            int k = 0;
+            px = Plan.awGet(an, w, Plan.awX());
+            py = Plan.awGet(an, w, Plan.awY());
+            pw = Plan.awGet(an, w, Plan.awW());
+            ph = Plan.awGet(an, w, Plan.awH());
+            x0 = Evidence.vwBoxToCpt(views, view, 0, px, py, pw, ph);
+            y0 = Evidence.vwBoxToCpt(views, view, 1, px, py, pw, ph);
+            x1 = Evidence.vwBoxToCpt(views, view, 2, px, py, pw, ph);
+            y1 = Evidence.vwBoxToCpt(views, view, 3, px, py, pw, ph);
+            ln = Plan.awGet(an, w, Plan.awLine());
+            lrow = -1;
+            bx0 = x0;
+            by0 = y1;
+            bx1 = x1;
+            by1 = y1;
+            if ((wx >= 0) && ((ln >= 0) && (ln < nl))) {
+                lrow = l0 + ln;
+                // The line's baseline is already in centipoints (mapped once, in `op-lines`); the word's endpoints
+                // are it evaluated at the word's left and right edge, with no pixel truncation in between (one
+                // centipoint at most, not a pixel). The edge's x is the view's for an upright raster.
+                bx0 = Evidence.vwPxToCpt(views, view, 0, px, py);
+                bx1 = Evidence.vwPxToCpt(views, view, 0, px + pw, py);
+                lx0 = Evidence.olGet(olines, lrow, Evidence.lhBx0());
+                ly0 = Evidence.olGet(olines, lrow, Evidence.lhBy0());
+                lx1 = Evidence.olGet(olines, lrow, Evidence.lhBx1());
+                ly1 = Evidence.olGet(olines, lrow, Evidence.lhBy1());
+                by0 = Evidence.evBaselineAt(lx0, ly0, lx1, ly1, bx0);
+                by1 = Evidence.evBaselineAt(lx0, ly0, lx1, ly1, bx1);
+            }
+            ts = Evidence.etxLen(etext);
+            nc = Plan.awGet(an, w, Plan.awLen());
+            k = 0;
             while (k < nc) {
                 Evidence.etxAppendCp(etext, Plan.awCp(an, w, k));
                 k += 1;
             }
-            Evidence.owSet(ocrwords, ow, Evidence.ofTstart(), ts);
-            Evidence.owSet(ocrwords, ow, Evidence.ofTlen(), nc);
-            Evidence.owSet(ocrwords, ow, Evidence.ofLine(), ln);
-            Evidence.owSet(ocrwords, ow, Evidence.ofBlock(), Plan.awGet(an, w, Plan.awBlock()));
+            ow = Evidence.owNew(owords, 1, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.evAngle(bx1 - bx0, by1 - by0), opLd(wdir), ts, nc, lrow, Plan.awGet(an, w, Plan.awConf()), -1);
+            Evidence.owSet(owords, ow, Evidence.owfRun(), run);
+            Evidence.owSet(owords, ow, Evidence.owfPx(), px);
+            Evidence.owSet(owords, ow, Evidence.owfPy(), py);
+            Evidence.owSet(owords, ow, Evidence.owfPw(), pw);
+            Evidence.owSet(owords, ow, Evidence.owfPh(), ph);
+            if (lrow >= 0) {
+                lcnt = Evidence.olGet(olines, lrow, Evidence.lhCount());
+                if (lcnt == 0) {
+                    Evidence.olSet(olines, lrow, Evidence.lhFirst(), ow);
+                }
+                Evidence.olSet(olines, lrow, Evidence.lhCount(), lcnt + 1);
+            }
             if (wx >= 0) {
-                Evidence.owSet(ocrwords, ow, Evidence.ofBaseline(), opCpt(opBaseline(an, ext, ln, px + (pw / 2), py + ph), dpi));
-                Evidence.owSet(ocrwords, ow, Evidence.ofFlags(), Ocr.oxWflags(an, wx));
-                Evidence.owSet(ocrwords, ow, Evidence.ofLang(), Ocr.oxWlang(an, wx));
-                int ns = Ocr.oxNsym(an, wx);
-                int s = Ocr.oxFirstSym(an, wx);
-                int j = 0;
-                int off = 0;
+                Evidence.owSet(owords, ow, Evidence.owfStyle(), Ocr.oxWflags(an, wx));
+                Evidence.owSet(owords, ow, Evidence.owfLang(), Ocr.oxWlang(an, wx));
+                ns = Ocr.oxNsym(an, wx);
+                Evidence.owSet(owords, ow, Evidence.owfSfirst(), Evidence.osCount(osyms));
+                Evidence.owSet(owords, ow, Evidence.owfScount(), ns);
+                sy = Ocr.oxFirstSym(an, wx);
+                j = 0;
                 while (j < ns) {
-                    int ncp = emon.Port.cellsAt(an, s + 5);
-                    int nalt = emon.Port.cellsAt(an, s + 6);
-                    int a = Ocr.oxSymAlts(an, s);
-                    int m = 0;
+                    ncp = emon.Port.cellsAt(an, sy + 5);
+                    nalt = emon.Port.cellsAt(an, sy + 6);
+                    px = emon.Port.cellsAt(an, sy);
+                    py = emon.Port.cellsAt(an, sy + 1);
+                    pw = emon.Port.cellsAt(an, sy + 2);
+                    ph = emon.Port.cellsAt(an, sy + 3);
+                    ts = -1;
+                    tlen = 0;
+                    cpv = -1;
+                    if (ncp > 1) {
+                        tlen = ncp;
+                    }
+                    if (ncp > 0) {
+                        cpv = emon.Port.cellsAt(an, sy + 7);
+                    }
+                    if (ncp > 1) {
+                        ts = Evidence.etxLen(etext);
+                        k = 0;
+                        while (k < ncp) {
+                            Evidence.etxAppendCp(etext, emon.Port.cellsAt(an, (sy + 7) + k));
+                            k += 1;
+                        }
+                    }
+                    sym = Evidence.osNew(osyms, 1, Evidence.vwBoxToCpt(views, view, 0, px, py, pw, ph), Evidence.vwBoxToCpt(views, view, 1, px, py, pw, ph), Evidence.vwBoxToCpt(views, view, 2, px, py, pw, ph), Evidence.vwBoxToCpt(views, view, 3, px, py, pw, ph), cpv, ts, tlen, ow);
+                    Evidence.osSet(osyms, sym, Evidence.osfConf(), emon.Port.cellsAt(an, sy + 4));
+                    Evidence.osSet(osyms, sym, Evidence.osfPx(), px);
+                    Evidence.osSet(osyms, sym, Evidence.osfPy(), py);
+                    Evidence.osSet(osyms, sym, Evidence.osfPw(), pw);
+                    Evidence.osSet(osyms, sym, Evidence.osfPh(), ph);
+                    a0 = Evidence.oaCount(oalts);
+                    a = Ocr.oxSymAlts(an, sy);
+                    m = 0;
                     while (m < nalt) {
-                        if (emon.Port.cellsAt(an, a) > 0) {
-                            Evidence.altAdd(ocrwords, alts, ow, off, emon.Port.cellsAt(an, a + 2), emon.Port.cellsAt(an, a + 1));
+                        acp = emon.Port.cellsAt(an, a);
+                        if (acp > 0) {
+                            ts = Evidence.etxLen(etext);
+                            k = 0;
+                            while (k < acp) {
+                                Evidence.etxAppendCp(etext, emon.Port.cellsAt(an, (a + 2) + k));
+                                k += 1;
+                            }
+                            Evidence.oaAdd(oalts, sym, ts, acp, emon.Port.cellsAt(an, a + 1));
                         }
                         a = Ocr.oxAltNext(an, a);
                         m += 1;
                     }
-                    off += ncp;
-                    s = Ocr.oxSymNext(an, s);
+                    Evidence.osSet(osyms, sym, Evidence.osfAfirst(), a0);
+                    Evidence.osSet(osyms, sym, Evidence.osfAcount(), Evidence.oaCount(oalts) - a0);
+                    sy = Ocr.oxSymNext(an, sy);
                     j += 1;
                 }
                 wx = Ocr.oxWordNext(an, wx);
@@ -79,11 +284,57 @@ public final class Ocrprobe {
             w = Plan.awNext(an, w);
             i += 1;
         }
+        return nw;
+    }
+    public static int opAnswer(emon.Port.Cells an, int at, int view, int request, emon.Port.Cells views, emon.Port.Cells epages, emon.Port.Cells etext, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells feats) {
+        // One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives,
+        // and the stage 1 features of every word.
+        int ext = Ocr.oxFind(an, at);
+        int run = Evidence.orNew(oruns, 1, view);
+        int b0 = Evidence.obCount(oblocks);
+        int l0 = Evidence.olCount(olines);
+        int w0 = Evidence.owCount(owords);
+        int nl = 0;
+        int nb = 0;
+        int nw = 0;
+        int w = 0;
+        int rotmed = 0;
+        Evidence.orSet(oruns, run, Evidence.orfRequest(), request);
+        Evidence.orSet(oruns, run, Evidence.orfRound(), 1);
+        Evidence.orSet(oruns, run, Evidence.orfPsm(), 3);
+        Evidence.orSet(oruns, run, Evidence.orfFlags(), Ocr.ocfSymbols() + Ocr.ocfOsd());
+        if (ext >= 0) {
+            Evidence.orSet(oruns, run, Evidence.orfOrient(), Ocr.oxOrient(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfWdir(), Ocr.oxWdir(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfLorder(), Ocr.oxTlorder(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfDeskew(), Ocr.oxDeskew(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfOsd(), Ocr.oxOsd(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfScript(), Ocr.oxScript(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfSconf(), Ocr.oxSconf(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfOconf(), Ocr.oxOconf(an, ext));
+            nl = opLines(an, ext, view, run, views, oblocks, olines);
+        }
+        nw = opWords(an, at, ext, view, run, l0, views, etext, olines, owords, osyms, oalts);
+        Evidence.orSet(oruns, run, Evidence.orfBfirst(), b0);
+        nb = Evidence.obCount(oblocks) - b0;
+        Evidence.orSet(oruns, run, Evidence.orfBcount(), nb);
+        Evidence.orSet(oruns, run, Evidence.orfLfirst(), l0);
+        nl = Evidence.olCount(olines) - l0;
+        Evidence.orSet(oruns, run, Evidence.orfLcount(), nl);
+        Evidence.orSet(oruns, run, Evidence.orfWfirst(), w0);
+        Evidence.orSet(oruns, run, Evidence.orfWcount(), nw);
+        nl = Evidence.olCount(olines) - l0;
+        rotmed = Evidence.evRotMedian(olines, l0, nl);
+        w = w0;
+        while (w < (w0 + nw)) {
+            Evidence.evFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, w, rotmed, 100);
+            w += 1;
+        }
         return 0;
     }
-    public static int opUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
+    public static int opUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
         // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.evInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         int n = emon.Port.srcLen(s);
         int mid = emon.Port.srcU8(s, n / 2);
         if (emon.Port.srcMissed(s)) {
@@ -109,9 +360,13 @@ public final class Ocrprobe {
         if (dpi < 1) {
             dpi = 72;
         }
+        Evidence.epNew(epages, 1, opCpt(w1, dpi), opCpt(h1, dpi));
+        Evidence.epSet(epages, 0, Evidence.epfFlags(), Evidence.egRaster());
+        Evidence.epSet(epages, 0, Evidence.epfDpi(), dpi * 100);
+        Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, w1, h1, dpi * 100, Plan.layFull(), -1, 0, 0, 0, 0, 0);
         Evidence.imNew(images, 1, 0, 0, opCpt(w1, dpi), opCpt(h1, dpi), mid, w1, h1);
         if (Plan.anOk(an, o2) == 1) {
-            opWords(an, o2, 1, dpi, ocrwords, alts, etext);
+            opAnswer(an, o2, 0, 2, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         }
         return Plan.usDone();
     }

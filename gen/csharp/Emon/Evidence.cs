@@ -96,6 +96,9 @@ public static class Evidence {
     public static int ArOther() {
         return 5;
     }
+    public static int ArPage() {
+        return 6;
+    }
     public static int ArEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "pagination");
@@ -114,6 +117,41 @@ public static class Evidence {
             return 1;
         }
         if (code == 5) {
+            emon.Port.TextAscii(t, "other");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "page");
+            return 1;
+        }
+        return 0;
+    }
+    public static int AsHeader() {
+        return 1;
+    }
+    public static int AsFooter() {
+        return 2;
+    }
+    public static int AsWatermark() {
+        return 3;
+    }
+    public static int AsOther() {
+        return 4;
+    }
+    public static int AsEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "header");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "footer");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "watermark");
+            return 1;
+        }
+        if (code == 4) {
             emon.Port.TextAscii(t, "other");
             return 1;
         }
@@ -312,6 +350,757 @@ public static class Evidence {
         }
         return 0;
     }
+    public static int EgTextLayer() {
+        return 1;
+    }
+    public static int EgRaster() {
+        return 2;
+    }
+    public static int EgDpiUnknown() {
+        return 4;
+    }
+    public static int EgEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "text-layer");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "raster");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "dpi-unknown");
+            return 1;
+        }
+        return 0;
+    }
+    public static int VgBilevel() {
+        return 1;
+    }
+    public static int VgNonaffine() {
+        return 2;
+    }
+    public static int VgEngineBinary() {
+        return 4;
+    }
+    public static int VgEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "bilevel");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "nonaffine");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "engine-binary");
+            return 1;
+        }
+        return 0;
+    }
+    public static int OeDictionary() {
+        return 1;
+    }
+    public static int OeNumeric() {
+        return 2;
+    }
+    public static int OeFallback() {
+        return 4;
+    }
+    public static int OeEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "dictionary");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "numeric");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "fallback");
+            return 1;
+        }
+        return 0;
+    }
+    public static int OsSuperscript() {
+        return 1;
+    }
+    public static int OsSubscript() {
+        return 2;
+    }
+    public static int OsDropCap() {
+        return 4;
+    }
+    public static int OsEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "superscript");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "subscript");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "drop-cap");
+            return 1;
+        }
+        return 0;
+    }
+    public static int VcClip() {
+        return 1;
+    }
+    public static int VcOffpage() {
+        return 2;
+    }
+    public static int VcWhite() {
+        return 4;
+    }
+    public static int VcZeroSize() {
+        return 8;
+    }
+    public static int VcOcclusion() {
+        return 16;
+    }
+    public static int VcEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "clip");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "offpage");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "white");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "zero-size");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "occlusion");
+            return 1;
+        }
+        return 0;
+    }
+    public static int EaEpages() {
+        return 1;
+    }
+    public static int EaViews() {
+        return 2;
+    }
+    public static int EaPts() {
+        return 3;
+    }
+    public static int EaRefs() {
+        return 4;
+    }
+    public static int EaEtext() {
+        return 5;
+    }
+    public static int EaFeats() {
+        return 6;
+    }
+    public static int EaGlyphs() {
+        return 7;
+    }
+    public static int EaWords() {
+        return 8;
+    }
+    public static int EaLines() {
+        return 9;
+    }
+    public static int EaMarks() {
+        return 10;
+    }
+    public static int EaFonts() {
+        return 11;
+    }
+    public static int EaPaths() {
+        return 12;
+    }
+    public static int EaImages() {
+        return 13;
+    }
+    public static int EaOruns() {
+        return 14;
+    }
+    public static int EaOblocks() {
+        return 15;
+    }
+    public static int EaOlines() {
+        return 16;
+    }
+    public static int EaOwords() {
+        return 17;
+    }
+    public static int EaOsyms() {
+        return 18;
+    }
+    public static int EaOalts() {
+        return 19;
+    }
+    public static int EaInks() {
+        return 20;
+    }
+    public static int EaComponents() {
+        return 21;
+    }
+    public static int EaRules() {
+        return 22;
+    }
+    public static int EaPrims() {
+        return 23;
+    }
+    public static int EaTlines() {
+        return 24;
+    }
+    public static int EaEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "epages");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "views");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "pts");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "refs");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "etext");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "feats");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "glyphs");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "words");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.TextAscii(t, "lines");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.TextAscii(t, "marks");
+            return 1;
+        }
+        if (code == 11) {
+            emon.Port.TextAscii(t, "fonts");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.TextAscii(t, "paths");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.TextAscii(t, "images");
+            return 1;
+        }
+        if (code == 14) {
+            emon.Port.TextAscii(t, "oruns");
+            return 1;
+        }
+        if (code == 15) {
+            emon.Port.TextAscii(t, "oblocks");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "olines");
+            return 1;
+        }
+        if (code == 17) {
+            emon.Port.TextAscii(t, "owords");
+            return 1;
+        }
+        if (code == 18) {
+            emon.Port.TextAscii(t, "osyms");
+            return 1;
+        }
+        if (code == 19) {
+            emon.Port.TextAscii(t, "oalts");
+            return 1;
+        }
+        if (code == 20) {
+            emon.Port.TextAscii(t, "inks");
+            return 1;
+        }
+        if (code == 21) {
+            emon.Port.TextAscii(t, "components");
+            return 1;
+        }
+        if (code == 22) {
+            emon.Port.TextAscii(t, "rules");
+            return 1;
+        }
+        if (code == 23) {
+            emon.Port.TextAscii(t, "prims");
+            return 1;
+        }
+        if (code == 24) {
+            emon.Port.TextAscii(t, "tlines");
+            return 1;
+        }
+        return 0;
+    }
+    public static int VkRender() {
+        return 1;
+    }
+    public static int VkDecode() {
+        return 2;
+    }
+    public static int VkEngineBinary() {
+        return 3;
+    }
+    public static int VkGray() {
+        return 4;
+    }
+    public static int VkBinary() {
+        return 5;
+    }
+    public static int VkInkMask() {
+        return 6;
+    }
+    public static int VkDeskewed() {
+        return 7;
+    }
+    public static int VkCropped() {
+        return 8;
+    }
+    public static int VkPolar() {
+        return 9;
+    }
+    public static int VkEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "render");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "decode");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "engine-binary");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "gray");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "binary");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "ink-mask");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "deskewed");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "cropped");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.TextAscii(t, "polar");
+            return 1;
+        }
+        return 0;
+    }
+    public static int PoMove() {
+        return 1;
+    }
+    public static int PoLine() {
+        return 2;
+    }
+    public static int PoCurve() {
+        return 3;
+    }
+    public static int PoClose() {
+        return 4;
+    }
+    public static int PoEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "move");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "line");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "curve");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "close");
+            return 1;
+        }
+        return 0;
+    }
+    public static int CsGray() {
+        return 1;
+    }
+    public static int CsRgb() {
+        return 2;
+    }
+    public static int CsCmyk() {
+        return 3;
+    }
+    public static int CsSpot() {
+        return 4;
+    }
+    public static int CsPattern() {
+        return 5;
+    }
+    public static int CsOther() {
+        return 6;
+    }
+    public static int CsEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "gray");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "rgb");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "cmyk");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "spot");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "pattern");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "other");
+            return 1;
+        }
+        return 0;
+    }
+    public static int WbSpace() {
+        return 1;
+    }
+    public static int WbGap() {
+        return 2;
+    }
+    public static int WbTjOffset() {
+        return 3;
+    }
+    public static int WbLineEnd() {
+        return 4;
+    }
+    public static int WbFontChange() {
+        return 5;
+    }
+    public static int WbMarkBoundary() {
+        return 6;
+    }
+    public static int WbEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "space");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "gap");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "tj-offset");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "line-end");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "font-change");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "mark-boundary");
+            return 1;
+        }
+        return 0;
+    }
+    public static int MkArtifact() {
+        return 1;
+    }
+    public static int MkOptionalContent() {
+        return 2;
+    }
+    public static int MkTag() {
+        return 3;
+    }
+    public static int MkEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "artifact");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "optional-content");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "tag");
+            return 1;
+        }
+        return 0;
+    }
+    public static int ObBlock() {
+        return 1;
+    }
+    public static int ObParagraph() {
+        return 2;
+    }
+    public static int ObEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "block");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "paragraph");
+            return 1;
+        }
+        return 0;
+    }
+    public static int OpFirst() {
+        return 1;
+    }
+    public static int OpRegion() {
+        return 2;
+    }
+    public static int OpLine() {
+        return 3;
+    }
+    public static int OpCell() {
+        return 4;
+    }
+    public static int OpSealStrip() {
+        return 5;
+    }
+    public static int OpBodyInk() {
+        return 6;
+    }
+    public static int OpTextOnly() {
+        return 7;
+    }
+    public static int OpReRotated() {
+        return 8;
+    }
+    public static int OpEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "first");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "region");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "line");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "cell");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "seal-strip");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "body-ink");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "text-only");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "re-rotated");
+            return 1;
+        }
+        return 0;
+    }
+    public static int IrBody() {
+        return 1;
+    }
+    public static int IrLight() {
+        return 2;
+    }
+    public static int IrColor() {
+        return 3;
+    }
+    public static int IrBackground() {
+        return 4;
+    }
+    public static int IrUnknown() {
+        return 5;
+    }
+    public static int IrEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "body");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "light");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "color");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "background");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "unknown");
+            return 1;
+        }
+        return 0;
+    }
+    public static int RsSolid() {
+        return 1;
+    }
+    public static int RsDashed() {
+        return 2;
+    }
+    public static int RsDotted() {
+        return 3;
+    }
+    public static int RsDouble() {
+        return 4;
+    }
+    public static int RsEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "solid");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "dashed");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "dotted");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "double");
+            return 1;
+        }
+        return 0;
+    }
+    public static int PmRect() {
+        return 1;
+    }
+    public static int PmEllipse() {
+        return 2;
+    }
+    public static int PmCircle() {
+        return 3;
+    }
+    public static int PmArrow() {
+        return 4;
+    }
+    public static int PmCurve() {
+        return 5;
+    }
+    public static int PmPolygon() {
+        return 6;
+    }
+    public static int PmRing() {
+        return 7;
+    }
+    public static int PmEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "rect");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "ellipse");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "circle");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "arrow");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "curve");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "polygon");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "ring");
+            return 1;
+        }
+        return 0;
+    }
+    public static int FtType1() {
+        return 1;
+    }
+    public static int FtMmtype1() {
+        return 2;
+    }
+    public static int FtTruetype() {
+        return 3;
+    }
+    public static int FtType3() {
+        return 4;
+    }
+    public static int FtType0() {
+        return 5;
+    }
+    public static int FtEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.TextAscii(t, "type1");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.TextAscii(t, "mmtype1");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "truetype");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "type3");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "type0");
+            return 1;
+        }
+        return 0;
+    }
     public static int EkVersion() {
         return 1;
     }
@@ -333,7 +1122,7 @@ public static class Evidence {
     public static int EkComponents() {
         return 7;
     }
-    public static int EkOcrwords() {
+    public static int EkOcrwordsV0() {
         return 8;
     }
     public static int EkPage() {
@@ -447,7 +1236,7 @@ public static class Evidence {
     public static int EkRun() {
         return 45;
     }
-    public static int EkSpans() {
+    public static int EkSpansV0() {
         return 46;
     }
     public static int EkTag() {
@@ -473,6 +1262,291 @@ public static class Evidence {
     }
     public static int EkStm() {
         return 54;
+    }
+    public static int EkEpages() {
+        return 55;
+    }
+    public static int EkViews() {
+        return 56;
+    }
+    public static int EkPts() {
+        return 57;
+    }
+    public static int EkRefs() {
+        return 58;
+    }
+    public static int EkEtext() {
+        return 59;
+    }
+    public static int EkFeats() {
+        return 60;
+    }
+    public static int EkMarks() {
+        return 61;
+    }
+    public static int EkFonts() {
+        return 62;
+    }
+    public static int EkOruns() {
+        return 63;
+    }
+    public static int EkOblocks() {
+        return 64;
+    }
+    public static int EkOlines() {
+        return 65;
+    }
+    public static int EkOwords() {
+        return 66;
+    }
+    public static int EkOsyms() {
+        return 67;
+    }
+    public static int EkOalts() {
+        return 68;
+    }
+    public static int EkInks() {
+        return 69;
+    }
+    public static int EkRules() {
+        return 70;
+    }
+    public static int EkPrims() {
+        return 71;
+    }
+    public static int EkTlines() {
+        return 72;
+    }
+    public static int EkSubject() {
+        return 73;
+    }
+    public static int EkHeight() {
+        return 74;
+    }
+    public static int EkTurns() {
+        return 75;
+    }
+    public static int EkDpi() {
+        return 76;
+    }
+    public static int EkRequest() {
+        return 77;
+    }
+    public static int EkInk() {
+        return 78;
+    }
+    public static int EkDeskew() {
+        return 79;
+    }
+    public static int EkCrop() {
+        return 80;
+    }
+    public static int EkA() {
+        return 81;
+    }
+    public static int EkB() {
+        return 82;
+    }
+    public static int EkC() {
+        return 83;
+    }
+    public static int EkD() {
+        return 84;
+    }
+    public static int EkE() {
+        return 85;
+    }
+    public static int EkF() {
+        return 86;
+    }
+    public static int EkIa() {
+        return 87;
+    }
+    public static int EkIb() {
+        return 88;
+    }
+    public static int EkIc() {
+        return 89;
+    }
+    public static int EkId() {
+        return 90;
+    }
+    public static int EkX() {
+        return 91;
+    }
+    public static int EkY() {
+        return 92;
+    }
+    public static int EkOp() {
+        return 93;
+    }
+    public static int EkAsc() {
+        return 94;
+    }
+    public static int EkDesc() {
+        return 95;
+    }
+    public static int EkSalpha() {
+        return 96;
+    }
+    public static int EkCs() {
+        return 97;
+    }
+    public static int EkZ() {
+        return 98;
+    }
+    public static int EkClip() {
+        return 99;
+    }
+    public static int EkMark() {
+        return 100;
+    }
+    public static int EkOcg() {
+        return 101;
+    }
+    public static int EkVby() {
+        return 102;
+    }
+    public static int EkVchk() {
+        return 103;
+    }
+    public static int EkFeat() {
+        return 104;
+    }
+    public static int EkWbreak() {
+        return 105;
+    }
+    public static int EkOrder() {
+        return 106;
+    }
+    public static int EkOcgdef() {
+        return 107;
+    }
+    public static int EkProgram() {
+        return 108;
+    }
+    public static int EkTounicode() {
+        return 109;
+    }
+    public static int EkEncoding() {
+        return 110;
+    }
+    public static int EkName() {
+        return 111;
+    }
+    public static int EkSpace() {
+        return 112;
+    }
+    public static int EkItalic() {
+        return 113;
+    }
+    public static int EkStemv() {
+        return 114;
+    }
+    public static int EkDash() {
+        return 115;
+    }
+    public static int EkSkewed() {
+        return 116;
+    }
+    public static int EkView() {
+        return 117;
+    }
+    public static int EkBinarised() {
+        return 118;
+    }
+    public static int EkRound() {
+        return 119;
+    }
+    public static int EkPsm() {
+        return 120;
+    }
+    public static int EkRegion() {
+        return 121;
+    }
+    public static int EkOrient() {
+        return 122;
+    }
+    public static int EkWdir() {
+        return 123;
+    }
+    public static int EkLorder() {
+        return 124;
+    }
+    public static int EkOsd() {
+        return 125;
+    }
+    public static int EkScript() {
+        return 126;
+    }
+    public static int EkSconf() {
+        return 127;
+    }
+    public static int EkOconf() {
+        return 128;
+    }
+    public static int EkBlocks() {
+        return 129;
+    }
+    public static int EkBtype() {
+        return 130;
+    }
+    public static int EkChildren() {
+        return 131;
+    }
+    public static int EkPar() {
+        return 132;
+    }
+    public static int EkXheight() {
+        return 133;
+    }
+    public static int EkSyms() {
+        return 134;
+    }
+    public static int EkPsize() {
+        return 135;
+    }
+    public static int EkLight() {
+        return 136;
+    }
+    public static int EkChroma() {
+        return 137;
+    }
+    public static int EkCount() {
+        return 138;
+    }
+    public static int EkRole() {
+        return 139;
+    }
+    public static int EkMask() {
+        return 140;
+    }
+    public static int EkSpread() {
+        return 141;
+    }
+    public static int EkContour() {
+        return 142;
+    }
+    public static int EkHoles() {
+        return 143;
+    }
+    public static int EkGray() {
+        return 144;
+    }
+    public static int EkThick() {
+        return 145;
+    }
+    public static int EkMembers() {
+        return 146;
+    }
+    public static int EkCenter() {
+        return 147;
+    }
+    public static int EkRadii() {
+        return 148;
+    }
+    public static int EkOutline() {
+        return 149;
     }
     public static int EkEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
@@ -691,178 +1765,1291 @@ public static class Evidence {
             emon.Port.TextAscii(t, "stm");
             return 1;
         }
+        if (code == 55) {
+            emon.Port.TextAscii(t, "epages");
+            return 1;
+        }
+        if (code == 56) {
+            emon.Port.TextAscii(t, "views");
+            return 1;
+        }
+        if (code == 57) {
+            emon.Port.TextAscii(t, "pts");
+            return 1;
+        }
+        if (code == 58) {
+            emon.Port.TextAscii(t, "refs");
+            return 1;
+        }
+        if (code == 59) {
+            emon.Port.TextAscii(t, "etext");
+            return 1;
+        }
+        if (code == 60) {
+            emon.Port.TextAscii(t, "feats");
+            return 1;
+        }
+        if (code == 61) {
+            emon.Port.TextAscii(t, "marks");
+            return 1;
+        }
+        if (code == 62) {
+            emon.Port.TextAscii(t, "fonts");
+            return 1;
+        }
+        if (code == 63) {
+            emon.Port.TextAscii(t, "oruns");
+            return 1;
+        }
+        if (code == 64) {
+            emon.Port.TextAscii(t, "oblocks");
+            return 1;
+        }
+        if (code == 65) {
+            emon.Port.TextAscii(t, "olines");
+            return 1;
+        }
+        if (code == 66) {
+            emon.Port.TextAscii(t, "owords");
+            return 1;
+        }
+        if (code == 67) {
+            emon.Port.TextAscii(t, "osyms");
+            return 1;
+        }
+        if (code == 68) {
+            emon.Port.TextAscii(t, "oalts");
+            return 1;
+        }
+        if (code == 69) {
+            emon.Port.TextAscii(t, "inks");
+            return 1;
+        }
+        if (code == 70) {
+            emon.Port.TextAscii(t, "rules");
+            return 1;
+        }
+        if (code == 71) {
+            emon.Port.TextAscii(t, "prims");
+            return 1;
+        }
+        if (code == 72) {
+            emon.Port.TextAscii(t, "tlines");
+            return 1;
+        }
+        if (code == 73) {
+            emon.Port.TextAscii(t, "subject");
+            return 1;
+        }
+        if (code == 74) {
+            emon.Port.TextAscii(t, "height");
+            return 1;
+        }
+        if (code == 75) {
+            emon.Port.TextAscii(t, "turns");
+            return 1;
+        }
+        if (code == 76) {
+            emon.Port.TextAscii(t, "dpi");
+            return 1;
+        }
+        if (code == 77) {
+            emon.Port.TextAscii(t, "request");
+            return 1;
+        }
+        if (code == 78) {
+            emon.Port.TextAscii(t, "ink");
+            return 1;
+        }
+        if (code == 79) {
+            emon.Port.TextAscii(t, "deskew");
+            return 1;
+        }
+        if (code == 80) {
+            emon.Port.TextAscii(t, "crop");
+            return 1;
+        }
+        if (code == 81) {
+            emon.Port.TextAscii(t, "a");
+            return 1;
+        }
+        if (code == 82) {
+            emon.Port.TextAscii(t, "b");
+            return 1;
+        }
+        if (code == 83) {
+            emon.Port.TextAscii(t, "c");
+            return 1;
+        }
+        if (code == 84) {
+            emon.Port.TextAscii(t, "d");
+            return 1;
+        }
+        if (code == 85) {
+            emon.Port.TextAscii(t, "e");
+            return 1;
+        }
+        if (code == 86) {
+            emon.Port.TextAscii(t, "f");
+            return 1;
+        }
+        if (code == 87) {
+            emon.Port.TextAscii(t, "ia");
+            return 1;
+        }
+        if (code == 88) {
+            emon.Port.TextAscii(t, "ib");
+            return 1;
+        }
+        if (code == 89) {
+            emon.Port.TextAscii(t, "ic");
+            return 1;
+        }
+        if (code == 90) {
+            emon.Port.TextAscii(t, "id");
+            return 1;
+        }
+        if (code == 91) {
+            emon.Port.TextAscii(t, "x");
+            return 1;
+        }
+        if (code == 92) {
+            emon.Port.TextAscii(t, "y");
+            return 1;
+        }
+        if (code == 93) {
+            emon.Port.TextAscii(t, "op");
+            return 1;
+        }
+        if (code == 94) {
+            emon.Port.TextAscii(t, "asc");
+            return 1;
+        }
+        if (code == 95) {
+            emon.Port.TextAscii(t, "desc");
+            return 1;
+        }
+        if (code == 96) {
+            emon.Port.TextAscii(t, "salpha");
+            return 1;
+        }
+        if (code == 97) {
+            emon.Port.TextAscii(t, "cs");
+            return 1;
+        }
+        if (code == 98) {
+            emon.Port.TextAscii(t, "z");
+            return 1;
+        }
+        if (code == 99) {
+            emon.Port.TextAscii(t, "clip");
+            return 1;
+        }
+        if (code == 100) {
+            emon.Port.TextAscii(t, "mark");
+            return 1;
+        }
+        if (code == 101) {
+            emon.Port.TextAscii(t, "ocg");
+            return 1;
+        }
+        if (code == 102) {
+            emon.Port.TextAscii(t, "vby");
+            return 1;
+        }
+        if (code == 103) {
+            emon.Port.TextAscii(t, "vchk");
+            return 1;
+        }
+        if (code == 104) {
+            emon.Port.TextAscii(t, "feat");
+            return 1;
+        }
+        if (code == 105) {
+            emon.Port.TextAscii(t, "wbreak");
+            return 1;
+        }
+        if (code == 106) {
+            emon.Port.TextAscii(t, "order");
+            return 1;
+        }
+        if (code == 107) {
+            emon.Port.TextAscii(t, "ocgdef");
+            return 1;
+        }
+        if (code == 108) {
+            emon.Port.TextAscii(t, "program");
+            return 1;
+        }
+        if (code == 109) {
+            emon.Port.TextAscii(t, "tounicode");
+            return 1;
+        }
+        if (code == 110) {
+            emon.Port.TextAscii(t, "encoding");
+            return 1;
+        }
+        if (code == 111) {
+            emon.Port.TextAscii(t, "name");
+            return 1;
+        }
+        if (code == 112) {
+            emon.Port.TextAscii(t, "space");
+            return 1;
+        }
+        if (code == 113) {
+            emon.Port.TextAscii(t, "italic");
+            return 1;
+        }
+        if (code == 114) {
+            emon.Port.TextAscii(t, "stemv");
+            return 1;
+        }
+        if (code == 115) {
+            emon.Port.TextAscii(t, "dash");
+            return 1;
+        }
+        if (code == 116) {
+            emon.Port.TextAscii(t, "skewed");
+            return 1;
+        }
+        if (code == 117) {
+            emon.Port.TextAscii(t, "view");
+            return 1;
+        }
+        if (code == 118) {
+            emon.Port.TextAscii(t, "binarised");
+            return 1;
+        }
+        if (code == 119) {
+            emon.Port.TextAscii(t, "round");
+            return 1;
+        }
+        if (code == 120) {
+            emon.Port.TextAscii(t, "psm");
+            return 1;
+        }
+        if (code == 121) {
+            emon.Port.TextAscii(t, "region");
+            return 1;
+        }
+        if (code == 122) {
+            emon.Port.TextAscii(t, "orient");
+            return 1;
+        }
+        if (code == 123) {
+            emon.Port.TextAscii(t, "wdir");
+            return 1;
+        }
+        if (code == 124) {
+            emon.Port.TextAscii(t, "lorder");
+            return 1;
+        }
+        if (code == 125) {
+            emon.Port.TextAscii(t, "osd");
+            return 1;
+        }
+        if (code == 126) {
+            emon.Port.TextAscii(t, "script");
+            return 1;
+        }
+        if (code == 127) {
+            emon.Port.TextAscii(t, "sconf");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.TextAscii(t, "oconf");
+            return 1;
+        }
+        if (code == 129) {
+            emon.Port.TextAscii(t, "blocks");
+            return 1;
+        }
+        if (code == 130) {
+            emon.Port.TextAscii(t, "btype");
+            return 1;
+        }
+        if (code == 131) {
+            emon.Port.TextAscii(t, "children");
+            return 1;
+        }
+        if (code == 132) {
+            emon.Port.TextAscii(t, "par");
+            return 1;
+        }
+        if (code == 133) {
+            emon.Port.TextAscii(t, "xheight");
+            return 1;
+        }
+        if (code == 134) {
+            emon.Port.TextAscii(t, "syms");
+            return 1;
+        }
+        if (code == 135) {
+            emon.Port.TextAscii(t, "psize");
+            return 1;
+        }
+        if (code == 136) {
+            emon.Port.TextAscii(t, "light");
+            return 1;
+        }
+        if (code == 137) {
+            emon.Port.TextAscii(t, "chroma");
+            return 1;
+        }
+        if (code == 138) {
+            emon.Port.TextAscii(t, "count");
+            return 1;
+        }
+        if (code == 139) {
+            emon.Port.TextAscii(t, "role");
+            return 1;
+        }
+        if (code == 140) {
+            emon.Port.TextAscii(t, "mask");
+            return 1;
+        }
+        if (code == 141) {
+            emon.Port.TextAscii(t, "spread");
+            return 1;
+        }
+        if (code == 142) {
+            emon.Port.TextAscii(t, "contour");
+            return 1;
+        }
+        if (code == 143) {
+            emon.Port.TextAscii(t, "holes");
+            return 1;
+        }
+        if (code == 144) {
+            emon.Port.TextAscii(t, "gray");
+            return 1;
+        }
+        if (code == 145) {
+            emon.Port.TextAscii(t, "thick");
+            return 1;
+        }
+        if (code == 146) {
+            emon.Port.TextAscii(t, "members");
+            return 1;
+        }
+        if (code == 147) {
+            emon.Port.TextAscii(t, "center");
+            return 1;
+        }
+        if (code == 148) {
+            emon.Port.TextAscii(t, "radii");
+            return 1;
+        }
+        if (code == 149) {
+            emon.Port.TextAscii(t, "outline");
+            return 1;
+        }
         return 0;
     }
-    public static int GlStride() {
-        return 20;
+    public static int XoConf() {
+        return 2;
     }
-    public static int WdStride() {
-        return 16;
+    public static int XoSymMin() {
+        return 3;
     }
-    public static int LnStride() {
+    public static int XoSymMean() {
+        return 4;
+    }
+    public static int XoMargin() {
+        return 5;
+    }
+    public static int XoAmbiguous() {
+        return 6;
+    }
+    public static int XoEngineFlags() {
+        return 7;
+    }
+    public static int XoImplausible() {
+        return 8;
+    }
+    public static int XoScript() {
+        return 9;
+    }
+    public static int XoKinInk() {
+        return 10;
+    }
+    public static int XoEngineInk() {
+        return 11;
+    }
+    public static int XoJaccard() {
         return 12;
     }
-    public static int PaStride() {
+    public static int XoBodyShare() {
+        return 13;
+    }
+    public static int XoComponents() {
+        return 14;
+    }
+    public static int XoCompRatio() {
+        return 15;
+    }
+    public static int XoInkGray() {
         return 16;
     }
+    public static int XoRelHeight() {
+        return 17;
+    }
+    public static int XoRelXheight() {
+        return 18;
+    }
+    public static int XoAngle() {
+        return 19;
+    }
+    public static int XoBaseDev() {
+        return 20;
+    }
+    public static int XoSpacing() {
+        return 21;
+    }
+    public static int XoSeal() {
+        return 22;
+    }
+    public static int XoArtifact() {
+        return 23;
+    }
+    public static int XoSimText() {
+        return 24;
+    }
+    public static int XoSimHidden() {
+        return 25;
+    }
+    public static int XoAgree() {
+        return 26;
+    }
+    public static int XoRecur() {
+        return 27;
+    }
+    public static int XoLength() {
+        return 28;
+    }
+    public static int XoEdge() {
+        return 29;
+    }
+    public static int XoEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 2) {
+            emon.Port.TextAscii(t, "conf");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "sym-min");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "sym-mean");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "margin");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "ambiguous");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "engine-flags");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "implausible");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.TextAscii(t, "script");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.TextAscii(t, "kin-ink");
+            return 1;
+        }
+        if (code == 11) {
+            emon.Port.TextAscii(t, "engine-ink");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.TextAscii(t, "jaccard");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.TextAscii(t, "body-share");
+            return 1;
+        }
+        if (code == 14) {
+            emon.Port.TextAscii(t, "components");
+            return 1;
+        }
+        if (code == 15) {
+            emon.Port.TextAscii(t, "comp-ratio");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "ink-gray");
+            return 1;
+        }
+        if (code == 17) {
+            emon.Port.TextAscii(t, "rel-height");
+            return 1;
+        }
+        if (code == 18) {
+            emon.Port.TextAscii(t, "rel-xheight");
+            return 1;
+        }
+        if (code == 19) {
+            emon.Port.TextAscii(t, "angle");
+            return 1;
+        }
+        if (code == 20) {
+            emon.Port.TextAscii(t, "base-dev");
+            return 1;
+        }
+        if (code == 21) {
+            emon.Port.TextAscii(t, "spacing");
+            return 1;
+        }
+        if (code == 22) {
+            emon.Port.TextAscii(t, "seal");
+            return 1;
+        }
+        if (code == 23) {
+            emon.Port.TextAscii(t, "artifact");
+            return 1;
+        }
+        if (code == 24) {
+            emon.Port.TextAscii(t, "sim-text");
+            return 1;
+        }
+        if (code == 25) {
+            emon.Port.TextAscii(t, "sim-hidden");
+            return 1;
+        }
+        if (code == 26) {
+            emon.Port.TextAscii(t, "agree");
+            return 1;
+        }
+        if (code == 27) {
+            emon.Port.TextAscii(t, "recur");
+            return 1;
+        }
+        if (code == 28) {
+            emon.Port.TextAscii(t, "length");
+            return 1;
+        }
+        if (code == 29) {
+            emon.Port.TextAscii(t, "edge");
+            return 1;
+        }
+        return 0;
+    }
+    public static int XtTrust() {
+        return 2;
+    }
+    public static int XtBadCp() {
+        return 3;
+    }
+    public static int XtOverlap() {
+        return 4;
+    }
+    public static int XtGapAnomaly() {
+        return 5;
+    }
+    public static int XtVis() {
+        return 6;
+    }
+    public static int XtModeClass() {
+        return 7;
+    }
+    public static int XtAlpha() {
+        return 8;
+    }
+    public static int XtContrast() {
+        return 9;
+    }
+    public static int XtKinInk() {
+        return 10;
+    }
+    public static int XtInkWithoutText() {
+        return 11;
+    }
+    public static int XtBodyShare() {
+        return 12;
+    }
+    public static int XtFontHealth() {
+        return 13;
+    }
+    public static int XtComponents() {
+        return 14;
+    }
+    public static int XtCompRatio() {
+        return 15;
+    }
+    public static int XtInArtifact() {
+        return 16;
+    }
+    public static int XtRelHeight() {
+        return 17;
+    }
+    public static int XtRelSize() {
+        return 18;
+    }
+    public static int XtAngle() {
+        return 19;
+    }
+    public static int XtBaseDev() {
+        return 20;
+    }
+    public static int XtSpacing() {
+        return 21;
+    }
+    public static int XtSeal() {
+        return 22;
+    }
+    public static int XtTlineOverlap() {
+        return 23;
+    }
+    public static int XtSimOcr() {
+        return 24;
+    }
+    public static int XtSimOcr2() {
+        return 25;
+    }
+    public static int XtRecur() {
+        return 27;
+    }
+    public static int XtLength() {
+        return 28;
+    }
+    public static int XtEdge() {
+        return 29;
+    }
+    public static int XtEmitName(System.Text.StringBuilder t, int code) {
+        if (code == 2) {
+            emon.Port.TextAscii(t, "trust");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.TextAscii(t, "bad-cp");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "overlap");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.TextAscii(t, "gap-anomaly");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "vis");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "mode-class");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "alpha");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.TextAscii(t, "contrast");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.TextAscii(t, "kin-ink");
+            return 1;
+        }
+        if (code == 11) {
+            emon.Port.TextAscii(t, "ink-without-text");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.TextAscii(t, "body-share");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.TextAscii(t, "font-health");
+            return 1;
+        }
+        if (code == 14) {
+            emon.Port.TextAscii(t, "components");
+            return 1;
+        }
+        if (code == 15) {
+            emon.Port.TextAscii(t, "comp-ratio");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "in-artifact");
+            return 1;
+        }
+        if (code == 17) {
+            emon.Port.TextAscii(t, "rel-height");
+            return 1;
+        }
+        if (code == 18) {
+            emon.Port.TextAscii(t, "rel-size");
+            return 1;
+        }
+        if (code == 19) {
+            emon.Port.TextAscii(t, "angle");
+            return 1;
+        }
+        if (code == 20) {
+            emon.Port.TextAscii(t, "base-dev");
+            return 1;
+        }
+        if (code == 21) {
+            emon.Port.TextAscii(t, "spacing");
+            return 1;
+        }
+        if (code == 22) {
+            emon.Port.TextAscii(t, "seal");
+            return 1;
+        }
+        if (code == 23) {
+            emon.Port.TextAscii(t, "tline-overlap");
+            return 1;
+        }
+        if (code == 24) {
+            emon.Port.TextAscii(t, "sim-ocr");
+            return 1;
+        }
+        if (code == 25) {
+            emon.Port.TextAscii(t, "sim-ocr2");
+            return 1;
+        }
+        if (code == 27) {
+            emon.Port.TextAscii(t, "recur");
+            return 1;
+        }
+        if (code == 28) {
+            emon.Port.TextAscii(t, "length");
+            return 1;
+        }
+        if (code == 29) {
+            emon.Port.TextAscii(t, "edge");
+            return 1;
+        }
+        return 0;
+    }
+    public static int EpStride() {
+        return 12;
+    }
+    public static int VwStride() {
+        return 24;
+    }
+    public static int PtStride() {
+        return 3;
+    }
+    public static int RfStride() {
+        return 2;
+    }
+    public static int EtxStride() {
+        return 1;
+    }
+    public static int FeStride() {
+        return 32;
+    }
+    public static int GlStride() {
+        return 32;
+    }
+    public static int WdStride() {
+        return 24;
+    }
+    public static int LnStride() {
+        return 16;
+    }
+    public static int MkStride() {
+        return 24;
+    }
+    public static int FoStride() {
+        return 16;
+    }
+    public static int PaStride() {
+        return 24;
+    }
     public static int ImStride() {
+        return 20;
+    }
+    public static int OrStride() {
+        return 28;
+    }
+    public static int ObStride() {
+        return 16;
+    }
+    public static int OlStride() {
+        return 24;
+    }
+    public static int OwStride() {
+        return 28;
+    }
+    public static int OsStride() {
+        return 20;
+    }
+    public static int OaStride() {
+        return 4;
+    }
+    public static int IkStride() {
         return 12;
     }
     public static int CoStride() {
+        return 24;
+    }
+    public static int RlStride() {
         return 20;
     }
-    public static int OwStride() {
-        return 16;
+    public static int PmStride() {
+        return 24;
     }
-    public static int AltStride() {
-        return 4;
+    public static int TlStride() {
+        return 20;
     }
-    public static int SpStride() {
-        return 22;
-    }
-    public static int GfPage() {
+    public static int HdPage() {
         return 0;
     }
-    public static int GfCp() {
+    public static int HdX0() {
         return 1;
     }
-    public static int GfTstart() {
+    public static int HdY0() {
         return 2;
     }
-    public static int GfTlen() {
+    public static int HdX1() {
         return 3;
     }
-    public static int GfHow() {
+    public static int HdY1() {
         return 4;
     }
-    public static int GfFont() {
+    public static int HdBx0() {
         return 5;
     }
-    public static int GfSize() {
+    public static int HdBy0() {
         return 6;
     }
-    public static int GfX0() {
+    public static int HdBx1() {
         return 7;
     }
-    public static int GfY0() {
+    public static int HdBy1() {
         return 8;
     }
-    public static int GfX1() {
+    public static int HdRot() {
         return 9;
     }
-    public static int GfY1() {
+    public static int HdDir() {
         return 10;
     }
-    public static int GfBaseline() {
+    public static int HdTstart() {
         return 11;
     }
-    public static int GfRot() {
+    public static int HdTlen() {
         return 12;
     }
-    public static int GfColor() {
+    public static int HdLine() {
         return 13;
     }
-    public static int GfAlpha() {
+    public static int HdConf() {
         return 14;
     }
-    public static int GfMode() {
+    public static int HdFeat() {
         return 15;
     }
-    public static int GfVis() {
+    public static int LhPage() {
+        return 0;
+    }
+    public static int LhX0() {
+        return 1;
+    }
+    public static int LhY0() {
+        return 2;
+    }
+    public static int LhX1() {
+        return 3;
+    }
+    public static int LhY1() {
+        return 4;
+    }
+    public static int LhBx0() {
+        return 5;
+    }
+    public static int LhBy0() {
+        return 6;
+    }
+    public static int LhBx1() {
+        return 7;
+    }
+    public static int LhBy1() {
+        return 8;
+    }
+    public static int LhRot() {
+        return 9;
+    }
+    public static int LhDir() {
+        return 10;
+    }
+    public static int LhFirst() {
+        return 11;
+    }
+    public static int LhCount() {
+        return 12;
+    }
+    public static int ChPage() {
+        return 0;
+    }
+    public static int ChX0() {
+        return 1;
+    }
+    public static int ChY0() {
+        return 2;
+    }
+    public static int ChX1() {
+        return 3;
+    }
+    public static int ChY1() {
+        return 4;
+    }
+    public static int ChCp() {
+        return 5;
+    }
+    public static int ChTstart() {
+        return 6;
+    }
+    public static int ChTlen() {
+        return 7;
+    }
+    public static int ChWord() {
+        return 8;
+    }
+    public static int EpfPage() {
+        return 0;
+    }
+    public static int EpfWidth() {
+        return 1;
+    }
+    public static int EpfHeight() {
+        return 2;
+    }
+    public static int EpfTurns() {
+        return 3;
+    }
+    public static int EpfFlags() {
+        return 4;
+    }
+    public static int EpfDpi() {
+        return 5;
+    }
+    public static int VwfPage() {
+        return 0;
+    }
+    public static int VwfKind() {
+        return 1;
+    }
+    public static int VwfRequest() {
+        return 2;
+    }
+    public static int VwfParent() {
+        return 3;
+    }
+    public static int VwfPxw() {
+        return 4;
+    }
+    public static int VwfPxh() {
+        return 5;
+    }
+    public static int VwfDpi() {
+        return 6;
+    }
+    public static int VwfLayer() {
+        return 7;
+    }
+    public static int VwfInk() {
+        return 8;
+    }
+    public static int VwfTurns() {
+        return 9;
+    }
+    public static int VwfDeskew() {
+        return 10;
+    }
+    public static int VwfCropx() {
+        return 11;
+    }
+    public static int VwfCropy() {
+        return 12;
+    }
+    public static int VwfA() {
+        return 13;
+    }
+    public static int VwfB() {
+        return 14;
+    }
+    public static int VwfC() {
+        return 15;
+    }
+    public static int VwfD() {
         return 16;
     }
-    public static int GfArtifact() {
+    public static int VwfE() {
         return 17;
     }
-    public static int GfMcid() {
+    public static int VwfF() {
         return 18;
     }
-    public static int GfWord() {
+    public static int VwfIa() {
         return 19;
     }
-    public static int WfPage() {
+    public static int VwfIb() {
+        return 20;
+    }
+    public static int VwfIc() {
+        return 21;
+    }
+    public static int VwfId() {
+        return 22;
+    }
+    public static int VwfFlags() {
+        return 23;
+    }
+    public static int PtfX() {
         return 0;
     }
-    public static int WfX0() {
+    public static int PtfY() {
         return 1;
     }
-    public static int WfY0() {
+    public static int PtfOp() {
         return 2;
     }
-    public static int WfX1() {
-        return 3;
+    public static int RffEa() {
+        return 0;
     }
-    public static int WfY1() {
-        return 4;
+    public static int RffIndex() {
+        return 1;
     }
-    public static int WfGfirst() {
-        return 5;
+    public static int XfSubject() {
+        return 0;
     }
-    public static int WfGcount() {
-        return 6;
+    public static int XfIndex() {
+        return 1;
     }
-    public static int WfTstart() {
-        return 7;
+    public static int XfCol() {
+        return 2;
     }
-    public static int WfTlen() {
-        return 8;
-    }
-    public static int WfLine() {
+    public static int GfBx0() {
         return 9;
     }
-    public static int WfSrc() {
+    public static int GfBy0() {
         return 10;
     }
-    public static int WfConf() {
+    public static int GfBx1() {
         return 11;
     }
-    public static int WfFlags() {
+    public static int GfBy1() {
         return 12;
     }
-    public static int WfGap() {
+    public static int GfAsc() {
         return 13;
     }
-    public static int WfFont() {
+    public static int GfDesc() {
         return 14;
     }
-    public static int WfSize() {
+    public static int GfRot() {
         return 15;
     }
-    public static int LfPage() {
-        return 0;
+    public static int GfHow() {
+        return 16;
     }
-    public static int LfX0() {
-        return 1;
+    public static int GfFont() {
+        return 17;
     }
-    public static int LfY0() {
-        return 2;
+    public static int GfSize() {
+        return 18;
     }
-    public static int LfX1() {
-        return 3;
+    public static int GfMode() {
+        return 19;
     }
-    public static int LfY1() {
-        return 4;
+    public static int GfFill() {
+        return 20;
     }
-    public static int LfWfirst() {
-        return 5;
+    public static int GfStroke() {
+        return 21;
     }
-    public static int LfWcount() {
-        return 6;
+    public static int GfFalpha() {
+        return 22;
     }
-    public static int LfBaseline() {
-        return 7;
+    public static int GfSalpha() {
+        return 23;
     }
-    public static int LfDir() {
-        return 8;
+    public static int GfCs() {
+        return 24;
     }
-    public static int LfRot() {
-        return 9;
+    public static int GfZ() {
+        return 25;
+    }
+    public static int GfClip() {
+        return 26;
+    }
+    public static int GfMark() {
+        return 27;
+    }
+    public static int GfOcg() {
+        return 28;
+    }
+    public static int GfVis() {
+        return 29;
+    }
+    public static int GfVby() {
+        return 30;
+    }
+    public static int GfVchk() {
+        return 31;
+    }
+    public static int WfStyle() {
+        return 16;
+    }
+    public static int WfGfirst() {
+        return 17;
+    }
+    public static int WfGcount() {
+        return 18;
+    }
+    public static int WfFont() {
+        return 19;
+    }
+    public static int WfSize() {
+        return 20;
+    }
+    public static int WfGap() {
+        return 21;
+    }
+    public static int WfWbreak() {
+        return 22;
+    }
+    public static int WfSrc() {
+        return 23;
     }
     public static int LfSrc() {
+        return 13;
+    }
+    public static int LfOrder() {
+        return 14;
+    }
+    public static int MkfPage() {
+        return 0;
+    }
+    public static int MkfKind() {
+        return 1;
+    }
+    public static int MkfTstart() {
+        return 2;
+    }
+    public static int MkfTlen() {
+        return 3;
+    }
+    public static int MkfParent() {
+        return 4;
+    }
+    public static int MkfMcid() {
+        return 5;
+    }
+    public static int MkfArtype() {
+        return 6;
+    }
+    public static int MkfArsub() {
+        return 7;
+    }
+    public static int MkfActual() {
+        return 8;
+    }
+    public static int MkfActuallen() {
+        return 9;
+    }
+    public static int MkfAlt() {
         return 10;
     }
-    public static int LfConf() {
+    public static int MkfAltlen() {
         return 11;
+    }
+    public static int MkfExp() {
+        return 12;
+    }
+    public static int MkfExplen() {
+        return 13;
+    }
+    public static int MkfLang() {
+        return 14;
+    }
+    public static int MkfLanglen() {
+        return 15;
+    }
+    public static int MkfOcg() {
+        return 16;
+    }
+    public static int MkfOcgdef() {
+        return 17;
+    }
+    public static int MkfGfirst() {
+        return 18;
+    }
+    public static int MkfGcount() {
+        return 19;
+    }
+    public static int MkfZfirst() {
+        return 20;
+    }
+    public static int MkfZlast() {
+        return 21;
+    }
+    public static int MkfFlags() {
+        return 22;
+    }
+    public static int MkfStm() {
+        return 23;
+    }
+    public static int FnfObj() {
+        return 0;
+    }
+    public static int FnfSubtype() {
+        return 1;
+    }
+    public static int FnfFlags() {
+        return 2;
+    }
+    public static int FnfProgram() {
+        return 3;
+    }
+    public static int FnfTounicode() {
+        return 4;
+    }
+    public static int FnfEnc() {
+        return 5;
+    }
+    public static int FnfTstart() {
+        return 6;
+    }
+    public static int FnfTlen() {
+        return 7;
+    }
+    public static int FnfAsc() {
+        return 8;
+    }
+    public static int FnfDesc() {
+        return 9;
+    }
+    public static int FnfSpace() {
+        return 10;
+    }
+    public static int FnfItalic() {
+        return 11;
+    }
+    public static int FnfStemv() {
+        return 12;
+    }
+    public static int FnfStyle() {
+        return 13;
     }
     public static int PfPage() {
         return 0;
@@ -891,17 +3078,35 @@ public static class Evidence {
     public static int PfWidth() {
         return 8;
     }
-    public static int PfAlpha() {
+    public static int PfFalpha() {
         return 9;
     }
-    public static int PfFlags() {
+    public static int PfSalpha() {
         return 10;
     }
-    public static int PfArtifact() {
+    public static int PfFlags() {
         return 11;
     }
-    public static int PfMcid() {
+    public static int PfZ() {
         return 12;
+    }
+    public static int PfClip() {
+        return 13;
+    }
+    public static int PfMark() {
+        return 14;
+    }
+    public static int PfOcg() {
+        return 15;
+    }
+    public static int PfPfirst() {
+        return 16;
+    }
+    public static int PfPcount() {
+        return 17;
+    }
+    public static int PfDash() {
+        return 18;
     }
     public static int MfPage() {
         return 0;
@@ -933,11 +3138,284 @@ public static class Evidence {
     public static int MfFlags() {
         return 9;
     }
-    public static int MfArtifact() {
+    public static int MfRot() {
         return 10;
     }
-    public static int MfMcid() {
+    public static int MfSkewed() {
         return 11;
+    }
+    public static int MfZ() {
+        return 12;
+    }
+    public static int MfClip() {
+        return 13;
+    }
+    public static int MfMark() {
+        return 14;
+    }
+    public static int MfOcg() {
+        return 15;
+    }
+    public static int MfVis() {
+        return 16;
+    }
+    public static int MfVby() {
+        return 17;
+    }
+    public static int MfVchk() {
+        return 18;
+    }
+    public static int OrfPage() {
+        return 0;
+    }
+    public static int OrfView() {
+        return 1;
+    }
+    public static int OrfBview() {
+        return 2;
+    }
+    public static int OrfRequest() {
+        return 3;
+    }
+    public static int OrfRound() {
+        return 4;
+    }
+    public static int OrfPass() {
+        return 5;
+    }
+    public static int OrfPsm() {
+        return 6;
+    }
+    public static int OrfRx() {
+        return 7;
+    }
+    public static int OrfRy() {
+        return 8;
+    }
+    public static int OrfRw() {
+        return 9;
+    }
+    public static int OrfRh() {
+        return 10;
+    }
+    public static int OrfLang() {
+        return 11;
+    }
+    public static int OrfLanglen() {
+        return 12;
+    }
+    public static int OrfOrient() {
+        return 13;
+    }
+    public static int OrfWdir() {
+        return 14;
+    }
+    public static int OrfLorder() {
+        return 15;
+    }
+    public static int OrfDeskew() {
+        return 16;
+    }
+    public static int OrfOsd() {
+        return 17;
+    }
+    public static int OrfScript() {
+        return 18;
+    }
+    public static int OrfSconf() {
+        return 19;
+    }
+    public static int OrfOconf() {
+        return 20;
+    }
+    public static int OrfFlags() {
+        return 21;
+    }
+    public static int OrfBfirst() {
+        return 22;
+    }
+    public static int OrfBcount() {
+        return 23;
+    }
+    public static int OrfLfirst() {
+        return 24;
+    }
+    public static int OrfLcount() {
+        return 25;
+    }
+    public static int OrfWfirst() {
+        return 26;
+    }
+    public static int OrfWcount() {
+        return 27;
+    }
+    public static int ObfPage() {
+        return 0;
+    }
+    public static int ObfX0() {
+        return 1;
+    }
+    public static int ObfY0() {
+        return 2;
+    }
+    public static int ObfX1() {
+        return 3;
+    }
+    public static int ObfY1() {
+        return 4;
+    }
+    public static int ObfKind() {
+        return 5;
+    }
+    public static int ObfParent() {
+        return 6;
+    }
+    public static int ObfRun() {
+        return 7;
+    }
+    public static int ObfBtype() {
+        return 8;
+    }
+    public static int ObfOrient() {
+        return 9;
+    }
+    public static int ObfWdir() {
+        return 10;
+    }
+    public static int ObfFirst() {
+        return 11;
+    }
+    public static int ObfCount() {
+        return 12;
+    }
+    public static int ObfConf() {
+        return 13;
+    }
+    public static int OlfPar() {
+        return 13;
+    }
+    public static int OlfRun() {
+        return 14;
+    }
+    public static int OlfConf() {
+        return 15;
+    }
+    public static int OlfXheight() {
+        return 16;
+    }
+    public static int OlfAsc() {
+        return 17;
+    }
+    public static int OlfDesc() {
+        return 18;
+    }
+    public static int OlfPx() {
+        return 19;
+    }
+    public static int OlfPy() {
+        return 20;
+    }
+    public static int OlfPw() {
+        return 21;
+    }
+    public static int OlfPh() {
+        return 22;
+    }
+    public static int OwfStyle() {
+        return 16;
+    }
+    public static int OwfRun() {
+        return 17;
+    }
+    public static int OwfSfirst() {
+        return 18;
+    }
+    public static int OwfScount() {
+        return 19;
+    }
+    public static int OwfLang() {
+        return 20;
+    }
+    public static int OwfFlags() {
+        return 21;
+    }
+    public static int OwfPsize() {
+        return 22;
+    }
+    public static int OwfPx() {
+        return 23;
+    }
+    public static int OwfPy() {
+        return 24;
+    }
+    public static int OwfPw() {
+        return 25;
+    }
+    public static int OwfPh() {
+        return 26;
+    }
+    public static int OsfConf() {
+        return 9;
+    }
+    public static int OsfAfirst() {
+        return 10;
+    }
+    public static int OsfAcount() {
+        return 11;
+    }
+    public static int OsfFlags() {
+        return 12;
+    }
+    public static int OsfPx() {
+        return 13;
+    }
+    public static int OsfPy() {
+        return 14;
+    }
+    public static int OsfPw() {
+        return 15;
+    }
+    public static int OsfPh() {
+        return 16;
+    }
+    public static int OafSym() {
+        return 0;
+    }
+    public static int OafTstart() {
+        return 1;
+    }
+    public static int OafTlen() {
+        return 2;
+    }
+    public static int OafConf() {
+        return 3;
+    }
+    public static int IkfPage() {
+        return 0;
+    }
+    public static int IkfView() {
+        return 1;
+    }
+    public static int IkfColor() {
+        return 2;
+    }
+    public static int IkfLight() {
+        return 3;
+    }
+    public static int IkfChroma() {
+        return 4;
+    }
+    public static int IkfCount() {
+        return 5;
+    }
+    public static int IkfRole() {
+        return 6;
+    }
+    public static int IkfMask() {
+        return 7;
+    }
+    public static int IkfSpread() {
+        return 8;
     }
     public static int CfPage() {
         return 0;
@@ -954,168 +3432,587 @@ public static class Evidence {
     public static int CfY1() {
         return 4;
     }
-    public static int CfPxx() {
+    public static int CfView() {
         return 5;
+    }
+    public static int CfPxx() {
+        return 6;
     }
     public static int CfPxy() {
-        return 6;
+        return 7;
     }
     public static int CfPxw() {
-        return 7;
+        return 8;
     }
     public static int CfPxh() {
-        return 8;
+        return 9;
     }
     public static int CfArea() {
-        return 9;
+        return 10;
     }
     public static int CfFill() {
-        return 10;
+        return 11;
     }
     public static int CfStroke() {
-        return 11;
+        return 12;
     }
     public static int CfColor() {
-        return 12;
-    }
-    public static int CfLayer() {
         return 13;
+    }
+    public static int CfInk() {
+        return 14;
     }
     public static int CfKind() {
-        return 14;
+        return 15;
     }
     public static int CfConf() {
-        return 15;
+        return 16;
     }
     public static int CfFlags() {
-        return 16;
-    }
-    public static int OfPage() {
-        return 0;
-    }
-    public static int OfX0() {
-        return 1;
-    }
-    public static int OfY0() {
-        return 2;
-    }
-    public static int OfX1() {
-        return 3;
-    }
-    public static int OfY1() {
-        return 4;
-    }
-    public static int OfTstart() {
-        return 5;
-    }
-    public static int OfTlen() {
-        return 6;
-    }
-    public static int OfConf() {
-        return 7;
-    }
-    public static int OfAlthead() {
-        return 8;
-    }
-    public static int OfAltcount() {
-        return 9;
-    }
-    public static int OfLine() {
-        return 10;
-    }
-    public static int OfBlock() {
-        return 11;
-    }
-    public static int OfBaseline() {
-        return 12;
-    }
-    public static int OfFlags() {
-        return 13;
-    }
-    public static int OfPass() {
-        return 14;
-    }
-    public static int OfLang() {
-        return 15;
-    }
-    public static int AfSym() {
-        return 0;
-    }
-    public static int AfCp() {
-        return 1;
-    }
-    public static int AfConf() {
-        return 2;
-    }
-    public static int AfNext() {
-        return 3;
-    }
-    public static int SfPage() {
-        return 0;
-    }
-    public static int SfTag() {
-        return 1;
-    }
-    public static int SfTaglen() {
-        return 2;
-    }
-    public static int SfParent() {
-        return 3;
-    }
-    public static int SfMcid() {
-        return 4;
-    }
-    public static int SfArtifact() {
-        return 5;
-    }
-    public static int SfType() {
-        return 6;
-    }
-    public static int SfTypelen() {
-        return 7;
-    }
-    public static int SfSubtype() {
-        return 8;
-    }
-    public static int SfSubtypelen() {
-        return 9;
-    }
-    public static int SfActual() {
-        return 10;
-    }
-    public static int SfActuallen() {
-        return 11;
-    }
-    public static int SfAlt() {
-        return 12;
-    }
-    public static int SfAltlen() {
-        return 13;
-    }
-    public static int SfExp() {
-        return 14;
-    }
-    public static int SfExplen() {
-        return 15;
-    }
-    public static int SfLang() {
-        return 16;
-    }
-    public static int SfLanglen() {
         return 17;
     }
-    public static int SfGfirst() {
+    public static int CfPfirst() {
         return 18;
     }
-    public static int SfGcount() {
+    public static int CfPcount() {
         return 19;
     }
-    public static int SfFlags() {
+    public static int CfParent() {
         return 20;
     }
-    public static int SfStm() {
+    public static int CfHoles() {
         return 21;
     }
+    public static int CfGray() {
+        return 22;
+    }
+    public static int RlfPage() {
+        return 0;
+    }
+    public static int RlfX0() {
+        return 1;
+    }
+    public static int RlfY0() {
+        return 2;
+    }
+    public static int RlfX1() {
+        return 3;
+    }
+    public static int RlfY1() {
+        return 4;
+    }
+    public static int RlfView() {
+        return 5;
+    }
+    public static int RlfLx0() {
+        return 6;
+    }
+    public static int RlfLy0() {
+        return 7;
+    }
+    public static int RlfLx1() {
+        return 8;
+    }
+    public static int RlfLy1() {
+        return 9;
+    }
+    public static int RlfThick() {
+        return 10;
+    }
+    public static int RlfColor() {
+        return 11;
+    }
+    public static int RlfInk() {
+        return 12;
+    }
+    public static int RlfStyle() {
+        return 13;
+    }
+    public static int RlfConf() {
+        return 14;
+    }
+    public static int RlfRfirst() {
+        return 15;
+    }
+    public static int RlfRcount() {
+        return 16;
+    }
+    public static int RlfFlags() {
+        return 17;
+    }
+    public static int PmfPage() {
+        return 0;
+    }
+    public static int PmfX0() {
+        return 1;
+    }
+    public static int PmfY0() {
+        return 2;
+    }
+    public static int PmfX1() {
+        return 3;
+    }
+    public static int PmfY1() {
+        return 4;
+    }
+    public static int PmfView() {
+        return 5;
+    }
+    public static int PmfKind() {
+        return 6;
+    }
+    public static int PmfCx() {
+        return 7;
+    }
+    public static int PmfCy() {
+        return 8;
+    }
+    public static int PmfRx() {
+        return 9;
+    }
+    public static int PmfRy() {
+        return 10;
+    }
+    public static int PmfRot() {
+        return 11;
+    }
+    public static int PmfStroke() {
+        return 12;
+    }
+    public static int PmfColor() {
+        return 13;
+    }
+    public static int PmfInk() {
+        return 14;
+    }
+    public static int PmfFill() {
+        return 15;
+    }
+    public static int PmfConf() {
+        return 16;
+    }
+    public static int PmfPfirst() {
+        return 17;
+    }
+    public static int PmfPcount() {
+        return 18;
+    }
+    public static int PmfRfirst() {
+        return 19;
+    }
+    public static int PmfRcount() {
+        return 20;
+    }
+    public static int PmfFlags() {
+        return 21;
+    }
+    public static int TlfInk() {
+        return 13;
+    }
+    public static int TlfHeight() {
+        return 14;
+    }
+    public static int TlfGap() {
+        return 15;
+    }
+    public static int TlfConf() {
+        return 16;
+    }
+    public static readonly int[] EvFd = new int[] {
+        1, 0, 1, 9, -2147483648, 0,
+        1, 1, 2, 34, 0, 0,
+        1, 2, 2, 74, 0, 0,
+        1, 3, 1, 75, 0, 0,
+        1, 4, 9, 28, 0, 7,
+        1, 5, 1, 76, 0, 0,
+        2, 0, 1, 9, -2147483648, 0,
+        2, 1, 8, 31, 0, 19,
+        2, 2, 1, 77, -1, 0,
+        2, 3, 1, 48, -1, 0,
+        2, 4, 12, 36, 0, 0,
+        2, 6, 1, 76, 0, 0,
+        2, 7, 1, 38, 0, 0,
+        2, 8, 1, 78, -1, 0,
+        2, 9, 1, 75, 0, 0,
+        2, 10, 2, 79, 0, 0,
+        2, 11, 13, 80, 0, 0,
+        2, 13, 1, 81, 0, 0,
+        2, 14, 1, 82, 0, 0,
+        2, 15, 1, 83, 0, 0,
+        2, 16, 1, 84, 0, 0,
+        2, 17, 2, 85, 0, 0,
+        2, 18, 2, 86, 0, 0,
+        2, 19, 1, 87, 0, 0,
+        2, 20, 1, 88, 0, 0,
+        2, 21, 1, 89, 0, 0,
+        2, 22, 1, 90, 0, 0,
+        2, 23, 9, 28, 0, 8,
+        3, 0, 2, 91, -2147483648, 0,
+        3, 1, 2, 92, -2147483648, 0,
+        3, 2, 8, 93, 0, 17,
+        7, 0, 1, 9, -2147483648, 0,
+        7, 1, 3, 15, -2147483648, 0,
+        7, 5, 1, 10, -1, 0,
+        7, 6, 6, 11, -2147483648, 0,
+        7, 8, 1, 24, -1, 0,
+        7, 9, 4, 16, -2147483648, 0,
+        7, 13, 2, 94, 0, 0,
+        7, 14, 2, 95, 0, 0,
+        7, 15, 2, 17, 0, 0,
+        7, 16, 8, 12, 0, 1,
+        7, 17, 1, 13, -1, 0,
+        7, 18, 2, 14, -2147483648, 0,
+        7, 19, 1, 20, 0, 0,
+        7, 20, 5, 18, -2147483648, 0,
+        7, 21, 5, 33, -2147483648, 0,
+        7, 22, 1, 19, 1000, 0,
+        7, 23, 1, 96, 1000, 0,
+        7, 24, 8, 97, -1, 13,
+        7, 25, 1, 98, -2147483648, 0,
+        7, 26, 1, 99, -1, 0,
+        7, 27, 1, 100, -1, 0,
+        7, 28, 1, 101, -1, 0,
+        7, 29, 8, 21, 0, 2,
+        7, 30, 1, 102, -1, 0,
+        7, 31, 9, 103, 0, 11,
+        8, 0, 1, 9, -2147483648, 0,
+        8, 1, 3, 15, -2147483648, 0,
+        8, 5, 4, 16, -2147483648, 0,
+        8, 9, 2, 17, 0, 0,
+        8, 10, 8, 30, 0, 4,
+        8, 11, 6, 11, -2147483648, 0,
+        8, 13, 1, 25, -1, 0,
+        8, 14, 1, 27, -1, 0,
+        8, 15, 1, 104, -1, 0,
+        8, 16, 9, 43, 0, 3,
+        8, 17, 7, 2, -1, 0,
+        8, 19, 1, 13, -1, 0,
+        8, 20, 2, 14, 0, 0,
+        8, 21, 2, 29, -1, 0,
+        8, 22, 8, 105, 0, 12,
+        8, 23, 9, 26, 0, 1,
+        9, 0, 1, 9, -2147483648, 0,
+        9, 1, 3, 15, -2147483648, 0,
+        9, 5, 4, 16, -2147483648, 0,
+        9, 9, 2, 17, 0, 0,
+        9, 10, 8, 30, 0, 4,
+        9, 11, 7, 3, -1, 0,
+        9, 13, 9, 26, 0, 1,
+        9, 14, 1, 106, -1, 0,
+        10, 0, 1, 9, -2147483648, 0,
+        10, 1, 8, 31, 0, 7,
+        10, 2, 6, 47, -2147483648, 0,
+        10, 4, 1, 48, -1, 0,
+        10, 5, 1, 23, -1, 0,
+        10, 6, 8, 49, 0, 3,
+        10, 7, 8, 50, 0, 8,
+        10, 8, 6, 51, -2147483648, 0,
+        10, 10, 6, 52, -2147483648, 0,
+        10, 12, 6, 53, -2147483648, 0,
+        10, 14, 6, 41, -2147483648, 0,
+        10, 16, 1, 101, -1, 0,
+        10, 17, 1, 107, -1, 0,
+        10, 18, 7, 2, -1, 0,
+        10, 20, 12, 98, -1, -1,
+        10, 22, 9, 28, 0, 6,
+        10, 23, 1, 54, 0, 0,
+        11, 0, 1, 35, 0, 0,
+        11, 1, 8, 50, 0, 11,
+        11, 2, 1, 28, 0, 0,
+        11, 3, 1, 108, 0, 0,
+        11, 4, 1, 109, 0, 0,
+        11, 5, 1, 110, -1, 0,
+        11, 6, 6, 111, -2147483648, 0,
+        11, 8, 1, 94, 0, 0,
+        11, 9, 1, 95, 0, 0,
+        11, 10, 1, 112, -1, 0,
+        11, 11, 2, 113, 0, 0,
+        11, 12, 1, 114, -1, 0,
+        11, 13, 9, 43, 0, 3,
+        12, 0, 1, 9, -2147483648, 0,
+        12, 1, 8, 31, 0, 5,
+        12, 2, 3, 15, -2147483648, 0,
+        12, 6, 5, 32, -2147483648, 0,
+        12, 7, 5, 33, -2147483648, 0,
+        12, 8, 2, 34, 0, 0,
+        12, 9, 1, 19, 1000, 0,
+        12, 10, 1, 96, 1000, 0,
+        12, 11, 9, 28, 0, 4,
+        12, 12, 1, 98, -1, 0,
+        12, 13, 1, 99, -1, 0,
+        12, 14, 1, 100, -1, 0,
+        12, 15, 1, 101, -1, 0,
+        12, 16, 7, 57, -1, 0,
+        12, 18, 2, 115, 0, 0,
+        13, 0, 1, 9, -2147483648, 0,
+        13, 1, 3, 15, -2147483648, 0,
+        13, 5, 1, 35, -2147483648, 0,
+        13, 6, 12, 36, 0, 0,
+        13, 8, 1, 19, 1000, 0,
+        13, 9, 9, 28, 0, 5,
+        13, 10, 2, 17, 0, 0,
+        13, 11, 1, 116, 0, 0,
+        13, 12, 1, 98, -1, 0,
+        13, 13, 1, 99, -1, 0,
+        13, 14, 1, 100, -1, 0,
+        13, 15, 1, 101, -1, 0,
+        13, 16, 8, 21, 0, 2,
+        13, 17, 1, 102, -1, 0,
+        13, 18, 9, 103, 0, 11,
+        14, 0, 1, 9, -2147483648, 0,
+        14, 1, 1, 117, -1, 0,
+        14, 2, 1, 118, -1, 0,
+        14, 3, 1, 77, -1, 0,
+        14, 4, 1, 119, 0, 0,
+        14, 5, 8, 40, 0, 10,
+        14, 6, 1, 120, 0, 0,
+        14, 7, 10, 121, -2147483648, 0,
+        14, 11, 6, 41, -2147483648, 0,
+        14, 13, 1, 122, 0, 0,
+        14, 14, 1, 123, 0, 0,
+        14, 15, 1, 124, 0, 0,
+        14, 16, 2, 79, 0, 0,
+        14, 17, 1, 125, -1, 0,
+        14, 18, 11, 126, -2147483648, 0,
+        14, 19, 1, 127, -1, 0,
+        14, 20, 1, 128, -1, 0,
+        14, 21, 1, 28, 0, 0,
+        14, 22, 7, 129, 0, 0,
+        14, 24, 7, 4, 0, 0,
+        14, 26, 7, 3, 0, 0,
+        15, 0, 1, 9, -2147483648, 0,
+        15, 1, 3, 15, -2147483648, 0,
+        15, 5, 8, 31, 0, 9,
+        15, 6, 1, 48, -1, 0,
+        15, 7, 1, 45, -1, 0,
+        15, 8, 1, 130, 0, 0,
+        15, 9, 1, 122, 0, 0,
+        15, 10, 1, 123, 0, 0,
+        15, 11, 7, 131, -1, 0,
+        15, 13, 1, 27, -1, 0,
+        16, 0, 1, 9, -2147483648, 0,
+        16, 1, 3, 15, -2147483648, 0,
+        16, 5, 4, 16, -2147483648, 0,
+        16, 9, 2, 17, 0, 0,
+        16, 10, 8, 30, 0, 4,
+        16, 11, 7, 3, -1, 0,
+        16, 13, 1, 132, -1, 0,
+        16, 14, 1, 45, -1, 0,
+        16, 15, 1, 27, -1, 0,
+        16, 16, 2, 133, -1, 0,
+        16, 17, 2, 94, -1, 0,
+        16, 18, 2, 95, -1, 0,
+        16, 19, 10, 36, -2147483648, 0,
+        17, 0, 1, 9, -2147483648, 0,
+        17, 1, 3, 15, -2147483648, 0,
+        17, 5, 4, 16, -2147483648, 0,
+        17, 9, 2, 17, 0, 0,
+        17, 10, 8, 30, 0, 4,
+        17, 11, 6, 11, -2147483648, 0,
+        17, 13, 1, 25, -1, 0,
+        17, 14, 1, 27, -1, 0,
+        17, 15, 1, 104, -1, 0,
+        17, 16, 9, 43, 0, 3,
+        17, 17, 1, 45, -1, 0,
+        17, 18, 7, 134, -1, 0,
+        17, 20, 11, 41, -2147483648, 0,
+        17, 21, 9, 28, 0, 9,
+        17, 22, 2, 135, -1, 0,
+        17, 23, 10, 36, -2147483648, 0,
+        18, 0, 1, 9, -2147483648, 0,
+        18, 1, 3, 15, -2147483648, 0,
+        18, 5, 1, 10, -1, 0,
+        18, 6, 6, 11, -2147483648, 0,
+        18, 8, 1, 24, -1, 0,
+        18, 9, 1, 27, -1, 0,
+        18, 10, 7, 39, -1, 0,
+        18, 12, 9, 28, 0, 10,
+        18, 13, 10, 36, -2147483648, 0,
+        19, 0, 1, 44, -2147483648, 0,
+        19, 1, 6, 11, -2147483648, 0,
+        19, 3, 1, 27, -1, 0,
+        20, 0, 1, 9, -2147483648, 0,
+        20, 1, 1, 117, -1, 0,
+        20, 2, 5, 18, -2147483648, 0,
+        20, 3, 1, 136, 0, 0,
+        20, 4, 1, 137, 0, 0,
+        20, 5, 1, 138, 0, 0,
+        20, 6, 8, 139, 0, 14,
+        20, 7, 1, 140, -1, 0,
+        20, 8, 1, 141, 0, 0,
+        21, 0, 1, 9, -2147483648, 0,
+        21, 1, 3, 15, -2147483648, 0,
+        21, 5, 1, 117, -1, 0,
+        21, 6, 10, 36, -2147483648, 0,
+        21, 10, 1, 37, 0, 0,
+        21, 11, 1, 32, 0, 0,
+        21, 12, 2, 33, 0, 0,
+        21, 13, 5, 18, -2147483648, 0,
+        21, 14, 1, 78, -1, 0,
+        21, 15, 8, 31, 0, 6,
+        21, 16, 1, 27, -1, 0,
+        21, 17, 9, 28, 0, 2,
+        21, 18, 7, 142, -1, 0,
+        21, 20, 1, 48, -1, 0,
+        21, 21, 1, 143, 0, 0,
+        21, 22, 1, 144, -1, 0,
+        22, 0, 1, 9, -2147483648, 0,
+        22, 1, 3, 15, -2147483648, 0,
+        22, 5, 1, 117, -1, 0,
+        22, 6, 4, 25, -2147483648, 0,
+        22, 10, 2, 145, 0, 0,
+        22, 11, 5, 18, -2147483648, 0,
+        22, 12, 1, 78, -1, 0,
+        22, 13, 8, 43, 0, 15,
+        22, 14, 1, 27, -1, 0,
+        22, 15, 7, 146, -1, 0,
+        22, 17, 1, 28, 0, 0,
+        23, 0, 1, 9, -2147483648, 0,
+        23, 1, 3, 15, -2147483648, 0,
+        23, 5, 1, 117, -1, 0,
+        23, 6, 8, 31, 0, 16,
+        23, 7, 13, 147, 0, 0,
+        23, 9, 13, 148, 0, 0,
+        23, 11, 2, 17, 0, 0,
+        23, 12, 2, 33, 0, 0,
+        23, 13, 5, 18, -2147483648, 0,
+        23, 14, 1, 78, -1, 0,
+        23, 15, 1, 32, 0, 0,
+        23, 16, 1, 27, -1, 0,
+        23, 17, 7, 149, -1, 0,
+        23, 19, 7, 146, -1, 0,
+        23, 21, 1, 28, 0, 0,
+        24, 0, 1, 9, -2147483648, 0,
+        24, 1, 3, 15, -2147483648, 0,
+        24, 5, 4, 16, -2147483648, 0,
+        24, 9, 2, 17, 0, 0,
+        24, 10, 8, 30, 0, 4,
+        24, 11, 7, 7, -1, 0,
+        24, 13, 1, 78, -1, 0,
+        24, 14, 2, 74, 0, 0,
+        24, 15, 2, 29, 0, 0,
+        24, 16, 1, 27, -1, 0
+    };
+    public static readonly int[] EvFx = new int[] {
+        0, 6,
+        6, 22,
+        28, 3,
+        0, 0,
+        0, 0,
+        0, 0,
+        31, 25,
+        56, 16,
+        72, 8,
+        80, 17,
+        97, 13,
+        110, 15,
+        125, 15,
+        140, 21,
+        161, 10,
+        171, 13,
+        184, 16,
+        200, 9,
+        209, 3,
+        212, 9,
+        221, 16,
+        237, 11,
+        248, 15,
+        263, 10
+    };
+    public static readonly int[] EvStrides = new int[] {
+        12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
+        28, 20, 4, 12, 24, 20, 24, 20
+    };
+    public static readonly int[] EvCk = new int[] {
+        2, 7, 1, 6, 7, 5,
+        3, 8, 1, 11, 12, 5,
+        4, 10, 1, 2, 3, 5,
+        5, 10, 1, 8, 9, 5,
+        6, 10, 1, 10, 11, 5,
+        7, 10, 1, 12, 13, 5,
+        8, 10, 1, 14, 15, 5,
+        9, 11, 1, 6, 7, 5,
+        10, 14, 1, 11, 12, 5,
+        11, 17, 1, 11, 12, 5,
+        12, 18, 1, 6, 7, 5,
+        13, 19, 1, 1, 2, 5,
+        14, 8, 2, 17, 18, 7,
+        15, 9, 2, 11, 12, 8,
+        16, 10, 2, 18, 19, 7,
+        17, 12, 2, 16, 17, 3,
+        18, 21, 2, 18, 19, 3,
+        19, 22, 2, 15, 16, 4,
+        20, 23, 2, 17, 18, 3,
+        21, 23, 2, 19, 20, 4,
+        22, 14, 2, 22, 23, 15,
+        23, 14, 2, 24, 25, 16,
+        24, 14, 2, 26, 27, 17,
+        25, 16, 2, 11, 12, 17,
+        26, 17, 2, 18, 19, 18,
+        27, 18, 2, 10, 11, 19,
+        28, 24, 2, 11, 12, 4,
+        29, 7, 3, 8, 0, 8,
+        30, 7, 3, 17, 0, 11,
+        31, 7, 3, 26, 0, 12,
+        32, 7, 3, 27, 0, 10,
+        33, 7, 3, 28, 0, 10,
+        34, 8, 3, 13, 0, 9,
+        35, 8, 3, 15, 0, 6,
+        36, 10, 5, 4, 0, 10,
+        37, 12, 3, 13, 0, 12,
+        38, 12, 3, 14, 0, 10,
+        39, 12, 3, 15, 0, 10,
+        40, 13, 3, 13, 0, 12,
+        41, 13, 3, 14, 0, 10,
+        42, 13, 3, 15, 0, 10,
+        43, 14, 3, 1, 0, 2,
+        44, 14, 3, 2, 0, 2,
+        45, 16, 3, 13, 0, 15,
+        46, 16, 3, 14, 0, 14,
+        47, 17, 3, 13, 0, 16,
+        48, 17, 3, 15, 0, 6,
+        49, 17, 3, 17, 0, 14,
+        50, 15, 3, 6, 0, 15,
+        51, 15, 3, 7, 0, 14,
+        52, 18, 4, 8, 0, 17,
+        53, 19, 4, 0, 0, 18,
+        54, 2, 3, 3, 0, 2,
+        55, 2, 3, 8, 0, 20,
+        56, 21, 3, 5, 0, 2,
+        57, 21, 3, 14, 0, 20,
+        58, 21, 3, 20, 0, 21,
+        59, 22, 3, 5, 0, 2,
+        60, 22, 3, 12, 0, 20,
+        61, 23, 3, 5, 0, 2,
+        62, 23, 3, 14, 0, 20,
+        63, 20, 3, 1, 0, 2,
+        64, 20, 3, 7, 0, 2,
+        65, 24, 3, 13, 0, 20,
+        66, 7, 6, 8, 17, 8,
+        67, 7, 6, 27, 18, 10,
+        68, 8, 6, 13, 11, 9,
+        69, 15, 6, 6, 11, 15,
+        70, 16, 6, 13, 11, 15,
+        71, 17, 6, 13, 11, 16,
+        72, 18, 6, 8, 18, 17,
+        73, 19, 6, 0, 10, 18,
+        74, 15, 6, 7, 22, 14,
+        75, 16, 6, 14, 24, 14,
+        76, 17, 6, 17, 26, 14,
+        77, 7, 8, 1, 0, 7,
+        78, 8, 8, 1, 0, 8,
+        79, 9, 8, 1, 0, 9,
+        80, 12, 8, 2, 0, 12,
+        81, 13, 8, 1, 0, 13,
+        82, 15, 8, 1, 0, 15,
+        83, 16, 8, 1, 0, 16,
+        84, 17, 8, 1, 0, 17,
+        85, 18, 8, 1, 0, 18,
+        86, 21, 8, 1, 0, 21,
+        87, 22, 8, 1, 0, 22,
+        88, 23, 8, 1, 0, 23,
+        89, 24, 8, 1, 0, 24
+    };
     internal static int EvGet(emon.Port.Cells c, int stride, int row, int f) {
         return emon.Port.CellsAt(c, (row * stride) + f);
     }
@@ -1136,18 +4033,52 @@ public static class Evidence {
         }
         return row;
     }
-    public static int EvInit(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
-        // Empty all ten arenas.
+    public static int EvsInit(emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats) {
+        // Empty the shared bundle.
+        emon.Port.CellsDrop(epages, 0);
+        emon.Port.CellsDrop(views, 0);
+        emon.Port.CellsDrop(pts, 0);
+        emon.Port.CellsDrop(refs, 0);
+        emon.Port.CellsDrop(etext, 0);
+        emon.Port.CellsDrop(feats, 0);
+        return 0;
+    }
+    public static int EvtInit(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images) {
+        // Empty the text bundle.
         emon.Port.CellsDrop(glyphs, 0);
         emon.Port.CellsDrop(words, 0);
         emon.Port.CellsDrop(lines, 0);
+        emon.Port.CellsDrop(marks, 0);
+        emon.Port.CellsDrop(fonts, 0);
         emon.Port.CellsDrop(paths, 0);
         emon.Port.CellsDrop(images, 0);
+        return 0;
+    }
+    public static int EvoInit(emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts) {
+        // Empty the OCR bundle.
+        emon.Port.CellsDrop(oruns, 0);
+        emon.Port.CellsDrop(oblocks, 0);
+        emon.Port.CellsDrop(olines, 0);
+        emon.Port.CellsDrop(owords, 0);
+        emon.Port.CellsDrop(osyms, 0);
+        emon.Port.CellsDrop(oalts, 0);
+        return 0;
+    }
+    public static int EvrInit(emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Empty the trace bundle.
+        emon.Port.CellsDrop(inks, 0);
         emon.Port.CellsDrop(components, 0);
-        emon.Port.CellsDrop(ocrwords, 0);
-        emon.Port.CellsDrop(alts, 0);
-        emon.Port.CellsDrop(etext, 0);
-        emon.Port.CellsDrop(spans, 0);
+        emon.Port.CellsDrop(rules, 0);
+        emon.Port.CellsDrop(prims, 0);
+        emon.Port.CellsDrop(tlines, 0);
+        return 0;
+    }
+    public static int EvInit(emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Empty all 24 arenas.
+        EvsInit(epages, views, pts, refs, etext, feats);
+        EvtInit(glyphs, words, lines, marks, fonts, paths, images);
+        EvoInit(oruns, oblocks, olines, owords, osyms, oalts);
+        EvrInit(inks, components, rules, prims, tlines);
         return 0;
     }
     public static int EtxAppendCp(emon.Port.Cells etext, int cp) {
@@ -1158,247 +4089,1556 @@ public static class Evidence {
     public static int EtxLen(emon.Port.Cells etext) {
         return emon.Port.CellsLen(etext);
     }
-    public static int GlCount(emon.Port.Cells glyphs) {
-        return EvCount(glyphs, 20);
+    public static int EpCount(emon.Port.Cells c) {
+        return EvCount(c, 12);
     }
-    public static int GlGet(emon.Port.Cells glyphs, int g, int f) {
-        return EvGet(glyphs, 20, g, f);
+    public static int EpGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 12, i, f);
     }
-    public static int GlSet(emon.Port.Cells glyphs, int g, int f, int v) {
-        return EvSet(glyphs, 20, g, f, v);
+    public static int EpSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 12, i, f, v);
     }
-    public static int GlNew(emon.Port.Cells glyphs, int page, int cp, int font, int size, int x0, int y0, int x1, int y1) {
-        // Append a glyph. Defaults: `how` unknown, baseline at the box's
-        // bottom, no rotation, colour none, opaque, render mode 0, visible,
-        // not an artifact, no marked-content id, in no word.
-        int g = EvPush(glyphs, 20);
-        EvSet(glyphs, 20, g, 0, page);
-        EvSet(glyphs, 20, g, 1, cp);
-        EvSet(glyphs, 20, g, 2, -1);
-        EvSet(glyphs, 20, g, 4, GhUnknown());
-        EvSet(glyphs, 20, g, 5, font);
-        EvSet(glyphs, 20, g, 6, size);
-        EvSet(glyphs, 20, g, 7, x0);
-        EvSet(glyphs, 20, g, 8, y0);
-        EvSet(glyphs, 20, g, 9, x1);
-        EvSet(glyphs, 20, g, 10, y1);
-        EvSet(glyphs, 20, g, 11, y1);
-        EvSet(glyphs, 20, g, 13, -1);
-        EvSet(glyphs, 20, g, 14, 1000);
-        EvSet(glyphs, 20, g, 18, -1);
-        EvSet(glyphs, 20, g, 19, -1);
-        return g;
+    public static int EpNew(emon.Port.Cells c, int vPage, int vWidth, int vHeight) {
+        // Append a row of epages: page width height; every other field is its default.
+        int r = EvPush(c, 12);
+        EvSet(c, 12, r, 0, vPage);
+        EvSet(c, 12, r, 1, vWidth);
+        EvSet(c, 12, r, 2, vHeight);
+        return r;
     }
-    public static int WdCount(emon.Port.Cells words) {
-        return EvCount(words, 16);
+    public static int VwCount(emon.Port.Cells c) {
+        return EvCount(c, 24);
     }
-    public static int WdGet(emon.Port.Cells words, int w, int f) {
-        return EvGet(words, 16, w, f);
+    public static int VwGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 24, i, f);
     }
-    public static int WdSet(emon.Port.Cells words, int w, int f, int v) {
-        return EvSet(words, 16, w, f, v);
+    public static int VwSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 24, i, f, v);
     }
-    public static int WdNew(emon.Port.Cells words, int page, int x0, int y0, int x1, int y1, int gfirst, int gcount) {
-        // Append a word over a run of glyphs. Defaults: no text, in no line,
-        // source `text` (1), no confidence, no flags, no gap, font -1.
-        int w = EvPush(words, 16);
-        EvSet(words, 16, w, 0, page);
-        EvSet(words, 16, w, 1, x0);
-        EvSet(words, 16, w, 2, y0);
-        EvSet(words, 16, w, 3, x1);
-        EvSet(words, 16, w, 4, y1);
-        EvSet(words, 16, w, 5, gfirst);
-        EvSet(words, 16, w, 6, gcount);
-        EvSet(words, 16, w, 7, -1);
-        EvSet(words, 16, w, 9, -1);
-        EvSet(words, 16, w, 10, 1);
-        EvSet(words, 16, w, 11, -1);
-        EvSet(words, 16, w, 13, -1);
-        EvSet(words, 16, w, 14, -1);
-        return w;
+    public static int PtCount(emon.Port.Cells c) {
+        return EvCount(c, 3);
     }
-    public static int LnCount(emon.Port.Cells lines) {
-        return EvCount(lines, 12);
+    public static int PtGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 3, i, f);
     }
-    public static int LnGet(emon.Port.Cells lines, int l, int f) {
-        return EvGet(lines, 12, l, f);
+    public static int PtSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 3, i, f, v);
     }
-    public static int LnSet(emon.Port.Cells lines, int l, int f, int v) {
-        return EvSet(lines, 12, l, f, v);
+    public static int PtNew(emon.Port.Cells c, int vX, int vY, int vOp) {
+        // Append a row of pts: x y op; every other field is its default.
+        int r = EvPush(c, 3);
+        EvSet(c, 3, r, 0, vX);
+        EvSet(c, 3, r, 1, vY);
+        EvSet(c, 3, r, 2, vOp);
+        return r;
     }
-    public static int LnNew(emon.Port.Cells lines, int page, int x0, int y0, int x1, int y1, int wfirst, int wcount, int baseline) {
-        // Append a line over a run of words. Defaults: left to right, no
-        // rotation, source `text` (1), no confidence.
-        int l = EvPush(lines, 12);
-        EvSet(lines, 12, l, 0, page);
-        EvSet(lines, 12, l, 1, x0);
-        EvSet(lines, 12, l, 2, y0);
-        EvSet(lines, 12, l, 3, x1);
-        EvSet(lines, 12, l, 4, y1);
-        EvSet(lines, 12, l, 5, wfirst);
-        EvSet(lines, 12, l, 6, wcount);
-        EvSet(lines, 12, l, 7, baseline);
-        EvSet(lines, 12, l, 10, 1);
-        EvSet(lines, 12, l, 11, -1);
-        return l;
+    public static int GlCount(emon.Port.Cells c) {
+        return EvCount(c, 32);
     }
-    public static int PaCount(emon.Port.Cells paths) {
-        return EvCount(paths, 16);
+    public static int GlGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 32, i, f);
     }
-    public static int PaGet(emon.Port.Cells paths, int p, int f) {
-        return EvGet(paths, 16, p, f);
+    public static int GlSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 32, i, f, v);
     }
-    public static int PaSet(emon.Port.Cells paths, int p, int f, int v) {
-        return EvSet(paths, 16, p, f, v);
+    public static int GlNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vCp, int vTstart, int vTlen, int vWord) {
+        // Append a row of glyphs: page x0 y0 x1 y1 cp tstart tlen word; every other field is its default.
+        int r = EvPush(c, 32);
+        EvSet(c, 32, r, 0, vPage);
+        EvSet(c, 32, r, 1, vX0);
+        EvSet(c, 32, r, 2, vY0);
+        EvSet(c, 32, r, 3, vX1);
+        EvSet(c, 32, r, 4, vY1);
+        EvSet(c, 32, r, 5, vCp);
+        EvSet(c, 32, r, 6, vTstart);
+        EvSet(c, 32, r, 7, vTlen);
+        EvSet(c, 32, r, 8, vWord);
+        EvSet(c, 32, r, 16, 5);
+        EvSet(c, 32, r, 17, -1);
+        EvSet(c, 32, r, 20, -1);
+        EvSet(c, 32, r, 21, -1);
+        EvSet(c, 32, r, 22, 1000);
+        EvSet(c, 32, r, 23, 1000);
+        EvSet(c, 32, r, 24, -1);
+        EvSet(c, 32, r, 26, -1);
+        EvSet(c, 32, r, 27, -1);
+        EvSet(c, 32, r, 28, -1);
+        EvSet(c, 32, r, 30, -1);
+        EvSet(c, 32, r, 9, vX0);
+        EvSet(c, 32, r, 10, vY1);
+        EvSet(c, 32, r, 11, vX1);
+        EvSet(c, 32, r, 12, vY1);
+        return r;
     }
-    public static int PaNew(emon.Port.Cells paths, int page, int kind, int x0, int y0, int x1, int y1) {
-        // Append a vector path. Defaults: neither filled nor stroked, opaque,
-        // no flags, not an artifact, no marked-content id.
-        int p = EvPush(paths, 16);
-        EvSet(paths, 16, p, 0, page);
-        EvSet(paths, 16, p, 1, kind);
-        EvSet(paths, 16, p, 2, x0);
-        EvSet(paths, 16, p, 3, y0);
-        EvSet(paths, 16, p, 4, x1);
-        EvSet(paths, 16, p, 5, y1);
-        EvSet(paths, 16, p, 6, -1);
-        EvSet(paths, 16, p, 7, -1);
-        EvSet(paths, 16, p, 9, 1000);
-        EvSet(paths, 16, p, 12, -1);
-        return p;
+    public static int WdCount(emon.Port.Cells c) {
+        return EvCount(c, 24);
     }
-    public static int ImCount(emon.Port.Cells images) {
-        return EvCount(images, 12);
+    public static int WdGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 24, i, f);
     }
-    public static int ImGet(emon.Port.Cells images, int m, int f) {
-        return EvGet(images, 12, m, f);
+    public static int WdSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 24, i, f, v);
     }
-    public static int ImSet(emon.Port.Cells images, int m, int f, int v) {
-        return EvSet(images, 12, m, f, v);
+    public static int WdNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vTstart, int vTlen, int vLine, int vConf, int vFeat) {
+        // Append a row of words: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+        int r = EvPush(c, 24);
+        EvSet(c, 24, r, 0, vPage);
+        EvSet(c, 24, r, 1, vX0);
+        EvSet(c, 24, r, 2, vY0);
+        EvSet(c, 24, r, 3, vX1);
+        EvSet(c, 24, r, 4, vY1);
+        EvSet(c, 24, r, 5, vBx0);
+        EvSet(c, 24, r, 6, vBy0);
+        EvSet(c, 24, r, 7, vBx1);
+        EvSet(c, 24, r, 8, vBy1);
+        EvSet(c, 24, r, 9, vRot);
+        EvSet(c, 24, r, 10, vDir);
+        EvSet(c, 24, r, 11, vTstart);
+        EvSet(c, 24, r, 12, vTlen);
+        EvSet(c, 24, r, 13, vLine);
+        EvSet(c, 24, r, 14, vConf);
+        EvSet(c, 24, r, 15, vFeat);
+        EvSet(c, 24, r, 17, -1);
+        EvSet(c, 24, r, 19, -1);
+        EvSet(c, 24, r, 21, -1);
+        EvSet(c, 24, r, 23, 1);
+        return r;
     }
-    public static int ImNew(emon.Port.Cells images, int page, int x0, int y0, int x1, int y1, int obj, int pxw, int pxh) {
-        // Append an image placement. Defaults: opaque, no flags, not an
-        // artifact, no marked-content id.
-        int m = EvPush(images, 12);
-        EvSet(images, 12, m, 0, page);
-        EvSet(images, 12, m, 1, x0);
-        EvSet(images, 12, m, 2, y0);
-        EvSet(images, 12, m, 3, x1);
-        EvSet(images, 12, m, 4, y1);
-        EvSet(images, 12, m, 5, obj);
-        EvSet(images, 12, m, 6, pxw);
-        EvSet(images, 12, m, 7, pxh);
-        EvSet(images, 12, m, 8, 1000);
-        EvSet(images, 12, m, 11, -1);
-        return m;
+    public static int LnCount(emon.Port.Cells c) {
+        return EvCount(c, 16);
     }
-    public static int CoCount(emon.Port.Cells components) {
-        return EvCount(components, 20);
+    public static int LnGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 16, i, f);
     }
-    public static int CoGet(emon.Port.Cells components, int c, int f) {
-        return EvGet(components, 20, c, f);
+    public static int LnSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 16, i, f, v);
     }
-    public static int CoSet(emon.Port.Cells components, int c, int f, int v) {
-        return EvSet(components, 20, c, f, v);
+    public static int LnNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vFirst, int vCount) {
+        // Append a row of lines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+        int r = EvPush(c, 16);
+        EvSet(c, 16, r, 0, vPage);
+        EvSet(c, 16, r, 1, vX0);
+        EvSet(c, 16, r, 2, vY0);
+        EvSet(c, 16, r, 3, vX1);
+        EvSet(c, 16, r, 4, vY1);
+        EvSet(c, 16, r, 5, vBx0);
+        EvSet(c, 16, r, 6, vBy0);
+        EvSet(c, 16, r, 7, vBx1);
+        EvSet(c, 16, r, 8, vBy1);
+        EvSet(c, 16, r, 9, vRot);
+        EvSet(c, 16, r, 10, vDir);
+        EvSet(c, 16, r, 11, vFirst);
+        EvSet(c, 16, r, 12, vCount);
+        EvSet(c, 16, r, 13, 1);
+        EvSet(c, 16, r, 14, -1);
+        return r;
     }
-    public static int CoNew(emon.Port.Cells components, int page, int kind, int x0, int y0, int x1, int y1) {
-        // Append a tracer component. Defaults: no pixel box, no ink
-        // statistics, colour none, layer -1, no confidence, no flags.
-        int c = EvPush(components, 20);
-        EvSet(components, 20, c, 0, page);
-        EvSet(components, 20, c, 1, x0);
-        EvSet(components, 20, c, 2, y0);
-        EvSet(components, 20, c, 3, x1);
-        EvSet(components, 20, c, 4, y1);
-        EvSet(components, 20, c, 12, -1);
-        EvSet(components, 20, c, 13, -1);
-        EvSet(components, 20, c, 14, kind);
-        EvSet(components, 20, c, 15, -1);
-        return c;
+    public static int MkCount(emon.Port.Cells c) {
+        return EvCount(c, 24);
     }
-    public static int OwCount(emon.Port.Cells ocrwords) {
-        return EvCount(ocrwords, 16);
+    public static int MkGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 24, i, f);
     }
-    public static int OwGet(emon.Port.Cells ocrwords, int w, int f) {
-        return EvGet(ocrwords, 16, w, f);
+    public static int MkSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 24, i, f, v);
     }
-    public static int OwSet(emon.Port.Cells ocrwords, int w, int f, int v) {
-        return EvSet(ocrwords, 16, w, f, v);
+    public static int MkNew(emon.Port.Cells c, int vPage, int vKind, int vTstart, int vTlen, int vParent, int vGfirst) {
+        // Append a row of marks: page kind tstart tlen parent gfirst; every other field is its default.
+        int r = EvPush(c, 24);
+        EvSet(c, 24, r, 0, vPage);
+        EvSet(c, 24, r, 1, vKind);
+        EvSet(c, 24, r, 2, vTstart);
+        EvSet(c, 24, r, 3, vTlen);
+        EvSet(c, 24, r, 4, vParent);
+        EvSet(c, 24, r, 5, -1);
+        EvSet(c, 24, r, 8, -1);
+        EvSet(c, 24, r, 10, -1);
+        EvSet(c, 24, r, 12, -1);
+        EvSet(c, 24, r, 14, -1);
+        EvSet(c, 24, r, 16, -1);
+        EvSet(c, 24, r, 17, -1);
+        EvSet(c, 24, r, 18, vGfirst);
+        EvSet(c, 24, r, 20, -1);
+        EvSet(c, 24, r, 21, -1);
+        return r;
     }
-    public static int OwNew(emon.Port.Cells ocrwords, int page, int x0, int y0, int x1, int y1, int conf) {
-        // Append an OCR word with the engine's confidence (per-mille).
-        // Defaults: no text, no alternatives, line and block -1, pass 0,
-        // language -1.
-        int w = EvPush(ocrwords, 16);
-        EvSet(ocrwords, 16, w, 0, page);
-        EvSet(ocrwords, 16, w, 1, x0);
-        EvSet(ocrwords, 16, w, 2, y0);
-        EvSet(ocrwords, 16, w, 3, x1);
-        EvSet(ocrwords, 16, w, 4, y1);
-        EvSet(ocrwords, 16, w, 5, -1);
-        EvSet(ocrwords, 16, w, 7, conf);
-        EvSet(ocrwords, 16, w, 8, -1);
-        EvSet(ocrwords, 16, w, 10, -1);
-        EvSet(ocrwords, 16, w, 11, -1);
-        EvSet(ocrwords, 16, w, 15, -1);
-        return w;
+    public static int FoCount(emon.Port.Cells c) {
+        return EvCount(c, 16);
     }
-    public static int AltCount(emon.Port.Cells alts) {
-        return emon.Port.CellsLen(alts) / 4;
+    public static int FoGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 16, i, f);
     }
-    public static int AltGet(emon.Port.Cells alts, int a, int f) {
-        return EvGet(alts, 4, a, f);
+    public static int FoSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 16, i, f, v);
     }
-    public static int AltAdd(emon.Port.Cells ocrwords, emon.Port.Cells alts, int w, int sym, int cp, int conf) {
-        // Add an alternative reading to OCR word w: symbol `sym` (an index
-        // into the word's text) might instead be `cp`, at `conf`. They chain
-        // in the order added. Answers the alternative's index.
-        int a = emon.Port.CellsLen(alts) / 4;
-        int head = EvGet(ocrwords, 16, w, 8);
-        int cnt = EvGet(ocrwords, 16, w, 9);
-        int t = head;
-        emon.Port.CellsPush(alts, sym);
-        emon.Port.CellsPush(alts, cp);
-        emon.Port.CellsPush(alts, conf);
-        emon.Port.CellsPush(alts, -1);
-        if (head < 0) {
-            EvSet(ocrwords, 16, w, 8, a);
-        } else {
-            while (emon.Port.CellsAt(alts, (t * 4) + 3) >= 0) {
-                t = emon.Port.CellsAt(alts, (t * 4) + 3);
-            }
-            emon.Port.CellsSet(alts, (t * 4) + 3, a);
+    public static int FoNew(emon.Port.Cells c, int vObj, int vSubtype) {
+        // Append a row of fonts: obj subtype; every other field is its default.
+        int r = EvPush(c, 16);
+        EvSet(c, 16, r, 0, vObj);
+        EvSet(c, 16, r, 1, vSubtype);
+        EvSet(c, 16, r, 5, -1);
+        EvSet(c, 16, r, 6, -1);
+        EvSet(c, 16, r, 10, -1);
+        EvSet(c, 16, r, 12, -1);
+        return r;
+    }
+    public static int PaCount(emon.Port.Cells c) {
+        return EvCount(c, 24);
+    }
+    public static int PaGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 24, i, f);
+    }
+    public static int PaSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 24, i, f, v);
+    }
+    public static int PaNew(emon.Port.Cells c, int vPage, int vKind, int vX0, int vY0, int vX1, int vY1) {
+        // Append a row of paths: page kind x0 y0 x1 y1; every other field is its default.
+        int r = EvPush(c, 24);
+        EvSet(c, 24, r, 0, vPage);
+        EvSet(c, 24, r, 1, vKind);
+        EvSet(c, 24, r, 2, vX0);
+        EvSet(c, 24, r, 3, vY0);
+        EvSet(c, 24, r, 4, vX1);
+        EvSet(c, 24, r, 5, vY1);
+        EvSet(c, 24, r, 6, -1);
+        EvSet(c, 24, r, 7, -1);
+        EvSet(c, 24, r, 9, 1000);
+        EvSet(c, 24, r, 10, 1000);
+        EvSet(c, 24, r, 12, -1);
+        EvSet(c, 24, r, 13, -1);
+        EvSet(c, 24, r, 14, -1);
+        EvSet(c, 24, r, 15, -1);
+        EvSet(c, 24, r, 16, -1);
+        return r;
+    }
+    public static int ImCount(emon.Port.Cells c) {
+        return EvCount(c, 20);
+    }
+    public static int ImGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 20, i, f);
+    }
+    public static int ImSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 20, i, f, v);
+    }
+    public static int ImNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vObj, int vPxw, int vPxh) {
+        // Append a row of images: page x0 y0 x1 y1 obj pxw pxh; every other field is its default.
+        int r = EvPush(c, 20);
+        EvSet(c, 20, r, 0, vPage);
+        EvSet(c, 20, r, 1, vX0);
+        EvSet(c, 20, r, 2, vY0);
+        EvSet(c, 20, r, 3, vX1);
+        EvSet(c, 20, r, 4, vY1);
+        EvSet(c, 20, r, 5, vObj);
+        EvSet(c, 20, r, 6, vPxw);
+        EvSet(c, 20, r, 7, vPxh);
+        EvSet(c, 20, r, 8, 1000);
+        EvSet(c, 20, r, 12, -1);
+        EvSet(c, 20, r, 13, -1);
+        EvSet(c, 20, r, 14, -1);
+        EvSet(c, 20, r, 15, -1);
+        EvSet(c, 20, r, 17, -1);
+        return r;
+    }
+    public static int OrCount(emon.Port.Cells c) {
+        return EvCount(c, 28);
+    }
+    public static int OrGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 28, i, f);
+    }
+    public static int OrSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 28, i, f, v);
+    }
+    public static int OrNew(emon.Port.Cells c, int vPage, int vView) {
+        // Append a row of oruns: page view; every other field is its default.
+        int r = EvPush(c, 28);
+        EvSet(c, 28, r, 0, vPage);
+        EvSet(c, 28, r, 1, vView);
+        EvSet(c, 28, r, 2, -1);
+        EvSet(c, 28, r, 3, -1);
+        EvSet(c, 28, r, 11, -1);
+        EvSet(c, 28, r, 17, -1);
+        EvSet(c, 28, r, 19, -1);
+        EvSet(c, 28, r, 20, -1);
+        return r;
+    }
+    public static int ObCount(emon.Port.Cells c) {
+        return EvCount(c, 16);
+    }
+    public static int ObGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 16, i, f);
+    }
+    public static int ObSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 16, i, f, v);
+    }
+    public static int ObNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vKind, int vParent, int vRun) {
+        // Append a row of oblocks: page x0 y0 x1 y1 kind parent run; every other field is its default.
+        int r = EvPush(c, 16);
+        EvSet(c, 16, r, 0, vPage);
+        EvSet(c, 16, r, 1, vX0);
+        EvSet(c, 16, r, 2, vY0);
+        EvSet(c, 16, r, 3, vX1);
+        EvSet(c, 16, r, 4, vY1);
+        EvSet(c, 16, r, 5, vKind);
+        EvSet(c, 16, r, 6, vParent);
+        EvSet(c, 16, r, 7, vRun);
+        EvSet(c, 16, r, 11, -1);
+        EvSet(c, 16, r, 13, -1);
+        return r;
+    }
+    public static int OlCount(emon.Port.Cells c) {
+        return EvCount(c, 24);
+    }
+    public static int OlGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 24, i, f);
+    }
+    public static int OlSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 24, i, f, v);
+    }
+    public static int OlNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vFirst, int vCount) {
+        // Append a row of olines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+        int r = EvPush(c, 24);
+        EvSet(c, 24, r, 0, vPage);
+        EvSet(c, 24, r, 1, vX0);
+        EvSet(c, 24, r, 2, vY0);
+        EvSet(c, 24, r, 3, vX1);
+        EvSet(c, 24, r, 4, vY1);
+        EvSet(c, 24, r, 5, vBx0);
+        EvSet(c, 24, r, 6, vBy0);
+        EvSet(c, 24, r, 7, vBx1);
+        EvSet(c, 24, r, 8, vBy1);
+        EvSet(c, 24, r, 9, vRot);
+        EvSet(c, 24, r, 10, vDir);
+        EvSet(c, 24, r, 11, vFirst);
+        EvSet(c, 24, r, 12, vCount);
+        EvSet(c, 24, r, 13, -1);
+        EvSet(c, 24, r, 14, -1);
+        EvSet(c, 24, r, 15, -1);
+        EvSet(c, 24, r, 16, -1);
+        EvSet(c, 24, r, 17, -1);
+        EvSet(c, 24, r, 18, -1);
+        return r;
+    }
+    public static int OwCount(emon.Port.Cells c) {
+        return EvCount(c, 28);
+    }
+    public static int OwGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 28, i, f);
+    }
+    public static int OwSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 28, i, f, v);
+    }
+    public static int OwNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vTstart, int vTlen, int vLine, int vConf, int vFeat) {
+        // Append a row of owords: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+        int r = EvPush(c, 28);
+        EvSet(c, 28, r, 0, vPage);
+        EvSet(c, 28, r, 1, vX0);
+        EvSet(c, 28, r, 2, vY0);
+        EvSet(c, 28, r, 3, vX1);
+        EvSet(c, 28, r, 4, vY1);
+        EvSet(c, 28, r, 5, vBx0);
+        EvSet(c, 28, r, 6, vBy0);
+        EvSet(c, 28, r, 7, vBx1);
+        EvSet(c, 28, r, 8, vBy1);
+        EvSet(c, 28, r, 9, vRot);
+        EvSet(c, 28, r, 10, vDir);
+        EvSet(c, 28, r, 11, vTstart);
+        EvSet(c, 28, r, 12, vTlen);
+        EvSet(c, 28, r, 13, vLine);
+        EvSet(c, 28, r, 14, vConf);
+        EvSet(c, 28, r, 15, vFeat);
+        EvSet(c, 28, r, 17, -1);
+        EvSet(c, 28, r, 18, -1);
+        EvSet(c, 28, r, 22, -1);
+        return r;
+    }
+    public static int OsCount(emon.Port.Cells c) {
+        return EvCount(c, 20);
+    }
+    public static int OsGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 20, i, f);
+    }
+    public static int OsSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 20, i, f, v);
+    }
+    public static int OsNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vCp, int vTstart, int vTlen, int vWord) {
+        // Append a row of osyms: page x0 y0 x1 y1 cp tstart tlen word; every other field is its default.
+        int r = EvPush(c, 20);
+        EvSet(c, 20, r, 0, vPage);
+        EvSet(c, 20, r, 1, vX0);
+        EvSet(c, 20, r, 2, vY0);
+        EvSet(c, 20, r, 3, vX1);
+        EvSet(c, 20, r, 4, vY1);
+        EvSet(c, 20, r, 5, vCp);
+        EvSet(c, 20, r, 6, vTstart);
+        EvSet(c, 20, r, 7, vTlen);
+        EvSet(c, 20, r, 8, vWord);
+        EvSet(c, 20, r, 9, -1);
+        EvSet(c, 20, r, 10, -1);
+        return r;
+    }
+    public static int OaCount(emon.Port.Cells c) {
+        return EvCount(c, 4);
+    }
+    public static int OaGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 4, i, f);
+    }
+    public static int OaSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 4, i, f, v);
+    }
+    public static int OaNew(emon.Port.Cells c, int vSym, int vTstart, int vTlen, int vConf) {
+        // Append a row of oalts: sym tstart tlen conf; every other field is its default.
+        int r = EvPush(c, 4);
+        EvSet(c, 4, r, 0, vSym);
+        EvSet(c, 4, r, 1, vTstart);
+        EvSet(c, 4, r, 2, vTlen);
+        EvSet(c, 4, r, 3, vConf);
+        return r;
+    }
+    public static int IkCount(emon.Port.Cells c) {
+        return EvCount(c, 12);
+    }
+    public static int IkGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 12, i, f);
+    }
+    public static int IkSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 12, i, f, v);
+    }
+    public static int IkNew(emon.Port.Cells c, int vPage, int vView) {
+        // Append a row of inks: page view; every other field is its default.
+        int r = EvPush(c, 12);
+        EvSet(c, 12, r, 0, vPage);
+        EvSet(c, 12, r, 1, vView);
+        EvSet(c, 12, r, 2, -1);
+        EvSet(c, 12, r, 7, -1);
+        return r;
+    }
+    public static int CoCount(emon.Port.Cells c) {
+        return EvCount(c, 24);
+    }
+    public static int CoGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 24, i, f);
+    }
+    public static int CoSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 24, i, f, v);
+    }
+    public static int CoNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vKind) {
+        // Append a row of components: page x0 y0 x1 y1 kind; every other field is its default.
+        int r = EvPush(c, 24);
+        EvSet(c, 24, r, 0, vPage);
+        EvSet(c, 24, r, 1, vX0);
+        EvSet(c, 24, r, 2, vY0);
+        EvSet(c, 24, r, 3, vX1);
+        EvSet(c, 24, r, 4, vY1);
+        EvSet(c, 24, r, 5, -1);
+        EvSet(c, 24, r, 13, -1);
+        EvSet(c, 24, r, 14, -1);
+        EvSet(c, 24, r, 15, vKind);
+        EvSet(c, 24, r, 16, -1);
+        EvSet(c, 24, r, 18, -1);
+        EvSet(c, 24, r, 20, -1);
+        EvSet(c, 24, r, 22, -1);
+        return r;
+    }
+    public static int RlCount(emon.Port.Cells c) {
+        return EvCount(c, 20);
+    }
+    public static int RlGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 20, i, f);
+    }
+    public static int RlSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 20, i, f, v);
+    }
+    public static int RlNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vView) {
+        // Append a row of rules: page x0 y0 x1 y1 view; every other field is its default.
+        int r = EvPush(c, 20);
+        EvSet(c, 20, r, 0, vPage);
+        EvSet(c, 20, r, 1, vX0);
+        EvSet(c, 20, r, 2, vY0);
+        EvSet(c, 20, r, 3, vX1);
+        EvSet(c, 20, r, 4, vY1);
+        EvSet(c, 20, r, 5, vView);
+        EvSet(c, 20, r, 11, -1);
+        EvSet(c, 20, r, 12, -1);
+        EvSet(c, 20, r, 14, -1);
+        EvSet(c, 20, r, 15, -1);
+        return r;
+    }
+    public static int PmCount(emon.Port.Cells c) {
+        return EvCount(c, 24);
+    }
+    public static int PmGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 24, i, f);
+    }
+    public static int PmSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 24, i, f, v);
+    }
+    public static int PmNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vKind) {
+        // Append a row of prims: page x0 y0 x1 y1 kind; every other field is its default.
+        int r = EvPush(c, 24);
+        EvSet(c, 24, r, 0, vPage);
+        EvSet(c, 24, r, 1, vX0);
+        EvSet(c, 24, r, 2, vY0);
+        EvSet(c, 24, r, 3, vX1);
+        EvSet(c, 24, r, 4, vY1);
+        EvSet(c, 24, r, 5, -1);
+        EvSet(c, 24, r, 6, vKind);
+        EvSet(c, 24, r, 13, -1);
+        EvSet(c, 24, r, 14, -1);
+        EvSet(c, 24, r, 16, -1);
+        EvSet(c, 24, r, 17, -1);
+        EvSet(c, 24, r, 19, -1);
+        return r;
+    }
+    public static int TlCount(emon.Port.Cells c) {
+        return EvCount(c, 20);
+    }
+    public static int TlGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 20, i, f);
+    }
+    public static int TlSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 20, i, f, v);
+    }
+    public static int TlNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vFirst, int vCount) {
+        // Append a row of tlines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+        int r = EvPush(c, 20);
+        EvSet(c, 20, r, 0, vPage);
+        EvSet(c, 20, r, 1, vX0);
+        EvSet(c, 20, r, 2, vY0);
+        EvSet(c, 20, r, 3, vX1);
+        EvSet(c, 20, r, 4, vY1);
+        EvSet(c, 20, r, 5, vBx0);
+        EvSet(c, 20, r, 6, vBy0);
+        EvSet(c, 20, r, 7, vBx1);
+        EvSet(c, 20, r, 8, vBy1);
+        EvSet(c, 20, r, 9, vRot);
+        EvSet(c, 20, r, 10, vDir);
+        EvSet(c, 20, r, 11, vFirst);
+        EvSet(c, 20, r, 12, vCount);
+        EvSet(c, 20, r, 13, -1);
+        EvSet(c, 20, r, 16, -1);
+        return r;
+    }
+    internal static int EvRatio(int lo, int hi) {
+        // round(1024 * lo / hi) for 0 <= lo <= hi, hi > 0 (half up), in 64 bits.
+        return (int) (unchecked(unchecked(((long) lo) * ((long) 2048)) + ((long) hi)) / unchecked(((long) hi) * ((long) 2)));
+    }
+    public static int EvAngle(int dx, int dy) {
+        // The angle of the vector (dx, dy), in page space (y DOWN), in centi-degrees
+        // counter-clockwise AS DISPLAYED, in [0, 36000): integer atan2 of (dx, -dy) by octant
+        // reduction and the table of atan(i/1024), i = round(1024 * min / max); the error is
+        // under 0.03 degree and exact at every multiple of 45. The zero vector is 0. Every source
+        // spells `rot` with this and nothing else (SPEC 8.4.1).
+        int x = dx;
+        int y = dy;
+        int ax = 0;
+        int ay = 0;
+        int t = 0;
+        int a = 0;
+        if (x == -2147483648) {
+            x = -2147483647;
         }
-        EvSet(ocrwords, 16, w, 9, cnt + 1);
+        if (y == -2147483648) {
+            y = -2147483647;
+        }
+        y = 0 - y;
+        ax = x;
+        if (ax < 0) {
+            ax = 0 - ax;
+        }
+        ay = y;
+        if (ay < 0) {
+            ay = 0 - ay;
+        }
+        if ((ax == 0) && (ay == 0)) {
+            return 0;
+        }
+        if (ay <= ax) {
+            t = Trig.EvAtan[EvRatio(ay, ax)];
+        } else {
+            t = 9000 - Trig.EvAtan[EvRatio(ax, ay)];
+        }
+        if ((x >= 0) && (y >= 0)) {
+            a = t;
+        }
+        if ((x < 0) && (y >= 0)) {
+            a = 18000 - t;
+        }
+        if ((x < 0) && (y < 0)) {
+            a = 18000 + t;
+        }
+        if ((x >= 0) && (y < 0)) {
+            a = 36000 - t;
+        }
+        if (a >= 36000) {
+            a -= 36000;
+        }
         return a;
     }
-    public static int SpCount(emon.Port.Cells spans) {
-        return EvCount(spans, 22);
+    public static int EvSin(int cdeg) {
+        // sin of an angle in centi-degrees, in 16.16 (65536 is 1): a generated table over 0..9000
+        // and the symmetries, for any integer angle.
+        int a = cdeg % 36000;
+        if (a < 0) {
+            a += 36000;
+        }
+        if (a <= 9000) {
+            return Trig.EvSinTab[a];
+        }
+        if (a <= 18000) {
+            return Trig.EvSinTab[18000 - a];
+        }
+        if (a <= 27000) {
+            return 0 - Trig.EvSinTab[a - 18000];
+        }
+        return 0 - Trig.EvSinTab[36000 - a];
     }
-    public static int SpGet(emon.Port.Cells spans, int s, int f) {
-        return EvGet(spans, 22, s, f);
+    public static int EvCos(int cdeg) {
+        // cos of an angle in centi-degrees, in 16.16.
+        return EvSin((cdeg % 36000) + 9000);
     }
-    public static int SpSet(emon.Port.Cells spans, int s, int f, int v) {
-        return EvSet(spans, 22, s, f, v);
+    public static long EvFloordiv(long a, long b) {
+        // a / b rounded toward minus infinity, for b > 0 (`quot` truncates toward zero).
+        long q = a / b;
+        if ((a - unchecked(q * b)) < ((long) 0)) {
+            return q - ((long) 1);
+        }
+        return q;
     }
-    public static int SpNew(emon.Port.Cells spans, int page, int tag, int taglen, int parent, int gfirst) {
-        // Append a marked-content span opened at glyph `gfirst`. Defaults: no
-        // MCID, not an artifact, no strings, no glyphs yet, no flags, the page's
-        // own content stream.
-        int s = EvPush(spans, 22);
-        EvSet(spans, 22, s, 0, page);
-        EvSet(spans, 22, s, 1, tag);
-        EvSet(spans, 22, s, 2, taglen);
-        EvSet(spans, 22, s, 3, parent);
-        EvSet(spans, 22, s, 4, -1);
-        EvSet(spans, 22, s, 6, -1);
-        EvSet(spans, 22, s, 8, -1);
-        EvSet(spans, 22, s, 10, -1);
-        EvSet(spans, 22, s, 12, -1);
-        EvSet(spans, 22, s, 14, -1);
-        EvSet(spans, 22, s, 16, -1);
-        EvSet(spans, 22, s, 18, gfirst);
-        return s;
+    internal static long EvRound16(long v) {
+        // floor((v + 2^15) / 2^16): a 16.16 value to the nearest integer, halves up (D096).
+        return EvFloordiv(unchecked(v + ((long) 32768)), (long) 65536);
+    }
+    public static int EvOverlapSmall(int ax0, int ay0, int ax1, int ay1, int bx0, int by0, int bx1, int by1) {
+        // Intersection area over the SMALLER box's area, per-mille; 0 when they miss or the smaller is empty.
+        int x0 = ax0;
+        int y0 = ay0;
+        int x1 = ax1;
+        int y1 = ay1;
+        if (bx0 > x0) {
+            x0 = bx0;
+        }
+        if (by0 > y0) {
+            y0 = by0;
+        }
+        if (bx1 < x1) {
+            x1 = bx1;
+        }
+        if (by1 < y1) {
+            y1 = by1;
+        }
+        if ((x0 >= x1) || (y0 >= y1)) {
+            return 0;
+        }
+        long inter = unchecked(((long) (x1 - x0)) * ((long) (y1 - y0)));
+        long areaa = unchecked(((long) (ax1 - ax0)) * ((long) (ay1 - ay0)));
+        long areab = unchecked(((long) (bx1 - bx0)) * ((long) (by1 - by0)));
+        long small = areaa;
+        if (areab < small) {
+            small = areab;
+        }
+        if (small <= ((long) 0)) {
+            return 0;
+        }
+        return (int) (unchecked(inter * ((long) 1000)) / small);
+    }
+    public static int EvBaselineAt(int bx0, int by0, int bx1, int by1, int x) {
+        // The segment's y at x, by integer interpolation (truncating); a vertical segment answers by1.
+        if (bx1 <= bx0) {
+            return by1;
+        }
+        return by0 + ((int) (unchecked(((long) (by1 - by0)) * ((long) (x - bx0))) / ((long) (bx1 - bx0))));
+    }
+    public static int RfCount(emon.Port.Cells c) {
+        return EvCount(c, 2);
+    }
+    public static int RfGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 2, i, f);
+    }
+    public static int RfAdd(emon.Port.Cells c, int ea, int index) {
+        // Append a reference `(ea, index)` to any row of any arena; answers its row.
+        int r = EvPush(c, 2);
+        EvSet(c, 2, r, 0, ea);
+        EvSet(c, 2, r, 1, index);
+        return r;
+    }
+    public static int FeCount(emon.Port.Cells c) {
+        return EvCount(c, 32);
+    }
+    public static int FeGet(emon.Port.Cells c, int i, int f) {
+        return EvGet(c, 32, i, f);
+    }
+    public static int FeSet(emon.Port.Cells c, int i, int f, int v) {
+        return EvSet(c, 32, i, f, v);
+    }
+    public static int FeNew(emon.Port.Cells c, int ea, int index) {
+        // Append a feature row for the word at `(ea, index)`, every column -1 (not computed yet).
+        int r = EvPush(c, 32);
+        int k = 2;
+        EvSet(c, 32, r, 0, ea);
+        EvSet(c, 32, r, 1, index);
+        while (k < 32) {
+            EvSet(c, 32, r, k, -1);
+            k += 1;
+        }
+        return r;
+    }
+    public static int OaAdd(emon.Port.Cells oalts, int sym, int tstart, int tlen, int conf) {
+        // Append an alternative of symbol `sym`. A symbol's alternatives are a run, so they must all be
+        // added before the next symbol's are (and the symbol's `afirst acount` set to the run);
+        // `ev-check` holds it by asking every alternative to lie in its symbol's run.
+        int r = EvPush(oalts, 4);
+        EvSet(oalts, 4, r, 0, sym);
+        EvSet(oalts, 4, r, 1, tstart);
+        EvSet(oalts, 4, r, 2, tlen);
+        EvSet(oalts, 4, r, 3, conf);
+        return r;
+    }
+    public static int MkOpen(emon.Port.Cells marks, int page, int kind, int tstart, int tlen, int parent, int gfirst, int zfirst) {
+        // Open a marked-content row (the caller keeps the stack of open rows: the `parent` it passes is
+        // the innermost open one, -1 at the top). `gfirst` is the next glyph, `zfirst` the next paint
+        // number. Answers the row. `mk-close` fills `gcount` and `zlast`.
+        int r = MkNew(marks, page, kind, tstart, tlen, parent, gfirst);
+        EvSet(marks, 24, r, 20, zfirst);
+        return r;
+    }
+    public static int MkClose(emon.Port.Cells marks, int row, int gnext, int znext) {
+        // Close the row: `gnext` the next glyph index and `znext` the next paint number AT THE CLOSE.
+        // `gcount` = `gnext` - `gfirst`; `zlast` = `znext` - 1 (so a span that painted nothing has
+        // `zlast` < `zfirst`).
+        int gfirst = EvGet(marks, 24, row, 18);
+        EvSet(marks, 24, row, 19, gnext - gfirst);
+        EvSet(marks, 24, row, 21, znext - 1);
+        return 0;
+    }
+    public static int MkArtifactOf(emon.Port.Cells marks, int mark) {
+        // The nearest artifact row on `mark`'s chain (itself, then its parents): its `/Type` * 16 +
+        // its `/Subtype`, packed; 0 when none of the chain is an artifact. (SPEC 9.5 defence 1.)
+        int t = mark;
+        while (t >= 0) {
+            if (EvGet(marks, 24, t, 1) == 1) {
+                return (EvGet(marks, 24, t, 6) * 16) + EvGet(marks, 24, t, 7);
+            }
+            t = EvGet(marks, 24, t, 4);
+        }
+        return 0;
+    }
+    public static int MkArtifactClass(int kind, int ty, int su) {
+        // D101's artifact class of a mark row, from its kind, /Type and /Subtype codes: 0 when it is not an
+        // /Artifact; else `watermark` (the subtype), `background`, `pagination` (the type, or the subtype
+        // header or footer), `layout`, else `other`. What v0 stored in a glyph's `artifact`.
+        if (kind != 1) {
+            return 0;
+        }
+        if (su == 3) {
+            return ArWatermark();
+        }
+        if (ty == 4) {
+            return ArBackground();
+        }
+        if ((ty == 1) || ((su == 1) || (su == 2))) {
+            return ArPagination();
+        }
+        if (ty == 3) {
+            return ArLayout();
+        }
+        return ArOther();
+    }
+    public static int MkOcgOf(emon.Port.Cells marks, int mark) {
+        // The innermost optional-content row on `mark`'s chain, -1 when none.
+        int t = mark;
+        while (t >= 0) {
+            if (EvGet(marks, 24, t, 1) == 2) {
+                return t;
+            }
+            t = EvGet(marks, 24, t, 4);
+        }
+        return -1;
+    }
+    public static int VwNew(emon.Port.Cells views, int page, int kind, int request, int parent, int pxw, int pxh, int dpi100, int layer, int ink, int turns, int deskew, int cropx, int cropy, int flags) {
+        // Append a view (SPEC 8.4.2) and compute its transform ONCE, from the integer parameters, so every
+        // reader uses the same numbers. The raster shows the page region whose top-left is (cropx, cropy)
+        // centipoints, turned `turns` quarter turns CLOCKWISE (as displayed) and its rows rotated `deskew`
+        // centi-degrees counter-clockwise; `dpi100` is the resolution x100. px -> cpt is
+        // x = e + (a*px + c*py) / 2^16, y = f + (b*px + d*py) / 2^16 (16.16 a b c d, e f centipoints), its
+        // inverse px = (a'*dx + c'*dy) / 2^16, py = (b'*dx + d'*dy) / 2^16 with dx, dy from (e, f): stored at
+        // `vwf-ia..id`. The scale is 720000 * 65536 / dpi100 in 64 bits; the quarter turns are exact; the
+        // deskew is `ev-cos`/`ev-sin`. There is NO rounding at all at 72, 96, 150, 200, 300, 400 and 600 dpi
+        // with no deskew.
+        int r = EvPush(views, 24);
+        int dpi = dpi100;
+        int q = turns % 4;
+        int xx = 1;
+        int xy = 0;
+        int yx = 0;
+        int yy = 1;
+        if (dpi < 1) {
+            dpi = 7200;
+        }
+        if (q < 0) {
+            q += 4;
+        }
+        if (q == 1) {
+            xx = 0;
+            xy = -1;
+            yx = 1;
+            yy = 0;
+        }
+        if (q == 2) {
+            xx = -1;
+            xy = 0;
+            yx = 0;
+            yy = -1;
+        }
+        if (q == 3) {
+            xx = 0;
+            xy = 1;
+            yx = -1;
+            yy = 0;
+        }
+        long s16 = unchecked(unchecked(((long) 1440000) * ((long) 65536)) + ((long) dpi)) / unchecked(((long) 2) * ((long) dpi));
+        int co = EvCos(deskew);
+        int si = EvSin(deskew);
+        int ux = (xx * co) + (xy * si);
+        int uy = (xy * co) + (0 - (xx * si));
+        int vx = (yx * co) + (yy * si);
+        int vy = (yy * co) + (0 - (yx * si));
+        // 16.16 unit vectors of the raster's x and y axes in page space: (ux, uy) and (vx, vy).
+        EvSet(views, 24, r, 0, page);
+        EvSet(views, 24, r, 1, kind);
+        EvSet(views, 24, r, 2, request);
+        EvSet(views, 24, r, 3, parent);
+        EvSet(views, 24, r, 4, pxw);
+        EvSet(views, 24, r, 5, pxh);
+        EvSet(views, 24, r, 6, dpi100);
+        EvSet(views, 24, r, 7, layer);
+        EvSet(views, 24, r, 8, ink);
+        EvSet(views, 24, r, 9, turns);
+        EvSet(views, 24, r, 10, deskew);
+        EvSet(views, 24, r, 11, cropx);
+        EvSet(views, 24, r, 12, cropy);
+        EvSet(views, 24, r, 13, (int) EvRound16(unchecked(s16 * ((long) ux))));
+        EvSet(views, 24, r, 14, (int) EvRound16(unchecked(s16 * ((long) uy))));
+        EvSet(views, 24, r, 15, (int) EvRound16(unchecked(s16 * ((long) vx))));
+        EvSet(views, 24, r, 16, (int) EvRound16(unchecked(s16 * ((long) vy))));
+        // The inverse of a rotation times a scale is its transpose over the scale squared.
+        EvSet(views, 24, r, 19, (int) EvFloordiv(unchecked(unchecked(((long) ux) * ((long) 65536)) + (s16 / ((long) 2))), s16));
+        EvSet(views, 24, r, 20, (int) EvFloordiv(unchecked(unchecked(((long) vx) * ((long) 65536)) + (s16 / ((long) 2))), s16));
+        EvSet(views, 24, r, 21, (int) EvFloordiv(unchecked(unchecked(((long) uy) * ((long) 65536)) + (s16 / ((long) 2))), s16));
+        EvSet(views, 24, r, 22, (int) EvFloordiv(unchecked(unchecked(((long) vy) * ((long) 65536)) + (s16 / ((long) 2))), s16));
+        EvSet(views, 24, r, 23, flags);
+        // The page position of pixel (0, 0): a corner of the region, by the quarter turns.
+        int wcpt = (int) EvRound16(unchecked(s16 * ((long) pxw)));
+        int hcpt = (int) EvRound16(unchecked(s16 * ((long) pxh)));
+        int e = cropx;
+        int f = cropy;
+        if (q == 1) {
+            f = cropy + wcpt;
+        }
+        if (q == 2) {
+            e = cropx + wcpt;
+            f = cropy + hcpt;
+        }
+        if (q == 3) {
+            e = cropx + hcpt;
+        }
+        EvSet(views, 24, r, 17, e);
+        EvSet(views, 24, r, 18, f);
+        return r;
+    }
+    public static int VwPxToCpt(emon.Port.Cells views, int v, int axis, int px, int py) {
+        // A pixel position of view `v` as page space: `axis` 0 the x, 1 the y, in centipoints (64-bit
+        // arithmetic, round half up with FLOOR division, D096).
+        if (axis == 0) {
+            return EvGet(views, 24, v, 17) + ((int) EvRound16(unchecked(unchecked(((long) EvGet(views, 24, v, 13)) * ((long) px)) + unchecked(((long) EvGet(views, 24, v, 15)) * ((long) py)))));
+        }
+        return EvGet(views, 24, v, 18) + ((int) EvRound16(unchecked(unchecked(((long) EvGet(views, 24, v, 14)) * ((long) px)) + unchecked(((long) EvGet(views, 24, v, 16)) * ((long) py)))));
+    }
+    public static int VwCptToPx(emon.Port.Cells views, int v, int axis, int x, int y) {
+        // A page position as a pixel of view `v` (the inverse; `axis` 0 the x, 1 the y).
+        long dx = (long) (x - EvGet(views, 24, v, 17));
+        long dy = (long) (y - EvGet(views, 24, v, 18));
+        if (axis == 0) {
+            return (int) EvRound16(unchecked(unchecked(((long) EvGet(views, 24, v, 19)) * dx) + unchecked(((long) EvGet(views, 24, v, 21)) * dy)));
+        }
+        return (int) EvRound16(unchecked(unchecked(((long) EvGet(views, 24, v, 20)) * dx) + unchecked(((long) EvGet(views, 24, v, 22)) * dy)));
+    }
+    public static int VwBoxToCpt(emon.Port.Cells views, int v, int k, int px, int py, int pw, int ph) {
+        // The page box of a pixel box `x y w h` of view `v`: the four corners mapped, the smallest box
+        // around them. `k` picks the answer: 0 x0, 1 y0, 2 x1, 3 y1.
+        int xa = VwPxToCpt(views, v, 0, px, py);
+        int xb = VwPxToCpt(views, v, 0, px + pw, py);
+        int xc = VwPxToCpt(views, v, 0, px, py + ph);
+        int xd = VwPxToCpt(views, v, 0, px + pw, py + ph);
+        int ya = VwPxToCpt(views, v, 1, px, py);
+        int yb = VwPxToCpt(views, v, 1, px + pw, py);
+        int yc = VwPxToCpt(views, v, 1, px, py + ph);
+        int yd = VwPxToCpt(views, v, 1, px + pw, py + ph);
+        int lo = 0;
+        int hi = 0;
+        if (k == 0) {
+            lo = xa;
+            if (xb < lo) {
+                lo = xb;
+            }
+            if (xc < lo) {
+                lo = xc;
+            }
+            if (xd < lo) {
+                lo = xd;
+            }
+            return lo;
+        }
+        if (k == 1) {
+            lo = ya;
+            if (yb < lo) {
+                lo = yb;
+            }
+            if (yc < lo) {
+                lo = yc;
+            }
+            if (yd < lo) {
+                lo = yd;
+            }
+            return lo;
+        }
+        if (k == 2) {
+            hi = xa;
+            if (xb > hi) {
+                hi = xb;
+            }
+            if (xc > hi) {
+                hi = xc;
+            }
+            if (xd > hi) {
+                hi = xd;
+            }
+            return hi;
+        }
+        hi = ya;
+        if (yb > hi) {
+            hi = yb;
+        }
+        if (yc > hi) {
+            hi = yc;
+        }
+        if (yd > hi) {
+            hi = yd;
+        }
+        return hi;
+    }
+    public static int EvLen(int ea, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // The number of cells of arena `ea` (its `ea` code, SPEC 8.4.6); 0 for a code that is none.
+        if (ea == 1) {
+            return emon.Port.CellsLen(epages);
+        }
+        if (ea == 2) {
+            return emon.Port.CellsLen(views);
+        }
+        if (ea == 3) {
+            return emon.Port.CellsLen(pts);
+        }
+        if (ea == 4) {
+            return emon.Port.CellsLen(refs);
+        }
+        if (ea == 5) {
+            return emon.Port.CellsLen(etext);
+        }
+        if (ea == 6) {
+            return emon.Port.CellsLen(feats);
+        }
+        if (ea == 7) {
+            return emon.Port.CellsLen(glyphs);
+        }
+        if (ea == 8) {
+            return emon.Port.CellsLen(words);
+        }
+        if (ea == 9) {
+            return emon.Port.CellsLen(lines);
+        }
+        if (ea == 10) {
+            return emon.Port.CellsLen(marks);
+        }
+        if (ea == 11) {
+            return emon.Port.CellsLen(fonts);
+        }
+        if (ea == 12) {
+            return emon.Port.CellsLen(paths);
+        }
+        if (ea == 13) {
+            return emon.Port.CellsLen(images);
+        }
+        if (ea == 14) {
+            return emon.Port.CellsLen(oruns);
+        }
+        if (ea == 15) {
+            return emon.Port.CellsLen(oblocks);
+        }
+        if (ea == 16) {
+            return emon.Port.CellsLen(olines);
+        }
+        if (ea == 17) {
+            return emon.Port.CellsLen(owords);
+        }
+        if (ea == 18) {
+            return emon.Port.CellsLen(osyms);
+        }
+        if (ea == 19) {
+            return emon.Port.CellsLen(oalts);
+        }
+        if (ea == 20) {
+            return emon.Port.CellsLen(inks);
+        }
+        if (ea == 21) {
+            return emon.Port.CellsLen(components);
+        }
+        if (ea == 22) {
+            return emon.Port.CellsLen(rules);
+        }
+        if (ea == 23) {
+            return emon.Port.CellsLen(prims);
+        }
+        if (ea == 24) {
+            return emon.Port.CellsLen(tlines);
+        }
+        return 0;
+    }
+    public static int EvPeek(int ea, int row, int f, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Cell `f` of row `row` of arena `ea`.
+        if (ea == 1) {
+            return emon.Port.CellsAt(epages, (row * 12) + f);
+        }
+        if (ea == 2) {
+            return emon.Port.CellsAt(views, (row * 24) + f);
+        }
+        if (ea == 3) {
+            return emon.Port.CellsAt(pts, (row * 3) + f);
+        }
+        if (ea == 4) {
+            return emon.Port.CellsAt(refs, (row * 2) + f);
+        }
+        if (ea == 5) {
+            return emon.Port.CellsAt(etext, (row * 1) + f);
+        }
+        if (ea == 6) {
+            return emon.Port.CellsAt(feats, (row * 32) + f);
+        }
+        if (ea == 7) {
+            return emon.Port.CellsAt(glyphs, (row * 32) + f);
+        }
+        if (ea == 8) {
+            return emon.Port.CellsAt(words, (row * 24) + f);
+        }
+        if (ea == 9) {
+            return emon.Port.CellsAt(lines, (row * 16) + f);
+        }
+        if (ea == 10) {
+            return emon.Port.CellsAt(marks, (row * 24) + f);
+        }
+        if (ea == 11) {
+            return emon.Port.CellsAt(fonts, (row * 16) + f);
+        }
+        if (ea == 12) {
+            return emon.Port.CellsAt(paths, (row * 24) + f);
+        }
+        if (ea == 13) {
+            return emon.Port.CellsAt(images, (row * 20) + f);
+        }
+        if (ea == 14) {
+            return emon.Port.CellsAt(oruns, (row * 28) + f);
+        }
+        if (ea == 15) {
+            return emon.Port.CellsAt(oblocks, (row * 16) + f);
+        }
+        if (ea == 16) {
+            return emon.Port.CellsAt(olines, (row * 24) + f);
+        }
+        if (ea == 17) {
+            return emon.Port.CellsAt(owords, (row * 28) + f);
+        }
+        if (ea == 18) {
+            return emon.Port.CellsAt(osyms, (row * 20) + f);
+        }
+        if (ea == 19) {
+            return emon.Port.CellsAt(oalts, (row * 4) + f);
+        }
+        if (ea == 20) {
+            return emon.Port.CellsAt(inks, (row * 12) + f);
+        }
+        if (ea == 21) {
+            return emon.Port.CellsAt(components, (row * 24) + f);
+        }
+        if (ea == 22) {
+            return emon.Port.CellsAt(rules, (row * 20) + f);
+        }
+        if (ea == 23) {
+            return emon.Port.CellsAt(prims, (row * 24) + f);
+        }
+        if (ea == 24) {
+            return emon.Port.CellsAt(tlines, (row * 20) + f);
+        }
+        return 0;
+    }
+    public static int EvPoke(int ea, int row, int f, int v, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Set cell `f` of row `row` of arena `ea` to `v` (the laws break a page with it).
+        if (ea == 1) {
+            emon.Port.CellsSet(epages, (row * 12) + f, v);
+            return 0;
+        }
+        if (ea == 2) {
+            emon.Port.CellsSet(views, (row * 24) + f, v);
+            return 0;
+        }
+        if (ea == 3) {
+            emon.Port.CellsSet(pts, (row * 3) + f, v);
+            return 0;
+        }
+        if (ea == 4) {
+            emon.Port.CellsSet(refs, (row * 2) + f, v);
+            return 0;
+        }
+        if (ea == 5) {
+            emon.Port.CellsSet(etext, (row * 1) + f, v);
+            return 0;
+        }
+        if (ea == 6) {
+            emon.Port.CellsSet(feats, (row * 32) + f, v);
+            return 0;
+        }
+        if (ea == 7) {
+            emon.Port.CellsSet(glyphs, (row * 32) + f, v);
+            return 0;
+        }
+        if (ea == 8) {
+            emon.Port.CellsSet(words, (row * 24) + f, v);
+            return 0;
+        }
+        if (ea == 9) {
+            emon.Port.CellsSet(lines, (row * 16) + f, v);
+            return 0;
+        }
+        if (ea == 10) {
+            emon.Port.CellsSet(marks, (row * 24) + f, v);
+            return 0;
+        }
+        if (ea == 11) {
+            emon.Port.CellsSet(fonts, (row * 16) + f, v);
+            return 0;
+        }
+        if (ea == 12) {
+            emon.Port.CellsSet(paths, (row * 24) + f, v);
+            return 0;
+        }
+        if (ea == 13) {
+            emon.Port.CellsSet(images, (row * 20) + f, v);
+            return 0;
+        }
+        if (ea == 14) {
+            emon.Port.CellsSet(oruns, (row * 28) + f, v);
+            return 0;
+        }
+        if (ea == 15) {
+            emon.Port.CellsSet(oblocks, (row * 16) + f, v);
+            return 0;
+        }
+        if (ea == 16) {
+            emon.Port.CellsSet(olines, (row * 24) + f, v);
+            return 0;
+        }
+        if (ea == 17) {
+            emon.Port.CellsSet(owords, (row * 28) + f, v);
+            return 0;
+        }
+        if (ea == 18) {
+            emon.Port.CellsSet(osyms, (row * 20) + f, v);
+            return 0;
+        }
+        if (ea == 19) {
+            emon.Port.CellsSet(oalts, (row * 4) + f, v);
+            return 0;
+        }
+        if (ea == 20) {
+            emon.Port.CellsSet(inks, (row * 12) + f, v);
+            return 0;
+        }
+        if (ea == 21) {
+            emon.Port.CellsSet(components, (row * 24) + f, v);
+            return 0;
+        }
+        if (ea == 22) {
+            emon.Port.CellsSet(rules, (row * 20) + f, v);
+            return 0;
+        }
+        if (ea == 23) {
+            emon.Port.CellsSet(prims, (row * 24) + f, v);
+            return 0;
+        }
+        if (ea == 24) {
+            emon.Port.CellsSet(tlines, (row * 20) + f, v);
+            return 0;
+        }
+        return 0;
+    }
+    public static readonly int[] EvEaKey = new int[] {
+        55, 56, 57, 58, 59, 60, 2, 3, 4, 61, 62, 5, 6, 63, 64, 65,
+        66, 67, 68, 69, 7, 70, 71, 72
+    };
+    public static int EvPageRow(emon.Port.Cells epages, int page) {
+        // The `epages` row of `page`, -1 when there is none.
+        int n = emon.Port.CellsLen(epages) / 12;
+        int i = 0;
+        while (i < n) {
+            if (EvGet(epages, 12, i, EpfPage()) == page) {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    internal static int EvLowerMedian(emon.Port.Cells c, int stride, int first, int cnt, int f) {
+        // The LOWER MEDIAN of cell `f` of rows [first, first + cnt) of an arena: the ((cnt - 1) / 2)th smallest;
+        // 0 for no rows.
+        int k = (cnt - 1) / 2;
+        int i = 0;
+        int j = 0;
+        int less = 0;
+        int leq = 0;
+        int r = 0;
+        int rj = 0;
+        if (cnt <= 0) {
+            return 0;
+        }
+        while (i < cnt) {
+            r = EvGet(c, stride, first + i, f);
+            less = 0;
+            leq = 0;
+            j = 0;
+            while (j < cnt) {
+                rj = EvGet(c, stride, first + j, f);
+                if (rj < r) {
+                    less += 1;
+                }
+                if (rj <= r) {
+                    leq += 1;
+                }
+                j += 1;
+            }
+            if ((less <= k) && (k < leq)) {
+                return r;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int EvRotMedian(emon.Port.Cells olines, int first, int cnt) {
+        // The page's dominant text angle for `xo-angle`: the lower median of the `rot` of the OCR lines
+        // [first, first + cnt) (an OCR run's); 0 for no line.
+        return EvLowerMedian(olines, 24, first, cnt, LhRot());
+    }
+    internal static int EvWordCls(int c) {
+        // A code point's class for `xo-implausible`: 1 lowercase letter, 2 uppercase letter, 3 digit, 0 anything
+        // else (only ASCII and Latin-1 are classed: what is not is never implausible).
+        if ((c >= 97) && (c <= 122)) {
+            return 1;
+        }
+        if ((c >= 65) && (c <= 90)) {
+            return 2;
+        }
+        if ((c >= 48) && (c <= 57)) {
+            return 3;
+        }
+        if (c == 223) {
+            return 1;
+        }
+        if ((c >= 224) && (c <= 246)) {
+            return 1;
+        }
+        if ((c >= 248) && (c <= 255)) {
+            return 1;
+        }
+        if ((c >= 192) && (c <= 214)) {
+            return 2;
+        }
+        if ((c >= 216) && (c <= 222)) {
+            return 2;
+        }
+        return 0;
+    }
+    internal static int EvImplausible(emon.Port.Cells etext, int ts, int n) {
+        // Per-mille of the adjacent code-point pairs of etext[ts, ts + n) that are letter <-> digit or
+        // lowercase -> uppercase (floor); 0 for one code point or none.
+        int i = 1;
+        int bad = 0;
+        int p = 0;
+        int q = 0;
+        if (n < 2) {
+            return 0;
+        }
+        while (i < n) {
+            p = EvWordCls(emon.Port.CellsAt(etext, ts + (i - 1)));
+            q = EvWordCls(emon.Port.CellsAt(etext, ts + i));
+            if ((p != 0) && (q != 0)) {
+                if ((p == 3) && (q != 3)) {
+                    bad += 1;
+                }
+                if ((p != 3) && (q == 3)) {
+                    bad += 1;
+                }
+                if ((p == 1) && (q == 2)) {
+                    bad += 1;
+                }
+            }
+            i += 1;
+        }
+        return (bad * 1000) / (n - 1);
+    }
+    internal static int EvSymAltSame(emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells etext, int s, int a) {
+        // 1 when alternative a has the same text as symbol s: the symbol's `etext` run when it has one (a
+        // ligature), else its one code point.
+        int ts = EvGet(osyms, 20, s, ChTstart());
+        int tl = EvGet(osyms, 20, s, ChTlen());
+        int cp = EvGet(osyms, 20, s, ChCp());
+        int @as = EvGet(oalts, 4, a, OafTstart());
+        int al = EvGet(oalts, 4, a, OafTlen());
+        int sl = 1;
+        int k = 0;
+        if ((ts >= 0) && (tl > 0)) {
+            sl = tl;
+        }
+        if ((ts < 0) && (cp < 0)) {
+            sl = 0;
+        }
+        if (sl != al) {
+            return 0;
+        }
+        while (k < al) {
+            if ((ts >= 0) && (tl > 0)) {
+                if (emon.Port.CellsAt(etext, ts + k) != emon.Port.CellsAt(etext, @as + k)) {
+                    return 0;
+                }
+            } else if (cp != emon.Port.CellsAt(etext, @as + k)) {
+                return 0;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    internal static int EvSymStart(emon.Port.Cells osyms, int s, int q) {
+        // Where symbol s begins along a line whose direction is quadrant q (0 right, 1 up, 2 left, 3 down).
+        if (q == 0) {
+            return EvGet(osyms, 20, s, ChX0());
+        }
+        if (q == 1) {
+            return 0 - EvGet(osyms, 20, s, ChY1());
+        }
+        if (q == 2) {
+            return 0 - EvGet(osyms, 20, s, ChX1());
+        }
+        return EvGet(osyms, 20, s, ChY0());
+    }
+    internal static int EvSymEnd(emon.Port.Cells osyms, int s, int q) {
+        if (q == 0) {
+            return EvGet(osyms, 20, s, ChX1());
+        }
+        if (q == 1) {
+            return 0 - EvGet(osyms, 20, s, ChY0());
+        }
+        if (q == 2) {
+            return 0 - EvGet(osyms, 20, s, ChX0());
+        }
+        return EvGet(osyms, 20, s, ChY1());
+    }
+    internal static int EvSpacing(emon.Port.Cells osyms, int sf, int sn, int rot) {
+        // The mean gap between consecutive symbols over the mean symbol width, per-mille, both along the
+        // word's writing direction (the quadrant of `rot`); -1 for fewer than two symbols or no width.
+        int q = ((rot + 4500) / 9000) % 4;
+        long gaps = (long) 0;
+        long widths = (long) 0;
+        int i = 0;
+        if (sn < 2) {
+            return -1;
+        }
+        while (i < sn) {
+            widths = unchecked(widths + ((long) (EvSymEnd(osyms, sf + i, q) - EvSymStart(osyms, sf + i, q))));
+            if ((i + 1) < sn) {
+                gaps = unchecked(gaps + ((long) (EvSymStart(osyms, sf + (i + 1), q) - EvSymEnd(osyms, sf + i, q))));
+            }
+            i += 1;
+        }
+        if (widths <= ((long) 0)) {
+            return -1;
+        }
+        return (int) (unchecked(unchecked(gaps * ((long) 1000)) * ((long) sn)) / unchecked(widths * ((long) (sn - 1))));
+    }
+    internal static int EvHeightMedian(emon.Port.Cells owords, int first, int cnt) {
+        // The lower median of the box heights of OCR words [first, first + cnt); 0 for none.
+        int k = (cnt - 1) / 2;
+        int i = 0;
+        int j = 0;
+        int less = 0;
+        int leq = 0;
+        int h = 0;
+        int hj = 0;
+        if (cnt <= 0) {
+            return 0;
+        }
+        while (i < cnt) {
+            h = EvGet(owords, 28, first + i, HdY1()) - EvGet(owords, 28, first + i, HdY0());
+            less = 0;
+            leq = 0;
+            j = 0;
+            while (j < cnt) {
+                hj = EvGet(owords, 28, first + j, HdY1()) - EvGet(owords, 28, first + j, HdY0());
+                if (hj < h) {
+                    less += 1;
+                }
+                if (hj <= h) {
+                    leq += 1;
+                }
+                j += 1;
+            }
+            if ((less <= k) && (k < leq)) {
+                return h;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int EvFeatOcr(emon.Port.Cells feats, emon.Port.Cells epages, emon.Port.Cells etext, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, int w, int rotmed, int altclose) {
+        // Stage 1 features of OCR word w (SPEC 8.4.5): a new `feats` row, the word's `feat` pointed at it,
+        // columns 2-8, 17, 19, 20, 21, 28 and 29 computed from the answer alone (the others -1).
+        // 2 the raw word confidence; 3 the lowest and 4 the mean (floor) symbol confidence; 5 the smallest
+        // MARGIN: over the symbols that have a differing alternative, the symbol's confidence less the best
+        // differing alternative's (-1 if none has one); 6 the symbols whose margin is at most `altclose`;
+        // 7 the engine's flags; 8 the implausible class transitions; 17 the height over its line's median,
+        // per-mille; 19 the angle to `rotmed`, the run's dominant line angle; 20 the distance of the word's
+        // baseline midpoint from its line's baseline there; 21 the mean gap between symbols over their mean
+        // width, per-mille (along the writing direction); 28 the code points; 29 the distance to the nearest page
+        // edge. The text is `etext`'s.
+        int row = FeNew(feats, 17, w);
+        int sf = EvGet(owords, 28, w, OwfSfirst());
+        int sn = EvGet(owords, 28, w, OwfScount());
+        int ts = EvGet(owords, 28, w, HdTstart());
+        int tl = EvGet(owords, 28, w, HdTlen());
+        int pg = EvGet(owords, 28, w, HdPage());
+        int lineix = EvGet(owords, 28, w, HdLine());
+        int rot = EvGet(owords, 28, w, HdRot());
+        int s = 0;
+        int lo = -1;
+        int sum = 0;
+        int nconf = 0;
+        int minmargin = 2147483647;
+        int nmargin = 0;
+        int ambiguous = 0;
+        int a = 0;
+        int af = 0;
+        int ac = 0;
+        int best = -1;
+        int sc = 0;
+        int marg = 0;
+        int d = 0;
+        int med = 0;
+        int lf = 0;
+        int lc = 0;
+        int xm = 0;
+        int ym = 0;
+        int ep = 0;
+        EvSet(owords, 28, w, HdFeat(), row);
+        FeSet(feats, row, XoConf(), EvGet(owords, 28, w, HdConf()));
+        s = sf;
+        while (s < (sf + sn)) {
+            sc = EvGet(osyms, 20, s, OsfConf());
+            if (sc >= 0) {
+                sum += sc;
+                nconf += 1;
+                if ((lo < 0) || (sc < lo)) {
+                    lo = sc;
+                }
+            }
+            af = EvGet(osyms, 20, s, OsfAfirst());
+            ac = EvGet(osyms, 20, s, OsfAcount());
+            best = -1;
+            a = af;
+            while (a < (af + ac)) {
+                if (EvSymAltSame(osyms, oalts, etext, s, a) == 0) {
+                    if (EvGet(oalts, 4, a, OafConf()) > best) {
+                        best = EvGet(oalts, 4, a, OafConf());
+                    }
+                }
+                a += 1;
+            }
+            if ((best >= 0) && (sc >= 0)) {
+                marg = sc - best;
+                nmargin += 1;
+                if (marg < minmargin) {
+                    minmargin = marg;
+                }
+                if (marg <= altclose) {
+                    ambiguous += 1;
+                }
+            }
+            s += 1;
+        }
+        if (nconf > 0) {
+            FeSet(feats, row, XoSymMin(), lo);
+            FeSet(feats, row, XoSymMean(), sum / nconf);
+        }
+        if (nmargin > 0) {
+            FeSet(feats, row, XoMargin(), minmargin);
+            FeSet(feats, row, XoAmbiguous(), ambiguous);
+        }
+        FeSet(feats, row, XoEngineFlags(), EvGet(owords, 28, w, OwfFlags()));
+        FeSet(feats, row, XoImplausible(), EvImplausible(etext, ts, tl));
+        d = rot - rotmed;
+        if (d < 0) {
+            d = 0 - d;
+        }
+        if (d > 18000) {
+            d = 36000 - d;
+        }
+        FeSet(feats, row, XoAngle(), d);
+        FeSet(feats, row, XoSpacing(), EvSpacing(osyms, sf, sn, rot));
+        FeSet(feats, row, XoLength(), tl);
+        if (lineix >= 0) {
+            lf = EvGet(olines, 24, lineix, LhFirst());
+            lc = EvGet(olines, 24, lineix, LhCount());
+            med = EvHeightMedian(owords, lf, lc);
+            if (med > 0) {
+                FeSet(feats, row, XoRelHeight(), (int) (unchecked(((long) (EvGet(owords, 28, w, HdY1()) - EvGet(owords, 28, w, HdY0()))) * ((long) 1000)) / ((long) med)));
+            }
+            xm = (EvGet(owords, 28, w, HdBx0()) + EvGet(owords, 28, w, HdBx1())) / 2;
+            ym = (EvGet(owords, 28, w, HdBy0()) + EvGet(owords, 28, w, HdBy1())) / 2;
+            d = ym - EvBaselineAt(EvGet(olines, 24, lineix, LhBx0()), EvGet(olines, 24, lineix, LhBy0()), EvGet(olines, 24, lineix, LhBx1()), EvGet(olines, 24, lineix, LhBy1()), xm);
+            if (d < 0) {
+                d = 0 - d;
+            }
+            FeSet(feats, row, XoBaseDev(), d);
+        }
+        ep = EvPageRow(epages, pg);
+        if (ep >= 0) {
+            d = EvGet(owords, 28, w, HdX0());
+            if (EvGet(owords, 28, w, HdY0()) < d) {
+                d = EvGet(owords, 28, w, HdY0());
+            }
+            if ((EvGet(epages, 12, ep, EpfWidth()) - EvGet(owords, 28, w, HdX1())) < d) {
+                d = EvGet(epages, 12, ep, EpfWidth()) - EvGet(owords, 28, w, HdX1());
+            }
+            if ((EvGet(epages, 12, ep, EpfHeight()) - EvGet(owords, 28, w, HdY1())) < d) {
+                d = EvGet(epages, 12, ep, EpfHeight()) - EvGet(owords, 28, w, HdY1());
+            }
+            if (d < 0) {
+                d = 0;
+            }
+            FeSet(feats, row, XoEdge(), d);
+        }
+        return row;
+    }
+    public static int EvRows(int ea, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // The rows of arena `ea` (its length over its stride); 0 for a code that is none.
+        if ((ea < 1) || (ea > 24)) {
+            return 0;
+        }
+        int nlen = EvLen(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        return nlen / EvStrides[ea - 1];
     }
     public static int EvRunOk(int start, int n, int total) {
         // 1 when [start, start+n) lies inside [0, total), or the run is empty
@@ -1420,125 +5660,140 @@ public static class Evidence {
         }
         return 1;
     }
-    public static int EvCheck(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
-        // 0 when every run and link is inside its arena; otherwise a code:
-        // 1 a stride, 2 a glyph's text run, 3 a word's glyph run, 4 a word's
-        // text run, 5 a line's word run, 6 an OCR word's text run, 7 an
-        // alternative chain, 8 a word's line, 9 a glyph's word, 10 a span's text
-        // run, glyph run or parent.
-        int ng = emon.Port.CellsLen(glyphs) / 20;
-        int nw = emon.Port.CellsLen(words) / 16;
-        int nl = emon.Port.CellsLen(lines) / 12;
-        int no = emon.Port.CellsLen(ocrwords) / 16;
-        int na = emon.Port.CellsLen(alts) / 4;
-        int nt = emon.Port.CellsLen(etext);
-        int ns = emon.Port.CellsLen(spans) / 22;
+    public static int EvCheck(emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // 0 when the evidence is well formed; otherwise the code of the first thing that is not.
+        // 1: an arena whose length is not a whole number of rows. 2..89: the rows of `ev-ck` in order (a
+        // text run, a run, an index, an index to an earlier row, a back pointer that the row it points to
+        // does not cover, a box with x0 > x1 or y0 > y1: read its row for which). 100: a `refs` row
+        // whose arena or index is none; 101: a `feats` row whose subject is not a word; 102: a word whose
+        // `feat` row does not name it. The OCR nesting block > paragraph > line > word > symbol >
+        // alternative is the back-pointer rows: a child lies in the run of the row it points to, and in
+        // its run's range, so nothing is counted twice and nothing is orphaned.
+        int ea = 1;
+        int k = 0;
         int i = 0;
-        int a = 0;
-        int steps = 0;
-        if ((emon.Port.CellsLen(glyphs) % 20) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(words) % 16) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(lines) % 12) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(paths) % 16) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(images) % 12) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(components) % 20) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(ocrwords) % 16) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(alts) % 4) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(spans) % 22) != 0) {
-            return 1;
-        }
-        while (i < ng) {
-            if (EvGet(glyphs, 20, i, 2) >= 0) {
-                if (EvRunOk(EvGet(glyphs, 20, i, 2), EvGet(glyphs, 20, i, 3), nt) == 0) {
-                    return 2;
-                }
+        int n = 0;
+        int nt = 0;
+        int kind = 0;
+        int f1 = 0;
+        int f2 = 0;
+        int tg = 0;
+        int v1 = 0;
+        int v2 = 0;
+        int nlen = 0;
+        int sea = 0;
+        while (ea <= 24) {
+            nlen = EvLen(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            if ((nlen % EvStrides[ea - 1]) != 0) {
+                return 1;
             }
-            if ((EvGet(glyphs, 20, i, 19) < -1) || (EvGet(glyphs, 20, i, 19) >= nw)) {
-                return 9;
-            }
-            i += 1;
+            ea += 1;
         }
-        i = 0;
-        while (i < nw) {
-            if (EvRunOk(EvGet(words, 16, i, 5), EvGet(words, 16, i, 6), ng) == 0) {
-                return 3;
-            }
-            if (EvGet(words, 16, i, 7) >= 0) {
-                if (EvRunOk(EvGet(words, 16, i, 7), EvGet(words, 16, i, 8), nt) == 0) {
-                    return 4;
-                }
-            }
-            if ((EvGet(words, 16, i, 9) < -1) || (EvGet(words, 16, i, 9) >= nl)) {
-                return 8;
-            }
-            i += 1;
-        }
-        i = 0;
-        while (i < nl) {
-            if (EvRunOk(EvGet(lines, 12, i, 5), EvGet(lines, 12, i, 6), nw) == 0) {
-                return 5;
-            }
-            i += 1;
-        }
-        i = 0;
-        while (i < no) {
-            if (EvGet(ocrwords, 16, i, 5) >= 0) {
-                if (EvRunOk(EvGet(ocrwords, 16, i, 5), EvGet(ocrwords, 16, i, 6), nt) == 0) {
-                    return 6;
-                }
-            }
-            a = EvGet(ocrwords, 16, i, 8);
-            steps = 0;
-            while (a >= 0) {
-                if (a >= na) {
-                    return 7;
-                }
-                if (steps > na) {
-                    return 7;
-                }
-                steps += 1;
-                a = EvGet(alts, 4, a, 3);
-            }
-            if (steps != EvGet(ocrwords, 16, i, 9)) {
-                return 7;
-            }
-            i += 1;
-        }
-        i = 0;
-        while (i < ns) {
-            if (EvRunOk(EvGet(spans, 22, i, 18), EvGet(spans, 22, i, 19), ng) == 0) {
-                return 10;
-            }
-            if ((EvGet(spans, 22, i, 3) < -1) || (EvGet(spans, 22, i, 3) >= i)) {
-                return 10;
-            }
-            if (EvRunOk(EvGet(spans, 22, i, 1), EvGet(spans, 22, i, 2), nt) == 0) {
-                return 10;
-            }
-            a = 6;
-            while (a <= 16) {
-                if (EvGet(spans, 22, i, a) >= 0) {
-                    if (EvRunOk(EvGet(spans, 22, i, a), EvGet(spans, 22, i, a + 1), nt) == 0) {
-                        return 10;
+        k = 0;
+        while (k < 88) {
+            ea = EvCk[k * 6 + 1];
+            kind = EvCk[k * 6 + 2];
+            f1 = EvCk[k * 6 + 3];
+            f2 = EvCk[k * 6 + 4];
+            tg = EvCk[k * 6 + 5];
+            n = EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            nt = EvRows(tg, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            i = 0;
+            while (i < n) {
+                v1 = EvPeek(ea, i, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                if ((kind == 1) || (kind == 2)) {
+                    v2 = EvPeek(ea, i, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                    if ((v1 >= 0) || (kind == 2)) {
+                        if (EvRunOk(v1, v2, nt) == 0) {
+                            return EvCk[k * 6 + 0];
+                        }
                     }
                 }
-                a += 2;
+                if (kind == 3) {
+                    if ((v1 < -1) || (v1 >= nt)) {
+                        return EvCk[k * 6 + 0];
+                    }
+                }
+                if (kind == 4) {
+                    if ((v1 < 0) || (v1 >= nt)) {
+                        return EvCk[k * 6 + 0];
+                    }
+                }
+                if (kind == 5) {
+                    if ((v1 < -1) || (v1 >= i)) {
+                        return EvCk[k * 6 + 0];
+                    }
+                }
+                if (kind == 6) {
+                    if (v1 >= 0) {
+                        if (v1 >= nt) {
+                            return EvCk[k * 6 + 0];
+                        }
+                        v2 = EvPeek(tg, v1, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                        nlen = EvPeek(tg, v1, f2 + 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                        if ((i < v2) || (i >= (v2 + nlen))) {
+                            return EvCk[k * 6 + 0];
+                        }
+                    }
+                }
+                if (kind == 8) {
+                    v2 = EvPeek(ea, i, f1 + 2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                    if (v1 > v2) {
+                        return EvCk[k * 6 + 0];
+                    }
+                    v1 = EvPeek(ea, i, f1 + 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                    v2 = EvPeek(ea, i, f1 + 3, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+                    if (v1 > v2) {
+                        return EvCk[k * 6 + 0];
+                    }
+                }
+                i += 1;
+            }
+            k += 1;
+        }
+        // references: the arena and the row exist
+        i = 0;
+        while (i < (emon.Port.CellsLen(refs) / 2)) {
+            ea = emon.Port.CellsAt(refs, i * 2);
+            if ((ea < 1) || (ea > 24)) {
+                return 100;
+            }
+            n = EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            if ((emon.Port.CellsAt(refs, (i * 2) + 1) < 0) || (emon.Port.CellsAt(refs, (i * 2) + 1) >= n)) {
+                return 100;
+            }
+            i += 1;
+        }
+        // features: the subject is a word (text layer or OCR) that exists, and it names its row back
+        i = 0;
+        while (i < (emon.Port.CellsLen(feats) / 32)) {
+            sea = emon.Port.CellsAt(feats, i * 32);
+            if ((sea != 8) && (sea != 17)) {
+                return 101;
+            }
+            n = EvRows(sea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            if ((emon.Port.CellsAt(feats, (i * 32) + 1) < 0) || (emon.Port.CellsAt(feats, (i * 32) + 1) >= n)) {
+                return 101;
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < (emon.Port.CellsLen(words) / 24)) {
+            v1 = emon.Port.CellsAt(words, (i * 24) + 15);
+            if (v1 >= 0) {
+                if ((emon.Port.CellsAt(feats, v1 * 32) != 8) || (emon.Port.CellsAt(feats, (v1 * 32) + 1) != i)) {
+                    return 102;
+                }
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < (emon.Port.CellsLen(owords) / 28)) {
+            v1 = emon.Port.CellsAt(owords, (i * 28) + 15);
+            if (v1 >= 0) {
+                if ((emon.Port.CellsAt(feats, v1 * 32) != 17) || (emon.Port.CellsAt(feats, (v1 * 32) + 1) != i)) {
+                    return 102;
+                }
             }
             i += 1;
         }
@@ -1579,9 +5834,9 @@ public static class Evidence {
         Json.JsCpt(t, v);
         return 1;
     }
-    internal static int EvFbox(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int started) {
-        // `"box":[x0,y0,x1,y1]`, fields f..f+3.
-        EvBegin(t, pr, d, started, EkBox());
+    internal static int EvFquad(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int started) {
+        // `"key":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.
+        EvBegin(t, pr, d, started, key);
         emon.Port.TextAscii(t, "[");
         Json.JsCpt(t, EvGet(c, stride, row, f));
         Json.JsFsep(t, pr, 1);
@@ -1590,6 +5845,44 @@ public static class Evidence {
         Json.JsCpt(t, EvGet(c, stride, row, f + 2));
         Json.JsFsep(t, pr, 1);
         Json.JsCpt(t, EvGet(c, stride, row, f + 3));
+        emon.Port.TextAscii(t, "]");
+        return 1;
+    }
+    internal static int EvFpx4(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int started) {
+        // A pixel box `"key":[x,y,w,h]` in integers; omitted when it has no area (w and h 0).
+        if ((EvGet(c, stride, row, f + 2) == 0) && (EvGet(c, stride, row, f + 3) == 0)) {
+            return started;
+        }
+        EvBegin(t, pr, d, started, key);
+        emon.Port.TextAscii(t, "[");
+        emon.Port.TextI32(t, EvGet(c, stride, row, f));
+        Json.JsFsep(t, pr, 1);
+        emon.Port.TextI32(t, EvGet(c, stride, row, f + 1));
+        Json.JsFsep(t, pr, 1);
+        emon.Port.TextI32(t, EvGet(c, stride, row, f + 2));
+        Json.JsFsep(t, pr, 1);
+        emon.Port.TextI32(t, EvGet(c, stride, row, f + 3));
+        emon.Port.TextAscii(t, "]");
+        return 1;
+    }
+    internal static int EvFpair(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int d1, int d2, int pts, int started) {
+        // Two cells as `"key":[a,b]`, integers (pts 0) or points (pts 1); omitted when they are (d1, d2).
+        if ((EvGet(c, stride, row, f) == d1) && (EvGet(c, stride, row, f + 1) == d2)) {
+            return started;
+        }
+        EvBegin(t, pr, d, started, key);
+        emon.Port.TextAscii(t, "[");
+        if (pts == 1) {
+            Json.JsCpt(t, EvGet(c, stride, row, f));
+        } else {
+            emon.Port.TextI32(t, EvGet(c, stride, row, f));
+        }
+        Json.JsFsep(t, pr, 1);
+        if (pts == 1) {
+            Json.JsCpt(t, EvGet(c, stride, row, f + 1));
+        } else {
+            emon.Port.TextI32(t, EvGet(c, stride, row, f + 1));
+        }
         emon.Port.TextAscii(t, "]");
         return 1;
     }
@@ -1610,24 +5903,36 @@ public static class Evidence {
         emon.Port.TextAscii(t, "\"");
         return 1;
     }
-    internal static int EvFtext(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int fstart, int flen, emon.Port.Cells etext, int started) {
-        // A text run of `etext` as `"text"`; an absent run (start -1) is omitted.
-        int s = EvGet(c, stride, row, fstart);
-        if (s < 0) {
+    internal static int EvFpacked(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int started) {
+        // Up to four ASCII characters packed big-endian in one cell (a script, a language) as a string; 0 is omitted.
+        int v = EvGet(c, stride, row, f);
+        int sh = 24;
+        int ch = 0;
+        if (v == 0) {
             return started;
         }
-        EvBegin(t, pr, d, started, EkText());
-        Json.JsStr(t, etext, s, EvGet(c, stride, row, flen));
+        EvBegin(t, pr, d, started, key);
+        emon.Port.TextAscii(t, "\"");
+        while (sh >= 0) {
+            ch = ((v) >> (sh)) & 255;
+            if ((ch > 31) && (ch < 127)) {
+                if ((ch != 34) && (ch != 92)) {
+                    emon.Port.TextCp(t, ch);
+                }
+            }
+            sh -= 8;
+        }
+        emon.Port.TextAscii(t, "\"");
         return 1;
     }
-    internal static int EvFtextk(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int fstart, int flen, emon.Port.Cells etext, int key, int started) {
-        // As `ev-ftext` under any key.
+    internal static int EvFtextk(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int fstart, emon.Port.Cells etext, int key, int started) {
+        // A text run of `etext` (cells fstart, fstart+1) as a string; an absent run (start -1) is omitted.
         int s = EvGet(c, stride, row, fstart);
         if (s < 0) {
             return started;
         }
         EvBegin(t, pr, d, started, key);
-        Json.JsStr(t, etext, s, EvGet(c, stride, row, flen));
+        Json.JsStr(t, etext, s, EvGet(c, stride, row, fstart + 1));
         return 1;
     }
     internal static int EvFrun(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int key, int started) {
@@ -1640,22 +5945,15 @@ public static class Evidence {
         emon.Port.TextAscii(t, "]");
         return 1;
     }
-    internal static int EvFbits(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int which, int started) {
-        // A bitset as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`,
-        // 5 `mg`, 6 `mc`. Zero is omitted.
+    internal static int EvFbits(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, int stride, int row, int f, int which, int key, int started) {
+        // A bit set as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`, 5 `mg`, 6 `mc`, 7 `eg`, 8 `vg`,
+        // 9 `oe`, 10 `os`, 11 `vc`. Zero is omitted.
         int v = EvGet(c, stride, row, f);
-        int key = EkSrc();
         int b = 0;
         int k = 0;
         int bit = 1;
         if (v == 0) {
             return started;
-        }
-        if (which != 1) {
-            key = EkFlags();
-        }
-        if (which == 3) {
-            key = EkStyle();
         }
         EvBegin(t, pr, d, started, key);
         if (which == 1) {
@@ -1667,9 +5965,9 @@ public static class Evidence {
         if (which == 3) {
             Json.JsBitsStyle(t, pr, v);
         }
-        if ((which == 4) || ((which == 5) || (which == 6))) {
+        if (which > 3) {
             emon.Port.TextAscii(t, "[");
-            while (b < 4) {
+            while (b < 8) {
                 if ((v & bit) != 0) {
                     Json.JsFsep(t, pr, k);
                     emon.Port.TextAscii(t, "\"");
@@ -1682,6 +5980,21 @@ public static class Evidence {
                     if (which == 6) {
                         McEmitName(t, bit);
                     }
+                    if (which == 7) {
+                        EgEmitName(t, bit);
+                    }
+                    if (which == 8) {
+                        VgEmitName(t, bit);
+                    }
+                    if (which == 9) {
+                        OeEmitName(t, bit);
+                    }
+                    if (which == 10) {
+                        OsEmitName(t, bit);
+                    }
+                    if (which == 11) {
+                        VcEmitName(t, bit);
+                    }
                     emon.Port.TextAscii(t, "\"");
                     k += 1;
                 }
@@ -1693,9 +6006,10 @@ public static class Evidence {
         return 1;
     }
     internal static int EvFenum(System.Text.StringBuilder t, int pr, int d, int started, int key, int which, int v) {
-        // An enumerated code as its name. which: 1 `gh`, 2 `vz`, 3 `ar`, 4 `ld`,
-        // 5 `pa`, 6 `ck`. Code 0 is "none" and is omitted.
-        if (v == 0) {
+        // An enumerated code as its name. which: 1 `gh`, 2 `vz`, 3 `ar`, 4 `ld`, 5 `pa`, 6 `ck`, 7 `mk`, 8 `as`,
+        // 9 `ob`, 10 `op`, 11 `ft`, 12 `wb`, 13 `cs`, 14 `ir`, 15 `rs`, 16 `pm`, 17 `po`, 18 `ea`, 19 `vk`.
+        // Code 0 is "none" and -1 "unknown": neither is written.
+        if (v <= 0) {
             return started;
         }
         EvBegin(t, pr, d, started, key);
@@ -1718,267 +6032,246 @@ public static class Evidence {
         if (which == 6) {
             CkEmitName(t, v);
         }
+        if (which == 7) {
+            MkEmitName(t, v);
+        }
+        if (which == 8) {
+            AsEmitName(t, v);
+        }
+        if (which == 9) {
+            ObEmitName(t, v);
+        }
+        if (which == 10) {
+            OpEmitName(t, v);
+        }
+        if (which == 11) {
+            FtEmitName(t, v);
+        }
+        if (which == 12) {
+            WbEmitName(t, v);
+        }
+        if (which == 13) {
+            CsEmitName(t, v);
+        }
+        if (which == 14) {
+            IrEmitName(t, v);
+        }
+        if (which == 15) {
+            RsEmitName(t, v);
+        }
+        if (which == 16) {
+            PmEmitName(t, v);
+        }
+        if (which == 17) {
+            PoEmitName(t, v);
+        }
+        if (which == 18) {
+            EaEmitName(t, v);
+        }
+        if (which == 19) {
+            VkEmitName(t, v);
+        }
         emon.Port.TextAscii(t, "\"");
         return 1;
     }
-    internal static int EvGlyph(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells glyphs, emon.Port.Cells etext, int g) {
-        int s = 0;
-        emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, glyphs, 20, g, 0, EkPage(), -2147483648, s);
-        s = EvFint(t, pr, d, glyphs, 20, g, 1, EkCp(), -1, s);
-        s = EvFtext(t, pr, d, glyphs, 20, g, 2, 3, etext, s);
-        s = EvFenum(t, pr, d, s, EkHow(), 1, EvGet(glyphs, 20, g, 4));
-        s = EvFint(t, pr, d, glyphs, 20, g, 5, EkFont(), -2147483648, s);
-        s = EvFcpt(t, pr, d, glyphs, 20, g, 6, EkSize(), -2147483648, s);
-        s = EvFbox(t, pr, d, glyphs, 20, g, 7, s);
-        s = EvFcpt(t, pr, d, glyphs, 20, g, 11, EkBaseline(), -2147483648, s);
-        s = EvFcpt(t, pr, d, glyphs, 20, g, 12, EkRot(), 0, s);
-        s = EvFcolor(t, pr, d, glyphs, 20, g, 13, EkColor(), s);
-        s = EvFint(t, pr, d, glyphs, 20, g, 14, EkAlpha(), 1000, s);
-        s = EvFint(t, pr, d, glyphs, 20, g, 15, EkMode(), 0, s);
-        s = EvFenum(t, pr, d, s, EkVis(), 2, EvGet(glyphs, 20, g, 16));
-        s = EvFenum(t, pr, d, s, EkArtifact(), 3, EvGet(glyphs, 20, g, 17));
-        s = EvFint(t, pr, d, glyphs, 20, g, 18, EkMcid(), -1, s);
-        s = EvFint(t, pr, d, glyphs, 20, g, 19, EkWord(), -1, s);
-        Json.JsClose(t, pr, d, s);
-        return 0;
-    }
-    internal static int EvWord(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells words, emon.Port.Cells etext, int w) {
-        int s = 0;
-        emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, words, 16, w, 0, EkPage(), -2147483648, s);
-        s = EvFtext(t, pr, d, words, 16, w, 7, 8, etext, s);
-        s = EvFbox(t, pr, d, words, 16, w, 1, s);
-        s = EvFrun(t, pr, d, words, 16, w, 5, EkGlyphs(), s);
-        s = EvFint(t, pr, d, words, 16, w, 9, EkLine(), -1, s);
-        s = EvFbits(t, pr, d, words, 16, w, 10, 1, s);
-        s = EvFint(t, pr, d, words, 16, w, 11, EkConf(), -1, s);
-        s = EvFbits(t, pr, d, words, 16, w, 12, 2, s);
-        s = EvFcpt(t, pr, d, words, 16, w, 13, EkGap(), -1, s);
-        s = EvFint(t, pr, d, words, 16, w, 14, EkFont(), -1, s);
-        s = EvFcpt(t, pr, d, words, 16, w, 15, EkSize(), 0, s);
-        Json.JsClose(t, pr, d, s);
-        return 0;
-    }
-    internal static int EvLine(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells lines, int l) {
-        int s = 0;
-        emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, lines, 12, l, 0, EkPage(), -2147483648, s);
-        s = EvFbox(t, pr, d, lines, 12, l, 1, s);
-        s = EvFrun(t, pr, d, lines, 12, l, 5, EkWords(), s);
-        s = EvFcpt(t, pr, d, lines, 12, l, 7, EkBaseline(), -2147483648, s);
-        s = EvFenum(t, pr, d, s, EkDir(), 4, EvGet(lines, 12, l, 8));
-        s = EvFcpt(t, pr, d, lines, 12, l, 9, EkRot(), 0, s);
-        s = EvFbits(t, pr, d, lines, 12, l, 10, 1, s);
-        s = EvFint(t, pr, d, lines, 12, l, 11, EkConf(), -1, s);
-        Json.JsClose(t, pr, d, s);
-        return 0;
-    }
-    internal static int EvPath(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells paths, int p) {
-        int s = 0;
-        emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, paths, 16, p, 0, EkPage(), -2147483648, s);
-        s = EvFenum(t, pr, d, s, EkKind(), 5, EvGet(paths, 16, p, 1));
-        s = EvFbox(t, pr, d, paths, 16, p, 2, s);
-        s = EvFcolor(t, pr, d, paths, 16, p, 6, EkFill(), s);
-        s = EvFcolor(t, pr, d, paths, 16, p, 7, EkStroke(), s);
-        s = EvFcpt(t, pr, d, paths, 16, p, 8, EkWidth(), 0, s);
-        s = EvFint(t, pr, d, paths, 16, p, 9, EkAlpha(), 1000, s);
-        s = EvFbits(t, pr, d, paths, 16, p, 10, 4, s);
-        s = EvFenum(t, pr, d, s, EkArtifact(), 3, EvGet(paths, 16, p, 11));
-        s = EvFint(t, pr, d, paths, 16, p, 12, EkMcid(), -1, s);
-        Json.JsClose(t, pr, d, s);
-        return 0;
-    }
-    internal static int EvImage(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells images, int m) {
-        int s = 0;
-        emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, images, 12, m, 0, EkPage(), -2147483648, s);
-        s = EvFbox(t, pr, d, images, 12, m, 1, s);
-        s = EvFint(t, pr, d, images, 12, m, 5, EkObj(), -2147483648, s);
-        s = EvBegin(t, pr, d, s, EkPx());
-        emon.Port.TextAscii(t, "[");
-        emon.Port.TextI32(t, EvGet(images, 12, m, 6));
-        Json.JsFsep(t, pr, 1);
-        emon.Port.TextI32(t, EvGet(images, 12, m, 7));
-        emon.Port.TextAscii(t, "]");
-        s = EvFint(t, pr, d, images, 12, m, 8, EkAlpha(), 1000, s);
-        s = EvFbits(t, pr, d, images, 12, m, 9, 5, s);
-        s = EvFenum(t, pr, d, s, EkArtifact(), 3, EvGet(images, 12, m, 10));
-        s = EvFint(t, pr, d, images, 12, m, 11, EkMcid(), -1, s);
-        Json.JsClose(t, pr, d, s);
-        return 0;
-    }
-    internal static int EvComponent(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells components, int c) {
-        int s = 0;
-        emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, components, 20, c, 0, EkPage(), -2147483648, s);
-        s = EvFenum(t, pr, d, s, EkKind(), 6, EvGet(components, 20, c, 14));
-        s = EvFbox(t, pr, d, components, 20, c, 1, s);
-        if ((EvGet(components, 20, c, 7) > 0) || (EvGet(components, 20, c, 8) > 0)) {
-            s = EvBegin(t, pr, d, s, EkPx());
-            emon.Port.TextAscii(t, "[");
-            emon.Port.TextI32(t, EvGet(components, 20, c, 5));
-            Json.JsFsep(t, pr, 1);
-            emon.Port.TextI32(t, EvGet(components, 20, c, 6));
-            Json.JsFsep(t, pr, 1);
-            emon.Port.TextI32(t, EvGet(components, 20, c, 7));
-            Json.JsFsep(t, pr, 1);
-            emon.Port.TextI32(t, EvGet(components, 20, c, 8));
-            emon.Port.TextAscii(t, "]");
+    internal static int EvField(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells c, emon.Port.Cells etext, int stride, int row, int r, int started) {
+        // One printed field of a row, by its row `r` of `ev-fd`: [arena first-cell kind key default arg].
+        int f = EvFd[r * 6 + 1];
+        int kind = EvFd[r * 6 + 2];
+        int key = EvFd[r * 6 + 3];
+        int dflt = EvFd[r * 6 + 4];
+        int arg = EvFd[r * 6 + 5];
+        if (kind == 1) {
+            return EvFint(t, pr, d, c, stride, row, f, key, dflt, started);
         }
-        s = EvFint(t, pr, d, components, 20, c, 9, EkArea(), 0, s);
-        s = EvFint(t, pr, d, components, 20, c, 10, EkFill(), 0, s);
-        s = EvFcpt(t, pr, d, components, 20, c, 11, EkStroke(), 0, s);
-        s = EvFcolor(t, pr, d, components, 20, c, 12, EkColor(), s);
-        s = EvFint(t, pr, d, components, 20, c, 13, EkLayer(), -1, s);
-        s = EvFint(t, pr, d, components, 20, c, 15, EkConf(), -1, s);
-        s = EvFbits(t, pr, d, components, 20, c, 16, 2, s);
-        Json.JsClose(t, pr, d, s);
-        return 0;
-    }
-    internal static int EvOcrword(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, int w) {
-        int s = 0;
-        int a = EvGet(ocrwords, 16, w, 8);
-        int i = 0;
-        int ast = 0;
-        emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, ocrwords, 16, w, 0, EkPage(), -2147483648, s);
-        s = EvFtext(t, pr, d, ocrwords, 16, w, 5, 6, etext, s);
-        s = EvFbox(t, pr, d, ocrwords, 16, w, 1, s);
-        s = EvFint(t, pr, d, ocrwords, 16, w, 7, EkConf(), -1, s);
-        if (a >= 0) {
-            s = EvBegin(t, pr, d, s, EkAlts());
-            emon.Port.TextAscii(t, "[");
-            while (a >= 0) {
-                Json.JsAelem(t, pr, d + 1, i);
-                emon.Port.TextAscii(t, "{");
-                ast = 0;
-                ast = EvFint(t, pr, d + 2, alts, 4, a, 0, EkSym(), -2147483648, ast);
-                ast = EvFint(t, pr, d + 2, alts, 4, a, 1, EkCp(), -2147483648, ast);
-                ast = EvFint(t, pr, d + 2, alts, 4, a, 2, EkConf(), -1, ast);
-                Json.JsClose(t, pr, d + 2, ast);
-                i += 1;
-                a = EvGet(alts, 4, a, 3);
+        if (kind == 2) {
+            return EvFcpt(t, pr, d, c, stride, row, f, key, dflt, started);
+        }
+        if ((kind == 3) || (kind == 4)) {
+            return EvFquad(t, pr, d, c, stride, row, f, key, started);
+        }
+        if (kind == 5) {
+            return EvFcolor(t, pr, d, c, stride, row, f, key, started);
+        }
+        if (kind == 6) {
+            return EvFtextk(t, pr, d, c, stride, row, f, etext, key, started);
+        }
+        if (kind == 7) {
+            if ((EvGet(c, stride, row, f) == dflt) && (EvGet(c, stride, row, f + 1) == arg)) {
+                return started;
             }
-            Json.JsAend(t, pr, d + 1, i);
+            return EvFrun(t, pr, d, c, stride, row, f, key, started);
         }
-        s = EvFint(t, pr, d, ocrwords, 16, w, 10, EkLine(), -1, s);
-        s = EvFint(t, pr, d, ocrwords, 16, w, 11, EkBlock(), -1, s);
-        s = EvFcpt(t, pr, d, ocrwords, 16, w, 12, EkBaseline(), 0, s);
-        s = EvFbits(t, pr, d, ocrwords, 16, w, 13, 3, s);
-        s = EvFint(t, pr, d, ocrwords, 16, w, 14, EkPass(), 0, s);
-        s = EvFint(t, pr, d, ocrwords, 16, w, 15, EkLang(), -1, s);
-        Json.JsClose(t, pr, d, s);
-        return 0;
+        if (kind == 8) {
+            return EvFenum(t, pr, d, started, key, arg, EvGet(c, stride, row, f));
+        }
+        if (kind == 9) {
+            return EvFbits(t, pr, d, c, stride, row, f, arg, key, started);
+        }
+        if (kind == 10) {
+            return EvFpx4(t, pr, d, c, stride, row, f, key, started);
+        }
+        if (kind == 11) {
+            return EvFpacked(t, pr, d, c, stride, row, f, key, started);
+        }
+        if (kind == 12) {
+            return EvFpair(t, pr, d, c, stride, row, f, key, dflt, arg, 0, started);
+        }
+        if (kind == 13) {
+            return EvFpair(t, pr, d, c, stride, row, f, key, dflt, arg, 1, started);
+        }
+        return started;
     }
-    internal static int EvSpan(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells spans, emon.Port.Cells etext, int i) {
+    internal static int EvRow(System.Text.StringBuilder t, int pr, int d, int ea, emon.Port.Cells c, emon.Port.Cells etext, int row) {
+        // One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
+        int stride = EvStrides[ea - 1];
+        int first = EvFx[(ea - 1) * 2 + 0];
+        int cnt = EvFx[(ea - 1) * 2 + 1];
         int s = 0;
+        int k = 0;
         emon.Port.TextAscii(t, "{");
-        s = EvFint(t, pr, d, spans, 22, i, 0, EkPage(), -2147483648, s);
-        s = EvFtextk(t, pr, d, spans, 22, i, 1, 2, etext, EkTag(), s);
-        s = EvFint(t, pr, d, spans, 22, i, 3, EkParent(), -1, s);
-        s = EvFint(t, pr, d, spans, 22, i, 4, EkMcid(), -1, s);
-        s = EvFenum(t, pr, d, s, EkArtifact(), 3, EvGet(spans, 22, i, 5));
-        s = EvFtextk(t, pr, d, spans, 22, i, 6, 7, etext, EkType(), s);
-        s = EvFtextk(t, pr, d, spans, 22, i, 8, 9, etext, EkSubtype(), s);
-        s = EvFtextk(t, pr, d, spans, 22, i, 10, 11, etext, EkActual(), s);
-        s = EvFtextk(t, pr, d, spans, 22, i, 12, 13, etext, EkAlt(), s);
-        s = EvFtextk(t, pr, d, spans, 22, i, 14, 15, etext, EkExp(), s);
-        s = EvFtextk(t, pr, d, spans, 22, i, 16, 17, etext, EkLang(), s);
-        s = EvFrun(t, pr, d, spans, 22, i, 18, EkGlyphs(), s);
-        s = EvFbits(t, pr, d, spans, 22, i, 20, 6, s);
-        s = EvFint(t, pr, d, spans, 22, i, 21, EkStm(), 0, s);
+        while (k < cnt) {
+            s = EvField(t, pr, d, c, etext, stride, row, first + k, s);
+            k += 1;
+        }
         Json.JsClose(t, pr, d, s);
         return 0;
     }
-    public static int EvEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
-        // Write the evidence as `emon-evidence` JSON (SPEC 4.5): version, then
-        // the eight row arrays, each row in its fixed key order.
-        int s = 0;
+    internal static int EvArena(System.Text.StringBuilder t, int pr, int started, int ea, emon.Port.Cells c, emon.Port.Cells etext) {
+        // `"arena":[row, ...]` for any arena with a field table.
+        int n = emon.Port.CellsLen(c) / EvStrides[ea - 1];
         int i = 0;
-        int ng = emon.Port.CellsLen(glyphs) / 20;
-        int nw = emon.Port.CellsLen(words) / 16;
-        int nl = emon.Port.CellsLen(lines) / 12;
-        int np = emon.Port.CellsLen(paths) / 16;
-        int nm = emon.Port.CellsLen(images) / 12;
-        int nc = emon.Port.CellsLen(components) / 20;
-        int no = emon.Port.CellsLen(ocrwords) / 16;
-        int nsp = emon.Port.CellsLen(spans) / 22;
+        EvBegin(t, pr, 0, started, EvEaKey[ea - 1]);
+        emon.Port.TextAscii(t, "[");
+        while (i < n) {
+            Json.JsAelem(t, pr, 1, i);
+            EvRow(t, pr, 2, ea, c, etext, i);
+            i += 1;
+        }
+        Json.JsAend(t, pr, 1, n);
+        return 1;
+    }
+    internal static int EvArenaRefs(System.Text.StringBuilder t, int pr, int started, emon.Port.Cells refs) {
+        // `"refs":[["arena",index], ...]`: an array of flat arrays is flat, so it stays on one line in
+        // the pretty form too (`kin/scripts/json-check.py`).
+        int n = emon.Port.CellsLen(refs) / 2;
+        int i = 0;
+        EvBegin(t, pr, 0, started, EvEaKey[3]);
+        emon.Port.TextAscii(t, "[");
+        while (i < n) {
+            Json.JsFsep(t, pr, i);
+            emon.Port.TextAscii(t, "[\"");
+            EaEmitName(t, emon.Port.CellsAt(refs, i * 2));
+            emon.Port.TextAscii(t, "\",");
+            if (pr == 1) {
+                emon.Port.TextAscii(t, " ");
+            }
+            emon.Port.TextI32(t, emon.Port.CellsAt(refs, (i * 2) + 1));
+            emon.Port.TextAscii(t, "]");
+            i += 1;
+        }
+        emon.Port.TextAscii(t, "]");
+        return 1;
+    }
+    internal static int EvArenaEtext(System.Text.StringBuilder t, int pr, int started, emon.Port.Cells etext) {
+        // `"etext":["all the text"]`, the whole arena as one string; `[]` when it is empty.
+        int n = emon.Port.CellsLen(etext);
+        EvBegin(t, pr, 0, started, EvEaKey[4]);
+        emon.Port.TextAscii(t, "[");
+        if (n > 0) {
+            Json.JsStr(t, etext, 0, n);
+        }
+        emon.Port.TextAscii(t, "]");
+        return 1;
+    }
+    internal static int EvArenaFeats(System.Text.StringBuilder t, int pr, int started, emon.Port.Cells feats) {
+        // `"feats":[{"subject":["owords",i],"conf":..., ...}]`: a column under its name (`xo` for OCR
+        // words, `xt` for text-layer words, `cN` for a column with none), -1 (not computed) omitted.
+        int n = emon.Port.CellsLen(feats) / 32;
+        int i = 0;
+        int col = 0;
+        int s = 0;
+        int sea = 0;
+        EvBegin(t, pr, 0, started, EvEaKey[5]);
+        emon.Port.TextAscii(t, "[");
+        while (i < n) {
+            Json.JsAelem(t, pr, 1, i);
+            sea = EvGet(feats, 32, i, 0);
+            emon.Port.TextAscii(t, "{");
+            s = 0;
+            s = EvBegin(t, pr, 2, s, EkSubject());
+            emon.Port.TextAscii(t, "[\"");
+            EaEmitName(t, sea);
+            emon.Port.TextAscii(t, "\",");
+            if (pr == 1) {
+                emon.Port.TextAscii(t, " ");
+            }
+            emon.Port.TextI32(t, EvGet(feats, 32, i, 1));
+            emon.Port.TextAscii(t, "]");
+            col = 2;
+            while (col < 32) {
+                if (EvGet(feats, 32, i, col) != -1) {
+                    if (s == 1) {
+                        emon.Port.TextAscii(t, ",");
+                    }
+                    if (pr == 1) {
+                        Json.JsIndent(t, 3);
+                    }
+                    emon.Port.TextAscii(t, "\"");
+                    if (sea == 8) {
+                        if (XtEmitName(t, col) == 0) {
+                            emon.Port.TextAscii(t, "c");
+                            emon.Port.TextI32(t, col);
+                        }
+                    } else if (XoEmitName(t, col) == 0) {
+                        emon.Port.TextAscii(t, "c");
+                        emon.Port.TextI32(t, col);
+                    }
+                    emon.Port.TextAscii(t, "\":");
+                    if (pr == 1) {
+                        emon.Port.TextAscii(t, " ");
+                    }
+                    emon.Port.TextI32(t, EvGet(feats, 32, i, col));
+                }
+                col += 1;
+            }
+            Json.JsClose(t, pr, 2, s);
+            i += 1;
+        }
+        Json.JsAend(t, pr, 1, n);
+        return 1;
+    }
+    public static int EvEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+        // in the order of the `ea` codes, each row in its fixed key order.
+        int s = 0;
         emon.Port.TextAscii(t, "{");
         s = EvBegin(t, pretty, 0, s, EkVersion());
-        emon.Port.TextAscii(t, "\"0\"");
-        s = EvBegin(t, pretty, 0, s, EkGlyphs());
-        emon.Port.TextAscii(t, "[");
-        while (i < ng) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvGlyph(t, pretty, 2, glyphs, etext, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, ng);
-        s = EvBegin(t, pretty, 0, s, EkWords());
-        emon.Port.TextAscii(t, "[");
-        i = 0;
-        while (i < nw) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvWord(t, pretty, 2, words, etext, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, nw);
-        s = EvBegin(t, pretty, 0, s, EkLines());
-        emon.Port.TextAscii(t, "[");
-        i = 0;
-        while (i < nl) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvLine(t, pretty, 2, lines, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, nl);
-        s = EvBegin(t, pretty, 0, s, EkPaths());
-        emon.Port.TextAscii(t, "[");
-        i = 0;
-        while (i < np) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvPath(t, pretty, 2, paths, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, np);
-        s = EvBegin(t, pretty, 0, s, EkImages());
-        emon.Port.TextAscii(t, "[");
-        i = 0;
-        while (i < nm) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvImage(t, pretty, 2, images, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, nm);
-        s = EvBegin(t, pretty, 0, s, EkComponents());
-        emon.Port.TextAscii(t, "[");
-        i = 0;
-        while (i < nc) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvComponent(t, pretty, 2, components, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, nc);
-        s = EvBegin(t, pretty, 0, s, EkOcrwords());
-        emon.Port.TextAscii(t, "[");
-        i = 0;
-        while (i < no) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvOcrword(t, pretty, 2, ocrwords, alts, etext, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, no);
-        s = EvBegin(t, pretty, 0, s, EkSpans());
-        emon.Port.TextAscii(t, "[");
-        i = 0;
-        while (i < nsp) {
-            Json.JsAelem(t, pretty, 1, i);
-            EvSpan(t, pretty, 2, spans, etext, i);
-            i += 1;
-        }
-        Json.JsAend(t, pretty, 1, nsp);
+        emon.Port.TextAscii(t, "\"1\"");
+        s = EvArena(t, pretty, s, 1, epages, etext);
+        s = EvArena(t, pretty, s, 2, views, etext);
+        s = EvArena(t, pretty, s, 3, pts, etext);
+        s = EvArenaRefs(t, pretty, s, refs);
+        s = EvArenaEtext(t, pretty, s, etext);
+        s = EvArenaFeats(t, pretty, s, feats);
+        s = EvArena(t, pretty, s, 7, glyphs, etext);
+        s = EvArena(t, pretty, s, 8, words, etext);
+        s = EvArena(t, pretty, s, 9, lines, etext);
+        s = EvArena(t, pretty, s, 10, marks, etext);
+        s = EvArena(t, pretty, s, 11, fonts, etext);
+        s = EvArena(t, pretty, s, 12, paths, etext);
+        s = EvArena(t, pretty, s, 13, images, etext);
+        s = EvArena(t, pretty, s, 14, oruns, etext);
+        s = EvArena(t, pretty, s, 15, oblocks, etext);
+        s = EvArena(t, pretty, s, 16, olines, etext);
+        s = EvArena(t, pretty, s, 17, owords, etext);
+        s = EvArena(t, pretty, s, 18, osyms, etext);
+        s = EvArena(t, pretty, s, 19, oalts, etext);
+        s = EvArena(t, pretty, s, 20, inks, etext);
+        s = EvArena(t, pretty, s, 21, components, etext);
+        s = EvArena(t, pretty, s, 22, rules, etext);
+        s = EvArena(t, pretty, s, 23, prims, etext);
+        s = EvArena(t, pretty, s, 24, tlines, etext);
         Json.JsClose(t, pretty, 0, s);
         return 0;
     }

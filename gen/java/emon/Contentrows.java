@@ -7,9 +7,9 @@ package emon;
 public final class Contentrows {
     public static int crGlyphText(StringBuilder t, emon.Port.Cells gl, emon.Port.Cells et, int g) {
         // The text of glyph g: its code points, or U+FFFD.
-        int ts = Evidence.glGet(gl, g, Evidence.gfTstart());
-        int tl = Evidence.glGet(gl, g, Evidence.gfTlen());
-        int cp = Evidence.glGet(gl, g, Evidence.gfCp());
+        int ts = Evidence.glGet(gl, g, Evidence.chTstart());
+        int tl = Evidence.glGet(gl, g, Evidence.chTlen());
+        int cp = Evidence.glGet(gl, g, Evidence.chCp());
         int k = 0;
         if ((ts >= 0) && (tl > 0)) {
             while (k < tl) {
@@ -31,7 +31,7 @@ public final class Contentrows {
         int n = Evidence.glCount(gl);
         int g = 0;
         while (g < n) {
-            if (Evidence.glGet(gl, g, Evidence.gfPage()) == page) {
+            if (Evidence.glGet(gl, g, Evidence.chPage()) == page) {
                 crGlyphText(t, gl, et, g);
             }
             g += 1;
@@ -50,8 +50,8 @@ public final class Contentrows {
     }
     public static int crWord(StringBuilder t, emon.Port.Cells wd, emon.Port.Cells et, int w) {
         // The text of word w.
-        int s = Evidence.wdGet(wd, w, Evidence.wfTstart());
-        int n = Evidence.wdGet(wd, w, Evidence.wfTlen());
+        int s = Evidence.wdGet(wd, w, Evidence.hdTstart());
+        int n = Evidence.wdGet(wd, w, Evidence.hdTlen());
         int k = 0;
         if (s < 0) {
             return 0;
@@ -87,10 +87,10 @@ public final class Contentrows {
         int cp = 0;
         int k = 0;
         while (g < n) {
-            if (Evidence.glGet(gl, g, Evidence.gfPage()) == page) {
-                ts = Evidence.glGet(gl, g, Evidence.gfTstart());
-                tl = Evidence.glGet(gl, g, Evidence.gfTlen());
-                cp = Evidence.glGet(gl, g, Evidence.gfCp());
+            if (Evidence.glGet(gl, g, Evidence.chPage()) == page) {
+                ts = Evidence.glGet(gl, g, Evidence.chTstart());
+                tl = Evidence.glGet(gl, g, Evidence.chTlen());
+                cp = Evidence.glGet(gl, g, Evidence.chCp());
                 if ((ts >= 0) && (tl > 0)) {
                     k = 0;
                     while (k < tl) {
@@ -127,15 +127,55 @@ public final class Contentrows {
         }
         return 0;
     }
-    public static int crSpan(StringBuilder t, emon.Port.Cells sp, emon.Port.Cells et, int i) {
-        // Span i as one row, without a newline: index, tag, MCID, artifact, type, subtype,
-        // ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated.
-        int art = Evidence.spGet(sp, i, Evidence.sfArtifact());
+    public static int crTypeName(StringBuilder t, int ty) {
+        // A marked-content /Type as the PDF spells it; `-` for none or for a name that is none of them.
+        if (ty == 1) {
+            emon.Port.textAscii(t, "Pagination");
+            return 0;
+        }
+        if (ty == 3) {
+            emon.Port.textAscii(t, "Layout");
+            return 0;
+        }
+        if (ty == 4) {
+            emon.Port.textAscii(t, "Background");
+            return 0;
+        }
+        if (ty == 6) {
+            emon.Port.textAscii(t, "Page");
+            return 0;
+        }
+        emon.Port.textAscii(t, "-");
+        return 0;
+    }
+    public static int crSubtypeName(StringBuilder t, int su) {
+        // A marked-content /Subtype as the PDF spells it; `-` for none or another name.
+        if (su == 1) {
+            emon.Port.textAscii(t, "Header");
+            return 0;
+        }
+        if (su == 2) {
+            emon.Port.textAscii(t, "Footer");
+            return 0;
+        }
+        if (su == 3) {
+            emon.Port.textAscii(t, "Watermark");
+            return 0;
+        }
+        emon.Port.textAscii(t, "-");
+        return 0;
+    }
+    public static int crSpan(StringBuilder t, emon.Port.Cells mk, emon.Port.Cells et, int i) {
+        // Mark i as one row, without a newline: index, tag, MCID, artifact class, /Type, /Subtype,
+        // ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated. The class
+        // is the D101 one, made from the mark's (/Type, /Subtype) by `mk-artifact-class`; the type and
+        // subtype are the PDF's names for the codes (a name that is none of them prints `-`).
+        int art = Evidence.mkArtifactClass(Evidence.mkGet(mk, i, Evidence.mkfKind()), Evidence.mkGet(mk, i, Evidence.mkfArtype()), Evidence.mkGet(mk, i, Evidence.mkfArsub()));
         emon.Port.textI32(t, i);
         emon.Port.textCp(t, 9);
-        crRun(t, et, Evidence.spGet(sp, i, Evidence.sfTag()), Evidence.spGet(sp, i, Evidence.sfTaglen()));
+        crRun(t, et, Evidence.mkGet(mk, i, Evidence.mkfTstart()), Evidence.mkGet(mk, i, Evidence.mkfTlen()));
         emon.Port.textCp(t, 9);
-        emon.Port.textI32(t, Evidence.spGet(sp, i, Evidence.sfMcid()));
+        emon.Port.textI32(t, Evidence.mkGet(mk, i, Evidence.mkfMcid()));
         emon.Port.textCp(t, 9);
         if (art == 0) {
             emon.Port.textAscii(t, "-");
@@ -143,27 +183,53 @@ public final class Contentrows {
             Evidence.arEmitName(t, art);
         }
         emon.Port.textCp(t, 9);
-        crRun(t, et, Evidence.spGet(sp, i, Evidence.sfType()), Evidence.spGet(sp, i, Evidence.sfTypelen()));
+        crTypeName(t, Evidence.mkGet(mk, i, Evidence.mkfArtype()));
         emon.Port.textCp(t, 9);
-        crRun(t, et, Evidence.spGet(sp, i, Evidence.sfSubtype()), Evidence.spGet(sp, i, Evidence.sfSubtypelen()));
+        crSubtypeName(t, Evidence.mkGet(mk, i, Evidence.mkfArsub()));
         emon.Port.textCp(t, 9);
-        crRun(t, et, Evidence.spGet(sp, i, Evidence.sfActual()), Evidence.spGet(sp, i, Evidence.sfActuallen()));
+        crRun(t, et, Evidence.mkGet(mk, i, Evidence.mkfActual()), Evidence.mkGet(mk, i, Evidence.mkfActuallen()));
         emon.Port.textCp(t, 9);
-        crRun(t, et, Evidence.spGet(sp, i, Evidence.sfAlt()), Evidence.spGet(sp, i, Evidence.sfAltlen()));
+        crRun(t, et, Evidence.mkGet(mk, i, Evidence.mkfAlt()), Evidence.mkGet(mk, i, Evidence.mkfAltlen()));
         emon.Port.textCp(t, 9);
-        crRun(t, et, Evidence.spGet(sp, i, Evidence.sfExp()), Evidence.spGet(sp, i, Evidence.sfExplen()));
+        crRun(t, et, Evidence.mkGet(mk, i, Evidence.mkfExp()), Evidence.mkGet(mk, i, Evidence.mkfExplen()));
         emon.Port.textCp(t, 9);
-        crRun(t, et, Evidence.spGet(sp, i, Evidence.sfLang()), Evidence.spGet(sp, i, Evidence.sfLanglen()));
+        crRun(t, et, Evidence.mkGet(mk, i, Evidence.mkfLang()), Evidence.mkGet(mk, i, Evidence.mkfLanglen()));
         emon.Port.textCp(t, 9);
-        emon.Port.textI32(t, Evidence.spGet(sp, i, Evidence.sfGfirst()));
+        emon.Port.textI32(t, Evidence.mkGet(mk, i, Evidence.mkfGfirst()));
         emon.Port.textCp(t, 9);
-        emon.Port.textI32(t, Evidence.spGet(sp, i, Evidence.sfGcount()));
+        emon.Port.textI32(t, Evidence.mkGet(mk, i, Evidence.mkfGcount()));
         emon.Port.textCp(t, 9);
-        emon.Port.textI32(t, Evidence.spGet(sp, i, Evidence.sfFlags()));
+        emon.Port.textI32(t, Evidence.mkGet(mk, i, Evidence.mkfFlags()));
         emon.Port.textCp(t, 9);
-        emon.Port.textI32(t, Evidence.spGet(sp, i, Evidence.sfStm()));
+        emon.Port.textI32(t, Evidence.mkGet(mk, i, Evidence.mkfStm()));
         emon.Port.textCp(t, 9);
-        emon.Port.textI32(t, Evidence.spGet(sp, i, Evidence.sfParent()));
+        emon.Port.textI32(t, Evidence.mkGet(mk, i, Evidence.mkfParent()));
+        return 0;
+    }
+    public static int crMarkMcid(emon.Port.Cells mk, int mark) {
+        // What v0 stored in a glyph's `mcid` (D101): the MCID of the innermost mark on the chain that has one,
+        // -1 when none does.
+        int t = mark;
+        int m = -1;
+        while (t >= 0) {
+            m = Evidence.mkGet(mk, t, Evidence.mkfMcid());
+            if (m >= 0) {
+                return m;
+            }
+            t = Evidence.mkGet(mk, t, Evidence.mkfParent());
+        }
+        return -1;
+    }
+    public static int crMarkClass(emon.Port.Cells mk, int mark) {
+        // What v0 stored in a glyph's `artifact` (D101): the class of the nearest /Artifact mark on the chain
+        // (`mk-artifact-class`), 0 when none is.
+        int t = mark;
+        while (t >= 0) {
+            if (Evidence.mkGet(mk, t, Evidence.mkfKind()) == 1) {
+                return Evidence.mkArtifactClass(1, Evidence.mkGet(mk, t, Evidence.mkfArtype()), Evidence.mkGet(mk, t, Evidence.mkfArsub()));
+            }
+            t = Evidence.mkGet(mk, t, Evidence.mkfParent());
+        }
         return 0;
     }
     public static int crPageLines(StringBuilder t, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int page) {
@@ -176,13 +242,13 @@ public final class Contentrows {
         int wn = 0;
         int firstline = 1;
         while (l < nl) {
-            if (Evidence.lnGet(ln, l, Evidence.lfPage()) == page) {
+            if (Evidence.lnGet(ln, l, Evidence.lhPage()) == page) {
                 if (firstline == 0) {
                     emon.Port.textCp(t, 8232);
                 }
                 firstline = 0;
-                w0 = Evidence.lnGet(ln, l, Evidence.lfWfirst());
-                wn = Evidence.lnGet(ln, l, Evidence.lfWcount());
+                w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
+                wn = Evidence.lnGet(ln, l, Evidence.lhCount());
                 w = 0;
                 while (w < wn) {
                     if (w > 0) {

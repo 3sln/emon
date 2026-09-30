@@ -153,18 +153,32 @@ fn test_begin_and_end_make_any_record() {
 }
 pub(crate) fn pt_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut t: &mut String) -> i32 {
     // Run the probe once over fresh arenas; with `us-done`, dump the evidence.
-    let g: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let co: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let al: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let sp: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let st: i32 = pp_unit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp);
+    let epages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let glyphs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let marks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fonts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let paths: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let images: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oalts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let components: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: i32 = pp_unit(s, an, rq, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
     if st == us_done() {
-        ev_emit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp);
+        ev_emit(t, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
     }
     return st;
 }

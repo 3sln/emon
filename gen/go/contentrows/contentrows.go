@@ -11,9 +11,9 @@ import (
 
 func CrGlyphText(t *strings.Builder, gl *port.Cells, et *port.Cells, g int32) int32 {
 	// The text of glyph g: its code points, or U+FFFD.
-	var ts int32 = evidence.GlGet(gl, g, evidence.GfTstart())
-	var tl int32 = evidence.GlGet(gl, g, evidence.GfTlen())
-	var cp int32 = evidence.GlGet(gl, g, evidence.GfCp())
+	var ts int32 = evidence.GlGet(gl, g, evidence.ChTstart())
+	var tl int32 = evidence.GlGet(gl, g, evidence.ChTlen())
+	var cp int32 = evidence.GlGet(gl, g, evidence.ChCp())
 	var k int32 = 0
 	if (ts >= 0) && (tl > 0) {
 		for k < tl {
@@ -36,7 +36,7 @@ func CrPageText(t *strings.Builder, gl *port.Cells, et *port.Cells, page int32) 
 	var n int32 = evidence.GlCount(gl)
 	var g int32 = 0
 	for g < n {
-		if evidence.GlGet(gl, g, evidence.GfPage()) == page {
+		if evidence.GlGet(gl, g, evidence.ChPage()) == page {
 			CrGlyphText(t, gl, et, g)
 		}
 		g += 1
@@ -57,8 +57,8 @@ func CrAllText(t *strings.Builder, gl *port.Cells, et *port.Cells) int32 {
 
 func CrWord(t *strings.Builder, wd *port.Cells, et *port.Cells, w int32) int32 {
 	// The text of word w.
-	var s int32 = evidence.WdGet(wd, w, evidence.WfTstart())
-	var n int32 = evidence.WdGet(wd, w, evidence.WfTlen())
+	var s int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var n int32 = evidence.WdGet(wd, w, evidence.HdTlen())
 	var k int32 = 0
 	if s < 0 {
 		return 0
@@ -97,10 +97,10 @@ func CrDigest(gl *port.Cells, et *port.Cells, page int32) int32 {
 	var cp int32 = 0
 	var k int32 = 0
 	for g < n {
-		if evidence.GlGet(gl, g, evidence.GfPage()) == page {
-			ts = evidence.GlGet(gl, g, evidence.GfTstart())
-			tl = evidence.GlGet(gl, g, evidence.GfTlen())
-			cp = evidence.GlGet(gl, g, evidence.GfCp())
+		if evidence.GlGet(gl, g, evidence.ChPage()) == page {
+			ts = evidence.GlGet(gl, g, evidence.ChTstart())
+			tl = evidence.GlGet(gl, g, evidence.ChTlen())
+			cp = evidence.GlGet(gl, g, evidence.ChCp())
 			if (ts >= 0) && (tl > 0) {
 				k = 0
 				for k < tl {
@@ -139,15 +139,57 @@ func crRun(t *strings.Builder, et *port.Cells, s int32, n int32) int32 {
 	return 0
 }
 
-func CrSpan(t *strings.Builder, sp *port.Cells, et *port.Cells, i int32) int32 {
-	// Span i as one row, without a newline: index, tag, MCID, artifact, type, subtype,
-	// ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated.
-	var art int32 = evidence.SpGet(sp, i, evidence.SfArtifact())
+func crTypeName(t *strings.Builder, ty int32) int32 {
+	// A marked-content /Type as the PDF spells it; `-` for none or for a name that is none of them.
+	if ty == 1 {
+		port.TextAscii(t, "Pagination")
+		return 0
+	}
+	if ty == 3 {
+		port.TextAscii(t, "Layout")
+		return 0
+	}
+	if ty == 4 {
+		port.TextAscii(t, "Background")
+		return 0
+	}
+	if ty == 6 {
+		port.TextAscii(t, "Page")
+		return 0
+	}
+	port.TextAscii(t, "-")
+	return 0
+}
+
+func crSubtypeName(t *strings.Builder, su int32) int32 {
+	// A marked-content /Subtype as the PDF spells it; `-` for none or another name.
+	if su == 1 {
+		port.TextAscii(t, "Header")
+		return 0
+	}
+	if su == 2 {
+		port.TextAscii(t, "Footer")
+		return 0
+	}
+	if su == 3 {
+		port.TextAscii(t, "Watermark")
+		return 0
+	}
+	port.TextAscii(t, "-")
+	return 0
+}
+
+func CrSpan(t *strings.Builder, mk *port.Cells, et *port.Cells, i int32) int32 {
+	// Mark i as one row, without a newline: index, tag, MCID, artifact class, /Type, /Subtype,
+	// ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated. The class
+	// is the D101 one, made from the mark's (/Type, /Subtype) by `mk-artifact-class`; the type and
+	// subtype are the PDF's names for the codes (a name that is none of them prints `-`).
+	var art int32 = evidence.MkArtifactClass(evidence.MkGet(mk, i, evidence.MkfKind()), evidence.MkGet(mk, i, evidence.MkfArtype()), evidence.MkGet(mk, i, evidence.MkfArsub()))
 	port.TextI32(t, i)
 	port.TextCp(t, 9)
-	crRun(t, et, evidence.SpGet(sp, i, evidence.SfTag()), evidence.SpGet(sp, i, evidence.SfTaglen()))
+	crRun(t, et, evidence.MkGet(mk, i, evidence.MkfTstart()), evidence.MkGet(mk, i, evidence.MkfTlen()))
 	port.TextCp(t, 9)
-	port.TextI32(t, evidence.SpGet(sp, i, evidence.SfMcid()))
+	port.TextI32(t, evidence.MkGet(mk, i, evidence.MkfMcid()))
 	port.TextCp(t, 9)
 	if art == 0 {
 		port.TextAscii(t, "-")
@@ -155,27 +197,55 @@ func CrSpan(t *strings.Builder, sp *port.Cells, et *port.Cells, i int32) int32 {
 		evidence.ArEmitName(t, art)
 	}
 	port.TextCp(t, 9)
-	crRun(t, et, evidence.SpGet(sp, i, evidence.SfType()), evidence.SpGet(sp, i, evidence.SfTypelen()))
+	crTypeName(t, evidence.MkGet(mk, i, evidence.MkfArtype()))
 	port.TextCp(t, 9)
-	crRun(t, et, evidence.SpGet(sp, i, evidence.SfSubtype()), evidence.SpGet(sp, i, evidence.SfSubtypelen()))
+	crSubtypeName(t, evidence.MkGet(mk, i, evidence.MkfArsub()))
 	port.TextCp(t, 9)
-	crRun(t, et, evidence.SpGet(sp, i, evidence.SfActual()), evidence.SpGet(sp, i, evidence.SfActuallen()))
+	crRun(t, et, evidence.MkGet(mk, i, evidence.MkfActual()), evidence.MkGet(mk, i, evidence.MkfActuallen()))
 	port.TextCp(t, 9)
-	crRun(t, et, evidence.SpGet(sp, i, evidence.SfAlt()), evidence.SpGet(sp, i, evidence.SfAltlen()))
+	crRun(t, et, evidence.MkGet(mk, i, evidence.MkfAlt()), evidence.MkGet(mk, i, evidence.MkfAltlen()))
 	port.TextCp(t, 9)
-	crRun(t, et, evidence.SpGet(sp, i, evidence.SfExp()), evidence.SpGet(sp, i, evidence.SfExplen()))
+	crRun(t, et, evidence.MkGet(mk, i, evidence.MkfExp()), evidence.MkGet(mk, i, evidence.MkfExplen()))
 	port.TextCp(t, 9)
-	crRun(t, et, evidence.SpGet(sp, i, evidence.SfLang()), evidence.SpGet(sp, i, evidence.SfLanglen()))
+	crRun(t, et, evidence.MkGet(mk, i, evidence.MkfLang()), evidence.MkGet(mk, i, evidence.MkfLanglen()))
 	port.TextCp(t, 9)
-	port.TextI32(t, evidence.SpGet(sp, i, evidence.SfGfirst()))
+	port.TextI32(t, evidence.MkGet(mk, i, evidence.MkfGfirst()))
 	port.TextCp(t, 9)
-	port.TextI32(t, evidence.SpGet(sp, i, evidence.SfGcount()))
+	port.TextI32(t, evidence.MkGet(mk, i, evidence.MkfGcount()))
 	port.TextCp(t, 9)
-	port.TextI32(t, evidence.SpGet(sp, i, evidence.SfFlags()))
+	port.TextI32(t, evidence.MkGet(mk, i, evidence.MkfFlags()))
 	port.TextCp(t, 9)
-	port.TextI32(t, evidence.SpGet(sp, i, evidence.SfStm()))
+	port.TextI32(t, evidence.MkGet(mk, i, evidence.MkfStm()))
 	port.TextCp(t, 9)
-	port.TextI32(t, evidence.SpGet(sp, i, evidence.SfParent()))
+	port.TextI32(t, evidence.MkGet(mk, i, evidence.MkfParent()))
+	return 0
+}
+
+func CrMarkMcid(mk *port.Cells, mark int32) int32 {
+	// What v0 stored in a glyph's `mcid` (D101): the MCID of the innermost mark on the chain that has one,
+	// -1 when none does.
+	var t int32 = mark
+	var m int32 = -1
+	for t >= 0 {
+		m = evidence.MkGet(mk, t, evidence.MkfMcid())
+		if m >= 0 {
+			return m
+		}
+		t = evidence.MkGet(mk, t, evidence.MkfParent())
+	}
+	return -1
+}
+
+func CrMarkClass(mk *port.Cells, mark int32) int32 {
+	// What v0 stored in a glyph's `artifact` (D101): the class of the nearest /Artifact mark on the chain
+	// (`mk-artifact-class`), 0 when none is.
+	var t int32 = mark
+	for t >= 0 {
+		if evidence.MkGet(mk, t, evidence.MkfKind()) == 1 {
+			return evidence.MkArtifactClass(1, evidence.MkGet(mk, t, evidence.MkfArtype()), evidence.MkGet(mk, t, evidence.MkfArsub()))
+		}
+		t = evidence.MkGet(mk, t, evidence.MkfParent())
+	}
 	return 0
 }
 
@@ -189,13 +259,13 @@ func CrPageLines(t *strings.Builder, wd *port.Cells, ln *port.Cells, et *port.Ce
 	var wn int32 = 0
 	var firstline int32 = 1
 	for l < nl {
-		if evidence.LnGet(ln, l, evidence.LfPage()) == page {
+		if evidence.LnGet(ln, l, evidence.LhPage()) == page {
 			if firstline == 0 {
 				port.TextCp(t, 8232)
 			}
 			firstline = 0
-			w0 = evidence.LnGet(ln, l, evidence.LfWfirst())
-			wn = evidence.LnGet(ln, l, evidence.LfWcount())
+			w0 = evidence.LnGet(ln, l, evidence.LhFirst())
+			wn = evidence.LnGet(ln, l, evidence.LhCount())
 			w = 0
 			for w < wn {
 				if w > 0 {

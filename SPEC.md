@@ -991,10 +991,10 @@ linear-part cells.
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `glyphs` | 32 | char head (9); baseline segment `bx0 by0 bx1 by1` = origin to origin + advance (without `Tc`/`Tw`, so spacing is the gap to the next origin); `asc`, `desc` (cpt, perpendicular to the baseline: with it they give the glyph's exact quad); `rot`; `how` (`gh`); `font` (`fonts` row); `size` (cpt); render `mode` 0..7; fill colour, stroke colour (0xRRGGBB, -1 none); fill alpha, stroke alpha (per-mille); colour-space class (`cs`: gray, rgb, cmyk, spot, pattern, other); `z`; `clip` (the `paths` row of the clip in force, -1 the page); `mark` (innermost `marks` row, -1); `ocg` (innermost optional-content span, a `marks` row, -1); `vis` (`vz`); `vby` (the `z` of the occluder, -1); `vchk` (bits of the P3.6 checks that have run) |
+| `glyphs` | 32 | char head (9); baseline segment `bx0 by0 bx1 by1` = origin to origin + advance (without `Tc`/`Tw`, so spacing is the gap to the next origin); `asc`, `desc` (cpt, SIGNED distances from the baseline along the up vector, `desc` negative for a descender: with them the segment gives the glyph's exact quad); `rot`; `how` (`gh`); `font` (`fonts` row); `size` (cpt); render `mode` 0..7; fill colour, stroke colour (0xRRGGBB, -1 none); fill alpha, stroke alpha (per-mille); colour-space class (`cs`: gray, rgb, cmyk, spot, pattern, other); `z`; `clip` (the `paths` row of the clip in force, -1 the page); `mark` (innermost `marks` row, -1); `ocg` (innermost optional-content span, a `marks` row, -1); `vis` (`vz`); `vby` (the `z` of the occluder, -1); `vchk` (bits of the P3.6 checks that have run) |
 | `words` | 24 | word head (16); style (`sy`, from the font); `gfirst gcount` (its glyphs); `font`, `size` (dominant); `gap` (cpt to the next word, -1); `wbreak` (`wb`: why it ended: space glyph, gap, `TJ` offset, line end, font change, mark boundary); `src` (`sr`: `text` or `hidden-text`) |
 | `lines` | 16 | line head (13); `src`; `order` (content-stream index of its first glyph, the weak reading-order signal); spare |
-| `marks` | 24 | page, kind (`mk`: artifact, optional-content, tag), tag `tstart tlen`, parent span, `mcid`, artifact `/Type` (`ar`), artifact `/Subtype` (`as`), `/ActualText`, `/Alt`, `/E`, `/Lang` (each an `etext` run: 8 cells), OCG or OCMD object number, its default state (1 on, 0 off, -1 unknown), `gfirst gcount` (glyphs inside), `zfirst zlast` (painted objects inside), flags (`/Properties` reference, inline dictionary, closed by the page end), spare |
+| `marks` | 24 | page, kind (`mk`: artifact, optional-content, tag), tag `tstart tlen`, parent span, `mcid`, artifact `/Type` (`ar`), artifact `/Subtype` (`as`), `/ActualText`, `/Alt`, `/E`, `/Lang` (each an `etext` run: 8 cells), OCG or OCMD object number, its default state (1 on, 0 off, -1 unknown), `gfirst gcount` (glyphs inside), `zfirst zlast` (painted objects inside), flags (`/Properties` reference, inline dictionary, name not found, closed by the page end), `stm` (the object number of the Form XObject whose stream the span is in, 0 the page's: P3.7 joins a structure element's MCID on `(stm, mcid)`, D101) |
 | `fonts` | 16 | object number, subtype (`ft`), descriptor `/Flags` verbatim, embedded program kind (0 none), has `ToUnicode`, base encoding, `/BaseFont` `tstart tlen`, ascent, descent (1/1000 em), space width (D083 units), italic angle (centi-degrees), `/StemV`, style (`sy` inferred from flags and name), spare |
 | `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), spare |
 | `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, spare |
@@ -1135,10 +1135,22 @@ reference, nesting or stride, by a numbered code.
 The dump (`emon-evidence`, §4.5) is **version "1"**: one key per arena in the
 `ea` order above, an empty arena printed as `[]`, fields in stride order
 under the names of the `ek` table, defaults omitted, runs as `[first,
-count]`, references as `["arena", index]`, baselines as `[x0, y0, x1, y1]`,
-centi-units as points, colours as `"#rrggbb"`, packed ASCII (script,
-language) as strings, and `feats` rows with their column names. It is not a
-public contract.
+count]`, references (the `refs` arena, a `feats` subject) as `["arena", index]`
+(a column that can only point at one arena, `glyph.font` or `word.line`, is
+its plain row number), baselines and boxes as `[x0, y0, x1, y1]`, centi-units
+as points, colours as `"#rrggbb"`, packed ASCII (script, language) as
+strings, `etext` as one string (an array of one, `[]` when empty), and
+`feats` rows with their column names (`xo-*` under an OCR word, `xt-*` under
+a text-layer word, `cN` for a column with none). It is table driven
+(`ev-fd`), so every cell of every stride is printed or named spare, and it
+is not a public contract.
+
+`ar`'s codes are forever: `pagination` 1, `watermark` 2 (v0's subtype stored
+as a type; never written by v2), `layout` 3, `background` 4, `other` 5 (an
+artifact whose `/Type` is none of the known ones, or absent, so that an
+artifact span always has a nonzero type and `mk-artifact-of` answers 0 only for
+"no artifact"), `page` 6. `as` (the subtype): `header` 1, `footer` 2,
+`watermark` 3, `other` 4.
 
 #### 8.4.7 What v2 does not hold yet
 

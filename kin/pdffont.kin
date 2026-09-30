@@ -236,6 +236,8 @@
 (defn ^:pub ^I32 pfn-vertical [^Cells f] (return (cells-at f H_WMODE)))
 (defn ^:pub ^I32 pfn-standard-font [^Cells f] (return (cells-at f H_S14)))
 (defn ^:pub ^I32 pfn-has-tounicode [^Cells f] (return (cells-at f H_HASTU)))
+(defn ^:pub ^I32 pfn-flags [^Cells f] (return (cells-at f H_FLAGS)))       ;; the descriptor's /Flags, verbatim (P1.12)
+(defn ^:pub ^I32 pfn-encoding [^Cells f] (return (cells-at f H_ENC)))      ;; a simple font's base encoding, -1 none (P1.12)
 (defn ^:pub ^I32 pfn-dw2-v [^Cells f] (return (cells-at f H_DW2V)))
 (defn ^:pub ^I32 pfn-dw2-w [^Cells f] (return (cells-at f H_DW2W)))
 (defn ^:pub ^I32 pfn-cp [^Cells f ^I32 i]

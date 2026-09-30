@@ -1,18 +1,34 @@
-;; The OCR-through-the-transcript PROBE UNIT (P2.6 spike, D095): what a real unit
-;; does with a real engine's answer, in miniature.
+;; The OCR-through-the-transcript PROBE UNIT (P2.6 spike, D095; evidence v2, P1.12, D096): what a real
+;; unit does with a real engine's answer, in miniature.
 ;;
 ;;   round 0   render  id 1  input 0 page 0 at 150 dpi, with text
 ;;   round 1   ocr     id 2  the render's bitmap, psm 3 (automatic), symbols and OSD
 ;;                           wanted, NO LANGUAGE (D038: no locale is assumed)
-;;   then      evidence: an image placement for the page and an `ocrwords` row per
-;;             word, with its text, alternatives, line, block, baseline, style
-;;             bits and language.
+;;   then      evidence, everything the D095 extension carries:
+;;               epages    the page (its size at the render's resolution, `raster`)
+;;               views     the render (its transform computed once by `vw-new`)
+;;               images    the page's image placement
+;;               oruns     one row: the request, the view read, psm, flags, orientation, writing
+;;                         direction, line order, deskew, OSD degrees, script, both confidences
+;;               oblocks   blocks and paragraphs, grouped from the lines' `block` and `par` ids (box =
+;;                         union of their lines, `btype` from the first line, orientation and writing
+;;                         direction from the run: the extension has no per-block value yet), each
+;;                         block followed by its paragraphs so both child runs are contiguous
+;;               olines    the pixel box mapped through the view, the two-point baseline mapped
+;;               owords    the pixel box mapped, the LINE's baseline (already mapped) evaluated at the word's left
+;;                         and right edge (D096: map first, then interpolate: one centipoint of error where
+;;                         interpolating in whole pixels first could be a pixel), style, language, symbols
+;;               osyms     boxes, text (a run of `etext` for a ligature), confidence
+;;               oalts     every alternative's full text, a run per symbol, in engine order
+;;               feats     the stage 1 features of every word (`ev-feat-ocr`)
 ;;
-;; `op-unit` is pure (it restarts from `ev-init` on every attempt), so a replayed
-;; transcript produces the recorded evidence byte for byte on every host.
-;; Boxes are converted bitmap pixels to centipoints with integer arithmetic only:
-;; `px * 7200 / dpi` is exact to a centipoint and stays in 32 bits for any scan
-;; under ~300,000 px.
+;; `op-unit` is pure (it restarts from `ev-init` on every attempt), so a replayed transcript produces
+;; the recorded evidence byte for byte on every host. Raster-to-page arithmetic is `vw-new`'s and is
+;; exact at 150 dpi (`px * 48`).
+;;
+;; THE ENGINE'S ORIENTATION ENUM is stored verbatim (Tesseract: page-up 0, right 1, down 2, left 3), as are
+;; the writing direction and the line order; `olines` and `owords` turn the writing direction into `ld`
+;; (left-to-right 0, right-to-left `ld-rtl`, top-to-bottom `ld-ttb`). The extension's confidences are x10.
 (ns emon.ocrprobe
   (:require [emon.lang :refer [I32 Cells Src]]
             [emon.port :refer [src-len src-u8 src-missed cells-at]]
@@ -23,88 +39,345 @@
                                aw-line aw-block aw-len]]
             [emon.ocr :refer [ocf-symbols ocf-osd ox-find ox-line-at ox-first-word
                               ox-wflags ox-wlang ox-nsym ox-first-sym ox-sym-next
-                              ox-sym-alts ox-alt-next ox-word-next ox-get]]
-            [emon.evidence :refer [ev-init im-new ow-new ow-set alt-add etx-append-cp
-                                   etx-len of-tstart of-tlen of-line of-block
-                                   of-baseline of-flags of-lang]]
+                              ox-sym-alts ox-alt-next ox-word-next ox-get ox-nlines
+                              ox-orient ox-wdir ox-tlorder ox-deskew ox-osd ox-script
+                              ox-sconf ox-oconf]]
+            [emon.evidence :refer [ev-init im-new ep-new ep-set vw-new vw-px-to-cpt vw-box-to-cpt
+                                   or-new or-set ob-new ob-set ob-get ob-count
+                                   ol-new ol-set ol-get ol-count ow-new ow-set ow-get ow-count
+                                   os-new os-set os-get os-count oa-add oa-count fe-count lh-first lh-count lh-bx0 lh-by0 lh-bx1 lh-by1
+                                   etx-append-cp etx-len ev-angle ev-baseline-at
+                                   ev-rot-median ev-feat-ocr
+                                   hd-x0 hd-y0 hd-x1 hd-y1
+                                   epf-flags epf-dpi
+                                   orf-request orf-round orf-psm orf-orient orf-wdir orf-lorder orf-deskew
+                                   orf-osd orf-script orf-sconf orf-oconf orf-flags orf-bfirst orf-bcount
+                                   orf-lfirst orf-lcount orf-wfirst orf-wcount
+                                   obf-btype obf-orient obf-wdir obf-first obf-count obf-x0 obf-y0 obf-x1 obf-y1
+                                   olf-par olf-run olf-px olf-py olf-pw olf-ph
+                                   owf-style owf-run owf-sfirst owf-scount owf-lang owf-px owf-py owf-pw owf-ph
+                                   osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
+                                   ch-tstart ch-tlen ld-rtl ld-ttb ob-block ob-paragraph
+                                   vk-render eg-raster op-first]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
 (defn ^I32 op-cpt [^I32 px ^I32 dpi] (return (quot (* px 7200) dpi)))
 
-(defn ^I32 op-baseline [^Cells an ^I32 ext ^I32 line ^I32 cx ^I32 dflt]
-  (comment "The line's baseline at pixel column `cx` (two points, integer interpolation), or `dflt`.")
-  (if (< ext 0) (return dflt))
-  (let [^I32 l (ox-line-at an ext line)
-        ^I32 bx0 (cells-at an (+ l 4))
-        ^I32 by0 (cells-at an (+ l 5))
-        ^I32 bx1 (cells-at an (+ l 6))
-        ^I32 by1 (cells-at an (+ l 7))]
-    (if (<= bx1 bx0) (return by1))
-    (return (+ by0 (quot (* (- by1 by0) (- cx bx0)) (- bx1 bx0))))))
+(defn ^I32 op-ld [^I32 wdir]
+  (comment "The engine's writing direction as `ld`: 0 left to right, 1 right to left, 2 top to bottom.")
+  (if (== wdir 1) (return (ld-rtl)))
+  (if (== wdir 2) (return (ld-ttb)))
+  (return 0))
 
-(defn ^I32 op-words [^Cells an ^I32 at ^I32 page ^I32 dpi
-                     ^:mut ^Cells ocrwords ^:mut ^Cells alts ^:mut ^Cells etext]
+(defn ^I32 op-grow [^:mut ^Cells oblocks ^I32 row ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Grow block (or paragraph) `row`'s box to hold the box (x0 y0 x1 y1).")
+  (if (< x0 (ob-get oblocks row (obf-x0))) (ob-set oblocks row (obf-x0) x0))
+  (if (< y0 (ob-get oblocks row (obf-y0))) (ob-set oblocks row (obf-y0) y0))
+  (if (> x1 (ob-get oblocks row (obf-x1))) (ob-set oblocks row (obf-x1) x1))
+  (if (> y1 (ob-get oblocks row (obf-y1))) (ob-set oblocks row (obf-y1) y1))
+  (return 0))
+
+(defn ^I32 op-lines [^Cells an ^I32 ext ^I32 view ^I32 run
+                     ^Cells views ^:mut ^Cells oblocks ^:mut ^Cells olines]
+  (comment "The blocks, paragraphs and lines of the extension, in its order. A block is a run of lines with the")
+  (comment "same block id, a paragraph a run of them with the same paragraph id inside it (-1 is an id like")
+  (comment "another); a block is followed by its paragraphs, a paragraph's lines are the rows that follow it.")
+  (let [^I32 nl (ox-nlines an ext)
+        ^I32 orient (ox-orient an ext)
+        ^I32 wdir (ox-wdir an ext)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 blk 0
+        ^:mut ^I32 par 0
+        ^:mut ^I32 bty 0
+        ^:mut ^I32 curblk -2
+        ^:mut ^I32 curpar -2
+        ^:mut ^I32 brow -1
+        ^:mut ^I32 prow -1
+        ^:mut ^I32 lrow 0
+        ^:mut ^I32 bcnt 0
+        ^:mut ^I32 fresh 0]
+    (while (< k nl)
+      (do (set l (ox-line-at an ext k))
+          (set px (cells-at an l))
+          (set py (cells-at an (+ l 1)))
+          (set pw (cells-at an (+ l 2)))
+          (set ph (cells-at an (+ l 3)))
+          (set x0 (vw-box-to-cpt views view 0 px py pw ph))
+          (set y0 (vw-box-to-cpt views view 1 px py pw ph))
+          (set x1 (vw-box-to-cpt views view 2 px py pw ph))
+          (set y1 (vw-box-to-cpt views view 3 px py pw ph))
+          (set bx0 (vw-px-to-cpt views view 0 (cells-at an (+ l 4)) (cells-at an (+ l 5))))
+          (set by0 (vw-px-to-cpt views view 1 (cells-at an (+ l 4)) (cells-at an (+ l 5))))
+          (set bx1 (vw-px-to-cpt views view 0 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
+          (set by1 (vw-px-to-cpt views view 1 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
+          (set blk (cells-at an (+ l 8)))
+          (set par (cells-at an (+ l 9)))
+          (set bty (cells-at an (+ l 10)))
+          (set fresh 0)
+          (if (or (== k 0) (!= blk curblk))
+            (do (set brow (ob-new oblocks 1 x0 y0 x1 y1 (ob-block) -1 run))
+                (ob-set oblocks brow (obf-btype) bty)
+                (ob-set oblocks brow (obf-orient) orient)
+                (ob-set oblocks brow (obf-wdir) wdir)
+                (ob-set oblocks brow (obf-first) (+ brow 1))
+                (set curblk blk)
+                (set curpar -2)))
+          (if (!= par curpar)
+            (do (set prow (ob-new oblocks 1 x0 y0 x1 y1 (ob-paragraph) brow run))
+                (ob-set oblocks prow (obf-btype) bty)
+                (ob-set oblocks prow (obf-orient) orient)
+                (ob-set oblocks prow (obf-wdir) wdir)
+                (ob-set oblocks prow (obf-first) (ol-count olines))
+                (set bcnt (ob-get oblocks brow (obf-count)))
+                (ob-set oblocks brow (obf-count) (+ bcnt 1))
+                (set curpar par)
+                (set fresh 1)))
+          (if (== fresh 0)
+            (do (op-grow oblocks prow x0 y0 x1 y1)
+                (op-grow oblocks brow x0 y0 x1 y1)))
+          (set lrow (ol-new olines 1 x0 y0 x1 y1 bx0 by0 bx1 by1
+                            (ev-angle (- bx1 bx0) (- by1 by0)) (op-ld wdir) -1 0))
+          (ol-set olines lrow (olf-par) prow)
+          (ol-set olines lrow (olf-run) run)
+          (ol-set olines lrow (olf-px) px)
+          (ol-set olines lrow (olf-py) py)
+          (ol-set olines lrow (olf-pw) pw)
+          (ol-set olines lrow (olf-ph) ph)
+          (set bcnt (ob-get oblocks prow (obf-count)))
+          (ob-set oblocks prow (obf-count) (+ bcnt 1))
+          (set k (+ k 1))))
+    (return nl)))
+
+(defn ^I32 op-words [^Cells an ^I32 at ^I32 ext ^I32 view ^I32 run ^I32 l0
+                     ^Cells views ^:mut ^Cells etext ^:mut ^Cells olines
+                     ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts]
+  (comment "The words of the answer with their symbols and alternatives. A word's line is the extension's")
+  (comment "line index (an olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 in")
+  (comment "pixels, then mapped through the view (a word without a line has its box's bottom edge).")
   (let [^I32 nw (an-ocr-count an at)
-        ^I32 ext (ox-find an at)
-        ^:mut ^I32 wx -1
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 wdir 0
+        ^:mut ^I32 tlen 0
         ^:mut ^I32 w (an-ocr-first an at)
-        ^:mut ^I32 i 0]
-    (if (>= ext 0) (set wx (ox-first-word an ext)))
+        ^:mut ^I32 wx -1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 lx0 0
+        ^:mut ^I32 ly0 0
+        ^:mut ^I32 lx1 0
+        ^:mut ^I32 ly1 0
+        ^:mut ^I32 lrow -1
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 nc 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ow 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 sy 0
+        ^:mut ^I32 sym 0
+        ^:mut ^I32 ncp 0
+        ^:mut ^I32 nalt 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 acp 0
+        ^:mut ^I32 cpv 0
+        ^:mut ^I32 a0 0
+        ^:mut ^I32 lcnt 0]
+    (if (>= ext 0)
+      (do (set wx (ox-first-word an ext))
+          (set nl (ox-nlines an ext))
+          (set wdir (ox-wdir an ext))))
     (while (< i nw)
-      (do (let [^I32 px (aw-get an w (aw-x))
-                ^I32 py (aw-get an w (aw-y))
-                ^I32 pw (aw-get an w (aw-w))
-                ^I32 ph (aw-get an w (aw-h))
-                ^I32 ln (aw-get an w (aw-line))
-                ^I32 ow (ow-new ocrwords page (op-cpt px dpi) (op-cpt py dpi)
-                                (op-cpt (+ px pw) dpi) (op-cpt (+ py ph) dpi)
-                                (aw-get an w (aw-conf)))
-                ^I32 ts (etx-len etext)
-                ^I32 nc (aw-get an w (aw-len))
-                ^:mut ^I32 k 0]
-            (while (< k nc)
-              (do (etx-append-cp etext (aw-cp an w k))
-                  (set k (+ k 1))))
-            (ow-set ocrwords ow (of-tstart) ts)
-            (ow-set ocrwords ow (of-tlen) nc)
-            (ow-set ocrwords ow (of-line) ln)
-            (ow-set ocrwords ow (of-block) (aw-get an w (aw-block)))
-            (if (>= wx 0)
-              (do (ow-set ocrwords ow (of-baseline)
-                          (op-cpt (op-baseline an ext ln (+ px (quot pw 2)) (+ py ph)) dpi))
-                  (ow-set ocrwords ow (of-flags) (ox-wflags an wx))
-                  (ow-set ocrwords ow (of-lang) (ox-wlang an wx))
-                  (let [^I32 ns (ox-nsym an wx)
-                        ^:mut ^I32 s (ox-first-sym an wx)
-                        ^:mut ^I32 j 0
-                        ^:mut ^I32 off 0]
-                    (while (< j ns)
-                      (do (let [^I32 ncp (cells-at an (+ s 5))
-                                ^I32 nalt (cells-at an (+ s 6))
-                                ^:mut ^I32 a (ox-sym-alts an s)
-                                ^:mut ^I32 m 0]
-                            (while (< m nalt)
-                              (do (if (> (cells-at an a) 0)
-                                    (alt-add ocrwords alts ow off (cells-at an (+ a 2))
-                                             (cells-at an (+ a 1))))
-                                  (set a (ox-alt-next an a))
-                                  (set m (+ m 1))))
-                            (set off (+ off ncp)))
-                          (set s (ox-sym-next an s))
-                          (set j (+ j 1))))
-                    (set wx (ox-word-next an wx))))))
+      (do (set px (aw-get an w (aw-x)))
+          (set py (aw-get an w (aw-y)))
+          (set pw (aw-get an w (aw-w)))
+          (set ph (aw-get an w (aw-h)))
+          (set x0 (vw-box-to-cpt views view 0 px py pw ph))
+          (set y0 (vw-box-to-cpt views view 1 px py pw ph))
+          (set x1 (vw-box-to-cpt views view 2 px py pw ph))
+          (set y1 (vw-box-to-cpt views view 3 px py pw ph))
+          (set ln (aw-get an w (aw-line)))
+          (set lrow -1)
+          (set bx0 x0)
+          (set by0 y1)
+          (set bx1 x1)
+          (set by1 y1)
+          (if (and (>= wx 0) (and (>= ln 0) (< ln nl)))
+            (do (set lrow (+ l0 ln))
+                (comment "The line's baseline is already in centipoints (mapped once, in `op-lines`); the word's endpoints")
+                (comment "are it evaluated at the word's left and right edge, with no pixel truncation in between (one")
+                (comment "centipoint at most, not a pixel). The edge's x is the view's for an upright raster.")
+                (set bx0 (vw-px-to-cpt views view 0 px py))
+                (set bx1 (vw-px-to-cpt views view 0 (+ px pw) py))
+                (set lx0 (ol-get olines lrow (lh-bx0)))
+                (set ly0 (ol-get olines lrow (lh-by0)))
+                (set lx1 (ol-get olines lrow (lh-bx1)))
+                (set ly1 (ol-get olines lrow (lh-by1)))
+                (set by0 (ev-baseline-at lx0 ly0 lx1 ly1 bx0))
+                (set by1 (ev-baseline-at lx0 ly0 lx1 ly1 bx1))))
+          (set ts (etx-len etext))
+          (set nc (aw-get an w (aw-len)))
+          (set k 0)
+          (while (< k nc)
+            (do (etx-append-cp etext (aw-cp an w k))
+                (set k (+ k 1))))
+          (set ow (ow-new owords 1 x0 y0 x1 y1 bx0 by0 bx1 by1
+                          (ev-angle (- bx1 bx0) (- by1 by0)) (op-ld wdir) ts nc lrow
+                          (aw-get an w (aw-conf)) -1))
+          (ow-set owords ow (owf-run) run)
+          (ow-set owords ow (owf-px) px)
+          (ow-set owords ow (owf-py) py)
+          (ow-set owords ow (owf-pw) pw)
+          (ow-set owords ow (owf-ph) ph)
+          (if (>= lrow 0)
+            (do (set lcnt (ol-get olines lrow (lh-count)))
+                (if (== lcnt 0) (ol-set olines lrow (lh-first) ow))
+                (ol-set olines lrow (lh-count) (+ lcnt 1))))
+          (if (>= wx 0)
+            (do (ow-set owords ow (owf-style) (ox-wflags an wx))
+                (ow-set owords ow (owf-lang) (ox-wlang an wx))
+                (set ns (ox-nsym an wx))
+                (ow-set owords ow (owf-sfirst) (os-count osyms))
+                (ow-set owords ow (owf-scount) ns)
+                (set sy (ox-first-sym an wx))
+                (set j 0)
+                (while (< j ns)
+                  (do (set ncp (cells-at an (+ sy 5)))
+                      (set nalt (cells-at an (+ sy 6)))
+                      (set px (cells-at an sy))
+                      (set py (cells-at an (+ sy 1)))
+                      (set pw (cells-at an (+ sy 2)))
+                      (set ph (cells-at an (+ sy 3)))
+                      (set ts -1)
+                      (set tlen 0)
+                      (set cpv -1)
+                      (if (> ncp 1) (set tlen ncp))
+                      (if (> ncp 0) (set cpv (cells-at an (+ sy 7))))
+                      (if (> ncp 1)
+                        (do (set ts (etx-len etext))
+                            (set k 0)
+                            (while (< k ncp)
+                              (do (etx-append-cp etext (cells-at an (+ (+ sy 7) k)))
+                                  (set k (+ k 1))))))
+                      (set sym (os-new osyms 1 (vw-box-to-cpt views view 0 px py pw ph)
+                                       (vw-box-to-cpt views view 1 px py pw ph)
+                                       (vw-box-to-cpt views view 2 px py pw ph)
+                                       (vw-box-to-cpt views view 3 px py pw ph)
+                                       cpv ts tlen ow))
+                      (os-set osyms sym (osf-conf) (cells-at an (+ sy 4)))
+                      (os-set osyms sym (osf-px) px)
+                      (os-set osyms sym (osf-py) py)
+                      (os-set osyms sym (osf-pw) pw)
+                      (os-set osyms sym (osf-ph) ph)
+                      (set a0 (oa-count oalts))
+                      (set a (ox-sym-alts an sy))
+                      (set m 0)
+                      (while (< m nalt)
+                        (do (set acp (cells-at an a))
+                            (if (> acp 0)
+                              (do (set ts (etx-len etext))
+                                  (set k 0)
+                                  (while (< k acp)
+                                    (do (etx-append-cp etext (cells-at an (+ (+ a 2) k)))
+                                        (set k (+ k 1))))
+                                  (oa-add oalts sym ts acp (cells-at an (+ a 1)))))
+                            (set a (ox-alt-next an a))
+                            (set m (+ m 1))))
+                      (os-set osyms sym (osf-afirst) a0)
+                      (os-set osyms sym (osf-acount) (- (oa-count oalts) a0))
+                      (set sy (ox-sym-next an sy))
+                      (set j (+ j 1))))
+                (set wx (ox-word-next an wx))))
           (set w (aw-next an w))
           (set i (+ i 1))))
+    (return nw)))
+
+(defn ^I32 op-answer [^Cells an ^I32 at ^I32 view ^I32 request
+                      ^Cells views ^Cells epages ^:mut ^Cells etext ^:mut ^Cells oruns
+                      ^:mut ^Cells oblocks ^:mut ^Cells olines ^:mut ^Cells owords
+                      ^:mut ^Cells osyms ^:mut ^Cells oalts ^:mut ^Cells feats]
+  (comment "One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives,")
+  (comment "and the stage 1 features of every word.")
+  (let [^I32 ext (ox-find an at)
+        ^I32 run (or-new oruns 1 view)
+        ^I32 b0 (ob-count oblocks)
+        ^I32 l0 (ol-count olines)
+        ^I32 w0 (ow-count owords)
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 nw 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 rotmed 0]
+    (or-set oruns run (orf-request) request)
+    (or-set oruns run (orf-round) 1)
+    (or-set oruns run (orf-psm) 3)
+    (or-set oruns run (orf-flags) (+ (ocf-symbols) (ocf-osd)))
+    (if (>= ext 0)
+      (do (or-set oruns run (orf-orient) (ox-orient an ext))
+          (or-set oruns run (orf-wdir) (ox-wdir an ext))
+          (or-set oruns run (orf-lorder) (ox-tlorder an ext))
+          (or-set oruns run (orf-deskew) (ox-deskew an ext))
+          (or-set oruns run (orf-osd) (ox-osd an ext))
+          (or-set oruns run (orf-script) (ox-script an ext))
+          (or-set oruns run (orf-sconf) (ox-sconf an ext))
+          (or-set oruns run (orf-oconf) (ox-oconf an ext))
+          (set nl (op-lines an ext view run views oblocks olines))))
+    (set nw (op-words an at ext view run l0 views etext olines owords osyms oalts))
+    (or-set oruns run (orf-bfirst) b0)
+    (set nb (- (ob-count oblocks) b0))
+    (or-set oruns run (orf-bcount) nb)
+    (or-set oruns run (orf-lfirst) l0)
+    (set nl (- (ol-count olines) l0))
+    (or-set oruns run (orf-lcount) nl)
+    (or-set oruns run (orf-wfirst) w0)
+    (or-set oruns run (orf-wcount) nw)
+    (set nl (- (ol-count olines) l0))
+    (set rotmed (ev-rot-median olines l0 nl))
+    (set w w0)
+    (while (< w (+ w0 nw))
+      (do (ev-feat-ocr feats epages etext olines owords osyms oalts w rotmed 100)
+          (set w (+ w 1))))
     (return 0)))
 
 (defn ^:pub ^I32 op-unit [^Src s ^Cells an ^:mut ^Cells rq
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                          ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
                           ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
-                          ^:mut ^Cells paths ^:mut ^Cells images
-                          ^:mut ^Cells components ^:mut ^Cells ocrwords
-                          ^:mut ^Cells alts ^:mut ^Cells etext ^:mut ^Cells spans]
+                          ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                          ^:mut ^Cells images
+                          ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                          ^:mut ^Cells prims ^:mut ^Cells tlines]
   (comment "One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.")
-  (ev-init glyphs words lines paths images components ocrwords alts etext spans)
+  (ev-init epages views pts refs etext feats glyphs words lines marks fonts paths images
+           oruns oblocks olines owords osyms oalts inks components rules prims tlines)
   (let [^I32 n (src-len s)
         ^I32 mid (src-u8 s (quot n 2))]
     (if (src-missed s) (return (us-need-bytes)))
@@ -122,7 +395,11 @@
               ^I32 h1 (an-arg an r1 1)
               ^:mut ^I32 dpi (an-arg an r1 3)]
           (if (< dpi 1) (set dpi 72))
+          (ep-new epages 1 (op-cpt w1 dpi) (op-cpt h1 dpi))
+          (ep-set epages 0 (epf-flags) (eg-raster))
+          (ep-set epages 0 (epf-dpi) (* dpi 100))
+          (vw-new views 1 (vk-render) 1 -1 w1 h1 (* dpi 100) (lay-full) -1 0 0 0 0 0)
           (im-new images 1 0 0 (op-cpt w1 dpi) (op-cpt h1 dpi) mid w1 h1)
           (if (== (an-ok an o2) 1)
-            (op-words an o2 1 dpi ocrwords alts etext))))))
+            (op-answer an o2 0 2 views epages etext oruns oblocks olines owords osyms oalts feats))))))
   (return (us-done)))

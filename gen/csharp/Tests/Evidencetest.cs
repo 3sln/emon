@@ -5,139 +5,364 @@ namespace emon;
 
 
 public static class Evidencetest {
-    internal static int EtBuild(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.EtxAppendCp(etext, 72);
-        Evidence.EtxAppendCp(etext, 105);
-        Evidence.EtxAppendCp(etext, 102);
-        Evidence.EtxAppendCp(etext, 105);
-        Evidence.EtxAppendCp(etext, 72);
-        Evidence.EtxAppendCp(etext, 105);
-        Evidence.EtxAppendCp(etext, 80);
-        Evidence.EtxAppendCp(etext, 101);
-        Evidence.EtxAppendCp(etext, 110);
-        Evidence.EtxAppendCp(etext, 65);
-        Evidence.EtxAppendCp(etext, 114);
-        Evidence.EtxAppendCp(etext, 116);
-        Evidence.EtxAppendCp(etext, 105);
-        Evidence.EtxAppendCp(etext, 102);
-        Evidence.EtxAppendCp(etext, 97);
-        Evidence.EtxAppendCp(etext, 99);
-        Evidence.EtxAppendCp(etext, 116);
-        Evidence.EtxAppendCp(etext, 80);
-        Evidence.EtxAppendCp(etext, 97);
-        Evidence.EtxAppendCp(etext, 103);
-        Evidence.EtxAppendCp(etext, 105);
-        Evidence.EtxAppendCp(etext, 110);
-        Evidence.EtxAppendCp(etext, 97);
-        Evidence.EtxAppendCp(etext, 116);
-        Evidence.EtxAppendCp(etext, 105);
-        Evidence.EtxAppendCp(etext, 111);
-        Evidence.EtxAppendCp(etext, 110);
-        Evidence.EtxAppendCp(etext, 87);
-        Evidence.EtxAppendCp(etext, 97);
-        Evidence.EtxAppendCp(etext, 116);
-        Evidence.EtxAppendCp(etext, 101);
-        Evidence.EtxAppendCp(etext, 114);
-        Evidence.EtxAppendCp(etext, 109);
-        Evidence.EtxAppendCp(etext, 97);
-        Evidence.EtxAppendCp(etext, 114);
-        Evidence.EtxAppendCp(etext, 107);
-        Evidence.EtxAppendCp(etext, 68);
-        Evidence.EtxAppendCp(etext, 82);
-        Evidence.EtxAppendCp(etext, 65);
-        Evidence.EtxAppendCp(etext, 70);
-        Evidence.EtxAppendCp(etext, 84);
-        Evidence.GlNew(glyphs, 1, 72, 1, 1200, 7200, 9000, 8000, 10200);
+    internal static int EtTxt(emon.Port.Cells etext, int c0, int c1, int c2, int c3, int c4, int c5, int c6, int c7, int c8) {
+        // Append the non-negative code points among the nine arguments; answer where the first went.
+        int at = Evidence.EtxLen(etext);
+        if (c0 >= 0) {
+            Evidence.EtxAppendCp(etext, c0);
+        }
+        if (c1 >= 0) {
+            Evidence.EtxAppendCp(etext, c1);
+        }
+        if (c2 >= 0) {
+            Evidence.EtxAppendCp(etext, c2);
+        }
+        if (c3 >= 0) {
+            Evidence.EtxAppendCp(etext, c3);
+        }
+        if (c4 >= 0) {
+            Evidence.EtxAppendCp(etext, c4);
+        }
+        if (c5 >= 0) {
+            Evidence.EtxAppendCp(etext, c5);
+        }
+        if (c6 >= 0) {
+            Evidence.EtxAppendCp(etext, c6);
+        }
+        if (c7 >= 0) {
+            Evidence.EtxAppendCp(etext, c7);
+        }
+        if (c8 >= 0) {
+            Evidence.EtxAppendCp(etext, c8);
+        }
+        return at;
+    }
+    public static int EtBuild(emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        Evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        int tHi = EtTxt(etext, 72, 105, -1, -1, -1, -1, -1, -1, -1);
+        int tFi = EtTxt(etext, 102, 105, -1, -1, -1, -1, -1, -1, -1);
+        int tP = EtTxt(etext, 80, -1, -1, -1, -1, -1, -1, -1, -1);
+        int tSpan = EtTxt(etext, 83, 112, 97, 110, -1, -1, -1, -1, -1);
+        int tEn = EtTxt(etext, 101, 110, -1, -1, -1, -1, -1, -1, -1);
+        int tArt = EtTxt(etext, 65, 114, 116, 105, 102, 97, 99, 116, -1);
+        int tDraft = EtTxt(etext, 68, 82, 65, 70, 84, -1, -1, -1, -1);
+        int tOc = EtTxt(etext, 79, 67, -1, -1, -1, -1, -1, -1, -1);
+        int tAlt = EtTxt(etext, 65, 108, 116, -1, -1, -1, -1, -1, -1);
+        int tExp = EtTxt(etext, 69, 120, 112, -1, -1, -1, -1, -1, -1);
+        int tArial = EtTxt(etext, 65, 114, 105, 97, 108, -1, -1, -1, -1);
+        int tEng = EtTxt(etext, 101, 110, 103, -1, -1, -1, -1, -1, -1);
+        int tOk = EtTxt(etext, 111, 107, -1, -1, -1, -1, -1, -1, -1);
+        int tRi = EtTxt(etext, 114, 105, -1, -1, -1, -1, -1, -1, -1);
+        int tBh = EtTxt(etext, 72, -1, -1, -1, -1, -1, -1, -1, -1);
+        int tBl = EtTxt(etext, 108, -1, -1, -1, -1, -1, -1, -1, -1);
+        // shared: the page, two views, three points, three references
+        Evidence.EpNew(epages, 1, 61200, 79200);
+        Evidence.EpSet(epages, 0, Evidence.EpfFlags(), Evidence.EgTextLayer() + Evidence.EgRaster());
+        Evidence.EpSet(epages, 0, Evidence.EpfDpi(), 15000);
+        Evidence.VwNew(views, 1, Evidence.VkRender(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
+        Evidence.VwNew(views, 1, Evidence.VkEngineBinary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, Evidence.VgEngineBinary());
+        Evidence.PtNew(pts, 7200, 12000, Evidence.PoMove());
+        Evidence.PtNew(pts, 20000, 12000, Evidence.PoLine());
+        Evidence.PtNew(pts, 20000, 14000, Evidence.PoClose());
+        Evidence.RfAdd(refs, Evidence.EaComponents(), 0);
+        Evidence.RfAdd(refs, Evidence.EaComponents(), 0);
+        Evidence.RfAdd(refs, Evidence.EaComponents(), 0);
+        // fonts: a simple one and a composite one
+        Evidence.FoNew(fonts, 5, Evidence.FtType1());
+        Evidence.FoSet(fonts, 0, Evidence.FnfFlags(), 32);
+        Evidence.FoSet(fonts, 0, Evidence.FnfTounicode(), 1);
+        Evidence.FoSet(fonts, 0, Evidence.FnfEnc(), 1);
+        Evidence.FoSet(fonts, 0, Evidence.FnfTstart(), tArial);
+        Evidence.FoSet(fonts, 0, Evidence.FnfTlen(), 5);
+        Evidence.FoSet(fonts, 0, Evidence.FnfAsc(), 905);
+        Evidence.FoSet(fonts, 0, Evidence.FnfDesc(), -212);
+        Evidence.FoSet(fonts, 0, Evidence.FnfSpace(), 27800);
+        Evidence.FoSet(fonts, 0, Evidence.FnfItalic(), -1200);
+        Evidence.FoSet(fonts, 0, Evidence.FnfStemv(), 80);
+        Evidence.FoSet(fonts, 0, Evidence.FnfStyle(), Model.SyBold());
+        Evidence.FoNew(fonts, 7, Evidence.FtType0());
+        // marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
+        Evidence.MkOpen(marks, 1, Evidence.MkTag(), tP, 1, -1, 0, 0);
+        Evidence.MkSet(marks, 0, Evidence.MkfMcid(), 0);
+        Evidence.MkSet(marks, 0, Evidence.MkfLang(), tEn);
+        Evidence.MkSet(marks, 0, Evidence.MkfLanglen(), 2);
+        Evidence.MkSet(marks, 0, Evidence.MkfFlags(), Evidence.McInline());
+        Evidence.MkOpen(marks, 1, Evidence.MkTag(), tSpan, 4, 0, 0, 0);
+        Evidence.MkSet(marks, 1, Evidence.MkfMcid(), 1);
+        Evidence.MkSet(marks, 1, Evidence.MkfAlt(), tAlt);
+        Evidence.MkSet(marks, 1, Evidence.MkfAltlen(), 3);
+        Evidence.MkSet(marks, 1, Evidence.MkfExp(), tExp);
+        Evidence.MkSet(marks, 1, Evidence.MkfExplen(), 3);
+        Evidence.MkClose(marks, 1, 2, 2);
+        Evidence.MkClose(marks, 0, 3, 3);
+        Evidence.MkOpen(marks, 1, Evidence.MkArtifact(), tArt, 8, -1, 3, 3);
+        Evidence.MkSet(marks, 2, Evidence.MkfArtype(), Evidence.ArPagination());
+        Evidence.MkSet(marks, 2, Evidence.MkfArsub(), Evidence.AsWatermark());
+        Evidence.MkSet(marks, 2, Evidence.MkfActual(), tDraft);
+        Evidence.MkSet(marks, 2, Evidence.MkfActuallen(), 5);
+        Evidence.MkSet(marks, 2, Evidence.MkfStm(), 12);
+        Evidence.MkSet(marks, 2, Evidence.MkfFlags(), Evidence.McUnterminated());
+        Evidence.MkOpen(marks, 1, Evidence.MkOptionalContent(), tOc, 2, 2, 3, 3);
+        Evidence.MkSet(marks, 3, Evidence.MkfOcg(), 42);
+        Evidence.MkSet(marks, 3, Evidence.MkfOcgdef(), 0);
+        Evidence.MkClose(marks, 3, 4, 4);
+        Evidence.MkClose(marks, 2, 4, 4);
+        // glyphs: H, i, the ligature fi, and a hidden diagonal one inside the optional-content span
+        Evidence.GlNew(glyphs, 1, 7200, 9000, 8000, 10200, 72, -1, 0, 0);
+        Evidence.GlSet(glyphs, 0, Evidence.GfBx0(), 7200);
+        Evidence.GlSet(glyphs, 0, Evidence.GfBy0(), 10000);
+        Evidence.GlSet(glyphs, 0, Evidence.GfBx1(), 8000);
+        Evidence.GlSet(glyphs, 0, Evidence.GfBy1(), 10000);
+        Evidence.GlSet(glyphs, 0, Evidence.GfAsc(), 1000);
+        Evidence.GlSet(glyphs, 0, Evidence.GfDesc(), -200);
         Evidence.GlSet(glyphs, 0, Evidence.GfHow(), Evidence.GhTounicode());
-        Evidence.GlSet(glyphs, 0, Evidence.GfColor(), 0);
-        Evidence.GlSet(glyphs, 0, Evidence.GfBaseline(), 10000);
-        Evidence.GlSet(glyphs, 0, Evidence.GfWord(), 0);
-        Evidence.GlNew(glyphs, 1, 105, 1, 1200, 8000, 9000, 8400, 10200);
+        Evidence.GlSet(glyphs, 0, Evidence.GfFont(), 0);
+        Evidence.GlSet(glyphs, 0, Evidence.GfSize(), 1200);
+        Evidence.GlSet(glyphs, 0, Evidence.GfFill(), 0);
+        Evidence.GlSet(glyphs, 0, Evidence.GfCs(), Evidence.CsRgb());
+        Evidence.GlSet(glyphs, 0, Evidence.GfZ(), 0);
+        Evidence.GlSet(glyphs, 0, Evidence.GfMark(), 1);
+        Evidence.GlNew(glyphs, 1, 8000, 9000, 8400, 10200, 105, -1, 0, 0);
+        Evidence.GlSet(glyphs, 1, Evidence.GfBx0(), 8000);
+        Evidence.GlSet(glyphs, 1, Evidence.GfBy0(), 10000);
+        Evidence.GlSet(glyphs, 1, Evidence.GfBx1(), 8400);
+        Evidence.GlSet(glyphs, 1, Evidence.GfBy1(), 10000);
+        Evidence.GlSet(glyphs, 1, Evidence.GfAsc(), 1000);
+        Evidence.GlSet(glyphs, 1, Evidence.GfDesc(), -200);
         Evidence.GlSet(glyphs, 1, Evidence.GfHow(), Evidence.GhTounicode());
-        Evidence.GlSet(glyphs, 1, Evidence.GfColor(), 0);
-        Evidence.GlSet(glyphs, 1, Evidence.GfBaseline(), 10000);
-        Evidence.GlSet(glyphs, 1, Evidence.GfWord(), 0);
-        Evidence.GlNew(glyphs, 1, 102, 1, 1200, 9000, 9000, 10000, 10200);
+        Evidence.GlSet(glyphs, 1, Evidence.GfFont(), 0);
+        Evidence.GlSet(glyphs, 1, Evidence.GfSize(), 1200);
+        Evidence.GlSet(glyphs, 1, Evidence.GfFill(), 0);
+        Evidence.GlSet(glyphs, 1, Evidence.GfZ(), 1);
+        Evidence.GlSet(glyphs, 1, Evidence.GfMark(), 1);
+        Evidence.GlNew(glyphs, 1, 9000, 9000, 10000, 10200, 102, tFi, 2, 1);
+        Evidence.GlSet(glyphs, 2, Evidence.GfBx0(), 9000);
+        Evidence.GlSet(glyphs, 2, Evidence.GfBy0(), 10000);
+        Evidence.GlSet(glyphs, 2, Evidence.GfBx1(), 10000);
+        Evidence.GlSet(glyphs, 2, Evidence.GfBy1(), 10000);
+        Evidence.GlSet(glyphs, 2, Evidence.GfAsc(), 1000);
+        Evidence.GlSet(glyphs, 2, Evidence.GfDesc(), -200);
         Evidence.GlSet(glyphs, 2, Evidence.GfHow(), Evidence.GhGlyphname());
-        Evidence.GlSet(glyphs, 2, Evidence.GfTstart(), 2);
-        Evidence.GlSet(glyphs, 2, Evidence.GfTlen(), 2);
-        Evidence.GlSet(glyphs, 2, Evidence.GfColor(), 2236962);
-        Evidence.GlSet(glyphs, 2, Evidence.GfBaseline(), 10000);
-        Evidence.GlSet(glyphs, 2, Evidence.GfWord(), 1);
-        Evidence.GlNew(glyphs, 1, -1, 2, 4800, -2000, -3000, 5000, 500);
+        Evidence.GlSet(glyphs, 2, Evidence.GfFont(), 0);
+        Evidence.GlSet(glyphs, 2, Evidence.GfSize(), 1200);
+        Evidence.GlSet(glyphs, 2, Evidence.GfFill(), 2236962);
+        Evidence.GlSet(glyphs, 2, Evidence.GfZ(), 2);
+        Evidence.GlSet(glyphs, 2, Evidence.GfMark(), 0);
+        Evidence.GlNew(glyphs, 1, 1000, 2000, 3000, 4000, -1, -1, 0, 2);
+        Evidence.GlSet(glyphs, 3, Evidence.GfBx0(), 1000);
+        Evidence.GlSet(glyphs, 3, Evidence.GfBy0(), 4000);
+        Evidence.GlSet(glyphs, 3, Evidence.GfBx1(), 3000);
+        Evidence.GlSet(glyphs, 3, Evidence.GfBy1(), 2000);
+        Evidence.GlSet(glyphs, 3, Evidence.GfAsc(), 400);
+        Evidence.GlSet(glyphs, 3, Evidence.GfDesc(), -100);
         Evidence.GlSet(glyphs, 3, Evidence.GfRot(), 4500);
-        Evidence.GlSet(glyphs, 3, Evidence.GfColor(), 16711680);
-        Evidence.GlSet(glyphs, 3, Evidence.GfAlpha(), 500);
+        Evidence.GlSet(glyphs, 3, Evidence.GfFont(), 1);
+        Evidence.GlSet(glyphs, 3, Evidence.GfSize(), 1400);
         Evidence.GlSet(glyphs, 3, Evidence.GfMode(), 3);
+        Evidence.GlSet(glyphs, 3, Evidence.GfFill(), 16711680);
+        Evidence.GlSet(glyphs, 3, Evidence.GfStroke(), 255);
+        Evidence.GlSet(glyphs, 3, Evidence.GfFalpha(), 500);
+        Evidence.GlSet(glyphs, 3, Evidence.GfSalpha(), 250);
+        Evidence.GlSet(glyphs, 3, Evidence.GfZ(), 3);
+        Evidence.GlSet(glyphs, 3, Evidence.GfClip(), 1);
+        Evidence.GlSet(glyphs, 3, Evidence.GfMark(), 3);
+        Evidence.GlSet(glyphs, 3, Evidence.GfOcg(), 3);
         Evidence.GlSet(glyphs, 3, Evidence.GfVis(), Evidence.VzClipped());
-        Evidence.GlSet(glyphs, 3, Evidence.GfArtifact(), Evidence.ArWatermark());
-        Evidence.GlSet(glyphs, 3, Evidence.GfMcid(), 7);
-        Evidence.WdNew(words, 1, 7200, 9000, 8400, 10200, 0, 2);
-        Evidence.WdSet(words, 0, Evidence.WfTstart(), 0);
-        Evidence.WdSet(words, 0, Evidence.WfTlen(), 2);
-        Evidence.WdSet(words, 0, Evidence.WfLine(), 0);
-        Evidence.WdSet(words, 0, Evidence.WfGap(), 600);
-        Evidence.WdSet(words, 0, Evidence.WfFont(), 1);
+        Evidence.GlSet(glyphs, 3, Evidence.GfVby(), 4);
+        Evidence.GlSet(glyphs, 3, Evidence.GfVchk(), Evidence.VcClip());
+        // words: Hi, the ligature, and the hidden one; two lines
+        Evidence.WdNew(words, 1, 7200, 9000, 8400, 10200, 7200, 10000, 8400, 10000, 0, 0, tHi, 2, 0, -1, -1);
+        Evidence.WdSet(words, 0, Evidence.WfStyle(), Model.SyBold());
+        Evidence.WdSet(words, 0, Evidence.WfGfirst(), 0);
+        Evidence.WdSet(words, 0, Evidence.WfGcount(), 2);
+        Evidence.WdSet(words, 0, Evidence.WfFont(), 0);
         Evidence.WdSet(words, 0, Evidence.WfSize(), 1200);
-        Evidence.WdNew(words, 1, 9000, 9000, 10000, 10200, 2, 1);
-        Evidence.WdSet(words, 1, Evidence.WfTstart(), 2);
-        Evidence.WdSet(words, 1, Evidence.WfTlen(), 2);
-        Evidence.WdSet(words, 1, Evidence.WfLine(), 0);
-        Evidence.WdSet(words, 1, Evidence.WfConf(), 990);
-        Evidence.WdSet(words, 1, Evidence.WfFont(), 1);
+        Evidence.WdSet(words, 0, Evidence.WfGap(), 600);
+        Evidence.WdSet(words, 0, Evidence.WfWbreak(), Evidence.WbSpace());
+        Evidence.WdNew(words, 1, 9000, 9000, 10000, 10200, 9000, 10000, 10000, 10000, 0, 0, tFi, 2, 0, -1, -1);
+        Evidence.WdSet(words, 1, Evidence.WfGfirst(), 2);
+        Evidence.WdSet(words, 1, Evidence.WfGcount(), 1);
+        Evidence.WdSet(words, 1, Evidence.WfFont(), 0);
         Evidence.WdSet(words, 1, Evidence.WfSize(), 1200);
-        Evidence.LnNew(lines, 1, 7200, 9000, 10000, 10200, 0, 2, 10000);
+        Evidence.WdSet(words, 1, Evidence.WfWbreak(), Evidence.WbLineEnd());
+        Evidence.WdNew(words, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, -1, 0, 1, -1, -1);
+        Evidence.WdSet(words, 2, Evidence.WfGfirst(), 3);
+        Evidence.WdSet(words, 2, Evidence.WfGcount(), 1);
+        Evidence.WdSet(words, 2, Evidence.WfFont(), 1);
+        Evidence.WdSet(words, 2, Evidence.WfSize(), 1400);
+        Evidence.WdSet(words, 2, Evidence.WfSrc(), Model.SrHiddenText());
+        Evidence.LnNew(lines, 1, 7200, 9000, 10000, 10200, 7200, 10000, 10000, 10000, 0, 0, 0, 2);
+        Evidence.LnSet(lines, 0, Evidence.LfOrder(), 0);
+        Evidence.LnNew(lines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1);
+        Evidence.LnSet(lines, 1, Evidence.LfOrder(), 3);
+        // paths: a rule and a clip rectangle with its outline in pts; an image
         Evidence.PaNew(paths, 1, Evidence.PaLine(), 7200, 11000, 54000, 11050);
         Evidence.PaSet(paths, 0, Evidence.PfStroke(), 3355443);
         Evidence.PaSet(paths, 0, Evidence.PfWidth(), 50);
+        Evidence.PaSet(paths, 0, Evidence.PfZ(), 4);
+        Evidence.PaSet(paths, 0, Evidence.PfDash(), 300);
         Evidence.PaNew(paths, 1, Evidence.PaRect(), 7200, 12000, 20000, 14000);
         Evidence.PaSet(paths, 1, Evidence.PfFill(), 16772778);
-        Evidence.PaSet(paths, 1, Evidence.PfAlpha(), 500);
-        Evidence.PaSet(paths, 1, Evidence.PfFlags(), 5);
-        Evidence.PaSet(paths, 1, Evidence.PfMcid(), 0);
+        Evidence.PaSet(paths, 1, Evidence.PfFalpha(), 500);
+        Evidence.PaSet(paths, 1, Evidence.PfFlags(), Evidence.PgClosed() + Evidence.PgClip());
+        Evidence.PaSet(paths, 1, Evidence.PfPfirst(), 0);
+        Evidence.PaSet(paths, 1, Evidence.PfPcount(), 3);
         Evidence.ImNew(images, 1, 7200, 20000, 30000, 40000, 12, 640, 480);
         Evidence.ImSet(images, 0, Evidence.MfFlags(), Evidence.MgSmask());
-        Evidence.ImSet(images, 0, Evidence.MfArtifact(), Evidence.ArBackground());
-        Evidence.ImSet(images, 0, Evidence.MfMcid(), 3);
-        Evidence.CoNew(components, 1, Evidence.CkRuleH(), 7200, 11000, 54000, 11050);
+        Evidence.ImSet(images, 0, Evidence.MfZ(), 5);
+        Evidence.ImSet(images, 0, Evidence.MfVchk(), Evidence.VcClip());
+        // OCR: one run over two blocks; a second, empty run
+        Evidence.OrNew(oruns, 1, 0);
+        Evidence.OrSet(oruns, 0, Evidence.OrfBview(), 1);
+        Evidence.OrSet(oruns, 0, Evidence.OrfRequest(), 2);
+        Evidence.OrSet(oruns, 0, Evidence.OrfRound(), 1);
+        Evidence.OrSet(oruns, 0, Evidence.OrfPass(), Evidence.OpFirst());
+        Evidence.OrSet(oruns, 0, Evidence.OrfPsm(), 3);
+        Evidence.OrSet(oruns, 0, Evidence.OrfLang(), tEng);
+        Evidence.OrSet(oruns, 0, Evidence.OrfLanglen(), 3);
+        Evidence.OrSet(oruns, 0, Evidence.OrfDeskew(), 35);
+        Evidence.OrSet(oruns, 0, Evidence.OrfOsd(), 0);
+        Evidence.OrSet(oruns, 0, Evidence.OrfScript(), 1281455214);
+        Evidence.OrSet(oruns, 0, Evidence.OrfSconf(), 950);
+        Evidence.OrSet(oruns, 0, Evidence.OrfOconf(), 880);
+        Evidence.OrSet(oruns, 0, Evidence.OrfFlags(), 3);
+        Evidence.OrSet(oruns, 0, Evidence.OrfBfirst(), 0);
+        Evidence.OrSet(oruns, 0, Evidence.OrfBcount(), 4);
+        Evidence.OrSet(oruns, 0, Evidence.OrfLfirst(), 0);
+        Evidence.OrSet(oruns, 0, Evidence.OrfLcount(), 3);
+        Evidence.OrSet(oruns, 0, Evidence.OrfWfirst(), 0);
+        Evidence.OrSet(oruns, 0, Evidence.OrfWcount(), 3);
+        Evidence.OrNew(oruns, 1, 0);
+        Evidence.OrSet(oruns, 1, Evidence.OrfPass(), Evidence.OpRegion());
+        Evidence.OrSet(oruns, 1, Evidence.OrfRound(), 2);
+        Evidence.ObNew(oblocks, 1, 7200, 9000, 12000, 15000, Evidence.ObBlock(), -1, 0);
+        Evidence.ObSet(oblocks, 0, Evidence.ObfFirst(), 1);
+        Evidence.ObSet(oblocks, 0, Evidence.ObfCount(), 1);
+        Evidence.ObNew(oblocks, 1, 7200, 9000, 12000, 12000, Evidence.ObParagraph(), 0, 0);
+        Evidence.ObSet(oblocks, 1, Evidence.ObfFirst(), 0);
+        Evidence.ObSet(oblocks, 1, Evidence.ObfCount(), 2);
+        Evidence.ObSet(oblocks, 1, Evidence.ObfConf(), 910);
+        Evidence.ObNew(oblocks, 1, 7200, 13000, 12000, 15000, Evidence.ObBlock(), -1, 0);
+        Evidence.ObSet(oblocks, 2, Evidence.ObfFirst(), 3);
+        Evidence.ObSet(oblocks, 2, Evidence.ObfCount(), 1);
+        Evidence.ObNew(oblocks, 1, 7200, 13000, 12000, 15000, Evidence.ObParagraph(), 2, 0);
+        Evidence.ObSet(oblocks, 3, Evidence.ObfFirst(), 2);
+        Evidence.ObSet(oblocks, 3, Evidence.ObfCount(), 1);
+        Evidence.OlNew(olines, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, 0, 1);
+        Evidence.OlSet(olines, 0, Evidence.OlfPar(), 1);
+        Evidence.OlSet(olines, 0, Evidence.OlfRun(), 0);
+        Evidence.OlSet(olines, 0, Evidence.OlfXheight(), 500);
+        Evidence.OlSet(olines, 0, Evidence.OlfAsc(), 1000);
+        Evidence.OlSet(olines, 0, Evidence.OlfDesc(), -200);
+        Evidence.OlSet(olines, 0, Evidence.OlfPx(), 150);
+        Evidence.OlSet(olines, 0, Evidence.OlfPy(), 187);
+        Evidence.OlSet(olines, 0, Evidence.OlfPw(), 50);
+        Evidence.OlSet(olines, 0, Evidence.OlfPh(), 25);
+        Evidence.OlNew(olines, 1, 7200, 11000, 12000, 12000, 7200, 12000, 12000, 12000, 0, 0, 1, 1);
+        Evidence.OlSet(olines, 1, Evidence.OlfPar(), 1);
+        Evidence.OlSet(olines, 1, Evidence.OlfRun(), 0);
+        Evidence.OlNew(olines, 1, 7200, 13000, 12000, 15000, 7200, 15000, 12000, 15000, 0, 0, 2, 1);
+        Evidence.OlSet(olines, 2, Evidence.OlfPar(), 3);
+        Evidence.OlSet(olines, 2, Evidence.OlfRun(), 0);
+        Evidence.OwNew(owords, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, tHi, 2, 0, 870, -1);
+        Evidence.OwSet(owords, 0, Evidence.OwfRun(), 0);
+        Evidence.OwSet(owords, 0, Evidence.OwfSfirst(), 0);
+        Evidence.OwSet(owords, 0, Evidence.OwfScount(), 2);
+        Evidence.OwSet(owords, 0, Evidence.OwfLang(), 6647399);
+        Evidence.OwSet(owords, 0, Evidence.OwfStyle(), Model.SyItalic());
+        Evidence.OwSet(owords, 0, Evidence.OwfFlags(), Evidence.OeDictionary());
+        Evidence.OwSet(owords, 0, Evidence.OwfPx(), 150);
+        Evidence.OwSet(owords, 0, Evidence.OwfPy(), 187);
+        Evidence.OwSet(owords, 0, Evidence.OwfPw(), 50);
+        Evidence.OwSet(owords, 0, Evidence.OwfPh(), 25);
+        Evidence.OwNew(owords, 1, 7200, 11000, 9600, 12000, 7200, 12000, 9600, 12000, 0, 0, tFi, 2, 1, 950, -1);
+        Evidence.OwSet(owords, 1, Evidence.OwfRun(), 0);
+        Evidence.OwSet(owords, 1, Evidence.OwfSfirst(), 2);
+        Evidence.OwSet(owords, 1, Evidence.OwfScount(), 1);
+        Evidence.OwNew(owords, 1, 7200, 13000, 9600, 15000, 7200, 15000, 9600, 15000, 0, 0, tOk, 2, 2, 0, -1);
+        Evidence.OwSet(owords, 2, Evidence.OwfRun(), 0);
+        Evidence.OwSet(owords, 2, Evidence.OwfSfirst(), 3);
+        Evidence.OwSet(owords, 2, Evidence.OwfScount(), 1);
+        Evidence.OsNew(osyms, 1, 7200, 9000, 8400, 10200, 72, -1, 0, 0);
+        Evidence.OsSet(osyms, 0, Evidence.OsfConf(), 910);
+        Evidence.OsSet(osyms, 0, Evidence.OsfAfirst(), 0);
+        Evidence.OsSet(osyms, 0, Evidence.OsfAcount(), 2);
+        Evidence.OsSet(osyms, 0, Evidence.OsfPx(), 150);
+        Evidence.OsSet(osyms, 0, Evidence.OsfPy(), 187);
+        Evidence.OsSet(osyms, 0, Evidence.OsfPw(), 25);
+        Evidence.OsSet(osyms, 0, Evidence.OsfPh(), 25);
+        Evidence.OsNew(osyms, 1, 8400, 9000, 9600, 10200, 105, -1, 0, 0);
+        Evidence.OsSet(osyms, 1, Evidence.OsfConf(), 880);
+        Evidence.OsSet(osyms, 1, Evidence.OsfAfirst(), 2);
+        Evidence.OsSet(osyms, 1, Evidence.OsfAcount(), 1);
+        Evidence.OsSet(osyms, 1, Evidence.OsfFlags(), Evidence.OsSuperscript());
+        Evidence.OsNew(osyms, 1, 7200, 11000, 9600, 12000, 102, tFi, 2, 1);
+        Evidence.OsSet(osyms, 2, Evidence.OsfConf(), 700);
+        Evidence.OsNew(osyms, 1, 7200, 13000, 9600, 15000, 111, -1, 0, 2);
+        Evidence.OsSet(osyms, 3, Evidence.OsfConf(), 990);
+        Evidence.OaAdd(oalts, 0, tBh, 1, 900);
+        Evidence.OaAdd(oalts, 0, tRi, 2, 250);
+        Evidence.OaAdd(oalts, 1, tBl, 1, 40);
+        // the tracer: an ink layer, a component, a rule, a primitive and a text line
+        Evidence.IkNew(inks, 1, 0);
+        Evidence.IkSet(inks, 0, Evidence.IkfColor(), 8421504);
+        Evidence.IkSet(inks, 0, Evidence.IkfLight(), 500);
+        Evidence.IkSet(inks, 0, Evidence.IkfChroma(), 20);
+        Evidence.IkSet(inks, 0, Evidence.IkfCount(), 1200);
+        Evidence.IkSet(inks, 0, Evidence.IkfRole(), Evidence.IrBody());
+        Evidence.IkSet(inks, 0, Evidence.IkfMask(), 1);
+        Evidence.IkSet(inks, 0, Evidence.IkfSpread(), 5);
+        Evidence.CoNew(components, 1, 7200, 11000, 54000, 11050, Evidence.CkRuleH());
+        Evidence.CoSet(components, 0, Evidence.CfView(), 0);
         Evidence.CoSet(components, 0, Evidence.CfPxx(), 100);
         Evidence.CoSet(components, 0, Evidence.CfPxw(), 300);
+        Evidence.CoSet(components, 0, Evidence.CfPxh(), 3);
         Evidence.CoSet(components, 0, Evidence.CfArea(), 1200);
         Evidence.CoSet(components, 0, Evidence.CfFill(), 950);
         Evidence.CoSet(components, 0, Evidence.CfStroke(), 50);
         Evidence.CoSet(components, 0, Evidence.CfColor(), 255);
-        Evidence.CoSet(components, 0, Evidence.CfLayer(), 2);
+        Evidence.CoSet(components, 0, Evidence.CfInk(), 0);
         Evidence.CoSet(components, 0, Evidence.CfConf(), 880);
         Evidence.CoSet(components, 0, Evidence.CfFlags(), Model.FlLowConf());
-        Evidence.OwNew(ocrwords, 1, 7190, 9010, 8410, 10190, 910);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfTstart(), 4);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfTlen(), 2);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfLine(), 0);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfBlock(), 0);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfBaseline(), 10000);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfFlags(), Model.SyBold());
-        Evidence.OwSet(ocrwords, 0, Evidence.OfPass(), 1);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfLang(), 3);
-        Evidence.AltAdd(ocrwords, alts, 0, 0, 72, 900);
-        Evidence.AltAdd(ocrwords, alts, 0, 1, 108, 250);
-        Evidence.SpNew(spans, 1, 6, 1, -1, 0);
-        Evidence.SpSet(spans, 0, Evidence.SfMcid(), 0);
-        Evidence.SpSet(spans, 0, Evidence.SfLang(), 7);
-        Evidence.SpSet(spans, 0, Evidence.SfLanglen(), 2);
-        Evidence.SpSet(spans, 0, Evidence.SfGcount(), 2);
-        Evidence.SpSet(spans, 0, Evidence.SfFlags(), Evidence.McInline());
-        Evidence.SpNew(spans, 1, 9, 8, -1, 3);
-        Evidence.SpSet(spans, 1, Evidence.SfArtifact(), Evidence.ArWatermark());
-        Evidence.SpSet(spans, 1, Evidence.SfType(), 17);
-        Evidence.SpSet(spans, 1, Evidence.SfTypelen(), 10);
-        Evidence.SpSet(spans, 1, Evidence.SfSubtype(), 27);
-        Evidence.SpSet(spans, 1, Evidence.SfSubtypelen(), 9);
-        Evidence.SpSet(spans, 1, Evidence.SfActual(), 36);
-        Evidence.SpSet(spans, 1, Evidence.SfActuallen(), 5);
-        Evidence.SpSet(spans, 1, Evidence.SfGcount(), 1);
-        Evidence.SpSet(spans, 1, Evidence.SfStm(), 12);
-        Evidence.SpSet(spans, 1, Evidence.SfFlags(), Evidence.McUnterminated());
+        Evidence.CoSet(components, 0, Evidence.CfPfirst(), 0);
+        Evidence.CoSet(components, 0, Evidence.CfPcount(), 3);
+        Evidence.CoSet(components, 0, Evidence.CfGray(), 90);
+        Evidence.RlNew(rules, 1, 7200, 11000, 54000, 11050, 0);
+        Evidence.RlSet(rules, 0, Evidence.RlfLx0(), 7200);
+        Evidence.RlSet(rules, 0, Evidence.RlfLy0(), 11025);
+        Evidence.RlSet(rules, 0, Evidence.RlfLx1(), 54000);
+        Evidence.RlSet(rules, 0, Evidence.RlfLy1(), 11025);
+        Evidence.RlSet(rules, 0, Evidence.RlfThick(), 50);
+        Evidence.RlSet(rules, 0, Evidence.RlfColor(), 3355443);
+        Evidence.RlSet(rules, 0, Evidence.RlfInk(), 0);
+        Evidence.RlSet(rules, 0, Evidence.RlfStyle(), Evidence.RsDashed());
+        Evidence.RlSet(rules, 0, Evidence.RlfConf(), 880);
+        Evidence.RlSet(rules, 0, Evidence.RlfRfirst(), 0);
+        Evidence.RlSet(rules, 0, Evidence.RlfRcount(), 1);
+        Evidence.PmNew(prims, 1, 17000, 12000, 23000, 18000, Evidence.PmCircle());
+        Evidence.PmSet(prims, 0, Evidence.PmfView(), 0);
+        Evidence.PmSet(prims, 0, Evidence.PmfCx(), 20000);
+        Evidence.PmSet(prims, 0, Evidence.PmfCy(), 15000);
+        Evidence.PmSet(prims, 0, Evidence.PmfRx(), 3000);
+        Evidence.PmSet(prims, 0, Evidence.PmfRy(), 3000);
+        Evidence.PmSet(prims, 0, Evidence.PmfStroke(), 40);
+        Evidence.PmSet(prims, 0, Evidence.PmfColor(), 65280);
+        Evidence.PmSet(prims, 0, Evidence.PmfInk(), 0);
+        Evidence.PmSet(prims, 0, Evidence.PmfConf(), 700);
+        Evidence.PmSet(prims, 0, Evidence.PmfPfirst(), 0);
+        Evidence.PmSet(prims, 0, Evidence.PmfPcount(), 3);
+        Evidence.PmSet(prims, 0, Evidence.PmfRfirst(), 1);
+        Evidence.PmSet(prims, 0, Evidence.PmfRcount(), 1);
+        Evidence.TlNew(tlines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1);
+        Evidence.TlSet(tlines, 0, Evidence.TlfInk(), 0);
+        Evidence.TlSet(tlines, 0, Evidence.TlfHeight(), 1200);
+        Evidence.TlSet(tlines, 0, Evidence.TlfGap(), 300);
+        Evidence.TlSet(tlines, 0, Evidence.TlfConf(), 600);
+        // features: a text-layer word and an OCR word, one row each
+        Evidence.FeNew(feats, Evidence.EaWords(), 0);
+        Evidence.FeSet(feats, 0, Evidence.XtTrust(), 1000);
+        Evidence.WdSet(words, 0, Evidence.HdFeat(), 0);
+        Evidence.EvFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, 0, 0, 100);
         return 0;
     }
     internal static int EtEnd(byte[] b) {
@@ -149,137 +374,955 @@ public static class Evidencetest {
         return n;
     }
     [Xunit.Fact]
-    public static void TestBuildersSetTheLayoutAndItsDefaults() {
-        emon.Port.Cells glyphs = emon.Port.NewCells();
-        emon.Port.Cells words = emon.Port.NewCells();
-        emon.Port.Cells lines = emon.Port.NewCells();
-        emon.Port.Cells paths = emon.Port.NewCells();
-        emon.Port.Cells images = emon.Port.NewCells();
-        emon.Port.Cells components = emon.Port.NewCells();
-        emon.Port.Cells ocrwords = emon.Port.NewCells();
-        emon.Port.Cells alts = emon.Port.NewCells();
-        emon.Port.Cells etext = emon.Port.NewCells();
-        emon.Port.Cells spans = emon.Port.NewCells();
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        emon.Testport.AssertEq(Evidence.GlCount(glyphs), 0, "no glyphs");
-        emon.Testport.AssertEq(Evidence.GlNew(glyphs, 3, 65, 9, 1000, 100, 200, 300, 400), 0, "first glyph");
-        emon.Testport.AssertEq(emon.Port.CellsLen(glyphs), 20, "twenty cells");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfPage()), 3, "page");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfCp()), 65, "cp");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfTstart()), -1, "no text run");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfTlen()), 0, "no text length");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfHow()), 5, "how defaults to unknown, code 5");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfFont()), 9, "font");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfSize()), 1000, "size");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfX0()), 100, "x0");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfY0()), 200, "y0");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfX1()), 300, "x1");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfY1()), 400, "y1");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfBaseline()), 400, "baseline defaults to the box's bottom");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfRot()), 0, "no rotation");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfColor()), -1, "no colour");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfAlpha()), 1000, "opaque");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfMode()), 0, "render mode 0");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfVis()), 0, "visible");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfArtifact()), 0, "not an artifact");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfMcid()), -1, "no mcid");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfWord()), -1, "in no word");
-        emon.Testport.AssertEq(Evidence.SpNew(spans, 3, 10, 1, -1, 4), 0, "first span");
-        emon.Testport.AssertEq(emon.Port.CellsLen(spans), 22, "twenty-two cells");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfMcid()), -1, "no MCID");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfArtifact()), 0, "not an artifact");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfType()), -1, "no type");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfActual()), -1, "no ActualText");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfLang()), -1, "no language");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfGfirst()), 4, "opened at glyph 4");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfParent()), -1, "no parent");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfStm()), 0, "the page's own stream");
-        emon.Testport.AssertEq(Evidence.WdNew(words, 3, 1, 2, 3, 4, 0, 1), 0, "first word");
-        emon.Testport.AssertEq(emon.Port.CellsLen(words), 16, "sixteen cells");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfTstart()), -1, "no text");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfLine()), -1, "no line");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfSrc()), 1, "source text");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfConf()), -1, "no confidence");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfGap()), -1, "no gap");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfFont()), -1, "no font");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfGcount()), 1, "glyph count");
-        emon.Testport.AssertEq(Evidence.LnNew(lines, 3, 1, 2, 3, 4, 0, 1, 400), 0, "first line");
-        emon.Testport.AssertEq(emon.Port.CellsLen(lines), 12, "twelve cells");
-        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LfSrc()), 1, "source text");
-        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LfBaseline()), 400, "baseline");
-        emon.Testport.AssertEq(Evidence.PaNew(paths, 3, Evidence.PaRect(), 1, 2, 3, 4), 0, "first path");
-        emon.Testport.AssertEq(emon.Port.CellsLen(paths), 16, "sixteen cells");
-        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfFill()), -1, "not filled");
-        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfStroke()), -1, "not stroked");
-        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfAlpha()), 1000, "opaque");
-        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfMcid()), -1, "no mcid");
-        emon.Testport.AssertEq(Evidence.ImNew(images, 3, 1, 2, 3, 4, 17, 10, 20), 0, "first image");
-        emon.Testport.AssertEq(emon.Port.CellsLen(images), 12, "twelve cells");
-        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfObj()), 17, "object number");
-        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfPxw()), 10, "pixel width");
-        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfPxh()), 20, "pixel height");
-        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfMcid()), -1, "no mcid");
-        emon.Testport.AssertEq(Evidence.CoNew(components, 3, Evidence.CkRuleH(), 1, 2, 3, 4), 0, "first component");
-        emon.Testport.AssertEq(emon.Port.CellsLen(components), 20, "twenty cells");
-        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfColor()), -1, "no colour");
-        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfLayer()), -1, "no layer");
-        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfKind()), 2, "rule-h is code 2");
-        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfConf()), -1, "no confidence");
-        emon.Testport.AssertEq(Evidence.OwNew(ocrwords, 3, 1, 2, 3, 4, 850), 0, "first OCR word");
-        emon.Testport.AssertEq(emon.Port.CellsLen(ocrwords), 16, "sixteen cells");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfConf()), 850, "confidence");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfTstart()), -1, "no text");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfAlthead()), -1, "no alternatives");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfAltcount()), 0, "none counted");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfLine()), -1, "no line");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfLang()), -1, "no language");
+    public static void TestEveryArenaHasTheStrideTheSpecGives() {
+        emon.Testport.AssertEq(24, 24, "24 arenas");
+        emon.Testport.AssertEq(Evidence.EvStrides[0], 12, "epages");
+        emon.Testport.AssertEq(Evidence.EvStrides[1], 24, "views");
+        emon.Testport.AssertEq(Evidence.EvStrides[2], 3, "pts");
+        emon.Testport.AssertEq(Evidence.EvStrides[3], 2, "refs");
+        emon.Testport.AssertEq(Evidence.EvStrides[4], 1, "etext");
+        emon.Testport.AssertEq(Evidence.EvStrides[5], 32, "feats");
+        emon.Testport.AssertEq(Evidence.EvStrides[6], 32, "glyphs");
+        emon.Testport.AssertEq(Evidence.EvStrides[7], 24, "words");
+        emon.Testport.AssertEq(Evidence.EvStrides[8], 16, "lines");
+        emon.Testport.AssertEq(Evidence.EvStrides[9], 24, "marks");
+        emon.Testport.AssertEq(Evidence.EvStrides[10], 16, "fonts");
+        emon.Testport.AssertEq(Evidence.EvStrides[11], 24, "paths");
+        emon.Testport.AssertEq(Evidence.EvStrides[12], 20, "images");
+        emon.Testport.AssertEq(Evidence.EvStrides[13], 28, "oruns");
+        emon.Testport.AssertEq(Evidence.EvStrides[14], 16, "oblocks");
+        emon.Testport.AssertEq(Evidence.EvStrides[15], 24, "olines");
+        emon.Testport.AssertEq(Evidence.EvStrides[16], 28, "owords");
+        emon.Testport.AssertEq(Evidence.EvStrides[17], 20, "osyms");
+        emon.Testport.AssertEq(Evidence.EvStrides[18], 4, "oalts");
+        emon.Testport.AssertEq(Evidence.EvStrides[19], 12, "inks");
+        emon.Testport.AssertEq(Evidence.EvStrides[20], 24, "components");
+        emon.Testport.AssertEq(Evidence.EvStrides[21], 20, "rules");
+        emon.Testport.AssertEq(Evidence.EvStrides[22], 24, "prims");
+        emon.Testport.AssertEq(Evidence.EvStrides[23], 20, "tlines");
     }
     [Xunit.Fact]
-    public static void TestSettersAndTheAlternativeChain() {
+    public static void TestTheThreeHeadsAreOneLayout() {
+        emon.Testport.AssertEq(Evidence.HdPage(), 0, "word head: page");
+        emon.Testport.AssertEq(Evidence.HdX0(), 1, "x0");
+        emon.Testport.AssertEq(Evidence.HdBy1(), 8, "baseline ends at 8");
+        emon.Testport.AssertEq(Evidence.HdRot(), 9, "rot");
+        emon.Testport.AssertEq(Evidence.HdDir(), 10, "dir");
+        emon.Testport.AssertEq(Evidence.HdTstart(), 11, "text start");
+        emon.Testport.AssertEq(Evidence.HdLine(), 13, "line");
+        emon.Testport.AssertEq(Evidence.HdConf(), 14, "conf");
+        emon.Testport.AssertEq(Evidence.HdFeat(), 15, "a word head is 16 cells");
+        emon.Testport.AssertEq(Evidence.LhPage(), Evidence.HdPage(), "line head: page");
+        emon.Testport.AssertEq(Evidence.LhX0(), Evidence.HdX0(), "x0");
+        emon.Testport.AssertEq(Evidence.LhY1(), Evidence.HdY1(), "y1");
+        emon.Testport.AssertEq(Evidence.LhBx0(), Evidence.HdBx0(), "baseline");
+        emon.Testport.AssertEq(Evidence.LhBy1(), Evidence.HdBy1(), "baseline end");
+        emon.Testport.AssertEq(Evidence.LhRot(), Evidence.HdRot(), "rot");
+        emon.Testport.AssertEq(Evidence.LhDir(), Evidence.HdDir(), "dir");
+        emon.Testport.AssertEq(Evidence.LhFirst(), 11, "first");
+        emon.Testport.AssertEq(Evidence.LhCount(), 12, "a line head is 13 cells");
+        emon.Testport.AssertEq(Evidence.ChPage(), 0, "char head: page");
+        emon.Testport.AssertEq(Evidence.ChY1(), 4, "box");
+        emon.Testport.AssertEq(Evidence.ChCp(), 5, "cp");
+        emon.Testport.AssertEq(Evidence.ChTstart(), 6, "text run");
+        emon.Testport.AssertEq(Evidence.ChWord(), 8, "a char head is 9 cells");
+    }
+    internal static int EtHeadPage(emon.Port.Cells c, int stride, int row) {
+        // ONE reader over (Cells, stride): a word-like or line-like row's page.
+        return emon.Port.CellsAt(c, (row * stride) + Evidence.HdPage());
+    }
+    internal static int EtHeadBox(emon.Port.Cells c, int stride, int row, int k) {
+        return emon.Port.CellsAt(c, (row * stride) + (Evidence.HdX0() + k));
+    }
+    internal static int EtHeadBase(emon.Port.Cells c, int stride, int row, int k) {
+        return emon.Port.CellsAt(c, (row * stride) + (Evidence.HdBx0() + k));
+    }
+    [Xunit.Fact]
+    public static void TestOneReaderReadsTheHeadOfEveryWordLikeAndLineLikeArena() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
         emon.Port.Cells glyphs = emon.Port.NewCells();
         emon.Port.Cells words = emon.Port.NewCells();
         emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
         emon.Port.Cells paths = emon.Port.NewCells();
         emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
         emon.Port.Cells components = emon.Port.NewCells();
-        emon.Port.Cells ocrwords = emon.Port.NewCells();
-        emon.Port.Cells alts = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        // words (24), owords (28), lines (16), olines (24), tlines (20): row 0 of each shares the head layout
+        emon.Testport.AssertEq(EtHeadPage(words, 24, 0), 1, "words page");
+        emon.Testport.AssertEq(EtHeadPage(owords, 28, 0), 1, "owords page");
+        emon.Testport.AssertEq(EtHeadPage(lines, 16, 0), 1, "lines page");
+        emon.Testport.AssertEq(EtHeadPage(olines, 24, 0), 1, "olines page");
+        emon.Testport.AssertEq(EtHeadPage(tlines, 20, 0), 1, "tlines page");
+        emon.Testport.AssertEq(EtHeadBox(words, 24, 0, 0), 7200, "words x0");
+        emon.Testport.AssertEq(EtHeadBox(owords, 28, 0, 0), 7200, "owords x0");
+        emon.Testport.AssertEq(EtHeadBox(lines, 16, 0, 0), 7200, "lines x0");
+        emon.Testport.AssertEq(EtHeadBox(olines, 24, 0, 0), 7200, "olines x0");
+        emon.Testport.AssertEq(EtHeadBox(tlines, 20, 0, 0), 1000, "tlines x0");
+        emon.Testport.AssertEq(EtHeadBox(words, 24, 0, 3), 10200, "words y1");
+        emon.Testport.AssertEq(EtHeadBox(owords, 28, 0, 3), 10200, "owords y1");
+        emon.Testport.AssertEq(EtHeadBox(lines, 16, 0, 3), 10200, "lines y1");
+        emon.Testport.AssertEq(EtHeadBox(olines, 24, 0, 3), 10200, "olines y1");
+        emon.Testport.AssertEq(EtHeadBox(tlines, 20, 0, 3), 4000, "tlines y1");
+        emon.Testport.AssertEq(EtHeadBase(words, 24, 0, 2), 8400, "words baseline x1");
+        emon.Testport.AssertEq(EtHeadBase(owords, 28, 0, 2), 9600, "owords baseline x1");
+        emon.Testport.AssertEq(EtHeadBase(lines, 16, 0, 2), 10000, "lines baseline x1");
+        emon.Testport.AssertEq(EtHeadBase(olines, 24, 0, 2), 9600, "olines baseline x1");
+        emon.Testport.AssertEq(EtHeadBase(tlines, 20, 0, 2), 3000, "tlines baseline x1");
+        emon.Testport.AssertEq(EtHeadBase(tlines, 20, 0, 3), 2000, "tlines baseline y1 (a diagonal)");
+        emon.Testport.AssertEq(Evidence.EvAngle(EtHeadBase(tlines, 20, 0, 2) - EtHeadBase(tlines, 20, 0, 0), EtHeadBase(tlines, 20, 0, 3) - EtHeadBase(tlines, 20, 0, 1)), 4500, "its angle is 45 degrees");
+    }
+    [Xunit.Fact]
+    public static void TestBuildersSetTheLayoutAndItsDefaults() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
         emon.Port.Cells etext = emon.Port.NewCells();
-        emon.Port.Cells spans = emon.Port.NewCells();
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        emon.Testport.AssertEq(Evidence.GlCount(glyphs), 4, "four glyphs");
-        emon.Testport.AssertEq(Evidence.WdCount(words), 2, "two words");
-        emon.Testport.AssertEq(Evidence.LnCount(lines), 1, "one line");
-        emon.Testport.AssertEq(Evidence.PaCount(paths), 2, "two paths");
-        emon.Testport.AssertEq(Evidence.ImCount(images), 1, "one image");
-        emon.Testport.AssertEq(Evidence.CoCount(components), 1, "one component");
-        emon.Testport.AssertEq(Evidence.OwCount(ocrwords), 1, "one OCR word");
-        emon.Testport.AssertEq(Evidence.AltCount(alts), 2, "two alternatives");
-        emon.Testport.AssertEq(Evidence.EtxLen(etext), 41, "the text cells");
-        emon.Testport.AssertEq(Evidence.SpCount(spans), 2, "two spans");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfMcid()), 0, "the paragraph's MCID");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 1, Evidence.SfMcid()), -1, "the artifact has none");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 1, Evidence.SfArtifact()), 2, "watermark");
-        emon.Testport.AssertEq(Evidence.SpGet(spans, 1, Evidence.SfStm()), 12, "a form's span");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 2, Evidence.GfTstart()), 2, "the ligature's text run");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 2, Evidence.GfTlen()), 2, "two code points");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 3, Evidence.GfRot()), 4500, "45 degrees in centi-degrees");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 3, Evidence.GfVis()), 1, "clipped is code 1");
-        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 3, Evidence.GfArtifact()), 2, "watermark is code 2");
-        emon.Testport.AssertEq(Evidence.WdGet(words, 1, Evidence.WfConf()), 990, "word confidence");
-        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LfWcount()), 2, "the line has two words");
-        emon.Testport.AssertEq(Evidence.PaGet(paths, 1, Evidence.PfFlags()), 5, "closed and clip");
-        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfFlags()), 2, "smask");
-        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfFlags()), 1, "low-conf");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfAlthead()), 0, "the chain starts at 0");
-        emon.Testport.AssertEq(Evidence.OwGet(ocrwords, 0, Evidence.OfAltcount()), 2, "two alternatives");
-        emon.Testport.AssertEq(Evidence.AltGet(alts, 0, Evidence.AfSym()), 0, "first alternative: symbol 0");
-        emon.Testport.AssertEq(Evidence.AltGet(alts, 0, Evidence.AfCp()), 72, "it reads H");
-        emon.Testport.AssertEq(Evidence.AltGet(alts, 0, Evidence.AfConf()), 900, "at 900");
-        emon.Testport.AssertEq(Evidence.AltGet(alts, 0, Evidence.AfNext()), 1, "then the second");
-        emon.Testport.AssertEq(Evidence.AltGet(alts, 1, Evidence.AfCp()), 108, "which reads l");
-        emon.Testport.AssertEq(Evidence.AltGet(alts, 1, Evidence.AfNext()), -1, "and ends the chain");
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 0, "the page is well formed");
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        Evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.GlCount(glyphs), 0, "no glyphs");
+        emon.Testport.AssertEq(Evidence.GlNew(glyphs, 3, 100, 200, 300, 400, 65, -1, 0, -1), 0, "first glyph");
+        emon.Testport.AssertEq(emon.Port.CellsLen(glyphs), 32, "32 cells");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.ChPage()), 3, "page");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.ChCp()), 65, "cp");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.ChTstart()), -1, "no text run");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.ChWord()), -1, "in no word");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfBx0()), 100, "baseline starts at the box's left");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfBy0()), 400, "on the box's bottom");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfBx1()), 300, "and ends at its right");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfBy1()), 400, "on the bottom");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfAsc()), 0, "asc 0");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfRot()), 0, "no rotation");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfHow()), 5, "how defaults to unknown, code 5");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfFont()), -1, "no font");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfMode()), 0, "render mode 0");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfFill()), -1, "no fill colour");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfStroke()), -1, "no stroke colour");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfFalpha()), 1000, "opaque fill");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfSalpha()), 1000, "opaque stroke");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfCs()), -1, "colour space unknown");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfClip()), -1, "no clip");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfMark()), -1, "no mark");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfOcg()), -1, "no optional content");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfVis()), 0, "unchecked counts as visible");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfVby()), -1, "no occluder");
+        emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfVchk()), 0, "no check has run");
+        emon.Testport.AssertEq(Evidence.WdNew(words, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, -1, -1), 0, "first word");
+        emon.Testport.AssertEq(emon.Port.CellsLen(words), 24, "24 cells");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdTstart()), -1, "no text");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdLine()), -1, "no line");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdConf()), -1, "no confidence");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.HdFeat()), -1, "no features yet");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfSrc()), 1, "source text");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfGap()), -1, "no gap");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfFont()), -1, "no font");
+        emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfWbreak()), 0, "no word break said");
+        emon.Testport.AssertEq(Evidence.LnNew(lines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first line");
+        emon.Testport.AssertEq(emon.Port.CellsLen(lines), 16, "16 cells");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LfSrc()), 1, "source text");
+        emon.Testport.AssertEq(Evidence.LnGet(lines, 0, Evidence.LfOrder()), -1, "no order");
+        emon.Testport.AssertEq(Evidence.MkNew(marks, 3, Evidence.MkTag(), -1, 0, -1, 4), 0, "first mark");
+        emon.Testport.AssertEq(emon.Port.CellsLen(marks), 24, "24 cells");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfMcid()), -1, "no MCID");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfArtype()), 0, "no /Type");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfActual()), -1, "no ActualText");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfLang()), -1, "no language");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfOcg()), -1, "no optional content");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfOcgdef()), -1, "its default state unknown");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfGfirst()), 4, "opened at glyph 4");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfZfirst()), -1, "no paint numbers yet");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfStm()), 0, "the page's own stream");
+        emon.Testport.AssertEq(Evidence.FoNew(fonts, 7, 3), 0, "first font");
+        emon.Testport.AssertEq(emon.Port.CellsLen(fonts), 16, "16 cells");
+        emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfTstart()), -1, "no name");
+        emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfEnc()), -1, "no base encoding");
+        emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfSpace()), -1, "no space width");
+        emon.Testport.AssertEq(Evidence.FoGet(fonts, 0, Evidence.FnfStemv()), -1, "no stem");
+        emon.Testport.AssertEq(Evidence.PaNew(paths, 3, Evidence.PaRect(), 1, 2, 3, 4), 0, "first path");
+        emon.Testport.AssertEq(emon.Port.CellsLen(paths), 24, "24 cells");
+        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfFill()), -1, "not filled");
+        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfStroke()), -1, "not stroked");
+        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfFalpha()), 1000, "opaque");
+        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfZ()), -1, "no paint number");
+        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfClip()), -1, "no clip");
+        emon.Testport.AssertEq(Evidence.PaGet(paths, 0, Evidence.PfPfirst()), -1, "no geometry");
+        emon.Testport.AssertEq(Evidence.ImNew(images, 3, 1, 2, 3, 4, 17, 10, 20), 0, "first image");
+        emon.Testport.AssertEq(emon.Port.CellsLen(images), 20, "20 cells");
+        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfObj()), 17, "object number");
+        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfAlpha()), 1000, "opaque");
+        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfZ()), -1, "no paint number");
+        emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfVby()), -1, "no occluder");
+        emon.Testport.AssertEq(Evidence.OrNew(oruns, 3, 0), 0, "first run");
+        emon.Testport.AssertEq(emon.Port.CellsLen(oruns), 28, "28 cells");
+        emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfBview()), -1, "no binarised view");
+        emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfRequest()), -1, "no request");
+        emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfLang()), -1, "no languages");
+        emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfOsd()), -1, "no OSD");
+        emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfSconf()), -1, "no script confidence");
+        emon.Testport.AssertEq(Evidence.ObNew(oblocks, 3, 1, 2, 3, 4, Evidence.ObBlock(), -1, 0), 0, "first block");
+        emon.Testport.AssertEq(emon.Port.CellsLen(oblocks), 16, "16 cells");
+        emon.Testport.AssertEq(Evidence.ObGet(oblocks, 0, Evidence.ObfConf()), -1, "no confidence");
+        emon.Testport.AssertEq(Evidence.OlNew(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line");
+        emon.Testport.AssertEq(emon.Port.CellsLen(olines), 24, "24 cells");
+        emon.Testport.AssertEq(Evidence.OlGet(olines, 0, Evidence.OlfPar()), -1, "in no paragraph");
+        emon.Testport.AssertEq(Evidence.OlGet(olines, 0, Evidence.OlfXheight()), -1, "x-height unknown");
+        emon.Testport.AssertEq(Evidence.OwNew(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word");
+        emon.Testport.AssertEq(emon.Port.CellsLen(owords), 28, "28 cells");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.HdConf()), 850, "confidence");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfPsize()), -1, "point size unknown");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfSfirst()), -1, "no symbols");
+        emon.Testport.AssertEq(Evidence.OsNew(osyms, 3, 1, 2, 3, 4, 65, -1, 0, 0), 0, "first symbol");
+        emon.Testport.AssertEq(emon.Port.CellsLen(osyms), 20, "20 cells");
+        emon.Testport.AssertEq(Evidence.OsGet(osyms, 0, Evidence.OsfConf()), -1, "no confidence");
+        emon.Testport.AssertEq(Evidence.OsGet(osyms, 0, Evidence.OsfAfirst()), -1, "no alternatives");
+        emon.Testport.AssertEq(Evidence.OaAdd(oalts, 0, -1, 0, 55), 0, "first alternative");
+        emon.Testport.AssertEq(emon.Port.CellsLen(oalts), 4, "4 cells");
+        emon.Testport.AssertEq(Evidence.OaGet(oalts, 0, Evidence.OafConf()), 55, "its confidence");
+        emon.Testport.AssertEq(Evidence.IkNew(inks, 3, 0), 0, "first ink");
+        emon.Testport.AssertEq(emon.Port.CellsLen(inks), 12, "12 cells");
+        emon.Testport.AssertEq(Evidence.IkGet(inks, 0, Evidence.IkfColor()), -1, "no colour");
+        emon.Testport.AssertEq(Evidence.IkGet(inks, 0, Evidence.IkfMask()), -1, "no mask view");
+        emon.Testport.AssertEq(Evidence.CoNew(components, 3, 1, 2, 3, 4, Evidence.CkRuleH()), 0, "first component");
+        emon.Testport.AssertEq(emon.Port.CellsLen(components), 24, "24 cells");
+        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfColor()), -1, "no colour");
+        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfInk()), -1, "no ink layer");
+        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfKind()), 2, "rule-h is code 2");
+        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfParent()), -1, "no parent");
+        emon.Testport.AssertEq(Evidence.CoGet(components, 0, Evidence.CfGray()), -1, "no gray");
+        emon.Testport.AssertEq(Evidence.RlNew(rules, 3, 1, 2, 3, 4, 0), 0, "first rule");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rules), 20, "20 cells");
+        emon.Testport.AssertEq(Evidence.RlGet(rules, 0, Evidence.RlfColor()), -1, "no colour");
+        emon.Testport.AssertEq(Evidence.PmNew(prims, 3, 1, 2, 3, 4, Evidence.PmCircle()), 0, "first primitive");
+        emon.Testport.AssertEq(emon.Port.CellsLen(prims), 24, "24 cells");
+        emon.Testport.AssertEq(Evidence.PmGet(prims, 0, Evidence.PmfInk()), -1, "no ink layer");
+        emon.Testport.AssertEq(Evidence.TlNew(tlines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0), 0, "first text line");
+        emon.Testport.AssertEq(emon.Port.CellsLen(tlines), 20, "20 cells");
+        emon.Testport.AssertEq(Evidence.TlGet(tlines, 0, Evidence.TlfInk()), -1, "no ink layer");
+        emon.Testport.AssertEq(Evidence.PtNew(pts, 5, 6, Evidence.PoLine()), 0, "first point");
+        emon.Testport.AssertEq(emon.Port.CellsLen(pts), 3, "3 cells");
+        emon.Testport.AssertEq(Evidence.RfAdd(refs, Evidence.EaGlyphs(), 4), 0, "first reference");
+        emon.Testport.AssertEq(Evidence.RfGet(refs, 0, 1), 4, "its index");
+        emon.Testport.AssertEq(Evidence.EpNew(epages, 3, 61200, 79200), 0, "first page");
+        emon.Testport.AssertEq(emon.Port.CellsLen(epages), 12, "12 cells");
+    }
+    [Xunit.Fact]
+    public static void TestTheHandBuiltPageHasARowInEveryArenaAndIsWellFormed() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvRows(1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "epages");
+        emon.Testport.AssertEq(Evidence.EvRows(2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "views");
+        emon.Testport.AssertEq(Evidence.EvRows(3, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "pts");
+        emon.Testport.AssertEq(Evidence.EvRows(4, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "refs");
+        emon.Testport.AssertEq(Evidence.EvRows(5, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), Evidence.EtxLen(etext), "etext");
+        emon.Testport.AssertEq(Evidence.EvRows(6, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "feats");
+        emon.Testport.AssertEq(Evidence.EvRows(7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "glyphs");
+        emon.Testport.AssertEq(Evidence.EvRows(8, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "words");
+        emon.Testport.AssertEq(Evidence.EvRows(9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "lines");
+        emon.Testport.AssertEq(Evidence.EvRows(10, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "marks");
+        emon.Testport.AssertEq(Evidence.EvRows(11, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "fonts");
+        emon.Testport.AssertEq(Evidence.EvRows(12, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "paths");
+        emon.Testport.AssertEq(Evidence.EvRows(13, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "images");
+        emon.Testport.AssertEq(Evidence.EvRows(14, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "oruns");
+        emon.Testport.AssertEq(Evidence.EvRows(15, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "oblocks");
+        emon.Testport.AssertEq(Evidence.EvRows(16, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "olines");
+        emon.Testport.AssertEq(Evidence.EvRows(17, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "owords");
+        emon.Testport.AssertEq(Evidence.EvRows(18, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "osyms");
+        emon.Testport.AssertEq(Evidence.EvRows(19, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "oalts");
+        emon.Testport.AssertEq(Evidence.EvRows(20, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "inks");
+        emon.Testport.AssertEq(Evidence.EvRows(21, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "components");
+        emon.Testport.AssertEq(Evidence.EvRows(22, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "rules");
+        emon.Testport.AssertEq(Evidence.EvRows(23, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "prims");
+        emon.Testport.AssertEq(Evidence.EvRows(24, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "tlines");
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed");
+        // the marks nest, and a glyph's chain finds its artifact
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 1, Evidence.MkfParent()), 0, "the span is in the paragraph");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 3, Evidence.MkfParent()), 2, "the optional-content span is in the artifact");
+        emon.Testport.AssertEq(Evidence.MkArtifactOf(marks, 3), 19, "glyph 3's nearest artifact: pagination (1) * 16 + watermark (3)");
+        emon.Testport.AssertEq(Evidence.MkArtifactOf(marks, 1), 0, "glyph 0's chain holds none");
+        emon.Testport.AssertEq(Evidence.MkArtifactOf(marks, -1), 0, "no mark, no artifact");
+        emon.Testport.AssertEq(Evidence.MkOcgOf(marks, 3), 3, "the optional-content mark");
+        emon.Testport.AssertEq(Evidence.MkOcgOf(marks, 1), -1, "none");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfGcount()), 3, "the paragraph holds three glyphs");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 1, Evidence.MkfGcount()), 2, "the span two");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 0, Evidence.MkfZlast()), 2, "the paragraph's last paint number");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 3, Evidence.MkfZfirst()), 3, "the optional-content span paints object 3");
+        emon.Testport.AssertEq(Evidence.MkGet(marks, 3, Evidence.MkfZlast()), 3, "and only it");
+        emon.Testport.AssertEq(Evidence.MkArtifactClass(Evidence.MkArtifact(), Evidence.ArPagination(), Evidence.AsWatermark()), 2, "the D101 class: watermark");
+        emon.Testport.AssertEq(Evidence.MkArtifactClass(Evidence.MkArtifact(), Evidence.ArBackground(), 0), 4, "background");
+        emon.Testport.AssertEq(Evidence.MkArtifactClass(Evidence.MkArtifact(), Evidence.ArPagination(), 0), 1, "pagination");
+        emon.Testport.AssertEq(Evidence.MkArtifactClass(Evidence.MkArtifact(), Evidence.ArOther(), Evidence.AsHeader()), 1, "a header is pagination");
+        emon.Testport.AssertEq(Evidence.MkArtifactClass(Evidence.MkArtifact(), Evidence.ArLayout(), 0), 3, "layout");
+        emon.Testport.AssertEq(Evidence.MkArtifactClass(Evidence.MkArtifact(), Evidence.ArPage(), 0), 5, "/Type /Page says nothing more: other");
+        emon.Testport.AssertEq(Evidence.MkArtifactClass(Evidence.MkTag(), Evidence.ArPagination(), 0), 0, "a tag is no artifact");
+    }
+    internal static int EtPokeCheck(int emonT, int k, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Break the page the way check row k says and require that code: the table is the spec of `ev-check`.
+        int code = Evidence.EvCk[k * 6 + 0];
+        int ea = Evidence.EvCk[k * 6 + 1];
+        int kind = Evidence.EvCk[k * 6 + 2];
+        int f1 = Evidence.EvCk[k * 6 + 3];
+        int f2 = Evidence.EvCk[k * 6 + 4];
+        int tg = Evidence.EvCk[k * 6 + 5];
+        int row = 0;
+        int v = 0;
+        int off = 0;
+        int cand = 0;
+        int n = 0;
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEqAt(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed before it is broken", code);
+        if (kind == 1) {
+            n = Evidence.EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            while ((row < n) && (Evidence.EvPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0)) {
+                row += 1;
+            }
+            emon.Testport.AssertThatAt(row < n, "a row with the text run exists", code);
+            Evidence.EvPoke(ea, row, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 2) {
+            Evidence.EvPoke(ea, 0, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 3) {
+            Evidence.EvPoke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 4) {
+            Evidence.EvPoke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 5) {
+            Evidence.EvPoke(ea, 0, f1, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 8) {
+            Evidence.EvPoke(ea, 0, f1, 1000000000, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 6) {
+            n = Evidence.EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            row = 0;
+            while ((row < n) && (Evidence.EvPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0)) {
+                row += 1;
+            }
+            emon.Testport.AssertThatAt(row < n, "a row with a back pointer exists", code);
+            v = Evidence.EvPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            n = Evidence.EvRows(tg, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            // another row of the target whose run does not hold this row
+            off = 1;
+            cand = (v + 1) % n;
+            while ((off < n) && ((row >= Evidence.EvPeek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)) && (row < (Evidence.EvPeek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) + Evidence.EvPeek(tg, cand, f2 + 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines))))) {
+                off += 1;
+                cand = (v + off) % n;
+            }
+            emon.Testport.AssertThatAt(off < n, "a row that does not hold it exists", code);
+            Evidence.EvPoke(ea, row, f1, cand, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        emon.Testport.AssertEqAt(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), code, "the code of the row that was broken", code);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestEvCheckAnswersEveryCodeOfItsTable() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        int k = 0;
+        emon.Testport.AssertEq(88, 88, "88 table checks, codes 2..89");
+        while (k < 88) {
+            EtPokeCheck(0, k, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            k += 1;
+        }
+    }
+    [Xunit.Fact]
+    public static void TestEvCheckAnswersTheCodesOutsideItsTable() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Port.CellsPush(glyphs, 0);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "a stride broken: a glyph arena that is not a whole number of rows");
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Port.CellsPush(etext, 0);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "an etext arena has no stride to break");
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvPoke(4, 1, 0, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to an arena that is none");
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvPoke(4, 1, 1, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to a row that is not there");
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvPoke(6, 0, 0, 7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is a glyph");
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvPoke(6, 1, 1, 9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is not there");
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvPoke(8, 0, 15, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "a word whose feature row names another word");
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvPoke(17, 0, 15, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "an OCR word pointing at the text layer's feature row");
+    }
+    [Xunit.Fact]
+    public static void TestEvAngleIsExactAtEveryMultipleOf45Degrees() {
+        emon.Testport.AssertEq(Evidence.EvAngle(0, 0), 0, "the zero vector");
+        emon.Testport.AssertEq(Evidence.EvAngle(100, 0), 0, "east");
+        emon.Testport.AssertEq(Evidence.EvAngle(100, -100), 4500, "north-east (y is down: -dy is up)");
+        emon.Testport.AssertEq(Evidence.EvAngle(0, -100), 9000, "north");
+        emon.Testport.AssertEq(Evidence.EvAngle(-100, -100), 13500, "north-west");
+        emon.Testport.AssertEq(Evidence.EvAngle(-100, 0), 18000, "west");
+        emon.Testport.AssertEq(Evidence.EvAngle(-100, 100), 22500, "south-west");
+        emon.Testport.AssertEq(Evidence.EvAngle(0, 100), 27000, "south");
+        emon.Testport.AssertEq(Evidence.EvAngle(100, 100), 31500, "south-east");
+        emon.Testport.AssertEq(Evidence.EvAngle(7, -7), 4500, "any length");
+        emon.Testport.AssertEq(Evidence.EvAngle(2147483647, -2147483647), 4500, "the largest");
+        emon.Testport.AssertEq(Evidence.EvAngle(-2147483648, 0), 18000, "the smallest does not overflow");
+        emon.Testport.AssertEq(Evidence.EvAngle(0, -2147483648), 9000, "nor -dy");
+    }
+    internal static int EtSweep(int emonT) {
+        // Every centi-degree: the angle of (cos, -sin) in 16.16 is within 3 of it, and never goes down.
+        int a = 0;
+        int got = 0;
+        int prev = 0;
+        int d = 0;
+        while (a < 36000) {
+            got = Evidence.EvAngle(Evidence.EvCos(a), 0 - Evidence.EvSin(a));
+            if ((got == 0) && (a > 18000)) {
+                got = 36000;
+            }
+            d = got - a;
+            if (d < 0) {
+                d = 0 - d;
+            }
+            emon.Testport.AssertThatAt(d <= 3, "within 3 centi-degrees (0.03 degree)", a);
+            emon.Testport.AssertThatAt(got >= prev, "monotonic over the sweep", a);
+            prev = got;
+            a += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestEvAngleIsMonotonicAndWithin3CentiDegreesOverTheWholeCircle() {
+        EtSweep(0);
+    }
+    [Xunit.Fact]
+    public static void TestSineAndCosineComeFromATableAndSymmetry() {
+        emon.Testport.AssertEq(Evidence.EvSin(0), 0, "sin 0");
+        emon.Testport.AssertEq(Evidence.EvSin(9000), 65536, "sin 90 degrees is 1.0");
+        emon.Testport.AssertEq(Evidence.EvSin(4500), 46341, "sin 45 degrees");
+        emon.Testport.AssertEq(Evidence.EvSin(3000), 32768, "sin 30 degrees is one half");
+        emon.Testport.AssertEq(Evidence.EvSin(18000), 0, "sin 180");
+        emon.Testport.AssertEq(Evidence.EvSin(27000), -65536, "sin 270");
+        emon.Testport.AssertEq(Evidence.EvSin(-9000), -65536, "sin -90");
+        emon.Testport.AssertEq(Evidence.EvSin(45000), 65536, "sin 450 is sin 90");
+        emon.Testport.AssertEq(Evidence.EvCos(0), 65536, "cos 0");
+        emon.Testport.AssertEq(Evidence.EvCos(9000), 0, "cos 90");
+        emon.Testport.AssertEq(Evidence.EvCos(18000), -65536, "cos 180");
+        emon.Testport.AssertEq(Evidence.EvCos(-4500), 46341, "cos -45");
+        emon.Testport.AssertEq(Evidence.EvSin(12000), Evidence.EvSin(6000), "sin 120 is sin 60");
+        emon.Testport.AssertEq(Evidence.EvSin(24000), 0 - Evidence.EvSin(6000), "sin 240 is -sin 60");
+    }
+    [Xunit.Fact]
+    public static void TestFloorDivisionRoundsTowardMinusInfinity() {
+        emon.Testport.AssertEq((int) Evidence.EvFloordiv((long) 7, (long) 2), 3, "7 / 2");
+        emon.Testport.AssertEq((int) Evidence.EvFloordiv((long) -7, (long) 2), -4, "-7 / 2 floors to -4 where `quot` truncates to -3");
+        emon.Testport.AssertEq((int) Evidence.EvFloordiv((long) -8, (long) 2), -4, "exact");
+        emon.Testport.AssertEq((int) Evidence.EvFloordiv((long) 0, (long) 5), 0, "0");
+    }
+    [Xunit.Fact]
+    public static void TestOverlapAndBaselines() {
+        emon.Testport.AssertEq(Evidence.EvOverlapSmall(0, 0, 100, 100, 50, 50, 150, 150), 250, "a quarter of the smaller");
+        emon.Testport.AssertEq(Evidence.EvOverlapSmall(0, 0, 100, 100, 10, 10, 20, 20), 1000, "a box inside another is all of the smaller");
+        emon.Testport.AssertEq(Evidence.EvOverlapSmall(0, 0, 100, 100, 200, 200, 300, 300), 0, "disjoint");
+        emon.Testport.AssertEq(Evidence.EvOverlapSmall(0, 0, 100, 100, 100, 0, 200, 100), 0, "touching is no overlap");
+        emon.Testport.AssertEq(Evidence.EvOverlapSmall(0, 0, 0, 0, 0, 0, 100, 100), 0, "an empty box overlaps nothing");
+        emon.Testport.AssertEq(Evidence.EvBaselineAt(0, 100, 1000, 200, 500), 150, "the middle of a rising segment");
+        emon.Testport.AssertEq(Evidence.EvBaselineAt(0, 100, 1000, 100, 777), 100, "a level one");
+        emon.Testport.AssertEq(Evidence.EvBaselineAt(0, 100, 1000, 0, 250), 75, "a falling one, truncating");
+        emon.Testport.AssertEq(Evidence.EvBaselineAt(50, 70, 50, 90, 50), 90, "a vertical segment answers its end");
+    }
+    internal static int EtAbs(int v) {
+        if (v < 0) {
+            return 0 - v;
+        }
+        return v;
+    }
+    internal static int EtViewGrid(int emonT, emon.Port.Cells views, int dpi, int deskew, int turns) {
+        // px -> cpt -> px lands within one pixel for a grid over a US Letter page, at every resolution (the 16.16
+        // inverse is good to 2^-17 of the distance from the origin: 0.6 pixel at 792 points); and
+        // EXACTLY at 150 and 300 dpi with no deskew (the scale is 48 or 24 centipoints a pixel, exactly).
+        int pw = (dpi * 17) / 2;
+        int ph = dpi * 11;
+        int v = Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, pw, ph, dpi * 100, 0, -1, turns, deskew, 0, 0, 0);
+        int i = 0;
+        int j = 0;
+        int px = 0;
+        int py = 0;
+        int x = 0;
+        int y = 0;
+        int bx = 0;
+        int by = 0;
+        int dx = 0;
+        int dy = 0;
+        while (i < 6) {
+            j = 0;
+            while (j < 5) {
+                px = (i * pw) / 5;
+                py = (j * ph) / 4;
+                x = Evidence.VwPxToCpt(views, v, 0, px, py);
+                y = Evidence.VwPxToCpt(views, v, 1, px, py);
+                bx = Evidence.VwCptToPx(views, v, 0, x, y);
+                by = Evidence.VwCptToPx(views, v, 1, x, y);
+                dx = EtAbs(bx - px);
+                dy = EtAbs(by - py);
+                emon.Testport.AssertThatAt(dx <= 1, "x within one pixel", (dpi * 10) + i);
+                emon.Testport.AssertThatAt(dy <= 1, "y within one pixel", (dpi * 10) + j);
+                if ((deskew == 0) && ((dpi == 150) || (dpi == 300))) {
+                    emon.Testport.AssertEqAt(bx, px, "x exactly", (dpi * 10) + i);
+                    emon.Testport.AssertEqAt(by, py, "y exactly", (dpi * 10) + j);
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAViewMapsPixelsToCentipointsAndBack() {
+        emon.Port.Cells views = emon.Port.NewCells();
+        int di = 0;
+        int ki = 0;
+        int q = 0;
+        int dpi = 0;
+        int dsk = 0;
+        while (di < 7) {
+            if (di == 0) {
+                dpi = 72;
+            }
+            if (di == 1) {
+                dpi = 96;
+            }
+            if (di == 2) {
+                dpi = 150;
+            }
+            if (di == 3) {
+                dpi = 200;
+            }
+            if (di == 4) {
+                dpi = 300;
+            }
+            if (di == 5) {
+                dpi = 400;
+            }
+            if (di == 6) {
+                dpi = 600;
+            }
+            ki = 0;
+            while (ki < 5) {
+                dsk = 0;
+                if (ki == 1) {
+                    dsk = 85;
+                }
+                if (ki == 2) {
+                    dsk = -85;
+                }
+                if (ki == 3) {
+                    dsk = 300;
+                }
+                if (ki == 4) {
+                    dsk = -300;
+                }
+                q = 0;
+                while (q < 4) {
+                    EtViewGrid(0, views, dpi, dsk, q);
+                    q += 1;
+                }
+                ki += 1;
+            }
+            di += 1;
+        }
+    }
+    [Xunit.Fact]
+    public static void TestAViewAt150DpiIsExactly48CentipointsAPixel() {
+        emon.Port.Cells views = emon.Port.NewCells();
+        int v = Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
+        int w = Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, 1275, 1650, 30000, 0, -1, 0, 0, 0, 0, 0);
+        emon.Testport.AssertEq(Evidence.VwGet(views, v, Evidence.VwfA()), 3145728, "a = 48.0 in 16.16");
+        emon.Testport.AssertEq(Evidence.VwGet(views, v, Evidence.VwfB()), 0, "b = 0");
+        emon.Testport.AssertEq(Evidence.VwGet(views, v, Evidence.VwfC()), 0, "c = 0");
+        emon.Testport.AssertEq(Evidence.VwGet(views, v, Evidence.VwfD()), 3145728, "d = 48.0");
+        emon.Testport.AssertEq(Evidence.VwGet(views, v, Evidence.VwfE()), 0, "e = 0");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, v, 0, 100, 200), 4800, "x = 100 * 48");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, v, 1, 100, 200), 9600, "y = 200 * 48");
+        emon.Testport.AssertEq(Evidence.VwCptToPx(views, v, 0, 4800, 9600), 100, "and back");
+        emon.Testport.AssertEq(Evidence.VwGet(views, w, Evidence.VwfA()), 1572864, "at 300 dpi 24.0");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, w, 0, 100, 200), 2400, "x = 100 * 24");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, v, 0, 10, 20, 30, 40), 480, "a pixel box's x0");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, v, 1, 10, 20, 30, 40), 960, "y0");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, v, 2, 10, 20, 30, 40), 1920, "x1");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, v, 3, 10, 20, 30, 40), 2880, "y1");
+    }
+    [Xunit.Fact]
+    public static void TestQuarterTurnsPutTheOriginAtTheRightCornerAndKeepBoxesBoxes() {
+        emon.Port.Cells views = emon.Port.NewCells();
+        int t1 = Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, 100, 200, 15000, 0, -1, 1, 0, 1000, 2000, 0);
+        int t2 = Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, 100, 200, 15000, 0, -1, 2, 0, 1000, 2000, 0);
+        int t3 = Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, 100, 200, 15000, 0, -1, 3, 0, 1000, 2000, 0);
+        // a raster turned a quarter clockwise: its (0,0) is the region's bottom-left; x grows up the page
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t1, 0, 0, 0), 1000, "t1 origin x");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t1, 1, 0, 0), 6800, "t1 origin y = cropy + 100 * 48");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t1, 0, 10, 0), 1000, "moving right on the raster moves up the page: x the same");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t1, 1, 10, 0), 6320, "and y less by 10 * 48");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t1, 0, 0, 10), 1480, "moving down the raster moves right on the page");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t2, 0, 0, 0), 5800, "t2 origin: the opposite corner");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t2, 1, 0, 0), 11600, "t2 origin y");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t3, 0, 0, 0), 10600, "t3 origin x = cropx + 200 * 48");
+        emon.Testport.AssertEq(Evidence.VwPxToCpt(views, t3, 1, 0, 0), 2000, "t3 origin y");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, t1, 0, 0, 0, 10, 20), 1000, "a box turned: its smallest box, x0");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, t1, 2, 0, 0, 10, 20), 1960, "x1 = 1000 + 20 * 48");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, t1, 1, 0, 0, 10, 20), 6320, "y0 = 6800 - 10 * 48, the smallest y of the four corners");
+        emon.Testport.AssertEq(Evidence.VwBoxToCpt(views, t1, 3, 0, 0, 10, 20), 6800, "y1");
+    }
+    [Xunit.Fact]
+    public static void TestStage1FeaturesOfAnOcrWord() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        // owords[0] is Hi with H at 910 (alternatives H 900, ri 250) and i at 880 (alternative l 40)
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, 0), 17, "the subject is an OCR word");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, 1), 0, "word 0");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoConf()), 870, "the raw confidence, verbatim");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoSymMin()), 880, "the lowest symbol");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoSymMean()), 895, "the mean of 910 and 880");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoMargin()), 660, "the smallest margin: 910 less the differing alternative 'ri' at 250 is 660, 880 less 'l' at 40 is 840");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoAmbiguous()), 0, "no margin within 100");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoEngineFlags()), 1, "the dictionary flag");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoImplausible()), 0, "Hi is plausible");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoLength()), 2, "two code points");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoAngle()), 0, "a level word on a level page");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoSpacing()), 0, "two symbols of 1200 width with no gap between them");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoRelHeight()), 1000, "the only word of its line");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoBaseDev()), 0, "on its line's baseline");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, Evidence.XoEdge()), 7200, "the nearest page edge is the left one");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, 9), -1, "a column of a later stage is -1");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 1, 31), -1, "a spare column is -1");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.HdFeat()), 1, "the word names its feature row");
+    }
+    [Xunit.Fact]
+    public static void TestImplausibleTransitionsAreLetterDigitAndLowerToUpper() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        // a word r1Il0 (a letter, a digit, a capital, a lower-case letter, a digit): every adjacent pair but l-0
+        Evidence.EtxAppendCp(etext, 114);
+        Evidence.EtxAppendCp(etext, 49);
+        Evidence.EtxAppendCp(etext, 73);
+        Evidence.EtxAppendCp(etext, 108);
+        Evidence.EtxAppendCp(etext, 48);
+        int at = Evidence.EtxLen(etext) - 5;
+        Evidence.OwSet(owords, 1, Evidence.HdTstart(), at);
+        Evidence.OwSet(owords, 1, Evidence.HdTlen(), 5);
+        Evidence.EvFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, 1, 0, 100);
+        // pairs r1 (letter-digit), 1I (digit-letter), Il (upper-lower: fine), l0 (letter-digit): 3 of 4
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 2, Evidence.XoImplausible()), 750, "three of four pairs");
+        emon.Testport.AssertEq(Evidence.FeGet(feats, 2, Evidence.XoLength()), 5, "five code points");
+    }
+    [Xunit.Fact]
+    public static void TestEveryCellOfEveryStrideIsPrintedOrSpare() {
+        // Count the cells each arena's field table prints (a box 4, a pair 2, a run 2, a text run 2) and
+        // require the rest to be the spare cells SPEC 8.4 names: no cell is printed twice or forgotten.
+        int ea = 1;
+        int r = 0;
+        int cells = 0;
+        int kind = 0;
+        while (ea <= 24) {
+            cells = 0;
+            r = Evidence.EvFx[(ea - 1) * 2 + 0];
+            while (r < (Evidence.EvFx[(ea - 1) * 2 + 0] + Evidence.EvFx[(ea - 1) * 2 + 1])) {
+                kind = Evidence.EvFd[r * 6 + 2];
+                if ((kind == 3) || ((kind == 4) || (kind == 10))) {
+                    cells += 4;
+                }
+                if ((kind == 6) || ((kind == 7) || ((kind == 12) || (kind == 13)))) {
+                    cells += 2;
+                }
+                if ((kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || (kind == 11)))))) {
+                    cells += 1;
+                }
+                r += 1;
+            }
+            if (ea == 1) {
+                emon.Testport.AssertEq(Evidence.EvStrides[0] - cells, 6, "epages: six spare cells");
+            }
+            if (ea == 2) {
+                emon.Testport.AssertEq(cells, 24, "views: every cell");
+            }
+            if (ea == 3) {
+                emon.Testport.AssertEq(cells, 3, "pts: every cell");
+            }
+            if (ea == 7) {
+                emon.Testport.AssertEq(cells, 32, "glyphs: every cell");
+            }
+            if (ea == 8) {
+                emon.Testport.AssertEq(cells, 24, "words: every cell");
+            }
+            if (ea == 9) {
+                emon.Testport.AssertEq(Evidence.EvStrides[8] - cells, 1, "lines: one spare");
+            }
+            if (ea == 10) {
+                emon.Testport.AssertEq(cells, 24, "marks: every cell");
+            }
+            if (ea == 11) {
+                emon.Testport.AssertEq(Evidence.EvStrides[10] - cells, 2, "fonts: two spare");
+            }
+            if (ea == 12) {
+                emon.Testport.AssertEq(Evidence.EvStrides[11] - cells, 5, "paths: five spare");
+            }
+            if (ea == 13) {
+                emon.Testport.AssertEq(Evidence.EvStrides[12] - cells, 1, "images: one spare");
+            }
+            if (ea == 14) {
+                emon.Testport.AssertEq(cells, 28, "oruns: every cell");
+            }
+            if (ea == 15) {
+                emon.Testport.AssertEq(Evidence.EvStrides[14] - cells, 2, "oblocks: two spare");
+            }
+            if (ea == 16) {
+                emon.Testport.AssertEq(Evidence.EvStrides[15] - cells, 1, "olines: one spare");
+            }
+            if (ea == 17) {
+                emon.Testport.AssertEq(Evidence.EvStrides[16] - cells, 1, "owords: one spare");
+            }
+            if (ea == 18) {
+                emon.Testport.AssertEq(Evidence.EvStrides[17] - cells, 3, "osyms: three spare");
+            }
+            if (ea == 19) {
+                emon.Testport.AssertEq(cells, 4, "oalts: every cell");
+            }
+            if (ea == 20) {
+                emon.Testport.AssertEq(Evidence.EvStrides[19] - cells, 3, "inks: three spare");
+            }
+            if (ea == 21) {
+                emon.Testport.AssertEq(Evidence.EvStrides[20] - cells, 1, "components: one spare");
+            }
+            if (ea == 22) {
+                emon.Testport.AssertEq(Evidence.EvStrides[21] - cells, 2, "rules: two spare");
+            }
+            if (ea == 23) {
+                emon.Testport.AssertEq(Evidence.EvStrides[22] - cells, 2, "prims: two spare");
+            }
+            if (ea == 24) {
+                emon.Testport.AssertEq(Evidence.EvStrides[23] - cells, 3, "tlines: three spare");
+            }
+            ea += 1;
+        }
+    }
+    [Xunit.Fact]
+    public static void TestGoldenPage() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        System.Text.StringBuilder compact = emon.Testport.NewText();
+        System.Text.StringBuilder pretty = emon.Testport.NewText();
+        EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvEmit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvEmit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("evidence/page1.json"), 0, EtEnd(emon.Testport.TestFile("evidence/page1.json")), "compact", 0);
+        emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("evidence/page1.pretty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/page1.pretty.json")), "pretty", 0);
+    }
+    [Xunit.Fact]
+    public static void TestAnEmptyEvidenceDump() {
+        emon.Port.Cells epages = emon.Port.NewCells();
+        emon.Port.Cells views = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells glyphs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells marks = emon.Port.NewCells();
+        emon.Port.Cells fonts = emon.Port.NewCells();
+        emon.Port.Cells paths = emon.Port.NewCells();
+        emon.Port.Cells images = emon.Port.NewCells();
+        emon.Port.Cells oruns = emon.Port.NewCells();
+        emon.Port.Cells oblocks = emon.Port.NewCells();
+        emon.Port.Cells olines = emon.Port.NewCells();
+        emon.Port.Cells owords = emon.Port.NewCells();
+        emon.Port.Cells osyms = emon.Port.NewCells();
+        emon.Port.Cells oalts = emon.Port.NewCells();
+        emon.Port.Cells inks = emon.Port.NewCells();
+        emon.Port.Cells components = emon.Port.NewCells();
+        emon.Port.Cells rules = emon.Port.NewCells();
+        emon.Port.Cells prims = emon.Port.NewCells();
+        emon.Port.Cells tlines = emon.Port.NewCells();
+        System.Text.StringBuilder compact = emon.Testport.NewText();
+        System.Text.StringBuilder pretty = emon.Testport.NewText();
+        Evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertEq(Evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "nothing is well formed");
+        Evidence.EvEmit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.EvEmit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("evidence/empty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/empty.json")), "compact", 0);
+        emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("evidence/empty.pretty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/empty.pretty.json")), "pretty", 0);
     }
     [Xunit.Fact]
     public static void TestEvidenceTextIsScalarValuesOnly() {
@@ -288,91 +1331,6 @@ public static class Evidencetest {
         Evidence.EtxAppendCp(etext, 55296);
         Evidence.EtxAppendCp(etext, 128512);
         emon.Testport.AssertEq(Evidence.EtxLen(etext), 3, "three cells");
-    }
-    [Xunit.Fact]
-    public static void TestCheckNamesWhatIsWrong() {
-        emon.Port.Cells glyphs = emon.Port.NewCells();
-        emon.Port.Cells words = emon.Port.NewCells();
-        emon.Port.Cells lines = emon.Port.NewCells();
-        emon.Port.Cells paths = emon.Port.NewCells();
-        emon.Port.Cells images = emon.Port.NewCells();
-        emon.Port.Cells components = emon.Port.NewCells();
-        emon.Port.Cells ocrwords = emon.Port.NewCells();
-        emon.Port.Cells alts = emon.Port.NewCells();
-        emon.Port.Cells etext = emon.Port.NewCells();
-        emon.Port.Cells spans = emon.Port.NewCells();
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.GlSet(glyphs, 2, Evidence.GfTlen(), 99);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 2, "a glyph's text run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.WdSet(words, 1, Evidence.WfGcount(), 9);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 3, "a word's glyph run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.WdSet(words, 0, Evidence.WfTlen(), 99);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 4, "a word's text run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.LnSet(lines, 0, Evidence.LfWcount(), 3);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 5, "a line's word run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfTlen(), 50);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 6, "an OCR word's text run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.OwSet(ocrwords, 0, Evidence.OfAltcount(), 3);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 7, "an alternative count that is not the chain");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.WdSet(words, 0, Evidence.WfLine(), 4);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 8, "a word in a line that is not there");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.GlSet(glyphs, 0, Evidence.GfWord(), 5);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 9, "a glyph in a word that is not there");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.SpSet(spans, 1, Evidence.SfGcount(), 9);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's glyph run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.SpSet(spans, 1, Evidence.SfActuallen(), 99);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's string past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.SpSet(spans, 0, Evidence.SfParent(), 0);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span that is its own parent");
-    }
-    [Xunit.Fact]
-    public static void TestGoldenPage() {
-        emon.Port.Cells glyphs = emon.Port.NewCells();
-        emon.Port.Cells words = emon.Port.NewCells();
-        emon.Port.Cells lines = emon.Port.NewCells();
-        emon.Port.Cells paths = emon.Port.NewCells();
-        emon.Port.Cells images = emon.Port.NewCells();
-        emon.Port.Cells components = emon.Port.NewCells();
-        emon.Port.Cells ocrwords = emon.Port.NewCells();
-        emon.Port.Cells alts = emon.Port.NewCells();
-        emon.Port.Cells etext = emon.Port.NewCells();
-        emon.Port.Cells spans = emon.Port.NewCells();
-        System.Text.StringBuilder compact = emon.Testport.NewText();
-        System.Text.StringBuilder pretty = emon.Testport.NewText();
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("evidence/page1.json"), 0, EtEnd(emon.Testport.TestFile("evidence/page1.json")), "compact", 0);
-        emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("evidence/page1.pretty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/page1.pretty.json")), "pretty", 0);
-    }
-    [Xunit.Fact]
-    public static void TestAnEmptyEvidenceDump() {
-        emon.Port.Cells glyphs = emon.Port.NewCells();
-        emon.Port.Cells words = emon.Port.NewCells();
-        emon.Port.Cells lines = emon.Port.NewCells();
-        emon.Port.Cells paths = emon.Port.NewCells();
-        emon.Port.Cells images = emon.Port.NewCells();
-        emon.Port.Cells components = emon.Port.NewCells();
-        emon.Port.Cells ocrwords = emon.Port.NewCells();
-        emon.Port.Cells alts = emon.Port.NewCells();
-        emon.Port.Cells etext = emon.Port.NewCells();
-        emon.Port.Cells spans = emon.Port.NewCells();
-        System.Text.StringBuilder compact = emon.Testport.NewText();
-        System.Text.StringBuilder pretty = emon.Testport.NewText();
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("evidence/empty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/empty.json")), "compact", 0);
-        emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("evidence/empty.pretty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/empty.pretty.json")), "pretty", 0);
+        emon.Testport.AssertEq(emon.Port.CellsAt(etext, 1), 65533, "a surrogate became U+FFFD");
     }
 }

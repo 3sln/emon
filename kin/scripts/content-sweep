@@ -62,12 +62,30 @@ fn main() {
             let mut cs = port::Cells::new(); let mut out = port::Cells::new();
             let mut f0 = port::Cells::new(); let mut f1 = port::Cells::new();
             let mut f2 = port::Cells::new(); let mut f3 = port::Cells::new();
-            let mut gl = port::Cells::new(); let mut et = port::Cells::new();
-            let mut sp = port::Cells::new(); let mut wd = port::Cells::new();
+            let mut epages = port::Cells::new();
+            let mut views = port::Cells::new();
+            let mut pts = port::Cells::new();
+            let mut refs = port::Cells::new();
+            let mut et = port::Cells::new();
+            let mut feats = port::Cells::new();
+            let mut gl = port::Cells::new();
+            let mut wd = port::Cells::new();
             let mut ln = port::Cells::new();
-            let mut paths = port::Cells::new(); let mut images = port::Cells::new();
-            let mut comps = port::Cells::new(); let mut ocr = port::Cells::new();
-            let mut alts = port::Cells::new();
+            let mut mk = port::Cells::new();
+            let mut fnt = port::Cells::new();
+            let mut paths = port::Cells::new();
+            let mut images = port::Cells::new();
+            let mut oruns = port::Cells::new();
+            let mut oblocks = port::Cells::new();
+            let mut olines = port::Cells::new();
+            let mut owords = port::Cells::new();
+            let mut osyms = port::Cells::new();
+            let mut oalts = port::Cells::new();
+            let mut inks = port::Cells::new();
+            let mut comps = port::Cells::new();
+            let mut rules = port::Cells::new();
+            let mut prims = port::Cells::new();
+            let mut tlines = port::Cells::new();
             let mut rows: Vec<String> = vec![];
             let ostatus = pd_open(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st);
             if ostatus != 0 {
@@ -76,11 +94,11 @@ fn main() {
             }
             let status = pc_document(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut cx, &mut ox,
                                      &mut cs, &mut out, &mut f0, &mut f1, &mut f2, &mut f3,
-                                     &mut gl, &mut et, &mut sp, &mut pg, &mut wd, &mut ln);
+                                     &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln);
             let npages = pd_pg_count(&mut pg);
             if mode == "json" {
                 let mut t = String::new();
-                ev_emit(&mut t, 0, &mut gl, &mut wd, &mut ln, &mut paths, &mut images, &mut comps, &mut ocr, &mut alts, &mut et, &mut sp);
+                ev_emit(&mut t, 0, &mut epages, &mut views, &mut pts, &mut refs, &mut et, &mut feats, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut paths, &mut images, &mut oruns, &mut oblocks, &mut olines, &mut owords, &mut osyms, &mut oalts, &mut inks, &mut comps, &mut rules, &mut prims, &mut tlines);
                 rows.push(format!("J\t{}\t{}", path, t));
             }
             if mode == "rows" || mode == "digest" {
@@ -94,14 +112,14 @@ fn main() {
                         rows.push(format!("T\t{}\t{}", p, tl));
                     } else {
                         let mut n = 0;
-                        for g in 0..gl_count(&mut gl) { if gl_get(&mut gl, g, gf_page()) == p { n += 1; } }
+                        for g in 0..gl_count(&mut gl) { if gl_get(&mut gl, g, ch_page()) == p { n += 1; } }
                         rows.push(format!("D\t{}\t{}\t{}", p, cr_digest(&mut gl, &mut et, p), n));
                     }
                 }
                 if mode == "rows" {
-                    for i in 0..sp_count(&mut sp) {
+                    for i in 0..mk_count(&mut mk) {
                         let mut t = String::new();
-                        cr_span(&mut t, &mut sp, &mut et, i);
+                        cr_span(&mut t, &mut mk, &mut et, i);
                         rows.push(format!("S\t{}", t));
                     }
                 }
@@ -109,33 +127,35 @@ fn main() {
             if mode == "glyphs" || mode == "all" {
                 for g in 0..gl_count(&mut gl) {
                     let mut v: Vec<i32> = vec![];
-                    for f in 0..20 { v.push(gl_get(&mut gl, g, f)); }
-                    let ts = v[gf_tstart() as usize];
-                    let cp = if ts >= 0 { cps_str(&et, ts, v[gf_tlen() as usize]).chars().map(|c| format!("{:04X}", c as u32)).collect::<Vec<_>>().join("+") }
-                             else if v[gf_cp() as usize] < 0 { "-".to_string() } else { format!("{:04X}", v[gf_cp() as usize]) };
-                    rows.push(format!("G\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", v[0], cp, v[4], v[5], v[6],
-                        v[7], v[8], v[9], v[10], v[11], v[12], v[15], v[18], v[19], v[17]));
+                    for f in 0..32 { v.push(gl_get(&mut gl, g, f)); }
+                    let ts = v[ch_tstart() as usize];
+                    let cp = if ts >= 0 { cps_str(&et, ts, v[ch_tlen() as usize]).chars().map(|c| format!("{:04X}", c as u32)).collect::<Vec<_>>().join("+") }
+                             else if v[ch_cp() as usize] < 0 { "-".to_string() } else { format!("{:04X}", v[ch_cp() as usize]) };
+                    let mcid = cr_mark_mcid(&mut mk, v[gf_mark() as usize]);
+                    let art = cr_mark_class(&mut mk, v[gf_mark() as usize]);
+                    rows.push(format!("G\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", v[0], cp, v[gf_how() as usize], v[gf_font() as usize], v[gf_size() as usize],
+                        v[1], v[2], v[3], v[4], v[gf_by0() as usize], v[gf_rot() as usize], v[gf_mode() as usize], mcid, v[8], art));
                 }
             }
             if mode == "text" || mode == "all" {
                 for l in 0..ln_count(&mut ln) {
                     let mut s = String::new();
-                    let w0 = ln_get(&mut ln, l, lf_wfirst());
-                    let wn = ln_get(&mut ln, l, lf_wcount());
+                    let w0 = ln_get(&mut ln, l, lh_first());
+                    let wn = ln_get(&mut ln, l, lh_count());
                     for w in w0..w0 + wn {
                         if w > w0 { s.push(' '); }
-                        s.push_str(&cps_str(&et, wd_get(&mut wd, w, wf_tstart()), wd_get(&mut wd, w, wf_tlen())));
+                        s.push_str(&cps_str(&et, wd_get(&mut wd, w, hd_tstart()), wd_get(&mut wd, w, hd_tlen())));
                     }
-                    rows.push(format!("T\t{}\t{}\t{}\t{}", ln_get(&mut ln, l, lf_page()), ln_get(&mut ln, l, lf_y0()), ln_get(&mut ln, l, lf_x0()), s));
+                    rows.push(format!("T\t{}\t{}\t{}\t{}", ln_get(&mut ln, l, lh_page()), ln_get(&mut ln, l, lh_y0()), ln_get(&mut ln, l, lh_x0()), s));
                 }
                 for w in 0..wd_count(&mut wd) {
-                    rows.push(format!("W\t{}\t{}\t{}\t{}\t{}\t{}", wd_get(&mut wd, w, wf_page()), wd_get(&mut wd, w, wf_x0()), wd_get(&mut wd, w, wf_y0()),
-                        wd_get(&mut wd, w, wf_x1()), wd_get(&mut wd, w, wf_y1()),
-                        cps_str(&et, wd_get(&mut wd, w, wf_tstart()), wd_get(&mut wd, w, wf_tlen()))));
+                    rows.push(format!("W\t{}\t{}\t{}\t{}\t{}\t{}", wd_get(&mut wd, w, hd_page()), wd_get(&mut wd, w, hd_x0()), wd_get(&mut wd, w, hd_y0()),
+                        wd_get(&mut wd, w, hd_x1()), wd_get(&mut wd, w, hd_y1()),
+                        cps_str(&et, wd_get(&mut wd, w, hd_tstart()), wd_get(&mut wd, w, hd_tlen()))));
                 }
             }
             rows.push(format!("F\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", path, if pd_encrypted(&mut dc) != 0 { "encrypted".to_string() } else if status == 0 { "ok".to_string() } else { format!("pc{}", status) }, npages,
-                gl_count(&mut gl), wd_count(&mut wd), ln_count(&mut ln), sp_count(&mut sp), pc_warn(&mut cx), pc_fonts(&mut cx), pc_stream_status(&mut cx),
+                gl_count(&mut gl), wd_count(&mut wd), ln_count(&mut ln), mk_count(&mut mk), pc_warn(&mut cx), pc_fonts(&mut cx), pc_stream_status(&mut cx),
                 t0.elapsed().as_millis(), port::cells_len(&cs)));
             rows
         }));
