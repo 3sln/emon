@@ -28,7 +28,19 @@
     ignored    `data-gold=\"skip\"` (chrome that prints but is not content: a fixed header, a watermark,
                a rule, a footnote's own marker), script, style, head.
     hints      `<script type=\"application/emon-gold+json\">` holds what no DOM node says: margin-box
-               running text from @page, page-number text, watermark text.
+               running text from @page, page-number text, watermark text, and `\"layout\": true` for a
+               document whose column structure is annotated (`facts.frags`, D114).
+    initials   `data-initial=\"drop|raised|margin\"` (+ `data-lines`, D114): on a <p>, the ::first-letter
+               extent of its first text (leading punctuation, one grapheme, trailing punctuation) is the
+               `initial` inline; on a <span>, <img> or <svg> that element is, its text from
+               `data-initial-text`, `alt` or its content.
+    alignment  `data-align=\"start|center|end|justify|none\"` on p, headings, figcaption, td/th; `none` is an
+               annotated absence (a decimal column).  Once a kind carries one it must carry one on every
+               node of that kind (the gold claims absence where it is absent).
+    columns    `data-cols=\"N\"` on a column container, `data-span=\"all\"` on a child spanning it: they say
+               nothing to the gold; `convert`'s `:ctx-out` hands build.clj each leaf block's container and
+               segment so it can turn printed lines into [page, band, col] fragments.
+    notes      `data-note=\"sidebar|margin\"` needs no reference (it sits beside what it annotates).
 
   Rules that are DECISIONS (DEVLOG D063) rather than facts:
     * a `ref` contributes no text; a `linebreak` contributes \"\\n\".
@@ -239,12 +251,67 @@
 
 (defn- inl-close [inl] (swap! (:stack inl) pop))
 
+;; ---------------------------------------------------------------- initials (D114)
+
+(def ^:private PUNCT-TYPES #{(int Character/START_PUNCTUATION) (int Character/INITIAL_QUOTE_PUNCTUATION)
+                             (int Character/FINAL_QUOTE_PUNCTUATION) (int Character/OTHER_PUNCTUATION)})
+(def ^:private MARK-TYPES #{(int Character/NON_SPACING_MARK) (int Character/ENCLOSING_MARK)
+                            (int Character/COMBINING_SPACING_MARK)})
+
+(defn first-letter-extent
+  "UTF-16 length of the `::first-letter` of s: preceding punctuation (Unicode Ps, Pi, Pf, Po), one grapheme
+  cluster (a code point and its combining marks), and the punctuation that follows it with no space
+  between."
+  [^String s]
+  (let [n (count s)
+        cp-at (fn [i] (.codePointAt s (int i)))
+        ty (fn [cp] (Character/getType (int cp)))
+        skip (fn [pred i] (loop [i i] (if (and (< i n) (pred (ty (cp-at i)))) (recur (+ i (Character/charCount (cp-at i)))) i)))
+        i (skip PUNCT-TYPES 0)
+        _ (when (>= i n) (throw (ex-info (str "first-letter: no letter in " (pr-str s)) {})))
+        j (skip MARK-TYPES (+ i (Character/charCount (cp-at i))))]
+    (skip PUNCT-TYPES j)))
+
+(defn- initial-node [form lines text]
+  (when-not (contains? #{"drop" "raised" "margin"} form)
+    (throw (ex-info (str "data-initial must be drop, raised or margin, not " (pr-str form)) {})))
+  (when (str/blank? text) (throw (ex-info "an initial with no text (give data-initial-text or alt)" {})))
+  (let [n (node "kind" "initial" "form" form
+                "children" (doto (ArrayList.) (.add (node "kind" "text" "text" (nfc-str text)))))]
+    (when (contains? #{"drop" "margin"} form)
+      (let [l (some-> lines parse-long)]
+        (when-not (and l (>= l 2)) (throw (ex-info (str form " initial needs data-lines >= 2") {})))
+        (nput! n "lines" l)))
+    (when (and (= form "raised") (some? lines)) (throw (ex-info "a raised initial has no data-lines" {})))
+    n))
+
+(defn- split-initial
+  "A post-processor for `leaf`: the first text of a <p data-initial> becomes initial + rest."
+  [e]
+  (fn [nodes]
+    (let [n0 (first nodes)]
+      (when-not (and n0 (= (nget n0 "kind") "text"))
+        (throw (ex-info "a <p data-initial> must start with plain text" {})))
+      (let [t (nget n0 "text")
+            k (first-letter-extent t)
+            out (ArrayList.)]
+        (.add out (initial-node (eget e "data-initial") (eget e "data-lines") (subs t 0 k)))
+        (when (< k (count t)) (.add out (node "kind" "text" "text" (subs t k))))
+        (doseq [x (rest nodes)] (.add out x))
+        out))))
+
 (defn- inl-walk [inl e]
   (doseq [k (vec (ekids e))]
     (if (string? k)
       (inl-text inl k)
       (let [t (etag k)]
         (cond
+          (some? (eget k "data-initial"))
+          (do (inl-space inl)
+              (reset! (:started inl) true)
+              (.add ^ArrayList (peek @(:stack inl))
+                    (initial-node (eget k "data-initial") (eget k "data-lines")
+                                  (or (eget k "data-initial-text") (eget k "alt") (text-content k)))))
           (or (= (eget k "data-gold") "skip") (contains? #{"script" "style" "svg"} t)) nil
           (= t "br") (inl-br inl)
           (and (= t "sup") (some? (eget k "data-fnref"))) (inl-ref inl (eget k "data-fnref"))
@@ -278,17 +345,20 @@
                  (flat (nget n "children"))))))
 
 (defn leaf
-  "A leaf block: `text`, and `inlines` only when they carry information."
-  [kind e notes fields]
+  "A leaf block: `text`, and `inlines` only when they carry information.  `post` (optional) rewrites the
+  pruned inline list before it is flattened (an initial splits the first text)."
+  ([kind e notes fields] (leaf kind e notes fields nil))
+  ([kind e notes fields post]
   (let [inl (new-inl notes)
         _ (inl-walk inl e)
         nodes (prune (:top inl))
+        nodes (if post (post nodes) nodes)
         n (node "kind" kind)]
     (doseq [[k v] fields] (nput! n k v))
     (nput! n "text" (flat nodes))
     (when (some #(not= (nget % "kind") "text") nodes)
       (nput! n "inlines" nodes))
-    n))
+    n)))
 
 ;; ---------------------------------------------------------------- blocks
 
@@ -330,12 +400,36 @@
 
 (declare conv-blocks)
 
+(defn- align-fields
+  "[[\"align\" v]] for an element's `data-align` (none: an annotated absence, no field), and the tally
+  that makes a document annotate a kind only when every node of the kind says (D114 convention 10)."
+  [cv kind e]
+  (let [a (eget e "data-align")]
+    (swap! (:align-stat cv) update-in [kind (if (some? a) :authored :missing)] (fnil inc 0))
+    (cond (nil? a) []
+          (= a "none") []
+          (and (= kind "cell") (= a "justify")) (throw (ex-info "a cell has no justify" {}))
+          (contains? #{"start" "center" "end" "justify"} a) [["align" a]]
+          :else (throw (ex-info (str "data-align " (pr-str a)) {})))))
+
+(defn- next-id! [cv] (swap! (:ctr cv) inc))
+
+(defn- tag-ctx!
+  "Remember, for every block under n not yet remembered, the column container and segment in force."
+  [cv n]
+  (let [^java.util.IdentityHashMap m (:ctx-map cv)]
+    (when-not (.containsKey m n) (.put m n @(:ctx cv)))
+    (doseq [c (or (nget n "children") [])]
+      (when-not (contains? #{"text" "span" "link" "ref" "linebreak" "initial"} (nget c "kind")) (tag-ctx! cv c)))))
+
 (defn- conv-flush [cv run out]
   (when (seq @run)
     (let [holder (el "p" {} nil)]
       (.addAll ^ArrayList (ekids holder) @run)
       (let [n (leaf "paragraph" holder (:notes cv) {})]
         (when (or (not= (nget n "text") "") (nhas? n "inlines"))
+          (doseq [[k v] (align-fields cv "paragraph" holder)] (nput! n k v))
+          (tag-ctx! cv n)
           (.add ^ArrayList out n)))
       (vreset! run []))))
 
@@ -346,6 +440,8 @@
             (node "kind" "caption" "label" (nth m 1) "text" (nth m 2))
             (node "kind" "caption" "text" (nget raw "text")))]
     (when (and (nhas? raw "inlines") (not m)) (nput! n "inlines" (nget raw "inlines")))
+    (doseq [[k v] (align-fields cv "caption" e)] (nput! n k v))
+    (.put ^java.util.IdentityHashMap (:raw-map cv) n (nget raw "text"))
     n))
 
 (defn- conv-heading [cv e]
@@ -358,8 +454,11 @@
         (.add ^ArrayList (ekids holder) k)))
     (let [extra (cond-> [["level" lvl]]
                   (truthy? @num) (into [["number" @num]
-                                        ["numbering" (let [v (eget e "data-numbering")] (if (truthy? v) v (numbering-scheme @num)))]]))]
-      (leaf "heading" holder (:notes cv) extra))))
+                                        ["numbering" (let [v (eget e "data-numbering")] (if (truthy? v) v (numbering-scheme @num)))]])
+                  true (into (align-fields cv "heading" e)))]
+      (let [n (leaf "heading" holder (:notes cv) extra)]
+        (.put ^java.util.IdentityHashMap (:raw-map cv) n (text-content e))
+        n))))
 
 (defn- conv-list [cv e depth]
   (let [ordered (= (etag e) "ol")
@@ -423,7 +522,7 @@
         kids (conv-blocks cv e)]
     (when (truthy? marker) (nput! n "marker" marker))
     (nput! n "children" (if (pos? (.size ^ArrayList kids)) kids (doto (ArrayList.) (.add (node "kind" "paragraph" "text" "")))))
-    (.add ^ArrayList (:notes-list cv) n)
+    (when (contains? #{"footnote" "endnote"} role) (.add ^ArrayList (:notes-list cv) n))
     n))
 
 (defn- conv-table [cv e]
@@ -453,7 +552,7 @@
                 width (volatile! 0)]
             (doseq [c (ekids tr) :when (el? c)]
               (when-not (contains? #{"td" "th"} (etag c)) (throw (ex-info (str "<" (etag c) "> in row") {})))
-              (let [cell (leaf "cell" c (:notes cv) {})
+              (let [cell (leaf "cell" c (:notes cv) (align-fields cv "cell" c))
                     rs (to-int (eget c "rowspan" 1))
                     cs (to-int (eget c "colspan" 1))]
                 (when (> rs 1) (nput! cell "rowspan" rs))
@@ -490,7 +589,8 @@
       (some? (eget e "data-seal")) (L (conv-seal cv e))
       (some? (eget e "data-note")) (L (conv-note cv e))
       (or (some? (eget e "data-figure")) (= t "figure")) (L (conv-figure cv e))
-      (= t "p") (L (leaf "paragraph" e (:notes cv) {}))
+      (= t "p") (L (leaf "paragraph" e (:notes cv) (align-fields cv "paragraph" e)
+                         (when (some? (eget e "data-initial")) (split-initial e))))
       (contains? #{"ul" "ol"} t) (L (conv-list cv e 0))
       (and (= t "table") (some? (eget e "data-layout")))
       (let [out (ArrayList.)]
@@ -518,7 +618,15 @@
             (and (INLINE-TAGS t) (nil? (eget k "data-seal")) (nil? (eget k "data-heading")) (nil? (eget k "data-note")))
             (vswap! run conj k)
             :else (do (conv-flush cv run out)
-                      (.addAll out ^java.util.Collection (conv-block cv k)))))))
+                      (let [cols (eget k "data-cols")
+                            span (eget k "data-span")
+                            saved @(:ctx cv)]
+                        (cond cols (vreset! (:ctx cv) {:cont (next-id! cv) :n (parse-long cols) :seg (next-id! cv)})
+                              span (vreset! (:ctx cv) {:cont nil :seg (next-id! cv)}))
+                        (let [nodes (conv-block cv k)]
+                          (doseq [nd nodes] (tag-ctx! cv nd))
+                          (when (or cols span) (vreset! (:ctx cv) (assoc saved :seg (next-id! cv))))
+                          (.addAll out ^java.util.Collection nodes))))))))
     (conv-flush cv run out)
     out))
 
@@ -548,7 +656,7 @@
             "marker" "value" "profile" "continued" "columns" "role" "repeated"
             "rowspan" "colspan" "header" "empty" "label" "target" "subkind" "alt"
             "labels" "name" "date" "color" "display" "style" "href" "page" "pages"
-            "template" "reason" "text" "inlines" "children"])
+            "template" "reason" "align" "form" "lines" "text" "inlines" "children"])
 (def ^:private ORDER-IDX (zipmap ORDER (range)))
 
 (defn ordered [x]
@@ -560,7 +668,7 @@
     (instance? java.util.List x) (mapv ordered x)
     :else x))
 
-(def INLINE-KINDS #{"text" "span" "link" "ref" "linebreak"})
+(def INLINE-KINDS #{"text" "span" "link" "ref" "linebreak" "initial"})
 
 (defn- assign-ids [root start]
   (let [nid (volatile! start)]
@@ -595,10 +703,14 @@
                "seal" ["subkind" "name" "date" "color"] "note" ["role" "marker"]))
 (def REASONS ["page-number" "running-title" "watermark" "duplicate-header-row"])
 
+(declare all-blocks attrs-for block-records)
+
 (defn convert
   "html2gold.convert(html, facts, doc_id, extra_provenance): facts is {\"pages\" [[w h]...] \"rows\" {...}}
-  with string keys (pyjson/parse); extra-provenance (an ordered map) or nil."
-  [html facts doc-id extra-provenance]
+  with string keys (pyjson/parse); extra-provenance (an ordered map) or nil.  `opts` (optional):
+  `:ctx-out`, an atom that receives [leaf-block records] for build.clj (see `block-records`)."
+  ([html facts doc-id extra-provenance] (convert html facts doc-id extra-provenance nil))
+  ([html facts doc-id extra-provenance opts]
   (let [root (parse html)
         htmlel (find-el root "html")
         lang (let [l (when htmlel (eget htmlel "lang"))] (when (truthy? l) l))
@@ -610,10 +722,27 @@
                   {})
         body (or (find-el root "body") root)
         notes {:refs (ArrayList.)}
-        cv {:facts facts :notes notes :notes-list (ArrayList.) :dropped-extra (atom [])}
+        cv {:facts facts :notes notes :notes-list (ArrayList.) :dropped-extra (atom [])
+            :align-stat (atom {}) :ctr (atom 0) :ctx (volatile! {:cont nil :seg 0})
+            :ctx-map (java.util.IdentityHashMap.) :raw-map (java.util.IdentityHashMap.)}
         blocks (conv-blocks cv body)
         doc (sections blocks)
-        nxt (volatile! (assign-ids doc 0))]
+        nxt (volatile! (assign-ids doc 0))
+        align-kinds (vec (for [k ["paragraph" "heading" "caption" "cell"]
+                               :when (pos? (get-in @(:align-stat cv) [k :authored] 0))]
+                           (do (when (pos? (get-in @(:align-stat cv) [k :missing] 0))
+                                 (throw (ex-info (str doc-id ": " (get-in @(:align-stat cv) [k :missing]) " " k
+                                                      " node(s) without data-align in a document that annotates align on " k
+                                                      "s (use data-align=none for an annotated absence)") {})))
+                               k)))
+        lines (get facts "lines")]
+    ;; a justified block that printed as one line is start (D114 convention 10)
+    (letfn [(fix [n]
+              (when (and (= (nget n "align") "justify") (= 1 (get lines (str (nget n "id")))))
+                (nput! n "align" "start"))
+              (doseq [c (or (nget n "children") [])] (when-not (INLINE-KINDS (nget c "kind")) (fix c))))]
+      (when (seq lines) (fix doc)))
+    (when-let [out (:ctx-out opts)] (reset! out (block-records doc (:ctx-map cv) (:raw-map cv))))
     ;; note references: each targets the next unmatched note with its marker
     (let [pending (volatile! {})]
       (doseq [nt (:notes-list cv)]
@@ -648,15 +777,74 @@
                         @(:dropped-extra cv)))
           dropped (vec (sort-by (fn [d] [(get d "page") (let [i (.indexOf ^java.util.List REASONS (get d "reason"))] (if (neg? i) 9 i))]) dropped))
           source (cond-> (om "format" "pdf" "pages" N) lang (assoc "lang" lang))
-          model (cond-> (om "emon" "1.0" "source" source "settings" (om "locale" lang))
+          init? (or (boolean (get hints "initial"))
+                    (boolean (some (fn [n] (some #(= (nget % "kind") "initial") (or (nget n "inlines") []))) (all-blocks doc))))
+          layout? (boolean (get hints "layout"))
+          sidebar? (boolean (some #(= (nget % "role") "sidebar") (filter #(= (nget % "kind") "note") (all-blocks doc))))
+          new? (or init? layout? sidebar? (seq align-kinds))
+          model (cond-> (om "emon" (if new? "1.1" "1.0") "source" source "settings" (om "locale" lang))
                   (truthy? title) (assoc "meta" (om "title" title))
                   true (assoc "pages" mpages "body" doc "furniture" furniture "dropped" dropped))]
       (pj/oassoc
        (cond-> (om "emon-gold" "1.0" "id" doc-id)
          extra-provenance (assoc "provenance" extra-provenance)
-         true (assoc "annotated" (om "structure" ALL-KINDS "attributes" ATTRS "text" true "inlines" true
-                                     "furniture" true "dropped" REASONS "pages" ["n" "w" "h" "label"])))
-       "model" (ordered model)))))
+         true (assoc "annotated" (cond-> (om "structure" ALL-KINDS "attributes" (attrs-for align-kinds init?)
+                                             "text" true "inlines" true
+                                             "furniture" true "dropped" REASONS "pages" ["n" "w" "h" "label"])
+                                   layout? (assoc "layout" true)))
+         (seq (select-keys facts ["frags" "lines" "hyphens"]))
+         (assoc "facts" (apply om (mapcat (fn [k] (when (contains? facts k) [k (get facts k)])) ["frags" "lines" "hyphens"]))))
+       "model" (ordered model))))))
+
+(defn- all-blocks
+  "Every block node under n (n included), pre-order."
+  [n]
+  (cons n (mapcat all-blocks (remove #(INLINE-KINDS (nget % "kind")) (or (nget n "children") [])))))
+
+(defn- attrs-for
+  "ATTRS plus the attributes a new document annotates (D114): align on the kinds that say it, `initial`."
+  [align-kinds init?]
+  (let [base (for [[k v] ATTRS] [k (if (some #{k} align-kinds) (conj (vec v) "align") v)])
+        base (if (some #{"paragraph"} align-kinds) (concat base [["paragraph" ["align"]]]) base)
+        base (if init? (concat base [["initial" ["form" "lines"]]]) base)]
+    (apply om (mapcat identity base))))
+
+(defn- stream-text
+  "What a leaf block prints: its text with note references as their markers."
+  [n]
+  (letfn [(flat* [nodes] (apply str (for [x nodes]
+                                      (case (nget x "kind")
+                                        "text" (nget x "text")
+                                        "linebreak" " "
+                                        "ref" (str (nget x "marker"))
+                                        (flat* (nget x "children"))))))]
+    (if (nhas? n "inlines") (flat* (nget n "inlines")) (nget n "text"))))
+
+(defn block-records
+  "For build.clj: one map per leaf block with text, in document order: its id, kind, gold text, printed
+  stream text (references as their markers, a note's marker first), its column container, segment and
+  column count (nil container: one flow), and its initial if any."
+  [doc ctx-map raw-map]
+  (let [out (volatile! [])
+        marker (volatile! nil)]
+    (letfn [(rec [n]
+              (let [kind (nget n "kind")]
+                (when (and (= kind "note") (nhas? n "marker")) (vreset! marker (nget n "marker")))
+                (when (and (string? (nget n "text")) (not= (nget n "text") "") (not= kind "document"))
+                  (let [ctx (.get ^java.util.IdentityHashMap ctx-map n)
+                        ini (some #(when (= (nget % "kind") "initial") %) (or (nget n "inlines") []))]
+                    (vswap! out conj
+                            (cond-> {:id (nget n "id") :kind kind :text (nget n "text")
+                                     :stream (str @marker (or (.get ^java.util.IdentityHashMap raw-map n) (stream-text n)))
+                                     :cont (:cont ctx) :n (:n ctx) :seg (:seg ctx 0)
+                                     :align (nget n "align")}
+                              ini (assoc :initial {:form (nget ini "form") :lines (nget ini "lines")
+                                                   :text (flat (nget ini "children"))})))
+                    (vreset! marker nil)))
+                (doseq [c (or (nget n "children") [])]
+                  (when-not (INLINE-KINDS (nget c "kind")) (rec c)))))]
+      (rec doc))
+    @out))
 
 (defn gold-text [gold] (str (pj/dumps gold {:indent 1}) "\n"))
 
