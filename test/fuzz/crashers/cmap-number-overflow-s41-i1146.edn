@@ -1,0 +1,4 @@
+;; Saved by `bb fuzz` (D096). Reproduce the unminimised mutant with
+;;   bb fuzz --seed 41 --only 1146 --dump /tmp/mutant.pdf
+;; Fixed in kin/pdffont.kin (the CMap number lexer, D097); replayed on every `bb fuzz` and must pass. (Not much minimised: the file is a real font.)
+{:index 1146, :signature ["panic:rust:async" "panic:rust:mem"], :ops ["length@418 2607->2608" "xref-entry@18360 whole" "flip x4"], :seed 41, :status :fixed, :original-bytes 18747, :bytes 18735, :fixture "test/corpus/synth/pdf/script-devanagari.pdf", :detail ["panic rust: mem PANIC attempt to add with overflow at emon/pdffont.rs:636" "panic rust: async PANIC attempt to add with overflow at emon/pdffont.rs:636"]}

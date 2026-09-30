@@ -782,10 +782,27 @@ analysis beyond "top-to-bottom lines on a single column".
   under `corpus/_gold/` (outside git), all validating; `bb import` runs them (D094; not
   a gate). Seal set found: mapo80/stamps. Tobacco800 and PubTabNet not imported
   (login / not fetched).
-- [ ] **P2.12 — `bb fuzz`, first cut**: truncation and byte-flip mutation of
-  the PDF fixtures through both hosts; no panic, no hang, same error name;
+- [x] **P2.12 — `bb fuzz`, first cut** (D096, D097): truncation and byte-flip
+  mutation of the PDF fixtures through both hosts; no panic, no hang, same error name;
   also under the 512-byte async source (a miss must never surface as an
   error, D058).
+  *Done*: `kin/fuzzprobe.kin` (one kin unit on every host: open, pages, decode every
+  stream, load every dictionary as a font and map every code, one line out; the same
+  pass through a 512-byte async source that is re-run until it does not miss), four
+  drivers (`test/fuzz/{rust,go,java,cs}`), and `tools/fuzz/` (babashka: SplitMix64
+  mutators, the harness with a per-case timeout and resumption after a kill, a
+  minimiser, and `--selftest` against a fake host that hangs/crashes/panics/disagrees
+  on demand). Mutators: truncation, byte flips, splices, and structure-aware ones
+  (xref entry numbers, `/Length` direct and indirect, `N G obj` headers, `stream` /
+  `endstream` boundaries, `/Size /Prev /Root /First /N /Kids /W /Index startxref`).
+  `bb fuzz` (no arguments) is the gate: selftest, every fixture unmutated, 300 seeded
+  mutants, every file under `test/fuzz/crashers/`, on Rust and Go, memory and async.
+  `bb fuzz --long N [--seed S] [--hosts all]` is not a gate. Found and fixed: three
+  signed-overflow sites that panic in a checked Rust build (a header shift added to a
+  saturated xref offset, an `/Index` start plus an entry number, a CMap number of ten
+  digits; D097), each kept as a reproducer in `test/fuzz/crashers/`. No hang, no
+  cross-host status difference and no async/memory difference was found. The content interpreter is not merged
+  (P1.7), so it is not in the probe yet: add its entry point to `fz-run` when it is.
 
 ## Phase 3 — PDF breadth
 
@@ -2937,4 +2954,81 @@ compressed PNG writer or bitmap-free OCR entries (the stored PNG is 2.1 MB a pag
 kin side of acting on OSD (a page at 180 degrees reads as noise until re-rendered rotated);
 the engine's binarised image as a bitmap answer for ghost detection (SPEC 9.5); a real
 `Renderer` in place of the extracted scan image.
+- [ ] **Signed off** (maintainer)
+
+### D096 — `bb fuzz`: one kin probe on every host, a babashka harness that judges by the whole answer line, and a smoke subset as a gate (P2.12)
+**Decision**: (1) What runs on a host is `kin/fuzzprobe.kin`'s `fz-case`: the PDF layer's
+whole read path (open, page table, every stream the cross-reference names decoded, every
+dictionary loaded as a font with every one-byte code mapped) folded into ONE text line
+(status name, page count, warning bits, hashes of geometry, objects, decoded bytes and font
+answers). With a `chunk` it reads through D058's async source, re-running on a fresh view
+until a run does not miss, then once more into the answer. The four drivers
+(`test/fuzz/{rust,go,java,cs}`) read file names on stdin and print `name TAB memory-line
+TAB async-line` per file, flushing each, a panic/exception caught and printed as `PANIC
+...` (Rust prints the `gen/` file:line). (2) The harness is `tools/fuzz/` (babashka, SplitMix64
+per D094 and `kin/splitmix.kin`): case i of seed S is a pure function of (S, i, fixture bytes)
+(`sm-at`), so `bb fuzz --seed S --only I --dump F` reproduces it. Mutators are truncation
+(uniform, near the end, near `xref`/`endobj`/`endstream`), 1 to 8 byte flips, splices
+(delete/duplicate/insert/swap) and structure-aware edits of xref entries, `/Length` (direct and
+`N 0 R`), object headers, `stream`/`endstream` boundaries and the trailer/object-stream numbers
+(`/Size /Prev /Root /First /N /Count /XRefStm`, `startxref`, `/W`, `/Index`, `/Kids`). Each case
+applies one to three. (3) A verdict is a failure when a host panics or throws, hangs (no answer
+within `--timeout-ms`, 10 s: the host is killed and the batch resumes after that case), dies
+(a Rust or Go stack overflow is not a panic), gives a line different from another host's (a
+`status-mismatch` when the `pd-status` name differs, a `detail-mismatch` when only the hashes do),
+or gives an async line different from its own memory line: a miss must never surface as an
+answer. Rust is built with overflow and bounds checks ON (as `pdf-sweep` is). (4) A failing
+mutant is minimised (spans removed while the same set of verdicts holds; 60 s budget) and saved
+as `test/fuzz/crashers/NAME.pdf` plus `NAME.edn` (seed, index, fixture, operations, verdicts,
+`:status :open|:fixed`). Every crasher is replayed on every run: `:fixed` must pass, `:open` is
+reported and does not gate. (5) `bb fuzz` with no arguments is the gate (`fuzz` in `bb gates`): a
+self-test of the harness against `tools/fuzz/fakehost.clj` (hang, crash, panic, both mismatches, an
+async miss, resumption after a kill, the minimiser), every fixture unmutated, 300 mutants of seed 1,
+and the crashers, on Rust and Go, about 15 s. `bb fuzz --long N` (every toolchain present, no gate)
+and `--hosts all` for Java and C# are not gates: Java and C# add about 25 s per 1000 files.
+**Why**: a line that carries every answer makes "the same status and error name on every host" the
+weakest of several checks rather than the only one, and puts the loop that D058 leaves to the host
+in kin once, where the four hosts share it. Seeds per case (not one stream per run) keep a case
+reproducible after the run that found it. A gate that cannot fail is not a gate, so the harness is
+tested against a host built to misbehave.
+**Alternatives**: one kin-side fuzz loop over SplitMix (`pdfdoctest`'s `dt-corruptions` already
+does this for fault-freedom, but it cannot see a hang, a cross-host difference or a process that
+dies, and it only flips bytes); comparing only the status name (hides a font or stream decode that
+differs); killing a hang with a thread in the host (a stack overflow or an infinite loop in kin
+does not yield).
+**Open**: the content interpreter (P1.7) is not merged, so `fz-run` does not run it; corpus PDFs
+(`corpus/`, real damaged files, P3.1) are not among the seeds; coverage is not measured (no
+instrumented build), so "how much of the PDF layer do 300 cases reach" is unanswered; a
+grammar-aware generator of whole objects (rather than mutation) is not built.
+- [ ] **Signed off** (maintainer)
+
+### D097 — Three signed-overflow sites in the PDF layer now saturate at 2^31-1 (found by `bb fuzz`, P2.12)
+**Decision**: hostile numbers reached integer additions that overflowed I32: a panic in a
+checked Rust build, a silent wrap in Go, Java and C# (so, with overflow checks on, a different
+answer from Rust). Each is now saturating and has a committed reproducer in
+`test/fuzz/crashers/`. (1) `pd-shifted` (`kin/pdfdoc.kin`) adds the header shift to a file offset
+and saturates; the five places that added the shift to an offset use it (`pd-open` for `startxref`,
+`pd-load-direct`, the `/XRefStm` position, `pd-hint-extents`, `pd-section`). The lexer already
+saturates integers, so `startxref 9999999999` or an xref entry `04000000054 0 n` is 2147483647, and
+adding a header shift of 1 overflowed (`xref-offset-overflow-s11-i983`,
+`startxref-offset-overflow-s21-i118`). (2) `pd-xfill`: with `/Index [2147483647 n]` an entry's
+object number `first + k` overflowed; the put is skipped for object numbers past 2^31-1 (they name
+nothing; `pd-ent-put` would drop them) and the entry is still consumed, so the byte position of
+the next subsection is unchanged (`xrefstream-index-overflow-s31-i12269`). (3) The CMap number
+lexer in `kin/pdffont.kin` clamped to 214748364 and then computed `x10 + d`, which overflows for a
+digit of 8 or 9; it now saturates at 2147483647 and is otherwise the same for every number that fit
+(`cmap-number-overflow-s41-i1146`, a mutated real font).
+**Why**: the fixes are what the lexer's own rule ("integers saturate at 2^31-1") implies and change
+no result that did not overflow (every unit law and fixture is unchanged). Another agent is changing
+`pdfdoc.kin` (xref repair, encryption): from `pdfdoc.kin` this is one helper, its five call sites
+and one guard in `pd-xfill`.
+**Alternatives**: wrapping arithmetic for offsets and object numbers (keeps the negative-position
+behaviour that only happened to be safe); rejecting the entry when it is parsed (a policy change
+for P3.1's repair to make). Release builds (no overflow checks) wrapped and did not crash, so
+these are robustness fixes (no panic under checks, one answer on every host), not a correctness
+regression.
+**Open**: the long runs (about 55,000 mutants over seeds 7, 11, 21, 31 and 41 on Rust and Go, 7,000
+of them on all four hosts) found only these three; Java and C# are not overflow-checked, so an
+overflow there is a wrap, found only as a difference from Rust's panic. Minimisation is span
+removal only: a mutated compressed stream does not shrink (the cmap crasher is 18 KB).
 - [ ] **Signed off** (maintainer)

@@ -216,6 +216,17 @@ func PdObjectCount(dc *port.Cells) int32 {
 	return port.CellsAt(dc, dNent)
 }
 
+func pdShifted(off int32, shift int32) int32 {
+	// A file offset plus the header shift, SATURATING at 2^31-1 (P2.12, D097):
+	// a hostile xref offset is the lexer's saturated 2147483647, and adding a
+	// positive shift to it overflowed I32 (a panic in a checked Rust build, a
+	// wrap to a negative position elsewhere). 2^31-1 is past any source.
+	if off > (2147483647 - shift) {
+		return 2147483647
+	}
+	return off + shift
+}
+
 func pdWarnSet(src *port.Src, dc *port.Cells, bit int32) int32 {
 	// Note a tolerated damage. NOT while the source has missed: what looks
 	// like damage may be zeros standing in for bytes that have not arrived.
@@ -413,7 +424,7 @@ func pdLoadDirect(src *port.Src, ar *port.Cells, dc *port.Cells, num int32, off 
 	var n int32 = pdfsrc.PsLen(src)
 	var h int32 = 0
 	pdflex.PlSeek(ar, 0, n)
-	h = pdflex.PlParseIndirect(src, ar, off+port.CellsAt(dc, dShift))
+	h = pdflex.PlParseIndirect(src, ar, pdShifted(off, port.CellsAt(dc, dShift)))
 	if (h != 0) && (pdflex.PlObjnum(ar) == num) {
 		return h
 	}
@@ -1002,7 +1013,7 @@ func pdTable(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *po
 	if (xs != 0) && (pdflex.PlKindOf(ar, xs) == 2) {
 		pdWarnSet(src, dc, 2)
 		// An unreadable /XRefStm costs only the objects it lists.
-		xpos = pdflex.PlIntValue(ar, xs) + port.CellsAt(dc, dShift)
+		xpos = pdShifted(pdflex.PlIntValue(ar, xs), port.CellsAt(dc, dShift))
 		pdXstream(src, ar, dc, a, b, st, xpos, 1)
 	}
 	// CHECKPOINT: after the trailer (and the /XRefStm it named).
@@ -1049,9 +1060,12 @@ func pdXfill(dc *port.Cells, a *port.Cells, at0 int32, first int32, count int32,
 	var ty int32 = 0
 	var f1 int32 = 0
 	var f2 int32 = 0
+	var room int32 = 0
 	if (first < 0) || (count < 0) {
 		return at0
 	}
+	// Object numbers past 2^31-1 name nothing (D097): skip the put, not the entry.
+	room = 2147483647 - first
 	for (k < count) && ((at + rec) <= ln) {
 		ty = 1
 		if w0 > 0 {
@@ -1059,13 +1073,13 @@ func pdXfill(dc *port.Cells, a *port.Cells, at0 int32, first int32, count int32,
 		}
 		f1 = pdRd(a, at+w0, w1)
 		f2 = pdRd(a, (at+w0)+w1, w2)
-		if ty == 0 {
+		if (ty == 0) && (k < room) {
 			pdEntPut(dc, first+k, 1, f1, f2, mode)
 		}
-		if ty == 1 {
+		if (ty == 1) && (k < room) {
 			pdEntPut(dc, first+k, 2, f1, f2, mode)
 		}
-		if ty == 2 {
+		if (ty == 2) && (k < room) {
 			pdEntPut(dc, first+k, 3, f1, f2, mode)
 		}
 		at += rec
@@ -1248,7 +1262,7 @@ func pdHintExtents(src *port.Src, dc *port.Cells, b *port.Cells) int32 {
 	for i < nent {
 		at = dFirst + (i * 5)
 		if port.CellsAt(dc, at) == 2 {
-			o = port.CellsAt(dc, at+1) + shift
+			o = pdShifted(port.CellsAt(dc, at+1), shift)
 			if (o >= 0) && (o < n) {
 				port.CellsPush(b, o)
 			}
@@ -1275,7 +1289,7 @@ func pdHintExtents(src *port.Src, dc *port.Cells, b *port.Cells) int32 {
 
 func pdSection(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, off int32) int32 {
 	// Read the section at file offset `off` (shifted): a table or a stream.
-	var pos int32 = off + port.CellsAt(dc, dShift)
+	var pos int32 = pdShifted(off, port.CellsAt(dc, dShift))
 	var k int32 = pdKindAt(src, ar, pos)
 	if k == 1 {
 		return pdTable(src, ar, dc, a, b, st, pos)
@@ -1392,7 +1406,7 @@ func PdOpen(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	// from the header: whichever finds a section at `startxref`.
 	if pdKindAt(src, ar, off) != 0 {
 		port.CellsSet(dc, dShift, 0)
-	} else if (base > 0) && (pdKindAt(src, ar, off+base) != 0) {
+	} else if (base > 0) && (pdKindAt(src, ar, pdShifted(off, base)) != 0) {
 		port.CellsSet(dc, dShift, base)
 		pdWarnSet(src, dc, 1)
 	} else {

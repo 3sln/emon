@@ -485,8 +485,10 @@
           (if (and (>= c 48) (<= c 57))
             (do (set seendig 1)
                 (if (== frac 0)
-                  (do (if (> val 214748363) (set val 214748364))
-                      (set val (+ (* val 10) (- c 48))))))
+                  (do (comment "Saturate at 2^31-1 (P2.12, D097): the old clamp to 214748364, then x10+d, overflowed for d of 8 or 9.")
+                      (if (or (> val 214748364) (and (== val 214748364) (> c 55)))
+                        (set val 2147483647)
+                        (set val (+ (* val 10) (- c 48)))))))
             (if (== c 46)
               (set frac 1)
               (set isnum 0)))
@@ -1155,6 +1157,9 @@
 
 (defn ^I32 pfn-round100 [^I32 cu]
   (comment "Hundredths to units, half away from zero.")
+  (comment "The two ends are answered directly: cu + 50 overflowed for a saturated cu (P2.12, D097).")
+  (if (> cu 2147483597) (return 21474836))
+  (if (< cu -2147483597) (return -21474836))
   (if (< cu 0) (return (- 0 (quot (+ (- 0 cu) 50) 100))))
   (return (quot (+ cu 50) 100)))
 

@@ -22,7 +22,7 @@
 set -e
 cd "$(dirname "$0")/../.."
 
-gates="hosts drift lang-test check unit plan ocr"
+gates="hosts drift lang-test check unit plan ocr fuzz"
 not_gates="gen emit gates accuracy import corpus-push corpus-pull corpus-test"
 
 fails=0
