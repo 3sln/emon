@@ -55,7 +55,7 @@ func toVec(c *port.Cells) []int32 {
 	return v
 }
 
-func answer(c *port.Cells, bm *port.PlanBitmap) (port.PlanAnswer, error) {
+func answer(c *port.Cells, bm *port.Bitmap) (port.PlanAnswer, error) {
 	return port.PlanAnswer{Rec: toVec(c), Bitmap: bm}, nil
 }
 
@@ -74,7 +74,7 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 			}
 		}
 		plan.AnRender(c, id, w, h, 1, req.Arg(2))
-		return answer(c, &port.PlanBitmap{W: w, H: h, Channels: 1, Pixels: px})
+		return answer(c, port.BitmapFromBytes(w, h, 1, px))
 	case port.PlanKindDecode:
 		w, h := int32(32), int32(16)
 		var px []byte
@@ -86,7 +86,7 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 			}
 		}
 		plan.AnDecode(c, id, w, h, 3, 7200, 0, 1)
-		return answer(c, &port.PlanBitmap{W: w, H: h, Channels: 3, Pixels: px})
+		return answer(c, port.BitmapFromBytes(w, h, 3, px))
 	case port.PlanKindOcr:
 		b, ok := bm[req.Arg(0)]
 		if !ok {
@@ -99,7 +99,7 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 			text                   []int32
 		}
 		words := []word{
-			{4, 2, b.W / 2, 10, 900 + int32(b.Pixels[0])%50, 0, []int32{72, 101, 108, 108, 111}},
+			{4, 2, b.W / 2, 10, 900 + int32(b.D[0])%50, 0, []int32{72, 101, 108, 108, 111}},
 			{b.W/2 + 6, 2, 20, 10, 871, 0, []int32{119, 246, 114, 108, 100}},
 			{4, 16, 6, 10, 640, 1, []int32{8364, 128512}},
 		}
@@ -265,7 +265,7 @@ func main() {
 	fmt.Printf("evidence: %s\n", evBuf.String())
 	for _, e := range transcript.Entries {
 		if b := e.Bitmap; b != nil {
-			fmt.Printf("bitmap %d: %dx%dx%d %08x\n", e.Req[2], b.W, b.H, b.Channels, fnv(b.Pixels))
+			fmt.Printf("bitmap %d: %dx%dx%d %08x\n", e.Req[2], b.W, b.H, b.Ch, fnv(b.D))
 		}
 	}
 	files := transcript.ToFiles()

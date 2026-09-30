@@ -650,17 +650,26 @@ analysis beyond "top-to-bottom lines on a single column".
   read (the `CellsRo` item in "Found in kin"), so the loop hands the unit
   `&mut` answers; ids must come from what is asked, not a global counter.
   Stored-block PNGs only (8.7 MB per gray 300-dpi A4 page; a compressed writer
-  is a P2.6 follow-up). `PlanBitmap` is provisional until P2.7's `Bitmap`.
+  is a P2.6 follow-up). Render and decode answers carry the port `Bitmap` (P2.7).
   Commit: pending (D037).
 - [ ] **P2.6 — Spike: OCR through the transcript.** Rust host binds
   Tesseract (C API), records one page's OCR into a transcript; kin reads the
   answer into `ocrwords` evidence; the Go host replays it and produces the
   same evidence dump. *Answers*: is the OCR answer layout sufficient
   (symbols, alternatives, baselines)? Does replay make identity exact?
-- [ ] **P2.7 — Spike: per-pixel cost** (SPEC §12.3). Binarise and label
+- [x] **P2.7 — Spike: per-pixel cost** (SPEC §12.3, D092). Binarise and label
   connected components of a 300-dpi A4 page in kin through `bitmap-u8`; a
   hand-written Rust comparator of the same algorithm; record the ratio in
   Rust, Go, C#. *Answers*: do we need bulk `Bitmap` forms, and which?
+  **Answer (D092)**: the port is not the cost: Otsu, Sauvola over integral
+  images and two-pass union-find labelling in kin are 0.7-1.3x the hand-written
+  Rust (Go up to 1.8x on Sauvola) and all four targets agree exactly; only the
+  whole-page streaming passes break 2x (threshold 18-24x vs a SIMD comparator,
+  zero-fill 12-61x), so `bitmap-histogram`, `bitmap-threshold-into`,
+  `bitmap-integral`, `bitmap-next-nonzero` and `cells-grow` are adopted and the
+  tracer stays in kin. The `Bitmap` tag and forms are in all four host trees
+  (`host/*/`), `kin/raster.kin` + `kin/rastertest.kin` (laws), harness in
+  `bench/` (`bench/run.sh`, `bb bench/report.clj`; not in `bb gates`).
 - [x] **P2.8 — Ground truth: the synthetic round trip** (D041, D071-D073, revising
   D032). An HTML corpus
   (start with ~30 documents covering headings to depth 4 with and without
@@ -2236,6 +2245,12 @@ them; offer them upstream when they have proved general.
   intended; the Rust borrow rule bites a kin function called INSIDE another call on the same
   `Cells` (`(cells-set f i (g f))`, `(pl-next ar (pl-first ar h))`): bind the inner result first
   (six sites in `pdffont` had to be).
+- `Bitmap` in Rust (P2.7): a pixel buffer both read and written by kin wants a SHARED
+  borrow (a source and a mask in one call), so its bytes are `Cell<u8>` behind `&Bitmap`;
+  `Cells`' `&mut` tag is the same read-only-parameter question again (the labeller passes
+  three `Cells` and only works because they are distinct arenas).
+- `var` (a Go keyword, a C# contextual one) as a kin local name was avoided by hand (`vr`);
+  worth a generation-time check beside `len`/`cap`/`go`.
 - A `(while 1 ...)` with statements after it would be unreachable code in Java
   (a constant condition); kin has no `loop`/`forever` the four targets agree
   on, so loops with several exits use a `done` flag.
@@ -2602,7 +2617,7 @@ opens it; the decoder reads the five filters but refuses compressed blocks
 (`png-compressed`). The price is size (8.7 MB for a gray 300-dpi A4 page);
 a compressed writer is a follow-up (P2.6 will want it). The library never names a
 filesystem: `Transcript` is named files in memory and the driver moves them. The
-Rust and Go hosts carry `PlanBitmap`, PROVISIONAL until P2.7's `Bitmap` lands.
+Rust and Go hosts carry the port `Bitmap` (P2.7; the provisional `PlanBitmap` is gone).
 **Why**: EDN is what the project already reads and diffs (DEVLOG, gold files); PNG
 makes bitmaps viewable; identical bytes across hosts is the strongest evidence that
 identity holds (and it is what `bb plan` checks).
@@ -2630,4 +2645,117 @@ the tests must be able to make it differ; limits as errors are what D030 wants
 (failure per unit, not a crashed process).
 **Alternatives**: limit kinds in the port table (touches the four port files, and
 P2.7 edits them); panicking breaches (the engine would have to catch them).
+- [ ] **Signed off** (maintainer)
+
+### D092 — Per-pixel work stays in kin over `bitmap-u8` and `Cells`; five bulk forms are adopted for the streaming passes (P2.7)
+**Decision**: the tracer and the normaliser (SPEC 8.2) are written in kin over the `Bitmap`
+port (`bitmap-u8`, `bitmap-set-u8`) and `Cells`; they are not hand-written per host. Five
+bulk forms are added, each because one measured stage broke the 2x rule (SPEC 12.3) and each
+replacing a whole-page loop that holds no kin-side state: `bitmap-histogram` (b, cells, off),
+`bitmap-threshold-into` (g, t, mask; answers the ink count), `bitmap-integral` (b, sum, sq; the
+two integral images of channel 0 and its square, low 32 bits, sized (w+1)(h+1)),
+`bitmap-next-nonzero` (b, x, y; the next ink pixel of a row, or the width), and `cells-grow`
+(c, n, v; n copies appended). They are declared in all four host trees, law-tested, and
+`bb hosts` agrees on them. `bitmap-row-copy` was tried and dropped: nothing measured wanted
+it. Rule for the next form: a pass earns one only if it is a pure whole-page map or reduce AND a
+measurement shows it over 2x; a pass that carries state in `Cells` (labelling, union-find,
+Sauvola's window) stays in kin.
+
+**What was measured** (`bench/`, not a gate; `bench/run.sh N port|bulk|skip`, `bb bench/report.clj`).
+Workload: Otsu + binarise + 8-connected labelling (two-pass union-find, labels/parents/areas in
+`Cells`), and Sauvola (r=15, k=87/256, integer) over two integral images + labelling, on a
+2481x3508 grayscale page (`corpus/formats/derived/inv_00007.noise.png`, the scanned katanaml
+invoice with scan noise, 300 dpi A4; made by `bb bench/mkpage.clj` through ImageMagick; a clean
+page, `inv_00000.png`, was run as well). The comparator is `bench/native/native.rs`, hand-written
+safe Rust (no port calls, no `unsafe`), the same algorithm. Release builds (rustc opt-level 3,
+`go build`, HotSpot 25 default, .NET 10 Release), best of 20, Apple M1 Pro. **Every arm produced
+identical threshold, component counts, areas and label checksum, on both pages and both
+pipelines** (e.g. noisy page: threshold 129, 155568 components, 266461 ink px, largest 958,
+checksum -285559633/1150869932; Sauvola 274254 ink px, 155391 components).
+
+Ratio to the hand-written Rust comparator, everything per pixel through the port (`port` mode),
+noisy page:
+
+| stage | rust-kin | go-kin | java-kin | csharp-kin | native (ms) |
+|---|---|---|---|---|---|
+| histogram (256 bins) | 0.99 | 1.00 | 1.02 | 1.01 | 18.4 |
+| binarise (threshold into mask) | 1.04 | 23.8 | 17.9 | 23.2 | 0.48 |
+| allocate labels (push loop vs `vec![0; n]`) | 12.3 | 61.0 | 18.9 | 21.6 | 0.30 |
+| label (2-pass union-find, 8-conn.) | 0.91 | 1.12 | 1.16 | 1.29 | 14.5 |
+| **Otsu pipeline total** | 1.06 | 1.93 | 1.49 | 1.65 | 33.7 |
+| integral images (sum and square) | 0.73 | 1.02 | 1.20 | 1.34 | 20.0 |
+| Sauvola threshold (8 `Cells` reads per pixel) | 1.00 | 1.81 | 1.35 | 1.33 | 41.3 |
+| **Sauvola pipeline total** (+ alloc, label) | 0.95 | 1.70 | 1.34 | 1.41 | 76.9 |
+
+After the bulk forms (`skip` mode: `bitmap-histogram`, `bitmap-threshold-into`,
+`bitmap-integral`, `cells-grow`, and labelling that visits only ink via `bitmap-next-nonzero`):
+
+| stage | rust-kin | go-kin | java-kin | csharp-kin |
+|---|---|---|---|---|
+| histogram | 0.28 | 0.28 | 0.26 | 0.27 |
+| binarise | 1.54 | 9.4 | 6.4 | 15.3 |
+| allocate | 1.0 | 1.0 | 1.0 | 1.9 |
+| label | 0.92 | 1.08 | 1.01 | 0.79 |
+| **Otsu pipeline total** | 0.58 | 0.77 | 0.68 | 0.73 |
+| integral images | 0.43 | 0.31 | 0.41 | 0.53 |
+| Sauvola threshold (unchanged, still kin) | 1.00 | 1.80 | 1.30 | 1.33 |
+| **Sauvola pipeline total** | 0.83 | 1.27 | 1.00 | 1.03 |
+
+Clean page (few components, white dominates), label stage: `port` 0.86 / 1.04 / 1.60 / 1.21, `skip`
+0.86 / 0.95 / 0.87 / 0.36 (rust / go / java / csharp).
+
+**Reading it.**
+- The per-pixel port call itself is not the cost. Rust-generated kin equals or beats the
+  hand-written comparator through `bitmap-u8` on histogram, label, integral and Sauvola (LLVM
+  inlines the port and even auto-vectorises the threshold loop: 0.50 ms against the comparator's
+  0.48). Go, Java and C# are 1.0-1.3x on the stateful passes (union-find, integral, histogram)
+  and 1.8x at worst (Go, Sauvola: several multiplies, two divisions and eight bounds-checked
+  `Cells` reads per pixel; the closest any stage comes to the line).
+- The two stages over 2x are streaming loops with nothing to hold in kin: binarise (18-24x
+  against a SIMD comparator; 2.8-3.7x against the same comparator compiled scalar, 3.1 ms; Go's
+  hand-written slice loop is 7.3 ms against 11.4 ms through the port, so the port costs Go
+  about 1.6x on a pure per-pixel loop) and zero-filling 8.7 M label cells (12-61x, a
+  `cells-push` loop against `memset`). Those are the two bulk forms that pay, and the histogram
+  form is worth having anyway: a host can split the bins across four counters to break the
+  dependency chain, which no kin loop can (5 ms against 18 ms, every host, 0.27x the comparator).
+- What is left in the bulk binarise (6-15x a SIMD comparator, 1.0-2.3x scalar) is the host's
+  loop quality, not kin's; a host may vectorise it (.NET `Vector<T>`, Go assembly) later
+  without touching a source. In absolute terms it is 3-7 ms of a ~25 ms pass, on a page
+  whose OCR takes seconds.
+- Skipping white (`bitmap-next-nonzero`) is what makes labelling proportional to ink: on a typical
+  clean page it takes C# from 1.2x to 0.36x and Java from 1.6x to 0.87x. Rust and Go gain little
+  (their per-pixel scan was already cheap).
+
+**Effect on the path tracer's design (SPEC 8.2, P6.3/P6.4).**
+1. Stays in kin: binarisation decisions that read neighbourhoods, integral images, Sauvola,
+   connected components, and by the same cost profile (Cells reads, integer arithmetic) distance
+   transforms, projection profiles, run and contour tracing. One source, four hosts,
+   identical output, as demonstrated.
+2. A pass over the whole page that only maps or reduces (thresholds, histograms, fills,
+   colour-layer masks, downscaling) goes through a bulk form, written once per host. Expect
+   two or three more of these at P6.3 (RGB to gray or to an ink-layer mask reads three
+   channels per pixel and was NOT spiked here; measure it before assuming it is fine).
+3. Write tracer passes sparse: iterate ink with `bitmap-next-nonzero` and runs, so work is
+   proportional to ink (1-3% of a page) rather than to 8.7 M pixels.
+4. Memory, not speed, is what a page-sized kin pass costs: per-pixel labels are 35 MB and the
+   two integral images 70 MB as `Cells` (32-bit cells). If that bites, the escalation is a
+   run-based labeller over a `bitmap-row-runs` form (not built; nothing measured wants it).
+5. Sauvola's window reads are the one place Go is near 2x; if Go's ratio degrades, the lever is
+   a host `bitmap-window-stats`-style form, not hand-writing the tracer.
+6. The `Bitmap` contract (SPEC 7.2) is now concrete: 8-bit, `channels` and `stride`, row-major
+   top-left; the bounds check is on the byte index, not each coordinate (an `x` past the row
+   reads the next row); writes are allowed. In Rust a `Bitmap` is a shared borrow over `Cell<u8>`,
+   so a source and a mask can be passed to one call, which `&mut Cells` does not allow.
+
+**Caveats**: one machine (Apple M1 Pro), one page and one degraded variant of it (the corpus
+holds no RVL-CDIP page; the noisy page is the nearest to a scan), default JIT settings (no
+warm-up tuning beyond best-of-20), a SIMD-capable comparator (the `rust-native-scalar` arm
+in `bench/run.sh` is the same source with the vectoriser off; Go/Java/C# do not vectorise these
+loops). The comparator's `binarise` and `histogram` are idiomatic iterator loops.
+**Why**: SPEC 12.3's rule is measurement; the spike says the port is cheap enough and that the
+only stages worth a bulk form are whole-page streaming ones.
+**Alternatives**: bulk forms for everything (rejected: labelling and Sauvola are within 2x, and a
+per-host tracer is four implementations that must agree byte for byte); no bulk forms
+(rejected: binarise and zero-fill break the rule by 18-60x in three hosts); a run-based
+labeller now (premature: nothing measured wants it).
 - [ ] **Signed off** (maintainer)

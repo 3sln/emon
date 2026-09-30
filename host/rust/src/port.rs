@@ -104,6 +104,14 @@ pub fn cells_drop(c: &mut Cells, n: i32) {
     c.v.truncate(n as usize);
 }
 
+// @kin:link:form:cells-grow: {:template "crate::port::cells_grow({0}, {1}, {2})" :arity 3}
+//
+// Appends `n` copies of `v` (what a loop of `cells-push` does, in one call).
+pub fn cells_grow(c: &mut Cells, n: i32, v: i32) {
+    let len = c.v.len() + n as usize;
+    c.v.resize(len, v);
+}
+
 // @kin:link:form:cells-bytes: {:template "(&crate::port::cells_bytes({0})[..])" :arity 1}
 //
 // A `Blob` VIEW OF A `Cells` OF BYTES (each cell 0..255, the low eight bits
@@ -115,6 +123,208 @@ pub fn cells_drop(c: &mut Cells, n: i32) {
 // never bind it with `let` (the same rule as `emon.test`'s blob makers).
 pub fn cells_bytes(c: &Cells) -> Vec<u8> {
     c.v.iter().map(|&x| x as u8).collect()
+}
+
+// ---------------------------------------------------------------- the Bitmap
+//
+// AN OPAQUE 8-BIT PIXEL BUFFER (SPEC 7.2, P2.7): `channels` bytes per pixel
+// (1 gray, 3 RGB), row-major, top-left origin, `stride` bytes per row.
+// `bitmap_u8(b, x, y, c)` reads, `bitmap_set_u8(b, x, y, c, v)` writes. A
+// write takes a SHARED borrow here (the bytes are `Cell`s), so one bitmap can
+// be handed to two parameters of a call, which `Cells`' `&mut` cannot.
+//
+// THE CHECK IS ON THE BYTE INDEX `y*stride + x*channels + c`, not on each
+// coordinate: an `x` past the row lands in the next row, as in every C
+// raster, and only an index past the BUFFER panics (Java and C# throw). A
+// caller that needs per-coordinate checks makes them. The P2.7 spike priced
+// the per-pixel call through this port (DEVLOG P2.7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Bitmap {
+    w: i32,
+    h: i32,
+    stride: i32,
+    ch: i32,
+    d: Vec<std::cell::Cell<u8>>,
+}
+
+impl Bitmap {
+    pub fn new(w: i32, h: i32, ch: i32) -> Bitmap {
+        let n = (w as usize) * (h as usize) * (ch as usize);
+        Bitmap { w, h, stride: w * ch, ch, d: vec![std::cell::Cell::new(0); n] }
+    }
+    // The host's way in: decoded pixels, tightly packed (stride = w * ch).
+    // The host's way out: the pixels tightly packed, row-major (encoders, transcripts).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let (w, h, ch, st) = (self.w as usize, self.h as usize, self.ch as usize, self.stride as usize);
+        let mut out = Vec::with_capacity(w * h * ch);
+        for y in 0..h {
+            out.extend(self.d[y * st..y * st + w * ch].iter().map(|c| c.get()));
+        }
+        out
+    }
+    pub fn width(&self) -> i32 { self.w }
+    pub fn height(&self) -> i32 { self.h }
+    pub fn channels(&self) -> i32 { self.ch }
+    pub fn from_bytes(w: i32, h: i32, ch: i32, bytes: &[u8]) -> Bitmap {
+        assert_eq!(bytes.len(), (w as usize) * (h as usize) * (ch as usize));
+        Bitmap { w, h, stride: w * ch, ch, d: bytes.iter().map(|&b| std::cell::Cell::new(b)).collect() }
+    }
+}
+
+// @kin:link:form:bitmap-new: {:template "(&crate::port::bitmap_new({0}, {1}, {2}))" :arity 3}
+//
+// Zero-filled. In Rust the template borrows a temporary: bind it with `let`
+// (extended) or nest it in the call that uses it, like `src-of-blob`.
+pub fn bitmap_new(w: i32, h: i32, ch: i32) -> Bitmap {
+    Bitmap::new(w, h, ch)
+}
+
+// @kin:link:form:bitmap-w: {:template "crate::port::bitmap_w({0})" :arity 1}
+pub fn bitmap_w(b: &Bitmap) -> i32 {
+    b.w
+}
+
+// @kin:link:form:bitmap-h: {:template "crate::port::bitmap_h({0})" :arity 1}
+pub fn bitmap_h(b: &Bitmap) -> i32 {
+    b.h
+}
+
+// @kin:link:form:bitmap-stride: {:template "crate::port::bitmap_stride({0})" :arity 1}
+pub fn bitmap_stride(b: &Bitmap) -> i32 {
+    b.stride
+}
+
+// @kin:link:form:bitmap-channels: {:template "crate::port::bitmap_channels({0})" :arity 1}
+pub fn bitmap_channels(b: &Bitmap) -> i32 {
+    b.ch
+}
+
+// @kin:link:form:bitmap-u8: {:template "crate::port::bitmap_u8({0}, {1}, {2}, {3})" :arity 4}
+#[inline]
+pub fn bitmap_u8(b: &Bitmap, x: i32, y: i32, c: i32) -> i32 {
+    b.d[(y * b.stride + x * b.ch + c) as usize].get() as i32
+}
+
+// @kin:link:form:bitmap-set-u8: {:template "crate::port::bitmap_set_u8({0}, {1}, {2}, {3}, {4})" :arity 5}
+#[inline]
+pub fn bitmap_set_u8(b: &Bitmap, x: i32, y: i32, c: i32, v: i32) {
+    b.d[(y * b.stride + x * b.ch + c) as usize].set(v as u8);
+}
+
+// ---- bulk forms (P2.7): the per-pixel loops the spike priced, done in the host.
+//
+// @kin:link:form:bitmap-histogram: {:template "crate::port::bitmap_histogram({0}, {1}, {2})" :arity 3}
+//
+// ADDS the count of each channel-0 value to `hist[off + v]`, v in 0..255; the
+// 256 cells must exist. One call per page instead of one per pixel.
+pub fn bitmap_histogram(b: &Bitmap, hist: &mut Cells, off: i32) {
+    let o = off as usize;
+    let bins = &mut hist.v[o..o + 256];
+    let (w, ch, stride) = (b.w as usize, b.ch as usize, b.stride as usize);
+    // FOUR PARTIAL HISTOGRAMS: one would make every increment wait for the
+    // previous one's store when neighbouring pixels share a value (a page is
+    // mostly white). The sums are the same.
+    let mut part = [[0i32; 256]; 4];
+    for y in 0..b.h as usize {
+        let row = &b.d[y * stride..y * stride + w * ch];
+        let mut it = row.chunks_exact(4 * ch);
+        for q in &mut it {
+            for k in 0..4 {
+                part[k][q[k * ch].get() as usize] += 1;
+            }
+        }
+        for px in it.remainder().chunks_exact(ch) {
+            part[0][px[0].get() as usize] += 1;
+        }
+    }
+    for v in 0..256 {
+        bins[v] += part[0][v] + part[1][v] + part[2][v] + part[3][v];
+    }
+}
+
+// @kin:link:form:bitmap-threshold-into: {:template "crate::port::bitmap_threshold_into({0}, {1}, {2})" :arity 3}
+//
+// `m`'s channel 0 := 255 where `g`'s channel 0 <= t, else 0, for every pixel;
+// `g` and `m` must have the same width and height (else a panic, like an
+// index). Answers the number of pixels set.
+pub fn bitmap_threshold_into(g: &Bitmap, t: i32, m: &Bitmap) -> i32 {
+    assert!(g.w == m.w && g.h == m.h);
+    let mut ink = 0;
+    let w = g.w as usize;
+    for y in 0..g.h as usize {
+        if g.ch == 1 && m.ch == 1 {
+            // The common case, row slices: no index arithmetic per pixel.
+            let gr = &g.d[y * g.stride as usize..][..w];
+            let mr = &m.d[y * m.stride as usize..][..w];
+            for (p, q) in gr.iter().zip(mr) {
+                let on = (p.get() as i32) <= t;
+                q.set(if on { 255 } else { 0 });
+                ink += on as i32;
+            }
+        } else {
+            for x in 0..w {
+                let v = g.d[y * g.stride as usize + x * g.ch as usize].get() as i32;
+                let o = y * m.stride as usize + x * m.ch as usize;
+                let on = v <= t;
+                m.d[o].set(if on { 255 } else { 0 });
+                ink += on as i32;
+            }
+        }
+    }
+    ink
+}
+
+// @kin:link:form:bitmap-next-nonzero: {:template "crate::port::bitmap_next_nonzero({0}, {1}, {2})" :arity 3}
+//
+// The first x' >= x on row `y` whose channel 0 is nonzero, or the width when
+// there is none (x may equal the width). What a labeller wants to skip white.
+pub fn bitmap_next_nonzero(b: &Bitmap, x: i32, y: i32) -> i32 {
+    let (w, ch) = (b.w as usize, b.ch as usize);
+    let row = &b.d[y as usize * b.stride as usize..][..w * ch];
+    let mut i = x as usize;
+    while i < w {
+        if row[i * ch].get() != 0 {
+            return i as i32;
+        }
+        i += 1;
+    }
+    b.w
+}
+
+// @kin:link:form:bitmap-integral: {:template "crate::port::bitmap_integral({0}, {1}, {2})" :arity 3}
+//
+// Sets `sum` and `sq` to the INTEGRAL IMAGES of channel 0 and of its square:
+// exactly (w+1)*(h+1) cells each (row-major, a zero row and a zero column
+// first), holding the LOW 32 BITS of the running sums (wrapping). A window sum
+// is the four-corner difference, taken in 64 bits and truncated; it is exact
+// whenever the true sum is below 2^31.
+pub fn bitmap_integral(b: &Bitmap, sum: &mut Cells, sq: &mut Cells) {
+    let (w, h, ch, stride) = (b.w as usize, b.h as usize, b.ch as usize, b.stride as usize);
+    let w1 = w + 1;
+    let n = w1 * (h + 1);
+    // Only row 0 and column 0 need zeroing: every other cell is written below.
+    sum.v.resize(n, 0);
+    sum.v.truncate(n);
+    sq.v.resize(n, 0);
+    sq.v.truncate(n);
+    sum.v[..w1].fill(0);
+    sq.v[..w1].fill(0);
+    for y in 0..h {
+        let row = &b.d[y * stride..y * stride + w * ch];
+        let (mut rs, mut rq) = (0i32, 0i32);
+        let (above_s, below_s) = sum.v.split_at_mut((y + 1) * w1);
+        let (above_q, below_q) = sq.v.split_at_mut((y + 1) * w1);
+        let (ps, pq) = (&above_s[y * w1..], &above_q[y * w1..]);
+        below_s[0] = 0;
+        below_q[0] = 0;
+        for x in 0..w {
+            let v = row[x * ch].get() as i32;
+            rs += v;
+            rq += v * v;
+            below_s[x + 1] = ps[x + 1].wrapping_add(rs);
+            below_q[x + 1] = pq[x + 1].wrapping_add(rq);
+        }
+    }
 }
 
 // ---------------------------------------------------------------- the Src

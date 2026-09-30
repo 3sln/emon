@@ -19,7 +19,7 @@ mod port;
 mod testport;
 
 use plan::*;
-use port::{cells_at, cells_len, Cells, Src};
+use port::{cells_at, Bitmap, cells_len, Cells, Src};
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -46,7 +46,7 @@ fn to_vec(c: &Cells) -> Vec<i32> {
     (0..cells_len(c)).map(|i| cells_at(c, i)).collect()
 }
 
-fn ok_answer(mut c: Cells, bm: Option<PlanBitmap>) -> Result<Answer, PlanError> {
+fn ok_answer(mut c: Cells, bm: Option<Bitmap>) -> Result<Answer, PlanError> {
     Ok(Answer { rec: to_vec(&c), bitmap: bm.map(Arc::new) })
 }
 
@@ -65,7 +65,7 @@ fn fake(req: &Request, bm: &Bitmaps) -> Result<Answer, PlanError> {
                 }
             }
             emon::plan::an_render(&mut c, id, w, h, 1, req.arg(2));
-            ok_answer(c, Some(PlanBitmap { w, h, channels: 1, pixels: px }))
+            ok_answer(c, Some(Bitmap::from_bytes(w, h, 1, &px)))
         }
         KIND_DECODE => {
             let (w, h) = (32, 16);
@@ -78,7 +78,7 @@ fn fake(req: &Request, bm: &Bitmaps) -> Result<Answer, PlanError> {
                 }
             }
             emon::plan::an_decode(&mut c, id, w, h, 3, 7200, 0, 1);
-            ok_answer(c, Some(PlanBitmap { w, h, channels: 3, pixels: px }))
+            ok_answer(c, Some(Bitmap::from_bytes(w, h, 3, &px)))
         }
         KIND_OCR => {
             let b = match bm.get(&req.arg(0)) {
@@ -90,8 +90,8 @@ fn fake(req: &Request, bm: &Bitmaps) -> Result<Answer, PlanError> {
             };
             let at = emon::plan::an_ocr(&mut c, id);
             let words: [(i32, i32, i32, i32, i32, i32, &[i32]); 3] = [
-                (4, 2, b.w / 2, 10, 900 + (b.pixels[0] as i32 % 50), 0, &[72, 101, 108, 108, 111]),
-                (b.w / 2 + 6, 2, 20, 10, 871, 0, &[119, 246, 114, 108, 100]),
+                (4, 2, b.width() / 2, 10, 900 + (b.to_bytes()[0] as i32 % 50), 0, &[72, 101, 108, 108, 111]),
+                (b.width() / 2 + 6, 2, 20, 10, 871, 0, &[119, 246, 114, 108, 100]),
                 (4, 16, 6, 10, 640, 1, &[8364, 128512]),
             ];
             for (x, y, w, h, conf, line, text) in words.iter() {
@@ -246,7 +246,7 @@ fn main() {
     println!("evidence: {}", evidence);
     for e in &transcript.entries {
         if let Some(b) = &e.bitmap {
-            println!("bitmap {}: {}x{}x{} {:08x}", e.req[2], b.w, b.h, b.channels, fnv(&b.pixels));
+            println!("bitmap {}: {}x{}x{} {:08x}", e.req[2], b.width(), b.height(), b.channels(), fnv(&b.to_bytes()));
         }
     }
     let files = transcript.to_files();

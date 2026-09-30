@@ -81,17 +81,8 @@ func planLimit(name string, limit, actual int32) *PlanError {
 	return planErr(name, "the limit is %d and this run reached %d", limit, actual)
 }
 
-// PlanBitmap is PROVISIONAL (P2.5): the SPEC's `Bitmap` port is P2.7's and lives
-// in port.go when it lands; this is the least a render/decode answer needs to
-// carry pixels into a transcript, and is named differently so the two cannot
-// collide. Replace it by `Bitmap` then and keep PngEncode/PngDecode over it.
-type PlanBitmap struct {
-	W, H, Channels int32 // channels: 1 gray, 3 RGB
-	Pixels         []byte
-}
-
-// PlanBitmaps maps an answer's id to its bitmap.
-type PlanBitmaps map[int32]*PlanBitmap
+// PlanBitmaps maps an answer's id to its (port) Bitmap.
+type PlanBitmaps map[int32]*Bitmap
 
 // PlanRequest is a request record.
 type PlanRequest struct{ Rec []int32 }
@@ -105,7 +96,7 @@ func (r PlanRequest) Arg(k int) int32 { return r.Rec[3+k] }
 // PlanAnswer is an answer record and, for render/decode, its pixels.
 type PlanAnswer struct {
 	Rec    []int32
-	Bitmap *PlanBitmap
+	Bitmap *Bitmap
 }
 
 func (a PlanAnswer) Kind() int32   { return a.Rec[1] }
@@ -353,7 +344,7 @@ type PlanEntry struct {
 	Round  int32
 	Req    []int32
 	Ans    []int32
-	Bitmap *PlanBitmap
+	Bitmap *Bitmap
 }
 
 // Transcript is the complete set of answers of one run. Inputs are (index,
@@ -726,12 +717,12 @@ func pngChunk(out *bytes.Buffer, kind string, body []byte) {
 }
 
 // PngEncode writes a bitmap as a lossless PNG.
-func PngEncode(b *PlanBitmap) []byte {
-	w, h, ch := int(b.W), int(b.H), int(b.Channels)
+func PngEncode(b *Bitmap) []byte {
+	w, h, ch := int(b.W), int(b.H), int(b.Ch)
 	raw := make([]byte, 0, h*(1+w*ch))
 	for y := 0; y < h; y++ {
 		raw = append(raw, 0)
-		raw = append(raw, b.Pixels[y*w*ch:(y+1)*w*ch]...)
+		raw = append(raw, b.D[y*int(b.Stride):y*int(b.Stride)+w*ch]...)
 	}
 	z := []byte{0x78, 0x01}
 	if len(raw) == 0 {
@@ -766,7 +757,7 @@ func PngEncode(b *PlanBitmap) []byte {
 }
 
 // PngDecode reads a PNG written by PngEncode (or any stored-block gray/RGB PNG).
-func PngDecode(p []byte) (*PlanBitmap, error) {
+func PngDecode(p []byte) (*Bitmap, error) {
 	sig := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
 	if len(p) < 8 || !bytes.Equal(p[:8], sig) {
 		return nil, errors.New("not a PNG")
@@ -878,7 +869,7 @@ loop:
 			px[y*stride+x] = byte(v + pred)
 		}
 	}
-	return &PlanBitmap{W: int32(w), H: int32(h), Channels: int32(ch), Pixels: px}, nil
+	return BitmapFromBytes(int32(w), int32(h), int32(ch), px), nil
 }
 
 func planAbs(x int) int {

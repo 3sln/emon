@@ -90,6 +90,21 @@ public final class Port {
         c.n = n;
     }
 
+    // @kin:link:form:cells-grow: {:template "emon.Port.cellsGrow({0}, {1}, {2})" :arity 3}
+    //
+    // Appends n copies of v (what a loop of `cells-push` does, in one call).
+    public static void cellsGrow(Cells c, int n, int v) {
+        if (n < 0) {
+            throw new IndexOutOfBoundsException();
+        }
+        int need = c.n + n;
+        if (need > c.v.length) {
+            c.v = java.util.Arrays.copyOf(c.v, Math.max(need, c.v.length * 2));
+        }
+        java.util.Arrays.fill(c.v, c.n, need, v);
+        c.n = need;
+    }
+
     // @kin:link:form:cells-bytes: {:template "emon.Port.cellsBytes({0})" :arity 1}
     //
     // A Blob VIEW of a Cells of bytes: a snapshot (see the Rust half).
@@ -99,6 +114,171 @@ public final class Port {
             b[i] = (byte) c.v[i];
         }
         return b;
+    }
+
+    // ---------------------------------------------------------- the Bitmap
+    //
+    // An opaque 8-bit pixel buffer (see the Rust half for the contract). The
+    // check is on the byte index, not on each coordinate; JAVA'S `byte` IS
+    // SIGNED, so a read masks with 0xFF.
+    public static final class Bitmap {
+        public final int w, h, stride, ch;
+        public final byte[] d;
+
+        public Bitmap(int w, int h, int ch, byte[] d) {
+            if (d.length != w * h * ch) {
+                throw new IllegalArgumentException("bitmap size");
+            }
+            this.w = w;
+            this.h = h;
+            this.stride = w * ch;
+            this.ch = ch;
+            this.d = d;
+        }
+    }
+
+    // @kin:link:form:bitmap-new: {:template "emon.Port.bitmapNew({0}, {1}, {2})" :arity 3}
+    public static Bitmap bitmapNew(int w, int h, int ch) {
+        return new Bitmap(w, h, ch, new byte[w * h * ch]);
+    }
+
+    // @kin:link:form:bitmap-w: {:template "emon.Port.bitmapW({0})" :arity 1}
+    public static int bitmapW(Bitmap b) {
+        return b.w;
+    }
+
+    // @kin:link:form:bitmap-h: {:template "emon.Port.bitmapH({0})" :arity 1}
+    public static int bitmapH(Bitmap b) {
+        return b.h;
+    }
+
+    // @kin:link:form:bitmap-stride: {:template "emon.Port.bitmapStride({0})" :arity 1}
+    public static int bitmapStride(Bitmap b) {
+        return b.stride;
+    }
+
+    // @kin:link:form:bitmap-channels: {:template "emon.Port.bitmapChannels({0})" :arity 1}
+    public static int bitmapChannels(Bitmap b) {
+        return b.ch;
+    }
+
+    // @kin:link:form:bitmap-u8: {:template "emon.Port.bitmapU8({0}, {1}, {2}, {3})" :arity 4}
+    public static int bitmapU8(Bitmap b, int x, int y, int c) {
+        return b.d[y * b.stride + x * b.ch + c] & 0xFF;
+    }
+
+    // @kin:link:form:bitmap-set-u8: {:template "emon.Port.bitmapSetU8({0}, {1}, {2}, {3}, {4})" :arity 5}
+    public static void bitmapSetU8(Bitmap b, int x, int y, int c, int v) {
+        b.d[y * b.stride + x * b.ch + c] = (byte) v;
+    }
+
+    // ---- bulk forms (P2.7): the per-pixel loops the spike priced, done in the
+    // host. See the Rust half for the contracts.
+
+    // @kin:link:form:bitmap-histogram: {:template "emon.Port.bitmapHistogram({0}, {1}, {2})" :arity 3}
+    public static void bitmapHistogram(Bitmap b, Cells hist, int off) {
+        if (off < 0 || off + 256 > hist.n) {
+            throw new IndexOutOfBoundsException();
+        }
+        // Four partial histograms, for the Rust half's reason.
+        int[] p0 = new int[256], p1 = new int[256], p2 = new int[256], p3 = new int[256];
+        byte[] d = b.d;
+        int ch = b.ch;
+        for (int y = 0; y < b.h; y++) {
+            int s = y * b.stride;
+            int end = s + b.w * ch;
+            int i = s;
+            for (; i + 4 * ch <= end; i += 4 * ch) {
+                p0[d[i] & 0xFF]++;
+                p1[d[i + ch] & 0xFF]++;
+                p2[d[i + 2 * ch] & 0xFF]++;
+                p3[d[i + 3 * ch] & 0xFF]++;
+            }
+            for (; i < end; i += ch) {
+                p0[d[i] & 0xFF]++;
+            }
+        }
+        int[] bins = hist.v;
+        for (int v = 0; v < 256; v++) {
+            bins[off + v] += p0[v] + p1[v] + p2[v] + p3[v];
+        }
+    }
+
+    // @kin:link:form:bitmap-threshold-into: {:template "emon.Port.bitmapThresholdInto({0}, {1}, {2})" :arity 3}
+    public static int bitmapThresholdInto(Bitmap g, int t, Bitmap m) {
+        if (g.w != m.w || g.h != m.h) {
+            throw new IllegalArgumentException("bitmap size");
+        }
+        int ink = 0;
+        byte[] gd = g.d, md = m.d;
+        for (int y = 0; y < g.h; y++) {
+            int gi = y * g.stride, mi = y * m.stride;
+            if (g.ch == 1 && m.ch == 1) {
+                // The common case: unit strides, which the JIT can vectorise.
+                for (int x = 0; x < g.w; x++) {
+                    int on = 1 - ((t - (gd[gi + x] & 0xFF)) >>> 31);
+                    md[mi + x] = (byte) -on;
+                    ink += on;
+                }
+                continue;
+            }
+            for (int x = 0; x < g.w; x++) {
+                // on = 1 when v <= t, branch-free (the sign bit of t - v).
+                int on = 1 - ((t - (gd[gi] & 0xFF)) >>> 31);
+                md[mi] = (byte) -on;
+                ink += on;
+                gi += g.ch;
+                mi += m.ch;
+            }
+        }
+        return ink;
+    }
+
+    // @kin:link:form:bitmap-next-nonzero: {:template "emon.Port.bitmapNextNonzero({0}, {1}, {2})" :arity 3}
+    public static int bitmapNextNonzero(Bitmap b, int x, int y) {
+        int s = y * b.stride;
+        byte[] d = b.d;
+        for (int i = x; i < b.w; i++) {
+            if (d[s + i * b.ch] != 0) {
+                return i;
+            }
+        }
+        return b.w;
+    }
+
+    // @kin:link:form:bitmap-integral: {:template "emon.Port.bitmapIntegral({0}, {1}, {2})" :arity 3}
+    public static void bitmapIntegral(Bitmap b, Cells sum, Cells sq) {
+        int w1 = b.w + 1;
+        int n = w1 * (b.h + 1);
+        // Only row 0 and column 0 need zeroing: every other cell is written below.
+        if (sum.v.length < n) {
+            sum.v = new int[n];
+        }
+        sum.n = n;
+        if (sq.v.length < n) {
+            sq.v = new int[n];
+        }
+        sq.n = n;
+        int[] s = sum.v, q = sq.v;
+        byte[] d = b.d;
+        for (int x = 0; x < w1; x++) {
+            s[x] = 0;
+            q[x] = 0;
+        }
+        for (int y = 0; y < b.h; y++) {
+            s[(y + 1) * w1] = 0;
+            q[(y + 1) * w1] = 0;
+            int rs = 0, rq = 0;
+            int src = y * b.stride;
+            int p = y * w1 + 1, c = (y + 1) * w1 + 1;
+            for (int x = 0; x < b.w; x++) {
+                int v = d[src + x * b.ch] & 0xFF;
+                rs += v;
+                rq += v * v;
+                s[c + x] = s[p + x] + rs;
+                q[c + x] = q[p + x] + rq;
+            }
+        }
     }
 
     // ---------------------------------------------------------- the Src

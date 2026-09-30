@@ -599,10 +599,12 @@ Mirroring nome's `kin/src/nome/{lang,test,targets,project}.cljc`:
    for JSON, HTML and the evidence dump, because the formats live in the
    *order kin emits*, not in the host (nome's `Sink` rule, generalised to
    text).
-3. **`Bitmap` forms** — `bitmap-w`, `bitmap-h`, `bitmap-channels`,
-   `bitmap-u8`, `bitmap-new`, `bitmap-set-u8`, plus a small number of
-   **bulk** forms added *only* when the not-worse rule demands it by
-   measurement (§12.3): e.g. `bitmap-row-sum`. Host-linked.
+3. **`Bitmap` forms** — `bitmap-w`, `bitmap-h`, `bitmap-stride`,
+   `bitmap-channels`, `bitmap-u8`, `bitmap-new`, `bitmap-set-u8`, plus a small
+   number of **bulk** forms added *only* when the not-worse rule demands it by
+   measurement (§12.3). P2.7 measured and adopted four (D092):
+   `bitmap-histogram`, `bitmap-threshold-into`, `bitmap-integral`,
+   `bitmap-next-nonzero`, with `cells-grow` on the `Cells` side. Host-linked.
 4. **`defenum`** (candidate, P0 decides): a kind table — name, integer
    code, JSON spelling — generating the `nk-*` constants *and* the
    code→spelling emitter from one declaration, so a kind cannot be added to
@@ -1225,6 +1227,12 @@ touched several times. Phase 2's spike measures it; if a generated inner loop
 is more than 2× the comparator, the answer is a small number of named bulk
 `Bitmap` forms (integral image, row histograms), not hand-writing the
 tracer.
+
+**Measured (P2.7, D092).** Otsu, Sauvola over integral images and 8-connected
+labelling of a 2481×3508 page through `bitmap-u8` and `Cells` are within 2× of
+the hand-written Rust comparator in every target for every stage except the
+streaming ones (threshold, zero-fill), which are what the four bulk forms
+above replace; the tracer stays in kin.
 
 ---
 

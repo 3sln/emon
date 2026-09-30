@@ -81,6 +81,19 @@ func CellsDrop(c *Cells, n int32) {
 	c.V = c.V[:n]
 }
 
+// @kin:link:form:cells-grow: {:template "port.CellsGrow({0}, {1}, {2})" :import "emon/port" :arity 3}
+//
+// Appends n copies of v (what a loop of `cells-push` does, in one call).
+func CellsGrow(c *Cells, n int32, v int32) {
+	old := len(c.V)
+	c.V = append(c.V, make([]int32, n)...)
+	if v != 0 {
+		for i := old; i < len(c.V); i++ {
+			c.V[i] = v
+		}
+	}
+}
+
 // @kin:link:form:cells-bytes: {:template "port.CellsBytes({0})" :import "emon/port" :arity 1}
 //
 // A Blob VIEW of a Cells of bytes: a snapshot (see the Rust half).
@@ -90,6 +103,166 @@ func CellsBytes(c *Cells) []byte {
 		b[i] = byte(v)
 	}
 	return b
+}
+
+// ------------------------------------------------------------------ the Bitmap
+//
+// An opaque 8-bit pixel buffer (see the Rust half for the contract): Ch bytes
+// per pixel, row-major, top-left, Stride bytes per row. The check is on the
+// byte index, not on each coordinate.
+type Bitmap struct {
+	W, H, Stride, Ch int32
+	D                []byte
+}
+
+// The host's way in: decoded pixels, tightly packed.
+func BitmapFromBytes(w, h, ch int32, d []byte) *Bitmap {
+	if len(d) != int(w)*int(h)*int(ch) {
+		panic("bitmap size")
+	}
+	return &Bitmap{W: w, H: h, Stride: w * ch, Ch: ch, D: d}
+}
+
+// @kin:link:form:bitmap-new: {:template "port.BitmapNew({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapNew(w, h, ch int32) *Bitmap {
+	return BitmapFromBytes(w, h, ch, make([]byte, int(w)*int(h)*int(ch)))
+}
+
+// @kin:link:form:bitmap-w: {:template "port.BitmapW({0})" :import "emon/port" :arity 1}
+func BitmapW(b *Bitmap) int32 {
+	return b.W
+}
+
+// @kin:link:form:bitmap-h: {:template "port.BitmapH({0})" :import "emon/port" :arity 1}
+func BitmapH(b *Bitmap) int32 {
+	return b.H
+}
+
+// @kin:link:form:bitmap-stride: {:template "port.BitmapStride({0})" :import "emon/port" :arity 1}
+func BitmapStride(b *Bitmap) int32 {
+	return b.Stride
+}
+
+// @kin:link:form:bitmap-channels: {:template "port.BitmapChannels({0})" :import "emon/port" :arity 1}
+func BitmapChannels(b *Bitmap) int32 {
+	return b.Ch
+}
+
+// @kin:link:form:bitmap-u8: {:template "port.BitmapU8({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
+func BitmapU8(b *Bitmap, x, y, c int32) int32 {
+	return int32(b.D[y*b.Stride+x*b.Ch+c])
+}
+
+// @kin:link:form:bitmap-set-u8: {:template "port.BitmapSetU8({0}, {1}, {2}, {3}, {4})" :import "emon/port" :arity 5}
+func BitmapSetU8(b *Bitmap, x, y, c, v int32) {
+	b.D[y*b.Stride+x*b.Ch+c] = byte(v)
+}
+
+// Bulk forms (P2.7): the per-pixel loops the spike priced, done in the host.
+// See the Rust half for the contracts.
+
+// @kin:link:form:bitmap-histogram: {:template "port.BitmapHistogram({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapHistogram(b *Bitmap, hist *Cells, off int32) {
+	bins := hist.V[off : off+256]
+	w, ch, stride := int(b.W), int(b.Ch), int(b.Stride)
+	// Four partial histograms: one makes each increment wait for the previous
+	// store when neighbouring pixels share a value (a page is mostly white).
+	var part [4][256]int32
+	for y := 0; y < int(b.H); y++ {
+		row := b.D[y*stride : y*stride+w*ch]
+		x := 0
+		for ; x+4*ch <= len(row); x += 4 * ch {
+			part[0][row[x]]++
+			part[1][row[x+ch]]++
+			part[2][row[x+2*ch]]++
+			part[3][row[x+3*ch]]++
+		}
+		for ; x < len(row); x += ch {
+			part[0][row[x]]++
+		}
+	}
+	for v := 0; v < 256; v++ {
+		bins[v] += part[0][v] + part[1][v] + part[2][v] + part[3][v]
+	}
+}
+
+// @kin:link:form:bitmap-threshold-into: {:template "port.BitmapThresholdInto({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapThresholdInto(g *Bitmap, t int32, m *Bitmap) int32 {
+	if g.W != m.W || g.H != m.H {
+		panic("bitmap size")
+	}
+	var ink int32
+	w := int(g.W)
+	for y := int32(0); y < g.H; y++ {
+		if g.Ch == 1 && m.Ch == 1 {
+			// The common case, row slices: no index arithmetic per pixel.
+			gr := g.D[y*g.Stride:][:w]
+			mr := m.D[y*m.Stride:][:w]
+			for i, v := range gr {
+				var on int32
+				if int32(v) <= t {
+					on = 1
+				}
+				mr[i] = byte(-on)
+				ink += on
+			}
+		} else {
+			for x := int32(0); x < g.W; x++ {
+				var on int32
+				if int32(g.D[y*g.Stride+x*g.Ch]) <= t {
+					on = 1
+				}
+				m.D[y*m.Stride+x*m.Ch] = byte(-on)
+				ink += on
+			}
+		}
+	}
+	return ink
+}
+
+// @kin:link:form:bitmap-next-nonzero: {:template "port.BitmapNextNonzero({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapNextNonzero(b *Bitmap, x, y int32) int32 {
+	ch := int(b.Ch)
+	row := b.D[int(y)*int(b.Stride):][:int(b.W)*ch]
+	for i := int(x); i < int(b.W); i++ {
+		if row[i*ch] != 0 {
+			return int32(i)
+		}
+	}
+	return b.W
+}
+
+// @kin:link:form:bitmap-integral: {:template "port.BitmapIntegral({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapIntegral(b *Bitmap, sum *Cells, sq *Cells) {
+	w, h, ch, stride := int(b.W), int(b.H), int(b.Ch), int(b.Stride)
+	w1 := w + 1
+	n := w1 * (h + 1)
+	// Only row 0 and column 0 need zeroing: every other cell is written below.
+	if cap(sum.V) < n {
+		sum.V = make([]int32, n)
+	}
+	sum.V = sum.V[:n]
+	if cap(sq.V) < n {
+		sq.V = make([]int32, n)
+	}
+	sq.V = sq.V[:n]
+	for x := 0; x < w1; x++ {
+		sum.V[x], sq.V[x] = 0, 0
+	}
+	for y := 0; y < h; y++ {
+		row := b.D[y*stride : y*stride+w*ch]
+		ps, pq := sum.V[y*w1:(y+1)*w1], sq.V[y*w1:(y+1)*w1]
+		cs, cq := sum.V[(y+1)*w1:(y+2)*w1], sq.V[(y+1)*w1:(y+2)*w1]
+		cs[0], cq[0] = 0, 0
+		var rs, rq int32
+		for x := 0; x < w; x++ {
+			v := int32(row[x*ch])
+			rs += v
+			rq += v * v
+			cs[x+1] = ps[x+1] + rs
+			cq[x+1] = pq[x+1] + rq
+		}
+	}
 }
 
 // ------------------------------------------------------------------ the Src

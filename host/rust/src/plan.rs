@@ -26,7 +26,7 @@
 // the order, which is what makes a transcript the same however the answers
 // arrived.
 
-use crate::port::{cells_at, cells_len, cells_push, Cells};
+use crate::port::{cells_at, cells_len, cells_push, Bitmap, Cells};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
@@ -117,21 +117,9 @@ impl std::fmt::Display for PlanError {
 }
 
 // -------------------------------------------------------------- the bitmap
-// PROVISIONAL (P2.5). The SPEC's `Bitmap` port (8-bit gray or RGB, row-major,
-// top-left) is P2.7's and lives in `port.rs` when it lands; this is the smallest
-// thing a render/decode answer needs to carry pixels to a transcript, and is
-// named differently so the two cannot collide. When P2.7 is merged, replace this
-// struct by `port::Bitmap` (w, h, channels, pixels) and keep `png_encode` and
-// `png_decode` over it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PlanBitmap {
-    pub w: i32,
-    pub h: i32,
-    pub channels: i32, // 1 gray, 3 RGB
-    pub pixels: Vec<u8>,
-}
-
-pub type Bitmaps = BTreeMap<i32, Arc<PlanBitmap>>;
+// Render and decode answers carry the port's `Bitmap` (P2.7, `port.rs`); this
+// file only encodes it to and from a lossless PNG for the transcript.
+pub type Bitmaps = BTreeMap<i32, Arc<Bitmap>>;
 
 // ------------------------------------------------- requests and answers
 
@@ -157,7 +145,7 @@ impl Request {
 pub struct Answer {
     pub rec: Vec<i32>,
     // A render or decode answer's pixels. Keyed by the answer's id.
-    pub bitmap: Option<Arc<PlanBitmap>>,
+    pub bitmap: Option<Arc<Bitmap>>,
 }
 
 impl Answer {
@@ -404,7 +392,7 @@ pub struct Entry {
     pub round: i32,
     pub req: Vec<i32>,
     pub ans: Vec<i32>,
-    pub bitmap: Option<Arc<PlanBitmap>>,
+    pub bitmap: Option<Arc<Bitmap>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -736,12 +724,13 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
     out.extend_from_slice(&crc32(&c).to_be_bytes());
 }
 
-pub fn png_encode(b: &PlanBitmap) -> Vec<u8> {
-    let (w, h, ch) = (b.w as usize, b.h as usize, b.channels as usize);
+pub fn png_encode(b: &Bitmap) -> Vec<u8> {
+    let (w, h, ch) = (b.width() as usize, b.height() as usize, b.channels() as usize);
+    let pixels = b.to_bytes();
     let mut raw = Vec::with_capacity(h * (1 + w * ch));
     for y in 0..h {
         raw.push(0);
-        raw.extend_from_slice(&b.pixels[y * w * ch..(y + 1) * w * ch]);
+        raw.extend_from_slice(&pixels[y * w * ch..(y + 1) * w * ch]);
     }
     let mut z = vec![0x78, 0x01];
     if raw.is_empty() {
@@ -759,8 +748,8 @@ pub fn png_encode(b: &PlanBitmap) -> Vec<u8> {
     z.extend_from_slice(&adler32(&raw).to_be_bytes());
     let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
     let mut ihdr = Vec::new();
-    ihdr.extend_from_slice(&(b.w as u32).to_be_bytes());
-    ihdr.extend_from_slice(&(b.h as u32).to_be_bytes());
+    ihdr.extend_from_slice(&(b.width() as u32).to_be_bytes());
+    ihdr.extend_from_slice(&(b.height() as u32).to_be_bytes());
     ihdr.extend_from_slice(&[8, if ch == 1 { 0 } else { 2 }, 0, 0, 0]);
     chunk(&mut out, b"IHDR", &ihdr);
     chunk(&mut out, b"IDAT", &z);
@@ -768,7 +757,7 @@ pub fn png_encode(b: &PlanBitmap) -> Vec<u8> {
     out
 }
 
-pub fn png_decode(p: &[u8]) -> Result<PlanBitmap, String> {
+pub fn png_decode(p: &[u8]) -> Result<Bitmap, String> {
     if p.len() < 8 || p[..8] != [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A] {
         return Err("not a PNG".to_string());
     }
@@ -859,5 +848,5 @@ pub fn png_decode(p: &[u8]) -> Result<PlanBitmap, String> {
             px[y * stride + x] = (v + pred) as u8;
         }
     }
-    Ok(PlanBitmap { w: w as i32, h: h as i32, channels: ch as i32, pixels: px })
+    Ok(Bitmap::from_bytes(w as i32, h as i32, ch as i32, &px))
 }

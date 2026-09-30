@@ -1,0 +1,500 @@
+;; Per-pixel raster work through the `Bitmap` port (P2.7, SPEC 12.3). emon's own
+;; module (D039).
+;;
+;; WHAT IT IS FOR. The P2.7 spike asks whether pixel-heavy work -- the path
+;; tracer's binarisation and connected-component passes above all -- can live
+;; in kin over `bitmap-u8`, or whether the port needs bulk forms. This is the
+;; workload the question is asked of: Otsu's threshold, a binarisation into a
+;; mask bitmap, and 8-connected component labelling by two-pass union-find,
+;; over a grayscale page. `bench/` times it in all four targets against a
+;; hand-written Rust comparator of the same algorithm (DEVLOG P2.7).
+;;
+;; THE STATE LIVES IN `Cells`: the label of every pixel (`labels`, w*h), the
+;; union-find forest (`parent`, one cell per provisional label, label 0 is
+;; background) and the area of each root (`area`). kin cannot allocate, so the
+;; host supplies empty ones and `ras-alloc` sizes them.
+;;
+;; DETERMINISM. A union always makes the SMALLER label the root, so the root of
+;; a set is its minimum provisional label, the same on every target, and the
+;; statistics (`ras-label`'s `stats`) are identical across them:
+;;   [0 components, 1 ink pixels, 2 largest area, 3 provisional labels,
+;;    4 label checksum high, 5 low, 6 sum of squared areas high, 7 low]
+;; The checksum folds the final (root) label of every ink pixel, in raster
+;; order, as a 64-bit wrapping polynomial (x31).
+(ns emon.raster
+  (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32 add64 mul64 shr64]]
+            [emon.port :refer [bitmap-w bitmap-h bitmap-u8 bitmap-set-u8
+                               cells-len cells-at cells-set cells-push
+                               cells-drop cells-grow bitmap-histogram bitmap-threshold-into bitmap-next-nonzero
+                               bitmap-integral]]
+            [kin.lang :refer [defn defconst return let set while if comment do
+                              + - * < > <= >= == != quot]]))
+
+(defn ^:pub ^I32 ras-histogram [^Bitmap g ^:mut ^Cells hist]
+  (comment "256 bins of channel 0, one port call per pixel. Clears `hist`.")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 n 0]
+    (cells-drop hist 0)
+    (while (< i 256)
+      (do (cells-push hist 0)
+          (set i (+ i 1))))
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (set v (bitmap-u8 g x y 0))
+                (set n (cells-at hist v))
+                (cells-set hist v (+ n 1))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ras-otsu [^Cells hist ^I32 total]
+  (comment "Otsu's threshold from a 256-bin histogram: the level t that")
+  (comment "maximises wb*wf*(mb-mf)^2, class B being levels 0..t. Integer")
+  (comment "means (quot), so every target takes the same decision. The first")
+  (comment "maximum wins. Ink is then gray <= t.")
+  (let [^:mut ^I64 sum 0
+        ^:mut ^I64 sb 0
+        ^:mut ^I64 wb 0
+        ^:mut ^I64 wf 0
+        ^:mut ^I64 mb 0
+        ^:mut ^I64 mf 0
+        ^:mut ^I64 d 0
+        ^:mut ^I64 between 0
+        ^:mut ^I64 best -1
+        ^:mut ^I32 thr 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 hv 0]
+    (while (< t 256)
+      (do (set hv (cells-at hist t))
+          (set sum (+ sum (* (i64 t) (i64 hv))))
+          (set t (+ t 1))))
+    (set t 0)
+    (while (< t 256)
+      (do (set hv (cells-at hist t))
+          (set wb (+ wb (i64 hv)))
+          (set sb (+ sb (* (i64 t) (i64 hv))))
+          (set wf (- (i64 total) wb))
+          (if (> wb 0)
+            (if (> wf 0)
+              (do (set mb (quot sb wb))
+                  (set mf (quot (- sum sb) wf))
+                  (set d (- mb mf))
+                  (set between (* (* wb wf) (* d d)))
+                  (if (> between best)
+                    (do (set best between)
+                        (set thr t))))))
+          (set t (+ t 1))))
+    (return thr)))
+
+(defn ^:pub ^I32 ras-binarise [^Bitmap g ^Bitmap m ^I32 thr]
+  (comment "mask = 255 where gray <= thr (ink), else 0. Answers the ink count.")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 ink 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (if (<= (bitmap-u8 g x y 0) thr)
+                  (do (bitmap-set-u8 m x y 0 255)
+                      (set ink (+ ink 1)))
+                  (bitmap-set-u8 m x y 0 0))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return ink)))
+
+(defn ^:pub ^I32 ras-alloc [^:mut ^Cells labels ^I32 n]
+  (comment "`labels` := n zeros, one push per pixel.")
+  (let [^:mut ^I32 i 0]
+    (cells-drop labels 0)
+    (while (< i n)
+      (do (cells-push labels 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ras-find [^:mut ^Cells parent ^I32 a]
+  (comment "The root of a, by path halving.")
+  (let [^:mut ^I32 r a
+        ^:mut ^I32 p 0
+        ^:mut ^I32 g 0]
+    (set p (cells-at parent r))
+    (while (!= p r)
+      (do (set g (cells-at parent p))
+          (cells-set parent r g)
+          (set r g)
+          (set p (cells-at parent r))))
+    (return r)))
+
+(defn ^I32 ras-union [^:mut ^Cells parent ^I32 a ^I32 b]
+  (comment "Join the sets of a and b, the smaller root winning. b may be 0")
+  (comment "(background), which joins nothing.")
+  (let [^:mut ^I32 ra 0
+        ^:mut ^I32 rb 0]
+    (if (!= b 0)
+      (do (set ra (ras-find parent a))
+          (set rb (ras-find parent b))
+          (if (< ra rb)
+            (cells-set parent rb ra))
+          (if (< rb ra)
+            (cells-set parent ra rb))))
+    (return 0)))
+
+(defn ^I32 ras-min-nz [^I32 a ^I32 b]
+  (comment "The smaller nonzero of a and b; 0 when both are 0.")
+  (if (== a 0)
+    (return b))
+  (if (== b 0)
+    (return a))
+  (if (< a b)
+    (return a))
+  (return b))
+
+(defn ^:pub ^I32 ras-label [^Bitmap m ^:mut ^Cells labels ^:mut ^Cells parent
+                            ^:mut ^Cells area ^:mut ^Cells stats]
+  (comment "8-connected component labelling of the mask's nonzero pixels.")
+  (comment "`labels` must already hold w*h cells (`ras-alloc`). Answers the")
+  (comment "number of components; fills `stats` (see the header).")
+  (let [^I32 w (bitmap-w m)
+        ^I32 h (bitmap-h m)
+        ^I32 n (* w h)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 la 0
+        ^:mut ^I32 lb 0
+        ^:mut ^I32 lc 0
+        ^:mut ^I32 ld 0
+        ^:mut ^I32 mn 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 ink 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 av 0
+        ^:mut ^I32 ncomp 0
+        ^:mut ^I32 maxa 0
+        ^:mut ^I64 cs 0
+        ^:mut ^I64 sq 0]
+    (cells-drop parent 0)
+    (cells-push parent 0)
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (if (!= (bitmap-u8 m x y 0) 0)
+                  (do (set ink (+ ink 1))
+                      (set la 0)
+                      (set lb 0)
+                      (set lc 0)
+                      (set ld 0)
+                      (if (> x 0)
+                        (do (set la (cells-at labels (- i 1)))
+                            (if (> y 0)
+                              (set lb (cells-at labels (- (- i w) 1))))))
+                      (if (> y 0)
+                        (do (set lc (cells-at labels (- i w)))
+                            (if (< x (- w 1))
+                              (set ld (cells-at labels (+ (- i w) 1))))))
+                      (set mn (ras-min-nz (ras-min-nz la lb) (ras-min-nz lc ld)))
+                      (if (== mn 0)
+                        (do (set nl (cells-len parent))
+                            (cells-push parent nl)
+                            (cells-set labels i nl))
+                        (do (cells-set labels i mn)
+                            (ras-union parent mn la)
+                            (ras-union parent mn lb)
+                            (ras-union parent mn lc)
+                            (ras-union parent mn ld)))))
+                (set x (+ x 1))
+                (set i (+ i 1))))
+          (set y (+ y 1))))
+    (comment "Second pass: resolve every label to its root, count areas.")
+    (set nl (cells-len parent))
+    (cells-drop area 0)
+    (set i 0)
+    (while (< i nl)
+      (do (cells-push area 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set lv (cells-at labels i))
+          (if (!= lv 0)
+            (do (set r (ras-find parent lv))
+                (cells-set labels i r)
+                (set av (cells-at area r))
+                (cells-set area r (+ av 1))
+                (set cs (add64 (mul64 cs 31) (i64 r)))))
+          (set i (+ i 1))))
+    (set i 1)
+    (while (< i nl)
+      (do (set lv (cells-at parent i))
+          (if (== lv i)
+            (do (set ncomp (+ ncomp 1))
+                (set av (cells-at area i))
+                (if (> av maxa)
+                  (set maxa av))
+                (set sq (add64 sq (mul64 (i64 av) (i64 av))))))
+          (set i (+ i 1))))
+    (cells-drop stats 0)
+    (cells-push stats ncomp)
+    (cells-push stats ink)
+    (cells-push stats maxa)
+    (cells-push stats (- nl 1))
+    (cells-push stats (i32 (shr64 cs 32)))
+    (cells-push stats (i32 cs))
+    (cells-push stats (i32 (shr64 sq 32)))
+    (cells-push stats (i32 sq))
+    (return ncomp)))
+
+;; ------------------------------------------------------- the bulk variants
+;;
+;; The same three steps with the per-pixel loop moved into the host: one port
+;; call per page instead of one per pixel (P2.7's question 4). The labelling has
+;; no bulk variant here: its per-pixel work is union-find over `Cells`, not
+;; bitmap access.
+
+(defn ^:pub ^I32 ras-histogram-bulk [^Bitmap g ^:mut ^Cells hist]
+  (cells-drop hist 0)
+  (cells-grow hist 256 0)
+  (bitmap-histogram g hist 0)
+  (return 0))
+
+(defn ^:pub ^I32 ras-binarise-bulk [^Bitmap g ^Bitmap m ^I32 thr]
+  (return (bitmap-threshold-into g thr m)))
+
+(defn ^:pub ^I32 ras-alloc-bulk [^:mut ^Cells labels ^I32 n]
+  (cells-drop labels 0)
+  (cells-grow labels n 0)
+  (return 0))
+
+(defn ^:pub ^I32 ras-label-skip [^Bitmap m ^:mut ^Cells labels ^:mut ^Cells parent
+                                 ^:mut ^Cells area ^:mut ^Cells stats]
+  (comment "`ras-label` visiting only the ink pixels: `bitmap-next-nonzero`")
+  (comment "skips white in the host, in both passes. Same answers, same order.")
+  (let [^I32 w (bitmap-w m)
+        ^I32 h (bitmap-h m)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 la 0
+        ^:mut ^I32 lb 0
+        ^:mut ^I32 lc 0
+        ^:mut ^I32 ld 0
+        ^:mut ^I32 mn 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 ink 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 av 0
+        ^:mut ^I32 ncomp 0
+        ^:mut ^I32 maxa 0
+        ^:mut ^I64 cs 0
+        ^:mut ^I64 sq 0]
+    (cells-drop parent 0)
+    (cells-push parent 0)
+    (while (< y h)
+      (do (set x (bitmap-next-nonzero m 0 y))
+          (while (< x w)
+            (do (set i (+ (* y w) x))
+                (set ink (+ ink 1))
+                (set la 0)
+                (set lb 0)
+                (set lc 0)
+                (set ld 0)
+                (if (> x 0)
+                  (do (set la (cells-at labels (- i 1)))
+                      (if (> y 0)
+                        (set lb (cells-at labels (- (- i w) 1))))))
+                (if (> y 0)
+                  (do (set lc (cells-at labels (- i w)))
+                      (if (< x (- w 1))
+                        (set ld (cells-at labels (+ (- i w) 1))))))
+                (set mn (ras-min-nz (ras-min-nz la lb) (ras-min-nz lc ld)))
+                (if (== mn 0)
+                  (do (set nl (cells-len parent))
+                      (cells-push parent nl)
+                      (cells-set labels i nl))
+                  (do (cells-set labels i mn)
+                      (ras-union parent mn la)
+                      (ras-union parent mn lb)
+                      (ras-union parent mn lc)
+                      (ras-union parent mn ld)))
+                (set x (bitmap-next-nonzero m (+ x 1) y))))
+          (set y (+ y 1))))
+    (set nl (cells-len parent))
+    (cells-drop area 0)
+    (cells-grow area nl 0)
+    (set y 0)
+    (while (< y h)
+      (do (set x (bitmap-next-nonzero m 0 y))
+          (while (< x w)
+            (do (set i (+ (* y w) x))
+                (set lv (cells-at labels i))
+                (set r (ras-find parent lv))
+                (cells-set labels i r)
+                (set av (cells-at area r))
+                (cells-set area r (+ av 1))
+                (set cs (add64 (mul64 cs 31) (i64 r)))
+                (set x (bitmap-next-nonzero m (+ x 1) y))))
+          (set y (+ y 1))))
+    (set i 1)
+    (while (< i nl)
+      (do (set lv (cells-at parent i))
+          (if (== lv i)
+            (do (set ncomp (+ ncomp 1))
+                (set av (cells-at area i))
+                (if (> av maxa)
+                  (set maxa av))
+                (set sq (add64 sq (mul64 (i64 av) (i64 av))))))
+          (set i (+ i 1))))
+    (cells-drop stats 0)
+    (cells-push stats ncomp)
+    (cells-push stats ink)
+    (cells-push stats maxa)
+    (cells-push stats (- nl 1))
+    (cells-push stats (i32 (shr64 cs 32)))
+    (cells-push stats (i32 cs))
+    (cells-push stats (i32 (shr64 sq 32)))
+    (cells-push stats (i32 sq))
+    (return ncomp)))
+
+;; ------------------------------------------- Sauvola over integral images
+;;
+;; SPEC 8.2.1's adaptive binarisation, in integer arithmetic: T = m + m*k*(s/R
+;; - 1) with k = 87/256 (0.34) and R = 128, m and s the mean and standard
+;; deviation over a (2r+1)^2 window, clipped at the border. The window sums are
+;; four reads of an INTEGRAL IMAGE, so the cost is per-pixel reads of `Cells`
+;; rather than of the bitmap: the workload the path tracer's normaliser is.
+;;
+;; THE INTEGRAL IMAGES HOLD THE LOW 32 BITS of the running sums, (w+1)*(h+1)
+;; cells each with a zero row and column first. Differences of wrapped values
+;; are congruent to the true window sum mod 2^32 and the true sum is below
+;; 2^31, so four reads recover it exactly on every target (the sum is taken in
+;; 64 bits and truncated; no 32-bit addition ever overflows).
+
+(defconst ^I32 SAUV_R 15)
+(defconst ^I32 SAUV_K 87)
+
+(defn ^:pub ^I32 ras-sqrt-table [^:mut ^Cells t]
+  (comment "t[i] = floor(sqrt(i)) for i in 0..65535: a variance is at most")
+  (comment "about 255^2 / 4, and the table spares a square root per pixel.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (cells-drop t 0)
+    (while (< i 65536)
+      (do (while (<= (* (+ k 1) (+ k 1)) i)
+            (set k (+ k 1)))
+          (cells-push t k)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ras-integral [^Bitmap g ^:mut ^Cells isum ^:mut ^Cells isq]
+  (comment "Integral images of the pixel and of its square, per-pixel reads.")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^I32 w1 (+ (bitmap-w g) 1)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 rs 0
+        ^:mut ^I32 rq 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0]
+    (cells-drop isum 0)
+    (cells-drop isq 0)
+    (cells-grow isum w1 0)
+    (cells-grow isq w1 0)
+    (while (< y h)
+      (do (cells-push isum 0)
+          (cells-push isq 0)
+          (set rs 0)
+          (set rq 0)
+          (set x 0)
+          (while (< x w)
+            (do (set v (bitmap-u8 g x y 0))
+                (set rs (+ rs v))
+                (set rq (+ rq (* v v)))
+                (set i (cells-len isum))
+                (set a (cells-at isum (- i w1)))
+                (set b (cells-at isq (- i w1)))
+                (cells-push isum (i32 (+ (i64 a) (i64 rs))))
+                (cells-push isq (i32 (+ (i64 b) (i64 rq))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 ras-win [^:mut ^Cells c ^I32 w1 ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "The window sum from four reads of an integral image (see above).")
+  (let [^:mut ^I64 s 0
+        ^:mut ^I32 p 0]
+    (set p (cells-at c (+ (* y1 w1) x1)))
+    (set s (i64 p))
+    (set p (cells-at c (+ (* y0 w1) x1)))
+    (set s (- s (i64 p)))
+    (set p (cells-at c (+ (* y1 w1) x0)))
+    (set s (- s (i64 p)))
+    (set p (cells-at c (+ (* y0 w1) x0)))
+    (set s (+ s (i64 p)))
+    (return (i32 s))))
+
+(defn ^:pub ^I32 ras-sauvola [^Bitmap g ^:mut ^Cells isum ^:mut ^Cells isq
+                              ^:mut ^Cells sq ^Bitmap m]
+  (comment "mask = 255 where the pixel < the Sauvola threshold. Answers the")
+  (comment "ink count. `sq` is `ras-sqrt-table`'s.")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^I32 w1 (+ (bitmap-w g) 1)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 mean 0
+        ^:mut ^I32 vr 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 thr 0
+        ^:mut ^I32 ink 0]
+    (while (< y h)
+      (do (set y0 (- y SAUV_R))
+          (if (< y0 0)
+            (set y0 0))
+          (set y1 (+ (+ y SAUV_R) 1))
+          (if (> y1 h)
+            (set y1 h))
+          (set x 0)
+          (while (< x w)
+            (do (set x0 (- x SAUV_R))
+                (if (< x0 0)
+                  (set x0 0))
+                (set x1 (+ (+ x SAUV_R) 1))
+                (if (> x1 w)
+                  (set x1 w))
+                (set n (* (- x1 x0) (- y1 y0)))
+                (set s (ras-win isum w1 x0 y0 x1 y1))
+                (set q (ras-win isq w1 x0 y0 x1 y1))
+                (set mean (quot s n))
+                (set vr (- (quot q n) (* mean mean)))
+                (set sd (cells-at sq vr))
+                (set thr (+ mean (i32 (quot (* (* (i64 mean) (i64 SAUV_K)) (i64 (- (* 2 sd) 256))) 65536))))
+                (if (< (bitmap-u8 g x y 0) thr)
+                  (do (bitmap-set-u8 m x y 0 255)
+                      (set ink (+ ink 1)))
+                  (bitmap-set-u8 m x y 0 0))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return ink)))
+
+(defn ^:pub ^I32 ras-integral-bulk [^Bitmap g ^:mut ^Cells isum ^:mut ^Cells isq]
+  (comment "`ras-integral` as one host call.")
+  (bitmap-integral g isum isq)
+  (return 0))

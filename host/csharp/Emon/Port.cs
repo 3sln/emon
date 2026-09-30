@@ -87,6 +87,23 @@ public static class Port {
         c.N = n;
     }
 
+    // @kin:link:form:cells-grow: {:template "emon.Port.CellsGrow({0}, {1}, {2})" :arity 3}
+    //
+    // Appends n copies of v (what a loop of `cells-push` does, in one call).
+    public static void CellsGrow(Cells c, int n, int v) {
+        if (n < 0) {
+            throw new System.IndexOutOfRangeException();
+        }
+        int need = c.N + n;
+        if (need > c.V.Length) {
+            var w = new int[System.Math.Max(need, c.V.Length * 2)];
+            System.Array.Copy(c.V, w, c.N);
+            c.V = w;
+        }
+        System.Array.Fill(c.V, v, c.N, n);
+        c.N = need;
+    }
+
     // @kin:link:form:cells-bytes: {:template "emon.Port.CellsBytes({0})" :arity 1}
     //
     // A Blob VIEW of a Cells of bytes: a snapshot (see the Rust half).
@@ -96,6 +113,176 @@ public static class Port {
             b[i] = (byte) c.V[i];
         }
         return b;
+    }
+
+    // ---------------------------------------------------------- the Bitmap
+    //
+    // An opaque 8-bit pixel buffer (see the Rust half for the contract). The
+    // check is on the byte index, not on each coordinate.
+    public sealed class Bitmap {
+        internal readonly int W, H, Stride, Ch;
+        internal readonly byte[] D;
+
+        public Bitmap(int w, int h, int ch, byte[] d) {
+            if (d.Length != w * h * ch) {
+                throw new System.ArgumentException("bitmap size");
+            }
+            W = w;
+            H = h;
+            Stride = w * ch;
+            Ch = ch;
+            D = d;
+        }
+    }
+
+    // @kin:link:form:bitmap-new: {:template "emon.Port.BitmapNew({0}, {1}, {2})" :arity 3}
+    public static Bitmap BitmapNew(int w, int h, int ch) {
+        return new Bitmap(w, h, ch, new byte[w * h * ch]);
+    }
+
+    // @kin:link:form:bitmap-w: {:template "emon.Port.BitmapW({0})" :arity 1}
+    public static int BitmapW(Bitmap b) {
+        return b.W;
+    }
+
+    // @kin:link:form:bitmap-h: {:template "emon.Port.BitmapH({0})" :arity 1}
+    public static int BitmapH(Bitmap b) {
+        return b.H;
+    }
+
+    // @kin:link:form:bitmap-stride: {:template "emon.Port.BitmapStride({0})" :arity 1}
+    public static int BitmapStride(Bitmap b) {
+        return b.Stride;
+    }
+
+    // @kin:link:form:bitmap-channels: {:template "emon.Port.BitmapChannels({0})" :arity 1}
+    public static int BitmapChannels(Bitmap b) {
+        return b.Ch;
+    }
+
+    // @kin:link:form:bitmap-u8: {:template "emon.Port.BitmapU8({0}, {1}, {2}, {3})" :arity 4}
+    public static int BitmapU8(Bitmap b, int x, int y, int c) {
+        return b.D[y * b.Stride + x * b.Ch + c];
+    }
+
+    // @kin:link:form:bitmap-set-u8: {:template "emon.Port.BitmapSetU8({0}, {1}, {2}, {3}, {4})" :arity 5}
+    public static void BitmapSetU8(Bitmap b, int x, int y, int c, int v) {
+        b.D[y * b.Stride + x * b.Ch + c] = (byte) v;
+    }
+
+    // ---- bulk forms (P2.7): the per-pixel loops the spike priced, done in the
+    // host. See the Rust half for the contracts.
+
+    // @kin:link:form:bitmap-histogram: {:template "emon.Port.BitmapHistogram({0}, {1}, {2})" :arity 3}
+    public static void BitmapHistogram(Bitmap b, Cells hist, int off) {
+        if (off < 0 || off + 256 > hist.N) {
+            throw new System.IndexOutOfRangeException();
+        }
+        // Four partial histograms, for the Rust half's reason.
+        var p0 = new int[256]; var p1 = new int[256]; var p2 = new int[256]; var p3 = new int[256];
+        var d = b.D;
+        int ch = b.Ch;
+        for (int y = 0; y < b.H; y++) {
+            int s = y * b.Stride;
+            int end = s + b.W * ch;
+            int i = s;
+            for (; i + 4 * ch <= end; i += 4 * ch) {
+                p0[d[i]]++;
+                p1[d[i + ch]]++;
+                p2[d[i + 2 * ch]]++;
+                p3[d[i + 3 * ch]]++;
+            }
+            for (; i < end; i += ch) {
+                p0[d[i]]++;
+            }
+        }
+        var bins = hist.V;
+        for (int v = 0; v < 256; v++) {
+            bins[off + v] += p0[v] + p1[v] + p2[v] + p3[v];
+        }
+    }
+
+    // @kin:link:form:bitmap-threshold-into: {:template "emon.Port.BitmapThresholdInto({0}, {1}, {2})" :arity 3}
+    public static int BitmapThresholdInto(Bitmap g, int t, Bitmap m) {
+        if (g.W != m.W || g.H != m.H) {
+            throw new System.ArgumentException("bitmap size");
+        }
+        int ink = 0;
+        var gd = g.D; var md = m.D;
+        for (int y = 0; y < g.H; y++) {
+            int gi = y * g.Stride, mi = y * m.Stride;
+            if (g.Ch == 1 && m.Ch == 1) {
+                // The common case: unit strides.
+                for (int x = 0; x < g.W; x++) {
+                    int on = 1 - (int)((uint)(t - gd[gi + x]) >> 31);
+                    md[mi + x] = (byte)(-on);
+                    ink += on;
+                }
+                continue;
+            }
+            for (int x = 0; x < g.W; x++) {
+                // on = 1 when v <= t, branch-free (the sign bit of t - v).
+                int on = 1 - (int)((uint)(t - gd[gi]) >> 31);
+                md[mi] = (byte)(-on);
+                ink += on;
+                gi += g.Ch;
+                mi += m.Ch;
+            }
+        }
+        return ink;
+    }
+
+    // @kin:link:form:bitmap-next-nonzero: {:template "emon.Port.BitmapNextNonzero({0}, {1}, {2})" :arity 3}
+    public static int BitmapNextNonzero(Bitmap b, int x, int y) {
+        int s = y * b.Stride;
+        if (b.Ch == 1) {
+            // Vectorised by the runtime.
+            int k = System.MemoryExtensions.IndexOfAnyExcept(new System.ReadOnlySpan<byte>(b.D, s + x, b.W - x), (byte)0);
+            return k < 0 ? b.W : x + k;
+        }
+        for (int i = x; i < b.W; i++) {
+            if (b.D[s + i * b.Ch] != 0) {
+                return i;
+            }
+        }
+        return b.W;
+    }
+
+    // @kin:link:form:bitmap-integral: {:template "emon.Port.BitmapIntegral({0}, {1}, {2})" :arity 3}
+    public static void BitmapIntegral(Bitmap b, Cells sum, Cells sq) {
+        int w1 = b.W + 1;
+        int n = w1 * (b.H + 1);
+        // Only row 0 and column 0 need zeroing: every other cell is written below.
+        if (sum.V.Length < n) {
+            sum.V = new int[n];
+        }
+        sum.N = n;
+        if (sq.V.Length < n) {
+            sq.V = new int[n];
+        }
+        sq.N = n;
+        int[] s = sum.V, q = sq.V;
+        byte[] d = b.D;
+        unchecked {
+            for (int x = 0; x < w1; x++) {
+                s[x] = 0;
+                q[x] = 0;
+            }
+            for (int y = 0; y < b.H; y++) {
+                s[(y + 1) * w1] = 0;
+                q[(y + 1) * w1] = 0;
+                int rs = 0, rq = 0;
+                int src = y * b.Stride;
+                int p = y * w1 + 1, c = (y + 1) * w1 + 1;
+                for (int x = 0; x < b.W; x++) {
+                    int v = d[src + x * b.Ch];
+                    rs += v;
+                    rq += v * v;
+                    s[c + x] = s[p + x] + rs;
+                    q[c + x] = q[p + x] + rq;
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------- the Src
