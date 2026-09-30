@@ -1,0 +1,590 @@
+#!/usr/bin/env bb
+;; Cross-check the catalogue extras (P3.8 annotations, forms, signatures; P3.9 outlines, page
+;; labels, Info and XMP metadata, /Lang, named destinations) against poppler and qpdf.
+;;
+;;     bb kin/scripts/pdf-catalog-compare                   every PDF under corpus/
+;;     bb kin/scripts/pdf-catalog-compare PATH...           just these files
+;;     bb kin/scripts/pdf-catalog-compare --cat labels,meta --show 5      some categories, more detail
+;;     bb kin/scripts/pdf-catalog-compare --write test/pdf/catalog-corpus.txt   write the row corpus
+;;
+;; A DEVELOPMENT TOOL, not a gate (D100's shape): it runs the generated Rust through
+;; `kin/scripts/pdf-catalog` once for all the files, asks the oracles about each file, and counts
+;; agreement per category. THE ORACLES ARE NOT EMON AND SHARE NO CODE WITH IT:
+;;
+;;   labels    qpdf --json pages[].label (the dictionary of the range a page is in) turned into a
+;;             label by the numbering rules written out below, in Clojure
+;;   outlines  qpdf --json outlines: title, depth, destpageposfrom1 of every bookmark
+;;   forms     qpdf --json acroform: full name, /FT, /Ff, value, page of every field
+;;   dests     pdfinfo -dests: page, fit and arguments of every named destination
+;;   urls      pdfinfo -url: every URI of a page's annotations
+;;   links     qpdf --json objects + pdfinfo -dests: the rectangle and target page of every link
+;;             annotation, resolved here from the raw objects (a name through poppler's table)
+;;   meta      pdfinfo -isodates: Title Author Subject Keywords Creator Producer dates Tagged Form
+;;   xmp       pdfinfo -meta: the packet, parsed by clojure.data.xml (namespaces resolved by it)
+;;   lang      qpdf --json objects: the catalog's /Lang and /Version
+;;   sigs      pdfsig: the field name and signed byte ranges; qpdf objects: /Name /Reason /Location /M
+;;   stamps    qpdf objects: the Stamp and Watermark annotations' subtype, /Name, /Contents
+;;
+;; An item is one thing compared (a page's label, a bookmark, a field attribute, a link); a FILE
+;; agrees when every item of the category does. Agreement is reported as items and as files.
+(require '[babashka.process :as p]
+         '[cheshire.core :as json]
+         '[clojure.string :as str]
+         '[clojure.set :as set])
+
+(def root (-> *file* java.io.File. .getCanonicalFile .getParentFile .getParentFile .getParent))
+
+(defn sh [& args]
+  (let [r (apply p/shell {:out :string :err :string :continue true :dir root} args)]
+    (:out r)))
+
+(defn parse-json [s] (try (json/parse-string s) (catch Exception _ nil)))
+
+;; ------------------------------------------------------------------ emon's side
+
+(defn emon-rows [paths]
+  (let [input (str (str/join "\n" paths) "\n")
+        r (p/shell {:out :string :err :string :in input :dir root} (str root "/kin/scripts/pdf-catalog"))]
+    (into {}
+          (for [l (str/split-lines (:out r))
+                :let [[path status js] (str/split l #"\t" 3)]]
+            [path {:status status :d (when (= status "ok") (parse-json js))}]))))
+
+;; ------------------------------------------------------------------ number formats
+
+(defn roman [n upper?]
+  (when (pos? n)
+    (let [tbl [[1000 "M"] [900 "CM"] [500 "D"] [400 "CD"] [100 "C"] [90 "XC"] [50 "L"] [40 "XL"]
+               [10 "X"] [9 "IX"] [5 "V"] [4 "IV"] [1 "I"]]
+          s (loop [n n acc ""]
+              (if (zero? n) acc
+                  (let [[v r] (first (filter #(>= n (first %)) tbl))]
+                    (recur (- n v) (str acc r)))))]
+      (if upper? s (str/lower-case s)))))
+
+(defn letters [n upper?]
+  (when (pos? n)
+    (let [c (char (+ (if upper? 65 97) (mod (dec n) 26)))]
+      (apply str (repeat (inc (quot (dec n) 26)) c)))))
+
+(defn label-text
+  "A page label from the dictionary qpdf reports for the page (its /St already offset)."
+  [d]
+  (when d
+    (let [s (get d "/S") st (get d "/St" 1) pre (str (let [p (get d "/P")] (if (string? p) (str/replace p #"^u:" "") "")))
+          num (case s
+                "/D" (str st)
+                "/R" (or (roman st true) "")
+                "/r" (or (roman st false) "")
+                "/A" (or (letters st true) "")
+                "/a" (or (letters st false) "")
+                "")]
+      (str pre num))))
+
+;; --------------------------------------------------------------- the categories
+
+(defn cmp-labels [path e]
+  (let [q (parse-json (sh "qpdf" "--json=2" "--json-key=pages" path))
+        want (mapv #(label-text (get % "label")) (get q "pages"))
+        got (get-in e [:d "m" "labels" "pages"])]
+    (when (and q got)
+      (if (not= (count want) (count got))
+        [{:item :pages :ok false :detail (str "page count " (count want) " vs " (count got))}]
+        (vec (for [[i w g] (map vector (range) want got)]
+               {:item [:label i] :ok (= w g) :detail (when (not= w g) (str "page " (inc i) ": qpdf " (pr-str w) " emon " (pr-str g)))}))))))
+
+(defn flat-outline [nodes depth npages]
+  (mapcat (fn [n] (cons {:depth depth :title (get n "title")
+                         ;; qpdf resolves references only; poppler and pdf.js also take an integer
+                         ;; first element as a page index (wkhtmltopdf writes those)
+                         :page (or (get n "destpageposfrom1")
+                                   (let [d (get n "dest")]
+                                     (when (and (sequential? d) (integer? (first d)) (< -1 (first d) npages))
+                                       (inc (first d)))))}
+                        (flat-outline (get n "kids") (inc depth) npages)))
+          nodes))
+
+(declare qpdf-objects deref* str-obj parse-dests)
+
+(defn oracle-outline
+  "Every bookmark of a file, pre-order, as qpdf and poppler see it: [q want] (q is qpdf's answer)."
+  [path npages]
+  (let [q (parse-json (sh "qpdf" "--json=2" "--json-key=outlines" path))
+        raw (vec (flat-outline (get q "outlines") 0 npages))
+        ;; qpdf follows /Dest and an /A whose /D is an array, not one whose /D is a name: resolve
+        ;; those through poppler's table (two readers that share no code with emon)
+        need (some #(and (nil? (:page %))) raw)
+        objs (when need (qpdf-objects path))
+        dests (when need (parse-dests (sh "pdfinfo" "-dests" path)))
+        flat-nodes (fn flat [nodes] (mapcat (fn [n] (cons n (flat (get n "kids")))) nodes))
+        want (if need
+               (vec (map (fn [w n]
+                           (if (nil? (:page w))
+                             (let [o (get (:objs objs) (second (re-find #"^(\d+) " (get n "object" ""))))
+                                   a (deref* objs (get o "/A"))
+                                   d (when (map? a) (deref* objs (get a "/D")))
+                                   nm (when (and (string? d)) (str-obj d))]
+                               (if-let [ds (and nm (get dests nm))] (assoc w :page (:page (first ds))) w))
+                             w))
+                         raw (flat-nodes (get q "outlines"))))
+               raw)]
+    [q want]))
+
+(defn cmp-outlines [path e]
+  (let [[q want] (oracle-outline path (get-in e [:d "pages"]))
+        rows (get-in e [:d "m" "outlines"])
+        got (mapv (fn [r] {:depth (get r "depth") :title (get r "title")
+                           :page (let [pg (get-in r ["dest" "page"])]
+                                   (when (and pg (>= pg 0) (not= "GoToR" (get r "action"))) (inc pg)))})
+                  rows)]
+    (when q
+      (if (not= (count want) (count got))
+        [{:item :count :ok false :detail (str "qpdf " (count want) " bookmarks, emon " (count got))}]
+        (vec (mapcat (fn [i w g]
+                       [{:item [:title i] :ok (and (= (:depth w) (:depth g)) (= (str (:title w)) (str (:title g))))
+                         :detail (str "#" i " qpdf " (pr-str (select-keys w [:depth :title])) " emon " (pr-str (select-keys g [:depth :title])))}
+                        {:item [:page i] :ok (= (:page w) (:page g))
+                         :detail (str "#" i " " (pr-str (:title w)) " qpdf page " (:page w) " emon " (:page g))}])
+                     (range) want got))))))
+
+(defn field-value [f]
+  (let [k (get f "vkind") v (get f "value")]
+    (cond (nil? k) nil
+          (= k "name") (str "/" v)
+          (= k "string") v
+          :else ::other)))
+
+(defn cmp-forms [path e]
+  (let [q (parse-json (sh "qpdf" "--json=2" "--json-key=acroform" path))
+        qf (get-in q ["acroform" "fields"])
+        ef (get-in e [:d "a" "fields"])
+        by-obj (into {} (map (fn [f] [(get f "obj") f]) ef))
+        ;; qpdf lists a field once per WIDGET and names the widget's object
+        by-widget (into {} (for [a (get-in e [:d "a" "annots"]) :when (and (= "Widget" (get a "subtype")) (get a "field"))]
+                             [(get a "obj") (get ef (get a "field"))]))
+        widget-page (into {} (for [a (get-in e [:d "a" "annots"]) :when (= "Widget" (get a "subtype"))] [(get a "obj") (get a "page")]))
+        parse-obj (fn [s] (when s (some-> (re-find #"^(\d+) " s) second parse-long)))]
+    (when q
+      (let [seen (atom #{})
+            items (doall (for [f qf
+                        :let [o (parse-obj (get f "object"))]
+                        :when (not (@seen o))
+                        :let [_ (swap! seen conj o)
+                              g (or (by-obj o) (by-widget o))]]
+                    (if (nil? g)
+                      [{:item [:field o] :ok false :detail (str "field " o " " (get f "fullname") " missing from emon")}]
+                      (let [wv (let [v (get f "value")] (if (and (string? v) (str/starts-with? v "u:")) (subs v 2) v)) gv (field-value g)
+                            chk (fn [k ok w g] {:item [k o] :ok ok :detail (when-not ok (str "field " o " " k ": qpdf " (pr-str w) " emon " (pr-str g)))})]
+                        [(chk :name (= (get f "fullname") (get g "name")) (get f "fullname") (get g "name"))
+                         (chk :type (= (str (get f "fieldtype")) (if (= "none" (get g "ft")) "" (str "/" (get g "ft")))) (get f "fieldtype") (get g "ft"))
+                         (chk :flags (= (get f "fieldflags") (get g "flags")) (get f "fieldflags") (get g "flags"))
+                         (chk :value (or (= ::other gv) (= wv gv)) wv gv)
+                         (let [ap (parse-obj (get-in f ["annotation" "object"])) pg (get widget-page ap (get g "page"))]
+                           (chk :page (= (some-> (get f "pageposfrom1") dec) pg) (get f "pageposfrom1") pg))]))))
+            extra (count (filter (fn [[o g]] (and (pos? (get g "widgets" 0))
+                                                      (not (@seen o))
+                                                      (not (some @seen (keep (fn [[w f]] (when (identical? f g) w)) by-widget)))))
+                                 by-obj))]
+        (vec (concat (apply concat items)
+                     (when (pos? extra) [{:item :extra :ok false :detail (str extra " emon fields qpdf does not list")}])))))))
+
+(defn parse-dests
+  "Poppler's table: name -> vector of destinations, in the order it lists them."
+  [out]
+  (reduce (fn [acc [nm v]] (update acc nm (fnil conj []) v))
+          {}
+          (for [l (str/split-lines out)
+                :let [m (re-find #"^\s*(\d+)\s+\[\s*(\S+)\s*(.*?)\s*\]\s+\"(.*)\"\s*$" l)]
+                :when m
+                :let [[_ pg kind args nm] m]]
+            [nm {:page (parse-long pg) :kind kind
+                 :args (mapv #(if (= % "null") nil (parse-double %)) (remove str/blank? (str/split args #"\s+")))}])))
+
+(defn dest-key
+  "A destination reduced to what both sides can state: page from 1, fit, arguments to a point
+  (an XYZ zoom of 0 is null)."
+  [page kind args]
+  (let [a (vec args)
+        a (if (and (= "XYZ" kind) (= 3 (count a)) (some-> (nth a 2) zero?)) (assoc a 2 nil) a)]
+    [page kind (mapv #(when % (Math/round (double %))) a)]))
+
+(defn cmp-dests [path e]
+  (let [want (parse-dests (sh "pdfinfo" "-dests" path))
+        rows (get-in e [:d "m" "dests"])
+        ;; poppler lists only destinations that name a page by reference: an integer page INDEX
+        ;; (wkhtmltopdf) or a reference to something that is not a page (page -1) it does not
+        got (reduce (fn [acc r] (let [d (get r "dest")]
+                                  (if (or (get d "index") (neg? (get d "page" -1)))
+                                    acc
+                                    (update acc (get r "name") (fnil conj []) d))))
+                    {} rows)
+        close? (fn [w g] (and (= (:page w) (some-> (get g "page") inc)) (= (:kind w) (get g "fit"))
+                              (every? true? (map (fn [a b] (if (and a b) (<= (Math/abs (- a b)) 1.0) (= a b)))
+                                                 (let [a (:args w)] (if (and (= "XYZ" (:kind w)) (= 3 (count a)) (some-> (nth a 2) zero?)) (assoc (vec a) 2 nil) a))
+                                                 (let [a (mapv #(when % (double %)) (get g "args"))] (if (and (= "XYZ" (get g "fit")) (= 3 (count a)) (some-> (nth a 2) zero?)) (assoc a 2 nil) a))))))]
+    (vec (concat
+          (for [nm (set/union (set (keys want)) (set (keys got)))]
+            (let [ws (get want nm []) gs (get got nm [])
+                  ;; a name in both the old /Dests dictionary and the name tree is listed by both
+                  ;; in the order each chooses: compare as sets
+                  ;; poppler lists a name once; emon lists every row of the tree
+                  ok (and (every? (fn [w] (some #(close? w %) gs)) ws)
+                          (or (seq ws) (empty? gs)))]
+              {:item [:dest nm] :ok ok
+               :detail (when-not ok (str (pr-str nm) " poppler " (pr-str ws) " emon " (pr-str gs)))}))))))
+
+(defn cmp-urls [path e]
+  (let [out (sh "pdfinfo" "-url" path)
+        ;; poppler shows a control character as `?` and puts `http://` in front of a URI with no scheme
+        fix (fn [u] (-> u
+                        (str/replace #"[\x00-\x1f\x7f]" "?")
+                        (as-> s (if (str/starts-with? s "www.") (str "http://" s) s))
+                        (str/replace #"[\p{Z}\s?]+$" "")))
+        want (frequencies (for [l (str/split-lines out)
+                                :let [m (re-find #"^\s*(\d+)\s+(\S+)\s+(.*)$" l)]
+                                :when (and m (not= "Page" (nth m 1)))]
+                            [(parse-long (nth m 1)) (str/replace (nth m 3) #"[\p{Z}\s?]+$" "")]))
+        got (frequencies (for [a (get-in e [:d "a" "annots"])
+                               :when (and (= "URI" (get a "action")) (get a "target"))]
+                           [(inc (get a "page")) (fix (get a "target"))]))]
+    (vec (for [k (set/union (set (keys want)) (set (keys got)))]
+           (let [w (get want k 0) g (get got k 0)]
+             {:item [:url k] :ok (= w g)
+              :detail (when (not= w g) (str "page " (first k) " " (second k) ": poppler x" w " emon x" g))})))))
+
+(defn iso-date [v]
+  (when (and v (>= (first v) 0))
+    (let [[y mo d h mi s tz] v
+          z (cond (= tz -99999) "Z"
+                  (zero? tz) "Z"
+                  :else (if (zero? (mod (Math/abs tz) 60))
+                        (format "%s%02d" (if (neg? tz) "-" "+") (quot (Math/abs tz) 60))
+                        (format "%s%02d:%02d" (if (neg? tz) "-" "+") (quot (Math/abs tz) 60) (mod (Math/abs tz) 60))))]
+      (format "%04d-%02d-%02dT%02d:%02d:%02d%s" y mo d h mi s z))))
+
+(defn cmp-meta [path e]
+  (let [out (sh "pdfinfo" "-isodates" path)
+        m (into {} (for [l (str/split-lines out) :let [mm (re-find #"^([A-Za-z ]+?):\s+(.*)$" l)] :when mm] [(nth mm 1) (nth mm 2)]))
+        d (get-in e [:d "m"])
+        info (get d "info")
+        chk (fn [k ok w g] {:item k :ok ok :detail (when-not ok (str k ": poppler " (pr-str w) " emon " (pr-str g)))})
+        norm (fn [s] (some-> s (str/replace #"[\x00-\x1f\x7f]" "?") (str/replace #"\s+" " ") str/trim))
+        txt (fn [pk ek] (chk pk (= (norm (get m pk)) (norm (get info ek))) (get m pk) (get info ek)))]
+    (when (seq m)
+      [(txt "Title" "title") (txt "Subject" "subject") (txt "Keywords" "keywords") (txt "Author" "author")
+       (txt "Creator" "creator") (txt "Producer" "producer")
+       (let [g (or (iso-date (get info "createdParsed")) (get info "created"))]   ; poppler shows a date it cannot parse as written
+         (chk "CreationDate" (= (get m "CreationDate") g) (get m "CreationDate") g))
+       (let [g (or (iso-date (get info "modifiedParsed")) (get info "modified"))]
+         (chk "ModDate" (= (get m "ModDate") g) (get m "ModDate") g))
+       (chk "Tagged" (= (= "yes" (get m "Tagged")) (= 1 (get d "marked"))) (get m "Tagged") (get d "marked"))
+       (chk "Form" (= (get m "Form" "none") (cond (= 1 (get d "xfa")) "XFA" (= 1 (get d "acroForm")) "AcroForm" :else "none"))
+            (get m "Form") [(get d "acroForm") (get d "xfa")])])))
+
+(defn qname [kw]
+  (let [ns (namespace kw) nm (name kw)]
+    [(if ns (java.net.URLDecoder/decode (str/replace ns #"^xmlns\." "") "UTF-8") "") nm]))
+
+(def rdf-ns "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+
+(defn xmp-oracle
+  "Properties of a packet by clojure.data.xml: [local kind value lang] in document order."
+  [xml]
+  (require 'clojure.data.xml)
+  (let [parse (resolve 'clojure.data.xml/parse-str)
+        doc (parse xml)
+        text (fn [el] (apply str (filter string? (:content el))))
+        els (fn [el] (filter map? (:content el)))
+        descs (letfn [(find-desc [el] (if (= [rdf-ns "Description"] (qname (:tag el)))
+                                        [el]
+                                        (mapcat find-desc (els el))))]
+                (find-desc doc))
+        lang-of (fn [el] (some (fn [[k v]] (when (= ["http://www.w3.org/XML/1998/namespace" "lang"] (qname k)) v)) (:attrs el)))]
+    (vec
+     (mapcat
+      (fn [dsc]
+        (concat
+         (for [[k v] (:attrs dsc)
+               :let [[u l] (qname k)]
+               :when (and (not (#{rdf-ns "http://www.w3.org/XML/1998/namespace" "http://www.w3.org/2000/xmlns/"} u))
+                          (not= "" u))]
+           [l "attribute" v nil])
+         (mapcat
+          (fn [prop]
+            (let [kids (els prop) [_ pl] (qname (:tag prop))]
+              (cond
+                (empty? kids) [[pl "simple" (text prop) nil]]
+                (and (= 1 (count kids)) (#{"Seq" "Bag" "Alt"} (second (qname (:tag (first kids))))))
+                (let [c (first kids) kind (case (second (qname (:tag c))) "Seq" "seq" "Bag" "bag" "Alt" "alt")]
+                  (for [li (els c) :when (and (= "li" (second (qname (:tag li)))) (empty? (els li)))]
+                    [pl kind (text li) (lang-of li)]))
+                :else [])))
+          (els dsc))))
+      descs))))
+
+(defn cmp-xmp [path e]
+  (let [out (sh "pdfinfo" "-meta" path)
+        i (or (str/index-of out "<?xpacket") (str/index-of out "<?xml") (str/index-of out "<x:xmpmeta"))
+        j (when i (str/last-index-of out "<?xpacket end"))
+        xml (when i (subs out i (or (when j (some-> (str/index-of out "?>" j) (+ 2))) (count out))))
+        ;; poppler prints a carriage return as `?`
+        want (when xml (try (xmp-oracle xml)
+                            (catch Exception _ (try (xmp-oracle (str/replace xml #"\?\n" "\n"))
+                                                    (catch Exception ex [:error (str ex)])))))
+        x (get-in e [:d "m" "xmp"])
+        got (vec (for [r (get x "props")]
+                   [(last (str/split (get r "name") #":")) (get r "kind") (get r "value") (get r "lang")]))]
+    (cond
+      (nil? xml) (when (pos? (get x "state" 0)) [{:item :xmp :ok false :detail "emon reads an XMP packet poppler does not show"}])
+      (= :error (first want)) [{:item :unparsable :ok true :detail "the oracle cannot parse this packet"}]
+      :else
+      (let [ua (some-> (re-find #"pdfuaid:part[=>]\s*\"?(\d+)" xml) second parse-long)]
+        [{:item :props :ok (= (frequencies want) (frequencies got)) :detail (when (not= (frequencies want) (frequencies got)) (str "poppler/data.xml " (pr-str (vec (take 40 (remove (set got) want)))) " emon " (pr-str (vec (take 40 (remove (set want) got))))))}
+         {:item :pdfua :ok (= ua (let [v (get x "pdfuaPart")] (when (and v (>= v 0)) v)))
+          :detail (str "pdfuaid:part " ua " vs " (get x "pdfuaPart"))}]))))
+
+(defn str-obj [v]
+  (cond (string? v) (cond (str/starts-with? v "u:") (subs v 2)
+                          (str/starts-with? v "b:") ::binary
+                          :else v)
+        :else v))
+
+(defn qpdf-objects [path]
+  (let [q (parse-json (sh "qpdf" "--json=2" path))
+        objs (into {} (for [m (get q "qpdf") :when (map? m) [k v] m :when (str/starts-with? k "obj:")]
+                        [(second (re-find #"obj:(\d+) 0 R" k)) (get v "value")]))
+        trailer (some (fn [m] (when (map? m) (get-in m ["trailer" "value"]))) (get q "qpdf"))]
+    (when q {:objs objs :trailer trailer :pages (mapv #(second (re-find #"^(\d+) " (get % "object")))
+                                                          (get (parse-json (sh "qpdf" "--json=2" "--json-key=pages" path)) "pages"))})))
+
+(defn ref-num [v] (when (string? v) (some-> (re-find #"^(?:obj:)?(\d+) 0 R$" v) second)))
+
+(defn deref* [{:keys [objs]} v] (if-let [n (ref-num v)] (get objs n) v))
+
+(defn cmp-lang [path e]
+  (let [{:keys [objs trailer] :as q} (qpdf-objects path)]
+    (when q
+      (let [root (deref* q (get trailer "/Root"))
+            lang (str-obj (deref* q (get root "/Lang")))
+            ver (get root "/Version")
+            d (get-in e [:d "m"])]
+        [{:item :lang :ok (= (when (string? lang) lang) (get d "lang")) :detail (str "qpdf " (pr-str lang) " emon " (pr-str (get d "lang")))}
+         {:item :version :ok (= (some-> ver (str/replace #"^/" "")) (get d "version")) :detail (str "qpdf " (pr-str ver) " emon " (pr-str (get d "version")))}]))))
+
+(defn num-of [q v] (let [v (deref* q v)] (when (number? v) v)))
+
+(defn page-annots
+  "Every annotation dictionary of every page, from qpdf's raw objects: [page-index dict]."
+  [{:keys [pages] :as q}]
+  (vec (for [[i pn] (map-indexed vector pages)
+             :let [pg (get (:objs q) pn)
+                   arr (deref* q (get pg "/Annots"))]
+             :when (sequential? arr)
+             a arr
+             :let [d (deref* q a)]
+             :when (map? d)]
+         [i d])))
+
+(defn oracle-links
+  "Every link annotation, in page order, from qpdf's raw objects and poppler's destination table:
+  [q want]."
+  [path]
+  (let [q (qpdf-objects path)
+        dests (parse-dests (sh "pdfinfo" "-dests" path))
+        page-of (into {} (map-indexed (fn [i n] [n i]) (:pages q)))
+        dest-page (fn [v]
+                    (let [v (deref* q v)]
+                      (cond (sequential? v) (some-> (ref-num (first v)) page-of)
+                            (map? v) nil
+                            (string? v) (let [nm (if (str/starts-with? v "/") (subs v 1) (str-obj v))]   ; a name or a string
+                                     (some-> (first (get dests nm)) :page dec))
+                            :else nil)))
+        act-kind {"/URI" "URI" "/GoTo" "GoTo" "/GoToR" "GoToR" "/Launch" "Launch" "/Named" "Named"
+                  "/JavaScript" "JavaScript" "/GoToE" "GoToE" "/SubmitForm" "SubmitForm"}
+        want (vec (for [[i d] (page-annots q) :when (= "/Link" (get d "/Subtype"))
+                        :let [a (deref* q (get d "/A"))
+                              r (let [r (deref* q (get d "/Rect"))] (when (sequential? r) (mapv #(num-of q %) r)))
+                              s (when (map? a) (get a "/S"))
+                              kind (cond (map? a) (get act-kind s "other") (get d "/Dest") "GoTo" :else nil)]]
+                    {:page i :rect r :kind kind
+                     :uri (when (= "/URI" s) (str-obj (deref* q (get a "/URI"))))
+                     :dpage (case kind
+                              "GoTo" (dest-page (if (map? a) (get a "/D") (get d "/Dest")))
+                              nil)}))]
+    [q want]))
+
+(defn cmp-links [path e]
+  (let [[q want] (oracle-links path)
+        got (vec (for [a (get-in e [:d "a" "annots"]) :when (= "Link" (get a "subtype"))]
+                   {:page (get a "page") :rect (get a "user") :kind (get a "action")
+                    :uri (when (= "URI" (get a "action")) (get a "target"))
+                    :index (get-in a ["dest" "index"])
+                    :dpage (when (= "GoTo" (get a "action")) (let [p (get-in a ["dest" "page"])] (when (and p (>= p 0)) p)))}))
+        rect-ok (fn [w g] (and (= (count w) (count g))
+                               (every? true? (map (fn [x y] (and x y (< (Math/abs (- (* 100.0 x) (* 100.0 y))) 1.5)))
+                                                  (let [[a b c d] w] (if (and a b c d) [(min a c) (min b d) (max a c) (max b d)] w))
+                                                  g))))]
+    (when q
+      (if (not= (count want) (count got))
+        [{:item :count :ok false :detail (str "qpdf " (count want) " links, emon " (count got))}]
+        (vec (mapcat (fn [i w g]
+                       [{:item [:rect i] :ok (and (= (:page w) (:page g)) (rect-ok (:rect w) (map #(/ % 1.0) (:rect g))))
+                         :detail (str "link " i " qpdf " (pr-str (select-keys w [:page :rect])) " emon " (pr-str (select-keys g [:page :rect])))}
+                        {:item [:action i] :ok (and (= (:kind w) (:kind g)) (or (= (:uri w) (:uri g)) (= ::binary (:uri w))))   ; qpdf shows a string that is not text as bytes
+                         :detail (str "link " i " qpdf " (pr-str (select-keys w [:kind :uri])) " emon " (pr-str (select-keys g [:kind :uri])))}
+                        {:item [:target i] :ok (or (= (:dpage w) (:dpage g)) (and (nil? (:dpage w)) (:index g)))   ; an integer page index: emon and pdf.js follow it, qpdf and poppler do not
+                         :detail (str "link " i " qpdf target page " (:dpage w) " emon " (:dpage g))}])
+                     (range) want got))))))
+
+(defn parse-sigs [out]
+  (vec (for [blk (rest (str/split out #"(?m)^Signature #\d+:"))
+             :let [nm (second (re-find #"Signature Field Name: (.*)" blk))
+                   rs (re-find #"Signed Ranges: (.*)" blk)
+                   ranges (when rs (mapv (fn [m] [(parse-long (nth m 1)) (parse-long (nth m 2))])
+                                         (re-seq #"\[(\d+) - (\d+)\]" (second rs))))]
+             :when ranges]                              ; pdfsig also lists the fields that are not signed
+         {:name nm :ranges ranges})))
+
+(defn cmp-sigs [path e]
+  (let [sigs (get-in e [:d "a" "sigs"])
+        fields (get-in e [:d "a" "fields"])
+        want (parse-sigs (sh "pdfsig" path))
+        got (vec (for [s sigs :when (and (>= (get s "field") 0) (pos? (get s "contents")))]
+                   {:name (get-in fields [(get s "field") "name"])
+                    :ranges (let [[a b c d] (get s "range")] (when (and a b c d) [[a (+ a b)] [c (+ c d)]]))}))
+        q (when (seq sigs) (qpdf-objects path))
+        qsigs (when q (vec (for [[n d] (:objs q) :when (and (map? d) (contains? d "/ByteRange") (contains? d "/Contents"))]
+                             {:obj n :name (str-obj (get d "/Name")) :reason (str-obj (get d "/Reason"))
+                              :location (str-obj (get d "/Location")) :m (str-obj (get d "/M"))})))
+        by-num (sort-by first (map (fn [s] [(get s "m") s]) (filter #(pos? (get % "contents")) sigs)))]
+    (when (or (seq want) (seq got))
+      (vec (concat
+            (if (not= (count want) (count got))
+              [{:item :count :ok false :detail (str "pdfsig " (count want) " signatures, emon " (count got))}]
+              (mapcat (fn [i w g] [{:item [:field i] :ok (= (:name w) (:name g)) :detail (str "sig " i " field pdfsig " (pr-str (:name w)) " emon " (pr-str (:name g)))}
+                                   {:item [:range i] :ok (= (:ranges w) (:ranges g)) :detail (str "sig " i " ranges pdfsig " (pr-str (:ranges w)) " emon " (pr-str (:ranges g)))}])
+                      (range) want got))
+            (when q
+              (let [wantd (frequencies (map #(dissoc % :obj) qsigs))
+                    gotd (frequencies (for [s sigs :when (pos? (get s "contents"))]
+                                        {:name (when (get s "name") (get s "name")) :reason (get s "reason") :location (get s "location") :m (get s "m")}))
+                    norm (fn [m] (into {} (map (fn [[k v]] [k (when-not (or (nil? v) (= "" v)) v)]) m)))
+                    w2 (frequencies (map norm (keys wantd))) g2 (frequencies (map norm (keys gotd)))
+                    ; emon lists a signature reached twice (field and /Perms) twice; compare as sets
+                    ok (= (set (keys w2)) (set (keys g2)))]
+                [{:item :dict :ok ok :detail (str "sig dictionaries qpdf " (pr-str (keys w2)) " emon " (pr-str (keys g2)))}])))))))
+
+(defn cmp-stamps [path e]
+  (let [annots (get-in e [:d "a" "annots"])
+        got (vec (for [a annots :when (#{"Stamp" "Watermark"} (get a "subtype"))]
+                   {:page (get a "page") :sub (get a "subtype") :name (get a "name") :contents (get a "contents")}))]
+    (when (seq got)
+      (let [q (qpdf-objects path)
+            want (vec (for [[i d] (page-annots q) :when (#{"/Stamp" "/Watermark"} (get d "/Subtype"))]
+                        {:page i :sub (subs (get d "/Subtype") 1)
+                         :name (let [n (get d "/Name")] (when n (if (str/starts-with? n "/") (subs n 1) (str-obj n))))
+                         :contents (str-obj (get d "/Contents"))}))
+            norm (fn [m] (into {} (map (fn [[k v]] [k (if (= v "") nil v)]) m)))]
+        (mapv (fn [i w g] {:item [:stamp i] :ok (= (norm w) (norm g)) :detail (str "stamp " i " qpdf " (pr-str w) " emon " (pr-str g))})
+              (range) want (concat got (repeat nil)))))))
+
+(def cats
+  {:labels cmp-labels :outlines cmp-outlines :forms cmp-forms :dests cmp-dests :urls cmp-urls
+   :meta cmp-meta :xmp cmp-xmp :lang cmp-lang :links cmp-links :sigs cmp-sigs :stamps cmp-stamps})
+
+;; ------------------------------------------------------------------------- run
+
+;; ------------------------------------------------------------- the real-file rows
+;;
+;; `--write FILE` writes the rows `kin/pdfcatalogtest.kin` reads: for a chosen set of real files,
+;; facts taken from qpdf and poppler (never from emon): the bookmarks' count and a digest of
+;; depth, title and page; a digest of every page's label; how many links, how many of them URIs, a
+;; digest of each link's action and target page; the PDF/UA part; a digest of /Lang. The digest
+;; is h * 131 + v modulo 8388593 over code points and small integers (`cg-fold` in the law).
+
+(defn fold [h v] (mod (+ (* h 131) (mod v 8388593)) 8388593))
+(defn cps [s] (vec (.toArray (.codePoints ^String (str s)))))
+(defn fold-all [h vs] (reduce fold h vs))
+
+(def act-code {nil 0 "URI" 1 "GoTo" 2 "GoToR" 3 "GoToE" 4 "Launch" 5 "Named" 6 "JavaScript" 7 "SubmitForm" 8 "other" 9})
+
+(defn oracle-facts [path npages]
+  (let [[_ outl] (oracle-outline path npages)
+        oh (reduce (fn [h n] (-> h (fold (:depth n)) (fold-all (cps (:title n))) (fold (or (:page n) 0)) (fold 1))) 0 outl)
+        q (parse-json (sh "qpdf" "--json=2" "--json-key=pages" path))
+        lh (reduce (fn [h pg] (if-let [t (label-text (get pg "label"))]
+                                (fold (fold-all h (cps t)) 0)
+                                (fold h 1)))
+                   0 (get q "pages"))
+        [_ links] (oracle-links path)
+        gh (reduce (fn [h l] (-> h (fold (act-code (:kind l))) (fold (if (and (= "GoTo" (:kind l)) (:dpage l)) (inc (:dpage l)) 0)))) 0 links)
+        ua (or (some-> (re-find #"pdfuaid:part[=>]\s*\"?(\d+)" (sh "pdfinfo" "-meta" path)) second parse-long) -1)
+        objs (qpdf-objects path)
+        lang (str-obj (deref* objs (get (deref* objs (get (:trailer objs) "/Root")) "/Lang")))
+        ]
+    (str/join "," [(count outl) oh lh (count links) (count (filter #(= "URI" (:kind %)) links)) gh ua
+                    (fold-all 0 (cps (if (string? lang) lang "")))])))
+
+(defn corpus-paths []
+  (->> (:out (p/shell {:out :string :dir root} "find" "-L" "corpus" "-iname" "*.pdf" "-not" "-path" "*/_dl/*"))
+       str/split-lines (remove str/blank?) sort))
+
+(defn choose-rows
+  "Which real files get a row: a spread over what the catalogue readers read. The files are chosen
+  from emon's own dumps (only to pick files that exercise something), the facts come from the
+  oracles. A file with an integer page index in a destination is left out (qpdf and poppler do not
+  follow those, emon and pdf.js do)."
+  [rows]
+  (let [ok (filter (fn [[_ r]] (:d r)) rows)
+        idx? (fn [d] (or (some #(get-in % ["dest" "index"]) (get-in d ["m" "outlines"]))
+                         (some #(get-in % ["dest" "index"]) (get-in d ["a" "annots"]))))
+        usable (remove (fn [[_ r]] (idx? (:d r))) ok)
+        feat (fn [f n] (take n (sort (map first (filter (fn [[_ r]] (f (:d r))) usable)))))
+        links (fn [d] (some #(= "Link" (get % "subtype")) (get-in d ["a" "annots"])))
+        small (fn [d] (<= (get d "pages" 0) 120))]
+    (vec (sort (distinct (concat
+                          (feat #(and (pos? (count (get-in % ["m" "outlines"]))) (small %)) 45)
+                          (feat #(and (pos? (count (get-in % ["m" "labels" "ranges"]))) (small %)) 30)
+                          (feat #(and (links %) (small %) (some (fn [a] (= "GoTo" (get a "action"))) (get-in % ["a" "annots"]))) 30)
+                          (feat #(and (links %) (small %)) 20)
+                          (feat #(= 1 (get-in % ["m" "xmp" "pdfuaPart"])) 25)
+                          (feat #(get-in % ["m" "lang"]) 12)
+                          (feat #(pos? (get-in % ["m" "acroForm"] 0)) 13)))))))
+
+(let [args (vec *command-line-args*)
+      opt (fn [k] (second (drop-while #(not= k %) args)))
+      sel (some-> (opt "--cat") (str/split #",") (->> (map keyword) set))
+      show (or (some-> (opt "--show") parse-long) 3)
+      paths (let [ps (remove #(or (str/starts-with? % "--") (#{(opt "--cat") (opt "--show") (opt "--write")} %)) args)]
+              (if (seq ps) (vec ps) (vec (corpus-paths))))
+      rows (emon-rows paths)
+      _ (when-let [out (opt "--write")]
+          (let [chosen (choose-rows rows)
+                lines (pmap (fn [path] (str "../" path "\t" (oracle-facts path (get-in rows [path :d "pages"])))) chosen)]
+            (spit (str root "/" out)
+                  (str "# emon P3.8/P3.9: real files from corpus/ (read-only), kin/pdfcatalogtest.kin. Written by\n"
+                       "# kin/scripts/pdf-catalog-compare --write. FACTS FROM QPDF AND POPPLER, never from emon.\n"
+                       "# path (relative to test/) <TAB> bookmarks,bookmark digest,label digest,links,URI links,link digest,PDF/UA part,/Lang digest\n"
+                       (str/join "\n" lines) "\n"))
+            (println "wrote" (count chosen) "rows to" out)
+            (System/exit 0)))
+      cats (if sel (select-keys cats sel) cats)
+      results (pmap (fn [path]
+                      (let [e (get rows path)]
+                        (into {} (for [[c f] cats]
+                                   [c (if (= "ok" (:status e))
+                                        (try (f path e) (catch Exception ex [{:item :error :ok false :detail (str "compare failed: " (.getMessage ex))}]))
+                                        nil)]))))
+                    paths)
+      by-path (zipmap paths results)]
+  (println (count paths) "files;" (count (filter #(= "ok" (:status (val %))) rows)) "opened by emon")
+  (doseq [c (keys cats)]
+    (let [per (for [[path r] by-path :let [items (get r c)] :when (seq items)] [path items])
+          all (mapcat second per)
+          ok (count (filter :ok all))
+          fok (count (filter (fn [[_ items]] (every? :ok items)) per))]
+      (println (format "  %-9s files %4d of %4d agree   items %7d of %7d agree (%.2f%%)"
+                       (name c) fok (count per) ok (count all) (if (seq all) (* 100.0 (/ ok (count all))) 100.0)))
+      (doseq [[path items] (take show (filter (fn [[_ items]] (not-every? :ok items)) per))]
+        (println "     " path)
+        (doseq [i (take 3 (remove :ok items))] (println "         " (:detail i)))))))

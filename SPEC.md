@@ -1210,9 +1210,30 @@ centi-units as points, colours as `"#rrggbb"`, packed ASCII (script,
 language) as strings, and `feats` rows with their column names. It is not a
 public contract.
 
-#### 8.4.7 What v2 does not hold yet
+#### 8.4.7 Annotations and the catalogue; what v2 does not hold yet
 
-Annotations (P3.8: their own arena then), the structure tree (P3.7 joins on
+**Annotations have their own arenas (P3.8, D120)**, as this section promised: `annots` (38 cells a row: page,
+subtype, object number, `/F`, the rectangle in page space (§3.4) and as written, the first
+action's kind, target and destination, `/Contents`, `/T`, `/Name`, `/CA`, the field it belongs
+to, the appearance's text), `quads` (8 cells: a link's `/QuadPoints` in page space, so a link
+that wraps maps onto the words each part covers), `fields` (terminal AcroForm fields: full
+name, type, flags, `/V`, `/DV`, the first widget's page and rectangle, the appearance's text,
+and how `/V` and the appearance agree) and `sigs` (signature dictionaries: `/Name`, `/M` as
+written and parsed, `/Reason`, `/Location`, `/ContactInfo`, `/Filter`, `/SubFilter`,
+`/ByteRange`, the size of `/Contents`; never validated). Stamp and Watermark annotations are
+`annots` rows like any other, carrying the name, contents, opacity, flags and appearance text
+that §8.1 and §9.5 read as watermark and seal evidence. A destination is 8 cells: page (0-based,
+-1 unresolved), fit kind (plus 16 when the file gave the page as an index, which poppler and pdf.js
+follow and qpdf does not), four arguments, the name it was looked up by. Their `ea` codes are
+appended after `tlines` (25 to 28) when P1.12 folds them into the bundles; until then they are
+`emon.pdfannot`'s (`kin/pdfannot.kin`), with the same conventions (integer `Cells`, rows of a fixed
+stride, strings as runs of an `etext`-shaped arena, absent is -1).
+
+**The catalogue's extras are not evidence** (P3.9, D121): outlines, page labels, Info, XMP and
+`/Lang` are read once, at stage 0, into `emon.pdfmeta`'s arenas (`md`, `xm`, `ol`, `lb`, `nd`), and
+join the Source (§2.0) as facts about the document, not observations on a page.
+
+**Not held yet**: the structure tree (P3.7 joins on
 `marks.mcid`; the tree is P3.7's arena), shadings as painted regions beyond
 their box (a `paths` row of kind `other` until P3.5), a font's `/CapHeight`
 and `/XHeight` (read by §10.9; a minor addition to `fonts`, D108), the Model-level
