@@ -18,6 +18,377 @@
   "magick": "Version: ImageMagick 7.1.1-33 Q16-HDRI aarch64 22263 https://imagemagick.org"
  },
  "docs": {
+  "align-justify-hyphen": {
+   "files": {
+    "html": {
+     "path": "html/align-justify-hyphen.html",
+     "sha256": "68a93af2768b4bac3698edd581075fd303e50b6eaafc5950909c2b86ed1fa1a4",
+     "bytes": 4251
+    },
+    "pdf": {
+     "path": "pdf/align-justify-hyphen.pdf",
+     "sha256": "29185a4e813cbec59f018d976af6471b22f149f4a88899abbd3c101ec398a9fc",
+     "bytes": 33648
+    },
+    "scan": {
+     "path": "scan/align-justify-hyphen.pdf",
+     "sha256": "54917cddd5412b344acd644877b9d2df3168b0bd652b3bb97f980d100d995437",
+     "bytes": 214588
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "2": 1,
+     "4": 1,
+     "5": 11,
+     "6": 11,
+     "8": 1,
+     "9": 11,
+     "10": 7,
+     "12": 1,
+     "13": 13,
+     "14": 8,
+     "16": 1,
+     "17": 13,
+     "18": 10
+    },
+    "hyphens": [
+     {
+      "id": 5,
+      "printed": "oppor-tunities",
+      "word": "opportunities"
+     },
+     {
+      "id": 5,
+      "printed": "re-sponsibility.",
+      "word": "responsibility."
+     },
+     {
+      "id": 5,
+      "printed": "de-velopment",
+      "word": "development"
+     },
+     {
+      "id": 5,
+      "printed": "organiza-tion",
+      "word": "organization"
+     },
+     {
+      "id": 5,
+      "printed": "in-formation",
+      "word": "information"
+     },
+     {
+      "id": 6,
+      "printed": "opportu-nities",
+      "word": "opportunities"
+     },
+     {
+      "id": 6,
+      "printed": "in-frastructure",
+      "word": "infrastructure"
+     },
+     {
+      "id": 6,
+      "printed": "im-plementation",
+      "word": "implementation"
+     },
+     {
+      "id": 6,
+      "printed": "trans-portation",
+      "word": "transportation"
+     },
+     {
+      "id": 6,
+      "printed": "imple-mentation",
+      "word": "implementation"
+     },
+     {
+      "id": 9,
+      "printed": "environmen-tal",
+      "word": "environmental"
+     },
+     {
+      "id": 9,
+      "printed": "opportu-nities",
+      "word": "opportunities"
+     },
+     {
+      "id": 10,
+      "printed": "in-ternational",
+      "word": "international"
+     },
+     {
+      "id": 13,
+      "printed": "docu-mentation",
+      "word": "documentation"
+     },
+     {
+      "id": 13,
+      "printed": "admin-istration",
+      "word": "administration"
+     },
+     {
+      "id": 13,
+      "printed": "or-ganization.",
+      "word": "organization."
+     },
+     {
+      "id": 13,
+      "printed": "docu-mentation",
+      "word": "documentation"
+     },
+     {
+      "id": 13,
+      "printed": "communica-tion",
+      "word": "communication"
+     },
+     {
+      "id": 13,
+      "printed": "doc-umentation",
+      "word": "documentation"
+     },
+     {
+      "id": 13,
+      "printed": "in-ternational",
+      "word": "international"
+     },
+     {
+      "id": 14,
+      "printed": "sto-ry",
+      "word": "story"
+     },
+     {
+      "id": 14,
+      "printed": "docu-mentation",
+      "word": "documentation"
+     },
+     {
+      "id": 14,
+      "printed": "us-ing",
+      "word": "using"
+     },
+     {
+      "id": 17,
+      "printed": "trans-portation",
+      "word": "transportation"
+     },
+     {
+      "id": 17,
+      "printed": "opportu-nities",
+      "word": "opportunities"
+     },
+     {
+      "id": 17,
+      "printed": "transporta-tion",
+      "word": "transportation"
+     },
+     {
+      "id": 17,
+      "printed": "environ-mental",
+      "word": "environmental"
+     },
+     {
+      "id": 17,
+      "printed": "informa-tion",
+      "word": "information"
+     },
+     {
+      "id": 18,
+      "printed": "be-cause",
+      "word": "because"
+     },
+     {
+      "id": 18,
+      "printed": "devel-opment",
+      "word": "development"
+     },
+     {
+      "id": 18,
+      "printed": "cir-cumstances",
+      "word": "circumstances"
+     }
+    ]
+   }
+  },
+  "align-paragraphs": {
+   "files": {
+    "html": {
+     "path": "html/align-paragraphs.html",
+     "sha256": "0b88f19fc00bcc27fc2ed835057b836c9d5b51a24f7593492f329bc6ba813f58",
+     "bytes": 4489
+    },
+    "pdf": {
+     "path": "pdf/align-paragraphs.pdf",
+     "sha256": "a15e9ceb469a68f80d5e090c5ba987547421b78efa2bab8689356bbd06485bbe",
+     "bytes": 51887
+    },
+    "scan": {
+     "path": "scan/align-paragraphs.pdf",
+     "sha256": "fe4b1cdda809bd8abfc121a4d3ee7b112b29783e4ee2cc0547515470ca65e408",
+     "bytes": 144496
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "2": 1,
+     "4": 1,
+     "5": 4,
+     "7": 1,
+     "8": 4,
+     "10": 1,
+     "11": 4,
+     "13": 1,
+     "14": 5,
+     "16": 1,
+     "17": 1,
+     "18": 1,
+     "19": 1,
+     "21": 1
+    },
+    "hyphens": []
+   }
+  },
+  "align-rtl": {
+   "files": {
+    "html": {
+     "path": "html/align-rtl.html",
+     "sha256": "dda80bdb5fa92c12ca08d981833137bcca39ab667dc35c270ea2584179722580",
+     "bytes": 3716
+    },
+    "pdf": {
+     "path": "pdf/align-rtl.pdf",
+     "sha256": "ea1deed9bfebd303eb1b74d4f73a01c8355e054ccfed71d383fc5dbc31dee5d9",
+     "bytes": 11483
+    },
+    "scan": {
+     "path": "scan/align-rtl.pdf",
+     "sha256": "f1a92350f49121f1b9a54a07381d5427837addafc1be7c80abebb394715e73df",
+     "bytes": 127202
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "2": 1,
+     "4": 1,
+     "5": 4,
+     "7": 1,
+     "8": 4,
+     "10": 1,
+     "11": 4,
+     "13": 1,
+     "14": 6
+    },
+    "hyphens": []
+   }
+  },
+  "align-table-numeric": {
+   "files": {
+    "html": {
+     "path": "html/align-table-numeric.html",
+     "sha256": "aae0ec2515f4b11d6c857ac7a9ae6a4ebc990e3eced4eeb855ca2fd22a58f964",
+     "bytes": 4276
+    },
+    "pdf": {
+     "path": "pdf/align-table-numeric.pdf",
+     "sha256": "1d9fed9ff81a5fb082922191182d29f69545962d5ad9aff0e76b64023e5095c3",
+     "bytes": 37562
+    },
+    "scan": {
+     "path": "scan/align-table-numeric.pdf",
+     "sha256": "2d79eb2a2bc31151178d81532ebdf7ece30aa8686e5f4f46940117025bac2019",
+     "bytes": 64338
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "2": 1,
+     "3": 2,
+     "7": 1,
+     "8": 1,
+     "9": 1,
+     "10": 1,
+     "11": 1,
+     "14": 1,
+     "15": 1,
+     "16": 1,
+     "17": 1,
+     "20": 1,
+     "21": 1,
+     "22": 1,
+     "23": 1,
+     "26": 1,
+     "27": 1,
+     "28": 1,
+     "29": 1,
+     "32": 1,
+     "33": 1,
+     "34": 1,
+     "35": 1,
+     "38": 1,
+     "39": 1,
+     "40": 1,
+     "41": 1,
+     "44": 1,
+     "45": 1,
+     "46": 1,
+     "47": 1,
+     "50": 1,
+     "51": 1,
+     "52": 1,
+     "53": 1,
+     "56": 1,
+     "57": 1,
+     "58": 1,
+     "59": 1,
+     "62": 1,
+     "63": 1,
+     "64": 1,
+     "65": 1,
+     "68": 1,
+     "69": 1,
+     "70": 1,
+     "71": 1
+    },
+    "hyphens": []
+   }
+  },
   "bank-statement": {
    "files": {
     "html": {
@@ -169,6 +540,1048 @@
     }
    }
   },
+  "columns-continue": {
+   "files": {
+    "html": {
+     "path": "html/columns-continue.html",
+     "sha256": "4208668f0d4b3591ad558f423077a6ecdbbda2787a4fa88a7936b934e810a8d5",
+     "bytes": 8325
+    },
+    "pdf": {
+     "path": "pdf/columns-continue.pdf",
+     "sha256": "e153df760ed189146faf5b9893ad35d8b211980f7a3fb68b731a3f3f8769a87d",
+     "bytes": 65913
+    },
+    "scan": {
+     "path": "scan/columns-continue.pdf",
+     "sha256": "8f116409e59299d763503f278b4c380113733704f12abd44bf094366d2952a38",
+     "bytes": 469081
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "frags": {
+     "2": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "3": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "5": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "6": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "7": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "8": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "9": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "10": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "11": [
+      [
+       1,
+       1,
+       1
+      ],
+      [
+       2,
+       0,
+       0
+      ]
+     ],
+     "13": [
+      [
+       2,
+       0,
+       0
+      ]
+     ],
+     "14": [
+      [
+       2,
+       0,
+       0
+      ]
+     ],
+     "15": [
+      [
+       2,
+       0,
+       0
+      ],
+      [
+       2,
+       0,
+       1
+      ]
+     ],
+     "16": [
+      [
+       2,
+       0,
+       1
+      ]
+     ],
+     "18": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "20": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "21": [
+      [
+       2,
+       2,
+       0
+      ]
+     ],
+     "22": [
+      [
+       2,
+       2,
+       0
+      ],
+      [
+       2,
+       2,
+       1
+      ]
+     ],
+     "24": [
+      [
+       2,
+       2,
+       1
+      ]
+     ],
+     "25": [
+      [
+       2,
+       2,
+       1
+      ]
+     ],
+     "26": [
+      [
+       3,
+       0,
+       0
+      ]
+     ],
+     "27": [
+      [
+       3,
+       0,
+       1
+      ]
+     ],
+     "29": [
+      [
+       3,
+       1,
+       0
+      ]
+     ]
+    },
+    "lines": {},
+    "hyphens": [
+     {
+      "id": 3,
+      "printed": "some-times",
+      "word": "sometimes"
+     },
+     {
+      "id": 6,
+      "printed": "to-day",
+      "word": "today"
+     },
+     {
+      "id": 6,
+      "printed": "to-gether",
+      "word": "together"
+     },
+     {
+      "id": 7,
+      "printed": "quar-ter",
+      "word": "quarter"
+     },
+     {
+      "id": 8,
+      "printed": "be-fore.",
+      "word": "before."
+     },
+     {
+      "id": 11,
+      "printed": "quar-ter",
+      "word": "quarter"
+     },
+     {
+      "id": 15,
+      "printed": "togeth-er",
+      "word": "together"
+     },
+     {
+      "id": 15,
+      "printed": "be-low",
+      "word": "below"
+     },
+     {
+      "id": 22,
+      "printed": "to-gether",
+      "word": "together"
+     },
+     {
+      "id": 22,
+      "printed": "us-ing",
+      "word": "using"
+     },
+     {
+      "id": 25,
+      "printed": "us-ing",
+      "word": "using"
+     }
+    ]
+   }
+  },
+  "columns-margin-notes": {
+   "files": {
+    "html": {
+     "path": "html/columns-margin-notes.html",
+     "sha256": "866df7869b6bf89703bc8809da8a75b38c8a4046ca54e3b5c45bf3ed5f633db7",
+     "bytes": 3535
+    },
+    "pdf": {
+     "path": "pdf/columns-margin-notes.pdf",
+     "sha256": "af4c0128cc6f8aa179e34d2fd2bb7b7466da81fd21a15ad0429e9d6852faab3e",
+     "bytes": 37071
+    },
+    "scan": {
+     "path": "scan/columns-margin-notes.pdf",
+     "sha256": "9b893642070dbc9db27d2ecb6eab88318a799ef1567b45226b90e46c9c8076b2",
+     "bytes": 151252
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "frags": {
+     "2": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "3": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "5": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "6": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "8": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "9": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "11": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "12": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "14": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "15": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "17": [
+      [
+       1,
+       1,
+       1
+      ]
+     ]
+    },
+    "lines": {},
+    "hyphens": []
+   }
+  },
+  "columns-mid-page": {
+   "files": {
+    "html": {
+     "path": "html/columns-mid-page.html",
+     "sha256": "b33a7afd8e51bf61015c1f0dd01187175a7c600051b73cdd15031f0f925c8989",
+     "bytes": 3439
+    },
+    "pdf": {
+     "path": "pdf/columns-mid-page.pdf",
+     "sha256": "4483480000ca6e038870f4d62ef59cd364c70469e2975d1255d5e01eedb14da3",
+     "bytes": 46968
+    },
+    "scan": {
+     "path": "scan/columns-mid-page.pdf",
+     "sha256": "c4cffe89cbc32906877325771135d7c9bb76bfa2ebee4d55233f5ebb9c1915c5",
+     "bytes": 158214
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "frags": {
+     "2": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "3": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "4": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "5": [
+      [
+       1,
+       1,
+       0
+      ],
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "6": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "8": [
+      [
+       1,
+       2,
+       0
+      ]
+     ],
+     "9": [
+      [
+       1,
+       2,
+       0
+      ]
+     ],
+     "10": [
+      [
+       1,
+       3,
+       0
+      ]
+     ],
+     "11": [
+      [
+       1,
+       3,
+       0
+      ],
+      [
+       1,
+       3,
+       1
+      ]
+     ],
+     "12": [
+      [
+       1,
+       3,
+       1
+      ],
+      [
+       1,
+       3,
+       2
+      ]
+     ],
+     "13": [
+      [
+       1,
+       3,
+       2
+      ]
+     ]
+    },
+    "lines": {},
+    "hyphens": []
+   }
+  },
+  "columns-newspaper": {
+   "files": {
+    "html": {
+     "path": "html/columns-newspaper.html",
+     "sha256": "f6d4c8b9002f34520965f051bd592c191fb388bf4271e3291f41d84c1473e132",
+     "bytes": 5002
+    },
+    "pdf": {
+     "path": "pdf/columns-newspaper.pdf",
+     "sha256": "41813f71404332d37b00d37f3d8c0aa833966d9ea4fe1d0efdf1020d0c9e5f55",
+     "bytes": 69661
+    },
+    "scan": {
+     "path": "scan/columns-newspaper.pdf",
+     "sha256": "f15ceef866e54c49da63d0e5f7aeb4c7f5863c242db7485c455119dd642e9695",
+     "bytes": 163493
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "frags": {
+     "2": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "3": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "5": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "6": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "7": [
+      [
+       1,
+       1,
+       0
+      ],
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "8": [
+      [
+       1,
+       1,
+       1
+      ],
+      [
+       1,
+       1,
+       2
+      ]
+     ],
+     "9": [
+      [
+       1,
+       1,
+       2
+      ]
+     ],
+     "10": [
+      [
+       1,
+       1,
+       2
+      ]
+     ],
+     "12": [
+      [
+       1,
+       1,
+       3
+      ]
+     ],
+     "13": [
+      [
+       1,
+       1,
+       3
+      ]
+     ],
+     "14": [
+      [
+       1,
+       1,
+       3
+      ]
+     ],
+     "16": [
+      [
+       1,
+       1,
+       4
+      ]
+     ],
+     "17": [
+      [
+       1,
+       1,
+       4
+      ]
+     ],
+     "18": [
+      [
+       1,
+       1,
+       4
+      ]
+     ],
+     "20": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "21": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "22": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "24": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "25": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "26": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "28": [
+      [
+       1,
+       1,
+       3
+      ]
+     ],
+     "29": [
+      [
+       1,
+       1,
+       3
+      ]
+     ],
+     "30": [
+      [
+       1,
+       1,
+       3
+      ]
+     ]
+    },
+    "lines": {},
+    "hyphens": [
+     {
+      "id": 7,
+      "printed": "un-der",
+      "word": "under"
+     },
+     {
+      "id": 8,
+      "printed": "be-tween",
+      "word": "between"
+     },
+     {
+      "id": 9,
+      "printed": "re-port",
+      "word": "report"
+     },
+     {
+      "id": 13,
+      "printed": "pic-ture",
+      "word": "picture"
+     },
+     {
+      "id": 17,
+      "printed": "how-ever",
+      "word": "however"
+     },
+     {
+      "id": 17,
+      "printed": "ani-mal",
+      "word": "animal"
+     },
+     {
+      "id": 17,
+      "printed": "to-ward",
+      "word": "toward"
+     },
+     {
+      "id": 21,
+      "printed": "an-other",
+      "word": "another"
+     },
+     {
+      "id": 22,
+      "printed": "to-day",
+      "word": "today"
+     },
+     {
+      "id": 22,
+      "printed": "some-times",
+      "word": "sometimes"
+     },
+     {
+      "id": 22,
+      "printed": "some-times",
+      "word": "sometimes"
+     },
+     {
+      "id": 29,
+      "printed": "impor-tant",
+      "word": "important"
+     }
+    ]
+   }
+  },
+  "columns-span-figure": {
+   "files": {
+    "html": {
+     "path": "html/columns-span-figure.html",
+     "sha256": "625800b11bde34f40cf0f87517988297e7f3c1a5cbef2077bf57417eca532b5b",
+     "bytes": 7042
+    },
+    "pdf": {
+     "path": "pdf/columns-span-figure.pdf",
+     "sha256": "858414e82695bb36c3d51692cd5b6b267148e7eed8b98341837cc5ff1af06866",
+     "bytes": 69895
+    },
+    "scan": {
+     "path": "scan/columns-span-figure.pdf",
+     "sha256": "82a53acab6d613fd279268a6b8e6890d43ba6e14229a92c6402d2469d5ea8167",
+     "bytes": 252384
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "frags": {
+     "2": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "3": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "4": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "6": [
+      [
+       1,
+       2,
+       0
+      ]
+     ],
+     "7": [
+      [
+       1,
+       3,
+       0
+      ]
+     ],
+     "8": [
+      [
+       1,
+       3,
+       0
+      ],
+      [
+       1,
+       3,
+       1
+      ]
+     ],
+     "10": [
+      [
+       1,
+       3,
+       1
+      ]
+     ],
+     "11": [
+      [
+       1,
+       3,
+       1
+      ],
+      [
+       2,
+       0,
+       0
+      ],
+      [
+       2,
+       0,
+       1
+      ]
+     ],
+     "13": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "16": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "17": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "18": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "19": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "22": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "23": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "24": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "25": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "27": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "28": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "29": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "30": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "32": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "33": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "34": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "35": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "37": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "38": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "39": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "40": [
+      [
+       2,
+       1,
+       0
+      ]
+     ],
+     "41": [
+      [
+       2,
+       2,
+       0
+      ]
+     ],
+     "42": [
+      [
+       2,
+       2,
+       0
+      ],
+      [
+       2,
+       2,
+       1
+      ]
+     ],
+     "43": [
+      [
+       2,
+       2,
+       1
+      ]
+     ]
+    },
+    "lines": {},
+    "hyphens": []
+   }
+  },
   "columns-three-news": {
    "files": {
     "html": {
@@ -231,6 +1644,101 @@
       792.0
      ]
     ]
+   }
+  },
+  "columns-uneven": {
+   "files": {
+    "html": {
+     "path": "html/columns-uneven.html",
+     "sha256": "48ff5fb4254041013d855cd39167be1990a1e5e43020f61dcf83e61df7b4c92a",
+     "bytes": 3496
+    },
+    "pdf": {
+     "path": "pdf/columns-uneven.pdf",
+     "sha256": "cc4f044a0f63e41d43903d1c28fea969d91920e34569667d550a1ea71ae91a6d",
+     "bytes": 41912
+    },
+    "scan": {
+     "path": "scan/columns-uneven.pdf",
+     "sha256": "fb0d8232fee502afb038528f48fbc3d6a97c08972d493f3d7d72c37d1e369f55",
+     "bytes": 145374
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "frags": {
+     "2": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "3": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "4": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "6": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "7": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "8": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "9": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "10": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "11": [
+      [
+       1,
+       1,
+       0
+      ]
+     ]
+    },
+    "lines": {},
+    "hyphens": []
    }
   },
   "figures-charts": {
@@ -680,6 +2188,364 @@
       792.0
      ]
     ]
+   }
+  },
+  "initial-cjk": {
+   "files": {
+    "html": {
+     "path": "html/initial-cjk.html",
+     "sha256": "0b8751c9acbb13c466c6dabf28b1e47f87f6704fc1f16cfe035b517cef8b9635",
+     "bytes": 3138
+    },
+    "pdf": {
+     "path": "pdf/initial-cjk.pdf",
+     "sha256": "ed80a9f4751dc61ec5f102ee3872e2d7e734ba74f76baff3178f804adde6005d",
+     "bytes": 254819
+    },
+    "scan": {
+     "path": "scan/initial-cjk.pdf",
+     "sha256": "2a3d16e3db1730df2377c5f198f556b0bb7d05c33752f657bb5361766012ed75",
+     "bytes": 147882
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "3": 7,
+     "4": 7,
+     "5": 7
+    },
+    "hyphens": []
+   }
+  },
+  "initial-columns": {
+   "files": {
+    "html": {
+     "path": "html/initial-columns.html",
+     "sha256": "ad037e7e4bb6387d1fb361677a0c4953a9ad6d7404de00119fb1d6878baf79d2",
+     "bytes": 2613
+    },
+    "pdf": {
+     "path": "pdf/initial-columns.pdf",
+     "sha256": "fff12a64e388a64ce5122af535061dcb504bcef611f511c4ff741c3c9a707944",
+     "bytes": 31521
+    },
+    "scan": {
+     "path": "scan/initial-columns.pdf",
+     "sha256": "ed49d532ecc462df9d26d370faa2b8f0c4759c55699f31cced06b63d2e399c40",
+     "bytes": 115066
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "frags": {
+     "2": [
+      [
+       1,
+       0,
+       0
+      ]
+     ],
+     "3": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "4": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "5": [
+      [
+       1,
+       1,
+       0
+      ]
+     ],
+     "6": [
+      [
+       1,
+       1,
+       1
+      ]
+     ],
+     "7": [
+      [
+       1,
+       1,
+       1
+      ]
+     ]
+    },
+    "lines": {
+     "4": 9,
+     "6": 11
+    },
+    "hyphens": []
+   }
+  },
+  "initial-firstletter": {
+   "files": {
+    "html": {
+     "path": "html/initial-firstletter.html",
+     "sha256": "c103e492228ae729818914d754e86c5c67e40a5b44968a3f0fa48115baa69b6f",
+     "bytes": 5376
+    },
+    "pdf": {
+     "path": "pdf/initial-firstletter.pdf",
+     "sha256": "e1f3b318da6309d35fc62c31614d1fbc8330b1b7c4f369dc02321ddc59cee995",
+     "bytes": 56731
+    },
+    "scan": {
+     "path": "scan/initial-firstletter.pdf",
+     "sha256": "e60ef823c1da9d7aea758f93c53716aceaee77b16e4e3116d38ab9762f0b7a37",
+     "bytes": 291778
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "3": 8,
+     "4": 8,
+     "5": 8,
+     "6": 7,
+     "7": 8,
+     "8": 8
+    },
+    "hyphens": []
+   }
+  },
+  "initial-firstword": {
+   "files": {
+    "html": {
+     "path": "html/initial-firstword.html",
+     "sha256": "062d9b934fdad7d6108296838c6639d6e838b0c161c0562f9ae5ed3486f363e5",
+     "bytes": 2997
+    },
+    "pdf": {
+     "path": "pdf/initial-firstword.pdf",
+     "sha256": "6b54d7adc180d0b39f30e8eb41045a4d02f07ef6679b053f51074efc73755bc8",
+     "bytes": 32369
+    },
+    "scan": {
+     "path": "scan/initial-firstword.pdf",
+     "sha256": "cec89a5319ee32f0fb47e1384abcdaa380b9de28120a12fcc9b2cc0e9a436f27",
+     "bytes": 146387
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "3": 8,
+     "4": 8,
+     "5": 8
+    },
+    "hyphens": []
+   }
+  },
+  "initial-image": {
+   "files": {
+    "html": {
+     "path": "html/initial-image.html",
+     "sha256": "a89ab9ddeef088ff958cdd6d14efe3484d400360eccb61a1d91cae7da3533f12",
+     "bytes": 2409
+    },
+    "pdf": {
+     "path": "pdf/initial-image.pdf",
+     "sha256": "0a0da6753f173e055b148441e9f353b59e09a6f28a7ed0b682eb82d64aded843",
+     "bytes": 30519
+    },
+    "asset": {
+     "path": "html/img/initial-W.png",
+     "sha256": "7b2557e791a684f746451fcafce4bd4db4981b2806ece93cd9b93c28b206e4bc",
+     "bytes": 7596
+    },
+    "scan": {
+     "path": "scan/initial-image.pdf",
+     "sha256": "b17722792f62de11ef45bb0bb0782b7489ff2b11b65d0b5f7fc3da849c95a5b0",
+     "bytes": 116358
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "4": 8
+    },
+    "hyphens": []
+   }
+  },
+  "initial-letter-headings": {
+   "files": {
+    "html": {
+     "path": "html/initial-letter-headings.html",
+     "sha256": "59188d56a4a940192f5ebff70cd60e5ef5cfb388f152b64865c47008bb4cbf2b",
+     "bytes": 2310
+    },
+    "pdf": {
+     "path": "pdf/initial-letter-headings.pdf",
+     "sha256": "cd1328a3d6e61062f5fcba69ca8dd247de821e0f43d69c17889a0c0e205b7046",
+     "bytes": 41745
+    },
+    "scan": {
+     "path": "scan/initial-letter-headings.pdf",
+     "sha256": "811895e773a8dbfa43e538e0caab31863d4baea2794c1e0a9d225946081a20bb",
+     "bytes": 100669
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {},
+    "hyphens": []
+   }
+  },
+  "initial-raised": {
+   "files": {
+    "html": {
+     "path": "html/initial-raised.html",
+     "sha256": "1d6975f9d6900d444cfcde0069692aadc4f0f878acb7ffb9899a5dffeaba6028",
+     "bytes": 4205
+    },
+    "pdf": {
+     "path": "pdf/initial-raised.pdf",
+     "sha256": "002a9ef11739df85cd551ca8ad595568640438867623c1fe6e59453178c7848f",
+     "bytes": 36590
+    },
+    "scan": {
+     "path": "scan/initial-raised.pdf",
+     "sha256": "d1b66586b3204925e403221c819cfc0aa25b6cff46e6aece3d51eff44403e192",
+     "bytes": 233859
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "3": 7,
+     "5": 7,
+     "6": 7,
+     "8": 6
+    },
+    "hyphens": []
+   }
+  },
+  "initial-rtl": {
+   "files": {
+    "html": {
+     "path": "html/initial-rtl.html",
+     "sha256": "ba6bcae7c0c5a085f218520775967cb85da7dba4217f5599bd9872b2dd8b4cc4",
+     "bytes": 3049
+    },
+    "pdf": {
+     "path": "pdf/initial-rtl.pdf",
+     "sha256": "9f30b3f7f52dc59d9ce6bc44ea78827900539ea1ba8573dec8867cd88c08ab39",
+     "bytes": 10106
+    },
+    "scan": {
+     "path": "scan/initial-rtl.pdf",
+     "sha256": "d495d99e1672ac2483ec56e22790c481d2e4c1de59290da2336825c6b63709ab",
+     "bytes": 113979
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "3": 6,
+     "5": 6
+    },
+    "hyphens": []
+   }
+  },
+  "initial-vector": {
+   "files": {
+    "html": {
+     "path": "html/initial-vector.html",
+     "sha256": "9e34e6c96a3eda94ea9b5c077e913cbf193bfda40c3cf1197b5ebb5b5b1b1a18",
+     "bytes": 2790
+    },
+    "pdf": {
+     "path": "pdf/initial-vector.pdf",
+     "sha256": "9a6ae1deee0b8805b6db2d5507fbbbbf057e92794be2f1714ce823d52b66e5fe",
+     "bytes": 26469
+    },
+    "scan": {
+     "path": "scan/initial-vector.pdf",
+     "sha256": "916404294b1f64f00ffd349f57e0dce32f3e74829f6fbffc01b766629a8ac614",
+     "bytes": 122380
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "lines": {
+     "4": 8,
+     "5": 7
+    },
+    "hyphens": []
    }
   },
   "invoice": {

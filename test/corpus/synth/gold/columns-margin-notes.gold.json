@@ -1,0 +1,313 @@
+{
+ "emon-gold": "1.0",
+ "id": "columns-margin-notes",
+ "provenance": {
+  "html": "html/columns-margin-notes.html",
+  "pdf": "pdf/columns-margin-notes.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/columns-margin-notes.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ],
+  "layout": true
+ },
+ "facts": {
+  "frags": {
+   "9": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "3": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "8": [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   "14": [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   "17": [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   "15": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "5": [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   "12": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "6": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "11": [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   "2": [
+    [
+     1,
+     0,
+     0
+    ]
+   ]
+  },
+  "lines": {},
+  "hyphens": []
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "An Essay with Margin Notes"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "So almost words several some number other words across better such sea results sentence why need example. School hand them off can was just money every using heard each room. Never food report while were done us across picture if house. Soon something more move have away best well in several does three still group. Word across also through keep any about long along so every up every."
+      },
+      {
+       "id": 4,
+       "kind": "note",
+       "role": "margin",
+       "children": [
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "text": "See the survey of 1925, p. 14."
+        }
+       ]
+      },
+      {
+       "id": 6,
+       "kind": "paragraph",
+       "text": "Something sometimes above important well life find see got would each. Door their best then home while something white paper results found good old without picture much. Left region same here method same method done too tell back. Good too feet important back across results any give being may hard right. Want school of high up sound on almost to something kind tell hear learn these."
+      },
+      {
+       "id": 7,
+       "kind": "note",
+       "role": "margin",
+       "children": [
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "text": "An earlier draft said the opposite."
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "paragraph",
+       "text": "Can not place come over man found need this us those their. Point write all want right point five life might important see whole who because while still. She heard time food home that far between be who where old play every that policy figure. Method toward me very tell day the to used few region there out our knew life. Door next friend there using go very change or an something we second these measure."
+      },
+      {
+       "id": 10,
+       "kind": "note",
+       "role": "margin",
+       "children": [
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "text": "The figure is disputed; compare the tax rolls."
+        }
+       ]
+      },
+      {
+       "id": 12,
+       "kind": "paragraph",
+       "text": "These our then along done several heard those boy place few than more us want us turned. How only and their looked how results away think away did car next after. Did there give while she three that play sample place did market part few. Today found point me is see all through now tell do not must. Old two most without almost never way was like best food it went mother."
+      },
+      {
+       "id": 13,
+       "kind": "note",
+       "role": "margin",
+       "children": [
+        {
+         "id": 14,
+         "kind": "paragraph",
+         "text": "Not in the first edition."
+        }
+       ]
+      },
+      {
+       "id": 15,
+       "kind": "paragraph",
+       "text": "Always study those different land car make people now page but. Sometimes does man one last us learn always time this great boy picture toward all. Any when set its how us like ever same hear side all down help there. Take ever since after more revenue looked both earth him better were around which whole. Picture been words for hear small using men well because end during play between."
+      },
+      {
+       "id": 16,
+       "kind": "note",
+       "role": "margin",
+       "children": [
+        {
+         "id": 17,
+         "kind": "paragraph",
+         "text": "Cf. the harbour master's log."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "An Essay with Margin Notes"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

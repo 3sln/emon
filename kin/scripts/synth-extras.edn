@@ -11,12 +11,24 @@
 ;;     HTML says once;
 ;;   * the list markers and numbers (footnotes-page's note numbers, lists-*'s `1.` `a.` `IV.`, the ordered
 ;;     lists of the script documents) and the page numbers of the multipage tables;
-;;   * the DRAFT watermark.
+;;   * the DRAFT watermark;
+;;   * (P2.13, D114) the HYPHENS `hyphens:auto` makes at a line's end: one U+002D glyph per hyphenation point
+;;     (the PDF's ToUnicode says `<0010> <0011> <002D>`; poppler writes U+2010 for it). The counts below are
+;;     exactly the hyphen points in the documents' `facts.hyphens` (align-justify-hyphen 31, columns-continue
+;;     11, columns-newspaper 12), found independently from poppler's lines by tools/synth/build.clj.
+;;   An INITIAL that has no glyph (initial-image's W is a PNG, initial-vector's T and L are filled paths) costs
+;;     nothing here: the HTML says those letters only in an attribute (`alt`, `data-initial-text`), never in
+;;     text, so the page has neither a glyph nor a character of HTML for it. The text-layer initials
+;;     (-firstletter, -raised, -firstword, -columns, -rtl, -cjk) have all their glyphs; the floats are painted
+;;     before the text (D108 (a)), which is why their `in-order` count is small and is not a claim.
 ;; THE MISSING ARE THE FONT'S: script-devanagari and script-mixed lose the vowel signs and viramas whose
 ;; glyphs carry no ToUnicode entry (59 and 8 glyphs are `unknown`, U+FFFD: Skia writes <0000> for the parts
 ;; of a conjunct), and script-cjk's HTML says 長 (U+9577) where Chrome's ToUnicode says 長's radical variant
 ;; U+2ED1: the file, not emon, decided that.
-{"bank-statement" {:extras 354}
+{"align-justify-hyphen" {:extras 31}
+ "bank-statement" {:extras 354}
+ "columns-continue" {:extras 11}
+ "columns-newspaper" {:extras 12}
  "footnotes-page" {:extras 2}
  "furn-fixed-dom" {:extras 88}
  "furn-informative" {:extras 180}

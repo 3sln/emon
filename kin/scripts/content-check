@@ -7,7 +7,7 @@
 ;; It reads only COMMITTED FILES (and runs poppler's `pdftotext -bbox` when that is installed) and never
 ;; the interpreter, so it is an opinion independent of the code whose output it judges:
 ;;
-;;  1. THE HTML IS THE TRUTH (the done-when of P1.7). Each of the 36 synthetic documents was printed by
+;;  1. THE HTML IS THE TRUTH (the done-when of P1.7). Each of the 55 synthetic documents (36 of P2.8, 19 of P2.13) was printed by
 ;;     Chrome from test/corpus/synth/html/NAME.html. `test/content/synth.txt` holds the glyph text emon
 ;;     made of each PDF page. The HTML's text (head, style and tags dropped, entities decoded, both
 ;;     sides NFKC-normalised and stripped of white space, so the `fi` ligature and a space glyph are

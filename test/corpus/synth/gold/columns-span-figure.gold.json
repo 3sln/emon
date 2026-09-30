@@ -1,0 +1,653 @@
+{
+ "emon-gold": "1.0",
+ "id": "columns-span-figure",
+ "provenance": {
+  "html": "html/columns-span-figure.html",
+  "pdf": "pdf/columns-span-figure.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/columns-span-figure.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ],
+  "layout": true
+ },
+ "facts": {
+  "frags": {
+   "3": [
+    [
+     1,
+     1,
+     0
+    ]
+   ],
+   "34": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "22": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "4": [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   "8": [
+    [
+     1,
+     3,
+     0
+    ],
+    [
+     1,
+     3,
+     1
+    ]
+   ],
+   "28": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "30": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "33": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "19": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "17": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "25": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "42": [
+    [
+     2,
+     2,
+     0
+    ],
+    [
+     2,
+     2,
+     1
+    ]
+   ],
+   "7": [
+    [
+     1,
+     3,
+     0
+    ]
+   ],
+   "18": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "13": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "27": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "24": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "35": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "6": [
+    [
+     1,
+     2,
+     0
+    ]
+   ],
+   "38": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "39": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "43": [
+    [
+     2,
+     2,
+     1
+    ]
+   ],
+   "37": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "11": [
+    [
+     1,
+     3,
+     1
+    ],
+    [
+     2,
+     0,
+     0
+    ],
+    [
+     2,
+     0,
+     1
+    ]
+   ],
+   "32": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "2": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "16": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "41": [
+    [
+     2,
+     2,
+     0
+    ]
+   ],
+   "10": [
+    [
+     1,
+     3,
+     1
+    ]
+   ],
+   "40": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "23": [
+    [
+     2,
+     1,
+     0
+    ]
+   ],
+   "29": [
+    [
+     2,
+     1,
+     0
+    ]
+   ]
+  },
+  "lines": {},
+  "hyphens": []
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Spanning Elements"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Going my house water feet morning today words word where tell sure himself. With because were side might about out house cut it its car last each my sometimes while. Kind top when began picture so most car almost most world below. Until something such every group them form take write food were himself off another city sample. Want food report leave light door her play around took place end such."
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "Under way your know any father story cut city revenue story name sun few. Left however saw without today high four is down on house study. Sun show car father away both figure how them told about across first if hand even ever. Same both country father room life these seen below those head where line while try those know. Example or kind again said your very few see different home."
+      },
+      {
+       "id": 5,
+       "kind": "figure",
+       "label": "Figure 1.",
+       "subkind": "chart",
+       "labels": [
+        "0",
+        "55",
+        "110",
+        "165",
+        "220",
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "Units (thousands)"
+       ],
+       "children": [
+        {
+         "id": 6,
+         "kind": "caption",
+         "label": "Figure 1.",
+         "text": "Units sold per quarter"
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "paragraph",
+       "text": "Year without just year big children the take put world high. Little friend part together money region do sure hard found world. With come about air answer we young does might light know. Quarter it measure most had told with also way never later did not. Study saw our once seen each head few we where move from."
+      },
+      {
+       "id": 8,
+       "kind": "paragraph",
+       "text": "Never at big more father however us several end always hear high until into. Have find does called next between time soon read name with world last hear. Him toward this she as did car hard new car at up once do should. Example through them went change boy city number friend words below figure only for. Is door her night ever hear few story sample does about men me this."
+      },
+      {
+       "id": 9,
+       "kind": "figure",
+       "label": "Figure 2.",
+       "subkind": "chart",
+       "labels": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "0",
+        "150"
+       ],
+       "children": [
+        {
+         "id": 10,
+         "kind": "caption",
+         "label": "Figure 2.",
+         "text": "Monthly revenue trend"
+        }
+       ]
+      },
+      {
+       "id": 11,
+       "kind": "paragraph",
+       "text": "Only last just great had last point had head more were. Would know land people has came at hear father below true own between got. Got last say answer each animal used hand play land said. Results may told said down good four during put hear what only. She below see no may color turned that it time every had still."
+      },
+      {
+       "id": 12,
+       "kind": "table",
+       "profile": "ruled",
+       "columns": 4,
+       "children": [
+        {
+         "id": 13,
+         "kind": "caption",
+         "label": "Table 1.",
+         "text": "Quarterly results"
+        },
+        {
+         "id": 14,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 15,
+           "kind": "row",
+           "children": [
+            {
+             "id": 16,
+             "kind": "cell",
+             "header": "col",
+             "text": "Quarter"
+            },
+            {
+             "id": 17,
+             "kind": "cell",
+             "header": "col",
+             "text": "Units"
+            },
+            {
+             "id": 18,
+             "kind": "cell",
+             "header": "col",
+             "text": "Revenue"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "header": "col",
+             "text": "Margin"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 20,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 21,
+           "kind": "row",
+           "children": [
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "First"
+            },
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "1,200"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "14,400"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "12.5"
+            }
+           ]
+          },
+          {
+           "id": 26,
+           "kind": "row",
+           "children": [
+            {
+             "id": 27,
+             "kind": "cell",
+             "text": "Second"
+            },
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "1,800"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "21,600"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "13.1"
+            }
+           ]
+          },
+          {
+           "id": 31,
+           "kind": "row",
+           "children": [
+            {
+             "id": 32,
+             "kind": "cell",
+             "text": "Third"
+            },
+            {
+             "id": 33,
+             "kind": "cell",
+             "text": "1,500"
+            },
+            {
+             "id": 34,
+             "kind": "cell",
+             "text": "18,000"
+            },
+            {
+             "id": 35,
+             "kind": "cell",
+             "text": "12.8"
+            }
+           ]
+          },
+          {
+           "id": 36,
+           "kind": "row",
+           "children": [
+            {
+             "id": 37,
+             "kind": "cell",
+             "text": "Fourth"
+            },
+            {
+             "id": 38,
+             "kind": "cell",
+             "text": "2,200"
+            },
+            {
+             "id": 39,
+             "kind": "cell",
+             "text": "26,400"
+            },
+            {
+             "id": 40,
+             "kind": "cell",
+             "text": "14.0"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 41,
+       "kind": "paragraph",
+       "text": "Said now until five first make when children face with two had him small. Friend water since here far well done next let had white light. Their seen being use while one out does write one four father change only no policy come. Was made before be help own people name true saw called time where between now very almost. Boy where family write read under what at who year keep top sometimes."
+      },
+      {
+       "id": 42,
+       "kind": "paragraph",
+       "text": "Several learn usually new two always toward story still figure almost sample head do not ever below four. Story took left while found would want knew near to learn found used like move. Time were or white all point keep went high play head first next car. Year well did not way pay color part until high policy air. Far who study that man great tell around be paper study my."
+      },
+      {
+       "id": 43,
+       "kind": "paragraph",
+       "text": "Move do not method had first animal city make such turned find country. Face part across heard heard home who feet city would city may in again since. As began went see with own who himself night done white. Father of few their during from paper year make try words end. Get much turn just market went over different think without study sun here water if policy find."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "Spanning Elements"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

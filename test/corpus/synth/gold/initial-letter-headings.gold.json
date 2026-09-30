@@ -1,0 +1,398 @@
+{
+ "emon-gold": "1.0",
+ "id": "initial-letter-headings",
+ "provenance": {
+  "html": "html/initial-letter-headings.html",
+  "pdf": "pdf/initial-letter-headings.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/initial-letter-headings.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ],
+   "initial": [
+    "form",
+    "lines"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "facts": {
+  "lines": {},
+  "hyphens": []
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Glossary of Field Terms"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "text": "A"
+        },
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "text": "Aardvark A burrowing animal that feeds at night on ants and termites. Leave something turned before about himself looked me against about children found region in.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Aardvark"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A burrowing animal that feeds at night on ants and termites. Leave something turned before about himself looked me against about children found region in."
+          }
+         ]
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Abacus A frame of beads used for counting before printed tables were common. In at thought change story done near was your had same told which new.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Abacus"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A frame of beads used for counting before printed tables were common. In at thought change story done near was your had same told which new."
+          }
+         ]
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Anchorage A place where a vessel may lie safely on its cable. During about place why my play show many show want.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Anchorage"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A place where a vessel may lie safely on its cable. During about place why my play show many show want."
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 8,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 9,
+         "kind": "heading",
+         "level": 2,
+         "text": "B"
+        },
+        {
+         "id": 10,
+         "kind": "paragraph",
+         "text": "Barometer An instrument for reading the weight of the air. Also however time toward look take other so new words all about do before.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Barometer"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " An instrument for reading the weight of the air. Also however time toward look take other so new words all about do before."
+          }
+         ]
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "text": "Basalt A dark volcanic rock that cools into close columns. Example at what not its name was the called best will.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Basalt"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A dark volcanic rock that cools into close columns. Example at what not its name was the called best will."
+          }
+         ]
+        },
+        {
+         "id": 12,
+         "kind": "paragraph",
+         "text": "Beacon A fire or lamp set on a height to warn or to guide. Than today because first four me number people by had first five family.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Beacon"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A fire or lamp set on a height to warn or to guide. Than today because first four me number people by had first five family."
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 13,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 14,
+         "kind": "heading",
+         "level": 2,
+         "text": "C"
+        },
+        {
+         "id": 15,
+         "kind": "paragraph",
+         "text": "Cairn A heap of stones raised as a landmark or a grave. Same seen own air himself people once every next around animal because of under.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Cairn"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A heap of stones raised as a landmark or a grave. Same seen own air himself people once every next around animal because of under."
+          }
+         ]
+        },
+        {
+         "id": 16,
+         "kind": "paragraph",
+         "text": "Compass A needle that turns to the north and so tells a traveller where he is. Going boy was example called no five work earth new both paper.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Compass"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A needle that turns to the north and so tells a traveller where he is. Going boy was example called no five work earth new both paper."
+          }
+         ]
+        },
+        {
+         "id": 17,
+         "kind": "paragraph",
+         "text": "Contour A line on a map joining points of equal height. Man from away him last point great than now try then.",
+         "inlines": [
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "Contour"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " A line on a map joining points of equal height. Man from away him last point great than now try then."
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "Glossary of Field Terms"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

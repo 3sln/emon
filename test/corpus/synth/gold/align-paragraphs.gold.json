@@ -1,0 +1,314 @@
+{
+ "emon-gold": "1.0",
+ "id": "align-paragraphs",
+ "provenance": {
+  "html": "html/align-paragraphs.html",
+  "pdf": "pdf/align-paragraphs.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/align-paragraphs.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering",
+    "align"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label",
+    "align"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ],
+   "paragraph": [
+    "align"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "facts": {
+  "lines": {
+   "4": 1,
+   "8": 4,
+   "14": 5,
+   "21": 1,
+   "19": 1,
+   "17": 1,
+   "7": 1,
+   "5": 4,
+   "18": 1,
+   "13": 1,
+   "11": 4,
+   "2": 1,
+   "16": 1,
+   "10": 1
+  },
+  "hyphens": []
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "align": "center",
+       "text": "Notes on Alignment"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "Start"
+        },
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "align": "start",
+         "text": "Body called in play being get both thought look hand turn form today. Seen make animal in true always got kind paper such study several what this after her family. Friend from would growth paper have soon number seen day country leave better. Place since once never before think same took method food that called."
+        }
+       ]
+      },
+      {
+       "id": 6,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 7,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "End"
+        },
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "align": "end",
+         "text": "Just no top as thought own the saw large will know night my down sun heard man. Line ever into important know not our could through budget feet friend sound can small. Side do back made around does under now your might point old today house other. Because feet answer sea example word right get their whole right between along food words told."
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 10,
+         "kind": "heading",
+         "level": 2,
+         "align": "center",
+         "text": "Center"
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "align": "center",
+         "text": "Found report went before children end father all can out use until once. Hear being another like write top take or over still sentence at by going so top city. Time work against my great market help report us give father this find people best does there. Turn door it called tell read through family as upon looked room every each even budget family."
+        }
+       ]
+      },
+      {
+       "id": 12,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 13,
+         "kind": "heading",
+         "level": 2,
+         "align": "start",
+         "text": "Justify"
+        },
+        {
+         "id": 14,
+         "kind": "paragraph",
+         "align": "justify",
+         "text": "Away near told next big kind there these such off soon friend back very during. Sound found new light better example against method cut house no began year said later when. Sea review find one read did got should my left so point get get using write. When him at land across these paper was again know whole second no every. Long hard were boy no sure along where want so however then."
+        }
+       ]
+      },
+      {
+       "id": 15,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 16,
+         "kind": "heading",
+         "level": 2,
+         "align": "center",
+         "text": "Single lines"
+        },
+        {
+         "id": 17,
+         "kind": "paragraph",
+         "align": "center",
+         "text": "A single line, centred."
+        },
+        {
+         "id": 18,
+         "kind": "paragraph",
+         "align": "end",
+         "text": "A single line at the end edge."
+        },
+        {
+         "id": 19,
+         "kind": "paragraph",
+         "align": "start",
+         "text": "A justified paragraph that happens to be one line."
+        },
+        {
+         "id": 20,
+         "kind": "figure",
+         "label": "Figure 1.",
+         "subkind": "chart",
+         "labels": [
+          "0",
+          "55",
+          "110",
+          "165",
+          "220",
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4",
+          "Units (thousands)"
+         ],
+         "children": [
+          {
+           "id": 21,
+           "kind": "caption",
+           "label": "Figure 1.",
+           "align": "center",
+           "text": "Units sold per quarter"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.1",
+  "furniture": [],
+  "meta": {
+   "title": "Notes on Alignment"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}
