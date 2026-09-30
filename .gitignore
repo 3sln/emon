@@ -11,3 +11,6 @@ __pycache__/
 .emit-stamp
 .emit-stamp.tmp
 .cache/
+
+# Agent worktrees and local tooling.
+.claude/
