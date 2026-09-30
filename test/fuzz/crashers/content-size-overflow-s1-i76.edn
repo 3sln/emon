@@ -1,0 +1,4 @@
+;; Saved by `bb fuzz` (D106). Reproduce the unminimised mutant with
+;;   bb fuzz --seed 1 --only 76 --dump /tmp/mutant.pdf
+;; Fixed in kin/pdfcontent.kin (`pc-continues` and the line join: a negative glyph size was only clamped above, D108); replayed on every `bb fuzz` and must pass.
+{:index 76, :signature ["panic:rust:async" "panic:rust:mem"], :ops ["stream@46791 keyword broken" "xref-entry@63532 type" "flip x7"], :seed 1, :status :fixed, :original-bytes 63820, :bytes 1591, :fixture "test/corpus/synth/pdf/table-multipage-thead.pdf", :detail ["panic rust: mem PANIC attempt to multiply with overflow at emon/pdfcontent.rs:2290" "panic rust: async PANIC attempt to multiply with overflow at emon/pdfcontent.rs:2290"]}

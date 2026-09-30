@@ -2504,6 +2504,9 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	if sz > 200000 {
 		sz = 200000
 	}
+	if sz < (0 - 200000) {
+		sz = 0 - 200000
+	}
 	off = pcCl(pcPairOff(gl, p, g, axis))
 	if (off * 1000) > (sz * offsetPm) {
 		return 0
@@ -2851,6 +2854,9 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, pag
 				}
 				if sz > 200000 {
 					sz = 200000
+				}
+				if sz < (0 - 200000) {
+					sz = 0 - 200000
 				}
 				glast = (evidence.WdGet(wd, prev, evidence.WfGfirst()) + evidence.WdGet(wd, prev, evidence.WfGcount())) - 1
 				off = pcCl(pcPairOff(gl, glast, gf0, axis))

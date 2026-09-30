@@ -213,6 +213,16 @@ public final class Pdfdoc {
         // One more than the highest object number the cross-reference names.
         return emon.Port.cellsAt(dc, D_NENT);
     }
+    public static int pdShifted(int off, int shift) {
+        // A file offset plus the header shift, SATURATING at 2^31-1 (P2.12, D107):
+        // a hostile xref offset is the lexer's saturated 2147483647, and adding a
+        // positive shift to it overflowed I32 (a panic in a checked Rust build, a
+        // wrap to a negative position elsewhere). 2^31-1 is past any source.
+        if (off > (2147483647 - shift)) {
+            return 2147483647;
+        }
+        return off + shift;
+    }
     public static int pdWarnSet(emon.Port.Src src, emon.Port.Cells dc, int bit) {
         // Note a tolerated damage. NOT while the source has missed: what looks
         // like damage may be zeros standing in for bytes that have not arrived.
@@ -401,7 +411,7 @@ public final class Pdfdoc {
         int n = Pdfsrc.psLen(src);
         int h = 0;
         Pdflex.plSeek(ar, 0, n);
-        h = Pdflex.plParseIndirect(src, ar, off + emon.Port.cellsAt(dc, D_SHIFT));
+        h = Pdflex.plParseIndirect(src, ar, pdShifted(off, emon.Port.cellsAt(dc, D_SHIFT)));
         if ((h != 0) && (Pdflex.plObjnum(ar) == num)) {
             return h;
         }
@@ -1163,7 +1173,7 @@ public final class Pdfdoc {
         if ((xs != 0) && (Pdflex.plKindOf(ar, xs) == 2)) {
             pdWarnSet(src, dc, 2);
             // An unreadable /XRefStm costs only the objects it lists.
-            xpos = Pdflex.plIntValue(ar, xs) + emon.Port.cellsAt(dc, D_SHIFT);
+            xpos = pdShifted(Pdflex.plIntValue(ar, xs), emon.Port.cellsAt(dc, D_SHIFT));
             pdXstream(src, ar, dc, a, b, st, xpos, 1);
         }
         // CHECKPOINT: after the trailer (and the /XRefStm it named).
@@ -1207,9 +1217,12 @@ public final class Pdfdoc {
         int ty = 0;
         int f1 = 0;
         int f2 = 0;
+        int room = 0;
         if ((first < 0) || (count < 0)) {
             return at0;
         }
+        // Object numbers past 2^31-1 name nothing (D107): skip the put, not the entry.
+        room = 2147483647 - first;
         while ((k < count) && ((at + rec) <= ln)) {
             ty = 1;
             if (w0 > 0) {
@@ -1217,13 +1230,13 @@ public final class Pdfdoc {
             }
             f1 = pdRd(a, at + w0, w1);
             f2 = pdRd(a, (at + w0) + w1, w2);
-            if (ty == 0) {
+            if ((ty == 0) && (k < room)) {
                 pdEntPut(dc, first + k, 1, f1, f2, mode);
             }
-            if (ty == 1) {
+            if ((ty == 1) && (k < room)) {
                 pdEntPut(dc, first + k, 2, f1, f2, mode);
             }
-            if (ty == 2) {
+            if ((ty == 2) && (k < room)) {
                 pdEntPut(dc, first + k, 3, f1, f2, mode);
             }
             at += rec;
@@ -1401,7 +1414,7 @@ public final class Pdfdoc {
         while (i < nent) {
             at = D_FIRST + (i * 5);
             if (emon.Port.cellsAt(dc, at) == 2) {
-                o = emon.Port.cellsAt(dc, at + 1) + shift;
+                o = pdShifted(emon.Port.cellsAt(dc, at + 1), shift);
                 if ((o >= 0) && (o < n)) {
                     emon.Port.cellsPush(b, o);
                 }
@@ -1427,7 +1440,7 @@ public final class Pdfdoc {
     }
     public static int pdSection(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int off) {
         // Read the section at file offset `off` (shifted): a table or a stream.
-        int pos = off + emon.Port.cellsAt(dc, D_SHIFT);
+        int pos = pdShifted(off, emon.Port.cellsAt(dc, D_SHIFT));
         int k = pdKindAt(src, ar, pos);
         if (k == 1) {
             return pdTable(src, ar, dc, a, b, st, pos);
@@ -2088,7 +2101,7 @@ public final class Pdfdoc {
         // from the header: whichever finds a section at `startxref`.
         if (pdKindAt(src, ar, off) != 0) {
             emon.Port.cellsSet(dc, D_SHIFT, 0);
-        } else if ((base > 0) && (pdKindAt(src, ar, off + base) != 0)) {
+        } else if ((base > 0) && (pdKindAt(src, ar, pdShifted(off, base)) != 0)) {
             emon.Port.cellsSet(dc, D_SHIFT, base);
             pdWarnSet(src, dc, 1);
         } else {

@@ -1,0 +1,219 @@
+;; The FUZZ PROBE UNIT (P2.12, D106): what `bb fuzz` runs on every host.
+;;
+;; `fz-case` takes the bytes of one (mutated) PDF and writes ONE LINE of text:
+;; everything the PDF layer can say about it, folded into a few numbers, so that
+;; two hosts (or one host through two sources) that agree on the line agree on
+;; the lot.
+;;
+;;     <status> pages=N warn=W enc=E geom=H objs=O streams=S fonts=F data=D
+;;
+;; `status` is the `pd-status` name; the rest appears only when the file opened.
+;; THE WORK IS THE PDF LAYER'S WHOLE READ PATH: open, the page table (every
+;; page's boxes and rotation, hashed), then EVERY object the cross-reference
+;; names: a stream is decoded through its filter chain (the status and the bytes
+;; are hashed), and a dictionary is handed to `pdffont` as a font (what it
+;; answers, then every one-byte code's Unicode value and width, hashed). It is
+;; `emon.pdfdoctest`'s `dt-survive` with the answers kept.
+;;
+;; `chunk` 0 reads from memory. `chunk` N reads through an ASYNC source of
+;; N-byte chunks, re-running the whole pass on a fresh view until one does not
+;; miss (D058, D075), then once more into the answer: a miss must never surface
+;; as a status, so the two lines must be equal. The host loop here is the
+;; host's job in production; it is a dozen lines and lives in kin so that the
+;; four hosts run the same one.
+;;
+;; A test-support unit: it uses `emon.test`'s chunked source, like the `*test`
+;; units, and no production source may require it.
+(ns emon.fuzzprobe
+  (:require [emon.lang :refer [I32 Blob Src Cells Text emit-ascii]]
+            [emon.test :refer [new-cells new-text test-src-chunked test-src-view
+                               test-src-ctl]]
+            [emon.port :refer [cells-len cells-at cells-drop text-i32 src-of-blob]]
+            [emon.pdfdoc :refer [pd-open pd-get pd-pages pd-stream-data pd-pg-count
+                                 pd-pg-media pd-pg-crop pd-pg-rotate
+                                 pd-status-emit-name pd-encrypted pd-warn
+                                 pd-object-count]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfcontent :refer [pc-document pc-warn pc-ops]]
+            [emon.evidence :refer [gl-count gl-get wd-count sp-count gf-cp]]
+            [emon.pdflex :refer [pl-kind-of]]
+            [emon.pdffont :refer [pfn-load pfn-map pfn-cp pfn-how-of pfn-width
+                                  pfn-warn pfn-kind-of]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defn ^I32 fz-mix [^I32 h ^I32 v]
+  (comment "A rolling 23-bit hash step; any I32 v.")
+  (return (rem (+ (* h 131) (bit-and v 8388607)) 8388593)))
+
+(defn ^I32 fz-geometry [^Cells pg]
+  (let [^I32 n (pd-pg-count pg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 h 7]
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 4)
+            (do (set h (fz-mix h (pd-pg-media pg i k)))
+                (set h (fz-mix h (pd-pg-crop pg i k)))
+                (set k (+ k 1))))
+          (set h (fz-mix h (pd-pg-rotate pg i)))
+          (set i (+ i 1))))
+    (return h)))
+
+(defn ^I32 fz-font [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                    ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells f
+                    ^:mut ^Cells out ^I32 h ^I32 h0]
+  (comment "Load dictionary h as a font, and fold in what it says about every")
+  (comment "one-byte code. Answers the new hash.")
+  (let [^I32 s (pfn-load src ar dc a b st f out h)
+        ^:mut ^I32 acc (fz-mix h0 s)
+        ^:mut ^I32 code 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 j 0]
+    (set acc (fz-mix acc (pfn-warn f)))
+    (if (== s 0)
+      (do (set acc (fz-mix acc (pfn-kind-of f)))
+          (if (!= (pfn-kind-of f) 0)
+            (while (< code 256)
+              (do (set n (pfn-map f code))
+                  (set acc (fz-mix acc n))
+                  (set acc (fz-mix acc (pfn-how-of f)))
+                  (set j 0)
+                  (while (and (< j n) (< j 4))
+                    (do (set acc (fz-mix acc (pfn-cp f j)))
+                        (set j (+ j 1))))
+                  (set acc (fz-mix acc (pfn-width f code)))
+                  (set code (+ code 1)))))))
+    (return acc)))
+
+(defn ^I32 fz-content [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Text t]
+  (comment "Page content interpretation (P3, D101-D105) over the opened document: the")
+  (comment "status, the warning bits, the operator count, and a hash of every glyph's")
+  (comment "code point. One more thing every mutant must survive.")
+  (let [^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sp (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 h 7]
+    (emit-ascii t " content=")
+    (text-i32 t s)
+    (if (== s 0)
+      (do (while (< g (gl-count gl))
+            (do (set h (fz-mix h (gl-get gl g (gf-cp))))
+                (set g (+ g 1))))
+          (emit-ascii t " cwarn=")
+          (text-i32 t (pc-warn cx))
+          (emit-ascii t " ops=")
+          (text-i32 t (pc-ops cx))
+          (emit-ascii t " glyphs=")
+          (text-i32 t (gl-count gl))
+          (emit-ascii t " words=")
+          (text-i32 t (wd-count wd))
+          (emit-ascii t " spans=")
+          (text-i32 t (sp-count sp))
+          (emit-ascii t " cps=")
+          (text-i32 t h)))
+    (return s)))
+
+(defn ^I32 fz-run [^Src src ^:mut ^Text t]
+  (comment "The whole pass over one source, written as one line into t.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f (new-cells)
+        ^I32 status (pd-open src ar dc a b st)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 h 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 objs 7
+        ^:mut ^I32 data 7
+        ^:mut ^I32 fonts 7
+        ^:mut ^I32 nstreams 0
+        ^:mut ^I32 nfonts 0]
+    (pd-status-emit-name t status)
+    (if (== status 0)
+      (do (pd-pages src ar dc a b st pg)
+          (emit-ascii t " pages=")
+          (text-i32 t (pd-pg-count pg))
+          (emit-ascii t " warn=")
+          (text-i32 t (pd-warn dc))
+          (emit-ascii t " enc=")
+          (text-i32 t (pd-encrypted dc))
+          (emit-ascii t " geom=")
+          (text-i32 t (fz-geometry pg))
+          (while (< i (pd-object-count dc))
+            (do (set h (pd-get src ar dc a b st i))
+                (set kind 0)
+                (if (!= h 0) (set kind (pl-kind-of ar h)))
+                (set objs (fz-mix objs kind))
+                (if (== kind 8)
+                  (do (set s (pd-stream-data src ar dc a b st h out))
+                      (set nstreams (+ nstreams 1))
+                      (set data (fz-mix data s))
+                      (set data (fz-mix data (cells-len out)))
+                      (set k 0)
+                      (while (< k (cells-len out))
+                        (do (set data (fz-mix data (cells-at out k)))
+                            (set k (+ k 1))))))
+                (if (or (== kind 7) (== kind 8))
+                  (do (set nfonts (+ nfonts 1))
+                      (set fonts (fz-font src ar dc a b st f out h fonts))))
+                (set i (+ i 1))))
+          (emit-ascii t " objs=")
+          (text-i32 t objs)
+          (emit-ascii t " streams=")
+          (text-i32 t nstreams)
+          (emit-ascii t " fonts=")
+          (text-i32 t fonts)
+          (emit-ascii t " data=")
+          (text-i32 t data)
+          (fz-content src ar dc a b st pg t)))
+    (return status)))
+
+(defn ^:pub ^I32 fz-case [^Blob bytes ^I32 chunk ^:mut ^Text t]
+  (comment "One case: from memory (chunk 0) or through an async source. Answers 0,")
+  (comment "or 1 when the async run did not settle (more than 40 fetch rounds, or")
+  (comment "the final run missed): the line then says so.")
+  (if (== chunk 0)
+    (do (fz-run (src-of-blob bytes) t)
+        (return 0)))
+  (let [^Src base (test-src-chunked bytes chunk 0)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 more 1]
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)
+                ^Text scratch (new-text)]
+            (fz-run v scratch)
+            (if (ps-missed v)
+              (do (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 40) (set more 0)))
+              (set more 0)))))
+    (if (> round 40)
+      (do (emit-ascii t "!rounds")
+          (return 1)))
+    (let [^Src fin (test-src-view base)]
+      (fz-run fin t)
+      (if (ps-missed fin)
+        (do (emit-ascii t " !missed")
+            (return 1))))
+    (return 0)))

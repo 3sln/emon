@@ -1,0 +1,4 @@
+;; Saved by `bb fuzz` (D106). Reproduce the unminimised mutant with
+;;   bb fuzz --seed 51 --only 6609 --dump /tmp/mutant.pdf
+;; Fixed in kin/pdffont.kin (`pfn-round100`, D107); replayed on every `bb fuzz` and must pass. (Barely minimised: a compressed real file.)
+{:index 6609, :signature ["panic:rust:async" "panic:rust:mem"], :ops ["flip x2" "flip x4" "flip x1"], :seed 51, :status :fixed, :original-bytes 50007, :bytes 49803, :fixture "test/corpus/synth/pdf/furn-title-pagenum.pdf", :detail ["panic rust: mem PANIC attempt to add with overflow at emon/pdffont.rs:1538" "panic rust: async PANIC attempt to add with overflow at emon/pdffont.rs:1538"]}
