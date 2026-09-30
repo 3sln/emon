@@ -1,0 +1,302 @@
+;; Laws for `emon.raster` and the `Bitmap` port forms (P2.7). Hand-computed on
+;; pictures small enough to draw.
+(ns emon.rastertest
+  (:require [emon.lang :refer [I32 Bitmap Cells]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that new-cells]]
+            [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-stride bitmap-channels
+                               bitmap-u8 bitmap-set-u8 cells-at cells-len cells-push cells-grow
+                               bitmap-histogram bitmap-threshold-into bitmap-row-copy
+                               bitmap-next-nonzero]]
+            [emon.raster :refer [ras-histogram ras-otsu ras-binarise ras-alloc ras-label
+                                 ras-histogram-bulk ras-binarise-bulk ras-alloc-bulk
+                                 ras-label-skip]]
+            [kin.lang :refer [defn let set while do if comment return + - * < > == != rem]]))
+
+(defn ^I32 rt-plot [^Bitmap b ^I32 x ^I32 y]
+  (bitmap-set-u8 b x y 0 255)
+  (return 0))
+
+(deftest test-a-bitmap-knows-its-shape
+  (let [^Bitmap b (bitmap-new 5 3 3)]
+    (assert-eq (bitmap-w b) 5 "width")
+    (assert-eq (bitmap-h b) 3 "height")
+    (assert-eq (bitmap-channels b) 3 "channels")
+    (assert-eq (bitmap-stride b) 15 "stride is width times channels")
+    (assert-eq (bitmap-u8 b 4 2 2) 0 "a new bitmap is zero")))
+
+(deftest test-a-written-byte-reads-back-and-touches-nothing-else
+  (let [^Bitmap b (bitmap-new 4 2 3)]
+    (bitmap-set-u8 b 3 1 2 200)
+    (bitmap-set-u8 b 0 0 0 7)
+    (assert-eq (bitmap-u8 b 3 1 2) 200 "the byte written")
+    (assert-eq (bitmap-u8 b 3 1 1) 0 "its neighbour channel")
+    (assert-eq (bitmap-u8 b 2 1 2) 0 "its neighbour pixel")
+    (assert-eq (bitmap-u8 b 0 0 0) 7 "the other write")))
+
+(deftest test-a-byte-is-unsigned-whatever_the_language
+  (let [^Bitmap b (bitmap-new 1 1 1)]
+    (bitmap-set-u8 b 0 0 0 255)
+    (assert-eq (bitmap-u8 b 0 0 0) 255 "0xFF reads as 255, not -1")
+    (bitmap-set-u8 b 0 0 0 128)
+    (assert-eq (bitmap-u8 b 0 0 0) 128 "0x80 reads as 128")))
+
+(deftest test-the-histogram-counts-every-pixel
+  (let [^Bitmap b (bitmap-new 4 2 1)
+        ^Cells hist (new-cells)]
+    (bitmap-set-u8 b 0 0 0 10)
+    (bitmap-set-u8 b 1 0 0 10)
+    (bitmap-set-u8 b 2 0 0 255)
+    (bitmap-set-u8 b 0 1 0 10)
+    (ras-histogram b hist)
+    (assert-eq (cells-len hist) 256 "256 bins")
+    (assert-eq (cells-at hist 10) 3 "three tens")
+    (assert-eq (cells-at hist 255) 1 "one 255")
+    (assert-eq (cells-at hist 0) 4 "four zeros")))
+
+(deftest test-otsu-splits-two-flat-modes-at-the-lower-one
+  (comment "Half the pixels 10, half 200: every t in 10..199 separates the")
+  (comment "modes equally well, and the first maximum wins.")
+  (let [^Bitmap b (bitmap-new 4 2 1)
+        ^Cells hist (new-cells)]
+    (bitmap-set-u8 b 0 0 0 200)
+    (bitmap-set-u8 b 1 0 0 200)
+    (bitmap-set-u8 b 2 0 0 200)
+    (bitmap-set-u8 b 3 0 0 200)
+    (bitmap-set-u8 b 0 1 0 10)
+    (bitmap-set-u8 b 1 1 0 10)
+    (bitmap-set-u8 b 2 1 0 10)
+    (bitmap-set-u8 b 3 1 0 10)
+    (ras-histogram b hist)
+    (assert-eq (ras-otsu hist 8) 10 "threshold")))
+
+(deftest test-binarise-marks-gray-at-or-below-the-threshold
+  (let [^Bitmap g (bitmap-new 3 1 1)
+        ^Bitmap m (bitmap-new 3 1 1)]
+    (bitmap-set-u8 g 0 0 0 50)
+    (bitmap-set-u8 g 1 0 0 100)
+    (bitmap-set-u8 g 2 0 0 101)
+    (assert-eq (ras-binarise g m 100) 2 "ink count")
+    (assert-eq (bitmap-u8 m 0 0 0) 255 "50 is ink")
+    (assert-eq (bitmap-u8 m 1 0 0) 255 "100 is ink")
+    (assert-eq (bitmap-u8 m 2 0 0) 0 "101 is not")))
+
+(deftest test-labelling-joins-diagonals-and-counts-areas
+  (comment "8x5. A = (0,0)(1,0)(2,1) joined by diagonals; D = (5,0);")
+  (comment "B = (6,2)(7,2)(6,3); C = (0,3)(0,4). Four components, nine ink")
+  (comment "pixels, largest area 3, sum of squared areas 9+1+9+4 = 23.")
+  (let [^Bitmap m (bitmap-new 8 5 1)
+        ^Cells labels (new-cells)
+        ^Cells parent (new-cells)
+        ^Cells area (new-cells)
+        ^Cells stats (new-cells)]
+    (rt-plot m 0 0)
+    (rt-plot m 1 0)
+    (rt-plot m 5 0)
+    (rt-plot m 2 1)
+    (rt-plot m 6 2)
+    (rt-plot m 7 2)
+    (rt-plot m 0 3)
+    (rt-plot m 6 3)
+    (rt-plot m 0 4)
+    (ras-alloc labels 40)
+    (assert-eq (ras-label m labels parent area stats) 4 "components")
+    (assert-eq-at (cells-at stats 0) 4 "stat" 0)
+    (assert-eq-at (cells-at stats 1) 9 "stat" 1)
+    (assert-eq-at (cells-at stats 2) 3 "stat" 2)
+    (assert-eq-at (cells-at stats 3) 4 "stat" 3)
+    (assert-eq-at (cells-at stats 7) 23 "stat" 7)
+    (assert-eq (cells-at labels 0) 1 "A's root is its first label")
+    (assert-eq (cells-at labels 10) 1 "(2,1) is in A")
+    (assert-eq (cells-at labels 5) 2 "D")
+    (assert-eq (cells-at labels 3) 0 "background stays 0")))
+
+(deftest test-labelling-merges-a-u-shape-into-one-component
+  (comment "3x3: columns 0 and 2 are labelled apart and meet along the")
+  (comment "bottom row, so there are two provisional labels and one root.")
+  (let [^Bitmap m (bitmap-new 3 3 1)
+        ^Cells labels (new-cells)
+        ^Cells parent (new-cells)
+        ^Cells area (new-cells)
+        ^Cells stats (new-cells)]
+    (rt-plot m 0 0)
+    (rt-plot m 2 0)
+    (rt-plot m 0 1)
+    (rt-plot m 2 1)
+    (rt-plot m 0 2)
+    (rt-plot m 1 2)
+    (rt-plot m 2 2)
+    (ras-alloc labels 9)
+    (assert-eq (ras-label m labels parent area stats) 1 "one component")
+    (assert-eq-at (cells-at stats 1) 7 "stat" 1)
+    (assert-eq-at (cells-at stats 2) 7 "stat" 2)
+    (assert-eq-at (cells-at stats 3) 2 "provisional labels" 3)
+    (assert-eq (cells-at labels 2) 1 "the right arm resolves to the left arm's label")
+    (assert-eq (cells-at labels 8) 1 "and so does the corner")))
+
+(deftest test-an-empty-mask-has-no-components
+  (let [^Bitmap m (bitmap-new 4 4 1)
+        ^Cells labels (new-cells)
+        ^Cells parent (new-cells)
+        ^Cells area (new-cells)
+        ^Cells stats (new-cells)]
+    (ras-alloc labels 16)
+    (assert-eq (ras-label m labels parent area stats) 0 "components")
+    (assert-eq-at (cells-at stats 1) 0 "stat" 1)))
+
+;; ------------------------------------------------------------ bulk forms
+;;
+;; Each is checked against what the per-pixel loop answers on the same
+;; picture, on widths that are not a multiple of the four the histogram strides by,
+;; and on RGB as well as gray (only channel 0 counts).
+
+(defn ^I32 rt-fill-ramp [^Bitmap b ^I32 ch]
+  (comment "channel 0 of pixel (x, y) := (37 * (y * w + x)) mod 256; the other")
+  (comment "channels := 255 - that, so a form reading the wrong one is caught.")
+  (let [^I32 w (bitmap-w b)
+        ^I32 h (bitmap-h b)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 v 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (set v (rem (* 37 (+ (* y w) x)) 256))
+                (bitmap-set-u8 b x y 0 v)
+                (if (> ch 1)
+                  (bitmap-set-u8 b x y 1 (- 255 v)))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 rt-same-cells [^Cells a ^Cells b]
+  (comment "1 when the two hold the same cells.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 same 1]
+    (if (!= (cells-len a) (cells-len b))
+      (set same 0))
+    (while (< i (cells-len a))
+      (do (if (!= (cells-at a i) (cells-at b i))
+            (set same 0))
+          (set i (+ i 1))))
+    (return same)))
+
+(deftest test-the-bulk-histogram-equals-the-per-pixel-one
+  (let [^Bitmap g (bitmap-new 13 5 1)
+        ^Bitmap c (bitmap-new 7 3 3)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)]
+    (rt-fill-ramp g 1)
+    (ras-histogram g a)
+    (ras-histogram-bulk g b)
+    (assert-eq (rt-same-cells a b) 1 "gray, width 13")
+    (rt-fill-ramp c 3)
+    (ras-histogram c a)
+    (ras-histogram-bulk c b)
+    (assert-eq (rt-same-cells a b) 1 "RGB, width 7: channel 0 only")))
+
+(deftest test-the-bulk-histogram-adds-at-an-offset
+  (let [^Bitmap g (bitmap-new 4 1 1)
+        ^Cells hist (new-cells)]
+    (cells-grow hist 300 0)
+    (bitmap-set-u8 g 0 0 0 5)
+    (bitmap-set-u8 g 1 0 0 5)
+    (bitmap-set-u8 g 2 0 0 255)
+    (bitmap-histogram g hist 40)
+    (bitmap-histogram g hist 40)
+    (assert-eq (cells-at hist 45) 4 "two calls add")
+    (assert-eq (cells-at hist 295) 2 "bin 255 at offset 40")
+    (assert-eq (cells-at hist 40) 2 "bin 0: the pixel never set")
+    (assert-eq (cells-at hist 5) 0 "nothing below the offset")))
+
+(deftest test-the-bulk-threshold-equals-the-per-pixel-one
+  (let [^Bitmap g (bitmap-new 13 5 1)
+        ^Bitmap m1 (bitmap-new 13 5 1)
+        ^Bitmap m2 (bitmap-new 13 5 1)
+        ^Bitmap c (bitmap-new 7 3 3)
+        ^Bitmap m3 (bitmap-new 7 3 1)
+        ^Bitmap m4 (bitmap-new 7 3 1)]
+    (rt-fill-ramp g 1)
+    (assert-eq (ras-binarise-bulk g m2 100) (ras-binarise g m1 100) "ink count")
+    (assert-eq (bitmap-u8 m2 0 0 0) (bitmap-u8 m1 0 0 0) "pixel 0")
+    (assert-eq (bitmap-u8 m2 12 4 0) (bitmap-u8 m1 12 4 0) "last pixel")
+    (assert-eq (bitmap-u8 m2 5 2 0) (bitmap-u8 m1 5 2 0) "a middle pixel")
+    (rt-fill-ramp c 3)
+    (assert-eq (bitmap-threshold-into c 100 m3) (ras-binarise c m4 100) "RGB source, gray mask")
+    (assert-eq (bitmap-u8 m3 6 2 0) (bitmap-u8 m4 6 2 0) "same last pixel")))
+
+(deftest test-the-bulk-threshold-overwrites-what-was-there
+  (let [^Bitmap g (bitmap-new 2 1 1)
+        ^Bitmap m (bitmap-new 2 1 1)]
+    (bitmap-set-u8 m 0 0 0 255)
+    (bitmap-set-u8 m 1 0 0 255)
+    (bitmap-set-u8 g 0 0 0 200)
+    (bitmap-set-u8 g 1 0 0 3)
+    (assert-eq (bitmap-threshold-into g 10 m) 1 "ink count")
+    (assert-eq (bitmap-u8 m 0 0 0) 0 "a stale 255 is cleared")
+    (assert-eq (bitmap-u8 m 1 0 0) 255 "ink")))
+
+(deftest test-a-row-copy-takes-channel-0-of-one-row
+  (let [^Bitmap c (bitmap-new 5 3 3)
+        ^Cells dst (new-cells)]
+    (rt-fill-ramp c 3)
+    (cells-grow dst 8 -1)
+    (bitmap-row-copy c 1 dst 2)
+    (assert-eq (cells-at dst 1) -1 "below the offset is untouched")
+    (assert-eq (cells-at dst 2) (bitmap-u8 c 0 1 0) "x = 0")
+    (assert-eq (cells-at dst 6) (bitmap-u8 c 4 1 0) "x = 4")
+    (assert-eq (cells-at dst 7) -1 "past the row is untouched")))
+
+(deftest test-next-nonzero-finds-the-next-ink-or-the-width
+  (let [^Bitmap m (bitmap-new 6 2 1)]
+    (rt-plot m 2 0)
+    (rt-plot m 5 0)
+    (assert-eq (bitmap-next-nonzero m 0 0) 2 "first ink")
+    (assert-eq (bitmap-next-nonzero m 2 0) 2 "starting ON ink finds it")
+    (assert-eq (bitmap-next-nonzero m 3 0) 5 "the next")
+    (assert-eq (bitmap-next-nonzero m 6 0) 6 "starting at the width answers the width")
+    (assert-eq (bitmap-next-nonzero m 0 1) 6 "an empty row answers the width")))
+
+(deftest test-cells-grow-appends-copies
+  (let [^Cells c (new-cells)]
+    (cells-push c 9)
+    (cells-grow c 40 7)
+    (assert-eq (cells-len c) 41 "length")
+    (assert-eq (cells-at c 0) 9 "the old cell")
+    (assert-eq (cells-at c 1) 7 "first new")
+    (assert-eq (cells-at c 40) 7 "last new")
+    (cells-grow c 0 1)
+    (assert-eq (cells-len c) 41 "growing by zero changes nothing")))
+
+(deftest test-the-bulk-alloc-equals-the-push-loop
+  (let [^Cells a (new-cells)
+        ^Cells b (new-cells)]
+    (cells-push a 5)
+    (ras-alloc a 100)
+    (ras-alloc-bulk b 100)
+    (assert-eq (rt-same-cells a b) 1 "100 zeros")
+    (assert-eq (cells-len b) 100 "length")))
+
+(deftest test-label-skip-answers-what-label-answers
+  (let [^Bitmap m (bitmap-new 8 5 1)
+        ^Cells l1 (new-cells)
+        ^Cells p1 (new-cells)
+        ^Cells a1 (new-cells)
+        ^Cells s1 (new-cells)
+        ^Cells l2 (new-cells)
+        ^Cells p2 (new-cells)
+        ^Cells a2 (new-cells)
+        ^Cells s2 (new-cells)]
+    (rt-plot m 0 0)
+    (rt-plot m 1 0)
+    (rt-plot m 5 0)
+    (rt-plot m 2 1)
+    (rt-plot m 6 2)
+    (rt-plot m 7 2)
+    (rt-plot m 0 3)
+    (rt-plot m 6 3)
+    (rt-plot m 0 4)
+    (ras-alloc l1 40)
+    (ras-alloc l2 40)
+    (assert-eq (ras-label-skip m l2 p2 a2 s2) (ras-label m l1 p1 a1 s1) "components")
+    (assert-eq (rt-same-cells s1 s2) 1 "stats")
+    (assert-eq (rt-same-cells l1 l2) 1 "every pixel's final label")))

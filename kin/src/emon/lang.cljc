@@ -141,6 +141,22 @@
    :needs {:go "emon/port"}
    :zero {:go "nil"}})
 
+(def Bitmap
+  "An OPAQUE 8-BIT PIXEL BUFFER, read and written through `emon.port`
+  (SPEC 7.2, P2.7): `channels` bytes per pixel, row-major, top-left, `stride`
+  bytes per row. Decoding is a codec's job and rendering is the Renderer's
+  (D007): kin only ever receives one and reads or writes its pixels.
+
+  IN RUST IT IS A SHARED BORROW and its bytes are `Cell`s, for `Src`'s reason:
+  a bitmap is handed to several parameters of one call (a source and a mask)
+  and `Cells`' `&mut` cannot be. The form that MAKES one (`bitmap-new`) borrows
+  a temporary: bind it with `let` or nest it in the call that uses it."
+  {:name 'Bitmap
+   :types {:rust "&crate::port::Bitmap" :go "*port.Bitmap"
+           :java "emon.Port.Bitmap" :csharp "emon.Port.Bitmap"}
+   :needs {:go "emon/port"}
+   :zero {:go "nil"}})
+
 (def Cpt
   "Centipoints, 1/100 pt, as a 32-bit integer (SPEC 3.4, D009).
 
@@ -319,7 +335,7 @@
   {:namespace 'emon.lang
    :targets #{:rust :go :java :csharp}
    :tags {'I32 I32 'U32 U32 'I64 I64
-          'Bool Bool 'Blob Blob 'Src Src 'Sink Sink 'Cells Cells
+          'Bool Bool 'Blob Blob 'Src Src 'Bitmap Bitmap 'Sink Sink 'Cells Cells
           'Cpt Cpt 'Px Px 'Fx Fx 'Conf Conf 'Text Text}
    :names {}
    ;; ---------------------------------------------------------- the casts
