@@ -52,7 +52,8 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "emon" ["sh" (str (fs/path HERE "predict-emon.sh"))]})
 (def FAMILY {"h" "headings" "table" "tables" "furn" "furniture" "figures" "figures"
              "lists" "lists" "script" "scripts" "columns" "columns" "footnotes" "footnotes"
-             "stamp" "seals" "watermark" "watermarks" "invoice" "forms" "bank" "forms"})
+             "stamp" "seals" "watermark" "watermarks" "invoice" "forms" "bank" "forms"
+             "initial" "initials" "align" "align"})
 
 (defn category [doc-id]
   (get FAMILY (first (str/split doc-id #"-" 2)) "other"))

@@ -1076,7 +1076,7 @@ analysis beyond "top-to-bottom lines on a single column".
   perfect; the entry reports, per new document, pages, fragments, hyphen
   points and the line count of each initial, and says anything Chrome did
   that D108's probe did not predict.
-- [ ] **P2.14 — Scorer metrics for initials, alignment and columns** (D115;
+- [x] **P2.14 — Scorer metrics for initials, alignment and columns** (D115, D118;
   `tools/accuracy/score.clj`, `test_score.clj`, `predict_degraded.clj`,
   `accuracy.clj`). **Can start now** with hand-built golds in the laws; the
   corpus run needs P2.13.
@@ -1099,6 +1099,15 @@ analysis beyond "top-to-bottom lines on a single column".
   a locale); `bb accuracy` oracle is perfect and degraded strictly worse on
   each new metric; the scoreboard's committed fixtures entries are updated
   in the same commit.
+  *Done (P2.14, D118)*: `score.clj` gains every D115 metric (initial-p/-r/-f1,
+  initial-form-acc, first-word-acc, initial-false-heading, align-acc/-cov (pooled and per
+  kind), align-wrong, frag-col-acc, join-p/-r/-f1, hyphen-acc) and the no-locale hyphen
+  rewrite; `predict_oracle.clj` and `predict_degraded.clj` learn `predict-gold` and the
+  three new damages; 14 new laws in `test_score.clj` (hand-computed). The committed golds
+  annotate none of the new fields, so on this corpus every new metric is absent and
+  `test/scoreboard.edn` does not change; the first run over the P2.13 corpus must be
+  `bb accuracy --predictor fixtures --update` (oracle perfect first). Not done here: the
+  corpus run itself (needs P2.13).
 
 ## Phase 3 — PDF breadth
 
@@ -4346,4 +4355,37 @@ transcript would change once). Flate images are still inflated whole into `Cells
 a sample), bounded by `asset-pixels`, until `inflate` can write a `Buf`. In the browser,
 `inline` HTML at the 32 MiB budget peaks near 150 MB of heap, so the JS SDK documents
 `external` plus `asset.blob()` (P9.3).
+- [ ] **Signed off** (maintainer)
+
+### D118 — How the layout-feature metrics read the gold and the Model (P2.14)
+**Decision**: D115's metrics, with the points D115 left open settled as follows. Gold reading: a block kind
+is scored for initials or alignment only when `annotated.attributes[kind]` holds `initial` or `align`; column
+and continuation metrics only when `annotated.layout` is true and `facts.frags` exists; `hyphen-acc` and the
+rewrite only from `facts.hyphens`. `facts.frags` is read as a map `{block-id: [[page band col] ...]}` (a list
+of `{id, frags}` is accepted too); `facts.hyphens` as a list of `{id, printed, word}` with `printed` the word as
+a no-locale run must write it (`hy-phenated`: hyphen kept, parts joined). An initial is the first inline of kind
+`initial` (its text its own `text` or its leaves'). Matching is D077's, unchanged; cells are matched by
+(row, column) inside a matched table pair. Counts: `align-acc` is over matched blocks both sides align, and is
+0 (not absent) when the gold has aligned blocks and none pair up; `align-cov` is those pairs over gold aligned
+blocks; `align-wrong` is (pairs - correct) over predicted aligned blocks (0 when none); the per-kind keys are
+`align-acc-paragraph`, `-heading`, `-caption`, `-cell` and `align-cov-*`. `initial-form-acc` is 0 when the gold
+has initials and none was found; `initial-false-heading` is predicted headings of 1-3 code points that equal a
+gold initial's text or prefix a gold first word and are not matched to a gold heading, per gold initial.
+`frag-col-acc` is over ALL gold blocks with `facts.frags` (an unmatched block misses), a region mapped through
+the predicted page `layout` cell holding its centre, none meaning a miss. `join-r` counts a gold multi-fragment
+block as held when one predicted block holds at least 0.9 of its words in order (independent of the match, so
+a moved or typo'd block still counts); a false join is a predicted block holding the last two words of a gold
+block and the first two of the next across a gold fragment boundary. `hyphen-acc` looks for `printed` (no
+locale) or `word` (a locale) in the predicted block matched to the gold block. The hyphen rewrite applies
+when the predicted `settings.locale` is null. The oracle writes what a perfect emon writes from the gold's
+`facts` (printed hyphens without a locale; a `layout` of one cell per `[page band col]` and one region per
+fragment); the degraded predictor adds the three damages of the brief, cutting a multi-fragment paragraph at
+its middle word because the gold has no offsets. `align-wrong` cannot rise under the degraded predictor (it drops
+every `align`), so it is the one new metric the fixture leaves at its best value.
+**Why**: each choice makes a metric a number that moves when the feature does, is never absent merely because
+the prediction failed, and never counts a prediction the gold cannot judge.
+**Alternatives**: `frag-col-acc` over matched blocks only (a block the matcher drops could not hurt it); `join-r`
+through the match (a split paragraph can still be matched to a half at similarity 0.5); `align-wrong` counting
+predicted alignments on blocks the gold leaves unaligned (the gold annotates only where authored, so it cannot
+judge them).
 - [ ] **Signed off** (maintainer)
