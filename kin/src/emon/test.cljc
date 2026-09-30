@@ -159,6 +159,33 @@
                           :java "emon.Testport.cellsBlob({0})"
                           :csharp "emon.Testport.CellsBlob({0})"}
                          {:tag el/Blob})
+    ;; A SOURCE THAT MISSES (P1.11, D058): a `Src` over a blob in `chunk`-byte
+    ;; chunks, none resident; sync 1 fills a chunk inline on a read (never
+    ;; misses), 0 records it as pending and misses. Like `src-of-blob` (and
+    ;; for the same Rust reason) it is a borrowed temporary: nest it, or bind
+    ;; it with `let`.
+    'test-src-chunked (kl/call {:go "port.SrcChunked({0}, {1}, {2})"
+                                :rust "(&crate::testport::src_chunked({0}, {1}, {2}))"
+                                :java "emon.Testport.srcChunked({0}, {1}, {2})"
+                                :csharp "emon.Testport.SrcChunked({0}, {1}, {2})"}
+                               {:tag el/Src})
+    ;; A fresh VIEW of the same chunk cache (the missed flag clear): what the
+    ;; host makes for each attempt of a unit.
+    'test-src-view (kl/call {:go "port.SrcView({0})"
+                             :rust "(&crate::testport::src_view({0}))"
+                             :java "emon.Testport.srcView({0})"
+                             :csharp "emon.Testport.SrcView({0})"}
+                            {:tag el/Src})
+    ;; The cache's control surface, `(test-src-ctl src op a)`, answering an
+    ;; I32: 0 fetch what was missed (a = the round; read-ahead doubles with
+    ;; it), 1 make chunk a resident, 2 evict chunk a, 3 make all resident,
+    ;; 4 pending chunks, 5 resident chunks, 6 hints received, 7 chunks a sync
+    ;; source filled, 8 chunk count.
+    'test-src-ctl (kl/call {:go "port.SrcCtl({0}, {1}, {2})"
+                            :rust "crate::testport::src_ctl({0}, {1}, {2})"
+                            :java "emon.Testport.srcCtl({0}, {1}, {2})"
+                            :csharp "emon.Testport.SrcCtl({0}, {1}, {2})"}
+                           {:tag el/I32})
     'new-cells (kl/call {:go "port.NewCells()"
                          :rust "(&mut crate::port::Cells::new())"
                          :java "emon.Port.newCells()"

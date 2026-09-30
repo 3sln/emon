@@ -7,6 +7,7 @@ import (
 	"emon/pdfdoc"
 	"emon/pdffilter"
 	"emon/pdflex"
+	"emon/pdfsrc"
 	"emon/port"
 	"emon/splitmix"
 	"strings"
@@ -145,7 +146,7 @@ func dtDigest(pg *port.Cells) int32 {
 	return h
 }
 
-func dtOpen(pdf []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells) int32 {
+func dtOpen(pdf *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells) int32 {
 	// Open a document and list its pages (an empty `pg` when it will not
 	// open). Answers the `pd-status`.
 	var status int32 = pdfdoc.PdOpen(pdf, ar, dc, a, b, st)
@@ -158,7 +159,7 @@ func dtOpen(pdf []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 
 func dtRunFixturesRow(names []byte, from int32, to int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, t *strings.Builder) int32 {
 	// Open the file named by names[from, to) and write its status.
-	var pdf []byte = port.TestFileSpan(names, from, to)
+	var pdf *port.Src = port.SrcOfBlob(port.TestFileSpan(names, from, to))
 	var status int32 = dtOpen(pdf, ar, dc, a, b, st, pg)
 	pdfdoc.PdStatusEmitName(t, status)
 	return status
@@ -207,7 +208,7 @@ func dtObjectRow(names []byte, from int32, to int32, num int32, kind int32, ar *
 	// Open the file, then: kind 111 (o) dumps object num into t (`!missing`
 	// when there is none); kind 115 (s) decodes it into `out` and writes the
 	// status name to t. Answers the pd-open status (non-zero: not opened).
-	var pdf []byte = port.TestFileSpan(names, from, to)
+	var pdf *port.Src = port.SrcOfBlob(port.TestFileSpan(names, from, to))
 	var status int32 = pdfdoc.PdOpen(pdf, ar, dc, a, b, st)
 	var h int32 = 0
 	var s int32 = 0
@@ -282,7 +283,7 @@ func TestEveryObjectResolvesAsBuilt(emonT *testing.T) {
 
 func dtCorpusRow(names []byte, from int32, to int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, t *strings.Builder) int32 {
 	// Open a real file and write its status name to t.
-	var pdf []byte = port.TestFileSpan(names, from, to)
+	var pdf *port.Src = port.SrcOfBlob(port.TestFileSpan(names, from, to))
 	var status int32 = dtOpen(pdf, ar, dc, a, b, st, pg)
 	pdfdoc.PdStatusEmitName(t, status)
 	return status
@@ -330,7 +331,7 @@ func TestEveryRealFileOpensWithThePageCountPdfinfoReports(emonT *testing.T) {
 	port.AssertThat(emonT, rows > 100, "the real files were read")
 }
 
-func dtSource(pdf []byte, t *strings.Builder) int32 {
+func dtSource(pdf *port.Src, t *strings.Builder) int32 {
 	var ar *port.Cells = port.NewCells()
 	var dc *port.Cells = port.NewCells()
 	var a *port.Cells = port.NewCells()
@@ -348,7 +349,7 @@ func dtSource(pdf []byte, t *strings.Builder) int32 {
 func TestSourceOfMinimalPdf(emonT *testing.T) {
 	var want []byte = port.TestFile("pdf/source/minimal.json")
 	var t *strings.Builder = port.NewText()
-	var status int32 = dtSource(port.TestFile("pdf/minimal.pdf"), t)
+	var status int32 = dtSource(port.SrcOfBlob(port.TestFile("pdf/minimal.pdf")), t)
 	port.AssertEq(emonT, status, 0, "opens")
 	port.AssertTextSpan(emonT, t, want, 0, port.BlobLen(want)-1, "Source JSON", 0)
 }
@@ -356,7 +357,7 @@ func TestSourceOfMinimalPdf(emonT *testing.T) {
 func TestSourceOfHtmlChromePdf(emonT *testing.T) {
 	var want []byte = port.TestFile("pdf/source/html-chrome.json")
 	var t *strings.Builder = port.NewText()
-	var status int32 = dtSource(port.TestFile("pdf/html-chrome.pdf"), t)
+	var status int32 = dtSource(port.SrcOfBlob(port.TestFile("pdf/html-chrome.pdf")), t)
 	port.AssertEq(emonT, status, 0, "opens")
 	port.AssertTextSpan(emonT, t, want, 0, port.BlobLen(want)-1, "Source JSON", 0)
 }
@@ -364,7 +365,7 @@ func TestSourceOfHtmlChromePdf(emonT *testing.T) {
 func TestSourceOfGhostscriptXrefStreamPdf(emonT *testing.T) {
 	var want []byte = port.TestFile("pdf/source/gs-xrefstream.json")
 	var t *strings.Builder = port.NewText()
-	var status int32 = dtSource(port.TestFile("pdf/gs-xrefstream.pdf"), t)
+	var status int32 = dtSource(port.SrcOfBlob(port.TestFile("pdf/gs-xrefstream.pdf")), t)
 	port.AssertEq(emonT, status, 0, "opens")
 	port.AssertTextSpan(emonT, t, want, 0, port.BlobLen(want)-1, "Source JSON", 0)
 }
@@ -372,7 +373,7 @@ func TestSourceOfGhostscriptXrefStreamPdf(emonT *testing.T) {
 func TestSourceWithInheritedAttributes(emonT *testing.T) {
 	var want []byte = port.TestFile("pdf/source/inherit.json")
 	var t *strings.Builder = port.NewText()
-	var status int32 = dtSource(port.TestFile("pdf/inherit.pdf"), t)
+	var status int32 = dtSource(port.SrcOfBlob(port.TestFile("pdf/inherit.pdf")), t)
 	port.AssertEq(emonT, status, 0, "opens")
 	port.AssertTextSpan(emonT, t, want, 0, port.BlobLen(want)-1, "Source JSON", 0)
 }
@@ -380,12 +381,12 @@ func TestSourceWithInheritedAttributes(emonT *testing.T) {
 func TestSourceWithOddBoxesAndRotations(emonT *testing.T) {
 	var want []byte = port.TestFile("pdf/source/boxes.json")
 	var t *strings.Builder = port.NewText()
-	var status int32 = dtSource(port.TestFile("pdf/boxes.pdf"), t)
+	var status int32 = dtSource(port.SrcOfBlob(port.TestFile("pdf/boxes.pdf")), t)
 	port.AssertEq(emonT, status, 0, "opens")
 	port.AssertTextSpan(emonT, t, want, 0, port.BlobLen(want)-1, "Source JSON", 0)
 }
 
-func dtInfo(pdf []byte, which int32) int32 {
+func dtInfo(pdf *port.Src, which int32) int32 {
 	// A fact about a document: 0 status, 1 encrypted, 2 version major,
 	// 3 version minor, 4 warning bits, 5 highest object number + 1.
 	var ar *port.Cells = port.NewCells()
@@ -414,24 +415,24 @@ func dtInfo(pdf []byte, which int32) int32 {
 }
 
 func TestHeaderVersionAndEncryptionAreReported(emonT *testing.T) {
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/minimal.pdf"), 2), 1, "major")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/minimal.pdf"), 3), 4, "minor")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/xrefstream.pdf"), 3), 5, "minor of a 1.5 file")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/minimal.pdf"), 1), 0, "not encrypted")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/encrypt-flag.pdf"), 1), 1, "an /Encrypt entry is reported")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/minimal.pdf"), 5), 6, "objects 0 to 5")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/minimal.pdf")), 2), 1, "major")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/minimal.pdf")), 3), 4, "minor")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/xrefstream.pdf")), 3), 5, "minor of a 1.5 file")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/minimal.pdf")), 1), 0, "not encrypted")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/encrypt-flag.pdf")), 1), 1, "an /Encrypt entry is reported")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/minimal.pdf")), 5), 6, "objects 0 to 5")
 }
 
 func TestToleratedDamageIsRecordedAsWarnings(emonT *testing.T) {
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/minimal.pdf"), 4), 0, "no warnings")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/junk-header.pdf"), 4), 1, "offsets relative to a header at 0 + 81")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/hybrid.pdf"), 4), 2, "hybrid-reference file")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/prev-loop.pdf"), 4), 4, "a /Prev loop is cut")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/kids-cycle.pdf"), 4), 128, "a cyclic page tree is cut")
-	port.AssertEq(emonT, dtInfo(port.TestFile("pdf/boxes.pdf"), 4), 256, "a missing MediaBox is defaulted")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/minimal.pdf")), 4), 0, "no warnings")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/junk-header.pdf")), 4), 1, "offsets relative to a header at 0 + 81")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/hybrid.pdf")), 4), 2, "hybrid-reference file")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/prev-loop.pdf")), 4), 4, "a /Prev loop is cut")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/kids-cycle.pdf")), 4), 128, "a cyclic page tree is cut")
+	port.AssertEq(emonT, dtInfo(port.SrcOfBlob(port.TestFile("pdf/boxes.pdf")), 4), 256, "a missing MediaBox is defaulted")
 }
 
-func dtSurvive(pdf []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, out *port.Cells) int32 {
+func dtSurvive(pdf *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, out *port.Cells) int32 {
 	// Open, list the pages, and decode every stream the cross-reference
 	// names: none of it may fault. Answers the pd-open status.
 	var status int32 = dtOpen(pdf, ar, dc, a, b, st, pg)
@@ -470,7 +471,7 @@ func dtTruncations(f []byte, step int32, ar *port.Cells, dc *port.Cells, a *port
 	var ok int32 = 0
 	for k <= n {
 		dtCut(f, k, cut)
-		if dtSurvive(port.CellsBlob(cut), ar, dc, a, b, st, pg, out) == 0 {
+		if dtSurvive(port.SrcOfBlob(port.CellsBlob(cut)), ar, dc, a, b, st, pg, out) == 0 {
 			ok += 1
 		}
 		k += step
@@ -495,7 +496,7 @@ func dtCorruptions(f []byte, rounds int32, flips int32, seed int32, ar *port.Cel
 			port.CellsSet(cut, at, splitmix.SmBelow(rng, 256))
 			j += 1
 		}
-		if dtSurvive(port.CellsBlob(cut), ar, dc, a, b, st, pg, out) == 0 {
+		if dtSurvive(port.SrcOfBlob(port.CellsBlob(cut)), ar, dc, a, b, st, pg, out) == 0 {
 			ok += 1
 		}
 		r += 1
@@ -537,4 +538,480 @@ func TestNoCorruptionOfAFixtureFaults(emonT *testing.T) {
 	port.AssertThat(emonT, dtCorruptions(port.TestFile("pdf/incremental.pdf"), 400, 3, 4, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "incremental")
 	port.AssertThat(emonT, dtCorruptions(port.TestFile("pdf/filters.pdf"), 400, 3, 5, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "filters")
 	port.AssertThat(emonT, dtCorruptions(port.TestFile("pdf/inherit.pdf"), 400, 3, 6, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "inherit")
+}
+
+func dtOpenAsync(bytes []byte, chunk int32, wf int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, ctr *port.Cells) int32 {
+	// Open `bytes` through an async source of `chunk`-byte chunks, re-running
+	// until an attempt does not miss. `wf` is the real run's warning bits.
+	// Answers the kept attempt's status; `ctr` gets [rounds, status
+	// violations, warning violations, hints received].
+	var base *port.Src = port.SrcChunked(bytes, chunk, 0)
+	var round int32 = 0
+	var status int32 = 0
+	var more int32 = 1
+	var w int32 = 0
+	port.CellsDrop(ctr, 0)
+	port.CellsPush(ctr, 0)
+	port.CellsPush(ctr, 0)
+	port.CellsPush(ctr, 0)
+	port.CellsPush(ctr, 0)
+	for more == 1 {
+		var v *port.Src = port.SrcView(base)
+		status = dtOpen(v, ar, dc, a, b, st, pg)
+		if pdfsrc.PsMissed(v) {
+			w = pdfdoc.PdWarn(dc)
+			if (status != 0) && (status != 7) {
+				port.CellsSet(ctr, 1, port.CellsAt(ctr, 1)+1)
+			}
+			if (w | wf) != wf {
+				port.CellsSet(ctr, 2, port.CellsAt(ctr, 2)+1)
+			}
+			port.SrcCtl(base, 0, round)
+			round += 1
+			if round > 40 {
+				more = 0
+			}
+		} else {
+			more = 0
+		}
+	}
+	port.CellsSet(ctr, 0, round)
+	port.CellsSet(ctr, 3, port.SrcCtl(base, 6, 0))
+	return status
+}
+
+func dtDiff(x *port.Cells, y *port.Cells) int32 {
+	// -1 when x and y hold the same cells, -2 when they differ in length,
+	// else the first index where they differ.
+	var n int32 = port.CellsLen(x)
+	var i int32 = 0
+	if n != port.CellsLen(y) {
+		return -2
+	}
+	for i < n {
+		if port.CellsAt(x, i) != port.CellsAt(y, i) {
+			return i
+		}
+		i += 1
+	}
+	return -1
+}
+
+func dtSameRow(bytes []byte, chunk int32, ctr *port.Cells) int32 {
+	// Open `bytes` in memory and through an async source; a verdict code
+	// (see above), 0 for the same. `ctr` is `dt-open-async`'s.
+	var ar1 *port.Cells = port.NewCells()
+	var dc1 *port.Cells = port.NewCells()
+	var a1 *port.Cells = port.NewCells()
+	var b1 *port.Cells = port.NewCells()
+	var st1 *port.Cells = port.NewCells()
+	var pg1 *port.Cells = port.NewCells()
+	var ar2 *port.Cells = port.NewCells()
+	var dc2 *port.Cells = port.NewCells()
+	var a2 *port.Cells = port.NewCells()
+	var b2 *port.Cells = port.NewCells()
+	var st2 *port.Cells = port.NewCells()
+	var pg2 *port.Cells = port.NewCells()
+	var mem *port.Src = port.SrcOfBlob(bytes)
+	var s1 int32 = dtOpen(mem, ar1, dc1, a1, b1, st1, pg1)
+	var s2 int32 = dtOpenAsync(bytes, chunk, pdfdoc.PdWarn(dc1), ar2, dc2, a2, b2, st2, pg2, ctr)
+	if s1 != s2 {
+		return 1
+	}
+	if port.CellsAt(ctr, 1) != 0 {
+		return 5
+	}
+	if port.CellsAt(ctr, 2) != 0 {
+		return 6
+	}
+	if port.CellsAt(ctr, 0) > 24 {
+		return 7
+	}
+	if dtDiff(ar1, ar2) != -1 {
+		return 2
+	}
+	if dtDiff(dc1, dc2) != -1 {
+		return 3
+	}
+	if dtDiff(pg1, pg2) != -1 {
+		return 4
+	}
+	return 0
+}
+
+func TestEveryFixtureIsTheSameThroughAnAsyncSourceOf64ByteChunks(emonT *testing.T) {
+	// Every row of the fixtures, damaged files included: the same arena,
+	// document and page table, and a status per failure that is the file's,
+	// never a miss's.
+	var f []byte = port.TestFile("pdf/fixtures.txt")
+	var ctr *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(f)
+	var pos int32 = 0
+	var line int32 = 0
+	var rows int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	for pos < n {
+		line += 1
+		e = dtNl(f, pos)
+		if (pos < e) && (port.BlobU8(f, pos) != 35) {
+			rows += 1
+			s0 = dtTab(f, pos, e)
+			port.AssertEqAt(emonT, dtSameRow(port.TestFileSpan(f, pos, s0), 64, ctr), 0, "async equals in-memory", line)
+		}
+		pos = e + 1
+	}
+	port.AssertThat(emonT, rows > 20, "the fixtures were read")
+}
+
+func TestEveryFixtureIsTheSameThroughAnAsyncSourceOf512ByteChunks(emonT *testing.T) {
+	var f []byte = port.TestFile("pdf/fixtures.txt")
+	var ctr *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(f)
+	var pos int32 = 0
+	var line int32 = 0
+	var rows int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	for pos < n {
+		line += 1
+		e = dtNl(f, pos)
+		if (pos < e) && (port.BlobU8(f, pos) != 35) {
+			rows += 1
+			s0 = dtTab(f, pos, e)
+			port.AssertEqAt(emonT, dtSameRow(port.TestFileSpan(f, pos, s0), 512, ctr), 0, "async equals in-memory", line)
+		}
+		pos = e + 1
+	}
+	port.AssertThat(emonT, rows > 20, "the fixtures were read")
+}
+
+func TestEveryRealFileIsTheSameThroughAnAsyncSourceOf512ByteChunks(emonT *testing.T) {
+	// THE D058 GATE on the committed real-file rows: identical to the
+	// in-memory run, within FETCH_ROUNDS, with the object extents hinted
+	// once the cross-reference was read, and the big files really did need
+	// several rounds.
+	var f []byte = port.TestFile("pdf/corpus.txt")
+	var ctr *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(f)
+	var pos int32 = 0
+	var line int32 = 0
+	var rows int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	var maxr int32 = 0
+	for pos < n {
+		line += 1
+		e = dtNl(f, pos)
+		if (pos < e) && (port.BlobU8(f, pos) != 35) {
+			rows += 1
+			s0 = dtTab(f, pos, e)
+			port.AssertEqAt(emonT, dtSameRow(port.TestFileSpan(f, pos, s0), 512, ctr), 0, "async equals in-memory", line)
+			if port.CellsAt(ctr, 0) > maxr {
+				maxr = port.CellsAt(ctr, 0)
+			}
+			if port.BlobU8(f, s0+1) == 111 {
+				port.AssertThatAt(emonT, port.CellsAt(ctr, 3) > 0, "the object extents were hinted", line)
+			}
+		}
+		pos = e + 1
+	}
+	port.AssertThat(emonT, rows > 100, "the real files were read")
+	port.AssertThat(emonT, maxr >= 4, "the big files took several rounds")
+}
+
+func dtSourceAsync(bytes []byte, chunk int32, t *strings.Builder) int32 {
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var ctr *port.Cells = port.NewCells()
+	var status int32 = dtOpenAsync(bytes, chunk, 1023, ar, dc, a, b, st, pg, ctr)
+	if status != 0 {
+		return status
+	}
+	pdfdoc.PdSourceJson(t, dc, pg)
+	return 0
+}
+
+func TestTheSourceGoldensAreTheSameFromA512ByteAsyncSource(emonT *testing.T) {
+	// P1.5's done-when: three (here five) fixtures give the same `Source`
+	// JSON from a 512-byte-chunk async source as from memory.
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	var t4 *strings.Builder = port.NewText()
+	var t5 *strings.Builder = port.NewText()
+	port.AssertEq(emonT, dtSourceAsync(port.TestFile("pdf/minimal.pdf"), 512, t1), 0, "minimal opens")
+	port.AssertTextSpan(emonT, t1, port.TestFile("pdf/source/minimal.json"), 0, port.BlobLen(port.TestFile("pdf/source/minimal.json"))-1, "minimal", 0)
+	port.AssertEq(emonT, dtSourceAsync(port.TestFile("pdf/html-chrome.pdf"), 512, t2), 0, "chrome opens")
+	port.AssertTextSpan(emonT, t2, port.TestFile("pdf/source/html-chrome.json"), 0, port.BlobLen(port.TestFile("pdf/source/html-chrome.json"))-1, "html-chrome", 0)
+	port.AssertEq(emonT, dtSourceAsync(port.TestFile("pdf/gs-xrefstream.pdf"), 512, t3), 0, "ghostscript opens")
+	port.AssertTextSpan(emonT, t3, port.TestFile("pdf/source/gs-xrefstream.json"), 0, port.BlobLen(port.TestFile("pdf/source/gs-xrefstream.json"))-1, "gs-xrefstream", 0)
+	port.AssertEq(emonT, dtSourceAsync(port.TestFile("pdf/inherit.pdf"), 512, t4), 0, "inherit opens")
+	port.AssertTextSpan(emonT, t4, port.TestFile("pdf/source/inherit.json"), 0, port.BlobLen(port.TestFile("pdf/source/inherit.json"))-1, "inherit", 0)
+	port.AssertEq(emonT, dtSourceAsync(port.TestFile("pdf/boxes.pdf"), 512, t5), 0, "boxes opens")
+	port.AssertTextSpan(emonT, t5, port.TestFile("pdf/source/boxes.json"), 0, port.BlobLen(port.TestFile("pdf/source/boxes.json"))-1, "boxes", 0)
+}
+
+func dtObjectOn(pdf *port.Src, num int32, kind int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, out *port.Cells, t *strings.Builder) int32 {
+	// `dt-object-row` on an open source: dump object num (kind 111) or
+	// decode it (115) into t, after opening the document.
+	var status int32 = pdfdoc.PdOpen(pdf, ar, dc, a, b, st)
+	var h int32 = 0
+	var s int32 = 0
+	if status != 0 {
+		return status
+	}
+	h = pdfdoc.PdGet(pdf, ar, dc, a, b, st, num)
+	if kind == 111 {
+		if h == 0 {
+			port.TextAscii(t, "!missing")
+		} else {
+			pdflex.PlDump(t, ar, h)
+		}
+	}
+	if kind == 115 {
+		port.CellsDrop(out, 0)
+		if h == 0 {
+			port.TextAscii(t, "!missing")
+		} else {
+			s = pdfdoc.PdStreamData(pdf, ar, dc, a, b, st, h, out)
+			pdffilter.PfStatusEmitName(t, s)
+		}
+	}
+	return 0
+}
+
+func dtObjectAsync(bytes []byte, chunk int32, num int32, kind int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, out *port.Cells, t *strings.Builder) int32 {
+	// The same through an async source: attempts that miss are thrown away
+	// (into a scratch sink) until one does not, then the answer is made once
+	// more on a fresh view of the now-resident cache, into t. -1 when that
+	// last run still missed.
+	var base *port.Src = port.SrcChunked(bytes, chunk, 0)
+	var round int32 = 0
+	var more int32 = 1
+	var opened int32 = 0
+	for more == 1 {
+		var v *port.Src = port.SrcView(base)
+		var scratch *strings.Builder = port.NewText()
+		opened = dtObjectOn(v, num, kind, ar, dc, a, b, st, out, scratch)
+		if pdfsrc.PsMissed(v) {
+			port.SrcCtl(base, 0, round)
+			round += 1
+			if round > 40 {
+				more = 0
+			}
+		} else {
+			more = 0
+		}
+	}
+	var fin *port.Src = port.SrcView(base)
+	opened = dtObjectOn(fin, num, kind, ar, dc, a, b, st, out, t)
+	if pdfsrc.PsMissed(fin) {
+		return -1
+	}
+	return opened
+}
+
+func TestEveryObjectResolvesTheSameThroughAnAsyncSource(emonT *testing.T) {
+	// Objects in object streams and decoded streams (Flate, LZW, ASCII85,
+	// RunLength, predictors), from 64-byte chunks: the stream spans are cut
+	// with `src-slice` and the object streams parsed through `src-of-cells`.
+	var f []byte = port.TestFile("pdf/objects-in-files.txt")
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(f)
+	var pos int32 = 0
+	var line int32 = 0
+	var rows int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	var s1 int32 = 0
+	var s2 int32 = 0
+	var s3 int32 = 0
+	var opened int32 = 0
+	var kind int32 = 0
+	for pos < n {
+		line += 1
+		e = dtNl(f, pos)
+		if (pos < e) && (port.BlobU8(f, pos) != 35) {
+			rows += 1
+			s0 = dtTab(f, pos, e)
+			s1 = dtTab(f, s0+1, e)
+			s2 = dtTab(f, s1+1, e)
+			s3 = dtTab(f, s2+1, e)
+			kind = port.BlobU8(f, s1+1)
+			var t *strings.Builder = port.NewText()
+			opened = dtObjectAsync(port.TestFileSpan(f, pos, s0), 64, dtDec(f, s0+1, s1), kind, ar, dc, a, b, st, out, t)
+			port.AssertEqAt(emonT, opened, 0, "the file opens, and the last run did not miss", line)
+			if kind == 111 {
+				port.AssertTextSpan(emonT, t, f, s3+1, e, "object", line)
+			}
+			if kind == 115 {
+				port.AssertTextSpan(emonT, t, f, s2+1, s3, "stream status", line)
+				port.AssertEqAt(emonT, dtCompareHex(out, f, s3+1, e), -1, "decoded bytes", line)
+			}
+		}
+		pos = e + 1
+	}
+	port.AssertThat(emonT, rows > 40, "the rows were read")
+}
+
+func dtM(s *port.Src) int32 {
+	if pdfsrc.PsMissed(s) {
+		return 1
+	}
+	return 0
+}
+
+func TestAColdSourceAnswersNeedBytesAndNoWarningAndNoPages(emonT *testing.T) {
+	// Nothing resident: the first read misses, and what comes back is the
+	// status `need-bytes` (7), no warning bit and no page, even for the
+	// files whose real status is bad-xref or no-startxref, because the
+	// zeros the miss read are not a file's damage.
+	var f []byte = port.TestFile("pdf/fixtures.txt")
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(f)
+	var pos int32 = 0
+	var line int32 = 0
+	var rows int32 = 0
+	var missed int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	var status int32 = 0
+	for pos < n {
+		line += 1
+		e = dtNl(f, pos)
+		if (pos < e) && (port.BlobU8(f, pos) != 35) {
+			rows += 1
+			s0 = dtTab(f, pos, e)
+			var v *port.Src = port.SrcView(port.SrcChunked(port.TestFileSpan(f, pos, s0), 64, 0))
+			status = dtOpen(v, ar, dc, a, b, st, pg)
+			if dtM(v) == 1 {
+				missed += 1
+				port.AssertEqAt(emonT, status, 7, "need-bytes", line)
+				port.AssertEqAt(emonT, pdfdoc.PdWarn(dc), 0, "no warning", line)
+				port.AssertEqAt(emonT, pdfdoc.PdPgCount(pg), 0, "no page", line)
+			}
+		}
+		pos = e + 1
+	}
+	port.AssertThat(emonT, rows > 20, "the fixtures were read")
+	port.AssertThat(emonT, missed > 20, "nearly every file missed on a cold source")
+}
+
+func TestANamedMissingChunkIsNeedBytesUntilItIsResident(emonT *testing.T) {
+	var f []byte = port.TestFile("pdf/minimal.pdf")
+	var base *port.Src = port.SrcChunked(f, 64, 0)
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var last int32 = port.SrcCtl(base, 8, 0) - 1
+	port.AssertThat(emonT, last > 4, "the fixture spans several chunks")
+	port.SrcCtl(base, 3, 0)
+	var v *port.Src = port.SrcView(base)
+	port.AssertEq(emonT, dtOpen(v, ar, dc, a, b, st, pg), 0, "opens with everything resident")
+	port.AssertEq(emonT, dtM(v), 0, "without a miss")
+	port.AssertEq(emonT, pdfdoc.PdPgCount(pg), 1, "one page")
+	port.SrcCtl(base, 2, 0)
+	var w *port.Src = port.SrcView(base)
+	port.AssertEq(emonT, dtOpen(w, ar, dc, a, b, st, pg), 7, "the header's chunk is missing")
+	port.AssertEq(emonT, dtM(w), 1, "and the view says so")
+	port.AssertEq(emonT, pdfdoc.PdWarn(dc), 0, "with no warning")
+	port.AssertEq(emonT, port.SrcCtl(base, 4, 0), 1, "one chunk is pending")
+	port.SrcCtl(base, 1, 0)
+	port.SrcCtl(base, 2, last)
+	var x *port.Src = port.SrcView(base)
+	port.AssertEq(emonT, dtOpen(x, ar, dc, a, b, st, pg), 7, "the last chunk (startxref) is missing")
+	port.AssertEq(emonT, dtM(x), 1, "and the view says so")
+	port.SrcCtl(base, 1, last)
+	var y *port.Src = port.SrcView(base)
+	port.AssertEq(emonT, dtOpen(y, ar, dc, a, b, st, pg), 0, "opens again once both are resident")
+	port.AssertEq(emonT, dtM(y), 0, "without a miss")
+	port.AssertEq(emonT, pdfdoc.PdPgCount(pg), 1, "one page")
+}
+
+func TestADamagedFileIsStillBadXrefOnceItsChunksAreResident(emonT *testing.T) {
+	// badxref.pdf's real status is bad-xref. On a cold source the answer
+	// is need-bytes; only a run that read every byte it used may say bad-xref.
+	var f []byte = port.TestFile("pdf/badxref.pdf")
+	var base *port.Src = port.SrcChunked(f, 64, 0)
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var ctr *port.Cells = port.NewCells()
+	var v *port.Src = port.SrcView(base)
+	port.AssertEq(emonT, dtOpen(v, ar, dc, a, b, st, pg), 7, "cold: need-bytes")
+	port.AssertEq(emonT, dtM(v), 1, "missed")
+	port.AssertEq(emonT, dtOpenAsync(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 3, "warm: bad-xref")
+	port.AssertThat(emonT, port.CellsAt(ctr, 0) >= 1, "it took a round")
+}
+
+func dtSameSync(bytes []byte, ctr *port.Cells) int32 {
+	// Open in memory and through a SYNC chunked source: 0 when the arena,
+	// the document and the page table are the same and the view never
+	// missed; the chunks filled inline are left in ctr[0].
+	var ar1 *port.Cells = port.NewCells()
+	var dc1 *port.Cells = port.NewCells()
+	var a1 *port.Cells = port.NewCells()
+	var b1 *port.Cells = port.NewCells()
+	var st1 *port.Cells = port.NewCells()
+	var pg1 *port.Cells = port.NewCells()
+	var ar2 *port.Cells = port.NewCells()
+	var dc2 *port.Cells = port.NewCells()
+	var a2 *port.Cells = port.NewCells()
+	var b2 *port.Cells = port.NewCells()
+	var st2 *port.Cells = port.NewCells()
+	var pg2 *port.Cells = port.NewCells()
+	var base *port.Src = port.SrcChunked(bytes, 64, 1)
+	var v *port.Src = port.SrcView(base)
+	var mem *port.Src = port.SrcOfBlob(bytes)
+	var s1 int32 = dtOpen(mem, ar1, dc1, a1, b1, st1, pg1)
+	var s2 int32 = dtOpen(v, ar2, dc2, a2, b2, st2, pg2)
+	port.CellsDrop(ctr, 0)
+	port.CellsPush(ctr, port.SrcCtl(base, 7, 0))
+	if s1 != s2 {
+		return 1
+	}
+	if pdfsrc.PsMissed(v) {
+		return 5
+	}
+	if dtDiff(ar1, ar2) != -1 {
+		return 2
+	}
+	if dtDiff(dc1, dc2) != -1 {
+		return 3
+	}
+	if dtDiff(pg1, pg2) != -1 {
+		return 4
+	}
+	return 0
+}
+
+func TestASyncSourceIsTheInMemoryRunWithNoRounds(emonT *testing.T) {
+	var ctr *port.Cells = port.NewCells()
+	port.AssertEq(emonT, dtSameSync(port.TestFile("pdf/minimal.pdf"), ctr), 0, "minimal")
+	port.AssertThat(emonT, port.CellsAt(ctr, 0) > 0, "chunks were filled inline")
+	port.AssertEq(emonT, dtSameSync(port.TestFile("pdf/gs-xrefstream.pdf"), ctr), 0, "xref stream and object streams")
+	port.AssertEq(emonT, dtSameSync(port.TestFile("pdf/html-chrome.pdf"), ctr), 0, "chrome")
+	port.AssertEq(emonT, dtSameSync(port.TestFile("pdf/incremental.pdf"), ctr), 0, "incremental")
+	port.AssertEq(emonT, dtSameSync(port.TestFile("pdf/badxref.pdf"), ctr), 0, "a damaged file")
 }

@@ -118,6 +118,29 @@
    :zero {:go "nil"}})
 
 
+(def Src
+  "An INPUT BYTE SOURCE that may MISS, opaque to kin (SPEC 7.2, 13.1, D058).
+
+  `Blob` is bytes in memory; `Src` is what the PDF and image readers are
+  given instead: a per-unit VIEW over a host chunk cache. A read of a byte
+  whose chunk is not resident answers 0 and sets the view's missed flag
+  (`src-missed`); kin checks the flag at its checkpoints and stops, and the
+  host fetches what was missed and re-runs the unit on a fresh view. A sync
+  source never misses. `src-of-blob` and `src-of-cells` make an in-memory
+  one, `src-slice` cuts a span out as a `Blob`.
+
+  IN RUST IT IS A SHARED BORROW, and its state is interior (an atomic flag),
+  so one source can be handed to any number of calls and to two parameters of
+  the same call, which `Cells`' `&mut` cannot. The forms that MAKE one
+  (`src-of-blob`, `src-of-cells`) borrow a temporary, like `cells-bytes`: nest
+  them in the call that uses them, or bind them with `let` (Rust extends a
+  let-bound borrow of a temporary)."
+  {:name 'Src
+   :types {:rust "&crate::port::Src" :go "*port.Src"
+           :java "emon.Port.Src" :csharp "emon.Port.Src"}
+   :needs {:go "emon/port"}
+   :zero {:go "nil"}})
+
 (def Cpt
   "Centipoints, 1/100 pt, as a 32-bit integer (SPEC 3.4, D009).
 
@@ -296,7 +319,7 @@
   {:namespace 'emon.lang
    :targets #{:rust :go :java :csharp}
    :tags {'I32 I32 'U32 U32 'I64 I64
-          'Bool Bool 'Blob Blob 'Sink Sink 'Cells Cells
+          'Bool Bool 'Blob Blob 'Src Src 'Sink Sink 'Cells Cells
           'Cpt Cpt 'Px Px 'Fx Fx 'Conf Conf 'Text Text}
    :names {}
    ;; ---------------------------------------------------------- the casts

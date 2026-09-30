@@ -109,4 +109,144 @@ public final class Testport {
     public static StringBuilder newText() {
         return new StringBuilder();
     }
+
+    // ------------------------------------------------ a source that misses
+    //
+    // A Src over a blob, served in fixed-size CHUNKS of which only some are
+    // RESIDENT (P1.11, D058); see the Rust half. Tests only.
+
+    private static final class ChunkedBacking implements Port.SrcBacking {
+        final byte[] data;
+        final int chunk;
+        final boolean sync;
+        final boolean[] resident;
+        final java.util.ArrayList<Integer> pending = new java.util.ArrayList<>();
+        int fills = 0;
+        int hints = 0;
+
+        ChunkedBacking(byte[] data, int chunk, boolean sync) {
+            this.data = data;
+            this.chunk = chunk;
+            this.sync = sync;
+            this.resident = new boolean[(data.length + chunk - 1) / chunk];
+        }
+
+        int nchunks() {
+            return resident.length;
+        }
+
+        boolean touch(int c) {
+            if (resident[c]) {
+                return true;
+            }
+            if (sync) {
+                resident[c] = true;
+                fills++;
+                return true;
+            }
+            if (!pending.contains(c)) {
+                pending.add(c);
+            }
+            return false;
+        }
+
+        public int len() {
+            return data.length;
+        }
+
+        public int at(int i) {
+            return touch(i / chunk) ? (data[i] & 0xFF) : -1;
+        }
+
+        public boolean span(int s, byte[] buf) {
+            int n = buf.length;
+            if (n == 0) {
+                return true;
+            }
+            boolean ok = true;
+            for (int c = s / chunk; c <= (s + n - 1) / chunk; c++) {
+                if (touch(c)) {
+                    int lo = Math.max(s, c * chunk);
+                    int hi = Math.min(s + n, (c + 1) * chunk);
+                    for (int k = lo; k < hi; k++) {
+                        buf[k - s] = data[k];
+                    }
+                } else {
+                    ok = false;
+                }
+            }
+            return ok;
+        }
+
+        public void hint(int s, int e) {
+            hints++;
+        }
+    }
+
+    // A source over b, in chunks of `chunk` bytes, none resident; sync 1 fills inline.
+    public static Port.Src srcChunked(byte[] b, int chunk, int sync) {
+        return new Port.Src(new ChunkedBacking(b, chunk, sync == 1));
+    }
+
+    // A fresh view (missed flag clear) of the same chunk cache.
+    public static Port.Src srcView(Port.Src s) {
+        return s.view();
+    }
+
+    // Control of the cache: op 0 fetch (a is the round: read-ahead of 2^a - 1
+    // chunks each side of every pending chunk; answers the chunks made
+    // resident), 1 make chunk a resident, 2 evict chunk a, 3 make every chunk
+    // resident, 4 the pending count, 5 the resident count, 6 the hints
+    // received, 7 the chunks a sync source filled inline, 8 the chunk count.
+    public static int srcCtl(Port.Src s, int op, int a) {
+        ChunkedBacking b = (ChunkedBacking) s.b;
+        int n = b.nchunks();
+        switch (op) {
+            case 0: {
+                int r = (1 << Math.min(a, 20)) - 1;
+                java.util.ArrayList<Integer> pend = new java.util.ArrayList<>(b.pending);
+                b.pending.clear();
+                int made = 0;
+                for (int c : pend) {
+                    for (int k = Math.max(0, c - r); k <= Math.min(n - 1, c + r); k++) {
+                        if (!b.resident[k]) {
+                            b.resident[k] = true;
+                            made++;
+                        }
+                    }
+                }
+                return made;
+            }
+            case 1:
+                b.resident[a] = true;
+                b.pending.remove(Integer.valueOf(a));
+                return 0;
+            case 2:
+                b.resident[a] = false;
+                return 0;
+            case 3:
+                java.util.Arrays.fill(b.resident, true);
+                b.pending.clear();
+                return 0;
+            case 4:
+                return b.pending.size();
+            case 5: {
+                int c = 0;
+                for (boolean r : b.resident) {
+                    if (r) {
+                        c++;
+                    }
+                }
+                return c;
+            }
+            case 6:
+                return b.hints;
+            case 7:
+                return b.fills;
+            case 8:
+                return n;
+            default:
+                throw new IllegalArgumentException("srcCtl: no op " + op);
+        }
+    }
 }

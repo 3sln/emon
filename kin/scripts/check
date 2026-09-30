@@ -40,7 +40,7 @@ trap 'rm -rf "$work"' EXIT
 #   limits 0 4 8 10 and settings 0 1 at their defaults (nothing sets EMON_*)
 #   text: e-acute, U+1F600, then U+FFFD twice (a surrogate and -1)
 want1="6 21"
-want2='blob: 8 255 33023 -2130767308 65408 -587320302 cells: 0 1 2 21 2 limits: 1073741824 64 100000 100000 settings: 0 0 text: é😀'"$(printf '\357\277\275\357\277\275')"' {"a\b":-42}'
+want2='blob: 8 255 33023 -2130767308 65408 -587320302 cells: 0 1 2 21 2 src: 8 255 -2130767308 2 21 0 limits: 1073741824 64 100000 100000 settings: 0 0 text: é😀'"$(printf '\357\277\275\357\277\275')"' {"a\b":-42}'
 
 # P0.3: a literal holding a quote and a backslash, through `emit-ascii`.
 want3='{"a\"b\\c":1}'

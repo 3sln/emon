@@ -1,32 +1,59 @@
-;; THE ONE PLACE THE PDF CODE READS ITS INPUT (P1.4, D058).
+;; THE ONE PLACE THE PDF CODE READS ITS INPUT (P1.4, P1.11, D058 revised).
 ;;
-;; `emon.pdflex`, `emon.pdfdoc` and `emon.pdffilter` never call `blob-len` or
-;; `blob-u8` themselves: they read the file, an object stream's decoded bytes
-;; and a filter's input through the two functions below. emon's input is an
-;; ABSTRACT BYTE SOURCE (no path, no file system: the library has to run in
-;; WASM in a browser, where the bytes may arrive in ranges, not as one slab),
-;; and the day the source becomes a window or a range reader, this is the file
-;; that changes; nothing that parses a PDF does.
+;; `emon.pdflex` and `emon.pdfdoc` never call `src-len` or `src-u8` themselves:
+;; they read the file and an object stream's decoded bytes through the
+;; functions below. emon's input is an ABSTRACT BYTE SOURCE (no path, no file
+;; system: the library has to run in WASM in a browser, where the bytes arrive
+;; in ranges, not as one slab), and kin reads it as a `Src`: a per-unit view
+;; over the host's chunk cache, whose read MAY MISS.
 ;;
-;; TODAY A SOURCE IS A `Blob`, a whole file in memory, and both functions are
-;; the port's reads. The contract a richer source must keep: `(ps-len src)` is
-;; the number of bytes; `(ps-u8 src i)` is the byte at an index 0 <= i <
-;; `(ps-len src)` and raises (the port's out-of-range) outside it. No parser
-;; reads out of range on purpose: each bounds its reads by `ps-len` or by the
-;; `end` it was given.
+;; THE CONTRACT. `(ps-len src)` is the number of bytes. `(ps-u8 src i)` is the
+;; byte at an index 0 <= i < `(ps-len src)`, and raises (the port's
+;; out-of-range) outside it. When the byte's chunk is not resident (an async
+;; source) it answers 0 AND SETS THE VIEW'S MISSED FLAG, which `(ps-missed
+;; src)` reads. A miss is not an error: kin carries on with a wrong byte until
+;; its next CHECKPOINT (after an indirect object, an xref section, a trailer, a
+;; stream span, a page-tree node), sees the flag, and returns `need-bytes` to
+;; the top of the unit without doing more. The host then awaits the missed
+;; ranges and re-runs the unit from scratch on a fresh view. So a result is only
+;; ever used if no read of its run missed, and then every byte it saw was the
+;; true byte: the kept run is the in-memory run. THE RULE FOR EVERY CALLER:
+;; check `ps-missed` BEFORE classifying a failure (a status, a warning bit, a
+;; repair), because what looks like damage may be zeros standing in for bytes
+;; that have not arrived.
 ;;
-;; THE OTHER HALF IS `cells-bytes` (emon.port): it makes a source out of bytes
-;; kin built in a `Cells` (a decoded object stream, the next stage of a filter
-;; chain). A windowed source would provide its own version of that.
+;; `(ps-hint src s e)` says that bytes [s, e) will probably be wanted (an
+;; object's extent, after the xref is read); the host may prefetch. It never
+;; misses and may do nothing.
+;;
+;; THE TWO THAT MAKE A SOURCE OR A SPAN ARE NOT FUNCTIONS HERE, and that is
+;; the port's doing, not this file's: `ps-slice` is the port form `src-slice`
+;; (a span of a source as a `Blob`, the decoded stream's input) and
+;; `ps-of-cells` is `src-of-cells` (bytes kin built in a `Cells`, an object
+;; stream's decoded data, as an in-memory source that never misses). In Rust a
+;; `Blob` and a `Src` are borrows, and a function cannot return a borrow of
+;; what it made, so both are forms that borrow a temporary, like `cells-bytes`
+;; (D067). They are named `ps-slice` and `ps-of-cells` in prose only; callers
+;; `:refer` them from `emon.port`. `src-of-blob` is the same, for tests.
 (ns emon.pdfsrc
-  (:require [emon.lang :refer [I32 Blob]]
-            [emon.port :refer [blob-len blob-u8]]
+  (:require [emon.lang :refer [I32 Bool Src]]
+            [emon.port :refer [src-len src-u8 src-missed src-hint]]
             [kin.lang :refer [defn return comment]]))
 
-(defn ^:pub ^I32 ps-len [^Blob src]
+(defn ^:pub ^I32 ps-len [^Src src]
   (comment "The number of bytes in the source.")
-  (return (blob-len src)))
+  (return (src-len src)))
 
-(defn ^:pub ^I32 ps-u8 [^Blob src ^I32 i]
-  (comment "The byte at index i, 0..255.")
-  (return (blob-u8 src i)))
+(defn ^:pub ^I32 ps-u8 [^Src src ^I32 i]
+  (comment "The byte at index i, 0..255; 0 and a miss when it is not resident.")
+  (return (src-u8 src i)))
+
+(defn ^:pub ^Bool ps-missed [^Src src]
+  (comment "True when a read through this view has missed: what it answered")
+  (comment "since may be wrong, and the unit must return `need-bytes`.")
+  (return (src-missed src)))
+
+(defn ^:pub ^I32 ps-hint [^Src src ^I32 s ^I32 e]
+  (comment "A prefetch hint: bytes [s, e) will probably be wanted. Answers 0.")
+  (src-hint src s e)
+  (return 0))

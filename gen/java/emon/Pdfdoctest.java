@@ -129,7 +129,7 @@ public final class Pdfdoctest {
         }
         return h;
     }
-    public static int dtOpen(byte[] pdf, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg) {
+    public static int dtOpen(emon.Port.Src pdf, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg) {
         // Open a document and list its pages (an empty `pg` when it will not
         // open). Answers the `pd-status`.
         int status = Pdfdoc.pdOpen(pdf, ar, dc, a, b, st);
@@ -141,7 +141,7 @@ public final class Pdfdoctest {
     }
     public static int dtRunFixturesRow(byte[] names, int from, int to, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, StringBuilder t) {
         // Open the file named by names[from, to) and write its status.
-        byte[] pdf = emon.Testport.testFileSpan(names, from, to);
+        emon.Port.Src pdf = emon.Port.srcOfBlob(emon.Testport.testFileSpan(names, from, to));
         int status = dtOpen(pdf, ar, dc, a, b, st, pg);
         Pdfdoc.pdStatusEmitName(t, status);
         return status;
@@ -188,7 +188,7 @@ public final class Pdfdoctest {
         // Open the file, then: kind 111 (o) dumps object num into t (`!missing`
         // when there is none); kind 115 (s) decodes it into `out` and writes the
         // status name to t. Answers the pd-open status (non-zero: not opened).
-        byte[] pdf = emon.Testport.testFileSpan(names, from, to);
+        emon.Port.Src pdf = emon.Port.srcOfBlob(emon.Testport.testFileSpan(names, from, to));
         int status = Pdfdoc.pdOpen(pdf, ar, dc, a, b, st);
         int h = 0;
         int s = 0;
@@ -261,7 +261,7 @@ public final class Pdfdoctest {
     }
     public static int dtCorpusRow(byte[] names, int from, int to, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, StringBuilder t) {
         // Open a real file and write its status name to t.
-        byte[] pdf = emon.Testport.testFileSpan(names, from, to);
+        emon.Port.Src pdf = emon.Port.srcOfBlob(emon.Testport.testFileSpan(names, from, to));
         int status = dtOpen(pdf, ar, dc, a, b, st, pg);
         Pdfdoc.pdStatusEmitName(t, status);
         return status;
@@ -307,7 +307,7 @@ public final class Pdfdoctest {
         }
         emon.Testport.assertThat(rows > 100, "the real files were read");
     }
-    public static int dtSource(byte[] pdf, StringBuilder t) {
+    public static int dtSource(emon.Port.Src pdf, StringBuilder t) {
         emon.Port.Cells ar = emon.Port.newCells();
         emon.Port.Cells dc = emon.Port.newCells();
         emon.Port.Cells a = emon.Port.newCells();
@@ -324,39 +324,39 @@ public final class Pdfdoctest {
     public static void testSourceOfMinimalPdf() {
         byte[] want = emon.Testport.testFile("pdf/source/minimal.json");
         StringBuilder t = emon.Testport.newText();
-        int status = dtSource(emon.Testport.testFile("pdf/minimal.pdf"), t);
+        int status = dtSource(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/minimal.pdf")), t);
         emon.Testport.assertEq(status, 0, "opens");
         emon.Testport.assertTextSpan(t, want, 0, emon.Port.blobLen(want) - 1, "Source JSON", 0);
     }
     public static void testSourceOfHtmlChromePdf() {
         byte[] want = emon.Testport.testFile("pdf/source/html-chrome.json");
         StringBuilder t = emon.Testport.newText();
-        int status = dtSource(emon.Testport.testFile("pdf/html-chrome.pdf"), t);
+        int status = dtSource(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/html-chrome.pdf")), t);
         emon.Testport.assertEq(status, 0, "opens");
         emon.Testport.assertTextSpan(t, want, 0, emon.Port.blobLen(want) - 1, "Source JSON", 0);
     }
     public static void testSourceOfGhostscriptXrefStreamPdf() {
         byte[] want = emon.Testport.testFile("pdf/source/gs-xrefstream.json");
         StringBuilder t = emon.Testport.newText();
-        int status = dtSource(emon.Testport.testFile("pdf/gs-xrefstream.pdf"), t);
+        int status = dtSource(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/gs-xrefstream.pdf")), t);
         emon.Testport.assertEq(status, 0, "opens");
         emon.Testport.assertTextSpan(t, want, 0, emon.Port.blobLen(want) - 1, "Source JSON", 0);
     }
     public static void testSourceWithInheritedAttributes() {
         byte[] want = emon.Testport.testFile("pdf/source/inherit.json");
         StringBuilder t = emon.Testport.newText();
-        int status = dtSource(emon.Testport.testFile("pdf/inherit.pdf"), t);
+        int status = dtSource(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/inherit.pdf")), t);
         emon.Testport.assertEq(status, 0, "opens");
         emon.Testport.assertTextSpan(t, want, 0, emon.Port.blobLen(want) - 1, "Source JSON", 0);
     }
     public static void testSourceWithOddBoxesAndRotations() {
         byte[] want = emon.Testport.testFile("pdf/source/boxes.json");
         StringBuilder t = emon.Testport.newText();
-        int status = dtSource(emon.Testport.testFile("pdf/boxes.pdf"), t);
+        int status = dtSource(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/boxes.pdf")), t);
         emon.Testport.assertEq(status, 0, "opens");
         emon.Testport.assertTextSpan(t, want, 0, emon.Port.blobLen(want) - 1, "Source JSON", 0);
     }
-    public static int dtInfo(byte[] pdf, int which) {
+    public static int dtInfo(emon.Port.Src pdf, int which) {
         // A fact about a document: 0 status, 1 encrypted, 2 version major,
         // 3 version minor, 4 warning bits, 5 highest object number + 1.
         emon.Port.Cells ar = emon.Port.newCells();
@@ -384,22 +384,22 @@ public final class Pdfdoctest {
         return Pdfdoc.pdObjectCount(dc);
     }
     public static void testHeaderVersionAndEncryptionAreReported() {
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/minimal.pdf"), 2), 1, "major");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/minimal.pdf"), 3), 4, "minor");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/xrefstream.pdf"), 3), 5, "minor of a 1.5 file");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/minimal.pdf"), 1), 0, "not encrypted");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/encrypt-flag.pdf"), 1), 1, "an /Encrypt entry is reported");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/minimal.pdf"), 5), 6, "objects 0 to 5");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/minimal.pdf")), 2), 1, "major");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/minimal.pdf")), 3), 4, "minor");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/xrefstream.pdf")), 3), 5, "minor of a 1.5 file");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/minimal.pdf")), 1), 0, "not encrypted");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/encrypt-flag.pdf")), 1), 1, "an /Encrypt entry is reported");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/minimal.pdf")), 5), 6, "objects 0 to 5");
     }
     public static void testToleratedDamageIsRecordedAsWarnings() {
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/minimal.pdf"), 4), 0, "no warnings");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/junk-header.pdf"), 4), 1, "offsets relative to a header at 0 + 81");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/hybrid.pdf"), 4), 2, "hybrid-reference file");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/prev-loop.pdf"), 4), 4, "a /Prev loop is cut");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/kids-cycle.pdf"), 4), 128, "a cyclic page tree is cut");
-        emon.Testport.assertEq(dtInfo(emon.Testport.testFile("pdf/boxes.pdf"), 4), 256, "a missing MediaBox is defaulted");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/minimal.pdf")), 4), 0, "no warnings");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/junk-header.pdf")), 4), 1, "offsets relative to a header at 0 + 81");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/hybrid.pdf")), 4), 2, "hybrid-reference file");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/prev-loop.pdf")), 4), 4, "a /Prev loop is cut");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/kids-cycle.pdf")), 4), 128, "a cyclic page tree is cut");
+        emon.Testport.assertEq(dtInfo(emon.Port.srcOfBlob(emon.Testport.testFile("pdf/boxes.pdf")), 4), 256, "a missing MediaBox is defaulted");
     }
-    public static int dtSurvive(byte[] pdf, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, emon.Port.Cells out) {
+    public static int dtSurvive(emon.Port.Src pdf, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, emon.Port.Cells out) {
         // Open, list the pages, and decode every stream the cross-reference
         // names: none of it may fault. Answers the pd-open status.
         int status = dtOpen(pdf, ar, dc, a, b, st, pg);
@@ -436,7 +436,7 @@ public final class Pdfdoctest {
         int ok = 0;
         while (k <= n) {
             dtCut(f, k, cut);
-            if (dtSurvive(emon.Testport.cellsBlob(cut), ar, dc, a, b, st, pg, out) == 0) {
+            if (dtSurvive(emon.Port.srcOfBlob(emon.Testport.cellsBlob(cut)), ar, dc, a, b, st, pg, out) == 0) {
                 ok += 1;
             }
             k += step;
@@ -460,7 +460,7 @@ public final class Pdfdoctest {
                 emon.Port.cellsSet(cut, at, Splitmix.smBelow(rng, 256));
                 j += 1;
             }
-            if (dtSurvive(emon.Testport.cellsBlob(cut), ar, dc, a, b, st, pg, out) == 0) {
+            if (dtSurvive(emon.Port.srcOfBlob(emon.Testport.cellsBlob(cut)), ar, dc, a, b, st, pg, out) == 0) {
                 ok += 1;
             }
             r += 1;
@@ -500,5 +500,464 @@ public final class Pdfdoctest {
         emon.Testport.assertThat(dtCorruptions(emon.Testport.testFile("pdf/incremental.pdf"), 400, 3, 4, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "incremental");
         emon.Testport.assertThat(dtCorruptions(emon.Testport.testFile("pdf/filters.pdf"), 400, 3, 5, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "filters");
         emon.Testport.assertThat(dtCorruptions(emon.Testport.testFile("pdf/inherit.pdf"), 400, 3, 6, ar, dc, a, b, st, pg, out, cut, rng) >= 0, "inherit");
+    }
+    public static int dtOpenAsync(byte[] bytes, int chunk, int wf, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, emon.Port.Cells ctr) {
+        // Open `bytes` through an async source of `chunk`-byte chunks, re-running
+        // until an attempt does not miss. `wf` is the real run's warning bits.
+        // Answers the kept attempt's status; `ctr` gets [rounds, status
+        // violations, warning violations, hints received].
+        emon.Port.Src base = emon.Testport.srcChunked(bytes, chunk, 0);
+        int round = 0;
+        int status = 0;
+        int more = 1;
+        int w = 0;
+        emon.Port.cellsDrop(ctr, 0);
+        emon.Port.cellsPush(ctr, 0);
+        emon.Port.cellsPush(ctr, 0);
+        emon.Port.cellsPush(ctr, 0);
+        emon.Port.cellsPush(ctr, 0);
+        while (more == 1) {
+            emon.Port.Src v = emon.Testport.srcView(base);
+            status = dtOpen(v, ar, dc, a, b, st, pg);
+            if (Pdfsrc.psMissed(v)) {
+                w = Pdfdoc.pdWarn(dc);
+                if ((status != 0) && (status != 7)) {
+                    emon.Port.cellsSet(ctr, 1, emon.Port.cellsAt(ctr, 1) + 1);
+                }
+                if ((w | wf) != wf) {
+                    emon.Port.cellsSet(ctr, 2, emon.Port.cellsAt(ctr, 2) + 1);
+                }
+                emon.Testport.srcCtl(base, 0, round);
+                round += 1;
+                if (round > 40) {
+                    more = 0;
+                }
+            } else {
+                more = 0;
+            }
+        }
+        emon.Port.cellsSet(ctr, 0, round);
+        emon.Port.cellsSet(ctr, 3, emon.Testport.srcCtl(base, 6, 0));
+        return status;
+    }
+    public static int dtDiff(emon.Port.Cells x, emon.Port.Cells y) {
+        // -1 when x and y hold the same cells, -2 when they differ in length,
+        // else the first index where they differ.
+        int n = emon.Port.cellsLen(x);
+        int i = 0;
+        if (n != emon.Port.cellsLen(y)) {
+            return -2;
+        }
+        while (i < n) {
+            if (emon.Port.cellsAt(x, i) != emon.Port.cellsAt(y, i)) {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static int dtSameRow(byte[] bytes, int chunk, emon.Port.Cells ctr) {
+        // Open `bytes` in memory and through an async source; a verdict code
+        // (see above), 0 for the same. `ctr` is `dt-open-async`'s.
+        emon.Port.Cells ar1 = emon.Port.newCells();
+        emon.Port.Cells dc1 = emon.Port.newCells();
+        emon.Port.Cells a1 = emon.Port.newCells();
+        emon.Port.Cells b1 = emon.Port.newCells();
+        emon.Port.Cells st1 = emon.Port.newCells();
+        emon.Port.Cells pg1 = emon.Port.newCells();
+        emon.Port.Cells ar2 = emon.Port.newCells();
+        emon.Port.Cells dc2 = emon.Port.newCells();
+        emon.Port.Cells a2 = emon.Port.newCells();
+        emon.Port.Cells b2 = emon.Port.newCells();
+        emon.Port.Cells st2 = emon.Port.newCells();
+        emon.Port.Cells pg2 = emon.Port.newCells();
+        emon.Port.Src mem = emon.Port.srcOfBlob(bytes);
+        int s1 = dtOpen(mem, ar1, dc1, a1, b1, st1, pg1);
+        int s2 = dtOpenAsync(bytes, chunk, Pdfdoc.pdWarn(dc1), ar2, dc2, a2, b2, st2, pg2, ctr);
+        if (s1 != s2) {
+            return 1;
+        }
+        if (emon.Port.cellsAt(ctr, 1) != 0) {
+            return 5;
+        }
+        if (emon.Port.cellsAt(ctr, 2) != 0) {
+            return 6;
+        }
+        if (emon.Port.cellsAt(ctr, 0) > 24) {
+            return 7;
+        }
+        if (dtDiff(ar1, ar2) != -1) {
+            return 2;
+        }
+        if (dtDiff(dc1, dc2) != -1) {
+            return 3;
+        }
+        if (dtDiff(pg1, pg2) != -1) {
+            return 4;
+        }
+        return 0;
+    }
+    public static void testEveryFixtureIsTheSameThroughAnAsyncSourceOf64ByteChunks() {
+        // Every row of the fixtures, damaged files included: the same arena,
+        // document and page table, and a status per failure that is the file's,
+        // never a miss's.
+        byte[] f = emon.Testport.testFile("pdf/fixtures.txt");
+        emon.Port.Cells ctr = emon.Port.newCells();
+        int n = emon.Port.blobLen(f);
+        int pos = 0;
+        int line = 0;
+        int rows = 0;
+        int e = 0;
+        int s0 = 0;
+        while (pos < n) {
+            line += 1;
+            e = dtNl(f, pos);
+            if ((pos < e) && (emon.Port.blobU8(f, pos) != 35)) {
+                rows += 1;
+                s0 = dtTab(f, pos, e);
+                emon.Testport.assertEqAt(dtSameRow(emon.Testport.testFileSpan(f, pos, s0), 64, ctr), 0, "async equals in-memory", line);
+            }
+            pos = e + 1;
+        }
+        emon.Testport.assertThat(rows > 20, "the fixtures were read");
+    }
+    public static void testEveryFixtureIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
+        byte[] f = emon.Testport.testFile("pdf/fixtures.txt");
+        emon.Port.Cells ctr = emon.Port.newCells();
+        int n = emon.Port.blobLen(f);
+        int pos = 0;
+        int line = 0;
+        int rows = 0;
+        int e = 0;
+        int s0 = 0;
+        while (pos < n) {
+            line += 1;
+            e = dtNl(f, pos);
+            if ((pos < e) && (emon.Port.blobU8(f, pos) != 35)) {
+                rows += 1;
+                s0 = dtTab(f, pos, e);
+                emon.Testport.assertEqAt(dtSameRow(emon.Testport.testFileSpan(f, pos, s0), 512, ctr), 0, "async equals in-memory", line);
+            }
+            pos = e + 1;
+        }
+        emon.Testport.assertThat(rows > 20, "the fixtures were read");
+    }
+    public static void testEveryRealFileIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
+        // THE D058 GATE on the committed real-file rows: identical to the
+        // in-memory run, within FETCH_ROUNDS, with the object extents hinted
+        // once the cross-reference was read, and the big files really did need
+        // several rounds.
+        byte[] f = emon.Testport.testFile("pdf/corpus.txt");
+        emon.Port.Cells ctr = emon.Port.newCells();
+        int n = emon.Port.blobLen(f);
+        int pos = 0;
+        int line = 0;
+        int rows = 0;
+        int e = 0;
+        int s0 = 0;
+        int maxr = 0;
+        while (pos < n) {
+            line += 1;
+            e = dtNl(f, pos);
+            if ((pos < e) && (emon.Port.blobU8(f, pos) != 35)) {
+                rows += 1;
+                s0 = dtTab(f, pos, e);
+                emon.Testport.assertEqAt(dtSameRow(emon.Testport.testFileSpan(f, pos, s0), 512, ctr), 0, "async equals in-memory", line);
+                if (emon.Port.cellsAt(ctr, 0) > maxr) {
+                    maxr = emon.Port.cellsAt(ctr, 0);
+                }
+                if (emon.Port.blobU8(f, s0 + 1) == 111) {
+                    emon.Testport.assertThatAt(emon.Port.cellsAt(ctr, 3) > 0, "the object extents were hinted", line);
+                }
+            }
+            pos = e + 1;
+        }
+        emon.Testport.assertThat(rows > 100, "the real files were read");
+        emon.Testport.assertThat(maxr >= 4, "the big files took several rounds");
+    }
+    public static int dtSourceAsync(byte[] bytes, int chunk, StringBuilder t) {
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells ctr = emon.Port.newCells();
+        int status = dtOpenAsync(bytes, chunk, 1023, ar, dc, a, b, st, pg, ctr);
+        if (status != 0) {
+            return status;
+        }
+        Pdfdoc.pdSourceJson(t, dc, pg);
+        return 0;
+    }
+    public static void testTheSourceGoldensAreTheSameFromA512ByteAsyncSource() {
+        // P1.5's done-when: three (here five) fixtures give the same `Source`
+        // JSON from a 512-byte-chunk async source as from memory.
+        StringBuilder t1 = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        StringBuilder t3 = emon.Testport.newText();
+        StringBuilder t4 = emon.Testport.newText();
+        StringBuilder t5 = emon.Testport.newText();
+        emon.Testport.assertEq(dtSourceAsync(emon.Testport.testFile("pdf/minimal.pdf"), 512, t1), 0, "minimal opens");
+        emon.Testport.assertTextSpan(t1, emon.Testport.testFile("pdf/source/minimal.json"), 0, emon.Port.blobLen(emon.Testport.testFile("pdf/source/minimal.json")) - 1, "minimal", 0);
+        emon.Testport.assertEq(dtSourceAsync(emon.Testport.testFile("pdf/html-chrome.pdf"), 512, t2), 0, "chrome opens");
+        emon.Testport.assertTextSpan(t2, emon.Testport.testFile("pdf/source/html-chrome.json"), 0, emon.Port.blobLen(emon.Testport.testFile("pdf/source/html-chrome.json")) - 1, "html-chrome", 0);
+        emon.Testport.assertEq(dtSourceAsync(emon.Testport.testFile("pdf/gs-xrefstream.pdf"), 512, t3), 0, "ghostscript opens");
+        emon.Testport.assertTextSpan(t3, emon.Testport.testFile("pdf/source/gs-xrefstream.json"), 0, emon.Port.blobLen(emon.Testport.testFile("pdf/source/gs-xrefstream.json")) - 1, "gs-xrefstream", 0);
+        emon.Testport.assertEq(dtSourceAsync(emon.Testport.testFile("pdf/inherit.pdf"), 512, t4), 0, "inherit opens");
+        emon.Testport.assertTextSpan(t4, emon.Testport.testFile("pdf/source/inherit.json"), 0, emon.Port.blobLen(emon.Testport.testFile("pdf/source/inherit.json")) - 1, "inherit", 0);
+        emon.Testport.assertEq(dtSourceAsync(emon.Testport.testFile("pdf/boxes.pdf"), 512, t5), 0, "boxes opens");
+        emon.Testport.assertTextSpan(t5, emon.Testport.testFile("pdf/source/boxes.json"), 0, emon.Port.blobLen(emon.Testport.testFile("pdf/source/boxes.json")) - 1, "boxes", 0);
+    }
+    public static int dtObjectOn(emon.Port.Src pdf, int num, int kind, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells out, StringBuilder t) {
+        // `dt-object-row` on an open source: dump object num (kind 111) or
+        // decode it (115) into t, after opening the document.
+        int status = Pdfdoc.pdOpen(pdf, ar, dc, a, b, st);
+        int h = 0;
+        int s = 0;
+        if (status != 0) {
+            return status;
+        }
+        h = Pdfdoc.pdGet(pdf, ar, dc, a, b, st, num);
+        if (kind == 111) {
+            if (h == 0) {
+                emon.Port.textAscii(t, "!missing");
+            } else {
+                Pdflex.plDump(t, ar, h);
+            }
+        }
+        if (kind == 115) {
+            emon.Port.cellsDrop(out, 0);
+            if (h == 0) {
+                emon.Port.textAscii(t, "!missing");
+            } else {
+                s = Pdfdoc.pdStreamData(pdf, ar, dc, a, b, st, h, out);
+                Pdffilter.pfStatusEmitName(t, s);
+            }
+        }
+        return 0;
+    }
+    public static int dtObjectAsync(byte[] bytes, int chunk, int num, int kind, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells out, StringBuilder t) {
+        // The same through an async source: attempts that miss are thrown away
+        // (into a scratch sink) until one does not, then the answer is made once
+        // more on a fresh view of the now-resident cache, into t. -1 when that
+        // last run still missed.
+        emon.Port.Src base = emon.Testport.srcChunked(bytes, chunk, 0);
+        int round = 0;
+        int more = 1;
+        int opened = 0;
+        while (more == 1) {
+            emon.Port.Src v = emon.Testport.srcView(base);
+            StringBuilder scratch = emon.Testport.newText();
+            opened = dtObjectOn(v, num, kind, ar, dc, a, b, st, out, scratch);
+            if (Pdfsrc.psMissed(v)) {
+                emon.Testport.srcCtl(base, 0, round);
+                round += 1;
+                if (round > 40) {
+                    more = 0;
+                }
+            } else {
+                more = 0;
+            }
+        }
+        emon.Port.Src fin = emon.Testport.srcView(base);
+        opened = dtObjectOn(fin, num, kind, ar, dc, a, b, st, out, t);
+        if (Pdfsrc.psMissed(fin)) {
+            return -1;
+        }
+        return opened;
+    }
+    public static void testEveryObjectResolvesTheSameThroughAnAsyncSource() {
+        // Objects in object streams and decoded streams (Flate, LZW, ASCII85,
+        // RunLength, predictors), from 64-byte chunks: the stream spans are cut
+        // with `src-slice` and the object streams parsed through `src-of-cells`.
+        byte[] f = emon.Testport.testFile("pdf/objects-in-files.txt");
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        int n = emon.Port.blobLen(f);
+        int pos = 0;
+        int line = 0;
+        int rows = 0;
+        int e = 0;
+        int s0 = 0;
+        int s1 = 0;
+        int s2 = 0;
+        int s3 = 0;
+        int opened = 0;
+        int kind = 0;
+        while (pos < n) {
+            line += 1;
+            e = dtNl(f, pos);
+            if ((pos < e) && (emon.Port.blobU8(f, pos) != 35)) {
+                rows += 1;
+                s0 = dtTab(f, pos, e);
+                s1 = dtTab(f, s0 + 1, e);
+                s2 = dtTab(f, s1 + 1, e);
+                s3 = dtTab(f, s2 + 1, e);
+                kind = emon.Port.blobU8(f, s1 + 1);
+                StringBuilder t = emon.Testport.newText();
+                opened = dtObjectAsync(emon.Testport.testFileSpan(f, pos, s0), 64, dtDec(f, s0 + 1, s1), kind, ar, dc, a, b, st, out, t);
+                emon.Testport.assertEqAt(opened, 0, "the file opens, and the last run did not miss", line);
+                if (kind == 111) {
+                    emon.Testport.assertTextSpan(t, f, s3 + 1, e, "object", line);
+                }
+                if (kind == 115) {
+                    emon.Testport.assertTextSpan(t, f, s2 + 1, s3, "stream status", line);
+                    emon.Testport.assertEqAt(dtCompareHex(out, f, s3 + 1, e), -1, "decoded bytes", line);
+                }
+            }
+            pos = e + 1;
+        }
+        emon.Testport.assertThat(rows > 40, "the rows were read");
+    }
+    public static int dtM(emon.Port.Src s) {
+        if (Pdfsrc.psMissed(s)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static void testAColdSourceAnswersNeedBytesAndNoWarningAndNoPages() {
+        // Nothing resident: the first read misses, and what comes back is the
+        // status `need-bytes` (7), no warning bit and no page, even for the
+        // files whose real status is bad-xref or no-startxref, because the
+        // zeros the miss read are not a file's damage.
+        byte[] f = emon.Testport.testFile("pdf/fixtures.txt");
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        int n = emon.Port.blobLen(f);
+        int pos = 0;
+        int line = 0;
+        int rows = 0;
+        int missed = 0;
+        int e = 0;
+        int s0 = 0;
+        int status = 0;
+        while (pos < n) {
+            line += 1;
+            e = dtNl(f, pos);
+            if ((pos < e) && (emon.Port.blobU8(f, pos) != 35)) {
+                rows += 1;
+                s0 = dtTab(f, pos, e);
+                emon.Port.Src v = emon.Testport.srcView(emon.Testport.srcChunked(emon.Testport.testFileSpan(f, pos, s0), 64, 0));
+                status = dtOpen(v, ar, dc, a, b, st, pg);
+                if (dtM(v) == 1) {
+                    missed += 1;
+                    emon.Testport.assertEqAt(status, 7, "need-bytes", line);
+                    emon.Testport.assertEqAt(Pdfdoc.pdWarn(dc), 0, "no warning", line);
+                    emon.Testport.assertEqAt(Pdfdoc.pdPgCount(pg), 0, "no page", line);
+                }
+            }
+            pos = e + 1;
+        }
+        emon.Testport.assertThat(rows > 20, "the fixtures were read");
+        emon.Testport.assertThat(missed > 20, "nearly every file missed on a cold source");
+    }
+    public static void testANamedMissingChunkIsNeedBytesUntilItIsResident() {
+        byte[] f = emon.Testport.testFile("pdf/minimal.pdf");
+        emon.Port.Src base = emon.Testport.srcChunked(f, 64, 0);
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        int last = emon.Testport.srcCtl(base, 8, 0) - 1;
+        emon.Testport.assertThat(last > 4, "the fixture spans several chunks");
+        emon.Testport.srcCtl(base, 3, 0);
+        emon.Port.Src v = emon.Testport.srcView(base);
+        emon.Testport.assertEq(dtOpen(v, ar, dc, a, b, st, pg), 0, "opens with everything resident");
+        emon.Testport.assertEq(dtM(v), 0, "without a miss");
+        emon.Testport.assertEq(Pdfdoc.pdPgCount(pg), 1, "one page");
+        emon.Testport.srcCtl(base, 2, 0);
+        emon.Port.Src w = emon.Testport.srcView(base);
+        emon.Testport.assertEq(dtOpen(w, ar, dc, a, b, st, pg), 7, "the header's chunk is missing");
+        emon.Testport.assertEq(dtM(w), 1, "and the view says so");
+        emon.Testport.assertEq(Pdfdoc.pdWarn(dc), 0, "with no warning");
+        emon.Testport.assertEq(emon.Testport.srcCtl(base, 4, 0), 1, "one chunk is pending");
+        emon.Testport.srcCtl(base, 1, 0);
+        emon.Testport.srcCtl(base, 2, last);
+        emon.Port.Src x = emon.Testport.srcView(base);
+        emon.Testport.assertEq(dtOpen(x, ar, dc, a, b, st, pg), 7, "the last chunk (startxref) is missing");
+        emon.Testport.assertEq(dtM(x), 1, "and the view says so");
+        emon.Testport.srcCtl(base, 1, last);
+        emon.Port.Src y = emon.Testport.srcView(base);
+        emon.Testport.assertEq(dtOpen(y, ar, dc, a, b, st, pg), 0, "opens again once both are resident");
+        emon.Testport.assertEq(dtM(y), 0, "without a miss");
+        emon.Testport.assertEq(Pdfdoc.pdPgCount(pg), 1, "one page");
+    }
+    public static void testADamagedFileIsStillBadXrefOnceItsChunksAreResident() {
+        // badxref.pdf's real status is bad-xref. On a cold source the answer
+        // is need-bytes; only a run that read every byte it used may say bad-xref.
+        byte[] f = emon.Testport.testFile("pdf/badxref.pdf");
+        emon.Port.Src base = emon.Testport.srcChunked(f, 64, 0);
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells ctr = emon.Port.newCells();
+        emon.Port.Src v = emon.Testport.srcView(base);
+        emon.Testport.assertEq(dtOpen(v, ar, dc, a, b, st, pg), 7, "cold: need-bytes");
+        emon.Testport.assertEq(dtM(v), 1, "missed");
+        emon.Testport.assertEq(dtOpenAsync(f, 64, 1023, ar, dc, a, b, st, pg, ctr), 3, "warm: bad-xref");
+        emon.Testport.assertThat(emon.Port.cellsAt(ctr, 0) >= 1, "it took a round");
+    }
+    public static int dtSameSync(byte[] bytes, emon.Port.Cells ctr) {
+        // Open in memory and through a SYNC chunked source: 0 when the arena,
+        // the document and the page table are the same and the view never
+        // missed; the chunks filled inline are left in ctr[0].
+        emon.Port.Cells ar1 = emon.Port.newCells();
+        emon.Port.Cells dc1 = emon.Port.newCells();
+        emon.Port.Cells a1 = emon.Port.newCells();
+        emon.Port.Cells b1 = emon.Port.newCells();
+        emon.Port.Cells st1 = emon.Port.newCells();
+        emon.Port.Cells pg1 = emon.Port.newCells();
+        emon.Port.Cells ar2 = emon.Port.newCells();
+        emon.Port.Cells dc2 = emon.Port.newCells();
+        emon.Port.Cells a2 = emon.Port.newCells();
+        emon.Port.Cells b2 = emon.Port.newCells();
+        emon.Port.Cells st2 = emon.Port.newCells();
+        emon.Port.Cells pg2 = emon.Port.newCells();
+        emon.Port.Src base = emon.Testport.srcChunked(bytes, 64, 1);
+        emon.Port.Src v = emon.Testport.srcView(base);
+        emon.Port.Src mem = emon.Port.srcOfBlob(bytes);
+        int s1 = dtOpen(mem, ar1, dc1, a1, b1, st1, pg1);
+        int s2 = dtOpen(v, ar2, dc2, a2, b2, st2, pg2);
+        emon.Port.cellsDrop(ctr, 0);
+        emon.Port.cellsPush(ctr, emon.Testport.srcCtl(base, 7, 0));
+        if (s1 != s2) {
+            return 1;
+        }
+        if (Pdfsrc.psMissed(v)) {
+            return 5;
+        }
+        if (dtDiff(ar1, ar2) != -1) {
+            return 2;
+        }
+        if (dtDiff(dc1, dc2) != -1) {
+            return 3;
+        }
+        if (dtDiff(pg1, pg2) != -1) {
+            return 4;
+        }
+        return 0;
+    }
+    public static void testASyncSourceIsTheInMemoryRunWithNoRounds() {
+        emon.Port.Cells ctr = emon.Port.newCells();
+        emon.Testport.assertEq(dtSameSync(emon.Testport.testFile("pdf/minimal.pdf"), ctr), 0, "minimal");
+        emon.Testport.assertThat(emon.Port.cellsAt(ctr, 0) > 0, "chunks were filled inline");
+        emon.Testport.assertEq(dtSameSync(emon.Testport.testFile("pdf/gs-xrefstream.pdf"), ctr), 0, "xref stream and object streams");
+        emon.Testport.assertEq(dtSameSync(emon.Testport.testFile("pdf/html-chrome.pdf"), ctr), 0, "chrome");
+        emon.Testport.assertEq(dtSameSync(emon.Testport.testFile("pdf/incremental.pdf"), ctr), 0, "incremental");
+        emon.Testport.assertEq(dtSameSync(emon.Testport.testFile("pdf/badxref.pdf"), ctr), 0, "a damaged file");
     }
 }

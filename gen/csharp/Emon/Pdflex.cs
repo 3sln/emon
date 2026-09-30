@@ -32,6 +32,9 @@ public static class Pdflex {
     public static int PlBadStream() {
         return 8;
     }
+    public static int PlNeedBytes() {
+        return 9;
+    }
     public static int PlStatusEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "ok");
@@ -67,6 +70,10 @@ public static class Pdflex {
         }
         if (code == 8) {
             emon.Port.TextAscii(t, "bad-stream");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.TextAscii(t, "need-bytes");
             return 1;
         }
         return 0;
@@ -408,6 +415,12 @@ public static class Pdflex {
         }
         return 0;
     }
+    internal static int PlMiss(emon.Port.Cells ar) {
+        // The source missed: what was read is not to be trusted. Latch
+        // `need-bytes` over whatever garbage error the zeros made, answer 0.
+        emon.Port.CellsSet(ar, AErr, 9);
+        return 0;
+    }
     internal static int PlWarnSet(emon.Port.Cells ar, int bit) {
         int w = emon.Port.CellsAt(ar, AWarn);
         if (((w / bit) & 1) == 0) {
@@ -697,17 +710,36 @@ public static class Pdflex {
         }
         return -1;
     }
-    public static int PlSkip(byte[] src, int from, int end) {
+    internal static int PlStalled(emon.Port.Src src, int p) {
+        // 1 when a LONG SCAN at index p should give up: the source has missed.
+        // Checked every 1 KiB. Zeros, which is what a miss reads, are white
+        // space to this lexer, so without it a scan would run to the end of the
+        // source over bytes that have not arrived, and ask for all of them (D058:
+        // an attempt stops at its first checkpoint after the miss).
+        if ((p & 1023) == 0) {
+            if (Pdfsrc.PsMissed(src)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    public static int PlSkip(emon.Port.Src src, int from, int end) {
         // The first index >= from that is neither white space nor inside a
         // comment (`%` to the end of the line), or end.
         int p = from;
         int c = 0;
         while (p < end) {
             c = Pdfsrc.PsU8(src, p);
+            if (PlStalled(src, p) == 1) {
+                return end;
+            }
             if (PlIsWs(c) == 1) {
                 p += 1;
             } else if (c == 37) {
                 while ((p < end) && (Pdfsrc.PsU8(src, p) != 10) && (Pdfsrc.PsU8(src, p) != 13)) {
+                    if (PlStalled(src, p) == 1) {
+                        return end;
+                    }
                     p += 1;
                 }
             } else {
@@ -716,7 +748,7 @@ public static class Pdflex {
         }
         return p;
     }
-    public static int PlKwAt(byte[] src, int p, int end, int id) {
+    public static int PlKwAt(emon.Port.Src src, int p, int end, int id) {
         // 1 when the bytes of keyword `id` (an `emon.pdfnames` `pk` code)
         // are at p. No delimiter check: `endstream` is found inside data.
         int start = Pdfnames.PkSpan[(id - 1) * 2 + 0];
@@ -733,7 +765,7 @@ public static class Pdflex {
         }
         return 1;
     }
-    internal static int PlKwIdOf(byte[] src, int s, int n) {
+    internal static int PlKwIdOf(emon.Port.Src src, int s, int n) {
         // The `pk` id of the keyword in src[s, s+n), 0 for any other.
         int row = 0;
         int k = 0;
@@ -779,7 +811,7 @@ public static class Pdflex {
         PlFail(ar, code);
         return PlTok(ar, 12, s, e, 0, 0, 0);
     }
-    internal static int PlLexNumber(byte[] src, emon.Port.Cells ar, int s, int end) {
+    internal static int PlLexNumber(emon.Port.Src src, emon.Port.Cells ar, int s, int end) {
         // A number starting at s, or 0 (nothing consumed) when it is not one.
         // Tolerated: several signs (`--5` is -5), `.5`, `5.`, and trailing
         // junk (`12abc` is 12 and then `abc`). Integers saturate at 2^31-1;
@@ -845,7 +877,7 @@ public static class Pdflex {
         }
         return PlTok(ar, 2, s, q, m, scale, 0);
     }
-    internal static int PlLexName(byte[] src, emon.Port.Cells ar, int s, int end) {
+    internal static int PlLexName(emon.Port.Src src, emon.Port.Cells ar, int s, int end) {
         // A name; s is the index of the byte AFTER the slash. `#xx` becomes
         // a byte when two hex digits follow, else the `#` is kept.
         int q = s;
@@ -869,7 +901,7 @@ public static class Pdflex {
         int e = PlInternEnd(ar);
         return PlTok(ar, 3, s - 1, q, e, emon.Port.CellsAt(ar, e + 1), 0);
     }
-    internal static int PlLexLit(byte[] src, emon.Port.Cells ar, int s, int end) {
+    internal static int PlLexLit(emon.Port.Src src, emon.Port.Cells ar, int s, int end) {
         // A literal string; s is the index of the byte AFTER the `(`.
         // Escapes \n \r \t \b \f \( \) \\ and \ddd (one to three octal
         // digits, high bits dropped); a backslash before an end of line is a
@@ -884,6 +916,10 @@ public static class Pdflex {
         while (q < end) {
             c = Pdfsrc.PsU8(src, q);
             q += 1;
+            if (PlStalled(src, q) == 1) {
+                emon.Port.CellsDrop(ar, start);
+                return 12;
+            }
             if (c == 92) {
                 if (q >= end) {
                     PlTokErr(ar, s - 1, end, 3);
@@ -941,7 +977,7 @@ public static class Pdflex {
         PlTokErr(ar, s - 1, end, 3);
         return 12;
     }
-    internal static int PlLexHex(byte[] src, emon.Port.Cells ar, int s, int end) {
+    internal static int PlLexHex(emon.Port.Src src, emon.Port.Cells ar, int s, int end) {
         // A hex string; s is the index of the byte AFTER the `<`. White space
         // and any non-hex byte are ignored; an odd last digit is followed by 0.
         int start = emon.Port.CellsLen(ar);
@@ -952,6 +988,10 @@ public static class Pdflex {
         while (q < end) {
             c = Pdfsrc.PsU8(src, q);
             q += 1;
+            if (PlStalled(src, q) == 1) {
+                emon.Port.CellsDrop(ar, start);
+                return 12;
+            }
             if (c == 62) {
                 if (half >= 0) {
                     emon.Port.CellsPush(ar, half * 16);
@@ -972,7 +1012,7 @@ public static class Pdflex {
         PlTokErr(ar, s - 1, end, 3);
         return 12;
     }
-    public static int PlLex(byte[] src, emon.Port.Cells ar) {
+    public static int PlLex(emon.Port.Src src, emon.Port.Cells ar) {
         // The next token: answers its kind (T_*) and leaves its values in the
         // header. At the end of input, T_EOF. A lexical error (an unterminated
         // string) is T_ERR with the status latched.
@@ -1054,7 +1094,7 @@ public static class Pdflex {
         }
         return 0;
     }
-    internal static int PlArrayStep(byte[] src, emon.Port.Cells ar, int arr) {
+    internal static int PlArrayStep(emon.Port.Src src, emon.Port.Cells ar, int arr) {
         // One element of an array: 0 carry on, 1 the array is complete, 2 failed.
         int tk = PlLex(src, ar);
         int v = 0;
@@ -1080,7 +1120,7 @@ public static class Pdflex {
         PlAddChild(ar, arr, v);
         return 0;
     }
-    internal static int PlArray(byte[] src, emon.Port.Cells ar) {
+    internal static int PlArray(emon.Port.Src src, emon.Port.Cells ar) {
         // After `[`: the elements up to `]`. Answers the array, or 0.
         int arr = PlNew(ar, 6, 0, 0, 0);
         int st = 0;
@@ -1092,7 +1132,7 @@ public static class Pdflex {
         }
         return arr;
     }
-    internal static int PlDictStep(byte[] src, emon.Port.Cells ar, int d) {
+    internal static int PlDictStep(emon.Port.Src src, emon.Port.Cells ar, int d) {
         // One key/value pair of a dictionary: 0 carry on, 1 the dictionary is
         // complete, 2 failed. A key that is not a name is skipped (with its
         // value, if it starts one); a key with no value gets null.
@@ -1157,7 +1197,7 @@ public static class Pdflex {
         PlAddChild(ar, d, v);
         return 0;
     }
-    internal static int PlDict(byte[] src, emon.Port.Cells ar) {
+    internal static int PlDict(emon.Port.Src src, emon.Port.Cells ar) {
         // After `<<`: the pairs up to `>>`. Answers the dictionary, or 0.
         int d = PlNew(ar, 7, 0, 0, 0);
         int st = 0;
@@ -1169,7 +1209,7 @@ public static class Pdflex {
         }
         return d;
     }
-    internal static int PlRefOrInt(byte[] src, emon.Port.Cells ar, int num) {
+    internal static int PlRefOrInt(emon.Port.Src src, emon.Port.Cells ar, int num) {
         // An integer has just been read. `num 0 R` is a reference: look
         // ahead two tokens, and only if a digit follows, so a string or a
         // dictionary is never lexed twice.
@@ -1201,7 +1241,7 @@ public static class Pdflex {
         emon.Port.CellsSet(ar, APos, after);
         return PlNew(ar, 2, num, 0, 0);
     }
-    internal static int PlValue(byte[] src, emon.Port.Cells ar, int tk) {
+    internal static int PlValue(emon.Port.Src src, emon.Port.Cells ar, int tk) {
         // The object whose first token `tk` has just been lexed, or 0.
         int ta = emon.Port.CellsAt(ar, ATa);
         int tb = emon.Port.CellsAt(ar, ATb);
@@ -1262,16 +1302,20 @@ public static class Pdflex {
         }
         return PlFail(ar, 2);
     }
-    public static int PlParse(byte[] src, emon.Port.Cells ar) {
+    public static int PlParse(emon.Port.Src src, emon.Port.Cells ar) {
         // Parse one object at the current position. Answers its handle, or 0
         // with `(pl-err ar)` set. A keyword that is not true, false or null
         // (an operator, or `endobj`) answers a keyword object, so a content
         // stream can be read as operands followed by one.
         emon.Port.CellsSet(ar, ADepth, 0);
         int tk = PlLex(src, ar);
-        return PlValue(src, ar, tk);
+        int v = PlValue(src, ar, tk);
+        if (Pdfsrc.PsMissed(src)) {
+            return PlMiss(ar);
+        }
+        return v;
     }
-    internal static int PlFindEndstream(byte[] src, int from, int end) {
+    internal static int PlFindEndstream(emon.Port.Src src, int from, int end) {
         // The index of the first `endstream` at or after from, or -1.
         int i = from;
         while (i < end) {
@@ -1280,11 +1324,14 @@ public static class Pdflex {
                     return i;
                 }
             }
+            if (PlStalled(src, i) == 1) {
+                return -1;
+            }
             i += 1;
         }
         return -1;
     }
-    internal static int PlFindEndobj(byte[] src, int from, int end) {
+    internal static int PlFindEndobj(emon.Port.Src src, int from, int end) {
         int i = from;
         while (i < end) {
             if (Pdfsrc.PsU8(src, i) == 101) {
@@ -1292,11 +1339,14 @@ public static class Pdflex {
                     return i;
                 }
             }
+            if (PlStalled(src, i) == 1) {
+                return -1;
+            }
             i += 1;
         }
         return -1;
     }
-    internal static int PlScan(byte[] src, emon.Port.Cells ar, int start, int end) {
+    internal static int PlScan(emon.Port.Src src, emon.Port.Cells ar, int start, int end) {
         // The data length of a stream starting at `start`, found by scanning for
         // `endstream` (none: `endobj`, none: the end), with one end of line
         // before it dropped. The index after what the scan found is left in the
@@ -1325,7 +1375,7 @@ public static class Pdflex {
         emon.Port.CellsSet(ar, ATb, after);
         return z - start;
     }
-    public static int PlStreamRescan(byte[] src, emon.Port.Cells ar, int sh) {
+    public static int PlStreamRescan(emon.Port.Src src, emon.Port.Cells ar, int sh) {
         // Find a stream's length by scanning, for the caller that could not use
         // an indirect /Length: sets the length and marks it scanned (flags 1).
         int start = emon.Port.CellsAt(ar, sh + RB);
@@ -1335,7 +1385,7 @@ public static class Pdflex {
         PlWarnSet(ar, 4);
         return dlen;
     }
-    internal static int PlStream(byte[] src, emon.Port.Cells ar, int dict) {
+    internal static int PlStream(emon.Port.Src src, emon.Port.Cells ar, int dict) {
         // After the `stream` keyword: the data span. The keyword is followed
         // by CRLF or LF (a lone CR, and spaces before the end of line, are
         // tolerated and noted). A direct /Length is trusted only when
@@ -1404,11 +1454,8 @@ public static class Pdflex {
         emon.Port.CellsSet(ar, sh + RD, flags);
         return sh;
     }
-    public static int PlParseIndirect(byte[] src, emon.Port.Cells ar, int pos) {
-        // Parse `N G obj <object> [stream ... endstream] endobj` at pos.
-        // Answers the object (a stream object when there is a stream) and
-        // leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched
-        // otherwise. The position after it is `pl-pos`.
+    internal static int PlParseIndirectRun(emon.Port.Src src, emon.Port.Cells ar, int pos) {
+        // `pl-parse-indirect` without its checkpoint.
         emon.Port.CellsSet(ar, APos, PlClamp(pos, emon.Port.CellsAt(ar, AEnd)));
         emon.Port.CellsSet(ar, AErr, 0);
         emon.Port.CellsSet(ar, ADepth, 0);
@@ -1456,6 +1503,19 @@ public static class Pdflex {
         if ((tk != 11) || (emon.Port.CellsAt(ar, ATc) != KEndobj)) {
             PlWarnSet(ar, 16);
             PlUnread(ar);
+        }
+        return v;
+    }
+    public static int PlParseIndirect(emon.Port.Src src, emon.Port.Cells ar, int pos) {
+        // Parse `N G obj <object> [stream ... endstream] endobj` at pos.
+        // Answers the object (a stream object when there is a stream) and
+        // leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched
+        // otherwise. The position after it is `pl-pos`. A CHECKPOINT (D058):
+        // when a read of `src` missed, the answer is 0 and the error
+        // `need-bytes`, whatever the zeros looked like.
+        int v = PlParseIndirectRun(src, ar, pos);
+        if (Pdfsrc.PsMissed(src)) {
+            return PlMiss(ar);
         }
         return v;
     }

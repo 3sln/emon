@@ -117,6 +117,136 @@ pub fn cells_bytes(c: &Cells) -> Vec<u8> {
     c.v.iter().map(|&x| x as u8).collect()
 }
 
+// ---------------------------------------------------------------- the Src
+//
+// AN INPUT BYTE SOURCE AS KIN SEES IT (SPEC 7.2 and 13.1, D058 revised). A
+// `Src` is a per-unit VIEW over a backing: the host's per-input chunk cache,
+// or (`src_of_blob`, `src_of_cells`) plain bytes in memory. It answers the
+// same questions as a `Blob` and adds one: a read may MISS.
+//
+// `src_u8` of a byte whose chunk is resident answers it. A backing that
+// cannot answer yet (an async source: a browser `Blob`, a URL) records the
+// missed chunk itself, answers "not resident", and the view then sets its
+// MISSED FLAG (sticky, for this view only) and answers 0. kin checks
+// `src_missed` at its checkpoints and stops; the host fetches what the
+// backing recorded and re-runs the unit on a FRESH VIEW (`Src::view`) of the
+// same backing. A sync backing fills a chunk inline and never misses. The
+// backing's cache only grows between attempts, never during one, which is
+// what makes a miss-free attempt identical to the in-memory run.
+//
+// `src_slice` is a SNAPSHOT of a span as a `Blob` (like `cells_bytes`, so in
+// Rust the template borrows a temporary: nest it in the call that uses it). A
+// span with a non-resident part sets the missed flag and its bytes there are
+// 0. `src_of_blob` and `src_of_cells` COPY, so the source outlives its
+// argument. An index or span outside 0..len panics, as a `Blob`'s does.
+pub trait SrcBacking: Send + Sync {
+    fn len(&self) -> i32;
+    // The byte 0..255, or -1 when it is not resident (the backing records the miss).
+    fn at(&self, i: i32) -> i32;
+    // Fill buf with the bytes from s; false when any are not resident (recorded).
+    fn span(&self, s: i32, buf: &mut [u8]) -> bool;
+    // A prefetch hint: bytes [s, e) will be wanted. May be ignored.
+    fn hint(&self, s: i32, e: i32);
+    // For the test sources' control surface (`testport`): the concrete backing.
+    fn as_any(&self) -> &dyn std::any::Any;
+}
+
+struct MemBacking {
+    v: Vec<u8>,
+}
+
+impl SrcBacking for MemBacking {
+    fn len(&self) -> i32 {
+        self.v.len() as i32
+    }
+    fn at(&self, i: i32) -> i32 {
+        self.v[i as usize] as i32
+    }
+    fn span(&self, s: i32, buf: &mut [u8]) -> bool {
+        let s = s as usize;
+        buf.copy_from_slice(&self.v[s..s + buf.len()]);
+        true
+    }
+    fn hint(&self, _s: i32, _e: i32) {}
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+pub struct Src {
+    b: std::sync::Arc<dyn SrcBacking>,
+    missed: std::sync::atomic::AtomicBool,
+}
+
+impl Src {
+    pub fn new(b: std::sync::Arc<dyn SrcBacking>) -> Src {
+        Src { b, missed: std::sync::atomic::AtomicBool::new(false) }
+    }
+    pub fn of_bytes(v: Vec<u8>) -> Src {
+        Src::new(std::sync::Arc::new(MemBacking { v }))
+    }
+    // A fresh view of the same backing: the missed flag is clear.
+    pub fn view(&self) -> Src {
+        Src::new(self.b.clone())
+    }
+    pub fn missed(&self) -> bool {
+        self.missed.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    pub fn backing(&self) -> &dyn SrcBacking {
+        &*self.b
+    }
+}
+
+// @kin:link:form:src-len: {:template "crate::port::src_len({0})" :arity 1}
+pub fn src_len(s: &Src) -> i32 {
+    s.b.len()
+}
+
+// @kin:link:form:src-u8: {:template "crate::port::src_u8({0}, {1})" :arity 2}
+pub fn src_u8(s: &Src, i: i32) -> i32 {
+    if i < 0 || i >= s.b.len() {
+        panic!("source index {} is outside 0..{}", i, s.b.len());
+    }
+    let v = s.b.at(i);
+    if v < 0 {
+        s.missed.store(true, std::sync::atomic::Ordering::Relaxed);
+        return 0;
+    }
+    v
+}
+
+// @kin:link:form:src-missed: {:template "crate::port::src_missed({0})" :arity 1}
+pub fn src_missed(s: &Src) -> bool {
+    s.missed()
+}
+
+// @kin:link:form:src-slice: {:template "(&crate::port::src_slice({0}, {1}, {2})[..])" :arity 3}
+pub fn src_slice(s: &Src, a: i32, b: i32) -> Vec<u8> {
+    if a < 0 || b < a || b > s.b.len() {
+        panic!("source span {}..{} is outside 0..{}", a, b, s.b.len());
+    }
+    let mut buf = vec![0u8; (b - a) as usize];
+    if !s.b.span(a, &mut buf) {
+        s.missed.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    buf
+}
+
+// @kin:link:form:src-of-cells: {:template "(&crate::port::src_of_cells({0}))" :arity 1}
+pub fn src_of_cells(c: &Cells) -> Src {
+    Src::of_bytes(c.v.iter().map(|&x| x as u8).collect())
+}
+
+// @kin:link:form:src-of-blob: {:template "(&crate::port::src_of_blob({0}))" :arity 1}
+pub fn src_of_blob(b: &[u8]) -> Src {
+    Src::of_bytes(b.to_vec())
+}
+
+// @kin:link:form:src-hint: {:template "crate::port::src_hint({0}, {1}, {2})" :arity 3}
+pub fn src_hint(s: &Src, a: i32, b: i32) {
+    s.b.hint(a, b);
+}
+
 // ---------------------------------------------------------------- the Text sink
 //
 // THE FORMAT IS KIN'S AND THE HOST ONLY APPENDS (SPEC 6.3.1). Three appends

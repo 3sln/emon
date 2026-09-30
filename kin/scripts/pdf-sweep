@@ -41,13 +41,14 @@ fn main() {
             let mut ar = port::Cells::new(); let mut dc = port::Cells::new();
             let mut a = port::Cells::new(); let mut b = port::Cells::new();
             let mut st = port::Cells::new(); let mut pg = port::Cells::new();
-            let status = pd_open(&data, &mut ar, &mut dc, &mut a, &mut b, &mut st);
+            let src = port::Src::of_bytes(data.clone());
+            let status = pd_open(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st);
             let mut t = String::new();
             pd_status_emit_name(&mut t, status);
             let mut n = 0;
             let mut h: i64 = 0;
             if status == 0 {
-                n = pd_pages(&data, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg);
+                n = pd_pages(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg);
                 for i in 0..n {
                     let mut vals = vec![];
                     for k in 0..4 { vals.push(pd_pg_media(&mut pg, i, k)); }

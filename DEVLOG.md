@@ -40,7 +40,7 @@ and in the phase item both.
    and laws in `bb unit`.
 
 After these: P1.2 (canonical JSON) → P1.10 in order (P1.11, the `Src`
-port of D058, goes in before P1.4/P1.5 close), which completes the
+port of D058, went in before P1.4/P1.5 closed: done), which completes the
 first vertical slice (a born-digital PDF's text layer → Model → JSON and
 HTML, on the Rust host). P0.7/P0.8 are hygiene and can be taken by anyone
 between items.
@@ -356,8 +356,25 @@ analysis beyond "top-to-bottom lines on a single column".
   dumper). Not modelled yet: contour polygons, annotations, the structure-tree
   mapping (D056). Commit: pending (D037).
 
-- [ ] **P1.11 — The `Src` port** (D058 revised, SPEC §13.1; take BEFORE
-  P1.4/P1.5 close). *Brief*: tag `Src` in `emon.lang` (four `:types`, Go
+- [x] **P1.11 — The `Src` port** (D058 revised, SPEC §13.1; take BEFORE
+  P1.4/P1.5 close).
+  *Done (P1.11)*: tag `Src` in `emon.lang` (Rust `&crate::port::Src`, a shared
+  borrow over an `Arc<dyn SrcBacking>` and an atomic missed flag; Go `*port.Src`;
+  Java `emon.Port.Src`; C# `emon.Port.Src`; Go `:zero nil`). Forms `src-len`,
+  `src-u8`, `src-missed` (a `Bool`), `src-slice`, `src-of-cells`, `src-of-blob`,
+  `src-hint` in all four `host/*/port.*`, with an interface the chunk cache
+  implements (`SrcBacking`: `len`, `at`, `span`, `hint`; a plain in-memory one is
+  built in) and `Src::view()`, a fresh view of the same backing, for the engine's
+  re-run (P1.10). Test source in all four `host/*/testport.*`: `test-src-chunked
+  blob chunk sync`, `test-src-view`, `test-src-ctl` (fetch with doubling
+  read-ahead, make resident, evict, pending, counts, hints). `kin/porttest.kin`
+  exercises the in-memory forms in `bb check` (one answer on four targets);
+  `kin/srctest.kin` (9 laws) exercises every form, a miss included: a miss
+  answers 0 and sets a sticky per-view flag, a span over a missing chunk is zero
+  there, the cache grows between attempts, a fresh view starts clean, a sync
+  source never misses, named chunks can be evicted, read-ahead doubles, hints
+  are accepted. The engine's own backing (P1.10) implements `SrcBacking`. D067.
+  *Brief*: tag `Src` in `emon.lang` (four `:types`, Go
   `:zero`); forms `src-len`, `src-u8`, `src-missed`, `src-slice` (span →
   `Blob` snapshot), `src-of-cells`, `src-of-blob`, `src-hint` in all four
   `host/*/port.*`, over a per-input chunk cache (64 KiB) with a per-unit
@@ -376,9 +393,21 @@ analysis beyond "top-to-bottom lines on a single column".
   are read by kin on all four targets; the fuzz law cuts `minimal.pdf` at every
   length (a real shorter blob each time) and parses tokens and an indirect object at
   every line start; `bb unit` 94 laws on four targets, broken laws fail on all four.
-  NOT done: D058's `Src` checklist below (steps 1-8) and its chunked-source law,
-  which wait for P1.11's `Src`; `pdfsrc` already cites D058 and every read is through it.
-  *Input (D058 revised) — checklist, in order, for `pdfsrc`/`pdflex`/`pdfdoc`*:
+  *Done (P1.11 retag)*: D058's checklist below, all nine steps (D067, D068):
+  `ps-len`/`ps-u8` are `Src`; `ps-missed` and `ps-hint` are added, and `ps-slice`
+  and `ps-of-cells` are the port forms `src-slice` and `src-of-cells`, not
+  functions (Rust cannot return a borrow of what a function made; D067); every
+  `^Blob src` in pdflex/pdfdoc is `^Src`; object streams parse through
+  `src-of-cells` and filter input is cut by `src-slice`; `need-bytes` is a status
+  of `pd`, `pl` and `pf`; checkpoints and the check-before-classify rule (D068);
+  no state outside the caller's Cells; object extents are hinted once the xref is
+  read; 18 new laws (srctest, and the async laws in `pdfdoctest`) incl. the
+  512-byte async-source law over `test/pdf/corpus.txt`, identical to in-memory
+  cell for cell. The real-file results are unchanged: all 3,689 PDFs under
+  `corpus/` give the same status, page count, digest and warning bits as before
+  (status counts 3672 ok, 12 encrypted, 3 bad-xref, 1 no-startxref, 1 no-pages).
+  *Input (D058 revised) — checklist, in order, for `pdfsrc`/`pdflex`/`pdfdoc`
+  (all done; kept for the record)*:
   1. After P1.11: in `pdfsrc.kin` retag `ps-len`/`ps-u8` to `^Src`; add
      `ps-missed`, `ps-slice src s e` (→ `Blob`), `ps-of-cells`, `ps-hint`;
      cite D058 (not D052) in its header.
@@ -432,10 +461,13 @@ analysis beyond "top-to-bottom lines on a single column".
   a wrong checksum, a double `FlateDecode` over 12 bytes, garbage headers). 190 real
   LZW/ASCII85/ASCIIHex/RunLength/Flate streams and 47 PNG-predictor streams are
   byte-identical to independent Python decoders. Opening all 4,000 takes 64 ms of
-  parsing in release. NOT done: D058's chunked-source law (needs P1.11's `Src`).
-  *Input (D058 revised)*: P1.4's checklist covers `pdfdoc` too (steps 2–7).
+  parsing in release. D058's chunked-source law is done (P1.11): all fixtures, the
+  five `Source` goldens, the object/stream rows and every committed real-file row
+  equal the in-memory run through a 512-byte-chunk (64 for the tiny fixtures)
+  async test source.
+  *Input (D058 revised)*: P1.4's checklist covers `pdfdoc` too (steps 2–7): done.
   *Done when* also: the three fixtures give the same `Source` JSON from a
-  512-byte-chunk async test source as from memory.
+  512-byte-chunk async test source as from memory: met.
   *Brief*: `startxref` → classic xref table *and* xref streams (with
   `/W`, `/Index`, predictors) → object lookup (with object streams
   `/ObjStm`); trailer → catalog → page tree with inherited attributes
@@ -503,7 +535,9 @@ analysis beyond "top-to-bottom lines on a single column".
   adapters for `&[u8]`/`Vec<u8>`, `Read + Seek` and `Read` (spooled);
   `Input { source, password: Option<..> }`; the Engine takes one `Input` or a
   list and gives kin a `Src` per input (P1.11; input-bytes limit checked
-  against `len()` first; a short or changed read is `source-changed`). The
+  against `len()` first; a short or changed read is `source-changed`; the host
+  half of a `Src` exists since P1.11: implement `SrcBacking` over the chunk cache
+  and make each attempt's `Src` with `Src::view()`). The
   engine loop runs each unit, and on `need-bytes` fetches the missed ranges
   (doubling read-ahead, coalesced, `FETCH_ROUNDS`) and re-runs it (D058
   revised) — with an async-simulating source in Rust, since Rust's real
@@ -1778,6 +1812,78 @@ any list of files; no gate runs these scripts, the committed files are the truth
 only way to know it.
 **Alternatives**: committing corpus PDFs (licences); comparing text instead of
 boxes (P1.6+).
+- [ ] **Signed off** (maintainer)
+
+### D067 — The `Src` port: a shared borrow over a backing, forms not functions for what makes one, a test source with a control surface
+**Decision** (P1.11, D058 revised). (1) In Rust a `Src` is `&crate::port::Src`: a
+shared borrow whose state is interior (an atomic missed flag; the backing is an
+`Arc<dyn SrcBacking>`), so one source can be passed to any number of calls and
+to two parameters of one call, which `Cells`' `&mut` cannot. Go `*port.Src`,
+Java and C# a class. (2) Every host implements one interface for the chunk cache
+(`SrcBacking`: `len`, `at` answering -1 for a non-resident byte and recording the
+miss itself, `span`, `hint`); the view (`Src`) turns -1 into "answer 0, set the
+flag". `view()` makes a fresh view of the same backing, which is what the engine
+does per attempt. `src-slice` of a span with a non-resident part zero-fills it
+and sets the flag; an index or span outside 0..len panics/throws like a `Blob`.
+`src-of-blob` and `src-of-cells` copy. (3) **`ps-slice` and `ps-of-cells` are the
+port forms `src-slice` and `src-of-cells`, not `emon.pdfsrc` functions**: a Rust
+function cannot return a borrow of what it made (`Blob` is `&[u8]`, `Src` is
+`&Src`), so both are templates that borrow a temporary, like `cells-bytes` (nest
+them in the call that uses them, or bind a `Src` with `let`, which Rust extends).
+`emon.pdfsrc` wraps only `ps-len`, `ps-u8`, `ps-missed`, `ps-hint`; `pdflex`'s
+input is `ps-*`, `pdfdoc` refers `src-slice`/`src-of-cells` from `emon.port`
+for its two uses. (4) `pdffilter` reads `Blob`s with `blob-u8`/`blob-len`, no
+longer through `pdfsrc` (its input is decoded bytes in memory, D058). (5) The test
+source is `test-src-chunked blob chunk sync` (none resident; sync fills inline,
+async records the chunk as pending and misses), `test-src-view`, and one control
+form `test-src-ctl src op a` (fetch with read-ahead 2^round - 1 chunks each
+side, make resident, evict a named chunk, make all resident, and counts of
+pending, resident, hints, inline fills and chunks). Hints are counted, not
+applied: applying them is the engine's (P1.10). The fetch policy in the test
+source is the engine's: doubling per round.
+**Why**: forced by Rust's borrow rules for (1) and (3); (2) keeps the four hosts
+to one small interface the engine can implement over a browser `Blob`, a URL or a
+file; (5) makes "a miss" testable on four targets with no I/O.
+**Alternatives**: an owned `Src` by value (not `Copy`: every second use would
+clone); a function `ps-slice` returning a leaked or cached buffer (memory per
+slice); one form per test operation (nine forms four times; one control form
+instead).
+- [ ] **Signed off** (maintainer)
+
+### D068 — The PDF layer under a source that misses: checkpoints, `need-bytes`, check-before-classify, bounded garbage, hints
+**Decision** (P1.11 retag, D058). (1) `need-bytes` is a status of `pd-status` (7),
+`pl-status` (9, latched by `pl-miss`, which `pl-parse` and `pl-parse-indirect`
+call when the view has missed) and `pf-status` (12). (2) Checkpoints: after each
+indirect object (`pl-parse-indirect`, `pl-parse`), each xref table entry, trailer
+and stream section, the `/XRefStm`, each cross-reference section of the chain,
+each object load (`pd-get` does not cache what may be zeros), every
+filter-chain run (before and after the stream span), each page-tree node and
+kid, and `pd-pages` (answers -1 on a miss). (3) Nothing is classified from a
+miss: every `bad-xref`, `no-header`, `no-startxref`, `no-root` goes through
+`pd-stop src status` (answers `need-bytes` if the view missed), `pd-unreadable`
+checks first, and `pd-warn-set` sets no bit on a missed view. The invariant the
+laws hold: an attempt that missed answers only `need-bytes` (or `ok`, when the
+miss was after the open) and only warning bits the real run has. (4) GARBAGE IS
+BOUNDED: zeros, which a miss reads, are white space to the lexer, so a scan
+would run to the end of the source asking for all of it. `pl-stalled` (checked
+every 1 KiB) stops the white-space/comment skip, literal and hex strings,
+and the `endstream`/`endobj` scans at the first sign of a miss, and the
+`startxref` search does not go on to its 64 KiB fallback after a miss.
+Without it the 512-byte law over the corpus took 11 s in release, with it 0.45 s.
+(5) Hints: once the xref is read, `pd-hint-extents` hints every in-use object's
+extent (its offset to the next larger offset, or the end), sorting the offsets in
+a scratch `Cells` with an in-place heap sort (no recursion). It runs for every
+source, in-memory included; opening all 3,689 corpus PDFs went from 61 ms to
+149 ms (a cost of the sort, the dynamic read and the per-file copy in the
+sweep), which P1.10 may skip with a "hints wanted" flag if it matters.
+(6) No state lives outside the caller's `Cells`; `pd-open` re-initializes `ar`
+and `dc`, so an attempt restarts on the same Cells and the kept run equals the
+in-memory run cell for cell (the law compares `ar`, `dc` and the page table).
+**Why**: a run that ignores these gives a status that is the miss's, not the
+file's; the gate compares arenas, so a leak shows.
+**Alternatives**: a check in every read (every in-memory byte pays); returning
+statuses only from the top (garbage between miss and checkpoint is unbounded,
+see (4)); hints as one whole-file range (defeats lazy reading).
 - [ ] **Signed off** (maintainer)
 
 ---

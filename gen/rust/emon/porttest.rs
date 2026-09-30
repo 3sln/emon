@@ -44,6 +44,25 @@ pub fn probe(b: &[u8], mut c: &mut crate::port::Cells, mut t: &mut String) -> i3
     crate::port::cells_drop(c, 2);
     sp(t);
     crate::port::text_i32(t, crate::port::cells_len(c));
+    crate::port::text_ascii(t, " src:");
+    let s: &crate::port::Src = &crate::port::src_of_blob(b);
+    crate::port::src_hint(s, 0, 4);
+    sp(t);
+    crate::port::text_i32(t, crate::port::src_len(s));
+    sp(t);
+    crate::port::text_i32(t, crate::port::src_u8(s, 3));
+    sp(t);
+    crate::port::text_i32(t, crate::port::blob_u32(&crate::port::src_slice(s, 2, 6)[..], 0));
+    sp(t);
+    crate::port::text_i32(t, crate::port::src_len(&crate::port::src_of_cells(c)));
+    sp(t);
+    crate::port::text_i32(t, crate::port::src_u8(&crate::port::src_of_cells(c), 0));
+    sp(t);
+    if crate::port::src_missed(s) {
+        crate::port::text_i32(t, 1);
+    } else {
+        crate::port::text_i32(t, 0);
+    }
     crate::port::text_ascii(t, " limits:");
     sp(t);
     crate::port::text_i32(t, crate::port::limit_of(0));

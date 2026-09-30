@@ -2,7 +2,7 @@
 ;; from ISO 32000-1 sections 7.2 (lexical conventions) and 7.3 (objects).
 ;;
 ;; WHAT IT IS. `(pl-init ar)` makes an empty ARENA; `(pl-seek ar pos end)` says
-;; where in a `Blob` to read; `(pl-parse src ar)` parses ONE object there and
+;; where in a `Src` to read; `(pl-parse src ar)` parses ONE object there and
 ;; answers its HANDLE (0 when it failed, with `(pl-err ar)` naming why);
 ;; `(pl-parse-indirect src ar pos)` parses `N G obj ... endobj`, stream
 ;; included. `(pl-dump t ar h)` writes an object as text, which is what the
@@ -45,8 +45,8 @@
 ;; LIMITS: objects are bounded by `limit-of` OBJECTS (a breach never returns);
 ;; container nesting by 128, a `nesting-too-deep` status.
 (ns emon.pdflex
-  (:require [emon.lang :refer [I32 Blob Cells Text defenum emit-ascii]]
-            [emon.pdfsrc :refer [ps-len ps-u8]]
+  (:require [emon.lang :refer [I32 Src Cells Text defenum emit-ascii]]
+            [emon.pdfsrc :refer [ps-len ps-u8 ps-missed]]
             [emon.port :refer [cells-len cells-at cells-set
                                cells-push cells-drop limit-of limit-breach
                                text-cp text-i32]]
@@ -69,7 +69,8 @@
    [pl-unterminated-dict 5 "unterminated-dict"]
    [pl-nesting-too-deep 6 "nesting-too-deep"]
    [pl-bad-object-header 7 "bad-object-header"]
-   [pl-bad-stream 8 "bad-stream"]])
+   [pl-bad-stream 8 "bad-stream"]
+   [pl-need-bytes 9 "need-bytes"]])
 
 (defenum ^:pub pl-kind
   [[pl-k-null 0 "null"]
@@ -96,7 +97,7 @@
 ;; ------------------------------------------------------------ the header
 
 (defconst ^I32 A_POS 0)      ;; where the next token starts
-(defconst ^I32 A_END 1)      ;; end of the readable span of the Blob
+(defconst ^I32 A_END 1)      ;; end of the readable span of the source
 (defconst ^I32 A_ERR 2)      ;; the first error, a pl-status
 (defconst ^I32 A_WARN 3)     ;; warning bits
 (defconst ^I32 A_NOBJ 4)     ;; object records made
@@ -266,6 +267,12 @@
   (comment "Latch the FIRST error; answer 0, the handle of nothing.")
   (if (== (cells-at ar A_ERR) 0)
     (cells-set ar A_ERR code))
+  (return 0))
+
+(defn ^I32 pl-miss [^:mut ^Cells ar]
+  (comment "The source missed: what was read is not to be trusted. Latch")
+  (comment "`need-bytes` over whatever garbage error the zeros made, answer 0.")
+  (cells-set ar A_ERR 9)
   (return 0))
 
 (defn ^I32 pl-warn-set [^:mut ^Cells ar ^I32 bit]
@@ -465,24 +472,36 @@
   (if (and (>= c 97) (<= c 102)) (return (- c 87)))
   (return -1))
 
-(defn ^:pub ^I32 pl-skip [^Blob src ^I32 from ^I32 end]
+(defn ^I32 pl-stalled [^Src src ^I32 p]
+  (comment "1 when a LONG SCAN at index p should give up: the source has missed.")
+  (comment "Checked every 1 KiB. Zeros, which is what a miss reads, are white")
+  (comment "space to this lexer, so without it a scan would run to the end of the")
+  (comment "source over bytes that have not arrived, and ask for all of them (D058:")
+  (comment "an attempt stops at its first checkpoint after the miss).")
+  (if (== (bit-and p 1023) 0)
+    (if (ps-missed src) (return 1)))
+  (return 0))
+
+(defn ^:pub ^I32 pl-skip [^Src src ^I32 from ^I32 end]
   (comment "The first index >= from that is neither white space nor inside a")
   (comment "comment (`%` to the end of the line), or end.")
   (let [^:mut ^I32 p from
         ^:mut ^I32 c 0]
     (while (< p end)
       (do (set c (ps-u8 src p))
+          (if (== (pl-stalled src p) 1) (return end))
           (if (== (pl-is-ws c) 1)
             (set p (+ p 1))
             (if (== c 37)
               (do (while (and (< p end)
                               (!= (ps-u8 src p) 10)
                               (!= (ps-u8 src p) 13))
-                    (set p (+ p 1))))
+                    (do (if (== (pl-stalled src p) 1) (return end))
+                        (set p (+ p 1)))))
               (return p)))))
     (return p)))
 
-(defn ^:pub ^I32 pl-kw-at [^Blob src ^I32 p ^I32 end ^I32 id]
+(defn ^:pub ^I32 pl-kw-at [^Src src ^I32 p ^I32 end ^I32 id]
   (comment "1 when the bytes of keyword `id` (an `emon.pdfnames` `pk` code)")
   (comment "are at p. No delimiter check: `endstream` is found inside data.")
   (let [^I32 start (pk-span-at 0 (- id 1) 0)
@@ -495,7 +514,7 @@
           (set k (+ k 1))))
     (return 1)))
 
-(defn ^I32 pl-kw-id-of [^Blob src ^I32 s ^I32 n]
+(defn ^I32 pl-kw-id-of [^Src src ^I32 s ^I32 n]
   (comment "The `pk` id of the keyword in src[s, s+n), 0 for any other.")
   (let [^:mut ^I32 row 0
         ^:mut ^I32 k 0
@@ -533,7 +552,7 @@
   (pl-fail ar code)
   (return (pl-tok ar 12 s e 0 0 0)))
 
-(defn ^I32 pl-lex-number [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+(defn ^I32 pl-lex-number [^Src src ^:mut ^Cells ar ^I32 s ^I32 end]
   (comment "A number starting at s, or 0 (nothing consumed) when it is not one.")
   (comment "Tolerated: several signs (`--5` is -5), `.5`, `5.`, and trailing")
   (comment "junk (`12abc` is 12 and then `abc`). Integers saturate at 2^31-1;")
@@ -580,7 +599,7 @@
     (if (== neg 1) (set m (- 0 m)))
     (return (pl-tok ar 2 s q m scale 0))))
 
-(defn ^I32 pl-lex-name [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+(defn ^I32 pl-lex-name [^Src src ^:mut ^Cells ar ^I32 s ^I32 end]
   (comment "A name; s is the index of the byte AFTER the slash. `#xx` becomes")
   (comment "a byte when two hex digits follow, else the `#` is kept.")
   (let [^:mut ^I32 q s
@@ -601,7 +620,7 @@
     (let [^I32 e (pl-intern-end ar)]
       (return (pl-tok ar 3 (- s 1) q e (cells-at ar (+ e 1)) 0)))))
 
-(defn ^I32 pl-lex-lit [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+(defn ^I32 pl-lex-lit [^Src src ^:mut ^Cells ar ^I32 s ^I32 end]
   (comment "A literal string; s is the index of the byte AFTER the `(`.")
   (comment "Escapes \\n \\r \\t \\b \\f \\( \\) \\\\ and \\ddd (one to three octal")
   (comment "digits, high bits dropped); a backslash before an end of line is a")
@@ -616,6 +635,8 @@
     (while (< q end)
       (do (set c (ps-u8 src q))
           (set q (+ q 1))
+          (if (== (pl-stalled src q) 1)
+            (do (cells-drop ar start) (return 12)))
           (if (== c 92)
             (do (if (>= q end)
                   (do (pl-tok-err ar (- s 1) end 3) (return 12)))
@@ -660,7 +681,7 @@
     (pl-tok-err ar (- s 1) end 3)
     (return 12)))
 
-(defn ^I32 pl-lex-hex [^Blob src ^:mut ^Cells ar ^I32 s ^I32 end]
+(defn ^I32 pl-lex-hex [^Src src ^:mut ^Cells ar ^I32 s ^I32 end]
   (comment "A hex string; s is the index of the byte AFTER the `<`. White space")
   (comment "and any non-hex byte are ignored; an odd last digit is followed by 0.")
   (let [^I32 start (cells-len ar)
@@ -671,6 +692,8 @@
     (while (< q end)
       (do (set c (ps-u8 src q))
           (set q (+ q 1))
+          (if (== (pl-stalled src q) 1)
+            (do (cells-drop ar start) (return 12)))
           (if (== c 62)
             (do (if (>= half 0) (cells-push ar (* half 16)))
                 (return (pl-tok ar 4 (- s 1) q start
@@ -685,7 +708,7 @@
     (pl-tok-err ar (- s 1) end 3)
     (return 12)))
 
-(defn ^:pub ^I32 pl-lex [^Blob src ^:mut ^Cells ar]
+(defn ^:pub ^I32 pl-lex [^Src src ^:mut ^Cells ar]
   (comment "The next token: answers its kind (T_*) and leaves its values in the")
   (comment "header. At the end of input, T_EOF. A lexical error (an unterminated")
   (comment "string) is T_ERR with the status latched.")
@@ -741,7 +764,7 @@
             (return 1)))))
   (return 0))
 
-(defn ^I32 pl-array-step [^Blob src ^:mut ^Cells ar ^I32 arr]
+(defn ^I32 pl-array-step [^Src src ^:mut ^Cells ar ^I32 arr]
   (comment "One element of an array: 0 carry on, 1 the array is complete, 2 failed.")
   (let [^I32 tk (pl-lex src ar)
         ^:mut ^I32 v 0]
@@ -759,7 +782,7 @@
     (pl-add-child ar arr v)
     (return 0)))
 
-(defn ^I32 pl-array [^Blob src ^:mut ^Cells ar]
+(defn ^I32 pl-array [^Src src ^:mut ^Cells ar]
   (comment "After `[`: the elements up to `]`. Answers the array, or 0.")
   (let [^I32 arr (pl-new ar 6 0 0 0)
         ^:mut ^I32 st 0]
@@ -768,7 +791,7 @@
     (if (== st 2) (return 0))
     (return arr)))
 
-(defn ^I32 pl-dict-step [^Blob src ^:mut ^Cells ar ^I32 d]
+(defn ^I32 pl-dict-step [^Src src ^:mut ^Cells ar ^I32 d]
   (comment "One key/value pair of a dictionary: 0 carry on, 1 the dictionary is")
   (comment "complete, 2 failed. A key that is not a name is skipped (with its")
   (comment "value, if it starts one); a key with no value gets null.")
@@ -816,7 +839,7 @@
     (pl-add-child ar d v)
     (return 0)))
 
-(defn ^I32 pl-dict [^Blob src ^:mut ^Cells ar]
+(defn ^I32 pl-dict [^Src src ^:mut ^Cells ar]
   (comment "After `<<`: the pairs up to `>>`. Answers the dictionary, or 0.")
   (let [^I32 d (pl-new ar 7 0 0 0)
         ^:mut ^I32 st 0]
@@ -825,7 +848,7 @@
     (if (== st 2) (return 0))
     (return d)))
 
-(defn ^I32 pl-ref-or-int [^Blob src ^:mut ^Cells ar ^I32 num]
+(defn ^I32 pl-ref-or-int [^Src src ^:mut ^Cells ar ^I32 num]
   (comment "An integer has just been read. `num 0 R` is a reference: look")
   (comment "ahead two tokens, and only if a digit follows, so a string or a")
   (comment "dictionary is never lexed twice.")
@@ -849,7 +872,7 @@
     (cells-set ar A_POS after)
     (return (pl-new ar 2 num 0 0))))
 
-(defn ^I32 pl-value [^Blob src ^:mut ^Cells ar ^I32 tk]
+(defn ^I32 pl-value [^Src src ^:mut ^Cells ar ^I32 tk]
   (comment "The object whose first token `tk` has just been lexed, or 0.")
   (let [^I32 ta (cells-at ar A_TA)
         ^I32 tb (cells-at ar A_TB)
@@ -886,37 +909,41 @@
           (return (pl-new ar 10 at tb tc))))
     (return (pl-fail ar 2))))
 
-(defn ^:pub ^I32 pl-parse [^Blob src ^:mut ^Cells ar]
+(defn ^:pub ^I32 pl-parse [^Src src ^:mut ^Cells ar]
   (comment "Parse one object at the current position. Answers its handle, or 0")
   (comment "with `(pl-err ar)` set. A keyword that is not true, false or null")
   (comment "(an operator, or `endobj`) answers a keyword object, so a content")
   (comment "stream can be read as operands followed by one.")
   (cells-set ar A_DEPTH 0)
-  (let [^I32 tk (pl-lex src ar)]
-    (return (pl-value src ar tk))))
+  (let [^I32 tk (pl-lex src ar)
+        ^I32 v (pl-value src ar tk)]
+    (if (ps-missed src) (return (pl-miss ar)))
+    (return v)))
 
 ;; ---------------------------------------------------- indirect objects
 
-(defn ^I32 pl-find-endstream [^Blob src ^I32 from ^I32 end]
+(defn ^I32 pl-find-endstream [^Src src ^I32 from ^I32 end]
   (comment "The index of the first `endstream` at or after from, or -1.")
   (let [^:mut ^I32 i from]
     (while (< i end)
       (do (if (== (ps-u8 src i) 101)
             (if (== (pl-kw-at src i end K_ENDSTREAM) 1)
               (return i)))
+          (if (== (pl-stalled src i) 1) (return -1))
           (set i (+ i 1))))
     (return -1)))
 
-(defn ^I32 pl-find-endobj [^Blob src ^I32 from ^I32 end]
+(defn ^I32 pl-find-endobj [^Src src ^I32 from ^I32 end]
   (let [^:mut ^I32 i from]
     (while (< i end)
       (do (if (== (ps-u8 src i) 101)
             (if (== (pl-kw-at src i end K_ENDOBJ) 1)
               (return i)))
+          (if (== (pl-stalled src i) 1) (return -1))
           (set i (+ i 1))))
     (return -1)))
 
-(defn ^I32 pl-scan [^Blob src ^:mut ^Cells ar ^I32 start ^I32 end]
+(defn ^I32 pl-scan [^Src src ^:mut ^Cells ar ^I32 start ^I32 end]
   (comment "The data length of a stream starting at `start`, found by scanning for")
   (comment "`endstream` (none: `endobj`, none: the end), with one end of line")
   (comment "before it dropped. The index after what the scan found is left in the")
@@ -939,7 +966,7 @@
     (cells-set ar A_TB after)
     (return (- z start))))
 
-(defn ^:pub ^I32 pl-stream-rescan [^Blob src ^:mut ^Cells ar ^I32 sh]
+(defn ^:pub ^I32 pl-stream-rescan [^Src src ^:mut ^Cells ar ^I32 sh]
   (comment "Find a stream's length by scanning, for the caller that could not use")
   (comment "an indirect /Length: sets the length and marks it scanned (flags 1).")
   (let [^I32 start (cells-at ar (+ sh R_B))
@@ -949,7 +976,7 @@
     (pl-warn-set ar 4)
     (return dlen)))
 
-(defn ^I32 pl-stream [^Blob src ^:mut ^Cells ar ^I32 dict]
+(defn ^I32 pl-stream [^Src src ^:mut ^Cells ar ^I32 dict]
   (comment "After the `stream` keyword: the data span. The keyword is followed")
   (comment "by CRLF or LF (a lone CR, and spaces before the end of line, are")
   (comment "tolerated and noted). A direct /Length is trusted only when")
@@ -1007,11 +1034,8 @@
     (cells-set ar (+ sh R_D) flags)
     (return sh)))
 
-(defn ^:pub ^I32 pl-parse-indirect [^Blob src ^:mut ^Cells ar ^I32 pos]
-  (comment "Parse `N G obj <object> [stream ... endstream] endobj` at pos.")
-  (comment "Answers the object (a stream object when there is a stream) and")
-  (comment "leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched")
-  (comment "otherwise. The position after it is `pl-pos`.")
+(defn ^I32 pl-parse-indirect-run [^Src src ^:mut ^Cells ar ^I32 pos]
+  (comment "`pl-parse-indirect` without its checkpoint.")
   (cells-set ar A_POS (pl-clamp pos (cells-at ar A_END)))
   (cells-set ar A_ERR 0)
   (cells-set ar A_DEPTH 0)
@@ -1047,6 +1071,17 @@
     (if (or (!= tk 11) (!= (cells-at ar A_TC) K_ENDOBJ))
       (do (pl-warn-set ar 16)
           (pl-unread ar)))
+    (return v)))
+
+(defn ^:pub ^I32 pl-parse-indirect [^Src src ^:mut ^Cells ar ^I32 pos]
+  (comment "Parse `N G obj <object> [stream ... endstream] endobj` at pos.")
+  (comment "Answers the object (a stream object when there is a stream) and")
+  (comment "leaves N, G in `pl-objnum`/`pl-objgen`; 0 with the error latched")
+  (comment "otherwise. The position after it is `pl-pos`. A CHECKPOINT (D058):")
+  (comment "when a read of `src` missed, the answer is 0 and the error")
+  (comment "`need-bytes`, whatever the zeros looked like.")
+  (let [^I32 v (pl-parse-indirect-run src ar pos)]
+    (if (ps-missed src) (return (pl-miss ar)))
     (return v)))
 
 ;; ---------------------------------------------------------------- dump

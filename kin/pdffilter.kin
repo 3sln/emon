@@ -29,8 +29,7 @@
 ;; does its own (inflate).
 (ns emon.pdffilter
   (:require [emon.lang :refer [I32 Blob Cells defenum shl32 sar32]]
-            [emon.pdfsrc :refer [ps-len ps-u8]]
-            [emon.port :refer [cells-len cells-at cells-set
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
                                cells-push cells-drop limit-of limit-breach]]
             [emon.inflate :refer [iz-zlib iz-ok iz-truncated iz-bad-header
                                   iz-bad-checksum]]
@@ -50,7 +49,8 @@
    [pf-flate-error 8 "flate-error"]
    [pf-unsupported 9 "unsupported-filter"]
    [pf-image-filter 10 "image-filter"]
-   [pf-bad-spec 11 "bad-filter-spec"]])
+   [pf-bad-spec 11 "bad-filter-spec"]
+   [pf-need-bytes 12 "need-bytes"]])
 
 ;; The filters, as the document layer numbers them after resolving a name
 ;; (and, for an inline image, its abbreviation).
@@ -92,7 +92,7 @@
         ^:mut ^I32 c 0
         ^:mut ^I32 done 0]
     (while (and (< i e) (== done 0))
-      (do (set c (ps-u8 src i))
+      (do (set c (blob-u8 src i))
           (set i (+ i 1))
           (if (== c 62)
             (set done 1)
@@ -138,14 +138,14 @@
         ^:mut ^I32 pad 0]
     (comment "Skip white space and a `<~` prefix.")
     (while (and (< i e)
-                (or (== (ps-u8 src i) 32) (== (ps-u8 src i) 10)
-                    (== (ps-u8 src i) 13) (== (ps-u8 src i) 9)
-                    (== (ps-u8 src i) 12) (== (ps-u8 src i) 0)))
+                (or (== (blob-u8 src i) 32) (== (blob-u8 src i) 10)
+                    (== (blob-u8 src i) 13) (== (blob-u8 src i) 9)
+                    (== (blob-u8 src i) 12) (== (blob-u8 src i) 0)))
       (set i (+ i 1)))
-    (if (and (< (+ i 1) e) (== (ps-u8 src i) 60) (== (ps-u8 src (+ i 1)) 126))
+    (if (and (< (+ i 1) e) (== (blob-u8 src i) 60) (== (blob-u8 src (+ i 1)) 126))
       (set i (+ i 2)))
     (while (and (< i e) (== done 0))
-      (do (set c (ps-u8 src i))
+      (do (set c (blob-u8 src i))
           (set i (+ i 1))
           (if (== c 126)
             (set done 1)
@@ -186,7 +186,7 @@
         ^:mut ^I32 k 0
         ^:mut ^I32 b 0]
     (while (< i e)
-      (do (set l (ps-u8 src i))
+      (do (set l (blob-u8 src i))
           (set i (+ i 1))
           (if (== l 128) (return 0))
           (if (< l 128)
@@ -194,11 +194,11 @@
                 (set k 0)
                 (while (<= k l)
                   (do (if (>= i e) (return 1))
-                      (cells-push out (ps-u8 src i))
+                      (cells-push out (blob-u8 src i))
                       (set i (+ i 1))
                       (set k (+ k 1)))))
             (do (if (>= i e) (return 1))
-                (set b (ps-u8 src i))
+                (set b (blob-u8 src i))
                 (set i (+ i 1))
                 (pf-room out base (- 257 l))
                 (set k 0)
@@ -296,7 +296,7 @@
     (pf-lzw-clear st)
     (while (== done 0)
       (do (while (and (< nbits width) (< i e))
-            (do (set acc (+ (* acc 256) (ps-u8 src i)))
+            (do (set acc (+ (* acc 256) (blob-u8 src i)))
                 (set i (+ i 1))
                 (set nbits (+ nbits 8))))
           (if (< nbits width)
@@ -478,7 +478,7 @@
   (if (== code 6)
     (do (let [^:mut ^I32 k s]
           (while (< k e)
-            (do (cells-push out (ps-u8 src k))
+            (do (cells-push out (blob-u8 src k))
                 (set k (+ k 1)))))
         (return 0)))
   (if (and (>= code 7) (<= code 10)) (return 10))

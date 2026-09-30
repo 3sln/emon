@@ -97,3 +97,164 @@ pub fn test_file_span(b: &[u8], from: i32, to: i32) -> Vec<u8> {
 pub fn cells_blob(c: &Cells) -> Vec<u8> {
     (0..cells_len(c)).map(|i| cells_at(c, i) as u8).collect()
 }
+
+// ------------------------------------------------------ a source that misses
+//
+// A `Src` over a blob, served in fixed-size CHUNKS of which only some are
+// RESIDENT (P1.11, D058). It stands in for a browser `Blob` or a URL: a read
+// of a byte in a non-resident chunk records the chunk as PENDING and misses;
+// `src_ctl` op 0 (fetch) is what a host does between attempts, making the
+// pending chunks resident with a read-ahead that doubles per round. A SYNC one
+// fills the chunk inline and never misses. Tests only.
+
+use crate::port::{Src, SrcBacking};
+use std::sync::{Arc, Mutex};
+
+struct ChunkState {
+    resident: Vec<bool>,
+    pending: Vec<i32>,
+    fills: i32,
+    hints: i32,
+}
+
+pub struct ChunkedBacking {
+    data: Vec<u8>,
+    chunk: i32,
+    sync: bool,
+    st: Mutex<ChunkState>,
+}
+
+impl ChunkedBacking {
+    fn nchunks(&self) -> i32 {
+        (self.data.len() as i32 + self.chunk - 1) / self.chunk
+    }
+
+    // True when chunk c is resident now: a sync source fills it inline, an
+    // async one records it as pending and answers false.
+    fn touch(&self, st: &mut ChunkState, c: i32) -> bool {
+        if st.resident[c as usize] {
+            return true;
+        }
+        if self.sync {
+            st.resident[c as usize] = true;
+            st.fills += 1;
+            return true;
+        }
+        if !st.pending.contains(&c) {
+            st.pending.push(c);
+        }
+        false
+    }
+}
+
+impl SrcBacking for ChunkedBacking {
+    fn len(&self) -> i32 {
+        self.data.len() as i32
+    }
+    fn at(&self, i: i32) -> i32 {
+        let mut st = self.st.lock().unwrap();
+        if self.touch(&mut st, i / self.chunk) {
+            self.data[i as usize] as i32
+        } else {
+            -1
+        }
+    }
+    fn span(&self, s: i32, buf: &mut [u8]) -> bool {
+        let mut st = self.st.lock().unwrap();
+        let mut ok = true;
+        let n = buf.len() as i32;
+        if n == 0 {
+            return true;
+        }
+        let first = s / self.chunk;
+        let last = (s + n - 1) / self.chunk;
+        for c in first..=last {
+            if self.touch(&mut st, c) {
+                let lo = std::cmp::max(s, c * self.chunk);
+                let hi = std::cmp::min(s + n, (c + 1) * self.chunk);
+                for k in lo..hi {
+                    buf[(k - s) as usize] = self.data[k as usize];
+                }
+            } else {
+                ok = false;
+            }
+        }
+        ok
+    }
+    fn hint(&self, _s: i32, _e: i32) {
+        self.st.lock().unwrap().hints += 1;
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+// A source over b, in chunks of `chunk` bytes, none resident; sync 1 fills inline.
+pub fn src_chunked(b: &[u8], chunk: i32, sync: i32) -> Src {
+    let n = (b.len() as i32 + chunk - 1) / chunk;
+    Src::new(Arc::new(ChunkedBacking {
+        data: b.to_vec(),
+        chunk,
+        sync: sync == 1,
+        st: Mutex::new(ChunkState {
+            resident: vec![false; n as usize],
+            pending: Vec::new(),
+            fills: 0,
+            hints: 0,
+        }),
+    }))
+}
+
+// A fresh view (missed flag clear) of the same chunk cache.
+pub fn src_view(s: &Src) -> Src {
+    s.view()
+}
+
+// Control of the cache: op 0 fetch (a is the round: read-ahead of 2^a - 1
+// chunks each side of every pending chunk; answers the chunks made resident),
+// 1 make chunk a resident, 2 evict chunk a, 3 make every chunk resident, 4 the
+// pending count, 5 the resident count, 6 the hints received, 7 the chunks a
+// sync source filled inline, 8 the chunk count.
+pub fn src_ctl(s: &Src, op: i32, a: i32) -> i32 {
+    let b = s.backing().as_any().downcast_ref::<ChunkedBacking>().expect("a chunked test source");
+    let n = b.nchunks();
+    let mut st = b.st.lock().unwrap();
+    match op {
+        0 => {
+            let r = (1i32 << std::cmp::min(a, 20)) - 1;
+            let pend = std::mem::take(&mut st.pending);
+            let mut made = 0;
+            for c in pend {
+                for k in std::cmp::max(0, c - r)..=std::cmp::min(n - 1, c + r) {
+                    if !st.resident[k as usize] {
+                        st.resident[k as usize] = true;
+                        made += 1;
+                    }
+                }
+            }
+            made
+        }
+        1 => {
+            st.resident[a as usize] = true;
+            st.pending.retain(|&c| c != a);
+            0
+        }
+        2 => {
+            st.resident[a as usize] = false;
+            0
+        }
+        3 => {
+            for k in 0..n {
+                st.resident[k as usize] = true;
+            }
+            st.pending.clear();
+            0
+        }
+        4 => st.pending.len() as i32,
+        5 => st.resident.iter().filter(|&&r| r).count() as i32,
+        6 => st.hints,
+        7 => st.fills,
+        8 => n,
+        _ => panic!("src_ctl: no op {}", op),
+    }
+}

@@ -26,6 +26,9 @@ public static class Pdfdoc {
     public static int PdEncryptedUnread() {
         return 6;
     }
+    public static int PdNeedBytes() {
+        return 7;
+    }
     public static int PdStatusEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "ok");
@@ -53,6 +56,10 @@ public static class Pdfdoc {
         }
         if (code == 6) {
             emon.Port.TextAscii(t, "encrypted");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "need-bytes");
             return 1;
         }
         return 0;
@@ -175,12 +182,26 @@ public static class Pdfdoc {
         // One more than the highest object number the cross-reference names.
         return emon.Port.CellsAt(dc, DNent);
     }
-    internal static int PdWarnSet(emon.Port.Cells dc, int bit) {
+    internal static int PdWarnSet(emon.Port.Src src, emon.Port.Cells dc, int bit) {
+        // Note a tolerated damage. NOT while the source has missed: what looks
+        // like damage may be zeros standing in for bytes that have not arrived.
+        if (Pdfsrc.PsMissed(src)) {
+            return 0;
+        }
         int w = emon.Port.CellsAt(dc, DWarn);
         if (((w / bit) & 1) == 0) {
             emon.Port.CellsSet(dc, DWarn, w + bit);
         }
         return 0;
+    }
+    internal static int PdStop(emon.Port.Src src, int status) {
+        // The status to report for a failure: `need-bytes` when the source has
+        // missed (the failure may be the miss), else `status`. THE CHECK BEFORE
+        // CLASSIFYING (D058): every `bad-xref` and friends goes through here.
+        if (Pdfsrc.PsMissed(src)) {
+            return 7;
+        }
+        return status;
     }
     internal static int PdEntPut(emon.Port.Cells dc, int num, int kind, int f1, int f2, int mode) {
         // Store an entry, unless an entry is already there: mode 0 stores
@@ -218,7 +239,7 @@ public static class Pdfdoc {
         }
         return emon.Port.CellsAt(dc, DFirst + (num * 5));
     }
-    internal static int PdFindHeader(byte[] src) {
+    internal static int PdFindHeader(emon.Port.Src src) {
         // The index of `%PDF-` within the first 1024 bytes (Acrobat accepts
         // junk before it), or -1.
         int n = Pdfsrc.PsLen(src);
@@ -235,7 +256,7 @@ public static class Pdfdoc {
         }
         return -1;
     }
-    internal static int PdFindStartxref(byte[] src) {
+    internal static int PdFindStartxref(emon.Port.Src src) {
         // The index of the LAST `startxref`: within the last 1100 bytes, then
         // within the last 64 KiB (junk appended after %%EOF). -1 for none.
         // A TAIL, not the file: only the end of the source is read.
@@ -257,6 +278,11 @@ public static class Pdfdoc {
             }
             i -= 1;
         }
+        // Nothing in the last 1100 bytes: if a miss is why, do not go on to
+        // ask for 64 KiB of zeros.
+        if (Pdfsrc.PsMissed(src)) {
+            return -1;
+        }
         i = stop - 1;
         while (i >= floor) {
             if (Pdfsrc.PsU8(src, i) == 115) {
@@ -268,7 +294,7 @@ public static class Pdfdoc {
         }
         return -1;
     }
-    internal static int PdKindAt(byte[] src, emon.Port.Cells ar, int pos) {
+    internal static int PdKindAt(emon.Port.Src src, emon.Port.Cells ar, int pos) {
         // What starts at pos: 1 for `xref` (a table), 2 for `N G obj` (a
         // cross-reference stream), 0 for anything else.
         int n = Pdfsrc.PsLen(src);
@@ -295,7 +321,7 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    public static int PdResolve(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int h0) {
+    public static int PdResolve(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int h0) {
         // Follow references from h0 to a value: 0 when the chain ends in a
         // missing object, is too deep, or cycles. A value that is not a
         // reference is answered as it is.
@@ -312,13 +338,13 @@ public static class Pdfdoc {
         }
         return h;
     }
-    public static int PdDget(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int dict, int id) {
+    public static int PdDget(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int dict, int id) {
         // The RESOLVED value under a well-known key of a dictionary (or of a
         // stream's dictionary), 0 when absent.
         int v = Pdflex.PlDictGet(ar, dict, id);
         return PdResolve(src, ar, dc, a, b, st, v);
     }
-    public static int PdDint(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int dict, int id, int dflt) {
+    public static int PdDint(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int dict, int id, int dflt) {
         // An integer value under a well-known key, else dflt. A real that is
         // a whole number counts.
         int v = PdDget(src, ar, dc, a, b, st, dict, id);
@@ -337,7 +363,7 @@ public static class Pdfdoc {
         }
         return dflt;
     }
-    internal static int PdLoadDirect(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, int num, int off) {
+    internal static int PdLoadDirect(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, int num, int off) {
         // Parse `num G obj ...` at file offset off. The object number found
         // must be num: a table entry that points at another object is wrong.
         int n = Pdfsrc.PsLen(src);
@@ -347,10 +373,10 @@ public static class Pdfdoc {
         if ((h != 0) && (Pdflex.PlObjnum(ar) == num)) {
             return h;
         }
-        PdWarnSet(dc, 32);
+        PdWarnSet(src, dc, 32);
         return 0;
     }
-    internal static int PdParseObjstm(byte[] data, emon.Port.Cells ar, emon.Port.Cells dc, int sn, int nn, int first) {
+    internal static int PdParseObjstm(emon.Port.Src data, emon.Port.Cells ar, emon.Port.Cells dc, int sn, int nn, int first) {
         // Every object of an object stream, from its decoded bytes: N pairs
         // of (object number, offset from /First), then the objects. Each is
         // cached in the cross-reference where that entry says it lives in
@@ -393,7 +419,7 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    internal static int PdLoadCompressed(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int num) {
+    internal static int PdLoadCompressed(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int num) {
         // Object `num` lives in an object stream: decode that stream once,
         // parse every object in it, and answer the cache of `num`.
         int at = DFirst + (num * 5);
@@ -431,15 +457,18 @@ public static class Pdfdoc {
         }
         plan = PdStreamPlan(src, ar, dc, a, b, st, sh);
         status = PdRunPlan(src, ar, plan, sh, b, st, a);
-        // A truncated or badly-checksummed stream still has its objects.
-        if ((status != 0) && (status != 1) && (status != 5) && (status != 7)) {
-            PdWarnSet(dc, 64);
+        if (Pdfsrc.PsMissed(src)) {
             return 0;
         }
-        PdParseObjstm(emon.Port.CellsBytes(a), ar, dc, sn, nn, first);
+        // A truncated or badly-checksummed stream still has its objects.
+        if ((status != 0) && (status != 1) && (status != 5) && (status != 7)) {
+            PdWarnSet(src, dc, 64);
+            return 0;
+        }
+        PdParseObjstm(emon.Port.SrcOfCells(a), ar, dc, sn, nn, first);
         return emon.Port.CellsAt(dc, at + 3);
     }
-    public static int PdGet(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int num) {
+    public static int PdGet(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int num) {
         // Object `num` as a handle in `ar`, loaded on first use and cached;
         // 0 when it is free, missing, at the wrong offset, or being loaded
         // already (a cycle).
@@ -476,6 +505,10 @@ public static class Pdfdoc {
         }
         emon.Port.CellsSet(dc, at + 4, emon.Port.CellsAt(dc, at + 4) - 1);
         emon.Port.CellsSet(dc, DDepth, depth);
+        // CHECKPOINT: an object that may be zeros is not cached.
+        if (Pdfsrc.PsMissed(src)) {
+            return 0;
+        }
         if (h != 0) {
             emon.Port.CellsSet(dc, at + 3, h);
         }
@@ -526,7 +559,7 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    internal static int PdFixLength(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh) {
+    internal static int PdFixLength(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh) {
         // A stream whose /Length is an indirect reference was parsed without a
         // length (flags 2). Follow the reference: if the length it names is
         // followed by `endstream` that is the length, read at two places and
@@ -539,12 +572,19 @@ public static class Pdfdoc {
         int start = Pdflex.PlStreamStart(ar, sh);
         int ln = PdDint(src, ar, dc, a, b, st, d, Pdfnames.PnLength(), -1);
         int z = 0;
+        if (Pdfsrc.PsMissed(src)) {
+            return 0;
+        }
         if ((ln >= 0) && (ln <= (n - start))) {
             z = Pdflex.PlSkip(src, start + ln, n);
             if (Pdflex.PlKwAt(src, z, n, 7) == 1) {
                 Pdflex.PlStreamSetLen(ar, sh, ln);
                 return 0;
             }
+        }
+        // The rescan reads forward, perhaps to the end: not on a guess.
+        if (Pdfsrc.PsMissed(src)) {
+            return 0;
         }
         Pdflex.PlStreamRescan(src, ar, sh);
         return 0;
@@ -559,7 +599,7 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    internal static int PdSpan(byte[] src, int s, int e, emon.Port.Cells to) {
+    internal static int PdSpan(emon.Port.Src src, int s, int e, emon.Port.Cells to) {
         int i = s;
         emon.Port.CellsDrop(to, 0);
         while (i < e) {
@@ -568,7 +608,7 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    public static int PdStreamPlan(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh) {
+    public static int PdStreamPlan(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh) {
         // Plan the decoding of stream `sh`: resolve /Filter and /DecodeParms
         // (and /Length, when it is a reference) and record the chain. Answers
         // the plan's handle in `ar`. `a`, `b` and `st` may be overwritten.
@@ -663,7 +703,7 @@ public static class Pdfdoc {
         Pdflex.PlSetInt(ar, nsh, nst);
         return plan;
     }
-    public static int PdRunPlan(byte[] src, emon.Port.Cells ar, int plan, int sh, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells @out) {
+    public static int PdRunPlan(emon.Port.Src src, emon.Port.Cells ar, int plan, int sh, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells @out) {
         // Run a plan over stream `sh` into `out` (cleared first), with `b` and
         // `st` as scratch. Answers a `pf-status`: the FIRST error, from a
         // stage or from the plan; whatever was decoded stays in `out`. An
@@ -688,6 +728,10 @@ public static class Pdfdoc {
         int columns = 1;
         int early = 1;
         emon.Port.CellsDrop(@out, 0);
+        // CHECKPOINT: the plan and the span may be made of zeros.
+        if (Pdfsrc.PsMissed(src)) {
+            return 12;
+        }
         while (i < ns) {
             code = Pdflex.PlIntValue(ar, k);
             k = Pdflex.PlNext(ar, k);
@@ -716,7 +760,7 @@ public static class Pdfdoc {
             }
             // cur: 0 the file's span, 1 the data is in out, 2 it is in b.
             if (cur == 0) {
-                s2 = Pdffilter.PfRun(code, src, start, end, @out, st, early);
+                s2 = Pdffilter.PfRun(code, emon.Port.SrcSlice(src, start, end), 0, end - start, @out, st, early);
                 cur = 1;
             } else if (cur == 1) {
                 emon.Port.CellsDrop(b, 0);
@@ -757,9 +801,13 @@ public static class Pdfdoc {
         if (status == 0) {
             status = pstatus;
         }
+        // CHECKPOINT: after the stream span.
+        if (Pdfsrc.PsMissed(src)) {
+            return 12;
+        }
         return status;
     }
-    public static int PdStreamData(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh, emon.Port.Cells @out) {
+    public static int PdStreamData(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int sh, emon.Port.Cells @out) {
         // The DECODED bytes of stream `sh` into `out` (cleared first), by
         // planning the chain and running it. `out` must not be `a`, `b` or
         // `st` (they are overwritten); answers a `pf-status`, the first error.
@@ -799,7 +847,7 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    internal static int PdTable(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int pos) {
+    internal static int PdTable(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int pos) {
         // A classic section: `xref`, subsections `first count` of `offset gen
         // n|f` entries, `trailer`, the trailer dictionary. Entries are read
         // as tokens, so the 20-byte layout is not insisted on. A count larger
@@ -823,42 +871,48 @@ public static class Pdfdoc {
         tk = Pdflex.PlLex(src, ar);
         while (more == 1) {
             tk = Pdflex.PlLex(src, ar);
+            if (Pdfsrc.PsMissed(src)) {
+                return PdNeedBytes();
+            }
             if ((tk == 11) && (Pdflex.PlTokenC(ar) == 10)) {
                 more = 0;
             } else {
                 if (tk != 1) {
-                    return 3;
+                    return PdStop(src, 3);
                 }
                 first = Pdflex.PlTokenA(ar);
                 tk = Pdflex.PlLex(src, ar);
                 if (tk != 1) {
-                    return 3;
+                    return PdStop(src, 3);
                 }
                 count = Pdflex.PlTokenA(ar);
                 i = 0;
                 inner = 1;
                 while ((i < count) && (inner == 1)) {
                     tk = Pdflex.PlLex(src, ar);
+                    if (Pdfsrc.PsMissed(src)) {
+                        return PdNeedBytes();
+                    }
                     if ((tk == 11) && (Pdflex.PlTokenC(ar) == 10)) {
                         Pdflex.PlUnread(ar);
                         inner = 0;
                     } else {
                         if (tk != 1) {
-                            return 3;
+                            return PdStop(src, 3);
                         }
                         eoff = Pdflex.PlTokenA(ar);
                         tk = Pdflex.PlLex(src, ar);
                         if (tk != 1) {
-                            return 3;
+                            return PdStop(src, 3);
                         }
                         egen = Pdflex.PlTokenA(ar);
                         tk = Pdflex.PlLex(src, ar);
                         if (tk != 11) {
-                            return 3;
+                            return PdStop(src, 3);
                         }
                         ek = Pdflex.PlTokenC(ar);
                         if ((ek != 12) && (ek != 13)) {
-                            return 3;
+                            return PdStop(src, 3);
                         }
                         if ((i == 0) && (first == 1) && (ek == 12) && (egen == 65535)) {
                             first = 0;
@@ -874,20 +928,27 @@ public static class Pdfdoc {
             }
         }
         d = Pdflex.PlParse(src, ar);
+        if (Pdfsrc.PsMissed(src)) {
+            return PdNeedBytes();
+        }
         if (d == 0) {
-            return 3;
+            return PdStop(src, 3);
         }
         if (Pdflex.PlKindOf(ar, d) != 7) {
-            return 3;
+            return PdStop(src, 3);
         }
         PdAddTrailer(dc, d);
         PdSetPrev(ar, dc, d);
         xs = Pdflex.PlDictGet(ar, d, Pdfnames.PnXRefStm());
         if ((xs != 0) && (Pdflex.PlKindOf(ar, xs) == 2)) {
-            PdWarnSet(dc, 2);
+            PdWarnSet(src, dc, 2);
             // An unreadable /XRefStm costs only the objects it lists.
             xpos = Pdflex.PlIntValue(ar, xs) + emon.Port.CellsAt(dc, DShift);
             PdXstream(src, ar, dc, a, b, st, xpos, 1);
+        }
+        // CHECKPOINT: after the trailer (and the /XRefStm it named).
+        if (Pdfsrc.PsMissed(src)) {
+            return PdNeedBytes();
         }
         return 0;
     }
@@ -950,17 +1011,17 @@ public static class Pdfdoc {
         }
         return at;
     }
-    internal static int PdXfinish(emon.Port.Cells ar, emon.Port.Cells dc, int d, int mode) {
+    internal static int PdXfinish(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, int d, int mode) {
         // A chain section (mode 0) registers its dictionary as a trailer and
         // names its /Prev; an /XRefStm (mode 1) does neither.
         if (mode == 0) {
             PdAddTrailer(dc, d);
             PdSetPrev(ar, dc, d);
-            PdWarnSet(dc, 16);
+            PdWarnSet(src, dc, 16);
         }
         return 0;
     }
-    internal static int PdXstream(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int pos, int mode) {
+    internal static int PdXstream(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int pos, int mode) {
         // A cross-reference STREAM: a stream object whose decoded data is
         // entries of widths /W [t o g] for each (first, count) of /Index
         // (default [0 /Size]): type 0 free, 1 in use (offset, generation), 2
@@ -987,22 +1048,25 @@ public static class Pdfdoc {
         int e2 = 0;
         Pdflex.PlSeek(ar, pos, n);
         h = Pdflex.PlParseIndirect(src, ar, pos);
+        if (Pdfsrc.PsMissed(src)) {
+            return PdNeedBytes();
+        }
         if (h == 0) {
-            return 3;
+            return PdStop(src, 3);
         }
         if (Pdflex.PlKindOf(ar, h) != 8) {
-            return 3;
+            return PdStop(src, 3);
         }
         d = Pdflex.PlStreamDict(ar, h);
         wa = PdDget(src, ar, dc, a, b, st, d, Pdfnames.PnW());
         if (wa == 0) {
-            return 3;
+            return PdStop(src, 3);
         }
         if (Pdflex.PlKindOf(ar, wa) != 6) {
-            return 3;
+            return PdStop(src, 3);
         }
         if (Pdflex.PlCount(ar, wa) < 3) {
-            return 3;
+            return PdStop(src, 3);
         }
         e0 = PdNth(ar, wa, 0);
         e1 = PdNth(ar, wa, 1);
@@ -1011,17 +1075,20 @@ public static class Pdfdoc {
         w1 = PdIval(ar, e1);
         w2 = PdIval(ar, e2);
         if ((w0 < 0) || (w0 > 4) || (w1 < 0) || (w1 > 4) || (w2 < 0) || (w2 > 4)) {
-            return 3;
+            return PdStop(src, 3);
         }
         if (((w0 + w1) + w2) == 0) {
-            return 3;
+            return PdStop(src, 3);
         }
         size = PdDint(src, ar, dc, a, b, st, d, Pdfnames.PnSize(), 0);
         plan = PdStreamPlan(src, ar, dc, a, b, st, h);
         status = PdRunPlan(src, ar, plan, h, b, st, a);
+        if (Pdfsrc.PsMissed(src)) {
+            return PdNeedBytes();
+        }
         // A cut-short or badly-checksummed stream still holds entries.
         if ((status != 0) && (status != 1) && (status != 5) && (status != 7)) {
-            return 3;
+            return PdStop(src, 3);
         }
         ix = PdDget(src, ar, dc, a, b, st, d, Pdfnames.PnIndex());
         if ((ix != 0) && (Pdflex.PlKindOf(ar, ix) == 6)) {
@@ -1038,9 +1105,107 @@ public static class Pdfdoc {
         } else {
             PdXfill(dc, a, 0, 0, size, w0, w1, w2, mode);
         }
-        return PdXfinish(ar, dc, d, mode);
+        return PdXfinish(src, ar, dc, d, mode);
     }
-    internal static int PdSection(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int off) {
+    internal static int PdSiftDown(emon.Port.Cells b, int lo, int n) {
+        // Heap sort's sift-down over b[0, n), for `pd-hint-extents`.
+        int root = lo;
+        int child = 0;
+        int sw = 0;
+        int x = 0;
+        int y = 0;
+        int more = 1;
+        while (more == 1) {
+            child = (root * 2) + 1;
+            if (child >= n) {
+                more = 0;
+            } else {
+                sw = root;
+                if (emon.Port.CellsAt(b, sw) < emon.Port.CellsAt(b, child)) {
+                    sw = child;
+                }
+                if ((child + 1) < n) {
+                    if (emon.Port.CellsAt(b, sw) < emon.Port.CellsAt(b, child + 1)) {
+                        sw = child + 1;
+                    }
+                }
+                if (sw == root) {
+                    more = 0;
+                } else {
+                    x = emon.Port.CellsAt(b, root);
+                    y = emon.Port.CellsAt(b, sw);
+                    emon.Port.CellsSet(b, root, y);
+                    emon.Port.CellsSet(b, sw, x);
+                    root = sw;
+                }
+            }
+        }
+        return 0;
+    }
+    internal static int PdSort(emon.Port.Cells b, int n) {
+        // Sort b[0, n) ascending, in place (heap sort: no recursion, no extra
+        // storage, and the same order on every target).
+        int i = (n / 2) - 1;
+        int e = n - 1;
+        int x = 0;
+        int y = 0;
+        while (i >= 0) {
+            PdSiftDown(b, i, n);
+            i -= 1;
+        }
+        while (e > 0) {
+            x = emon.Port.CellsAt(b, 0);
+            y = emon.Port.CellsAt(b, e);
+            emon.Port.CellsSet(b, 0, y);
+            emon.Port.CellsSet(b, e, x);
+            PdSiftDown(b, 0, e);
+            e -= 1;
+        }
+        return 0;
+    }
+    internal static int PdHintExtents(emon.Port.Src src, emon.Port.Cells dc, emon.Port.Cells b) {
+        // Once the cross-reference is read, every object's EXTENT is known: from
+        // its offset to the next larger offset (or the end of the source). Tell
+        // the source, so a miss on an object can fetch the whole object, not a
+        // guess (D058). `b` is scratch. Answers the number of hints.
+        int n = Pdfsrc.PsLen(src);
+        int nent = emon.Port.CellsAt(dc, DNent);
+        int shift = emon.Port.CellsAt(dc, DShift);
+        int i = 0;
+        int at = 0;
+        int o = 0;
+        int nx = 0;
+        int cnt = 0;
+        int hints = 0;
+        emon.Port.CellsDrop(b, 0);
+        while (i < nent) {
+            at = DFirst + (i * 5);
+            if (emon.Port.CellsAt(dc, at) == 2) {
+                o = emon.Port.CellsAt(dc, at + 1) + shift;
+                if ((o >= 0) && (o < n)) {
+                    emon.Port.CellsPush(b, o);
+                }
+            }
+            i += 1;
+        }
+        cnt = emon.Port.CellsLen(b);
+        PdSort(b, cnt);
+        i = 0;
+        while (i < cnt) {
+            o = emon.Port.CellsAt(b, i);
+            nx = n;
+            if ((i + 1) < cnt) {
+                nx = emon.Port.CellsAt(b, i + 1);
+            }
+            if (nx > o) {
+                Pdfsrc.PsHint(src, o, nx);
+                hints += 1;
+            }
+            i += 1;
+        }
+        return hints;
+    }
+    internal static int PdSection(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int off) {
         // Read the section at file offset `off` (shifted): a table or a stream.
         int pos = off + emon.Port.CellsAt(dc, DShift);
         int k = PdKindAt(src, ar, pos);
@@ -1050,9 +1215,9 @@ public static class Pdfdoc {
         if (k == 2) {
             return PdXstream(src, ar, dc, a, b, st, pos, 0);
         }
-        return 3;
+        return PdStop(src, 3);
     }
-    internal static int PdChain(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int off0) {
+    internal static int PdChain(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int off0) {
         // The sections, newest first: the one `startxref` names, then each
         // /Prev. A section already read ends the chain (a loop); a failure in
         // the first section is the answer, in a later one only a warning: the
@@ -1072,18 +1237,22 @@ public static class Pdfdoc {
                 j += 1;
             }
             if (seen == 1) {
-                PdWarnSet(dc, 4);
+                PdWarnSet(src, dc, 4);
                 off = -1;
             } else {
                 emon.Port.CellsSet(dc, DSeen + guard, off);
                 emon.Port.CellsSet(dc, DNseen, guard + 1);
                 emon.Port.CellsSet(dc, DPrev, -1);
                 status = PdSection(src, ar, dc, a, b, st, off);
+                // CHECKPOINT: after each xref section.
+                if (Pdfsrc.PsMissed(src)) {
+                    return PdNeedBytes();
+                }
                 if (status != 0) {
                     if (guard == 0) {
                         return status;
                     }
-                    PdWarnSet(dc, 8);
+                    PdWarnSet(src, dc, 8);
                     off = -1;
                 } else {
                     off = emon.Port.CellsAt(dc, DPrev);
@@ -1093,15 +1262,19 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    internal static int PdUnreadable(emon.Port.Cells dc, int status) {
+    internal static int PdUnreadable(emon.Port.Src src, emon.Port.Cells dc, int status) {
         // The status to answer when the catalog or the page tree could not be
-        // read: `encrypted` (6) if the trailer has /Encrypt, else `status`.
+        // read: `encrypted` (6) if the trailer has /Encrypt, else `status`; and
+        // `need-bytes` before either when the source has missed.
+        if (Pdfsrc.PsMissed(src)) {
+            return 7;
+        }
         if (emon.Port.CellsAt(dc, DEnc) != 0) {
             return 6;
         }
         return status;
     }
-    public static int PdOpen(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
+    public static int PdOpen(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st) {
         // Open a document: find the header and `startxref`, read every
         // cross-reference section and trailer, check that there is a catalog
         // with a page tree. Answers a `pd-status` (0 ok). Nothing is decoded
@@ -1119,7 +1292,7 @@ public static class Pdfdoc {
         int pages = 0;
         int enc = 0;
         if (@base < 0) {
-            return 1;
+            return PdStop(src, 1);
         }
         emon.Port.CellsSet(dc, DBase, @base);
         if ((@base + 7) < n) {
@@ -1136,12 +1309,12 @@ public static class Pdfdoc {
         emon.Port.CellsSet(dc, DReflim, emon.Port.LimitOf(4));
         sx = PdFindStartxref(src);
         if (sx < 0) {
-            return 2;
+            return PdStop(src, 2);
         }
         Pdflex.PlSeek(ar, sx + 9, n);
         tk = Pdflex.PlLex(src, ar);
         if (tk != 1) {
-            return 3;
+            return PdStop(src, 3);
         }
         off = Pdflex.PlTokenA(ar);
         // Offsets are from the start of the file, or (junk before the header)
@@ -1150,45 +1323,47 @@ public static class Pdfdoc {
             emon.Port.CellsSet(dc, DShift, 0);
         } else if ((@base > 0) && (PdKindAt(src, ar, off + @base) != 0)) {
             emon.Port.CellsSet(dc, DShift, @base);
-            PdWarnSet(dc, 1);
+            PdWarnSet(src, dc, 1);
         } else {
-            return 3;
+            return PdStop(src, 3);
         }
         status = PdChain(src, ar, dc, a, b, st, off);
         if (status != 0) {
             return status;
         }
         if (emon.Port.CellsAt(dc, DNtrail) == 0) {
-            return 3;
+            return PdStop(src, 3);
         }
+        // The cross-reference is read: say where each object ends.
+        PdHintExtents(src, dc, b);
         enc = PdTrailerGet(ar, dc, Pdfnames.PnEncrypt());
         if (enc != 0) {
             emon.Port.CellsSet(dc, DEnc, enc);
         }
         root = PdTrailerGet(ar, dc, Pdfnames.PnRoot());
         if (root == 0) {
-            return 4;
+            return PdStop(src, 4);
         }
         root = PdResolve(src, ar, dc, a, b, st, root);
         // When the file is encrypted, what cannot be read is probably
         // encrypted (object streams are, whole): say so, and let P3.2 decrypt.
         if (root == 0) {
-            return PdUnreadable(dc, 4);
+            return PdUnreadable(src, dc, 4);
         }
         if (Pdflex.PlKindOf(ar, root) != 7) {
-            return PdUnreadable(dc, 4);
+            return PdUnreadable(src, dc, 4);
         }
         emon.Port.CellsSet(dc, DRoot, root);
         pages = PdDget(src, ar, dc, a, b, st, root, Pdfnames.PnPages());
         if (pages == 0) {
-            return PdUnreadable(dc, 5);
+            return PdUnreadable(src, dc, 5);
         }
         if (Pdflex.PlKindOf(ar, pages) != 7) {
-            return PdUnreadable(dc, 5);
+            return PdUnreadable(src, dc, 5);
         }
         return 0;
     }
-    internal static int PdElem(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int arr, int i) {
+    internal static int PdElem(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int arr, int i) {
         // The i-th element of an array, resolved; 0 when absent.
         int h = PdNth(ar, arr, i);
         return PdResolve(src, ar, dc, a, b, st, h);
@@ -1209,7 +1384,7 @@ public static class Pdfdoc {
         }
         return 0;
     }
-    internal static int PdReadBox(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int boxh, emon.Port.Cells pg, int at) {
+    internal static int PdReadBox(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int boxh, emon.Port.Cells pg, int at) {
         // Read a box (four numbers, any of which may be a reference) into
         // pg[at, at+4) as x0 y0 x1 y1 with x0 < x1 and y0 < y1. Answers 1 when
         // it is a box with a positive area, else 0 and pg untouched.
@@ -1274,7 +1449,7 @@ public static class Pdfdoc {
         emon.Port.CellsSet(pg, at + 3, y1);
         return 1;
     }
-    internal static int PdRotation(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int rh) {
+    internal static int PdRotation(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int rh) {
         // /Rotate as 0, 90, 180 or 270. Negative values wrap; a value that
         // is not a multiple of 90 (poppler keeps 45, pdf.js reads 0) is 0.
         int h = PdResolve(src, ar, dc, a, b, st, rh);
@@ -1296,7 +1471,7 @@ public static class Pdfdoc {
         }
         return deg;
     }
-    internal static int PdAddPage(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, int node, int num, int im, int ic, int ir, int ires) {
+    internal static int PdAddPage(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, int node, int num, int im, int ic, int ir, int ires) {
         // Append the page record for a leaf `node` with its inherited
         // attributes (handles, 0 when no ancestor has one).
         int at = emon.Port.CellsLen(pg);
@@ -1325,7 +1500,7 @@ public static class Pdfdoc {
             emon.Port.CellsSet(pg, at + 3, 61200);
             emon.Port.CellsSet(pg, at + 4, 79200);
             flags = 1;
-            PdWarnSet(dc, 256);
+            PdWarnSet(src, dc, 256);
         }
         ok = PdReadBox(src, ar, dc, a, b, st, ic, pg, at + 5);
         if (ok == 1) {
@@ -1374,7 +1549,7 @@ public static class Pdfdoc {
         emon.Port.CellsSet(pg, at + 12, flags);
         return 0;
     }
-    internal static int PdWalk(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, int node, int num, int depth, int im, int ic, int ir, int ires) {
+    internal static int PdWalk(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, int node, int num, int depth, int im, int ic, int ir, int ires) {
         // One node of the page tree. `im ic ir ires` are the nearest
         // ancestor's /MediaBox /CropBox /Rotate /Resources (handles, 0 for
         // none). A node with /Kids is an intermediate node, any other is a
@@ -1383,8 +1558,12 @@ public static class Pdfdoc {
         if (depth > 64) {
             return 0;
         }
+        // CHECKPOINT: at each page-tree node.
+        if (Pdfsrc.PsMissed(src)) {
+            return 0;
+        }
         if (Pdflex.PlKindOf(ar, node) != 7) {
-            PdWarnSet(dc, 128);
+            PdWarnSet(src, dc, 128);
             return 0;
         }
         int at = 0;
@@ -1401,7 +1580,7 @@ public static class Pdfdoc {
         if (num > 0) {
             at = DFirst + (num * 5);
             if (((emon.Port.CellsAt(dc, at + 4) / 4) & 1) == 1) {
-                PdWarnSet(dc, 128);
+                PdWarnSet(src, dc, 128);
                 return 0;
             }
             emon.Port.CellsSet(dc, at + 4, emon.Port.CellsAt(dc, at + 4) + 4);
@@ -1431,14 +1610,17 @@ public static class Pdfdoc {
                     kn = Pdflex.PlIntValue(ar, k);
                     kh = PdGet(src, ar, dc, a, b, st, kn);
                     if (kh == 0) {
-                        PdWarnSet(dc, 128);
+                        PdWarnSet(src, dc, 128);
                     } else {
                         PdWalk(src, ar, dc, a, b, st, pg, kh, kn, depth + 1, m, c, r, res);
                     }
                 } else if (kk == 7) {
                     PdWalk(src, ar, dc, a, b, st, pg, k, 0, depth + 1, m, c, r, res);
                 } else {
-                    PdWarnSet(dc, 128);
+                    PdWarnSet(src, dc, 128);
+                }
+                if (Pdfsrc.PsMissed(src)) {
+                    return 0;
                 }
                 k = Pdflex.PlNext(ar, k);
             }
@@ -1447,15 +1629,19 @@ public static class Pdfdoc {
         PdAddPage(src, ar, dc, a, b, st, pg, node, num, m, c, r, res);
         return 0;
     }
-    public static int PdPages(byte[] src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg) {
+    public static int PdPages(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg) {
         // Walk the page tree from the catalog into `pg` (cleared first) and
-        // answer the number of pages. Call it after a successful `pd-open`.
+        // answer the number of pages, or -1 when the source missed (then `pg` is
+        // not to be used: re-run). Call it after a successful `pd-open`.
         emon.Port.CellsDrop(pg, 0);
         int root = emon.Port.CellsAt(dc, DRoot);
         int raw = Pdflex.PlDictGet(ar, root, Pdfnames.PnPages());
         int top = PdResolve(src, ar, dc, a, b, st, raw);
         int num = 0;
         int i = 0;
+        if (Pdfsrc.PsMissed(src)) {
+            return -1;
+        }
         if (top == 0) {
             return 0;
         }
@@ -1470,6 +1656,9 @@ public static class Pdfdoc {
             num = Pdflex.PlIntValue(ar, raw);
         }
         PdWalk(src, ar, dc, a, b, st, pg, top, num, 0, 0, 0, 0, 0);
+        if (Pdfsrc.PsMissed(src)) {
+            return -1;
+        }
         return emon.Port.CellsLen(pg) / PageStride;
     }
     public static int PdPgCount(emon.Port.Cells pg) {

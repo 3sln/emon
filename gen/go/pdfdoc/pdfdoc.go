@@ -33,6 +33,9 @@ func PdNoPages() int32 {
 func PdEncryptedUnread() int32 {
 	return 6
 }
+func PdNeedBytes() int32 {
+	return 7
+}
 func PdStatusEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "ok")
@@ -60,6 +63,10 @@ func PdStatusEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 6 {
 		port.TextAscii(t, "encrypted")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "need-bytes")
 		return 1
 	}
 	return 0
@@ -209,12 +216,27 @@ func PdObjectCount(dc *port.Cells) int32 {
 	return port.CellsAt(dc, dNent)
 }
 
-func pdWarnSet(dc *port.Cells, bit int32) int32 {
+func pdWarnSet(src *port.Src, dc *port.Cells, bit int32) int32 {
+	// Note a tolerated damage. NOT while the source has missed: what looks
+	// like damage may be zeros standing in for bytes that have not arrived.
+	if pdfsrc.PsMissed(src) {
+		return 0
+	}
 	var w int32 = port.CellsAt(dc, dWarn)
 	if ((w / bit) & 1) == 0 {
 		port.CellsSet(dc, dWarn, w+bit)
 	}
 	return 0
+}
+
+func pdStop(src *port.Src, status int32) int32 {
+	// The status to report for a failure: `need-bytes` when the source has
+	// missed (the failure may be the miss), else `status`. THE CHECK BEFORE
+	// CLASSIFYING (D058): every `bad-xref` and friends goes through here.
+	if pdfsrc.PsMissed(src) {
+		return 7
+	}
+	return status
 }
 
 func pdEntPut(dc *port.Cells, num int32, kind int32, f1 int32, f2 int32, mode int32) int32 {
@@ -255,7 +277,7 @@ func PdEntKind(dc *port.Cells, num int32) int32 {
 	return port.CellsAt(dc, dFirst+(num*5))
 }
 
-func pdFindHeader(src []byte) int32 {
+func pdFindHeader(src *port.Src) int32 {
 	// The index of `%PDF-` within the first 1024 bytes (Acrobat accepts
 	// junk before it), or -1.
 	var n int32 = pdfsrc.PsLen(src)
@@ -273,7 +295,7 @@ func pdFindHeader(src []byte) int32 {
 	return -1
 }
 
-func pdFindStartxref(src []byte) int32 {
+func pdFindStartxref(src *port.Src) int32 {
 	// The index of the LAST `startxref`: within the last 1100 bytes, then
 	// within the last 64 KiB (junk appended after %%EOF). -1 for none.
 	// A TAIL, not the file: only the end of the source is read.
@@ -295,6 +317,11 @@ func pdFindStartxref(src []byte) int32 {
 		}
 		i -= 1
 	}
+	// Nothing in the last 1100 bytes: if a miss is why, do not go on to
+	// ask for 64 KiB of zeros.
+	if pdfsrc.PsMissed(src) {
+		return -1
+	}
 	i = stop - 1
 	for i >= floor {
 		if pdfsrc.PsU8(src, i) == 115 {
@@ -307,7 +334,7 @@ func pdFindStartxref(src []byte) int32 {
 	return -1
 }
 
-func pdKindAt(src []byte, ar *port.Cells, pos int32) int32 {
+func pdKindAt(src *port.Src, ar *port.Cells, pos int32) int32 {
 	// What starts at pos: 1 for `xref` (a table), 2 for `N G obj` (a
 	// cross-reference stream), 0 for anything else.
 	var n int32 = pdfsrc.PsLen(src)
@@ -335,7 +362,7 @@ func pdKindAt(src []byte, ar *port.Cells, pos int32) int32 {
 	return 0
 }
 
-func PdResolve(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, h0 int32) int32 {
+func PdResolve(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, h0 int32) int32 {
 	// Follow references from h0 to a value: 0 when the chain ends in a
 	// missing object, is too deep, or cycles. A value that is not a
 	// reference is answered as it is.
@@ -353,14 +380,14 @@ func PdResolve(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	return h
 }
 
-func PdDget(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, dict int32, id int32) int32 {
+func PdDget(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, dict int32, id int32) int32 {
 	// The RESOLVED value under a well-known key of a dictionary (or of a
 	// stream's dictionary), 0 when absent.
 	var v int32 = pdflex.PlDictGet(ar, dict, id)
 	return PdResolve(src, ar, dc, a, b, st, v)
 }
 
-func PdDint(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, dict int32, id int32, dflt int32) int32 {
+func PdDint(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, dict int32, id int32, dflt int32) int32 {
 	// An integer value under a well-known key, else dflt. A real that is
 	// a whole number counts.
 	var v int32 = PdDget(src, ar, dc, a, b, st, dict, id)
@@ -380,7 +407,7 @@ func PdDint(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 	return dflt
 }
 
-func pdLoadDirect(src []byte, ar *port.Cells, dc *port.Cells, num int32, off int32) int32 {
+func pdLoadDirect(src *port.Src, ar *port.Cells, dc *port.Cells, num int32, off int32) int32 {
 	// Parse `num G obj ...` at file offset off. The object number found
 	// must be num: a table entry that points at another object is wrong.
 	var n int32 = pdfsrc.PsLen(src)
@@ -390,11 +417,11 @@ func pdLoadDirect(src []byte, ar *port.Cells, dc *port.Cells, num int32, off int
 	if (h != 0) && (pdflex.PlObjnum(ar) == num) {
 		return h
 	}
-	pdWarnSet(dc, 32)
+	pdWarnSet(src, dc, 32)
 	return 0
 }
 
-func pdParseObjstm(data []byte, ar *port.Cells, dc *port.Cells, sn int32, nn int32, first int32) int32 {
+func pdParseObjstm(data *port.Src, ar *port.Cells, dc *port.Cells, sn int32, nn int32, first int32) int32 {
 	// Every object of an object stream, from its decoded bytes: N pairs
 	// of (object number, offset from /First), then the objects. Each is
 	// cached in the cross-reference where that entry says it lives in
@@ -438,7 +465,7 @@ func pdParseObjstm(data []byte, ar *port.Cells, dc *port.Cells, sn int32, nn int
 	return 0
 }
 
-func pdLoadCompressed(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, num int32) int32 {
+func pdLoadCompressed(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, num int32) int32 {
 	// Object `num` lives in an object stream: decode that stream once,
 	// parse every object in it, and answer the cache of `num`.
 	var at int32 = dFirst + (num * 5)
@@ -476,16 +503,19 @@ func pdLoadCompressed(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells,
 	}
 	plan = PdStreamPlan(src, ar, dc, a, b, st, sh)
 	status = PdRunPlan(src, ar, plan, sh, b, st, a)
-	// A truncated or badly-checksummed stream still has its objects.
-	if (status != 0) && (status != 1) && (status != 5) && (status != 7) {
-		pdWarnSet(dc, 64)
+	if pdfsrc.PsMissed(src) {
 		return 0
 	}
-	pdParseObjstm(port.CellsBytes(a), ar, dc, sn, nn, first)
+	// A truncated or badly-checksummed stream still has its objects.
+	if (status != 0) && (status != 1) && (status != 5) && (status != 7) {
+		pdWarnSet(src, dc, 64)
+		return 0
+	}
+	pdParseObjstm(port.SrcOfCells(a), ar, dc, sn, nn, first)
 	return port.CellsAt(dc, at+3)
 }
 
-func PdGet(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, num int32) int32 {
+func PdGet(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, num int32) int32 {
 	// Object `num` as a handle in `ar`, loaded on first use and cached;
 	// 0 when it is free, missing, at the wrong offset, or being loaded
 	// already (a cycle).
@@ -522,6 +552,10 @@ func PdGet(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Ce
 	}
 	port.CellsSet(dc, at+4, port.CellsAt(dc, at+4)-1)
 	port.CellsSet(dc, dDepth, depth)
+	// CHECKPOINT: an object that may be zeros is not cached.
+	if pdfsrc.PsMissed(src) {
+		return 0
+	}
 	if h != 0 {
 		port.CellsSet(dc, at+3, h)
 	}
@@ -575,7 +609,7 @@ func pdFilterCode(ar *port.Cells, h int32) int32 {
 	return 0
 }
 
-func pdFixLength(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32) int32 {
+func pdFixLength(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32) int32 {
 	// A stream whose /Length is an indirect reference was parsed without a
 	// length (flags 2). Follow the reference: if the length it names is
 	// followed by `endstream` that is the length, read at two places and
@@ -588,12 +622,19 @@ func pdFixLength(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *p
 	var start int32 = pdflex.PlStreamStart(ar, sh)
 	var ln int32 = PdDint(src, ar, dc, a, b, st, d, pdfnames.PnLength(), -1)
 	var z int32 = 0
+	if pdfsrc.PsMissed(src) {
+		return 0
+	}
 	if (ln >= 0) && (ln <= (n - start)) {
 		z = pdflex.PlSkip(src, start+ln, n)
 		if pdflex.PlKwAt(src, z, n, 7) == 1 {
 			pdflex.PlStreamSetLen(ar, sh, ln)
 			return 0
 		}
+	}
+	// The rescan reads forward, perhaps to the end: not on a guess.
+	if pdfsrc.PsMissed(src) {
+		return 0
 	}
 	pdflex.PlStreamRescan(src, ar, sh)
 	return 0
@@ -610,7 +651,7 @@ func pdCopy(from *port.Cells, to *port.Cells) int32 {
 	return 0
 }
 
-func pdSpan(src []byte, s int32, e int32, to *port.Cells) int32 {
+func pdSpan(src *port.Src, s int32, e int32, to *port.Cells) int32 {
 	var i int32 = s
 	port.CellsDrop(to, 0)
 	for i < e {
@@ -620,7 +661,7 @@ func pdSpan(src []byte, s int32, e int32, to *port.Cells) int32 {
 	return 0
 }
 
-func PdStreamPlan(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32) int32 {
+func PdStreamPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32) int32 {
 	// Plan the decoding of stream `sh`: resolve /Filter and /DecodeParms
 	// (and /Length, when it is a reference) and record the chain. Answers
 	// the plan's handle in `ar`. `a`, `b` and `st` may be overwritten.
@@ -716,7 +757,7 @@ func PdStreamPlan(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	return plan
 }
 
-func PdRunPlan(src []byte, ar *port.Cells, plan int32, sh int32, b *port.Cells, st *port.Cells, out *port.Cells) int32 {
+func PdRunPlan(src *port.Src, ar *port.Cells, plan int32, sh int32, b *port.Cells, st *port.Cells, out *port.Cells) int32 {
 	// Run a plan over stream `sh` into `out` (cleared first), with `b` and
 	// `st` as scratch. Answers a `pf-status`: the FIRST error, from a
 	// stage or from the plan; whatever was decoded stays in `out`. An
@@ -741,6 +782,10 @@ func PdRunPlan(src []byte, ar *port.Cells, plan int32, sh int32, b *port.Cells, 
 	var columns int32 = 1
 	var early int32 = 1
 	port.CellsDrop(out, 0)
+	// CHECKPOINT: the plan and the span may be made of zeros.
+	if pdfsrc.PsMissed(src) {
+		return 12
+	}
 	for i < ns {
 		code = pdflex.PlIntValue(ar, k)
 		k = pdflex.PlNext(ar, k)
@@ -769,7 +814,7 @@ func PdRunPlan(src []byte, ar *port.Cells, plan int32, sh int32, b *port.Cells, 
 		}
 		// cur: 0 the file's span, 1 the data is in out, 2 it is in b.
 		if cur == 0 {
-			s2 = pdffilter.PfRun(code, src, start, end, out, st, early)
+			s2 = pdffilter.PfRun(code, port.SrcSlice(src, start, end), 0, end-start, out, st, early)
 			cur = 1
 		} else if cur == 1 {
 			port.CellsDrop(b, 0)
@@ -810,10 +855,14 @@ func PdRunPlan(src []byte, ar *port.Cells, plan int32, sh int32, b *port.Cells, 
 	if status == 0 {
 		status = pstatus
 	}
+	// CHECKPOINT: after the stream span.
+	if pdfsrc.PsMissed(src) {
+		return 12
+	}
 	return status
 }
 
-func PdStreamData(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32, out *port.Cells) int32 {
+func PdStreamData(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32, out *port.Cells) int32 {
 	// The DECODED bytes of stream `sh` into `out` (cleared first), by
 	// planning the chain and running it. `out` must not be `a`, `b` or
 	// `st` (they are overwritten); answers a `pf-status`, the first error.
@@ -857,7 +906,7 @@ func pdSetPrev(ar *port.Cells, dc *port.Cells, dict int32) int32 {
 	return 0
 }
 
-func pdTable(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pos int32) int32 {
+func pdTable(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pos int32) int32 {
 	// A classic section: `xref`, subsections `first count` of `offset gen
 	// n|f` entries, `trailer`, the trailer dictionary. Entries are read
 	// as tokens, so the 20-byte layout is not insisted on. A count larger
@@ -881,42 +930,48 @@ func pdTable(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	tk = pdflex.PlLex(src, ar)
 	for more == 1 {
 		tk = pdflex.PlLex(src, ar)
+		if pdfsrc.PsMissed(src) {
+			return PdNeedBytes()
+		}
 		if (tk == 11) && (pdflex.PlTokenC(ar) == 10) {
 			more = 0
 		} else {
 			if tk != 1 {
-				return 3
+				return pdStop(src, 3)
 			}
 			first = pdflex.PlTokenA(ar)
 			tk = pdflex.PlLex(src, ar)
 			if tk != 1 {
-				return 3
+				return pdStop(src, 3)
 			}
 			count = pdflex.PlTokenA(ar)
 			i = 0
 			inner = 1
 			for (i < count) && (inner == 1) {
 				tk = pdflex.PlLex(src, ar)
+				if pdfsrc.PsMissed(src) {
+					return PdNeedBytes()
+				}
 				if (tk == 11) && (pdflex.PlTokenC(ar) == 10) {
 					pdflex.PlUnread(ar)
 					inner = 0
 				} else {
 					if tk != 1 {
-						return 3
+						return pdStop(src, 3)
 					}
 					eoff = pdflex.PlTokenA(ar)
 					tk = pdflex.PlLex(src, ar)
 					if tk != 1 {
-						return 3
+						return pdStop(src, 3)
 					}
 					egen = pdflex.PlTokenA(ar)
 					tk = pdflex.PlLex(src, ar)
 					if tk != 11 {
-						return 3
+						return pdStop(src, 3)
 					}
 					ek = pdflex.PlTokenC(ar)
 					if (ek != 12) && (ek != 13) {
-						return 3
+						return pdStop(src, 3)
 					}
 					if (i == 0) && (first == 1) && (ek == 12) && (egen == 65535) {
 						first = 0
@@ -932,20 +987,27 @@ func pdTable(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 		}
 	}
 	d = pdflex.PlParse(src, ar)
+	if pdfsrc.PsMissed(src) {
+		return PdNeedBytes()
+	}
 	if d == 0 {
-		return 3
+		return pdStop(src, 3)
 	}
 	if pdflex.PlKindOf(ar, d) != 7 {
-		return 3
+		return pdStop(src, 3)
 	}
 	pdAddTrailer(dc, d)
 	pdSetPrev(ar, dc, d)
 	xs = pdflex.PlDictGet(ar, d, pdfnames.PnXRefStm())
 	if (xs != 0) && (pdflex.PlKindOf(ar, xs) == 2) {
-		pdWarnSet(dc, 2)
+		pdWarnSet(src, dc, 2)
 		// An unreadable /XRefStm costs only the objects it lists.
 		xpos = pdflex.PlIntValue(ar, xs) + port.CellsAt(dc, dShift)
 		pdXstream(src, ar, dc, a, b, st, xpos, 1)
+	}
+	// CHECKPOINT: after the trailer (and the /XRefStm it named).
+	if pdfsrc.PsMissed(src) {
+		return PdNeedBytes()
 	}
 	return 0
 }
@@ -1012,18 +1074,18 @@ func pdXfill(dc *port.Cells, a *port.Cells, at0 int32, first int32, count int32,
 	return at
 }
 
-func pdXfinish(ar *port.Cells, dc *port.Cells, d int32, mode int32) int32 {
+func pdXfinish(src *port.Src, ar *port.Cells, dc *port.Cells, d int32, mode int32) int32 {
 	// A chain section (mode 0) registers its dictionary as a trailer and
 	// names its /Prev; an /XRefStm (mode 1) does neither.
 	if mode == 0 {
 		pdAddTrailer(dc, d)
 		pdSetPrev(ar, dc, d)
-		pdWarnSet(dc, 16)
+		pdWarnSet(src, dc, 16)
 	}
 	return 0
 }
 
-func pdXstream(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pos int32, mode int32) int32 {
+func pdXstream(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pos int32, mode int32) int32 {
 	// A cross-reference STREAM: a stream object whose decoded data is
 	// entries of widths /W [t o g] for each (first, count) of /Index
 	// (default [0 /Size]): type 0 free, 1 in use (offset, generation), 2
@@ -1050,22 +1112,25 @@ func pdXstream(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	var e2 int32 = 0
 	pdflex.PlSeek(ar, pos, n)
 	h = pdflex.PlParseIndirect(src, ar, pos)
+	if pdfsrc.PsMissed(src) {
+		return PdNeedBytes()
+	}
 	if h == 0 {
-		return 3
+		return pdStop(src, 3)
 	}
 	if pdflex.PlKindOf(ar, h) != 8 {
-		return 3
+		return pdStop(src, 3)
 	}
 	d = pdflex.PlStreamDict(ar, h)
 	wa = PdDget(src, ar, dc, a, b, st, d, pdfnames.PnW())
 	if wa == 0 {
-		return 3
+		return pdStop(src, 3)
 	}
 	if pdflex.PlKindOf(ar, wa) != 6 {
-		return 3
+		return pdStop(src, 3)
 	}
 	if pdflex.PlCount(ar, wa) < 3 {
-		return 3
+		return pdStop(src, 3)
 	}
 	e0 = pdNth(ar, wa, 0)
 	e1 = pdNth(ar, wa, 1)
@@ -1074,17 +1139,20 @@ func pdXstream(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	w1 = pdIval(ar, e1)
 	w2 = pdIval(ar, e2)
 	if (w0 < 0) || (w0 > 4) || (w1 < 0) || (w1 > 4) || (w2 < 0) || (w2 > 4) {
-		return 3
+		return pdStop(src, 3)
 	}
 	if ((w0 + w1) + w2) == 0 {
-		return 3
+		return pdStop(src, 3)
 	}
 	size = PdDint(src, ar, dc, a, b, st, d, pdfnames.PnSize(), 0)
 	plan = PdStreamPlan(src, ar, dc, a, b, st, h)
 	status = PdRunPlan(src, ar, plan, h, b, st, a)
+	if pdfsrc.PsMissed(src) {
+		return PdNeedBytes()
+	}
 	// A cut-short or badly-checksummed stream still holds entries.
 	if (status != 0) && (status != 1) && (status != 5) && (status != 7) {
-		return 3
+		return pdStop(src, 3)
 	}
 	ix = PdDget(src, ar, dc, a, b, st, d, pdfnames.PnIndex())
 	if (ix != 0) && (pdflex.PlKindOf(ar, ix) == 6) {
@@ -1101,10 +1169,111 @@ func pdXstream(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	} else {
 		pdXfill(dc, a, 0, 0, size, w0, w1, w2, mode)
 	}
-	return pdXfinish(ar, dc, d, mode)
+	return pdXfinish(src, ar, dc, d, mode)
 }
 
-func pdSection(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, off int32) int32 {
+func pdSiftDown(b *port.Cells, lo int32, n int32) int32 {
+	// Heap sort's sift-down over b[0, n), for `pd-hint-extents`.
+	var root int32 = lo
+	var child int32 = 0
+	var sw int32 = 0
+	var x int32 = 0
+	var y int32 = 0
+	var more int32 = 1
+	for more == 1 {
+		child = (root * 2) + 1
+		if child >= n {
+			more = 0
+		} else {
+			sw = root
+			if port.CellsAt(b, sw) < port.CellsAt(b, child) {
+				sw = child
+			}
+			if (child + 1) < n {
+				if port.CellsAt(b, sw) < port.CellsAt(b, child+1) {
+					sw = child + 1
+				}
+			}
+			if sw == root {
+				more = 0
+			} else {
+				x = port.CellsAt(b, root)
+				y = port.CellsAt(b, sw)
+				port.CellsSet(b, root, y)
+				port.CellsSet(b, sw, x)
+				root = sw
+			}
+		}
+	}
+	return 0
+}
+
+func pdSort(b *port.Cells, n int32) int32 {
+	// Sort b[0, n) ascending, in place (heap sort: no recursion, no extra
+	// storage, and the same order on every target).
+	var i int32 = (n / 2) - 1
+	var e int32 = n - 1
+	var x int32 = 0
+	var y int32 = 0
+	for i >= 0 {
+		pdSiftDown(b, i, n)
+		i -= 1
+	}
+	for e > 0 {
+		x = port.CellsAt(b, 0)
+		y = port.CellsAt(b, e)
+		port.CellsSet(b, 0, y)
+		port.CellsSet(b, e, x)
+		pdSiftDown(b, 0, e)
+		e -= 1
+	}
+	return 0
+}
+
+func pdHintExtents(src *port.Src, dc *port.Cells, b *port.Cells) int32 {
+	// Once the cross-reference is read, every object's EXTENT is known: from
+	// its offset to the next larger offset (or the end of the source). Tell
+	// the source, so a miss on an object can fetch the whole object, not a
+	// guess (D058). `b` is scratch. Answers the number of hints.
+	var n int32 = pdfsrc.PsLen(src)
+	var nent int32 = port.CellsAt(dc, dNent)
+	var shift int32 = port.CellsAt(dc, dShift)
+	var i int32 = 0
+	var at int32 = 0
+	var o int32 = 0
+	var nx int32 = 0
+	var cnt int32 = 0
+	var hints int32 = 0
+	port.CellsDrop(b, 0)
+	for i < nent {
+		at = dFirst + (i * 5)
+		if port.CellsAt(dc, at) == 2 {
+			o = port.CellsAt(dc, at+1) + shift
+			if (o >= 0) && (o < n) {
+				port.CellsPush(b, o)
+			}
+		}
+		i += 1
+	}
+	cnt = port.CellsLen(b)
+	pdSort(b, cnt)
+	i = 0
+	for i < cnt {
+		o = port.CellsAt(b, i)
+		nx = n
+		if (i + 1) < cnt {
+			nx = port.CellsAt(b, i+1)
+		}
+		if nx > o {
+			pdfsrc.PsHint(src, o, nx)
+			hints += 1
+		}
+		i += 1
+	}
+	return hints
+}
+
+func pdSection(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, off int32) int32 {
 	// Read the section at file offset `off` (shifted): a table or a stream.
 	var pos int32 = off + port.CellsAt(dc, dShift)
 	var k int32 = pdKindAt(src, ar, pos)
@@ -1114,10 +1283,10 @@ func pdSection(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	if k == 2 {
 		return pdXstream(src, ar, dc, a, b, st, pos, 0)
 	}
-	return 3
+	return pdStop(src, 3)
 }
 
-func pdChain(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, off0 int32) int32 {
+func pdChain(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, off0 int32) int32 {
 	// The sections, newest first: the one `startxref` names, then each
 	// /Prev. A section already read ends the chain (a loop); a failure in
 	// the first section is the answer, in a later one only a warning: the
@@ -1137,18 +1306,22 @@ func pdChain(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 			j += 1
 		}
 		if seen == 1 {
-			pdWarnSet(dc, 4)
+			pdWarnSet(src, dc, 4)
 			off = -1
 		} else {
 			port.CellsSet(dc, dSeen+guard, off)
 			port.CellsSet(dc, dNseen, guard+1)
 			port.CellsSet(dc, dPrev, -1)
 			status = pdSection(src, ar, dc, a, b, st, off)
+			// CHECKPOINT: after each xref section.
+			if pdfsrc.PsMissed(src) {
+				return PdNeedBytes()
+			}
 			if status != 0 {
 				if guard == 0 {
 					return status
 				}
-				pdWarnSet(dc, 8)
+				pdWarnSet(src, dc, 8)
 				off = -1
 			} else {
 				off = port.CellsAt(dc, dPrev)
@@ -1159,16 +1332,20 @@ func pdChain(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	return 0
 }
 
-func pdUnreadable(dc *port.Cells, status int32) int32 {
+func pdUnreadable(src *port.Src, dc *port.Cells, status int32) int32 {
 	// The status to answer when the catalog or the page tree could not be
-	// read: `encrypted` (6) if the trailer has /Encrypt, else `status`.
+	// read: `encrypted` (6) if the trailer has /Encrypt, else `status`; and
+	// `need-bytes` before either when the source has missed.
+	if pdfsrc.PsMissed(src) {
+		return 7
+	}
 	if port.CellsAt(dc, dEnc) != 0 {
 		return 6
 	}
 	return status
 }
 
-func PdOpen(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
+func PdOpen(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells) int32 {
 	// Open a document: find the header and `startxref`, read every
 	// cross-reference section and trailer, check that there is a catalog
 	// with a page tree. Answers a `pd-status` (0 ok). Nothing is decoded
@@ -1186,7 +1363,7 @@ func PdOpen(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 	var pages int32 = 0
 	var enc int32 = 0
 	if base < 0 {
-		return 1
+		return pdStop(src, 1)
 	}
 	port.CellsSet(dc, dBase, base)
 	if (base + 7) < n {
@@ -1203,12 +1380,12 @@ func PdOpen(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 	port.CellsSet(dc, dReflim, port.LimitOf(4))
 	sx = pdFindStartxref(src)
 	if sx < 0 {
-		return 2
+		return pdStop(src, 2)
 	}
 	pdflex.PlSeek(ar, sx+9, n)
 	tk = pdflex.PlLex(src, ar)
 	if tk != 1 {
-		return 3
+		return pdStop(src, 3)
 	}
 	off = pdflex.PlTokenA(ar)
 	// Offsets are from the start of the file, or (junk before the header)
@@ -1217,46 +1394,48 @@ func PdOpen(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 		port.CellsSet(dc, dShift, 0)
 	} else if (base > 0) && (pdKindAt(src, ar, off+base) != 0) {
 		port.CellsSet(dc, dShift, base)
-		pdWarnSet(dc, 1)
+		pdWarnSet(src, dc, 1)
 	} else {
-		return 3
+		return pdStop(src, 3)
 	}
 	status = pdChain(src, ar, dc, a, b, st, off)
 	if status != 0 {
 		return status
 	}
 	if port.CellsAt(dc, dNtrail) == 0 {
-		return 3
+		return pdStop(src, 3)
 	}
+	// The cross-reference is read: say where each object ends.
+	pdHintExtents(src, dc, b)
 	enc = pdTrailerGet(ar, dc, pdfnames.PnEncrypt())
 	if enc != 0 {
 		port.CellsSet(dc, dEnc, enc)
 	}
 	root = pdTrailerGet(ar, dc, pdfnames.PnRoot())
 	if root == 0 {
-		return 4
+		return pdStop(src, 4)
 	}
 	root = PdResolve(src, ar, dc, a, b, st, root)
 	// When the file is encrypted, what cannot be read is probably
 	// encrypted (object streams are, whole): say so, and let P3.2 decrypt.
 	if root == 0 {
-		return pdUnreadable(dc, 4)
+		return pdUnreadable(src, dc, 4)
 	}
 	if pdflex.PlKindOf(ar, root) != 7 {
-		return pdUnreadable(dc, 4)
+		return pdUnreadable(src, dc, 4)
 	}
 	port.CellsSet(dc, dRoot, root)
 	pages = PdDget(src, ar, dc, a, b, st, root, pdfnames.PnPages())
 	if pages == 0 {
-		return pdUnreadable(dc, 5)
+		return pdUnreadable(src, dc, 5)
 	}
 	if pdflex.PlKindOf(ar, pages) != 7 {
-		return pdUnreadable(dc, 5)
+		return pdUnreadable(src, dc, 5)
 	}
 	return 0
 }
 
-func pdElem(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, arr int32, i int32) int32 {
+func pdElem(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, arr int32, i int32) int32 {
 	// The i-th element of an array, resolved; 0 when absent.
 	var h int32 = pdNth(ar, arr, i)
 	return PdResolve(src, ar, dc, a, b, st, h)
@@ -1280,7 +1459,7 @@ func pdIsNum(ar *port.Cells, h int32) int32 {
 	return 0
 }
 
-func pdReadBox(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, boxh int32, pg *port.Cells, at int32) int32 {
+func pdReadBox(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, boxh int32, pg *port.Cells, at int32) int32 {
 	// Read a box (four numbers, any of which may be a reference) into
 	// pg[at, at+4) as x0 y0 x1 y1 with x0 < x1 and y0 < y1. Answers 1 when
 	// it is a box with a positive area, else 0 and pg untouched.
@@ -1346,7 +1525,7 @@ func pdReadBox(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	return 1
 }
 
-func pdRotation(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, rh int32) int32 {
+func pdRotation(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, rh int32) int32 {
 	// /Rotate as 0, 90, 180 or 270. Negative values wrap; a value that
 	// is not a multiple of 90 (poppler keeps 45, pdf.js reads 0) is 0.
 	var h int32 = PdResolve(src, ar, dc, a, b, st, rh)
@@ -1369,7 +1548,7 @@ func pdRotation(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *po
 	return deg
 }
 
-func pdAddPage(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, node int32, num int32, im int32, ic int32, ir int32, ires int32) int32 {
+func pdAddPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, node int32, num int32, im int32, ic int32, ir int32, ires int32) int32 {
 	// Append the page record for a leaf `node` with its inherited
 	// attributes (handles, 0 when no ancestor has one).
 	var at int32 = port.CellsLen(pg)
@@ -1398,7 +1577,7 @@ func pdAddPage(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 		port.CellsSet(pg, at+3, 61200)
 		port.CellsSet(pg, at+4, 79200)
 		flags = 1
-		pdWarnSet(dc, 256)
+		pdWarnSet(src, dc, 256)
 	}
 	ok = pdReadBox(src, ar, dc, a, b, st, ic, pg, at+5)
 	if ok == 1 {
@@ -1448,7 +1627,7 @@ func pdAddPage(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	return 0
 }
 
-func pdWalk(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, node int32, num int32, depth int32, im int32, ic int32, ir int32, ires int32) int32 {
+func pdWalk(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, node int32, num int32, depth int32, im int32, ic int32, ir int32, ires int32) int32 {
 	// One node of the page tree. `im ic ir ires` are the nearest
 	// ancestor's /MediaBox /CropBox /Rotate /Resources (handles, 0 for
 	// none). A node with /Kids is an intermediate node, any other is a
@@ -1457,8 +1636,12 @@ func pdWalk(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 	if depth > 64 {
 		return 0
 	}
+	// CHECKPOINT: at each page-tree node.
+	if pdfsrc.PsMissed(src) {
+		return 0
+	}
 	if pdflex.PlKindOf(ar, node) != 7 {
-		pdWarnSet(dc, 128)
+		pdWarnSet(src, dc, 128)
 		return 0
 	}
 	var at int32 = 0
@@ -1475,7 +1658,7 @@ func pdWalk(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 	if num > 0 {
 		at = dFirst + (num * 5)
 		if ((port.CellsAt(dc, at+4) / 4) & 1) == 1 {
-			pdWarnSet(dc, 128)
+			pdWarnSet(src, dc, 128)
 			return 0
 		}
 		port.CellsSet(dc, at+4, port.CellsAt(dc, at+4)+4)
@@ -1505,14 +1688,17 @@ func pdWalk(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 				kn = pdflex.PlIntValue(ar, k)
 				kh = PdGet(src, ar, dc, a, b, st, kn)
 				if kh == 0 {
-					pdWarnSet(dc, 128)
+					pdWarnSet(src, dc, 128)
 				} else {
 					pdWalk(src, ar, dc, a, b, st, pg, kh, kn, depth+1, m, c, r, res)
 				}
 			} else if kk == 7 {
 				pdWalk(src, ar, dc, a, b, st, pg, k, 0, depth+1, m, c, r, res)
 			} else {
-				pdWarnSet(dc, 128)
+				pdWarnSet(src, dc, 128)
+			}
+			if pdfsrc.PsMissed(src) {
+				return 0
 			}
 			k = pdflex.PlNext(ar, k)
 		}
@@ -1522,15 +1708,19 @@ func pdWalk(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.C
 	return 0
 }
 
-func PdPages(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells) int32 {
+func PdPages(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells) int32 {
 	// Walk the page tree from the catalog into `pg` (cleared first) and
-	// answer the number of pages. Call it after a successful `pd-open`.
+	// answer the number of pages, or -1 when the source missed (then `pg` is
+	// not to be used: re-run). Call it after a successful `pd-open`.
 	port.CellsDrop(pg, 0)
 	var root int32 = port.CellsAt(dc, dRoot)
 	var raw int32 = pdflex.PlDictGet(ar, root, pdfnames.PnPages())
 	var top int32 = PdResolve(src, ar, dc, a, b, st, raw)
 	var num int32 = 0
 	var i int32 = 0
+	if pdfsrc.PsMissed(src) {
+		return -1
+	}
 	if top == 0 {
 		return 0
 	}
@@ -1545,6 +1735,9 @@ func PdPages(src []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 		num = pdflex.PlIntValue(ar, raw)
 	}
 	pdWalk(src, ar, dc, a, b, st, pg, top, num, 0, 0, 0, 0, 0)
+	if pdfsrc.PsMissed(src) {
+		return -1
+	}
 	return port.CellsLen(pg) / pageStride
 }
 

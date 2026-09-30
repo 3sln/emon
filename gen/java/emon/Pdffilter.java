@@ -41,6 +41,9 @@ public final class Pdffilter {
     public static int pfBadSpec() {
         return 11;
     }
+    public static int pfNeedBytes() {
+        return 12;
+    }
     public static int pfStatusEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "ok");
@@ -88,6 +91,10 @@ public final class Pdffilter {
         }
         if (code == 11) {
             emon.Port.textAscii(t, "bad-filter-spec");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.textAscii(t, "need-bytes");
             return 1;
         }
         return 0;
@@ -196,7 +203,7 @@ public final class Pdffilter {
         int c = 0;
         int done = 0;
         while ((i < e) && (done == 0)) {
-            c = Pdfsrc.psU8(src, i);
+            c = emon.Port.blobU8(src, i);
             i += 1;
             if (c == 62) {
                 done = 1;
@@ -257,14 +264,14 @@ public final class Pdffilter {
         int done = 0;
         int pad = 0;
         // Skip white space and a `<~` prefix.
-        while ((i < e) && ((Pdfsrc.psU8(src, i) == 32) || (Pdfsrc.psU8(src, i) == 10) || (Pdfsrc.psU8(src, i) == 13) || (Pdfsrc.psU8(src, i) == 9) || (Pdfsrc.psU8(src, i) == 12) || (Pdfsrc.psU8(src, i) == 0))) {
+        while ((i < e) && ((emon.Port.blobU8(src, i) == 32) || (emon.Port.blobU8(src, i) == 10) || (emon.Port.blobU8(src, i) == 13) || (emon.Port.blobU8(src, i) == 9) || (emon.Port.blobU8(src, i) == 12) || (emon.Port.blobU8(src, i) == 0))) {
             i += 1;
         }
-        if (((i + 1) < e) && (Pdfsrc.psU8(src, i) == 60) && (Pdfsrc.psU8(src, i + 1) == 126)) {
+        if (((i + 1) < e) && (emon.Port.blobU8(src, i) == 60) && (emon.Port.blobU8(src, i + 1) == 126)) {
             i += 2;
         }
         while ((i < e) && (done == 0)) {
-            c = Pdfsrc.psU8(src, i);
+            c = emon.Port.blobU8(src, i);
             i += 1;
             if (c == 126) {
                 done = 1;
@@ -318,7 +325,7 @@ public final class Pdffilter {
         int k = 0;
         int b = 0;
         while (i < e) {
-            l = Pdfsrc.psU8(src, i);
+            l = emon.Port.blobU8(src, i);
             i += 1;
             if (l == 128) {
                 return 0;
@@ -330,7 +337,7 @@ public final class Pdffilter {
                     if (i >= e) {
                         return 1;
                     }
-                    emon.Port.cellsPush(out, Pdfsrc.psU8(src, i));
+                    emon.Port.cellsPush(out, emon.Port.blobU8(src, i));
                     i += 1;
                     k += 1;
                 }
@@ -338,7 +345,7 @@ public final class Pdffilter {
                 if (i >= e) {
                     return 1;
                 }
-                b = Pdfsrc.psU8(src, i);
+                b = emon.Port.blobU8(src, i);
                 i += 1;
                 pfRoom(out, base, 257 - l);
                 k = 0;
@@ -448,7 +455,7 @@ public final class Pdffilter {
         pfLzwClear(st);
         while (done == 0) {
             while ((nbits < width) && (i < e)) {
-                acc = (acc * 256) + Pdfsrc.psU8(src, i);
+                acc = (acc * 256) + emon.Port.blobU8(src, i);
                 i += 1;
                 nbits += 8;
             }
@@ -699,7 +706,7 @@ public final class Pdffilter {
         if (code == 6) {
             int k = s;
             while (k < e) {
-                emon.Port.cellsPush(out, Pdfsrc.psU8(src, k));
+                emon.Port.cellsPush(out, emon.Port.blobU8(src, k));
                 k += 1;
             }
             return 0;

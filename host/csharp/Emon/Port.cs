@@ -98,6 +98,117 @@ public static class Port {
         return b;
     }
 
+    // ---------------------------------------------------------- the Src
+    //
+    // An input byte source as kin sees it: a per-unit view over a backing
+    // that may miss (see the Rust half for the contract). `Src.View()` is a
+    // fresh view of the same backing, for the host's re-run.
+
+    public interface ISrcBacking {
+        int Len();
+
+        // The byte 0..255, or -1 when it is not resident (the backing records the miss).
+        int At(int i);
+
+        // Fill buf from s; false when any of it is not resident (recorded).
+        bool Span(int s, byte[] buf);
+
+        // Bytes [s, e) will be wanted. May be ignored.
+        void Hint(int s, int e);
+    }
+
+    private sealed class MemBacking : ISrcBacking {
+        private readonly byte[] v;
+
+        public MemBacking(byte[] v) {
+            this.v = v;
+        }
+
+        public int Len() {
+            return v.Length;
+        }
+
+        public int At(int i) {
+            return v[i];
+        }
+
+        public bool Span(int s, byte[] buf) {
+            System.Array.Copy(v, s, buf, 0, buf.Length);
+            return true;
+        }
+
+        public void Hint(int s, int e) {
+        }
+    }
+
+    public sealed class Src {
+        internal readonly ISrcBacking B;
+        internal volatile bool Missed = false;
+
+        public Src(ISrcBacking b) {
+            B = b;
+        }
+
+        // A fresh view of the same backing: the missed flag is clear.
+        public Src View() {
+            return new Src(B);
+        }
+
+        public bool WasMissed() {
+            return Missed;
+        }
+    }
+
+    // @kin:link:form:src-len: {:template "emon.Port.SrcLen({0})" :arity 1}
+    public static int SrcLen(Src s) {
+        return s.B.Len();
+    }
+
+    // @kin:link:form:src-u8: {:template "emon.Port.SrcU8({0}, {1})" :arity 2}
+    public static int SrcU8(Src s, int i) {
+        if (i < 0 || i >= s.B.Len()) {
+            throw new System.IndexOutOfRangeException("source index " + i + " is outside 0.." + s.B.Len());
+        }
+        int v = s.B.At(i);
+        if (v < 0) {
+            s.Missed = true;
+            return 0;
+        }
+        return v;
+    }
+
+    // @kin:link:form:src-missed: {:template "emon.Port.SrcMissed({0})" :arity 1}
+    public static bool SrcMissed(Src s) {
+        return s.Missed;
+    }
+
+    // @kin:link:form:src-slice: {:template "emon.Port.SrcSlice({0}, {1}, {2})" :arity 3}
+    public static byte[] SrcSlice(Src s, int a, int b) {
+        if (a < 0 || b < a || b > s.B.Len()) {
+            throw new System.IndexOutOfRangeException("source span " + a + ".." + b + " is outside 0.." + s.B.Len());
+        }
+        var buf = new byte[b - a];
+        if (!s.B.Span(a, buf)) {
+            s.Missed = true;
+        }
+        return buf;
+    }
+
+    // @kin:link:form:src-of-cells: {:template "emon.Port.SrcOfCells({0})" :arity 1}
+    public static Src SrcOfCells(Cells c) {
+        return new Src(new MemBacking(CellsBytes(c)));
+    }
+
+    // @kin:link:form:src-of-blob: {:template "emon.Port.SrcOfBlob({0})" :arity 1}
+    public static Src SrcOfBlob(byte[] b) {
+        return new Src(new MemBacking(b));
+    }
+
+    // @kin:link:form:src-hint: {:template "emon.Port.SrcHint({0}, {1}, {2})" :arity 3}
+    public static void SrcHint(Src s, int a, int b) {
+        s.B.Hint(a, b);
+    }
+
     // ---------------------------------------------------------- the Text sink
     //
     // A StringBuilder is UTF-16; the host encodes to UTF-8 when the text

@@ -83,9 +83,9 @@ public final class Pdflextest {
         Pdflex.plInit(ar);
         Pdflex.plSeek(ar, 0, emon.Port.cellsLen(inp));
         if (indirect == 1) {
-            h = Pdflex.plParseIndirect(emon.Testport.cellsBlob(inp), ar, 0);
+            h = Pdflex.plParseIndirect(emon.Port.srcOfBlob(emon.Testport.cellsBlob(inp)), ar, 0);
         } else {
-            h = Pdflex.plParse(emon.Testport.cellsBlob(inp), ar);
+            h = Pdflex.plParse(emon.Port.srcOfBlob(emon.Testport.cellsBlob(inp)), ar);
         }
         if (h == 0) {
             emon.Port.textAscii(t, "!");
@@ -218,7 +218,7 @@ public final class Pdflextest {
     public static int ptParseText(byte[] b, emon.Port.Cells ar) {
         Pdflex.plInit(ar);
         Pdflex.plSeek(ar, 0, emon.Port.blobLen(b));
-        return Pdflex.plParse(b, ar);
+        return Pdflex.plParse(emon.Port.srcOfBlob(b), ar);
     }
     public static void testNamesAreInternedAndWellKnownIdsResolve() {
         emon.Port.Cells ar = emon.Port.newCells();
@@ -286,9 +286,9 @@ public final class Pdflextest {
             emon.Port.cellsPush(txt, 48 + ((i / 7) % 10));
             emon.Port.cellsPush(txt, 48 + (i / 100));
             Pdflex.plSeek(ar, 0, emon.Port.cellsLen(txt));
-            a = Pdflex.plParse(emon.Testport.cellsBlob(txt), ar);
+            a = Pdflex.plParse(emon.Port.srcOfBlob(emon.Testport.cellsBlob(txt)), ar);
             Pdflex.plSeek(ar, 0, emon.Port.cellsLen(txt));
-            b = Pdflex.plParse(emon.Testport.cellsBlob(txt), ar);
+            b = Pdflex.plParse(emon.Port.srcOfBlob(emon.Testport.cellsBlob(txt)), ar);
             ea = Pdflex.plNameEntry(ar, a);
             eb = Pdflex.plNameEntry(ar, b);
             emon.Testport.assertEqAt(ea, eb, "equal names share an entry", i);
@@ -297,8 +297,8 @@ public final class Pdflextest {
         // and a neighbour differs
         Pdflex.plInit(ar);
         Pdflex.plSeek(ar, 0, 5);
-        a = Pdflex.plParse(emon.Testport.textBlob("/x /y"), ar);
-        b = Pdflex.plParse(emon.Testport.textBlob("/x /y"), ar);
+        a = Pdflex.plParse(emon.Port.srcOfBlob(emon.Testport.textBlob("/x /y")), ar);
+        b = Pdflex.plParse(emon.Port.srcOfBlob(emon.Testport.textBlob("/x /y")), ar);
         emon.Testport.assertThat(Pdflex.plNameEntry(ar, a) != Pdflex.plNameEntry(ar, b), "/x and /y differ");
     }
     public static int ptPrep(emon.Port.Cells ar, byte[] src) {
@@ -310,7 +310,7 @@ public final class Pdflextest {
         // One field of the stream parsed from src (an indirect object).
         emon.Port.Cells ar = emon.Port.newCells();
         int z = ptPrep(ar, src);
-        int s = Pdflex.plParseIndirect(src, ar, 0);
+        int s = Pdflex.plParseIndirect(emon.Port.srcOfBlob(src), ar, 0);
         int sd = Pdflex.plStreamDict(ar, s);
         int lh = Pdflex.plDictGet(ar, sd, Pdfnames.pnLength());
         if (z != 0) {
@@ -378,7 +378,7 @@ public final class Pdflextest {
             h = 1;
             while ((h != 0) && (guard < 2000)) {
                 before = Pdflex.plPos(ar);
-                h = Pdflex.plParse(emon.Testport.cellsBlob(cut), ar);
+                h = Pdflex.plParse(emon.Port.srcOfBlob(emon.Testport.cellsBlob(cut)), ar);
                 if ((h != 0) && (Pdflex.plPos(ar) <= before)) {
                     h = 0;
                 }
@@ -389,7 +389,7 @@ public final class Pdflextest {
             while (at < cutn) {
                 Pdflex.plInit(ar);
                 Pdflex.plSeek(ar, 0, cutn);
-                Pdflex.plParseIndirect(emon.Testport.cellsBlob(cut), ar, at);
+                Pdflex.plParseIndirect(emon.Port.srcOfBlob(emon.Testport.cellsBlob(cut)), ar, at);
                 // a stream's data ends inside the blob
                 emon.Testport.assertThat(Pdflex.plPos(ar) <= cutn, "the parse never ran past the end");
                 at = ptNl(f, at) + 1;
