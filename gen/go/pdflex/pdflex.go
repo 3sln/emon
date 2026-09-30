@@ -422,7 +422,7 @@ func PlInit(ar *port.Cells) int32 {
 	}
 	port.CellsSet(ar, aObjlim, port.LimitOf(3))
 	i = 0
-	for i < 89 {
+	for i < 123 {
 		start = pdfnames.PnSpan[i*2+0]
 		ln = pdfnames.PnSpan[i*2+1]
 		plInternBegin(ar)

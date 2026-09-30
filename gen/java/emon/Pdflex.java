@@ -351,7 +351,7 @@ public final class Pdflex {
         }
         emon.Port.cellsSet(ar, A_OBJLIM, emon.Port.limitOf(3));
         i = 0;
-        while (i < 89) {
+        while (i < 123) {
             start = Pdfnames.PN_SPAN[i * 2 + 0];
             ln = Pdfnames.PN_SPAN[i * 2 + 1];
             plInternBegin(ar);

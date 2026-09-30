@@ -1,0 +1,590 @@
+;; Laws and the row corpora for `emon.pdffont` (P1.6).
+;;
+;; FOUR CORPORA, all read by kin from `test/fonts/` so that every target must
+;; agree with the same rows:
+;;
+;;   fonts.txt   fonts.pdf's fonts (hand-built; kin/scripts/font-fixtures.py):
+;;               the code points, `how`, widths, metrics, code lengths and
+;;               CIDs each must answer -- every expectation known by construction
+;;   cmaps.txt   CMap programs (ToUnicode, encoding, codespace) with the edge
+;;               cases of bfchar/bfrange: what each code must map to
+;;   names.txt   glyph names -> code points by the AGL rules (every name in the
+;;               Adobe Glyph List, and the uniXXXX/uXXXXX/underscore/suffix cases;
+;;               kin/scripts/font-names.py writes it and checks it against
+;;               pdfminer.six's independent implementation), and BaseFont
+;;               names -> standard font
+;;   real.txt    fonts of real files from `corpus/` and what pdfminer.six says
+;;               they map to (kin/scripts/font-corpus.py)
+;;
+;; plus laws on the sorted tables (a thousand entries defined in reverse, a CMap
+;; over the limit) and the truncation law: a CMap cut at every byte never faults.
+(ns emon.pdffonttest
+  (:require [emon.lang :refer [I32 Blob Src Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               assert-that-at assert-text assert-text-span
+                               text-blob new-cells new-text test-file
+                               test-file-span cells-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
+                               cells-push cells-drop text-cp text-i32 src-of-blob]]
+            [emon.evidence :refer [gh-tounicode gh-encoding gh-glyphname gh-cid
+                                   gh-unknown]]
+            [emon.pdfdoc :refer [pd-open pd-get]]
+            [emon.pdflex :refer [pl-init pl-seek pl-parse pl-kind-of pl-k-name]]
+            [emon.pdffont :refer [pfn-init pfn-load pfn-from-cmap pfn-map pfn-cp
+                                  pfn-how-of pfn-width pfn-cid pfn-code-len
+                                  pfn-ascent pfn-descent pfn-vertical pfn-warn
+                                  pfn-kind-of pfn-standard-font pfn-name-cps pfn-name-cps-zapf
+                                  pfn-s14-of pfn-how-emit-name pfn-dw2-v pfn-dw2-w
+                                  pfn-how-tounicode pfn-how-encoding
+                                  pfn-how-glyphname pfn-how-cid pfn-how-unknown
+                                  pfn-w-limit]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------ row helpers
+
+(defn ^I32 ft-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ft-tab [^Blob b ^I32 i ^I32 lim]
+  (comment "Index of the next tab in [i, lim), or lim.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ft-comma [^Blob b ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 44))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ft-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^I32 ft-hex [^Blob b ^I32 from ^I32 to]
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0]
+    (while (< k to)
+      (do (set v (+ (* v 16) (ft-hexval (blob-u8 b k))))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 ft-dec [^Blob b ^I32 from ^I32 to]
+  (comment "A decimal, possibly negative; `-` alone is -1 (none).")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0
+        ^:mut ^I32 neg 0]
+    (if (and (== (- to from) 1) (== (blob-u8 b from) 45)) (return -1))
+    (if (and (< k to) (== (blob-u8 b k) 45))
+      (do (set neg 1) (set k (+ k 1))))
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (if (== neg 1) (return (- 0 v)))
+    (return v)))
+
+(defn ^I32 ft-emit-hex [^:mut ^Text t ^I32 v]
+  (comment "Upper-case hex, at least four digits.")
+  (let [^:mut ^I32 p 1
+        ^:mut ^I32 nd 1
+        ^:mut ^I32 d 0
+        ^:mut ^I32 pad 0]
+    (while (>= (quot v p) 16)
+      (do (set p (* p 16))
+          (set nd (+ nd 1))))
+    (set pad (- 4 nd))
+    (while (> pad 0)
+      (do (text-cp t 48)
+          (set pad (- pad 1))))
+    (while (> p 0)
+      (do (set d (rem (quot v p) 16))
+          (if (< d 10)
+            (text-cp t (+ 48 d))
+            (text-cp t (+ 55 d)))
+          (set p (quot p 16))))
+    (return 0)))
+
+(defn ^I32 ft-emit-cps [^:mut ^Text t ^:mut ^Cells f ^I32 n]
+  (comment "The answer registers of the last `pfn-map` as `0041+0042`, or `-`.")
+  (let [^:mut ^I32 i 0]
+    (if (== n 0)
+      (do (text-cp t 45) (return 0)))
+    (while (< i n)
+      (do (if (> i 0) (text-cp t 43))
+          (ft-emit-hex t (pfn-cp f i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ft-unescape [^Blob b ^I32 from ^I32 to ^:mut ^Cells out]
+  (comment "b[from, to) with \\n \\r \\t and \\\\ turned into bytes, into out.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 c 0]
+    (cells-drop out 0)
+    (while (< k to)
+      (do (set c (blob-u8 b k))
+          (set k (+ k 1))
+          (if (== c 92)
+            (do (set c (blob-u8 b k))
+                (set k (+ k 1))
+                (if (== c 110) (cells-push out 10))
+                (if (== c 114) (cells-push out 13))
+                (if (== c 116) (cells-push out 9))
+                (if (== c 92) (cells-push out 92)))
+            (cells-push out c))))
+    (return 0)))
+
+;; ---------------------------------------------------------------- how codes
+
+(deftest test-how-codes-are-the-evidence-codes
+  (comment "SPEC 8.1: what pdffont says and what the evidence schema stores agree.")
+  (assert-eq (pfn-how-tounicode) (gh-tounicode) "tounicode")
+  (assert-eq (pfn-how-encoding) (gh-encoding) "encoding")
+  (assert-eq (pfn-how-glyphname) (gh-glyphname) "glyphname")
+  (assert-eq (pfn-how-cid) (gh-cid) "cid")
+  (assert-eq (pfn-how-unknown) (gh-unknown) "unknown"))
+
+;; ------------------------------------------------------------- the CMap rows
+
+(defn ^I32 ft-cmap-tu-row [^Blob rows ^I32 prog0 ^I32 prog1 ^I32 q0 ^I32 q1
+                           ^:mut ^Cells f ^:mut ^Cells prog ^:mut ^Text t]
+  (comment "Parse the program as a ToUnicode CMap and write what each query code")
+  (comment "maps to, joined by commas.")
+  (let [^:mut ^I32 at q0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 first 1]
+    (ft-unescape rows prog0 prog1 prog)
+    (pfn-from-cmap f (cells-blob prog) 1)
+    (while (<= at q1)
+      (do (set ce (ft-comma rows at q1))
+          (if (== first 0) (text-cp t 44))
+          (set first 0)
+          (set n (pfn-map f (ft-hex rows at ce)))
+          (ft-emit-cps t f n)
+          (set at (+ ce 1))))
+    (return 0)))
+
+(defn ^I32 ft-cmap-cid-row [^Blob rows ^I32 prog0 ^I32 prog1 ^I32 q0 ^I32 q1
+                            ^:mut ^Cells f ^:mut ^Cells prog ^:mut ^Text t]
+  (comment "Parse the program as an encoding CMap and write each query's CID.")
+  (let [^:mut ^I32 at q0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 first 1]
+    (ft-unescape rows prog0 prog1 prog)
+    (pfn-from-cmap f (cells-blob prog) 2)
+    (while (<= at q1)
+      (do (set ce (ft-comma rows at q1))
+          (if (== first 0) (text-cp t 44))
+          (set first 0)
+          (text-i32 t (pfn-cid f (ft-hex rows at ce)))
+          (set at (+ ce 1))))
+    (return 0)))
+
+(defn ^I32 ft-byte-at [^Blob rows ^I32 from ^I32 to ^I32 k]
+  (comment "Byte k of the hex string rows[from, to), -1 past its end.")
+  (if (>= (+ (* k 2) 1) (- to from)) (return -1))
+  (return (ft-hex rows (+ from (* k 2)) (+ from (+ (* k 2) 2)))))
+
+(defn ^I32 ft-cmap-cs-row [^Blob rows ^I32 prog0 ^I32 prog1 ^I32 q0 ^I32 q1
+                           ^:mut ^Cells f ^:mut ^Cells prog ^:mut ^Text t]
+  (comment "Parse the program's codespace ranges and write the length of the code")
+  (comment "at the start of each query's bytes.")
+  (let [^:mut ^I32 at q0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 first 1]
+    (ft-unescape rows prog0 prog1 prog)
+    (pfn-from-cmap f (cells-blob prog) 2)
+    (while (<= at q1)
+      (do (set ce (ft-comma rows at q1))
+          (if (== first 0) (text-cp t 44))
+          (set first 0)
+          (text-i32 t (pfn-code-len f (ft-byte-at rows at ce 0) (ft-byte-at rows at ce 1)
+                                    (ft-byte-at rows at ce 2) (ft-byte-at rows at ce 3)))
+          (set at (+ ce 1))))
+    (return 0)))
+
+(deftest test-every-cmap-row-maps-as-written
+  (comment "Row: kind (tu, cid, cs), program, queries, expected; `\\n` is a newline.")
+  (let [^Blob rows (test-file "fonts/cmaps.txt")
+        ^Cells f (new-cells)
+        ^Cells prog (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set count (+ count 1))
+                (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (set s2 (ft-tab rows (+ s1 1) e))
+                (let [^Text t (new-text)]
+                  (if (== (blob-u8 rows (+ pos 1)) 117)
+                    (ft-cmap-tu-row rows (+ s0 1) s1 (+ s1 1) s2 f prog t))
+                  (if (== (blob-u8 rows (+ pos 1)) 105)
+                    (ft-cmap-cid-row rows (+ s0 1) s1 (+ s1 1) s2 f prog t))
+                  (if (== (blob-u8 rows (+ pos 1)) 115)
+                    (ft-cmap-cs-row rows (+ s0 1) s1 (+ s1 1) s2 f prog t))
+                  (assert-text-span t rows (+ s2 1) e "cmap row" line))))
+          (set pos (+ e 1))))
+    (assert-that (> count 25) "the cmap rows were read")))
+
+;; ----------------------------------------------------------------- the names
+
+(defn ^I32 ft-name-row [^Blob rows ^I32 from ^I32 to ^:mut ^Cells ar ^:mut ^Cells f
+                        ^I32 kind ^:mut ^Text t]
+  (comment "Parse the /name at rows[from, to) and write its code points (kind 110,")
+  (comment "`n`; 122, `z`, for ZapfDingbats) or the standard font its BaseFont means")
+  (comment "(kind 115, `s`).")
+  (let [^:mut ^I32 h 0
+        ^:mut ^I32 cnt 0]
+    (pl-init ar)
+    (pl-seek ar from to)
+    (set h (pl-parse (src-of-blob rows) ar))
+    (if (== h 0)
+      (do (emit-ascii t "!parse") (return 0)))
+    (if (!= (pl-kind-of ar h) 4)
+      (do (emit-ascii t "!notname") (return 0)))
+    (if (== kind 110)
+      (do (set cnt (pfn-name-cps f ar h))
+          (ft-emit-cps t f cnt)))
+    (if (== kind 122)
+      (do (set cnt (pfn-name-cps-zapf f ar h))
+          (ft-emit-cps t f cnt)))
+    (if (== kind 115)
+      (text-i32 t (pfn-s14-of ar h)))
+    (return 0)))
+
+(deftest test-every-glyph-name-maps-by-the-agl-rules
+  (comment "Row: n (or z, for ZapfDingbats), /name, code points; s, /BaseFont, font number.")
+  (let [^Blob rows (test-file "fonts/names.txt")
+        ^Cells ar (new-cells)
+        ^Cells f (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0]
+    (pfn-init f)
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set count (+ count 1))
+                (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (let [^Text t (new-text)]
+                  (ft-name-row rows (+ s0 1) s1 ar f (blob-u8 rows pos) t)
+                  (if (== (blob-u8 rows pos) 115)
+                    (assert-text-span t rows (+ s1 1) e "standard font" line)
+                    (assert-text-span t rows (+ s1 1) e "glyph name" line)))))
+          (set pos (+ e 1))))
+    (assert-that (> count 4000) "every AGL name was read")))
+
+;; -------------------------------------------------------------- the fonts
+;;
+;; (A helper cannot assert -- Go's assertion templates name the test's own
+;; parameter -- so these answer values and the laws assert.)
+
+(defn ^I32 ft-kind-code [^I32 c]
+  (comment "simple -> 1, composite -> 2, none -> 0, by the first letter.")
+  (if (== c 115) (return 1))
+  (if (== c 99) (return 2))
+  (return 0))
+
+(defn ^I32 ft-load-font [^Blob rows ^I32 from ^I32 to ^I32 num
+                         ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out
+                         ^:mut ^Cells f]
+  (comment "Open the file named by rows[from, to), load font object `num`, and answer")
+  (comment "the `pfn-status`, or 100 + the `pd-open` status when the file will not open.")
+  (let [^Src pdf (src-of-blob (test-file-span rows from to))
+        ^I32 ostatus (pd-open pdf ar dc a b st)
+        ^:mut ^I32 h 0]
+    (if (!= ostatus 0) (return (+ 100 ostatus)))
+    (set h (pd-get pdf ar dc a b st num))
+    (return (pfn-load pdf ar dc a b st f out h))))
+
+(defn ^I32 ft-code-row [^Blob rows ^I32 s0 ^I32 s1 ^:mut ^Cells f
+                        ^:mut ^Text cps ^:mut ^Text how]
+  (comment "Map the hex code at rows[s0+1, s1) and write its code points and `how`;")
+  (comment "answers its width.")
+  (let [^I32 code (ft-hex rows (+ s0 1) s1)
+        ^I32 cnt (pfn-map f code)]
+    (ft-emit-cps cps f cnt)
+    (pfn-how-emit-name how (pfn-how-of f))
+    (return (pfn-width f code))))
+
+(defn ^I32 ft-len-row [^Blob rows ^I32 s0 ^I32 s1 ^:mut ^Cells f]
+  (return (pfn-code-len f (ft-byte-at rows (+ s0 1) s1 0) (ft-byte-at rows (+ s0 1) s1 1)
+                        (ft-byte-at rows (+ s0 1) s1 2) (ft-byte-at rows (+ s0 1) s1 3))))
+
+(deftest test-every-fixture-font-answers-as-built
+  (comment "Rows of fonts.txt: font, then its code, len, cid and dw2 rows.")
+  (let [^Blob rows (test-file "fonts/fonts.txt")
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 s5 0
+        ^:mut ^I32 s6 0
+        ^:mut ^I32 s7 0
+        ^:mut ^I32 s8 0
+        ^:mut ^I32 lstatus 0
+        ^:mut ^I32 b0 0
+        ^:mut ^I32 b1 0
+        ^:mut ^I32 width 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set count (+ count 1))
+                (set b0 (blob-u8 rows pos))
+                (set b1 (blob-u8 rows (+ pos 1)))
+                (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (set s2 (ft-tab rows (+ s1 1) e))
+                (set s3 (ft-tab rows (+ s2 1) e))
+                (if (== b0 102)
+                  (do (set s4 (ft-tab rows (+ s3 1) e))
+                      (set s5 (ft-tab rows (+ s4 1) e))
+                      (set s6 (ft-tab rows (+ s5 1) e))
+                      (set s7 (ft-tab rows (+ s6 1) e))
+                      (set s8 (ft-tab rows (+ s7 1) e))
+                      (set lstatus (ft-load-font rows (+ s0 1) s1 (ft-dec rows (+ s1 1) s2)
+                                                 ar dc a b st out f))
+                      (assert-eq-at lstatus (ft-dec rows (+ s2 1) s3) "load status" line)
+                      (if (== lstatus 0)
+                        (do (assert-eq-at (pfn-kind-of f) (ft-kind-code (blob-u8 rows (+ s3 1))) "kind" line)
+                            (assert-eq-at (pfn-ascent f) (ft-dec rows (+ s4 1) s5) "ascent" line)
+                            (assert-eq-at (pfn-descent f) (ft-dec rows (+ s5 1) s6) "descent" line)
+                            (assert-eq-at (pfn-warn f) (ft-dec rows (+ s6 1) s7) "warning bits" line)
+                            (assert-eq-at (pfn-vertical f) (ft-dec rows (+ s7 1) s8) "vertical" line)
+                            (assert-eq-at (pfn-standard-font f) (ft-dec rows (+ s8 1) e) "standard font" line)))))
+                (if (and (== b0 99) (== b1 111))
+                  (let [^Text tcps (new-text)
+                        ^Text thow (new-text)]
+                    (set width (ft-code-row rows s0 s1 f tcps thow))
+                    (assert-text-span tcps rows (+ s1 1) s2 "code points" line)
+                    (assert-text-span thow rows (+ s2 1) s3 "how" line)
+                    (assert-eq-at width (ft-dec rows (+ s3 1) e) "width" line)))
+                (if (and (== b0 99) (== b1 105))
+                  (assert-eq-at (pfn-cid f (ft-hex rows (+ s0 1) s1)) (ft-dec rows (+ s1 1) e) "cid" line))
+                (if (== b0 108)
+                  (assert-eq-at (ft-len-row rows s0 s1 f) (ft-dec rows (+ s1 1) e) "code length" line))
+                (if (== b0 100)
+                  (do (assert-eq-at (pfn-dw2-v f) (ft-dec rows (+ s1 1) s2) "DW2 v" line)
+                      (assert-eq-at (pfn-dw2-w f) (ft-dec rows (+ s2 1) e) "DW2 w1" line)))))
+          (set pos (+ e 1))))
+    (assert-that (> count 150) "the font rows were read")))
+
+(deftest test-every-real-font-answers-as-the-reference-said
+  (comment "Rows of real.txt (fonts of real files, codes on which pdfminer.six agreed).")
+  (let [^Blob rows (test-file "fonts/real.txt")
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 s5 0
+        ^:mut ^I32 s6 0
+        ^:mut ^I32 s7 0
+        ^:mut ^I32 s8 0
+        ^:mut ^I32 lstatus 0
+        ^:mut ^I32 b0 0
+        ^:mut ^I32 b1 0
+        ^:mut ^I32 width 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set count (+ count 1))
+                (set b0 (blob-u8 rows pos))
+                (set b1 (blob-u8 rows (+ pos 1)))
+                (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (set s2 (ft-tab rows (+ s1 1) e))
+                (set s3 (ft-tab rows (+ s2 1) e))
+                (if (== b0 102)
+                  (do (set s4 (ft-tab rows (+ s3 1) e))
+                      (set s5 (ft-tab rows (+ s4 1) e))
+                      (set s6 (ft-tab rows (+ s5 1) e))
+                      (set s7 (ft-tab rows (+ s6 1) e))
+                      (set s8 (ft-tab rows (+ s7 1) e))
+                      (set lstatus (ft-load-font rows (+ s0 1) s1 (ft-dec rows (+ s1 1) s2)
+                                                 ar dc a b st out f))
+                      (assert-eq-at lstatus (ft-dec rows (+ s2 1) s3) "load status" line)
+                      (if (== lstatus 0)
+                        (do (assert-eq-at (pfn-kind-of f) (ft-kind-code (blob-u8 rows (+ s3 1))) "kind" line)
+                            (assert-eq-at (pfn-ascent f) (ft-dec rows (+ s4 1) s5) "ascent" line)
+                            (assert-eq-at (pfn-descent f) (ft-dec rows (+ s5 1) s6) "descent" line)
+                            (assert-eq-at (pfn-warn f) (ft-dec rows (+ s6 1) s7) "warning bits" line)
+                            (assert-eq-at (pfn-vertical f) (ft-dec rows (+ s7 1) s8) "vertical" line)
+                            (assert-eq-at (pfn-standard-font f) (ft-dec rows (+ s8 1) e) "standard font" line)))))
+                (if (and (== b0 99) (== b1 111))
+                  (let [^Text tcps (new-text)
+                        ^Text thow (new-text)]
+                    (set width (ft-code-row rows s0 s1 f tcps thow))
+                    (assert-text-span tcps rows (+ s1 1) s2 "code points" line)
+                    (assert-text-span thow rows (+ s2 1) s3 "how" line)
+                    (assert-eq-at width (ft-dec rows (+ s3 1) e) "width" line)))
+                (if (and (== b0 99) (== b1 105))
+                  (assert-eq-at (pfn-cid f (ft-hex rows (+ s0 1) s1)) (ft-dec rows (+ s1 1) e) "cid" line))
+                (if (== b0 108)
+                  (assert-eq-at (ft-len-row rows s0 s1 f) (ft-dec rows (+ s1 1) e) "code length" line))
+                (if (== b0 100)
+                  (do (assert-eq-at (pfn-dw2-v f) (ft-dec rows (+ s1 1) s2) "DW2 v" line)
+                      (assert-eq-at (pfn-dw2-w f) (ft-dec rows (+ s2 1) e) "DW2 w1" line)))))
+          (set pos (+ e 1))))
+    (assert-that (> count 1000) "the real-font rows were read")))
+
+
+;; ------------------------------------------------------- the tables, stressed
+
+(defn ^I32 ft-put-hex4 [^:mut ^Cells out ^I32 v]
+  (comment "Four upper-case hex digits of v, as bytes.")
+  (let [^:mut ^I32 p 4096
+        ^:mut ^I32 d 0]
+    (while (> p 0)
+      (do (set d (rem (quot v p) 16))
+          (if (< d 10)
+            (cells-push out (+ 48 d))
+            (cells-push out (+ 55 d)))
+          (set p (quot p 16))))
+    (return 0)))
+
+(defn ^I32 ft-put-entry [^:mut ^Cells out ^I32 code ^I32 dst]
+  (comment "`<code> <dst>` and a newline.")
+  (cells-push out 60)
+  (ft-put-hex4 out code)
+  (cells-push out 62)
+  (cells-push out 32)
+  (cells-push out 60)
+  (ft-put-hex4 out dst)
+  (cells-push out 62)
+  (cells-push out 10)
+  (return 0))
+
+(defn ^I32 ft-put-begin [^:mut ^Cells out]
+  (comment "The bytes of `beginbfchar` and a newline.")
+  (cells-push out 98) (cells-push out 101) (cells-push out 103) (cells-push out 105)
+  (cells-push out 110) (cells-push out 98) (cells-push out 102) (cells-push out 99)
+  (cells-push out 104) (cells-push out 97) (cells-push out 114) (cells-push out 10)
+  (return 0))
+
+(deftest test-a-thousand-entries-defined-in-reverse-are-found
+  (comment "A heap sort and a binary search: 3000 bfchars, each the code + 100,")
+  (comment "written from the highest code down; every one must be found, and the")
+  (comment "codes between and beyond must not be.")
+  (let [^Cells f (new-cells)
+        ^Cells prog (new-cells)
+        ^:mut ^I32 i 3000
+        ^:mut ^I32 n 0
+        ^:mut ^I32 bad 0]
+    (ft-put-begin prog)
+    (while (> i 0)
+      (do (ft-put-entry prog (+ i 4000) (+ i 100))
+          (set i (- i 1))))
+    (pfn-from-cmap f (cells-blob prog) 1)
+    (set i 1)
+    (while (<= i 3000)
+      (do (set n (pfn-map f (+ i 4000)))
+          (if (!= n 1) (set bad (+ bad 1)))
+          (if (!= (pfn-cp f 0) (+ i 100)) (set bad (+ bad 1)))
+          (set i (+ i 1))))
+    (assert-eq bad 0 "every entry found with its value")
+    (assert-eq (pfn-map f 4000) 0 "below the first")
+    (assert-eq (pfn-map f 7001) 0 "above the last")
+    (assert-eq (pfn-map f 100) 0 "far below")))
+
+(deftest test-a-cmap-over-the-limit-is-cut-and-says-so
+  (comment "100,050 entries: the first 100,000 (in definition order) are kept, the")
+  (comment "warning bit says the rest were dropped, and nothing faults.")
+  (let [^Cells f (new-cells)
+        ^Cells prog (new-cells)
+        ^:mut ^I32 i 0]
+    (ft-put-begin prog)
+    (while (< i 100050)
+      (do (ft-put-entry prog (rem i 65536) 65)
+          (set i (+ i 1))))
+    (pfn-from-cmap f (cells-blob prog) 1)
+    (assert-that (> (rem (quot (pfn-warn f) 4) 2) 0) "the limit warning is set")
+    (assert-eq (pfn-map f 5) 1 "an entry inside the limit")))
+
+(deftest test-a-cmap-cut-at-every-byte-never-faults
+  (comment "Every prefix of a CMap with every construct parses and answers.")
+  (let [^Blob rows (test-file "fonts/cmaps.txt")
+        ^Cells f (new-cells)
+        ^Cells prog (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 cut 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 tries 0]
+    (while (< pos n)
+      (do (set e (ft-nl rows pos))
+          (if (and (< pos e) (== (blob-u8 rows pos) 102))
+            (do (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (ft-unescape rows (+ s0 1) s1 prog)
+                (set total (cells-len prog))
+                (set cut 0)
+                (while (<= cut total)
+                  (do (let [^Cells piece (new-cells)
+                            ^:mut ^I32 j 0]
+                        (while (< j cut)
+                          (do (cells-push piece (cells-at prog j))
+                              (set j (+ j 1))))
+                        (pfn-from-cmap f (cells-blob piece) 1)
+                        (pfn-map f 65)
+                        (pfn-map f 4660)
+                        (pfn-from-cmap f (cells-blob piece) 2)
+                        (pfn-cid f 65)
+                        (pfn-code-len f 129 64 -1 -1))
+                      (set tries (+ tries 1))
+                      (set cut (+ cut 1))))))
+          (set pos (+ e 1))))
+    (assert-that (> tries 100) "the prefixes were tried")))

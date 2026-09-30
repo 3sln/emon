@@ -481,8 +481,40 @@ analysis beyond "top-to-bottom lines on a single column".
   hand-written minimal PDF, one xref-stream PDF from a mainstream producer —
   licence-clean) is a golden JSON on every target.
 
-- [ ] **P1.6 — Fonts and encodings, first cut** (`kin/pdffont.kin`,
+- [x] **P1.6 — Fonts and encodings, first cut** (`kin/pdffont.kin`,
   `kin/agl.kin`, `kin/encodings.kin`).
+  *Done (P1.6)*: `emon.pdffont` (one font is one `Cells`; `pfn-load` builds it from a
+  font dictionary through the document layer; per code `pfn-map`, `pfn-width`,
+  `pfn-cid`, `pfn-code-len`, D080-D084), the AGL and the encodings generated from
+  Adobe's own files by `kin/scripts/fontdata.py` (D081), CMaps parsed into sorted range
+  tables (D082). Laws on every target (102 in all, the same count in each arm): 168
+  hand-built font rows (`test/fonts/fonts.pdf`: all 14 standard fonts' routes, every
+  glyph-name form, ToUnicode both ways, Identity-H/V, embedded encoding CMaps, Uni*
+  CMaps, Type 3, symbolic guesses, damaged fonts), 55 CMap rows with the bfrange
+  edge cases, all 4,482 AGL names plus the `uni`/`u`/underscore/suffix cases (checked
+  against pdfminer.six's `name2unicode`: 0 disagreements on 4,345 names), 160 fonts of
+  real files (`test/fonts/real.txt`, a ratchet), a 3,000-entry reverse-order table, a
+  CMap over its limit, and a CMap cut at every byte.
+  **Agreement with pdfminer.six on real files** (the codes the pages actually SHOW,
+  read from their content streams by pypdf; `kin/scripts/font-corpus.py`): over 1,576
+  PDFs, 8,490 fonts and 10.6M shown characters, **99.92% of shown characters
+  (99.71% of distinct codes) decode to the same code points**; of the values emon
+  is sure of (`how` is not `unknown`) **99.99% (99.97% of distinct codes)**. Widths agree
+  to 0.001 em on 99.98% of the shown characters both know. Every remaining
+  disagreement is one of: a symbolic Type 1 font whose built-in encoding is in the
+  font program (emon says `unknown`, D084); a Type 3 font's own glyph names (emon
+  says nothing, pdfminer reads them as ASCII); a ToUnicode entry of `<0000>` (emon
+  falls back to the encoding, pdfminer emits NUL or U+FFFD); WinAnsi 0xAD (emon: hyphen, pdfminer:
+  space). Zero faults in the generated Rust with overflow and bounds checks on.
+  NOT done: font programs (embedded Type 1/CFF/TrueType cmaps and built-in
+  encodings), the predefined CID CMaps and Adobe CID-to-Unicode tables, MacExpert, `/W2`.
+  *Input for P1.7*: per `Tf` build a font with `(pfn-init f)` + `(pfn-load src ar dc
+  a b st f out fh)` (a font is reused for the whole document; `pfn-width` is in
+  hundredths of a thousandth of an em, -1 for unknown; `pfn-code-len` splits a string
+  into codes from the next four bytes; `pfn-ascent`/`pfn-descent` are 1/1000 em;
+  `pfn-how-of` is SPEC 8.1's `gh` code). `pfn-load` takes the file as `^Blob src` only
+  to hand it to `emon.pdfdoc`: the D058 retag is that one word in its signature (and in
+  `kin/scripts/font-sweep`'s harness, as in `pdf-sweep`'s).
   *Brief*: simple fonts (StandardEncoding, WinAnsi, MacRoman,
   `Differences`), glyph-name → Unicode via the Adobe Glyph List (generated
   `defdata` table from AGL + `uniXXXX`/`uXXXXX` rules), `ToUnicode` CMap
@@ -2175,6 +2207,10 @@ them; offer them upstream when they have proved general.
 - A `let` binding that is never read is a compile error in Go only (`declared
   and not used`); the other three targets accept it. Tests that bind a scratch
   cell they do not use fail on Go alone.
+- Go also refuses a local named `go` (besides `len`, `cap`, `new`), found at generation time, as
+  intended; the Rust borrow rule bites a kin function called INSIDE another call on the same
+  `Cells` (`(cells-set f i (g f))`, `(pl-next ar (pl-first ar h))`): bind the inner result first
+  (six sites in `pdffont` had to be).
 - A `(while 1 ...)` with statements after it would be unreachable code in Java
   (a constant condition); kin has no `loop`/`forever` the four targets agree
   on, so loops with several exits use a `done` flag.
@@ -2297,3 +2333,114 @@ only rising).
 **Alternatives**: relative tolerance (hides small-base regressions); per-metric
 tolerances (premature before there are real numbers).
 - [ ] **Signed off** (maintainer)
+
+### D080 — A font is one `Cells`, built through the document layer; the Unicode of a code is decided per code, in a fixed order, and says how
+**Decision**: `emon.pdffont` keeps a font in ONE caller-supplied `Cells` (a 160-cell
+header, then a 256-entry table for a simple font, or sorted range tables for a composite
+one). `(pfn-load src ar dc a b st f out fh)` fills it from a font dictionary handle,
+following references and decoding the ToUnicode and encoding-CMap streams through
+`emon.pdfdoc`; nothing else in the module touches the file. Per code the answer
+(`pfn-map`, then `pfn-cp`/`pfn-how-of`) is, for a simple font, the first of: the
+ToUnicode CMap when it gives a value that is not empty, U+0000 or U+FFFD (`tounicode`);
+a /Differences name by the AGL rules (`glyphname`); the base encoding (`encoding`). The
+base encoding is /BaseEncoding or the /Encoding name, else the built-in encoding of
+Symbol and ZapfDingbats, StandardEncoding, or WinAnsi for a TrueType font with no
+/Encoding; a symbolic font's built-in encoding lives in the font program, so there the
+base is a GUESS (Standard/WinAnsi) and the answer says `unknown` with the guessed
+value (warning bit 256). A composite font is looked up in its ToUnicode; else a
+predefined `Uni*-UCS2-*`/`Uni*-UTF16-*` Encoding means the code is the Unicode value
+(`encoding`); else `unknown` with no value. The `how` codes are `emon.evidence`'s `gh`
+(a law holds them equal). The names `a1`..`a206` are ZapfDingbats' own and mean nothing
+in another font (a Type 3 font's local glyph names are often `a1`, `a2`...).
+**Why**: accuracy is the point, and what the file actually says (ToUnicode) must beat
+what a table says, while a guess must be visible as one so a consumer can weigh it. The
+`<0000>`/`<FFFD>` rule is for producers (pdfTeX) that write NUL for "no mapping".
+**Alternatives**: a per-font rather than per-code choice (a partial ToUnicode is
+common); mapping a symbolic font's codes to nothing (loses the many that are right:
+the guess agreed with pdfminer on 95% of the shown characters it was made for).
+- [ ] **Signed off** (maintainer)
+
+### D081 — The AGL, the encodings, the standard-14 metrics and the CMap token ids are generated from Adobe's files by `fontdata.py`; two departures from Annex D are deliberate
+**Decision**: `kin/scripts/fontdata.py` writes `kin/agl.kin` (4,482 names sorted by
+bytes, so a glyph name is found by binary search and its row is its glyph id; up to three
+code points each; a flag for the ZapfDingbats names) and `kin/encodings.kin`
+(`enc-gid`: Standard, WinAnsi, MacRoman, Symbol and ZapfDingbats built-ins; `s14-width`:
+the 14 standard fonts' AFM widths; `s14-metric`; `s14-alias`: 453 normalised BaseFont
+names for them, such as `arialboldmt`, `timesnewromanpsmt`; `cm-kw`: the CMap
+tokens) from the vendored Adobe files in `test/fonts/` (glyphlist.txt, zapfdingbats.txt,
+aglfn.txt, the 14 AFMs; licences in the files). The encodings are DERIVED, not typed:
+Standard, Symbol and Zapf from the AFMs' character codes; WinAnsi and MacRoman from
+Python's cp1252 and mac_roman, named by aglfn (then the shortest AGL name for what aglfn
+omits: the ligatures, the superscripts), with the PDF specification's exceptions.
+`--check-ref` holds the result against pdfminer.six's copy of Annex D, typed by someone
+else: 0 disagreements but three, all deliberate. Code 160 (both encodings) is `space`,
+not `nbspace`, and WinAnsi 173 is `hyphen` (Annex D's footnote; what poppler and pdf.js
+do; a word must split there). MacRoman also gives the Mac OS Roman characters Annex D
+leaves out (notequal, infinity, ...): a file that uses them means them. The script is
+checked by `bb unit` (`--check`), like `ucd.py`; Java's static-array limit is handled by
+kin (the tables are chunked).
+**Why**: a typed table is where an encoding bug hides; derived tables have one place to
+be wrong and an independent check.
+**Alternatives**: typing Annex D (what pdfminer did); fetching at build time (no).
+- [ ] **Signed off** (maintainer)
+
+### D082 — CMaps are parsed into sorted range tables: later definitions win, overlaps resolve to the nearest start, a range increments its destination's last code point
+**Decision**: `pfn-cmap` reads a CMap program (decoded bytes, a `Blob`) into records
+appended to the font: ToUnicode `[lo hi n seq d0..d3 cummax]` (bfchar, bfrange incl. the
+array form), CID `[lo hi cid seq cummax]` (cidchar, cidrange), and up to 16
+codespace ranges kept per byte (`[bytes, lo hi 16-bit halves, hi hi 16-bit halves]`, so
+a 4-byte range with a first byte above 0x7F fits an `I32`). Records are heap-sorted by
+(first code, definition order) and found by binary search for the last start <= the
+code, then at most 64 records back while the running maximum of `hi` still reaches the
+code: a later definition wins a tie, a nearer start wins an overlap, and a wide range
+under many singles is still found. Destinations are UTF-16BE (surrogate pairs joined, a
+lone surrogate U+FFFD, one or two digits one unit), at most four code points (a fifth
+sets a warning); a range adds the offset to the LAST code point as a number (so
+`<00FE>..` goes 00FE, 00FF, 0100, where a byte-wise reader would wrap). Code lengths
+(`pfn-code-len`) are the shortest codespace range that fully matches the next four
+bytes; with no full match, a range whose first byte fits, else the shortest range.
+Unparseable or truncated input gives what was read; a CMap holds at most 100,000
+records (warning bit 4). `usecmap` is ignored (bit 64).
+**Why**: bounded, allocation-free, identical on four targets, and the laws pin the edge
+cases (55 rows; the same questions put to pdfminer.six agree on all but the rows where
+emon differs on purpose or is more tolerant).
+**Alternatives**: a hash map (no allocation in kin); keeping only the first definition
+(pdfminer).
+- [ ] **Signed off** (maintainer)
+
+### D083 — Widths are hundredths of a thousandth of an em; /Widths, then the standard 14's AFM, then /MissingWidth; Type 3 widths are scaled by the FontMatrix
+**Decision**: `pfn-width` answers `w * 100` where `w` is in 1/1000 em (277.83 is 27783),
+so real-valued widths keep their precision without floats (D009); -1 is "the font says
+nothing". A simple font: /Widths for codes in [FirstChar, LastChar]; otherwise the AFM
+width when the BaseFont is one of the 14 (or a common alias: Arial, TimesNewRoman,
+CourierNew with their Bold/Italic/MT spellings, subset tags ignored) and the code has a
+glyph; otherwise /MissingWidth; otherwise -1. A composite font: /W (both forms) by CID,
+else /DW (default 1000). A Type 3 font's widths are in glyph space and are multiplied
+by the FontMatrix's `a`. Ascent and descent (1/1000 em) come from the FontDescriptor,
+else its FontBBox, else the standard font's AFM; a positive descent is negated. /DW2 is
+kept for vertical writing (`pfn-dw2-v`, `pfn-dw2-w`); /W2 is not read.
+**Why**: P1.7's glyph boxes come from widths and metrics, never from the font size.
+**Alternatives**: floats (D009); thousandths rounded to integers (a hundred glyphs of
+error per line).
+- [ ] **Signed off** (maintainer)
+
+### D084 — What P1.6 does not read: font programs, predefined CID CMaps and CID-to-Unicode tables, MacExpert; how it was validated
+**Decision**: out of this cut and answered honestly rather than guessed: the built-in
+encoding of an embedded Type 1/CFF/TrueType font (a symbolic font's codes are then
+`unknown`, with a guess, and are where most of the remaining disagreement with
+pdfminer.six is); predefined CMaps that map codes to CIDs (90ms-RKSJ-H, GBK-EUC-H, ...:
+`unknown`, warning bit 1, and codes are split by the ToUnicode's codespace or two bytes)
+and the Adobe-Japan1/GB1/CNS1/Korea1 CID-to-Unicode tables; MacExpertEncoding (warning
+bit 8); `/W2`; CIDToGIDMap. They are P3 (PDF breadth). VALIDATION: no content
+interpreter exists yet, so `kin/scripts/font-corpus.py` takes the codes the pages show
+from pypdf (reading each page's content stream, three Form levels deep, following `Tf`)
+and compares emon's `pfn-map`/`pfn-width` (the generated Rust, `kin/scripts/font-sweep`)
+with pdfminer.six's `to_unichr`/`char_width` on the committed 130-file sample and a
+deterministic extra sample of the corpus. Both libraries are installed by hand into
+`~/.cache/emon/pylib` (as the JSON check's are) and are not dependencies of anything
+that runs; `test/fonts/real.txt` is the ratchet (up to eight agreed codes of 160 fonts,
+held by `bb unit`).
+**Why**: an independent oracle is the only way to know the mapping is right, and the
+disagreements it finds are a map of what P3 must do.
+**Alternatives**: comparing with poppler's text (needs P1.7 and layout to align);
+a larger ratchet (the corpus files are not committed).

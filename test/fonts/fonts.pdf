@@ -1,0 +1,227 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>
+endobj
+3 0 obj
+<< /Type /FontDescriptor /FontName /X /Flags 32 /Ascent 900 /Descent -200 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /CapHeight 700 /StemV 80 /MissingWidth 300 >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /ABCDEF+MyFont /FirstChar 1 /LastChar 70 /Widths [277.83 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 500 612.5 500 500 500 500 500] /FontDescriptor 3 0 R /Encoding << /Type /Encoding /Differences [1 /Euro /uni20AC 65 /f_f_i /A.alt /ffi /g123 /u1F600 /.notdef 71 /uni00660066 /uniD800 /u110000 /a_b /ff /uni004100420043 /u0041 /uni004] >> >>
+endobj
+5 0 obj
+<< /Type /FontDescriptor /FontName /X /Flags 32 /Ascent 905 /Descent -212 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /CapHeight 700 /StemV 80  >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /TrueType /BaseFont /ArialMT /FirstChar 32 /LastChar 34 /Widths [278 278 355] /FontDescriptor 5 0 R >>
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Symbol >>
+endobj
+8 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>
+endobj
+9 0 obj
+<<  /Length 574 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Adobe-Identity-UCS def
+/CMapType 2 def
+1 begincodespacerange
+<00> <FF>
+endcodespacerange
+3 beginbfchar
+<41> <0058>
+<45> <00660066>
+<4A> <D83DDE00>
+endbfchar
+1 beginbfrange
+<42> <44> <0061>
+endbfrange
+3 beginbfchar
+<46> <>
+<47> <0000>
+<48> <FFFD>
+endbfchar
+1 beginbfrange
+<4B> <4D> [<0041> <00420043> <0044>]
+endbfrange
+2 beginbfchar
+<50> <0051>
+<50> <0052>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 72 /Widths [700 701 702 703 704 705 706 707] /ToUnicode 9 0 R >>
+endobj
+11 0 obj
+<<  /Filter /FlateDecode /Length 122 >>
+stream
+xúKJMœÃKŒM,‡2TH≥ÛSRãìSãÛ“SπlÄ¿N¡∆Ï∏RÛR–‰ç ∫í“í3ã¿™Å™LÌ¿<#0œ’¨™
+ÆnÖ°Xô!DµDØD–h`¥çÅ©òkÍbh1¢‰$êÛ;9Û
+endstream
+endobj
+12 0 obj
+<< /Type /FontDescriptor /FontName /X /Flags 4 /Ascent 880 /Descent -120 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /CapHeight 700 /StemV 80  >>
+endobj
+13 0 obj
+<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ABCDEF+Noto /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 /W [1 [500 600] 10 20 750 30 [333.5]] /FontDescriptor 12 0 R >>
+endobj
+14 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /ABCDEF+Noto /Encoding /Identity-H /DescendantFonts [13 0 R] /ToUnicode 11 0 R >>
+endobj
+15 0 obj
+<< /Type /Font /Subtype /CIDFontType0 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 2 >> /DW2 [900 -1100] >>
+endobj
+16 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-V /DescendantFonts [15 0 R] >>
+endobj
+17 0 obj
+<< /Type /CMap /CMapName /Test-H /Length 253 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CMapName /Test-H def
+/WMode 1 def
+2 begincodespacerange
+<00> <80>
+<8140> <9FFC>
+endcodespacerange
+1 begincidrange
+<20> <7E> 1
+endcidrange
+1 begincidchar
+<8140> 500
+endcidchar
+endcmap
+end
+end
+
+endstream
+endobj
+18 0 obj
+<< /Type /Font /Subtype /CIDFontType0 /BaseFont /X /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 2 >> /DW 900 /W [34 [650]] >>
+endobj
+19 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding 17 0 R /DescendantFonts [18 0 R] >>
+endobj
+20 0 obj
+<< /Type /Font /Subtype /CIDFontType0 /BaseFont /Y /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 2 >> >>
+endobj
+21 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /Y /Encoding /UniJIS-UCS2-H /DescendantFonts [20 0 R] >>
+endobj
+22 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /Y /Encoding /UniJIS-UTF16-V /DescendantFonts [20 0 R] >>
+endobj
+23 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /Z /Encoding /90ms-RKSJ-H /DescendantFonts [20 0 R] >>
+endobj
+24 0 obj
+<< /Type /Font /Subtype /Type3 /FontBBox [0 0 100 100] /FontMatrix [0.01 0 0 0.01 0 0] /CharProcs << >> /FirstChar 97 /LastChar 98 /Widths [50 60.5] /Encoding << /Type /Encoding /Differences [97 /a /b] >> >>
+endobj
+25 0 obj
+<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Arial,Bold /FirstChar 65 /LastChar 66 /Widths [700 710] >>
+endobj
+26 0 obj
+<< /Type /Font /Subtype /TrueType /BaseFont /TimesNewRomanPS-BoldItalicMT /Encoding /WinAnsiEncoding >>
+endobj
+27 0 obj
+<< /Type /FontDescriptor /FontName /X /Flags 4 /Ascent 800 /Descent -200 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /CapHeight 700 /StemV 80  >>
+endobj
+28 0 obj
+<< /Type /Font /Subtype /TrueType /BaseFont /Wingdings-Regular /FontDescriptor 27 0 R >>
+endobj
+29 0 obj
+<< /Type /Font /BaseFont /Helvetica >>
+endobj
+30 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /MacRomanEncoding >>
+endobj
+31 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /Type /Encoding /BaseEncoding /MacRomanEncoding /Differences [142 /Scaron] >> >>
+endobj
+32 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /MacExpertEncoding >>
+endobj
+33 0 obj
+7
+endobj
+34 0 obj
+<< /Type /Font /Subtype /Type0 /BaseFont /Q /Encoding /Identity-H >>
+endobj
+35 0 obj
+<<  /Length 39 >>
+stream
+BT /Helv 12 Tf 72 720 Td (Hello) Tj ET
+
+endstream
+endobj
+36 0 obj
+<< /Type /Page /Parent 37 0 R /MediaBox [0 0 612 792] /Resources << /Font << /Helv 1 0 R /Tim 2 0 R /Cus 4 0 R /Ari 6 0 R /Sym 7 0 R /Zap 8 0 R /TUs 10 0 R /T0H 14 0 R /T0V 16 0 R /T0C 19 0 R /UCS 21 0 R /U16 22 0 R /RKS 23 0 R /Typ3 24 0 R /ArB 25 0 R /TNR 26 0 R /Wng 28 0 R /NoS 29 0 R /Mac 30 0 R /MaD 31 0 R /MEx 32 0 R /Bad 34 0 R >> >> /Contents 35 0 R >>
+endobj
+37 0 obj
+<< /Type /Pages /Kids [36 0 R] /Count 1 >>
+endobj
+38 0 obj
+<< /Type /Catalog /Pages 37 0 R >>
+endobj
+xref
+0 39
+0000000000 65535 f 
+0000000015 00000 n 
+0000000112 00000 n 
+0000000184 00000 n 
+0000000362 00000 n 
+0000000963 00000 n 
+0000001124 00000 n 
+0000001266 00000 n 
+0000001333 00000 n 
+0000001406 00000 n 
+0000002032 00000 n 
+0000002216 00000 n 
+0000002412 00000 n 
+0000002573 00000 n 
+0000002797 00000 n 
+0000002936 00000 n 
+0000003095 00000 n 
+0000003206 00000 n 
+0000003541 00000 n 
+0000003705 00000 n 
+0000003811 00000 n 
+0000003953 00000 n 
+0000004067 00000 n 
+0000004182 00000 n 
+0000004294 00000 n 
+0000004518 00000 n 
+0000004645 00000 n 
+0000004765 00000 n 
+0000004926 00000 n 
+0000005031 00000 n 
+0000005086 00000 n 
+0000005187 00000 n 
+0000005349 00000 n 
+0000005449 00000 n 
+0000005467 00000 n 
+0000005552 00000 n 
+0000005643 00000 n 
+0000006022 00000 n 
+0000006081 00000 n 
+trailer
+<< /Size 39 /Root 38 0 R >>
+startxref
+6132
+%%EOF

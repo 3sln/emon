@@ -1,0 +1,1140 @@
+# emon P1.6: fonts of real files from corpus/ (read-only), kin/pdffonttest.kin.
+# Written by kin/scripts/font-corpus.py: up to eight codes per font on which emon and pdfminer.six
+# AGREED when this was written (a ratchet: emon must keep answering them). Same format as fonts.txt.
+font	../corpus/financial/agami-indian-bank-statements/train/India_Bank_Statement_Digital_Type1/00035.pdf	6	0	simple	718	-207	16	0	4
+code	32	0032	encoding	55600
+code	30	0030	encoding	55600
+code	20	0020	encoding	27800
+code	31	0031	encoding	55600
+code	34	0034	encoding	55600
+code	2D	002D	encoding	33300
+code	2E	002E	encoding	27800
+code	33	0033	encoding	55600
+font	../corpus/financial/agami-indian-bank-statements/train/India_Bank_Statement_Digital_Type1/00035.pdf	7	0	simple	718	-207	16	0	5
+code	65	0065	encoding	55600
+code	61	0061	encoding	55600
+code	74	0074	encoding	33300
+code	6E	006E	encoding	61100
+code	20	0020	encoding	27800
+code	63	0063	encoding	55600
+code	72	0072	encoding	38900
+code	6F	006F	encoding	61100
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	2252	0	simple	699	-205	256	0	9
+code	41	0041	tounicode	72200
+code	52	0052	tounicode	72200
+code	45	0045	tounicode	66700
+code	48	0048	tounicode	77800
+code	4E	004E	tounicode	72200
+code	49	0049	tounicode	38900
+code	54	0054	tounicode	66700
+code	32	0032	tounicode	50000
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1811	0	simple	694	-213	0	0	8
+code	2E	002E	encoding	25000
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	74	0074	encoding	27800
+code	72	0072	encoding	33300
+code	69	0069	encoding	27800
+code	6E	006E	encoding	50000
+code	61	0061	encoding	44400
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1809	0	simple	677	-213	0	0	9
+code	20	0020	encoding	25000
+code	41	0041	encoding	72200
+code	45	0045	encoding	66700
+code	52	0052	encoding	72200
+code	48	0048	encoding	77800
+code	54	0054	encoding	66700
+code	4E	004E	encoding	72200
+code	49	0049	encoding	38900
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1815	0	simple	0	-139	0	0	-1
+code	20	0020	encoding	25500
+code	65	0065	encoding	39600
+code	68	0068	encoding	44800
+code	72	0072	encoding	39600
+code	61	0061	encoding	44800
+code	69	0069	encoding	28100
+code	74	0074	encoding	28100
+code	63	0063	encoding	33300
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1814	0	simple	688	-176	256	0	-1
+code	20	0020	tounicode	25000
+code	65	0065	tounicode	52500
+code	74	0074	tounicode	32200
+code	61	0061	tounicode	54100
+code	72	0072	tounicode	33100
+code	68	0068	tounicode	54200
+code	6E	006E	tounicode	54000
+code	69	0069	tounicode	24400
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1813	0	simple	756	-160	0	0	-1
+code	65	0065	encoding	61000
+code	72	0072	encoding	44400
+code	76	0076	encoding	55600
+code	42	0042	encoding	77800
+code	75	0075	encoding	61000
+code	74	0074	encoding	38900
+code	6E	006E	encoding	61000
+code	43	0043	encoding	72200
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1817	0	simple	694	-213	0	0	10
+code	61	0061	encoding	50000
+code	74	0074	encoding	27800
+code	65	0065	encoding	44400
+code	73	0073	encoding	38900
+code	72	0072	encoding	38900
+code	69	0069	encoding	27800
+code	6C	006C	encoding	27800
+code	20	0020	encoding	25000
+font	../corpus/financial/bank-statement-benchmark/datasets/basic/bsb-004/bsb-004-statement.pdf	28	0	composite	1006	-274	0	0	-1
+code	9	0020	tounicode	26300
+code	16	0061	tounicode	52400
+code	1F	0074	tounicode	41300
+code	18	006E	tounicode	63800
+code	12	0069	tounicode	32700
+code	1C	0065	tounicode	53800
+code	1B	0073	tounicode	48500
+code	F	0044	tounicode	75900
+font	../corpus/financial/bank-statement-benchmark/datasets/basic/bsb-004/bsb-004-statement.pdf	29	0	composite	1160	-288	0	0	-1
+code	16	0020	tounicode	22000
+code	14	0065	tounicode	52700
+code	15	0072	tounicode	33900
+code	22	0073	tounicode	44100
+code	23	0069	tounicode	24500
+code	1C	006E	tounicode	58000
+code	1	7D72	tounicode	100000
+code	2	8DEF	tounicode	100000
+font	../corpus/financial/bank-statement-benchmark/datasets/basic/bsb-004/bsb-004-statement.pdf	31	0	composite	1006	-274	0	0	-1
+code	5	0020	tounicode	26300
+code	14	0065	tounicode	54200
+code	2A	0030	tounicode	62100
+code	19	0054	tounicode	64000
+code	22	0032	tounicode	53700
+code	21	0031	tounicode	36400
+code	8	0061	tounicode	51600
+code	7	006F	tounicode	58500
+font	../corpus/formats/derived/sroie_00000.ocr-layer.pdf	3	0	composite	1000	-1	0	0	-1
+code	20	0020	tounicode	50000
+code	30	0030	tounicode	50000
+code	41	0041	tounicode	50000
+code	65	0065	tounicode	50000
+code	6F	006F	tounicode	50000
+code	61	0061	tounicode	50000
+code	6C	006C	tounicode	50000
+code	3A	003A	tounicode	50000
+font	../corpus/forms/irs/f1120.pdf	5291	0	simple	952	-214	0	0	-1
+code	20	0020	encoding	27800
+code	2E	002E	encoding	27800
+code	65	0065	encoding	53700
+code	74	0074	encoding	31500
+code	6F	006F	encoding	57400
+code	72	0072	encoding	33300
+code	6E	006E	encoding	55600
+code	69	0069	encoding	22200
+font	../corpus/forms/irs/f1120.pdf	5293	0	simple	972	-230	0	0	-1
+code	31	0031	encoding	52000
+code	32	0032	encoding	52000
+code	30	0030	encoding	52000
+font	../corpus/forms/irs/f1120.pdf	5295	0	simple	934	-250	0	0	-1
+code	20	0020	encoding	30000
+code	6F	006F	encoding	54000
+code	72	0072	encoding	34000
+code	6E	006E	encoding	54000
+code	2E	002E	encoding	30000
+code	61	0061	encoding	54000
+code	74	0074	encoding	38000
+code	65	0065	encoding	54000
+font	../corpus/forms/irs/f1120.pdf	5297	0	simple	975	-218	0	0	-1
+code	20	0020	encoding	27800
+code	31	0031	encoding	55600
+code	32	0032	encoding	55600
+code	65	0065	encoding	57400
+code	61	0061	encoding	57400
+code	69	0069	encoding	25800
+code	6F	006F	encoding	61100
+code	6E	006E	encoding	59300
+font	../corpus/forms/irs/f1120.pdf	5299	0	simple	975	-218	0	0	-1
+code	77	0077	encoding	81500
+code	2E	002E	encoding	27800
+code	72	0072	encoding	38900
+code	6F	006F	encoding	59300
+code	31	0031	encoding	55600
+code	69	0069	encoding	25900
+code	73	0073	encoding	51900
+code	67	0067	encoding	61100
+font	../corpus/forms/irs/f1120.pdf	5301	0	simple	992	-270	0	0	-1
+code	32	0032	encoding	63200
+code	30	0030	encoding	63200
+font	../corpus/forms/irs/f1120.pdf	5303	0	simple	953	-232	0	0	-1
+code	32	0032	encoding	66800
+code	35	0035	encoding	66800
+font	../corpus/forms/irs/f1120.pdf	342	0	simple	886	-309	0	0	-1
+code	30	0030	encoding	63200
+code	31	0031	encoding	63200
+code	35	0035	encoding	63200
+code	65	0065	encoding	44800
+code	69	0069	encoding	18400
+code	6E	006E	encoding	46900
+code	73	0073	encoding	48500
+code	74	0074	encoding	44800
+font	../corpus/forms/irs/f1120.pdf	343	0	simple	957	-214	0	0	-1
+code	20	0020	encoding	27800
+code	6F	006F	encoding	57400
+code	6E	006E	encoding	55600
+code	65	0065	encoding	53700
+code	28	0028	encoding	25900
+code	63	0063	encoding	53700
+code	74	0074	encoding	31500
+code	69	0069	encoding	22200
+font	../corpus/forms/irs/i1040gi.pdf	77036	0	composite	891	-216	0	0	-1
+code	3	0020	tounicode	25000
+code	48	0065	tounicode	44400
+code	52	006F	tounicode	50000
+code	11	002E	tounicode	25000
+code	57	0074	tounicode	27800
+code	4C	0069	tounicode	27800
+code	44	0061	tounicode	44400
+code	55	0072	tounicode	33300
+font	../corpus/forms/irs/i1040gi.pdf	77039	0	composite	891	-216	0	0	-1
+code	3	0020	tounicode	25000
+code	48	0065	tounicode	44400
+code	52	006F	tounicode	50000
+code	55	0072	tounicode	38900
+code	51	006E	tounicode	50000
+code	57	0074	tounicode	27800
+code	44	0061	tounicode	50000
+code	53	0070	tounicode	50000
+font	../corpus/forms/irs/i1040gi.pdf	77042	0	composite	891	-216	0	0	-1
+code	3	0020	tounicode	25000
+code	52	006F	tounicode	50000
+code	48	0065	tounicode	44400
+code	51	006E	tounicode	55600
+code	57	0074	tounicode	27800
+code	55	0072	tounicode	38900
+code	44	0061	tounicode	50000
+code	56	0073	tounicode	38900
+font	../corpus/forms/irs/i1040gi.pdf	77045	0	composite	891	-216	0	0	-1
+code	3	0020	tounicode	25000
+code	48	0065	tounicode	44400
+code	44	0061	tounicode	50000
+code	52	006F	tounicode	50000
+code	57	0074	tounicode	33300
+code	51	006E	tounicode	55600
+code	55	0072	tounicode	44400
+code	4C	0069	tounicode	27800
+font	../corpus/forms/irs/i1040gi.pdf	77050	0	simple	975	-218	0	0	-1
+code	20	0020	encoding	27800
+code	65	0065	encoding	57400
+code	6F	006F	encoding	61100
+code	6E	006E	encoding	59300
+code	52	0052	encoding	72200
+code	53	0053	encoding	64900
+code	30	0030	encoding	55600
+code	67	0067	encoding	61100
+font	../corpus/forms/irs/i1040gi.pdf	77052	0	simple	952	-214	0	0	-1
+code	20	0020	encoding	27800
+code	65	0065	encoding	53700
+code	74	0074	encoding	31500
+code	61	0061	encoding	53700
+code	73	0073	encoding	50000
+code	6E	006E	encoding	55600
+code	6F	006F	encoding	57400
+code	72	0072	encoding	33300
+font	../corpus/forms/irs/i1040gi.pdf	77055	0	simple	957	-214	0	0	-1
+code	65	0065	encoding	53700
+code	57	0057	encoding	92600
+code	68	0068	encoding	55600
+code	61	0061	encoding	51900
+code	74	0074	encoding	31500
+code	92	2019	encoding	27800
+code	73	0073	encoding	48100
+code	20	0020	encoding	27800
+font	../corpus/forms/irs/i1040gi.pdf	1287	0	composite	1171	-258	0	0	-1
+code	BB	0065	tounicode	57300
+code	CA	0074	tounicode	33600
+code	C4	006E	tounicode	61000
+code	B7	0061	tounicode	57100
+code	C5	006F	tounicode	61400
+code	C9	0073	tounicode	55600
+code	3	0020	tounicode	26900
+code	6	0043	tounicode	72300
+font	../corpus/forms/irs/i1040gi.pdf	1140	0	simple	952	-214	0	0	-1
+code	20	0020	encoding	27800
+code	65	0065	encoding	53700
+code	6F	006F	encoding	57400
+code	74	0074	encoding	31500
+code	61	0061	encoding	53700
+code	72	0072	encoding	33300
+code	6E	006E	encoding	55600
+code	69	0069	encoding	22200
+font	../corpus/forms/irs/i1040gi.pdf	1142	0	simple	975	-218	0	0	-1
+code	20	0020	encoding	27800
+code	65	0065	encoding	57400
+code	49	0049	encoding	29500
+code	53	0053	encoding	64900
+code	6C	006C	encoding	25800
+code	64	0064	encoding	61100
+code	75	0075	encoding	59300
+code	63	0063	encoding	57400
+font	../corpus/forms/irs/i1040gi.pdf	1145	0	simple	957	-214	0	0	-1
+code	65	0065	encoding	53700
+code	2D	002D	encoding	38900
+code	1F	FB01	glyphname	51900
+code	6C	006C	encoding	22200
+font	../corpus/forms/irs/i1040gi.pdf	1155	0	simple	1056	-376	0	0	5
+code	20	0020	encoding	27800
+code	72	0072	encoding	38900
+code	65	0065	encoding	55600
+code	6F	006F	encoding	61100
+code	6D	006D	encoding	88900
+code	30	0030	encoding	55600
+code	61	0061	encoding	55600
+code	46	0046	encoding	61100
+font	../corpus/forms/irs/i1040gi.pdf	1157	0	simple	1040	-325	0	0	4
+code	20	0020	encoding	27800
+code	65	0065	encoding	55600
+code	6F	006F	encoding	55600
+code	72	0072	encoding	33300
+code	74	0074	encoding	27800
+code	61	0061	encoding	55600
+code	69	0069	encoding	22200
+code	6E	006E	encoding	55600
+font	../corpus/forms/irs/i1040gi.pdf	1148	0	simple	975	-218	0	0	-1
+code	65	0065	encoding	57400
+code	72	0072	encoding	38900
+code	20	0020	encoding	27800
+code	61	0061	encoding	57400
+code	63	0063	encoding	57400
+code	52	0052	encoding	72200
+code	6D	006D	encoding	90600
+code	69	0069	encoding	25800
+font	../corpus/forms/irs/i1040gi.pdf	1151	0	simple	952	-214	0	0	-1
+code	20	0020	encoding	27800
+code	61	0061	encoding	53700
+code	6F	006F	encoding	57400
+code	65	0065	encoding	53700
+code	6E	006E	encoding	55600
+code	74	0074	encoding	31500
+code	75	0075	encoding	55600
+code	68	0068	encoding	55600
+font	../corpus/forms/irs/i1040gi.pdf	1153	0	simple	957	-214	0	0	-1
+code	77	0077	encoding	75900
+code	2E	002E	encoding	27800
+code	65	0065	encoding	53700
+code	61	0061	encoding	51900
+code	48	0048	encoding	72200
+code	6C	006C	encoding	22200
+code	74	0074	encoding	31500
+code	68	0068	encoding	55600
+font	../corpus/layout/arxiv/1409.1556.pdf	10	0	simple	683	-217	16	0	8
+code	65	0065	encoding	44400
+code	74	0074	encoding	27800
+code	61	0061	encoding	44400
+code	69	0069	encoding	27800
+code	6E	006E	encoding	50000
+code	6F	006F	encoding	50000
+code	73	0073	encoding	38900
+code	72	0072	encoding	33300
+font	../corpus/layout/arxiv/1409.1556.pdf	33	0	simple	683	-217	16	0	9
+code	6E	006E	encoding	55600
+code	6F	006F	encoding	50000
+code	65	0065	encoding	44400
+code	61	0061	encoding	50000
+code	63	0063	encoding	44400
+code	76	0076	encoding	50000
+code	2D	002D	encoding	33300
+code	32	0032	encoding	50000
+font	../corpus/layout/arxiv/1409.1556.pdf	34	0	simple	465	0	0	0	-1
+code	0	2212	glyphname	89200
+code	3	2217	glyphname	58500
+font	../corpus/layout/arxiv/1409.1556.pdf	36	0	simple	750	-250	0	0	-1
+code	2	00D7	tounicode	77700
+code	66	007B	tounicode	50000
+code	67	007D	tounicode	50000
+code	32	2208	tounicode	66600
+code	1	00B7	tounicode	27700
+code	1D	226B	tounicode	100000
+code	0	2212	tounicode	77700
+font	../corpus/layout/arxiv/1409.1556.pdf	38	0	simple	629	-157	16	0	0
+code	2E	002E	encoding	60000
+code	72	0072	encoding	60000
+code	65	0065	encoding	60000
+code	6F	006F	encoding	60000
+code	2F	002F	encoding	60000
+code	61	0061	encoding	60000
+code	74	0074	encoding	60000
+code	6B	006B	encoding	60000
+font	../corpus/layout/arxiv/1409.1556.pdf	39	0	simple	750	-250	0	0	-1
+code	32	0032	encoding	50000
+code	31	0031	encoding	50000
+code	33	0033	encoding	50000
+code	35	0035	encoding	50000
+code	34	0034	encoding	50000
+code	37	0037	encoding	50000
+code	3D	003D	encoding	77700
+code	30	0030	encoding	50000
+font	../corpus/layout/arxiv/1409.1556.pdf	72	0	simple	465	0	0	0	-1
+code	3	2217	glyphname	63800
+font	../corpus/layout/arxiv/1409.1556.pdf	121	0	simple	750	-250	0	0	-1
+code	32	0032	encoding	51300
+code	34	0034	encoding	51300
+font	../corpus/layout/arxiv/1409.1556.pdf	123	0	simple	679	-6	0	0	-1
+code	2	00D7	glyphname	79900
+font	../corpus/layout/arxiv/1409.1556.pdf	125	0	simple	750	-250	0	0	-1
+code	53	0053	encoding	61300
+code	51	0051	encoding	79000
+code	3A	002E	glyphname	27700
+code	3B	002C	glyphname	27700
+code	43	0043	encoding	71400
+code	4C	004C	encoding	68000
+font	../corpus/layout/arxiv/1409.1556.pdf	129	0	simple	674	-20	0	0	-1
+code	32	0032	encoding	56900
+code	34	0034	encoding	56900
+code	33	0033	encoding	56900
+font	../corpus/layout/arxiv/1409.1556.pdf	165	0	simple	663	-10	0	0	-1
+code	6D	006D	encoding	101300
+code	69	0069	encoding	40400
+code	6E	006E	encoding	70600
+code	61	0061	encoding	61900
+code	78	0078	encoding	64700
+font	../corpus/layout/arxiv/1409.1556.pdf	196	0	simple	705	-194	0	0	-1
+code	53	0053	encoding	62700
+code	51	0051	encoding	81000
+font	../corpus/layout/arxiv/1512.03385.pdf	46	0	simple	690	-209	256	0	-1
+code	65	0065	glyphname	44400
+code	74	0074	glyphname	33300
+code	2E	002E	glyphname	25000
+code	69	0069	glyphname	27800
+code	6E	006E	glyphname	55600
+code	73	0073	glyphname	38900
+code	72	0072	glyphname	44400
+code	6F	006F	glyphname	50000
+font	../corpus/layout/arxiv/1512.03385.pdf	47	0	simple	678	-216	256	0	-1
+code	65	0065	glyphname	44400
+code	74	0074	glyphname	27800
+code	61	0061	glyphname	44400
+code	69	0069	glyphname	27800
+code	6E	006E	glyphname	50000
+code	72	0072	glyphname	33300
+code	6F	006F	glyphname	50000
+code	73	0073	glyphname	38900
+font	../corpus/layout/arxiv/1512.03385.pdf	48	0	simple	775	-960	256	0	-1
+code	46	0046	unknown	71870
+code	48	0048	unknown	84450
+font	../corpus/layout/arxiv/1512.03385.pdf	50	0	simple	669	-193	256	0	-1
+code	65	0065	glyphname	44400
+code	74	0074	glyphname	27800
+code	6E	006E	glyphname	50000
+code	61	0061	glyphname	50000
+code	69	0069	glyphname	27800
+code	73	0073	glyphname	38900
+code	6F	006F	glyphname	50000
+code	72	0072	glyphname	38900
+font	../corpus/layout/arxiv/1512.03385.pdf	53	0	simple	625	-147	256	0	-1
+code	2F	002F	glyphname	60000
+code	74	0074	glyphname	60000
+code	65	0065	glyphname	60000
+code	61	0061	glyphname	60000
+code	67	0067	glyphname	60000
+code	6F	006F	glyphname	60000
+code	63	0063	glyphname	60000
+code	68	0068	glyphname	60000
+font	../corpus/layout/arxiv/1512.03385.pdf	57	0	simple	699	-217	0	0	8
+code	72	0072	encoding	33300
+code	30	0030	encoding	50000
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	31	0031	encoding	50000
+code	74	0074	encoding	27800
+code	32	0032	encoding	50000
+code	34	0034	encoding	50000
+font	../corpus/layout/arxiv/1512.03385.pdf	58	0	simple	718	-207	0	0	4
+code	20	0020	encoding	27800
+font	../corpus/layout/arxiv/1512.03385.pdf	59	0	simple	693	-213	0	0	-1
+code	2D	002D	encoding	33300
+code	6C	006C	encoding	28000
+code	61	0061	encoding	44000
+code	79	0079	encoding	48000
+code	65	0065	encoding	44000
+code	72	0072	encoding	33300
+code	35	0035	encoding	50700
+code	36	0036	encoding	50700
+font	../corpus/layout/arxiv/1512.03385.pdf	664	0	simple	683	-217	16	0	8
+code	20	0020	encoding	25000
+code	31	0031	encoding	50000
+code	35	0035	encoding	50000
+code	30	0030	encoding	50000
+code	76	0076	encoding	50000
+code	32	0032	encoding	50000
+code	2E	002E	encoding	25000
+code	33	0033	encoding	50000
+font	../corpus/layout/arxiv/1512.03385.pdf	135	0	simple	332	-87	256	0	-1
+code	4	0065	tounicode	49400
+code	2	0069	tounicode	22700
+code	6	0074	tounicode	33300
+code	8	0072	tounicode	34700
+code	9	006C	tounicode	22700
+code	A	0075	tounicode	52000
+code	3	0064	tounicode	52000
+code	5	006E	tounicode	52000
+font	../corpus/layout/arxiv/1512.03385.pdf	136	0	simple	332	-87	256	0	-1
+code	3	0065	tounicode	49300
+code	2	0077	tounicode	71700
+code	4	0069	tounicode	22400
+code	5	0067	tounicode	47800
+code	6	0068	tounicode	52200
+code	7	0074	tounicode	32900
+code	8	0020	tounicode	22400
+code	9	006C	tounicode	22400
+font	../corpus/layout/arxiv/1512.03385.pdf	139	0	simple	775	-960	256	0	-1
+code	46	0046	tounicode	71900
+font	../corpus/layout/arxiv/1512.03385.pdf	142	0	simple	750	-250	256	0	-1
+code	28	0028	tounicode	38800
+code	29	0029	tounicode	38800
+code	2B	002B	tounicode	77700
+font	../corpus/layout/arxiv/1512.03385.pdf	145	0	simple	750	-250	256	0	-1
+code	78	0078	tounicode	60600
+font	../corpus/layout/arxiv/1512.03385.pdf	131	0	simple	750	-250	256	0	-1
+code	28	0028	unknown	38890
+code	29	0029	unknown	38890
+code	30	0030	unknown	50000
+code	2B	002B	unknown	77780
+code	3D	003D	unknown	77780
+code	31	0031	unknown	50000
+code	34	0034	unknown	50000
+code	32	0032	unknown	50000
+font	../corpus/layout/arxiv/1512.03385.pdf	132	0	simple	750	-250	256	0	-1
+code	78	0078	unknown	60690
+code	79	0079	unknown	60690
+font	../corpus/layout/arxiv/1512.03385.pdf	229	0	simple	694	-194	256	0	-1
+code	57	0057	unknown	94440
+font	../corpus/layout/arxiv/1512.03385.pdf	230	0	simple	694	-194	256	0	-1
+code	69	0069	unknown	40420
+code	73	0073	unknown	53920
+font	../corpus/layout/arxiv/1512.03385.pdf	231	0	simple	694	-194	256	0	-1
+code	39	0039	unknown	56950
+code	31	0031	unknown	56950
+code	32	0032	unknown	56950
+code	34	0034	unknown	56950
+font	../corpus/layout/arxiv/1512.03385.pdf	269	0	simple	717	-179	256	0	-1
+code	4	0020	tounicode	21400
+code	10	0033	tounicode	50000
+code	6	006F	tounicode	52400
+code	9	002C	tounicode	23800
+code	5	0063	tounicode	42900
+code	D	0032	tounicode	50000
+code	8	0076	tounicode	45300
+code	3	0078	tounicode	42900
+font	../corpus/layout/arxiv/1512.03385.pdf	270	0	simple	680	-178	256	0	-1
+code	9	006C	tounicode	22400
+code	A	0061	tounicode	47800
+code	4	002D	tounicode	31300
+code	C	0065	tounicode	49300
+code	D	0072	tounicode	34300
+code	3	0047	tounicode	62700
+code	7	0033	tounicode	50800
+code	8	0034	tounicode	50800
+font	../corpus/layout/arxiv/1512.03385.pdf	305	0	simple	699	-217	0	0	8
+code	30	0030	encoding	50000
+code	65	0065	encoding	44400
+code	34	0034	encoding	50000
+code	72	0072	encoding	33300
+code	31	0031	encoding	50000
+code	33	0033	encoding	50000
+code	32	0032	encoding	50000
+code	35	0035	encoding	50000
+font	../corpus/layout/arxiv/1512.03385.pdf	306	0	simple	718	-207	0	0	4
+code	20	0020	encoding	27800
+font	../corpus/layout/arxiv/1512.03385.pdf	307	0	simple	700	-220	0	0	-1
+code	2D	002D	encoding	34000
+code	6C	006C	encoding	24000
+code	61	0061	encoding	44000
+code	79	0079	encoding	46000
+code	65	0065	encoding	44000
+code	72	0072	encoding	34000
+code	31	0031	encoding	50000
+code	38	0038	encoding	50000
+font	../corpus/layout/arxiv/1512.03385.pdf	353	0	simple	688	-209	256	0	-1
+code	76	0076	glyphname	44400
+code	73	0073	glyphname	38900
+font	../corpus/layout/arxiv/1512.03385.pdf	357	0	simple	641	-142	256	0	-1
+code	2	0033	tounicode	50600
+code	3	0078	tounicode	43400
+code	4	002C	tounicode	25300
+code	5	0020	tounicode	22900
+code	6	0036	tounicode	50600
+code	7	0034	tounicode	50600
+code	8	0031	tounicode	50600
+code	9	0032	tounicode	50600
+font	../corpus/layout/arxiv/1512.03385.pdf	358	0	simple	680	-10	256	0	-1
+code	2	0072	tounicode	34700
+code	3	0065	tounicode	49400
+code	4	006C	tounicode	22700
+code	5	0075	tounicode	52000
+code	6	0036	tounicode	50700
+code	8	002D	tounicode	30700
+code	9	0064	tounicode	52000
+code	7	0034	tounicode	50700
+font	../corpus/layout/arxiv/1512.03385.pdf	354	0	simple	750	-194	256	0	-1
+code	46	0046	unknown	73630
+font	../corpus/layout/arxiv/1706.03762.pdf	104	0	simple	678	-216	256	0	-1
+code	65	0065	tounicode	44400
+code	74	0074	tounicode	27800
+code	6E	006E	tounicode	50000
+code	6F	006F	tounicode	50000
+code	69	0069	tounicode	27800
+code	61	0061	tounicode	44400
+code	73	0073	tounicode	38900
+code	72	0072	tounicode	33300
+font	../corpus/layout/arxiv/1706.03762.pdf	105	0	simple	690	-209	256	0	-1
+code	6F	006F	tounicode	50000
+code	74	0074	tounicode	33300
+code	65	0065	tounicode	44400
+code	6E	006E	tounicode	55600
+code	69	0069	tounicode	27800
+code	61	0061	tounicode	50000
+code	64	0064	tounicode	55600
+code	72	0072	tounicode	44400
+font	../corpus/layout/arxiv/1706.03762.pdf	106	0	simple	750	-194	256	0	-1
+code	3	2217	tounicode	58530
+code	2	00D7	tounicode	89290
+code	70	221A	tounicode	93850
+code	79	2020	tounicode	52380
+code	7A	2021	tounicode	52380
+code	0	2212	tounicode	89290
+font	../corpus/layout/arxiv/1706.03762.pdf	107	0	simple	611	-222	256	0	-1
+code	6F	006F	tounicode	52490
+code	67	0067	tounicode	52490
+code	6C	006C	tounicode	52490
+code	61	0061	tounicode	52490
+code	69	0069	tounicode	52490
+code	2E	002E	tounicode	52490
+code	6D	006D	tounicode	52490
+code	40	0040	tounicode	52490
+font	../corpus/layout/arxiv/1706.03762.pdf	108	0	simple	750	-194	256	0	-1
+code	3	2217	tounicode	63890
+code	79	2020	tounicode	57410
+code	7A	2021	tounicode	57410
+font	../corpus/layout/arxiv/1706.03762.pdf	5957	0	simple	683	-217	16	0	8
+code	20	0020	encoding	25000
+code	32	0032	encoding	50000
+code	37	0037	encoding	50000
+code	30	0030	encoding	50000
+code	76	0076	encoding	50000
+code	36	0036	encoding	50000
+code	2E	002E	encoding	25000
+code	33	0033	encoding	50000
+font	../corpus/layout/arxiv/1706.03762.pdf	139	0	simple	694	-194	256	0	-1
+code	64	0064	tounicode	52050
+code	3B	002C	tounicode	27780
+code	3A	002E	tounicode	27780
+code	4F	004F	tounicode	76280
+code	6E	006E	tounicode	60020
+code	78	0078	tounicode	57150
+code	57	0057	tounicode	94440
+code	68	0068	tounicode	57620
+font	../corpus/layout/arxiv/1706.03762.pdf	140	0	simple	694	-194	256	0	-1
+code	64	0064	tounicode	59470
+code	69	0069	tounicode	40420
+code	6B	006B	tounicode	60730
+code	6E	006E	tounicode	70620
+code	76	0076	tounicode	57140
+code	70	0070	tounicode	58890
+code	6F	006F	tounicode	56390
+code	73	0073	tounicode	53920
+font	../corpus/layout/arxiv/1706.03762.pdf	141	0	simple	694	-194	256	0	-1
+code	31	0031	tounicode	56950
+code	32	0032	tounicode	56950
+code	28	0028	tounicode	44640
+code	29	0029	tounicode	44640
+code	2B	002B	tounicode	87700
+code	68	0068	tounicode	63100
+code	69	0069	tounicode	32340
+font	../corpus/layout/arxiv/1706.03762.pdf	142	0	simple	694	-194	256	0	-1
+code	28	0028	tounicode	38890
+code	29	0029	tounicode	38890
+code	3D	003D	tounicode	77780
+code	30	0030	tounicode	50000
+code	61	0061	tounicode	50000
+code	65	0065	tounicode	44440
+code	31	0031	tounicode	50000
+code	74	0074	tounicode	38890
+font	../corpus/layout/arxiv/1706.03762.pdf	143	0	simple	694	-194	256	0	-1
+code	7A	007A	tounicode	51110
+font	../corpus/layout/arxiv/1706.03762.pdf	190	0	simple	750	-194	256	0	-1
+code	1	00B7	tounicode	27780
+code	32	2208	tounicode	66670
+code	70	221A	tounicode	83330
+code	0	2212	tounicode	77780
+code	31	221E	tounicode	100000
+font	../corpus/layout/arxiv/1706.03762.pdf	192	0	simple	694	-194	256	0	-1
+code	6B	006B	tounicode	75810
+code	76	0076	tounicode	72220
+font	../corpus/layout/arxiv/1706.03762.pdf	194	0	simple	694	-194	256	0	-1
+code	71	0071	tounicode	45920
+code	6B	006B	tounicode	53510
+code	64	0064	tounicode	53250
+font	../corpus/layout/arxiv/1706.03762.pdf	195	0	simple	694	-194	256	0	-1
+code	30	0030	tounicode	51390
+code	31	0031	tounicode	51390
+code	3D	003D	tounicode	79940
+font	../corpus/layout/arxiv/1706.03762.pdf	196	0	simple	750	-194	256	0	-1
+code	1	00B7	tounicode	28550
+font	../corpus/layout/arxiv/1706.03762.pdf	198	0	simple	694	-194	256	0	-1
+code	69	0069	tounicode	44560
+code	64	0064	tounicode	64250
+code	6B	006B	tounicode	66090
+font	../corpus/layout/arxiv/1706.03762.pdf	199	0	simple	694	-194	256	0	-1
+code	3D	003D	tounicode	93520
+code	31	0031	tounicode	61110
+font	../corpus/layout/arxiv/1706.03762.pdf	214	0	simple	464	0	256	0	-1
+code	52	0052	tounicode	72220
+font	../corpus/layout/arxiv/2005.14165.pdf	140	0	simple	690	-209	256	0	-1
+code	65	0065	glyphname	44400
+code	61	0061	glyphname	50000
+code	6E	006E	glyphname	55600
+code	69	0069	glyphname	27800
+code	72	0072	glyphname	44400
+code	74	0074	glyphname	33300
+code	6F	006F	glyphname	50000
+code	73	0073	glyphname	38900
+font	../corpus/layout/arxiv/2005.14165.pdf	142	0	simple	678	-216	256	0	-1
+code	65	0065	glyphname	44400
+code	74	0074	glyphname	27800
+code	61	0061	glyphname	44400
+code	6E	006E	glyphname	50000
+code	73	0073	glyphname	38900
+code	69	0069	glyphname	27800
+code	6F	006F	glyphname	50000
+code	72	0072	glyphname	33300
+font	../corpus/layout/arxiv/2005.14165.pdf	1618	0	simple	683	-217	16	0	8
+code	20	0020	encoding	25000
+code	32	0032	encoding	50000
+code	30	0030	encoding	50000
+code	76	0076	encoding	50000
+code	35	0035	encoding	50000
+code	2E	002E	encoding	25000
+code	31	0031	encoding	50000
+code	34	0034	encoding	50000
+font	../corpus/layout/arxiv/2005.14165.pdf	209	0	simple	694	-194	256	0	-1
+code	2B	002B	unknown	87700
+code	63	0063	unknown	50790
+code	74	0074	unknown	44640
+code	78	0078	unknown	60020
+font	../corpus/layout/arxiv/2005.14165.pdf	266	0	simple	694	-194	256	0	-1
+code	4B	004B	unknown	84930
+code	6E	006E	unknown	60020
+font	../corpus/layout/arxiv/2005.14165.pdf	294	0	simple	694	-194	256	0	-1
+code	3D	003D	unknown	77780
+code	32	0032	unknown	50000
+code	30	0030	unknown	50000
+code	34	0034	unknown	50000
+code	38	0038	unknown	50000
+font	../corpus/layout/arxiv/2103.00020.pdf	51	0	simple	690	-209	256	0	-1
+code	61	0061	glyphname	50000
+code	65	0065	glyphname	44400
+code	72	0072	glyphname	44400
+code	6E	006E	glyphname	55600
+code	69	0069	glyphname	27800
+code	73	0073	glyphname	38900
+code	6C	006C	glyphname	27800
+code	6F	006F	glyphname	50000
+font	../corpus/layout/arxiv/2103.00020.pdf	52	0	simple	678	-216	256	0	-1
+code	65	0065	glyphname	44400
+code	74	0074	glyphname	27800
+code	61	0061	glyphname	44400
+code	69	0069	glyphname	27800
+code	6F	006F	glyphname	50000
+code	6E	006E	glyphname	50000
+code	73	0073	glyphname	38900
+code	72	0072	glyphname	33300
+font	../corpus/layout/arxiv/2103.00020.pdf	54	0	simple	625	-147	256	0	-1
+code	2F	002F	glyphname	60000
+code	4F	004F	glyphname	60000
+code	31	0031	glyphname	60000
+code	53	0053	glyphname	60000
+code	74	0074	glyphname	60000
+code	5B	005B	glyphname	60000
+code	5D	005D	glyphname	60000
+code	68	0068	glyphname	60000
+font	../corpus/layout/arxiv/2103.00020.pdf	58	0	simple	694	-194	256	0	-1
+code	3C	003C	unknown	79940
+code	3E	003E	unknown	79940
+font	../corpus/layout/arxiv/2103.00020.pdf	5645	0	simple	683	-217	16	0	8
+code	30	0030	encoding	50000
+code	20	0020	encoding	25000
+code	32	0032	encoding	50000
+code	31	0031	encoding	50000
+code	76	0076	encoding	50000
+code	2E	002E	encoding	25000
+code	61	0061	encoding	44400
+code	72	0072	encoding	33300
+font	../corpus/layout/arxiv/2103.00020.pdf	115	0	composite	891	-216	0	0	-1
+code	37	0054	tounicode	61084
+code	2C	0049	tounicode	33301
+code	101	00B7	tounicode	33301
+font	../corpus/layout/arxiv/2103.00020.pdf	116	0	composite	891	-216	0	0	-1
+code	14	0031	tounicode	50000
+code	15	0032	tounicode	50000
+code	16	0033	tounicode	50000
+code	31	004E	tounicode	72217
+font	../corpus/layout/arxiv/2103.00020.pdf	117	0	composite	833	-300	0	0	-1
+code	53	0070	tounicode	60010
+code	48	0065	tounicode	60010
+code	3	0009	tounicode	60010
+code	AB	2026	tounicode	60010
+code	52	006F	tounicode	60010
+code	44	0061	tounicode	60010
+code	58	0075	tounicode	60010
+code	56	0073	tounicode	60010
+font	../corpus/layout/arxiv/2103.00020.pdf	118	0	composite	667	-250	0	0	-1
+code	2E0	22EE	tounicode	41064
+code	2E3	22F1	tounicode	93945
+font	../corpus/layout/arxiv/2103.00020.pdf	119	0	composite	770	-230	0	0	-1
+code	3	0020	tounicode	27783
+code	48	0065	tounicode	55615
+code	57	0074	tounicode	27783
+code	55	0072	tounicode	33301
+code	44	0061	tounicode	55615
+code	52	006F	tounicode	55615
+code	56	0073	tounicode	50000
+code	4C	0069	tounicode	22217
+font	../corpus/layout/arxiv/2103.00020.pdf	120	0	composite	770	-230	0	0	-1
+code	48	0065	tounicode	55615
+code	28	0045	tounicode	66699
+code	51	006E	tounicode	55615
+code	46	0063	tounicode	50000
+code	52	006F	tounicode	55615
+code	47	0064	tounicode	55615
+code	55	0072	tounicode	33301
+code	2C	0049	tounicode	27783
+font	../corpus/layout/arxiv/2103.00020.pdf	105	0	simple	678	-216	256	0	-1
+code	46	0046	glyphname	55600
+code	69	0069	glyphname	27800
+code	67	0067	glyphname	50000
+code	75	0075	glyphname	50000
+code	72	0072	glyphname	33300
+code	65	0065	glyphname	44400
+code	2E	002E	glyphname	25000
+code	31	0031	glyphname	50000
+font	../corpus/layout/arxiv/2103.00020.pdf	191	0	simple	929	-236	0	0	-1
+code	20	0020	glyphname	31800
+code	65	0065	glyphname	61500
+code	6F	006F	glyphname	61200
+code	72	0072	glyphname	41100
+code	61	0061	glyphname	61300
+code	63	0063	glyphname	55000
+code	66	0066	glyphname	35200
+code	69	0069	glyphname	27800
+font	../corpus/layout/arxiv/2103.00020.pdf	187	0	simple	669	-193	256	0	-1
+code	61	0061	glyphname	50000
+code	6E	006E	glyphname	50000
+code	6C	006C	glyphname	27800
+code	65	0065	glyphname	44400
+code	73	0073	glyphname	38900
+code	69	0069	glyphname	27800
+code	72	0072	glyphname	38900
+code	74	0074	glyphname	27800
+font	../corpus/layout/arxiv/2103.00020.pdf	291	0	simple	694	-194	256	0	-1
+code	4E	004E	unknown	80350
+code	74	0074	unknown	36110
+font	../corpus/layout/arxiv/2103.00020.pdf	293	0	simple	694	-194	256	0	-1
+code	32	0032	unknown	56950
+font	../corpus/layout/arxiv/2103.00020.pdf	295	0	simple	694	-194	256	0	-1
+code	75	0075	unknown	67540
+code	76	0076	unknown	57140
+font	../corpus/layout/arxiv/2103.00020.pdf	357	0	composite	1047	-270	0	0	-1
+code	1	0020	tounicode	60000
+code	20	0065	tounicode	60000
+code	2A	006F	tounicode	60000
+code	2E	0073	tounicode	60000
+code	2F	0074	tounicode	60000
+code	24	0069	tounicode	60000
+code	29	006E	tounicode	60000
+code	1C	0061	tounicode	60000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Co_Branding/PcquoteComInc_19990721_S-1A_EX-10.11_6377149_EX-10.11_Co-Branding Agreement2.pdf	29	0	composite	612	-188	0	0	-1
+code	3	0020	tounicode	60000
+code	10	002D	tounicode	60000
+code	48	0065	tounicode	60000
+code	57	0074	tounicode	60000
+code	44	0061	tounicode	60000
+code	51	006E	tounicode	60000
+code	55	0072	tounicode	60000
+code	4C	0069	tounicode	60000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Co_Branding/PcquoteComInc_19990721_S-1A_EX-10.11_6377149_EX-10.11_Co-Branding Agreement2.pdf	32	0	simple	765	-207	0	0	-1
+code	20	0020	encoding	31300
+code	43	0043	encoding	60100
+code	31	0031	encoding	54600
+code	2F	002F	encoding	38200
+code	39	0039	encoding	54600
+code	53	0053	encoding	55700
+code	4F	004F	encoding	70800
+code	2C	002C	encoding	30300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	160	0	composite	677	-215	0	0	-1
+code	3	00A0	tounicode	25000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	161	0	simple	693	-216	0	0	8
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	6F	006F	encoding	50000
+code	61	0061	encoding	44400
+code	74	0074	encoding	27800
+code	6E	006E	encoding	50000
+code	72	0072	encoding	33300
+code	69	0069	encoding	27800
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	162	0	simple	677	-216	0	0	9
+code	45	0045	encoding	66700
+code	20	0020	encoding	25000
+code	4E	004E	encoding	72200
+code	54	0054	encoding	66700
+code	65	0065	encoding	44400
+code	4F	004F	encoding	77800
+code	52	0052	encoding	72200
+code	61	0061	encoding	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	163	0	composite	693	-215	0	0	-1
+code	3	00A0	tounicode	25000
+code	B6	2019	tounicode	33300
+code	B3	201C	tounicode	44300
+code	B4	201D	tounicode	44300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	144	0	composite	1000	-206	0	0	-1
+code	3	0020	tounicode	31250
+code	36	0053	tounicode	55713
+code	35	0052	tounicode	62061
+code	31	004E	tounicode	66748
+code	F	002C	tounicode	30273
+code	14	0031	tounicode	54590
+code	33	0050	tounicode	55127
+code	28	0045	tounicode	56104
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	102	0	composite	693	-215	0	0	-1
+code	78	00B7	tounicode	45900
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	107	0	simple	694	-216	0	0	10
+code	2E	002E	encoding	25000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	113	0	composite	694	-215	0	0	-1
+code	3	00A0	tounicode	25000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/ThriventVariableInsuranceAccountB_20190701_N-6_EX-99.D(IV)_11720968_EX-99.D(IV)_Endorsement Agreement.pdf	22	0	composite	677	-215	0	0	-1
+code	31	004E	tounicode	72200
+code	28	0045	tounicode	66600
+code	3	0020	tounicode	25000
+code	2C	0049	tounicode	38900
+code	36	0053	tounicode	55600
+code	37	0054	tounicode	66600
+code	32	004F	tounicode	77700
+code	27	0044	tounicode	72200
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/ThriventVariableInsuranceAccountB_20190701_N-6_EX-99.D(IV)_11720968_EX-99.D(IV)_Endorsement Agreement.pdf	23	0	composite	693	-215	0	0	-1
+code	3	0020	tounicode	25000
+code	48	0065	tounicode	44300
+code	51	006E	tounicode	50000
+code	57	0074	tounicode	27700
+code	44	0061	tounicode	44300
+code	4C	0069	tounicode	27700
+code	55	0072	tounicode	33300
+code	52	006F	tounicode	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/ThriventVariableInsuranceAccountB_20190701_N-6_EX-99.D(IV)_11720968_EX-99.D(IV)_Endorsement Agreement.pdf	43	0	composite	1000	-206	0	0	-1
+code	3	0020	tounicode	31250
+code	31	004E	tounicode	66748
+code	24	0041	tounicode	59961
+code	37	0054	tounicode	58398
+code	35	0052	tounicode	62061
+code	2C	0049	tounicode	37305
+code	28	0045	tounicode	56104
+code	26	0043	tounicode	60059
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/IP/ArmstrongFlooringInc_20190107_8-K_EX-10.2_11471795_EX-10.2_Intellectual Property Agreement.pdf	211	0	composite	677	-215	0	0	-1
+code	48	0065	tounicode	44300
+code	3	0020	tounicode	25000
+code	51	006E	tounicode	55600
+code	4C	0069	tounicode	27700
+code	44	0061	tounicode	50000
+code	55	0072	tounicode	44300
+code	56	0073	tounicode	38900
+code	52	006F	tounicode	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/IP/ArmstrongFlooringInc_20190107_8-K_EX-10.2_11471795_EX-10.2_Intellectual Property Agreement.pdf	212	0	composite	694	-215	0	0	-1
+code	57	0074	tounicode	27700
+code	4C	0069	tounicode	27700
+code	58	0075	tounicode	50000
+code	51	006E	tounicode	50000
+code	3	0020	tounicode	25000
+code	56	0073	tounicode	38900
+code	48	0065	tounicode	44300
+code	52	006F	tounicode	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/IP/ArmstrongFlooringInc_20190107_8-K_EX-10.2_11471795_EX-10.2_Intellectual Property Agreement.pdf	210	0	composite	693	-215	0	0	-1
+code	3	0020	tounicode	25000
+code	48	0065	tounicode	44300
+code	51	006E	tounicode	50000
+code	57	0074	tounicode	27700
+code	44	0061	tounicode	44300
+code	52	006F	tounicode	50000
+code	4C	0069	tounicode	27700
+code	55	0072	tounicode	33300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/IP/ArmstrongFlooringInc_20190107_8-K_EX-10.2_11471795_EX-10.2_Intellectual Property Agreement.pdf	248	0	composite	1000	-206	0	0	-1
+code	3	0020	tounicode	31250
+code	35	0052	tounicode	62061
+code	32	004F	tounicode	70752
+code	31	004E	tounicode	66748
+code	F	002C	tounicode	30273
+code	36	0053	tounicode	55713
+code	2A	0047	tounicode	66748
+code	2C	0049	tounicode	37305
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Joint Venture/IMPCOTECHNOLOGIESINC_04_15_2003-EX-10.65-JOINT VENTURE AGREEMENT.PDF	123	0	composite	677	-215	0	0	-1
+code	3	00A0	tounicode	25000
+code	28	0045	tounicode	66600
+code	57	0074	tounicode	33300
+code	24	0041	tounicode	72200
+code	48	0065	tounicode	44300
+code	2C	0049	tounicode	38900
+code	52	006F	tounicode	50000
+code	55	0072	tounicode	44300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Joint Venture/IMPCOTECHNOLOGIESINC_04_15_2003-EX-10.65-JOINT VENTURE AGREEMENT.PDF	122	0	composite	693	-215	0	0	-1
+code	3	00A0	tounicode	25000
+code	48	0065	tounicode	44300
+code	57	0074	tounicode	27700
+code	51	006E	tounicode	50000
+code	44	0061	tounicode	44300
+code	4C	0069	tounicode	27700
+code	52	006F	tounicode	50000
+code	55	0072	tounicode	33300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Joint Venture/IMPCOTECHNOLOGIESINC_04_15_2003-EX-10.65-JOINT VENTURE AGREEMENT.PDF	124	0	composite	694	-215	0	0	-1
+code	4C	0069	tounicode	27700
+code	44	0061	tounicode	50000
+code	51	006E	tounicode	50000
+code	57	0074	tounicode	27700
+code	48	0065	tounicode	44300
+code	55	0072	tounicode	38900
+code	3	00A0	tounicode	25000
+code	4F	006C	tounicode	27700
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/License_Agreements/GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content License Agreement1.pdf	507	0	composite	677	-215	0	0	-1
+code	48	0065	tounicode	44300
+code	3	00A0	tounicode	25000
+code	56	0073	tounicode	38900
+code	55	0072	tounicode	44300
+code	57	0074	tounicode	33300
+code	B4	201D	tounicode	50000
+code	B3	201C	tounicode	50000
+code	4C	0069	tounicode	27700
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/License_Agreements/GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content License Agreement1.pdf	510	0	composite	693	-215	0	0	-1
+code	3	00A0	tounicode	25000
+code	48	0065	tounicode	44300
+code	57	0074	tounicode	27700
+code	4C	0069	tounicode	27700
+code	52	006F	tounicode	50000
+code	55	0072	tounicode	33300
+code	56	0073	tounicode	38900
+code	51	006E	tounicode	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/License_Agreements/GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content License Agreement1.pdf	514	0	composite	1000	-206	0	0	-1
+code	3	0020	tounicode	31250
+code	12	002F	tounicode	38232
+code	36	0053	tounicode	55713
+code	2F	004C	tounicode	49756
+code	2C	0049	tounicode	37305
+code	F	002C	tounicode	30273
+code	14	0031	tounicode	54590
+code	13	0030	tounicode	54590
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Service/FEDERATEDGOVERNMENTINCOMESECURITIESINC_04_28_2020-EX-99.SERV AGREE-SERVICES AGREEMENT_AMENDMENT.pdf	8	0	composite	693	-215	0	0	-1
+code	3	0020	tounicode	25000
+code	48	0065	tounicode	44300
+code	57	0074	tounicode	27700
+code	51	006E	tounicode	50000
+code	4C	0069	tounicode	27700
+code	44	0061	tounicode	44300
+code	52	006F	tounicode	50000
+code	55	0072	tounicode	33300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Sponsorship/CANOPETROLEUM,INC_12_13_2007-EX-10.1-Sponsorship Agreement.PDF	42	0	simple	693	-216	0	0	8
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	74	0074	encoding	27800
+code	61	0061	encoding	44400
+code	6F	006F	encoding	50000
+code	6E	006E	encoding	50000
+code	72	0072	encoding	33300
+code	69	0069	encoding	27800
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Sponsorship/CANOPETROLEUM,INC_12_13_2007-EX-10.1-Sponsorship Agreement.PDF	43	0	composite	693	-215	0	0	-1
+code	3	00A0	tounicode	25000
+code	48	0065	tounicode	44300
+code	57	0074	tounicode	27700
+code	49	0066	tounicode	33300
+code	44	0061	tounicode	44300
+code	46	0063	tounicode	44300
+code	19	0036	tounicode	50000
+code	EE	00D7	tounicode	56300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Sponsorship/CANOPETROLEUM,INC_12_13_2007-EX-10.1-Sponsorship Agreement.PDF	44	0	simple	677	-216	0	0	9
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	49	0049	encoding	38900
+code	31	0031	encoding	50000
+code	70	0070	encoding	55600
+code	6F	006F	encoding	50000
+code	6E	006E	encoding	55600
+code	73	0073	encoding	38900
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Sponsorship/CANOPETROLEUM,INC_12_13_2007-EX-10.1-Sponsorship Agreement.PDF	45	0	composite	677	-215	0	0	-1
+code	3	00A0	tounicode	25000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Sponsorship/CANOPETROLEUM,INC_12_13_2007-EX-10.1-Sponsorship Agreement.PDF	46	0	simple	694	-216	0	0	10
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	61	0061	encoding	50000
+code	72	0072	encoding	38900
+code	6F	006F	encoding	50000
+code	6E	006E	encoding	50000
+code	74	0074	encoding	27800
+code	2E	002E	encoding	25000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	244	0	simple	677	-216	0	0	9
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	69	0069	encoding	27800
+code	74	0074	encoding	33300
+code	6E	006E	encoding	55600
+code	61	0061	encoding	50000
+code	72	0072	encoding	44400
+code	6F	006F	encoding	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	245	0	simple	693	-216	0	0	8
+code	20	0020	encoding	25000
+code	65	0065	encoding	44400
+code	74	0074	encoding	27800
+code	6E	006E	encoding	50000
+code	69	0069	encoding	27800
+code	61	0061	encoding	44400
+code	6F	006F	encoding	50000
+code	72	0072	encoding	33300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	246	0	composite	693	-215	0	0	-1
+code	3	00A0	tounicode	25000
+code	48	0065	tounicode	44300
+code	57	0074	tounicode	27700
+code	51	006E	tounicode	50000
+code	4C	0069	tounicode	27700
+code	52	006F	tounicode	50000
+code	44	0061	tounicode	44300
+code	56	0073	tounicode	38900
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	162	0	simple	728	-210	0	0	4
+code	20	0020	encoding	27800
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	34	0	simple	693	-216	0	0	8
+code	1	0020	tounicode	25000
+code	B	002E	tounicode	25000
+code	10	006F	tounicode	50000
+code	11	006D	tounicode	77800
+code	15	0074	tounicode	27800
+code	18	0072	tounicode	33300
+code	5	0049	tounicode	33300
+code	8	0031	tounicode	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	36	0	simple	677	-216	0	0	9
+code	1	0020	tounicode	25000
+code	1D	0065	tounicode	44400
+code	1E	006E	tounicode	55600
+code	24	0061	tounicode	50000
+code	1F	0074	tounicode	33300
+code	27	006F	tounicode	50000
+code	1C	0072	tounicode	44400
+code	26	0069	tounicode	27800
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	4	0	simple	677	-216	0	0	9
+code	1	0020	tounicode	25000
+code	1D	0065	tounicode	44400
+code	1F	0074	tounicode	33300
+code	1E	006E	tounicode	55600
+code	24	0061	tounicode	50000
+code	1C	0072	tounicode	44400
+code	26	0069	tounicode	27800
+code	27	006F	tounicode	50000
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	7	0	simple	693	-216	0	0	8
+code	1	0020	tounicode	25000
+code	1A	002D	tounicode	33300
+font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	15	0	simple	677	-216	0	0	9
+code	53	005F	tounicode	50000
+code	1	0020	tounicode	25000
+code	26	0069	tounicode	27800
+code	29	0063	tounicode	44400
+code	1E	006E	tounicode	55600
+code	3D	002E	tounicode	25000
+code	1C	0072	tounicode	44400
+code	1D	0065	tounicode	44400

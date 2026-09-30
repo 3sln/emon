@@ -1,0 +1,98 @@
+#!/bin/sh
+# Ask the GENERATED RUST what it makes of fonts in real files (DEVLOG P1.6).
+#
+#     kin/scripts/font-sweep < requests.tsv > answers.tsv
+#
+# A DEVELOPMENT TOOL, run by a person and by `kin/scripts/font-corpus.py`; no
+# gate runs it. Each input line is `path<TAB>object number<TAB>hex codes,
+# comma separated`; each request is answered by
+#
+#     F  path  object  load-status  kind  warn  ascent  descent  standard-font  vertical
+#     C  code  code-points (hex, `+` joined, `-` none)  how  width (1/100000 em, `-` none)  cid
+#
+# one C line per requested code. Like `pdf-sweep` it builds with overflow and
+# bounds checks ON, and a fault is a `PANIC` line, not a crash.
+set -e
+cd "$(dirname "$0")/../.."
+./kin/scripts/emit > /dev/null
+work=$(mktemp -d "${TMPDIR:-/tmp}/emon-fsweep.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/emon"
+cp gen/rust/emon/*.rs "$work/emon/"
+cp host/rust/src/port.rs host/rust/src/testport.rs "$work/"
+( for f in gen/rust/emon/*.rs; do echo "pub mod $(basename "$f" .rs);"; done ) > "$work/emon.rs"
+cat > "$work/main.rs" <<'MAIN'
+#![allow(dead_code, unused_mut, unused_variables, unused_imports)]
+mod emon;
+mod port;
+mod testport;
+use emon::pdfdoc::*;
+use emon::pdffont::*;
+use std::io::BufRead;
+
+fn hexs(cps: &[i32]) -> String {
+    if cps.is_empty() { return "-".to_string(); }
+    cps.iter().map(|c| format!("{:04X}", c)).collect::<Vec<_>>().join("+")
+}
+
+fn main() {
+    let stdin = std::io::stdin();
+    let mut cache: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+    for line in stdin.lock().lines() {
+        let line = line.unwrap();
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 3 { continue; }
+        let path = parts[0].to_string();
+        let num: i32 = parts[1].parse().unwrap_or(0);
+        let codes: Vec<i32> = parts[2].split(',').filter(|s| !s.is_empty())
+            .map(|s| i32::from_str_radix(s, 16).unwrap_or(0)).collect();
+        if !cache.contains_key(&path) {
+            if cache.len() > 4 { cache.clear(); }
+            cache.insert(path.clone(), std::fs::read(&path).unwrap_or_default());
+        }
+        let data = cache.get(&path).unwrap().clone();
+        let src = port::Src::of_bytes(data);
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut ar = port::Cells::new(); let mut dc = port::Cells::new();
+            let mut a = port::Cells::new(); let mut b = port::Cells::new();
+            let mut st = port::Cells::new(); let mut out = port::Cells::new();
+            let mut f = port::Cells::new();
+            let mut rows: Vec<String> = vec![];
+            let ostatus = pd_open(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st);
+            if ostatus != 0 {
+                rows.push(format!("F\t{}\t{}\topen{}\t0\t0\t0\t0\t-1", path, num, ostatus));
+                return rows;
+            }
+            let h = pd_get(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, num);
+            let status = pfn_load(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut f, &mut out, h);
+            rows.push(format!("F\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", path, num, status, pfn_kind_of(&mut f),
+                              pfn_warn(&mut f), pfn_ascent(&mut f), pfn_descent(&mut f), pfn_standard_font(&mut f),
+                              pfn_vertical(&mut f)));
+            if status == 0 {
+                for c in &codes {
+                    let n = pfn_map(&mut f, *c);
+                    let cps: Vec<i32> = (0..n).map(|i| pfn_cp(&mut f, i)).collect();
+                    let how = pfn_how_of(&mut f);
+                    let mut t = String::new();
+                    pfn_how_emit_name(&mut t, how);
+                    let w = pfn_width(&mut f, *c);
+                    let ws = if w == -1 { "-".to_string() } else { w.to_string() };
+                    rows.push(format!("C\t{:X}\t{}\t{}\t{}\t{}", c, hexs(&cps), t, ws, pfn_cid(&mut f, *c)));
+                }
+            }
+            rows
+        }));
+        match res {
+            Ok(rows) => for r in rows { println!("{}", r); },
+            Err(p) => {
+                let m = if let Some(s) = p.downcast_ref::<String>() { s.clone() }
+                        else if let Some(s) = p.downcast_ref::<&str>() { s.to_string() }
+                        else { "?".to_string() };
+                println!("F\t{}\t{}\tPANIC {}\t0\t0\t0\t0\t-1", path, num, m.replace('\n', " ").replace('\t', " "));
+            }
+        }
+    }
+}
+MAIN
+( cd "$work" && rustc -O -C debug-assertions=on -C overflow-checks=on -o fsweep main.rs 2>&1 | grep -E '^error' -A8 || true )
+"$work/fsweep"

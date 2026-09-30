@@ -268,6 +268,108 @@ pub fn pn_creation_date() -> i32 {
 pub fn pn_mod_date() -> i32 {
     return 88;
 }
+pub fn pn_base_font() -> i32 {
+    return 89;
+}
+pub fn pn_encoding() -> i32 {
+    return 90;
+}
+pub fn pn_differences() -> i32 {
+    return 91;
+}
+pub fn pn_base_encoding() -> i32 {
+    return 92;
+}
+pub fn pn_to_unicode() -> i32 {
+    return 93;
+}
+pub fn pn_widths() -> i32 {
+    return 94;
+}
+pub fn pn_first_char() -> i32 {
+    return 95;
+}
+pub fn pn_last_char() -> i32 {
+    return 96;
+}
+pub fn pn_font_descriptor() -> i32 {
+    return 97;
+}
+pub fn pn_flags() -> i32 {
+    return 98;
+}
+pub fn pn_missing_width() -> i32 {
+    return 99;
+}
+pub fn pn_ascent() -> i32 {
+    return 100;
+}
+pub fn pn_descent() -> i32 {
+    return 101;
+}
+pub fn pn_font_b_box() -> i32 {
+    return 102;
+}
+pub fn pn_font_matrix() -> i32 {
+    return 103;
+}
+pub fn pn_descendant_fonts() -> i32 {
+    return 104;
+}
+pub fn pn_dw() -> i32 {
+    return 105;
+}
+pub fn pn_dw2() -> i32 {
+    return 106;
+}
+pub fn pn_cid_system_info() -> i32 {
+    return 107;
+}
+pub fn pn_ordering() -> i32 {
+    return 108;
+}
+pub fn pn_w_mode() -> i32 {
+    return 109;
+}
+pub fn pn_type0() -> i32 {
+    return 110;
+}
+pub fn pn_type1() -> i32 {
+    return 111;
+}
+pub fn pn_mm_type1() -> i32 {
+    return 112;
+}
+pub fn pn_true_type() -> i32 {
+    return 113;
+}
+pub fn pn_type3() -> i32 {
+    return 114;
+}
+pub fn pn_cid_font_type0() -> i32 {
+    return 115;
+}
+pub fn pn_cid_font_type2() -> i32 {
+    return 116;
+}
+pub fn pn_win_ansi_encoding() -> i32 {
+    return 117;
+}
+pub fn pn_mac_roman_encoding() -> i32 {
+    return 118;
+}
+pub fn pn_standard_encoding() -> i32 {
+    return 119;
+}
+pub fn pn_mac_expert_encoding() -> i32 {
+    return 120;
+}
+pub fn pn_identity_h() -> i32 {
+    return 121;
+}
+pub fn pn_identity_v() -> i32 {
+    return 122;
+}
 pub fn pn_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "Type");
@@ -625,9 +727,145 @@ pub fn pn_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "ModDate");
         return 1;
     }
+    if code == 89 {
+        crate::port::text_ascii(t, "BaseFont");
+        return 1;
+    }
+    if code == 90 {
+        crate::port::text_ascii(t, "Encoding");
+        return 1;
+    }
+    if code == 91 {
+        crate::port::text_ascii(t, "Differences");
+        return 1;
+    }
+    if code == 92 {
+        crate::port::text_ascii(t, "BaseEncoding");
+        return 1;
+    }
+    if code == 93 {
+        crate::port::text_ascii(t, "ToUnicode");
+        return 1;
+    }
+    if code == 94 {
+        crate::port::text_ascii(t, "Widths");
+        return 1;
+    }
+    if code == 95 {
+        crate::port::text_ascii(t, "FirstChar");
+        return 1;
+    }
+    if code == 96 {
+        crate::port::text_ascii(t, "LastChar");
+        return 1;
+    }
+    if code == 97 {
+        crate::port::text_ascii(t, "FontDescriptor");
+        return 1;
+    }
+    if code == 98 {
+        crate::port::text_ascii(t, "Flags");
+        return 1;
+    }
+    if code == 99 {
+        crate::port::text_ascii(t, "MissingWidth");
+        return 1;
+    }
+    if code == 100 {
+        crate::port::text_ascii(t, "Ascent");
+        return 1;
+    }
+    if code == 101 {
+        crate::port::text_ascii(t, "Descent");
+        return 1;
+    }
+    if code == 102 {
+        crate::port::text_ascii(t, "FontBBox");
+        return 1;
+    }
+    if code == 103 {
+        crate::port::text_ascii(t, "FontMatrix");
+        return 1;
+    }
+    if code == 104 {
+        crate::port::text_ascii(t, "DescendantFonts");
+        return 1;
+    }
+    if code == 105 {
+        crate::port::text_ascii(t, "DW");
+        return 1;
+    }
+    if code == 106 {
+        crate::port::text_ascii(t, "DW2");
+        return 1;
+    }
+    if code == 107 {
+        crate::port::text_ascii(t, "CIDSystemInfo");
+        return 1;
+    }
+    if code == 108 {
+        crate::port::text_ascii(t, "Ordering");
+        return 1;
+    }
+    if code == 109 {
+        crate::port::text_ascii(t, "WMode");
+        return 1;
+    }
+    if code == 110 {
+        crate::port::text_ascii(t, "Type0");
+        return 1;
+    }
+    if code == 111 {
+        crate::port::text_ascii(t, "Type1");
+        return 1;
+    }
+    if code == 112 {
+        crate::port::text_ascii(t, "MMType1");
+        return 1;
+    }
+    if code == 113 {
+        crate::port::text_ascii(t, "TrueType");
+        return 1;
+    }
+    if code == 114 {
+        crate::port::text_ascii(t, "Type3");
+        return 1;
+    }
+    if code == 115 {
+        crate::port::text_ascii(t, "CIDFontType0");
+        return 1;
+    }
+    if code == 116 {
+        crate::port::text_ascii(t, "CIDFontType2");
+        return 1;
+    }
+    if code == 117 {
+        crate::port::text_ascii(t, "WinAnsiEncoding");
+        return 1;
+    }
+    if code == 118 {
+        crate::port::text_ascii(t, "MacRomanEncoding");
+        return 1;
+    }
+    if code == 119 {
+        crate::port::text_ascii(t, "StandardEncoding");
+        return 1;
+    }
+    if code == 120 {
+        crate::port::text_ascii(t, "MacExpertEncoding");
+        return 1;
+    }
+    if code == 121 {
+        crate::port::text_ascii(t, "Identity-H");
+        return 1;
+    }
+    if code == 122 {
+        crate::port::text_ascii(t, "Identity-V");
+        return 1;
+    }
     return 0;
 }
-pub static PN_CHARS: [i32; 607] = [
+pub static PN_CHARS: [i32; 924] = [
     84, 121, 112, 101, 76, 101, 110, 103, 116, 104, 70, 105, 108, 116, 101, 114,
     68, 101, 99, 111, 100, 101, 80, 97, 114, 109, 115, 70, 80, 114, 101, 100,
     105, 99, 116, 111, 114, 67, 111, 108, 111, 114, 115, 66, 105, 116, 115, 80,
@@ -665,9 +903,29 @@ pub static PN_CHARS: [i32; 607] = [
     103, 104, 116, 84, 105, 116, 108, 101, 65, 117, 116, 104, 111, 114, 83, 117,
     98, 106, 101, 99, 116, 75, 101, 121, 119, 111, 114, 100, 115, 67, 114, 101,
     97, 116, 111, 114, 80, 114, 111, 100, 117, 99, 101, 114, 67, 114, 101, 97,
-    116, 105, 111, 110, 68, 97, 116, 101, 77, 111, 100, 68, 97, 116, 101
+    116, 105, 111, 110, 68, 97, 116, 101, 77, 111, 100, 68, 97, 116, 101, 66,
+    97, 115, 101, 70, 111, 110, 116, 69, 110, 99, 111, 100, 105, 110, 103, 68,
+    105, 102, 102, 101, 114, 101, 110, 99, 101, 115, 66, 97, 115, 101, 69, 110,
+    99, 111, 100, 105, 110, 103, 84, 111, 85, 110, 105, 99, 111, 100, 101, 87,
+    105, 100, 116, 104, 115, 70, 105, 114, 115, 116, 67, 104, 97, 114, 76, 97,
+    115, 116, 67, 104, 97, 114, 70, 111, 110, 116, 68, 101, 115, 99, 114, 105,
+    112, 116, 111, 114, 70, 108, 97, 103, 115, 77, 105, 115, 115, 105, 110, 103,
+    87, 105, 100, 116, 104, 65, 115, 99, 101, 110, 116, 68, 101, 115, 99, 101,
+    110, 116, 70, 111, 110, 116, 66, 66, 111, 120, 70, 111, 110, 116, 77, 97,
+    116, 114, 105, 120, 68, 101, 115, 99, 101, 110, 100, 97, 110, 116, 70, 111,
+    110, 116, 115, 68, 87, 68, 87, 50, 67, 73, 68, 83, 121, 115, 116, 101,
+    109, 73, 110, 102, 111, 79, 114, 100, 101, 114, 105, 110, 103, 87, 77, 111,
+    100, 101, 84, 121, 112, 101, 48, 84, 121, 112, 101, 49, 77, 77, 84, 121,
+    112, 101, 49, 84, 114, 117, 101, 84, 121, 112, 101, 84, 121, 112, 101, 51,
+    67, 73, 68, 70, 111, 110, 116, 84, 121, 112, 101, 48, 67, 73, 68, 70,
+    111, 110, 116, 84, 121, 112, 101, 50, 87, 105, 110, 65, 110, 115, 105, 69,
+    110, 99, 111, 100, 105, 110, 103, 77, 97, 99, 82, 111, 109, 97, 110, 69,
+    110, 99, 111, 100, 105, 110, 103, 83, 116, 97, 110, 100, 97, 114, 100, 69,
+    110, 99, 111, 100, 105, 110, 103, 77, 97, 99, 69, 120, 112, 101, 114, 116,
+    69, 110, 99, 111, 100, 105, 110, 103, 73, 100, 101, 110, 116, 105, 116, 121,
+    45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86
 ];
-pub static PN_SPAN: [i32; 178] = [
+pub static PN_SPAN: [i32; 246] = [
     0, 4,
     4, 6,
     10, 6,
@@ -756,7 +1014,41 @@ pub static PN_SPAN: [i32; 178] = [
     573, 7,
     580, 8,
     588, 12,
-    600, 7
+    600, 7,
+    607, 8,
+    615, 8,
+    623, 11,
+    634, 12,
+    646, 9,
+    655, 6,
+    661, 9,
+    670, 8,
+    678, 14,
+    692, 5,
+    697, 12,
+    709, 6,
+    715, 7,
+    722, 8,
+    730, 10,
+    740, 15,
+    755, 2,
+    757, 3,
+    760, 13,
+    773, 8,
+    781, 5,
+    786, 5,
+    791, 5,
+    796, 7,
+    803, 8,
+    811, 5,
+    816, 12,
+    828, 12,
+    840, 15,
+    855, 16,
+    871, 16,
+    887, 17,
+    904, 10,
+    914, 10
 ];
 pub fn pk_true() -> i32 {
     return 1;
