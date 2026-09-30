@@ -81,9 +81,9 @@ pub(crate) fn op_words(an: &mut crate::port::Cells, at: i32, page: i32, dpi: i32
     }
     return 0;
 }
-pub fn op_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, mut etext: &mut crate::port::Cells) -> i32 {
+pub fn op_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut ocrwords: &mut crate::port::Cells, mut alts: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut spans: &mut crate::port::Cells) -> i32 {
     // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    ev_init(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
     let n: i32 = crate::port::src_len(s);
     let mid: i32 = crate::port::src_u8(s, n / 2);
     if crate::port::src_missed(s) {

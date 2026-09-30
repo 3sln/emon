@@ -1,0 +1,125 @@
+# emon P1.7: the glyph text of each page and every marked-content span of the 3 tagged PDFs
+# Written by kin/scripts/content-goldens from the generated Rust; do not edit.
+# F path (relative to test/), P page glyph text, T page line text (words joined by a space, lines by U+2028), S span (emon.contentrows). See kin/pdfcontenttest.kin.
+F	corpus/synth/pdf-tagged/h-inverted.pdf
+P	1	ANNUAL REVIEW OF OPERATIONSSchool change them boy every it side no always cut region would words. Family father try ouraround did not were very being review man.Northern RegionAt again as five when another for sea before. Land under all just come results before abovefather between we seen family got.StafﬁngLife much came air across over long page she name sound say father.Hiring planHeard both life just budget looked learn young usually. Far near for men see next what comewhat high live.FacilitiesMe show say want leave him white try leave do story has took found.Maintenance backlogMe body after come review during have today knew all since can across will growth better. Thatput city great enough near any always.Southern RegionAt pay best where leave white the off face that both above because off sea always. Didn't throughuse few asked group around sample seen take better money near put during.StafﬁngUntil knew too let change and study help animal need quarter.Hiring planGive take ever try results children time out began. And budget much find line last her beingmeasure will family like then world.FacilitiesMoney every almost money using began friend number go an true on city then most just.
+T	1	A N N U A L R E V I E W O F O P E R AT I O N S School change them boy every it side no always cut region would words. Family father try our around did not were very being review man. Northern Region At again as five when another for sea before. Land under all just come results before above father between we seen family got. Stafﬁng Life much came air across over long page she name sound say father. Hiring plan Heard both life just budget looked learn young usually. Far near for men see next what come what high live. Facilities Me show say want leave him white try leave do story has took found. Maintenance backlog Me body after come review during have today knew all since can across will growth better. That put city great enough near any always. Southern Region At pay best where leave white the off face that both above because off sea always. Didn't through use few asked group around sample seen take better money near put during. Stafﬁng Until knew too let change and study help animal need quarter. Hiring plan Give take ever try results children time out began. And budget much find line last her being measure will family like then world. Facilities Money every almost money using began friend number go an true on city then most just.
+P	2	Maintenance backlogAn hand do young three where far last. There write their almost make method four were handcity form part other across sure.FINANCIAL SUMMARYBudget us last many part along away pay could look for side example.Income and ExpensesLand kind see review white called form under left back just called now came my move. Good hasknow an move results never up friend next animal.IncomeGood same big show all without white face father any leave all country.
+T	2	Maintenance backlog An hand do young three where far last. There write their almost make method four were hand city form part other across sure. F I N A N C I A L S U M M A RY Budget us last many part along away pay could look for side example. Income and Expenses Land kind see review white called form under left back just called now came my move. Good has know an move results never up friend next animal. Income Good same big show all without white face father any leave all country.
+S	0	H1	0	-	-	-	-	-	-	-	0	0	1	0	-1
+S	1	NonStruct	1	-	-	-	-	-	-	-	0	27	1	0	-1
+S	2	NonStruct	2	-	-	-	-	-	-	-	27	134	1	0	-1
+S	3	NonStruct	3	-	-	-	-	-	-	-	161	15	1	0	-1
+S	4	NonStruct	4	-	-	-	-	-	-	-	176	125	1	0	-1
+S	5	NonStruct	5	-	-	-	-	-	-	-	301	7	1	0	-1
+S	6	Span	-1	-	-	-	fi	-	-	-	305	1	1	0	5
+S	7	NonStruct	6	-	-	-	-	-	-	-	308	67	1	0	-1
+S	8	NonStruct	7	-	-	-	-	-	-	-	375	11	1	0	-1
+S	9	NonStruct	8	-	-	-	-	-	-	-	386	106	1	0	-1
+S	10	NonStruct	9	-	-	-	-	-	-	-	492	10	1	0	-1
+S	11	NonStruct	10	-	-	-	-	-	-	-	502	67	1	0	-1
+S	12	NonStruct	11	-	-	-	-	-	-	-	569	19	1	0	-1
+S	13	NonStruct	12	-	-	-	-	-	-	-	588	132	1	0	-1
+S	14	NonStruct	13	-	-	-	-	-	-	-	720	15	1	0	-1
+S	15	NonStruct	14	-	-	-	-	-	-	-	735	170	1	0	-1
+S	16	NonStruct	15	-	-	-	-	-	-	-	905	7	1	0	-1
+S	17	Span	-1	-	-	-	fi	-	-	-	909	1	1	0	16
+S	18	NonStruct	16	-	-	-	-	-	-	-	912	61	1	0	-1
+S	19	NonStruct	17	-	-	-	-	-	-	-	973	11	1	0	-1
+S	20	NonStruct	18	-	-	-	-	-	-	-	984	128	1	0	-1
+S	21	NonStruct	19	-	-	-	-	-	-	-	1112	10	1	0	-1
+S	22	NonStruct	20	-	-	-	-	-	-	-	1122	85	1	0	-1
+S	23	H1	0	-	-	-	-	-	-	-	1207	0	1	0	-1
+S	24	NonStruct	1	-	-	-	-	-	-	-	1207	19	1	0	-1
+S	25	NonStruct	2	-	-	-	-	-	-	-	1226	123	1	0	-1
+S	26	NonStruct	3	-	-	-	-	-	-	-	1349	17	1	0	-1
+S	27	NonStruct	4	-	-	-	-	-	-	-	1366	68	1	0	-1
+S	28	NonStruct	5	-	-	-	-	-	-	-	1434	19	1	0	-1
+S	29	NonStruct	6	-	-	-	-	-	-	-	1453	142	1	0	-1
+S	30	NonStruct	7	-	-	-	-	-	-	-	1595	6	1	0	-1
+S	31	NonStruct	8	-	-	-	-	-	-	-	1601	71	1	0	-1
+F	corpus/synth/pdf-tagged/lists-basic.pdf
+P	1	Packing ChecklistYoung seen since word take see part turned been some night family own have.Tent and groundsheetStove, with spare fuel canisterWater filterBackup tabletsBottleOne litreTwo litreFirst aid kitSteps1. Lay out the groundsheet.2. Stake the corners.3. Raise the polesa. Short pole first.b. Long pole second.4. Attach the fly.Usually family four best much or form animal write example once something two car by think.
+T	1	Packing Checklist Young seen since word take see part turned been some night family own have. Tent and groundsheet Stove, with spare fuel canister Water filter Backup tablets Bottle One litre Two litre First aid kit Steps 1. Lay out the groundsheet. 2. Stake the corners. 3. Raise the poles a. Short pole first. b. Long pole second. 4. Attach the fly. Usually family four best much or form animal write example once something two car by think.
+S	0	NonStruct	0	-	-	-	-	-	-	-	0	17	1	0	-1
+S	1	NonStruct	1	-	-	-	-	-	-	-	17	75	1	0	-1
+S	2	Lbl	2	-	-	-	-	-	-	-	92	0	1	0	-1
+S	3	NonStruct	3	-	-	-	-	-	-	-	92	20	1	0	-1
+S	4	Lbl	4	-	-	-	-	-	-	-	112	0	1	0	-1
+S	5	NonStruct	5	-	-	-	-	-	-	-	112	12	1	0	-1
+S	6	NonStruct	6	-	-	-	-	-	-	-	124	5	1	0	-1
+S	7	NonStruct	7	-	-	-	-	-	-	-	129	14	1	0	-1
+S	8	Lbl	8	-	-	-	-	-	-	-	143	0	1	0	-1
+S	9	NonStruct	9	-	-	-	-	-	-	-	143	12	1	0	-1
+S	10	Lbl	10	-	-	-	-	-	-	-	155	0	1	0	-1
+S	11	NonStruct	11	-	-	-	-	-	-	-	155	14	1	0	-1
+S	12	Lbl	12	-	-	-	-	-	-	-	169	0	1	0	-1
+S	13	NonStruct	13	-	-	-	-	-	-	-	169	6	1	0	-1
+S	14	Lbl	14	-	-	-	-	-	-	-	175	0	1	0	-1
+S	15	NonStruct	15	-	-	-	-	-	-	-	175	9	1	0	-1
+S	16	Lbl	16	-	-	-	-	-	-	-	184	0	1	0	-1
+S	17	NonStruct	17	-	-	-	-	-	-	-	184	9	1	0	-1
+S	18	Lbl	18	-	-	-	-	-	-	-	193	0	1	0	-1
+S	19	NonStruct	19	-	-	-	-	-	-	-	193	13	1	0	-1
+S	20	NonStruct	20	-	-	-	-	-	-	-	206	5	1	0	-1
+S	21	Lbl	21	-	-	-	-	-	-	-	211	3	1	0	-1
+S	22	NonStruct	22	-	-	-	-	-	-	-	214	24	1	0	-1
+S	23	Lbl	23	-	-	-	-	-	-	-	238	3	1	0	-1
+S	24	NonStruct	24	-	-	-	-	-	-	-	241	18	1	0	-1
+S	25	Lbl	25	-	-	-	-	-	-	-	259	3	1	0	-1
+S	26	NonStruct	26	-	-	-	-	-	-	-	262	15	1	0	-1
+S	27	Lbl	27	-	-	-	-	-	-	-	277	3	1	0	-1
+S	28	NonStruct	28	-	-	-	-	-	-	-	280	17	1	0	-1
+S	29	Lbl	29	-	-	-	-	-	-	-	297	3	1	0	-1
+S	30	NonStruct	30	-	-	-	-	-	-	-	300	17	1	0	-1
+S	31	Lbl	31	-	-	-	-	-	-	-	317	3	1	0	-1
+S	32	NonStruct	32	-	-	-	-	-	-	-	320	15	1	0	-1
+S	33	NonStruct	33	-	-	-	-	-	-	-	335	91	1	0	-1
+F	corpus/synth/pdf-tagged/table-simple-ruled.pdf
+P	1	Regional SalesLarge does while saw toward do not words thought show being since is. White with want samewho soon the paper its before boy want together.Table 1. Sales by region, thousands of unitsRegionQ1Q2Q3Q4North100153116169South137100153116East174137100153West121174137100Central158121174137Total512498530547Don't after show after need one food several each place us new more left usually three. Leaveyour or said she called new point this review all.
+T	1	Regional Sales Large does while saw toward do not words thought show being since is. White with want same who soon the paper its before boy want together. Table 1. Sales by region, thousands of units Region Q1 Q2 Q3 Q4 North 100 153 116 169 South 137 100 153 116 East 174 137 100 153 West 121 174 137 100 Central 158 121 174 137 Total 512 498 530 547 Don't after show after need one food several each place us new more left usually three. Leave your or said she called new point this review all.
+S	0	TH	0	-	-	-	-	-	-	-	0	0	1	0	-1
+S	1	TH	1	-	-	-	-	-	-	-	0	0	1	0	-1
+S	2	TH	2	-	-	-	-	-	-	-	0	0	1	0	-1
+S	3	TH	3	-	-	-	-	-	-	-	0	0	1	0	-1
+S	4	TH	4	-	-	-	-	-	-	-	0	0	1	0	-1
+S	5	Table	5	-	-	-	-	-	-	-	0	0	1	0	-1
+S	6	NonStruct	6	-	-	-	-	-	-	-	0	14	1	0	-1
+S	7	NonStruct	7	-	-	-	-	-	-	-	14	138	1	0	-1
+S	8	NonStruct	8	-	-	-	-	-	-	-	152	44	1	0	-1
+S	9	NonStruct	9	-	-	-	-	-	-	-	196	6	1	0	-1
+S	10	NonStruct	10	-	-	-	-	-	-	-	202	2	1	0	-1
+S	11	NonStruct	11	-	-	-	-	-	-	-	204	2	1	0	-1
+S	12	NonStruct	12	-	-	-	-	-	-	-	206	2	1	0	-1
+S	13	NonStruct	13	-	-	-	-	-	-	-	208	2	1	0	-1
+S	14	NonStruct	14	-	-	-	-	-	-	-	210	5	1	0	-1
+S	15	NonStruct	15	-	-	-	-	-	-	-	215	3	1	0	-1
+S	16	NonStruct	16	-	-	-	-	-	-	-	218	3	1	0	-1
+S	17	NonStruct	17	-	-	-	-	-	-	-	221	3	1	0	-1
+S	18	NonStruct	18	-	-	-	-	-	-	-	224	3	1	0	-1
+S	19	NonStruct	19	-	-	-	-	-	-	-	227	5	1	0	-1
+S	20	NonStruct	20	-	-	-	-	-	-	-	232	3	1	0	-1
+S	21	NonStruct	21	-	-	-	-	-	-	-	235	3	1	0	-1
+S	22	NonStruct	22	-	-	-	-	-	-	-	238	3	1	0	-1
+S	23	NonStruct	23	-	-	-	-	-	-	-	241	3	1	0	-1
+S	24	NonStruct	24	-	-	-	-	-	-	-	244	4	1	0	-1
+S	25	NonStruct	25	-	-	-	-	-	-	-	248	3	1	0	-1
+S	26	NonStruct	26	-	-	-	-	-	-	-	251	3	1	0	-1
+S	27	NonStruct	27	-	-	-	-	-	-	-	254	3	1	0	-1
+S	28	NonStruct	28	-	-	-	-	-	-	-	257	3	1	0	-1
+S	29	NonStruct	29	-	-	-	-	-	-	-	260	4	1	0	-1
+S	30	NonStruct	30	-	-	-	-	-	-	-	264	3	1	0	-1
+S	31	NonStruct	31	-	-	-	-	-	-	-	267	3	1	0	-1
+S	32	NonStruct	32	-	-	-	-	-	-	-	270	3	1	0	-1
+S	33	NonStruct	33	-	-	-	-	-	-	-	273	3	1	0	-1
+S	34	NonStruct	34	-	-	-	-	-	-	-	276	7	1	0	-1
+S	35	NonStruct	35	-	-	-	-	-	-	-	283	3	1	0	-1
+S	36	NonStruct	36	-	-	-	-	-	-	-	286	3	1	0	-1
+S	37	NonStruct	37	-	-	-	-	-	-	-	289	3	1	0	-1
+S	38	NonStruct	38	-	-	-	-	-	-	-	292	3	1	0	-1
+S	39	NonStruct	39	-	-	-	-	-	-	-	295	5	1	0	-1
+S	40	NonStruct	40	-	-	-	-	-	-	-	300	3	1	0	-1
+S	41	NonStruct	41	-	-	-	-	-	-	-	303	3	1	0	-1
+S	42	NonStruct	42	-	-	-	-	-	-	-	306	3	1	0	-1
+S	43	NonStruct	43	-	-	-	-	-	-	-	309	3	1	0	-1
+S	44	NonStruct	44	-	-	-	-	-	-	-	312	143	1	0	-1

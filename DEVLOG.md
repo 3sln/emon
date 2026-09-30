@@ -525,8 +525,24 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: a font corpus (the fixtures' fonts) produces the expected code
   points for every glyph; laws for CMap range edge cases.
 
-- [ ] **P1.7 — Content-stream interpreter, text subset**
+- [x] **P1.7 — Content-stream interpreter, text subset**
   (`kin/pdfcontent.kin`, `kin/fx.kin`).
+  *Done (P1.7)*: `kin/pdfcontent.kin` (`pc-init`, `pc-page`, `pc-document`), `kin/fx.kin`, `kin/contentrows.kin`, the
+  evidence `spans` arena (D101-D105). Every text operator, Form XObjects, every marked-content span (tag, MCID,
+  Artifact class/Type/Subtype, ActualText, Alt, E, Lang; inline or `/Properties`), words and lines (right-to-left
+  in logical order). Same on four targets (150 laws; `bb unit red` fails in every arm); through a 512-byte async
+  source the evidence is the in-memory run's cell for cell (36 synthetic, 3 tagged, 8 fixtures, 3 P1.5 fixtures,
+  120 real pages). **Synthetic documents**: every one of the 64,127 characters of the 36 HTML sources has its glyph
+  but 37 (Devanagari vowel signs Skia gave no ToUnicode; one CJK variant), and the 1,116 glyphs not in the HTML
+  are the printer's (furniture, markers, page numbers, watermark): `kin/scripts/content-check`. The three P1.5
+  fixtures' evidence dumps are goldens; their 52 words are poppler's to 0.03 pt. **Hand-made fixtures**: 8 PDFs, every
+  glyph within 1 centipoint of an exact-rational evaluator. **Tagged fixtures**: 111 spans equal pypdf's, 2,553 of
+  2,553 glyphs inside an MCID or artifact span. **Real files vs pdfminer.six (536 files, 1,013 pages, no fault)**:
+  glyph stream identical on 96.6 per cent of pages, 99.60 per cent of 2.01M characters; of the 1.89M glyphs emon
+  is sure of, 100.000 per cent agree (the rest: symbolic fonts, D084); words precision 80.2 / recall 97.2; lines 76.4 /
+  63.7; geometry 99.83 per cent of 2.01M glyphs within 0.05 pt. Learnt: 16.16 is not enough (D103); a struct of
+  cells must not overlap (a lexer cell sat inside the form stack); an independent evaluator finds what a
+  comparison with a peer cannot (the Rotate 90 matrix).
   *Brief*: operators `q Q cm BT ET Tf Tm Td TD T* TL Tc Tw Tz Ts Tr Tj TJ ' "`,
   `Do` for Form XObjects (recursive, depth-limited), `BDC/BMC/EMC` — record
   every marked-content span with its tag, `/MCID`, `/Artifact` and its
@@ -543,6 +559,12 @@ analysis beyond "top-to-bottom lines on a single column".
   truth).
   *Note (D096)*: P1.7 writes D056's v0 evidence; do not pre-empt v2. P1.12
   migrates the interpreter and its goldens after P1.7 merges.
+  *Note (P1.7 merge)*: P1.7 merged with its own `spans` arena (D101, stride 22,
+  the tenth arena) working as-is; D096 was not implemented. P1.12 must fold
+  `spans` into v2's `marks` table and retire the arena.
+  *Encrypted files (P1.7 merge)*: `pdfcontent` reads every stream through `pd-stream-data`, so P3.2's
+  decryption applies with no change; `test/pdf/p3/crypt-{rc4-128,aes-128,aes-256-r6}-empty.pdf` give the
+  same 798 glyphs, 159 words and 6 lines as `base.pdf` (content-sweep).
 
 - [ ] **P1.12 — Evidence v2** (`kin/evidence.kin`, `kin/trig.kin`,
   `kin/evidencetest.kin`, `kin/ocrprobe.kin`, P1.7's `kin/pdfcontent.kin`;
@@ -3415,4 +3437,121 @@ cells); kin signatures that take all arenas take 24 `Cells` (only `ev-init`,
 the OCR answer extension gains the fields the schema now has room for in
 P6.5a (binarised image, row attributes, per-block orientation, word dictionary
 flags, point size, a `:producer` map), until then they are -1.
+
+
+### D101 — Marked-content spans are a tenth evidence arena, `spans`; every BMC/BDC is one
+**Decision**: `emon.evidence` gains `spans` (stride 22; `ev-init`, `ev-check` and `ev-emit` take it last;
+the dump has a `spans` array; `sp-new`, `sp-get`, `sp-set`, `sf-*` fields). A span is one BMC/BDC..EMC of one
+content stream: its tag, parent span (-1), `/MCID` (-1), the `/Artifact` class `ar` (0 when the tag is not
+`/Artifact`; `ar-other` = 5 is an artifact that says no more: a bare `BMC`, `/Type /Page`), `/Type`,
+`/Subtype`, `/ActualText`, `/Alt`, `/E` and `/Lang` as runs of `etext`, the run of glyphs shown inside it
+(nested spans' included), flags (`mc`: 1 inline dictionary, 2 through `/Properties`, 4 name not found, 8
+unterminated), and `stm`, the object number of the Form XObject whose stream it is in (0: the page's), so P3.7
+can join on (`stm`, MCID). The class is the most specific of Subtype and Type: Watermark, else Background,
+else Pagination (Type, or Subtype Header/Footer), else Layout, else other. A glyph's own `mcid` and `artifact`
+are the INNERMOST enclosing span's that has one. Strings are decoded: UTF-16BE or LE with a byte order mark (PDF 2.0
+language escapes dropped), UTF-8 with its BOM, else PDFDocEncoding (Annex D.2). A property list read through
+`/Properties` is copied into the operand entries first (`pc-ingest-props`) so one reader serves both forms. An
+unbalanced EMC is ignored (warning 64); a span left open when its stream ends is closed there and flagged; 256
+deep is the bound (the rest are counted and their EMCs balanced).
+**Why**: D076 asks that P3.7 be a tree reader and a join; `ar` had no value for "an artifact that says nothing".
+**Alternatives**: spans only as glyph fields (loses Alt/E/Lang/ActualText and empty spans: a Figure has no glyph);
+a flat MCID to string table (loses nesting and the form it came from).
+**Validation**: the 3 tagged fixtures: 111 spans equal pypdf's (tag, MCID, Type, Subtype, ActualText, Alt, Lang,
+`tools/oracle/tagged-check.py`) and 2,553 of 2,553 glyphs lie inside a span with an MCID or an artifact; a
+hand-made `marked.pdf` holds all seventeen shapes (inline and named properties, every artifact class, UTF-16,
+UTF-8 and PDFDoc strings, nesting, an unbalanced EMC, an open span at the end of a page and of a Form XObject).
+- [ ] **Signed off** (maintainer)
+
+### D102 — The content interpreter: one workspace, four font slots, what it reads and what it skips
+**Decision**: `emon.pdfcontent` (`pc-init`, `pc-page`, `pc-document`) takes the document layer's workspace
+plus `cx` (one `Cells`: scalars, the 256-deep graphics-state stack, the four font slots, the matrices), `ox`
+(the operands of one operator: entries of four cells, then the bytes of names and strings; arrays and
+dictionaries are flattened with a count; at most 4,096 entries), `cs` (the decoded bytes of the page's streams with
+each running Form XObject on top; its OWN lexer, because the object parser interns names and strings into the
+document arena for good), `out`, four font `Cells`, and `glyphs`, `etext`, `spans`, `words`, `lines`. Fonts
+(`emon.pdffont` keeps one in one `Cells`) live in FOUR SLOTS with least-recently-used replacement, keyed by the font
+dictionary's handle, so a page of more than four fonts reloads some; a font's id in the evidence is its index in the
+order the document first showed it. Read: `q Q cm BT ET Tf Tc Tw Tz TL Ts Tr Td TD Tm T* Tj TJ ' "`, `Do` of a
+Form XObject (its `/Matrix`, `/Resources`, its own `q`; to `limit-of` 6 deep; a form that draws itself or is too
+deep is skipped with warning 16, where a limit breach would refuse the page), `BDC BMC EMC`, `g rg k sc scn cs` (the
+fill colour by operand count: 1 gray, 3 RGB, 4 CMYK; 0 black after `cs`) and `gs` (`/ca` as per-mille alpha).
+Skipped with their operands: paths, images, shading, clipping, stroking colours, everything else; an inline image
+is skipped to its `EI`. A glyph is recorded with mode 3 (invisible) too: what to make of it is fusion's. `Tw` applies
+to a one-byte code 32 only; vertical fonts (`/DW2`, not `/W2`) advance down. A glyph's box is its cell (width from the
+font, height from ascent and descent; a Type 3 font's from `/FontBBox` times `/FontMatrix`, which `pfn-load` now
+reads: `test/fonts/fonts.txt`'s Type 3 row changed from ascent 0 to 1000); its `size` is the font size times the
+length of the text matrix's y axis; its rotation counter-clockwise from the page's x axis, centi-degrees. A glyph
+whose value is U+0000 or U+FFFD has none (cp -1, how unknown): Skia writes <0000> for the parts of a Devanagari
+conjunct. An unknown width is half an em (warning 128). Every object loaded is followed by a miss check; a miss
+ends the run with `need-bytes` (7) and is never taken for a missing font (D075); the 512-byte async law (D074) holds it
+to the in-memory run cell for cell, on all 36 synthetic documents, the 3 tagged, the 8 fixtures, the 3 P1.5
+fixtures and 120 real pages.
+**Why**: kin cannot allocate; a Rust `Cells` cannot be borrowed twice (every call binds what it reads first);
+a bounded, allocation-free interpreter that reads operators as a stream is what the four targets can share.
+**Not done**: encrypted files (P3.2; emon reports `encrypted`), vector paths and images (P3), clipping and the
+visibility checks SPEC 8.1 lists (`vz`), annotations, `/UserUnit`, the stroking colour, patterns, a font
+loaded per Type 3 glyph procedure.
+- [ ] **Signed off** (maintainer)
+
+### D103 — `Fx` has 24 fractional bits, not 16 (changes D009's "16.16")
+**Decision**: `emon.fx`'s `Fx` is an `I64` with 24 fractional bits: one is 16,777,216, values clamp to +-2^50
+(6.7e7 centipoints). The product of two does not fit an `I64`, so `fx-mul` splits its second factor in two
+twelve-bit halves and carries the remainder (exact to the half-unit for a coordinate of 2^45 times a scale
+of 2^28). `fx-atan2` and `fx-cos`/`fx-sin` are CORDIC (centi-degrees in, `Fx` out; sixteen steps, within a
+centi-degree and 3e-5), `fx-isqrt`/`fx-sqrt`/`fx-hypot` integer square roots; nothing rounds differently on
+different targets (wrapping `add64`/`mul64`, division `quot` with the rounding written out).
+**Why**: measured against pdfminer.six, 16.16 put 12 per cent of 501,000 glyphs (first 148 files) more than 0.05 pt from the
+right answer: 0.1 is 6553.6 units of 2^-16, so Ghostscript's `0.1 cm` followed by `10 cm` multiplies to 1.00006 and
+a baseline at y = 720 is 0.044 pt off; Chrome's 0.24 scale and a coordinate of 2,500 is 1.4 centipoints off.
+At 24 bits: 99.83 per cent of 2,014,475 upright glyphs within 0.05 pt, and the rest are x extents of a few odd fonts.
+**Alternatives**: 16.16 as SPEC 3.4 said (the error above); exact rationals (no allocation in kin); 32.32 (a scale
+times a coordinate overflows).
+- [ ] **Signed off** (maintainer)
+
+### D104 — Words and lines: gap thresholds in the size, rotated text by centres, right-to-left in logical order
+**Decision**: `pc-group` runs once per page over its glyphs in stream order. A space glyph (U+0020, U+00A0,
+U+1680, U+2000..U+200A, U+202F, U+205F, U+3000, the tab) ends a word and belongs to none; otherwise the next glyph
+joins when its rotation agrees to half a degree, its baseline is within 45 per cent of the size (sub- and
+superscripts stay), and the gap along the writing axis is at most 16 per cent of the size and the step back at
+most 40 per cent (constants `WORD_GAP_PM`, `WORD_BACK_PM`, `OFFSET_PM`, tuned on the corpus against
+pdfminer.six). Text within three degrees of a quarter turn is measured along that axis; any other angle along its
+own direction from the glyph centres, with 60 per cent of the size taken for the two half-advances. A line is a
+run of consecutive words on one baseline (45 per cent), each starting within 2 sizes of the last one's end (the
+gap is recorded in the word, `wf-gap`) or a step back of 60 per cent: a wider gap is a column gutter or table cell,
+which is the layout stage's (P1.8, P3). RIGHT-TO-LEFT: a word with more right-to-left than left-to-right
+letters whose glyphs run left to right on the page (the producers' visual order) has its TEXT written in logical
+order (glyphs reversed, runs of digits and Latin letters turned back); a line with more right-to-left glyphs is
+`ld-rtl`, and its words (whose rows are swapped in the word arena, their glyph runs untouched, their `gap` and
+`line` re-pointed) are in logical order too. `ttb`/`btt` lines are not made: a rotated line has `rot`.
+**Why**: SPEC 8.1 groups by gap against the space width and by baseline and direction; Arabic and Hebrew glyph
+streams from Chrome are in visual order, and text in the wrong order is wrong text.
+**Known limits**: letter-spaced text (a `Tc` over 16 per cent of the size) breaks into letters; a rotated word of wide
+capitals may break; a mixed-direction word is reordered one level deep (no embedding levels); a right-to-left word of
+one glyph cannot be told from its neighbours' order.
+**Measured**: against pdfminer.six on 536 real files (1,013 pages), words: precision 80.2 per cent, recall 97.2 per
+cent (emon splits more: pdfminer glues words where a PDF has no space glyph); lines: 76.4 / 63.7 per cent (pdfminer
+cuts lines at every gap over 2 of its character widths and emon at 2 sizes, and it lays out text boxes).
+- [ ] **Signed off** (maintainer)
+
+### D105 — How P1.7 was validated: four independent witnesses, all babashka but the two that drive a Python library
+**Decision**: (1) `kin/scripts/content-fixtures` (bb) writes 8 small PDFs (`test/content/`) and the expected glyph
+boxes of four of them from an exact-rational evaluator of the text operators (Clojure ratios; the page turned a quarter
+at a time; AFM widths of the standard fonts read from `test/fonts`): 303 rows, each glyph's code point, box,
+baseline, size, angle and render mode within one centipoint in `kin/pdfcontenttest.kin`, and the marked-content
+rows, words, counts and warning bits written out by hand. (2) `kin/scripts/content-check` (bb) holds the 36 Chrome-printed
+synthetic documents' line text (`test/content/synth.txt`) to the text of the HTML they were printed from, each side
+decomposed by the vendored UCD: every one of the HTML's 64,127 characters has a glyph but 37 (Devanagari vowel signs
+Skia gave no ToUnicode; one CJK variant), and the 1,116 glyphs that are not in the HTML are the printer's (running
+furniture, list markers, page numbers, repeated table heads, the DRAFT watermark), counted per document in
+`kin/scripts/synth-extras.edn` (a ratchet: fewer fails too); and the three P1.5 fixtures' 52 words have poppler's
+`pdftotext -bbox` boxes to 0.03 pt. (3) `tools/oracle/content-corpus.py` and `tools/oracle/tagged-check.py` (Python, because
+the references are; `~/.cache/emon/pylib`, never a dependency) compare the generated Rust with pdfminer.six and pypdf on real
+files and on the tagged fixtures; `test/content/real.txt` ratchets 120 pages whose glyph streams pdfminer agreed with.
+(4) the laws: 10 row-file and async laws plus a fuzz of 1,700 corrupted or cut files per arm. `kin/scripts/content-sweep`
+(the generated Rust, overflow checks on, `rows|digest|glyphs|text|json|all`) is the development tool all of them use;
+`kin/scripts/content-goldens` writes `synth.txt`, `tagged.txt` and the three evidence dumps from it.
+**Why**: the goldens are kin's own output, so they are worth what is held against them (the maintainer's policy: bb
+for emon's scripting, Python only where a third-party reference must be driven, under `tools/oracle/`).
+**Alternatives**: committing the corpus's glyph streams (not committable); checking the goldens only against themselves.
 - [ ] **Signed off** (maintainer)

@@ -168,9 +168,10 @@ func ptUnit(s *port.Src, an *port.Cells, rq *port.Cells, etext *port.Cells, t *s
 	var co *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
 	var al *port.Cells = port.NewCells()
-	var st int32 = planprobe.PpUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext)
+	var sp *port.Cells = port.NewCells()
+	var st int32 = planprobe.PpUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp)
 	if st == plan.UsDone() {
-		evidence.EvEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext)
+		evidence.EvEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp)
 	}
 	return st
 }

@@ -152,9 +152,10 @@ public final class Plantest {
         emon.Port.Cells co = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
         emon.Port.Cells al = emon.Port.newCells();
-        int st = Planprobe.ppUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext);
+        emon.Port.Cells sp = emon.Port.newCells();
+        int st = Planprobe.ppUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp);
         if (st == Plan.usDone()) {
-            Evidence.evEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext);
+            Evidence.evEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp);
         }
         return st;
     }

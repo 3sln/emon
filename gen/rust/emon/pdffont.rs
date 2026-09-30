@@ -1599,6 +1599,42 @@ pub(crate) fn pfn_scale_width(f: &mut crate::port::Cells, w: i32) -> i32 {
     }
     return ((x / 1000) * am) + (((x % 1000) * am) / 1000);
 }
+pub(crate) fn pfn_t3_bbox(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut f: &mut crate::port::Cells, fh: i32) -> i32 {
+    // A Type 3 font with no descriptor: its cell's height is its /FontBBox (glyph
+    // space) times the FontMatrix, in thousandths of a text unit like every
+    // other font's ascent and descent (P1.7 needs a glyph's box, D101).
+    let bb: i32 = pd_dget(src, ar, dc, a, b, st, fh, pn_font_b_box());
+    let mut asc: i32 = 0;
+    let mut dsc: i32 = 0;
+    let mut el: i32 = 0;
+    let mut ev: i32 = 0;
+    if (bb != 0) && (pl_kind_of(ar, bb) == 6) {
+        el = pl_first(ar, bb);
+        el = pl_next(ar, el);
+        if el != 0 {
+            ev = pd_resolve(src, ar, dc, a, b, st, el);
+            if pfn_isnum(ar, ev) == 1 {
+                dsc = pfn_round100(pl_num_cp(ar, ev));
+            }
+            el = pl_next(ar, el);
+            el = pl_next(ar, el);
+            if el != 0 {
+                ev = pd_resolve(src, ar, dc, a, b, st, el);
+                if pfn_isnum(ar, ev) == 1 {
+                    asc = pfn_round100(pl_num_cp(ar, ev));
+                }
+            }
+        }
+    }
+    if dsc > 0 {
+        dsc = 0 - dsc;
+    }
+    asc = pfn_scale_width(f, asc * 100) / 100;
+    dsc = pfn_scale_width(f, dsc * 100) / 100;
+    crate::port::cells_set(f, H_ASC, asc);
+    crate::port::cells_set(f, H_DESC, dsc);
+    return 0;
+}
 pub(crate) fn pfn_load_widths(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut f: &mut crate::port::Cells, fh: i32) -> i32 {
     // /FirstChar, /LastChar and /Widths of a simple font into the table.
     let wa: i32 = pd_dget(src, ar, dc, a, b, st, fh, pn_widths());
@@ -1957,6 +1993,9 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
             if pfn_isnum(ar, ev) == 1 {
                 crate::port::cells_set(f, H_T3SCALE, pfn_micro(ar, ev));
             }
+        }
+        if (crate::port::cells_at(f, H_ASC) == 0) && (crate::port::cells_at(f, H_DESC) == 0) {
+            pfn_t3_bbox(src, ar, dc, a, b, st, f, fh);
         }
     }
     pfn_load_widths(src, ar, dc, a, b, st, f, fh);

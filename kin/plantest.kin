@@ -171,9 +171,10 @@
         ^Cells co (new-cells)
         ^Cells ow (new-cells)
         ^Cells al (new-cells)
-        ^I32 st (pp-unit s an rq g wd ln pa im co ow al etext)]
+        ^Cells sp (new-cells)
+        ^I32 st (pp-unit s an rq g wd ln pa im co ow al etext sp)]
     (if (== st (us-done))
-      (ev-emit t 0 g wd ln pa im co ow al etext))
+      (ev-emit t 0 g wd ln pa im co ow al etext sp))
     (return st)))
 
 (deftest test-the-probe-asks-in-two-rounds-and-then-writes-evidence

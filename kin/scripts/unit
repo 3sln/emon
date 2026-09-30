@@ -90,6 +90,13 @@ command -v python3 > /dev/null && python3 kin/scripts/gold-check.py
 # fixture does not. `bb accuracy` itself is NOT a gate (D078).
 bb -cp tools:tools/lib tools/accuracy/test_score.clj
 
+# THE CONTENT INTERPRETER'S INDEPENDENT WITNESSES (P1.7, D101-D104; both babashka, both read only
+# committed files): the hand-made PDFs and their exact-rational expectations are what the script writes,
+# and the synthetic documents' glyph text is held to the text of the HTML they were printed from (and the
+# fixtures' word boxes to poppler's, when `pdftotext` is installed).
+kin/scripts/content-fixtures --check
+kin/scripts/content-check
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then

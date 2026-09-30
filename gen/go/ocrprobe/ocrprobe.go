@@ -89,9 +89,9 @@ func opWords(an *port.Cells, at int32, page int32, dpi int32, ocrwords *port.Cel
 	return 0
 }
 
-func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells) int32 {
+func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
 	// One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-	evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext)
+	evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
 	var n int32 = port.SrcLen(s)
 	var mid int32 = port.SrcU8(s, n/2)
 	if port.SrcMissed(s) {

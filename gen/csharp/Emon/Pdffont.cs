@@ -1596,6 +1596,42 @@ public static class Pdffont {
         }
         return ((x / 1000) * am) + (((x % 1000) * am) / 1000);
     }
+    internal static int PfnT3Bbox(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells f, int fh) {
+        // A Type 3 font with no descriptor: its cell's height is its /FontBBox (glyph
+        // space) times the FontMatrix, in thousandths of a text unit like every
+        // other font's ascent and descent (P1.7 needs a glyph's box, D101).
+        int bb = Pdfdoc.PdDget(src, ar, dc, a, b, st, fh, Pdfnames.PnFontBBox());
+        int asc = 0;
+        int dsc = 0;
+        int el = 0;
+        int ev = 0;
+        if ((bb != 0) && (Pdflex.PlKindOf(ar, bb) == 6)) {
+            el = Pdflex.PlFirst(ar, bb);
+            el = Pdflex.PlNext(ar, el);
+            if (el != 0) {
+                ev = Pdfdoc.PdResolve(src, ar, dc, a, b, st, el);
+                if (PfnIsnum(ar, ev) == 1) {
+                    dsc = PfnRound100(Pdflex.PlNumCp(ar, ev));
+                }
+                el = Pdflex.PlNext(ar, el);
+                el = Pdflex.PlNext(ar, el);
+                if (el != 0) {
+                    ev = Pdfdoc.PdResolve(src, ar, dc, a, b, st, el);
+                    if (PfnIsnum(ar, ev) == 1) {
+                        asc = PfnRound100(Pdflex.PlNumCp(ar, ev));
+                    }
+                }
+            }
+        }
+        if (dsc > 0) {
+            dsc = 0 - dsc;
+        }
+        asc = PfnScaleWidth(f, asc * 100) / 100;
+        dsc = PfnScaleWidth(f, dsc * 100) / 100;
+        emon.Port.CellsSet(f, HAsc, asc);
+        emon.Port.CellsSet(f, HDesc, dsc);
+        return 0;
+    }
     internal static int PfnLoadWidths(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells f, int fh) {
         // /FirstChar, /LastChar and /Widths of a simple font into the table.
         int wa = Pdfdoc.PdDget(src, ar, dc, a, b, st, fh, Pdfnames.PnWidths());
@@ -1954,6 +1990,9 @@ public static class Pdffont {
                 if (PfnIsnum(ar, ev) == 1) {
                     emon.Port.CellsSet(f, HT3scale, PfnMicro(ar, ev));
                 }
+            }
+            if ((emon.Port.CellsAt(f, HAsc) == 0) && (emon.Port.CellsAt(f, HDesc) == 0)) {
+                PfnT3Bbox(src, ar, dc, a, b, st, f, fh);
             }
         }
         PfnLoadWidths(src, ar, dc, a, b, st, f, fh);

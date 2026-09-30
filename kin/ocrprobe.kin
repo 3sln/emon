@@ -102,9 +102,9 @@
                           ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
                           ^:mut ^Cells paths ^:mut ^Cells images
                           ^:mut ^Cells components ^:mut ^Cells ocrwords
-                          ^:mut ^Cells alts ^:mut ^Cells etext]
+                          ^:mut ^Cells alts ^:mut ^Cells etext ^:mut ^Cells spans]
   (comment "One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.")
-  (ev-init glyphs words lines paths images components ocrwords alts etext)
+  (ev-init glyphs words lines paths images components ocrwords alts etext spans)
   (let [^I32 n (src-len s)
         ^I32 mid (src-u8 s (quot n 2))]
     (if (src-missed s) (return (us-need-bytes)))

@@ -1,0 +1,178 @@
+;; Row printers for what the content interpreter found (P1.7): the text of a page's glyphs, a
+;; marked-content span as one tab-separated row, and a digest of a page's text. The laws in
+;; `kin/pdfcontenttest.kin` and the development sweep `kin/scripts/content-sweep` both use them, so
+;; a golden written by one is read by the other, and all four targets print the same bytes.
+;;
+;; THE TEXT OF A GLYPH is its code points (all of them, for a ligature), or U+FFFD when the font
+;; gave it none. A page's text is its glyphs in content-stream order, spaces included: it is the
+;; glyph stream itself, not the words (P1.8 makes those of it).
+;;
+;; THE DIGEST of a page is h = 7, then for each code point c of the page's text LEAVING OUT WHITE
+;; SPACE (U+0009, U+000A, U+000D, U+0020, U+00A0, U+1680, U+2000..U+200A, U+202F, U+205F, U+3000):
+;; h = (h * 31 + c + 1) mod 67108859. The oracle (`tools/oracle/content-corpus.py`) computes the
+;; same number from emon's own glyph rows, so a ratchet row says "emon's stream, which pdfminer
+;; agreed with, has not changed".
+(ns emon.contentrows
+  (:require [emon.lang :refer [I32 Cells Text emit-ascii]]
+            [emon.port :refer [cells-len cells-at text-cp text-i32]]
+            [emon.evidence :refer [gl-count gl-get sp-get wd-get wf-tstart wf-tlen ln-count ln-get lf-page lf-wfirst lf-wcount gf-page gf-cp gf-tstart gf-tlen
+                                   sf-tag sf-taglen sf-mcid sf-artifact sf-type sf-typelen
+                                   sf-subtype sf-subtypelen sf-actual sf-actuallen sf-alt
+                                   sf-altlen sf-exp sf-explen sf-lang sf-langlen sf-gfirst
+                                   sf-gcount sf-flags sf-stm sf-parent ar-emit-name]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or
+                              quot rem bit-and]]))
+
+(defn ^:pub ^I32 cr-glyph-text [^:mut ^Text t ^Cells gl ^Cells et ^I32 g]
+  (comment "The text of glyph g: its code points, or U+FFFD.")
+  (let [^I32 ts (gl-get gl g (gf-tstart))
+        ^I32 tl (gl-get gl g (gf-tlen))
+        ^I32 cp (gl-get gl g (gf-cp))
+        ^:mut ^I32 k 0]
+    (if (and (>= ts 0) (> tl 0))
+      (do (while (< k tl)
+            (do (let [^I32 c (cells-at et (+ ts k))]
+                  (text-cp t c))
+                (set k (+ k 1))))
+          (return 0)))
+    (if (< cp 0)
+      (do (text-cp t 65533) (return 0)))
+    (text-cp t cp)
+    (return 0)))
+
+(defn ^:pub ^I32 cr-page-text [^:mut ^Text t ^Cells gl ^Cells et ^I32 page]
+  (comment "The glyphs of one page, in the order they were shown, as text.")
+  (let [^I32 n (gl-count gl)
+        ^:mut ^I32 g 0]
+    (while (< g n)
+      (do (if (== (gl-get gl g (gf-page)) page)
+            (cr-glyph-text t gl et g))
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 cr-all-text [^:mut ^Text t ^Cells gl ^Cells et]
+  (comment "Every glyph of the document, in the order they were shown, as text.")
+  (let [^I32 n (gl-count gl)
+        ^:mut ^I32 g 0]
+    (while (< g n)
+      (do (cr-glyph-text t gl et g)
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 cr-word [^:mut ^Text t ^Cells wd ^Cells et ^I32 w]
+  (comment "The text of word w.")
+  (let [^I32 s (wd-get wd w (wf-tstart))
+        ^I32 n (wd-get wd w (wf-tlen))
+        ^:mut ^I32 k 0]
+    (if (< s 0) (return 0))
+    (while (< k n)
+      (do (let [^I32 c (cells-at et (+ s k))]
+            (text-cp t c))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 cr-white [^I32 c]
+  (if (or (== c 9) (or (== c 10) (or (== c 13) (or (== c 32) (or (== c 160) (or (== c 5760) (or (== c 8239) (or (== c 8287) (== c 12288))))))))) (return 1))
+  (if (and (>= c 8192) (<= c 8202)) (return 1))
+  (return 0))
+
+(defn ^I32 cr-mix [^I32 h ^I32 c]
+  (comment "h * 31 + c + 1 modulo 67108859 (2^26 - 5, a prime): h * 31 is below 2^31 for every")
+  (comment "h below the modulus, so no target overflows.")
+  (return (rem (+ (* h 31) (+ c 1)) 67108859)))
+
+(defn ^:pub ^I32 cr-digest [^Cells gl ^Cells et ^I32 page]
+  (comment "A 31-bit digest of the page's text without white space (see the head of this file).")
+  (let [^I32 n (gl-count gl)
+        ^:mut ^I32 h 7
+        ^:mut ^I32 g 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 k 0]
+    (while (< g n)
+      (do (if (== (gl-get gl g (gf-page)) page)
+            (do (set ts (gl-get gl g (gf-tstart)))
+                (set tl (gl-get gl g (gf-tlen)))
+                (set cp (gl-get gl g (gf-cp)))
+                (if (and (>= ts 0) (> tl 0))
+                  (do (set k 0)
+                      (while (< k tl)
+                        (do (set cp (cells-at et (+ ts k)))
+                            (if (== (cr-white cp) 0) (set h (cr-mix h cp)))
+                            (set k (+ k 1)))))
+                  (do (if (< cp 0) (set cp 65533))
+                      (if (== (cr-white cp) 0) (set h (cr-mix h cp)))))))
+          (set g (+ g 1))))
+    (return h)))
+
+(defn ^I32 cr-run [^:mut ^Text t ^Cells et ^I32 s ^I32 n]
+  (comment "A text run of the evidence text, `-` when it is absent.")
+  (let [^:mut ^I32 k 0]
+    (if (< s 0)
+      (do (emit-ascii t "-") (return 0)))
+    (while (< k n)
+      (do (let [^I32 c (cells-at et (+ s k))]
+            (text-cp t c))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 cr-span [^:mut ^Text t ^Cells sp ^Cells et ^I32 i]
+  (comment "Span i as one row, without a newline: index, tag, MCID, artifact, type, subtype,")
+  (comment "ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated.")
+  (let [^I32 art (sp-get sp i (sf-artifact))]
+    (text-i32 t i)
+    (text-cp t 9)
+    (cr-run t et (sp-get sp i (sf-tag)) (sp-get sp i (sf-taglen)))
+    (text-cp t 9)
+    (text-i32 t (sp-get sp i (sf-mcid)))
+    (text-cp t 9)
+    (if (== art 0)
+      (emit-ascii t "-")
+      (ar-emit-name t art))
+    (text-cp t 9)
+    (cr-run t et (sp-get sp i (sf-type)) (sp-get sp i (sf-typelen)))
+    (text-cp t 9)
+    (cr-run t et (sp-get sp i (sf-subtype)) (sp-get sp i (sf-subtypelen)))
+    (text-cp t 9)
+    (cr-run t et (sp-get sp i (sf-actual)) (sp-get sp i (sf-actuallen)))
+    (text-cp t 9)
+    (cr-run t et (sp-get sp i (sf-alt)) (sp-get sp i (sf-altlen)))
+    (text-cp t 9)
+    (cr-run t et (sp-get sp i (sf-exp)) (sp-get sp i (sf-explen)))
+    (text-cp t 9)
+    (cr-run t et (sp-get sp i (sf-lang)) (sp-get sp i (sf-langlen)))
+    (text-cp t 9)
+    (text-i32 t (sp-get sp i (sf-gfirst)))
+    (text-cp t 9)
+    (text-i32 t (sp-get sp i (sf-gcount)))
+    (text-cp t 9)
+    (text-i32 t (sp-get sp i (sf-flags)))
+    (text-cp t 9)
+    (text-i32 t (sp-get sp i (sf-stm)))
+    (text-cp t 9)
+    (text-i32 t (sp-get sp i (sf-parent)))
+    (return 0)))
+
+(defn ^:pub ^I32 cr-page-lines [^:mut ^Text t ^Cells wd ^Cells ln ^Cells et ^I32 page]
+  (comment "The page's lines in the order they were made: each line's words (in the order the line")
+  (comment "holds them) joined by a space, the lines joined by U+2028.")
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 wn 0
+        ^:mut ^I32 firstline 1]
+    (while (< l nl)
+      (do (if (== (ln-get ln l (lf-page)) page)
+            (do (if (== firstline 0) (text-cp t 8232))
+                (set firstline 0)
+                (set w0 (ln-get ln l (lf-wfirst)))
+                (set wn (ln-get ln l (lf-wcount)))
+                (set w 0)
+                (while (< w wn)
+                  (do (if (> w 0) (text-cp t 32))
+                      (cr-word t wd et (+ w0 w))
+                      (set w (+ w 1))))))
+          (set l (+ l 1))))
+    (return 0)))

@@ -5,14 +5,49 @@ package emon;
 
 
 public final class Evidencetest {
-    public static int etBuild(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    public static int etBuild(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
+        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.etxAppendCp(etext, 72);
         Evidence.etxAppendCp(etext, 105);
         Evidence.etxAppendCp(etext, 102);
         Evidence.etxAppendCp(etext, 105);
         Evidence.etxAppendCp(etext, 72);
         Evidence.etxAppendCp(etext, 105);
+        Evidence.etxAppendCp(etext, 80);
+        Evidence.etxAppendCp(etext, 101);
+        Evidence.etxAppendCp(etext, 110);
+        Evidence.etxAppendCp(etext, 65);
+        Evidence.etxAppendCp(etext, 114);
+        Evidence.etxAppendCp(etext, 116);
+        Evidence.etxAppendCp(etext, 105);
+        Evidence.etxAppendCp(etext, 102);
+        Evidence.etxAppendCp(etext, 97);
+        Evidence.etxAppendCp(etext, 99);
+        Evidence.etxAppendCp(etext, 116);
+        Evidence.etxAppendCp(etext, 80);
+        Evidence.etxAppendCp(etext, 97);
+        Evidence.etxAppendCp(etext, 103);
+        Evidence.etxAppendCp(etext, 105);
+        Evidence.etxAppendCp(etext, 110);
+        Evidence.etxAppendCp(etext, 97);
+        Evidence.etxAppendCp(etext, 116);
+        Evidence.etxAppendCp(etext, 105);
+        Evidence.etxAppendCp(etext, 111);
+        Evidence.etxAppendCp(etext, 110);
+        Evidence.etxAppendCp(etext, 87);
+        Evidence.etxAppendCp(etext, 97);
+        Evidence.etxAppendCp(etext, 116);
+        Evidence.etxAppendCp(etext, 101);
+        Evidence.etxAppendCp(etext, 114);
+        Evidence.etxAppendCp(etext, 109);
+        Evidence.etxAppendCp(etext, 97);
+        Evidence.etxAppendCp(etext, 114);
+        Evidence.etxAppendCp(etext, 107);
+        Evidence.etxAppendCp(etext, 68);
+        Evidence.etxAppendCp(etext, 82);
+        Evidence.etxAppendCp(etext, 65);
+        Evidence.etxAppendCp(etext, 70);
+        Evidence.etxAppendCp(etext, 84);
         Evidence.glNew(glyphs, 1, 72, 1, 1200, 7200, 9000, 8000, 10200);
         Evidence.glSet(glyphs, 0, Evidence.gfHow(), Evidence.ghTounicode());
         Evidence.glSet(glyphs, 0, Evidence.gfColor(), 0);
@@ -86,6 +121,23 @@ public final class Evidencetest {
         Evidence.owSet(ocrwords, 0, Evidence.ofLang(), 3);
         Evidence.altAdd(ocrwords, alts, 0, 0, 72, 900);
         Evidence.altAdd(ocrwords, alts, 0, 1, 108, 250);
+        Evidence.spNew(spans, 1, 6, 1, -1, 0);
+        Evidence.spSet(spans, 0, Evidence.sfMcid(), 0);
+        Evidence.spSet(spans, 0, Evidence.sfLang(), 7);
+        Evidence.spSet(spans, 0, Evidence.sfLanglen(), 2);
+        Evidence.spSet(spans, 0, Evidence.sfGcount(), 2);
+        Evidence.spSet(spans, 0, Evidence.sfFlags(), Evidence.mcInline());
+        Evidence.spNew(spans, 1, 9, 8, -1, 3);
+        Evidence.spSet(spans, 1, Evidence.sfArtifact(), Evidence.arWatermark());
+        Evidence.spSet(spans, 1, Evidence.sfType(), 17);
+        Evidence.spSet(spans, 1, Evidence.sfTypelen(), 10);
+        Evidence.spSet(spans, 1, Evidence.sfSubtype(), 27);
+        Evidence.spSet(spans, 1, Evidence.sfSubtypelen(), 9);
+        Evidence.spSet(spans, 1, Evidence.sfActual(), 36);
+        Evidence.spSet(spans, 1, Evidence.sfActuallen(), 5);
+        Evidence.spSet(spans, 1, Evidence.sfGcount(), 1);
+        Evidence.spSet(spans, 1, Evidence.sfStm(), 12);
+        Evidence.spSet(spans, 1, Evidence.sfFlags(), Evidence.mcUnterminated());
         return 0;
     }
     public static int etEnd(byte[] b) {
@@ -106,7 +158,8 @@ public final class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.newCells();
         emon.Port.Cells alts = emon.Port.newCells();
         emon.Port.Cells etext = emon.Port.newCells();
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Port.Cells spans = emon.Port.newCells();
+        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.assertEq(Evidence.glCount(glyphs), 0, "no glyphs");
         emon.Testport.assertEq(Evidence.glNew(glyphs, 3, 65, 9, 1000, 100, 200, 300, 400), 0, "first glyph");
         emon.Testport.assertEq(emon.Port.cellsLen(glyphs), 20, "twenty cells");
@@ -130,6 +183,16 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfArtifact()), 0, "not an artifact");
         emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfMcid()), -1, "no mcid");
         emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfWord()), -1, "in no word");
+        emon.Testport.assertEq(Evidence.spNew(spans, 3, 10, 1, -1, 4), 0, "first span");
+        emon.Testport.assertEq(emon.Port.cellsLen(spans), 22, "twenty-two cells");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfMcid()), -1, "no MCID");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfArtifact()), 0, "not an artifact");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfType()), -1, "no type");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfActual()), -1, "no ActualText");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfLang()), -1, "no language");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfGfirst()), 4, "opened at glyph 4");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfParent()), -1, "no parent");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfStm()), 0, "the page's own stream");
         emon.Testport.assertEq(Evidence.wdNew(words, 3, 1, 2, 3, 4, 0, 1), 0, "first word");
         emon.Testport.assertEq(emon.Port.cellsLen(words), 16, "sixteen cells");
         emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfTstart()), -1, "no text");
@@ -180,7 +243,8 @@ public final class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.newCells();
         emon.Port.Cells alts = emon.Port.newCells();
         emon.Port.Cells etext = emon.Port.newCells();
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Port.Cells spans = emon.Port.newCells();
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.assertEq(Evidence.glCount(glyphs), 4, "four glyphs");
         emon.Testport.assertEq(Evidence.wdCount(words), 2, "two words");
         emon.Testport.assertEq(Evidence.lnCount(lines), 1, "one line");
@@ -189,7 +253,12 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.coCount(components), 1, "one component");
         emon.Testport.assertEq(Evidence.owCount(ocrwords), 1, "one OCR word");
         emon.Testport.assertEq(Evidence.altCount(alts), 2, "two alternatives");
-        emon.Testport.assertEq(Evidence.etxLen(etext), 6, "six text cells");
+        emon.Testport.assertEq(Evidence.etxLen(etext), 41, "the text cells");
+        emon.Testport.assertEq(Evidence.spCount(spans), 2, "two spans");
+        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfMcid()), 0, "the paragraph's MCID");
+        emon.Testport.assertEq(Evidence.spGet(spans, 1, Evidence.sfMcid()), -1, "the artifact has none");
+        emon.Testport.assertEq(Evidence.spGet(spans, 1, Evidence.sfArtifact()), 2, "watermark");
+        emon.Testport.assertEq(Evidence.spGet(spans, 1, Evidence.sfStm()), 12, "a form's span");
         emon.Testport.assertEq(Evidence.glGet(glyphs, 2, Evidence.gfTstart()), 2, "the ligature's text run");
         emon.Testport.assertEq(Evidence.glGet(glyphs, 2, Evidence.gfTlen()), 2, "two code points");
         emon.Testport.assertEq(Evidence.glGet(glyphs, 3, Evidence.gfRot()), 4500, "45 degrees in centi-degrees");
@@ -208,7 +277,7 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.altGet(alts, 0, Evidence.afNext()), 1, "then the second");
         emon.Testport.assertEq(Evidence.altGet(alts, 1, Evidence.afCp()), 108, "which reads l");
         emon.Testport.assertEq(Evidence.altGet(alts, 1, Evidence.afNext()), -1, "and ends the chain");
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 0, "the page is well formed");
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 0, "the page is well formed");
     }
     public static void testEvidenceTextIsScalarValuesOnly() {
         emon.Port.Cells etext = emon.Port.newCells();
@@ -227,30 +296,40 @@ public final class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.newCells();
         emon.Port.Cells alts = emon.Port.newCells();
         emon.Port.Cells etext = emon.Port.newCells();
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.glSet(glyphs, 2, Evidence.gfTlen(), 9);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 2, "a glyph's text run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Port.Cells spans = emon.Port.newCells();
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.glSet(glyphs, 2, Evidence.gfTlen(), 99);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 2, "a glyph's text run past the arena");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.wdSet(words, 1, Evidence.wfGcount(), 9);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 3, "a word's glyph run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.wdSet(words, 0, Evidence.wfTlen(), 40);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 4, "a word's text run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 3, "a word's glyph run past the arena");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.wdSet(words, 0, Evidence.wfTlen(), 99);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 4, "a word's text run past the arena");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.lnSet(lines, 0, Evidence.lfWcount(), 3);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 5, "a line's word run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 5, "a line's word run past the arena");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.owSet(ocrwords, 0, Evidence.ofTlen(), 50);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 6, "an OCR word's text run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 6, "an OCR word's text run past the arena");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.owSet(ocrwords, 0, Evidence.ofAltcount(), 3);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 7, "an alternative count that is not the chain");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 7, "an alternative count that is not the chain");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.wdSet(words, 0, Evidence.wfLine(), 4);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 8, "a word in a line that is not there");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 8, "a word in a line that is not there");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.glSet(glyphs, 0, Evidence.gfWord(), 5);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 9, "a glyph in a word that is not there");
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 9, "a glyph in a word that is not there");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.spSet(spans, 1, Evidence.sfGcount(), 9);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's glyph run past the arena");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.spSet(spans, 1, Evidence.sfActuallen(), 99);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's string past the arena");
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.spSet(spans, 0, Evidence.sfParent(), 0);
+        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span that is its own parent");
     }
     public static void testGoldenPage() {
         emon.Port.Cells glyphs = emon.Port.newCells();
@@ -262,11 +341,12 @@ public final class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.newCells();
         emon.Port.Cells alts = emon.Port.newCells();
         emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells spans = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.evEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.evEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.evEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.evEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.assertTextSpan(compact, emon.Testport.testFile("evidence/page1.json"), 0, etEnd(emon.Testport.testFile("evidence/page1.json")), "compact", 0);
         emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("evidence/page1.pretty.json"), 0, etEnd(emon.Testport.testFile("evidence/page1.pretty.json")), "pretty", 0);
     }
@@ -280,11 +360,12 @@ public final class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.newCells();
         emon.Port.Cells alts = emon.Port.newCells();
         emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells spans = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.evEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.evEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.evEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.evEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.assertTextSpan(compact, emon.Testport.testFile("evidence/empty.json"), 0, etEnd(emon.Testport.testFile("evidence/empty.json")), "compact", 0);
         emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("evidence/empty.pretty.json"), 0, etEnd(emon.Testport.testFile("evidence/empty.pretty.json")), "pretty", 0);
     }

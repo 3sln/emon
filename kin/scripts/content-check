@@ -1,0 +1,160 @@
+#!/usr/bin/env bb
+;; The content interpreter's goldens against what is known independently (DEVLOG P1.7).   bb unit runs it.
+;;
+;;     kin/scripts/content-check            check; exit non-zero on a failure
+;;     kin/scripts/content-check --report   also print every extra glyph of every document
+;;
+;; It reads only COMMITTED FILES (and runs poppler's `pdftotext -bbox` when that is installed) and never
+;; the interpreter, so it is an opinion independent of the code whose output it judges:
+;;
+;;  1. THE HTML IS THE TRUTH (the done-when of P1.7). Each of the 36 synthetic documents was printed by
+;;     Chrome from test/corpus/synth/html/NAME.html. `test/content/synth.txt` holds the glyph text emon
+;;     made of each PDF page. The HTML's text (head, style and tags dropped, entities decoded, both
+;;     sides NFKC-normalised and stripped of white space, so the `fi` ligature and a space glyph are
+;;     not differences) must be found IN ORDER in the glyphs': every character of the HTML has its
+;;     glyph. The glyphs that match nothing in the HTML are the EXTRAS, and each must be a thing the
+;;     printer makes that the HTML does not say: a list marker or number, a running header or footer, a
+;;     page number, a repeated table head. `synth-extras.edn` lists what is allowed, per document, by
+;;     count; a document with more extras than that, or any HTML character without a glyph, fails.
+;;     A glyph emon could not give a code point (U+FFFD) matches any one character.
+;;
+;;  2. POPPLER'S BOXES. The whole evidence dump of each committed P1.5 fixture (test/content/*.evidence.json)
+;;     holds words with boxes; `pdftotext -bbox` reads the same file independently. Every word emon made
+;;     must be a word poppler made, in the same order, with the same box to 0.03 pt on every side.
+(require '[clojure.string :as str]
+         '[clojure.java.io :as io]
+         '[clojure.java.shell :as sh]
+         '[clojure.edn :as edn]
+         '[cheshire.core :as json])
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+(def report? (some #{"--report"} *command-line-args*))
+(def fails (atom 0))
+(defn fail! [& msg] (println "  FAIL content-check:" (apply str msg)) (swap! fails inc))
+
+;; babashka has no java.text.Normalizer, so NFKD is done here, from the vendored Unicode Character Database
+;; (test/normalize/UnicodeData.txt: decomposition mappings and combining classes), on BOTH sides of every
+;; comparison. (No composition: two texts that differ only in how marks are composed compare equal.)
+(def ucd
+  (delay
+    (let [rows (for [l (str/split-lines (slurp (io/file root "test/normalize/UnicodeData.txt")))
+                     :let [f (str/split l #";" -1)]]
+                 [(Integer/parseInt (f 0) 16) (Integer/parseInt (f 3)) (f 5)])]
+      {:ccc (into {} (for [[c k _] rows :when (pos? k)] [c k]))
+       :decomp (into {} (for [[c _ d] rows :when (seq d)]
+                          [c (mapv #(Integer/parseInt % 16) (str/split (str/replace d #"^<[^>]*> ?" "") #" "))]))})))
+
+(defn decompose [cp]
+  (if-let [d (get (:decomp @ucd) cp)] (mapcat decompose d) [cp]))
+
+(defn canonical-order [cps]
+  (let [ccc (:ccc @ucd)]
+    (mapcat (fn [run] (if (pos? (get ccc (first run) 0)) (sort-by #(get ccc % 0) run) run))
+            (partition-by #(pos? (get ccc % 0)) cps))))
+
+(defn nfkc [s]
+  (->> (.toArray (.codePoints ^String s)) (mapcat decompose) canonical-order (map #(String. (Character/toChars %))) (apply str)))
+
+(defn strip-ws [s] (str/replace s #"[\s\u00a0\u0000\u2028]+" ""))
+
+;; ------------------------------------------------------------------ 1. the HTML's text
+
+(defn html-text [html]
+  (-> html
+      (str/replace #"(?s)<head>.*?</head>" "")
+      (str/replace #"(?s)<style[^>]*>.*?</style>" "")
+      (str/replace #"(?s)<script[^>]*>.*?</script>" "")
+      (str/replace #"<[^>]*>" "")
+      (str/replace "&nbsp;" " ") (str/replace "&lt;" "<") (str/replace "&gt;" ">") (str/replace "&quot;" "\"")
+      (str/replace #"&#(\d+);" (fn [[_ n]] (str (char (parse-long n)))))
+      (str/replace "&amp;" "&")
+      nfkc strip-ws))
+
+(defn doc-glyph-text
+  "{doc-name line text of all its pages}, from the T rows of synth.txt (words in the order the lines hold them)."
+  []
+  (loop [ls (str/split (slurp (io/file root "test/content/synth.txt")) #"\n") cur nil out {}]
+    (if (empty? ls)
+      out
+      (let [l (first ls)]
+        (cond (str/starts-with? l "F\t") (recur (rest ls) (-> l (str/split #"\t") second (str/replace #".*/" "") (str/replace #"\.pdf$" "")) out)
+              (str/starts-with? l "T\t") (let [[_ _ t] (str/split l #"\t" 3)] (recur (rest ls) cur (update out cur str t)))
+              :else (recur (rest ls) cur out))))))
+
+(defn in-order
+  "How many of the HTML's characters the glyph text carries IN ORDER, walking it once: a glyph that
+  equals the next HTML character (or is U+FFFD, which stands for any one) consumes it."
+  [^String glyphs ^String html]
+  (let [g (vec (map str (seq glyphs))) h (vec (map str (seq html)))]
+    (loop [i 0 j 0]
+      (cond (or (>= i (count g)) (>= j (count h))) j
+            (or (= (g i) (h j)) (= (g i) "\ufffd")) (recur (inc i) (inc j))
+            :else (recur (inc i) j)))))
+
+(defn multiset-diff
+  "{:missing [chars the HTML has more of than the glyphs], :extra [chars the glyphs have more of]}.
+  A U+FFFD glyph is set against what is missing, one for one, before the rest are extras."
+  [glyphs html]
+  (let [cg (frequencies (map str (seq glyphs))) ch (frequencies (map str (seq html)))
+        unknown (get cg "\ufffd" 0)
+        miss (mapcat (fn [[c n]] (repeat (max 0 (- n (get cg c 0))) c)) ch)
+        extra (mapcat (fn [[c n]] (repeat (max 0 (- n (get ch c 0))) c)) (dissoc cg "\ufffd"))]
+    {:missing (vec (drop unknown miss)) :extra (vec extra) :unknown unknown}))
+
+(defn check-html []
+  (let [allowed (edn/read-string (slurp (io/file root "kin/scripts/synth-extras.edn")))
+        docs (doc-glyph-text)
+        total (atom {:glyphs 0 :html 0 :extras 0 :missing 0 :docs 0 :ordered 0})]
+    (doseq [[name raw] (sort docs)]
+      (let [html (html-text (slurp (io/file root "test/corpus/synth/html" (str name ".html"))))
+            glyphs (strip-ws (nfkc raw))
+            d (multiset-diff glyphs html)
+            ordered (in-order glyphs html)
+            ok (get allowed name {:extras 0 :missing 0})
+            ne (count (:extra d)) nm (count (:missing d))]
+        (swap! total #(-> % (update :docs inc) (update :glyphs + (count glyphs)) (update :html + (count html))
+                          (update :extras + ne) (update :missing + nm) (update :ordered + ordered)))
+        (when report?
+          (println (format "  %-32s glyphs %5d html %5d in-order %5d extras %3d missing %3d unknown %2d  %s | %s" name (count glyphs) (count html) ordered ne nm (:unknown d)
+                           (pr-str (apply str (take 40 (:extra d)))) (pr-str (apply str (take 40 (:missing d)))))))
+        (when (> nm (:missing ok 0)) (fail! name ": " nm " characters of the HTML have no glyph (" (:missing ok 0) " allowed in synth-extras.edn): " (pr-str (apply str (take 40 (:missing d))))))
+        (when (> ne (:extras ok 0)) (fail! name ": " ne " glyphs are not in the HTML (" (:extras ok 0) " allowed in synth-extras.edn): " (pr-str (apply str (take 40 (:extra d))))))))
+    (let [t @total]
+      (when (< (:docs t) 30) (fail! "only " (:docs t) " documents were compared"))
+      (when (zero? @fails)
+        (println (format "  ok   content-check: %d documents, %d glyphs for %d characters of HTML: %d HTML characters without a glyph and %d glyphs without HTML, all accounted for in synth-extras.edn; %d of the HTML's characters are found in order by one walk"
+                         (:docs t) (:glyphs t) (:html t) (:missing t) (:extras t) (:ordered t)))))))
+
+;; ---------------------------------------------------------------- 2. poppler's boxes
+
+(defn poppler-words [pdf]
+  (let [r (sh/sh "pdftotext" "-bbox" pdf "-")]
+    (when (zero? (:exit r))
+      (->> (re-seq #"<word xMin=\"([\d.]+)\" yMin=\"([\d.]+)\" xMax=\"([\d.]+)\" yMax=\"([\d.]+)\">([^<]*)</word>" (:out r))
+           (map (fn [[_ a b c d t]] {:box (mapv parse-double [a b c d]) :text t}))))))
+
+(defn unescape [s] (-> s (str/replace "&amp;" "&") (str/replace "&lt;" "<") (str/replace "&gt;" ">") (str/replace "&quot;" "\"") (str/replace "&#39;" "'")))
+
+(defn check-poppler []
+  (if-not (zero? (:exit (sh/sh "which" "pdftotext")))
+    (println "  SKIP content-check: poppler's pdftotext is not installed; the word boxes were not compared")
+    (let [rows (remove #(or (str/blank? %) (str/starts-with? % "#")) (str/split-lines (slurp (io/file root "test/content/evidence.txt"))))
+          n (atom 0)]
+      (doseq [row rows]
+        (let [[pdf gold] (str/split row #"\t")
+              ev (json/parse-string (slurp (io/file root "test" gold)) true)
+              mine (:words ev)
+              theirs (poppler-words (str root "/test/" pdf))]
+          (if (not= (count mine) (count theirs))
+            (fail! pdf ": emon made " (count mine) " words, poppler " (count theirs))
+            (doseq [[i [m t]] (map-indexed vector (map vector mine theirs))]
+              (swap! n inc)
+              (when (not= (nfkc (:text m)) (nfkc (unescape (:text t))))
+                (fail! pdf ": word " i " is " (pr-str (:text m)) " for emon and " (pr-str (:text t)) " for poppler"))
+              (when (some true? (map #(> (Math/abs (- %1 %2)) 0.03) (:box m) (:box t)))
+                (fail! pdf ": word " i " " (pr-str (:text m)) " box " (:box m) " is not poppler's " (:box t)))))))
+      (when (zero? @fails)
+        (println (format "  ok   content-check: %d words of the three fixtures are poppler's words, boxes within 0.03 pt" @n))))))
+
+(check-html)
+(check-poppler)
+(System/exit (if (zero? @fails) 0 1))

@@ -161,9 +161,10 @@ pub(crate) fn pt_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq:
     let co: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let al: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let st: i32 = pp_unit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext);
+    let sp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: i32 = pp_unit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp);
     if st == us_done() {
-        ev_emit(t, 0, g, wd, ln, pa, im, co, ow, al, etext);
+        ev_emit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp);
     }
     return st;
 }

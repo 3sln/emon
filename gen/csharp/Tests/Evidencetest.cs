@@ -5,14 +5,49 @@ namespace emon;
 
 
 public static class Evidencetest {
-    internal static int EtBuild(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+    internal static int EtBuild(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
+        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.EtxAppendCp(etext, 72);
         Evidence.EtxAppendCp(etext, 105);
         Evidence.EtxAppendCp(etext, 102);
         Evidence.EtxAppendCp(etext, 105);
         Evidence.EtxAppendCp(etext, 72);
         Evidence.EtxAppendCp(etext, 105);
+        Evidence.EtxAppendCp(etext, 80);
+        Evidence.EtxAppendCp(etext, 101);
+        Evidence.EtxAppendCp(etext, 110);
+        Evidence.EtxAppendCp(etext, 65);
+        Evidence.EtxAppendCp(etext, 114);
+        Evidence.EtxAppendCp(etext, 116);
+        Evidence.EtxAppendCp(etext, 105);
+        Evidence.EtxAppendCp(etext, 102);
+        Evidence.EtxAppendCp(etext, 97);
+        Evidence.EtxAppendCp(etext, 99);
+        Evidence.EtxAppendCp(etext, 116);
+        Evidence.EtxAppendCp(etext, 80);
+        Evidence.EtxAppendCp(etext, 97);
+        Evidence.EtxAppendCp(etext, 103);
+        Evidence.EtxAppendCp(etext, 105);
+        Evidence.EtxAppendCp(etext, 110);
+        Evidence.EtxAppendCp(etext, 97);
+        Evidence.EtxAppendCp(etext, 116);
+        Evidence.EtxAppendCp(etext, 105);
+        Evidence.EtxAppendCp(etext, 111);
+        Evidence.EtxAppendCp(etext, 110);
+        Evidence.EtxAppendCp(etext, 87);
+        Evidence.EtxAppendCp(etext, 97);
+        Evidence.EtxAppendCp(etext, 116);
+        Evidence.EtxAppendCp(etext, 101);
+        Evidence.EtxAppendCp(etext, 114);
+        Evidence.EtxAppendCp(etext, 109);
+        Evidence.EtxAppendCp(etext, 97);
+        Evidence.EtxAppendCp(etext, 114);
+        Evidence.EtxAppendCp(etext, 107);
+        Evidence.EtxAppendCp(etext, 68);
+        Evidence.EtxAppendCp(etext, 82);
+        Evidence.EtxAppendCp(etext, 65);
+        Evidence.EtxAppendCp(etext, 70);
+        Evidence.EtxAppendCp(etext, 84);
         Evidence.GlNew(glyphs, 1, 72, 1, 1200, 7200, 9000, 8000, 10200);
         Evidence.GlSet(glyphs, 0, Evidence.GfHow(), Evidence.GhTounicode());
         Evidence.GlSet(glyphs, 0, Evidence.GfColor(), 0);
@@ -86,6 +121,23 @@ public static class Evidencetest {
         Evidence.OwSet(ocrwords, 0, Evidence.OfLang(), 3);
         Evidence.AltAdd(ocrwords, alts, 0, 0, 72, 900);
         Evidence.AltAdd(ocrwords, alts, 0, 1, 108, 250);
+        Evidence.SpNew(spans, 1, 6, 1, -1, 0);
+        Evidence.SpSet(spans, 0, Evidence.SfMcid(), 0);
+        Evidence.SpSet(spans, 0, Evidence.SfLang(), 7);
+        Evidence.SpSet(spans, 0, Evidence.SfLanglen(), 2);
+        Evidence.SpSet(spans, 0, Evidence.SfGcount(), 2);
+        Evidence.SpSet(spans, 0, Evidence.SfFlags(), Evidence.McInline());
+        Evidence.SpNew(spans, 1, 9, 8, -1, 3);
+        Evidence.SpSet(spans, 1, Evidence.SfArtifact(), Evidence.ArWatermark());
+        Evidence.SpSet(spans, 1, Evidence.SfType(), 17);
+        Evidence.SpSet(spans, 1, Evidence.SfTypelen(), 10);
+        Evidence.SpSet(spans, 1, Evidence.SfSubtype(), 27);
+        Evidence.SpSet(spans, 1, Evidence.SfSubtypelen(), 9);
+        Evidence.SpSet(spans, 1, Evidence.SfActual(), 36);
+        Evidence.SpSet(spans, 1, Evidence.SfActuallen(), 5);
+        Evidence.SpSet(spans, 1, Evidence.SfGcount(), 1);
+        Evidence.SpSet(spans, 1, Evidence.SfStm(), 12);
+        Evidence.SpSet(spans, 1, Evidence.SfFlags(), Evidence.McUnterminated());
         return 0;
     }
     internal static int EtEnd(byte[] b) {
@@ -107,7 +159,8 @@ public static class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.NewCells();
         emon.Port.Cells alts = emon.Port.NewCells();
         emon.Port.Cells etext = emon.Port.NewCells();
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Port.Cells spans = emon.Port.NewCells();
+        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.AssertEq(Evidence.GlCount(glyphs), 0, "no glyphs");
         emon.Testport.AssertEq(Evidence.GlNew(glyphs, 3, 65, 9, 1000, 100, 200, 300, 400), 0, "first glyph");
         emon.Testport.AssertEq(emon.Port.CellsLen(glyphs), 20, "twenty cells");
@@ -131,6 +184,16 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfArtifact()), 0, "not an artifact");
         emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfMcid()), -1, "no mcid");
         emon.Testport.AssertEq(Evidence.GlGet(glyphs, 0, Evidence.GfWord()), -1, "in no word");
+        emon.Testport.AssertEq(Evidence.SpNew(spans, 3, 10, 1, -1, 4), 0, "first span");
+        emon.Testport.AssertEq(emon.Port.CellsLen(spans), 22, "twenty-two cells");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfMcid()), -1, "no MCID");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfArtifact()), 0, "not an artifact");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfType()), -1, "no type");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfActual()), -1, "no ActualText");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfLang()), -1, "no language");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfGfirst()), 4, "opened at glyph 4");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfParent()), -1, "no parent");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfStm()), 0, "the page's own stream");
         emon.Testport.AssertEq(Evidence.WdNew(words, 3, 1, 2, 3, 4, 0, 1), 0, "first word");
         emon.Testport.AssertEq(emon.Port.CellsLen(words), 16, "sixteen cells");
         emon.Testport.AssertEq(Evidence.WdGet(words, 0, Evidence.WfTstart()), -1, "no text");
@@ -182,7 +245,8 @@ public static class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.NewCells();
         emon.Port.Cells alts = emon.Port.NewCells();
         emon.Port.Cells etext = emon.Port.NewCells();
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Port.Cells spans = emon.Port.NewCells();
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.AssertEq(Evidence.GlCount(glyphs), 4, "four glyphs");
         emon.Testport.AssertEq(Evidence.WdCount(words), 2, "two words");
         emon.Testport.AssertEq(Evidence.LnCount(lines), 1, "one line");
@@ -191,7 +255,12 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.CoCount(components), 1, "one component");
         emon.Testport.AssertEq(Evidence.OwCount(ocrwords), 1, "one OCR word");
         emon.Testport.AssertEq(Evidence.AltCount(alts), 2, "two alternatives");
-        emon.Testport.AssertEq(Evidence.EtxLen(etext), 6, "six text cells");
+        emon.Testport.AssertEq(Evidence.EtxLen(etext), 41, "the text cells");
+        emon.Testport.AssertEq(Evidence.SpCount(spans), 2, "two spans");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 0, Evidence.SfMcid()), 0, "the paragraph's MCID");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 1, Evidence.SfMcid()), -1, "the artifact has none");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 1, Evidence.SfArtifact()), 2, "watermark");
+        emon.Testport.AssertEq(Evidence.SpGet(spans, 1, Evidence.SfStm()), 12, "a form's span");
         emon.Testport.AssertEq(Evidence.GlGet(glyphs, 2, Evidence.GfTstart()), 2, "the ligature's text run");
         emon.Testport.AssertEq(Evidence.GlGet(glyphs, 2, Evidence.GfTlen()), 2, "two code points");
         emon.Testport.AssertEq(Evidence.GlGet(glyphs, 3, Evidence.GfRot()), 4500, "45 degrees in centi-degrees");
@@ -210,7 +279,7 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.AltGet(alts, 0, Evidence.AfNext()), 1, "then the second");
         emon.Testport.AssertEq(Evidence.AltGet(alts, 1, Evidence.AfCp()), 108, "which reads l");
         emon.Testport.AssertEq(Evidence.AltGet(alts, 1, Evidence.AfNext()), -1, "and ends the chain");
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 0, "the page is well formed");
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 0, "the page is well formed");
     }
     [Xunit.Fact]
     public static void TestEvidenceTextIsScalarValuesOnly() {
@@ -231,30 +300,40 @@ public static class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.NewCells();
         emon.Port.Cells alts = emon.Port.NewCells();
         emon.Port.Cells etext = emon.Port.NewCells();
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.GlSet(glyphs, 2, Evidence.GfTlen(), 9);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 2, "a glyph's text run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Port.Cells spans = emon.Port.NewCells();
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.GlSet(glyphs, 2, Evidence.GfTlen(), 99);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 2, "a glyph's text run past the arena");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.WdSet(words, 1, Evidence.WfGcount(), 9);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 3, "a word's glyph run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.WdSet(words, 0, Evidence.WfTlen(), 40);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 4, "a word's text run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 3, "a word's glyph run past the arena");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.WdSet(words, 0, Evidence.WfTlen(), 99);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 4, "a word's text run past the arena");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.LnSet(lines, 0, Evidence.LfWcount(), 3);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 5, "a line's word run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 5, "a line's word run past the arena");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.OwSet(ocrwords, 0, Evidence.OfTlen(), 50);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 6, "an OCR word's text run past the arena");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 6, "an OCR word's text run past the arena");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.OwSet(ocrwords, 0, Evidence.OfAltcount(), 3);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 7, "an alternative count that is not the chain");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 7, "an alternative count that is not the chain");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.WdSet(words, 0, Evidence.WfLine(), 4);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 8, "a word in a line that is not there");
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 8, "a word in a line that is not there");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         Evidence.GlSet(glyphs, 0, Evidence.GfWord(), 5);
-        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext), 9, "a glyph in a word that is not there");
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 9, "a glyph in a word that is not there");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.SpSet(spans, 1, Evidence.SfGcount(), 9);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's glyph run past the arena");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.SpSet(spans, 1, Evidence.SfActuallen(), 99);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's string past the arena");
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.SpSet(spans, 0, Evidence.SfParent(), 0);
+        emon.Testport.AssertEq(Evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span that is its own parent");
     }
     [Xunit.Fact]
     public static void TestGoldenPage() {
@@ -267,11 +346,12 @@ public static class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.NewCells();
         emon.Port.Cells alts = emon.Port.NewCells();
         emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells spans = emon.Port.NewCells();
         System.Text.StringBuilder compact = emon.Testport.NewText();
         System.Text.StringBuilder pretty = emon.Testport.NewText();
-        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        EtBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("evidence/page1.json"), 0, EtEnd(emon.Testport.TestFile("evidence/page1.json")), "compact", 0);
         emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("evidence/page1.pretty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/page1.pretty.json")), "pretty", 0);
     }
@@ -286,11 +366,12 @@ public static class Evidencetest {
         emon.Port.Cells ocrwords = emon.Port.NewCells();
         emon.Port.Cells alts = emon.Port.NewCells();
         emon.Port.Cells etext = emon.Port.NewCells();
+        emon.Port.Cells spans = emon.Port.NewCells();
         System.Text.StringBuilder compact = emon.Testport.NewText();
         System.Text.StringBuilder pretty = emon.Testport.NewText();
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
-        Evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("evidence/empty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/empty.json")), "compact", 0);
         emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("evidence/empty.pretty.json"), 0, EtEnd(emon.Testport.TestFile("evidence/empty.pretty.json")), "pretty", 0);
     }

@@ -370,7 +370,8 @@ end
                 "/CharProcs << >> /FirstChar 97 /LastChar 98 /Widths [50 60.5] "
                 "/Encoding << /Type /Encoding /Differences [97 /a /b] >> >>")
     fonts.append(("Typ3", n))
-    font(pdf, n, 0, "simple", 0, 0, 0, 0, -1)
+    # no descriptor: the cell is /FontBBox times the FontMatrix (100 * 0.01 em high), D101
+    font(pdf, n, 0, "simple", 1000, 0, 0, 0, -1)
     code(97, [0x61], "glyphname", 500)
     code(98, [0x62], "glyphname", 605)
     code(99, [], "unknown", None)

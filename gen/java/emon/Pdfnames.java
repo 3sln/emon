@@ -373,6 +373,57 @@ public final class Pdfnames {
     public static int pnIdentityV() {
         return 122;
     }
+    public static int pnMatrix() {
+        return 123;
+    }
+    public static int pnBBox() {
+        return 124;
+    }
+    public static int pnMcid() {
+        return 125;
+    }
+    public static int pnActualText() {
+        return 126;
+    }
+    public static int pnAlt() {
+        return 127;
+    }
+    public static int pnE() {
+        return 128;
+    }
+    public static int pnArtifact() {
+        return 129;
+    }
+    public static int pnPagination() {
+        return 130;
+    }
+    public static int pnLayout() {
+        return 131;
+    }
+    public static int pnBackground() {
+        return 132;
+    }
+    public static int pnWatermark() {
+        return 133;
+    }
+    public static int pnHeader() {
+        return 134;
+    }
+    public static int pnFooter() {
+        return 135;
+    }
+    public static int pnDeviceGray() {
+        return 136;
+    }
+    public static int pnDeviceRgb() {
+        return 137;
+    }
+    public static int pnDeviceCmyk() {
+        return 138;
+    }
+    public static int pnCa() {
+        return 139;
+    }
     public static int pnEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "Type");
@@ -866,6 +917,74 @@ public final class Pdfnames {
             emon.Port.textAscii(t, "Identity-V");
             return 1;
         }
+        if (code == 123) {
+            emon.Port.textAscii(t, "Matrix");
+            return 1;
+        }
+        if (code == 124) {
+            emon.Port.textAscii(t, "BBox");
+            return 1;
+        }
+        if (code == 125) {
+            emon.Port.textAscii(t, "MCID");
+            return 1;
+        }
+        if (code == 126) {
+            emon.Port.textAscii(t, "ActualText");
+            return 1;
+        }
+        if (code == 127) {
+            emon.Port.textAscii(t, "Alt");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.textAscii(t, "E");
+            return 1;
+        }
+        if (code == 129) {
+            emon.Port.textAscii(t, "Artifact");
+            return 1;
+        }
+        if (code == 130) {
+            emon.Port.textAscii(t, "Pagination");
+            return 1;
+        }
+        if (code == 131) {
+            emon.Port.textAscii(t, "Layout");
+            return 1;
+        }
+        if (code == 132) {
+            emon.Port.textAscii(t, "Background");
+            return 1;
+        }
+        if (code == 133) {
+            emon.Port.textAscii(t, "Watermark");
+            return 1;
+        }
+        if (code == 134) {
+            emon.Port.textAscii(t, "Header");
+            return 1;
+        }
+        if (code == 135) {
+            emon.Port.textAscii(t, "Footer");
+            return 1;
+        }
+        if (code == 136) {
+            emon.Port.textAscii(t, "DeviceGray");
+            return 1;
+        }
+        if (code == 137) {
+            emon.Port.textAscii(t, "DeviceRGB");
+            return 1;
+        }
+        if (code == 138) {
+            emon.Port.textAscii(t, "DeviceCMYK");
+            return 1;
+        }
+        if (code == 139) {
+            emon.Port.textAscii(t, "ca");
+            return 1;
+        }
         return 0;
     }
     public static final int[] PN_CHARS = {
@@ -926,7 +1045,14 @@ public final class Pdfnames {
         110, 99, 111, 100, 105, 110, 103, 83, 116, 97, 110, 100, 97, 114, 100, 69,
         110, 99, 111, 100, 105, 110, 103, 77, 97, 99, 69, 120, 112, 101, 114, 116,
         69, 110, 99, 111, 100, 105, 110, 103, 73, 100, 101, 110, 116, 105, 116, 121,
-        45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86
+        45, 72, 73, 100, 101, 110, 116, 105, 116, 121, 45, 86, 77, 97, 116, 114,
+        105, 120, 66, 66, 111, 120, 77, 67, 73, 68, 65, 99, 116, 117, 97, 108,
+        84, 101, 120, 116, 65, 108, 116, 69, 65, 114, 116, 105, 102, 97, 99, 116,
+        80, 97, 103, 105, 110, 97, 116, 105, 111, 110, 76, 97, 121, 111, 117, 116,
+        66, 97, 99, 107, 103, 114, 111, 117, 110, 100, 87, 97, 116, 101, 114, 109,
+        97, 114, 107, 72, 101, 97, 100, 101, 114, 70, 111, 111, 116, 101, 114, 68,
+        101, 118, 105, 99, 101, 71, 114, 97, 121, 68, 101, 118, 105, 99, 101, 82,
+        71, 66, 68, 101, 118, 105, 99, 101, 67, 77, 89, 75, 99, 97
     };
     public static final int[] PN_SPAN = {
         0, 4,
@@ -1051,7 +1177,24 @@ public final class Pdfnames {
         871, 16,
         887, 17,
         904, 10,
-        914, 10
+        914, 10,
+        924, 6,
+        930, 4,
+        934, 4,
+        938, 10,
+        948, 3,
+        951, 1,
+        952, 8,
+        960, 10,
+        970, 6,
+        976, 10,
+        986, 9,
+        995, 6,
+        1001, 6,
+        1007, 10,
+        1017, 9,
+        1026, 10,
+        1036, 2
     };
     public static int pkTrue() {
         return 1;

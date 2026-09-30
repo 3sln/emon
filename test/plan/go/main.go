@@ -217,12 +217,12 @@ func main() {
 	var evBuf strings.Builder
 	unit := func(an, rq *port.Cells) int32 {
 		view := base.View()
-		g, w, l, p, i, co, ow, al, et := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(),
-			port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
-		st := planprobe.PpUnit(view, an, rq, g, w, l, p, i, co, ow, al, et)
+		g, w, l, p, i, co, ow, al, et, sp := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(),
+			port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
+		st := planprobe.PpUnit(view, an, rq, g, w, l, p, i, co, ow, al, et, sp)
 		if st == port.PlanUnitDone {
 			evBuf.Reset()
-			evidence.EvEmit(&evBuf, 0, g, w, l, p, i, co, ow, al, et)
+			evidence.EvEmit(&evBuf, 0, g, w, l, p, i, co, ow, al, et, sp)
 		}
 		return st
 	}

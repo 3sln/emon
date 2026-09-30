@@ -33,9 +33,9 @@ public static class Planprobe {
         }
         return 0;
     }
-    public static int PpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
+    public static int PpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
         // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext);
+        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
         int n = emon.Port.SrcLen(s);
         int mid = emon.Port.SrcU8(s, n / 2);
         int tail = emon.Port.SrcU8(s, n - 1);

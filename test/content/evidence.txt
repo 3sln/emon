@@ -1,0 +1,4 @@
+# emon P1.7: `pdf <TAB> golden`: the compact emon-evidence dump of each file is its golden.
+pdf/minimal.pdf	content/minimal.evidence.json
+pdf/html-chrome.pdf	content/html-chrome.evidence.json
+pdf/gs-xrefstream.pdf	content/gs-xrefstream.evidence.json

@@ -100,6 +100,9 @@ func ArLayout() int32 {
 func ArBackground() int32 {
 	return 4
 }
+func ArOther() int32 {
+	return 5
+}
 func ArEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "pagination")
@@ -115,6 +118,10 @@ func ArEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 4 {
 		port.TextAscii(t, "background")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "other")
 		return 1
 	}
 	return 0
@@ -287,6 +294,38 @@ func MgEmitName(t *strings.Builder, code int32) int32 {
 	return 0
 }
 
+func McInline() int32 {
+	return 1
+}
+func McResource() int32 {
+	return 2
+}
+func McUnresolved() int32 {
+	return 4
+}
+func McUnterminated() int32 {
+	return 8
+}
+func McEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "inline")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "resource")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "unresolved")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "unterminated")
+		return 1
+	}
+	return 0
+}
+
 func EkVersion() int32 {
 	return 1
 }
@@ -421,6 +460,33 @@ func EkSym() int32 {
 }
 func EkRun() int32 {
 	return 45
+}
+func EkSpans() int32 {
+	return 46
+}
+func EkTag() int32 {
+	return 47
+}
+func EkParent() int32 {
+	return 48
+}
+func EkType() int32 {
+	return 49
+}
+func EkSubtype() int32 {
+	return 50
+}
+func EkActual() int32 {
+	return 51
+}
+func EkAlt() int32 {
+	return 52
+}
+func EkExp() int32 {
+	return 53
+}
+func EkStm() int32 {
+	return 54
 }
 func EkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
@@ -603,6 +669,42 @@ func EkEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "run")
 		return 1
 	}
+	if code == 46 {
+		port.TextAscii(t, "spans")
+		return 1
+	}
+	if code == 47 {
+		port.TextAscii(t, "tag")
+		return 1
+	}
+	if code == 48 {
+		port.TextAscii(t, "parent")
+		return 1
+	}
+	if code == 49 {
+		port.TextAscii(t, "type")
+		return 1
+	}
+	if code == 50 {
+		port.TextAscii(t, "subtype")
+		return 1
+	}
+	if code == 51 {
+		port.TextAscii(t, "actual")
+		return 1
+	}
+	if code == 52 {
+		port.TextAscii(t, "alt")
+		return 1
+	}
+	if code == 53 {
+		port.TextAscii(t, "exp")
+		return 1
+	}
+	if code == 54 {
+		port.TextAscii(t, "stm")
+		return 1
+	}
 	return 0
 }
 
@@ -636,6 +738,10 @@ func OwStride() int32 {
 
 func AltStride() int32 {
 	return 4
+}
+
+func SpStride() int32 {
+	return 22
 }
 
 func GfPage() int32 {
@@ -1078,6 +1184,94 @@ func AfNext() int32 {
 	return 3
 }
 
+func SfPage() int32 {
+	return 0
+}
+
+func SfTag() int32 {
+	return 1
+}
+
+func SfTaglen() int32 {
+	return 2
+}
+
+func SfParent() int32 {
+	return 3
+}
+
+func SfMcid() int32 {
+	return 4
+}
+
+func SfArtifact() int32 {
+	return 5
+}
+
+func SfType() int32 {
+	return 6
+}
+
+func SfTypelen() int32 {
+	return 7
+}
+
+func SfSubtype() int32 {
+	return 8
+}
+
+func SfSubtypelen() int32 {
+	return 9
+}
+
+func SfActual() int32 {
+	return 10
+}
+
+func SfActuallen() int32 {
+	return 11
+}
+
+func SfAlt() int32 {
+	return 12
+}
+
+func SfAltlen() int32 {
+	return 13
+}
+
+func SfExp() int32 {
+	return 14
+}
+
+func SfExplen() int32 {
+	return 15
+}
+
+func SfLang() int32 {
+	return 16
+}
+
+func SfLanglen() int32 {
+	return 17
+}
+
+func SfGfirst() int32 {
+	return 18
+}
+
+func SfGcount() int32 {
+	return 19
+}
+
+func SfFlags() int32 {
+	return 20
+}
+
+func SfStm() int32 {
+	return 21
+}
+
 func evGet(c *port.Cells, stride int32, row int32, f int32) int32 {
 	return port.CellsAt(c, (row*stride)+f)
 }
@@ -1102,8 +1296,8 @@ func evPush(c *port.Cells, stride int32) int32 {
 	return row
 }
 
-func EvInit(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells) int32 {
-	// Empty all nine arenas.
+func EvInit(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
+	// Empty all ten arenas.
 	port.CellsDrop(glyphs, 0)
 	port.CellsDrop(words, 0)
 	port.CellsDrop(lines, 0)
@@ -1113,6 +1307,7 @@ func EvInit(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *por
 	port.CellsDrop(ocrwords, 0)
 	port.CellsDrop(alts, 0)
 	port.CellsDrop(etext, 0)
+	port.CellsDrop(spans, 0)
 	return 0
 }
 
@@ -1371,6 +1566,38 @@ func AltAdd(ocrwords *port.Cells, alts *port.Cells, w int32, sym int32, cp int32
 	return a
 }
 
+func SpCount(spans *port.Cells) int32 {
+	return evCount(spans, 22)
+}
+
+func SpGet(spans *port.Cells, s int32, f int32) int32 {
+	return evGet(spans, 22, s, f)
+}
+
+func SpSet(spans *port.Cells, s int32, f int32, v int32) int32 {
+	return evSet(spans, 22, s, f, v)
+}
+
+func SpNew(spans *port.Cells, page int32, tag int32, taglen int32, parent int32, gfirst int32) int32 {
+	// Append a marked-content span opened at glyph `gfirst`. Defaults: no
+	// MCID, not an artifact, no strings, no glyphs yet, no flags, the page's
+	// own content stream.
+	var s int32 = evPush(spans, 22)
+	evSet(spans, 22, s, 0, page)
+	evSet(spans, 22, s, 1, tag)
+	evSet(spans, 22, s, 2, taglen)
+	evSet(spans, 22, s, 3, parent)
+	evSet(spans, 22, s, 4, -1)
+	evSet(spans, 22, s, 6, -1)
+	evSet(spans, 22, s, 8, -1)
+	evSet(spans, 22, s, 10, -1)
+	evSet(spans, 22, s, 12, -1)
+	evSet(spans, 22, s, 14, -1)
+	evSet(spans, 22, s, 16, -1)
+	evSet(spans, 22, s, 18, gfirst)
+	return s
+}
+
 func EvRunOk(start int32, n int32, total int32) int32 {
 	// 1 when [start, start+n) lies inside [0, total), or the run is empty
 	// and absent (start -1, n 0 -- or any start with n 0).
@@ -1392,17 +1619,19 @@ func EvRunOk(start int32, n int32, total int32) int32 {
 	return 1
 }
 
-func EvCheck(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells) int32 {
+func EvCheck(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
 	// 0 when every run and link is inside its arena; otherwise a code:
 	// 1 a stride, 2 a glyph's text run, 3 a word's glyph run, 4 a word's
 	// text run, 5 a line's word run, 6 an OCR word's text run, 7 an
-	// alternative chain, 8 a word's line, 9 a glyph's word.
+	// alternative chain, 8 a word's line, 9 a glyph's word, 10 a span's text
+	// run, glyph run or parent.
 	var ng int32 = port.CellsLen(glyphs) / 20
 	var nw int32 = port.CellsLen(words) / 16
 	var nl int32 = port.CellsLen(lines) / 12
 	var no int32 = port.CellsLen(ocrwords) / 16
 	var na int32 = port.CellsLen(alts) / 4
 	var nt int32 = port.CellsLen(etext)
+	var ns int32 = port.CellsLen(spans) / 22
 	var i int32 = 0
 	var a int32 = 0
 	var steps int32 = 0
@@ -1428,6 +1657,9 @@ func EvCheck(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *po
 		return 1
 	}
 	if (port.CellsLen(alts) % 4) != 0 {
+		return 1
+	}
+	if (port.CellsLen(spans) % 22) != 0 {
 		return 1
 	}
 	for i < ng {
@@ -1484,6 +1716,28 @@ func EvCheck(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *po
 		}
 		if steps != evGet(ocrwords, 16, i, 9) {
 			return 7
+		}
+		i += 1
+	}
+	i = 0
+	for i < ns {
+		if EvRunOk(evGet(spans, 22, i, 18), evGet(spans, 22, i, 19), ng) == 0 {
+			return 10
+		}
+		if (evGet(spans, 22, i, 3) < -1) || (evGet(spans, 22, i, 3) >= i) {
+			return 10
+		}
+		if EvRunOk(evGet(spans, 22, i, 1), evGet(spans, 22, i, 2), nt) == 0 {
+			return 10
+		}
+		a = 6
+		for a <= 16 {
+			if evGet(spans, 22, i, a) >= 0 {
+				if EvRunOk(evGet(spans, 22, i, a), evGet(spans, 22, i, a+1), nt) == 0 {
+					return 10
+				}
+			}
+			a += 2
 		}
 		i += 1
 	}
@@ -1572,6 +1826,17 @@ func evFtext(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 	return 1
 }
 
+func evFtextk(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, fstart int32, flen int32, etext *port.Cells, key int32, started int32) int32 {
+	// As `ev-ftext` under any key.
+	var s int32 = evGet(c, stride, row, fstart)
+	if s < 0 {
+		return started
+	}
+	evBegin(t, pr, d, started, key)
+	json.JsStr(t, etext, s, evGet(c, stride, row, flen))
+	return 1
+}
+
 func evFrun(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
 	// A run as `"key":[first,count]`.
 	evBegin(t, pr, d, started, key)
@@ -1585,7 +1850,7 @@ func evFrun(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 
 func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, which int32, started int32) int32 {
 	// A bitset as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`,
-	// 5 `mg`. Zero is omitted.
+	// 5 `mg`, 6 `mc`. Zero is omitted.
 	var v int32 = evGet(c, stride, row, f)
 	var key int32 = EkSrc()
 	var b int32 = 0
@@ -1610,9 +1875,9 @@ func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 	if which == 3 {
 		json.JsBitsStyle(t, pr, v)
 	}
-	if (which == 4) || (which == 5) {
+	if (which == 4) || ((which == 5) || (which == 6)) {
 		port.TextAscii(t, "[")
-		for b < 3 {
+		for b < 4 {
 			if (v & bit) != 0 {
 				json.JsFsep(t, pr, k)
 				port.TextAscii(t, "\"")
@@ -1621,6 +1886,9 @@ func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 				}
 				if which == 5 {
 					MgEmitName(t, bit)
+				}
+				if which == 6 {
+					McEmitName(t, bit)
 				}
 				port.TextAscii(t, "\"")
 				k += 1
@@ -1821,9 +2089,30 @@ func evOcrword(t *strings.Builder, pr int32, d int32, ocrwords *port.Cells, alts
 	return 0
 }
 
-func EvEmit(t *strings.Builder, pretty int32, glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells) int32 {
+func evSpan(t *strings.Builder, pr int32, d int32, spans *port.Cells, etext *port.Cells, i int32) int32 {
+	var s int32 = 0
+	port.TextAscii(t, "{")
+	s = evFint(t, pr, d, spans, 22, i, 0, EkPage(), -2147483648, s)
+	s = evFtextk(t, pr, d, spans, 22, i, 1, 2, etext, EkTag(), s)
+	s = evFint(t, pr, d, spans, 22, i, 3, EkParent(), -1, s)
+	s = evFint(t, pr, d, spans, 22, i, 4, EkMcid(), -1, s)
+	s = evFenum(t, pr, d, s, EkArtifact(), 3, evGet(spans, 22, i, 5))
+	s = evFtextk(t, pr, d, spans, 22, i, 6, 7, etext, EkType(), s)
+	s = evFtextk(t, pr, d, spans, 22, i, 8, 9, etext, EkSubtype(), s)
+	s = evFtextk(t, pr, d, spans, 22, i, 10, 11, etext, EkActual(), s)
+	s = evFtextk(t, pr, d, spans, 22, i, 12, 13, etext, EkAlt(), s)
+	s = evFtextk(t, pr, d, spans, 22, i, 14, 15, etext, EkExp(), s)
+	s = evFtextk(t, pr, d, spans, 22, i, 16, 17, etext, EkLang(), s)
+	s = evFrun(t, pr, d, spans, 22, i, 18, EkGlyphs(), s)
+	s = evFbits(t, pr, d, spans, 22, i, 20, 6, s)
+	s = evFint(t, pr, d, spans, 22, i, 21, EkStm(), 0, s)
+	json.JsClose(t, pr, d, s)
+	return 0
+}
+
+func EvEmit(t *strings.Builder, pretty int32, glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
 	// Write the evidence as `emon-evidence` JSON (SPEC 4.5): version, then
-	// the seven row arrays, each row in its fixed key order.
+	// the eight row arrays, each row in its fixed key order.
 	var s int32 = 0
 	var i int32 = 0
 	var ng int32 = port.CellsLen(glyphs) / 20
@@ -1833,6 +2122,7 @@ func EvEmit(t *strings.Builder, pretty int32, glyphs *port.Cells, words *port.Ce
 	var nm int32 = port.CellsLen(images) / 12
 	var nc int32 = port.CellsLen(components) / 20
 	var no int32 = port.CellsLen(ocrwords) / 16
+	var nsp int32 = port.CellsLen(spans) / 22
 	port.TextAscii(t, "{")
 	s = evBegin(t, pretty, 0, s, EkVersion())
 	port.TextAscii(t, "\"0\"")
@@ -1898,6 +2188,15 @@ func EvEmit(t *strings.Builder, pretty int32, glyphs *port.Cells, words *port.Ce
 		i += 1
 	}
 	json.JsAend(t, pretty, 1, no)
+	s = evBegin(t, pretty, 0, s, EkSpans())
+	port.TextAscii(t, "[")
+	i = 0
+	for i < nsp {
+		json.JsAelem(t, pretty, 1, i)
+		evSpan(t, pretty, 2, spans, etext, i)
+		i += 1
+	}
+	json.JsAend(t, pretty, 1, nsp)
 	json.JsClose(t, pretty, 0, s)
 	return 0
 }

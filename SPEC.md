@@ -276,7 +276,7 @@ API expose.
   more finely than that and meant it.
 * **Why not points as floats**: four languages do not agree on floating point
   (nome SPEC §7). emon uses **no floats anywhere in kin** — matrices are
-  16.16 fixed point in `I64`, angles are integer trigonometry (emon's own), ratios
+  fixed point in `I64` with 24 fractional bits (D103; 16.16 was not enough), angles are integer trigonometry (emon's own), ratios
   are per-mille integers.
 * **Why centipoints and not nome's 1/64**: the serialized form is decimal
   (`72.5`, never `72.515625`), because the consumer is a scraper, not a
@@ -478,7 +478,12 @@ Evidence and PageLayer have their own debug serialization (`emon-evidence`),
 with the same canonical rules. It is not a public contract — it changes as the
 algorithms do — but it is what fusion tests are written against, and what a
 maintainer reads to answer "why did emon think that". Its version is "1"
-(§8.4.6, D096).
+(§8.4.6, D096). Its arrays are the
+evidence arenas (D056): `glyphs`, `words`, `lines`, `paths`, `images`,
+`components`, `ocrwords` and `spans`, the marked-content spans of the text
+layer (D076, D101: tag, `/MCID`, `/Artifact` class, Type and Subtype,
+`/ActualText`, `/Alt`, `/E`, `/Lang`, the run of glyphs inside, and the Form
+XObject they came from).
 
 ---
 
@@ -567,7 +572,7 @@ Mirroring nome's `kin/src/nome/{lang,test,targets,project}.cljc`:
     to a pixel count.
   * `Px` — raster pixels. Converting `Px` ↔ `Cpt` goes through a named form
     carrying the resolution; there is no implicit mix.
-  * `Fx` — 16.16 fixed point in `I64` (PDF reals, matrices).
+  * `Fx` — fixed point in `I64`, 24 fractional bits (D103: PDF reals, matrices).
   * `Conf` — per-mille confidence.
   * `Bitmap` — opaque host pixel buffer (§7.2).
   * `Src` — an input byte source as kin sees it: a length and byte reads

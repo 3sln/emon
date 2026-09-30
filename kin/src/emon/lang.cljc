@@ -175,7 +175,7 @@
    :zero {:go "0"}})
 
 (def Fx
-  "16.16 fixed point held in an `I64` (PDF reals, matrices; SPEC 6.3)."
+  "Fixed point held in an `I64`, 24 fractional bits (PDF reals, matrices; SPEC 6.3, D103)."
   {:name 'Fx
    :types {:rust "i64" :go "int64" :java "long" :csharp "long"}
    :zero {:go "0"}})

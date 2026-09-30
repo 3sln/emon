@@ -181,14 +181,14 @@ fn main() {
     let mut evidence = String::new();
     let mut unit = |an: &mut Cells, rq: &mut Cells| -> i32 {
         let view = base.view();
-        let (mut g, mut w, mut l, mut p, mut i, mut co, mut ow, mut al, mut et) = (
+        let (mut g, mut w, mut l, mut p, mut i, mut co, mut ow, mut al, mut et, mut sp) = (
             Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(),
-            Cells::new(), Cells::new(), Cells::new(), Cells::new(),
+            Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(),
         );
-        let st = emon::planprobe::pp_unit(&view, an, rq, &mut g, &mut w, &mut l, &mut p, &mut i, &mut co, &mut ow, &mut al, &mut et);
+        let st = emon::planprobe::pp_unit(&view, an, rq, &mut g, &mut w, &mut l, &mut p, &mut i, &mut co, &mut ow, &mut al, &mut et, &mut sp);
         if st == UNIT_DONE {
             evidence.clear();
-            emon::evidence::ev_emit(&mut evidence, 0, &mut g, &mut w, &mut l, &mut p, &mut i, &mut co, &mut ow, &mut al, &mut et);
+            emon::evidence::ev_emit(&mut evidence, 0, &mut g, &mut w, &mut l, &mut p, &mut i, &mut co, &mut ow, &mut al, &mut et, &mut sp);
         }
         st
     };

@@ -1,0 +1,65 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 11 0 R >> /Properties << /MC0 5 0 R >> /XObject << /Fm1 6 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 854 >>
+stream
+BT /F1 10 Tf 20 280 Td
+/P <</MCID 0>> BDC (Hello) Tj EMC
+/Span <</MCID 1 /Lang (en-US) /ActualText (\376\377\000f\000i\000 \000t\000e\000x\000t)>> BDC (A)Tj
+/Artifact BMC (b) Tj EMC (C) Tj EMC
+/Artifact <</Type /Pagination /Subtype /Header>> BDC (Head) Tj EMC
+/Artifact <</Type /Pagination /Subtype /Watermark>> BDC (DRAFT) Tj EMC
+/Artifact <</Type /Layout>> BDC (rule) Tj EMC
+/Artifact <</Type /Background>> BDC (back) Tj EMC
+/Artifact <</Type /Pagination /Subtype /Footer>> BDC (Foot) Tj EMC
+/Artifact <</Type /Page>> BDC (edge) Tj EMC
+/Figure /MC0 BDC (fig) Tj EMC
+/Span /MC9 BDC (lost) Tj EMC
+/Span <</MCID 7 /Alt (\200 bullet) /E (Mister) /Lang (fr)>> BDC (Mr) Tj EMC
+EMC (after) Tj
+/H1 <</MCID 8>> BDC (open) Tj EMC
+/Span <</MCID 10 /ActualText (\357\273\277caf\303\251)>> BDC (cafe) Tj EMC
+ET
+BT /F1 10 Tf 20 100 Td /Div <</MCID 9>> BDC /Fm1 Do ET
+endstream
+endobj
+5 0 obj
+<< /MCID 5 /Alt (A picture) /E (expanded) /Lang (de) >>
+endobj
+6 0 obj
+<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /Font << /F1 11 0 R >> >> /Length 76 >>
+stream
+BT /F1 10 Tf /Span <</MCID 3>> BDC (inform) Tj EMC /Artifact BMC (unt) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000303 00000 n 
+0000001209 00000 n 
+0000001280 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000001496 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+1594
+%%EOF

@@ -29,6 +29,8 @@ DescendantFonts DW DW2 CIDSystemInfo Ordering WMode
 Type0 Type1 MMType1 TrueType Type3 CIDFontType0 CIDFontType2
 WinAnsiEncoding MacRomanEncoding StandardEncoding MacExpertEncoding
 Identity-H Identity-V
+Matrix BBox MCID ActualText Alt E Artifact Pagination Layout Background Watermark Header Footer
+DeviceGray DeviceRGB DeviceCMYK ca
 """.split()
 
 # Keywords the lexer recognises by id (0 is "any other keyword").

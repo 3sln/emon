@@ -1,0 +1,36 @@
+;; What `kin/scripts/content-check` allows, per synthetic document, between the HTML's text and the glyph
+;; text emon makes of the PDF Chrome printed from it. Exact counts (a ratchet: more, or fewer glyphs
+;; than listed, both fail, so an improvement is noticed and recorded). A document not listed allows none.
+;;
+;;   :extras   glyphs the PDF has and the HTML does not say (counted as a multiset of characters)
+;;   :missing  characters the HTML has that no glyph carries
+;;
+;; THE EXTRAS ARE THE PRINTER'S OWN, every one:
+;;   * the running headers, footers and page numbers that the furniture documents draw on every page
+;;     (bank-statement, furn-*, invoice) and the repeated table heads (table-multipage-thead), which the
+;;     HTML says once;
+;;   * the list markers and numbers (footnotes-page's note numbers, lists-*'s `1.` `a.` `IV.`, the ordered
+;;     lists of the script documents) and the page numbers of the multipage tables;
+;;   * the DRAFT watermark.
+;; THE MISSING ARE THE FONT'S: script-devanagari and script-mixed lose the vowel signs and viramas whose
+;; glyphs carry no ToUnicode entry (59 and 8 glyphs are `unknown`, U+FFFD: Skia writes <0000> for the parts
+;; of a conjunct), and script-cjk's HTML says 長 (U+9577) where Chrome's ToUnicode says 長's radical variant
+;; U+2ED1: the file, not emon, decided that.
+{"bank-statement" {:extras 354}
+ "footnotes-page" {:extras 2}
+ "furn-fixed-dom" {:extras 88}
+ "furn-informative" {:extras 180}
+ "furn-odd-even" {:extras 57}
+ "furn-title-pagenum" {:extras 64}
+ "invoice" {:extras 52}
+ "lists-basic" {:extras 12}
+ "lists-long-multipage" {:extras 174}
+ "lists-schemes" {:extras 31}
+ "script-cjk" {:extras 7 :missing 1}
+ "script-devanagari" {:missing 29}
+ "script-hebrew" {:extras 6}
+ "script-mixed" {:missing 7}
+ "table-multipage-no-thead" {:extras 4}
+ "table-multipage-nohead-repeat" {:extras 4}
+ "table-multipage-thead" {:extras 76}
+ "watermark-draft" {:extras 5}}

@@ -137,7 +137,7 @@ len	0041	2
 len	E000	2
 font	fonts/fonts.pdf	23	0	composite	0	0	1	0	-1
 code	82A0	-	unknown	100000
-font	fonts/fonts.pdf	24	0	simple	0	0	0	0	-1
+font	fonts/fonts.pdf	24	0	simple	1000	0	0	0	-1
 code	61	0061	glyphname	50000
 code	62	0062	glyphname	60500
 code	63	-	unknown	-

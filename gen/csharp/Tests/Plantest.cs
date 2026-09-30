@@ -161,9 +161,10 @@ public static class Plantest {
         emon.Port.Cells co = emon.Port.NewCells();
         emon.Port.Cells ow = emon.Port.NewCells();
         emon.Port.Cells al = emon.Port.NewCells();
-        int st = Planprobe.PpUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext);
+        emon.Port.Cells sp = emon.Port.NewCells();
+        int st = Planprobe.PpUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp);
         if (st == Plan.UsDone()) {
-            Evidence.EvEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext);
+            Evidence.EvEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp);
         }
         return st;
     }
