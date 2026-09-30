@@ -228,17 +228,6 @@ public final class Rastertest {
         emon.Testport.assertEq(emon.Port.bitmapU8(m, 0, 0, 0), 0, "a stale 255 is cleared");
         emon.Testport.assertEq(emon.Port.bitmapU8(m, 1, 0, 0), 255, "ink");
     }
-    public static void testARowCopyTakesChannel0OfOneRow() {
-        emon.Port.Bitmap c = emon.Port.bitmapNew(5, 3, 3);
-        emon.Port.Cells dst = emon.Port.newCells();
-        rtFillRamp(c, 3);
-        emon.Port.cellsGrow(dst, 8, -1);
-        emon.Port.bitmapRowCopy(c, 1, dst, 2);
-        emon.Testport.assertEq(emon.Port.cellsAt(dst, 1), -1, "below the offset is untouched");
-        emon.Testport.assertEq(emon.Port.cellsAt(dst, 2), emon.Port.bitmapU8(c, 0, 1, 0), "x = 0");
-        emon.Testport.assertEq(emon.Port.cellsAt(dst, 6), emon.Port.bitmapU8(c, 4, 1, 0), "x = 4");
-        emon.Testport.assertEq(emon.Port.cellsAt(dst, 7), -1, "past the row is untouched");
-    }
     public static void testNextNonzeroFindsTheNextInkOrTheWidth() {
         emon.Port.Bitmap m = emon.Port.bitmapNew(6, 2, 1);
         rtPlot(m, 2, 0);
@@ -293,5 +282,131 @@ public final class Rastertest {
         emon.Testport.assertEq(Raster.rasLabelSkip(m, l2, p2, a2, s2), Raster.rasLabel(m, l1, p1, a1, s1), "components");
         emon.Testport.assertEq(rtSameCells(s1, s2), 1, "stats");
         emon.Testport.assertEq(rtSameCells(l1, l2), 1, "every pixel's final label");
+    }
+    public static int rtRamp19(emon.Port.Bitmap b) {
+        int y = 0;
+        int x = 0;
+        while (y < 3) {
+            x = 0;
+            while (x < 3) {
+                emon.Port.bitmapSetU8(b, x, y, 0, ((y * 3) + x) + 1);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static void testTheIntegralOfA3x3Ramp() {
+        emon.Port.Bitmap g = emon.Port.bitmapNew(3, 3, 1);
+        emon.Port.Cells s = emon.Port.newCells();
+        emon.Port.Cells q = emon.Port.newCells();
+        rtRamp19(g);
+        Raster.rasIntegral(g, s, q);
+        emon.Testport.assertEq(emon.Port.cellsLen(s), 16, "sum cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(q), 16, "square cells");
+        emon.Testport.assertEq(emon.Port.cellsAt(s, 0), 0, "corner");
+        emon.Testport.assertEq(emon.Port.cellsAt(s, 5), 1, "(1,1)");
+        emon.Testport.assertEq(emon.Port.cellsAt(s, 7), 6, "(1,3): the first row");
+        emon.Testport.assertEq(emon.Port.cellsAt(s, 10), 12, "(2,2)");
+        emon.Testport.assertEq(emon.Port.cellsAt(s, 15), 45, "all nine");
+        emon.Testport.assertEq(emon.Port.cellsAt(s, 12), 0, "left column is zero");
+        emon.Testport.assertEq(emon.Port.cellsAt(q, 15), 285, "all nine, squared");
+        emon.Testport.assertEq(emon.Port.cellsAt(q, 10), 46, "(2,2), squared");
+        emon.Testport.assertEq(emon.Port.cellsAt(q, 13), 66, "(3,1), squared");
+    }
+    public static void testTheBulkIntegralEqualsThePerPixelOne() {
+        emon.Port.Bitmap g = emon.Port.bitmapNew(13, 5, 1);
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells q1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        emon.Port.Cells q2 = emon.Port.newCells();
+        rtFillRamp(g, 1);
+        Raster.rasIntegral(g, s1, q1);
+        emon.Port.cellsGrow(s2, 7, 99);
+        Raster.rasIntegralBulk(g, s2, q2);
+        emon.Testport.assertEq(rtSameCells(s1, s2), 1, "sums (and a stale, shorter target)");
+        emon.Testport.assertEq(rtSameCells(q1, q2), 1, "squares");
+    }
+    public static void testTheIntegralWrapsAndTheWindowIsStillExact() {
+        // A white 3000 x 3000 page sums to 255 * 9e6 = 2295000000, past 2^31,
+        // so the last integral cell is that minus 2^32 = -1999967296. Every
+        // window sum is nevertheless exact, so Sauvola sees mean 255, sd 0,
+        // T = 255 - 86 = 169 and no pixel is ink.
+        emon.Port.Bitmap g = emon.Port.bitmapNew(3000, 3000, 1);
+        emon.Port.Bitmap m = emon.Port.bitmapNew(3000, 3000, 1);
+        emon.Port.Cells s = emon.Port.newCells();
+        emon.Port.Cells q = emon.Port.newCells();
+        emon.Port.Cells t = emon.Port.newCells();
+        int x = 0;
+        int y = 0;
+        while (y < 3000) {
+            x = 0;
+            while (x < 3000) {
+                emon.Port.bitmapSetU8(g, x, y, 0, 255);
+                x += 1;
+            }
+            y += 1;
+        }
+        Raster.rasSqrtTable(t);
+        Raster.rasIntegralBulk(g, s, q);
+        emon.Testport.assertEq(emon.Port.cellsLen(s), 9006001, "cells");
+        emon.Testport.assertEq(emon.Port.cellsAt(s, 9006000), -1999967296, "the last sum, wrapped");
+        emon.Testport.assertEq(Raster.rasSauvola(g, s, q, t, m), 0, "no ink on a flat white page");
+    }
+    public static void testTheSqrtTableIsTheFloorOfTheRoot() {
+        emon.Port.Cells t = emon.Port.newCells();
+        Raster.rasSqrtTable(t);
+        emon.Testport.assertEq(emon.Port.cellsLen(t), 65536, "entries");
+        emon.Testport.assertEq(emon.Port.cellsAt(t, 0), 0, "0");
+        emon.Testport.assertEq(emon.Port.cellsAt(t, 1), 1, "1");
+        emon.Testport.assertEq(emon.Port.cellsAt(t, 3), 1, "3");
+        emon.Testport.assertEq(emon.Port.cellsAt(t, 4), 2, "4");
+        emon.Testport.assertEq(emon.Port.cellsAt(t, 16255), 127, "16255");
+        emon.Testport.assertEq(emon.Port.cellsAt(t, 65535), 255, "65535");
+    }
+    public static void testSauvolaKeepsADarkDotOnWhiteAndNothingElse() {
+        // 11x11 of 255 with (5,5) = 0; the window is the whole image: n=121,
+        // mean 252, var 983, sd 31, T = 252 - 64 = 188 (worked in raster.kin).
+        emon.Port.Bitmap g = emon.Port.bitmapNew(11, 11, 1);
+        emon.Port.Bitmap m = emon.Port.bitmapNew(11, 11, 1);
+        emon.Port.Cells s = emon.Port.newCells();
+        emon.Port.Cells q = emon.Port.newCells();
+        emon.Port.Cells t = emon.Port.newCells();
+        int x = 0;
+        int y = 0;
+        while (y < 11) {
+            x = 0;
+            while (x < 11) {
+                emon.Port.bitmapSetU8(g, x, y, 0, 255);
+                x += 1;
+            }
+            y += 1;
+        }
+        emon.Port.bitmapSetU8(g, 5, 5, 0, 0);
+        Raster.rasSqrtTable(t);
+        Raster.rasIntegral(g, s, q);
+        emon.Testport.assertEq(Raster.rasSauvola(g, s, q, t, m), 1, "one ink pixel");
+        emon.Testport.assertEq(emon.Port.bitmapU8(m, 5, 5, 0), 255, "the dot");
+        emon.Testport.assertEq(emon.Port.bitmapU8(m, 4, 5, 0), 0, "its neighbour");
+    }
+    public static void testSauvolaLeavesAFlatLightPageBlank() {
+        emon.Port.Bitmap g = emon.Port.bitmapNew(6, 6, 1);
+        emon.Port.Bitmap m = emon.Port.bitmapNew(6, 6, 1);
+        emon.Port.Cells s = emon.Port.newCells();
+        emon.Port.Cells q = emon.Port.newCells();
+        emon.Port.Cells t = emon.Port.newCells();
+        int x = 0;
+        int y = 0;
+        while (y < 6) {
+            x = 0;
+            while (x < 6) {
+                emon.Port.bitmapSetU8(g, x, y, 0, 200);
+                x += 1;
+            }
+            y += 1;
+        }
+        Raster.rasSqrtTable(t);
+        Raster.rasIntegral(g, s, q);
+        emon.Testport.assertEq(Raster.rasSauvola(g, s, q, t, m), 0, "T = 200 - 67 = 133 < 200");
     }
 }

@@ -240,18 +240,6 @@ fn test_the_bulk_threshold_overwrites_what_was_there() {
     crate::testport::assert_eq(crate::port::bitmap_u8(m, 1, 0, 0), 255, "ink");
 }
 #[test]
-fn test_a_row_copy_takes_channel_0_of_one_row() {
-    let c: &crate::port::Bitmap = &crate::port::bitmap_new(5, 3, 3);
-    let dst: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    rt_fill_ramp(c, 3);
-    crate::port::cells_grow(dst, 8, -1);
-    crate::port::bitmap_row_copy(c, 1, dst, 2);
-    crate::testport::assert_eq(crate::port::cells_at(dst, 1), -1, "below the offset is untouched");
-    crate::testport::assert_eq(crate::port::cells_at(dst, 2), crate::port::bitmap_u8(c, 0, 1, 0), "x = 0");
-    crate::testport::assert_eq(crate::port::cells_at(dst, 6), crate::port::bitmap_u8(c, 4, 1, 0), "x = 4");
-    crate::testport::assert_eq(crate::port::cells_at(dst, 7), -1, "past the row is untouched");
-}
-#[test]
 fn test_next_nonzero_finds_the_next_ink_or_the_width() {
     let m: &crate::port::Bitmap = &crate::port::bitmap_new(6, 2, 1);
     rt_plot(m, 2, 0);
@@ -309,4 +297,136 @@ fn test_label_skip_answers_what_label_answers() {
     crate::testport::assert_eq(ras_label_skip(m, l2, p2, a2, s2), ras_label(m, l1, p1, a1, s1), "components");
     crate::testport::assert_eq(rt_same_cells(s1, s2), 1, "stats");
     crate::testport::assert_eq(rt_same_cells(l1, l2), 1, "every pixel's final label");
+}
+pub(crate) fn rt_ramp_1_9(b: &crate::port::Bitmap) -> i32 {
+    let mut y: i32 = 0;
+    let mut x: i32 = 0;
+    while y < 3 {
+        x = 0;
+        while x < 3 {
+            crate::port::bitmap_set_u8(b, x, y, 0, ((y * 3) + x) + 1);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_the_integral_of_a_3x3_ramp() {
+    let g: &crate::port::Bitmap = &crate::port::bitmap_new(3, 3, 1);
+    let s: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let q: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    rt_ramp_1_9(g);
+    ras_integral(g, s, q);
+    crate::testport::assert_eq(crate::port::cells_len(s), 16, "sum cells");
+    crate::testport::assert_eq(crate::port::cells_len(q), 16, "square cells");
+    crate::testport::assert_eq(crate::port::cells_at(s, 0), 0, "corner");
+    crate::testport::assert_eq(crate::port::cells_at(s, 5), 1, "(1,1)");
+    crate::testport::assert_eq(crate::port::cells_at(s, 7), 6, "(1,3): the first row");
+    crate::testport::assert_eq(crate::port::cells_at(s, 10), 12, "(2,2)");
+    crate::testport::assert_eq(crate::port::cells_at(s, 15), 45, "all nine");
+    crate::testport::assert_eq(crate::port::cells_at(s, 12), 0, "left column is zero");
+    crate::testport::assert_eq(crate::port::cells_at(q, 15), 285, "all nine, squared");
+    crate::testport::assert_eq(crate::port::cells_at(q, 10), 46, "(2,2), squared");
+    crate::testport::assert_eq(crate::port::cells_at(q, 13), 66, "(3,1), squared");
+}
+#[test]
+fn test_the_bulk_integral_equals_the_per_pixel_one() {
+    let g: &crate::port::Bitmap = &crate::port::bitmap_new(13, 5, 1);
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let q1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let q2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    rt_fill_ramp(g, 1);
+    ras_integral(g, s1, q1);
+    crate::port::cells_grow(s2, 7, 99);
+    ras_integral_bulk(g, s2, q2);
+    crate::testport::assert_eq(rt_same_cells(s1, s2), 1, "sums (and a stale, shorter target)");
+    crate::testport::assert_eq(rt_same_cells(q1, q2), 1, "squares");
+}
+#[test]
+fn test_the_integral_wraps_and_the_window_is_still_exact() {
+    // A white 3000 x 3000 page sums to 255 * 9e6 = 2295000000, past 2^31,
+    // so the last integral cell is that minus 2^32 = -1999967296. Every
+    // window sum is nevertheless exact, so Sauvola sees mean 255, sd 0,
+    // T = 255 - 86 = 169 and no pixel is ink.
+    let g: &crate::port::Bitmap = &crate::port::bitmap_new(3000, 3000, 1);
+    let m: &crate::port::Bitmap = &crate::port::bitmap_new(3000, 3000, 1);
+    let s: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let q: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while y < 3000 {
+        x = 0;
+        while x < 3000 {
+            crate::port::bitmap_set_u8(g, x, y, 0, 255);
+            x += 1;
+        }
+        y += 1;
+    }
+    ras_sqrt_table(t);
+    ras_integral_bulk(g, s, q);
+    crate::testport::assert_eq(crate::port::cells_len(s), 9006001, "cells");
+    crate::testport::assert_eq(crate::port::cells_at(s, 9006000), -1999967296, "the last sum, wrapped");
+    crate::testport::assert_eq(ras_sauvola(g, s, q, t, m), 0, "no ink on a flat white page");
+}
+#[test]
+fn test_the_sqrt_table_is_the_floor_of_the_root() {
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ras_sqrt_table(t);
+    crate::testport::assert_eq(crate::port::cells_len(t), 65536, "entries");
+    crate::testport::assert_eq(crate::port::cells_at(t, 0), 0, "0");
+    crate::testport::assert_eq(crate::port::cells_at(t, 1), 1, "1");
+    crate::testport::assert_eq(crate::port::cells_at(t, 3), 1, "3");
+    crate::testport::assert_eq(crate::port::cells_at(t, 4), 2, "4");
+    crate::testport::assert_eq(crate::port::cells_at(t, 16255), 127, "16255");
+    crate::testport::assert_eq(crate::port::cells_at(t, 65535), 255, "65535");
+}
+#[test]
+fn test_sauvola_keeps_a_dark_dot_on_white_and_nothing_else() {
+    // 11x11 of 255 with (5,5) = 0; the window is the whole image: n=121,
+    // mean 252, var 983, sd 31, T = 252 - 64 = 188 (worked in raster.kin).
+    let g: &crate::port::Bitmap = &crate::port::bitmap_new(11, 11, 1);
+    let m: &crate::port::Bitmap = &crate::port::bitmap_new(11, 11, 1);
+    let s: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let q: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while y < 11 {
+        x = 0;
+        while x < 11 {
+            crate::port::bitmap_set_u8(g, x, y, 0, 255);
+            x += 1;
+        }
+        y += 1;
+    }
+    crate::port::bitmap_set_u8(g, 5, 5, 0, 0);
+    ras_sqrt_table(t);
+    ras_integral(g, s, q);
+    crate::testport::assert_eq(ras_sauvola(g, s, q, t, m), 1, "one ink pixel");
+    crate::testport::assert_eq(crate::port::bitmap_u8(m, 5, 5, 0), 255, "the dot");
+    crate::testport::assert_eq(crate::port::bitmap_u8(m, 4, 5, 0), 0, "its neighbour");
+}
+#[test]
+fn test_sauvola_leaves_a_flat_light_page_blank() {
+    let g: &crate::port::Bitmap = &crate::port::bitmap_new(6, 6, 1);
+    let m: &crate::port::Bitmap = &crate::port::bitmap_new(6, 6, 1);
+    let s: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let q: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    while y < 6 {
+        x = 0;
+        while x < 6 {
+            crate::port::bitmap_set_u8(g, x, y, 0, 200);
+            x += 1;
+        }
+        y += 1;
+    }
+    ras_sqrt_table(t);
+    ras_integral(g, s, q);
+    crate::testport::assert_eq(ras_sauvola(g, s, q, t, m), 0, "T = 200 - 67 = 133 < 200");
 }

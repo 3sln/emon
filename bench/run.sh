@@ -4,12 +4,12 @@
 # comparator. NOT part of `bb gates`.
 #
 #     bench/run.sh [N] [port|bulk]        N = iterations, best of (default 10)
-#     python3 bench/report.py             the table, and the equality check
+#     bb bench/report.clj             the table, and the equality check
 #
-# Needs: python3 bench/mkpage.py (once), and the generated code in gen/
+# Needs: bb bench/mkpage.clj (once), and the generated code in gen/
 # (`bb emit`). Release builds: rustc -C opt-level=3, `go build`, `javac` + the
 # JIT, `dotnet -c Release`. Each arm prints `T <phase> <best ms>` lines and one
-# `S <threshold> <stats...>` line; bench/report.py checks every S line agrees.
+# `S <threshold> <stats...>` line; bench/report.clj checks every S line agrees.
 set -e
 cd "$(dirname "$0")/.."
 repo=$(pwd)
@@ -17,10 +17,10 @@ N=${1:-10}
 mode=${2:-port}
 work="$repo/bench/work"
 # PAGE=/abs/other.gray TAG=-clean bench/run.sh ... times another page (made
-# with bench/mkpage.py SRC OUT); results land in results-<mode><TAG>.txt.
+# with bench/mkpage.clj SRC OUT); results land in results-<mode><TAG>.txt.
 page="${PAGE:-$repo/bench/data/page.gray}"
 tag="${TAG:-}"
-[ -f "$page" ] || python3 bench/mkpage.py
+[ -f "$page" ] || bb bench/mkpage.clj
 read -r W H < "$page.size"
 mkdir -p "$work"
 out="$work/results-$mode$tag.txt"

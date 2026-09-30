@@ -278,16 +278,39 @@ pub fn bitmap_next_nonzero(b: &Bitmap, x: i32, y: i32) -> i32 {
     b.w
 }
 
-// @kin:link:form:bitmap-row-copy: {:template "crate::port::bitmap_row_copy({0}, {1}, {2}, {3})" :arity 4}
+// @kin:link:form:bitmap-integral: {:template "crate::port::bitmap_integral({0}, {1}, {2})" :arity 3}
 //
-// Copies channel 0 of row `y` into `dst[off .. off + w]` (which must exist),
-// one byte per cell.
-pub fn bitmap_row_copy(b: &Bitmap, y: i32, dst: &mut Cells, off: i32) {
-    let (w, ch) = (b.w as usize, b.ch as usize);
-    let s = y as usize * b.stride as usize;
-    let o = off as usize;
-    for x in 0..w {
-        dst.v[o + x] = b.d[s + x * ch].get() as i32;
+// Sets `sum` and `sq` to the INTEGRAL IMAGES of channel 0 and of its square:
+// exactly (w+1)*(h+1) cells each (row-major, a zero row and a zero column
+// first), holding the LOW 32 BITS of the running sums (wrapping). A window sum
+// is the four-corner difference, taken in 64 bits and truncated; it is exact
+// whenever the true sum is below 2^31.
+pub fn bitmap_integral(b: &Bitmap, sum: &mut Cells, sq: &mut Cells) {
+    let (w, h, ch, stride) = (b.w as usize, b.h as usize, b.ch as usize, b.stride as usize);
+    let w1 = w + 1;
+    let n = w1 * (h + 1);
+    // Only row 0 and column 0 need zeroing: every other cell is written below.
+    sum.v.resize(n, 0);
+    sum.v.truncate(n);
+    sq.v.resize(n, 0);
+    sq.v.truncate(n);
+    sum.v[..w1].fill(0);
+    sq.v[..w1].fill(0);
+    for y in 0..h {
+        let row = &b.d[y * stride..y * stride + w * ch];
+        let (mut rs, mut rq) = (0i32, 0i32);
+        let (above_s, below_s) = sum.v.split_at_mut((y + 1) * w1);
+        let (above_q, below_q) = sq.v.split_at_mut((y + 1) * w1);
+        let (ps, pq) = (&above_s[y * w1..], &above_q[y * w1..]);
+        below_s[0] = 0;
+        below_q[0] = 0;
+        for x in 0..w {
+            let v = row[x * ch].get() as i32;
+            rs += v;
+            rq += v * v;
+            below_s[x + 1] = ps[x + 1].wrapping_add(rs);
+            below_q[x + 1] = pq[x + 1].wrapping_add(rq);
+        }
     }
 }
 

@@ -246,14 +246,38 @@ public final class Port {
         return b.w;
     }
 
-    // @kin:link:form:bitmap-row-copy: {:template "emon.Port.bitmapRowCopy({0}, {1}, {2}, {3})" :arity 4}
-    public static void bitmapRowCopy(Bitmap b, int y, Cells dst, int off) {
-        if (off < 0 || off + b.w > dst.n) {
-            throw new IndexOutOfBoundsException();
+    // @kin:link:form:bitmap-integral: {:template "emon.Port.bitmapIntegral({0}, {1}, {2})" :arity 3}
+    public static void bitmapIntegral(Bitmap b, Cells sum, Cells sq) {
+        int w1 = b.w + 1;
+        int n = w1 * (b.h + 1);
+        // Only row 0 and column 0 need zeroing: every other cell is written below.
+        if (sum.v.length < n) {
+            sum.v = new int[n];
         }
-        int s = y * b.stride;
-        for (int x = 0; x < b.w; x++) {
-            dst.v[off + x] = b.d[s + x * b.ch] & 0xFF;
+        sum.n = n;
+        if (sq.v.length < n) {
+            sq.v = new int[n];
+        }
+        sq.n = n;
+        int[] s = sum.v, q = sq.v;
+        byte[] d = b.d;
+        for (int x = 0; x < w1; x++) {
+            s[x] = 0;
+            q[x] = 0;
+        }
+        for (int y = 0; y < b.h; y++) {
+            s[(y + 1) * w1] = 0;
+            q[(y + 1) * w1] = 0;
+            int rs = 0, rq = 0;
+            int src = y * b.stride;
+            int p = y * w1 + 1, c = (y + 1) * w1 + 1;
+            for (int x = 0; x < b.w; x++) {
+                int v = d[src + x * b.ch] & 0xFF;
+                rs += v;
+                rq += v * v;
+                s[c + x] = s[p + x] + rs;
+                q[c + x] = q[p + x] + rq;
+            }
         }
     }
 

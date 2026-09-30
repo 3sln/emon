@@ -181,6 +181,81 @@ fn label(
     ncomp
 }
 
+// ---- Sauvola over integral images (SPEC 8.2.1), integer arithmetic ---------
+// The integral images hold the LOW 32 BITS of the running sums (wrapping):
+// a window sum is a difference of four and is below 2^31, so it is exact.
+const SAUV_K: i64 = 87; // k = 0.34 in 1/256
+const SAUV_R: i32 = 15; // window radius: 31 x 31
+
+fn sqrt_table() -> Vec<i32> {
+    let mut t = Vec::with_capacity(65536);
+    let mut k = 0i32;
+    for i in 0..65536i32 {
+        while (k + 1) * (k + 1) <= i {
+            k += 1;
+        }
+        t.push(k);
+    }
+    t
+}
+
+fn integral(g: &[u8], w: usize, h: usize, isum: &mut Vec<i32>, isq: &mut Vec<i32>) {
+    let w1 = w + 1;
+    isum.clear();
+    isq.clear();
+    isum.resize(w1, 0);
+    isq.resize(w1, 0);
+    for y in 0..h {
+        isum.push(0);
+        isq.push(0);
+        let (mut rs, mut rq) = (0i32, 0i32);
+        for x in 0..w {
+            let v = g[y * w + x] as i32;
+            rs += v;
+            rq += v * v;
+            let i = isum.len();
+            let a = isum[i - w1];
+            let b = isq[i - w1];
+            isum.push(a.wrapping_add(rs));
+            isq.push(b.wrapping_add(rq));
+        }
+    }
+}
+
+fn sauvola(g: &[u8], w: usize, h: usize, isum: &[i32], isq: &[i32], sq: &[i32], m: &mut [u8]) -> i32 {
+    let w1 = w + 1;
+    let r = SAUV_R as usize;
+    let mut ink = 0;
+    for y in 0..h {
+        let y0 = y.saturating_sub(r);
+        let y1 = (y + r + 1).min(h);
+        for x in 0..w {
+            let x0 = x.saturating_sub(r);
+            let x1 = (x + r + 1).min(w);
+            let n = ((x1 - x0) * (y1 - y0)) as i32;
+            let s = isum[y1 * w1 + x1]
+                .wrapping_sub(isum[y0 * w1 + x1])
+                .wrapping_sub(isum[y1 * w1 + x0])
+                .wrapping_add(isum[y0 * w1 + x0]);
+            let q = isq[y1 * w1 + x1]
+                .wrapping_sub(isq[y0 * w1 + x1])
+                .wrapping_sub(isq[y1 * w1 + x0])
+                .wrapping_add(isq[y0 * w1 + x0]);
+            let mean = s / n;
+            let var = q / n - mean * mean;
+            let std = sq[var as usize];
+            let t = mean + ((mean as i64 * SAUV_K * (2 * std as i64 - 256)) / 65536) as i32;
+            if (g[y * w + x] as i32) < t {
+                m[y * w + x] = 255;
+                ink += 1;
+            } else {
+                m[y * w + x] = 0;
+            }
+        }
+    }
+    ink
+}
+
 fn ms(a: Instant, b: Instant) -> f64 {
     b.duration_since(a).as_secs_f64() * 1000.0
 }
@@ -194,9 +269,13 @@ fn main() {
     assert_eq!(g.len(), w * h);
     let mut hist = [0i32; 256];
     let mut m = vec![0u8; w * h];
+    let mut m2 = vec![0u8; w * h];
     let mut labels: Vec<i32> = Vec::new();
     let (mut parent, mut area, mut stats) = (Vec::new(), Vec::new(), Vec::new());
-    let mut best = [f64::MAX; 6];
+    let (mut isum, mut isq): (Vec<i32>, Vec<i32>) = (Vec::new(), Vec::new());
+    let (mut stats2, mut ink2) = (Vec::new(), 0);
+    let sqt = sqrt_table();
+    let mut best = [f64::MAX; 11];
     let mut thr = 0;
     for _ in 0..n {
         let t0 = Instant::now();
@@ -211,17 +290,30 @@ fn main() {
         let t4 = Instant::now();
         label(&m, w, h, &mut labels, &mut parent, &mut area, &mut stats);
         let t5 = Instant::now();
-        let ph = [ms(t0, t1), ms(t1, t2), ms(t2, t3), ms(t3, t4), ms(t4, t5), ms(t0, t5)];
-        for k in 0..6 {
+        // the Sauvola pipeline
+        integral(&g, w, h, &mut isum, &mut isq);
+        let t6 = Instant::now();
+        ink2 = sauvola(&g, w, h, &isum, &isq, &sqt, &mut m2);
+        let t7 = Instant::now();
+        labels.clear();
+        labels.resize(w * h, 0);
+        let t8 = Instant::now();
+        label(&m2, w, h, &mut labels, &mut parent, &mut area, &mut stats2);
+        let t9 = Instant::now();
+        let ph = [ms(t0, t1), ms(t1, t2), ms(t2, t3), ms(t3, t4), ms(t4, t5), ms(t0, t5),
+                  ms(t5, t6), ms(t6, t7), ms(t7, t8), ms(t8, t9), ms(t5, t9)];
+        for k in 0..11 {
             if ph[k] < best[k] {
                 best[k] = ph[k];
             }
         }
     }
-    let names = ["hist", "otsu", "bin", "alloc", "label", "total"];
-    for k in 0..6 {
+    let names = ["hist", "otsu", "bin", "alloc", "label", "total", "integ", "sauv", "alloc2", "label2", "total2"];
+    for k in 0..11 {
         println!("T {} {:.3}", names[k], best[k]);
     }
     let s: Vec<String> = stats.iter().map(|x| x.to_string()).collect();
     println!("S {} {}", thr, s.join(" "));
+    let s2: Vec<String> = stats2.iter().map(|x| x.to_string()).collect();
+    println!("S2 {} {}", ink2, s2.join(" "));
 }

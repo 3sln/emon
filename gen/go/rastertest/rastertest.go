@@ -248,18 +248,6 @@ func TestTheBulkThresholdOverwritesWhatWasThere(emonT *testing.T) {
 	port.AssertEq(emonT, port.BitmapU8(m, 1, 0, 0), 255, "ink")
 }
 
-func TestARowCopyTakesChannel0OfOneRow(emonT *testing.T) {
-	var c *port.Bitmap = port.BitmapNew(5, 3, 3)
-	var dst *port.Cells = port.NewCells()
-	rtFillRamp(c, 3)
-	port.CellsGrow(dst, 8, -1)
-	port.BitmapRowCopy(c, 1, dst, 2)
-	port.AssertEq(emonT, port.CellsAt(dst, 1), -1, "below the offset is untouched")
-	port.AssertEq(emonT, port.CellsAt(dst, 2), port.BitmapU8(c, 0, 1, 0), "x = 0")
-	port.AssertEq(emonT, port.CellsAt(dst, 6), port.BitmapU8(c, 4, 1, 0), "x = 4")
-	port.AssertEq(emonT, port.CellsAt(dst, 7), -1, "past the row is untouched")
-}
-
 func TestNextNonzeroFindsTheNextInkOrTheWidth(emonT *testing.T) {
 	var m *port.Bitmap = port.BitmapNew(6, 2, 1)
 	rtPlot(m, 2, 0)
@@ -317,4 +305,137 @@ func TestLabelSkipAnswersWhatLabelAnswers(emonT *testing.T) {
 	port.AssertEq(emonT, raster.RasLabelSkip(m, l2, p2, a2, s2), raster.RasLabel(m, l1, p1, a1, s1), "components")
 	port.AssertEq(emonT, rtSameCells(s1, s2), 1, "stats")
 	port.AssertEq(emonT, rtSameCells(l1, l2), 1, "every pixel's final label")
+}
+
+func rtRamp19(b *port.Bitmap) int32 {
+	var y int32 = 0
+	var x int32 = 0
+	for y < 3 {
+		x = 0
+		for x < 3 {
+			port.BitmapSetU8(b, x, y, 0, ((y*3)+x)+1)
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func TestTheIntegralOfA3x3Ramp(emonT *testing.T) {
+	var g *port.Bitmap = port.BitmapNew(3, 3, 1)
+	var s *port.Cells = port.NewCells()
+	var q *port.Cells = port.NewCells()
+	rtRamp19(g)
+	raster.RasIntegral(g, s, q)
+	port.AssertEq(emonT, port.CellsLen(s), 16, "sum cells")
+	port.AssertEq(emonT, port.CellsLen(q), 16, "square cells")
+	port.AssertEq(emonT, port.CellsAt(s, 0), 0, "corner")
+	port.AssertEq(emonT, port.CellsAt(s, 5), 1, "(1,1)")
+	port.AssertEq(emonT, port.CellsAt(s, 7), 6, "(1,3): the first row")
+	port.AssertEq(emonT, port.CellsAt(s, 10), 12, "(2,2)")
+	port.AssertEq(emonT, port.CellsAt(s, 15), 45, "all nine")
+	port.AssertEq(emonT, port.CellsAt(s, 12), 0, "left column is zero")
+	port.AssertEq(emonT, port.CellsAt(q, 15), 285, "all nine, squared")
+	port.AssertEq(emonT, port.CellsAt(q, 10), 46, "(2,2), squared")
+	port.AssertEq(emonT, port.CellsAt(q, 13), 66, "(3,1), squared")
+}
+
+func TestTheBulkIntegralEqualsThePerPixelOne(emonT *testing.T) {
+	var g *port.Bitmap = port.BitmapNew(13, 5, 1)
+	var s1 *port.Cells = port.NewCells()
+	var q1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	var q2 *port.Cells = port.NewCells()
+	rtFillRamp(g, 1)
+	raster.RasIntegral(g, s1, q1)
+	port.CellsGrow(s2, 7, 99)
+	raster.RasIntegralBulk(g, s2, q2)
+	port.AssertEq(emonT, rtSameCells(s1, s2), 1, "sums (and a stale, shorter target)")
+	port.AssertEq(emonT, rtSameCells(q1, q2), 1, "squares")
+}
+
+func TestTheIntegralWrapsAndTheWindowIsStillExact(emonT *testing.T) {
+	// A white 3000 x 3000 page sums to 255 * 9e6 = 2295000000, past 2^31,
+	// so the last integral cell is that minus 2^32 = -1999967296. Every
+	// window sum is nevertheless exact, so Sauvola sees mean 255, sd 0,
+	// T = 255 - 86 = 169 and no pixel is ink.
+	var g *port.Bitmap = port.BitmapNew(3000, 3000, 1)
+	var m *port.Bitmap = port.BitmapNew(3000, 3000, 1)
+	var s *port.Cells = port.NewCells()
+	var q *port.Cells = port.NewCells()
+	var t *port.Cells = port.NewCells()
+	var x int32 = 0
+	var y int32 = 0
+	for y < 3000 {
+		x = 0
+		for x < 3000 {
+			port.BitmapSetU8(g, x, y, 0, 255)
+			x += 1
+		}
+		y += 1
+	}
+	raster.RasSqrtTable(t)
+	raster.RasIntegralBulk(g, s, q)
+	port.AssertEq(emonT, port.CellsLen(s), 9006001, "cells")
+	port.AssertEq(emonT, port.CellsAt(s, 9006000), -1999967296, "the last sum, wrapped")
+	port.AssertEq(emonT, raster.RasSauvola(g, s, q, t, m), 0, "no ink on a flat white page")
+}
+
+func TestTheSqrtTableIsTheFloorOfTheRoot(emonT *testing.T) {
+	var t *port.Cells = port.NewCells()
+	raster.RasSqrtTable(t)
+	port.AssertEq(emonT, port.CellsLen(t), 65536, "entries")
+	port.AssertEq(emonT, port.CellsAt(t, 0), 0, "0")
+	port.AssertEq(emonT, port.CellsAt(t, 1), 1, "1")
+	port.AssertEq(emonT, port.CellsAt(t, 3), 1, "3")
+	port.AssertEq(emonT, port.CellsAt(t, 4), 2, "4")
+	port.AssertEq(emonT, port.CellsAt(t, 16255), 127, "16255")
+	port.AssertEq(emonT, port.CellsAt(t, 65535), 255, "65535")
+}
+
+func TestSauvolaKeepsADarkDotOnWhiteAndNothingElse(emonT *testing.T) {
+	// 11x11 of 255 with (5,5) = 0; the window is the whole image: n=121,
+	// mean 252, var 983, sd 31, T = 252 - 64 = 188 (worked in raster.kin).
+	var g *port.Bitmap = port.BitmapNew(11, 11, 1)
+	var m *port.Bitmap = port.BitmapNew(11, 11, 1)
+	var s *port.Cells = port.NewCells()
+	var q *port.Cells = port.NewCells()
+	var t *port.Cells = port.NewCells()
+	var x int32 = 0
+	var y int32 = 0
+	for y < 11 {
+		x = 0
+		for x < 11 {
+			port.BitmapSetU8(g, x, y, 0, 255)
+			x += 1
+		}
+		y += 1
+	}
+	port.BitmapSetU8(g, 5, 5, 0, 0)
+	raster.RasSqrtTable(t)
+	raster.RasIntegral(g, s, q)
+	port.AssertEq(emonT, raster.RasSauvola(g, s, q, t, m), 1, "one ink pixel")
+	port.AssertEq(emonT, port.BitmapU8(m, 5, 5, 0), 255, "the dot")
+	port.AssertEq(emonT, port.BitmapU8(m, 4, 5, 0), 0, "its neighbour")
+}
+
+func TestSauvolaLeavesAFlatLightPageBlank(emonT *testing.T) {
+	var g *port.Bitmap = port.BitmapNew(6, 6, 1)
+	var m *port.Bitmap = port.BitmapNew(6, 6, 1)
+	var s *port.Cells = port.NewCells()
+	var q *port.Cells = port.NewCells()
+	var t *port.Cells = port.NewCells()
+	var x int32 = 0
+	var y int32 = 0
+	for y < 6 {
+		x = 0
+		for x < 6 {
+			port.BitmapSetU8(g, x, y, 0, 200)
+			x += 1
+		}
+		y += 1
+	}
+	raster.RasSqrtTable(t)
+	raster.RasIntegral(g, s, q)
+	port.AssertEq(emonT, raster.RasSauvola(g, s, q, t, m), 0, "T = 200 - 67 = 133 < 200")
 }

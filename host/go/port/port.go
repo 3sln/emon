@@ -232,11 +232,36 @@ func BitmapNextNonzero(b *Bitmap, x, y int32) int32 {
 	return b.W
 }
 
-// @kin:link:form:bitmap-row-copy: {:template "port.BitmapRowCopy({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
-func BitmapRowCopy(b *Bitmap, y int32, dst *Cells, off int32) {
-	s := y * b.Stride
-	for x := int32(0); x < b.W; x++ {
-		dst.V[off+x] = int32(b.D[s+x*b.Ch])
+// @kin:link:form:bitmap-integral: {:template "port.BitmapIntegral({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapIntegral(b *Bitmap, sum *Cells, sq *Cells) {
+	w, h, ch, stride := int(b.W), int(b.H), int(b.Ch), int(b.Stride)
+	w1 := w + 1
+	n := w1 * (h + 1)
+	// Only row 0 and column 0 need zeroing: every other cell is written below.
+	if cap(sum.V) < n {
+		sum.V = make([]int32, n)
+	}
+	sum.V = sum.V[:n]
+	if cap(sq.V) < n {
+		sq.V = make([]int32, n)
+	}
+	sq.V = sq.V[:n]
+	for x := 0; x < w1; x++ {
+		sum.V[x], sq.V[x] = 0, 0
+	}
+	for y := 0; y < h; y++ {
+		row := b.D[y*stride : y*stride+w*ch]
+		ps, pq := sum.V[y*w1:(y+1)*w1], sq.V[y*w1:(y+1)*w1]
+		cs, cq := sum.V[(y+1)*w1:(y+2)*w1], sq.V[(y+1)*w1:(y+2)*w1]
+		cs[0], cq[0] = 0, 0
+		var rs, rq int32
+		for x := 0; x < w; x++ {
+			v := int32(row[x*ch])
+			rs += v
+			rq += v * v
+			cs[x+1] = ps[x+1] + rs
+			cq[x+1] = pq[x+1] + rq
+		}
 	}
 }
 

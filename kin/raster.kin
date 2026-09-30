@@ -25,7 +25,8 @@
   (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32 add64 mul64 shr64]]
             [emon.port :refer [bitmap-w bitmap-h bitmap-u8 bitmap-set-u8
                                cells-len cells-at cells-set cells-push
-                               cells-drop cells-grow bitmap-histogram bitmap-threshold-into bitmap-next-nonzero]]
+                               cells-drop cells-grow bitmap-histogram bitmap-threshold-into bitmap-next-nonzero
+                               bitmap-integral]]
             [kin.lang :refer [defn defconst return let set while if comment do
                               + - * < > <= >= == != quot]]))
 
@@ -361,3 +362,139 @@
     (cells-push stats (i32 (shr64 sq 32)))
     (cells-push stats (i32 sq))
     (return ncomp)))
+
+;; ------------------------------------------- Sauvola over integral images
+;;
+;; SPEC 8.2.1's adaptive binarisation, in integer arithmetic: T = m + m*k*(s/R
+;; - 1) with k = 87/256 (0.34) and R = 128, m and s the mean and standard
+;; deviation over a (2r+1)^2 window, clipped at the border. The window sums are
+;; four reads of an INTEGRAL IMAGE, so the cost is per-pixel reads of `Cells`
+;; rather than of the bitmap: the workload the path tracer's normaliser is.
+;;
+;; THE INTEGRAL IMAGES HOLD THE LOW 32 BITS of the running sums, (w+1)*(h+1)
+;; cells each with a zero row and column first. Differences of wrapped values
+;; are congruent to the true window sum mod 2^32 and the true sum is below
+;; 2^31, so four reads recover it exactly on every target (the sum is taken in
+;; 64 bits and truncated; no 32-bit addition ever overflows).
+
+(defconst ^I32 SAUV_R 15)
+(defconst ^I32 SAUV_K 87)
+
+(defn ^:pub ^I32 ras-sqrt-table [^:mut ^Cells t]
+  (comment "t[i] = floor(sqrt(i)) for i in 0..65535: a variance is at most")
+  (comment "about 255^2 / 4, and the table spares a square root per pixel.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (cells-drop t 0)
+    (while (< i 65536)
+      (do (while (<= (* (+ k 1) (+ k 1)) i)
+            (set k (+ k 1)))
+          (cells-push t k)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ras-integral [^Bitmap g ^:mut ^Cells isum ^:mut ^Cells isq]
+  (comment "Integral images of the pixel and of its square, per-pixel reads.")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^I32 w1 (+ (bitmap-w g) 1)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 rs 0
+        ^:mut ^I32 rq 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0]
+    (cells-drop isum 0)
+    (cells-drop isq 0)
+    (cells-grow isum w1 0)
+    (cells-grow isq w1 0)
+    (while (< y h)
+      (do (cells-push isum 0)
+          (cells-push isq 0)
+          (set rs 0)
+          (set rq 0)
+          (set x 0)
+          (while (< x w)
+            (do (set v (bitmap-u8 g x y 0))
+                (set rs (+ rs v))
+                (set rq (+ rq (* v v)))
+                (set i (cells-len isum))
+                (set a (cells-at isum (- i w1)))
+                (set b (cells-at isq (- i w1)))
+                (cells-push isum (i32 (+ (i64 a) (i64 rs))))
+                (cells-push isq (i32 (+ (i64 b) (i64 rq))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 ras-win [^:mut ^Cells c ^I32 w1 ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "The window sum from four reads of an integral image (see above).")
+  (let [^:mut ^I64 s 0
+        ^:mut ^I32 p 0]
+    (set p (cells-at c (+ (* y1 w1) x1)))
+    (set s (i64 p))
+    (set p (cells-at c (+ (* y0 w1) x1)))
+    (set s (- s (i64 p)))
+    (set p (cells-at c (+ (* y1 w1) x0)))
+    (set s (- s (i64 p)))
+    (set p (cells-at c (+ (* y0 w1) x0)))
+    (set s (+ s (i64 p)))
+    (return (i32 s))))
+
+(defn ^:pub ^I32 ras-sauvola [^Bitmap g ^:mut ^Cells isum ^:mut ^Cells isq
+                              ^:mut ^Cells sq ^Bitmap m]
+  (comment "mask = 255 where the pixel < the Sauvola threshold. Answers the")
+  (comment "ink count. `sq` is `ras-sqrt-table`'s.")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^I32 w1 (+ (bitmap-w g) 1)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 mean 0
+        ^:mut ^I32 vr 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 thr 0
+        ^:mut ^I32 ink 0]
+    (while (< y h)
+      (do (set y0 (- y SAUV_R))
+          (if (< y0 0)
+            (set y0 0))
+          (set y1 (+ (+ y SAUV_R) 1))
+          (if (> y1 h)
+            (set y1 h))
+          (set x 0)
+          (while (< x w)
+            (do (set x0 (- x SAUV_R))
+                (if (< x0 0)
+                  (set x0 0))
+                (set x1 (+ (+ x SAUV_R) 1))
+                (if (> x1 w)
+                  (set x1 w))
+                (set n (* (- x1 x0) (- y1 y0)))
+                (set s (ras-win isum w1 x0 y0 x1 y1))
+                (set q (ras-win isq w1 x0 y0 x1 y1))
+                (set mean (quot s n))
+                (set vr (- (quot q n) (* mean mean)))
+                (set sd (cells-at sq vr))
+                (set thr (+ mean (i32 (quot (* (* (i64 mean) (i64 SAUV_K)) (i64 (- (* 2 sd) 256))) 65536))))
+                (if (< (bitmap-u8 g x y 0) thr)
+                  (do (bitmap-set-u8 m x y 0 255)
+                      (set ink (+ ink 1)))
+                  (bitmap-set-u8 m x y 0 0))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return ink)))
+
+(defn ^:pub ^I32 ras-integral-bulk [^Bitmap g ^:mut ^Cells isum ^:mut ^Cells isq]
+  (comment "`ras-integral` as one host call.")
+  (bitmap-integral g isum isq)
+  (return 0))

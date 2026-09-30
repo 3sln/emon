@@ -376,4 +376,136 @@ public final class Raster {
         emon.Port.cellsPush(stats, (int) sq);
         return ncomp;
     }
+    public static final int SAUV_R = 15;
+    public static final int SAUV_K = 87;
+    public static int rasSqrtTable(emon.Port.Cells t) {
+        // t[i] = floor(sqrt(i)) for i in 0..65535: a variance is at most
+        // about 255^2 / 4, and the table spares a square root per pixel.
+        int i = 0;
+        int k = 0;
+        emon.Port.cellsDrop(t, 0);
+        while (i < 65536) {
+            while (((k + 1) * (k + 1)) <= i) {
+                k += 1;
+            }
+            emon.Port.cellsPush(t, k);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int rasIntegral(emon.Port.Bitmap g, emon.Port.Cells isum, emon.Port.Cells isq) {
+        // Integral images of the pixel and of its square, per-pixel reads.
+        int w = emon.Port.bitmapW(g);
+        int h = emon.Port.bitmapH(g);
+        int w1 = emon.Port.bitmapW(g) + 1;
+        int x = 0;
+        int y = 0;
+        int v = 0;
+        int rs = 0;
+        int rq = 0;
+        int i = 0;
+        int a = 0;
+        int b = 0;
+        emon.Port.cellsDrop(isum, 0);
+        emon.Port.cellsDrop(isq, 0);
+        emon.Port.cellsGrow(isum, w1, 0);
+        emon.Port.cellsGrow(isq, w1, 0);
+        while (y < h) {
+            emon.Port.cellsPush(isum, 0);
+            emon.Port.cellsPush(isq, 0);
+            rs = 0;
+            rq = 0;
+            x = 0;
+            while (x < w) {
+                v = emon.Port.bitmapU8(g, x, y, 0);
+                rs += v;
+                rq += v * v;
+                i = emon.Port.cellsLen(isum);
+                a = emon.Port.cellsAt(isum, i - w1);
+                b = emon.Port.cellsAt(isq, i - w1);
+                emon.Port.cellsPush(isum, (int) (((long) a) + ((long) rs)));
+                emon.Port.cellsPush(isq, (int) (((long) b) + ((long) rq)));
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int rasWin(emon.Port.Cells c, int w1, int x0, int y0, int x1, int y1) {
+        // The window sum from four reads of an integral image (see above).
+        long s = 0;
+        int p = 0;
+        p = emon.Port.cellsAt(c, (y1 * w1) + x1);
+        s = (long) p;
+        p = emon.Port.cellsAt(c, (y0 * w1) + x1);
+        s -= (long) p;
+        p = emon.Port.cellsAt(c, (y1 * w1) + x0);
+        s -= (long) p;
+        p = emon.Port.cellsAt(c, (y0 * w1) + x0);
+        s += (long) p;
+        return (int) s;
+    }
+    public static int rasSauvola(emon.Port.Bitmap g, emon.Port.Cells isum, emon.Port.Cells isq, emon.Port.Cells sq, emon.Port.Bitmap m) {
+        // mask = 255 where the pixel < the Sauvola threshold. Answers the
+        // ink count. `sq` is `ras-sqrt-table`'s.
+        int w = emon.Port.bitmapW(g);
+        int h = emon.Port.bitmapH(g);
+        int w1 = emon.Port.bitmapW(g) + 1;
+        int x = 0;
+        int y = 0;
+        int x0 = 0;
+        int x1 = 0;
+        int y0 = 0;
+        int y1 = 0;
+        int n = 0;
+        int s = 0;
+        int q = 0;
+        int mean = 0;
+        int vr = 0;
+        int sd = 0;
+        int thr = 0;
+        int ink = 0;
+        while (y < h) {
+            y0 = y - SAUV_R;
+            if (y0 < 0) {
+                y0 = 0;
+            }
+            y1 = (y + SAUV_R) + 1;
+            if (y1 > h) {
+                y1 = h;
+            }
+            x = 0;
+            while (x < w) {
+                x0 = x - SAUV_R;
+                if (x0 < 0) {
+                    x0 = 0;
+                }
+                x1 = (x + SAUV_R) + 1;
+                if (x1 > w) {
+                    x1 = w;
+                }
+                n = (x1 - x0) * (y1 - y0);
+                s = rasWin(isum, w1, x0, y0, x1, y1);
+                q = rasWin(isq, w1, x0, y0, x1, y1);
+                mean = s / n;
+                vr = (q / n) - (mean * mean);
+                sd = emon.Port.cellsAt(sq, vr);
+                thr = mean + ((int) (((((long) mean) * ((long) SAUV_K)) * ((long) ((2 * sd) - 256))) / 65536));
+                if (emon.Port.bitmapU8(g, x, y, 0) < thr) {
+                    emon.Port.bitmapSetU8(m, x, y, 0, 255);
+                    ink += 1;
+                } else {
+                    emon.Port.bitmapSetU8(m, x, y, 0, 0);
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+        return ink;
+    }
+    public static int rasIntegralBulk(emon.Port.Bitmap g, emon.Port.Cells isum, emon.Port.Cells isq) {
+        // `ras-integral` as one host call.
+        emon.Port.bitmapIntegral(g, isum, isq);
+        return 0;
+    }
 }

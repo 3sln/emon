@@ -390,3 +390,142 @@ func RasLabelSkip(m *port.Bitmap, labels *port.Cells, parent *port.Cells, area *
 	port.CellsPush(stats, int32(sq))
 	return ncomp
 }
+
+const sauvR int32 = 15
+
+const sauvK int32 = 87
+
+func RasSqrtTable(t *port.Cells) int32 {
+	// t[i] = floor(sqrt(i)) for i in 0..65535: a variance is at most
+	// about 255^2 / 4, and the table spares a square root per pixel.
+	var i int32 = 0
+	var k int32 = 0
+	port.CellsDrop(t, 0)
+	for i < 65536 {
+		for ((k + 1) * (k + 1)) <= i {
+			k += 1
+		}
+		port.CellsPush(t, k)
+		i += 1
+	}
+	return 0
+}
+
+func RasIntegral(g *port.Bitmap, isum *port.Cells, isq *port.Cells) int32 {
+	// Integral images of the pixel and of its square, per-pixel reads.
+	var w int32 = port.BitmapW(g)
+	var h int32 = port.BitmapH(g)
+	var w1 int32 = port.BitmapW(g) + 1
+	var x int32 = 0
+	var y int32 = 0
+	var v int32 = 0
+	var rs int32 = 0
+	var rq int32 = 0
+	var i int32 = 0
+	var a int32 = 0
+	var b int32 = 0
+	port.CellsDrop(isum, 0)
+	port.CellsDrop(isq, 0)
+	port.CellsGrow(isum, w1, 0)
+	port.CellsGrow(isq, w1, 0)
+	for y < h {
+		port.CellsPush(isum, 0)
+		port.CellsPush(isq, 0)
+		rs = 0
+		rq = 0
+		x = 0
+		for x < w {
+			v = port.BitmapU8(g, x, y, 0)
+			rs += v
+			rq += v * v
+			i = port.CellsLen(isum)
+			a = port.CellsAt(isum, i-w1)
+			b = port.CellsAt(isq, i-w1)
+			port.CellsPush(isum, int32(int64(a)+int64(rs)))
+			port.CellsPush(isq, int32(int64(b)+int64(rq)))
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func rasWin(c *port.Cells, w1 int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// The window sum from four reads of an integral image (see above).
+	var s int64 = 0
+	var p int32 = 0
+	p = port.CellsAt(c, (y1*w1)+x1)
+	s = int64(p)
+	p = port.CellsAt(c, (y0*w1)+x1)
+	s -= int64(p)
+	p = port.CellsAt(c, (y1*w1)+x0)
+	s -= int64(p)
+	p = port.CellsAt(c, (y0*w1)+x0)
+	s += int64(p)
+	return int32(s)
+}
+
+func RasSauvola(g *port.Bitmap, isum *port.Cells, isq *port.Cells, sq *port.Cells, m *port.Bitmap) int32 {
+	// mask = 255 where the pixel < the Sauvola threshold. Answers the
+	// ink count. `sq` is `ras-sqrt-table`'s.
+	var w int32 = port.BitmapW(g)
+	var h int32 = port.BitmapH(g)
+	var w1 int32 = port.BitmapW(g) + 1
+	var x int32 = 0
+	var y int32 = 0
+	var x0 int32 = 0
+	var x1 int32 = 0
+	var y0 int32 = 0
+	var y1 int32 = 0
+	var n int32 = 0
+	var s int32 = 0
+	var q int32 = 0
+	var mean int32 = 0
+	var vr int32 = 0
+	var sd int32 = 0
+	var thr int32 = 0
+	var ink int32 = 0
+	for y < h {
+		y0 = y - sauvR
+		if y0 < 0 {
+			y0 = 0
+		}
+		y1 = (y + sauvR) + 1
+		if y1 > h {
+			y1 = h
+		}
+		x = 0
+		for x < w {
+			x0 = x - sauvR
+			if x0 < 0 {
+				x0 = 0
+			}
+			x1 = (x + sauvR) + 1
+			if x1 > w {
+				x1 = w
+			}
+			n = (x1 - x0) * (y1 - y0)
+			s = rasWin(isum, w1, x0, y0, x1, y1)
+			q = rasWin(isq, w1, x0, y0, x1, y1)
+			mean = s / n
+			vr = (q / n) - (mean * mean)
+			sd = port.CellsAt(sq, vr)
+			thr = mean + int32(((int64(mean)*int64(sauvK))*int64((2*sd)-256))/65536)
+			if port.BitmapU8(g, x, y, 0) < thr {
+				port.BitmapSetU8(m, x, y, 0, 255)
+				ink += 1
+			} else {
+				port.BitmapSetU8(m, x, y, 0, 0)
+			}
+			x += 1
+		}
+		y += 1
+	}
+	return ink
+}
+
+func RasIntegralBulk(g *port.Bitmap, isum *port.Cells, isq *port.Cells) int32 {
+	// `ras-integral` as one host call.
+	port.BitmapIntegral(g, isum, isq)
+	return 0
+}

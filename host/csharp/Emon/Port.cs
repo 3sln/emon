@@ -248,14 +248,40 @@ public static class Port {
         return b.W;
     }
 
-    // @kin:link:form:bitmap-row-copy: {:template "emon.Port.BitmapRowCopy({0}, {1}, {2}, {3})" :arity 4}
-    public static void BitmapRowCopy(Bitmap b, int y, Cells dst, int off) {
-        if (off < 0 || off + b.W > dst.N) {
-            throw new System.IndexOutOfRangeException();
+    // @kin:link:form:bitmap-integral: {:template "emon.Port.BitmapIntegral({0}, {1}, {2})" :arity 3}
+    public static void BitmapIntegral(Bitmap b, Cells sum, Cells sq) {
+        int w1 = b.W + 1;
+        int n = w1 * (b.H + 1);
+        // Only row 0 and column 0 need zeroing: every other cell is written below.
+        if (sum.V.Length < n) {
+            sum.V = new int[n];
         }
-        int s = y * b.Stride;
-        for (int x = 0; x < b.W; x++) {
-            dst.V[off + x] = b.D[s + x * b.Ch];
+        sum.N = n;
+        if (sq.V.Length < n) {
+            sq.V = new int[n];
+        }
+        sq.N = n;
+        int[] s = sum.V, q = sq.V;
+        byte[] d = b.D;
+        unchecked {
+            for (int x = 0; x < w1; x++) {
+                s[x] = 0;
+                q[x] = 0;
+            }
+            for (int y = 0; y < b.H; y++) {
+                s[(y + 1) * w1] = 0;
+                q[(y + 1) * w1] = 0;
+                int rs = 0, rq = 0;
+                int src = y * b.Stride;
+                int p = y * w1 + 1, c = (y + 1) * w1 + 1;
+                for (int x = 0; x < b.W; x++) {
+                    int v = d[src + x * b.Ch];
+                    rs += v;
+                    rq += v * v;
+                    s[c + x] = s[p + x] + rs;
+                    q[c + x] = q[p + x] + rq;
+                }
+            }
         }
     }
 

@@ -373,3 +373,135 @@ pub fn ras_label_skip(m: &crate::port::Bitmap, mut labels: &mut crate::port::Cel
     crate::port::cells_push(stats, sq as i32);
     return ncomp;
 }
+pub(crate) const SAUV_R: i32 = 15;
+pub(crate) const SAUV_K: i32 = 87;
+pub fn ras_sqrt_table(mut t: &mut crate::port::Cells) -> i32 {
+    // t[i] = floor(sqrt(i)) for i in 0..65535: a variance is at most
+    // about 255^2 / 4, and the table spares a square root per pixel.
+    let mut i: i32 = 0;
+    let mut k: i32 = 0;
+    crate::port::cells_drop(t, 0);
+    while i < 65536 {
+        while ((k + 1) * (k + 1)) <= i {
+            k += 1;
+        }
+        crate::port::cells_push(t, k);
+        i += 1;
+    }
+    return 0;
+}
+pub fn ras_integral(g: &crate::port::Bitmap, mut isum: &mut crate::port::Cells, mut isq: &mut crate::port::Cells) -> i32 {
+    // Integral images of the pixel and of its square, per-pixel reads.
+    let w: i32 = crate::port::bitmap_w(g);
+    let h: i32 = crate::port::bitmap_h(g);
+    let w1: i32 = crate::port::bitmap_w(g) + 1;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut v: i32 = 0;
+    let mut rs: i32 = 0;
+    let mut rq: i32 = 0;
+    let mut i: i32 = 0;
+    let mut a: i32 = 0;
+    let mut b: i32 = 0;
+    crate::port::cells_drop(isum, 0);
+    crate::port::cells_drop(isq, 0);
+    crate::port::cells_grow(isum, w1, 0);
+    crate::port::cells_grow(isq, w1, 0);
+    while y < h {
+        crate::port::cells_push(isum, 0);
+        crate::port::cells_push(isq, 0);
+        rs = 0;
+        rq = 0;
+        x = 0;
+        while x < w {
+            v = crate::port::bitmap_u8(g, x, y, 0);
+            rs += v;
+            rq += v * v;
+            i = crate::port::cells_len(isum);
+            a = crate::port::cells_at(isum, i - w1);
+            b = crate::port::cells_at(isq, i - w1);
+            crate::port::cells_push(isum, ((a as i64) + (rs as i64)) as i32);
+            crate::port::cells_push(isq, ((b as i64) + (rq as i64)) as i32);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub(crate) fn ras_win(mut c: &mut crate::port::Cells, w1: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // The window sum from four reads of an integral image (see above).
+    let mut s: i64 = 0;
+    let mut p: i32 = 0;
+    p = crate::port::cells_at(c, (y1 * w1) + x1);
+    s = p as i64;
+    p = crate::port::cells_at(c, (y0 * w1) + x1);
+    s -= p as i64;
+    p = crate::port::cells_at(c, (y1 * w1) + x0);
+    s -= p as i64;
+    p = crate::port::cells_at(c, (y0 * w1) + x0);
+    s += p as i64;
+    return s as i32;
+}
+pub fn ras_sauvola(g: &crate::port::Bitmap, mut isum: &mut crate::port::Cells, mut isq: &mut crate::port::Cells, mut sq: &mut crate::port::Cells, m: &crate::port::Bitmap) -> i32 {
+    // mask = 255 where the pixel < the Sauvola threshold. Answers the
+    // ink count. `sq` is `ras-sqrt-table`'s.
+    let w: i32 = crate::port::bitmap_w(g);
+    let h: i32 = crate::port::bitmap_h(g);
+    let w1: i32 = crate::port::bitmap_w(g) + 1;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut n: i32 = 0;
+    let mut s: i32 = 0;
+    let mut q: i32 = 0;
+    let mut mean: i32 = 0;
+    let mut vr: i32 = 0;
+    let mut sd: i32 = 0;
+    let mut thr: i32 = 0;
+    let mut ink: i32 = 0;
+    while y < h {
+        y0 = y - SAUV_R;
+        if y0 < 0 {
+            y0 = 0;
+        }
+        y1 = (y + SAUV_R) + 1;
+        if y1 > h {
+            y1 = h;
+        }
+        x = 0;
+        while x < w {
+            x0 = x - SAUV_R;
+            if x0 < 0 {
+                x0 = 0;
+            }
+            x1 = (x + SAUV_R) + 1;
+            if x1 > w {
+                x1 = w;
+            }
+            n = (x1 - x0) * (y1 - y0);
+            s = ras_win(isum, w1, x0, y0, x1, y1);
+            q = ras_win(isq, w1, x0, y0, x1, y1);
+            mean = s / n;
+            vr = (q / n) - (mean * mean);
+            sd = crate::port::cells_at(sq, vr);
+            thr = mean + (((((mean as i64) * (SAUV_K as i64)) * (((2 * sd) - 256) as i64)) / 65536) as i32);
+            if crate::port::bitmap_u8(g, x, y, 0) < thr {
+                crate::port::bitmap_set_u8(m, x, y, 0, 255);
+                ink += 1;
+            } else {
+                crate::port::bitmap_set_u8(m, x, y, 0, 0);
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    return ink;
+}
+pub fn ras_integral_bulk(g: &crate::port::Bitmap, mut isum: &mut crate::port::Cells, mut isq: &mut crate::port::Cells) -> i32 {
+    // `ras-integral` as one host call.
+    crate::port::bitmap_integral(g, isum, isq);
+    return 0;
+}

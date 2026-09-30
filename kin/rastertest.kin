@@ -5,11 +5,11 @@
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that new-cells]]
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-stride bitmap-channels
                                bitmap-u8 bitmap-set-u8 cells-at cells-len cells-push cells-grow
-                               bitmap-histogram bitmap-threshold-into bitmap-row-copy
+                               bitmap-histogram bitmap-threshold-into
                                bitmap-next-nonzero]]
             [emon.raster :refer [ras-histogram ras-otsu ras-binarise ras-alloc ras-label
                                  ras-histogram-bulk ras-binarise-bulk ras-alloc-bulk
-                                 ras-label-skip]]
+                                 ras-label-skip ras-integral ras-integral-bulk ras-sauvola ras-sqrt-table]]
             [kin.lang :refer [defn let set while do if comment return + - * < > == != rem]]))
 
 (defn ^I32 rt-plot [^Bitmap b ^I32 x ^I32 y]
@@ -235,17 +235,6 @@
     (assert-eq (bitmap-u8 m 0 0 0) 0 "a stale 255 is cleared")
     (assert-eq (bitmap-u8 m 1 0 0) 255 "ink")))
 
-(deftest test-a-row-copy-takes-channel-0-of-one-row
-  (let [^Bitmap c (bitmap-new 5 3 3)
-        ^Cells dst (new-cells)]
-    (rt-fill-ramp c 3)
-    (cells-grow dst 8 -1)
-    (bitmap-row-copy c 1 dst 2)
-    (assert-eq (cells-at dst 1) -1 "below the offset is untouched")
-    (assert-eq (cells-at dst 2) (bitmap-u8 c 0 1 0) "x = 0")
-    (assert-eq (cells-at dst 6) (bitmap-u8 c 4 1 0) "x = 4")
-    (assert-eq (cells-at dst 7) -1 "past the row is untouched")))
-
 (deftest test-next-nonzero-finds-the-next-ink-or-the-width
   (let [^Bitmap m (bitmap-new 6 2 1)]
     (rt-plot m 2 0)
@@ -300,3 +289,127 @@
     (assert-eq (ras-label-skip m l2 p2 a2 s2) (ras-label m l1 p1 a1 s1) "components")
     (assert-eq (rt-same-cells s1 s2) 1 "stats")
     (assert-eq (rt-same-cells l1 l2) 1 "every pixel's final label")))
+
+;; ------------------------------------------------ Sauvola and the integral
+;;
+;; The integral of 1..9 (a 3x3 ramp) by hand, (w+1)*(h+1) cells with a zero
+;; row and column first: sums 0 0 0 0 / 0 1 3 6 / 0 5 12 21 / 0 12 27 45, and
+;; of the squares 0 0 0 0 / 0 1 5 14 / 0 17 46 91 / 0 66 159 285.
+
+(defn ^I32 rt-ramp-1-9 [^Bitmap b]
+  (let [^:mut ^I32 y 0
+        ^:mut ^I32 x 0]
+    (while (< y 3)
+      (do (set x 0)
+          (while (< x 3)
+            (do (bitmap-set-u8 b x y 0 (+ (+ (* y 3) x) 1))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(deftest test-the-integral-of-a-3x3-ramp
+  (let [^Bitmap g (bitmap-new 3 3 1)
+        ^Cells s (new-cells)
+        ^Cells q (new-cells)]
+    (rt-ramp-1-9 g)
+    (ras-integral g s q)
+    (assert-eq (cells-len s) 16 "sum cells")
+    (assert-eq (cells-len q) 16 "square cells")
+    (assert-eq (cells-at s 0) 0 "corner")
+    (assert-eq (cells-at s 5) 1 "(1,1)")
+    (assert-eq (cells-at s 7) 6 "(1,3): the first row")
+    (assert-eq (cells-at s 10) 12 "(2,2)")
+    (assert-eq (cells-at s 15) 45 "all nine")
+    (assert-eq (cells-at s 12) 0 "left column is zero")
+    (assert-eq (cells-at q 15) 285 "all nine, squared")
+    (assert-eq (cells-at q 10) 46 "(2,2), squared")
+    (assert-eq (cells-at q 13) 66 "(3,1), squared")))
+
+(deftest test-the-bulk-integral-equals-the-per-pixel-one
+  (let [^Bitmap g (bitmap-new 13 5 1)
+        ^Cells s1 (new-cells)
+        ^Cells q1 (new-cells)
+        ^Cells s2 (new-cells)
+        ^Cells q2 (new-cells)]
+    (rt-fill-ramp g 1)
+    (ras-integral g s1 q1)
+    (cells-grow s2 7 99)
+    (ras-integral-bulk g s2 q2)
+    (assert-eq (rt-same-cells s1 s2) 1 "sums (and a stale, shorter target)")
+    (assert-eq (rt-same-cells q1 q2) 1 "squares")))
+
+(deftest test-the-integral-wraps-and-the-window-is-still-exact
+  (comment "A white 3000 x 3000 page sums to 255 * 9e6 = 2295000000, past 2^31,")
+  (comment "so the last integral cell is that minus 2^32 = -1999967296. Every")
+  (comment "window sum is nevertheless exact, so Sauvola sees mean 255, sd 0,")
+  (comment "T = 255 - 86 = 169 and no pixel is ink.")
+  (let [^Bitmap g (bitmap-new 3000 3000 1)
+        ^Bitmap m (bitmap-new 3000 3000 1)
+        ^Cells s (new-cells)
+        ^Cells q (new-cells)
+        ^Cells t (new-cells)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y 3000)
+      (do (set x 0)
+          (while (< x 3000)
+            (do (bitmap-set-u8 g x y 0 255)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (ras-sqrt-table t)
+    (ras-integral-bulk g s q)
+    (assert-eq (cells-len s) 9006001 "cells")
+    (assert-eq (cells-at s 9006000) -1999967296 "the last sum, wrapped")
+    (assert-eq (ras-sauvola g s q t m) 0 "no ink on a flat white page")))
+
+(deftest test-the-sqrt-table-is-the-floor-of-the-root
+  (let [^Cells t (new-cells)]
+    (ras-sqrt-table t)
+    (assert-eq (cells-len t) 65536 "entries")
+    (assert-eq (cells-at t 0) 0 "0")
+    (assert-eq (cells-at t 1) 1 "1")
+    (assert-eq (cells-at t 3) 1 "3")
+    (assert-eq (cells-at t 4) 2 "4")
+    (assert-eq (cells-at t 16255) 127 "16255")
+    (assert-eq (cells-at t 65535) 255 "65535")))
+
+(deftest test-sauvola-keeps-a-dark-dot-on-white-and-nothing-else
+  (comment "11x11 of 255 with (5,5) = 0; the window is the whole image: n=121,")
+  (comment "mean 252, var 983, sd 31, T = 252 - 64 = 188 (worked in raster.kin).")
+  (let [^Bitmap g (bitmap-new 11 11 1)
+        ^Bitmap m (bitmap-new 11 11 1)
+        ^Cells s (new-cells)
+        ^Cells q (new-cells)
+        ^Cells t (new-cells)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y 11)
+      (do (set x 0)
+          (while (< x 11)
+            (do (bitmap-set-u8 g x y 0 255)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (bitmap-set-u8 g 5 5 0 0)
+    (ras-sqrt-table t)
+    (ras-integral g s q)
+    (assert-eq (ras-sauvola g s q t m) 1 "one ink pixel")
+    (assert-eq (bitmap-u8 m 5 5 0) 255 "the dot")
+    (assert-eq (bitmap-u8 m 4 5 0) 0 "its neighbour")))
+
+(deftest test-sauvola-leaves-a-flat-light-page-blank
+  (let [^Bitmap g (bitmap-new 6 6 1)
+        ^Bitmap m (bitmap-new 6 6 1)
+        ^Cells s (new-cells)
+        ^Cells q (new-cells)
+        ^Cells t (new-cells)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y 6)
+      (do (set x 0)
+          (while (< x 6)
+            (do (bitmap-set-u8 g x y 0 200)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (ras-sqrt-table t)
+    (ras-integral g s q)
+    (assert-eq (ras-sauvola g s q t m) 0 "T = 200 - 67 = 133 < 200")))
