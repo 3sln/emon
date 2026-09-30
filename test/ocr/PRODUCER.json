@@ -1,0 +1,26 @@
+{
+ "note": "What produced test/ocr/*/ (D094). The transcript format (D090) has no producer field yet, so it lives here. Regenerate with `bb tools/ocr/record.clj`.",
+ "engine": {
+  "name": "Tesseract (C API through FFI, host/rust/src/tess.rs)",
+  "version": "5.5.3",
+  "leptonica": "1.87.0",
+  "installed-by": "brew (tesseract 5.5.3, leptonica 1.87.0)",
+  "ocr-engine-mode": "default (LSTM)",
+  "variables": {"lstm_choice_mode": "2"},
+  "models": {
+   "eng.traineddata": {"bytes": 4113088, "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"},
+   "osd.traineddata": {"sha256": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff"}
+  },
+  "languages": "no hint: every installed model except osd and snum (here: eng) (D038)"
+ },
+ "host": {"os": "Darwin 23.6.0", "cpu": "Apple M1 Pro", "rustc": "1.92.0"},
+ "requests": {
+  "h-keyword": {
+   "input": "test/corpus/synth/scan/h-keyword.pdf",
+   "input-sha256": "e97d6483549d06ea5ad75320c34f13f97dde396fdd8c17e37a17d3a9cb864db5",
+   "page": 1,
+   "render": "stand-in: the page's one embedded JPEG (`pdfimages -all`), gray (`magick -colorspace Gray`), 1275x1650 at 150 dpi; ImageMagick 7.1.1-33, poppler pdfimages",
+   "ocr": "psm 3, flags 3 (symbols and alternatives, OSD), whole bitmap, no language"
+  }
+ }
+}

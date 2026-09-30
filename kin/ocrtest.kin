@@ -1,0 +1,91 @@
+;; Laws for `emon.ocr` (P2.6 spike, D094): the OCR answer's extension, built by a
+;; host and read by kin, cell by cell; an answer without one; and a word whose
+;; symbols carry alternatives, walked past to the word after it.
+(ns emon.ocrtest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at]]
+            [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end an-ocr-count
+                               an-ocr-first aw-next]]
+            [emon.ocr :refer [ox-version ox-header ox-line-stride ox-begin ox-line
+                              ox-word ox-sym ox-sym-cp ox-alt ox-alt-cp ox-find
+                              ox-get ox-orient ox-wdir ox-tlorder ox-deskew ox-osd
+                              ox-script ox-sconf ox-oconf ox-nlines ox-line-at
+                              ox-first-word ox-wflags ox-wlang ox-nsym ox-first-sym
+                              ox-sym-next ox-sym-alts ox-alt-next ox-word-next]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(deftest test-an-answer-with-no-extension-has-none
+  (let [^Cells c (new-cells)
+        ^I32 at (an-ocr c 3)
+        ^I32 w (an-ocr-word c at 10 20 30 40 900 0 0)]
+    (an-ocr-cp c w 97)
+    (an-ocr-end c at)
+    (assert-eq (ox-find c at) -1 "the words are all there is")))
+
+(deftest test-the-extension-follows-the-words-and-reads-back
+  (let [^Cells c (new-cells)
+        ^I32 at (an-ocr c 3)
+        ^I32 w0 (an-ocr-word c at 10 20 30 40 900 0 0)]
+    (an-ocr-cp c w0 72)
+    (an-ocr-cp c w0 105)
+    (let [^I32 w1 (an-ocr-word c at 50 20 30 40 800 0 0)]
+      (an-ocr-cp c w1 33)
+      (ox-begin c 1 2 3 -85 90 1281455214 17 187 1)
+      (ox-line c 10 18 70 44 10 60 80 62 0 0 1)
+      (let [^I32 x0 (ox-word c 65 1701734144)
+            ^I32 s0 (ox-sym c x0 10 20 15 40 950)]
+        (ox-sym-cp c s0 72)
+        (let [^I32 a0 (ox-alt c s0 120)]
+          (ox-alt-cp c a0 75)
+          (let [^I32 a1 (ox-alt c s0 80)]
+            (ox-alt-cp c a1 78)
+            (ox-alt-cp c a1 77)))
+        (let [^I32 s1 (ox-sym c x0 25 20 15 40 900)]
+          (ox-sym-cp c s1 105))
+        (let [^I32 x1 (ox-word c 0 0)
+              ^I32 s2 (ox-sym c x1 50 20 30 40 800)]
+          (ox-sym-cp c s2 33)
+          (an-ocr-end c at)
+          (let [^I32 ext (ox-find c at)]
+            (assert-that (>= ext 0) "the extension is found after the two words")
+            (let [^I32 n1 (aw-next c w0)]
+              (assert-eq ext (aw-next c n1) "right after the last word"))
+            (assert-eq (ox-get c ext 0) (ox-version) "version")
+            (assert-eq (ox-orient c ext) 1 "orient")
+            (assert-eq (ox-wdir c ext) 2 "writing direction")
+            (assert-eq (ox-tlorder c ext) 3 "line order")
+            (assert-eq (ox-deskew c ext) -85 "deskew in centi-degrees")
+            (assert-eq (ox-osd c ext) 90 "OSD degrees")
+            (assert-eq (ox-script c ext) 1281455214 "script, packed")
+            (assert-eq (ox-sconf c ext) 17 "script confidence")
+            (assert-eq (ox-oconf c ext) 187 "orientation confidence")
+            (assert-eq (ox-nlines c ext) 1 "one line")
+            (let [^I32 l (ox-line-at c ext 0)]
+              (assert-eq l (+ ext (ox-header)) "the line list follows the header")
+              (assert-eq (cells-at c (+ l 6)) 80 "baseline end x")
+              (assert-eq (cells-at c (+ l 10)) 1 "block type")
+              (assert-eq (ox-first-word c ext) (+ l (ox-line-stride)) "the word list follows the lines"))
+            (let [^I32 wx0 (ox-first-word c ext)]
+              (assert-eq (ox-wflags c wx0) 65 "bold and mono")
+              (assert-eq (ox-wlang c wx0) 1701734144 "eng")
+              (assert-eq (ox-nsym c wx0) 2 "two symbols")
+              (let [^I32 sy0 (ox-first-sym c wx0)]
+                (assert-eq (cells-at c (+ sy0 4)) 950 "symbol confidence")
+                (assert-eq (cells-at c (+ sy0 5)) 1 "one code point")
+                (assert-eq (cells-at c (+ sy0 6)) 2 "two alternatives")
+                (assert-eq (cells-at c (+ sy0 7)) 72 "H")
+                (let [^I32 al0 (ox-sym-alts c sy0)
+                      ^I32 al1 (ox-alt-next c al0)]
+                  (assert-eq (cells-at c al0) 1 "the first alternative has one code point")
+                  (assert-eq (cells-at c (+ al0 1)) 120 "its confidence")
+                  (assert-eq (cells-at c (+ al0 2)) 75 "K")
+                  (assert-eq (cells-at c al1) 2 "the second has two")
+                  (assert-eq (cells-at c (+ al1 3)) 77 "its second code point")
+                  (assert-eq (ox-alt-next c al1) (ox-sym-next c sy0) "the next symbol follows the alternatives")))
+              (let [^I32 wx1 (ox-word-next c wx0)]
+                (assert-eq (ox-nsym c wx1) 1 "the second word has one symbol")
+                (let [^I32 s (ox-first-sym c wx1)]
+                  (assert-eq (cells-at c (+ s 7)) 33 "!"))
+                (assert-eq (ox-word-next c wx1) (cells-len c) "and is the last thing in the answer")))))))))
