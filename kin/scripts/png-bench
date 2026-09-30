@@ -1,0 +1,240 @@
+#!/usr/bin/env bb
+;; How long does the canonical PNG writer take on each target, and do the four
+;; write the same file?   kin/scripts/png-bench [N]        (DEVLOG P3.11, D092's rule)
+;;
+;; NOT A GATE: a measurement. It writes two real images through `emon.pngprobe`'s
+;; `pp-page` on Rust, Go, Java and C# (release builds: rustc -O, go build, javac
+;; with the JIT, dotnet -c Release), best of N (default 3):
+;;
+;;   * a scanned A4 page at 300 dpi, 8-bit gray, 2481x3508 (the P2.7 bench page:
+;;     `corpus/formats/derived/inv_00007.noise.png` through ImageMagick), and
+;;   * a 1200x800 RGB photograph (a receipt photo from the corpus, resized).
+;;
+;; Every target must write BYTE-IDENTICAL files (SHA-256 compared), and each is
+;; compared with java.util.zip.Deflater level 6 over the same filtered rows
+;; (size) -- the numbers DEVLOG P3.11 records. Needs the untracked corpus/.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [shell process]]
+         '[clojure.string :as str])
+(import '[java.util.zip Inflater Deflater]
+        '[java.io ByteArrayOutputStream]
+        '[java.security MessageDigest])
+
+(def n (or (some-> (first *command-line-args*) parse-long) 3))
+(def work (str (fs/create-temp-dir {:prefix "emon-pngbench."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+(defn exec [dir & cmd]
+  (let [r @(apply process {:dir dir :out :string :err :string} cmd)]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+(defn have? [cmd] (zero? (:exit (exec "." "sh" "-c" (str "command -v " cmd)))))
+(defn sha256 [file]
+  (let [md (MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" %) (.digest md (fs/read-all-bytes file))))))
+
+(def page-src "corpus/formats/derived/inv_00007.noise.png")
+(def photo-src (first (sort (map str (fs/glob "corpus/financial/sroie2019/test" "*.jpg")))))
+(when-not (and (fs/exists? page-src) photo-src (have? "magick"))
+  (println "  SKIP corpus/ or magick is missing: nothing to measure")
+  (System/exit 0))
+
+(def inputs
+  [{:name "page-2481x3508-gray" :w 2481 :h 3508 :ch 1 :dpi 30000
+    :cmd ["magick" page-src "-colorspace" "Gray" "-depth" "8"] :fmt "gray:"}
+   {:name "photo-1200x800-rgb" :w 1200 :h 800 :ch 3 :dpi 0
+    :cmd ["magick" (str photo-src "[0]") "-resize" "1200x800!" "-depth" "8"] :fmt "rgb:"}])
+
+(doseq [{:keys [name cmd fmt]} inputs]
+  (apply exec "." (concat cmd [(str fmt work "/" name ".raw")])))
+
+(defn arg-lines [{:keys [name w h ch dpi]}]
+  (str work "/" name ".raw " w " " h " " ch " " dpi " " work "/%s-" name ".png"))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+;; ------------------------------------------------------------------- Rust
+(def rust-main "
+#![allow(dead_code, unused_mut, unused_variables)]
+mod emon;
+mod port;
+fn main() {
+    let a: Vec<String> = std::env::args().collect();
+    let px = std::fs::read(&a[1]).unwrap();
+    let (w, h, ch, dpi): (i32, i32, i32, i32) = (a[2].parse().unwrap(), a[3].parse().unwrap(), a[4].parse().unwrap(), a[5].parse().unwrap());
+    let n: usize = a[7].parse().unwrap();
+    let mut best = u128::MAX;
+    let mut last = port::Buf::new();
+    for _ in 0..n {
+        let mut ws = port::Cells::new(); let mut out = port::Buf::new(); let mut z = port::Buf::new();
+        let mut row = port::Cells::new(); let mut pal = port::Cells::new();
+        let t = std::time::Instant::now();
+        emon::pngprobe::pp_page(&mut ws, &mut out, &mut z, &px[..], w, h, ch, dpi, &mut row, &mut pal);
+        best = best.min(t.elapsed().as_millis());
+        last = out;
+    }
+    std::fs::write(&a[6], &last.0).unwrap();
+    println!(\"{}\", best);
+}
+")
+(def go-main "
+package main
+
+import (
+	\"fmt\"
+	\"os\"
+	\"strconv\"
+	\"time\"
+
+	\"emon/pngprobe\"
+	\"emon/port\"
+)
+
+func main() {
+	px, _ := os.ReadFile(os.Args[1])
+	w, _ := strconv.Atoi(os.Args[2])
+	h, _ := strconv.Atoi(os.Args[3])
+	ch, _ := strconv.Atoi(os.Args[4])
+	dpi, _ := strconv.Atoi(os.Args[5])
+	n, _ := strconv.Atoi(os.Args[7])
+	best := int64(1 << 62)
+	var last *port.Buf
+	for i := 0; i < n; i++ {
+		ws, out, z, row, pal := port.NewCells(), port.NewBuf(), port.NewBuf(), port.NewCells(), port.NewCells()
+		t := time.Now()
+		pngprobe.PpPage(ws, out, z, px, int32(w), int32(h), int32(ch), int32(dpi), row, pal)
+		if d := time.Since(t).Milliseconds(); d < best {
+			best = d
+		}
+		last = out
+	}
+	os.WriteFile(os.Args[6], last.B, 0644)
+	fmt.Println(best)
+}
+")
+(def java-main "
+public class Main {
+    public static void main(String[] a) throws Exception {
+        byte[] px = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(a[0]));
+        int w = Integer.parseInt(a[1]), h = Integer.parseInt(a[2]), ch = Integer.parseInt(a[3]), dpi = Integer.parseInt(a[4]);
+        int n = Integer.parseInt(a[6]);
+        long best = Long.MAX_VALUE;
+        emon.Port.Buf last = null;
+        for (int i = 0; i < n; i++) {
+            emon.Port.Cells ws = emon.Port.newCells(), row = emon.Port.newCells(), pal = emon.Port.newCells();
+            emon.Port.Buf out = emon.Port.newBuf(), z = emon.Port.newBuf();
+            long t = System.nanoTime();
+            emon.Pngprobe.ppPage(ws, out, z, px, w, h, ch, dpi, row, pal);
+            best = Math.min(best, (System.nanoTime() - t) / 1000000);
+            last = out;
+        }
+        java.nio.file.Files.write(java.nio.file.Paths.get(a[5]), emon.Port.bufBlob(last));
+        System.out.println(best);
+    }
+}
+")
+(def cs-main "
+var av = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Skip(System.Environment.GetCommandLineArgs(), 1));
+var px = System.IO.File.ReadAllBytes(av[0]);
+int w = int.Parse(av[1]), h = int.Parse(av[2]), ch = int.Parse(av[3]), dpi = int.Parse(av[4]);
+int n = int.Parse(av[6]);
+long best = long.MaxValue;
+emon.Port.Buf last = null;
+for (int i = 0; i < n; i++) {
+    var ws = emon.Port.NewCells(); var row = emon.Port.NewCells(); var pal = emon.Port.NewCells();
+    var o = emon.Port.NewBuf(); var z = emon.Port.NewBuf();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    emon.Pngprobe.PpPage(ws, o, z, px, w, h, ch, dpi, row, pal);
+    best = System.Math.Min(best, sw.ElapsedMilliseconds);
+    last = o;
+}
+System.IO.File.WriteAllBytes(av[5], emon.Port.BufBlob(last));
+System.Console.WriteLine(best);
+")
+
+(defn build [target]
+  (let [d (str work "/" (name target))]
+    (fs/create-dirs d)
+    (case target
+      :rust (do (fs/create-dirs (str d "/emon"))
+                (doseq [m ["deflate" "png" "pngprobe" "splitmix"]]
+                  (fs/copy (str "gen/rust/emon/" m ".rs") (str d "/emon/" m ".rs")))
+                (fs/copy "host/rust/src/port.rs" (str d "/port.rs"))
+                (spit (str d "/emon.rs") "pub mod deflate;\npub mod png;\npub mod pngprobe;\npub mod splitmix;\n")
+                (spit (str d "/main.rs") rust-main)
+                (let [r (exec d "rustc" "--edition" "2021" "-C" "opt-level=3" "-A" "warnings" "-o" "prog" "main.rs")]
+                  (when (zero? (:exit r)) [(str d "/prog")])))
+      :go (do (doseq [m ["deflate" "png" "pngprobe" "splitmix"]]
+                (fs/create-dirs (str d "/" m))
+                (fs/copy (str "gen/go/" m "/" m ".go") (str d "/" m "/" m ".go")))
+              (fs/create-dirs (str d "/port"))
+              (doseq [f (fs/glob "host/go/port" "*.go")] (fs/copy f (str d "/port/" (fs/file-name f))))
+              (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")
+              (spit (str d "/main.go") go-main)
+              (let [r (exec d "go" "build" "-o" "prog" ".")]
+                (if (zero? (:exit r)) [(str d "/prog")] (do (println (:err r)) nil))))
+      :java (let [jdk (or (System/getenv "EMON_JDK") "/opt/homebrew/opt/openjdk")]
+              (when (fs/exists? (str jdk "/bin/javac"))
+                (fs/create-dirs (str d "/emon"))
+                (doseq [f (concat (fs/glob "gen/java/emon" "{Deflate,Png,Pngprobe,Splitmix}.java")
+                                  (fs/glob "host/java/emon" "Port.java"))]
+                  (fs/copy f (str d "/emon/" (fs/file-name f))))
+                (spit (str d "/Main.java") java-main)
+                (let [r (exec d (str jdk "/bin/javac") "-encoding" "UTF-8" "-d" "." "emon/Deflate.java" "emon/Png.java"
+                              "emon/Pngprobe.java" "emon/Splitmix.java" "emon/Port.java" "Main.java")]
+                  (when (zero? (:exit r)) [(str jdk "/bin/java") "-cp" d "Main"]))))
+      :csharp (when (have? "dotnet")
+                (doseq [f (concat (fs/glob "gen/csharp/Emon" "{Deflate,Png,Pngprobe,Splitmix}.cs")
+                                  (fs/glob "host/csharp/Emon" "Port.cs"))]
+                  (fs/copy f (str d "/" (fs/file-name f))))
+                (spit (str d "/Program.cs") cs-main)
+                (spit (str d "/cs.csproj")
+                      "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><Nullable>disable</Nullable><ImplicitUsings>disable</ImplicitUsings></PropertyGroup></Project>")
+                (let [r (exec d "dotnet" "build" "-c" "Release" "-v" "q" "--nologo" "-o" "out")]
+                  (if (zero? (:exit r)) ["dotnet" (str d "/out/cs.dll")] (do (println (:out r)) nil)))))))
+
+(println "  rows: target, ms (best of" n ") for each image; files compared byte for byte")
+(def results
+  (into {}
+        (for [t [:rust :go :java :csharp]]
+          (let [cmd (build t)]
+            (if-not cmd
+              (do (println "  SKIP" (name t) "- did not build or no toolchain") [t nil])
+              [t (for [{:keys [name w h ch dpi] :as in} inputs]
+                   (let [outf (str work "/" (clojure.core/name t) "-" name ".png")
+                         r (apply exec "." (concat cmd [(str work "/" name ".raw") (str w) (str h) (str ch) (str dpi) outf (str n)]))]
+                     {:image name :ms (when (zero? (:exit r)) (str/trim (:out r)))
+                      :sha (when (fs/exists? outf) (sha256 outf)) :size (when (fs/exists? outf) (fs/size outf))
+                      :err (:err r)}))])))))
+
+(doseq [[t rs] results :when rs, r rs]
+  (println (format "   %-7s %-22s %6s ms  %9s B  %s" (name t) (:image r) (:ms r) (:size r) (some-> (:sha r) (subs 0 16))))
+  (when-not (str/blank? (:err r)) (println "      " (subs (:err r) 0 (min 400 (count (:err r)))))))
+
+(defn zlib6-over-filtered [png-file]
+  (let [b (fs/read-all-bytes png-file)
+        idat (let [bo (ByteArrayOutputStream.)]
+               (loop [pos 8]
+                 (when (< pos (alength b))
+                   (let [len (+ (bit-shift-left (bit-and 255 (aget b pos)) 24) (bit-shift-left (bit-and 255 (aget b (+ pos 1))) 16)
+                                (bit-shift-left (bit-and 255 (aget b (+ pos 2))) 8) (bit-and 255 (aget b (+ pos 3))))
+                         ty (String. b (int (+ pos 4)) 4 "ISO-8859-1")]
+                     (when (= ty "IDAT") (.write bo b (int (+ pos 8)) (int len)))
+                     (recur (+ pos 12 len)))))
+               (.toByteArray bo))
+        inf (Inflater.) out (ByteArrayOutputStream.) buf (byte-array 65536)]
+    (.setInput inf idat)
+    (while (not (.finished inf)) (.write out buf 0 (.inflate inf buf)))
+    (let [data (.toByteArray out) d (Deflater. 6) o2 (ByteArrayOutputStream.)]
+      (.setInput d data) (.finish d)
+      (while (not (.finished d)) (.write o2 buf 0 (.deflate d buf)))
+      {:emon (alength idat) :zlib6 (.size o2)})))
+
+(doseq [{:keys [name]} inputs]
+  (let [shas (set (for [[_ rs] results :when rs, r rs :when (= name (:image r))] (:sha r)))
+        f (first (for [t [:rust :go :java :csharp] :let [p (str work "/" (clojure.core/name t) "-" name ".png")] :when (fs/exists? p)] p))]
+    (println (if (= 1 (count shas))
+               (str "  ok   " name ": every target wrote the same file")
+               (str "  FAIL " name ": the targets wrote " (count shas) " different files")))
+    (when f
+      (let [{:keys [emon zlib6]} (zlib6-over-filtered f)]
+        (println (format "       size: emon's IDAT data %d B, java.util.zip level 6 over the same filtered rows %d B (%.3f)"
+                         emon zlib6 (double (/ emon zlib6))))))))

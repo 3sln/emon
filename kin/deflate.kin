@@ -1,0 +1,861 @@
+;; A DETERMINISTIC ZLIB WRITER (P3.11, D117, SPEC 10.11). emon's own module
+;; (D039), written from RFC 1950 and RFC 1951; `emon.inflate` is its inverse and
+;; its test oracle, and zlib, libpng and ImageMagick are the independent ones.
+;;
+;; WHY KIN WRITES THE STREAM. A host zlib cannot be mandated to agree byte for
+;; byte across versions and languages (D090 found the same), and the assets of
+;; SPEC 10.11 carry a SHA-256 in the JSON. So every parameter of the encoder is
+;; fixed here and the four targets agree by construction.
+;;
+;; THE PARAMETERS (SPEC 10.11; any change changes every committed asset hash):
+;;   header          78 01, then Adler-32 of the input, big-endian, at the end
+;;   window          32,768 bytes (distances 1..32,768); matches 3..258
+;;   hash            ((b0 << 10) ^ (b1 << 5) ^ b2) & 32767, 32,768 heads
+;;   chains          nearest first, at most 32 candidates, a longer match only
+;;                   replaces the best (so on equal length the NEAREST wins)
+;;   parsing         greedy, with ONE step of lazy matching: having a match at p,
+;;                   look at p+1; when that match is STRICTLY longer, emit the
+;;                   byte at p as a literal and take p+1's match; no further
+;;                   look. Every position is inserted into the hash once, in
+;;                   order, before the next position is searched; the last two
+;;                   bytes of the stream (no 3-byte hash) are never inserted.
+;;   blocks          one every 16,384 symbols and one at the end (an empty
+;;                   final block when the symbols divide evenly)
+;;   block type      stored, fixed or dynamic by FEWEST BITS, ties in that
+;;                   order. Stored is a candidate only when the block covers at
+;;                   most 32,768 input bytes (what the ring still holds).
+;;   dynamic codes   lengths by PACKAGE-MERGE, limit 15 (7 for the code-length
+;;                   code); symbols sorted by (frequency, symbol); in a merge a
+;;                   leaf precedes a package of equal weight; fewer than two
+;;                   used symbols get a code of length 1 each (symbol 0 and/or 1
+;;                   standing in), as zlib does. Canonical codes from lengths.
+;;   header runs     the literal/length and distance lengths are one sequence,
+;;                   run-length coded greedily: zeros by 18 (11..138) then 17
+;;                   (3..10), a non-zero value once and then 16 (3..6) repeats,
+;;                   anything shorter as literal lengths.
+;;
+;; THE OUTPUT DOES NOT DEPEND ON HOW THE INPUT IS SPLIT across write calls: a
+;; position is decided only when 262 bytes of lookahead exist (or at `df-finish`),
+;; and a decision reads at most 259 bytes ahead. So a PNG written a row at a
+;; time and the same bytes written in one call are the same file.
+;;
+;; THE WORKSPACE is one `Cells` (`df-init`): the 64 KiB ring of input bytes (a
+;; 32 KiB window and the lookahead), `head` and `prev` hash chains of 32,768,
+;; the pending symbols (16,384, each one cell: a literal is 0..255, a match is
+;; length*65536 + distance-1), and the frequency and code tables. About 670 KiB.
+;; Output bytes go to a `Buf`.
+(ns emon.deflate
+  (:require [emon.lang :refer [I32 Blob Cells Buf shl32 sar32]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
+                               cells-drop cells-grow buf-push]]
+            [kin.lang :refer [defn defconst defdata return let set while if
+                              comment do + - * < > <= >= == != and or
+                              bit-and bit-or bit-xor quot rem]]))
+
+;; ---------------------------------------------------------- the workspace
+
+(defconst ^I32 D_POS 0)       ;; next position to decide (absolute)
+(defconst ^I32 D_AVAIL 1)     ;; bytes received
+(defconst ^I32 D_INS 2)       ;; next position to insert into the hash
+(defconst ^I32 D_NSYM 3)      ;; pending symbols
+(defconst ^I32 D_BSTART 4)    ;; first input byte of the pending block
+(defconst ^I32 D_BITBUF 5)
+(defconst ^I32 D_BITCNT 6)
+(defconst ^I32 D_ADA 7)
+(defconst ^I32 D_ADB 8)
+(defconst ^I32 D_FORCE 9)     ;; 0 by cost, 1 stored, 2 fixed, 3 dynamic (tests)
+(defconst ^I32 D_STARTED 10)
+(defconst ^I32 D_NL 12)       ;; HLIT + 257 of the planned dynamic block
+(defconst ^I32 D_ND 13)
+(defconst ^I32 D_HCLEN 14)
+(defconst ^I32 D_NCS 15)      ;; entries in the code-length sequence
+(defconst ^I32 D_TMP 16)      ;; 16: length counts while codes are assigned
+(defconst ^I32 D_NEXT 32)     ;; 16: next code per length
+(defconst ^I32 D_PN 48)       ;; 16: items per package-merge level
+(defconst ^I32 D_LSYM 64)     ;; 259: match length -> length code index 0..28
+(defconst ^I32 D_LFREQ 328)   ;; 288
+(defconst ^I32 D_DFREQ 616)   ;; 32
+(defconst ^I32 D_LLEN 648)    ;; 288
+(defconst ^I32 D_DLEN 936)    ;; 32
+(defconst ^I32 D_LCODE 968)   ;; 288 (bit-reversed, ready to write)
+(defconst ^I32 D_DCODE 1256)  ;; 32
+(defconst ^I32 D_CLFREQ 1288) ;; 32
+(defconst ^I32 D_CLLEN 1320)  ;; 32
+(defconst ^I32 D_CLCODE 1352) ;; 32
+(defconst ^I32 D_CLSEQ 1384)  ;; 320: symbol + 32 * extra-bits value
+(defconst ^I32 D_SORT 1704)   ;; 288: used symbols by (frequency, symbol)
+(defconst ^I32 D_PLEN 1992)   ;; 288: lengths by sorted index
+(defconst ^I32 D_PW 2280)     ;; 15 levels of 600: item weights
+(defconst ^I32 D_PT 11280)    ;; 15 levels of 600: -1 a package, else a leaf
+(defconst ^I32 D_RING 20480)  ;; 65536
+(defconst ^I32 D_HEAD 86016)  ;; 32768: position + 1 of the newest, 0 for none
+(defconst ^I32 D_PREV 118784) ;; 32768
+(defconst ^I32 D_SYMS 151552) ;; 16384
+(defconst ^I32 DF_CELLS 167936)
+
+(defconst ^I32 PM_CAP 600)
+
+(defdata df-lbase
+  :emitter kin.lang/flat-array
+  :data [3 4 5 6 7 8 9 10 11 13 15 17 19 23 27 31 35 43 51 59 67 83 99 115
+         131 163 195 227 258]
+  :accessors {^I32 df-lbase-at [^I32 ignored ^I32 i]})
+
+(defdata df-lext
+  :emitter kin.lang/flat-array
+  :data [0 0 0 0 0 0 0 0 1 1 1 1 2 2 2 2 3 3 3 3 4 4 4 4 5 5 5 5 0]
+  :accessors {^I32 df-lext-at [^I32 ignored ^I32 i]})
+
+(defdata df-dbase
+  :emitter kin.lang/flat-array
+  :data [1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025
+         1537 2049 3073 4097 6145 8193 12289 16385 24577]
+  :accessors {^I32 df-dbase-at [^I32 ignored ^I32 i]})
+
+(defdata df-dext
+  :emitter kin.lang/flat-array
+  :data [0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13]
+  :accessors {^I32 df-dext-at [^I32 ignored ^I32 i]})
+
+(defdata df-order
+  :emitter kin.lang/flat-array
+  :data [16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15]
+  :accessors {^I32 df-order-at [^I32 ignored ^I32 i]})
+
+(defn ^:pub ^I32 df-size []
+  (comment "Cells a workspace holds after `df-init`: a caller that shares the")
+  (comment "workspace (`emon.png`) puts its own state from here on.")
+  (return DF_CELLS))
+
+(defn ^:pub ^I32 df-init [^:mut ^Cells ws]
+  (comment "Clear `ws` and size it. Every table starts at zero; the length")
+  (comment "code index table is filled here.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 ln 3
+        ^:mut ^I32 last 28]
+    (cells-drop ws 0)
+    (cells-grow ws DF_CELLS 0)
+    (cells-set ws D_ADA 1)
+    (while (< i 28)
+      (do (set ln (df-lbase-at 0 i))
+          (set last (- (df-lbase-at 0 (+ i 1)) 1))
+          (while (<= ln last)
+            (do (cells-set ws (+ D_LSYM ln) i)
+                (set ln (+ ln 1))))
+          (set i (+ i 1))))
+    (cells-set ws (+ D_LSYM 258) 28)
+    (return 0)))
+
+;; ------------------------------------------------------------------ bits
+
+(defn ^I32 df-bits [^:mut ^Cells ws ^:mut ^Buf out ^I32 v ^I32 n]
+  (comment "n bits (0..16) of v, low bit first (RFC 1951 3.1.1). A Huffman code")
+  (comment "is kept bit-reversed in its table, so it is written by this too.")
+  (let [^I32 bc (cells-at ws D_BITCNT)
+        ^:mut ^I32 bb (+ (cells-at ws D_BITBUF) (shl32 v bc))
+        ^:mut ^I32 cnt (+ bc n)]
+    (while (>= cnt 8)
+      (do (buf-push out (bit-and bb 255))
+          (set bb (sar32 bb 8))
+          (set cnt (- cnt 8))))
+    (cells-set ws D_BITBUF bb)
+    (cells-set ws D_BITCNT cnt)
+    (return 0)))
+
+(defn ^I32 df-align [^:mut ^Cells ws ^:mut ^Buf out]
+  (comment "Pad the partial byte with zero bits (before a stored block, at the end).")
+  (let [^I32 cnt (cells-at ws D_BITCNT)
+        ^I32 bb (cells-at ws D_BITBUF)]
+    (if (> cnt 0)
+      (do (buf-push out bb)
+          (cells-set ws D_BITBUF 0)
+          (cells-set ws D_BITCNT 0)))
+    (return 0)))
+
+(defn ^I32 df-adler [^:mut ^Cells ws ^I32 v]
+  (let [^:mut ^I32 a (+ (cells-at ws D_ADA) v)
+        ^:mut ^I32 b 0]
+    (if (>= a 65521) (set a (- a 65521)))
+    (set b (+ (cells-at ws D_ADB) a))
+    (if (>= b 65521) (set b (- b 65521)))
+    (cells-set ws D_ADA a)
+    (cells-set ws D_ADB b)
+    (return 0)))
+
+;; ------------------------------------------------------- hash and matches
+
+(defn ^I32 df-hash [^:mut ^Cells ws ^I32 p]
+  (let [^I32 b0 (cells-at ws (+ D_RING (bit-and p 65535)))
+        ^I32 b1 (cells-at ws (+ D_RING (bit-and (+ p 1) 65535)))
+        ^I32 b2 (cells-at ws (+ D_RING (bit-and (+ p 2) 65535)))]
+    (return (bit-and (bit-xor (bit-xor (shl32 b0 10) (shl32 b1 5)) b2) 32767))))
+
+(defn ^I32 df-insert [^:mut ^Cells ws ^I32 p]
+  (comment "Position p (whose three bytes are present) becomes the newest of its")
+  (comment "chain. Heads hold position + 1 so that 0 means none.")
+  (let [^I32 h (df-hash ws p)
+        ^I32 old (cells-at ws (+ D_HEAD h))]
+    (cells-set ws (+ D_PREV (bit-and p 32767)) old)
+    (cells-set ws (+ D_HEAD h) (+ p 1))
+    (return 0)))
+
+(defn ^I32 df-find [^:mut ^Cells ws ^I32 p ^I32 maxlen]
+  (comment "The best match for position p, at most maxlen long: length * 65536 +")
+  (comment "(distance - 1), or 0 when none reaches 3. Nearest first; a candidate")
+  (comment "replaces the best only when STRICTLY longer, so on equal length the")
+  (comment "nearest stays. At most 32 candidates, none further than 32,768.")
+  (if (< maxlen 3) (return 0))
+  (let [^I32 hh (df-hash ws p)
+        ^:mut ^I32 cand (cells-at ws (+ D_HEAD hh))
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bestd 0
+        ^:mut ^I32 chain 0
+        ^:mut ^I32 live 1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 same 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (and (== live 1) (and (> cand 0) (< chain 32)))
+      (do (set c (- cand 1))
+          (set d (- p c))
+          (if (> d 32768)
+            (set live 0)
+            (do (set x (cells-at ws (+ D_RING (bit-and (+ c best) 65535))))
+                (set y (cells-at ws (+ D_RING (bit-and (+ p best) 65535))))
+                (if (== x y)
+                  (do (set k 0)
+                      (set same 1)
+                      (while (and (< k maxlen) (== same 1))
+                        (do (set x (cells-at ws (+ D_RING (bit-and (+ c k) 65535))))
+                            (set y (cells-at ws (+ D_RING (bit-and (+ p k) 65535))))
+                            (if (== x y)
+                              (set k (+ k 1))
+                              (set same 0))))
+                      (if (> k best)
+                        (do (set best k)
+                            (set bestd d)))))
+                (if (>= best maxlen) (set live 0))
+                (set cand (cells-at ws (+ D_PREV (bit-and c 32767))))
+                (set chain (+ chain 1))))))
+    (if (< best 3) (return 0))
+    (return (+ (* best 65536) (- bestd 1)))))
+
+(defn ^I32 df-dsym [^I32 d]
+  (comment "The distance code of a distance 1..32768.")
+  (let [^:mut ^I32 i 29]
+    (while (> (df-dbase-at 0 i) d)
+      (set i (- i 1)))
+    (return i)))
+
+;; ------------------------------------------------------ Huffman lengths
+
+(defn ^I32 df-lengths [^:mut ^Cells ws ^I32 fbase ^I32 n ^I32 limit ^I32 lbase]
+  (comment "Code lengths for the n symbols whose frequencies are at ws[fbase..],")
+  (comment "at most `limit` bits, by package-merge (Larmore and Hirschberg): the")
+  (comment "optimal length-limited code. Level lv holds the leaves and the pairs")
+  (comment "of the level below it, by weight, a leaf first on equal weight; the")
+  (comment "first 2m-2 items of level 0 are chosen and each package there calls")
+  (comment "for its first two items a level down. A symbol's length is how many")
+  (comment "levels chose its leaf. Fewer than two used symbols: length 1 for")
+  (comment "symbol 0 (or 1) and the used one, as zlib's dummy codes.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 more 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 na 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 no 0
+        ^:mut ^I32 npk 0
+        ^:mut ^I32 wa 0
+        ^:mut ^I32 wb 0
+        ^:mut ^I32 take 0
+        ^:mut ^I32 need 0
+        ^:mut ^I32 pk 0
+        ^:mut ^I32 tk 0
+        ^:mut ^I32 wbase 0
+        ^:mut ^I32 tbase 0
+        ^:mut ^I32 pwbase 0]
+    (while (< i n)
+      (do (cells-set ws (+ lbase i) 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set f (cells-at ws (+ fbase i)))
+          (if (> f 0)
+            (do (set j m)
+                (set more 1)
+                (while (== more 1)
+                  (do (set more 0)
+                      (if (> j 0)
+                        (do (set s (cells-at ws (+ D_SORT (- j 1))))
+                            (set t (cells-at ws (+ fbase s)))
+                            (if (> t f)
+                              (do (cells-set ws (+ D_SORT j) s)
+                                  (set j (- j 1))
+                                  (set more 1)))))))
+                (cells-set ws (+ D_SORT j) i)
+                (set m (+ m 1))))
+          (set i (+ i 1))))
+    (if (< m 2)
+      (do (set s 0)
+          (if (== m 1) (set s (cells-at ws D_SORT)))
+          (set t 0)
+          (if (== s 0) (set t 1))
+          (cells-set ws (+ lbase s) 1)
+          (cells-set ws (+ lbase t) 1)
+          (return 0)))
+    (set lv (- limit 1))
+    (set wbase (+ D_PW (* lv PM_CAP)))
+    (set tbase (+ D_PT (* lv PM_CAP)))
+    (set i 0)
+    (while (< i m)
+      (do (set s (cells-at ws (+ D_SORT i)))
+          (set f (cells-at ws (+ fbase s)))
+          (cells-set ws (+ wbase i) f)
+          (cells-set ws (+ tbase i) i)
+          (set i (+ i 1))))
+    (cells-set ws (+ D_PN lv) m)
+    (while (> lv 0)
+      (do (set lv (- lv 1))
+          (set pwbase (+ D_PW (* (+ lv 1) PM_CAP)))
+          (set wbase (+ D_PW (* lv PM_CAP)))
+          (set tbase (+ D_PT (* lv PM_CAP)))
+          (set npk (quot (cells-at ws (+ D_PN (+ lv 1))) 2))
+          (set na 0)
+          (set nb 0)
+          (set no 0)
+          (while (or (< na m) (< nb npk))
+            (do (if (< na m)
+                  (do (set s (cells-at ws (+ D_SORT na)))
+                      (set wa (cells-at ws (+ fbase s)))))
+                (if (< nb npk)
+                  (do (set wb (cells-at ws (+ pwbase (* 2 nb))))
+                      (set wb (+ wb (cells-at ws (+ pwbase (+ (* 2 nb) 1)))))))
+                (set take 0)
+                (if (and (< na m) (>= nb npk)) (set take 1))
+                (if (and (< na m) (< nb npk))
+                  (if (<= wa wb) (set take 1)))
+                (if (== take 1)
+                  (do (cells-set ws (+ wbase no) wa)
+                      (cells-set ws (+ tbase no) na)
+                      (set na (+ na 1)))
+                  (do (cells-set ws (+ wbase no) wb)
+                      (cells-set ws (+ tbase no) -1)
+                      (set nb (+ nb 1))))
+                (set no (+ no 1))))
+          (cells-set ws (+ D_PN lv) no)))
+    (set i 0)
+    (while (< i m)
+      (do (cells-set ws (+ D_PLEN i) 0)
+          (set i (+ i 1))))
+    (set need (- (* 2 m) 2))
+    (set lv 0)
+    (while (< lv limit)
+      (do (set tbase (+ D_PT (* lv PM_CAP)))
+          (set pk 0)
+          (set i 0)
+          (while (< i need)
+            (do (set tk (cells-at ws (+ tbase i)))
+                (if (>= tk 0)
+                  (do (set s (cells-at ws (+ D_PLEN tk)))
+                      (cells-set ws (+ D_PLEN tk) (+ s 1)))
+                  (set pk (+ pk 1)))
+                (set i (+ i 1))))
+          (set need (* 2 pk))
+          (set lv (+ lv 1))))
+    (set i 0)
+    (while (< i m)
+      (do (set s (cells-at ws (+ D_SORT i)))
+          (set t (cells-at ws (+ D_PLEN i)))
+          (cells-set ws (+ lbase s) t)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 df-codes [^:mut ^Cells ws ^I32 lbase ^I32 cbase ^I32 n]
+  (comment "Canonical codes (RFC 1951 3.2.2) for the n lengths at ws[lbase..],")
+  (comment "stored bit-reversed at ws[cbase..], ready for `df-bits`.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 code 0]
+    (while (< i 16)
+      (do (cells-set ws (+ D_TMP i) 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set l (cells-at ws (+ lbase i)))
+          (if (> l 0)
+            (do (set c (cells-at ws (+ D_TMP l)))
+                (cells-set ws (+ D_TMP l) (+ c 1))))
+          (set i (+ i 1))))
+    (set l 1)
+    (while (<= l 15)
+      (do (set c (cells-at ws (+ D_TMP (- l 1))))
+          (set code (* (+ code c) 2))
+          (cells-set ws (+ D_NEXT l) code)
+          (set l (+ l 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set l (cells-at ws (+ lbase i)))
+          (set r 0)
+          (if (> l 0)
+            (do (set c (cells-at ws (+ D_NEXT l)))
+                (cells-set ws (+ D_NEXT l) (+ c 1))
+                (set k 0)
+                (while (< k l)
+                  (do (set r (+ (* r 2) (bit-and c 1)))
+                      (set c (sar32 c 1))
+                      (set k (+ k 1))))))
+          (cells-set ws (+ cbase i) r)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 df-fixed [^:mut ^Cells ws]
+  (comment "The fixed code's lengths (RFC 1951 3.2.6) into the length tables.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 w 8]
+    (while (< s 288)
+      (do (set w 8)
+          (if (>= s 144) (set w 9))
+          (if (>= s 256) (set w 7))
+          (if (>= s 280) (set w 8))
+          (cells-set ws (+ D_LLEN s) w)
+          (set s (+ s 1))))
+    (set s 0)
+    (while (< s 30)
+      (do (cells-set ws (+ D_DLEN s) 5)
+          (set s (+ s 1))))
+    (return 0)))
+
+;; ------------------------------------------------- the dynamic header plan
+
+(defn ^I32 df-put-cl [^:mut ^Cells ws ^I32 sym ^I32 extra]
+  (let [^I32 k (cells-at ws D_NCS)
+        ^I32 f (cells-at ws (+ D_CLFREQ sym))]
+    (cells-set ws (+ D_CLSEQ k) (+ sym (* extra 32)))
+    (cells-set ws (+ D_CLFREQ sym) (+ f 1))
+    (cells-set ws D_NCS (+ k 1))
+    (return 0)))
+
+(defn ^I32 df-lenat [^:mut ^Cells ws ^I32 nl ^I32 i]
+  (if (< i nl) (return (cells-at ws (+ D_LLEN i))))
+  (return (cells-at ws (+ D_DLEN (- i nl)))))
+
+(defn ^I32 df-plan [^:mut ^Cells ws]
+  (comment "Plan the dynamic header of the lengths now in the tables: HLIT, HDIST,")
+  (comment "the run-length coded sequence, the code-length code and HCLEN.")
+  (let [^:mut ^I32 nl 286
+        ^:mut ^I32 nd 30
+        ^:mut ^I32 i 0
+        ^:mut ^I32 tot 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 left 0
+        ^:mut ^I32 c 0]
+    (while (and (> nl 257) (== (cells-at ws (+ D_LLEN (- nl 1))) 0))
+      (set nl (- nl 1)))
+    (while (and (> nd 1) (== (cells-at ws (+ D_DLEN (- nd 1))) 0))
+      (set nd (- nd 1)))
+    (cells-set ws D_NL nl)
+    (cells-set ws D_ND nd)
+    (cells-set ws D_NCS 0)
+    (while (< i 19)
+      (do (cells-set ws (+ D_CLFREQ i) 0)
+          (set i (+ i 1))))
+    (set tot (+ nl nd))
+    (set i 0)
+    (while (< i tot)
+      (do (set v (df-lenat ws nl i))
+          (set r 1)
+          (while (and (< (+ i r) tot) (== (df-lenat ws nl (+ i r)) v))
+            (set r (+ r 1)))
+          (set i (+ i r))
+          (if (== v 0)
+            (do (set left r)
+                (while (> left 0)
+                  (do (set c left)
+                      (if (>= left 11)
+                        (do (if (> c 138) (set c 138))
+                            (df-put-cl ws 18 (- c 11)))
+                        (if (>= left 3)
+                          (df-put-cl ws 17 (- c 3))
+                          (do (set c 1)
+                              (df-put-cl ws 0 0))))
+                      (set left (- left c)))))
+            (do (df-put-cl ws v 0)
+                (set left (- r 1))
+                (while (>= left 3)
+                  (do (set c left)
+                      (if (> c 6) (set c 6))
+                      (df-put-cl ws 16 (- c 3))
+                      (set left (- left c))))
+                (while (> left 0)
+                  (do (df-put-cl ws v 0)
+                      (set left (- left 1))))))))
+    (df-lengths ws D_CLFREQ 19 7 D_CLLEN)
+    (set i 18)
+    (while (and (> i 3) (== (cells-at ws (+ D_CLLEN (df-order-at 0 i))) 0))
+      (set i (- i 1)))
+    (cells-set ws D_HCLEN (+ i 1))
+    (return 0)))
+
+;; ------------------------------------------------------------------ costs
+
+(defn ^I32 df-extra [^:mut ^Cells ws]
+  (comment "Extra bits of every pending match, from the frequencies.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 tot 0]
+    (while (< i 29)
+      (do (set tot (+ tot (* (cells-at ws (+ D_LFREQ (+ 257 i))) (df-lext-at 0 i))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 30)
+      (do (set tot (+ tot (* (cells-at ws (+ D_DFREQ i)) (df-dext-at 0 i))))
+          (set i (+ i 1))))
+    (return tot)))
+
+(defn ^I32 df-cost-fixed [^:mut ^Cells ws]
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 w 8
+        ^:mut ^I32 tot 3]
+    (while (< s 286)
+      (do (set w 8)
+          (if (>= s 144) (set w 9))
+          (if (>= s 256) (set w 7))
+          (if (>= s 280) (set w 8))
+          (set tot (+ tot (* w (cells-at ws (+ D_LFREQ s)))))
+          (set s (+ s 1))))
+    (set s 0)
+    (while (< s 30)
+      (do (set tot (+ tot (* 5 (cells-at ws (+ D_DFREQ s)))))
+          (set s (+ s 1))))
+    (set tot (+ tot (df-extra ws)))
+    (return tot)))
+
+(defn ^I32 df-cost-dyn [^:mut ^Cells ws]
+  (comment "Bits of a dynamic block: 3 header bits, HLIT/HDIST/HCLEN (14), the")
+  (comment "code-length code (3 each), the run-length coded lengths, the symbols.")
+  (let [^:mut ^I32 tot (+ 17 (* 3 (cells-at ws D_HCLEN)))
+        ^I32 ncs (cells-at ws D_NCS)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 sy 0
+        ^:mut ^I32 ex 0
+        ^:mut ^I32 s 0]
+    (while (< k ncs)
+      (do (set e (cells-at ws (+ D_CLSEQ k)))
+          (set sy (bit-and e 31))
+          (set ex 0)
+          (if (== sy 16) (set ex 2))
+          (if (== sy 17) (set ex 3))
+          (if (== sy 18) (set ex 7))
+          (set tot (+ tot (+ ex (cells-at ws (+ D_CLLEN sy)))))
+          (set k (+ k 1))))
+    (while (< s 286)
+      (do (set tot (+ tot (* (cells-at ws (+ D_LFREQ s)) (cells-at ws (+ D_LLEN s)))))
+          (set s (+ s 1))))
+    (set s 0)
+    (while (< s 30)
+      (do (set tot (+ tot (* (cells-at ws (+ D_DFREQ s)) (cells-at ws (+ D_DLEN s)))))
+          (set s (+ s 1))))
+    (set tot (+ tot (df-extra ws)))
+    (return tot)))
+
+;; ------------------------------------------------------------------ blocks
+
+(defn ^I32 df-head [^:mut ^Cells ws ^:mut ^Buf out]
+  (comment "The dynamic header: HLIT, HDIST, HCLEN, the code-length code's lengths")
+  (comment "in RFC order, then the run-length coded lengths.")
+  (let [^I32 nl (cells-at ws D_NL)
+        ^I32 nd (cells-at ws D_ND)
+        ^I32 hclen (cells-at ws D_HCLEN)
+        ^I32 ncs (cells-at ws D_NCS)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 sy 0
+        ^:mut ^I32 code 0]
+    (df-bits ws out (- nl 257) 5)
+    (df-bits ws out (- nd 1) 5)
+    (df-bits ws out (- hclen 4) 4)
+    (while (< i hclen)
+      (do (set v (cells-at ws (+ D_CLLEN (df-order-at 0 i))))
+          (df-bits ws out v 3)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i ncs)
+      (do (set e (cells-at ws (+ D_CLSEQ i)))
+          (set sy (bit-and e 31))
+          (set code (cells-at ws (+ D_CLCODE sy)))
+          (set v (cells-at ws (+ D_CLLEN sy)))
+          (df-bits ws out code v)
+          (if (== sy 16) (df-bits ws out (sar32 e 5) 2))
+          (if (== sy 17) (df-bits ws out (sar32 e 5) 3))
+          (if (== sy 18) (df-bits ws out (sar32 e 5) 7))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 df-emit [^:mut ^Cells ws ^:mut ^Buf out]
+  (comment "The pending symbols and the end-of-block, with the tables as they are.")
+  (let [^I32 nsym (cells-at ws D_NSYM)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 di 0
+        ^:mut ^I32 li 0
+        ^:mut ^I32 ds 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 ex 0]
+    (while (< k nsym)
+      (do (set s (cells-at ws (+ D_SYMS k)))
+          (if (< s 65536)
+            (do (set code (cells-at ws (+ D_LCODE s)))
+                (set nb (cells-at ws (+ D_LLEN s)))
+                (df-bits ws out code nb))
+            (do (set ln (quot s 65536))
+                (set di (+ (bit-and s 65535) 1))
+                (set li (cells-at ws (+ D_LSYM ln)))
+                (set code (cells-at ws (+ D_LCODE (+ 257 li))))
+                (set nb (cells-at ws (+ D_LLEN (+ 257 li))))
+                (df-bits ws out code nb)
+                (set ex (df-lext-at 0 li))
+                (if (> ex 0)
+                  (df-bits ws out (- ln (df-lbase-at 0 li)) ex))
+                (set ds (df-dsym di))
+                (set code (cells-at ws (+ D_DCODE ds)))
+                (set nb (cells-at ws (+ D_DLEN ds)))
+                (df-bits ws out code nb)
+                (set ex (df-dext-at 0 ds))
+                (if (> ex 0)
+                  (df-bits ws out (- di (df-dbase-at 0 ds)) ex))))
+          (set k (+ k 1))))
+    (set code (cells-at ws (+ D_LCODE 256)))
+    (set nb (cells-at ws (+ D_LLEN 256)))
+    (df-bits ws out code nb)
+    (return 0)))
+
+(defn ^I32 df-stored [^:mut ^Cells ws ^:mut ^Buf out ^I32 span]
+  (comment "The body of a stored block: LEN, NLEN, then the bytes from the ring.")
+  (let [^I32 from (cells-at ws D_BSTART)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0]
+    (buf-push out (bit-and span 255))
+    (buf-push out (bit-and (sar32 span 8) 255))
+    (buf-push out (bit-and (- 65535 span) 255))
+    (buf-push out (bit-and (sar32 (- 65535 span) 8) 255))
+    (while (< k span)
+      (do (set v (cells-at ws (+ D_RING (bit-and (+ from k) 65535))))
+          (buf-push out v)
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 df-flush [^:mut ^Cells ws ^:mut ^Buf out ^I32 end ^I32 fin]
+  (comment "Write the pending symbols as one block, of the type that costs the")
+  (comment "fewest bits (ties: stored, fixed, dynamic), and start the next block.")
+  (let [^I32 span (- end (cells-at ws D_BSTART))
+        ^I32 force (cells-at ws D_FORCE)
+        ^I32 bc (cells-at ws D_BITCNT)
+        ^:mut ^I32 ty 1
+        ^:mut ^I32 best 0
+        ^:mut ^I32 elig 0
+        ^:mut ^I32 cs 0
+        ^:mut ^I32 cf 0
+        ^:mut ^I32 cd 0
+        ^:mut ^I32 i 0]
+    (cells-set ws (+ D_LFREQ 256) 1)
+    (df-lengths ws D_LFREQ 286 15 D_LLEN)
+    (df-lengths ws D_DFREQ 30 15 D_DLEN)
+    (df-plan ws)
+    (set cd (df-cost-dyn ws))
+    (set cf (df-cost-fixed ws))
+    (if (<= span 32768)
+      (do (set elig 1)
+          (set cs (+ 35 (+ (* 8 span) (rem (- 8 (rem (+ bc 3) 8)) 8))))))
+    (set ty 0)
+    (set best cs)
+    (if (== elig 0)
+      (do (set ty 1)
+          (set best cf)))
+    (if (< cf best)
+      (do (set ty 1)
+          (set best cf)))
+    (if (< cd best)
+      (do (set ty 2)
+          (set best cd)))
+    (if (== force 2) (set ty 1))
+    (if (== force 3) (set ty 2))
+    (if (and (== force 1) (== elig 1)) (set ty 0))
+    (df-bits ws out fin 1)
+    (if (== ty 0)
+      (do (df-bits ws out 0 2)
+          (df-align ws out)
+          (df-stored ws out span))
+      (do (if (== ty 1)
+            (do (df-bits ws out 1 2)
+                (df-fixed ws)
+                (df-codes ws D_LLEN D_LCODE 288)
+                (df-codes ws D_DLEN D_DCODE 30))
+            (do (df-bits ws out 2 2)
+                (df-codes ws D_LLEN D_LCODE 286)
+                (df-codes ws D_DLEN D_DCODE 30)
+                (df-codes ws D_CLLEN D_CLCODE 19)
+                (df-head ws out)))
+          (df-emit ws out)))
+    (cells-set ws D_NSYM 0)
+    (cells-set ws D_BSTART end)
+    (while (< i 288)
+      (do (cells-set ws (+ D_LFREQ i) 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 32)
+      (do (cells-set ws (+ D_DFREQ i) 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 df-count [^:mut ^Cells ws ^I32 at]
+  (let [^I32 f (cells-at ws at)]
+    (cells-set ws at (+ f 1))
+    (return 0)))
+
+(defn ^I32 df-sym [^:mut ^Cells ws ^:mut ^Buf out ^I32 sym ^I32 end]
+  (comment "Record one symbol (the input up to `end` is now covered). A literal is")
+  (comment "0..255; a match is length * 65536 + distance - 1. The 16,384th symbol")
+  (comment "closes a block.")
+  (let [^I32 n (cells-at ws D_NSYM)
+        ^:mut ^I32 li 0
+        ^:mut ^I32 ds 0]
+    (cells-set ws (+ D_SYMS n) sym)
+    (if (< sym 65536)
+      (df-count ws (+ D_LFREQ sym))
+      (do (set li (cells-at ws (+ D_LSYM (quot sym 65536))))
+          (df-count ws (+ D_LFREQ (+ 257 li)))
+          (set ds (df-dsym (+ (bit-and sym 65535) 1)))
+          (df-count ws (+ D_DFREQ ds))))
+    (cells-set ws D_NSYM (+ n 1))
+    (if (== (+ n 1) 16384)
+      (df-flush ws out end 0))
+    (return 0)))
+
+;; ---------------------------------------------------------------- parsing
+
+(defn ^I32 df-step [^:mut ^Cells ws ^:mut ^Buf out]
+  (comment "Decide position p = D_POS: a literal, or a match (taking the match of")
+  (comment "p+1 instead, after a literal for p, when that one is strictly longer).")
+  (let [^I32 p (cells-at ws D_POS)
+        ^I32 av (cells-at ws D_AVAIL)
+        ^:mut ^I32 ml1 (- av p)
+        ^:mut ^I32 ml2 0
+        ^:mut ^I32 m1 0
+        ^:mut ^I32 m2 0
+        ^:mut ^I32 st p
+        ^:mut ^I32 mm 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 en 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 v 0]
+    (if (> ml1 258) (set ml1 258))
+    (set m1 (df-find ws p ml1))
+    (if (== m1 0)
+      (do (set v (cells-at ws (+ D_RING (bit-and p 65535))))
+          (if (< (+ p 2) av) (df-insert ws p))
+          (cells-set ws D_INS (+ p 1))
+          (cells-set ws D_POS (+ p 1))
+          (df-sym ws out v (+ p 1))
+          (return 0)))
+    (df-insert ws p)
+    (cells-set ws D_INS (+ p 1))
+    (set ml2 (- av (+ p 1)))
+    (if (> ml2 258) (set ml2 258))
+    (set m2 (df-find ws (+ p 1) ml2))
+    (set mm m1)
+    (if (> (quot m2 65536) (quot m1 65536))
+      (do (set v (cells-at ws (+ D_RING (bit-and p 65535))))
+          (df-sym ws out v (+ p 1))
+          (set st (+ p 1))
+          (set mm m2)))
+    (set ln (quot mm 65536))
+    (set en (+ st ln))
+    (df-sym ws out mm en)
+    (set q (cells-at ws D_INS))
+    (while (< q en)
+      (do (if (< (+ q 2) av) (df-insert ws q))
+          (set q (+ q 1))))
+    (cells-set ws D_INS en)
+    (cells-set ws D_POS en)
+    (return 0)))
+
+(defn ^I32 df-run [^:mut ^Cells ws ^:mut ^Buf out ^I32 fin]
+  (comment "Decide every position that has its lookahead (262 bytes), or, at the")
+  (comment "end of the stream, every position left.")
+  (let [^:mut ^I32 lim 262]
+    (if (== fin 1) (set lim 1))
+    (while (>= (- (cells-at ws D_AVAIL) (cells-at ws D_POS)) lim)
+      (df-step ws out))
+    (return 0)))
+
+;; -------------------------------------------------------------------- API
+
+(defn ^:pub ^I32 df-force [^:mut ^Cells ws ^I32 mode]
+  (comment "TEST ONLY: 0 by cost (the default), 1 stored, 2 fixed, 3 dynamic.")
+  (cells-set ws D_FORCE mode)
+  (return 0))
+
+(defn ^:pub ^I32 df-ensure [^:mut ^Cells ws ^:mut ^Buf out]
+  (comment "Write the zlib header `78 01` once, before the first byte.")
+  (if (== (cells-at ws D_STARTED) 0)
+    (do (cells-set ws D_STARTED 1)
+        (buf-push out 120)
+        (buf-push out 1)))
+  (return 0))
+
+(defn ^:pub ^I32 df-byte [^:mut ^Cells ws ^:mut ^Buf out ^I32 v]
+  (comment "One input byte (`df-ensure` has been called). What the row writers of")
+  (comment "emon.png feed it; the `df-write-` forms are loops over this.")
+  (let [^I32 av (cells-at ws D_AVAIL)]
+    (cells-set ws (+ D_RING (bit-and av 65535)) v)
+    (cells-set ws D_AVAIL (+ av 1))
+    (df-adler ws v)
+    (df-run ws out 0)
+    (return 0)))
+
+(defn ^:pub ^I32 df-write-cells [^:mut ^Cells ws ^:mut ^Buf out ^Cells cells ^I32 start ^I32 end]
+  (comment "Compress cells[start, end) (one byte per cell, the low eight bits).")
+  (let [^:mut ^I32 i start]
+    (df-ensure ws out)
+    (while (< i end)
+      (do (df-byte ws out (bit-and (cells-at cells i) 255))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 df-write-blob [^:mut ^Cells ws ^:mut ^Buf out ^Blob blob ^I32 start ^I32 end]
+  (comment "Compress blob[start, end).")
+  (let [^:mut ^I32 i start]
+    (df-ensure ws out)
+    (while (< i end)
+      (do (df-byte ws out (blob-u8 blob i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 df-finish [^:mut ^Cells ws ^:mut ^Buf out]
+  (comment "Decide what is left, write the final block and the Adler-32.")
+  (df-ensure ws out)
+  (df-run ws out 1)
+  (let [^I32 en (cells-at ws D_AVAIL)
+        ^I32 a (cells-at ws D_ADA)
+        ^I32 b (cells-at ws D_ADB)]
+    (df-flush ws out en 1)
+    (df-align ws out)
+    (buf-push out (bit-and (sar32 b 8) 255))
+    (buf-push out (bit-and b 255))
+    (buf-push out (bit-and (sar32 a 8) 255))
+    (buf-push out (bit-and a 255))
+    (return 0)))

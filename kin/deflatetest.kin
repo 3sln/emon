@@ -1,0 +1,332 @@
+;; Laws for `emon.deflate` (P3.11, D117).
+;;
+;; THE ORACLE IS `emon.inflate`, which was itself checked against CPython's
+;; zlib over a row corpus (D046): a stream this module writes must inflate to
+;; exactly its input, with a good header and a good Adler-32 (`iz-zlib` checks
+;; both). `kin/scripts/png-check` adds the independent inflaters (java.util.zip,
+;; ImageMagick's libpng) over whole PNGs. The two tiny streams that are
+;; worked out by hand below are the same bytes zlib writes for them.
+;;
+;; Every input is generated here, from splitmix or a fixed rule, so a law reads
+;; the same on all four targets and no file is needed.
+(ns emon.deflatetest
+  (:require [emon.lang :refer [I32 I64 Blob Cells Buf]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               new-cells new-buf hex-blob text-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
+                               cells-push cells-drop buf-len buf-at buf-push
+                               buf-truncate buf-blob]]
+            [emon.splitmix :refer [sm-seed sm-below sm-at sm-lo]]
+            [emon.inflate :refer [iz-zlib iz-ok]]
+            [emon.deflate :refer [df-init df-force df-write-cells df-write-blob
+                                  df-finish df-byte df-ensure]]
+            [kin.lang :refer [defn let set while if comment do return + - * < >
+                              <= >= == != and or bit-and quot rem]]))
+
+;; ------------------------------------------------------------- inputs
+
+(defn ^I32 dt-fill-random [^:mut ^Cells c ^I32 n ^I64 seed]
+  (comment "n splitmix bytes: incompressible.")
+  (let [^Cells st (new-cells)
+        ^:mut ^I32 i 0]
+    (sm-seed st seed)
+    (cells-drop c 0)
+    (while (< i n)
+      (do (cells-push c (sm-below st 256))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 dt-letter [^I32 word ^I32 k]
+  (return (+ 97 (rem (bit-and (sm-lo (sm-at 777 (+ (* word 16) k))) 2147483647) 26))))
+
+(defn ^I32 dt-fill-text [^:mut ^Cells c ^I32 n ^I64 seed]
+  (comment "n bytes of pseudo-text: words from a vocabulary of 48, 2..9 letters,")
+  (comment "a space after each and a newline after about every twelfth.")
+  (let [^Cells st (new-cells)
+        ^:mut ^I32 w 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 cnt 0]
+    (sm-seed st seed)
+    (cells-drop c 0)
+    (while (< (cells-len c) n)
+      (do (set w (sm-below st 48))
+          (set k 0)
+          (while (< k (+ 2 (rem w 8)))
+            (do (cells-push c (dt-letter w k))
+                (set k (+ k 1))))
+          (set cnt (+ cnt 1))
+          (if (== (rem cnt 12) 0)
+            (cells-push c 10)
+            (cells-push c 32))))
+    (cells-drop c n)
+    (return n)))
+
+(defn ^I32 dt-fill-repeat [^:mut ^Cells c ^I32 n ^I32 a ^I32 b ^I32 d]
+  (comment "n bytes of a, b, d repeated.")
+  (let [^:mut ^I32 i 0]
+    (cells-drop c 0)
+    (while (< i n)
+      (do (cells-push c a)
+          (cells-push c b)
+          (cells-push c d)
+          (set i (+ i 3))))
+    (cells-drop c n)
+    (return n)))
+
+;; ---------------------------------------------------------- the round trip
+
+(defn ^I32 dt-compress [^:mut ^Cells ws ^:mut ^Buf z ^Cells src ^I32 n ^I32 mode]
+  (comment "src[0, n) in one write, in block mode `mode`; the stream's length.")
+  (df-init ws)
+  (df-force ws mode)
+  (buf-truncate z 0)
+  (df-write-cells ws z src 0 n)
+  (df-finish ws z)
+  (return (buf-len z)))
+
+(defn ^I32 dt-verify [^Buf z ^Cells src ^I32 n ^:mut ^Cells dec ^:mut ^Cells st]
+  (comment "-1 when z inflates (header and Adler-32 checked) to exactly src[0, n);")
+  (comment "-2 for a wrong length; i for the first differing byte; -10 - status")
+  (comment "when inflate refuses it.")
+  (cells-drop dec 0)
+  (let [^I32 rc (iz-zlib (buf-blob z) 0 (buf-len z) dec st)
+        ^:mut ^I32 i 0]
+    (if (!= rc (iz-ok)) (return (- 0 (+ rc 10))))
+    (if (!= (cells-len dec) n) (return -2))
+    (while (< i n)
+      (do (if (!= (cells-at dec i) (cells-at src i)) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 dt-same [^Buf a ^Buf b]
+  (comment "1 when the two buffers hold the same bytes.")
+  (let [^:mut ^I32 i 0]
+    (if (!= (buf-len a) (buf-len b)) (return 0))
+    (while (< i (buf-len a))
+      (do (if (!= (buf-at a i) (buf-at b i)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 dt-trip [^Cells src ^I32 n ^I32 mode]
+  (comment "Compress and verify with fresh state; -1 is a pass.")
+  (let [^Cells ws (new-cells)
+        ^Buf z (new-buf)
+        ^Cells dec (new-cells)
+        ^Cells st (new-cells)]
+    (dt-compress ws z src n mode)
+    (return (dt-verify z src n dec st))))
+
+;; -------------------------------------------------------------------- laws
+
+(deftest test-empty-input-is-the-fixed-empty-block
+  (let [^Cells ws (new-cells)
+        ^Buf z (new-buf)]
+    (df-init ws)
+    (df-finish ws z)
+    (assert-eq (buf-len z) 8 "eight bytes")
+    (assert-eq (buf-at z 0) 120 "CMF")
+    (assert-eq (buf-at z 1) 1 "FLG")
+    (assert-eq (buf-at z 2) 3 "final fixed block, end-of-block")
+    (assert-eq (buf-at z 3) 0 "end-of-block, last bits")
+    (assert-eq (buf-at z 4) 0 "Adler-32 of nothing: 00")
+    (assert-eq (buf-at z 5) 0 "00")
+    (assert-eq (buf-at z 6) 0 "00")
+    (assert-eq (buf-at z 7) 1 "01")))
+
+(deftest test-one-byte-is-what-zlib-writes
+  (comment "zlib's output for `a` with the fixed code: 78 01 4b 04 00 00 62 00 62")
+  (let [^Cells ws (new-cells)
+        ^Buf z (new-buf)]
+    (df-init ws)
+    (df-write-blob ws z (text-blob "a") 0 1)
+    (df-finish ws z)
+    (assert-eq (buf-len z) 9 "nine bytes")
+    (assert-eq (buf-at z 2) 75 "4b")
+    (assert-eq (buf-at z 3) 4 "04")
+    (assert-eq (buf-at z 4) 0 "00")
+    (assert-eq (buf-at z 5) 0 "00")
+    (assert-eq (buf-at z 6) 98 "62")
+    (assert-eq (buf-at z 7) 0 "00")
+    (assert-eq (buf-at z 8) 98 "62")))
+
+(deftest test-three-hundred-repeats-round-trip-and-shrink
+  (let [^Cells src (new-cells)
+        ^Cells ws (new-cells)
+        ^Buf z (new-buf)
+        ^Cells dec (new-cells)
+        ^Cells st (new-cells)]
+    (dt-fill-repeat src 300 97 98 99)
+    (assert-that (< (dt-compress ws z src 300 0) 20) "three literals and two matches: a dozen bytes")
+    (assert-eq (dt-verify z src 300 dec st) -1 "round trip")))
+
+(deftest test-one-mebibyte-of-random-bytes-is-stored
+  (comment "Incompressible blocks are stored: the cost is the five bytes of each")
+  (comment "block header, and the stream still inflates to the input.")
+  (let [^Cells src (new-cells)
+        ^Cells ws (new-cells)
+        ^Buf z (new-buf)
+        ^Cells dec (new-cells)
+        ^Cells st (new-cells)]
+    (dt-fill-random src 1048576 11)
+    (let [^I32 zn (dt-compress ws z src 1048576 0)]
+      (assert-that (> zn 1048576) "stored blocks add their headers")
+      (assert-that (< zn (+ 1048576 400)) "and only those")
+      (assert-eq (dt-verify z src 1048576 dec st) -1 "round trip"))))
+
+(deftest test-sixty-four-kib-of-text-round-trips-and-shrinks
+  (let [^Cells src (new-cells)
+        ^Cells ws (new-cells)
+        ^Buf z (new-buf)
+        ^Cells dec (new-cells)
+        ^Cells st (new-cells)]
+    (dt-fill-text src 65536 5)
+    (let [^I32 zn (dt-compress ws z src 65536 0)]
+      (assert-that (< zn 32768) "text compresses to under half")
+      (assert-eq (dt-verify z src 65536 dec st) -1 "round trip"))))
+
+(deftest test-each-block-type-can-be-forced-on-random-bytes
+  (let [^Cells src (new-cells)]
+    (dt-fill-random src 40000 3)
+    (assert-eq (dt-trip src 40000 1) -1 "stored")
+    (assert-eq (dt-trip src 40000 2) -1 "fixed")
+    (assert-eq (dt-trip src 40000 3) -1 "dynamic")
+    (assert-eq (dt-trip src 40000 0) -1 "by cost")))
+
+(deftest test-each-block-type-can-be-forced-on-text
+  (let [^Cells src (new-cells)]
+    (dt-fill-text src 50000 9)
+    (assert-eq (dt-trip src 50000 1) -1 "stored")
+    (assert-eq (dt-trip src 50000 2) -1 "fixed")
+    (assert-eq (dt-trip src 50000 3) -1 "dynamic")))
+
+(deftest test-one-symbol-repeated-has-a-single-distance-code
+  (comment "A run of one byte is one literal and matches of distance 1: one used")
+  (comment "distance symbol, and in the literal tree few. The one-symbol rule of")
+  (comment "package-merge (two codes of length 1) makes a complete code.")
+  (let [^Cells src (new-cells)
+        ^Cells ws (new-cells)
+        ^Buf z (new-buf)
+        ^Cells dec (new-cells)
+        ^Cells st (new-cells)]
+    (dt-fill-repeat src 100000 7 7 7)
+    (let [^I32 zn (dt-compress ws z src 100000 3)]
+      (assert-that (< zn 200) "100,000 equal bytes in a few dozen bytes")
+      (assert-eq (dt-verify z src 100000 dec st) -1 "round trip"))
+    (assert-eq (dt-trip src 100000 0) -1 "by cost")
+    (assert-eq (dt-trip src 100000 2) -1 "fixed")))
+
+(deftest test-a-match-at-distance-32768-is-used
+  (comment "Ten rare bytes, 32,758 bytes that never contain byte 1, the ten again:")
+  (comment "the only way to code the last ten cheaply is distance 32,768. Against")
+  (comment "the same data with the last byte changed, the stream is shorter.")
+  (let [^Cells src (new-cells)
+        ^Cells ws (new-cells)
+        ^Buf z (new-buf)
+        ^Cells dec (new-cells)
+        ^Cells st (new-cells)
+        ^Cells rnd (new-cells)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 zn1 0]
+    (sm-seed rnd 21)
+    (while (< i 10)
+      (do (cells-push src (+ 1 i))
+          (set i (+ i 1))))
+    (while (< i 32768)
+      (do (cells-push src (+ 20 (sm-below rnd 200)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 10)
+      (do (cells-push src (+ 1 i))
+          (set i (+ i 1))))
+    (assert-eq (cells-len src) 32778 "length")
+    (set zn1 (dt-compress ws z src 32778 2))
+    (assert-eq (dt-verify z src 32778 dec st) -1 "round trip")
+    (cells-set src 32777 99)
+    (let [^I32 zn2 (dt-compress ws z src 32778 2)]
+      (assert-that (> (- zn2 zn1) 0) "a changed last byte costs more bytes")
+      (assert-eq (dt-verify z src 32778 dec st) -1 "round trip, changed"))))
+
+(deftest test-a-match-at-distance-32768-survives-every-block-type
+  (let [^Cells src (new-cells)
+        ^Cells rnd (new-cells)
+        ^:mut ^I32 i 0]
+    (sm-seed rnd 22)
+    (while (< i 10)
+      (do (cells-push src (+ 1 i))
+          (set i (+ i 1))))
+    (while (< i 32768)
+      (do (cells-push src (+ 20 (sm-below rnd 200)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 10)
+      (do (cells-push src (+ 1 i))
+          (set i (+ i 1))))
+    (assert-eq (dt-trip src 32778 0) -1 "by cost")
+    (assert-eq (dt-trip src 32778 1) -1 "stored")
+    (assert-eq (dt-trip src 32778 3) -1 "dynamic")))
+
+(deftest test-the-output-does-not-depend-on-how-the-input-is-split
+  (let [^Cells src (new-cells)
+        ^Cells ws (new-cells)
+        ^Buf whole (new-buf)
+        ^Buf bytewise (new-buf)
+        ^Buf chunks (new-buf)
+        ^:mut ^I32 i 0]
+    (dt-fill-text src 70000 13)
+    (dt-compress ws whole src 70000 0)
+    (df-init ws)
+    (while (< i 70000)
+      (do (df-write-cells ws bytewise src i (+ i 1))
+          (set i (+ i 1))))
+    (df-finish ws bytewise)
+    (df-init ws)
+    (set i 0)
+    (while (< i 70000)
+      (do (df-write-cells ws chunks src i (+ i 1000))
+          (set i (+ i 1000))))
+    (df-finish ws chunks)
+    (assert-eq (dt-same whole bytewise) 1 "byte by byte")
+    (assert-eq (dt-same whole chunks) 1 "in chunks of 1000")))
+
+(deftest test-mixed-content-uses-several-block-types
+  (comment "Random bytes, then text, then a run: blocks of different costs.")
+  (let [^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells c (new-cells)
+        ^Cells src (new-cells)
+        ^:mut ^I32 i 0]
+    (dt-fill-random a 20000 31)
+    (dt-fill-text b 40000 32)
+    (dt-fill-repeat c 30000 1 2 3)
+    (while (< i 20000)
+      (do (cells-push src (cells-at a i))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 40000)
+      (do (cells-push src (cells-at b i))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 30000)
+      (do (cells-push src (cells-at c i))
+          (set i (+ i 1))))
+    (assert-eq (dt-trip src 90000 0) -1 "by cost")))
+
+(deftest test-every-small-length-round-trips
+  (comment "0..40 bytes of text: the end-of-stream handling (the last two bytes")
+  (comment "are never hashed, a match may end exactly at the end).")
+  (let [^Cells src (new-cells)
+        ^:mut ^I32 n 0]
+    (dt-fill-repeat src 40 97 97 98)
+    (while (<= n 40)
+      (do (assert-eq-at (dt-trip src n 0) -1 "round trip of n bytes" n)
+          (set n (+ n 1))))))
+
+(deftest test-lengths-straddling-a-block-boundary-round-trip
+  (comment "Random literals: the 16,384th symbol closes a block exactly at the")
+  (comment "end, or one symbol before or after it.")
+  (let [^Cells src (new-cells)]
+    (dt-fill-random src 16386 41)
+    (assert-eq (dt-trip src 16383 0) -1 "16383")
+    (assert-eq (dt-trip src 16384 0) -1 "16384 (an empty final block follows)")
+    (assert-eq (dt-trip src 16385 0) -1 "16385")
+    (assert-eq (dt-trip src 16384 3) -1 "16384 dynamic")))

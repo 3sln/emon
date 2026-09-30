@@ -115,6 +115,78 @@ public static class Port {
         return b;
     }
 
+    // ---------------------------------------------------------- the Buf
+    //
+    // A growable run of bytes (see the Rust half for the contract).
+    public sealed class Buf {
+        internal byte[] V = new byte[64];
+        internal int N = 0;
+    }
+
+    public static Buf NewBuf() {
+        return new Buf();
+    }
+
+    // @kin:link:form:buf-len: {:template "emon.Port.BufLen({0})" :arity 1}
+    public static int BufLen(Buf b) {
+        return b.N;
+    }
+
+    // @kin:link:form:buf-at: {:template "emon.Port.BufAt({0}, {1})" :arity 2}
+    public static int BufAt(Buf b, int i) {
+        if (i < 0 || i >= b.N) {
+            throw new System.IndexOutOfRangeException();
+        }
+        return b.V[i];
+    }
+
+    // @kin:link:form:buf-push: {:template "emon.Port.BufPush({0}, {1})" :arity 2}
+    public static int BufPush(Buf b, int v) {
+        if (b.N == b.V.Length) {
+            System.Array.Resize(ref b.V, b.V.Length * 2);
+        }
+        b.V[b.N++] = unchecked((byte) v);
+        return b.N;
+    }
+
+    // @kin:link:form:buf-set: {:template "emon.Port.BufSet({0}, {1}, {2})" :arity 3}
+    public static void BufSet(Buf b, int i, int v) {
+        if (i < 0 || i >= b.N) {
+            throw new System.IndexOutOfRangeException();
+        }
+        b.V[i] = unchecked((byte) v);
+    }
+
+    // @kin:link:form:buf-truncate: {:template "emon.Port.BufTruncate({0}, {1})" :arity 2}
+    public static void BufTruncate(Buf b, int n) {
+        if (n < 0 || n > b.N) {
+            throw new System.IndexOutOfRangeException();
+        }
+        b.N = n;
+    }
+
+    // @kin:link:form:buf-append-blob: {:template "emon.Port.BufAppendBlob({0}, {1}, {2}, {3})" :arity 4}
+    public static void BufAppendBlob(Buf b, byte[] blob, int start, int end) {
+        if (start < 0 || end < start || end > blob.Length) {
+            throw new System.IndexOutOfRangeException();
+        }
+        int k = end - start;
+        if (b.N + k > b.V.Length) {
+            System.Array.Resize(ref b.V, System.Math.Max(b.N + k, b.V.Length * 2));
+        }
+        System.Array.Copy(blob, start, b.V, b.N, k);
+        b.N += k;
+    }
+
+    // @kin:link:form:buf-blob: {:template "emon.Port.BufBlob({0})" :arity 1}
+    //
+    // A copy (a `byte[]` cannot be a prefix of a larger array).
+    public static byte[] BufBlob(Buf b) {
+        var r = new byte[b.N];
+        System.Array.Copy(b.V, r, b.N);
+        return r;
+    }
+
     // ---------------------------------------------------------- the Bitmap
     //
     // An opaque 8-bit pixel buffer (see the Rust half for the contract). The

@@ -109,6 +109,58 @@ func CellsBytes(c *Cells) []byte {
 	return b
 }
 
+// -------------------------------------------------------------------- the Buf
+//
+// A growable run of bytes (see the Rust half for the contract).
+type Buf struct {
+	B []byte
+}
+
+func NewBuf() *Buf {
+	return &Buf{}
+}
+
+// @kin:link:form:buf-len: {:template "port.BufLen({0})" :import "emon/port" :arity 1}
+func BufLen(b *Buf) int32 {
+	return int32(len(b.B))
+}
+
+// @kin:link:form:buf-at: {:template "port.BufAt({0}, {1})" :import "emon/port" :arity 2}
+func BufAt(b *Buf, i int32) int32 {
+	return int32(b.B[i])
+}
+
+// @kin:link:form:buf-push: {:template "port.BufPush({0}, {1})" :import "emon/port" :arity 2}
+func BufPush(b *Buf, v int32) int32 {
+	b.B = append(b.B, byte(v))
+	return int32(len(b.B))
+}
+
+// @kin:link:form:buf-set: {:template "port.BufSet({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BufSet(b *Buf, i int32, v int32) {
+	b.B[i] = byte(v)
+}
+
+// @kin:link:form:buf-truncate: {:template "port.BufTruncate({0}, {1})" :import "emon/port" :arity 2}
+func BufTruncate(b *Buf, n int32) {
+	if n < 0 || int(n) > len(b.B) {
+		panic("BufTruncate out of range")
+	}
+	b.B = b.B[:n]
+}
+
+// @kin:link:form:buf-append-blob: {:template "port.BufAppendBlob({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
+func BufAppendBlob(b *Buf, blob []byte, start int32, end int32) {
+	b.B = append(b.B, blob[start:end]...)
+}
+
+// @kin:link:form:buf-blob: {:template "port.BufBlob({0})" :import "emon/port" :arity 1}
+//
+// The storage itself (a borrow, valid until the next write).
+func BufBlob(b *Buf) []byte {
+	return b.B
+}
+
 // ------------------------------------------------------------------ the Bitmap
 //
 // An opaque 8-bit pixel buffer (see the Rust half for the contract): Ch bytes

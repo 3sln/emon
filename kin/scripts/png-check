@@ -1,0 +1,361 @@
+#!/usr/bin/env bb
+;; Do INDEPENDENT decoders read what emon's PNG writer writes?   kin/scripts/png-check
+;; (DEVLOG P3.11, D117, SPEC 10.11)
+;;
+;; THE WRITER IS KIN (`emon.png` over `emon.deflate`); its own round trip
+;; (`kin/pngtest.kin`) uses emon's inflate, which is emon's too. This gate
+;; has other people's code read the files, and compares pixels:
+;;
+;;   1. the Rust build of `emon.pngprobe` writes the twelve test images (each
+;;      `imgK.png`, and `imgK.raw`, the packed rows the generator gave the
+;;      writer);
+;;   2. `java.util.zip.Inflater` inflates the IDATs, a small unfilter written
+;;      HERE undoes the filters, and the rows must equal `imgK.raw`;
+;;   3. ImageMagick (libpng) decodes each file to 16-bit RGBA, which must equal
+;;      what the samples mean (an 8-bit sample v is v*257, a 4-bit one v*17*257,
+;;      a palette entry its RGB and its alpha, gray the same thrice);
+;;   4. real pixels, when the untracked corpus is present (scanned A4 pages at
+;;      300 dpi, other scans, a photograph): java.util.zip inflates the whole
+;;      stream (it checks the Adler-32) and the filters are undone here for the
+;;      first 64 rows (a bb loop is an interpreter); ImageMagick, native,
+;;      decodes every pixel and they must equal the source pixels it decoded
+;;      the source image to;
+;;   and first of all: test/png/digests.txt (the committed SHA-256 of the
+;;   twelve files, which `bb unit` and `bb check` hold every target to) equals
+;;   what this Rust build writes (`--update-digests` rewrites it);
+;;   5. the SIZE, against java.util.zip.Deflater level 6 over the same filtered
+;;      rows (the inflated IDAT data), and against ImageMagick's own PNG of the
+;;      same pixels. Reported, not a gate beyond a generous ceiling.
+;;
+;; A GATE (`bb gates`), but not part of `bb check`: it needs `magick`, rustc and
+;; java; a missing tool is a SKIP, said loudly. THE VERSION OF THE DECODER IS PRINTED, since a decoder is an
+;; opinion and the record should say whose.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [shell process]]
+         '[clojure.string :as str])
+(import '[java.util.zip Inflater Deflater]
+        '[java.io ByteArrayOutputStream])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn skip [& xs] (println (str "  SKIP " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def work (str (fs/create-temp-dir {:prefix "emon-pngcheck."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+
+(defn exec [dir & cmd]
+  (let [r @(apply process {:dir dir :out :string :err :string} cmd)]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+
+(defn have? [cmd] (zero? (:exit (exec "." "sh" "-c" (str "command -v " cmd)))))
+
+(when-not (and (have? "magick") (have? "rustc"))
+  (skip "magick or rustc not on PATH: nothing to check")
+  (System/exit 0))
+
+(def magick-version
+  (-> (:out (exec "." "magick" "-version")) str/split-lines first))
+
+;; ------------------------------------------------------------- the writer
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+(def rust-main "
+#![allow(dead_code, unused_mut, unused_variables)]
+mod emon;
+mod port;
+use std::io::Write;
+fn main() {
+    let a: Vec<String> = std::env::args().collect();
+    let mut ws = port::Cells::new();
+    let mut out = port::Buf::new();
+    let mut z = port::Buf::new();
+    let mut raw = port::Buf::new();
+    let mut row = port::Cells::new();
+    let mut st = port::Cells::new();
+    let mut pal = port::Cells::new();
+    match a[1].as_str() {
+        \"images\" => {
+            for k in 0..emon::pngprobe::pp_count() {
+                out.0.clear(); raw.0.clear();
+                emon::pngprobe::pp_build(k, &mut ws, &mut out, &mut z, &mut raw, &mut row, &mut st, &mut pal);
+                std::fs::write(format!(\"{}/img{}.png\", a[2], k), &out.0).unwrap();
+                std::fs::write(format!(\"{}/img{}.raw\", a[2], k), &raw.0).unwrap();
+            }
+        }
+        \"digests\" => {
+            let mut dig = port::Cells::new();
+            for k in 0..emon::pngprobe::pp_count() {
+                out.0.clear(); raw.0.clear();
+                emon::pngprobe::pp_build(k, &mut ws, &mut out, &mut z, &mut raw, &mut row, &mut st, &mut pal);
+                let mut t = String::new();
+                emon::pngprobe::pp_digest(&mut out, &mut dig, &mut t);
+                println!(\"{}\", t);
+            }
+        }
+        \"page\" => {
+            // page IN W H CH DPI100 OUT
+            let px = std::fs::read(&a[2]).unwrap();
+            let (w, h, ch, dpi): (i32, i32, i32, i32) = (a[3].parse().unwrap(), a[4].parse().unwrap(), a[5].parse().unwrap(), a[6].parse().unwrap());
+            let t = std::time::Instant::now();
+            emon::pngprobe::pp_page(&mut ws, &mut out, &mut z, &px[..], w, h, ch, dpi, &mut row, &mut pal);
+            let ms = t.elapsed().as_millis();
+            std::fs::write(&a[7], &out.0).unwrap();
+            println!(\"{}\", ms);
+        }
+        _ => panic!(\"mode\"),
+    }
+}
+")
+
+(defn build-rust []
+  (let [d (str work "/rust")]
+    (fs/create-dirs (str d "/emon"))
+    (doseq [m ["deflate" "png" "pngprobe" "splitmix"]]
+      (fs/copy (str "gen/rust/emon/" m ".rs") (str d "/emon/" m ".rs")))
+    (fs/copy "host/rust/src/port.rs" (str d "/port.rs"))
+    (spit (str d "/emon.rs") "pub mod deflate;\npub mod png;\npub mod pngprobe;\npub mod splitmix;\n")
+    (spit (str d "/main.rs") rust-main)
+    (let [r (exec d "rustc" "--edition" "2021" "-O" "-A" "warnings" "-o" "prog" "main.rs")]
+      (if (zero? (:exit r))
+        (str d "/prog")
+        (do (bad "the Rust driver did not build:\n" (:err r)) nil)))))
+
+;; ---------------------------------------------------------- a PNG, read here
+
+(defn u8 [^bytes b i] (bit-and 0xFF (aget b i)))
+(defn u32 [^bytes b i]
+  (+ (bit-shift-left (u8 b i) 24) (bit-shift-left (u8 b (+ i 1)) 16)
+     (bit-shift-left (u8 b (+ i 2)) 8) (u8 b (+ i 3))))
+
+(defn chunks [^bytes png]
+  (loop [pos 8 acc []]
+    (if (>= pos (alength png))
+      acc
+      (let [n (u32 png pos)
+            ty (String. png (int (+ pos 4)) 4 "ISO-8859-1")]
+        (recur (+ pos 12 n) (conj acc {:type ty :at (+ pos 8) :len n}))))))
+
+(defn inflate [^bytes data]
+  (let [inf (Inflater.) out (ByteArrayOutputStream.) buf (byte-array 65536)]
+    (.setInput inf data)
+    (loop []
+      (let [n (.inflate inf buf)]
+        (when (pos? n) (.write out buf 0 n))
+        (cond (.finished inf) nil
+              (and (zero? n) (or (.needsInput inf) (.needsDictionary inf)))
+              (throw (ex-info "inflate: truncated or needs a dictionary" {}))
+              :else (recur))))
+    (.end inf)
+    (.toByteArray out)))
+
+(defn read-png [^bytes png]
+  (let [cs (chunks png)
+        ihdr (first (filter #(= "IHDR" (:type %)) cs))
+        at (:at ihdr)
+        idat (let [bo (ByteArrayOutputStream.)]
+               (doseq [c (filter #(= "IDAT" (:type %)) cs)]
+                 (.write bo png (int (:at c)) (int (:len c))))
+               (.toByteArray bo))
+        plte (first (filter #(= "PLTE" (:type %)) cs))
+        trns (first (filter #(= "tRNS" (:type %)) cs))]
+    {:w (u32 png at) :h (u32 png (+ at 4)) :depth (u8 png (+ at 8)) :ct (u8 png (+ at 9))
+     :chunks cs :idat idat
+     :plte (when plte (vec (for [i (range (:len plte))] (u8 png (+ (:at plte) i)))))
+     :trns (when trns (vec (for [i (range (:len trns))] (u8 png (+ (:at trns) i)))))}))
+
+(defn channels [ct] (case (int ct) 0 1 2 3 3 1 4 2 6 4))
+
+(defn unfilter
+  "The inflated IDAT data -> packed rows (a byte array), by the PNG spec's own rules."
+  [{:keys [w h depth ct]} ^bytes data]
+  (let [bits (* (channels ct) depth)
+        rowb (quot (+ (* w bits) 7) 8)
+        bpp (quot (+ bits 7) 8)
+        out (byte-array (* h rowb))
+        filters (long-array 5)]
+    (assert (= (alength data) (* h (inc rowb))) "inflated size is not h * (rowb + 1)")
+    (dotimes [y h]
+      (let [rs (* y (inc rowb)) f (u8 data rs) o (* y rowb) p (- o rowb)]
+        (aset filters f (inc (aget filters f)))
+        (dotimes [i rowb]
+          (let [x (u8 data (+ rs 1 i))
+                a (if (>= i bpp) (u8 out (+ o (- i bpp))) 0)
+                b (if (pos? y) (u8 out (+ p i)) 0)
+                c (if (and (pos? y) (>= i bpp)) (u8 out (+ p (- i bpp))) 0)
+                pred (case f
+                       0 0 1 a 2 b 3 (quot (+ a b) 2)
+                       4 (let [pp (- (+ a b) c) pa (Math/abs (- pp a)) pb (Math/abs (- pp b)) pc (Math/abs (- pp c))]
+                           (cond (and (<= pa pb) (<= pa pc)) a (<= pb pc) b :else c)))]
+            (aset out (+ o i) (unchecked-byte (bit-and 0xFF (+ x pred))))))))
+    {:rows out :filters (vec filters) :rowb rowb}))
+
+(defn rgba16
+  "What the packed samples mean, as 16-bit big-endian RGBA."
+  [{:keys [w h depth ct plte trns]} ^bytes rows]
+  (let [bits (* (channels ct) depth)
+        rowb (quot (+ (* w bits) 7) 8)
+        out (byte-array (* w h 8))
+        sample (fn [y x c] ;; sample c of pixel x in row y
+                 (let [o (* y rowb)]
+                   (case (int depth)
+                     16 (+ (* 256 (u8 rows (+ o (* 2 (+ (* x (channels ct)) c)))))
+                           (u8 rows (+ o 1 (* 2 (+ (* x (channels ct)) c)))))
+                     8 (u8 rows (+ o (+ (* x (channels ct)) c)))
+                     (let [bit (* x depth)]
+                       (bit-and (dec (bit-shift-left 1 depth))
+                                (bit-shift-right (u8 rows (+ o (quot bit 8)))
+                                                 (- 8 depth (mod bit 8))))))))
+        scale (fn [v] (case (int depth) 16 v 8 (* v 257) (* (quot 255 (dec (bit-shift-left 1 depth))) v 257)))
+        put (fn [y x r g b a]
+              (let [i (* 8 (+ (* y w) x))]
+                (doseq [[k v] (map-indexed vector [r g b a])]
+                  (aset out (+ i (* 2 k)) (unchecked-byte (bit-shift-right v 8)))
+                  (aset out (+ i (* 2 k) 1) (unchecked-byte (bit-and v 255))))))]
+    (dotimes [y h]
+      (dotimes [x w]
+        (case (int ct)
+          0 (let [g (scale (sample y x 0))] (put y x g g g 65535))
+          2 (put y x (scale (sample y x 0)) (scale (sample y x 1)) (scale (sample y x 2)) 65535)
+          3 (let [i (sample y x 0)]
+              (put y x (* 257 (nth plte (* 3 i))) (* 257 (nth plte (+ 1 (* 3 i)))) (* 257 (nth plte (+ 2 (* 3 i))))
+                   (if (and trns (< i (count trns))) (* 257 (nth trns i)) 65535)))
+          4 (let [g (scale (sample y x 0))] (put y x g g g (scale (sample y x 1))))
+          6 (put y x (scale (sample y x 0)) (scale (sample y x 1)) (scale (sample y x 2)) (scale (sample y x 3))))))
+    out))
+
+(defn magick-rgba16 [file]
+  (let [r @(process {:out :bytes :err :string} "magick" file "-endian" "MSB" "-depth" "16" "rgba:-")]
+    (when-not (zero? (:exit r)) (throw (ex-info (str "magick failed: " (:err r)) {})))
+    (let [b (:out r)] (if (bytes? b) b (.readAllBytes b)))))
+
+(defn zlib-size
+  "Bytes of a zlib stream of `data` at `level`."
+  [^bytes data level]
+  (let [d (Deflater. level) out (ByteArrayOutputStream.) buf (byte-array 65536)]
+    (.setInput d data) (.finish d)
+    (while (not (.finished d)) (.write out buf 0 (.deflate d buf)))
+    (.end d)
+    (.size out)))
+
+;; ------------------------------------------------------------------ the run
+
+(let [prog (build-rust)]
+  (when-not prog (System/exit 1))
+  (println (str "  decoder: " magick-version "; java " (System/getProperty "java.version")))
+  ;; THE COMMITTED DIGESTS (test/png/digests.txt, which the unit laws and `bb
+  ;; check` compare on every target) are what this build writes. A deliberate
+  ;; change of the encoder is made visible by `--update-digests` and a diff.
+  (let [want (:out (exec "." prog "digests"))
+        file "test/png/digests.txt"]
+    (if (some #{"--update-digests"} *command-line-args*)
+      (do (spit file want) (ok "wrote " file))
+      (check (= want (slurp file)) "test/png/digests.txt holds the SHA-256 of the twelve files the Rust build writes")))
+  (let [dir (str work "/img")]
+    (fs/create-dirs dir)
+    (let [r (exec "." prog "images" dir)]
+      (when-not (zero? (:exit r)) (bad "the driver failed: " (:err r))))
+    (let [n (count (fs/glob dir "img*.png"))
+          results
+          (for [k (range n)]
+            (let [file (str dir "/img" k ".png")
+                  png (fs/read-all-bytes file)
+                  raw (fs/read-all-bytes (str dir "/img" k ".raw"))
+                  info (read-png png)
+                  zl (try (let [{:keys [rows]} (unfilter info (inflate (:idat info)))]
+                            (java.util.Arrays/equals ^bytes rows ^bytes raw))
+                          (catch Throwable e (println "   " k (str e)) false))
+                  im (try (java.util.Arrays/equals ^bytes (magick-rgba16 file)
+                                                   ^bytes (rgba16 info raw))
+                          (catch Throwable e (println "   " k (str e)) false))]
+              (when-not zl (bad "image " k ": java.util.zip + the unfilter do not give the generator's rows"))
+              (when-not im (bad "image " k ": ImageMagick's RGBA16 is not what the samples mean"))
+              {:k k :zl zl :im im}))
+          results (doall results)]
+      (check (and (= 12 n) (every? :zl results))
+             n " generated images inflate with java.util.zip to exactly the generator's rows")
+      (check (every? :im results)
+             n " generated images decode in ImageMagick to exactly the generator's RGBA16"))))
+
+;; --------------------------------------------------------- real pixels, size
+
+(def scans
+  (vec (take 4 (sort (map str (fs/glob "corpus/formats/derived" "inv_0000[0-2].png"))))))
+(def scan2 (vec (take 2 (sort (map str (fs/glob "corpus/formats/derived" "sroie_0001[1-2].*.png"))))))
+(def photo (first (sort (map str (fs/glob "corpus/financial/sroie2019/test" "*.jpg")))))
+
+(defn real-case
+  "Write `src` (decoded by ImageMagick to ch-channel 8-bit rows, resized to
+  `size` when given) with the Rust build; check both decoders; answer the sizes."
+  [prog label src ch dpi size]
+  (let [raw (str work "/" label ".raw")
+        png (str work "/" label ".png")
+        im-own (str work "/" label ".im.png")
+        fmt (if (= ch 1) "gray:" "rgb:")
+        common (concat ["magick" (str src "[0]")]
+                       (if (= ch 1) ["-colorspace" "Gray"] [])
+                       (when size ["-resize" (str (first size) "x" (second size) "!")])
+                       ["-depth" "8"])
+        _ (apply shell {:out :string :err :string} (concat common [(str fmt raw)]))
+        _ (apply shell {:out :string :err :string} (concat common [im-own]))
+        [w h] (or size
+                  (map parse-long
+                       (str/split (str/trim (:out (exec "." "magick" "identify" "-format" "%w %h"
+                                                        (str src "[0]")))) #" ")))
+        _ (assert (= (fs/size raw) (* (long w) (long h) ch)) (str label ": raw size is not w*h*ch"))
+        t (exec "." prog "page" raw (str w) (str h) (str ch) (str dpi) png)
+        _ (when-not (zero? (:exit t)) (throw (ex-info (str label ": driver failed " (:err t)) {})))
+        ms (parse-long (str/trim (:out t)))
+        bytes (fs/read-all-bytes png)
+        info (read-png bytes)
+        data (inflate (:idat info))
+        ;; THE WHOLE STREAM IS INFLATED by java.util.zip (which checks the
+        ;; Adler-32); a bb loop is an interpreter, so the filters are undone
+        ;; and compared for the first 64 rows only, and ImageMagick (native)
+        ;; is what compares every pixel.
+        rowb (quot (+ (* w (channels (:ct info)) (:depth info)) 7) 8)
+        _ (assert (= (alength ^bytes data) (* h (inc rowb))) (str label ": inflated size is not h * (rowb + 1)"))
+        nrows (min h 64)
+        src-bytes (fs/read-all-bytes raw)
+        {:keys [rows]} (unfilter (assoc info :h nrows)
+                                 (java.util.Arrays/copyOf ^bytes data (int (* nrows (inc rowb)))))
+        filters (frequencies (for [y (range h)] (u8 data (* y (inc rowb)))))
+        zl-eq (java.util.Arrays/equals ^bytes rows
+                                       ^bytes (java.util.Arrays/copyOf ^bytes src-bytes (int (* nrows rowb))))
+        im-out (let [r @(process {:out :bytes :err :string} "magick" png "-depth" "8" (str fmt "-"))
+                     b (:out r)]
+                 (if (bytes? b) b (.readAllBytes b)))
+        im-eq (java.util.Arrays/equals ^bytes im-out ^bytes src-bytes)
+        z6 (zlib-size data 6)]
+    {:label label :w w :h h :ch ch :ms ms :ours (alength ^bytes bytes)
+     :zlib6 z6 :im-own (fs/size im-own) :filters filters :zl zl-eq :im im-eq}))
+
+(when (seq scans)
+  (let [prog (str work "/rust/prog")
+        cases (concat
+               (for [s scans] [(str "scan-" (fs/file-name s)) s 1 30000 nil])
+               (for [s scan2] [(str "scan-" (fs/file-name s)) s 1 0 nil])
+               (when photo [["photo-1200x800-rgb" photo 3 0 [1200 800]]]))
+        rs (doall (for [[label src ch dpi size] cases]
+                    (try (real-case prog label src ch dpi size)
+                         (catch Throwable e (bad label ": " (.getMessage e)) nil))))
+        rs (remove nil? rs)]
+    (doseq [r rs]
+      (when-not (:zl r) (bad (:label r) ": java.util.zip + unfilter do not give the source pixels"))
+      (when-not (:im r) (bad (:label r) ": ImageMagick's RGBA16 is not the source pixels"))
+      (println (format "   %-32s %4dx%-4d ch%d  emon %8d B  zlib-6/same rows %8d B  magick %8d B  emon/zlib %.3f  filters %s  %d ms"
+                       (:label r) (:w r) (:h r) (:ch r) (:ours r) (:zlib6 r) (:im-own r)
+                       (double (/ (:ours r) (:zlib6 r))) (:filters r) (:ms r))))
+    (check (and (seq rs) (every? :zl rs) (every? :im rs))
+           (count rs) " real images (scans, a photograph) decode to their source pixels in java.util.zip and ImageMagick")
+    (let [worst (apply max (map #(/ (:ours %) (:zlib6 %)) rs))]
+      (check (< worst 1.6)
+             (format "the largest file is %.3f times zlib level 6 over the same rows (ceiling 1.6)" (double worst))))))
+(when-not (seq scans)
+  (skip "corpus/ is not present: real scans and the photograph are not checked (the twelve generated images were)"))
+
+(if (zero? @fails)
+  (println "  ok   independent decoders agree with the PNG writer")
+  (System/exit 1))

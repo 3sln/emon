@@ -1,0 +1,319 @@
+;; THE CANONICAL PNG WRITER (P3.11, D117, SPEC 10.11). emon's own module (D039),
+;; written from the PNG specification (ISO/IEC 15948) over `emon.deflate`.
+;;
+;;   (png-begin ws out z w h ctype depth dpi100 pal npal trns)
+;;   (png-row   ws out z cells start)      once per row, top to bottom
+;;   (png-end   ws out z)
+;;
+;; `ws` is ONE `Cells` for both modules (`df-init` sizes it, this adds the
+;; CRC-32 table and the previous row after it), `out` the `Buf` that receives
+;; the file, `z` a scratch `Buf` that holds the zlib bytes until they fill an
+;; IDAT. THE WRITER STREAMS: a row goes in, filtered, into the compressor,
+;; and every 65,536 bytes of compressed data leave as one IDAT chunk; the
+;; image is never held. The working set is the deflate workspace (about 670
+;; KiB), one row, and at most a few IDATs of `z`.
+;;
+;; THE FILE IS A FUNCTION OF THE PIXELS and of nothing else (SPEC 10.11):
+;;   chunks     IHDR, PLTE and tRNS (palette images), pHYs (when dpi100 > 0),
+;;              IDAT..., IEND. No tIME, text, gamma or anything else.
+;;   colour     ctype 0 gray, 2 RGB, 3 palette, 4 gray+alpha, 6 RGBA; depth
+;;              1, 2, 4, 8 or 16 as the type allows (the caller's concern).
+;;   pHYs       (dpi100 * 100 + 127) / 254 pixels per metre both ways, unit 1.
+;;              `dpi100` is the resolution in hundredths of a dot per inch.
+;;   filter     of the five, the one whose filtered row has the smallest sum
+;;              of absolute SIGNED bytes; ties to the lower filter number.
+;;              Filter 0 for palette images and for depths below 8.
+;;   deflate    `emon.deflate`, every parameter of it fixed.
+;;
+;; A ROW is `ceil(w * channels * depth / 8)` cells of 0..255, the bytes the
+;; PNG format itself uses (sub-byte samples packed high bits first, 16-bit
+;; samples big-endian), read from `cells[start..]`. The palette is four cells
+;; per entry (r, g, b, a); `npal` entries go in PLTE and the first `trns` alphas
+;; in tRNS (0 for none).
+(ns emon.png
+  (:require [emon.lang :refer [I32 Cells Buf shl32 sar32]]
+            [emon.port :refer [cells-at cells-set cells-grow buf-len buf-at
+                               buf-push buf-set buf-truncate buf-append-blob
+                               buf-blob]]
+            [emon.deflate :refer [df-size df-init df-ensure df-byte df-finish]]
+            [kin.lang :refer [defn defconst return let set while if comment do
+                              + - * < > <= >= == != and or bit-and bit-or
+                              bit-xor quot rem]]))
+
+(defconst ^I32 PN_W 0)
+(defconst ^I32 PN_H 1)
+(defconst ^I32 PN_CT 2)
+(defconst ^I32 PN_DEPTH 3)
+(defconst ^I32 PN_BPP 4)     ;; bytes per pixel, at least 1: the distance of `a`
+(defconst ^I32 PN_ROWB 5)    ;; bytes in a row
+(defconst ^I32 PN_ROWS 6)    ;; rows written
+(defconst ^I32 PN_ONLY0 7)   ;; 1: filter 0 only
+(defconst ^I32 PN_CRC 32)    ;; 256: the CRC-32 table
+(defconst ^I32 PN_PREV 288)  ;; the previous row, rowb cells
+
+(defconst ^I32 CRC_POLY -306674912)   ;; 0xEDB88320
+(defconst ^I32 T_IHDR 1229472850)     ;; "IHDR"
+(defconst ^I32 T_PLTE 1347179589)
+(defconst ^I32 T_TRNS 1951551059)
+(defconst ^I32 T_PHYS 1883789683)
+(defconst ^I32 T_IDAT 1229209940)
+(defconst ^I32 T_IEND 1229278788)
+
+;; ------------------------------------------------------------------ CRC-32
+
+(defn ^I32 pn-crc-table [^:mut ^Cells ws ^I32 at]
+  (comment "The table of CRC-32 (polynomial EDB88320, reflected) at ws[at..at+256).")
+  (let [^:mut ^I32 n 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 k 0]
+    (while (< n 256)
+      (do (set c n)
+          (set k 0)
+          (while (< k 8)
+            (do (if (== (bit-and c 1) 1)
+                  (set c (bit-xor CRC_POLY (bit-and (sar32 c 1) 2147483647)))
+                  (set c (bit-and (sar32 c 1) 2147483647)))
+                (set k (+ k 1))))
+          (cells-set ws (+ at n) c)
+          (set n (+ n 1))))
+    (return 0)))
+
+;; ---------------------------------------------------------------- chunks
+
+(defn ^I32 pn-u32 [^:mut ^Buf out ^I32 v]
+  (buf-push out (bit-and (sar32 v 24) 255))
+  (buf-push out (bit-and (sar32 v 16) 255))
+  (buf-push out (bit-and (sar32 v 8) 255))
+  (buf-push out (bit-and v 255))
+  (return 0))
+
+(defn ^I32 pn-open [^:mut ^Buf out ^I32 ty]
+  (comment "Begin a chunk: a length to be filled in, the four type bytes. Answers")
+  (comment "the offset of the chunk.")
+  (let [^I32 at (buf-len out)]
+    (pn-u32 out 0)
+    (pn-u32 out ty)
+    (return at)))
+
+(defn ^I32 pn-close [^Cells ws ^:mut ^Buf out ^I32 at]
+  (comment "End the chunk begun at `at`: its length, then the CRC-32 of the type")
+  (comment "and data.")
+  (let [^I32 tab (+ (df-size) PN_CRC)
+        ^I32 end (buf-len out)
+        ^I32 n (- end (+ at 8))
+        ^:mut ^I32 crc -1
+        ^:mut ^I32 i (+ at 4)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 t 0]
+    (buf-set out at (bit-and (sar32 n 24) 255))
+    (buf-set out (+ at 1) (bit-and (sar32 n 16) 255))
+    (buf-set out (+ at 2) (bit-and (sar32 n 8) 255))
+    (buf-set out (+ at 3) (bit-and n 255))
+    (while (< i end)
+      (do (set x (bit-and (bit-xor crc (buf-at out i)) 255))
+          (set t (cells-at ws (+ tab x)))
+          (set crc (bit-xor t (bit-and (sar32 crc 8) 16777215)))
+          (set i (+ i 1))))
+    (pn-u32 out (bit-xor crc -1))
+    (return 0)))
+
+;; ------------------------------------------------------------------- begin
+
+(defn ^:pub ^I32 png-begin [^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z
+                            ^I32 w ^I32 h ^I32 ctype ^I32 depth ^I32 dpi100
+                            ^Cells pal ^I32 npal ^I32 trns]
+  (comment "Start a file: the signature, IHDR, PLTE and tRNS for a palette, pHYs.")
+  (let [^I32 b (df-size)
+        ^:mut ^I32 ch 1
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 rowb 0
+        ^:mut ^I32 bpp 1
+        ^:mut ^I32 at 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 ppm 0]
+    (df-init ws)
+    (if (== ctype 2) (set ch 3))
+    (if (== ctype 4) (set ch 2))
+    (if (== ctype 6) (set ch 4))
+    (set bits (* ch depth))
+    (set rowb (quot (+ (* w bits) 7) 8))
+    (set bpp (quot (+ bits 7) 8))
+    (cells-grow ws (+ PN_PREV rowb) 0)
+    (pn-crc-table ws (+ b PN_CRC))
+    (cells-set ws (+ b PN_W) w)
+    (cells-set ws (+ b PN_H) h)
+    (cells-set ws (+ b PN_CT) ctype)
+    (cells-set ws (+ b PN_DEPTH) depth)
+    (cells-set ws (+ b PN_BPP) bpp)
+    (cells-set ws (+ b PN_ROWB) rowb)
+    (if (or (== ctype 3) (< depth 8))
+      (cells-set ws (+ b PN_ONLY0) 1))
+    (buf-truncate z 0)
+    (buf-push out 137)
+    (buf-push out 80)
+    (buf-push out 78)
+    (buf-push out 71)
+    (buf-push out 13)
+    (buf-push out 10)
+    (buf-push out 26)
+    (buf-push out 10)
+    (set at (pn-open out T_IHDR))
+    (pn-u32 out w)
+    (pn-u32 out h)
+    (buf-push out depth)
+    (buf-push out ctype)
+    (buf-push out 0)
+    (buf-push out 0)
+    (buf-push out 0)
+    (pn-close ws out at)
+    (if (and (== ctype 3) (> npal 0))
+      (do (set at (pn-open out T_PLTE))
+          (while (< i npal)
+            (do (buf-push out (cells-at pal (* i 4)))
+                (buf-push out (cells-at pal (+ (* i 4) 1)))
+                (buf-push out (cells-at pal (+ (* i 4) 2)))
+                (set i (+ i 1))))
+          (pn-close ws out at)
+          (if (> trns 0)
+            (do (set at (pn-open out T_TRNS))
+                (set i 0)
+                (while (< i trns)
+                  (do (buf-push out (cells-at pal (+ (* i 4) 3)))
+                      (set i (+ i 1))))
+                (pn-close ws out at)))))
+    (if (> dpi100 0)
+      (do (set ppm (quot (+ (* dpi100 100) 127) 254))
+          (set at (pn-open out T_PHYS))
+          (pn-u32 out ppm)
+          (pn-u32 out ppm)
+          (buf-push out 1)
+          (pn-close ws out at)))
+    (return 0)))
+
+;; -------------------------------------------------------------------- rows
+
+(defn ^I32 pn-sb [^I32 d]
+  (comment "The absolute value of the low byte of d read as a signed byte.")
+  (let [^I32 v (bit-and d 255)]
+    (if (> v 127) (return (- 256 v)))
+    (return v)))
+
+(defn ^I32 pn-paeth [^I32 a ^I32 b ^I32 c]
+  (let [^I32 p (- (+ a b) c)
+        ^:mut ^I32 pa (- p a)
+        ^:mut ^I32 pb (- p b)
+        ^:mut ^I32 pc (- p c)]
+    (if (< pa 0) (set pa (- 0 pa)))
+    (if (< pb 0) (set pb (- 0 pb)))
+    (if (< pc 0) (set pc (- 0 pc)))
+    (if (and (<= pa pb) (<= pa pc)) (return a))
+    (if (<= pb pc) (return b))
+    (return c)))
+
+(defn ^I32 pn-idat [^Cells ws ^:mut ^Buf out ^Buf z ^I32 from ^I32 n]
+  (comment "One IDAT chunk holding z[from, from + n).")
+  (let [^I32 at (pn-open out T_IDAT)]
+    (buf-append-blob out (buf-blob z) from (+ from n))
+    (pn-close ws out at)
+    (return 0)))
+
+(defn ^I32 pn-flush [^Cells ws ^:mut ^Buf out ^:mut ^Buf z ^I32 all]
+  (comment "Every full 65,536 bytes of z become an IDAT (and, when `all` is 1, the")
+  (comment "rest too); what is left moves to the front of z.")
+  (let [^I32 total (buf-len z)
+        ^:mut ^I32 done 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (while (>= (- total done) 65536)
+      (do (pn-idat ws out z done 65536)
+          (set done (+ done 65536))))
+    (if (and (== all 1) (> (- total done) 0))
+      (do (pn-idat ws out z done (- total done))
+          (set done total)))
+    (if (> done 0)
+      (do (set n (- total done))
+          (while (< i n)
+            (do (set v (buf-at z (+ done i)))
+                (buf-set z i v)
+                (set i (+ i 1))))
+          (buf-truncate z n)))
+    (return 0)))
+
+(defn ^:pub ^I32 png-row [^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z
+                          ^Cells cells ^I32 start]
+  (comment "Filter one row (the filter chosen as the header says) into the")
+  (comment "compressor, and remember it as the next row's `up`.")
+  (let [^I32 b (df-size)
+        ^I32 rowb (cells-at ws (+ b PN_ROWB))
+        ^I32 bpp (cells-at ws (+ b PN_BPP))
+        ^I32 pb (+ b PN_PREV)
+        ^:mut ^I32 f 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 best 0]
+    (if (== (cells-at ws (+ b PN_ONLY0)) 0)
+      (do (while (< i rowb)
+            (do (set x (cells-at cells (+ start i)))
+                (set a 0)
+                (set c 0)
+                (if (>= i bpp)
+                  (do (set a (cells-at cells (+ start (- i bpp))))
+                      (set c (cells-at ws (+ pb (- i bpp))))))
+                (set u (cells-at ws (+ pb i)))
+                (set s0 (+ s0 (pn-sb x)))
+                (set s1 (+ s1 (pn-sb (- x a))))
+                (set s2 (+ s2 (pn-sb (- x u))))
+                (set s3 (+ s3 (pn-sb (- x (quot (+ a u) 2)))))
+                (set s4 (+ s4 (pn-sb (- x (pn-paeth a u c)))))
+                (set i (+ i 1))))
+          (set best s0)
+          (if (< s1 best) (do (set f 1) (set best s1)))
+          (if (< s2 best) (do (set f 2) (set best s2)))
+          (if (< s3 best) (do (set f 3) (set best s3)))
+          (if (< s4 best) (do (set f 4) (set best s4)))))
+    (df-ensure ws z)
+    (df-byte ws z f)
+    (set i 0)
+    (while (< i rowb)
+      (do (set x (cells-at cells (+ start i)))
+          (set a 0)
+          (set c 0)
+          (if (>= i bpp)
+            (do (set a (cells-at cells (+ start (- i bpp))))
+                (set c (cells-at ws (+ pb (- i bpp))))))
+          (set u (cells-at ws (+ pb i)))
+          (set v x)
+          (if (== f 1) (set v (- x a)))
+          (if (== f 2) (set v (- x u)))
+          (if (== f 3) (set v (- x (quot (+ a u) 2))))
+          (if (== f 4) (set v (- x (pn-paeth a u c))))
+          (df-byte ws z (bit-and v 255))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i rowb)
+      (do (set x (cells-at cells (+ start i)))
+          (cells-set ws (+ pb i) x)
+          (set i (+ i 1))))
+    (cells-set ws (+ b PN_ROWS) (+ (cells-at ws (+ b PN_ROWS)) 1))
+    (if (>= (buf-len z) 65536)
+      (pn-flush ws out z 0))
+    (return 0)))
+
+(defn ^:pub ^I32 png-end [^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z]
+  (comment "Finish the zlib stream, write the last IDATs and IEND.")
+  (let [^:mut ^I32 at 0]
+    (df-finish ws z)
+    (pn-flush ws out z 1)
+    (set at (pn-open out T_IEND))
+    (pn-close ws out at)
+    (return 0)))

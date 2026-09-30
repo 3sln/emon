@@ -716,7 +716,7 @@ host implement it however it likes.
 | `Src` | an input byte source (§13.1, D058): `src-len`, `src-u8` (may miss), `src-missed`, `src-slice` (span → `Blob`), `src-of-cells`, `src-of-blob`, `src-hint`; the PDF code reads it through `emon.pdfsrc` (`ps-len`, `ps-u8`, `ps-missed`, `ps-hint`) and the forms `src-slice` and `src-of-cells`, which return borrows and so are forms, not functions (D074) | the chunk cache, and whether a read can block or must be awaited, are the host's |
 | `Cells` | growable `i32` arena: len, at, set, push, drop | kin cannot allocate (nome) |
 | `Text` | append code point / ASCII literal / decimal; host encodes UTF-8 | output buffers differ; the *format* is kin's |
-| `Buf` | growable **byte** buffer: `buf-len`, `buf-at`, `buf-push`, `buf-set`, `buf-append-blob` (a span of a `Blob`), `buf-blob` (borrow as a `Blob`, a form); what asset bytes and the PNG encoder write into (D117) | `Cells` spends four bytes a byte, which a 32 MiB asset budget cannot afford in a browser |
+| `Buf` | growable **byte** buffer: `buf-len`, `buf-at`, `buf-push`, `buf-set`, `buf-truncate` (to a length), `buf-append-blob` (a span of a `Blob`), `buf-blob` (borrow as a `Blob`, valid until the next write; a copy on Java and C#); writes keep the low eight bits, `buf-push` answers the new length; what asset bytes and the PNG encoder write into (D117, D123) | `Cells` spends four bytes a byte, which a 32 MiB asset budget cannot afford in a browser |
 | `Bitmap` | 8-bit gray or RGB, row-major, top-left; new/read/write | pixel buffers differ; decoding is a codec's job |
 | `ImageDecode` | encoded bytes → frames → `Bitmap` + resolution | four mature codec stacks exist; includes PDF's `DCTDecode`, `JPXDecode`, `JBIG2Decode`, `CCITTFaxDecode` (D005) |
 | `Renderer` | PDF page + resolution → `Bitmap` | a correct PDF rasteriser is pdfium/MuPDF-sized (D007) |
@@ -1796,8 +1796,22 @@ each block stored, fixed or dynamic by fewest bits (ties in that order),
 dynamic lengths by package-merge limited to 15 (7 for the code-length code),
 ties by symbol, Adler-32. The encoder streams a row at a time, so its
 working set is the window and its tables (under 1 MiB), not the image.
-Changing any of this changes every committed asset hash, and is a reviewed
-change like any output change.
+The details that the sentence leaves open are fixed in `kin/deflate.kin`
+and `kin/png.kin` (D124): hash `((b0<<10) ^ (b1<<5) ^ b2) & 32767`;
+nearest candidate first, a longer match replaces the best only when
+strictly longer; "one step of lazy" is: having a match at *p*, look at
+*p*+1, and when that match is strictly longer emit *p* as a literal and
+take it, with no further look; every position is hashed once, in order,
+before the next is searched (the last two bytes of the stream never are);
+stored is a candidate only for a block covering at most 32,768 input
+bytes; in package-merge a leaf precedes a package of equal weight; fewer
+than two used symbols get length-1 codes for symbol 0 (or 1) and the used
+one; the literal/length and distance lengths are one run-length sequence
+(zeros by 18 then 17, a value once and then 16, the rest literal); an
+empty final block closes a stream whose symbols divide into blocks
+exactly. The output does not depend on how the rows or calls split the
+input. Changing any of this changes every committed asset hash, and is a
+reviewed change like any output change.
 
 **Admission, in node-id order.** An asset whose bytes equal an earlier one's
 (same SHA-256 and length) is that asset, with one more use — a logo on every
