@@ -62,11 +62,11 @@ same checksum list. (a) costs nothing and is the natural first step.
 
 ## 2. Importers
 
-`python3 tools/import/import_all.py [--limit N] [name ...]` runs them all (not part of `bb gates`: the corpus is not in the
-repository). Sources: `tools/import/<dataset>.py` (Python standard library; `jsonschema` is found as
-`kin/scripts/json-check.py` finds it). Output: `corpus/_gold/<dataset>/<id>.gold.json`, each validated
+`bb import [--limit N] [name ...]` runs them all (not part of `bb gates`: the corpus is not in the
+repository). Sources: `tools/import/<dataset>.clj` (babashka; the schema check is the `jsonschema` oracle,
+`tools/oracle/gold_validate.py`, found as `kin/scripts/json-check.py` finds it). Output: `corpus/_gold/<dataset>/<id>.gold.json`, each validated
 against `schema/emon-gold-1.json` plus document-order ids, page numbering, and regions on existing pages.
-`tools/import/spotcheck.py DATASET [ID...]` draws a gold's regions on its page (Pillow) for a human check.
+`bb tools/import/spotcheck.clj DATASET [ID...]` draws a gold's regions on its page (ImageMagick) for a human check.
 
 Last full run (corpus as fetched; "skipped" items are named in the importer's summary):
 
@@ -92,7 +92,7 @@ All `at` regions are `[page, x0, y0, x1, y1]`, top-left origin, y down (SPEC 3.4
 
 | Dataset | Native | Transform | Verified by |
 |---|---|---|---|
-| FUNSD, XFUND, SROIE, CORD, cTDaR, FinTabNet-OTSL, stamps | pixels, top-left origin | none (YOLO stamps: fractions times image size); page is the image at a nominal 1 px = 1 pt, `px` recorded, `dpi` not claimed | regions drawn on the image (`spotcheck.py`); annotated image size equals the file's header (XFUND, SROIE, CORD checked per item); no EXIF orientation anywhere (checked over every JPEG) |
+| FUNSD, XFUND, SROIE, CORD, cTDaR, FinTabNet-OTSL, stamps | pixels, top-left origin | none (YOLO stamps: fractions times image size); page is the image at a nominal 1 px = 1 pt, `px` recorded, `dpi` not claimed | regions drawn on the image (`spotcheck.clj`); annotated image size equals the file's header (XFUND, SROIE, CORD checked per item); no EXIF orientation anywhere (checked over every JPEG) |
 | DocLayNet | `[x,y,w,h]` in a 1025 x 1025 canvas onto which the page is **stretched** (not letterboxed) | `x_pt = x * original_width / coco_width`, `y_pt = y * original_height / coco_height`, then add w, h | words of `pdf_cells` against `pdftotext -bbox` of the paired PDF: 480.80 px scaled = 279.23 pt, pdftotext 279.227; overlay on the 72-dpi render |
 | ICDAR 2013 | PDF points, **bottom-left origin**, y up | `(x1, H - y2, x2, H - y1)` with H the page's height from `pdfinfo` | `RELEASES` at yMin 300.86..310.55 top-left equals `H - 541..H - 531`; overlays on eu-001 and us-001 |
 | pdfa-eng-wds | `[x,y,w,h]` as fractions of the page, top-left | multiply by the page's points (`pdfinfo`) | "This" at 52.21, 62.92 pt from `pdftotext -bbox` equals 0.087711 x 595.276, 0.074735 x 841.89 |
@@ -121,7 +121,7 @@ All `at` regions are `[page, x0, y0, x1, y1]`, top-left origin, y down (SPEC 3.4
 Tobacco800, StaVer and SPODS need logins. **mapo80/stamps** ("Clean Core Stamp Detection Dataset", Hugging
 Face, CC-BY-4.0, no login) was found and fetched: `corpus/fetch.sh stamps` downloads the val and test
 zips (185 MB; train is 783 MB and not fetched), 1571 images with YOLO boxes (single class `stamp`),
-imported by `tools/import/stamps.py`. Catches: the positives are an aggregate of community sets whose
+imported by `tools/import/stamps.clj`. Catches: the positives are an aggregate of community sets whose
 upstream licences are unverified; 250 negatives (`neg_*`) come from RVL-CDIP and FUNSD and inherit their
 research-only terms; it labels stamps only, so signatures and logos on an image are absent from the gold.
 Signatures remain a gap: `tech4humans/signature-detection` (Apache-2.0, 2819 images, on HF) is a

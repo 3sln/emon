@@ -10,8 +10,8 @@ NO PRODUCER IS INVOKED, and no PDF tool: this reads only committed files.
   3. MANIFEST.json is honest: every html/pdf/pdf-tagged/scan file it lists
      exists with the recorded sha256, every html has a gold and a PDF, and
      every PDF is a PDF, with the producer and its version recorded;
-  4. the gold IS WHAT THE CONVERTER SAYS: tools/synth/html2gold.py run over
-     the committed HTML and the manifest's layout facts reproduces each gold
+  4. the gold IS WHAT THE CONVERTER SAYS: tools/synth/html2gold.clj (babashka, run
+     once for all stems) over the committed HTML and the manifest's layout facts reproduces each gold
      byte for byte (so a hand edit of a gold, or of a document, is caught).
 
 `jsonschema` is found as json-check.py finds it.
@@ -20,11 +20,11 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 CORPUS = os.path.join(ROOT, "test", "corpus", "synth")
-sys.path.insert(0, os.path.join(ROOT, "tools", "synth"))
 
 
 def load(path, name):
@@ -34,8 +34,20 @@ def load(path, name):
     return m
 
 
+def converter_disagrees():
+    """Stems whose committed gold differs from what tools/synth/html2gold.clj (babashka) derives from the
+    committed HTML + MANIFEST facts: one bb process for all of them (the converter was Python until
+    the scripting-is-babashka decision; the schema validation below stays a Python oracle)."""
+    r = subprocess.run(["bb", "-cp", "tools:tools/lib", "-m", "synth.html2gold", "check"], cwd=ROOT,
+                       capture_output=True, text=True)
+    if r.returncode not in (0, 1):
+        print("  FAIL gold-check: html2gold (bb) exited %d: %s" % (r.returncode, r.stderr.strip()[-300:]))
+        sys.exit(1)
+    return set(r.stdout.split())
+
+
 def main():
-    import html2gold
+    differs = converter_disagrees()
     bad = 0
 
     def fail(msg):
@@ -130,10 +142,8 @@ def main():
         if len(gold["model"]["pages"]) != gold["model"]["source"]["pages"]:
             fail("%s: source.pages and the page table disagree" % stem)
         # 4. the converter says so
-        html = open(os.path.join(CORPUS, "html", stem + ".html"), encoding="utf-8").read()
-        want = html2gold.convert(html, manifest["docs"][stem]["facts"], stem, gold.get("provenance"))
-        if json.dumps(want, ensure_ascii=False, indent=1) + "\n" != text:
-            fail("%s: gold differs from tools/synth/html2gold.py over the committed HTML" % stem)
+        if stem in differs:
+            fail("%s: gold differs from tools/synth/html2gold.clj over the committed HTML" % stem)
     if bad:
         return 1
     print("  ok   gold-check: %d gold files valid, ids in order, equal to html2gold over the HTML%s"

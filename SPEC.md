@@ -1481,8 +1481,9 @@ newcomer needs only what is listed here to run every gate.
 
 **Tools.** `bb` (babashka) and `sh`; `git` (for `drift`); a checkout of
 `kin` as a sibling directory (`../kin`, put on the classpath by `bb.edn`);
-`python3` (for `unit`'s table and JSON-golden checks, which are tooling, not
-runtime). Each target's toolchain is used if present and **skipped loudly**
+`python3` (only for the third-party reference oracles in `unit`: the table and
+JSON-golden checks and the `jsonschema` / html5lib validators, which are tooling,
+not runtime; all other scripting is babashka, D089). Each target's toolchain is used if present and **skipped loudly**
 if not: `rustc`/`cargo`, `go` and `gofmt`, a JDK (`/opt/homebrew/opt/openjdk`,
 or `EMON_JDK`; macOS's `/usr/bin/javac` stub is detected and ignored),
 `dotnet` (net10.0; xunit is restored on first `bb unit csharp`). The schema
