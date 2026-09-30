@@ -1192,6 +1192,149 @@ analysis beyond "top-to-bottom lines on a single column".
 - [ ] P3.10 — Text-layer oracle (SPEC §14.5): per-character comparison
   against a pinned reference extractor on a born-digital corpus; committed
   expectations.
+- [ ] **P3.11 — Canonical PNG writer, DEFLATE compressor, and the `Buf` port**
+  (D117, SPEC §10.11). No dependency: may be taken at any time.
+  *Brief*: (a) **`Buf` port**, in all four host port files beside `Cells`, with
+  `@kin:link` annotations and a `Buf` tag in `emon.lang`: `buf-len b`, `buf-at b i`
+  (0..255), `buf-push b v` (low 8 bits; answers the new length, as `cells-push`),
+  `buf-set b i v`, `buf-truncate b n`, `buf-append-blob b blob start end`, and the
+  form `buf-blob b` (a borrow as a `Blob`, spelled like `src-slice`). Host types: Rust
+  `pub struct Buf(Vec<u8>)`, Go `*Buf` over `[]byte`, Java `emon.Buf` (byte[] +
+  length, doubling), C# `Emon.Buf`. Laws in `kin/porttest.kin`. (b) **`kin/deflate.kin`**
+  (`emon.deflate`), a zlib writer that streams: `df-init ws` (a `Cells` workspace:
+  32 KiB window ring, `head` 32,768 and `prev` 32,768 hash chains, a pending-symbol
+  buffer of 16,384, frequency tables), `df-write-cells ws out cells start end`,
+  `df-write-blob ws out blob start end`, `df-finish ws out`. Parameters exactly as
+  SPEC §10.11: header `78 01`; hash `((b0 << 10) ^ (b1 << 5) ^ b2) & 32767`; chain
+  limit 32; greedy with one step of lazy matching (take the next position's match
+  only if strictly longer); matches 3..258, nearest first on equal length; a block
+  every 16,384 symbols and at the end; each block stored, fixed or dynamic by
+  fewest bits (ties: stored, fixed, dynamic); dynamic lengths by package-merge,
+  limit 15 (7 for the code-length code), frequency ties by symbol; code-length
+  runs greedy with 16/17/18; Adler-32. A test-only `df-force` mode forces one block
+  type. (c) **`kin/png.kin`** (`emon.png`): `png-begin ws out z w h ctype depth
+  dpi100 pal npal trns` (writes signature, `IHDR`, `PLTE`/`tRNS`, `pHYs` when
+  `dpi100 > 0` as `(dpi100·100 + 127) / 254` pixels per metre, unit 1), `png-row ws
+  out z cells start` (one row of packed samples; filter chosen per SPEC §10.11; the
+  filtered row goes to deflate, whose output goes to the scratch `Buf` `z`; every
+  65,536 bytes of `z` become one `IDAT` in `out`, the remainder moved to `z`'s
+  front and `buf-truncate`d), `png-end ws out z` (last `IDAT`, `IEND`). CRC-32
+  table computed in `ws` at `png-begin` (polynomial `EDB88320`). (d) Tests:
+  `kin/deflatetest.kin` (round trip through `emon.inflate`: empty, 1 byte, 300
+  repeats, 1 MiB of splitmix bytes, 64 KiB of text, each forced block type, a
+  match at distance 32,768); `kin/pngtest.kin` (12 images generated from splitmix
+  in the test: gray 1×1, RGB 97×61, RGBA 97×61, gray+alpha 97×61, 1-bit gray 33×17,
+  palette of 16 with `tRNS`, RGB 3000×1, gray 1×3000, a 2481×64 strip of the bench
+  page, and three more of the implementer's choosing; each decoded again by a
+  test-only reader (inflate + unfilter) to the same samples, and its SHA-256
+  through `crypto-sha256` equal to the committed value); `kin/pngprobe.kin` in
+  `bb check` prints the 12 digests, which the four targets must agree on.
+  `kin/scripts/png-check` (bb) writes the 12 files from the Rust probe and decodes
+  each with ImageMagick (`magick x.png rgba:-`, version recorded) and with
+  `java.util.zip.Inflater`, comparing to the generator's samples. (e) Measure
+  (D092's rule, not a gate): ms per target for the 2481×3508 gray bench page and a
+  1200×800 RGB photo, and size against `java.util.zip.Deflater` level 6 on the
+  same filtered rows; record it here.
+  *Files*: `host/*/port.*`, `kin/deflate.kin`, `kin/png.kin`, `kin/deflatetest.kin`,
+  `kin/pngtest.kin`, `kin/pngprobe.kin`, `kin/porttest.kin`, `kin/scripts/png-check`.
+  *Done when*: `bb unit` green on every arm, `bb hosts` agrees on the `Buf` forms,
+  the probe's 12 digests are equal on four targets, `png-check` green, and the
+  measurement is written here. **Not** in scope: transcript PNGs (D090) keep
+  stored blocks until a decision moves them to this writer.
+- [ ] **P3.12 — PDF image pixels in kin** (D117, SPEC §10.11 "embedded" and
+  "decoded"). Depends on P3.5 (image placements with CTM and clip in `images`
+  rows) and P3.11.
+  *Brief*: `kin/pdfimage.kin` (`emon.pdfimage`). (1) `pi-info`: an image XObject or
+  an inline image (`BI`…`EI`, whose abbreviations `/W /H /BPC /CS /D /F /DP /IM`
+  and abbreviated filter and colour-space names are expanded) → a `Cells` record:
+  object number (-1 inline), w, h, bpc, colour-space class, base and `/N`, an
+  `Indexed` palette (hival and its bytes from a string or stream), `/Decode` as `Fx`
+  pairs (default by class), `/ImageMask`, `/Mask` (colour-key ranges or a stencil
+  handle), `/SMask` handle and `/Matte`, the filter chain and `DecodeParms`, the
+  stream span, and whether its bytes are the input's own (not encrypted, the image
+  filter alone) or kin's (decrypted or pre-filtered). (2) `pi-passthrough`: SPEC
+  §10.11's JPEG conditions by a marker walk (SOF0/1/2 allowed; SOF3, 5-7, 9-11,
+  13-15 refused; component count; APP1 Exif tag 0x0112; SOF size against
+  `/Width`/`/Height`), answering 0 or a `pv` `defenum` reason. (3) `pi-samples`:
+  raw, Flate, LZW, RunLength with predictors through the existing filters; for DCT
+  that cannot pass through, JPX, JBIG2 and CCITT, plan a `decode-img` request
+  instead. (4) `pi-pixels`: samples (or the answer's `Bitmap`) → a gray or RGB
+  `Bitmap` plus a one-channel alpha `Bitmap` (host-allocated), applying unpack, 16 →
+  8 rounding, `/Decode` (Fx, rounded half up), colour (CMYK naive, `Indexed`,
+  `ICCBased` by `/N`), masks (a mask of another size mapped by nearest neighbour,
+  `floor(x·mw / w)`), `/Matte`; `Separation`/`DeviceN`/`Lab` answer `colorspace`.
+  (5) `pi-orient`: the eight rectilinear orientations from the signs and zeros of
+  the placement's `Fx` matrix (else `transformed`), and the visible crop (clip box
+  ∩ image box mapped into image pixels, floor/ceiling) under `asset-whole`. (6)
+  `decode-img` (kind 6) in `kin/plan.kin`: `rq-decode-img` and readers, args
+  `filter w h comps bpc k columns rows ccitt-flags where offset length sha×8
+  gwhere goffset glength gsha×8` (`where`: input index ≥ 0, -2 the unit's payload
+  `Buf`, -1 none; `sha` zero for an input span), answered as `decode`; laws in
+  `kin/plantest.kin`; the Rust and Go loops (`host/rust/src/plan.rs`,
+  `host/go/port/plan.go`) hand the unit's payload `Buf` to the fulfiller and never
+  write it to a transcript (a payload whose SHA-256 differs is a different key, so
+  a replay answers `transcript-miss`). Fixtures: `kin/scripts/asset-fixtures`
+  (bb, in the manner of `pdf-p3-fixtures`) writes `test/assets/*.pdf` from source
+  images it generates deterministically (JPEGs by ImageMagick, committed, version
+  recorded): DCT passthrough; DCT with `/Decode [1 0 1 0 1 0]`; CMYK DCT with an
+  Adobe marker; DCT with EXIF orientation 6; arithmetic-coded DCT; Flate RGB 8 and
+  16 bits; gray 1, 2, 4 bits; `Indexed` 16 over RGB; `/ImageMask` in red; `/Mask`
+  colour key; `/Mask` stencil of another size; `/SMask` with and without `/Matte`;
+  an inline image; an image in a Form XObject; drawn rotated 90°, flipped, and
+  skewed; clipped to a rectangle and to a circle; drawn twice; an encrypted
+  (AES-128) copy of the Flate case; JPX, JBIG2 with globals, CCITT G4 (from
+  `magick -compress Group4`), for the request record only. Expected pixels are
+  computed by the generator itself (Clojure, from the source samples and the rules
+  above) and committed as the SHA-256 of RGBA8 row-major bytes, beside an
+  ImageMagick PNG for eyes.
+  *Files*: `kin/pdfimage.kin`, `kin/pdfimagetest.kin`, `kin/plan.kin`,
+  `kin/plantest.kin`, `host/rust/src/plan.rs`, `host/go/port/plan.go`,
+  `kin/scripts/asset-fixtures`, `test/assets/`.
+  *Done when*: every kin-decodable case's pixel hash equals the generator's on every
+  arm (`bb unit`); passthrough bytes equal poppler's `pdfimages -all` output byte for
+  byte; unmasked decoded cases equal `pdfimages -png` (`magick compare -metric AE`
+  0); every codec case plans the expected `decode-img` record; `bb plan` still green.
+- [ ] **P3.13 — Assets in the Model, JSON, HTML and the API, level `images`**
+  (D117, SPEC §3.7-3.9, §4.2, §5, §10.11). Depends on P1.10, P3.6, P3.12 (P2.1 for
+  the Go arm).
+  *Brief*: (1) Settings `assets`, `asset-dpi`, `asset-pixels`, `asset-bytes`,
+  `assets-bytes`, `asset-signatures` through `setting-of` and the Engine `Config`.
+  (2) `kin/model.kin`: arenas `assets` (stride 24: type, origin, from, object, byte
+  start, byte length, sha256 ×8, w, h, dpi, flags, use head, use count, 4 spare)
+  and `uses` (stride 8), the `abytes` `Buf`; `defenum`s for type, origin, from,
+  flags and `noasset` reasons (codes forever, D050); `model-check` and
+  `model-hash` cover them. (3) **Provisional figures** until P8.1: an image
+  placement that passed P3.6, covers < 800 ‰ of its page (else it is a scan or a
+  background) and has both sides ≥ 18 pt becomes a `figure` of subkind `unknown`,
+  placed in reading order by its top edge. This is SPEC §10.6's placeholder, owed
+  with or without `assets`; P8.1 replaces the rule. (4) `kin/asset.kin`
+  (`emon.asset`): per node in id order, SPEC §10.11 steps 1-4 at `images`
+  (`part`/`vector`/`composite` otherwise), passthrough bytes by `buf-append-blob`,
+  decoded pixels through `emon.png`, `asset-pixels` scaling, dedup by SHA-256 and
+  length, `asset-bytes` and the first-overflow `assets-bytes` rule, uses. Codec
+  images answer `noasset: "codec"` until P6.1a. (5) `kin/json.kin`: the `assets`
+  array, `asset`/`noasset`, the settings keys, all in SPEC §10.11's order;
+  `schema/emon-1.json` extended additively (D055); goldens
+  `test/json/assets-*.{model.edn,json}` with the independent Python reference
+  (D054) extended. (6) `kin/html.kin`: `ho-assets-external` 128, `ho-assets-omit`
+  256 (neither: inline), an `asset-prefix` text argument, the mapping and `alt`
+  rule of SPEC §10.11, base64 in kin; HTML goldens in the three modes and D067's
+  independent renderer extended; html5lib check. (7) Rust and Go API (`Asset`,
+  `assets()`, `asset()`, `asset_files()`); driver flags `--assets=images|figures`,
+  `--html-assets=inline|external|omit`, `--asset-dir=D` (the driver writes the
+  files; the library never does). (8) End to end: P3.12's fixtures, and four new
+  synthetic documents in `tools/synth` with `<img>` of known PNG and JPEG sources
+  (whether Chrome passes a JPEG through is measured and recorded; a PNG must come
+  back with equal pixels).
+  *Files*: `kin/model.kin`, `kin/asset.kin`, `kin/assettest.kin`, `kin/json.kin`,
+  `kin/html.kin`, `schema/emon-1.json`, `host/rust/src/emon.rs`, the Go host,
+  `test/json/`, `test/html/`, `test/assets/`, `tools/synth/`.
+  *Done when*: `bb slice` with `--assets=images` green on Rust and Go; the identity
+  arm gives byte-identical JSON, HTML in three modes and asset files across hosts,
+  in memory and through the 512-byte async source; a bb check recomputes every
+  `sha256` from the files and every PNG decodes (ImageMagick) to the expected
+  pixels; the schema gate passes; with `assets: none` every existing golden is
+  unchanged except where a provisional figure now appears.
 
 ## Phase 4 — Layout and structure, on the text layer
 
@@ -1276,6 +1419,21 @@ analysis beyond "top-to-bottom lines on a single column".
   several inputs, mixable with PDFs (D058, SPEC §2.0); codecs read the
   host's byte source (forward or by offset, awaited in async hosts), and kin
   only sniffs the first chunk.
+- [ ] **P6.1a — Host decoding for assets: `decode-img`** (D117). Depends on P6.1
+  and P3.12.
+  *Brief*: Rust and Go fulfil kind 6: DCT (Rust `zune-jpeg`; Go `image/jpeg`), JPX
+  (Rust through OpenJPEG; Go `unsupported` unless a pure-Go decoder is adopted),
+  JBIG2 with its globals (Rust through `jbig2dec`; Go `unsupported`), CCITT G3/G4
+  with `K`, `Columns`, `Rows`, `BlackIs1`, `EncodedByteAlign` (Rust `fax`; Go
+  `golang.org/x/image/ccitt`). The answer is the codestream's pixels (8-bit, gray or
+  RGB, `bilevel` flag), never with the PDF's `/Decode` or masks applied (those are
+  kin's); an engine that cannot is `ps-unsupported`, which becomes `noasset:
+  "codec"`. A 4-component DCT is converted to RGB honouring the Adobe APP14 marker.
+  Record a transcript of P3.12's codec cases live on Rust into
+  `test/assets/transcripts/` and replay it on Rust and Go.
+  *Done when*: JPX (lossless), JBIG2 and CCITT cases equal the generator's pixels
+  exactly, DCT within 2 per channel of `pdfimages -png`; the replay's JSON, HTML and
+  asset files are byte-identical on Rust and Go.
 - [ ] P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
   available (D007); pdfium loads through its custom-loader callback over the
   byte source, not a path or a whole-file copy (D058).
@@ -1335,6 +1493,32 @@ analysis beyond "top-to-bottom lines on a single column".
   P3.8) into `seal` nodes.
 - [ ] P8.4 — Logos, including recurrence across pages (and their removal from
   furniture templates).
+- [ ] **P8.5 — Region assets at `figures`: cropped and rendered** (D117, SPEC
+  §10.11). Depends on P8.1, P6.1a and P6.2 (seals: P8.2, P8.3).
+  *Brief*: (1) `crop` (kind 5) in `kin/plan.kin` (`input page dpi layer px py pw
+  ph`, answered as `render`), fulfilled in Rust and Go by pdfium
+  (`FPDF_RenderPageBitmapWithMatrix`: scale `dpi/72`, translate `(-px, -py)`, clip
+  `(0, 0, pw, ph)`, white fill, `FPDF_ANNOT`), with a law that a crop equals the
+  same rectangle of the whole-page render on each host. (2) `emon.asset` at
+  `figures`: steps 2-4 in full — the overlay test over `z` (paths, shadings, images
+  and visible glyphs painted after the image over more than `asset-overlay` of
+  it), the non-rectangular clip (the `clip` `paths` row is not an axis-aligned
+  rectangle), the rectilinear test; `cropped` from P3.12/P6.1a pixels or from a
+  raster input's or scan's decode answer through its view (no resampling, no
+  deskew); `rendered` with the 2 pt pad and the `d·3/4` step-down;
+  `text-overlap`; the `seal` policy (`asset-signatures`). (3) Fixtures: synthetic
+  documents (`tools/synth`) with inline-SVG charts and diagrams (vector), an image
+  clipped by `border-radius` (non-rectangular), one rotated 10° by CSS, text over a
+  photo, a logo on every page (one asset, many uses); raster pages composed by bb
+  (ImageMagick) from a known figure image pasted at a known offset into a lossless
+  PNG and TIFF page; the mapo80 stamps (D088) for seals.
+  *Done when*: a law crops a fixed region of a raster fixture and gets exactly the
+  pasted pixels; end to end, each raster figure's crop has IoU ≥ 0.9 with the paste
+  box and equals the page's pixels over it; each render crop has the computed pixel
+  size and a mean absolute difference ≤ 8 per channel from `pdftoppm -r 150 -x -y
+  -W -H` over the same rectangle (different rasterisers: a sanity bound, not
+  identity); a transcript recorded live on Rust replays byte-identical JSON, HTML
+  (three modes) and asset files on Rust and Go; the logo fixture has one asset.
 
 ## Phase 9 — The remaining host layers and bindings
 
@@ -1350,6 +1534,12 @@ analysis beyond "top-to-bottom lines on a single column".
   identical JSON from each adapter in a headless browser, a URL fixture
   fetches measurably less than its length for a one-page conversion, and
   the wasm build links no filesystem import (`wasm32-unknown-unknown`).
+  **Assets (D117)**: `asset.bytes()` (a `Uint8Array` copy) and `asset.blob()`
+  (a `Blob` of the asset's type), `external` documented as the browser form; the
+  P3.13/P8.5 asset fixtures give identical JSON, HTML and asset files in a
+  headless browser, and the peak JS heap for a document at the 32 MiB
+  `assets-bytes` default is measured in `inline` and `external` modes and written
+  here.
 - [ ] P9.4 — C binding; babashka pod.
 - [ ] P9.5 — `bb identity` over all four hosts and three bindings.
 - [x] ~~P9.6 — Ranged inputs, optional~~ — **promoted into the main design**
@@ -1632,6 +1822,9 @@ chart is there and what it is about, not its pixels.
 question SPEC §17.1); dropping graphics entirely (loses that a chart existed
 and its caption association).
 - [ ] **Signed off** (maintainer)
+**Open item resolved by D117**: pixels are an opt-in (`assets`: `none` /
+`images` / `figures`, SPEC §10.11); the placeholder stays the default and the
+Model never carries bytes.
 
 ### D021 — Locale is an optional hint; absent means locale-independent, not English
 **Decision**: SPEC §11. Without a hint: script-driven OCR model selection and
@@ -2940,8 +3133,8 @@ them; offer them upstream when they have proved general.
   error; caller-supplied password (D040).
 - [x] **Java toolchain**: a JDK exists at `/opt/homebrew/opt/openjdk` and
   `bb check` already runs the Java arm.
-- [?] **Figure crops**: placeholders only for now (D020); opt-in pixels
-  undecided (SPEC §17.1).
+- [x] **Figure crops**: an opt-in, `assets` = `none` (default) / `images` /
+  `figures`, with bytes out of band (D117, SPEC §10.11; resolves D020's open item).
 - [x] **Inputs**: Blob-like byte sources with async slice reads; lazy range
   reading required; PDFs and images may be mixed in one conversion (D058
   revised).
@@ -4053,4 +4246,104 @@ glyph, word and span counts and a hash of every glyph's code point joining the a
 glyph size was clamped above only (`pc-continues` and the line join in `pdfcontent.kin`), so `sz * 450` overflowed;
 clamped to +-200000 now, reproducer `test/fuzz/crashers/content-size-overflow-s1-i76.pdf`.
 **Open**: `bb fuzz --long 5000 --seed 101` (Rust, Java, C#; Go skipped that run on a build-cache error) found nothing further.
+- [ ] **Signed off** (maintainer)
+
+### D117 — Assets: opt-in pixels for figures and seals, bytes out of band, a canonical PNG written by kin (resolves D020's open item)
+**Decision** (SPEC §10.11; items P3.11-P3.13, P6.1a, P8.5, P9.3). The maintainer asked for "a
+flag to let it try and isolate and clip/crop graphics/art from the pdf/image and retain it in
+the output html as base64 … not needed for most cases, but could be useful for like a pdf →
+epub conversion".
+1. **Option.** `assets` = `none` (default: nothing runs, every output byte-identical to a run
+   without the feature) / `images` (a figure or seal whose content is one embedded image gets
+   that image) / `figures` (also every other figure or seal, cut from the image it lies in or
+   rendered). Limits `asset-dpi` 150, `asset-pixels` 4,194,304, `asset-bytes` 4 MiB,
+   `assets-bytes` 32 MiB; `asset-signatures` off. Limits degrade to a `noasset` reason and
+   never fail a page.
+2. **Sources and origins.** `embedded` (a JPEG passed through, only when a browser shows it as
+   the PDF painted it: SPEC §10.11's list — including no non-default `/Decode`, no masks, no
+   EXIF rotation, no arithmetic coding, 1 or 3 components); `decoded` (pixels from kin's
+   filters or the host's `decode-img`, with `/Decode`, colour, masks, `/Matte`, orientation
+   and the visible crop applied by kin in integers, then PNG); `cropped` (an exact rectangle of
+   an image's pixels: scans, raster inputs, a figure inside a larger image; no resampling, no
+   deskew); `rendered` (a `crop` request to the host `Renderer`, with text, 2 pt pad, dpi
+   stepped down by 3/4 to fit `asset-pixels`). A clipped image is kept whole when its visible
+   part is ≥ 98 % of it and cut to the clip's box otherwise; a non-rectangular clip, a skew,
+   or paint over the image sends it to `rendered` at `figures` and is flagged at `images`.
+   Crops keep the text: a chart's labels are the picture; `labels` stays a text copy.
+3. **Model.** Bytes are out of band: arenas `assets` (24) and `uses` (8) and one `Buf` of bytes
+   in the Model; JSON gets a top-level `assets` array (metadata: id, name, type, origin,
+   from, object, bytes, sha256, w, h, dpi, flags, uses with node and region) only when
+   `assets` is on, and figure/seal nodes get `asset` or `noasset`. Identical bytes are one
+   asset with several uses (a logo on every page is one file). Admission is in node-id order;
+   the first new asset that overflows `assets-bytes` closes the budget.
+4. **Serialization.** HTML option `assets`: `inline` (default; `data:` URIs), `external`
+   (`src` = `asset-prefix` + `a<id>.png|jpg`, the caller writes `model.asset_files()`: the EPUB
+   and browser form) or `omit`. `<figure><img src alt width height data-emon-asset>` then the
+   placeholder's content; `alt` is the PDF's `/Alt` (D076) or the seal label, else empty
+   (`data-emon-alt="missing"` when there is no caption either); `width`/`height` are the
+   on-page size in CSS pixels. The library API hands out borrows of the bytes. JSON never
+   carries bytes.
+5. **Identity.** Every byte of an asset is kin's or the input's: passthrough bytes are the
+   input's, pixels come from kin or from transcribed answers (`crop` 5 and `decode-img` 6 are
+   transcribed like `render`; `decode-img`'s kin-made payload is named by its SHA-256 in the
+   record and never transcribed, like `bytes`), and the PNG, DEFLATE and base64 writers are
+   kin. So `sha256` is over the **encoded bytes**, and the identity gate compares JSON, HTML
+   in all three modes and the asset files byte for byte, and recomputes each hash. Tests
+   additionally compare **decoded pixels** against independently generated originals.
+6. **The canonical PNG** is fully specified in SPEC §10.11 (filters, LZ77 parameters, block
+   choice, package-merge, chunks) so a change to it is a visible, reviewed change of every
+   asset hash.
+
+**Why**: (a) *Opt-in, three levels*: most callers are crawlers (D020 stands for them), and
+`images` is cheap, exact and available before P6 (no Renderer, no region detection deciding
+pixels), while `figures` needs P6.2 and P8.1 and is where the EPUB case really lives (charts
+are vector). (b) *Out of band*: the Model is integer arenas that must cross WASM and C cheaply
+(§3.8), and JSON is a scraper's format and the gate subject; base64 in it would multiply its
+size by the images' and make every consumer pay for what one wanted. (c) *Kin writes the PNG*:
+the maintainer's question was whether to compare pixel hashes or mandate a canonical
+encoding. Comparing pixels only would leave HTML with `data:` URIs, and the `sha256` field,
+different per host, so the byte-identity claim of §12.2 would silently exclude the one output
+the maintainer asked for. A host zlib cannot be mandated to agree byte for byte (D090 found
+the same); a kin DEFLATE agrees by construction, costs one module of about the size of
+`inflate`, and is also the writer D090 and D095 left open for transcripts. (d) *Passthrough
+only for JPEG, and only when faithful*: JPEG is the one PDF image codec every browser and EPUB
+reader shows, and passing it through is lossless and small; JPX, JBIG2 and CCITT are not
+shown reliably, and a JPEG with inverted `/Decode`, CMYK, masks or an EXIF rotation would
+display differently from the PDF, which for a converter is an accuracy bug. (e) *Crops keep
+text*: the Renderer's layer mask is all text or none, so "remove only the re-emitted words" is
+not expressible; without text a chart loses its axes, and text drawn as outlines would stay
+anyway. (f) *Signatures withheld by default*: a crawler that turned on `figures` for charts
+should not start publishing handwritten signatures; a converter that wants them says so.
+(g) *Dedup and first-overflow budget*: deterministic, cheap, and a repeated logo costs once.
+
+**Alternatives**: (1) always emit crops (rejected: D020's crawlers pay in size for pixels
+they do not want); (2) bytes as base64 in the JSON (rejected, above) or a second JSON
+document with them (a format nobody reads; the API and the sidecar do it better); (3) host
+PNG encoders and a gate over decoded pixels (rejected: HTML and `sha256` would differ per
+host); (4) stored-block PNGs as in D090 (canonical and trivial, but 3-10× larger, which is
+exactly what `data:` URIs cannot afford); (5) always transcode to PNG, no passthrough
+(canonical and simpler, but photos grow several times and the author's JPEG was already
+the best version there is); (6) WebP or AVIF output (not universally readable in EPUB 3
+readers; no encoder anyone would write in kin); (7) a Renderer crop for every figure,
+embedded images included (uniform, but lossy against the original, host-dependent pixels
+where exact bytes were available, and impossible before P6.2); (8) rendering crops without
+text, or with the figure's labels masked out (not expressible with the port's layer mask,
+and wrong for charts); (9) the full image always, even when clipped (shows what the author
+hid) or always the clipped part (re-encodes a JPEG to drop a 1 % sliver: hence the 98 %
+rule); (10) first-fit budget packing (deterministic too, but "why is figure 40 present when
+figure 12 is missing" is harder to explain than a budget that closes); (11) content-addressed
+file names (`<sha>.png`: dedup across documents, but long, and the `sha256` field already
+gives a caller that); (12) inventing alt text from `labels` or the subkind (emon says what it
+knows, D013).
+
+**Consequences**: two plan kinds (`crop` 5, `decode-img` 6) and a payload `Buf` per unit in
+the host loops; a `Buf` port in four hosts; the Model grows two arenas and a byte store; the
+schema gains `assets`, `asset`, `noasset` and six settings additively (D055; pre-release, so
+the version string stays `1.0`); P3.13 also brings provisional image figures before P8.1,
+so PDFs with images gain `figure` placeholders in default output then (owed by SPEC §10.6
+anyway). A later decision may move D090's transcript PNGs to this writer (every committed
+transcript would change once). Flate images are still inflated whole into `Cells` (four bytes
+a sample), bounded by `asset-pixels`, until `inflate` can write a `Buf`. In the browser,
+`inline` HTML at the 32 MiB budget peaks near 150 MB of heap, so the JS SDK documents
+`external` plus `asset.blob()` (P9.3).
 - [ ] **Signed off** (maintainer)
