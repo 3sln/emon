@@ -1,0 +1,138 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Resources << /Font << /F1 11 0 R /F2 12 0 R /F3 13 0 R /F4 14 0 R /F5 15 0 R /F6 16 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 676 >>
+stream
+q
+BT
+/F1 12 Tf
+20 250 Td
+(Hello World) Tj
+ET
+Q
+BT
+/F2 10 Tf
+14 TL
+20 220 Td
+(Times line) Tj
+T*
+(second line) Tj
+(third line) '
+2 1 (fourth) "
+ET
+BT
+/F3 8 Tf
+0.5 Tc
+20 170 Td
+(char spaced) Tj
+10 Tw
+0 -12 Td
+(word spaced out) Tj
+0 Tc
+0 Tw
+ET
+BT
+/F1 10 Tf
+50 Tz
+20 140 Td
+(squeezed) Tj
+200 Tz
+0 -12 Td
+(wide) Tj
+100 Tz
+ET
+BT
+/F1 10 Tf
+20 100 Td
+(rise) Tj
+4 Ts
+(up) Tj
+-3 Ts
+(down) Tj
+0 Ts
+ET
+BT
+/F2 11 Tf
+20 80 Td
+[(Kern) -120 (ed) -300 (text)] TJ
+ET
+q
+0.5 0 0 0.5 100 40 cm
+BT
+/F1 20 Tf
+0 0 Td
+(Scaled) Tj
+ET
+Q
+BT
+/F1 12 Tf
+0 1 -1 0 180 40 Tm
+(Up) Tj
+ET
+BT
+/F1 12 Tf
+0.866025 0.5 -0.5 0.866025 120 20 Tm
+(Tilt) Tj
+ET
+BT
+/F4 9 Tf
+3 Tr
+20 10 Td
+(hidden) Tj
+0 Tr
+50 0 TD
+(TD) Tj
+ET
+endstream
+endobj
+11 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+12 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>
+endobj
+13 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+14 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+15 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>
+endobj
+16 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 17
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000303 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000001031 00000 n 
+0000001129 00000 n 
+0000001229 00000 n 
+0000001325 00000 n 
+0000001428 00000 n 
+0000001527 00000 n 
+trailer
+<< /Size 17 /Root 1 0 R >>
+startxref
+1628
+%%EOF

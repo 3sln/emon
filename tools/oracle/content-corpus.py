@@ -25,8 +25,9 @@ WHAT IS COMPARED, per page, for the first PAGES pages of each file:
   geometry       for pages whose streams are identical and whose crop box is the media box,
                  each glyph's box against the LTChar's, in points: the share within 0.05 pt.
 
-`--write` keeps a RATCHET, test/content/real.txt: per page, a hash of the glyph stream where
-the two AGREE, for kin/pdfcontenttest.kin to hold.
+`--write` keeps a RATCHET, test/content/real.txt: per page, the digest of emon's glyph stream (the
+one `emon.contentrows` computes) and its glyph count, for the pages where the two AGREE, for
+kin/pdfcontenttest.kin to hold.
 """
 import difflib
 import hashlib
@@ -78,8 +79,13 @@ def sample_files(extra):
 
 
 def norm(s):
-    s = unicodedata.normalize("NFKC", s)
+    # U+0000 is what pdfminer writes for a glyph its ToUnicode gives no value; emon's is U+FFFD (none)
+    s = unicodedata.normalize("NFKC", s.replace("\x00", "\ufffd"))
     return "".join(ch for ch in s if not ch.isspace())
+
+
+def nk(s):
+    return unicodedata.normalize("NFKC", s.replace("\x00", "\ufffd"))
 
 
 def emon_rows(paths):
@@ -161,6 +167,24 @@ def emon_chars(rows, page):
     return out
 
 
+WS = {9, 10, 13, 32, 160, 0x1680, 0x202F, 0x205F, 0x3000} | set(range(0x2000, 0x200B))
+
+
+def digest(rows, page):
+    """`emon.contentrows`'s digest of a page's glyph text: h = 7, then h = (h * 31 + cp + 1) mod 67108859
+    over every code point of every glyph (U+FFFD for one with none) but white space."""
+    h = 7
+    n = 0
+    for r in rows:
+        if int(r[0]) != page:
+            continue
+        n += 1
+        for c in ([0xFFFD] if r[1] == "-" else [int(x, 16) for x in r[1].split("+")]):
+            if c not in WS:
+                h = (h * 31 + c + 1) % 67108859
+    return h, n
+
+
 def f1(a, b):
     from collections import Counter
     ca, cb = Counter(a), Counter(b)
@@ -237,7 +261,8 @@ def main():
                     tot["sure_ok"] += sum(1 for x in sure if x)
                 tot["same"] += 1
                 tot["ch_match"] += len(etext)
-                ratchet.append((path, pn, hashlib.sha1(etext.encode()).hexdigest()[:8], len(etext)))
+                dg, ng = digest(rows["G"], pn)
+                ratchet.append((path, pn, dg, ng))
             else:
                 if len(etext) + len(ptext) < 40000:
                     sm = difflib.SequenceMatcher(None, etext, ptext, autojunk=False)
@@ -246,12 +271,12 @@ def main():
                     m = 0
                 tot["ch_match"] += m
                 worst.append((max(len(etext), len(ptext)) - m, path, pn, len(etext), len(ptext)))
-            ew = [t for r in rows["T"] if int(r[0]) == pn for t in unicodedata.normalize("NFKC", r[3]).split()]
-            pwds = [t for l in lines for t in unicodedata.normalize("NFKC", l).split()]
+            ew = [t for r in rows["T"] if int(r[0]) == pn for t in nk(r[3]).split()]
+            pwds = [t for l in lines for t in nk(l).split()]
             c, a, b = f1(ew, pwds)
             tot["w_common"] += c; tot["w_emon"] += a; tot["w_pm"] += b
-            el = [unicodedata.normalize("NFKC", " ".join(r[3].split())) for r in rows["T"] if int(r[0]) == pn]
-            pl = [unicodedata.normalize("NFKC", " ".join(l.split())) for l in lines]
+            el = [nk(" ".join(r[3].split())) for r in rows["T"] if int(r[0]) == pn]
+            pl = [nk(" ".join(l.split())) for l in lines]
             c, a, b = f1(el, pl)
             tot["l_common"] += c; tot["l_emon"] += a; tot["l_pm"] += b
             # geometry where the streams agree and the crop box is the media box
@@ -308,13 +333,13 @@ def main():
         with open(out, "w") as fh:
             fh.write("# emon P1.7: glyph streams of real files from corpus/ that pdfminer.six agrees with, kin/pdfcontenttest.kin.\n")
             fh.write("# Written by tools/oracle/content-corpus.py --write.\n")
-            fh.write("# path (relative to test/) <TAB> page <TAB> sha1[:8] of the NFKC, white-space-free glyph text <TAB> its length\n")
+            fh.write("# path (relative to test/) <TAB> page <TAB> digest of the glyph stream (emon.contentrows) <TAB> glyphs on the page\n")
             seen = {}
             for path, pn, h, n in ratchet:
                 if n < 20:
                     continue
                 seen[path] = seen.get(path, 0) + 1
-                if seen[path] > 2:
+                if seen[path] > 1:
                     continue
                 fh.write("%s\t%d\t%s\t%d\n" % (os.path.relpath(path, os.path.join(ROOT, "test")), pn, h, n))
         print("wrote", out)

@@ -1,0 +1,67 @@
+#!/usr/bin/env bb
+;; Write the content interpreter's goldens from the generated Rust (DEVLOG P1.7).
+;;
+;;     kin/scripts/content-goldens            write test/content/{synth,tagged,evidence}.txt and the dumps
+;;
+;; A DEVELOPMENT SCRIPT, run by a person after the interpreter changed on purpose; no gate runs it (the
+;; laws in kin/pdfcontenttest.kin compare every target with what it wrote). The goldens are kin's own
+;; output, so what makes them trustworthy is what is held against them:
+;;   * synth.txt, tagged.txt   `kin/scripts/content-check` holds the glyph text of the HTML-printed
+;;                             documents to the text of their source HTML, and the tagged documents' spans
+;;                             to the PDF structure (`tools/oracle/tagged-check.py`, pypdf);
+;;   * evidence.txt            the three P1.5 fixtures' whole dumps, checked against poppler's
+;;                             `pdftotext -bbox` by `kin/scripts/content-check`.
+(require '[clojure.string :as str]
+         '[clojure.java.io :as io]
+         '[clojure.java.shell :as sh])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+
+(defn sweep [mode paths]
+  (let [r (sh/sh (str root "/kin/scripts/content-sweep") mode :in (str (str/join "\n" paths) "\n") :dir root)]
+    (when-not (zero? (:exit r)) (println (:err r)) (System/exit 1))
+    (str/split-lines (:out r))))
+
+(defn by-file
+  "The sweep prints a file's rows and then its F row; answer {path [rows]}."
+  [lines]
+  (loop [ls lines cur [] out []]
+    (if (empty? ls)
+      out
+      (let [l (first ls)]
+        (if (str/starts-with? l "F\t")
+          (recur (rest ls) [] (conj out [(second (str/split l #"\t")) cur (str/split l #"\t")]))
+          (recur (rest ls) (conj cur l) out))))))
+
+(defn rel [p] (str/replace p (str root "/test/") ""))
+
+(defn pdfs [dir] (->> (.listFiles (io/file root "test" dir)) (filter #(str/ends-with? (.getName %) ".pdf")) (map #(.getPath %)) sort))
+
+(defn rows-file [paths with-spans?]
+  (str/join ""
+    (for [[p rows f] (by-file (sweep "rows" paths))]
+      (do (when-not (= "ok" (nth f 2)) (println "NOT OK" p f) (System/exit 1))
+          (str "F\t" (rel p) "\n"
+               (str/join "" (for [r rows :when (or (str/starts-with? r "P\t") (str/starts-with? r "T\t") (and with-spans? (str/starts-with? r "S\t")))] (str r "\n"))))))))
+
+(defn write [name content]
+  (spit (io/file root "test" "content" name) content)
+  (println "wrote test/content/" name))
+
+(defn -main []
+  (let [hdr (fn [what] (str "# emon P1.7: " what "\n# Written by kin/scripts/content-goldens from the generated Rust; do not edit.\n"
+                            "# F path (relative to test/), P page glyph text, T page line text (words joined by a space, lines by U+2028), S span (emon.contentrows). See kin/pdfcontenttest.kin.\n"))]
+    (write "synth.txt" (str (hdr "the glyph text of each page of the 36 Chrome-printed synthetic documents")
+                            (rows-file (pdfs "corpus/synth/pdf") false)))
+    (write "tagged.txt" (str (hdr "the glyph text of each page and every marked-content span of the 3 tagged PDFs")
+                             (rows-file (pdfs "corpus/synth/pdf-tagged") true)))
+    (let [fx [["pdf/minimal.pdf" "content/minimal.evidence.json"]
+              ["pdf/html-chrome.pdf" "content/html-chrome.evidence.json"]
+              ["pdf/gs-xrefstream.pdf" "content/gs-xrefstream.evidence.json"]]
+          js (into {} (for [l (sweep "json" (map #(str root "/test/" (first %)) fx)) :when (str/starts-with? l "J\t")]
+                        (let [[_ p j] (str/split l #"\t" 3)] [(rel p) j])))]
+      (doseq [[pdf gold] fx] (write (subs gold (count "content/")) (str (js pdf) "\n")))
+      (write "evidence.txt" (str "# emon P1.7: `pdf <TAB> golden`: the compact emon-evidence dump of each file is its golden.\n"
+                                 (str/join "" (for [[pdf gold] fx] (str pdf "\t" gold "\n"))))))))
+
+(-main)

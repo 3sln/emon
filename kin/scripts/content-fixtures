@@ -1,0 +1,507 @@
+#!/usr/bin/env bb
+;; Write the content-interpreter fixtures and their expectations (DEVLOG P1.7).
+;;
+;;     kin/scripts/content-fixtures            write test/content/*.pdf and rows.txt
+;;     kin/scripts/content-fixtures --check    fail if the committed files are not what this writes
+;;
+;; A DEVELOPMENT SCRIPT that `bb unit` also runs with --check, like the other fixture writers.
+;; Nothing here is emon: it is a SECOND, INDEPENDENT READER OF THE CONTENT STREAMS.
+;;
+;;   * A tiny PDF writer (objects, a classic cross-reference table) makes seven small files.
+;;   * `glyph-rows` is a reference evaluator of the text operators in EXACT RATIONAL arithmetic
+;;     (Clojure ratios, no fixed point), written from ISO 32000-1 9.3-9.4, with the page turned a
+;;     QUARTER AT A TIME (emon composes one base matrix instead). It knows the AFM widths of the
+;;     standard fonts, read from test/fonts/*.afm.
+;;   * What it computes becomes the G rows of test/content/rows.txt (one per glyph: code point,
+;;     box, baseline, size, rotation: centipoints and centi-degrees); kin/pdfcontenttest.kin
+;;     holds the generated interpreter to them within one centipoint (the fixed point's own
+;;     rounding).
+;;   * The S (span), W (word), C (text) and N (count) rows are written out below BY HAND, from what
+;;     each operator says; no evaluator made them.
+;;
+;; THE FIXTURES (test/content/):
+;;   ops.pdf       every text operator: Tc Tw Tz Ts TL Td TD T* ' " TJ Tm, q Q cm, render modes
+;;   rotate.pdf    the same text on four pages /Rotate 0 90 180 270 with a crop box off the origin
+;;   forms.pdf     Form XObjects: /Matrix, /Resources, nesting, a cycle, an image skipped
+;;   marked.pdf    every marked-content shape D076 asks for, balanced and not
+;;   fonts.pdf     a composite font with a ToUnicode and /W, a Type 3 font, six simple fonts in
+;;                 rotation (so the four font slots are replaced)
+;;   inline.pdf    an inline image between two lines of text
+;;   damaged.pdf   odd strings, arrays and dictionaries, junk, a missing font, stray Q and EMC
+(require '[clojure.string :as str]
+         '[clojure.java.io :as io])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+(def out-dir (str root "/test/content"))
+
+;; ------------------------------------------------------------------ the PDF writer
+
+(defn latin1 ^bytes [^String s] (.getBytes s "ISO-8859-1"))
+
+(defn build-pdf
+  "objs: {num body}. A body is a string (an object) or [:stream dict-string data-string]."
+  [objs]
+  (let [buf (java.io.ByteArrayOutputStream.)
+        offs (atom {})
+        w (fn [s] (.write buf (latin1 s)))]
+    (w "%PDF-1.7\n%âãÏÓ\n")
+    (doseq [n (sort (keys objs))]
+      (swap! offs assoc n (.size buf))
+      (let [b (objs n)]
+        (w (str n " 0 obj\n"))
+        (if (vector? b)
+          (let [[_ dict data] b]
+            (w (str "<< " dict " /Length " (count (latin1 data)) " >>\nstream\n"))
+            (w data)
+            (w "\nendstream"))
+          (w b))
+        (w "\nendobj\n")))
+    (let [xref (.size buf)
+          n (inc (apply max (keys objs)))]
+      (w (str "xref\n0 " n "\n0000000000 65535 f \n"))
+      (doseq [i (range 1 n)]
+        (w (if-let [o (@offs i)] (format "%010d 00000 n \n" o) "0000000000 65535 f \n")))
+      (w (str "trailer\n<< /Size " n " /Root 1 0 R >>\nstartxref\n" xref "\n%%EOF\n")))
+    (.toByteArray buf)))
+
+(defn stream [dict data] [:stream dict data])
+
+;; ------------------------------------------------------------ the fonts' metrics
+
+(defn afm [font]
+  (let [lines (str/split-lines (slurp (str root "/test/fonts/" font ".afm")))
+        widths (into {} (for [l lines :when (str/starts-with? l "C ")
+                              :let [m (re-find #"^C (-?\d+) ; WX (\d+) ;" l)]
+                              :when (and m (>= (parse-long (m 1)) 0))]
+                          [(parse-long (m 1)) (parse-long (m 2))]))
+        num (fn [k] (some (fn [l] (when-let [m (re-find (re-pattern (str "^" k " (-?\\d+)")) l)] (parse-long (m 1)))) lines))]
+    {:widths widths :asc (num "Ascender") :desc (num "Descender")}))
+
+(def fonts
+  {:F1 (assoc (afm "Helvetica") :base "Helvetica")
+   :F2 (assoc (afm "Times-Roman") :base "Times-Roman")
+   :F3 (assoc (afm "Courier") :base "Courier")
+   :F4 (assoc (afm "Helvetica-Bold") :base "Helvetica-Bold")
+   :F5 (assoc (afm "Times-Bold") :base "Times-Bold")
+   :F6 (assoc (afm "Courier-Bold") :base "Courier-Bold")
+   ;; the composite font of fonts.pdf: 2-byte codes, widths from /W, else /DW; ToUnicode's values
+   :T0 {:bytes 2 :dw 500 :widths {1 600, 2 700, 16 400, 17 400, 18 400} :asc 800 :desc -200
+        :cps {1 0x41, 2 0x42, 16 0x61, 17 0x62, 18 0x63}}
+   ;; the Type 3 font: widths times the FontMatrix's 0.01, the cell from /FontBBox times it
+   :T3 {:widths {97 500, 98 600} :asc 800 :desc -200}})
+
+;; ------------------------------------------------------------ matrices, exactly
+
+(defn mm [[a b c d e f] [a2 b2 c2 d2 e2 f2]]
+  [(+ (* a a2) (* b c2)) (+ (* a b2) (* b d2))
+   (+ (* c a2) (* d c2)) (+ (* c b2) (* d d2))
+   (+ (* e a2) (* f c2) e2) (+ (* e b2) (* f d2) f2)])
+
+(defn pt [[a b c d e f] x y] [(+ (* a x) (* c y) e) (+ (* b x) (* d y) f)])
+
+(def ident [1 0 0 1 0 0])
+
+(defn page-point
+  "User space (points) to page space (centipoints, y down) for a crop box and a rotation: the crop
+  box's corner to the origin, then a quarter turn clockwise at a time, then y flipped."
+  [[cx0 cy0 cx1 cy1] rot [x y]]
+  (loop [px (- x cx0) py (- y cy0) w (- cx1 cx0) h (- cy1 cy0) k (quot rot 90)]
+    (if (zero? k)
+      [(* 100 px) (* 100 (- h py))]
+      ;; a quarter turn clockwise about the origin of a y-up page w x h: (x y) -> (y, w - x), size h x w
+      (recur py (- w px) h w (dec k)))))
+
+;; --------------------------------------------------------- the reference evaluator
+
+(defn glyph-rows
+  "Run a vector of [op & operands] and answer the glyphs as maps."
+  [ops {:keys [crop rot fonts forms]}]
+  (let [glyphs (atom [])
+        active (atom #{})
+        o (page-point crop rot [0 0]) px (page-point crop rot [1 0]) py (page-point crop rot [0 1])
+        base-m [(- (px 0) (o 0)) (- (px 1) (o 1)) (- (py 0) (o 0)) (- (py 1) (o 1)) (o 0) (o 1)]
+        init {:ctm base-m :tc 0 :tw 0 :th 1 :tl 0 :rise 0 :fs 0 :font nil :mode 0 :tm ident :tlm ident}]
+    (letfn [(show-code [st fdef code]
+              (let [w (/ (get (:widths fdef) code (or (:dw fdef) 0)) 1000)
+                    {:keys [fs th tc tw rise tm ctm]} st
+                    m (mm tm ctm)
+                    x1 (* w fs th)
+                    y0 (+ (* (/ (:desc fdef) 1000) fs) rise)
+                    y1 (+ (* (/ (:asc fdef) 1000) fs) rise)
+                    pts (map (fn [[x y]] (pt m x y)) [[0 y0] [x1 y0] [0 y1] [x1 y1]])
+                    xs (map first pts) ys (map second pts)
+                    [ma mb mc md] m
+                    size (* (Math/abs (double fs)) (Math/sqrt (double (+ (* mc mc) (* md md)))))
+                    rotd (mod (Math/round (* 100 (Math/toDegrees (Math/atan2 (double (- mb)) (double ma))))) 36000)
+                    adv (+ (* w fs) tc (if (and (= code 32) (not (:bytes fdef))) tw 0))]
+                (swap! glyphs conj {:cp (if (:cps fdef) (get (:cps fdef) code) code)
+                                    :x0 (apply min xs) :y0 (apply min ys) :x1 (apply max xs) :y1 (apply max ys)
+                                    :base (second (pt m 0 rise)) :size size :rot rotd :mode (:mode st)})
+                (update st :tm #(mm [1 0 0 1 (* adv th) 0] %))))
+            (show-str [st s]
+              (let [fdef (get fonts (:font st))
+                    n (or (:bytes fdef) 1)]
+                (reduce (fn [st chunk] (show-code st fdef (reduce (fn [a c] (+ (* a 256) (int c))) 0 chunk)))
+                        st (partition n s))))
+            (show-arr [st xs]
+              (reduce (fn [st x]
+                        (if (number? x)
+                          (update st :tm #(mm [1 0 0 1 (* (- (/ x 1000)) (:fs st) (:th st)) 0] %))
+                          (show-str st x)))
+                      st xs))
+            (td [st tx ty]
+              (let [tlm (mm [1 0 0 1 tx ty] (:tlm st))] (assoc st :tlm tlm :tm tlm)))
+            (run [st ops]
+              (reduce
+               (fn [{:keys [stack] :as st} [op & a]]
+                 (case op
+                   :q (assoc st :stack (conj (or stack []) (dissoc st :stack)))
+                   :Q (if (seq stack) (assoc (peek stack) :stack (pop stack)) st)
+                   :cm (assoc st :ctm (mm (vec a) (:ctm st)))
+                   :BT (assoc st :tm ident :tlm ident)
+                   :ET st
+                   :Tf (assoc st :font (first a) :fs (second a))
+                   :Tc (assoc st :tc (first a))
+                   :Tw (assoc st :tw (first a))
+                   :Tz (assoc st :th (/ (first a) 100))
+                   :TL (assoc st :tl (first a))
+                   :Ts (assoc st :rise (first a))
+                   :Tr (assoc st :mode (first a))
+                   :Td (td st (first a) (second a))
+                   :TD (td (assoc st :tl (- (second a))) (first a) (second a))
+                   :Tm (assoc st :tm (vec a) :tlm (vec a))
+                   :T* (td st 0 (- (:tl st)))
+                   :Tj (show-str st (first a))
+                   :TJ (show-arr st (first a))
+                   :quote (show-str (td st 0 (- (:tl st))) (first a))
+                   :dquote (show-str (td (assoc st :tw (first a) :tc (second a)) 0 (- (:tl st))) (nth a 2))
+                   :Do (let [f (get forms (first a))]
+                         (when (and f (not (@active (first a))))
+                           (swap! active conj (first a))
+                           (run (assoc st :stack [] :ctm (mm (:matrix f) (:ctm st))) (:ops f))
+                           (swap! active disj (first a)))
+                         st)
+                   st))
+               st ops))]
+      (run init ops)
+      @glyphs)))
+
+;; ----------------------------------------------------------------------- writing content
+
+(defn printable? [s] (every? #(<= 32 (int %) 126) s))
+(defn lit [s] (if (printable? s)
+                (str "(" (-> s (str/replace "\\" "\\\\") (str/replace "(" "\\(") (str/replace ")" "\\)")) ")")
+                (str "<" (apply str (map #(format "%02X" (int %)) s)) ">")))
+(defn num* [x] (if (integer? x) (str x) (str/replace (format "%.6f" (double x)) #"\.?0+$" "")))
+
+(defn op->text [[op & a]]
+  (let [opn (get {:quote "'" :dquote "\"" :T* "T*"} op (name op))
+        arg (fn [x] (cond (string? x) (lit x)
+                          (keyword? x) (str "/" (name x))
+                          (vector? x) (str "[" (str/join " " (map #(if (string? %) (lit %) (num* %)) x)) "]")
+                          :else (num* x)))]
+    (str (str/join " " (map arg a)) (when (seq a) " ") opn)))
+
+(defn content [ops] (str/join "\n" (map op->text ops)))
+
+(defn font-obj [base]
+  (str "<< /Type /Font /Subtype /Type1 /BaseFont /" base " /Encoding /WinAnsiEncoding >>"))
+
+(defn std-font-objs [] (into {} (for [i (range 1 7)] [(+ 10 i) (font-obj (:base (fonts (keyword (str "F" i)))))])))
+
+(def fonts-res
+  (str "<< /Font << " (str/join " " (for [i (range 1 7)] (str "/F" i " " (+ 10 i) " 0 R"))) " >> >>"))
+
+(defn simple-pdf [media ops]
+  (build-pdf
+   (merge
+    {1 "<< /Type /Catalog /Pages 2 0 R >>"
+     2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+     3 (str "<< /Type /Page /Parent 2 0 R /MediaBox [" (str/join " " media) "] /Resources " fonts-res " /Contents 4 0 R >>")
+     4 (stream "" (content ops))}
+    (std-font-objs))))
+
+;; ---------------------------------------------------------------------------------- ops.pdf
+
+(def ops-ops
+  [[:q] [:BT] [:Tf :F1 12] [:Td 20 250] [:Tj "Hello World"] [:ET] [:Q]
+   [:BT] [:Tf :F2 10] [:TL 14] [:Td 20 220] [:Tj "Times line"] [:T*] [:Tj "second line"]
+   [:quote "third line"] [:dquote 2 1 "fourth"] [:ET]
+   [:BT] [:Tf :F3 8] [:Tc 0.5] [:Td 20 170] [:Tj "char spaced"] [:Tw 10] [:Td 0 -12] [:Tj "word spaced out"] [:Tc 0] [:Tw 0] [:ET]
+   [:BT] [:Tf :F1 10] [:Tz 50] [:Td 20 140] [:Tj "squeezed"] [:Tz 200] [:Td 0 -12] [:Tj "wide"] [:Tz 100] [:ET]
+   [:BT] [:Tf :F1 10] [:Td 20 100] [:Tj "rise"] [:Ts 4] [:Tj "up"] [:Ts -3] [:Tj "down"] [:Ts 0] [:ET]
+   [:BT] [:Tf :F2 11] [:Td 20 80] [:TJ ["Kern" -120 "ed" -300 "text"]] [:ET]
+   [:q] [:cm 0.5 0 0 0.5 100 40] [:BT] [:Tf :F1 20] [:Td 0 0] [:Tj "Scaled"] [:ET] [:Q]
+   [:BT] [:Tf :F1 12] [:Tm 0 1 -1 0 180 40] [:Tj "Up"] [:ET]
+   [:BT] [:Tf :F1 12] [:Tm 0.866025 0.5 -0.5 0.866025 120 20] [:Tj "Tilt"] [:ET]
+   [:BT] [:Tf :F4 9] [:Tr 3] [:Td 20 10] [:Tj "hidden"] [:Tr 0] [:TD 50 0] [:Tj "TD"] [:ET]])
+
+(def ops-words
+  ["Hello" "World" "Times" "line" "second" "line" "third" "line" "fourth"
+   "char" "spaced" "word" "spaced" "out" "squeezed" "wide" "riseup" "down" "Kerned" "text"
+   "Scaled" "Up" "Tilt" "hidden" "TD"])
+
+;; -------------------------------------------------------------------------------- rotate.pdf
+
+(def rotate-ops [[:BT] [:Tf :F1 12] [:Td 50 100] [:Tj "Ab"] [:Td 0 20] [:Tf :F2 9] [:Tj "Turned"] [:ET]])
+
+(defn rotate-pdf []
+  (build-pdf
+   (merge
+    {1 "<< /Type /Catalog /Pages 2 0 R >>"
+     2 "<< /Type /Pages /Kids [3 0 R 5 0 R 6 0 R 7 0 R] /Count 4 >>"
+     4 (stream "" (content rotate-ops))}
+    (into {} (for [[n r] [[3 0] [5 90] [6 180] [7 270]]]
+               [n (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /CropBox [10 20 190 280] "
+                       (when (pos? r) (str "/Rotate " r " "))
+                       "/Resources " fonts-res " /Contents 4 0 R >>")]))
+    (std-font-objs))))
+
+;; ---------------------------------------------------------------------------------- forms.pdf
+
+(def forms-spec
+  {:Fm1 {:matrix [1 0 0 1 3 4] :ops [[:BT] [:Tf :F2 10] [:Td 0 0] [:Tj "Fm"] [:ET] [:Do :Fm2] [:Do :Fm3]]}
+   :Fm2 {:matrix [2 0 0 2 0 20] :ops [[:BT] [:Tf :F1 6] [:Td 0 0] [:Tj "N"] [:ET]]}
+   :Fm3 {:matrix [1 0 0 1 0 40] :ops [[:BT] [:Tf :F3 6] [:Tj "C"] [:ET] [:Do :Fm3]]}})
+
+(def forms-page-ops
+  [[:q] [:cm 2 0 0 2 10 10] [:Do :Fm1] [:Q] [:Do :Fm1] [:Do :Im1]
+   [:BT] [:Tf :F1 10] [:Td 5 5] [:Tj "P"] [:ET]])
+
+(defn forms-pdf []
+  (build-pdf
+   (merge
+    {1 "<< /Type /Catalog /Pages 2 0 R >>"
+     2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+     3 (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Resources << /Font << /F1 11 0 R /F2 12 0 R /F3 13 0 R >> "
+            "/XObject << /Fm1 5 0 R /Im1 8 0 R >> >> /Contents 4 0 R >>")
+     4 (stream "" (content forms-page-ops))
+     5 (stream (str "/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [1 0 0 1 3 4] /Resources << /Font << /F2 12 0 R /F1 11 0 R /F3 13 0 R >> "
+                    "/XObject << /Fm2 6 0 R /Fm3 7 0 R >> >>")
+               (content (:ops (:Fm1 forms-spec))))
+     6 (stream "/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [2 0 0 2 0 20]"
+               (content (:ops (:Fm2 forms-spec))))
+     7 (stream "/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [1 0 0 1 0 40] /Resources << /Font << /F3 13 0 R >> /XObject << /Fm3 7 0 R >> >>"
+               (content (:ops (:Fm3 forms-spec))))
+     8 (stream "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8" "\u0000")}
+    (std-font-objs))))
+
+;; --------------------------------------------------------------------------------- marked.pdf
+
+(def marked-page
+  (str/join "\n"
+    ["BT /F1 10 Tf 20 280 Td"
+     "/P <</MCID 0>> BDC (Hello) Tj EMC"
+     "/Span <</MCID 1 /Lang (en-US) /ActualText (\\376\\377\\000f\\000i\\000 \\000t\\000e\\000x\\000t)>> BDC (A)Tj"
+     "/Artifact BMC (b) Tj EMC (C) Tj EMC"
+     "/Artifact <</Type /Pagination /Subtype /Header>> BDC (Head) Tj EMC"
+     "/Artifact <</Type /Pagination /Subtype /Watermark>> BDC (DRAFT) Tj EMC"
+     "/Artifact <</Type /Layout>> BDC (rule) Tj EMC"
+     "/Artifact <</Type /Background>> BDC (back) Tj EMC"
+     "/Artifact <</Type /Pagination /Subtype /Footer>> BDC (Foot) Tj EMC"
+     "/Artifact <</Type /Page>> BDC (edge) Tj EMC"
+     "/Figure /MC0 BDC (fig) Tj EMC"
+     "/Span /MC9 BDC (lost) Tj EMC"
+     "/Span <</MCID 7 /Alt (\\200 bullet) /E (Mister) /Lang (fr)>> BDC (Mr) Tj EMC"
+     "EMC (after) Tj"
+     "/H1 <</MCID 8>> BDC (open) Tj EMC"
+     "/Span <</MCID 10 /ActualText (\\357\\273\\277caf\\303\\251)>> BDC (cafe) Tj EMC"
+     "ET"
+     "BT /F1 10 Tf 20 100 Td /Div <</MCID 9>> BDC /Fm1 Do ET"]))
+
+(defn marked-pdf []
+  (build-pdf
+   {1 "<< /Type /Catalog /Pages 2 0 R >>"
+    2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+    3 (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 11 0 R >> "
+           "/Properties << /MC0 5 0 R >> /XObject << /Fm1 6 0 R >> >> /Contents 4 0 R >>")
+    4 (stream "" marked-page)
+    5 "<< /MCID 5 /Alt (A picture) /E (expanded) /Lang (de) >>"
+    6 (stream "/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Resources << /Font << /F1 11 0 R >> >>"
+              "BT /F1 10 Tf /Span <</MCID 3>> BDC (inform) Tj EMC /Artifact BMC (unt) Tj ET")
+    11 (font-obj "Helvetica")}))
+
+;; the spans, by hand: idx tag mcid artifact type subtype actual alt exp lang gfirst gcount flags stm parent
+;; flags: 1 inline dictionary, 2 via /Properties, 4 name not found, 8 unterminated
+(def marked-spans
+  [[0 "P" 0 "-" "-" "-" "-" "-" "-" "-" 0 5 1 0 -1]
+   [1 "Span" 1 "-" "-" "-" "fi text" "-" "-" "en-US" 5 3 1 0 -1]
+   [2 "Artifact" -1 "other" "-" "-" "-" "-" "-" "-" 6 1 0 0 1]
+   [3 "Artifact" -1 "pagination" "Pagination" "Header" "-" "-" "-" "-" 8 4 1 0 -1]
+   [4 "Artifact" -1 "watermark" "Pagination" "Watermark" "-" "-" "-" "-" 12 5 1 0 -1]
+   [5 "Artifact" -1 "layout" "Layout" "-" "-" "-" "-" "-" 17 4 1 0 -1]
+   [6 "Artifact" -1 "background" "Background" "-" "-" "-" "-" "-" 21 4 1 0 -1]
+   [7 "Artifact" -1 "pagination" "Pagination" "Footer" "-" "-" "-" "-" 25 4 1 0 -1]
+   [8 "Artifact" -1 "other" "Page" "-" "-" "-" "-" "-" 29 4 1 0 -1]
+   [9 "Figure" 5 "-" "-" "-" "-" "A picture" "expanded" "de" 33 3 2 0 -1]
+   [10 "Span" -1 "-" "-" "-" "-" "-" "-" "-" 36 4 4 0 -1]
+   [11 "Span" 7 "-" "-" "-" "-" "• bullet" "Mister" "fr" 40 2 1 0 -1]
+   [12 "H1" 8 "-" "-" "-" "-" "-" "-" "-" 47 4 1 0 -1]
+   [13 "Span" 10 "-" "-" "-" "caf\u00e9" "-" "-" "-" 51 4 1 0 -1]
+   [14 "Div" 9 "-" "-" "-" "-" "-" "-" "-" 55 9 9 0 -1]
+   [15 "Span" 3 "-" "-" "-" "-" "-" "-" "-" 55 6 1 6 14]
+   [16 "Artifact" -1 "other" "-" "-" "-" "-" "-" "-" 61 3 8 6 14]])
+
+;; ---------------------------------------------------------------------------------- fonts.pdf
+
+(def fonts-lines
+  (for [i (range 18)] [(keyword (str "F" (inc (mod i 6)))) (str (char (+ 65 i)) "x" i)]))
+
+(def fonts-ops
+  (concat [[:BT] [:TL 14] [:Td 10 280]]
+          (mapcat (fn [[f s]] [[:Tf f 10] [:Tj s] [:T*]]) fonts-lines)
+          [[:Tf :T0 12] [:Tj "\u0000\u0001\u0000\u0002\u0000\u0010\u0000\u0011\u0000\u0012\u0000\u0003"] [:T*]
+           [:Tf :T3 10] [:Tj "abab"] [:ET]]))
+
+(def fonts-text
+  (str (apply str (map second fonts-lines)) "A" "BC" "abc" "�" "abab"))
+
+(defn fonts-pdf []
+  (let [tu (str "/CIDInit /ProcSet findresource begin 12 dict begin begincmap\n"
+                "/CMapName /Adobe-Identity-UCS def /CMapType 2 def\n"
+                "1 begincodespacerange <0000> <FFFF> endcodespacerange\n"
+                "2 beginbfchar <0001> <0041> <0002> <00420043> endbfchar\n"
+                "1 beginbfrange <0010> <0012> <0061> endbfrange\n"
+                "endcmap CMapName currentdict /CMap defineresource pop end end")]
+    (build-pdf
+     (merge
+      {1 "<< /Type /Catalog /Pages 2 0 R >>"
+       2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+       3 (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << "
+              (str/join " " (for [i (range 1 7)] (str "/F" i " " (+ 10 i) " 0 R")))
+              " /T0 20 0 R /T3 24 0 R >> >> /Contents 4 0 R >>")
+       4 (stream "" (content fonts-ops))
+       20 "<< /Type /Font /Subtype /Type0 /BaseFont /Test /Encoding /Identity-H /DescendantFonts [21 0 R] /ToUnicode 23 0 R >>"
+       21 "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Test /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor 22 0 R /DW 500 /W [1 [600 700] 16 18 400] >>"
+       22 "<< /Type /FontDescriptor /FontName /Test /Flags 4 /FontBBox [0 -200 1000 800] /Ascent 800 /Descent -200 /ItalicAngle 0 /StemV 80 >>"
+       23 (stream "" tu)
+       24 (str "<< /Type /Font /Subtype /Type3 /FontBBox [0 -20 60 80] /FontMatrix [0.01 0 0 0.01 0 0] /CharProcs << /a 25 0 R /b 25 0 R >> "
+               "/Encoding << /Type /Encoding /Differences [97 /a /b] >> /FirstChar 97 /LastChar 98 /Widths [50 60] >>")
+       25 (stream "" "50 0 0 0 50 80 d1 0 0 50 80 re f")}
+      (std-font-objs)))))
+
+;; --------------------------------------------------------------------------------- inline.pdf
+
+(defn inline-pdf []
+  (build-pdf
+   (merge
+    {1 "<< /Type /Catalog /Pages 2 0 R >>"
+     2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+     3 "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 11 0 R >> >> /Contents 4 0 R >>"
+     4 (stream "" (str "BT /F1 10 Tf 10 150 Td (before) Tj ET\n"
+                       "q 50 0 0 50 10 50 cm BI /W 4 /H 2 /CS /G /BPC 8 ID \u0001 EI \u0002\u0003\u0004\u0005\u0006\u0007 EI\nQ\n"
+                       "BT /F1 10 Tf 10 20 Td (after) Tj ET\n"))}
+    {11 (font-obj "Helvetica")})))
+
+;; -------------------------------------------------------------------------------- damaged.pdf
+
+;; ----------------------------------------------------------------------------------- deep.pdf
+;; limits: 300 nested marked-content sequences (256 are kept), 300 q (256 kept), a chain of 40
+;; Form XObjects (32 run)
+
+(defn deep-pdf []
+  (build-pdf
+   (merge
+    {1 "<< /Type /Catalog /Pages 2 0 R >>"
+     2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+     3 (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 11 0 R >> /XObject << /X1 20 0 R >> >> /Contents 4 0 R >>")
+     4 (stream "" (str (apply str (repeat 300 "/A BMC ")) "BT /F1 10 Tf 10 100 Td (x) Tj ET " (apply str (repeat 300 "EMC "))
+                       "\n" (apply str (repeat 300 "q ")) (apply str (repeat 300 "Q "))
+                       "\nBT /F1 10 Tf 10 50 Td (y) Tj ET /X1 Do\n"))
+     11 (font-obj "Helvetica")}
+    (into {} (for [i (range 1 41)]
+               [(+ 19 i) (stream (str "/Type /XObject /Subtype /Form /BBox [0 0 10 10] /Resources << /Font << /F1 11 0 R >>"
+                                      (when (< i 40) (str " /XObject << /X" (inc i) " " (+ 20 i) " 0 R >>")) " >>")
+                                 (str "BT /F1 4 Tf 1 1 Td (f) Tj ET" (when (< i 40) (str " /X" (inc i) " Do"))))])))))
+
+(defn damaged-pdf []
+  (build-pdf
+   {1 "<< /Type /Catalog /Pages 2 0 R >>"
+    2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+    3 "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 11 0 R >> >> /Contents 4 0 R >>"
+    4 (stream "" (str "BT /F1 10 Tf 10 180 Td (ok) Tj\n"
+                      "(a(b)c) Tj\n"
+                      "[(a) 50 (b) TJ\n"
+                      "Tj\n"
+                      "/Nope 9 Tf (nofont) Tj\n"
+                      "/F1 10 Tf <4142 4> Tj\n"
+                      "<< /A [1 2 << /B (x) >> >> BDC\n"
+                      "99999999999999999999 99999999999999999999 Td (big) Tj\n"
+                      "-- 5 - . .5. 5.. Td 1 2 3 4 5 6 7 8 9 Tm (junk) Tj\n"
+                      "ET q q q Q Q Q Q Q\n"
+                      "BT (tail"))
+    11 (font-obj "Helvetica")}))
+
+;; ---------------------------------------------------------------------------------- the rows
+
+(defn round-half-up [x] (long (Math/floor (+ (double x) 0.5))))
+(defn row-g [g]
+  (str/join "\t" ["G" (if (:cp g) (format "%04X" (:cp g)) "-")
+                  (round-half-up (:x0 g)) (round-half-up (:y0 g)) (round-half-up (:x1 g)) (round-half-up (:y1 g))
+                  (round-half-up (:base g)) (round-half-up (:size g)) (:rot g) (:mode g)]))
+
+(defn g-section [file gs & extra]
+  (str "F\tcontent/" file "\n" (str/join "" (map #(str (row-g %) "\n") gs)) (str/join "" (map #(str % "\n") extra))))
+
+(defn tabs [& xs] (str/join "\t" xs))
+
+(defn generate []
+  (let [media [0 0 200 300]
+        ops-g (glyph-rows ops-ops {:fonts fonts :crop media :rot 0})
+        rot-g (mapcat (fn [r] (glyph-rows rotate-ops {:fonts fonts :crop [10 20 190 280] :rot r})) [0 90 180 270])
+        forms-g (glyph-rows forms-page-ops
+                            {:fonts fonts :crop media :rot 0
+                             :forms {:Fm1 (:Fm1 forms-spec) :Fm2 (:Fm2 forms-spec) :Fm3 (:Fm3 forms-spec)}})
+        fonts-g (glyph-rows fonts-ops {:fonts fonts :crop [0 0 300 300] :rot 0})
+        files {"ops.pdf" (simple-pdf media ops-ops)
+               "rotate.pdf" (rotate-pdf)
+               "deep.pdf" (deep-pdf)
+               "forms.pdf" (forms-pdf)
+               "marked.pdf" (marked-pdf)
+               "fonts.pdf" (fonts-pdf)
+               "inline.pdf" (inline-pdf)
+               "damaged.pdf" (damaged-pdf)}
+        rows (str "# emon P1.7: what the content interpreter must make of test/content/*.pdf.\n"
+                  "# Written by kin/scripts/content-fixtures (bb); do not edit.\n"
+                  "# F file: the rows after it are about that file.\n"
+                  "# G: code point (hex, - none), box, baseline, size (centipoints), rotation (centi-degrees), render mode.\n"
+                  "#    Computed by the script's exact-rational evaluator; kin holds the interpreter to them within 1.\n"
+                  "# N: glyphs, words, spans, warning bits.   W: a word's text.   C: the glyphs' text, in order.\n"
+                  "# S: span index, tag, MCID, artifact, type, subtype, ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent.\n"
+                  (g-section "ops.pdf" ops-g
+                             (tabs "N" (count ops-g) (count ops-words) 0 0)
+                             (str/join "" (map #(str (tabs "W" %) "\n") ops-words)))
+                  (g-section "rotate.pdf" rot-g (tabs "N" (count rot-g) "-" 0 0))
+                  (g-section "forms.pdf" forms-g
+                             (tabs "N" (count forms-g) "-" 0 16)
+                             (tabs "C" (str/join "" (map #(String. (Character/toChars (:cp %))) forms-g))))
+                  (g-section "fonts.pdf" fonts-g
+                             (tabs "N" (count fonts-g) "-" 0 0)
+                             (tabs "C" fonts-text))
+                  (str "F\tcontent/marked.pdf\n"
+                       (tabs "N" 64 "-" 17 576) "\n"
+                       (tabs "C" "HelloAbCHeadDRAFTrulebackFootedgefiglostMrafteropencafeinformunt") "\n"
+                       (str/join "" (map #(str (apply tabs "S" %) "\n") marked-spans)))
+                  (str "F\tcontent/deep.pdf\n" (tabs "N" 34 "-" 256 112) "\n")
+                  (str "F\tcontent/inline.pdf\n" (tabs "N" 11 "-" 0 0) "\n" (tabs "C" "beforeafter") "\n")
+                  (str "F\tcontent/damaged.pdf\n" (tabs "N" 25 "-" 1 996) "\n"
+                       (tabs "C" (str "oka(b)cab" (apply str (repeat 6 "�")) "AB@bigjunk")) "\n"))]
+    {:files files :rows rows}))
+
+(defn -main [args]
+  (let [{:keys [files rows]} (generate)
+        check? (some #{"--check"} args)
+        outs (assoc (into {} files) "rows.txt" (.getBytes ^String rows "UTF-8"))]
+    (.mkdirs (io/file out-dir))
+    (if check?
+      (let [bad (for [[k v] outs :let [f (io/file out-dir k)]
+                      :when (not (and (.exists f) (java.util.Arrays/equals ^bytes v ^bytes (java.nio.file.Files/readAllBytes (.toPath f)))))]
+                  k)]
+        (if (seq bad)
+          (do (println "  FAIL content-fixtures: stale" (str/join " " bad) "-- run kin/scripts/content-fixtures") (System/exit 1))
+          (println "  ok   content-fixtures:" (count files) "PDFs and rows.txt are what the script writes")))
+      (doseq [[k v] outs]
+        (with-open [o (io/output-stream (io/file out-dir k))] (.write o ^bytes v))
+        (println "wrote" (str "test/content/" k))))))
+
+(-main *command-line-args*)

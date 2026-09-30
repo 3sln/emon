@@ -1,0 +1,123 @@
+# emon P1.7: glyph streams of real files from corpus/ that pdfminer.six agrees with, kin/pdfcontenttest.kin.
+# Written by tools/oracle/content-corpus.py --write.
+# path (relative to test/) <TAB> page <TAB> digest of the glyph stream (emon.contentrows) <TAB> glyphs on the page
+../corpus/financial/agami-indian-bank-statements/train/India_Bank_Statement_Digital_Type1/00035.pdf	1	50266461	2141
+../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1	17752472	37
+../corpus/financial/bank-statement-benchmark/datasets/basic/bsb-004/bsb-004-statement.pdf	1	54421551	741
+../corpus/formats/derived/sroie_00000.ocr-layer.pdf	1	47444077	577
+../corpus/forms/irs/f1120.pdf	1	32736402	4364
+../corpus/forms/irs/i1040gi.pdf	1	12798814	984
+../corpus/layout/arxiv/1409.1556.pdf	1	8685147	3289
+../corpus/layout/arxiv/1706.03762.pdf	1	56645195	2464
+../corpus/layout/arxiv/2005.14165.pdf	2	25478383	1495
+../corpus/layout/arxiv/2103.00020.pdf	2	21255506	3973
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Co_Branding/PcquoteComInc_19990721_S-1A_EX-10.11_6377149_EX-10.11_Co-Branding Agreement2.pdf	1	51949701	525
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/PerformanceSportsBrandsInc_20110909_S-1_EX-10.10_7220214_EX-10.10_Endorsement Agreement.pdf	1	31252485	184
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Endorsement/ThriventVariableInsuranceAccountB_20190701_N-6_EX-99.D(IV)_11720968_EX-99.D(IV)_Endorsement Agreement.pdf	1	56206239	2726
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/IP/ArmstrongFlooringInc_20190107_8-K_EX-10.2_11471795_EX-10.2_Intellectual Property Agreement.pdf	1	46947490	3053
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Joint Venture/IMPCOTECHNOLOGIESINC_04_15_2003-EX-10.65-JOINT VENTURE AGREEMENT.PDF	1	19507931	2334
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/License_Agreements/GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content License Agreement1.pdf	1	45280232	2785
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Service/FEDERATEDGOVERNMENTINCOMESECURITIESINC_04_28_2020-EX-99.SERV AGREE-SERVICES AGREEMENT_AMENDMENT.pdf	1	30915182	3807
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_II/Sponsorship/CANOPETROLEUM,INC_12_13_2007-EX-10.1-Sponsorship Agreement.PDF	1	24923652	3637
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	1	9952823	3310
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	1	50419469	2346
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Marketing/Principal Life Insurance Company - Broker Dealer Marketing and Servicing Agreement .PDF	1	982845	3582
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Outsourcing/HUBEIMINKANGPHARMACEUTICALLTD_09_19_2006-EX-10.1-OUTSOURCING AGREEMENT.PDF	1	36665009	1861
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Strategic Alliance/REWALKROBOTICSLTD_07_10_2014-EX-10.2-STRATEGIC ALLIANCE AGREEMENT.PDF	1	13369958	2268
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00338.pdf	1	11051423	1129
+../corpus/layout/gov-reports/berkshire-2023-letter.pdf	1	65301702	2413
+../corpus/layout/gov-reports/fomc-minutes-20240918.pdf	1	64612887	2678
+../corpus/layout/gov-reports/gao-24-106540.pdf	1	10051391	232
+../corpus/layout/pdfa-eng-wds/0090578.pdf	1	46143709	4114
+../corpus/layout/pdfa-eng-wds/0101299.pdf	1	8760021	2254
+../corpus/layout/pdfa-eng-wds/0182448.pdf	1	59215677	3713
+../corpus/layout/pdfa-eng-wds/0798598.pdf	1	43845067	2496
+../corpus/layout/pdfa-eng-wds/0895053.pdf	1	13235210	44
+../corpus/layout/pdfa-eng-wds/1118746.pdf	1	34198708	1053
+../corpus/layout/pdfa-eng-wds/1149465.pdf	1	19594846	122
+../corpus/layout/pdfa-eng-wds/1291700.pdf	1	57457758	2697
+../corpus/layout/pdfa-eng-wds/1481937.pdf	1	5041973	1340
+../corpus/layout/pdfa-eng-wds/1497817.pdf	1	42009459	1645
+../corpus/layout/pdfa-eng-wds/2077768.pdf	1	27600334	862
+../corpus/layout/pdfa-eng-wds/2316977.pdf	1	53908597	1940
+../corpus/layout/pdfa-eng-wds/2388991.pdf	1	17925836	2839
+../corpus/layout/pdfa-eng-wds/2760333.pdf	1	3112353	1864
+../corpus/layout/pdfa-eng-wds/2854487.pdf	1	55978393	2751
+../corpus/layout/pdfa-eng-wds/2940901.pdf	1	46468905	661
+../corpus/layout/pdfa-eng-wds/2987875.pdf	1	43763654	195
+../corpus/layout/pdfa-eng-wds/3047324.pdf	1	8653542	2853
+../corpus/layout/pdfa-eng-wds/3383892.pdf	1	34227896	221
+../corpus/layout/pdfa-eng-wds/3560255.pdf	1	51849398	2359
+../corpus/layout/pdfa-eng-wds/4164802.pdf	1	36874196	1284
+../corpus/layout/pdfa-eng-wds/4334768.pdf	1	63746419	1446
+../corpus/layout/pdfa-eng-wds/4770394.pdf	1	23079251	320
+../corpus/layout/pdfa-eng-wds/4823941.pdf	1	50940936	10096
+../corpus/layout/pdfa-eng-wds/4936269.pdf	1	46322140	1969
+../corpus/layout/pdfa-eng-wds/5171302.pdf	1	44701613	1586
+../corpus/layout/pdfa-eng-wds/5394642.pdf	1	37339897	687
+../corpus/layout/pdfa-eng-wds/5443628.pdf	1	25862923	3963
+../corpus/layout/pdfa-eng-wds/6010082.pdf	1	50134004	785
+../corpus/layout/pdfa-eng-wds/6523894.pdf	1	36489359	2113
+../corpus/layout/pdfa-eng-wds/6547262.pdf	1	10601161	1798
+../corpus/layout/pdfa-eng-wds/6579860.pdf	1	46334721	2158
+../corpus/layout/pdfa-eng-wds/6635499.pdf	1	20525233	3546
+../corpus/layout/pdfa-eng-wds/6693456.pdf	1	51552231	2092
+../corpus/layout/pdfa-eng-wds/6772189.pdf	1	5630485	4323
+../corpus/layout/pdfa-eng-wds/7191610.pdf	1	38730069	1576
+../corpus/layout/pdfa-eng-wds/7405284.pdf	1	18392359	1899
+../corpus/multilingual/udhr/ar-wikipedia-udhr.pdf	1	21143317	2565
+../corpus/multilingual/udhr/chn.pdf	1	63609567	1179
+../corpus/multilingual/udhr/khm.pdf	2	48233481	498
+../corpus/multilingual/udhr/prs.pdf	1	41149416	56
+../corpus/multilingual/udhr/ukr.pdf	1	57751121	4921
+../corpus/multilingual/udhr/un-booklet-ar.pdf	1	7782893	61
+../corpus/tables/gov-reports/bls-cpi.pdf	1	38468868	1826
+../corpus/tables/gov-reports/eia-steo-full.pdf	1	36083334	51
+../corpus/tables/gov-reports/uscourts-jb-c1-2023.pdf	1	56936767	1583
+../corpus/tables/icdar2013/competition-dataset-eu/eu-003.pdf	1	29491437	1413
+../corpus/tables/icdar2013/competition-dataset-eu/eu-008.pdf	1	57653193	3546
+../corpus/tables/icdar2013/competition-dataset-eu/eu-015.pdf	1	16673887	1300
+../corpus/tables/icdar2013/competition-dataset-us/us-001.pdf	1	40821583	4739
+../corpus/tables/icdar2013/competition-dataset-us/us-029.pdf	1	18445313	1364
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00500.pdf	1	29596345	1536
+../corpus/layout/pdfa-eng-wds/4904188.pdf	1	30575508	1371
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00506.pdf	1	9848684	2523
+../corpus/layout/pdfa-eng-wds/7637306.pdf	1	19703057	1107
+../corpus/layout/pdfa-eng-wds/6413195.pdf	1	52642861	3527
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00280.pdf	1	27876685	2763
+../corpus/layout/pdfa-eng-wds/3691653.pdf	1	44055536	1137
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Promotion/ExactSciencesCorp_20180822_8-K_EX-10.1_11331629_EX-10.1_Promotion Agreement.pdf	1	18625573	153
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00661.pdf	1	31330846	1167
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00259.pdf	1	2028432	2530
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00854.pdf	1	32481286	1007
+../corpus/layout/pdfa-eng-wds/5121577.pdf	1	39249878	8560
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00851.pdf	1	24976952	2065
+../corpus/layout/pdfa-eng-wds/3835152.pdf	1	28551060	2839
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_I/Joint Venture/KIROMICBIOPHARMA,INC_04_08_2020-EX-10.28-JOINT VENTURE AGREEMENT.PDF	1	47394126	1616
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00517.pdf	1	44164976	2181
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00092.pdf	1	62570642	1301
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00155.pdf	1	21789306	2472
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00885.pdf	1	47123835	1647
+../corpus/layout/pdfa-eng-wds/6199302.pdf	1	24427987	2324
+../corpus/layout/pdfa-eng-wds/5791067.pdf	1	47736428	2179
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00811.pdf	1	67061486	2563
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00309.pdf	1	62643105	91
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00414.pdf	1	1832847	166
+../corpus/layout/pdfa-eng-wds/0945087.pdf	3	28419379	2799
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00858.pdf	1	13882684	1627
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00277.pdf	1	27709523	255
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00158.pdf	1	21212610	2807
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00304.pdf	1	19468155	1580
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00686.pdf	1	7285376	6170
+../corpus/financial/agami-indian-bank-statements/train/India_Bank_Statement_Digital_Type1/00005.pdf	1	679475	2229
+../corpus/layout/pdfa-eng-wds/1169249.pdf	1	51470128	735
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00605.pdf	1	54763033	1727
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00305.pdf	1	64711774	2257
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00142.pdf	1	24933426	1314
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00485.pdf	1	27204170	2413
+../corpus/layout/pdfa-eng-wds/6987560.pdf	1	3621867	2823
+../corpus/layout/doclaynet-v1.2/test-shard4/dln_00435.pdf	1	2111662	979
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00492.pdf	1	28594102	2305
+../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/IP/GSITECHNOLOGYINC_11_16_2009-EX-10.2-INTELLECTUAL PROPERTY AGREEMENT between SONY ELECTRONICS INC. and GSI TECHNOLOGY, INC..PDF	1	56289430	139
+../corpus/layout/pdfa-eng-wds/3749188.pdf	1	52130370	777
+../corpus/layout/doclaynet-v1.2/val-shard4/dln_00179.pdf	1	8422503	3078

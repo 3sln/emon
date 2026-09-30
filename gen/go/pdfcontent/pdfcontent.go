@@ -157,9 +157,9 @@ const cIntext int32 = 598
 
 const cGsbase int32 = 599
 
-const cSstat int32 = 602
+const cSstat int32 = 633
 
-const cTok int32 = 601
+const cTok int32 = 632
 
 const cFstack int32 = 600
 
@@ -771,7 +771,7 @@ func pcGsReset(cx *port.Cells) int32 {
 	fx.MxCopy(cx, cCur+gCtm, cBase)
 	fx.FxPut(cx, cCur+gTc, int64(0))
 	fx.FxPut(cx, cCur+gTw, int64(0))
-	fx.FxPut(cx, cCur+gTh, int64(65536))
+	fx.FxPut(cx, cCur+gTh, fx.FxOne())
 	fx.FxPut(cx, cCur+gTl, int64(0))
 	fx.FxPut(cx, cCur+gRise, int64(0))
 	fx.FxPut(cx, cCur+gFs, int64(0))
@@ -787,8 +787,8 @@ func pcBaseMatrix(cx *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, rot in
 	// The matrix from user space (points) to page space (centipoints, y down,
 	// the crop box's corner at the origin, /Rotate applied). x0..y1 are the crop
 	// box in centipoints.
-	var h int64 = int64(6553600)
-	var nh int64 = int64(-6553600)
+	var h int64 = int64(1677721600)
+	var nh int64 = int64(-1677721600)
 	if rot == 90 {
 		fx.MxSet(cx, cBase, int64(0), h, h, int64(0), fx.FxOfInt(0-y0), fx.FxOfInt(0-x0))
 	}
@@ -902,7 +902,7 @@ func pcSetColor(cx *port.Cells, ox *port.Cells, n int32) int32 {
 	var o1 int64 = pcNum(ox, n, 1)
 	var o2 int64 = pcNum(ox, n, 2)
 	var o3 int64 = pcNum(ox, n, 3)
-	var one int64 = int64(65536)
+	var one int64 = fx.FxOne()
 	if n == 1 {
 		var gy int32 = pcByte(o0)
 		port.CellsSet(cx, cCur+gColor, pcRgb(gy, gy, gy))
@@ -1282,6 +1282,13 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 	}
 	if cnt > 0 {
 		cp0 = pcFCp(f0, f1, f2, f3, slot, 0)
+	}
+	// A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value
+	// for (Skia does, for the parts of a Devanagari conjunct): that is no value.
+	if (cnt == 1) && ((cp0 == 0) || (cp0 == 65533)) {
+		cnt = 0
+		cp0 = -1
+		how = 5
 	}
 	if w < 0 {
 		w = 50000
@@ -2395,7 +2402,7 @@ func pcGap(gl *port.Cells, p int32, g int32, axis int32) int32 {
 
 func pcRotGap(gl *port.Cells, p int32, g int32, size int32) int32 {
 	// For text at an arbitrary angle: the distance between glyph p's centre and
-	// glyph g's, along the writing direction, less 55 percent of the size (the
+	// glyph g's, along the writing direction, less 60 percent of the size (the
 	// two half-advances of adjacent letters), so it reads as `pc-gap` does.
 	var rot int32 = evidence.GlGet(gl, p, evidence.GfRot())
 	var ux int64 = fx.FxCos(rot)
@@ -2403,7 +2410,7 @@ func pcRotGap(gl *port.Cells, p int32, g int32, size int32) int32 {
 	var dx2 int32 = (evidence.GlGet(gl, g, evidence.GfX0()) + evidence.GlGet(gl, g, evidence.GfX1())) - (evidence.GlGet(gl, p, evidence.GfX0()) + evidence.GlGet(gl, p, evidence.GfX1()))
 	var dy2 int32 = (evidence.GlGet(gl, g, evidence.GfY0()) + evidence.GlGet(gl, g, evidence.GfY1())) - (evidence.GlGet(gl, p, evidence.GfY0()) + evidence.GlGet(gl, p, evidence.GfY1()))
 	var al2 int64 = fx.FxMul(fx.FxOfInt(dx2), ux) + fx.FxMul(fx.FxOfInt(dy2), uy)
-	return fx.FxRound(al2/int64(2)) - ((size * 550) / 1000)
+	return fx.FxRound(al2/int64(2)) - ((size * 600) / 1000)
 }
 
 func pcRotOff(gl *port.Cells, p int32, g int32) int32 {
@@ -2511,23 +2518,79 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	return 1
 }
 
+func pcCls(cp int32) int32 {
+	// A code point's strength for reordering right-to-left text: 1 strong right-to-left
+	// (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right
+	// letter or a digit (Arabic-Indic digits are digits: they run left to right inside
+	// right-to-left text), 0 neutral (punctuation, symbols, what has no value).
+	if cp < 33 {
+		return 0
+	}
+	if ((cp >= 48) && (cp <= 57)) || (((cp >= 1632) && (cp <= 1641)) || ((cp >= 1776) && (cp <= 1785))) {
+		return 2
+	}
+	if ((cp >= 1424) && (cp <= 2303)) || (((cp >= 64285) && (cp <= 65023)) || ((cp >= 65136) && (cp <= 65279))) {
+		return 1
+	}
+	if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+		return 2
+	}
+	if (cp >= 192) && ((cp < 8192) && (cp != 215)) {
+		return 2
+	}
+	if (cp >= 12352) && (cp < 65000) {
+		return 2
+	}
+	return 0
+}
+
+func pcGcls(gl *port.Cells, j int32) int32 {
+	return pcCls(evidence.GlGet(gl, j, evidence.GfCp()))
+}
+
+func pcGlyphOut(et *port.Cells, gl *port.Cells, j int32) int32 {
+	// Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
+	var ts int32 = evidence.GlGet(gl, j, evidence.GfTstart())
+	var tl int32 = evidence.GlGet(gl, j, evidence.GfTlen())
+	var cp int32 = evidence.GlGet(gl, j, evidence.GfCp())
+	var k int32 = 0
+	var cpv int32 = 0
+	if (ts >= 0) && (tl > 0) {
+		for k < tl {
+			cpv = port.CellsAt(et, ts+k)
+			evidence.EtxAppendCp(et, cpv)
+			k += 1
+		}
+		return 0
+	}
+	if cp >= 0 {
+		evidence.EtxAppendCp(et, cp)
+	} else {
+		evidence.EtxAppendCp(et, 65533)
+	}
+	return 0
+}
+
 func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, page int32, gfst int32, glst int32) int32 {
-	// Record glyphs [first, last] as a word: the union of their boxes, their text
-	// (a glyph of unknown value is U+FFFD), the dominant font and size of the
-	// first, and `hidden-text` as its source when every glyph is render mode 3.
+	// Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
+	// dominant font and size of the first, and `hidden-text` as its source when every
+	// glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
+	// page (visual order, as Skia and most producers write them) has its TEXT written in
+	// logical order: the glyphs reversed, with the runs of digits and Latin letters in it
+	// turned back. The glyphs themselves stay as they were shown.
 	var x0 int32 = evidence.GlGet(gl, gfst, evidence.GfX0())
 	var y0 int32 = evidence.GlGet(gl, gfst, evidence.GfY0())
 	var x1 int32 = evidence.GlGet(gl, gfst, evidence.GfX1())
 	var y1 int32 = evidence.GlGet(gl, gfst, evidence.GfY1())
 	var j int32 = gfst
 	var tstart int32 = -1
-	var k int32 = 0
-	var ts int32 = 0
-	var tl int32 = 0
 	var visible int32 = 0
-	var cpv int32 = 0
-	var cp int32 = 0
-	tstart = port.CellsLen(et)
+	var nr int32 = 0
+	var nl int32 = 0
+	var cl int32 = 0
+	var rtlw int32 = 0
+	var kk int32 = 0
+	var m int32 = 0
 	for j <= glst {
 		if evidence.GlGet(gl, j, evidence.GfX0()) < x0 {
 			x0 = evidence.GlGet(gl, j, evidence.GfX0())
@@ -2544,22 +2607,48 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, page int32, gfst
 		if evidence.GlGet(gl, j, evidence.GfMode()) != 3 {
 			visible = 1
 		}
-		ts = evidence.GlGet(gl, j, evidence.GfTstart())
-		tl = evidence.GlGet(gl, j, evidence.GfTlen())
-		cp = evidence.GlGet(gl, j, evidence.GfCp())
-		if (ts >= 0) && (tl > 0) {
-			k = 0
-			for k < tl {
-				cpv = port.CellsAt(et, ts+k)
-				evidence.EtxAppendCp(et, cpv)
-				k += 1
-			}
-		} else if cp >= 0 {
-			evidence.EtxAppendCp(et, cp)
-		} else {
-			evidence.EtxAppendCp(et, 65533)
+		cl = pcGcls(gl, j)
+		if cl == 1 {
+			nr += 1
+		}
+		if cl == 2 {
+			nl += 1
 		}
 		j += 1
+	}
+	if (nr > nl) && (glst > gfst) {
+		if pcAxis(evidence.GlGet(gl, gfst, evidence.GfRot())) == 0 {
+			if evidence.GlGet(gl, glst, evidence.GfX0()) >= evidence.GlGet(gl, gfst, evidence.GfX0()) {
+				rtlw = 1
+			}
+		}
+	}
+	tstart = port.CellsLen(et)
+	if rtlw == 0 {
+		j = gfst
+		for j <= glst {
+			pcGlyphOut(et, gl, j)
+			j += 1
+		}
+	} else {
+		j = glst
+		for j >= gfst {
+			if pcGcls(gl, j) == 2 {
+				kk = j
+				for (kk > gfst) && (pcGcls(gl, kk-1) == 2) {
+					kk -= 1
+				}
+				m = kk
+				for m <= j {
+					pcGlyphOut(et, gl, m)
+					m += 1
+				}
+				j = kk - 1
+			} else {
+				pcGlyphOut(et, gl, j)
+				j -= 1
+			}
+		}
 	}
 	var w int32 = evidence.WdNew(wd, page, x0, y0, x1, y1, gfst, (glst-gfst)+1)
 	evidence.WdSet(wd, w, evidence.WfTstart(), tstart)
@@ -2575,6 +2664,132 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, page int32, gfst
 		j += 1
 	}
 	return w
+}
+
+func pcSwapRows(wd *port.Cells, i int32, j int32) int32 {
+	var k int32 = 0
+	var u int32 = 0
+	var v int32 = 0
+	for k < 16 {
+		u = port.CellsAt(wd, (i*16)+k)
+		v = port.CellsAt(wd, (j*16)+k)
+		port.CellsSet(wd, (i*16)+k, v)
+		port.CellsSet(wd, (j*16)+k, u)
+		k += 1
+	}
+	return 0
+}
+
+func pcRevRows(wd *port.Cells, a int32, b int32) int32 {
+	var i int32 = a
+	var j int32 = b
+	for i < j {
+		pcSwapRows(wd, i, j)
+		i += 1
+		j -= 1
+	}
+	return 0
+}
+
+func pcWcls(gl *port.Cells, wd *port.Cells, w int32) int32 {
+	// 2 when the word has more left-to-right letters and digits than right-to-left letters.
+	var g0 int32 = evidence.WdGet(wd, w, evidence.WfGfirst())
+	var gn int32 = evidence.WdGet(wd, w, evidence.WfGcount())
+	var j int32 = 0
+	var nr int32 = 0
+	var nl int32 = 0
+	var cl int32 = 0
+	for j < gn {
+		cl = pcGcls(gl, g0+j)
+		if cl == 1 {
+			nr += 1
+		}
+		if cl == 2 {
+			nl += 1
+		}
+		j += 1
+	}
+	if nr > nl {
+		return 1
+	}
+	return 2
+}
+
+func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst int32, wlst int32) int32 {
+	// Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than
+	// left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on
+	// the page, their ORDER is made logical: reversed, with runs of left-to-right words
+	// turned back; each word's glyphs are re-pointed at it and its gap is the space to
+	// the word that follows it in that order.
+	var w int32 = wfst
+	var nr int32 = 0
+	var nl int32 = 0
+	var j int32 = 0
+	var cl int32 = 0
+	var a int32 = 0
+	var z int32 = 0
+	var g0 int32 = 0
+	var gn int32 = 0
+	for w <= wlst {
+		g0 = evidence.WdGet(wd, w, evidence.WfGfirst())
+		gn = evidence.WdGet(wd, w, evidence.WfGcount())
+		j = 0
+		for j < gn {
+			cl = pcGcls(gl, g0+j)
+			if cl == 1 {
+				nr += 1
+			}
+			if cl == 2 {
+				nl += 1
+			}
+			j += 1
+		}
+		w += 1
+	}
+	if nr <= nl {
+		return 0
+	}
+	evidence.LnSet(ln, lidx, evidence.LfDir(), evidence.LdRtl())
+	if pcAxis(evidence.GlGet(gl, evidence.WdGet(wd, wfst, evidence.WfGfirst()), evidence.GfRot())) != 0 {
+		return 0
+	}
+	if evidence.WdGet(wd, wlst, evidence.WfX0()) < evidence.WdGet(wd, wfst, evidence.WfX0()) {
+		return 0
+	}
+	if wfst == wlst {
+		return 0
+	}
+	pcRevRows(wd, wfst, wlst)
+	a = wfst
+	for a <= wlst {
+		if pcWcls(gl, wd, a) == 2 {
+			z = a
+			for (z < wlst) && (pcWcls(gl, wd, z+1) == 2) {
+				z += 1
+			}
+			pcRevRows(wd, a, z)
+			a = z + 1
+		} else {
+			a += 1
+		}
+	}
+	w = wfst
+	for w <= wlst {
+		g0 = evidence.WdGet(wd, w, evidence.WfGfirst())
+		gn = evidence.WdGet(wd, w, evidence.WfGcount())
+		j = 0
+		for j < gn {
+			evidence.GlSet(gl, g0+j, evidence.GfWord(), w)
+			j += 1
+		}
+		z = -1
+		if w < wlst {
+			z = evidence.WdGet(wd, w, evidence.WfX0()) - evidence.WdGet(wd, w+1, evidence.WfX1())
+		}
+		evidence.WdSet(wd, w, evidence.WfGap(), z)
+		w += 1
+	}
+	return 0
 }
 
 func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, page int32, g0 int32, w0 int32) int32 {
@@ -2680,6 +2895,7 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, pag
 				axis = pcAxis(evidence.GlGet(gl, gfp, evidence.GfRot()))
 				lnx = evidence.LnNew(ln, page, x0, y0, x1, y1, lfirst, (prev-lfirst)+1, pcOffset(gl, gfp, axis))
 				evidence.LnSet(ln, lnx, evidence.LfRot(), evidence.GlGet(gl, gfp, evidence.GfRot()))
+				pcLineBidi(gl, wd, ln, lnx, lfirst, prev)
 				gfp = lfirst
 				for gfp <= prev {
 					evidence.WdSet(wd, gfp, evidence.WfLine(), lnx)

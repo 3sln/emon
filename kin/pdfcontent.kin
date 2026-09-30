@@ -36,9 +36,25 @@
 ;; THE PAGE SPACE is D009's: the crop box applied, `/Rotate` applied, origin at
 ;; the top left, y down, centipoints. It is done ONCE, in the base matrix the
 ;; current transformation matrix starts as, so every later coordinate is already
-;; a page coordinate. Matrices are 16.16 fixed point in `I64` (`emon.fx`).
+;; a page coordinate. Matrices are fixed point in `I64`, 24 fractional bits (`emon.fx`, D087).
 ;; A glyph's box is the bounding box, in page space, of its cell: its width from
 ;; the font, its height from the font's ascent and descent (NOT from the size).
+;;
+;; WHAT A GLYPH SAYS. Its code point is what `emon.pdffont` answers for the code, and `how` says how it
+;; knew (`gh`); a code the font says nothing of, or says U+0000 or U+FFFD for (Skia writes <0000> for the
+;; parts of a Devanagari conjunct), has no value: cp -1, how unknown. A glyph of unknown width takes half
+;; an em (warning bit 128). The font's cell is its ascent and descent, a Type 3 font's its /FontBBox
+;; times its /FontMatrix. Text in a font that cannot be loaded is shown all the same, with no values.
+;;
+;; WORDS AND LINES (`pc-group`, after the page is read; stream order kept). A glyph continues the word of
+;; the one before it when their rotation agrees to half a degree, their baselines are within 45 per cent of
+;; the size (sub- and superscripts stay), and the gap along the writing direction is at most 16 per cent of
+;; the size and the step back at most 40: a space glyph (U+0020, U+00A0, the tab, ...) always ends a word.
+;; Words join into a line while the next starts within 2 sizes of the last one's end (60 per cent of a size
+;; back) on the same baseline: a wider gap is a column gutter or a table cell, the next stage's to decide.
+;; Text at an angle off the four axes is measured along its own direction from the glyph centres. A
+;; RIGHT-TO-LEFT word written in visual order has its text put in logical order, and the words of a
+;; right-to-left line likewise (D088); the glyphs stay as they were shown.
 ;;
 ;; A SOURCE THAT MISSES (D058, D074, D075): after every object the document layer
 ;; loads for this module (a font, a resource, a stream) the view is checked, and on
@@ -48,9 +64,9 @@
 ;;
 ;; BOUNDS: operands per operator 4,096 (the rest dropped, warning bit 2);
 ;; containers nest 16 deep; graphics states 256; marked-content spans 256 deep;
-;; forms FORM_DEPTH (limit 6; deeper ones are skipped with warning bit 16, since
-;; a cycle in a damaged file is not a reason to refuse the page); operators per
-;; page OPERATORS (limit 5; a breach never returns).
+;; forms FORM_DEPTH (`limit-of` kind 6, 32 by default; deeper ones, and a form that draws itself, are
+;; skipped with warning bit 16, since a cycle in a damaged file is not a reason to refuse the page);
+;; operators per page OPERATORS (kind 5; a breach never returns).
 (ns emon.pdfcontent
   (:require [emon.lang :refer [I32 I64 Src Cells i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
@@ -77,7 +93,7 @@
                                    wd-new wd-get wd-set wd-count ln-new ln-set
                                    wf-gfirst wf-gcount wf-x0 wf-y0 wf-x1 wf-y1
                                    wf-tstart wf-tlen wf-font wf-size wf-src wf-gap
-                                   wf-line lf-rot
+                                   wf-line lf-rot lf-dir ld-rtl
                                    sp-new sp-get sp-set sp-count
                                    gf-tstart gf-tlen gf-how gf-baseline gf-rot
                                    gf-color gf-alpha gf-mode gf-artifact gf-mcid
@@ -92,7 +108,7 @@
                                    ar-pagination ar-watermark ar-layout ar-background
                                    ar-other]]
             [emon.fx :refer [fx-of-int fx-mul fx-div fx-muldiv fx-of-real fx-round
-                             fx-abs fx-hypot fx-atan2 fx-cos fx-sin fx-get fx-put fx-push fx-join
+                             fx-abs fx-one fx-hypot fx-atan2 fx-cos fx-sin fx-get fx-put fx-push fx-join
                              fx-clamp fx-hi fx-lo mx-set mx-ident mx-mul mx-x mx-y mx-translate mx-copy]]
             [kin.lang :refer [defn defconst defdata declarefn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
@@ -175,8 +191,8 @@
 (defconst ^I32 C_FLIM 597)       ;; limit-of FORM_DEPTH
 (defconst ^I32 C_INTEXT 598)
 (defconst ^I32 C_GSBASE 599)
-(defconst ^I32 C_SSTAT 602)      ;; the last non-zero status of a stream decode (`pf-status`)
-(defconst ^I32 C_TOK 601)        ;; what `pc-lex-one` read     ;; the depth this stream started at
+(defconst ^I32 C_SSTAT 633)      ;; the last non-zero status of a stream decode (`pf-status`)
+(defconst ^I32 C_TOK 632)        ;; what `pc-lex-one` read
 (defconst ^I32 C_FSTACK 600)     ;; 32 object numbers of the forms being run
 (defconst ^I32 MAX_FORMS 32)
 (defconst ^I32 C_CSTACK 640)     ;; 16 open containers' entry indices
@@ -617,7 +633,7 @@
   (mx-copy cx (+ C_CUR G_CTM) C_BASE)
   (fx-put cx (+ C_CUR G_TC) (i64 0))
   (fx-put cx (+ C_CUR G_TW) (i64 0))
-  (fx-put cx (+ C_CUR G_TH) (i64 65536))
+  (fx-put cx (+ C_CUR G_TH) (fx-one))
   (fx-put cx (+ C_CUR G_TL) (i64 0))
   (fx-put cx (+ C_CUR G_RISE) (i64 0))
   (fx-put cx (+ C_CUR G_FS) (i64 0))
@@ -632,8 +648,8 @@
   (comment "The matrix from user space (points) to page space (centipoints, y down,")
   (comment "the crop box's corner at the origin, /Rotate applied). x0..y1 are the crop")
   (comment "box in centipoints.")
-  (let [^I64 h (i64 6553600)
-        ^I64 nh (i64 -6553600)]
+  (let [^I64 h (i64 1677721600)
+        ^I64 nh (i64 -1677721600)]
     (if (== rot 90)
       (mx-set cx C_BASE (i64 0) h h (i64 0) (fx-of-int (- 0 y0)) (fx-of-int (- 0 x0))))
     (if (== rot 180)
@@ -733,7 +749,7 @@
         ^I64 o1 (pc-num ox n 1)
         ^I64 o2 (pc-num ox n 2)
         ^I64 o3 (pc-num ox n 3)
-        ^I64 one (i64 65536)]
+        ^I64 one (fx-one)]
     (if (== n 1)
       (do (let [^I32 gy (pc-byte o0)]
             (cells-set cx (+ C_CUR G_COLOR) (pc-rgb gy gy gy)))
@@ -1001,6 +1017,12 @@
                 (set vert (cells-at cx (+ sat S_VERT)))
                 (set dwv (cells-at cx (+ sat S_DW2W)))))))
     (if (> cnt 0) (set cp0 (pc-f-cp f0 f1 f2 f3 slot 0)))
+    (comment "A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value")
+    (comment "for (Skia does, for the parts of a Devanagari conjunct): that is no value.")
+    (if (and (== cnt 1) (or (== cp0 0) (== cp0 65533)))
+      (do (set cnt 0)
+          (set cp0 -1)
+          (set how 5)))
     (if (< w 0)
       (do (set w 50000)
           (pc-warn-set cx W_WIDTH)))
@@ -1850,7 +1872,7 @@
 
 (defn ^I32 pc-rot-gap [^Cells gl ^I32 p ^I32 g ^I32 size]
   (comment "For text at an arbitrary angle: the distance between glyph p's centre and")
-  (comment "glyph g's, along the writing direction, less 55 percent of the size (the")
+  (comment "glyph g's, along the writing direction, less 60 percent of the size (the")
   (comment "two half-advances of adjacent letters), so it reads as `pc-gap` does.")
   (let [^I32 rot (gl-get gl p (gf-rot))
         ^I64 ux (fx-cos rot)
@@ -1858,7 +1880,7 @@
         ^I32 dx2 (- (+ (gl-get gl g (gf-x0)) (gl-get gl g (gf-x1))) (+ (gl-get gl p (gf-x0)) (gl-get gl p (gf-x1))))
         ^I32 dy2 (- (+ (gl-get gl g (gf-y0)) (gl-get gl g (gf-y1))) (+ (gl-get gl p (gf-y0)) (gl-get gl p (gf-y1))))
         ^I64 al2 (add64 (fx-mul (fx-of-int dx2) ux) (fx-mul (fx-of-int dy2) uy))]
-    (return (- (fx-round (quot al2 (i64 2))) (quot (* size 550) 1000)))))
+    (return (- (fx-round (quot al2 (i64 2))) (quot (* size 600) 1000)))))
 
 (defn ^I32 pc-rot-off [^Cells gl ^I32 p ^I32 g]
   (comment "The distance between the two glyphs' centres across the writing direction.")
@@ -1925,43 +1947,96 @@
     (if (< (* gap 1000) (- 0 (* sz WORD_BACK_PM))) (return 0))
     (return 1)))
 
+(defn ^I32 pc-cls [^I32 cp]
+  (comment "A code point's strength for reordering right-to-left text: 1 strong right-to-left")
+  (comment "(Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right")
+  (comment "letter or a digit (Arabic-Indic digits are digits: they run left to right inside")
+  (comment "right-to-left text), 0 neutral (punctuation, symbols, what has no value).")
+  (if (< cp 33) (return 0))
+  (if (or (and (>= cp 48) (<= cp 57)) (or (and (>= cp 1632) (<= cp 1641)) (and (>= cp 1776) (<= cp 1785))))
+    (return 2))
+  (if (or (and (>= cp 1424) (<= cp 2303)) (or (and (>= cp 64285) (<= cp 65023)) (and (>= cp 65136) (<= cp 65279))))
+    (return 1))
+  (if (or (and (>= cp 65) (<= cp 90)) (and (>= cp 97) (<= cp 122))) (return 2))
+  (if (and (>= cp 192) (and (< cp 8192) (!= cp 215))) (return 2))
+  (if (and (>= cp 12352) (< cp 65000)) (return 2))
+  (return 0))
+
+(defn ^I32 pc-gcls [^Cells gl ^I32 j]
+  (return (pc-cls (gl-get gl j (gf-cp)))))
+
+(defn ^I32 pc-glyph-out [^:mut ^Cells et ^Cells gl ^I32 j]
+  (comment "Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.")
+  (let [^I32 ts (gl-get gl j (gf-tstart))
+        ^I32 tl (gl-get gl j (gf-tlen))
+        ^I32 cp (gl-get gl j (gf-cp))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 cpv 0]
+    (if (and (>= ts 0) (> tl 0))
+      (do (while (< k tl)
+            (do (set cpv (cells-at et (+ ts k)))
+                (etx-append-cp et cpv)
+                (set k (+ k 1))))
+          (return 0)))
+    (if (>= cp 0)
+      (etx-append-cp et cp)
+      (etx-append-cp et 65533))
+    (return 0)))
+
 (defn ^I32 pc-emit-word [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd
                          ^I32 page ^I32 gfst ^I32 glst]
-  (comment "Record glyphs [first, last] as a word: the union of their boxes, their text")
-  (comment "(a glyph of unknown value is U+FFFD), the dominant font and size of the")
-  (comment "first, and `hidden-text` as its source when every glyph is render mode 3.")
+  (comment "Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the")
+  (comment "dominant font and size of the first, and `hidden-text` as its source when every")
+  (comment "glyph is render mode 3. A right-to-left word whose glyphs run left to right on the")
+  (comment "page (visual order, as Skia and most producers write them) has its TEXT written in")
+  (comment "logical order: the glyphs reversed, with the runs of digits and Latin letters in it")
+  (comment "turned back. The glyphs themselves stay as they were shown.")
   (let [^:mut ^I32 x0 (gl-get gl gfst (gf-x0))
         ^:mut ^I32 y0 (gl-get gl gfst (gf-y0))
         ^:mut ^I32 x1 (gl-get gl gfst (gf-x1))
         ^:mut ^I32 y1 (gl-get gl gfst (gf-y1))
         ^:mut ^I32 j gfst
         ^:mut ^I32 tstart -1
-        ^:mut ^I32 k 0
-        ^:mut ^I32 ts 0
-        ^:mut ^I32 tl 0
         ^:mut ^I32 visible 0
-        ^:mut ^I32 cpv 0
-        ^:mut ^I32 cp 0]
-    (set tstart (cells-len et))
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 cl 0
+        ^:mut ^I32 rtlw 0
+        ^:mut ^I32 kk 0
+        ^:mut ^I32 m 0]
     (while (<= j glst)
       (do (if (< (gl-get gl j (gf-x0)) x0) (set x0 (gl-get gl j (gf-x0))))
           (if (< (gl-get gl j (gf-y0)) y0) (set y0 (gl-get gl j (gf-y0))))
           (if (> (gl-get gl j (gf-x1)) x1) (set x1 (gl-get gl j (gf-x1))))
           (if (> (gl-get gl j (gf-y1)) y1) (set y1 (gl-get gl j (gf-y1))))
           (if (!= (gl-get gl j (gf-mode)) 3) (set visible 1))
-          (set ts (gl-get gl j (gf-tstart)))
-          (set tl (gl-get gl j (gf-tlen)))
-          (set cp (gl-get gl j (gf-cp)))
-          (if (and (>= ts 0) (> tl 0))
-            (do (set k 0)
-                (while (< k tl)
-                  (do (set cpv (cells-at et (+ ts k)))
-                      (etx-append-cp et cpv)
-                      (set k (+ k 1)))))
-            (if (>= cp 0)
-              (etx-append-cp et cp)
-              (etx-append-cp et 65533)))
+          (set cl (pc-gcls gl j))
+          (if (== cl 1) (set nr (+ nr 1)))
+          (if (== cl 2) (set nl (+ nl 1)))
           (set j (+ j 1))))
+    (if (and (> nr nl) (> glst gfst))
+      (if (== (pc-axis (gl-get gl gfst (gf-rot))) 0)
+        (if (>= (gl-get gl glst (gf-x0)) (gl-get gl gfst (gf-x0)))
+          (set rtlw 1))))
+    (set tstart (cells-len et))
+    (if (== rtlw 0)
+      (do (set j gfst)
+          (while (<= j glst)
+            (do (pc-glyph-out et gl j)
+                (set j (+ j 1)))))
+      (do (set j glst)
+          (while (>= j gfst)
+            (if (== (pc-gcls gl j) 2)
+              (do (set kk j)
+                  (while (and (> kk gfst) (== (pc-gcls gl (- kk 1)) 2))
+                    (set kk (- kk 1)))
+                  (set m kk)
+                  (while (<= m j)
+                    (do (pc-glyph-out et gl m)
+                        (set m (+ m 1))))
+                  (set j (- kk 1)))
+              (do (pc-glyph-out et gl j)
+                  (set j (- j 1)))))))
     (let [^I32 w (wd-new wd page x0 y0 x1 y1 gfst (+ (- glst gfst) 1))]
       (wd-set wd w (wf-tstart) tstart)
       (wd-set wd w (wf-tlen) (- (cells-len et) tstart))
@@ -1973,6 +2048,101 @@
         (do (gl-set gl j (gf-word) w)
             (set j (+ j 1))))
       (return w))))
+
+;; right-to-left lines: the words in logical order
+
+(defn ^I32 pc-swap-rows [^:mut ^Cells wd ^I32 i ^I32 j]
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 v 0]
+    (while (< k 16)
+      (do (set u (cells-at wd (+ (* i 16) k)))
+          (set v (cells-at wd (+ (* j 16) k)))
+          (cells-set wd (+ (* i 16) k) v)
+          (cells-set wd (+ (* j 16) k) u)
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 pc-rev-rows [^:mut ^Cells wd ^I32 a ^I32 b]
+  (let [^:mut ^I32 i a
+        ^:mut ^I32 j b]
+    (while (< i j)
+      (do (pc-swap-rows wd i j)
+          (set i (+ i 1))
+          (set j (- j 1))))
+    (return 0)))
+
+(defn ^I32 pc-wcls [^Cells gl ^Cells wd ^I32 w]
+  (comment "2 when the word has more left-to-right letters and digits than right-to-left letters.")
+  (let [^I32 g0 (wd-get wd w (wf-gfirst))
+        ^I32 gn (wd-get wd w (wf-gcount))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 cl 0]
+    (while (< j gn)
+      (do (set cl (pc-gcls gl (+ g0 j)))
+          (if (== cl 1) (set nr (+ nr 1)))
+          (if (== cl 2) (set nl (+ nl 1)))
+          (set j (+ j 1))))
+    (if (> nr nl) (return 1))
+    (return 2)))
+
+(defn ^I32 pc-line-bidi [^:mut ^Cells gl ^:mut ^Cells wd ^:mut ^Cells ln ^I32 lidx
+                         ^I32 wfst ^I32 wlst]
+  (comment "Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than")
+  (comment "left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on")
+  (comment "the page, their ORDER is made logical: reversed, with runs of left-to-right words")
+  (comment "turned back; each word's glyphs are re-pointed at it and its gap is the space to")
+  (comment "the word that follows it in that order.")
+  (let [^:mut ^I32 w wfst
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cl 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 z 0
+        ^:mut ^I32 g0 0
+        ^:mut ^I32 gn 0]
+    (while (<= w wlst)
+      (do (set g0 (wd-get wd w (wf-gfirst)))
+          (set gn (wd-get wd w (wf-gcount)))
+          (set j 0)
+          (while (< j gn)
+            (do (set cl (pc-gcls gl (+ g0 j)))
+                (if (== cl 1) (set nr (+ nr 1)))
+                (if (== cl 2) (set nl (+ nl 1)))
+                (set j (+ j 1))))
+          (set w (+ w 1))))
+    (if (<= nr nl) (return 0))
+    (ln-set ln lidx (lf-dir) (ld-rtl))
+    (if (!= (pc-axis (gl-get gl (wd-get wd wfst (wf-gfirst)) (gf-rot))) 0) (return 0))
+    (if (< (wd-get wd wlst (wf-x0)) (wd-get wd wfst (wf-x0))) (return 0))
+    (if (== wfst wlst) (return 0))
+    (pc-rev-rows wd wfst wlst)
+    (set a wfst)
+    (while (<= a wlst)
+      (if (== (pc-wcls gl wd a) 2)
+        (do (set z a)
+            (while (and (< z wlst) (== (pc-wcls gl wd (+ z 1)) 2))
+              (set z (+ z 1)))
+            (pc-rev-rows wd a z)
+            (set a (+ z 1)))
+        (set a (+ a 1))))
+    (set w wfst)
+    (while (<= w wlst)
+      (do (set g0 (wd-get wd w (wf-gfirst)))
+          (set gn (wd-get wd w (wf-gcount)))
+          (set j 0)
+          (while (< j gn)
+            (do (gl-set gl (+ g0 j) (gf-word) w)
+                (set j (+ j 1))))
+          (set z -1)
+          (if (< w wlst)
+            (set z (- (wd-get wd w (wf-x0)) (wd-get wd (+ w 1) (wf-x1)))))
+          (wd-set wd w (wf-gap) z)
+          (set w (+ w 1))))
+    (return 0)))
 
 (defn ^:pub ^I32 pc-group [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd ^:mut ^Cells ln
                            ^I32 page ^I32 g0 ^I32 w0]
@@ -2051,6 +2221,7 @@
                         (set lnx (ln-new ln page x0 y0 x1 y1 lfirst (+ (- prev lfirst) 1)
                                          (pc-offset gl gfp axis)))
                         (ln-set ln lnx (lf-rot) (gl-get gl gfp (gf-rot)))
+                        (pc-line-bidi gl wd ln lnx lfirst prev)
                         (set gfp lfirst)
                         (while (<= gfp prev)
                           (do (wd-set wd gfp (wf-line) lnx)

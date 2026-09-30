@@ -9,14 +9,14 @@ pub(crate) fn fxt_raw(v: i64) -> i32 {
 }
 #[test]
 fn test_integers_and_reals_become_fx() {
-    crate::testport::assert_eq(fxt_raw(fx_of_int(3)), 196608, "3 is 3*65536");
-    crate::testport::assert_eq(fxt_raw(fx_of_int(-2)), -131072, "-2");
-    crate::testport::assert_eq(fxt_raw(fx_of_real(5, 1)), 32768, "0.5 is 32768");
-    crate::testport::assert_eq(fxt_raw(fx_of_real(25, 2)), 16384, "0.25");
-    crate::testport::assert_eq(fxt_raw(fx_of_real(-75, 2)), -49152, "-0.75");
-    crate::testport::assert_eq(fxt_raw(fx_of_real(1, 5)), 1, "0.00001 rounds to 1 unit (0.655)");
-    crate::testport::assert_eq(fxt_raw(fx_of_real(1, 6)), 0, "0.000001 is under half a unit");
-    crate::testport::assert_eq(fxt_raw(fx_of_real(1234567, 3)), 80908583, "1234.567 is 80908583 units");
+    crate::testport::assert_eq(fxt_raw(fx_of_int(3)), 50331648, "3 is 3*2^24");
+    crate::testport::assert_eq(fxt_raw(fx_of_int(-2)), -33554432, "-2");
+    crate::testport::assert_eq(fxt_raw(fx_of_real(5, 1)), 8388608, "0.5 is 2^23");
+    crate::testport::assert_eq(fxt_raw(fx_of_real(25, 2)), 4194304, "0.25");
+    crate::testport::assert_eq(fxt_raw(fx_of_real(-75, 2)), -12582912, "-0.75");
+    crate::testport::assert_eq(fxt_raw(fx_of_real(1, 5)), 168, "0.00001 is 167.77 units");
+    crate::testport::assert_eq(fxt_raw(fx_of_real(1, 6)), 17, "0.000001 is 16.78 units");
+    crate::testport::assert_eq(fxt_raw(fx_of_real(1234567, 5)), 207125972, "12.34567 in units");
     crate::testport::assert_eq(fx_round(fx_of_real(149, 2)), 1, "1.49 rounds to 1");
     crate::testport::assert_eq(fx_round(fx_of_real(150, 2)), 2, "1.50 rounds up");
     crate::testport::assert_eq(fx_round(fx_of_real(-150, 2)), -1, "-1.50 rounds up, toward positive");
@@ -26,25 +26,27 @@ fn test_integers_and_reals_become_fx() {
 }
 #[test]
 fn test_multiplication_and_division_round_half_away_from_zero() {
-    crate::testport::assert_eq(fxt_raw(fx_mul(fx_of_int(3), fx_of_int(4))), 786432, "3*4");
-    crate::testport::assert_eq(fxt_raw(fx_mul(fx_of_real(5, 1), fx_of_real(5, 1))), 16384, "0.5*0.5");
-    crate::testport::assert_eq(fxt_raw(fx_mul(fx_of_int(-3), fx_of_real(5, 1))), -98304, "-3*0.5");
-    crate::testport::assert_eq(fxt_raw(fx_mul(1 as i64, 32768 as i64)), 1, "half a unit rounds away: 1");
-    crate::testport::assert_eq(fxt_raw(fx_mul(-1 as i64, 32768 as i64)), -1, "and -1");
-    crate::testport::assert_eq(fxt_raw(fx_mul(1 as i64, 32767 as i64)), 0, "under half: 0");
-    crate::testport::assert_eq(fxt_raw(fx_div(fx_of_int(1), fx_of_int(4))), 16384, "1/4");
-    crate::testport::assert_eq(fxt_raw(fx_div(fx_of_int(10), fx_of_int(-4))), -163840, "10/-4");
+    crate::testport::assert_eq(fxt_raw(fx_mul(fx_of_int(3), fx_of_int(4))), 201326592, "3*4");
+    crate::testport::assert_eq(fxt_raw(fx_mul(fx_of_real(5, 1), fx_of_real(5, 1))), 4194304, "0.5*0.5");
+    crate::testport::assert_eq(fxt_raw(fx_mul(fx_of_int(-3), fx_of_real(5, 1))), -25165824, "-3*0.5");
+    crate::testport::assert_eq(fxt_raw(fx_mul(1 as i64, 8388608 as i64)), 1, "half a unit rounds away: 1");
+    crate::testport::assert_eq(fxt_raw(fx_mul(-1 as i64, 8388608 as i64)), -1, "and -1");
+    crate::testport::assert_eq(fxt_raw(fx_mul(1 as i64, 8388607 as i64)), 0, "under half: 0");
+    crate::testport::assert_that(fx_mul(3000000000000 as i64, 100663296 as i64) == (18000000000000 as i64), "a coordinate times a scale: 3e12 * 6");
+    crate::testport::assert_that(fx_mul(1099511627776 as i64, 16777216 as i64) == (1099511627776 as i64), "a large coordinate times one");
+    crate::testport::assert_eq(fxt_raw(fx_div(fx_of_int(1), fx_of_int(4))), 4194304, "1/4");
+    crate::testport::assert_eq(fxt_raw(fx_div(fx_of_int(10), fx_of_int(-4))), -41943040, "10/-4");
     crate::testport::assert_eq(fxt_raw(fx_div(fx_of_int(1), 0 as i64)), 0, "division by zero is 0, not a fault");
-    crate::testport::assert_eq(fxt_raw(fx_muldiv(27783 as i64, fx_of_int(12), 100000 as i64)), 218494, "a glyph width: 277.83/1000 em at 12 is 3.334");
+    crate::testport::assert_eq(fxt_raw(fx_muldiv(27783 as i64, fx_of_int(12), 100000 as i64)), 55934567, "a glyph width: 277.83/1000 em at 12 is 3.334");
     crate::testport::assert_eq(fxt_raw(fx_muldiv(-7 as i64, 1 as i64, 2 as i64)), -4, "-3.5 rounds away");
     crate::testport::assert_eq(fxt_raw(fx_muldiv(7 as i64, 1 as i64, -2 as i64)), -4, "3.5 over -1 ... away");
     crate::testport::assert_eq(fxt_raw(fx_muldiv(-7 as i64, 1 as i64, -2 as i64)), 4, "positive again");
 }
 #[test]
 fn test_hostile_magnitudes_wrap_and_clamp_but_never_fault() {
-    crate::testport::assert_eq(fx_round(fx_clamp(fx_of_int(2147483647))), 268435456, "a huge integer is clamped to 2^28");
-    crate::testport::assert_that(fx_clamp(9000000000000000 as i64) == (17592186044416 as i64), "clamped above");
-    crate::testport::assert_that(fx_clamp(-9000000000000000 as i64) == (-17592186044416 as i64), "clamped below");
+    crate::testport::assert_eq(fx_round(fx_clamp(fx_of_int(2147483647))), 67108864, "a huge integer is clamped to 2^26");
+    crate::testport::assert_that(fx_clamp(9000000000000000 as i64) == (1125899906842624 as i64), "clamped above");
+    crate::testport::assert_that(fx_clamp(-9000000000000000 as i64) == (-1125899906842624 as i64), "clamped below");
     crate::testport::assert_eq(fx_round(fx_of_int(2147483647)), 2147483647, "the largest integer");
     crate::testport::assert_eq(fx_round(fx_of_int(2147483647)), 2147483647, "saturation in the round");
 }
@@ -55,8 +57,8 @@ fn test_square_roots_and_lengths() {
     crate::testport::assert_eq(fx_isqrt(15 as i64) as i32, 3, "isqrt 15");
     crate::testport::assert_eq(fx_isqrt(16 as i64) as i32, 4, "isqrt 16");
     crate::testport::assert_eq(fx_isqrt(2147395600 as i64) as i32, 46340, "isqrt of 46340^2");
-    crate::testport::assert_eq(fxt_raw(fx_sqrt(fx_of_int(4))), 131072, "sqrt 4 = 2");
-    crate::testport::assert_eq(fxt_raw(fx_sqrt(fx_of_int(2))), 92681, "sqrt 2 = 1.41421 (floor of 92681.9)");
+    crate::testport::assert_eq(fxt_raw(fx_sqrt(fx_of_int(4))), 33554432, "sqrt 4 = 2");
+    crate::testport::assert_eq(fxt_raw(fx_sqrt(fx_of_int(2))), 23726566, "sqrt 2 = 1.41421 (floor)");
     crate::testport::assert_eq(fxt_raw(fx_sqrt(-5 as i64)), 0, "sqrt of a negative is 0");
     crate::testport::assert_eq(fx_round(fx_hypot(fx_of_int(3), fx_of_int(4))), 5, "3-4-5");
     crate::testport::assert_eq(fx_round(fx_hypot(fx_of_int(-3), fx_of_int(4))), 5, "signs do not matter");
@@ -152,20 +154,20 @@ pub(crate) fn fxt_dist(v: i64, want: i32) -> i32 {
 }
 #[test]
 fn test_sine_and_cosine_are_exact_at_the_axes_and_close_between() {
-    crate::testport::assert_eq(fxt_raw(fx_cos(0)), 65536, "cos 0");
+    crate::testport::assert_eq(fxt_raw(fx_cos(0)), 16777216, "cos 0");
     crate::testport::assert_eq(fxt_raw(fx_sin(0)), 0, "sin 0");
     crate::testport::assert_eq(fxt_raw(fx_cos(9000)), 0, "cos 90");
-    crate::testport::assert_eq(fxt_raw(fx_sin(9000)), 65536, "sin 90");
-    crate::testport::assert_eq(fxt_raw(fx_cos(18000)), -65536, "cos 180");
+    crate::testport::assert_eq(fxt_raw(fx_sin(9000)), 16777216, "sin 90");
+    crate::testport::assert_eq(fxt_raw(fx_cos(18000)), -16777216, "cos 180");
     crate::testport::assert_eq(fxt_raw(fx_sin(18000)), 0, "sin 180");
     crate::testport::assert_eq(fxt_raw(fx_cos(27000)), 0, "cos 270");
-    crate::testport::assert_eq(fxt_raw(fx_sin(27000)), -65536, "sin 270");
-    crate::testport::assert_that(fxt_dist(fx_sin(4500), 46341) <= 2, "sin 45 = 0.70711");
-    crate::testport::assert_that(fxt_dist(fx_cos(4500), 46341) <= 2, "cos 45");
-    crate::testport::assert_that(fxt_dist(fx_sin(3000), 32768) <= 2, "sin 30 = 0.5");
-    crate::testport::assert_that(fxt_dist(fx_cos(6000), 32768) <= 2, "cos 60 = 0.5");
-    crate::testport::assert_that(fxt_dist(fx_cos(13500), -46341) <= 2, "cos 135");
-    crate::testport::assert_that(fxt_dist(fx_sin(31500), -46341) <= 2, "sin 315");
-    crate::testport::assert_that(fxt_dist(fx_sin(-4500), -46341) <= 2, "a negative angle");
-    crate::testport::assert_that(fxt_dist(fx_cos(40500), 46341) <= 2, "an angle past a turn");
+    crate::testport::assert_eq(fxt_raw(fx_sin(27000)), -16777216, "sin 270");
+    crate::testport::assert_that(fxt_dist(fx_sin(4500), 11863283) <= 700, "sin 45 = 0.70711");
+    crate::testport::assert_that(fxt_dist(fx_cos(4500), 11863283) <= 700, "cos 45");
+    crate::testport::assert_that(fxt_dist(fx_sin(3000), 8388608) <= 700, "sin 30 = 0.5");
+    crate::testport::assert_that(fxt_dist(fx_cos(6000), 8388608) <= 700, "cos 60 = 0.5");
+    crate::testport::assert_that(fxt_dist(fx_cos(13500), -11863283) <= 700, "cos 135");
+    crate::testport::assert_that(fxt_dist(fx_sin(31500), -11863283) <= 700, "sin 315");
+    crate::testport::assert_that(fxt_dist(fx_sin(-4500), -11863283) <= 700, "a negative angle");
+    crate::testport::assert_that(fxt_dist(fx_cos(40500), 11863283) <= 700, "an angle past a turn");
 }

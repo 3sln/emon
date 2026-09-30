@@ -7,6 +7,8 @@
 # no gate runs it. Builds with overflow and bounds checks ON, so a fault in the
 # interpreter is a `PANIC` row rather than a crash (and the next file is read).
 #
+#   rows    `P page text` per page and `S ...` per span: the goldens of test/content/synth.txt and tagged.txt
+#   digest  `D page digest glyphs` per page (`emon.contentrows`'s digest, what the oracle's ratchet holds)
 #   json    one row `J path <TAB> the compact emon-evidence dump` per file
 #   glyphs  `G page cp[+cp] how font size x0 y0 x1 y1 baseline rot mode mcid word artifact` per glyph
 #   text    `T page y0 x0 line-text` per emon line, words joined by a space
@@ -29,6 +31,7 @@ mod testport;
 use emon::pdfdoc::*;
 use emon::pdfcontent::*;
 use emon::evidence::*;
+use emon::contentrows::*;
 use std::io::BufRead;
 
 fn cps_str(et: &port::Cells, s: i32, n: i32) -> String {
@@ -79,6 +82,29 @@ fn main() {
                 let mut t = String::new();
                 ev_emit(&mut t, 0, &mut gl, &mut wd, &mut ln, &mut paths, &mut images, &mut comps, &mut ocr, &mut alts, &mut et, &mut sp);
                 rows.push(format!("J\t{}\t{}", path, t));
+            }
+            if mode == "rows" || mode == "digest" {
+                for p in 1..=npages {
+                    if mode == "rows" {
+                        let mut t = String::new();
+                        cr_page_text(&mut t, &mut gl, &mut et, p);
+                        rows.push(format!("P\t{}\t{}", p, t));
+                        let mut tl = String::new();
+                        cr_page_lines(&mut tl, &mut wd, &mut ln, &mut et, p);
+                        rows.push(format!("T\t{}\t{}", p, tl));
+                    } else {
+                        let mut n = 0;
+                        for g in 0..gl_count(&mut gl) { if gl_get(&mut gl, g, gf_page()) == p { n += 1; } }
+                        rows.push(format!("D\t{}\t{}\t{}", p, cr_digest(&mut gl, &mut et, p), n));
+                    }
+                }
+                if mode == "rows" {
+                    for i in 0..sp_count(&mut sp) {
+                        let mut t = String::new();
+                        cr_span(&mut t, &mut sp, &mut et, i);
+                        rows.push(format!("S\t{}", t));
+                    }
+                }
             }
             if mode == "glyphs" || mode == "all" {
                 for g in 0..gl_count(&mut gl) {

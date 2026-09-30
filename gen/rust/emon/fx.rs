@@ -3,32 +3,52 @@
 
 pub(crate) static FX_ATAN: [i32; 16] = [4500000, 2656505, 1403624, 712502, 357633, 178991, 89517, 44761, 22381, 11191, 5595, 2798, 1399, 699, 350, 175];
 pub fn fx_one() -> i64 {
-    return 65536 as i64;
+    return 16777216 as i64;
 }
 pub fn fx_of_int(v: i32) -> i64 {
     // An integer as Fx.
-    return (v as i64).wrapping_mul(65536 as i64);
+    return (v as i64).wrapping_mul(16777216 as i64);
 }
 pub fn fx_clamp(v: i64) -> i64 {
-    // Limit to +-2^44: what a matrix entry or a coordinate may hold.
-    if v > (17592186044416 as i64) {
-        return 17592186044416 as i64;
+    // Limit to +-2^50: what a matrix entry or a coordinate may hold.
+    if v > (1125899906842624 as i64) {
+        return 1125899906842624 as i64;
     }
-    if v < (-17592186044416 as i64) {
-        return -17592186044416 as i64;
+    if v < (-1125899906842624 as i64) {
+        return -1125899906842624 as i64;
     }
     return v;
 }
 pub fn fx_mul(a: i64, b: i64) -> i64 {
-    // a * b, rounded half away from zero.
-    let p: i64 = (a).wrapping_mul(b);
-    if p >= (0 as i64) {
-        return (p).wrapping_add(32768 as i64) / (65536 as i64);
+    // a * b, rounded half away from zero. The product of two Fx does not fit an I64 (a
+    // coordinate of 2^45 times a scale of 2^28), so the second factor is split in two
+    // halves of twelve bits: a*b / 2^24 = (a*bh) / 2^12 + (a*bl) / 2^24, the first
+    // kept whole and its remainder carried into the second before the rounding.
+    let mut x: i64 = a;
+    let mut y: i64 = b;
+    let mut neg: i32 = 0;
+    if x < (0 as i64) {
+        x = (0 as i64) - x;
+        neg = 1;
     }
-    return (0 as i64) - (((0 as i64) - p).wrapping_add(32768 as i64) / (65536 as i64));
+    if y < (0 as i64) {
+        y = (0 as i64) - y;
+        neg = 1 - neg;
+    }
+    let bh: i64 = y / (4096 as i64);
+    let bl: i64 = y - (bh).wrapping_mul(4096 as i64);
+    let q1: i64 = (x).wrapping_mul(bh);
+    let q2: i64 = (x).wrapping_mul(bl);
+    let q1h: i64 = q1 / (4096 as i64);
+    let q1l: i64 = q1 - (q1h).wrapping_mul(4096 as i64);
+    let res: i64 = (q1h).wrapping_add((((q1l).wrapping_mul(4096 as i64)).wrapping_add(q2)).wrapping_add(8388608 as i64) / (16777216 as i64));
+    if neg == 1 {
+        return (0 as i64) - res;
+    }
+    return res;
 }
 pub fn fx_muldiv(a: i64, b: i64, c: i64) -> i64 {
-    // a * b / c (all plain integers, or all Fx), rounded half away from zero;
+    // a * b / c (a and b plain integers, or one of them an Fx), rounded half away from zero;
     // 0 when c is 0.
     let p: i64 = (a).wrapping_mul(b);
     let mut ap: i64 = p;
@@ -54,7 +74,7 @@ pub fn fx_muldiv(a: i64, b: i64, c: i64) -> i64 {
 }
 pub fn fx_div(a: i64, b: i64) -> i64 {
     // a / b as Fx; 0 when b is 0.
-    return fx_muldiv(a, 65536 as i64, b);
+    return fx_muldiv(a, 16777216 as i64, b);
 }
 pub(crate) fn fx_pow10(n: i32) -> i64 {
     let mut p: i64 = 1 as i64;
@@ -68,16 +88,16 @@ pub(crate) fn fx_pow10(n: i32) -> i64 {
 pub fn fx_of_real(mant: i32, scale: i32) -> i64 {
     // The real mant / 10^scale (`emon.pdflex`'s mantissa and count of
     // fractional digits) as Fx, rounded.
-    return fx_muldiv(mant as i64, 65536 as i64, fx_pow10(scale));
+    return fx_muldiv(mant as i64, 16777216 as i64, fx_pow10(scale));
 }
 pub fn fx_round(v: i64) -> i32 {
     // Fx to the nearest integer (half up), saturating to +-(2^31-1).
-    let s: i64 = (v).wrapping_add(32768 as i64);
+    let s: i64 = (v).wrapping_add(8388608 as i64);
     let mut q: i64 = 0 as i64;
     if s >= (0 as i64) {
-        q = s / (65536 as i64);
+        q = s / (16777216 as i64);
     } else {
-        q = (0 as i64) - (((0 as i64) - s).wrapping_add(65535 as i64) / (65536 as i64));
+        q = (0 as i64) - (((0 as i64) - s).wrapping_add(16777215 as i64) / (16777216 as i64));
     }
     if q > (2147483647 as i64) {
         return 2147483647;
@@ -91,9 +111,9 @@ pub fn fx_floor(v: i64) -> i32 {
     // Fx to the integer below it, saturating as `fx-round` does.
     let mut q: i64 = 0 as i64;
     if v >= (0 as i64) {
-        q = v / (65536 as i64);
+        q = v / (16777216 as i64);
     } else {
-        q = (0 as i64) - (((0 as i64) - v).wrapping_add(65535 as i64) / (65536 as i64));
+        q = (0 as i64) - (((0 as i64) - v).wrapping_add(16777215 as i64) / (16777216 as i64));
     }
     if q > (2147483647 as i64) {
         return 2147483647;
@@ -133,15 +153,15 @@ pub fn fx_isqrt(v: i64) -> i64 {
     return root;
 }
 pub fn fx_sqrt(v: i64) -> i64 {
-    // sqrt of an Fx as Fx: isqrt(v * 65536), or isqrt(v) * 256 when v is
+    // sqrt of an Fx as Fx: isqrt(v * 2^24), or isqrt(v) * 2^12 when v is
     // too large for the product.
     if v <= (0 as i64) {
         return 0 as i64;
     }
-    if v > (140737488355328 as i64) {
-        return (fx_isqrt(v)).wrapping_mul(256 as i64);
+    if v > (549755813888 as i64) {
+        return (fx_isqrt(v)).wrapping_mul(4096 as i64);
     }
-    return fx_isqrt((v).wrapping_mul(65536 as i64));
+    return fx_isqrt((v).wrapping_mul(16777216 as i64));
 }
 pub fn fx_hypot(x: i64, y: i64) -> i64 {
     // sqrt(x^2 + y^2) in the units of x and y, to about nine significant
@@ -277,9 +297,9 @@ pub(crate) fn fx_cordic(cdeg: i32, which: i32) -> i64 {
         cy = ny;
         i += 1;
     }
-    // 2^30 to 2^16, rounded half away from zero.
-    c = fx_muldiv(cx, 1 as i64, 16384 as i64);
-    sn = fx_muldiv(cy, 1 as i64, 16384 as i64);
+    // 2^30 to 2^24, rounded half away from zero.
+    c = fx_muldiv(cx, 1 as i64, 64 as i64);
+    sn = fx_muldiv(cy, 1 as i64, 64 as i64);
     if q == 0 {
         if which == 0 {
             return c;
@@ -348,7 +368,7 @@ pub fn mx_set(mut c: &mut crate::port::Cells, o: i32, a: i64, b: i64, cc: i64, d
     return 0;
 }
 pub fn mx_ident(mut c: &mut crate::port::Cells, o: i32) -> i32 {
-    return mx_set(c, o, 65536 as i64, 0 as i64, 0 as i64, 65536 as i64, 0 as i64, 0 as i64);
+    return mx_set(c, o, fx_one(), 0 as i64, 0 as i64, fx_one(), 0 as i64, 0 as i64);
 }
 pub fn mx_copy(mut c: &mut crate::port::Cells, dst: i32, src: i32) -> i32 {
     let mut i: i32 = 0;
@@ -385,5 +405,5 @@ pub fn mx_y(c: &mut crate::port::Cells, o: i32, px: i64, py: i64) -> i64 {
 }
 pub fn mx_translate(mut c: &mut crate::port::Cells, o: i32, tx: i64, ty: i64) -> i32 {
     // Set the matrix at o to a translation.
-    return mx_set(c, o, 65536 as i64, 0 as i64, 0 as i64, 65536 as i64, tx, ty);
+    return mx_set(c, o, fx_one(), 0 as i64, 0 as i64, fx_one(), tx, ty);
 }

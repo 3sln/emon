@@ -11,14 +11,14 @@ public static class Fxtest {
     }
     [Xunit.Fact]
     public static void TestIntegersAndRealsBecomeFx() {
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfInt(3)), 196608, "3 is 3*65536");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfInt(-2)), -131072, "-2");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(5, 1)), 32768, "0.5 is 32768");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(25, 2)), 16384, "0.25");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(-75, 2)), -49152, "-0.75");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(1, 5)), 1, "0.00001 rounds to 1 unit (0.655)");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(1, 6)), 0, "0.000001 is under half a unit");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(1234567, 3)), 80908583, "1234.567 is 80908583 units");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfInt(3)), 50331648, "3 is 3*2^24");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfInt(-2)), -33554432, "-2");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(5, 1)), 8388608, "0.5 is 2^23");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(25, 2)), 4194304, "0.25");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(-75, 2)), -12582912, "-0.75");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(1, 5)), 168, "0.00001 is 167.77 units");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(1, 6)), 17, "0.000001 is 16.78 units");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxOfReal(1234567, 5)), 207125972, "12.34567 in units");
         emon.Testport.AssertEq(Fx.FxRound(Fx.FxOfReal(149, 2)), 1, "1.49 rounds to 1");
         emon.Testport.AssertEq(Fx.FxRound(Fx.FxOfReal(150, 2)), 2, "1.50 rounds up");
         emon.Testport.AssertEq(Fx.FxRound(Fx.FxOfReal(-150, 2)), -1, "-1.50 rounds up, toward positive");
@@ -28,25 +28,27 @@ public static class Fxtest {
     }
     [Xunit.Fact]
     public static void TestMultiplicationAndDivisionRoundHalfAwayFromZero() {
-        emon.Testport.AssertEq(FxtRaw(Fx.FxMul(Fx.FxOfInt(3), Fx.FxOfInt(4))), 786432, "3*4");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxMul(Fx.FxOfReal(5, 1), Fx.FxOfReal(5, 1))), 16384, "0.5*0.5");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxMul(Fx.FxOfInt(-3), Fx.FxOfReal(5, 1))), -98304, "-3*0.5");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxMul((long) 1, (long) 32768)), 1, "half a unit rounds away: 1");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxMul((long) -1, (long) 32768)), -1, "and -1");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxMul((long) 1, (long) 32767)), 0, "under half: 0");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxDiv(Fx.FxOfInt(1), Fx.FxOfInt(4))), 16384, "1/4");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxDiv(Fx.FxOfInt(10), Fx.FxOfInt(-4))), -163840, "10/-4");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxMul(Fx.FxOfInt(3), Fx.FxOfInt(4))), 201326592, "3*4");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxMul(Fx.FxOfReal(5, 1), Fx.FxOfReal(5, 1))), 4194304, "0.5*0.5");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxMul(Fx.FxOfInt(-3), Fx.FxOfReal(5, 1))), -25165824, "-3*0.5");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxMul((long) 1, (long) 8388608)), 1, "half a unit rounds away: 1");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxMul((long) -1, (long) 8388608)), -1, "and -1");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxMul((long) 1, (long) 8388607)), 0, "under half: 0");
+        emon.Testport.AssertThat(Fx.FxMul((long) 3000000000000, (long) 100663296) == ((long) 18000000000000), "a coordinate times a scale: 3e12 * 6");
+        emon.Testport.AssertThat(Fx.FxMul((long) 1099511627776, (long) 16777216) == ((long) 1099511627776), "a large coordinate times one");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxDiv(Fx.FxOfInt(1), Fx.FxOfInt(4))), 4194304, "1/4");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxDiv(Fx.FxOfInt(10), Fx.FxOfInt(-4))), -41943040, "10/-4");
         emon.Testport.AssertEq(FxtRaw(Fx.FxDiv(Fx.FxOfInt(1), (long) 0)), 0, "division by zero is 0, not a fault");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxMuldiv((long) 27783, Fx.FxOfInt(12), (long) 100000)), 218494, "a glyph width: 277.83/1000 em at 12 is 3.334");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxMuldiv((long) 27783, Fx.FxOfInt(12), (long) 100000)), 55934567, "a glyph width: 277.83/1000 em at 12 is 3.334");
         emon.Testport.AssertEq(FxtRaw(Fx.FxMuldiv((long) -7, (long) 1, (long) 2)), -4, "-3.5 rounds away");
         emon.Testport.AssertEq(FxtRaw(Fx.FxMuldiv((long) 7, (long) 1, (long) -2)), -4, "3.5 over -1 ... away");
         emon.Testport.AssertEq(FxtRaw(Fx.FxMuldiv((long) -7, (long) 1, (long) -2)), 4, "positive again");
     }
     [Xunit.Fact]
     public static void TestHostileMagnitudesWrapAndClampButNeverFault() {
-        emon.Testport.AssertEq(Fx.FxRound(Fx.FxClamp(Fx.FxOfInt(2147483647))), 268435456, "a huge integer is clamped to 2^28");
-        emon.Testport.AssertThat(Fx.FxClamp((long) 9000000000000000) == ((long) 17592186044416), "clamped above");
-        emon.Testport.AssertThat(Fx.FxClamp((long) -9000000000000000) == ((long) -17592186044416), "clamped below");
+        emon.Testport.AssertEq(Fx.FxRound(Fx.FxClamp(Fx.FxOfInt(2147483647))), 67108864, "a huge integer is clamped to 2^26");
+        emon.Testport.AssertThat(Fx.FxClamp((long) 9000000000000000) == ((long) 1125899906842624), "clamped above");
+        emon.Testport.AssertThat(Fx.FxClamp((long) -9000000000000000) == ((long) -1125899906842624), "clamped below");
         emon.Testport.AssertEq(Fx.FxRound(Fx.FxOfInt(2147483647)), 2147483647, "the largest integer");
         emon.Testport.AssertEq(Fx.FxRound(Fx.FxOfInt(2147483647)), 2147483647, "saturation in the round");
     }
@@ -57,8 +59,8 @@ public static class Fxtest {
         emon.Testport.AssertEq((int) Fx.FxIsqrt((long) 15), 3, "isqrt 15");
         emon.Testport.AssertEq((int) Fx.FxIsqrt((long) 16), 4, "isqrt 16");
         emon.Testport.AssertEq((int) Fx.FxIsqrt((long) 2147395600), 46340, "isqrt of 46340^2");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxSqrt(Fx.FxOfInt(4))), 131072, "sqrt 4 = 2");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxSqrt(Fx.FxOfInt(2))), 92681, "sqrt 2 = 1.41421 (floor of 92681.9)");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxSqrt(Fx.FxOfInt(4))), 33554432, "sqrt 4 = 2");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxSqrt(Fx.FxOfInt(2))), 23726566, "sqrt 2 = 1.41421 (floor)");
         emon.Testport.AssertEq(FxtRaw(Fx.FxSqrt((long) -5)), 0, "sqrt of a negative is 0");
         emon.Testport.AssertEq(Fx.FxRound(Fx.FxHypot(Fx.FxOfInt(3), Fx.FxOfInt(4))), 5, "3-4-5");
         emon.Testport.AssertEq(Fx.FxRound(Fx.FxHypot(Fx.FxOfInt(-3), Fx.FxOfInt(4))), 5, "signs do not matter");
@@ -154,21 +156,21 @@ public static class Fxtest {
     }
     [Xunit.Fact]
     public static void TestSineAndCosineAreExactAtTheAxesAndCloseBetween() {
-        emon.Testport.AssertEq(FxtRaw(Fx.FxCos(0)), 65536, "cos 0");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxCos(0)), 16777216, "cos 0");
         emon.Testport.AssertEq(FxtRaw(Fx.FxSin(0)), 0, "sin 0");
         emon.Testport.AssertEq(FxtRaw(Fx.FxCos(9000)), 0, "cos 90");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxSin(9000)), 65536, "sin 90");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxCos(18000)), -65536, "cos 180");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxSin(9000)), 16777216, "sin 90");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxCos(18000)), -16777216, "cos 180");
         emon.Testport.AssertEq(FxtRaw(Fx.FxSin(18000)), 0, "sin 180");
         emon.Testport.AssertEq(FxtRaw(Fx.FxCos(27000)), 0, "cos 270");
-        emon.Testport.AssertEq(FxtRaw(Fx.FxSin(27000)), -65536, "sin 270");
-        emon.Testport.AssertThat(FxtDist(Fx.FxSin(4500), 46341) <= 2, "sin 45 = 0.70711");
-        emon.Testport.AssertThat(FxtDist(Fx.FxCos(4500), 46341) <= 2, "cos 45");
-        emon.Testport.AssertThat(FxtDist(Fx.FxSin(3000), 32768) <= 2, "sin 30 = 0.5");
-        emon.Testport.AssertThat(FxtDist(Fx.FxCos(6000), 32768) <= 2, "cos 60 = 0.5");
-        emon.Testport.AssertThat(FxtDist(Fx.FxCos(13500), -46341) <= 2, "cos 135");
-        emon.Testport.AssertThat(FxtDist(Fx.FxSin(31500), -46341) <= 2, "sin 315");
-        emon.Testport.AssertThat(FxtDist(Fx.FxSin(-4500), -46341) <= 2, "a negative angle");
-        emon.Testport.AssertThat(FxtDist(Fx.FxCos(40500), 46341) <= 2, "an angle past a turn");
+        emon.Testport.AssertEq(FxtRaw(Fx.FxSin(27000)), -16777216, "sin 270");
+        emon.Testport.AssertThat(FxtDist(Fx.FxSin(4500), 11863283) <= 700, "sin 45 = 0.70711");
+        emon.Testport.AssertThat(FxtDist(Fx.FxCos(4500), 11863283) <= 700, "cos 45");
+        emon.Testport.AssertThat(FxtDist(Fx.FxSin(3000), 8388608) <= 700, "sin 30 = 0.5");
+        emon.Testport.AssertThat(FxtDist(Fx.FxCos(6000), 8388608) <= 700, "cos 60 = 0.5");
+        emon.Testport.AssertThat(FxtDist(Fx.FxCos(13500), -11863283) <= 700, "cos 135");
+        emon.Testport.AssertThat(FxtDist(Fx.FxSin(31500), -11863283) <= 700, "sin 315");
+        emon.Testport.AssertThat(FxtDist(Fx.FxSin(-4500), -11863283) <= 700, "a negative angle");
+        emon.Testport.AssertThat(FxtDist(Fx.FxCos(40500), 11863283) <= 700, "an angle past a turn");
     }
 }

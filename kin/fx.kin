@@ -1,17 +1,20 @@
-;; 16.16 fixed-point arithmetic and affine matrices (P1.7; SPEC 3.4, D009).
+;; Fixed-point arithmetic and affine matrices (P1.7; SPEC 3.4, D009, D087).
 ;; emon's own module (D039).
 ;;
 ;; THERE ARE NO FLOATS IN KIN (four languages do not agree on them), so a
-;; PDF real, a matrix entry and a font size are `Fx`: a 16.16 fixed-point number
-;; held in an `I64` (`emon.lang`'s tag). One unit is 65536. The page's own unit
-;; in the evidence is the CENTIPOINT, and the interpreter's base matrix carries
-;; that scale, so an `Fx` that is a page coordinate is a centipoint count times
-;; 65536 and `fx-round` turns it into the `Cpt` the evidence stores.
+;; PDF real, a matrix entry and a font size are `Fx`: a fixed-point number held in an
+;; `I64` (`emon.lang`'s tag) with 24 FRACTIONAL BITS (D087; SPEC 3.4 said 16.16, which
+;; is not enough: Ghostscript writes `0.1 cm` then `10 cm`, and 0.1 is 6553.6 units
+;; of 2^-16, so the pair multiplies to 1.00006 and a baseline at y = 720 is 0.044 pt
+;; off; at 24 bits the same pair is exact to 2e-8). One unit is 2^24 = 16777216. The page's
+;; own unit in the evidence is the CENTIPOINT, and the interpreter's base matrix carries
+;; that scale, so an `Fx` that is a page coordinate is a centipoint count times 2^24 and
+;; `fx-round` turns it into the `Cpt` the evidence stores. Range: +-2^50 (see `fx-clamp`).
 ;;
 ;; THE ARITHMETIC IS WRAPPING (`add64`, `mul64`, as SplitMix's is), because a
 ;; hostile file can ask for `1e9 1e9 mul` and three of the four targets wrap
 ;; silently where Rust (debug) panics: only the wrapping forms make the four
-;; agree on garbage, and a value is CLAMPED to +-2^44 (about 2.7e8 centipoints)
+;; agree on garbage, and a value is CLAMPED to +-2^50 (about 6.7e7 centipoints)
 ;; before it is stored in a matrix so garbage does not compound.
 ;;
 ;; A `Cells` HOLDS 32-BIT CELLS, so an `Fx` is stored as two (high half first,
@@ -42,27 +45,40 @@
          22381 11191 5595 2798 1399 699 350 175]
   :accessors {^I32 fx-atan-at [^I32 ignored ^I32 i]})
 
-(defn ^:pub ^I64 fx-one [] (return (i64 65536)))
+(defn ^:pub ^I64 fx-one [] (return (i64 16777216)))
 
 (defn ^:pub ^I64 fx-of-int [^I32 v]
   (comment "An integer as Fx.")
-  (return (mul64 (i64 v) (i64 65536))))
+  (return (mul64 (i64 v) (i64 16777216))))
 
 (defn ^:pub ^I64 fx-clamp [^I64 v]
-  (comment "Limit to +-2^44: what a matrix entry or a coordinate may hold.")
-  (if (> v (i64 17592186044416)) (return (i64 17592186044416)))
-  (if (< v (i64 -17592186044416)) (return (i64 -17592186044416)))
+  (comment "Limit to +-2^50: what a matrix entry or a coordinate may hold.")
+  (if (> v (i64 1125899906842624)) (return (i64 1125899906842624)))
+  (if (< v (i64 -1125899906842624)) (return (i64 -1125899906842624)))
   (return v))
 
 (defn ^:pub ^I64 fx-mul [^I64 a ^I64 b]
-  (comment "a * b, rounded half away from zero.")
-  (let [^I64 p (mul64 a b)]
-    (if (>= p (i64 0))
-      (return (quot (add64 p (i64 32768)) (i64 65536))))
-    (return (- (i64 0) (quot (add64 (- (i64 0) p) (i64 32768)) (i64 65536))))))
+  (comment "a * b, rounded half away from zero. The product of two Fx does not fit an I64 (a")
+  (comment "coordinate of 2^45 times a scale of 2^28), so the second factor is split in two")
+  (comment "halves of twelve bits: a*b / 2^24 = (a*bh) / 2^12 + (a*bl) / 2^24, the first")
+  (comment "kept whole and its remainder carried into the second before the rounding.")
+  (let [^:mut ^I64 x a
+        ^:mut ^I64 y b
+        ^:mut ^I32 neg 0]
+    (if (< x (i64 0)) (do (set x (- (i64 0) x)) (set neg 1)))
+    (if (< y (i64 0)) (do (set y (- (i64 0) y)) (set neg (- 1 neg))))
+    (let [^I64 bh (quot y (i64 4096))
+          ^I64 bl (- y (mul64 bh (i64 4096)))
+          ^I64 q1 (mul64 x bh)
+          ^I64 q2 (mul64 x bl)
+          ^I64 q1h (quot q1 (i64 4096))
+          ^I64 q1l (- q1 (mul64 q1h (i64 4096)))
+          ^I64 res (add64 q1h (quot (add64 (add64 (mul64 q1l (i64 4096)) q2) (i64 8388608)) (i64 16777216)))]
+      (if (== neg 1) (return (- (i64 0) res)))
+      (return res))))
 
 (defn ^:pub ^I64 fx-muldiv [^I64 a ^I64 b ^I64 c]
-  (comment "a * b / c (all plain integers, or all Fx), rounded half away from zero;")
+  (comment "a * b / c (a and b plain integers, or one of them an Fx), rounded half away from zero;")
   (comment "0 when c is 0.")
   (let [^I64 p (mul64 a b)
         ^:mut ^I64 ap p
@@ -78,7 +94,7 @@
 
 (defn ^:pub ^I64 fx-div [^I64 a ^I64 b]
   (comment "a / b as Fx; 0 when b is 0.")
-  (return (fx-muldiv a (i64 65536) b)))
+  (return (fx-muldiv a (i64 16777216) b)))
 
 (defn ^I64 fx-pow10 [^I32 n]
   (let [^:mut ^I64 p (i64 1)
@@ -91,15 +107,15 @@
 (defn ^:pub ^I64 fx-of-real [^I32 mant ^I32 scale]
   (comment "The real mant / 10^scale (`emon.pdflex`'s mantissa and count of")
   (comment "fractional digits) as Fx, rounded.")
-  (return (fx-muldiv (i64 mant) (i64 65536) (fx-pow10 scale))))
+  (return (fx-muldiv (i64 mant) (i64 16777216) (fx-pow10 scale))))
 
 (defn ^:pub ^I32 fx-round [^I64 v]
   (comment "Fx to the nearest integer (half up), saturating to +-(2^31-1).")
-  (let [^I64 s (add64 v (i64 32768))
+  (let [^I64 s (add64 v (i64 8388608))
         ^:mut ^I64 q (i64 0)]
     (if (>= s (i64 0))
-      (set q (quot s (i64 65536)))
-      (set q (- (i64 0) (quot (add64 (- (i64 0) s) (i64 65535)) (i64 65536)))))
+      (set q (quot s (i64 16777216)))
+      (set q (- (i64 0) (quot (add64 (- (i64 0) s) (i64 16777215)) (i64 16777216)))))
     (if (> q (i64 2147483647)) (return 2147483647))
     (if (< q (i64 -2147483647)) (return -2147483647))
     (return (i32 q))))
@@ -108,8 +124,8 @@
   (comment "Fx to the integer below it, saturating as `fx-round` does.")
   (let [^:mut ^I64 q (i64 0)]
     (if (>= v (i64 0))
-      (set q (quot v (i64 65536)))
-      (set q (- (i64 0) (quot (add64 (- (i64 0) v) (i64 65535)) (i64 65536)))))
+      (set q (quot v (i64 16777216)))
+      (set q (- (i64 0) (quot (add64 (- (i64 0) v) (i64 16777215)) (i64 16777216)))))
     (if (> q (i64 2147483647)) (return 2147483647))
     (if (< q (i64 -2147483647)) (return -2147483647))
     (return (i32 q))))
@@ -136,12 +152,12 @@
     (return root)))
 
 (defn ^:pub ^I64 fx-sqrt [^I64 v]
-  (comment "sqrt of an Fx as Fx: isqrt(v * 65536), or isqrt(v) * 256 when v is")
+  (comment "sqrt of an Fx as Fx: isqrt(v * 2^24), or isqrt(v) * 2^12 when v is")
   (comment "too large for the product.")
   (if (<= v (i64 0)) (return (i64 0)))
-  (if (> v (i64 140737488355328))
-    (return (mul64 (fx-isqrt v) (i64 256))))
-  (return (fx-isqrt (mul64 v (i64 65536)))))
+  (if (> v (i64 549755813888))
+    (return (mul64 (fx-isqrt v) (i64 4096))))
+  (return (fx-isqrt (mul64 v (i64 16777216)))))
 
 (defn ^:pub ^I64 fx-hypot [^I64 x ^I64 y]
   (comment "sqrt(x^2 + y^2) in the units of x and y, to about nine significant")
@@ -249,9 +265,9 @@
           (set cx nx)
           (set cy ny)
           (set i (+ i 1))))
-    (comment "2^30 to 2^16, rounded half away from zero.")
-    (set c (fx-muldiv cx (i64 1) (i64 16384)))
-    (set sn (fx-muldiv cy (i64 1) (i64 16384)))
+    (comment "2^30 to 2^24, rounded half away from zero.")
+    (set c (fx-muldiv cx (i64 1) (i64 64)))
+    (set sn (fx-muldiv cy (i64 1) (i64 64)))
     (if (== q 0) (do (if (== which 0) (return c)) (return sn)))
     (if (== q 1) (do (if (== which 0) (return (- (i64 0) sn))) (return c)))
     (if (== q 2) (do (if (== which 0) (return (- (i64 0) c))) (return (- (i64 0) sn))))
@@ -307,7 +323,7 @@
   (return 0))
 
 (defn ^:pub ^I32 mx-ident [^:mut ^Cells c ^I32 o]
-  (return (mx-set c o (i64 65536) (i64 0) (i64 0) (i64 65536) (i64 0) (i64 0))))
+  (return (mx-set c o (fx-one) (i64 0) (i64 0) (fx-one) (i64 0) (i64 0))))
 
 (defn ^:pub ^I32 mx-copy [^:mut ^Cells c ^I32 dst ^I32 src]
   (let [^:mut ^I32 i 0]
@@ -351,4 +367,4 @@
 
 (defn ^:pub ^I32 mx-translate [^:mut ^Cells c ^I32 o ^I64 tx ^I64 ty]
   (comment "Set the matrix at o to a translation.")
-  (return (mx-set c o (i64 65536) (i64 0) (i64 0) (i64 65536) tx ty)))
+  (return (mx-set c o (fx-one) (i64 0) (i64 0) (fx-one) tx ty)))

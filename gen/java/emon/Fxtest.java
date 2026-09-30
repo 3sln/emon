@@ -10,14 +10,14 @@ public final class Fxtest {
         return (int) v;
     }
     public static void testIntegersAndRealsBecomeFx() {
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfInt(3)), 196608, "3 is 3*65536");
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfInt(-2)), -131072, "-2");
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(5, 1)), 32768, "0.5 is 32768");
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(25, 2)), 16384, "0.25");
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(-75, 2)), -49152, "-0.75");
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(1, 5)), 1, "0.00001 rounds to 1 unit (0.655)");
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(1, 6)), 0, "0.000001 is under half a unit");
-        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(1234567, 3)), 80908583, "1234.567 is 80908583 units");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfInt(3)), 50331648, "3 is 3*2^24");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfInt(-2)), -33554432, "-2");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(5, 1)), 8388608, "0.5 is 2^23");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(25, 2)), 4194304, "0.25");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(-75, 2)), -12582912, "-0.75");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(1, 5)), 168, "0.00001 is 167.77 units");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(1, 6)), 17, "0.000001 is 16.78 units");
+        emon.Testport.assertEq(fxtRaw(Fx.fxOfReal(1234567, 5)), 207125972, "12.34567 in units");
         emon.Testport.assertEq(Fx.fxRound(Fx.fxOfReal(149, 2)), 1, "1.49 rounds to 1");
         emon.Testport.assertEq(Fx.fxRound(Fx.fxOfReal(150, 2)), 2, "1.50 rounds up");
         emon.Testport.assertEq(Fx.fxRound(Fx.fxOfReal(-150, 2)), -1, "-1.50 rounds up, toward positive");
@@ -26,24 +26,26 @@ public final class Fxtest {
         emon.Testport.assertEq(Fx.fxFloor(Fx.fxOfReal(19, 1)), 1, "floor of 1.9");
     }
     public static void testMultiplicationAndDivisionRoundHalfAwayFromZero() {
-        emon.Testport.assertEq(fxtRaw(Fx.fxMul(Fx.fxOfInt(3), Fx.fxOfInt(4))), 786432, "3*4");
-        emon.Testport.assertEq(fxtRaw(Fx.fxMul(Fx.fxOfReal(5, 1), Fx.fxOfReal(5, 1))), 16384, "0.5*0.5");
-        emon.Testport.assertEq(fxtRaw(Fx.fxMul(Fx.fxOfInt(-3), Fx.fxOfReal(5, 1))), -98304, "-3*0.5");
-        emon.Testport.assertEq(fxtRaw(Fx.fxMul((long) 1, (long) 32768)), 1, "half a unit rounds away: 1");
-        emon.Testport.assertEq(fxtRaw(Fx.fxMul((long) -1, (long) 32768)), -1, "and -1");
-        emon.Testport.assertEq(fxtRaw(Fx.fxMul((long) 1, (long) 32767)), 0, "under half: 0");
-        emon.Testport.assertEq(fxtRaw(Fx.fxDiv(Fx.fxOfInt(1), Fx.fxOfInt(4))), 16384, "1/4");
-        emon.Testport.assertEq(fxtRaw(Fx.fxDiv(Fx.fxOfInt(10), Fx.fxOfInt(-4))), -163840, "10/-4");
+        emon.Testport.assertEq(fxtRaw(Fx.fxMul(Fx.fxOfInt(3), Fx.fxOfInt(4))), 201326592, "3*4");
+        emon.Testport.assertEq(fxtRaw(Fx.fxMul(Fx.fxOfReal(5, 1), Fx.fxOfReal(5, 1))), 4194304, "0.5*0.5");
+        emon.Testport.assertEq(fxtRaw(Fx.fxMul(Fx.fxOfInt(-3), Fx.fxOfReal(5, 1))), -25165824, "-3*0.5");
+        emon.Testport.assertEq(fxtRaw(Fx.fxMul((long) 1, (long) 8388608)), 1, "half a unit rounds away: 1");
+        emon.Testport.assertEq(fxtRaw(Fx.fxMul((long) -1, (long) 8388608)), -1, "and -1");
+        emon.Testport.assertEq(fxtRaw(Fx.fxMul((long) 1, (long) 8388607)), 0, "under half: 0");
+        emon.Testport.assertThat(Fx.fxMul((long) 3000000000000L, (long) 100663296) == ((long) 18000000000000L), "a coordinate times a scale: 3e12 * 6");
+        emon.Testport.assertThat(Fx.fxMul((long) 1099511627776L, (long) 16777216) == ((long) 1099511627776L), "a large coordinate times one");
+        emon.Testport.assertEq(fxtRaw(Fx.fxDiv(Fx.fxOfInt(1), Fx.fxOfInt(4))), 4194304, "1/4");
+        emon.Testport.assertEq(fxtRaw(Fx.fxDiv(Fx.fxOfInt(10), Fx.fxOfInt(-4))), -41943040, "10/-4");
         emon.Testport.assertEq(fxtRaw(Fx.fxDiv(Fx.fxOfInt(1), (long) 0)), 0, "division by zero is 0, not a fault");
-        emon.Testport.assertEq(fxtRaw(Fx.fxMuldiv((long) 27783, Fx.fxOfInt(12), (long) 100000)), 218494, "a glyph width: 277.83/1000 em at 12 is 3.334");
+        emon.Testport.assertEq(fxtRaw(Fx.fxMuldiv((long) 27783, Fx.fxOfInt(12), (long) 100000)), 55934567, "a glyph width: 277.83/1000 em at 12 is 3.334");
         emon.Testport.assertEq(fxtRaw(Fx.fxMuldiv((long) -7, (long) 1, (long) 2)), -4, "-3.5 rounds away");
         emon.Testport.assertEq(fxtRaw(Fx.fxMuldiv((long) 7, (long) 1, (long) -2)), -4, "3.5 over -1 ... away");
         emon.Testport.assertEq(fxtRaw(Fx.fxMuldiv((long) -7, (long) 1, (long) -2)), 4, "positive again");
     }
     public static void testHostileMagnitudesWrapAndClampButNeverFault() {
-        emon.Testport.assertEq(Fx.fxRound(Fx.fxClamp(Fx.fxOfInt(2147483647))), 268435456, "a huge integer is clamped to 2^28");
-        emon.Testport.assertThat(Fx.fxClamp((long) 9000000000000000L) == ((long) 17592186044416L), "clamped above");
-        emon.Testport.assertThat(Fx.fxClamp((long) -9000000000000000L) == ((long) -17592186044416L), "clamped below");
+        emon.Testport.assertEq(Fx.fxRound(Fx.fxClamp(Fx.fxOfInt(2147483647))), 67108864, "a huge integer is clamped to 2^26");
+        emon.Testport.assertThat(Fx.fxClamp((long) 9000000000000000L) == ((long) 1125899906842624L), "clamped above");
+        emon.Testport.assertThat(Fx.fxClamp((long) -9000000000000000L) == ((long) -1125899906842624L), "clamped below");
         emon.Testport.assertEq(Fx.fxRound(Fx.fxOfInt(2147483647)), 2147483647, "the largest integer");
         emon.Testport.assertEq(Fx.fxRound(Fx.fxOfInt(2147483647)), 2147483647, "saturation in the round");
     }
@@ -53,8 +55,8 @@ public final class Fxtest {
         emon.Testport.assertEq((int) Fx.fxIsqrt((long) 15), 3, "isqrt 15");
         emon.Testport.assertEq((int) Fx.fxIsqrt((long) 16), 4, "isqrt 16");
         emon.Testport.assertEq((int) Fx.fxIsqrt((long) 2147395600), 46340, "isqrt of 46340^2");
-        emon.Testport.assertEq(fxtRaw(Fx.fxSqrt(Fx.fxOfInt(4))), 131072, "sqrt 4 = 2");
-        emon.Testport.assertEq(fxtRaw(Fx.fxSqrt(Fx.fxOfInt(2))), 92681, "sqrt 2 = 1.41421 (floor of 92681.9)");
+        emon.Testport.assertEq(fxtRaw(Fx.fxSqrt(Fx.fxOfInt(4))), 33554432, "sqrt 4 = 2");
+        emon.Testport.assertEq(fxtRaw(Fx.fxSqrt(Fx.fxOfInt(2))), 23726566, "sqrt 2 = 1.41421 (floor)");
         emon.Testport.assertEq(fxtRaw(Fx.fxSqrt((long) -5)), 0, "sqrt of a negative is 0");
         emon.Testport.assertEq(Fx.fxRound(Fx.fxHypot(Fx.fxOfInt(3), Fx.fxOfInt(4))), 5, "3-4-5");
         emon.Testport.assertEq(Fx.fxRound(Fx.fxHypot(Fx.fxOfInt(-3), Fx.fxOfInt(4))), 5, "signs do not matter");
@@ -145,21 +147,21 @@ public final class Fxtest {
         return d;
     }
     public static void testSineAndCosineAreExactAtTheAxesAndCloseBetween() {
-        emon.Testport.assertEq(fxtRaw(Fx.fxCos(0)), 65536, "cos 0");
+        emon.Testport.assertEq(fxtRaw(Fx.fxCos(0)), 16777216, "cos 0");
         emon.Testport.assertEq(fxtRaw(Fx.fxSin(0)), 0, "sin 0");
         emon.Testport.assertEq(fxtRaw(Fx.fxCos(9000)), 0, "cos 90");
-        emon.Testport.assertEq(fxtRaw(Fx.fxSin(9000)), 65536, "sin 90");
-        emon.Testport.assertEq(fxtRaw(Fx.fxCos(18000)), -65536, "cos 180");
+        emon.Testport.assertEq(fxtRaw(Fx.fxSin(9000)), 16777216, "sin 90");
+        emon.Testport.assertEq(fxtRaw(Fx.fxCos(18000)), -16777216, "cos 180");
         emon.Testport.assertEq(fxtRaw(Fx.fxSin(18000)), 0, "sin 180");
         emon.Testport.assertEq(fxtRaw(Fx.fxCos(27000)), 0, "cos 270");
-        emon.Testport.assertEq(fxtRaw(Fx.fxSin(27000)), -65536, "sin 270");
-        emon.Testport.assertThat(fxtDist(Fx.fxSin(4500), 46341) <= 2, "sin 45 = 0.70711");
-        emon.Testport.assertThat(fxtDist(Fx.fxCos(4500), 46341) <= 2, "cos 45");
-        emon.Testport.assertThat(fxtDist(Fx.fxSin(3000), 32768) <= 2, "sin 30 = 0.5");
-        emon.Testport.assertThat(fxtDist(Fx.fxCos(6000), 32768) <= 2, "cos 60 = 0.5");
-        emon.Testport.assertThat(fxtDist(Fx.fxCos(13500), -46341) <= 2, "cos 135");
-        emon.Testport.assertThat(fxtDist(Fx.fxSin(31500), -46341) <= 2, "sin 315");
-        emon.Testport.assertThat(fxtDist(Fx.fxSin(-4500), -46341) <= 2, "a negative angle");
-        emon.Testport.assertThat(fxtDist(Fx.fxCos(40500), 46341) <= 2, "an angle past a turn");
+        emon.Testport.assertEq(fxtRaw(Fx.fxSin(27000)), -16777216, "sin 270");
+        emon.Testport.assertThat(fxtDist(Fx.fxSin(4500), 11863283) <= 700, "sin 45 = 0.70711");
+        emon.Testport.assertThat(fxtDist(Fx.fxCos(4500), 11863283) <= 700, "cos 45");
+        emon.Testport.assertThat(fxtDist(Fx.fxSin(3000), 8388608) <= 700, "sin 30 = 0.5");
+        emon.Testport.assertThat(fxtDist(Fx.fxCos(6000), 8388608) <= 700, "cos 60 = 0.5");
+        emon.Testport.assertThat(fxtDist(Fx.fxCos(13500), -11863283) <= 700, "cos 135");
+        emon.Testport.assertThat(fxtDist(Fx.fxSin(31500), -11863283) <= 700, "sin 315");
+        emon.Testport.assertThat(fxtDist(Fx.fxSin(-4500), -11863283) <= 700, "a negative angle");
+        emon.Testport.assertThat(fxtDist(Fx.fxCos(40500), 11863283) <= 700, "an angle past a turn");
     }
 }

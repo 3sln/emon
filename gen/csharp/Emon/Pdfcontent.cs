@@ -76,8 +76,8 @@ public static class Pdfcontent {
     internal const int CFlim = 597;
     internal const int CIntext = 598;
     internal const int CGsbase = 599;
-    internal const int CSstat = 602;
-    internal const int CTok = 601;
+    internal const int CSstat = 633;
+    internal const int CTok = 632;
     internal const int CFstack = 600;
     internal const int MaxForms = 32;
     internal const int CCstack = 640;
@@ -612,7 +612,7 @@ public static class Pdfcontent {
         Fx.MxCopy(cx, CCur + GCtm, CBase);
         Fx.FxPut(cx, CCur + GTc, (long) 0);
         Fx.FxPut(cx, CCur + GTw, (long) 0);
-        Fx.FxPut(cx, CCur + GTh, (long) 65536);
+        Fx.FxPut(cx, CCur + GTh, Fx.FxOne());
         Fx.FxPut(cx, CCur + GTl, (long) 0);
         Fx.FxPut(cx, CCur + GRise, (long) 0);
         Fx.FxPut(cx, CCur + GFs, (long) 0);
@@ -627,8 +627,8 @@ public static class Pdfcontent {
         // The matrix from user space (points) to page space (centipoints, y down,
         // the crop box's corner at the origin, /Rotate applied). x0..y1 are the crop
         // box in centipoints.
-        long h = (long) 6553600;
-        long nh = (long) -6553600;
+        long h = (long) 1677721600;
+        long nh = (long) -1677721600;
         if (rot == 90) {
             Fx.MxSet(cx, CBase, (long) 0, h, h, (long) 0, Fx.FxOfInt(0 - y0), Fx.FxOfInt(0 - x0));
         }
@@ -732,7 +732,7 @@ public static class Pdfcontent {
         long o1 = PcNum(ox, n, 1);
         long o2 = PcNum(ox, n, 2);
         long o3 = PcNum(ox, n, 3);
-        long one = (long) 65536;
+        long one = Fx.FxOne();
         if (n == 1) {
             int gy = PcByte(o0);
             emon.Port.CellsSet(cx, CCur + GColor, PcRgb(gy, gy, gy));
@@ -1097,6 +1097,13 @@ public static class Pdfcontent {
         }
         if (cnt > 0) {
             cp0 = PcFCp(f0, f1, f2, f3, slot, 0);
+        }
+        // A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value
+        // for (Skia does, for the parts of a Devanagari conjunct): that is no value.
+        if ((cnt == 1) && ((cp0 == 0) || (cp0 == 65533))) {
+            cnt = 0;
+            cp0 = -1;
+            how = 5;
         }
         if (w < 0) {
             w = 50000;
@@ -2179,7 +2186,7 @@ public static class Pdfcontent {
     }
     internal static int PcRotGap(emon.Port.Cells gl, int p, int g, int size) {
         // For text at an arbitrary angle: the distance between glyph p's centre and
-        // glyph g's, along the writing direction, less 55 percent of the size (the
+        // glyph g's, along the writing direction, less 60 percent of the size (the
         // two half-advances of adjacent letters), so it reads as `pc-gap` does.
         int rot = Evidence.GlGet(gl, p, Evidence.GfRot());
         long ux = Fx.FxCos(rot);
@@ -2187,7 +2194,7 @@ public static class Pdfcontent {
         int dx2 = (Evidence.GlGet(gl, g, Evidence.GfX0()) + Evidence.GlGet(gl, g, Evidence.GfX1())) - (Evidence.GlGet(gl, p, Evidence.GfX0()) + Evidence.GlGet(gl, p, Evidence.GfX1()));
         int dy2 = (Evidence.GlGet(gl, g, Evidence.GfY0()) + Evidence.GlGet(gl, g, Evidence.GfY1())) - (Evidence.GlGet(gl, p, Evidence.GfY0()) + Evidence.GlGet(gl, p, Evidence.GfY1()));
         long al2 = unchecked(Fx.FxMul(Fx.FxOfInt(dx2), ux) + Fx.FxMul(Fx.FxOfInt(dy2), uy));
-        return Fx.FxRound(al2 / ((long) 2)) - ((size * 550) / 1000);
+        return Fx.FxRound(al2 / ((long) 2)) - ((size * 600) / 1000);
     }
     internal static int PcRotOff(emon.Port.Cells gl, int p, int g) {
         // The distance between the two glyphs' centres across the writing direction.
@@ -2287,23 +2294,76 @@ public static class Pdfcontent {
         }
         return 1;
     }
+    internal static int PcCls(int cp) {
+        // A code point's strength for reordering right-to-left text: 1 strong right-to-left
+        // (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right
+        // letter or a digit (Arabic-Indic digits are digits: they run left to right inside
+        // right-to-left text), 0 neutral (punctuation, symbols, what has no value).
+        if (cp < 33) {
+            return 0;
+        }
+        if (((cp >= 48) && (cp <= 57)) || (((cp >= 1632) && (cp <= 1641)) || ((cp >= 1776) && (cp <= 1785)))) {
+            return 2;
+        }
+        if (((cp >= 1424) && (cp <= 2303)) || (((cp >= 64285) && (cp <= 65023)) || ((cp >= 65136) && (cp <= 65279)))) {
+            return 1;
+        }
+        if (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
+            return 2;
+        }
+        if ((cp >= 192) && ((cp < 8192) && (cp != 215))) {
+            return 2;
+        }
+        if ((cp >= 12352) && (cp < 65000)) {
+            return 2;
+        }
+        return 0;
+    }
+    internal static int PcGcls(emon.Port.Cells gl, int j) {
+        return PcCls(Evidence.GlGet(gl, j, Evidence.GfCp()));
+    }
+    internal static int PcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j) {
+        // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
+        int ts = Evidence.GlGet(gl, j, Evidence.GfTstart());
+        int tl = Evidence.GlGet(gl, j, Evidence.GfTlen());
+        int cp = Evidence.GlGet(gl, j, Evidence.GfCp());
+        int k = 0;
+        int cpv = 0;
+        if ((ts >= 0) && (tl > 0)) {
+            while (k < tl) {
+                cpv = emon.Port.CellsAt(et, ts + k);
+                Evidence.EtxAppendCp(et, cpv);
+                k += 1;
+            }
+            return 0;
+        }
+        if (cp >= 0) {
+            Evidence.EtxAppendCp(et, cp);
+        } else {
+            Evidence.EtxAppendCp(et, 65533);
+        }
+        return 0;
+    }
     internal static int PcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, int page, int gfst, int glst) {
-        // Record glyphs [first, last] as a word: the union of their boxes, their text
-        // (a glyph of unknown value is U+FFFD), the dominant font and size of the
-        // first, and `hidden-text` as its source when every glyph is render mode 3.
+        // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
+        // dominant font and size of the first, and `hidden-text` as its source when every
+        // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
+        // page (visual order, as Skia and most producers write them) has its TEXT written in
+        // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
+        // turned back. The glyphs themselves stay as they were shown.
         int x0 = Evidence.GlGet(gl, gfst, Evidence.GfX0());
         int y0 = Evidence.GlGet(gl, gfst, Evidence.GfY0());
         int x1 = Evidence.GlGet(gl, gfst, Evidence.GfX1());
         int y1 = Evidence.GlGet(gl, gfst, Evidence.GfY1());
         int j = gfst;
         int tstart = -1;
-        int k = 0;
-        int ts = 0;
-        int tl = 0;
         int visible = 0;
-        int cpv = 0;
-        int cp = 0;
-        tstart = emon.Port.CellsLen(et);
+        int nr = 0;
+        int nl = 0;
+        int cl = 0;
+        int rtlw = 0;
+        int kk = 0;
+        int m = 0;
         while (j <= glst) {
             if (Evidence.GlGet(gl, j, Evidence.GfX0()) < x0) {
                 x0 = Evidence.GlGet(gl, j, Evidence.GfX0());
@@ -2320,22 +2380,48 @@ public static class Pdfcontent {
             if (Evidence.GlGet(gl, j, Evidence.GfMode()) != 3) {
                 visible = 1;
             }
-            ts = Evidence.GlGet(gl, j, Evidence.GfTstart());
-            tl = Evidence.GlGet(gl, j, Evidence.GfTlen());
-            cp = Evidence.GlGet(gl, j, Evidence.GfCp());
-            if ((ts >= 0) && (tl > 0)) {
-                k = 0;
-                while (k < tl) {
-                    cpv = emon.Port.CellsAt(et, ts + k);
-                    Evidence.EtxAppendCp(et, cpv);
-                    k += 1;
-                }
-            } else if (cp >= 0) {
-                Evidence.EtxAppendCp(et, cp);
-            } else {
-                Evidence.EtxAppendCp(et, 65533);
+            cl = PcGcls(gl, j);
+            if (cl == 1) {
+                nr += 1;
+            }
+            if (cl == 2) {
+                nl += 1;
             }
             j += 1;
+        }
+        if ((nr > nl) && (glst > gfst)) {
+            if (PcAxis(Evidence.GlGet(gl, gfst, Evidence.GfRot())) == 0) {
+                if (Evidence.GlGet(gl, glst, Evidence.GfX0()) >= Evidence.GlGet(gl, gfst, Evidence.GfX0())) {
+                    rtlw = 1;
+                }
+            }
+        }
+        tstart = emon.Port.CellsLen(et);
+        if (rtlw == 0) {
+            j = gfst;
+            while (j <= glst) {
+                PcGlyphOut(et, gl, j);
+                j += 1;
+            }
+        } else {
+            j = glst;
+            while (j >= gfst) {
+                if (PcGcls(gl, j) == 2) {
+                    kk = j;
+                    while ((kk > gfst) && (PcGcls(gl, kk - 1) == 2)) {
+                        kk -= 1;
+                    }
+                    m = kk;
+                    while (m <= j) {
+                        PcGlyphOut(et, gl, m);
+                        m += 1;
+                    }
+                    j = kk - 1;
+                } else {
+                    PcGlyphOut(et, gl, j);
+                    j -= 1;
+                }
+            }
         }
         int w = Evidence.WdNew(wd, page, x0, y0, x1, y1, gfst, (glst - gfst) + 1);
         Evidence.WdSet(wd, w, Evidence.WfTstart(), tstart);
@@ -2351,6 +2437,128 @@ public static class Pdfcontent {
             j += 1;
         }
         return w;
+    }
+    internal static int PcSwapRows(emon.Port.Cells wd, int i, int j) {
+        int k = 0;
+        int u = 0;
+        int v = 0;
+        while (k < 16) {
+            u = emon.Port.CellsAt(wd, (i * 16) + k);
+            v = emon.Port.CellsAt(wd, (j * 16) + k);
+            emon.Port.CellsSet(wd, (i * 16) + k, v);
+            emon.Port.CellsSet(wd, (j * 16) + k, u);
+            k += 1;
+        }
+        return 0;
+    }
+    internal static int PcRevRows(emon.Port.Cells wd, int a, int b) {
+        int i = a;
+        int j = b;
+        while (i < j) {
+            PcSwapRows(wd, i, j);
+            i += 1;
+            j -= 1;
+        }
+        return 0;
+    }
+    internal static int PcWcls(emon.Port.Cells gl, emon.Port.Cells wd, int w) {
+        // 2 when the word has more left-to-right letters and digits than right-to-left letters.
+        int g0 = Evidence.WdGet(wd, w, Evidence.WfGfirst());
+        int gn = Evidence.WdGet(wd, w, Evidence.WfGcount());
+        int j = 0;
+        int nr = 0;
+        int nl = 0;
+        int cl = 0;
+        while (j < gn) {
+            cl = PcGcls(gl, g0 + j);
+            if (cl == 1) {
+                nr += 1;
+            }
+            if (cl == 2) {
+                nl += 1;
+            }
+            j += 1;
+        }
+        if (nr > nl) {
+            return 1;
+        }
+        return 2;
+    }
+    internal static int PcLineBidi(emon.Port.Cells gl, emon.Port.Cells wd, emon.Port.Cells ln, int lidx, int wfst, int wlst) {
+        // Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than
+        // left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on
+        // the page, their ORDER is made logical: reversed, with runs of left-to-right words
+        // turned back; each word's glyphs are re-pointed at it and its gap is the space to
+        // the word that follows it in that order.
+        int w = wfst;
+        int nr = 0;
+        int nl = 0;
+        int j = 0;
+        int cl = 0;
+        int a = 0;
+        int z = 0;
+        int g0 = 0;
+        int gn = 0;
+        while (w <= wlst) {
+            g0 = Evidence.WdGet(wd, w, Evidence.WfGfirst());
+            gn = Evidence.WdGet(wd, w, Evidence.WfGcount());
+            j = 0;
+            while (j < gn) {
+                cl = PcGcls(gl, g0 + j);
+                if (cl == 1) {
+                    nr += 1;
+                }
+                if (cl == 2) {
+                    nl += 1;
+                }
+                j += 1;
+            }
+            w += 1;
+        }
+        if (nr <= nl) {
+            return 0;
+        }
+        Evidence.LnSet(ln, lidx, Evidence.LfDir(), Evidence.LdRtl());
+        if (PcAxis(Evidence.GlGet(gl, Evidence.WdGet(wd, wfst, Evidence.WfGfirst()), Evidence.GfRot())) != 0) {
+            return 0;
+        }
+        if (Evidence.WdGet(wd, wlst, Evidence.WfX0()) < Evidence.WdGet(wd, wfst, Evidence.WfX0())) {
+            return 0;
+        }
+        if (wfst == wlst) {
+            return 0;
+        }
+        PcRevRows(wd, wfst, wlst);
+        a = wfst;
+        while (a <= wlst) {
+            if (PcWcls(gl, wd, a) == 2) {
+                z = a;
+                while ((z < wlst) && (PcWcls(gl, wd, z + 1) == 2)) {
+                    z += 1;
+                }
+                PcRevRows(wd, a, z);
+                a = z + 1;
+            } else {
+                a += 1;
+            }
+        }
+        w = wfst;
+        while (w <= wlst) {
+            g0 = Evidence.WdGet(wd, w, Evidence.WfGfirst());
+            gn = Evidence.WdGet(wd, w, Evidence.WfGcount());
+            j = 0;
+            while (j < gn) {
+                Evidence.GlSet(gl, g0 + j, Evidence.GfWord(), w);
+                j += 1;
+            }
+            z = -1;
+            if (w < wlst) {
+                z = Evidence.WdGet(wd, w, Evidence.WfX0()) - Evidence.WdGet(wd, w + 1, Evidence.WfX1());
+            }
+            Evidence.WdSet(wd, w, Evidence.WfGap(), z);
+            w += 1;
+        }
+        return 0;
     }
     public static int PcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, int page, int g0, int w0) {
         // Group the glyphs from g0 on into words, and the words from w0 on into lines.
@@ -2455,6 +2663,7 @@ public static class Pdfcontent {
                     axis = PcAxis(Evidence.GlGet(gl, gfp, Evidence.GfRot()));
                     lnx = Evidence.LnNew(ln, page, x0, y0, x1, y1, lfirst, (prev - lfirst) + 1, PcOffset(gl, gfp, axis));
                     Evidence.LnSet(ln, lnx, Evidence.LfRot(), Evidence.GlGet(gl, gfp, Evidence.GfRot()));
+                    PcLineBidi(gl, wd, ln, lnx, lfirst, prev);
                     gfp = lfirst;
                     while (gfp <= prev) {
                         Evidence.WdSet(wd, gfp, Evidence.WfLine(), lnx);

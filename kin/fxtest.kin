@@ -1,7 +1,7 @@
 ;; Laws for `emon.fx` (P1.7): the 16.16 arithmetic, its rounding at the edges, the
 ;; integer square root and angle, the two-cell storage, and matrix composition in
 ;; PDF's row-vector order. Every answer is checked as an I32 (an Fx rounded, or
-;; a count of 1/65536 units) because that is what every target can assert.
+;; a count of 2^-24 units) because that is what every target can assert.
 (ns emon.fxtest
   (:require [emon.lang :refer [I32 I64 Cells i64 i32]]
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that new-cells]]
@@ -17,14 +17,14 @@
   (return (i32 v)))
 
 (deftest test-integers-and-reals-become-fx
-  (assert-eq (fxt-raw (fx-of-int 3)) 196608 "3 is 3*65536")
-  (assert-eq (fxt-raw (fx-of-int -2)) -131072 "-2")
-  (assert-eq (fxt-raw (fx-of-real 5 1)) 32768 "0.5 is 32768")
-  (assert-eq (fxt-raw (fx-of-real 25 2)) 16384 "0.25")
-  (assert-eq (fxt-raw (fx-of-real -75 2)) -49152 "-0.75")
-  (assert-eq (fxt-raw (fx-of-real 1 5)) 1 "0.00001 rounds to 1 unit (0.655)")
-  (assert-eq (fxt-raw (fx-of-real 1 6)) 0 "0.000001 is under half a unit")
-  (assert-eq (fxt-raw (fx-of-real 1234567 3)) 80908583 "1234.567 is 80908583 units")
+  (assert-eq (fxt-raw (fx-of-int 3)) 50331648 "3 is 3*2^24")
+  (assert-eq (fxt-raw (fx-of-int -2)) -33554432 "-2")
+  (assert-eq (fxt-raw (fx-of-real 5 1)) 8388608 "0.5 is 2^23")
+  (assert-eq (fxt-raw (fx-of-real 25 2)) 4194304 "0.25")
+  (assert-eq (fxt-raw (fx-of-real -75 2)) -12582912 "-0.75")
+  (assert-eq (fxt-raw (fx-of-real 1 5)) 168 "0.00001 is 167.77 units")
+  (assert-eq (fxt-raw (fx-of-real 1 6)) 17 "0.000001 is 16.78 units")
+  (assert-eq (fxt-raw (fx-of-real 1234567 5)) 207125972 "12.34567 in units")
   (assert-eq (fx-round (fx-of-real 149 2)) 1 "1.49 rounds to 1")
   (assert-eq (fx-round (fx-of-real 150 2)) 2 "1.50 rounds up")
   (assert-eq (fx-round (fx-of-real -150 2)) -1 "-1.50 rounds up, toward positive")
@@ -33,24 +33,26 @@
   (assert-eq (fx-floor (fx-of-real 19 1)) 1 "floor of 1.9"))
 
 (deftest test-multiplication-and-division-round-half-away-from-zero
-  (assert-eq (fxt-raw (fx-mul (fx-of-int 3) (fx-of-int 4))) 786432 "3*4")
-  (assert-eq (fxt-raw (fx-mul (fx-of-real 5 1) (fx-of-real 5 1))) 16384 "0.5*0.5")
-  (assert-eq (fxt-raw (fx-mul (fx-of-int -3) (fx-of-real 5 1))) -98304 "-3*0.5")
-  (assert-eq (fxt-raw (fx-mul (i64 1) (i64 32768))) 1 "half a unit rounds away: 1")
-  (assert-eq (fxt-raw (fx-mul (i64 -1) (i64 32768))) -1 "and -1")
-  (assert-eq (fxt-raw (fx-mul (i64 1) (i64 32767))) 0 "under half: 0")
-  (assert-eq (fxt-raw (fx-div (fx-of-int 1) (fx-of-int 4))) 16384 "1/4")
-  (assert-eq (fxt-raw (fx-div (fx-of-int 10) (fx-of-int -4))) -163840 "10/-4")
+  (assert-eq (fxt-raw (fx-mul (fx-of-int 3) (fx-of-int 4))) 201326592 "3*4")
+  (assert-eq (fxt-raw (fx-mul (fx-of-real 5 1) (fx-of-real 5 1))) 4194304 "0.5*0.5")
+  (assert-eq (fxt-raw (fx-mul (fx-of-int -3) (fx-of-real 5 1))) -25165824 "-3*0.5")
+  (assert-eq (fxt-raw (fx-mul (i64 1) (i64 8388608))) 1 "half a unit rounds away: 1")
+  (assert-eq (fxt-raw (fx-mul (i64 -1) (i64 8388608))) -1 "and -1")
+  (assert-eq (fxt-raw (fx-mul (i64 1) (i64 8388607))) 0 "under half: 0")
+  (assert-that (== (fx-mul (i64 3000000000000) (i64 100663296)) (i64 18000000000000)) "a coordinate times a scale: 3e12 * 6")
+  (assert-that (== (fx-mul (i64 1099511627776) (i64 16777216)) (i64 1099511627776)) "a large coordinate times one")
+  (assert-eq (fxt-raw (fx-div (fx-of-int 1) (fx-of-int 4))) 4194304 "1/4")
+  (assert-eq (fxt-raw (fx-div (fx-of-int 10) (fx-of-int -4))) -41943040 "10/-4")
   (assert-eq (fxt-raw (fx-div (fx-of-int 1) (i64 0))) 0 "division by zero is 0, not a fault")
-  (assert-eq (fxt-raw (fx-muldiv (i64 27783) (fx-of-int 12) (i64 100000))) 218494 "a glyph width: 277.83/1000 em at 12 is 3.334")
+  (assert-eq (fxt-raw (fx-muldiv (i64 27783) (fx-of-int 12) (i64 100000))) 55934567 "a glyph width: 277.83/1000 em at 12 is 3.334")
   (assert-eq (fxt-raw (fx-muldiv (i64 -7) (i64 1) (i64 2))) -4 "-3.5 rounds away")
   (assert-eq (fxt-raw (fx-muldiv (i64 7) (i64 1) (i64 -2))) -4 "3.5 over -1 ... away")
   (assert-eq (fxt-raw (fx-muldiv (i64 -7) (i64 1) (i64 -2))) 4 "positive again"))
 
 (deftest test-hostile-magnitudes-wrap-and-clamp-but-never-fault
-  (assert-eq (fx-round (fx-clamp (fx-of-int 2147483647))) 268435456 "a huge integer is clamped to 2^28")
-  (assert-that (== (fx-clamp (i64 9000000000000000)) (i64 17592186044416)) "clamped above")
-  (assert-that (== (fx-clamp (i64 -9000000000000000)) (i64 -17592186044416)) "clamped below")
+  (assert-eq (fx-round (fx-clamp (fx-of-int 2147483647))) 67108864 "a huge integer is clamped to 2^26")
+  (assert-that (== (fx-clamp (i64 9000000000000000)) (i64 1125899906842624)) "clamped above")
+  (assert-that (== (fx-clamp (i64 -9000000000000000)) (i64 -1125899906842624)) "clamped below")
   (assert-eq (fx-round (fx-of-int 2147483647)) 2147483647 "the largest integer")
   (assert-eq (fx-round (fx-of-int 2147483647)) 2147483647 "saturation in the round"))
 
@@ -60,8 +62,8 @@
   (assert-eq (i32 (fx-isqrt (i64 15))) 3 "isqrt 15")
   (assert-eq (i32 (fx-isqrt (i64 16))) 4 "isqrt 16")
   (assert-eq (i32 (fx-isqrt (i64 2147395600))) 46340 "isqrt of 46340^2")
-  (assert-eq (fxt-raw (fx-sqrt (fx-of-int 4))) 131072 "sqrt 4 = 2")
-  (assert-eq (fxt-raw (fx-sqrt (fx-of-int 2))) 92681 "sqrt 2 = 1.41421 (floor of 92681.9)")
+  (assert-eq (fxt-raw (fx-sqrt (fx-of-int 4))) 33554432 "sqrt 4 = 2")
+  (assert-eq (fxt-raw (fx-sqrt (fx-of-int 2))) 23726566 "sqrt 2 = 1.41421 (floor)")
   (assert-eq (fxt-raw (fx-sqrt (i64 -5))) 0 "sqrt of a negative is 0")
   (assert-eq (fx-round (fx-hypot (fx-of-int 3) (fx-of-int 4))) 5 "3-4-5")
   (assert-eq (fx-round (fx-hypot (fx-of-int -3) (fx-of-int 4))) 5 "signs do not matter")
@@ -148,19 +150,19 @@
     (return d)))
 
 (deftest test-sine-and-cosine-are-exact-at-the-axes-and-close-between
-  (assert-eq (fxt-raw (fx-cos 0)) 65536 "cos 0")
+  (assert-eq (fxt-raw (fx-cos 0)) 16777216 "cos 0")
   (assert-eq (fxt-raw (fx-sin 0)) 0 "sin 0")
   (assert-eq (fxt-raw (fx-cos 9000)) 0 "cos 90")
-  (assert-eq (fxt-raw (fx-sin 9000)) 65536 "sin 90")
-  (assert-eq (fxt-raw (fx-cos 18000)) -65536 "cos 180")
+  (assert-eq (fxt-raw (fx-sin 9000)) 16777216 "sin 90")
+  (assert-eq (fxt-raw (fx-cos 18000)) -16777216 "cos 180")
   (assert-eq (fxt-raw (fx-sin 18000)) 0 "sin 180")
   (assert-eq (fxt-raw (fx-cos 27000)) 0 "cos 270")
-  (assert-eq (fxt-raw (fx-sin 27000)) -65536 "sin 270")
-  (assert-that (<= (fxt-dist (fx-sin 4500) 46341) 2) "sin 45 = 0.70711")
-  (assert-that (<= (fxt-dist (fx-cos 4500) 46341) 2) "cos 45")
-  (assert-that (<= (fxt-dist (fx-sin 3000) 32768) 2) "sin 30 = 0.5")
-  (assert-that (<= (fxt-dist (fx-cos 6000) 32768) 2) "cos 60 = 0.5")
-  (assert-that (<= (fxt-dist (fx-cos 13500) -46341) 2) "cos 135")
-  (assert-that (<= (fxt-dist (fx-sin 31500) -46341) 2) "sin 315")
-  (assert-that (<= (fxt-dist (fx-sin -4500) -46341) 2) "a negative angle")
-  (assert-that (<= (fxt-dist (fx-cos 40500) 46341) 2) "an angle past a turn"))
+  (assert-eq (fxt-raw (fx-sin 27000)) -16777216 "sin 270")
+  (assert-that (<= (fxt-dist (fx-sin 4500) 11863283) 700) "sin 45 = 0.70711")
+  (assert-that (<= (fxt-dist (fx-cos 4500) 11863283) 700) "cos 45")
+  (assert-that (<= (fxt-dist (fx-sin 3000) 8388608) 700) "sin 30 = 0.5")
+  (assert-that (<= (fxt-dist (fx-cos 6000) 8388608) 700) "cos 60 = 0.5")
+  (assert-that (<= (fxt-dist (fx-cos 13500) -11863283) 700) "cos 135")
+  (assert-that (<= (fxt-dist (fx-sin 31500) -11863283) 700) "sin 315")
+  (assert-that (<= (fxt-dist (fx-sin -4500) -11863283) 700) "a negative angle")
+  (assert-that (<= (fxt-dist (fx-cos 40500) 11863283) 700) "an angle past a turn"))

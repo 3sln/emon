@@ -1,0 +1,613 @@
+;; Laws for `emon.pdfcontent` (P1.7), on every target.
+;;
+;; THE CORPORA, all under test/ and all read by kin, so each target must reach the same answers:
+;;
+;;   content/rows.txt     seven hand-made PDFs (kin/scripts/content-fixtures, a babashka script, which
+;;                        also holds a second, exact-rational evaluator of the text operators): every
+;;                        glyph's box, baseline, size and angle to one centipoint, the words, the
+;;                        marked-content spans row by row, the warning bits
+;;   content/synth.txt    the 36 Chrome-printed synthetic documents (test/corpus/synth/pdf): each
+;;                        page's glyph text, which kin/scripts/content-check (babashka) holds to the
+;;                        text of the source HTML
+;;   content/tagged.txt   the 3 tagged PDFs: each page's glyph text and EVERY marked-content span
+;;   content/evidence.txt the three P1.5 fixtures and their whole evidence dumps, byte for byte
+;;   content/real.txt     real files of corpus/ and the digest of each page's glyph stream, agreed
+;;                        with pdfminer.six when written (tools/oracle/content-corpus.py)
+;;
+;; AND THE LAWS ABOUT HOW: every row file again through a 512-byte async source (D075: the same
+;; arenas cell for cell, the kept attempt's status the file's), and corrupted and cut files (no
+;; fault, whatever they say).
+;;
+;; (A helper asserts by taking the test handle, D070: its first parameter is `emon-t`.)
+(ns emon.pdfcontenttest
+  (:require [emon.lang :refer [I32 Blob Src Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at
+                               assert-text-span new-cells new-text test-file test-file-span
+                               test-t test-src-chunked test-src-view test-src-ctl Str TestT]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push
+                               cells-drop text-cp text-i32 src-of-blob src-of-cells]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfdoc :refer [pd-open]]
+            [emon.pdfcontent :refer [pc-document pc-warn pc-fonts]]
+            [emon.contentrows :refer [cr-page-text cr-page-lines cr-all-text cr-word cr-span cr-digest]]
+            [emon.evidence :refer [gl-count gl-get wd-count sp-count
+                                   gf-cp gf-x0 gf-y0 gf-x1 gf-y1 gf-baseline gf-size gf-rot
+                                   gf-mode gf-page ev-emit ev-init ev-check]]
+            [emon.splitmix :refer [sm-seed sm-below]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------ row helpers
+
+(defn ^I32 ct-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ct-tab [^Blob b ^I32 i ^I32 lim]
+  (comment "Index of the next tab in [i, lim), or lim.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 ct-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^I32 ct-hex [^Blob b ^I32 from ^I32 to]
+  (comment "A hex number; a lone `-` is -1 (none).")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0]
+    (if (and (== (- to from) 1) (== (blob-u8 b from) 45)) (return -1))
+    (while (< k to)
+      (do (set v (+ (* v 16) (ct-hexval (blob-u8 b k))))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 ct-dec [^Blob b ^I32 from ^I32 to]
+  (comment "A decimal, possibly negative.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0
+        ^:mut ^I32 neg 0]
+    (if (and (< k to) (== (blob-u8 b k) 45))
+      (do (set neg 1) (set k (+ k 1))))
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (if (== neg 1) (return (- 0 v)))
+    (return v)))
+
+(defn ^I32 ct-near [^TestT emon-t ^I32 got ^I32 want ^I32 tol ^Str law ^I32 row]
+  (let [^:mut ^I32 d (- got want)]
+    (if (< d 0) (set d (- 0 d)))
+    (assert-that-at (<= d tol) law row)
+    (return 0)))
+
+(defn ^I32 ct-near-angle [^TestT emon-t ^I32 got ^I32 want ^Str law ^I32 row]
+  (comment "Centi-degrees, around the circle.")
+  (let [^:mut ^I32 d (- got want)]
+    (if (< d 0) (set d (- 0 d)))
+    (if (> d 18000) (set d (- 36000 d)))
+    (assert-that-at (<= d 1) law row)
+    (return 0)))
+
+;; ---------------------------------------------------------------- the driver
+
+(defn ^I32 ct-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                   ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                   ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                   ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^:mut ^Cells pg
+                   ^:mut ^Cells wd ^:mut ^Cells ln]
+  (comment "Open the file and run every page: 0 when both went well, 100 + the open")
+  (comment "status when it did not open, else `pc-document`'s (7: the source missed).")
+  (cells-drop gl 0)
+  (cells-drop et 0)
+  (cells-drop sp 0)
+  (cells-drop wd 0)
+  (cells-drop ln 0)
+  (let [^I32 o (pd-open src ar dc a b st)]
+    (if (!= o 0) (return (+ 100 o)))
+    (return (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))))
+
+(defn ^I32 ct-g-row [^TestT emon-t ^Blob rows ^I32 s ^I32 e ^Cells gl ^:mut ^Cells vals ^I32 g ^I32 line]
+  (comment "One G row against glyph g: the code point exactly, the geometry within a")
+  (comment "centipoint (the fixed point's rounding), the render mode exactly.")
+  (let [^I32 n (gl-count gl)
+        ^:mut ^I32 p (+ s 2)
+        ^:mut ^I32 q 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 cpw 0]
+    (assert-that-at (< g n) "there is a glyph for the row" line)
+    (if (>= g n) (return 0))
+    (cells-drop vals 0)
+    (set q (ct-tab rows p e))
+    (set cpw (ct-hex rows p q))
+    (set p (+ q 1))
+    (while (< k 8)
+      (do (set q (ct-tab rows p e))
+          (cells-push vals (ct-dec rows p q))
+          (set p (+ q 1))
+          (set k (+ k 1))))
+    (assert-eq-at (gl-get gl g (gf-cp)) cpw "code point" line)
+    (ct-near emon-t (gl-get gl g (gf-x0)) (cells-at vals 0) 1 "x0" line)
+    (ct-near emon-t (gl-get gl g (gf-y0)) (cells-at vals 1) 1 "y0" line)
+    (ct-near emon-t (gl-get gl g (gf-x1)) (cells-at vals 2) 1 "x1" line)
+    (ct-near emon-t (gl-get gl g (gf-y1)) (cells-at vals 3) 1 "y1" line)
+    (ct-near emon-t (gl-get gl g (gf-baseline)) (cells-at vals 4) 1 "baseline" line)
+    (ct-near emon-t (gl-get gl g (gf-size)) (cells-at vals 5) 1 "size" line)
+    (ct-near-angle emon-t (gl-get gl g (gf-rot)) (cells-at vals 6) "rotation" line)
+    (assert-eq-at (gl-get gl g (gf-mode)) (cells-at vals 7) "render mode" line)
+    (return 0)))
+
+(defn ^I32 ct-rows [^TestT emon-t ^Blob rows
+                    ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                    ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                    ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^:mut ^Cells pg
+                    ^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells vals]
+  (comment "Check a row file: `F path` runs a file (path relative to test/); G, N, W, C, P and S")
+  (comment "rows are about the run. Answers how many rows were checked.")
+  (let [^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 checked 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 want 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set kind (blob-u8 rows pos))
+                (set checked (+ checked 1))
+                (if (== kind 70)
+                  (do (set status (ct-run (src-of-blob (test-file-span rows (+ pos 2) e))
+                                          ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+                      (assert-eq-at status 0 "the file ran" line)
+                      (set g 0)
+                      (set w 0)))
+                (if (== kind 71)
+                  (do (ct-g-row emon-t rows pos e gl vals g line)
+                      (set g (+ g 1))))
+                (if (== kind 78)
+                  (do (comment "N glyphs words spans warn; - is `not stated`")
+                      (set p (+ pos 2))
+                      (set q (ct-tab rows p e))
+                      (assert-eq-at (gl-count gl) (ct-dec rows p q) "glyph count" line)
+                      (set p (+ q 1))
+                      (set q (ct-tab rows p e))
+                      (if (!= (blob-u8 rows p) 45)
+                        (assert-eq-at (wd-count wd) (ct-dec rows p q) "word count" line))
+                      (set p (+ q 1))
+                      (set q (ct-tab rows p e))
+                      (assert-eq-at (sp-count sp) (ct-dec rows p q) "span count" line)
+                      (set p (+ q 1))
+                      (if (!= (blob-u8 rows p) 45)
+                        (assert-eq-at (pc-warn cx) (ct-dec rows p e) "warning bits" line))))
+                (if (== kind 87)
+                  (do (let [^Text tw (new-text)]
+                        (cr-word tw wd et w)
+                        (assert-text-span tw rows (+ pos 2) e "word text" line))
+                      (set w (+ w 1))))
+                (if (== kind 67)
+                  (do (let [^Text tc (new-text)]
+                        (cr-all-text tc gl et)
+                        (assert-text-span tc rows (+ pos 2) e "glyph text" line))))
+                (if (== kind 80)
+                  (do (comment "P page text")
+                      (set p (+ pos 2))
+                      (set q (ct-tab rows p e))
+                      (set want (ct-dec rows p q))
+                      (let [^Text tp (new-text)]
+                        (cr-page-text tp gl et want)
+                        (assert-text-span tp rows (+ q 1) e "page text" line))))
+                (if (== kind 84)
+                  (do (comment "T page lines: the page's lines, words joined by a space, lines by U+2028")
+                      (set p (+ pos 2))
+                      (set q (ct-tab rows p e))
+                      (set want (ct-dec rows p q))
+                      (let [^Text tl (new-text)]
+                        (cr-page-lines tl wd ln et want)
+                        (assert-text-span tl rows (+ q 1) e "line text" line))))
+                (if (== kind 83)
+                  (do (comment "S index ...: the whole row after the S")
+                      (set p (+ pos 2))
+                      (set q (ct-tab rows p e))
+                      (let [^Text ts (new-text)]
+                        (cr-span ts sp et (ct-dec rows p q))
+                        (assert-text-span ts rows p e "span" line))))))
+          (set pos (+ e 1))))
+    (return checked)))
+
+;; ------------------------------------------------------------------ one world
+
+(defn ^I32 ct-world [^TestT emon-t ^I32 which]
+  (comment "Allocate the workspace once and run the law `which`: 1 the fixtures, 2 the synthetic")
+  (comment "documents, 3 the tagged ones.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sp (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells vals (new-cells)
+        ^:mut ^I32 n 0]
+    (if (== which 1)
+      (set n (ct-rows emon-t (test-file "content/rows.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln vals)))
+    (if (== which 2)
+      (set n (ct-rows emon-t (test-file "content/synth.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln vals)))
+    (if (== which 3)
+      (set n (ct-rows emon-t (test-file "content/tagged.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln vals)))
+    (return n)))
+
+(deftest test-the-hand-made-fixtures-read-as-an-independent-evaluator-reads-them
+  (comment "ops, rotate, forms, marked, fonts, deep, inline, damaged: 300 rows.")
+  (assert-that (> (ct-world (test-t) 1) 250) "the fixture rows were read"))
+
+(deftest test-the-synthetic-documents-have-the-text-the-html-has
+  (comment "Each page's glyph stream as committed; kin/scripts/content-check holds the")
+  (comment "committed text to the source HTML.")
+  (assert-that (> (ct-world (test-t) 2) 90) "the synthetic rows were read"))
+
+(deftest test-the-tagged-documents-give-every-span
+  (assert-that (> (ct-world (test-t) 3) 100) "the tagged rows were read"))
+
+;; ------------------------------------------------------ evidence dumps, whole
+
+(defn ^I32 ct-end [^Blob b]
+  (comment "A golden's end: its length less one final newline.")
+  (let [^I32 n (blob-len b)]
+    (if (and (> n 0) (== (blob-u8 b (- n 1)) 10)) (return (- n 1)))
+    (return n)))
+
+(defn ^I32 ct-dump-rows [^TestT emon-t ^Blob rows]
+  (comment "evidence.txt: `F pdf <TAB> golden`: the compact `emon-evidence` dump is the golden's bytes.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sp (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells paths (new-cells)
+        ^Cells images (new-cells)
+        ^Cells comps (new-cells)
+        ^Cells ocr (new-cells)
+        ^Cells alts (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 tb 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 files 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set tb (ct-tab rows pos e))
+                (set files (+ files 1))
+                (set status (ct-run (src-of-blob (test-file-span rows pos tb))
+                                    ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+                (assert-eq-at status 0 "the file ran" line)
+                (assert-eq-at (ev-check gl wd ln paths images comps ocr alts et sp) 0 "the evidence is well formed" line)
+                (let [^Text t (new-text)]
+                  (ev-emit t 0 gl wd ln paths images comps ocr alts et sp)
+                  (assert-text-span t (test-file-span rows (+ tb 1) e) 0
+                                    (ct-end (test-file-span rows (+ tb 1) e)) "the evidence dump" line))))
+          (set pos (+ e 1))))
+    (return files)))
+
+(deftest test-the-three-fixtures-make-the-evidence-their-goldens-say
+  (assert-eq (ct-dump-rows (test-t) (test-file "content/evidence.txt")) 3 "three fixtures"))
+
+;; ----------------------------------------------------- a source that misses (D075)
+
+(defn ^I32 ct-diff [^Cells x ^Cells y]
+  (comment "-1 when x and y hold the same cells, -2 when they differ in length, else the first")
+  (comment "index where they differ.")
+  (let [^I32 n (cells-len x)
+        ^:mut ^I32 i 0]
+    (if (!= n (cells-len y)) (return -2))
+    (while (< i n)
+      (do (if (!= (cells-at x i) (cells-at y i)) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 ct-async [^Blob bytes ^I32 chunk ^:mut ^Cells ctr
+                     ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                     ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                     ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                     ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^:mut ^Cells pg
+                     ^:mut ^Cells wd ^:mut ^Cells ln]
+  (comment "Run `bytes` through an async source of `chunk`-byte chunks, re-running on a fresh")
+  (comment "view after each fetch until an attempt does not miss. `ctr` gets [rounds, attempts")
+  (comment "that missed and answered something other than need-bytes].")
+  (let [^Src base (test-src-chunked bytes chunk 0)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 more 1]
+    (cells-drop ctr 0)
+    (cells-push ctr 0)
+    (cells-push ctr 0)
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)]
+            (set status (ct-run v ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+            (if (ps-missed v)
+              (do (if (and (!= status 7) (!= status 0) (< status 100))
+                    (cells-set ctr 1 (+ (cells-at ctr 1) 1)))
+                  (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 40) (set more 0)))
+              (set more 0)))))
+    (cells-set ctr 0 round)
+    (return status)))
+
+(defn ^I32 ct-async-rows [^TestT emon-t ^Blob rows ^I32 mode ^I32 chunk]
+  (comment "Every file a row file names, run in memory and through the async source: the")
+  (comment "same evidence cell for cell, the same warnings, the same status, in at most 24")
+  (comment "rounds. mode 0: `F path` rows; mode 1: the path is the first field of each row.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sp (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells ar2 (new-cells)
+        ^Cells dc2 (new-cells)
+        ^Cells a2 (new-cells)
+        ^Cells b2 (new-cells)
+        ^Cells st2 (new-cells)
+        ^Cells cx2 (new-cells)
+        ^Cells ox2 (new-cells)
+        ^Cells cs2 (new-cells)
+        ^Cells out2 (new-cells)
+        ^Cells f02 (new-cells)
+        ^Cells f12 (new-cells)
+        ^Cells f22 (new-cells)
+        ^Cells f32 (new-cells)
+        ^Cells gl2 (new-cells)
+        ^Cells et2 (new-cells)
+        ^Cells sp2 (new-cells)
+        ^Cells pg2 (new-cells)
+        ^Cells wd2 (new-cells)
+        ^Cells ln2 (new-cells)
+        ^Cells ctr (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 files 0
+        ^:mut ^I32 maxr 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl rows pos))
+          (set s -1)
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (if (and (== mode 0) (and (== (blob-u8 rows pos) 70) (> (- e pos) 2)))
+                  (set s (+ pos 2)))
+                (if (== mode 1)
+                  (set s pos))))
+          (if (>= s 0)
+            (do (set q (ct-tab rows s e))
+                (set files (+ files 1))
+                (set s1 (ct-run (src-of-blob (test-file-span rows s q))
+                                ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+                (set s2 (ct-async (test-file-span rows s q) chunk ctr
+                                  ar2 dc2 a2 b2 st2 cx2 ox2 cs2 out2 f02 f12 f22 f32 gl2 et2 sp2 pg2 wd2 ln2))
+                (assert-eq-at s2 s1 "the kept attempt's status is the in-memory run's" line)
+                (assert-eq-at (ct-diff gl gl2) -1 "glyphs" line)
+                (assert-eq-at (ct-diff et et2) -1 "evidence text" line)
+                (assert-eq-at (ct-diff sp sp2) -1 "spans" line)
+                (assert-eq-at (ct-diff wd wd2) -1 "words" line)
+                (assert-eq-at (ct-diff ln ln2) -1 "lines" line)
+                (assert-eq-at (pc-warn cx2) (pc-warn cx) "warnings" line)
+                (assert-eq-at (cells-at ctr 1) 0 "a missed attempt answered only need-bytes" line)
+                (assert-that-at (<= (cells-at ctr 0) 24) "within 24 rounds" line)
+                (if (> (cells-at ctr 0) maxr) (set maxr (cells-at ctr 0)))))
+          (set pos (+ e 1))))
+    (return (+ (* files 100) maxr))))
+
+(deftest test-every-fixture-is-the-same-through-an-async-source-of-512-byte-chunks
+  (let [^I32 r (ct-async-rows (test-t) (test-file "content/rows.txt") 0 512)]
+    (assert-that (>= r 800) "eight files were run")))
+
+(deftest test-every-synthetic-document-is-the-same-through-an-async-source-of-512-byte-chunks
+  (let [^I32 r (ct-async-rows (test-t) (test-file "content/synth.txt") 0 512)]
+    (assert-that (>= r 3600) "thirty-six documents were run")
+    (assert-that (>= (rem r 100) 4) "the big ones took several rounds")))
+
+(deftest test-every-tagged-document-is-the-same-through-an-async-source-of-512-byte-chunks
+  (let [^I32 r (ct-async-rows (test-t) (test-file "content/tagged.txt") 0 512)]
+    (assert-that (>= r 300) "three documents were run")))
+
+(deftest test-the-three-fixtures-and-the-real-files-are-the-same-through-an-async-source-of-512-byte-chunks
+  (let [^I32 r1 (ct-async-rows (test-t) (test-file "content/evidence.txt") 1 512)
+        ^I32 r2 (ct-async-rows (test-t) (test-file "content/real.txt") 1 512)]
+    (assert-that (>= r1 300) "the three fixtures were run")
+    (assert-that (>= r2 1000) "the real files were run")))
+
+;; ---------------------------------------------------------------- real files
+
+(defn ^I32 ct-count-page [^Cells gl ^I32 page]
+  (let [^I32 n (gl-count gl)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 c 0]
+    (while (< g n)
+      (do (if (== (gl-get gl g (gf-page)) page) (set c (+ c 1)))
+          (set g (+ g 1))))
+    (return c)))
+
+(defn ^I32 ct-real-rows [^TestT emon-t ^Blob rows]
+  (comment "real.txt: `path page digest glyphs`. The file is one of corpus/ (not committed):")
+  (comment "the digest of the page's glyph stream and its glyph count are what emon made of it")
+  (comment "when pdfminer.six agreed, and must not change.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sp (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 t1 0
+        ^:mut ^I32 t2 0
+        ^:mut ^I32 t3 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 rowsn 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ct-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set t1 (ct-tab rows pos e))
+                (set t2 (ct-tab rows (+ t1 1) e))
+                (set t3 (ct-tab rows (+ t2 1) e))
+                (set page (ct-dec rows (+ t1 1) t2))
+                (set rowsn (+ rowsn 1))
+                (assert-eq-at (ct-run (src-of-blob (test-file-span rows pos t1))
+                                      ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+                              0 "the file ran" line)
+                (assert-eq-at (cr-digest gl et page) (ct-dec rows (+ t2 1) t3) "digest of the page's text" line)
+                (assert-eq-at (ct-count-page gl page) (ct-dec rows (+ t3 1) e) "glyphs on the page" line)))
+          (set pos (+ e 1))))
+    (return rowsn)))
+
+(deftest test-real-files-make-the-glyph-streams-pdfminer-agreed-with
+  (assert-that (> (ct-real-rows (test-t) (test-file "content/real.txt")) 100) "the real rows were read"))
+
+;; ---------------------------------------------------------- corrupted and cut
+
+(defn ^I32 ct-copy [^Blob b ^:mut ^Cells c]
+  (let [^I32 n (blob-len b)
+        ^:mut ^I32 i 0]
+    (cells-drop c 0)
+    (while (< i n)
+      (do (cells-push c (blob-u8 b i))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 ct-fuzz-file [^TestT emon-t ^Blob bytes ^I32 iters ^I32 cut-step]
+  (comment "Flip 1-6 random bytes `iters` times, and cut the file at every `cut-step` bytes; run each.")
+  (comment "Nothing is asserted but that no run faults, on any target, whatever it says.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sp (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells work (new-cells)
+        ^Cells rng (new-cells)
+        ^I32 n (blob-len bytes)
+        ^:mut ^I32 it 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 flips 0
+        ^:mut ^I32 cut 0
+        ^:mut ^I32 runs 0
+        ^:mut ^I32 at 0]
+    (sm-seed rng 4242)
+    (while (< it iters)
+      (do (ct-copy bytes work)
+          (set flips (+ 1 (sm-below rng 6)))
+          (set k 0)
+          (while (< k flips)
+            (do (set at (sm-below rng n))
+                (cells-set work at (sm-below rng 256))
+                (set k (+ k 1))))
+          (ct-run (src-of-cells work) ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+          (set runs (+ runs 1))
+          (set it (+ it 1))))
+    (set cut cut-step)
+    (while (< cut n)
+      (do (ct-copy bytes work)
+          (cells-drop work cut)
+          (ct-run (src-of-cells work) ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+          (set runs (+ runs 1))
+          (set cut (+ cut cut-step))))
+    (return runs)))
+
+(deftest test-corrupted-and-cut-files-never-fault
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "content/ops.pdf") 300 29) 300) "ops.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "content/marked.pdf") 300 31) 300) "marked.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "content/forms.pdf") 300 29) 300) "forms.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "content/fonts.pdf") 300 37) 300) "fonts.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "content/damaged.pdf") 300 29) 300) "damaged.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "pdf/html-chrome.pdf") 100 401) 100) "a Chrome file"))

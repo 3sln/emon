@@ -10,36 +10,56 @@ import (
 var fxAtan [16]int32 = [16]int32{4500000, 2656505, 1403624, 712502, 357633, 178991, 89517, 44761, 22381, 11191, 5595, 2798, 1399, 699, 350, 175}
 
 func FxOne() int64 {
-	return int64(65536)
+	return int64(16777216)
 }
 
 func FxOfInt(v int32) int64 {
 	// An integer as Fx.
-	return int64(v) * int64(65536)
+	return int64(v) * int64(16777216)
 }
 
 func FxClamp(v int64) int64 {
-	// Limit to +-2^44: what a matrix entry or a coordinate may hold.
-	if v > int64(17592186044416) {
-		return int64(17592186044416)
+	// Limit to +-2^50: what a matrix entry or a coordinate may hold.
+	if v > int64(1125899906842624) {
+		return int64(1125899906842624)
 	}
-	if v < int64(-17592186044416) {
-		return int64(-17592186044416)
+	if v < int64(-1125899906842624) {
+		return int64(-1125899906842624)
 	}
 	return v
 }
 
 func FxMul(a int64, b int64) int64 {
-	// a * b, rounded half away from zero.
-	var p int64 = a * b
-	if p >= int64(0) {
-		return (p + int64(32768)) / int64(65536)
+	// a * b, rounded half away from zero. The product of two Fx does not fit an I64 (a
+	// coordinate of 2^45 times a scale of 2^28), so the second factor is split in two
+	// halves of twelve bits: a*b / 2^24 = (a*bh) / 2^12 + (a*bl) / 2^24, the first
+	// kept whole and its remainder carried into the second before the rounding.
+	var x int64 = a
+	var y int64 = b
+	var neg int32 = 0
+	if x < int64(0) {
+		x = int64(0) - x
+		neg = 1
 	}
-	return int64(0) - (((int64(0) - p) + int64(32768)) / int64(65536))
+	if y < int64(0) {
+		y = int64(0) - y
+		neg = 1 - neg
+	}
+	var bh int64 = y / int64(4096)
+	var bl int64 = y - (bh * int64(4096))
+	var q1 int64 = x * bh
+	var q2 int64 = x * bl
+	var q1h int64 = q1 / int64(4096)
+	var q1l int64 = q1 - (q1h * int64(4096))
+	var res int64 = q1h + ((((q1l * int64(4096)) + q2) + int64(8388608)) / int64(16777216))
+	if neg == 1 {
+		return int64(0) - res
+	}
+	return res
 }
 
 func FxMuldiv(a int64, b int64, c int64) int64 {
-	// a * b / c (all plain integers, or all Fx), rounded half away from zero;
+	// a * b / c (a and b plain integers, or one of them an Fx), rounded half away from zero;
 	// 0 when c is 0.
 	var p int64 = a * b
 	var ap int64 = p
@@ -66,7 +86,7 @@ func FxMuldiv(a int64, b int64, c int64) int64 {
 
 func FxDiv(a int64, b int64) int64 {
 	// a / b as Fx; 0 when b is 0.
-	return FxMuldiv(a, int64(65536), b)
+	return FxMuldiv(a, int64(16777216), b)
 }
 
 func fxPow10(n int32) int64 {
@@ -82,17 +102,17 @@ func fxPow10(n int32) int64 {
 func FxOfReal(mant int32, scale int32) int64 {
 	// The real mant / 10^scale (`emon.pdflex`'s mantissa and count of
 	// fractional digits) as Fx, rounded.
-	return FxMuldiv(int64(mant), int64(65536), fxPow10(scale))
+	return FxMuldiv(int64(mant), int64(16777216), fxPow10(scale))
 }
 
 func FxRound(v int64) int32 {
 	// Fx to the nearest integer (half up), saturating to +-(2^31-1).
-	var s int64 = v + int64(32768)
+	var s int64 = v + int64(8388608)
 	var q int64 = int64(0)
 	if s >= int64(0) {
-		q = s / int64(65536)
+		q = s / int64(16777216)
 	} else {
-		q = int64(0) - (((int64(0) - s) + int64(65535)) / int64(65536))
+		q = int64(0) - (((int64(0) - s) + int64(16777215)) / int64(16777216))
 	}
 	if q > int64(2147483647) {
 		return 2147483647
@@ -107,9 +127,9 @@ func FxFloor(v int64) int32 {
 	// Fx to the integer below it, saturating as `fx-round` does.
 	var q int64 = int64(0)
 	if v >= int64(0) {
-		q = v / int64(65536)
+		q = v / int64(16777216)
 	} else {
-		q = int64(0) - (((int64(0) - v) + int64(65535)) / int64(65536))
+		q = int64(0) - (((int64(0) - v) + int64(16777215)) / int64(16777216))
 	}
 	if q > int64(2147483647) {
 		return 2147483647
@@ -152,15 +172,15 @@ func FxIsqrt(v int64) int64 {
 }
 
 func FxSqrt(v int64) int64 {
-	// sqrt of an Fx as Fx: isqrt(v * 65536), or isqrt(v) * 256 when v is
+	// sqrt of an Fx as Fx: isqrt(v * 2^24), or isqrt(v) * 2^12 when v is
 	// too large for the product.
 	if v <= int64(0) {
 		return int64(0)
 	}
-	if v > int64(140737488355328) {
-		return FxIsqrt(v) * int64(256)
+	if v > int64(549755813888) {
+		return FxIsqrt(v) * int64(4096)
 	}
-	return FxIsqrt(v * int64(65536))
+	return FxIsqrt(v * int64(16777216))
 }
 
 func FxHypot(x int64, y int64) int64 {
@@ -299,9 +319,9 @@ func fxCordic(cdeg int32, which int32) int64 {
 		cy = ny
 		i += 1
 	}
-	// 2^30 to 2^16, rounded half away from zero.
-	c = FxMuldiv(cx, int64(1), int64(16384))
-	sn = FxMuldiv(cy, int64(1), int64(16384))
+	// 2^30 to 2^24, rounded half away from zero.
+	c = FxMuldiv(cx, int64(1), int64(64))
+	sn = FxMuldiv(cy, int64(1), int64(64))
 	if q == 0 {
 		if which == 0 {
 			return c
@@ -380,7 +400,7 @@ func MxSet(c *port.Cells, o int32, a int64, b int64, cc int64, d int64, e int64,
 }
 
 func MxIdent(c *port.Cells, o int32) int32 {
-	return MxSet(c, o, int64(65536), int64(0), int64(0), int64(65536), int64(0), int64(0))
+	return MxSet(c, o, FxOne(), int64(0), int64(0), FxOne(), int64(0), int64(0))
 }
 
 func MxCopy(c *port.Cells, dst int32, src int32) int32 {
@@ -422,5 +442,5 @@ func MxY(c *port.Cells, o int32, px int64, py int64) int64 {
 
 func MxTranslate(c *port.Cells, o int32, tx int64, ty int64) int32 {
 	// Set the matrix at o to a translation.
-	return MxSet(c, o, int64(65536), int64(0), int64(0), int64(65536), tx, ty)
+	return MxSet(c, o, FxOne(), int64(0), int64(0), FxOne(), tx, ty)
 }

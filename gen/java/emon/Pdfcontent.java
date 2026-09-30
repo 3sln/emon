@@ -76,8 +76,8 @@ public final class Pdfcontent {
     public static final int C_FLIM = 597;
     public static final int C_INTEXT = 598;
     public static final int C_GSBASE = 599;
-    public static final int C_SSTAT = 602;
-    public static final int C_TOK = 601;
+    public static final int C_SSTAT = 633;
+    public static final int C_TOK = 632;
     public static final int C_FSTACK = 600;
     public static final int MAX_FORMS = 32;
     public static final int C_CSTACK = 640;
@@ -612,7 +612,7 @@ public final class Pdfcontent {
         Fx.mxCopy(cx, C_CUR + G_CTM, C_BASE);
         Fx.fxPut(cx, C_CUR + G_TC, (long) 0);
         Fx.fxPut(cx, C_CUR + G_TW, (long) 0);
-        Fx.fxPut(cx, C_CUR + G_TH, (long) 65536);
+        Fx.fxPut(cx, C_CUR + G_TH, Fx.fxOne());
         Fx.fxPut(cx, C_CUR + G_TL, (long) 0);
         Fx.fxPut(cx, C_CUR + G_RISE, (long) 0);
         Fx.fxPut(cx, C_CUR + G_FS, (long) 0);
@@ -627,8 +627,8 @@ public final class Pdfcontent {
         // The matrix from user space (points) to page space (centipoints, y down,
         // the crop box's corner at the origin, /Rotate applied). x0..y1 are the crop
         // box in centipoints.
-        long h = (long) 6553600;
-        long nh = (long) -6553600;
+        long h = (long) 1677721600;
+        long nh = (long) -1677721600;
         if (rot == 90) {
             Fx.mxSet(cx, C_BASE, (long) 0, h, h, (long) 0, Fx.fxOfInt(0 - y0), Fx.fxOfInt(0 - x0));
         }
@@ -732,7 +732,7 @@ public final class Pdfcontent {
         long o1 = pcNum(ox, n, 1);
         long o2 = pcNum(ox, n, 2);
         long o3 = pcNum(ox, n, 3);
-        long one = (long) 65536;
+        long one = Fx.fxOne();
         if (n == 1) {
             int gy = pcByte(o0);
             emon.Port.cellsSet(cx, C_CUR + G_COLOR, pcRgb(gy, gy, gy));
@@ -1097,6 +1097,13 @@ public final class Pdfcontent {
         }
         if (cnt > 0) {
             cp0 = pcFCp(f0, f1, f2, f3, slot, 0);
+        }
+        // A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value
+        // for (Skia does, for the parts of a Devanagari conjunct): that is no value.
+        if ((cnt == 1) && ((cp0 == 0) || (cp0 == 65533))) {
+            cnt = 0;
+            cp0 = -1;
+            how = 5;
         }
         if (w < 0) {
             w = 50000;
@@ -2179,7 +2186,7 @@ public final class Pdfcontent {
     }
     public static int pcRotGap(emon.Port.Cells gl, int p, int g, int size) {
         // For text at an arbitrary angle: the distance between glyph p's centre and
-        // glyph g's, along the writing direction, less 55 percent of the size (the
+        // glyph g's, along the writing direction, less 60 percent of the size (the
         // two half-advances of adjacent letters), so it reads as `pc-gap` does.
         int rot = Evidence.glGet(gl, p, Evidence.gfRot());
         long ux = Fx.fxCos(rot);
@@ -2187,7 +2194,7 @@ public final class Pdfcontent {
         int dx2 = (Evidence.glGet(gl, g, Evidence.gfX0()) + Evidence.glGet(gl, g, Evidence.gfX1())) - (Evidence.glGet(gl, p, Evidence.gfX0()) + Evidence.glGet(gl, p, Evidence.gfX1()));
         int dy2 = (Evidence.glGet(gl, g, Evidence.gfY0()) + Evidence.glGet(gl, g, Evidence.gfY1())) - (Evidence.glGet(gl, p, Evidence.gfY0()) + Evidence.glGet(gl, p, Evidence.gfY1()));
         long al2 = Fx.fxMul(Fx.fxOfInt(dx2), ux) + Fx.fxMul(Fx.fxOfInt(dy2), uy);
-        return Fx.fxRound(al2 / ((long) 2)) - ((size * 550) / 1000);
+        return Fx.fxRound(al2 / ((long) 2)) - ((size * 600) / 1000);
     }
     public static int pcRotOff(emon.Port.Cells gl, int p, int g) {
         // The distance between the two glyphs' centres across the writing direction.
@@ -2287,23 +2294,76 @@ public final class Pdfcontent {
         }
         return 1;
     }
+    public static int pcCls(int cp) {
+        // A code point's strength for reordering right-to-left text: 1 strong right-to-left
+        // (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right
+        // letter or a digit (Arabic-Indic digits are digits: they run left to right inside
+        // right-to-left text), 0 neutral (punctuation, symbols, what has no value).
+        if (cp < 33) {
+            return 0;
+        }
+        if (((cp >= 48) && (cp <= 57)) || (((cp >= 1632) && (cp <= 1641)) || ((cp >= 1776) && (cp <= 1785)))) {
+            return 2;
+        }
+        if (((cp >= 1424) && (cp <= 2303)) || (((cp >= 64285) && (cp <= 65023)) || ((cp >= 65136) && (cp <= 65279)))) {
+            return 1;
+        }
+        if (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
+            return 2;
+        }
+        if ((cp >= 192) && ((cp < 8192) && (cp != 215))) {
+            return 2;
+        }
+        if ((cp >= 12352) && (cp < 65000)) {
+            return 2;
+        }
+        return 0;
+    }
+    public static int pcGcls(emon.Port.Cells gl, int j) {
+        return pcCls(Evidence.glGet(gl, j, Evidence.gfCp()));
+    }
+    public static int pcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j) {
+        // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
+        int ts = Evidence.glGet(gl, j, Evidence.gfTstart());
+        int tl = Evidence.glGet(gl, j, Evidence.gfTlen());
+        int cp = Evidence.glGet(gl, j, Evidence.gfCp());
+        int k = 0;
+        int cpv = 0;
+        if ((ts >= 0) && (tl > 0)) {
+            while (k < tl) {
+                cpv = emon.Port.cellsAt(et, ts + k);
+                Evidence.etxAppendCp(et, cpv);
+                k += 1;
+            }
+            return 0;
+        }
+        if (cp >= 0) {
+            Evidence.etxAppendCp(et, cp);
+        } else {
+            Evidence.etxAppendCp(et, 65533);
+        }
+        return 0;
+    }
     public static int pcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, int page, int gfst, int glst) {
-        // Record glyphs [first, last] as a word: the union of their boxes, their text
-        // (a glyph of unknown value is U+FFFD), the dominant font and size of the
-        // first, and `hidden-text` as its source when every glyph is render mode 3.
+        // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
+        // dominant font and size of the first, and `hidden-text` as its source when every
+        // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
+        // page (visual order, as Skia and most producers write them) has its TEXT written in
+        // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
+        // turned back. The glyphs themselves stay as they were shown.
         int x0 = Evidence.glGet(gl, gfst, Evidence.gfX0());
         int y0 = Evidence.glGet(gl, gfst, Evidence.gfY0());
         int x1 = Evidence.glGet(gl, gfst, Evidence.gfX1());
         int y1 = Evidence.glGet(gl, gfst, Evidence.gfY1());
         int j = gfst;
         int tstart = -1;
-        int k = 0;
-        int ts = 0;
-        int tl = 0;
         int visible = 0;
-        int cpv = 0;
-        int cp = 0;
-        tstart = emon.Port.cellsLen(et);
+        int nr = 0;
+        int nl = 0;
+        int cl = 0;
+        int rtlw = 0;
+        int kk = 0;
+        int m = 0;
         while (j <= glst) {
             if (Evidence.glGet(gl, j, Evidence.gfX0()) < x0) {
                 x0 = Evidence.glGet(gl, j, Evidence.gfX0());
@@ -2320,22 +2380,48 @@ public final class Pdfcontent {
             if (Evidence.glGet(gl, j, Evidence.gfMode()) != 3) {
                 visible = 1;
             }
-            ts = Evidence.glGet(gl, j, Evidence.gfTstart());
-            tl = Evidence.glGet(gl, j, Evidence.gfTlen());
-            cp = Evidence.glGet(gl, j, Evidence.gfCp());
-            if ((ts >= 0) && (tl > 0)) {
-                k = 0;
-                while (k < tl) {
-                    cpv = emon.Port.cellsAt(et, ts + k);
-                    Evidence.etxAppendCp(et, cpv);
-                    k += 1;
-                }
-            } else if (cp >= 0) {
-                Evidence.etxAppendCp(et, cp);
-            } else {
-                Evidence.etxAppendCp(et, 65533);
+            cl = pcGcls(gl, j);
+            if (cl == 1) {
+                nr += 1;
+            }
+            if (cl == 2) {
+                nl += 1;
             }
             j += 1;
+        }
+        if ((nr > nl) && (glst > gfst)) {
+            if (pcAxis(Evidence.glGet(gl, gfst, Evidence.gfRot())) == 0) {
+                if (Evidence.glGet(gl, glst, Evidence.gfX0()) >= Evidence.glGet(gl, gfst, Evidence.gfX0())) {
+                    rtlw = 1;
+                }
+            }
+        }
+        tstart = emon.Port.cellsLen(et);
+        if (rtlw == 0) {
+            j = gfst;
+            while (j <= glst) {
+                pcGlyphOut(et, gl, j);
+                j += 1;
+            }
+        } else {
+            j = glst;
+            while (j >= gfst) {
+                if (pcGcls(gl, j) == 2) {
+                    kk = j;
+                    while ((kk > gfst) && (pcGcls(gl, kk - 1) == 2)) {
+                        kk -= 1;
+                    }
+                    m = kk;
+                    while (m <= j) {
+                        pcGlyphOut(et, gl, m);
+                        m += 1;
+                    }
+                    j = kk - 1;
+                } else {
+                    pcGlyphOut(et, gl, j);
+                    j -= 1;
+                }
+            }
         }
         int w = Evidence.wdNew(wd, page, x0, y0, x1, y1, gfst, (glst - gfst) + 1);
         Evidence.wdSet(wd, w, Evidence.wfTstart(), tstart);
@@ -2351,6 +2437,128 @@ public final class Pdfcontent {
             j += 1;
         }
         return w;
+    }
+    public static int pcSwapRows(emon.Port.Cells wd, int i, int j) {
+        int k = 0;
+        int u = 0;
+        int v = 0;
+        while (k < 16) {
+            u = emon.Port.cellsAt(wd, (i * 16) + k);
+            v = emon.Port.cellsAt(wd, (j * 16) + k);
+            emon.Port.cellsSet(wd, (i * 16) + k, v);
+            emon.Port.cellsSet(wd, (j * 16) + k, u);
+            k += 1;
+        }
+        return 0;
+    }
+    public static int pcRevRows(emon.Port.Cells wd, int a, int b) {
+        int i = a;
+        int j = b;
+        while (i < j) {
+            pcSwapRows(wd, i, j);
+            i += 1;
+            j -= 1;
+        }
+        return 0;
+    }
+    public static int pcWcls(emon.Port.Cells gl, emon.Port.Cells wd, int w) {
+        // 2 when the word has more left-to-right letters and digits than right-to-left letters.
+        int g0 = Evidence.wdGet(wd, w, Evidence.wfGfirst());
+        int gn = Evidence.wdGet(wd, w, Evidence.wfGcount());
+        int j = 0;
+        int nr = 0;
+        int nl = 0;
+        int cl = 0;
+        while (j < gn) {
+            cl = pcGcls(gl, g0 + j);
+            if (cl == 1) {
+                nr += 1;
+            }
+            if (cl == 2) {
+                nl += 1;
+            }
+            j += 1;
+        }
+        if (nr > nl) {
+            return 1;
+        }
+        return 2;
+    }
+    public static int pcLineBidi(emon.Port.Cells gl, emon.Port.Cells wd, emon.Port.Cells ln, int lidx, int wfst, int wlst) {
+        // Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than
+        // left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on
+        // the page, their ORDER is made logical: reversed, with runs of left-to-right words
+        // turned back; each word's glyphs are re-pointed at it and its gap is the space to
+        // the word that follows it in that order.
+        int w = wfst;
+        int nr = 0;
+        int nl = 0;
+        int j = 0;
+        int cl = 0;
+        int a = 0;
+        int z = 0;
+        int g0 = 0;
+        int gn = 0;
+        while (w <= wlst) {
+            g0 = Evidence.wdGet(wd, w, Evidence.wfGfirst());
+            gn = Evidence.wdGet(wd, w, Evidence.wfGcount());
+            j = 0;
+            while (j < gn) {
+                cl = pcGcls(gl, g0 + j);
+                if (cl == 1) {
+                    nr += 1;
+                }
+                if (cl == 2) {
+                    nl += 1;
+                }
+                j += 1;
+            }
+            w += 1;
+        }
+        if (nr <= nl) {
+            return 0;
+        }
+        Evidence.lnSet(ln, lidx, Evidence.lfDir(), Evidence.ldRtl());
+        if (pcAxis(Evidence.glGet(gl, Evidence.wdGet(wd, wfst, Evidence.wfGfirst()), Evidence.gfRot())) != 0) {
+            return 0;
+        }
+        if (Evidence.wdGet(wd, wlst, Evidence.wfX0()) < Evidence.wdGet(wd, wfst, Evidence.wfX0())) {
+            return 0;
+        }
+        if (wfst == wlst) {
+            return 0;
+        }
+        pcRevRows(wd, wfst, wlst);
+        a = wfst;
+        while (a <= wlst) {
+            if (pcWcls(gl, wd, a) == 2) {
+                z = a;
+                while ((z < wlst) && (pcWcls(gl, wd, z + 1) == 2)) {
+                    z += 1;
+                }
+                pcRevRows(wd, a, z);
+                a = z + 1;
+            } else {
+                a += 1;
+            }
+        }
+        w = wfst;
+        while (w <= wlst) {
+            g0 = Evidence.wdGet(wd, w, Evidence.wfGfirst());
+            gn = Evidence.wdGet(wd, w, Evidence.wfGcount());
+            j = 0;
+            while (j < gn) {
+                Evidence.glSet(gl, g0 + j, Evidence.gfWord(), w);
+                j += 1;
+            }
+            z = -1;
+            if (w < wlst) {
+                z = Evidence.wdGet(wd, w, Evidence.wfX0()) - Evidence.wdGet(wd, w + 1, Evidence.wfX1());
+            }
+            Evidence.wdSet(wd, w, Evidence.wfGap(), z);
+            w += 1;
+        }
+        return 0;
     }
     public static int pcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, int page, int g0, int w0) {
         // Group the glyphs from g0 on into words, and the words from w0 on into lines.
@@ -2455,6 +2663,7 @@ public final class Pdfcontent {
                     axis = pcAxis(Evidence.glGet(gl, gfp, Evidence.gfRot()));
                     lnx = Evidence.lnNew(ln, page, x0, y0, x1, y1, lfirst, (prev - lfirst) + 1, pcOffset(gl, gfp, axis));
                     Evidence.lnSet(ln, lnx, Evidence.lfRot(), Evidence.glGet(gl, gfp, Evidence.gfRot()));
+                    pcLineBidi(gl, wd, ln, lnx, lfirst, prev);
                     gfp = lfirst;
                     while (gfp <= prev) {
                         Evidence.wdSet(wd, gfp, Evidence.wfLine(), lnx);

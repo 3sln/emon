@@ -81,8 +81,8 @@ pub(crate) const C_CURART: i32 = 596;
 pub(crate) const C_FLIM: i32 = 597;
 pub(crate) const C_INTEXT: i32 = 598;
 pub(crate) const C_GSBASE: i32 = 599;
-pub(crate) const C_SSTAT: i32 = 602;
-pub(crate) const C_TOK: i32 = 601;
+pub(crate) const C_SSTAT: i32 = 633;
+pub(crate) const C_TOK: i32 = 632;
 pub(crate) const C_FSTACK: i32 = 600;
 pub(crate) const MAX_FORMS: i32 = 32;
 pub(crate) const C_CSTACK: i32 = 640;
@@ -617,7 +617,7 @@ pub(crate) fn pc_gs_reset(mut cx: &mut crate::port::Cells) -> i32 {
     mx_copy(cx, C_CUR + G_CTM, C_BASE);
     fx_put(cx, C_CUR + G_TC, 0 as i64);
     fx_put(cx, C_CUR + G_TW, 0 as i64);
-    fx_put(cx, C_CUR + G_TH, 65536 as i64);
+    fx_put(cx, C_CUR + G_TH, fx_one());
     fx_put(cx, C_CUR + G_TL, 0 as i64);
     fx_put(cx, C_CUR + G_RISE, 0 as i64);
     fx_put(cx, C_CUR + G_FS, 0 as i64);
@@ -632,8 +632,8 @@ pub(crate) fn pc_base_matrix(mut cx: &mut crate::port::Cells, x0: i32, y0: i32, 
     // The matrix from user space (points) to page space (centipoints, y down,
     // the crop box's corner at the origin, /Rotate applied). x0..y1 are the crop
     // box in centipoints.
-    let h: i64 = 6553600 as i64;
-    let nh: i64 = -6553600 as i64;
+    let h: i64 = 1677721600 as i64;
+    let nh: i64 = -1677721600 as i64;
     if rot == 90 {
         mx_set(cx, C_BASE, 0 as i64, h, h, 0 as i64, fx_of_int(0 - y0), fx_of_int(0 - x0));
     }
@@ -737,7 +737,7 @@ pub(crate) fn pc_set_color(mut cx: &mut crate::port::Cells, ox: &mut crate::port
     let o1: i64 = pc_num(ox, n, 1);
     let o2: i64 = pc_num(ox, n, 2);
     let o3: i64 = pc_num(ox, n, 3);
-    let one: i64 = 65536 as i64;
+    let one: i64 = fx_one();
     if n == 1 {
         let gy: i32 = pc_byte(o0);
         crate::port::cells_set(cx, C_CUR + G_COLOR, pc_rgb(gy, gy, gy));
@@ -1102,6 +1102,13 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
     }
     if cnt > 0 {
         cp0 = pc_f_cp(f0, f1, f2, f3, slot, 0);
+    }
+    // A composite font's ToUnicode may say U+0000 or U+FFFD for a glyph it has no value
+    // for (Skia does, for the parts of a Devanagari conjunct): that is no value.
+    if (cnt == 1) && ((cp0 == 0) || (cp0 == 65533)) {
+        cnt = 0;
+        cp0 = -1;
+        how = 5;
     }
     if w < 0 {
         w = 50000;
@@ -2184,7 +2191,7 @@ pub(crate) fn pc_gap(gl: &mut crate::port::Cells, p: i32, g: i32, axis: i32) -> 
 }
 pub(crate) fn pc_rot_gap(gl: &mut crate::port::Cells, p: i32, g: i32, size: i32) -> i32 {
     // For text at an arbitrary angle: the distance between glyph p's centre and
-    // glyph g's, along the writing direction, less 55 percent of the size (the
+    // glyph g's, along the writing direction, less 60 percent of the size (the
     // two half-advances of adjacent letters), so it reads as `pc-gap` does.
     let rot: i32 = gl_get(gl, p, gf_rot());
     let ux: i64 = fx_cos(rot);
@@ -2192,7 +2199,7 @@ pub(crate) fn pc_rot_gap(gl: &mut crate::port::Cells, p: i32, g: i32, size: i32)
     let dx2: i32 = (gl_get(gl, g, gf_x0()) + gl_get(gl, g, gf_x1())) - (gl_get(gl, p, gf_x0()) + gl_get(gl, p, gf_x1()));
     let dy2: i32 = (gl_get(gl, g, gf_y0()) + gl_get(gl, g, gf_y1())) - (gl_get(gl, p, gf_y0()) + gl_get(gl, p, gf_y1()));
     let al2: i64 = (fx_mul(fx_of_int(dx2), ux)).wrapping_add(fx_mul(fx_of_int(dy2), uy));
-    return fx_round(al2 / (2 as i64)) - ((size * 550) / 1000);
+    return fx_round(al2 / (2 as i64)) - ((size * 600) / 1000);
 }
 pub(crate) fn pc_rot_off(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     // The distance between the two glyphs' centres across the writing direction.
@@ -2292,23 +2299,76 @@ pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     }
     return 1;
 }
+pub(crate) fn pc_cls(cp: i32) -> i32 {
+    // A code point's strength for reordering right-to-left text: 1 strong right-to-left
+    // (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right
+    // letter or a digit (Arabic-Indic digits are digits: they run left to right inside
+    // right-to-left text), 0 neutral (punctuation, symbols, what has no value).
+    if cp < 33 {
+        return 0;
+    }
+    if ((cp >= 48) && (cp <= 57)) || (((cp >= 1632) && (cp <= 1641)) || ((cp >= 1776) && (cp <= 1785))) {
+        return 2;
+    }
+    if ((cp >= 1424) && (cp <= 2303)) || (((cp >= 64285) && (cp <= 65023)) || ((cp >= 65136) && (cp <= 65279))) {
+        return 1;
+    }
+    if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+        return 2;
+    }
+    if (cp >= 192) && ((cp < 8192) && (cp != 215)) {
+        return 2;
+    }
+    if (cp >= 12352) && (cp < 65000) {
+        return 2;
+    }
+    return 0;
+}
+pub(crate) fn pc_gcls(gl: &mut crate::port::Cells, j: i32) -> i32 {
+    return pc_cls(gl_get(gl, j, gf_cp()));
+}
+pub(crate) fn pc_glyph_out(mut et: &mut crate::port::Cells, gl: &mut crate::port::Cells, j: i32) -> i32 {
+    // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
+    let ts: i32 = gl_get(gl, j, gf_tstart());
+    let tl: i32 = gl_get(gl, j, gf_tlen());
+    let cp: i32 = gl_get(gl, j, gf_cp());
+    let mut k: i32 = 0;
+    let mut cpv: i32 = 0;
+    if (ts >= 0) && (tl > 0) {
+        while k < tl {
+            cpv = crate::port::cells_at(et, ts + k);
+            etx_append_cp(et, cpv);
+            k += 1;
+        }
+        return 0;
+    }
+    if cp >= 0 {
+        etx_append_cp(et, cp);
+    } else {
+        etx_append_cp(et, 65533);
+    }
+    return 0;
+}
 pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, page: i32, gfst: i32, glst: i32) -> i32 {
-    // Record glyphs [first, last] as a word: the union of their boxes, their text
-    // (a glyph of unknown value is U+FFFD), the dominant font and size of the
-    // first, and `hidden-text` as its source when every glyph is render mode 3.
+    // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
+    // dominant font and size of the first, and `hidden-text` as its source when every
+    // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
+    // page (visual order, as Skia and most producers write them) has its TEXT written in
+    // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
+    // turned back. The glyphs themselves stay as they were shown.
     let mut x0: i32 = gl_get(gl, gfst, gf_x0());
     let mut y0: i32 = gl_get(gl, gfst, gf_y0());
     let mut x1: i32 = gl_get(gl, gfst, gf_x1());
     let mut y1: i32 = gl_get(gl, gfst, gf_y1());
     let mut j: i32 = gfst;
     let mut tstart: i32 = -1;
-    let mut k: i32 = 0;
-    let mut ts: i32 = 0;
-    let mut tl: i32 = 0;
     let mut visible: i32 = 0;
-    let mut cpv: i32 = 0;
-    let mut cp: i32 = 0;
-    tstart = crate::port::cells_len(et);
+    let mut nr: i32 = 0;
+    let mut nl: i32 = 0;
+    let mut cl: i32 = 0;
+    let mut rtlw: i32 = 0;
+    let mut kk: i32 = 0;
+    let mut m: i32 = 0;
     while j <= glst {
         if gl_get(gl, j, gf_x0()) < x0 {
             x0 = gl_get(gl, j, gf_x0());
@@ -2325,22 +2385,48 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
         if gl_get(gl, j, gf_mode()) != 3 {
             visible = 1;
         }
-        ts = gl_get(gl, j, gf_tstart());
-        tl = gl_get(gl, j, gf_tlen());
-        cp = gl_get(gl, j, gf_cp());
-        if (ts >= 0) && (tl > 0) {
-            k = 0;
-            while k < tl {
-                cpv = crate::port::cells_at(et, ts + k);
-                etx_append_cp(et, cpv);
-                k += 1;
-            }
-        } else if cp >= 0 {
-            etx_append_cp(et, cp);
-        } else {
-            etx_append_cp(et, 65533);
+        cl = pc_gcls(gl, j);
+        if cl == 1 {
+            nr += 1;
+        }
+        if cl == 2 {
+            nl += 1;
         }
         j += 1;
+    }
+    if (nr > nl) && (glst > gfst) {
+        if pc_axis(gl_get(gl, gfst, gf_rot())) == 0 {
+            if gl_get(gl, glst, gf_x0()) >= gl_get(gl, gfst, gf_x0()) {
+                rtlw = 1;
+            }
+        }
+    }
+    tstart = crate::port::cells_len(et);
+    if rtlw == 0 {
+        j = gfst;
+        while j <= glst {
+            pc_glyph_out(et, gl, j);
+            j += 1;
+        }
+    } else {
+        j = glst;
+        while j >= gfst {
+            if pc_gcls(gl, j) == 2 {
+                kk = j;
+                while (kk > gfst) && (pc_gcls(gl, kk - 1) == 2) {
+                    kk -= 1;
+                }
+                m = kk;
+                while m <= j {
+                    pc_glyph_out(et, gl, m);
+                    m += 1;
+                }
+                j = kk - 1;
+            } else {
+                pc_glyph_out(et, gl, j);
+                j -= 1;
+            }
+        }
     }
     let w: i32 = wd_new(wd, page, x0, y0, x1, y1, gfst, (glst - gfst) + 1);
     wd_set(wd, w, wf_tstart(), tstart);
@@ -2356,6 +2442,128 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
         j += 1;
     }
     return w;
+}
+pub(crate) fn pc_swap_rows(mut wd: &mut crate::port::Cells, i: i32, j: i32) -> i32 {
+    let mut k: i32 = 0;
+    let mut u: i32 = 0;
+    let mut v: i32 = 0;
+    while k < 16 {
+        u = crate::port::cells_at(wd, (i * 16) + k);
+        v = crate::port::cells_at(wd, (j * 16) + k);
+        crate::port::cells_set(wd, (i * 16) + k, v);
+        crate::port::cells_set(wd, (j * 16) + k, u);
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn pc_rev_rows(mut wd: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    let mut i: i32 = a;
+    let mut j: i32 = b;
+    while i < j {
+        pc_swap_rows(wd, i, j);
+        i += 1;
+        j -= 1;
+    }
+    return 0;
+}
+pub(crate) fn pc_wcls(gl: &mut crate::port::Cells, wd: &mut crate::port::Cells, w: i32) -> i32 {
+    // 2 when the word has more left-to-right letters and digits than right-to-left letters.
+    let g0: i32 = wd_get(wd, w, wf_gfirst());
+    let gn: i32 = wd_get(wd, w, wf_gcount());
+    let mut j: i32 = 0;
+    let mut nr: i32 = 0;
+    let mut nl: i32 = 0;
+    let mut cl: i32 = 0;
+    while j < gn {
+        cl = pc_gcls(gl, g0 + j);
+        if cl == 1 {
+            nr += 1;
+        }
+        if cl == 2 {
+            nl += 1;
+        }
+        j += 1;
+    }
+    if nr > nl {
+        return 1;
+    }
+    return 2;
+}
+pub(crate) fn pc_line_bidi(mut gl: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, lidx: i32, wfst: i32, wlst: i32) -> i32 {
+    // Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than
+    // left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on
+    // the page, their ORDER is made logical: reversed, with runs of left-to-right words
+    // turned back; each word's glyphs are re-pointed at it and its gap is the space to
+    // the word that follows it in that order.
+    let mut w: i32 = wfst;
+    let mut nr: i32 = 0;
+    let mut nl: i32 = 0;
+    let mut j: i32 = 0;
+    let mut cl: i32 = 0;
+    let mut a: i32 = 0;
+    let mut z: i32 = 0;
+    let mut g0: i32 = 0;
+    let mut gn: i32 = 0;
+    while w <= wlst {
+        g0 = wd_get(wd, w, wf_gfirst());
+        gn = wd_get(wd, w, wf_gcount());
+        j = 0;
+        while j < gn {
+            cl = pc_gcls(gl, g0 + j);
+            if cl == 1 {
+                nr += 1;
+            }
+            if cl == 2 {
+                nl += 1;
+            }
+            j += 1;
+        }
+        w += 1;
+    }
+    if nr <= nl {
+        return 0;
+    }
+    ln_set(ln, lidx, lf_dir(), ld_rtl());
+    if pc_axis(gl_get(gl, wd_get(wd, wfst, wf_gfirst()), gf_rot())) != 0 {
+        return 0;
+    }
+    if wd_get(wd, wlst, wf_x0()) < wd_get(wd, wfst, wf_x0()) {
+        return 0;
+    }
+    if wfst == wlst {
+        return 0;
+    }
+    pc_rev_rows(wd, wfst, wlst);
+    a = wfst;
+    while a <= wlst {
+        if pc_wcls(gl, wd, a) == 2 {
+            z = a;
+            while (z < wlst) && (pc_wcls(gl, wd, z + 1) == 2) {
+                z += 1;
+            }
+            pc_rev_rows(wd, a, z);
+            a = z + 1;
+        } else {
+            a += 1;
+        }
+    }
+    w = wfst;
+    while w <= wlst {
+        g0 = wd_get(wd, w, wf_gfirst());
+        gn = wd_get(wd, w, wf_gcount());
+        j = 0;
+        while j < gn {
+            gl_set(gl, g0 + j, gf_word(), w);
+            j += 1;
+        }
+        z = -1;
+        if w < wlst {
+            z = wd_get(wd, w, wf_x0()) - wd_get(wd, w + 1, wf_x1());
+        }
+        wd_set(wd, w, wf_gap(), z);
+        w += 1;
+    }
+    return 0;
 }
 pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, page: i32, g0: i32, w0: i32) -> i32 {
     // Group the glyphs from g0 on into words, and the words from w0 on into lines.
@@ -2460,6 +2668,7 @@ pub fn pc_group(mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells
                 axis = pc_axis(gl_get(gl, gfp, gf_rot()));
                 lnx = ln_new(ln, page, x0, y0, x1, y1, lfirst, (prev - lfirst) + 1, pc_offset(gl, gfp, axis));
                 ln_set(ln, lnx, lf_rot(), gl_get(gl, gfp, gf_rot()));
+                pc_line_bidi(gl, wd, ln, lnx, lfirst, prev);
                 gfp = lfirst;
                 while gfp <= prev {
                     wd_set(wd, gfp, wf_line(), lnx);

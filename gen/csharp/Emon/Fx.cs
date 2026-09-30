@@ -6,32 +6,52 @@ namespace emon;
 public static class Fx {
     internal static readonly int[] FxAtan = new int[] {4500000, 2656505, 1403624, 712502, 357633, 178991, 89517, 44761, 22381, 11191, 5595, 2798, 1399, 699, 350, 175};
     public static long FxOne() {
-        return (long) 65536;
+        return (long) 16777216;
     }
     public static long FxOfInt(int v) {
         // An integer as Fx.
-        return unchecked(((long) v) * ((long) 65536));
+        return unchecked(((long) v) * ((long) 16777216));
     }
     public static long FxClamp(long v) {
-        // Limit to +-2^44: what a matrix entry or a coordinate may hold.
-        if (v > ((long) 17592186044416)) {
-            return (long) 17592186044416;
+        // Limit to +-2^50: what a matrix entry or a coordinate may hold.
+        if (v > ((long) 1125899906842624)) {
+            return (long) 1125899906842624;
         }
-        if (v < ((long) -17592186044416)) {
-            return (long) -17592186044416;
+        if (v < ((long) -1125899906842624)) {
+            return (long) -1125899906842624;
         }
         return v;
     }
     public static long FxMul(long a, long b) {
-        // a * b, rounded half away from zero.
-        long p = unchecked(a * b);
-        if (p >= ((long) 0)) {
-            return unchecked(p + ((long) 32768)) / ((long) 65536);
+        // a * b, rounded half away from zero. The product of two Fx does not fit an I64 (a
+        // coordinate of 2^45 times a scale of 2^28), so the second factor is split in two
+        // halves of twelve bits: a*b / 2^24 = (a*bh) / 2^12 + (a*bl) / 2^24, the first
+        // kept whole and its remainder carried into the second before the rounding.
+        long x = a;
+        long y = b;
+        int neg = 0;
+        if (x < ((long) 0)) {
+            x = ((long) 0) - x;
+            neg = 1;
         }
-        return ((long) 0) - (unchecked((((long) 0) - p) + ((long) 32768)) / ((long) 65536));
+        if (y < ((long) 0)) {
+            y = ((long) 0) - y;
+            neg = 1 - neg;
+        }
+        long bh = y / ((long) 4096);
+        long bl = y - unchecked(bh * ((long) 4096));
+        long q1 = unchecked(x * bh);
+        long q2 = unchecked(x * bl);
+        long q1h = q1 / ((long) 4096);
+        long q1l = q1 - unchecked(q1h * ((long) 4096));
+        long res = unchecked(q1h + (unchecked(unchecked(unchecked(q1l * ((long) 4096)) + q2) + ((long) 8388608)) / ((long) 16777216)));
+        if (neg == 1) {
+            return ((long) 0) - res;
+        }
+        return res;
     }
     public static long FxMuldiv(long a, long b, long c) {
-        // a * b / c (all plain integers, or all Fx), rounded half away from zero;
+        // a * b / c (a and b plain integers, or one of them an Fx), rounded half away from zero;
         // 0 when c is 0.
         long p = unchecked(a * b);
         long ap = p;
@@ -57,7 +77,7 @@ public static class Fx {
     }
     public static long FxDiv(long a, long b) {
         // a / b as Fx; 0 when b is 0.
-        return FxMuldiv(a, (long) 65536, b);
+        return FxMuldiv(a, (long) 16777216, b);
     }
     internal static long FxPow10(int n) {
         long p = (long) 1;
@@ -71,16 +91,16 @@ public static class Fx {
     public static long FxOfReal(int mant, int scale) {
         // The real mant / 10^scale (`emon.pdflex`'s mantissa and count of
         // fractional digits) as Fx, rounded.
-        return FxMuldiv((long) mant, (long) 65536, FxPow10(scale));
+        return FxMuldiv((long) mant, (long) 16777216, FxPow10(scale));
     }
     public static int FxRound(long v) {
         // Fx to the nearest integer (half up), saturating to +-(2^31-1).
-        long s = unchecked(v + ((long) 32768));
+        long s = unchecked(v + ((long) 8388608));
         long q = (long) 0;
         if (s >= ((long) 0)) {
-            q = s / ((long) 65536);
+            q = s / ((long) 16777216);
         } else {
-            q = ((long) 0) - (unchecked((((long) 0) - s) + ((long) 65535)) / ((long) 65536));
+            q = ((long) 0) - (unchecked((((long) 0) - s) + ((long) 16777215)) / ((long) 16777216));
         }
         if (q > ((long) 2147483647)) {
             return 2147483647;
@@ -94,9 +114,9 @@ public static class Fx {
         // Fx to the integer below it, saturating as `fx-round` does.
         long q = (long) 0;
         if (v >= ((long) 0)) {
-            q = v / ((long) 65536);
+            q = v / ((long) 16777216);
         } else {
-            q = ((long) 0) - (unchecked((((long) 0) - v) + ((long) 65535)) / ((long) 65536));
+            q = ((long) 0) - (unchecked((((long) 0) - v) + ((long) 16777215)) / ((long) 16777216));
         }
         if (q > ((long) 2147483647)) {
             return 2147483647;
@@ -136,15 +156,15 @@ public static class Fx {
         return root;
     }
     public static long FxSqrt(long v) {
-        // sqrt of an Fx as Fx: isqrt(v * 65536), or isqrt(v) * 256 when v is
+        // sqrt of an Fx as Fx: isqrt(v * 2^24), or isqrt(v) * 2^12 when v is
         // too large for the product.
         if (v <= ((long) 0)) {
             return (long) 0;
         }
-        if (v > ((long) 140737488355328)) {
-            return unchecked(FxIsqrt(v) * ((long) 256));
+        if (v > ((long) 549755813888)) {
+            return unchecked(FxIsqrt(v) * ((long) 4096));
         }
-        return FxIsqrt(unchecked(v * ((long) 65536)));
+        return FxIsqrt(unchecked(v * ((long) 16777216)));
     }
     public static long FxHypot(long x, long y) {
         // sqrt(x^2 + y^2) in the units of x and y, to about nine significant
@@ -280,9 +300,9 @@ public static class Fx {
             cy = ny;
             i += 1;
         }
-        // 2^30 to 2^16, rounded half away from zero.
-        c = FxMuldiv(cx, (long) 1, (long) 16384);
-        sn = FxMuldiv(cy, (long) 1, (long) 16384);
+        // 2^30 to 2^24, rounded half away from zero.
+        c = FxMuldiv(cx, (long) 1, (long) 64);
+        sn = FxMuldiv(cy, (long) 1, (long) 64);
         if (q == 0) {
             if (which == 0) {
                 return c;
@@ -351,7 +371,7 @@ public static class Fx {
         return 0;
     }
     public static int MxIdent(emon.Port.Cells c, int o) {
-        return MxSet(c, o, (long) 65536, (long) 0, (long) 0, (long) 65536, (long) 0, (long) 0);
+        return MxSet(c, o, FxOne(), (long) 0, (long) 0, FxOne(), (long) 0, (long) 0);
     }
     public static int MxCopy(emon.Port.Cells c, int dst, int src) {
         int i = 0;
@@ -388,6 +408,6 @@ public static class Fx {
     }
     public static int MxTranslate(emon.Port.Cells c, int o, long tx, long ty) {
         // Set the matrix at o to a translation.
-        return MxSet(c, o, (long) 65536, (long) 0, (long) 0, (long) 65536, tx, ty);
+        return MxSet(c, o, FxOne(), (long) 0, (long) 0, FxOne(), tx, ty);
     }
 }
