@@ -1,0 +1,169 @@
+#!/usr/bin/env bb
+;; The plan/fulfil protocol, end to end, recorded on one host and replayed on
+;; the other.   kin/scripts/plan     (DEVLOG P2.5, D089)
+;;
+;; THE SLICE ISSUES ZERO REQUESTS, so this is what exercises the protocol: the
+;; probe unit `emon.planprobe` asks for a render and a decode, then two OCRs, and
+;; writes evidence. Each host (Rust, Go) has a driver (`test/plan/*`) that runs it
+;; through that host's `plan` loop with a fake fulfiller or a transcript. A
+;; transcript is a directory: `transcript.edn` of records plus a lossless PNG per
+;; bitmap. What must hold:
+;;
+;;   1. RECORD on Rust, REPLAY on Go: identical stdout -- the evidence dump, a hash
+;;      per bitmap's pixels (the PNGs survived the trip) and a hash per transcript file.
+;;   2. A recording is DETERMINISTIC: sync or async-shaped (answers arriving in
+;;      reverse on Rust, on goroutines in a random order on Go), on either host, the
+;;      transcript directories are byte for byte the same.
+;;   3. `bytes` is the input and not an opinion: under a 512-byte async source the
+;;      unit misses, the loop fetches and re-runs (>= 1 fetch round), and the
+;;      transcript is still the same four entries, and the evidence the same.
+;;   4. `max-rounds` is a NAMED limit: with 1 the run stops with `max-rounds` on
+;;      both hosts, recording or replaying.
+;;   5. A replay never guesses: a changed request is `transcript-miss`, a missing
+;;      PNG is `transcript-bad`.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [shell process]]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def work (str (fs/create-temp-dir {:prefix "emon-plan."})))
+(.addShutdownHook (Runtime/getRuntime)
+                  (Thread. (fn [] (fs/delete-tree work))))
+
+(defn exec [dir & cmd]
+  (let [r @(apply process {:dir dir :out :string :err :string} cmd)]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+;; ------------------------------------------------------------------ builds
+
+(defn build-rust []
+  (let [d (str work "/rust")]
+    (fs/create-dirs (str d "/emon"))
+    (doseq [f (fs/glob "gen/rust/emon" "*.rs")] (fs/copy f (str d "/emon/" (fs/file-name f))))
+    (doseq [f ["port.rs" "testport.rs" "plan.rs"]] (fs/copy (str "host/rust/src/" f) (str d "/" f)))
+    (spit (str d "/emon.rs")
+          (apply str (for [f (sort (map fs/file-name (fs/glob "gen/rust/emon" "*.rs")))]
+                       (str "pub mod " (str/replace f #"\.rs$" "") ";\n"))))
+    (fs/copy "test/plan/rust/main.rs" (str d "/main.rs"))
+    (let [r (exec d "rustc" "--edition" "2021" "-O" "-A" "warnings" "-o" "prog" "main.rs")]
+      (if (zero? (:exit r))
+        (str d "/prog")
+        (do (bad "rust driver did not build:\n" (:err r)) nil)))))
+
+(defn build-go []
+  (let [d (str work "/go")]
+    (fs/copy-tree "gen/go" d)
+    (fs/create-dirs (str d "/port"))
+    (doseq [f (fs/glob "host/go/port" "*.go")] (fs/copy f (str d "/port/" (fs/file-name f))))
+    (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")
+    (fs/copy "test/plan/go/main.go" (str d "/main.go"))
+    (let [r (exec d "go" "build" "-o" "prog" ".")]
+      (if (zero? (:exit r))
+        (str d "/prog")
+        (do (bad "go driver did not build:\n" (:err r)) nil)))))
+
+(def rust (if (fs/which "rustc") (build-rust) (do (println "  SKIP rust   -- rustc not on PATH") nil)))
+(def go (if (fs/which "go") (build-go) (do (println "  SKIP go     -- go not on PATH") nil)))
+
+(defn drive [prog & args]
+  (let [r (apply exec work prog args)]
+    (assoc r :out (str/trim (:out r)))))
+
+(defn dir-files
+  "{name bytes-as-string-of-hex} of a directory, for comparing."
+  [d]
+  (into (sorted-map)
+        (for [f (fs/list-dir d)]
+          [(fs/file-name f) (vec (fs/read-all-bytes f))])))
+
+(defn fresh [name] (str work "/t-" name))
+
+(when (and rust go)
+  ;; 1. record on Rust, replay on Go -------------------------------------------
+  (let [t (fresh "rust")
+        rec (drive rust "record" t)]
+    (check (zero? (:exit rec)) "rust records the probe to a transcript (" (count (dir-files t)) " files)")
+    (let [files (dir-files t)
+          edn (String. (byte-array (get files "transcript.edn")))]
+      (check (and (= 3 (count files))
+                  (= 4 (count (re-seq #"\{:round" edn)))
+                  (not (str/includes? edn ":bytes")))
+             "the transcript holds four entries (render, decode, two OCRs), two PNGs and no `bytes`")
+      (check (str/includes? (:out rec) "\"ocrwords\":[{")
+             "the evidence carries the OCR words the fake answered"))
+    (let [rep-go (drive go "replay" t)
+          rep-rs (drive rust "replay" t)]
+      (check (and (zero? (:exit rep-go)) (= (:out rec) (:out rep-go)))
+             "GO REPLAYS RUST'S TRANSCRIPT: evidence, bitmap hashes and file hashes identical ("
+             (count (:out rec)) " bytes of dump)")
+      (check (and (zero? (:exit rep-rs)) (= (:out rec) (:out rep-rs)))
+             "rust replays its own transcript to the same dump"))
+
+    ;; 2. a recording is deterministic ---------------------------------------
+    (let [ra (fresh "rust-async") g (fresh "go") ga (fresh "go-async")
+          r1 (drive rust "record" ra "--async")
+          r2 (drive go "record" g)
+          r3 (drive go "record" ga "--async")
+          want (dir-files t)]
+      (check (and (zero? (:exit r1)) (= want (dir-files ra)) (= (:out rec) (:out r1)))
+             "rust, answers arriving in reverse: the same transcript, byte for byte")
+      (check (and (zero? (:exit r2)) (= want (dir-files g)) (= (:out rec) (:out r2)))
+             "go records the same transcript as rust, byte for byte (PNGs included)")
+      (check (and (zero? (:exit r3)) (= want (dir-files ga)) (= (:out rec) (:out r3)))
+             "go, answers on goroutines in any order: the same transcript"))
+
+    ;; 3. bytes requests: never transcribed, never a round -------------------
+    (doseq [[name prog] [["rust" rust] ["go" go]]]
+      (let [r (drive prog "replay" t "--chunk=512")
+            fetched (re-find #"fetch-rounds=(\d+)" (:err r))
+            rounds (re-find #"rounds=(\d+) " (:err r))
+            c (fresh (str name "-chunked"))
+            rc (drive prog "record" c "--chunk=512")]
+        (check (and (zero? (:exit r)) (= (:out rec) (:out r))
+                    (some-> fetched second parse-long pos?)
+                    (= "2" (second rounds)))
+               name " replay over an async 512-byte source: same dump, "
+               (second fetched) " fetch round(s), 2 max-rounds rounds")
+        (check (and (zero? (:exit rc)) (= (dir-files t) (dir-files c)))
+               name " recording over an async source writes the same transcript (no `bytes`)")))
+
+    ;; 4. max-rounds is a named limit ----------------------------------------
+    (doseq [[name prog] [["rust" rust] ["go" go]]]
+      (let [r1 (drive prog "record" (fresh (str name "-max")) "--max-rounds=1")
+            r2 (drive prog "replay" t "--max-rounds=1")
+            r3 (drive prog "replay" t "--max-rounds=2")]
+        (check (and (= 3 (:exit r1)) (= "error: max-rounds" (:out r1))
+                    (str/includes? (:err r1) "the limit is 1 and this run reached 2"))
+               name " record with max-rounds 1: stopped by the named limit `max-rounds`")
+        (check (and (= 3 (:exit r2)) (= "error: max-rounds" (:out r2)))
+               name " replay with max-rounds 1: the same named limit")
+        (check (zero? (:exit r3)) name " max-rounds 2 is enough for the probe's two rounds")))
+
+    ;; 5. a replay never guesses ---------------------------------------------
+    (let [edn (slurp (str t "/transcript.edn"))
+          tam (fresh "tampered")]
+      (fs/create-dirs tam)
+      (doseq [f (fs/list-dir t)] (fs/copy f (str tam "/" (fs/file-name f))))
+      (check (str/includes? edn "[12 3 3 1 6 ") "the OCR request is where the tamper expects it")
+      (spit (str tam "/transcript.edn") (str/replace-first edn "[12 3 3 1 6 " "[12 3 3 1 7 "))
+      (let [nop (fresh "nopng")]
+        (fs/create-dirs nop)
+        (doseq [f (fs/list-dir t)] (fs/copy f (str nop "/" (fs/file-name f))))
+        (fs/delete (str nop "/bitmap-0000.png"))
+        (doseq [[name prog] [["rust" rust] ["go" go]]]
+          (let [r (drive prog "replay" tam)
+                p (drive prog "replay" nop)]
+            (check (and (= 3 (:exit r)) (= "error: transcript-miss" (:out r)))
+                   name " replay of a changed request: transcript-miss, nothing guessed")
+            (check (and (= 3 (:exit p)) (= "error: transcript-bad" (:out p)))
+                   name " replay with a bitmap file missing: transcript-bad")))))))
+
+(when (pos? @fails) (System/exit 1))
+(when (and rust go (zero? @fails))
+  (ok "the plan/fulfil protocol: one transcript, recorded on Rust, replayed on Go, one evidence dump"))

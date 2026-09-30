@@ -1,0 +1,116 @@
+;; The plan/fulfil PROBE (P2.5, D089): a fake unit that exercises the protocol
+;; end to end, because the slice itself issues zero requests.
+;;
+;; `pp-unit` is what a real unit will look like, in miniature. It reads a `Src`
+;; (so an async source makes it answer `us-need-bytes`), and asks for
+;;
+;;   round 0   render  id 1  input 0 page 0 at 300 dpi, with text
+;;             decode  id 2  input 1, bytes 0..64, no filter          (one round, two requests)
+;;   round 1   ocr     id 3  the render's bitmap, psm 6, "eng"+"deu", the whole bitmap
+;;             ocr     id 4  the decode's bitmap, psm 3, "eng", a region    (they need the bitmaps)
+;;
+;; and, once every answer is in, writes EVIDENCE: an image placement per
+;; bitmap (page 1 the render, page 2 the decode; the box is the bitmap's size
+;; at its resolution, in centipoints; `obj` carries a byte read from the `Src`,
+;; so the dump shows that a re-run after a miss read the true byte) and an OCR
+;; word per answered word, its box converted from bitmap pixels to centipoints
+;; and its text in `etext`. A failed answer contributes nothing. The host loop
+;; runs it by `us-requests` until it answers `us-done`; the evidence is what
+;; the gate compares across hosts, recorded on one and replayed on another.
+;;
+;; THE UNIT MUST BE PURE: it restarts from `ev-init` every attempt and reads
+;; only its `Src` and the answers, so a discarded attempt (a miss) leaves no
+;; trace, and a replay sees what the recording saw.
+(ns emon.planprobe
+  (:require [emon.lang :refer [I32 Cells Src]]
+            [emon.port :refer [src-len src-u8 src-missed]]
+            [emon.plan :refer [us-done us-requests us-need-bytes lay-full flt-none
+                               rq-render rq-decode rq-ocr rq-ocr-lang rq-ocr-end
+                               an-find an-ok an-arg an-ocr-count an-ocr-first
+                               aw-get aw-cp aw-next aw-x aw-y aw-w aw-h aw-conf
+                               aw-line aw-block aw-len]]
+            [emon.evidence :refer [ev-init im-new ow-new ow-set etx-append-cp etx-len
+                                   of-tstart of-tlen of-line of-block]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 pp-words [^Cells an ^I32 at ^I32 page ^I32 dpi100
+                     ^:mut ^Cells ocrwords ^:mut ^Cells etext]
+  (comment "One OCR answer's words as OCR evidence on `page`; `dpi100` is the")
+  (comment "resolution (x100) of the bitmap the boxes are in.")
+  (let [^I32 nw (an-ocr-count an at)
+        ^:mut ^I32 w (an-ocr-first an at)
+        ^:mut ^I32 i 0]
+    (while (< i nw)
+      (do (let [^I32 x0 (quot (* (aw-get an w (aw-x)) 720000) dpi100)
+                ^I32 y0 (quot (* (aw-get an w (aw-y)) 720000) dpi100)
+                ^I32 x1 (quot (* (+ (aw-get an w (aw-x)) (aw-get an w (aw-w))) 720000) dpi100)
+                ^I32 y1 (quot (* (+ (aw-get an w (aw-y)) (aw-get an w (aw-h))) 720000) dpi100)
+                ^I32 ow (ow-new ocrwords page x0 y0 x1 y1 (aw-get an w (aw-conf)))
+                ^I32 ts (etx-len etext)
+                ^I32 nc (aw-get an w (aw-len))
+                ^:mut ^I32 k 0]
+            (while (< k nc)
+              (do (etx-append-cp etext (aw-cp an w k))
+                  (set k (+ k 1))))
+            (ow-set ocrwords ow (of-tstart) ts)
+            (ow-set ocrwords ow (of-tlen) nc)
+            (ow-set ocrwords ow (of-line) (aw-get an w (aw-line)))
+            (ow-set ocrwords ow (of-block) (aw-get an w (aw-block))))
+          (set w (aw-next an w))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pp-unit [^Src s ^Cells an ^:mut ^Cells rq
+                          ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                          ^:mut ^Cells paths ^:mut ^Cells images
+                          ^:mut ^Cells components ^:mut ^Cells ocrwords
+                          ^:mut ^Cells alts ^:mut ^Cells etext]
+  (comment "One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.")
+  (ev-init glyphs words lines paths images components ocrwords alts etext)
+  (let [^I32 n (src-len s)
+        ^I32 mid (src-u8 s (quot n 2))
+        ^I32 tail (src-u8 s (- n 1))]
+    (if (src-missed s) (return (us-need-bytes)))
+    (let [^I32 r1 (an-find an 1)
+          ^I32 r2 (an-find an 2)
+          ^:mut ^I32 asked 0]
+      (if (< r1 0)
+        (do (rq-render rq 1 0 0 300 (lay-full))
+            (set asked 1)))
+      (if (< r2 0)
+        (do (rq-decode rq 2 1 0 64 (flt-none) 0)
+            (set asked 1)))
+      (if (== asked 1) (return (us-requests)))
+      (let [^I32 o3 (an-find an 3)
+            ^I32 o4 (an-find an 4)]
+        (if (and (== (an-ok an r1) 1) (< o3 0))
+          (let [^I32 q3 (rq-ocr rq 3 1 6 0 0 0 0 0)]
+            (rq-ocr-lang rq 101 110 103 0)
+            (rq-ocr-lang rq 100 101 117 0)
+            (rq-ocr-end rq q3)
+            (set asked 1)))
+        (if (and (== (an-ok an r2) 1) (< o4 0))
+          (let [^I32 q4 (rq-ocr rq 4 2 3 0 10 20 30 40)]
+            (rq-ocr-lang rq 101 110 103 0)
+            (rq-ocr-end rq q4)
+            (set asked 1)))
+        (if (== asked 1) (return (us-requests)))
+        (comment "Every answer is in: the evidence.")
+        (if (== (an-ok an r1) 1)
+          (let [^I32 w1 (an-arg an r1 0)
+                ^I32 h1 (an-arg an r1 1)
+                ^:mut ^I32 dd1 (* (an-arg an r1 3) 100)]
+            (if (< dd1 1) (set dd1 7200))
+            (im-new images 1 0 0 (quot (* w1 720000) dd1) (quot (* h1 720000) dd1) mid w1 h1)
+            (if (== (an-ok an o3) 1)
+              (pp-words an o3 1 dd1 ocrwords etext))))
+        (if (== (an-ok an r2) 1)
+          (let [^I32 w2 (an-arg an r2 0)
+                ^I32 h2 (an-arg an r2 1)
+                ^:mut ^I32 dd2 (an-arg an r2 3)]
+            (if (< dd2 1) (set dd2 7200))
+            (im-new images 2 0 0 (quot (* w2 720000) dd2) (quot (* h2 720000) dd2) tail w2 h2)
+            (if (== (an-ok an o4) 1)
+              (pp-words an o4 2 dd2 ocrwords etext)))))))
+  (return (us-done)))

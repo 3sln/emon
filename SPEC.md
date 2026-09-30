@@ -731,6 +731,15 @@ serializable for free. Consequences, each of which is the point:
    round. Rounds are bounded by a limit and terminate because each round
    asks only about regions the previous round flagged.
 
+**Records and transcripts** (D089-D091): a request is `[len kind id args...]`
+and an answer `[len kind id status args...]` in a `Cells` (layouts in
+`kin/plan.kin`: render, decode, ocr, bytes); ids are kin's; render and decode
+name their input by index. A transcript is a directory: `transcript.edn`
+(entries in (round, id) order, each the whole request record and its answer)
+plus one lossless PNG per bitmap. Replay looks a request up by its whole record
+and answers `transcript-miss` rather than guess. `max-rounds` and `fetch-rounds`
+are named limits of the host loop.
+
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.
 

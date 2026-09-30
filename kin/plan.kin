@@ -1,0 +1,331 @@
+;; The plan/fulfil protocol's record layouts (P2.5; SPEC 7.3, D008, D058 revised,
+;; D074, D075, D089). emon's own module (D039).
+;;
+;; kin NEVER CALLS `Renderer`, `ImageDecode` or `Ocr`. A unit that wants one
+;; writes a REQUEST into a `Cells` and answers `us-requests`; the host fulfils
+;; it (concurrently, awaiting, however it likes), appends an ANSWER to the
+;; answers `Cells`, and RE-RUNS the unit from scratch on everything answered so
+;; far. The set of answers of one run is the TRANSCRIPT (`transcript.edn` and
+;; PNGs, written by the hosts, D089). A record is a run of `I32`s in a `Cells`;
+;; a `Cells` of records is a run of records back to back, each LENGTH-PREFIXED:
+;;
+;;   request   [len kind id  arg0 arg1 ...]          args start at cell 3
+;;   answer    [len kind id status  arg0 arg1 ...]   args start at cell 4
+;;
+;; `len` counts the whole record, itself included, so the next record starts at
+;; `at + len`. `id` is chosen by kin, positive, and unique among the requests of
+;; one unit; an answer carries the id (and kind) of the request it answers, which
+;; is how kin finds it (`rec-find`). A transcript is keyed by the whole request
+;; record, id included, so a unit must derive its ids deterministically from
+;; what it is asking about (a page number, a counter) and nothing else.
+;;
+;; THE KINDS (`pk`). `render`, `decode` and `ocr` are the host's opinions and are
+;; transcribed. `bytes` is the D058 re-run loop asking a byte source for a range
+;; it missed: the HOST makes `bytes` requests (kin only answers `us-need-bytes`),
+;; they are NEVER written to a transcript (they are the input, not an opinion)
+;; and never count against `max-rounds`; the layout is here so that the four
+;; hosts spell it alike.
+;;
+;;   render  args  input page dpi layer          (`lay`: 0 with text, 1 without, 2 text only)
+;;   decode  args  input offset length filter frame   (filter `flt`; 0 = the bytes are a whole image file)
+;;   ocr     args  bitmap psm flags x y w h lang...   (bitmap = the id of the render/decode request
+;;                 whose bitmap to read; w = 0 means the whole bitmap; flags bit 1 = symbol
+;;                 alternatives; each lang is up to four ASCII chars packed big-endian, "eng")
+;;   bytes   args  input offset length
+;;
+;;   render answer  status w h channels dpi        (pixels are the host's; the bitmap's handle
+;;                                                   is the answer's id; channels 1 gray or 3 RGB)
+;;   decode answer  status w h channels dpi100 bilevel frames   (dpi x100, 0 unknown)
+;;   ocr answer     status nwords word...          (boxes in the REQUEST BITMAP's pixels,
+;;                                                  confidence x10, text as code points)
+;;       word       x y w h conf line block len cp...   (8 cells, then `len` code points)
+;;   bytes answer   status offset length           (the bytes go to the host's cache, not to kin)
+;;
+;; A request that fails answers `ps-failed` (or `ps-unsupported`) with no args
+;; beyond the header: a failure is an answer too, and is transcribed, so a replay
+;; reproduces it. A MISSING answer is not a failure: it means "not asked yet".
+;;
+;; UNIT STATUSES (`us`). A unit answers `us-done` (0; it asked for nothing),
+;; `us-requests` (1; the requests are in the `Cells`, answer them and re-run) or
+;; `us-need-bytes` (7, the number D075 gave `pd-status`; its attempt, requests
+;; included, is DISCARDED, the host fetches what the `Src` missed and re-runs).
+;; Anything else is the unit's own error and is the host's to report.
+(ns emon.plan
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- the tables
+;; Codes are assigned once and never reused (D050).
+
+(defn ^:pub ^I32 pk-render [] (return 1))
+(defn ^:pub ^I32 pk-decode [] (return 2))
+(defn ^:pub ^I32 pk-ocr [] (return 3))
+(defn ^:pub ^I32 pk-bytes [] (return 4))
+
+(defn ^:pub ^I32 ps-ok [] (return 0))
+(defn ^:pub ^I32 ps-failed [] (return 1))
+(defn ^:pub ^I32 ps-unsupported [] (return 2))
+
+(defn ^:pub ^I32 us-done [] (return 0))
+(defn ^:pub ^I32 us-requests [] (return 1))
+(defn ^:pub ^I32 us-need-bytes [] (return 7))
+
+;; Render layers (SPEC 7.2: with text, without text, text only).
+(defn ^:pub ^I32 lay-full [] (return 0))
+(defn ^:pub ^I32 lay-no-text [] (return 1))
+(defn ^:pub ^I32 lay-text-only [] (return 2))
+
+;; `decode`'s filter: what the requested span is encoded as (PDF image filters).
+(defn ^:pub ^I32 flt-none [] (return 0))
+(defn ^:pub ^I32 flt-dct [] (return 1))
+(defn ^:pub ^I32 flt-jpx [] (return 2))
+(defn ^:pub ^I32 flt-jbig2 [] (return 3))
+(defn ^:pub ^I32 flt-ccitt [] (return 4))
+
+;; OCR request flags.
+(defn ^:pub ^I32 ocr-symbols [] (return 1))
+
+;; An OCR word's fields.
+(defn ^:pub ^I32 aw-x [] (return 0))
+(defn ^:pub ^I32 aw-y [] (return 1))
+(defn ^:pub ^I32 aw-w [] (return 2))
+(defn ^:pub ^I32 aw-h [] (return 3))
+(defn ^:pub ^I32 aw-conf [] (return 4))
+(defn ^:pub ^I32 aw-line [] (return 5))
+(defn ^:pub ^I32 aw-block [] (return 6))
+(defn ^:pub ^I32 aw-len [] (return 7))
+
+;; ------------------------------------------------------ records, generic
+
+(defn ^:pub ^I32 rec-len [^Cells c ^I32 at] (return (cells-at c at)))
+(defn ^:pub ^I32 rec-kind [^Cells c ^I32 at] (return (cells-at c (+ at 1))))
+(defn ^:pub ^I32 rec-id [^Cells c ^I32 at] (return (cells-at c (+ at 2))))
+(defn ^:pub ^I32 rec-next [^Cells c ^I32 at] (return (+ at (cells-at c at))))
+
+(defn ^:pub ^I32 rec-begin [^:mut ^Cells c ^I32 kind ^I32 id]
+  (comment "Start a record: push a placeholder length, the kind and the id.")
+  (comment "Answers its start. `rec-end` fills the length in.")
+  (let [^I32 at (cells-len c)]
+    (cells-push c 0)
+    (cells-push c kind)
+    (cells-push c id)
+    (return at)))
+
+(defn ^:pub ^I32 rec-end [^:mut ^Cells c ^I32 at]
+  (comment "Close the record that began at `at`; answers the next start.")
+  (let [^I32 end (cells-len c)
+        ^I32 n (- end at)]
+    (cells-set c at n)
+    (return end)))
+
+(defn ^:pub ^I32 rec-find [^Cells c ^I32 id]
+  (comment "The start of the record whose id is `id`, or -1. A malformed length")
+  (comment "(under 3) stops the walk: that is `rec-check`'s to report.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 hit -1]
+    (while (< at n)
+      (do (if (== (cells-at c (+ at 2)) id)
+            (do (set hit at)
+                (set at n))
+            (if (< (cells-at c at) 3)
+              (set at n)
+              (set at (+ at (cells-at c at)))))))
+    (return hit)))
+
+(defn ^:pub ^I32 rec-count [^Cells c]
+  (comment "How many records; -1 when the `Cells` is not a run of well-formed ones.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0]
+    (while (< at n)
+      (let [^I32 ln (cells-at c at)]
+        (if (< ln 3)
+          (do (set k -1) (set at (+ n 1)))
+          (do (set k (+ k 1))
+              (set at (+ at ln))))))
+    (if (> at n) (return -1))
+    (return k)))
+
+(defn ^:pub ^I32 rec-check [^Cells c ^I32 legal-lo ^I32 legal-hi]
+  (comment "0 when `c` is a run of well-formed records whose kinds are in")
+  (comment "[legal-lo, legal-hi] and whose ids are positive and unique; else")
+  (comment "1 malformed length, 2 kind out of range, 3 id not positive, 4 id repeated.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 bad 0]
+    (while (< at n)
+      (let [^I32 ln (cells-at c at)
+            ^I32 kind (cells-at c (+ at 1))
+            ^I32 id (cells-at c (+ at 2))]
+        (if (or (< ln 3) (> (+ at ln) n))
+          (do (set bad 1) (set at n))
+          (do (if (or (< kind legal-lo) (> kind legal-hi))
+                (do (set bad 2) (set at n)))
+              (if (< id 1)
+                (do (set bad 3) (set at n)))
+              (if (== bad 0)
+                (if (< (rec-find c id) at)
+                  (do (set bad 4) (set at n))
+                  (set at (+ at ln))))))))
+    (return bad)))
+
+;; ------------------------------------------------------------- requests
+
+(defn ^:pub ^I32 rq-arg [^Cells c ^I32 at ^I32 k] (return (cells-at c (+ (+ at 3) k))))
+(defn ^:pub ^I32 rq-nargs [^Cells c ^I32 at] (return (- (cells-at c at) 3)))
+
+(defn ^:pub ^I32 rq-render [^:mut ^Cells c ^I32 id ^I32 input ^I32 page ^I32 dpi ^I32 layer]
+  (comment "Ask for page `page` of input `input`, as displayed, at `dpi`, in `layer`.")
+  (let [^I32 at (rec-begin c (pk-render) id)]
+    (cells-push c input)
+    (cells-push c page)
+    (cells-push c dpi)
+    (cells-push c layer)
+    (rec-end c at)
+    (return at)))
+
+(defn ^:pub ^I32 rq-decode [^:mut ^Cells c ^I32 id ^I32 input ^I32 offset ^I32 length
+                            ^I32 filter ^I32 frame]
+  (comment "Ask for the image encoded in bytes [offset, offset+length) of input")
+  (comment "`input` (the host reads them from its own source), frame `frame`.")
+  (let [^I32 at (rec-begin c (pk-decode) id)]
+    (cells-push c input)
+    (cells-push c offset)
+    (cells-push c length)
+    (cells-push c filter)
+    (cells-push c frame)
+    (rec-end c at)
+    (return at)))
+
+(defn ^:pub ^I32 rq-ocr [^:mut ^Cells c ^I32 id ^I32 bitmap ^I32 psm ^I32 flags
+                         ^I32 x ^I32 y ^I32 w ^I32 h]
+  (comment "Ask for OCR of the bitmap of request `bitmap`. Add languages with")
+  (comment "`rq-ocr-lang` straight after, then close with `rq-ocr-end`.")
+  (let [^I32 at (rec-begin c (pk-ocr) id)]
+    (cells-push c bitmap)
+    (cells-push c psm)
+    (cells-push c flags)
+    (cells-push c x)
+    (cells-push c y)
+    (cells-push c w)
+    (cells-push c h)
+    (return at)))
+
+(defn ^:pub ^I32 rq-ocr-lang [^:mut ^Cells c ^I32 a ^I32 b ^I32 d ^I32 e]
+  (comment "Append a language: up to four ASCII chars, 0 for none (\"eng\" = e n g 0).")
+  (let [^I32 hi (+ (* a 256) b)
+        ^I32 lo (+ (* d 256) e)]
+    (cells-push c (+ (* hi 65536) lo))
+    (return 0)))
+
+(defn ^:pub ^I32 rq-ocr-end [^:mut ^Cells c ^I32 at]
+  (return (rec-end c at)))
+
+(defn ^:pub ^I32 rq-bytes [^:mut ^Cells c ^I32 id ^I32 input ^I32 offset ^I32 length]
+  (comment "The D058 re-run loop's request for a missed range. Made by the HOST.")
+  (let [^I32 at (rec-begin c (pk-bytes) id)]
+    (cells-push c input)
+    (cells-push c offset)
+    (cells-push c length)
+    (rec-end c at)
+    (return at)))
+
+;; --------------------------------------------------------------- answers
+
+(defn ^:pub ^I32 an-status [^Cells c ^I32 at] (return (cells-at c (+ at 3))))
+(defn ^:pub ^I32 an-arg [^Cells c ^I32 at ^I32 k] (return (cells-at c (+ (+ at 4) k))))
+
+(defn ^:pub ^I32 an-find [^Cells c ^I32 id]
+  (comment "The start of the answer to request `id`, or -1 (not asked yet).")
+  (return (rec-find c id)))
+
+(defn ^:pub ^I32 an-ok [^Cells c ^I32 at]
+  (comment "1 when the answer at `at` says ok.")
+  (if (== (cells-at c (+ at 3)) (ps-ok)) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 an-fail [^:mut ^Cells c ^I32 kind ^I32 id ^I32 status]
+  (comment "A failed answer: the header and nothing else.")
+  (let [^I32 at (rec-begin c kind id)]
+    (cells-push c status)
+    (rec-end c at)
+    (return at)))
+
+(defn ^:pub ^I32 an-render [^:mut ^Cells c ^I32 id ^I32 w ^I32 h ^I32 channels ^I32 dpi]
+  (let [^I32 at (rec-begin c (pk-render) id)]
+    (cells-push c (ps-ok))
+    (cells-push c w)
+    (cells-push c h)
+    (cells-push c channels)
+    (cells-push c dpi)
+    (rec-end c at)
+    (return at)))
+
+(defn ^:pub ^I32 an-decode [^:mut ^Cells c ^I32 id ^I32 w ^I32 h ^I32 channels
+                            ^I32 dpi100 ^I32 bilevel ^I32 frames]
+  (let [^I32 at (rec-begin c (pk-decode) id)]
+    (cells-push c (ps-ok))
+    (cells-push c w)
+    (cells-push c h)
+    (cells-push c channels)
+    (cells-push c dpi100)
+    (cells-push c bilevel)
+    (cells-push c frames)
+    (rec-end c at)
+    (return at)))
+
+(defn ^:pub ^I32 an-ocr [^:mut ^Cells c ^I32 id]
+  (comment "Start an OCR answer (ok, no words yet); add words with `an-ocr-word`")
+  (comment "and `an-ocr-cp`, close with `an-ocr-end`. Answers its start.")
+  (let [^I32 at (rec-begin c (pk-ocr) id)]
+    (cells-push c (ps-ok))
+    (cells-push c 0)
+    (return at)))
+
+(defn ^:pub ^I32 an-ocr-word [^:mut ^Cells c ^I32 at ^I32 x ^I32 y ^I32 w ^I32 h
+                              ^I32 conf ^I32 line ^I32 block]
+  (comment "Begin a word of the OCR answer at `at`; answers the word's start.")
+  (comment "Its code points follow, through `an-ocr-cp` (the LAST word only).")
+  (let [^I32 word (cells-len c)
+        ^I32 nwords (cells-at c (+ at 4))]
+    (cells-set c (+ at 4) (+ nwords 1))
+    (cells-push c x)
+    (cells-push c y)
+    (cells-push c w)
+    (cells-push c h)
+    (cells-push c conf)
+    (cells-push c line)
+    (cells-push c block)
+    (cells-push c 0)
+    (return word)))
+
+(defn ^:pub ^I32 an-ocr-cp [^:mut ^Cells c ^I32 word ^I32 cp]
+  (comment "Append a code point to the last word, which began at `word`.")
+  (let [^I32 n (cells-at c (+ word 7))]
+    (cells-set c (+ word 7) (+ n 1))
+    (cells-push c cp)
+    (return 0)))
+
+(defn ^:pub ^I32 an-ocr-end [^:mut ^Cells c ^I32 at]
+  (return (rec-end c at)))
+
+(defn ^:pub ^I32 an-bytes [^:mut ^Cells c ^I32 id ^I32 offset ^I32 length]
+  (let [^I32 at (rec-begin c (pk-bytes) id)]
+    (cells-push c (ps-ok))
+    (cells-push c offset)
+    (cells-push c length)
+    (rec-end c at)
+    (return at)))
+
+;; ---------------------------------------------------- reading OCR words
+
+(defn ^:pub ^I32 an-ocr-count [^Cells c ^I32 at] (return (cells-at c (+ at 4))))
+(defn ^:pub ^I32 an-ocr-first [^Cells c ^I32 at] (return (+ at 5)))
+
+(defn ^:pub ^I32 aw-get [^Cells c ^I32 word ^I32 f] (return (cells-at c (+ word f))))
+(defn ^:pub ^I32 aw-cp [^Cells c ^I32 word ^I32 k] (return (cells-at c (+ (+ word 8) k))))
+(defn ^:pub ^I32 aw-next [^Cells c ^I32 word]
+  (return (+ (+ word 8) (cells-at c (+ word 7)))))

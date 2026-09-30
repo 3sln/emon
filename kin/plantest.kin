@@ -1,0 +1,210 @@
+;; Laws for `emon.plan` (P2.5): every record layout, cell by cell; the record
+;; walkers and their refusals; and the probe unit driven by hand through its two
+;; rounds (the hosts drive it for real, `bb plan`).
+(ns emon.plantest
+  (:require [emon.lang :refer [I32 Blob Src Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text text-blob
+                               new-cells new-text]]
+            [emon.port :refer [cells-len cells-at cells-push cells-drop src-of-blob]]
+            [emon.plan :refer [pk-render pk-decode pk-ocr pk-bytes ps-ok ps-failed
+                               ps-unsupported us-done us-requests us-need-bytes
+                               lay-full lay-text-only flt-none flt-dct
+                               rec-len rec-kind rec-id rec-next rec-begin rec-end
+                               rec-find rec-count rec-check
+                               rq-arg rq-nargs rq-render rq-decode rq-ocr rq-ocr-lang
+                               rq-ocr-end rq-bytes
+                               an-status an-arg an-find an-ok an-fail an-render
+                               an-decode an-ocr an-ocr-word an-ocr-cp an-ocr-end
+                               an-bytes an-ocr-count an-ocr-first aw-get aw-cp aw-next
+                               aw-x aw-conf aw-len]]
+            [emon.planprobe :refer [pp-unit]]
+            [emon.evidence :refer [ev-emit ow-count im-count]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(deftest test-the-kinds-and-statuses-are-fixed
+  (assert-eq (pk-render) 1 "render")
+  (assert-eq (pk-decode) 2 "decode")
+  (assert-eq (pk-ocr) 3 "ocr")
+  (assert-eq (pk-bytes) 4 "bytes")
+  (assert-eq (ps-ok) 0 "ok")
+  (assert-eq (ps-failed) 1 "failed")
+  (assert-eq (ps-unsupported) 2 "unsupported")
+  (assert-eq (us-done) 0 "done")
+  (assert-eq (us-requests) 1 "requests")
+  (assert-eq (us-need-bytes) 7 "need-bytes is D075's 7"))
+
+(deftest test-a-render-request-is-seven-cells
+  (let [^Cells c (new-cells)]
+    (assert-eq (rq-render c 5 2 9 300 (lay-text-only)) 0 "starts at 0")
+    (assert-eq (cells-len c) 7 "length")
+    (assert-eq (cells-at c 0) 7 "len")
+    (assert-eq (cells-at c 1) 1 "kind")
+    (assert-eq (cells-at c 2) 5 "id")
+    (assert-eq (rq-arg c 0 0) 2 "input")
+    (assert-eq (rq-arg c 0 1) 9 "page")
+    (assert-eq (rq-arg c 0 2) 300 "dpi")
+    (assert-eq (rq-arg c 0 3) 2 "layer")
+    (assert-eq (rq-nargs c 0) 4 "four args")))
+
+(deftest test-a-decode-request-names-its-input-by-index-and-span
+  (let [^Cells c (new-cells)]
+    (rq-decode c 6 1 4096 512 (flt-dct) 2)
+    (assert-eq (cells-len c) 8 "length")
+    (assert-eq (rec-kind c 0) 2 "kind")
+    (assert-eq (rq-arg c 0 0) 1 "input")
+    (assert-eq (rq-arg c 0 1) 4096 "offset")
+    (assert-eq (rq-arg c 0 2) 512 "length")
+    (assert-eq (rq-arg c 0 3) 1 "filter")
+    (assert-eq (rq-arg c 0 4) 2 "frame")))
+
+(deftest test-an-ocr-request-carries-its-languages
+  (let [^Cells c (new-cells)
+        ^I32 at (rq-ocr c 7 3 6 1 10 20 30 40)]
+    (rq-ocr-lang c 101 110 103 0)
+    (rq-ocr-lang c 100 101 117 0)
+    (rq-ocr-end c at)
+    (assert-eq (rec-len c 0) 12 "ten cells and two languages")
+    (assert-eq (rec-kind c 0) 3 "kind")
+    (assert-eq (rq-arg c 0 0) 3 "bitmap")
+    (assert-eq (rq-arg c 0 1) 6 "psm")
+    (assert-eq (rq-arg c 0 2) 1 "flags")
+    (assert-eq (rq-arg c 0 6) 40 "region height")
+    (assert-eq (rq-arg c 0 7) 1701734144 "eng packed big-endian")
+    (assert-eq (rq-arg c 0 8) 1684370688 "deu packed big-endian")
+    (assert-eq (rq-nargs c 0) 9 "nine args")))
+
+(deftest test-a-bytes-request-is-a-span
+  (let [^Cells c (new-cells)]
+    (rq-bytes c 1 0 65536 131072)
+    (assert-eq (rec-len c 0) 6 "length")
+    (assert-eq (rec-kind c 0) 4 "kind")
+    (assert-eq (rq-arg c 0 1) 65536 "offset")
+    (assert-eq (rq-arg c 0 2) 131072 "length")))
+
+(deftest test-answers-carry-the-id-and-a-status
+  (let [^Cells c (new-cells)
+        ^I32 a1 (an-render c 1 612 792 1 300)
+        ^I32 a2 (an-fail c 2 2 1)
+        ^I32 a3 (an-decode c 3 32 16 3 7200 0 1)]
+    (assert-eq a1 0 "first at 0")
+    (assert-eq a2 8 "second after the render's eight cells")
+    (assert-eq a3 12 "third after the four-cell failure")
+    (assert-eq (an-status c a1) 0 "render ok")
+    (assert-eq (an-arg c a1 0) 612 "w")
+    (assert-eq (an-arg c a1 1) 792 "h")
+    (assert-eq (an-arg c a1 2) 1 "channels")
+    (assert-eq (an-arg c a1 3) 300 "dpi")
+    (assert-eq (an-status c a2) 1 "decode failed")
+    (assert-eq (an-ok c a2) 0 "not ok")
+    (assert-eq (rec-len c a2) 4 "a failure is the header and a status")
+    (assert-eq (an-arg c a3 3) 7200 "dpi x100")
+    (assert-eq (an-arg c a3 5) 1 "frames")
+    (assert-eq (rec-count c) 3 "three records")
+    (assert-eq (an-find c 2) a2 "found by id")
+    (assert-eq (an-find c 4) -1 "an unasked id is not found")
+    (assert-eq (rec-next c a1) a2 "walking")))
+
+(deftest test-an-ocr-answer-holds-words-with-their-text
+  (let [^Cells c (new-cells)
+        ^I32 at (an-ocr c 3)
+        ^I32 w0 (an-ocr-word c at 10 20 300 40 912 0 1)]
+    (an-ocr-cp c w0 72)
+    (an-ocr-cp c w0 105)
+    (let [^I32 w1 (an-ocr-word c at 400 20 50 40 870 0 1)]
+      (an-ocr-cp c w1 128512)
+      (an-ocr-end c at)
+      (assert-eq (an-ocr-count c at) 2 "two words")
+      (assert-eq (an-ocr-first c at) 5 "the first word follows the count")
+      (assert-eq (an-ocr-first c at) w0 "and is w0")
+      (assert-eq (aw-get c w0 (aw-x)) 10 "x")
+      (assert-eq (aw-get c w0 (aw-conf)) 912 "confidence x10")
+      (assert-eq (aw-get c w0 (aw-len)) 2 "two code points")
+      (assert-eq (aw-cp c w0 1) 105 "i")
+      (assert-eq (aw-next c w0) w1 "the next word")
+      (assert-eq (aw-cp c w1 0) 128512 "a code point outside the BMP is one cell")
+      (assert-eq (aw-next c w1) (cells-len c) "and the last ends the record")
+      (assert-eq (rec-len c at) (cells-len c) "the record's length covers them"))))
+
+(deftest test-a-record-walk-refuses-what-is-malformed
+  (let [^Cells c (new-cells)
+        ^Cells d (new-cells)
+        ^Cells e (new-cells)
+        ^Cells f (new-cells)]
+    (rq-render c 1 0 0 72 0)
+    (rq-render c 2 0 1 72 0)
+    (assert-eq (rec-check c 1 3) 0 "well formed")
+    (rq-render c 2 0 2 72 0)
+    (assert-eq (rec-check c 1 3) 4 "a repeated id")
+    (rq-bytes d 1 0 0 1)
+    (assert-eq (rec-check d 1 3) 2 "a bytes request is not one kin may make")
+    (assert-eq (rec-check d 1 4) 0 "though it is a record")
+    (rq-render e 0 0 0 72 0)
+    (assert-eq (rec-check e 1 3) 3 "an id of 0")
+    (cells-push f 9)
+    (cells-push f 1)
+    (cells-push f 1)
+    (assert-eq (rec-check f 1 3) 1 "a length past the end")
+    (assert-eq (rec-count f) -1 "is not a run of records")
+    (assert-eq (rec-count (new-cells)) 0 "nothing is zero records")
+    (assert-eq (rec-find (new-cells) 1) -1 "and finds nothing")))
+
+(deftest test-begin-and-end-make-any-record
+  (let [^Cells c (new-cells)
+        ^I32 at (rec-begin c 9 77)]
+    (cells-push c 1)
+    (cells-push c 2)
+    (assert-eq (rec-end c at) 5 "the next start")
+    (assert-eq (rec-len c 0) 5 "len")
+    (assert-eq (rec-kind c 0) 9 "kind")
+    (assert-eq (rec-id c 0) 77 "id")))
+
+;; ---------------------------------------------------------------- the probe
+
+(defn ^I32 pt-unit [^Src s ^Cells an ^:mut ^Cells rq ^:mut ^Cells etext ^:mut ^Text t]
+  (comment "Run the probe once over fresh arenas; with `us-done`, dump the evidence.")
+  (let [^Cells g (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells co (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells al (new-cells)
+        ^I32 st (pp-unit s an rq g wd ln pa im co ow al etext)]
+    (if (== st (us-done))
+      (ev-emit t 0 g wd ln pa im co ow al etext))
+    (return st)))
+
+(deftest test-the-probe-asks-in-two-rounds-and-then-writes-evidence
+  (let [^Src s (src-of-blob (text-blob "0123456789abcdef"))
+        ^Cells an (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells et (new-cells)
+        ^Text t (new-text)]
+    (assert-eq (pt-unit s an rq et t) 1 "round 0 asks")
+    (assert-eq (rec-count rq) 2 "for two things")
+    (assert-eq (rec-check rq 1 3) 0 "well formed")
+    (assert-eq (rec-id rq 0) 1 "the render is id 1")
+    (assert-eq (rec-kind rq 0) 1 "a render")
+    (let [^I32 second (rec-next rq 0)]
+      (assert-eq (rec-kind rq second) 2 "and a decode"))
+    (an-render an 1 64 48 1 300)
+    (an-decode an 2 32 16 3 7200 0 1)
+    (cells-drop rq 0)
+    (assert-eq (pt-unit s an rq et t) 1 "round 1 asks")
+    (assert-eq (rec-count rq) 2 "for two OCRs")
+    (assert-eq (rec-id rq 0) 3 "id 3")
+    (assert-eq (rq-arg rq 0 0) 1 "of the render's bitmap")
+    (let [^I32 second4 (rec-next rq 0)]
+      (assert-eq (rec-id rq second4) 4 "id 4")
+      (assert-eq (rq-arg rq second4 0) 2 "of the decode's bitmap"))
+    (let [^I32 o3 (an-ocr an 3)]
+      (let [^I32 w (an-ocr-word an o3 6 3 40 9 911 0 0)]
+        (an-ocr-cp an w 72)
+        (an-ocr-cp an w 105))
+      (an-ocr-end an o3))
+    (an-fail an 3 4 1)
+    (cells-drop rq 0)
+    (assert-eq (pt-unit s an rq et t) 0 "round 2 is done")
+    (assert-eq (cells-len rq) 0 "and asks for nothing")))

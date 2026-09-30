@@ -623,7 +623,7 @@ analysis beyond "top-to-bottom lines on a single column".
   library file names a filesystem type (D058).
 - [ ] **P2.4 — `bb repeat`**: run vs run, and pages submitted in reverse,
   byte-identical.
-- [ ] **P2.5 — The plan/fulfil protocol and transcript format** (D008):
+- [x] **P2.5 — The plan/fulfil protocol and transcript format** (D008, D089-D091):
   request/answer record layouts in `emon.plan` (render, decode, ocr; `bytes`
   issued by the D058 re-run loop, never transcribed, not counted in
   `max-rounds`; render/decode name the input
@@ -631,6 +631,27 @@ analysis beyond "top-to-bottom lines on a single column".
   loop in both hosts, transcript read/write (a directory: `transcript.edn` of
   records + lossless PNGs for bitmaps). Zero requests are issued by the
   slice; the protocol is exercised by a synthetic probe.
+  *Done 2026-09-30.* `kin/plan.kin` (`emon.plan`): length-prefixed records
+  `[len kind id args...]` / `[len kind id status args...]` for render, decode,
+  ocr and bytes, builders and readers, unit statuses (`us-done`, `us-requests`,
+  `us-need-bytes` = 7); `kin/planprobe.kin` (`pp-unit`: render + decode in round
+  0, two OCRs in round 1, then evidence); `kin/plantest.kin` (10 laws; 141 per arm
+  now). Host loops: `host/rust/src/plan.rs`, `host/go/port/plan.go` (`run` /
+  `PlanRun`: `Fulfiller` start/next for sync and async-shaped fulfilment, a
+  `Misses` hook for the D058 re-run, `Transcript`, `Replayer`, PNG and EDN codecs,
+  named limits `max-rounds` and `fetch-rounds`); probe drivers `test/plan/{rust,go}`;
+  `bb plan` (a gate, `kin/scripts/plan`, babashka): a transcript recorded on Rust
+  replays on Go with a byte-identical evidence dump, bitmap hashes and transcript
+  files; a recording is byte-identical sync or async on either host and across
+  hosts; under a 512-byte async source the unit misses, the loop fetches (1
+  round) and nothing of it reaches the transcript; `max-rounds` 1 stops both
+  hosts by name; a changed request is `transcript-miss`, a missing PNG
+  `transcript-bad`. Learnt: the kin-side units take `&mut Cells` in Rust even to
+  read (the `CellsRo` item in "Found in kin"), so the loop hands the unit
+  `&mut` answers; ids must come from what is asked, not a global counter.
+  Stored-block PNGs only (8.7 MB per gray 300-dpi A4 page; a compressed writer
+  is a P2.6 follow-up). `PlanBitmap` is provisional until P2.7's `Bitmap`.
+  Commit: pending (D037).
 - [ ] **P2.6 — Spike: OCR through the transcript.** Rust host binds
   Tesseract (C API), records one page's OCR into a transcript; kin reads the
   answer into `ocrwords` evidence; the Go host replays it and produces the
@@ -2534,4 +2555,79 @@ candidate, not fetched.
 real scans; text-bearing truth is synthesized.
 **Alternatives**: synthesize only (no real-world check); register for the
 login-gated sets (not reproducible by script).
+- [ ] **Signed off** (maintainer)
+
+### D089 — The plan/fulfil records: length-prefixed `Cells` runs, ids chosen by kin, `bytes` made by the host and never transcribed
+**Decision** (P2.5, D008, D058 revised). A request is `[len kind id args...]` and an
+answer `[len kind id status args...]` in a `Cells`, `len` counting the whole record.
+Kinds: render 1 (input page dpi layer), decode 2 (input offset length filter frame),
+ocr 3 (bitmap psm flags x y w h lang...; languages packed four ASCII chars to a cell),
+bytes 4 (input offset length). Render and decode name their input by INDEX and the
+host reads the bytes from its own source. A bitmap's handle is its answer's id (an
+OCR request names "the bitmap of request N"); kin never sees pixels, only `w h
+channels dpi` (and from P2.7 the `Bitmap` forms). OCR words are `x y w h conf line
+block len cp...` in the request bitmap's pixels, confidence x10. A failure is an
+answer (`failed`, `unsupported`) and is transcribed; a MISSING answer is "not asked
+yet". A unit answers `done` 0, `requests` 1 or `need-bytes` 7 (the number D075 gave
+`pd-status`); anything else is the unit's own error. A `need-bytes` attempt is
+discarded whole, requests included. `bytes` requests are made only by the host
+loop, from the `Src`'s misses (`Misses`), fulfilled by a SEPARATE fulfiller that is
+never the transcript, given negative ids, never recorded, never a round and counted
+only against `fetch-rounds`. The loop refuses a unit that returns `done` with
+requests, `requests` with none, a request kin may not make (`bytes`), a repeated or
+already-answered id, or an answer whose id or kind answers nothing asked.
+**Why**: a length prefix makes a run of records serializable and walkable in any of
+four languages with no schema; ids chosen by kin let it find its answer with no
+host cooperation; a separate bytes path makes "the input is not an opinion" a
+property of the structure, not a filter.
+**Alternatives**: fixed-stride records (OCR words are variable); answers keyed by
+position (a re-run that asks in a different order would misread); `bytes` as an
+ordinary transcribed kind (breaks identity across sources, D058).
+- [ ] **Signed off** (maintainer)
+
+### D090 — The transcript: a directory of `transcript.edn` and one lossless PNG per bitmap, keyed by the whole request record
+**Decision**: `transcript.edn` is `{:emon-transcript 1 :inputs [{:index :length}...]
+:entries [{:round :kind :req [...] :ans [...] :bitmap "bitmap-NNNN.png"}...]}`, one
+entry per line, a fixed spelling (EDN subset: maps, vectors, keywords, integers,
+strings), entries ordered by (round, request id) whatever order the answers arrived
+in, so a recording is a function of the run alone and two hosts write the same
+bytes. A replay looks an entry up by the WHOLE request record (id included); a
+request with no entry is `transcript-miss` (never a guess), a recorded entry never
+asked for is reported, inputs must match in count and length, and the password, the
+input bytes, their origin and the fetch rounds are never written (SPEC 13.1).
+Bitmaps are 8-bit gray or RGB PNGs, unfiltered, in STORED deflate blocks: the file is
+a function of the pixels, needs no compressor (emon has an inflater and no
+deflater, and two compressors would not agree byte for byte), and any PNG reader
+opens it; the decoder reads the five filters but refuses compressed blocks
+(`png-compressed`). The price is size (8.7 MB for a gray 300-dpi A4 page);
+a compressed writer is a follow-up (P2.6 will want it). The library never names a
+filesystem: `Transcript` is named files in memory and the driver moves them. The
+Rust and Go hosts carry `PlanBitmap`, PROVISIONAL until P2.7's `Bitmap` lands.
+**Why**: EDN is what the project already reads and diffs (DEVLOG, gold files); PNG
+makes bitmaps viewable; identical bytes across hosts is the strongest evidence that
+identity holds (and it is what `bb plan` checks).
+**Alternatives**: JSON (no comments, same cost, not the project's idiom); raw pixels
+(not viewable); zlib-compressed PNG (host-dependent bytes); keying by id alone (a
+unit that changed its mind about what it asks would be answered wrongly).
+- [ ] **Signed off** (maintainer)
+
+### D091 — The host loop: start all, take completions in any order, `max-rounds` and `fetch-rounds` are named limits that live with the loop
+**Decision**: per round the loop STARTS every request, then takes one completion
+per request in whatever order they arrive (`Fulfiller::start`/`next`; a sync host
+finishes inside `start`, a threaded or JS host whenever), sorts by id, appends to
+the answers and re-runs the unit from scratch on all answers so far. `max-rounds`
+(default 3, SPEC 13.1) counts rounds that ask; asking for round max+1 is the named
+breach `max-rounds` (limit, actual). `fetch-rounds` (default 24, D058) counts the
+D058 fetches since the last kept attempt and is named the same way. Breaches are
+returned errors, not panics, and live in the loop's config rather than the port's
+`limit-of` table (kin never reads them and the port files stay untouched; the
+engine (P1.10) builds the `Config` from settings). The shape keeps the await loop
+in the host, so the JS/WASM host is the same loop over promises; Java and C# get it
+when the engine reaches them. Test doubles: a deferred fulfiller (reverse order) on
+Rust, goroutines with pseudo-random delays on Go.
+**Why**: the order answers arrive must not matter (D008's concurrency promise), and
+the tests must be able to make it differ; limits as errors are what D030 wants
+(failure per unit, not a crashed process).
+**Alternatives**: limit kinds in the port table (touches the four port files, and
+P2.7 edits them); panicking breaches (the engine would have to catch them).
 - [ ] **Signed off** (maintainer)

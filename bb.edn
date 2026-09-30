@@ -14,6 +14,8 @@
          :task (shell "kin/scripts/check")}
   unit  {:doc "Do the laws hold as native tests on every target?  bb unit [go|rust|java|csharp|red]"
          :task (apply shell "kin/scripts/unit" *command-line-args*)}
+  plan {:doc "The plan/fulfil protocol: a transcript recorded on Rust, replayed on Go, identical evidence (P2.5)."
+        :task (shell "kin/scripts/plan")}
   drift {:doc "Is the committed generated code what the sources say?"
          :task (shell "kin/scripts/drift")}
   hosts {:doc "Do the four host trees agree, and do the call sites match?"
