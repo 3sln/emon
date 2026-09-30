@@ -21,4 +21,11 @@
   accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (NOT a gate, D078).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
             :task (apply shell "python3" "tools/accuracy/accuracy.py" *command-line-args*)}
   gates {:doc "Run every gate; fail if one exits non-zero or prints no score."
-         :task (shell "kin/scripts/gates")}}}
+         :task (shell "kin/scripts/gates")}
+  corpus-push {:doc "Zip each corpus category and push to S3-compatible storage (.env).  bb corpus-push [--dry-run] [category...]"
+               :task (apply shell "bb" "tools/corpus.clj" "push" *command-line-args*)}
+  corpus-pull {:doc "Pull changed archives from S3-compatible storage into corpus/.  bb corpus-pull [--dry-run] [--force] [category...]"
+               :task (apply shell "bb" "tools/corpus.clj" "pull" *command-line-args*)}
+  corpus-test {:doc "SigV4 vectors, then a push/pull round trip against a local MinIO. NOT a gate."
+               :task (do (shell "bb" "-cp" "tools" "tools/corpus_test.clj")
+                         (shell "bb" "-cp" "tools" "tools/corpus_roundtrip.clj"))}}}

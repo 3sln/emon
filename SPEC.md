@@ -1491,6 +1491,24 @@ check in `bb unit` needs Python's `jsonschema`; it is found on the path or in
 loudly, if that is impossible). The runtime and the generation path need
 none of Python, git or a network.
 
+### 15.2 The sample corpus (`corpus/`, never committed)
+
+`corpus/` (about 12 GB) is gitignored; it is shared through any S3-compatible
+bucket (D077). Copy `.env.example` to `.env` (gitignored) and fill in
+`EMON_S3_ENDPOINT`, `_REGION`, `_BUCKET`, `_ACCESS_KEY_ID`,
+`_SECRET_ACCESS_KEY` (optional: `_PREFIX`, `_PATH_STYLE`).
+
+    bb corpus-push [--dry-run] [category...]           zip per category, upload, write index.json
+    bb corpus-pull [--dry-run] [--force] [category...]  download changed archives, verify, extract
+    bb corpus-test                                      SigV4 vectors + round trip on a local MinIO (not a gate)
+
+Options for both: `--corpus DIR` (or `$EMON_CORPUS_DIR`), `--part-mb N`
+(multipart part size, default 64). One `<category>.zip` per top-level corpus
+directory, `_root.zip` for the loose files (MANIFEST, fetch.sh), `_dl/` left
+out; archives are deterministic, so an unchanged category is skipped by
+sha256. A pull replaces `corpus/<category>` atomically (extract aside, rename).
+Pure babashka (own SigV4); no aws/rclone/mc. Implementation: `tools/corpus.clj`.
+
 ---
 
 ## 16. Security posture
