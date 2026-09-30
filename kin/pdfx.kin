@@ -1,0 +1,960 @@
+;; What the catalogue readers share (P3.8, P3.9): `emon.pdfannot` (annotations, forms,
+;; signatures) and `emon.pdfmeta` (outlines, page labels, Info, XMP, /Lang). emon's own
+;; module (D039), written from ISO 32000-1 7.9 (text strings, dates, name and number
+;; trees) and 12.3.2 (destinations); additive: nothing in `emon.pdfdoc` changed (D120).
+;;
+;;   TEXT. Every string the readers keep is DECODED into one `Cells`, `txt`, a code point a
+;;   cell (SPEC 8.4: the evidence `etext` shape), and a record refers to it by a RUN, two
+;;   cells `tstart tlen`; an absent one is `-1 0`. A PDF text string is PDFDocEncoding,
+;;   UTF-16BE or UTF-16LE (by BOM) or UTF-8 (by BOM), with UTF-16's language escapes
+;;   dropped; a surrogate or a value past U+10FFFF is U+FFFD, never passed on (Java and C#
+;;   would encode a lone surrogate differently from Rust and Go). A string in an encrypted
+;;   file arrives DECRYPTED: `pd-get` does that where an object is loaded (D098).
+;;
+;;   NAMES are compared by bytes with a generated table (`emon.pdfxnames`), not interned:
+;;   the object arena's table is full enough and shared with other readers.
+;;
+;;   PAGES. A destination names its page by object number. `px-index-build` makes the
+;;   table that answers "which page is object 41" in one read, and keeps the two roots a
+;;   named destination can be in.
+;;
+;;   DESTINATIONS are 8 cells (`DS_STRIDE`): page (0-based; -1 not a page of this document),
+;;   fit kind (`ds-kind`, plus 16 when the page was given as an integer INDEX, which the spec
+;;   allows only in a remote destination and wkhtmltopdf writes in local ones; poppler and
+;;   pdf.js follow it, qpdf does not), four arguments in centipoints (`px-null` for null or
+;;   absent), and the name it was looked up by (a run of `txt`, -1 0 when it was not named).
+;;
+;;   GEOMETRY. A rectangle is read in the page's default user space and kept twice: as it
+;;   is, and in PAGE SPACE (SPEC 3.4: origin top-left, rotation and crop box applied).
+;;
+;;   BOUNDS. Trees are walked to depth 12 and 20,000 nodes a search; a cycle costs that and
+;;   no more. Nothing here recurses without a depth.
+(ns emon.pdfx
+  (:require [emon.lang :refer [I32 Src Cells Text defenum emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+                               text-cp text-i32]]
+            [emon.pdfxnames :refer [px-chars-at px-span-at px-dests px-d px-fit px-xyz
+                                    px-fit-h px-fit-v px-fit-r px-fit-b px-fit-bh
+                                    px-fit-bv px-limits px-nums]]
+            [emon.pdfnames :refer [pn-kids pn-names]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-count
+                                 pl-name-len pl-name-byte pl-str-len pl-str-byte
+                                 pl-num-cp pl-dict-get pl-stream-dict]]
+            [emon.pdfdoc :refer [pd-get pd-resolve pd-dget pd-root pd-pg-count
+                                 pd-pg-objnum pd-pg-crop pd-pg-rotate
+                                 pd-object-count]]
+            [kin.lang :refer [defn defconst defdata declarefn return let set while if
+                              comment do + - * < > <= >= == != and or quot rem
+                              bit-and]]))
+
+;; ------------------------------------------------------------------ constants
+
+(defconst ^I32 PX_NONE 2147483647)   ;; a destination parameter that is `null`
+(defconst ^I32 PX_NODES 20000)       ;; nodes a tree search may visit
+(defconst ^I32 PX_RUN 4000000)       ;; nodes and dictionary entries ALL the destination lookups of a run may visit
+(defconst ^I32 PX_DEPTH 12)          ;; tree depth
+(defconst ^I32 DS_STRIDE 8)          ;; a destination: page kind a b c d nstart nlen
+
+(defn ^:pub ^I32 px-null []
+  (comment "The destination parameter that is `null` (or absent): 2147483647.")
+  (return PX_NONE))
+
+;; destination kinds (`ds-kind`): the order of the PDF's own list
+(defenum ^:pub ds-kind
+  [[ds-none 0 "none"]
+   [ds-xyz 1 "XYZ"]
+   [ds-fit 2 "Fit"]
+   [ds-fit-h 3 "FitH"]
+   [ds-fit-v 4 "FitV"]
+   [ds-fit-r 5 "FitR"]
+   [ds-fit-b 6 "FitB"]
+   [ds-fit-bh 7 "FitBH"]
+   [ds-fit-bv 8 "FitBV"]])
+
+;; ------------------------------------------------------------------- names
+
+(defn ^:pub ^I32 px-is [^Cells ar ^I32 h ^I32 id]
+  (comment "1 when h is a name object whose bytes are row `id` of the `px` table.")
+  (if (== h 0) (return 0))
+  (if (!= (pl-kind-of ar h) 4) (return 0))
+  (let [^I32 n (px-span-at 0 id 1)
+        ^I32 o (px-span-at 0 id 0)
+        ^:mut ^I32 i 0]
+    (if (!= (pl-name-len ar h) n) (return 0))
+    (while (< i n)
+      (do (if (!= (pl-name-byte ar h i) (px-chars-at 0 (+ o i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 px-get [^Cells ar ^I32 dict ^I32 id]
+  (comment "The RAW value under the key whose bytes are row `id` of the table, 0 when")
+  (comment "absent; a key that occurs twice answers its last. A stream answers from its")
+  (comment "dictionary.")
+  (if (== dict 0) (return 0))
+  (let [^:mut ^I32 d dict
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 found 0]
+    (if (== (pl-kind-of ar d) 8) (set d (pl-stream-dict ar d)))
+    (if (!= (pl-kind-of ar d) 7) (return 0))
+    (set k (pl-first ar d))
+    (while (!= k 0)
+      (do (set v (pl-next ar k))
+          (if (== (px-is ar k id) 1) (set found v))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (return found)))
+
+(defn ^:pub ^I32 px-dget [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^I32 dict ^I32 id]
+  (comment "The RESOLVED value under a key of the px table, 0 when absent.")
+  (let [^I32 v (px-get ar dict id)]
+    (if (== v 0) (return 0))
+    (return (pd-resolve src ar dc a b st v))))
+
+(defn ^:pub ^I32 px-has [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^I32 dict ^I32 id]
+  (comment "1 when the dictionary has the key and its value is something: not `null`, and not a")
+  (comment "reference to an object that is missing (in PDF either is a key that is absent).")
+  (let [^I32 v (px-dget src ar dc a b st dict id)]
+    (if (== v 0) (return 0))
+    (if (== (pl-kind-of ar v) 0) (return 0))
+    (return 1)))
+
+(defn ^:pub ^I32 px-nth [^Cells ar ^I32 arr ^I32 i]
+  (comment "The i-th element of an array, raw; 0 when absent.")
+  (let [^:mut ^I32 k (pl-first ar arr)
+        ^:mut ^I32 j 0]
+    (while (and (!= k 0) (< j i))
+      (do (set k (pl-next ar k))
+          (set j (+ j 1))))
+    (return k)))
+
+(defn ^:pub ^I32 px-int-of [^Cells ar ^I32 h ^I32 dflt]
+  (comment "An integer object's value (a real that is a whole number counts), else dflt.")
+  (if (== h 0) (return dflt))
+  (if (== (pl-kind-of ar h) 2) (return (pl-int-value ar h)))
+  (if (== (pl-kind-of ar h) 3)
+    (if (== (rem (pl-num-cp ar h) 100) 0)
+      (return (quot (pl-num-cp ar h) 100))))
+  (return dflt))
+
+(defn ^:pub ^I32 px-is-num [^Cells ar ^I32 h]
+  (if (== h 0) (return 0))
+  (if (== (pl-kind-of ar h) 2) (return 1))
+  (if (== (pl-kind-of ar h) 3) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 px-clamp-cp [^I32 v]
+  (comment "A centipoint value kept away from the `null` sentinel.")
+  (if (> v 2000000000) (return 2000000000))
+  (if (< v -2000000000) (return -2000000000))
+  (return v))
+
+(defn ^:pub ^I32 px-blen [^Cells ar ^I32 h]
+  (comment "The length of the bytes of a string or name object, 0 for anything else.")
+  (if (== h 0) (return 0))
+  (if (== (pl-kind-of ar h) 5) (return (pl-str-len ar h)))
+  (if (== (pl-kind-of ar h) 4) (return (pl-name-len ar h)))
+  (return 0))
+
+(defn ^:pub ^I32 px-bat [^Cells ar ^I32 h ^I32 i]
+  (if (== (pl-kind-of ar h) 5) (return (pl-str-byte ar h i)))
+  (return (pl-name-byte ar h i)))
+
+(defn ^:pub ^I32 px-bytes-cmp [^Cells ar ^I32 x ^I32 y]
+  (comment "Unsigned lexicographic comparison of the bytes of two string or name")
+  (comment "objects: -1, 0 or 1 (how a name tree is ordered, ISO 32000-1 7.9.6).")
+  (let [^I32 nx (px-blen ar x)
+        ^I32 ny (px-blen ar y)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 bx 0
+        ^:mut ^I32 by 0]
+    (while (and (< i nx) (< i ny))
+      (do (set bx (px-bat ar x i))
+          (set by (px-bat ar y i))
+          (if (< bx by) (return -1))
+          (if (> bx by) (return 1))
+          (set i (+ i 1))))
+    (if (< nx ny) (return -1))
+    (if (> nx ny) (return 1))
+    (return 0)))
+
+;; -------------------------------------------------------------- code points
+
+(defn ^:pub ^I32 px-push-cp [^:mut ^Cells txt ^I32 cp]
+  (comment "Append one code point; a surrogate or a value outside Unicode is U+FFFD.")
+  (if (or (< cp 0) (> cp 1114111))
+    (do (cells-push txt 65533) (return 1)))
+  (if (and (>= cp 55296) (<= cp 57343))
+    (do (cells-push txt 65533) (return 1)))
+  (cells-push txt cp)
+  (return 1))
+
+(defdata ^:pub px-pdfdoc-hi
+  :emitter kin.lang/flat-array
+  :data [8226 8224 8225 8230 8212 8211 402 8260 8249 8250 8722 8240 8222 8220 8221 8216
+         8217 8218 8482 64257 64258 321 338 352 376 381 305 322 339 353 382 65533 8364]
+  :accessors {^I32 px-pdfdoc-hi-at [^I32 ignored ^I32 i]})
+
+(defdata ^:pub px-pdfdoc-lo
+  :emitter kin.lang/flat-array
+  :data [728 711 710 729 733 731 730 732]
+  :accessors {^I32 px-pdfdoc-lo-at [^I32 ignored ^I32 i]})
+
+(defn ^:pub ^I32 px-pdfdoc-cp [^I32 c]
+  (comment "PDFDocEncoding (ISO 32000-1 annex D.2) to Unicode. Undefined codes are U+FFFD.")
+  (if (and (>= c 24) (<= c 31)) (return (px-pdfdoc-lo-at 0 (- c 24))))
+  (if (and (>= c 128) (<= c 160)) (return (px-pdfdoc-hi-at 0 (- c 128))))
+  (if (== c 127) (return 65533))
+  (if (== c 173) (return 65533))
+  (if (< c 24) (return c))
+  (return c))
+
+(defn ^:pub ^I32 px-utf8-push [^Cells ar ^I32 h ^I32 from ^:mut ^Cells txt]
+  (comment "The bytes of h from `from`, read as UTF-8; a byte that does not start a")
+  (comment "well-formed sequence is taken as Latin-1 (a URI with raw high bytes). Answers")
+  (comment "the number of code points appended.")
+  (let [^I32 n (px-blen ar h)
+        ^:mut ^I32 i from
+        ^:mut ^I32 c 0
+        ^:mut ^I32 need 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 ok 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 lo 0]
+    (while (< i n)
+      (do (set c (px-bat ar h i))
+          (set need 0)
+          (if (and (>= c 194) (<= c 223)) (do (set need 1) (set cp (- c 192)) (set lo 128)))
+          (if (and (>= c 224) (<= c 239)) (do (set need 2) (set cp (- c 224)) (set lo 2048)))
+          (if (and (>= c 240) (<= c 244)) (do (set need 3) (set cp (- c 240)) (set lo 65536)))
+          (set ok 0)
+          (if (and (> need 0) (<= (+ i need) (- n 1)))
+            (do (set ok 1)
+                (set j 1)
+                (while (<= j need)
+                  (do (if (!= (bit-and (px-bat ar h (+ i j)) 192) 128) (set ok 0))
+                      (set cp (+ (* cp 64) (bit-and (px-bat ar h (+ i j)) 63)))
+                      (set j (+ j 1))))
+                (if (< cp lo) (set ok 0))
+                (if (> cp 1114111) (set ok 0))
+                (if (and (>= cp 55296) (<= cp 57343)) (set ok 0))))
+          (if (== ok 1)
+            (do (px-push-cp txt cp)
+                (set i (+ i (+ need 1))))
+            (do (px-push-cp txt c)
+                (set i (+ i 1))))
+          (set cnt (+ cnt 1))))
+    (return cnt)))
+
+(defn ^:pub ^I32 px-utf16-push [^Cells ar ^I32 h ^I32 from ^I32 le ^:mut ^Cells txt]
+  (comment "The bytes of h from `from` as UTF-16 (le 1: little-endian). A language escape")
+  (comment "(U+001B, tag, U+001B) is dropped; an unpaired surrogate is U+FFFD.")
+  (let [^I32 n (px-blen ar h)
+        ^:mut ^I32 i from
+        ^:mut ^I32 u 0
+        ^:mut ^I32 u2 0
+        ^:mut ^I32 esc 0
+        ^:mut ^I32 cnt 0]
+    (while (<= (+ i 2) n)
+      (do (if (== le 1)
+            (set u (+ (px-bat ar h i) (* (px-bat ar h (+ i 1)) 256)))
+            (set u (+ (* (px-bat ar h i) 256) (px-bat ar h (+ i 1)))))
+          (set i (+ i 2))
+          (if (== u 27)
+            (set esc (- 1 esc))
+            (if (== esc 0)
+              (do (if (and (>= u 55296) (<= u 56319))
+                    (do (set u2 0)
+                        (if (<= (+ i 2) n)
+                          (if (== le 1)
+                            (set u2 (+ (px-bat ar h i) (* (px-bat ar h (+ i 1)) 256)))
+                            (set u2 (+ (* (px-bat ar h i) 256) (px-bat ar h (+ i 1))))))
+                        (if (and (>= u2 56320) (<= u2 57343))
+                          (do (px-push-cp txt (+ 65536 (+ (* (- u 55296) 1024) (- u2 56320))))
+                              (set i (+ i 2)))
+                          (px-push-cp txt 65533)))
+                    (px-push-cp txt u))
+                  (set cnt (+ cnt 1)))))))
+    (return cnt)))
+
+(defn ^:pub ^I32 px-text-push [^Cells ar ^I32 h ^:mut ^Cells txt]
+  (comment "A PDF text string (or a name, as UTF-8) as code points appended to `txt`.")
+  (comment "Answers how many were appended.")
+  (let [^I32 n (px-blen ar h)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cnt 0]
+    (if (== h 0) (return 0))
+    (if (== (pl-kind-of ar h) 4) (return (px-utf8-push ar h 0 txt)))
+    (if (and (>= n 2) (== (px-bat ar h 0) 254) (== (px-bat ar h 1) 255))
+      (return (px-utf16-push ar h 2 0 txt)))
+    (if (and (>= n 2) (== (px-bat ar h 0) 255) (== (px-bat ar h 1) 254))
+      (return (px-utf16-push ar h 2 1 txt)))
+    (if (and (>= n 3) (== (px-bat ar h 0) 239) (== (px-bat ar h 1) 187) (== (px-bat ar h 2) 191))
+      (return (px-utf8-push ar h 3 txt)))
+    (while (< i n)
+      (do (px-push-cp txt (px-pdfdoc-cp (px-bat ar h i)))
+          (set cnt (+ cnt 1))
+          (set i (+ i 1))))
+    (return cnt)))
+
+(defn ^:pub ^I32 px-uri-push [^Cells ar ^I32 h ^:mut ^Cells txt]
+  (comment "A URI or file specification: bytes, UTF-8 where they are well formed.")
+  (if (== h 0) (return 0))
+  (if (== (pl-kind-of ar h) 5)
+    (if (>= (px-blen ar h) 2)
+      (if (and (== (px-bat ar h 0) 254) (== (px-bat ar h 1) 255))
+        (return (px-utf16-push ar h 2 0 txt)))))
+  (return (px-utf8-push ar h 0 txt)))
+
+(defn ^:pub ^I32 px-run-start [^Cells txt]
+  (comment "Where the next run will start.")
+  (return (cells-len txt)))
+
+(defn ^:pub ^I32 px-run-eq [^Cells txt ^I32 s1 ^I32 n1 ^I32 s2 ^I32 n2]
+  (comment "1 when two runs of `txt` spell the same text.")
+  (if (!= n1 n2) (return 0))
+  (let [^:mut ^I32 i 0]
+    (while (< i n1)
+      (do (if (!= (cells-at txt (+ s1 i)) (cells-at txt (+ s2 i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+;; ------------------------------------------------------------------- dates
+
+(defn ^I32 px-digits [^Cells txt ^I32 s ^I32 ln ^I32 at ^I32 n]
+  (comment "n decimal digits of the run (s, ln) of `txt`, from offset `at`: the number, or")
+  (comment "-1 if they are not all digits.")
+  (let [^:mut ^I32 v 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 c 0]
+    (if (> (+ at n) ln) (return -1))
+    (while (< i n)
+      (do (set c (cells-at txt (+ s (+ at i))))
+          (if (or (< c 48) (> c 57)) (return -1))
+          (set v (+ (* v 10) (- c 48)))
+          (set i (+ i 1))))
+    (return v)))
+
+(defn ^:pub ^I32 px-date-parse [^Cells txt ^I32 s ^I32 n ^:mut ^Cells out ^I32 at]
+  (comment "A PDF date (`D:YYYYMMDDHHmmSSOHH'mm'`, every part after the year optional) read from")
+  (comment "a run of DECODED text (a date is a text string: it may be UTF-16) into out[at, at+7):")
+  (comment "year month day hour minute second and the zone in minutes east of UTC (-99999 when")
+  (comment "none is given). Missing parts take the PDF defaults. Answers 1, or 0 with all seven")
+  (comment "set to -1 when it is not a date: no year, or a part out of range (month 1-12, day")
+  (comment "1-31, hour 0-23, minute and second 0-59: a producer's own dialect is not guessed).")
+  (let [^:mut ^I32 p 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 mo 1
+        ^:mut ^I32 d 1
+        ^:mut ^I32 hh 0
+        ^:mut ^I32 mi 0
+        ^:mut ^I32 ss 0
+        ^:mut ^I32 tz -99999
+        ^:mut ^I32 v 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 sg 1
+        ^:mut ^I32 k 0]
+    (if (and (>= n 2) (== (cells-at txt s) 68) (== (cells-at txt (+ s 1)) 58)) (set p 2))
+    (set y (px-digits txt s n p 4))
+    (if (< y 0)
+      (do (set k 0)
+          (while (< k 7)
+            (do (cells-set out (+ at k) -1)
+                (set k (+ k 1))))
+          (return 0)))
+    (set p (+ p 4))
+    (set v (px-digits txt s n p 2))
+    (if (>= v 0) (do (set mo v) (set p (+ p 2))))
+    (if (>= v 0)
+      (do (set v (px-digits txt s n p 2))
+          (if (>= v 0) (do (set d v) (set p (+ p 2))))
+          (if (>= v 0)
+            (do (set v (px-digits txt s n p 2))
+                (if (>= v 0) (do (set hh v) (set p (+ p 2))))
+                (if (>= v 0)
+                  (do (set v (px-digits txt s n p 2))
+                      (if (>= v 0) (do (set mi v) (set p (+ p 2))))
+                      (if (>= v 0)
+                        (do (set v (px-digits txt s n p 2))
+                            (if (>= v 0) (do (set ss v) (set p (+ p 2))))))))))))
+    (if (or (< mo 1) (> mo 12) (< d 1) (> d 31) (> hh 23) (> mi 59) (> ss 59))
+      (do (set k 0)
+          (while (< k 7)
+            (do (cells-set out (+ at k) -1)
+                (set k (+ k 1))))
+          (return 0)))
+    (if (< p n)
+      (do (set c (cells-at txt (+ s p)))
+          (if (== c 90) (set tz 0))
+          (if (or (== c 43) (== c 45))
+            (do (if (== c 45) (set sg -1))
+                (set v (px-digits txt s n (+ p 1) 2))
+                (if (>= v 0)
+                  (do (set tz (* v 60))
+                      (set p (+ p 3))
+                      (if (and (< p n) (== (cells-at txt (+ s p)) 39)) (set p (+ p 1)))
+                      (set v (px-digits txt s n p 2))
+                      (if (>= v 0) (set tz (+ tz v)))
+                      (set tz (* tz sg))))))))
+    (cells-set out at y)
+    (cells-set out (+ at 1) mo)
+    (cells-set out (+ at 2) d)
+    (cells-set out (+ at 3) hh)
+    (cells-set out (+ at 4) mi)
+    (cells-set out (+ at 5) ss)
+    (cells-set out (+ at 6) tz)
+    (return 1)))
+
+;; ------------------------------------------------------------------- pages
+
+(defconst ^I32 IX_HEAD 8)
+
+(defn ^:pub ^I32 px-index-build [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                                 ^:mut ^Cells b ^:mut ^Cells st ^Cells pg ^:mut ^Cells idx]
+  (comment "The page index, after `pd-open` and `pd-pages`. Header: 0 the page count, 1 the")
+  (comment "catalog's /Dests dictionary (a handle, 0 none), 2 the root of the /Names /Dests")
+  (comment "name tree (0 none), 3 the search budget, 4 the catalog, 5 remote mode, 6 what is left")
+  (comment "of the run's lookup budget (`PX_RUN`: a hostile file with a looping tree and a")
+  (comment "hundred thousand links costs that and no more). From IX_HEAD on, for each")
+  (comment "object number, the page index + 1 of the page it is (0: not a page).")
+  (cells-drop idx 0)
+  (let [^I32 n (pd-pg-count pg)
+        ^I32 nobj (pd-object-count dc)
+        ^I32 root (pd-root dc)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 num 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 nm 0
+        ^:mut ^I32 t 0]
+    (while (< i IX_HEAD)
+      (do (cells-push idx 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nobj)
+      (do (cells-push idx 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set num (pd-pg-objnum pg i))
+          (if (and (> num 0) (< num nobj))
+            (cells-set idx (+ IX_HEAD num) (+ i 1)))
+          (set i (+ i 1))))
+    (cells-set idx 0 n)
+    (cells-set idx 4 root)
+    (cells-set idx 6 PX_RUN)
+    (set d (px-dget src ar dc a b st root (px-dests)))
+    (if (and (!= d 0) (== (pl-kind-of ar d) 7)) (cells-set idx 1 d))
+    (set nm (pd-dget src ar dc a b st root (pn-names)))
+    (if (and (!= nm 0) (== (pl-kind-of ar nm) 7))
+      (do (set t (px-dget src ar dc a b st nm (px-dests)))
+          (if (and (!= t 0) (== (pl-kind-of ar t) 7)) (cells-set idx 2 t))))
+    (return n)))
+
+(defn ^:pub ^I32 px-page-of [^Cells idx ^I32 num]
+  (comment "The page index of object number `num`, -1 when it is not a page.")
+  (if (<= num 0) (return -1))
+  (if (>= (+ IX_HEAD num) (cells-len idx)) (return -1))
+  (return (- (cells-at idx (+ IX_HEAD num)) 1)))
+
+(defn ^:pub ^I32 px-page-x [^Cells pg ^I32 i ^I32 x ^I32 y]
+  (comment "x of the point (x, y) of page i's default user space in PAGE SPACE (SPEC 3.4):")
+  (comment "the crop box's corner is the origin, y runs down, /Rotate turns the page clockwise.")
+  (let [^I32 cx0 (pd-pg-crop pg i 0)
+        ^I32 cy0 (pd-pg-crop pg i 1)
+        ^I32 cx1 (pd-pg-crop pg i 2)
+        ^I32 cy1 (pd-pg-crop pg i 3)
+        ^I32 r (pd-pg-rotate pg i)
+        ^I32 u (- x cx0)
+        ^I32 v (- y cy0)]
+    (if (== r 90) (return v))
+    (if (== r 180) (return (- (- cx1 cx0) u)))
+    (if (== r 270) (return (- (- cy1 cy0) v)))
+    (return u)))
+
+(defn ^:pub ^I32 px-page-y [^Cells pg ^I32 i ^I32 x ^I32 y]
+  (let [^I32 cx0 (pd-pg-crop pg i 0)
+        ^I32 cy0 (pd-pg-crop pg i 1)
+        ^I32 cx1 (pd-pg-crop pg i 2)
+        ^I32 cy1 (pd-pg-crop pg i 3)
+        ^I32 r (pd-pg-rotate pg i)
+        ^I32 u (- x cx0)
+        ^I32 v (- y cy0)]
+    (if (== r 90) (return u))
+    (if (== r 180) (return v))
+    (if (== r 270) (return (- (- cx1 cx0) u)))
+    (return (- (- cy1 cy0) v))))
+
+;; ------------------------------------------------ visited marks by object
+
+(defn ^:pub ^I32 px-seen-begin [^:mut ^Cells seen ^I32 nobj]
+  (comment "Start a traversal that must not visit an indirect object twice. `seen` holds an")
+  (comment "EPOCH in cell 0 and one cell an object number: a mark is the epoch's value, so")
+  (comment "starting again clears every mark at no cost. Each traversal that can be open at")
+  (comment "the same time as another needs its own `seen`.")
+  (while (< (cells-len seen) (+ nobj 1))
+    (cells-push seen 0))
+  (cells-set seen 0 (+ (cells-at seen 0) 1))
+  (return 0))
+
+(defn ^:pub ^I32 px-seen-mark [^:mut ^Cells seen ^I32 num]
+  (comment "1 when object `num` was already marked in this traversal, else marks it and")
+  (comment "answers 0. An object number the table does not cover is never marked (depth")
+  (comment "bounds the walk that meets it).")
+  (if (<= num 0) (return 0))
+  (if (>= num (cells-len seen)) (return 0))
+  (if (== (cells-at seen num) (cells-at seen 0)) (return 1))
+  (cells-set seen num (cells-at seen 0))
+  (return 0))
+
+;; ------------------------------------------------------------ name trees
+
+(declarefn px-nt-node)
+
+(defn ^I32 px-nt-in-limits [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^I32 node ^I32 key]
+  (comment "0 when the node's /Limits exclude `key`; 1 when they include it or say nothing.")
+  (let [^I32 lim (px-dget src ar dc a b st node (px-limits))
+        ^:mut ^I32 e 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0]
+    (if (== lim 0) (return 1))
+    (if (!= (pl-kind-of ar lim) 6) (return 1))
+    (set e (px-nth ar lim 0))
+    (set lo (pd-resolve src ar dc a b st e))
+    (set e (px-nth ar lim 1))
+    (set hi (pd-resolve src ar dc a b st e))
+    (if (or (== lo 0) (== hi 0)) (return 1))
+    (if (< (px-bytes-cmp ar key lo) 0) (return 0))
+    (if (> (px-bytes-cmp ar key hi) 0) (return 0))
+    (return 1)))
+
+(defn ^I32 px-nt-node [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                       ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx
+                       ^I32 node ^I32 key ^I32 depth ^I32 honor]
+  (comment "Search one node of a name tree for `key`: the RAW value, 0 when it is not here.")
+  (if (> depth PX_DEPTH) (return 0))
+  (if (== node 0) (return 0))
+  (if (!= (pl-kind-of ar node) 7) (return 0))
+  (let [^I32 left (cells-at idx 3)
+        ^I32 tot (cells-at idx 6)]
+    (if (<= left 0) (return 0))
+    (if (<= tot 0) (return 0))
+    (cells-set idx 3 (- left 1))
+    (cells-set idx 6 (- tot 1)))
+  (if (== honor 1)
+    (if (== (px-nt-in-limits src ar dc a b st node key) 0) (return 0)))
+  (let [^I32 names (pd-dget src ar dc a b st node (pn-names))
+        ^I32 kids (pd-dget src ar dc a b st node (pn-kids))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 kr 0
+        ^:mut ^I32 r 0]
+    (if (and (!= names 0) (== (pl-kind-of ar names) 6))
+      (do (set k (pl-first ar names))
+          (while (!= k 0)
+            (do (set v (pl-next ar k))
+                (if (== v 0) (return 0))
+                (set kr (pd-resolve src ar dc a b st k))
+                (if (!= kr 0)
+                  (if (== (px-bytes-cmp ar kr key) 0) (return v)))
+                (set k (pl-next ar v))))))
+    (if (and (!= kids 0) (== (pl-kind-of ar kids) 6))
+      (do (set k (pl-first ar kids))
+          (while (!= k 0)
+            (do (set kr (pd-resolve src ar dc a b st k))
+                (set r (px-nt-node src ar dc a b st idx kr key (+ depth 1) honor))
+                (if (!= r 0) (return r))
+                (set k (pl-next ar k))))))
+    (return 0)))
+
+(defn ^:pub ^I32 px-nt-find [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                             ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^I32 key]
+  (comment "The raw value under `key` (a string or name object) in the catalog's /Names")
+  (comment "/Dests tree, 0 when absent. /Limits narrow the search; a miss is searched again")
+  (comment "without them (a producer that wrote them wrong), inside the same node budget.")
+  (let [^I32 root (cells-at idx 2)
+        ^:mut ^I32 r 0]
+    (if (== root 0) (return 0))
+    (cells-set idx 3 PX_NODES)
+    (set r (px-nt-node src ar dc a b st idx root key 0 1))
+    (if (!= r 0) (return r))
+    (cells-set idx 3 PX_NODES)
+    (return (px-nt-node src ar dc a b st idx root key 0 0))))
+
+(defn ^:pub ^I32 px-dict-find-bytes [^Cells ar ^:mut ^Cells idx ^I32 dict ^I32 key]
+  (comment "The raw value of the dictionary entry whose KEY NAME has the bytes of `key` (a")
+  (comment "string or name object): the old-style /Dests dictionary. 0 when absent. Each entry")
+  (comment "looked at is charged to the run's lookup budget (idx cell 6).")
+  (if (== dict 0) (return 0))
+  (let [^:mut ^I32 d dict
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0]
+    (if (== (pl-kind-of ar d) 8) (set d (pl-stream-dict ar d)))
+    (if (!= (pl-kind-of ar d) 7) (return 0))
+    (set k (pl-first ar d))
+    (while (!= k 0)
+      (do (if (<= (cells-at idx 6) 0) (return 0))
+          (cells-set idx 6 (- (cells-at idx 6) 1))
+          (set v (pl-next ar k))
+          (if (== (px-bytes-cmp ar k key) 0) (return v))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (return 0)))
+
+(defn ^:pub ^I32 px-dict-find-plain [^Cells ar ^I32 dict ^I32 key]
+  (comment "`px-dict-find-bytes` without the budget: for a dictionary the caller knows is small")
+  (comment "(an annotation's appearance states).")
+  (if (== dict 0) (return 0))
+  (let [^:mut ^I32 d dict
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0]
+    (if (== (pl-kind-of ar d) 8) (set d (pl-stream-dict ar d)))
+    (if (!= (pl-kind-of ar d) 7) (return 0))
+    (set k (pl-first ar d))
+    (while (!= k 0)
+      (do (set v (pl-next ar k))
+          (if (== (px-bytes-cmp ar k key) 0) (return v))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (return 0)))
+
+(declarefn px-nt-collect)
+
+(defn ^I32 px-nt-collect [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx
+                          ^I32 node ^I32 depth ^:mut ^Cells out]
+  (comment "Every (key handle, value handle) pair of a name tree, in tree order, appended to")
+  (comment "`out` (two cells a pair); the handles are the arena's, raw.")
+  (if (> depth PX_DEPTH) (return 0))
+  (if (== node 0) (return 0))
+  (if (!= (pl-kind-of ar node) 7) (return 0))
+  (let [^I32 left (cells-at idx 3)]
+    (if (<= left 0) (return 0))
+    (cells-set idx 3 (- left 1)))
+  (let [^I32 names (pd-dget src ar dc a b st node (pn-names))
+        ^I32 kids (pd-dget src ar dc a b st node (pn-kids))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 kr 0]
+    (if (and (!= names 0) (== (pl-kind-of ar names) 6))
+      (do (set k (pl-first ar names))
+          (while (!= k 0)
+            (do (set v (pl-next ar k))
+                (if (== v 0)
+                  (set k 0)
+                  (do (set kr (pd-resolve src ar dc a b st k))
+                      (if (and (!= kr 0) (or (== (pl-kind-of ar kr) 5) (== (pl-kind-of ar kr) 4)))
+                        (do (cells-push out kr)
+                            (cells-push out v)))
+                      (set k (pl-next ar v))))))))
+    (if (and (!= kids 0) (== (pl-kind-of ar kids) 6))
+      (do (set k (pl-first ar kids))
+          (while (!= k 0)
+            (do (set kr (pd-resolve src ar dc a b st k))
+                (px-nt-collect src ar dc a b st idx kr (+ depth 1) out)
+                (set k (pl-next ar k))))))
+    (return 0)))
+
+(defn ^:pub ^I32 px-dests-collect [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                                   ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx
+                                   ^:mut ^Cells out]
+  (comment "Every named destination: first the old-style /Dests dictionary's (key handle,")
+  (comment "value handle), then the name tree's. Appended to `out`, cleared first.")
+  (cells-drop out 0)
+  (let [^I32 dd (cells-at idx 1)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 n 0]
+    (if (!= dd 0)
+      (do (set k (pl-first ar dd))
+          (while (!= k 0)
+            (do (set v (pl-next ar k))
+                (if (== v 0)
+                  (set k 0)
+                  (do (if (== (pl-kind-of ar k) 4)
+                        (do (cells-push out k)
+                            (cells-push out v)))
+                      (set k (pl-next ar v))))))))
+    (cells-set idx 3 PX_NODES)
+    (px-nt-collect src ar dc a b st idx (cells-at idx 2) 0 out)
+    (set n (quot (cells-len out) 2))
+    (return n)))
+
+;; ---------------------------------------------------------- number trees
+
+(declarefn px-nn-collect)
+
+(defn ^:pub ^I32 px-nn-collect [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx
+                          ^I32 node ^I32 depth ^:mut ^Cells out]
+  (comment "Every (integer key, value handle) of a number tree, in tree order, appended to")
+  (comment "`out` two cells a pair (the value handle is raw).")
+  (if (> depth PX_DEPTH) (return 0))
+  (if (== node 0) (return 0))
+  (if (!= (pl-kind-of ar node) 7) (return 0))
+  (let [^I32 left (cells-at idx 3)]
+    (if (<= left 0) (return 0))
+    (cells-set idx 3 (- left 1)))
+  (let [^I32 nums (px-dget src ar dc a b st node (px-nums))
+        ^I32 kids (pd-dget src ar dc a b st node (pn-kids))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 kr 0]
+    (if (and (!= nums 0) (== (pl-kind-of ar nums) 6))
+      (do (set k (pl-first ar nums))
+          (while (!= k 0)
+            (do (set v (pl-next ar k))
+                (if (== v 0)
+                  (set k 0)
+                  (do (set kr (pd-resolve src ar dc a b st k))
+                      (if (and (!= kr 0) (== (pl-kind-of ar kr) 2))
+                        (do (cells-push out (pl-int-value ar kr))
+                            (cells-push out v)))
+                      (set k (pl-next ar v))))))))
+    (if (and (!= kids 0) (== (pl-kind-of ar kids) 6))
+      (do (set k (pl-first ar kids))
+          (while (!= k 0)
+            (do (set kr (pd-resolve src ar dc a b st k))
+                (px-nn-collect src ar dc a b st idx kr (+ depth 1) out)
+                (set k (pl-next ar k))))))
+    (return 0)))
+
+;; ------------------------------------------------------------ destinations
+
+(defn ^:pub ^I32 px-dest-init [^:mut ^Cells out ^I32 at]
+  (comment "A destination record (8 cells at `at`) that says nothing: page -1, kind 0,")
+  (comment "four null parameters, no name.")
+  (cells-set out at -1)
+  (cells-set out (+ at 1) 0)
+  (cells-set out (+ at 2) PX_NONE)
+  (cells-set out (+ at 3) PX_NONE)
+  (cells-set out (+ at 4) PX_NONE)
+  (cells-set out (+ at 5) PX_NONE)
+  (cells-set out (+ at 6) -1)
+  (cells-set out (+ at 7) 0)
+  (return 0))
+
+(defn ^I32 px-dest-kind-of [^Cells ar ^I32 h]
+  (comment "A fit name as a `ds-kind`, 0 when it is not one.")
+  (if (== h 0) (return 0))
+  (if (== (px-is ar h (px-xyz)) 1) (return 1))
+  (if (== (px-is ar h (px-fit)) 1) (return 2))
+  (if (== (px-is ar h (px-fit-h)) 1) (return 3))
+  (if (== (px-is ar h (px-fit-v)) 1) (return 4))
+  (if (== (px-is ar h (px-fit-r)) 1) (return 5))
+  (if (== (px-is ar h (px-fit-b)) 1) (return 6))
+  (if (== (px-is ar h (px-fit-bh)) 1) (return 7))
+  (if (== (px-is ar h (px-fit-bv)) 1) (return 8))
+  (return 0))
+
+(defn ^:pub ^I32 px-remote-set [^:mut ^Cells idx ^I32 on]
+  (comment "While `on` is 1 a destination's integer page is a REMOTE document's 0-based page")
+  (comment "(a GoToR action) and is kept as it is; while 0 it must name a page of this document.")
+  (cells-set idx 5 on)
+  (return 0))
+
+(defn ^I32 px-dest-array [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^Cells idx ^I32 arr
+                          ^:mut ^Cells out ^I32 at]
+  (comment "Fill a destination record from `[page /Fit... params]`. The page is the RAW")
+  (comment "first element: a reference names a page by object number (resolving it would")
+  (comment "lose that); an integer is a 0-based page INDEX, which the spec allows only in a")
+  (comment "remote destination but wkhtmltopdf and others write in local ones, and poppler and")
+  (comment "pdf.js follow: here it is taken as a page of this document when it is one (in")
+  (comment "range), and always in remote mode (`px-remote-set`), and the record says so by")
+  (comment "adding 16 to its kind. Answers 1 when a page was found, else 0 (the record keeps")
+  (comment "what was read).")
+  (let [^I32 e0 (pl-first ar arr)
+        ^:mut ^I32 e 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 isint 0
+        ^:mut ^I32 got 0]
+    (if (== e0 0) (return 0))
+    (if (== (pl-kind-of ar e0) 9)
+      (do (cells-set out at (px-page-of idx (pl-int-value ar e0)))
+          (if (>= (px-page-of idx (pl-int-value ar e0)) 0) (set got 1))))
+    (if (== (pl-kind-of ar e0) 2)
+      (do (set v (pl-int-value ar e0))
+          (set isint 16)
+          (if (== (cells-at idx 5) 1)
+            (do (cells-set out at v)
+                (set got 1))
+            (if (and (>= v 0) (< v (cells-at idx 0)))
+              (do (cells-set out at v)
+                  (set got 1))))))
+    (set e (pl-next ar e0))
+    (cells-set out (+ at 1) isint)
+    (if (== e 0) (return got))
+    (set v (pd-resolve src ar dc a b st e))
+    (cells-set out (+ at 1) (+ (px-dest-kind-of ar v) isint))
+    (set e (pl-next ar e))
+    (set j 0)
+    (while (and (!= e 0) (< j 4))
+      (do (set v (pd-resolve src ar dc a b st e))
+          (if (== (px-is-num ar v) 1)
+            (cells-set out (+ at (+ 2 j)) (px-clamp-cp (pl-num-cp ar v))))
+          (set e (pl-next ar e))
+          (set j (+ j 1))))
+    (return got)))
+
+(declarefn px-dest-value)
+
+(defn ^I32 px-dest-value [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^Cells pg
+                          ^:mut ^Cells txt ^I32 h0 ^:mut ^Cells out ^I32 at ^I32 depth]
+  (comment "A destination from a /Dest or /D value: an array, a dictionary whose /D is one,")
+  (comment "or a NAME (or string) looked up in the old /Dests dictionary and the name tree.")
+  (comment "The name is kept in the record as a run of `txt` (at the first level). Answers")
+  (comment "1 when a page (or remote page number) was found.")
+  (if (== h0 0) (return 0))
+  (if (> depth 3) (return 0))
+  (let [^I32 h (pd-resolve src ar dc a b st h0)
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 dd 0
+        ^:mut ^I32 d 0]
+    (if (== h 0) (return 0))
+    (set kind (pl-kind-of ar h))
+    (if (== kind 6)
+      (return (px-dest-array src ar dc a b st idx h out at)))
+    (if (== kind 7)
+      (do (set d (px-get ar h (px-d)))
+          (return (px-dest-value src ar dc a b st idx pg txt d out at (+ depth 1)))))
+    (if (or (== kind 4) (== kind 5))
+      (do (if (== depth 0)
+            (do (cells-set out (+ at 6) (cells-len txt))
+                (px-text-push ar h txt)
+                (cells-set out (+ at 7) (- (cells-len txt) (cells-at out (+ at 6))))))
+          (if (== kind 4)
+            (do (set dd (cells-at idx 1))
+                (set v (px-dict-find-bytes ar idx dd h))
+                (if (== v 0) (set v (px-nt-find src ar dc a b st idx h))))
+            (do (set v (px-nt-find src ar dc a b st idx h))
+                (set dd (cells-at idx 1))
+                (if (== v 0) (set v (px-dict-find-bytes ar idx dd h)))))
+          (if (== v 0) (return 0))
+          (return (px-dest-value src ar dc a b st idx pg txt v out at (+ depth 1)))))
+    (return got)))
+
+(defn ^:pub ^I32 px-dest-of [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                             ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^Cells pg
+                             ^:mut ^Cells txt ^I32 h ^:mut ^Cells out ^I32 at]
+  (comment "Read the destination `h` (a /Dest or /D value, raw) into the 8-cell record at")
+  (comment "`at` of `out` (initialized here): page (index, or the remote page number; -1")
+  (comment "unresolved), `ds-kind`, four parameters in centipoints of the target page's")
+  (comment "user space (`PX_NONE` for null or absent), and the destination's name as a run of")
+  (comment "`txt` (-1 0 when it was not named). Answers 1 when a page was found.")
+  (px-dest-init out at)
+  (return (px-dest-value src ar dc a b st idx pg txt h out at 0)))
+
+;; ------------------------------------------------------------------- JSON
+
+(defn ^:pub ^I32 px-json-hex2 [^:mut ^Text t ^I32 v]
+  (let [^I32 hi (quot v 16)
+        ^I32 lo (rem v 16)]
+    (if (< hi 10) (text-cp t (+ 48 hi)) (text-cp t (+ 87 hi)))
+    (if (< lo 10) (text-cp t (+ 48 lo)) (text-cp t (+ 87 lo)))
+    (return 0)))
+
+(defn ^:pub ^I32 px-json-esc-cp [^:mut ^Text t ^I32 c]
+  (comment "One code point as the inside of a JSON string: quote, backslash and control")
+  (comment "characters escaped (a backslash, u, 00 and two lower-case hex digits), everything else as UTF-8.")
+  (if (== c 34) (emit-ascii t "\\\""))
+  (if (== c 92) (emit-ascii t "\\\\"))
+  (if (and (!= c 34) (!= c 92))
+    (if (< c 32)
+      (do (emit-ascii t "\\u00") (px-json-hex2 t c))
+      (text-cp t c)))
+  (return 0))
+
+(defn ^:pub ^I32 px-json-run [^:mut ^Text t ^Cells txt ^I32 s ^I32 n]
+  (comment "A run of `txt` as a JSON string: quote, backslash and control characters")
+  (comment "escaped (backslash, u, 00 and two lower-case hex digits), everything else as UTF-8. A run that is absent")
+  (comment "(start -1) is `null`.")
+  (if (< s 0)
+    (do (emit-ascii t "null") (return 0)))
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 c 0]
+    (emit-ascii t "\"")
+    (while (< i n)
+      (do (set c (cells-at txt (+ s i)))
+          (px-json-esc-cp t c)
+          (set i (+ i 1))))
+    (emit-ascii t "\"")
+    (return 0)))
+
+(defn ^:pub ^I32 px-json-cp [^:mut ^Text t ^I32 v]
+  (comment "A centipoint value as a JSON number (SPEC 4.3): 7250 is 72.5, -5 is -0.05, 0 is 0,")
+  (comment "no trailing zeros; `PX_NONE` is `null`.")
+  (let [^:mut ^I32 m v
+        ^:mut ^I32 frac 0]
+    (if (== v PX_NONE)
+      (do (emit-ascii t "null") (return 0)))
+    (if (< m 0)
+      (do (emit-ascii t "-")
+          (set m (- 0 m))))
+    (text-i32 t (quot m 100))
+    (set frac (rem m 100))
+    (if (!= frac 0)
+      (do (emit-ascii t ".")
+          (text-cp t (+ 48 (quot frac 10)))
+          (if (!= (rem frac 10) 0)
+            (text-cp t (+ 48 (rem frac 10))))))
+    (return 0)))
+
+(defn ^:pub ^I32 px-json-box [^:mut ^Text t ^Cells c ^I32 at]
+  (comment "Four centipoint values of `c` from `at` as a JSON array.")
+  (emit-ascii t "[")
+  (px-json-cp t (cells-at c at))
+  (emit-ascii t ",")
+  (px-json-cp t (cells-at c (+ at 1)))
+  (emit-ascii t ",")
+  (px-json-cp t (cells-at c (+ at 2)))
+  (emit-ascii t ",")
+  (px-json-cp t (cells-at c (+ at 3)))
+  (emit-ascii t "]")
+  (return 0))
+
+(defn ^:pub ^I32 px-dest-present [^Cells c ^I32 at]
+  (comment "1 when the destination record at c[at] holds anything.")
+  (if (!= (cells-at c at) -1) (return 1))
+  (if (!= (cells-at c (+ at 1)) 0) (return 1))
+  (if (>= (cells-at c (+ at 6)) 0) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 px-json-dest [^:mut ^Text t ^Cells txt ^Cells c ^I32 at]
+  (comment "A destination record as a JSON object: the page (0-based, -1 unresolved), the")
+  (comment "fit, its arguments in the PDF's own order (trailing nulls dropped) and its name.")
+  (let [^:mut ^I32 last -1
+        ^:mut ^I32 k 0]
+    (emit-ascii t "{\"page\":")
+    (text-i32 t (cells-at c at))
+    (emit-ascii t ",\"fit\":\"")
+    (ds-kind-emit-name t (rem (cells-at c (+ at 1)) 16))
+    (emit-ascii t "\"")
+    (if (>= (cells-at c (+ at 1)) 16)
+      (emit-ascii t ",\"index\":true"))
+    (while (< k 4)
+      (do (if (!= (cells-at c (+ (+ at 2) k)) PX_NONE) (set last k))
+          (set k (+ k 1))))
+    (if (>= last 0)
+      (do (emit-ascii t ",\"args\":[")
+          (set k 0)
+          (while (<= k last)
+            (do (if (> k 0) (emit-ascii t ","))
+                (px-json-cp t (cells-at c (+ (+ at 2) k)))
+                (set k (+ k 1))))
+          (emit-ascii t "]")))
+    (if (>= (cells-at c (+ at 6)) 0)
+      (do (emit-ascii t ",\"name\":")
+          (px-json-run t txt (cells-at c (+ at 6)) (cells-at c (+ at 7)))))
+    (emit-ascii t "}")
+    (return 0)))

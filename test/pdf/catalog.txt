@@ -1,0 +1,14 @@
+# emon P3.8/P3.9: the fixtures of kin/scripts/pdf-catalog-fixtures, read by kin/pdfcatalogtest.kin.
+# file (relative to test/) <TAB> password ('-' for none) <TAB> its golden
+pdf/catalog/forms.pdf	-	pdf/catalog/forms.json
+pdf/catalog/labels-odd.pdf	-	pdf/catalog/labels-odd.json
+pdf/catalog/labels.pdf	-	pdf/catalog/labels.json
+pdf/catalog/links.pdf	-	pdf/catalog/links.json
+pdf/catalog/meta-aes128.pdf	-	pdf/catalog/meta-aes128.json
+pdf/catalog/meta-aes256.pdf	-	pdf/catalog/meta-aes256.json
+pdf/catalog/meta-rc4-128.pdf	-	pdf/catalog/meta-rc4-128.json
+pdf/catalog/meta.pdf	-	pdf/catalog/meta.json
+pdf/catalog/outline-cycles.pdf	-	pdf/catalog/outline-cycles.json
+pdf/catalog/outlines.pdf	-	pdf/catalog/outlines.json
+pdf/catalog/sigs.pdf	-	pdf/catalog/sigs.json
+pdf/catalog/stamps.pdf	-	pdf/catalog/stamps.json

@@ -1017,11 +1017,58 @@ analysis beyond "top-to-bottom lines on a single column".
   description; `Caption`, `Note`, `Reference`, `Link`; per-element `/Lang`;
   `/E` expansions; PDF/UA identification (XMP `pdfuaid:part`) as a trust
   signal. Test with synth pairs: correctly tagged vs deliberately mis-tagged.
-- [ ] P3.8 — Annotations: links (URI, GoTo, named dests — ISO 32000-1
+- [x] P3.8 — Annotations: links (URI, GoTo, named dests — ISO 32000-1
   §12.3.2 destination arrays), Watermark/Stamp annotations, widgets + AcroForm values,
   signature dictionaries.
-- [ ] P3.9 — Outlines, page labels (`/PageLabels` number trees), Info + XMP
+  *Done (P3.8, D120, D122)*: `kin/pdfannot.kin` (with `kin/pdfx.kin`, their shared helpers)
+  reads every page's `/Annots` into the `annots` arena and the AcroForm tree into `fields` and
+  `sigs`, with SPEC 8.4.7's own arenas (D096), and `pdfdoc` untouched. **Links**: URI, GoTo, GoToR,
+  GoToE, Launch, Named, JavaScript, SubmitForm (first action, and how many the `/Next` chain
+  holds); a destination is page, fit, four arguments and the name it was looked up by; a named
+  destination is found in the old `/Dests` dictionary and in the `/Names` `/Dests` tree
+  (`/Limits` honoured, then a full walk, inside a node budget). Each annotation keeps its `/Rect`
+  in PAGE SPACE (SPEC 3.4: crop box origin, `/Rotate`) and as written, and a link's `/QuadPoints`
+  as quads in page space, so P8 can map a wrapped link onto the words each line covers.
+  **Stamp and Watermark** annotations keep `/Name`, `/Contents`, `/T`, `/CA`, `/F`, the
+  appearance stream and the text it shows. **Widgets and fields**: `/FT /Ff /V /DV /Q /MaxLen`
+  inherited down the tree, a widget found by its own `/T` or its `/Parent`, `/V` as text (an array
+  joined with a line feed), the first widget's appearance text read beside it (`BT`..`ET`, Latin-1)
+  and a verdict on whether they agree; check boxes and radio buttons: which widgets are on and
+  whether the one `/V` names is. **Signatures**: `/Name`, `/M` (as written and parsed), `/Reason`,
+  `/Location`, `/ContactInfo`, `/Filter`, `/SubFilter`, `/ByteRange`, the size of `/Contents`, a
+  document time stamp, `/Perms` `/DocMDP`; nothing validated. **Verified** (D122): over all 4,000
+  corpus PDFs, `kin/scripts/pdf-catalog-compare` against qpdf and poppler: **forms 19,215 of
+  19,215** field attributes (46 files); **links 91,651 of 91,653** (819 files; the two are a
+  `file:` URI with a non-ASCII byte, which emon reads as UTF-8 and qpdf as PDFDocEncoding);
+  **urls 11,169 of 11,308** (poppler's `-url`, 586 of 590 files: what differs is how poppler
+  prints a control character or a trailing no-break space); **signatures 30 of 30** (`pdfsig`: field names and signed ranges); **stamps 30 of 30**;
+  130 real-file rows of oracle facts (`test/pdf/catalog-corpus.txt`) all equal on four targets.
+  **Fixtures** (`kin/scripts/pdf-catalog-fixtures`, test/pdf/catalog/): forms with inherited
+  fields (type, flags, value, `/Q`, `/MaxLen` from a parent; a radio group; a check box; a
+  combo with an array value; `/V` against a different appearance), links of every action on a
+  rotated page and a cropped one, stamps and a watermark, signature dictionaries.
+- [x] P3.9 — Outlines, page labels (`/PageLabels` number trees), Info + XMP
   metadata.
+  *Done (P3.9, D121, D122)*: `kin/pdfmeta.kin`. **Outlines** as a pre-order tree (depth,
+  parent, children, subtree size, title, `/Count`, `/F`, `/C`, action or destination), read
+  without recursion, a looping `/Next` or `/First` dropped by a visited set and noted on its
+  parent. **Page labels**: the number tree sorted and cut into ranges; every style (`D R r A a`),
+  prefixes, `/St`, a range past the last page, a repeated key (the first wins), pages before
+  the first range (no label); Roman past 3999 repeats M, letters repeat (`aa`, `bb`). **Info**
+  (PDFDocEncoding, UTF-16, UTF-8 with BOM; dates read and range-checked, zone kept apart from
+  "none given"), **XMP** by a small tolerant scanner (prefix-independent: `dc:` may be spelled
+  anything; entities, CDATA, comments, attribute and element forms, `rdf:Seq/Bag/Alt` with
+  `xml:lang`) including `pdfuaid:part` (D076) and `pdfaid:part`/`conformance`, and the
+  catalog's `/Lang`, `/Version`, `/MarkInfo`, `/ViewerPreferences /DisplayDocTitle`, AcroForm
+  `/NeedAppearances` `/SigFlags` `/XFA`. Strings of an encrypted file arrive decrypted (D098). **Verified**
+  (D122), all 4,000 corpus PDFs: **labels 24,731 of 24,731 pages** (qpdf); **outlines 5,474 of
+  5,474 bookmarks** (qpdf, poppler for named destinations); **named destinations 13,223 of
+  13,223** (`pdfinfo -dests`); **Info and metadata flags 39,997 of 40,000** (`pdfinfo`; the
+  three are poppler's own dates and a malformed Info dictionary); **XMP 2,298 of 2,298**
+  properties over 1,150 packets (parsed by `clojure.data.xml`); **/Lang and /Version 8,000 of
+  8,000**. **Fixtures**: label ranges of every style, an odd tree, outlines with named
+  destinations, circular outlines, UTF-16/PDFDoc/UTF-8 metadata plain and encrypted by
+  AES-256, AES-128 and RC4-128.
 - [ ] P3.10 — Text-layer oracle (SPEC §14.5): per-character comparison
   against a pinned reference extractor on a born-digital corpus; committed
   expectations.
@@ -2623,6 +2670,160 @@ The committed fixtures mean a test run needs neither tool. `qpdf` was installed 
 repair should have produced; emon cannot be its own oracle.
 - [ ] **Signed off** (maintainer)
 
+### D120 — P3.8: annotations, forms and signatures are evidence in their own arenas; `/V` and the appearance are both kept and compared; signatures are read, not validated; `pdfdoc` is untouched
+**Decision** (P3.8, D034, D096). (1) **Arenas** (SPEC 8.4.7): `annots` (38 cells a row), `quads`
+(8), `fields` (32) and `sigs` (36), integer `Cells`, strings as runs of one `txt` arena (a code
+point a cell, `tstart tlen`, absent `-1 0`: the evidence `etext` shape); `kin/pdfannot.kin` owns
+the layouts and `pa-dump` writes them as canonical JSON. They take `ea` codes 25 to 28 when P1.12
+folds them into the bundles. `kin/pdfdoc.kin`, `pdflex.kin` and `pdfcrypt.kin` are not edited:
+the readers use only what they export. (2) **Geometry**: a `/Rect` is normalized and kept twice,
+as written (default user space) and in page space (SPEC 3.4: crop-box origin, y down,
+`/Rotate` clockwise), the box around the four corners mapped; `/QuadPoints` become quads in page
+space (at most 64 an annotation), in the order the file wrote them. (3) **Actions**: the first
+action's kind (`URI GoTo GoToR GoToE Launch Named JavaScript SubmitForm`, else `other`), its
+target (URI, file specification, named action) as text and, for GoTo and GoToR, a destination;
+the `/Next` chain is counted (at most 8), not followed. A `/Dest` on the annotation is a GoTo.
+A URI is read as UTF-8 where it is well formed and Latin-1 byte by byte where it is not (qpdf
+shows the same bytes as PDFDocEncoding and so differs on a non-ASCII URI). (4) **Destinations**
+(8 cells: page, fit kind, four arguments in centipoints or `null`, the name it was looked up by).
+A name is looked up in the old catalog `/Dests` dictionary and the `/Names` `/Dests` tree (a name
+object tries the dictionary first, a string the tree first, each falls back to the other); the
+tree search honours `/Limits` and, on a miss, walks the whole tree (a producer that wrote them
+wrong); one search visits at most 20,000 nodes and a whole run at most 4,000,000 nodes and
+dictionary entries (a looping tree and a hundred thousand links cost that and no more). **An
+integer first element is a page INDEX**: the spec allows it only in a remote destination, but
+wkhtmltopdf writes it in local ones and poppler and pdf.js follow it; it is taken as a page of
+this document when in range (and always for GoToR), and the record says so by adding 16 to its
+kind, so a reader that wants the strict reading can ignore those. qpdf and `pdfinfo -dests` do not
+follow them; the oracle comparison accounts for it. A reference to something that is not a page is
+page -1. (5) **Fields**: the tree is walked once (a visited set by object number, depth 26, 100,000
+terminal fields); `/FT /Ff /V /DV /Q /MaxLen` are inherited; a child with a `/T` (or `/Kids`) is a
+field, one without is a widget of its parent; the name is the dotted partial names. `/V` is kept
+as text (a name as its text, an array joined with a line feed), and its kind. A key whose value
+is `null` or a reference to a missing object is absent. (6) **`/V` against the appearance**: a
+widget's appearance stream (`/AP /N`, or the state `/AS` names) is decoded and the text it shows
+is read (`BT`..`ET`, `Tj` `TJ` `'` `"`, a line break at a `Td` that moves down and at `T*`), as
+Latin-1, at most 64 KiB; a Form XObject it draws and text in a composite font are not followed. The
+first widget's text is compared with `/V` and the verdict kept (`equal differ value-only
+appearance-only`); a check box or radio group says how many of its widgets are on and whether one
+that is on is the state `/V` names. **SPEC 8.1's "`/V` usually wins" is fusion's rule**, not this
+reader's: both are recorded. (7) **Signatures**: `/Name` (a text string, so UTF-16 works), `/M` as
+written and parsed (a date with a zone, or none, or out of range: unparsed, never guessed),
+`/Reason`, `/Location`, `/ContactInfo`, `/Filter`, `/SubFilter`, the first four `/ByteRange`
+numbers and how many ranges, the byte count of `/Contents`, whether it is a document time stamp, and
+whether it came from `/Perms /DocMDP`. The signer a certificate names is inside the PKCS#7 bytes
+and is not read; nothing is validated (SPEC 8.1). (8) **Stamp and Watermark** annotations are rows
+like the others, with `/Name`, `/Contents`, `/T`, `/CA` (per-mille), `/F` (hidden, print and
+no-view bits are watermark evidence), the appearance stream's object number and its text; P8.2 and
+§9.5 decide what a seal or a watermark is (D034: a stamp that says `APPROVED` is evidence, not a
+seal). (9) **Names by bytes**: the readers need about 100 names the object arena does not intern
+(it holds 192, shared with P1.7), so `tools/pdfxnames.clj` (babashka, checked by `bb unit`) generates
+`kin/pdfxnames.kin`, a table of names and XMP strings compared by bytes; a dictionary is walked
+rather than hashed, which is fine at these sizes. (10) **A source that misses** (D075): `pa-run`
+answers -1 when the view missed, at each field, each page and at the end; nothing it writes is
+kept, and the laws read every fixture through 64- and 512-byte async sources to the same dump.
+**Why**: the annotations are the author's own statement of what is a link, a stamp, a filled
+form and a signature; a fusion that decides on them needs them whole, in page space, with what
+disagreed kept beside what was claimed (D034), and in a shape that does not change when the file
+is read through a source that misses.
+**Alternatives**: extend `pdfdoc`'s page record (another agent works beside it, and a page record
+is the wrong place for a variable-length list); one record per annotation with the field nested
+(an array of arrays kin cannot build); obey `/V` or the appearance (either loses what the other
+says); resolve the integer page index strictly (a third of a wkhtmltopdf document's bookmarks and
+links would point nowhere, where the PDF viewers take them); intern the names in the arena
+(192 slots, two agents adding).
+- [ ] **Signed off** (maintainer)
+
+### D121 — P3.9: outlines, page labels, Info and XMP, `/Lang`: read once, as facts; XMP by a tolerant scanner; nothing believed
+**Decision** (P3.9, D034, D076). (1) **Outlines** (`ol`, 24 cells a row, pre-order): walked with no
+recursion (an explicit stack of next sibling, parent and depth), a visited set over object
+numbers ends a chain that loops (a `/Next` back to a sibling, a `/First` back to an ancestor) and
+says so on the parent (bit 4), depth stops at 64 (bit 8), rows at 200,000; `/Parent`, `/Prev` and
+`/Last` are ignored (the tree is what the walk finds: qpdf follows a loop and lists its
+repeats). A row has depth, parent, children, subtree size, title (text),
+`/Count` as written, `/F`, `/C` as 0xRRGGBB, and an action or a destination; a `/Dest` is a GoTo.
+(2) **Page labels** (`lb`): the number tree is read to 20,000 nodes into pairs, sorted by key with
+the order of equal keys kept, at most 10,000 ranges; the first of a repeated key wins (the rest is
+kept with bit 4 and ignored), a key past the last page is kept with bit 1, a negative key is
+dropped, and pages before the first range have **no** label (the caller may print the decimal
+number or nothing: this says what the file says). Styles: decimal; Roman, upper and lower, with M
+repeated past 3999 (poppler and qpdf do the same); letters A to Z then AA to ZZ then AAA; no style
+is the prefix alone; `/St` defaults to 1 and is used as written (0 prints `0`). (3) **Info**: the
+keys `Title Author Subject Keywords Creator Producer CreationDate ModDate Trapped` as text
+strings: PDFDocEncoding (including the eight accent codes at 0x18 and the block at 0x80 to 0xA0 that
+differ from Latin-1), UTF-16BE or LE by BOM with language escapes dropped, UTF-8 by BOM (PDF 2.0;
+poppler reads it as PDFDocEncoding and shows mojibake); a surrogate or a value past U+10FFFF is
+U+FFFD, never passed on (Java and C# would encode a lone surrogate differently from Rust and
+Go). A date is read from the DECODED text (it may be UTF-16), every part after the year
+optional, the zone in minutes east of UTC or "none given" (-99999; poppler prints UTC for it),
+out-of-range parts reject the date (a Y2K-bug `D:19100...` stays a raw string; poppler guesses).
+(4) **XMP**: `kin/pdfmeta.kin`'s scanner reads the packet by bytes (up to 1 MiB, 48 elements deep,
+64 namespace declarations; UTF-16 packets are noted and not read): it resolves the prefixes the
+packet declares to the six namespaces emon knows (so `dc:` may be spelled `x:`), decodes
+entities, CDATA and UTF-8, and writes one row per simple element, attribute and `rdf:li` item of a
+`rdf:Description` (kind simple, seq, bag, alt, attribute; `xml:lang`); a structure (`xmpMM:History`) is
+skipped. The header gets `pdfuaid:part` and `rev` (D076: a trust signal, verified not obeyed
+(D034)), `pdfaid:part` and `conformance`. (5) **The catalog**: `/Lang`, `/Version`, `/MarkInfo
+/Marked`, whether there is a `/StructTreeRoot`, an `/AcroForm` (`/NeedAppearances`, `/SigFlags`,
+`/XFA`), `/Outlines`, `/PageLabels`, `/Perms`, `/ViewerPreferences /DisplayDocTitle`. A `/Lang` is
+recorded, not judged: P4 and P9 compare it with what the text is. (6) **Named destinations**
+are listed on request (`nd`), the old dictionary first and then the tree, every row, at most
+50,000. (7) **Source**: `pd-source-json` (D065) is NOT changed, so the five golden `Source` files
+stay byte-identical; the engine that builds the Source (P1.10) adds the catalogue's fields
+from `pm-dump`'s cells. (8) Encrypted files: every string and the XMP stream arrive decrypted
+(D098: `pd-get` decrypts where an object is loaded); the `/Metadata` stream of a file with
+`/EncryptMetadata false` is read as it is.
+**Why**: these are the author's own signals of structure, language and accessibility, cheap to
+read once and worth having whole before stage 3 decides what a heading is (D018) or whether a
+document is in a language it claims. The scanner is small because the packets that exist are a
+small subset of RDF/XML; the corpus's 1,150 packets give the same properties as `clojure.data.xml` finds
+(where it can parse the packet at all).
+**Alternatives**: a full XML parser in kin (thousands of lines for a subset's worth of value); the
+library's own XMP reader through a host port (four hosts, four behaviours: SPEC 7.2); labels
+as a per-page array (a 100,000-page book pays for it, and the ranges are the structure); trust
+`/Count` for an outline's size (wrong in real files).
+- [ ] **Signed off** (maintainer)
+
+### D122 — P3.8 and P3.9 are verified against poppler and qpdf over the whole corpus, in babashka, by a tool that counts items; real-file facts come from the oracles
+**Decision** (P3.8, P3.9, D034, D094, D100). `kin/scripts/pdf-catalog` runs the generated Rust over
+any list of PDFs (one `path<TAB>password` a line) and prints each file's canonical dump
+(`pa-dump`, `pm-dump`); `kin/scripts/pdf-catalog-compare` (babashka, NOT a gate) compares every
+category with an independent reader and counts agreement as **items** (a page's label, a
+bookmark, a field attribute, a link) and **files** (every item agrees). The oracles share no code
+with emon: labels (qpdf's per-page label dictionary, turned into text by numbering code written out
+in the tool), outlines (qpdf; a named `/A` GoTo qpdf does not follow through poppler's table),
+fields (qpdf `acroform`: name, type, flags, value, page, matched by widget), named destinations
+(`pdfinfo -dests`), URLs (`pdfinfo -url`), links (qpdf's raw objects: rectangle, action, target
+page), signatures (`pdfsig`: field name and signed ranges; qpdf objects: `/Name /Reason /Location
+/M`), stamps (qpdf objects), Info and flags (`pdfinfo -isodates`), XMP (`pdfinfo -meta` parsed
+by `clojure.data.xml`), `/Lang` (qpdf objects). **Results, 4,000 files** (`bb
+kin/scripts/pdf-catalog-compare`): labels 24,731 of 24,731 pages; outlines 5,474 of 5,474; named
+destinations 13,223 of 13,223; fields 19,215 of 19,215; XMP 2,298 of 2,298; `/Lang` and
+`/Version` 8,000 of 8,000; Info 39,997 of 40,000; signatures 30 of 30; stamps 30 of 30;
+links and URLs as D120 says. **What still differs, and is emon's on purpose**: a URI with a
+non-ASCII byte (emon reads UTF-8, qpdf PDFDocEncoding); an integer page index (emon and
+pdf.js follow it, qpdf and poppler's table do not); a UTF-8 Keywords string with a BOM (poppler
+shows mojibake); a `D:` date poppler guesses at; an outline that loops (qpdf lists repeats);
+a URL poppler shows with a trailing `?` for a control character. **Fixtures**
+(`kin/scripts/pdf-catalog-fixtures`, test/pdf/catalog/, goldens and `test/pdf/catalog.txt`):
+known by construction, cross-checked by the same tool (they agree except where a fixture
+was built to differ: the loop, the BOM, a date with no seconds), read by
+`kin/pdfcatalogtest.kin` on all four targets: the dump is the golden byte for byte, the labels
+of every range, the outline tree, the loop, the inherited fields, the link of every action, the
+signature's signer, the metadata of every encoding (plain and encrypted), no truncation or
+corruption faults, every fixture through 64- and 512-byte async sources. **Real files**
+(`test/pdf/catalog-corpus.txt`, 130 rows, written by `pdf-catalog-compare --write`): counts and
+digests of the bookmarks, the labels, the links and the `/Lang` that qpdf and poppler state;
+kin computes the same digests from its arenas and they are equal on four targets. The corpus
+is not in git (D086): the row law needs `../corpus`, as `pdf/corpus.txt`'s does.
+**Why**: accuracy is paramount (D023) and emon cannot be its own oracle (D100); rates over the
+whole corpus found what the fixtures could not (an integer page index, `/Dest null`, a string
+qpdf shows as bytes, poppler's own date and URL quirks), and each was a decision or a fix.
+**Alternatives**: Python oracles (D094: bb for everything but third-party libraries, and none is
+installed); comparing whole dumps (a format change would be an oracle change); per-file verdicts
+only (a 600-page book with one wrong label would count as one failure among 4,000).
+- [ ] **Signed off** (maintainer)
+
 ---
 
 ## Found in kin, not ours to fix here
@@ -2706,6 +2907,20 @@ them; offer them upstream when they have proved general.
 - A `(while 1 ...)` with statements after it would be unreachable code in Java
   (a constant condition); kin has no `loop`/`forever` the four targets agree
   on, so loops with several exits use a `done` flag.
+- A `\u` in a kin COMMENT becomes a Java unicode escape in the generated Java (`javac`: `illegal
+  unicode escape`), because Java reads `\u` everywhere, comments included; Rust, Go and C# do not. P3.9's
+  first Java build failed on a comment that spelled a JSON escape. kin could sanitise emitted comments
+  (or refuse a `\u` in one at generation time, as it refuses `len` for Go); emon words around it.
+- `defconst` names fold to the same Go identifier as a function of the same name in lower case: `PX_NULL`
+  and `(px-null)` are both `pxNull`, `PM_OUTLINES` and `pm-outlines` both `pmOutlines`, and the
+  generator says nothing (as for `PG`/`pg` and `len`/`cap`/`go`/`var` above). Found by the Go
+  compile; worth a generation-time check of constants against functions per target.
+- `emit-ascii` refuses a literal TAB (it is not printable ASCII), which is right, and means a row
+  law that writes tab-separated fields uses another separator on the output side.
+- `(pd-resolve ... (px-nth ar arr i))`, `(cells-set md 41 (pm-xmp-scan ... md ...))`: the Rust
+  `&mut Cells` tag again (two mutable borrows in one call): every one of P3.8's and P3.9's Rust errors
+  was that or a `let` that was assigned later without `^:mut`. The `CellsRo` tag of the audit above
+  would have removed the first kind outright.
 
 ## Open questions for the maintainer
 

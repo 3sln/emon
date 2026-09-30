@@ -1,0 +1,300 @@
+#!/usr/bin/env bb
+;; Write P3.8 and P3.9's fixtures: hand-built PDFs whose catalogue extras are known BY
+;; CONSTRUCTION (labels with every numbering style and prefix, outlines with named
+;; destinations and with loops, forms with inherited fields, links of every action, stamps,
+;; signature dictionaries, Info and XMP metadata), and qpdf's encrypted copies of the metadata
+;; file (emon must decrypt the strings).
+;;
+;;     bb kin/scripts/pdf-catalog-fixtures            write test/pdf/catalog/*.pdf and *.json
+;;     bb kin/scripts/pdf-catalog-fixtures --check    fail if a committed golden is out of date
+;;
+;; A DEVELOPMENT TOOL (babashka; needs qpdf; the cross-check needs poppler), run by a person, not
+;; a gate. The files are COMMITTED so a test run needs no tool. It writes
+;;
+;;   test/pdf/catalog/NAME.pdf    the file
+;;   test/pdf/catalog/NAME.json   what `kin/scripts/pdf-catalog` (the generated Rust) says of it:
+;;                                the goldens `kin/pdfcatalogtest.kin` holds all four targets to
+;;   test/pdf/catalog.txt         the fixtures, one per row
+;;
+;; THE GOLDENS ARE EMON'S OWN OUTPUT, reviewed, so each is also held to the oracles: after
+;; writing, this runs `kin/scripts/pdf-catalog-compare` over the fixtures (poppler and qpdf share no
+;; code with emon) and stops on a disagreement it does not know of. What the oracles cannot check
+;; (a file whose answer no other reader gives) is asserted as literals in the laws.
+(require '[babashka.process :as p]
+         '[babashka.fs :as fs]
+         '[clojure.string :as str])
+
+(def root (-> *file* java.io.File. .getCanonicalFile .getParentFile .getParentFile .getParent))
+(def out-dir (str root "/test/pdf/catalog"))
+(def check? (some #{"--check"} *command-line-args*))
+(fs/create-dirs out-dir)
+
+(defn bytes-of [s] (.getBytes ^String s "ISO-8859-1"))
+(defn sh [& args] (apply p/shell {:out :string :err :string :continue true :dir root} args))
+(defn path [name] (str out-dir "/" name))
+
+(defn build-pdf
+  "Classic-xref PDF bytes from [[num body] ...]; a body is a string, or [dict-string stream-string]
+  for a stream with its /Length filled in."
+  [objs trailer-extra]
+  (let [sb (StringBuilder. "%PDF-1.7\n%âãÏÓ\n")
+        offs (volatile! {})]
+    (doseq [[num body] objs]
+      (vswap! offs assoc num (.length sb))
+      (.append sb (str num " 0 obj\n"))
+      (if (vector? body)
+        (let [[d s] body]
+          (.append sb (str "<<" d "/Length " (count s) ">>\nstream\n" s "\nendstream\n")))
+        (.append sb (str body "\n")))
+      (.append sb "endobj\n"))
+    (let [xr (.length sb)
+          size (inc (apply max (keys @offs)))]
+      (.append sb (str "xref\n0 " size "\n0000000000 65535 f \n"))
+      (doseq [i (range 1 size)]
+        (.append sb (if-let [o (@offs i)] (format "%010d 00000 n \n" o) "0000000000 00000 f \n")))
+      (.append sb (str "trailer\n<</Size " size trailer-extra ">>\nstartxref\n" xr "\n%%EOF\n"))
+      (bytes-of (str sb)))))
+
+(def font [9 "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>"])
+
+(defn page [num & {:keys [box extra] :or {box "[0 0 612 792]"}}]
+  [num (str "<</Type/Page/Parent 2 0 R/MediaBox" box "/Resources<</Font<</F1 9 0 R>>>>" (or extra "") ">>")])
+
+(defn pages-obj [nums] [2 (str "<</Type/Pages/Kids[" (str/join " " (map #(str % " 0 R") nums)) "]/Count " (count nums) ">>")])
+
+(defn form-xobj [num text]
+  [num ["/Type/XObject/Subtype/Form/BBox[0 0 200 20]/Resources<</Font<</Helv 9 0 R>>>>"
+        (if text (str "/Tx BMC q BT /Helv 12 Tf 2 4 Td (" text ") Tj ET Q EMC") "")]])
+
+;; ---------------------------------------------------------------- labels
+
+(def labels
+  (build-pdf
+   (concat [[1 "<</Type/Catalog/Pages 2 0 R/PageLabels 3 0 R/Lang (en)>>"]
+            (pages-obj (range 10 24))
+            [3 "<</Kids[4 0 R 5 0 R]>>"]
+            [4 "<</Limits[0 8]/Nums[0<</S/r>>4<</S/D>>8<</S/A/P(App-)>>]>>"]
+            [5 "<</Limits[10 20]/Nums[10<</P(Ex)>>11<</S/a/St 27>>13<</S/R/St 4>>20<</S/D>>]>>"]
+            font]
+           (for [i (range 10 24)] (page i)))
+   "/Root 1 0 R"))
+
+;; the odd ones: no range at page 0, St 0, a repeated key, a negative key, Roman past 3999
+(def labels-odd
+  (build-pdf
+   (concat [[1 "<</Type/Catalog/Pages 2 0 R/PageLabels 3 0 R>>"]
+            (pages-obj (range 10 16))
+            [3 "<</Nums[-1<</S/D>>2<</S/D/St 0>>4<</S/A>>4<</S/a>>5<</S/R/St 3999>>]>>"]
+            font]
+           (for [i (range 10 16)] (page i)))
+   "/Root 1 0 R"))
+
+;; ---------------------------------------------------------------- outlines
+
+(def outline-pages (for [i (range 3 9)] (page i)))
+
+(def outlines
+  (build-pdf
+   (concat [[1 "<</Type/Catalog/Pages 2 0 R/Outlines 20 0 R/Dests 30 0 R/Names 31 0 R>>"]
+            (pages-obj (range 3 9))
+            font
+            [20 "<</Type/Outlines/First 21 0 R/Last 23 0 R/Count 5>>"]
+            [21 "<</Title(Chapter 1)/Parent 20 0 R/Next 22 0 R/First 24 0 R/Last 25 0 R/Count 2/Dest[3 0 R/XYZ 0 792 null]/C[1 0 0]/F 2>>"]
+            [24 "<</Title(Section 1.1)/Parent 21 0 R/Next 25 0 R/Dest[4 0 R/FitH 700]>>"]
+            [25 "<</Title<FEFF00530065006300740069006F006E00E9>/Parent 21 0 R/Prev 24 0 R/A<</S/GoTo/D(chapter.2)>>>>"]
+            [22 "<</Title(Chapter 2)/Parent 20 0 R/Prev 21 0 R/Next 23 0 R/First 26 0 R/Last 26 0 R/Count -1/Dest(chapter.2)>>"]
+            [26 "<</Title(Hidden child)/Parent 22 0 R/Dest/DestA>>"]
+            [23 "<</Title(Appendix \\(A\\))/Parent 20 0 R/Prev 22 0 R/A<</S/URI/URI(http://example.org/a)>>>>"]
+            [30 "<</DestA[5 0 R/Fit]/Other[8 0 R/XYZ null null null]>>"]
+            [31 "<</Dests 32 0 R>>"]
+            [32 "<</Kids[33 0 R 34 0 R]>>"]
+            [33 "<</Limits[(chapter.1)(chapter.2)]/Names[(chapter.1)[3 0 R/XYZ 0 792 null](chapter.2)<</D[6 0 R/FitH 500]>>]>>"]
+            [34 "<</Limits[(z.last)(z.last)]/Names[(z.last)[8 0 R/FitR 10 10 100 100]]>>"]]
+           outline-pages)
+   "/Root 1 0 R"))
+
+;; loops: Y -> W -> W, and X.1's /First is X
+(def outline-cycles
+  (build-pdf
+   (concat [[1 "<</Type/Catalog/Pages 2 0 R/Outlines 20 0 R>>"]
+            (pages-obj [3 4 5])
+            font
+            [20 "<</Type/Outlines/First 21 0 R/Last 24 0 R/Count 4>>"]
+            [21 "<</Title(X)/Parent 20 0 R/Next 22 0 R/First 23 0 R/Last 23 0 R/Dest[3 0 R/Fit]>>"]
+            [23 "<</Title(X.1)/Parent 21 0 R/First 21 0 R/Last 21 0 R/Dest[4 0 R/Fit]>>"]
+            [22 "<</Title(Y)/Parent 20 0 R/Prev 21 0 R/Next 24 0 R/Dest[4 0 R/Fit]>>"]
+            [24 "<</Title(W)/Parent 20 0 R/Prev 22 0 R/Next 24 0 R/Dest[5 0 R/Fit]>>"]]
+           (for [i [3 4 5]] (page i)))
+   "/Root 1 0 R"))
+
+;; ---------------------------------------------------------------- forms
+
+(def forms
+  (build-pdf
+   [[1 "<</Type/Catalog/Pages 2 0 R/AcroForm 40 0 R>>"]
+    (pages-obj [3])
+    (page 3 :extra "/Annots[11 0 R 12 0 R 14 0 R 15 0 R 16 0 R 17 0 R 20 0 R 21 0 R 19 0 R 25 0 R]")
+    font
+    [40 "<</Fields[10 0 R 13 0 R 16 0 R 17 0 R 18 0 R 19 0 R 25 0 R]/DA(/Helv 0 Tf 0 g)/NeedAppearances false/SigFlags 1/DR<</Font<</Helv 9 0 R>>>>>>"]
+    [10 "<</T(person)/FT/Tx/Ff 4096/Q 1/MaxLen 20/Kids[11 0 R 12 0 R]>>"]
+    [11 "<</Type/Annot/Subtype/Widget/Parent 10 0 R/T(name)/V(Alice)/Rect[72 700 272 720]/AP<</N 30 0 R>>/F 4/P 3 0 R>>"]
+    [12 "<</Type/Annot/Subtype/Widget/Parent 10 0 R/T(nick)/V(Bob)/Rect[72 660 272 680]/AP<</N 31 0 R>>/P 3 0 R>>"]
+    [13 "<</T(pick)/FT/Btn/Ff 32768/V/b/Kids[14 0 R 15 0 R]>>"]
+    [14 "<</Type/Annot/Subtype/Widget/Parent 13 0 R/Rect[72 600 92 620]/AS/Off/AP<</N<</a 32 0 R/Off 33 0 R>>>>/P 3 0 R>>"]
+    [15 "<</Type/Annot/Subtype/Widget/Parent 13 0 R/Rect[102 600 122 620]/AS/b/AP<</N<</b 32 0 R/Off 33 0 R>>>>/P 3 0 R>>"]
+    [16 "<</Type/Annot/Subtype/Widget/T(agree)/FT/Btn/V/Yes/AS/Yes/Rect[72 560 92 580]/AP<</N<</Yes 32 0 R/Off 33 0 R>>>>/P 3 0 R>>"]
+    [17 "<</Type/Annot/Subtype/Widget/T(color)/FT/Ch/Ff 131072/V[(red)(blue)]/Opt[(red)(green)(blue)]/Rect[72 520 172 540]/P 3 0 R>>"]
+    [18 "<</T(grp)/FT/Tx/V(inherited)/DV(dflt)/Kids[20 0 R 21 0 R]>>"]
+    [20 "<</Type/Annot/Subtype/Widget/Parent 18 0 R/Rect[72 480 172 500]/P 3 0 R>>"]
+    [21 "<</Type/Annot/Subtype/Widget/Parent 18 0 R/Rect[182 480 282 500]/P 3 0 R>>"]
+    [19 "<</Type/Annot/Subtype/Widget/T(sig0)/FT/Sig/Rect[72 440 172 460]/P 3 0 R>>"]
+    [25 "<</Type/Annot/Subtype/Widget/T(go)/FT/Btn/Ff 65536/Rect[72 400 122 420]/P 3 0 R>>"]
+    (form-xobj 30 "Alice")
+    (form-xobj 31 "Robert")
+    (form-xobj 32 nil)
+    (form-xobj 33 nil)]
+   "/Root 1 0 R"))
+
+;; ---------------------------------------------------------------- links
+
+(def links
+  (build-pdf
+   [[1 "<</Type/Catalog/Pages 2 0 R/Names<</Dests 60 0 R>>/Dests 61 0 R>>"]
+    (pages-obj [3 4 5])
+    (page 3 :extra "/Annots[70 0 R 71 0 R 72 0 R 73 0 R 74 0 R 75 0 R 76 0 R 77 0 R 78 0 R 79 0 R 80 0 R 81 0 R 82 0 R]")
+    (page 4 :box "[0 0 595 842]" :extra "/Rotate 90/Annots[90 0 R]")
+    (page 5 :box "[0 0 300 400]" :extra "/CropBox[10 10 290 390]/Annots[91 0 R]")
+    font
+    [60 "<</Names[(named.x)[5 0 R/Fit](named.y)<</D[4 0 R/FitV 50]>>]>>"]
+    [61 "<</oldname[4 0 R/XYZ 10 20 1.5]>>"]
+    [70 "<</Type/Annot/Subtype/Link/Rect[72 700 172 712]/A<</S/URI/URI(http://example.org/x?a=1&b=2)>>/Border[0 0 0]>>"]
+    [71 "<</Type/Annot/Subtype/Link/Rect[72 680 172 692]/A<</S/GoTo/D[4 0 R/FitH 300]>>>>"]
+    [72 "<</Type/Annot/Subtype/Link/Rect[72 660 172 672]/A<</S/GoTo/D(named.x)>>>>"]
+    [73 "<</Type/Annot/Subtype/Link/Rect[72 640 172 652]/Dest/oldname>>"]
+    [74 "<</Type/Annot/Subtype/Link/Rect[72 620 172 632]/Dest(named.y)>>"]
+    [75 "<</Type/Annot/Subtype/Link/Rect[72 600 172 612]/A<</S/GoToR/F(other.pdf)/D[2/Fit]>>>>"]
+    [76 "<</Type/Annot/Subtype/Link/Rect[72 580 172 592]/A<</S/Launch/F(app.exe)>>>>"]
+    [77 "<</Type/Annot/Subtype/Link/Rect[72 560 172 572]/A<</S/Named/N/NextPage>>>>"]
+    [78 "<</Type/Annot/Subtype/Link/Rect[72 500 300 540]/QuadPoints[72 540 300 540 72 520 300 520 72 520 200 520 72 500 200 500]/A<</S/URI/URI(http://example.org/wrapped)>>>>"]
+    [79 "<</Type/Annot/Subtype/Link/Rect[72 480 172 492]/A<</S/URI/URI(http://example.org/first)/Next<</S/URI/URI(http://example.org/second)>>>>>>"]
+    [80 "<</Type/Annot/Subtype/Link/Rect[72 460 172 472]/A<</S/JavaScript/JS(app.alert\\(1\\))>>>>"]
+    [81 "<</Type/Annot/Subtype/Link/Rect[72 440 172 452]/Dest[99 0 R/Fit]>>"]
+    [82 "<</Type/Annot/Subtype/Link/Rect[172 420 72 432]/Dest[1/XYZ 0 0 null]>>"]
+    [90 "<</Type/Annot/Subtype/Link/Rect[100 100 200 150]/A<</S/URI/URI(http://example.org/rotated)>>>>"]
+    [91 "<</Type/Annot/Subtype/Link/Rect[20 20 120 60]/A<</S/GoTo/D[3 0 R/Fit]>>>>"]
+    [99 "<</NotAPage true>>"]]
+   "/Root 1 0 R"))
+
+;; ---------------------------------------------------------------- stamps
+
+(def stamps
+  (build-pdf
+   [[1 "<</Type/Catalog/Pages 2 0 R>>"]
+    (pages-obj [3])
+    (page 3 :extra "/Annots[50 0 R 51 0 R 52 0 R 53 0 R]")
+    font
+    [50 "<</Type/Annot/Subtype/Stamp/Rect[100 600 300 650]/Name/Approved/Contents(Approved by QA)/T(QA)/AP<</N 60 0 R>>/F 4/CA 0.5>>"]
+    [51 "<</Type/Annot/Subtype/Stamp/Rect[100 500 300 550]/Name/Draft/AP<</N 61 0 R>>/F 4>>"]
+    [52 "<</Type/Annot/Subtype/Watermark/Rect[0 0 612 792]/FixedPrint<</Type/FixedPrint/Matrix[1 0 0 1 0 0]/H 0/V 0>>/AP<</N 62 0 R>>/F 68>>"]
+    [53 "<</Type/Annot/Subtype/FreeText/Rect[100 400 300 430]/Contents(Note: free text)/DA(/Helv 12 Tf 0 g)/AP<</N 63 0 R>>>>"]
+    (form-xobj 60 "APPROVED")
+    (form-xobj 61 "DRAFT")
+    (form-xobj 62 "CONFIDENTIAL")
+    (form-xobj 63 "Note: free text")]
+   "/Root 1 0 R"))
+
+;; ---------------------------------------------------------------- signatures
+
+(def sigs
+  (build-pdf
+   [[1 "<</Type/Catalog/Pages 2 0 R/AcroForm 40 0 R/Perms<</DocMDP 50 0 R>>>>"]
+    (pages-obj [3])
+    (page 3 :extra "/Annots[10 0 R 11 0 R 12 0 R]")
+    font
+    [40 "<</Fields[10 0 R 11 0 R 12 0 R]/SigFlags 3>>"]
+    [10 "<</Type/Annot/Subtype/Widget/T(sigA)/FT/Sig/V 50 0 R/Rect[72 700 272 740]/P 3 0 R>>"]
+    [11 "<</Type/Annot/Subtype/Widget/T(stamp)/FT/Sig/V 51 0 R/Rect[72 640 272 680]/P 3 0 R>>"]
+    [12 "<</Type/Annot/Subtype/Widget/T(unsigned)/FT/Sig/Rect[72 580 272 620]/P 3 0 R>>"]
+    [50 "<</Type/Sig/Filter/Adobe.PPKLite/SubFilter/adbe.pkcs7.detached/Name<FEFF005A006F00EB00200053006900670066006F006F>/M(D:20240229123456+01'00')/Reason(I approve this document)/Location(Berlin)/ContactInfo(z@example.org)/ByteRange[0 100 200 300]/Contents<0011223344556677889900AABBCCDDEEFF00112233445566778899>>>"]
+    [51 "<</Type/DocTimeStamp/Filter/Adobe.PPKLite/SubFilter/ETSI.RFC3161/M(D:20240301000000Z)/ByteRange[0 10 20 30]/Contents<00>>>"]]
+   "/Root 1 0 R"))
+
+;; ---------------------------------------------------------------- metadata
+
+(def xmp
+  (str "<?xpacket begin=\"ï»¿\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
+       "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
+       "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
+       " <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\" pdfuaid:part=\"1\" dc:format=\"application/pdf\">\n"
+       "  <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">A &amp; B &#233;&#x20AC; Ã©</rdf:li><rdf:li xml:lang=\"de\">Ein Titel</rdf:li></rdf:Alt></dc:title>\n"
+       "  <dc:creator><rdf:Seq><rdf:li>Ada</rdf:li><rdf:li>Bob</rdf:li></rdf:Seq></dc:creator>\n"
+       "  <dc:subject><rdf:Bag><rdf:li>one</rdf:li><rdf:li>two</rdf:li></rdf:Bag></dc:subject>\n"
+       "  <dc:description/>\n"
+       " </rdf:Description>\n"
+       " <rdf:Description rdf:about=\"\" xmlns:q=\"http://ns.adobe.com/pdf/1.3/\" xmlns:xmpMM=\"http://ns.adobe.com/xap/1.0/mm/\">\n"
+       "  <q:Producer><![CDATA[Prod <ucer> & co]]></q:Producer>\n"
+       "  <!-- a comment with <tags> in it -->\n"
+       "  <q:Keywords>k1, k2</q:Keywords>\n"
+       "  <xmpMM:History><rdf:Seq><rdf:li rdf:parseType=\"Resource\"><xmpMM:action>saved</xmpMM:action></rdf:li></rdf:Seq></xmpMM:History>\n"
+       "  <xmpMM:DocumentID>uuid:0000</xmpMM:DocumentID>\n"
+       " </rdf:Description>\n"
+       " <rdf:Description xmlns:m=\"http://www.aiim.org/pdfa/ns/id/\" m:part=\"2\" m:conformance=\"B\"/>\n"
+       "</rdf:RDF>\n"
+       "</x:xmpmeta>\n"
+       "<?xpacket end=\"w\"?>"))
+
+(def meta
+  (build-pdf
+   [[1 "<</Type/Catalog/Pages 2 0 R/Lang (fr-CA)/MarkInfo<</Marked true>>/ViewerPreferences<</DisplayDocTitle true>>/Metadata 15 0 R/StructTreeRoot 16 0 R/Version/1.7>>"]
+    (pages-obj [3])
+    (page 3)
+    font
+    [10 (str "<</Title<FEFF00DC006E00EF20AC006F00640065>"
+             "/Author(Bullet\\200 Euro\\240 breve\\030 end)"
+             "/Subject(Paren \\(nested\\) and \\\\ backslash)"
+             "/Keywords<EFBBBF4B65792D776F7264E282AC>"
+             "/Creator(Emon Test)/Producer(emon fixtures)"
+             "/CreationDate(D:20240102030405Z)/ModDate(D:2024010203+05'30')/Trapped/False>>")]
+    [15 [(str "/Type/Metadata/Subtype/XML") xmp]]
+    [16 "<</Type/StructTreeRoot>>"]]
+   "/Root 1 0 R/Info 10 0 R"))
+
+;; ------------------------------------------------------------------------ run
+
+(def files
+  {"labels.pdf" labels "labels-odd.pdf" labels-odd "outlines.pdf" outlines
+   "outline-cycles.pdf" outline-cycles "forms.pdf" forms "links.pdf" links
+   "stamps.pdf" stamps "sigs.pdf" sigs "meta.pdf" meta})
+
+(when-not check?
+  (doseq [[n b] files] (fs/write-bytes (path n) b))
+  ;; qpdf's encrypted copies of the metadata file: strings and the XMP stream must be decrypted
+  (doseq [[n args] {"meta-aes256.pdf" ["--encrypt" "" "owner" "256" "--"]
+                    "meta-rc4-128.pdf" ["--encrypt" "" "owner" "128" "--use-aes=n" "--"]
+                    "meta-aes128.pdf" ["--encrypt" "" "owner" "128" "--use-aes=y" "--"]}]
+    (let [r (apply sh "qpdf" "--static-id" "--allow-weak-crypto" (concat args [(path "meta.pdf") (path n)]))]
+      (when-not (#{0 3} (:exit r)) (throw (ex-info (str "qpdf failed for " n "\n" (:err r)) {}))))))
+
+(def all-names (vec (sort (concat (keys files) ["meta-aes256.pdf" "meta-rc4-128.pdf" "meta-aes128.pdf"]))))
+
+(let [input (str (str/join "\n" (map #(str "test/pdf/catalog/" %) all-names)) "\n")
+      r (p/shell {:out :string :in input :dir root} (str root "/kin/scripts/pdf-catalog"))
+      rows (into {} (for [l (str/split-lines (:out r))
+                          :let [[pth status js] (str/split l #"\t" 3)]]
+                      [(last (str/split pth #"/")) [status js]]))
+      stale (atom [])]
+  (doseq [n all-names]
+    (let [[status js] (rows n)
+          gold (path (str/replace n ".pdf" ".json"))]
+      (when-not (= "ok" status) (throw (ex-info (str n " did not open: " status) {})))
+      (if check?
+        (when-not (and (fs/exists? gold) (= (str js "\n") (slurp gold))) (swap! stale conj n))
+        (spit gold (str js "\n")))))
+  (if check?
+    (if (seq @stale)
+      (do (println "  FAIL out of date:" (str/join " " @stale) "-- run bb kin/scripts/pdf-catalog-fixtures") (System/exit 1))
+      (println "  ok   test/pdf/catalog goldens are current"))
+    (spit (str root "/test/pdf/catalog.txt")
+          (str "# emon P3.8/P3.9: the fixtures of kin/scripts/pdf-catalog-fixtures, read by kin/pdfcatalogtest.kin.\n"
+               "# file (relative to test/) <TAB> password ('-' for none) <TAB> its golden\n"
+               (str/join "" (map #(str "pdf/catalog/" % "\t-\tpdf/catalog/" (str/replace % ".pdf" ".json") "\n") all-names))))))

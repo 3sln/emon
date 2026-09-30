@@ -1,0 +1,26 @@
+#!/bin/sh
+# Read the catalogue extras (P3.8 annotations, forms, signatures; P3.9 outlines, page labels,
+# metadata) of every PDF named on stdin with the GENERATED RUST, and print one row each:
+#
+#     path<TAB>status<TAB>json
+#
+#     find corpus -name '*.pdf' | kin/scripts/pdf-catalog
+#     echo 'corpus/forms/irs/fw4.pdf<TAB>secret' | kin/scripts/pdf-catalog
+#
+# A line may be `path<TAB>password` (D098). `json` is `{"annots":..,"fields":..,"sigs":..,
+# "catalog":..}`: the two dumps (`pa-dump`, `pm-dump`) of kin/pdfannot.kin and kin/pdfmeta.kin,
+# on one line. A DEVELOPMENT TOOL, run by kin/scripts/pdf-catalog-compare (babashka) and by a
+# person; no gate runs it. A fault in the code is a `PANIC` row, not a crash. Built with
+# overflow and bounds checks ON.
+set -e
+cd "$(dirname "$0")/../.."
+./kin/scripts/emit > /dev/null
+work=$(mktemp -d "${TMPDIR:-/tmp}/emon-catalog.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/emon"
+cp gen/rust/emon/*.rs "$work/emon/"
+cp host/rust/src/port.rs host/rust/src/testport.rs "$work/"
+( for f in gen/rust/emon/*.rs; do echo "pub mod $(basename "$f" .rs);"; done ) > "$work/emon.rs"
+cp kin/scripts/pdf-catalog.rs "$work/main.rs"
+( cd "$work" && rustc -O -C debug-assertions=on -C overflow-checks=on -o catalog main.rs 2>&1 | grep -E '^(error|warning: unused)' -A8 | head -400 || true )
+"$work/catalog"

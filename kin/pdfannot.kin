@@ -1,0 +1,1367 @@
+;; Annotations, AcroForm fields and signature dictionaries (P3.8, D120): links (URI, GoTo,
+;; GoToR, Launch, Named, named destinations), Stamp and Watermark annotations, widgets with
+;; their field's value AND appearance text, and what a signature dictionary says about its
+;; signer. emon's own module (D039), from ISO 32000-1 12.5 (annotations), 12.6 (actions),
+;; 12.7 (interactive forms) and 12.8 (signatures). Evidence, not truth (D034): every value
+;; is recorded as the file states it and the readers that follow decide what to believe.
+;;
+;;   (pa-run src ar dc a b st pg idx txt w fs seen fm an aq fd sg)   read everything
+;;   (pa-dump t txt an aq fd sg)                                   the canonical JSON dump
+;;
+;; THE ARENAS are `Cells`, rows of a fixed stride, strings as runs of `txt` (see
+;; `emon.pdfx`). SPEC 8.4.7 says annotations get their own arena; these are them, and they
+;; will join the evidence bundles when P1.12 lands (D096).
+;;
+;;   `an`  annotations, `AN_STRIDE` cells: 0 page, 1 subtype (`an-sub`), 2 object number (0
+;;         direct), 3 /F, 4-7 rectangle in PAGE SPACE (x0 y0 x1 y1, SPEC 3.4), 8-11 the
+;;         rectangle in user space as written (normalized), 12 first action (`an-act`), 13-14
+;;         its target (URI, file, named action) as a run, 15-22 its destination
+;;         (`emon.pdfx` `DS_STRIDE`: page kind a b c d name-start name-len), 23-24 /Contents,
+;;         25-26 /T, 27-28 /Name, 29 field row (-1), 30 bits (1 has /AP, 2 has /OC, 4 has
+;;         /Parent, 8 has /Dest itself), 31 actions in the /Next chain, 32-33 the appearance's
+;;         text, 34 the appearance stream's object number, 35 /CA per-mille (-1), 36-37 its
+;;         quadrilaterals as `aq` rows first count.
+;;   `aq`  quadrilaterals, 8 cells: x y of four corners in page space, as written.
+;;   `fd`  terminal fields, `FD_STRIDE` cells: 0 object number, 1 name components, 2-3 full
+;;         name, 4 /FT (`fd-ft`), 5 /Ff, 6 kind (`fd-kind`), 7 value kind (`fv`), 8-9 /V as
+;;         text, 10 values in it, 11-12 /DV, 13-14 /TU, 15 page of the first widget, 16-19 its
+;;         rectangle in page space, 20 widgets, 21-22 the first widget's appearance text,
+;;         23 how /V and the appearance agree (`fa`), 24 signature row, 25 /MaxLen, 26 /Q,
+;;         27 widgets that are on AND match /V (buttons), 28 /Opt entries, 29 widgets that
+;;         are on, 30 first widget's annotation row, 31 spare.
+;;   `sg`  signatures, `SG_STRIDE` cells: 0 field row, 1 annotation row, 2 page, 3-6
+;;         rectangle (page space), 7-8 /Name, 9-10 /M as written, 11-17 /M parsed (year month
+;;         day hour minute second zone-minutes; -1 absent, zone -99999 unknown), 18-19
+;;         /Reason, 20-21 /Location, 22-23 /ContactInfo, 24-25 /Filter, 26-27 /SubFilter,
+;;         28-31 /ByteRange, 32 bytes in /Contents, 33 bits (1 signed, 2 has a /ByteRange, 4 a
+;;         document timestamp, 8 from /Perms), 34 ranges, 35 spare.
+;;
+;; THE APPEARANCE is decoded and its text shown (`BT` .. `ET`, strings and their line
+;; moves) is read as Latin-1: enough for a form filled with a base-14 or WinAnsi font; text
+;; in a composite font is unreadable here and left empty. A Form XObject the appearance
+;; draws is not followed. `/V` is what the author's software stored and the appearance is
+;; what it painted; when both exist they are compared (`fa`) and both are kept. SPEC 8.1:
+;; `/V` usually wins; that is fusion's rule, not this module's.
+;;
+;; A SIGNATURE is not validated (SPEC 8.1): /Name, /M, /Reason, /Location, /ContactInfo, the
+;; byte range and the size of the /Contents are what the dictionary says. The signer a
+;; certificate names is inside the PKCS#7 bytes and is not read.
+(ns emon.pdfannot
+  (:require [emon.lang :refer [I32 Src Cells Text defenum emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+                               text-cp text-i32]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfxnames :refer [px-annots px-rect px-a px-s px-uri px-go-to px-go-to-r
+                                    px-go-to-e px-launch px-named px-java-script
+                                    px-submit-form px-dest px-d px-link px-stamp
+                                    px-watermark px-widget px-text px-free-text px-line
+                                    px-square px-circle px-polygon px-poly-line
+                                    px-highlight px-underline px-squiggly px-strike-out
+                                    px-caret px-ink px-popup px-file-attachment px-sound
+                                    px-movie px-screen px-printer-mark px-trap-net px-redact
+                                    px-rich-media px-ft px-ff px-t px-tu px-v px-dv px-opt
+                                    px-ap px-as px-btn px-tx px-ch px-sig px-off px-max-len
+                                    px-q px-name px-m px-reason px-location px-contact-info
+                                    px-byte-range px-sub-filter px-doc-time-stamp px-perms
+                                    px-doc-mdp px-next px-quad-points px-ca px-oc px-uf px-fs
+                                    px-doc-mdp px-xfa px-need-appearances]]
+            [emon.pdfnames :refer [pn-type pn-subtype pn-contents pn-f pn-n pn-kids
+                                   pn-parent pn-acro-form pn-fields pn-filter pn-flags]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-count pl-dict-get
+                                 pl-name-len pl-name-byte pl-str-len pl-str-byte
+                                 pl-num-cp pl-stream-dict]]
+            [emon.pdfdoc :refer [pd-get pd-resolve pd-dget pd-dint pd-root pd-pg-count
+                                 pd-pg-node pd-stream-data pd-object-count]]
+            [emon.pdfx :refer [px-is px-get px-dget px-nth px-int-of px-is-num px-clamp-cp
+                               px-blen px-bat px-bytes-cmp px-push-cp px-text-push px-uri-push
+                               px-run-eq px-date-parse px-page-x px-page-y px-dest-init px-remote-set px-json-box px-json-cp
+                               px-json-dest px-dest-present px-dest-of px-seen-begin px-seen-mark px-json-run px-dict-find-plain px-null px-has]]
+            [kin.lang :refer [defn defconst declarefn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+(defconst ^I32 AN_STRIDE 38)
+(defconst ^I32 FD_STRIDE 32)
+(defconst ^I32 SG_STRIDE 36)
+(defconst ^I32 FS_STRIDE 8)
+(defconst ^I32 FS_DEPTH 26)           ;; field-tree depth
+(defconst ^I32 PA_ANNOTS 200000)      ;; annotations read
+(defconst ^I32 PA_FIELDS 100000)      ;; terminal fields read
+(defconst ^I32 PA_STREAM 65536)       ;; bytes of an appearance scanned
+
+(defenum ^:pub an-sub
+  [[an-other 0 "other"]
+   [an-link 1 "Link"]
+   [an-text 2 "Text"]
+   [an-free-text 3 "FreeText"]
+   [an-line 4 "Line"]
+   [an-square 5 "Square"]
+   [an-circle 6 "Circle"]
+   [an-polygon 7 "Polygon"]
+   [an-poly-line 8 "PolyLine"]
+   [an-highlight 9 "Highlight"]
+   [an-underline 10 "Underline"]
+   [an-squiggly 11 "Squiggly"]
+   [an-strike-out 12 "StrikeOut"]
+   [an-stamp 13 "Stamp"]
+   [an-caret 14 "Caret"]
+   [an-ink 15 "Ink"]
+   [an-popup 16 "Popup"]
+   [an-file-attachment 17 "FileAttachment"]
+   [an-sound 18 "Sound"]
+   [an-movie 19 "Movie"]
+   [an-widget 20 "Widget"]
+   [an-screen 21 "Screen"]
+   [an-printer-mark 22 "PrinterMark"]
+   [an-trap-net 23 "TrapNet"]
+   [an-watermark 24 "Watermark"]
+   [an-redact 25 "Redact"]
+   [an-rich-media 26 "RichMedia"]])
+
+(defenum ^:pub an-act
+  [[ac-none 0 "none"]
+   [ac-uri 1 "URI"]
+   [ac-goto 2 "GoTo"]
+   [ac-gotor 3 "GoToR"]
+   [ac-gotoe 4 "GoToE"]
+   [ac-launch 5 "Launch"]
+   [ac-named 6 "Named"]
+   [ac-javascript 7 "JavaScript"]
+   [ac-submit 8 "SubmitForm"]
+   [ac-other 9 "other"]])
+
+(defenum ^:pub fd-ft
+  [[ft-none 0 "none"]
+   [ft-btn 1 "Btn"]
+   [ft-tx 2 "Tx"]
+   [ft-ch 3 "Ch"]
+   [ft-sig 4 "Sig"]])
+
+(defenum ^:pub fd-kind
+  [[fk-unknown 0 "unknown"]
+   [fk-pushbutton 1 "pushbutton"]
+   [fk-checkbox 2 "checkbox"]
+   [fk-radio 3 "radio"]
+   [fk-text 4 "text"]
+   [fk-combo 5 "combo"]
+   [fk-list 6 "list"]
+   [fk-signature 7 "signature"]])
+
+(defenum ^:pub fv
+  [[fv-none 0 "none"]
+   [fv-text 1 "string"]
+   [fv-name 2 "name"]
+   [fv-array 3 "array"]
+   [fv-stream 4 "stream"]
+   [fv-dict 5 "dictionary"]
+   [fv-other 6 "other"]])
+
+;; how /V and the appearance agree: 0 not compared, 1 equal, 2 they differ, 3 /V alone (no
+;; appearance text), 4 appearance text alone
+(defenum ^:pub fa
+  [[fa-none 0 "none"]
+   [fa-equal 1 "equal"]
+   [fa-differ 2 "differ"]
+   [fa-value-only 3 "value-only"]
+   [fa-appearance-only 4 "appearance-only"]])
+
+;; ---------------------------------------------------------------- classifiers
+
+(defn ^I32 pa-subtype [^Cells ar ^I32 h]
+  (if (== h 0) (return 0))
+  (if (== (px-is ar h (px-link)) 1) (return 1))
+  (if (== (px-is ar h (px-text)) 1) (return 2))
+  (if (== (px-is ar h (px-free-text)) 1) (return 3))
+  (if (== (px-is ar h (px-line)) 1) (return 4))
+  (if (== (px-is ar h (px-square)) 1) (return 5))
+  (if (== (px-is ar h (px-circle)) 1) (return 6))
+  (if (== (px-is ar h (px-polygon)) 1) (return 7))
+  (if (== (px-is ar h (px-poly-line)) 1) (return 8))
+  (if (== (px-is ar h (px-highlight)) 1) (return 9))
+  (if (== (px-is ar h (px-underline)) 1) (return 10))
+  (if (== (px-is ar h (px-squiggly)) 1) (return 11))
+  (if (== (px-is ar h (px-strike-out)) 1) (return 12))
+  (if (== (px-is ar h (px-stamp)) 1) (return 13))
+  (if (== (px-is ar h (px-caret)) 1) (return 14))
+  (if (== (px-is ar h (px-ink)) 1) (return 15))
+  (if (== (px-is ar h (px-popup)) 1) (return 16))
+  (if (== (px-is ar h (px-file-attachment)) 1) (return 17))
+  (if (== (px-is ar h (px-sound)) 1) (return 18))
+  (if (== (px-is ar h (px-movie)) 1) (return 19))
+  (if (== (px-is ar h (px-widget)) 1) (return 20))
+  (if (== (px-is ar h (px-screen)) 1) (return 21))
+  (if (== (px-is ar h (px-printer-mark)) 1) (return 22))
+  (if (== (px-is ar h (px-trap-net)) 1) (return 23))
+  (if (== (px-is ar h (px-watermark)) 1) (return 24))
+  (if (== (px-is ar h (px-redact)) 1) (return 25))
+  (if (== (px-is ar h (px-rich-media)) 1) (return 26))
+  (return 0))
+
+(defn ^I32 pa-act-kind [^Cells ar ^I32 h]
+  (comment "An action's /S as an `an-act`.")
+  (if (== h 0) (return 0))
+  (if (== (px-is ar h (px-uri)) 1) (return 1))
+  (if (== (px-is ar h (px-go-to)) 1) (return 2))
+  (if (== (px-is ar h (px-go-to-r)) 1) (return 3))
+  (if (== (px-is ar h (px-go-to-e)) 1) (return 4))
+  (if (== (px-is ar h (px-launch)) 1) (return 5))
+  (if (== (px-is ar h (px-named)) 1) (return 6))
+  (if (== (px-is ar h (px-java-script)) 1) (return 7))
+  (if (== (px-is ar h (px-submit-form)) 1) (return 8))
+  (return 9))
+
+;; ------------------------------------------------------------ small writers
+
+(defn ^:pub ^I32 pa-text-to [^:mut ^Cells txt ^Cells ar ^I32 h ^:mut ^Cells out ^I32 at]
+  (comment "Keep the text of the resolved string or name `h` as a run at out[at, at+2);")
+  (comment "absent (-1 0) when h is neither.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 n 0]
+    (if (== h 0)
+      (do (cells-set out at -1) (cells-set out (+ at 1) 0) (return 0)))
+    (if (and (!= (pl-kind-of ar h) 5) (!= (pl-kind-of ar h) 4))
+      (do (cells-set out at -1) (cells-set out (+ at 1) 0) (return 0)))
+    (set s (cells-len txt))
+    (set n (px-text-push ar h txt))
+    (cells-set out at s)
+    (cells-set out (+ at 1) n)
+    (return n)))
+
+(defn ^:pub ^I32 pa-uri-to [^:mut ^Cells txt ^Cells ar ^I32 h ^:mut ^Cells out ^I32 at]
+  (comment "The same for a URI or a file specification: bytes, UTF-8 where well formed.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 n 0]
+    (if (== h 0)
+      (do (cells-set out at -1) (cells-set out (+ at 1) 0) (return 0)))
+    (if (and (!= (pl-kind-of ar h) 5) (!= (pl-kind-of ar h) 4))
+      (do (cells-set out at -1) (cells-set out (+ at 1) 0) (return 0)))
+    (set s (cells-len txt))
+    (set n (px-uri-push ar h txt))
+    (cells-set out at s)
+    (cells-set out (+ at 1) n)
+    (return n)))
+
+(defn ^I32 pa-filespec-to [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                           ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt ^I32 h0
+                           ^:mut ^Cells out ^I32 at]
+  (comment "A file specification (a string, or a dictionary whose /UF or /F is one) as a run.")
+  (let [^I32 h (pd-resolve src ar dc a b st h0)
+        ^:mut ^I32 v 0]
+    (if (== h 0)
+      (do (cells-set out at -1) (cells-set out (+ at 1) 0) (return 0)))
+    (if (== (pl-kind-of ar h) 7)
+      (do (set v (px-dget src ar dc a b st h (px-uf)))
+          (if (== v 0) (set v (pd-dget src ar dc a b st h (pn-f))))
+          (if (== v 0) (set v (px-dget src ar dc a b st h (px-fs))))
+          (return (pa-uri-to txt ar v out at))))
+    (return (pa-uri-to txt ar h out at))))
+
+;; ------------------------------------------------------------------- actions
+
+(defn ^:pub ^I32 pa-action [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^Cells pg
+                      ^:mut ^Cells txt ^I32 act ^:mut ^Cells out ^I32 row]
+  (comment "Read an action dictionary into annotation/outline-style cells at out[row]: the")
+  (comment "first action's kind at row+0, its target run at row+1, its destination at row+3.")
+  (comment "(Both `an` and `ol` lay these out the same, relative to `row`.) Answers how many")
+  (comment "actions the /Next chain holds (at most 8), counting this one.")
+  (let [^:mut ^I32 kind 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 cur act
+        ^:mut ^I32 nx 0
+        ^:mut ^I32 guard 0]
+    (if (== act 0) (return 0))
+    (if (!= (pl-kind-of ar act) 7) (return 0))
+    (set v (px-dget src ar dc a b st act (px-s)))
+    (set kind (pa-act-kind ar v))
+    (cells-set out row kind)
+    (if (== kind 1)
+      (do (set v (px-dget src ar dc a b st act (px-uri)))
+          (pa-uri-to txt ar v out (+ row 1))))
+    (if (== kind 2)
+      (do (set v (px-get ar act (px-d)))
+          (px-dest-of src ar dc a b st idx pg txt v out (+ row 3))))
+    (if (== kind 3)
+      (do (set v (px-get ar act (px-d)))
+          (px-remote-set idx 1)
+          (px-dest-of src ar dc a b st idx pg txt v out (+ row 3))
+          (px-remote-set idx 0)
+          (set v (pd-dget src ar dc a b st act (pn-f)))
+          (pa-filespec-to src ar dc a b st txt v out (+ row 1))))
+    (if (== kind 5)
+      (do (set v (pd-dget src ar dc a b st act (pn-f)))
+          (pa-filespec-to src ar dc a b st txt v out (+ row 1))))
+    (if (== kind 6)
+      (do (set v (pd-dget src ar dc a b st act (pn-n)))
+          (pa-text-to txt ar v out (+ row 1))))
+    (comment "The chain: /Next is an action or an array of them; count, do not follow deeper.")
+    (set cnt 1)
+    (set cur act)
+    (while (< guard 8)
+      (do (set guard (+ guard 1))
+          (set nx (px-dget src ar dc a b st cur (px-next)))
+          (if (== nx 0)
+            (set guard 99)
+            (if (== (pl-kind-of ar nx) 6)
+              (do (set cnt (+ cnt (pl-count ar nx)))
+                  (set guard 99))
+              (if (== (pl-kind-of ar nx) 7)
+                (do (set cnt (+ cnt 1))
+                    (set cur nx))
+                (set guard 99))))))
+    (if (> cnt 8) (set cnt 8))
+    (return cnt)))
+
+;; ----------------------------------------------------------- appearance text
+
+(defn ^I32 pa-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (return -1))
+
+(defn ^I32 pa-is-delim [^I32 c]
+  (if (== c 0) (return 1))
+  (if (== c 9) (return 1))
+  (if (== c 10) (return 1))
+  (if (== c 12) (return 1))
+  (if (== c 13) (return 1))
+  (if (== c 32) (return 1))
+  (if (== c 40) (return 1))
+  (if (== c 41) (return 1))
+  (if (== c 60) (return 1))
+  (if (== c 62) (return 1))
+  (if (== c 91) (return 1))
+  (if (== c 93) (return 1))
+  (if (== c 123) (return 1))
+  (if (== c 125) (return 1))
+  (if (== c 47) (return 1))
+  (if (== c 37) (return 1))
+  (return 0))
+
+(defn ^I32 pa-scan-text [^Cells w ^:mut ^Cells txt]
+  (comment "The text an appearance stream shows: every string between `BT` and `ET`, read")
+  (comment "as Latin-1, with a line break where a `Td`/`TD` moves down, at `T*` and `'`/`\"`")
+  (comment "and between text blocks; trailing space and breaks dropped. Answers the number")
+  (comment "of code points appended.")
+  (let [^I32 n0 (cells-len txt)
+        ^:mut ^I32 n (cells-len w)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 c2 0
+        ^:mut ^I32 inbt 0
+        ^:mut ^I32 pend 0
+        ^:mut ^I32 any 0
+        ^:mut ^I32 lastzero 0
+        ^:mut ^I32 depth 0
+        ^:mut ^I32 emit 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 nib 0
+        ^:mut ^I32 ws 0
+        ^:mut ^I32 we 0
+        ^:mut ^I32 wl 0
+        ^:mut ^I32 last 0
+        ^:mut ^I32 digit 0
+        ^:mut ^I32 nonzero 0]
+    (if (> n 65536) (set n 65536))
+    (while (< i n)
+      (do (set c (cells-at w i))
+          (set emit -1)
+          (if (== c 37)
+            (while (and (< i n) (!= (cells-at w i) 10) (!= (cells-at w i) 13))
+              (set i (+ i 1)))
+            (if (== c 40)
+              (do (set depth 1)
+                  (set i (+ i 1))
+                  (while (and (< i n) (> depth 0))
+                    (do (set c (cells-at w i))
+                        (set i (+ i 1))
+                        (set emit -1)
+                        (if (== c 92)
+                          (if (< i n)
+                            (do (set c2 (cells-at w i))
+                                (set i (+ i 1))
+                                (if (== c2 110) (set emit 10))
+                                (if (== c2 114) (set emit 13))
+                                (if (== c2 116) (set emit 9))
+                                (if (== c2 98) (set emit 8))
+                                (if (== c2 102) (set emit 12))
+                                (if (or (== c2 40) (== c2 41) (== c2 92)) (set emit c2))
+                                (if (and (>= c2 48) (<= c2 55))
+                                  (do (set o (- c2 48))
+                                      (set k 0)
+                                      (while (and (< k 2) (< i n) (>= (cells-at w i) 48) (<= (cells-at w i) 55))
+                                        (do (set o (+ (* o 8) (- (cells-at w i) 48)))
+                                            (set i (+ i 1))
+                                            (set k (+ k 1))))
+                                      (set emit (bit-and o 255))))
+                                (if (== c2 13)
+                                  (if (and (< i n) (== (cells-at w i) 10)) (set i (+ i 1))))
+                                (if (and (== emit -1) (!= c2 10) (!= c2 13)
+                                         (or (< c2 48) (> c2 55)))
+                                  (set emit c2))))
+                          (do (if (== c 40) (do (set depth (+ depth 1)) (set emit 40)))
+                              (if (== c 41)
+                                (do (set depth (- depth 1))
+                                    (if (> depth 0) (set emit 41))))
+                              (if (and (!= c 40) (!= c 41)) (set emit c))))
+                        (if (and (>= emit 0) (== inbt 1))
+                          (do (if (and (== pend 1) (== any 1))
+                                (px-push-cp txt 10))
+                              (set pend 0)
+                              (px-push-cp txt emit)
+                              (set any 1))))))
+              (if (== c 60)
+                (if (and (< (+ i 1) n) (== (cells-at w (+ i 1)) 60))
+                  (set i (+ i 2))
+                  (do (set i (+ i 1))
+                      (set hi -1)
+                      (while (and (< i n) (!= (cells-at w i) 62))
+                        (do (set nib (pa-hexval (cells-at w i)))
+                            (if (>= nib 0)
+                              (if (< hi 0)
+                                (set hi nib)
+                                (do (set emit (+ (* hi 16) nib))
+                                    (set hi -1)
+                                    (if (== inbt 1)
+                                      (do (if (and (== pend 1) (== any 1))
+                                            (px-push-cp txt 10))
+                                          (set pend 0)
+                                          (px-push-cp txt emit)
+                                          (set any 1))))))
+                            (set i (+ i 1))))
+                      (if (>= hi 0)
+                        (if (== inbt 1)
+                          (do (if (and (== pend 1) (== any 1))
+                                (px-push-cp txt 10))
+                              (set pend 0)
+                              (px-push-cp txt (* hi 16))
+                              (set any 1))))
+                      (set i (+ i 1))))
+                (if (== c 47)
+                  (do (set i (+ i 1))
+                      (while (and (< i n) (== (pa-is-delim (cells-at w i)) 0))
+                        (set i (+ i 1))))
+                  (if (== (pa-is-delim c) 1)
+                    (set i (+ i 1))
+                    (do (set ws i)
+                        (while (and (< i n) (== (pa-is-delim (cells-at w i)) 0))
+                          (set i (+ i 1)))
+                        (set we i)
+                        (set wl (- we ws))
+                        (set c2 (cells-at w ws))
+                        (set digit 0)
+                        (if (or (and (>= c2 48) (<= c2 57)) (== c2 45) (== c2 43) (== c2 46))
+                          (do (set digit 1)
+                              (set nonzero 0)
+                              (set k ws)
+                              (while (< k we)
+                                (do (set last (cells-at w k))
+                                    (if (and (>= last 49) (<= last 57)) (set nonzero 1))
+                                    (set k (+ k 1))))
+                              (if (== nonzero 1) (set lastzero 0) (set lastzero 1))))
+                        (if (== digit 0)
+                          (do (if (and (== wl 2) (== c2 66) (== (cells-at w (+ ws 1)) 84))
+                                (set inbt 1))
+                              (if (and (== wl 2) (== c2 69) (== (cells-at w (+ ws 1)) 84))
+                                (do (set inbt 0) (set pend 1)))
+                              (if (and (== wl 2) (== c2 84) (or (== (cells-at w (+ ws 1)) 100)
+                                                                (== (cells-at w (+ ws 1)) 68)))
+                                (if (== lastzero 0) (set pend 1)))
+                              (if (and (== wl 2) (== c2 84) (== (cells-at w (+ ws 1)) 42))
+                                (set pend 1))
+                              (if (and (== wl 1) (or (== c2 39) (== c2 34)))
+                                (set pend 1))))))))))))
+    (comment "Trailing white space and line breaks.")
+    (while (> (cells-len txt) n0)
+      (do (set c (cells-at txt (- (cells-len txt) 1)))
+          (if (or (== c 10) (== c 32) (== c 13) (== c 9))
+            (cells-drop txt (- (cells-len txt) 1))
+            (return (- (cells-len txt) n0)))))
+    (return 0)))
+
+(defn ^I32 pa-ap-raw [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                      ^:mut ^Cells b ^:mut ^Cells st ^I32 adict]
+  (comment "The annotation's normal appearance, RAW: /AP /N, or, when that is a dictionary of")
+  (comment "states, the entry /AS names. 0 when there is none.")
+  (let [^I32 ap (px-dget src ar dc a b st adict (px-ap))
+        ^:mut ^I32 n 0
+        ^:mut ^I32 as 0
+        ^:mut ^I32 nr 0]
+    (if (== ap 0) (return 0))
+    (if (!= (pl-kind-of ar ap) 7) (return 0))
+    (set nr (pl-dict-get ar ap (pn-n)))
+    (if (== nr 0) (return 0))
+    (set n (pd-resolve src ar dc a b st nr))
+    (if (== n 0) (return 0))
+    (if (== (pl-kind-of ar n) 8) (return nr))
+    (if (== (pl-kind-of ar n) 7)
+      (do (set as (px-dget src ar dc a b st adict (px-as)))
+          (if (== as 0) (return 0))
+          (return (px-dict-find-plain ar n as))))
+    (return 0)))
+
+(defn ^I32 pa-ap-text [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                       ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells w ^:mut ^Cells txt
+                       ^I32 raw]
+  (comment "The text of the appearance stream `raw` (from `pa-ap-raw`): decoded into `w`,")
+  (comment "scanned into `txt`. Answers the number of code points, 0 when none (or none")
+  (comment "readable). `w` must not be `a`, `b` or `st`.")
+  (let [^I32 sh (pd-resolve src ar dc a b st raw)]
+    (if (== sh 0) (return 0))
+    (if (!= (pl-kind-of ar sh) 8) (return 0))
+    (pd-stream-data src ar dc a b st sh w)
+    (return (pa-scan-text w txt))))
+
+;; ---------------------------------------------------------------- signatures
+
+(defn ^I32 pa-sig-new [^:mut ^Cells sg ^I32 field]
+  (comment "Push a signature row that says nothing; answers its row.")
+  (let [^I32 row (quot (cells-len sg) SG_STRIDE)
+        ^I32 at (cells-len sg)
+        ^:mut ^I32 k 0]
+    (while (< k SG_STRIDE)
+      (do (cells-push sg 0)
+          (set k (+ k 1))))
+    (cells-set sg at field)
+    (cells-set sg (+ at 1) -1)
+    (cells-set sg (+ at 2) -1)
+    (cells-set sg (+ at 7) -1)
+    (cells-set sg (+ at 9) -1)
+    (set k 11)
+    (while (< k 18)
+      (do (cells-set sg (+ at k) -1)
+          (set k (+ k 1))))
+    (cells-set sg (+ at 18) -1)
+    (cells-set sg (+ at 20) -1)
+    (cells-set sg (+ at 22) -1)
+    (cells-set sg (+ at 24) -1)
+    (cells-set sg (+ at 26) -1)
+    (set k 28)
+    (while (< k 32)
+      (do (cells-set sg (+ at k) -1)
+          (set k (+ k 1))))
+    (return row)))
+
+(defn ^I32 pa-sig-fill [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                        ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt
+                        ^:mut ^Cells sg ^I32 row ^I32 sd ^I32 bits]
+  (comment "Fill signature row `row` from the signature dictionary `sd` (resolved). Nothing")
+  (comment "is validated: these are the strings the dictionary holds.")
+  (let [^I32 at (* row SG_STRIDE)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 br 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 fl bits
+        ^:mut ^I32 n 0]
+    (set v (px-dget src ar dc a b st sd (px-name)))
+    (pa-text-to txt ar v sg (+ at 7))
+    (set v (px-dget src ar dc a b st sd (px-m)))
+    (pa-text-to txt ar v sg (+ at 9))
+    (px-date-parse txt (cells-at sg (+ at 9)) (cells-at sg (+ at 10)) sg (+ at 11))
+    (set v (px-dget src ar dc a b st sd (px-reason)))
+    (pa-text-to txt ar v sg (+ at 18))
+    (set v (px-dget src ar dc a b st sd (px-location)))
+    (pa-text-to txt ar v sg (+ at 20))
+    (set v (px-dget src ar dc a b st sd (px-contact-info)))
+    (pa-text-to txt ar v sg (+ at 22))
+    (set v (pd-dget src ar dc a b st sd (pn-filter)))
+    (pa-text-to txt ar v sg (+ at 24))
+    (set v (px-dget src ar dc a b st sd (px-sub-filter)))
+    (pa-text-to txt ar v sg (+ at 26))
+    (set br (px-dget src ar dc a b st sd (px-byte-range)))
+    (if (and (!= br 0) (== (pl-kind-of ar br) 6))
+      (do (set n (pl-count ar br))
+          (cells-set sg (+ at 34) (quot n 2))
+          (if (>= n 4) (set fl (bit-or fl 2)))
+          (set e (pl-first ar br))
+          (set j 0)
+          (while (and (!= e 0) (< j 4))
+            (do (set v (pd-resolve src ar dc a b st e))
+                (cells-set sg (+ (+ at 28) j) (px-int-of ar v -1))
+                (set e (pl-next ar e))
+                (set j (+ j 1))))))
+    (set v (pd-dget src ar dc a b st sd (pn-contents)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 5))
+      (do (cells-set sg (+ at 32) (pl-str-len ar v))
+          (set fl (bit-or fl 1))))
+    (set v (pd-dget src ar dc a b st sd (pn-type)))
+    (if (== (px-is ar v (px-doc-time-stamp)) 1) (set fl (bit-or fl 4)))
+    (cells-set sg (+ at 33) fl)
+    (return 0)))
+
+;; -------------------------------------------------------------------- fields
+
+(defn ^I32 pa-ft-code [^Cells ar ^I32 h]
+  (comment "A /FT name as an `fd-ft`.")
+  (if (== h 0) (return 0))
+  (if (== (px-is ar h (px-btn)) 1) (return 1))
+  (if (== (px-is ar h (px-tx)) 1) (return 2))
+  (if (== (px-is ar h (px-ch)) 1) (return 3))
+  (if (== (px-is ar h (px-sig)) 1) (return 4))
+  (return 0))
+
+(defn ^I32 pa-flag-set [^I32 ff ^I32 bit]
+  (comment "1 when the field flag whose value is `bit` (a power of two) is set.")
+  (return (rem (quot ff bit) 2)))
+
+(defn ^I32 pa-fd-kind [^I32 ft ^I32 ff]
+  (if (== ft 1)
+    (do (if (== (pa-flag-set ff 65536) 1) (return 1))
+        (if (== (pa-flag-set ff 32768) 1) (return 3))
+        (return 2)))
+  (if (== ft 2) (return 4))
+  (if (== ft 3)
+    (do (if (== (pa-flag-set ff 131072) 1) (return 5))
+        (return 6)))
+  (if (== ft 4) (return 7))
+  (return 0))
+
+(defn ^I32 pa-fd-new [^:mut ^Cells fd]
+  (comment "Push a terminal field row that says nothing; answers its row.")
+  (let [^I32 row (quot (cells-len fd) FD_STRIDE)
+        ^I32 at (cells-len fd)
+        ^:mut ^I32 k 0]
+    (while (< k FD_STRIDE)
+      (do (cells-push fd 0)
+          (set k (+ k 1))))
+    (cells-set fd (+ at 2) -1)
+    (cells-set fd (+ at 8) -1)
+    (cells-set fd (+ at 11) -1)
+    (cells-set fd (+ at 13) -1)
+    (cells-set fd (+ at 15) -1)
+    (cells-set fd (+ at 21) -1)
+    (cells-set fd (+ at 24) -1)
+    (cells-set fd (+ at 25) -1)
+    (cells-set fd (+ at 26) -1)
+    (cells-set fd (+ at 30) -1)
+    (return row)))
+
+(defn ^I32 pa-fd-value [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                        ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt
+                        ^:mut ^Cells fd ^I32 row ^I32 vh]
+  (comment "Keep /V (resolved, 0 none): its kind, its text (an array's items joined with a")
+  (comment "line feed) and how many values it holds.")
+  (let [^I32 at (* row FD_STRIDE)
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 first 1]
+    (if (== vh 0) (return 0))
+    (set kind (pl-kind-of ar vh))
+    (if (== kind 5)
+      (do (cells-set fd (+ at 7) 1)
+          (cells-set fd (+ at 10) 1)
+          (pa-text-to txt ar vh fd (+ at 8))))
+    (if (== kind 4)
+      (do (cells-set fd (+ at 7) 2)
+          (cells-set fd (+ at 10) 1)
+          (pa-text-to txt ar vh fd (+ at 8))))
+    (if (== kind 6)
+      (do (cells-set fd (+ at 7) 3)
+          (set s (cells-len txt))
+          (set e (pl-first ar vh))
+          (while (!= e 0)
+            (do (set r (pd-resolve src ar dc a b st e))
+                (if (and (!= r 0) (or (== (pl-kind-of ar r) 5) (== (pl-kind-of ar r) 4)))
+                  (do (if (== first 0) (px-push-cp txt 10))
+                      (set first 0)
+                      (px-text-push ar r txt)
+                      (set n (+ n 1))))
+                (set e (pl-next ar e))))
+          (cells-set fd (+ at 8) s)
+          (cells-set fd (+ at 9) (- (cells-len txt) s))
+          (cells-set fd (+ at 10) n)))
+    (if (== kind 8) (cells-set fd (+ at 7) 4))
+    (if (== kind 7) (cells-set fd (+ at 7) 5))
+    (if (and (!= kind 5) (!= kind 4) (!= kind 6) (!= kind 8) (!= kind 7))
+      (cells-set fd (+ at 7) 6))
+    (cells-set fd (+ at 31) vh)
+    (return 0)))
+
+(defn ^I32 pa-field-row [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt ^Cells fs
+                         ^:mut ^Cells fd ^:mut ^Cells sg ^I32 node ^I32 num
+                         ^I32 depth]
+  (comment "A terminal field: one row from the node and the frame its ancestors left.")
+  (let [^I32 fo (* (+ depth 1) FS_STRIDE)
+        ^I32 row (pa-fd-new fd)
+        ^I32 at (* row FD_STRIDE)
+        ^I32 ft (cells-at fs fo)
+        ^I32 ff (cells-at fs (+ fo 1))
+        ^I32 vh (cells-at fs (+ fo 2))
+        ^I32 dvh (cells-at fs (+ fo 3))
+        ^:mut ^I32 v 0
+        ^:mut ^I32 srow 0]
+    (cells-set fd at num)
+    (cells-set fd (+ at 1) (+ depth 1))
+    (cells-set fd (+ at 2) (cells-at fs (+ fo 6)))
+    (cells-set fd (+ at 3) (cells-at fs (+ fo 7)))
+    (cells-set fd (+ at 4) ft)
+    (cells-set fd (+ at 5) ff)
+    (cells-set fd (+ at 6) (pa-fd-kind ft ff))
+    (cells-set fd (+ at 25) (cells-at fs (+ fo 5)))
+    (cells-set fd (+ at 26) (cells-at fs (+ fo 4)))
+    (pa-fd-value src ar dc a b st txt fd row vh)
+    (if (!= dvh 0)
+      (if (or (== (pl-kind-of ar dvh) 5) (== (pl-kind-of ar dvh) 4))
+        (pa-text-to txt ar dvh fd (+ at 11))))
+    (set v (px-dget src ar dc a b st node (px-tu)))
+    (pa-text-to txt ar v fd (+ at 13))
+    (set v (px-dget src ar dc a b st node (px-opt)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 6))
+      (cells-set fd (+ at 28) (pl-count ar v)))
+    (if (== ft 4)
+      (if (and (!= vh 0) (== (pl-kind-of ar vh) 7))
+        (do (set srow (pa-sig-new sg row))
+            (pa-sig-fill src ar dc a b st txt sg srow vh 0)
+            (cells-set fd (+ at 24) srow))))
+    (return row)))
+
+(declarefn pa-field-walk)
+
+(defn ^I32 pa-field-walk [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                          ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt
+                          ^:mut ^Cells fs ^:mut ^Cells seen ^:mut ^Cells fm ^:mut ^Cells fd
+                          ^:mut ^Cells sg ^I32 h0 ^I32 depth]
+  (comment "One node of the AcroForm field tree. Inherited: /FT /Ff /V /DV /Q /MaxLen (from")
+  (comment "the frame of the parent, `FS_STRIDE` cells a level: ft ff v dv q maxlen name-run).")
+  (comment "A node with a child that has a /T (or /Kids of its own) is not terminal and only")
+  (comment "those children are fields; one without is a field whose children are widgets.")
+  (if (> depth FS_DEPTH) (return 0))
+  (if (>= (quot (cells-len fd) FD_STRIDE) PA_FIELDS) (return 0))
+  (let [^I32 node (pd-resolve src ar dc a b st h0)
+        ^I32 fo (* (+ depth 1) FS_STRIDE)
+        ^I32 po (* depth FS_STRIDE)
+        ^:mut ^I32 num 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 ps 0
+        ^:mut ^I32 pl 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 kids 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 kr 0
+        ^:mut ^I32 fr 0
+        ^:mut ^I32 subs 0]
+    (if (== node 0) (return 0))
+    (if (!= (pl-kind-of ar node) 7) (return 0))
+    (if (== (pl-kind-of ar h0) 9) (set num (pl-int-value ar h0)))
+    (if (== (px-seen-mark seen num) 1) (return 0))
+    (while (< k FS_STRIDE)
+      (do (set x (cells-at fs (+ po k)))
+          (cells-set fs (+ fo k) x)
+          (set k (+ k 1))))
+    (set v (px-dget src ar dc a b st node (px-ft)))
+    (if (!= (pa-ft-code ar v) 0) (cells-set fs fo (pa-ft-code ar v)))
+    (set v (px-dget src ar dc a b st node (px-ff)))
+    (if (== (px-is-num ar v) 1) (cells-set fs (+ fo 1) (px-int-of ar v 0)))
+    (if (== (px-has src ar dc a b st node (px-v)) 1)
+      (do (set v (px-dget src ar dc a b st node (px-v)))
+          (cells-set fs (+ fo 2) v)))
+    (if (== (px-has src ar dc a b st node (px-dv)) 1)
+      (do (set v (px-dget src ar dc a b st node (px-dv)))
+          (cells-set fs (+ fo 3) v)))
+    (set v (px-dget src ar dc a b st node (px-q)))
+    (if (== (px-is-num ar v) 1) (cells-set fs (+ fo 4) (px-int-of ar v -1)))
+    (set v (px-dget src ar dc a b st node (px-max-len)))
+    (if (== (px-is-num ar v) 1) (cells-set fs (+ fo 5) (px-int-of ar v -1)))
+    (comment "The name: the parent's, a dot, and this node's /T.")
+    (set t (px-dget src ar dc a b st node (px-t)))
+    (set ps (cells-at fs (+ po 6)))
+    (set pl (cells-at fs (+ po 7)))
+    (set s (cells-len txt))
+    (if (and (!= t 0) (== (pl-kind-of ar t) 5))
+      (do (set k 0)
+          (while (< k pl)
+            (do (set x (cells-at txt (+ ps k)))
+                (cells-push txt x)
+                (set k (+ k 1))))
+          (if (> pl 0) (cells-push txt 46))
+          (px-text-push ar t txt)
+          (cells-set fs (+ fo 6) s)
+          (cells-set fs (+ fo 7) (- (cells-len txt) s)))
+      (do (set k 0)
+          (while (< k pl)
+            (do (set x (cells-at txt (+ ps k)))
+                (cells-push txt x)
+                (set k (+ k 1))))
+          (cells-set fs (+ fo 6) s)
+          (cells-set fs (+ fo 7) pl)
+          (if (== pl 0) (cells-set fs (+ fo 6) -1))))
+    (set kids (pd-dget src ar dc a b st node (pn-kids)))
+    (if (and (!= kids 0) (== (pl-kind-of ar kids) 6))
+      (do (set e (pl-first ar kids))
+          (while (!= e 0)
+            (do (set kr (pd-resolve src ar dc a b st e))
+                (if (and (!= kr 0) (== (pl-kind-of ar kr) 7))
+                  (if (or (!= (px-get ar kr (px-t)) 0) (!= (pl-dict-get ar kr (pn-kids)) 0))
+                    (set subs (+ subs 1))))
+                (set e (pl-next ar e))))))
+    (if (> subs 0)
+      (do (set e (pl-first ar kids))
+          (while (!= e 0)
+            (do (set kr (pd-resolve src ar dc a b st e))
+                (if (and (!= kr 0) (== (pl-kind-of ar kr) 7))
+                  (if (or (!= (px-get ar kr (px-t)) 0) (!= (pl-dict-get ar kr (pn-kids)) 0))
+                    (pa-field-walk src ar dc a b st txt fs seen fm fd sg e (+ depth 1))))
+                (set e (pl-next ar e)))))
+      (do (set fr (pa-field-row src ar dc a b st txt fs fd sg node num depth))
+          (if (and (> num 0) (< num (cells-len fm)))
+            (cells-set fm num (+ fr 1)))))
+    (return 0)))
+
+(defn ^I32 pa-find-field [^Cells fm ^I32 num]
+  (comment "The row of the terminal field whose object number is `num` (the field map holds row")
+  (comment "+ 1 at each object number), -1 when none.")
+  (if (<= num 0) (return -1))
+  (if (>= num (cells-len fm)) (return -1))
+  (return (- (cells-at fm num) 1)))
+
+;; --------------------------------------------------------------- annotations
+
+(defn ^I32 pa-an-new [^:mut ^Cells an ^I32 pi]
+  (comment "Push an annotation row that says nothing, on page `pi`; answers its row.")
+  (let [^I32 row (quot (cells-len an) AN_STRIDE)
+        ^I32 at (cells-len an)
+        ^:mut ^I32 k 0]
+    (while (< k AN_STRIDE)
+      (do (cells-push an 0)
+          (set k (+ k 1))))
+    (cells-set an at pi)
+    (cells-set an (+ at 13) -1)
+    (px-dest-init an (+ at 15))
+    (cells-set an (+ at 23) -1)
+    (cells-set an (+ at 25) -1)
+    (cells-set an (+ at 27) -1)
+    (cells-set an (+ at 29) -1)
+    (cells-set an (+ at 32) -1)
+    (cells-set an (+ at 35) -1)
+    (cells-set an (+ at 36) -1)
+    (return row)))
+
+(defn ^I32 pa-num-at [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                      ^:mut ^Cells b ^:mut ^Cells st ^I32 arr ^I32 i]
+  (comment "The i-th element of an array as centipoints; (px-null) when it is not a number.")
+  (let [^I32 raw (px-nth ar arr i)
+        ^I32 v (pd-resolve src ar dc a b st raw)]
+    (if (== (px-is-num ar v) 0) (return (px-null)))
+    (return (px-clamp-cp (pl-num-cp ar v)))))
+
+(defn ^I32 pa-rect-into [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^Cells pg ^I32 pi
+                         ^I32 arr ^:mut ^Cells out ^I32 at]
+  (comment "A /Rect (four numbers) into out[at, at+4) in page space and out[at+4, at+8) as")
+  (comment "written and normalized (user space). Answers 1 when it was a rectangle.")
+  (if (== arr 0) (return 0))
+  (if (!= (pl-kind-of ar arr) 6) (return 0))
+  (let [^:mut ^I32 x0 (pa-num-at src ar dc a b st arr 0)
+        ^:mut ^I32 y0 (pa-num-at src ar dc a b st arr 1)
+        ^:mut ^I32 x1 (pa-num-at src ar dc a b st arr 2)
+        ^:mut ^I32 y1 (pa-num-at src ar dc a b st arr 3)
+        ^:mut ^I32 t 0
+        ^:mut ^I32 p0 0
+        ^:mut ^I32 p1 0
+        ^:mut ^I32 q0 0
+        ^:mut ^I32 q1 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0]
+    (if (or (== x0 (px-null)) (== y0 (px-null)) (== x1 (px-null)) (== y1 (px-null))) (return 0))
+    (if (> x0 x1) (do (set t x0) (set x0 x1) (set x1 t)))
+    (if (> y0 y1) (do (set t y0) (set y0 y1) (set y1 t)))
+    (cells-set out (+ at 4) x0)
+    (cells-set out (+ at 5) y0)
+    (cells-set out (+ at 6) x1)
+    (cells-set out (+ at 7) y1)
+    (comment "The four corners mapped; the box around them.")
+    (set p0 (px-page-x pg pi x0 y0))
+    (set q0 (px-page-y pg pi x0 y0))
+    (set p1 (px-page-x pg pi x1 y1))
+    (set q1 (px-page-y pg pi x1 y1))
+    (set lo p0)
+    (if (< p1 lo) (set lo p1))
+    (set hi p0)
+    (if (> p1 hi) (set hi p1))
+    (cells-set out at lo)
+    (cells-set out (+ at 2) hi)
+    (set lo q0)
+    (if (< q1 lo) (set lo q1))
+    (set hi q0)
+    (if (> q1 hi) (set hi q1))
+    (cells-set out (+ at 1) lo)
+    (cells-set out (+ at 3) hi)
+    (return 1)))
+
+(defn ^I32 pa-quads [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                     ^:mut ^Cells b ^:mut ^Cells st ^Cells pg ^I32 pi ^I32 arr
+                     ^:mut ^Cells aq ^:mut ^Cells an ^I32 at]
+  (comment "/QuadPoints (groups of eight numbers) mapped to page space into `aq`, at most 64")
+  (comment "quadrilaterals; the run is recorded at an[at+36, at+38).")
+  (if (== arr 0) (return 0))
+  (if (!= (pl-kind-of ar arr) 6) (return 0))
+  (let [^:mut ^I32 n (quot (pl-count ar arr) 8)
+        ^:mut ^I32 q 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (if (== n 0) (return 0))
+    (if (> n 64) (set n 64))
+    (cells-set an (+ at 36) (quot (cells-len aq) 8))
+    (cells-set an (+ at 37) n)
+    (while (< q n)
+      (do (set k 0)
+          (while (< k 4)
+            (do (set x (pa-num-at src ar dc a b st arr (+ (* q 8) (* k 2))))
+                (set y (pa-num-at src ar dc a b st arr (+ (+ (* q 8) (* k 2)) 1)))
+                (if (or (== x (px-null)) (== y (px-null)))
+                  (do (cells-push aq 0) (cells-push aq 0))
+                  (do (cells-push aq (px-page-x pg pi x y))
+                      (cells-push aq (px-page-y pg pi x y))))
+                (set k (+ k 1))))
+          (set q (+ q 1))))
+    (return n)))
+
+(defn ^I32 pa-compare [^:mut ^Cells fd ^Cells txt ^I32 frow ^I32 s ^I32 n]
+  (comment "Field row `frow` (a text or choice field) against the appearance text run (s, n):")
+  (comment "set `fa`.")
+  (let [^I32 at (* frow FD_STRIDE)
+        ^I32 vs (cells-at fd (+ at 8))
+        ^I32 vn (cells-at fd (+ at 9))
+        ^I32 vk (cells-at fd (+ at 7))
+        ^:mut ^I32 r 0]
+    (if (== vk 0)
+      (do (if (> n 0) (set r 4))
+          (cells-set fd (+ at 23) r)
+          (return r)))
+    (if (<= n 0)
+      (do (if (== vn 0) (set r 1) (set r 3))
+          (cells-set fd (+ at 23) r)
+          (return r)))
+    (if (== (px-run-eq txt vs vn s n) 1) (set r 1) (set r 2))
+    (cells-set fd (+ at 23) r)
+    (return r)))
+
+(defn ^I32 pa-annot [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                     ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^Cells pg
+                     ^:mut ^Cells txt ^:mut ^Cells w ^:mut ^Cells an ^:mut ^Cells aq
+                     ^:mut ^Cells fm ^:mut ^Cells fd ^:mut ^Cells sg ^I32 pi ^I32 h0]
+  (comment "One entry of a page's /Annots: a row in `an`, and, for a widget, its field's")
+  (comment "row updated. Answers the annotation row, or -1 when the entry is no dictionary.")
+  (let [^I32 dict (pd-resolve src ar dc a b st h0)
+        ^I32 at (cells-len an)
+        ^:mut ^I32 row 0
+        ^:mut ^I32 num 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 act 0
+        ^:mut ^I32 par 0
+        ^:mut ^I32 fnum 0
+        ^:mut ^I32 frow 0
+        ^:mut ^I32 raw 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 ft 0
+        ^:mut ^I32 srow 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 fat 0
+        ^:mut ^I32 vh 0]
+    (if (== dict 0) (return -1))
+    (if (!= (pl-kind-of ar dict) 7) (return -1))
+    (set row (pa-an-new an pi))
+    (if (== (pl-kind-of ar h0) 9) (set num (pl-int-value ar h0)))
+    (cells-set an (+ at 2) num)
+    (set v (pd-dget src ar dc a b st dict (pn-subtype)))
+    (set sub (pa-subtype ar v))
+    (cells-set an (+ at 1) sub)
+    (cells-set an (+ at 3) (pd-dint src ar dc a b st dict (pn-f) 0))
+    (set v (px-dget src ar dc a b st dict (px-rect)))
+    (pa-rect-into src ar dc a b st pg pi v an (+ at 4))
+    (set v (pd-dget src ar dc a b st dict (pn-contents)))
+    (pa-text-to txt ar v an (+ at 23))
+    (set v (px-dget src ar dc a b st dict (px-t)))
+    (pa-text-to txt ar v an (+ at 25))
+    (set v (px-dget src ar dc a b st dict (px-name)))
+    (pa-text-to txt ar v an (+ at 27))
+    (if (!= (px-get ar dict (px-ap)) 0) (set bits (bit-or bits 1)))
+    (if (!= (px-get ar dict (px-oc)) 0) (set bits (bit-or bits 2)))
+    (if (!= (pl-dict-get ar dict (pn-parent)) 0) (set bits (bit-or bits 4)))
+    (set v (px-dget src ar dc a b st dict (px-ca)))
+    (if (== (px-is-num ar v) 1) (cells-set an (+ at 35) (* (pl-num-cp ar v) 10)))
+    (comment "The action; or a /Dest on the annotation itself, which is a GoTo.")
+    (set act (px-dget src ar dc a b st dict (px-a)))
+    (if (and (!= act 0) (== (pl-kind-of ar act) 7))
+      (do (set n (pa-action src ar dc a b st idx pg txt act an (+ at 12)))
+          (cells-set an (+ at 31) n))
+      (if (== (px-has src ar dc a b st dict (px-dest)) 1)
+        (do (set v (px-get ar dict (px-dest)))
+            (px-dest-of src ar dc a b st idx pg txt v an (+ at 15))
+            (cells-set an (+ at 12) 2)
+            (cells-set an (+ at 31) 1)
+            (set bits (bit-or bits 8)))))
+    (set v (px-dget src ar dc a b st dict (px-quad-points)))
+    (pa-quads src ar dc a b st pg pi v aq an at)
+    (comment "The appearance's text: where the annotation says something by painting it.")
+    (set raw (pa-ap-raw src ar dc a b st dict))
+    (if (!= raw 0)
+      (do (if (== (pl-kind-of ar raw) 9) (cells-set an (+ at 34) (pl-int-value ar raw)))
+          (if (or (== sub 20) (== sub 13) (== sub 24) (== sub 3))
+            (do (set s (cells-len txt))
+                (set n (pa-ap-text src ar dc a b st w txt raw))
+                (if (> n 0)
+                  (do (cells-set an (+ at 32) s)
+                      (cells-set an (+ at 33) n)))))))
+    (cells-set an (+ at 30) bits)
+    (comment "A widget belongs to a field: its own /T makes it one, else its /Parent.")
+    (if (== sub 20)
+      (do (set fnum num)
+          (set par (pl-dict-get ar dict (pn-parent)))
+          (if (and (!= par 0) (== (pl-kind-of ar par) 9) (== (px-get ar dict (px-t)) 0))
+            (set fnum (pl-int-value ar par)))
+          (set frow (pa-find-field fm fnum))
+          (if (and (< frow 0) (!= fnum num)) (set frow (pa-find-field fm num)))
+          (if (>= frow 0)
+            (do (cells-set an (+ at 29) frow)
+                (set fat (* frow FD_STRIDE))
+                (cells-set fd (+ fat 20) (+ (cells-at fd (+ fat 20)) 1))
+                (set ft (cells-at fd (+ fat 4)))
+                (comment "A check box or radio button: is this widget on, and is it the state /V names?")
+                (if (and (== ft 1) (or (== (cells-at fd (+ fat 6)) 2) (== (cells-at fd (+ fat 6)) 3)))
+                  (do (set v (px-dget src ar dc a b st dict (px-as)))
+                      (if (and (!= v 0) (== (px-is ar v (px-off)) 0))
+                        (do (cells-set fd (+ fat 29) (+ (cells-at fd (+ fat 29)) 1))
+                            (set vh (cells-at fd (+ fat 31)))
+                            (if (and (!= vh 0) (== (pl-kind-of ar vh) 4))
+                              (if (== (px-bytes-cmp ar v vh) 0)
+                                (cells-set fd (+ fat 27) (+ (cells-at fd (+ fat 27)) 1))))))))
+                (if (== (cells-at fd (+ fat 30)) -1)
+                  (do (cells-set fd (+ fat 30) row)
+                      (cells-set fd (+ fat 15) pi)
+                      (set x 0)
+                      (while (< x 4)
+                        (do (cells-set fd (+ (+ fat 16) x) (cells-at an (+ at (+ 4 x))))
+                            (set x (+ x 1))))
+                      (cells-set fd (+ fat 21) (cells-at an (+ at 32)))
+                      (cells-set fd (+ fat 22) (cells-at an (+ at 33)))
+                      (if (or (== ft 2) (== ft 3))
+                        (pa-compare fd txt frow (cells-at an (+ at 32)) (cells-at an (+ at 33))))
+                      (set srow (cells-at fd (+ fat 24)))
+                      (if (>= srow 0)
+                        (do (cells-set sg (+ (* srow SG_STRIDE) 1) row)
+                            (cells-set sg (+ (* srow SG_STRIDE) 2) pi)
+                            (set x 0)
+                            (while (< x 4)
+                              (do (cells-set sg (+ (+ (* srow SG_STRIDE) 3) x) (cells-at an (+ at (+ 4 x))))
+                                  (set x (+ x 1))))))))))))
+    (return row)))
+
+(defn ^I32 pa-finalize [^Cells ar ^:mut ^Cells fd]
+  (comment "Buttons: a field with widgets is `on` when a widget is on AND is the state /V")
+  (comment "names; /V and the widgets agree when both say on or both say off.")
+  (let [^I32 n (quot (cells-len fd) FD_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 von 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 onw 0
+        ^:mut ^I32 vh 0]
+    (while (< i n)
+      (do (set at (* i FD_STRIDE))
+          (set m (cells-at fd (+ at 27)))
+          (set onw (cells-at fd (+ at 29)))
+          (cells-set fd (+ at 27) -1)
+          (if (and (== (cells-at fd (+ at 4)) 1)
+                   (or (== (cells-at fd (+ at 6)) 2) (== (cells-at fd (+ at 6)) 3)))
+            (if (> (cells-at fd (+ at 20)) 0)
+              (do
+                  (set von 0)
+                  (set vh (cells-at fd (+ at 31)))
+                  (if (and (!= vh 0) (== (pl-kind-of ar vh) 4))
+                    (if (== (px-is ar vh (px-off)) 0) (set von 1)))
+                  (if (> m 0) (cells-set fd (+ at 27) 1) (cells-set fd (+ at 27) 0))
+                  (if (or (and (== von 1) (> m 0)) (and (== von 0) (== onw 0)))
+                    (cells-set fd (+ at 23) 1)
+                    (cells-set fd (+ at 23) 2)))))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------------ run
+
+(defn ^:pub ^I32 pa-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells idx
+                         ^:mut ^Cells txt ^:mut ^Cells w ^:mut ^Cells fs ^:mut ^Cells seen
+                         ^:mut ^Cells fm ^:mut ^Cells an ^:mut ^Cells aq ^:mut ^Cells fd ^:mut ^Cells sg]
+  (comment "Everything P3.8 reads, after `pd-open`, `pd-pages` and `px-index-build`: fields")
+  (comment "first (so a widget finds its field), then every page's /Annots, then the")
+  (comment "document's /Perms /DocMDP. `an aq fd sg fs fm` are cleared; `txt` is APPENDED to (its")
+  (comment "runs are offsets into it). `w` is scratch that holds a decoded appearance; `seen`")
+  (comment "a visited set; `fm` maps an object number to its terminal field's row + 1. Answers")
+  (comment "the number of annotations, or -1 when the source missed")
+  (comment "(re-run on a fresh view; nothing here is kept).")
+  (cells-drop an 0)
+  (cells-drop aq 0)
+  (cells-drop fd 0)
+  (cells-drop sg 0)
+  (cells-drop fs 0)
+  (cells-drop fm 0)
+  (let [^I32 root (pd-root dc)
+        ^I32 n (pd-pg-count pg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 af 0
+        ^:mut ^I32 fields 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 an-arr 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 perms 0
+        ^:mut ^I32 srow 0]
+    (while (< i (* (+ FS_DEPTH 2) FS_STRIDE))
+      (do (cells-push fs 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (<= i (pd-object-count dc))
+      (do (cells-push fm 0)
+          (set i (+ i 1))))
+    (cells-set fs 4 -1)
+    (cells-set fs 5 -1)
+    (cells-set fs 6 -1)
+    (set af (pd-dget src ar dc a b st root (pn-acro-form)))
+    (if (and (!= af 0) (== (pl-kind-of ar af) 7))
+      (do (set fields (pd-dget src ar dc a b st af (pn-fields)))
+          (if (and (!= fields 0) (== (pl-kind-of ar fields) 6))
+            (do (px-seen-begin seen (pd-object-count dc))
+                (set e (pl-first ar fields))
+                (while (!= e 0)
+                  (do (pa-field-walk src ar dc a b st txt fs seen fm fd sg e 0)
+                      (if (ps-missed src) (return -1))
+                      (set e (pl-next ar e))))))))
+    (set i 0)
+    (while (< i n)
+      (do (set an-arr (px-dget src ar dc a b st (pd-pg-node pg i) (px-annots)))
+          (if (and (!= an-arr 0) (== (pl-kind-of ar an-arr) 6))
+            (do (set e (pl-first ar an-arr))
+                (while (!= e 0)
+                  (do (if (< (quot (cells-len an) AN_STRIDE) PA_ANNOTS)
+                        (pa-annot src ar dc a b st idx pg txt w an aq fm fd sg i e))
+                      (set e (pl-next ar e))))))
+          (if (ps-missed src) (return -1))
+          (set i (+ i 1))))
+    (pa-finalize ar fd)
+    (set perms (px-dget src ar dc a b st root (px-perms)))
+    (if (and (!= perms 0) (== (pl-kind-of ar perms) 7))
+      (do (set v (px-dget src ar dc a b st perms (px-doc-mdp)))
+          (if (and (!= v 0) (== (pl-kind-of ar v) 7))
+            (do (set srow (pa-sig-new sg -1))
+                (pa-sig-fill src ar dc a b st txt sg srow v 8)))))
+    (if (ps-missed src) (return -1))
+    (return (quot (cells-len an) AN_STRIDE))))
+
+;; ------------------------------------------------------------------------ dump
+
+(defn ^I32 pa-dump-annot [^:mut ^Text t ^Cells txt ^Cells an ^Cells aq ^I32 row]
+  (let [^I32 at (* row AN_STRIDE)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 v 0]
+    (emit-ascii t "{\"page\":")
+    (text-i32 t (cells-at an at))
+    (emit-ascii t ",\"subtype\":\"")
+    (an-sub-emit-name t (cells-at an (+ at 1)))
+    (emit-ascii t "\",\"obj\":")
+    (text-i32 t (cells-at an (+ at 2)))
+    (emit-ascii t ",\"flags\":")
+    (text-i32 t (cells-at an (+ at 3)))
+    (emit-ascii t ",\"rect\":")
+    (px-json-box t an (+ at 4))
+    (emit-ascii t ",\"user\":")
+    (px-json-box t an (+ at 8))
+    (if (!= (cells-at an (+ at 12)) 0)
+      (do (emit-ascii t ",\"action\":\"")
+          (an-act-emit-name t (cells-at an (+ at 12)))
+          (emit-ascii t "\",\"actions\":")
+          (text-i32 t (cells-at an (+ at 31)))))
+    (if (>= (cells-at an (+ at 13)) 0)
+      (do (emit-ascii t ",\"target\":")
+          (px-json-run t txt (cells-at an (+ at 13)) (cells-at an (+ at 14)))))
+    (if (== (px-dest-present an (+ at 15)) 1)
+      (do (emit-ascii t ",\"dest\":")
+          (px-json-dest t txt an (+ at 15))))
+    (if (>= (cells-at an (+ at 23)) 0)
+      (do (emit-ascii t ",\"contents\":")
+          (px-json-run t txt (cells-at an (+ at 23)) (cells-at an (+ at 24)))))
+    (if (>= (cells-at an (+ at 25)) 0)
+      (do (emit-ascii t ",\"title\":")
+          (px-json-run t txt (cells-at an (+ at 25)) (cells-at an (+ at 26)))))
+    (if (>= (cells-at an (+ at 27)) 0)
+      (do (emit-ascii t ",\"name\":")
+          (px-json-run t txt (cells-at an (+ at 27)) (cells-at an (+ at 28)))))
+    (if (>= (cells-at an (+ at 29)) 0)
+      (do (emit-ascii t ",\"field\":")
+          (text-i32 t (cells-at an (+ at 29)))))
+    (if (>= (cells-at an (+ at 32)) 0)
+      (do (emit-ascii t ",\"appearance\":")
+          (px-json-run t txt (cells-at an (+ at 32)) (cells-at an (+ at 33)))))
+    (if (!= (cells-at an (+ at 34)) 0)
+      (do (emit-ascii t ",\"apobj\":")
+          (text-i32 t (cells-at an (+ at 34)))))
+    (if (>= (cells-at an (+ at 35)) 0)
+      (do (emit-ascii t ",\"ca\":")
+          (text-i32 t (cells-at an (+ at 35)))))
+    (emit-ascii t ",\"bits\":")
+    (text-i32 t (cells-at an (+ at 30)))
+    (if (>= (cells-at an (+ at 36)) 0)
+      (do (emit-ascii t ",\"quads\":[")
+          (set q 0)
+          (while (< q (cells-at an (+ at 37)))
+            (do (if (> q 0) (emit-ascii t ","))
+                (emit-ascii t "[")
+                (set k 0)
+                (while (< k 8)
+                  (do (if (> k 0) (emit-ascii t ","))
+                      (set v (cells-at aq (+ (* (+ (cells-at an (+ at 36)) q) 8) k)))
+                      (px-json-cp t v)
+                      (set k (+ k 1))))
+                (emit-ascii t "]")
+                (set q (+ q 1))))
+          (emit-ascii t "]")))
+    (emit-ascii t "}")
+    (return 0)))
+
+(defn ^I32 pa-dump-field [^:mut ^Text t ^Cells txt ^Cells fd ^I32 row]
+  (let [^I32 at (* row FD_STRIDE)]
+    (emit-ascii t "{\"obj\":")
+    (text-i32 t (cells-at fd at))
+    (emit-ascii t ",\"name\":")
+    (px-json-run t txt (cells-at fd (+ at 2)) (cells-at fd (+ at 3)))
+    (emit-ascii t ",\"ft\":\"")
+    (fd-ft-emit-name t (cells-at fd (+ at 4)))
+    (emit-ascii t "\",\"kind\":\"")
+    (fd-kind-emit-name t (cells-at fd (+ at 6)))
+    (emit-ascii t "\",\"flags\":")
+    (text-i32 t (cells-at fd (+ at 5)))
+    (if (!= (cells-at fd (+ at 7)) 0)
+      (do (emit-ascii t ",\"vkind\":\"")
+          (fv-emit-name t (cells-at fd (+ at 7)))
+          (emit-ascii t "\",\"values\":")
+          (text-i32 t (cells-at fd (+ at 10)))
+          (if (>= (cells-at fd (+ at 8)) 0)
+            (do (emit-ascii t ",\"value\":")
+                (px-json-run t txt (cells-at fd (+ at 8)) (cells-at fd (+ at 9)))))))
+    (if (>= (cells-at fd (+ at 11)) 0)
+      (do (emit-ascii t ",\"default\":")
+          (px-json-run t txt (cells-at fd (+ at 11)) (cells-at fd (+ at 12)))))
+    (if (>= (cells-at fd (+ at 13)) 0)
+      (do (emit-ascii t ",\"tooltip\":")
+          (px-json-run t txt (cells-at fd (+ at 13)) (cells-at fd (+ at 14)))))
+    (emit-ascii t ",\"widgets\":")
+    (text-i32 t (cells-at fd (+ at 20)))
+    (if (>= (cells-at fd (+ at 15)) 0)
+      (do (emit-ascii t ",\"page\":")
+          (text-i32 t (cells-at fd (+ at 15)))
+          (emit-ascii t ",\"rect\":")
+          (px-json-box t fd (+ at 16))))
+    (if (>= (cells-at fd (+ at 21)) 0)
+      (do (emit-ascii t ",\"appearance\":")
+          (px-json-run t txt (cells-at fd (+ at 21)) (cells-at fd (+ at 22)))))
+    (if (!= (cells-at fd (+ at 23)) 0)
+      (do (emit-ascii t ",\"agree\":\"")
+          (fa-emit-name t (cells-at fd (+ at 23)))
+          (emit-ascii t "\"")))
+    (if (>= (cells-at fd (+ at 24)) 0)
+      (do (emit-ascii t ",\"sig\":")
+          (text-i32 t (cells-at fd (+ at 24)))))
+    (if (>= (cells-at fd (+ at 25)) 0)
+      (do (emit-ascii t ",\"maxlen\":")
+          (text-i32 t (cells-at fd (+ at 25)))))
+    (if (>= (cells-at fd (+ at 26)) 0)
+      (do (emit-ascii t ",\"quadding\":")
+          (text-i32 t (cells-at fd (+ at 26)))))
+    (if (>= (cells-at fd (+ at 27)) 0)
+      (do (emit-ascii t ",\"on\":")
+          (text-i32 t (cells-at fd (+ at 27)))))
+    (if (> (cells-at fd (+ at 28)) 0)
+      (do (emit-ascii t ",\"options\":")
+          (text-i32 t (cells-at fd (+ at 28)))))
+    (emit-ascii t "}")
+    (return 0)))
+
+(defn ^I32 pa-dump-sig [^:mut ^Text t ^Cells txt ^Cells sg ^I32 row]
+  (let [^I32 at (* row SG_STRIDE)
+        ^:mut ^I32 k 0]
+    (emit-ascii t "{\"field\":")
+    (text-i32 t (cells-at sg at))
+    (emit-ascii t ",\"annot\":")
+    (text-i32 t (cells-at sg (+ at 1)))
+    (emit-ascii t ",\"page\":")
+    (text-i32 t (cells-at sg (+ at 2)))
+    (if (>= (cells-at sg (+ at 2)) 0)
+      (do (emit-ascii t ",\"rect\":")
+          (px-json-box t sg (+ at 3))))
+    (emit-ascii t ",\"name\":")
+    (px-json-run t txt (cells-at sg (+ at 7)) (cells-at sg (+ at 8)))
+    (emit-ascii t ",\"m\":")
+    (px-json-run t txt (cells-at sg (+ at 9)) (cells-at sg (+ at 10)))
+    (if (>= (cells-at sg (+ at 11)) 0)
+      (do (emit-ascii t ",\"date\":[")
+          (set k 0)
+          (while (< k 7)
+            (do (if (> k 0) (emit-ascii t ","))
+                (text-i32 t (cells-at sg (+ (+ at 11) k)))
+                (set k (+ k 1))))
+          (emit-ascii t "]")))
+    (emit-ascii t ",\"reason\":")
+    (px-json-run t txt (cells-at sg (+ at 18)) (cells-at sg (+ at 19)))
+    (emit-ascii t ",\"location\":")
+    (px-json-run t txt (cells-at sg (+ at 20)) (cells-at sg (+ at 21)))
+    (emit-ascii t ",\"contact\":")
+    (px-json-run t txt (cells-at sg (+ at 22)) (cells-at sg (+ at 23)))
+    (emit-ascii t ",\"filter\":")
+    (px-json-run t txt (cells-at sg (+ at 24)) (cells-at sg (+ at 25)))
+    (emit-ascii t ",\"subfilter\":")
+    (px-json-run t txt (cells-at sg (+ at 26)) (cells-at sg (+ at 27)))
+    (emit-ascii t ",\"range\":[")
+    (set k 0)
+    (while (< k 4)
+      (do (if (> k 0) (emit-ascii t ","))
+          (text-i32 t (cells-at sg (+ (+ at 28) k)))
+          (set k (+ k 1))))
+    (emit-ascii t "],\"contents\":")
+    (text-i32 t (cells-at sg (+ at 32)))
+    (emit-ascii t ",\"bits\":")
+    (text-i32 t (cells-at sg (+ at 33)))
+    (emit-ascii t "}")
+    (return 0)))
+
+(defn ^:pub ^I32 pa-dump [^:mut ^Text t ^Cells txt ^Cells an ^Cells aq ^Cells fd ^Cells sg]
+  (comment "Annotations, fields and signatures as one canonical JSON object, in row order:")
+  (comment "`{\"annots\":[..],\"fields\":[..],\"sigs\":[..]}`. Not a public contract (the")
+  (comment "Model says what it needs of these); it is what the laws and the oracle compare.")
+  (let [^I32 na (quot (cells-len an) AN_STRIDE)
+        ^I32 nf (quot (cells-len fd) FD_STRIDE)
+        ^I32 ns (quot (cells-len sg) SG_STRIDE)
+        ^:mut ^I32 i 0]
+    (emit-ascii t "{\"annots\":[")
+    (while (< i na)
+      (do (if (> i 0) (emit-ascii t ","))
+          (pa-dump-annot t txt an aq i)
+          (set i (+ i 1))))
+    (emit-ascii t "],\"fields\":[")
+    (set i 0)
+    (while (< i nf)
+      (do (if (> i 0) (emit-ascii t ","))
+          (pa-dump-field t txt fd i)
+          (set i (+ i 1))))
+    (emit-ascii t "],\"sigs\":[")
+    (set i 0)
+    (while (< i ns)
+      (do (if (> i 0) (emit-ascii t ","))
+          (pa-dump-sig t txt sg i)
+          (set i (+ i 1))))
+    (emit-ascii t "]}")
+    (return 0)))

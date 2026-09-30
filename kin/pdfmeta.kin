@@ -1,0 +1,1430 @@
+;; The document catalogue's extras (P3.9, D121): outlines (bookmarks) as a tree with their
+;; destinations, page labels (`/PageLabels`, every numbering style and prefix), the Info
+;; dictionary, XMP metadata (RDF/XML read by a small tolerant scanner, including
+;; `pdfuaid:part`, D076's PDF/UA signal) and the catalog's `/Lang` and flags. emon's own
+;; module (D039), from ISO 32000-1 7.9.6-7.9.7 (trees), 12.3.2-12.3.3 (labels, outlines),
+;; 14.3 (metadata) and ISO 16684-1 (XMP). Evidence, not truth (D034): a bookmark whose text
+;; matches no heading, a `/Lang` the text contradicts, an XMP that disagrees with the Info
+;; dictionary are all recorded as stated; what to believe is for the stages that can check.
+;;
+;;   (pm-run src ar dc a b st pg idx txt w seen md xm ol lb nd nt)   read everything
+;;   (pm-dump t txt md xm ol lb nd nt pg)                            the canonical JSON dump
+;;
+;; THE ARENAS are `Cells`, fixed-stride rows, strings as runs of `txt` (`emon.pdfx`).
+;;
+;;   `md`  a header of `MD_SIZE` cells. Runs (two cells, -1 0 when absent): 0 /Lang, 2 Info
+;;         /Title, 4 /Author, 6 /Subject, 8 /Keywords, 10 /Creator, 12 /Producer, 14
+;;         /CreationDate and 16 /ModDate as written, 18 /Trapped, 50 the catalog's /Version.
+;;         Parsed dates (year month day hour minute second zone-minutes, -1 absent, zone
+;;         -99999 when none is given): 20 creation, 27 modification. Flags: 34 Info present,
+;;         35 /MarkInfo /Marked (-1 absent), 36 a /StructTreeRoot, 37 an /AcroForm, 38
+;;         /NeedAppearances (-1), 39 /SigFlags (-1), 40 /ViewerPreferences /DisplayDocTitle
+;;         (-1), 41 XMP (0 none, 1 read, 2 present but not read), 42 `pdfuaid:part` (-1),
+;;         43 `pdfaid:part` (-1), 44 `pdfaid:conformance` (a run), 46 XMP properties, 47
+;;         /Outlines, 48 /PageLabels, 49 named destinations exist, 52 /Perms, 53 /XFA, 54
+;;         label ranges, 55 outline rows, 56 outline depth, 57 named destinations, 59
+;;         `pdfuaid:rev` (-1).
+;;   `xm`  XMP properties, `XM_STRIDE` cells: 0 name as written (run, `dc:title`), 2 kind
+;;         (`xmk`: simple, sequence item, bag item, alternative item, attribute), 3 value
+;;         (run), 5 `xml:lang` (run), 7 the property if it is one emon knows (`xk`), 8-9 spare.
+;;   `ol`  outline rows in pre-order, `OL_STRIDE` cells: 0 depth, 1 parent row (-1), 2
+;;         children, 3 rows in its subtree (itself included), 4 object number, 5 /Title (run),
+;;         7 /Count as written, 8 /F (1 italic, 2 bold), 9 /C as 0xRRGGBB (-1), 10 action kind
+;;         (`an-act`), 11 its target (run), 13 destination (`emon.pdfx`, 8 cells), 21 bits (1
+;;         a destination, 2 an action, 4 a link that would have looped was dropped, 8 a depth
+;;         beyond the limit was not read, 16 a /SE structure element).
+;;   `lb`  page label ranges sorted by first page, `LB_STRIDE` cells: 0 first page, 1 style
+;;         (`ls`: none, D, R, r, A, a), 2 prefix (run), 4 the number on the first page, 5 the
+;;         page after the last, 6 bits (1 the key is past the last page, 2 the value is no
+;;         dictionary, 4 a key repeated an earlier one).
+;;   `nd`  named destinations, `ND_STRIDE` cells: 0 the name (run), 2 destination (8 cells).
+;;
+;; A DESTINATION IS NOT FOLLOWED FOR ITS TEXT: outlines and links are mapped onto headings
+;; and words by the stages that own those (P4.4, P8), which have the geometry.
+;;
+;; BOUNDS: 200,000 outline rows, depth 64; a looping /Next or /First is dropped (and noted)
+;; by a visited set over object numbers; 50,000 named destinations; XMP is read to 1 MiB,
+;; 48 elements deep, 64 namespace declarations.
+(ns emon.pdfmeta
+  (:require [emon.lang :refer [I32 Src Cells Text defenum emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+                               text-cp text-i32]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfxnames :refer [px-s px-d px-a px-r-upper px-r-lower px-a-lower px-p
+                                    px-st px-dest px-c px-next px-trapped px-need-appearances
+                                    px-sig-flags px-xfa px-viewer-preferences
+                                    px-display-doc-title px-perms px-nums px-next px-last
+                                    xs-ns-dc xs-ns-pdf xs-ns-xmp xs-ns-xmp-mm xs-ns-pdfuaid
+                                    xs-ns-pdfaid xs-ns-rdf xs-rdf xs-description xs-seq
+                                    xs-bag xs-alt xs-li xs-title xs-creator
+                                    xs-description-l xs-subject xs-language xs-format
+                                    xs-rights xs-producer xs-keywords xs-pdf-version
+                                    xs-creator-tool xs-create-date xs-modify-date
+                                    xs-metadata-date xs-document-id xs-instance-id
+                                    xs-original-document-id xs-part xs-conformance xs-rev
+                                    xs-amd xs-about xs-parse-type xs-lang xs-xmlns xs-xml
+                                    xs-rdf-l xs-publisher xs-date xs-identifier
+                                    xs-chars-at xs-span-at xs-span-count]]
+            [emon.pdfnames :refer [pn-type pn-info pn-title pn-author pn-subject
+                                   pn-keywords pn-creator pn-producer pn-creation-date
+                                   pn-mod-date pn-lang pn-version pn-mark-info pn-marked
+                                   pn-struct-tree-root pn-acro-form pn-outlines
+                                   pn-page-labels pn-metadata pn-names pn-first pn-count
+                                   pn-f pn-title]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-count
+                                 pl-dict-get pl-num-cp]]
+            [emon.pdfdoc :refer [pd-get pd-resolve pd-dget pd-dint pd-root pd-pg-count
+                                 pd-stream-data pd-object-count pd-trailer-get]]
+            [emon.pdfx :refer [px-is px-get px-dget px-nth px-int-of px-is-num px-blen
+                               px-bat px-push-cp px-text-push px-date-parse px-seen-begin
+                               px-seen-mark px-dest-of px-dests-collect px-nn-collect
+                               px-json-run px-json-dest px-dest-present px-null
+                               px-json-box px-json-cp px-json-esc-cp px-dest-init px-has]]
+            [emon.pdfannot :refer [pa-text-to pa-uri-to pa-action an-act-emit-name]]
+            [kin.lang :refer [defn defconst defdata declarefn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+(defconst ^I32 MD_SIZE 64)
+(defconst ^I32 XM_STRIDE 10)
+(defconst ^I32 OL_STRIDE 24)
+(defconst ^I32 LB_STRIDE 8)
+(defconst ^I32 ND_STRIDE 10)
+(defconst ^I32 PM_OL_MAX 200000)
+(defconst ^I32 PM_DEPTH 64)
+(defconst ^I32 PM_ND_MAX 50000)
+(defconst ^I32 PM_LB_MAX 10000)       ;; page label ranges kept
+(defconst ^I32 PM_XMP 1048576)
+(defconst ^I32 NT_NS 8)               ;; nt: namespace rows start here (64 of four cells)
+(defconst ^I32 NT_STACK 264)          ;; nt: element frames start here (48 of eight cells)
+(defconst ^I32 NT_SIZE 648)
+(defconst ^I32 FR_STRIDE 8)
+
+(defenum ^:pub ls
+  [[ls-none 0 "none"]
+   [ls-decimal 1 "D"]
+   [ls-roman-upper 2 "R"]
+   [ls-roman-lower 3 "r"]
+   [ls-letters-upper 4 "A"]
+   [ls-letters-lower 5 "a"]])
+
+(defenum ^:pub xmk
+  [[xk-simple 0 "simple"]
+   [xk-seq 1 "seq"]
+   [xk-bag 2 "bag"]
+   [xk-alt 3 "alt"]
+   [xk-attr 4 "attribute"]])
+
+(defenum ^:pub xk
+  [[xkn-unknown 0 "unknown"]
+   [xkn-title 1 "dc:title"]
+   [xkn-creator 2 "dc:creator"]
+   [xkn-description 3 "dc:description"]
+   [xkn-subject 4 "dc:subject"]
+   [xkn-language 5 "dc:language"]
+   [xkn-format 6 "dc:format"]
+   [xkn-rights 7 "dc:rights"]
+   [xkn-publisher 8 "dc:publisher"]
+   [xkn-producer 9 "pdf:Producer"]
+   [xkn-keywords 10 "pdf:Keywords"]
+   [xkn-pdf-version 11 "pdf:PDFVersion"]
+   [xkn-creator-tool 12 "xmp:CreatorTool"]
+   [xkn-create-date 13 "xmp:CreateDate"]
+   [xkn-modify-date 14 "xmp:ModifyDate"]
+   [xkn-metadata-date 15 "xmp:MetadataDate"]
+   [xkn-document-id 16 "xmpMM:DocumentID"]
+   [xkn-instance-id 17 "xmpMM:InstanceID"]
+   [xkn-original-document-id 18 "xmpMM:OriginalDocumentID"]
+   [xkn-ua-part 19 "pdfuaid:part"]
+   [xkn-ua-rev 20 "pdfuaid:rev"]
+   [xkn-a-part 21 "pdfaid:part"]
+   [xkn-a-conformance 22 "pdfaid:conformance"]
+   [xkn-a-amd 23 "pdfaid:amd"]
+   [xkn-identifier 24 "dc:identifier"]
+   [xkn-date 25 "dc:date"]])
+
+;; ---------------------------------------------------------------- page labels
+
+(defn ^I32 pm-style [^Cells ar ^I32 h]
+  (comment "A /S name as an `ls`; 0 when there is none or it is not one of the five.")
+  (if (== h 0) (return 0))
+  (if (== (px-is ar h (px-d)) 1) (return 1))
+  (if (== (px-is ar h (px-r-upper)) 1) (return 2))
+  (if (== (px-is ar h (px-r-lower)) 1) (return 3))
+  (if (== (px-is ar h (px-a)) 1) (return 4))
+  (if (== (px-is ar h (px-a-lower)) 1) (return 5))
+  (return 0))
+
+(defn ^I32 pm-labels [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                      ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^:mut ^Cells txt
+                      ^:mut ^Cells nt ^:mut ^Cells lb ^I32 root ^I32 npages]
+  (comment "Collect /PageLabels into `lb`, sorted by first page. The number tree is read into")
+  (comment "`nt` as (key, value) pairs first; a key that repeats an earlier one is kept with")
+  (comment "bit 4 and the range it would start is not (the first wins).")
+  (cells-drop lb 0)
+  (cells-drop nt 0)
+  (let [^I32 pl (pd-dget src ar dc a b st root (pn-page-labels))
+        ^:mut ^I32 n 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 key 0
+        ^:mut ^I32 vh 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 dup 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 ln 0]
+    (if (== pl 0) (return 0))
+    (if (!= (pl-kind-of ar pl) 7) (return 0))
+    (cells-set idx 3 20000)
+    (px-nn-collect src ar dc a b st idx pl 0 nt)
+    (set n (quot (cells-len nt) 2))
+    (comment "Insertion in key order: rows are pushed at the end and moved down, so the order")
+    (comment "of equal keys is the order the tree gave them.")
+    (while (< i n)
+      (do (set key (cells-at nt (* i 2)))
+          (set vh (cells-at nt (+ (* i 2) 1)))
+          (if (and (>= key 0) (< (quot (cells-len lb) LB_STRIDE) PM_LB_MAX))
+            (do (set pos (quot (cells-len lb) LB_STRIDE))
+                (while (and (> pos 0) (> (cells-at lb (* (- pos 1) LB_STRIDE)) key))
+                  (set pos (- pos 1)))
+                (comment "pos is the row the new one takes; make room by pushing one row.")
+                (set row (quot (cells-len lb) LB_STRIDE))
+                (set j 0)
+                (while (< j LB_STRIDE)
+                  (do (cells-push lb 0)
+                      (set j (+ j 1))))
+                (set j (- row 1))
+                (while (>= j pos)
+                  (do (set at 0)
+                      (while (< at LB_STRIDE)
+                        (do (set v (cells-at lb (+ (* j LB_STRIDE) at)))
+                            (cells-set lb (+ (* (+ j 1) LB_STRIDE) at) v)
+                            (set at (+ at 1))))
+                      (set j (- j 1))))
+                (set at (* pos LB_STRIDE))
+                (cells-set lb at key)
+                (cells-set lb (+ at 1) 0)
+                (cells-set lb (+ at 2) -1)
+                (cells-set lb (+ at 3) 0)
+                (cells-set lb (+ at 4) 1)
+                (set bits 0)
+                (if (>= key npages) (set bits (bit-or bits 1)))
+                (set dup 0)
+                (if (> pos 0)
+                  (if (== (cells-at lb (* (- pos 1) LB_STRIDE)) key) (set dup 1)))
+                (if (== dup 1) (set bits (bit-or bits 4)))
+                (set d (pd-resolve src ar dc a b st vh))
+                (if (and (!= d 0) (== (pl-kind-of ar d) 7))
+                  (do (set v (px-dget src ar dc a b st d (px-s)))
+                      (cells-set lb (+ at 1) (pm-style ar v))
+                      (set v (px-dget src ar dc a b st d (px-p)))
+                      (if (and (!= v 0) (== (pl-kind-of ar v) 5))
+                        (do (set s (cells-len txt))
+                            (set ln (px-text-push ar v txt))
+                            (cells-set lb (+ at 2) s)
+                            (cells-set lb (+ at 3) ln)))
+                      (set v (px-dget src ar dc a b st d (px-st)))
+                      (if (== (px-is-num ar v) 1)
+                        (cells-set lb (+ at 4) (px-int-of ar v 1))))
+                  (set bits (bit-or bits 2)))
+                (cells-set lb (+ at 6) bits)))
+          (set i (+ i 1))))
+    (comment "A range ends where the next begins, the last at the page count.")
+    (set n (quot (cells-len lb) LB_STRIDE))
+    (set i 0)
+    (while (< i n)
+      (do (if (< (+ i 1) n)
+            (cells-set lb (+ (* i LB_STRIDE) 5) (cells-at lb (* (+ i 1) LB_STRIDE)))
+            (cells-set lb (+ (* i LB_STRIDE) 5) npages))
+          (set i (+ i 1))))
+    (return n)))
+
+;; Roman numerals: value, the first letter and the second (0 none) of each token, upper case.
+(defdata ^:pub pm-rn
+  :emitter kin.lang/flat-array
+  :stride 3
+  :data [1000 77 0  900 67 77  500 68 0  400 67 68  100 67 0  90 88 67  50 76 0
+         40 88 76  10 88 0  9 73 88  5 86 0  4 73 86  1 73 0]
+  :accessors {^I32 pm-rn-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^I32 pm-push-roman [^:mut ^Cells out ^I32 n ^I32 upper]
+  (comment "n as a Roman numeral pushed onto `out` as code points, M repeated past 3999 (as")
+  (comment "poppler and qpdf do); nothing for n below 1.")
+  (let [^:mut ^I32 m n
+        ^:mut ^I32 k 0
+        ^:mut ^I32 lower 32]
+    (if (< n 1) (return 0))
+    (if (== upper 1) (set lower 0))
+    (while (< k 13)
+      (do (while (>= m (pm-rn-at 0 k 0))
+            (do (cells-push out (+ (pm-rn-at 0 k 1) lower))
+                (if (!= (pm-rn-at 0 k 2) 0)
+                  (cells-push out (+ (pm-rn-at 0 k 2) lower)))
+                (set m (- m (pm-rn-at 0 k 0)))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 pm-push-letters [^:mut ^Cells out ^I32 n ^I32 upper]
+  (comment "n as letters: A to Z, then AA to ZZ, then AAA (ISO 32000-1 12.4.2); nothing below 1.")
+  (if (< n 1) (return 0))
+  (let [^I32 reps (+ (quot (- n 1) 26) 1)
+        ^:mut ^I32 c (+ (rem (- n 1) 26) 97)
+        ^:mut ^I32 i 0]
+    (if (== upper 1) (set c (- c 32)))
+    (while (< i reps)
+      (do (cells-push out c)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 pm-push-int [^:mut ^Cells out ^I32 v]
+  (comment "v in decimal pushed onto `out` as code points.")
+  (let [^:mut ^I32 m v
+        ^:mut ^I32 d 1]
+    (if (< v 0)
+      (do (cells-push out 45)
+          (set m (- 0 v))))
+    (while (<= d (quot m 10))
+      (set d (* d 10)))
+    (while (> d 0)
+      (do (cells-push out (+ 48 (rem (quot m d) 10)))
+          (set d (quot d 10))))
+    (return 0)))
+
+(defn ^I32 pm-label-range [^Cells lb ^I32 page]
+  (comment "The row of the range page `page` falls in: the last whose first page is at or")
+  (comment "before it and that is not a duplicate key; -1 when none does.")
+  (let [^I32 n (quot (cells-len lb) LB_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 best -1]
+    (while (< i n)
+      (do (if (<= (cells-at lb (* i LB_STRIDE)) page)
+            (if (== (rem (quot (cells-at lb (+ (* i LB_STRIDE) 6)) 4) 2) 0)
+              (set best i)))
+          (set i (+ i 1))))
+    (return best)))
+
+(defn ^:pub ^I32 pm-label-cells [^Cells txt ^Cells lb ^I32 page ^:mut ^Cells out]
+  (comment "The printed label of page `page` (0-based) pushed onto `out` as code points: the")
+  (comment "range's prefix, then the page's number in its style. Answers how many, or -1 (and")
+  (comment "pushes nothing) when no range covers the page: pages before the first range have")
+  (comment "no label.")
+  (let [^I32 r (pm-label-range lb page)
+        ^I32 before (cells-len out)]
+    (if (< r 0) (return -1))
+    (let [^I32 at (* r LB_STRIDE)
+          ^I32 style (cells-at lb (+ at 1))
+          ^I32 num (+ (cells-at lb (+ at 4)) (- page (cells-at lb at)))
+          ^:mut ^I32 i 0
+          ^:mut ^I32 c 0]
+      (while (< i (cells-at lb (+ at 3)))
+        (do (set c (cells-at txt (+ (cells-at lb (+ at 2)) i)))
+            (cells-push out c)
+            (set i (+ i 1))))
+      (if (== style 1) (pm-push-int out num))
+      (if (== style 2) (pm-push-roman out num 1))
+      (if (== style 3) (pm-push-roman out num 0))
+      (if (== style 4) (pm-push-letters out num 1))
+      (if (== style 5) (pm-push-letters out num 0))
+      (return (- (cells-len out) before)))))
+
+(defn ^:pub ^I32 pm-label-write [^:mut ^Text t ^Cells txt ^Cells lb ^I32 page ^:mut ^Cells sc]
+  (comment "The label of page `page` as text on `t`, built in the scratch `sc` first. Answers 1,")
+  (comment "or 0 and nothing written when the page has none.")
+  (cells-drop sc 0)
+  (let [^I32 n (pm-label-cells txt lb page sc)
+        ^:mut ^I32 i 0]
+    (if (< n 0) (return 0))
+    (while (< i n)
+      (do (text-cp t (cells-at sc i))
+          (set i (+ i 1))))
+    (return 1)))
+
+;; ------------------------------------------------------------------- outlines
+
+(defn ^I32 pm-ol-new [^:mut ^Cells ol ^I32 depth ^I32 parent ^I32 num]
+  (comment "Push an outline row that says nothing; answers its row.")
+  (let [^I32 row (quot (cells-len ol) OL_STRIDE)
+        ^I32 at (cells-len ol)
+        ^:mut ^I32 k 0]
+    (while (< k OL_STRIDE)
+      (do (cells-push ol 0)
+          (set k (+ k 1))))
+    (cells-set ol at depth)
+    (cells-set ol (+ at 1) parent)
+    (cells-set ol (+ at 3) 1)
+    (cells-set ol (+ at 4) num)
+    (cells-set ol (+ at 5) -1)
+    (cells-set ol (+ at 9) -1)
+    (cells-set ol (+ at 11) -1)
+    (px-dest-init ol (+ at 13))
+    (if (>= parent 0)
+      (cells-set ol (+ (* parent OL_STRIDE) 2) (+ (cells-at ol (+ (* parent OL_STRIDE) 2)) 1)))
+    (return row)))
+
+(defn ^I32 pm-rgb [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                   ^:mut ^Cells b ^:mut ^Cells st ^I32 arr]
+  (comment "A /C colour array of three numbers in 0..1 as 0xRRGGBB, -1 when it is not one.")
+  (if (== arr 0) (return -1))
+  (if (!= (pl-kind-of ar arr) 6) (return -1))
+  (if (!= (pl-count ar arr) 3) (return -1))
+  (let [^:mut ^I32 rgb 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 c 0]
+    (while (< k 3)
+      (do (set e (px-nth ar arr k))
+          (set v (pd-resolve src ar dc a b st e))
+          (if (== (px-is-num ar v) 0) (return -1))
+          (set c (quot (+ (* (pl-num-cp ar v) 255) 50) 100))
+          (if (< c 0) (set c 0))
+          (if (> c 255) (set c 255))
+          (set rgb (+ (* rgb 256) c))
+          (set k (+ k 1))))
+    (return rgb)))
+
+(defn ^I32 pm-ol-fill [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                       ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^:mut ^Cells pg
+                       ^:mut ^Cells txt ^:mut ^Cells ol ^I32 row ^I32 item]
+  (comment "Fill an outline row from its dictionary: title, count, flags, colour, and the")
+  (comment "action or destination it goes to (a /Dest is a GoTo).")
+  (let [^I32 at (* row OL_STRIDE)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 bits 0]
+    (set v (pd-dget src ar dc a b st item (pn-title)))
+    (pa-text-to txt ar v ol (+ at 5))
+    (cells-set ol (+ at 7) (pd-dint src ar dc a b st item (pn-count) 0))
+    (cells-set ol (+ at 8) (pd-dint src ar dc a b st item (pn-f) 0))
+    (set v (px-dget src ar dc a b st item (px-c)))
+    (cells-set ol (+ at 9) (pm-rgb src ar dc a b st v))
+    (set v (px-dget src ar dc a b st item (px-a)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 7))
+      (do (pa-action src ar dc a b st idx pg txt v ol (+ at 10))
+          (set bits 2)
+          (if (== (px-dest-present ol (+ at 13)) 1) (set bits 3)))
+      (if (== (px-has src ar dc a b st item (px-dest)) 1)
+        (do (set v (px-get ar item (px-dest)))
+            (px-dest-of src ar dc a b st idx pg txt v ol (+ at 13))
+            (cells-set ol (+ at 10) 2)
+            (set bits 1))))
+    (cells-set ol (+ at 21) bits)
+    (return 0)))
+
+(defn ^I32 pm-outlines [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                        ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^:mut ^Cells pg
+                        ^:mut ^Cells txt ^:mut ^Cells seen ^:mut ^Cells nt
+                        ^:mut ^Cells ol ^I32 root]
+  (comment "Walk /Outlines into `ol`, pre-order, without recursion: a stack of (next")
+  (comment "sibling, parent row, depth) in `nt`. An item met twice (a looping /Next or a")
+  (comment "/First that leads back up) ends its chain and is noted on its parent; a chain")
+  (comment "deeper than PM_DEPTH is not read. Answers the rows, -1 when the source missed.")
+  (cells-drop ol 0)
+  (cells-drop nt 0)
+  (let [^I32 outl (pd-dget src ar dc a b st root (pn-outlines))
+        ^:mut ^I32 cur 0
+        ^:mut ^I32 depth 0
+        ^:mut ^I32 parent -1
+        ^:mut ^I32 done 0
+        ^:mut ^I32 item 0
+        ^:mut ^I32 num 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 nxt 0
+        ^:mut ^I32 fst 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 sz 0]
+    (if (== outl 0) (return 0))
+    (if (!= (pl-kind-of ar outl) 7) (return 0))
+    (px-seen-begin seen (pd-object-count dc))
+    (set cur (pl-dict-get ar outl (pn-first)))
+    (while (== done 0)
+      (do (if (ps-missed src) (return -1))
+          (if (== cur 0)
+            (do (set ln (cells-len nt))
+                (if (== ln 0)
+                  (set done 1)
+                  (do (set cur (cells-at nt (- ln 3)))
+                      (set parent (cells-at nt (- ln 2)))
+                      (set depth (cells-at nt (- ln 1)))
+                      (cells-drop nt (- ln 3)))))
+            (do (set item (pd-resolve src ar dc a b st cur))
+                (set num 0)
+                (if (== (pl-kind-of ar cur) 9) (set num (pl-int-value ar cur)))
+                (set nxt 0)
+                (if (or (== item 0) (!= (pl-kind-of ar item) 7))
+                  (set cur 0)
+                  (if (== (px-seen-mark seen num) 1)
+                    (do (if (>= parent 0)
+                          (cells-set ol (+ (* parent OL_STRIDE) 21)
+                                     (bit-or (cells-at ol (+ (* parent OL_STRIDE) 21)) 4)))
+                        (set cur 0))
+                    (if (>= (quot (cells-len ol) OL_STRIDE) PM_OL_MAX)
+                      (set done 1)
+                      (do (set row (pm-ol-new ol depth parent num))
+                          (pm-ol-fill src ar dc a b st idx pg txt ol row item)
+                          (set nxt (px-get ar item (px-next)))
+                          (set fst (pl-dict-get ar item (pn-first)))
+                          (if (and (!= fst 0) (< (+ depth 1) PM_DEPTH))
+                            (do (cells-push nt nxt)
+                                (cells-push nt parent)
+                                (cells-push nt depth)
+                                (set parent row)
+                                (set depth (+ depth 1))
+                                (set cur fst))
+                            (do (if (!= fst 0)
+                                  (cells-set ol (+ (* row OL_STRIDE) 21)
+                                             (bit-or (cells-at ol (+ (* row OL_STRIDE) 21)) 8)))
+                                (set cur nxt))))))))))) 
+    (comment "Subtree sizes: children follow their parent, so one backward pass.")
+    (set n (quot (cells-len ol) OL_STRIDE))
+    (set k (- n 1))
+    (while (>= k 0)
+      (do (set p (cells-at ol (+ (* k OL_STRIDE) 1)))
+          (if (>= p 0)
+            (do (set sz (cells-at ol (+ (* k OL_STRIDE) 3)))
+                (cells-set ol (+ (* p OL_STRIDE) 3) (+ (cells-at ol (+ (* p OL_STRIDE) 3)) sz))))
+          (set k (- k 1))))
+    (return n)))
+
+;; ------------------------------------------------------------------------ XMP
+;;
+;; XMP is RDF/XML, but the packets that exist are a small, regular subset: one or more
+;; `rdf:Description` elements whose properties are simple elements, simple attributes, or an
+;; `rdf:Seq`/`rdf:Bag`/`rdf:Alt` of `rdf:li` items. The scanner below reads exactly that, by
+;; bytes, resolving the namespace prefixes the packet declares (so `dc:` can be spelled
+;; anything), decoding entities and UTF-8, and skipping what it does not understand (structure
+;; values such as `xmpMM:History`). It is not an XML parser and does not claim to be.
+
+(defn ^I32 pm-x-eq [^Cells w ^I32 s ^I32 n ^I32 id]
+  (comment "1 when w[s, s+n) spells row `id` of the xs table.")
+  (let [^I32 o (xs-span-at 0 id 0)
+        ^I32 m (xs-span-at 0 id 1)
+        ^:mut ^I32 i 0]
+    (if (!= n m) (return 0))
+    (while (< i n)
+      (do (if (!= (cells-at w (+ s i)) (xs-chars-at 0 (+ o i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 pm-x-same [^Cells w ^I32 s1 ^I32 s2 ^I32 n]
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (!= (cells-at w (+ s1 i)) (cells-at w (+ s2 i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 pm-x-colon [^Cells w ^I32 s ^I32 n]
+  (comment "The offset of the first `:` in the name w[s, s+n), -1 when there is none.")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (cells-at w (+ s i)) 58) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 pm-x-uri-id [^Cells nt ^Cells w ^I32 ps ^I32 pl]
+  (comment "The xs id (0..6) of the namespace the prefix w[ps, ps+pl) is declared to be, -1")
+  (comment "when it is undeclared or is a namespace emon has no name for. The newest")
+  (comment "declaration wins.")
+  (let [^:mut ^I32 i (- (cells-at nt 0) 1)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0]
+    (while (>= i 0)
+      (do (set at (+ NT_NS (* i 4)))
+          (if (== (cells-at nt (+ at 1)) pl)
+            (if (== (pm-x-same w (cells-at nt at) ps pl) 1)
+              (do (set k 0)
+                  (while (< k 7)
+                    (do (if (== (pm-x-eq w (cells-at nt (+ at 2)) (cells-at nt (+ at 3)) k) 1)
+                          (return k))
+                        (set k (+ k 1))))
+                  (return -1))))
+          (set i (- i 1))))
+    (return -1)))
+
+(defn ^I32 pm-x-local-id [^Cells w ^I32 s ^I32 n]
+  (comment "The xs id of a local name, -1 when it is not one the reader knows.")
+  (let [^I32 rows (xs-span-count 0)
+        ^:mut ^I32 k 7]
+    (while (< k rows)
+      (do (if (== (pm-x-eq w s n k) 1) (return k))
+          (set k (+ k 1))))
+    (return -1)))
+
+(defn ^I32 pm-x-classify [^Cells nt ^Cells w ^I32 s ^I32 n]
+  (comment "A qualified name as one integer: ((namespace id + 1) * 1024) + (local id + 1),")
+  (comment "a part that is unknown counting as 0.")
+  (let [^I32 c (pm-x-colon w s n)
+        ^:mut ^I32 uri -1
+        ^:mut ^I32 loc -1]
+    (if (< c 0)
+      (do (set uri (pm-x-uri-id nt w s 0))
+          (set loc (pm-x-local-id w s n)))
+      (do (set uri (pm-x-uri-id nt w s c))
+          (set loc (pm-x-local-id w (+ (+ s c) 1) (- (- n c) 1)))))
+    (return (+ (* (+ uri 1) 1024) (+ loc 1)))))
+
+(defn ^I32 pm-x-known [^I32 uri ^I32 loc]
+  (comment "The `xk` of a property: namespace id and local id to the property emon reads.")
+  (if (== uri (xs-ns-dc))
+    (do (if (== loc (xs-title)) (return 1))
+        (if (== loc (xs-creator)) (return 2))
+        (if (== loc (xs-description-l)) (return 3))
+        (if (== loc (xs-subject)) (return 4))
+        (if (== loc (xs-language)) (return 5))
+        (if (== loc (xs-format)) (return 6))
+        (if (== loc (xs-rights)) (return 7))
+        (if (== loc (xs-publisher)) (return 8))
+        (if (== loc (xs-identifier)) (return 24))
+        (if (== loc (xs-date)) (return 25))))
+  (if (== uri (xs-ns-pdf))
+    (do (if (== loc (xs-producer)) (return 9))
+        (if (== loc (xs-keywords)) (return 10))
+        (if (== loc (xs-pdf-version)) (return 11))))
+  (if (== uri (xs-ns-xmp))
+    (do (if (== loc (xs-creator-tool)) (return 12))
+        (if (== loc (xs-create-date)) (return 13))
+        (if (== loc (xs-modify-date)) (return 14))
+        (if (== loc (xs-metadata-date)) (return 15))))
+  (if (== uri (xs-ns-xmp-mm))
+    (do (if (== loc (xs-document-id)) (return 16))
+        (if (== loc (xs-instance-id)) (return 17))
+        (if (== loc (xs-original-document-id)) (return 18))))
+  (if (== uri (xs-ns-pdfuaid))
+    (do (if (== loc (xs-part)) (return 19))
+        (if (== loc (xs-rev)) (return 20))))
+  (if (== uri (xs-ns-pdfaid))
+    (do (if (== loc (xs-part)) (return 21))
+        (if (== loc (xs-conformance)) (return 22))
+        (if (== loc (xs-amd)) (return 23))))
+  (return 0))
+
+(defn ^I32 pm-x-is-ws [^I32 c]
+  (if (== c 32) (return 1))
+  (if (== c 10) (return 1))
+  (if (== c 13) (return 1))
+  (if (== c 9) (return 1))
+  (return 0))
+
+(defn ^I32 pm-x-seq-len [^Cells w ^I32 i ^I32 to]
+  (comment "The length of the well-formed UTF-8 sequence at w[i], 1 when it is not one.")
+  (let [^I32 c (cells-at w i)
+        ^:mut ^I32 need 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 j 1]
+    (if (and (>= c 194) (<= c 223)) (do (set need 1) (set cp (- c 192)) (set lo 128)))
+    (if (and (>= c 224) (<= c 239)) (do (set need 2) (set cp (- c 224)) (set lo 2048)))
+    (if (and (>= c 240) (<= c 244)) (do (set need 3) (set cp (- c 240)) (set lo 65536)))
+    (if (== need 0) (return 1))
+    (if (> (+ (+ i need) 1) to) (return 1))
+    (while (<= j need)
+      (do (if (!= (bit-and (cells-at w (+ i j)) 192) 128) (return 1))
+          (set cp (+ (* cp 64) (bit-and (cells-at w (+ i j)) 63)))
+          (set j (+ j 1))))
+    (if (< cp lo) (return 1))
+    (if (> cp 1114111) (return 1))
+    (if (and (>= cp 55296) (<= cp 57343)) (return 1))
+    (return (+ need 1))))
+
+(defn ^I32 pm-x-seq-cp [^Cells w ^I32 i ^I32 ln]
+  (let [^I32 c (cells-at w i)
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 j 1]
+    (if (== ln 1) (return c))
+    (if (== ln 2) (set cp (- c 192)))
+    (if (== ln 3) (set cp (- c 224)))
+    (if (== ln 4) (set cp (- c 240)))
+    (while (< j ln)
+      (do (set cp (+ (* cp 64) (bit-and (cells-at w (+ i j)) 63)))
+          (set j (+ j 1))))
+    (return cp)))
+
+(defn ^I32 pm-x-entity [^Cells w ^I32 i ^I32 to ^:mut ^Cells txt]
+  (comment "An entity at w[i] (`&`): pushes its code point and answers the position after the")
+  (comment "`;`; answers -1 and pushes nothing when it is not one of the five, `&#N;` or `&#xH;`.")
+  (let [^:mut ^I32 j (+ i 1)
+        ^:mut ^I32 semi -1
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 hex 0]
+    (while (and (< j to) (< j (+ i 12)) (== semi -1))
+      (do (if (== (cells-at w j) 59) (set semi j))
+          (set j (+ j 1))))
+    (if (== semi -1) (return -1))
+    (set n (- (- semi i) 1))
+    (set c (cells-at w (+ i 1)))
+    (if (and (== n 3) (== c 97) (== (cells-at w (+ i 2)) 109) (== (cells-at w (+ i 3)) 112))
+      (do (px-push-cp txt 38) (return (+ semi 1))))
+    (if (and (== n 2) (== c 108) (== (cells-at w (+ i 2)) 116))
+      (do (px-push-cp txt 60) (return (+ semi 1))))
+    (if (and (== n 2) (== c 103) (== (cells-at w (+ i 2)) 116))
+      (do (px-push-cp txt 62) (return (+ semi 1))))
+    (if (and (== n 4) (== c 113) (== (cells-at w (+ i 2)) 117) (== (cells-at w (+ i 3)) 111)
+             (== (cells-at w (+ i 4)) 116))
+      (do (px-push-cp txt 34) (return (+ semi 1))))
+    (if (and (== n 4) (== c 97) (== (cells-at w (+ i 2)) 112) (== (cells-at w (+ i 3)) 111)
+             (== (cells-at w (+ i 4)) 115))
+      (do (px-push-cp txt 39) (return (+ semi 1))))
+    (if (and (== c 35) (> n 1))
+      (do (set k (+ i 2))
+          (if (or (== (cells-at w k) 120) (== (cells-at w k) 88))
+            (do (set hex 1) (set k (+ k 1))))
+          (if (>= k semi) (return -1))
+          (while (< k semi)
+            (do (set d (cells-at w k))
+                (if (and (>= d 48) (<= d 57))
+                  (set d (- d 48))
+                  (if (and (== hex 1) (>= d 97) (<= d 102))
+                    (set d (- d 87))
+                    (if (and (== hex 1) (>= d 65) (<= d 70))
+                      (set d (- d 55))
+                      (return -1))))
+                (if (== hex 1) (set v (+ (* v 16) d)) (set v (+ (* v 10) d)))
+                (if (> v 1114111) (return -1))
+                (set k (+ k 1))))
+          (px-push-cp txt v)
+          (return (+ semi 1))))
+    (return -1)))
+
+(defn ^I32 pm-x-text [^Cells w ^I32 from ^I32 to ^I32 ent ^:mut ^Cells txt]
+  (comment "w[from, to) as text into `txt`: UTF-8 (a byte that is not part of a sequence is")
+  (comment "Latin-1), entities decoded when `ent` is 1.")
+  (let [^:mut ^I32 i from
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 r 0]
+    (while (< i to)
+      (do (set c (cells-at w i))
+          (set r -1)
+          (if (and (== c 38) (== ent 1))
+            (set r (pm-x-entity w i to txt)))
+          (if (>= r 0)
+            (set i r)
+            (do (set ln (pm-x-seq-len w i to))
+                (px-push-cp txt (pm-x-seq-cp w i ln))
+                (set i (+ i ln))))))
+    (return 0)))
+
+(defn ^I32 pm-x-tag-end [^Cells w ^I32 i ^I32 n]
+  (comment "Where the tag whose attributes start at `i` ends: the `>` outside any quotes.")
+  (let [^:mut ^I32 p i
+        ^:mut ^I32 q 0
+        ^:mut ^I32 c 0]
+    (while (< p n)
+      (do (set c (cells-at w p))
+          (if (== q 0)
+            (do (if (or (== c 34) (== c 39)) (set q c))
+                (if (== c 62) (return p)))
+            (if (== c q) (set q 0)))
+          (set p (+ p 1))))
+    (return n)))
+
+(defn ^I32 pm-x-attr [^:mut ^Cells nt ^Cells w ^I32 p ^I32 e]
+  (comment "The next attribute in w[p, e): its name and value spans go to nt[4..8) (name")
+  (comment "start, length, value start, length) and the position after it is answered; -1")
+  (comment "when there is none.")
+  (let [^:mut ^I32 i p
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 vs 0
+        ^:mut ^I32 vl 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 c 0]
+    (while (and (< i e) (== (pm-x-is-ws (cells-at w i)) 1))
+      (set i (+ i 1)))
+    (if (>= i e) (return -1))
+    (set c (cells-at w i))
+    (if (or (== c 47) (== c 62)) (return -1))
+    (set ns i)
+    (while (and (< i e) (== (pm-x-is-ws (cells-at w i)) 0) (!= (cells-at w i) 61)
+                (!= (cells-at w i) 47) (!= (cells-at w i) 62))
+      (set i (+ i 1)))
+    (set nl (- i ns))
+    (while (and (< i e) (== (pm-x-is-ws (cells-at w i)) 1))
+      (set i (+ i 1)))
+    (if (and (< i e) (== (cells-at w i) 61))
+      (do (set i (+ i 1))
+          (while (and (< i e) (== (pm-x-is-ws (cells-at w i)) 1))
+            (set i (+ i 1)))
+          (if (< i e) (set q (cells-at w i)))
+          (if (or (== q 34) (== q 39))
+            (do (set i (+ i 1))
+                (set vs i)
+                (while (and (< i e) (!= (cells-at w i) q))
+                  (set i (+ i 1)))
+                (set vl (- i vs))
+                (if (< i e) (set i (+ i 1))))
+            (do (set vs i)
+                (while (and (< i e) (== (pm-x-is-ws (cells-at w i)) 0) (!= (cells-at w i) 62))
+                  (set i (+ i 1)))
+                (set vl (- i vs)))))
+      (set vs i))
+    (if (== i p) (set i (+ p 1)))
+    (cells-set nt 4 ns)
+    (cells-set nt 5 nl)
+    (cells-set nt 6 vs)
+    (cells-set nt 7 vl)
+    (return i)))
+
+(defn ^I32 pm-run-int [^Cells txt ^I32 s ^I32 n]
+  (comment "The decimal number a run spells (surrounding white space allowed), -1 otherwise.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 got 0]
+    (while (< i n)
+      (do (set c (cells-at txt (+ s i)))
+          (if (and (>= c 48) (<= c 57))
+            (do (set v (+ (* v 10) (- c 48)))
+                (set got 1)
+                (if (> v 100000000) (return -1)))
+            (if (!= (pm-x-is-ws c) 1) (return -1)))
+          (set i (+ i 1))))
+    (if (== got 0) (return -1))
+    (return v)))
+
+(defn ^I32 pm-x-row [^:mut ^Cells xm ^:mut ^Cells txt ^:mut ^Cells md ^Cells w
+                     ^I32 ns ^I32 nl0 ^I32 kind ^I32 vs ^I32 vl ^I32 ls ^I32 ll ^I32 known]
+  (comment "Append an XMP property row; the name is copied into `txt` from w[ns, ns+nl); the")
+  (comment "value and language are runs already there. Sets the header cells of the properties")
+  (comment "emon reads into `md` (PDF/UA and PDF/A identification).")
+  (let [^I32 s (cells-len txt)
+        ^:mut ^I32 nl nl0
+        ^:mut ^I32 v 0]
+    (pm-x-text w ns (+ ns nl0) 0 txt)
+    (set nl (- (cells-len txt) s))
+    (cells-push xm s)
+    (cells-push xm nl)
+    (cells-push xm kind)
+    (cells-push xm vs)
+    (cells-push xm vl)
+    (cells-push xm ls)
+    (cells-push xm ll)
+    (cells-push xm known)
+    (cells-push xm 0)
+    (cells-push xm 0)
+    (set v (cells-at md 46))
+    (cells-set md 46 (+ v 1))
+    (if (and (== known 19) (== (cells-at md 42) -1))
+      (do (set v (pm-run-int txt vs vl))
+          (cells-set md 42 v)))
+    (if (and (== known 20) (== (cells-at md 59) -1))
+      (do (set v (pm-run-int txt vs vl))
+          (cells-set md 59 v)))
+    (if (and (== known 21) (== (cells-at md 43) -1))
+      (do (set v (pm-run-int txt vs vl))
+          (cells-set md 43 v)))
+    (if (and (== known 22) (== (cells-at md 44) -1))
+      (do (cells-set md 44 vs)
+          (cells-set md 45 vl)))
+    (return 0)))
+
+(defn ^I32 pm-x-pop [^:mut ^Cells nt ^Cells w ^:mut ^Cells txt ^:mut ^Cells md ^:mut ^Cells xm]
+  (comment "Close the innermost element. A property element or an `rdf:li` that had no child")
+  (comment "elements is a value: its row is written. Answers 0.")
+  (let [^I32 d (cells-at nt 1)
+        ^:mut ^I32 fo 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 pf 0
+        ^:mut ^I32 vs 0
+        ^:mut ^I32 vl 0
+        ^:mut ^I32 cl 0
+        ^:mut ^I32 known 0
+        ^:mut ^I32 kind 0]
+    (if (<= d 0) (return 0))
+    (set fo (+ NT_STACK (* (- d 1) FR_STRIDE)))
+    (set role (cells-at nt (+ fo 2)))
+    (if (and (== (cells-at nt (+ fo 3)) 0) (or (== role 2) (== role 4)))
+      (do (set vs (cells-at nt (+ fo 4)))
+          (set vl (- (cells-len txt) vs))
+          (if (== role 2)
+            (do (set cl (pm-x-classify nt w (cells-at nt fo) (cells-at nt (+ fo 1))))
+                (set known (pm-x-known (- (quot cl 1024) 1) (- (rem cl 1024) 1)))
+                (pm-x-row xm txt md w (cells-at nt fo) (cells-at nt (+ fo 1)) 0 vs vl -1 0 known)))
+          (if (and (== role 4) (>= d 3))
+            (do (set pf (- fo (* 2 FR_STRIDE)))
+                (set cl (pm-x-classify nt w (cells-at nt pf) (cells-at nt (+ pf 1))))
+                (set known (pm-x-known (- (quot cl 1024) 1) (- (rem cl 1024) 1)))
+                (set kind (cells-at nt (+ (- fo FR_STRIDE) 7)))
+                (pm-x-row xm txt md w (cells-at nt pf) (cells-at nt (+ pf 1)) kind vs vl
+                          (cells-at nt (+ fo 5)) (cells-at nt (+ fo 6)) known)))))
+    (cells-set nt 1 (- d 1))
+    (return 0)))
+
+(defn ^I32 pm-xmp-scan [^Cells w ^:mut ^Cells nt ^:mut ^Cells txt ^:mut ^Cells md
+                        ^:mut ^Cells xm]
+  (comment "Read the XMP packet in `w` (bytes) into `xm` rows and the header cells of `md`.")
+  (comment "`nt` is scratch (namespaces, the open elements). Answers 1, or 2 when it is UTF-16")
+  (comment "(not read) and no row was written.")
+  (cells-drop nt 0)
+  (let [^:mut ^I32 n (cells-len w)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 c1 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 fo 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 prole 0
+        ^:mut ^I32 ck 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 gt 0
+        ^:mut ^I32 selfc 0
+        ^:mut ^I32 cl 0
+        ^:mut ^I32 uri 0
+        ^:mut ^I32 loc 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 as 0
+        ^:mut ^I32 al 0
+        ^:mut ^I32 av 0
+        ^:mut ^I32 avl 0
+        ^:mut ^I32 nn 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 vs 0
+        ^:mut ^I32 cl2 0
+        ^:mut ^I32 colon 0
+        ^:mut ^I32 langs -1
+        ^:mut ^I32 langl 0
+        ^:mut ^I32 skip 0]
+    (while (< k NT_SIZE)
+      (do (cells-push nt 0)
+          (set k (+ k 1))))
+    (if (> n PM_XMP) (set n PM_XMP))
+    (if (>= n 2)
+      (if (or (and (== (cells-at w 0) 254) (== (cells-at w 1) 255))
+              (and (== (cells-at w 0) 255) (== (cells-at w 1) 254)))
+        (return 2)))
+    (if (>= n 3)
+      (if (and (== (cells-at w 0) 239) (== (cells-at w 1) 187) (== (cells-at w 2) 191))
+        (set i 3)))
+    (while (< i n)
+      (do (set c (cells-at w i))
+          (if (!= c 60)
+            (do (set j i)
+                (while (and (< j n) (!= (cells-at w j) 60))
+                  (set j (+ j 1)))
+                (set d (cells-at nt 1))
+                (if (> d 0)
+                  (do (set fo (+ NT_STACK (* (- d 1) FR_STRIDE)))
+                      (set role (cells-at nt (+ fo 2)))
+                      (if (and (or (== role 2) (== role 4)) (== (cells-at nt (+ fo 3)) 0))
+                        (pm-x-text w i j 1 txt))))
+                (set i j))
+            (do (set c1 0)
+                (if (< (+ i 1) n) (set c1 (cells-at w (+ i 1))))
+                (if (== c1 63)
+                  (do (set j (+ i 2))
+                      (while (and (< (+ j 1) n)
+                                  (or (!= (cells-at w j) 63) (!= (cells-at w (+ j 1)) 62)))
+                        (set j (+ j 1)))
+                      (set i (+ j 2)))
+                  (if (== c1 33)
+                    (if (and (< (+ i 3) n) (== (cells-at w (+ i 2)) 45) (== (cells-at w (+ i 3)) 45))
+                      (do (set j (+ i 4))
+                          (while (and (< (+ j 2) n)
+                                      (or (!= (cells-at w j) 45) (!= (cells-at w (+ j 1)) 45)
+                                          (!= (cells-at w (+ j 2)) 62)))
+                            (set j (+ j 1)))
+                          (set i (+ j 3)))
+                      (if (and (< (+ i 8) n) (== (cells-at w (+ i 2)) 91) (== (cells-at w (+ i 3)) 67)
+                               (== (cells-at w (+ i 4)) 68) (== (cells-at w (+ i 5)) 65)
+                               (== (cells-at w (+ i 6)) 84) (== (cells-at w (+ i 7)) 65)
+                               (== (cells-at w (+ i 8)) 91))
+                        (do (set j (+ i 9))
+                            (while (and (< (+ j 2) n)
+                                        (or (!= (cells-at w j) 93) (!= (cells-at w (+ j 1)) 93)
+                                            (!= (cells-at w (+ j 2)) 62)))
+                              (set j (+ j 1)))
+                            (set d (cells-at nt 1))
+                            (if (> d 0)
+                              (do (set fo (+ NT_STACK (* (- d 1) FR_STRIDE)))
+                                  (set role (cells-at nt (+ fo 2)))
+                                  (if (and (or (== role 2) (== role 4)) (== (cells-at nt (+ fo 3)) 0))
+                                    (pm-x-text w (+ i 9) j 0 txt))))
+                            (set i (+ j 3)))
+                        (do (set j (pm-x-tag-end w (+ i 2) n))
+                            (set i (+ j 1)))))
+                    (if (== c1 47)
+                      (do (set j (+ i 2))
+                          (while (and (< j n) (!= (cells-at w j) 62))
+                            (set j (+ j 1)))
+                          (pm-x-pop nt w txt md xm)
+                          (set i (+ j 1)))
+                      (do (comment "A start tag: the name, the namespaces it declares, then its role.")
+                          (set ns (+ i 1))
+                          (set j ns)
+                          (while (and (< j n) (== (pm-x-is-ws (cells-at w j)) 0)
+                                      (!= (cells-at w j) 47) (!= (cells-at w j) 62))
+                            (set j (+ j 1)))
+                          (set nl (- j ns))
+                          (set gt (pm-x-tag-end w j n))
+                          (set selfc 0)
+                          (if (and (> gt j) (== (cells-at w (- gt 1)) 47)) (set selfc 1))
+                          (set p j)
+                          (while (>= p 0)
+                            (do (set p (pm-x-attr nt w p gt))
+                                (if (>= p 0)
+                                  (do (set as (cells-at nt 4))
+                                      (set al (cells-at nt 5))
+                                      (if (and (>= al 5) (== (pm-x-eq w as 5 (xs-xmlns)) 1))
+                                        (do (set nn (cells-at nt 0))
+                                            (if (and (< nn 64) (or (== al 5) (== (cells-at w (+ as 5)) 58)))
+                                              (do (set at (+ NT_NS (* nn 4)))
+                                                  (if (== al 5)
+                                                    (do (cells-set nt at as) (cells-set nt (+ at 1) 0))
+                                                    (do (cells-set nt at (+ as 6)) (cells-set nt (+ at 1) (- al 6))))
+                                                  (cells-set nt (+ at 2) (cells-at nt 6))
+                                                  (cells-set nt (+ at 3) (cells-at nt 7))
+                                                  (cells-set nt 0 (+ nn 1))))))))))
+                          (set d (cells-at nt 1))
+                          (if (>= d 46)
+                            (set i n)
+                            (do (set prole 0)
+                                (if (> d 0) (set prole (cells-at nt (+ (+ NT_STACK (* (- d 1) FR_STRIDE)) 2))))
+                                (set cl (pm-x-classify nt w ns nl))
+                                (set uri (- (quot cl 1024) 1))
+                                (set loc (- (rem cl 1024) 1))
+                                (set role 0)
+                                (set ck 0)
+                                (if (and (== uri (xs-ns-rdf)) (== loc (xs-rdf))) (set role 6))
+                                (if (and (== uri (xs-ns-rdf)) (== loc (xs-description))
+                                         (or (== prole 6) (== d 0)))
+                                  (set role 1))
+                                (if (and (== role 0) (== prole 1) (!= uri (xs-ns-rdf))) (set role 2))
+                                (if (and (== role 0) (== prole 2) (== uri (xs-ns-rdf)))
+                                  (do (if (== loc (xs-seq)) (do (set role 3) (set ck 1)))
+                                      (if (== loc (xs-bag)) (do (set role 3) (set ck 2)))
+                                      (if (== loc (xs-alt)) (do (set role 3) (set ck 3)))))
+                                (if (and (== role 0) (== prole 3) (== uri (xs-ns-rdf)) (== loc (xs-li)))
+                                  (set role 4))
+                                (comment "The parent now has a child element: any text it had is white space.")
+                                (if (> d 0)
+                                  (do (set fo (+ NT_STACK (* (- d 1) FR_STRIDE)))
+                                      (if (and (or (== prole 2) (== prole 4)) (== (cells-at nt (+ fo 3)) 0))
+                                        (do (cells-set nt (+ fo 3) 1)
+                                            (cells-drop txt (cells-at nt (+ fo 4)))))))
+                                (set langs -1)
+                                (set langl 0)
+                                (set p j)
+                                (while (>= p 0)
+                                  (do (set p (pm-x-attr nt w p gt))
+                                      (if (>= p 0)
+                                        (do (set as (cells-at nt 4))
+                                            (set al (cells-at nt 5))
+                                            (set av (cells-at nt 6))
+                                            (set avl (cells-at nt 7))
+                                            (set colon (pm-x-colon w as al))
+                                            (if (== role 1)
+                                              (do (set skip 0)
+                                                  (if (and (>= al 5) (== (pm-x-eq w as 5 (xs-xmlns)) 1)) (set skip 1))
+                                                  (if (< colon 0) (set skip 1))
+                                                  (if (and (== colon 3) (== (pm-x-eq w as 3 (xs-xml)) 1)) (set skip 1))
+                                                  (set cl2 (pm-x-classify nt w as al))
+                                                  (if (== (- (quot cl2 1024) 1) (xs-ns-rdf)) (set skip 1))
+                                                  (if (== skip 0)
+                                                    (do (set vs (cells-len txt))
+                                                        (pm-x-text w av (+ av avl) 1 txt)
+                                                        (pm-x-row xm txt md w as al 4 vs (- (cells-len txt) vs) -1 0
+                                                                  (pm-x-known (- (quot cl2 1024) 1) (- (rem cl2 1024) 1)))))))
+                                            (if (and (== role 4) (== colon 3))
+                                              (if (and (== (pm-x-eq w as 3 (xs-xml)) 1)
+                                                       (== (pm-x-eq w (+ as 4) (- al 4) (xs-lang)) 1))
+                                                (do (set langs (cells-len txt))
+                                                    (pm-x-text w av (+ av avl) 1 txt)
+                                                    (set langl (- (cells-len txt) langs)))))))))
+                                (set fo (+ NT_STACK (* d FR_STRIDE)))
+                                (cells-set nt fo ns)
+                                (cells-set nt (+ fo 1) nl)
+                                (cells-set nt (+ fo 2) role)
+                                (cells-set nt (+ fo 3) 0)
+                                (cells-set nt (+ fo 4) (cells-len txt))
+                                (cells-set nt (+ fo 5) langs)
+                                (cells-set nt (+ fo 6) langl)
+                                (cells-set nt (+ fo 7) ck)
+                                (cells-set nt 1 (+ d 1))
+                                (if (== selfc 1) (pm-x-pop nt w txt md xm))
+                                (set i (+ gt 1))))))))))))
+    (return 1)))
+
+;; ---------------------------------------------------------------------- the run
+
+(defn ^I32 pm-md-init [^:mut ^Cells md]
+  (comment "The header of `md`: zero, with the runs, the dates and the tri-state flags absent.")
+  (cells-drop md 0)
+  (let [^:mut ^I32 k 0]
+    (while (< k MD_SIZE)
+      (do (cells-push md 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k 20)
+      (do (cells-set md k -1)
+          (set k (+ k 2))))
+    (set k 20)
+    (while (< k 34)
+      (do (cells-set md k -1)
+          (set k (+ k 1))))
+    (cells-set md 35 -1)
+    (cells-set md 38 -1)
+    (cells-set md 39 -1)
+    (cells-set md 40 -1)
+    (cells-set md 42 -1)
+    (cells-set md 43 -1)
+    (cells-set md 44 -1)
+    (cells-set md 50 -1)
+    (cells-set md 57 -1)
+    (cells-set md 59 -1)
+    (return 0)))
+
+(defn ^I32 pm-bool-of [^Cells ar ^I32 h]
+  (comment "1 or 0 for a boolean object, -1 for anything else (or absent).")
+  (if (== h 0) (return -1))
+  (if (== (pl-kind-of ar h) 1) (return (pl-int-value ar h)))
+  (return -1))
+
+(defn ^I32 pm-info [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                    ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt ^:mut ^Cells md]
+  (comment "The Info dictionary into the header of `md`.")
+  (let [^I32 ih (pd-trailer-get ar dc (pn-info))
+        ^I32 info (pd-resolve src ar dc a b st ih)
+        ^:mut ^I32 v 0]
+    (if (== info 0) (return 0))
+    (if (!= (pl-kind-of ar info) 7) (return 0))
+    (cells-set md 34 1)
+    (set v (pd-dget src ar dc a b st info (pn-title)))
+    (pa-text-to txt ar v md 2)
+    (set v (pd-dget src ar dc a b st info (pn-author)))
+    (pa-text-to txt ar v md 4)
+    (set v (pd-dget src ar dc a b st info (pn-subject)))
+    (pa-text-to txt ar v md 6)
+    (set v (pd-dget src ar dc a b st info (pn-keywords)))
+    (pa-text-to txt ar v md 8)
+    (set v (pd-dget src ar dc a b st info (pn-creator)))
+    (pa-text-to txt ar v md 10)
+    (set v (pd-dget src ar dc a b st info (pn-producer)))
+    (pa-text-to txt ar v md 12)
+    (set v (pd-dget src ar dc a b st info (pn-creation-date)))
+    (pa-text-to txt ar v md 14)
+    (if (>= (cells-at md 14) 0) (px-date-parse txt (cells-at md 14) (cells-at md 15) md 20))
+    (set v (pd-dget src ar dc a b st info (pn-mod-date)))
+    (pa-text-to txt ar v md 16)
+    (if (>= (cells-at md 16) 0) (px-date-parse txt (cells-at md 16) (cells-at md 17) md 27))
+    (set v (px-dget src ar dc a b st info (px-trapped)))
+    (pa-text-to txt ar v md 18)
+    (return 0)))
+
+(defn ^I32 pm-catalog [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                       ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt ^:mut ^Cells md
+                       ^I32 root]
+  (comment "/Lang, /Version, /MarkInfo, the presence of the structure tree, forms, outlines,")
+  (comment "labels, permissions, and the viewer preference that says to show the title.")
+  (let [^:mut ^I32 v 0
+        ^:mut ^I32 af 0
+        ^:mut ^I32 vp 0]
+    (set v (pd-dget src ar dc a b st root (pn-lang)))
+    (pa-text-to txt ar v md 0)
+    (set v (pd-dget src ar dc a b st root (pn-version)))
+    (pa-text-to txt ar v md 50)
+    (set v (pd-dget src ar dc a b st root (pn-mark-info)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 7))
+      (do (set vp (pd-dget src ar dc a b st v (pn-marked)))
+          (cells-set md 35 (pm-bool-of ar vp))))
+    (if (!= (pl-dict-get ar root (pn-struct-tree-root)) 0) (cells-set md 36 1))
+    (set af (pd-dget src ar dc a b st root (pn-acro-form)))
+    (if (and (!= af 0) (== (pl-kind-of ar af) 7))
+      (do (cells-set md 37 1)
+          (set v (px-dget src ar dc a b st af (px-need-appearances)))
+          (cells-set md 38 (pm-bool-of ar v))
+          (set v (px-dget src ar dc a b st af (px-sig-flags)))
+          (if (== (px-is-num ar v) 1) (cells-set md 39 (px-int-of ar v -1)))
+          (if (!= (px-get ar af (px-xfa)) 0) (cells-set md 53 1))))
+    (set v (px-dget src ar dc a b st root (px-viewer-preferences)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 7))
+      (do (set vp (px-dget src ar dc a b st v (px-display-doc-title)))
+          (cells-set md 40 (pm-bool-of ar vp))))
+    (if (!= (pl-dict-get ar root (pn-outlines)) 0) (cells-set md 47 1))
+    (if (!= (pl-dict-get ar root (pn-page-labels)) 0) (cells-set md 48 1))
+    (if (!= (px-get ar root (px-perms)) 0) (cells-set md 52 1))
+    (return 0)))
+
+(defn ^I32 pm-dests [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                     ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells idx ^:mut ^Cells pg
+                     ^:mut ^Cells txt ^:mut ^Cells nt ^:mut ^Cells nd]
+  (comment "Every named destination (the old /Dests dictionary first, then the name tree)")
+  (comment "into `nd`, at most PM_ND_MAX.")
+  (cells-drop nd 0)
+  (let [^:mut ^I32 n (px-dests-collect src ar dc a b st idx nt)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 key 0
+        ^:mut ^I32 val 0]
+    (if (> n PM_ND_MAX) (set n PM_ND_MAX))
+    (while (< i n)
+      (do (set at (cells-len nd))
+          (set k 0)
+          (while (< k ND_STRIDE)
+            (do (cells-push nd 0)
+                (set k (+ k 1))))
+          (set key (cells-at nt (* i 2)))
+          (set val (cells-at nt (+ (* i 2) 1)))
+          (pa-text-to txt ar key nd at)
+          (px-dest-of src ar dc a b st idx pg txt val nd (+ at 2))
+          (if (ps-missed src) (return -1))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^:pub ^I32 pm-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells idx
+                         ^:mut ^Cells txt ^:mut ^Cells w ^:mut ^Cells seen
+                         ^:mut ^Cells md ^:mut ^Cells xm ^:mut ^Cells ol ^:mut ^Cells lb
+                         ^:mut ^Cells nd ^:mut ^Cells nt]
+  (comment "Everything P3.9 reads, after `pd-open`, `pd-pages` and `px-index-build`. `md xm ol")
+  (comment "lb nd` are the results and are cleared first; `txt` is APPENDED to; `w` and `nt` are")
+  (comment "scratch (the decoded XMP packet; stacks and pairs); `seen` a visited set. Answers")
+  (comment "the number of outline rows, or -1 when the source missed (re-run on a fresh view).")
+  (pm-md-init md)
+  (cells-drop xm 0)
+  (cells-drop ol 0)
+  (cells-drop lb 0)
+  (cells-drop nd 0)
+  (let [^I32 root (pd-root dc)
+        ^I32 npages (pd-pg-count pg)
+        ^:mut ^I32 mh 0
+        ^:mut ^I32 xs 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 nn 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 dp 0]
+    (pm-info src ar dc a b st txt md)
+    (pm-catalog src ar dc a b st txt md root)
+    (if (ps-missed src) (return -1))
+    (set mh (pd-dget src ar dc a b st root (pn-metadata)))
+    (if (and (!= mh 0) (== (pl-kind-of ar mh) 8))
+      (do (pd-stream-data src ar dc a b st mh w)
+          (if (ps-missed src) (return -1))
+          (if (> (cells-len w) 0)
+            (do (set xs (pm-xmp-scan w nt txt md xm))
+                (cells-set md 41 xs))
+            (cells-set md 41 2))))
+    (set rows (pm-outlines src ar dc a b st idx pg txt seen nt ol root))
+    (if (< rows 0) (return -1))
+    (cells-set md 55 rows)
+    (set k 0)
+    (while (< k rows)
+      (do (set dp (+ (cells-at ol (* k OL_STRIDE)) 1))
+          (if (> dp (cells-at md 56)) (cells-set md 56 dp))
+          (set k (+ k 1))))
+    (set nl (pm-labels src ar dc a b st idx txt nt lb root npages))
+    (cells-set md 54 nl)
+    (if (or (!= (cells-at idx 1) 0) (!= (cells-at idx 2) 0))
+      (do (cells-set md 49 1)
+          (set nn (pm-dests src ar dc a b st idx pg txt nt nd))
+          (if (< nn 0) (return -1))
+          (cells-set md 57 nn)))
+    (if (ps-missed src) (return -1))
+    (return rows)))
+
+;; ------------------------------------------------------------------------ dump
+
+(defn ^I32 pm-j-run [^:mut ^Text t ^Cells txt ^Cells md ^I32 at]
+  (return (px-json-run t txt (cells-at md at) (cells-at md (+ at 1)))))
+
+(defn ^I32 pm-j-date [^:mut ^Text t ^Cells md ^I32 at]
+  (comment "Seven parsed date cells as a JSON array, `null` when absent.")
+  (if (< (cells-at md at) 0)
+    (do (emit-ascii t "null") (return 0)))
+  (let [^:mut ^I32 k 0]
+    (emit-ascii t "[")
+    (while (< k 7)
+      (do (if (> k 0) (emit-ascii t ","))
+          (text-i32 t (cells-at md (+ at k)))
+          (set k (+ k 1))))
+    (emit-ascii t "]")
+    (return 0)))
+
+(defn ^:pub ^I32 pm-dump [^:mut ^Text t ^Cells txt ^Cells md ^Cells xm ^Cells ol ^Cells lb
+                          ^Cells nd ^Cells pg ^:mut ^Cells sc]
+  (comment "The catalogue extras as one canonical JSON object: `lang`, `version`, `info`, the")
+  (comment "catalog's flags, `xmp` (its identification and every property row), `outlines` (rows,")
+  (comment "pre-order), `labels` (the ranges and the label of every page, built in the scratch")
+  (comment "`sc`) and `dests`. Not a")
+  (comment "public contract; what the laws and the oracle compare.")
+  (let [^I32 nx (quot (cells-len xm) XM_STRIDE)
+        ^I32 no (quot (cells-len ol) OL_STRIDE)
+        ^I32 nlb (quot (cells-len lb) LB_STRIDE)
+        ^I32 ndd (quot (cells-len nd) ND_STRIDE)
+        ^I32 npg (pd-pg-count pg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 at 0]
+    (emit-ascii t "{\"lang\":")
+    (pm-j-run t txt md 0)
+    (emit-ascii t ",\"version\":")
+    (pm-j-run t txt md 50)
+    (emit-ascii t ",\"info\":{\"present\":")
+    (text-i32 t (cells-at md 34))
+    (emit-ascii t ",\"title\":")
+    (pm-j-run t txt md 2)
+    (emit-ascii t ",\"author\":")
+    (pm-j-run t txt md 4)
+    (emit-ascii t ",\"subject\":")
+    (pm-j-run t txt md 6)
+    (emit-ascii t ",\"keywords\":")
+    (pm-j-run t txt md 8)
+    (emit-ascii t ",\"creator\":")
+    (pm-j-run t txt md 10)
+    (emit-ascii t ",\"producer\":")
+    (pm-j-run t txt md 12)
+    (emit-ascii t ",\"created\":")
+    (pm-j-run t txt md 14)
+    (emit-ascii t ",\"createdParsed\":")
+    (pm-j-date t md 20)
+    (emit-ascii t ",\"modified\":")
+    (pm-j-run t txt md 16)
+    (emit-ascii t ",\"modifiedParsed\":")
+    (pm-j-date t md 27)
+    (emit-ascii t ",\"trapped\":")
+    (pm-j-run t txt md 18)
+    (emit-ascii t "},\"marked\":")
+    (text-i32 t (cells-at md 35))
+    (emit-ascii t ",\"structTree\":")
+    (text-i32 t (cells-at md 36))
+    (emit-ascii t ",\"acroForm\":")
+    (text-i32 t (cells-at md 37))
+    (emit-ascii t ",\"needAppearances\":")
+    (text-i32 t (cells-at md 38))
+    (emit-ascii t ",\"sigFlags\":")
+    (text-i32 t (cells-at md 39))
+    (emit-ascii t ",\"xfa\":")
+    (text-i32 t (cells-at md 53))
+    (emit-ascii t ",\"displayDocTitle\":")
+    (text-i32 t (cells-at md 40))
+    (emit-ascii t ",\"perms\":")
+    (text-i32 t (cells-at md 52))
+    (emit-ascii t ",\"xmp\":{\"state\":")
+    (text-i32 t (cells-at md 41))
+    (emit-ascii t ",\"pdfuaPart\":")
+    (text-i32 t (cells-at md 42))
+    (emit-ascii t ",\"pdfuaRev\":")
+    (text-i32 t (cells-at md 59))
+    (emit-ascii t ",\"pdfaPart\":")
+    (text-i32 t (cells-at md 43))
+    (emit-ascii t ",\"pdfaConformance\":")
+    (pm-j-run t txt md 44)
+    (emit-ascii t ",\"props\":[")
+    (while (< i nx)
+      (do (set at (* i XM_STRIDE))
+          (if (> i 0) (emit-ascii t ","))
+          (emit-ascii t "{\"name\":")
+          (px-json-run t txt (cells-at xm at) (cells-at xm (+ at 1)))
+          (emit-ascii t ",\"kind\":\"")
+          (xmk-emit-name t (cells-at xm (+ at 2)))
+          (emit-ascii t "\",\"value\":")
+          (px-json-run t txt (cells-at xm (+ at 3)) (cells-at xm (+ at 4)))
+          (if (>= (cells-at xm (+ at 5)) 0)
+            (do (emit-ascii t ",\"lang\":")
+                (px-json-run t txt (cells-at xm (+ at 5)) (cells-at xm (+ at 6)))))
+          (if (!= (cells-at xm (+ at 7)) 0)
+            (do (emit-ascii t ",\"known\":\"")
+                (xk-emit-name t (cells-at xm (+ at 7)))
+                (emit-ascii t "\"")))
+          (emit-ascii t "}")
+          (set i (+ i 1))))
+    (emit-ascii t "]},\"outlines\":[")
+    (set i 0)
+    (while (< i no)
+      (do (set at (* i OL_STRIDE))
+          (if (> i 0) (emit-ascii t ","))
+          (emit-ascii t "{\"depth\":")
+          (text-i32 t (cells-at ol at))
+          (emit-ascii t ",\"parent\":")
+          (text-i32 t (cells-at ol (+ at 1)))
+          (emit-ascii t ",\"children\":")
+          (text-i32 t (cells-at ol (+ at 2)))
+          (emit-ascii t ",\"subtree\":")
+          (text-i32 t (cells-at ol (+ at 3)))
+          (emit-ascii t ",\"obj\":")
+          (text-i32 t (cells-at ol (+ at 4)))
+          (emit-ascii t ",\"title\":")
+          (px-json-run t txt (cells-at ol (+ at 5)) (cells-at ol (+ at 6)))
+          (emit-ascii t ",\"count\":")
+          (text-i32 t (cells-at ol (+ at 7)))
+          (emit-ascii t ",\"flags\":")
+          (text-i32 t (cells-at ol (+ at 8)))
+          (if (>= (cells-at ol (+ at 9)) 0)
+            (do (emit-ascii t ",\"color\":")
+                (text-i32 t (cells-at ol (+ at 9)))))
+          (if (!= (cells-at ol (+ at 10)) 0)
+            (do (emit-ascii t ",\"action\":\"")
+                (an-act-emit-name t (cells-at ol (+ at 10)))
+                (emit-ascii t "\"")))
+          (if (>= (cells-at ol (+ at 11)) 0)
+            (do (emit-ascii t ",\"target\":")
+                (px-json-run t txt (cells-at ol (+ at 11)) (cells-at ol (+ at 12)))))
+          (if (== (px-dest-present ol (+ at 13)) 1)
+            (do (emit-ascii t ",\"dest\":")
+                (px-json-dest t txt ol (+ at 13))))
+          (emit-ascii t ",\"bits\":")
+          (text-i32 t (cells-at ol (+ at 21)))
+          (emit-ascii t "}")
+          (set i (+ i 1))))
+    (emit-ascii t "],\"labels\":{\"ranges\":[")
+    (set i 0)
+    (while (< i nlb)
+      (do (set at (* i LB_STRIDE))
+          (if (> i 0) (emit-ascii t ","))
+          (emit-ascii t "{\"page\":")
+          (text-i32 t (cells-at lb at))
+          (emit-ascii t ",\"style\":\"")
+          (ls-emit-name t (cells-at lb (+ at 1)))
+          (emit-ascii t "\",\"prefix\":")
+          (px-json-run t txt (cells-at lb (+ at 2)) (cells-at lb (+ at 3)))
+          (emit-ascii t ",\"start\":")
+          (text-i32 t (cells-at lb (+ at 4)))
+          (emit-ascii t ",\"end\":")
+          (text-i32 t (cells-at lb (+ at 5)))
+          (emit-ascii t ",\"bits\":")
+          (text-i32 t (cells-at lb (+ at 6)))
+          (emit-ascii t "}")
+          (set i (+ i 1))))
+    (emit-ascii t "],\"pages\":[")
+    (set i 0)
+    (while (< i npg)
+      (do (if (> i 0) (emit-ascii t ","))
+          (cells-drop sc 0)
+          (set ln (pm-label-cells txt lb i sc))
+          (if (>= ln 0)
+            (do (emit-ascii t "\"")
+                (set k 0)
+                (while (< k ln)
+                  (do (px-json-esc-cp t (cells-at sc k))
+                      (set k (+ k 1))))
+                (emit-ascii t "\""))
+            (emit-ascii t "null"))
+          (set i (+ i 1))))
+    (emit-ascii t "]},\"dests\":[")
+    (set i 0)
+    (while (< i ndd)
+      (do (set at (* i ND_STRIDE))
+          (if (> i 0) (emit-ascii t ","))
+          (emit-ascii t "{\"name\":")
+          (px-json-run t txt (cells-at nd at) (cells-at nd (+ at 1)))
+          (emit-ascii t ",\"dest\":")
+          (px-json-dest t txt nd (+ at 2))
+          (emit-ascii t "}")
+          (set i (+ i 1))))
+    (emit-ascii t "]}")
+    (return 0)))

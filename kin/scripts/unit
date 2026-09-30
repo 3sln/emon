@@ -59,6 +59,8 @@ trap 'rm -rf "$work"' EXIT
 command -v python3 > /dev/null && python3 kin/scripts/ucd.py --check
 # THE PDF NAME TABLE (P1.4) is generated too, and checked the same way.
 command -v python3 > /dev/null && python3 kin/scripts/pdfnames.py --check
+# THE CATALOGUE READERS' NAME TABLE (P3.8, P3.9) is generated too, in babashka (D094), and checked the same way.
+bb tools/pdfxnames.clj --check
 # THE FONT TABLES (P1.6): the Adobe Glyph List, the encodings and the
 # standard-14 metrics are generated from test/fonts/; the glyph-name and CMap
 # row corpora are written by scripts (each cross-checked against pdfminer.six

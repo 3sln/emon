@@ -1,0 +1,702 @@
+;; Laws for the catalogue extras (P3.8 annotations, forms, signatures; P3.9 outlines, page
+;; labels, Info and XMP metadata, /Lang, named destinations): `emon.pdfannot`,
+;; `emon.pdfmeta` and `emon.pdfx` over the fixtures of `kin/scripts/pdf-catalog-fixtures`
+;; (babashka; qpdf and poppler are the oracles) and over real files.
+;;
+;; THE FIXTURES are `test/pdf/catalog/*.pdf`, listed with their goldens in
+;; `test/pdf/catalog.txt`. A golden is the canonical dump (`{"pages":N,"a":annotations,
+;; "m":catalogue}`) that the generated Rust wrote and the fixtures script cross-checked against
+;; `qpdf` and `pdfinfo`; every target must write it byte for byte. The laws then state what the
+;; fixtures were BUILT to say, as literals, so that a golden that is wrong in the same way on
+;; every target still fails: the label of every page of a file with every numbering style and
+;; prefix, the outline tree of a file with named destinations, a file whose outline loops, a
+;; form whose fields inherit their type, value and flags, the link of every kind of action on a
+;; rotated page and a cropped one, a signature's signer, and metadata in every encoding PDF has
+;; (PDFDocEncoding, UTF-16, UTF-8), plain and encrypted by three handlers.
+;;
+;; THE REAL FILES are `test/pdf/catalog-corpus.txt`: rows of facts (counts and digests of the
+;; outline, the labels, the links, the named destinations, the fields, the PDF/UA part) that
+;; `kin/scripts/pdf-catalog-compare --write` took from qpdf and poppler, not from emon.
+(ns emon.pdfcatalogtest
+  (:require [emon.lang :refer [I32 I64 Blob Src Cells Text emit-ascii i64]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at
+                               assert-text assert-text-span text-blob new-cells new-text
+                               test-file test-file-span cells-blob test-src-chunked
+                               test-src-view test-src-ctl]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push
+                               cells-drop src-of-blob text-cp text-i32]]
+            [emon.splitmix :refer [sm-seed sm-below]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfdoc :refer [pd-open pd-pages]]
+            [emon.pdfx :refer [px-index-build px-json-box px-json-cp]]
+            [emon.pdfannot :refer [pa-run pa-dump an-sub-emit-name an-act-emit-name fa-emit-name]]
+            [emon.pdfmeta :refer [pm-run pm-dump pm-label-write pm-label-cells]]
+            [kin.lang :refer [defn declarefn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem bit-or]]))
+
+;; ------------------------------------------------------------------ the pipeline
+
+(defn ^I32 cg-read [^Src pdf ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells idx ^:mut ^Cells txt
+                    ^:mut ^Cells w ^:mut ^Cells fs ^:mut ^Cells seen ^:mut ^Cells fm ^:mut ^Cells an
+                    ^:mut ^Cells aq ^:mut ^Cells fd ^:mut ^Cells sg ^:mut ^Cells md
+                    ^:mut ^Cells xm ^:mut ^Cells ol ^:mut ^Cells lb ^:mut ^Cells nd
+                    ^:mut ^Cells nt]
+  (comment "Open, list the pages, read everything. Answers 0, the `pd-status` when it did not")
+  (comment "open, or -1 when the source missed.")
+  (let [^:mut ^I32 status 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 r 0]
+    (set status (pd-open pdf ar dc a b st))
+    (if (!= status 0) (return status))
+    (set n (pd-pages pdf ar dc a b st pg))
+    (if (< n 0) (return -1))
+    (cells-drop txt 0)
+    (px-index-build pdf ar dc a b st pg idx)
+    (set r (pa-run pdf ar dc a b st pg idx txt w fs seen fm an aq fd sg))
+    (if (< r 0) (return -1))
+    (set r (pm-run pdf ar dc a b st pg idx txt w seen md xm ol lb nd nt))
+    (if (< r 0) (return -1))
+    (return 0)))
+
+(defn ^I32 cg-dump [^Src pdf ^:mut ^Text t]
+  (comment "The canonical dump of a file into t (as `kin/scripts/pdf-catalog` writes it). Answers")
+  (comment "cg-read's verdict; t holds the dump only when it is 0.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells idx (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells w (new-cells)
+        ^Cells fs (new-cells)
+        ^Cells seen (new-cells)
+        ^Cells fm (new-cells)
+        ^Cells an (new-cells)
+        ^Cells aq (new-cells)
+        ^Cells fd (new-cells)
+        ^Cells sg (new-cells)
+        ^Cells md (new-cells)
+        ^Cells xm (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells lb (new-cells)
+        ^Cells nd (new-cells)
+        ^Cells nt (new-cells)
+        ^:mut ^I32 status 0]
+    (set status (cg-read pdf ar dc a b st pg idx txt w fs seen fm an aq fd sg md xm ol lb nd nt))
+    (if (!= status 0) (return status))
+    (emit-ascii t "{\"pages\":")
+    (text-i32 t (quot (cells-len pg) 16))
+    (emit-ascii t ",\"a\":")
+    (pa-dump t txt an aq fd sg)
+    (emit-ascii t ",\"m\":")
+    (pm-dump t txt md xm ol lb nd pg nt)
+    (emit-ascii t "}")
+    (return 0)))
+
+;; ------------------------------------------------------------ row helpers
+
+(defn ^I32 cg-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 cg-tab [^Blob b ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+;; ------------------------------------------------------------- the goldens
+
+(deftest test-every-fixture-dump-is-its-golden
+  (comment "Row: file, password, golden. The dump of the file, read in memory, is the golden's")
+  (comment "bytes (less its line feed): annotations, fields, signatures, outlines, labels,")
+  (comment "metadata, named destinations, all four targets.")
+  (let [^Blob f (test-file "pdf/catalog.txt")
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (cg-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (cg-tab f pos e))
+                (set s1 (cg-tab f (+ s0 1) e))
+                (let [^Text t (new-text)
+                      ^Blob g (test-file-span f (+ s1 1) e)]
+                  (assert-eq-at (cg-dump (src-of-blob (test-file-span f pos s0)) t) 0 "opened and read" line)
+                  (assert-text-span t g 0 (- (blob-len g) 1) "the golden" line))))
+          (set pos (+ e 1))))
+    (assert-that (>= rows 12) "the fixtures were read")))
+
+;; ------------------------------------------------------ what they were built to say
+
+(defn ^I32 cg-put [^:mut ^Text t ^Cells txt ^I32 s ^I32 n]
+  (comment "A run of `txt` as ASCII text: a code point past 126 (or a control) is `{N}`, its number.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 c 0]
+    (while (< i n)
+      (do (set c (cells-at txt (+ s i)))
+          (if (and (>= c 32) (<= c 126))
+            (text-cp t c)
+            (do (emit-ascii t "{")
+                (text-i32 t c)
+                (emit-ascii t "}")))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 cg-fold [^I32 h ^I32 v]
+  (comment "The rolling hash the corpus rows use: h * 131 + v, modulo 8388593 (the same prime as")
+  (comment "the geometry digest of `kin/pdfdoctest.kin`), v taken modulo it first.")
+  (let [^:mut ^I32 x (rem v 8388593)]
+    (if (< x 0) (set x (+ x 8388593)))
+    (return (rem (+ (* h 131) x) 8388593))))
+
+(defn ^I32 cg-date [^:mut ^Text t ^Cells c ^I32 at]
+  (comment "Seven parsed date cells as `Y-M-DTH:M:S/zone`, `-` when absent.")
+  (if (< (cells-at c at) 0)
+    (do (emit-ascii t "-") (return 0)))
+  (text-i32 t (cells-at c at))
+  (emit-ascii t "-")
+  (text-i32 t (cells-at c (+ at 1)))
+  (emit-ascii t "-")
+  (text-i32 t (cells-at c (+ at 2)))
+  (emit-ascii t "T")
+  (text-i32 t (cells-at c (+ at 3)))
+  (emit-ascii t ":")
+  (text-i32 t (cells-at c (+ at 4)))
+  (emit-ascii t ":")
+  (text-i32 t (cells-at c (+ at 5)))
+  (emit-ascii t "/")
+  (text-i32 t (cells-at c (+ at 6)))
+  (return 0))
+
+(defn ^I32 cg-line [^Blob f ^I32 which ^:mut ^Text t]
+  (comment "One line of what a file says, by `which`: 1 the label of every page (`|` between, `-`")
+  (comment "for none), 2 every outline row (`depth:title@page`, `i` for an index, `!` for a dropped")
+  (comment "loop, then `#` and the tree's depth), 3 every field (`name=value:agreement:widgets:on`),")
+  (comment "4 every link (`action:target@page`, then `#` and two rectangles), 5 every signature,")
+  (comment "6 the Info dictionary, the XMP identification and /Lang, 8 the real-file facts (tab separated: bookmarks, their digest, the labels' digest, links, URI links, their digest, PDF/UA part, /Lang digest), 7 the Stamp, Watermark and FreeText")
+  (comment "annotations (`subtype:name:contents:appearance:ca:flags`). Answers 0, or 1 when the file")
+  (comment "could not be read.")
+  (let [^Src pdf (src-of-blob f)
+        ^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells idx (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells w (new-cells)
+        ^Cells fs (new-cells)
+        ^Cells seen (new-cells)
+        ^Cells fm (new-cells)
+        ^Cells an (new-cells)
+        ^Cells aq (new-cells)
+        ^Cells fd (new-cells)
+        ^Cells sg (new-cells)
+        ^Cells md (new-cells)
+        ^Cells xm (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells lb (new-cells)
+        ^Cells nd (new-cells)
+        ^Cells nt (new-cells)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 first 1
+        ^:mut ^I32 h 0
+        ^:mut ^I32 h2 0
+        ^:mut ^I32 h3 0
+        ^:mut ^I32 nlinks 0
+        ^:mut ^I32 nuris 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0]
+    (if (!= (cg-read pdf ar dc a b st pg idx txt w fs seen fm an aq fd sg md xm ol lb nd nt) 0)
+      (do (emit-ascii t "unreadable") (return 1)))
+    (if (== which 1)
+      (do (set n (quot (cells-len pg) 16))
+          (while (< i n)
+            (do (if (> i 0) (emit-ascii t "|"))
+                (if (== (pm-label-write t txt lb i nt) 0) (emit-ascii t "-"))
+                (set i (+ i 1))))))
+    (if (== which 2)
+      (do (set n (quot (cells-len ol) 24))
+          (while (< i n)
+            (do (set at (* i 24))
+                (if (> i 0) (emit-ascii t "|"))
+                (text-i32 t (cells-at ol at))
+                (emit-ascii t ":")
+                (cg-put t txt (cells-at ol (+ at 5)) (cells-at ol (+ at 6)))
+                (emit-ascii t "@")
+                (set p (cells-at ol (+ at 13)))
+                (if (< p 0)
+                  (emit-ascii t "-")
+                  (text-i32 t (+ p 1)))
+                (if (>= (cells-at ol (+ at 14)) 16) (emit-ascii t "i"))
+                (if (== (rem (quot (cells-at ol (+ at 21)) 4) 2) 1) (emit-ascii t "!"))
+                (set i (+ i 1))))
+          (emit-ascii t "#")
+          (text-i32 t (cells-at md 56))))
+    (if (== which 3)
+      (do (set n (quot (cells-len fd) 32))
+          (while (< i n)
+            (do (set at (* i 32))
+                (if (> i 0) (emit-ascii t "|"))
+                (cg-put t txt (cells-at fd (+ at 2)) (cells-at fd (+ at 3)))
+                (emit-ascii t "=")
+                (if (>= (cells-at fd (+ at 8)) 0)
+                  (cg-put t txt (cells-at fd (+ at 8)) (cells-at fd (+ at 9))))
+                (emit-ascii t ":")
+                (fa-emit-name t (cells-at fd (+ at 23)))
+                (emit-ascii t ":")
+                (text-i32 t (cells-at fd (+ at 20)))
+                (emit-ascii t ":")
+                (text-i32 t (cells-at fd (+ at 27)))
+                (set i (+ i 1))))))
+    (if (== which 4)
+      (do (set n (quot (cells-len an) 38))
+          (while (< i n)
+            (do (set at (* i 38))
+                (if (== (cells-at an (+ at 1)) 1)
+                  (do (if (== first 0) (emit-ascii t "|"))
+                      (set first 0)
+                      (an-act-emit-name t (cells-at an (+ at 12)))
+                      (emit-ascii t ":")
+                      (if (>= (cells-at an (+ at 13)) 0)
+                        (cg-put t txt (cells-at an (+ at 13)) (cells-at an (+ at 14))))
+                      (emit-ascii t "@")
+                      (set p (cells-at an (+ at 15)))
+                      (if (< p 0)
+                        (emit-ascii t "-")
+                        (text-i32 t (+ p 1)))
+                      (if (>= (cells-at an (+ at 16)) 16) (emit-ascii t "i"))))
+                (set i (+ i 1))))
+          (emit-ascii t "#")
+          (px-json-box t an (+ (* 13 38) 4))
+          (px-json-box t an (+ (* 14 38) 4))))
+    (if (== which 5)
+      (do (set n (quot (cells-len sg) 36))
+          (while (< i n)
+            (do (set at (* i 36))
+                (if (> i 0) (emit-ascii t "|"))
+                (cg-put t txt (cells-at sg (+ at 7)) (cells-at sg (+ at 8)))
+                (emit-ascii t ";")
+                (cg-put t txt (cells-at sg (+ at 9)) (cells-at sg (+ at 10)))
+                (emit-ascii t ";")
+                (cg-date t sg (+ at 11))
+                (emit-ascii t ";")
+                (cg-put t txt (cells-at sg (+ at 18)) (cells-at sg (+ at 19)))
+                (emit-ascii t ";")
+                (cg-put t txt (cells-at sg (+ at 20)) (cells-at sg (+ at 21)))
+                (emit-ascii t ";")
+                (cg-put t txt (cells-at sg (+ at 22)) (cells-at sg (+ at 23)))
+                (emit-ascii t ";")
+                (cg-put t txt (cells-at sg (+ at 24)) (cells-at sg (+ at 25)))
+                (emit-ascii t ";")
+                (cg-put t txt (cells-at sg (+ at 26)) (cells-at sg (+ at 27)))
+                (emit-ascii t ";")
+                (text-i32 t (cells-at sg (+ at 28)))
+                (emit-ascii t ",")
+                (text-i32 t (cells-at sg (+ at 29)))
+                (emit-ascii t ",")
+                (text-i32 t (cells-at sg (+ at 30)))
+                (emit-ascii t ",")
+                (text-i32 t (cells-at sg (+ at 31)))
+                (emit-ascii t ";")
+                (text-i32 t (cells-at sg (+ at 32)))
+                (emit-ascii t ";")
+                (text-i32 t (cells-at sg (+ at 33)))
+                (emit-ascii t ";")
+                (text-i32 t (cells-at sg at))
+                (set i (+ i 1))))))
+    (if (== which 6)
+      (do (cg-put t txt (cells-at md 2) (cells-at md 3))
+          (emit-ascii t "|")
+          (cg-put t txt (cells-at md 4) (cells-at md 5))
+          (emit-ascii t "|")
+          (cg-put t txt (cells-at md 6) (cells-at md 7))
+          (emit-ascii t "|")
+          (cg-put t txt (cells-at md 8) (cells-at md 9))
+          (emit-ascii t "|")
+          (cg-date t md 20)
+          (emit-ascii t "|")
+          (cg-date t md 27)
+          (emit-ascii t "|")
+          (cg-put t txt (cells-at md 0) (cells-at md 1))
+          (emit-ascii t "|ua")
+          (text-i32 t (cells-at md 42))
+          (emit-ascii t "|a")
+          (text-i32 t (cells-at md 43))
+          (if (>= (cells-at md 44) 0)
+            (cg-put t txt (cells-at md 44) (cells-at md 45)))
+          (emit-ascii t "|marked")
+          (text-i32 t (cells-at md 35))
+          (emit-ascii t "|props")
+          (text-i32 t (cells-at md 46))
+          (emit-ascii t "|")
+          (cg-put t txt (cells-at xm 23) (cells-at xm 24))))
+    (if (== which 7)
+      (do (set n (quot (cells-len an) 38))
+          (while (< i n)
+            (do (set at (* i 38))
+                (set p (cells-at an (+ at 1)))
+                (if (or (== p 13) (== p 24) (== p 3))
+                  (do (if (== first 0) (emit-ascii t "|"))
+                      (set first 0)
+                      (an-sub-emit-name t p)
+                      (emit-ascii t ":")
+                      (cg-put t txt (cells-at an (+ at 27)) (cells-at an (+ at 28)))
+                      (emit-ascii t ":")
+                      (if (>= (cells-at an (+ at 23)) 0)
+                        (cg-put t txt (cells-at an (+ at 23)) (cells-at an (+ at 24))))
+                      (emit-ascii t ":")
+                      (if (>= (cells-at an (+ at 32)) 0)
+                        (cg-put t txt (cells-at an (+ at 32)) (cells-at an (+ at 33))))
+                      (emit-ascii t ":")
+                      (text-i32 t (cells-at an (+ at 35)))
+                      (emit-ascii t ":")
+                      (text-i32 t (cells-at an (+ at 3)))))
+                (set i (+ i 1))))))
+    (if (== which 8)
+      (do (comment "The bookmarks: their count, then a digest of depth, title and page.")
+          (set n (quot (cells-len ol) 24))
+          (set i 0)
+          (while (< i n)
+            (do (set at (* i 24))
+                (set h (cg-fold h (cells-at ol at)))
+                (set k 0)
+                (while (< k (cells-at ol (+ at 6)))
+                  (do (set h (cg-fold h (cells-at txt (+ (cells-at ol (+ at 5)) k))))
+                      (set k (+ k 1))))
+                (set p (cells-at ol (+ at 13)))
+                (if (or (< p 0) (== (cells-at ol (+ at 10)) 3))
+                  (set h (cg-fold h 0))
+                  (set h (cg-fold h (+ p 1))))
+                (set h (cg-fold h 1))
+                (set i (+ i 1))))
+          (text-i32 t n)
+          (emit-ascii t ",")
+          (text-i32 t h)
+          (comment "The label of every page.")
+          (set n (quot (cells-len pg) 16))
+          (set i 0)
+          (while (< i n)
+            (do (cells-drop nt 0)
+                (set k (pm-label-cells txt lb i nt))
+                (if (< k 0)
+                  (set h2 (cg-fold h2 1))
+                  (do (set c 0)
+                      (while (< c k)
+                        (do (set h2 (cg-fold h2 (cells-at nt c)))
+                            (set c (+ c 1))))
+                      (set h2 (cg-fold h2 0))))
+                (set i (+ i 1))))
+          (emit-ascii t ",")
+          (text-i32 t h2)
+          (comment "The links: how many, how many go to a URI, a digest of action and target page.")
+          (set n (quot (cells-len an) 38))
+          (set i 0)
+          (while (< i n)
+            (do (set at (* i 38))
+                (if (== (cells-at an (+ at 1)) 1)
+                  (do (set nlinks (+ nlinks 1))
+                      (if (== (cells-at an (+ at 12)) 1) (set nuris (+ nuris 1)))
+                      (set h3 (cg-fold h3 (cells-at an (+ at 12))))
+                      (set p (cells-at an (+ at 15)))
+                      (if (and (== (cells-at an (+ at 12)) 2) (>= p 0))
+                        (set h3 (cg-fold h3 (+ p 1)))
+                        (set h3 (cg-fold h3 0)))))
+                (set i (+ i 1))))
+          (emit-ascii t ",")
+          (text-i32 t nlinks)
+          (emit-ascii t ",")
+          (text-i32 t nuris)
+          (emit-ascii t ",")
+          (text-i32 t h3)
+          (comment "PDF/UA, and /Lang.")
+          (emit-ascii t ",")
+          (text-i32 t (cells-at md 42))
+          (set h 0)
+          (set k 0)
+          (if (>= (cells-at md 0) 0)
+            (while (< k (cells-at md 1))
+              (do (set h (cg-fold h (cells-at txt (+ (cells-at md 0) k))))
+                  (set k (+ k 1)))))
+          (emit-ascii t ",")
+          (text-i32 t h)))
+    (return 0)))
+
+(deftest test-page-labels-of-every-style-and-prefix
+  (comment "Fourteen pages, seven ranges spread over a number tree with two leaves and /Limits:")
+  (comment "lower Roman from 0, decimal from 4, upper letters with a prefix from 8, a prefix with")
+  (comment "no style at 10, lower letters starting at 27 (`aa`, `bb`) from 11, upper Roman")
+  (comment "starting at 4 from 13, and a range past the last page that changes nothing.")
+  (let [^Text t (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/labels.pdf") 1 t) 0 "read")
+    (assert-text t "i|ii|iii|iv|1|2|3|4|App-A|App-B|Ex|aa|bb|IV" "labels"))
+  (comment "Odd trees: nothing before the first key, a start of 0, a repeated key (the first")
+  (comment "wins), a negative key ignored, Roman at 3999.")
+  (let [^Text t2 (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/labels-odd.pdf") 1 t2) 0 "read odd")
+    (assert-text t2 "-|-|0|1|A|MMMCMXCIX" "odd labels")))
+
+(deftest test-the-outline-tree-with-named-destinations
+  (comment "Six bookmarks in three levels: a /Dest array, an /A GoTo naming a destination in the name")
+  (comment "tree (two leaves, /Limits), a /Dest string, a /Dest name in the old /Dests dictionary,")
+  (comment "a UTF-16 title (an acute e, 233), a closed node (/Count -1), a URI action (no page),")
+  (comment "and a title with escaped parentheses. The tree is two levels deep.")
+  (let [^Text t (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/outlines.pdf") 2 t) 0 "read")
+    (assert-text t "0:Chapter 1@1|1:Section 1.1@2|1:Section{233}@4|0:Chapter 2@4|1:Hidden child@3|0:Appendix (A)@-#2" "outline")))
+
+(deftest test-an-outline-that-loops-is-read-once
+  (comment "X has a child X.1 whose /First is X; Y's /Next is W and W's /Next is W. Each bookmark")
+  (comment "is read once and the loops are dropped: four rows, X.1 marked (bit 4 of its row).")
+  (let [^Text t (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/outline-cycles.pdf") 2 t) 0 "read")
+    (assert-text t "0:X@1|1:X.1@2!|0:Y@2|0:W@3#2" "outline")))
+
+(deftest test-fields-inherit-their-type-value-and-flags
+  (comment "`person` holds /FT /Tx, /Ff 4096, /Q 1 and /MaxLen for its two children; `grp` holds")
+  (comment "/V for two widgets that have none; `pick` is a radio group whose second widget is on")
+  (comment "and is the state /V names; `agree` a check box; `color` a combo box whose /V is an")
+  (comment "array. Where an appearance stream shows other text than /V (`nick`: Bob, Robert) the")
+  (comment "two are said to differ; `sig0` is unsigned.")
+  (let [^Text t (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/forms.pdf") 3 t) 0 "read")
+    (assert-text t "person.name=Alice:equal:1:-1|person.nick=Bob:differ:1:-1|pick=b:equal:2:1|agree=Yes:equal:1:1|color=red{10}blue:value-only:1:-1|grp=inherited:value-only:2:-1|sig0=:none:1:-1|go=:none:1:-1" "fields")))
+
+(deftest test-a-link-of-every-kind-of-action
+  (comment "URI, GoTo with an array, with a name in the name tree, with /Dest naming the old")
+  (comment "/Dests dictionary and with /Dest a string, GoToR with a page index of another file,")
+  (comment "Launch, Named, a wrapped link, a chain of two URI actions, JavaScript, a destination")
+  (comment "that is not a page (-), a page given as an index (`i`). The rotated page's link and")
+  (comment "the cropped page's link are in page space: [100,100,150,200] and [10,330,110,370].")
+  (let [^Text t (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/links.pdf") 4 t) 0 "read")
+    (assert-text t "URI:http://example.org/x?a=1&b=2@-|GoTo:@2|GoTo:@3|GoTo:@2|GoTo:@2|GoToR:other.pdf@3i|Launch:app.exe@-|Named:NextPage@-|URI:http://example.org/wrapped@-|URI:http://example.org/first@-|JavaScript:@-|GoTo:@-|GoTo:@2i|URI:http://example.org/rotated@-|GoTo:@1#[100,100,150,200][10,330,110,370]" "links")))
+
+(deftest test-signature-dictionaries-are-read-not-validated
+  (comment "A signature's /Name is UTF-16 (`Zoe` with a diaeresis, 235), /M a date with a zone (60")
+  (comment "minutes east), /Reason, /Location, /ContactInfo, /ByteRange and the size of /Contents;")
+  (comment "a document time stamp has bit 4; /Perms /DocMDP names the first dictionary again (bit 8).")
+  (let [^Text t (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/sigs.pdf") 5 t) 0 "read")
+    (assert-text t "Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;3;0|;D:20240301000000Z;2024-3-1T0:0:0/0;;;;Adobe.PPKLite;ETSI.RFC3161;0,10,20,30;1;7;1|Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;11;-1" "signatures")))
+
+(deftest test-metadata-in-every-encoding-plain-and-encrypted
+  (comment "Info strings in UTF-16 (`Un{239}{8364}ode`), in PDFDocEncoding (the bullet, Euro and")
+  (comment "breve that differ from Latin-1) and in UTF-8 with a BOM; two dates, one with a zone;")
+  (comment "/Lang; XMP with `pdfuaid:part` 1, PDF/A part 2 and conformance B, a renamed prefix,")
+  (comment "CDATA, entities and an item with a language. The same file encrypted by qpdf with")
+  (comment "AES-256 (R6), RC4-128 and AES-128 says the same, strings and XMP stream decrypted.")
+  (let [^Text t (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/meta.pdf") 6 t) 0 "read")
+    (assert-text t "{220}n{239}{8364}ode|Bullet{8226} Euro{8364} breve{728} end|Paren (nested) and \\ backslash|Key-word{8364}|2024-1-2T3:4:5/0|2024-1-2T3:0:0/330|fr-CA|ua1|a2B|marked1|props14|A & B {233}{8364} {233}" "plain"))
+  (let [^Text t2 (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/meta-aes256.pdf") 6 t2) 0 "read aes256")
+    (assert-text t2 "{220}n{239}{8364}ode|Bullet{8226} Euro{8364} breve{728} end|Paren (nested) and \\ backslash|Key-word{8364}|2024-1-2T3:4:5/0|2024-1-2T3:0:0/330|fr-CA|ua1|a2B|marked1|props14|A & B {233}{8364} {233}" "aes256"))
+  (let [^Text t3 (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/meta-rc4-128.pdf") 6 t3) 0 "read rc4")
+    (assert-text t3 "{220}n{239}{8364}ode|Bullet{8226} Euro{8364} breve{728} end|Paren (nested) and \\ backslash|Key-word{8364}|2024-1-2T3:4:5/0|2024-1-2T3:0:0/330|fr-CA|ua1|a2B|marked1|props14|A & B {233}{8364} {233}" "rc4"))
+  (let [^Text t4 (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/meta-aes128.pdf") 6 t4) 0 "read aes128")
+    (assert-text t4 "{220}n{239}{8364}ode|Bullet{8226} Euro{8364} breve{728} end|Paren (nested) and \\ backslash|Key-word{8364}|2024-1-2T3:4:5/0|2024-1-2T3:0:0/330|fr-CA|ua1|a2B|marked1|props14|A & B {233}{8364} {233}" "aes128")))
+
+(deftest test-stamps-and-watermarks-carry-their-name-and-appearance
+  (comment "A Stamp (/Name Approved, /Contents, its appearance shows APPROVED, /CA 0.5), a Stamp")
+  (comment "with only an appearance (DRAFT), a Watermark annotation (flags 68: print and no-view)")
+  (comment "whose appearance shows CONFIDENTIAL, and a FreeText whose appearance is its text.")
+  (let [^Text t2 (new-text)]
+    (assert-eq (cg-line (test-file "pdf/catalog/stamps.pdf") 7 t2) 0 "read stamps")
+    (assert-text t2 "Stamp:Approved:Approved by QA:APPROVED:500:4|Stamp:Draft::DRAFT:-1:4|Watermark:::CONFIDENTIAL:-1:68|FreeText::Note: free text:Note: free text:-1:0" "annotations")))
+
+;; ------------------------------------------------------------------- hardening
+
+(defn ^I32 cg-survive [^Src pdf]
+  (comment "Read everything from a file that may be damaged: none of it may fault. Answers the")
+  (comment "verdict of `cg-dump`.")
+  (let [^Text t (new-text)]
+    (return (cg-dump pdf t))))
+
+(defn ^I32 cg-cut [^Blob f ^I32 n ^:mut ^Cells cut]
+  (comment "cut = the first n bytes of f.")
+  (let [^:mut ^I32 i 0]
+    (cells-drop cut 0)
+    (while (< i n)
+      (do (cells-push cut (blob-u8 f i))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 cg-truncations [^Blob f ^I32 step ^:mut ^Cells cut]
+  (comment "Every truncation of f, every `step` bytes: none may fault. Answers how many still read.")
+  (let [^I32 n (blob-len f)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ok 0]
+    (while (<= k n)
+      (do (cg-cut f k cut)
+          (if (== (cg-survive (src-of-blob (cells-blob cut))) 0)
+            (set ok (+ ok 1)))
+          (set k (+ k step))))
+    (return ok)))
+
+(defn ^I32 cg-corruptions [^Blob f ^I32 rounds ^I32 flips ^I32 seed ^:mut ^Cells cut
+                           ^:mut ^Cells rng]
+  (comment "`rounds` copies of f with `flips` random bytes replaced (SplitMix, so every target")
+  (comment "damages the same bytes): none may fault. Answers how many still read.")
+  (let [^I32 n (blob-len f)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 ok 0]
+    (sm-seed rng (i64 seed))
+    (while (< r rounds)
+      (do (cg-cut f n cut)
+          (set j 0)
+          (while (< j flips)
+            (do (set at (sm-below rng n))
+                (cells-set cut at (sm-below rng 256))
+                (set j (+ j 1))))
+          (if (== (cg-survive (src-of-blob (cells-blob cut))) 0)
+            (set ok (+ ok 1)))
+          (set r (+ r 1))))
+    (return ok)))
+
+(deftest test-no-truncation-of-a-fixture-faults
+  (comment "Every 11th cut of each fixture, and every byte of the smallest: nothing faults (the")
+  (comment "outlines, labels, forms and XMP readers all run on a document cut anywhere).")
+  (let [^Cells cut (new-cells)]
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/labels-odd.pdf") 1 cut) 1) "labels-odd")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/labels.pdf") 11 cut) 1) "labels")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/outlines.pdf") 11 cut) 1) "outlines")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/outline-cycles.pdf") 7 cut) 1) "outline-cycles")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/forms.pdf") 11 cut) 1) "forms")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/links.pdf") 13 cut) 1) "links")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/stamps.pdf") 11 cut) 1) "stamps")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/sigs.pdf") 11 cut) 1) "sigs")
+    (assert-that (>= (cg-truncations (test-file "pdf/catalog/meta.pdf") 11 cut) 1) "meta")))
+
+(deftest test-no-corruption-of-a-fixture-faults
+  (comment "Copies with three bytes replaced, 150 of each: a wrong /Kids, /First, /Next, /Nums, /Kids")
+  (comment "of a name tree, a broken tag in the XMP packet, an odd /Rect or /QuadPoints or /Ff.")
+  (let [^Cells cut (new-cells)
+        ^Cells rng (new-cells)]
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/labels.pdf") 150 3 1 cut rng) 0) "labels")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/outlines.pdf") 150 3 2 cut rng) 0) "outlines")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/outline-cycles.pdf") 150 3 3 cut rng) 0) "cycles")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/forms.pdf") 150 3 4 cut rng) 0) "forms")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/links.pdf") 150 3 5 cut rng) 0) "links")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/stamps.pdf") 150 3 6 cut rng) 0) "stamps")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/sigs.pdf") 150 3 7 cut rng) 0) "sigs")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/meta.pdf") 300 4 8 cut rng) 0) "meta")
+    (assert-that (>= (cg-corruptions (test-file "pdf/catalog/meta-aes256.pdf") 100 3 9 cut rng) 0) "meta, AES-256")))
+
+;; ------------------------------------------------ a source that misses (P1.11)
+;;
+;; D058 and D075: every fixture read through a simulated ASYNC source of tiny chunks gives the
+;; in-memory dump. A missed attempt answers -1 and writes nothing (an unread name tree, an
+;; XMP stream not yet fetched, must never become an absent destination or a missing property);
+;; the host fetches what was missed, with a doubling read-ahead, and re-runs on a fresh view.
+
+(defn ^I32 cg-async [^Blob bytes ^I32 chunk ^:mut ^Text t]
+  (comment "Read `bytes` through an async source of `chunk`-byte chunks, re-running until an")
+  (comment "attempt does not miss; the dump of that attempt goes to t. Answers that attempt's")
+  (comment "verdict, or -2 after 40 rounds.")
+  (let [^Src base (test-src-chunked bytes chunk 0)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 verdict 0]
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)]
+            (set verdict (cg-dump v t))
+            (if (ps-missed v)
+              (do (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 40)
+                    (do (set more 0)
+                        (set verdict -2))))
+              (set more 0)))))
+    (return verdict)))
+
+(defn ^I32 cg-async-rows [^I32 chunk]
+  (comment "Every row of test/pdf/catalog.txt through an async source of `chunk`-byte chunks: the")
+  (comment "dump must be the golden. Answers the number of rows that were not.")
+  (let [^Blob f (test-file "pdf/catalog.txt")
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 bad 0
+        ^:mut ^I32 rows 0]
+    (while (< pos n)
+      (do (set e (cg-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (cg-tab f pos e))
+                (let [^Text t (new-text)]
+                  (if (!= (cg-async (test-file-span f pos s0) chunk t) 0)
+                    (set bad (+ bad 1))))))
+          (set pos (+ e 1))))
+    (if (< rows 12) (return -1))
+    (return bad)))
+
+(deftest test-every-fixture-is-the-same-through-an-async-source-of-64-byte-chunks
+  (assert-eq (cg-async-rows 64) 0 "every row read through 64-byte chunks"))
+
+(deftest test-every-fixture-is-the-same-through-an-async-source-of-512-byte-chunks
+  (assert-eq (cg-async-rows 512) 0 "every row read through 512-byte chunks"))
+
+(deftest test-a-fixture-through-an-async-source-is-its-golden-bytes
+  (comment "`cg-async-rows` only asks that the read completes; this holds the dump itself to the")
+  (comment "golden, for the file that needs the most: forms (appearance streams, inherited")
+  (comment "values), and the metadata file encrypted (strings decrypted on a source that misses).")
+  (let [^Text t (new-text)
+        ^Blob g (test-file "pdf/catalog/forms.json")]
+    (assert-eq (cg-async (test-file "pdf/catalog/forms.pdf") 64 t) 0 "read")
+    (assert-text-span t g 0 (- (blob-len g) 1) "forms through 64-byte chunks" 1))
+  (let [^Text t2 (new-text)
+        ^Blob g2 (test-file "pdf/catalog/meta-aes256.json")]
+    (assert-eq (cg-async (test-file "pdf/catalog/meta-aes256.pdf") 64 t2) 0 "read")
+    (assert-text-span t2 g2 0 (- (blob-len g2) 1) "encrypted metadata through 64-byte chunks" 2))
+  (let [^Text t3 (new-text)
+        ^Blob g3 (test-file "pdf/catalog/outlines.json")]
+    (assert-eq (cg-async (test-file "pdf/catalog/outlines.pdf") 512 t3) 0 "read")
+    (assert-text-span t3 g3 0 (- (blob-len g3) 1) "outlines through 512-byte chunks" 3)))
+
+;; -------------------------------------------------------- real files (oracle facts)
+
+(deftest test-real-files-say-what-qpdf-and-poppler-say
+  (comment "Row: path (relative to test/), then tab-separated facts taken from qpdf and poppler by")
+  (comment "`kin/scripts/pdf-catalog-compare --write`: the bookmarks' count and digest, the labels'")
+  (comment "digest, the links' count, URI count and digest, the PDF/UA part and the /Lang digest. The")
+  (comment "digests are computed here from emon's arenas and must be the oracles' numbers.")
+  (let [^Blob f (test-file "pdf/catalog-corpus.txt")
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (cg-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (cg-tab f pos e))
+                (let [^Text t (new-text)]
+                  (assert-eq-at (cg-line (test-file-span f pos s0) 8 t) 0 "read" line)
+                  (assert-text-span t f (+ s0 1) e "facts" line))))
+          (set pos (+ e 1))))
+    (assert-that (>= rows 100) "the real files were read")))
