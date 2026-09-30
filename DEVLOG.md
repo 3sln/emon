@@ -652,11 +652,95 @@ analysis beyond "top-to-bottom lines on a single column".
   Stored-block PNGs only (8.7 MB per gray 300-dpi A4 page; a compressed writer
   is a P2.6 follow-up). Render and decode answers carry the port `Bitmap` (P2.7).
   Commit: pending (D037).
-- [ ] **P2.6 — Spike: OCR through the transcript.** Rust host binds
-  Tesseract (C API), records one page's OCR into a transcript; kin reads the
-  answer into `ocrwords` evidence; the Go host replays it and produces the
+- [x] **P2.6 — Spike: OCR through the transcript** (D008, D038, D056, D089-D092, D095).
+  Rust host binds Tesseract (C API), records one page's OCR into a transcript; kin
+  reads the answer into `ocrwords` evidence; the Go host replays it and produces the
   same evidence dump. *Answers*: is the OCR answer layout sufficient
   (symbols, alternatives, baselines)? Does replay make identity exact?
+  *Done 2026-09-30.* **Built**: `kin/ocr.kin` (`emon.ocr`, the answer's EXTENSION:
+  lines with baselines, block and paragraph ids and block type; per word its style
+  bits and language; per symbol its box, confidence, text and alternatives; page
+  orientation, writing direction, line order, deskew, OSD degrees, script and their
+  confidences; builders for hosts, readers for kin; it follows the D089 words in the
+  same record, so nothing that reads the words changed); `kin/ocrprobe.kin`
+  (`op-unit`: render at 150 dpi, then OCR psm 3 with symbols and OSD and NO language,
+  then evidence); `kin/ocrtest.kin` (2 laws); `host/rust/src/tess.rs` (Tesseract 5.5.3
+  through hand-written FFI to `libtesseract`, no crate: the C API is ~35 functions,
+  and a crate would pin a build; live only, compiled under `--cfg live`, NOT in any
+  gate); `test/ocr/{rust,go}/main.*` (record/replay drivers);
+  `tools/ocr/record.clj` (records live; not a gate); `tools/ocr/cer.clj` (the bb CER);
+  `kin/scripts/ocr` = `bb ocr`, **a gate** (replay only: no Tesseract needed).
+  The recording is `test/ocr/h-keyword/` (transcript.edn 55 KB + one stored PNG 2.1 MB;
+  the page is page 1 of `test/corpus/synth/scan/h-keyword.pdf`, 1275x1650 gray, one
+  embedded JPEG at 150 dpi, converted by `pdfimages` and ImageMagick as a STAND-IN
+  Renderer: emon has no PDF renderer or JPEG decoder yet) and its stdout,
+  `test/ocr/h-keyword.dump`; `test/ocr/PRODUCER.json` pins what made it.
+  **Answers**
+  1. *Is the layout sufficient?* For a first fusion pass yes; it carried everything
+     Tesseract's C API exposes through integers alone: 199 words, 24 lines (two-point
+     baselines), blocks, symbols with boxes and confidences, 193 of 199 words with
+     alternatives (`lstm_choice_mode` 2), orientation (enum), writing direction, deskew
+     (-0.85 deg here), OSD degrees, script and confidences. The alternatives pay their way: of
+     12 misreads inspected (`tight` for `right`, `stary` for `story`, `nol` for `not`,
+     `Seciton`, `honse`, ...) the right character was among the alternatives in 10, at 0.3-0.75
+     (the other two were dropped characters). **What is missing or wrong**:
+     (a) the EVIDENCE schema (D056) cannot hold most of it: no symbol boxes (only `alts`
+     with a symbol index), one baseline y per word (slope lost, and slope is what a
+     rotated watermark or a seal arc is), no paragraph, block type, page orientation,
+     script or deskew, and `alt-add` keeps one code point so a multi-character
+     candidate is cut to its first; the unit therefore reads only what the schema can
+     take, and the rest stays in the transcript (follow-up: a D056 revision, `ocrpages`
+     or per-page columns, symbol boxes, baseline as two points);
+     (b) confidence is thin: words the engine got RIGHT come back at 0 (the heading
+     "Chapter 1" scores 0, while `Seciton` scores 554) and most alternatives are 0 at
+     x10 resolution, so engine confidence alone cannot carry the SPEC 9 rules;
+     (c) OSD is weak on a sparse page: orientation confidence 5-28 of 100, script
+     confidence 1.2-2.8, and on the rotated copies it called the Latin text Cyrillic.
+     Orientation itself was right (90 and 180 reported) and matters: a page rotated
+     90 deg was read perfectly by psm 3 (CER 2.05%, the same 24 edits) but one rotated
+     180 deg was read as noise (CER 82%) while OSD said 180, so kin must plan a
+     re-render with the rotation in round 2 (the layout carries the number, the
+     loop for acting on it is unwritten);
+     (d) script names arrive as words ("Latin", "Canadian_Aboriginal"): the host maps
+     them to ISO 15924 to fit four chars (table in `tess.rs`);
+     (e) FOR WATERMARK / SEAL GHOSTS (SPEC 9.5): the faint watermark of
+     `watermark-draft` (red, 13% alpha, -30 deg) was NOT read at all on the gray 150-dpi
+     page (413 words, no `DRAFT`), so the ghost rules could not be exercised; what the
+     answer would need to support them: per-word baseline SLOPE in evidence (the
+     extension has it per line), the engine's BINARISED image as a bitmap answer
+     (`TessBaseAPIGetThresholdedImage`) so kin can compare ink under a word with what
+     the engine saw, a `layer` tag on the answer (which render it read, the
+     render request has one), per-word dictionary/numeric flags, and block orientation
+     for non-axis text (Tesseract reports four orientations only; arcs need kin's polar
+     unwarp and a second round). Ink support itself is pixel work and stays in kin (D092).
+     A structural gap: the request has a `psm` and language but no way to say "read
+     this as a single line/word" beyond psm, and no variable/whitelist passthrough.
+  2. *Does replay make identity exact?* On the kin side, yes: the committed transcript
+     replays on Rust and on Go to the same dump, 87,082 bytes, byte for byte (evidence,
+     pixel hash, hash of each transcript file), and a changed request (psm 3 to 4) is
+     `transcript-miss` on both. Two separate live recordings on this machine were also
+     byte-identical (same transcript.edn and PNG hashes). What replay does NOT give
+     is engine repeatability across builds or machines: that is what the transcript is
+     for, and why the producer is pinned.
+  3. *Pinning and cost.* Tesseract 5.5.3 (brew), Leptonica 1.87.0, `eng.traineddata`
+     sha256 7d4322bd... (4,113,088 bytes), `osd.traineddata` 9cf5d576..., variable
+     `lstm_choice_mode`=2, default OEM (LSTM); the transcript format (D090) has no
+     producer field, so `test/ocr/PRODUCER.json` holds them (follow-up: a `:producer`
+     map in `transcript.edn` and `TessVersion()` written by the recorder; the
+     `transcript-bad` check never looks at it). Runtime on an M1 Pro, one 1275x1650 gray
+     page, psm 3 + OSD + symbols and alternatives, including first-use model load of
+     `eng` and `osd`: 0.8-2.4 s wall, 1.3 s for a 413-word page, ~1.4 s for the CLI with
+     psm 3 alone. The answer is 17,633 cells for 199 words (~88 cells a word with
+     symbols and alternatives), 55 KB as EDN. The PNG is the cost of the transcript
+     (2.1 MB stored; a compressed writer, or not keeping a bitmap no replayed unit
+     reads, is the follow-up that D090 predicted).
+  4. *First CER*: **2.05%** (24 edits over 1169 gold characters, 199 words; reading
+     order exact: one column) on `h-keyword` page 1 against its gold, by `tools/ocr/cer.clj`
+     (bb; whitespace-normalised, no NFC, bb having no Normalizer) and ceilinged at 5% in
+     the gate. The errors are single-letter confusions at 150 dpi (`t` for `l` or `r`, `n` for `u`,
+     `o` for `a`), a swapped `ti` in "Section" twice, and dropped letters. Not comparable to `bb accuracy`'s CER until that scorer reads
+     evidence; it is one page.
+  Commit: pending (D037).
 - [x] **P2.7 — Spike: per-pixel cost** (SPEC §12.3, D092). Binarise and label
   connected components of a 300-dpi A4 page in kin through `bitmap-u8`; a
   hand-written Rust comparator of the same algorithm; record the ratio in
@@ -2198,6 +2282,8 @@ see (4)); hints as one whole-file range (defeats lazy reading).
   assert templates hardcode `t`; fix in `emon.test` (helpers take `t`, or
   templates read a scoped frame).
 - Go refuses `len`/`cap`/`new` — **REAL, by design** (`go-reserved`); rename.
+- `if` as a value (`(let [x (if c a b)] ...)`, P2.6) generates in every target but
+  Rust emits `()` for the taken branch's value (E0308): use `^:mut` + `set`.
 - No source label on the generation context — **REAL, kin one-liner**:
   `render-open` (kin `project.cljc`) never sets `:kin/label`, though
   `kin.cljc` already reads it. Maintainer to decide on patching kin.
@@ -2811,4 +2897,44 @@ same way as the gates; a reference oracle is the one place a second, independent
 point, so those stay separate and labelled.
 **Alternatives**: leave Python as the tooling language (two toolchains, drift between the Python and
 kin implementations of the same rules); drop the oracles (loses the independent check).
+- [ ] **Signed off** (maintainer)
+
+### D095 — OCR through the transcript: the answer gains an extension, Tesseract is bound live in the Rust host only, and only a replay is a gate (P2.6)
+**Decision**: (1) An OCR answer is D089's words followed, in the same length-prefixed
+record, by the `emon.ocr` extension: a 10-cell header (version, orientation, writing
+direction, line order, deskew in centi-degrees, OSD degrees, script as an ISO 15924 code
+packed in four chars, script and orientation confidence, line count), 11 cells per line
+(box, two-point baseline, block, paragraph, block type), and per word its style bits
+(the Model's `sy`), language, and symbols (box, confidence x10, code points, alternatives
+with confidences). Everything is integers in the request bitmap's pixels; layout,
+builders and readers live in `kin/ocr.kin`, so a host and kin cannot drift. An answer
+with nothing after its words (a fake, an engine without symbols) has no extension
+(`ox-find` answers -1). Request flags: bit 1 symbols and alternatives (D089's), bit 2
+orientation and script detection. (2) The Tesseract binding is `host/rust/src/tess.rs`,
+hand-written FFI to the C API, LIVE only: nothing in `bb gates` compiles or runs it (it is
+built under `--cfg live` by `tools/ocr/record.clj`); with no language in the request it
+loads every installed model (D038), OSD runs on its own `osd` instance, and alternatives
+come from `lstm_choice_mode` 2. (3) `bb ocr` is a gate: it replays the committed
+transcript `test/ocr/h-keyword/` on Rust and Go, requires the identical dump (and that it
+is the dump the recording printed), a CER ceiling (5%) on the page against its gold, and
+`transcript-miss` for a changed request. (4) The producer of a transcript is pinned in
+`test/ocr/PRODUCER.json` until D090's format has a field for it. (5) The unit puts into
+`ocrwords` only what D056 holds (text, box, confidence, alternatives by symbol index, line,
+block, baseline y, style bits, language); symbol boxes, baseline slope, paragraphs, block
+types and page orientation stay in the transcript until D056 is revised.
+**Why**: the spike's two questions were whether the layout is enough and whether replay is
+exact; an extension after the words answers the first without touching D089 readers, and a
+gate that replays proves the second without making the gate depend on whose Tesseract is
+installed (SPEC 7.3, D008). FFI by hand keeps the dependency a shared library the OS package
+already ships and avoids a crate's build script; it is 35 declarations.
+**Alternatives**: changing the word layout to carry symbols in place (breaks D089's walkers
+and every recorded transcript); `tesseract-sys` or `leptess` (a build script and a pinned
+Leptonica; the C API is small enough to declare); the gate running live Tesseract (makes the
+gates machine-dependent, which D008 exists to prevent); recording with the CLI's hOCR/TSV
+(no symbol alternatives, no OSD in one call).
+**Open**: a D056 revision for the fields above; a `:producer` map in `transcript.edn`; a
+compressed PNG writer or bitmap-free OCR entries (the stored PNG is 2.1 MB a page); the
+kin side of acting on OSD (a page at 180 degrees reads as noise until re-rendered rotated);
+the engine's binarised image as a bitmap answer for ghost detection (SPEC 9.5); a real
+`Renderer` in place of the extracted scan image.
 - [ ] **Signed off** (maintainer)

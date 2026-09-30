@@ -35,7 +35,13 @@
           (= "--limit" (first a)) (recur (drop 2 a) (parse-long (second a)) names)
           :else (recur (rest a) limit (conj names (first a))))))
 
+(def usage
+  "usage: bb import [--limit N] [name ...]\n  names: funsd xfund sroie cord doclaynet icdar2013 ctdar fintabnet_otsl pdfa_eng_wds stamps (default: all)\n  -h, --help  print this and exit")
+
 (defn -main [& argv]
+  (when (some #{"--help" "-h"} argv)
+    (println usage)
+    (System/exit 0))
   (let [{:keys [limit names]} (parse-args argv)
         rows (atom []) bad (atom 0)]
     (doseq [[name f need] importers

@@ -1,0 +1,119 @@
+#!/usr/bin/env bb
+;; A real engine's OCR, replayed from a transcript: recorded on Rust (Tesseract),
+;; replayed on Rust and Go.   kin/scripts/ocr     (DEVLOG P2.6, D095)
+;;
+;; THE LIVE ENGINE IS NOT HERE. `tools/ocr/record.clj` ran Tesseract once on one
+;; scanned page (`test/corpus/synth/scan/h-keyword.pdf`, page 1) and committed what
+;; it answered: `test/ocr/h-keyword/` (the transcript) and `test/ocr/h-keyword.dump`
+;; (the driver's stdout at recording). This gate only REPLAYS, so it tests emon and
+;; never whose Tesseract is installed (SPEC 7.3). It holds:
+;;
+;;   1. the Rust replay and the Go replay print the IDENTICAL dump -- the evidence
+;;      (`ocrwords` with text, boxes, confidences, alternatives, line, block,
+;;      baseline, style, language), a hash of the bitmap's pixels and of each
+;;      transcript file -- and it is the dump the live recording printed;
+;;   2. the evidence is the answer's words and symbols' alternatives: 150+ words,
+;;      alternatives on most of them;
+;;   3. a first CER of that evidence against the page's gold, under a ceiling;
+;;   4. a replay never guesses: a changed request is `transcript-miss` on both.
+(require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
+         '[babashka.process :refer [shell process]]
+         '[cheshire.core :as json]
+         '[clojure.string :as str])
+(cp/add-classpath "tools")
+(require '[ocr.cer :as cer])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def id "h-keyword")
+(def pdf (str "test/corpus/synth/scan/" id ".pdf"))
+(def tdir (str "test/ocr/" id))
+(def cer-ceiling 0.05)
+
+(def work (str (fs/create-temp-dir {:prefix "emon-ocr."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+
+(defn exec [dir & cmd]
+  (let [r @(apply process {:dir dir :out :string :err :string} cmd)]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+(defn build-rust []
+  (let [d (str work "/rust")]
+    (fs/create-dirs (str d "/emon"))
+    (doseq [f (fs/glob "gen/rust/emon" "*.rs")] (fs/copy f (str d "/emon/" (fs/file-name f))))
+    (doseq [f ["port.rs" "testport.rs" "plan.rs"]] (fs/copy (str "host/rust/src/" f) (str d "/" f)))
+    (spit (str d "/emon.rs")
+          (apply str (for [f (sort (map fs/file-name (fs/glob "gen/rust/emon" "*.rs")))]
+                       (str "pub mod " (str/replace f #"\.rs$" "") ";\n"))))
+    (fs/copy "test/ocr/rust/main.rs" (str d "/main.rs"))
+    ;; no `--cfg live`: nothing here links Tesseract
+    (let [r (exec d "rustc" "--edition" "2021" "-O" "-A" "warnings" "-o" "prog" "main.rs")]
+      (if (zero? (:exit r))
+        (str d "/prog")
+        (do (bad "rust driver did not build:\n" (:err r)) nil)))))
+
+(defn build-go []
+  (let [d (str work "/go")]
+    (fs/copy-tree "gen/go" d)
+    (fs/create-dirs (str d "/port"))
+    (doseq [f (fs/glob "host/go/port" "*.go")] (fs/copy f (str d "/port/" (fs/file-name f))))
+    (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")
+    (fs/copy "test/ocr/go/main.go" (str d "/main.go"))
+    (let [r (exec d "go" "build" "-o" "prog" ".")]
+      (if (zero? (:exit r))
+        (str d "/prog")
+        (do (bad "go driver did not build:\n" (:err r)) nil)))))
+
+(def rust (if (fs/which "rustc") (build-rust) (do (println "  SKIP rust   -- rustc not on PATH") nil)))
+(def go (if (fs/which "go") (build-go) (do (println "  SKIP go     -- go not on PATH") nil)))
+
+(def abs #(str (fs/absolutize %)))
+
+(when (and rust go)
+  (let [want (str/trim (slurp (str tdir ".dump")))
+        t (abs tdir)
+        pdf* (abs pdf)
+        run (fn [prog dir] (let [r (exec work prog "replay" dir pdf*)] (assoc r :out (str/trim (:out r)))))
+        rr (run rust t)
+        rg (run go t)]
+    ;; 1. identity ----------------------------------------------------------
+    (check (and (zero? (:exit rr)) (= want (:out rr)))
+           "rust replays the committed transcript to the dump the live recording printed ("
+           (count want) " bytes: evidence, bitmap hash, file hashes)")
+    (check (and (zero? (:exit rg)) (= (:out rr) (:out rg)))
+           "GO REPLAYS THE TESSERACT TRANSCRIPT: the identical dump, byte for byte")
+    ;; 2. what the evidence is ----------------------------------------------
+    (let [ev (cer/dump-evidence (:out rr))
+          ws (:ocrwords ev)]
+      (check (and (>= (count ws) 150) (every? :text ws))
+             (count ws) " OCR words, each with its text")
+      (check (> (count (filter :alts ws)) (* 0.9 (count ws)))
+             (count (filter :alts ws)) " of them carry symbol alternatives")
+      (check (and (every? #(contains? % :baseline) ws) (every? #(contains? % :line) ws))
+             "every word has a baseline, a line and a block")
+      ;; 3. a first CER ------------------------------------------------------
+      (let [r (cer/cer (:out rr) (str "test/corpus/synth/gold/" id ".gold.json"))]
+        (check (< (:cer r) cer-ceiling)
+               (format "CER %.4f against the gold (%d edits over %d chars), ceiling %.2f"
+                       (:cer r) (:distance r) (:gold-chars r) cer-ceiling))))
+    ;; 4. a replay never guesses --------------------------------------------
+    (let [edn (slurp (str tdir "/transcript.edn"))
+          tam (str work "/tampered")]
+      (fs/create-dirs tam)
+      (doseq [f (fs/list-dir t)] (fs/copy f (str tam "/" (fs/file-name f))))
+      (check (str/includes? edn "[10 3 2 1 3 3 0 0 0 0]") "the OCR request is where the tamper expects it")
+      (spit (str tam "/transcript.edn") (str/replace-first edn "[10 3 2 1 3 3 0 0 0 0]" "[10 3 2 1 4 3 0 0 0 0]"))
+      (doseq [[name prog] [["rust" rust] ["go" go]]]
+        (let [r (run prog tam)]
+          (check (and (= 3 (:exit r)) (= "error: transcript-miss" (:out r)))
+                 name " replay of a changed request (psm 3 -> 4): transcript-miss, nothing guessed"))))))
+
+(when (pos? @fails) (System/exit 1))
+(when (and rust go (zero? @fails))
+  (ok "one Tesseract transcript, recorded on Rust, replayed on Rust and Go: one evidence dump"))
