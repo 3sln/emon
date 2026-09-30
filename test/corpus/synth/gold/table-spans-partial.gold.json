@@ -1,0 +1,380 @@
+{
+ "emon-gold": "1.0",
+ "id": "table-spans-partial",
+ "provenance": {
+  "html": "html/table-spans-partial.html",
+  "pdf": "pdf/table-spans-partial.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/table-spans-partial.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Grouped Headers"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "The own such head where often often would left."
+      },
+      {
+       "id": 4,
+       "kind": "table",
+       "profile": "partial",
+       "columns": 5,
+       "children": [
+        {
+         "id": 5,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 6,
+           "kind": "row",
+           "children": [
+            {
+             "id": 7,
+             "kind": "cell",
+             "rowspan": 2,
+             "header": "col",
+             "text": "Product"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "colspan": 2,
+             "header": "col",
+             "text": "2024"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "colspan": 2,
+             "header": "col",
+             "text": "2025"
+            }
+           ]
+          },
+          {
+           "id": 10,
+           "kind": "row",
+           "children": [
+            {
+             "id": 11,
+             "kind": "cell",
+             "header": "col",
+             "text": "Units"
+            },
+            {
+             "id": 12,
+             "kind": "cell",
+             "header": "col",
+             "text": "Revenue"
+            },
+            {
+             "id": 13,
+             "kind": "cell",
+             "header": "col",
+             "text": "Units"
+            },
+            {
+             "id": 14,
+             "kind": "cell",
+             "header": "col",
+             "text": "Revenue"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 15,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 16,
+           "kind": "row",
+           "children": [
+            {
+             "id": 17,
+             "kind": "cell",
+             "text": "Alpha"
+            },
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "1000"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "$20,000"
+            },
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "1100"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "$23,000"
+            }
+           ]
+          },
+          {
+           "id": 22,
+           "kind": "row",
+           "children": [
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "Beta"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "1120"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "$21,311"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "1190"
+            },
+            {
+             "id": 27,
+             "kind": "cell",
+             "text": "$24,197"
+            }
+           ]
+          },
+          {
+           "id": 28,
+           "kind": "row",
+           "children": [
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "Gamma"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "1240"
+            },
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "$22,622"
+            },
+            {
+             "id": 32,
+             "kind": "cell",
+             "text": "1280"
+            },
+            {
+             "id": 33,
+             "kind": "cell",
+             "text": "$25,394"
+            }
+           ]
+          },
+          {
+           "id": 34,
+           "kind": "row",
+           "children": [
+            {
+             "id": 35,
+             "kind": "cell",
+             "text": "Delta"
+            },
+            {
+             "id": 36,
+             "kind": "cell",
+             "text": "1360"
+            },
+            {
+             "id": 37,
+             "kind": "cell",
+             "text": "$23,933"
+            },
+            {
+             "id": 38,
+             "kind": "cell",
+             "text": "1370"
+            },
+            {
+             "id": 39,
+             "kind": "cell",
+             "text": "$26,591"
+            }
+           ]
+          },
+          {
+           "id": 40,
+           "kind": "row",
+           "children": [
+            {
+             "id": 41,
+             "kind": "cell",
+             "colspan": 3,
+             "text": "Combined total for the two years"
+            },
+            {
+             "id": 42,
+             "kind": "cell",
+             "empty": true,
+             "text": ""
+            },
+            {
+             "id": 43,
+             "kind": "cell",
+             "text": "$190,000"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 44,
+       "kind": "paragraph",
+       "text": "Three feet with its she five top much now."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Grouped Headers"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

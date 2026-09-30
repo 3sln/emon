@@ -571,7 +571,7 @@ analysis beyond "top-to-bottom lines on a single column".
   connected components of a 300-dpi A4 page in kin through `bitmap-u8`; a
   hand-written Rust comparator of the same algorithm; record the ratio in
   Rust, Go, C#. *Answers*: do we need bulk `Bitmap` forms, and which?
-- [ ] **P2.8 — Ground truth: the synthetic round trip** (D041, revising
+- [x] **P2.8 — Ground truth: the synthetic round trip** (D041, D071-D073, revising
   D032). An HTML corpus
   (start with ~30 documents covering headings to depth 4 with and without
   numbering, lists, simple tables, a multi-page table with repeated `thead`
@@ -1884,6 +1884,108 @@ space-separated line (and finds `gen`, whose line starts with the map's `{`).
 kin); a gate that cries wolf is a gate nobody trusts (D057).
 **Alternatives**: templates reading a scoped frame (kin has none); the helper
 answering a code for the law to assert (what P1.2 did).
+- [ ] **Signed off** (maintainer)
+
+### D071 — The synthetic corpus: 36 semantic HTML documents, printed once by Chrome 154, committed beside their gold
+**Decision**: `test/corpus/synth/` holds `html/` (36 documents, authored by
+`tools/synth/make_html.py`, which is authoring tooling: the committed HTML is
+the corpus), `pdf/` (headless Google Chrome 154.0.8037.59 `printToPDF`, Skia/PDF
+m154, **untagged** via `--disable-pdf-tagging`), `pdf-tagged/` (3 documents
+printed tagged, for later struct-tree work), `scan/` (image-only degraded
+variants: 150 dpi, per-page skew up to 1.2 degrees, Gaussian noise, blur, JPEG
+q50; seeded, so a rerun is pixel-stable), `gold/` and `MANIFEST.json`
+(producer, version, tool versions, sha256 of every file, and the layout facts
+below). Coverage: headings to depth 4 plain, decimal-numbered, keyword-numbered
+and roman/alpha-numbered; two documents where the level 1 heading prints
+SMALLER than level 2 (and level 3 smaller than 4), and one where headings are
+`<div data-level>` of body size; lists (nested, schemes, start/value, 60 items
+over 3 pages); ruled, whitespace, partial/spanned and shaded tables; multi-page
+tables with repeated `thead`, with a non-repeating `thead`, and with none, and
+two distinct tables on consecutive pages; `@page` margin-box running text
+(title + "Page n of N", odd/even with a different first page, an informative
+court-filing header with invariant parts and a per-page Bates number) and
+`position:fixed` furniture; footnotes (page-bottom) and endnotes; bar/line
+charts, a diagram, a photo and a blank chart placeholder, logo, screenshot;
+watermark (`DRAFT`, every page); a circular seal, a rectangular stamp and a
+signature line; 2 and 3 column layouts; an invoice; a 3-page bank statement;
+Arabic, Hebrew, CJK (Chinese and Japanese), Devanagari and a mixed-script
+table. Only system fonts (Georgia, Helvetica, Courier New, Arial, Geeza Pro,
+Arial Hebrew, Hiragino Sans GB, Devanagari Sangam MN): reproducible on the
+same OS, which `PRODUCER.json` records. `tools/synth/print.sh` regenerates
+PDFs, scans, manifest and gold; **no gate runs it or any PDF tool**. The PDFs
+are NOT in LFS (`.gitattributes` only LFS-tracks `corpus/`; these are 2 MB, the
+scans 6 MB, everything under 10 MB).
+**Why**: P2.8 and D041: an oracle that costs nothing to label, with the
+producer's idioms (margin boxes, repeated thead, fixed furniture, tagged or
+not) varied so emon does not overfit one. Untagged by default because a struct
+tree would hand emon the headings the round trip exists to test it finding.
+**Alternatives**: one big document per feature family (worse localisation of
+failures); WeasyPrint/LibreOffice as a second producer now (parked with nome).
+- [ ] **Signed off** (maintainer)
+
+### D072 — The gold format: a partial emon-1 Model plus a declaration of what is annotated (`schema/emon-gold-1.json`)
+**Decision**: a gold file is `{"emon-gold":"1.0","id","provenance","annotated",
+"model"}`. `model` has the emon-1 keys, `body` is an ordinary emon-1 `document`
+(ids in document order, no `at`/`src`/`conf`/`flags`), `pages` carry `n`,`w`,`h`,
+`rot` and the printed `label`, `furniture` items are `{id, role, template,
+pages}` (`{n}` in a template marks per-page text, e.g. a Bates number), and
+`dropped` items are `{reason, page, text}` with `at` optional (geometry is not
+known). `annotated` says which node kinds (presence AND absence), which fields
+per kind, whether `text` and `inlines` are annotated, which ledger reasons are
+exhaustive, and which page fields. A metric reads `annotated` and skips what is
+not claimed, so DocLayNet-style gold (no heading levels) and synthetic gold
+(no geometry) fit one format. The schema reuses emon-1's `$defs`
+(`emon-1.json#/$defs/document`, `page`, ...) by `$ref`, so a Model change
+cannot leave gold behind silently. `kin/scripts/gold-check.py`, run by `bb unit`
+(beside json-check and html-check), validates every gold, checks ids, `ref`
+targets and the manifest's sha256s, and requires each gold to equal what
+`tools/synth/html2gold.py` says of the committed HTML plus the manifest's layout
+facts (page count and sizes; the page each row of a `data-multipage` table
+landed on, found once by pdftotext at print time). A scan variant shares its
+document's gold (its page sizes agree within a point).
+**Why**: the converter is deterministic and stdlib-only, so the gate needs
+neither Chrome nor poppler; a hand-edited gold or HTML fails the gate instead of
+drifting.
+**Alternatives**: gold as bare emon JSON (cannot say what is unannotated);
+storing facts inside each gold (mixes evidence with truth).
+- [ ] **Signed off** (maintainer)
+
+### D073 — Conventions the gold had to choose (the SPEC is silent or ambiguous); maintainer to confirm
+**Decision**, each one encoded in `tools/synth/html2gold.py`:
+1. A heading's `level` is the HTML level; its printed number is `number`
+   (punctuation stripped) and is not in `text`; `numbering` is `decimal`,
+   `upper-roman`, `upper-alpha`, `lower-alpha` or `keyword`. Visual size is
+   never consulted (SPEC 10.3: a level 1 may print smaller than a level 2).
+2. A caption's `label` is the matched prefix (`Table 1`, `Figure 2`) and its
+   `text` the remainder, as with headings; a figure also gets the `label`.
+3. A `ref` contributes no text to its paragraph's `text`; `<br>` is a
+   `linebreak` inline and `"\n"` in `text`. `inlines` is present when any
+   style, link, ref or linebreak is.
+4. A footnote `note` (`role: footnote`, `marker`, child paragraph without the
+   marker) is where it is read, i.e. at the page bottom in document order, not
+   next to its reference; each `ref` targets the next unmatched note with the
+   same marker.
+5. A header row that printed again on continuation pages is ONE `head`
+   rowgroup row with `repeated: true`, the table has `continued` = pages
+   spanned, and each continuation page has a `duplicate-header-row` ledger
+   entry with the row's text. A thead the producer did not repeat has no such
+   entries.
+6. Page numbers: a `page-number` ledger entry per page with the printed text
+   (`Page 3 of 10`, `3`) and the page's `label` set to the number when it
+   printed (from the first page it printed on). A title in the running header
+   is a `running-title` entry; invariant running text is one `furniture` item
+   with the pages it covered; text that varies (`ACME-{n}`) is a furniture
+   template.
+7. Watermark text is one `watermark` ledger entry per page it printed on, and
+   is not body. Seal/stamp text is the seal's `text`, not a paragraph; chart
+   axis and legend text is the figure's `labels`.
+8. List `marker` is the literal marker (`1.`, `a.`, `II.`, bullets by depth
+   `• ◦ ▪`); `start` only when not 1.
+**Why**: a gold needs one answer per case; these are the readings of SPEC
+3.2, 3.7, 10.2-10.8 that make the answers checkable. Any the maintainer changes
+is a converter edit and a regeneration.
+**Alternatives**: leaving the cases out of the gold (the weakest metrics would
+have nothing to say exactly where emon is most likely wrong).
 - [ ] **Signed off** (maintainer)
 
 ---

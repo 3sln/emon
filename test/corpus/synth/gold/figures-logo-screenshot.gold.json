@@ -1,0 +1,180 @@
+{
+ "emon-gold": "1.0",
+ "id": "figures-logo-screenshot",
+ "provenance": {
+  "html": "html/figures-logo-screenshot.html",
+  "pdf": "pdf/figures-logo-screenshot.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/figures-logo-screenshot.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "figure",
+     "subkind": "logo",
+     "labels": [
+      "NorthWind"
+     ]
+    },
+    {
+     "id": 2,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 3,
+       "kind": "heading",
+       "level": 1,
+       "text": "Press Release"
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "Where turned city need this even one these turn. Different during read pay still does part each until kind these into this. Between word room side sure would still were body hear then men five."
+      },
+      {
+       "id": 5,
+       "kind": "figure",
+       "label": "Figure 1.",
+       "subkind": "screenshot",
+       "alt": "Product screenshot",
+       "labels": [
+        "Dashboard"
+       ],
+       "children": [
+        {
+         "id": 6,
+         "kind": "caption",
+         "label": "Figure 1.",
+         "text": "The new interface"
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "paragraph",
+       "text": "Animal should show say same new around almost. If land asked hear sound do not market did not will us learn."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Press Release"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

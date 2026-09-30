@@ -1,0 +1,390 @@
+{
+ "emon-gold": "1.0",
+ "id": "furn-odd-even",
+ "provenance": {
+  "html": "html/furn-odd-even.html",
+  "pdf": "pdf/furn-odd-even.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/furn-odd-even.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "label": "2",
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "label": "3",
+    "h": 792.0,
+    "n": 3,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "label": "4",
+    "h": 792.0,
+    "n": 4,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Handbook for New Staff"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "text": "Overview"
+        },
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "text": "Looked who something turn one white much try move upon little also quarter its then well. When of form young always long by also me. Part number each little going few policy live. Play be because like set room four put seen much. With do must important little can earth money any life show."
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Same upon results review color think these together under words was. Got told will without best about if came move. Light answer himself money put sun change usually more large out. Together must is house small left sound different keep year four. Away looked high now so measure home can better best together no away even up out."
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Make no city story paper near in some leave example food near. Her budget got review change for earth review above morning next at keep. Answer where hand of friend and different car or together great next country over much. Began can learn it should several color report also. For well now today what into true could any sound another from always form."
+        },
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "text": "Work measure good out quarter like cut other at over go true. Life since long side move never going head across without. Man little each toward most want change seen story different look above would. High feet heard keep of been our better learn answer know our color place often. New told these looked its pay color country face."
+        },
+        {
+         "id": 9,
+         "kind": "paragraph",
+         "text": "Form each just made found something feet by each move few. Every white use big four because face own asked man thing. This today had little three today can very took went each sometimes room called. Friend know room hard give market food were why turned between still. Answer made before animal four do not of only."
+        }
+       ]
+      },
+      {
+       "id": 10,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 11,
+         "kind": "heading",
+         "level": 2,
+         "text": "Findings"
+        },
+        {
+         "id": 12,
+         "kind": "paragraph",
+         "text": "Top together few without turned door under through knew night both heard head. To against good go work turned all part asked did different life life. Her children region five school see than together market. Were move me last well do not best group here life along market whole put one. Any other go until its car soon this over let down."
+        },
+        {
+         "id": 13,
+         "kind": "paragraph",
+         "text": "Can sun under for method need to sometimes last find upon door. Were in whole through back this day it great car. Has never much here time take few done. Between say sample like your thing study next policy may seen find. Play left said there sentence form down door heard have them."
+        },
+        {
+         "id": 14,
+         "kind": "paragraph",
+         "text": "Form words your until quarter what one some. Set into should any can land true side next method morning saw. Do be best right policy it it it air. Him family began when own put next enough cut also using if good into will. That seen earth in had sample made help almost word be method."
+        },
+        {
+         "id": 15,
+         "kind": "paragraph",
+         "text": "This part same name leave great both own learn review all. Feet best last still work enough all heard policy side between have place. Three as long thought do not hand policy pay or. Little same long different white has here year along want every set father little. Can them got morning best as get near."
+        },
+        {
+         "id": 16,
+         "kind": "paragraph",
+         "text": "Take growth method she take sometimes left knew has something these water could looked. Friend said work think budget long money sun father measure young long color then put feet. Usually said small today results were between may. Across told me had policy best where called until men different house results great might thought. Best below him using growth play say same."
+        }
+       ]
+      },
+      {
+       "id": 17,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 18,
+         "kind": "heading",
+         "level": 2,
+         "text": "Recommendations"
+        },
+        {
+         "id": 19,
+         "kind": "paragraph",
+         "text": "Something any called figure its measure same answer small make way house. True money how sea this called until family set seen on. On head new from each do not since life both had. Four might toward next sun measure over example policy group house across learn point boy. Region see turned sure left new read method."
+        },
+        {
+         "id": 20,
+         "kind": "paragraph",
+         "text": "Three five from of give up same tell house since began just words. In your got enough picture much have some water tell way. While high read turn told try of for other told. Until was had city usually own room heard different try hard found since best. Turned think who me if from so over body many should below market."
+        },
+        {
+         "id": 21,
+         "kind": "paragraph",
+         "text": "Want when few that about in do not before. Heard country live sea up here into picture were market. But all in has know once just well life new large into find with white. Hand help figure saw does five children keep today. Different city region mother story also use color today back big can."
+        },
+        {
+         "id": 22,
+         "kind": "paragraph",
+         "text": "Think for policy country play sea think did not than did. Large play usually people land every out even can those than came during move. There father father not between page those change day what sure. Money hard going took seen with might usually always does best going home by was. Learn each whole soon away did still more home feet did."
+        },
+        {
+         "id": 23,
+         "kind": "paragraph",
+         "text": "Few budget hard great country which its region work done method word my. House got all figure line may of next much tell best like. Little color better boy done used car both red look told learn here hear after. Market called last better into your next under such part sound. Thing usually man father after so who about part said."
+        }
+       ]
+      },
+      {
+       "id": 24,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 25,
+         "kind": "heading",
+         "level": 2,
+         "text": "Methods"
+        },
+        {
+         "id": 26,
+         "kind": "paragraph",
+         "text": "That quarter if far important toward market animal from keep took need high group. Mother knew using move go want boy all good with. For had food under new usually sentence him that saw is. Now sea heard story called once air below of. Earth too must together year without were her."
+        },
+        {
+         "id": 27,
+         "kind": "paragraph",
+         "text": "Live heard policy sentence then sound page still using door house who. Heard four one using earth would she much white study your four top way. Tell second like made study near far is. Water any keep well long do not to then name far. Water come market must pay never ever even to done change."
+        },
+        {
+         "id": 28,
+         "kind": "paragraph",
+         "text": "Land room thought point write she still place show for until good quarter important story not. She began life get side think your who going after big seen or region well. Said in upon does give through ever without answer may. Being important began this its without another food toward said second. Your where market group every much an animal."
+        },
+        {
+         "id": 29,
+         "kind": "paragraph",
+         "text": "Never hand has study policy later usually most right have house several sure earth going. Sound where who sea later might quarter have so. Down review another may enough study or soon the not we with. To than turn quarter away just all people animal time many an. With also room again body school done review called animal family again just good got even."
+        },
+        {
+         "id": 30,
+         "kind": "paragraph",
+         "text": "Way almost more say be during look set off on next. Last number more car next but against each through one want while. Important two may country without under what school sample went old what then on toward. Her was head them toward always can my region was today. Revenue might hand too turned going here however down year come me work knew their."
+        }
+       ]
+      },
+      {
+       "id": 31,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 32,
+         "kind": "heading",
+         "level": 2,
+         "text": "Annex"
+        },
+        {
+         "id": 33,
+         "kind": "paragraph",
+         "text": "Door first have her our or place found. Large true all report that as now report on toward looked. New them land only budget had learn began only all answer people any. Their money most three we very what found region big set an of animal number. Still line white city paper that two color four."
+        },
+        {
+         "id": 34,
+         "kind": "paragraph",
+         "text": "Point friend toward sun looked said him right have sound. Tell father and between went we friend left big this into look more example paper. Answer every much been however policy well find made so why done she the big. Your show she again five down always paper up. Made away back here into animal almost air not quarter day know page find other family."
+        },
+        {
+         "id": 35,
+         "kind": "paragraph",
+         "text": "Friend words thing great father food second family began later just picture hear top no. Off once day so heard me heard land him home last. Sure next move again some your put with these using cut must later back. Near five move food house new does no came want once. Get until as play example now learn good car world large soon."
+        },
+        {
+         "id": 36,
+         "kind": "paragraph",
+         "text": "Last these method let try such may since say small their man again people. On play end soon soon off which hand tell children then both. Should very than made ever once any turned market him red important man young. Day number to review sentence mother was best end. Old two keep word on across tell need all school after."
+        },
+        {
+         "id": 37,
+         "kind": "paragraph",
+         "text": "Much every the it used picture be usually. Make make she began later always himself turn did not learn top later we. Red any always across down hard of find we hand once region. These your sentence why last of four think heard there face. Method air almost hand year word left think seen second."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "page": 2,
+    "reason": "page-number",
+    "text": "2"
+   },
+   {
+    "page": 2,
+    "reason": "running-title",
+    "text": "Handbook for New Staff"
+   },
+   {
+    "page": 3,
+    "reason": "page-number",
+    "text": "3"
+   },
+   {
+    "page": 4,
+    "reason": "page-number",
+    "text": "4"
+   },
+   {
+    "page": 4,
+    "reason": "running-title",
+    "text": "Handbook for New Staff"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [
+   {
+    "id": 38,
+    "role": "header",
+    "pages": [
+     3
+    ],
+    "template": "Employee Handbook"
+   }
+  ],
+  "meta": {
+   "title": "Handbook for New Staff"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 4,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

@@ -1,0 +1,290 @@
+{
+ "emon-gold": "1.0",
+ "id": "footnotes-page",
+ "provenance": {
+  "html": "html/footnotes-page.html",
+  "pdf": "pdf/footnotes-page.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/footnotes-page.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "label": "1",
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "label": "2",
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Measuring Productivity"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Whole other her body revenue does using around near usually five had. Where results time find face form not end high house next help. Output per hour rose in every sector.",
+       "inlines": [
+        {
+         "kind": "text",
+         "text": "Whole other her body revenue does using around near usually five had. Where results time find face form not end high house next help."
+        },
+        {
+         "kind": "ref",
+         "marker": "1",
+         "target": 5
+        },
+        {
+         "kind": "text",
+         "text": " Output per hour rose in every sector."
+        },
+        {
+         "kind": "ref",
+         "marker": "2",
+         "target": 7
+        }
+       ]
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "Who at old new still hard color live each. Even group most today over about hand until got the how cut. Right how house night like picture came seen school we these.",
+       "inlines": [
+        {
+         "kind": "text",
+         "text": "Who at old new still hard color live each. Even group most today over about hand until got the how cut. Right how house night like picture came seen school we these."
+        },
+        {
+         "kind": "ref",
+         "marker": "3",
+         "target": 9
+        }
+       ]
+      },
+      {
+       "id": 5,
+       "kind": "note",
+       "marker": "1",
+       "role": "footnote",
+       "children": [
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Source: national statistics office, 2025."
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "note",
+       "marker": "2",
+       "role": "footnote",
+       "children": [
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "text": "Seasonally adjusted."
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "note",
+       "marker": "3",
+       "role": "footnote",
+       "children": [
+        {
+         "id": 10,
+         "kind": "paragraph",
+         "text": "Excludes agriculture."
+        }
+       ]
+      },
+      {
+       "id": 11,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 12,
+         "kind": "heading",
+         "level": 2,
+         "text": "Comparisons"
+        },
+        {
+         "id": 13,
+         "kind": "paragraph",
+         "text": "Never find across well almost each both other. City boy work himself something sometimes water such. Made done different does called used four then time give quarter we.",
+         "inlines": [
+          {
+           "kind": "text",
+           "text": "Never find across well almost each both other. City boy work himself something sometimes water such. Made done different does called used four then time give quarter we."
+          },
+          {
+           "kind": "ref",
+           "marker": "1",
+           "target": 15
+          }
+         ]
+        },
+        {
+         "id": 14,
+         "kind": "paragraph",
+         "text": "Done line children page long end light house where little asked on then. Could boy asked does man something kind show results let several. Red young important school asked water such try."
+        },
+        {
+         "id": 15,
+         "kind": "note",
+         "marker": "1",
+         "role": "footnote",
+         "children": [
+          {
+           "id": 16,
+           "kind": "paragraph",
+           "text": "Purchasing power parity, current prices."
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "page": 1,
+    "reason": "page-number",
+    "text": "1"
+   },
+   {
+    "page": 2,
+    "reason": "page-number",
+    "text": "2"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Measuring Productivity"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

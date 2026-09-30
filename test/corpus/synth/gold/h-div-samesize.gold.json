@@ -1,0 +1,275 @@
+{
+ "emon-gold": "1.0",
+ "id": "h-div-samesize",
+ "provenance": {
+  "html": "html/h-div-samesize.html",
+  "pdf": "pdf/h-div-samesize.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/h-div-samesize.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Maintenance Manual"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Keep red budget soon place above try many different used soon took word room water. Market two let always way face and part told me up market."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "Safety"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Between money over good something men soon told. As into market away young how say one tell does went review."
+        },
+        {
+         "id": 7,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 8,
+           "kind": "heading",
+           "level": 3,
+           "text": "Lockout procedure"
+          },
+          {
+           "id": 9,
+           "kind": "paragraph",
+           "text": "Five keep four over came your night your over men sun along morning as never came."
+          },
+          {
+           "id": 10,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 11,
+             "kind": "heading",
+             "level": 4,
+             "text": "Verification"
+            },
+            {
+             "id": 12,
+             "kind": "paragraph",
+             "text": "Hear such head thought look of hear along however friend called study with."
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 13,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 14,
+           "kind": "heading",
+           "level": 3,
+           "text": "Personal protective equipment"
+          },
+          {
+           "id": 15,
+           "kind": "paragraph",
+           "text": "Along revenue but school make against money face."
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 16,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 17,
+         "kind": "heading",
+         "level": 2,
+         "text": "Routine service"
+        },
+        {
+         "id": 18,
+         "kind": "paragraph",
+         "text": "Own high world until one story high part room called found us later end might. Didn't found later water old all himself hard have."
+        },
+        {
+         "id": 19,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 20,
+           "kind": "heading",
+           "level": 3,
+           "text": "Daily checks"
+          },
+          {
+           "id": 21,
+           "kind": "paragraph",
+           "text": "Above would off five five point day that and white than word important."
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": 22,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 23,
+       "kind": "heading",
+       "level": 1,
+       "text": "Appendix"
+      },
+      {
+       "id": 24,
+       "kind": "paragraph",
+       "text": "Find five hand write people come review the keep."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Maintenance Manual"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

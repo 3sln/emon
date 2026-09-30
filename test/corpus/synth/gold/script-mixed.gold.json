@@ -1,0 +1,305 @@
+{
+ "emon-gold": "1.0",
+ "id": "script-mixed",
+ "provenance": {
+  "html": "html/script-mixed.html",
+  "pdf": "pdf/script-mixed.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/script-mixed.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Multilingual Glossary"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "One table, four scripts, each row a translation of the same term."
+      },
+      {
+       "id": 4,
+       "kind": "table",
+       "profile": "ruled",
+       "columns": 4,
+       "children": [
+        {
+         "id": 5,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 6,
+           "kind": "row",
+           "children": [
+            {
+             "id": 7,
+             "kind": "cell",
+             "header": "col",
+             "text": "English"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "header": "col",
+             "text": "العربية"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "中文"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "header": "col",
+             "text": "हिन्दी"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 11,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 12,
+           "kind": "row",
+           "children": [
+            {
+             "id": 13,
+             "kind": "cell",
+             "text": "Report"
+            },
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "تقرير"
+            },
+            {
+             "id": 15,
+             "kind": "cell",
+             "text": "报告"
+            },
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "रिपोर्ट"
+            }
+           ]
+          },
+          {
+           "id": 17,
+           "kind": "row",
+           "children": [
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "Budget"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "ميزانية"
+            },
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "预算"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "बजट"
+            }
+           ]
+          },
+          {
+           "id": 22,
+           "kind": "row",
+           "children": [
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "Customer"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "عميل"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "客户"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "ग्राहक"
+            }
+           ]
+          },
+          {
+           "id": 27,
+           "kind": "row",
+           "children": [
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "Quality"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "جودة"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "质量"
+            },
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "गुणवत्ता"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Multilingual Glossary"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

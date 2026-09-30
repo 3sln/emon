@@ -1,0 +1,272 @@
+{
+ "emon-gold": "1.0",
+ "id": "figures-charts",
+ "provenance": {
+  "html": "html/figures-charts.html",
+  "pdf": "pdf/figures-charts.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/figures-charts.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Sales Dashboard"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Man large like young some thing about its next."
+      },
+      {
+       "id": 4,
+       "kind": "figure",
+       "label": "Figure 1.",
+       "subkind": "chart",
+       "labels": [
+        "0",
+        "55",
+        "110",
+        "165",
+        "220",
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "Units (thousands)"
+       ],
+       "children": [
+        {
+         "id": 5,
+         "kind": "caption",
+         "label": "Figure 1.",
+         "text": "Units sold per quarter"
+        }
+       ]
+      },
+      {
+       "id": 6,
+       "kind": "paragraph",
+       "text": "Find body those us under through looked better food said move sure did not change use example. All while never toward city up across said four she did not does big five country were."
+      },
+      {
+       "id": 7,
+       "kind": "figure",
+       "label": "Figure 2",
+       "subkind": "chart",
+       "labels": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "0",
+        "150"
+       ],
+       "children": [
+        {
+         "id": 8,
+         "kind": "caption",
+         "label": "Figure 2",
+         "text": "Monthly revenue trend"
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 10,
+         "kind": "heading",
+         "level": 2,
+         "text": "Architecture"
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "text": "Back try city four her even way does came."
+        },
+        {
+         "id": 12,
+         "kind": "figure",
+         "label": "Figure 3.",
+         "subkind": "diagram",
+         "labels": [
+          "Client",
+          "Gateway",
+          "Service"
+         ],
+         "children": [
+          {
+           "id": 13,
+           "kind": "caption",
+           "label": "Figure 3.",
+           "text": "Request path"
+          }
+         ]
+        },
+        {
+         "id": 14,
+         "kind": "figure",
+         "label": "Figure 4.",
+         "subkind": "photo",
+         "alt": "Site photograph",
+         "children": [
+          {
+           "id": 15,
+           "kind": "caption",
+           "label": "Figure 4.",
+           "text": "Site photograph, north face"
+          }
+         ]
+        },
+        {
+         "id": 16,
+         "kind": "figure",
+         "subkind": "chart"
+        },
+        {
+         "id": 17,
+         "kind": "paragraph",
+         "text": "Since them something with your because very school one figure thought house it toward before."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Sales Dashboard"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

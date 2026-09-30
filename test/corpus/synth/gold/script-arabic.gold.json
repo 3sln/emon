@@ -1,0 +1,320 @@
+{
+ "emon-gold": "1.0",
+ "id": "script-arabic",
+ "provenance": {
+  "html": "html/script-arabic.html",
+  "pdf": "pdf/script-arabic.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/script-arabic.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "التقرير السنوي للشركة"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "بدأت الشركة أعمالها في مدينة صغيرة على الساحل قبل خمسين عاما، ثم توسعت تدريجيا لتصبح من أكبر المؤسسات في المنطقة."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "نظرة عامة"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "تعتمد الخطة الجديدة على تحسين الخدمات وتقليل التكاليف وزيادة رضا العملاء في جميع الفروع خلال السنوات المقبلة."
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 8,
+         "kind": "heading",
+         "level": 2,
+         "text": "الأهداف"
+        },
+        {
+         "id": 9,
+         "kind": "list",
+         "ordered": false,
+         "scheme": "bullet",
+         "children": [
+          {
+           "id": 10,
+           "kind": "item",
+           "marker": "•",
+           "text": "تحسين جودة الخدمة"
+          },
+          {
+           "id": 11,
+           "kind": "item",
+           "marker": "•",
+           "text": "خفض التكاليف التشغيلية"
+          },
+          {
+           "id": 12,
+           "kind": "item",
+           "marker": "•",
+           "text": "توسيع قاعدة العملاء"
+          }
+         ]
+        },
+        {
+         "id": 13,
+         "kind": "paragraph",
+         "text": "يبين الجدول التالي عدد الموظفين في كل قسم، كما يوضح النسب المئوية للزيادة السنوية المتوقعة."
+        },
+        {
+         "id": 14,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 3,
+         "children": [
+          {
+           "id": 15,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 16,
+             "kind": "row",
+             "children": [
+              {
+               "id": 17,
+               "kind": "cell",
+               "header": "col",
+               "text": "القسم"
+              },
+              {
+               "id": 18,
+               "kind": "cell",
+               "header": "col",
+               "text": "الموظفون"
+              },
+              {
+               "id": 19,
+               "kind": "cell",
+               "header": "col",
+               "text": "النمو"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 20,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 21,
+             "kind": "row",
+             "children": [
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "المبيعات"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "120"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "text": "5%"
+              }
+             ]
+            },
+            {
+             "id": 25,
+             "kind": "row",
+             "children": [
+              {
+               "id": 26,
+               "kind": "cell",
+               "text": "الدعم"
+              },
+              {
+               "id": 27,
+               "kind": "cell",
+               "text": "85"
+              },
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "8%"
+              }
+             ]
+            },
+            {
+             "id": 29,
+             "kind": "row",
+             "children": [
+              {
+               "id": 30,
+               "kind": "cell",
+               "text": "التطوير"
+              },
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "60"
+              },
+              {
+               "id": 32,
+               "kind": "cell",
+               "text": "12%"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "التقرير السنوي"
+  },
+  "settings": {
+   "locale": "ar"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "ar"
+  }
+ }
+}

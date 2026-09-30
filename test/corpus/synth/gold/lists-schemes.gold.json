@@ -1,0 +1,367 @@
+{
+ "emon-gold": "1.0",
+ "id": "lists-schemes",
+ "provenance": {
+  "html": "html/lists-schemes.html",
+  "pdf": "pdf/lists-schemes.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/lists-schemes.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Reference Lists"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "text": "Alphabetic"
+        },
+        {
+         "id": 5,
+         "kind": "list",
+         "ordered": true,
+         "scheme": "lower-alpha",
+         "children": [
+          {
+           "id": 6,
+           "kind": "item",
+           "marker": "a.",
+           "text": "Apples"
+          },
+          {
+           "id": 7,
+           "kind": "item",
+           "marker": "b.",
+           "text": "Bananas"
+          },
+          {
+           "id": 8,
+           "kind": "item",
+           "marker": "c.",
+           "text": "Cherries"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 10,
+         "kind": "heading",
+         "level": 2,
+         "text": "Roman"
+        },
+        {
+         "id": 11,
+         "kind": "list",
+         "ordered": true,
+         "scheme": "upper-roman",
+         "children": [
+          {
+           "id": 12,
+           "kind": "item",
+           "marker": "I.",
+           "text": "Preamble"
+          },
+          {
+           "id": 13,
+           "kind": "item",
+           "marker": "II.",
+           "text": "Definitions"
+          },
+          {
+           "id": 14,
+           "kind": "item",
+           "marker": "III.",
+           "text": "Obligations"
+          },
+          {
+           "id": 15,
+           "kind": "item",
+           "marker": "IV.",
+           "text": "Term"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 16,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 17,
+         "kind": "heading",
+         "level": 2,
+         "text": "Resumed"
+        },
+        {
+         "id": 18,
+         "kind": "list",
+         "ordered": true,
+         "scheme": "decimal",
+         "start": 5,
+         "children": [
+          {
+           "id": 19,
+           "kind": "item",
+           "marker": "5.",
+           "text": "Fifth item with a link.",
+           "inlines": [
+            {
+             "kind": "text",
+             "text": "Fifth item with a "
+            },
+            {
+             "kind": "link",
+             "href": "https://example.org/five",
+             "children": [
+              {
+               "kind": "text",
+               "text": "link"
+              }
+             ]
+            },
+            {
+             "kind": "text",
+             "text": "."
+            }
+           ]
+          },
+          {
+           "id": 20,
+           "kind": "item",
+           "marker": "6.",
+           "text": "Sixth item, emphasised and monospaced.",
+           "inlines": [
+            {
+             "kind": "text",
+             "text": "Sixth item, "
+            },
+            {
+             "kind": "span",
+             "style": [
+              "italic"
+             ],
+             "children": [
+              {
+               "kind": "text",
+               "text": "emphasised"
+              }
+             ]
+            },
+            {
+             "kind": "text",
+             "text": " and "
+            },
+            {
+             "kind": "span",
+             "style": [
+              "mono"
+             ],
+             "children": [
+              {
+               "kind": "text",
+               "text": "monospaced"
+              }
+             ]
+            },
+            {
+             "kind": "text",
+             "text": "."
+            }
+           ]
+          },
+          {
+           "id": 21,
+           "kind": "item",
+           "marker": "7.",
+           "text": "Seventh item"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 22,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 23,
+         "kind": "heading",
+         "level": 2,
+         "text": "Explicit values"
+        },
+        {
+         "id": 24,
+         "kind": "list",
+         "ordered": true,
+         "scheme": "decimal",
+         "children": [
+          {
+           "id": 25,
+           "kind": "item",
+           "marker": "3.",
+           "value": 3,
+           "text": "Third"
+          },
+          {
+           "id": 26,
+           "kind": "item",
+           "marker": "4.",
+           "text": "Fourth"
+          },
+          {
+           "id": 27,
+           "kind": "item",
+           "marker": "10.",
+           "value": 10,
+           "text": "Tenth"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Reference Lists"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

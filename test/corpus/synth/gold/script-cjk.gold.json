@@ -1,0 +1,330 @@
+{
+ "emon-gold": "1.0",
+ "id": "script-cjk",
+ "provenance": {
+  "html": "html/script-cjk.html",
+  "pdf": "pdf/script-cjk.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/script-cjk.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "年度报告"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "本公司五十年前在沿海的一座小城市开始经营，随后逐步发展，成为本地区最大的机构之一。"
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "概述"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "新的计划侧重于改善服务、降低成本，并在未来几年内提高所有分支机构的客户满意度。"
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 8,
+         "kind": "heading",
+         "level": 2,
+         "text": "目标"
+        },
+        {
+         "id": 9,
+         "kind": "list",
+         "ordered": true,
+         "scheme": "decimal",
+         "children": [
+          {
+           "id": 10,
+           "kind": "item",
+           "marker": "1.",
+           "text": "提高服务质量"
+          },
+          {
+           "id": 11,
+           "kind": "item",
+           "marker": "2.",
+           "text": "降低运营成本"
+          },
+          {
+           "id": 12,
+           "kind": "item",
+           "marker": "3.",
+           "text": "扩大客户基础"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": 13,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 14,
+       "kind": "heading",
+       "level": 1,
+       "text": "年次報告書"
+      },
+      {
+       "id": 15,
+       "kind": "paragraph",
+       "text": "当社は五十年前に海沿いの小さな町で事業を始め、徐々に拡大して地域最大級の組織の一つとなりました。"
+      },
+      {
+       "id": 16,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 17,
+         "kind": "heading",
+         "level": 2,
+         "text": "概要"
+        },
+        {
+         "id": 18,
+         "kind": "paragraph",
+         "text": "新しい計画は、サービスの向上とコストの削減、そして全支店の顧客満足度の向上に重点を置いています。"
+        },
+        {
+         "id": 19,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 3,
+         "children": [
+          {
+           "id": 20,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 21,
+             "kind": "row",
+             "children": [
+              {
+               "id": 22,
+               "kind": "cell",
+               "header": "col",
+               "text": "部門"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "header": "col",
+               "text": "人数"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "header": "col",
+               "text": "成長率"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 25,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 26,
+             "kind": "row",
+             "children": [
+              {
+               "id": 27,
+               "kind": "cell",
+               "text": "営業"
+              },
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "120"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "5%"
+              }
+             ]
+            },
+            {
+             "id": 30,
+             "kind": "row",
+             "children": [
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "サポート"
+              },
+              {
+               "id": 32,
+               "kind": "cell",
+               "text": "85"
+              },
+              {
+               "id": 33,
+               "kind": "cell",
+               "text": "8%"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "年度报告 / 年次報告書"
+  },
+  "settings": {
+   "locale": "zh"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "zh"
+  }
+ }
+}

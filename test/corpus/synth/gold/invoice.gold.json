@@ -1,0 +1,568 @@
+{
+ "emon-gold": "1.0",
+ "id": "invoice",
+ "provenance": {
+  "html": "html/invoice.html",
+  "pdf": "pdf/invoice.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/invoice.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 841.92,
+    "n": 1,
+    "rot": 0,
+    "w": 594.96
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "paragraph",
+     "text": "Brightline Supplies Ltd."
+    },
+    {
+     "id": 2,
+     "kind": "paragraph",
+     "text": "14 Harbour Road\nPortsmouth PO1 2AB\nUnited Kingdom",
+     "inlines": [
+      {
+       "kind": "text",
+       "text": "14 Harbour Road"
+      },
+      {
+       "kind": "linebreak"
+      },
+      {
+       "kind": "text",
+       "text": "Portsmouth PO1 2AB"
+      },
+      {
+       "kind": "linebreak"
+      },
+      {
+       "kind": "text",
+       "text": "United Kingdom"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 4,
+       "kind": "heading",
+       "level": 1,
+       "text": "INVOICE"
+      },
+      {
+       "id": 5,
+       "kind": "paragraph",
+       "text": "Invoice No: INV-2026-0417\nDate: 2026-03-02\nDue: 2026-04-01",
+       "inlines": [
+        {
+         "kind": "text",
+         "text": "Invoice No: INV-2026-0417"
+        },
+        {
+         "kind": "linebreak"
+        },
+        {
+         "kind": "text",
+         "text": "Date: 2026-03-02"
+        },
+        {
+         "kind": "linebreak"
+        },
+        {
+         "kind": "text",
+         "text": "Due: 2026-04-01"
+        }
+       ]
+      },
+      {
+       "id": 6,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 7,
+         "kind": "heading",
+         "level": 2,
+         "text": "Bill to"
+        },
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "text": "Harwell & Sons\n3 Mill Lane\nOxford OX2 6QA",
+         "inlines": [
+          {
+           "kind": "text",
+           "text": "Harwell & Sons"
+          },
+          {
+           "kind": "linebreak"
+          },
+          {
+           "kind": "text",
+           "text": "3 Mill Lane"
+          },
+          {
+           "kind": "linebreak"
+          },
+          {
+           "kind": "text",
+           "text": "Oxford OX2 6QA"
+          }
+         ]
+        },
+        {
+         "id": 9,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 5,
+         "children": [
+          {
+           "id": 10,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 11,
+             "kind": "row",
+             "children": [
+              {
+               "id": 12,
+               "kind": "cell",
+               "header": "col",
+               "text": "Item"
+              },
+              {
+               "id": 13,
+               "kind": "cell",
+               "header": "col",
+               "text": "Description"
+              },
+              {
+               "id": 14,
+               "kind": "cell",
+               "header": "col",
+               "text": "Qty"
+              },
+              {
+               "id": 15,
+               "kind": "cell",
+               "header": "col",
+               "text": "Unit price"
+              },
+              {
+               "id": 16,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 17,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 18,
+             "kind": "row",
+             "children": [
+              {
+               "id": 19,
+               "kind": "cell",
+               "text": "A-100"
+              },
+              {
+               "id": 20,
+               "kind": "cell",
+               "text": "Copper pipe 15mm x 3m"
+              },
+              {
+               "id": 21,
+               "kind": "cell",
+               "text": "40"
+              },
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "6.50"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "260.00"
+              }
+             ]
+            },
+            {
+             "id": 24,
+             "kind": "row",
+             "children": [
+              {
+               "id": 25,
+               "kind": "cell",
+               "text": "B-220"
+              },
+              {
+               "id": 26,
+               "kind": "cell",
+               "text": "Elbow joint 15mm"
+              },
+              {
+               "id": 27,
+               "kind": "cell",
+               "text": "120"
+              },
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "0.85"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "102.00"
+              }
+             ]
+            },
+            {
+             "id": 30,
+             "kind": "row",
+             "children": [
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "C-310"
+              },
+              {
+               "id": 32,
+               "kind": "cell",
+               "text": "Flux paste 100g"
+              },
+              {
+               "id": 33,
+               "kind": "cell",
+               "text": "12"
+              },
+              {
+               "id": 34,
+               "kind": "cell",
+               "text": "4.20"
+              },
+              {
+               "id": 35,
+               "kind": "cell",
+               "text": "50.40"
+              }
+             ]
+            },
+            {
+             "id": 36,
+             "kind": "row",
+             "children": [
+              {
+               "id": 37,
+               "kind": "cell",
+               "text": "D-005"
+              },
+              {
+               "id": 38,
+               "kind": "cell",
+               "text": "PTFE tape"
+              },
+              {
+               "id": 39,
+               "kind": "cell",
+               "text": "60"
+              },
+              {
+               "id": 40,
+               "kind": "cell",
+               "text": "0.45"
+              },
+              {
+               "id": 41,
+               "kind": "cell",
+               "text": "27.00"
+              }
+             ]
+            },
+            {
+             "id": 42,
+             "kind": "row",
+             "children": [
+              {
+               "id": 43,
+               "kind": "cell",
+               "text": "E-900"
+              },
+              {
+               "id": 44,
+               "kind": "cell",
+               "text": "Delivery"
+              },
+              {
+               "id": 45,
+               "kind": "cell",
+               "text": "1"
+              },
+              {
+               "id": 46,
+               "kind": "cell",
+               "text": "25.00"
+              },
+              {
+               "id": 47,
+               "kind": "cell",
+               "text": "25.00"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 48,
+         "kind": "table",
+         "profile": "whitespace",
+         "columns": 2,
+         "children": [
+          {
+           "id": 49,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 50,
+             "kind": "row",
+             "children": [
+              {
+               "id": 51,
+               "kind": "cell",
+               "text": "Subtotal"
+              },
+              {
+               "id": 52,
+               "kind": "cell",
+               "text": "464.40"
+              }
+             ]
+            },
+            {
+             "id": 53,
+             "kind": "row",
+             "children": [
+              {
+               "id": 54,
+               "kind": "cell",
+               "text": "VAT 20%"
+              },
+              {
+               "id": 55,
+               "kind": "cell",
+               "text": "92.88"
+              }
+             ]
+            },
+            {
+             "id": 56,
+             "kind": "row",
+             "children": [
+              {
+               "id": 57,
+               "kind": "cell",
+               "text": "Total due",
+               "inlines": [
+                {
+                 "kind": "span",
+                 "style": [
+                  "bold"
+                 ],
+                 "children": [
+                  {
+                   "kind": "text",
+                   "text": "Total due"
+                  }
+                 ]
+                }
+               ]
+              },
+              {
+               "id": 58,
+               "kind": "cell",
+               "text": "557.28",
+               "inlines": [
+                {
+                 "kind": "span",
+                 "style": [
+                  "bold"
+                 ],
+                 "children": [
+                  {
+                   "kind": "text",
+                   "text": "557.28"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 59,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 60,
+         "kind": "heading",
+         "level": 2,
+         "text": "Payment terms"
+        },
+        {
+         "id": 61,
+         "kind": "paragraph",
+         "text": "Payment within 30 days by bank transfer to sort code 12-34-56, account 00112233. Late payments incur interest at 4% above base rate."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [
+   {
+    "id": 62,
+    "role": "footer",
+    "pages": [
+     1
+    ],
+    "template": "Brightline Supplies Ltd. - Registered in England No. 0123456"
+   }
+  ],
+  "meta": {
+   "title": "Invoice INV-2026-0417"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

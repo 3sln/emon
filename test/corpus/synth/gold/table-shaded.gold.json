@@ -1,0 +1,336 @@
+{
+ "emon-gold": "1.0",
+ "id": "table-shaded",
+ "provenance": {
+  "html": "html/table-shaded.html",
+  "pdf": "pdf/table-shaded.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/table-shaded.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Project Status"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Father revenue looked year himself then what white no found."
+      },
+      {
+       "id": 4,
+       "kind": "table",
+       "profile": "shaded",
+       "columns": 4,
+       "children": [
+        {
+         "id": 5,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 6,
+           "kind": "row",
+           "children": [
+            {
+             "id": 7,
+             "kind": "cell",
+             "header": "col",
+             "text": "Workstream"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "header": "col",
+             "text": "Owner"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Status"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "header": "col",
+             "text": "Due"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 11,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 12,
+           "kind": "row",
+           "children": [
+            {
+             "id": 13,
+             "kind": "cell",
+             "text": "Data migration"
+            },
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "Ana"
+            },
+            {
+             "id": 15,
+             "kind": "cell",
+             "text": "On track"
+            },
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "2026-03-01"
+            }
+           ]
+          },
+          {
+           "id": 17,
+           "kind": "row",
+           "children": [
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "Security review"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "Ben"
+            },
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "At risk"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "2026-03-15"
+            }
+           ]
+          },
+          {
+           "id": 22,
+           "kind": "row",
+           "children": [
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "User training"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "Chen"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "Done"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "2026-02-10"
+            }
+           ]
+          },
+          {
+           "id": 27,
+           "kind": "row",
+           "children": [
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "Launch"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "Dee"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "Not started"
+            },
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "2026-04-01"
+            }
+           ]
+          },
+          {
+           "id": 32,
+           "kind": "row",
+           "children": [
+            {
+             "id": 33,
+             "kind": "cell",
+             "text": "Retrospective"
+            },
+            {
+             "id": 34,
+             "kind": "cell",
+             "text": "Eli"
+            },
+            {
+             "id": 35,
+             "kind": "cell",
+             "text": "Not started"
+            },
+            {
+             "id": 36,
+             "kind": "cell",
+             "text": "2026-04-20"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 37,
+       "kind": "paragraph",
+       "text": "Did many knew something is some people near often down take."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Project Status"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

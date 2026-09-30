@@ -1,0 +1,211 @@
+{
+ "emon-gold": "1.0",
+ "id": "script-hebrew",
+ "provenance": {
+  "html": "html/script-hebrew.html",
+  "pdf": "pdf/script-hebrew.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/script-hebrew.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "דוח שנתי"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "החברה הוקמה לפני חמישים שנה בעיר קטנה על החוף והתרחבה בהדרגה לאחד הארגונים הגדולים באזור."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "סקירה כללית"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "התוכנית החדשה מתמקדת בשיפור השירות, הפחתת עלויות והגדלת שביעות הרצון של הלקוחות בכל הסניפים."
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 8,
+         "kind": "heading",
+         "level": 2,
+         "text": "יעדים"
+        },
+        {
+         "id": 9,
+         "kind": "list",
+         "ordered": true,
+         "scheme": "decimal",
+         "children": [
+          {
+           "id": 10,
+           "kind": "item",
+           "marker": "1.",
+           "text": "שיפור איכות השירות"
+          },
+          {
+           "id": 11,
+           "kind": "item",
+           "marker": "2.",
+           "text": "הפחתת עלויות"
+          },
+          {
+           "id": 12,
+           "kind": "item",
+           "marker": "3.",
+           "text": "הרחבת בסיס הלקוחות"
+          }
+         ]
+        },
+        {
+         "id": 13,
+         "kind": "paragraph",
+         "text": "הדוח כולל נתונים על 1,250 עובדים ועל תקציב של 3.4 מיליון שקלים לשנת 2026, לצד מונחים כמו KPI ו-ROI."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "דוח שנתי"
+  },
+  "settings": {
+   "locale": "he"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "he"
+  }
+ }
+}

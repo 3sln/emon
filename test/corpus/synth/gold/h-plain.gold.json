@@ -1,0 +1,407 @@
+{
+ "emon-gold": "1.0",
+ "id": "h-plain",
+ "provenance": {
+  "html": "html/h-plain.html",
+  "pdf": "pdf/h-plain.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/h-plain.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Field Notes on Soil Moisture"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Group your take see sun being sentence food any some. By side high sample of night again come review other never at was be seen."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "Background"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Far however red for man white told tell. Have turned try while will well asked not page people."
+        },
+        {
+         "id": 7,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 8,
+           "kind": "heading",
+           "level": 3,
+           "text": "Site selection"
+          },
+          {
+           "id": 9,
+           "kind": "paragraph",
+           "text": "Put would while leave after be above four will other. Us better pay being above too our never below might."
+          },
+          {
+           "id": 10,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 11,
+             "kind": "heading",
+             "level": 4,
+             "text": "Calibration"
+            },
+            {
+             "id": 12,
+             "kind": "paragraph",
+             "text": "Friend point this even say man than always great country by play first can used."
+            }
+           ]
+          },
+          {
+           "id": 13,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 14,
+             "kind": "heading",
+             "level": 4,
+             "text": "Logging"
+            },
+            {
+             "id": 15,
+             "kind": "paragraph",
+             "text": "Sound work very feet red small family great children red in well as light."
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 16,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 17,
+           "kind": "heading",
+           "level": 3,
+           "text": "Instruments"
+          },
+          {
+           "id": 18,
+           "kind": "paragraph",
+           "text": "Live live say during right best room get heard play. Of for want revenue far said over work three had mother."
+          },
+          {
+           "id": 19,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 20,
+             "kind": "heading",
+             "level": 4,
+             "text": "Calibration"
+            },
+            {
+             "id": 21,
+             "kind": "paragraph",
+             "text": "Every made white want so second growth whole."
+            }
+           ]
+          },
+          {
+           "id": 22,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 23,
+             "kind": "heading",
+             "level": 4,
+             "text": "Logging"
+            },
+            {
+             "id": 24,
+             "kind": "paragraph",
+             "text": "Turned seen him where food another still by another him group in would use."
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 25,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 26,
+         "kind": "heading",
+         "level": 2,
+         "text": "Method"
+        },
+        {
+         "id": 27,
+         "kind": "paragraph",
+         "text": "Move paper study change budget before through room best back some night air my she. Had region once study use for play your can from before does figure at ever while."
+        },
+        {
+         "id": 28,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 29,
+           "kind": "heading",
+           "level": 3,
+           "text": "Site selection"
+          },
+          {
+           "id": 30,
+           "kind": "paragraph",
+           "text": "For same line better had take have line cut earth so report no color. Room last know morning together sea near point into these figure."
+          },
+          {
+           "id": 31,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 32,
+             "kind": "heading",
+             "level": 4,
+             "text": "Calibration"
+            },
+            {
+             "id": 33,
+             "kind": "paragraph",
+             "text": "Again do not part better might out usually never around turn out way those these those."
+            }
+           ]
+          },
+          {
+           "id": 34,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 35,
+             "kind": "heading",
+             "level": 4,
+             "text": "Logging"
+            },
+            {
+             "id": 36,
+             "kind": "paragraph",
+             "text": "Example upon water even work upon take animal morning ever morning."
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 37,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 38,
+           "kind": "heading",
+           "level": 3,
+           "text": "Instruments"
+          },
+          {
+           "id": 39,
+           "kind": "paragraph",
+           "text": "Man high figure did not there than across had example words far. Head used by also made first right market however side do not."
+          },
+          {
+           "id": 40,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 41,
+             "kind": "heading",
+             "level": 4,
+             "text": "Calibration"
+            },
+            {
+             "id": 42,
+             "kind": "paragraph",
+             "text": "Soon example however turned asked second at from after few been."
+            }
+           ]
+          },
+          {
+           "id": 43,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 44,
+             "kind": "heading",
+             "level": 4,
+             "text": "Logging"
+            },
+            {
+             "id": 45,
+             "kind": "paragraph",
+             "text": "Light later home however knew food think night might red."
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Field Notes on Soil Moisture"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

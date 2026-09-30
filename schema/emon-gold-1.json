@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://emon.dev/schema/emon-gold-1.json",
+  "title": "emon gold file, version 1.0 (SPEC 14.3; DEVLOG P2.8, D041, D063)",
+  "description": "Ground truth for one corpus document: a PARTIAL emon Model (`model`) plus a declaration of what is annotated (`annotated`). A metric reads `annotated` first and skips what the gold does not claim (DocLayNet-derived gold has no heading levels; synthetic gold has no geometry). Inside what is annotated the gold is exact: a node of an annotated kind that is absent from `model` is a claim that none exists. `model.body` is an ordinary emon-1 document (ids in document order; no `at`, `src`, `conf` or `flags`, which are never annotated by synthetic gold). Conventions that are decisions, not facts, are in DEVLOG D063.",
+  "type": "object",
+  "required": ["emon-gold", "id", "annotated", "model"],
+  "additionalProperties": false,
+  "properties": {
+    "emon-gold": { "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "provenance": {
+      "type": "object",
+      "description": "Where the document came from. Synthetic gold: the HTML it was authored as, the PDF a producer printed from it (and the producer), and variants that share this gold (a tagged print, a degraded scan).",
+      "additionalProperties": false,
+      "properties": {
+        "html": { "type": "string" },
+        "pdf": { "type": "string" },
+        "producer": { "type": "string" },
+        "variants": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "annotated": {
+      "type": "object",
+      "description": "What this gold claims.",
+      "required": ["structure", "attributes", "text", "inlines", "furniture", "dropped", "pages"],
+      "additionalProperties": false,
+      "properties": {
+        "structure": {
+          "description": "Node kinds whose presence AND absence is annotated.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["section", "heading", "paragraph", "list", "item", "table", "rowgroup", "row", "cell", "caption", "figure", "seal", "formula", "code", "quote", "note", "field", "break"] }
+        },
+        "attributes": {
+          "description": "Per kind, the fields that are annotated. An annotated field that is absent is absent in the truth.",
+          "type": "object",
+          "propertyNames": { "enum": ["section", "heading", "paragraph", "list", "item", "table", "rowgroup", "row", "cell", "caption", "figure", "seal", "formula", "code", "quote", "note", "field", "break"] },
+          "additionalProperties": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+        },
+        "text": { "type": "boolean", "description": "Leaf-block `text` is annotated (reading order, NFC, whitespace normalized, refs contribute none, linebreaks \\n)." },
+        "inlines": { "type": "boolean", "description": "`inlines` are annotated (style spans, links, refs, linebreaks)." },
+        "furniture": { "type": "boolean", "description": "`model.furniture` is exhaustive." },
+        "dropped": {
+          "description": "Ledger reasons whose entries are exhaustive (an absent entry of these reasons is a claim). Entries carry no `at`.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["watermark", "background", "page-number", "running-title", "bleed-through", "duplicate-header-row", "ocr-ghost", "clipped", "offpage", "invisible"] }
+        },
+        "pages": {
+          "description": "Page-table fields that are annotated.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["n", "label", "w", "h", "rot", "kind", "health", "dpi", "px"] }
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "description": "A partial emon Model (emon-1.json, SPEC 4.2). Same keys, same canonical meaning; `furniture` and `dropped` items are loosened (below) because their geometry is unknown.",
+      "required": ["emon", "source", "settings", "pages", "body", "furniture", "dropped"],
+      "additionalProperties": false,
+      "properties": {
+        "emon": { "const": "1.0" },
+        "source": { "$ref": "emon-1.json#/properties/source" },
+        "settings": { "$ref": "emon-1.json#/properties/settings" },
+        "meta": { "$ref": "emon-1.json#/properties/meta" },
+        "pages": { "type": "array", "items": { "$ref": "emon-1.json#/$defs/page" } },
+        "body": { "$ref": "emon-1.json#/$defs/document" },
+        "furniture": { "type": "array", "items": { "$ref": "#/$defs/furniture" } },
+        "dropped": { "type": "array", "items": { "$ref": "#/$defs/dropped" } }
+      }
+    }
+  },
+  "$defs": {
+    "furniture": {
+      "type": "object",
+      "description": "A running header/footer kept by policy (SPEC 10.2). `template` is the printed text; `{n}` stands for the page number where the text varies by page. `pages` are the pages it printed on.",
+      "required": ["id", "role", "template", "pages"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "role": { "enum": ["header", "footer", "margin"] },
+        "template": { "type": "string" },
+        "pages": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 1 } }
+      }
+    },
+    "dropped": {
+      "type": "object",
+      "description": "A ledger entry without geometry. `text` is the text exactly as it printed on that page.",
+      "required": ["reason", "page", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": { "$ref": "emon-1.json#/$defs/droppedItem/properties/reason" },
+        "page": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string" },
+        "at": { "$ref": "emon-1.json#/$defs/region" }
+      }
+    }
+  }
+}

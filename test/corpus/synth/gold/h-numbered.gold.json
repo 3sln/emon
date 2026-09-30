@@ -1,0 +1,557 @@
+{
+ "emon-gold": "1.0",
+ "id": "h-numbered",
+ "provenance": {
+  "html": "html/h-numbered.html",
+  "pdf": "pdf/h-numbered.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/h-numbered.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "number": "1",
+       "numbering": "decimal",
+       "text": "Introduction"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Example upon water even work upon take animal morning ever morning. Both budget asked land tell took to like by usually help this across where those big."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "number": "1.1",
+         "numbering": "decimal",
+         "text": "Purpose"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Get turn right left name left by sure together together which sometimes white might very. To example she just saw be high made than took should between thought."
+        },
+        {
+         "id": 7,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 8,
+           "kind": "heading",
+           "level": 3,
+           "number": "1.1.1",
+           "numbering": "decimal",
+           "text": "General"
+          },
+          {
+           "id": 9,
+           "kind": "paragraph",
+           "text": "Like us time own get right looked time father soon point tell night words read tell."
+          },
+          {
+           "id": 10,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 11,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.1.1.1",
+             "numbering": "decimal",
+             "text": "Normative"
+            },
+            {
+             "id": 12,
+             "kind": "paragraph",
+             "text": "Right each measure could keep white something see try up been also quarter on not."
+            }
+           ]
+          },
+          {
+           "id": 13,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 14,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.1.1.2",
+             "numbering": "decimal",
+             "text": "Informative"
+            },
+            {
+             "id": 15,
+             "kind": "paragraph",
+             "text": "Write came without next to make it very."
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 16,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 17,
+           "kind": "heading",
+           "level": 3,
+           "number": "1.1.2",
+           "numbering": "decimal",
+           "text": "Exceptions"
+          },
+          {
+           "id": 18,
+           "kind": "paragraph",
+           "text": "Revenue mother second had sea better few would never up such number thing always method."
+          },
+          {
+           "id": 19,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 20,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.1.2.1",
+             "numbering": "decimal",
+             "text": "Normative"
+            },
+            {
+             "id": 21,
+             "kind": "paragraph",
+             "text": "It later city best there help your much young do not mother being say around hard."
+            }
+           ]
+          },
+          {
+           "id": 22,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 23,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.1.2.2",
+             "numbering": "decimal",
+             "text": "Informative"
+            },
+            {
+             "id": 24,
+             "kind": "paragraph",
+             "text": "Pay earth however own now earth did not no such should region."
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 25,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 26,
+         "kind": "heading",
+         "level": 2,
+         "number": "1.2",
+         "numbering": "decimal",
+         "text": "Scope"
+        },
+        {
+         "id": 27,
+         "kind": "paragraph",
+         "text": "Which must ever own often words change back water to. Words could at sentence sentence top as both review water day about."
+        },
+        {
+         "id": 28,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 29,
+           "kind": "heading",
+           "level": 3,
+           "number": "1.2.1",
+           "numbering": "decimal",
+           "text": "General"
+          },
+          {
+           "id": 30,
+           "kind": "paragraph",
+           "text": "Along write does go like between best turn must over later hear."
+          },
+          {
+           "id": 31,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 32,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.2.1.1",
+             "numbering": "decimal",
+             "text": "Normative"
+            },
+            {
+             "id": 33,
+             "kind": "paragraph",
+             "text": "Friend big paper page long house also city second be side region word soon hard."
+            }
+           ]
+          },
+          {
+           "id": 34,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 35,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.2.1.2",
+             "numbering": "decimal",
+             "text": "Informative"
+            },
+            {
+             "id": 36,
+             "kind": "paragraph",
+             "text": "Number as across body always because mother at."
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 37,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 38,
+           "kind": "heading",
+           "level": 3,
+           "number": "1.2.2",
+           "numbering": "decimal",
+           "text": "Exceptions"
+          },
+          {
+           "id": 39,
+           "kind": "paragraph",
+           "text": "So big why need have did enough much sentence form car."
+          },
+          {
+           "id": 40,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 41,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.2.2.1",
+             "numbering": "decimal",
+             "text": "Normative"
+            },
+            {
+             "id": 42,
+             "kind": "paragraph",
+             "text": "New like usually two below body between small something however an morning."
+            }
+           ]
+          },
+          {
+           "id": 43,
+           "kind": "section",
+           "level": 4,
+           "children": [
+            {
+             "id": 44,
+             "kind": "heading",
+             "level": 4,
+             "number": "1.2.2.2",
+             "numbering": "decimal",
+             "text": "Informative"
+            },
+            {
+             "id": 45,
+             "kind": "paragraph",
+             "text": "Home in time been today however even number four quarter got leave do study your last."
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 46,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 47,
+         "kind": "heading",
+         "level": 2,
+         "number": "1.3",
+         "numbering": "decimal",
+         "text": "Definitions"
+        },
+        {
+         "id": 48,
+         "kind": "paragraph",
+         "text": "Let name here however them feet about will used still do set can also than. Word number growth at have market long came later far hand asked knew."
+        },
+        {
+         "id": 49,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 50,
+           "kind": "heading",
+           "level": 3,
+           "number": "1.3.1",
+           "numbering": "decimal",
+           "text": "General"
+          },
+          {
+           "id": 51,
+           "kind": "paragraph",
+           "text": "Boy seen page going do not five enough important on body children think."
+          }
+         ]
+        },
+        {
+         "id": 52,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 53,
+           "kind": "heading",
+           "level": 3,
+           "number": "1.3.2",
+           "numbering": "decimal",
+           "text": "Exceptions"
+          },
+          {
+           "id": 54,
+           "kind": "paragraph",
+           "text": "Second something turn five children during it may down being method the never found together also."
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": 55,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 56,
+       "kind": "heading",
+       "level": 1,
+       "number": "2",
+       "numbering": "decimal",
+       "text": "Requirements"
+      },
+      {
+       "id": 57,
+       "kind": "paragraph",
+       "text": "Place much report white she last same around such left important water more never big than. Every between look before example change him earth too our at some."
+      },
+      {
+       "id": 58,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 59,
+         "kind": "heading",
+         "level": 2,
+         "number": "2.1",
+         "numbering": "decimal",
+         "text": "Functional"
+        },
+        {
+         "id": 60,
+         "kind": "paragraph",
+         "text": "Look quarter animal where learn where next every through. There results high first on near far something being report come down those get."
+        },
+        {
+         "id": 61,
+         "kind": "section",
+         "level": 3,
+         "children": [
+          {
+           "id": 62,
+           "kind": "heading",
+           "level": 3,
+           "number": "2.1.1",
+           "numbering": "decimal",
+           "text": "Input"
+          },
+          {
+           "id": 63,
+           "kind": "paragraph",
+           "text": "Same market give if world think story policy water has air being does turn animal form."
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Specification With Decimal Numbering"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

@@ -1,0 +1,206 @@
+{
+ "emon-gold": "1.0",
+ "id": "script-devanagari",
+ "provenance": {
+  "html": "html/script-devanagari.html",
+  "pdf": "pdf/script-devanagari.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/script-devanagari.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "वार्षिक रिपोर्ट"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "कंपनी ने पचास साल पहले तट पर एक छोटे शहर में अपना काम शुरू किया और धीरे-धीरे क्षेत्र के सबसे बड़े संगठनों में से एक बन गई।"
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "अवलोकन"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "नई योजना सेवाओं को बेहतर बनाने, लागत कम करने और आने वाले वर्षों में सभी शाखाओं में ग्राहकों की संतुष्टि बढ़ाने पर केंद्रित है।"
+        }
+       ]
+      },
+      {
+       "id": 7,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 8,
+         "kind": "heading",
+         "level": 2,
+         "text": "लक्ष्य"
+        },
+        {
+         "id": 9,
+         "kind": "list",
+         "ordered": false,
+         "scheme": "bullet",
+         "children": [
+          {
+           "id": 10,
+           "kind": "item",
+           "marker": "•",
+           "text": "सेवा की गुणवत्ता में सुधार"
+          },
+          {
+           "id": 11,
+           "kind": "item",
+           "marker": "•",
+           "text": "परिचालन लागत में कमी"
+          },
+          {
+           "id": 12,
+           "kind": "item",
+           "marker": "•",
+           "text": "ग्राहक आधार का विस्तार"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "वार्षिक रिपोर्ट"
+  },
+  "settings": {
+   "locale": "hi"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "hi"
+  }
+ }
+}

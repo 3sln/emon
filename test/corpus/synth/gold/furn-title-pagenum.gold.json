@@ -1,0 +1,313 @@
+{
+ "emon-gold": "1.0",
+ "id": "furn-title-pagenum",
+ "provenance": {
+  "html": "html/furn-title-pagenum.html",
+  "pdf": "pdf/furn-title-pagenum.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/furn-title-pagenum.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "label": "1",
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "label": "2",
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Quarterly Operating Report"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "text": "Overview"
+        },
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "text": "Done car from more paper form whole and not together since. Always any does better end later went without around because let but side place quarter of. Your without do not several before sample why knew. Which many well other off sample along being same on what important place might there year. Or thought out great growth we used never should."
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Through below toward give white measure during food other seen color one show study. Day last word several people than its heard an knew place after took them this. Over car often boy some before from their until through. Sun few came do not far need new many budget. Place is being find could both sun learn time might sentence year."
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Upon group along night in red turned what each soon. Toward hard people head through read she place. Today would morning that to their know know between light. Name have of something also away even them better turn think hard. Number read often study been when us important animal such since."
+        }
+       ]
+      },
+      {
+       "id": 8,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 9,
+         "kind": "heading",
+         "level": 2,
+         "text": "Findings"
+        },
+        {
+         "id": 10,
+         "kind": "paragraph",
+         "text": "Looked who something turn one white much try move upon little also quarter its then well. When of form young always long by also me. Part number each little going few policy live. Play be because like set room four put seen much. With do must important little can earth money any life show."
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "text": "Same upon results review color think these together under words was. Got told will without best about if came move. Light answer himself money put sun change usually more large out. Together must is house small left sound different keep year four. Away looked high now so measure home can better best together no away even up out."
+        },
+        {
+         "id": 12,
+         "kind": "paragraph",
+         "text": "Make no city story paper near in some leave example food near. Her budget got review change for earth review above morning next at keep. Answer where hand of friend and different car or together great next country over much. Began can learn it should several color report also. For well now today what into true could any sound another from always form."
+        }
+       ]
+      },
+      {
+       "id": 13,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 14,
+         "kind": "heading",
+         "level": 2,
+         "text": "Recommendations"
+        },
+        {
+         "id": 15,
+         "kind": "paragraph",
+         "text": "Top together few without turned door under through knew night both heard head. To against good go work turned all part asked did different life life. Her children region five school see than together market. Were move me last well do not best group here life along market whole put one. Any other go until its car soon this over let down."
+        },
+        {
+         "id": 16,
+         "kind": "paragraph",
+         "text": "Can sun under for method need to sometimes last find upon door. Were in whole through back this day it great car. Has never much here time take few done. Between say sample like your thing study next policy may seen find. Play left said there sentence form down door heard have them."
+        },
+        {
+         "id": 17,
+         "kind": "paragraph",
+         "text": "Form words your until quarter what one some. Set into should any can land true side next method morning saw. Do be best right policy it it it air. Him family began when own put next enough cut also using if good into will. That seen earth in had sample made help almost word be method."
+        }
+       ]
+      },
+      {
+       "id": 18,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 19,
+         "kind": "heading",
+         "level": 2,
+         "text": "Methods"
+        },
+        {
+         "id": 20,
+         "kind": "paragraph",
+         "text": "Something any called figure its measure same answer small make way house. True money how sea this called until family set seen on. On head new from each do not since life both had. Four might toward next sun measure over example policy group house across learn point boy. Region see turned sure left new read method."
+        },
+        {
+         "id": 21,
+         "kind": "paragraph",
+         "text": "Three five from of give up same tell house since began just words. In your got enough picture much have some water tell way. While high read turn told try of for other told. Until was had city usually own room heard different try hard found since best. Turned think who me if from so over body many should below market."
+        },
+        {
+         "id": 22,
+         "kind": "paragraph",
+         "text": "Want when few that about in do not before. Heard country live sea up here into picture were market. But all in has know once just well life new large into find with white. Hand help figure saw does five children keep today. Different city region mother story also use color today back big can."
+        }
+       ]
+      },
+      {
+       "id": 23,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 24,
+         "kind": "heading",
+         "level": 2,
+         "text": "Annex"
+        },
+        {
+         "id": 25,
+         "kind": "paragraph",
+         "text": "That quarter if far important toward market animal from keep took need high group. Mother knew using move go want boy all good with. For had food under new usually sentence him that saw is. Now sea heard story called once air below of. Earth too must together year without were her."
+        },
+        {
+         "id": 26,
+         "kind": "paragraph",
+         "text": "Live heard policy sentence then sound page still using door house who. Heard four one using earth would she much white study your four top way. Tell second like made study near far is. Water any keep well long do not to then name far. Water come market must pay never ever even to done change."
+        },
+        {
+         "id": 27,
+         "kind": "paragraph",
+         "text": "Land room thought point write she still place show for until good quarter important story not. She began life get side think your who going after big seen or region well. Said in upon does give through ever without answer may. Being important began this its without another food toward said second. Your where market group every much an animal."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "page": 1,
+    "reason": "page-number",
+    "text": "Page 1 of 2"
+   },
+   {
+    "page": 1,
+    "reason": "running-title",
+    "text": "Quarterly Operating Report"
+   },
+   {
+    "page": 2,
+    "reason": "page-number",
+    "text": "Page 2 of 2"
+   },
+   {
+    "page": 2,
+    "reason": "running-title",
+    "text": "Quarterly Operating Report"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Quarterly Operating Report"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

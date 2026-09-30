@@ -1,0 +1,1036 @@
+{
+ "emon-gold": "1.0",
+ "id": "table-consecutive-distinct",
+ "provenance": {
+  "html": "html/table-consecutive-distinct.html",
+  "pdf": "pdf/table-consecutive-distinct.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/table-consecutive-distinct.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Two Schedules"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "text": "Schedule A"
+        },
+        {
+         "id": 5,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 5,
+         "children": [
+          {
+           "id": 6,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 7,
+             "kind": "row",
+             "children": [
+              {
+               "id": 8,
+               "kind": "cell",
+               "header": "col",
+               "text": "Ref"
+              },
+              {
+               "id": 9,
+               "kind": "cell",
+               "header": "col",
+               "text": "Item"
+              },
+              {
+               "id": 10,
+               "kind": "cell",
+               "header": "col",
+               "text": "Category"
+              },
+              {
+               "id": 11,
+               "kind": "cell",
+               "header": "col",
+               "text": "Qty"
+              },
+              {
+               "id": 12,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 13,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 14,
+             "kind": "row",
+             "children": [
+              {
+               "id": 15,
+               "kind": "cell",
+               "text": "A0001"
+              },
+              {
+               "id": 16,
+               "kind": "cell",
+               "text": "Way help like"
+              },
+              {
+               "id": 17,
+               "kind": "cell",
+               "text": "Training"
+              },
+              {
+               "id": 18,
+               "kind": "cell",
+               "text": "27"
+              },
+              {
+               "id": 19,
+               "kind": "cell",
+               "text": "853.84"
+              }
+             ]
+            },
+            {
+             "id": 20,
+             "kind": "row",
+             "children": [
+              {
+               "id": 21,
+               "kind": "cell",
+               "text": "A0002"
+              },
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "Make there friend"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "text": "34"
+              },
+              {
+               "id": 25,
+               "kind": "cell",
+               "text": "2777.23"
+              }
+             ]
+            },
+            {
+             "id": 26,
+             "kind": "row",
+             "children": [
+              {
+               "id": 27,
+               "kind": "cell",
+               "text": "A0003"
+              },
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "Sound car was"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "Services"
+              },
+              {
+               "id": 30,
+               "kind": "cell",
+               "text": "24"
+              },
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "1349.62"
+              }
+             ]
+            },
+            {
+             "id": 32,
+             "kind": "row",
+             "children": [
+              {
+               "id": 33,
+               "kind": "cell",
+               "text": "A0004"
+              },
+              {
+               "id": 34,
+               "kind": "cell",
+               "text": "Sample this father"
+              },
+              {
+               "id": 35,
+               "kind": "cell",
+               "text": "Services"
+              },
+              {
+               "id": 36,
+               "kind": "cell",
+               "text": "21"
+              },
+              {
+               "id": 37,
+               "kind": "cell",
+               "text": "877.05"
+              }
+             ]
+            },
+            {
+             "id": 38,
+             "kind": "row",
+             "children": [
+              {
+               "id": 39,
+               "kind": "cell",
+               "text": "A0005"
+              },
+              {
+               "id": 40,
+               "kind": "cell",
+               "text": "Side without all"
+              },
+              {
+               "id": 41,
+               "kind": "cell",
+               "text": "Hardware"
+              },
+              {
+               "id": 42,
+               "kind": "cell",
+               "text": "17"
+              },
+              {
+               "id": 43,
+               "kind": "cell",
+               "text": "7728.39"
+              }
+             ]
+            },
+            {
+             "id": 44,
+             "kind": "row",
+             "children": [
+              {
+               "id": 45,
+               "kind": "cell",
+               "text": "A0006"
+              },
+              {
+               "id": 46,
+               "kind": "cell",
+               "text": "Write most get"
+              },
+              {
+               "id": 47,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 48,
+               "kind": "cell",
+               "text": "12"
+              },
+              {
+               "id": 49,
+               "kind": "cell",
+               "text": "2350.67"
+              }
+             ]
+            },
+            {
+             "id": 50,
+             "kind": "row",
+             "children": [
+              {
+               "id": 51,
+               "kind": "cell",
+               "text": "A0007"
+              },
+              {
+               "id": 52,
+               "kind": "cell",
+               "text": "Told day three"
+              },
+              {
+               "id": 53,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 54,
+               "kind": "cell",
+               "text": "35"
+              },
+              {
+               "id": 55,
+               "kind": "cell",
+               "text": "7656.66"
+              }
+             ]
+            },
+            {
+             "id": 56,
+             "kind": "row",
+             "children": [
+              {
+               "id": 57,
+               "kind": "cell",
+               "text": "A0008"
+              },
+              {
+               "id": 58,
+               "kind": "cell",
+               "text": "Then however group"
+              },
+              {
+               "id": 59,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 60,
+               "kind": "cell",
+               "text": "10"
+              },
+              {
+               "id": 61,
+               "kind": "cell",
+               "text": "1162.11"
+              }
+             ]
+            },
+            {
+             "id": 62,
+             "kind": "row",
+             "children": [
+              {
+               "id": 63,
+               "kind": "cell",
+               "text": "A0009"
+              },
+              {
+               "id": 64,
+               "kind": "cell",
+               "text": "In himself not"
+              },
+              {
+               "id": 65,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 66,
+               "kind": "cell",
+               "text": "19"
+              },
+              {
+               "id": 67,
+               "kind": "cell",
+               "text": "3827.53"
+              }
+             ]
+            },
+            {
+             "id": 68,
+             "kind": "row",
+             "children": [
+              {
+               "id": 69,
+               "kind": "cell",
+               "text": "A0010"
+              },
+              {
+               "id": 70,
+               "kind": "cell",
+               "text": "Some which much"
+              },
+              {
+               "id": 71,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 72,
+               "kind": "cell",
+               "text": "10"
+              },
+              {
+               "id": 73,
+               "kind": "cell",
+               "text": "6433.82"
+              }
+             ]
+            },
+            {
+             "id": 74,
+             "kind": "row",
+             "children": [
+              {
+               "id": 75,
+               "kind": "cell",
+               "text": "A0011"
+              },
+              {
+               "id": 76,
+               "kind": "cell",
+               "text": "Home toward it"
+              },
+              {
+               "id": 77,
+               "kind": "cell",
+               "text": "Hardware"
+              },
+              {
+               "id": 78,
+               "kind": "cell",
+               "text": "33"
+              },
+              {
+               "id": 79,
+               "kind": "cell",
+               "text": "1555.95"
+              }
+             ]
+            },
+            {
+             "id": 80,
+             "kind": "row",
+             "children": [
+              {
+               "id": 81,
+               "kind": "cell",
+               "text": "A0012"
+              },
+              {
+               "id": 82,
+               "kind": "cell",
+               "text": "Another little the"
+              },
+              {
+               "id": 83,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 84,
+               "kind": "cell",
+               "text": "39"
+              },
+              {
+               "id": 85,
+               "kind": "cell",
+               "text": "6957.48"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 86,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 87,
+         "kind": "heading",
+         "level": 2,
+         "text": "Schedule B"
+        },
+        {
+         "id": 88,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 5,
+         "children": [
+          {
+           "id": 89,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 90,
+             "kind": "row",
+             "children": [
+              {
+               "id": 91,
+               "kind": "cell",
+               "header": "col",
+               "text": "Ref"
+              },
+              {
+               "id": 92,
+               "kind": "cell",
+               "header": "col",
+               "text": "Item"
+              },
+              {
+               "id": 93,
+               "kind": "cell",
+               "header": "col",
+               "text": "Category"
+              },
+              {
+               "id": 94,
+               "kind": "cell",
+               "header": "col",
+               "text": "Qty"
+              },
+              {
+               "id": 95,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 96,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 97,
+             "kind": "row",
+             "children": [
+              {
+               "id": 98,
+               "kind": "cell",
+               "text": "B0001"
+              },
+              {
+               "id": 99,
+               "kind": "cell",
+               "text": "Same animal take"
+              },
+              {
+               "id": 100,
+               "kind": "cell",
+               "text": "Services"
+              },
+              {
+               "id": 101,
+               "kind": "cell",
+               "text": "40"
+              },
+              {
+               "id": 102,
+               "kind": "cell",
+               "text": "4264.73"
+              }
+             ]
+            },
+            {
+             "id": 103,
+             "kind": "row",
+             "children": [
+              {
+               "id": 104,
+               "kind": "cell",
+               "text": "B0002"
+              },
+              {
+               "id": 105,
+               "kind": "cell",
+               "text": "However how my"
+              },
+              {
+               "id": 106,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 107,
+               "kind": "cell",
+               "text": "10"
+              },
+              {
+               "id": 108,
+               "kind": "cell",
+               "text": "2680.29"
+              }
+             ]
+            },
+            {
+             "id": 109,
+             "kind": "row",
+             "children": [
+              {
+               "id": 110,
+               "kind": "cell",
+               "text": "B0003"
+              },
+              {
+               "id": 111,
+               "kind": "cell",
+               "text": "Food often however"
+              },
+              {
+               "id": 112,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 113,
+               "kind": "cell",
+               "text": "15"
+              },
+              {
+               "id": 114,
+               "kind": "cell",
+               "text": "8386.18"
+              }
+             ]
+            },
+            {
+             "id": 115,
+             "kind": "row",
+             "children": [
+              {
+               "id": 116,
+               "kind": "cell",
+               "text": "B0004"
+              },
+              {
+               "id": 117,
+               "kind": "cell",
+               "text": "To show part"
+              },
+              {
+               "id": 118,
+               "kind": "cell",
+               "text": "Services"
+              },
+              {
+               "id": 119,
+               "kind": "cell",
+               "text": "15"
+              },
+              {
+               "id": 120,
+               "kind": "cell",
+               "text": "2722.65"
+              }
+             ]
+            },
+            {
+             "id": 121,
+             "kind": "row",
+             "children": [
+              {
+               "id": 122,
+               "kind": "cell",
+               "text": "B0005"
+              },
+              {
+               "id": 123,
+               "kind": "cell",
+               "text": "Has light see"
+              },
+              {
+               "id": 124,
+               "kind": "cell",
+               "text": "Hardware"
+              },
+              {
+               "id": 125,
+               "kind": "cell",
+               "text": "22"
+              },
+              {
+               "id": 126,
+               "kind": "cell",
+               "text": "6903.23"
+              }
+             ]
+            },
+            {
+             "id": 127,
+             "kind": "row",
+             "children": [
+              {
+               "id": 128,
+               "kind": "cell",
+               "text": "B0006"
+              },
+              {
+               "id": 129,
+               "kind": "cell",
+               "text": "Found men sentence"
+              },
+              {
+               "id": 130,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 131,
+               "kind": "cell",
+               "text": "24"
+              },
+              {
+               "id": 132,
+               "kind": "cell",
+               "text": "4585.86"
+              }
+             ]
+            },
+            {
+             "id": 133,
+             "kind": "row",
+             "children": [
+              {
+               "id": 134,
+               "kind": "cell",
+               "text": "B0007"
+              },
+              {
+               "id": 135,
+               "kind": "cell",
+               "text": "Far like said"
+              },
+              {
+               "id": 136,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 137,
+               "kind": "cell",
+               "text": "12"
+              },
+              {
+               "id": 138,
+               "kind": "cell",
+               "text": "1226.12"
+              }
+             ]
+            },
+            {
+             "id": 139,
+             "kind": "row",
+             "children": [
+              {
+               "id": 140,
+               "kind": "cell",
+               "text": "B0008"
+              },
+              {
+               "id": 141,
+               "kind": "cell",
+               "text": "If method seen"
+              },
+              {
+               "id": 142,
+               "kind": "cell",
+               "text": "Training"
+              },
+              {
+               "id": 143,
+               "kind": "cell",
+               "text": "9"
+              },
+              {
+               "id": 144,
+               "kind": "cell",
+               "text": "8897.80"
+              }
+             ]
+            },
+            {
+             "id": 145,
+             "kind": "row",
+             "children": [
+              {
+               "id": 146,
+               "kind": "cell",
+               "text": "B0009"
+              },
+              {
+               "id": 147,
+               "kind": "cell",
+               "text": "Into part face"
+              },
+              {
+               "id": 148,
+               "kind": "cell",
+               "text": "Training"
+              },
+              {
+               "id": 149,
+               "kind": "cell",
+               "text": "23"
+              },
+              {
+               "id": 150,
+               "kind": "cell",
+               "text": "6018.68"
+              }
+             ]
+            },
+            {
+             "id": 151,
+             "kind": "row",
+             "children": [
+              {
+               "id": 152,
+               "kind": "cell",
+               "text": "B0010"
+              },
+              {
+               "id": 153,
+               "kind": "cell",
+               "text": "Very much point"
+              },
+              {
+               "id": 154,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 155,
+               "kind": "cell",
+               "text": "11"
+              },
+              {
+               "id": 156,
+               "kind": "cell",
+               "text": "2556.30"
+              }
+             ]
+            },
+            {
+             "id": 157,
+             "kind": "row",
+             "children": [
+              {
+               "id": 158,
+               "kind": "cell",
+               "text": "B0011"
+              },
+              {
+               "id": 159,
+               "kind": "cell",
+               "text": "There answer men"
+              },
+              {
+               "id": 160,
+               "kind": "cell",
+               "text": "Hardware"
+              },
+              {
+               "id": 161,
+               "kind": "cell",
+               "text": "28"
+              },
+              {
+               "id": 162,
+               "kind": "cell",
+               "text": "889.48"
+              }
+             ]
+            },
+            {
+             "id": 163,
+             "kind": "row",
+             "children": [
+              {
+               "id": 164,
+               "kind": "cell",
+               "text": "B0012"
+              },
+              {
+               "id": 165,
+               "kind": "cell",
+               "text": "Show best later"
+              },
+              {
+               "id": 166,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 167,
+               "kind": "cell",
+               "text": "4"
+              },
+              {
+               "id": 168,
+               "kind": "cell",
+               "text": "7684.05"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Two Schedules"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

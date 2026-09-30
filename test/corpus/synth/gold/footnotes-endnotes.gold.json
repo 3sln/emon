@@ -1,0 +1,259 @@
+{
+ "emon-gold": "1.0",
+ "id": "footnotes-endnotes",
+ "provenance": {
+  "html": "html/footnotes-endnotes.html",
+  "pdf": "pdf/footnotes-endnotes.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/footnotes-endnotes.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Essay on Lighthouses"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Boy earth show came hand place also went however next only so not took of. Hand over word usually most before off most often out far country hard land use. Children any every own toward hard new another where its why every asked for. Whole told out need write we should father old later write is. Together ever at sometimes an house come however top set.",
+       "inlines": [
+        {
+         "kind": "text",
+         "text": "Boy earth show came hand place also went however next only so not took of. Hand over word usually most before off most often out far country hard land use. Children any every own toward hard new another where its why every asked for."
+        },
+        {
+         "kind": "ref",
+         "marker": "1",
+         "target": 7
+        },
+        {
+         "kind": "text",
+         "text": " Whole told out need write we should father old later write is. Together ever at sometimes an house come however top set."
+        },
+        {
+         "kind": "ref",
+         "marker": "2",
+         "target": 9
+        }
+       ]
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "Small do not during took your different measure country world then learn another one another. At go each point her money night or might took. Up toward there picture each those me show ever.",
+       "inlines": [
+        {
+         "kind": "text",
+         "text": "Small do not during took your different measure country world then learn another one another. At go each point her money night or might took. Up toward there picture each those me show ever."
+        },
+        {
+         "kind": "ref",
+         "marker": "3",
+         "target": 11
+        }
+       ]
+      },
+      {
+       "id": 5,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 6,
+         "kind": "heading",
+         "level": 2,
+         "text": "Notes"
+        },
+        {
+         "id": 7,
+         "kind": "note",
+         "marker": "1",
+         "role": "endnote",
+         "children": [
+          {
+           "id": 8,
+           "kind": "paragraph",
+           "text": "Stevenson, Lighthouse Design, 1880.",
+           "inlines": [
+            {
+             "kind": "text",
+             "text": "Stevenson, "
+            },
+            {
+             "kind": "span",
+             "style": [
+              "italic"
+             ],
+             "children": [
+              {
+               "kind": "text",
+               "text": "Lighthouse Design"
+              }
+             ]
+            },
+            {
+             "kind": "text",
+             "text": ", 1880."
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 9,
+         "kind": "note",
+         "marker": "2",
+         "role": "endnote",
+         "children": [
+          {
+           "id": 10,
+           "kind": "paragraph",
+           "text": "See the log of the keeper."
+          }
+         ]
+        },
+        {
+         "id": 11,
+         "kind": "note",
+         "marker": "3",
+         "role": "endnote",
+         "children": [
+          {
+           "id": 12,
+           "kind": "paragraph",
+           "text": "Lamp power in candelas is approximate."
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Essay on Lighthouses"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

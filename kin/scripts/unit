@@ -71,6 +71,12 @@ command -v python3 > /dev/null && python3 kin/scripts/json-check.py
 # structure. Tooling, not runtime (D067).
 command -v python3 > /dev/null && python3 kin/scripts/html-check.py
 
+# THE SYNTHETIC GOLD (P2.8, D041, D063): the committed gold files validate
+# against schema/emon-gold-1.json, equal what tools/synth/html2gold.py says of
+# the committed HTML, and MANIFEST.json matches the committed PDFs. No PDF
+# producer and no PDF tool is invoked. Tooling, not runtime.
+command -v python3 > /dev/null && python3 kin/scripts/gold-check.py
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then

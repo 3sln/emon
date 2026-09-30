@@ -1,0 +1,1 @@
+{"name":"headless Chromium printToPDF","binary":"Google Chrome","version":"Google Chrome 154.0.8037.59 ","os":"Darwin 23.6.0","flags":["--headless=new","--disable-gpu","--no-pdf-header-footer","--disable-pdf-tagging (except pdf-tagged/)"]}
