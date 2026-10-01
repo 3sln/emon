@@ -215,7 +215,7 @@ fn main() {
     let inputs = vec![(0, in0.len() as i32), (1, input1().len() as i32)];
     let base: Rc<Src> = Rc::new(if chunk > 0 { testport::src_chunked(&in0, chunk, 0) } else { Src::of_bytes(in0.clone()) });
 
-    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new() };
+    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new() };
     let mut replayer: Option<Replayer> = None;
     if mode == "replay" {
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
