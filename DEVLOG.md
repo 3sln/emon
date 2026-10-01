@@ -1660,8 +1660,8 @@ analysis beyond "top-to-bottom lines on a single column".
   paragraph (D135: a document-wide line gap; the abstract is set looser than the body, so every line looks like a break): both are
   the paragraph builder's and P4.3's, not the columns'. Also by eye: the GAO report's left margin notes on page 1 and 5 are `margin`
   notes after the paragraph beside them; the ViT paper's display equations come out as two columns (formula, equation number): P4.9.
-  **Still wrong** (by cause): (1) no figure, path or image evidence reaches the stage yet (P3.5/3.6), so a figure that is only ink
-  does not end a gutter, a caption that sits between a figure and columns goes with the columns, and the text of a figure is
+  **Still wrong** (by cause): (1) the stage reads no figure, path or image evidence (P3.5's `paths` and `images` exist since this branch
+  merged main, and are not read: a figure that is only ink does not end a gutter, a caption that sits between a figure and columns goes with the columns), and the text of a figure is
   paragraphs in whichever fragment its words lie; (2) running headers, footers and page numbers are not out of the flow (P4.3), so a
   footer is a paragraph and a header can be joined to the first paragraph of the page (GAO page 5/6); (3) line numbers in a margin
   (a column of digits) are dropped from the flow without a ledger entry; (4) a paragraph that ends exactly at the bottom of a column in a

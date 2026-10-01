@@ -693,7 +693,7 @@ pub(crate) fn pa_maxi(a: i32, b: i32) -> i32 {
 }
 pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, raw: &mut crate::port::Cells, a: i32, b: i32, colx0: i32, colx1: i32, ncol: i32, bmargin: i32, indents: i32, bottom: i32, bx0: i32, bx1: i32, bn: i32) -> i32 {
     // The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
-    // on with line b, the first of the next fragment (SPEC 10.1.2, D152). `colx0`..`colx1` is the extent of a's
+    // on with line b, the first of the next fragment (SPEC 10.1.2, D159). `colx0`..`colx1` is the extent of a's
     // fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
     // the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.
     let n: i32 = crate::port::cells_len(raw);
@@ -1037,7 +1037,7 @@ pub(crate) fn pa_dump_num(mut t: &mut String, v: i32) -> i32 {
     return 0;
 }
 pub fn pa_dump(mut t: &mut String, cf: &mut crate::port::Cells, dbg: &mut crate::port::Cells) -> i32 {
-    // The column stage's evidence as debug lines (SPEC 10.1.1; D152, D153), from what `pa-build` was given:
+    // The column stage's evidence as debug lines (SPEC 10.1.1; D158, D159), from what `pa-build` was given:
     // one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,
     // in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one
     // `J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the
