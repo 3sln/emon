@@ -7,8 +7,10 @@
 ;; the paragraphs of the Model equal, in order, the text of the `<h1>`..`<h6>` and `<p>` elements of the
 ;; HTML the document was printed from (`test/corpus/synth/html/NAME.html`): the HTML's text with its tags
 ;; removed and entities decoded, then NFC, the seven Latin ligatures decomposed, soft hyphens removed and
-;; every run of white space made one space (the same on both sides). The stage knows nothing of headings, so
-;; a heading is a paragraph here (D134); what is checked is that no line of text is lost, joined to
+;; every run of white space made one space (the same on both sides). A heading (P4.4, D167; made by the Engine
+;; since the heading analysis was wired in, D172) is a block here as a paragraph is, its number put back in front of
+;; its title and compared by its letters and digits alone (the dots and brackets of a number are not kept, D170;
+;; `heading-check` holds the headings to the gold); what is checked is that no line of text is lost, joined to
 ;; another block's or cut in two, and that the order is the page's. Also: every page of the document has
 ;; its milestone (`break`, from page 2), every region is on a page of the Model, and the Model's `text` is
 ;; NFC.
@@ -43,12 +45,16 @@
          (remove str/blank?)
          vec)))
 
+(defn alnum [s] (str/replace s #"[^\p{L}\p{N}]" ""))
+
 (defn text-of [n]
-  (or (get n "text")
+  (or (when (= "heading" (get n "kind"))
+        (alnum (str (get-in n ["attrs" "number"] (get n "number" "")) (get n "text" ""))))
+      (get n "text")
       (apply str (map #(get % "text" "") (or (get n "inlines") (get n "children"))))))
 
 (defn paragraphs [model]
-  (letfn [(walk [n] (concat (when (= "paragraph" (get n "kind")) [n]) (mapcat walk (get n "children"))))]
+  (letfn [(walk [n] (concat (when (#{"paragraph" "heading"} (get n "kind")) [n]) (mapcat walk (get n "children"))))]
     (vec (walk (get model "body")))))
 
 (defn milestones [model]
@@ -70,6 +76,7 @@
         want (html-blocks (slurp (io/file root "test" "corpus" "synth" "html" (str name ".html")) :encoding "UTF-8"))
         ps (paragraphs model)
         got (mapv (comp norm text-of) ps)
+        want (mapv (fn [w p] (if (= "heading" (get p "kind")) (alnum w) w)) want (concat ps (repeat nil)))
         npages (count (get model "pages"))
         pages (set (map #(get % "n") (get model "pages")))
         miles (milestones model)]

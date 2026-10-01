@@ -28,6 +28,7 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build pa-dump]]
+            [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -134,13 +135,14 @@
 
 (defn ^I32 pt-build [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
-                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp]
-  (comment "`pa-build`, with the column stage's scratch (`emon.columns`) made here.")
+                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells hc]
+  (comment "`pa-build`, with the column stage's scratch (`emon.columns`) made here; `hc` is the heading analysis")
+  (comment "(`emon.heading`), empty for the paragraphs alone.")
   (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)]
     (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg))))
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc))))
 
 (defn ^I32 pt-dump [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Text t]
   (comment "`pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.")
@@ -150,13 +152,14 @@
         ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
+        ^Cells hc (new-cells)
         ^:mut ^I32 p 1]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
     (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-              lt ls sd it io rw gu ac tm cf lo pr dbg)
+              lt ls sd it io rw gu ac tm cf lo pr dbg hc)
     (pa-dump t cf dbg)
     (return 0)))
 
@@ -165,12 +168,13 @@
                    ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout
                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells st]
   (comment "Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.")
-  (let [^:mut ^I32 p 1]
+  (let [^:mut ^I32 p 1
+        ^Cells hc (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
-    (pt-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp)
+    (pt-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp hc)
     (return (model-check nodes attrs regions text pages ledger layout st))))
 
 (defn ^I32 pt-brief [^:mut ^Text t ^Cells nodes ^Cells regions ^Cells text]
@@ -559,8 +563,11 @@
     (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0) (return 2))
     (model-init nodes attrs regions text pages ledger layout)
     (pa-pages pg pages)
-    (let [^I32 np (quot (cells-len pages) 16)]
-      (pt-build wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp))
+    (let [^I32 np (quot (cells-len pages) 16)
+          ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells)
+          ^Cells htmp (new-cells) ^Cells hpr (new-cells) ^Cells hptxt (new-cells)]
+      (hd-analyze wd ln et gl sf sc hc ws htmp hpr hptxt)
+      (pt-build wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp hc))
     (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
     (js-emit t 1 nodes attrs regions text pages ledger layout)
     (return 0)))

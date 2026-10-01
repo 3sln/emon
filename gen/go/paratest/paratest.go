@@ -5,6 +5,7 @@ package paratest
 
 import (
 	"emon/evidence"
+	"emon/heading"
 	"emon/html"
 	"emon/json"
 	"emon/model"
@@ -127,8 +128,9 @@ func ptClear(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
 	return 0
 }
 
-func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells) int32 {
-	// `pa-build`, with the column stage's scratch (`emon.columns`) made here.
+func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, hc *port.Cells) int32 {
+	// `pa-build`, with the column stage's scratch (`emon.columns`) made here; `hc` is the heading analysis
+	// (`emon.heading`), empty for the paragraphs alone.
 	var lt *port.Cells = port.NewCells()
 	var ls *port.Cells = port.NewCells()
 	var sd *port.Cells = port.NewCells()
@@ -142,7 +144,7 @@ func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
-	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg)
+	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc)
 }
 
 func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *strings.Builder) int32 {
@@ -172,13 +174,14 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
 	var p int32 = 1
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	for p <= npages {
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg)
+	para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc)
 	para.PaDump(t, cf, dbg)
 	return 0
 }
@@ -186,12 +189,13 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {
 	// Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
 	var p int32 = 1
+	var hc *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	for p <= npages {
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
 
@@ -710,7 +714,15 @@ func ptGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var htmp *port.Cells = port.NewCells()
+	var hpr *port.Cells = port.NewCells()
+	var hptxt *port.Cells = port.NewCells()
+	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
+	ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
 		return 3
 	}

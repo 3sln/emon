@@ -27,58 +27,78 @@
     "children": [
       {
         "id": 1,
-        "kind": "paragraph",
-        "text": "Essay on Lighthouses",
-        "at": [[1, 72, 95.6, 284.21, 115.6]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 2,
-        "kind": "paragraph",
-        "text": "Boy earth show came hand place also went however next only so not took of. Hand over word usually most before off most often out far country hard land use. Children any every own toward hard new another where its why every asked for.1 Whole told out need write we should father old later write is. Together ever at sometimes an house come however top set.2",
-        "at": [[1, 72, 124.17, 539.73, 189.08]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 3,
-        "kind": "paragraph",
-        "text": "Small do not during took your different measure country world then learn another one another. At go each point her money night or might took. Up toward there picture each those me show ever.3",
-        "at": [[1, 72, 199.92, 534.1, 246.83]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 4,
-        "kind": "paragraph",
-        "text": "Notes",
-        "at": [[1, 72, 265.22, 110.88, 279.22]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 5,
-        "kind": "paragraph",
-        "text": "Stevenson, Lighthouse Design, 1880.",
-        "at": [[1, 72, 285.58, 235.59, 296.94]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 6,
-        "kind": "paragraph",
-        "text": "See the log of the keeper.",
-        "at": [[1, 72, 307.33, 181.87, 318.69]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 7,
-        "kind": "paragraph",
-        "text": "Lamp power in candelas is approximate.",
-        "at": [[1, 72, 329.08, 250.15, 340.44]],
-        "src": ["text", "infer"],
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "text": "Essay on Lighthouses",
+            "at": [[1, 72, 95.6, 284.21, 115.6]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "Boy earth show came hand place also went however next only so not took of. Hand over word usually most before off most often out far country hard land use. Children any every own toward hard new another where its why every asked for.1 Whole told out need write we should father old later write is. Together ever at sometimes an house come however top set.2",
+            "at": [[1, 72, 124.17, 539.73, 189.08]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 4,
+            "kind": "paragraph",
+            "text": "Small do not during took your different measure country world then learn another one another. At go each point her money night or might took. Up toward there picture each those me show ever.3",
+            "at": [[1, 72, 199.92, 534.1, 246.83]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 5,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 6,
+                "kind": "heading",
+                "level": 2,
+                "text": "Notes",
+                "at": [[1, 72, 265.22, 110.88, 279.22]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 7,
+                "kind": "paragraph",
+                "text": "Stevenson, Lighthouse Design, 1880.",
+                "at": [[1, 72, 285.58, 235.59, 296.94]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 8,
+                "kind": "paragraph",
+                "text": "See the log of the keeper.",
+                "at": [[1, 72, 307.33, 181.87, 318.69]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 9,
+                "kind": "paragraph",
+                "text": "Lamp power in candelas is approximate.",
+                "at": [[1, 72, 329.08, 250.15, 340.44]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
         "conf": 500
       }
     ]

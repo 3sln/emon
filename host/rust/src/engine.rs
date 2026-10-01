@@ -29,6 +29,7 @@
 // NOTHING IN THIS FILE NAMES A FILESYSTEM (D058): inputs are `source::ByteSource`s.
 
 use crate::emon::evidence::*;
+use crate::emon::heading::*;
 use crate::emon::html::*;
 use crate::emon::json::*;
 use crate::emon::model::*;
@@ -705,8 +706,12 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    // the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
+    // paragraph stage builds; its priors (the tagged roles, the outline) are empty here: follow-up (D172)
+    let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    hd_analyze(&mut wd, &mut ln, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
     pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
-             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg);
+             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc);
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
         for ch in loc.chars() {

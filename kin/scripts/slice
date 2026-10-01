@@ -95,9 +95,8 @@
                     (str/replace "&lt;" "<") (str/replace "&gt;" ">") (str/replace "&quot;" "\"") (str/replace "&amp;" "&"))))))
 
   (defn json-paragraphs [j]
-    (->> (get-in (json/parse-string j) ["body" "children"])
-         (filter #(= "paragraph" (get % "kind")))
-         (map #(get % "text"))))
+    (letfn [(walk [n] (concat (when (= "paragraph" (get n "kind")) [(get n "text")]) (mapcat walk (get n "children"))))]
+      (walk (get (json/parse-string j) "body"))))
 
   (def timings (atom []))
   (drive (pdf "h-plain"))                  ; warm the file cache and the binary: the timings below are not a cold start

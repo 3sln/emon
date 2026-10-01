@@ -1,0 +1,1340 @@
+;; Headings: candidates, numbering schemes, priors and the level assignment (P4.4; SPEC 10.3; D018, D167-D171).
+;; emon's own module (D039).
+;;
+;;   (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)    decide which lines are headings and at what level
+;;   (hd-prior-add pr ptxt src start len level kind weight)     an external prior: tagged role, outline entry
+;;   (hd-prior-outline ol txt pr ptxt)                           every row of P3.9's outline as a prior
+;;   (hd-level hc l) (hd-opinion hc a b) (hd-parent hc nodes lev) (hd-cur hc)     what the paragraph stage asks
+;;
+;; THE MAINTAINER'S REQUIREMENT, which the whole module is shaped by: a higher heading can print SMALLER than
+;; an inner one (`h-inverted`: the chapter title is 9.5 pt capitals, its sections 21 pt). So the level is
+;; never read off the size. The size is the weakest evidence here, the last term of the penalty and the only
+;; one a tie falls to; what decides is the system the document makes of its headings:
+;;
+;;   1. THE STYLE INVENTORY (`emon.style`, P4.2): body = the class of most characters. A line is a candidate
+;;      only if its style differs from the body's, or it starts with a numbering pattern and stands apart.
+;;   2. CANDIDATE UNITS: a line, or a few lines of one style close together (a heading that wraps), that are
+;;      short, do not end a sentence, have no sibling on their row (a table cell; an initial's neighbour: D108,
+;;      D109), do not start with a bullet. A unit is scored (style points, numbering, the whitespace around it,
+;;      length, what follows it) and kept at `HD_MIN`.
+;;   3. NUMBERING: `1`, `1.2.3`, `I.`, `A.`, `a)`, `(i)`, `§ 4` and a capitalised word then a number (`Chapter
+;;      1`, `Article 1.1`, `Kapitel 3`: locale independent, no keyword table: D168). Dotted depth is the strongest
+;;      level signal there is; letters and romans are flat and only say "this class is a sequence".
+;;   4. PRIORS: tagged-PDF H1-H6 (weighted by P3.7's trust, D034) and the outline's depth, matched to a unit's
+;;      text; heavy when present. None is required: a document with neither is the common case.
+;;   5. THE LEVEL ASSIGNMENT (D018): the units are grouped into heading CLASSES (style class, numbering depth,
+;;      indent, centred); every class gets a level, minimising an integer penalty over the whole document:
+;;      numbering depth (heavy), prior mismatch (heavy), a level skipped on the way down (medium), a class that
+;;      appears before a class assigned above it (medium: the document's first-occurrence order is its
+;;      outline's), two classes at one level (light), a bigger or bolder class assigned deeper (light: the
+;;      weakest signal). Exhaustive up to 6 classes, coordinate descent beyond; ties go to the first found in a
+;;      fixed order.
+;;
+;; WHAT IT WRITES is `hc`: a header, then one row of `HC_STRIDE` cells per line of `ln`: the heading level (0:
+;;   not a heading), where the number is in the line's text, how many code points to skip to reach the title,
+;;   the numbering scheme, flags (1 starts a heading, 2 is part of one). `hc` is also where the paragraph stage
+;;   keeps the stack of open sections (D170). An EMPTY `hc` means "no headings": the paragraph stage then
+;;   behaves as before this module existed.
+(ns emon.heading
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-get ln-get ln-count lh-first lh-count lh-y0 hd-tstart hd-tlen]]
+            [emon.model :refer [node-new node-set-sub node-set-conf node-add-src nk-section sr-infer
+                                text-append-cp]]
+            [emon.style :refer [st-build st-get st-hget sc-get st-upper st-lower
+                                sfh-lines sfh-body sfh-gap sfh-size
+                                sfk-size sfk-bits sfk-color sfk-cps sfk-first sfk-last sfk-caps sfk-class
+                                sfk-above sfk-below sfk-gap-above sfk-gap-below sfk-sib sfk-upright
+                                sfk-letters sfk-centered sfk-indent sfk-page sfk-x0 sfk-height
+                                sfk-head sfk-unit sfk-points st-set sfk-sibline sfk-nsib sfk-sibgap sfk-bucket
+                                sfk-ncol sfk-words
+                                sck-bits sck-caps sck-color sck-bucket]]
+            [kin.lang :refer [defn defconst defdata return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem bit-and]]))
+
+;; ----------------------------------------------------------------------- the knobs (all named: D167)
+(defconst ^I32 HD_MIN 4)            ;; a unit's score must reach this to be a heading
+(defconst ^I32 HD_MAXLINES 4)       ;; a heading wraps over at most this many lines
+(defconst ^I32 HD_MAXCPS 160)       ;; ... and has at most this many code points
+(defconst ^I32 W_DEPTH 20)          ;; numbering depth: per level of mismatch, per class
+(defconst ^I32 W_PRIOR 20)          ;; an external prior: per level, per class, times its weight/1000
+(defconst ^I32 W_SKIP 4)            ;; a level skipped going down: per skipped level, per occurrence
+(defconst ^I32 W_ORPHAN 4)          ;; a class appears before a class assigned above it: per occurrence
+(defconst ^I32 W_SAME 2)            ;; two classes at one level
+(defconst ^I32 W_TWIN 2)            ;; two classes of one style (alignment and indent apart) at different levels
+(defconst ^I32 W_PROM 1)          ;; a bigger or bolder class assigned deeper than a smaller or lighter one
+(defconst ^I32 HD_KMAX 16)          ;; heading classes considered
+(defconst ^I32 HD_EXHAUSTIVE 6)     ;; up to this many classes the search is exhaustive
+
+;; the layout of `hc`
+(defconst ^I32 HC_HDR 48)
+(defconst ^I32 HC_STRIDE 6)
+(defconst ^I32 HC_STACK 8)          ;; first (level, node) pair of the open sections
+(defconst ^I32 HC_DEEP 19)          ;; pairs
+(defn ^:pub ^I32 hck-level [] (return 0))
+(defn ^:pub ^I32 hck-nstart [] (return 1))
+(defn ^:pub ^I32 hck-nlen [] (return 2))
+(defn ^:pub ^I32 hck-skip [] (return 3))
+(defn ^:pub ^I32 hck-scheme [] (return 4))
+(defn ^:pub ^I32 hck-flags [] (return 5))
+
+;; the layout of `ws`
+(defconst ^I32 WS_VAR 8)
+(defconst ^I32 WS_LINES 24)
+(defconst ^I32 WS_HK 64)
+(defconst ^I32 HK_STRIDE 12)
+(defconst ^I32 WS_T 256)
+(defconst ^I32 WS_O 512)
+(defconst ^I32 WS_LV 768)
+(defconst ^I32 WS_BEST 784)
+(defconst ^I32 WS_U 1024)
+(defconst ^I32 UN_STRIDE 16)
+
+;; the numbering schemes (SPEC 3.2; the names are written to `numbering`)
+(defn ^:pub ^I32 hs-decimal [] (return 1))
+(defn ^:pub ^I32 hs-upper-roman [] (return 2))
+(defn ^:pub ^I32 hs-lower-roman [] (return 3))
+(defn ^:pub ^I32 hs-upper-alpha [] (return 4))
+(defn ^:pub ^I32 hs-lower-alpha [] (return 5))
+(defn ^:pub ^I32 hs-keyword [] (return 6))
+(defn ^:pub ^I32 hs-section [] (return 7))
+
+(defdata ^:pub hd-names
+  :emitter kin.lang/flat-array
+  :data [100 101 99 105 109 97 108 117 112 112 101 114 45 114 111 109 97 110 108 111 119 101 114 45 114 111 109
+         97 110 117 112 112 101 114 45 97 108 112 104 97 108 111 119 101 114 45 97 108 112 104 97 107 101 121
+         119 111 114 100 115 101 99 116 105 111 110]
+  :accessors {^I32 hd-name-at [^I32 ignored ^I32 i]})
+
+(defn ^I32 hd-name-off [^I32 s]
+  (if (== s 1) (return 0))
+  (if (== s 2) (return 7))
+  (if (== s 3) (return 18))
+  (if (== s 4) (return 29))
+  (if (== s 5) (return 40))
+  (if (== s 6) (return 51))
+  (return 58))
+
+(defn ^I32 hd-name-len [^I32 s]
+  (if (or (== s 1) (or (== s 6) (== s 7))) (return 7))
+  (return 11))
+
+(defn ^:pub ^I32 hd-put-scheme [^:mut ^Cells text ^I32 s]
+  (comment "Append the scheme's name (`decimal`, `upper-roman`, ...) to the text arena; answer its length.")
+  (let [^I32 off (hd-name-off s)
+        ^I32 n (hd-name-len s)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (text-append-cp text (hd-name-at 0 (+ off i)))
+          (set i (+ i 1))))
+    (return n)))
+
+;; ----------------------------------------------------------------------- what the paragraph stage asks
+
+(defn ^I32 hd-live [^Cells hc]
+  (if (< (cells-len hc) HC_HDR) (return 0))
+  (return 1))
+
+(defn ^:pub ^I32 hd-field [^Cells hc ^I32 l ^I32 f]
+  (comment "A line's heading cell; 0 when `hc` is empty or the line is not in it.")
+  (if (== (hd-live hc) 0) (return 0))
+  (if (or (< l 0) (>= l (cells-at hc 0))) (return 0))
+  (return (cells-at hc (+ (+ HC_HDR (* l HC_STRIDE)) f))))
+
+(defn ^:pub ^I32 hd-level [^Cells hc ^I32 l]
+  (return (hd-field hc l (hck-level))))
+
+(defn ^:pub ^I32 hd-opinion [^Cells hc ^I32 a ^I32 b]
+  (comment "What the heading analysis says about a boundary between line a and the next line b: 0 nothing,")
+  (comment "1 they are one heading (join), 2 a boundary (a heading and a body line, or two headings).")
+  (let [^I32 la (hd-field hc a (hck-level))
+        ^I32 lb (hd-field hc b (hck-level))]
+    (if (and (== la 0) (== lb 0)) (return 0))
+    (if (!= la lb) (return 2))
+    (if (!= (bit-and (hd-field hc b (hck-flags)) 1) 0) (return 2))
+    (return 1)))
+
+(defn ^:pub ^I32 hd-cur [^Cells hc]
+  (comment "The innermost open section, or 0 (the document) when none is.")
+  (if (== (hd-live hc) 0) (return 0))
+  (let [^I32 d (cells-at hc 1)]
+    (if (<= d 0) (return 0))
+    (return (cells-at hc (+ (+ HC_STACK (* (- d 1) 2)) 1)))))
+
+(defn ^:pub ^I32 hd-parent [^:mut ^Cells hc ^:mut ^Cells nodes ^I32 lev]
+  (comment "The parent of the next block. For a body block (lev 0) the innermost open section; for a heading of")
+  (comment "level lev the sections of its level and deeper are closed, a new `section` of that level is opened")
+  (comment "under the one that remains, and it is the parent (SPEC 10.3 step 6).")
+  (if (== (hd-live hc) 0) (return 0))
+  (if (<= lev 0) (return (hd-cur hc)))
+  (let [^:mut ^I32 d (cells-at hc 1)
+        ^:mut ^I32 par 0]
+    (while (and (> d 0) (>= (cells-at hc (+ HC_STACK (* (- d 1) 2))) lev))
+      (set d (- d 1)))
+    (if (> d 0) (set par (cells-at hc (+ (+ HC_STACK (* (- d 1) 2)) 1))))
+    (let [^I32 sec (node-new nodes (nk-section) par)]
+      (if (< sec 0)
+        (do (cells-set hc 1 d)
+            (return par)))
+      (node-set-sub nodes sec lev)
+      (node-set-conf nodes sec 500)
+      (node-add-src nodes sec (sr-infer))
+      (if (< d HC_DEEP)
+        (do (cells-set hc (+ HC_STACK (* d 2)) lev)
+            (cells-set hc (+ (+ HC_STACK (* d 2)) 1) sec)
+            (set d (+ d 1))))
+      (cells-set hc 1 d)
+      (return sec))))
+
+;; ----------------------------------------------------------------------- reading a line's words
+
+(defn ^I32 hd-wl [^Cells wd ^I32 w]
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))]
+    (if (or (< ts 0) (<= tl 0)) (return 0))
+    (return tl)))
+
+(defn ^I32 hd-wc [^Cells wd ^Cells et ^I32 w ^I32 j]
+  (return (cells-at et (+ (wd-get wd w (hd-tstart)) j))))
+
+(defn ^I32 hd-nth-word [^Cells wd ^Cells ln ^I32 l ^I32 k]
+  (comment "The row of the k-th word (from 0) of the line that has text; -1 when there are fewer.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 seen 0]
+    (while (< i wn)
+      (do (if (> (hd-wl wd (+ w0 i)) 0)
+            (do (if (== seen k) (return (+ w0 i)))
+                (set seen (+ seen 1))))
+          (set i (+ i 1))))
+    (return -1)))
+
+;; ----------------------------------------------------------------------- numbering patterns
+
+(defn ^I32 hd-dec [^Cells wd ^Cells et ^I32 w]
+  (comment "A word that is a decimal number of 1-3 digit components separated by dots, with one optional '.', ')'")
+  (comment "or ':' after it: its depth (the components) + 64 when the delimiter is there; 0 when it is not one.")
+  (let [^I32 n (hd-wl wd w)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 comps 0
+        ^:mut ^I32 dig 0
+        ^:mut ^I32 delim 0
+        ^:mut ^I32 ok 1]
+    (if (< n 1) (return 0))
+    (while (and (< i n) (== ok 1))
+      (do (let [^I32 c (hd-wc wd et w i)]
+            (if (and (>= c 48) (<= c 57))
+              (do (set dig (+ dig 1))
+                  (if (== dig 1) (set comps (+ comps 1)))
+                  (if (> dig 3) (set ok 0)))
+              (if (== c 46)
+                (do (if (== dig 0) (set ok 0))
+                    (if (== i (- n 1)) (set delim 1))
+                    (set dig 0))
+                (if (or (== c 41) (== c 58))
+                  (do (if (or (== dig 0) (!= i (- n 1))) (set ok 0))
+                      (set delim 1))
+                  (set ok 0)))))
+          (set i (+ i 1))))
+    (if (or (== ok 0) (or (< comps 1) (> comps 8))) (return 0))
+    (return (+ comps (* delim 64)))))
+
+(defn ^Bool hd-roman-up [^I32 c]
+  (return (or (== c 73) (or (== c 86) (or (== c 88) (or (== c 76) (or (== c 67) (or (== c 68) (== c 77)))))))))
+
+(defn ^Bool hd-roman-low [^I32 c]
+  (return (or (== c 105) (or (== c 118) (or (== c 120) (or (== c 108) (or (== c 99) (or (== c 100) (== c 109)))))))))
+
+(defn ^I32 hd-letters [^Cells wd ^Cells et ^I32 w ^I32 from ^I32 m]
+  (comment "The m code points of the word from `from` as a numbering letter: 2 upper roman, 3 lower roman, 4 one")
+  (comment "upper letter, 5 one lower letter, 0 neither. A single I, V or X is roman, a single C, D, L, M a letter.")
+  (if (or (< m 1) (> m 6)) (return 0))
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 up 0
+        ^:mut ^I32 lo 0
+        ^I32 c0 (hd-wc wd et w from)]
+    (while (< i m)
+      (do (let [^I32 c (hd-wc wd et w (+ from i))]
+            (if (hd-roman-up c) (set up (+ up 1)))
+            (if (hd-roman-low c) (set lo (+ lo 1))))
+          (set i (+ i 1))))
+    (if (and (== up m) (or (>= m 2) (or (== c0 73) (or (== c0 86) (== c0 88))))) (return 2))
+    (if (and (== lo m) (or (>= m 2) (or (== c0 105) (or (== c0 118) (== c0 120))))) (return 3))
+    (if (== m 1)
+      (do (if (st-upper c0) (return 4))
+          (if (st-lower c0) (return 5))))
+    (return 0)))
+
+(defn ^I32 hd-alpha [^Cells wd ^Cells et ^I32 w]
+  (comment "A letter or a roman numeral followed by '.' or ')': `A.` `b)` `IV.`. The scheme, or 0.")
+  (let [^I32 n (hd-wl wd w)]
+    (if (< n 2) (return 0))
+    (let [^I32 last (hd-wc wd et w (- n 1))]
+      (if (and (!= last 46) (!= last 41)) (return 0))
+      (return (hd-letters wd et w 0 (- n 1))))))
+
+(defn ^I32 hd-paren [^Cells wd ^Cells et ^I32 w]
+  (comment "`(a)`, `(iv)`, `(2)`: the scheme (decimal is 1), or 0.")
+  (let [^I32 n (hd-wl wd w)]
+    (if (< n 3) (return 0))
+    (if (or (!= (hd-wc wd et w 0) 40) (!= (hd-wc wd et w (- n 1)) 41)) (return 0))
+    (if (> n 6) (return 0))
+    (let [^:mut ^I32 i 1
+          ^:mut ^I32 dig 0]
+      (while (< i (- n 1))
+        (do (let [^I32 c (hd-wc wd et w i)]
+              (if (and (>= c 48) (<= c 57)) (set dig (+ dig 1))))
+            (set i (+ i 1))))
+      (if (== dig (- n 2)) (return 1))
+      (return (hd-letters wd et w 1 (- n 2))))))
+
+(defn ^I32 hd-kword [^Cells wd ^Cells et ^I32 w]
+  (comment "A capitalised or all-capital word of at least three letters: the first part of `Chapter 1`.")
+  (let [^I32 n (hd-wl wd w)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 up 0
+        ^:mut ^I32 bad 0]
+    (if (< n 3) (return 0))
+    (if (not (st-upper (hd-wc wd et w 0))) (return 0))
+    (while (< i n)
+      (do (let [^I32 c (hd-wc wd et w i)]
+            (if (st-lower c) (set lo (+ lo 1))
+              (if (st-upper c) (set up (+ up 1))
+                (set bad 1))))
+          (set i (+ i 1))))
+    (if (== bad 1) (return 0))
+    (if (or (== up 0) (== lo 0)) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 hd-marker [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^I32 l]
+  (comment "Does line l start with a numbering pattern? The scheme (0 none), and in ws[0..4]: scheme, depth (the")
+  (comment "dotted components of a decimal number, 0 for a letter or a roman), where the number is in the line's")
+  (comment "text (start, length: delimiters and brackets left out), how many code points to skip to reach the")
+  (comment "title (0: nothing follows the pattern, so the line is kept whole).")
+  (cells-set ws 0 0)
+  (cells-set ws 1 0)
+  (cells-set ws 2 0)
+  (cells-set ws 3 0)
+  (cells-set ws 4 0)
+  (cells-set ws 5 0)
+  (let [^I32 w0 (hd-nth-word wd ln l 0)
+        ^I32 w1 (hd-nth-word wd ln l 1)
+        ^I32 w2 (hd-nth-word wd ln l 2)]
+    (if (< w0 0) (return 0))
+    (if (< w1 0) (cells-set ws 5 1))
+    (let [^I32 n0 (hd-wl wd w0)
+          ^I32 d (hd-dec wd et w0)]
+      (comment "decimal: 1  1.  1.2.3  2)")
+      (if (> d 0)
+        (do (cells-set ws 0 1)
+            (cells-set ws 1 (rem d 64))
+            (cells-set ws 2 0)
+            (cells-set ws 3 (- n0 (quot d 64)))
+            (if (>= w1 0) (cells-set ws 4 (+ n0 1)))
+            (return 1)))
+      (comment "letters and romans with a delimiter: A.  b)  IV.")
+      (let [^I32 a (hd-alpha wd et w0)]
+        (if (> a 0)
+          (do (cells-set ws 0 a)
+              (cells-set ws 1 0)
+              (cells-set ws 3 (- n0 1))
+              (if (>= w1 0) (cells-set ws 4 (+ n0 1)))
+              (return a))))
+      (comment "bracketed: (a)  (iv)  (2)")
+      (let [^I32 p (hd-paren wd et w0)]
+        (if (> p 0)
+          (do (cells-set ws 0 p)
+              (cells-set ws 1 0)
+              (if (== p 1) (cells-set ws 1 1))
+              (cells-set ws 2 1)
+              (cells-set ws 3 (- n0 2))
+              (if (>= w1 0) (cells-set ws 4 (+ n0 1)))
+              (return p))))
+      (comment "a section sign, then a decimal number: § 4.1")
+      (if (and (== n0 1) (and (== (hd-wc wd et w0 0) 167) (>= w1 0)))
+        (do (let [^I32 d1 (hd-dec wd et w1)]
+              (if (> d1 0)
+                (do (cells-set ws 0 7)
+                    (cells-set ws 1 (rem d1 64))
+                    (cells-set ws 2 2)
+                    (cells-set ws 3 (- (hd-wl wd w1) (quot d1 64)))
+                    (if (>= w2 0) (cells-set ws 4 (+ 3 (hd-wl wd w1))))
+                    (return 7))))))
+      (comment "a keyword and a number: a capitalised word, then 1 or 1.2 or IV or a capital letter")
+      (if (and (== (hd-kword wd et w0) 1) (>= w1 0))
+        (do (let [^I32 n1 (hd-wl wd w1)
+                  ^I32 d2 (hd-dec wd et w1)
+                  ^I32 r (hd-letters wd et w1 0 n1)
+                  ^I32 tot (+ (+ n0 1) n1)]
+              (if (> d2 0)
+                (do (cells-set ws 0 6)
+                    (cells-set ws 1 (rem d2 64))
+                    (cells-set ws 2 0)
+                    (cells-set ws 3 (- tot (quot d2 64)))
+                    (if (>= w2 0) (cells-set ws 4 (+ tot 1)))
+                    (return 6)))
+              (comment "a roman numeral, or a lone capital letter only when the line stops there (`Appendix A`)")
+              (if (or (== r 2) (and (== r 4) (< w2 0)))
+                (do (cells-set ws 0 6)
+                    (cells-set ws 1 0)
+                    (cells-set ws 2 0)
+                    (cells-set ws 3 tot)
+                    (if (>= w2 0) (cells-set ws 4 (+ tot 1)))
+                    (return 6)))
+              (comment "a capital letter and a colon or a dot: `Appendix A: Data`")
+              (if (and (== n1 2)
+                       (and (st-upper (hd-wc wd et w1 0))
+                            (or (== (hd-wc wd et w1 1) 58) (== (hd-wc wd et w1 1) 46))))
+                (do (cells-set ws 0 6)
+                    (cells-set ws 1 0)
+                    (cells-set ws 2 0)
+                    (cells-set ws 3 (- tot 1))
+                    (if (>= w2 0) (cells-set ws 4 (+ tot 1)))
+                    (return 6))))))
+      (return 0))))
+
+;; ----------------------------------------------------------------------- candidate lines
+
+(defn ^I32 hd-style-points [^Cells sf ^Cells sc ^I32 l]
+  (comment "How far the line's style stands out from the body's: bigger (3, 4), bold (3), capitals (2), italic")
+  (comment "(1), another colour (1). -1 when it cannot be a heading by style: monospaced against a body that is")
+  (comment "not, or smaller than the body with neither weight nor capitals to say it is more, not less.")
+  (let [^I32 body (st-hget sf (sfh-body))
+        ^I32 bsz (st-hget sf (sfh-size))
+        ^I32 sz (st-get sf l (sfk-size))
+        ^I32 bits (st-get sf l (sfk-bits))
+        ^I32 bbits (sc-get sc body (sck-bits))
+        ^I32 col (st-get sf l (sfk-color))
+        ^I32 bcol (sc-get sc body (sck-color))
+        ^:mut ^I32 p 0
+        ^:mut ^I32 weight 0]
+    (if (and (!= (bit-and bits 64) 0) (== (bit-and bbits 64) 0)) (return -1))
+    (if (>= (* sz 100) (* bsz 104)) (set p (+ p 3)))
+    (if (>= (* sz 100) (* bsz 120)) (set p (+ p 1)))
+    (if (and (!= (bit-and bits 1) 0) (== (bit-and bbits 1) 0))
+      (do (set p (+ p 3))
+          (set weight 1)))
+    (if (and (== (st-get sf l (sfk-caps)) 1) (== (sc-get sc body (sck-caps)) 0))
+      (do (set p (+ p 2))
+          (set weight 1)))
+    (if (and (!= (bit-and bits 2) 0) (== (bit-and bbits 2) 0)) (set p (+ p 1)))
+    (if (and (>= col 0) (and (>= bcol 0) (!= col bcol))) (set p (+ p 1)))
+    (if (and (<= (* sz 100) (* bsz 96)) (== weight 0)) (return -1))
+    (return p)))
+
+(defn ^I32 hd-bullet [^I32 cp]
+  (comment "A list bullet or a dash, or a private-use glyph (a symbol font's bullet).")
+  (if (or (== cp 8226) (or (== cp 9702) (or (== cp 9642) (or (== cp 8227) (or (== cp 183) (or (== cp 9679)
+        (or (== cp 9632) (or (== cp 45) (or (== cp 8211) (or (== cp 8212) (== cp 42)))))))))))
+    (return 1))
+  (if (and (>= cp 57344) (<= cp 63743)) (return 1))
+  (return 0))
+
+(defn ^I32 hd-marker-only [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^I32 l]
+  (comment "1 when the whole line is one numbering pattern (`1`, `1.1`, `A.`): the number of a heading whose title")
+  (comment "the layout put on a line of its own beside it (a wide gap after the number: `h-numbered`).")
+  (if (== (hd-marker wd ln et ws l) 0) (return 0))
+  (return (cells-at ws 5)))
+
+(defn ^I32 hd-partner [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^I32 l]
+  (comment "The line that is the other half of line l's heading line, or -1: l and its one sibling on the row are")
+  (comment "alone with each other, of one size, a number's width apart (ten ems at most), and one of them is a bare")
+  (comment "numbering pattern standing left of the other.")
+  (let [^I32 q (st-get sf l (sfk-sibline))]
+    (if (< q 0) (return -1))
+    (if (or (!= (st-get sf l (sfk-nsib)) 1) (!= (st-get sf q (sfk-nsib)) 1)) (return -1))
+    (if (!= (st-get sf q (sfk-sibline)) l) (return -1))
+    (if (or (< (st-get sf l (sfk-class)) 0) (< (st-get sf q (sfk-class)) 0)) (return -1))
+    (if (!= (st-get sf l (sfk-bucket)) (st-get sf q (sfk-bucket))) (return -1))
+    (if (> (st-get sf l (sfk-sibgap)) (* 10 (st-get sf l (sfk-size)))) (return -1))
+    (let [^I32 lm (hd-marker-only wd ln et ws l)
+          ^I32 qm (hd-marker-only wd ln et ws q)]
+      (if (== lm qm) (return -1))
+      (if (== lm 1)
+        (if (>= (st-get sf l (sfk-x0)) (st-get sf q (sfk-x0))) (return -1))
+        (if (>= (st-get sf q (sfk-x0)) (st-get sf l (sfk-x0))) (return -1)))
+      (return q))))
+
+(defn ^I32 hd-put-head [^:mut ^Cells sf ^I32 l ^I32 h ^I32 p]
+  (st-set sf l (sfk-head) h)
+  (st-set sf l (sfk-points) p)
+  (return 0))
+
+(defn ^I32 hd-headish [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^Cells sc ^:mut ^Cells ws ^I32 l]
+  (comment "Can line l be (part of) a heading: sets its `head` field (1) and `points` (the style points).")
+  (hd-put-head sf l 0 0)
+  (if (!= (st-get sf l (sfk-upright)) 1) (return 0))
+  (if (< (st-get sf l (sfk-class)) 0) (return 0))
+  (if (< (st-get sf l (sfk-cps)) 1) (return 0))
+  (let [^I32 sib (st-get sf l (sfk-sib))
+        ^I32 cps (st-get sf l (sfk-cps))
+        ^I32 f (st-get sf l (sfk-first))]
+    (comment "a row sibling: a table cell, an initial's neighbour (D108); but the two halves of one heading line are not")
+    (let [^I32 pq (hd-partner wd ln et ws sf l)
+          ^I32 nsib (st-get sf l (sfk-nsib))
+          ^I32 sl (st-get sf l (sfk-sibline))]
+      (if (< pq 0)
+        (do (comment "beside something that is not a column of body text: a table cell, a label and its value")
+            (comment "(a headline set a fifth bigger than the body is not a table cell, whatever is beside it: a column's)")
+            (if (and (> nsib (st-get sf l (sfk-ncol)))
+                     (< (* (st-get sf l (sfk-size)) 100) (* (st-hget sf (sfh-size)) 120)))
+              (return 0))
+            (comment "an initial: one or two code points with anything beside it; a divider has nothing on its row")
+            (if (and (<= cps 2) (> nsib 0)) (return 0))
+            (comment "an initial WORD (D108): a short single word, near the body text it starts, much taller than it,")
+            (comment "and that text goes on in lower case. P4.10 finds initials properly; this keeps one from being a heading.")
+            (if (and (> nsib 0) (and (== (st-get sf l (sfk-words)) 1) (and (<= cps 12) (and (!= (bit-and sib 4) 0) (>= sl 0)))))
+              (if (and (>= (st-get sf l (sfk-height)) (* 2 (st-get sf sl (sfk-height))))
+                       (st-lower (st-get sf sl (sfk-first))))
+                (return 0)))
+            (if (and (== (st-get sf l (sfk-letters)) 0) (< f 128)) (return 0)))))
+    (if (== (hd-bullet f) 1) (return 0))
+    (let [^I32 ps (hd-style-points sf sc l)]
+      (if (< ps 0) (return 0))
+      (if (== ps 0)
+        (if (== (hd-marker wd ln et ws l) 0) (return 0)))
+      (hd-put-head sf l 1 ps)
+      (return 1))))
+
+(defn ^Bool hd-sentence-end [^I32 c]
+  (comment "A mark that closes a sentence or a clause: a heading does not end in one.")
+  (return (or (== c 46) (or (== c 44) (or (== c 59) (or (== c 33) (or (== c 63) (or (== c 8230)
+              (or (== c 12290) (or (== c 65281) (or (== c 65311) (or (== c 65292) (== c 65294)))))))))))))
+
+(defn ^I32 hd-tight [^Cells sf ^I32 a ^I32 b]
+  (comment "Is line b right below line a, as close as the lines of one heading: within 3/2 of the document's line gap")
+  (comment "and a quarter of b's size.")
+  (if (!= (st-get sf b (sfk-above)) a) (return 0))
+  (let [^I32 g (st-get sf b (sfk-gap-above))
+        ^I32 lim (+ (quot (* (st-hget sf (sfh-gap)) 3) 2) (quot (st-get sf b (sfk-size)) 4))]
+    (if (<= g lim) (return 1))
+    (return 0)))
+
+;; ----------------------------------------------------------------------- units
+
+(defn ^I32 hd-un [^Cells ws ^I32 u ^I32 f]
+  (return (cells-at ws (+ (+ WS_U (* u UN_STRIDE)) f))))
+
+(defn ^I32 hd-un-set [^:mut ^Cells ws ^I32 u ^I32 f ^I32 v]
+  (cells-set ws (+ (+ WS_U (* u UN_STRIDE)) f) v)
+  (return 0))
+
+(defn ^I32 hd-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 hd-fold [^I32 c]
+  (comment "A code point for comparing titles: ASCII and Latin-1 capitals fold to lower case.")
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (if (and (>= c 192) (and (<= c 222) (!= c 215))) (return (+ c 32)))
+  (return c))
+
+(defn ^I32 hd-text-hash [^Cells wd ^Cells ln ^Cells et ^Cells ws ^I32 cnt]
+  (comment "A hash of the unit's text with its digits and its case left out, so the running header of a document")
+  (comment "(`Page 3 of 10`, `September 2024`, a title that carries a page number) is one value on every page.")
+  (let [^:mut ^I32 h 7
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0]
+    (while (< i cnt)
+      (do (let [^I32 l (cells-at ws (+ WS_LINES i))
+                ^I32 w0 (ln-get ln l (lh-first))
+                ^I32 wn (ln-get ln l (lh-count))]
+            (set k 0)
+            (while (< k wn)
+              (do (let [^I32 tl (hd-wl wd (+ w0 k))]
+                    (set j 0)
+                    (while (< j tl)
+                      (do (let [^I32 c (hd-wc wd et (+ w0 k) j)]
+                            (if (or (< c 48) (> c 57))
+                              (set h (rem (+ (* h 31) (hd-fold c)) 1000003))))
+                          (set j (+ j 1)))))
+                  (set k (+ k 1)))))
+          (set i (+ i 1))))
+    (return h)))
+
+(defn ^I32 hd-spacing [^Cells sf ^I32 top ^I32 last]
+  (comment "The whitespace around a heading, in points of evidence: 0 as tight as body lines, 1 more, 2 well apart;")
+  (comment "+1 when there is more space above than below; a heading with nothing above it (the top of a page, or")
+  (comment "under a figure) gets 1.")
+  (let [^I32 lg (st-hget sf (sfh-gap))
+        ^I32 sz (st-get sf top (sfk-size))
+        ^I32 ab (st-get sf top (sfk-above))
+        ^I32 ga (st-get sf top (sfk-gap-above))
+        ^:mut ^I32 p 0]
+    (if (< ab 0)
+      (set p 1)
+      (do (if (>= ga (+ (* lg 2) (quot sz 4))) (set p 2)
+            (if (> (* ga 8) (+ (* lg 10) sz)) (set p 1)))
+          (if (>= (st-get sf last (sfk-below)) 0)
+            (if (> (- ga (st-get sf last (sfk-gap-below))) (quot sz 8)) (set p (+ p 1))))))
+    (return p)))
+
+(defn ^I32 hd-list-run [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^I32 top ^I32 last]
+  (comment "Is a body-styled numbered line one of a numbered run: a neighbour above or below it with the same class")
+  (comment "and a numbering pattern of its own. Then it is a list item, not a heading (SPEC 10.4).")
+  (let [^I32 a (st-get sf top (sfk-above))
+        ^I32 b (st-get sf last (sfk-below))
+        ^I32 c (st-get sf top (sfk-class))]
+    (if (and (>= a 0) (and (== (st-get sf a (sfk-class)) c) (== (st-get sf a (sfk-head)) 1)))
+      (return 1))
+    (if (and (>= b 0) (and (== (st-get sf b (sfk-class)) c) (== (st-get sf b (sfk-head)) 1)))
+      (return 1))
+    (return 0)))
+
+(defn ^I32 hd-unit-score [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^Cells sc ^I32 cnt]
+  (comment "The score of the unit whose lines are ws[WS_LINES..]: -1 when it cannot be a heading. Leaves the")
+  (comment "numbering of its first line in ws[0..4].")
+  (let [^I32 top (cells-at ws WS_LINES)
+        ^I32 last (cells-at ws (+ WS_LINES (- cnt 1)))
+        ^I32 ps (st-get sf top (sfk-points))
+        ^I32 body (st-hget sf (sfh-body))
+        ^:mut ^I32 total 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 pts 0]
+    (while (< i cnt)
+      (do (set total (+ total (st-get sf (cells-at ws (+ WS_LINES i)) (sfk-cps))))
+          (set i (+ i 1))))
+    (if (> total HD_MAXCPS) (return -1))
+    (if (hd-sentence-end (st-get sf last (sfk-last))) (return -1))
+    (if (== ps 0)
+      (if (== (hd-list-run wd ln et ws sf top last) 1) (return -1)))
+    (set s (hd-marker wd ln et ws top))
+    (set pts ps)
+    (if (> s 0)
+      (if (and (or (== s 1) (or (== s 6) (== s 7))) (>= (cells-at ws 1) 2))
+        (set pts (+ pts 4))
+        (set pts (+ pts 2))))
+    (let [^I32 sp (hd-spacing sf top last)
+          ^I32 lg (st-hget sf (sfh-gap))
+          ^I32 sz (st-get sf top (sfk-size))
+          ^I32 b (st-get sf last (sfk-below))
+          ^I32 gb (st-get sf last (sfk-gap-below))]
+      (if (and (== ps 0) (< sp 1)) (return -1))
+      (comment "a body-styled numbered line followed at the body's own line gap is a paragraph or a list item")
+      (if (and (== ps 0) (and (>= b 0) (< (* gb 2) (* lg 3)))) (return -1))
+      (comment "smaller than the body, so it is the weight or the capitals alone that says heading: it must at least")
+      (comment "be followed by text close by, or be numbered (a label inside a seal or a figure is neither)")
+      (if (and (<= (* sz 100) (* (st-hget sf (sfh-size)) 96)) (== s 0))
+        (if (or (< b 0) (> gb (+ (* lg 5) sz))) (return -1)))
+      (set pts (+ pts sp))
+      (if (and (>= b 0) (== (st-get sf b (sfk-class)) body)) (set pts (+ pts 1))))
+    (if (<= total 80) (set pts (+ pts 1)))
+    (if (>= cnt 3) (set pts (- pts 1)))
+    (comment "a line that ends in a figure is a label and its value (`Opening balance 4,210.55`), unless it is numbered")
+    (let [^I32 lc (st-get sf last (sfk-last))]
+      (if (and (== s 0) (and (>= lc 48) (<= lc 57))) (set pts (- pts 2))))
+    (comment "italic or another colour alone, with no number: an emphasised line more often than a heading")
+    (if (and (== s 0) (<= ps 1)) (set pts (- pts 2)))
+    (return pts)))
+
+(defn ^I32 hd-collect [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^:mut ^Cells sf ^Cells sc ^I32 n]
+  (comment "Group the candidate lines into units (a heading that wraps is one unit), score them, keep the ones")
+  (comment "that reach HD_MIN. Units are rows from WS_U. Answers their number.")
+  (let [^:mut ^I32 l 0
+        ^:mut ^I32 nu 0
+        ^:mut ^I32 cur 0
+        ^:mut ^I32 more 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 sco 0
+        ^:mut ^I32 pairflag 0
+        ^:mut ^I32 nb 0]
+    (while (< l n)
+      (do (if (and (== (st-get sf l (sfk-head)) 1) (== (st-get sf l (sfk-unit)) -1))
+            (do (comment "climb to the top of the run of candidate lines of one class")
+                (set cur l)
+                (set more 1)
+                (set steps 0)
+                (while (and (== more 1) (< steps HD_MAXLINES))
+                  (do (set nb (st-get sf cur (sfk-above)))
+                      (if (and (>= nb 0)
+                               (and (== (st-get sf nb (sfk-head)) 1)
+                                    (and (== (st-get sf nb (sfk-unit)) -1)
+                                         (and (== (st-get sf nb (sfk-class)) (st-get sf cur (sfk-class)))
+                                              (and (== (hd-tight sf nb cur) 1)
+                                                   (== (hd-marker wd ln et ws cur) 0))))))
+                        (set cur nb)
+                        (set more 0))
+                      (set steps (+ steps 1))))
+                (comment "the two halves of one heading line (a number and its title on one row): the number first")
+                (cells-set ws WS_LINES cur)
+                (set cnt 1)
+                (set pairflag 0)
+                (set nb (hd-partner wd ln et ws sf cur))
+                (if (and (>= nb 0) (and (== (st-get sf nb (sfk-head)) 1) (== (st-get sf nb (sfk-unit)) -1)))
+                  (do (set pairflag 1)
+                      (if (== (hd-marker-only wd ln et ws cur) 1)
+                        (do (cells-set ws (+ WS_LINES 1) nb)
+                            (set cur nb))
+                        (do (cells-set ws WS_LINES nb)
+                            (cells-set ws (+ WS_LINES 1) cur)))
+                      (set cnt 2)))
+                (comment "and walk down it")
+                (set more 1)
+                (while (and (== more 1) (<= cnt HD_MAXLINES))
+                  (do (set nb (st-get sf cur (sfk-below)))
+                      (if (and (>= nb 0)
+                               (and (== (st-get sf nb (sfk-head)) 1)
+                                    (and (== (st-get sf nb (sfk-unit)) -1)
+                                         (and (== (st-get sf nb (sfk-class)) (st-get sf (cells-at ws WS_LINES) (sfk-class)))
+                                              (and (== (hd-tight sf cur nb) 1)
+                                                   (== (hd-marker wd ln et ws nb) 0))))))
+                        (do (cells-set ws (+ WS_LINES cnt) nb)
+                            (set cnt (+ cnt 1))
+                            (set cur nb))
+                        (set more 0))))
+                (set sco -1)
+                (if (<= cnt HD_MAXLINES)
+                  (set sco (hd-unit-score wd ln et ws sf sc cnt)))
+                (if (>= sco HD_MIN)
+                  (do (let [^I32 top (cells-at ws WS_LINES)
+                            ^I32 u (+ WS_U (* nu UN_STRIDE))]
+                        (while (< (cells-len ws) (+ u UN_STRIDE)) (cells-push ws 0))
+                        (hd-un-set ws nu 0 top)
+                        (hd-un-set ws nu 1 (cells-at ws (+ WS_LINES (- cnt 1))))
+                        (hd-un-set ws nu 2 cnt)
+                        (hd-un-set ws nu 3 -1)
+                        (hd-un-set ws nu 4 sco)
+                        (hd-un-set ws nu 5 (cells-at ws 0))
+                        (hd-un-set ws nu 6 (cells-at ws 1))
+                        (hd-un-set ws nu 7 (cells-at ws 2))
+                        (hd-un-set ws nu 8 (cells-at ws 3))
+                        (hd-un-set ws nu 9 (cells-at ws 4))
+                        (if (== pairflag 1)
+                          (do (let [^I32 ncps (st-get sf top (sfk-cps))]
+                                (hd-un-set ws nu 9 (+ ncps 1)))))
+                        (hd-un-set ws nu 10 (st-get sf top (sfk-page)))
+                        (hd-un-set ws nu 11 (ln-get ln top (lh-y0)))
+                        (hd-un-set ws nu 12 (st-get sf top (sfk-x0)))
+                        (hd-un-set ws nu 13 0)
+                        (hd-un-set ws nu 14 0)
+                        (let [^I32 hh (hd-text-hash wd ln et ws cnt)]
+                          (hd-un-set ws nu 15 hh))
+                        (set k 0)
+                        (while (< k cnt)
+                          (do (st-set sf (cells-at ws (+ WS_LINES k)) (sfk-unit) nu)
+                              (set k (+ k 1))))
+                        (set nu (+ nu 1))))
+                  (do (set k 0)
+                      (while (< k cnt)
+                        (do (st-set sf (cells-at ws (+ WS_LINES k)) (sfk-unit) -2)
+                            (set k (+ k 1))))))))
+          (set l (+ l 1))))
+    (cells-set ws WS_VAR nu)
+    (return nu)))
+
+(defn ^I32 hd-recurs [^Cells ws ^I32 u ^I32 nu]
+  (comment "Is the unit a running header or footer: the same text (digits aside) at the same place on at least two")
+  (comment "other pages. SPEC 10.2 does this properly (P4.3); a heading is never that, and a document's running")
+  (comment "title must not be taken for its headings meanwhile. 1 = yes.")
+  (let [^:mut ^I32 v 0
+        ^:mut ^I32 same 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 dx 0]
+    (while (< v nu)
+      (do (if (and (!= v u) (and (== (hd-un ws v 15) (hd-un ws u 15)) (!= (hd-un ws v 10) (hd-un ws u 10))))
+            (do (set dy (hd-abs (- (hd-un ws v 11) (hd-un ws u 11))))
+                (set dx (hd-abs (- (hd-un ws v 12) (hd-un ws u 12))))
+                (if (and (< dy 300) (< dx 300)) (set same (+ same 1)))))
+          (set v (+ v 1))))
+    (if (>= same 2) (return 1))
+    (return 0)))
+
+(defn ^I32 hd-lone [^Cells ws ^Cells sf ^I32 u ^I32 nu]
+  (comment "A unit numbered by a letter or a roman numeral (or a keyword and a letter) that is the only one of its")
+  (comment "style and scheme: a sequence is what a letter marker is evidence of, and `A. Author` is a name. 1 = lone.")
+  (let [^I32 s (hd-un ws u 5)
+        ^I32 sclass (st-get sf (hd-un ws u 0) (sfk-class))
+        ^:mut ^I32 v 0
+        ^:mut ^I32 same 0]
+    (if (and (>= s 2) (<= s 5))
+      (do (while (< v nu)
+            (do (if (and (== (hd-un ws v 5) s) (== (st-get sf (hd-un ws v 0) (sfk-class)) sclass))
+                  (set same (+ same 1)))
+                (set v (+ v 1))))
+          (if (< same 2) (return 1))))
+    (return 0)))
+
+(defn ^I32 hd-drop-lone [^:mut ^Cells ws ^:mut ^Cells sf ^I32 n]
+  (comment "Remove the lone letter-numbered units (`hd-lone`) from the table and from the lines. Answers how many")
+  (comment "units are left.")
+  (let [^I32 nu (cells-at ws WS_VAR)
+        ^I32 base (cells-len ws)
+        ^:mut ^I32 u 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 l 0]
+    (if (> nu 2000) (return nu))
+    (while (< u nu)
+      (do (if (or (== (hd-lone ws sf u nu) 1) (== (hd-recurs ws u nu) 1))
+            (cells-push ws -2)
+            (do (cells-push ws w)
+                (set w (+ w 1))))
+          (set u (+ u 1))))
+    (set u 0)
+    (while (< u nu)
+      (do (let [^I32 to (cells-at ws (+ base u))]
+            (if (>= to 0)
+              (do (set f 0)
+                  (while (< f UN_STRIDE)
+                    (do (let [^I32 cell (hd-un ws u f)]
+                          (hd-un-set ws to f cell))
+                        (set f (+ f 1)))))))
+          (set u (+ u 1))))
+    (set l 0)
+    (while (< l n)
+      (do (let [^I32 id (st-get sf l (sfk-unit))]
+            (if (>= id 0)
+              (st-set sf l (sfk-unit) (cells-at ws (+ base id)))))
+          (set l (+ l 1))))
+    (cells-drop ws (+ WS_U (* w UN_STRIDE)))
+    (cells-set ws WS_VAR w)
+    (return w)))
+
+;; ----------------------------------------------------------------------- priors
+
+(defn ^:pub ^I32 hd-prior-add [^:mut ^Cells pr ^:mut ^Cells ptxt ^I32 src ^I32 tstart ^I32 tlen
+                               ^Cells from ^I32 level ^I32 weight]
+  (comment "One external prior: the heading text from[tstart..tstart+tlen), the level it says (1..), its source (1")
+  (comment "tagged, 2 outline) and its weight per-mille (a tagged tree's trust, D034; an outline's 800). Rows of")
+  (comment "`pr` are (text start in `ptxt`, length, level, source, weight).")
+  (let [^I32 at (cells-len ptxt)
+        ^:mut ^I32 i 0]
+    (while (< i tlen)
+      (do (cells-push ptxt (cells-at from (+ tstart i)))
+          (set i (+ i 1))))
+    (cells-push pr at)
+    (cells-push pr tlen)
+    (cells-push pr level)
+    (cells-push pr src)
+    (cells-push pr weight)
+    (return (quot (cells-len pr) 5))))
+
+(defn ^:pub ^I32 hd-prior-outline [^Cells ol ^Cells txt ^:mut ^Cells pr ^:mut ^Cells ptxt]
+  (comment "Every row of P3.9's outline (`ol`, 24 cells a row: depth, ..., title run at 5 and 6 of `txt`) as a")
+  (comment "prior: level depth + 1, weight 800. Answers the number of rows read.")
+  (let [^I32 n (quot (cells-len ol) 24)
+        ^:mut ^I32 r 0]
+    (while (< r n)
+      (do (let [^I32 ts (cells-at ol (+ (* r 24) 5))
+                ^I32 tl (cells-at ol (+ (* r 24) 6))]
+            (if (and (>= ts 0) (> tl 0))
+              (hd-prior-add pr ptxt 2 ts tl txt (+ (cells-at ol (* r 24)) 1) 800)))
+          (set r (+ r 1))))
+    (return n)))
+
+
+(defn ^I32 hd-blank [^I32 c]
+  (if (or (== c 32) (or (== c 9) (or (== c 160) (== c 10)))) (return 1))
+  (return 0))
+
+(defn ^I32 hd-same-text [^Cells a ^I32 a0 ^I32 a1 ^Cells b ^I32 b0 ^I32 b1]
+  (comment "Equal as titles: the same code points once blanks are skipped and capitals folded. 1 or 0.")
+  (let [^:mut ^I32 i a0
+        ^:mut ^I32 j b0]
+    (while (or (< i a1) (< j b1))
+      (do (while (and (< i a1) (== (hd-blank (cells-at a i)) 1)) (set i (+ i 1)))
+          (while (and (< j b1) (== (hd-blank (cells-at b j)) 1)) (set j (+ j 1)))
+          (if (or (>= i a1) (>= j b1))
+            (do (if (and (>= i a1) (>= j b1)) (return 1))
+                (return 0)))
+          (if (!= (hd-fold (cells-at a i)) (hd-fold (cells-at b j))) (return 0))
+          (set i (+ i 1))
+          (set j (+ j 1))))
+    (return 1)))
+
+(defn ^I32 hd-line-text [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells tmp ^I32 l]
+  (comment "Append the line's words, one space between two, to `tmp` (and one before the first when tmp is not")
+  (comment "empty).")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0]
+    (while (< k wn)
+      (do (let [^I32 tl (hd-wl wd (+ w0 k))]
+            (if (> tl 0)
+              (do (if (> (cells-len tmp) 0) (cells-push tmp 32))
+                  (set j 0)
+                  (while (< j tl)
+                    (do (cells-push tmp (hd-wc wd et (+ w0 k) j))
+                        (set j (+ j 1)))))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 hd-apply-priors [^Cells wd ^Cells ln ^Cells et ^Cells sf ^:mut ^Cells ws ^:mut ^Cells tmp
+                            ^Cells pr ^Cells ptxt ^I32 n]
+  (comment "Match every unit's text to the priors; the best (heaviest) prior of a unit is kept in the unit's")
+  (comment "fields 13 (level) and 14 (weight). A unit's text is compared whole and without its number.")
+  (let [^I32 nu (cells-at ws WS_VAR)
+        ^I32 np (quot (cells-len pr) 5)
+        ^:mut ^I32 u 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 found 0
+        ^:mut ^I32 tl 0]
+    (if (== np 0) (return 0))
+    (while (< u nu)
+      (do (cells-drop tmp 0)
+          (comment "the unit's lines are consecutive rows of one chain; collect them through the unit id")
+          (set l 0)
+          (while (< l n)
+            (do (if (== (st-get sf l (sfk-unit)) u)
+                  (hd-line-text wd ln et tmp l))
+                (set l (+ l 1))))
+          (set tl (cells-len tmp))
+          (set r 0)
+          (while (< r np)
+            (do (let [^I32 ps (cells-at pr (* r 5))
+                      ^I32 pl (cells-at pr (+ (* r 5) 1))
+                      ^I32 lev (cells-at pr (+ (* r 5) 2))
+                      ^I32 w (cells-at pr (+ (* r 5) 4))
+                      ^I32 skip (hd-un ws u 9)]
+                  (if (> w (hd-un ws u 14))
+                    (do (set found 0)
+                        (if (== (hd-same-text tmp 0 tl ptxt ps (+ ps pl)) 1) (set found 1))
+                        (if (and (== found 0) (> skip 0))
+                          (if (== (hd-same-text tmp skip tl ptxt ps (+ ps pl)) 1) (set found 1)))
+                        (if (== found 1)
+                          (do (hd-un-set ws u 13 lev)
+                              (hd-un-set ws u 14 w))))))
+                (set r (+ r 1))))
+          (set u (+ u 1))))
+    (return 0)))
+
+;; ----------------------------------------------------------------------- heading classes
+
+(defn ^I32 hd-hk [^Cells ws ^I32 c ^I32 f]
+  (return (cells-at ws (+ (+ WS_HK (* c HK_STRIDE)) f))))
+
+(defn ^I32 hd-hk-set [^:mut ^Cells ws ^I32 c ^I32 f ^I32 v]
+  (cells-set ws (+ (+ WS_HK (* c HK_STRIDE)) f) v)
+  (return 0))
+
+;; class fields: 0 style class, 1 numbering key, 2 indent, 3 centred, 4 units, 5 first position,
+;; 6 prior level, 7 prior weight, 8 target level (0 none), 9 prominence, 10 level, 11 prior units
+
+(defn ^I32 hd-dkey [^I32 scheme ^I32 depth ^I32 hier]
+  (comment "The numbering key of a unit's class: 0 none, the dotted depth for a hierarchical decimal (a bare `1.`")
+  (comment "counts as depth 1 only when the document has dotted numbers somewhere), minus the scheme for a flat one.")
+  (if (== scheme 0) (return 0))
+  (if (or (== scheme 1) (or (== scheme 6) (== scheme 7)))
+    (do (if (>= depth 2) (return depth))
+        (if (== depth 1)
+          (do (if (== hier 1) (return 1))
+              (return 0)))
+        (return (- 0 scheme))))
+  (return (- 0 scheme)))
+
+(defn ^I32 hd-hk-add [^:mut ^Cells ws ^I32 c ^I32 f ^I32 d]
+  (let [^I32 v (hd-hk ws c f)]
+    (hd-hk-set ws c f (+ v d))
+    (return 0)))
+
+(defn ^I32 hd-class-find [^:mut ^Cells ws ^I32 nk ^I32 sclass ^I32 dkey ^I32 ind ^I32 cen]
+  (let [^:mut ^I32 c 0]
+    (while (< c nk)
+      (do (if (and (== (hd-hk ws c 0) sclass)
+                   (and (== (hd-hk ws c 1) dkey)
+                        (and (== (hd-hk ws c 2) ind)
+                             (== (hd-hk ws c 3) cen))))
+            (return c))
+          (set c (+ c 1))))
+    (return -1)))
+
+(defn ^I32 hd-prom [^Cells sc ^I32 sclass]
+  (comment "How prominent a style class is: the size first, then bold, capitals, italic. Light evidence.")
+  (let [^I32 bits (sc-get sc sclass (sck-bits))
+        ^:mut ^I32 p (* (sc-get sc sclass (sck-bucket)) 8)]
+    (if (!= (bit-and bits 1) 0) (set p (+ p 4)))
+    (if (== (sc-get sc sclass (sck-caps)) 1) (set p (+ p 2)))
+    (if (!= (bit-and bits 2) 0) (set p (+ p 1)))
+    (return p)))
+
+(defn ^I32 hd-classify [^Cells ln ^:mut ^Cells ws ^Cells sf ^Cells sc]
+  (comment "Group the units into heading classes (style class, numbering key, indent, centred), merge an unnumbered")
+  (comment "class into the one numbered class of its own style, and fill each class's counts, prominence, target")
+  (comment "level and prior. Answers the number of classes.")
+  (let [^I32 nu (cells-at ws WS_VAR)
+        ^:mut ^I32 hier 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 nk 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 hits 0
+        ^:mut ^I32 hit 0]
+    (while (< u nu)
+      (do (let [^I32 s (hd-un ws u 5)]
+            (if (and (or (== s 1) (or (== s 6) (== s 7))) (>= (hd-un ws u 6) 2)) (set hier 1)))
+          (set u (+ u 1))))
+    (cells-set ws (+ WS_VAR 2) hier)
+    (set c 0)
+    (while (< c (* HD_KMAX HK_STRIDE))
+      (do (cells-set ws (+ WS_HK c) 0)
+          (set c (+ c 1))))
+    (set u 0)
+    (while (< u nu)
+      (do (let [^I32 top (hd-un ws u 0)
+                ^I32 sclass (st-get sf top (sfk-class))
+                ^I32 cen (st-get sf top (sfk-centered))
+                ^:mut ^I32 ind (st-get sf top (sfk-indent))
+                ^I32 dk (hd-dkey (hd-un ws u 5) (hd-un ws u 6) hier)]
+            (if (== cen 1) (set ind 0))
+            (set c (hd-class-find ws nk sclass dk ind cen))
+            (if (< c 0)
+              (do (if (< nk HD_KMAX)
+                    (do (hd-hk-set ws nk 0 sclass)
+                        (hd-hk-set ws nk 1 dk)
+                        (hd-hk-set ws nk 2 ind)
+                        (hd-hk-set ws nk 3 cen)
+                        (set c nk)
+                        (set nk (+ nk 1)))
+                    (do (set c 0)
+                        (set o 0)
+                        (while (< o nk)
+                          (do (if (== (hd-hk ws o 0) sclass) (set c o))
+                              (set o (+ o 1))))))))
+            (hd-un-set ws u 3 c)
+            (hd-hk-add ws c 4 1))
+          (set u (+ u 1))))
+    (comment "an unnumbered class is the numbered class of its own style, when there is exactly one such")
+    (set c 0)
+    (while (< c nk)
+      (do (if (and (== (hd-hk ws c 1) 0) (> (hd-hk ws c 4) 0))
+            (do (set hits 0)
+                (set hit -1)
+                (set o 0)
+                (while (< o nk)
+                  (do (if (and (!= o c)
+                               (and (!= (hd-hk ws o 1) 0)
+                                    (and (== (hd-hk ws o 0) (hd-hk ws c 0))
+                                         (and (== (hd-hk ws o 2) (hd-hk ws c 2))
+                                              (== (hd-hk ws o 3) (hd-hk ws c 3))))))
+                        (do (set hits (+ hits 1))
+                            (set hit o)))
+                      (set o (+ o 1))))
+                (if (== hits 1)
+                  (do (set u 0)
+                      (while (< u nu)
+                        (do (if (== (hd-un ws u 3) c) (hd-un-set ws u 3 hit))
+                            (set u (+ u 1))))
+                      (let [^I32 moved (hd-hk ws c 4)]
+                        (hd-hk-add ws hit 4 moved))
+                      (hd-hk-set ws c 4 0)))))
+          (set c (+ c 1))))
+    (comment "drop the emptied classes: the new index of each old one is kept in WS_BEST")
+    (let [^:mut ^I32 w 0]
+      (set c 0)
+      (while (< c nk)
+        (do (if (> (hd-hk ws c 4) 0)
+              (do (cells-set ws (+ WS_BEST c) w)
+                  (set o 0)
+                  (while (< o HK_STRIDE)
+                    (do (let [^I32 cell (hd-hk ws c o)]
+                          (hd-hk-set ws w o cell))
+                        (set o (+ o 1))))
+                  (set w (+ w 1)))
+              (cells-set ws (+ WS_BEST c) -1))
+            (set c (+ c 1))))
+      (set u 0)
+      (while (< u nu)
+        (do (let [^I32 old (hd-un ws u 3)
+                  ^I32 fresh (cells-at ws (+ WS_BEST old))]
+              (hd-un-set ws u 3 fresh))
+            (set u (+ u 1))))
+      (set nk w))
+    (comment "prominence, target level, prior")
+    (set c 0)
+    (while (< c nk)
+      (do (let [^I32 pm (hd-prom sc (hd-hk ws c 0))
+                ^I32 dk (hd-hk ws c 1)]
+            (hd-hk-set ws c 9 pm)
+            (hd-hk-set ws c 8 0)
+            (if (> dk 0) (hd-hk-set ws c 8 dk)))
+          (hd-hk-set ws c 6 0)
+          (hd-hk-set ws c 7 0)
+          (hd-hk-set ws c 11 0)
+          (set c (+ c 1))))
+    (set u 0)
+    (while (< u nu)
+      (do (if (> (hd-un ws u 14) 0)
+            (do (let [^I32 k (hd-un ws u 3)
+                      ^I32 pw (hd-un ws u 14)
+                      ^I32 plv (hd-un ws u 13)]
+                  (hd-hk-add ws k 6 (* plv pw))
+                  (hd-hk-add ws k 7 pw)
+                  (hd-hk-add ws k 11 1))))
+          (set u (+ u 1))))
+    (set c 0)
+    (while (< c nk)
+      (do (if (> (hd-hk ws c 11) 0)
+            (do (let [^I32 sw (hd-hk ws c 7)
+                      ^I32 sl (hd-hk ws c 6)
+                      ^I32 pc (hd-hk ws c 11)]
+                  (hd-hk-set ws c 6 (quot (+ sl (quot sw 2)) sw))
+                  (hd-hk-set ws c 7 (quot sw pc)))))
+          (set c (+ c 1))))
+    (cells-set ws (+ WS_VAR 1) nk)
+    (return nk)))
+
+
+(defn ^Bool hd-before [^Cells ws ^I32 a ^I32 b]
+  (comment "Does unit a come before unit b in reading order: page, then top of the page down, then left, then")
+  (comment "the order they were found in. A total order.")
+  (let [^I32 pa (hd-un ws a 10)
+        ^I32 pb (hd-un ws b 10)
+        ^I32 ya (hd-un ws a 11)
+        ^I32 yb (hd-un ws b 11)
+        ^I32 xa (hd-un ws a 12)
+        ^I32 xb (hd-un ws b 12)]
+    (if (!= pa pb) (return (< pa pb)))
+    (if (!= ya yb) (return (< ya yb)))
+    (if (!= xa xb) (return (< xa xb)))
+    (return (< a b))))
+
+(defn ^I32 hd-order [^:mut ^Cells ws]
+  (comment "The units in reading order: their indices, pushed after the last unit, insertion sorted. Answers the")
+  (comment "base of that run (its length is the unit count).")
+  (let [^I32 nu (cells-at ws WS_VAR)
+        ^I32 base (cells-len ws)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0]
+    (while (< i nu)
+      (do (cells-push ws i)
+          (set i (+ i 1))))
+    (set i 1)
+    (while (< i nu)
+      (do (set v (cells-at ws (+ base i)))
+          (set j (- i 1))
+          (while (and (>= j 0) (hd-before ws v (cells-at ws (+ base j))))
+            (do (cells-set ws (+ base (+ j 1)) (cells-at ws (+ base j)))
+                (set j (- j 1))))
+          (cells-set ws (+ base (+ j 1)) v)
+          (set i (+ i 1))))
+    (return base)))
+
+(defn ^I32 hd-matrices [^:mut ^Cells ws ^I32 base ^I32 nk]
+  (comment "From the sequence of the document's headings: T[a][b], how often a class b follows a class a; O[a][b],")
+  (comment "how often a class a occurs before the first occurrence of b; each class's first position; the class")
+  (comment "the document starts with; the deepest numbering target.")
+  (let [^I32 nu (cells-at ws WS_VAR)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 mt 0]
+    (while (< i 256)
+      (do (cells-set ws (+ WS_T i) 0)
+          (cells-set ws (+ WS_O i) 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nk)
+      (do (hd-hk-set ws i 5 1000000000)
+          (if (> (hd-hk ws i 8) mt) (set mt (hd-hk ws i 8)))
+          (set i (+ i 1))))
+    (cells-set ws (+ WS_VAR 4) mt)
+    (set i 0)
+    (while (< i nu)
+      (do (let [^I32 c (hd-un ws (cells-at ws (+ base i)) 3)]
+            (if (> (hd-hk ws c 5) i) (hd-hk-set ws c 5 i)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nu)
+      (do (let [^I32 c (hd-un ws (cells-at ws (+ base i)) 3)]
+            (set b 0)
+            (while (< b nk)
+              (do (if (and (!= b c) (> (hd-hk ws b 5) i))
+                    (cells-set ws (+ (+ WS_O (* c HD_KMAX)) b) (+ (cells-at ws (+ (+ WS_O (* c HD_KMAX)) b)) 1)))
+                  (set b (+ b 1))))
+            (if (> i 0)
+              (do (let [^I32 pc (hd-un ws (cells-at ws (+ base (- i 1))) 3)]
+                    (if (!= pc c)
+                      (cells-set ws (+ (+ WS_T (* pc HD_KMAX)) c) (+ (cells-at ws (+ (+ WS_T (* pc HD_KMAX)) c)) 1))))))
+            (if (== i 0) (cells-set ws (+ WS_VAR 3) c)))
+          (set i (+ i 1))))
+    (return 0)))
+
+
+
+(defn ^I32 hd-eval [^Cells ws ^I32 nk]
+  (comment "The penalty of the levels in ws[WS_LV..] (D018). Integer, deterministic.")
+  (let [^:mut ^I32 pen 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0]
+    (while (< a nk)
+      (do (let [^I32 la (cells-at ws (+ WS_LV a))
+                ^I32 tg (hd-hk ws a 8)]
+            (if (> tg 0) (set pen (+ pen (* W_DEPTH (hd-abs (- la tg))))))
+            (if (> (hd-hk ws a 11) 0)
+              (set pen (+ pen (quot (* (* W_PRIOR (hd-hk ws a 7)) (hd-abs (- la (hd-hk ws a 6)))) 1000))))
+            (set b 0)
+            (while (< b nk)
+              (do (if (!= a b)
+                    (let [^I32 lb (cells-at ws (+ WS_LV b))]
+                      (if (> la lb)
+                        (do (set pen (+ pen (* W_ORPHAN (cells-at ws (+ (+ WS_O (* a HD_KMAX)) b)))))
+                            (if (> (hd-hk ws a 9) (hd-hk ws b 9)) (set pen (+ pen W_PROM)))))
+                      (comment "two classes of one style that differ only in alignment or indent are twins: they want one level")
+                      (if (and (== (hd-hk ws a 0) (hd-hk ws b 0)) (== (hd-hk ws a 1) (hd-hk ws b 1)))
+                        (if (!= la lb) (set pen (+ pen W_TWIN)))
+                        (if (and (== la lb) (< a b)) (set pen (+ pen W_SAME))))
+                      (if (> (- lb la) 1)
+                        (set pen (+ pen (* (* W_SKIP (- (- lb la) 1))
+                                           (cells-at ws (+ (+ WS_T (* a HD_KMAX)) b))))))))
+                  (set b (+ b 1)))))
+          (set a (+ a 1))))
+    (let [^I32 lf (cells-at ws (+ WS_LV (cells-at ws (+ WS_VAR 3))))]
+      (if (> lf 1) (set pen (+ pen (* W_SKIP (- lf 1))))))
+    (return pen)))
+
+(defn ^I32 hd-search [^:mut ^Cells ws ^I32 nk]
+  (comment "The levels that minimise `hd-eval`: every assignment up to HD_EXHAUSTIVE classes (the first found")
+  (comment "wins a tie), coordinate descent beyond. The result is each class's field 10.")
+  (let [^I32 mt (cells-at ws (+ WS_VAR 4))
+        ^:mut ^I32 lmax nk
+        ^:mut ^I32 best 2000000000
+        ^:mut ^I32 i 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 carry 0
+        ^:mut ^I32 pen 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 keep 0
+        ^:mut ^I32 sweeps 0
+        ^:mut ^I32 changed 1]
+    (if (> mt lmax) (set lmax mt))
+    (if (> lmax 12) (set lmax 12))
+    (if (<= nk HD_EXHAUSTIVE)
+      (do (set i 0)
+          (while (< i nk)
+            (do (cells-set ws (+ WS_LV i) 1)
+                (set i (+ i 1))))
+          (while (== more 1)
+            (do (set pen (hd-eval ws nk))
+                (if (< pen best)
+                  (do (set best pen)
+                      (set i 0)
+                      (while (< i nk)
+                        (do (cells-set ws (+ WS_BEST i) (cells-at ws (+ WS_LV i)))
+                            (set i (+ i 1))))))
+                (set i 0)
+                (set carry 1)
+                (while (and (== carry 1) (< i nk))
+                  (do (cells-set ws (+ WS_LV i) (+ (cells-at ws (+ WS_LV i)) 1))
+                      (if (> (cells-at ws (+ WS_LV i)) lmax)
+                        (do (cells-set ws (+ WS_LV i) 1)
+                            (set i (+ i 1)))
+                        (set carry 0))))
+                (if (== carry 1) (set more 0)))))
+      (do (comment "start from the first-occurrence order (or the numbering's own level), then improve one class at a time")
+          (set c 0)
+          (while (< c nk)
+            (do (set lv 1)
+                (set i 0)
+                (while (< i nk)
+                  (do (if (< (hd-hk ws i 5) (hd-hk ws c 5)) (set lv (+ lv 1)))
+                      (set i (+ i 1))))
+                (if (> (hd-hk ws c 8) 0) (set lv (hd-hk ws c 8)))
+                (if (> lv lmax) (set lv lmax))
+                (cells-set ws (+ WS_LV c) lv)
+                (set c (+ c 1))))
+          (set best (hd-eval ws nk))
+          (while (and (== changed 1) (< sweeps 30))
+            (do (set changed 0)
+                (set c 0)
+                (while (< c nk)
+                  (do (set keep (cells-at ws (+ WS_LV c)))
+                      (set lv 1)
+                      (while (<= lv lmax)
+                        (do (cells-set ws (+ WS_LV c) lv)
+                            (set pen (hd-eval ws nk))
+                            (if (< pen best)
+                              (do (set best pen)
+                                  (set keep lv)
+                                  (set changed 1)))
+                            (set lv (+ lv 1))))
+                      (cells-set ws (+ WS_LV c) keep)
+                      (set c (+ c 1))))
+                (set sweeps (+ sweeps 1))))
+          (set i 0)
+          (while (< i nk)
+            (do (cells-set ws (+ WS_BEST i) (cells-at ws (+ WS_LV i)))
+                (set i (+ i 1))))))
+    (set i 0)
+    (while (< i nk)
+      (do (hd-hk-set ws i 10 (cells-at ws (+ WS_BEST i)))
+          (set i (+ i 1))))
+    (return best)))
+
+;; ----------------------------------------------------------------------- writing hc
+
+(defn ^I32 hd-emit [^Cells ln ^:mut ^Cells hc ^:mut ^Cells ws ^Cells sf ^I32 n]
+  (comment "One row of `hc` for every line of every kept unit: the level of its class and, on the unit's first")
+  (comment "line, where the number is, how much to skip, the scheme, and the start flag.")
+  (let [^:mut ^I32 l 0]
+    (while (< l n)
+      (do (let [^I32 u (st-get sf l (sfk-unit))]
+            (if (>= u 0)
+              (do (let [^I32 hcl (hd-un ws u 3)
+                        ^I32 lev (hd-hk ws hcl 10)
+                        ^I32 at (+ HC_HDR (* l HC_STRIDE))]
+                    (cells-set hc at lev)
+                    (if (== l (hd-un ws u 0))
+                      (do (cells-set hc (+ at 1) (hd-un ws u 7))
+                          (cells-set hc (+ at 2) (hd-un ws u 8))
+                          (cells-set hc (+ at 3) (hd-un ws u 9))
+                          (cells-set hc (+ at 4) (hd-un ws u 5))
+                          (cells-set hc (+ at 5) 3))
+                      (cells-set hc (+ at 5) 2))))))
+          (set l (+ l 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 hd-analyze [^Cells wd ^Cells ln ^Cells et ^Cells gl
+                             ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc ^:mut ^Cells ws ^:mut ^Cells tmp
+                             ^Cells pr ^Cells ptxt]
+  (comment "Decide which lines are headings and at what level. `sf`, `sc`, `ws`, `tmp` are scratch, `hc` the answer")
+  (comment "(emptied first); `pr` and `ptxt` the priors (`hd-prior-add`), empty when there are none. Answers the")
+  (comment "number of headings found.")
+  (let [^I32 n (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 nu 0
+        ^:mut ^I32 nk 0
+        ^:mut ^I32 base 0]
+    (st-build wd ln et gl sf sc tmp)
+    (cells-drop hc 0)
+    (while (< l HC_HDR)
+      (do (cells-push hc 0)
+          (set l (+ l 1))))
+    (cells-set hc 0 n)
+    (set l 0)
+    (while (< l (* n HC_STRIDE))
+      (do (cells-push hc 0)
+          (set l (+ l 1))))
+    (cells-drop ws 0)
+    (set l 0)
+    (while (< l WS_U)
+      (do (cells-push ws 0)
+          (set l (+ l 1))))
+    (if (< (st-hget sf (sfh-body)) 0) (return 0))
+    (set l 0)
+    (while (< l n)
+      (do (st-set sf l (sfk-unit) -1)
+          (st-set sf l (sfk-head) 0)
+          (set l (+ l 1))))
+    (set l 0)
+    (while (< l n)
+      (do (hd-headish wd ln et sf sc ws l)
+          (set l (+ l 1))))
+    (set nu (hd-collect wd ln et ws sf sc n))
+    (if (> nu 0) (set nu (hd-drop-lone ws sf n)))
+    (if (== nu 0) (return 0))
+    (hd-apply-priors wd ln et sf ws tmp pr ptxt n)
+    (set nk (hd-classify ln ws sf sc))
+    (set base (hd-order ws))
+    (hd-matrices ws base nk)
+    (hd-search ws nk)
+    (hd-emit ln hc ws sf n)
+    (return nu)))

@@ -385,8 +385,14 @@ func TestTheModelCanBeWalked(t *testing.T) {
 	if !strings.Contains(m.ToJSON(JSONOptions{}), "\"locale\":\"en-GB\"") {
 		t.Error("the JSON has no locale")
 	}
-	kids := root.Children()
-	if len(kids) <= 2 || kids[0].Kind().Name() != "paragraph" || kids[0].Text() != "Field Notes on Soil Moisture" {
+	// the title is a heading (the heading analysis, D172) at the head of a section of level 1
+	top := root.Children()
+	if len(top) < 1 || top[0].Kind().Name() != "section" {
+		t.Fatalf("top %v", top)
+	}
+	sec := top[0].Index()
+	kids := top[0].Children()
+	if len(kids) <= 2 || kids[0].Kind().Name() != "heading" || kids[0].Text() != "Field Notes on Soil Moisture" {
 		t.Fatalf("children %v", kids)
 	}
 	if s := kids[0].Sources(); len(s) != 2 || s[0] != "text" || s[1] != "infer" {
@@ -395,7 +401,7 @@ func TestTheModelCanBeWalked(t *testing.T) {
 	if kids[0].Conf() != 500 {
 		t.Errorf("conf %d", kids[0].Conf())
 	}
-	if p, ok := kids[0].Parent(); !ok || p.Index() != 0 {
+	if p, ok := kids[0].Parent(); !ok || p.Index() != sec {
 		t.Error("parent")
 	}
 	if _, ok := root.Parent(); ok {
