@@ -80,7 +80,7 @@ func ntLower(c int32) int32 {
 	return c
 }
 
-func ntKeyword(wd *port.Cells, et *port.Cells, w int32) int32 {
+func NtKeyword(wd *port.Cells, et *port.Cells, w int32) int32 {
 	// The kind of caption the word w is the keyword of: 1 a figure, 2 a table, 0 not a keyword.
 	var tl int32 = lists.LsWl(wd, w)
 	var e int32 = 0
@@ -112,7 +112,7 @@ func ntUpper(c int32) bool {
 	return (c >= 65) && (c <= 90)
 }
 
-func ntNumberBody(wd *port.Cells, et *port.Cells, w int32) int32 {
+func NtNumberBody(wd *port.Cells, et *port.Cells, w int32) int32 {
 	// How many code points of the word are a caption's number: `[A-Z]?` then digits (at most four a group) with
 	// `.` or `-` and more digits, then at most one small letter; or a roman numeral of capitals (up to five). 0 when
 	// the word does not start with one.
@@ -217,11 +217,11 @@ func ntCaption(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, s
 	if (w0 < 0) || (w1 < 0) {
 		return 0
 	}
-	var kind int32 = ntKeyword(wd, et, w0)
+	var kind int32 = NtKeyword(wd, et, w0)
 	if kind == 0 {
 		return 0
 	}
-	var bl int32 = ntNumberBody(wd, et, w1)
+	var bl int32 = NtNumberBody(wd, et, w1)
 	var tl1 int32 = lists.LsWl(wd, w1)
 	if bl == 0 {
 		return 0
@@ -356,6 +356,15 @@ func ntGlyphMark(gl *port.Cells, et *port.Cells, g int32, sz0 int32, base int32)
 	return -1
 }
 
+func ntGchar(gl *port.Cells, et *port.Cells, g int32) int32 {
+	// The character of glyph g: its own code point, or the first of its text run when it has one.
+	var ts int32 = evidence.GlGet(gl, g, evidence.ChTstart())
+	if ts >= 0 {
+		return port.CellsAt(et, ts)
+	}
+	return evidence.GlGet(gl, g, evidence.ChCp())
+}
+
 func ntGpos(gl *port.Cells, g int32, wts int32, eq int32, i int32) int32 {
 	// Where glyph g (the i-th of its word, whose text starts at wts) begins in the text: its own run when it has one, else
 	// the i-th code point of the word's text, which is where it is when the word has as many code points as glyphs
@@ -412,7 +421,59 @@ func ntPushNb(nb *port.Cells, l int32, page int32, w int32, kind int32, g1 int32
 	return 0
 }
 
-func ntScanWord(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, l int32, w int32, first int32, sz0 int32, base int32, szok int32, band int32) int32 {
+func ntLetterish(c int32) bool {
+	// A letter of Latin, Greek or Cyrillic (any case), or a character of the CJK blocks.
+	if (c >= 65) && (c <= 90) {
+		return 1 == 1
+	}
+	if (c >= 97) && (c <= 122) {
+		return 1 == 1
+	}
+	if (c >= 192) && ((c <= 591) && ((c != 215) && (c != 247))) {
+		return 1 == 1
+	}
+	if (c >= 880) && (c <= 1327) {
+		return 1 == 1
+	}
+	if c >= 12288 {
+		return 1 == 1
+	}
+	return 0 == 1
+}
+
+func ntTrailingPunct(c int32) bool {
+	// Punctuation that may stand against a note reference on either side: a word's end, a comma, a closing bracket.
+	if (c == 46) || ((c == 44) || ((c == 59) || ((c == 58) || ((c == 63) || (c == 33))))) {
+		return 1 == 1
+	}
+	if (c == 41) || ((c == 93) || ((c == 8221) || ((c == 8217) || ((c == 34) || (c == 39))))) {
+		return 1 == 1
+	}
+	return 0 == 1
+}
+
+func ntRefContext(gl *port.Cells, et *port.Cells, g0 int32, gn int32, i int32, j int32, pwc int32) int32 {
+	// Is the superscript run of glyphs i..j of a word a note reference and not an exponent or an index: what comes
+	// before it (the word's glyph i-1, or when the run starts the word the last character of the word before) is a
+	// letter or punctuation, never a digit or an operator, and what comes after it in the word is punctuation only.
+	var before int32 = pwc
+	var k int32 = j
+	if i > 0 {
+		before = ntGchar(gl, et, g0+(i-1))
+	}
+	if !(ntLetterish(before) || ntTrailingPunct(before)) {
+		return 0
+	}
+	for k < gn {
+		if !ntTrailingPunct(ntGchar(gl, et, g0+k)) {
+			return 0
+		}
+		k += 1
+	}
+	return 1
+}
+
+func ntScanWord(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, l int32, w int32, first int32, pwc int32, sz0 int32, base int32, szok int32, band int32) int32 {
 	// The superscript runs of word w of line l: a run at the start of the line's first word is a note body's marker
 	// (a row of `nb`), any other a reference (a row of `rf`). The marker characters go to `mk`.
 	var g0 int32 = evidence.WdGet(wd, w, evidence.WfGfirst())
@@ -440,7 +501,7 @@ func ntScanWord(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, 
 				j += 1
 			}
 			// a comma between two markers belongs to them: `1,2`
-			if ((j + 1) < gn) && ((j - i) < 5) && (port.CellsAt(et, evidence.GlGet(gl, g0+j, evidence.ChTstart())) == 44) && ntSupStyled(gl, g0+j, sz0, base) && (ntGlyphMark(gl, et, g0+j+1, sz0, base) >= 0) {
+			if ((j + 1) < gn) && ((j - i) < 5) && (ntGchar(gl, et, g0+j) == 44) && ntSupStyled(gl, g0+j, sz0, base) && (ntGlyphMark(gl, et, g0+j+1, sz0, base) >= 0) {
 				port.CellsPush(mk, 44)
 				j += 1
 				for (j < gn) && ((j - i) < 8) && (ntGlyphMark(gl, et, g0+j, sz0, base) >= 0) {
@@ -459,7 +520,7 @@ func ntScanWord(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, 
 						ntPushNb(nb, l, page, w, 1, pb, ms, port.CellsLen(mk)-ms, szok, band)
 					}
 				} else {
-					if (port.CellsLen(rf) / ntRf) < ntMaxrf {
+					if ((port.CellsLen(rf) / ntRf) < ntMaxrf) && (ntRefContext(gl, et, g0, gn, i, j, pwc) == 1) {
 						ntPushRf(rf, w, pa, pb, l, page, ms, port.CellsLen(mk)-ms)
 					}
 				}
@@ -533,6 +594,8 @@ func ntScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *
 	var band int32 = 0
 	var sz0 int32 = 0
 	var first int32 = 0
+	var pwc int32 = -1
+	var wl int32 = 0
 	var base int32 = 0
 	var ml int32 = 0
 	var ms int32 = 0
@@ -559,14 +622,17 @@ func ntScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *
 			}
 			nrow = port.CellsLen(nb) / ntNb
 			first = 1
+			pwc = -1
 			var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
 			var wn int32 = evidence.LnGet(ln, l, evidence.LhCount())
 			k = 0
 			for k < wn {
 				w = w0 + k
 				if lists.LsWl(wd, w) > 0 {
-					ntScanWord(wd, ln, et, gl, rf, nb, mk, l, w, first, sz0, base, szok, band)
+					ntScanWord(wd, ln, et, gl, rf, nb, mk, l, w, first, pwc, sz0, base, szok, band)
 					first = 0
+					wl = lists.LsWl(wd, w)
+					pwc = lists.LsWc(wd, et, w, wl-1)
 				}
 				k += 1
 			}
@@ -602,8 +668,8 @@ func ntSameMark(mk *port.Cells, s1 int32, l1 int32, s2 int32, l2 int32) bool {
 }
 
 func ntFindRef(rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32, samePage int32, before int32) int32 {
-	// The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), or before it
-	// in the document (before 1). Its row, or -1.
+	// The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), on the page before
+	// it (same-page 2: a footnote a column or a page break pushed on), or before it in the document (before 1). Its row, or -1.
 	var nr int32 = port.CellsLen(rf) / ntRf
 	var nl int32 = port.CellsAt(nb, i*ntNb)
 	var np int32 = port.CellsAt(nb, (i*ntNb)+1)
@@ -615,6 +681,9 @@ func ntFindRef(rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32, samePage
 			if (samePage == 1) && (port.CellsAt(rf, (r*ntRf)+4) == np) {
 				return r
 			}
+			if (samePage == 2) && (port.CellsAt(rf, (r*ntRf)+4) == (np - 1)) {
+				return r
+			}
 			if (before == 1) && ((port.CellsAt(rf, (r*ntRf)+4) < np) || ((port.CellsAt(rf, (r*ntRf)+4) == np) && (port.CellsAt(rf, (r*ntRf)+3) < nl))) {
 				return r
 			}
@@ -624,7 +693,38 @@ func ntFindRef(rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32, samePage
 	return -1
 }
 
-func ntMatch(rf *port.Cells, nb *port.Cells, mk *port.Cells) int32 {
+func ntFoot(rf *port.Cells, nb *port.Cells, mk *port.Cells, i int32) int32 {
+	// Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
+	// with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
+	// on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
+	// reference it took.
+	var b int32 = i * ntNb
+	var kind int32 = port.CellsAt(nb, b+3)
+	var szok int32 = port.CellsAt(nb, b+8)
+	var band int32 = port.CellsAt(nb, b+9)
+	var r int32 = -1
+	if port.CellsAt(nb, b+7) != 0 {
+		return 0
+	}
+	if (band == 1) && ((szok == 1) || (kind == 1)) {
+		r = ntFindRef(rf, nb, mk, i, 1, 0)
+	}
+	if (r < 0) && ((szok == 1) || ((kind == 1) && (band == 1))) {
+		r = ntFindRef(rf, nb, mk, i, 2, 0)
+	}
+	if r >= 0 {
+		port.CellsSet(rf, (r*ntRf)+7, 1)
+		port.CellsSet(nb, b+7, 1)
+		return 1
+	}
+	if (kind == 1) && (szok == 1) && (band == 1) {
+		port.CellsSet(nb, b+7, 1)
+		return 1
+	}
+	return 0
+}
+
+func ntMatch(rf *port.Cells, nb *port.Cells, mk *port.Cells, nhl int32) int32 {
 	// Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
 	// the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
 	// the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -634,22 +734,7 @@ func ntMatch(rf *port.Cells, nb *port.Cells, mk *port.Cells) int32 {
 	var r int32 = 0
 	var tent int32 = 0
 	for i < nn {
-		var b int32 = i * ntNb
-		if (port.CellsAt(nb, b+8) == 1) && (port.CellsAt(nb, b+9) == 1) && (port.CellsAt(nb, b+7) == 0) {
-			r = ntFindRef(rf, nb, mk, i, 1, 0)
-			if r >= 0 {
-				port.CellsSet(rf, (r*ntRf)+7, 1)
-				port.CellsSet(nb, b+7, 1)
-			} else if port.CellsAt(nb, b+3) == 1 {
-				port.CellsSet(nb, b+7, 1)
-			}
-		} else if (port.CellsAt(nb, b+3) == 1) && (port.CellsAt(nb, b+9) == 1) && (port.CellsAt(nb, b+7) == 0) {
-			r = ntFindRef(rf, nb, mk, i, 1, 0)
-			if r >= 0 {
-				port.CellsSet(rf, (r*ntRf)+7, 1)
-				port.CellsSet(nb, b+7, 1)
-			}
-		}
+		ntFoot(rf, nb, mk, i)
 		i += 1
 	}
 	// endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -663,9 +748,11 @@ func ntMatch(rf *port.Cells, nb *port.Cells, mk *port.Cells) int32 {
 					port.CellsSet(rf, (r*ntRf)+7, 2)
 					port.CellsSet(nb, b+7, 2)
 				} else {
-					port.CellsSet(rf, (r*ntRf)+7, 4)
-					port.CellsSet(nb, b+7, 4)
-					tent += 1
+					if (nhl >= 0) && (port.CellsAt(nb, b) > nhl) {
+						port.CellsSet(rf, (r*ntRf)+7, 4)
+						port.CellsSet(nb, b+7, 4)
+						tent += 1
+					}
 				}
 			}
 		}
@@ -696,11 +783,237 @@ func ntMatch(rf *port.Cells, nb *port.Cells, mk *port.Cells) int32 {
 	return 0
 }
 
+var NtNh [188]int32 = [188]int32{
+	110, 111, 116, 101, 115, 101, 110, 100, 110, 111, 116, 101, 115, 102, 111, 111,
+	116, 110, 111, 116, 101, 115, 110, 111, 116, 101, 115, 32, 97, 110, 100, 32,
+	114, 101, 102, 101, 114, 101, 110, 99, 101, 115, 110, 111, 116, 101, 115, 32,
+	97, 110, 100, 32, 115, 111, 117, 114, 99, 101, 115, 97, 110, 109, 101, 114,
+	107, 117, 110, 103, 101, 110, 101, 110, 100, 110, 111, 116, 101, 110, 102, 117,
+	223, 110, 111, 116, 101, 110, 102, 117, 115, 115, 110, 111, 116, 101, 110, 110,
+	111, 116, 101, 110, 110, 111, 116, 97, 115, 114, 101, 109, 97, 114, 113, 117,
+	101, 115, 110, 111, 116, 101, 115, 32, 100, 101, 32, 98, 97, 115, 32, 100,
+	101, 32, 112, 97, 103, 101, 110, 111, 116, 101, 110, 111, 116, 101, 32, 97,
+	32, 112, 105, 232, 32, 100, 105, 32, 112, 97, 103, 105, 110, 97, 1087, 1088,
+	1080, 1084, 1077, 1095, 1072, 1085, 1080, 1103, 1089, 1085, 1086, 1089, 1082, 1080, 27880, 37322,
+	33050, 27880, 23614, 27880, 35387, 37323, 27880, 35352, 44033, 51452, 48120, 51452,
+}
+
+var NtNhi [48]int32 = [48]int32{
+	0, 5, 5, 8, 13, 9, 22, 20, 42, 17, 59, 11, 70, 8, 78, 8,
+	86, 9, 95, 5, 100, 5, 105, 9, 114, 20, 134, 4, 138, 20, 158, 10,
+	168, 6, 174, 2, 176, 2, 178, 2, 180, 2, 182, 2, 184, 2, 186, 2,
+}
+
+const ntNnh int32 = 24
+
+func ntLastWord(wd *port.Cells, ln *port.Cells, l int32) int32 {
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var i int32 = (w0 + evidence.LnGet(ln, l, evidence.LhCount())) - 1
+	for i >= w0 {
+		if lists.LsWl(wd, i) > 0 {
+			return i
+		}
+		i -= 1
+	}
+	return -1
+}
+
+func ntNhMatch(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, e int32) int32 {
+	// 1 when the words of line l, joined by one space, with a colon or a full stop at their end dropped, spell entry e of
+	// the notes headings, in any case.
+	var off int32 = NtNhi[e*2]
+	var n int32 = NtNhi[(e*2)+1]
+	var lw int32 = ntLastWord(wd, ln, l)
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var wn int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var k int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var first int32 = 1
+	if lw < 0 {
+		return 0
+	}
+	for i < wn {
+		var w int32 = w0 + i
+		var tl int32 = lists.LsWl(wd, w)
+		if tl > 0 {
+			if first == 0 {
+				if (k >= n) || (NtNh[off+k] != 32) {
+					return 0
+				}
+				k += 1
+			}
+			first = 0
+			j = 0
+			for j < tl {
+				var c int32 = lists.LsWc(wd, et, w, j)
+				if (w == lw) && (j == (tl - 1)) && ((c == 58) || (c == 46)) {
+					j += 1
+				} else {
+					if (k >= n) || (ntLower(c) != NtNh[off+k]) {
+						return 0
+					}
+					k += 1
+					j += 1
+				}
+			}
+		}
+		i += 1
+	}
+	if k == n {
+		return 1
+	}
+	return 0
+}
+
+func ntNotesHeading(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) int32 {
+	var e int32 = 0
+	for e < ntNnh {
+		if ntNhMatch(wd, ln, et, l, e) == 1 {
+			return 1
+		}
+		e += 1
+	}
+	return 0
+}
+
+func ntFirstNotesHeading(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cells, rf *port.Cells) int32 {
+	// The first heading line that says `Notes` after the first reference there is; -1 when there is none (or no reference).
+	if port.CellsLen(rf) == 0 {
+		return -1
+	}
+	var n int32 = evidence.LnCount(ln)
+	var h int32 = port.CellsAt(rf, 3) + 1
+	for h < n {
+		if lists.LsUpright(ln, h) && (heading.HdLevel(hc, h) > 0) && (ntNotesHeading(wd, ln, et, h) == 1) {
+			return h
+		}
+		h += 1
+	}
+	return -1
+}
+
+func ntNthRef(rf *port.Cells, n int32) int32 {
+	// The row of the n-th (from 0) reference that nothing has claimed (state 0); -1 when there are fewer.
+	var nr int32 = port.CellsLen(rf) / ntRf
+	var r int32 = 0
+	var seen int32 = 0
+	for r < nr {
+		if port.CellsAt(rf, (r*ntRf)+7) == 0 {
+			if seen == n {
+				return r
+			}
+			seen += 1
+		}
+		r += 1
+	}
+	return -1
+}
+
 func ntPutMark(et *port.Cells, mk *port.Cells, ms int32, ml int32) int32 {
 	var i int32 = 0
 	for i < ml {
 		port.CellsPush(et, port.CellsAt(mk, ms+i))
 		i += 1
+	}
+	return 0
+}
+
+func ntWrapNote(wd *port.Cells, et *port.Cells, mk *port.Cells, w int32, ms int32, ml int32, role int32) int32 {
+	// Word w begins with an `S_NOTE` group (the role) whose text is the marker mk[ms, ms+ml), and keeps its own text.
+	var s int32 = lists.LsWrapBegin(et, lists.LsSNote(), role, -1)
+	ntPutMark(et, mk, ms, ml)
+	lists.LsWrapEnd(et)
+	lists.LsCopyWord(et, wd, w, 0)
+	lists.LsWrapSet(wd, et, w, s)
+	return 0
+}
+
+func ntClaim(wd *port.Cells, et *port.Cells, ln *port.Cells, hc *port.Cells, rf *port.Cells, mk *port.Cells, b int32, k int32) int32 {
+	// Line b starts the k-th note under a heading: an endnote whose marker is the k-th reference nothing claimed.
+	var r int32 = ntNthRef(rf, k)
+	var w int32 = lists.LsFirstWord(wd, ln, b)
+	if (r >= 0) && (w >= 0) {
+		ntWrapNote(wd, et, mk, w, port.CellsAt(rf, (r*ntRf)+5), port.CellsAt(rf, (r*ntRf)+6), 5)
+		lists.LsPut(hc, b, lists.LsKFlags(), lists.LsFNote())
+	}
+	return 0
+}
+
+func ntWalk(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, hc *port.Cells, rf *port.Cells, mk *port.Cells, h int32, doit int32) int32 {
+	// The notes under the heading line h: the first line below it and every line below that starts after more than one and
+	// a half line gaps of whitespace. With doit 1 each one is rewritten as an endnote whose marker is the next of the
+	// references nothing has claimed. Answers how many there are.
+	var med int32 = style.StHget(sf, style.SfhGap())
+	var b int32 = style.StGet(sf, h, style.SfkBelow())
+	var k int32 = 0
+	var steps int32 = 0
+	var first int32 = 1
+	var start int32 = 0
+	for (b >= 0) && (steps < 400) {
+		if (heading.HdLevel(hc, b) > 0) || !lists.LsUpright(ln, b) || (lists.LsGet(hc, b, lists.LsKFlags()) != 0) || (evidence.LnGet(ln, b, evidence.LhPage()) != evidence.LnGet(ln, h, evidence.LhPage())) {
+			b = -1
+		} else {
+			start = first
+			var g int32 = style.StGet(sf, b, style.SfkGapAbove())
+			var hb int32 = style.StGet(sf, b, style.SfkHeight())
+			if ((g * 2) > (med * 3)) && (((g - med) * 8) > hb) {
+				start = 1
+			}
+			if start == 1 {
+				if doit == 1 {
+					ntClaim(wd, et, ln, hc, rf, mk, b, k)
+				}
+				k += 1
+			}
+			first = 0
+			b = style.StGet(sf, b, style.SfkBelow())
+		}
+		steps += 1
+	}
+	return k
+}
+
+func ntMarkerless(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, hc *port.Cells, rf *port.Cells, mk *port.Cells) int32 {
+	// References left over (a superscript marker no body claimed) and a heading that says `Notes` after them: the lines
+	// under it that start a note, as many as there are references, are the endnotes, the printed marker being none; the
+	// markers are the references' own, in order. A different count leaves everything as it is.
+	var nr int32 = port.CellsLen(rf) / ntRf
+	var n int32 = evidence.LnCount(ln)
+	var r int32 = 0
+	var un int32 = 0
+	var fl int32 = -1
+	var h int32 = 0
+	var k int32 = 0
+	for r < nr {
+		if port.CellsAt(rf, (r*ntRf)+7) == 0 {
+			if fl < 0 {
+				fl = port.CellsAt(rf, (r*ntRf)+3)
+			}
+			un += 1
+		}
+		r += 1
+	}
+	if (un == 0) || (un > 400) {
+		return 0
+	}
+	h = fl + 1
+	for h < n {
+		if lists.LsUpright(ln, h) && (heading.HdLevel(hc, h) > 0) && (ntNotesHeading(wd, ln, et, h) == 1) {
+			k = ntWalk(wd, et, ln, sf, hc, rf, mk, h, 0)
+			if k == un {
+				ntWalk(wd, et, ln, sf, hc, rf, mk, h, 1)
+				r = 0
+				for r < nr {
+					if port.CellsAt(rf, (r*ntRf)+7) == 0 {
+						port.CellsSet(rf, (r*ntRf)+7, 2)
+					}
+					r += 1
+				}
+				return k
+			}
+		}
+		h += 1
 	}
 	return 0
 }
@@ -808,6 +1121,7 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	}
 	var n int32 = evidence.LnCount(ln)
 	var l int32 = 0
+	var nhl int32 = -1
 	var found int32 = 0
 	// captions first: a caption is never a note body
 	for l < n {
@@ -817,7 +1131,9 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 		l += 1
 	}
 	ntScan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk)
-	ntMatch(rf, nb, mk)
+	nhl = ntFirstNotesHeading(wd, ln, et, hc, rf)
+	ntMatch(rf, nb, mk, nhl)
+	ntMarkerless(wd, et, ln, sf, hc, rf, mk)
 	l = 0
 	for l < (port.CellsLen(nb) / ntNb) {
 		if (port.CellsAt(nb, (l*ntNb)+7) == 1) || (port.CellsAt(nb, (l*ntNb)+7) == 2) {

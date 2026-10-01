@@ -5,13 +5,13 @@ use crate::emon::evidence::*;
 use crate::emon::heading::*;
 use crate::emon::style::*;
 
-pub(crate) const LS_STRIDE: i32 = 6;
+pub(crate) const LS_STRIDE: i32 = 8;
 pub(crate) const LS_WIN: i32 = 48;
 pub(crate) const LS_MAXCAND: i32 = 6000;
 pub(crate) const LS_MAXSHAPE: i32 = 20000;
 pub(crate) const LS_NEAR: i32 = 12;
 pub(crate) const LS_XTOL: i32 = 300;
-pub(crate) const LS_CD: i32 = 10;
+pub(crate) const LS_CD: i32 = 12;
 pub fn ls_s_item() -> i32 {
     return 64976;
 }
@@ -86,6 +86,9 @@ pub fn ls_k_shape() -> i32 {
 }
 pub fn ls_k_gap() -> i32 {
     return 5;
+}
+pub fn ls_k_rtl() -> i32 {
+    return 6;
 }
 pub(crate) fn ls_gt(a: i32, b: i32) -> i32 {
     if a > b {
@@ -698,7 +701,7 @@ pub(crate) fn ls_pages(ln: &mut crate::port::Cells, mut pi: &mut crate::port::Ce
     }
     return 1;
 }
-pub(crate) fn ls_attach(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, l: i32, r: i32, x1: i32, w: i32, cy0: i32) -> i32 {
+pub(crate) fn ls_attach(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, l: i32, r: i32, x0: i32, x1: i32, w: i32, cy0: i32) -> i32 {
     // Associate shape r (its right edge x1, its width w, its centre cy) with line l if the shape stands where a
     // bullet stands: a fraction of an em to the left of the first word, on the x-height, of a fraction of an em in
     // size. The line keeps the nearest one. Answers 1 when this was the first shape the line got.
@@ -707,13 +710,30 @@ pub(crate) fn ls_attach(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells
     let lx: i32 = ls_cap(ln_get(ln, l, lh_x0()));
     let by: i32 = ls_cap(ln_get(ln, l, lh_by0()));
     let gap: i32 = ls_cap(lx - ls_cap(x1));
-    if ((gap * 16) >= sz) && ((gap * 10) <= (sz * 25)) && ((w * 100) >= (sz * 12)) && ((w * 100) <= (sz * 70)) && ((cy * 100) >= ((by * 100) - (sz * 80))) && ((cy * 10) <= ((by * 10) - sz)) {
-        let old: i32 = ls_get(hc, l, ls_k_shape());
-        if (old == 0) || (gap < ls_get(hc, l, ls_k_gap())) {
-            ls_put(hc, l, ls_k_shape(), r + 1);
-            ls_put(hc, l, ls_k_gap(), gap);
-            if old == 0 {
-                return 1;
+    let rx: i32 = ls_cap(ln_get(ln, l, lh_x1()));
+    let gap2: i32 = ls_cap(ls_cap(x0) - rx);
+    if ((w * 100) >= (sz * 12)) && ((w * 100) <= (sz * 70)) && ((cy * 100) >= ((by * 100) - (sz * 80))) && ((cy * 10) <= ((by * 10) - sz)) {
+        // to the left of the line's start (a bullet), or to the right of its end (the bullet of a line that runs right to left)
+        if ((gap * 16) >= sz) && ((gap * 10) <= (sz * 25)) {
+            let old: i32 = ls_get(hc, l, ls_k_shape());
+            if (old == 0) || (ls_get(hc, l, ls_k_rtl()) == 1) || (gap < ls_get(hc, l, ls_k_gap())) {
+                ls_put(hc, l, ls_k_shape(), r + 1);
+                ls_put(hc, l, ls_k_gap(), gap);
+                ls_put(hc, l, ls_k_rtl(), 0);
+                if old == 0 {
+                    return 1;
+                }
+            }
+        }
+        if ((gap2 * 16) >= sz) && ((gap2 * 10) <= (sz * 25)) {
+            let old: i32 = ls_get(hc, l, ls_k_shape());
+            if (old == 0) || ((ls_get(hc, l, ls_k_rtl()) == 1) && (gap2 < ls_get(hc, l, ls_k_gap()))) {
+                ls_put(hc, l, ls_k_shape(), r + 1);
+                ls_put(hc, l, ls_k_gap(), gap2);
+                ls_put(hc, l, ls_k_rtl(), 1);
+                if old == 0 {
+                    return 1;
+                }
             }
         }
     }
@@ -741,7 +761,7 @@ pub(crate) fn ls_shapes(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells
             l = crate::port::cells_at(pi, 2 * p) - 1;
             while (l >= 0) && (l < crate::port::cells_at(pi, (2 * p) + 1)) {
                 if ls_upright(ln, l) {
-                    got += ls_attach(ln, sf, hc, l, r, x1, w, (y0 + y1) / 2);
+                    got += ls_attach(ln, sf, hc, l, r, x0, x1, w, (y0 + y1) / 2);
                 }
                 l += 1;
             }
@@ -795,7 +815,7 @@ pub fn ls_second_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
     }
     return -1;
 }
-pub(crate) fn ls_push_cand(mut cd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, sch: i32, val: i32, sch2: i32, val2: i32, pun: i32, cls: i32, ch: i32, x: i32) -> i32 {
+pub(crate) fn ls_push_cand(mut cd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, sch: i32, val: i32, sch2: i32, val2: i32, pun: i32, cls: i32, ch: i32, x: i32, partner: i32) -> i32 {
     // Append one candidate row of `LS_CD` cells: line, page, scheme, value, scheme2, value2, punct, x0 of the line,
     // class (1 strong bullet, 2 weak, 3 number or letter, 4 shape), the bullet character.
     crate::port::cells_push(cd, l);
@@ -808,6 +828,8 @@ pub(crate) fn ls_push_cand(mut cd: &mut crate::port::Cells, ln: &mut crate::port
     crate::port::cells_push(cd, x);
     crate::port::cells_push(cd, cls);
     crate::port::cells_push(cd, ch);
+    crate::port::cells_push(cd, partner);
+    crate::port::cells_push(cd, 0);
     return 0;
 }
 pub(crate) fn ls_mlen(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32, mut ws: &mut crate::port::Cells) -> i32 {
@@ -815,11 +837,14 @@ pub(crate) fn ls_mlen(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, 
     ls_parse(wd, et, w, ws);
     return crate::port::cells_at(ws, 4);
 }
-pub(crate) fn ls_textx(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32, w: i32, cls: i32, mut ws: &mut crate::port::Cells) -> i32 {
+pub(crate) fn ls_textx(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, hc: &mut crate::port::Cells, l: i32, w: i32, cls: i32, mut ws: &mut crate::port::Cells) -> i32 {
     // The x where the item's text starts: the word after the marker; a glued marker's share of its word; the
     // word itself for a shape. 0 when the line has nothing after the marker. (Markers are often right aligned, so
     // the marker's own x says little about the indent: the text's does.)
     if cls == 4 {
+        if ls_get(hc, l, ls_k_rtl()) == 1 {
+            return 10000000 - ls_cap(ln_get(ln, l, lh_x1()));
+        }
         return wd_get(wd, w, hd_x0());
     }
     let w2: i32 = ls_second_word(wd, ln, l);
@@ -833,7 +858,119 @@ pub(crate) fn ls_textx(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     }
     return 0;
 }
-pub(crate) fn ls_collect(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, hc: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
+pub(crate) fn ls_rtl_side(ln: &mut crate::port::Cells, m: i32, t: i32) -> i32 {
+    // 1 when the text line t lies to the LEFT of its marker line m: the item runs right to left.
+    if ln_get(ln, t, lh_x1()) <= ln_get(ln, m, lh_x0()) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn ls_take_partner(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, w: i32, l: i32, m: i32, scheme: i32, value: i32) -> i32 {
+    // The item whose marker stands alone on line m and whose text starts with word w: w gets the group (the marker's
+    // text), the marker's word is emptied, line m is taken out of the lines (page -7, as furniture's are) and the text's
+    // line grows to hold it.
+    let wm: i32 = ls_first_word(wd, ln, m);
+    let s: i32 = ls_wrap_begin(et, ls_s_item(), scheme, value);
+    let ts: i32 = wd_get(wd, wm, hd_tstart());
+    let tl: i32 = wd_get(wd, wm, hd_tlen());
+    let mut j: i32 = 0;
+    while j < tl {
+        crate::port::cells_push(et, crate::port::cells_at(et, ts + j));
+        j += 1;
+    }
+    ls_wrap_end(et);
+    ls_copy_word(et, wd, w, 0);
+    ls_wrap_set(wd, et, w, s);
+    wd_set(wd, wm, hd_tlen(), 0);
+    let mx0: i32 = ln_get(ln, m, lh_x0());
+    let mx1: i32 = ln_get(ln, m, lh_x1());
+    let lx0: i32 = ln_get(ln, l, lh_x0());
+    let lx1: i32 = ln_get(ln, l, lh_x1());
+    if ls_rtl_side(ln, m, l) == 1 {
+        if mx1 > lx1 {
+            ln_set(ln, l, lh_x1(), mx1);
+        }
+    } else {
+        if mx0 < lx0 {
+            ln_set(ln, l, lh_x0(), mx0);
+        }
+    }
+    ln_set(ln, m, lh_page(), -7);
+    return 0;
+}
+pub(crate) fn ls_small(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, l: i32) -> i32 {
+    // 1 when line l is set smaller than three quarters of the body's size: the labels of a figure, the cells of a table
+    // in small type; a list there is not what this stage is after.
+    let bsz: i32 = st_hget(sf, sfh_size());
+    if (bsz > 0) && ((ls_line_size(sf, ln, l) * 100) < (bsz * 75)) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn ls_letter_after(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32, w: i32) -> i32 {
+    // 1 when the word after the marker word w of line l starts with a letter (of any script of letters): a dash before a
+    // number is a table's blank or a minus, not a bullet.
+    let w2: i32 = ls_second_word(wd, ln, l);
+    if w2 < 0 {
+        return 0;
+    }
+    let c: i32 = ls_wc(wd, et, w2, 0);
+    if (c >= 65) && (c <= 90) {
+        return 1;
+    }
+    if (c >= 97) && (c <= 122) {
+        return 1;
+    }
+    if (c >= 192) && ((c <= 8191) && ((c != 215) && (c != 247))) {
+        return 1;
+    }
+    if c >= 12288 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn ls_partner(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, hc: &mut crate::port::Cells, l: i32) -> i32 {
+    // The line that holds the TEXT of the item whose marker is alone on line l: the one sibling on its row, at the same
+    // baseline, close beside it (to its right, or to its left when the text runs right to left), with text of its own
+    // and nothing else. -1 when there is none. (A text layer builds two lines out of a marker and its text when
+    // they are set in different fonts: a right to left list is the common case.)
+    let t: i32 = st_get(sf, l, sfk_sibline());
+    if t < 0 {
+        return -1;
+    }
+    if st_get(sf, l, sfk_nsib()) != 1 {
+        return -1;
+    }
+    if !ls_upright(ln, t) {
+        return -1;
+    }
+    if (ls_get(hc, t, ls_k_flags()) != 0) || (hd_level(hc, t) > 0) {
+        return -1;
+    }
+    if ln_get(ln, t, lh_page()) != ln_get(ln, l, lh_page()) {
+        return -1;
+    }
+    if ls_first_word(wd, ln, t) < 0 {
+        return -1;
+    }
+    let sz: i32 = ls_line_size(sf, ln, l);
+    let mx0: i32 = ls_cap(ln_get(ln, l, lh_x0()));
+    let mx1: i32 = ls_cap(ln_get(ln, l, lh_x1()));
+    let tx0: i32 = ls_cap(ln_get(ln, t, lh_x0()));
+    let tx1: i32 = ls_cap(ln_get(ln, t, lh_x1()));
+    let db: i32 = ls_abs(ls_cap(ln_get(ln, l, lh_by0())) - ls_cap(ln_get(ln, t, lh_by0())));
+    if (db * 3) > sz {
+        return -1;
+    }
+    if ((tx0 + (sz / 4)) >= mx1) && (((tx0 - mx1) * 10) <= (sz * 25)) {
+        return t;
+    }
+    if ((tx1 - (sz / 4)) <= mx0) && (((mx0 - tx1) * 10) <= (sz * 25)) {
+        return t;
+    }
+    return -1;
+}
+pub(crate) fn ls_collect(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, sf: &mut crate::port::Cells, hc: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
     // One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are
     // headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the
     // marker has no item text and is left out.
@@ -842,22 +979,41 @@ pub(crate) fn ls_collect(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     let mut c: i32 = 0;
     let mut w: i32 = 0;
     let mut tx: i32 = 0;
+    let mut pt: i32 = 0;
+    let mut rt: i32 = 0;
     let mut cls: i32 = 0;
     crate::port::cells_drop(cd, 0);
     while (l < n) && (c < LS_MAXCAND) {
         if ls_upright(ln, l) && (hd_level(hc, l) == 0) && (ls_get(hc, l, ls_k_flags()) == 0) {
             w = ls_first_word(wd, ln, l);
-            if w >= 0 {
+            if (w >= 0) && (ls_small(wd, ln, sf, l) == 0) {
                 cls = ls_parse(wd, et, w, ws);
+                if (cls == 2) && (ls_letter_after(wd, ln, et, l, w) == 0) {
+                    cls = 0;
+                }
                 if (cls > 0) && ((crate::port::cells_at(ws, 4) < ls_wl(wd, w)) || (ls_second_word(wd, ln, l) >= 0)) {
-                    tx = ls_textx(wd, ln, et, l, w, cls, ws);
+                    tx = ls_textx(wd, ln, et, hc, l, w, cls, ws);
                     ls_parse(wd, et, w, ws);
-                    ls_push_cand(cd, ln, l, crate::port::cells_at(ws, 0), crate::port::cells_at(ws, 1), crate::port::cells_at(ws, 2), crate::port::cells_at(ws, 3), crate::port::cells_at(ws, 5), cls, crate::port::cells_at(ws, 6), tx);
+                    ls_push_cand(cd, ln, l, crate::port::cells_at(ws, 0), crate::port::cells_at(ws, 1), crate::port::cells_at(ws, 2), crate::port::cells_at(ws, 3), crate::port::cells_at(ws, 5), cls, crate::port::cells_at(ws, 6), tx, -1);
                     c += 1;
                 }
+                // a marker alone on its line, its text on the line beside it
+                if (cls > 0) && (crate::port::cells_at(ws, 4) == ls_wl(wd, w)) && (ls_second_word(wd, ln, l) < 0) {
+                    pt = ls_partner(wd, ln, sf, hc, l);
+                    if pt >= 0 {
+                        ls_parse(wd, et, w, ws);
+                        rt = ls_rtl_side(ln, l, pt);
+                        tx = ln_get(ln, pt, lh_x0());
+                        if rt == 1 {
+                            tx = 10000000 - ls_cap(ln_get(ln, pt, lh_x1()));
+                        }
+                        ls_push_cand(cd, ln, pt, crate::port::cells_at(ws, 0), crate::port::cells_at(ws, 1), crate::port::cells_at(ws, 2), crate::port::cells_at(ws, 3), crate::port::cells_at(ws, 5), cls, crate::port::cells_at(ws, 6), tx, l);
+                        c += 1;
+                    }
+                }
                 if (cls == 0) && (ls_get(hc, l, ls_k_shape()) > 0) {
-                    tx = ls_textx(wd, ln, et, l, w, 4, ws);
-                    ls_push_cand(cd, ln, l, ls_sc_bullet(), 0, 0, 0, 0, 4, 0, tx);
+                    tx = ls_textx(wd, ln, et, hc, l, w, 4, ws);
+                    ls_push_cand(cd, ln, l, ls_sc_bullet(), 0, 0, 0, 0, 4, 0, tx, -1);
                     c += 1;
                 }
             }
@@ -973,6 +1129,14 @@ pub(crate) fn ls_walk(ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, 
     }
     return 0;
 }
+pub(crate) fn ls_initial_like(cd: &mut crate::port::Cells, i: i32) -> i32 {
+    // 1 when candidate i is a letter or a roman numeral and a full stop (`Z.`): it might be an author's initial, and a
+    // hanging indent under it (a bibliography's) does not make it an item: only neighbours in a sequence do.
+    if (ls_cget(cd, i, 8) == 3) && (ls_cget(cd, i, 2) >= 3) && (ls_cget(cd, i, 2) <= 7) && (ls_cget(cd, i, 6) == 1) {
+        return 1;
+    }
+    return 0;
+}
 pub fn ls_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, sf: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, mut pi: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
     // Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.
     // Answers the number of item lines found. The heading rows of `hc` must be there (`hd-analyze` ran); when
@@ -990,7 +1154,7 @@ pub fn ls_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
     if ls_pages(ln, pi) == 1 {
         ls_shapes(ln, sf, pa, pi, hc);
     }
-    let nc: i32 = ls_collect(wd, ln, et, hc, cd, ws);
+    let nc: i32 = ls_collect(wd, ln, et, sf, hc, cd, ws);
     i = 0;
     while i < nc {
         let l: i32 = ls_cget(cd, i, 0);
@@ -999,7 +1163,7 @@ pub fn ls_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
         let mut conf: i32 = ls_confirm(cd, nc, i);
         let textx: i32 = ls_cget(cd, i, 7);
         // a lone candidate needs a hanging continuation under it (a number or a letter, a bullet or a shape)
-        if (conf == 0) && (textx > 0) && (cls != 2) {
+        if (conf == 0) && (textx > 0) && (cls != 2) && (ls_initial_like(cd, i) == 0) {
             if ls_hang_evidence(ln, sf, hc, l, textx) == 1 {
                 conf = 1;
             }
@@ -1008,19 +1172,27 @@ pub fn ls_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
             let mut sch: i32 = ls_pick(ls_cget(cd, i, 2), ls_cget(cd, i, 4), conf);
             let mut val: i32 = -1;
             let mut bch: i32 = -1;
+            let partner: i32 = ls_cget(cd, i, 10);
             let mlen: i32 = ls_mlen(wd, et, w, ws);
             if cls == 3 {
                 val = ls_pick(ls_cget(cd, i, 3), ls_cget(cd, i, 5), conf);
-            } else {
-                bch = ls_cget(cd, i, 9);
             }
             if cls == 4 {
                 let shape: i32 = ls_get(hc, l, ls_k_shape()) - 1;
                 let sx: i32 = pa_get(pa, shape, pf_x0());
+                let sx1: i32 = pa_get(pa, shape, pf_x1());
                 ls_wrap_item(wd, et, w, ls_sc_bullet(), -1, 0, ls_shape_char(pa, shape));
-                if sx < ln_get(ln, l, lh_x0()) {
-                    ln_set(ln, l, lh_x0(), sx);
+                if ls_get(hc, l, ls_k_rtl()) == 1 {
+                    if sx1 > ln_get(ln, l, lh_x1()) {
+                        ln_set(ln, l, lh_x1(), sx1);
+                    }
+                } else {
+                    if sx < ln_get(ln, l, lh_x0()) {
+                        ln_set(ln, l, lh_x0(), sx);
+                    }
                 }
+            } else if partner >= 0 {
+                ls_take_partner(wd, et, ln, w, l, partner, sch, val);
             } else {
                 ls_wrap_item(wd, et, w, sch, val, mlen, bch);
             }

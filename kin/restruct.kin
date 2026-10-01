@@ -38,6 +38,7 @@
                                 node-new node-set-text node-set-sub node-set-aux node-set-src node-set-conf
                                 node-set-flags node-add-region node-add-src
                                 region-page region-x0 region-y0 region-x1 region-y1 region-next
+                                layout-count layout-page layout-x0 layout-y0 layout-x1 layout-y1 layout-role rl-body
                                 attr-key attr-vkind attr-value attr-len attr-next
                                 node-set-attr-int node-add-attr-int node-add-attr-text node-set-attr-text
                                 node-set-attr-node node-set-attr-bool node-attr node-attr-int-or
@@ -232,8 +233,9 @@
   (return 0))
 
 (defn ^I32 rs-open-list [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells stk
-                         ^I32 parent ^I32 indent ^I32 scheme ^I32 value]
-  (comment "Open a list under parent for an item of this scheme and value, and push its frame.")
+                         ^I32 parent ^I32 indent ^I32 scheme ^I32 value ^I32 colx]
+  (comment "Open a list under parent for an item of this scheme and value, and push its frame: the x its items' text starts at")
+  (comment "and the left edge of the column that x is in (the frame's own coordinates).")
   (let [^I32 ls (node-new nodes (nk-list) parent)
         ^I32 off (rs-name-off scheme)
         ^I32 n (rs-name-len scheme)
@@ -258,31 +260,57 @@
     (cells-push stk -1)
     (cells-push stk value)
     (cells-push stk parent)
-    (cells-push stk 0)
+    (cells-push stk colx)
     (return ls)))
 
+(defn ^I32 rs-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 rs-column-x [^Cells lay ^Cells on ^Cells orr ^I32 c]
+  (comment "The left edge of the column (the layout's body cell) the item c's first region is in; 0 when none is.")
+  (let [^I32 r (node-region-head on c)]
+    (if (< r 0) (return 0))
+    (let [^I32 pg (region-page orr r)
+          ^I32 cx (quot (+ (region-x0 orr r) (region-x1 orr r)) 2)
+          ^I32 cy (quot (+ (region-y0 orr r) (region-y1 orr r)) 2)
+          ^I32 n (layout-count lay)
+          ^:mut ^I32 i 0]
+      (while (< i n)
+        (do (if (and (== (layout-page lay i) pg) (== (layout-role lay i) (rl-body))
+                     (>= cx (layout-x0 lay i)) (<= cx (layout-x1 lay i))
+                     (>= cy (layout-y0 lay i)) (<= cy (layout-y1 lay i)))
+              (return (layout-x0 lay i)))
+            (set i (+ i 1))))
+      (return 0))))
+
 (defn ^I32 rs-place-item [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                          ^:mut ^Cells text ^:mut ^Cells stk ^I32 base ^I32 c ^I32 np]
+                          ^:mut ^Cells text ^:mut ^Cells stk ^Cells lay ^I32 base ^I32 c ^I32 np]
   (comment "The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has")
   (comment "left. Answers the new list's node; the frame on top of the stack is its.")
   (let [^I32 tx0 (node-attr-int-or on oa c (fk-box) -1)
         ^I32 sch (node-sub on c)
         ^I32 val (node-aux on c)
+        ^I32 cx (rs-column-x lay on orr c)
         ^:mut ^I32 tx tx0
+        ^:mut ^I32 shift 0
         ^:mut ^I32 more 1]
     (if (< tx 0)
-      (do (if (>= (node-region-head on c) 0) (set tx (region-x0 orr (node-region-head on c))) (set tx 0))))
+      (if (>= (node-region-head on c) 0) (set tx (region-x0 orr (node-region-head on c))) (set tx 0)))
     (while (== more 1)
       (do (let [^I32 d (rs-depth stk base)]
             (if (== d 0)
-              (do (rs-open-list nodes attrs text stk np tx sch val)
+              (do (rs-open-list nodes attrs text stk np tx sch val cx)
                   (set more 0))
               (do (let [^I32 f (+ base (* (- d 1) RS_FR))
                         ^I32 ind (cells-at stk (+ f 1))
-                        ^I32 dx (- tx ind)]
+                        ^I32 fc (cells-at stk (+ f 7))]
+                    (set shift 0)
+                    (if (and (> fc 0) (> cx 0) (< tx 5000000) (> (rs-abs (- cx fc)) 2000)) (set shift (- cx fc)))
+                    (let [^I32 dx (- (- tx shift) ind)]
                     (if (> dx RS_NEST)
                       (do (let [^I32 held (cells-at stk (+ f 4))]
-                            (rs-open-list nodes attrs text stk held tx sch val)
+                            (rs-open-list nodes attrs text stk held (- tx shift) sch val cx)
                             (set more 0)))
                       (if (< dx (- 0 RS_NEST))
                         (rs-close-top nodes regions stk base)
@@ -291,8 +319,8 @@
                               (set more 0)
                               (do (let [^I32 par (cells-at stk (+ f 6))]
                                     (rs-close-top nodes regions stk base)
-                                    (rs-open-list nodes attrs text stk par tx sch val)
-                                    (set more 0)))))))))))))
+                                    (rs-open-list nodes attrs text stk par (- tx shift) sch val cx)
+                                    (set more 0))))))))))))))
     (let [^I32 d2 (rs-depth stk base)]
       (return (cells-at stk (+ base (* (- d2 1) RS_FR)))))))
 
@@ -387,7 +415,7 @@
 
 (defn ^I32 rs-children [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text
                         ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                        ^:mut ^Cells nm ^:mut ^Cells stk ^:mut ^Cells out ^I32 p ^I32 np]
+                        ^:mut ^Cells nm ^:mut ^Cells stk ^:mut ^Cells out ^Cells lay ^I32 p ^I32 np]
   (comment "Copy the children of old node p under new node np, restructured (see the head). Recursive.")
   (let [^I32 base (cells-len stk)
         ^:mut ^I32 c (node-first-child on p)
@@ -408,7 +436,7 @@
             (rs-close-all nodes regions stk base))
           (comment "an item: into a list, nested or not")
           (if (== act 1)
-            (do (set ls (rs-place-item on oa orr nodes attrs regions text stk base c np))
+            (do (set ls (rs-place-item on oa orr nodes attrs regions text stk lay base c np))
                 (set f (+ base (* (- (rs-depth stk base) 1) RS_FR)))
                 (set nn (rs-node on oa orr nodes attrs regions nm c ls))
                 (node-set-sub nodes nn 0)
@@ -420,13 +448,13 @@
                   (node-set-attr-int nodes attrs nn (fk-value) (node-aux on c)))
                 (cells-set stk (+ f 3) (node-aux on c))
                 (cells-set stk (+ f 4) nn)
-                (rs-children on oa orr text nodes attrs regions nm stk out c nn)))
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)))
           (comment "a milestone or a note inside a list that goes on: kept in the item before it")
           (if (== act 2)
             (do (set f (+ base (* (- (rs-depth stk base) 1) RS_FR)))
                 (set hold (cells-at stk (+ f 4)))
                 (set nn (rs-node on oa orr nodes attrs regions nm c hold))
-                (rs-children on oa orr text nodes attrs regions nm stk out c nn)))
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)))
           (comment "the caption above its object")
           (if (== act 3)
             (do (set q (node-next on c))
@@ -434,8 +462,8 @@
                 (set cn (rs-node on oa orr nodes attrs regions nm c nn))
                 (rs-pair out cn nn)
                 (rs-label-of on oa c nodes attrs nn)
-                (rs-children on oa orr text nodes attrs regions nm stk out c cn)
-                (rs-children on oa orr text nodes attrs regions nm stk out q nn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c cn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay q nn)
                 (set c q)))
           (comment "a figure caption with no figure: the evidence of a figure nothing else found")
           (if (== act 4)
@@ -447,7 +475,7 @@
                 (rs-label-of on oa c nodes attrs nn)
                 (set cn (rs-node on oa orr nodes attrs regions nm c nn))
                 (rs-pair out cn nn)
-                (rs-children on oa orr text nodes attrs regions nm stk out c cn)))
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c cn)))
           (comment "an object and the caption below it")
           (if (== act 5)
             (do (set q (node-next on c))
@@ -455,8 +483,8 @@
                 (set cn (rs-node on oa orr nodes attrs regions nm q nn))
                 (rs-pair out cn nn)
                 (rs-label-of on oa q nodes attrs nn)
-                (rs-children on oa orr text nodes attrs regions nm stk out q cn)
-                (rs-children on oa orr text nodes attrs regions nm stk out c nn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay q cn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)
                 (set c q)))
           (if (== act 6)
             (rs-pieces nodes attrs text np t0 t1 out))
@@ -465,7 +493,7 @@
                 (if (== act 8)
                   (do (node-set-text nodes nn -1 0)
                       (rs-pieces nodes attrs text nn t0 t1 out))
-                  (rs-children on oa orr text nodes attrs regions nm stk out c nn))))
+                  (rs-children on oa orr text nodes attrs regions nm stk out lay c nn))))
           (set c (node-next on c))))
     (rs-close-all nodes regions stk base)
     (return 0)))
@@ -540,7 +568,7 @@
 
 (defn ^:pub ^I32 rs-run [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text
                          ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                         ^:mut ^Cells nm ^:mut ^Cells stk ^:mut ^Cells used ^:mut ^Cells out]
+                         ^:mut ^Cells nm ^:mut ^Cells stk ^:mut ^Cells used ^:mut ^Cells out ^Cells lay]
   (comment "Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).")
   (comment "`nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new")
   (comment "node count.")
@@ -562,7 +590,7 @@
     (while (< r n)
       (do (if (< (node-parent on r) 0)
             (do (let [^I32 nr (rs-node on oa orr nodes attrs regions nm r -1)]
-                  (rs-children on oa orr text nodes attrs regions nm stk out r nr))))
+                  (rs-children on oa orr text nodes attrs regions nm stk out lay r nr))))
           (set r (+ r 1))))
     (rs-remap attrs nm)
     (rs-targets nodes attrs out)

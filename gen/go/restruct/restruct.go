@@ -263,8 +263,9 @@ func rsCloseAll(nodes *port.Cells, regions *port.Cells, stk *port.Cells, base in
 	return 0
 }
 
-func rsOpenList(nodes *port.Cells, attrs *port.Cells, text *port.Cells, stk *port.Cells, parent int32, indent int32, scheme int32, value int32) int32 {
-	// Open a list under parent for an item of this scheme and value, and push its frame.
+func rsOpenList(nodes *port.Cells, attrs *port.Cells, text *port.Cells, stk *port.Cells, parent int32, indent int32, scheme int32, value int32, colx int32) int32 {
+	// Open a list under parent for an item of this scheme and value, and push its frame: the x its items' text starts at
+	// and the left edge of the column that x is in (the frame's own coordinates).
 	var ls int32 = model.NodeNew(nodes, model.NkList(), parent)
 	var off int32 = rsNameOff(scheme)
 	var n int32 = rsNameLen(scheme)
@@ -295,17 +296,46 @@ func rsOpenList(nodes *port.Cells, attrs *port.Cells, text *port.Cells, stk *por
 	port.CellsPush(stk, -1)
 	port.CellsPush(stk, value)
 	port.CellsPush(stk, parent)
-	port.CellsPush(stk, 0)
+	port.CellsPush(stk, colx)
 	return ls
 }
 
-func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, stk *port.Cells, base int32, c int32, np int32) int32 {
+func rsAbs(v int32) int32 {
+	if v < 0 {
+		return 0 - v
+	}
+	return v
+}
+
+func rsColumnX(lay *port.Cells, on *port.Cells, orr *port.Cells, c int32) int32 {
+	// The left edge of the column (the layout's body cell) the item c's first region is in; 0 when none is.
+	var r int32 = model.NodeRegionHead(on, c)
+	if r < 0 {
+		return 0
+	}
+	var pg int32 = model.RegionPage(orr, r)
+	var cx int32 = (model.RegionX0(orr, r) + model.RegionX1(orr, r)) / 2
+	var cy int32 = (model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2
+	var n int32 = model.LayoutCount(lay)
+	var i int32 = 0
+	for i < n {
+		if (model.LayoutPage(lay, i) == pg) && (model.LayoutRole(lay, i) == model.RlBody()) && (cx >= model.LayoutX0(lay, i)) && (cx <= model.LayoutX1(lay, i)) && (cy >= model.LayoutY0(lay, i)) && (cy <= model.LayoutY1(lay, i)) {
+			return model.LayoutX0(lay, i)
+		}
+		i += 1
+	}
+	return 0
+}
+
+func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, stk *port.Cells, lay *port.Cells, base int32, c int32, np int32) int32 {
 	// The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has
 	// left. Answers the new list's node; the frame on top of the stack is its.
 	var tx0 int32 = model.NodeAttrIntOr(on, oa, c, model.FkBox(), -1)
 	var sch int32 = model.NodeSub(on, c)
 	var val int32 = model.NodeAux(on, c)
+	var cx int32 = rsColumnX(lay, on, orr, c)
 	var tx int32 = tx0
+	var shift int32 = 0
 	var more int32 = 1
 	if tx < 0 {
 		if model.NodeRegionHead(on, c) >= 0 {
@@ -317,15 +347,20 @@ func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Ce
 	for more == 1 {
 		var d int32 = rsDepth(stk, base)
 		if d == 0 {
-			rsOpenList(nodes, attrs, text, stk, np, tx, sch, val)
+			rsOpenList(nodes, attrs, text, stk, np, tx, sch, val, cx)
 			more = 0
 		} else {
 			var f int32 = base + ((d - 1) * rsFr)
 			var ind int32 = port.CellsAt(stk, f+1)
-			var dx int32 = tx - ind
+			var fc int32 = port.CellsAt(stk, f+7)
+			shift = 0
+			if (fc > 0) && (cx > 0) && (tx < 5000000) && (rsAbs(cx-fc) > 2000) {
+				shift = cx - fc
+			}
+			var dx int32 = (tx - shift) - ind
 			if dx > rsNest {
 				var held int32 = port.CellsAt(stk, f+4)
-				rsOpenList(nodes, attrs, text, stk, held, tx, sch, val)
+				rsOpenList(nodes, attrs, text, stk, held, tx-shift, sch, val, cx)
 				more = 0
 			} else if dx < (0 - rsNest) {
 				rsCloseTop(nodes, regions, stk, base)
@@ -335,7 +370,7 @@ func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Ce
 				} else {
 					var par int32 = port.CellsAt(stk, f+6)
 					rsCloseTop(nodes, regions, stk, base)
-					rsOpenList(nodes, attrs, text, stk, par, tx, sch, val)
+					rsOpenList(nodes, attrs, text, stk, par, tx-shift, sch, val, cx)
 					more = 0
 				}
 			}
@@ -479,7 +514,7 @@ func rsClassify(on *port.Cells, text *port.Cells, p int32, c int32, depth int32,
 	return 7
 }
 
-func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, stk *port.Cells, out *port.Cells, p int32, np int32) int32 {
+func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, stk *port.Cells, out *port.Cells, lay *port.Cells, p int32, np int32) int32 {
 	// Copy the children of old node p under new node np, restructured (see the head). Recursive.
 	var base int32 = port.CellsLen(stk)
 	var c int32 = model.NodeFirstChild(on, p)
@@ -501,7 +536,7 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 		}
 		// an item: into a list, nested or not
 		if act == 1 {
-			ls = rsPlaceItem(on, oa, orr, nodes, attrs, regions, text, stk, base, c, np)
+			ls = rsPlaceItem(on, oa, orr, nodes, attrs, regions, text, stk, lay, base, c, np)
 			f = base + ((rsDepth(stk, base) - 1) * rsFr)
 			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, ls)
 			model.NodeSetSub(nodes, nn, 0)
@@ -511,14 +546,14 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			}
 			port.CellsSet(stk, f+3, model.NodeAux(on, c))
 			port.CellsSet(stk, f+4, nn)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn)
 		}
 		// a milestone or a note inside a list that goes on: kept in the item before it
 		if act == 2 {
 			f = base + ((rsDepth(stk, base) - 1) * rsFr)
 			hold = port.CellsAt(stk, f+4)
 			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, hold)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn)
 		}
 		// the caption above its object
 		if act == 3 {
@@ -527,8 +562,8 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			cn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn)
 			rsPair(out, cn, nn)
 			rsLabelOf(on, oa, c, nodes, attrs, nn)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, cn)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, q, nn)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, cn)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, q, nn)
 			c = q
 		}
 		// a figure caption with no figure: the evidence of a figure nothing else found
@@ -541,7 +576,7 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			rsLabelOf(on, oa, c, nodes, attrs, nn)
 			cn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn)
 			rsPair(out, cn, nn)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, cn)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, cn)
 		}
 		// an object and the caption below it
 		if act == 5 {
@@ -550,8 +585,8 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			cn = rsNode(on, oa, orr, nodes, attrs, regions, nm, q, nn)
 			rsPair(out, cn, nn)
 			rsLabelOf(on, oa, q, nodes, attrs, nn)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, q, cn)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, q, cn)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn)
 			c = q
 		}
 		if act == 6 {
@@ -563,7 +598,7 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 				model.NodeSetText(nodes, nn, -1, 0)
 				rsPieces(nodes, attrs, text, nn, t0, t1, out)
 			} else {
-				rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn)
+				rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn)
 			}
 		}
 		c = model.NodeNext(on, c)
@@ -661,7 +696,7 @@ func rsLinkRefs(nodes *port.Cells, attrs *port.Cells, text *port.Cells, used *po
 	return 0
 }
 
-func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, stk *port.Cells, used *port.Cells, out *port.Cells) int32 {
+func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, stk *port.Cells, used *port.Cells, out *port.Cells, lay *port.Cells) int32 {
 	// Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
 	// `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
 	// node count.
@@ -684,7 +719,7 @@ func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, no
 	for r < n {
 		if model.NodeParent(on, r) < 0 {
 			var nr int32 = rsNode(on, oa, orr, nodes, attrs, regions, nm, r, -1)
-			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, r, nr)
+			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, r, nr)
 		}
 		r += 1
 	}

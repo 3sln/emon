@@ -242,8 +242,9 @@ pub(crate) fn rs_close_all(mut nodes: &mut crate::port::Cells, mut regions: &mut
     }
     return 0;
 }
-pub(crate) fn rs_open_list(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, parent: i32, indent: i32, scheme: i32, value: i32) -> i32 {
-    // Open a list under parent for an item of this scheme and value, and push its frame.
+pub(crate) fn rs_open_list(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, parent: i32, indent: i32, scheme: i32, value: i32, colx: i32) -> i32 {
+    // Open a list under parent for an item of this scheme and value, and push its frame: the x its items' text starts at
+    // and the left edge of the column that x is in (the frame's own coordinates).
     let ls: i32 = node_new(nodes, nk_list(), parent);
     let off: i32 = rs_name_off(scheme);
     let n: i32 = rs_name_len(scheme);
@@ -274,16 +275,43 @@ pub(crate) fn rs_open_list(mut nodes: &mut crate::port::Cells, mut attrs: &mut c
     crate::port::cells_push(stk, -1);
     crate::port::cells_push(stk, value);
     crate::port::cells_push(stk, parent);
-    crate::port::cells_push(stk, 0);
+    crate::port::cells_push(stk, colx);
     return ls;
 }
-pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, base: i32, c: i32, np: i32) -> i32 {
+pub(crate) fn rs_abs(v: i32) -> i32 {
+    if v < 0 {
+        return 0 - v;
+    }
+    return v;
+}
+pub(crate) fn rs_column_x(lay: &mut crate::port::Cells, on: &mut crate::port::Cells, orr: &mut crate::port::Cells, c: i32) -> i32 {
+    // The left edge of the column (the layout's body cell) the item c's first region is in; 0 when none is.
+    let r: i32 = node_region_head(on, c);
+    if r < 0 {
+        return 0;
+    }
+    let pg: i32 = region_page(orr, r);
+    let cx: i32 = (region_x0(orr, r) + region_x1(orr, r)) / 2;
+    let cy: i32 = (region_y0(orr, r) + region_y1(orr, r)) / 2;
+    let n: i32 = layout_count(lay);
+    let mut i: i32 = 0;
+    while i < n {
+        if (layout_page(lay, i) == pg) && (layout_role(lay, i) == rl_body()) && (cx >= layout_x0(lay, i)) && (cx <= layout_x1(lay, i)) && (cy >= layout_y0(lay, i)) && (cy <= layout_y1(lay, i)) {
+            return layout_x0(lay, i);
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, lay: &mut crate::port::Cells, base: i32, c: i32, np: i32) -> i32 {
     // The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has
     // left. Answers the new list's node; the frame on top of the stack is its.
     let tx0: i32 = node_attr_int_or(on, oa, c, fk_box(), -1);
     let sch: i32 = node_sub(on, c);
     let val: i32 = node_aux(on, c);
+    let cx: i32 = rs_column_x(lay, on, orr, c);
     let mut tx: i32 = tx0;
+    let mut shift: i32 = 0;
     let mut more: i32 = 1;
     if tx < 0 {
         if node_region_head(on, c) >= 0 {
@@ -295,15 +323,20 @@ pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::C
     while more == 1 {
         let d: i32 = rs_depth(stk, base);
         if d == 0 {
-            rs_open_list(nodes, attrs, text, stk, np, tx, sch, val);
+            rs_open_list(nodes, attrs, text, stk, np, tx, sch, val, cx);
             more = 0;
         } else {
             let f: i32 = base + ((d - 1) * RS_FR);
             let ind: i32 = crate::port::cells_at(stk, f + 1);
-            let dx: i32 = tx - ind;
+            let fc: i32 = crate::port::cells_at(stk, f + 7);
+            shift = 0;
+            if (fc > 0) && (cx > 0) && (tx < 5000000) && (rs_abs(cx - fc) > 2000) {
+                shift = cx - fc;
+            }
+            let dx: i32 = (tx - shift) - ind;
             if dx > RS_NEST {
                 let held: i32 = crate::port::cells_at(stk, f + 4);
-                rs_open_list(nodes, attrs, text, stk, held, tx, sch, val);
+                rs_open_list(nodes, attrs, text, stk, held, tx - shift, sch, val, cx);
                 more = 0;
             } else if dx < (0 - RS_NEST) {
                 rs_close_top(nodes, regions, stk, base);
@@ -313,7 +346,7 @@ pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::C
                 } else {
                     let par: i32 = crate::port::cells_at(stk, f + 6);
                     rs_close_top(nodes, regions, stk, base);
-                    rs_open_list(nodes, attrs, text, stk, par, tx, sch, val);
+                    rs_open_list(nodes, attrs, text, stk, par, tx - shift, sch, val, cx);
                     more = 0;
                 }
             }
@@ -447,7 +480,7 @@ pub(crate) fn rs_classify(on: &mut crate::port::Cells, text: &mut crate::port::C
     }
     return 7;
 }
-pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, mut out: &mut crate::port::Cells, p: i32, np: i32) -> i32 {
+pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, mut out: &mut crate::port::Cells, lay: &mut crate::port::Cells, p: i32, np: i32) -> i32 {
     // Copy the children of old node p under new node np, restructured (see the head). Recursive.
     let base: i32 = crate::port::cells_len(stk);
     let mut c: i32 = node_first_child(on, p);
@@ -469,7 +502,7 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
         }
         // an item: into a list, nested or not
         if act == 1 {
-            ls = rs_place_item(on, oa, orr, nodes, attrs, regions, text, stk, base, c, np);
+            ls = rs_place_item(on, oa, orr, nodes, attrs, regions, text, stk, lay, base, c, np);
             f = base + ((rs_depth(stk, base) - 1) * RS_FR);
             nn = rs_node(on, oa, orr, nodes, attrs, regions, nm, c, ls);
             node_set_sub(nodes, nn, 0);
@@ -479,14 +512,14 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
             }
             crate::port::cells_set(stk, f + 3, node_aux(on, c));
             crate::port::cells_set(stk, f + 4, nn);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
         }
         // a milestone or a note inside a list that goes on: kept in the item before it
         if act == 2 {
             f = base + ((rs_depth(stk, base) - 1) * RS_FR);
             hold = crate::port::cells_at(stk, f + 4);
             nn = rs_node(on, oa, orr, nodes, attrs, regions, nm, c, hold);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
         }
         // the caption above its object
         if act == 3 {
@@ -495,8 +528,8 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
             cn = rs_node(on, oa, orr, nodes, attrs, regions, nm, c, nn);
             rs_pair(out, cn, nn);
             rs_label_of(on, oa, c, nodes, attrs, nn);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, cn);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, q, nn);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, cn);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, q, nn);
             c = q;
         }
         // a figure caption with no figure: the evidence of a figure nothing else found
@@ -509,7 +542,7 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
             rs_label_of(on, oa, c, nodes, attrs, nn);
             cn = rs_node(on, oa, orr, nodes, attrs, regions, nm, c, nn);
             rs_pair(out, cn, nn);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, cn);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, cn);
         }
         // an object and the caption below it
         if act == 5 {
@@ -518,8 +551,8 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
             cn = rs_node(on, oa, orr, nodes, attrs, regions, nm, q, nn);
             rs_pair(out, cn, nn);
             rs_label_of(on, oa, q, nodes, attrs, nn);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, q, cn);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, q, cn);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
             c = q;
         }
         if act == 6 {
@@ -531,7 +564,7 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
                 node_set_text(nodes, nn, -1, 0);
                 rs_pieces(nodes, attrs, text, nn, t0, t1, out);
             } else {
-                rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, c, nn);
+                rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
             }
         }
         c = node_next(on, c);
@@ -624,7 +657,7 @@ pub(crate) fn rs_link_refs(mut nodes: &mut crate::port::Cells, mut attrs: &mut c
     }
     return 0;
 }
-pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, mut used: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
+pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, mut used: &mut crate::port::Cells, mut out: &mut crate::port::Cells, lay: &mut crate::port::Cells) -> i32 {
     // Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
     // `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
     // node count.
@@ -647,7 +680,7 @@ pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mu
     while r < n {
         if node_parent(on, r) < 0 {
             let nr: i32 = rs_node(on, oa, orr, nodes, attrs, regions, nm, r, -1);
-            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, r, nr);
+            rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, r, nr);
         }
         r += 1;
     }

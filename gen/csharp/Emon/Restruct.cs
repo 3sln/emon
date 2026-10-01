@@ -243,8 +243,9 @@ public static class Restruct {
         }
         return 0;
     }
-    internal static int RsOpenList(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells stk, int parent, int indent, int scheme, int value) {
-        // Open a list under parent for an item of this scheme and value, and push its frame.
+    internal static int RsOpenList(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells stk, int parent, int indent, int scheme, int value, int colx) {
+        // Open a list under parent for an item of this scheme and value, and push its frame: the x its items' text starts at
+        // and the left edge of the column that x is in (the frame's own coordinates).
         int ls = Model.NodeNew(nodes, Model.NkList(), parent);
         int off = RsNameOff(scheme);
         int n = RsNameLen(scheme);
@@ -275,16 +276,43 @@ public static class Restruct {
         emon.Port.CellsPush(stk, -1);
         emon.Port.CellsPush(stk, value);
         emon.Port.CellsPush(stk, parent);
-        emon.Port.CellsPush(stk, 0);
+        emon.Port.CellsPush(stk, colx);
         return ls;
     }
-    internal static int RsPlaceItem(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells stk, int @base, int c, int np) {
+    internal static int RsAbs(int v) {
+        if (v < 0) {
+            return 0 - v;
+        }
+        return v;
+    }
+    internal static int RsColumnX(emon.Port.Cells lay, emon.Port.Cells on, emon.Port.Cells orr, int c) {
+        // The left edge of the column (the layout's body cell) the item c's first region is in; 0 when none is.
+        int r = Model.NodeRegionHead(on, c);
+        if (r < 0) {
+            return 0;
+        }
+        int pg = Model.RegionPage(orr, r);
+        int cx = (Model.RegionX0(orr, r) + Model.RegionX1(orr, r)) / 2;
+        int cy = (Model.RegionY0(orr, r) + Model.RegionY1(orr, r)) / 2;
+        int n = Model.LayoutCount(lay);
+        int i = 0;
+        while (i < n) {
+            if ((Model.LayoutPage(lay, i) == pg) && (Model.LayoutRole(lay, i) == Model.RlBody()) && (cx >= Model.LayoutX0(lay, i)) && (cx <= Model.LayoutX1(lay, i)) && (cy >= Model.LayoutY0(lay, i)) && (cy <= Model.LayoutY1(lay, i))) {
+                return Model.LayoutX0(lay, i);
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int RsPlaceItem(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells stk, emon.Port.Cells lay, int @base, int c, int np) {
         // The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has
         // left. Answers the new list's node; the frame on top of the stack is its.
         int tx0 = Model.NodeAttrIntOr(on, oa, c, Model.FkBox(), -1);
         int sch = Model.NodeSub(on, c);
         int val = Model.NodeAux(on, c);
+        int cx = RsColumnX(lay, on, orr, c);
         int tx = tx0;
+        int shift = 0;
         int more = 1;
         if (tx < 0) {
             if (Model.NodeRegionHead(on, c) >= 0) {
@@ -296,15 +324,20 @@ public static class Restruct {
         while (more == 1) {
             int d = RsDepth(stk, @base);
             if (d == 0) {
-                RsOpenList(nodes, attrs, text, stk, np, tx, sch, val);
+                RsOpenList(nodes, attrs, text, stk, np, tx, sch, val, cx);
                 more = 0;
             } else {
                 int f = @base + ((d - 1) * RsFr);
                 int ind = emon.Port.CellsAt(stk, f + 1);
-                int dx = tx - ind;
+                int fc = emon.Port.CellsAt(stk, f + 7);
+                shift = 0;
+                if ((fc > 0) && (cx > 0) && (tx < 5000000) && (RsAbs(cx - fc) > 2000)) {
+                    shift = cx - fc;
+                }
+                int dx = (tx - shift) - ind;
                 if (dx > RsNest) {
                     int held = emon.Port.CellsAt(stk, f + 4);
-                    RsOpenList(nodes, attrs, text, stk, held, tx, sch, val);
+                    RsOpenList(nodes, attrs, text, stk, held, tx - shift, sch, val, cx);
                     more = 0;
                 } else if (dx < (0 - RsNest)) {
                     RsCloseTop(nodes, regions, stk, @base);
@@ -314,7 +347,7 @@ public static class Restruct {
                     } else {
                         int par = emon.Port.CellsAt(stk, f + 6);
                         RsCloseTop(nodes, regions, stk, @base);
-                        RsOpenList(nodes, attrs, text, stk, par, tx, sch, val);
+                        RsOpenList(nodes, attrs, text, stk, par, tx - shift, sch, val, cx);
                         more = 0;
                     }
                 }
@@ -448,7 +481,7 @@ public static class Restruct {
         }
         return 7;
     }
-    internal static int RsChildren(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells stk, emon.Port.Cells @out, int p, int np) {
+    internal static int RsChildren(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells stk, emon.Port.Cells @out, emon.Port.Cells lay, int p, int np) {
         // Copy the children of old node p under new node np, restructured (see the head). Recursive.
         int @base = emon.Port.CellsLen(stk);
         int c = Model.NodeFirstChild(on, p);
@@ -470,7 +503,7 @@ public static class Restruct {
             }
             // an item: into a list, nested or not
             if (act == 1) {
-                ls = RsPlaceItem(on, oa, orr, nodes, attrs, regions, text, stk, @base, c, np);
+                ls = RsPlaceItem(on, oa, orr, nodes, attrs, regions, text, stk, lay, @base, c, np);
                 f = @base + ((RsDepth(stk, @base) - 1) * RsFr);
                 nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, ls);
                 Model.NodeSetSub(nodes, nn, 0);
@@ -480,14 +513,14 @@ public static class Restruct {
                 }
                 emon.Port.CellsSet(stk, f + 3, Model.NodeAux(on, c));
                 emon.Port.CellsSet(stk, f + 4, nn);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, c, nn);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, nn);
             }
             // a milestone or a note inside a list that goes on: kept in the item before it
             if (act == 2) {
                 f = @base + ((RsDepth(stk, @base) - 1) * RsFr);
                 hold = emon.Port.CellsAt(stk, f + 4);
                 nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, hold);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, c, nn);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, nn);
             }
             // the caption above its object
             if (act == 3) {
@@ -496,8 +529,8 @@ public static class Restruct {
                 cn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn);
                 RsPair(@out, cn, nn);
                 RsLabelOf(on, oa, c, nodes, attrs, nn);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, c, cn);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, q, nn);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, cn);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, q, nn);
                 c = q;
             }
             // a figure caption with no figure: the evidence of a figure nothing else found
@@ -510,7 +543,7 @@ public static class Restruct {
                 RsLabelOf(on, oa, c, nodes, attrs, nn);
                 cn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn);
                 RsPair(@out, cn, nn);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, c, cn);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, cn);
             }
             // an object and the caption below it
             if (act == 5) {
@@ -519,8 +552,8 @@ public static class Restruct {
                 cn = RsNode(on, oa, orr, nodes, attrs, regions, nm, q, nn);
                 RsPair(@out, cn, nn);
                 RsLabelOf(on, oa, q, nodes, attrs, nn);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, q, cn);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, c, nn);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, q, cn);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, nn);
                 c = q;
             }
             if (act == 6) {
@@ -532,7 +565,7 @@ public static class Restruct {
                     Model.NodeSetText(nodes, nn, -1, 0);
                     RsPieces(nodes, attrs, text, nn, t0, t1, @out);
                 } else {
-                    RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, c, nn);
+                    RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, nn);
                 }
             }
             c = Model.NodeNext(on, c);
@@ -625,7 +658,7 @@ public static class Restruct {
         }
         return 0;
     }
-    public static int RsRun(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells stk, emon.Port.Cells used, emon.Port.Cells @out) {
+    public static int RsRun(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells stk, emon.Port.Cells used, emon.Port.Cells @out, emon.Port.Cells lay) {
         // Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
         // `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
         // node count.
@@ -648,7 +681,7 @@ public static class Restruct {
         while (r < n) {
             if (Model.NodeParent(on, r) < 0) {
                 int nr = RsNode(on, oa, orr, nodes, attrs, regions, nm, r, -1);
-                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, r, nr);
+                RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, r, nr);
             }
             r += 1;
         }

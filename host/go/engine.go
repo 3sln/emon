@@ -792,7 +792,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
 	// body is copied into new arenas, in document order, and they replace the old ones
 	r := newCellsN(10)
-	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6])
+	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6], m.layout)
 	m.nodes, r[0] = r[0], m.nodes
 	m.attrs, r[1] = r[1], m.attrs
 	m.regions, r[2] = r[2], m.regions

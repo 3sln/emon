@@ -10,7 +10,7 @@ import (
 	"emon/style"
 )
 
-const lsStride int32 = 6
+const lsStride int32 = 8
 
 const lsWin int32 = 48
 
@@ -22,7 +22,7 @@ const lsNear int32 = 12
 
 const lsXtol int32 = 300
 
-const lsCd int32 = 10
+const lsCd int32 = 12
 
 func LsSItem() int32 {
 	return 64976
@@ -122,6 +122,10 @@ func LsKShape() int32 {
 
 func LsKGap() int32 {
 	return 5
+}
+
+func LsKRtl() int32 {
+	return 6
 }
 
 func lsGt(a int32, b int32) int32 {
@@ -769,7 +773,7 @@ func lsPages(ln *port.Cells, pi *port.Cells) int32 {
 	return 1
 }
 
-func lsAttach(ln *port.Cells, sf *port.Cells, hc *port.Cells, l int32, r int32, x1 int32, w int32, cy0 int32) int32 {
+func lsAttach(ln *port.Cells, sf *port.Cells, hc *port.Cells, l int32, r int32, x0 int32, x1 int32, w int32, cy0 int32) int32 {
 	// Associate shape r (its right edge x1, its width w, its centre cy) with line l if the shape stands where a
 	// bullet stands: a fraction of an em to the left of the first word, on the x-height, of a fraction of an em in
 	// size. The line keeps the nearest one. Answers 1 when this was the first shape the line got.
@@ -778,13 +782,30 @@ func lsAttach(ln *port.Cells, sf *port.Cells, hc *port.Cells, l int32, r int32, 
 	var lx int32 = LsCap(evidence.LnGet(ln, l, evidence.LhX0()))
 	var by int32 = LsCap(evidence.LnGet(ln, l, evidence.LhBy0()))
 	var gap int32 = LsCap(lx - LsCap(x1))
-	if ((gap * 16) >= sz) && ((gap * 10) <= (sz * 25)) && ((w * 100) >= (sz * 12)) && ((w * 100) <= (sz * 70)) && ((cy * 100) >= ((by * 100) - (sz * 80))) && ((cy * 10) <= ((by * 10) - sz)) {
-		var old int32 = LsGet(hc, l, LsKShape())
-		if (old == 0) || (gap < LsGet(hc, l, LsKGap())) {
-			LsPut(hc, l, LsKShape(), r+1)
-			LsPut(hc, l, LsKGap(), gap)
-			if old == 0 {
-				return 1
+	var rx int32 = LsCap(evidence.LnGet(ln, l, evidence.LhX1()))
+	var gap2 int32 = LsCap(LsCap(x0) - rx)
+	if ((w * 100) >= (sz * 12)) && ((w * 100) <= (sz * 70)) && ((cy * 100) >= ((by * 100) - (sz * 80))) && ((cy * 10) <= ((by * 10) - sz)) {
+		// to the left of the line's start (a bullet), or to the right of its end (the bullet of a line that runs right to left)
+		if ((gap * 16) >= sz) && ((gap * 10) <= (sz * 25)) {
+			var old int32 = LsGet(hc, l, LsKShape())
+			if (old == 0) || (LsGet(hc, l, LsKRtl()) == 1) || (gap < LsGet(hc, l, LsKGap())) {
+				LsPut(hc, l, LsKShape(), r+1)
+				LsPut(hc, l, LsKGap(), gap)
+				LsPut(hc, l, LsKRtl(), 0)
+				if old == 0 {
+					return 1
+				}
+			}
+		}
+		if ((gap2 * 16) >= sz) && ((gap2 * 10) <= (sz * 25)) {
+			var old int32 = LsGet(hc, l, LsKShape())
+			if (old == 0) || ((LsGet(hc, l, LsKRtl()) == 1) && (gap2 < LsGet(hc, l, LsKGap()))) {
+				LsPut(hc, l, LsKShape(), r+1)
+				LsPut(hc, l, LsKGap(), gap2)
+				LsPut(hc, l, LsKRtl(), 1)
+				if old == 0 {
+					return 1
+				}
 			}
 		}
 	}
@@ -813,7 +834,7 @@ func lsShapes(ln *port.Cells, sf *port.Cells, pa *port.Cells, pi *port.Cells, hc
 			l = port.CellsAt(pi, 2*p) - 1
 			for (l >= 0) && (l < port.CellsAt(pi, (2*p)+1)) {
 				if LsUpright(ln, l) {
-					got += lsAttach(ln, sf, hc, l, r, x1, w, (y0+y1)/2)
+					got += lsAttach(ln, sf, hc, l, r, x0, x1, w, (y0+y1)/2)
 				}
 				l += 1
 			}
@@ -871,7 +892,7 @@ func LsSecondWord(wd *port.Cells, ln *port.Cells, l int32) int32 {
 	return -1
 }
 
-func lsPushCand(cd *port.Cells, ln *port.Cells, l int32, sch int32, val int32, sch2 int32, val2 int32, pun int32, cls int32, ch int32, x int32) int32 {
+func lsPushCand(cd *port.Cells, ln *port.Cells, l int32, sch int32, val int32, sch2 int32, val2 int32, pun int32, cls int32, ch int32, x int32, partner int32) int32 {
 	// Append one candidate row of `LS_CD` cells: line, page, scheme, value, scheme2, value2, punct, x0 of the line,
 	// class (1 strong bullet, 2 weak, 3 number or letter, 4 shape), the bullet character.
 	port.CellsPush(cd, l)
@@ -884,6 +905,8 @@ func lsPushCand(cd *port.Cells, ln *port.Cells, l int32, sch int32, val int32, s
 	port.CellsPush(cd, x)
 	port.CellsPush(cd, cls)
 	port.CellsPush(cd, ch)
+	port.CellsPush(cd, partner)
+	port.CellsPush(cd, 0)
 	return 0
 }
 
@@ -893,11 +916,14 @@ func lsMlen(wd *port.Cells, et *port.Cells, w int32, ws *port.Cells) int32 {
 	return port.CellsAt(ws, 4)
 }
 
-func lsTextx(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, w int32, cls int32, ws *port.Cells) int32 {
+func lsTextx(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cells, l int32, w int32, cls int32, ws *port.Cells) int32 {
 	// The x where the item's text starts: the word after the marker; a glued marker's share of its word; the
 	// word itself for a shape. 0 when the line has nothing after the marker. (Markers are often right aligned, so
 	// the marker's own x says little about the indent: the text's does.)
 	if cls == 4 {
+		if LsGet(hc, l, LsKRtl()) == 1 {
+			return 10000000 - LsCap(evidence.LnGet(ln, l, evidence.LhX1()))
+		}
 		return evidence.WdGet(wd, w, evidence.HdX0())
 	}
 	var w2 int32 = LsSecondWord(wd, ln, l)
@@ -912,7 +938,124 @@ func lsTextx(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, w int32, c
 	return 0
 }
 
-func lsCollect(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cells, cd *port.Cells, ws *port.Cells) int32 {
+func lsRtlSide(ln *port.Cells, m int32, t int32) int32 {
+	// 1 when the text line t lies to the LEFT of its marker line m: the item runs right to left.
+	if evidence.LnGet(ln, t, evidence.LhX1()) <= evidence.LnGet(ln, m, evidence.LhX0()) {
+		return 1
+	}
+	return 0
+}
+
+func lsTakePartner(wd *port.Cells, et *port.Cells, ln *port.Cells, w int32, l int32, m int32, scheme int32, value int32) int32 {
+	// The item whose marker stands alone on line m and whose text starts with word w: w gets the group (the marker's
+	// text), the marker's word is emptied, line m is taken out of the lines (page -7, as furniture's are) and the text's
+	// line grows to hold it.
+	var wm int32 = LsFirstWord(wd, ln, m)
+	var s int32 = LsWrapBegin(et, LsSItem(), scheme, value)
+	var ts int32 = evidence.WdGet(wd, wm, evidence.HdTstart())
+	var tl int32 = evidence.WdGet(wd, wm, evidence.HdTlen())
+	var j int32 = 0
+	for j < tl {
+		port.CellsPush(et, port.CellsAt(et, ts+j))
+		j += 1
+	}
+	LsWrapEnd(et)
+	LsCopyWord(et, wd, w, 0)
+	LsWrapSet(wd, et, w, s)
+	evidence.WdSet(wd, wm, evidence.HdTlen(), 0)
+	var mx0 int32 = evidence.LnGet(ln, m, evidence.LhX0())
+	var mx1 int32 = evidence.LnGet(ln, m, evidence.LhX1())
+	var lx0 int32 = evidence.LnGet(ln, l, evidence.LhX0())
+	var lx1 int32 = evidence.LnGet(ln, l, evidence.LhX1())
+	if lsRtlSide(ln, m, l) == 1 {
+		if mx1 > lx1 {
+			evidence.LnSet(ln, l, evidence.LhX1(), mx1)
+		}
+	} else {
+		if mx0 < lx0 {
+			evidence.LnSet(ln, l, evidence.LhX0(), mx0)
+		}
+	}
+	evidence.LnSet(ln, m, evidence.LhPage(), -7)
+	return 0
+}
+
+func lsSmall(wd *port.Cells, ln *port.Cells, sf *port.Cells, l int32) int32 {
+	// 1 when line l is set smaller than three quarters of the body's size: the labels of a figure, the cells of a table
+	// in small type; a list there is not what this stage is after.
+	var bsz int32 = style.StHget(sf, style.SfhSize())
+	if (bsz > 0) && ((LsLineSize(sf, ln, l) * 100) < (bsz * 75)) {
+		return 1
+	}
+	return 0
+}
+
+func lsLetterAfter(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32, w int32) int32 {
+	// 1 when the word after the marker word w of line l starts with a letter (of any script of letters): a dash before a
+	// number is a table's blank or a minus, not a bullet.
+	var w2 int32 = LsSecondWord(wd, ln, l)
+	if w2 < 0 {
+		return 0
+	}
+	var c int32 = LsWc(wd, et, w2, 0)
+	if (c >= 65) && (c <= 90) {
+		return 1
+	}
+	if (c >= 97) && (c <= 122) {
+		return 1
+	}
+	if (c >= 192) && ((c <= 8191) && ((c != 215) && (c != 247))) {
+		return 1
+	}
+	if c >= 12288 {
+		return 1
+	}
+	return 0
+}
+
+func lsPartner(wd *port.Cells, ln *port.Cells, sf *port.Cells, hc *port.Cells, l int32) int32 {
+	// The line that holds the TEXT of the item whose marker is alone on line l: the one sibling on its row, at the same
+	// baseline, close beside it (to its right, or to its left when the text runs right to left), with text of its own
+	// and nothing else. -1 when there is none. (A text layer builds two lines out of a marker and its text when
+	// they are set in different fonts: a right to left list is the common case.)
+	var t int32 = style.StGet(sf, l, style.SfkSibline())
+	if t < 0 {
+		return -1
+	}
+	if style.StGet(sf, l, style.SfkNsib()) != 1 {
+		return -1
+	}
+	if !LsUpright(ln, t) {
+		return -1
+	}
+	if (LsGet(hc, t, LsKFlags()) != 0) || (heading.HdLevel(hc, t) > 0) {
+		return -1
+	}
+	if evidence.LnGet(ln, t, evidence.LhPage()) != evidence.LnGet(ln, l, evidence.LhPage()) {
+		return -1
+	}
+	if LsFirstWord(wd, ln, t) < 0 {
+		return -1
+	}
+	var sz int32 = LsLineSize(sf, ln, l)
+	var mx0 int32 = LsCap(evidence.LnGet(ln, l, evidence.LhX0()))
+	var mx1 int32 = LsCap(evidence.LnGet(ln, l, evidence.LhX1()))
+	var tx0 int32 = LsCap(evidence.LnGet(ln, t, evidence.LhX0()))
+	var tx1 int32 = LsCap(evidence.LnGet(ln, t, evidence.LhX1()))
+	var db int32 = LsAbs(LsCap(evidence.LnGet(ln, l, evidence.LhBy0())) - LsCap(evidence.LnGet(ln, t, evidence.LhBy0())))
+	if (db * 3) > sz {
+		return -1
+	}
+	if ((tx0 + (sz / 4)) >= mx1) && (((tx0 - mx1) * 10) <= (sz * 25)) {
+		return t
+	}
+	if ((tx1 - (sz / 4)) <= mx0) && (((mx0 - tx1) * 10) <= (sz * 25)) {
+		return t
+	}
+	return -1
+}
+
+func lsCollect(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, hc *port.Cells, cd *port.Cells, ws *port.Cells) int32 {
 	// One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are
 	// headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the
 	// marker has no item text and is left out.
@@ -921,22 +1064,41 @@ func lsCollect(wd *port.Cells, ln *port.Cells, et *port.Cells, hc *port.Cells, c
 	var c int32 = 0
 	var w int32 = 0
 	var tx int32 = 0
+	var pt int32 = 0
+	var rt int32 = 0
 	var cls int32 = 0
 	port.CellsDrop(cd, 0)
 	for (l < n) && (c < lsMaxcand) {
 		if LsUpright(ln, l) && (heading.HdLevel(hc, l) == 0) && (LsGet(hc, l, LsKFlags()) == 0) {
 			w = LsFirstWord(wd, ln, l)
-			if w >= 0 {
+			if (w >= 0) && (lsSmall(wd, ln, sf, l) == 0) {
 				cls = LsParse(wd, et, w, ws)
+				if (cls == 2) && (lsLetterAfter(wd, ln, et, l, w) == 0) {
+					cls = 0
+				}
 				if (cls > 0) && ((port.CellsAt(ws, 4) < LsWl(wd, w)) || (LsSecondWord(wd, ln, l) >= 0)) {
-					tx = lsTextx(wd, ln, et, l, w, cls, ws)
+					tx = lsTextx(wd, ln, et, hc, l, w, cls, ws)
 					LsParse(wd, et, w, ws)
-					lsPushCand(cd, ln, l, port.CellsAt(ws, 0), port.CellsAt(ws, 1), port.CellsAt(ws, 2), port.CellsAt(ws, 3), port.CellsAt(ws, 5), cls, port.CellsAt(ws, 6), tx)
+					lsPushCand(cd, ln, l, port.CellsAt(ws, 0), port.CellsAt(ws, 1), port.CellsAt(ws, 2), port.CellsAt(ws, 3), port.CellsAt(ws, 5), cls, port.CellsAt(ws, 6), tx, -1)
 					c += 1
 				}
+				// a marker alone on its line, its text on the line beside it
+				if (cls > 0) && (port.CellsAt(ws, 4) == LsWl(wd, w)) && (LsSecondWord(wd, ln, l) < 0) {
+					pt = lsPartner(wd, ln, sf, hc, l)
+					if pt >= 0 {
+						LsParse(wd, et, w, ws)
+						rt = lsRtlSide(ln, l, pt)
+						tx = evidence.LnGet(ln, pt, evidence.LhX0())
+						if rt == 1 {
+							tx = 10000000 - LsCap(evidence.LnGet(ln, pt, evidence.LhX1()))
+						}
+						lsPushCand(cd, ln, pt, port.CellsAt(ws, 0), port.CellsAt(ws, 1), port.CellsAt(ws, 2), port.CellsAt(ws, 3), port.CellsAt(ws, 5), cls, port.CellsAt(ws, 6), tx, l)
+						c += 1
+					}
+				}
 				if (cls == 0) && (LsGet(hc, l, LsKShape()) > 0) {
-					tx = lsTextx(wd, ln, et, l, w, 4, ws)
-					lsPushCand(cd, ln, l, LsScBullet(), 0, 0, 0, 0, 4, 0, tx)
+					tx = lsTextx(wd, ln, et, hc, l, w, 4, ws)
+					lsPushCand(cd, ln, l, LsScBullet(), 0, 0, 0, 0, 4, 0, tx, -1)
 					c += 1
 				}
 			}
@@ -1058,6 +1220,15 @@ func lsWalk(ln *port.Cells, sf *port.Cells, hc *port.Cells) int32 {
 	return 0
 }
 
+func lsInitialLike(cd *port.Cells, i int32) int32 {
+	// 1 when candidate i is a letter or a roman numeral and a full stop (`Z.`): it might be an author's initial, and a
+	// hanging indent under it (a bibliography's) does not make it an item: only neighbours in a sequence do.
+	if (lsCget(cd, i, 8) == 3) && (lsCget(cd, i, 2) >= 3) && (lsCget(cd, i, 2) <= 7) && (lsCget(cd, i, 6) == 1) {
+		return 1
+	}
+	return 0
+}
+
 func LsAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, pa *port.Cells, hc *port.Cells, cd *port.Cells, pi *port.Cells, ws *port.Cells) int32 {
 	// Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.
 	// Answers the number of item lines found. The heading rows of `hc` must be there (`hd-analyze` ran); when
@@ -1075,7 +1246,7 @@ func LsAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, p
 	if lsPages(ln, pi) == 1 {
 		lsShapes(ln, sf, pa, pi, hc)
 	}
-	var nc int32 = lsCollect(wd, ln, et, hc, cd, ws)
+	var nc int32 = lsCollect(wd, ln, et, sf, hc, cd, ws)
 	i = 0
 	for i < nc {
 		var l int32 = lsCget(cd, i, 0)
@@ -1084,7 +1255,7 @@ func LsAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, p
 		var conf int32 = lsConfirm(cd, nc, i)
 		var textx int32 = lsCget(cd, i, 7)
 		// a lone candidate needs a hanging continuation under it (a number or a letter, a bullet or a shape)
-		if (conf == 0) && (textx > 0) && (cls != 2) {
+		if (conf == 0) && (textx > 0) && (cls != 2) && (lsInitialLike(cd, i) == 0) {
 			if lsHangEvidence(ln, sf, hc, l, textx) == 1 {
 				conf = 1
 			}
@@ -1093,19 +1264,27 @@ func LsAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, p
 			var sch int32 = lsPick(lsCget(cd, i, 2), lsCget(cd, i, 4), conf)
 			var val int32 = -1
 			var bch int32 = -1
+			var partner int32 = lsCget(cd, i, 10)
 			var mlen int32 = lsMlen(wd, et, w, ws)
 			if cls == 3 {
 				val = lsPick(lsCget(cd, i, 3), lsCget(cd, i, 5), conf)
-			} else {
-				bch = lsCget(cd, i, 9)
 			}
 			if cls == 4 {
 				var shape int32 = LsGet(hc, l, LsKShape()) - 1
 				var sx int32 = evidence.PaGet(pa, shape, evidence.PfX0())
+				var sx1 int32 = evidence.PaGet(pa, shape, evidence.PfX1())
 				lsWrapItem(wd, et, w, LsScBullet(), -1, 0, lsShapeChar(pa, shape))
-				if sx < evidence.LnGet(ln, l, evidence.LhX0()) {
-					evidence.LnSet(ln, l, evidence.LhX0(), sx)
+				if LsGet(hc, l, LsKRtl()) == 1 {
+					if sx1 > evidence.LnGet(ln, l, evidence.LhX1()) {
+						evidence.LnSet(ln, l, evidence.LhX1(), sx1)
+					}
+				} else {
+					if sx < evidence.LnGet(ln, l, evidence.LhX0()) {
+						evidence.LnSet(ln, l, evidence.LhX0(), sx)
+					}
 				}
+			} else if partner >= 0 {
+				lsTakePartner(wd, et, ln, w, l, partner, sch, val)
 			} else {
 				lsWrapItem(wd, et, w, sch, val, mlen, bch)
 			}

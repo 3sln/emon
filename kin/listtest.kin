@@ -1,0 +1,372 @@
+;; Laws for `emon.lists`, `emon.notes`, `emon.links` and `emon.restruct` (P4.5, P4.6), on every target.
+;;
+;; TWO KINDS, as for the stages before them. (1) What the stages DECIDE, on evidence written by hand: the marker a word
+;; is (read from the characters: bullets, numbers, letters, roman numerals, parenthesised and bracketed forms, circled
+;; digits, in any decimal script) and what is not one; a run of numbered lines is a list and a lone `A. Smith` is not
+;; (`ls-analyze`); the caption keywords and the numbers that follow them; what a bare URL or an address is and what is
+;; not (`lk-find`). (2) What the restructuring stage MAKES of a Model written by hand (`rs-run`): items into lists
+;; nested by the x their text starts at, a list that goes on across a page milestone, a caption bound to the table next
+;; to it, a figure caption wrapped in an empty figure, a note reference given the target of its note body, a bare link
+;; made a `link` inline with the text intact.
+(ns emon.listtest
+  (:require [emon.lang :refer [I32 Blob Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-text new-cells new-text text-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop text-cp text-i32]]
+            [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind node-sub node-aux node-parent
+                                node-first-child node-next node-text-start node-text-len node-new node-set-text
+                                node-set-sub node-set-aux node-set-attr-int node-set-attr-text node-attr node-attr-int-or
+                                attr-value attr-len text-at text-append-utf8
+                                nk-section nk-item nk-list nk-paragraph nk-caption nk-table nk-figure nk-note nk-ref nk-link
+                                nk-text nk-break fk-box fk-marker fk-label fk-target fk-value fk-start fk-scheme fk-href]]
+            [emon.evidence :refer [wd-new wd-set wd-count wd-get ln-new ln-count ln-get wf-size wf-font wf-style hd-tstart hd-tlen]]
+            [emon.style :refer [sfh-body]]
+            [emon.heading :refer [hd-analyze]]
+            [emon.para :refer [pa-pages pa-build]]
+            [emon.lists :refer [ls-parse ls-analyze ls-open ls-get ls-k-flags ls-f-item ls-s-item ls-start
+                                ls-sc-bullet ls-sc-decimal ls-sc-lower-alpha ls-sc-upper-alpha ls-sc-lower-roman
+                                ls-sc-upper-roman]]
+            [emon.notes :refer [nt-keyword nt-number-body]]
+            [emon.links :refer [lk-find]]
+            [emon.restruct :refer [rs-run]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------------ one word, to be parsed
+
+(defn ^I32 lt-word [^:mut ^Cells wd ^:mut ^Cells et ^Blob b]
+  (comment "Append one word holding the UTF-8 text b; answers its row.")
+  (let [^I32 ts (cells-len et)]
+    (text-append-utf8 et b 0 (blob-len b))
+    (let [^I32 r (wd-new wd 1 7200 1000 9000 2200 7200 1800 9000 1800 0 0 ts (- (cells-len et) ts) -1 -1 -1)]
+      (wd-set wd r (wf-size) 1100)
+      (return r))))
+
+(defn ^I32 lt-kw [^:mut ^Cells wd ^:mut ^Cells et ^Blob b]
+  (comment "`nt-keyword` of a word spelled b.")
+  (let [^I32 w (lt-word wd et b)]
+    (return (nt-keyword wd et w))))
+
+(defn ^I32 lt-nb [^:mut ^Cells wd ^:mut ^Cells et ^Blob b]
+  (comment "`nt-number-body` of a word spelled b.")
+  (let [^I32 w (lt-word wd et b)]
+    (return (nt-number-body wd et w))))
+
+(defn ^I32 lt-parse [^:mut ^Cells ws ^Blob b]
+  (comment "`ls-parse` of a word spelled b: answers its class; the rest is in `ws`.")
+  (let [^Cells wd (new-cells) ^Cells et (new-cells)]
+    (let [^I32 w (lt-word wd et b)]
+      (return (ls-parse wd et w ws)))))
+
+(defn ^I32 lt-ws [^:mut ^Cells ws]
+  (cells-drop ws 0)
+  (let [^:mut ^I32 i 0]
+    (while (< i 8)
+      (do (cells-push ws 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-markers-are-read-from-the-characters
+  (let [^Cells ws (new-cells)]
+    (lt-ws ws)
+    (assert-eq (lt-parse ws (text-blob "1.")) 3 "1. is a numbered marker")
+    (assert-eq (cells-at ws 0) (ls-sc-decimal) "decimal")
+    (assert-eq (cells-at ws 1) 1 "of value 1")
+    (assert-eq (cells-at ws 4) 2 "two code points long")
+    (assert-eq (lt-parse ws (text-blob "12)")) 3 "12) too")
+    (assert-eq (cells-at ws 1) 12 "value 12")
+    (assert-eq (lt-parse ws (text-blob "(a)")) 3 "(a) is a letter in parentheses")
+    (assert-eq (cells-at ws 0) (ls-sc-lower-alpha) "lower alpha")
+    (assert-eq (cells-at ws 1) 1 "the first letter")
+    (assert-eq (lt-parse ws (text-blob "C.")) 3 "C. is a letter")
+    (assert-eq (cells-at ws 0) (ls-sc-upper-alpha) "upper alpha")
+    (assert-eq (cells-at ws 1) 3 "the third")
+    (assert-eq (lt-parse ws (text-blob "iv.")) 3 "iv. is a roman numeral")
+    (assert-eq (cells-at ws 0) (ls-sc-lower-roman) "lower roman")
+    (assert-eq (cells-at ws 1) 4 "four")
+    (assert-eq (lt-parse ws (text-blob "XIV)")) 3 "XIV) too")
+    (assert-eq (cells-at ws 0) (ls-sc-upper-roman) "upper roman")
+    (assert-eq (cells-at ws 1) 14 "fourteen")
+    (assert-eq (lt-parse ws (text-blob "I.")) 3 "I. is a roman one or the ninth letter")
+    (assert-eq (cells-at ws 0) (ls-sc-upper-alpha) "its first reading is the letter")
+    (assert-eq (cells-at ws 2) (ls-sc-upper-roman) "its second the numeral")
+    (assert-eq (cells-at ws 3) 1 "one")
+    (assert-eq (lt-parse ws (text-blob "[3]")) 3 "[3] is a bracketed number")
+    (assert-eq (cells-at ws 1) 3 "three")
+    (assert-eq (lt-parse ws (text-blob "•")) 1 "a bullet is a strong marker")
+    (assert-eq (cells-at ws 0) (ls-sc-bullet) "a bullet")
+    (assert-eq (lt-parse ws (text-blob "-")) 2 "a dash is a weak one")
+    (assert-eq (lt-parse ws (text-blob "①")) 3 "a circled digit is a number")
+    (assert-eq (cells-at ws 1) 1 "one")
+    (assert-eq (lt-parse ws (text-blob "٣.")) 3 "Arabic-Indic digits are numbers too")
+    (assert-eq (cells-at ws 1) 3 "three")
+    (assert-eq (lt-parse ws (text-blob "•Item")) 1 "a bullet glued to its text is read")
+    (assert-eq (cells-at ws 4) 1 "one code point of it is the marker")))
+
+(deftest test-what-is-not-a-marker
+  (let [^Cells ws (new-cells)]
+    (lt-ws ws)
+    (assert-eq (lt-parse ws (text-blob "3.5")) 0 "a decimal number is not one")
+    (assert-eq (lt-parse ws (text-blob "2019.")) 0 "a year is not one (four digits)")
+    (assert-eq (lt-parse ws (text-blob "Smith.")) 0 "a word is not one")
+    (assert-eq (lt-parse ws (text-blob "mix.")) 0 "mix. is not a roman numeral")
+    (assert-eq (lt-parse ws (text-blob "e.g.")) 0 "an abbreviation is not one")
+    (assert-eq (lt-parse ws (text-blob "12")) 0 "a bare number has no marker punctuation")
+    (assert-eq (lt-parse ws (text-blob "1.2.")) 0 "a section number is a heading's, not an item's")
+    (assert-eq (lt-parse ws (text-blob "ab)")) 0 "two letters that are not roman")))
+
+;; ------------------------------------------------------------------ the captions' words
+
+(deftest test-caption-keywords-and-numbers
+  (let [^Cells wd (new-cells) ^Cells et (new-cells)]
+    (assert-eq (lt-kw wd et (text-blob "Figure")) 1 "Figure")
+    (assert-eq (lt-kw wd et (text-blob "FIGURE")) 1 "any case")
+    (assert-eq (lt-kw wd et (text-blob "Table")) 2 "Table is a table's")
+    (assert-eq (lt-kw wd et (text-blob "Tabelle")) 2 "in German")
+    (assert-eq (lt-kw wd et (text-blob "Abbildung")) 1 "and the figure")
+    (assert-eq (lt-kw wd et (text-blob "Рис.")) 1 "in Russian, with its full stop")
+    (assert-eq (lt-kw wd et (text-blob "Gráfico")) 1 "with an accent")
+    (assert-eq (lt-kw wd et (text-blob "Section")) 0 "Section is no caption's")
+    (assert-eq (lt-kw wd et (text-blob "The")) 0 "nor is The")
+    (assert-eq (lt-nb wd et (text-blob "1.")) 1 "the number of 1. is 1")
+    (assert-eq (lt-nb wd et (text-blob "2.3:")) 3 "2.3 of 2.3:")
+    (assert-eq (lt-nb wd et (text-blob "A.1")) 3 "A.1")
+    (assert-eq (lt-nb wd et (text-blob "4b")) 2 "4b")
+    (assert-eq (lt-nb wd et (text-blob "IV")) 2 "a roman numeral")
+    (assert-eq (lt-nb wd et (text-blob "shows")) 0 "a word is no number")))
+
+;; --------------------------------------------------------------------------------- bare links
+
+(defn ^I32 lt-find [^:mut ^Cells text ^:mut ^Cells out ^Blob b]
+  (comment "`lk-find` over the text b, from its start; the link is in `out`: start, end, kind. Answers the kind.")
+  (cells-drop text 0)
+  (cells-drop out 0)
+  (cells-push out 0)
+  (cells-push out 0)
+  (cells-push out 0)
+  (text-append-utf8 text b 0 (blob-len b))
+  (return (lk-find text (cells-len text) 0 out)))
+
+(deftest test-what-is-a-bare-link
+  (let [^Cells text (new-cells) ^Cells out (new-cells)]
+    (assert-eq (lt-find text out (text-blob "see https://example.org/a/b, and")) 1 "a URL with a scheme")
+    (assert-eq (cells-at out 0) 4 "it starts at the h")
+    (assert-eq (cells-at out 1) 28 "and ends before the comma")
+    (assert-eq (lt-find text out (text-blob "(see www.example.com)")) 2 "www. and a domain")
+    (assert-eq (cells-at out 1) 20 "the bracket it did not open is not in it")
+    (assert-eq (lt-find text out (text-blob "write to jane.doe@example.org.")) 3 "an address")
+    (assert-eq (cells-at out 0) 9 "its local part starts at the j")
+    (assert-eq (cells-at out 1) 29 "its full stop is the sentence's")
+    (assert-eq (lt-find text out (text-blob "mailto:a@b.co")) 4 "a mailto link")
+    (assert-eq (lt-find text out (text-blob "see http://en.wikipedia.org/wiki/Foo_(bar).")) 1 "a bracket it opened stays")
+    (assert-eq (cells-at out 1) 42 "in it")))
+
+(deftest test-what-is-not-a-bare-link
+  (let [^Cells text (new-cells) ^Cells out (new-cells)]
+    (assert-eq (lt-find text out (text-blob "visit example.com today")) 0 "a dotted word is not a link without www or a scheme")
+    (assert-eq (lt-find text out (text-blob "www.example is not one")) 0 "www. and no top-level domain")
+    (assert-eq (lt-find text out (text-blob "see http:// here")) 0 "a scheme and nothing")
+    (assert-eq (lt-find text out (text-blob "ask @handle later")) 0 "@handle is not an address")
+    (assert-eq (lt-find text out (text-blob "a@b alone")) 0 "no top-level domain")
+    (assert-eq (lt-find text out (text-blob "version 1.2.3 of it")) 0 "numbers with dots are not links")))
+
+;; ------------------------------------------------------- the list stage on evidence written by hand
+
+(defn ^I32 lt-line [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob marker ^Blob rest ^I32 mx ^I32 tx ^I32 y]
+  (comment "A line on page 1 at y: a marker word at mx and then the words of `rest` from tx (the marker's blob may be")
+  (comment "empty: a plain line from tx). 11 pt, regular, 1200 tall. Answers the line's row.")
+  (let [^I32 w0 (wd-count wd)
+        ^:mut ^I32 x tx
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 r 0
+        ^I32 n (blob-len rest)]
+    (if (> (blob-len marker) 0)
+      (do (let [^I32 ts (cells-len et)]
+            (text-append-utf8 et marker 0 (blob-len marker))
+            (set r (wd-new wd 1 mx y (+ mx 600) (+ y 1200) mx (- (+ y 1200) 200) (+ mx 600) (- (+ y 1200) 200) 0 0
+                           ts (- (cells-len et) ts) -1 -1 -1))
+            (wd-set wd r (wf-size) 1100)
+            (wd-set wd r (wf-font) 0))))
+    (while (<= k n)
+      (do (if (or (== k n) (== (blob-u8 rest k) 32))
+            (do (if (> k s)
+                  (do (let [^I32 ts (cells-len et)]
+                        (text-append-utf8 et rest s k)
+                        (set r (wd-new wd 1 x y (+ x 2400) (+ y 1200) x (- (+ y 1200) 200) (+ x 2400) (- (+ y 1200) 200) 0 0
+                                       ts (- (cells-len et) ts) -1 -1 -1))
+                        (wd-set wd r (wf-size) 1100)
+                        (wd-set wd r (wf-font) 0)
+                        (set x (+ x 2800)))))
+                (set s (+ k 1))))
+          (set k (+ k 1))))
+    (return (ln-new ln 1 (if (> (blob-len marker) 0) mx tx) y (+ x 0) (+ y 1200)
+                    (if (> (blob-len marker) 0) mx tx) (- (+ y 1200) 200) (+ x 0) (- (+ y 1200) 200) 0 0 w0 (- (wd-count wd) w0)))))
+
+(defn ^I32 lt-doc [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et]
+  (comment "Body text, then three numbered lines, a nested pair, and a lone `A. Smith` among prose. The lines: 0..2 body,")
+  (comment "3 `1.`, 4 `2.`, 5 `3.`, 6 body, 7 `A.`. Answers 0.")
+  (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 5000)
+  (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 6400)
+  (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 7800)
+  (lt-line wd ln et (text-blob "1.") (text-blob "alpha beta gamma") 7200 9000 10000)
+  (lt-line wd ln et (text-blob "2.") (text-blob "delta epsilon") 7200 9000 11400)
+  (lt-line wd ln et (text-blob "3.") (text-blob "zeta eta") 7200 9000 12800)
+  (lt-line wd ln et (text-blob "") (text-blob "lorem ipsum dolor sit amet consectetur") 0 7200 15000)
+  (lt-line wd ln et (text-blob "A.") (text-blob "Smith wrote this") 7200 9000 16400)
+  (return 0))
+
+(defn ^I32 lt-run [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc]
+  (comment "The heading analysis and then the list analysis of the evidence. Answers the items found.")
+  (let [^Cells gl (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Cells pa (new-cells) ^Cells cd (new-cells) ^Cells pi (new-cells) ^Cells lws (new-cells)]
+    (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
+    (return (ls-analyze wd ln et sf pa hc cd pi lws))))
+
+(deftest test-a-run-of-numbers-is-a-list-and-a-lone-letter-is-not
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells)]
+    (lt-doc wd ln et)
+    (assert-eq (lt-run wd ln et sf sc hc) 3 "three items: 1. 2. 3.")
+    (assert-eq (ls-get hc 3 (ls-k-flags)) (ls-f-item) "line 3 starts an item")
+    (assert-eq (ls-get hc 5 (ls-k-flags)) (ls-f-item) "line 5 too")
+    (assert-eq (ls-get hc 7 (ls-k-flags)) 0 "`A. Smith` among prose does not")
+    (assert-eq (ls-get hc 6 (ls-k-flags)) 0 "nor does the line after the list")
+    (assert-eq (ls-start hc 4) 1 "an item must begin a paragraph")
+    (assert-eq (ls-start hc 0) 0 "a body line need not")
+    (assert-eq (cells-at et (wd-get wd (ln-get ln 3 11) (hd-tstart))) (ls-s-item) "the marker word begins with the item group")))
+
+;; ------------------------------------------------------------------- the restructuring stage
+
+(defn ^I32 lt-item [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 parent ^Blob marker ^Blob body
+                    ^I32 scheme ^I32 value ^I32 x]
+  (comment "An `item` of the old Model under parent: its marker, text, scheme (`sub`), value (`aux`), text x (`fk-box`).")
+  (let [^I32 it (node-new nodes (nk-item) parent)
+        ^I32 t0 (cells-len text)]
+    (text-append-utf8 text body 0 (blob-len body))
+    (node-set-text nodes it t0 (- (cells-len text) t0))
+    (let [^I32 m0 (cells-len text)]
+      (text-append-utf8 text marker 0 (blob-len marker))
+      (node-set-attr-text nodes attrs it (fk-marker) m0 (- (cells-len text) m0)))
+    (node-set-sub nodes it scheme)
+    (node-set-aux nodes it value)
+    (node-set-attr-int nodes attrs it (fk-box) x)
+    (return it)))
+
+(defn ^I32 lt-rs [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions]
+  (comment "`rs-run` with its scratch made here; answers the new node count.")
+  (let [^Cells nm (new-cells) ^Cells stk (new-cells) ^Cells used (new-cells) ^Cells out (new-cells)
+        ^Cells lay (new-cells)]
+    (return (rs-run on oa orr text nodes attrs regions nm stk used out lay))))
+
+(deftest test-items-become-lists-nested-by-the-x-of-their-text
+  (let [^Cells on (new-cells) ^Cells oa (new-cells) ^Cells orr (new-cells) ^Cells text (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (model-init on oa orr text pages ledger layout)
+    (let [^I32 sec (node-new on (nk-section) 0)]
+      (lt-item on oa text sec (text-blob "1.") (text-blob "one") (ls-sc-decimal) 1 9000)
+      (lt-item on oa text sec (text-blob "2.") (text-blob "two") (ls-sc-decimal) 2 9000)
+      (lt-item on oa text sec (text-blob "a.") (text-blob "inner a") (ls-sc-lower-alpha) 1 12000)
+      (lt-item on oa text sec (text-blob "b.") (text-blob "inner b") (ls-sc-lower-alpha) 2 12000)
+      (lt-item on oa text sec (text-blob "3.") (text-blob "three") (ls-sc-decimal) 3 9000)
+      (lt-item on oa text sec (text-blob "5.") (text-blob "five") (ls-sc-decimal) 5 9000)
+      (node-new on (nk-paragraph) sec)
+      (lt-item on oa text sec (text-blob "1.") (text-blob "again") (ls-sc-decimal) 1 9000))
+    (assert-eq (lt-rs on oa orr text nodes attrs regions) 13 "seven items, two lists and a nested one, a paragraph")
+    (assert-eq (node-kind nodes 0) 1 "the document")
+    (assert-eq (node-kind nodes 2) (nk-list) "the first item opens a list under the section")
+    (assert-eq (node-parent nodes 2) 1 "in the section")
+    (assert-eq (node-sub nodes 2) 2 "an ordered one")
+    (assert-eq (node-kind nodes 3) (nk-item) "its first item")
+    (assert-eq (node-kind nodes 5) (nk-list) "the lettered items are a list of their own")
+    (assert-eq (node-parent nodes 5) 4 "inside the item before them")
+    (assert-eq (node-kind nodes 8) (nk-item) "then the third item continues the numbered list")
+    (assert-eq (node-parent nodes 8) 2 "in the outer list")
+    (assert-eq (node-attr-int-or nodes attrs 9 (fk-value) -1) 5 "the item that skips gets an explicit value")
+    (assert-eq (node-attr-int-or nodes attrs 8 (fk-value) -1) -1 "and the one that does not, none")
+    (assert-eq (node-kind nodes 10) (nk-paragraph) "a paragraph ends the list")
+    (assert-eq (node-kind nodes 11) (nk-list) "and a numbering that starts again is a new list")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the new Model is in document order")))
+
+(deftest test-a-list-goes-on-across-a-page-milestone
+  (let [^Cells on (new-cells) ^Cells oa (new-cells) ^Cells orr (new-cells) ^Cells text (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (model-init on oa orr text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (page-new pages 2 61200 79200 0 (pk-vector))
+    (lt-item on oa text 0 (text-blob "1.") (text-blob "one") (ls-sc-decimal) 1 9000)
+    (lt-item on oa text 0 (text-blob "2.") (text-blob "two") (ls-sc-decimal) 2 9000)
+    (let [^I32 br (node-new on (nk-break) 0)]
+      (node-set-sub on br 2))
+    (lt-item on oa text 0 (text-blob "3.") (text-blob "three") (ls-sc-decimal) 3 9000)
+    (assert-eq (lt-rs on oa orr text nodes attrs regions) 6 "one list, three items, the milestone in the second")
+    (assert-eq (node-kind nodes 1) (nk-list) "a list")
+    (assert-eq (node-kind nodes 3) (nk-item) "an item")
+    (assert-eq (node-kind nodes 4) (nk-break) "the milestone is in it")
+    (assert-eq (node-parent nodes 4) 3 "kept in the item before it")
+    (assert-eq (node-parent nodes 5) 1 "and the next item is in the same list")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))
+
+(defn ^I32 lt-caption [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 parent ^I32 kind]
+  (comment "A caption of the old Model (its kind in `aux`) with a label and a text.")
+  (let [^I32 c (node-new nodes (nk-caption) parent)
+        ^I32 t0 (cells-len text)
+        ^Blob b (text-blob "Table 1")]
+    (text-append-utf8 text b 0 (blob-len b))
+    (node-set-attr-text nodes attrs c (fk-label) t0 (- (cells-len text) t0))
+    (node-set-aux nodes c kind)
+    (return c)))
+
+(deftest test-a-caption-is-bound-to-its-object
+  (let [^Cells on (new-cells) ^Cells oa (new-cells) ^Cells orr (new-cells) ^Cells text (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (model-init on oa orr text pages ledger layout)
+    (lt-caption on oa text 0 2)
+    (node-new on (nk-table) 0)
+    (node-new on (nk-paragraph) 0)
+    (lt-caption on oa text 0 1)
+    (assert-eq (lt-rs on oa orr text nodes attrs regions) 6 "a table with its caption, a paragraph, a figure with its caption")
+    (assert-eq (node-kind nodes 1) (nk-table) "the table first")
+    (assert-eq (node-kind nodes 2) (nk-caption) "its caption is its first child")
+    (assert-eq (node-parent nodes 2) 1 "of it")
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-target) -1) 1 "and points at it")
+    (assert-eq (node-kind nodes 3) (nk-paragraph) "the paragraph")
+    (assert-eq (node-kind nodes 4) (nk-figure) "a figure caption with no figure is wrapped in an empty figure")
+    (assert-eq (node-kind nodes 5) (nk-caption) "the caption is inside it")
+    (assert-eq (node-attr-int-or nodes attrs 5 (fk-target) -1) 4 "pointing at it")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))
+
+(deftest test-note-references-find-their-notes-and-bare-links-become-links
+  (let [^Cells on (new-cells) ^Cells oa (new-cells) ^Cells orr (new-cells) ^Cells text (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (model-init on oa orr text pages ledger layout)
+    (let [^I32 p (node-new on (nk-paragraph) 0)
+          ^I32 t1 (node-new on (nk-text) p)
+          ^I32 r (node-new on (nk-ref) p)
+          ^I32 nt (node-new on (nk-note) 0)
+          ^I32 np (node-new on (nk-paragraph) nt)
+          ^Blob b (text-blob "see www.example.com now")
+          ^Blob m (text-blob "1")
+          ^I32 s0 (cells-len text)]
+      (text-append-utf8 text b 0 (blob-len b))
+      (node-set-text on t1 s0 (- (cells-len text) s0))
+      (let [^I32 m0 (cells-len text)]
+        (text-append-utf8 text m 0 (blob-len m))
+        (node-set-attr-text on oa r (fk-marker) m0 1)
+        (node-set-attr-text on oa nt (fk-marker) m0 1))
+      (let [^I32 s1 (cells-len text)]
+        (text-append-utf8 text b 0 (blob-len b))
+        (node-set-text on np s1 (- (cells-len text) s1))))
+    (assert-eq (lt-rs on oa orr text nodes attrs regions) 13 "the paragraph, the text split in three, the ref, the note")
+    (assert-eq (node-kind nodes 2) (nk-text) "the text before the link")
+    (assert-eq (node-kind nodes 3) (nk-link) "the link")
+    (assert-eq (node-first-child nodes 3) 4 "holding its text")
+    (assert-eq (node-kind nodes 5) (nk-text) "the text after it")
+    (assert-eq (node-kind nodes 6) (nk-ref) "the reference")
+    (assert-eq (node-attr-int-or nodes attrs 6 (fk-target) -1) 7 "has the note as its target")
+    (assert-eq (node-kind nodes 7) (nk-note) "the note")
+    (assert-eq (node-kind nodes 10) (nk-link) "and the bare link in the note's own text is a link as well")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))

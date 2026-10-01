@@ -29,7 +29,8 @@
             [emon.evidence :refer [wd-get wd-set ln-get ln-set ln-count gl-get
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-first lh-count
                                    hd-tstart hd-tlen hd-x0 wf-gfirst wf-gcount gf-size gf-by0 ch-cp ch-tstart ch-tlen]]
-            [emon.style :refer [st-get st-hget sc-get sfk-size sfk-bits sfh-body sfh-size sck-bits]]
+            [emon.style :refer [st-get st-hget sc-get sfk-size sfk-bits sfh-body sfh-size sck-bits sfk-below sfk-gap-above
+                                sfh-gap sfk-height]]
             [emon.model :refer [page-h]]
             [emon.heading :refer [hd-level hd-rows-end]]
             [emon.lists :refer [ls-open ls-get ls-put ls-f-note ls-f-cap ls-f-ref ls-k-flags ls-upright ls-wl ls-wc
@@ -67,7 +68,7 @@
   (if (and (>= c 1040) (<= c 1071)) (return (+ c 32)))
   (return c))
 
-(defn ^I32 nt-keyword [^Cells wd ^Cells et ^I32 w]
+(defn ^:pub ^I32 nt-keyword [^Cells wd ^Cells et ^I32 w]
   (comment "The kind of caption the word w is the keyword of: 1 a figure, 2 a table, 0 not a keyword.")
   (let [^I32 tl (ls-wl wd w)
         ^:mut ^I32 e 0]
@@ -88,7 +89,7 @@
 (defn ^Bool nt-upper [^I32 c]
   (return (and (>= c 65) (<= c 90))))
 
-(defn ^I32 nt-number-body [^Cells wd ^Cells et ^I32 w]
+(defn ^:pub ^I32 nt-number-body [^Cells wd ^Cells et ^I32 w]
   (comment "How many code points of the word are a caption's number: `[A-Z]?` then digits (at most four a group) with")
   (comment "`.` or `-` and more digits, then at most one small letter; or a roman numeral of capitals (up to five). 0 when")
   (comment "the word does not start with one.")
@@ -254,6 +255,12 @@
       (if (nt-sup-styled gl g sz0 base) (return (nt-markc c)))
       (return -1))))
 
+(defn ^I32 nt-gchar [^Cells gl ^Cells et ^I32 g]
+  (comment "The character of glyph g: its own code point, or the first of its text run when it has one.")
+  (let [^I32 ts (gl-get gl g (ch-tstart))]
+    (if (>= ts 0) (return (cells-at et ts)))
+    (return (gl-get gl g (ch-cp)))))
+
 (defn ^I32 nt-gpos [^Cells gl ^I32 g ^I32 wts ^I32 eq ^I32 i]
   (comment "Where glyph g (the i-th of its word, whose text starts at wts) begins in the text: its own run when it has one, else")
   (comment "the i-th code point of the word's text, which is where it is when the word has as many code points as glyphs")
@@ -297,8 +304,36 @@
   (cells-push nb band)
   (return 0))
 
+(defn ^Bool nt-letterish [^I32 c]
+  (comment "A letter of Latin, Greek or Cyrillic (any case), or a character of the CJK blocks.")
+  (if (and (>= c 65) (<= c 90)) (return (== 1 1)))
+  (if (and (>= c 97) (<= c 122)) (return (== 1 1)))
+  (if (and (>= c 192) (and (<= c 591) (and (!= c 215) (!= c 247)))) (return (== 1 1)))
+  (if (and (>= c 880) (<= c 1327)) (return (== 1 1)))
+  (if (>= c 12288) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^Bool nt-trailing-punct [^I32 c]
+  (comment "Punctuation that may stand against a note reference on either side: a word's end, a comma, a closing bracket.")
+  (if (or (== c 46) (or (== c 44) (or (== c 59) (or (== c 58) (or (== c 63) (== c 33)))))) (return (== 1 1)))
+  (if (or (== c 41) (or (== c 93) (or (== c 8221) (or (== c 8217) (or (== c 34) (== c 39)))))) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^I32 nt-ref-context [^Cells gl ^Cells et ^I32 g0 ^I32 gn ^I32 i ^I32 j ^I32 pwc]
+  (comment "Is the superscript run of glyphs i..j of a word a note reference and not an exponent or an index: what comes")
+  (comment "before it (the word's glyph i-1, or when the run starts the word the last character of the word before) is a")
+  (comment "letter or punctuation, never a digit or an operator, and what comes after it in the word is punctuation only.")
+  (let [^:mut ^I32 before pwc
+        ^:mut ^I32 k j]
+    (if (> i 0) (set before (nt-gchar gl et (+ g0 (- i 1)))))
+    (if (not (or (nt-letterish before) (nt-trailing-punct before))) (return 0))
+    (while (< k gn)
+      (do (if (not (nt-trailing-punct (nt-gchar gl et (+ g0 k)))) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
 (defn ^I32 nt-scan-word [^Cells wd ^Cells ln ^Cells et ^Cells gl ^:mut ^Cells rf ^:mut ^Cells nb ^:mut ^Cells mk
-                         ^I32 l ^I32 w ^I32 first ^I32 sz0 ^I32 base ^I32 szok ^I32 band]
+                         ^I32 l ^I32 w ^I32 first ^I32 pwc ^I32 sz0 ^I32 base ^I32 szok ^I32 band]
   (comment "The superscript runs of word w of line l: a run at the start of the line's first word is a note body's marker")
   (comment "(a row of `nb`), any other a reference (a row of `rf`). The marker characters go to `mk`.")
   (let [^I32 g0 (wd-get wd w (wf-gfirst))
@@ -324,7 +359,7 @@
                         (set j (+ j 1))))
                   (comment "a comma between two markers belongs to them: `1,2`")
                   (if (and (< (+ j 1) gn) (< (- j i) 5)
-                           (== (cells-at et (gl-get gl (+ g0 j) (ch-tstart))) 44)
+                           (== (nt-gchar gl et (+ g0 j)) 44)
                            (nt-sup-styled gl (+ g0 j) sz0 base)
                            (>= (nt-glyph-mark gl et (+ g0 j 1) sz0 base) 0))
                     (do (cells-push mk 44)
@@ -340,7 +375,8 @@
                     (do (if (and (== i 0) (== first 1))
                           (do (if (< (quot (cells-len nb) NT_NB) NT_MAXNB)
                                 (nt-push-nb nb l page w 1 pb ms (- (cells-len mk) ms) szok band)))
-                          (do (if (< (quot (cells-len rf) NT_RF) NT_MAXRF)
+                          (do (if (and (< (quot (cells-len rf) NT_RF) NT_MAXRF)
+                                       (== (nt-ref-context gl et g0 gn i j pwc) 1))
                                 (nt-push-rf rf w pa pb l page ms (- (cells-len mk) ms)))))))
                   (set i j))))))
     (return 0)))
@@ -393,6 +429,8 @@
         ^:mut ^I32 band 0
         ^:mut ^I32 sz0 0
         ^:mut ^I32 first 0
+        ^:mut ^I32 pwc -1
+        ^:mut ^I32 wl 0
         ^:mut ^I32 base 0
         ^:mut ^I32 ml 0
         ^:mut ^I32 ms 0]
@@ -412,14 +450,17 @@
                     (if (>= (* (ls-cap (ln-get ln l (lh-y0))) 2) (ls-cap (page-h pages (- pg 1)))) (set band 1))))
                 (set nrow (quot (cells-len nb) NT_NB))
                 (set first 1)
+                (set pwc -1)
                 (let [^I32 w0 (ln-get ln l (lh-first))
                       ^I32 wn (ln-get ln l (lh-count))]
                   (set k 0)
                   (while (< k wn)
                     (do (set w (+ w0 k))
                         (if (> (ls-wl wd w) 0)
-                          (do (nt-scan-word wd ln et gl rf nb mk l w first sz0 base szok band)
-                              (set first 0)))
+                          (do (nt-scan-word wd ln et gl rf nb mk l w first pwc sz0 base szok band)
+                              (set first 0)
+                              (set wl (ls-wl wd w))
+                              (set pwc (ls-wc wd et w (- wl 1)))))
                         (set k (+ k 1)))))
                 (comment "no sup marker led the line: a plain one may")
                 (if (== (quot (cells-len nb) NT_NB) nrow)
@@ -443,8 +484,8 @@
     (return (== 1 1))))
 
 (defn ^I32 nt-find-ref [^Cells rf ^Cells nb ^Cells mk ^I32 i ^I32 same-page ^I32 before]
-  (comment "The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), or before it")
-  (comment "in the document (before 1). Its row, or -1.")
+  (comment "The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), on the page before")
+  (comment "it (same-page 2: a footnote a column or a page break pushed on), or before it in the document (before 1). Its row, or -1.")
   (let [^I32 nr (quot (cells-len rf) NT_RF)
         ^I32 nl (cells-at nb (* i NT_NB))
         ^I32 np (cells-at nb (+ (* i NT_NB) 1))
@@ -455,6 +496,7 @@
       (do (if (and (== (cells-at rf (+ (* r NT_RF) 7)) 0)
                    (nt-same-mark mk ms ml (cells-at rf (+ (* r NT_RF) 5)) (cells-at rf (+ (* r NT_RF) 6))))
             (do (if (and (== same-page 1) (== (cells-at rf (+ (* r NT_RF) 4)) np)) (return r))
+                (if (and (== same-page 2) (== (cells-at rf (+ (* r NT_RF) 4)) (- np 1))) (return r))
                 (if (and (== before 1)
                          (or (< (cells-at rf (+ (* r NT_RF) 4)) np)
                              (and (== (cells-at rf (+ (* r NT_RF) 4)) np) (< (cells-at rf (+ (* r NT_RF) 3)) nl))))
@@ -462,7 +504,31 @@
           (set r (+ r 1))))
     (return -1)))
 
-(defn ^I32 nt-match [^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk]
+(defn ^I32 nt-foot [^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk ^I32 i]
+  (comment "Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,")
+  (comment "with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed")
+  (comment "on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the")
+  (comment "reference it took.")
+  (let [^I32 b (* i NT_NB)
+        ^I32 kind (cells-at nb (+ b 3))
+        ^I32 szok (cells-at nb (+ b 8))
+        ^I32 band (cells-at nb (+ b 9))
+        ^:mut ^I32 r -1]
+    (if (!= (cells-at nb (+ b 7)) 0) (return 0))
+    (if (and (== band 1) (or (== szok 1) (== kind 1)))
+      (set r (nt-find-ref rf nb mk i 1 0)))
+    (if (and (< r 0) (or (== szok 1) (and (== kind 1) (== band 1))))
+      (set r (nt-find-ref rf nb mk i 2 0)))
+    (if (>= r 0)
+      (do (cells-set rf (+ (* r NT_RF) 7) 1)
+          (cells-set nb (+ b 7) 1)
+          (return 1)))
+    (if (and (== kind 1) (== szok 1) (== band 1))
+      (do (cells-set nb (+ b 7) 1)
+          (return 1)))
+    (return 0)))
+
+(defn ^I32 nt-match [^:mut ^Cells rf ^:mut ^Cells nb ^Cells mk ^I32 nhl]
   (comment "Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than")
   (comment "the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when")
   (comment "the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker")
@@ -472,18 +538,7 @@
         ^:mut ^I32 r 0
         ^:mut ^I32 tent 0]
     (while (< i nn)
-      (do (let [^I32 b (* i NT_NB)]
-            (if (and (== (cells-at nb (+ b 8)) 1) (== (cells-at nb (+ b 9)) 1) (== (cells-at nb (+ b 7)) 0))
-              (do (set r (nt-find-ref rf nb mk i 1 0))
-                  (if (>= r 0)
-                    (do (cells-set rf (+ (* r NT_RF) 7) 1)
-                        (cells-set nb (+ b 7) 1))
-                    (if (== (cells-at nb (+ b 3)) 1) (cells-set nb (+ b 7) 1))))
-              (if (and (== (cells-at nb (+ b 3)) 1) (== (cells-at nb (+ b 9)) 1) (== (cells-at nb (+ b 7)) 0))
-                (do (set r (nt-find-ref rf nb mk i 1 0))
-                    (if (>= r 0)
-                      (do (cells-set rf (+ (* r NT_RF) 7) 1)
-                          (cells-set nb (+ b 7) 1)))))))
+      (do (nt-foot rf nb mk i)
           (set i (+ i 1))))
     (comment "endnotes: a superscript marker with an earlier reference at once, a plain number when there are two")
     (set i 0)
@@ -495,9 +550,10 @@
                     (do (if (== (cells-at nb (+ b 3)) 1)
                           (do (cells-set rf (+ (* r NT_RF) 7) 2)
                               (cells-set nb (+ b 7) 2))
-                          (do (cells-set rf (+ (* r NT_RF) 7) 4)
-                              (cells-set nb (+ b 7) 4)
-                              (set tent (+ tent 1)))))))))
+                          (do (if (and (>= nhl 0) (> (cells-at nb b) nhl))
+                                (do (cells-set rf (+ (* r NT_RF) 7) 4)
+                                    (cells-set nb (+ b 7) 4)
+                                    (set tent (+ tent 1)))))))))))
           (set i (+ i 1))))
     (set i 0)
     (while (< i nn)
@@ -515,7 +571,90 @@
           (set r (+ r 1))))
     (return 0)))
 
-;; --------------------------------------------------------------------------------- rewriting
+;; ------------------------------------------------------------- notes with no printed marker
+
+;; headings that say what follows is a list of notes (lower case; `nt-nhi`: offset and length of each)
+(defdata ^:pub nt-nh
+  :emitter kin.lang/flat-array
+  :data [110 111 116 101 115 101 110 100 110 111 116 101 115 102 111 111 116 110 111 116 101 115 110 111 116 101 115 32 97 110 100 32 114 101 102 101 114 101 110 99 101 115 110 111 116 101 115 32 97 110 100 32 115 111 117 114 99 101 115 97 110 109 101 114 107 117 110 103 101 110 101 110 100 110 111 116 101 110 102 117 223 110 111 116 101 110 102 117 115 115 110 111 116 101 110 110 111 116 101 110 110 111 116 97 115 114 101 109 97 114 113 117 101 115 110 111 116 101 115 32 100 101 32 98 97 115 32 100 101 32 112 97 103 101 110 111 116 101 110 111 116 101 32 97 32 112 105 232 32 100 105 32 112 97 103 105 110 97 1087 1088 1080 1084 1077 1095 1072 1085 1080 1103 1089 1085 1086 1089 1082 1080 27880 37322 33050 27880 23614 27880 35387 37323 27880 35352 44033 51452 48120 51452]
+  :accessors {^I32 nt-nh-at [^I32 ignored ^I32 i]})
+
+(defdata ^:pub nt-nhi
+  :emitter kin.lang/flat-array
+  :data [0 5 5 8 13 9 22 20 42 17 59 11 70 8 78 8 86 9 95 5 100 5 105 9 114 20 134 4 138 20 158 10 168 6 174 2 176 2 178 2 180 2 182 2 184 2 186 2]
+  :accessors {^I32 nt-nhi-at [^I32 ignored ^I32 i]})
+
+(defconst ^I32 NT_NNH 24)
+
+(defn ^I32 nt-last-word [^Cells wd ^Cells ln ^I32 l]
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^:mut ^I32 i (- (+ w0 (ln-get ln l (lh-count))) 1)]
+    (while (>= i w0)
+      (do (if (> (ls-wl wd i) 0) (return i))
+          (set i (- i 1))))
+    (return -1)))
+
+(defn ^I32 nt-nh-match [^Cells wd ^Cells ln ^Cells et ^I32 l ^I32 e]
+  (comment "1 when the words of line l, joined by one space, with a colon or a full stop at their end dropped, spell entry e of")
+  (comment "the notes headings, in any case.")
+  (let [^I32 off (nt-nhi-at 0 (* e 2))
+        ^I32 n (nt-nhi-at 0 (+ (* e 2) 1))
+        ^I32 lw (nt-last-word wd ln l)
+        ^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 first 1]
+    (if (< lw 0) (return 0))
+    (while (< i wn)
+      (do (let [^I32 w (+ w0 i)
+                ^I32 tl (ls-wl wd w)]
+            (if (> tl 0)
+              (do (if (== first 0)
+                    (do (if (or (>= k n) (!= (nt-nh-at 0 (+ off k)) 32)) (return 0))
+                        (set k (+ k 1))))
+                  (set first 0)
+                  (set j 0)
+                  (while (< j tl)
+                    (do (let [^I32 c (ls-wc wd et w j)]
+                          (if (and (== w lw) (== j (- tl 1)) (or (== c 58) (== c 46)))
+                            (set j (+ j 1))
+                            (do (if (or (>= k n) (!= (nt-lower c) (nt-nh-at 0 (+ off k)))) (return 0))
+                                (set k (+ k 1))
+                                (set j (+ j 1))))))))))
+          (set i (+ i 1))))
+    (if (== k n) (return 1))
+    (return 0)))
+
+(defn ^I32 nt-notes-heading [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (let [^:mut ^I32 e 0]
+    (while (< e NT_NNH)
+      (do (if (== (nt-nh-match wd ln et l e) 1) (return 1))
+          (set e (+ e 1))))
+    (return 0)))
+
+(defn ^I32 nt-first-notes-heading [^Cells wd ^Cells ln ^Cells et ^Cells hc ^Cells rf]
+  (comment "The first heading line that says `Notes` after the first reference there is; -1 when there is none (or no reference).")
+  (if (== (cells-len rf) 0) (return -1))
+  (let [^I32 n (ln-count ln)
+        ^:mut ^I32 h (+ (cells-at rf 3) 1)]
+    (while (< h n)
+      (do (if (and (ls-upright ln h) (> (hd-level hc h) 0) (== (nt-notes-heading wd ln et h) 1)) (return h))
+          (set h (+ h 1))))
+    (return -1)))
+
+(defn ^I32 nt-nth-ref [^Cells rf ^I32 n]
+  (comment "The row of the n-th (from 0) reference that nothing has claimed (state 0); -1 when there are fewer.")
+  (let [^I32 nr (quot (cells-len rf) NT_RF)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 seen 0]
+    (while (< r nr)
+      (do (if (== (cells-at rf (+ (* r NT_RF) 7)) 0)
+            (do (if (== seen n) (return r))
+                (set seen (+ seen 1))))
+          (set r (+ r 1))))
+    (return -1)))
 
 (defn ^I32 nt-put-mark [^:mut ^Cells et ^Cells mk ^I32 ms ^I32 ml]
   (let [^:mut ^I32 i 0]
@@ -523,6 +662,83 @@
       (do (cells-push et (cells-at mk (+ ms i)))
           (set i (+ i 1))))
     (return 0)))
+
+(defn ^I32 nt-wrap-note [^:mut ^Cells wd ^:mut ^Cells et ^Cells mk ^I32 w ^I32 ms ^I32 ml ^I32 role]
+  (comment "Word w begins with an `S_NOTE` group (the role) whose text is the marker mk[ms, ms+ml), and keeps its own text.")
+  (let [^I32 s (ls-wrap-begin et (ls-s-note) role -1)]
+    (nt-put-mark et mk ms ml)
+    (ls-wrap-end et)
+    (ls-copy-word et wd w 0)
+    (ls-wrap-set wd et w s)
+    (return 0)))
+
+(defn ^I32 nt-claim [^:mut ^Cells wd ^:mut ^Cells et ^Cells ln ^:mut ^Cells hc ^Cells rf ^Cells mk ^I32 b ^I32 k]
+  (comment "Line b starts the k-th note under a heading: an endnote whose marker is the k-th reference nothing claimed.")
+  (let [^I32 r (nt-nth-ref rf k)
+        ^I32 w (ls-first-word wd ln b)]
+    (if (and (>= r 0) (>= w 0))
+      (do (nt-wrap-note wd et mk w (cells-at rf (+ (* r NT_RF) 5)) (cells-at rf (+ (* r NT_RF) 6)) 5)
+          (ls-put hc b (ls-k-flags) (ls-f-note))))
+    (return 0)))
+
+(defn ^I32 nt-walk [^:mut ^Cells wd ^:mut ^Cells et ^Cells ln ^Cells sf ^:mut ^Cells hc ^Cells rf ^Cells mk ^I32 h ^I32 doit]
+  (comment "The notes under the heading line h: the first line below it and every line below that starts after more than one and")
+  (comment "a half line gaps of whitespace. With doit 1 each one is rewritten as an endnote whose marker is the next of the")
+  (comment "references nothing has claimed. Answers how many there are.")
+  (let [^I32 med (st-hget sf (sfh-gap))
+        ^:mut ^I32 b (st-get sf h (sfk-below))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 first 1
+        ^:mut ^I32 start 0]
+    (while (and (>= b 0) (< steps 400))
+      (do (if (or (> (hd-level hc b) 0) (not (ls-upright ln b)) (!= (ls-get hc b (ls-k-flags)) 0)
+                  (!= (ln-get ln b (lh-page)) (ln-get ln h (lh-page))))
+            (set b -1)
+            (do (set start first)
+                (let [^I32 g (st-get sf b (sfk-gap-above))
+                      ^I32 hb (st-get sf b (sfk-height))]
+                  (if (and (> (* g 2) (* med 3)) (> (* (- g med) 8) hb)) (set start 1)))
+                (if (== start 1)
+                  (do (if (== doit 1) (nt-claim wd et ln hc rf mk b k))
+                      (set k (+ k 1))))
+                (set first 0)
+                (set b (st-get sf b (sfk-below)))))
+          (set steps (+ steps 1))))
+    (return k)))
+
+(defn ^I32 nt-markerless [^:mut ^Cells wd ^:mut ^Cells et ^Cells ln ^Cells sf ^:mut ^Cells hc ^:mut ^Cells rf ^Cells mk]
+  (comment "References left over (a superscript marker no body claimed) and a heading that says `Notes` after them: the lines")
+  (comment "under it that start a note, as many as there are references, are the endnotes, the printed marker being none; the")
+  (comment "markers are the references' own, in order. A different count leaves everything as it is.")
+  (let [^I32 nr (quot (cells-len rf) NT_RF)
+        ^I32 n (ln-count ln)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 un 0
+        ^:mut ^I32 fl -1
+        ^:mut ^I32 h 0
+        ^:mut ^I32 k 0]
+    (while (< r nr)
+      (do (if (== (cells-at rf (+ (* r NT_RF) 7)) 0)
+            (do (if (< fl 0) (set fl (cells-at rf (+ (* r NT_RF) 3))))
+                (set un (+ un 1))))
+          (set r (+ r 1))))
+    (if (or (== un 0) (> un 400)) (return 0))
+    (set h (+ fl 1))
+    (while (< h n)
+      (do (if (and (ls-upright ln h) (> (hd-level hc h) 0) (== (nt-notes-heading wd ln et h) 1))
+            (do (set k (nt-walk wd et ln sf hc rf mk h 0))
+                (if (== k un)
+                  (do (nt-walk wd et ln sf hc rf mk h 1)
+                      (set r 0)
+                      (while (< r nr)
+                        (do (if (== (cells-at rf (+ (* r NT_RF) 7)) 0) (cells-set rf (+ (* r NT_RF) 7) 2))
+                            (set r (+ r 1))))
+                      (return k)))))
+          (set h (+ h 1))))
+    (return 0)))
+
+;; --------------------------------------------------------------------------------- rewriting
 
 (defn ^I32 nt-apply-bodies [^:mut ^Cells wd ^:mut ^Cells et ^Cells gl ^Cells ln ^:mut ^Cells nb ^Cells mk ^:mut ^Cells rf ^:mut ^Cells hc]
   (comment "Rewrite the first word of every confirmed note body: its marker leaves the text, an `S_NOTE` group (the role: 4 a")
@@ -607,6 +823,7 @@
   (if (== (ls-open hc) 0) (return 0))
   (let [^I32 n (ln-count ln)
         ^:mut ^I32 l 0
+        ^:mut ^I32 nhl -1
         ^:mut ^I32 found 0]
     (comment "captions first: a caption is never a note body")
     (while (< l n)
@@ -614,7 +831,9 @@
             (set found (+ found (nt-caption wd et ln sf sc hc l))))
           (set l (+ l 1))))
     (nt-scan wd ln et gl sf pages hc rf nb mk)
-    (nt-match rf nb mk)
+    (set nhl (nt-first-notes-heading wd ln et hc rf))
+    (nt-match rf nb mk nhl)
+    (nt-markerless wd et ln sf hc rf mk)
     (set l 0)
     (while (< l (quot (cells-len nb) NT_NB))
       (do (if (or (== (cells-at nb (+ (* l NT_NB) 7)) 1) (== (cells-at nb (+ (* l NT_NB) 7)) 2))

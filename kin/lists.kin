@@ -38,19 +38,19 @@
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-rot lh-first lh-count
                                    hd-tstart hd-tlen hd-x0 hd-x1
                                    pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-flags pa-curve]]
-            [emon.style :refer [st-get sfk-size sfk-below sfk-gap-below sfk-upright sfk-height]]
+            [emon.style :refer [st-hget sfh-size st-get sfk-size sfk-below sfk-gap-below sfk-upright sfk-height sfk-sibline sfk-nsib]]
             [emon.heading :refer [hd-level hd-rows-end]]
             [kin.lang :refer [defn defconst return let set while if do comment
                               + - * < > <= >= == != and or not quot rem bit-and bit-or]]))
 
 ;; ---------------------------------------------------------------------- the knobs (named: D178)
-(defconst ^I32 LS_STRIDE 6)
+(defconst ^I32 LS_STRIDE 8)
 (defconst ^I32 LS_WIN 48)           ;; a candidate's neighbours are looked for this many candidates either side
 (defconst ^I32 LS_MAXCAND 6000)     ;; candidates considered (the neighbour search is quadratic in the window, linear here)
 (defconst ^I32 LS_MAXSHAPE 20000)   ;; bullet shapes considered
 (defconst ^I32 LS_NEAR 12)          ;; a value this far from a neighbour's is still the same list (3, 4, 10)
 (defconst ^I32 LS_XTOL 300)         ;; two markers are at one indent within 3 pt
-(defconst ^I32 LS_CD 10)            ;; candidate row: line page scheme value scheme2 value2 punct x0 class flags
+(defconst ^I32 LS_CD 12)            ;; candidate row: line page scheme value scheme2 value2 punct x0 class flags
 
 ;; the private-use code points that carry structure from the evidence to the paragraph stage (D179)
 (defn ^:pub ^I32 ls-s-item [] (return 64976))     ;; U+FDD0: a list marker group
@@ -84,6 +84,7 @@
 (defn ^:pub ^I32 ls-k-tol [] (return 3))         ;; the slop of a hanging indent (half the line's size)
 (defn ^:pub ^I32 ls-k-shape [] (return 4))       ;; 1 + the path row of a bullet shape that precedes the line, 0 none
 (defn ^:pub ^I32 ls-k-gap [] (return 5))         ;; the gap from that shape to the first word
+(defn ^:pub ^I32 ls-k-rtl [] (return 6))         ;; 1 when that shape stands at the END of a right-to-left line (to its right)
 
 ;; ----------------------------------------------------------------------------- small arithmetic
 
@@ -503,7 +504,7 @@
           (set l (+ l 1))))
     (return 1)))
 
-(defn ^I32 ls-attach [^Cells ln ^Cells sf ^:mut ^Cells hc ^I32 l ^I32 r ^I32 x1 ^I32 w ^I32 cy0]
+(defn ^I32 ls-attach [^Cells ln ^Cells sf ^:mut ^Cells hc ^I32 l ^I32 r ^I32 x0 ^I32 x1 ^I32 w ^I32 cy0]
   (comment "Associate shape r (its right edge x1, its width w, its centre cy) with line l if the shape stands where a")
   (comment "bullet stands: a fraction of an em to the left of the first word, on the x-height, of a fraction of an em in")
   (comment "size. The line keeps the nearest one. Answers 1 when this was the first shape the line got.")
@@ -511,16 +512,27 @@
         ^I32 sz (ls-line-size sf ln l)
         ^I32 lx (ls-cap (ln-get ln l (lh-x0)))
         ^I32 by (ls-cap (ln-get ln l (lh-by0)))
-        ^I32 gap (ls-cap (- lx (ls-cap x1)))]
-    (if (and (>= (* gap 16) sz) (<= (* gap 10) (* sz 25))
-             (>= (* w 100) (* sz 12)) (<= (* w 100) (* sz 70))
+        ^I32 gap (ls-cap (- lx (ls-cap x1)))
+        ^I32 rx (ls-cap (ln-get ln l (lh-x1)))
+        ^I32 gap2 (ls-cap (- (ls-cap x0) rx))]
+    (if (and (>= (* w 100) (* sz 12)) (<= (* w 100) (* sz 70))
              (>= (* cy 100) (- (* by 100) (* sz 80)))
              (<= (* cy 10) (- (* by 10) sz)))
-      (do (let [^I32 old (ls-get hc l (ls-k-shape))]
-            (if (or (== old 0) (< gap (ls-get hc l (ls-k-gap))))
-              (do (ls-put hc l (ls-k-shape) (+ r 1))
-                  (ls-put hc l (ls-k-gap) gap)
-                  (if (== old 0) (return 1)))))))
+      (do (comment "to the left of the line's start (a bullet), or to the right of its end (the bullet of a line that runs right to left)")
+          (if (and (>= (* gap 16) sz) (<= (* gap 10) (* sz 25)))
+            (do (let [^I32 old (ls-get hc l (ls-k-shape))]
+                  (if (or (== old 0) (== (ls-get hc l (ls-k-rtl)) 1) (< gap (ls-get hc l (ls-k-gap))))
+                    (do (ls-put hc l (ls-k-shape) (+ r 1))
+                        (ls-put hc l (ls-k-gap) gap)
+                        (ls-put hc l (ls-k-rtl) 0)
+                        (if (== old 0) (return 1)))))))
+          (if (and (>= (* gap2 16) sz) (<= (* gap2 10) (* sz 25)))
+            (do (let [^I32 old (ls-get hc l (ls-k-shape))]
+                  (if (or (== old 0) (and (== (ls-get hc l (ls-k-rtl)) 1) (< gap2 (ls-get hc l (ls-k-gap)))))
+                    (do (ls-put hc l (ls-k-shape) (+ r 1))
+                        (ls-put hc l (ls-k-gap) gap2)
+                        (ls-put hc l (ls-k-rtl) 1)
+                        (if (== old 0) (return 1)))))))))
     (return 0)))
 
 (defn ^I32 ls-shapes [^Cells ln ^Cells sf ^Cells pa ^Cells pi ^:mut ^Cells hc]
@@ -549,7 +561,7 @@
                   (set l (- (cells-at pi (* 2 p)) 1))
                   (while (and (>= l 0) (< l (cells-at pi (+ (* 2 p) 1))))
                     (do (if (ls-upright ln l)
-                          (set got (+ got (ls-attach ln sf hc l r x1 w (quot (+ y0 y1) 2)))))
+                          (set got (+ got (ls-attach ln sf hc l r x0 x1 w (quot (+ y0 y1) 2)))))
                         (set l (+ l 1)))))))
           (set r (+ r 1))))
     (return got)))
@@ -588,7 +600,7 @@
           (set i (+ i 1))))
     (return -1)))
 
-(defn ^I32 ls-push-cand [^:mut ^Cells cd ^Cells ln ^I32 l ^I32 sch ^I32 val ^I32 sch2 ^I32 val2 ^I32 pun ^I32 cls ^I32 ch ^I32 x]
+(defn ^I32 ls-push-cand [^:mut ^Cells cd ^Cells ln ^I32 l ^I32 sch ^I32 val ^I32 sch2 ^I32 val2 ^I32 pun ^I32 cls ^I32 ch ^I32 x ^I32 partner]
   (comment "Append one candidate row of `LS_CD` cells: line, page, scheme, value, scheme2, value2, punct, x0 of the line,")
   (comment "class (1 strong bullet, 2 weak, 3 number or letter, 4 shape), the bullet character.")
   (cells-push cd l)
@@ -601,6 +613,8 @@
   (cells-push cd x)
   (cells-push cd cls)
   (cells-push cd ch)
+  (cells-push cd partner)
+  (cells-push cd 0)
   (return 0))
 
 (defn ^I32 ls-mlen [^Cells wd ^Cells et ^I32 w ^:mut ^Cells ws]
@@ -608,11 +622,13 @@
   (ls-parse wd et w ws)
   (return (cells-at ws 4)))
 
-(defn ^I32 ls-textx [^Cells wd ^Cells ln ^Cells et ^I32 l ^I32 w ^I32 cls ^:mut ^Cells ws]
+(defn ^I32 ls-textx [^Cells wd ^Cells ln ^Cells et ^Cells hc ^I32 l ^I32 w ^I32 cls ^:mut ^Cells ws]
   (comment "The x where the item's text starts: the word after the marker; a glued marker's share of its word; the")
   (comment "word itself for a shape. 0 when the line has nothing after the marker. (Markers are often right aligned, so")
   (comment "the marker's own x says little about the indent: the text's does.)")
-  (if (== cls 4) (return (wd-get wd w (hd-x0))))
+  (if (== cls 4)
+    (do (if (== (ls-get hc l (ls-k-rtl)) 1) (return (- 10000000 (ls-cap (ln-get ln l (lh-x1))))))
+        (return (wd-get wd w (hd-x0)))))
   (let [^I32 w2 (ls-second-word wd ln l)
         ^I32 wl (ls-wl wd w)
         ^I32 ml (ls-mlen wd et w ws)]
@@ -622,7 +638,80 @@
     (if (>= w2 0) (return (wd-get wd w2 (hd-x0))))
     (return 0)))
 
-(defn ^I32 ls-collect [^Cells wd ^Cells ln ^Cells et ^Cells hc ^:mut ^Cells cd ^:mut ^Cells ws]
+(defn ^I32 ls-rtl-side [^Cells ln ^I32 m ^I32 t]
+  (comment "1 when the text line t lies to the LEFT of its marker line m: the item runs right to left.")
+  (if (<= (ln-get ln t (lh-x1)) (ln-get ln m (lh-x0))) (return 1))
+  (return 0))
+
+(defn ^I32 ls-take-partner [^:mut ^Cells wd ^:mut ^Cells et ^:mut ^Cells ln ^I32 w ^I32 l ^I32 m ^I32 scheme ^I32 value]
+  (comment "The item whose marker stands alone on line m and whose text starts with word w: w gets the group (the marker's")
+  (comment "text), the marker's word is emptied, line m is taken out of the lines (page -7, as furniture's are) and the text's")
+  (comment "line grows to hold it.")
+  (let [^I32 wm (ls-first-word wd ln m)
+        ^I32 s (ls-wrap-begin et (ls-s-item) scheme value)
+        ^I32 ts (wd-get wd wm (hd-tstart))
+        ^I32 tl (wd-get wd wm (hd-tlen))
+        ^:mut ^I32 j 0]
+    (while (< j tl)
+      (do (cells-push et (cells-at et (+ ts j)))
+          (set j (+ j 1))))
+    (ls-wrap-end et)
+    (ls-copy-word et wd w 0)
+    (ls-wrap-set wd et w s)
+    (wd-set wd wm (hd-tlen) 0)
+    (let [^I32 mx0 (ln-get ln m (lh-x0))
+          ^I32 mx1 (ln-get ln m (lh-x1))
+          ^I32 lx0 (ln-get ln l (lh-x0))
+          ^I32 lx1 (ln-get ln l (lh-x1))]
+      (if (== (ls-rtl-side ln m l) 1)
+        (do (if (> mx1 lx1) (ln-set ln l (lh-x1) mx1)))
+        (do (if (< mx0 lx0) (ln-set ln l (lh-x0) mx0)))))
+    (ln-set ln m (lh-page) -7)
+    (return 0)))
+
+(defn ^I32 ls-small [^Cells wd ^Cells ln ^Cells sf ^I32 l]
+  (comment "1 when line l is set smaller than three quarters of the body's size: the labels of a figure, the cells of a table")
+  (comment "in small type; a list there is not what this stage is after.")
+  (let [^I32 bsz (st-hget sf (sfh-size))]
+    (if (and (> bsz 0) (< (* (ls-line-size sf ln l) 100) (* bsz 75))) (return 1))
+    (return 0)))
+
+(defn ^I32 ls-letter-after [^Cells wd ^Cells ln ^Cells et ^I32 l ^I32 w]
+  (comment "1 when the word after the marker word w of line l starts with a letter (of any script of letters): a dash before a")
+  (comment "number is a table's blank or a minus, not a bullet.")
+  (let [^I32 w2 (ls-second-word wd ln l)]
+    (if (< w2 0) (return 0))
+    (let [^I32 c (ls-wc wd et w2 0)]
+      (if (and (>= c 65) (<= c 90)) (return 1))
+      (if (and (>= c 97) (<= c 122)) (return 1))
+      (if (and (>= c 192) (and (<= c 8191) (and (!= c 215) (!= c 247)))) (return 1))
+      (if (>= c 12288) (return 1))
+      (return 0))))
+
+(defn ^I32 ls-partner [^Cells wd ^Cells ln ^Cells sf ^Cells hc ^I32 l]
+  (comment "The line that holds the TEXT of the item whose marker is alone on line l: the one sibling on its row, at the same")
+  (comment "baseline, close beside it (to its right, or to its left when the text runs right to left), with text of its own")
+  (comment "and nothing else. -1 when there is none. (A text layer builds two lines out of a marker and its text when")
+  (comment "they are set in different fonts: a right to left list is the common case.)")
+  (let [^I32 t (st-get sf l (sfk-sibline))]
+    (if (< t 0) (return -1))
+    (if (!= (st-get sf l (sfk-nsib)) 1) (return -1))
+    (if (not (ls-upright ln t)) (return -1))
+    (if (or (!= (ls-get hc t (ls-k-flags)) 0) (> (hd-level hc t) 0)) (return -1))
+    (if (!= (ln-get ln t (lh-page)) (ln-get ln l (lh-page))) (return -1))
+    (if (< (ls-first-word wd ln t) 0) (return -1))
+    (let [^I32 sz (ls-line-size sf ln l)
+          ^I32 mx0 (ls-cap (ln-get ln l (lh-x0)))
+          ^I32 mx1 (ls-cap (ln-get ln l (lh-x1)))
+          ^I32 tx0 (ls-cap (ln-get ln t (lh-x0)))
+          ^I32 tx1 (ls-cap (ln-get ln t (lh-x1)))
+          ^I32 db (ls-abs (- (ls-cap (ln-get ln l (lh-by0))) (ls-cap (ln-get ln t (lh-by0)))))]
+      (if (> (* db 3) sz) (return -1))
+      (if (and (>= (+ tx0 (quot sz 4)) mx1) (<= (* (- tx0 mx1) 10) (* sz 25))) (return t))
+      (if (and (<= (- tx1 (quot sz 4)) mx0) (<= (* (- mx0 tx1) 10) (* sz 25))) (return t))
+      (return -1))))
+
+(defn ^I32 ls-collect [^Cells wd ^Cells ln ^Cells et ^Cells sf ^Cells hc ^:mut ^Cells cd ^:mut ^Cells ws]
   (comment "One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are")
   (comment "headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the")
   (comment "marker has no item text and is left out.")
@@ -631,6 +720,8 @@
         ^:mut ^I32 c 0
         ^:mut ^I32 w 0
         ^:mut ^I32 tx 0
+        ^:mut ^I32 pt 0
+        ^:mut ^I32 rt 0
         ^:mut ^I32 cls 0]
     (cells-drop cd 0)
     (while (and (< l n) (< c LS_MAXCAND))
@@ -638,18 +729,30 @@
                    (== (hd-level hc l) 0)
                    (== (ls-get hc l (ls-k-flags)) 0))
             (do (set w (ls-first-word wd ln l))
-                (if (>= w 0)
+                (if (and (>= w 0) (== (ls-small wd ln sf l) 0))
                   (do (set cls (ls-parse wd et w ws))
+                      (if (and (== cls 2) (== (ls-letter-after wd ln et l w) 0)) (set cls 0))
                       (if (and (> cls 0)
                                (or (< (cells-at ws 4) (ls-wl wd w)) (>= (ls-second-word wd ln l) 0)))
-                        (do (set tx (ls-textx wd ln et l w cls ws))
+                        (do (set tx (ls-textx wd ln et hc l w cls ws))
                             (ls-parse wd et w ws)
                             (ls-push-cand cd ln l (cells-at ws 0) (cells-at ws 1) (cells-at ws 2) (cells-at ws 3)
-                                          (cells-at ws 5) cls (cells-at ws 6) tx)
+                                          (cells-at ws 5) cls (cells-at ws 6) tx -1)
                             (set c (+ c 1))))
+                      (comment "a marker alone on its line, its text on the line beside it")
+                      (if (and (> cls 0) (== (cells-at ws 4) (ls-wl wd w)) (< (ls-second-word wd ln l) 0))
+                        (do (set pt (ls-partner wd ln sf hc l))
+                            (if (>= pt 0)
+                              (do (ls-parse wd et w ws)
+                                  (set rt (ls-rtl-side ln l pt))
+                                  (set tx (ln-get ln pt (lh-x0)))
+                                  (if (== rt 1) (set tx (- 10000000 (ls-cap (ln-get ln pt (lh-x1))))))
+                                  (ls-push-cand cd ln pt (cells-at ws 0) (cells-at ws 1) (cells-at ws 2) (cells-at ws 3)
+                                                (cells-at ws 5) cls (cells-at ws 6) tx l)
+                                  (set c (+ c 1))))))
                       (if (and (== cls 0) (> (ls-get hc l (ls-k-shape)) 0))
-                        (do (set tx (ls-textx wd ln et l w 4 ws))
-                            (ls-push-cand cd ln l (ls-sc-bullet) 0 0 0 0 4 0 tx)
+                        (do (set tx (ls-textx wd ln et hc l w 4 ws))
+                            (ls-push-cand cd ln l (ls-sc-bullet) 0 0 0 0 4 0 tx -1)
                             (set c (+ c 1))))))))
           (set l (+ l 1))))
     (return c)))
@@ -740,6 +843,12 @@
           (set l (+ l 1))))
     (return 0)))
 
+(defn ^I32 ls-initial-like [^Cells cd ^I32 i]
+  (comment "1 when candidate i is a letter or a roman numeral and a full stop (`Z.`): it might be an author's initial, and a")
+  (comment "hanging indent under it (a bibliography's) does not make it an item: only neighbours in a sequence do.")
+  (if (and (== (ls-cget cd i 8) 3) (>= (ls-cget cd i 2) 3) (<= (ls-cget cd i 2) 7) (== (ls-cget cd i 6) 1)) (return 1))
+  (return 0))
+
 (defn ^:pub ^I32 ls-analyze [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Cells sf ^Cells pa
                              ^:mut ^Cells hc ^:mut ^Cells cd ^:mut ^Cells pi ^:mut ^Cells ws]
   (comment "Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.")
@@ -754,7 +863,7 @@
           (set i (+ i 1))))
     (if (== (ls-pages ln pi) 1)
       (ls-shapes ln sf pa pi hc))
-    (let [^I32 nc (ls-collect wd ln et hc cd ws)]
+    (let [^I32 nc (ls-collect wd ln et sf hc cd ws)]
       (set i 0)
       (while (< i nc)
         (do (let [^I32 l (ls-cget cd i 0)
@@ -763,24 +872,30 @@
                   ^:mut ^I32 conf (ls-confirm cd nc i)
                   ^I32 textx (ls-cget cd i 7)]
               (comment "a lone candidate needs a hanging continuation under it (a number or a letter, a bullet or a shape)")
-              (if (and (== conf 0) (> textx 0) (!= cls 2))
+              (if (and (== conf 0) (> textx 0) (!= cls 2) (== (ls-initial-like cd i) 0))
                 (do (if (== (ls-hang-evidence ln sf hc l textx) 1)
                       (set conf 1))))
               (if (> conf 0)
                 (do (let [^:mut ^I32 sch (ls-pick (ls-cget cd i 2) (ls-cget cd i 4) conf)
                           ^:mut ^I32 val -1
                           ^:mut ^I32 bch -1
+                          ^I32 partner (ls-cget cd i 10)
                           ^I32 mlen (ls-mlen wd et w ws)]
                       (if (== cls 3)
-                        (set val (ls-pick (ls-cget cd i 3) (ls-cget cd i 5) conf))
-                        (set bch (ls-cget cd i 9)))
+                        (set val (ls-pick (ls-cget cd i 3) (ls-cget cd i 5) conf)))
                       (if (== cls 4)
                         (do (let [^I32 shape (- (ls-get hc l (ls-k-shape)) 1)
-                                  ^I32 sx (pa-get pa shape (pf-x0))]
+                                  ^I32 sx (pa-get pa shape (pf-x0))
+                                  ^I32 sx1 (pa-get pa shape (pf-x1))]
                               (ls-wrap-item wd et w (ls-sc-bullet) -1 0 (ls-shape-char pa shape))
-                              (if (< sx (ln-get ln l (lh-x0)))
-                                (ln-set ln l (lh-x0) sx))))
-                        (ls-wrap-item wd et w sch val mlen bch))
+                              (if (== (ls-get hc l (ls-k-rtl)) 1)
+                                (do (if (> sx1 (ln-get ln l (lh-x1)))
+                                      (ln-set ln l (lh-x1) sx1)))
+                                (do (if (< sx (ln-get ln l (lh-x0)))
+                                      (ln-set ln l (lh-x0) sx))))))
+                        (if (>= partner 0)
+                          (ls-take-partner wd et ln w l partner sch val)
+                          (ls-wrap-item wd et w sch val mlen bch)))
                       (ls-put hc l (ls-k-flags) (ls-f-item))
                       (ls-put hc l (ls-k-textx) textx)
                       (ls-put hc l (ls-k-markx) (ln-get ln l (lh-x0)))

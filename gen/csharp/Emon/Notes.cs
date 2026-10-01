@@ -65,7 +65,7 @@ public static class Notes {
         }
         return c;
     }
-    internal static int NtKeyword(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+    public static int NtKeyword(emon.Port.Cells wd, emon.Port.Cells et, int w) {
         // The kind of caption the word w is the keyword of: 1 a figure, 2 a table, 0 not a keyword.
         int tl = Lists.LsWl(wd, w);
         int e = 0;
@@ -95,7 +95,7 @@ public static class Notes {
     internal static bool NtUpper(int c) {
         return (c >= 65) && (c <= 90);
     }
-    internal static int NtNumberBody(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+    public static int NtNumberBody(emon.Port.Cells wd, emon.Port.Cells et, int w) {
         // How many code points of the word are a caption's number: `[A-Z]?` then digits (at most four a group) with
         // `.` or `-` and more digits, then at most one small letter; or a roman numeral of capitals (up to five). 0 when
         // the word does not start with one.
@@ -330,6 +330,14 @@ public static class Notes {
         }
         return -1;
     }
+    internal static int NtGchar(emon.Port.Cells gl, emon.Port.Cells et, int g) {
+        // The character of glyph g: its own code point, or the first of its text run when it has one.
+        int ts = Evidence.GlGet(gl, g, Evidence.ChTstart());
+        if (ts >= 0) {
+            return emon.Port.CellsAt(et, ts);
+        }
+        return Evidence.GlGet(gl, g, Evidence.ChCp());
+    }
     internal static int NtGpos(emon.Port.Cells gl, int g, int wts, int eq, int i) {
         // Where glyph g (the i-th of its word, whose text starts at wts) begins in the text: its own run when it has one, else
         // the i-th code point of the word's text, which is where it is when the word has as many code points as glyphs
@@ -381,7 +389,56 @@ public static class Notes {
         emon.Port.CellsPush(nb, band);
         return 0;
     }
-    internal static int NtScanWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int l, int w, int first, int sz0, int @base, int szok, int band) {
+    internal static bool NtLetterish(int c) {
+        // A letter of Latin, Greek or Cyrillic (any case), or a character of the CJK blocks.
+        if ((c >= 65) && (c <= 90)) {
+            return 1 == 1;
+        }
+        if ((c >= 97) && (c <= 122)) {
+            return 1 == 1;
+        }
+        if ((c >= 192) && ((c <= 591) && ((c != 215) && (c != 247)))) {
+            return 1 == 1;
+        }
+        if ((c >= 880) && (c <= 1327)) {
+            return 1 == 1;
+        }
+        if (c >= 12288) {
+            return 1 == 1;
+        }
+        return 0 == 1;
+    }
+    internal static bool NtTrailingPunct(int c) {
+        // Punctuation that may stand against a note reference on either side: a word's end, a comma, a closing bracket.
+        if ((c == 46) || ((c == 44) || ((c == 59) || ((c == 58) || ((c == 63) || (c == 33)))))) {
+            return 1 == 1;
+        }
+        if ((c == 41) || ((c == 93) || ((c == 8221) || ((c == 8217) || ((c == 34) || (c == 39)))))) {
+            return 1 == 1;
+        }
+        return 0 == 1;
+    }
+    internal static int NtRefContext(emon.Port.Cells gl, emon.Port.Cells et, int g0, int gn, int i, int j, int pwc) {
+        // Is the superscript run of glyphs i..j of a word a note reference and not an exponent or an index: what comes
+        // before it (the word's glyph i-1, or when the run starts the word the last character of the word before) is a
+        // letter or punctuation, never a digit or an operator, and what comes after it in the word is punctuation only.
+        int before = pwc;
+        int k = j;
+        if (i > 0) {
+            before = NtGchar(gl, et, g0 + (i - 1));
+        }
+        if (!(NtLetterish(before) || NtTrailingPunct(before))) {
+            return 0;
+        }
+        while (k < gn) {
+            if (!NtTrailingPunct(NtGchar(gl, et, g0 + k))) {
+                return 0;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    internal static int NtScanWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int l, int w, int first, int pwc, int sz0, int @base, int szok, int band) {
         // The superscript runs of word w of line l: a run at the start of the line's first word is a note body's marker
         // (a row of `nb`), any other a reference (a row of `rf`). The marker characters go to `mk`.
         int g0 = Evidence.WdGet(wd, w, Evidence.WfGfirst());
@@ -409,7 +466,7 @@ public static class Notes {
                     j += 1;
                 }
                 // a comma between two markers belongs to them: `1,2`
-                if (((j + 1) < gn) && ((j - i) < 5) && (emon.Port.CellsAt(et, Evidence.GlGet(gl, g0 + j, Evidence.ChTstart())) == 44) && NtSupStyled(gl, g0 + j, sz0, @base) && (NtGlyphMark(gl, et, g0 + j + 1, sz0, @base) >= 0)) {
+                if (((j + 1) < gn) && ((j - i) < 5) && (NtGchar(gl, et, g0 + j) == 44) && NtSupStyled(gl, g0 + j, sz0, @base) && (NtGlyphMark(gl, et, g0 + j + 1, sz0, @base) >= 0)) {
                     emon.Port.CellsPush(mk, 44);
                     j += 1;
                     while ((j < gn) && ((j - i) < 8) && (NtGlyphMark(gl, et, g0 + j, sz0, @base) >= 0)) {
@@ -428,7 +485,7 @@ public static class Notes {
                             NtPushNb(nb, l, page, w, 1, pb, ms, emon.Port.CellsLen(mk) - ms, szok, band);
                         }
                     } else {
-                        if ((emon.Port.CellsLen(rf) / NtRf) < NtMaxrf) {
+                        if (((emon.Port.CellsLen(rf) / NtRf) < NtMaxrf) && (NtRefContext(gl, et, g0, gn, i, j, pwc) == 1)) {
                             NtPushRf(rf, w, pa, pb, l, page, ms, emon.Port.CellsLen(mk) - ms);
                         }
                     }
@@ -500,6 +557,8 @@ public static class Notes {
         int band = 0;
         int sz0 = 0;
         int first = 0;
+        int pwc = -1;
+        int wl = 0;
         int @base = 0;
         int ml = 0;
         int ms = 0;
@@ -526,14 +585,17 @@ public static class Notes {
                 }
                 nrow = emon.Port.CellsLen(nb) / NtNb;
                 first = 1;
+                pwc = -1;
                 int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
                 int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
                 k = 0;
                 while (k < wn) {
                     w = w0 + k;
                     if (Lists.LsWl(wd, w) > 0) {
-                        NtScanWord(wd, ln, et, gl, rf, nb, mk, l, w, first, sz0, @base, szok, band);
+                        NtScanWord(wd, ln, et, gl, rf, nb, mk, l, w, first, pwc, sz0, @base, szok, band);
                         first = 0;
+                        wl = Lists.LsWl(wd, w);
+                        pwc = Lists.LsWc(wd, et, w, wl - 1);
                     }
                     k += 1;
                 }
@@ -567,8 +629,8 @@ public static class Notes {
         return 1 == 1;
     }
     internal static int NtFindRef(emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i, int samePage, int before) {
-        // The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), or before it
-        // in the document (before 1). Its row, or -1.
+        // The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), on the page before
+        // it (same-page 2: a footnote a column or a page break pushed on), or before it in the document (before 1). Its row, or -1.
         int nr = emon.Port.CellsLen(rf) / NtRf;
         int nl = emon.Port.CellsAt(nb, i * NtNb);
         int np = emon.Port.CellsAt(nb, (i * NtNb) + 1);
@@ -580,6 +642,9 @@ public static class Notes {
                 if ((samePage == 1) && (emon.Port.CellsAt(rf, (r * NtRf) + 4) == np)) {
                     return r;
                 }
+                if ((samePage == 2) && (emon.Port.CellsAt(rf, (r * NtRf) + 4) == (np - 1))) {
+                    return r;
+                }
                 if ((before == 1) && ((emon.Port.CellsAt(rf, (r * NtRf) + 4) < np) || ((emon.Port.CellsAt(rf, (r * NtRf) + 4) == np) && (emon.Port.CellsAt(rf, (r * NtRf) + 3) < nl)))) {
                     return r;
                 }
@@ -588,7 +653,37 @@ public static class Notes {
         }
         return -1;
     }
-    internal static int NtMatch(emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk) {
+    internal static int NtFoot(emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int i) {
+        // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
+        // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
+        // on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
+        // reference it took.
+        int b = i * NtNb;
+        int kind = emon.Port.CellsAt(nb, b + 3);
+        int szok = emon.Port.CellsAt(nb, b + 8);
+        int band = emon.Port.CellsAt(nb, b + 9);
+        int r = -1;
+        if (emon.Port.CellsAt(nb, b + 7) != 0) {
+            return 0;
+        }
+        if ((band == 1) && ((szok == 1) || (kind == 1))) {
+            r = NtFindRef(rf, nb, mk, i, 1, 0);
+        }
+        if ((r < 0) && ((szok == 1) || ((kind == 1) && (band == 1)))) {
+            r = NtFindRef(rf, nb, mk, i, 2, 0);
+        }
+        if (r >= 0) {
+            emon.Port.CellsSet(rf, (r * NtRf) + 7, 1);
+            emon.Port.CellsSet(nb, b + 7, 1);
+            return 1;
+        }
+        if ((kind == 1) && (szok == 1) && (band == 1)) {
+            emon.Port.CellsSet(nb, b + 7, 1);
+            return 1;
+        }
+        return 0;
+    }
+    internal static int NtMatch(emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, int nhl) {
         // Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
         // the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
         // the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -598,22 +693,7 @@ public static class Notes {
         int r = 0;
         int tent = 0;
         while (i < nn) {
-            int b = i * NtNb;
-            if ((emon.Port.CellsAt(nb, b + 8) == 1) && (emon.Port.CellsAt(nb, b + 9) == 1) && (emon.Port.CellsAt(nb, b + 7) == 0)) {
-                r = NtFindRef(rf, nb, mk, i, 1, 0);
-                if (r >= 0) {
-                    emon.Port.CellsSet(rf, (r * NtRf) + 7, 1);
-                    emon.Port.CellsSet(nb, b + 7, 1);
-                } else if (emon.Port.CellsAt(nb, b + 3) == 1) {
-                    emon.Port.CellsSet(nb, b + 7, 1);
-                }
-            } else if ((emon.Port.CellsAt(nb, b + 3) == 1) && (emon.Port.CellsAt(nb, b + 9) == 1) && (emon.Port.CellsAt(nb, b + 7) == 0)) {
-                r = NtFindRef(rf, nb, mk, i, 1, 0);
-                if (r >= 0) {
-                    emon.Port.CellsSet(rf, (r * NtRf) + 7, 1);
-                    emon.Port.CellsSet(nb, b + 7, 1);
-                }
-            }
+            NtFoot(rf, nb, mk, i);
             i += 1;
         }
         // endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -627,9 +707,11 @@ public static class Notes {
                         emon.Port.CellsSet(rf, (r * NtRf) + 7, 2);
                         emon.Port.CellsSet(nb, b + 7, 2);
                     } else {
-                        emon.Port.CellsSet(rf, (r * NtRf) + 7, 4);
-                        emon.Port.CellsSet(nb, b + 7, 4);
-                        tent += 1;
+                        if ((nhl >= 0) && (emon.Port.CellsAt(nb, b) > nhl)) {
+                            emon.Port.CellsSet(rf, (r * NtRf) + 7, 4);
+                            emon.Port.CellsSet(nb, b + 7, 4);
+                            tent += 1;
+                        }
                     }
                 }
             }
@@ -659,11 +741,225 @@ public static class Notes {
         }
         return 0;
     }
+    public static readonly int[] NtNh = new int[] {
+        110, 111, 116, 101, 115, 101, 110, 100, 110, 111, 116, 101, 115, 102, 111, 111,
+        116, 110, 111, 116, 101, 115, 110, 111, 116, 101, 115, 32, 97, 110, 100, 32,
+        114, 101, 102, 101, 114, 101, 110, 99, 101, 115, 110, 111, 116, 101, 115, 32,
+        97, 110, 100, 32, 115, 111, 117, 114, 99, 101, 115, 97, 110, 109, 101, 114,
+        107, 117, 110, 103, 101, 110, 101, 110, 100, 110, 111, 116, 101, 110, 102, 117,
+        223, 110, 111, 116, 101, 110, 102, 117, 115, 115, 110, 111, 116, 101, 110, 110,
+        111, 116, 101, 110, 110, 111, 116, 97, 115, 114, 101, 109, 97, 114, 113, 117,
+        101, 115, 110, 111, 116, 101, 115, 32, 100, 101, 32, 98, 97, 115, 32, 100,
+        101, 32, 112, 97, 103, 101, 110, 111, 116, 101, 110, 111, 116, 101, 32, 97,
+        32, 112, 105, 232, 32, 100, 105, 32, 112, 97, 103, 105, 110, 97, 1087, 1088,
+        1080, 1084, 1077, 1095, 1072, 1085, 1080, 1103, 1089, 1085, 1086, 1089, 1082, 1080, 27880, 37322,
+        33050, 27880, 23614, 27880, 35387, 37323, 27880, 35352, 44033, 51452, 48120, 51452
+    };
+    public static readonly int[] NtNhi = new int[] {
+        0, 5, 5, 8, 13, 9, 22, 20, 42, 17, 59, 11, 70, 8, 78, 8,
+        86, 9, 95, 5, 100, 5, 105, 9, 114, 20, 134, 4, 138, 20, 158, 10,
+        168, 6, 174, 2, 176, 2, 178, 2, 180, 2, 182, 2, 184, 2, 186, 2
+    };
+    internal const int NtNnh = 24;
+    internal static int NtLastWord(emon.Port.Cells wd, emon.Port.Cells ln, int l) {
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int i = (w0 + Evidence.LnGet(ln, l, Evidence.LhCount())) - 1;
+        while (i >= w0) {
+            if (Lists.LsWl(wd, i) > 0) {
+                return i;
+            }
+            i -= 1;
+        }
+        return -1;
+    }
+    internal static int NtNhMatch(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int e) {
+        // 1 when the words of line l, joined by one space, with a colon or a full stop at their end dropped, spell entry e of
+        // the notes headings, in any case.
+        int off = NtNhi[e * 2];
+        int n = NtNhi[(e * 2) + 1];
+        int lw = NtLastWord(wd, ln, l);
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
+        int k = 0;
+        int i = 0;
+        int j = 0;
+        int first = 1;
+        if (lw < 0) {
+            return 0;
+        }
+        while (i < wn) {
+            int w = w0 + i;
+            int tl = Lists.LsWl(wd, w);
+            if (tl > 0) {
+                if (first == 0) {
+                    if ((k >= n) || (NtNh[off + k] != 32)) {
+                        return 0;
+                    }
+                    k += 1;
+                }
+                first = 0;
+                j = 0;
+                while (j < tl) {
+                    int c = Lists.LsWc(wd, et, w, j);
+                    if ((w == lw) && (j == (tl - 1)) && ((c == 58) || (c == 46))) {
+                        j += 1;
+                    } else {
+                        if ((k >= n) || (NtLower(c) != NtNh[off + k])) {
+                            return 0;
+                        }
+                        k += 1;
+                        j += 1;
+                    }
+                }
+            }
+            i += 1;
+        }
+        if (k == n) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int NtNotesHeading(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        int e = 0;
+        while (e < NtNnh) {
+            if (NtNhMatch(wd, ln, et, l, e) == 1) {
+                return 1;
+            }
+            e += 1;
+        }
+        return 0;
+    }
+    internal static int NtFirstNotesHeading(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells hc, emon.Port.Cells rf) {
+        // The first heading line that says `Notes` after the first reference there is; -1 when there is none (or no reference).
+        if (emon.Port.CellsLen(rf) == 0) {
+            return -1;
+        }
+        int n = Evidence.LnCount(ln);
+        int h = emon.Port.CellsAt(rf, 3) + 1;
+        while (h < n) {
+            if (Lists.LsUpright(ln, h) && (Heading.HdLevel(hc, h) > 0) && (NtNotesHeading(wd, ln, et, h) == 1)) {
+                return h;
+            }
+            h += 1;
+        }
+        return -1;
+    }
+    internal static int NtNthRef(emon.Port.Cells rf, int n) {
+        // The row of the n-th (from 0) reference that nothing has claimed (state 0); -1 when there are fewer.
+        int nr = emon.Port.CellsLen(rf) / NtRf;
+        int r = 0;
+        int seen = 0;
+        while (r < nr) {
+            if (emon.Port.CellsAt(rf, (r * NtRf) + 7) == 0) {
+                if (seen == n) {
+                    return r;
+                }
+                seen += 1;
+            }
+            r += 1;
+        }
+        return -1;
+    }
     internal static int NtPutMark(emon.Port.Cells et, emon.Port.Cells mk, int ms, int ml) {
         int i = 0;
         while (i < ml) {
             emon.Port.CellsPush(et, emon.Port.CellsAt(mk, ms + i));
             i += 1;
+        }
+        return 0;
+    }
+    internal static int NtWrapNote(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells mk, int w, int ms, int ml, int role) {
+        // Word w begins with an `S_NOTE` group (the role) whose text is the marker mk[ms, ms+ml), and keeps its own text.
+        int s = Lists.LsWrapBegin(et, Lists.LsSNote(), role, -1);
+        NtPutMark(et, mk, ms, ml);
+        Lists.LsWrapEnd(et);
+        Lists.LsCopyWord(et, wd, w, 0);
+        Lists.LsWrapSet(wd, et, w, s);
+        return 0;
+    }
+    internal static int NtClaim(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells hc, emon.Port.Cells rf, emon.Port.Cells mk, int b, int k) {
+        // Line b starts the k-th note under a heading: an endnote whose marker is the k-th reference nothing claimed.
+        int r = NtNthRef(rf, k);
+        int w = Lists.LsFirstWord(wd, ln, b);
+        if ((r >= 0) && (w >= 0)) {
+            NtWrapNote(wd, et, mk, w, emon.Port.CellsAt(rf, (r * NtRf) + 5), emon.Port.CellsAt(rf, (r * NtRf) + 6), 5);
+            Lists.LsPut(hc, b, Lists.LsKFlags(), Lists.LsFNote());
+        }
+        return 0;
+    }
+    internal static int NtWalk(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc, emon.Port.Cells rf, emon.Port.Cells mk, int h, int doit) {
+        // The notes under the heading line h: the first line below it and every line below that starts after more than one and
+        // a half line gaps of whitespace. With doit 1 each one is rewritten as an endnote whose marker is the next of the
+        // references nothing has claimed. Answers how many there are.
+        int med = Style.StHget(sf, Style.SfhGap());
+        int b = Style.StGet(sf, h, Style.SfkBelow());
+        int k = 0;
+        int steps = 0;
+        int first = 1;
+        int start = 0;
+        while ((b >= 0) && (steps < 400)) {
+            if ((Heading.HdLevel(hc, b) > 0) || !Lists.LsUpright(ln, b) || (Lists.LsGet(hc, b, Lists.LsKFlags()) != 0) || (Evidence.LnGet(ln, b, Evidence.LhPage()) != Evidence.LnGet(ln, h, Evidence.LhPage()))) {
+                b = -1;
+            } else {
+                start = first;
+                int g = Style.StGet(sf, b, Style.SfkGapAbove());
+                int hb = Style.StGet(sf, b, Style.SfkHeight());
+                if (((g * 2) > (med * 3)) && (((g - med) * 8) > hb)) {
+                    start = 1;
+                }
+                if (start == 1) {
+                    if (doit == 1) {
+                        NtClaim(wd, et, ln, hc, rf, mk, b, k);
+                    }
+                    k += 1;
+                }
+                first = 0;
+                b = Style.StGet(sf, b, Style.SfkBelow());
+            }
+            steps += 1;
+        }
+        return k;
+    }
+    internal static int NtMarkerless(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc, emon.Port.Cells rf, emon.Port.Cells mk) {
+        // References left over (a superscript marker no body claimed) and a heading that says `Notes` after them: the lines
+        // under it that start a note, as many as there are references, are the endnotes, the printed marker being none; the
+        // markers are the references' own, in order. A different count leaves everything as it is.
+        int nr = emon.Port.CellsLen(rf) / NtRf;
+        int n = Evidence.LnCount(ln);
+        int r = 0;
+        int un = 0;
+        int fl = -1;
+        int h = 0;
+        int k = 0;
+        while (r < nr) {
+            if (emon.Port.CellsAt(rf, (r * NtRf) + 7) == 0) {
+                if (fl < 0) {
+                    fl = emon.Port.CellsAt(rf, (r * NtRf) + 3);
+                }
+                un += 1;
+            }
+            r += 1;
+        }
+        if ((un == 0) || (un > 400)) {
+            return 0;
+        }
+        h = fl + 1;
+        while (h < n) {
+            if (Lists.LsUpright(ln, h) && (Heading.HdLevel(hc, h) > 0) && (NtNotesHeading(wd, ln, et, h) == 1)) {
+                k = NtWalk(wd, et, ln, sf, hc, rf, mk, h, 0);
+                if (k == un) {
+                    NtWalk(wd, et, ln, sf, hc, rf, mk, h, 1);
+                    r = 0;
+                    while (r < nr) {
+                        if (emon.Port.CellsAt(rf, (r * NtRf) + 7) == 0) {
+                            emon.Port.CellsSet(rf, (r * NtRf) + 7, 2);
+                        }
+                        r += 1;
+                    }
+                    return k;
+                }
+            }
+            h += 1;
         }
         return 0;
     }
@@ -768,6 +1064,7 @@ public static class Notes {
         }
         int n = Evidence.LnCount(ln);
         int l = 0;
+        int nhl = -1;
         int found = 0;
         // captions first: a caption is never a note body
         while (l < n) {
@@ -777,7 +1074,9 @@ public static class Notes {
             l += 1;
         }
         NtScan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk);
-        NtMatch(rf, nb, mk);
+        nhl = NtFirstNotesHeading(wd, ln, et, hc, rf);
+        NtMatch(rf, nb, mk, nhl);
+        NtMarkerless(wd, et, ln, sf, hc, rf, mk);
         l = 0;
         while (l < (emon.Port.CellsLen(nb) / NtNb)) {
             if ((emon.Port.CellsAt(nb, (l * NtNb) + 7) == 1) || (emon.Port.CellsAt(nb, (l * NtNb) + 7) == 2)) {

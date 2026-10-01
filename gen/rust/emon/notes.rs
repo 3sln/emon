@@ -67,7 +67,7 @@ pub(crate) fn nt_lower(c: i32) -> i32 {
     }
     return c;
 }
-pub(crate) fn nt_keyword(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+pub fn nt_keyword(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
     // The kind of caption the word w is the keyword of: 1 a figure, 2 a table, 0 not a keyword.
     let tl: i32 = ls_wl(wd, w);
     let mut e: i32 = 0;
@@ -97,7 +97,7 @@ pub(crate) fn nt_keyword(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
 pub(crate) fn nt_upper(c: i32) -> bool {
     return (c >= 65) && (c <= 90);
 }
-pub(crate) fn nt_number_body(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+pub fn nt_number_body(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
     // How many code points of the word are a caption's number: `[A-Z]?` then digits (at most four a group) with
     // `.` or `-` and more digits, then at most one small letter; or a roman numeral of capitals (up to five). 0 when
     // the word does not start with one.
@@ -332,6 +332,14 @@ pub(crate) fn nt_glyph_mark(gl: &mut crate::port::Cells, et: &mut crate::port::C
     }
     return -1;
 }
+pub(crate) fn nt_gchar(gl: &mut crate::port::Cells, et: &mut crate::port::Cells, g: i32) -> i32 {
+    // The character of glyph g: its own code point, or the first of its text run when it has one.
+    let ts: i32 = gl_get(gl, g, ch_tstart());
+    if ts >= 0 {
+        return crate::port::cells_at(et, ts);
+    }
+    return gl_get(gl, g, ch_cp());
+}
 pub(crate) fn nt_gpos(gl: &mut crate::port::Cells, g: i32, wts: i32, eq: i32, i: i32) -> i32 {
     // Where glyph g (the i-th of its word, whose text starts at wts) begins in the text: its own run when it has one, else
     // the i-th code point of the word's text, which is where it is when the word has as many code points as glyphs
@@ -383,7 +391,56 @@ pub(crate) fn nt_push_nb(mut nb: &mut crate::port::Cells, l: i32, page: i32, w: 
     crate::port::cells_push(nb, band);
     return 0;
 }
-pub(crate) fn nt_scan_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, l: i32, w: i32, first: i32, sz0: i32, base: i32, szok: i32, band: i32) -> i32 {
+pub(crate) fn nt_letterish(c: i32) -> bool {
+    // A letter of Latin, Greek or Cyrillic (any case), or a character of the CJK blocks.
+    if (c >= 65) && (c <= 90) {
+        return 1 == 1;
+    }
+    if (c >= 97) && (c <= 122) {
+        return 1 == 1;
+    }
+    if (c >= 192) && ((c <= 591) && ((c != 215) && (c != 247))) {
+        return 1 == 1;
+    }
+    if (c >= 880) && (c <= 1327) {
+        return 1 == 1;
+    }
+    if c >= 12288 {
+        return 1 == 1;
+    }
+    return 0 == 1;
+}
+pub(crate) fn nt_trailing_punct(c: i32) -> bool {
+    // Punctuation that may stand against a note reference on either side: a word's end, a comma, a closing bracket.
+    if (c == 46) || ((c == 44) || ((c == 59) || ((c == 58) || ((c == 63) || (c == 33))))) {
+        return 1 == 1;
+    }
+    if (c == 41) || ((c == 93) || ((c == 8221) || ((c == 8217) || ((c == 34) || (c == 39))))) {
+        return 1 == 1;
+    }
+    return 0 == 1;
+}
+pub(crate) fn nt_ref_context(gl: &mut crate::port::Cells, et: &mut crate::port::Cells, g0: i32, gn: i32, i: i32, j: i32, pwc: i32) -> i32 {
+    // Is the superscript run of glyphs i..j of a word a note reference and not an exponent or an index: what comes
+    // before it (the word's glyph i-1, or when the run starts the word the last character of the word before) is a
+    // letter or punctuation, never a digit or an operator, and what comes after it in the word is punctuation only.
+    let mut before: i32 = pwc;
+    let mut k: i32 = j;
+    if i > 0 {
+        before = nt_gchar(gl, et, g0 + (i - 1));
+    }
+    if !(nt_letterish(before) || nt_trailing_punct(before)) {
+        return 0;
+    }
+    while k < gn {
+        if !nt_trailing_punct(nt_gchar(gl, et, g0 + k)) {
+            return 0;
+        }
+        k += 1;
+    }
+    return 1;
+}
+pub(crate) fn nt_scan_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, gl: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, l: i32, w: i32, first: i32, pwc: i32, sz0: i32, base: i32, szok: i32, band: i32) -> i32 {
     // The superscript runs of word w of line l: a run at the start of the line's first word is a note body's marker
     // (a row of `nb`), any other a reference (a row of `rf`). The marker characters go to `mk`.
     let g0: i32 = wd_get(wd, w, wf_gfirst());
@@ -411,7 +468,7 @@ pub(crate) fn nt_scan_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Ce
                 j += 1;
             }
             // a comma between two markers belongs to them: `1,2`
-            if ((j + 1) < gn) && ((j - i) < 5) && (crate::port::cells_at(et, gl_get(gl, g0 + j, ch_tstart())) == 44) && nt_sup_styled(gl, g0 + j, sz0, base) && (nt_glyph_mark(gl, et, g0 + j + 1, sz0, base) >= 0) {
+            if ((j + 1) < gn) && ((j - i) < 5) && (nt_gchar(gl, et, g0 + j) == 44) && nt_sup_styled(gl, g0 + j, sz0, base) && (nt_glyph_mark(gl, et, g0 + j + 1, sz0, base) >= 0) {
                 crate::port::cells_push(mk, 44);
                 j += 1;
                 while (j < gn) && ((j - i) < 8) && (nt_glyph_mark(gl, et, g0 + j, sz0, base) >= 0) {
@@ -430,7 +487,7 @@ pub(crate) fn nt_scan_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Ce
                         nt_push_nb(nb, l, page, w, 1, pb, ms, crate::port::cells_len(mk) - ms, szok, band);
                     }
                 } else {
-                    if (crate::port::cells_len(rf) / NT_RF) < NT_MAXRF {
+                    if ((crate::port::cells_len(rf) / NT_RF) < NT_MAXRF) && (nt_ref_context(gl, et, g0, gn, i, j, pwc) == 1) {
                         nt_push_rf(rf, w, pa, pb, l, page, ms, crate::port::cells_len(mk) - ms);
                     }
                 }
@@ -502,6 +559,8 @@ pub(crate) fn nt_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
     let mut band: i32 = 0;
     let mut sz0: i32 = 0;
     let mut first: i32 = 0;
+    let mut pwc: i32 = -1;
+    let mut wl: i32 = 0;
     let mut base: i32 = 0;
     let mut ml: i32 = 0;
     let mut ms: i32 = 0;
@@ -528,14 +587,17 @@ pub(crate) fn nt_scan(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
             }
             nrow = crate::port::cells_len(nb) / NT_NB;
             first = 1;
+            pwc = -1;
             let w0: i32 = ln_get(ln, l, lh_first());
             let wn: i32 = ln_get(ln, l, lh_count());
             k = 0;
             while k < wn {
                 w = w0 + k;
                 if ls_wl(wd, w) > 0 {
-                    nt_scan_word(wd, ln, et, gl, rf, nb, mk, l, w, first, sz0, base, szok, band);
+                    nt_scan_word(wd, ln, et, gl, rf, nb, mk, l, w, first, pwc, sz0, base, szok, band);
                     first = 0;
+                    wl = ls_wl(wd, w);
+                    pwc = ls_wc(wd, et, w, wl - 1);
                 }
                 k += 1;
             }
@@ -569,8 +631,8 @@ pub(crate) fn nt_same_mark(mk: &mut crate::port::Cells, s1: i32, l1: i32, s2: i3
     return 1 == 1;
 }
 pub(crate) fn nt_find_ref(rf: &mut crate::port::Cells, nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, i: i32, same_page: i32, before: i32) -> i32 {
-    // The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), or before it
-    // in the document (before 1). Its row, or -1.
+    // The first reference not yet taken (state 0) with note body i's marker: on its page (same-page 1), on the page before
+    // it (same-page 2: a footnote a column or a page break pushed on), or before it in the document (before 1). Its row, or -1.
     let nr: i32 = crate::port::cells_len(rf) / NT_RF;
     let nl: i32 = crate::port::cells_at(nb, i * NT_NB);
     let np: i32 = crate::port::cells_at(nb, (i * NT_NB) + 1);
@@ -582,6 +644,9 @@ pub(crate) fn nt_find_ref(rf: &mut crate::port::Cells, nb: &mut crate::port::Cel
             if (same_page == 1) && (crate::port::cells_at(rf, (r * NT_RF) + 4) == np) {
                 return r;
             }
+            if (same_page == 2) && (crate::port::cells_at(rf, (r * NT_RF) + 4) == (np - 1)) {
+                return r;
+            }
             if (before == 1) && ((crate::port::cells_at(rf, (r * NT_RF) + 4) < np) || ((crate::port::cells_at(rf, (r * NT_RF) + 4) == np) && (crate::port::cells_at(rf, (r * NT_RF) + 3) < nl))) {
                 return r;
             }
@@ -590,7 +655,37 @@ pub(crate) fn nt_find_ref(rf: &mut crate::port::Cells, nb: &mut crate::port::Cel
     }
     return -1;
 }
-pub(crate) fn nt_match(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells) -> i32 {
+pub(crate) fn nt_foot(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, i: i32) -> i32 {
+    // Is note body candidate i a footnote? In the lower half of the page (the band) and small or marked in superscript,
+    // with a reference on its page; or small, with a reference on the page before (a note a column or a page break pushed
+    // on); or marked in superscript, small and in the band, with no reference at all. Marks the candidate (state 1) and the
+    // reference it took.
+    let b: i32 = i * NT_NB;
+    let kind: i32 = crate::port::cells_at(nb, b + 3);
+    let szok: i32 = crate::port::cells_at(nb, b + 8);
+    let band: i32 = crate::port::cells_at(nb, b + 9);
+    let mut r: i32 = -1;
+    if crate::port::cells_at(nb, b + 7) != 0 {
+        return 0;
+    }
+    if (band == 1) && ((szok == 1) || (kind == 1)) {
+        r = nt_find_ref(rf, nb, mk, i, 1, 0);
+    }
+    if (r < 0) && ((szok == 1) || ((kind == 1) && (band == 1))) {
+        r = nt_find_ref(rf, nb, mk, i, 2, 0);
+    }
+    if r >= 0 {
+        crate::port::cells_set(rf, (r * NT_RF) + 7, 1);
+        crate::port::cells_set(nb, b + 7, 1);
+        return 1;
+    }
+    if (kind == 1) && (szok == 1) && (band == 1) {
+        crate::port::cells_set(nb, b + 7, 1);
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn nt_match(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mk: &mut crate::port::Cells, nhl: i32) -> i32 {
     // Decide which candidates are notes. State 1: a footnote (a body in the lower half of the page, set smaller than
     // the body text or marked in superscript, with a reference on its page; a superscript marker alone is enough when
     // the line is also smaller). State 2: an endnote (a reference earlier in the document: for a superscript marker
@@ -600,22 +695,7 @@ pub(crate) fn nt_match(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port
     let mut r: i32 = 0;
     let mut tent: i32 = 0;
     while i < nn {
-        let b: i32 = i * NT_NB;
-        if (crate::port::cells_at(nb, b + 8) == 1) && (crate::port::cells_at(nb, b + 9) == 1) && (crate::port::cells_at(nb, b + 7) == 0) {
-            r = nt_find_ref(rf, nb, mk, i, 1, 0);
-            if r >= 0 {
-                crate::port::cells_set(rf, (r * NT_RF) + 7, 1);
-                crate::port::cells_set(nb, b + 7, 1);
-            } else if crate::port::cells_at(nb, b + 3) == 1 {
-                crate::port::cells_set(nb, b + 7, 1);
-            }
-        } else if (crate::port::cells_at(nb, b + 3) == 1) && (crate::port::cells_at(nb, b + 9) == 1) && (crate::port::cells_at(nb, b + 7) == 0) {
-            r = nt_find_ref(rf, nb, mk, i, 1, 0);
-            if r >= 0 {
-                crate::port::cells_set(rf, (r * NT_RF) + 7, 1);
-                crate::port::cells_set(nb, b + 7, 1);
-            }
-        }
+        nt_foot(rf, nb, mk, i);
         i += 1;
     }
     // endnotes: a superscript marker with an earlier reference at once, a plain number when there are two
@@ -629,9 +709,11 @@ pub(crate) fn nt_match(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port
                     crate::port::cells_set(rf, (r * NT_RF) + 7, 2);
                     crate::port::cells_set(nb, b + 7, 2);
                 } else {
-                    crate::port::cells_set(rf, (r * NT_RF) + 7, 4);
-                    crate::port::cells_set(nb, b + 7, 4);
-                    tent += 1;
+                    if (nhl >= 0) && (crate::port::cells_at(nb, b) > nhl) {
+                        crate::port::cells_set(rf, (r * NT_RF) + 7, 4);
+                        crate::port::cells_set(nb, b + 7, 4);
+                        tent += 1;
+                    }
                 }
             }
         }
@@ -661,11 +743,225 @@ pub(crate) fn nt_match(mut rf: &mut crate::port::Cells, mut nb: &mut crate::port
     }
     return 0;
 }
+pub static NT_NH: [i32; 188] = [
+    110, 111, 116, 101, 115, 101, 110, 100, 110, 111, 116, 101, 115, 102, 111, 111,
+    116, 110, 111, 116, 101, 115, 110, 111, 116, 101, 115, 32, 97, 110, 100, 32,
+    114, 101, 102, 101, 114, 101, 110, 99, 101, 115, 110, 111, 116, 101, 115, 32,
+    97, 110, 100, 32, 115, 111, 117, 114, 99, 101, 115, 97, 110, 109, 101, 114,
+    107, 117, 110, 103, 101, 110, 101, 110, 100, 110, 111, 116, 101, 110, 102, 117,
+    223, 110, 111, 116, 101, 110, 102, 117, 115, 115, 110, 111, 116, 101, 110, 110,
+    111, 116, 101, 110, 110, 111, 116, 97, 115, 114, 101, 109, 97, 114, 113, 117,
+    101, 115, 110, 111, 116, 101, 115, 32, 100, 101, 32, 98, 97, 115, 32, 100,
+    101, 32, 112, 97, 103, 101, 110, 111, 116, 101, 110, 111, 116, 101, 32, 97,
+    32, 112, 105, 232, 32, 100, 105, 32, 112, 97, 103, 105, 110, 97, 1087, 1088,
+    1080, 1084, 1077, 1095, 1072, 1085, 1080, 1103, 1089, 1085, 1086, 1089, 1082, 1080, 27880, 37322,
+    33050, 27880, 23614, 27880, 35387, 37323, 27880, 35352, 44033, 51452, 48120, 51452
+];
+pub static NT_NHI: [i32; 48] = [
+    0, 5, 5, 8, 13, 9, 22, 20, 42, 17, 59, 11, 70, 8, 78, 8,
+    86, 9, 95, 5, 100, 5, 105, 9, 114, 20, 134, 4, 138, 20, 158, 10,
+    168, 6, 174, 2, 176, 2, 178, 2, 180, 2, 182, 2, 184, 2, 186, 2
+];
+pub(crate) const NT_NNH: i32 = 24;
+pub(crate) fn nt_last_word(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32) -> i32 {
+    let w0: i32 = ln_get(ln, l, lh_first());
+    let mut i: i32 = (w0 + ln_get(ln, l, lh_count())) - 1;
+    while i >= w0 {
+        if ls_wl(wd, i) > 0 {
+            return i;
+        }
+        i -= 1;
+    }
+    return -1;
+}
+pub(crate) fn nt_nh_match(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32, e: i32) -> i32 {
+    // 1 when the words of line l, joined by one space, with a colon or a full stop at their end dropped, spell entry e of
+    // the notes headings, in any case.
+    let off: i32 = NT_NHI[(e * 2) as usize];
+    let n: i32 = NT_NHI[((e * 2) + 1) as usize];
+    let lw: i32 = nt_last_word(wd, ln, l);
+    let w0: i32 = ln_get(ln, l, lh_first());
+    let wn: i32 = ln_get(ln, l, lh_count());
+    let mut k: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut first: i32 = 1;
+    if lw < 0 {
+        return 0;
+    }
+    while i < wn {
+        let w: i32 = w0 + i;
+        let tl: i32 = ls_wl(wd, w);
+        if tl > 0 {
+            if first == 0 {
+                if (k >= n) || (NT_NH[(off + k) as usize] != 32) {
+                    return 0;
+                }
+                k += 1;
+            }
+            first = 0;
+            j = 0;
+            while j < tl {
+                let c: i32 = ls_wc(wd, et, w, j);
+                if (w == lw) && (j == (tl - 1)) && ((c == 58) || (c == 46)) {
+                    j += 1;
+                } else {
+                    if (k >= n) || (nt_lower(c) != NT_NH[(off + k) as usize]) {
+                        return 0;
+                    }
+                    k += 1;
+                    j += 1;
+                }
+            }
+        }
+        i += 1;
+    }
+    if k == n {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn nt_notes_heading(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
+    let mut e: i32 = 0;
+    while e < NT_NNH {
+        if nt_nh_match(wd, ln, et, l, e) == 1 {
+            return 1;
+        }
+        e += 1;
+    }
+    return 0;
+}
+pub(crate) fn nt_first_notes_heading(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, hc: &mut crate::port::Cells, rf: &mut crate::port::Cells) -> i32 {
+    // The first heading line that says `Notes` after the first reference there is; -1 when there is none (or no reference).
+    if crate::port::cells_len(rf) == 0 {
+        return -1;
+    }
+    let n: i32 = ln_count(ln);
+    let mut h: i32 = crate::port::cells_at(rf, 3) + 1;
+    while h < n {
+        if ls_upright(ln, h) && (hd_level(hc, h) > 0) && (nt_notes_heading(wd, ln, et, h) == 1) {
+            return h;
+        }
+        h += 1;
+    }
+    return -1;
+}
+pub(crate) fn nt_nth_ref(rf: &mut crate::port::Cells, n: i32) -> i32 {
+    // The row of the n-th (from 0) reference that nothing has claimed (state 0); -1 when there are fewer.
+    let nr: i32 = crate::port::cells_len(rf) / NT_RF;
+    let mut r: i32 = 0;
+    let mut seen: i32 = 0;
+    while r < nr {
+        if crate::port::cells_at(rf, (r * NT_RF) + 7) == 0 {
+            if seen == n {
+                return r;
+            }
+            seen += 1;
+        }
+        r += 1;
+    }
+    return -1;
+}
 pub(crate) fn nt_put_mark(mut et: &mut crate::port::Cells, mk: &mut crate::port::Cells, ms: i32, ml: i32) -> i32 {
     let mut i: i32 = 0;
     while i < ml {
         crate::port::cells_push(et, crate::port::cells_at(mk, ms + i));
         i += 1;
+    }
+    return 0;
+}
+pub(crate) fn nt_wrap_note(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mk: &mut crate::port::Cells, w: i32, ms: i32, ml: i32, role: i32) -> i32 {
+    // Word w begins with an `S_NOTE` group (the role) whose text is the marker mk[ms, ms+ml), and keeps its own text.
+    let s: i32 = ls_wrap_begin(et, ls_s_note(), role, -1);
+    nt_put_mark(et, mk, ms, ml);
+    ls_wrap_end(et);
+    ls_copy_word(et, wd, w, 0);
+    ls_wrap_set(wd, et, w, s);
+    return 0;
+}
+pub(crate) fn nt_claim(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, ln: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, rf: &mut crate::port::Cells, mk: &mut crate::port::Cells, b: i32, k: i32) -> i32 {
+    // Line b starts the k-th note under a heading: an endnote whose marker is the k-th reference nothing claimed.
+    let r: i32 = nt_nth_ref(rf, k);
+    let w: i32 = ls_first_word(wd, ln, b);
+    if (r >= 0) && (w >= 0) {
+        nt_wrap_note(wd, et, mk, w, crate::port::cells_at(rf, (r * NT_RF) + 5), crate::port::cells_at(rf, (r * NT_RF) + 6), 5);
+        ls_put(hc, b, ls_k_flags(), ls_f_note());
+    }
+    return 0;
+}
+pub(crate) fn nt_walk(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, rf: &mut crate::port::Cells, mk: &mut crate::port::Cells, h: i32, doit: i32) -> i32 {
+    // The notes under the heading line h: the first line below it and every line below that starts after more than one and
+    // a half line gaps of whitespace. With doit 1 each one is rewritten as an endnote whose marker is the next of the
+    // references nothing has claimed. Answers how many there are.
+    let med: i32 = st_hget(sf, sfh_gap());
+    let mut b: i32 = st_get(sf, h, sfk_below());
+    let mut k: i32 = 0;
+    let mut steps: i32 = 0;
+    let mut first: i32 = 1;
+    let mut start: i32 = 0;
+    while (b >= 0) && (steps < 400) {
+        if (hd_level(hc, b) > 0) || !ls_upright(ln, b) || (ls_get(hc, b, ls_k_flags()) != 0) || (ln_get(ln, b, lh_page()) != ln_get(ln, h, lh_page())) {
+            b = -1;
+        } else {
+            start = first;
+            let g: i32 = st_get(sf, b, sfk_gap_above());
+            let hb: i32 = st_get(sf, b, sfk_height());
+            if ((g * 2) > (med * 3)) && (((g - med) * 8) > hb) {
+                start = 1;
+            }
+            if start == 1 {
+                if doit == 1 {
+                    nt_claim(wd, et, ln, hc, rf, mk, b, k);
+                }
+                k += 1;
+            }
+            first = 0;
+            b = st_get(sf, b, sfk_below());
+        }
+        steps += 1;
+    }
+    return k;
+}
+pub(crate) fn nt_markerless(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mk: &mut crate::port::Cells) -> i32 {
+    // References left over (a superscript marker no body claimed) and a heading that says `Notes` after them: the lines
+    // under it that start a note, as many as there are references, are the endnotes, the printed marker being none; the
+    // markers are the references' own, in order. A different count leaves everything as it is.
+    let nr: i32 = crate::port::cells_len(rf) / NT_RF;
+    let n: i32 = ln_count(ln);
+    let mut r: i32 = 0;
+    let mut un: i32 = 0;
+    let mut fl: i32 = -1;
+    let mut h: i32 = 0;
+    let mut k: i32 = 0;
+    while r < nr {
+        if crate::port::cells_at(rf, (r * NT_RF) + 7) == 0 {
+            if fl < 0 {
+                fl = crate::port::cells_at(rf, (r * NT_RF) + 3);
+            }
+            un += 1;
+        }
+        r += 1;
+    }
+    if (un == 0) || (un > 400) {
+        return 0;
+    }
+    h = fl + 1;
+    while h < n {
+        if ls_upright(ln, h) && (hd_level(hc, h) > 0) && (nt_notes_heading(wd, ln, et, h) == 1) {
+            k = nt_walk(wd, et, ln, sf, hc, rf, mk, h, 0);
+            if k == un {
+                nt_walk(wd, et, ln, sf, hc, rf, mk, h, 1);
+                r = 0;
+                while r < nr {
+                    if crate::port::cells_at(rf, (r * NT_RF) + 7) == 0 {
+                        crate::port::cells_set(rf, (r * NT_RF) + 7, 2);
+                    }
+                    r += 1;
+                }
+                return k;
+            }
+        }
+        h += 1;
     }
     return 0;
 }
@@ -770,6 +1066,7 @@ pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
     }
     let n: i32 = ln_count(ln);
     let mut l: i32 = 0;
+    let mut nhl: i32 = -1;
     let mut found: i32 = 0;
     // captions first: a caption is never a note body
     while l < n {
@@ -779,7 +1076,9 @@ pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
         l += 1;
     }
     nt_scan(wd, ln, et, gl, sf, pages, hc, rf, nb, mk);
-    nt_match(rf, nb, mk);
+    nhl = nt_first_notes_heading(wd, ln, et, hc, rf);
+    nt_match(rf, nb, mk, nhl);
+    nt_markerless(wd, et, ln, sf, hc, rf, mk);
     l = 0;
     while l < (crate::port::cells_len(nb) / NT_NB) {
         if (crate::port::cells_at(nb, (l * NT_NB) + 7) == 1) || (crate::port::cells_at(nb, (l * NT_NB) + 7) == 2) {

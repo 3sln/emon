@@ -5,13 +5,13 @@ package emon;
 
 
 public final class Lists {
-    public static final int LS_STRIDE = 6;
+    public static final int LS_STRIDE = 8;
     public static final int LS_WIN = 48;
     public static final int LS_MAXCAND = 6000;
     public static final int LS_MAXSHAPE = 20000;
     public static final int LS_NEAR = 12;
     public static final int LS_XTOL = 300;
-    public static final int LS_CD = 10;
+    public static final int LS_CD = 12;
     public static int lsSItem() {
         return 64976;
     }
@@ -86,6 +86,9 @@ public final class Lists {
     }
     public static int lsKGap() {
         return 5;
+    }
+    public static int lsKRtl() {
+        return 6;
     }
     public static int lsGt(int a, int b) {
         if (a > b) {
@@ -698,7 +701,7 @@ public final class Lists {
         }
         return 1;
     }
-    public static int lsAttach(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc, int l, int r, int x1, int w, int cy0) {
+    public static int lsAttach(emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc, int l, int r, int x0, int x1, int w, int cy0) {
         // Associate shape r (its right edge x1, its width w, its centre cy) with line l if the shape stands where a
         // bullet stands: a fraction of an em to the left of the first word, on the x-height, of a fraction of an em in
         // size. The line keeps the nearest one. Answers 1 when this was the first shape the line got.
@@ -707,13 +710,30 @@ public final class Lists {
         int lx = lsCap(Evidence.lnGet(ln, l, Evidence.lhX0()));
         int by = lsCap(Evidence.lnGet(ln, l, Evidence.lhBy0()));
         int gap = lsCap(lx - lsCap(x1));
-        if (((gap * 16) >= sz) && ((gap * 10) <= (sz * 25)) && ((w * 100) >= (sz * 12)) && ((w * 100) <= (sz * 70)) && ((cy * 100) >= ((by * 100) - (sz * 80))) && ((cy * 10) <= ((by * 10) - sz))) {
-            int old = lsGet(hc, l, lsKShape());
-            if ((old == 0) || (gap < lsGet(hc, l, lsKGap()))) {
-                lsPut(hc, l, lsKShape(), r + 1);
-                lsPut(hc, l, lsKGap(), gap);
-                if (old == 0) {
-                    return 1;
+        int rx = lsCap(Evidence.lnGet(ln, l, Evidence.lhX1()));
+        int gap2 = lsCap(lsCap(x0) - rx);
+        if (((w * 100) >= (sz * 12)) && ((w * 100) <= (sz * 70)) && ((cy * 100) >= ((by * 100) - (sz * 80))) && ((cy * 10) <= ((by * 10) - sz))) {
+            // to the left of the line's start (a bullet), or to the right of its end (the bullet of a line that runs right to left)
+            if (((gap * 16) >= sz) && ((gap * 10) <= (sz * 25))) {
+                int old = lsGet(hc, l, lsKShape());
+                if ((old == 0) || (lsGet(hc, l, lsKRtl()) == 1) || (gap < lsGet(hc, l, lsKGap()))) {
+                    lsPut(hc, l, lsKShape(), r + 1);
+                    lsPut(hc, l, lsKGap(), gap);
+                    lsPut(hc, l, lsKRtl(), 0);
+                    if (old == 0) {
+                        return 1;
+                    }
+                }
+            }
+            if (((gap2 * 16) >= sz) && ((gap2 * 10) <= (sz * 25))) {
+                int old = lsGet(hc, l, lsKShape());
+                if ((old == 0) || ((lsGet(hc, l, lsKRtl()) == 1) && (gap2 < lsGet(hc, l, lsKGap())))) {
+                    lsPut(hc, l, lsKShape(), r + 1);
+                    lsPut(hc, l, lsKGap(), gap2);
+                    lsPut(hc, l, lsKRtl(), 1);
+                    if (old == 0) {
+                        return 1;
+                    }
                 }
             }
         }
@@ -741,7 +761,7 @@ public final class Lists {
                 l = emon.Port.cellsAt(pi, 2 * p) - 1;
                 while ((l >= 0) && (l < emon.Port.cellsAt(pi, (2 * p) + 1))) {
                     if (lsUpright(ln, l)) {
-                        got += lsAttach(ln, sf, hc, l, r, x1, w, (y0 + y1) / 2);
+                        got += lsAttach(ln, sf, hc, l, r, x0, x1, w, (y0 + y1) / 2);
                     }
                     l += 1;
                 }
@@ -795,7 +815,7 @@ public final class Lists {
         }
         return -1;
     }
-    public static int lsPushCand(emon.Port.Cells cd, emon.Port.Cells ln, int l, int sch, int val, int sch2, int val2, int pun, int cls, int ch, int x) {
+    public static int lsPushCand(emon.Port.Cells cd, emon.Port.Cells ln, int l, int sch, int val, int sch2, int val2, int pun, int cls, int ch, int x, int partner) {
         // Append one candidate row of `LS_CD` cells: line, page, scheme, value, scheme2, value2, punct, x0 of the line,
         // class (1 strong bullet, 2 weak, 3 number or letter, 4 shape), the bullet character.
         emon.Port.cellsPush(cd, l);
@@ -808,6 +828,8 @@ public final class Lists {
         emon.Port.cellsPush(cd, x);
         emon.Port.cellsPush(cd, cls);
         emon.Port.cellsPush(cd, ch);
+        emon.Port.cellsPush(cd, partner);
+        emon.Port.cellsPush(cd, 0);
         return 0;
     }
     public static int lsMlen(emon.Port.Cells wd, emon.Port.Cells et, int w, emon.Port.Cells ws) {
@@ -815,11 +837,14 @@ public final class Lists {
         lsParse(wd, et, w, ws);
         return emon.Port.cellsAt(ws, 4);
     }
-    public static int lsTextx(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int w, int cls, emon.Port.Cells ws) {
+    public static int lsTextx(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells hc, int l, int w, int cls, emon.Port.Cells ws) {
         // The x where the item's text starts: the word after the marker; a glued marker's share of its word; the
         // word itself for a shape. 0 when the line has nothing after the marker. (Markers are often right aligned, so
         // the marker's own x says little about the indent: the text's does.)
         if (cls == 4) {
+            if (lsGet(hc, l, lsKRtl()) == 1) {
+                return 10000000 - lsCap(Evidence.lnGet(ln, l, Evidence.lhX1()));
+            }
             return Evidence.wdGet(wd, w, Evidence.hdX0());
         }
         int w2 = lsSecondWord(wd, ln, l);
@@ -833,7 +858,119 @@ public final class Lists {
         }
         return 0;
     }
-    public static int lsCollect(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells hc, emon.Port.Cells cd, emon.Port.Cells ws) {
+    public static int lsRtlSide(emon.Port.Cells ln, int m, int t) {
+        // 1 when the text line t lies to the LEFT of its marker line m: the item runs right to left.
+        if (Evidence.lnGet(ln, t, Evidence.lhX1()) <= Evidence.lnGet(ln, m, Evidence.lhX0())) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int lsTakePartner(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, int w, int l, int m, int scheme, int value) {
+        // The item whose marker stands alone on line m and whose text starts with word w: w gets the group (the marker's
+        // text), the marker's word is emptied, line m is taken out of the lines (page -7, as furniture's are) and the text's
+        // line grows to hold it.
+        int wm = lsFirstWord(wd, ln, m);
+        int s = lsWrapBegin(et, lsSItem(), scheme, value);
+        int ts = Evidence.wdGet(wd, wm, Evidence.hdTstart());
+        int tl = Evidence.wdGet(wd, wm, Evidence.hdTlen());
+        int j = 0;
+        while (j < tl) {
+            emon.Port.cellsPush(et, emon.Port.cellsAt(et, ts + j));
+            j += 1;
+        }
+        lsWrapEnd(et);
+        lsCopyWord(et, wd, w, 0);
+        lsWrapSet(wd, et, w, s);
+        Evidence.wdSet(wd, wm, Evidence.hdTlen(), 0);
+        int mx0 = Evidence.lnGet(ln, m, Evidence.lhX0());
+        int mx1 = Evidence.lnGet(ln, m, Evidence.lhX1());
+        int lx0 = Evidence.lnGet(ln, l, Evidence.lhX0());
+        int lx1 = Evidence.lnGet(ln, l, Evidence.lhX1());
+        if (lsRtlSide(ln, m, l) == 1) {
+            if (mx1 > lx1) {
+                Evidence.lnSet(ln, l, Evidence.lhX1(), mx1);
+            }
+        } else {
+            if (mx0 < lx0) {
+                Evidence.lnSet(ln, l, Evidence.lhX0(), mx0);
+            }
+        }
+        Evidence.lnSet(ln, m, Evidence.lhPage(), -7);
+        return 0;
+    }
+    public static int lsSmall(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells sf, int l) {
+        // 1 when line l is set smaller than three quarters of the body's size: the labels of a figure, the cells of a table
+        // in small type; a list there is not what this stage is after.
+        int bsz = Style.stHget(sf, Style.sfhSize());
+        if ((bsz > 0) && ((lsLineSize(sf, ln, l) * 100) < (bsz * 75))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int lsLetterAfter(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l, int w) {
+        // 1 when the word after the marker word w of line l starts with a letter (of any script of letters): a dash before a
+        // number is a table's blank or a minus, not a bullet.
+        int w2 = lsSecondWord(wd, ln, l);
+        if (w2 < 0) {
+            return 0;
+        }
+        int c = lsWc(wd, et, w2, 0);
+        if ((c >= 65) && (c <= 90)) {
+            return 1;
+        }
+        if ((c >= 97) && (c <= 122)) {
+            return 1;
+        }
+        if ((c >= 192) && ((c <= 8191) && ((c != 215) && (c != 247)))) {
+            return 1;
+        }
+        if (c >= 12288) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int lsPartner(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells hc, int l) {
+        // The line that holds the TEXT of the item whose marker is alone on line l: the one sibling on its row, at the same
+        // baseline, close beside it (to its right, or to its left when the text runs right to left), with text of its own
+        // and nothing else. -1 when there is none. (A text layer builds two lines out of a marker and its text when
+        // they are set in different fonts: a right to left list is the common case.)
+        int t = Style.stGet(sf, l, Style.sfkSibline());
+        if (t < 0) {
+            return -1;
+        }
+        if (Style.stGet(sf, l, Style.sfkNsib()) != 1) {
+            return -1;
+        }
+        if (!lsUpright(ln, t)) {
+            return -1;
+        }
+        if ((lsGet(hc, t, lsKFlags()) != 0) || (Heading.hdLevel(hc, t) > 0)) {
+            return -1;
+        }
+        if (Evidence.lnGet(ln, t, Evidence.lhPage()) != Evidence.lnGet(ln, l, Evidence.lhPage())) {
+            return -1;
+        }
+        if (lsFirstWord(wd, ln, t) < 0) {
+            return -1;
+        }
+        int sz = lsLineSize(sf, ln, l);
+        int mx0 = lsCap(Evidence.lnGet(ln, l, Evidence.lhX0()));
+        int mx1 = lsCap(Evidence.lnGet(ln, l, Evidence.lhX1()));
+        int tx0 = lsCap(Evidence.lnGet(ln, t, Evidence.lhX0()));
+        int tx1 = lsCap(Evidence.lnGet(ln, t, Evidence.lhX1()));
+        int db = lsAbs(lsCap(Evidence.lnGet(ln, l, Evidence.lhBy0())) - lsCap(Evidence.lnGet(ln, t, Evidence.lhBy0())));
+        if ((db * 3) > sz) {
+            return -1;
+        }
+        if (((tx0 + (sz / 4)) >= mx1) && (((tx0 - mx1) * 10) <= (sz * 25))) {
+            return t;
+        }
+        if (((tx1 - (sz / 4)) <= mx0) && (((mx0 - tx1) * 10) <= (sz * 25))) {
+            return t;
+        }
+        return -1;
+    }
+    public static int lsCollect(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells hc, emon.Port.Cells cd, emon.Port.Cells ws) {
         // One candidate row per line that starts with a marker, or with a bullet shape, in line order. Lines that are
         // headings, not upright, or already taken (a note, a caption) are left out; a line whose only word is the
         // marker has no item text and is left out.
@@ -842,22 +979,41 @@ public final class Lists {
         int c = 0;
         int w = 0;
         int tx = 0;
+        int pt = 0;
+        int rt = 0;
         int cls = 0;
         emon.Port.cellsDrop(cd, 0);
         while ((l < n) && (c < LS_MAXCAND)) {
             if (lsUpright(ln, l) && (Heading.hdLevel(hc, l) == 0) && (lsGet(hc, l, lsKFlags()) == 0)) {
                 w = lsFirstWord(wd, ln, l);
-                if (w >= 0) {
+                if ((w >= 0) && (lsSmall(wd, ln, sf, l) == 0)) {
                     cls = lsParse(wd, et, w, ws);
+                    if ((cls == 2) && (lsLetterAfter(wd, ln, et, l, w) == 0)) {
+                        cls = 0;
+                    }
                     if ((cls > 0) && ((emon.Port.cellsAt(ws, 4) < lsWl(wd, w)) || (lsSecondWord(wd, ln, l) >= 0))) {
-                        tx = lsTextx(wd, ln, et, l, w, cls, ws);
+                        tx = lsTextx(wd, ln, et, hc, l, w, cls, ws);
                         lsParse(wd, et, w, ws);
-                        lsPushCand(cd, ln, l, emon.Port.cellsAt(ws, 0), emon.Port.cellsAt(ws, 1), emon.Port.cellsAt(ws, 2), emon.Port.cellsAt(ws, 3), emon.Port.cellsAt(ws, 5), cls, emon.Port.cellsAt(ws, 6), tx);
+                        lsPushCand(cd, ln, l, emon.Port.cellsAt(ws, 0), emon.Port.cellsAt(ws, 1), emon.Port.cellsAt(ws, 2), emon.Port.cellsAt(ws, 3), emon.Port.cellsAt(ws, 5), cls, emon.Port.cellsAt(ws, 6), tx, -1);
                         c += 1;
                     }
+                    // a marker alone on its line, its text on the line beside it
+                    if ((cls > 0) && (emon.Port.cellsAt(ws, 4) == lsWl(wd, w)) && (lsSecondWord(wd, ln, l) < 0)) {
+                        pt = lsPartner(wd, ln, sf, hc, l);
+                        if (pt >= 0) {
+                            lsParse(wd, et, w, ws);
+                            rt = lsRtlSide(ln, l, pt);
+                            tx = Evidence.lnGet(ln, pt, Evidence.lhX0());
+                            if (rt == 1) {
+                                tx = 10000000 - lsCap(Evidence.lnGet(ln, pt, Evidence.lhX1()));
+                            }
+                            lsPushCand(cd, ln, pt, emon.Port.cellsAt(ws, 0), emon.Port.cellsAt(ws, 1), emon.Port.cellsAt(ws, 2), emon.Port.cellsAt(ws, 3), emon.Port.cellsAt(ws, 5), cls, emon.Port.cellsAt(ws, 6), tx, l);
+                            c += 1;
+                        }
+                    }
                     if ((cls == 0) && (lsGet(hc, l, lsKShape()) > 0)) {
-                        tx = lsTextx(wd, ln, et, l, w, 4, ws);
-                        lsPushCand(cd, ln, l, lsScBullet(), 0, 0, 0, 0, 4, 0, tx);
+                        tx = lsTextx(wd, ln, et, hc, l, w, 4, ws);
+                        lsPushCand(cd, ln, l, lsScBullet(), 0, 0, 0, 0, 4, 0, tx, -1);
                         c += 1;
                     }
                 }
@@ -973,6 +1129,14 @@ public final class Lists {
         }
         return 0;
     }
+    public static int lsInitialLike(emon.Port.Cells cd, int i) {
+        // 1 when candidate i is a letter or a roman numeral and a full stop (`Z.`): it might be an author's initial, and a
+        // hanging indent under it (a bibliography's) does not make it an item: only neighbours in a sequence do.
+        if ((lsCget(cd, i, 8) == 3) && (lsCget(cd, i, 2) >= 3) && (lsCget(cd, i, 2) <= 7) && (lsCget(cd, i, 6) == 1)) {
+            return 1;
+        }
+        return 0;
+    }
     public static int lsAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells pa, emon.Port.Cells hc, emon.Port.Cells cd, emon.Port.Cells pi, emon.Port.Cells ws) {
         // Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.
         // Answers the number of item lines found. The heading rows of `hc` must be there (`hd-analyze` ran); when
@@ -990,7 +1154,7 @@ public final class Lists {
         if (lsPages(ln, pi) == 1) {
             lsShapes(ln, sf, pa, pi, hc);
         }
-        int nc = lsCollect(wd, ln, et, hc, cd, ws);
+        int nc = lsCollect(wd, ln, et, sf, hc, cd, ws);
         i = 0;
         while (i < nc) {
             int l = lsCget(cd, i, 0);
@@ -999,7 +1163,7 @@ public final class Lists {
             int conf = lsConfirm(cd, nc, i);
             int textx = lsCget(cd, i, 7);
             // a lone candidate needs a hanging continuation under it (a number or a letter, a bullet or a shape)
-            if ((conf == 0) && (textx > 0) && (cls != 2)) {
+            if ((conf == 0) && (textx > 0) && (cls != 2) && (lsInitialLike(cd, i) == 0)) {
                 if (lsHangEvidence(ln, sf, hc, l, textx) == 1) {
                     conf = 1;
                 }
@@ -1008,19 +1172,27 @@ public final class Lists {
                 int sch = lsPick(lsCget(cd, i, 2), lsCget(cd, i, 4), conf);
                 int val = -1;
                 int bch = -1;
+                int partner = lsCget(cd, i, 10);
                 int mlen = lsMlen(wd, et, w, ws);
                 if (cls == 3) {
                     val = lsPick(lsCget(cd, i, 3), lsCget(cd, i, 5), conf);
-                } else {
-                    bch = lsCget(cd, i, 9);
                 }
                 if (cls == 4) {
                     int shape = lsGet(hc, l, lsKShape()) - 1;
                     int sx = Evidence.paGet(pa, shape, Evidence.pfX0());
+                    int sx1 = Evidence.paGet(pa, shape, Evidence.pfX1());
                     lsWrapItem(wd, et, w, lsScBullet(), -1, 0, lsShapeChar(pa, shape));
-                    if (sx < Evidence.lnGet(ln, l, Evidence.lhX0())) {
-                        Evidence.lnSet(ln, l, Evidence.lhX0(), sx);
+                    if (lsGet(hc, l, lsKRtl()) == 1) {
+                        if (sx1 > Evidence.lnGet(ln, l, Evidence.lhX1())) {
+                            Evidence.lnSet(ln, l, Evidence.lhX1(), sx1);
+                        }
+                    } else {
+                        if (sx < Evidence.lnGet(ln, l, Evidence.lhX0())) {
+                            Evidence.lnSet(ln, l, Evidence.lhX0(), sx);
+                        }
                     }
+                } else if (partner >= 0) {
+                    lsTakePartner(wd, et, ln, w, l, partner, sch, val);
                 } else {
                     lsWrapItem(wd, et, w, sch, val, mlen, bch);
                 }
