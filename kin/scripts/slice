@@ -36,7 +36,7 @@
 (defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
 
 (def update? (some #{"--update"} *command-line-args*))
-(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "footnotes-endnotes" "initial-image" "initial-vector"])
+(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "h-numbered" "initial-image" "initial-vector"])
 
 (shell {:out :string :err :string} "kin/scripts/emit")
 
