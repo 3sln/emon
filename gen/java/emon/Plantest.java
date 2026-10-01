@@ -144,18 +144,32 @@ public final class Plantest {
     }
     public static int ptUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells etext, StringBuilder t) {
         // Run the probe once over fresh arenas; with `us-done`, dump the evidence.
-        emon.Port.Cells g = emon.Port.newCells();
-        emon.Port.Cells wd = emon.Port.newCells();
-        emon.Port.Cells ln = emon.Port.newCells();
-        emon.Port.Cells pa = emon.Port.newCells();
-        emon.Port.Cells im = emon.Port.newCells();
-        emon.Port.Cells co = emon.Port.newCells();
-        emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells al = emon.Port.newCells();
-        emon.Port.Cells sp = emon.Port.newCells();
-        int st = Planprobe.ppUnit(s, an, rq, g, wd, ln, pa, im, co, ow, al, etext, sp);
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        int st = Planprobe.ppUnit(s, an, rq, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         if (st == Plan.usDone()) {
-            Evidence.evEmit(t, 0, g, wd, ln, pa, im, co, ow, al, etext, sp);
+            Evidence.evEmit(t, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         }
         return st;
     }

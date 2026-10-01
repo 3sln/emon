@@ -97,7 +97,7 @@
                   (= 4 (count (re-seq #"\{:round" edn)))
                   (not (str/includes? edn ":bytes")))
              "the transcript holds four entries (render, decode, two OCRs), two PNGs and no `bytes`")
-      (check (str/includes? (:out rec) "\"ocrwords\":[{")
+      (check (str/includes? (:out rec) "\"owords\":[{")
              "the evidence carries the OCR words the fake answered"))
     (let [rep-go (drive go "replay" t)
           rep-rs (drive rust "replay" t)]

@@ -11,139 +11,367 @@ import (
 	"testing"
 )
 
-func etBuild(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
-	evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.EtxAppendCp(etext, 72)
-	evidence.EtxAppendCp(etext, 105)
-	evidence.EtxAppendCp(etext, 102)
-	evidence.EtxAppendCp(etext, 105)
-	evidence.EtxAppendCp(etext, 72)
-	evidence.EtxAppendCp(etext, 105)
-	evidence.EtxAppendCp(etext, 80)
-	evidence.EtxAppendCp(etext, 101)
-	evidence.EtxAppendCp(etext, 110)
-	evidence.EtxAppendCp(etext, 65)
-	evidence.EtxAppendCp(etext, 114)
-	evidence.EtxAppendCp(etext, 116)
-	evidence.EtxAppendCp(etext, 105)
-	evidence.EtxAppendCp(etext, 102)
-	evidence.EtxAppendCp(etext, 97)
-	evidence.EtxAppendCp(etext, 99)
-	evidence.EtxAppendCp(etext, 116)
-	evidence.EtxAppendCp(etext, 80)
-	evidence.EtxAppendCp(etext, 97)
-	evidence.EtxAppendCp(etext, 103)
-	evidence.EtxAppendCp(etext, 105)
-	evidence.EtxAppendCp(etext, 110)
-	evidence.EtxAppendCp(etext, 97)
-	evidence.EtxAppendCp(etext, 116)
-	evidence.EtxAppendCp(etext, 105)
-	evidence.EtxAppendCp(etext, 111)
-	evidence.EtxAppendCp(etext, 110)
-	evidence.EtxAppendCp(etext, 87)
-	evidence.EtxAppendCp(etext, 97)
-	evidence.EtxAppendCp(etext, 116)
-	evidence.EtxAppendCp(etext, 101)
-	evidence.EtxAppendCp(etext, 114)
-	evidence.EtxAppendCp(etext, 109)
-	evidence.EtxAppendCp(etext, 97)
-	evidence.EtxAppendCp(etext, 114)
-	evidence.EtxAppendCp(etext, 107)
-	evidence.EtxAppendCp(etext, 68)
-	evidence.EtxAppendCp(etext, 82)
-	evidence.EtxAppendCp(etext, 65)
-	evidence.EtxAppendCp(etext, 70)
-	evidence.EtxAppendCp(etext, 84)
-	evidence.GlNew(glyphs, 1, 72, 1, 1200, 7200, 9000, 8000, 10200)
+func etTxt(etext *port.Cells, c0 int32, c1 int32, c2 int32, c3 int32, c4 int32, c5 int32, c6 int32, c7 int32, c8 int32) int32 {
+	// Append the non-negative code points among the nine arguments; answer where the first went.
+	var at int32 = evidence.EtxLen(etext)
+	if c0 >= 0 {
+		evidence.EtxAppendCp(etext, c0)
+	}
+	if c1 >= 0 {
+		evidence.EtxAppendCp(etext, c1)
+	}
+	if c2 >= 0 {
+		evidence.EtxAppendCp(etext, c2)
+	}
+	if c3 >= 0 {
+		evidence.EtxAppendCp(etext, c3)
+	}
+	if c4 >= 0 {
+		evidence.EtxAppendCp(etext, c4)
+	}
+	if c5 >= 0 {
+		evidence.EtxAppendCp(etext, c5)
+	}
+	if c6 >= 0 {
+		evidence.EtxAppendCp(etext, c6)
+	}
+	if c7 >= 0 {
+		evidence.EtxAppendCp(etext, c7)
+	}
+	if c8 >= 0 {
+		evidence.EtxAppendCp(etext, c8)
+	}
+	return at
+}
+
+func EtBuild(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	var tHi int32 = etTxt(etext, 72, 105, -1, -1, -1, -1, -1, -1, -1)
+	var tFi int32 = etTxt(etext, 102, 105, -1, -1, -1, -1, -1, -1, -1)
+	var tP int32 = etTxt(etext, 80, -1, -1, -1, -1, -1, -1, -1, -1)
+	var tSpan int32 = etTxt(etext, 83, 112, 97, 110, -1, -1, -1, -1, -1)
+	var tEn int32 = etTxt(etext, 101, 110, -1, -1, -1, -1, -1, -1, -1)
+	var tArt int32 = etTxt(etext, 65, 114, 116, 105, 102, 97, 99, 116, -1)
+	var tDraft int32 = etTxt(etext, 68, 82, 65, 70, 84, -1, -1, -1, -1)
+	var tOc int32 = etTxt(etext, 79, 67, -1, -1, -1, -1, -1, -1, -1)
+	var tAlt int32 = etTxt(etext, 65, 108, 116, -1, -1, -1, -1, -1, -1)
+	var tExp int32 = etTxt(etext, 69, 120, 112, -1, -1, -1, -1, -1, -1)
+	var tArial int32 = etTxt(etext, 65, 114, 105, 97, 108, -1, -1, -1, -1)
+	var tEng int32 = etTxt(etext, 101, 110, 103, -1, -1, -1, -1, -1, -1)
+	var tOk int32 = etTxt(etext, 111, 107, -1, -1, -1, -1, -1, -1, -1)
+	var tRi int32 = etTxt(etext, 114, 105, -1, -1, -1, -1, -1, -1, -1)
+	var tBh int32 = etTxt(etext, 72, -1, -1, -1, -1, -1, -1, -1, -1)
+	var tBl int32 = etTxt(etext, 108, -1, -1, -1, -1, -1, -1, -1, -1)
+	// shared: the page, two views, three points, three references
+	evidence.EpNew(epages, 1, 61200, 79200)
+	evidence.EpSet(epages, 0, evidence.EpfFlags(), evidence.EgTextLayer()+evidence.EgRaster())
+	evidence.EpSet(epages, 0, evidence.EpfDpi(), 15000)
+	evidence.VwNew(views, 1, evidence.VkRender(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0)
+	evidence.VwNew(views, 1, evidence.VkEngineBinary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, evidence.VgEngineBinary())
+	evidence.PtAdd(pts, 7200, 12000, evidence.PoMove())
+	evidence.PtAdd(pts, 20000, 12000, evidence.PoLine())
+	evidence.PtAdd(pts, 20000, 14000, evidence.PoClose())
+	evidence.RfAdd(refs, evidence.EaComponents(), 0)
+	evidence.RfAdd(refs, evidence.EaComponents(), 0)
+	evidence.RfAdd(refs, evidence.EaComponents(), 0)
+	// fonts: a simple one and a composite one
+	evidence.FoNew(fonts, 5, evidence.FtType1())
+	evidence.FoSet(fonts, 0, evidence.FnfFlags(), 32)
+	evidence.FoSet(fonts, 0, evidence.FnfTounicode(), 1)
+	evidence.FoSet(fonts, 0, evidence.FnfEnc(), 1)
+	evidence.FoSet(fonts, 0, evidence.FnfTstart(), tArial)
+	evidence.FoSet(fonts, 0, evidence.FnfTlen(), 5)
+	evidence.FoSet(fonts, 0, evidence.FnfAsc(), 905)
+	evidence.FoSet(fonts, 0, evidence.FnfDesc(), -212)
+	evidence.FoSet(fonts, 0, evidence.FnfSpace(), 27800)
+	evidence.FoSet(fonts, 0, evidence.FnfItalic(), -1200)
+	evidence.FoSet(fonts, 0, evidence.FnfStemv(), 80)
+	evidence.FoSet(fonts, 0, evidence.FnfStyle(), model.SyBold())
+	evidence.FoSet(fonts, 0, evidence.FnfCapheight(), 716)
+	evidence.FoSet(fonts, 0, evidence.FnfXheight(), 519)
+	evidence.FoNew(fonts, 7, evidence.FtType0())
+	// marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
+	evidence.MkOpen(marks, 1, evidence.MkTag(), tP, 1, -1, 0, 0)
+	evidence.MkSet(marks, 0, evidence.MkfMcid(), 0)
+	evidence.MkSet(marks, 0, evidence.MkfLang(), tEn)
+	evidence.MkSet(marks, 0, evidence.MkfLanglen(), 2)
+	evidence.MkSet(marks, 0, evidence.MkfFlags(), evidence.McInline())
+	evidence.MkOpen(marks, 1, evidence.MkTag(), tSpan, 4, 0, 0, 0)
+	evidence.MkSet(marks, 1, evidence.MkfMcid(), 1)
+	evidence.MkSet(marks, 1, evidence.MkfAlt(), tAlt)
+	evidence.MkSet(marks, 1, evidence.MkfAltlen(), 3)
+	evidence.MkSet(marks, 1, evidence.MkfExp(), tExp)
+	evidence.MkSet(marks, 1, evidence.MkfExplen(), 3)
+	evidence.MkClose(marks, 1, 2, 2)
+	evidence.MkClose(marks, 0, 3, 3)
+	evidence.MkOpen(marks, 1, evidence.MkArtifact(), tArt, 8, -1, 3, 3)
+	evidence.MkSet(marks, 2, evidence.MkfArtype(), evidence.ArPagination())
+	evidence.MkSet(marks, 2, evidence.MkfArsub(), evidence.AsWatermark())
+	evidence.MkSet(marks, 2, evidence.MkfActual(), tDraft)
+	evidence.MkSet(marks, 2, evidence.MkfActuallen(), 5)
+	evidence.MkSet(marks, 2, evidence.MkfStm(), 12)
+	evidence.MkSet(marks, 2, evidence.MkfFlags(), evidence.McUnterminated())
+	evidence.MkOpen(marks, 1, evidence.MkOptionalContent(), tOc, 2, 2, 3, 3)
+	evidence.MkSet(marks, 3, evidence.MkfOcg(), 42)
+	evidence.MkSet(marks, 3, evidence.MkfOcgdef(), 0)
+	evidence.MkClose(marks, 3, 4, 4)
+	evidence.MkClose(marks, 2, 4, 4)
+	// glyphs: H, i, the ligature fi, and a hidden diagonal one inside the optional-content span
+	evidence.GlNew(glyphs, 1, 7200, 9000, 8000, 10200, 72, -1, 0, 0)
+	evidence.GlSet(glyphs, 0, evidence.GfBx0(), 7200)
+	evidence.GlSet(glyphs, 0, evidence.GfBy0(), 10000)
+	evidence.GlSet(glyphs, 0, evidence.GfBx1(), 8000)
+	evidence.GlSet(glyphs, 0, evidence.GfBy1(), 10000)
+	evidence.GlSet(glyphs, 0, evidence.GfAsc(), 1000)
+	evidence.GlSet(glyphs, 0, evidence.GfDesc(), -200)
 	evidence.GlSet(glyphs, 0, evidence.GfHow(), evidence.GhTounicode())
-	evidence.GlSet(glyphs, 0, evidence.GfColor(), 0)
-	evidence.GlSet(glyphs, 0, evidence.GfBaseline(), 10000)
-	evidence.GlSet(glyphs, 0, evidence.GfWord(), 0)
-	evidence.GlNew(glyphs, 1, 105, 1, 1200, 8000, 9000, 8400, 10200)
+	evidence.GlSet(glyphs, 0, evidence.GfFont(), 0)
+	evidence.GlSet(glyphs, 0, evidence.GfSize(), 1200)
+	evidence.GlSet(glyphs, 0, evidence.GfFill(), 0)
+	evidence.GlSet(glyphs, 0, evidence.GfCs(), evidence.CsRgb())
+	evidence.GlSet(glyphs, 0, evidence.GfZ(), 0)
+	evidence.GlSet(glyphs, 0, evidence.GfMark(), 1)
+	evidence.GlNew(glyphs, 1, 8000, 9000, 8400, 10200, 105, -1, 0, 0)
+	evidence.GlSet(glyphs, 1, evidence.GfBx0(), 8000)
+	evidence.GlSet(glyphs, 1, evidence.GfBy0(), 10000)
+	evidence.GlSet(glyphs, 1, evidence.GfBx1(), 8400)
+	evidence.GlSet(glyphs, 1, evidence.GfBy1(), 10000)
+	evidence.GlSet(glyphs, 1, evidence.GfAsc(), 1000)
+	evidence.GlSet(glyphs, 1, evidence.GfDesc(), -200)
 	evidence.GlSet(glyphs, 1, evidence.GfHow(), evidence.GhTounicode())
-	evidence.GlSet(glyphs, 1, evidence.GfColor(), 0)
-	evidence.GlSet(glyphs, 1, evidence.GfBaseline(), 10000)
-	evidence.GlSet(glyphs, 1, evidence.GfWord(), 0)
-	evidence.GlNew(glyphs, 1, 102, 1, 1200, 9000, 9000, 10000, 10200)
+	evidence.GlSet(glyphs, 1, evidence.GfFont(), 0)
+	evidence.GlSet(glyphs, 1, evidence.GfSize(), 1200)
+	evidence.GlSet(glyphs, 1, evidence.GfFill(), 0)
+	evidence.GlSet(glyphs, 1, evidence.GfZ(), 1)
+	evidence.GlSet(glyphs, 1, evidence.GfMark(), 1)
+	evidence.GlNew(glyphs, 1, 9000, 9000, 10000, 10200, 102, tFi, 2, 1)
+	evidence.GlSet(glyphs, 2, evidence.GfBx0(), 9000)
+	evidence.GlSet(glyphs, 2, evidence.GfBy0(), 10000)
+	evidence.GlSet(glyphs, 2, evidence.GfBx1(), 10000)
+	evidence.GlSet(glyphs, 2, evidence.GfBy1(), 10000)
+	evidence.GlSet(glyphs, 2, evidence.GfAsc(), 1000)
+	evidence.GlSet(glyphs, 2, evidence.GfDesc(), -200)
 	evidence.GlSet(glyphs, 2, evidence.GfHow(), evidence.GhGlyphname())
-	evidence.GlSet(glyphs, 2, evidence.GfTstart(), 2)
-	evidence.GlSet(glyphs, 2, evidence.GfTlen(), 2)
-	evidence.GlSet(glyphs, 2, evidence.GfColor(), 2236962)
-	evidence.GlSet(glyphs, 2, evidence.GfBaseline(), 10000)
-	evidence.GlSet(glyphs, 2, evidence.GfWord(), 1)
-	evidence.GlNew(glyphs, 1, -1, 2, 4800, -2000, -3000, 5000, 500)
+	evidence.GlSet(glyphs, 2, evidence.GfFont(), 0)
+	evidence.GlSet(glyphs, 2, evidence.GfSize(), 1200)
+	evidence.GlSet(glyphs, 2, evidence.GfFill(), 2236962)
+	evidence.GlSet(glyphs, 2, evidence.GfZ(), 2)
+	evidence.GlSet(glyphs, 2, evidence.GfMark(), 0)
+	evidence.GlNew(glyphs, 1, 1000, 2000, 3000, 4000, -1, -1, 0, 2)
+	evidence.GlSet(glyphs, 3, evidence.GfBx0(), 1000)
+	evidence.GlSet(glyphs, 3, evidence.GfBy0(), 4000)
+	evidence.GlSet(glyphs, 3, evidence.GfBx1(), 3000)
+	evidence.GlSet(glyphs, 3, evidence.GfBy1(), 2000)
+	evidence.GlSet(glyphs, 3, evidence.GfAsc(), 400)
+	evidence.GlSet(glyphs, 3, evidence.GfDesc(), -100)
 	evidence.GlSet(glyphs, 3, evidence.GfRot(), 4500)
-	evidence.GlSet(glyphs, 3, evidence.GfColor(), 16711680)
-	evidence.GlSet(glyphs, 3, evidence.GfAlpha(), 500)
+	evidence.GlSet(glyphs, 3, evidence.GfFont(), 1)
+	evidence.GlSet(glyphs, 3, evidence.GfSize(), 1400)
 	evidence.GlSet(glyphs, 3, evidence.GfMode(), 3)
+	evidence.GlSet(glyphs, 3, evidence.GfFill(), 16711680)
+	evidence.GlSet(glyphs, 3, evidence.GfStroke(), 255)
+	evidence.GlSet(glyphs, 3, evidence.GfFalpha(), 500)
+	evidence.GlSet(glyphs, 3, evidence.GfSalpha(), 250)
+	evidence.GlSet(glyphs, 3, evidence.GfZ(), 3)
+	evidence.GlSet(glyphs, 3, evidence.GfClip(), 1)
+	evidence.GlSet(glyphs, 3, evidence.GfMark(), 3)
+	evidence.GlSet(glyphs, 3, evidence.GfOcg(), 3)
 	evidence.GlSet(glyphs, 3, evidence.GfVis(), evidence.VzClipped())
-	evidence.GlSet(glyphs, 3, evidence.GfArtifact(), evidence.ArWatermark())
-	evidence.GlSet(glyphs, 3, evidence.GfMcid(), 7)
-	evidence.WdNew(words, 1, 7200, 9000, 8400, 10200, 0, 2)
-	evidence.WdSet(words, 0, evidence.WfTstart(), 0)
-	evidence.WdSet(words, 0, evidence.WfTlen(), 2)
-	evidence.WdSet(words, 0, evidence.WfLine(), 0)
-	evidence.WdSet(words, 0, evidence.WfGap(), 600)
-	evidence.WdSet(words, 0, evidence.WfFont(), 1)
+	evidence.GlSet(glyphs, 3, evidence.GfVby(), 4)
+	evidence.GlSet(glyphs, 3, evidence.GfVchk(), evidence.VcClip())
+	// words: Hi, the ligature, and the hidden one; two lines
+	evidence.WdNew(words, 1, 7200, 9000, 8400, 10200, 7200, 10000, 8400, 10000, 0, 0, tHi, 2, 0, -1, -1)
+	evidence.WdSet(words, 0, evidence.WfStyle(), model.SyBold())
+	evidence.WdSet(words, 0, evidence.WfGfirst(), 0)
+	evidence.WdSet(words, 0, evidence.WfGcount(), 2)
+	evidence.WdSet(words, 0, evidence.WfFont(), 0)
 	evidence.WdSet(words, 0, evidence.WfSize(), 1200)
-	evidence.WdNew(words, 1, 9000, 9000, 10000, 10200, 2, 1)
-	evidence.WdSet(words, 1, evidence.WfTstart(), 2)
-	evidence.WdSet(words, 1, evidence.WfTlen(), 2)
-	evidence.WdSet(words, 1, evidence.WfLine(), 0)
-	evidence.WdSet(words, 1, evidence.WfConf(), 990)
-	evidence.WdSet(words, 1, evidence.WfFont(), 1)
+	evidence.WdSet(words, 0, evidence.WfGap(), 600)
+	evidence.WdSet(words, 0, evidence.WfWbreak(), evidence.WbSpace())
+	evidence.WdNew(words, 1, 9000, 9000, 10000, 10200, 9000, 10000, 10000, 10000, 0, 0, tFi, 2, 0, -1, -1)
+	evidence.WdSet(words, 1, evidence.WfGfirst(), 2)
+	evidence.WdSet(words, 1, evidence.WfGcount(), 1)
+	evidence.WdSet(words, 1, evidence.WfFont(), 0)
 	evidence.WdSet(words, 1, evidence.WfSize(), 1200)
-	evidence.LnNew(lines, 1, 7200, 9000, 10000, 10200, 0, 2, 10000)
+	evidence.WdSet(words, 1, evidence.WfWbreak(), evidence.WbLineEnd())
+	evidence.WdNew(words, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, -1, 0, 1, -1, -1)
+	evidence.WdSet(words, 2, evidence.WfGfirst(), 3)
+	evidence.WdSet(words, 2, evidence.WfGcount(), 1)
+	evidence.WdSet(words, 2, evidence.WfFont(), 1)
+	evidence.WdSet(words, 2, evidence.WfSize(), 1400)
+	evidence.WdSet(words, 2, evidence.WfSrc(), model.SrHiddenText())
+	evidence.LnNew(lines, 1, 7200, 9000, 10000, 10200, 7200, 10000, 10000, 10000, 0, 0, 0, 2)
+	evidence.LnSet(lines, 0, evidence.LfOrder(), 0)
+	evidence.LnNew(lines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1)
+	evidence.LnSet(lines, 1, evidence.LfOrder(), 3)
+	// paths: a rule and a clip rectangle with its outline in pts; an image
 	evidence.PaNew(paths, 1, evidence.PaLine(), 7200, 11000, 54000, 11050)
 	evidence.PaSet(paths, 0, evidence.PfStroke(), 3355443)
 	evidence.PaSet(paths, 0, evidence.PfWidth(), 50)
+	evidence.PaSet(paths, 0, evidence.PfZ(), 4)
+	evidence.PaSet(paths, 0, evidence.PfDash(), 300)
 	evidence.PaNew(paths, 1, evidence.PaRect(), 7200, 12000, 20000, 14000)
 	evidence.PaSet(paths, 1, evidence.PfFill(), 16772778)
-	evidence.PaSet(paths, 1, evidence.PfAlpha(), 500)
-	evidence.PaSet(paths, 1, evidence.PfFlags(), 5)
-	evidence.PaSet(paths, 1, evidence.PfMcid(), 0)
+	evidence.PaSet(paths, 1, evidence.PfFalpha(), 500)
+	evidence.PaSet(paths, 1, evidence.PfFlags(), evidence.PgClosed()+evidence.PgClip())
+	evidence.PaSet(paths, 1, evidence.PfPfirst(), 0)
+	evidence.PaSet(paths, 1, evidence.PfPcount(), 3)
 	evidence.ImNew(images, 1, 7200, 20000, 30000, 40000, 12, 640, 480)
 	evidence.ImSet(images, 0, evidence.MfFlags(), evidence.MgSmask())
-	evidence.ImSet(images, 0, evidence.MfArtifact(), evidence.ArBackground())
-	evidence.ImSet(images, 0, evidence.MfMcid(), 3)
-	evidence.CoNew(components, 1, evidence.CkRuleH(), 7200, 11000, 54000, 11050)
+	evidence.ImSet(images, 0, evidence.MfZ(), 5)
+	evidence.ImSet(images, 0, evidence.MfVchk(), evidence.VcClip())
+	// OCR: one run over two blocks; a second, empty run
+	evidence.OrNew(oruns, 1, 0)
+	evidence.OrSet(oruns, 0, evidence.OrfBview(), 1)
+	evidence.OrSet(oruns, 0, evidence.OrfRequest(), 2)
+	evidence.OrSet(oruns, 0, evidence.OrfRound(), 1)
+	evidence.OrSet(oruns, 0, evidence.OrfPass(), evidence.OpFirst())
+	evidence.OrSet(oruns, 0, evidence.OrfPsm(), 3)
+	evidence.OrSet(oruns, 0, evidence.OrfLang(), tEng)
+	evidence.OrSet(oruns, 0, evidence.OrfLanglen(), 3)
+	evidence.OrSet(oruns, 0, evidence.OrfDeskew(), 35)
+	evidence.OrSet(oruns, 0, evidence.OrfOsd(), 0)
+	evidence.OrSet(oruns, 0, evidence.OrfScript(), 1281455214)
+	evidence.OrSet(oruns, 0, evidence.OrfSconf(), 950)
+	evidence.OrSet(oruns, 0, evidence.OrfOconf(), 880)
+	evidence.OrSet(oruns, 0, evidence.OrfFlags(), 3)
+	evidence.OrSet(oruns, 0, evidence.OrfBfirst(), 0)
+	evidence.OrSet(oruns, 0, evidence.OrfBcount(), 4)
+	evidence.OrSet(oruns, 0, evidence.OrfLfirst(), 0)
+	evidence.OrSet(oruns, 0, evidence.OrfLcount(), 3)
+	evidence.OrSet(oruns, 0, evidence.OrfWfirst(), 0)
+	evidence.OrSet(oruns, 0, evidence.OrfWcount(), 3)
+	evidence.OrNew(oruns, 1, 0)
+	evidence.OrSet(oruns, 1, evidence.OrfPass(), evidence.OpRegion())
+	evidence.OrSet(oruns, 1, evidence.OrfRound(), 2)
+	evidence.ObNew(oblocks, 1, 7200, 9000, 12000, 15000, evidence.ObBlock(), -1, 0)
+	evidence.ObSet(oblocks, 0, evidence.ObfFirst(), 1)
+	evidence.ObSet(oblocks, 0, evidence.ObfCount(), 1)
+	evidence.ObNew(oblocks, 1, 7200, 9000, 12000, 12000, evidence.ObParagraph(), 0, 0)
+	evidence.ObSet(oblocks, 1, evidence.ObfFirst(), 0)
+	evidence.ObSet(oblocks, 1, evidence.ObfCount(), 2)
+	evidence.ObSet(oblocks, 1, evidence.ObfConf(), 910)
+	evidence.ObNew(oblocks, 1, 7200, 13000, 12000, 15000, evidence.ObBlock(), -1, 0)
+	evidence.ObSet(oblocks, 2, evidence.ObfFirst(), 3)
+	evidence.ObSet(oblocks, 2, evidence.ObfCount(), 1)
+	evidence.ObNew(oblocks, 1, 7200, 13000, 12000, 15000, evidence.ObParagraph(), 2, 0)
+	evidence.ObSet(oblocks, 3, evidence.ObfFirst(), 2)
+	evidence.ObSet(oblocks, 3, evidence.ObfCount(), 1)
+	evidence.OlNew(olines, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, 0, 1)
+	evidence.OlSet(olines, 0, evidence.OlfPar(), 1)
+	evidence.OlSet(olines, 0, evidence.OlfRun(), 0)
+	evidence.OlSet(olines, 0, evidence.OlfXheight(), 500)
+	evidence.OlSet(olines, 0, evidence.OlfAsc(), 1000)
+	evidence.OlSet(olines, 0, evidence.OlfDesc(), -200)
+	evidence.OlSet(olines, 0, evidence.OlfPx(), 150)
+	evidence.OlSet(olines, 0, evidence.OlfPy(), 187)
+	evidence.OlSet(olines, 0, evidence.OlfPw(), 50)
+	evidence.OlSet(olines, 0, evidence.OlfPh(), 25)
+	evidence.OlNew(olines, 1, 7200, 11000, 12000, 12000, 7200, 12000, 12000, 12000, 0, 0, 1, 1)
+	evidence.OlSet(olines, 1, evidence.OlfPar(), 1)
+	evidence.OlSet(olines, 1, evidence.OlfRun(), 0)
+	evidence.OlNew(olines, 1, 7200, 13000, 12000, 15000, 7200, 15000, 12000, 15000, 0, 0, 2, 1)
+	evidence.OlSet(olines, 2, evidence.OlfPar(), 3)
+	evidence.OlSet(olines, 2, evidence.OlfRun(), 0)
+	evidence.OwNew(owords, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, tHi, 2, 0, 870, -1)
+	evidence.OwSet(owords, 0, evidence.OwfRun(), 0)
+	evidence.OwSet(owords, 0, evidence.OwfSfirst(), 0)
+	evidence.OwSet(owords, 0, evidence.OwfScount(), 2)
+	evidence.OwSet(owords, 0, evidence.OwfLang(), 6647399)
+	evidence.OwSet(owords, 0, evidence.OwfStyle(), model.SyItalic())
+	evidence.OwSet(owords, 0, evidence.OwfFlags(), evidence.OeDictionary())
+	evidence.OwSet(owords, 0, evidence.OwfPx(), 150)
+	evidence.OwSet(owords, 0, evidence.OwfPy(), 187)
+	evidence.OwSet(owords, 0, evidence.OwfPw(), 50)
+	evidence.OwSet(owords, 0, evidence.OwfPh(), 25)
+	evidence.OwNew(owords, 1, 7200, 11000, 9600, 12000, 7200, 12000, 9600, 12000, 0, 0, tFi, 2, 1, 950, -1)
+	evidence.OwSet(owords, 1, evidence.OwfRun(), 0)
+	evidence.OwSet(owords, 1, evidence.OwfSfirst(), 2)
+	evidence.OwSet(owords, 1, evidence.OwfScount(), 1)
+	evidence.OwNew(owords, 1, 7200, 13000, 9600, 15000, 7200, 15000, 9600, 15000, 0, 0, tOk, 2, 2, 0, -1)
+	evidence.OwSet(owords, 2, evidence.OwfRun(), 0)
+	evidence.OwSet(owords, 2, evidence.OwfSfirst(), 3)
+	evidence.OwSet(owords, 2, evidence.OwfScount(), 1)
+	evidence.OsNew(osyms, 1, 7200, 9000, 8400, 10200, 72, -1, 0, 0)
+	evidence.OsSet(osyms, 0, evidence.OsfConf(), 910)
+	evidence.OsSet(osyms, 0, evidence.OsfAfirst(), 0)
+	evidence.OsSet(osyms, 0, evidence.OsfAcount(), 2)
+	evidence.OsSet(osyms, 0, evidence.OsfPx(), 150)
+	evidence.OsSet(osyms, 0, evidence.OsfPy(), 187)
+	evidence.OsSet(osyms, 0, evidence.OsfPw(), 25)
+	evidence.OsSet(osyms, 0, evidence.OsfPh(), 25)
+	evidence.OsNew(osyms, 1, 8400, 9000, 9600, 10200, 105, -1, 0, 0)
+	evidence.OsSet(osyms, 1, evidence.OsfConf(), 880)
+	evidence.OsSet(osyms, 1, evidence.OsfAfirst(), 2)
+	evidence.OsSet(osyms, 1, evidence.OsfAcount(), 1)
+	evidence.OsSet(osyms, 1, evidence.OsfFlags(), evidence.OsSuperscript())
+	evidence.OsNew(osyms, 1, 7200, 11000, 9600, 12000, 102, tFi, 2, 1)
+	evidence.OsSet(osyms, 2, evidence.OsfConf(), 700)
+	evidence.OsNew(osyms, 1, 7200, 13000, 9600, 15000, 111, -1, 0, 2)
+	evidence.OsSet(osyms, 3, evidence.OsfConf(), 990)
+	evidence.OaAdd(oalts, 0, tBh, 1, 900)
+	evidence.OaAdd(oalts, 0, tRi, 2, 250)
+	evidence.OaAdd(oalts, 1, tBl, 1, 40)
+	// the tracer: an ink layer, a component, a rule, a primitive and a text line
+	evidence.IkNew(inks, 1, 0)
+	evidence.IkSet(inks, 0, evidence.IkfColor(), 8421504)
+	evidence.IkSet(inks, 0, evidence.IkfLight(), 500)
+	evidence.IkSet(inks, 0, evidence.IkfChroma(), 20)
+	evidence.IkSet(inks, 0, evidence.IkfCount(), 1200)
+	evidence.IkSet(inks, 0, evidence.IkfRole(), evidence.IrBody())
+	evidence.IkSet(inks, 0, evidence.IkfMask(), 1)
+	evidence.IkSet(inks, 0, evidence.IkfSpread(), 5)
+	evidence.CoNew(components, 1, 7200, 11000, 54000, 11050, evidence.CkRuleH())
+	evidence.CoSet(components, 0, evidence.CfView(), 0)
 	evidence.CoSet(components, 0, evidence.CfPxx(), 100)
 	evidence.CoSet(components, 0, evidence.CfPxw(), 300)
+	evidence.CoSet(components, 0, evidence.CfPxh(), 3)
 	evidence.CoSet(components, 0, evidence.CfArea(), 1200)
 	evidence.CoSet(components, 0, evidence.CfFill(), 950)
 	evidence.CoSet(components, 0, evidence.CfStroke(), 50)
 	evidence.CoSet(components, 0, evidence.CfColor(), 255)
-	evidence.CoSet(components, 0, evidence.CfLayer(), 2)
+	evidence.CoSet(components, 0, evidence.CfInk(), 0)
 	evidence.CoSet(components, 0, evidence.CfConf(), 880)
 	evidence.CoSet(components, 0, evidence.CfFlags(), model.FlLowConf())
-	evidence.OwNew(ocrwords, 1, 7190, 9010, 8410, 10190, 910)
-	evidence.OwSet(ocrwords, 0, evidence.OfTstart(), 4)
-	evidence.OwSet(ocrwords, 0, evidence.OfTlen(), 2)
-	evidence.OwSet(ocrwords, 0, evidence.OfLine(), 0)
-	evidence.OwSet(ocrwords, 0, evidence.OfBlock(), 0)
-	evidence.OwSet(ocrwords, 0, evidence.OfBaseline(), 10000)
-	evidence.OwSet(ocrwords, 0, evidence.OfFlags(), model.SyBold())
-	evidence.OwSet(ocrwords, 0, evidence.OfPass(), 1)
-	evidence.OwSet(ocrwords, 0, evidence.OfLang(), 3)
-	evidence.AltAdd(ocrwords, alts, 0, 0, 72, 900)
-	evidence.AltAdd(ocrwords, alts, 0, 1, 108, 250)
-	evidence.SpNew(spans, 1, 6, 1, -1, 0)
-	evidence.SpSet(spans, 0, evidence.SfMcid(), 0)
-	evidence.SpSet(spans, 0, evidence.SfLang(), 7)
-	evidence.SpSet(spans, 0, evidence.SfLanglen(), 2)
-	evidence.SpSet(spans, 0, evidence.SfGcount(), 2)
-	evidence.SpSet(spans, 0, evidence.SfFlags(), evidence.McInline())
-	evidence.SpNew(spans, 1, 9, 8, -1, 3)
-	evidence.SpSet(spans, 1, evidence.SfArtifact(), evidence.ArWatermark())
-	evidence.SpSet(spans, 1, evidence.SfType(), 17)
-	evidence.SpSet(spans, 1, evidence.SfTypelen(), 10)
-	evidence.SpSet(spans, 1, evidence.SfSubtype(), 27)
-	evidence.SpSet(spans, 1, evidence.SfSubtypelen(), 9)
-	evidence.SpSet(spans, 1, evidence.SfActual(), 36)
-	evidence.SpSet(spans, 1, evidence.SfActuallen(), 5)
-	evidence.SpSet(spans, 1, evidence.SfGcount(), 1)
-	evidence.SpSet(spans, 1, evidence.SfStm(), 12)
-	evidence.SpSet(spans, 1, evidence.SfFlags(), evidence.McUnterminated())
+	evidence.CoSet(components, 0, evidence.CfPfirst(), 0)
+	evidence.CoSet(components, 0, evidence.CfPcount(), 3)
+	evidence.CoSet(components, 0, evidence.CfGray(), 90)
+	evidence.RlNew(rules, 1, 7200, 11000, 54000, 11050, 0)
+	evidence.RlSet(rules, 0, evidence.RlfLx0(), 7200)
+	evidence.RlSet(rules, 0, evidence.RlfLy0(), 11025)
+	evidence.RlSet(rules, 0, evidence.RlfLx1(), 54000)
+	evidence.RlSet(rules, 0, evidence.RlfLy1(), 11025)
+	evidence.RlSet(rules, 0, evidence.RlfThick(), 50)
+	evidence.RlSet(rules, 0, evidence.RlfColor(), 3355443)
+	evidence.RlSet(rules, 0, evidence.RlfInk(), 0)
+	evidence.RlSet(rules, 0, evidence.RlfStyle(), evidence.RsDashed())
+	evidence.RlSet(rules, 0, evidence.RlfConf(), 880)
+	evidence.RlSet(rules, 0, evidence.RlfRfirst(), 0)
+	evidence.RlSet(rules, 0, evidence.RlfRcount(), 1)
+	evidence.PmNew(prims, 1, 17000, 12000, 23000, 18000, evidence.PmCircle())
+	evidence.PmSet(prims, 0, evidence.PmfView(), 0)
+	evidence.PmSet(prims, 0, evidence.PmfCx(), 20000)
+	evidence.PmSet(prims, 0, evidence.PmfCy(), 15000)
+	evidence.PmSet(prims, 0, evidence.PmfRx(), 3000)
+	evidence.PmSet(prims, 0, evidence.PmfRy(), 3000)
+	evidence.PmSet(prims, 0, evidence.PmfStroke(), 40)
+	evidence.PmSet(prims, 0, evidence.PmfColor(), 65280)
+	evidence.PmSet(prims, 0, evidence.PmfInk(), 0)
+	evidence.PmSet(prims, 0, evidence.PmfConf(), 700)
+	evidence.PmSet(prims, 0, evidence.PmfPfirst(), 0)
+	evidence.PmSet(prims, 0, evidence.PmfPcount(), 3)
+	evidence.PmSet(prims, 0, evidence.PmfRfirst(), 1)
+	evidence.PmSet(prims, 0, evidence.PmfRcount(), 1)
+	evidence.TlNew(tlines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1)
+	evidence.TlSet(tlines, 0, evidence.TlfInk(), 0)
+	evidence.TlSet(tlines, 0, evidence.TlfHeight(), 1200)
+	evidence.TlSet(tlines, 0, evidence.TlfGap(), 300)
+	evidence.TlSet(tlines, 0, evidence.TlfConf(), 600)
+	// features: a text-layer word and an OCR word, one row each
+	evidence.FeNew(feats, evidence.EaWords(), 0)
+	evidence.FeSet(feats, 0, evidence.XtTrust(), 1000)
+	evidence.WdSet(words, 0, evidence.HdFeat(), 0)
+	evidence.EvFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, 0, 0, 100)
 	return 0
 }
 
@@ -156,137 +384,964 @@ func etEnd(b []byte) int32 {
 	return n
 }
 
-func TestBuildersSetTheLayoutAndItsDefaults(emonT *testing.T) {
-	var glyphs *port.Cells = port.NewCells()
-	var words *port.Cells = port.NewCells()
-	var lines *port.Cells = port.NewCells()
-	var paths *port.Cells = port.NewCells()
-	var images *port.Cells = port.NewCells()
-	var components *port.Cells = port.NewCells()
-	var ocrwords *port.Cells = port.NewCells()
-	var alts *port.Cells = port.NewCells()
-	var etext *port.Cells = port.NewCells()
-	var spans *port.Cells = port.NewCells()
-	evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	port.AssertEq(emonT, evidence.GlCount(glyphs), 0, "no glyphs")
-	port.AssertEq(emonT, evidence.GlNew(glyphs, 3, 65, 9, 1000, 100, 200, 300, 400), 0, "first glyph")
-	port.AssertEq(emonT, port.CellsLen(glyphs), 20, "twenty cells")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfPage()), 3, "page")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfCp()), 65, "cp")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfTstart()), -1, "no text run")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfTlen()), 0, "no text length")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfHow()), 5, "how defaults to unknown, code 5")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfFont()), 9, "font")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfSize()), 1000, "size")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfX0()), 100, "x0")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfY0()), 200, "y0")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfX1()), 300, "x1")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfY1()), 400, "y1")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfBaseline()), 400, "baseline defaults to the box's bottom")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfRot()), 0, "no rotation")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfColor()), -1, "no colour")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfAlpha()), 1000, "opaque")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfMode()), 0, "render mode 0")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfVis()), 0, "visible")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfArtifact()), 0, "not an artifact")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfMcid()), -1, "no mcid")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfWord()), -1, "in no word")
-	port.AssertEq(emonT, evidence.SpNew(spans, 3, 10, 1, -1, 4), 0, "first span")
-	port.AssertEq(emonT, port.CellsLen(spans), 22, "twenty-two cells")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfMcid()), -1, "no MCID")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfArtifact()), 0, "not an artifact")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfType()), -1, "no type")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfActual()), -1, "no ActualText")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfLang()), -1, "no language")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfGfirst()), 4, "opened at glyph 4")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfParent()), -1, "no parent")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfStm()), 0, "the page's own stream")
-	port.AssertEq(emonT, evidence.WdNew(words, 3, 1, 2, 3, 4, 0, 1), 0, "first word")
-	port.AssertEq(emonT, port.CellsLen(words), 16, "sixteen cells")
-	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfTstart()), -1, "no text")
-	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfLine()), -1, "no line")
-	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfSrc()), 1, "source text")
-	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfConf()), -1, "no confidence")
-	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfGap()), -1, "no gap")
-	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfFont()), -1, "no font")
-	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfGcount()), 1, "glyph count")
-	port.AssertEq(emonT, evidence.LnNew(lines, 3, 1, 2, 3, 4, 0, 1, 400), 0, "first line")
-	port.AssertEq(emonT, port.CellsLen(lines), 12, "twelve cells")
-	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LfSrc()), 1, "source text")
-	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LfBaseline()), 400, "baseline")
-	port.AssertEq(emonT, evidence.PaNew(paths, 3, evidence.PaRect(), 1, 2, 3, 4), 0, "first path")
-	port.AssertEq(emonT, port.CellsLen(paths), 16, "sixteen cells")
-	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfFill()), -1, "not filled")
-	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfStroke()), -1, "not stroked")
-	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfAlpha()), 1000, "opaque")
-	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfMcid()), -1, "no mcid")
-	port.AssertEq(emonT, evidence.ImNew(images, 3, 1, 2, 3, 4, 17, 10, 20), 0, "first image")
-	port.AssertEq(emonT, port.CellsLen(images), 12, "twelve cells")
-	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfObj()), 17, "object number")
-	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfPxw()), 10, "pixel width")
-	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfPxh()), 20, "pixel height")
-	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfMcid()), -1, "no mcid")
-	port.AssertEq(emonT, evidence.CoNew(components, 3, evidence.CkRuleH(), 1, 2, 3, 4), 0, "first component")
-	port.AssertEq(emonT, port.CellsLen(components), 20, "twenty cells")
-	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfColor()), -1, "no colour")
-	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfLayer()), -1, "no layer")
-	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfKind()), 2, "rule-h is code 2")
-	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfConf()), -1, "no confidence")
-	port.AssertEq(emonT, evidence.OwNew(ocrwords, 3, 1, 2, 3, 4, 850), 0, "first OCR word")
-	port.AssertEq(emonT, port.CellsLen(ocrwords), 16, "sixteen cells")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfConf()), 850, "confidence")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfTstart()), -1, "no text")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfAlthead()), -1, "no alternatives")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfAltcount()), 0, "none counted")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfLine()), -1, "no line")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfLang()), -1, "no language")
+func TestEveryArenaHasTheStrideTheSpecGives(emonT *testing.T) {
+	port.AssertEq(emonT, 24, 24, "24 arenas")
+	port.AssertEq(emonT, evidence.EvStrides[0], 12, "epages")
+	port.AssertEq(emonT, evidence.EvStrides[1], 24, "views")
+	port.AssertEq(emonT, evidence.EvStrides[2], 3, "pts")
+	port.AssertEq(emonT, evidence.EvStrides[3], 2, "refs")
+	port.AssertEq(emonT, evidence.EvStrides[4], 1, "etext")
+	port.AssertEq(emonT, evidence.EvStrides[5], 32, "feats")
+	port.AssertEq(emonT, evidence.EvStrides[6], 32, "glyphs")
+	port.AssertEq(emonT, evidence.EvStrides[7], 24, "words")
+	port.AssertEq(emonT, evidence.EvStrides[8], 16, "lines")
+	port.AssertEq(emonT, evidence.EvStrides[9], 24, "marks")
+	port.AssertEq(emonT, evidence.EvStrides[10], 16, "fonts")
+	port.AssertEq(emonT, evidence.EvStrides[11], 24, "paths")
+	port.AssertEq(emonT, evidence.EvStrides[12], 20, "images")
+	port.AssertEq(emonT, evidence.EvStrides[13], 28, "oruns")
+	port.AssertEq(emonT, evidence.EvStrides[14], 16, "oblocks")
+	port.AssertEq(emonT, evidence.EvStrides[15], 24, "olines")
+	port.AssertEq(emonT, evidence.EvStrides[16], 28, "owords")
+	port.AssertEq(emonT, evidence.EvStrides[17], 20, "osyms")
+	port.AssertEq(emonT, evidence.EvStrides[18], 4, "oalts")
+	port.AssertEq(emonT, evidence.EvStrides[19], 12, "inks")
+	port.AssertEq(emonT, evidence.EvStrides[20], 24, "components")
+	port.AssertEq(emonT, evidence.EvStrides[21], 20, "rules")
+	port.AssertEq(emonT, evidence.EvStrides[22], 24, "prims")
+	port.AssertEq(emonT, evidence.EvStrides[23], 20, "tlines")
 }
 
-func TestSettersAndTheAlternativeChain(emonT *testing.T) {
+func TestTheThreeHeadsAreOneLayout(emonT *testing.T) {
+	port.AssertEq(emonT, evidence.HdPage(), 0, "word head: page")
+	port.AssertEq(emonT, evidence.HdX0(), 1, "x0")
+	port.AssertEq(emonT, evidence.HdBy1(), 8, "baseline ends at 8")
+	port.AssertEq(emonT, evidence.HdRot(), 9, "rot")
+	port.AssertEq(emonT, evidence.HdDir(), 10, "dir")
+	port.AssertEq(emonT, evidence.HdTstart(), 11, "text start")
+	port.AssertEq(emonT, evidence.HdLine(), 13, "line")
+	port.AssertEq(emonT, evidence.HdConf(), 14, "conf")
+	port.AssertEq(emonT, evidence.HdFeat(), 15, "a word head is 16 cells")
+	port.AssertEq(emonT, evidence.LhPage(), evidence.HdPage(), "line head: page")
+	port.AssertEq(emonT, evidence.LhX0(), evidence.HdX0(), "x0")
+	port.AssertEq(emonT, evidence.LhY1(), evidence.HdY1(), "y1")
+	port.AssertEq(emonT, evidence.LhBx0(), evidence.HdBx0(), "baseline")
+	port.AssertEq(emonT, evidence.LhBy1(), evidence.HdBy1(), "baseline end")
+	port.AssertEq(emonT, evidence.LhRot(), evidence.HdRot(), "rot")
+	port.AssertEq(emonT, evidence.LhDir(), evidence.HdDir(), "dir")
+	port.AssertEq(emonT, evidence.LhFirst(), 11, "first")
+	port.AssertEq(emonT, evidence.LhCount(), 12, "a line head is 13 cells")
+	port.AssertEq(emonT, evidence.ChPage(), 0, "char head: page")
+	port.AssertEq(emonT, evidence.ChY1(), 4, "box")
+	port.AssertEq(emonT, evidence.ChCp(), 5, "cp")
+	port.AssertEq(emonT, evidence.ChTstart(), 6, "text run")
+	port.AssertEq(emonT, evidence.ChWord(), 8, "a char head is 9 cells")
+}
+
+func etHeadPage(c *port.Cells, stride int32, row int32) int32 {
+	// ONE reader over (Cells, stride): a word-like or line-like row's page.
+	return port.CellsAt(c, (row*stride)+evidence.HdPage())
+}
+
+func etHeadBox(c *port.Cells, stride int32, row int32, k int32) int32 {
+	return port.CellsAt(c, (row*stride)+(evidence.HdX0()+k))
+}
+
+func etHeadBase(c *port.Cells, stride int32, row int32, k int32) int32 {
+	return port.CellsAt(c, (row*stride)+(evidence.HdBx0()+k))
+}
+
+func TestOneReaderReadsTheHeadOfEveryWordLikeAndLineLikeArena(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
 	var glyphs *port.Cells = port.NewCells()
 	var words *port.Cells = port.NewCells()
 	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
 	var paths *port.Cells = port.NewCells()
 	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
 	var components *port.Cells = port.NewCells()
-	var ocrwords *port.Cells = port.NewCells()
-	var alts *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	// words (24), owords (28), lines (16), olines (24), tlines (20): row 0 of each shares the head layout
+	port.AssertEq(emonT, etHeadPage(words, 24, 0), 1, "words page")
+	port.AssertEq(emonT, etHeadPage(owords, 28, 0), 1, "owords page")
+	port.AssertEq(emonT, etHeadPage(lines, 16, 0), 1, "lines page")
+	port.AssertEq(emonT, etHeadPage(olines, 24, 0), 1, "olines page")
+	port.AssertEq(emonT, etHeadPage(tlines, 20, 0), 1, "tlines page")
+	port.AssertEq(emonT, etHeadBox(words, 24, 0, 0), 7200, "words x0")
+	port.AssertEq(emonT, etHeadBox(owords, 28, 0, 0), 7200, "owords x0")
+	port.AssertEq(emonT, etHeadBox(lines, 16, 0, 0), 7200, "lines x0")
+	port.AssertEq(emonT, etHeadBox(olines, 24, 0, 0), 7200, "olines x0")
+	port.AssertEq(emonT, etHeadBox(tlines, 20, 0, 0), 1000, "tlines x0")
+	port.AssertEq(emonT, etHeadBox(words, 24, 0, 3), 10200, "words y1")
+	port.AssertEq(emonT, etHeadBox(owords, 28, 0, 3), 10200, "owords y1")
+	port.AssertEq(emonT, etHeadBox(lines, 16, 0, 3), 10200, "lines y1")
+	port.AssertEq(emonT, etHeadBox(olines, 24, 0, 3), 10200, "olines y1")
+	port.AssertEq(emonT, etHeadBox(tlines, 20, 0, 3), 4000, "tlines y1")
+	port.AssertEq(emonT, etHeadBase(words, 24, 0, 2), 8400, "words baseline x1")
+	port.AssertEq(emonT, etHeadBase(owords, 28, 0, 2), 9600, "owords baseline x1")
+	port.AssertEq(emonT, etHeadBase(lines, 16, 0, 2), 10000, "lines baseline x1")
+	port.AssertEq(emonT, etHeadBase(olines, 24, 0, 2), 9600, "olines baseline x1")
+	port.AssertEq(emonT, etHeadBase(tlines, 20, 0, 2), 3000, "tlines baseline x1")
+	port.AssertEq(emonT, etHeadBase(tlines, 20, 0, 3), 2000, "tlines baseline y1 (a diagonal)")
+	port.AssertEq(emonT, evidence.EvAngle(etHeadBase(tlines, 20, 0, 2)-etHeadBase(tlines, 20, 0, 0), etHeadBase(tlines, 20, 0, 3)-etHeadBase(tlines, 20, 0, 1)), 4500, "its angle is 45 degrees")
+}
+
+func TestBuildersSetTheLayoutAndItsDefaults(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
 	var etext *port.Cells = port.NewCells()
-	var spans *port.Cells = port.NewCells()
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	port.AssertEq(emonT, evidence.GlCount(glyphs), 4, "four glyphs")
-	port.AssertEq(emonT, evidence.WdCount(words), 2, "two words")
-	port.AssertEq(emonT, evidence.LnCount(lines), 1, "one line")
-	port.AssertEq(emonT, evidence.PaCount(paths), 2, "two paths")
-	port.AssertEq(emonT, evidence.ImCount(images), 1, "one image")
-	port.AssertEq(emonT, evidence.CoCount(components), 1, "one component")
-	port.AssertEq(emonT, evidence.OwCount(ocrwords), 1, "one OCR word")
-	port.AssertEq(emonT, evidence.AltCount(alts), 2, "two alternatives")
-	port.AssertEq(emonT, evidence.EtxLen(etext), 41, "the text cells")
-	port.AssertEq(emonT, evidence.SpCount(spans), 2, "two spans")
-	port.AssertEq(emonT, evidence.SpGet(spans, 0, evidence.SfMcid()), 0, "the paragraph's MCID")
-	port.AssertEq(emonT, evidence.SpGet(spans, 1, evidence.SfMcid()), -1, "the artifact has none")
-	port.AssertEq(emonT, evidence.SpGet(spans, 1, evidence.SfArtifact()), 2, "watermark")
-	port.AssertEq(emonT, evidence.SpGet(spans, 1, evidence.SfStm()), 12, "a form's span")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 2, evidence.GfTstart()), 2, "the ligature's text run")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 2, evidence.GfTlen()), 2, "two code points")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 3, evidence.GfRot()), 4500, "45 degrees in centi-degrees")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 3, evidence.GfVis()), 1, "clipped is code 1")
-	port.AssertEq(emonT, evidence.GlGet(glyphs, 3, evidence.GfArtifact()), 2, "watermark is code 2")
-	port.AssertEq(emonT, evidence.WdGet(words, 1, evidence.WfConf()), 990, "word confidence")
-	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LfWcount()), 2, "the line has two words")
-	port.AssertEq(emonT, evidence.PaGet(paths, 1, evidence.PfFlags()), 5, "closed and clip")
-	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfFlags()), 2, "smask")
-	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfFlags()), 1, "low-conf")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfAlthead()), 0, "the chain starts at 0")
-	port.AssertEq(emonT, evidence.OwGet(ocrwords, 0, evidence.OfAltcount()), 2, "two alternatives")
-	port.AssertEq(emonT, evidence.AltGet(alts, 0, evidence.AfSym()), 0, "first alternative: symbol 0")
-	port.AssertEq(emonT, evidence.AltGet(alts, 0, evidence.AfCp()), 72, "it reads H")
-	port.AssertEq(emonT, evidence.AltGet(alts, 0, evidence.AfConf()), 900, "at 900")
-	port.AssertEq(emonT, evidence.AltGet(alts, 0, evidence.AfNext()), 1, "then the second")
-	port.AssertEq(emonT, evidence.AltGet(alts, 1, evidence.AfCp()), 108, "which reads l")
-	port.AssertEq(emonT, evidence.AltGet(alts, 1, evidence.AfNext()), -1, "and ends the chain")
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 0, "the page is well formed")
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.GlCount(glyphs), 0, "no glyphs")
+	port.AssertEq(emonT, evidence.GlNew(glyphs, 3, 100, 200, 300, 400, 65, -1, 0, -1), 0, "first glyph")
+	port.AssertEq(emonT, port.CellsLen(glyphs), 32, "32 cells")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.ChPage()), 3, "page")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.ChCp()), 65, "cp")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.ChTstart()), -1, "no text run")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.ChWord()), -1, "in no word")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfBx0()), 100, "baseline starts at the box's left")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfBy0()), 400, "on the box's bottom")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfBx1()), 300, "and ends at its right")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfBy1()), 400, "on the bottom")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfAsc()), 0, "asc 0")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfRot()), 0, "no rotation")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfHow()), 5, "how defaults to unknown, code 5")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfFont()), -1, "no font")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfMode()), 0, "render mode 0")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfFill()), -1, "no fill colour")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfStroke()), -1, "no stroke colour")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfFalpha()), 1000, "opaque fill")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfSalpha()), 1000, "opaque stroke")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfCs()), -1, "colour space unknown")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfClip()), -1, "no clip")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfMark()), -1, "no mark")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfOcg()), -1, "no optional content")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfVis()), 0, "unchecked counts as visible")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfVby()), -1, "no occluder")
+	port.AssertEq(emonT, evidence.GlGet(glyphs, 0, evidence.GfVchk()), 0, "no check has run")
+	port.AssertEq(emonT, evidence.WdNew(words, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, -1, -1), 0, "first word")
+	port.AssertEq(emonT, port.CellsLen(words), 24, "24 cells")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdTstart()), -1, "no text")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdLine()), -1, "no line")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdConf()), -1, "no confidence")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.HdFeat()), -1, "no features yet")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfSrc()), 1, "source text")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfGap()), -1, "no gap")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfFont()), -1, "no font")
+	port.AssertEq(emonT, evidence.WdGet(words, 0, evidence.WfWbreak()), 0, "no word break said")
+	port.AssertEq(emonT, evidence.LnNew(lines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first line")
+	port.AssertEq(emonT, port.CellsLen(lines), 16, "16 cells")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LfSrc()), 1, "source text")
+	port.AssertEq(emonT, evidence.LnGet(lines, 0, evidence.LfOrder()), -1, "no order")
+	port.AssertEq(emonT, evidence.MkNew(marks, 3, evidence.MkTag(), -1, 0, -1, 4), 0, "first mark")
+	port.AssertEq(emonT, port.CellsLen(marks), 24, "24 cells")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfMcid()), -1, "no MCID")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfArtype()), 0, "no /Type")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfActual()), -1, "no ActualText")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfLang()), -1, "no language")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfOcg()), -1, "no optional content")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfOcgdef()), -1, "its default state unknown")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfGfirst()), 4, "opened at glyph 4")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfZfirst()), -1, "no paint numbers yet")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfStm()), 0, "the page's own stream")
+	port.AssertEq(emonT, evidence.FoNew(fonts, 7, 3), 0, "first font")
+	port.AssertEq(emonT, port.CellsLen(fonts), 16, "16 cells")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfTstart()), -1, "no name")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfEnc()), -1, "no base encoding")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfSpace()), -1, "no space width")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfStemv()), -1, "no stem")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfCapheight()), -1, "no cap height")
+	port.AssertEq(emonT, evidence.FoGet(fonts, 0, evidence.FnfXheight()), -1, "no x-height")
+	port.AssertEq(emonT, evidence.PaNew(paths, 3, evidence.PaRect(), 1, 2, 3, 4), 0, "first path")
+	port.AssertEq(emonT, port.CellsLen(paths), 24, "24 cells")
+	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfFill()), -1, "not filled")
+	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfStroke()), -1, "not stroked")
+	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfFalpha()), 1000, "opaque")
+	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfZ()), -1, "no paint number")
+	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfClip()), -1, "no clip")
+	port.AssertEq(emonT, evidence.PaGet(paths, 0, evidence.PfPfirst()), -1, "no geometry")
+	port.AssertEq(emonT, evidence.ImNew(images, 3, 1, 2, 3, 4, 17, 10, 20), 0, "first image")
+	port.AssertEq(emonT, port.CellsLen(images), 20, "20 cells")
+	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfObj()), 17, "object number")
+	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfAlpha()), 1000, "opaque")
+	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfZ()), -1, "no paint number")
+	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfVby()), -1, "no occluder")
+	port.AssertEq(emonT, evidence.OrNew(oruns, 3, 0), 0, "first run")
+	port.AssertEq(emonT, port.CellsLen(oruns), 28, "28 cells")
+	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfBview()), -1, "no binarised view")
+	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfRequest()), -1, "no request")
+	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfLang()), -1, "no languages")
+	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfOsd()), -1, "no OSD")
+	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfSconf()), -1, "no script confidence")
+	port.AssertEq(emonT, evidence.ObNew(oblocks, 3, 1, 2, 3, 4, evidence.ObBlock(), -1, 0), 0, "first block")
+	port.AssertEq(emonT, port.CellsLen(oblocks), 16, "16 cells")
+	port.AssertEq(emonT, evidence.ObGet(oblocks, 0, evidence.ObfConf()), -1, "no confidence")
+	port.AssertEq(emonT, evidence.OlNew(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line")
+	port.AssertEq(emonT, port.CellsLen(olines), 24, "24 cells")
+	port.AssertEq(emonT, evidence.OlGet(olines, 0, evidence.OlfPar()), -1, "in no paragraph")
+	port.AssertEq(emonT, evidence.OlGet(olines, 0, evidence.OlfXheight()), -1, "x-height unknown")
+	port.AssertEq(emonT, evidence.OwNew(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word")
+	port.AssertEq(emonT, port.CellsLen(owords), 28, "28 cells")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdConf()), 850, "confidence")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfPsize()), -1, "point size unknown")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfSfirst()), -1, "no symbols")
+	port.AssertEq(emonT, evidence.OsNew(osyms, 3, 1, 2, 3, 4, 65, -1, 0, 0), 0, "first symbol")
+	port.AssertEq(emonT, port.CellsLen(osyms), 20, "20 cells")
+	port.AssertEq(emonT, evidence.OsGet(osyms, 0, evidence.OsfConf()), -1, "no confidence")
+	port.AssertEq(emonT, evidence.OsGet(osyms, 0, evidence.OsfAfirst()), -1, "no alternatives")
+	port.AssertEq(emonT, evidence.OaAdd(oalts, 0, -1, 0, 55), 0, "first alternative")
+	port.AssertEq(emonT, port.CellsLen(oalts), 4, "4 cells")
+	port.AssertEq(emonT, evidence.OaGet(oalts, 0, evidence.OafConf()), 55, "its confidence")
+	port.AssertEq(emonT, evidence.IkNew(inks, 3, 0), 0, "first ink")
+	port.AssertEq(emonT, port.CellsLen(inks), 12, "12 cells")
+	port.AssertEq(emonT, evidence.IkGet(inks, 0, evidence.IkfColor()), -1, "no colour")
+	port.AssertEq(emonT, evidence.IkGet(inks, 0, evidence.IkfMask()), -1, "no mask view")
+	port.AssertEq(emonT, evidence.CoNew(components, 3, 1, 2, 3, 4, evidence.CkRuleH()), 0, "first component")
+	port.AssertEq(emonT, port.CellsLen(components), 24, "24 cells")
+	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfColor()), -1, "no colour")
+	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfInk()), -1, "no ink layer")
+	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfKind()), 2, "rule-h is code 2")
+	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfParent()), -1, "no parent")
+	port.AssertEq(emonT, evidence.CoGet(components, 0, evidence.CfGray()), -1, "no gray")
+	port.AssertEq(emonT, evidence.RlNew(rules, 3, 1, 2, 3, 4, 0), 0, "first rule")
+	port.AssertEq(emonT, port.CellsLen(rules), 20, "20 cells")
+	port.AssertEq(emonT, evidence.RlGet(rules, 0, evidence.RlfColor()), -1, "no colour")
+	port.AssertEq(emonT, evidence.PmNew(prims, 3, 1, 2, 3, 4, evidence.PmCircle()), 0, "first primitive")
+	port.AssertEq(emonT, port.CellsLen(prims), 24, "24 cells")
+	port.AssertEq(emonT, evidence.PmGet(prims, 0, evidence.PmfInk()), -1, "no ink layer")
+	port.AssertEq(emonT, evidence.TlNew(tlines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0), 0, "first text line")
+	port.AssertEq(emonT, port.CellsLen(tlines), 20, "20 cells")
+	port.AssertEq(emonT, evidence.TlGet(tlines, 0, evidence.TlfInk()), -1, "no ink layer")
+	port.AssertEq(emonT, evidence.PtNew(pts, 5, 6, evidence.PoLine()), 0, "first point")
+	port.AssertEq(emonT, port.CellsLen(pts), 3, "3 cells")
+	port.AssertEq(emonT, evidence.RfAdd(refs, evidence.EaGlyphs(), 4), 0, "first reference")
+	port.AssertEq(emonT, evidence.RfGet(refs, 0, 1), 4, "its index")
+	port.AssertEq(emonT, evidence.EpNew(epages, 3, 61200, 79200), 0, "first page")
+	port.AssertEq(emonT, port.CellsLen(epages), 12, "12 cells")
+}
+
+func TestTheHandBuiltPageHasARowInEveryArenaAndIsWellFormed(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvRows(1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "epages")
+	port.AssertEq(emonT, evidence.EvRows(2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "views")
+	port.AssertEq(emonT, evidence.EvRows(3, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "pts")
+	port.AssertEq(emonT, evidence.EvRows(4, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "refs")
+	port.AssertEq(emonT, evidence.EvRows(5, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), evidence.EtxLen(etext), "etext")
+	port.AssertEq(emonT, evidence.EvRows(6, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "feats")
+	port.AssertEq(emonT, evidence.EvRows(7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "glyphs")
+	port.AssertEq(emonT, evidence.EvRows(8, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "words")
+	port.AssertEq(emonT, evidence.EvRows(9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "lines")
+	port.AssertEq(emonT, evidence.EvRows(10, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "marks")
+	port.AssertEq(emonT, evidence.EvRows(11, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "fonts")
+	port.AssertEq(emonT, evidence.EvRows(12, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "paths")
+	port.AssertEq(emonT, evidence.EvRows(13, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "images")
+	port.AssertEq(emonT, evidence.EvRows(14, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "oruns")
+	port.AssertEq(emonT, evidence.EvRows(15, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "oblocks")
+	port.AssertEq(emonT, evidence.EvRows(16, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "olines")
+	port.AssertEq(emonT, evidence.EvRows(17, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "owords")
+	port.AssertEq(emonT, evidence.EvRows(18, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "osyms")
+	port.AssertEq(emonT, evidence.EvRows(19, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "oalts")
+	port.AssertEq(emonT, evidence.EvRows(20, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "inks")
+	port.AssertEq(emonT, evidence.EvRows(21, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "components")
+	port.AssertEq(emonT, evidence.EvRows(22, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "rules")
+	port.AssertEq(emonT, evidence.EvRows(23, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "prims")
+	port.AssertEq(emonT, evidence.EvRows(24, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "tlines")
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed")
+	// the marks nest, and a glyph's chain finds its artifact
+	port.AssertEq(emonT, evidence.MkGet(marks, 1, evidence.MkfParent()), 0, "the span is in the paragraph")
+	port.AssertEq(emonT, evidence.MkGet(marks, 3, evidence.MkfParent()), 2, "the optional-content span is in the artifact")
+	port.AssertEq(emonT, evidence.MkArtifactOf(marks, 3), 19, "glyph 3's nearest artifact: pagination (1) * 16 + watermark (3)")
+	port.AssertEq(emonT, evidence.MkArtifactOf(marks, 1), 0, "glyph 0's chain holds none")
+	port.AssertEq(emonT, evidence.MkArtifactOf(marks, -1), 0, "no mark, no artifact")
+	port.AssertEq(emonT, evidence.MkOcgOf(marks, 3), 3, "the optional-content mark")
+	port.AssertEq(emonT, evidence.MkOcgOf(marks, 1), -1, "none")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfGcount()), 3, "the paragraph holds three glyphs")
+	port.AssertEq(emonT, evidence.MkGet(marks, 1, evidence.MkfGcount()), 2, "the span two")
+	port.AssertEq(emonT, evidence.MkGet(marks, 0, evidence.MkfZlast()), 2, "the paragraph's last paint number")
+	port.AssertEq(emonT, evidence.MkGet(marks, 3, evidence.MkfZfirst()), 3, "the optional-content span paints object 3")
+	port.AssertEq(emonT, evidence.MkGet(marks, 3, evidence.MkfZlast()), 3, "and only it")
+	port.AssertEq(emonT, evidence.MkArtifactClass(evidence.MkArtifact(), evidence.ArPagination(), evidence.AsWatermark()), 2, "the D101 class: watermark")
+	port.AssertEq(emonT, evidence.MkArtifactClass(evidence.MkArtifact(), evidence.ArBackground(), 0), 4, "background")
+	port.AssertEq(emonT, evidence.MkArtifactClass(evidence.MkArtifact(), evidence.ArPagination(), 0), 1, "pagination")
+	port.AssertEq(emonT, evidence.MkArtifactClass(evidence.MkArtifact(), evidence.ArOther(), evidence.AsHeader()), 1, "a header is pagination")
+	port.AssertEq(emonT, evidence.MkArtifactClass(evidence.MkArtifact(), evidence.ArLayout(), 0), 3, "layout")
+	port.AssertEq(emonT, evidence.MkArtifactClass(evidence.MkArtifact(), evidence.ArPage(), 0), 5, "/Type /Page says nothing more: other")
+	port.AssertEq(emonT, evidence.MkArtifactClass(evidence.MkTag(), evidence.ArPagination(), 0), 0, "a tag is no artifact")
+}
+
+func etPokeCheck(emonT *testing.T, k int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// Break the page the way check row k says and require that code: the table is the spec of `ev-check`.
+	var code int32 = evidence.EvCk[k*6+0]
+	var ea int32 = evidence.EvCk[k*6+1]
+	var kind int32 = evidence.EvCk[k*6+2]
+	var f1 int32 = evidence.EvCk[k*6+3]
+	var f2 int32 = evidence.EvCk[k*6+4]
+	var tg int32 = evidence.EvCk[k*6+5]
+	var row int32 = 0
+	var v int32 = 0
+	var off int32 = 0
+	var cand int32 = 0
+	var n int32 = 0
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEqAt(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed before it is broken", code)
+	if kind == 1 {
+		n = evidence.EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		for (row < n) && (evidence.EvPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0) {
+			row += 1
+		}
+		port.AssertThatAt(emonT, row < n, "a row with the text run exists", code)
+		evidence.EvPoke(ea, row, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	}
+	if kind == 2 {
+		evidence.EvPoke(ea, 0, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	}
+	if kind == 3 {
+		evidence.EvPoke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	}
+	if kind == 4 {
+		evidence.EvPoke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	}
+	if kind == 5 {
+		evidence.EvPoke(ea, 0, f1, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	}
+	if kind == 8 {
+		evidence.EvPoke(ea, 0, f1, 1000000000, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	}
+	if kind == 6 {
+		n = evidence.EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		row = 0
+		for (row < n) && (evidence.EvPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0) {
+			row += 1
+		}
+		port.AssertThatAt(emonT, row < n, "a row with a back pointer exists", code)
+		v = evidence.EvPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		n = evidence.EvRows(tg, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		// another row of the target whose run does not hold this row
+		off = 1
+		cand = (v + 1) % n
+		for (off < n) && ((row >= evidence.EvPeek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)) && (row < (evidence.EvPeek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) + evidence.EvPeek(tg, cand, f2+1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)))) {
+			off += 1
+			cand = (v + off) % n
+		}
+		port.AssertThatAt(emonT, off < n, "a row that does not hold it exists", code)
+		evidence.EvPoke(ea, row, f1, cand, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	}
+	port.AssertEqAt(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), code, "the code of the row that was broken", code)
+	return 0
+}
+
+func TestEvCheckAnswersEveryCodeOfItsTable(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var k int32 = 0
+	port.AssertEq(emonT, 88, 88, "88 table checks, codes 2..89")
+	for k < 88 {
+		etPokeCheck(emonT, k, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		k += 1
+	}
+}
+
+func TestEvCheckAnswersTheCodesOutsideItsTable(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.CellsPush(glyphs, 0)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "a stride broken: a glyph arena that is not a whole number of rows")
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.CellsPush(etext, 0)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "an etext arena has no stride to break")
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvPoke(4, 1, 0, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to an arena that is none")
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvPoke(4, 1, 1, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to a row that is not there")
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvPoke(6, 0, 0, 7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is a glyph")
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvPoke(6, 1, 1, 9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is not there")
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvPoke(8, 0, 15, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "a word whose feature row names another word")
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvPoke(17, 0, 15, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "an OCR word pointing at the text layer's feature row")
+}
+
+func TestEvAngleIsExactAtEveryMultipleOf45Degrees(emonT *testing.T) {
+	port.AssertEq(emonT, evidence.EvAngle(0, 0), 0, "the zero vector")
+	port.AssertEq(emonT, evidence.EvAngle(100, 0), 0, "east")
+	port.AssertEq(emonT, evidence.EvAngle(100, -100), 4500, "north-east (y is down: -dy is up)")
+	port.AssertEq(emonT, evidence.EvAngle(0, -100), 9000, "north")
+	port.AssertEq(emonT, evidence.EvAngle(-100, -100), 13500, "north-west")
+	port.AssertEq(emonT, evidence.EvAngle(-100, 0), 18000, "west")
+	port.AssertEq(emonT, evidence.EvAngle(-100, 100), 22500, "south-west")
+	port.AssertEq(emonT, evidence.EvAngle(0, 100), 27000, "south")
+	port.AssertEq(emonT, evidence.EvAngle(100, 100), 31500, "south-east")
+	port.AssertEq(emonT, evidence.EvAngle(7, -7), 4500, "any length")
+	port.AssertEq(emonT, evidence.EvAngle(2147483647, -2147483647), 4500, "the largest")
+	port.AssertEq(emonT, evidence.EvAngle(-2147483648, 0), 18000, "the smallest does not overflow")
+	port.AssertEq(emonT, evidence.EvAngle(0, -2147483648), 9000, "nor -dy")
+}
+
+func etSweep(emonT *testing.T) int32 {
+	// Every centi-degree: the angle of (cos, -sin) in 16.16 is within 3 of it, and never goes down.
+	var a int32 = 0
+	var got int32 = 0
+	var prev int32 = 0
+	var d int32 = 0
+	for a < 36000 {
+		got = evidence.EvAngle(evidence.EvCos(a), 0-evidence.EvSin(a))
+		if (got == 0) && (a > 18000) {
+			got = 36000
+		}
+		d = got - a
+		if d < 0 {
+			d = 0 - d
+		}
+		port.AssertThatAt(emonT, d <= 3, "within 3 centi-degrees (0.03 degree)", a)
+		port.AssertThatAt(emonT, got >= prev, "monotonic over the sweep", a)
+		prev = got
+		a += 1
+	}
+	return 0
+}
+
+func TestEvAngleIsMonotonicAndWithin3CentiDegreesOverTheWholeCircle(emonT *testing.T) {
+	etSweep(emonT)
+}
+
+func TestSineAndCosineComeFromATableAndSymmetry(emonT *testing.T) {
+	port.AssertEq(emonT, evidence.EvSin(0), 0, "sin 0")
+	port.AssertEq(emonT, evidence.EvSin(9000), 65536, "sin 90 degrees is 1.0")
+	port.AssertEq(emonT, evidence.EvSin(4500), 46341, "sin 45 degrees")
+	port.AssertEq(emonT, evidence.EvSin(3000), 32768, "sin 30 degrees is one half")
+	port.AssertEq(emonT, evidence.EvSin(18000), 0, "sin 180")
+	port.AssertEq(emonT, evidence.EvSin(27000), -65536, "sin 270")
+	port.AssertEq(emonT, evidence.EvSin(-9000), -65536, "sin -90")
+	port.AssertEq(emonT, evidence.EvSin(45000), 65536, "sin 450 is sin 90")
+	port.AssertEq(emonT, evidence.EvCos(0), 65536, "cos 0")
+	port.AssertEq(emonT, evidence.EvCos(9000), 0, "cos 90")
+	port.AssertEq(emonT, evidence.EvCos(18000), -65536, "cos 180")
+	port.AssertEq(emonT, evidence.EvCos(-4500), 46341, "cos -45")
+	port.AssertEq(emonT, evidence.EvSin(12000), evidence.EvSin(6000), "sin 120 is sin 60")
+	port.AssertEq(emonT, evidence.EvSin(24000), 0-evidence.EvSin(6000), "sin 240 is -sin 60")
+}
+
+func TestFloorDivisionRoundsTowardMinusInfinity(emonT *testing.T) {
+	port.AssertEq(emonT, int32(evidence.EvFloordiv(int64(7), int64(2))), 3, "7 / 2")
+	port.AssertEq(emonT, int32(evidence.EvFloordiv(int64(-7), int64(2))), -4, "-7 / 2 floors to -4 where `quot` truncates to -3")
+	port.AssertEq(emonT, int32(evidence.EvFloordiv(int64(-8), int64(2))), -4, "exact")
+	port.AssertEq(emonT, int32(evidence.EvFloordiv(int64(0), int64(5))), 0, "0")
+}
+
+func TestOverlapAndBaselines(emonT *testing.T) {
+	port.AssertEq(emonT, evidence.EvOverlapSmall(0, 0, 100, 100, 50, 50, 150, 150), 250, "a quarter of the smaller")
+	port.AssertEq(emonT, evidence.EvOverlapSmall(0, 0, 100, 100, 10, 10, 20, 20), 1000, "a box inside another is all of the smaller")
+	port.AssertEq(emonT, evidence.EvOverlapSmall(0, 0, 100, 100, 200, 200, 300, 300), 0, "disjoint")
+	port.AssertEq(emonT, evidence.EvOverlapSmall(0, 0, 100, 100, 100, 0, 200, 100), 0, "touching is no overlap")
+	port.AssertEq(emonT, evidence.EvOverlapSmall(0, 0, 0, 0, 0, 0, 100, 100), 0, "an empty box overlaps nothing")
+	port.AssertEq(emonT, evidence.EvBaselineAt(0, 100, 1000, 200, 500), 150, "the middle of a rising segment")
+	port.AssertEq(emonT, evidence.EvBaselineAt(0, 100, 1000, 100, 777), 100, "a level one")
+	port.AssertEq(emonT, evidence.EvBaselineAt(0, 100, 1000, 0, 250), 75, "a falling one, truncating")
+	port.AssertEq(emonT, evidence.EvBaselineAt(50, 70, 50, 90, 50), 90, "a vertical segment answers its end")
+}
+
+func etAbs(v int32) int32 {
+	if v < 0 {
+		return 0 - v
+	}
+	return v
+}
+
+func etViewGrid(emonT *testing.T, views *port.Cells, dpi int32, deskew int32, turns int32) int32 {
+	// px -> cpt -> px lands within one pixel for a grid over a US Letter page, at every resolution (the 16.16
+	// inverse is good to 2^-17 of the distance from the origin: 0.6 pixel at 792 points); and
+	// EXACTLY at 150 and 300 dpi with no deskew (the scale is 48 or 24 centipoints a pixel, exactly).
+	var pw int32 = (dpi * 17) / 2
+	var ph int32 = dpi * 11
+	var v int32 = evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, pw, ph, dpi*100, 0, -1, turns, deskew, 0, 0, 0)
+	var i int32 = 0
+	var j int32 = 0
+	var px int32 = 0
+	var py int32 = 0
+	var x int32 = 0
+	var y int32 = 0
+	var bx int32 = 0
+	var by int32 = 0
+	var dx int32 = 0
+	var dy int32 = 0
+	for i < 6 {
+		j = 0
+		for j < 5 {
+			px = (i * pw) / 5
+			py = (j * ph) / 4
+			x = evidence.VwPxToCpt(views, v, 0, px, py)
+			y = evidence.VwPxToCpt(views, v, 1, px, py)
+			bx = evidence.VwCptToPx(views, v, 0, x, y)
+			by = evidence.VwCptToPx(views, v, 1, x, y)
+			dx = etAbs(bx - px)
+			dy = etAbs(by - py)
+			port.AssertThatAt(emonT, dx <= 1, "x within one pixel", (dpi*10)+i)
+			port.AssertThatAt(emonT, dy <= 1, "y within one pixel", (dpi*10)+j)
+			if (deskew == 0) && ((dpi == 150) || (dpi == 300)) {
+				port.AssertEqAt(emonT, bx, px, "x exactly", (dpi*10)+i)
+				port.AssertEqAt(emonT, by, py, "y exactly", (dpi*10)+j)
+			}
+			j += 1
+		}
+		i += 1
+	}
+	return 0
+}
+
+func TestAViewMapsPixelsToCentipointsAndBack(emonT *testing.T) {
+	var views *port.Cells = port.NewCells()
+	var di int32 = 0
+	var ki int32 = 0
+	var q int32 = 0
+	var dpi int32 = 0
+	var dsk int32 = 0
+	for di < 7 {
+		if di == 0 {
+			dpi = 72
+		}
+		if di == 1 {
+			dpi = 96
+		}
+		if di == 2 {
+			dpi = 150
+		}
+		if di == 3 {
+			dpi = 200
+		}
+		if di == 4 {
+			dpi = 300
+		}
+		if di == 5 {
+			dpi = 400
+		}
+		if di == 6 {
+			dpi = 600
+		}
+		ki = 0
+		for ki < 5 {
+			dsk = 0
+			if ki == 1 {
+				dsk = 85
+			}
+			if ki == 2 {
+				dsk = -85
+			}
+			if ki == 3 {
+				dsk = 300
+			}
+			if ki == 4 {
+				dsk = -300
+			}
+			q = 0
+			for q < 4 {
+				etViewGrid(emonT, views, dpi, dsk, q)
+				q += 1
+			}
+			ki += 1
+		}
+		di += 1
+	}
+}
+
+func TestAViewAt150DpiIsExactly48CentipointsAPixel(emonT *testing.T) {
+	var views *port.Cells = port.NewCells()
+	var v int32 = evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0)
+	var w int32 = evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, 1275, 1650, 30000, 0, -1, 0, 0, 0, 0, 0)
+	port.AssertEq(emonT, evidence.VwGet(views, v, evidence.VwfA()), 3145728, "a = 48.0 in 16.16")
+	port.AssertEq(emonT, evidence.VwGet(views, v, evidence.VwfB()), 0, "b = 0")
+	port.AssertEq(emonT, evidence.VwGet(views, v, evidence.VwfC()), 0, "c = 0")
+	port.AssertEq(emonT, evidence.VwGet(views, v, evidence.VwfD()), 3145728, "d = 48.0")
+	port.AssertEq(emonT, evidence.VwGet(views, v, evidence.VwfE()), 0, "e = 0")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, v, 0, 100, 200), 4800, "x = 100 * 48")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, v, 1, 100, 200), 9600, "y = 200 * 48")
+	port.AssertEq(emonT, evidence.VwCptToPx(views, v, 0, 4800, 9600), 100, "and back")
+	port.AssertEq(emonT, evidence.VwGet(views, w, evidence.VwfA()), 1572864, "at 300 dpi 24.0")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, w, 0, 100, 200), 2400, "x = 100 * 24")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, v, 0, 10, 20, 30, 40), 480, "a pixel box's x0")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, v, 1, 10, 20, 30, 40), 960, "y0")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, v, 2, 10, 20, 30, 40), 1920, "x1")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, v, 3, 10, 20, 30, 40), 2880, "y1")
+}
+
+func TestQuarterTurnsPutTheOriginAtTheRightCornerAndKeepBoxesBoxes(emonT *testing.T) {
+	var views *port.Cells = port.NewCells()
+	var t1 int32 = evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, 100, 200, 15000, 0, -1, 1, 0, 1000, 2000, 0)
+	var t2 int32 = evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, 100, 200, 15000, 0, -1, 2, 0, 1000, 2000, 0)
+	var t3 int32 = evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, 100, 200, 15000, 0, -1, 3, 0, 1000, 2000, 0)
+	// a raster turned a quarter clockwise: its (0,0) is the region's bottom-left; x grows up the page
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t1, 0, 0, 0), 1000, "t1 origin x")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t1, 1, 0, 0), 6800, "t1 origin y = cropy + 100 * 48")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t1, 0, 10, 0), 1000, "moving right on the raster moves up the page: x the same")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t1, 1, 10, 0), 6320, "and y less by 10 * 48")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t1, 0, 0, 10), 1480, "moving down the raster moves right on the page")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t2, 0, 0, 0), 5800, "t2 origin: the opposite corner")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t2, 1, 0, 0), 11600, "t2 origin y")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t3, 0, 0, 0), 10600, "t3 origin x = cropx + 200 * 48")
+	port.AssertEq(emonT, evidence.VwPxToCpt(views, t3, 1, 0, 0), 2000, "t3 origin y")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, t1, 0, 0, 0, 10, 20), 1000, "a box turned: its smallest box, x0")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, t1, 2, 0, 0, 10, 20), 1960, "x1 = 1000 + 20 * 48")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, t1, 1, 0, 0, 10, 20), 6320, "y0 = 6800 - 10 * 48, the smallest y of the four corners")
+	port.AssertEq(emonT, evidence.VwBoxToCpt(views, t1, 3, 0, 0, 10, 20), 6800, "y1")
+}
+
+func TestStage1FeaturesOfAnOcrWord(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	// owords[0] is Hi with H at 910 (alternatives H 900, ri 250) and i at 880 (alternative l 40)
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, 0), 17, "the subject is an OCR word")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, 1), 0, "word 0")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoConf()), 870, "the raw confidence, verbatim")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoSymMin()), 880, "the lowest symbol")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoSymMean()), 895, "the mean of 910 and 880")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoMargin()), 660, "the smallest margin: 910 less the differing alternative 'ri' at 250 is 660, 880 less 'l' at 40 is 840")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoAmbiguous()), 0, "no margin within 100")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoEngineFlags()), 1, "the dictionary flag")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoImplausible()), 0, "Hi is plausible")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoLength()), 2, "two code points")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoAngle()), 0, "a level word on a level page")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoSpacing()), 0, "two symbols of 1200 width with no gap between them")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoRelHeight()), 1000, "the only word of its line")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoBaseDev()), 0, "on its line's baseline")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoEdge()), 7200, "the nearest page edge is the left one")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, 9), -1, "a column of a later stage is -1")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, 31), -1, "a spare column is -1")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdFeat()), 1, "the word names its feature row")
+}
+
+func TestImplausibleTransitionsAreLetterDigitAndLowerToUpper(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	// a word r1Il0 (a letter, a digit, a capital, a lower-case letter, a digit): every adjacent pair but l-0
+	evidence.EtxAppendCp(etext, 114)
+	evidence.EtxAppendCp(etext, 49)
+	evidence.EtxAppendCp(etext, 73)
+	evidence.EtxAppendCp(etext, 108)
+	evidence.EtxAppendCp(etext, 48)
+	var at int32 = evidence.EtxLen(etext) - 5
+	evidence.OwSet(owords, 1, evidence.HdTstart(), at)
+	evidence.OwSet(owords, 1, evidence.HdTlen(), 5)
+	evidence.EvFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, 1, 0, 100)
+	// pairs r1 (letter-digit), 1I (digit-letter), Il (upper-lower: fine), l0 (letter-digit): 3 of 4
+	port.AssertEq(emonT, evidence.FeGet(feats, 2, evidence.XoImplausible()), 750, "three of four pairs")
+	port.AssertEq(emonT, evidence.FeGet(feats, 2, evidence.XoLength()), 5, "five code points")
+}
+
+func TestEveryCellOfEveryStrideIsPrintedOrSpare(emonT *testing.T) {
+	// Count the cells each arena's field table prints (a box 4, a pair 2, a run 2, a text run 2) and
+	// require the rest to be the spare cells SPEC 8.4 names: no cell is printed twice or forgotten.
+	var ea int32 = 1
+	var r int32 = 0
+	var cells int32 = 0
+	var kind int32 = 0
+	for ea <= 24 {
+		cells = 0
+		r = evidence.EvFx[(ea-1)*2+0]
+		for r < (evidence.EvFx[(ea-1)*2+0] + evidence.EvFx[(ea-1)*2+1]) {
+			kind = evidence.EvFd[r*6+2]
+			if (kind == 3) || ((kind == 4) || (kind == 10)) {
+				cells += 4
+			}
+			if (kind == 6) || ((kind == 7) || ((kind == 12) || (kind == 13))) {
+				cells += 2
+			}
+			if (kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || (kind == 11))))) {
+				cells += 1
+			}
+			r += 1
+		}
+		if ea == 1 {
+			port.AssertEq(emonT, evidence.EvStrides[0]-cells, 6, "epages: six spare cells")
+		}
+		if ea == 2 {
+			port.AssertEq(emonT, cells, 24, "views: every cell")
+		}
+		if ea == 3 {
+			port.AssertEq(emonT, cells, 3, "pts: every cell")
+		}
+		if ea == 7 {
+			port.AssertEq(emonT, cells, 32, "glyphs: every cell")
+		}
+		if ea == 8 {
+			port.AssertEq(emonT, cells, 24, "words: every cell")
+		}
+		if ea == 9 {
+			port.AssertEq(emonT, evidence.EvStrides[8]-cells, 1, "lines: one spare")
+		}
+		if ea == 10 {
+			port.AssertEq(emonT, cells, 24, "marks: every cell")
+		}
+		if ea == 11 {
+			port.AssertEq(emonT, cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)")
+		}
+		if ea == 12 {
+			port.AssertEq(emonT, evidence.EvStrides[11]-cells, 5, "paths: five spare")
+		}
+		if ea == 13 {
+			port.AssertEq(emonT, evidence.EvStrides[12]-cells, 1, "images: one spare")
+		}
+		if ea == 14 {
+			port.AssertEq(emonT, cells, 28, "oruns: every cell")
+		}
+		if ea == 15 {
+			port.AssertEq(emonT, evidence.EvStrides[14]-cells, 2, "oblocks: two spare")
+		}
+		if ea == 16 {
+			port.AssertEq(emonT, evidence.EvStrides[15]-cells, 1, "olines: one spare")
+		}
+		if ea == 17 {
+			port.AssertEq(emonT, evidence.EvStrides[16]-cells, 1, "owords: one spare")
+		}
+		if ea == 18 {
+			port.AssertEq(emonT, evidence.EvStrides[17]-cells, 3, "osyms: three spare")
+		}
+		if ea == 19 {
+			port.AssertEq(emonT, cells, 4, "oalts: every cell")
+		}
+		if ea == 20 {
+			port.AssertEq(emonT, evidence.EvStrides[19]-cells, 3, "inks: three spare")
+		}
+		if ea == 21 {
+			port.AssertEq(emonT, evidence.EvStrides[20]-cells, 1, "components: one spare")
+		}
+		if ea == 22 {
+			port.AssertEq(emonT, evidence.EvStrides[21]-cells, 2, "rules: two spare")
+		}
+		if ea == 23 {
+			port.AssertEq(emonT, evidence.EvStrides[22]-cells, 2, "prims: two spare")
+		}
+		if ea == 24 {
+			port.AssertEq(emonT, evidence.EvStrides[23]-cells, 3, "tlines: three spare")
+		}
+		ea += 1
+	}
+}
+
+func TestGoldenPage(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var compact *strings.Builder = port.NewText()
+	var pretty *strings.Builder = port.NewText()
+	EtBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvEmit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvEmit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertTextSpan(emonT, compact, port.TestFile("evidence/page1.json"), 0, etEnd(port.TestFile("evidence/page1.json")), "compact", 0)
+	port.AssertTextSpan(emonT, pretty, port.TestFile("evidence/page1.pretty.json"), 0, etEnd(port.TestFile("evidence/page1.pretty.json")), "pretty", 0)
+}
+
+func TestAnEmptyEvidenceDump(emonT *testing.T) {
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var glyphs *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var marks *port.Cells = port.NewCells()
+	var fonts *port.Cells = port.NewCells()
+	var paths *port.Cells = port.NewCells()
+	var images *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var compact *strings.Builder = port.NewText()
+	var pretty *strings.Builder = port.NewText()
+	evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertEq(emonT, evidence.EvCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "nothing is well formed")
+	evidence.EvEmit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	evidence.EvEmit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.AssertTextSpan(emonT, compact, port.TestFile("evidence/empty.json"), 0, etEnd(port.TestFile("evidence/empty.json")), "compact", 0)
+	port.AssertTextSpan(emonT, pretty, port.TestFile("evidence/empty.pretty.json"), 0, etEnd(port.TestFile("evidence/empty.pretty.json")), "pretty", 0)
 }
 
 func TestEvidenceTextIsScalarValuesOnly(emonT *testing.T) {
@@ -295,90 +1350,5 @@ func TestEvidenceTextIsScalarValuesOnly(emonT *testing.T) {
 	evidence.EtxAppendCp(etext, 55296)
 	evidence.EtxAppendCp(etext, 128512)
 	port.AssertEq(emonT, evidence.EtxLen(etext), 3, "three cells")
-}
-
-func TestCheckNamesWhatIsWrong(emonT *testing.T) {
-	var glyphs *port.Cells = port.NewCells()
-	var words *port.Cells = port.NewCells()
-	var lines *port.Cells = port.NewCells()
-	var paths *port.Cells = port.NewCells()
-	var images *port.Cells = port.NewCells()
-	var components *port.Cells = port.NewCells()
-	var ocrwords *port.Cells = port.NewCells()
-	var alts *port.Cells = port.NewCells()
-	var etext *port.Cells = port.NewCells()
-	var spans *port.Cells = port.NewCells()
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.GlSet(glyphs, 2, evidence.GfTlen(), 99)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 2, "a glyph's text run past the arena")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.WdSet(words, 1, evidence.WfGcount(), 9)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 3, "a word's glyph run past the arena")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.WdSet(words, 0, evidence.WfTlen(), 99)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 4, "a word's text run past the arena")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.LnSet(lines, 0, evidence.LfWcount(), 3)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 5, "a line's word run past the arena")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.OwSet(ocrwords, 0, evidence.OfTlen(), 50)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 6, "an OCR word's text run past the arena")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.OwSet(ocrwords, 0, evidence.OfAltcount(), 3)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 7, "an alternative count that is not the chain")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.WdSet(words, 0, evidence.WfLine(), 4)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 8, "a word in a line that is not there")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.GlSet(glyphs, 0, evidence.GfWord(), 5)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 9, "a glyph in a word that is not there")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.SpSet(spans, 1, evidence.SfGcount(), 9)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's glyph run past the arena")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.SpSet(spans, 1, evidence.SfActuallen(), 99)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's string past the arena")
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.SpSet(spans, 0, evidence.SfParent(), 0)
-	port.AssertEq(emonT, evidence.EvCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span that is its own parent")
-}
-
-func TestGoldenPage(emonT *testing.T) {
-	var glyphs *port.Cells = port.NewCells()
-	var words *port.Cells = port.NewCells()
-	var lines *port.Cells = port.NewCells()
-	var paths *port.Cells = port.NewCells()
-	var images *port.Cells = port.NewCells()
-	var components *port.Cells = port.NewCells()
-	var ocrwords *port.Cells = port.NewCells()
-	var alts *port.Cells = port.NewCells()
-	var etext *port.Cells = port.NewCells()
-	var spans *port.Cells = port.NewCells()
-	var compact *strings.Builder = port.NewText()
-	var pretty *strings.Builder = port.NewText()
-	etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	port.AssertTextSpan(emonT, compact, port.TestFile("evidence/page1.json"), 0, etEnd(port.TestFile("evidence/page1.json")), "compact", 0)
-	port.AssertTextSpan(emonT, pretty, port.TestFile("evidence/page1.pretty.json"), 0, etEnd(port.TestFile("evidence/page1.pretty.json")), "pretty", 0)
-}
-
-func TestAnEmptyEvidenceDump(emonT *testing.T) {
-	var glyphs *port.Cells = port.NewCells()
-	var words *port.Cells = port.NewCells()
-	var lines *port.Cells = port.NewCells()
-	var paths *port.Cells = port.NewCells()
-	var images *port.Cells = port.NewCells()
-	var components *port.Cells = port.NewCells()
-	var ocrwords *port.Cells = port.NewCells()
-	var alts *port.Cells = port.NewCells()
-	var etext *port.Cells = port.NewCells()
-	var spans *port.Cells = port.NewCells()
-	var compact *strings.Builder = port.NewText()
-	var pretty *strings.Builder = port.NewText()
-	evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.EvEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	evidence.EvEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
-	port.AssertTextSpan(emonT, compact, port.TestFile("evidence/empty.json"), 0, etEnd(port.TestFile("evidence/empty.json")), "compact", 0)
-	port.AssertTextSpan(emonT, pretty, port.TestFile("evidence/empty.pretty.json"), 0, etEnd(port.TestFile("evidence/empty.pretty.json")), "pretty", 0)
+	port.AssertEq(emonT, port.CellsAt(etext, 1), 65533, "a surrogate became U+FFFD")
 }

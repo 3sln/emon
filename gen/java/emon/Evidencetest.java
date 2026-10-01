@@ -5,139 +5,366 @@ package emon;
 
 
 public final class Evidencetest {
-    public static int etBuild(emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.etxAppendCp(etext, 72);
-        Evidence.etxAppendCp(etext, 105);
-        Evidence.etxAppendCp(etext, 102);
-        Evidence.etxAppendCp(etext, 105);
-        Evidence.etxAppendCp(etext, 72);
-        Evidence.etxAppendCp(etext, 105);
-        Evidence.etxAppendCp(etext, 80);
-        Evidence.etxAppendCp(etext, 101);
-        Evidence.etxAppendCp(etext, 110);
-        Evidence.etxAppendCp(etext, 65);
-        Evidence.etxAppendCp(etext, 114);
-        Evidence.etxAppendCp(etext, 116);
-        Evidence.etxAppendCp(etext, 105);
-        Evidence.etxAppendCp(etext, 102);
-        Evidence.etxAppendCp(etext, 97);
-        Evidence.etxAppendCp(etext, 99);
-        Evidence.etxAppendCp(etext, 116);
-        Evidence.etxAppendCp(etext, 80);
-        Evidence.etxAppendCp(etext, 97);
-        Evidence.etxAppendCp(etext, 103);
-        Evidence.etxAppendCp(etext, 105);
-        Evidence.etxAppendCp(etext, 110);
-        Evidence.etxAppendCp(etext, 97);
-        Evidence.etxAppendCp(etext, 116);
-        Evidence.etxAppendCp(etext, 105);
-        Evidence.etxAppendCp(etext, 111);
-        Evidence.etxAppendCp(etext, 110);
-        Evidence.etxAppendCp(etext, 87);
-        Evidence.etxAppendCp(etext, 97);
-        Evidence.etxAppendCp(etext, 116);
-        Evidence.etxAppendCp(etext, 101);
-        Evidence.etxAppendCp(etext, 114);
-        Evidence.etxAppendCp(etext, 109);
-        Evidence.etxAppendCp(etext, 97);
-        Evidence.etxAppendCp(etext, 114);
-        Evidence.etxAppendCp(etext, 107);
-        Evidence.etxAppendCp(etext, 68);
-        Evidence.etxAppendCp(etext, 82);
-        Evidence.etxAppendCp(etext, 65);
-        Evidence.etxAppendCp(etext, 70);
-        Evidence.etxAppendCp(etext, 84);
-        Evidence.glNew(glyphs, 1, 72, 1, 1200, 7200, 9000, 8000, 10200);
+    public static int etTxt(emon.Port.Cells etext, int c0, int c1, int c2, int c3, int c4, int c5, int c6, int c7, int c8) {
+        // Append the non-negative code points among the nine arguments; answer where the first went.
+        int at = Evidence.etxLen(etext);
+        if (c0 >= 0) {
+            Evidence.etxAppendCp(etext, c0);
+        }
+        if (c1 >= 0) {
+            Evidence.etxAppendCp(etext, c1);
+        }
+        if (c2 >= 0) {
+            Evidence.etxAppendCp(etext, c2);
+        }
+        if (c3 >= 0) {
+            Evidence.etxAppendCp(etext, c3);
+        }
+        if (c4 >= 0) {
+            Evidence.etxAppendCp(etext, c4);
+        }
+        if (c5 >= 0) {
+            Evidence.etxAppendCp(etext, c5);
+        }
+        if (c6 >= 0) {
+            Evidence.etxAppendCp(etext, c6);
+        }
+        if (c7 >= 0) {
+            Evidence.etxAppendCp(etext, c7);
+        }
+        if (c8 >= 0) {
+            Evidence.etxAppendCp(etext, c8);
+        }
+        return at;
+    }
+    public static int etBuild(emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        Evidence.evInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        int tHi = etTxt(etext, 72, 105, -1, -1, -1, -1, -1, -1, -1);
+        int tFi = etTxt(etext, 102, 105, -1, -1, -1, -1, -1, -1, -1);
+        int tP = etTxt(etext, 80, -1, -1, -1, -1, -1, -1, -1, -1);
+        int tSpan = etTxt(etext, 83, 112, 97, 110, -1, -1, -1, -1, -1);
+        int tEn = etTxt(etext, 101, 110, -1, -1, -1, -1, -1, -1, -1);
+        int tArt = etTxt(etext, 65, 114, 116, 105, 102, 97, 99, 116, -1);
+        int tDraft = etTxt(etext, 68, 82, 65, 70, 84, -1, -1, -1, -1);
+        int tOc = etTxt(etext, 79, 67, -1, -1, -1, -1, -1, -1, -1);
+        int tAlt = etTxt(etext, 65, 108, 116, -1, -1, -1, -1, -1, -1);
+        int tExp = etTxt(etext, 69, 120, 112, -1, -1, -1, -1, -1, -1);
+        int tArial = etTxt(etext, 65, 114, 105, 97, 108, -1, -1, -1, -1);
+        int tEng = etTxt(etext, 101, 110, 103, -1, -1, -1, -1, -1, -1);
+        int tOk = etTxt(etext, 111, 107, -1, -1, -1, -1, -1, -1, -1);
+        int tRi = etTxt(etext, 114, 105, -1, -1, -1, -1, -1, -1, -1);
+        int tBh = etTxt(etext, 72, -1, -1, -1, -1, -1, -1, -1, -1);
+        int tBl = etTxt(etext, 108, -1, -1, -1, -1, -1, -1, -1, -1);
+        // shared: the page, two views, three points, three references
+        Evidence.epNew(epages, 1, 61200, 79200);
+        Evidence.epSet(epages, 0, Evidence.epfFlags(), Evidence.egTextLayer() + Evidence.egRaster());
+        Evidence.epSet(epages, 0, Evidence.epfDpi(), 15000);
+        Evidence.vwNew(views, 1, Evidence.vkRender(), 7, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
+        Evidence.vwNew(views, 1, Evidence.vkEngineBinary(), 7, 0, 640, 480, 30000, 0, -1, 1, 85, 100, 200, Evidence.vgEngineBinary());
+        Evidence.ptAdd(pts, 7200, 12000, Evidence.poMove());
+        Evidence.ptAdd(pts, 20000, 12000, Evidence.poLine());
+        Evidence.ptAdd(pts, 20000, 14000, Evidence.poClose());
+        Evidence.rfAdd(refs, Evidence.eaComponents(), 0);
+        Evidence.rfAdd(refs, Evidence.eaComponents(), 0);
+        Evidence.rfAdd(refs, Evidence.eaComponents(), 0);
+        // fonts: a simple one and a composite one
+        Evidence.foNew(fonts, 5, Evidence.ftType1());
+        Evidence.foSet(fonts, 0, Evidence.fnfFlags(), 32);
+        Evidence.foSet(fonts, 0, Evidence.fnfTounicode(), 1);
+        Evidence.foSet(fonts, 0, Evidence.fnfEnc(), 1);
+        Evidence.foSet(fonts, 0, Evidence.fnfTstart(), tArial);
+        Evidence.foSet(fonts, 0, Evidence.fnfTlen(), 5);
+        Evidence.foSet(fonts, 0, Evidence.fnfAsc(), 905);
+        Evidence.foSet(fonts, 0, Evidence.fnfDesc(), -212);
+        Evidence.foSet(fonts, 0, Evidence.fnfSpace(), 27800);
+        Evidence.foSet(fonts, 0, Evidence.fnfItalic(), -1200);
+        Evidence.foSet(fonts, 0, Evidence.fnfStemv(), 80);
+        Evidence.foSet(fonts, 0, Evidence.fnfStyle(), Model.syBold());
+        Evidence.foSet(fonts, 0, Evidence.fnfCapheight(), 716);
+        Evidence.foSet(fonts, 0, Evidence.fnfXheight(), 519);
+        Evidence.foNew(fonts, 7, Evidence.ftType0());
+        // marks: a paragraph, a span in it, an artifact, an optional-content span in the artifact
+        Evidence.mkOpen(marks, 1, Evidence.mkTag(), tP, 1, -1, 0, 0);
+        Evidence.mkSet(marks, 0, Evidence.mkfMcid(), 0);
+        Evidence.mkSet(marks, 0, Evidence.mkfLang(), tEn);
+        Evidence.mkSet(marks, 0, Evidence.mkfLanglen(), 2);
+        Evidence.mkSet(marks, 0, Evidence.mkfFlags(), Evidence.mcInline());
+        Evidence.mkOpen(marks, 1, Evidence.mkTag(), tSpan, 4, 0, 0, 0);
+        Evidence.mkSet(marks, 1, Evidence.mkfMcid(), 1);
+        Evidence.mkSet(marks, 1, Evidence.mkfAlt(), tAlt);
+        Evidence.mkSet(marks, 1, Evidence.mkfAltlen(), 3);
+        Evidence.mkSet(marks, 1, Evidence.mkfExp(), tExp);
+        Evidence.mkSet(marks, 1, Evidence.mkfExplen(), 3);
+        Evidence.mkClose(marks, 1, 2, 2);
+        Evidence.mkClose(marks, 0, 3, 3);
+        Evidence.mkOpen(marks, 1, Evidence.mkArtifact(), tArt, 8, -1, 3, 3);
+        Evidence.mkSet(marks, 2, Evidence.mkfArtype(), Evidence.arPagination());
+        Evidence.mkSet(marks, 2, Evidence.mkfArsub(), Evidence.asWatermark());
+        Evidence.mkSet(marks, 2, Evidence.mkfActual(), tDraft);
+        Evidence.mkSet(marks, 2, Evidence.mkfActuallen(), 5);
+        Evidence.mkSet(marks, 2, Evidence.mkfStm(), 12);
+        Evidence.mkSet(marks, 2, Evidence.mkfFlags(), Evidence.mcUnterminated());
+        Evidence.mkOpen(marks, 1, Evidence.mkOptionalContent(), tOc, 2, 2, 3, 3);
+        Evidence.mkSet(marks, 3, Evidence.mkfOcg(), 42);
+        Evidence.mkSet(marks, 3, Evidence.mkfOcgdef(), 0);
+        Evidence.mkClose(marks, 3, 4, 4);
+        Evidence.mkClose(marks, 2, 4, 4);
+        // glyphs: H, i, the ligature fi, and a hidden diagonal one inside the optional-content span
+        Evidence.glNew(glyphs, 1, 7200, 9000, 8000, 10200, 72, -1, 0, 0);
+        Evidence.glSet(glyphs, 0, Evidence.gfBx0(), 7200);
+        Evidence.glSet(glyphs, 0, Evidence.gfBy0(), 10000);
+        Evidence.glSet(glyphs, 0, Evidence.gfBx1(), 8000);
+        Evidence.glSet(glyphs, 0, Evidence.gfBy1(), 10000);
+        Evidence.glSet(glyphs, 0, Evidence.gfAsc(), 1000);
+        Evidence.glSet(glyphs, 0, Evidence.gfDesc(), -200);
         Evidence.glSet(glyphs, 0, Evidence.gfHow(), Evidence.ghTounicode());
-        Evidence.glSet(glyphs, 0, Evidence.gfColor(), 0);
-        Evidence.glSet(glyphs, 0, Evidence.gfBaseline(), 10000);
-        Evidence.glSet(glyphs, 0, Evidence.gfWord(), 0);
-        Evidence.glNew(glyphs, 1, 105, 1, 1200, 8000, 9000, 8400, 10200);
+        Evidence.glSet(glyphs, 0, Evidence.gfFont(), 0);
+        Evidence.glSet(glyphs, 0, Evidence.gfSize(), 1200);
+        Evidence.glSet(glyphs, 0, Evidence.gfFill(), 0);
+        Evidence.glSet(glyphs, 0, Evidence.gfCs(), Evidence.csRgb());
+        Evidence.glSet(glyphs, 0, Evidence.gfZ(), 0);
+        Evidence.glSet(glyphs, 0, Evidence.gfMark(), 1);
+        Evidence.glNew(glyphs, 1, 8000, 9000, 8400, 10200, 105, -1, 0, 0);
+        Evidence.glSet(glyphs, 1, Evidence.gfBx0(), 8000);
+        Evidence.glSet(glyphs, 1, Evidence.gfBy0(), 10000);
+        Evidence.glSet(glyphs, 1, Evidence.gfBx1(), 8400);
+        Evidence.glSet(glyphs, 1, Evidence.gfBy1(), 10000);
+        Evidence.glSet(glyphs, 1, Evidence.gfAsc(), 1000);
+        Evidence.glSet(glyphs, 1, Evidence.gfDesc(), -200);
         Evidence.glSet(glyphs, 1, Evidence.gfHow(), Evidence.ghTounicode());
-        Evidence.glSet(glyphs, 1, Evidence.gfColor(), 0);
-        Evidence.glSet(glyphs, 1, Evidence.gfBaseline(), 10000);
-        Evidence.glSet(glyphs, 1, Evidence.gfWord(), 0);
-        Evidence.glNew(glyphs, 1, 102, 1, 1200, 9000, 9000, 10000, 10200);
+        Evidence.glSet(glyphs, 1, Evidence.gfFont(), 0);
+        Evidence.glSet(glyphs, 1, Evidence.gfSize(), 1200);
+        Evidence.glSet(glyphs, 1, Evidence.gfFill(), 0);
+        Evidence.glSet(glyphs, 1, Evidence.gfZ(), 1);
+        Evidence.glSet(glyphs, 1, Evidence.gfMark(), 1);
+        Evidence.glNew(glyphs, 1, 9000, 9000, 10000, 10200, 102, tFi, 2, 1);
+        Evidence.glSet(glyphs, 2, Evidence.gfBx0(), 9000);
+        Evidence.glSet(glyphs, 2, Evidence.gfBy0(), 10000);
+        Evidence.glSet(glyphs, 2, Evidence.gfBx1(), 10000);
+        Evidence.glSet(glyphs, 2, Evidence.gfBy1(), 10000);
+        Evidence.glSet(glyphs, 2, Evidence.gfAsc(), 1000);
+        Evidence.glSet(glyphs, 2, Evidence.gfDesc(), -200);
         Evidence.glSet(glyphs, 2, Evidence.gfHow(), Evidence.ghGlyphname());
-        Evidence.glSet(glyphs, 2, Evidence.gfTstart(), 2);
-        Evidence.glSet(glyphs, 2, Evidence.gfTlen(), 2);
-        Evidence.glSet(glyphs, 2, Evidence.gfColor(), 2236962);
-        Evidence.glSet(glyphs, 2, Evidence.gfBaseline(), 10000);
-        Evidence.glSet(glyphs, 2, Evidence.gfWord(), 1);
-        Evidence.glNew(glyphs, 1, -1, 2, 4800, -2000, -3000, 5000, 500);
+        Evidence.glSet(glyphs, 2, Evidence.gfFont(), 0);
+        Evidence.glSet(glyphs, 2, Evidence.gfSize(), 1200);
+        Evidence.glSet(glyphs, 2, Evidence.gfFill(), 2236962);
+        Evidence.glSet(glyphs, 2, Evidence.gfZ(), 2);
+        Evidence.glSet(glyphs, 2, Evidence.gfMark(), 0);
+        Evidence.glNew(glyphs, 1, 1000, 2000, 3000, 4000, -1, -1, 0, 2);
+        Evidence.glSet(glyphs, 3, Evidence.gfBx0(), 1000);
+        Evidence.glSet(glyphs, 3, Evidence.gfBy0(), 4000);
+        Evidence.glSet(glyphs, 3, Evidence.gfBx1(), 3000);
+        Evidence.glSet(glyphs, 3, Evidence.gfBy1(), 2000);
+        Evidence.glSet(glyphs, 3, Evidence.gfAsc(), 400);
+        Evidence.glSet(glyphs, 3, Evidence.gfDesc(), -100);
         Evidence.glSet(glyphs, 3, Evidence.gfRot(), 4500);
-        Evidence.glSet(glyphs, 3, Evidence.gfColor(), 16711680);
-        Evidence.glSet(glyphs, 3, Evidence.gfAlpha(), 500);
+        Evidence.glSet(glyphs, 3, Evidence.gfFont(), 1);
+        Evidence.glSet(glyphs, 3, Evidence.gfSize(), 1400);
         Evidence.glSet(glyphs, 3, Evidence.gfMode(), 3);
+        Evidence.glSet(glyphs, 3, Evidence.gfFill(), 16711680);
+        Evidence.glSet(glyphs, 3, Evidence.gfStroke(), 255);
+        Evidence.glSet(glyphs, 3, Evidence.gfFalpha(), 500);
+        Evidence.glSet(glyphs, 3, Evidence.gfSalpha(), 250);
+        Evidence.glSet(glyphs, 3, Evidence.gfZ(), 3);
+        Evidence.glSet(glyphs, 3, Evidence.gfClip(), 1);
+        Evidence.glSet(glyphs, 3, Evidence.gfMark(), 3);
+        Evidence.glSet(glyphs, 3, Evidence.gfOcg(), 3);
         Evidence.glSet(glyphs, 3, Evidence.gfVis(), Evidence.vzClipped());
-        Evidence.glSet(glyphs, 3, Evidence.gfArtifact(), Evidence.arWatermark());
-        Evidence.glSet(glyphs, 3, Evidence.gfMcid(), 7);
-        Evidence.wdNew(words, 1, 7200, 9000, 8400, 10200, 0, 2);
-        Evidence.wdSet(words, 0, Evidence.wfTstart(), 0);
-        Evidence.wdSet(words, 0, Evidence.wfTlen(), 2);
-        Evidence.wdSet(words, 0, Evidence.wfLine(), 0);
-        Evidence.wdSet(words, 0, Evidence.wfGap(), 600);
-        Evidence.wdSet(words, 0, Evidence.wfFont(), 1);
+        Evidence.glSet(glyphs, 3, Evidence.gfVby(), 4);
+        Evidence.glSet(glyphs, 3, Evidence.gfVchk(), Evidence.vcClip());
+        // words: Hi, the ligature, and the hidden one; two lines
+        Evidence.wdNew(words, 1, 7200, 9000, 8400, 10200, 7200, 10000, 8400, 10000, 0, 0, tHi, 2, 0, -1, -1);
+        Evidence.wdSet(words, 0, Evidence.wfStyle(), Model.syBold());
+        Evidence.wdSet(words, 0, Evidence.wfGfirst(), 0);
+        Evidence.wdSet(words, 0, Evidence.wfGcount(), 2);
+        Evidence.wdSet(words, 0, Evidence.wfFont(), 0);
         Evidence.wdSet(words, 0, Evidence.wfSize(), 1200);
-        Evidence.wdNew(words, 1, 9000, 9000, 10000, 10200, 2, 1);
-        Evidence.wdSet(words, 1, Evidence.wfTstart(), 2);
-        Evidence.wdSet(words, 1, Evidence.wfTlen(), 2);
-        Evidence.wdSet(words, 1, Evidence.wfLine(), 0);
-        Evidence.wdSet(words, 1, Evidence.wfConf(), 990);
-        Evidence.wdSet(words, 1, Evidence.wfFont(), 1);
+        Evidence.wdSet(words, 0, Evidence.wfGap(), 600);
+        Evidence.wdSet(words, 0, Evidence.wfWbreak(), Evidence.wbSpace());
+        Evidence.wdNew(words, 1, 9000, 9000, 10000, 10200, 9000, 10000, 10000, 10000, 0, 0, tFi, 2, 0, -1, -1);
+        Evidence.wdSet(words, 1, Evidence.wfGfirst(), 2);
+        Evidence.wdSet(words, 1, Evidence.wfGcount(), 1);
+        Evidence.wdSet(words, 1, Evidence.wfFont(), 0);
         Evidence.wdSet(words, 1, Evidence.wfSize(), 1200);
-        Evidence.lnNew(lines, 1, 7200, 9000, 10000, 10200, 0, 2, 10000);
+        Evidence.wdSet(words, 1, Evidence.wfWbreak(), Evidence.wbLineEnd());
+        Evidence.wdNew(words, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, -1, 0, 1, -1, -1);
+        Evidence.wdSet(words, 2, Evidence.wfGfirst(), 3);
+        Evidence.wdSet(words, 2, Evidence.wfGcount(), 1);
+        Evidence.wdSet(words, 2, Evidence.wfFont(), 1);
+        Evidence.wdSet(words, 2, Evidence.wfSize(), 1400);
+        Evidence.wdSet(words, 2, Evidence.wfSrc(), Model.srHiddenText());
+        Evidence.lnNew(lines, 1, 7200, 9000, 10000, 10200, 7200, 10000, 10000, 10000, 0, 0, 0, 2);
+        Evidence.lnSet(lines, 0, Evidence.lfOrder(), 0);
+        Evidence.lnNew(lines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1);
+        Evidence.lnSet(lines, 1, Evidence.lfOrder(), 3);
+        // paths: a rule and a clip rectangle with its outline in pts; an image
         Evidence.paNew(paths, 1, Evidence.paLine(), 7200, 11000, 54000, 11050);
         Evidence.paSet(paths, 0, Evidence.pfStroke(), 3355443);
         Evidence.paSet(paths, 0, Evidence.pfWidth(), 50);
+        Evidence.paSet(paths, 0, Evidence.pfZ(), 4);
+        Evidence.paSet(paths, 0, Evidence.pfDash(), 300);
         Evidence.paNew(paths, 1, Evidence.paRect(), 7200, 12000, 20000, 14000);
         Evidence.paSet(paths, 1, Evidence.pfFill(), 16772778);
-        Evidence.paSet(paths, 1, Evidence.pfAlpha(), 500);
-        Evidence.paSet(paths, 1, Evidence.pfFlags(), 5);
-        Evidence.paSet(paths, 1, Evidence.pfMcid(), 0);
+        Evidence.paSet(paths, 1, Evidence.pfFalpha(), 500);
+        Evidence.paSet(paths, 1, Evidence.pfFlags(), Evidence.pgClosed() + Evidence.pgClip());
+        Evidence.paSet(paths, 1, Evidence.pfPfirst(), 0);
+        Evidence.paSet(paths, 1, Evidence.pfPcount(), 3);
         Evidence.imNew(images, 1, 7200, 20000, 30000, 40000, 12, 640, 480);
         Evidence.imSet(images, 0, Evidence.mfFlags(), Evidence.mgSmask());
-        Evidence.imSet(images, 0, Evidence.mfArtifact(), Evidence.arBackground());
-        Evidence.imSet(images, 0, Evidence.mfMcid(), 3);
-        Evidence.coNew(components, 1, Evidence.ckRuleH(), 7200, 11000, 54000, 11050);
+        Evidence.imSet(images, 0, Evidence.mfZ(), 5);
+        Evidence.imSet(images, 0, Evidence.mfVchk(), Evidence.vcClip());
+        // OCR: one run over two blocks; a second, empty run
+        Evidence.orNew(oruns, 1, 0);
+        Evidence.orSet(oruns, 0, Evidence.orfBview(), 1);
+        Evidence.orSet(oruns, 0, Evidence.orfRequest(), 2);
+        Evidence.orSet(oruns, 0, Evidence.orfRound(), 1);
+        Evidence.orSet(oruns, 0, Evidence.orfPass(), Evidence.opFirst());
+        Evidence.orSet(oruns, 0, Evidence.orfPsm(), 3);
+        Evidence.orSet(oruns, 0, Evidence.orfLang(), tEng);
+        Evidence.orSet(oruns, 0, Evidence.orfLanglen(), 3);
+        Evidence.orSet(oruns, 0, Evidence.orfDeskew(), 35);
+        Evidence.orSet(oruns, 0, Evidence.orfOsd(), 0);
+        Evidence.orSet(oruns, 0, Evidence.orfScript(), 1281455214);
+        Evidence.orSet(oruns, 0, Evidence.orfSconf(), 950);
+        Evidence.orSet(oruns, 0, Evidence.orfOconf(), 880);
+        Evidence.orSet(oruns, 0, Evidence.orfFlags(), 3);
+        Evidence.orSet(oruns, 0, Evidence.orfBfirst(), 0);
+        Evidence.orSet(oruns, 0, Evidence.orfBcount(), 4);
+        Evidence.orSet(oruns, 0, Evidence.orfLfirst(), 0);
+        Evidence.orSet(oruns, 0, Evidence.orfLcount(), 3);
+        Evidence.orSet(oruns, 0, Evidence.orfWfirst(), 0);
+        Evidence.orSet(oruns, 0, Evidence.orfWcount(), 3);
+        Evidence.orNew(oruns, 1, 0);
+        Evidence.orSet(oruns, 1, Evidence.orfPass(), Evidence.opRegion());
+        Evidence.orSet(oruns, 1, Evidence.orfRound(), 2);
+        Evidence.obNew(oblocks, 1, 7200, 9000, 12000, 15000, Evidence.obBlock(), -1, 0);
+        Evidence.obSet(oblocks, 0, Evidence.obfFirst(), 1);
+        Evidence.obSet(oblocks, 0, Evidence.obfCount(), 1);
+        Evidence.obNew(oblocks, 1, 7200, 9000, 12000, 12000, Evidence.obParagraph(), 0, 0);
+        Evidence.obSet(oblocks, 1, Evidence.obfFirst(), 0);
+        Evidence.obSet(oblocks, 1, Evidence.obfCount(), 2);
+        Evidence.obSet(oblocks, 1, Evidence.obfConf(), 910);
+        Evidence.obNew(oblocks, 1, 7200, 13000, 12000, 15000, Evidence.obBlock(), -1, 0);
+        Evidence.obSet(oblocks, 2, Evidence.obfFirst(), 3);
+        Evidence.obSet(oblocks, 2, Evidence.obfCount(), 1);
+        Evidence.obNew(oblocks, 1, 7200, 13000, 12000, 15000, Evidence.obParagraph(), 2, 0);
+        Evidence.obSet(oblocks, 3, Evidence.obfFirst(), 2);
+        Evidence.obSet(oblocks, 3, Evidence.obfCount(), 1);
+        Evidence.olNew(olines, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, 0, 1);
+        Evidence.olSet(olines, 0, Evidence.olfPar(), 1);
+        Evidence.olSet(olines, 0, Evidence.olfRun(), 0);
+        Evidence.olSet(olines, 0, Evidence.olfXheight(), 500);
+        Evidence.olSet(olines, 0, Evidence.olfAsc(), 1000);
+        Evidence.olSet(olines, 0, Evidence.olfDesc(), -200);
+        Evidence.olSet(olines, 0, Evidence.olfPx(), 150);
+        Evidence.olSet(olines, 0, Evidence.olfPy(), 187);
+        Evidence.olSet(olines, 0, Evidence.olfPw(), 50);
+        Evidence.olSet(olines, 0, Evidence.olfPh(), 25);
+        Evidence.olNew(olines, 1, 7200, 11000, 12000, 12000, 7200, 12000, 12000, 12000, 0, 0, 1, 1);
+        Evidence.olSet(olines, 1, Evidence.olfPar(), 1);
+        Evidence.olSet(olines, 1, Evidence.olfRun(), 0);
+        Evidence.olNew(olines, 1, 7200, 13000, 12000, 15000, 7200, 15000, 12000, 15000, 0, 0, 2, 1);
+        Evidence.olSet(olines, 2, Evidence.olfPar(), 3);
+        Evidence.olSet(olines, 2, Evidence.olfRun(), 0);
+        Evidence.owNew(owords, 1, 7200, 9000, 9600, 10200, 7200, 10000, 9600, 10000, 0, 0, tHi, 2, 0, 870, -1);
+        Evidence.owSet(owords, 0, Evidence.owfRun(), 0);
+        Evidence.owSet(owords, 0, Evidence.owfSfirst(), 0);
+        Evidence.owSet(owords, 0, Evidence.owfScount(), 2);
+        Evidence.owSet(owords, 0, Evidence.owfLang(), 6647399);
+        Evidence.owSet(owords, 0, Evidence.owfStyle(), Model.syItalic());
+        Evidence.owSet(owords, 0, Evidence.owfFlags(), Evidence.oeDictionary());
+        Evidence.owSet(owords, 0, Evidence.owfPx(), 150);
+        Evidence.owSet(owords, 0, Evidence.owfPy(), 187);
+        Evidence.owSet(owords, 0, Evidence.owfPw(), 50);
+        Evidence.owSet(owords, 0, Evidence.owfPh(), 25);
+        Evidence.owNew(owords, 1, 7200, 11000, 9600, 12000, 7200, 12000, 9600, 12000, 0, 0, tFi, 2, 1, 950, -1);
+        Evidence.owSet(owords, 1, Evidence.owfRun(), 0);
+        Evidence.owSet(owords, 1, Evidence.owfSfirst(), 2);
+        Evidence.owSet(owords, 1, Evidence.owfScount(), 1);
+        Evidence.owNew(owords, 1, 7200, 13000, 9600, 15000, 7200, 15000, 9600, 15000, 0, 0, tOk, 2, 2, 0, -1);
+        Evidence.owSet(owords, 2, Evidence.owfRun(), 0);
+        Evidence.owSet(owords, 2, Evidence.owfSfirst(), 3);
+        Evidence.owSet(owords, 2, Evidence.owfScount(), 1);
+        Evidence.osNew(osyms, 1, 7200, 9000, 8400, 10200, 72, -1, 0, 0);
+        Evidence.osSet(osyms, 0, Evidence.osfConf(), 910);
+        Evidence.osSet(osyms, 0, Evidence.osfAfirst(), 0);
+        Evidence.osSet(osyms, 0, Evidence.osfAcount(), 2);
+        Evidence.osSet(osyms, 0, Evidence.osfPx(), 150);
+        Evidence.osSet(osyms, 0, Evidence.osfPy(), 187);
+        Evidence.osSet(osyms, 0, Evidence.osfPw(), 25);
+        Evidence.osSet(osyms, 0, Evidence.osfPh(), 25);
+        Evidence.osNew(osyms, 1, 8400, 9000, 9600, 10200, 105, -1, 0, 0);
+        Evidence.osSet(osyms, 1, Evidence.osfConf(), 880);
+        Evidence.osSet(osyms, 1, Evidence.osfAfirst(), 2);
+        Evidence.osSet(osyms, 1, Evidence.osfAcount(), 1);
+        Evidence.osSet(osyms, 1, Evidence.osfFlags(), Evidence.osSuperscript());
+        Evidence.osNew(osyms, 1, 7200, 11000, 9600, 12000, 102, tFi, 2, 1);
+        Evidence.osSet(osyms, 2, Evidence.osfConf(), 700);
+        Evidence.osNew(osyms, 1, 7200, 13000, 9600, 15000, 111, -1, 0, 2);
+        Evidence.osSet(osyms, 3, Evidence.osfConf(), 990);
+        Evidence.oaAdd(oalts, 0, tBh, 1, 900);
+        Evidence.oaAdd(oalts, 0, tRi, 2, 250);
+        Evidence.oaAdd(oalts, 1, tBl, 1, 40);
+        // the tracer: an ink layer, a component, a rule, a primitive and a text line
+        Evidence.ikNew(inks, 1, 0);
+        Evidence.ikSet(inks, 0, Evidence.ikfColor(), 8421504);
+        Evidence.ikSet(inks, 0, Evidence.ikfLight(), 500);
+        Evidence.ikSet(inks, 0, Evidence.ikfChroma(), 20);
+        Evidence.ikSet(inks, 0, Evidence.ikfCount(), 1200);
+        Evidence.ikSet(inks, 0, Evidence.ikfRole(), Evidence.irBody());
+        Evidence.ikSet(inks, 0, Evidence.ikfMask(), 1);
+        Evidence.ikSet(inks, 0, Evidence.ikfSpread(), 5);
+        Evidence.coNew(components, 1, 7200, 11000, 54000, 11050, Evidence.ckRuleH());
+        Evidence.coSet(components, 0, Evidence.cfView(), 0);
         Evidence.coSet(components, 0, Evidence.cfPxx(), 100);
         Evidence.coSet(components, 0, Evidence.cfPxw(), 300);
+        Evidence.coSet(components, 0, Evidence.cfPxh(), 3);
         Evidence.coSet(components, 0, Evidence.cfArea(), 1200);
         Evidence.coSet(components, 0, Evidence.cfFill(), 950);
         Evidence.coSet(components, 0, Evidence.cfStroke(), 50);
         Evidence.coSet(components, 0, Evidence.cfColor(), 255);
-        Evidence.coSet(components, 0, Evidence.cfLayer(), 2);
+        Evidence.coSet(components, 0, Evidence.cfInk(), 0);
         Evidence.coSet(components, 0, Evidence.cfConf(), 880);
         Evidence.coSet(components, 0, Evidence.cfFlags(), Model.flLowConf());
-        Evidence.owNew(ocrwords, 1, 7190, 9010, 8410, 10190, 910);
-        Evidence.owSet(ocrwords, 0, Evidence.ofTstart(), 4);
-        Evidence.owSet(ocrwords, 0, Evidence.ofTlen(), 2);
-        Evidence.owSet(ocrwords, 0, Evidence.ofLine(), 0);
-        Evidence.owSet(ocrwords, 0, Evidence.ofBlock(), 0);
-        Evidence.owSet(ocrwords, 0, Evidence.ofBaseline(), 10000);
-        Evidence.owSet(ocrwords, 0, Evidence.ofFlags(), Model.syBold());
-        Evidence.owSet(ocrwords, 0, Evidence.ofPass(), 1);
-        Evidence.owSet(ocrwords, 0, Evidence.ofLang(), 3);
-        Evidence.altAdd(ocrwords, alts, 0, 0, 72, 900);
-        Evidence.altAdd(ocrwords, alts, 0, 1, 108, 250);
-        Evidence.spNew(spans, 1, 6, 1, -1, 0);
-        Evidence.spSet(spans, 0, Evidence.sfMcid(), 0);
-        Evidence.spSet(spans, 0, Evidence.sfLang(), 7);
-        Evidence.spSet(spans, 0, Evidence.sfLanglen(), 2);
-        Evidence.spSet(spans, 0, Evidence.sfGcount(), 2);
-        Evidence.spSet(spans, 0, Evidence.sfFlags(), Evidence.mcInline());
-        Evidence.spNew(spans, 1, 9, 8, -1, 3);
-        Evidence.spSet(spans, 1, Evidence.sfArtifact(), Evidence.arWatermark());
-        Evidence.spSet(spans, 1, Evidence.sfType(), 17);
-        Evidence.spSet(spans, 1, Evidence.sfTypelen(), 10);
-        Evidence.spSet(spans, 1, Evidence.sfSubtype(), 27);
-        Evidence.spSet(spans, 1, Evidence.sfSubtypelen(), 9);
-        Evidence.spSet(spans, 1, Evidence.sfActual(), 36);
-        Evidence.spSet(spans, 1, Evidence.sfActuallen(), 5);
-        Evidence.spSet(spans, 1, Evidence.sfGcount(), 1);
-        Evidence.spSet(spans, 1, Evidence.sfStm(), 12);
-        Evidence.spSet(spans, 1, Evidence.sfFlags(), Evidence.mcUnterminated());
+        Evidence.coSet(components, 0, Evidence.cfPfirst(), 0);
+        Evidence.coSet(components, 0, Evidence.cfPcount(), 3);
+        Evidence.coSet(components, 0, Evidence.cfGray(), 90);
+        Evidence.rlNew(rules, 1, 7200, 11000, 54000, 11050, 0);
+        Evidence.rlSet(rules, 0, Evidence.rlfLx0(), 7200);
+        Evidence.rlSet(rules, 0, Evidence.rlfLy0(), 11025);
+        Evidence.rlSet(rules, 0, Evidence.rlfLx1(), 54000);
+        Evidence.rlSet(rules, 0, Evidence.rlfLy1(), 11025);
+        Evidence.rlSet(rules, 0, Evidence.rlfThick(), 50);
+        Evidence.rlSet(rules, 0, Evidence.rlfColor(), 3355443);
+        Evidence.rlSet(rules, 0, Evidence.rlfInk(), 0);
+        Evidence.rlSet(rules, 0, Evidence.rlfStyle(), Evidence.rsDashed());
+        Evidence.rlSet(rules, 0, Evidence.rlfConf(), 880);
+        Evidence.rlSet(rules, 0, Evidence.rlfRfirst(), 0);
+        Evidence.rlSet(rules, 0, Evidence.rlfRcount(), 1);
+        Evidence.pmNew(prims, 1, 17000, 12000, 23000, 18000, Evidence.pmCircle());
+        Evidence.pmSet(prims, 0, Evidence.pmfView(), 0);
+        Evidence.pmSet(prims, 0, Evidence.pmfCx(), 20000);
+        Evidence.pmSet(prims, 0, Evidence.pmfCy(), 15000);
+        Evidence.pmSet(prims, 0, Evidence.pmfRx(), 3000);
+        Evidence.pmSet(prims, 0, Evidence.pmfRy(), 3000);
+        Evidence.pmSet(prims, 0, Evidence.pmfStroke(), 40);
+        Evidence.pmSet(prims, 0, Evidence.pmfColor(), 65280);
+        Evidence.pmSet(prims, 0, Evidence.pmfInk(), 0);
+        Evidence.pmSet(prims, 0, Evidence.pmfConf(), 700);
+        Evidence.pmSet(prims, 0, Evidence.pmfPfirst(), 0);
+        Evidence.pmSet(prims, 0, Evidence.pmfPcount(), 3);
+        Evidence.pmSet(prims, 0, Evidence.pmfRfirst(), 1);
+        Evidence.pmSet(prims, 0, Evidence.pmfRcount(), 1);
+        Evidence.tlNew(tlines, 1, 1000, 2000, 3000, 4000, 1000, 4000, 3000, 2000, 4500, 0, 2, 1);
+        Evidence.tlSet(tlines, 0, Evidence.tlfInk(), 0);
+        Evidence.tlSet(tlines, 0, Evidence.tlfHeight(), 1200);
+        Evidence.tlSet(tlines, 0, Evidence.tlfGap(), 300);
+        Evidence.tlSet(tlines, 0, Evidence.tlfConf(), 600);
+        // features: a text-layer word and an OCR word, one row each
+        Evidence.feNew(feats, Evidence.eaWords(), 0);
+        Evidence.feSet(feats, 0, Evidence.xtTrust(), 1000);
+        Evidence.wdSet(words, 0, Evidence.hdFeat(), 0);
+        Evidence.evFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, 0, 0, 100);
         return 0;
     }
     public static int etEnd(byte[] b) {
@@ -148,136 +375,938 @@ public final class Evidencetest {
         }
         return n;
     }
-    public static void testBuildersSetTheLayoutAndItsDefaults() {
+    public static void testEveryArenaHasTheStrideTheSpecGives() {
+        emon.Testport.assertEq(24, 24, "24 arenas");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[0], 12, "epages");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[1], 24, "views");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[2], 3, "pts");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[3], 2, "refs");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[4], 1, "etext");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[5], 32, "feats");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[6], 32, "glyphs");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[7], 24, "words");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[8], 16, "lines");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[9], 24, "marks");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[10], 16, "fonts");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[11], 24, "paths");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[12], 20, "images");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[13], 28, "oruns");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[14], 16, "oblocks");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[15], 24, "olines");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[16], 28, "owords");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[17], 20, "osyms");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[18], 4, "oalts");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[19], 12, "inks");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[20], 24, "components");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[21], 20, "rules");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[22], 24, "prims");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[23], 20, "tlines");
+    }
+    public static void testTheThreeHeadsAreOneLayout() {
+        emon.Testport.assertEq(Evidence.hdPage(), 0, "word head: page");
+        emon.Testport.assertEq(Evidence.hdX0(), 1, "x0");
+        emon.Testport.assertEq(Evidence.hdBy1(), 8, "baseline ends at 8");
+        emon.Testport.assertEq(Evidence.hdRot(), 9, "rot");
+        emon.Testport.assertEq(Evidence.hdDir(), 10, "dir");
+        emon.Testport.assertEq(Evidence.hdTstart(), 11, "text start");
+        emon.Testport.assertEq(Evidence.hdLine(), 13, "line");
+        emon.Testport.assertEq(Evidence.hdConf(), 14, "conf");
+        emon.Testport.assertEq(Evidence.hdFeat(), 15, "a word head is 16 cells");
+        emon.Testport.assertEq(Evidence.lhPage(), Evidence.hdPage(), "line head: page");
+        emon.Testport.assertEq(Evidence.lhX0(), Evidence.hdX0(), "x0");
+        emon.Testport.assertEq(Evidence.lhY1(), Evidence.hdY1(), "y1");
+        emon.Testport.assertEq(Evidence.lhBx0(), Evidence.hdBx0(), "baseline");
+        emon.Testport.assertEq(Evidence.lhBy1(), Evidence.hdBy1(), "baseline end");
+        emon.Testport.assertEq(Evidence.lhRot(), Evidence.hdRot(), "rot");
+        emon.Testport.assertEq(Evidence.lhDir(), Evidence.hdDir(), "dir");
+        emon.Testport.assertEq(Evidence.lhFirst(), 11, "first");
+        emon.Testport.assertEq(Evidence.lhCount(), 12, "a line head is 13 cells");
+        emon.Testport.assertEq(Evidence.chPage(), 0, "char head: page");
+        emon.Testport.assertEq(Evidence.chY1(), 4, "box");
+        emon.Testport.assertEq(Evidence.chCp(), 5, "cp");
+        emon.Testport.assertEq(Evidence.chTstart(), 6, "text run");
+        emon.Testport.assertEq(Evidence.chWord(), 8, "a char head is 9 cells");
+    }
+    public static int etHeadPage(emon.Port.Cells c, int stride, int row) {
+        // ONE reader over (Cells, stride): a word-like or line-like row's page.
+        return emon.Port.cellsAt(c, (row * stride) + Evidence.hdPage());
+    }
+    public static int etHeadBox(emon.Port.Cells c, int stride, int row, int k) {
+        return emon.Port.cellsAt(c, (row * stride) + (Evidence.hdX0() + k));
+    }
+    public static int etHeadBase(emon.Port.Cells c, int stride, int row, int k) {
+        return emon.Port.cellsAt(c, (row * stride) + (Evidence.hdBx0() + k));
+    }
+    public static void testOneReaderReadsTheHeadOfEveryWordLikeAndLineLikeArena() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
         emon.Port.Cells glyphs = emon.Port.newCells();
         emon.Port.Cells words = emon.Port.newCells();
         emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
         emon.Port.Cells paths = emon.Port.newCells();
         emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
         emon.Port.Cells components = emon.Port.newCells();
-        emon.Port.Cells ocrwords = emon.Port.newCells();
-        emon.Port.Cells alts = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        // words (24), owords (28), lines (16), olines (24), tlines (20): row 0 of each shares the head layout
+        emon.Testport.assertEq(etHeadPage(words, 24, 0), 1, "words page");
+        emon.Testport.assertEq(etHeadPage(owords, 28, 0), 1, "owords page");
+        emon.Testport.assertEq(etHeadPage(lines, 16, 0), 1, "lines page");
+        emon.Testport.assertEq(etHeadPage(olines, 24, 0), 1, "olines page");
+        emon.Testport.assertEq(etHeadPage(tlines, 20, 0), 1, "tlines page");
+        emon.Testport.assertEq(etHeadBox(words, 24, 0, 0), 7200, "words x0");
+        emon.Testport.assertEq(etHeadBox(owords, 28, 0, 0), 7200, "owords x0");
+        emon.Testport.assertEq(etHeadBox(lines, 16, 0, 0), 7200, "lines x0");
+        emon.Testport.assertEq(etHeadBox(olines, 24, 0, 0), 7200, "olines x0");
+        emon.Testport.assertEq(etHeadBox(tlines, 20, 0, 0), 1000, "tlines x0");
+        emon.Testport.assertEq(etHeadBox(words, 24, 0, 3), 10200, "words y1");
+        emon.Testport.assertEq(etHeadBox(owords, 28, 0, 3), 10200, "owords y1");
+        emon.Testport.assertEq(etHeadBox(lines, 16, 0, 3), 10200, "lines y1");
+        emon.Testport.assertEq(etHeadBox(olines, 24, 0, 3), 10200, "olines y1");
+        emon.Testport.assertEq(etHeadBox(tlines, 20, 0, 3), 4000, "tlines y1");
+        emon.Testport.assertEq(etHeadBase(words, 24, 0, 2), 8400, "words baseline x1");
+        emon.Testport.assertEq(etHeadBase(owords, 28, 0, 2), 9600, "owords baseline x1");
+        emon.Testport.assertEq(etHeadBase(lines, 16, 0, 2), 10000, "lines baseline x1");
+        emon.Testport.assertEq(etHeadBase(olines, 24, 0, 2), 9600, "olines baseline x1");
+        emon.Testport.assertEq(etHeadBase(tlines, 20, 0, 2), 3000, "tlines baseline x1");
+        emon.Testport.assertEq(etHeadBase(tlines, 20, 0, 3), 2000, "tlines baseline y1 (a diagonal)");
+        emon.Testport.assertEq(Evidence.evAngle(etHeadBase(tlines, 20, 0, 2) - etHeadBase(tlines, 20, 0, 0), etHeadBase(tlines, 20, 0, 3) - etHeadBase(tlines, 20, 0, 1)), 4500, "its angle is 45 degrees");
+    }
+    public static void testBuildersSetTheLayoutAndItsDefaults() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
         emon.Port.Cells etext = emon.Port.newCells();
-        emon.Port.Cells spans = emon.Port.newCells();
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        Evidence.evInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         emon.Testport.assertEq(Evidence.glCount(glyphs), 0, "no glyphs");
-        emon.Testport.assertEq(Evidence.glNew(glyphs, 3, 65, 9, 1000, 100, 200, 300, 400), 0, "first glyph");
-        emon.Testport.assertEq(emon.Port.cellsLen(glyphs), 20, "twenty cells");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfPage()), 3, "page");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfCp()), 65, "cp");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfTstart()), -1, "no text run");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfTlen()), 0, "no text length");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfHow()), 5, "how defaults to unknown, code 5");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfFont()), 9, "font");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfSize()), 1000, "size");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfX0()), 100, "x0");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfY0()), 200, "y0");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfX1()), 300, "x1");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfY1()), 400, "y1");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfBaseline()), 400, "baseline defaults to the box's bottom");
+        emon.Testport.assertEq(Evidence.glNew(glyphs, 3, 100, 200, 300, 400, 65, -1, 0, -1), 0, "first glyph");
+        emon.Testport.assertEq(emon.Port.cellsLen(glyphs), 32, "32 cells");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.chPage()), 3, "page");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.chCp()), 65, "cp");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.chTstart()), -1, "no text run");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.chWord()), -1, "in no word");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfBx0()), 100, "baseline starts at the box's left");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfBy0()), 400, "on the box's bottom");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfBx1()), 300, "and ends at its right");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfBy1()), 400, "on the bottom");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfAsc()), 0, "asc 0");
         emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfRot()), 0, "no rotation");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfColor()), -1, "no colour");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfAlpha()), 1000, "opaque");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfHow()), 5, "how defaults to unknown, code 5");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfFont()), -1, "no font");
         emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfMode()), 0, "render mode 0");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfVis()), 0, "visible");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfArtifact()), 0, "not an artifact");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfMcid()), -1, "no mcid");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfWord()), -1, "in no word");
-        emon.Testport.assertEq(Evidence.spNew(spans, 3, 10, 1, -1, 4), 0, "first span");
-        emon.Testport.assertEq(emon.Port.cellsLen(spans), 22, "twenty-two cells");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfMcid()), -1, "no MCID");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfArtifact()), 0, "not an artifact");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfType()), -1, "no type");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfActual()), -1, "no ActualText");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfLang()), -1, "no language");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfGfirst()), 4, "opened at glyph 4");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfParent()), -1, "no parent");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfStm()), 0, "the page's own stream");
-        emon.Testport.assertEq(Evidence.wdNew(words, 3, 1, 2, 3, 4, 0, 1), 0, "first word");
-        emon.Testport.assertEq(emon.Port.cellsLen(words), 16, "sixteen cells");
-        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfTstart()), -1, "no text");
-        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfLine()), -1, "no line");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfFill()), -1, "no fill colour");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfStroke()), -1, "no stroke colour");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfFalpha()), 1000, "opaque fill");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfSalpha()), 1000, "opaque stroke");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfCs()), -1, "colour space unknown");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfClip()), -1, "no clip");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfMark()), -1, "no mark");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfOcg()), -1, "no optional content");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfVis()), 0, "unchecked counts as visible");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfVby()), -1, "no occluder");
+        emon.Testport.assertEq(Evidence.glGet(glyphs, 0, Evidence.gfVchk()), 0, "no check has run");
+        emon.Testport.assertEq(Evidence.wdNew(words, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, -1, -1), 0, "first word");
+        emon.Testport.assertEq(emon.Port.cellsLen(words), 24, "24 cells");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdTstart()), -1, "no text");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdLine()), -1, "no line");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdConf()), -1, "no confidence");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.hdFeat()), -1, "no features yet");
         emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfSrc()), 1, "source text");
-        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfConf()), -1, "no confidence");
         emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfGap()), -1, "no gap");
         emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfFont()), -1, "no font");
-        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfGcount()), 1, "glyph count");
-        emon.Testport.assertEq(Evidence.lnNew(lines, 3, 1, 2, 3, 4, 0, 1, 400), 0, "first line");
-        emon.Testport.assertEq(emon.Port.cellsLen(lines), 12, "twelve cells");
+        emon.Testport.assertEq(Evidence.wdGet(words, 0, Evidence.wfWbreak()), 0, "no word break said");
+        emon.Testport.assertEq(Evidence.lnNew(lines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first line");
+        emon.Testport.assertEq(emon.Port.cellsLen(lines), 16, "16 cells");
         emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lfSrc()), 1, "source text");
-        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lfBaseline()), 400, "baseline");
+        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lfOrder()), -1, "no order");
+        emon.Testport.assertEq(Evidence.mkNew(marks, 3, Evidence.mkTag(), -1, 0, -1, 4), 0, "first mark");
+        emon.Testport.assertEq(emon.Port.cellsLen(marks), 24, "24 cells");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfMcid()), -1, "no MCID");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfArtype()), 0, "no /Type");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfActual()), -1, "no ActualText");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfLang()), -1, "no language");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfOcg()), -1, "no optional content");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfOcgdef()), -1, "its default state unknown");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfGfirst()), 4, "opened at glyph 4");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfZfirst()), -1, "no paint numbers yet");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfStm()), 0, "the page's own stream");
+        emon.Testport.assertEq(Evidence.foNew(fonts, 7, 3), 0, "first font");
+        emon.Testport.assertEq(emon.Port.cellsLen(fonts), 16, "16 cells");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfTstart()), -1, "no name");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfEnc()), -1, "no base encoding");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfSpace()), -1, "no space width");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfStemv()), -1, "no stem");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfCapheight()), -1, "no cap height");
+        emon.Testport.assertEq(Evidence.foGet(fonts, 0, Evidence.fnfXheight()), -1, "no x-height");
         emon.Testport.assertEq(Evidence.paNew(paths, 3, Evidence.paRect(), 1, 2, 3, 4), 0, "first path");
-        emon.Testport.assertEq(emon.Port.cellsLen(paths), 16, "sixteen cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(paths), 24, "24 cells");
         emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfFill()), -1, "not filled");
         emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfStroke()), -1, "not stroked");
-        emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfAlpha()), 1000, "opaque");
-        emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfMcid()), -1, "no mcid");
+        emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfFalpha()), 1000, "opaque");
+        emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfZ()), -1, "no paint number");
+        emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfClip()), -1, "no clip");
+        emon.Testport.assertEq(Evidence.paGet(paths, 0, Evidence.pfPfirst()), -1, "no geometry");
         emon.Testport.assertEq(Evidence.imNew(images, 3, 1, 2, 3, 4, 17, 10, 20), 0, "first image");
-        emon.Testport.assertEq(emon.Port.cellsLen(images), 12, "twelve cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(images), 20, "20 cells");
         emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfObj()), 17, "object number");
-        emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfPxw()), 10, "pixel width");
-        emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfPxh()), 20, "pixel height");
-        emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfMcid()), -1, "no mcid");
-        emon.Testport.assertEq(Evidence.coNew(components, 3, Evidence.ckRuleH(), 1, 2, 3, 4), 0, "first component");
-        emon.Testport.assertEq(emon.Port.cellsLen(components), 20, "twenty cells");
+        emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfAlpha()), 1000, "opaque");
+        emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfZ()), -1, "no paint number");
+        emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfVby()), -1, "no occluder");
+        emon.Testport.assertEq(Evidence.orNew(oruns, 3, 0), 0, "first run");
+        emon.Testport.assertEq(emon.Port.cellsLen(oruns), 28, "28 cells");
+        emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfBview()), -1, "no binarised view");
+        emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfRequest()), -1, "no request");
+        emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfLang()), -1, "no languages");
+        emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfOsd()), -1, "no OSD");
+        emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfSconf()), -1, "no script confidence");
+        emon.Testport.assertEq(Evidence.obNew(oblocks, 3, 1, 2, 3, 4, Evidence.obBlock(), -1, 0), 0, "first block");
+        emon.Testport.assertEq(emon.Port.cellsLen(oblocks), 16, "16 cells");
+        emon.Testport.assertEq(Evidence.obGet(oblocks, 0, Evidence.obfConf()), -1, "no confidence");
+        emon.Testport.assertEq(Evidence.olNew(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line");
+        emon.Testport.assertEq(emon.Port.cellsLen(olines), 24, "24 cells");
+        emon.Testport.assertEq(Evidence.olGet(olines, 0, Evidence.olfPar()), -1, "in no paragraph");
+        emon.Testport.assertEq(Evidence.olGet(olines, 0, Evidence.olfXheight()), -1, "x-height unknown");
+        emon.Testport.assertEq(Evidence.owNew(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word");
+        emon.Testport.assertEq(emon.Port.cellsLen(owords), 28, "28 cells");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdConf()), 850, "confidence");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfPsize()), -1, "point size unknown");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfSfirst()), -1, "no symbols");
+        emon.Testport.assertEq(Evidence.osNew(osyms, 3, 1, 2, 3, 4, 65, -1, 0, 0), 0, "first symbol");
+        emon.Testport.assertEq(emon.Port.cellsLen(osyms), 20, "20 cells");
+        emon.Testport.assertEq(Evidence.osGet(osyms, 0, Evidence.osfConf()), -1, "no confidence");
+        emon.Testport.assertEq(Evidence.osGet(osyms, 0, Evidence.osfAfirst()), -1, "no alternatives");
+        emon.Testport.assertEq(Evidence.oaAdd(oalts, 0, -1, 0, 55), 0, "first alternative");
+        emon.Testport.assertEq(emon.Port.cellsLen(oalts), 4, "4 cells");
+        emon.Testport.assertEq(Evidence.oaGet(oalts, 0, Evidence.oafConf()), 55, "its confidence");
+        emon.Testport.assertEq(Evidence.ikNew(inks, 3, 0), 0, "first ink");
+        emon.Testport.assertEq(emon.Port.cellsLen(inks), 12, "12 cells");
+        emon.Testport.assertEq(Evidence.ikGet(inks, 0, Evidence.ikfColor()), -1, "no colour");
+        emon.Testport.assertEq(Evidence.ikGet(inks, 0, Evidence.ikfMask()), -1, "no mask view");
+        emon.Testport.assertEq(Evidence.coNew(components, 3, 1, 2, 3, 4, Evidence.ckRuleH()), 0, "first component");
+        emon.Testport.assertEq(emon.Port.cellsLen(components), 24, "24 cells");
         emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfColor()), -1, "no colour");
-        emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfLayer()), -1, "no layer");
+        emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfInk()), -1, "no ink layer");
         emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfKind()), 2, "rule-h is code 2");
-        emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfConf()), -1, "no confidence");
-        emon.Testport.assertEq(Evidence.owNew(ocrwords, 3, 1, 2, 3, 4, 850), 0, "first OCR word");
-        emon.Testport.assertEq(emon.Port.cellsLen(ocrwords), 16, "sixteen cells");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofConf()), 850, "confidence");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofTstart()), -1, "no text");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofAlthead()), -1, "no alternatives");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofAltcount()), 0, "none counted");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofLine()), -1, "no line");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofLang()), -1, "no language");
+        emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfParent()), -1, "no parent");
+        emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfGray()), -1, "no gray");
+        emon.Testport.assertEq(Evidence.rlNew(rules, 3, 1, 2, 3, 4, 0), 0, "first rule");
+        emon.Testport.assertEq(emon.Port.cellsLen(rules), 20, "20 cells");
+        emon.Testport.assertEq(Evidence.rlGet(rules, 0, Evidence.rlfColor()), -1, "no colour");
+        emon.Testport.assertEq(Evidence.pmNew(prims, 3, 1, 2, 3, 4, Evidence.pmCircle()), 0, "first primitive");
+        emon.Testport.assertEq(emon.Port.cellsLen(prims), 24, "24 cells");
+        emon.Testport.assertEq(Evidence.pmGet(prims, 0, Evidence.pmfInk()), -1, "no ink layer");
+        emon.Testport.assertEq(Evidence.tlNew(tlines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0), 0, "first text line");
+        emon.Testport.assertEq(emon.Port.cellsLen(tlines), 20, "20 cells");
+        emon.Testport.assertEq(Evidence.tlGet(tlines, 0, Evidence.tlfInk()), -1, "no ink layer");
+        emon.Testport.assertEq(Evidence.ptNew(pts, 5, 6, Evidence.poLine()), 0, "first point");
+        emon.Testport.assertEq(emon.Port.cellsLen(pts), 3, "3 cells");
+        emon.Testport.assertEq(Evidence.rfAdd(refs, Evidence.eaGlyphs(), 4), 0, "first reference");
+        emon.Testport.assertEq(Evidence.rfGet(refs, 0, 1), 4, "its index");
+        emon.Testport.assertEq(Evidence.epNew(epages, 3, 61200, 79200), 0, "first page");
+        emon.Testport.assertEq(emon.Port.cellsLen(epages), 12, "12 cells");
     }
-    public static void testSettersAndTheAlternativeChain() {
+    public static void testTheHandBuiltPageHasARowInEveryArenaAndIsWellFormed() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
         emon.Port.Cells glyphs = emon.Port.newCells();
         emon.Port.Cells words = emon.Port.newCells();
         emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
         emon.Port.Cells paths = emon.Port.newCells();
         emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
         emon.Port.Cells components = emon.Port.newCells();
-        emon.Port.Cells ocrwords = emon.Port.newCells();
-        emon.Port.Cells alts = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evRows(1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "epages");
+        emon.Testport.assertEq(Evidence.evRows(2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "views");
+        emon.Testport.assertEq(Evidence.evRows(3, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "pts");
+        emon.Testport.assertEq(Evidence.evRows(4, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "refs");
+        emon.Testport.assertEq(Evidence.evRows(5, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), Evidence.etxLen(etext), "etext");
+        emon.Testport.assertEq(Evidence.evRows(6, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "feats");
+        emon.Testport.assertEq(Evidence.evRows(7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "glyphs");
+        emon.Testport.assertEq(Evidence.evRows(8, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "words");
+        emon.Testport.assertEq(Evidence.evRows(9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "lines");
+        emon.Testport.assertEq(Evidence.evRows(10, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "marks");
+        emon.Testport.assertEq(Evidence.evRows(11, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "fonts");
+        emon.Testport.assertEq(Evidence.evRows(12, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "paths");
+        emon.Testport.assertEq(Evidence.evRows(13, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "images");
+        emon.Testport.assertEq(Evidence.evRows(14, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 2, "oruns");
+        emon.Testport.assertEq(Evidence.evRows(15, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "oblocks");
+        emon.Testport.assertEq(Evidence.evRows(16, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "olines");
+        emon.Testport.assertEq(Evidence.evRows(17, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "owords");
+        emon.Testport.assertEq(Evidence.evRows(18, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 4, "osyms");
+        emon.Testport.assertEq(Evidence.evRows(19, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 3, "oalts");
+        emon.Testport.assertEq(Evidence.evRows(20, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "inks");
+        emon.Testport.assertEq(Evidence.evRows(21, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "components");
+        emon.Testport.assertEq(Evidence.evRows(22, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "rules");
+        emon.Testport.assertEq(Evidence.evRows(23, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "prims");
+        emon.Testport.assertEq(Evidence.evRows(24, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "tlines");
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed");
+        // the marks nest, and a glyph's chain finds its artifact
+        emon.Testport.assertEq(Evidence.mkGet(marks, 1, Evidence.mkfParent()), 0, "the span is in the paragraph");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 3, Evidence.mkfParent()), 2, "the optional-content span is in the artifact");
+        emon.Testport.assertEq(Evidence.mkArtifactOf(marks, 3), 19, "glyph 3's nearest artifact: pagination (1) * 16 + watermark (3)");
+        emon.Testport.assertEq(Evidence.mkArtifactOf(marks, 1), 0, "glyph 0's chain holds none");
+        emon.Testport.assertEq(Evidence.mkArtifactOf(marks, -1), 0, "no mark, no artifact");
+        emon.Testport.assertEq(Evidence.mkOcgOf(marks, 3), 3, "the optional-content mark");
+        emon.Testport.assertEq(Evidence.mkOcgOf(marks, 1), -1, "none");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfGcount()), 3, "the paragraph holds three glyphs");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 1, Evidence.mkfGcount()), 2, "the span two");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 0, Evidence.mkfZlast()), 2, "the paragraph's last paint number");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 3, Evidence.mkfZfirst()), 3, "the optional-content span paints object 3");
+        emon.Testport.assertEq(Evidence.mkGet(marks, 3, Evidence.mkfZlast()), 3, "and only it");
+        emon.Testport.assertEq(Evidence.mkArtifactClass(Evidence.mkArtifact(), Evidence.arPagination(), Evidence.asWatermark()), 2, "the D101 class: watermark");
+        emon.Testport.assertEq(Evidence.mkArtifactClass(Evidence.mkArtifact(), Evidence.arBackground(), 0), 4, "background");
+        emon.Testport.assertEq(Evidence.mkArtifactClass(Evidence.mkArtifact(), Evidence.arPagination(), 0), 1, "pagination");
+        emon.Testport.assertEq(Evidence.mkArtifactClass(Evidence.mkArtifact(), Evidence.arOther(), Evidence.asHeader()), 1, "a header is pagination");
+        emon.Testport.assertEq(Evidence.mkArtifactClass(Evidence.mkArtifact(), Evidence.arLayout(), 0), 3, "layout");
+        emon.Testport.assertEq(Evidence.mkArtifactClass(Evidence.mkArtifact(), Evidence.arPage(), 0), 5, "/Type /Page says nothing more: other");
+        emon.Testport.assertEq(Evidence.mkArtifactClass(Evidence.mkTag(), Evidence.arPagination(), 0), 0, "a tag is no artifact");
+    }
+    public static int etPokeCheck(int emonT, int k, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Break the page the way check row k says and require that code: the table is the spec of `ev-check`.
+        int code = Evidence.EV_CK[k * 6 + 0];
+        int ea = Evidence.EV_CK[k * 6 + 1];
+        int kind = Evidence.EV_CK[k * 6 + 2];
+        int f1 = Evidence.EV_CK[k * 6 + 3];
+        int f2 = Evidence.EV_CK[k * 6 + 4];
+        int tg = Evidence.EV_CK[k * 6 + 5];
+        int row = 0;
+        int v = 0;
+        int off = 0;
+        int cand = 0;
+        int n = 0;
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEqAt(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the page is well formed before it is broken", code);
+        if (kind == 1) {
+            n = Evidence.evRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            while ((row < n) && (Evidence.evPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0)) {
+                row += 1;
+            }
+            emon.Testport.assertThatAt(row < n, "a row with the text run exists", code);
+            Evidence.evPoke(ea, row, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 2) {
+            Evidence.evPoke(ea, 0, f2, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 3) {
+            Evidence.evPoke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 4) {
+            Evidence.evPoke(ea, 0, f1, 99999, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 5) {
+            Evidence.evPoke(ea, 0, f1, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 8) {
+            Evidence.evPoke(ea, 0, f1, 1000000000, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        if (kind == 6) {
+            n = Evidence.evRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            row = 0;
+            while ((row < n) && (Evidence.evPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) < 0)) {
+                row += 1;
+            }
+            emon.Testport.assertThatAt(row < n, "a row with a back pointer exists", code);
+            v = Evidence.evPeek(ea, row, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            n = Evidence.evRows(tg, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            // another row of the target whose run does not hold this row
+            off = 1;
+            cand = (v + 1) % n;
+            while ((off < n) && ((row >= Evidence.evPeek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)) && (row < (Evidence.evPeek(tg, cand, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines) + Evidence.evPeek(tg, cand, f2 + 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines))))) {
+                off += 1;
+                cand = (v + off) % n;
+            }
+            emon.Testport.assertThatAt(off < n, "a row that does not hold it exists", code);
+            Evidence.evPoke(ea, row, f1, cand, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        }
+        emon.Testport.assertEqAt(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), code, "the code of the row that was broken", code);
+        return 0;
+    }
+    public static void testEvCheckAnswersEveryCodeOfItsTable() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
         emon.Port.Cells etext = emon.Port.newCells();
-        emon.Port.Cells spans = emon.Port.newCells();
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        emon.Testport.assertEq(Evidence.glCount(glyphs), 4, "four glyphs");
-        emon.Testport.assertEq(Evidence.wdCount(words), 2, "two words");
-        emon.Testport.assertEq(Evidence.lnCount(lines), 1, "one line");
-        emon.Testport.assertEq(Evidence.paCount(paths), 2, "two paths");
-        emon.Testport.assertEq(Evidence.imCount(images), 1, "one image");
-        emon.Testport.assertEq(Evidence.coCount(components), 1, "one component");
-        emon.Testport.assertEq(Evidence.owCount(ocrwords), 1, "one OCR word");
-        emon.Testport.assertEq(Evidence.altCount(alts), 2, "two alternatives");
-        emon.Testport.assertEq(Evidence.etxLen(etext), 41, "the text cells");
-        emon.Testport.assertEq(Evidence.spCount(spans), 2, "two spans");
-        emon.Testport.assertEq(Evidence.spGet(spans, 0, Evidence.sfMcid()), 0, "the paragraph's MCID");
-        emon.Testport.assertEq(Evidence.spGet(spans, 1, Evidence.sfMcid()), -1, "the artifact has none");
-        emon.Testport.assertEq(Evidence.spGet(spans, 1, Evidence.sfArtifact()), 2, "watermark");
-        emon.Testport.assertEq(Evidence.spGet(spans, 1, Evidence.sfStm()), 12, "a form's span");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 2, Evidence.gfTstart()), 2, "the ligature's text run");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 2, Evidence.gfTlen()), 2, "two code points");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 3, Evidence.gfRot()), 4500, "45 degrees in centi-degrees");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 3, Evidence.gfVis()), 1, "clipped is code 1");
-        emon.Testport.assertEq(Evidence.glGet(glyphs, 3, Evidence.gfArtifact()), 2, "watermark is code 2");
-        emon.Testport.assertEq(Evidence.wdGet(words, 1, Evidence.wfConf()), 990, "word confidence");
-        emon.Testport.assertEq(Evidence.lnGet(lines, 0, Evidence.lfWcount()), 2, "the line has two words");
-        emon.Testport.assertEq(Evidence.paGet(paths, 1, Evidence.pfFlags()), 5, "closed and clip");
-        emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfFlags()), 2, "smask");
-        emon.Testport.assertEq(Evidence.coGet(components, 0, Evidence.cfFlags()), 1, "low-conf");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofAlthead()), 0, "the chain starts at 0");
-        emon.Testport.assertEq(Evidence.owGet(ocrwords, 0, Evidence.ofAltcount()), 2, "two alternatives");
-        emon.Testport.assertEq(Evidence.altGet(alts, 0, Evidence.afSym()), 0, "first alternative: symbol 0");
-        emon.Testport.assertEq(Evidence.altGet(alts, 0, Evidence.afCp()), 72, "it reads H");
-        emon.Testport.assertEq(Evidence.altGet(alts, 0, Evidence.afConf()), 900, "at 900");
-        emon.Testport.assertEq(Evidence.altGet(alts, 0, Evidence.afNext()), 1, "then the second");
-        emon.Testport.assertEq(Evidence.altGet(alts, 1, Evidence.afCp()), 108, "which reads l");
-        emon.Testport.assertEq(Evidence.altGet(alts, 1, Evidence.afNext()), -1, "and ends the chain");
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 0, "the page is well formed");
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        int k = 0;
+        emon.Testport.assertEq(88, 88, "88 table checks, codes 2..89");
+        while (k < 88) {
+            etPokeCheck(0, k, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+            k += 1;
+        }
+    }
+    public static void testEvCheckAnswersTheCodesOutsideItsTable() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Port.cellsPush(glyphs, 0);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 1, "a stride broken: a glyph arena that is not a whole number of rows");
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Port.cellsPush(etext, 0);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "an etext arena has no stride to break");
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evPoke(4, 1, 0, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to an arena that is none");
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evPoke(4, 1, 1, 99, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 100, "a reference to a row that is not there");
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evPoke(6, 0, 0, 7, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is a glyph");
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evPoke(6, 1, 1, 9, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 101, "a feature row whose subject is not there");
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evPoke(8, 0, 15, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "a word whose feature row names another word");
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evPoke(17, 0, 15, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 102, "an OCR word pointing at the text layer's feature row");
+    }
+    public static void testEvAngleIsExactAtEveryMultipleOf45Degrees() {
+        emon.Testport.assertEq(Evidence.evAngle(0, 0), 0, "the zero vector");
+        emon.Testport.assertEq(Evidence.evAngle(100, 0), 0, "east");
+        emon.Testport.assertEq(Evidence.evAngle(100, -100), 4500, "north-east (y is down: -dy is up)");
+        emon.Testport.assertEq(Evidence.evAngle(0, -100), 9000, "north");
+        emon.Testport.assertEq(Evidence.evAngle(-100, -100), 13500, "north-west");
+        emon.Testport.assertEq(Evidence.evAngle(-100, 0), 18000, "west");
+        emon.Testport.assertEq(Evidence.evAngle(-100, 100), 22500, "south-west");
+        emon.Testport.assertEq(Evidence.evAngle(0, 100), 27000, "south");
+        emon.Testport.assertEq(Evidence.evAngle(100, 100), 31500, "south-east");
+        emon.Testport.assertEq(Evidence.evAngle(7, -7), 4500, "any length");
+        emon.Testport.assertEq(Evidence.evAngle(2147483647, -2147483647), 4500, "the largest");
+        emon.Testport.assertEq(Evidence.evAngle(-2147483648, 0), 18000, "the smallest does not overflow");
+        emon.Testport.assertEq(Evidence.evAngle(0, -2147483648), 9000, "nor -dy");
+    }
+    public static int etSweep(int emonT) {
+        // Every centi-degree: the angle of (cos, -sin) in 16.16 is within 3 of it, and never goes down.
+        int a = 0;
+        int got = 0;
+        int prev = 0;
+        int d = 0;
+        while (a < 36000) {
+            got = Evidence.evAngle(Evidence.evCos(a), 0 - Evidence.evSin(a));
+            if ((got == 0) && (a > 18000)) {
+                got = 36000;
+            }
+            d = got - a;
+            if (d < 0) {
+                d = 0 - d;
+            }
+            emon.Testport.assertThatAt(d <= 3, "within 3 centi-degrees (0.03 degree)", a);
+            emon.Testport.assertThatAt(got >= prev, "monotonic over the sweep", a);
+            prev = got;
+            a += 1;
+        }
+        return 0;
+    }
+    public static void testEvAngleIsMonotonicAndWithin3CentiDegreesOverTheWholeCircle() {
+        etSweep(0);
+    }
+    public static void testSineAndCosineComeFromATableAndSymmetry() {
+        emon.Testport.assertEq(Evidence.evSin(0), 0, "sin 0");
+        emon.Testport.assertEq(Evidence.evSin(9000), 65536, "sin 90 degrees is 1.0");
+        emon.Testport.assertEq(Evidence.evSin(4500), 46341, "sin 45 degrees");
+        emon.Testport.assertEq(Evidence.evSin(3000), 32768, "sin 30 degrees is one half");
+        emon.Testport.assertEq(Evidence.evSin(18000), 0, "sin 180");
+        emon.Testport.assertEq(Evidence.evSin(27000), -65536, "sin 270");
+        emon.Testport.assertEq(Evidence.evSin(-9000), -65536, "sin -90");
+        emon.Testport.assertEq(Evidence.evSin(45000), 65536, "sin 450 is sin 90");
+        emon.Testport.assertEq(Evidence.evCos(0), 65536, "cos 0");
+        emon.Testport.assertEq(Evidence.evCos(9000), 0, "cos 90");
+        emon.Testport.assertEq(Evidence.evCos(18000), -65536, "cos 180");
+        emon.Testport.assertEq(Evidence.evCos(-4500), 46341, "cos -45");
+        emon.Testport.assertEq(Evidence.evSin(12000), Evidence.evSin(6000), "sin 120 is sin 60");
+        emon.Testport.assertEq(Evidence.evSin(24000), 0 - Evidence.evSin(6000), "sin 240 is -sin 60");
+    }
+    public static void testFloorDivisionRoundsTowardMinusInfinity() {
+        emon.Testport.assertEq((int) Evidence.evFloordiv((long) 7, (long) 2), 3, "7 / 2");
+        emon.Testport.assertEq((int) Evidence.evFloordiv((long) -7, (long) 2), -4, "-7 / 2 floors to -4 where `quot` truncates to -3");
+        emon.Testport.assertEq((int) Evidence.evFloordiv((long) -8, (long) 2), -4, "exact");
+        emon.Testport.assertEq((int) Evidence.evFloordiv((long) 0, (long) 5), 0, "0");
+    }
+    public static void testOverlapAndBaselines() {
+        emon.Testport.assertEq(Evidence.evOverlapSmall(0, 0, 100, 100, 50, 50, 150, 150), 250, "a quarter of the smaller");
+        emon.Testport.assertEq(Evidence.evOverlapSmall(0, 0, 100, 100, 10, 10, 20, 20), 1000, "a box inside another is all of the smaller");
+        emon.Testport.assertEq(Evidence.evOverlapSmall(0, 0, 100, 100, 200, 200, 300, 300), 0, "disjoint");
+        emon.Testport.assertEq(Evidence.evOverlapSmall(0, 0, 100, 100, 100, 0, 200, 100), 0, "touching is no overlap");
+        emon.Testport.assertEq(Evidence.evOverlapSmall(0, 0, 0, 0, 0, 0, 100, 100), 0, "an empty box overlaps nothing");
+        emon.Testport.assertEq(Evidence.evBaselineAt(0, 100, 1000, 200, 500), 150, "the middle of a rising segment");
+        emon.Testport.assertEq(Evidence.evBaselineAt(0, 100, 1000, 100, 777), 100, "a level one");
+        emon.Testport.assertEq(Evidence.evBaselineAt(0, 100, 1000, 0, 250), 75, "a falling one, truncating");
+        emon.Testport.assertEq(Evidence.evBaselineAt(50, 70, 50, 90, 50), 90, "a vertical segment answers its end");
+    }
+    public static int etAbs(int v) {
+        if (v < 0) {
+            return 0 - v;
+        }
+        return v;
+    }
+    public static int etViewGrid(int emonT, emon.Port.Cells views, int dpi, int deskew, int turns) {
+        // px -> cpt -> px lands within one pixel for a grid over a US Letter page, at every resolution (the 16.16
+        // inverse is good to 2^-17 of the distance from the origin: 0.6 pixel at 792 points); and
+        // EXACTLY at 150 and 300 dpi with no deskew (the scale is 48 or 24 centipoints a pixel, exactly).
+        int pw = (dpi * 17) / 2;
+        int ph = dpi * 11;
+        int v = Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, pw, ph, dpi * 100, 0, -1, turns, deskew, 0, 0, 0);
+        int i = 0;
+        int j = 0;
+        int px = 0;
+        int py = 0;
+        int x = 0;
+        int y = 0;
+        int bx = 0;
+        int by = 0;
+        int dx = 0;
+        int dy = 0;
+        while (i < 6) {
+            j = 0;
+            while (j < 5) {
+                px = (i * pw) / 5;
+                py = (j * ph) / 4;
+                x = Evidence.vwPxToCpt(views, v, 0, px, py);
+                y = Evidence.vwPxToCpt(views, v, 1, px, py);
+                bx = Evidence.vwCptToPx(views, v, 0, x, y);
+                by = Evidence.vwCptToPx(views, v, 1, x, y);
+                dx = etAbs(bx - px);
+                dy = etAbs(by - py);
+                emon.Testport.assertThatAt(dx <= 1, "x within one pixel", (dpi * 10) + i);
+                emon.Testport.assertThatAt(dy <= 1, "y within one pixel", (dpi * 10) + j);
+                if ((deskew == 0) && ((dpi == 150) || (dpi == 300))) {
+                    emon.Testport.assertEqAt(bx, px, "x exactly", (dpi * 10) + i);
+                    emon.Testport.assertEqAt(by, py, "y exactly", (dpi * 10) + j);
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testAViewMapsPixelsToCentipointsAndBack() {
+        emon.Port.Cells views = emon.Port.newCells();
+        int di = 0;
+        int ki = 0;
+        int q = 0;
+        int dpi = 0;
+        int dsk = 0;
+        while (di < 7) {
+            if (di == 0) {
+                dpi = 72;
+            }
+            if (di == 1) {
+                dpi = 96;
+            }
+            if (di == 2) {
+                dpi = 150;
+            }
+            if (di == 3) {
+                dpi = 200;
+            }
+            if (di == 4) {
+                dpi = 300;
+            }
+            if (di == 5) {
+                dpi = 400;
+            }
+            if (di == 6) {
+                dpi = 600;
+            }
+            ki = 0;
+            while (ki < 5) {
+                dsk = 0;
+                if (ki == 1) {
+                    dsk = 85;
+                }
+                if (ki == 2) {
+                    dsk = -85;
+                }
+                if (ki == 3) {
+                    dsk = 300;
+                }
+                if (ki == 4) {
+                    dsk = -300;
+                }
+                q = 0;
+                while (q < 4) {
+                    etViewGrid(0, views, dpi, dsk, q);
+                    q += 1;
+                }
+                ki += 1;
+            }
+            di += 1;
+        }
+    }
+    public static void testAViewAt150DpiIsExactly48CentipointsAPixel() {
+        emon.Port.Cells views = emon.Port.newCells();
+        int v = Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, 1275, 1650, 15000, 0, -1, 0, 0, 0, 0, 0);
+        int w = Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, 1275, 1650, 30000, 0, -1, 0, 0, 0, 0, 0);
+        emon.Testport.assertEq(Evidence.vwGet(views, v, Evidence.vwfA()), 3145728, "a = 48.0 in 16.16");
+        emon.Testport.assertEq(Evidence.vwGet(views, v, Evidence.vwfB()), 0, "b = 0");
+        emon.Testport.assertEq(Evidence.vwGet(views, v, Evidence.vwfC()), 0, "c = 0");
+        emon.Testport.assertEq(Evidence.vwGet(views, v, Evidence.vwfD()), 3145728, "d = 48.0");
+        emon.Testport.assertEq(Evidence.vwGet(views, v, Evidence.vwfE()), 0, "e = 0");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, v, 0, 100, 200), 4800, "x = 100 * 48");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, v, 1, 100, 200), 9600, "y = 200 * 48");
+        emon.Testport.assertEq(Evidence.vwCptToPx(views, v, 0, 4800, 9600), 100, "and back");
+        emon.Testport.assertEq(Evidence.vwGet(views, w, Evidence.vwfA()), 1572864, "at 300 dpi 24.0");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, w, 0, 100, 200), 2400, "x = 100 * 24");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, v, 0, 10, 20, 30, 40), 480, "a pixel box's x0");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, v, 1, 10, 20, 30, 40), 960, "y0");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, v, 2, 10, 20, 30, 40), 1920, "x1");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, v, 3, 10, 20, 30, 40), 2880, "y1");
+    }
+    public static void testQuarterTurnsPutTheOriginAtTheRightCornerAndKeepBoxesBoxes() {
+        emon.Port.Cells views = emon.Port.newCells();
+        int t1 = Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, 100, 200, 15000, 0, -1, 1, 0, 1000, 2000, 0);
+        int t2 = Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, 100, 200, 15000, 0, -1, 2, 0, 1000, 2000, 0);
+        int t3 = Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, 100, 200, 15000, 0, -1, 3, 0, 1000, 2000, 0);
+        // a raster turned a quarter clockwise: its (0,0) is the region's bottom-left; x grows up the page
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t1, 0, 0, 0), 1000, "t1 origin x");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t1, 1, 0, 0), 6800, "t1 origin y = cropy + 100 * 48");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t1, 0, 10, 0), 1000, "moving right on the raster moves up the page: x the same");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t1, 1, 10, 0), 6320, "and y less by 10 * 48");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t1, 0, 0, 10), 1480, "moving down the raster moves right on the page");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t2, 0, 0, 0), 5800, "t2 origin: the opposite corner");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t2, 1, 0, 0), 11600, "t2 origin y");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t3, 0, 0, 0), 10600, "t3 origin x = cropx + 200 * 48");
+        emon.Testport.assertEq(Evidence.vwPxToCpt(views, t3, 1, 0, 0), 2000, "t3 origin y");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, t1, 0, 0, 0, 10, 20), 1000, "a box turned: its smallest box, x0");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, t1, 2, 0, 0, 10, 20), 1960, "x1 = 1000 + 20 * 48");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, t1, 1, 0, 0, 10, 20), 6320, "y0 = 6800 - 10 * 48, the smallest y of the four corners");
+        emon.Testport.assertEq(Evidence.vwBoxToCpt(views, t1, 3, 0, 0, 10, 20), 6800, "y1");
+    }
+    public static void testStage1FeaturesOfAnOcrWord() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        // owords[0] is Hi with H at 910 (alternatives H 900, ri 250) and i at 880 (alternative l 40)
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, 0), 17, "the subject is an OCR word");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, 1), 0, "word 0");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoConf()), 870, "the raw confidence, verbatim");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoSymMin()), 880, "the lowest symbol");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoSymMean()), 895, "the mean of 910 and 880");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoMargin()), 660, "the smallest margin: 910 less the differing alternative 'ri' at 250 is 660, 880 less 'l' at 40 is 840");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoAmbiguous()), 0, "no margin within 100");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoEngineFlags()), 1, "the dictionary flag");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoImplausible()), 0, "Hi is plausible");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoLength()), 2, "two code points");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoAngle()), 0, "a level word on a level page");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoSpacing()), 0, "two symbols of 1200 width with no gap between them");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoRelHeight()), 1000, "the only word of its line");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoBaseDev()), 0, "on its line's baseline");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoEdge()), 7200, "the nearest page edge is the left one");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, 9), -1, "a column of a later stage is -1");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, 31), -1, "a spare column is -1");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdFeat()), 1, "the word names its feature row");
+    }
+    public static void testImplausibleTransitionsAreLetterDigitAndLowerToUpper() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        // a word r1Il0 (a letter, a digit, a capital, a lower-case letter, a digit): every adjacent pair but l-0
+        Evidence.etxAppendCp(etext, 114);
+        Evidence.etxAppendCp(etext, 49);
+        Evidence.etxAppendCp(etext, 73);
+        Evidence.etxAppendCp(etext, 108);
+        Evidence.etxAppendCp(etext, 48);
+        int at = Evidence.etxLen(etext) - 5;
+        Evidence.owSet(owords, 1, Evidence.hdTstart(), at);
+        Evidence.owSet(owords, 1, Evidence.hdTlen(), 5);
+        Evidence.evFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, 1, 0, 100);
+        // pairs r1 (letter-digit), 1I (digit-letter), Il (upper-lower: fine), l0 (letter-digit): 3 of 4
+        emon.Testport.assertEq(Evidence.feGet(feats, 2, Evidence.xoImplausible()), 750, "three of four pairs");
+        emon.Testport.assertEq(Evidence.feGet(feats, 2, Evidence.xoLength()), 5, "five code points");
+    }
+    public static void testEveryCellOfEveryStrideIsPrintedOrSpare() {
+        // Count the cells each arena's field table prints (a box 4, a pair 2, a run 2, a text run 2) and
+        // require the rest to be the spare cells SPEC 8.4 names: no cell is printed twice or forgotten.
+        int ea = 1;
+        int r = 0;
+        int cells = 0;
+        int kind = 0;
+        while (ea <= 24) {
+            cells = 0;
+            r = Evidence.EV_FX[(ea - 1) * 2 + 0];
+            while (r < (Evidence.EV_FX[(ea - 1) * 2 + 0] + Evidence.EV_FX[(ea - 1) * 2 + 1])) {
+                kind = Evidence.EV_FD[r * 6 + 2];
+                if ((kind == 3) || ((kind == 4) || (kind == 10))) {
+                    cells += 4;
+                }
+                if ((kind == 6) || ((kind == 7) || ((kind == 12) || (kind == 13)))) {
+                    cells += 2;
+                }
+                if ((kind == 1) || ((kind == 2) || ((kind == 5) || ((kind == 8) || ((kind == 9) || (kind == 11)))))) {
+                    cells += 1;
+                }
+                r += 1;
+            }
+            if (ea == 1) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[0] - cells, 6, "epages: six spare cells");
+            }
+            if (ea == 2) {
+                emon.Testport.assertEq(cells, 24, "views: every cell");
+            }
+            if (ea == 3) {
+                emon.Testport.assertEq(cells, 3, "pts: every cell");
+            }
+            if (ea == 7) {
+                emon.Testport.assertEq(cells, 32, "glyphs: every cell");
+            }
+            if (ea == 8) {
+                emon.Testport.assertEq(cells, 24, "words: every cell");
+            }
+            if (ea == 9) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[8] - cells, 1, "lines: one spare");
+            }
+            if (ea == 10) {
+                emon.Testport.assertEq(cells, 24, "marks: every cell");
+            }
+            if (ea == 11) {
+                emon.Testport.assertEq(cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)");
+            }
+            if (ea == 12) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[11] - cells, 5, "paths: five spare");
+            }
+            if (ea == 13) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[12] - cells, 1, "images: one spare");
+            }
+            if (ea == 14) {
+                emon.Testport.assertEq(cells, 28, "oruns: every cell");
+            }
+            if (ea == 15) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[14] - cells, 2, "oblocks: two spare");
+            }
+            if (ea == 16) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[15] - cells, 1, "olines: one spare");
+            }
+            if (ea == 17) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[16] - cells, 1, "owords: one spare");
+            }
+            if (ea == 18) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[17] - cells, 3, "osyms: three spare");
+            }
+            if (ea == 19) {
+                emon.Testport.assertEq(cells, 4, "oalts: every cell");
+            }
+            if (ea == 20) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[19] - cells, 3, "inks: three spare");
+            }
+            if (ea == 21) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[20] - cells, 1, "components: one spare");
+            }
+            if (ea == 22) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[21] - cells, 2, "rules: two spare");
+            }
+            if (ea == 23) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[22] - cells, 2, "prims: two spare");
+            }
+            if (ea == 24) {
+                emon.Testport.assertEq(Evidence.EV_STRIDES[23] - cells, 3, "tlines: three spare");
+            }
+            ea += 1;
+        }
+    }
+    public static void testGoldenPage() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        StringBuilder compact = emon.Testport.newText();
+        StringBuilder pretty = emon.Testport.newText();
+        etBuild(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evEmit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evEmit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertTextSpan(compact, emon.Testport.testFile("evidence/page1.json"), 0, etEnd(emon.Testport.testFile("evidence/page1.json")), "compact", 0);
+        emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("evidence/page1.pretty.json"), 0, etEnd(emon.Testport.testFile("evidence/page1.pretty.json")), "pretty", 0);
+    }
+    public static void testAnEmptyEvidenceDump() {
+        emon.Port.Cells epages = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells glyphs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells marks = emon.Port.newCells();
+        emon.Port.Cells fonts = emon.Port.newCells();
+        emon.Port.Cells paths = emon.Port.newCells();
+        emon.Port.Cells images = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells oalts = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells components = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        StringBuilder compact = emon.Testport.newText();
+        StringBuilder pretty = emon.Testport.newText();
+        Evidence.evInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertEq(Evidence.evCheck(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "nothing is well formed");
+        Evidence.evEmit(compact, 0, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        Evidence.evEmit(pretty, 1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Testport.assertTextSpan(compact, emon.Testport.testFile("evidence/empty.json"), 0, etEnd(emon.Testport.testFile("evidence/empty.json")), "compact", 0);
+        emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("evidence/empty.pretty.json"), 0, etEnd(emon.Testport.testFile("evidence/empty.pretty.json")), "pretty", 0);
     }
     public static void testEvidenceTextIsScalarValuesOnly() {
         emon.Port.Cells etext = emon.Port.newCells();
@@ -285,88 +1314,6 @@ public final class Evidencetest {
         Evidence.etxAppendCp(etext, 55296);
         Evidence.etxAppendCp(etext, 128512);
         emon.Testport.assertEq(Evidence.etxLen(etext), 3, "three cells");
-    }
-    public static void testCheckNamesWhatIsWrong() {
-        emon.Port.Cells glyphs = emon.Port.newCells();
-        emon.Port.Cells words = emon.Port.newCells();
-        emon.Port.Cells lines = emon.Port.newCells();
-        emon.Port.Cells paths = emon.Port.newCells();
-        emon.Port.Cells images = emon.Port.newCells();
-        emon.Port.Cells components = emon.Port.newCells();
-        emon.Port.Cells ocrwords = emon.Port.newCells();
-        emon.Port.Cells alts = emon.Port.newCells();
-        emon.Port.Cells etext = emon.Port.newCells();
-        emon.Port.Cells spans = emon.Port.newCells();
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.glSet(glyphs, 2, Evidence.gfTlen(), 99);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 2, "a glyph's text run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.wdSet(words, 1, Evidence.wfGcount(), 9);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 3, "a word's glyph run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.wdSet(words, 0, Evidence.wfTlen(), 99);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 4, "a word's text run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.lnSet(lines, 0, Evidence.lfWcount(), 3);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 5, "a line's word run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.owSet(ocrwords, 0, Evidence.ofTlen(), 50);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 6, "an OCR word's text run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.owSet(ocrwords, 0, Evidence.ofAltcount(), 3);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 7, "an alternative count that is not the chain");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.wdSet(words, 0, Evidence.wfLine(), 4);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 8, "a word in a line that is not there");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.glSet(glyphs, 0, Evidence.gfWord(), 5);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 9, "a glyph in a word that is not there");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.spSet(spans, 1, Evidence.sfGcount(), 9);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's glyph run past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.spSet(spans, 1, Evidence.sfActuallen(), 99);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span's string past the arena");
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.spSet(spans, 0, Evidence.sfParent(), 0);
-        emon.Testport.assertEq(Evidence.evCheck(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans), 10, "a span that is its own parent");
-    }
-    public static void testGoldenPage() {
-        emon.Port.Cells glyphs = emon.Port.newCells();
-        emon.Port.Cells words = emon.Port.newCells();
-        emon.Port.Cells lines = emon.Port.newCells();
-        emon.Port.Cells paths = emon.Port.newCells();
-        emon.Port.Cells images = emon.Port.newCells();
-        emon.Port.Cells components = emon.Port.newCells();
-        emon.Port.Cells ocrwords = emon.Port.newCells();
-        emon.Port.Cells alts = emon.Port.newCells();
-        emon.Port.Cells etext = emon.Port.newCells();
-        emon.Port.Cells spans = emon.Port.newCells();
-        StringBuilder compact = emon.Testport.newText();
-        StringBuilder pretty = emon.Testport.newText();
-        etBuild(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.evEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.evEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        emon.Testport.assertTextSpan(compact, emon.Testport.testFile("evidence/page1.json"), 0, etEnd(emon.Testport.testFile("evidence/page1.json")), "compact", 0);
-        emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("evidence/page1.pretty.json"), 0, etEnd(emon.Testport.testFile("evidence/page1.pretty.json")), "pretty", 0);
-    }
-    public static void testAnEmptyEvidenceDump() {
-        emon.Port.Cells glyphs = emon.Port.newCells();
-        emon.Port.Cells words = emon.Port.newCells();
-        emon.Port.Cells lines = emon.Port.newCells();
-        emon.Port.Cells paths = emon.Port.newCells();
-        emon.Port.Cells images = emon.Port.newCells();
-        emon.Port.Cells components = emon.Port.newCells();
-        emon.Port.Cells ocrwords = emon.Port.newCells();
-        emon.Port.Cells alts = emon.Port.newCells();
-        emon.Port.Cells etext = emon.Port.newCells();
-        emon.Port.Cells spans = emon.Port.newCells();
-        StringBuilder compact = emon.Testport.newText();
-        StringBuilder pretty = emon.Testport.newText();
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.evEmit(compact, 0, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        Evidence.evEmit(pretty, 1, glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
-        emon.Testport.assertTextSpan(compact, emon.Testport.testFile("evidence/empty.json"), 0, etEnd(emon.Testport.testFile("evidence/empty.json")), "compact", 0);
-        emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("evidence/empty.pretty.json"), 0, etEnd(emon.Testport.testFile("evidence/empty.pretty.json")), "pretty", 0);
+        emon.Testport.assertEq(emon.Port.cellsAt(etext, 1), 65533, "a surrogate became U+FFFD");
     }
 }

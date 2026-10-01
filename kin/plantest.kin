@@ -163,18 +163,34 @@
 
 (defn ^I32 pt-unit [^Src s ^Cells an ^:mut ^Cells rq ^:mut ^Cells etext ^:mut ^Text t]
   (comment "Run the probe once over fresh arenas; with `us-done`, dump the evidence.")
-  (let [^Cells g (new-cells)
-        ^Cells wd (new-cells)
-        ^Cells ln (new-cells)
-        ^Cells pa (new-cells)
-        ^Cells im (new-cells)
-        ^Cells co (new-cells)
-        ^Cells ow (new-cells)
-        ^Cells al (new-cells)
-        ^Cells sp (new-cells)
-        ^I32 st (pp-unit s an rq g wd ln pa im co ow al etext sp)]
+  (let [^Cells epages (new-cells)
+        ^Cells views (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells glyphs (new-cells)
+        ^Cells words (new-cells)
+        ^Cells lines (new-cells)
+        ^Cells marks (new-cells)
+        ^Cells fonts (new-cells)
+        ^Cells paths (new-cells)
+        ^Cells images (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells oblocks (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells oalts (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells components (new-cells)
+        ^Cells rules (new-cells)
+        ^Cells prims (new-cells)
+        ^Cells tlines (new-cells)
+        ^I32 st (pp-unit s an rq epages views pts refs etext feats glyphs words lines marks fonts paths images
+                         oruns oblocks olines owords osyms oalts inks components rules prims tlines)]
     (if (== st (us-done))
-      (ev-emit t 0 g wd ln pa im co ow al etext sp))
+      (ev-emit t 0 epages views pts refs etext feats glyphs words lines marks fonts paths images
+               oruns oblocks olines owords osyms oalts inks components rules prims tlines))
     (return st)))
 
 (deftest test-the-probe-asks-in-two-rounds-and-then-writes-evidence

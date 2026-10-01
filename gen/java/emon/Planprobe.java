@@ -5,18 +5,24 @@ package emon;
 
 
 public final class Planprobe {
-    public static int ppWords(emon.Port.Cells an, int at, int page, int dpi100, emon.Port.Cells ocrwords, emon.Port.Cells etext) {
-        // One OCR answer's words as OCR evidence on `page`; `dpi100` is the
-        // resolution (x100) of the bitmap the boxes are in.
+    public static int ppWords(emon.Port.Cells an, int at, int page, int view, int request, int psm, emon.Port.Cells views, emon.Port.Cells oruns, emon.Port.Cells owords, emon.Port.Cells etext) {
+        // One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
         int nw = Plan.anOcrCount(an, at);
+        int run = Evidence.orNew(oruns, page, view);
+        int w0 = Evidence.owCount(owords);
         int w = Plan.anOcrFirst(an, at);
         int i = 0;
+        Evidence.orSet(oruns, run, Evidence.orfRequest(), request);
+        Evidence.orSet(oruns, run, Evidence.orfPsm(), psm);
         while (i < nw) {
-            int x0 = (Plan.awGet(an, w, Plan.awX()) * 720000) / dpi100;
-            int y0 = (Plan.awGet(an, w, Plan.awY()) * 720000) / dpi100;
-            int x1 = ((Plan.awGet(an, w, Plan.awX()) + Plan.awGet(an, w, Plan.awW())) * 720000) / dpi100;
-            int y1 = ((Plan.awGet(an, w, Plan.awY()) + Plan.awGet(an, w, Plan.awH())) * 720000) / dpi100;
-            int ow = Evidence.owNew(ocrwords, page, x0, y0, x1, y1, Plan.awGet(an, w, Plan.awConf()));
+            int px = Plan.awGet(an, w, Plan.awX());
+            int py = Plan.awGet(an, w, Plan.awY());
+            int pw = Plan.awGet(an, w, Plan.awW());
+            int ph = Plan.awGet(an, w, Plan.awH());
+            int x0 = Evidence.vwBoxToCpt(views, view, 0, px, py, pw, ph);
+            int y0 = Evidence.vwBoxToCpt(views, view, 1, px, py, pw, ph);
+            int x1 = Evidence.vwBoxToCpt(views, view, 2, px, py, pw, ph);
+            int y1 = Evidence.vwBoxToCpt(views, view, 3, px, py, pw, ph);
             int ts = Evidence.etxLen(etext);
             int nc = Plan.awGet(an, w, Plan.awLen());
             int k = 0;
@@ -24,18 +30,18 @@ public final class Planprobe {
                 Evidence.etxAppendCp(etext, Plan.awCp(an, w, k));
                 k += 1;
             }
-            Evidence.owSet(ocrwords, ow, Evidence.ofTstart(), ts);
-            Evidence.owSet(ocrwords, ow, Evidence.ofTlen(), nc);
-            Evidence.owSet(ocrwords, ow, Evidence.ofLine(), Plan.awGet(an, w, Plan.awLine()));
-            Evidence.owSet(ocrwords, ow, Evidence.ofBlock(), Plan.awGet(an, w, Plan.awBlock()));
+            int ow = Evidence.owNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, Plan.awGet(an, w, Plan.awConf()), -1);
+            Evidence.owSet(owords, ow, Evidence.owfRun(), run);
             w = Plan.awNext(an, w);
             i += 1;
         }
+        Evidence.orSet(oruns, run, Evidence.orfWfirst(), w0);
+        Evidence.orSet(oruns, run, Evidence.orfWcount(), nw);
         return 0;
     }
-    public static int ppUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
+    public static int ppUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
         // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-        Evidence.evInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.evInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         int n = emon.Port.srcLen(s);
         int mid = emon.Port.srcU8(s, n / 2);
         int tail = emon.Port.srcU8(s, n - 1);
@@ -82,9 +88,10 @@ public final class Planprobe {
             if (dd1 < 1) {
                 dd1 = 7200;
             }
+            int v1 = Evidence.vwNew(views, 1, Evidence.vkRender(), 1, -1, w1, h1, dd1, Plan.layFull(), -1, 0, 0, 0, 0, 0);
             Evidence.imNew(images, 1, 0, 0, (w1 * 720000) / dd1, (h1 * 720000) / dd1, mid, w1, h1);
             if (Plan.anOk(an, o3) == 1) {
-                ppWords(an, o3, 1, dd1, ocrwords, etext);
+                ppWords(an, o3, 1, v1, 3, 6, views, oruns, owords, etext);
             }
         }
         if (Plan.anOk(an, r2) == 1) {
@@ -94,9 +101,10 @@ public final class Planprobe {
             if (dd2 < 1) {
                 dd2 = 7200;
             }
+            int v2 = Evidence.vwNew(views, 2, Evidence.vkDecode(), 2, -1, w2, h2, dd2, Plan.layFull(), -1, 0, 0, 0, 0, 0);
             Evidence.imNew(images, 2, 0, 0, (w2 * 720000) / dd2, (h2 * 720000) / dd2, tail, w2, h2);
             if (Plan.anOk(an, o4) == 1) {
-                ppWords(an, o4, 2, dd2, ocrwords, etext);
+                ppWords(an, o4, 2, v2, 4, 3, views, oruns, owords, etext);
             }
         }
         return Plan.usDone();

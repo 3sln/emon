@@ -7,6 +7,7 @@ import (
 	"emon/json"
 	"emon/model"
 	"emon/port"
+	"emon/trig"
 	"strings"
 )
 
@@ -103,6 +104,9 @@ func ArBackground() int32 {
 func ArOther() int32 {
 	return 5
 }
+func ArPage() int32 {
+	return 6
+}
 func ArEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "pagination")
@@ -121,6 +125,42 @@ func ArEmitName(t *strings.Builder, code int32) int32 {
 		return 1
 	}
 	if code == 5 {
+		port.TextAscii(t, "other")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "page")
+		return 1
+	}
+	return 0
+}
+
+func AsHeader() int32 {
+	return 1
+}
+func AsFooter() int32 {
+	return 2
+}
+func AsWatermark() int32 {
+	return 3
+}
+func AsOther() int32 {
+	return 4
+}
+func AsEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "header")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "footer")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "watermark")
+		return 1
+	}
+	if code == 4 {
 		port.TextAscii(t, "other")
 		return 1
 	}
@@ -326,6 +366,774 @@ func McEmitName(t *strings.Builder, code int32) int32 {
 	return 0
 }
 
+func EgTextLayer() int32 {
+	return 1
+}
+func EgRaster() int32 {
+	return 2
+}
+func EgDpiUnknown() int32 {
+	return 4
+}
+func EgEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "text-layer")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "raster")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "dpi-unknown")
+		return 1
+	}
+	return 0
+}
+
+func VgBilevel() int32 {
+	return 1
+}
+func VgNonaffine() int32 {
+	return 2
+}
+func VgEngineBinary() int32 {
+	return 4
+}
+func VgEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "bilevel")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "nonaffine")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "engine-binary")
+		return 1
+	}
+	return 0
+}
+
+func OeDictionary() int32 {
+	return 1
+}
+func OeNumeric() int32 {
+	return 2
+}
+func OeFallback() int32 {
+	return 4
+}
+func OeEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "dictionary")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "numeric")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "fallback")
+		return 1
+	}
+	return 0
+}
+
+func OsSuperscript() int32 {
+	return 1
+}
+func OsSubscript() int32 {
+	return 2
+}
+func OsDropCap() int32 {
+	return 4
+}
+func OsEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "superscript")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "subscript")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "drop-cap")
+		return 1
+	}
+	return 0
+}
+
+func VcClip() int32 {
+	return 1
+}
+func VcOffpage() int32 {
+	return 2
+}
+func VcWhite() int32 {
+	return 4
+}
+func VcZeroSize() int32 {
+	return 8
+}
+func VcOcclusion() int32 {
+	return 16
+}
+func VcEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "clip")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "offpage")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "white")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "zero-size")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "occlusion")
+		return 1
+	}
+	return 0
+}
+
+func EaEpages() int32 {
+	return 1
+}
+func EaViews() int32 {
+	return 2
+}
+func EaPts() int32 {
+	return 3
+}
+func EaRefs() int32 {
+	return 4
+}
+func EaEtext() int32 {
+	return 5
+}
+func EaFeats() int32 {
+	return 6
+}
+func EaGlyphs() int32 {
+	return 7
+}
+func EaWords() int32 {
+	return 8
+}
+func EaLines() int32 {
+	return 9
+}
+func EaMarks() int32 {
+	return 10
+}
+func EaFonts() int32 {
+	return 11
+}
+func EaPaths() int32 {
+	return 12
+}
+func EaImages() int32 {
+	return 13
+}
+func EaOruns() int32 {
+	return 14
+}
+func EaOblocks() int32 {
+	return 15
+}
+func EaOlines() int32 {
+	return 16
+}
+func EaOwords() int32 {
+	return 17
+}
+func EaOsyms() int32 {
+	return 18
+}
+func EaOalts() int32 {
+	return 19
+}
+func EaInks() int32 {
+	return 20
+}
+func EaComponents() int32 {
+	return 21
+}
+func EaRules() int32 {
+	return 22
+}
+func EaPrims() int32 {
+	return 23
+}
+func EaTlines() int32 {
+	return 24
+}
+func EaEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "epages")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "views")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "pts")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "refs")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "etext")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "feats")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "glyphs")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "words")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "lines")
+		return 1
+	}
+	if code == 10 {
+		port.TextAscii(t, "marks")
+		return 1
+	}
+	if code == 11 {
+		port.TextAscii(t, "fonts")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "paths")
+		return 1
+	}
+	if code == 13 {
+		port.TextAscii(t, "images")
+		return 1
+	}
+	if code == 14 {
+		port.TextAscii(t, "oruns")
+		return 1
+	}
+	if code == 15 {
+		port.TextAscii(t, "oblocks")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "olines")
+		return 1
+	}
+	if code == 17 {
+		port.TextAscii(t, "owords")
+		return 1
+	}
+	if code == 18 {
+		port.TextAscii(t, "osyms")
+		return 1
+	}
+	if code == 19 {
+		port.TextAscii(t, "oalts")
+		return 1
+	}
+	if code == 20 {
+		port.TextAscii(t, "inks")
+		return 1
+	}
+	if code == 21 {
+		port.TextAscii(t, "components")
+		return 1
+	}
+	if code == 22 {
+		port.TextAscii(t, "rules")
+		return 1
+	}
+	if code == 23 {
+		port.TextAscii(t, "prims")
+		return 1
+	}
+	if code == 24 {
+		port.TextAscii(t, "tlines")
+		return 1
+	}
+	return 0
+}
+
+func VkRender() int32 {
+	return 1
+}
+func VkDecode() int32 {
+	return 2
+}
+func VkEngineBinary() int32 {
+	return 3
+}
+func VkGray() int32 {
+	return 4
+}
+func VkBinary() int32 {
+	return 5
+}
+func VkInkMask() int32 {
+	return 6
+}
+func VkDeskewed() int32 {
+	return 7
+}
+func VkCropped() int32 {
+	return 8
+}
+func VkPolar() int32 {
+	return 9
+}
+func VkEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "render")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "decode")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "engine-binary")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "gray")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "binary")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "ink-mask")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "deskewed")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "cropped")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "polar")
+		return 1
+	}
+	return 0
+}
+
+func PoMove() int32 {
+	return 1
+}
+func PoLine() int32 {
+	return 2
+}
+func PoCurve() int32 {
+	return 3
+}
+func PoClose() int32 {
+	return 4
+}
+func PoEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "move")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "line")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "curve")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "close")
+		return 1
+	}
+	return 0
+}
+
+func CsGray() int32 {
+	return 1
+}
+func CsRgb() int32 {
+	return 2
+}
+func CsCmyk() int32 {
+	return 3
+}
+func CsSpot() int32 {
+	return 4
+}
+func CsPattern() int32 {
+	return 5
+}
+func CsOther() int32 {
+	return 6
+}
+func CsEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "gray")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "rgb")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "cmyk")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "spot")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "pattern")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "other")
+		return 1
+	}
+	return 0
+}
+
+func WbSpace() int32 {
+	return 1
+}
+func WbGap() int32 {
+	return 2
+}
+func WbTjOffset() int32 {
+	return 3
+}
+func WbLineEnd() int32 {
+	return 4
+}
+func WbFontChange() int32 {
+	return 5
+}
+func WbMarkBoundary() int32 {
+	return 6
+}
+func WbEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "space")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "gap")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "tj-offset")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "line-end")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "font-change")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "mark-boundary")
+		return 1
+	}
+	return 0
+}
+
+func MkArtifact() int32 {
+	return 1
+}
+func MkOptionalContent() int32 {
+	return 2
+}
+func MkTag() int32 {
+	return 3
+}
+func MkEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "artifact")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "optional-content")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "tag")
+		return 1
+	}
+	return 0
+}
+
+func ObBlock() int32 {
+	return 1
+}
+func ObParagraph() int32 {
+	return 2
+}
+func ObEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "block")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "paragraph")
+		return 1
+	}
+	return 0
+}
+
+func OpFirst() int32 {
+	return 1
+}
+func OpRegion() int32 {
+	return 2
+}
+func OpLine() int32 {
+	return 3
+}
+func OpCell() int32 {
+	return 4
+}
+func OpSealStrip() int32 {
+	return 5
+}
+func OpBodyInk() int32 {
+	return 6
+}
+func OpTextOnly() int32 {
+	return 7
+}
+func OpReRotated() int32 {
+	return 8
+}
+func OpEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "first")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "region")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "line")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "cell")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "seal-strip")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "body-ink")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "text-only")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "re-rotated")
+		return 1
+	}
+	return 0
+}
+
+func IrBody() int32 {
+	return 1
+}
+func IrLight() int32 {
+	return 2
+}
+func IrColor() int32 {
+	return 3
+}
+func IrBackground() int32 {
+	return 4
+}
+func IrUnknown() int32 {
+	return 5
+}
+func IrEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "body")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "light")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "color")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "background")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "unknown")
+		return 1
+	}
+	return 0
+}
+
+func RsSolid() int32 {
+	return 1
+}
+func RsDashed() int32 {
+	return 2
+}
+func RsDotted() int32 {
+	return 3
+}
+func RsDouble() int32 {
+	return 4
+}
+func RsEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "solid")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "dashed")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "dotted")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "double")
+		return 1
+	}
+	return 0
+}
+
+func PmRect() int32 {
+	return 1
+}
+func PmEllipse() int32 {
+	return 2
+}
+func PmCircle() int32 {
+	return 3
+}
+func PmArrow() int32 {
+	return 4
+}
+func PmCurve() int32 {
+	return 5
+}
+func PmPolygon() int32 {
+	return 6
+}
+func PmRing() int32 {
+	return 7
+}
+func PmEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "rect")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "ellipse")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "circle")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "arrow")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "curve")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "polygon")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "ring")
+		return 1
+	}
+	return 0
+}
+
+func FtType1() int32 {
+	return 1
+}
+func FtMmtype1() int32 {
+	return 2
+}
+func FtTruetype() int32 {
+	return 3
+}
+func FtType3() int32 {
+	return 4
+}
+func FtType0() int32 {
+	return 5
+}
+func FtEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "type1")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "mmtype1")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "truetype")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "type3")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "type0")
+		return 1
+	}
+	return 0
+}
+
 func EkVersion() int32 {
 	return 1
 }
@@ -347,7 +1155,7 @@ func EkImages() int32 {
 func EkComponents() int32 {
 	return 7
 }
-func EkOcrwords() int32 {
+func EkOcrwordsV0() int32 {
 	return 8
 }
 func EkPage() int32 {
@@ -461,7 +1269,7 @@ func EkSym() int32 {
 func EkRun() int32 {
 	return 45
 }
-func EkSpans() int32 {
+func EkSpansV0() int32 {
 	return 46
 }
 func EkTag() int32 {
@@ -487,6 +1295,294 @@ func EkExp() int32 {
 }
 func EkStm() int32 {
 	return 54
+}
+func EkEpages() int32 {
+	return 55
+}
+func EkViews() int32 {
+	return 56
+}
+func EkPts() int32 {
+	return 57
+}
+func EkRefs() int32 {
+	return 58
+}
+func EkEtext() int32 {
+	return 59
+}
+func EkFeats() int32 {
+	return 60
+}
+func EkMarks() int32 {
+	return 61
+}
+func EkFonts() int32 {
+	return 62
+}
+func EkOruns() int32 {
+	return 63
+}
+func EkOblocks() int32 {
+	return 64
+}
+func EkOlines() int32 {
+	return 65
+}
+func EkOwords() int32 {
+	return 66
+}
+func EkOsyms() int32 {
+	return 67
+}
+func EkOalts() int32 {
+	return 68
+}
+func EkInks() int32 {
+	return 69
+}
+func EkRules() int32 {
+	return 70
+}
+func EkPrims() int32 {
+	return 71
+}
+func EkTlines() int32 {
+	return 72
+}
+func EkSubject() int32 {
+	return 73
+}
+func EkHeight() int32 {
+	return 74
+}
+func EkTurns() int32 {
+	return 75
+}
+func EkDpi() int32 {
+	return 76
+}
+func EkRequest() int32 {
+	return 77
+}
+func EkInk() int32 {
+	return 78
+}
+func EkDeskew() int32 {
+	return 79
+}
+func EkCrop() int32 {
+	return 80
+}
+func EkA() int32 {
+	return 81
+}
+func EkB() int32 {
+	return 82
+}
+func EkC() int32 {
+	return 83
+}
+func EkD() int32 {
+	return 84
+}
+func EkE() int32 {
+	return 85
+}
+func EkF() int32 {
+	return 86
+}
+func EkIa() int32 {
+	return 87
+}
+func EkIb() int32 {
+	return 88
+}
+func EkIc() int32 {
+	return 89
+}
+func EkId() int32 {
+	return 90
+}
+func EkX() int32 {
+	return 91
+}
+func EkY() int32 {
+	return 92
+}
+func EkOp() int32 {
+	return 93
+}
+func EkAsc() int32 {
+	return 94
+}
+func EkDesc() int32 {
+	return 95
+}
+func EkSalpha() int32 {
+	return 96
+}
+func EkCs() int32 {
+	return 97
+}
+func EkZ() int32 {
+	return 98
+}
+func EkClip() int32 {
+	return 99
+}
+func EkMark() int32 {
+	return 100
+}
+func EkOcg() int32 {
+	return 101
+}
+func EkVby() int32 {
+	return 102
+}
+func EkVchk() int32 {
+	return 103
+}
+func EkFeat() int32 {
+	return 104
+}
+func EkWbreak() int32 {
+	return 105
+}
+func EkOrder() int32 {
+	return 106
+}
+func EkOcgdef() int32 {
+	return 107
+}
+func EkProgram() int32 {
+	return 108
+}
+func EkTounicode() int32 {
+	return 109
+}
+func EkEncoding() int32 {
+	return 110
+}
+func EkName() int32 {
+	return 111
+}
+func EkSpace() int32 {
+	return 112
+}
+func EkItalic() int32 {
+	return 113
+}
+func EkStemv() int32 {
+	return 114
+}
+func EkCapheight() int32 {
+	return 115
+}
+func EkXheight() int32 {
+	return 116
+}
+func EkDash() int32 {
+	return 117
+}
+func EkSkewed() int32 {
+	return 118
+}
+func EkView() int32 {
+	return 119
+}
+func EkBinarised() int32 {
+	return 120
+}
+func EkRound() int32 {
+	return 121
+}
+func EkPsm() int32 {
+	return 122
+}
+func EkRegion() int32 {
+	return 123
+}
+func EkOrient() int32 {
+	return 124
+}
+func EkWdir() int32 {
+	return 125
+}
+func EkLorder() int32 {
+	return 126
+}
+func EkOsd() int32 {
+	return 127
+}
+func EkScript() int32 {
+	return 128
+}
+func EkSconf() int32 {
+	return 129
+}
+func EkOconf() int32 {
+	return 130
+}
+func EkBlocks() int32 {
+	return 131
+}
+func EkBtype() int32 {
+	return 132
+}
+func EkChildren() int32 {
+	return 133
+}
+func EkPar() int32 {
+	return 134
+}
+func EkSyms() int32 {
+	return 135
+}
+func EkPsize() int32 {
+	return 136
+}
+func EkLight() int32 {
+	return 137
+}
+func EkChroma() int32 {
+	return 138
+}
+func EkCount() int32 {
+	return 139
+}
+func EkRole() int32 {
+	return 140
+}
+func EkMask() int32 {
+	return 141
+}
+func EkSpread() int32 {
+	return 142
+}
+func EkContour() int32 {
+	return 143
+}
+func EkHoles() int32 {
+	return 144
+}
+func EkGray() int32 {
+	return 145
+}
+func EkThick() int32 {
+	return 146
+}
+func EkMembers() int32 {
+	return 147
+}
+func EkCenter() int32 {
+	return 148
+}
+func EkRadii() int32 {
+	return 149
+}
+func EkOutline() int32 {
+	return 150
 }
 func EkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
@@ -705,235 +1801,1476 @@ func EkEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "stm")
 		return 1
 	}
+	if code == 55 {
+		port.TextAscii(t, "epages")
+		return 1
+	}
+	if code == 56 {
+		port.TextAscii(t, "views")
+		return 1
+	}
+	if code == 57 {
+		port.TextAscii(t, "pts")
+		return 1
+	}
+	if code == 58 {
+		port.TextAscii(t, "refs")
+		return 1
+	}
+	if code == 59 {
+		port.TextAscii(t, "etext")
+		return 1
+	}
+	if code == 60 {
+		port.TextAscii(t, "feats")
+		return 1
+	}
+	if code == 61 {
+		port.TextAscii(t, "marks")
+		return 1
+	}
+	if code == 62 {
+		port.TextAscii(t, "fonts")
+		return 1
+	}
+	if code == 63 {
+		port.TextAscii(t, "oruns")
+		return 1
+	}
+	if code == 64 {
+		port.TextAscii(t, "oblocks")
+		return 1
+	}
+	if code == 65 {
+		port.TextAscii(t, "olines")
+		return 1
+	}
+	if code == 66 {
+		port.TextAscii(t, "owords")
+		return 1
+	}
+	if code == 67 {
+		port.TextAscii(t, "osyms")
+		return 1
+	}
+	if code == 68 {
+		port.TextAscii(t, "oalts")
+		return 1
+	}
+	if code == 69 {
+		port.TextAscii(t, "inks")
+		return 1
+	}
+	if code == 70 {
+		port.TextAscii(t, "rules")
+		return 1
+	}
+	if code == 71 {
+		port.TextAscii(t, "prims")
+		return 1
+	}
+	if code == 72 {
+		port.TextAscii(t, "tlines")
+		return 1
+	}
+	if code == 73 {
+		port.TextAscii(t, "subject")
+		return 1
+	}
+	if code == 74 {
+		port.TextAscii(t, "height")
+		return 1
+	}
+	if code == 75 {
+		port.TextAscii(t, "turns")
+		return 1
+	}
+	if code == 76 {
+		port.TextAscii(t, "dpi")
+		return 1
+	}
+	if code == 77 {
+		port.TextAscii(t, "request")
+		return 1
+	}
+	if code == 78 {
+		port.TextAscii(t, "ink")
+		return 1
+	}
+	if code == 79 {
+		port.TextAscii(t, "deskew")
+		return 1
+	}
+	if code == 80 {
+		port.TextAscii(t, "crop")
+		return 1
+	}
+	if code == 81 {
+		port.TextAscii(t, "a")
+		return 1
+	}
+	if code == 82 {
+		port.TextAscii(t, "b")
+		return 1
+	}
+	if code == 83 {
+		port.TextAscii(t, "c")
+		return 1
+	}
+	if code == 84 {
+		port.TextAscii(t, "d")
+		return 1
+	}
+	if code == 85 {
+		port.TextAscii(t, "e")
+		return 1
+	}
+	if code == 86 {
+		port.TextAscii(t, "f")
+		return 1
+	}
+	if code == 87 {
+		port.TextAscii(t, "ia")
+		return 1
+	}
+	if code == 88 {
+		port.TextAscii(t, "ib")
+		return 1
+	}
+	if code == 89 {
+		port.TextAscii(t, "ic")
+		return 1
+	}
+	if code == 90 {
+		port.TextAscii(t, "id")
+		return 1
+	}
+	if code == 91 {
+		port.TextAscii(t, "x")
+		return 1
+	}
+	if code == 92 {
+		port.TextAscii(t, "y")
+		return 1
+	}
+	if code == 93 {
+		port.TextAscii(t, "op")
+		return 1
+	}
+	if code == 94 {
+		port.TextAscii(t, "asc")
+		return 1
+	}
+	if code == 95 {
+		port.TextAscii(t, "desc")
+		return 1
+	}
+	if code == 96 {
+		port.TextAscii(t, "salpha")
+		return 1
+	}
+	if code == 97 {
+		port.TextAscii(t, "cs")
+		return 1
+	}
+	if code == 98 {
+		port.TextAscii(t, "z")
+		return 1
+	}
+	if code == 99 {
+		port.TextAscii(t, "clip")
+		return 1
+	}
+	if code == 100 {
+		port.TextAscii(t, "mark")
+		return 1
+	}
+	if code == 101 {
+		port.TextAscii(t, "ocg")
+		return 1
+	}
+	if code == 102 {
+		port.TextAscii(t, "vby")
+		return 1
+	}
+	if code == 103 {
+		port.TextAscii(t, "vchk")
+		return 1
+	}
+	if code == 104 {
+		port.TextAscii(t, "feat")
+		return 1
+	}
+	if code == 105 {
+		port.TextAscii(t, "wbreak")
+		return 1
+	}
+	if code == 106 {
+		port.TextAscii(t, "order")
+		return 1
+	}
+	if code == 107 {
+		port.TextAscii(t, "ocgdef")
+		return 1
+	}
+	if code == 108 {
+		port.TextAscii(t, "program")
+		return 1
+	}
+	if code == 109 {
+		port.TextAscii(t, "tounicode")
+		return 1
+	}
+	if code == 110 {
+		port.TextAscii(t, "encoding")
+		return 1
+	}
+	if code == 111 {
+		port.TextAscii(t, "name")
+		return 1
+	}
+	if code == 112 {
+		port.TextAscii(t, "space")
+		return 1
+	}
+	if code == 113 {
+		port.TextAscii(t, "italic")
+		return 1
+	}
+	if code == 114 {
+		port.TextAscii(t, "stemv")
+		return 1
+	}
+	if code == 115 {
+		port.TextAscii(t, "capheight")
+		return 1
+	}
+	if code == 116 {
+		port.TextAscii(t, "xheight")
+		return 1
+	}
+	if code == 117 {
+		port.TextAscii(t, "dash")
+		return 1
+	}
+	if code == 118 {
+		port.TextAscii(t, "skewed")
+		return 1
+	}
+	if code == 119 {
+		port.TextAscii(t, "view")
+		return 1
+	}
+	if code == 120 {
+		port.TextAscii(t, "binarised")
+		return 1
+	}
+	if code == 121 {
+		port.TextAscii(t, "round")
+		return 1
+	}
+	if code == 122 {
+		port.TextAscii(t, "psm")
+		return 1
+	}
+	if code == 123 {
+		port.TextAscii(t, "region")
+		return 1
+	}
+	if code == 124 {
+		port.TextAscii(t, "orient")
+		return 1
+	}
+	if code == 125 {
+		port.TextAscii(t, "wdir")
+		return 1
+	}
+	if code == 126 {
+		port.TextAscii(t, "lorder")
+		return 1
+	}
+	if code == 127 {
+		port.TextAscii(t, "osd")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "script")
+		return 1
+	}
+	if code == 129 {
+		port.TextAscii(t, "sconf")
+		return 1
+	}
+	if code == 130 {
+		port.TextAscii(t, "oconf")
+		return 1
+	}
+	if code == 131 {
+		port.TextAscii(t, "blocks")
+		return 1
+	}
+	if code == 132 {
+		port.TextAscii(t, "btype")
+		return 1
+	}
+	if code == 133 {
+		port.TextAscii(t, "children")
+		return 1
+	}
+	if code == 134 {
+		port.TextAscii(t, "par")
+		return 1
+	}
+	if code == 135 {
+		port.TextAscii(t, "syms")
+		return 1
+	}
+	if code == 136 {
+		port.TextAscii(t, "psize")
+		return 1
+	}
+	if code == 137 {
+		port.TextAscii(t, "light")
+		return 1
+	}
+	if code == 138 {
+		port.TextAscii(t, "chroma")
+		return 1
+	}
+	if code == 139 {
+		port.TextAscii(t, "count")
+		return 1
+	}
+	if code == 140 {
+		port.TextAscii(t, "role")
+		return 1
+	}
+	if code == 141 {
+		port.TextAscii(t, "mask")
+		return 1
+	}
+	if code == 142 {
+		port.TextAscii(t, "spread")
+		return 1
+	}
+	if code == 143 {
+		port.TextAscii(t, "contour")
+		return 1
+	}
+	if code == 144 {
+		port.TextAscii(t, "holes")
+		return 1
+	}
+	if code == 145 {
+		port.TextAscii(t, "gray")
+		return 1
+	}
+	if code == 146 {
+		port.TextAscii(t, "thick")
+		return 1
+	}
+	if code == 147 {
+		port.TextAscii(t, "members")
+		return 1
+	}
+	if code == 148 {
+		port.TextAscii(t, "center")
+		return 1
+	}
+	if code == 149 {
+		port.TextAscii(t, "radii")
+		return 1
+	}
+	if code == 150 {
+		port.TextAscii(t, "outline")
+		return 1
+	}
 	return 0
 }
 
-func GlStride() int32 {
-	return 20
+func XoConf() int32 {
+	return 2
 }
-
-func WdStride() int32 {
+func XoSymMin() int32 {
+	return 3
+}
+func XoSymMean() int32 {
+	return 4
+}
+func XoMargin() int32 {
+	return 5
+}
+func XoAmbiguous() int32 {
+	return 6
+}
+func XoEngineFlags() int32 {
+	return 7
+}
+func XoImplausible() int32 {
+	return 8
+}
+func XoScript() int32 {
+	return 9
+}
+func XoKinInk() int32 {
+	return 10
+}
+func XoEngineInk() int32 {
+	return 11
+}
+func XoJaccard() int32 {
+	return 12
+}
+func XoBodyShare() int32 {
+	return 13
+}
+func XoComponents() int32 {
+	return 14
+}
+func XoCompRatio() int32 {
+	return 15
+}
+func XoInkGray() int32 {
 	return 16
 }
+func XoRelHeight() int32 {
+	return 17
+}
+func XoRelXheight() int32 {
+	return 18
+}
+func XoAngle() int32 {
+	return 19
+}
+func XoBaseDev() int32 {
+	return 20
+}
+func XoSpacing() int32 {
+	return 21
+}
+func XoSeal() int32 {
+	return 22
+}
+func XoArtifact() int32 {
+	return 23
+}
+func XoSimText() int32 {
+	return 24
+}
+func XoSimHidden() int32 {
+	return 25
+}
+func XoAgree() int32 {
+	return 26
+}
+func XoRecur() int32 {
+	return 27
+}
+func XoLength() int32 {
+	return 28
+}
+func XoEdge() int32 {
+	return 29
+}
+func XoEmitName(t *strings.Builder, code int32) int32 {
+	if code == 2 {
+		port.TextAscii(t, "conf")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "sym-min")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "sym-mean")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "margin")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "ambiguous")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "engine-flags")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "implausible")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "script")
+		return 1
+	}
+	if code == 10 {
+		port.TextAscii(t, "kin-ink")
+		return 1
+	}
+	if code == 11 {
+		port.TextAscii(t, "engine-ink")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "jaccard")
+		return 1
+	}
+	if code == 13 {
+		port.TextAscii(t, "body-share")
+		return 1
+	}
+	if code == 14 {
+		port.TextAscii(t, "components")
+		return 1
+	}
+	if code == 15 {
+		port.TextAscii(t, "comp-ratio")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "ink-gray")
+		return 1
+	}
+	if code == 17 {
+		port.TextAscii(t, "rel-height")
+		return 1
+	}
+	if code == 18 {
+		port.TextAscii(t, "rel-xheight")
+		return 1
+	}
+	if code == 19 {
+		port.TextAscii(t, "angle")
+		return 1
+	}
+	if code == 20 {
+		port.TextAscii(t, "base-dev")
+		return 1
+	}
+	if code == 21 {
+		port.TextAscii(t, "spacing")
+		return 1
+	}
+	if code == 22 {
+		port.TextAscii(t, "seal")
+		return 1
+	}
+	if code == 23 {
+		port.TextAscii(t, "artifact")
+		return 1
+	}
+	if code == 24 {
+		port.TextAscii(t, "sim-text")
+		return 1
+	}
+	if code == 25 {
+		port.TextAscii(t, "sim-hidden")
+		return 1
+	}
+	if code == 26 {
+		port.TextAscii(t, "agree")
+		return 1
+	}
+	if code == 27 {
+		port.TextAscii(t, "recur")
+		return 1
+	}
+	if code == 28 {
+		port.TextAscii(t, "length")
+		return 1
+	}
+	if code == 29 {
+		port.TextAscii(t, "edge")
+		return 1
+	}
+	return 0
+}
 
-func LnStride() int32 {
+func XtTrust() int32 {
+	return 2
+}
+func XtBadCp() int32 {
+	return 3
+}
+func XtOverlap() int32 {
+	return 4
+}
+func XtGapAnomaly() int32 {
+	return 5
+}
+func XtVis() int32 {
+	return 6
+}
+func XtModeClass() int32 {
+	return 7
+}
+func XtAlpha() int32 {
+	return 8
+}
+func XtContrast() int32 {
+	return 9
+}
+func XtKinInk() int32 {
+	return 10
+}
+func XtInkWithoutText() int32 {
+	return 11
+}
+func XtBodyShare() int32 {
+	return 12
+}
+func XtFontHealth() int32 {
+	return 13
+}
+func XtComponents() int32 {
+	return 14
+}
+func XtCompRatio() int32 {
+	return 15
+}
+func XtInArtifact() int32 {
+	return 16
+}
+func XtRelHeight() int32 {
+	return 17
+}
+func XtRelSize() int32 {
+	return 18
+}
+func XtAngle() int32 {
+	return 19
+}
+func XtBaseDev() int32 {
+	return 20
+}
+func XtSpacing() int32 {
+	return 21
+}
+func XtSeal() int32 {
+	return 22
+}
+func XtTlineOverlap() int32 {
+	return 23
+}
+func XtSimOcr() int32 {
+	return 24
+}
+func XtSimOcr2() int32 {
+	return 25
+}
+func XtRecur() int32 {
+	return 27
+}
+func XtLength() int32 {
+	return 28
+}
+func XtEdge() int32 {
+	return 29
+}
+func XtEmitName(t *strings.Builder, code int32) int32 {
+	if code == 2 {
+		port.TextAscii(t, "trust")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "bad-cp")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "overlap")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "gap-anomaly")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "vis")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "mode-class")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "alpha")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "contrast")
+		return 1
+	}
+	if code == 10 {
+		port.TextAscii(t, "kin-ink")
+		return 1
+	}
+	if code == 11 {
+		port.TextAscii(t, "ink-without-text")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "body-share")
+		return 1
+	}
+	if code == 13 {
+		port.TextAscii(t, "font-health")
+		return 1
+	}
+	if code == 14 {
+		port.TextAscii(t, "components")
+		return 1
+	}
+	if code == 15 {
+		port.TextAscii(t, "comp-ratio")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "in-artifact")
+		return 1
+	}
+	if code == 17 {
+		port.TextAscii(t, "rel-height")
+		return 1
+	}
+	if code == 18 {
+		port.TextAscii(t, "rel-size")
+		return 1
+	}
+	if code == 19 {
+		port.TextAscii(t, "angle")
+		return 1
+	}
+	if code == 20 {
+		port.TextAscii(t, "base-dev")
+		return 1
+	}
+	if code == 21 {
+		port.TextAscii(t, "spacing")
+		return 1
+	}
+	if code == 22 {
+		port.TextAscii(t, "seal")
+		return 1
+	}
+	if code == 23 {
+		port.TextAscii(t, "tline-overlap")
+		return 1
+	}
+	if code == 24 {
+		port.TextAscii(t, "sim-ocr")
+		return 1
+	}
+	if code == 25 {
+		port.TextAscii(t, "sim-ocr2")
+		return 1
+	}
+	if code == 27 {
+		port.TextAscii(t, "recur")
+		return 1
+	}
+	if code == 28 {
+		port.TextAscii(t, "length")
+		return 1
+	}
+	if code == 29 {
+		port.TextAscii(t, "edge")
+		return 1
+	}
+	return 0
+}
+
+func EpStride() int32 {
 	return 12
 }
 
-func PaStride() int32 {
+func VwStride() int32 {
+	return 24
+}
+
+func PtStride() int32 {
+	return 3
+}
+
+func RfStride() int32 {
+	return 2
+}
+
+func EtxStride() int32 {
+	return 1
+}
+
+func FeStride() int32 {
+	return 32
+}
+
+func GlStride() int32 {
+	return 32
+}
+
+func WdStride() int32 {
+	return 24
+}
+
+func LnStride() int32 {
 	return 16
 }
 
+func MkStride() int32 {
+	return 24
+}
+
+func FoStride() int32 {
+	return 16
+}
+
+func PaStride() int32 {
+	return 24
+}
+
 func ImStride() int32 {
+	return 20
+}
+
+func OrStride() int32 {
+	return 28
+}
+
+func ObStride() int32 {
+	return 16
+}
+
+func OlStride() int32 {
+	return 24
+}
+
+func OwStride() int32 {
+	return 28
+}
+
+func OsStride() int32 {
+	return 20
+}
+
+func OaStride() int32 {
+	return 4
+}
+
+func IkStride() int32 {
 	return 12
 }
 
 func CoStride() int32 {
+	return 24
+}
+
+func RlStride() int32 {
 	return 20
 }
 
-func OwStride() int32 {
-	return 16
+func PmStride() int32 {
+	return 24
 }
 
-func AltStride() int32 {
-	return 4
+func TlStride() int32 {
+	return 20
 }
 
-func SpStride() int32 {
-	return 22
-}
-
-func GfPage() int32 {
+func HdPage() int32 {
 	return 0
 }
 
-func GfCp() int32 {
+func HdX0() int32 {
 	return 1
 }
 
-func GfTstart() int32 {
+func HdY0() int32 {
 	return 2
 }
 
-func GfTlen() int32 {
+func HdX1() int32 {
 	return 3
 }
 
-func GfHow() int32 {
+func HdY1() int32 {
 	return 4
 }
 
-func GfFont() int32 {
+func HdBx0() int32 {
 	return 5
 }
 
-func GfSize() int32 {
+func HdBy0() int32 {
 	return 6
 }
 
-func GfX0() int32 {
+func HdBx1() int32 {
 	return 7
 }
 
-func GfY0() int32 {
+func HdBy1() int32 {
 	return 8
 }
 
-func GfX1() int32 {
+func HdRot() int32 {
 	return 9
 }
 
-func GfY1() int32 {
+func HdDir() int32 {
 	return 10
 }
 
-func GfBaseline() int32 {
+func HdTstart() int32 {
 	return 11
 }
 
-func GfRot() int32 {
+func HdTlen() int32 {
 	return 12
 }
 
-func GfColor() int32 {
+func HdLine() int32 {
 	return 13
 }
 
-func GfAlpha() int32 {
+func HdConf() int32 {
 	return 14
 }
 
-func GfMode() int32 {
+func HdFeat() int32 {
 	return 15
 }
 
-func GfVis() int32 {
+func LhPage() int32 {
+	return 0
+}
+
+func LhX0() int32 {
+	return 1
+}
+
+func LhY0() int32 {
+	return 2
+}
+
+func LhX1() int32 {
+	return 3
+}
+
+func LhY1() int32 {
+	return 4
+}
+
+func LhBx0() int32 {
+	return 5
+}
+
+func LhBy0() int32 {
+	return 6
+}
+
+func LhBx1() int32 {
+	return 7
+}
+
+func LhBy1() int32 {
+	return 8
+}
+
+func LhRot() int32 {
+	return 9
+}
+
+func LhDir() int32 {
+	return 10
+}
+
+func LhFirst() int32 {
+	return 11
+}
+
+func LhCount() int32 {
+	return 12
+}
+
+func ChPage() int32 {
+	return 0
+}
+
+func ChX0() int32 {
+	return 1
+}
+
+func ChY0() int32 {
+	return 2
+}
+
+func ChX1() int32 {
+	return 3
+}
+
+func ChY1() int32 {
+	return 4
+}
+
+func ChCp() int32 {
+	return 5
+}
+
+func ChTstart() int32 {
+	return 6
+}
+
+func ChTlen() int32 {
+	return 7
+}
+
+func ChWord() int32 {
+	return 8
+}
+
+func EpfPage() int32 {
+	return 0
+}
+
+func EpfWidth() int32 {
+	return 1
+}
+
+func EpfHeight() int32 {
+	return 2
+}
+
+func EpfTurns() int32 {
+	return 3
+}
+
+func EpfFlags() int32 {
+	return 4
+}
+
+func EpfDpi() int32 {
+	return 5
+}
+
+func VwfPage() int32 {
+	return 0
+}
+
+func VwfKind() int32 {
+	return 1
+}
+
+func VwfRequest() int32 {
+	return 2
+}
+
+func VwfParent() int32 {
+	return 3
+}
+
+func VwfPxw() int32 {
+	return 4
+}
+
+func VwfPxh() int32 {
+	return 5
+}
+
+func VwfDpi() int32 {
+	return 6
+}
+
+func VwfLayer() int32 {
+	return 7
+}
+
+func VwfInk() int32 {
+	return 8
+}
+
+func VwfTurns() int32 {
+	return 9
+}
+
+func VwfDeskew() int32 {
+	return 10
+}
+
+func VwfCropx() int32 {
+	return 11
+}
+
+func VwfCropy() int32 {
+	return 12
+}
+
+func VwfA() int32 {
+	return 13
+}
+
+func VwfB() int32 {
+	return 14
+}
+
+func VwfC() int32 {
+	return 15
+}
+
+func VwfD() int32 {
 	return 16
 }
 
-func GfArtifact() int32 {
+func VwfE() int32 {
 	return 17
 }
 
-func GfMcid() int32 {
+func VwfF() int32 {
 	return 18
 }
 
-func GfWord() int32 {
+func VwfIa() int32 {
 	return 19
 }
 
-func WfPage() int32 {
+func VwfIb() int32 {
+	return 20
+}
+
+func VwfIc() int32 {
+	return 21
+}
+
+func VwfId() int32 {
+	return 22
+}
+
+func VwfFlags() int32 {
+	return 23
+}
+
+func PtfX() int32 {
 	return 0
 }
 
-func WfX0() int32 {
+func PtfY() int32 {
 	return 1
 }
 
-func WfY0() int32 {
+func PtfOp() int32 {
 	return 2
 }
 
-func WfX1() int32 {
-	return 3
+func RffEa() int32 {
+	return 0
 }
 
-func WfY1() int32 {
-	return 4
+func RffIndex() int32 {
+	return 1
 }
 
-func WfGfirst() int32 {
-	return 5
+func XfSubject() int32 {
+	return 0
 }
 
-func WfGcount() int32 {
-	return 6
+func XfIndex() int32 {
+	return 1
 }
 
-func WfTstart() int32 {
-	return 7
+func XfCol() int32 {
+	return 2
 }
 
-func WfTlen() int32 {
-	return 8
-}
-
-func WfLine() int32 {
+func GfBx0() int32 {
 	return 9
 }
 
-func WfSrc() int32 {
+func GfBy0() int32 {
 	return 10
 }
 
-func WfConf() int32 {
+func GfBx1() int32 {
 	return 11
 }
 
-func WfFlags() int32 {
+func GfBy1() int32 {
 	return 12
 }
 
-func WfGap() int32 {
+func GfAsc() int32 {
 	return 13
 }
 
-func WfFont() int32 {
+func GfDesc() int32 {
 	return 14
 }
 
-func WfSize() int32 {
+func GfRot() int32 {
 	return 15
 }
 
-func LfPage() int32 {
-	return 0
+func GfHow() int32 {
+	return 16
 }
 
-func LfX0() int32 {
-	return 1
+func GfFont() int32 {
+	return 17
 }
 
-func LfY0() int32 {
-	return 2
+func GfSize() int32 {
+	return 18
 }
 
-func LfX1() int32 {
-	return 3
+func GfMode() int32 {
+	return 19
 }
 
-func LfY1() int32 {
-	return 4
+func GfFill() int32 {
+	return 20
 }
 
-func LfWfirst() int32 {
-	return 5
+func GfStroke() int32 {
+	return 21
 }
 
-func LfWcount() int32 {
-	return 6
+func GfFalpha() int32 {
+	return 22
 }
 
-func LfBaseline() int32 {
-	return 7
+func GfSalpha() int32 {
+	return 23
 }
 
-func LfDir() int32 {
-	return 8
+func GfCs() int32 {
+	return 24
 }
 
-func LfRot() int32 {
-	return 9
+func GfZ() int32 {
+	return 25
+}
+
+func GfClip() int32 {
+	return 26
+}
+
+func GfMark() int32 {
+	return 27
+}
+
+func GfOcg() int32 {
+	return 28
+}
+
+func GfVis() int32 {
+	return 29
+}
+
+func GfVby() int32 {
+	return 30
+}
+
+func GfVchk() int32 {
+	return 31
+}
+
+func WfStyle() int32 {
+	return 16
+}
+
+func WfGfirst() int32 {
+	return 17
+}
+
+func WfGcount() int32 {
+	return 18
+}
+
+func WfFont() int32 {
+	return 19
+}
+
+func WfSize() int32 {
+	return 20
+}
+
+func WfGap() int32 {
+	return 21
+}
+
+func WfWbreak() int32 {
+	return 22
+}
+
+func WfSrc() int32 {
+	return 23
 }
 
 func LfSrc() int32 {
+	return 13
+}
+
+func LfOrder() int32 {
+	return 14
+}
+
+func MkfPage() int32 {
+	return 0
+}
+
+func MkfKind() int32 {
+	return 1
+}
+
+func MkfTstart() int32 {
+	return 2
+}
+
+func MkfTlen() int32 {
+	return 3
+}
+
+func MkfParent() int32 {
+	return 4
+}
+
+func MkfMcid() int32 {
+	return 5
+}
+
+func MkfArtype() int32 {
+	return 6
+}
+
+func MkfArsub() int32 {
+	return 7
+}
+
+func MkfActual() int32 {
+	return 8
+}
+
+func MkfActuallen() int32 {
+	return 9
+}
+
+func MkfAlt() int32 {
 	return 10
 }
 
-func LfConf() int32 {
+func MkfAltlen() int32 {
 	return 11
+}
+
+func MkfExp() int32 {
+	return 12
+}
+
+func MkfExplen() int32 {
+	return 13
+}
+
+func MkfLang() int32 {
+	return 14
+}
+
+func MkfLanglen() int32 {
+	return 15
+}
+
+func MkfOcg() int32 {
+	return 16
+}
+
+func MkfOcgdef() int32 {
+	return 17
+}
+
+func MkfGfirst() int32 {
+	return 18
+}
+
+func MkfGcount() int32 {
+	return 19
+}
+
+func MkfZfirst() int32 {
+	return 20
+}
+
+func MkfZlast() int32 {
+	return 21
+}
+
+func MkfFlags() int32 {
+	return 22
+}
+
+func MkfStm() int32 {
+	return 23
+}
+
+func FnfObj() int32 {
+	return 0
+}
+
+func FnfSubtype() int32 {
+	return 1
+}
+
+func FnfFlags() int32 {
+	return 2
+}
+
+func FnfProgram() int32 {
+	return 3
+}
+
+func FnfTounicode() int32 {
+	return 4
+}
+
+func FnfEnc() int32 {
+	return 5
+}
+
+func FnfTstart() int32 {
+	return 6
+}
+
+func FnfTlen() int32 {
+	return 7
+}
+
+func FnfAsc() int32 {
+	return 8
+}
+
+func FnfDesc() int32 {
+	return 9
+}
+
+func FnfSpace() int32 {
+	return 10
+}
+
+func FnfItalic() int32 {
+	return 11
+}
+
+func FnfStemv() int32 {
+	return 12
+}
+
+func FnfStyle() int32 {
+	return 13
+}
+
+func FnfCapheight() int32 {
+	return 14
+}
+
+func FnfXheight() int32 {
+	return 15
 }
 
 func PfPage() int32 {
@@ -972,20 +3309,44 @@ func PfWidth() int32 {
 	return 8
 }
 
-func PfAlpha() int32 {
+func PfFalpha() int32 {
 	return 9
 }
 
-func PfFlags() int32 {
+func PfSalpha() int32 {
 	return 10
 }
 
-func PfArtifact() int32 {
+func PfFlags() int32 {
 	return 11
 }
 
-func PfMcid() int32 {
+func PfZ() int32 {
 	return 12
+}
+
+func PfClip() int32 {
+	return 13
+}
+
+func PfMark() int32 {
+	return 14
+}
+
+func PfOcg() int32 {
+	return 15
+}
+
+func PfPfirst() int32 {
+	return 16
+}
+
+func PfPcount() int32 {
+	return 17
+}
+
+func PfDash() int32 {
+	return 18
 }
 
 func MfPage() int32 {
@@ -1028,12 +3389,376 @@ func MfFlags() int32 {
 	return 9
 }
 
-func MfArtifact() int32 {
+func MfRot() int32 {
 	return 10
 }
 
-func MfMcid() int32 {
+func MfSkewed() int32 {
 	return 11
+}
+
+func MfZ() int32 {
+	return 12
+}
+
+func MfClip() int32 {
+	return 13
+}
+
+func MfMark() int32 {
+	return 14
+}
+
+func MfOcg() int32 {
+	return 15
+}
+
+func MfVis() int32 {
+	return 16
+}
+
+func MfVby() int32 {
+	return 17
+}
+
+func MfVchk() int32 {
+	return 18
+}
+
+func OrfPage() int32 {
+	return 0
+}
+
+func OrfView() int32 {
+	return 1
+}
+
+func OrfBview() int32 {
+	return 2
+}
+
+func OrfRequest() int32 {
+	return 3
+}
+
+func OrfRound() int32 {
+	return 4
+}
+
+func OrfPass() int32 {
+	return 5
+}
+
+func OrfPsm() int32 {
+	return 6
+}
+
+func OrfRx() int32 {
+	return 7
+}
+
+func OrfRy() int32 {
+	return 8
+}
+
+func OrfRw() int32 {
+	return 9
+}
+
+func OrfRh() int32 {
+	return 10
+}
+
+func OrfLang() int32 {
+	return 11
+}
+
+func OrfLanglen() int32 {
+	return 12
+}
+
+func OrfOrient() int32 {
+	return 13
+}
+
+func OrfWdir() int32 {
+	return 14
+}
+
+func OrfLorder() int32 {
+	return 15
+}
+
+func OrfDeskew() int32 {
+	return 16
+}
+
+func OrfOsd() int32 {
+	return 17
+}
+
+func OrfScript() int32 {
+	return 18
+}
+
+func OrfSconf() int32 {
+	return 19
+}
+
+func OrfOconf() int32 {
+	return 20
+}
+
+func OrfFlags() int32 {
+	return 21
+}
+
+func OrfBfirst() int32 {
+	return 22
+}
+
+func OrfBcount() int32 {
+	return 23
+}
+
+func OrfLfirst() int32 {
+	return 24
+}
+
+func OrfLcount() int32 {
+	return 25
+}
+
+func OrfWfirst() int32 {
+	return 26
+}
+
+func OrfWcount() int32 {
+	return 27
+}
+
+func ObfPage() int32 {
+	return 0
+}
+
+func ObfX0() int32 {
+	return 1
+}
+
+func ObfY0() int32 {
+	return 2
+}
+
+func ObfX1() int32 {
+	return 3
+}
+
+func ObfY1() int32 {
+	return 4
+}
+
+func ObfKind() int32 {
+	return 5
+}
+
+func ObfParent() int32 {
+	return 6
+}
+
+func ObfRun() int32 {
+	return 7
+}
+
+func ObfBtype() int32 {
+	return 8
+}
+
+func ObfOrient() int32 {
+	return 9
+}
+
+func ObfWdir() int32 {
+	return 10
+}
+
+func ObfFirst() int32 {
+	return 11
+}
+
+func ObfCount() int32 {
+	return 12
+}
+
+func ObfConf() int32 {
+	return 13
+}
+
+func OlfPar() int32 {
+	return 13
+}
+
+func OlfRun() int32 {
+	return 14
+}
+
+func OlfConf() int32 {
+	return 15
+}
+
+func OlfXheight() int32 {
+	return 16
+}
+
+func OlfAsc() int32 {
+	return 17
+}
+
+func OlfDesc() int32 {
+	return 18
+}
+
+func OlfPx() int32 {
+	return 19
+}
+
+func OlfPy() int32 {
+	return 20
+}
+
+func OlfPw() int32 {
+	return 21
+}
+
+func OlfPh() int32 {
+	return 22
+}
+
+func OwfStyle() int32 {
+	return 16
+}
+
+func OwfRun() int32 {
+	return 17
+}
+
+func OwfSfirst() int32 {
+	return 18
+}
+
+func OwfScount() int32 {
+	return 19
+}
+
+func OwfLang() int32 {
+	return 20
+}
+
+func OwfFlags() int32 {
+	return 21
+}
+
+func OwfPsize() int32 {
+	return 22
+}
+
+func OwfPx() int32 {
+	return 23
+}
+
+func OwfPy() int32 {
+	return 24
+}
+
+func OwfPw() int32 {
+	return 25
+}
+
+func OwfPh() int32 {
+	return 26
+}
+
+func OsfConf() int32 {
+	return 9
+}
+
+func OsfAfirst() int32 {
+	return 10
+}
+
+func OsfAcount() int32 {
+	return 11
+}
+
+func OsfFlags() int32 {
+	return 12
+}
+
+func OsfPx() int32 {
+	return 13
+}
+
+func OsfPy() int32 {
+	return 14
+}
+
+func OsfPw() int32 {
+	return 15
+}
+
+func OsfPh() int32 {
+	return 16
+}
+
+func OafSym() int32 {
+	return 0
+}
+
+func OafTstart() int32 {
+	return 1
+}
+
+func OafTlen() int32 {
+	return 2
+}
+
+func OafConf() int32 {
+	return 3
+}
+
+func IkfPage() int32 {
+	return 0
+}
+
+func IkfView() int32 {
+	return 1
+}
+
+func IkfColor() int32 {
+	return 2
+}
+
+func IkfLight() int32 {
+	return 3
+}
+
+func IkfChroma() int32 {
+	return 4
+}
+
+func IkfCount() int32 {
+	return 5
+}
+
+func IkfRole() int32 {
+	return 6
+}
+
+func IkfMask() int32 {
+	return 7
+}
+
+func IkfSpread() int32 {
+	return 8
 }
 
 func CfPage() int32 {
@@ -1056,220 +3781,653 @@ func CfY1() int32 {
 	return 4
 }
 
-func CfPxx() int32 {
+func CfView() int32 {
 	return 5
+}
+
+func CfPxx() int32 {
+	return 6
 }
 
 func CfPxy() int32 {
-	return 6
+	return 7
 }
 
 func CfPxw() int32 {
-	return 7
+	return 8
 }
 
 func CfPxh() int32 {
-	return 8
+	return 9
 }
 
 func CfArea() int32 {
-	return 9
+	return 10
 }
 
 func CfFill() int32 {
-	return 10
+	return 11
 }
 
 func CfStroke() int32 {
-	return 11
+	return 12
 }
 
 func CfColor() int32 {
-	return 12
+	return 13
 }
 
-func CfLayer() int32 {
-	return 13
+func CfInk() int32 {
+	return 14
 }
 
 func CfKind() int32 {
-	return 14
+	return 15
 }
 
 func CfConf() int32 {
-	return 15
+	return 16
 }
 
 func CfFlags() int32 {
-	return 16
-}
-
-func OfPage() int32 {
-	return 0
-}
-
-func OfX0() int32 {
-	return 1
-}
-
-func OfY0() int32 {
-	return 2
-}
-
-func OfX1() int32 {
-	return 3
-}
-
-func OfY1() int32 {
-	return 4
-}
-
-func OfTstart() int32 {
-	return 5
-}
-
-func OfTlen() int32 {
-	return 6
-}
-
-func OfConf() int32 {
-	return 7
-}
-
-func OfAlthead() int32 {
-	return 8
-}
-
-func OfAltcount() int32 {
-	return 9
-}
-
-func OfLine() int32 {
-	return 10
-}
-
-func OfBlock() int32 {
-	return 11
-}
-
-func OfBaseline() int32 {
-	return 12
-}
-
-func OfFlags() int32 {
-	return 13
-}
-
-func OfPass() int32 {
-	return 14
-}
-
-func OfLang() int32 {
-	return 15
-}
-
-func AfSym() int32 {
-	return 0
-}
-
-func AfCp() int32 {
-	return 1
-}
-
-func AfConf() int32 {
-	return 2
-}
-
-func AfNext() int32 {
-	return 3
-}
-
-func SfPage() int32 {
-	return 0
-}
-
-func SfTag() int32 {
-	return 1
-}
-
-func SfTaglen() int32 {
-	return 2
-}
-
-func SfParent() int32 {
-	return 3
-}
-
-func SfMcid() int32 {
-	return 4
-}
-
-func SfArtifact() int32 {
-	return 5
-}
-
-func SfType() int32 {
-	return 6
-}
-
-func SfTypelen() int32 {
-	return 7
-}
-
-func SfSubtype() int32 {
-	return 8
-}
-
-func SfSubtypelen() int32 {
-	return 9
-}
-
-func SfActual() int32 {
-	return 10
-}
-
-func SfActuallen() int32 {
-	return 11
-}
-
-func SfAlt() int32 {
-	return 12
-}
-
-func SfAltlen() int32 {
-	return 13
-}
-
-func SfExp() int32 {
-	return 14
-}
-
-func SfExplen() int32 {
-	return 15
-}
-
-func SfLang() int32 {
-	return 16
-}
-
-func SfLanglen() int32 {
 	return 17
 }
 
-func SfGfirst() int32 {
+func CfPfirst() int32 {
 	return 18
 }
 
-func SfGcount() int32 {
+func CfPcount() int32 {
 	return 19
 }
 
-func SfFlags() int32 {
+func CfParent() int32 {
 	return 20
 }
 
-func SfStm() int32 {
+func CfHoles() int32 {
 	return 21
+}
+
+func CfGray() int32 {
+	return 22
+}
+
+func RlfPage() int32 {
+	return 0
+}
+
+func RlfX0() int32 {
+	return 1
+}
+
+func RlfY0() int32 {
+	return 2
+}
+
+func RlfX1() int32 {
+	return 3
+}
+
+func RlfY1() int32 {
+	return 4
+}
+
+func RlfView() int32 {
+	return 5
+}
+
+func RlfLx0() int32 {
+	return 6
+}
+
+func RlfLy0() int32 {
+	return 7
+}
+
+func RlfLx1() int32 {
+	return 8
+}
+
+func RlfLy1() int32 {
+	return 9
+}
+
+func RlfThick() int32 {
+	return 10
+}
+
+func RlfColor() int32 {
+	return 11
+}
+
+func RlfInk() int32 {
+	return 12
+}
+
+func RlfStyle() int32 {
+	return 13
+}
+
+func RlfConf() int32 {
+	return 14
+}
+
+func RlfRfirst() int32 {
+	return 15
+}
+
+func RlfRcount() int32 {
+	return 16
+}
+
+func RlfFlags() int32 {
+	return 17
+}
+
+func PmfPage() int32 {
+	return 0
+}
+
+func PmfX0() int32 {
+	return 1
+}
+
+func PmfY0() int32 {
+	return 2
+}
+
+func PmfX1() int32 {
+	return 3
+}
+
+func PmfY1() int32 {
+	return 4
+}
+
+func PmfView() int32 {
+	return 5
+}
+
+func PmfKind() int32 {
+	return 6
+}
+
+func PmfCx() int32 {
+	return 7
+}
+
+func PmfCy() int32 {
+	return 8
+}
+
+func PmfRx() int32 {
+	return 9
+}
+
+func PmfRy() int32 {
+	return 10
+}
+
+func PmfRot() int32 {
+	return 11
+}
+
+func PmfStroke() int32 {
+	return 12
+}
+
+func PmfColor() int32 {
+	return 13
+}
+
+func PmfInk() int32 {
+	return 14
+}
+
+func PmfFill() int32 {
+	return 15
+}
+
+func PmfConf() int32 {
+	return 16
+}
+
+func PmfPfirst() int32 {
+	return 17
+}
+
+func PmfPcount() int32 {
+	return 18
+}
+
+func PmfRfirst() int32 {
+	return 19
+}
+
+func PmfRcount() int32 {
+	return 20
+}
+
+func PmfFlags() int32 {
+	return 21
+}
+
+func TlfInk() int32 {
+	return 13
+}
+
+func TlfHeight() int32 {
+	return 14
+}
+
+func TlfGap() int32 {
+	return 15
+}
+
+func TlfConf() int32 {
+	return 16
+}
+
+var EvFd [1650]int32 = [1650]int32{
+	1, 0, 1, 9, -2147483648, 0,
+	1, 1, 2, 34, 0, 0,
+	1, 2, 2, 74, 0, 0,
+	1, 3, 1, 75, 0, 0,
+	1, 4, 9, 28, 0, 7,
+	1, 5, 1, 76, 0, 0,
+	2, 0, 1, 9, -2147483648, 0,
+	2, 1, 8, 31, 0, 19,
+	2, 2, 1, 77, -1, 0,
+	2, 3, 1, 48, -1, 0,
+	2, 4, 12, 36, 0, 0,
+	2, 6, 1, 76, 0, 0,
+	2, 7, 1, 38, 0, 0,
+	2, 8, 1, 78, -1, 0,
+	2, 9, 1, 75, 0, 0,
+	2, 10, 2, 79, 0, 0,
+	2, 11, 13, 80, 0, 0,
+	2, 13, 1, 81, 0, 0,
+	2, 14, 1, 82, 0, 0,
+	2, 15, 1, 83, 0, 0,
+	2, 16, 1, 84, 0, 0,
+	2, 17, 2, 85, 0, 0,
+	2, 18, 2, 86, 0, 0,
+	2, 19, 1, 87, 0, 0,
+	2, 20, 1, 88, 0, 0,
+	2, 21, 1, 89, 0, 0,
+	2, 22, 1, 90, 0, 0,
+	2, 23, 9, 28, 0, 8,
+	3, 0, 2, 91, -2147483648, 0,
+	3, 1, 2, 92, -2147483648, 0,
+	3, 2, 8, 93, 0, 17,
+	7, 0, 1, 9, -2147483648, 0,
+	7, 1, 3, 15, -2147483648, 0,
+	7, 5, 1, 10, -1, 0,
+	7, 6, 6, 11, -2147483648, 0,
+	7, 8, 1, 24, -1, 0,
+	7, 9, 4, 16, -2147483648, 0,
+	7, 13, 2, 94, 0, 0,
+	7, 14, 2, 95, 0, 0,
+	7, 15, 2, 17, 0, 0,
+	7, 16, 8, 12, 0, 1,
+	7, 17, 1, 13, -1, 0,
+	7, 18, 2, 14, -2147483648, 0,
+	7, 19, 1, 20, 0, 0,
+	7, 20, 5, 18, -2147483648, 0,
+	7, 21, 5, 33, -2147483648, 0,
+	7, 22, 1, 19, 1000, 0,
+	7, 23, 1, 96, 1000, 0,
+	7, 24, 8, 97, -1, 13,
+	7, 25, 1, 98, -2147483648, 0,
+	7, 26, 1, 99, -1, 0,
+	7, 27, 1, 100, -1, 0,
+	7, 28, 1, 101, -1, 0,
+	7, 29, 8, 21, 0, 2,
+	7, 30, 1, 102, -1, 0,
+	7, 31, 9, 103, 0, 11,
+	8, 0, 1, 9, -2147483648, 0,
+	8, 1, 3, 15, -2147483648, 0,
+	8, 5, 4, 16, -2147483648, 0,
+	8, 9, 2, 17, 0, 0,
+	8, 10, 8, 30, 0, 4,
+	8, 11, 6, 11, -2147483648, 0,
+	8, 13, 1, 25, -1, 0,
+	8, 14, 1, 27, -1, 0,
+	8, 15, 1, 104, -1, 0,
+	8, 16, 9, 43, 0, 3,
+	8, 17, 7, 2, -1, 0,
+	8, 19, 1, 13, -1, 0,
+	8, 20, 2, 14, 0, 0,
+	8, 21, 2, 29, -1, 0,
+	8, 22, 8, 105, 0, 12,
+	8, 23, 9, 26, 0, 1,
+	9, 0, 1, 9, -2147483648, 0,
+	9, 1, 3, 15, -2147483648, 0,
+	9, 5, 4, 16, -2147483648, 0,
+	9, 9, 2, 17, 0, 0,
+	9, 10, 8, 30, 0, 4,
+	9, 11, 7, 3, -1, 0,
+	9, 13, 9, 26, 0, 1,
+	9, 14, 1, 106, -1, 0,
+	10, 0, 1, 9, -2147483648, 0,
+	10, 1, 8, 31, 0, 7,
+	10, 2, 6, 47, -2147483648, 0,
+	10, 4, 1, 48, -1, 0,
+	10, 5, 1, 23, -1, 0,
+	10, 6, 8, 49, 0, 3,
+	10, 7, 8, 50, 0, 8,
+	10, 8, 6, 51, -2147483648, 0,
+	10, 10, 6, 52, -2147483648, 0,
+	10, 12, 6, 53, -2147483648, 0,
+	10, 14, 6, 41, -2147483648, 0,
+	10, 16, 1, 101, -1, 0,
+	10, 17, 1, 107, -1, 0,
+	10, 18, 7, 2, -1, 0,
+	10, 20, 12, 98, -1, -1,
+	10, 22, 9, 28, 0, 6,
+	10, 23, 1, 54, 0, 0,
+	11, 0, 1, 35, 0, 0,
+	11, 1, 8, 50, 0, 11,
+	11, 2, 1, 28, 0, 0,
+	11, 3, 1, 108, 0, 0,
+	11, 4, 1, 109, 0, 0,
+	11, 5, 1, 110, -1, 0,
+	11, 6, 6, 111, -2147483648, 0,
+	11, 8, 1, 94, 0, 0,
+	11, 9, 1, 95, 0, 0,
+	11, 10, 1, 112, -1, 0,
+	11, 11, 2, 113, 0, 0,
+	11, 12, 1, 114, -1, 0,
+	11, 13, 9, 43, 0, 3,
+	11, 14, 1, 115, -1, 0,
+	11, 15, 1, 116, -1, 0,
+	12, 0, 1, 9, -2147483648, 0,
+	12, 1, 8, 31, 0, 5,
+	12, 2, 3, 15, -2147483648, 0,
+	12, 6, 5, 32, -2147483648, 0,
+	12, 7, 5, 33, -2147483648, 0,
+	12, 8, 2, 34, 0, 0,
+	12, 9, 1, 19, 1000, 0,
+	12, 10, 1, 96, 1000, 0,
+	12, 11, 9, 28, 0, 4,
+	12, 12, 1, 98, -1, 0,
+	12, 13, 1, 99, -1, 0,
+	12, 14, 1, 100, -1, 0,
+	12, 15, 1, 101, -1, 0,
+	12, 16, 7, 57, -1, 0,
+	12, 18, 2, 117, 0, 0,
+	13, 0, 1, 9, -2147483648, 0,
+	13, 1, 3, 15, -2147483648, 0,
+	13, 5, 1, 35, -2147483648, 0,
+	13, 6, 12, 36, 0, 0,
+	13, 8, 1, 19, 1000, 0,
+	13, 9, 9, 28, 0, 5,
+	13, 10, 2, 17, 0, 0,
+	13, 11, 1, 118, 0, 0,
+	13, 12, 1, 98, -1, 0,
+	13, 13, 1, 99, -1, 0,
+	13, 14, 1, 100, -1, 0,
+	13, 15, 1, 101, -1, 0,
+	13, 16, 8, 21, 0, 2,
+	13, 17, 1, 102, -1, 0,
+	13, 18, 9, 103, 0, 11,
+	14, 0, 1, 9, -2147483648, 0,
+	14, 1, 1, 119, -1, 0,
+	14, 2, 1, 120, -1, 0,
+	14, 3, 1, 77, -1, 0,
+	14, 4, 1, 121, 0, 0,
+	14, 5, 8, 40, 0, 10,
+	14, 6, 1, 122, 0, 0,
+	14, 7, 10, 123, -2147483648, 0,
+	14, 11, 6, 41, -2147483648, 0,
+	14, 13, 1, 124, 0, 0,
+	14, 14, 1, 125, 0, 0,
+	14, 15, 1, 126, 0, 0,
+	14, 16, 2, 79, 0, 0,
+	14, 17, 1, 127, -1, 0,
+	14, 18, 11, 128, -2147483648, 0,
+	14, 19, 1, 129, -1, 0,
+	14, 20, 1, 130, -1, 0,
+	14, 21, 1, 28, 0, 0,
+	14, 22, 7, 131, 0, 0,
+	14, 24, 7, 4, 0, 0,
+	14, 26, 7, 3, 0, 0,
+	15, 0, 1, 9, -2147483648, 0,
+	15, 1, 3, 15, -2147483648, 0,
+	15, 5, 8, 31, 0, 9,
+	15, 6, 1, 48, -1, 0,
+	15, 7, 1, 45, -1, 0,
+	15, 8, 1, 132, 0, 0,
+	15, 9, 1, 124, 0, 0,
+	15, 10, 1, 125, 0, 0,
+	15, 11, 7, 133, -1, 0,
+	15, 13, 1, 27, -1, 0,
+	16, 0, 1, 9, -2147483648, 0,
+	16, 1, 3, 15, -2147483648, 0,
+	16, 5, 4, 16, -2147483648, 0,
+	16, 9, 2, 17, 0, 0,
+	16, 10, 8, 30, 0, 4,
+	16, 11, 7, 3, -1, 0,
+	16, 13, 1, 134, -1, 0,
+	16, 14, 1, 45, -1, 0,
+	16, 15, 1, 27, -1, 0,
+	16, 16, 2, 116, -1, 0,
+	16, 17, 2, 94, -1, 0,
+	16, 18, 2, 95, -1, 0,
+	16, 19, 10, 36, -2147483648, 0,
+	17, 0, 1, 9, -2147483648, 0,
+	17, 1, 3, 15, -2147483648, 0,
+	17, 5, 4, 16, -2147483648, 0,
+	17, 9, 2, 17, 0, 0,
+	17, 10, 8, 30, 0, 4,
+	17, 11, 6, 11, -2147483648, 0,
+	17, 13, 1, 25, -1, 0,
+	17, 14, 1, 27, -1, 0,
+	17, 15, 1, 104, -1, 0,
+	17, 16, 9, 43, 0, 3,
+	17, 17, 1, 45, -1, 0,
+	17, 18, 7, 135, -1, 0,
+	17, 20, 11, 41, -2147483648, 0,
+	17, 21, 9, 28, 0, 9,
+	17, 22, 2, 136, -1, 0,
+	17, 23, 10, 36, -2147483648, 0,
+	18, 0, 1, 9, -2147483648, 0,
+	18, 1, 3, 15, -2147483648, 0,
+	18, 5, 1, 10, -1, 0,
+	18, 6, 6, 11, -2147483648, 0,
+	18, 8, 1, 24, -1, 0,
+	18, 9, 1, 27, -1, 0,
+	18, 10, 7, 39, -1, 0,
+	18, 12, 9, 28, 0, 10,
+	18, 13, 10, 36, -2147483648, 0,
+	19, 0, 1, 44, -2147483648, 0,
+	19, 1, 6, 11, -2147483648, 0,
+	19, 3, 1, 27, -1, 0,
+	20, 0, 1, 9, -2147483648, 0,
+	20, 1, 1, 119, -1, 0,
+	20, 2, 5, 18, -2147483648, 0,
+	20, 3, 1, 137, 0, 0,
+	20, 4, 1, 138, 0, 0,
+	20, 5, 1, 139, 0, 0,
+	20, 6, 8, 140, 0, 14,
+	20, 7, 1, 141, -1, 0,
+	20, 8, 1, 142, 0, 0,
+	21, 0, 1, 9, -2147483648, 0,
+	21, 1, 3, 15, -2147483648, 0,
+	21, 5, 1, 119, -1, 0,
+	21, 6, 10, 36, -2147483648, 0,
+	21, 10, 1, 37, 0, 0,
+	21, 11, 1, 32, 0, 0,
+	21, 12, 2, 33, 0, 0,
+	21, 13, 5, 18, -2147483648, 0,
+	21, 14, 1, 78, -1, 0,
+	21, 15, 8, 31, 0, 6,
+	21, 16, 1, 27, -1, 0,
+	21, 17, 9, 28, 0, 2,
+	21, 18, 7, 143, -1, 0,
+	21, 20, 1, 48, -1, 0,
+	21, 21, 1, 144, 0, 0,
+	21, 22, 1, 145, -1, 0,
+	22, 0, 1, 9, -2147483648, 0,
+	22, 1, 3, 15, -2147483648, 0,
+	22, 5, 1, 119, -1, 0,
+	22, 6, 4, 25, -2147483648, 0,
+	22, 10, 2, 146, 0, 0,
+	22, 11, 5, 18, -2147483648, 0,
+	22, 12, 1, 78, -1, 0,
+	22, 13, 8, 43, 0, 15,
+	22, 14, 1, 27, -1, 0,
+	22, 15, 7, 147, -1, 0,
+	22, 17, 1, 28, 0, 0,
+	23, 0, 1, 9, -2147483648, 0,
+	23, 1, 3, 15, -2147483648, 0,
+	23, 5, 1, 119, -1, 0,
+	23, 6, 8, 31, 0, 16,
+	23, 7, 13, 148, 0, 0,
+	23, 9, 13, 149, 0, 0,
+	23, 11, 2, 17, 0, 0,
+	23, 12, 2, 33, 0, 0,
+	23, 13, 5, 18, -2147483648, 0,
+	23, 14, 1, 78, -1, 0,
+	23, 15, 1, 32, 0, 0,
+	23, 16, 1, 27, -1, 0,
+	23, 17, 7, 150, -1, 0,
+	23, 19, 7, 147, -1, 0,
+	23, 21, 1, 28, 0, 0,
+	24, 0, 1, 9, -2147483648, 0,
+	24, 1, 3, 15, -2147483648, 0,
+	24, 5, 4, 16, -2147483648, 0,
+	24, 9, 2, 17, 0, 0,
+	24, 10, 8, 30, 0, 4,
+	24, 11, 7, 7, -1, 0,
+	24, 13, 1, 78, -1, 0,
+	24, 14, 2, 74, 0, 0,
+	24, 15, 2, 29, 0, 0,
+	24, 16, 1, 27, -1, 0,
+}
+
+var EvFx [48]int32 = [48]int32{
+	0, 6,
+	6, 22,
+	28, 3,
+	0, 0,
+	0, 0,
+	0, 0,
+	31, 25,
+	56, 16,
+	72, 8,
+	80, 17,
+	97, 15,
+	112, 15,
+	127, 15,
+	142, 21,
+	163, 10,
+	173, 13,
+	186, 16,
+	202, 9,
+	211, 3,
+	214, 9,
+	223, 16,
+	239, 11,
+	250, 15,
+	265, 10,
+}
+
+var EvStrides [24]int32 = [24]int32{
+	12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
+	28, 20, 4, 12, 24, 20, 24, 20,
+}
+
+var EvCk [528]int32 = [528]int32{
+	2, 7, 1, 6, 7, 5,
+	3, 8, 1, 11, 12, 5,
+	4, 10, 1, 2, 3, 5,
+	5, 10, 1, 8, 9, 5,
+	6, 10, 1, 10, 11, 5,
+	7, 10, 1, 12, 13, 5,
+	8, 10, 1, 14, 15, 5,
+	9, 11, 1, 6, 7, 5,
+	10, 14, 1, 11, 12, 5,
+	11, 17, 1, 11, 12, 5,
+	12, 18, 1, 6, 7, 5,
+	13, 19, 1, 1, 2, 5,
+	14, 8, 2, 17, 18, 7,
+	15, 9, 2, 11, 12, 8,
+	16, 10, 2, 18, 19, 7,
+	17, 12, 2, 16, 17, 3,
+	18, 21, 2, 18, 19, 3,
+	19, 22, 2, 15, 16, 4,
+	20, 23, 2, 17, 18, 3,
+	21, 23, 2, 19, 20, 4,
+	22, 14, 2, 22, 23, 15,
+	23, 14, 2, 24, 25, 16,
+	24, 14, 2, 26, 27, 17,
+	25, 16, 2, 11, 12, 17,
+	26, 17, 2, 18, 19, 18,
+	27, 18, 2, 10, 11, 19,
+	28, 24, 2, 11, 12, 4,
+	29, 7, 3, 8, 0, 8,
+	30, 7, 3, 17, 0, 11,
+	31, 7, 3, 26, 0, 12,
+	32, 7, 3, 27, 0, 10,
+	33, 7, 3, 28, 0, 10,
+	34, 8, 3, 13, 0, 9,
+	35, 8, 3, 15, 0, 6,
+	36, 10, 5, 4, 0, 10,
+	37, 12, 3, 13, 0, 12,
+	38, 12, 3, 14, 0, 10,
+	39, 12, 3, 15, 0, 10,
+	40, 13, 3, 13, 0, 12,
+	41, 13, 3, 14, 0, 10,
+	42, 13, 3, 15, 0, 10,
+	43, 14, 3, 1, 0, 2,
+	44, 14, 3, 2, 0, 2,
+	45, 16, 3, 13, 0, 15,
+	46, 16, 3, 14, 0, 14,
+	47, 17, 3, 13, 0, 16,
+	48, 17, 3, 15, 0, 6,
+	49, 17, 3, 17, 0, 14,
+	50, 15, 3, 6, 0, 15,
+	51, 15, 3, 7, 0, 14,
+	52, 18, 4, 8, 0, 17,
+	53, 19, 4, 0, 0, 18,
+	54, 2, 3, 3, 0, 2,
+	55, 2, 3, 8, 0, 20,
+	56, 21, 3, 5, 0, 2,
+	57, 21, 3, 14, 0, 20,
+	58, 21, 3, 20, 0, 21,
+	59, 22, 3, 5, 0, 2,
+	60, 22, 3, 12, 0, 20,
+	61, 23, 3, 5, 0, 2,
+	62, 23, 3, 14, 0, 20,
+	63, 20, 3, 1, 0, 2,
+	64, 20, 3, 7, 0, 2,
+	65, 24, 3, 13, 0, 20,
+	66, 7, 6, 8, 17, 8,
+	67, 7, 6, 27, 18, 10,
+	68, 8, 6, 13, 11, 9,
+	69, 15, 6, 6, 11, 15,
+	70, 16, 6, 13, 11, 15,
+	71, 17, 6, 13, 11, 16,
+	72, 18, 6, 8, 18, 17,
+	73, 19, 6, 0, 10, 18,
+	74, 15, 6, 7, 22, 14,
+	75, 16, 6, 14, 24, 14,
+	76, 17, 6, 17, 26, 14,
+	77, 7, 8, 1, 0, 7,
+	78, 8, 8, 1, 0, 8,
+	79, 9, 8, 1, 0, 9,
+	80, 12, 8, 2, 0, 12,
+	81, 13, 8, 1, 0, 13,
+	82, 15, 8, 1, 0, 15,
+	83, 16, 8, 1, 0, 16,
+	84, 17, 8, 1, 0, 17,
+	85, 18, 8, 1, 0, 18,
+	86, 21, 8, 1, 0, 21,
+	87, 22, 8, 1, 0, 22,
+	88, 23, 8, 1, 0, 23,
+	89, 24, 8, 1, 0, 24,
 }
 
 func evGet(c *port.Cells, stride int32, row int32, f int32) int32 {
@@ -1296,18 +4454,56 @@ func evPush(c *port.Cells, stride int32) int32 {
 	return row
 }
 
-func EvInit(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
-	// Empty all ten arenas.
+func EvsInit(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells) int32 {
+	// Empty the shared bundle.
+	port.CellsDrop(epages, 0)
+	port.CellsDrop(views, 0)
+	port.CellsDrop(pts, 0)
+	port.CellsDrop(refs, 0)
+	port.CellsDrop(etext, 0)
+	port.CellsDrop(feats, 0)
+	return 0
+}
+
+func EvtInit(glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells) int32 {
+	// Empty the text bundle.
 	port.CellsDrop(glyphs, 0)
 	port.CellsDrop(words, 0)
 	port.CellsDrop(lines, 0)
+	port.CellsDrop(marks, 0)
+	port.CellsDrop(fonts, 0)
 	port.CellsDrop(paths, 0)
 	port.CellsDrop(images, 0)
+	return 0
+}
+
+func EvoInit(oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells) int32 {
+	// Empty the OCR bundle.
+	port.CellsDrop(oruns, 0)
+	port.CellsDrop(oblocks, 0)
+	port.CellsDrop(olines, 0)
+	port.CellsDrop(owords, 0)
+	port.CellsDrop(osyms, 0)
+	port.CellsDrop(oalts, 0)
+	return 0
+}
+
+func EvrInit(inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// Empty the trace bundle.
+	port.CellsDrop(inks, 0)
 	port.CellsDrop(components, 0)
-	port.CellsDrop(ocrwords, 0)
-	port.CellsDrop(alts, 0)
-	port.CellsDrop(etext, 0)
-	port.CellsDrop(spans, 0)
+	port.CellsDrop(rules, 0)
+	port.CellsDrop(prims, 0)
+	port.CellsDrop(tlines, 0)
+	return 0
+}
+
+func EvInit(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// Empty all 24 arenas.
+	EvsInit(epages, views, pts, refs, etext, feats)
+	EvtInit(glyphs, words, lines, marks, fonts, paths, images)
+	EvoInit(oruns, oblocks, olines, owords, osyms, oalts)
+	EvrInit(inks, components, rules, prims, tlines)
 	return 0
 }
 
@@ -1321,281 +4517,1686 @@ func EtxLen(etext *port.Cells) int32 {
 	return port.CellsLen(etext)
 }
 
-func GlCount(glyphs *port.Cells) int32 {
-	return evCount(glyphs, 20)
+func EpCount(c *port.Cells) int32 {
+	return evCount(c, 12)
 }
 
-func GlGet(glyphs *port.Cells, g int32, f int32) int32 {
-	return evGet(glyphs, 20, g, f)
+func EpGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 12, i, f)
 }
 
-func GlSet(glyphs *port.Cells, g int32, f int32, v int32) int32 {
-	return evSet(glyphs, 20, g, f, v)
+func EpSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 12, i, f, v)
 }
 
-func GlNew(glyphs *port.Cells, page int32, cp int32, font int32, size int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
-	// Append a glyph. Defaults: `how` unknown, baseline at the box's
-	// bottom, no rotation, colour none, opaque, render mode 0, visible,
-	// not an artifact, no marked-content id, in no word.
-	var g int32 = evPush(glyphs, 20)
-	evSet(glyphs, 20, g, 0, page)
-	evSet(glyphs, 20, g, 1, cp)
-	evSet(glyphs, 20, g, 2, -1)
-	evSet(glyphs, 20, g, 4, GhUnknown())
-	evSet(glyphs, 20, g, 5, font)
-	evSet(glyphs, 20, g, 6, size)
-	evSet(glyphs, 20, g, 7, x0)
-	evSet(glyphs, 20, g, 8, y0)
-	evSet(glyphs, 20, g, 9, x1)
-	evSet(glyphs, 20, g, 10, y1)
-	evSet(glyphs, 20, g, 11, y1)
-	evSet(glyphs, 20, g, 13, -1)
-	evSet(glyphs, 20, g, 14, 1000)
-	evSet(glyphs, 20, g, 18, -1)
-	evSet(glyphs, 20, g, 19, -1)
-	return g
+func EpNew(c *port.Cells, vPage int32, vWidth int32, vHeight int32) int32 {
+	// Append a row of epages: page width height; every other field is its default.
+	var r int32 = evPush(c, 12)
+	evSet(c, 12, r, 0, vPage)
+	evSet(c, 12, r, 1, vWidth)
+	evSet(c, 12, r, 2, vHeight)
+	return r
 }
 
-func WdCount(words *port.Cells) int32 {
-	return evCount(words, 16)
+func VwCount(c *port.Cells) int32 {
+	return evCount(c, 24)
 }
 
-func WdGet(words *port.Cells, w int32, f int32) int32 {
-	return evGet(words, 16, w, f)
+func VwGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 24, i, f)
 }
 
-func WdSet(words *port.Cells, w int32, f int32, v int32) int32 {
-	return evSet(words, 16, w, f, v)
+func VwSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 24, i, f, v)
 }
 
-func WdNew(words *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, gfirst int32, gcount int32) int32 {
-	// Append a word over a run of glyphs. Defaults: no text, in no line,
-	// source `text` (1), no confidence, no flags, no gap, font -1.
-	var w int32 = evPush(words, 16)
-	evSet(words, 16, w, 0, page)
-	evSet(words, 16, w, 1, x0)
-	evSet(words, 16, w, 2, y0)
-	evSet(words, 16, w, 3, x1)
-	evSet(words, 16, w, 4, y1)
-	evSet(words, 16, w, 5, gfirst)
-	evSet(words, 16, w, 6, gcount)
-	evSet(words, 16, w, 7, -1)
-	evSet(words, 16, w, 9, -1)
-	evSet(words, 16, w, 10, 1)
-	evSet(words, 16, w, 11, -1)
-	evSet(words, 16, w, 13, -1)
-	evSet(words, 16, w, 14, -1)
-	return w
+func PtCount(c *port.Cells) int32 {
+	return evCount(c, 3)
 }
 
-func LnCount(lines *port.Cells) int32 {
-	return evCount(lines, 12)
+func PtGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 3, i, f)
 }
 
-func LnGet(lines *port.Cells, l int32, f int32) int32 {
-	return evGet(lines, 12, l, f)
+func PtSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 3, i, f, v)
 }
 
-func LnSet(lines *port.Cells, l int32, f int32, v int32) int32 {
-	return evSet(lines, 12, l, f, v)
+func PtNew(c *port.Cells, vX int32, vY int32, vOp int32) int32 {
+	// Append a row of pts: x y op; every other field is its default.
+	var r int32 = evPush(c, 3)
+	evSet(c, 3, r, 0, vX)
+	evSet(c, 3, r, 1, vY)
+	evSet(c, 3, r, 2, vOp)
+	return r
 }
 
-func LnNew(lines *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, wfirst int32, wcount int32, baseline int32) int32 {
-	// Append a line over a run of words. Defaults: left to right, no
-	// rotation, source `text` (1), no confidence.
-	var l int32 = evPush(lines, 12)
-	evSet(lines, 12, l, 0, page)
-	evSet(lines, 12, l, 1, x0)
-	evSet(lines, 12, l, 2, y0)
-	evSet(lines, 12, l, 3, x1)
-	evSet(lines, 12, l, 4, y1)
-	evSet(lines, 12, l, 5, wfirst)
-	evSet(lines, 12, l, 6, wcount)
-	evSet(lines, 12, l, 7, baseline)
-	evSet(lines, 12, l, 10, 1)
-	evSet(lines, 12, l, 11, -1)
-	return l
+func GlCount(c *port.Cells) int32 {
+	return evCount(c, 32)
 }
 
-func PaCount(paths *port.Cells) int32 {
-	return evCount(paths, 16)
+func GlGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 32, i, f)
 }
 
-func PaGet(paths *port.Cells, p int32, f int32) int32 {
-	return evGet(paths, 16, p, f)
+func GlSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 32, i, f, v)
 }
 
-func PaSet(paths *port.Cells, p int32, f int32, v int32) int32 {
-	return evSet(paths, 16, p, f, v)
+func GlNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vCp int32, vTstart int32, vTlen int32, vWord int32) int32 {
+	// Append a row of glyphs: page x0 y0 x1 y1 cp tstart tlen word; every other field is its default.
+	var r int32 = evPush(c, 32)
+	evSet(c, 32, r, 0, vPage)
+	evSet(c, 32, r, 1, vX0)
+	evSet(c, 32, r, 2, vY0)
+	evSet(c, 32, r, 3, vX1)
+	evSet(c, 32, r, 4, vY1)
+	evSet(c, 32, r, 5, vCp)
+	evSet(c, 32, r, 6, vTstart)
+	evSet(c, 32, r, 7, vTlen)
+	evSet(c, 32, r, 8, vWord)
+	evSet(c, 32, r, 16, 5)
+	evSet(c, 32, r, 17, -1)
+	evSet(c, 32, r, 20, -1)
+	evSet(c, 32, r, 21, -1)
+	evSet(c, 32, r, 22, 1000)
+	evSet(c, 32, r, 23, 1000)
+	evSet(c, 32, r, 24, -1)
+	evSet(c, 32, r, 26, -1)
+	evSet(c, 32, r, 27, -1)
+	evSet(c, 32, r, 28, -1)
+	evSet(c, 32, r, 30, -1)
+	evSet(c, 32, r, 9, vX0)
+	evSet(c, 32, r, 10, vY1)
+	evSet(c, 32, r, 11, vX1)
+	evSet(c, 32, r, 12, vY1)
+	return r
 }
 
-func PaNew(paths *port.Cells, page int32, kind int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
-	// Append a vector path. Defaults: neither filled nor stroked, opaque,
-	// no flags, not an artifact, no marked-content id.
-	var p int32 = evPush(paths, 16)
-	evSet(paths, 16, p, 0, page)
-	evSet(paths, 16, p, 1, kind)
-	evSet(paths, 16, p, 2, x0)
-	evSet(paths, 16, p, 3, y0)
-	evSet(paths, 16, p, 4, x1)
-	evSet(paths, 16, p, 5, y1)
-	evSet(paths, 16, p, 6, -1)
-	evSet(paths, 16, p, 7, -1)
-	evSet(paths, 16, p, 9, 1000)
-	evSet(paths, 16, p, 12, -1)
-	return p
+func WdCount(c *port.Cells) int32 {
+	return evCount(c, 24)
 }
 
-func ImCount(images *port.Cells) int32 {
-	return evCount(images, 12)
+func WdGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 24, i, f)
 }
 
-func ImGet(images *port.Cells, m int32, f int32) int32 {
-	return evGet(images, 12, m, f)
+func WdSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 24, i, f, v)
 }
 
-func ImSet(images *port.Cells, m int32, f int32, v int32) int32 {
-	return evSet(images, 12, m, f, v)
+func WdNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vTstart int32, vTlen int32, vLine int32, vConf int32, vFeat int32) int32 {
+	// Append a row of words: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+	var r int32 = evPush(c, 24)
+	evSet(c, 24, r, 0, vPage)
+	evSet(c, 24, r, 1, vX0)
+	evSet(c, 24, r, 2, vY0)
+	evSet(c, 24, r, 3, vX1)
+	evSet(c, 24, r, 4, vY1)
+	evSet(c, 24, r, 5, vBx0)
+	evSet(c, 24, r, 6, vBy0)
+	evSet(c, 24, r, 7, vBx1)
+	evSet(c, 24, r, 8, vBy1)
+	evSet(c, 24, r, 9, vRot)
+	evSet(c, 24, r, 10, vDir)
+	evSet(c, 24, r, 11, vTstart)
+	evSet(c, 24, r, 12, vTlen)
+	evSet(c, 24, r, 13, vLine)
+	evSet(c, 24, r, 14, vConf)
+	evSet(c, 24, r, 15, vFeat)
+	evSet(c, 24, r, 17, -1)
+	evSet(c, 24, r, 19, -1)
+	evSet(c, 24, r, 21, -1)
+	evSet(c, 24, r, 23, 1)
+	return r
 }
 
-func ImNew(images *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, obj int32, pxw int32, pxh int32) int32 {
-	// Append an image placement. Defaults: opaque, no flags, not an
-	// artifact, no marked-content id.
-	var m int32 = evPush(images, 12)
-	evSet(images, 12, m, 0, page)
-	evSet(images, 12, m, 1, x0)
-	evSet(images, 12, m, 2, y0)
-	evSet(images, 12, m, 3, x1)
-	evSet(images, 12, m, 4, y1)
-	evSet(images, 12, m, 5, obj)
-	evSet(images, 12, m, 6, pxw)
-	evSet(images, 12, m, 7, pxh)
-	evSet(images, 12, m, 8, 1000)
-	evSet(images, 12, m, 11, -1)
-	return m
+func LnCount(c *port.Cells) int32 {
+	return evCount(c, 16)
 }
 
-func CoCount(components *port.Cells) int32 {
-	return evCount(components, 20)
+func LnGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 16, i, f)
 }
 
-func CoGet(components *port.Cells, c int32, f int32) int32 {
-	return evGet(components, 20, c, f)
+func LnSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 16, i, f, v)
 }
 
-func CoSet(components *port.Cells, c int32, f int32, v int32) int32 {
-	return evSet(components, 20, c, f, v)
+func LnNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vFirst int32, vCount int32) int32 {
+	// Append a row of lines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+	var r int32 = evPush(c, 16)
+	evSet(c, 16, r, 0, vPage)
+	evSet(c, 16, r, 1, vX0)
+	evSet(c, 16, r, 2, vY0)
+	evSet(c, 16, r, 3, vX1)
+	evSet(c, 16, r, 4, vY1)
+	evSet(c, 16, r, 5, vBx0)
+	evSet(c, 16, r, 6, vBy0)
+	evSet(c, 16, r, 7, vBx1)
+	evSet(c, 16, r, 8, vBy1)
+	evSet(c, 16, r, 9, vRot)
+	evSet(c, 16, r, 10, vDir)
+	evSet(c, 16, r, 11, vFirst)
+	evSet(c, 16, r, 12, vCount)
+	evSet(c, 16, r, 13, 1)
+	evSet(c, 16, r, 14, -1)
+	return r
 }
 
-func CoNew(components *port.Cells, page int32, kind int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
-	// Append a tracer component. Defaults: no pixel box, no ink
-	// statistics, colour none, layer -1, no confidence, no flags.
-	var c int32 = evPush(components, 20)
-	evSet(components, 20, c, 0, page)
-	evSet(components, 20, c, 1, x0)
-	evSet(components, 20, c, 2, y0)
-	evSet(components, 20, c, 3, x1)
-	evSet(components, 20, c, 4, y1)
-	evSet(components, 20, c, 12, -1)
-	evSet(components, 20, c, 13, -1)
-	evSet(components, 20, c, 14, kind)
-	evSet(components, 20, c, 15, -1)
-	return c
+func MkCount(c *port.Cells) int32 {
+	return evCount(c, 24)
 }
 
-func OwCount(ocrwords *port.Cells) int32 {
-	return evCount(ocrwords, 16)
+func MkGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 24, i, f)
 }
 
-func OwGet(ocrwords *port.Cells, w int32, f int32) int32 {
-	return evGet(ocrwords, 16, w, f)
+func MkSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 24, i, f, v)
 }
 
-func OwSet(ocrwords *port.Cells, w int32, f int32, v int32) int32 {
-	return evSet(ocrwords, 16, w, f, v)
+func MkNew(c *port.Cells, vPage int32, vKind int32, vTstart int32, vTlen int32, vParent int32, vGfirst int32) int32 {
+	// Append a row of marks: page kind tstart tlen parent gfirst; every other field is its default.
+	var r int32 = evPush(c, 24)
+	evSet(c, 24, r, 0, vPage)
+	evSet(c, 24, r, 1, vKind)
+	evSet(c, 24, r, 2, vTstart)
+	evSet(c, 24, r, 3, vTlen)
+	evSet(c, 24, r, 4, vParent)
+	evSet(c, 24, r, 5, -1)
+	evSet(c, 24, r, 8, -1)
+	evSet(c, 24, r, 10, -1)
+	evSet(c, 24, r, 12, -1)
+	evSet(c, 24, r, 14, -1)
+	evSet(c, 24, r, 16, -1)
+	evSet(c, 24, r, 17, -1)
+	evSet(c, 24, r, 18, vGfirst)
+	evSet(c, 24, r, 20, -1)
+	evSet(c, 24, r, 21, -1)
+	return r
 }
 
-func OwNew(ocrwords *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, conf int32) int32 {
-	// Append an OCR word with the engine's confidence (per-mille).
-	// Defaults: no text, no alternatives, line and block -1, pass 0,
-	// language -1.
-	var w int32 = evPush(ocrwords, 16)
-	evSet(ocrwords, 16, w, 0, page)
-	evSet(ocrwords, 16, w, 1, x0)
-	evSet(ocrwords, 16, w, 2, y0)
-	evSet(ocrwords, 16, w, 3, x1)
-	evSet(ocrwords, 16, w, 4, y1)
-	evSet(ocrwords, 16, w, 5, -1)
-	evSet(ocrwords, 16, w, 7, conf)
-	evSet(ocrwords, 16, w, 8, -1)
-	evSet(ocrwords, 16, w, 10, -1)
-	evSet(ocrwords, 16, w, 11, -1)
-	evSet(ocrwords, 16, w, 15, -1)
-	return w
+func FoCount(c *port.Cells) int32 {
+	return evCount(c, 16)
 }
 
-func AltCount(alts *port.Cells) int32 {
-	return port.CellsLen(alts) / 4
+func FoGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 16, i, f)
 }
 
-func AltGet(alts *port.Cells, a int32, f int32) int32 {
-	return evGet(alts, 4, a, f)
+func FoSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 16, i, f, v)
 }
 
-func AltAdd(ocrwords *port.Cells, alts *port.Cells, w int32, sym int32, cp int32, conf int32) int32 {
-	// Add an alternative reading to OCR word w: symbol `sym` (an index
-	// into the word's text) might instead be `cp`, at `conf`. They chain
-	// in the order added. Answers the alternative's index.
-	var a int32 = port.CellsLen(alts) / 4
-	var head int32 = evGet(ocrwords, 16, w, 8)
-	var cnt int32 = evGet(ocrwords, 16, w, 9)
-	var t int32 = head
-	port.CellsPush(alts, sym)
-	port.CellsPush(alts, cp)
-	port.CellsPush(alts, conf)
-	port.CellsPush(alts, -1)
-	if head < 0 {
-		evSet(ocrwords, 16, w, 8, a)
-	} else {
-		for port.CellsAt(alts, (t*4)+3) >= 0 {
-			t = port.CellsAt(alts, (t*4)+3)
-		}
-		port.CellsSet(alts, (t*4)+3, a)
+func FoNew(c *port.Cells, vObj int32, vSubtype int32) int32 {
+	// Append a row of fonts: obj subtype; every other field is its default.
+	var r int32 = evPush(c, 16)
+	evSet(c, 16, r, 0, vObj)
+	evSet(c, 16, r, 1, vSubtype)
+	evSet(c, 16, r, 5, -1)
+	evSet(c, 16, r, 6, -1)
+	evSet(c, 16, r, 10, -1)
+	evSet(c, 16, r, 12, -1)
+	evSet(c, 16, r, 14, -1)
+	evSet(c, 16, r, 15, -1)
+	return r
+}
+
+func PaCount(c *port.Cells) int32 {
+	return evCount(c, 24)
+}
+
+func PaGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 24, i, f)
+}
+
+func PaSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 24, i, f, v)
+}
+
+func PaNew(c *port.Cells, vPage int32, vKind int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32) int32 {
+	// Append a row of paths: page kind x0 y0 x1 y1; every other field is its default.
+	var r int32 = evPush(c, 24)
+	evSet(c, 24, r, 0, vPage)
+	evSet(c, 24, r, 1, vKind)
+	evSet(c, 24, r, 2, vX0)
+	evSet(c, 24, r, 3, vY0)
+	evSet(c, 24, r, 4, vX1)
+	evSet(c, 24, r, 5, vY1)
+	evSet(c, 24, r, 6, -1)
+	evSet(c, 24, r, 7, -1)
+	evSet(c, 24, r, 9, 1000)
+	evSet(c, 24, r, 10, 1000)
+	evSet(c, 24, r, 12, -1)
+	evSet(c, 24, r, 13, -1)
+	evSet(c, 24, r, 14, -1)
+	evSet(c, 24, r, 15, -1)
+	evSet(c, 24, r, 16, -1)
+	return r
+}
+
+func ImCount(c *port.Cells) int32 {
+	return evCount(c, 20)
+}
+
+func ImGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 20, i, f)
+}
+
+func ImSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 20, i, f, v)
+}
+
+func ImNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vObj int32, vPxw int32, vPxh int32) int32 {
+	// Append a row of images: page x0 y0 x1 y1 obj pxw pxh; every other field is its default.
+	var r int32 = evPush(c, 20)
+	evSet(c, 20, r, 0, vPage)
+	evSet(c, 20, r, 1, vX0)
+	evSet(c, 20, r, 2, vY0)
+	evSet(c, 20, r, 3, vX1)
+	evSet(c, 20, r, 4, vY1)
+	evSet(c, 20, r, 5, vObj)
+	evSet(c, 20, r, 6, vPxw)
+	evSet(c, 20, r, 7, vPxh)
+	evSet(c, 20, r, 8, 1000)
+	evSet(c, 20, r, 12, -1)
+	evSet(c, 20, r, 13, -1)
+	evSet(c, 20, r, 14, -1)
+	evSet(c, 20, r, 15, -1)
+	evSet(c, 20, r, 17, -1)
+	return r
+}
+
+func OrCount(c *port.Cells) int32 {
+	return evCount(c, 28)
+}
+
+func OrGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 28, i, f)
+}
+
+func OrSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 28, i, f, v)
+}
+
+func OrNew(c *port.Cells, vPage int32, vView int32) int32 {
+	// Append a row of oruns: page view; every other field is its default.
+	var r int32 = evPush(c, 28)
+	evSet(c, 28, r, 0, vPage)
+	evSet(c, 28, r, 1, vView)
+	evSet(c, 28, r, 2, -1)
+	evSet(c, 28, r, 3, -1)
+	evSet(c, 28, r, 11, -1)
+	evSet(c, 28, r, 17, -1)
+	evSet(c, 28, r, 19, -1)
+	evSet(c, 28, r, 20, -1)
+	return r
+}
+
+func ObCount(c *port.Cells) int32 {
+	return evCount(c, 16)
+}
+
+func ObGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 16, i, f)
+}
+
+func ObSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 16, i, f, v)
+}
+
+func ObNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vKind int32, vParent int32, vRun int32) int32 {
+	// Append a row of oblocks: page x0 y0 x1 y1 kind parent run; every other field is its default.
+	var r int32 = evPush(c, 16)
+	evSet(c, 16, r, 0, vPage)
+	evSet(c, 16, r, 1, vX0)
+	evSet(c, 16, r, 2, vY0)
+	evSet(c, 16, r, 3, vX1)
+	evSet(c, 16, r, 4, vY1)
+	evSet(c, 16, r, 5, vKind)
+	evSet(c, 16, r, 6, vParent)
+	evSet(c, 16, r, 7, vRun)
+	evSet(c, 16, r, 11, -1)
+	evSet(c, 16, r, 13, -1)
+	return r
+}
+
+func OlCount(c *port.Cells) int32 {
+	return evCount(c, 24)
+}
+
+func OlGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 24, i, f)
+}
+
+func OlSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 24, i, f, v)
+}
+
+func OlNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vFirst int32, vCount int32) int32 {
+	// Append a row of olines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+	var r int32 = evPush(c, 24)
+	evSet(c, 24, r, 0, vPage)
+	evSet(c, 24, r, 1, vX0)
+	evSet(c, 24, r, 2, vY0)
+	evSet(c, 24, r, 3, vX1)
+	evSet(c, 24, r, 4, vY1)
+	evSet(c, 24, r, 5, vBx0)
+	evSet(c, 24, r, 6, vBy0)
+	evSet(c, 24, r, 7, vBx1)
+	evSet(c, 24, r, 8, vBy1)
+	evSet(c, 24, r, 9, vRot)
+	evSet(c, 24, r, 10, vDir)
+	evSet(c, 24, r, 11, vFirst)
+	evSet(c, 24, r, 12, vCount)
+	evSet(c, 24, r, 13, -1)
+	evSet(c, 24, r, 14, -1)
+	evSet(c, 24, r, 15, -1)
+	evSet(c, 24, r, 16, -1)
+	evSet(c, 24, r, 17, -1)
+	evSet(c, 24, r, 18, -1)
+	return r
+}
+
+func OwCount(c *port.Cells) int32 {
+	return evCount(c, 28)
+}
+
+func OwGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 28, i, f)
+}
+
+func OwSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 28, i, f, v)
+}
+
+func OwNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vTstart int32, vTlen int32, vLine int32, vConf int32, vFeat int32) int32 {
+	// Append a row of owords: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+	var r int32 = evPush(c, 28)
+	evSet(c, 28, r, 0, vPage)
+	evSet(c, 28, r, 1, vX0)
+	evSet(c, 28, r, 2, vY0)
+	evSet(c, 28, r, 3, vX1)
+	evSet(c, 28, r, 4, vY1)
+	evSet(c, 28, r, 5, vBx0)
+	evSet(c, 28, r, 6, vBy0)
+	evSet(c, 28, r, 7, vBx1)
+	evSet(c, 28, r, 8, vBy1)
+	evSet(c, 28, r, 9, vRot)
+	evSet(c, 28, r, 10, vDir)
+	evSet(c, 28, r, 11, vTstart)
+	evSet(c, 28, r, 12, vTlen)
+	evSet(c, 28, r, 13, vLine)
+	evSet(c, 28, r, 14, vConf)
+	evSet(c, 28, r, 15, vFeat)
+	evSet(c, 28, r, 17, -1)
+	evSet(c, 28, r, 18, -1)
+	evSet(c, 28, r, 22, -1)
+	return r
+}
+
+func OsCount(c *port.Cells) int32 {
+	return evCount(c, 20)
+}
+
+func OsGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 20, i, f)
+}
+
+func OsSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 20, i, f, v)
+}
+
+func OsNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vCp int32, vTstart int32, vTlen int32, vWord int32) int32 {
+	// Append a row of osyms: page x0 y0 x1 y1 cp tstart tlen word; every other field is its default.
+	var r int32 = evPush(c, 20)
+	evSet(c, 20, r, 0, vPage)
+	evSet(c, 20, r, 1, vX0)
+	evSet(c, 20, r, 2, vY0)
+	evSet(c, 20, r, 3, vX1)
+	evSet(c, 20, r, 4, vY1)
+	evSet(c, 20, r, 5, vCp)
+	evSet(c, 20, r, 6, vTstart)
+	evSet(c, 20, r, 7, vTlen)
+	evSet(c, 20, r, 8, vWord)
+	evSet(c, 20, r, 9, -1)
+	evSet(c, 20, r, 10, -1)
+	return r
+}
+
+func OaCount(c *port.Cells) int32 {
+	return evCount(c, 4)
+}
+
+func OaGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 4, i, f)
+}
+
+func OaSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 4, i, f, v)
+}
+
+func OaNew(c *port.Cells, vSym int32, vTstart int32, vTlen int32, vConf int32) int32 {
+	// Append a row of oalts: sym tstart tlen conf; every other field is its default.
+	var r int32 = evPush(c, 4)
+	evSet(c, 4, r, 0, vSym)
+	evSet(c, 4, r, 1, vTstart)
+	evSet(c, 4, r, 2, vTlen)
+	evSet(c, 4, r, 3, vConf)
+	return r
+}
+
+func IkCount(c *port.Cells) int32 {
+	return evCount(c, 12)
+}
+
+func IkGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 12, i, f)
+}
+
+func IkSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 12, i, f, v)
+}
+
+func IkNew(c *port.Cells, vPage int32, vView int32) int32 {
+	// Append a row of inks: page view; every other field is its default.
+	var r int32 = evPush(c, 12)
+	evSet(c, 12, r, 0, vPage)
+	evSet(c, 12, r, 1, vView)
+	evSet(c, 12, r, 2, -1)
+	evSet(c, 12, r, 7, -1)
+	return r
+}
+
+func CoCount(c *port.Cells) int32 {
+	return evCount(c, 24)
+}
+
+func CoGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 24, i, f)
+}
+
+func CoSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 24, i, f, v)
+}
+
+func CoNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vKind int32) int32 {
+	// Append a row of components: page x0 y0 x1 y1 kind; every other field is its default.
+	var r int32 = evPush(c, 24)
+	evSet(c, 24, r, 0, vPage)
+	evSet(c, 24, r, 1, vX0)
+	evSet(c, 24, r, 2, vY0)
+	evSet(c, 24, r, 3, vX1)
+	evSet(c, 24, r, 4, vY1)
+	evSet(c, 24, r, 5, -1)
+	evSet(c, 24, r, 13, -1)
+	evSet(c, 24, r, 14, -1)
+	evSet(c, 24, r, 15, vKind)
+	evSet(c, 24, r, 16, -1)
+	evSet(c, 24, r, 18, -1)
+	evSet(c, 24, r, 20, -1)
+	evSet(c, 24, r, 22, -1)
+	return r
+}
+
+func RlCount(c *port.Cells) int32 {
+	return evCount(c, 20)
+}
+
+func RlGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 20, i, f)
+}
+
+func RlSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 20, i, f, v)
+}
+
+func RlNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vView int32) int32 {
+	// Append a row of rules: page x0 y0 x1 y1 view; every other field is its default.
+	var r int32 = evPush(c, 20)
+	evSet(c, 20, r, 0, vPage)
+	evSet(c, 20, r, 1, vX0)
+	evSet(c, 20, r, 2, vY0)
+	evSet(c, 20, r, 3, vX1)
+	evSet(c, 20, r, 4, vY1)
+	evSet(c, 20, r, 5, vView)
+	evSet(c, 20, r, 11, -1)
+	evSet(c, 20, r, 12, -1)
+	evSet(c, 20, r, 14, -1)
+	evSet(c, 20, r, 15, -1)
+	return r
+}
+
+func PmCount(c *port.Cells) int32 {
+	return evCount(c, 24)
+}
+
+func PmGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 24, i, f)
+}
+
+func PmSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 24, i, f, v)
+}
+
+func PmNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vKind int32) int32 {
+	// Append a row of prims: page x0 y0 x1 y1 kind; every other field is its default.
+	var r int32 = evPush(c, 24)
+	evSet(c, 24, r, 0, vPage)
+	evSet(c, 24, r, 1, vX0)
+	evSet(c, 24, r, 2, vY0)
+	evSet(c, 24, r, 3, vX1)
+	evSet(c, 24, r, 4, vY1)
+	evSet(c, 24, r, 5, -1)
+	evSet(c, 24, r, 6, vKind)
+	evSet(c, 24, r, 13, -1)
+	evSet(c, 24, r, 14, -1)
+	evSet(c, 24, r, 16, -1)
+	evSet(c, 24, r, 17, -1)
+	evSet(c, 24, r, 19, -1)
+	return r
+}
+
+func TlCount(c *port.Cells) int32 {
+	return evCount(c, 20)
+}
+
+func TlGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 20, i, f)
+}
+
+func TlSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 20, i, f, v)
+}
+
+func TlNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vFirst int32, vCount int32) int32 {
+	// Append a row of tlines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
+	var r int32 = evPush(c, 20)
+	evSet(c, 20, r, 0, vPage)
+	evSet(c, 20, r, 1, vX0)
+	evSet(c, 20, r, 2, vY0)
+	evSet(c, 20, r, 3, vX1)
+	evSet(c, 20, r, 4, vY1)
+	evSet(c, 20, r, 5, vBx0)
+	evSet(c, 20, r, 6, vBy0)
+	evSet(c, 20, r, 7, vBx1)
+	evSet(c, 20, r, 8, vBy1)
+	evSet(c, 20, r, 9, vRot)
+	evSet(c, 20, r, 10, vDir)
+	evSet(c, 20, r, 11, vFirst)
+	evSet(c, 20, r, 12, vCount)
+	evSet(c, 20, r, 13, -1)
+	evSet(c, 20, r, 16, -1)
+	return r
+}
+
+func evRatio(lo int32, hi int32) int32 {
+	// round(1024 * lo / hi) for 0 <= lo <= hi, hi > 0 (half up), in 64 bits.
+	return int32(((int64(lo) * int64(2048)) + int64(hi)) / (int64(hi) * int64(2)))
+}
+
+func EvAngle(dx int32, dy int32) int32 {
+	// The angle of the vector (dx, dy), in page space (y DOWN), in centi-degrees
+	// counter-clockwise AS DISPLAYED, in [0, 36000): integer atan2 of (dx, -dy) by octant
+	// reduction and the table of atan(i/1024), i = round(1024 * min / max); the error is
+	// under 0.03 degree and exact at every multiple of 45. The zero vector is 0. Every source
+	// spells `rot` with this and nothing else (SPEC 8.4.1).
+	var x int32 = dx
+	var y int32 = dy
+	var ax int32 = 0
+	var ay int32 = 0
+	var t int32 = 0
+	var a int32 = 0
+	if x == -2147483648 {
+		x = -2147483647
 	}
-	evSet(ocrwords, 16, w, 9, cnt+1)
+	if y == -2147483648 {
+		y = -2147483647
+	}
+	y = 0 - y
+	ax = x
+	if ax < 0 {
+		ax = 0 - ax
+	}
+	ay = y
+	if ay < 0 {
+		ay = 0 - ay
+	}
+	if (ax == 0) && (ay == 0) {
+		return 0
+	}
+	if ay <= ax {
+		t = trig.EvAtan[evRatio(ay, ax)]
+	} else {
+		t = 9000 - trig.EvAtan[evRatio(ax, ay)]
+	}
+	if (x >= 0) && (y >= 0) {
+		a = t
+	}
+	if (x < 0) && (y >= 0) {
+		a = 18000 - t
+	}
+	if (x < 0) && (y < 0) {
+		a = 18000 + t
+	}
+	if (x >= 0) && (y < 0) {
+		a = 36000 - t
+	}
+	if a >= 36000 {
+		a -= 36000
+	}
 	return a
 }
 
-func SpCount(spans *port.Cells) int32 {
-	return evCount(spans, 22)
+func EvSin(cdeg int32) int32 {
+	// sin of an angle in centi-degrees, in 16.16 (65536 is 1): a generated table over 0..9000
+	// and the symmetries, for any integer angle.
+	var a int32 = cdeg % 36000
+	if a < 0 {
+		a += 36000
+	}
+	if a <= 9000 {
+		return trig.EvSinTab[a]
+	}
+	if a <= 18000 {
+		return trig.EvSinTab[18000-a]
+	}
+	if a <= 27000 {
+		return 0 - trig.EvSinTab[a-18000]
+	}
+	return 0 - trig.EvSinTab[36000-a]
 }
 
-func SpGet(spans *port.Cells, s int32, f int32) int32 {
-	return evGet(spans, 22, s, f)
+func EvCos(cdeg int32) int32 {
+	// cos of an angle in centi-degrees, in 16.16.
+	return EvSin((cdeg % 36000) + 9000)
 }
 
-func SpSet(spans *port.Cells, s int32, f int32, v int32) int32 {
-	return evSet(spans, 22, s, f, v)
+func EvFloordiv(a int64, b int64) int64 {
+	// a / b rounded toward minus infinity, for b > 0 (`quot` truncates toward zero).
+	var q int64 = a / b
+	if (a - (q * b)) < int64(0) {
+		return q - int64(1)
+	}
+	return q
 }
 
-func SpNew(spans *port.Cells, page int32, tag int32, taglen int32, parent int32, gfirst int32) int32 {
-	// Append a marked-content span opened at glyph `gfirst`. Defaults: no
-	// MCID, not an artifact, no strings, no glyphs yet, no flags, the page's
-	// own content stream.
-	var s int32 = evPush(spans, 22)
-	evSet(spans, 22, s, 0, page)
-	evSet(spans, 22, s, 1, tag)
-	evSet(spans, 22, s, 2, taglen)
-	evSet(spans, 22, s, 3, parent)
-	evSet(spans, 22, s, 4, -1)
-	evSet(spans, 22, s, 6, -1)
-	evSet(spans, 22, s, 8, -1)
-	evSet(spans, 22, s, 10, -1)
-	evSet(spans, 22, s, 12, -1)
-	evSet(spans, 22, s, 14, -1)
-	evSet(spans, 22, s, 16, -1)
-	evSet(spans, 22, s, 18, gfirst)
-	return s
+func evRound16(v int64) int64 {
+	// floor((v + 2^15) / 2^16): a 16.16 value to the nearest integer, halves up (D096).
+	return EvFloordiv(v+int64(32768), int64(65536))
+}
+
+func EvOverlapSmall(ax0 int32, ay0 int32, ax1 int32, ay1 int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
+	// Intersection area over the SMALLER box's area, per-mille; 0 when they miss or the smaller is empty.
+	var x0 int32 = ax0
+	var y0 int32 = ay0
+	var x1 int32 = ax1
+	var y1 int32 = ay1
+	if bx0 > x0 {
+		x0 = bx0
+	}
+	if by0 > y0 {
+		y0 = by0
+	}
+	if bx1 < x1 {
+		x1 = bx1
+	}
+	if by1 < y1 {
+		y1 = by1
+	}
+	if (x0 >= x1) || (y0 >= y1) {
+		return 0
+	}
+	var inter int64 = int64(x1-x0) * int64(y1-y0)
+	var areaa int64 = int64(ax1-ax0) * int64(ay1-ay0)
+	var areab int64 = int64(bx1-bx0) * int64(by1-by0)
+	var small int64 = areaa
+	if areab < small {
+		small = areab
+	}
+	if small <= int64(0) {
+		return 0
+	}
+	return int32((inter * int64(1000)) / small)
+}
+
+func EvBaselineAt(bx0 int32, by0 int32, bx1 int32, by1 int32, x int32) int32 {
+	// The segment's y at x, by integer interpolation (truncating); a vertical segment answers by1.
+	if bx1 <= bx0 {
+		return by1
+	}
+	return by0 + int32((int64(by1-by0)*int64(x-bx0))/int64(bx1-bx0))
+}
+
+func RfCount(c *port.Cells) int32 {
+	return evCount(c, 2)
+}
+
+func RfGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 2, i, f)
+}
+
+func RfAdd(c *port.Cells, ea int32, index int32) int32 {
+	// Append a reference `(ea, index)` to any row of any arena; answers its row.
+	var r int32 = evPush(c, 2)
+	evSet(c, 2, r, 0, ea)
+	evSet(c, 2, r, 1, index)
+	return r
+}
+
+func PtAdd(pts *port.Cells, x int32, y int32, op int32) int32 {
+	// Append a point of a path or contour (x y in centipoints, `op` a `po`); answers its row. (`pt-new`.)
+	return PtNew(pts, x, y, op)
+}
+
+func FeCount(c *port.Cells) int32 {
+	return evCount(c, 32)
+}
+
+func FeGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 32, i, f)
+}
+
+func FeSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 32, i, f, v)
+}
+
+func FeNew(c *port.Cells, ea int32, index int32) int32 {
+	// Append a feature row for the word at `(ea, index)`, every column -1 (not computed yet).
+	var r int32 = evPush(c, 32)
+	var k int32 = 2
+	evSet(c, 32, r, 0, ea)
+	evSet(c, 32, r, 1, index)
+	for k < 32 {
+		evSet(c, 32, r, k, -1)
+		k += 1
+	}
+	return r
+}
+
+func OaAdd(oalts *port.Cells, sym int32, tstart int32, tlen int32, conf int32) int32 {
+	// Append an alternative of symbol `sym`. A symbol's alternatives are a run, so they must all be
+	// added before the next symbol's are (and the symbol's `afirst acount` set to the run);
+	// `ev-check` holds it by asking every alternative to lie in its symbol's run.
+	var r int32 = evPush(oalts, 4)
+	evSet(oalts, 4, r, 0, sym)
+	evSet(oalts, 4, r, 1, tstart)
+	evSet(oalts, 4, r, 2, tlen)
+	evSet(oalts, 4, r, 3, conf)
+	return r
+}
+
+func MkOpen(marks *port.Cells, page int32, kind int32, tstart int32, tlen int32, parent int32, gfirst int32, zfirst int32) int32 {
+	// Open a marked-content row (the caller keeps the stack of open rows: the `parent` it passes is
+	// the innermost open one, -1 at the top). `gfirst` is the next glyph, `zfirst` the next paint
+	// number. Answers the row. `mk-close` fills `gcount` and `zlast`.
+	var r int32 = MkNew(marks, page, kind, tstart, tlen, parent, gfirst)
+	evSet(marks, 24, r, 20, zfirst)
+	return r
+}
+
+func MkClose(marks *port.Cells, row int32, gnext int32, znext int32) int32 {
+	// Close the row: `gnext` the next glyph index and `znext` the next paint number AT THE CLOSE.
+	// `gcount` = `gnext` - `gfirst`; `zlast` = `znext` - 1 (so a span that painted nothing has
+	// `zlast` < `zfirst`).
+	var gfirst int32 = evGet(marks, 24, row, 18)
+	evSet(marks, 24, row, 19, gnext-gfirst)
+	evSet(marks, 24, row, 21, znext-1)
+	return 0
+}
+
+func MkArtifactOf(marks *port.Cells, mark int32) int32 {
+	// The nearest artifact row on `mark`'s chain (itself, then its parents): its `/Type` * 16 +
+	// its `/Subtype`, packed; 0 when none of the chain is an artifact. (SPEC 9.5 defence 1.)
+	var t int32 = mark
+	for t >= 0 {
+		if evGet(marks, 24, t, 1) == 1 {
+			return (evGet(marks, 24, t, 6) * 16) + evGet(marks, 24, t, 7)
+		}
+		t = evGet(marks, 24, t, 4)
+	}
+	return 0
+}
+
+func MkArtifactClass(kind int32, ty int32, su int32) int32 {
+	// D101's artifact class of a mark row, from its kind, /Type and /Subtype codes: 0 when it is not an
+	// /Artifact; else `watermark` (the subtype), `background`, `pagination` (the type, or the subtype
+	// header or footer), `layout`, else `other`. What v0 stored in a glyph's `artifact`.
+	if kind != 1 {
+		return 0
+	}
+	if su == 3 {
+		return ArWatermark()
+	}
+	if ty == 4 {
+		return ArBackground()
+	}
+	if (ty == 1) || ((su == 1) || (su == 2)) {
+		return ArPagination()
+	}
+	if ty == 3 {
+		return ArLayout()
+	}
+	return ArOther()
+}
+
+func MkOcgOf(marks *port.Cells, mark int32) int32 {
+	// The innermost optional-content row on `mark`'s chain, -1 when none.
+	var t int32 = mark
+	for t >= 0 {
+		if evGet(marks, 24, t, 1) == 2 {
+			return t
+		}
+		t = evGet(marks, 24, t, 4)
+	}
+	return -1
+}
+
+func VwNew(views *port.Cells, page int32, kind int32, request int32, parent int32, pxw int32, pxh int32, dpi100 int32, layer int32, ink int32, turns int32, deskew int32, cropx int32, cropy int32, flags int32) int32 {
+	// Append a view (SPEC 8.4.2) and compute its transform ONCE, from the integer parameters, so every
+	// reader uses the same numbers. The raster shows the page region whose top-left is (cropx, cropy)
+	// centipoints, turned `turns` quarter turns CLOCKWISE (as displayed) and its rows rotated `deskew`
+	// centi-degrees counter-clockwise; `dpi100` is the resolution x100. px -> cpt is
+	// x = e + (a*px + c*py) / 2^16, y = f + (b*px + d*py) / 2^16 (16.16 a b c d, e f centipoints), its
+	// inverse px = (a'*dx + c'*dy) / 2^16, py = (b'*dx + d'*dy) / 2^16 with dx, dy from (e, f): stored at
+	// `vwf-ia..id`. The scale is 720000 * 65536 / dpi100 in 64 bits; the quarter turns are exact; the
+	// deskew is `ev-cos`/`ev-sin`. There is NO rounding at all at 72, 96, 150, 200, 300, 400 and 600 dpi
+	// with no deskew.
+	var r int32 = evPush(views, 24)
+	var dpi int32 = dpi100
+	var q int32 = turns % 4
+	var xx int32 = 1
+	var xy int32 = 0
+	var yx int32 = 0
+	var yy int32 = 1
+	if dpi < 1 {
+		dpi = 7200
+	}
+	if q < 0 {
+		q += 4
+	}
+	if q == 1 {
+		xx = 0
+		xy = -1
+		yx = 1
+		yy = 0
+	}
+	if q == 2 {
+		xx = -1
+		xy = 0
+		yx = 0
+		yy = -1
+	}
+	if q == 3 {
+		xx = 0
+		xy = 1
+		yx = -1
+		yy = 0
+	}
+	var s16 int64 = ((int64(1440000) * int64(65536)) + int64(dpi)) / (int64(2) * int64(dpi))
+	var co int32 = EvCos(deskew)
+	var si int32 = EvSin(deskew)
+	var ux int32 = (xx * co) + (xy * si)
+	var uy int32 = (xy * co) + (0 - (xx * si))
+	var vx int32 = (yx * co) + (yy * si)
+	var vy int32 = (yy * co) + (0 - (yx * si))
+	// 16.16 unit vectors of the raster's x and y axes in page space: (ux, uy) and (vx, vy).
+	evSet(views, 24, r, 0, page)
+	evSet(views, 24, r, 1, kind)
+	evSet(views, 24, r, 2, request)
+	evSet(views, 24, r, 3, parent)
+	evSet(views, 24, r, 4, pxw)
+	evSet(views, 24, r, 5, pxh)
+	evSet(views, 24, r, 6, dpi100)
+	evSet(views, 24, r, 7, layer)
+	evSet(views, 24, r, 8, ink)
+	evSet(views, 24, r, 9, turns)
+	evSet(views, 24, r, 10, deskew)
+	evSet(views, 24, r, 11, cropx)
+	evSet(views, 24, r, 12, cropy)
+	evSet(views, 24, r, 13, int32(evRound16(s16*int64(ux))))
+	evSet(views, 24, r, 14, int32(evRound16(s16*int64(uy))))
+	evSet(views, 24, r, 15, int32(evRound16(s16*int64(vx))))
+	evSet(views, 24, r, 16, int32(evRound16(s16*int64(vy))))
+	// The inverse of a rotation times a scale is its transpose over the scale squared.
+	evSet(views, 24, r, 19, int32(EvFloordiv((int64(ux)*int64(65536))+(s16/int64(2)), s16)))
+	evSet(views, 24, r, 20, int32(EvFloordiv((int64(vx)*int64(65536))+(s16/int64(2)), s16)))
+	evSet(views, 24, r, 21, int32(EvFloordiv((int64(uy)*int64(65536))+(s16/int64(2)), s16)))
+	evSet(views, 24, r, 22, int32(EvFloordiv((int64(vy)*int64(65536))+(s16/int64(2)), s16)))
+	evSet(views, 24, r, 23, flags)
+	// The page position of pixel (0, 0): a corner of the region, by the quarter turns.
+	var wcpt int32 = int32(evRound16(s16 * int64(pxw)))
+	var hcpt int32 = int32(evRound16(s16 * int64(pxh)))
+	var e int32 = cropx
+	var f int32 = cropy
+	if q == 1 {
+		f = cropy + wcpt
+	}
+	if q == 2 {
+		e = cropx + wcpt
+		f = cropy + hcpt
+	}
+	if q == 3 {
+		e = cropx + hcpt
+	}
+	evSet(views, 24, r, 17, e)
+	evSet(views, 24, r, 18, f)
+	return r
+}
+
+func VwPxToCpt(views *port.Cells, v int32, axis int32, px int32, py int32) int32 {
+	// A pixel position of view `v` as page space: `axis` 0 the x, 1 the y, in centipoints (64-bit
+	// arithmetic, round half up with FLOOR division, D096).
+	if axis == 0 {
+		return evGet(views, 24, v, 17) + int32(evRound16((int64(evGet(views, 24, v, 13))*int64(px))+(int64(evGet(views, 24, v, 15))*int64(py))))
+	}
+	return evGet(views, 24, v, 18) + int32(evRound16((int64(evGet(views, 24, v, 14))*int64(px))+(int64(evGet(views, 24, v, 16))*int64(py))))
+}
+
+func VwCptToPx(views *port.Cells, v int32, axis int32, x int32, y int32) int32 {
+	// A page position as a pixel of view `v` (the inverse; `axis` 0 the x, 1 the y).
+	var dx int64 = int64(x - evGet(views, 24, v, 17))
+	var dy int64 = int64(y - evGet(views, 24, v, 18))
+	if axis == 0 {
+		return int32(evRound16((int64(evGet(views, 24, v, 19)) * dx) + (int64(evGet(views, 24, v, 21)) * dy)))
+	}
+	return int32(evRound16((int64(evGet(views, 24, v, 20)) * dx) + (int64(evGet(views, 24, v, 22)) * dy)))
+}
+
+func VwBoxToCpt(views *port.Cells, v int32, k int32, px int32, py int32, pw int32, ph int32) int32 {
+	// The page box of a pixel box `x y w h` of view `v`: the four corners mapped, the smallest box
+	// around them. `k` picks the answer: 0 x0, 1 y0, 2 x1, 3 y1.
+	var xa int32 = VwPxToCpt(views, v, 0, px, py)
+	var xb int32 = VwPxToCpt(views, v, 0, px+pw, py)
+	var xc int32 = VwPxToCpt(views, v, 0, px, py+ph)
+	var xd int32 = VwPxToCpt(views, v, 0, px+pw, py+ph)
+	var ya int32 = VwPxToCpt(views, v, 1, px, py)
+	var yb int32 = VwPxToCpt(views, v, 1, px+pw, py)
+	var yc int32 = VwPxToCpt(views, v, 1, px, py+ph)
+	var yd int32 = VwPxToCpt(views, v, 1, px+pw, py+ph)
+	var lo int32 = 0
+	var hi int32 = 0
+	if k == 0 {
+		lo = xa
+		if xb < lo {
+			lo = xb
+		}
+		if xc < lo {
+			lo = xc
+		}
+		if xd < lo {
+			lo = xd
+		}
+		return lo
+	}
+	if k == 1 {
+		lo = ya
+		if yb < lo {
+			lo = yb
+		}
+		if yc < lo {
+			lo = yc
+		}
+		if yd < lo {
+			lo = yd
+		}
+		return lo
+	}
+	if k == 2 {
+		hi = xa
+		if xb > hi {
+			hi = xb
+		}
+		if xc > hi {
+			hi = xc
+		}
+		if xd > hi {
+			hi = xd
+		}
+		return hi
+	}
+	hi = ya
+	if yb > hi {
+		hi = yb
+	}
+	if yc > hi {
+		hi = yc
+	}
+	if yd > hi {
+		hi = yd
+	}
+	return hi
+}
+
+func EvLen(ea int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// The number of cells of arena `ea` (its `ea` code, SPEC 8.4.6); 0 for a code that is none.
+	if ea == 1 {
+		return port.CellsLen(epages)
+	}
+	if ea == 2 {
+		return port.CellsLen(views)
+	}
+	if ea == 3 {
+		return port.CellsLen(pts)
+	}
+	if ea == 4 {
+		return port.CellsLen(refs)
+	}
+	if ea == 5 {
+		return port.CellsLen(etext)
+	}
+	if ea == 6 {
+		return port.CellsLen(feats)
+	}
+	if ea == 7 {
+		return port.CellsLen(glyphs)
+	}
+	if ea == 8 {
+		return port.CellsLen(words)
+	}
+	if ea == 9 {
+		return port.CellsLen(lines)
+	}
+	if ea == 10 {
+		return port.CellsLen(marks)
+	}
+	if ea == 11 {
+		return port.CellsLen(fonts)
+	}
+	if ea == 12 {
+		return port.CellsLen(paths)
+	}
+	if ea == 13 {
+		return port.CellsLen(images)
+	}
+	if ea == 14 {
+		return port.CellsLen(oruns)
+	}
+	if ea == 15 {
+		return port.CellsLen(oblocks)
+	}
+	if ea == 16 {
+		return port.CellsLen(olines)
+	}
+	if ea == 17 {
+		return port.CellsLen(owords)
+	}
+	if ea == 18 {
+		return port.CellsLen(osyms)
+	}
+	if ea == 19 {
+		return port.CellsLen(oalts)
+	}
+	if ea == 20 {
+		return port.CellsLen(inks)
+	}
+	if ea == 21 {
+		return port.CellsLen(components)
+	}
+	if ea == 22 {
+		return port.CellsLen(rules)
+	}
+	if ea == 23 {
+		return port.CellsLen(prims)
+	}
+	if ea == 24 {
+		return port.CellsLen(tlines)
+	}
+	return 0
+}
+
+func EvPeek(ea int32, row int32, f int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// Cell `f` of row `row` of arena `ea`.
+	if ea == 1 {
+		return port.CellsAt(epages, (row*12)+f)
+	}
+	if ea == 2 {
+		return port.CellsAt(views, (row*24)+f)
+	}
+	if ea == 3 {
+		return port.CellsAt(pts, (row*3)+f)
+	}
+	if ea == 4 {
+		return port.CellsAt(refs, (row*2)+f)
+	}
+	if ea == 5 {
+		return port.CellsAt(etext, (row*1)+f)
+	}
+	if ea == 6 {
+		return port.CellsAt(feats, (row*32)+f)
+	}
+	if ea == 7 {
+		return port.CellsAt(glyphs, (row*32)+f)
+	}
+	if ea == 8 {
+		return port.CellsAt(words, (row*24)+f)
+	}
+	if ea == 9 {
+		return port.CellsAt(lines, (row*16)+f)
+	}
+	if ea == 10 {
+		return port.CellsAt(marks, (row*24)+f)
+	}
+	if ea == 11 {
+		return port.CellsAt(fonts, (row*16)+f)
+	}
+	if ea == 12 {
+		return port.CellsAt(paths, (row*24)+f)
+	}
+	if ea == 13 {
+		return port.CellsAt(images, (row*20)+f)
+	}
+	if ea == 14 {
+		return port.CellsAt(oruns, (row*28)+f)
+	}
+	if ea == 15 {
+		return port.CellsAt(oblocks, (row*16)+f)
+	}
+	if ea == 16 {
+		return port.CellsAt(olines, (row*24)+f)
+	}
+	if ea == 17 {
+		return port.CellsAt(owords, (row*28)+f)
+	}
+	if ea == 18 {
+		return port.CellsAt(osyms, (row*20)+f)
+	}
+	if ea == 19 {
+		return port.CellsAt(oalts, (row*4)+f)
+	}
+	if ea == 20 {
+		return port.CellsAt(inks, (row*12)+f)
+	}
+	if ea == 21 {
+		return port.CellsAt(components, (row*24)+f)
+	}
+	if ea == 22 {
+		return port.CellsAt(rules, (row*20)+f)
+	}
+	if ea == 23 {
+		return port.CellsAt(prims, (row*24)+f)
+	}
+	if ea == 24 {
+		return port.CellsAt(tlines, (row*20)+f)
+	}
+	return 0
+}
+
+func EvPoke(ea int32, row int32, f int32, v int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// Set cell `f` of row `row` of arena `ea` to `v` (the laws break a page with it).
+	if ea == 1 {
+		port.CellsSet(epages, (row*12)+f, v)
+		return 0
+	}
+	if ea == 2 {
+		port.CellsSet(views, (row*24)+f, v)
+		return 0
+	}
+	if ea == 3 {
+		port.CellsSet(pts, (row*3)+f, v)
+		return 0
+	}
+	if ea == 4 {
+		port.CellsSet(refs, (row*2)+f, v)
+		return 0
+	}
+	if ea == 5 {
+		port.CellsSet(etext, (row*1)+f, v)
+		return 0
+	}
+	if ea == 6 {
+		port.CellsSet(feats, (row*32)+f, v)
+		return 0
+	}
+	if ea == 7 {
+		port.CellsSet(glyphs, (row*32)+f, v)
+		return 0
+	}
+	if ea == 8 {
+		port.CellsSet(words, (row*24)+f, v)
+		return 0
+	}
+	if ea == 9 {
+		port.CellsSet(lines, (row*16)+f, v)
+		return 0
+	}
+	if ea == 10 {
+		port.CellsSet(marks, (row*24)+f, v)
+		return 0
+	}
+	if ea == 11 {
+		port.CellsSet(fonts, (row*16)+f, v)
+		return 0
+	}
+	if ea == 12 {
+		port.CellsSet(paths, (row*24)+f, v)
+		return 0
+	}
+	if ea == 13 {
+		port.CellsSet(images, (row*20)+f, v)
+		return 0
+	}
+	if ea == 14 {
+		port.CellsSet(oruns, (row*28)+f, v)
+		return 0
+	}
+	if ea == 15 {
+		port.CellsSet(oblocks, (row*16)+f, v)
+		return 0
+	}
+	if ea == 16 {
+		port.CellsSet(olines, (row*24)+f, v)
+		return 0
+	}
+	if ea == 17 {
+		port.CellsSet(owords, (row*28)+f, v)
+		return 0
+	}
+	if ea == 18 {
+		port.CellsSet(osyms, (row*20)+f, v)
+		return 0
+	}
+	if ea == 19 {
+		port.CellsSet(oalts, (row*4)+f, v)
+		return 0
+	}
+	if ea == 20 {
+		port.CellsSet(inks, (row*12)+f, v)
+		return 0
+	}
+	if ea == 21 {
+		port.CellsSet(components, (row*24)+f, v)
+		return 0
+	}
+	if ea == 22 {
+		port.CellsSet(rules, (row*20)+f, v)
+		return 0
+	}
+	if ea == 23 {
+		port.CellsSet(prims, (row*24)+f, v)
+		return 0
+	}
+	if ea == 24 {
+		port.CellsSet(tlines, (row*20)+f, v)
+		return 0
+	}
+	return 0
+}
+
+var EvEaKey [24]int32 = [24]int32{
+	55, 56, 57, 58, 59, 60, 2, 3, 4, 61, 62, 5, 6, 63, 64, 65,
+	66, 67, 68, 69, 7, 70, 71, 72,
+}
+
+func EvPageRow(epages *port.Cells, page int32) int32 {
+	// The `epages` row of `page`, -1 when there is none.
+	var n int32 = port.CellsLen(epages) / 12
+	var i int32 = 0
+	for i < n {
+		if evGet(epages, 12, i, EpfPage()) == page {
+			return i
+		}
+		i += 1
+	}
+	return -1
+}
+
+func evLowerMedian(c *port.Cells, stride int32, first int32, cnt int32, f int32) int32 {
+	// The LOWER MEDIAN of cell `f` of rows [first, first + cnt) of an arena: the ((cnt - 1) / 2)th smallest;
+	// 0 for no rows.
+	var k int32 = (cnt - 1) / 2
+	var i int32 = 0
+	var j int32 = 0
+	var less int32 = 0
+	var leq int32 = 0
+	var r int32 = 0
+	var rj int32 = 0
+	if cnt <= 0 {
+		return 0
+	}
+	for i < cnt {
+		r = evGet(c, stride, first+i, f)
+		less = 0
+		leq = 0
+		j = 0
+		for j < cnt {
+			rj = evGet(c, stride, first+j, f)
+			if rj < r {
+				less += 1
+			}
+			if rj <= r {
+				leq += 1
+			}
+			j += 1
+		}
+		if (less <= k) && (k < leq) {
+			return r
+		}
+		i += 1
+	}
+	return 0
+}
+
+func EvRotMedian(olines *port.Cells, first int32, cnt int32) int32 {
+	// The page's dominant text angle for `xo-angle`: the lower median of the `rot` of the OCR lines
+	// [first, first + cnt) (an OCR run's); 0 for no line.
+	return evLowerMedian(olines, 24, first, cnt, LhRot())
+}
+
+func evWordCls(c int32) int32 {
+	// A code point's class for `xo-implausible`: 1 lowercase letter, 2 uppercase letter, 3 digit, 0 anything
+	// else (only ASCII and Latin-1 are classed: what is not is never implausible).
+	if (c >= 97) && (c <= 122) {
+		return 1
+	}
+	if (c >= 65) && (c <= 90) {
+		return 2
+	}
+	if (c >= 48) && (c <= 57) {
+		return 3
+	}
+	if c == 223 {
+		return 1
+	}
+	if (c >= 224) && (c <= 246) {
+		return 1
+	}
+	if (c >= 248) && (c <= 255) {
+		return 1
+	}
+	if (c >= 192) && (c <= 214) {
+		return 2
+	}
+	if (c >= 216) && (c <= 222) {
+		return 2
+	}
+	return 0
+}
+
+func evImplausible(etext *port.Cells, ts int32, n int32) int32 {
+	// Per-mille of the adjacent code-point pairs of etext[ts, ts + n) that are letter <-> digit or
+	// lowercase -> uppercase (floor); 0 for one code point or none.
+	var i int32 = 1
+	var bad int32 = 0
+	var p int32 = 0
+	var q int32 = 0
+	if n < 2 {
+		return 0
+	}
+	for i < n {
+		p = evWordCls(port.CellsAt(etext, ts+(i-1)))
+		q = evWordCls(port.CellsAt(etext, ts+i))
+		if (p != 0) && (q != 0) {
+			if (p == 3) && (q != 3) {
+				bad += 1
+			}
+			if (p != 3) && (q == 3) {
+				bad += 1
+			}
+			if (p == 1) && (q == 2) {
+				bad += 1
+			}
+		}
+		i += 1
+	}
+	return (bad * 1000) / (n - 1)
+}
+
+func evSymAltSame(osyms *port.Cells, oalts *port.Cells, etext *port.Cells, s int32, a int32) int32 {
+	// 1 when alternative a has the same text as symbol s: the symbol's `etext` run when it has one (a
+	// ligature), else its one code point.
+	var ts int32 = evGet(osyms, 20, s, ChTstart())
+	var tl int32 = evGet(osyms, 20, s, ChTlen())
+	var cp int32 = evGet(osyms, 20, s, ChCp())
+	var as int32 = evGet(oalts, 4, a, OafTstart())
+	var al int32 = evGet(oalts, 4, a, OafTlen())
+	var sl int32 = 1
+	var k int32 = 0
+	if (ts >= 0) && (tl > 0) {
+		sl = tl
+	}
+	if (ts < 0) && (cp < 0) {
+		sl = 0
+	}
+	if sl != al {
+		return 0
+	}
+	for k < al {
+		if (ts >= 0) && (tl > 0) {
+			if port.CellsAt(etext, ts+k) != port.CellsAt(etext, as+k) {
+				return 0
+			}
+		} else if cp != port.CellsAt(etext, as+k) {
+			return 0
+		}
+		k += 1
+	}
+	return 1
+}
+
+func evSymStart(osyms *port.Cells, s int32, q int32) int32 {
+	// Where symbol s begins along a line whose direction is quadrant q (0 right, 1 up, 2 left, 3 down).
+	if q == 0 {
+		return evGet(osyms, 20, s, ChX0())
+	}
+	if q == 1 {
+		return 0 - evGet(osyms, 20, s, ChY1())
+	}
+	if q == 2 {
+		return 0 - evGet(osyms, 20, s, ChX1())
+	}
+	return evGet(osyms, 20, s, ChY0())
+}
+
+func evSymEnd(osyms *port.Cells, s int32, q int32) int32 {
+	if q == 0 {
+		return evGet(osyms, 20, s, ChX1())
+	}
+	if q == 1 {
+		return 0 - evGet(osyms, 20, s, ChY0())
+	}
+	if q == 2 {
+		return 0 - evGet(osyms, 20, s, ChX0())
+	}
+	return evGet(osyms, 20, s, ChY1())
+}
+
+func evSpacing(osyms *port.Cells, sf int32, sn int32, rot int32) int32 {
+	// The mean gap between consecutive symbols over the mean symbol width, per-mille, both along the
+	// word's writing direction (the quadrant of `rot`); -1 for fewer than two symbols or no width.
+	var q int32 = ((rot + 4500) / 9000) % 4
+	var gaps int64 = int64(0)
+	var widths int64 = int64(0)
+	var i int32 = 0
+	if sn < 2 {
+		return -1
+	}
+	for i < sn {
+		widths = widths + int64(evSymEnd(osyms, sf+i, q)-evSymStart(osyms, sf+i, q))
+		if (i + 1) < sn {
+			gaps = gaps + int64(evSymStart(osyms, sf+(i+1), q)-evSymEnd(osyms, sf+i, q))
+		}
+		i += 1
+	}
+	if widths <= int64(0) {
+		return -1
+	}
+	return int32(((gaps * int64(1000)) * int64(sn)) / (widths * int64(sn-1)))
+}
+
+func evHeightMedian(owords *port.Cells, first int32, cnt int32) int32 {
+	// The lower median of the box heights of OCR words [first, first + cnt); 0 for none.
+	var k int32 = (cnt - 1) / 2
+	var i int32 = 0
+	var j int32 = 0
+	var less int32 = 0
+	var leq int32 = 0
+	var h int32 = 0
+	var hj int32 = 0
+	if cnt <= 0 {
+		return 0
+	}
+	for i < cnt {
+		h = evGet(owords, 28, first+i, HdY1()) - evGet(owords, 28, first+i, HdY0())
+		less = 0
+		leq = 0
+		j = 0
+		for j < cnt {
+			hj = evGet(owords, 28, first+j, HdY1()) - evGet(owords, 28, first+j, HdY0())
+			if hj < h {
+				less += 1
+			}
+			if hj <= h {
+				leq += 1
+			}
+			j += 1
+		}
+		if (less <= k) && (k < leq) {
+			return h
+		}
+		i += 1
+	}
+	return 0
+}
+
+func EvFeatOcr(feats *port.Cells, epages *port.Cells, etext *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, w int32, rotmed int32, altclose int32) int32 {
+	// Stage 1 features of OCR word w (SPEC 8.4.5): a new `feats` row, the word's `feat` pointed at it,
+	// columns 2-8, 17, 19, 20, 21, 28 and 29 computed from the answer alone (the others -1).
+	// 2 the raw word confidence; 3 the lowest and 4 the mean (floor) symbol confidence; 5 the smallest
+	// MARGIN: over the symbols that have a differing alternative, the symbol's confidence less the best
+	// differing alternative's (-1 if none has one); 6 the symbols whose margin is at most `altclose`;
+	// 7 the engine's flags; 8 the implausible class transitions; 17 the height over its line's median,
+	// per-mille; 19 the angle to `rotmed`, the run's dominant line angle; 20 the distance of the word's
+	// baseline midpoint from its line's baseline there; 21 the mean gap between symbols over their mean
+	// width, per-mille (along the writing direction); 28 the code points; 29 the distance to the nearest page
+	// edge. The text is `etext`'s.
+	var row int32 = FeNew(feats, 17, w)
+	var sf int32 = evGet(owords, 28, w, OwfSfirst())
+	var sn int32 = evGet(owords, 28, w, OwfScount())
+	var ts int32 = evGet(owords, 28, w, HdTstart())
+	var tl int32 = evGet(owords, 28, w, HdTlen())
+	var pg int32 = evGet(owords, 28, w, HdPage())
+	var lineix int32 = evGet(owords, 28, w, HdLine())
+	var rot int32 = evGet(owords, 28, w, HdRot())
+	var s int32 = 0
+	var lo int32 = -1
+	var sum int32 = 0
+	var nconf int32 = 0
+	var minmargin int32 = 2147483647
+	var nmargin int32 = 0
+	var ambiguous int32 = 0
+	var a int32 = 0
+	var af int32 = 0
+	var ac int32 = 0
+	var best int32 = -1
+	var sc int32 = 0
+	var marg int32 = 0
+	var d int32 = 0
+	var med int32 = 0
+	var lf int32 = 0
+	var lc int32 = 0
+	var xm int32 = 0
+	var ym int32 = 0
+	var ep int32 = 0
+	evSet(owords, 28, w, HdFeat(), row)
+	FeSet(feats, row, XoConf(), evGet(owords, 28, w, HdConf()))
+	s = sf
+	for s < (sf + sn) {
+		sc = evGet(osyms, 20, s, OsfConf())
+		if sc >= 0 {
+			sum += sc
+			nconf += 1
+			if (lo < 0) || (sc < lo) {
+				lo = sc
+			}
+		}
+		af = evGet(osyms, 20, s, OsfAfirst())
+		ac = evGet(osyms, 20, s, OsfAcount())
+		best = -1
+		a = af
+		for a < (af + ac) {
+			if evSymAltSame(osyms, oalts, etext, s, a) == 0 {
+				if evGet(oalts, 4, a, OafConf()) > best {
+					best = evGet(oalts, 4, a, OafConf())
+				}
+			}
+			a += 1
+		}
+		if (best >= 0) && (sc >= 0) {
+			marg = sc - best
+			nmargin += 1
+			if marg < minmargin {
+				minmargin = marg
+			}
+			if marg <= altclose {
+				ambiguous += 1
+			}
+		}
+		s += 1
+	}
+	if nconf > 0 {
+		FeSet(feats, row, XoSymMin(), lo)
+		FeSet(feats, row, XoSymMean(), sum/nconf)
+	}
+	if nmargin > 0 {
+		FeSet(feats, row, XoMargin(), minmargin)
+		FeSet(feats, row, XoAmbiguous(), ambiguous)
+	}
+	FeSet(feats, row, XoEngineFlags(), evGet(owords, 28, w, OwfFlags()))
+	FeSet(feats, row, XoImplausible(), evImplausible(etext, ts, tl))
+	d = rot - rotmed
+	if d < 0 {
+		d = 0 - d
+	}
+	if d > 18000 {
+		d = 36000 - d
+	}
+	FeSet(feats, row, XoAngle(), d)
+	FeSet(feats, row, XoSpacing(), evSpacing(osyms, sf, sn, rot))
+	FeSet(feats, row, XoLength(), tl)
+	if lineix >= 0 {
+		lf = evGet(olines, 24, lineix, LhFirst())
+		lc = evGet(olines, 24, lineix, LhCount())
+		med = evHeightMedian(owords, lf, lc)
+		if med > 0 {
+			FeSet(feats, row, XoRelHeight(), int32((int64(evGet(owords, 28, w, HdY1())-evGet(owords, 28, w, HdY0()))*int64(1000))/int64(med)))
+		}
+		xm = (evGet(owords, 28, w, HdBx0()) + evGet(owords, 28, w, HdBx1())) / 2
+		ym = (evGet(owords, 28, w, HdBy0()) + evGet(owords, 28, w, HdBy1())) / 2
+		d = ym - EvBaselineAt(evGet(olines, 24, lineix, LhBx0()), evGet(olines, 24, lineix, LhBy0()), evGet(olines, 24, lineix, LhBx1()), evGet(olines, 24, lineix, LhBy1()), xm)
+		if d < 0 {
+			d = 0 - d
+		}
+		FeSet(feats, row, XoBaseDev(), d)
+	}
+	ep = EvPageRow(epages, pg)
+	if ep >= 0 {
+		d = evGet(owords, 28, w, HdX0())
+		if evGet(owords, 28, w, HdY0()) < d {
+			d = evGet(owords, 28, w, HdY0())
+		}
+		if (evGet(epages, 12, ep, EpfWidth()) - evGet(owords, 28, w, HdX1())) < d {
+			d = evGet(epages, 12, ep, EpfWidth()) - evGet(owords, 28, w, HdX1())
+		}
+		if (evGet(epages, 12, ep, EpfHeight()) - evGet(owords, 28, w, HdY1())) < d {
+			d = evGet(epages, 12, ep, EpfHeight()) - evGet(owords, 28, w, HdY1())
+		}
+		if d < 0 {
+			d = 0
+		}
+		FeSet(feats, row, XoEdge(), d)
+	}
+	return row
+}
+
+func EvRows(ea int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// The rows of arena `ea` (its length over its stride); 0 for a code that is none.
+	if (ea < 1) || (ea > 24) {
+		return 0
+	}
+	var nlen int32 = EvLen(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	return nlen / EvStrides[ea-1]
 }
 
 func EvRunOk(start int32, n int32, total int32) int32 {
@@ -1619,125 +6220,140 @@ func EvRunOk(start int32, n int32, total int32) int32 {
 	return 1
 }
 
-func EvCheck(glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
-	// 0 when every run and link is inside its arena; otherwise a code:
-	// 1 a stride, 2 a glyph's text run, 3 a word's glyph run, 4 a word's
-	// text run, 5 a line's word run, 6 an OCR word's text run, 7 an
-	// alternative chain, 8 a word's line, 9 a glyph's word, 10 a span's text
-	// run, glyph run or parent.
-	var ng int32 = port.CellsLen(glyphs) / 20
-	var nw int32 = port.CellsLen(words) / 16
-	var nl int32 = port.CellsLen(lines) / 12
-	var no int32 = port.CellsLen(ocrwords) / 16
-	var na int32 = port.CellsLen(alts) / 4
-	var nt int32 = port.CellsLen(etext)
-	var ns int32 = port.CellsLen(spans) / 22
+func EvCheck(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// 0 when the evidence is well formed; otherwise the code of the first thing that is not.
+	// 1: an arena whose length is not a whole number of rows. 2..89: the rows of `ev-ck` in order (a
+	// text run, a run, an index, an index to an earlier row, a back pointer that the row it points to
+	// does not cover, a box with x0 > x1 or y0 > y1: read its row for which). 100: a `refs` row
+	// whose arena or index is none; 101: a `feats` row whose subject is not a word; 102: a word whose
+	// `feat` row does not name it. The OCR nesting block > paragraph > line > word > symbol >
+	// alternative is the back-pointer rows: a child lies in the run of the row it points to, and in
+	// its run's range, so nothing is counted twice and nothing is orphaned.
+	var ea int32 = 1
+	var k int32 = 0
 	var i int32 = 0
-	var a int32 = 0
-	var steps int32 = 0
-	if (port.CellsLen(glyphs) % 20) != 0 {
-		return 1
-	}
-	if (port.CellsLen(words) % 16) != 0 {
-		return 1
-	}
-	if (port.CellsLen(lines) % 12) != 0 {
-		return 1
-	}
-	if (port.CellsLen(paths) % 16) != 0 {
-		return 1
-	}
-	if (port.CellsLen(images) % 12) != 0 {
-		return 1
-	}
-	if (port.CellsLen(components) % 20) != 0 {
-		return 1
-	}
-	if (port.CellsLen(ocrwords) % 16) != 0 {
-		return 1
-	}
-	if (port.CellsLen(alts) % 4) != 0 {
-		return 1
-	}
-	if (port.CellsLen(spans) % 22) != 0 {
-		return 1
-	}
-	for i < ng {
-		if evGet(glyphs, 20, i, 2) >= 0 {
-			if EvRunOk(evGet(glyphs, 20, i, 2), evGet(glyphs, 20, i, 3), nt) == 0 {
-				return 2
-			}
+	var n int32 = 0
+	var nt int32 = 0
+	var kind int32 = 0
+	var f1 int32 = 0
+	var f2 int32 = 0
+	var tg int32 = 0
+	var v1 int32 = 0
+	var v2 int32 = 0
+	var nlen int32 = 0
+	var sea int32 = 0
+	for ea <= 24 {
+		nlen = EvLen(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		if (nlen % EvStrides[ea-1]) != 0 {
+			return 1
 		}
-		if (evGet(glyphs, 20, i, 19) < -1) || (evGet(glyphs, 20, i, 19) >= nw) {
-			return 9
-		}
-		i += 1
+		ea += 1
 	}
-	i = 0
-	for i < nw {
-		if EvRunOk(evGet(words, 16, i, 5), evGet(words, 16, i, 6), ng) == 0 {
-			return 3
-		}
-		if evGet(words, 16, i, 7) >= 0 {
-			if EvRunOk(evGet(words, 16, i, 7), evGet(words, 16, i, 8), nt) == 0 {
-				return 4
-			}
-		}
-		if (evGet(words, 16, i, 9) < -1) || (evGet(words, 16, i, 9) >= nl) {
-			return 8
-		}
-		i += 1
-	}
-	i = 0
-	for i < nl {
-		if EvRunOk(evGet(lines, 12, i, 5), evGet(lines, 12, i, 6), nw) == 0 {
-			return 5
-		}
-		i += 1
-	}
-	i = 0
-	for i < no {
-		if evGet(ocrwords, 16, i, 5) >= 0 {
-			if EvRunOk(evGet(ocrwords, 16, i, 5), evGet(ocrwords, 16, i, 6), nt) == 0 {
-				return 6
-			}
-		}
-		a = evGet(ocrwords, 16, i, 8)
-		steps = 0
-		for a >= 0 {
-			if a >= na {
-				return 7
-			}
-			if steps > na {
-				return 7
-			}
-			steps += 1
-			a = evGet(alts, 4, a, 3)
-		}
-		if steps != evGet(ocrwords, 16, i, 9) {
-			return 7
-		}
-		i += 1
-	}
-	i = 0
-	for i < ns {
-		if EvRunOk(evGet(spans, 22, i, 18), evGet(spans, 22, i, 19), ng) == 0 {
-			return 10
-		}
-		if (evGet(spans, 22, i, 3) < -1) || (evGet(spans, 22, i, 3) >= i) {
-			return 10
-		}
-		if EvRunOk(evGet(spans, 22, i, 1), evGet(spans, 22, i, 2), nt) == 0 {
-			return 10
-		}
-		a = 6
-		for a <= 16 {
-			if evGet(spans, 22, i, a) >= 0 {
-				if EvRunOk(evGet(spans, 22, i, a), evGet(spans, 22, i, a+1), nt) == 0 {
-					return 10
+	k = 0
+	for k < 88 {
+		ea = EvCk[k*6+1]
+		kind = EvCk[k*6+2]
+		f1 = EvCk[k*6+3]
+		f2 = EvCk[k*6+4]
+		tg = EvCk[k*6+5]
+		n = EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		nt = EvRows(tg, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		i = 0
+		for i < n {
+			v1 = EvPeek(ea, i, f1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+			if (kind == 1) || (kind == 2) {
+				v2 = EvPeek(ea, i, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+				if (v1 >= 0) || (kind == 2) {
+					if EvRunOk(v1, v2, nt) == 0 {
+						return EvCk[k*6+0]
+					}
 				}
 			}
-			a += 2
+			if kind == 3 {
+				if (v1 < -1) || (v1 >= nt) {
+					return EvCk[k*6+0]
+				}
+			}
+			if kind == 4 {
+				if (v1 < 0) || (v1 >= nt) {
+					return EvCk[k*6+0]
+				}
+			}
+			if kind == 5 {
+				if (v1 < -1) || (v1 >= i) {
+					return EvCk[k*6+0]
+				}
+			}
+			if kind == 6 {
+				if v1 >= 0 {
+					if v1 >= nt {
+						return EvCk[k*6+0]
+					}
+					v2 = EvPeek(tg, v1, f2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+					nlen = EvPeek(tg, v1, f2+1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+					if (i < v2) || (i >= (v2 + nlen)) {
+						return EvCk[k*6+0]
+					}
+				}
+			}
+			if kind == 8 {
+				v2 = EvPeek(ea, i, f1+2, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+				if v1 > v2 {
+					return EvCk[k*6+0]
+				}
+				v1 = EvPeek(ea, i, f1+1, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+				v2 = EvPeek(ea, i, f1+3, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+				if v1 > v2 {
+					return EvCk[k*6+0]
+				}
+			}
+			i += 1
+		}
+		k += 1
+	}
+	// references: the arena and the row exist
+	i = 0
+	for i < (port.CellsLen(refs) / 2) {
+		ea = port.CellsAt(refs, i*2)
+		if (ea < 1) || (ea > 24) {
+			return 100
+		}
+		n = EvRows(ea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		if (port.CellsAt(refs, (i*2)+1) < 0) || (port.CellsAt(refs, (i*2)+1) >= n) {
+			return 100
+		}
+		i += 1
+	}
+	// features: the subject is a word (text layer or OCR) that exists, and it names its row back
+	i = 0
+	for i < (port.CellsLen(feats) / 32) {
+		sea = port.CellsAt(feats, i*32)
+		if (sea != 8) && (sea != 17) {
+			return 101
+		}
+		n = EvRows(sea, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+		if (port.CellsAt(feats, (i*32)+1) < 0) || (port.CellsAt(feats, (i*32)+1) >= n) {
+			return 101
+		}
+		i += 1
+	}
+	i = 0
+	for i < (port.CellsLen(words) / 24) {
+		v1 = port.CellsAt(words, (i*24)+15)
+		if v1 >= 0 {
+			if (port.CellsAt(feats, v1*32) != 8) || (port.CellsAt(feats, (v1*32)+1) != i) {
+				return 102
+			}
+		}
+		i += 1
+	}
+	i = 0
+	for i < (port.CellsLen(owords) / 28) {
+		v1 = port.CellsAt(owords, (i*28)+15)
+		if v1 >= 0 {
+			if (port.CellsAt(feats, v1*32) != 17) || (port.CellsAt(feats, (v1*32)+1) != i) {
+				return 102
+			}
 		}
 		i += 1
 	}
@@ -1782,9 +6398,9 @@ func evFcpt(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 	return 1
 }
 
-func evFbox(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, started int32) int32 {
-	// `"box":[x0,y0,x1,y1]`, fields f..f+3.
-	evBegin(t, pr, d, started, EkBox())
+func evFquad(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
+	// `"key":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.
+	evBegin(t, pr, d, started, key)
 	port.TextAscii(t, "[")
 	json.JsCpt(t, evGet(c, stride, row, f))
 	json.JsFsep(t, pr, 1)
@@ -1793,6 +6409,46 @@ func evFbox(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 	json.JsCpt(t, evGet(c, stride, row, f+2))
 	json.JsFsep(t, pr, 1)
 	json.JsCpt(t, evGet(c, stride, row, f+3))
+	port.TextAscii(t, "]")
+	return 1
+}
+
+func evFpx4(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
+	// A pixel box `"key":[x,y,w,h]` in integers; omitted when it has no area (w and h 0).
+	if (evGet(c, stride, row, f+2) == 0) && (evGet(c, stride, row, f+3) == 0) {
+		return started
+	}
+	evBegin(t, pr, d, started, key)
+	port.TextAscii(t, "[")
+	port.TextI32(t, evGet(c, stride, row, f))
+	json.JsFsep(t, pr, 1)
+	port.TextI32(t, evGet(c, stride, row, f+1))
+	json.JsFsep(t, pr, 1)
+	port.TextI32(t, evGet(c, stride, row, f+2))
+	json.JsFsep(t, pr, 1)
+	port.TextI32(t, evGet(c, stride, row, f+3))
+	port.TextAscii(t, "]")
+	return 1
+}
+
+func evFpair(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, d1 int32, d2 int32, pts int32, started int32) int32 {
+	// Two cells as `"key":[a,b]`, integers (pts 0) or points (pts 1); omitted when they are (d1, d2).
+	if (evGet(c, stride, row, f) == d1) && (evGet(c, stride, row, f+1) == d2) {
+		return started
+	}
+	evBegin(t, pr, d, started, key)
+	port.TextAscii(t, "[")
+	if pts == 1 {
+		json.JsCpt(t, evGet(c, stride, row, f))
+	} else {
+		port.TextI32(t, evGet(c, stride, row, f))
+	}
+	json.JsFsep(t, pr, 1)
+	if pts == 1 {
+		json.JsCpt(t, evGet(c, stride, row, f+1))
+	} else {
+		port.TextI32(t, evGet(c, stride, row, f+1))
+	}
 	port.TextAscii(t, "]")
 	return 1
 }
@@ -1815,25 +6471,37 @@ func evFcolor(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32
 	return 1
 }
 
-func evFtext(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, fstart int32, flen int32, etext *port.Cells, started int32) int32 {
-	// A text run of `etext` as `"text"`; an absent run (start -1) is omitted.
-	var s int32 = evGet(c, stride, row, fstart)
-	if s < 0 {
+func evFpacked(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
+	// Up to four ASCII characters packed big-endian in one cell (a script, a language) as a string; 0 is omitted.
+	var v int32 = evGet(c, stride, row, f)
+	var sh int32 = 24
+	var ch int32 = 0
+	if v == 0 {
 		return started
 	}
-	evBegin(t, pr, d, started, EkText())
-	json.JsStr(t, etext, s, evGet(c, stride, row, flen))
+	evBegin(t, pr, d, started, key)
+	port.TextAscii(t, "\"")
+	for sh >= 0 {
+		ch = ((v) >> uint(sh)) & 255
+		if (ch > 31) && (ch < 127) {
+			if (ch != 34) && (ch != 92) {
+				port.TextCp(t, ch)
+			}
+		}
+		sh -= 8
+	}
+	port.TextAscii(t, "\"")
 	return 1
 }
 
-func evFtextk(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, fstart int32, flen int32, etext *port.Cells, key int32, started int32) int32 {
-	// As `ev-ftext` under any key.
+func evFtextk(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, fstart int32, etext *port.Cells, key int32, started int32) int32 {
+	// A text run of `etext` (cells fstart, fstart+1) as a string; an absent run (start -1) is omitted.
 	var s int32 = evGet(c, stride, row, fstart)
 	if s < 0 {
 		return started
 	}
 	evBegin(t, pr, d, started, key)
-	json.JsStr(t, etext, s, evGet(c, stride, row, flen))
+	json.JsStr(t, etext, s, evGet(c, stride, row, fstart+1))
 	return 1
 }
 
@@ -1848,22 +6516,15 @@ func evFrun(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 	return 1
 }
 
-func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, which int32, started int32) int32 {
-	// A bitset as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`,
-	// 5 `mg`, 6 `mc`. Zero is omitted.
+func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, which int32, key int32, started int32) int32 {
+	// A bit set as an array of names: which 1 `sr`, 2 `fl`, 3 `sy`, 4 `pg`, 5 `mg`, 6 `mc`, 7 `eg`, 8 `vg`,
+	// 9 `oe`, 10 `os`, 11 `vc`. Zero is omitted.
 	var v int32 = evGet(c, stride, row, f)
-	var key int32 = EkSrc()
 	var b int32 = 0
 	var k int32 = 0
 	var bit int32 = 1
 	if v == 0 {
 		return started
-	}
-	if which != 1 {
-		key = EkFlags()
-	}
-	if which == 3 {
-		key = EkStyle()
 	}
 	evBegin(t, pr, d, started, key)
 	if which == 1 {
@@ -1875,9 +6536,9 @@ func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 	if which == 3 {
 		json.JsBitsStyle(t, pr, v)
 	}
-	if (which == 4) || ((which == 5) || (which == 6)) {
+	if which > 3 {
 		port.TextAscii(t, "[")
-		for b < 4 {
+		for b < 8 {
 			if (v & bit) != 0 {
 				json.JsFsep(t, pr, k)
 				port.TextAscii(t, "\"")
@@ -1889,6 +6550,21 @@ func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 				}
 				if which == 6 {
 					McEmitName(t, bit)
+				}
+				if which == 7 {
+					EgEmitName(t, bit)
+				}
+				if which == 8 {
+					VgEmitName(t, bit)
+				}
+				if which == 9 {
+					OeEmitName(t, bit)
+				}
+				if which == 10 {
+					OsEmitName(t, bit)
+				}
+				if which == 11 {
+					VcEmitName(t, bit)
 				}
 				port.TextAscii(t, "\"")
 				k += 1
@@ -1902,9 +6578,10 @@ func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 }
 
 func evFenum(t *strings.Builder, pr int32, d int32, started int32, key int32, which int32, v int32) int32 {
-	// An enumerated code as its name. which: 1 `gh`, 2 `vz`, 3 `ar`, 4 `ld`,
-	// 5 `pa`, 6 `ck`. Code 0 is "none" and is omitted.
-	if v == 0 {
+	// An enumerated code as its name. which: 1 `gh`, 2 `vz`, 3 `ar`, 4 `ld`, 5 `pa`, 6 `ck`, 7 `mk`, 8 `as`,
+	// 9 `ob`, 10 `op`, 11 `ft`, 12 `wb`, 13 `cs`, 14 `ir`, 15 `rs`, 16 `pm`, 17 `po`, 18 `ea`, 19 `vk`.
+	// Code 0 is "none" and -1 "unknown": neither is written.
+	if v <= 0 {
 		return started
 	}
 	evBegin(t, pr, d, started, key)
@@ -1927,276 +6604,253 @@ func evFenum(t *strings.Builder, pr int32, d int32, started int32, key int32, wh
 	if which == 6 {
 		CkEmitName(t, v)
 	}
+	if which == 7 {
+		MkEmitName(t, v)
+	}
+	if which == 8 {
+		AsEmitName(t, v)
+	}
+	if which == 9 {
+		ObEmitName(t, v)
+	}
+	if which == 10 {
+		OpEmitName(t, v)
+	}
+	if which == 11 {
+		FtEmitName(t, v)
+	}
+	if which == 12 {
+		WbEmitName(t, v)
+	}
+	if which == 13 {
+		CsEmitName(t, v)
+	}
+	if which == 14 {
+		IrEmitName(t, v)
+	}
+	if which == 15 {
+		RsEmitName(t, v)
+	}
+	if which == 16 {
+		PmEmitName(t, v)
+	}
+	if which == 17 {
+		PoEmitName(t, v)
+	}
+	if which == 18 {
+		EaEmitName(t, v)
+	}
+	if which == 19 {
+		VkEmitName(t, v)
+	}
 	port.TextAscii(t, "\"")
 	return 1
 }
 
-func evGlyph(t *strings.Builder, pr int32, d int32, glyphs *port.Cells, etext *port.Cells, g int32) int32 {
-	var s int32 = 0
-	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, glyphs, 20, g, 0, EkPage(), -2147483648, s)
-	s = evFint(t, pr, d, glyphs, 20, g, 1, EkCp(), -1, s)
-	s = evFtext(t, pr, d, glyphs, 20, g, 2, 3, etext, s)
-	s = evFenum(t, pr, d, s, EkHow(), 1, evGet(glyphs, 20, g, 4))
-	s = evFint(t, pr, d, glyphs, 20, g, 5, EkFont(), -2147483648, s)
-	s = evFcpt(t, pr, d, glyphs, 20, g, 6, EkSize(), -2147483648, s)
-	s = evFbox(t, pr, d, glyphs, 20, g, 7, s)
-	s = evFcpt(t, pr, d, glyphs, 20, g, 11, EkBaseline(), -2147483648, s)
-	s = evFcpt(t, pr, d, glyphs, 20, g, 12, EkRot(), 0, s)
-	s = evFcolor(t, pr, d, glyphs, 20, g, 13, EkColor(), s)
-	s = evFint(t, pr, d, glyphs, 20, g, 14, EkAlpha(), 1000, s)
-	s = evFint(t, pr, d, glyphs, 20, g, 15, EkMode(), 0, s)
-	s = evFenum(t, pr, d, s, EkVis(), 2, evGet(glyphs, 20, g, 16))
-	s = evFenum(t, pr, d, s, EkArtifact(), 3, evGet(glyphs, 20, g, 17))
-	s = evFint(t, pr, d, glyphs, 20, g, 18, EkMcid(), -1, s)
-	s = evFint(t, pr, d, glyphs, 20, g, 19, EkWord(), -1, s)
-	json.JsClose(t, pr, d, s)
-	return 0
-}
-
-func evWord(t *strings.Builder, pr int32, d int32, words *port.Cells, etext *port.Cells, w int32) int32 {
-	var s int32 = 0
-	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, words, 16, w, 0, EkPage(), -2147483648, s)
-	s = evFtext(t, pr, d, words, 16, w, 7, 8, etext, s)
-	s = evFbox(t, pr, d, words, 16, w, 1, s)
-	s = evFrun(t, pr, d, words, 16, w, 5, EkGlyphs(), s)
-	s = evFint(t, pr, d, words, 16, w, 9, EkLine(), -1, s)
-	s = evFbits(t, pr, d, words, 16, w, 10, 1, s)
-	s = evFint(t, pr, d, words, 16, w, 11, EkConf(), -1, s)
-	s = evFbits(t, pr, d, words, 16, w, 12, 2, s)
-	s = evFcpt(t, pr, d, words, 16, w, 13, EkGap(), -1, s)
-	s = evFint(t, pr, d, words, 16, w, 14, EkFont(), -1, s)
-	s = evFcpt(t, pr, d, words, 16, w, 15, EkSize(), 0, s)
-	json.JsClose(t, pr, d, s)
-	return 0
-}
-
-func evLine(t *strings.Builder, pr int32, d int32, lines *port.Cells, l int32) int32 {
-	var s int32 = 0
-	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, lines, 12, l, 0, EkPage(), -2147483648, s)
-	s = evFbox(t, pr, d, lines, 12, l, 1, s)
-	s = evFrun(t, pr, d, lines, 12, l, 5, EkWords(), s)
-	s = evFcpt(t, pr, d, lines, 12, l, 7, EkBaseline(), -2147483648, s)
-	s = evFenum(t, pr, d, s, EkDir(), 4, evGet(lines, 12, l, 8))
-	s = evFcpt(t, pr, d, lines, 12, l, 9, EkRot(), 0, s)
-	s = evFbits(t, pr, d, lines, 12, l, 10, 1, s)
-	s = evFint(t, pr, d, lines, 12, l, 11, EkConf(), -1, s)
-	json.JsClose(t, pr, d, s)
-	return 0
-}
-
-func evPath(t *strings.Builder, pr int32, d int32, paths *port.Cells, p int32) int32 {
-	var s int32 = 0
-	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, paths, 16, p, 0, EkPage(), -2147483648, s)
-	s = evFenum(t, pr, d, s, EkKind(), 5, evGet(paths, 16, p, 1))
-	s = evFbox(t, pr, d, paths, 16, p, 2, s)
-	s = evFcolor(t, pr, d, paths, 16, p, 6, EkFill(), s)
-	s = evFcolor(t, pr, d, paths, 16, p, 7, EkStroke(), s)
-	s = evFcpt(t, pr, d, paths, 16, p, 8, EkWidth(), 0, s)
-	s = evFint(t, pr, d, paths, 16, p, 9, EkAlpha(), 1000, s)
-	s = evFbits(t, pr, d, paths, 16, p, 10, 4, s)
-	s = evFenum(t, pr, d, s, EkArtifact(), 3, evGet(paths, 16, p, 11))
-	s = evFint(t, pr, d, paths, 16, p, 12, EkMcid(), -1, s)
-	json.JsClose(t, pr, d, s)
-	return 0
-}
-
-func evImage(t *strings.Builder, pr int32, d int32, images *port.Cells, m int32) int32 {
-	var s int32 = 0
-	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, images, 12, m, 0, EkPage(), -2147483648, s)
-	s = evFbox(t, pr, d, images, 12, m, 1, s)
-	s = evFint(t, pr, d, images, 12, m, 5, EkObj(), -2147483648, s)
-	s = evBegin(t, pr, d, s, EkPx())
-	port.TextAscii(t, "[")
-	port.TextI32(t, evGet(images, 12, m, 6))
-	json.JsFsep(t, pr, 1)
-	port.TextI32(t, evGet(images, 12, m, 7))
-	port.TextAscii(t, "]")
-	s = evFint(t, pr, d, images, 12, m, 8, EkAlpha(), 1000, s)
-	s = evFbits(t, pr, d, images, 12, m, 9, 5, s)
-	s = evFenum(t, pr, d, s, EkArtifact(), 3, evGet(images, 12, m, 10))
-	s = evFint(t, pr, d, images, 12, m, 11, EkMcid(), -1, s)
-	json.JsClose(t, pr, d, s)
-	return 0
-}
-
-func evComponent(t *strings.Builder, pr int32, d int32, components *port.Cells, c int32) int32 {
-	var s int32 = 0
-	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, components, 20, c, 0, EkPage(), -2147483648, s)
-	s = evFenum(t, pr, d, s, EkKind(), 6, evGet(components, 20, c, 14))
-	s = evFbox(t, pr, d, components, 20, c, 1, s)
-	if (evGet(components, 20, c, 7) > 0) || (evGet(components, 20, c, 8) > 0) {
-		s = evBegin(t, pr, d, s, EkPx())
-		port.TextAscii(t, "[")
-		port.TextI32(t, evGet(components, 20, c, 5))
-		json.JsFsep(t, pr, 1)
-		port.TextI32(t, evGet(components, 20, c, 6))
-		json.JsFsep(t, pr, 1)
-		port.TextI32(t, evGet(components, 20, c, 7))
-		json.JsFsep(t, pr, 1)
-		port.TextI32(t, evGet(components, 20, c, 8))
-		port.TextAscii(t, "]")
+func evField(t *strings.Builder, pr int32, d int32, c *port.Cells, etext *port.Cells, stride int32, row int32, r int32, started int32) int32 {
+	// One printed field of a row, by its row `r` of `ev-fd`: [arena first-cell kind key default arg].
+	var f int32 = EvFd[r*6+1]
+	var kind int32 = EvFd[r*6+2]
+	var key int32 = EvFd[r*6+3]
+	var dflt int32 = EvFd[r*6+4]
+	var arg int32 = EvFd[r*6+5]
+	if kind == 1 {
+		return evFint(t, pr, d, c, stride, row, f, key, dflt, started)
 	}
-	s = evFint(t, pr, d, components, 20, c, 9, EkArea(), 0, s)
-	s = evFint(t, pr, d, components, 20, c, 10, EkFill(), 0, s)
-	s = evFcpt(t, pr, d, components, 20, c, 11, EkStroke(), 0, s)
-	s = evFcolor(t, pr, d, components, 20, c, 12, EkColor(), s)
-	s = evFint(t, pr, d, components, 20, c, 13, EkLayer(), -1, s)
-	s = evFint(t, pr, d, components, 20, c, 15, EkConf(), -1, s)
-	s = evFbits(t, pr, d, components, 20, c, 16, 2, s)
-	json.JsClose(t, pr, d, s)
-	return 0
-}
-
-func evOcrword(t *strings.Builder, pr int32, d int32, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, w int32) int32 {
-	var s int32 = 0
-	var a int32 = evGet(ocrwords, 16, w, 8)
-	var i int32 = 0
-	var ast int32 = 0
-	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, ocrwords, 16, w, 0, EkPage(), -2147483648, s)
-	s = evFtext(t, pr, d, ocrwords, 16, w, 5, 6, etext, s)
-	s = evFbox(t, pr, d, ocrwords, 16, w, 1, s)
-	s = evFint(t, pr, d, ocrwords, 16, w, 7, EkConf(), -1, s)
-	if a >= 0 {
-		s = evBegin(t, pr, d, s, EkAlts())
-		port.TextAscii(t, "[")
-		for a >= 0 {
-			json.JsAelem(t, pr, d+1, i)
-			port.TextAscii(t, "{")
-			ast = 0
-			ast = evFint(t, pr, d+2, alts, 4, a, 0, EkSym(), -2147483648, ast)
-			ast = evFint(t, pr, d+2, alts, 4, a, 1, EkCp(), -2147483648, ast)
-			ast = evFint(t, pr, d+2, alts, 4, a, 2, EkConf(), -1, ast)
-			json.JsClose(t, pr, d+2, ast)
-			i += 1
-			a = evGet(alts, 4, a, 3)
+	if kind == 2 {
+		return evFcpt(t, pr, d, c, stride, row, f, key, dflt, started)
+	}
+	if (kind == 3) || (kind == 4) {
+		return evFquad(t, pr, d, c, stride, row, f, key, started)
+	}
+	if kind == 5 {
+		return evFcolor(t, pr, d, c, stride, row, f, key, started)
+	}
+	if kind == 6 {
+		return evFtextk(t, pr, d, c, stride, row, f, etext, key, started)
+	}
+	if kind == 7 {
+		if (evGet(c, stride, row, f) == dflt) && (evGet(c, stride, row, f+1) == arg) {
+			return started
 		}
-		json.JsAend(t, pr, d+1, i)
+		return evFrun(t, pr, d, c, stride, row, f, key, started)
 	}
-	s = evFint(t, pr, d, ocrwords, 16, w, 10, EkLine(), -1, s)
-	s = evFint(t, pr, d, ocrwords, 16, w, 11, EkBlock(), -1, s)
-	s = evFcpt(t, pr, d, ocrwords, 16, w, 12, EkBaseline(), 0, s)
-	s = evFbits(t, pr, d, ocrwords, 16, w, 13, 3, s)
-	s = evFint(t, pr, d, ocrwords, 16, w, 14, EkPass(), 0, s)
-	s = evFint(t, pr, d, ocrwords, 16, w, 15, EkLang(), -1, s)
-	json.JsClose(t, pr, d, s)
-	return 0
+	if kind == 8 {
+		return evFenum(t, pr, d, started, key, arg, evGet(c, stride, row, f))
+	}
+	if kind == 9 {
+		return evFbits(t, pr, d, c, stride, row, f, arg, key, started)
+	}
+	if kind == 10 {
+		return evFpx4(t, pr, d, c, stride, row, f, key, started)
+	}
+	if kind == 11 {
+		return evFpacked(t, pr, d, c, stride, row, f, key, started)
+	}
+	if kind == 12 {
+		return evFpair(t, pr, d, c, stride, row, f, key, dflt, arg, 0, started)
+	}
+	if kind == 13 {
+		return evFpair(t, pr, d, c, stride, row, f, key, dflt, arg, 1, started)
+	}
+	return started
 }
 
-func evSpan(t *strings.Builder, pr int32, d int32, spans *port.Cells, etext *port.Cells, i int32) int32 {
+func evRow(t *strings.Builder, pr int32, d int32, ea int32, c *port.Cells, etext *port.Cells, row int32) int32 {
+	// One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
+	var stride int32 = EvStrides[ea-1]
+	var first int32 = EvFx[(ea-1)*2+0]
+	var cnt int32 = EvFx[(ea-1)*2+1]
 	var s int32 = 0
+	var k int32 = 0
 	port.TextAscii(t, "{")
-	s = evFint(t, pr, d, spans, 22, i, 0, EkPage(), -2147483648, s)
-	s = evFtextk(t, pr, d, spans, 22, i, 1, 2, etext, EkTag(), s)
-	s = evFint(t, pr, d, spans, 22, i, 3, EkParent(), -1, s)
-	s = evFint(t, pr, d, spans, 22, i, 4, EkMcid(), -1, s)
-	s = evFenum(t, pr, d, s, EkArtifact(), 3, evGet(spans, 22, i, 5))
-	s = evFtextk(t, pr, d, spans, 22, i, 6, 7, etext, EkType(), s)
-	s = evFtextk(t, pr, d, spans, 22, i, 8, 9, etext, EkSubtype(), s)
-	s = evFtextk(t, pr, d, spans, 22, i, 10, 11, etext, EkActual(), s)
-	s = evFtextk(t, pr, d, spans, 22, i, 12, 13, etext, EkAlt(), s)
-	s = evFtextk(t, pr, d, spans, 22, i, 14, 15, etext, EkExp(), s)
-	s = evFtextk(t, pr, d, spans, 22, i, 16, 17, etext, EkLang(), s)
-	s = evFrun(t, pr, d, spans, 22, i, 18, EkGlyphs(), s)
-	s = evFbits(t, pr, d, spans, 22, i, 20, 6, s)
-	s = evFint(t, pr, d, spans, 22, i, 21, EkStm(), 0, s)
+	for k < cnt {
+		s = evField(t, pr, d, c, etext, stride, row, first+k, s)
+		k += 1
+	}
 	json.JsClose(t, pr, d, s)
 	return 0
 }
 
-func EvEmit(t *strings.Builder, pretty int32, glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
-	// Write the evidence as `emon-evidence` JSON (SPEC 4.5): version, then
-	// the eight row arrays, each row in its fixed key order.
-	var s int32 = 0
+func evArena(t *strings.Builder, pr int32, started int32, ea int32, c *port.Cells, etext *port.Cells) int32 {
+	// `"arena":[row, ...]` for any arena with a field table.
+	var n int32 = port.CellsLen(c) / EvStrides[ea-1]
 	var i int32 = 0
-	var ng int32 = port.CellsLen(glyphs) / 20
-	var nw int32 = port.CellsLen(words) / 16
-	var nl int32 = port.CellsLen(lines) / 12
-	var np int32 = port.CellsLen(paths) / 16
-	var nm int32 = port.CellsLen(images) / 12
-	var nc int32 = port.CellsLen(components) / 20
-	var no int32 = port.CellsLen(ocrwords) / 16
-	var nsp int32 = port.CellsLen(spans) / 22
+	evBegin(t, pr, 0, started, EvEaKey[ea-1])
+	port.TextAscii(t, "[")
+	for i < n {
+		json.JsAelem(t, pr, 1, i)
+		evRow(t, pr, 2, ea, c, etext, i)
+		i += 1
+	}
+	json.JsAend(t, pr, 1, n)
+	return 1
+}
+
+func evArenaRefs(t *strings.Builder, pr int32, started int32, refs *port.Cells) int32 {
+	// `"refs":[["arena",index], ...]`: an array of flat arrays is flat, so it stays on one line in
+	// the pretty form too (`kin/scripts/json-check.py`).
+	var n int32 = port.CellsLen(refs) / 2
+	var i int32 = 0
+	evBegin(t, pr, 0, started, EvEaKey[3])
+	port.TextAscii(t, "[")
+	for i < n {
+		json.JsFsep(t, pr, i)
+		port.TextAscii(t, "[\"")
+		EaEmitName(t, port.CellsAt(refs, i*2))
+		port.TextAscii(t, "\",")
+		if pr == 1 {
+			port.TextAscii(t, " ")
+		}
+		port.TextI32(t, port.CellsAt(refs, (i*2)+1))
+		port.TextAscii(t, "]")
+		i += 1
+	}
+	port.TextAscii(t, "]")
+	return 1
+}
+
+func evArenaEtext(t *strings.Builder, pr int32, started int32, etext *port.Cells) int32 {
+	// `"etext":["all the text"]`, the whole arena as one string; `[]` when it is empty.
+	var n int32 = port.CellsLen(etext)
+	evBegin(t, pr, 0, started, EvEaKey[4])
+	port.TextAscii(t, "[")
+	if n > 0 {
+		json.JsStr(t, etext, 0, n)
+	}
+	port.TextAscii(t, "]")
+	return 1
+}
+
+func evArenaFeats(t *strings.Builder, pr int32, started int32, feats *port.Cells) int32 {
+	// `"feats":[{"subject":["owords",i],"conf":..., ...}]`: a column under its name (`xo` for OCR
+	// words, `xt` for text-layer words, `cN` for a column with none), -1 (not computed) omitted.
+	var n int32 = port.CellsLen(feats) / 32
+	var i int32 = 0
+	var col int32 = 0
+	var s int32 = 0
+	var sea int32 = 0
+	evBegin(t, pr, 0, started, EvEaKey[5])
+	port.TextAscii(t, "[")
+	for i < n {
+		json.JsAelem(t, pr, 1, i)
+		sea = evGet(feats, 32, i, 0)
+		port.TextAscii(t, "{")
+		s = 0
+		s = evBegin(t, pr, 2, s, EkSubject())
+		port.TextAscii(t, "[\"")
+		EaEmitName(t, sea)
+		port.TextAscii(t, "\",")
+		if pr == 1 {
+			port.TextAscii(t, " ")
+		}
+		port.TextI32(t, evGet(feats, 32, i, 1))
+		port.TextAscii(t, "]")
+		col = 2
+		for col < 32 {
+			if evGet(feats, 32, i, col) != -1 {
+				if s == 1 {
+					port.TextAscii(t, ",")
+				}
+				if pr == 1 {
+					json.JsIndent(t, 3)
+				}
+				port.TextAscii(t, "\"")
+				if sea == 8 {
+					if XtEmitName(t, col) == 0 {
+						port.TextAscii(t, "c")
+						port.TextI32(t, col)
+					}
+				} else if XoEmitName(t, col) == 0 {
+					port.TextAscii(t, "c")
+					port.TextI32(t, col)
+				}
+				port.TextAscii(t, "\":")
+				if pr == 1 {
+					port.TextAscii(t, " ")
+				}
+				port.TextI32(t, evGet(feats, 32, i, col))
+			}
+			col += 1
+		}
+		json.JsClose(t, pr, 2, s)
+		i += 1
+	}
+	json.JsAend(t, pr, 1, n)
+	return 1
+}
+
+func EvEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+	// in the order of the `ea` codes, each row in its fixed key order.
+	var s int32 = 0
 	port.TextAscii(t, "{")
 	s = evBegin(t, pretty, 0, s, EkVersion())
-	port.TextAscii(t, "\"0\"")
-	s = evBegin(t, pretty, 0, s, EkGlyphs())
-	port.TextAscii(t, "[")
-	for i < ng {
-		json.JsAelem(t, pretty, 1, i)
-		evGlyph(t, pretty, 2, glyphs, etext, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, ng)
-	s = evBegin(t, pretty, 0, s, EkWords())
-	port.TextAscii(t, "[")
-	i = 0
-	for i < nw {
-		json.JsAelem(t, pretty, 1, i)
-		evWord(t, pretty, 2, words, etext, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, nw)
-	s = evBegin(t, pretty, 0, s, EkLines())
-	port.TextAscii(t, "[")
-	i = 0
-	for i < nl {
-		json.JsAelem(t, pretty, 1, i)
-		evLine(t, pretty, 2, lines, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, nl)
-	s = evBegin(t, pretty, 0, s, EkPaths())
-	port.TextAscii(t, "[")
-	i = 0
-	for i < np {
-		json.JsAelem(t, pretty, 1, i)
-		evPath(t, pretty, 2, paths, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, np)
-	s = evBegin(t, pretty, 0, s, EkImages())
-	port.TextAscii(t, "[")
-	i = 0
-	for i < nm {
-		json.JsAelem(t, pretty, 1, i)
-		evImage(t, pretty, 2, images, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, nm)
-	s = evBegin(t, pretty, 0, s, EkComponents())
-	port.TextAscii(t, "[")
-	i = 0
-	for i < nc {
-		json.JsAelem(t, pretty, 1, i)
-		evComponent(t, pretty, 2, components, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, nc)
-	s = evBegin(t, pretty, 0, s, EkOcrwords())
-	port.TextAscii(t, "[")
-	i = 0
-	for i < no {
-		json.JsAelem(t, pretty, 1, i)
-		evOcrword(t, pretty, 2, ocrwords, alts, etext, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, no)
-	s = evBegin(t, pretty, 0, s, EkSpans())
-	port.TextAscii(t, "[")
-	i = 0
-	for i < nsp {
-		json.JsAelem(t, pretty, 1, i)
-		evSpan(t, pretty, 2, spans, etext, i)
-		i += 1
-	}
-	json.JsAend(t, pretty, 1, nsp)
+	port.TextAscii(t, "\"1\"")
+	s = evArena(t, pretty, s, 1, epages, etext)
+	s = evArena(t, pretty, s, 2, views, etext)
+	s = evArena(t, pretty, s, 3, pts, etext)
+	s = evArenaRefs(t, pretty, s, refs)
+	s = evArenaEtext(t, pretty, s, etext)
+	s = evArenaFeats(t, pretty, s, feats)
+	s = evArena(t, pretty, s, 7, glyphs, etext)
+	s = evArena(t, pretty, s, 8, words, etext)
+	s = evArena(t, pretty, s, 9, lines, etext)
+	s = evArena(t, pretty, s, 10, marks, etext)
+	s = evArena(t, pretty, s, 11, fonts, etext)
+	s = evArena(t, pretty, s, 12, paths, etext)
+	s = evArena(t, pretty, s, 13, images, etext)
+	s = evArena(t, pretty, s, 14, oruns, etext)
+	s = evArena(t, pretty, s, 15, oblocks, etext)
+	s = evArena(t, pretty, s, 16, olines, etext)
+	s = evArena(t, pretty, s, 17, owords, etext)
+	s = evArena(t, pretty, s, 18, osyms, etext)
+	s = evArena(t, pretty, s, 19, oalts, etext)
+	s = evArena(t, pretty, s, 20, inks, etext)
+	s = evArena(t, pretty, s, 21, components, etext)
+	s = evArena(t, pretty, s, 22, rules, etext)
+	s = evArena(t, pretty, s, 23, prims, etext)
+	s = evArena(t, pretty, s, 24, tlines, etext)
 	json.JsClose(t, pretty, 0, s)
 	return 0
 }

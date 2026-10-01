@@ -8,12 +8,12 @@
 ;; (the driver's stdout at recording). This gate only REPLAYS, so it tests emon and
 ;; never whose Tesseract is installed (SPEC 7.3). It holds:
 ;;
-;;   1. the Rust replay and the Go replay print the IDENTICAL dump -- the evidence
-;;      (`ocrwords` with text, boxes, confidences, alternatives, line, block,
-;;      baseline, style, language), a hash of the bitmap's pixels and of each
-;;      transcript file -- and it is the dump the live recording printed;
-;;   2. the evidence is the answer's words and symbols' alternatives: 150+ words,
-;;      alternatives on most of them;
+;;   1. the Rust replay and the Go replay print the IDENTICAL dump -- the evidence v2 (D096: `oruns`
+;;      with orientation, script and confidences; `oblocks`, `olines`, `owords`, `osyms` and `oalts`
+;;      with text, boxes, confidences, baselines, the hierarchy, styles, languages; `feats`), a hash of
+;;      the bitmap's pixels and of each transcript file -- and it is the dump the live recording printed;
+;;   2. the evidence is the answer's whole extension: 150+ words, one run, the 24 lines, every symbol
+;;      and every alternative with its full text, alternatives on most of the words;
 ;;   3. a first CER of that evidence against the page's gold, under a ceiling;
 ;;   4. a replay never guesses: a changed request is `transcript-miss` on both.
 (require '[babashka.fs :as fs]
@@ -92,13 +92,33 @@
            "GO REPLAYS THE TESSERACT TRANSCRIPT: the identical dump, byte for byte")
     ;; 2. what the evidence is ----------------------------------------------
     (let [ev (cer/dump-evidence (:out rr))
-          ws (:ocrwords ev)]
+          ws (:owords ev)
+          runs (:oruns ev)
+          lines (:olines ev)
+          syms (:osyms ev)
+          alts (:oalts ev)
+          sym-count (reduce + (map #(second (:syms %)) ws))
+          alt-count (reduce + (map #(second (:alts %)) syms))
+          with-alts (count (filter (fn [w] (let [[f n] (:syms w)]
+                                             (some #(pos? (second (:alts %))) (subvec (vec syms) f (+ f n)))))
+                                   ws))]
       (check (and (>= (count ws) 150) (every? :text ws))
              (count ws) " OCR words, each with its text")
-      (check (> (count (filter :alts ws)) (* 0.9 (count ws)))
-             (count (filter :alts ws)) " of them carry symbol alternatives")
-      (check (and (every? #(contains? % :baseline) ws) (every? #(contains? % :line) ws))
-             "every word has a baseline, a line and a block")
+      (check (and (= 1 (count runs))
+                  (let [r (first runs)] (and (:script r) (contains? r :osd) (contains? r :sconf) (contains? r :oconf) (:flags r))))
+             "one OCR run, with its orientation, script and confidences")
+      (check (and (= 24 (count lines)) (every? #(and (:baseline %) (:words %) (:par %) (:px %)) lines)
+                  (seq (:oblocks ev)))
+             (count lines) " OCR lines, each with a baseline, its words, a paragraph and a pixel box, in "
+             (count (:oblocks ev)) " blocks and paragraphs")
+      (check (and (every? #(and (:baseline %) (:line %) (:px %)) ws) (= (count ws) (count (:feats ev))))
+             "every word has a baseline, a line, a pixel box and a feature row")
+      (check (and (= sym-count (count syms)) (every? #(and (:box %) (:conf %)) syms)
+                  (= alt-count (count alts)) (every? :text alts))
+             (count syms) " symbols, each with a box and a confidence, and " (count alts)
+             " alternatives, each with its full text")
+      (check (> with-alts (* 0.9 (count ws)))
+             with-alts " of the words carry symbol alternatives")
       ;; 3. a first CER ------------------------------------------------------
       (let [r (cer/cer (:out rr) (str "test/corpus/synth/gold/" id ".gold.json"))]
         (check (< (:cer r) cer-ceiling)

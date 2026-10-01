@@ -14,71 +14,278 @@ func opCpt(px int32, dpi int32) int32 {
 	return (px * 7200) / dpi
 }
 
-func opBaseline(an *port.Cells, ext int32, line int32, cx int32, dflt int32) int32 {
-	// The line's baseline at pixel column `cx` (two points, integer interpolation), or `dflt`.
-	if ext < 0 {
-		return dflt
+func opLd(wdir int32) int32 {
+	// The engine's writing direction as `ld`: 0 left to right, 1 right to left, 2 top to bottom.
+	if wdir == 1 {
+		return evidence.LdRtl()
 	}
-	var l int32 = ocr.OxLineAt(an, ext, line)
-	var bx0 int32 = port.CellsAt(an, l+4)
-	var by0 int32 = port.CellsAt(an, l+5)
-	var bx1 int32 = port.CellsAt(an, l+6)
-	var by1 int32 = port.CellsAt(an, l+7)
-	if bx1 <= bx0 {
-		return by1
+	if wdir == 2 {
+		return evidence.LdTtb()
 	}
-	return by0 + (((by1 - by0) * (cx - bx0)) / (bx1 - bx0))
+	return 0
 }
 
-func opWords(an *port.Cells, at int32, page int32, dpi int32, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells) int32 {
+func opGrow(oblocks *port.Cells, row int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// Grow block (or paragraph) `row`'s box to hold the box (x0 y0 x1 y1).
+	if x0 < evidence.ObGet(oblocks, row, evidence.ObfX0()) {
+		evidence.ObSet(oblocks, row, evidence.ObfX0(), x0)
+	}
+	if y0 < evidence.ObGet(oblocks, row, evidence.ObfY0()) {
+		evidence.ObSet(oblocks, row, evidence.ObfY0(), y0)
+	}
+	if x1 > evidence.ObGet(oblocks, row, evidence.ObfX1()) {
+		evidence.ObSet(oblocks, row, evidence.ObfX1(), x1)
+	}
+	if y1 > evidence.ObGet(oblocks, row, evidence.ObfY1()) {
+		evidence.ObSet(oblocks, row, evidence.ObfY1(), y1)
+	}
+	return 0
+}
+
+func opLines(an *port.Cells, ext int32, view int32, run int32, views *port.Cells, oblocks *port.Cells, olines *port.Cells) int32 {
+	// The blocks, paragraphs and lines of the extension, in its order. A block is a run of lines with the
+	// same block id, a paragraph a run of them with the same paragraph id inside it (-1 is an id like
+	// another); a block is followed by its paragraphs, a paragraph's lines are the rows that follow it.
+	var nl int32 = ocr.OxNlines(an, ext)
+	var orient int32 = ocr.OxOrient(an, ext)
+	var wdir int32 = ocr.OxWdir(an, ext)
+	var k int32 = 0
+	var l int32 = 0
+	var px int32 = 0
+	var py int32 = 0
+	var pw int32 = 0
+	var ph int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var bx0 int32 = 0
+	var by0 int32 = 0
+	var bx1 int32 = 0
+	var by1 int32 = 0
+	var blk int32 = 0
+	var par int32 = 0
+	var bty int32 = 0
+	var curblk int32 = -2
+	var curpar int32 = -2
+	var brow int32 = -1
+	var prow int32 = -1
+	var lrow int32 = 0
+	var bcnt int32 = 0
+	var fresh int32 = 0
+	for k < nl {
+		l = ocr.OxLineAt(an, ext, k)
+		px = port.CellsAt(an, l)
+		py = port.CellsAt(an, l+1)
+		pw = port.CellsAt(an, l+2)
+		ph = port.CellsAt(an, l+3)
+		x0 = evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph)
+		y0 = evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph)
+		x1 = evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph)
+		y1 = evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph)
+		bx0 = evidence.VwPxToCpt(views, view, 0, port.CellsAt(an, l+4), port.CellsAt(an, l+5))
+		by0 = evidence.VwPxToCpt(views, view, 1, port.CellsAt(an, l+4), port.CellsAt(an, l+5))
+		bx1 = evidence.VwPxToCpt(views, view, 0, port.CellsAt(an, l+6), port.CellsAt(an, l+7))
+		by1 = evidence.VwPxToCpt(views, view, 1, port.CellsAt(an, l+6), port.CellsAt(an, l+7))
+		blk = port.CellsAt(an, l+8)
+		par = port.CellsAt(an, l+9)
+		bty = port.CellsAt(an, l+10)
+		fresh = 0
+		if (k == 0) || (blk != curblk) {
+			brow = evidence.ObNew(oblocks, 1, x0, y0, x1, y1, evidence.ObBlock(), -1, run)
+			evidence.ObSet(oblocks, brow, evidence.ObfBtype(), bty)
+			evidence.ObSet(oblocks, brow, evidence.ObfOrient(), orient)
+			evidence.ObSet(oblocks, brow, evidence.ObfWdir(), wdir)
+			evidence.ObSet(oblocks, brow, evidence.ObfFirst(), brow+1)
+			curblk = blk
+			curpar = -2
+		}
+		if par != curpar {
+			prow = evidence.ObNew(oblocks, 1, x0, y0, x1, y1, evidence.ObParagraph(), brow, run)
+			evidence.ObSet(oblocks, prow, evidence.ObfBtype(), bty)
+			evidence.ObSet(oblocks, prow, evidence.ObfOrient(), orient)
+			evidence.ObSet(oblocks, prow, evidence.ObfWdir(), wdir)
+			evidence.ObSet(oblocks, prow, evidence.ObfFirst(), evidence.OlCount(olines))
+			bcnt = evidence.ObGet(oblocks, brow, evidence.ObfCount())
+			evidence.ObSet(oblocks, brow, evidence.ObfCount(), bcnt+1)
+			curpar = par
+			fresh = 1
+		}
+		if fresh == 0 {
+			opGrow(oblocks, prow, x0, y0, x1, y1)
+			opGrow(oblocks, brow, x0, y0, x1, y1)
+		}
+		lrow = evidence.OlNew(olines, 1, x0, y0, x1, y1, bx0, by0, bx1, by1, evidence.EvAngle(bx1-bx0, by1-by0), opLd(wdir), -1, 0)
+		evidence.OlSet(olines, lrow, evidence.OlfPar(), prow)
+		evidence.OlSet(olines, lrow, evidence.OlfRun(), run)
+		evidence.OlSet(olines, lrow, evidence.OlfPx(), px)
+		evidence.OlSet(olines, lrow, evidence.OlfPy(), py)
+		evidence.OlSet(olines, lrow, evidence.OlfPw(), pw)
+		evidence.OlSet(olines, lrow, evidence.OlfPh(), ph)
+		bcnt = evidence.ObGet(oblocks, prow, evidence.ObfCount())
+		evidence.ObSet(oblocks, prow, evidence.ObfCount(), bcnt+1)
+		k += 1
+	}
+	return nl
+}
+
+func opWords(an *port.Cells, at int32, ext int32, view int32, run int32, l0 int32, views *port.Cells, etext *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells) int32 {
+	// The words of the answer with their symbols and alternatives. A word's line is the extension's
+	// line index (an olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 in
+	// pixels, then mapped through the view (a word without a line has its box's bottom edge).
 	var nw int32 = plan.AnOcrCount(an, at)
-	var ext int32 = ocr.OxFind(an, at)
-	var wx int32 = -1
+	var nl int32 = 0
+	var wdir int32 = 0
+	var tlen int32 = 0
 	var w int32 = plan.AnOcrFirst(an, at)
+	var wx int32 = -1
 	var i int32 = 0
+	var px int32 = 0
+	var py int32 = 0
+	var pw int32 = 0
+	var ph int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var bx0 int32 = 0
+	var by0 int32 = 0
+	var bx1 int32 = 0
+	var by1 int32 = 0
+	var ln int32 = 0
+	var lx0 int32 = 0
+	var ly0 int32 = 0
+	var lx1 int32 = 0
+	var ly1 int32 = 0
+	var lrow int32 = -1
+	var ts int32 = 0
+	var nc int32 = 0
+	var k int32 = 0
+	var ow int32 = 0
+	var j int32 = 0
+	var ns int32 = 0
+	var sy int32 = 0
+	var sym int32 = 0
+	var ncp int32 = 0
+	var nalt int32 = 0
+	var a int32 = 0
+	var m int32 = 0
+	var acp int32 = 0
+	var cpv int32 = 0
+	var a0 int32 = 0
+	var lcnt int32 = 0
 	if ext >= 0 {
 		wx = ocr.OxFirstWord(an, ext)
+		nl = ocr.OxNlines(an, ext)
+		wdir = ocr.OxWdir(an, ext)
 	}
 	for i < nw {
-		var px int32 = plan.AwGet(an, w, plan.AwX())
-		var py int32 = plan.AwGet(an, w, plan.AwY())
-		var pw int32 = plan.AwGet(an, w, plan.AwW())
-		var ph int32 = plan.AwGet(an, w, plan.AwH())
-		var ln int32 = plan.AwGet(an, w, plan.AwLine())
-		var ow int32 = evidence.OwNew(ocrwords, page, opCpt(px, dpi), opCpt(py, dpi), opCpt(px+pw, dpi), opCpt(py+ph, dpi), plan.AwGet(an, w, plan.AwConf()))
-		var ts int32 = evidence.EtxLen(etext)
-		var nc int32 = plan.AwGet(an, w, plan.AwLen())
-		var k int32 = 0
+		px = plan.AwGet(an, w, plan.AwX())
+		py = plan.AwGet(an, w, plan.AwY())
+		pw = plan.AwGet(an, w, plan.AwW())
+		ph = plan.AwGet(an, w, plan.AwH())
+		x0 = evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph)
+		y0 = evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph)
+		x1 = evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph)
+		y1 = evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph)
+		ln = plan.AwGet(an, w, plan.AwLine())
+		lrow = -1
+		bx0 = x0
+		by0 = y1
+		bx1 = x1
+		by1 = y1
+		if (wx >= 0) && ((ln >= 0) && (ln < nl)) {
+			lrow = l0 + ln
+			// The line's baseline is already in centipoints (mapped once, in `op-lines`); the word's endpoints
+			// are it evaluated at the word's left and right edge, with no pixel truncation in between (one
+			// centipoint at most, not a pixel). The edge's x is the view's for an upright raster.
+			bx0 = evidence.VwPxToCpt(views, view, 0, px, py)
+			bx1 = evidence.VwPxToCpt(views, view, 0, px+pw, py)
+			lx0 = evidence.OlGet(olines, lrow, evidence.LhBx0())
+			ly0 = evidence.OlGet(olines, lrow, evidence.LhBy0())
+			lx1 = evidence.OlGet(olines, lrow, evidence.LhBx1())
+			ly1 = evidence.OlGet(olines, lrow, evidence.LhBy1())
+			by0 = evidence.EvBaselineAt(lx0, ly0, lx1, ly1, bx0)
+			by1 = evidence.EvBaselineAt(lx0, ly0, lx1, ly1, bx1)
+		}
+		ts = evidence.EtxLen(etext)
+		nc = plan.AwGet(an, w, plan.AwLen())
+		k = 0
 		for k < nc {
 			evidence.EtxAppendCp(etext, plan.AwCp(an, w, k))
 			k += 1
 		}
-		evidence.OwSet(ocrwords, ow, evidence.OfTstart(), ts)
-		evidence.OwSet(ocrwords, ow, evidence.OfTlen(), nc)
-		evidence.OwSet(ocrwords, ow, evidence.OfLine(), ln)
-		evidence.OwSet(ocrwords, ow, evidence.OfBlock(), plan.AwGet(an, w, plan.AwBlock()))
+		ow = evidence.OwNew(owords, 1, x0, y0, x1, y1, bx0, by0, bx1, by1, evidence.EvAngle(bx1-bx0, by1-by0), opLd(wdir), ts, nc, lrow, plan.AwGet(an, w, plan.AwConf()), -1)
+		evidence.OwSet(owords, ow, evidence.OwfRun(), run)
+		evidence.OwSet(owords, ow, evidence.OwfPx(), px)
+		evidence.OwSet(owords, ow, evidence.OwfPy(), py)
+		evidence.OwSet(owords, ow, evidence.OwfPw(), pw)
+		evidence.OwSet(owords, ow, evidence.OwfPh(), ph)
+		if lrow >= 0 {
+			lcnt = evidence.OlGet(olines, lrow, evidence.LhCount())
+			if lcnt == 0 {
+				evidence.OlSet(olines, lrow, evidence.LhFirst(), ow)
+			}
+			evidence.OlSet(olines, lrow, evidence.LhCount(), lcnt+1)
+		}
 		if wx >= 0 {
-			evidence.OwSet(ocrwords, ow, evidence.OfBaseline(), opCpt(opBaseline(an, ext, ln, px+(pw/2), py+ph), dpi))
-			evidence.OwSet(ocrwords, ow, evidence.OfFlags(), ocr.OxWflags(an, wx))
-			evidence.OwSet(ocrwords, ow, evidence.OfLang(), ocr.OxWlang(an, wx))
-			var ns int32 = ocr.OxNsym(an, wx)
-			var s int32 = ocr.OxFirstSym(an, wx)
-			var j int32 = 0
-			var off int32 = 0
+			evidence.OwSet(owords, ow, evidence.OwfStyle(), ocr.OxWflags(an, wx))
+			evidence.OwSet(owords, ow, evidence.OwfLang(), ocr.OxWlang(an, wx))
+			ns = ocr.OxNsym(an, wx)
+			evidence.OwSet(owords, ow, evidence.OwfSfirst(), evidence.OsCount(osyms))
+			evidence.OwSet(owords, ow, evidence.OwfScount(), ns)
+			sy = ocr.OxFirstSym(an, wx)
+			j = 0
 			for j < ns {
-				var ncp int32 = port.CellsAt(an, s+5)
-				var nalt int32 = port.CellsAt(an, s+6)
-				var a int32 = ocr.OxSymAlts(an, s)
-				var m int32 = 0
+				ncp = port.CellsAt(an, sy+5)
+				nalt = port.CellsAt(an, sy+6)
+				px = port.CellsAt(an, sy)
+				py = port.CellsAt(an, sy+1)
+				pw = port.CellsAt(an, sy+2)
+				ph = port.CellsAt(an, sy+3)
+				ts = -1
+				tlen = 0
+				cpv = -1
+				if ncp > 1 {
+					tlen = ncp
+				}
+				if ncp > 0 {
+					cpv = port.CellsAt(an, sy+7)
+				}
+				if ncp > 1 {
+					ts = evidence.EtxLen(etext)
+					k = 0
+					for k < ncp {
+						evidence.EtxAppendCp(etext, port.CellsAt(an, (sy+7)+k))
+						k += 1
+					}
+				}
+				sym = evidence.OsNew(osyms, 1, evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph), evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph), evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph), evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph), cpv, ts, tlen, ow)
+				evidence.OsSet(osyms, sym, evidence.OsfConf(), port.CellsAt(an, sy+4))
+				evidence.OsSet(osyms, sym, evidence.OsfPx(), px)
+				evidence.OsSet(osyms, sym, evidence.OsfPy(), py)
+				evidence.OsSet(osyms, sym, evidence.OsfPw(), pw)
+				evidence.OsSet(osyms, sym, evidence.OsfPh(), ph)
+				a0 = evidence.OaCount(oalts)
+				a = ocr.OxSymAlts(an, sy)
+				m = 0
 				for m < nalt {
-					if port.CellsAt(an, a) > 0 {
-						evidence.AltAdd(ocrwords, alts, ow, off, port.CellsAt(an, a+2), port.CellsAt(an, a+1))
+					acp = port.CellsAt(an, a)
+					if acp > 0 {
+						ts = evidence.EtxLen(etext)
+						k = 0
+						for k < acp {
+							evidence.EtxAppendCp(etext, port.CellsAt(an, (a+2)+k))
+							k += 1
+						}
+						evidence.OaAdd(oalts, sym, ts, acp, port.CellsAt(an, a+1))
 					}
 					a = ocr.OxAltNext(an, a)
 					m += 1
 				}
-				off += ncp
-				s = ocr.OxSymNext(an, s)
+				evidence.OsSet(osyms, sym, evidence.OsfAfirst(), a0)
+				evidence.OsSet(osyms, sym, evidence.OsfAcount(), evidence.OaCount(oalts)-a0)
+				sy = ocr.OxSymNext(an, sy)
 				j += 1
 			}
 			wx = ocr.OxWordNext(an, wx)
@@ -86,12 +293,59 @@ func opWords(an *port.Cells, at int32, page int32, dpi int32, ocrwords *port.Cel
 		w = plan.AwNext(an, w)
 		i += 1
 	}
+	return nw
+}
+
+func opAnswer(an *port.Cells, at int32, view int32, request int32, views *port.Cells, epages *port.Cells, etext *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, feats *port.Cells) int32 {
+	// One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives,
+	// and the stage 1 features of every word.
+	var ext int32 = ocr.OxFind(an, at)
+	var run int32 = evidence.OrNew(oruns, 1, view)
+	var b0 int32 = evidence.ObCount(oblocks)
+	var l0 int32 = evidence.OlCount(olines)
+	var w0 int32 = evidence.OwCount(owords)
+	var nl int32 = 0
+	var nb int32 = 0
+	var nw int32 = 0
+	var w int32 = 0
+	var rotmed int32 = 0
+	evidence.OrSet(oruns, run, evidence.OrfRequest(), request)
+	evidence.OrSet(oruns, run, evidence.OrfRound(), 1)
+	evidence.OrSet(oruns, run, evidence.OrfPsm(), 3)
+	evidence.OrSet(oruns, run, evidence.OrfFlags(), ocr.OcfSymbols()+ocr.OcfOsd())
+	if ext >= 0 {
+		evidence.OrSet(oruns, run, evidence.OrfOrient(), ocr.OxOrient(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfWdir(), ocr.OxWdir(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfLorder(), ocr.OxTlorder(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfDeskew(), ocr.OxDeskew(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfOsd(), ocr.OxOsd(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfScript(), ocr.OxScript(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfSconf(), ocr.OxSconf(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfOconf(), ocr.OxOconf(an, ext))
+		nl = opLines(an, ext, view, run, views, oblocks, olines)
+	}
+	nw = opWords(an, at, ext, view, run, l0, views, etext, olines, owords, osyms, oalts)
+	evidence.OrSet(oruns, run, evidence.OrfBfirst(), b0)
+	nb = evidence.ObCount(oblocks) - b0
+	evidence.OrSet(oruns, run, evidence.OrfBcount(), nb)
+	evidence.OrSet(oruns, run, evidence.OrfLfirst(), l0)
+	nl = evidence.OlCount(olines) - l0
+	evidence.OrSet(oruns, run, evidence.OrfLcount(), nl)
+	evidence.OrSet(oruns, run, evidence.OrfWfirst(), w0)
+	evidence.OrSet(oruns, run, evidence.OrfWcount(), nw)
+	nl = evidence.OlCount(olines) - l0
+	rotmed = evidence.EvRotMedian(olines, l0, nl)
+	w = w0
+	for w < (w0 + nw) {
+		evidence.EvFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, w, rotmed, 100)
+		w += 1
+	}
 	return 0
 }
 
-func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
+func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
 	// One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-	evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
+	evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	var n int32 = port.SrcLen(s)
 	var mid int32 = port.SrcU8(s, n/2)
 	if port.SrcMissed(s) {
@@ -117,9 +371,13 @@ func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, glyphs *port.Cells, wor
 	if dpi < 1 {
 		dpi = 72
 	}
+	evidence.EpNew(epages, 1, opCpt(w1, dpi), opCpt(h1, dpi))
+	evidence.EpSet(epages, 0, evidence.EpfFlags(), evidence.EgRaster())
+	evidence.EpSet(epages, 0, evidence.EpfDpi(), dpi*100)
+	evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, w1, h1, dpi*100, plan.LayFull(), -1, 0, 0, 0, 0, 0)
 	evidence.ImNew(images, 1, 0, 0, opCpt(w1, dpi), opCpt(h1, dpi), mid, w1, h1)
 	if plan.AnOk(an, o2) == 1 {
-		opWords(an, o2, 1, dpi, ocrwords, alts, etext)
+		opAnswer(an, o2, 0, 2, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 	}
 	return plan.UsDone()
 }

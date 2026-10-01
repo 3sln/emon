@@ -88,7 +88,7 @@ func ctNear(emonT *testing.T, got int32, want int32, tol int32, law string, row 
 }
 
 func ctNearAngle(emonT *testing.T, got int32, want int32, law string, row int32) int32 {
-	// Centi-degrees, around the circle.
+	// Centi-degrees, around the circle, within 3: `ev-angle`'s table is good to 0.03 degree.
 	var d int32 = got - want
 	if d < 0 {
 		d = 0 - d
@@ -96,23 +96,24 @@ func ctNearAngle(emonT *testing.T, got int32, want int32, law string, row int32)
 	if d > 18000 {
 		d = 36000 - d
 	}
-	port.AssertThatAt(emonT, d <= 1, law, row)
+	port.AssertThatAt(emonT, d <= 3, law, row)
 	return 0
 }
 
-func ctRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+func ctRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
 	// Open the file and run every page: 0 when both went well, 100 + the open
 	// status when it did not open, else `pc-document`'s (7: the source missed).
 	port.CellsDrop(gl, 0)
 	port.CellsDrop(et, 0)
-	port.CellsDrop(sp, 0)
+	port.CellsDrop(mk, 0)
+	port.CellsDrop(fnt, 0)
 	port.CellsDrop(wd, 0)
 	port.CellsDrop(ln, 0)
 	var o int32 = pdfdoc.PdOpen(src, ar, dc, a, b, st)
 	if o != 0 {
 		return 100 + o
 	}
-	return pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
+	return pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 }
 
 func ctGRow(emonT *testing.T, rows []byte, s int32, e int32, gl *port.Cells, vals *port.Cells, g int32, line int32) int32 {
@@ -137,19 +138,19 @@ func ctGRow(emonT *testing.T, rows []byte, s int32, e int32, gl *port.Cells, val
 		p = q + 1
 		k += 1
 	}
-	port.AssertEqAt(emonT, evidence.GlGet(gl, g, evidence.GfCp()), cpw, "code point", line)
-	ctNear(emonT, evidence.GlGet(gl, g, evidence.GfX0()), port.CellsAt(vals, 0), 1, "x0", line)
-	ctNear(emonT, evidence.GlGet(gl, g, evidence.GfY0()), port.CellsAt(vals, 1), 1, "y0", line)
-	ctNear(emonT, evidence.GlGet(gl, g, evidence.GfX1()), port.CellsAt(vals, 2), 1, "x1", line)
-	ctNear(emonT, evidence.GlGet(gl, g, evidence.GfY1()), port.CellsAt(vals, 3), 1, "y1", line)
-	ctNear(emonT, evidence.GlGet(gl, g, evidence.GfBaseline()), port.CellsAt(vals, 4), 1, "baseline", line)
+	port.AssertEqAt(emonT, evidence.GlGet(gl, g, evidence.ChCp()), cpw, "code point", line)
+	ctNear(emonT, evidence.GlGet(gl, g, evidence.ChX0()), port.CellsAt(vals, 0), 1, "x0", line)
+	ctNear(emonT, evidence.GlGet(gl, g, evidence.ChY0()), port.CellsAt(vals, 1), 1, "y0", line)
+	ctNear(emonT, evidence.GlGet(gl, g, evidence.ChX1()), port.CellsAt(vals, 2), 1, "x1", line)
+	ctNear(emonT, evidence.GlGet(gl, g, evidence.ChY1()), port.CellsAt(vals, 3), 1, "y1", line)
+	ctNear(emonT, evidence.GlGet(gl, g, evidence.GfBy0()), port.CellsAt(vals, 4), 1, "baseline", line)
 	ctNear(emonT, evidence.GlGet(gl, g, evidence.GfSize()), port.CellsAt(vals, 5), 1, "size", line)
 	ctNearAngle(emonT, evidence.GlGet(gl, g, evidence.GfRot()), port.CellsAt(vals, 6), "rotation", line)
 	port.AssertEqAt(emonT, evidence.GlGet(gl, g, evidence.GfMode()), port.CellsAt(vals, 7), "render mode", line)
 	return 0
 }
 
-func ctRows(emonT *testing.T, rows []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells, vals *port.Cells) int32 {
+func ctRows(emonT *testing.T, rows []byte, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells, vals *port.Cells) int32 {
 	// Check a row file: `F path` runs a file (path relative to test/); G, N, W, C, P and S
 	// rows are about the run. Answers how many rows were checked.
 	var n int32 = port.BlobLen(rows)
@@ -171,7 +172,7 @@ func ctRows(emonT *testing.T, rows []byte, ar *port.Cells, dc *port.Cells, a *po
 			kind = port.BlobU8(rows, pos)
 			checked += 1
 			if kind == 70 {
-				status = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, pos+2, e)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
+				status = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, pos+2, e)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 				port.AssertEqAt(emonT, status, 0, "the file ran", line)
 				g = 0
 				w = 0
@@ -192,7 +193,7 @@ func ctRows(emonT *testing.T, rows []byte, ar *port.Cells, dc *port.Cells, a *po
 				}
 				p = q + 1
 				q = ctTab(rows, p, e)
-				port.AssertEqAt(emonT, evidence.SpCount(sp), ctDec(rows, p, q), "span count", line)
+				port.AssertEqAt(emonT, evidence.MkCount(mk), ctDec(rows, p, q), "span count", line)
 				p = q + 1
 				if port.BlobU8(rows, p) != 45 {
 					port.AssertEqAt(emonT, pdfcontent.PcWarn(cx), ctDec(rows, p, e), "warning bits", line)
@@ -232,7 +233,7 @@ func ctRows(emonT *testing.T, rows []byte, ar *port.Cells, dc *port.Cells, a *po
 				p = pos + 2
 				q = ctTab(rows, p, e)
 				var ts *strings.Builder = port.NewText()
-				contentrows.CrSpan(ts, sp, et, ctDec(rows, p, q))
+				contentrows.CrSpan(ts, mk, et, ctDec(rows, p, q))
 				port.AssertTextSpan(emonT, ts, rows, p, e, "span", line)
 			}
 		}
@@ -259,20 +260,21 @@ func ctWorld(emonT *testing.T, which int32) int32 {
 	var f3 *port.Cells = port.NewCells()
 	var gl *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
-	var sp *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
 	var pg *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
 	var vals *port.Cells = port.NewCells()
 	var n int32 = 0
 	if which == 1 {
-		n = ctRows(emonT, port.TestFile("content/rows.txt"), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln, vals)
+		n = ctRows(emonT, port.TestFile("content/rows.txt"), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, vals)
 	}
 	if which == 2 {
-		n = ctRows(emonT, port.TestFile("content/synth.txt"), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln, vals)
+		n = ctRows(emonT, port.TestFile("content/synth.txt"), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, vals)
 	}
 	if which == 3 {
-		n = ctRows(emonT, port.TestFile("content/tagged.txt"), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln, vals)
+		n = ctRows(emonT, port.TestFile("content/tagged.txt"), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, vals)
 	}
 	return n
 }
@@ -318,15 +320,29 @@ func ctDumpRows(emonT *testing.T, rows []byte) int32 {
 	var f3 *port.Cells = port.NewCells()
 	var gl *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
-	var sp *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
 	var pg *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
+	var epages *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
 	var paths *port.Cells = port.NewCells()
 	var images *port.Cells = port.NewCells()
-	var comps *port.Cells = port.NewCells()
-	var ocr *port.Cells = port.NewCells()
-	var alts *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var oalts *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var components *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
 	var n int32 = port.BlobLen(rows)
 	var pos int32 = 0
 	var line int32 = 0
@@ -340,11 +356,11 @@ func ctDumpRows(emonT *testing.T, rows []byte) int32 {
 		if (pos < e) && (port.BlobU8(rows, pos) != 35) {
 			tb = ctTab(rows, pos, e)
 			files += 1
-			status = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, pos, tb)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
+			status = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, pos, tb)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 			port.AssertEqAt(emonT, status, 0, "the file ran", line)
-			port.AssertEqAt(emonT, evidence.EvCheck(gl, wd, ln, paths, images, comps, ocr, alts, et, sp), 0, "the evidence is well formed", line)
+			port.AssertEqAt(emonT, evidence.EvCheck(epages, views, pts, refs, et, feats, gl, wd, ln, mk, fnt, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the evidence is well formed", line)
 			var t *strings.Builder = port.NewText()
-			evidence.EvEmit(t, 0, gl, wd, ln, paths, images, comps, ocr, alts, et, sp)
+			evidence.EvEmit(t, 0, epages, views, pts, refs, et, feats, gl, wd, ln, mk, fnt, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 			port.AssertTextSpan(emonT, t, port.TestFileSpan(rows, tb+1, e), 0, ctEnd(port.TestFileSpan(rows, tb+1, e)), "the evidence dump", line)
 		}
 		pos = e + 1
@@ -373,7 +389,7 @@ func ctDiff(x *port.Cells, y *port.Cells) int32 {
 	return -1
 }
 
-func ctAsync(bytes []byte, chunk int32, ctr *port.Cells, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+func ctAsync(bytes []byte, chunk int32, ctr *port.Cells, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
 	// Run `bytes` through an async source of `chunk`-byte chunks, re-running on a fresh
 	// view after each fetch until an attempt does not miss. `ctr` gets [rounds, attempts
 	// that missed and answered something other than need-bytes].
@@ -386,7 +402,7 @@ func ctAsync(bytes []byte, chunk int32, ctr *port.Cells, ar *port.Cells, dc *por
 	port.CellsPush(ctr, 0)
 	for more == 1 {
 		var v *port.Src = port.SrcView(base)
-		status = ctRun(v, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
+		status = ctRun(v, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 		if pdfsrc.PsMissed(v) {
 			if (status != 7) && (status != 0) && (status < 100) {
 				port.CellsSet(ctr, 1, port.CellsAt(ctr, 1)+1)
@@ -423,7 +439,8 @@ func ctAsyncRows(emonT *testing.T, rows []byte, mode int32, chunk int32) int32 {
 	var f3 *port.Cells = port.NewCells()
 	var gl *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
-	var sp *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
 	var pg *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -442,7 +459,8 @@ func ctAsyncRows(emonT *testing.T, rows []byte, mode int32, chunk int32) int32 {
 	var f32 *port.Cells = port.NewCells()
 	var gl2 *port.Cells = port.NewCells()
 	var et2 *port.Cells = port.NewCells()
-	var sp2 *port.Cells = port.NewCells()
+	var mk2 *port.Cells = port.NewCells()
+	var fnt2 *port.Cells = port.NewCells()
 	var pg2 *port.Cells = port.NewCells()
 	var wd2 *port.Cells = port.NewCells()
 	var ln2 *port.Cells = port.NewCells()
@@ -472,12 +490,13 @@ func ctAsyncRows(emonT *testing.T, rows []byte, mode int32, chunk int32) int32 {
 		if s >= 0 {
 			q = ctTab(rows, s, e)
 			files += 1
-			s1 = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, s, q)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
-			s2 = ctAsync(port.TestFileSpan(rows, s, q), chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, sp2, pg2, wd2, ln2)
+			s1 = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, s, q)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
+			s2 = ctAsync(port.TestFileSpan(rows, s, q), chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, mk2, fnt2, pg2, wd2, ln2)
 			port.AssertEqAt(emonT, s2, s1, "the kept attempt's status is the in-memory run's", line)
 			port.AssertEqAt(emonT, ctDiff(gl, gl2), -1, "glyphs", line)
 			port.AssertEqAt(emonT, ctDiff(et, et2), -1, "evidence text", line)
-			port.AssertEqAt(emonT, ctDiff(sp, sp2), -1, "spans", line)
+			port.AssertEqAt(emonT, ctDiff(mk, mk2), -1, "marks", line)
+			port.AssertEqAt(emonT, ctDiff(fnt, fnt2), -1, "fonts", line)
 			port.AssertEqAt(emonT, ctDiff(wd, wd2), -1, "words", line)
 			port.AssertEqAt(emonT, ctDiff(ln, ln2), -1, "lines", line)
 			port.AssertEqAt(emonT, pdfcontent.PcWarn(cx2), pdfcontent.PcWarn(cx), "warnings", line)
@@ -520,7 +539,7 @@ func ctCountPage(gl *port.Cells, page int32) int32 {
 	var g int32 = 0
 	var c int32 = 0
 	for g < n {
-		if evidence.GlGet(gl, g, evidence.GfPage()) == page {
+		if evidence.GlGet(gl, g, evidence.ChPage()) == page {
 			c += 1
 		}
 		g += 1
@@ -547,7 +566,8 @@ func ctRealRows(emonT *testing.T, rows []byte) int32 {
 	var f3 *port.Cells = port.NewCells()
 	var gl *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
-	var sp *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
 	var pg *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -569,7 +589,7 @@ func ctRealRows(emonT *testing.T, rows []byte) int32 {
 			t3 = ctTab(rows, t2+1, e)
 			page = ctDec(rows, t1+1, t2)
 			rowsn += 1
-			port.AssertEqAt(emonT, ctRun(port.SrcOfBlob(port.TestFileSpan(rows, pos, t1)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln), 0, "the file ran", line)
+			port.AssertEqAt(emonT, ctRun(port.SrcOfBlob(port.TestFileSpan(rows, pos, t1)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln), 0, "the file ran", line)
 			port.AssertEqAt(emonT, contentrows.CrDigest(gl, et, page), ctDec(rows, t2+1, t3), "digest of the page's text", line)
 			port.AssertEqAt(emonT, ctCountPage(gl, page), ctDec(rows, t3+1, e), "glyphs on the page", line)
 		}
@@ -611,7 +631,8 @@ func ctFuzzFile(emonT *testing.T, bytes []byte, iters int32, cutStep int32) int3
 	var f3 *port.Cells = port.NewCells()
 	var gl *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
-	var sp *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
 	var pg *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
@@ -634,7 +655,7 @@ func ctFuzzFile(emonT *testing.T, bytes []byte, iters int32, cutStep int32) int3
 			port.CellsSet(work, at, splitmix.SmBelow(rng, 256))
 			k += 1
 		}
-		ctRun(port.SrcOfCells(work), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
+		ctRun(port.SrcOfCells(work), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 		runs += 1
 		it += 1
 	}
@@ -642,7 +663,7 @@ func ctFuzzFile(emonT *testing.T, bytes []byte, iters int32, cutStep int32) int3
 	for cut < n {
 		ctCopy(bytes, work)
 		port.CellsDrop(work, cut)
-		ctRun(port.SrcOfCells(work), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, wd, ln)
+		ctRun(port.SrcOfCells(work), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 		runs += 1
 		cut += cutStep
 	}

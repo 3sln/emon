@@ -25,6 +25,60 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+// The evidence arenas travel in four bundles, held by the host as structs (SPEC 8.4.6, D096).
+struct EvShared {
+    epages: Cells,
+    views: Cells,
+    pts: Cells,
+    refs: Cells,
+    etext: Cells,
+    feats: Cells,
+}
+impl EvShared {
+    fn new() -> Self {
+        EvShared { epages: Cells::new(), views: Cells::new(), pts: Cells::new(), refs: Cells::new(), etext: Cells::new(), feats: Cells::new() }
+    }
+}
+struct EvText {
+    glyphs: Cells,
+    words: Cells,
+    lines: Cells,
+    marks: Cells,
+    fonts: Cells,
+    paths: Cells,
+    images: Cells,
+}
+impl EvText {
+    fn new() -> Self {
+        EvText { glyphs: Cells::new(), words: Cells::new(), lines: Cells::new(), marks: Cells::new(), fonts: Cells::new(), paths: Cells::new(), images: Cells::new() }
+    }
+}
+struct EvOcr {
+    oruns: Cells,
+    oblocks: Cells,
+    olines: Cells,
+    owords: Cells,
+    osyms: Cells,
+    oalts: Cells,
+}
+impl EvOcr {
+    fn new() -> Self {
+        EvOcr { oruns: Cells::new(), oblocks: Cells::new(), olines: Cells::new(), owords: Cells::new(), osyms: Cells::new(), oalts: Cells::new() }
+    }
+}
+struct EvTrace {
+    inks: Cells,
+    components: Cells,
+    rules: Cells,
+    prims: Cells,
+    tlines: Cells,
+}
+impl EvTrace {
+    fn new() -> Self {
+        EvTrace { inks: Cells::new(), components: Cells::new(), rules: Cells::new(), prims: Cells::new(), tlines: Cells::new() }
+    }
+}
+
 fn fnv(b: &[u8]) -> u32 {
     let mut h: u32 = 0x811C_9DC5;
     for &x in b {
@@ -181,14 +235,11 @@ fn main() {
     let mut evidence = String::new();
     let mut unit = |an: &mut Cells, rq: &mut Cells| -> i32 {
         let view = base.view();
-        let (mut g, mut w, mut l, mut p, mut i, mut co, mut ow, mut al, mut et, mut sp) = (
-            Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(),
-            Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(),
-        );
-        let st = emon::planprobe::pp_unit(&view, an, rq, &mut g, &mut w, &mut l, &mut p, &mut i, &mut co, &mut ow, &mut al, &mut et, &mut sp);
+        let (mut sh, mut tx, mut oc, mut tr) = (EvShared::new(), EvText::new(), EvOcr::new(), EvTrace::new());
+        let st = emon::planprobe::pp_unit(&view, an, rq, &mut sh.epages, &mut sh.views, &mut sh.pts, &mut sh.refs, &mut sh.etext, &mut sh.feats, &mut tx.glyphs, &mut tx.words, &mut tx.lines, &mut tx.marks, &mut tx.fonts, &mut tx.paths, &mut tx.images, &mut oc.oruns, &mut oc.oblocks, &mut oc.olines, &mut oc.owords, &mut oc.osyms, &mut oc.oalts, &mut tr.inks, &mut tr.components, &mut tr.rules, &mut tr.prims, &mut tr.tlines);
         if st == UNIT_DONE {
             evidence.clear();
-            emon::evidence::ev_emit(&mut evidence, 0, &mut g, &mut w, &mut l, &mut p, &mut i, &mut co, &mut ow, &mut al, &mut et, &mut sp);
+            emon::evidence::ev_emit(&mut evidence, 0, &mut sh.epages, &mut sh.views, &mut sh.pts, &mut sh.refs, &mut sh.etext, &mut sh.feats, &mut tx.glyphs, &mut tx.words, &mut tx.lines, &mut tx.marks, &mut tx.fonts, &mut tx.paths, &mut tx.images, &mut oc.oruns, &mut oc.oblocks, &mut oc.olines, &mut oc.owords, &mut oc.osyms, &mut oc.oalts, &mut tr.inks, &mut tr.components, &mut tr.rules, &mut tr.prims, &mut tr.tlines);
         }
         st
     };

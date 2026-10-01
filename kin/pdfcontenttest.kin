@@ -30,9 +30,9 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document pc-warn pc-fonts]]
             [emon.contentrows :refer [cr-page-text cr-page-lines cr-all-text cr-word cr-span cr-digest]]
-            [emon.evidence :refer [gl-count gl-get wd-count sp-count
-                                   gf-cp gf-x0 gf-y0 gf-x1 gf-y1 gf-baseline gf-size gf-rot
-                                   gf-mode gf-page ev-emit ev-init ev-check]]
+            [emon.evidence :refer [gl-count gl-get wd-count mk-count
+                                   ch-cp ch-x0 ch-y0 ch-x1 ch-y1 gf-by0 gf-size gf-rot
+                                   gf-mode ch-page ev-emit ev-init ev-check]]
             [emon.splitmix :refer [sm-seed sm-below]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -88,11 +88,11 @@
     (return 0)))
 
 (defn ^I32 ct-near-angle [^TestT emon-t ^I32 got ^I32 want ^Str law ^I32 row]
-  (comment "Centi-degrees, around the circle.")
+  (comment "Centi-degrees, around the circle, within 3: `ev-angle`'s table is good to 0.03 degree.")
   (let [^:mut ^I32 d (- got want)]
     (if (< d 0) (set d (- 0 d)))
     (if (> d 18000) (set d (- 36000 d)))
-    (assert-that-at (<= d 1) law row)
+    (assert-that-at (<= d 3) law row)
     (return 0)))
 
 ;; ---------------------------------------------------------------- the driver
@@ -100,18 +100,19 @@
 (defn ^I32 ct-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
                    ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
                    ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
-                   ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^:mut ^Cells pg
+                   ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
                    ^:mut ^Cells wd ^:mut ^Cells ln]
   (comment "Open the file and run every page: 0 when both went well, 100 + the open")
   (comment "status when it did not open, else `pc-document`'s (7: the source missed).")
   (cells-drop gl 0)
   (cells-drop et 0)
-  (cells-drop sp 0)
+  (cells-drop mk 0)
+  (cells-drop fnt 0)
   (cells-drop wd 0)
   (cells-drop ln 0)
   (let [^I32 o (pd-open src ar dc a b st)]
     (if (!= o 0) (return (+ 100 o)))
-    (return (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))))
+    (return (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))))
 
 (defn ^I32 ct-g-row [^TestT emon-t ^Blob rows ^I32 s ^I32 e ^Cells gl ^:mut ^Cells vals ^I32 g ^I32 line]
   (comment "One G row against glyph g: the code point exactly, the geometry within a")
@@ -132,12 +133,12 @@
           (cells-push vals (ct-dec rows p q))
           (set p (+ q 1))
           (set k (+ k 1))))
-    (assert-eq-at (gl-get gl g (gf-cp)) cpw "code point" line)
-    (ct-near emon-t (gl-get gl g (gf-x0)) (cells-at vals 0) 1 "x0" line)
-    (ct-near emon-t (gl-get gl g (gf-y0)) (cells-at vals 1) 1 "y0" line)
-    (ct-near emon-t (gl-get gl g (gf-x1)) (cells-at vals 2) 1 "x1" line)
-    (ct-near emon-t (gl-get gl g (gf-y1)) (cells-at vals 3) 1 "y1" line)
-    (ct-near emon-t (gl-get gl g (gf-baseline)) (cells-at vals 4) 1 "baseline" line)
+    (assert-eq-at (gl-get gl g (ch-cp)) cpw "code point" line)
+    (ct-near emon-t (gl-get gl g (ch-x0)) (cells-at vals 0) 1 "x0" line)
+    (ct-near emon-t (gl-get gl g (ch-y0)) (cells-at vals 1) 1 "y0" line)
+    (ct-near emon-t (gl-get gl g (ch-x1)) (cells-at vals 2) 1 "x1" line)
+    (ct-near emon-t (gl-get gl g (ch-y1)) (cells-at vals 3) 1 "y1" line)
+    (ct-near emon-t (gl-get gl g (gf-by0)) (cells-at vals 4) 1 "baseline" line)
     (ct-near emon-t (gl-get gl g (gf-size)) (cells-at vals 5) 1 "size" line)
     (ct-near-angle emon-t (gl-get gl g (gf-rot)) (cells-at vals 6) "rotation" line)
     (assert-eq-at (gl-get gl g (gf-mode)) (cells-at vals 7) "render mode" line)
@@ -147,7 +148,7 @@
                     ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
                     ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
                     ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
-                    ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^:mut ^Cells pg
+                    ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
                     ^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells vals]
   (comment "Check a row file: `F path` runs a file (path relative to test/); G, N, W, C, P and S")
   (comment "rows are about the run. Answers how many rows were checked.")
@@ -171,7 +172,7 @@
                 (set checked (+ checked 1))
                 (if (== kind 70)
                   (do (set status (ct-run (src-of-blob (test-file-span rows (+ pos 2) e))
-                                          ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+                                          ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
                       (assert-eq-at status 0 "the file ran" line)
                       (set g 0)
                       (set w 0)))
@@ -189,7 +190,7 @@
                         (assert-eq-at (wd-count wd) (ct-dec rows p q) "word count" line))
                       (set p (+ q 1))
                       (set q (ct-tab rows p e))
-                      (assert-eq-at (sp-count sp) (ct-dec rows p q) "span count" line)
+                      (assert-eq-at (mk-count mk) (ct-dec rows p q) "span count" line)
                       (set p (+ q 1))
                       (if (!= (blob-u8 rows p) 45)
                         (assert-eq-at (pc-warn cx) (ct-dec rows p e) "warning bits" line))))
@@ -223,7 +224,7 @@
                       (set p (+ pos 2))
                       (set q (ct-tab rows p e))
                       (let [^Text ts (new-text)]
-                        (cr-span ts sp et (ct-dec rows p q))
+                        (cr-span ts mk et (ct-dec rows p q))
                         (assert-text-span ts rows p e "span" line))))))
           (set pos (+ e 1))))
     (return checked)))
@@ -248,18 +249,19 @@
         ^Cells f3 (new-cells)
         ^Cells gl (new-cells)
         ^Cells et (new-cells)
-        ^Cells sp (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
         ^Cells pg (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
         ^Cells vals (new-cells)
         ^:mut ^I32 n 0]
     (if (== which 1)
-      (set n (ct-rows emon-t (test-file "content/rows.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln vals)))
+      (set n (ct-rows emon-t (test-file "content/rows.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln vals)))
     (if (== which 2)
-      (set n (ct-rows emon-t (test-file "content/synth.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln vals)))
+      (set n (ct-rows emon-t (test-file "content/synth.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln vals)))
     (if (== which 3)
-      (set n (ct-rows emon-t (test-file "content/tagged.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln vals)))
+      (set n (ct-rows emon-t (test-file "content/tagged.txt") ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln vals)))
     (return n)))
 
 (deftest test-the-hand-made-fixtures-read-as-an-independent-evaluator-reads-them
@@ -299,15 +301,29 @@
         ^Cells f3 (new-cells)
         ^Cells gl (new-cells)
         ^Cells et (new-cells)
-        ^Cells sp (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
         ^Cells pg (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells views (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells feats (new-cells)
         ^Cells paths (new-cells)
         ^Cells images (new-cells)
-        ^Cells comps (new-cells)
-        ^Cells ocr (new-cells)
-        ^Cells alts (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells oblocks (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells oalts (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells components (new-cells)
+        ^Cells rules (new-cells)
+        ^Cells prims (new-cells)
+        ^Cells tlines (new-cells)
         ^I32 n (blob-len rows)
         ^:mut ^I32 pos 0
         ^:mut ^I32 line 0
@@ -322,11 +338,11 @@
             (do (set tb (ct-tab rows pos e))
                 (set files (+ files 1))
                 (set status (ct-run (src-of-blob (test-file-span rows pos tb))
-                                    ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+                                    ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
                 (assert-eq-at status 0 "the file ran" line)
-                (assert-eq-at (ev-check gl wd ln paths images comps ocr alts et sp) 0 "the evidence is well formed" line)
+                (assert-eq-at (ev-check epages views pts refs et feats gl wd ln mk fnt paths images oruns oblocks olines owords osyms oalts inks components rules prims tlines) 0 "the evidence is well formed" line)
                 (let [^Text t (new-text)]
-                  (ev-emit t 0 gl wd ln paths images comps ocr alts et sp)
+                  (ev-emit t 0 epages views pts refs et feats gl wd ln mk fnt paths images oruns oblocks olines owords osyms oalts inks components rules prims tlines)
                   (assert-text-span t (test-file-span rows (+ tb 1) e) 0
                                     (ct-end (test-file-span rows (+ tb 1) e)) "the evidence dump" line))))
           (set pos (+ e 1))))
@@ -352,7 +368,7 @@
                      ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
                      ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
                      ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
-                     ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells sp ^:mut ^Cells pg
+                     ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
                      ^:mut ^Cells wd ^:mut ^Cells ln]
   (comment "Run `bytes` through an async source of `chunk`-byte chunks, re-running on a fresh")
   (comment "view after each fetch until an attempt does not miss. `ctr` gets [rounds, attempts")
@@ -366,7 +382,7 @@
     (cells-push ctr 0)
     (while (== more 1)
       (do (let [^Src v (test-src-view base)]
-            (set status (ct-run v ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+            (set status (ct-run v ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
             (if (ps-missed v)
               (do (if (and (!= status 7) (!= status 0) (< status 100))
                     (cells-set ctr 1 (+ (cells-at ctr 1) 1)))
@@ -396,7 +412,8 @@
         ^Cells f3 (new-cells)
         ^Cells gl (new-cells)
         ^Cells et (new-cells)
-        ^Cells sp (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
         ^Cells pg (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
@@ -415,7 +432,8 @@
         ^Cells f32 (new-cells)
         ^Cells gl2 (new-cells)
         ^Cells et2 (new-cells)
-        ^Cells sp2 (new-cells)
+        ^Cells mk2 (new-cells)
+        ^Cells fnt2 (new-cells)
         ^Cells pg2 (new-cells)
         ^Cells wd2 (new-cells)
         ^Cells ln2 (new-cells)
@@ -443,13 +461,14 @@
             (do (set q (ct-tab rows s e))
                 (set files (+ files 1))
                 (set s1 (ct-run (src-of-blob (test-file-span rows s q))
-                                ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln))
+                                ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
                 (set s2 (ct-async (test-file-span rows s q) chunk ctr
-                                  ar2 dc2 a2 b2 st2 cx2 ox2 cs2 out2 f02 f12 f22 f32 gl2 et2 sp2 pg2 wd2 ln2))
+                                  ar2 dc2 a2 b2 st2 cx2 ox2 cs2 out2 f02 f12 f22 f32 gl2 et2 mk2 fnt2 pg2 wd2 ln2))
                 (assert-eq-at s2 s1 "the kept attempt's status is the in-memory run's" line)
                 (assert-eq-at (ct-diff gl gl2) -1 "glyphs" line)
                 (assert-eq-at (ct-diff et et2) -1 "evidence text" line)
-                (assert-eq-at (ct-diff sp sp2) -1 "spans" line)
+                (assert-eq-at (ct-diff mk mk2) -1 "marks" line)
+                (assert-eq-at (ct-diff fnt fnt2) -1 "fonts" line)
                 (assert-eq-at (ct-diff wd wd2) -1 "words" line)
                 (assert-eq-at (ct-diff ln ln2) -1 "lines" line)
                 (assert-eq-at (pc-warn cx2) (pc-warn cx) "warnings" line)
@@ -485,7 +504,7 @@
         ^:mut ^I32 g 0
         ^:mut ^I32 c 0]
     (while (< g n)
-      (do (if (== (gl-get gl g (gf-page)) page) (set c (+ c 1)))
+      (do (if (== (gl-get gl g (ch-page)) page) (set c (+ c 1)))
           (set g (+ g 1))))
     (return c)))
 
@@ -508,7 +527,8 @@
         ^Cells f3 (new-cells)
         ^Cells gl (new-cells)
         ^Cells et (new-cells)
-        ^Cells sp (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
         ^Cells pg (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
@@ -531,7 +551,7 @@
                 (set page (ct-dec rows (+ t1 1) t2))
                 (set rowsn (+ rowsn 1))
                 (assert-eq-at (ct-run (src-of-blob (test-file-span rows pos t1))
-                                      ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+                                      ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln)
                               0 "the file ran" line)
                 (assert-eq-at (cr-digest gl et page) (ct-dec rows (+ t2 1) t3) "digest of the page's text" line)
                 (assert-eq-at (ct-count-page gl page) (ct-dec rows (+ t3 1) e) "glyphs on the page" line)))
@@ -570,7 +590,8 @@
         ^Cells f3 (new-cells)
         ^Cells gl (new-cells)
         ^Cells et (new-cells)
-        ^Cells sp (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
         ^Cells pg (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
@@ -592,14 +613,14 @@
             (do (set at (sm-below rng n))
                 (cells-set work at (sm-below rng 256))
                 (set k (+ k 1))))
-          (ct-run (src-of-cells work) ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+          (ct-run (src-of-cells work) ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln)
           (set runs (+ runs 1))
           (set it (+ it 1))))
     (set cut cut-step)
     (while (< cut n)
       (do (ct-copy bytes work)
           (cells-drop work cut)
-          (ct-run (src-of-cells work) ar dc a b st cx ox cs out f0 f1 f2 f3 gl et sp pg wd ln)
+          (ct-run (src-of-cells work) ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln)
           (set runs (+ runs 1))
           (set cut (+ cut cut-step))))
     (return runs)))

@@ -147,9 +147,9 @@ const cMcbase int32 = 593
 
 const cMcover int32 = 594
 
-const cCurmcid int32 = 595
+const cCurocg int32 = 595
 
-const cCurart int32 = 596
+const cZ int32 = 596
 
 const cFlim int32 = 597
 
@@ -214,6 +214,8 @@ const gColor int32 = 26
 const gAlpha int32 = 27
 
 const gFam int32 = 28
+
+const gFobj int32 = 29
 
 const maxEnt int32 = 4096
 
@@ -1112,6 +1114,165 @@ func pcFWidth(f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, sl
 	return pdffont.PfnWidth(f3, code)
 }
 
+func pcFR(f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, slot int32, which int32) int32 {
+	// A font's descriptor facts for the `fonts` row: which 0 subtype, 1 /Flags, 2 has a ToUnicode,
+	// 3 base encoding, 4 kind (1 simple).
+	if slot == 0 {
+		if which == 0 {
+			return pdffont.PfnSubtype(f0)
+		}
+		if which == 1 {
+			return pdffont.PfnFlags(f0)
+		}
+		if which == 2 {
+			return pdffont.PfnHasTounicode(f0)
+		}
+		if which == 3 {
+			return pdffont.PfnEncoding(f0)
+		}
+		return pdffont.PfnKindOf(f0)
+	}
+	if slot == 1 {
+		if which == 0 {
+			return pdffont.PfnSubtype(f1)
+		}
+		if which == 1 {
+			return pdffont.PfnFlags(f1)
+		}
+		if which == 2 {
+			return pdffont.PfnHasTounicode(f1)
+		}
+		if which == 3 {
+			return pdffont.PfnEncoding(f1)
+		}
+		return pdffont.PfnKindOf(f1)
+	}
+	if slot == 2 {
+		if which == 0 {
+			return pdffont.PfnSubtype(f2)
+		}
+		if which == 1 {
+			return pdffont.PfnFlags(f2)
+		}
+		if which == 2 {
+			return pdffont.PfnHasTounicode(f2)
+		}
+		if which == 3 {
+			return pdffont.PfnEncoding(f2)
+		}
+		return pdffont.PfnKindOf(f2)
+	}
+	if which == 0 {
+		return pdffont.PfnSubtype(f3)
+	}
+	if which == 1 {
+		return pdffont.PfnFlags(f3)
+	}
+	if which == 2 {
+		return pdffont.PfnHasTounicode(f3)
+	}
+	if which == 3 {
+		return pdffont.PfnEncoding(f3)
+	}
+	return pdffont.PfnKindOf(f3)
+}
+
+func pcNameFind(ar *port.Cells, nh int32, n int32, c0 int32, c1 int32, c2 int32, c3 int32, c4 int32, c5 int32, c6 int32) int32 {
+	// 1 when the name nh contains the n (1..7) characters c0.. in a row.
+	var ln int32 = pdflex.PlNameLen(ar, nh)
+	var i int32 = 0
+	var ok int32 = 1
+	for (i + n) <= ln {
+		ok = 1
+		if pdflex.PlNameByte(ar, nh, i) != c0 {
+			ok = 0
+		}
+		if (n > 1) && (pdflex.PlNameByte(ar, nh, i+1) != c1) {
+			ok = 0
+		}
+		if (n > 2) && (pdflex.PlNameByte(ar, nh, i+2) != c2) {
+			ok = 0
+		}
+		if (n > 3) && (pdflex.PlNameByte(ar, nh, i+3) != c3) {
+			ok = 0
+		}
+		if (n > 4) && (pdflex.PlNameByte(ar, nh, i+4) != c4) {
+			ok = 0
+		}
+		if (n > 5) && (pdflex.PlNameByte(ar, nh, i+5) != c5) {
+			ok = 0
+		}
+		if (n > 6) && (pdflex.PlNameByte(ar, nh, i+6) != c6) {
+			ok = 0
+		}
+		if ok == 1 {
+			return 1
+		}
+		i += 1
+	}
+	return 0
+}
+
+func pcFontRow(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, fnt *port.Cells, et *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, slot int32, status int32, key int32) int32 {
+	// The `fonts` row of a font the document shows for the first time (its row is its id): object
+	// number, subtype, /Flags, whether it has a ToUnicode, base encoding, /BaseFont, ascent, descent,
+	// the width of a space (simple fonts), and a style from the flags and the name. P1.6 reads no
+	// font programs, /ItalicAngle or /StemV (`pdfnames` has no such names): program 0, italic angle 0,
+	// stem -1. A font that would not load has subtype 0 and no metrics.
+	var row int32 = evidence.FoNew(fnt, port.CellsAt(cx, cCur+gFobj), 0)
+	var nh int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, key, pdfnames.PnBaseFont())
+	var flags int32 = 0
+	var sty int32 = 0
+	var i int32 = 0
+	var start int32 = 0
+	var ln int32 = 0
+	if status == 0 {
+		evidence.FoSet(fnt, row, evidence.FnfSubtype(), pcFR(f0, f1, f2, f3, slot, 0))
+		flags = pcFR(f0, f1, f2, f3, slot, 1)
+		evidence.FoSet(fnt, row, evidence.FnfFlags(), flags)
+		evidence.FoSet(fnt, row, evidence.FnfTounicode(), pcFR(f0, f1, f2, f3, slot, 2))
+		evidence.FoSet(fnt, row, evidence.FnfEnc(), pcFR(f0, f1, f2, f3, slot, 3))
+		evidence.FoSet(fnt, row, evidence.FnfAsc(), pcFQ(f0, f1, f2, f3, slot, 0))
+		evidence.FoSet(fnt, row, evidence.FnfDesc(), pcFQ(f0, f1, f2, f3, slot, 1))
+		if pcFR(f0, f1, f2, f3, slot, 4) == 1 {
+			evidence.FoSet(fnt, row, evidence.FnfSpace(), pcFWidth(f0, f1, f2, f3, slot, 32))
+		}
+	}
+	if (nh != 0) && (pdflex.PlKindOf(ar, nh) == 4) {
+		ln = pdflex.PlNameLen(ar, nh)
+		start = port.CellsLen(et)
+		for i < ln {
+			evidence.EtxAppendCp(et, pdflex.PlNameByte(ar, nh, i))
+			i += 1
+		}
+		evidence.FoSet(fnt, row, evidence.FnfTstart(), start)
+		evidence.FoSet(fnt, row, evidence.FnfTlen(), ln)
+		if pcNameFind(ar, nh, 4, 66, 111, 108, 100, 0, 0, 0) == 1 {
+			sty |= model.SyBold()
+		}
+		if pcNameFind(ar, nh, 6, 73, 116, 97, 108, 105, 99, 0) == 1 {
+			sty |= model.SyItalic()
+		}
+		if pcNameFind(ar, nh, 7, 79, 98, 108, 105, 113, 117, 101) == 1 {
+			sty |= model.SyItalic()
+		}
+	}
+	if (flags & 1) != 0 {
+		sty |= model.SyMono()
+	}
+	if (flags & 64) != 0 {
+		sty |= model.SyItalic()
+	}
+	if (flags & 131072) != 0 {
+		sty |= model.SySmallcaps()
+	}
+	if (flags & 262144) != 0 {
+		sty |= model.SyBold()
+	}
+	evidence.FoSet(fnt, row, evidence.FnfStyle(), sty)
+	return row
+}
+
 func pcFontId(cx *port.Cells, key int32) int32 {
 	// The evidence id of a font dictionary: its index in the order the
 	// document first showed it (-1 past 512 fonts).
@@ -1131,7 +1292,7 @@ func pcFontId(cx *port.Cells, key int32) int32 {
 	return n
 }
 
-func pcEnsureFont(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells) int32 {
+func pcEnsureFont(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, fnt *port.Cells, et *port.Cells) int32 {
 	// Make the current font (the graphics state's) resident in a slot and set
 	// C_SLOT to it, -1 when there is none. A font is loaded once and kept; the
 	// slot that has gone unused longest is the one replaced.
@@ -1142,6 +1303,7 @@ func pcEnsureFont(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 	var best int32 = 2147483647
 	var status int32 = 0
 	var fid int32 = 0
+	var nbefore int32 = port.CellsAt(cx, cNfont)
 	var clock int32 = port.CellsAt(cx, cClock)
 	if key == 0 {
 		port.CellsSet(cx, cSlot, -1)
@@ -1175,6 +1337,10 @@ func pcEnsureFont(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 	port.CellsSet(cx, at+sStatus, status)
 	fid = pcFontId(cx, key)
 	port.CellsSet(cx, at+sId, fid)
+	// A font the document has not shown before gets its `fonts` row, which is its id.
+	if (fid >= 0) && (fid == nbefore) {
+		pcFontRow(src, ar, dc, a, b, st, cx, fnt, et, f0, f1, f2, f3, pick, status, key)
+	}
 	if status == 0 {
 		port.CellsSet(cx, at+sAsc, pcFQ(f0, f1, f2, f3, pick, 0))
 		port.CellsSet(cx, at+sDesc, pcFQ(f0, f1, f2, f3, pick, 1))
@@ -1187,6 +1353,9 @@ func pcEnsureFont(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 		port.CellsSet(cx, at+sVert, 0)
 	}
 	port.CellsSet(cx, cSlot, pick)
+	if pdfsrc.PsMissed(src) {
+		port.CellsSet(cx, cAbort, 1)
+	}
 	return 0
 }
 
@@ -1214,6 +1383,12 @@ func pcTf(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 		pcWarnSet(cx, wFont)
 	}
 	port.CellsSet(cx, cCur+gFont, fh)
+	port.CellsSet(cx, cCur+gFobj, 0)
+	if (fh != 0) && (raw != 0) {
+		if pdflex.PlKindOf(ar, raw) == 9 {
+			port.CellsSet(cx, cCur+gFobj, pdflex.PlIntValue(ar, raw))
+		}
+	}
 	return 0
 }
 
@@ -1245,9 +1420,41 @@ func pcMax4(p int64, q int64, r int64, s int64) int64 {
 	return m
 }
 
+func pcDirAngle(a int64, b int64) int32 {
+	// The angle of the direction (a, b) in page space (y down), by `ev-angle`: halve both until the
+	// larger fits 30 bits, so the angle of a matrix axis in 24-bit fixed point keeps all its precision.
+	var x int64 = a
+	var y int64 = b
+	var m int64 = int64(0)
+	if x < int64(0) {
+		m = int64(0) - x
+	} else {
+		m = x
+	}
+	if y < int64(0) {
+		if (int64(0) - y) > m {
+			m = int64(0) - y
+		}
+	} else if y > m {
+		m = y
+	}
+	for m > int64(1073741824) {
+		x = x / int64(2)
+		y = y / int64(2)
+		m = m / int64(2)
+	}
+	return evidence.EvAngle(int32(x), int32(y))
+}
+
 func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, code int32, ncode int32) int32 {
 	// One shown glyph: look the code up, put its cell in page space, record it,
 	// advance the text position by its width, the character and word spacing.
+	// Recorded (SPEC 8.4.3): the box of its cell; its baseline segment from its origin to its origin plus
+	// its advance without Tc and Tw (text space +x, so the spacing stays measurable); `asc` and `desc`
+	// (signed distances from the baseline along the up vector, from the font's ascent and descent); `rot`
+	// by `ev-angle` from the exact direction of the text matrix's x axis; its fill colour and alpha; the
+	// colour-space class when the colour operators said (gray, rgb, cmyk); `z`, the page's paint counter;
+	// `mark` (the innermost open mark) and `ocg` (the innermost optional-content mark).
 	var slot int32 = port.CellsAt(cx, cSlot)
 	var fs int64 = fx.FxGet(cx, cCur+gFs)
 	var th int64 = fx.FxGet(cx, cCur+gTh)
@@ -1325,18 +1532,43 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 	var mb int64 = fx.FxGet(cx, cM+2)
 	var mc int64 = fx.FxGet(cx, cM+4)
 	var md int64 = fx.FxGet(cx, cM+6)
-	var size int32 = fx.FxRound(fx.FxMul(fx.FxHypot(mc, md), fx.FxAbs(fs)))
-	var rot int32 = fx.FxAtan2(int64(0)-mb, ma)
-	var bline int32 = fx.FxRound(fx.MxY(cx, cM, int64(0), rise))
-	var g int32 = evidence.GlNew(gl, port.CellsAt(cx, cPage), cp0, fid, size, fx.FxRound(pcMin4(p0x, p1x, p2x, p3x)), fx.FxRound(pcMin4(p0y, p1y, p2y, p3y)), fx.FxRound(pcMax4(p0x, p1x, p2x, p3x)), fx.FxRound(pcMax4(p0y, p1y, p2y, p3y)))
+	var hyp int64 = fx.FxHypot(mc, md)
+	var size int32 = fx.FxRound(fx.FxMul(hyp, fx.FxAbs(fs)))
+	var rot int32 = pcDirAngle(ma, mb)
+	var bx0 int32 = fx.FxRound(fx.MxX(cx, cM, int64(0), rise))
+	var by0 int32 = fx.FxRound(fx.MxY(cx, cM, int64(0), rise))
+	var bx1 int32 = fx.FxRound(fx.MxX(cx, cM, fx.FxMul(wfx, th), rise))
+	var by1 int32 = fx.FxRound(fx.MxY(cx, cM, fx.FxMul(wfx, th), rise))
+	var up int32 = fx.FxRound(fx.FxMul(y1t-rise, hyp))
+	var down int32 = fx.FxRound(fx.FxMul(y0t-rise, hyp))
+	var fam int32 = port.CellsAt(cx, cCur+gFam)
+	var z int32 = port.CellsAt(cx, cZ)
+	var g int32 = evidence.GlNew(gl, port.CellsAt(cx, cPage), fx.FxRound(pcMin4(p0x, p1x, p2x, p3x)), fx.FxRound(pcMin4(p0y, p1y, p2y, p3y)), fx.FxRound(pcMax4(p0x, p1x, p2x, p3x)), fx.FxRound(pcMax4(p0y, p1y, p2y, p3y)), cp0, -1, 0, -1)
 	evidence.GlSet(gl, g, evidence.GfHow(), how)
-	evidence.GlSet(gl, g, evidence.GfBaseline(), bline)
+	evidence.GlSet(gl, g, evidence.GfFont(), fid)
+	evidence.GlSet(gl, g, evidence.GfSize(), size)
+	evidence.GlSet(gl, g, evidence.GfBx0(), bx0)
+	evidence.GlSet(gl, g, evidence.GfBy0(), by0)
+	evidence.GlSet(gl, g, evidence.GfBx1(), bx1)
+	evidence.GlSet(gl, g, evidence.GfBy1(), by1)
+	if up >= down {
+		evidence.GlSet(gl, g, evidence.GfAsc(), up)
+		evidence.GlSet(gl, g, evidence.GfDesc(), down)
+	} else {
+		evidence.GlSet(gl, g, evidence.GfAsc(), down)
+		evidence.GlSet(gl, g, evidence.GfDesc(), up)
+	}
 	evidence.GlSet(gl, g, evidence.GfRot(), rot)
-	evidence.GlSet(gl, g, evidence.GfColor(), port.CellsAt(cx, cCur+gColor))
-	evidence.GlSet(gl, g, evidence.GfAlpha(), port.CellsAt(cx, cCur+gAlpha))
+	evidence.GlSet(gl, g, evidence.GfFill(), port.CellsAt(cx, cCur+gColor))
+	evidence.GlSet(gl, g, evidence.GfFalpha(), port.CellsAt(cx, cCur+gAlpha))
 	evidence.GlSet(gl, g, evidence.GfMode(), port.CellsAt(cx, cCur+gMode))
-	evidence.GlSet(gl, g, evidence.GfArtifact(), port.CellsAt(cx, cCurart))
-	evidence.GlSet(gl, g, evidence.GfMcid(), port.CellsAt(cx, cCurmcid))
+	if fam > 0 {
+		evidence.GlSet(gl, g, evidence.GfCs(), fam)
+	}
+	evidence.GlSet(gl, g, evidence.GfZ(), z)
+	port.CellsSet(cx, cZ, z+1)
+	evidence.GlSet(gl, g, evidence.GfMark(), port.CellsAt(cx, cMctop))
+	evidence.GlSet(gl, g, evidence.GfOcg(), port.CellsAt(cx, cCurocg))
 	if cnt > 1 {
 		i = 0
 		for i < cnt {
@@ -1346,8 +1578,8 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 			}
 			i += 1
 		}
-		evidence.GlSet(gl, g, evidence.GfTstart(), tstart)
-		evidence.GlSet(gl, g, evidence.GfTlen(), cnt)
+		evidence.GlSet(gl, g, evidence.ChTstart(), tstart)
+		evidence.GlSet(gl, g, evidence.ChTlen(), cnt)
 	}
 	// The advance: tx = (w0 * Tfs + Tc + Tw) * Th, or ty = w1 * Tfs + Tc + Tw.
 	var adv int64 = int64(0)
@@ -1699,11 +1931,11 @@ func pcIngestProps(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 	return d
 }
 
-func pcReadProps(et *port.Cells, sp *port.Cells, ox *port.Cells, span int32, d int32) int32 {
-	// Fill the span's fields from the dictionary entry d of the operands: MCID,
-	// Type, Subtype, ActualText, Alt, E, Lang. Answers a code for the artifact's
-	// class: 1 watermark, 2 background, 3 pagination, 4 layout, 5 another
-	// named type or subtype, 0 none.
+func pcReadProps(et *port.Cells, mk *port.Cells, ox *port.Cells, span int32, d int32, isart int32) int32 {
+	// Fill the mark's fields from the dictionary entry d of the operands: MCID, ActualText, Alt, E, Lang;
+	// and, for an /Artifact, its /Type and /Subtype as codes (`ar`: pagination, layout, background, page,
+	// else `other`; `as`: header, footer, watermark, else `other`). A name that is none of the known ones
+	// is not kept (SPEC 8.4.3 holds codes, D101 held the name).
 	var end int32 = (d + 1) + pcEa(ox, d)
 	var j int32 = d + 1
 	var v int32 = 0
@@ -1713,7 +1945,6 @@ func pcReadProps(et *port.Cells, sp *port.Cells, ox *port.Cells, span int32, d i
 	var vl int32 = 0
 	var vk int32 = 0
 	var at int32 = 0
-	var cls int32 = 0
 	for j < end {
 		v = j + 1
 		if (pcKind(ox, j) == kName) && (v < end) {
@@ -1723,72 +1954,55 @@ func pcReadProps(et *port.Cells, sp *port.Cells, ox *port.Cells, span int32, d i
 			vs = pcEa(ox, v)
 			vl = pcEb(ox, v)
 			if (pcNameEq(ox, ks, kl, pdfnames.PnMcid()) == 1) && (vk == kNum) {
-				evidence.SpSet(sp, span, evidence.SfMcid(), fx.FxRound(fx.FxJoin(vs, vl)))
+				evidence.MkSet(mk, span, evidence.MkfMcid(), fx.FxRound(fx.FxJoin(vs, vl)))
 			}
-			if (pcNameEq(ox, ks, kl, pdfnames.PnType()) == 1) && (vk == kName) {
-				at = pcPushBytes(et, ox, vs, vl)
-				evidence.SpSet(sp, span, evidence.SfType(), at)
-				evidence.SpSet(sp, span, evidence.SfTypelen(), vl)
+			if (isart == 1) && ((pcNameEq(ox, ks, kl, pdfnames.PnType()) == 1) && (vk == kName)) {
+				evidence.MkSet(mk, span, evidence.MkfArtype(), evidence.ArOther())
 				if pcNameEq(ox, vs, vl, pdfnames.PnPagination()) == 1 {
-					if cls == 0 {
-						cls = 3
-					}
+					evidence.MkSet(mk, span, evidence.MkfArtype(), evidence.ArPagination())
 				}
 				if pcNameEq(ox, vs, vl, pdfnames.PnLayout()) == 1 {
-					if cls == 0 {
-						cls = 4
-					}
+					evidence.MkSet(mk, span, evidence.MkfArtype(), evidence.ArLayout())
 				}
 				if pcNameEq(ox, vs, vl, pdfnames.PnBackground()) == 1 {
-					if cls != 1 {
-						cls = 2
-					}
+					evidence.MkSet(mk, span, evidence.MkfArtype(), evidence.ArBackground())
 				}
-				if cls == 0 {
-					cls = 5
+				if pcNameEq(ox, vs, vl, pdfnames.PnPage()) == 1 {
+					evidence.MkSet(mk, span, evidence.MkfArtype(), evidence.ArPage())
 				}
 			}
-			if (pcNameEq(ox, ks, kl, pdfnames.PnSubtype()) == 1) && (vk == kName) {
-				at = pcPushBytes(et, ox, vs, vl)
-				evidence.SpSet(sp, span, evidence.SfSubtype(), at)
-				evidence.SpSet(sp, span, evidence.SfSubtypelen(), vl)
+			if (isart == 1) && ((pcNameEq(ox, ks, kl, pdfnames.PnSubtype()) == 1) && (vk == kName)) {
+				evidence.MkSet(mk, span, evidence.MkfArsub(), evidence.AsOther())
+				if pcNameEq(ox, vs, vl, pdfnames.PnHeader()) == 1 {
+					evidence.MkSet(mk, span, evidence.MkfArsub(), evidence.AsHeader())
+				}
+				if pcNameEq(ox, vs, vl, pdfnames.PnFooter()) == 1 {
+					evidence.MkSet(mk, span, evidence.MkfArsub(), evidence.AsFooter())
+				}
 				if pcNameEq(ox, vs, vl, pdfnames.PnWatermark()) == 1 {
-					cls = 1
-				}
-				if pcNameEq(ox, vs, vl, pdfnames.PnBackground()) == 1 {
-					if cls != 1 {
-						cls = 2
-					}
-				}
-				if (pcNameEq(ox, vs, vl, pdfnames.PnHeader()) == 1) || (pcNameEq(ox, vs, vl, pdfnames.PnFooter()) == 1) {
-					if (cls == 0) || (cls == 5) {
-						cls = 3
-					}
-				}
-				if cls == 0 {
-					cls = 5
+					evidence.MkSet(mk, span, evidence.MkfArsub(), evidence.AsWatermark())
 				}
 			}
 			if (vk == kStr) || (vk == kName) {
 				if pcNameEq(ox, ks, kl, pdfnames.PnActualText()) == 1 {
 					at = pcPushText(et, ox, vs, vl)
-					evidence.SpSet(sp, span, evidence.SfActual(), at)
-					evidence.SpSet(sp, span, evidence.SfActuallen(), port.CellsLen(et)-at)
+					evidence.MkSet(mk, span, evidence.MkfActual(), at)
+					evidence.MkSet(mk, span, evidence.MkfActuallen(), port.CellsLen(et)-at)
 				}
 				if pcNameEq(ox, ks, kl, pdfnames.PnAlt()) == 1 {
 					at = pcPushText(et, ox, vs, vl)
-					evidence.SpSet(sp, span, evidence.SfAlt(), at)
-					evidence.SpSet(sp, span, evidence.SfAltlen(), port.CellsLen(et)-at)
+					evidence.MkSet(mk, span, evidence.MkfAlt(), at)
+					evidence.MkSet(mk, span, evidence.MkfAltlen(), port.CellsLen(et)-at)
 				}
 				if pcNameEq(ox, ks, kl, pdfnames.PnE()) == 1 {
 					at = pcPushText(et, ox, vs, vl)
-					evidence.SpSet(sp, span, evidence.SfExp(), at)
-					evidence.SpSet(sp, span, evidence.SfExplen(), port.CellsLen(et)-at)
+					evidence.MkSet(mk, span, evidence.MkfExp(), at)
+					evidence.MkSet(mk, span, evidence.MkfExplen(), port.CellsLen(et)-at)
 				}
 				if pcNameEq(ox, ks, kl, pdfnames.PnLang()) == 1 {
 					at = pcPushText(et, ox, vs, vl)
-					evidence.SpSet(sp, span, evidence.SfLang(), at)
-					evidence.SpSet(sp, span, evidence.SfLanglen(), port.CellsLen(et)-at)
+					evidence.MkSet(mk, span, evidence.MkfLang(), at)
+					evidence.MkSet(mk, span, evidence.MkfLanglen(), port.CellsLen(et)-at)
 				}
 			}
 			j = v + pcEsize(ox, v)
@@ -1796,66 +2010,47 @@ func pcReadProps(et *port.Cells, sp *port.Cells, ox *port.Cells, span int32, d i
 			j += pcEsize(ox, j)
 		}
 	}
-	return cls
-}
-
-func pcMcRecompute(cx *port.Cells, sp *port.Cells) int32 {
-	// The innermost MCID and artifact class in force: walk the open spans.
-	var t int32 = port.CellsAt(cx, cMctop)
-	var mcid int32 = -1
-	var art int32 = 0
-	var guard int32 = 0
-	var m int32 = 0
-	for (t >= 0) && (guard <= maxMc) {
-		if mcid < 0 {
-			m = evidence.SpGet(sp, t, evidence.SfMcid())
-			if m >= 0 {
-				mcid = m
-			}
-		}
-		if art == 0 {
-			art = evidence.SpGet(sp, t, evidence.SfArtifact())
-		}
-		t = evidence.SpGet(sp, t, evidence.SfParent())
-		guard += 1
-	}
-	port.CellsSet(cx, cCurmcid, mcid)
-	port.CellsSet(cx, cCurart, art)
 	return 0
 }
 
-func pcMcPop(cx *port.Cells, sp *port.Cells, gl *port.Cells, unterminated int32) int32 {
-	// Close the innermost open span: its glyphs are those shown since it opened.
+func pcMcPop(cx *port.Cells, mk *port.Cells, gl *port.Cells, unterminated int32) int32 {
+	// Close the innermost open mark: its glyphs are those shown since it opened, its painted objects
+	// those numbered since (`mk-close`).
 	var t int32 = port.CellsAt(cx, cMctop)
 	if t < 0 {
 		return 0
 	}
 	var g int32 = evidence.GlCount(gl)
-	var gf int32 = evidence.SpGet(sp, t, evidence.SfGfirst())
-	var par int32 = evidence.SpGet(sp, t, evidence.SfParent())
-	evidence.SpSet(sp, t, evidence.SfGcount(), g-gf)
+	var par int32 = evidence.MkGet(mk, t, evidence.MkfParent())
+	evidence.MkClose(mk, t, g, port.CellsAt(cx, cZ))
 	if unterminated == 1 {
-		var fl int32 = evidence.SpGet(sp, t, evidence.SfFlags())
-		evidence.SpSet(sp, t, evidence.SfFlags(), fl|evidence.McUnterminated())
+		var fl int32 = evidence.MkGet(mk, t, evidence.MkfFlags())
+		evidence.MkSet(mk, t, evidence.MkfFlags(), fl|evidence.McUnterminated())
 	}
 	port.CellsSet(cx, cMctop, par)
 	port.CellsSet(cx, cMcdepth, port.CellsAt(cx, cMcdepth)-1)
-	pcMcRecompute(cx, sp)
+	if port.CellsAt(cx, cCurocg) == t {
+		port.CellsSet(cx, cCurocg, evidence.MkOcgOf(mk, par))
+	}
 	return 0
 }
 
-func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, n int32, props int32) int32 {
-	// BMC / BDC: open a span with the tag of operand 0 and, for BDC, the
-	// properties of operand 1 (an inline dictionary, or a name in /Properties).
+func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, n int32, props int32) int32 {
+	// BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an
+	// inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,
+	// `optional-content` for /OC (its object number is the /Properties entry's, when that is a
+	// reference), else `tag`.
 	var depth int32 = port.CellsAt(cx, cMcdepth)
 	var tstart int32 = 0
 	var tlen int32 = 0
 	var span int32 = 0
 	var d int32 = -1
-	var cls int32 = 0
 	var raw int32 = 0
 	var dh int32 = 0
 	var isart int32 = 0
+	var isoc int32 = 0
+	var t0 int32 = 0
+	var kind int32 = 3
 	var flags int32 = 0
 	if depth >= maxMc {
 		port.CellsSet(cx, cMcover, port.CellsAt(cx, cMcover)+1)
@@ -1869,11 +2064,21 @@ func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 		if pcEntryNameIs(ox, 0, pdfnames.PnArtifact()) == 1 {
 			isart = 1
 		}
+		t0 = pcEa(ox, 0)
+		if (tlen == 2) && ((port.CellsAt(ox, t0) == 79) && (port.CellsAt(ox, t0+1) == 67)) {
+			isoc = 1
+		}
 	}
-	span = evidence.SpNew(sp, port.CellsAt(cx, cPage), tstart, tlen, port.CellsAt(cx, cMctop), evidence.GlCount(gl))
-	evidence.SpSet(sp, span, evidence.SfStm(), port.CellsAt(cx, cStm))
 	if isart == 1 {
-		evidence.SpSet(sp, span, evidence.SfArtifact(), evidence.ArOther())
+		kind = evidence.MkArtifact()
+	}
+	if isoc == 1 {
+		kind = evidence.MkOptionalContent()
+	}
+	span = evidence.MkOpen(mk, port.CellsAt(cx, cPage), kind, tstart, tlen, port.CellsAt(cx, cMctop), evidence.GlCount(gl), port.CellsAt(cx, cZ))
+	evidence.MkSet(mk, span, evidence.MkfStm(), port.CellsAt(cx, cStm))
+	if isart == 1 {
+		evidence.MkSet(mk, span, evidence.MkfArtype(), evidence.ArOther())
 	}
 	if (props == 1) && (n >= 2) {
 		if pcKind(ox, 1) == kDict {
@@ -1888,6 +2093,11 @@ func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 			if pdfsrc.PsMissed(src) {
 				port.CellsSet(cx, cAbort, 1)
 			}
+			if (isoc == 1) && (raw != 0) {
+				if pdflex.PlKindOf(ar, raw) == 9 {
+					evidence.MkSet(mk, span, evidence.MkfOcg(), pdflex.PlIntValue(ar, raw))
+				}
+			}
 			if (dh != 0) && (pdflex.PlKindOf(ar, dh) == 7) {
 				d = pcIngestProps(src, ar, dc, a, b, st, cx, ox, dh)
 				flags = evidence.McResource()
@@ -1896,33 +2106,21 @@ func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 				pcWarnSet(cx, wProps)
 			}
 		}
-		evidence.SpSet(sp, span, evidence.SfFlags(), flags)
+		evidence.MkSet(mk, span, evidence.MkfFlags(), flags)
 		if d >= 0 {
-			cls = pcReadProps(et, sp, ox, span, d)
-			if isart == 1 {
-				if cls == 1 {
-					evidence.SpSet(sp, span, evidence.SfArtifact(), evidence.ArWatermark())
-				}
-				if cls == 2 {
-					evidence.SpSet(sp, span, evidence.SfArtifact(), evidence.ArBackground())
-				}
-				if cls == 3 {
-					evidence.SpSet(sp, span, evidence.SfArtifact(), evidence.ArPagination())
-				}
-				if cls == 4 {
-					evidence.SpSet(sp, span, evidence.SfArtifact(), evidence.ArLayout())
-				}
-			}
+			pcReadProps(et, mk, ox, span, d, isart)
 		}
 	}
 	port.CellsSet(cx, cMctop, span)
 	port.CellsSet(cx, cMcdepth, depth+1)
-	pcMcRecompute(cx, sp)
+	if isoc == 1 {
+		port.CellsSet(cx, cCurocg, span)
+	}
 	return 0
 }
 
-func pcMcEnd(cx *port.Cells, sp *port.Cells, gl *port.Cells) int32 {
-	// EMC: close the innermost span this stream opened; a BDC that was too deep
+func pcMcEnd(cx *port.Cells, mk *port.Cells, gl *port.Cells) int32 {
+	// EMC: close the innermost mark this stream opened; a BDC that was too deep
 	// to record is balanced first; an EMC with nothing to close is ignored.
 	var over int32 = port.CellsAt(cx, cMcover)
 	if over > 0 {
@@ -1933,7 +2131,7 @@ func pcMcEnd(cx *port.Cells, sp *port.Cells, gl *port.Cells) int32 {
 		pcWarnSet(cx, wMc)
 		return 0
 	}
-	return pcMcPop(cx, sp, gl, 0)
+	return pcMcPop(cx, mk, gl, 0)
 }
 
 func pcSkipInline(cx *port.Cells, cs *port.Cells) int32 {
@@ -1994,7 +2192,7 @@ func pcAppendStream(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells
 	return status
 }
 
-func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, n int32) int32 {
+func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, n int32) int32 {
 	// Do: run the Form XObject named by operand 0. Images and everything that is
 	// not a form are skipped. The form's /Matrix is concatenated to the CTM, its
 	// /Resources replace the current ones (else they are inherited), and it runs
@@ -2101,7 +2299,7 @@ func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	port.CellsSet(cx, cFdepth, fd+1)
 	port.CellsSet(cx, cStm, objnum)
 	endcs = port.CellsLen(cs)
-	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, start, endcs)
+	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, start, endcs)
 	port.CellsSet(cx, cFdepth, fd)
 	port.CellsSet(cx, cStm, oldstm)
 	port.CellsSet(cx, cRes, oldres)
@@ -2110,9 +2308,9 @@ func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	return 0
 }
 
-func pcPrep(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells) int32 {
+func pcPrep(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, fnt *port.Cells, et *port.Cells) int32 {
 	// Before a string is shown: the font resident, and M = Tm x CTM current.
-	pcEnsureFont(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3)
+	pcEnsureFont(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et)
 	pcUpdateM(cx)
 	if port.CellsAt(cx, cSlot) < 0 {
 		pcWarnSet(cx, wText)
@@ -2120,7 +2318,7 @@ func pcPrep(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	return 0
 }
 
-func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, op int32, n int32) int32 {
+func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, op int32, n int32) int32 {
 	// Execute one operator; `ox` holds its n operands. Unknown operators do
 	// nothing (their operands are dropped by the caller).
 	if op == opSave {
@@ -2197,14 +2395,14 @@ func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	}
 	if op == opShow {
 		if (n >= 1) && (pcKind(ox, 0) == kStr) {
-			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3)
+			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et)
 			pcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 0)
 		}
 		return 0
 	}
 	if op == opShowarr {
 		if (n >= 1) && (pcKind(ox, 0) == kArr) {
-			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3)
+			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et)
 			pcShowArr(cx, ox, gl, et, f0, f1, f2, f3, 0)
 		}
 		return 0
@@ -2212,7 +2410,7 @@ func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	if op == opQuote {
 		if (n >= 1) && (pcKind(ox, 0) == kStr) {
 			pcNextLine(cx)
-			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3)
+			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et)
 			pcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 0)
 		}
 		return 0
@@ -2222,25 +2420,25 @@ func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 			fx.FxPut(cx, cCur+gTw, pcNum(ox, n, 0))
 			fx.FxPut(cx, cCur+gTc, pcNum(ox, n, 1))
 			pcNextLine(cx)
-			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3)
+			pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et)
 			pcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 2)
 		}
 		return 0
 	}
 	if op == opDo {
-		pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, n)
+		pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, n)
 		return 0
 	}
 	if op == opBdc {
-		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 1)
+		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 1)
 		return 0
 	}
 	if op == opBmc {
-		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 0)
+		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 0)
 		return 0
 	}
 	if op == opEmc {
-		pcMcEnd(cx, sp, gl)
+		pcMcEnd(cx, mk, gl)
 		return 0
 	}
 	if op == opBi {
@@ -2295,7 +2493,7 @@ func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	return 0
 }
 
-func pcRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, start int32, end int32) int32 {
+func pcRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, start int32, end int32) int32 {
 	// Run the content bytes cs[start, end): read operands, then execute each
 	// operator. The caller's lexer position, graphics-state floor and marked-
 	// content floor are kept and restored, so a form can run inside an operator.
@@ -2325,20 +2523,20 @@ func pcRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port
 			}
 			opc = port.CellsAt(cx, cOp)
 			nop = port.CellsAt(cx, cOxn)
-			pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, opc, nop)
+			pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, opc, nop)
 			pcOxClear(cx, ox)
 		}
 	}
 	// What the stream left open: spans, graphics states.
 	for port.CellsAt(cx, cMcdepth) > port.CellsAt(cx, cMcbase) {
 		pcWarnSet(cx, wMc)
-		pcMcPop(cx, sp, gl, 1)
+		pcMcPop(cx, mk, gl, 1)
 	}
 	for port.CellsAt(cx, cDepth) > port.CellsAt(cx, cGsbase) {
 		port.CellsSet(cx, cDepth, port.CellsAt(cx, cDepth)-1)
 	}
 	port.CellsSet(cx, cMctop, oldtop)
-	pcMcRecompute(cx, sp)
+	port.CellsSet(cx, cCurocg, evidence.MkOcgOf(mk, oldtop))
 	port.CellsSet(cx, cMcover, oldover)
 	port.CellsSet(cx, cMcbase, oldmcb)
 	port.CellsSet(cx, cGsbase, oldgs)
@@ -2377,27 +2575,27 @@ func pcAxis(rot int32) int32 {
 func pcOffset(gl *port.Cells, j int32, axis int32) int32 {
 	// Where glyph j's baseline is across its writing axis, in centipoints.
 	if axis == 1 {
-		return evidence.GlGet(gl, j, evidence.GfX1())
+		return evidence.GlGet(gl, j, evidence.ChX1())
 	}
 	if axis == 3 {
-		return evidence.GlGet(gl, j, evidence.GfX0())
+		return evidence.GlGet(gl, j, evidence.ChX0())
 	}
-	return evidence.GlGet(gl, j, evidence.GfBaseline())
+	return evidence.GlGet(gl, j, evidence.GfBy0())
 }
 
 func pcGap(gl *port.Cells, p int32, g int32, axis int32) int32 {
 	// The space along the axis between glyph p and the glyph g after it
 	// (negative when they overlap or g is before p).
 	if axis == 0 {
-		return evidence.GlGet(gl, g, evidence.GfX0()) - evidence.GlGet(gl, p, evidence.GfX1())
+		return evidence.GlGet(gl, g, evidence.ChX0()) - evidence.GlGet(gl, p, evidence.ChX1())
 	}
 	if axis == 2 {
-		return evidence.GlGet(gl, p, evidence.GfX0()) - evidence.GlGet(gl, g, evidence.GfX1())
+		return evidence.GlGet(gl, p, evidence.ChX0()) - evidence.GlGet(gl, g, evidence.ChX1())
 	}
 	if axis == 1 {
-		return evidence.GlGet(gl, p, evidence.GfY0()) - evidence.GlGet(gl, g, evidence.GfY1())
+		return evidence.GlGet(gl, p, evidence.ChY0()) - evidence.GlGet(gl, g, evidence.ChY1())
 	}
-	return evidence.GlGet(gl, g, evidence.GfY0()) - evidence.GlGet(gl, p, evidence.GfY1())
+	return evidence.GlGet(gl, g, evidence.ChY0()) - evidence.GlGet(gl, p, evidence.ChY1())
 }
 
 func pcRotGap(gl *port.Cells, p int32, g int32, size int32) int32 {
@@ -2407,8 +2605,8 @@ func pcRotGap(gl *port.Cells, p int32, g int32, size int32) int32 {
 	var rot int32 = evidence.GlGet(gl, p, evidence.GfRot())
 	var ux int64 = fx.FxCos(rot)
 	var uy int64 = int64(0) - fx.FxSin(rot)
-	var dx2 int32 = (evidence.GlGet(gl, g, evidence.GfX0()) + evidence.GlGet(gl, g, evidence.GfX1())) - (evidence.GlGet(gl, p, evidence.GfX0()) + evidence.GlGet(gl, p, evidence.GfX1()))
-	var dy2 int32 = (evidence.GlGet(gl, g, evidence.GfY0()) + evidence.GlGet(gl, g, evidence.GfY1())) - (evidence.GlGet(gl, p, evidence.GfY0()) + evidence.GlGet(gl, p, evidence.GfY1()))
+	var dx2 int32 = (evidence.GlGet(gl, g, evidence.ChX0()) + evidence.GlGet(gl, g, evidence.ChX1())) - (evidence.GlGet(gl, p, evidence.ChX0()) + evidence.GlGet(gl, p, evidence.ChX1()))
+	var dy2 int32 = (evidence.GlGet(gl, g, evidence.ChY0()) + evidence.GlGet(gl, g, evidence.ChY1())) - (evidence.GlGet(gl, p, evidence.ChY0()) + evidence.GlGet(gl, p, evidence.ChY1()))
 	var al2 int64 = fx.FxMul(fx.FxOfInt(dx2), ux) + fx.FxMul(fx.FxOfInt(dy2), uy)
 	return fx.FxRound(al2/int64(2)) - ((size * 600) / 1000)
 }
@@ -2418,8 +2616,8 @@ func pcRotOff(gl *port.Cells, p int32, g int32) int32 {
 	var rot int32 = evidence.GlGet(gl, p, evidence.GfRot())
 	var sn int64 = fx.FxSin(rot)
 	var cs int64 = fx.FxCos(rot)
-	var dx2 int32 = (evidence.GlGet(gl, g, evidence.GfX0()) + evidence.GlGet(gl, g, evidence.GfX1())) - (evidence.GlGet(gl, p, evidence.GfX0()) + evidence.GlGet(gl, p, evidence.GfX1()))
-	var dy2 int32 = (evidence.GlGet(gl, g, evidence.GfY0()) + evidence.GlGet(gl, g, evidence.GfY1())) - (evidence.GlGet(gl, p, evidence.GfY0()) + evidence.GlGet(gl, p, evidence.GfY1()))
+	var dx2 int32 = (evidence.GlGet(gl, g, evidence.ChX0()) + evidence.GlGet(gl, g, evidence.ChX1())) - (evidence.GlGet(gl, p, evidence.ChX0()) + evidence.GlGet(gl, p, evidence.ChX1()))
+	var dy2 int32 = (evidence.GlGet(gl, g, evidence.ChY0()) + evidence.GlGet(gl, g, evidence.ChY1())) - (evidence.GlGet(gl, p, evidence.ChY0()) + evidence.GlGet(gl, p, evidence.ChY1()))
 	var pe int32 = fx.FxRound((fx.FxMul(fx.FxOfInt(dx2), sn) + fx.FxMul(fx.FxOfInt(dy2), cs)) / int64(2))
 	if pe < 0 {
 		return 0 - pe
@@ -2548,14 +2746,14 @@ func pcCls(cp int32) int32 {
 }
 
 func pcGcls(gl *port.Cells, j int32) int32 {
-	return pcCls(evidence.GlGet(gl, j, evidence.GfCp()))
+	return pcCls(evidence.GlGet(gl, j, evidence.ChCp()))
 }
 
 func pcGlyphOut(et *port.Cells, gl *port.Cells, j int32) int32 {
 	// Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
-	var ts int32 = evidence.GlGet(gl, j, evidence.GfTstart())
-	var tl int32 = evidence.GlGet(gl, j, evidence.GfTlen())
-	var cp int32 = evidence.GlGet(gl, j, evidence.GfCp())
+	var ts int32 = evidence.GlGet(gl, j, evidence.ChTstart())
+	var tl int32 = evidence.GlGet(gl, j, evidence.ChTlen())
+	var cp int32 = evidence.GlGet(gl, j, evidence.ChCp())
 	var k int32 = 0
 	var cpv int32 = 0
 	if (ts >= 0) && (tl > 0) {
@@ -2574,17 +2772,17 @@ func pcGlyphOut(et *port.Cells, gl *port.Cells, j int32) int32 {
 	return 0
 }
 
-func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, page int32, gfst int32, glst int32) int32 {
+func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells, page int32, gfst int32, glst int32, wbk int32) int32 {
 	// Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
 	// dominant font and size of the first, and `hidden-text` as its source when every
 	// glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
 	// page (visual order, as Skia and most producers write them) has its TEXT written in
 	// logical order: the glyphs reversed, with the runs of digits and Latin letters in it
 	// turned back. The glyphs themselves stay as they were shown.
-	var x0 int32 = evidence.GlGet(gl, gfst, evidence.GfX0())
-	var y0 int32 = evidence.GlGet(gl, gfst, evidence.GfY0())
-	var x1 int32 = evidence.GlGet(gl, gfst, evidence.GfX1())
-	var y1 int32 = evidence.GlGet(gl, gfst, evidence.GfY1())
+	var x0 int32 = evidence.GlGet(gl, gfst, evidence.ChX0())
+	var y0 int32 = evidence.GlGet(gl, gfst, evidence.ChY0())
+	var x1 int32 = evidence.GlGet(gl, gfst, evidence.ChX1())
+	var y1 int32 = evidence.GlGet(gl, gfst, evidence.ChY1())
 	var j int32 = gfst
 	var tstart int32 = -1
 	var visible int32 = 0
@@ -2595,17 +2793,17 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, page int32, gfst
 	var kk int32 = 0
 	var m int32 = 0
 	for j <= glst {
-		if evidence.GlGet(gl, j, evidence.GfX0()) < x0 {
-			x0 = evidence.GlGet(gl, j, evidence.GfX0())
+		if evidence.GlGet(gl, j, evidence.ChX0()) < x0 {
+			x0 = evidence.GlGet(gl, j, evidence.ChX0())
 		}
-		if evidence.GlGet(gl, j, evidence.GfY0()) < y0 {
-			y0 = evidence.GlGet(gl, j, evidence.GfY0())
+		if evidence.GlGet(gl, j, evidence.ChY0()) < y0 {
+			y0 = evidence.GlGet(gl, j, evidence.ChY0())
 		}
-		if evidence.GlGet(gl, j, evidence.GfX1()) > x1 {
-			x1 = evidence.GlGet(gl, j, evidence.GfX1())
+		if evidence.GlGet(gl, j, evidence.ChX1()) > x1 {
+			x1 = evidence.GlGet(gl, j, evidence.ChX1())
 		}
-		if evidence.GlGet(gl, j, evidence.GfY1()) > y1 {
-			y1 = evidence.GlGet(gl, j, evidence.GfY1())
+		if evidence.GlGet(gl, j, evidence.ChY1()) > y1 {
+			y1 = evidence.GlGet(gl, j, evidence.ChY1())
 		}
 		if evidence.GlGet(gl, j, evidence.GfMode()) != 3 {
 			visible = 1
@@ -2621,7 +2819,7 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, page int32, gfst
 	}
 	if (nr > nl) && (glst > gfst) {
 		if pcAxis(evidence.GlGet(gl, gfst, evidence.GfRot())) == 0 {
-			if evidence.GlGet(gl, glst, evidence.GfX0()) >= evidence.GlGet(gl, gfst, evidence.GfX0()) {
+			if evidence.GlGet(gl, glst, evidence.ChX0()) >= evidence.GlGet(gl, gfst, evidence.ChX0()) {
 				rtlw = 1
 			}
 		}
@@ -2653,17 +2851,25 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, page int32, gfst
 			}
 		}
 	}
-	var w int32 = evidence.WdNew(wd, page, x0, y0, x1, y1, gfst, (glst-gfst)+1)
-	evidence.WdSet(wd, w, evidence.WfTstart(), tstart)
-	evidence.WdSet(wd, w, evidence.WfTlen(), port.CellsLen(et)-tstart)
-	evidence.WdSet(wd, w, evidence.WfFont(), evidence.GlGet(gl, gfst, evidence.GfFont()))
+	var w int32 = evidence.WdNew(wd, page, x0, y0, x1, y1, evidence.GlGet(gl, gfst, evidence.GfBx0()), evidence.GlGet(gl, gfst, evidence.GfBy0()), evidence.GlGet(gl, glst, evidence.GfBx1()), evidence.GlGet(gl, glst, evidence.GfBy1()), evidence.GlGet(gl, gfst, evidence.GfRot()), 0, tstart, port.CellsLen(et)-tstart, -1, -1, -1)
+	var fo int32 = evidence.GlGet(gl, gfst, evidence.GfFont())
+	if rtlw == 1 {
+		evidence.WdSet(wd, w, evidence.HdDir(), evidence.LdRtl())
+	}
+	evidence.WdSet(wd, w, evidence.WfGfirst(), gfst)
+	evidence.WdSet(wd, w, evidence.WfGcount(), (glst-gfst)+1)
+	evidence.WdSet(wd, w, evidence.WfFont(), fo)
 	evidence.WdSet(wd, w, evidence.WfSize(), evidence.GlGet(gl, gfst, evidence.GfSize()))
+	if (fo >= 0) && (fo < evidence.FoCount(fnt)) {
+		evidence.WdSet(wd, w, evidence.WfStyle(), evidence.FoGet(fnt, fo, evidence.FnfStyle()))
+	}
+	evidence.WdSet(wd, w, evidence.WfWbreak(), wbk)
 	if visible == 0 {
 		evidence.WdSet(wd, w, evidence.WfSrc(), model.SrHiddenText())
 	}
 	j = gfst
 	for j <= glst {
-		evidence.GlSet(gl, j, evidence.GfWord(), w)
+		evidence.GlSet(gl, j, evidence.ChWord(), w)
 		j += 1
 	}
 	return w
@@ -2673,11 +2879,11 @@ func pcSwapRows(wd *port.Cells, i int32, j int32) int32 {
 	var k int32 = 0
 	var u int32 = 0
 	var v int32 = 0
-	for k < 16 {
-		u = port.CellsAt(wd, (i*16)+k)
-		v = port.CellsAt(wd, (j*16)+k)
-		port.CellsSet(wd, (i*16)+k, v)
-		port.CellsSet(wd, (j*16)+k, u)
+	for k < 24 {
+		u = port.CellsAt(wd, (i*24)+k)
+		v = port.CellsAt(wd, (j*24)+k)
+		port.CellsSet(wd, (i*24)+k, v)
+		port.CellsSet(wd, (j*24)+k, u)
 		k += 1
 	}
 	return 0
@@ -2752,11 +2958,11 @@ func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst
 	if nr <= nl {
 		return 0
 	}
-	evidence.LnSet(ln, lidx, evidence.LfDir(), evidence.LdRtl())
+	evidence.LnSet(ln, lidx, evidence.LhDir(), evidence.LdRtl())
 	if pcAxis(evidence.GlGet(gl, evidence.WdGet(wd, wfst, evidence.WfGfirst()), evidence.GfRot())) != 0 {
 		return 0
 	}
-	if evidence.WdGet(wd, wlst, evidence.WfX0()) < evidence.WdGet(wd, wfst, evidence.WfX0()) {
+	if evidence.WdGet(wd, wlst, evidence.HdX0()) < evidence.WdGet(wd, wfst, evidence.HdX0()) {
 		return 0
 	}
 	if wfst == wlst {
@@ -2782,12 +2988,12 @@ func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst
 		gn = evidence.WdGet(wd, w, evidence.WfGcount())
 		j = 0
 		for j < gn {
-			evidence.GlSet(gl, g0+j, evidence.GfWord(), w)
+			evidence.GlSet(gl, g0+j, evidence.ChWord(), w)
 			j += 1
 		}
 		z = -1
 		if w < wlst {
-			z = evidence.WdGet(wd, w, evidence.WfX0()) - evidence.WdGet(wd, w+1, evidence.WfX1())
+			z = evidence.WdGet(wd, w, evidence.HdX0()) - evidence.WdGet(wd, w+1, evidence.HdX1())
 		}
 		evidence.WdSet(wd, w, evidence.WfGap(), z)
 		w += 1
@@ -2795,21 +3001,21 @@ func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst
 	return 0
 }
 
-func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, page int32, g0 int32, w0 int32) int32 {
+func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, fnt *port.Cells, page int32, g0 int32, w0 int32) int32 {
 	// Group the glyphs from g0 on into words, and the words from w0 on into lines.
 	var g1 int32 = evidence.GlCount(gl)
 	var i int32 = g0
 	var cur int32 = -1
 	for i < g1 {
-		if pcSpaceCp(evidence.GlGet(gl, i, evidence.GfCp())) == 1 {
+		if pcSpaceCp(evidence.GlGet(gl, i, evidence.ChCp())) == 1 {
 			if cur >= 0 {
-				pcEmitWord(gl, et, wd, page, cur, i-1)
+				pcEmitWord(gl, et, wd, fnt, page, cur, i-1, evidence.WbSpace())
 				cur = -1
 			}
 		} else {
 			if cur >= 0 {
 				if pcContinues(gl, i-1, i) == 0 {
-					pcEmitWord(gl, et, wd, page, cur, i-1)
+					pcEmitWord(gl, et, wd, fnt, page, cur, i-1, evidence.WbGap())
 					cur = -1
 				}
 			}
@@ -2820,7 +3026,7 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, pag
 		i += 1
 	}
 	if cur >= 0 {
-		pcEmitWord(gl, et, wd, page, cur, g1-1)
+		pcEmitWord(gl, et, wd, fnt, page, cur, g1-1, evidence.WbLineEnd())
 		cur = -1
 	}
 	// Lines: consecutive words on one baseline, in order.
@@ -2840,6 +3046,7 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, pag
 	var joins int32 = 0
 	var gap int32 = 0
 	var sz int32 = 0
+	var ord int32 = 0
 	var off int32 = 0
 	for j <= nw {
 		joins = 0
@@ -2877,34 +3084,45 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, pag
 		} else {
 			// The line so far ends at `prev`: record it, then start a new one at j.
 			if lfirst >= 0 {
-				x0 = evidence.WdGet(wd, lfirst, evidence.WfX0())
-				y0 = evidence.WdGet(wd, lfirst, evidence.WfY0())
-				x1 = evidence.WdGet(wd, lfirst, evidence.WfX1())
-				y1 = evidence.WdGet(wd, lfirst, evidence.WfY1())
+				x0 = evidence.WdGet(wd, lfirst, evidence.HdX0())
+				y0 = evidence.WdGet(wd, lfirst, evidence.HdY0())
+				x1 = evidence.WdGet(wd, lfirst, evidence.HdX1())
+				y1 = evidence.WdGet(wd, lfirst, evidence.HdY1())
 				lnx = lfirst
 				for lnx <= prev {
-					if evidence.WdGet(wd, lnx, evidence.WfX0()) < x0 {
-						x0 = evidence.WdGet(wd, lnx, evidence.WfX0())
+					if evidence.WdGet(wd, lnx, evidence.HdX0()) < x0 {
+						x0 = evidence.WdGet(wd, lnx, evidence.HdX0())
 					}
-					if evidence.WdGet(wd, lnx, evidence.WfY0()) < y0 {
-						y0 = evidence.WdGet(wd, lnx, evidence.WfY0())
+					if evidence.WdGet(wd, lnx, evidence.HdY0()) < y0 {
+						y0 = evidence.WdGet(wd, lnx, evidence.HdY0())
 					}
-					if evidence.WdGet(wd, lnx, evidence.WfX1()) > x1 {
-						x1 = evidence.WdGet(wd, lnx, evidence.WfX1())
+					if evidence.WdGet(wd, lnx, evidence.HdX1()) > x1 {
+						x1 = evidence.WdGet(wd, lnx, evidence.HdX1())
 					}
-					if evidence.WdGet(wd, lnx, evidence.WfY1()) > y1 {
-						y1 = evidence.WdGet(wd, lnx, evidence.WfY1())
+					if evidence.WdGet(wd, lnx, evidence.HdY1()) > y1 {
+						y1 = evidence.WdGet(wd, lnx, evidence.HdY1())
 					}
 					lnx += 1
 				}
 				gfp = evidence.WdGet(wd, lfirst, evidence.WfGfirst())
 				axis = pcAxis(evidence.GlGet(gl, gfp, evidence.GfRot()))
-				lnx = evidence.LnNew(ln, page, x0, y0, x1, y1, lfirst, (prev-lfirst)+1, pcOffset(gl, gfp, axis))
-				evidence.LnSet(ln, lnx, evidence.LfRot(), evidence.GlGet(gl, gfp, evidence.GfRot()))
+				ord = evidence.WdGet(wd, lfirst, evidence.WfGfirst())
+				lnx = lfirst
+				for lnx <= prev {
+					if evidence.WdGet(wd, lnx, evidence.WfGfirst()) < ord {
+						ord = evidence.WdGet(wd, lnx, evidence.WfGfirst())
+					}
+					lnx += 1
+				}
+				// The baseline runs from the first word's start to the last word's end, in the
+				// order the words were SHOWN (the bidi step below re-orders the rows, not the page).
+				lnx = evidence.LnNew(ln, page, x0, y0, x1, y1, evidence.WdGet(wd, lfirst, evidence.HdBx0()), evidence.WdGet(wd, lfirst, evidence.HdBy0()), evidence.WdGet(wd, prev, evidence.HdBx1()), evidence.WdGet(wd, prev, evidence.HdBy1()), evidence.GlGet(gl, gfp, evidence.GfRot()), 0, lfirst, (prev-lfirst)+1)
+				evidence.LnSet(ln, lnx, evidence.LfOrder(), ord)
 				pcLineBidi(gl, wd, ln, lnx, lfirst, prev)
+				evidence.WdSet(wd, prev, evidence.WfWbreak(), evidence.WbLineEnd())
 				gfp = lfirst
 				for gfp <= prev {
-					evidence.WdSet(wd, gfp, evidence.WfLine(), lnx)
+					evidence.WdSet(wd, gfp, evidence.HdLine(), lnx)
 					gfp += 1
 				}
 			}
@@ -2936,8 +3154,8 @@ func pcBeginPage(cx *port.Cells, page int32) int32 {
 	port.CellsSet(cx, cMcdepth, 0)
 	port.CellsSet(cx, cMcbase, 0)
 	port.CellsSet(cx, cMcover, 0)
-	port.CellsSet(cx, cCurmcid, -1)
-	port.CellsSet(cx, cCurart, 0)
+	port.CellsSet(cx, cCurocg, -1)
+	port.CellsSet(cx, cZ, 0)
 	port.CellsSet(cx, cIntext, 0)
 	port.CellsSet(cx, cGsbase, 0)
 	fx.MxIdent(cx, cTm)
@@ -2946,7 +3164,7 @@ func pcBeginPage(cx *port.Cells, page int32) int32 {
 	return 0
 }
 
-func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, pg *port.Cells, pi int32, page int32, wd *port.Cells, ln *port.Cells) int32 {
+func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, pi int32, page int32, wd *port.Cells, ln *port.Cells) int32 {
 	// Interpret page index pi of the page table pg (page number `page`, 1-based, is
 	// what the evidence records): its content streams, then the words and lines.
 	// Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is
@@ -2984,21 +3202,22 @@ func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 		return 7
 	}
 	endcs = port.CellsLen(cs)
-	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, 0, endcs)
+	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, 0, endcs)
 	if port.CellsAt(cx, cAbort) == 1 {
 		return 7
 	}
 	if pdfsrc.PsMissed(src) {
 		return 7
 	}
-	PcGroup(gl, et, wd, ln, page, g0, w0)
+	PcGroup(gl, et, wd, ln, fnt, page, g0, w0)
 	return 0
 }
 
-func PcDocument(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, sp *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+func PcDocument(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
 	// Every page of an opened document (`pd-open` has answered 0): clears `cx`,
 	// then `pc-page` for each page. Answers 0, or 7 when the source missed.
 	PcInit(cx, ox)
+	port.CellsDrop(fnt, 0)
 	var n int32 = pdfdoc.PdPages(src, ar, dc, a, b, st, pg)
 	var i int32 = 0
 	var status int32 = 0
@@ -3006,7 +3225,7 @@ func PcDocument(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b 
 		return 7
 	}
 	for i < n {
-		status = PcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, i, i+1, wd, ln)
+		status = PcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i+1, wd, ln)
 		if status == 7 {
 			return 7
 		}

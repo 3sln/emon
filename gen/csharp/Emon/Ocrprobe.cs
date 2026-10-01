@@ -8,70 +8,275 @@ public static class Ocrprobe {
     internal static int OpCpt(int px, int dpi) {
         return (px * 7200) / dpi;
     }
-    internal static int OpBaseline(emon.Port.Cells an, int ext, int line, int cx, int dflt) {
-        // The line's baseline at pixel column `cx` (two points, integer interpolation), or `dflt`.
-        if (ext < 0) {
-            return dflt;
+    internal static int OpLd(int wdir) {
+        // The engine's writing direction as `ld`: 0 left to right, 1 right to left, 2 top to bottom.
+        if (wdir == 1) {
+            return Evidence.LdRtl();
         }
-        int l = Ocr.OxLineAt(an, ext, line);
-        int bx0 = emon.Port.CellsAt(an, l + 4);
-        int by0 = emon.Port.CellsAt(an, l + 5);
-        int bx1 = emon.Port.CellsAt(an, l + 6);
-        int by1 = emon.Port.CellsAt(an, l + 7);
-        if (bx1 <= bx0) {
-            return by1;
+        if (wdir == 2) {
+            return Evidence.LdTtb();
         }
-        return by0 + (((by1 - by0) * (cx - bx0)) / (bx1 - bx0));
+        return 0;
     }
-    internal static int OpWords(emon.Port.Cells an, int at, int page, int dpi, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext) {
+    internal static int OpGrow(emon.Port.Cells oblocks, int row, int x0, int y0, int x1, int y1) {
+        // Grow block (or paragraph) `row`'s box to hold the box (x0 y0 x1 y1).
+        if (x0 < Evidence.ObGet(oblocks, row, Evidence.ObfX0())) {
+            Evidence.ObSet(oblocks, row, Evidence.ObfX0(), x0);
+        }
+        if (y0 < Evidence.ObGet(oblocks, row, Evidence.ObfY0())) {
+            Evidence.ObSet(oblocks, row, Evidence.ObfY0(), y0);
+        }
+        if (x1 > Evidence.ObGet(oblocks, row, Evidence.ObfX1())) {
+            Evidence.ObSet(oblocks, row, Evidence.ObfX1(), x1);
+        }
+        if (y1 > Evidence.ObGet(oblocks, row, Evidence.ObfY1())) {
+            Evidence.ObSet(oblocks, row, Evidence.ObfY1(), y1);
+        }
+        return 0;
+    }
+    internal static int OpLines(emon.Port.Cells an, int ext, int view, int run, emon.Port.Cells views, emon.Port.Cells oblocks, emon.Port.Cells olines) {
+        // The blocks, paragraphs and lines of the extension, in its order. A block is a run of lines with the
+        // same block id, a paragraph a run of them with the same paragraph id inside it (-1 is an id like
+        // another); a block is followed by its paragraphs, a paragraph's lines are the rows that follow it.
+        int nl = Ocr.OxNlines(an, ext);
+        int orient = Ocr.OxOrient(an, ext);
+        int wdir = Ocr.OxWdir(an, ext);
+        int k = 0;
+        int l = 0;
+        int px = 0;
+        int py = 0;
+        int pw = 0;
+        int ph = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int bx0 = 0;
+        int by0 = 0;
+        int bx1 = 0;
+        int by1 = 0;
+        int blk = 0;
+        int par = 0;
+        int bty = 0;
+        int curblk = -2;
+        int curpar = -2;
+        int brow = -1;
+        int prow = -1;
+        int lrow = 0;
+        int bcnt = 0;
+        int fresh = 0;
+        while (k < nl) {
+            l = Ocr.OxLineAt(an, ext, k);
+            px = emon.Port.CellsAt(an, l);
+            py = emon.Port.CellsAt(an, l + 1);
+            pw = emon.Port.CellsAt(an, l + 2);
+            ph = emon.Port.CellsAt(an, l + 3);
+            x0 = Evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph);
+            y0 = Evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph);
+            x1 = Evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph);
+            y1 = Evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph);
+            bx0 = Evidence.VwPxToCpt(views, view, 0, emon.Port.CellsAt(an, l + 4), emon.Port.CellsAt(an, l + 5));
+            by0 = Evidence.VwPxToCpt(views, view, 1, emon.Port.CellsAt(an, l + 4), emon.Port.CellsAt(an, l + 5));
+            bx1 = Evidence.VwPxToCpt(views, view, 0, emon.Port.CellsAt(an, l + 6), emon.Port.CellsAt(an, l + 7));
+            by1 = Evidence.VwPxToCpt(views, view, 1, emon.Port.CellsAt(an, l + 6), emon.Port.CellsAt(an, l + 7));
+            blk = emon.Port.CellsAt(an, l + 8);
+            par = emon.Port.CellsAt(an, l + 9);
+            bty = emon.Port.CellsAt(an, l + 10);
+            fresh = 0;
+            if ((k == 0) || (blk != curblk)) {
+                brow = Evidence.ObNew(oblocks, 1, x0, y0, x1, y1, Evidence.ObBlock(), -1, run);
+                Evidence.ObSet(oblocks, brow, Evidence.ObfBtype(), bty);
+                Evidence.ObSet(oblocks, brow, Evidence.ObfOrient(), orient);
+                Evidence.ObSet(oblocks, brow, Evidence.ObfWdir(), wdir);
+                Evidence.ObSet(oblocks, brow, Evidence.ObfFirst(), brow + 1);
+                curblk = blk;
+                curpar = -2;
+            }
+            if (par != curpar) {
+                prow = Evidence.ObNew(oblocks, 1, x0, y0, x1, y1, Evidence.ObParagraph(), brow, run);
+                Evidence.ObSet(oblocks, prow, Evidence.ObfBtype(), bty);
+                Evidence.ObSet(oblocks, prow, Evidence.ObfOrient(), orient);
+                Evidence.ObSet(oblocks, prow, Evidence.ObfWdir(), wdir);
+                Evidence.ObSet(oblocks, prow, Evidence.ObfFirst(), Evidence.OlCount(olines));
+                bcnt = Evidence.ObGet(oblocks, brow, Evidence.ObfCount());
+                Evidence.ObSet(oblocks, brow, Evidence.ObfCount(), bcnt + 1);
+                curpar = par;
+                fresh = 1;
+            }
+            if (fresh == 0) {
+                OpGrow(oblocks, prow, x0, y0, x1, y1);
+                OpGrow(oblocks, brow, x0, y0, x1, y1);
+            }
+            lrow = Evidence.OlNew(olines, 1, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.EvAngle(bx1 - bx0, by1 - by0), OpLd(wdir), -1, 0);
+            Evidence.OlSet(olines, lrow, Evidence.OlfPar(), prow);
+            Evidence.OlSet(olines, lrow, Evidence.OlfRun(), run);
+            Evidence.OlSet(olines, lrow, Evidence.OlfPx(), px);
+            Evidence.OlSet(olines, lrow, Evidence.OlfPy(), py);
+            Evidence.OlSet(olines, lrow, Evidence.OlfPw(), pw);
+            Evidence.OlSet(olines, lrow, Evidence.OlfPh(), ph);
+            bcnt = Evidence.ObGet(oblocks, prow, Evidence.ObfCount());
+            Evidence.ObSet(oblocks, prow, Evidence.ObfCount(), bcnt + 1);
+            k += 1;
+        }
+        return nl;
+    }
+    internal static int OpWords(emon.Port.Cells an, int at, int ext, int view, int run, int l0, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts) {
+        // The words of the answer with their symbols and alternatives. A word's line is the extension's
+        // line index (an olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 in
+        // pixels, then mapped through the view (a word without a line has its box's bottom edge).
         int nw = Plan.AnOcrCount(an, at);
-        int ext = Ocr.OxFind(an, at);
-        int wx = -1;
+        int nl = 0;
+        int wdir = 0;
+        int tlen = 0;
         int w = Plan.AnOcrFirst(an, at);
+        int wx = -1;
         int i = 0;
+        int px = 0;
+        int py = 0;
+        int pw = 0;
+        int ph = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int bx0 = 0;
+        int by0 = 0;
+        int bx1 = 0;
+        int by1 = 0;
+        int ln = 0;
+        int lx0 = 0;
+        int ly0 = 0;
+        int lx1 = 0;
+        int ly1 = 0;
+        int lrow = -1;
+        int ts = 0;
+        int nc = 0;
+        int k = 0;
+        int ow = 0;
+        int j = 0;
+        int ns = 0;
+        int sy = 0;
+        int sym = 0;
+        int ncp = 0;
+        int nalt = 0;
+        int a = 0;
+        int m = 0;
+        int acp = 0;
+        int cpv = 0;
+        int a0 = 0;
+        int lcnt = 0;
         if (ext >= 0) {
             wx = Ocr.OxFirstWord(an, ext);
+            nl = Ocr.OxNlines(an, ext);
+            wdir = Ocr.OxWdir(an, ext);
         }
         while (i < nw) {
-            int px = Plan.AwGet(an, w, Plan.AwX());
-            int py = Plan.AwGet(an, w, Plan.AwY());
-            int pw = Plan.AwGet(an, w, Plan.AwW());
-            int ph = Plan.AwGet(an, w, Plan.AwH());
-            int ln = Plan.AwGet(an, w, Plan.AwLine());
-            int ow = Evidence.OwNew(ocrwords, page, OpCpt(px, dpi), OpCpt(py, dpi), OpCpt(px + pw, dpi), OpCpt(py + ph, dpi), Plan.AwGet(an, w, Plan.AwConf()));
-            int ts = Evidence.EtxLen(etext);
-            int nc = Plan.AwGet(an, w, Plan.AwLen());
-            int k = 0;
+            px = Plan.AwGet(an, w, Plan.AwX());
+            py = Plan.AwGet(an, w, Plan.AwY());
+            pw = Plan.AwGet(an, w, Plan.AwW());
+            ph = Plan.AwGet(an, w, Plan.AwH());
+            x0 = Evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph);
+            y0 = Evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph);
+            x1 = Evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph);
+            y1 = Evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph);
+            ln = Plan.AwGet(an, w, Plan.AwLine());
+            lrow = -1;
+            bx0 = x0;
+            by0 = y1;
+            bx1 = x1;
+            by1 = y1;
+            if ((wx >= 0) && ((ln >= 0) && (ln < nl))) {
+                lrow = l0 + ln;
+                // The line's baseline is already in centipoints (mapped once, in `op-lines`); the word's endpoints
+                // are it evaluated at the word's left and right edge, with no pixel truncation in between (one
+                // centipoint at most, not a pixel). The edge's x is the view's for an upright raster.
+                bx0 = Evidence.VwPxToCpt(views, view, 0, px, py);
+                bx1 = Evidence.VwPxToCpt(views, view, 0, px + pw, py);
+                lx0 = Evidence.OlGet(olines, lrow, Evidence.LhBx0());
+                ly0 = Evidence.OlGet(olines, lrow, Evidence.LhBy0());
+                lx1 = Evidence.OlGet(olines, lrow, Evidence.LhBx1());
+                ly1 = Evidence.OlGet(olines, lrow, Evidence.LhBy1());
+                by0 = Evidence.EvBaselineAt(lx0, ly0, lx1, ly1, bx0);
+                by1 = Evidence.EvBaselineAt(lx0, ly0, lx1, ly1, bx1);
+            }
+            ts = Evidence.EtxLen(etext);
+            nc = Plan.AwGet(an, w, Plan.AwLen());
+            k = 0;
             while (k < nc) {
                 Evidence.EtxAppendCp(etext, Plan.AwCp(an, w, k));
                 k += 1;
             }
-            Evidence.OwSet(ocrwords, ow, Evidence.OfTstart(), ts);
-            Evidence.OwSet(ocrwords, ow, Evidence.OfTlen(), nc);
-            Evidence.OwSet(ocrwords, ow, Evidence.OfLine(), ln);
-            Evidence.OwSet(ocrwords, ow, Evidence.OfBlock(), Plan.AwGet(an, w, Plan.AwBlock()));
+            ow = Evidence.OwNew(owords, 1, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.EvAngle(bx1 - bx0, by1 - by0), OpLd(wdir), ts, nc, lrow, Plan.AwGet(an, w, Plan.AwConf()), -1);
+            Evidence.OwSet(owords, ow, Evidence.OwfRun(), run);
+            Evidence.OwSet(owords, ow, Evidence.OwfPx(), px);
+            Evidence.OwSet(owords, ow, Evidence.OwfPy(), py);
+            Evidence.OwSet(owords, ow, Evidence.OwfPw(), pw);
+            Evidence.OwSet(owords, ow, Evidence.OwfPh(), ph);
+            if (lrow >= 0) {
+                lcnt = Evidence.OlGet(olines, lrow, Evidence.LhCount());
+                if (lcnt == 0) {
+                    Evidence.OlSet(olines, lrow, Evidence.LhFirst(), ow);
+                }
+                Evidence.OlSet(olines, lrow, Evidence.LhCount(), lcnt + 1);
+            }
             if (wx >= 0) {
-                Evidence.OwSet(ocrwords, ow, Evidence.OfBaseline(), OpCpt(OpBaseline(an, ext, ln, px + (pw / 2), py + ph), dpi));
-                Evidence.OwSet(ocrwords, ow, Evidence.OfFlags(), Ocr.OxWflags(an, wx));
-                Evidence.OwSet(ocrwords, ow, Evidence.OfLang(), Ocr.OxWlang(an, wx));
-                int ns = Ocr.OxNsym(an, wx);
-                int s = Ocr.OxFirstSym(an, wx);
-                int j = 0;
-                int off = 0;
+                Evidence.OwSet(owords, ow, Evidence.OwfStyle(), Ocr.OxWflags(an, wx));
+                Evidence.OwSet(owords, ow, Evidence.OwfLang(), Ocr.OxWlang(an, wx));
+                ns = Ocr.OxNsym(an, wx);
+                Evidence.OwSet(owords, ow, Evidence.OwfSfirst(), Evidence.OsCount(osyms));
+                Evidence.OwSet(owords, ow, Evidence.OwfScount(), ns);
+                sy = Ocr.OxFirstSym(an, wx);
+                j = 0;
                 while (j < ns) {
-                    int ncp = emon.Port.CellsAt(an, s + 5);
-                    int nalt = emon.Port.CellsAt(an, s + 6);
-                    int a = Ocr.OxSymAlts(an, s);
-                    int m = 0;
+                    ncp = emon.Port.CellsAt(an, sy + 5);
+                    nalt = emon.Port.CellsAt(an, sy + 6);
+                    px = emon.Port.CellsAt(an, sy);
+                    py = emon.Port.CellsAt(an, sy + 1);
+                    pw = emon.Port.CellsAt(an, sy + 2);
+                    ph = emon.Port.CellsAt(an, sy + 3);
+                    ts = -1;
+                    tlen = 0;
+                    cpv = -1;
+                    if (ncp > 1) {
+                        tlen = ncp;
+                    }
+                    if (ncp > 0) {
+                        cpv = emon.Port.CellsAt(an, sy + 7);
+                    }
+                    if (ncp > 1) {
+                        ts = Evidence.EtxLen(etext);
+                        k = 0;
+                        while (k < ncp) {
+                            Evidence.EtxAppendCp(etext, emon.Port.CellsAt(an, (sy + 7) + k));
+                            k += 1;
+                        }
+                    }
+                    sym = Evidence.OsNew(osyms, 1, Evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph), Evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph), Evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph), Evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph), cpv, ts, tlen, ow);
+                    Evidence.OsSet(osyms, sym, Evidence.OsfConf(), emon.Port.CellsAt(an, sy + 4));
+                    Evidence.OsSet(osyms, sym, Evidence.OsfPx(), px);
+                    Evidence.OsSet(osyms, sym, Evidence.OsfPy(), py);
+                    Evidence.OsSet(osyms, sym, Evidence.OsfPw(), pw);
+                    Evidence.OsSet(osyms, sym, Evidence.OsfPh(), ph);
+                    a0 = Evidence.OaCount(oalts);
+                    a = Ocr.OxSymAlts(an, sy);
+                    m = 0;
                     while (m < nalt) {
-                        if (emon.Port.CellsAt(an, a) > 0) {
-                            Evidence.AltAdd(ocrwords, alts, ow, off, emon.Port.CellsAt(an, a + 2), emon.Port.CellsAt(an, a + 1));
+                        acp = emon.Port.CellsAt(an, a);
+                        if (acp > 0) {
+                            ts = Evidence.EtxLen(etext);
+                            k = 0;
+                            while (k < acp) {
+                                Evidence.EtxAppendCp(etext, emon.Port.CellsAt(an, (a + 2) + k));
+                                k += 1;
+                            }
+                            Evidence.OaAdd(oalts, sym, ts, acp, emon.Port.CellsAt(an, a + 1));
                         }
                         a = Ocr.OxAltNext(an, a);
                         m += 1;
                     }
-                    off += ncp;
-                    s = Ocr.OxSymNext(an, s);
+                    Evidence.OsSet(osyms, sym, Evidence.OsfAfirst(), a0);
+                    Evidence.OsSet(osyms, sym, Evidence.OsfAcount(), Evidence.OaCount(oalts) - a0);
+                    sy = Ocr.OxSymNext(an, sy);
                     j += 1;
                 }
                 wx = Ocr.OxWordNext(an, wx);
@@ -79,11 +284,57 @@ public static class Ocrprobe {
             w = Plan.AwNext(an, w);
             i += 1;
         }
+        return nw;
+    }
+    internal static int OpAnswer(emon.Port.Cells an, int at, int view, int request, emon.Port.Cells views, emon.Port.Cells epages, emon.Port.Cells etext, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells feats) {
+        // One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives,
+        // and the stage 1 features of every word.
+        int ext = Ocr.OxFind(an, at);
+        int run = Evidence.OrNew(oruns, 1, view);
+        int b0 = Evidence.ObCount(oblocks);
+        int l0 = Evidence.OlCount(olines);
+        int w0 = Evidence.OwCount(owords);
+        int nl = 0;
+        int nb = 0;
+        int nw = 0;
+        int w = 0;
+        int rotmed = 0;
+        Evidence.OrSet(oruns, run, Evidence.OrfRequest(), request);
+        Evidence.OrSet(oruns, run, Evidence.OrfRound(), 1);
+        Evidence.OrSet(oruns, run, Evidence.OrfPsm(), 3);
+        Evidence.OrSet(oruns, run, Evidence.OrfFlags(), Ocr.OcfSymbols() + Ocr.OcfOsd());
+        if (ext >= 0) {
+            Evidence.OrSet(oruns, run, Evidence.OrfOrient(), Ocr.OxOrient(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfWdir(), Ocr.OxWdir(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfLorder(), Ocr.OxTlorder(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfDeskew(), Ocr.OxDeskew(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfOsd(), Ocr.OxOsd(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfScript(), Ocr.OxScript(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfSconf(), Ocr.OxSconf(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfOconf(), Ocr.OxOconf(an, ext));
+            nl = OpLines(an, ext, view, run, views, oblocks, olines);
+        }
+        nw = OpWords(an, at, ext, view, run, l0, views, etext, olines, owords, osyms, oalts);
+        Evidence.OrSet(oruns, run, Evidence.OrfBfirst(), b0);
+        nb = Evidence.ObCount(oblocks) - b0;
+        Evidence.OrSet(oruns, run, Evidence.OrfBcount(), nb);
+        Evidence.OrSet(oruns, run, Evidence.OrfLfirst(), l0);
+        nl = Evidence.OlCount(olines) - l0;
+        Evidence.OrSet(oruns, run, Evidence.OrfLcount(), nl);
+        Evidence.OrSet(oruns, run, Evidence.OrfWfirst(), w0);
+        Evidence.OrSet(oruns, run, Evidence.OrfWcount(), nw);
+        nl = Evidence.OlCount(olines) - l0;
+        rotmed = Evidence.EvRotMedian(olines, l0, nl);
+        w = w0;
+        while (w < (w0 + nw)) {
+            Evidence.EvFeatOcr(feats, epages, etext, olines, owords, osyms, oalts, w, rotmed, 100);
+            w += 1;
+        }
         return 0;
     }
-    public static int OpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells components, emon.Port.Cells ocrwords, emon.Port.Cells alts, emon.Port.Cells etext, emon.Port.Cells spans) {
+    public static int OpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
         // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-        Evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans);
+        Evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         int n = emon.Port.SrcLen(s);
         int mid = emon.Port.SrcU8(s, n / 2);
         if (emon.Port.SrcMissed(s)) {
@@ -109,9 +360,13 @@ public static class Ocrprobe {
         if (dpi < 1) {
             dpi = 72;
         }
+        Evidence.EpNew(epages, 1, OpCpt(w1, dpi), OpCpt(h1, dpi));
+        Evidence.EpSet(epages, 0, Evidence.EpfFlags(), Evidence.EgRaster());
+        Evidence.EpSet(epages, 0, Evidence.EpfDpi(), dpi * 100);
+        Evidence.VwNew(views, 1, Evidence.VkRender(), 1, -1, w1, h1, dpi * 100, Plan.LayFull(), -1, 0, 0, 0, 0, 0);
         Evidence.ImNew(images, 1, 0, 0, OpCpt(w1, dpi), OpCpt(h1, dpi), mid, w1, h1);
         if (Plan.AnOk(an, o2) == 1) {
-            OpWords(an, o2, 1, dpi, ocrwords, alts, etext);
+            OpAnswer(an, o2, 0, 2, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         }
         return Plan.UsDone();
     }

@@ -40,7 +40,7 @@
          (remove nil?))))
 
 (defn ocr-text [evidence]
-  (str/join " " (map :text (:ocrwords evidence))))
+  (str/join " " (map :text (:owords evidence))))
 
 (defn dump-evidence [dump-text]
   (let [line (first (filter #(str/starts-with? % "evidence: ") (str/split-lines dump-text)))]
@@ -53,7 +53,7 @@
         o (norm (ocr-text ev))
         d (lev g o)]
     {:gold-chars (count g) :ocr-chars (count o) :distance d
-     :cer (/ (double d) (count g)) :words (count (:ocrwords ev))
+     :cer (/ (double d) (count g)) :words (count (:owords ev))
      :gold g :ocr o}))
 
 (when (= *file* (System/getProperty "babashka.file"))

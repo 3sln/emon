@@ -5,9 +5,9 @@ use crate::emon::evidence::*;
 
 pub fn cr_glyph_text(mut t: &mut String, gl: &mut crate::port::Cells, et: &mut crate::port::Cells, g: i32) -> i32 {
     // The text of glyph g: its code points, or U+FFFD.
-    let ts: i32 = gl_get(gl, g, gf_tstart());
-    let tl: i32 = gl_get(gl, g, gf_tlen());
-    let cp: i32 = gl_get(gl, g, gf_cp());
+    let ts: i32 = gl_get(gl, g, ch_tstart());
+    let tl: i32 = gl_get(gl, g, ch_tlen());
+    let cp: i32 = gl_get(gl, g, ch_cp());
     let mut k: i32 = 0;
     if (ts >= 0) && (tl > 0) {
         while k < tl {
@@ -29,7 +29,7 @@ pub fn cr_page_text(mut t: &mut String, gl: &mut crate::port::Cells, et: &mut cr
     let n: i32 = gl_count(gl);
     let mut g: i32 = 0;
     while g < n {
-        if gl_get(gl, g, gf_page()) == page {
+        if gl_get(gl, g, ch_page()) == page {
             cr_glyph_text(t, gl, et, g);
         }
         g += 1;
@@ -48,8 +48,8 @@ pub fn cr_all_text(mut t: &mut String, gl: &mut crate::port::Cells, et: &mut cra
 }
 pub fn cr_word(mut t: &mut String, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
     // The text of word w.
-    let s: i32 = wd_get(wd, w, wf_tstart());
-    let n: i32 = wd_get(wd, w, wf_tlen());
+    let s: i32 = wd_get(wd, w, hd_tstart());
+    let n: i32 = wd_get(wd, w, hd_tlen());
     let mut k: i32 = 0;
     if s < 0 {
         return 0;
@@ -85,10 +85,10 @@ pub fn cr_digest(gl: &mut crate::port::Cells, et: &mut crate::port::Cells, page:
     let mut cp: i32 = 0;
     let mut k: i32 = 0;
     while g < n {
-        if gl_get(gl, g, gf_page()) == page {
-            ts = gl_get(gl, g, gf_tstart());
-            tl = gl_get(gl, g, gf_tlen());
-            cp = gl_get(gl, g, gf_cp());
+        if gl_get(gl, g, ch_page()) == page {
+            ts = gl_get(gl, g, ch_tstart());
+            tl = gl_get(gl, g, ch_tlen());
+            cp = gl_get(gl, g, ch_cp());
             if (ts >= 0) && (tl > 0) {
                 k = 0;
                 while k < tl {
@@ -125,15 +125,55 @@ pub(crate) fn cr_run(mut t: &mut String, et: &mut crate::port::Cells, s: i32, n:
     }
     return 0;
 }
-pub fn cr_span(mut t: &mut String, sp: &mut crate::port::Cells, et: &mut crate::port::Cells, i: i32) -> i32 {
-    // Span i as one row, without a newline: index, tag, MCID, artifact, type, subtype,
-    // ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated.
-    let art: i32 = sp_get(sp, i, sf_artifact());
+pub(crate) fn cr_type_name(mut t: &mut String, ty: i32) -> i32 {
+    // A marked-content /Type as the PDF spells it; `-` for none or for a name that is none of them.
+    if ty == 1 {
+        crate::port::text_ascii(t, "Pagination");
+        return 0;
+    }
+    if ty == 3 {
+        crate::port::text_ascii(t, "Layout");
+        return 0;
+    }
+    if ty == 4 {
+        crate::port::text_ascii(t, "Background");
+        return 0;
+    }
+    if ty == 6 {
+        crate::port::text_ascii(t, "Page");
+        return 0;
+    }
+    crate::port::text_ascii(t, "-");
+    return 0;
+}
+pub(crate) fn cr_subtype_name(mut t: &mut String, su: i32) -> i32 {
+    // A marked-content /Subtype as the PDF spells it; `-` for none or another name.
+    if su == 1 {
+        crate::port::text_ascii(t, "Header");
+        return 0;
+    }
+    if su == 2 {
+        crate::port::text_ascii(t, "Footer");
+        return 0;
+    }
+    if su == 3 {
+        crate::port::text_ascii(t, "Watermark");
+        return 0;
+    }
+    crate::port::text_ascii(t, "-");
+    return 0;
+}
+pub fn cr_span(mut t: &mut String, mk: &mut crate::port::Cells, et: &mut crate::port::Cells, i: i32) -> i32 {
+    // Mark i as one row, without a newline: index, tag, MCID, artifact class, /Type, /Subtype,
+    // ActualText, Alt, E, Lang, first glyph, glyphs, flags, stm, parent, tab-separated. The class
+    // is the D101 one, made from the mark's (/Type, /Subtype) by `mk-artifact-class`; the type and
+    // subtype are the PDF's names for the codes (a name that is none of them prints `-`).
+    let art: i32 = mk_artifact_class(mk_get(mk, i, mkf_kind()), mk_get(mk, i, mkf_artype()), mk_get(mk, i, mkf_arsub()));
     crate::port::text_i32(t, i);
     crate::port::text_cp(t, 9);
-    cr_run(t, et, sp_get(sp, i, sf_tag()), sp_get(sp, i, sf_taglen()));
+    cr_run(t, et, mk_get(mk, i, mkf_tstart()), mk_get(mk, i, mkf_tlen()));
     crate::port::text_cp(t, 9);
-    crate::port::text_i32(t, sp_get(sp, i, sf_mcid()));
+    crate::port::text_i32(t, mk_get(mk, i, mkf_mcid()));
     crate::port::text_cp(t, 9);
     if art == 0 {
         crate::port::text_ascii(t, "-");
@@ -141,27 +181,53 @@ pub fn cr_span(mut t: &mut String, sp: &mut crate::port::Cells, et: &mut crate::
         ar_emit_name(t, art);
     }
     crate::port::text_cp(t, 9);
-    cr_run(t, et, sp_get(sp, i, sf_type()), sp_get(sp, i, sf_typelen()));
+    cr_type_name(t, mk_get(mk, i, mkf_artype()));
     crate::port::text_cp(t, 9);
-    cr_run(t, et, sp_get(sp, i, sf_subtype()), sp_get(sp, i, sf_subtypelen()));
+    cr_subtype_name(t, mk_get(mk, i, mkf_arsub()));
     crate::port::text_cp(t, 9);
-    cr_run(t, et, sp_get(sp, i, sf_actual()), sp_get(sp, i, sf_actuallen()));
+    cr_run(t, et, mk_get(mk, i, mkf_actual()), mk_get(mk, i, mkf_actuallen()));
     crate::port::text_cp(t, 9);
-    cr_run(t, et, sp_get(sp, i, sf_alt()), sp_get(sp, i, sf_altlen()));
+    cr_run(t, et, mk_get(mk, i, mkf_alt()), mk_get(mk, i, mkf_altlen()));
     crate::port::text_cp(t, 9);
-    cr_run(t, et, sp_get(sp, i, sf_exp()), sp_get(sp, i, sf_explen()));
+    cr_run(t, et, mk_get(mk, i, mkf_exp()), mk_get(mk, i, mkf_explen()));
     crate::port::text_cp(t, 9);
-    cr_run(t, et, sp_get(sp, i, sf_lang()), sp_get(sp, i, sf_langlen()));
+    cr_run(t, et, mk_get(mk, i, mkf_lang()), mk_get(mk, i, mkf_langlen()));
     crate::port::text_cp(t, 9);
-    crate::port::text_i32(t, sp_get(sp, i, sf_gfirst()));
+    crate::port::text_i32(t, mk_get(mk, i, mkf_gfirst()));
     crate::port::text_cp(t, 9);
-    crate::port::text_i32(t, sp_get(sp, i, sf_gcount()));
+    crate::port::text_i32(t, mk_get(mk, i, mkf_gcount()));
     crate::port::text_cp(t, 9);
-    crate::port::text_i32(t, sp_get(sp, i, sf_flags()));
+    crate::port::text_i32(t, mk_get(mk, i, mkf_flags()));
     crate::port::text_cp(t, 9);
-    crate::port::text_i32(t, sp_get(sp, i, sf_stm()));
+    crate::port::text_i32(t, mk_get(mk, i, mkf_stm()));
     crate::port::text_cp(t, 9);
-    crate::port::text_i32(t, sp_get(sp, i, sf_parent()));
+    crate::port::text_i32(t, mk_get(mk, i, mkf_parent()));
+    return 0;
+}
+pub fn cr_mark_mcid(mk: &mut crate::port::Cells, mark: i32) -> i32 {
+    // What v0 stored in a glyph's `mcid` (D101): the MCID of the innermost mark on the chain that has one,
+    // -1 when none does.
+    let mut t: i32 = mark;
+    let mut m: i32 = -1;
+    while t >= 0 {
+        m = mk_get(mk, t, mkf_mcid());
+        if m >= 0 {
+            return m;
+        }
+        t = mk_get(mk, t, mkf_parent());
+    }
+    return -1;
+}
+pub fn cr_mark_class(mk: &mut crate::port::Cells, mark: i32) -> i32 {
+    // What v0 stored in a glyph's `artifact` (D101): the class of the nearest /Artifact mark on the chain
+    // (`mk-artifact-class`), 0 when none is.
+    let mut t: i32 = mark;
+    while t >= 0 {
+        if mk_get(mk, t, mkf_kind()) == 1 {
+            return mk_artifact_class(1, mk_get(mk, t, mkf_artype()), mk_get(mk, t, mkf_arsub()));
+        }
+        t = mk_get(mk, t, mkf_parent());
+    }
     return 0;
 }
 pub fn cr_page_lines(mut t: &mut String, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, page: i32) -> i32 {
@@ -174,13 +240,13 @@ pub fn cr_page_lines(mut t: &mut String, wd: &mut crate::port::Cells, ln: &mut c
     let mut wn: i32 = 0;
     let mut firstline: i32 = 1;
     while l < nl {
-        if ln_get(ln, l, lf_page()) == page {
+        if ln_get(ln, l, lh_page()) == page {
             if firstline == 0 {
                 crate::port::text_cp(t, 8232);
             }
             firstline = 0;
-            w0 = ln_get(ln, l, lf_wfirst());
-            wn = ln_get(ln, l, lf_wcount());
+            w0 = ln_get(ln, l, lh_first());
+            wn = ln_get(ln, l, lh_count());
             w = 0;
             while w < wn {
                 if w > 0 {

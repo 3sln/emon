@@ -9,18 +9,24 @@ import (
 	"emon/port"
 )
 
-func ppWords(an *port.Cells, at int32, page int32, dpi100 int32, ocrwords *port.Cells, etext *port.Cells) int32 {
-	// One OCR answer's words as OCR evidence on `page`; `dpi100` is the
-	// resolution (x100) of the bitmap the boxes are in.
+func ppWords(an *port.Cells, at int32, page int32, view int32, request int32, psm int32, views *port.Cells, oruns *port.Cells, owords *port.Cells, etext *port.Cells) int32 {
+	// One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
 	var nw int32 = plan.AnOcrCount(an, at)
+	var run int32 = evidence.OrNew(oruns, page, view)
+	var w0 int32 = evidence.OwCount(owords)
 	var w int32 = plan.AnOcrFirst(an, at)
 	var i int32 = 0
+	evidence.OrSet(oruns, run, evidence.OrfRequest(), request)
+	evidence.OrSet(oruns, run, evidence.OrfPsm(), psm)
 	for i < nw {
-		var x0 int32 = (plan.AwGet(an, w, plan.AwX()) * 720000) / dpi100
-		var y0 int32 = (plan.AwGet(an, w, plan.AwY()) * 720000) / dpi100
-		var x1 int32 = ((plan.AwGet(an, w, plan.AwX()) + plan.AwGet(an, w, plan.AwW())) * 720000) / dpi100
-		var y1 int32 = ((plan.AwGet(an, w, plan.AwY()) + plan.AwGet(an, w, plan.AwH())) * 720000) / dpi100
-		var ow int32 = evidence.OwNew(ocrwords, page, x0, y0, x1, y1, plan.AwGet(an, w, plan.AwConf()))
+		var px int32 = plan.AwGet(an, w, plan.AwX())
+		var py int32 = plan.AwGet(an, w, plan.AwY())
+		var pw int32 = plan.AwGet(an, w, plan.AwW())
+		var ph int32 = plan.AwGet(an, w, plan.AwH())
+		var x0 int32 = evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph)
+		var y0 int32 = evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph)
+		var x1 int32 = evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph)
+		var y1 int32 = evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph)
 		var ts int32 = evidence.EtxLen(etext)
 		var nc int32 = plan.AwGet(an, w, plan.AwLen())
 		var k int32 = 0
@@ -28,19 +34,19 @@ func ppWords(an *port.Cells, at int32, page int32, dpi100 int32, ocrwords *port.
 			evidence.EtxAppendCp(etext, plan.AwCp(an, w, k))
 			k += 1
 		}
-		evidence.OwSet(ocrwords, ow, evidence.OfTstart(), ts)
-		evidence.OwSet(ocrwords, ow, evidence.OfTlen(), nc)
-		evidence.OwSet(ocrwords, ow, evidence.OfLine(), plan.AwGet(an, w, plan.AwLine()))
-		evidence.OwSet(ocrwords, ow, evidence.OfBlock(), plan.AwGet(an, w, plan.AwBlock()))
+		var ow int32 = evidence.OwNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, plan.AwGet(an, w, plan.AwConf()), -1)
+		evidence.OwSet(owords, ow, evidence.OwfRun(), run)
 		w = plan.AwNext(an, w)
 		i += 1
 	}
+	evidence.OrSet(oruns, run, evidence.OrfWfirst(), w0)
+	evidence.OrSet(oruns, run, evidence.OrfWcount(), nw)
 	return 0
 }
 
-func PpUnit(s *port.Src, an *port.Cells, rq *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, paths *port.Cells, images *port.Cells, components *port.Cells, ocrwords *port.Cells, alts *port.Cells, etext *port.Cells, spans *port.Cells) int32 {
+func PpUnit(s *port.Src, an *port.Cells, rq *port.Cells, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
 	// One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
-	evidence.EvInit(glyphs, words, lines, paths, images, components, ocrwords, alts, etext, spans)
+	evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	var n int32 = port.SrcLen(s)
 	var mid int32 = port.SrcU8(s, n/2)
 	var tail int32 = port.SrcU8(s, n-1)
@@ -87,9 +93,10 @@ func PpUnit(s *port.Src, an *port.Cells, rq *port.Cells, glyphs *port.Cells, wor
 		if dd1 < 1 {
 			dd1 = 7200
 		}
+		var v1 int32 = evidence.VwNew(views, 1, evidence.VkRender(), 1, -1, w1, h1, dd1, plan.LayFull(), -1, 0, 0, 0, 0, 0)
 		evidence.ImNew(images, 1, 0, 0, (w1*720000)/dd1, (h1*720000)/dd1, mid, w1, h1)
 		if plan.AnOk(an, o3) == 1 {
-			ppWords(an, o3, 1, dd1, ocrwords, etext)
+			ppWords(an, o3, 1, v1, 3, 6, views, oruns, owords, etext)
 		}
 	}
 	if plan.AnOk(an, r2) == 1 {
@@ -99,9 +106,10 @@ func PpUnit(s *port.Src, an *port.Cells, rq *port.Cells, glyphs *port.Cells, wor
 		if dd2 < 1 {
 			dd2 = 7200
 		}
+		var v2 int32 = evidence.VwNew(views, 2, evidence.VkDecode(), 2, -1, w2, h2, dd2, plan.LayFull(), -1, 0, 0, 0, 0, 0)
 		evidence.ImNew(images, 2, 0, 0, (w2*720000)/dd2, (h2*720000)/dd2, tail, w2, h2)
 		if plan.AnOk(an, o4) == 1 {
-			ppWords(an, o4, 2, dd2, ocrwords, etext)
+			ppWords(an, o4, 2, v2, 4, 3, views, oruns, owords, etext)
 		}
 	}
 	return plan.UsDone()

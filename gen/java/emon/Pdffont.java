@@ -274,6 +274,12 @@ public final class Pdffont {
     public static int pfnHasTounicode(emon.Port.Cells f) {
         return emon.Port.cellsAt(f, H_HASTU);
     }
+    public static int pfnFlags(emon.Port.Cells f) {
+        return emon.Port.cellsAt(f, H_FLAGS);
+    }
+    public static int pfnEncoding(emon.Port.Cells f) {
+        return emon.Port.cellsAt(f, H_ENC);
+    }
     public static int pfnDw2V(emon.Port.Cells f) {
         return emon.Port.cellsAt(f, H_DW2V);
     }

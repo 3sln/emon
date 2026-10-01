@@ -71,8 +71,8 @@ public final class Pdfcontent {
     public static final int C_MCDEPTH = 592;
     public static final int C_MCBASE = 593;
     public static final int C_MCOVER = 594;
-    public static final int C_CURMCID = 595;
-    public static final int C_CURART = 596;
+    public static final int C_CUROCG = 595;
+    public static final int C_Z = 596;
     public static final int C_FLIM = 597;
     public static final int C_INTEXT = 598;
     public static final int C_GSBASE = 599;
@@ -105,6 +105,7 @@ public final class Pdfcontent {
     public static final int G_COLOR = 26;
     public static final int G_ALPHA = 27;
     public static final int G_FAM = 28;
+    public static final int G_FOBJ = 29;
     public static final int MAX_ENT = 4096;
     public static final int OX_BASE = 16384;
     public static final int K_NUM = 1;
@@ -932,6 +933,162 @@ public final class Pdfcontent {
         }
         return Pdffont.pfnWidth(f3, code);
     }
+    public static int pcFR(emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int which) {
+        // A font's descriptor facts for the `fonts` row: which 0 subtype, 1 /Flags, 2 has a ToUnicode,
+        // 3 base encoding, 4 kind (1 simple).
+        if (slot == 0) {
+            if (which == 0) {
+                return Pdffont.pfnSubtype(f0);
+            }
+            if (which == 1) {
+                return Pdffont.pfnFlags(f0);
+            }
+            if (which == 2) {
+                return Pdffont.pfnHasTounicode(f0);
+            }
+            if (which == 3) {
+                return Pdffont.pfnEncoding(f0);
+            }
+            return Pdffont.pfnKindOf(f0);
+        }
+        if (slot == 1) {
+            if (which == 0) {
+                return Pdffont.pfnSubtype(f1);
+            }
+            if (which == 1) {
+                return Pdffont.pfnFlags(f1);
+            }
+            if (which == 2) {
+                return Pdffont.pfnHasTounicode(f1);
+            }
+            if (which == 3) {
+                return Pdffont.pfnEncoding(f1);
+            }
+            return Pdffont.pfnKindOf(f1);
+        }
+        if (slot == 2) {
+            if (which == 0) {
+                return Pdffont.pfnSubtype(f2);
+            }
+            if (which == 1) {
+                return Pdffont.pfnFlags(f2);
+            }
+            if (which == 2) {
+                return Pdffont.pfnHasTounicode(f2);
+            }
+            if (which == 3) {
+                return Pdffont.pfnEncoding(f2);
+            }
+            return Pdffont.pfnKindOf(f2);
+        }
+        if (which == 0) {
+            return Pdffont.pfnSubtype(f3);
+        }
+        if (which == 1) {
+            return Pdffont.pfnFlags(f3);
+        }
+        if (which == 2) {
+            return Pdffont.pfnHasTounicode(f3);
+        }
+        if (which == 3) {
+            return Pdffont.pfnEncoding(f3);
+        }
+        return Pdffont.pfnKindOf(f3);
+    }
+    public static int pcNameFind(emon.Port.Cells ar, int nh, int n, int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
+        // 1 when the name nh contains the n (1..7) characters c0.. in a row.
+        int ln = Pdflex.plNameLen(ar, nh);
+        int i = 0;
+        int ok = 1;
+        while ((i + n) <= ln) {
+            ok = 1;
+            if (Pdflex.plNameByte(ar, nh, i) != c0) {
+                ok = 0;
+            }
+            if ((n > 1) && (Pdflex.plNameByte(ar, nh, i + 1) != c1)) {
+                ok = 0;
+            }
+            if ((n > 2) && (Pdflex.plNameByte(ar, nh, i + 2) != c2)) {
+                ok = 0;
+            }
+            if ((n > 3) && (Pdflex.plNameByte(ar, nh, i + 3) != c3)) {
+                ok = 0;
+            }
+            if ((n > 4) && (Pdflex.plNameByte(ar, nh, i + 4) != c4)) {
+                ok = 0;
+            }
+            if ((n > 5) && (Pdflex.plNameByte(ar, nh, i + 5) != c5)) {
+                ok = 0;
+            }
+            if ((n > 6) && (Pdflex.plNameByte(ar, nh, i + 6) != c6)) {
+                ok = 0;
+            }
+            if (ok == 1) {
+                return 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int pcFontRow(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells fnt, emon.Port.Cells et, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int slot, int status, int key) {
+        // The `fonts` row of a font the document shows for the first time (its row is its id): object
+        // number, subtype, /Flags, whether it has a ToUnicode, base encoding, /BaseFont, ascent, descent,
+        // the width of a space (simple fonts), and a style from the flags and the name. P1.6 reads no
+        // font programs, /ItalicAngle or /StemV (`pdfnames` has no such names): program 0, italic angle 0,
+        // stem -1. A font that would not load has subtype 0 and no metrics.
+        int row = Evidence.foNew(fnt, emon.Port.cellsAt(cx, C_CUR + G_FOBJ), 0);
+        int nh = Pdfdoc.pdDget(src, ar, dc, a, b, st, key, Pdfnames.pnBaseFont());
+        int flags = 0;
+        int sty = 0;
+        int i = 0;
+        int start = 0;
+        int ln = 0;
+        if (status == 0) {
+            Evidence.foSet(fnt, row, Evidence.fnfSubtype(), pcFR(f0, f1, f2, f3, slot, 0));
+            flags = pcFR(f0, f1, f2, f3, slot, 1);
+            Evidence.foSet(fnt, row, Evidence.fnfFlags(), flags);
+            Evidence.foSet(fnt, row, Evidence.fnfTounicode(), pcFR(f0, f1, f2, f3, slot, 2));
+            Evidence.foSet(fnt, row, Evidence.fnfEnc(), pcFR(f0, f1, f2, f3, slot, 3));
+            Evidence.foSet(fnt, row, Evidence.fnfAsc(), pcFQ(f0, f1, f2, f3, slot, 0));
+            Evidence.foSet(fnt, row, Evidence.fnfDesc(), pcFQ(f0, f1, f2, f3, slot, 1));
+            if (pcFR(f0, f1, f2, f3, slot, 4) == 1) {
+                Evidence.foSet(fnt, row, Evidence.fnfSpace(), pcFWidth(f0, f1, f2, f3, slot, 32));
+            }
+        }
+        if ((nh != 0) && (Pdflex.plKindOf(ar, nh) == 4)) {
+            ln = Pdflex.plNameLen(ar, nh);
+            start = emon.Port.cellsLen(et);
+            while (i < ln) {
+                Evidence.etxAppendCp(et, Pdflex.plNameByte(ar, nh, i));
+                i += 1;
+            }
+            Evidence.foSet(fnt, row, Evidence.fnfTstart(), start);
+            Evidence.foSet(fnt, row, Evidence.fnfTlen(), ln);
+            if (pcNameFind(ar, nh, 4, 66, 111, 108, 100, 0, 0, 0) == 1) {
+                sty |= Model.syBold();
+            }
+            if (pcNameFind(ar, nh, 6, 73, 116, 97, 108, 105, 99, 0) == 1) {
+                sty |= Model.syItalic();
+            }
+            if (pcNameFind(ar, nh, 7, 79, 98, 108, 105, 113, 117, 101) == 1) {
+                sty |= Model.syItalic();
+            }
+        }
+        if ((flags & 1) != 0) {
+            sty |= Model.syMono();
+        }
+        if ((flags & 64) != 0) {
+            sty |= Model.syItalic();
+        }
+        if ((flags & 131072) != 0) {
+            sty |= Model.sySmallcaps();
+        }
+        if ((flags & 262144) != 0) {
+            sty |= Model.syBold();
+        }
+        Evidence.foSet(fnt, row, Evidence.fnfStyle(), sty);
+        return row;
+    }
     public static int pcFontId(emon.Port.Cells cx, int key) {
         // The evidence id of a font dictionary: its index in the order the
         // document first showed it (-1 past 512 fonts).
@@ -950,7 +1107,7 @@ public final class Pdfcontent {
         emon.Port.cellsSet(cx, C_NFONT, n + 1);
         return n;
     }
-    public static int pcEnsureFont(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3) {
+    public static int pcEnsureFont(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells fnt, emon.Port.Cells et) {
         // Make the current font (the graphics state's) resident in a slot and set
         // C_SLOT to it, -1 when there is none. A font is loaded once and kept; the
         // slot that has gone unused longest is the one replaced.
@@ -961,6 +1118,7 @@ public final class Pdfcontent {
         int best = 2147483647;
         int status = 0;
         int fid = 0;
+        int nbefore = emon.Port.cellsAt(cx, C_NFONT);
         int clock = emon.Port.cellsAt(cx, C_CLOCK);
         if (key == 0) {
             emon.Port.cellsSet(cx, C_SLOT, -1);
@@ -994,6 +1152,10 @@ public final class Pdfcontent {
         emon.Port.cellsSet(cx, at + S_STATUS, status);
         fid = pcFontId(cx, key);
         emon.Port.cellsSet(cx, at + S_ID, fid);
+        // A font the document has not shown before gets its `fonts` row, which is its id.
+        if ((fid >= 0) && (fid == nbefore)) {
+            pcFontRow(src, ar, dc, a, b, st, cx, fnt, et, f0, f1, f2, f3, pick, status, key);
+        }
         if (status == 0) {
             emon.Port.cellsSet(cx, at + S_ASC, pcFQ(f0, f1, f2, f3, pick, 0));
             emon.Port.cellsSet(cx, at + S_DESC, pcFQ(f0, f1, f2, f3, pick, 1));
@@ -1006,6 +1168,9 @@ public final class Pdfcontent {
             emon.Port.cellsSet(cx, at + S_VERT, 0);
         }
         emon.Port.cellsSet(cx, C_SLOT, pick);
+        if (Pdfsrc.psMissed(src)) {
+            emon.Port.cellsSet(cx, C_ABORT, 1);
+        }
         return 0;
     }
     public static int pcTf(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, int n) {
@@ -1032,6 +1197,12 @@ public final class Pdfcontent {
             pcWarnSet(cx, W_FONT);
         }
         emon.Port.cellsSet(cx, C_CUR + G_FONT, fh);
+        emon.Port.cellsSet(cx, C_CUR + G_FOBJ, 0);
+        if ((fh != 0) && (raw != 0)) {
+            if (Pdflex.plKindOf(ar, raw) == 9) {
+                emon.Port.cellsSet(cx, C_CUR + G_FOBJ, Pdflex.plIntValue(ar, raw));
+            }
+        }
         return 0;
     }
     public static long pcMin4(long p, long q, long r, long s) {
@@ -1060,9 +1231,40 @@ public final class Pdfcontent {
         }
         return m;
     }
+    public static int pcDirAngle(long a, long b) {
+        // The angle of the direction (a, b) in page space (y down), by `ev-angle`: halve both until the
+        // larger fits 30 bits, so the angle of a matrix axis in 24-bit fixed point keeps all its precision.
+        long x = a;
+        long y = b;
+        long m = (long) 0;
+        if (x < ((long) 0)) {
+            m = ((long) 0) - x;
+        } else {
+            m = x;
+        }
+        if (y < ((long) 0)) {
+            if ((((long) 0) - y) > m) {
+                m = ((long) 0) - y;
+            }
+        } else if (y > m) {
+            m = y;
+        }
+        while (m > ((long) 1073741824)) {
+            x = x / ((long) 2);
+            y = y / ((long) 2);
+            m = m / ((long) 2);
+        }
+        return Evidence.evAngle((int) x, (int) y);
+    }
     public static int pcGlyph(emon.Port.Cells cx, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, int code, int ncode) {
         // One shown glyph: look the code up, put its cell in page space, record it,
         // advance the text position by its width, the character and word spacing.
+        // Recorded (SPEC 8.4.3): the box of its cell; its baseline segment from its origin to its origin plus
+        // its advance without Tc and Tw (text space +x, so the spacing stays measurable); `asc` and `desc`
+        // (signed distances from the baseline along the up vector, from the font's ascent and descent); `rot`
+        // by `ev-angle` from the exact direction of the text matrix's x axis; its fill colour and alpha; the
+        // colour-space class when the colour operators said (gray, rgb, cmyk); `z`, the page's paint counter;
+        // `mark` (the innermost open mark) and `ocg` (the innermost optional-content mark).
         int slot = emon.Port.cellsAt(cx, C_SLOT);
         long fs = Fx.fxGet(cx, C_CUR + G_FS);
         long th = Fx.fxGet(cx, C_CUR + G_TH);
@@ -1140,18 +1342,43 @@ public final class Pdfcontent {
         long mb = Fx.fxGet(cx, C_M + 2);
         long mc = Fx.fxGet(cx, C_M + 4);
         long md = Fx.fxGet(cx, C_M + 6);
-        int size = Fx.fxRound(Fx.fxMul(Fx.fxHypot(mc, md), Fx.fxAbs(fs)));
-        int rot = Fx.fxAtan2(((long) 0) - mb, ma);
-        int bline = Fx.fxRound(Fx.mxY(cx, C_M, (long) 0, rise));
-        int g = Evidence.glNew(gl, emon.Port.cellsAt(cx, C_PAGE), cp0, fid, size, Fx.fxRound(pcMin4(p0x, p1x, p2x, p3x)), Fx.fxRound(pcMin4(p0y, p1y, p2y, p3y)), Fx.fxRound(pcMax4(p0x, p1x, p2x, p3x)), Fx.fxRound(pcMax4(p0y, p1y, p2y, p3y)));
+        long hyp = Fx.fxHypot(mc, md);
+        int size = Fx.fxRound(Fx.fxMul(hyp, Fx.fxAbs(fs)));
+        int rot = pcDirAngle(ma, mb);
+        int bx0 = Fx.fxRound(Fx.mxX(cx, C_M, (long) 0, rise));
+        int by0 = Fx.fxRound(Fx.mxY(cx, C_M, (long) 0, rise));
+        int bx1 = Fx.fxRound(Fx.mxX(cx, C_M, Fx.fxMul(wfx, th), rise));
+        int by1 = Fx.fxRound(Fx.mxY(cx, C_M, Fx.fxMul(wfx, th), rise));
+        int up = Fx.fxRound(Fx.fxMul(y1t - rise, hyp));
+        int down = Fx.fxRound(Fx.fxMul(y0t - rise, hyp));
+        int fam = emon.Port.cellsAt(cx, C_CUR + G_FAM);
+        int z = emon.Port.cellsAt(cx, C_Z);
+        int g = Evidence.glNew(gl, emon.Port.cellsAt(cx, C_PAGE), Fx.fxRound(pcMin4(p0x, p1x, p2x, p3x)), Fx.fxRound(pcMin4(p0y, p1y, p2y, p3y)), Fx.fxRound(pcMax4(p0x, p1x, p2x, p3x)), Fx.fxRound(pcMax4(p0y, p1y, p2y, p3y)), cp0, -1, 0, -1);
         Evidence.glSet(gl, g, Evidence.gfHow(), how);
-        Evidence.glSet(gl, g, Evidence.gfBaseline(), bline);
+        Evidence.glSet(gl, g, Evidence.gfFont(), fid);
+        Evidence.glSet(gl, g, Evidence.gfSize(), size);
+        Evidence.glSet(gl, g, Evidence.gfBx0(), bx0);
+        Evidence.glSet(gl, g, Evidence.gfBy0(), by0);
+        Evidence.glSet(gl, g, Evidence.gfBx1(), bx1);
+        Evidence.glSet(gl, g, Evidence.gfBy1(), by1);
+        if (up >= down) {
+            Evidence.glSet(gl, g, Evidence.gfAsc(), up);
+            Evidence.glSet(gl, g, Evidence.gfDesc(), down);
+        } else {
+            Evidence.glSet(gl, g, Evidence.gfAsc(), down);
+            Evidence.glSet(gl, g, Evidence.gfDesc(), up);
+        }
         Evidence.glSet(gl, g, Evidence.gfRot(), rot);
-        Evidence.glSet(gl, g, Evidence.gfColor(), emon.Port.cellsAt(cx, C_CUR + G_COLOR));
-        Evidence.glSet(gl, g, Evidence.gfAlpha(), emon.Port.cellsAt(cx, C_CUR + G_ALPHA));
+        Evidence.glSet(gl, g, Evidence.gfFill(), emon.Port.cellsAt(cx, C_CUR + G_COLOR));
+        Evidence.glSet(gl, g, Evidence.gfFalpha(), emon.Port.cellsAt(cx, C_CUR + G_ALPHA));
         Evidence.glSet(gl, g, Evidence.gfMode(), emon.Port.cellsAt(cx, C_CUR + G_MODE));
-        Evidence.glSet(gl, g, Evidence.gfArtifact(), emon.Port.cellsAt(cx, C_CURART));
-        Evidence.glSet(gl, g, Evidence.gfMcid(), emon.Port.cellsAt(cx, C_CURMCID));
+        if (fam > 0) {
+            Evidence.glSet(gl, g, Evidence.gfCs(), fam);
+        }
+        Evidence.glSet(gl, g, Evidence.gfZ(), z);
+        emon.Port.cellsSet(cx, C_Z, z + 1);
+        Evidence.glSet(gl, g, Evidence.gfMark(), emon.Port.cellsAt(cx, C_MCTOP));
+        Evidence.glSet(gl, g, Evidence.gfOcg(), emon.Port.cellsAt(cx, C_CUROCG));
         if (cnt > 1) {
             i = 0;
             while (i < cnt) {
@@ -1161,8 +1388,8 @@ public final class Pdfcontent {
                 }
                 i += 1;
             }
-            Evidence.glSet(gl, g, Evidence.gfTstart(), tstart);
-            Evidence.glSet(gl, g, Evidence.gfTlen(), cnt);
+            Evidence.glSet(gl, g, Evidence.chTstart(), tstart);
+            Evidence.glSet(gl, g, Evidence.chTlen(), cnt);
         }
         // The advance: tx = (w0 * Tfs + Tc + Tw) * Th, or ty = w1 * Tfs + Tc + Tw.
         long adv = (long) 0;
@@ -1502,11 +1729,11 @@ public final class Pdfcontent {
         emon.Port.cellsSet(ox, (d * 4) + 1, (emon.Port.cellsAt(cx, C_OXN) - d) - 1);
         return d;
     }
-    public static int pcReadProps(emon.Port.Cells et, emon.Port.Cells sp, emon.Port.Cells ox, int span, int d) {
-        // Fill the span's fields from the dictionary entry d of the operands: MCID,
-        // Type, Subtype, ActualText, Alt, E, Lang. Answers a code for the artifact's
-        // class: 1 watermark, 2 background, 3 pagination, 4 layout, 5 another
-        // named type or subtype, 0 none.
+    public static int pcReadProps(emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells ox, int span, int d, int isart) {
+        // Fill the mark's fields from the dictionary entry d of the operands: MCID, ActualText, Alt, E, Lang;
+        // and, for an /Artifact, its /Type and /Subtype as codes (`ar`: pagination, layout, background, page,
+        // else `other`; `as`: header, footer, watermark, else `other`). A name that is none of the known ones
+        // is not kept (SPEC 8.4.3 holds codes, D101 held the name).
         int end = (d + 1) + pcEa(ox, d);
         int j = d + 1;
         int v = 0;
@@ -1516,7 +1743,6 @@ public final class Pdfcontent {
         int vl = 0;
         int vk = 0;
         int at = 0;
-        int cls = 0;
         while (j < end) {
             v = j + 1;
             if ((pcKind(ox, j) == K_NAME) && (v < end)) {
@@ -1526,72 +1752,55 @@ public final class Pdfcontent {
                 vs = pcEa(ox, v);
                 vl = pcEb(ox, v);
                 if ((pcNameEq(ox, ks, kl, Pdfnames.pnMcid()) == 1) && (vk == K_NUM)) {
-                    Evidence.spSet(sp, span, Evidence.sfMcid(), Fx.fxRound(Fx.fxJoin(vs, vl)));
+                    Evidence.mkSet(mk, span, Evidence.mkfMcid(), Fx.fxRound(Fx.fxJoin(vs, vl)));
                 }
-                if ((pcNameEq(ox, ks, kl, Pdfnames.pnType()) == 1) && (vk == K_NAME)) {
-                    at = pcPushBytes(et, ox, vs, vl);
-                    Evidence.spSet(sp, span, Evidence.sfType(), at);
-                    Evidence.spSet(sp, span, Evidence.sfTypelen(), vl);
+                if ((isart == 1) && ((pcNameEq(ox, ks, kl, Pdfnames.pnType()) == 1) && (vk == K_NAME))) {
+                    Evidence.mkSet(mk, span, Evidence.mkfArtype(), Evidence.arOther());
                     if (pcNameEq(ox, vs, vl, Pdfnames.pnPagination()) == 1) {
-                        if (cls == 0) {
-                            cls = 3;
-                        }
+                        Evidence.mkSet(mk, span, Evidence.mkfArtype(), Evidence.arPagination());
                     }
                     if (pcNameEq(ox, vs, vl, Pdfnames.pnLayout()) == 1) {
-                        if (cls == 0) {
-                            cls = 4;
-                        }
+                        Evidence.mkSet(mk, span, Evidence.mkfArtype(), Evidence.arLayout());
                     }
                     if (pcNameEq(ox, vs, vl, Pdfnames.pnBackground()) == 1) {
-                        if (cls != 1) {
-                            cls = 2;
-                        }
+                        Evidence.mkSet(mk, span, Evidence.mkfArtype(), Evidence.arBackground());
                     }
-                    if (cls == 0) {
-                        cls = 5;
+                    if (pcNameEq(ox, vs, vl, Pdfnames.pnPage()) == 1) {
+                        Evidence.mkSet(mk, span, Evidence.mkfArtype(), Evidence.arPage());
                     }
                 }
-                if ((pcNameEq(ox, ks, kl, Pdfnames.pnSubtype()) == 1) && (vk == K_NAME)) {
-                    at = pcPushBytes(et, ox, vs, vl);
-                    Evidence.spSet(sp, span, Evidence.sfSubtype(), at);
-                    Evidence.spSet(sp, span, Evidence.sfSubtypelen(), vl);
+                if ((isart == 1) && ((pcNameEq(ox, ks, kl, Pdfnames.pnSubtype()) == 1) && (vk == K_NAME))) {
+                    Evidence.mkSet(mk, span, Evidence.mkfArsub(), Evidence.asOther());
+                    if (pcNameEq(ox, vs, vl, Pdfnames.pnHeader()) == 1) {
+                        Evidence.mkSet(mk, span, Evidence.mkfArsub(), Evidence.asHeader());
+                    }
+                    if (pcNameEq(ox, vs, vl, Pdfnames.pnFooter()) == 1) {
+                        Evidence.mkSet(mk, span, Evidence.mkfArsub(), Evidence.asFooter());
+                    }
                     if (pcNameEq(ox, vs, vl, Pdfnames.pnWatermark()) == 1) {
-                        cls = 1;
-                    }
-                    if (pcNameEq(ox, vs, vl, Pdfnames.pnBackground()) == 1) {
-                        if (cls != 1) {
-                            cls = 2;
-                        }
-                    }
-                    if ((pcNameEq(ox, vs, vl, Pdfnames.pnHeader()) == 1) || (pcNameEq(ox, vs, vl, Pdfnames.pnFooter()) == 1)) {
-                        if ((cls == 0) || (cls == 5)) {
-                            cls = 3;
-                        }
-                    }
-                    if (cls == 0) {
-                        cls = 5;
+                        Evidence.mkSet(mk, span, Evidence.mkfArsub(), Evidence.asWatermark());
                     }
                 }
                 if ((vk == K_STR) || (vk == K_NAME)) {
                     if (pcNameEq(ox, ks, kl, Pdfnames.pnActualText()) == 1) {
                         at = pcPushText(et, ox, vs, vl);
-                        Evidence.spSet(sp, span, Evidence.sfActual(), at);
-                        Evidence.spSet(sp, span, Evidence.sfActuallen(), emon.Port.cellsLen(et) - at);
+                        Evidence.mkSet(mk, span, Evidence.mkfActual(), at);
+                        Evidence.mkSet(mk, span, Evidence.mkfActuallen(), emon.Port.cellsLen(et) - at);
                     }
                     if (pcNameEq(ox, ks, kl, Pdfnames.pnAlt()) == 1) {
                         at = pcPushText(et, ox, vs, vl);
-                        Evidence.spSet(sp, span, Evidence.sfAlt(), at);
-                        Evidence.spSet(sp, span, Evidence.sfAltlen(), emon.Port.cellsLen(et) - at);
+                        Evidence.mkSet(mk, span, Evidence.mkfAlt(), at);
+                        Evidence.mkSet(mk, span, Evidence.mkfAltlen(), emon.Port.cellsLen(et) - at);
                     }
                     if (pcNameEq(ox, ks, kl, Pdfnames.pnE()) == 1) {
                         at = pcPushText(et, ox, vs, vl);
-                        Evidence.spSet(sp, span, Evidence.sfExp(), at);
-                        Evidence.spSet(sp, span, Evidence.sfExplen(), emon.Port.cellsLen(et) - at);
+                        Evidence.mkSet(mk, span, Evidence.mkfExp(), at);
+                        Evidence.mkSet(mk, span, Evidence.mkfExplen(), emon.Port.cellsLen(et) - at);
                     }
                     if (pcNameEq(ox, ks, kl, Pdfnames.pnLang()) == 1) {
                         at = pcPushText(et, ox, vs, vl);
-                        Evidence.spSet(sp, span, Evidence.sfLang(), at);
-                        Evidence.spSet(sp, span, Evidence.sfLanglen(), emon.Port.cellsLen(et) - at);
+                        Evidence.mkSet(mk, span, Evidence.mkfLang(), at);
+                        Evidence.mkSet(mk, span, Evidence.mkfLanglen(), emon.Port.cellsLen(et) - at);
                     }
                 }
                 j = v + pcEsize(ox, v);
@@ -1599,63 +1808,45 @@ public final class Pdfcontent {
                 j += pcEsize(ox, j);
             }
         }
-        return cls;
-    }
-    public static int pcMcRecompute(emon.Port.Cells cx, emon.Port.Cells sp) {
-        // The innermost MCID and artifact class in force: walk the open spans.
-        int t = emon.Port.cellsAt(cx, C_MCTOP);
-        int mcid = -1;
-        int art = 0;
-        int guard = 0;
-        int m = 0;
-        while ((t >= 0) && (guard <= MAX_MC)) {
-            if (mcid < 0) {
-                m = Evidence.spGet(sp, t, Evidence.sfMcid());
-                if (m >= 0) {
-                    mcid = m;
-                }
-            }
-            if (art == 0) {
-                art = Evidence.spGet(sp, t, Evidence.sfArtifact());
-            }
-            t = Evidence.spGet(sp, t, Evidence.sfParent());
-            guard += 1;
-        }
-        emon.Port.cellsSet(cx, C_CURMCID, mcid);
-        emon.Port.cellsSet(cx, C_CURART, art);
         return 0;
     }
-    public static int pcMcPop(emon.Port.Cells cx, emon.Port.Cells sp, emon.Port.Cells gl, int unterminated) {
-        // Close the innermost open span: its glyphs are those shown since it opened.
+    public static int pcMcPop(emon.Port.Cells cx, emon.Port.Cells mk, emon.Port.Cells gl, int unterminated) {
+        // Close the innermost open mark: its glyphs are those shown since it opened, its painted objects
+        // those numbered since (`mk-close`).
         int t = emon.Port.cellsAt(cx, C_MCTOP);
         if (t < 0) {
             return 0;
         }
         int g = Evidence.glCount(gl);
-        int gf = Evidence.spGet(sp, t, Evidence.sfGfirst());
-        int par = Evidence.spGet(sp, t, Evidence.sfParent());
-        Evidence.spSet(sp, t, Evidence.sfGcount(), g - gf);
+        int par = Evidence.mkGet(mk, t, Evidence.mkfParent());
+        Evidence.mkClose(mk, t, g, emon.Port.cellsAt(cx, C_Z));
         if (unterminated == 1) {
-            int fl = Evidence.spGet(sp, t, Evidence.sfFlags());
-            Evidence.spSet(sp, t, Evidence.sfFlags(), fl | Evidence.mcUnterminated());
+            int fl = Evidence.mkGet(mk, t, Evidence.mkfFlags());
+            Evidence.mkSet(mk, t, Evidence.mkfFlags(), fl | Evidence.mcUnterminated());
         }
         emon.Port.cellsSet(cx, C_MCTOP, par);
         emon.Port.cellsSet(cx, C_MCDEPTH, emon.Port.cellsAt(cx, C_MCDEPTH) - 1);
-        pcMcRecompute(cx, sp);
+        if (emon.Port.cellsAt(cx, C_CUROCG) == t) {
+            emon.Port.cellsSet(cx, C_CUROCG, Evidence.mkOcgOf(mk, par));
+        }
         return 0;
     }
-    public static int pcMcBegin(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int n, int props) {
-        // BMC / BDC: open a span with the tag of operand 0 and, for BDC, the
-        // properties of operand 1 (an inline dictionary, or a name in /Properties).
+    public static int pcMcBegin(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int n, int props) {
+        // BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an
+        // inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,
+        // `optional-content` for /OC (its object number is the /Properties entry's, when that is a
+        // reference), else `tag`.
         int depth = emon.Port.cellsAt(cx, C_MCDEPTH);
         int tstart = 0;
         int tlen = 0;
         int span = 0;
         int d = -1;
-        int cls = 0;
         int raw = 0;
         int dh = 0;
         int isart = 0;
+        int isoc = 0;
+        int t0 = 0;
+        int kind = 3;
         int flags = 0;
         if (depth >= MAX_MC) {
             emon.Port.cellsSet(cx, C_MCOVER, emon.Port.cellsAt(cx, C_MCOVER) + 1);
@@ -1669,11 +1860,21 @@ public final class Pdfcontent {
             if (pcEntryNameIs(ox, 0, Pdfnames.pnArtifact()) == 1) {
                 isart = 1;
             }
+            t0 = pcEa(ox, 0);
+            if ((tlen == 2) && ((emon.Port.cellsAt(ox, t0) == 79) && (emon.Port.cellsAt(ox, t0 + 1) == 67))) {
+                isoc = 1;
+            }
         }
-        span = Evidence.spNew(sp, emon.Port.cellsAt(cx, C_PAGE), tstart, tlen, emon.Port.cellsAt(cx, C_MCTOP), Evidence.glCount(gl));
-        Evidence.spSet(sp, span, Evidence.sfStm(), emon.Port.cellsAt(cx, C_STM));
         if (isart == 1) {
-            Evidence.spSet(sp, span, Evidence.sfArtifact(), Evidence.arOther());
+            kind = Evidence.mkArtifact();
+        }
+        if (isoc == 1) {
+            kind = Evidence.mkOptionalContent();
+        }
+        span = Evidence.mkOpen(mk, emon.Port.cellsAt(cx, C_PAGE), kind, tstart, tlen, emon.Port.cellsAt(cx, C_MCTOP), Evidence.glCount(gl), emon.Port.cellsAt(cx, C_Z));
+        Evidence.mkSet(mk, span, Evidence.mkfStm(), emon.Port.cellsAt(cx, C_STM));
+        if (isart == 1) {
+            Evidence.mkSet(mk, span, Evidence.mkfArtype(), Evidence.arOther());
         }
         if ((props == 1) && (n >= 2)) {
             if (pcKind(ox, 1) == K_DICT) {
@@ -1688,6 +1889,11 @@ public final class Pdfcontent {
                 if (Pdfsrc.psMissed(src)) {
                     emon.Port.cellsSet(cx, C_ABORT, 1);
                 }
+                if ((isoc == 1) && (raw != 0)) {
+                    if (Pdflex.plKindOf(ar, raw) == 9) {
+                        Evidence.mkSet(mk, span, Evidence.mkfOcg(), Pdflex.plIntValue(ar, raw));
+                    }
+                }
                 if ((dh != 0) && (Pdflex.plKindOf(ar, dh) == 7)) {
                     d = pcIngestProps(src, ar, dc, a, b, st, cx, ox, dh);
                     flags = Evidence.mcResource();
@@ -1696,32 +1902,20 @@ public final class Pdfcontent {
                     pcWarnSet(cx, W_PROPS);
                 }
             }
-            Evidence.spSet(sp, span, Evidence.sfFlags(), flags);
+            Evidence.mkSet(mk, span, Evidence.mkfFlags(), flags);
             if (d >= 0) {
-                cls = pcReadProps(et, sp, ox, span, d);
-                if (isart == 1) {
-                    if (cls == 1) {
-                        Evidence.spSet(sp, span, Evidence.sfArtifact(), Evidence.arWatermark());
-                    }
-                    if (cls == 2) {
-                        Evidence.spSet(sp, span, Evidence.sfArtifact(), Evidence.arBackground());
-                    }
-                    if (cls == 3) {
-                        Evidence.spSet(sp, span, Evidence.sfArtifact(), Evidence.arPagination());
-                    }
-                    if (cls == 4) {
-                        Evidence.spSet(sp, span, Evidence.sfArtifact(), Evidence.arLayout());
-                    }
-                }
+                pcReadProps(et, mk, ox, span, d, isart);
             }
         }
         emon.Port.cellsSet(cx, C_MCTOP, span);
         emon.Port.cellsSet(cx, C_MCDEPTH, depth + 1);
-        pcMcRecompute(cx, sp);
+        if (isoc == 1) {
+            emon.Port.cellsSet(cx, C_CUROCG, span);
+        }
         return 0;
     }
-    public static int pcMcEnd(emon.Port.Cells cx, emon.Port.Cells sp, emon.Port.Cells gl) {
-        // EMC: close the innermost span this stream opened; a BDC that was too deep
+    public static int pcMcEnd(emon.Port.Cells cx, emon.Port.Cells mk, emon.Port.Cells gl) {
+        // EMC: close the innermost mark this stream opened; a BDC that was too deep
         // to record is balanced first; an EMC with nothing to close is ignored.
         int over = emon.Port.cellsAt(cx, C_MCOVER);
         if (over > 0) {
@@ -1732,7 +1926,7 @@ public final class Pdfcontent {
             pcWarnSet(cx, W_MC);
             return 0;
         }
-        return pcMcPop(cx, sp, gl, 0);
+        return pcMcPop(cx, mk, gl, 0);
     }
     public static int pcSkipInline(emon.Port.Cells cx, emon.Port.Cells cs) {
         // BI: skip to the end of the inline image: find `ID` and its one white
@@ -1790,7 +1984,7 @@ public final class Pdfcontent {
         emon.Port.cellsPush(cs, 10);
         return status;
     }
-    public static int pcDo(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int n) {
+    public static int pcDo(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int n) {
         // Do: run the Form XObject named by operand 0. Images and everything that is
         // not a form are skipped. The form's /Matrix is concatenated to the CTM, its
         // /Resources replace the current ones (else they are inherited), and it runs
@@ -1897,7 +2091,7 @@ public final class Pdfcontent {
         emon.Port.cellsSet(cx, C_FDEPTH, fd + 1);
         emon.Port.cellsSet(cx, C_STM, objnum);
         endcs = emon.Port.cellsLen(cs);
-        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, start, endcs);
+        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, start, endcs);
         emon.Port.cellsSet(cx, C_FDEPTH, fd);
         emon.Port.cellsSet(cx, C_STM, oldstm);
         emon.Port.cellsSet(cx, C_RES, oldres);
@@ -1905,16 +2099,16 @@ public final class Pdfcontent {
         emon.Port.cellsDrop(cs, start);
         return 0;
     }
-    public static int pcPrep(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3) {
+    public static int pcPrep(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells fnt, emon.Port.Cells et) {
         // Before a string is shown: the font resident, and M = Tm x CTM current.
-        pcEnsureFont(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+        pcEnsureFont(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
         pcUpdateM(cx);
         if (emon.Port.cellsAt(cx, C_SLOT) < 0) {
             pcWarnSet(cx, W_TEXT);
         }
         return 0;
     }
-    public static int pcOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int op, int n) {
+    public static int pcOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int op, int n) {
         // Execute one operator; `ox` holds its n operands. Unknown operators do
         // nothing (their operands are dropped by the caller).
         if (op == OP_SAVE) {
@@ -1991,14 +2185,14 @@ public final class Pdfcontent {
         }
         if (op == OP_SHOW) {
             if ((n >= 1) && (pcKind(ox, 0) == K_STR)) {
-                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
                 pcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 0);
             }
             return 0;
         }
         if (op == OP_SHOWARR) {
             if ((n >= 1) && (pcKind(ox, 0) == K_ARR)) {
-                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
                 pcShowArr(cx, ox, gl, et, f0, f1, f2, f3, 0);
             }
             return 0;
@@ -2006,7 +2200,7 @@ public final class Pdfcontent {
         if (op == OP_QUOTE) {
             if ((n >= 1) && (pcKind(ox, 0) == K_STR)) {
                 pcNextLine(cx);
-                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
                 pcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 0);
             }
             return 0;
@@ -2016,25 +2210,25 @@ public final class Pdfcontent {
                 Fx.fxPut(cx, C_CUR + G_TW, pcNum(ox, n, 0));
                 Fx.fxPut(cx, C_CUR + G_TC, pcNum(ox, n, 1));
                 pcNextLine(cx);
-                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3);
+                pcPrep(src, ar, dc, a, b, st, cx, out, f0, f1, f2, f3, fnt, et);
                 pcShowStr(cx, ox, gl, et, f0, f1, f2, f3, 2);
             }
             return 0;
         }
         if (op == OP_DO) {
-            pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, n);
+            pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, n);
             return 0;
         }
         if (op == OP_BDC) {
-            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 1);
+            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 1);
             return 0;
         }
         if (op == OP_BMC) {
-            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, sp, n, 0);
+            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 0);
             return 0;
         }
         if (op == OP_EMC) {
-            pcMcEnd(cx, sp, gl);
+            pcMcEnd(cx, mk, gl);
             return 0;
         }
         if (op == OP_BI) {
@@ -2088,7 +2282,7 @@ public final class Pdfcontent {
         }
         return 0;
     }
-    public static int pcRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, int start, int end) {
+    public static int pcRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int start, int end) {
         // Run the content bytes cs[start, end): read operands, then execute each
         // operator. The caller's lexer position, graphics-state floor and marked-
         // content floor are kept and restored, so a form can run inside an operator.
@@ -2118,20 +2312,20 @@ public final class Pdfcontent {
                 }
                 opc = emon.Port.cellsAt(cx, C_OP);
                 nop = emon.Port.cellsAt(cx, C_OXN);
-                pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, opc, nop);
+                pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, opc, nop);
                 pcOxClear(cx, ox);
             }
         }
         // What the stream left open: spans, graphics states.
         while (emon.Port.cellsAt(cx, C_MCDEPTH) > emon.Port.cellsAt(cx, C_MCBASE)) {
             pcWarnSet(cx, W_MC);
-            pcMcPop(cx, sp, gl, 1);
+            pcMcPop(cx, mk, gl, 1);
         }
         while (emon.Port.cellsAt(cx, C_DEPTH) > emon.Port.cellsAt(cx, C_GSBASE)) {
             emon.Port.cellsSet(cx, C_DEPTH, emon.Port.cellsAt(cx, C_DEPTH) - 1);
         }
         emon.Port.cellsSet(cx, C_MCTOP, oldtop);
-        pcMcRecompute(cx, sp);
+        emon.Port.cellsSet(cx, C_CUROCG, Evidence.mkOcgOf(mk, oldtop));
         emon.Port.cellsSet(cx, C_MCOVER, oldover);
         emon.Port.cellsSet(cx, C_MCBASE, oldmcb);
         emon.Port.cellsSet(cx, C_GSBASE, oldgs);
@@ -2163,26 +2357,26 @@ public final class Pdfcontent {
     public static int pcOffset(emon.Port.Cells gl, int j, int axis) {
         // Where glyph j's baseline is across its writing axis, in centipoints.
         if (axis == 1) {
-            return Evidence.glGet(gl, j, Evidence.gfX1());
+            return Evidence.glGet(gl, j, Evidence.chX1());
         }
         if (axis == 3) {
-            return Evidence.glGet(gl, j, Evidence.gfX0());
+            return Evidence.glGet(gl, j, Evidence.chX0());
         }
-        return Evidence.glGet(gl, j, Evidence.gfBaseline());
+        return Evidence.glGet(gl, j, Evidence.gfBy0());
     }
     public static int pcGap(emon.Port.Cells gl, int p, int g, int axis) {
         // The space along the axis between glyph p and the glyph g after it
         // (negative when they overlap or g is before p).
         if (axis == 0) {
-            return Evidence.glGet(gl, g, Evidence.gfX0()) - Evidence.glGet(gl, p, Evidence.gfX1());
+            return Evidence.glGet(gl, g, Evidence.chX0()) - Evidence.glGet(gl, p, Evidence.chX1());
         }
         if (axis == 2) {
-            return Evidence.glGet(gl, p, Evidence.gfX0()) - Evidence.glGet(gl, g, Evidence.gfX1());
+            return Evidence.glGet(gl, p, Evidence.chX0()) - Evidence.glGet(gl, g, Evidence.chX1());
         }
         if (axis == 1) {
-            return Evidence.glGet(gl, p, Evidence.gfY0()) - Evidence.glGet(gl, g, Evidence.gfY1());
+            return Evidence.glGet(gl, p, Evidence.chY0()) - Evidence.glGet(gl, g, Evidence.chY1());
         }
-        return Evidence.glGet(gl, g, Evidence.gfY0()) - Evidence.glGet(gl, p, Evidence.gfY1());
+        return Evidence.glGet(gl, g, Evidence.chY0()) - Evidence.glGet(gl, p, Evidence.chY1());
     }
     public static int pcRotGap(emon.Port.Cells gl, int p, int g, int size) {
         // For text at an arbitrary angle: the distance between glyph p's centre and
@@ -2191,8 +2385,8 @@ public final class Pdfcontent {
         int rot = Evidence.glGet(gl, p, Evidence.gfRot());
         long ux = Fx.fxCos(rot);
         long uy = ((long) 0) - Fx.fxSin(rot);
-        int dx2 = (Evidence.glGet(gl, g, Evidence.gfX0()) + Evidence.glGet(gl, g, Evidence.gfX1())) - (Evidence.glGet(gl, p, Evidence.gfX0()) + Evidence.glGet(gl, p, Evidence.gfX1()));
-        int dy2 = (Evidence.glGet(gl, g, Evidence.gfY0()) + Evidence.glGet(gl, g, Evidence.gfY1())) - (Evidence.glGet(gl, p, Evidence.gfY0()) + Evidence.glGet(gl, p, Evidence.gfY1()));
+        int dx2 = (Evidence.glGet(gl, g, Evidence.chX0()) + Evidence.glGet(gl, g, Evidence.chX1())) - (Evidence.glGet(gl, p, Evidence.chX0()) + Evidence.glGet(gl, p, Evidence.chX1()));
+        int dy2 = (Evidence.glGet(gl, g, Evidence.chY0()) + Evidence.glGet(gl, g, Evidence.chY1())) - (Evidence.glGet(gl, p, Evidence.chY0()) + Evidence.glGet(gl, p, Evidence.chY1()));
         long al2 = Fx.fxMul(Fx.fxOfInt(dx2), ux) + Fx.fxMul(Fx.fxOfInt(dy2), uy);
         return Fx.fxRound(al2 / ((long) 2)) - ((size * 600) / 1000);
     }
@@ -2201,8 +2395,8 @@ public final class Pdfcontent {
         int rot = Evidence.glGet(gl, p, Evidence.gfRot());
         long sn = Fx.fxSin(rot);
         long cs = Fx.fxCos(rot);
-        int dx2 = (Evidence.glGet(gl, g, Evidence.gfX0()) + Evidence.glGet(gl, g, Evidence.gfX1())) - (Evidence.glGet(gl, p, Evidence.gfX0()) + Evidence.glGet(gl, p, Evidence.gfX1()));
-        int dy2 = (Evidence.glGet(gl, g, Evidence.gfY0()) + Evidence.glGet(gl, g, Evidence.gfY1())) - (Evidence.glGet(gl, p, Evidence.gfY0()) + Evidence.glGet(gl, p, Evidence.gfY1()));
+        int dx2 = (Evidence.glGet(gl, g, Evidence.chX0()) + Evidence.glGet(gl, g, Evidence.chX1())) - (Evidence.glGet(gl, p, Evidence.chX0()) + Evidence.glGet(gl, p, Evidence.chX1()));
+        int dy2 = (Evidence.glGet(gl, g, Evidence.chY0()) + Evidence.glGet(gl, g, Evidence.chY1())) - (Evidence.glGet(gl, p, Evidence.chY0()) + Evidence.glGet(gl, p, Evidence.chY1()));
         int pe = Fx.fxRound((Fx.fxMul(Fx.fxOfInt(dx2), sn) + Fx.fxMul(Fx.fxOfInt(dy2), cs)) / ((long) 2));
         if (pe < 0) {
             return 0 - pe;
@@ -2323,13 +2517,13 @@ public final class Pdfcontent {
         return 0;
     }
     public static int pcGcls(emon.Port.Cells gl, int j) {
-        return pcCls(Evidence.glGet(gl, j, Evidence.gfCp()));
+        return pcCls(Evidence.glGet(gl, j, Evidence.chCp()));
     }
     public static int pcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j) {
         // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
-        int ts = Evidence.glGet(gl, j, Evidence.gfTstart());
-        int tl = Evidence.glGet(gl, j, Evidence.gfTlen());
-        int cp = Evidence.glGet(gl, j, Evidence.gfCp());
+        int ts = Evidence.glGet(gl, j, Evidence.chTstart());
+        int tl = Evidence.glGet(gl, j, Evidence.chTlen());
+        int cp = Evidence.glGet(gl, j, Evidence.chCp());
         int k = 0;
         int cpv = 0;
         if ((ts >= 0) && (tl > 0)) {
@@ -2347,17 +2541,17 @@ public final class Pdfcontent {
         }
         return 0;
     }
-    public static int pcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, int page, int gfst, int glst) {
+    public static int pcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells fnt, int page, int gfst, int glst, int wbk) {
         // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
         // dominant font and size of the first, and `hidden-text` as its source when every
         // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
         // page (visual order, as Skia and most producers write them) has its TEXT written in
         // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
         // turned back. The glyphs themselves stay as they were shown.
-        int x0 = Evidence.glGet(gl, gfst, Evidence.gfX0());
-        int y0 = Evidence.glGet(gl, gfst, Evidence.gfY0());
-        int x1 = Evidence.glGet(gl, gfst, Evidence.gfX1());
-        int y1 = Evidence.glGet(gl, gfst, Evidence.gfY1());
+        int x0 = Evidence.glGet(gl, gfst, Evidence.chX0());
+        int y0 = Evidence.glGet(gl, gfst, Evidence.chY0());
+        int x1 = Evidence.glGet(gl, gfst, Evidence.chX1());
+        int y1 = Evidence.glGet(gl, gfst, Evidence.chY1());
         int j = gfst;
         int tstart = -1;
         int visible = 0;
@@ -2368,17 +2562,17 @@ public final class Pdfcontent {
         int kk = 0;
         int m = 0;
         while (j <= glst) {
-            if (Evidence.glGet(gl, j, Evidence.gfX0()) < x0) {
-                x0 = Evidence.glGet(gl, j, Evidence.gfX0());
+            if (Evidence.glGet(gl, j, Evidence.chX0()) < x0) {
+                x0 = Evidence.glGet(gl, j, Evidence.chX0());
             }
-            if (Evidence.glGet(gl, j, Evidence.gfY0()) < y0) {
-                y0 = Evidence.glGet(gl, j, Evidence.gfY0());
+            if (Evidence.glGet(gl, j, Evidence.chY0()) < y0) {
+                y0 = Evidence.glGet(gl, j, Evidence.chY0());
             }
-            if (Evidence.glGet(gl, j, Evidence.gfX1()) > x1) {
-                x1 = Evidence.glGet(gl, j, Evidence.gfX1());
+            if (Evidence.glGet(gl, j, Evidence.chX1()) > x1) {
+                x1 = Evidence.glGet(gl, j, Evidence.chX1());
             }
-            if (Evidence.glGet(gl, j, Evidence.gfY1()) > y1) {
-                y1 = Evidence.glGet(gl, j, Evidence.gfY1());
+            if (Evidence.glGet(gl, j, Evidence.chY1()) > y1) {
+                y1 = Evidence.glGet(gl, j, Evidence.chY1());
             }
             if (Evidence.glGet(gl, j, Evidence.gfMode()) != 3) {
                 visible = 1;
@@ -2394,7 +2588,7 @@ public final class Pdfcontent {
         }
         if ((nr > nl) && (glst > gfst)) {
             if (pcAxis(Evidence.glGet(gl, gfst, Evidence.gfRot())) == 0) {
-                if (Evidence.glGet(gl, glst, Evidence.gfX0()) >= Evidence.glGet(gl, gfst, Evidence.gfX0())) {
+                if (Evidence.glGet(gl, glst, Evidence.chX0()) >= Evidence.glGet(gl, gfst, Evidence.chX0())) {
                     rtlw = 1;
                 }
             }
@@ -2426,17 +2620,25 @@ public final class Pdfcontent {
                 }
             }
         }
-        int w = Evidence.wdNew(wd, page, x0, y0, x1, y1, gfst, (glst - gfst) + 1);
-        Evidence.wdSet(wd, w, Evidence.wfTstart(), tstart);
-        Evidence.wdSet(wd, w, Evidence.wfTlen(), emon.Port.cellsLen(et) - tstart);
-        Evidence.wdSet(wd, w, Evidence.wfFont(), Evidence.glGet(gl, gfst, Evidence.gfFont()));
+        int w = Evidence.wdNew(wd, page, x0, y0, x1, y1, Evidence.glGet(gl, gfst, Evidence.gfBx0()), Evidence.glGet(gl, gfst, Evidence.gfBy0()), Evidence.glGet(gl, glst, Evidence.gfBx1()), Evidence.glGet(gl, glst, Evidence.gfBy1()), Evidence.glGet(gl, gfst, Evidence.gfRot()), 0, tstart, emon.Port.cellsLen(et) - tstart, -1, -1, -1);
+        int fo = Evidence.glGet(gl, gfst, Evidence.gfFont());
+        if (rtlw == 1) {
+            Evidence.wdSet(wd, w, Evidence.hdDir(), Evidence.ldRtl());
+        }
+        Evidence.wdSet(wd, w, Evidence.wfGfirst(), gfst);
+        Evidence.wdSet(wd, w, Evidence.wfGcount(), (glst - gfst) + 1);
+        Evidence.wdSet(wd, w, Evidence.wfFont(), fo);
         Evidence.wdSet(wd, w, Evidence.wfSize(), Evidence.glGet(gl, gfst, Evidence.gfSize()));
+        if ((fo >= 0) && (fo < Evidence.foCount(fnt))) {
+            Evidence.wdSet(wd, w, Evidence.wfStyle(), Evidence.foGet(fnt, fo, Evidence.fnfStyle()));
+        }
+        Evidence.wdSet(wd, w, Evidence.wfWbreak(), wbk);
         if (visible == 0) {
             Evidence.wdSet(wd, w, Evidence.wfSrc(), Model.srHiddenText());
         }
         j = gfst;
         while (j <= glst) {
-            Evidence.glSet(gl, j, Evidence.gfWord(), w);
+            Evidence.glSet(gl, j, Evidence.chWord(), w);
             j += 1;
         }
         return w;
@@ -2445,11 +2647,11 @@ public final class Pdfcontent {
         int k = 0;
         int u = 0;
         int v = 0;
-        while (k < 16) {
-            u = emon.Port.cellsAt(wd, (i * 16) + k);
-            v = emon.Port.cellsAt(wd, (j * 16) + k);
-            emon.Port.cellsSet(wd, (i * 16) + k, v);
-            emon.Port.cellsSet(wd, (j * 16) + k, u);
+        while (k < 24) {
+            u = emon.Port.cellsAt(wd, (i * 24) + k);
+            v = emon.Port.cellsAt(wd, (j * 24) + k);
+            emon.Port.cellsSet(wd, (i * 24) + k, v);
+            emon.Port.cellsSet(wd, (j * 24) + k, u);
             k += 1;
         }
         return 0;
@@ -2521,11 +2723,11 @@ public final class Pdfcontent {
         if (nr <= nl) {
             return 0;
         }
-        Evidence.lnSet(ln, lidx, Evidence.lfDir(), Evidence.ldRtl());
+        Evidence.lnSet(ln, lidx, Evidence.lhDir(), Evidence.ldRtl());
         if (pcAxis(Evidence.glGet(gl, Evidence.wdGet(wd, wfst, Evidence.wfGfirst()), Evidence.gfRot())) != 0) {
             return 0;
         }
-        if (Evidence.wdGet(wd, wlst, Evidence.wfX0()) < Evidence.wdGet(wd, wfst, Evidence.wfX0())) {
+        if (Evidence.wdGet(wd, wlst, Evidence.hdX0()) < Evidence.wdGet(wd, wfst, Evidence.hdX0())) {
             return 0;
         }
         if (wfst == wlst) {
@@ -2551,33 +2753,33 @@ public final class Pdfcontent {
             gn = Evidence.wdGet(wd, w, Evidence.wfGcount());
             j = 0;
             while (j < gn) {
-                Evidence.glSet(gl, g0 + j, Evidence.gfWord(), w);
+                Evidence.glSet(gl, g0 + j, Evidence.chWord(), w);
                 j += 1;
             }
             z = -1;
             if (w < wlst) {
-                z = Evidence.wdGet(wd, w, Evidence.wfX0()) - Evidence.wdGet(wd, w + 1, Evidence.wfX1());
+                z = Evidence.wdGet(wd, w, Evidence.hdX0()) - Evidence.wdGet(wd, w + 1, Evidence.hdX1());
             }
             Evidence.wdSet(wd, w, Evidence.wfGap(), z);
             w += 1;
         }
         return 0;
     }
-    public static int pcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, int page, int g0, int w0) {
+    public static int pcGroup(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells fnt, int page, int g0, int w0) {
         // Group the glyphs from g0 on into words, and the words from w0 on into lines.
         int g1 = Evidence.glCount(gl);
         int i = g0;
         int cur = -1;
         while (i < g1) {
-            if (pcSpaceCp(Evidence.glGet(gl, i, Evidence.gfCp())) == 1) {
+            if (pcSpaceCp(Evidence.glGet(gl, i, Evidence.chCp())) == 1) {
                 if (cur >= 0) {
-                    pcEmitWord(gl, et, wd, page, cur, i - 1);
+                    pcEmitWord(gl, et, wd, fnt, page, cur, i - 1, Evidence.wbSpace());
                     cur = -1;
                 }
             } else {
                 if (cur >= 0) {
                     if (pcContinues(gl, i - 1, i) == 0) {
-                        pcEmitWord(gl, et, wd, page, cur, i - 1);
+                        pcEmitWord(gl, et, wd, fnt, page, cur, i - 1, Evidence.wbGap());
                         cur = -1;
                     }
                 }
@@ -2588,7 +2790,7 @@ public final class Pdfcontent {
             i += 1;
         }
         if (cur >= 0) {
-            pcEmitWord(gl, et, wd, page, cur, g1 - 1);
+            pcEmitWord(gl, et, wd, fnt, page, cur, g1 - 1, Evidence.wbLineEnd());
             cur = -1;
         }
         // Lines: consecutive words on one baseline, in order.
@@ -2608,6 +2810,7 @@ public final class Pdfcontent {
         int joins = 0;
         int gap = 0;
         int sz = 0;
+        int ord = 0;
         int off = 0;
         while (j <= nw) {
             joins = 0;
@@ -2645,34 +2848,45 @@ public final class Pdfcontent {
             } else {
                 // The line so far ends at `prev`: record it, then start a new one at j.
                 if (lfirst >= 0) {
-                    x0 = Evidence.wdGet(wd, lfirst, Evidence.wfX0());
-                    y0 = Evidence.wdGet(wd, lfirst, Evidence.wfY0());
-                    x1 = Evidence.wdGet(wd, lfirst, Evidence.wfX1());
-                    y1 = Evidence.wdGet(wd, lfirst, Evidence.wfY1());
+                    x0 = Evidence.wdGet(wd, lfirst, Evidence.hdX0());
+                    y0 = Evidence.wdGet(wd, lfirst, Evidence.hdY0());
+                    x1 = Evidence.wdGet(wd, lfirst, Evidence.hdX1());
+                    y1 = Evidence.wdGet(wd, lfirst, Evidence.hdY1());
                     lnx = lfirst;
                     while (lnx <= prev) {
-                        if (Evidence.wdGet(wd, lnx, Evidence.wfX0()) < x0) {
-                            x0 = Evidence.wdGet(wd, lnx, Evidence.wfX0());
+                        if (Evidence.wdGet(wd, lnx, Evidence.hdX0()) < x0) {
+                            x0 = Evidence.wdGet(wd, lnx, Evidence.hdX0());
                         }
-                        if (Evidence.wdGet(wd, lnx, Evidence.wfY0()) < y0) {
-                            y0 = Evidence.wdGet(wd, lnx, Evidence.wfY0());
+                        if (Evidence.wdGet(wd, lnx, Evidence.hdY0()) < y0) {
+                            y0 = Evidence.wdGet(wd, lnx, Evidence.hdY0());
                         }
-                        if (Evidence.wdGet(wd, lnx, Evidence.wfX1()) > x1) {
-                            x1 = Evidence.wdGet(wd, lnx, Evidence.wfX1());
+                        if (Evidence.wdGet(wd, lnx, Evidence.hdX1()) > x1) {
+                            x1 = Evidence.wdGet(wd, lnx, Evidence.hdX1());
                         }
-                        if (Evidence.wdGet(wd, lnx, Evidence.wfY1()) > y1) {
-                            y1 = Evidence.wdGet(wd, lnx, Evidence.wfY1());
+                        if (Evidence.wdGet(wd, lnx, Evidence.hdY1()) > y1) {
+                            y1 = Evidence.wdGet(wd, lnx, Evidence.hdY1());
                         }
                         lnx += 1;
                     }
                     gfp = Evidence.wdGet(wd, lfirst, Evidence.wfGfirst());
                     axis = pcAxis(Evidence.glGet(gl, gfp, Evidence.gfRot()));
-                    lnx = Evidence.lnNew(ln, page, x0, y0, x1, y1, lfirst, (prev - lfirst) + 1, pcOffset(gl, gfp, axis));
-                    Evidence.lnSet(ln, lnx, Evidence.lfRot(), Evidence.glGet(gl, gfp, Evidence.gfRot()));
+                    ord = Evidence.wdGet(wd, lfirst, Evidence.wfGfirst());
+                    lnx = lfirst;
+                    while (lnx <= prev) {
+                        if (Evidence.wdGet(wd, lnx, Evidence.wfGfirst()) < ord) {
+                            ord = Evidence.wdGet(wd, lnx, Evidence.wfGfirst());
+                        }
+                        lnx += 1;
+                    }
+                    // The baseline runs from the first word's start to the last word's end, in the
+                    // order the words were SHOWN (the bidi step below re-orders the rows, not the page).
+                    lnx = Evidence.lnNew(ln, page, x0, y0, x1, y1, Evidence.wdGet(wd, lfirst, Evidence.hdBx0()), Evidence.wdGet(wd, lfirst, Evidence.hdBy0()), Evidence.wdGet(wd, prev, Evidence.hdBx1()), Evidence.wdGet(wd, prev, Evidence.hdBy1()), Evidence.glGet(gl, gfp, Evidence.gfRot()), 0, lfirst, (prev - lfirst) + 1);
+                    Evidence.lnSet(ln, lnx, Evidence.lfOrder(), ord);
                     pcLineBidi(gl, wd, ln, lnx, lfirst, prev);
+                    Evidence.wdSet(wd, prev, Evidence.wfWbreak(), Evidence.wbLineEnd());
                     gfp = lfirst;
                     while (gfp <= prev) {
-                        Evidence.wdSet(wd, gfp, Evidence.wfLine(), lnx);
+                        Evidence.wdSet(wd, gfp, Evidence.hdLine(), lnx);
                         gfp += 1;
                     }
                 }
@@ -2703,8 +2917,8 @@ public final class Pdfcontent {
         emon.Port.cellsSet(cx, C_MCDEPTH, 0);
         emon.Port.cellsSet(cx, C_MCBASE, 0);
         emon.Port.cellsSet(cx, C_MCOVER, 0);
-        emon.Port.cellsSet(cx, C_CURMCID, -1);
-        emon.Port.cellsSet(cx, C_CURART, 0);
+        emon.Port.cellsSet(cx, C_CUROCG, -1);
+        emon.Port.cellsSet(cx, C_Z, 0);
         emon.Port.cellsSet(cx, C_INTEXT, 0);
         emon.Port.cellsSet(cx, C_GSBASE, 0);
         Fx.mxIdent(cx, C_TM);
@@ -2712,7 +2926,7 @@ public final class Pdfcontent {
         Fx.mxIdent(cx, C_M);
         return 0;
     }
-    public static int pcPage(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, emon.Port.Cells pg, int pi, int page, emon.Port.Cells wd, emon.Port.Cells ln) {
+    public static int pcPage(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, int pi, int page, emon.Port.Cells wd, emon.Port.Cells ln) {
         // Interpret page index pi of the page table pg (page number `page`, 1-based, is
         // what the evidence records): its content streams, then the words and lines.
         // Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is
@@ -2750,20 +2964,21 @@ public final class Pdfcontent {
             return 7;
         }
         endcs = emon.Port.cellsLen(cs);
-        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, 0, endcs);
+        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, 0, endcs);
         if (emon.Port.cellsAt(cx, C_ABORT) == 1) {
             return 7;
         }
         if (Pdfsrc.psMissed(src)) {
             return 7;
         }
-        pcGroup(gl, et, wd, ln, page, g0, w0);
+        pcGroup(gl, et, wd, ln, fnt, page, g0, w0);
         return 0;
     }
-    public static int pcDocument(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells sp, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
+    public static int pcDocument(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
         // Every page of an opened document (`pd-open` has answered 0): clears `cx`,
         // then `pc-page` for each page. Answers 0, or 7 when the source missed.
         pcInit(cx, ox);
+        emon.Port.cellsDrop(fnt, 0);
         int n = Pdfdoc.pdPages(src, ar, dc, a, b, st, pg);
         int i = 0;
         int status = 0;
@@ -2771,7 +2986,7 @@ public final class Pdfcontent {
             return 7;
         }
         while (i < n) {
-            status = pcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, sp, pg, i, i + 1, wd, ln);
+            status = pcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i + 1, wd, ln);
             if (status == 7) {
                 return 7;
             }
