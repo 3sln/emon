@@ -40,6 +40,22 @@ pub(crate) fn pt_clear(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port
     crate::port::cells_drop(et, 0);
     return 0;
 }
+pub(crate) fn pt_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells) -> i32 {
+    // `pa-build`, with the column stage's scratch (`emon.columns`) made here.
+    let lt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let it: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let io: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gu: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ac: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
+}
 pub(crate) fn pt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
     let mut p: i32 = 1;
@@ -48,7 +64,7 @@ pub(crate) fn pt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
         page_new(pages, p, 61200, 79200, 0, pk_vector());
         p += 1;
     }
-    pa_build(wd, ln, et, npages, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+    pt_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
 }
 pub(crate) fn pt_brief(mut t: &mut String, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells) -> i32 {
@@ -331,7 +347,7 @@ pub(crate) fn pt_golden(pdf: &[u8], mut t: &mut String, mut ar: &mut crate::port
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
-    pa_build(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+    pt_build(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
         return 3;
     }

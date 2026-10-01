@@ -4,6 +4,7 @@
 package para
 
 import (
+	"emon/columns"
 	"emon/evidence"
 	"emon/model"
 	"emon/normalize"
@@ -23,9 +24,55 @@ const paSizeDiv int32 = 20
 
 const paRotSlop int32 = 100
 
-const paWideNum int32 = 3
+const paIndentUse int32 = 3
 
-const paWideDen int32 = 5
+const jsHyphen int32 = 3
+
+const jsEdge int32 = 2
+
+const jsShort int32 = -3
+
+const jsNoterm int32 = 2
+
+const jsLower int32 = 3
+
+const jsIndent int32 = -3
+
+const jsMarker int32 = -3
+
+const jsStyle int32 = -3
+
+const jsStream int32 = 1
+
+const joinMin int32 = 4
+
+const paEdgePct int32 = 15
+
+const cfStride int32 = 12
+
+const cfPage int32 = 0
+
+const cfBand int32 = 1
+
+const cfCol int32 = 2
+
+const cfRole int32 = 3
+
+const cfX0 int32 = 4
+
+const cfY0 int32 = 5
+
+const cfX1 int32 = 6
+
+const cfY1 int32 = 7
+
+const cfFirst int32 = 8
+
+const cfCount int32 = 9
+
+const cfAssoc int32 = 10
+
+const cfDone int32 = 11
 
 const frStride int32 = 6
 
@@ -309,32 +356,75 @@ func paOverlaps(ln *port.Cells, a int32, b int32) bool {
 	return (evidence.LnGet(ln, b, evidence.LhX0()) < evidence.LnGet(ln, a, evidence.LhX1())) && (evidence.LnGet(ln, a, evidence.LhX0()) < evidence.LnGet(ln, b, evidence.LhX1()))
 }
 
-func paMedian(ln *port.Cells, ord *port.Cells, gp *port.Cells, npages int32) int32 {
-	// The median line gap of the document: every pair of consecutive lines of a page (in reading
-	// order) that are upright, read the same way and the second below the first. 0 when there is none.
-	var p int32 = 1
+func paMedian(ln *port.Cells, cf *port.Cells, lo *port.Cells, gp *port.Cells) int32 {
+	// The line gap of the document: the lower quartile of the gaps between consecutive lines of a body
+	// fragment (D135) that are read the same way, the second below the first. 0 when there is none.
+	var nf int32 = port.CellsLen(cf) / cfStride
+	var r int32 = 0
 	var i int32 = 0
-	var n int32 = 0
 	port.CellsDrop(gp, 0)
-	for p <= npages {
-		paCollect(ord, ln, p)
-		n = port.CellsLen(ord)
-		i = 1
-		for i < n {
-			var a int32 = port.CellsAt(ord, i-1)
-			var b int32 = port.CellsAt(ord, i)
-			if paUpright(ln, a) && (paUpright(ln, b) && ((evidence.LnGet(ln, a, evidence.LhDir()) == evidence.LnGet(ln, b, evidence.LhDir())) && paBelow(ln, a, b))) {
-				port.CellsPush(gp, paGap(ln, a, b))
+	for r < nf {
+		if port.CellsAt(cf, (r*cfStride)+cfRole) == model.RlBody() {
+			i = 1
+			for i < port.CellsAt(cf, (r*cfStride)+cfCount) {
+				var a int32 = port.CellsAt(lo, port.CellsAt(cf, (r*cfStride)+cfFirst)+(i-1))
+				var b int32 = port.CellsAt(lo, port.CellsAt(cf, (r*cfStride)+cfFirst)+i)
+				if (evidence.LnGet(ln, a, evidence.LhDir()) == evidence.LnGet(ln, b, evidence.LhDir())) && paBelow(ln, a, b) {
+					port.CellsPush(gp, paGap(ln, a, b))
+				}
+				i += 1
 			}
-			i += 1
 		}
-		p += 1
+		r += 1
 	}
 	if port.CellsLen(gp) == 0 {
 		return 0
 	}
 	paSortNums(gp)
 	return port.CellsAt(gp, port.CellsLen(gp)/4)
+}
+
+func paFmargin(ln *port.Cells, lo *port.Cells, first int32, count int32) int32 {
+	// The margin of a fragment, in `pa-start`'s terms: the least start of its lines.
+	var i int32 = 0
+	var m int32 = 0
+	for i < count {
+		var s int32 = paStart(ln, port.CellsAt(lo, first+i))
+		if (i == 0) || (s < m) {
+			m = s
+		}
+		i += 1
+	}
+	return m
+}
+
+func paIndents(wd *port.Cells, ln *port.Cells, cf *port.Cells, lo *port.Cells) int32 {
+	// How many times, in the body fragments, a line starts further in than a line at the margin before it,
+	// by more than half its size and is close below it: the document's paragraphs have first-line indents
+	// when this is at least PA_INDENT_USE.
+	var nf int32 = port.CellsLen(cf) / cfStride
+	var r int32 = 0
+	var i int32 = 0
+	var n int32 = 0
+	for r < nf {
+		if port.CellsAt(cf, (r*cfStride)+cfRole) == model.RlBody() {
+			var first int32 = port.CellsAt(cf, (r*cfStride)+cfFirst)
+			var cnt int32 = port.CellsAt(cf, (r*cfStride)+cfCount)
+			var mg int32 = paFmargin(ln, lo, first, cnt)
+			i = 1
+			for i < cnt {
+				var a int32 = port.CellsAt(lo, first+(i-1))
+				var b int32 = port.CellsAt(lo, first+i)
+				var sb int32 = paSize(wd, ln, b)
+				if paBelow(ln, a, b) && ((((paStart(ln, a) - mg) * paIndentDiv) <= sb) && (((paStart(ln, b) - paStart(ln, a)) * paIndentDiv) > sb)) {
+					n += 1
+				}
+				i += 1
+			}
+		}
+		r += 1
+	}
+	return n
 }
 
 func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margin int32) bool {
@@ -476,39 +566,48 @@ func paFragExtend(fr *port.Cells, ln *port.Cells, l int32) int32 {
 	return 0
 }
 
-func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells) int32 {
-	// Close the open paragraph, if there is one: its node (own `text` when it is on one page, else
-	// `text`, `break`, `text` inlines), `at` one region per page, `src`, `conf`. Empties `raw` and `fr`.
+func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, parent int32) int32 {
+	// Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
+	// column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
+	// inline per page it is on with a `break` milestone between two, a column break being only a new region
+	// (SPEC 10.1.2). Empties `raw` and `fr`.
 	var nfr int32 = port.CellsLen(fr) / frStride
 	var rawn int32 = port.CellsLen(raw)
 	if nfr == 0 {
 		port.CellsDrop(raw, 0)
 		return 0
 	}
-	var par int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var par int32 = model.NodeNew(nodes, model.NkParagraph(), parent)
 	var k int32 = 0
+	var kend int32 = 0
+	var runs int32 = 1
 	var from int32 = 0
 	var to int32 = 0
-	var base int32 = 0
 	var t0 int32 = 0
 	var child int32 = 0
 	model.NodeSetConf(nodes, par, 500)
 	model.NodeAddSrc(nodes, par, model.SrText())
 	model.NodeAddSrc(nodes, par, model.SrInfer())
+	k = 1
 	for k < nfr {
-		base = k * frStride
-		from = port.CellsAt(fr, base+5)
-		to = rawn
-		if (k + 1) < nfr {
-			to = port.CellsAt(fr, ((k+1)*frStride)+5)
+		if port.CellsAt(fr, k*frStride) != port.CellsAt(fr, (k-1)*frStride) {
+			runs += 1
 		}
-		var pg int32 = port.CellsAt(fr, base)
-		var rx0 int32 = port.CellsAt(fr, base+1)
-		var ry0 int32 = port.CellsAt(fr, base+2)
-		var rx1 int32 = port.CellsAt(fr, base+3)
-		var ry1 int32 = port.CellsAt(fr, base+4)
-		model.NodeAddRegion(nodes, regions, par, pg, rx0, ry0, rx1, ry1)
-		if nfr > 1 {
+		k += 1
+	}
+	k = 0
+	for k < nfr {
+		var pg int32 = port.CellsAt(fr, k*frStride)
+		kend = k + 1
+		for (kend < nfr) && (port.CellsAt(fr, kend*frStride) == pg) {
+			kend += 1
+		}
+		from = port.CellsAt(fr, (k*frStride)+5)
+		to = rawn
+		if kend < nfr {
+			to = port.CellsAt(fr, (kend*frStride)+5)
+		}
+		if runs > 1 {
 			if k > 0 {
 				child = model.NodeNew(nodes, model.NkBreak(), par)
 				model.NodeSetSub(nodes, child, pg)
@@ -522,14 +621,24 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 			model.NodeSetText(nodes, child, t0, tn)
 			model.NodeSetConf(nodes, child, 1000)
 			model.NodeAddSrc(nodes, child, model.SrText())
-			model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1)
 		} else {
 			t0 = port.CellsLen(text)
 			normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 			var tn2 int32 = port.CellsLen(text) - t0
 			model.NodeSetText(nodes, par, t0, tn2)
 		}
-		k += 1
+		for k < kend {
+			var base int32 = k * frStride
+			var rx0 int32 = port.CellsAt(fr, base+1)
+			var ry0 int32 = port.CellsAt(fr, base+2)
+			var rx1 int32 = port.CellsAt(fr, base+3)
+			var ry1 int32 = port.CellsAt(fr, base+4)
+			model.NodeAddRegion(nodes, regions, par, pg, rx0, ry0, rx1, ry1)
+			if runs > 1 {
+				model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1)
+			}
+			k += 1
+		}
 	}
 	port.CellsDrop(raw, 0)
 	port.CellsDrop(fr, 0)
@@ -545,87 +654,206 @@ func paMilestone(nodes *port.Cells, page int32) int32 {
 	return 0
 }
 
-func paMaxw(ln *port.Cells, ord *port.Cells) int32 {
-	// The widest upright line of the page (0 when there is none).
-	var n int32 = port.CellsLen(ord)
-	var i int32 = 0
-	var m int32 = 0
-	for i < n {
-		var l int32 = port.CellsAt(ord, i)
-		if paUpright(ln, l) {
-			var w int32 = evidence.LnGet(ln, l, evidence.LhX1()) - evidence.LnGet(ln, l, evidence.LhX0())
-			if w > m {
-				m = w
-			}
-		}
-		i += 1
+func paLetter(cp int32) bool {
+	// A letter, for the hyphen at a break: Basic Latin, Latin-1, Greek, Cyrillic, and anything above U+2FF
+	// that is not punctuation or a symbol (the CJK block and beyond).
+	if (cp >= 65) && (cp <= 90) {
+		return 1 == 1
 	}
-	return m
+	if paLower(cp) {
+		return 1 == 1
+	}
+	if (cp >= 192) && (cp <= 591) {
+		return 1 == 1
+	}
+	if (cp >= 880) && (cp <= 1327) {
+		return 1 == 1
+	}
+	return 0 == 1
 }
 
-func paMargin(ln *port.Cells, ord *port.Cells) int32 {
-	// The page's margin, in `pa-start`'s terms: the least start of an upright line (0 when none).
-	var n int32 = port.CellsLen(ord)
-	var i int32 = 0
-	var m int32 = 0
-	var any int32 = 0
-	for i < n {
-		var l int32 = port.CellsAt(ord, i)
-		if paUpright(ln, l) {
-			var s int32 = paStart(ln, l)
-			if (any == 0) || (s < m) {
-				m = s
-			}
-			any = 1
-		}
-		i += 1
+func paBullet(cp int32) bool {
+	// A bullet or a dash that stands alone as a word: a list marker.
+	if (cp == 8226) || (cp == 183) || (cp == 9679) {
+		return 1 == 1
 	}
-	return m
+	if (cp == 9632) || (cp == 9642) || (cp == 8259) {
+		return 1 == 1
+	}
+	if (cp == 42) || (cp == 45) || (cp == 8211) || (cp == 8212) {
+		return 1 == 1
+	}
+	return 0 == 1
 }
 
-func paContinues(wd *port.Cells, ln *port.Cells, raw *port.Cells, a int32, b int32, amaxw int32, bmargin int32) bool {
-	// Does the paragraph that ended the last page (its last line a) go on with line b, the first of the
-	// next (D137): both upright and one way; a is long (3/5 of its page's longest) and does not close
-	// a sentence; b is not indented past the margin of its page.
-	if !paUpright(ln, a) {
+func paMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool {
+	// Does the line start with a list marker: a bullet or dash alone, `1.`, `12)`, `a)`, `(a)`.
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var wn int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	if wn < 1 {
 		return 0 == 1
 	}
-	if !paUpright(ln, b) {
+	var ts int32 = evidence.WdGet(wd, w0, evidence.HdTstart())
+	var tl int32 = evidence.WdGet(wd, w0, evidence.HdTlen())
+	if (ts < 0) || (tl < 1) {
 		return 0 == 1
 	}
-	if evidence.LnGet(ln, a, evidence.LhDir()) != evidence.LnGet(ln, b, evidence.LhDir()) {
+	var c0 int32 = port.CellsAt(et, ts)
+	if tl == 1 {
+		return paBullet(c0)
+	}
+	if tl > 5 {
 		return 0 == 1
 	}
-	if paEndsSentence(raw) {
-		return 0 == 1
+	var cl int32 = port.CellsAt(et, ts+(tl-1))
+	if (c0 >= 48) && (c0 <= 57) {
+		if (cl != 46) && (cl != 41) {
+			return 0 == 1
+		}
+		var k int32 = 1
+		for k < (tl - 1) {
+			var c int32 = port.CellsAt(et, ts+k)
+			if (c < 48) || (c > 57) {
+				return 0 == 1
+			}
+			k += 1
+		}
+		return 1 == 1
 	}
-	var wa int32 = evidence.LnGet(ln, a, evidence.LhX1()) - evidence.LnGet(ln, a, evidence.LhX0())
+	if (c0 == 40) && (cl == 41) && (tl == 3) {
+		return 1 == 1
+	}
+	if (tl == 2) && paLetter(c0) && (cl == 41) {
+		return 1 == 1
+	}
+	return 0 == 1
+}
+
+func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, a int32, b int32, colx0 int32, colx1 int32, ncol int32, bmargin int32, indents int32) int32 {
+	// The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
+	// on with line b, the first of the next fragment (SPEC 10.1.2, D152). `colx0`..`colx1` is the extent of a's
+	// fragment, `ncol` its lines (the edge signals need three), `bmargin` the margin of b's, `indents` whether
+	// the document's paragraphs have first-line indents.
+	var n int32 = port.CellsLen(raw)
+	var sa int32 = paSize(wd, ln, a)
 	var sb int32 = paSize(wd, ln, b)
-	if (wa * paWideDen) < (amaxw * paWideNum) {
-		return 0 == 1
+	var pts int32 = 0
+	if n < 1 {
+		return -100
 	}
-	if ((paStart(ln, b) - bmargin) * paIndentDiv) > sb {
-		return 0 == 1
+	var last int32 = port.CellsAt(raw, n-1)
+	if ((last == 45) || (last == 173)) && (n >= 2) {
+		if paLetter(port.CellsAt(raw, n-2)) {
+			pts += jsHyphen
+		}
 	}
-	return 1 == 1
+	if ncol >= 3 {
+		if evidence.LnGet(ln, a, evidence.LhX1()) >= (colx1 - (sa / 2)) {
+			pts += jsEdge
+		}
+		if ((colx1 - evidence.LnGet(ln, a, evidence.LhX1())) * 5) > (colx1 - colx0) {
+			pts += jsShort
+		}
+	}
+	if !paEndsSentence(raw) {
+		pts += jsNoterm
+	}
+	if paLower(paFirstCp(wd, ln, et, b)) {
+		pts += jsLower
+	}
+	if (indents == 1) && (((paStart(ln, b) - bmargin) * paIndentDiv) > sb) {
+		pts += jsIndent
+	}
+	if paMarker(wd, ln, et, b) {
+		pts += jsMarker
+	}
+	if ((paAbs(sa-sb) * paSizeDiv) > sa) || (paStyle(wd, ln, a) != paStyle(wd, ln, b)) {
+		pts += jsStyle
+	}
+	if (evidence.LnGet(ln, a, evidence.LhFirst()) + evidence.LnGet(ln, a, evidence.LhCount())) == evidence.LnGet(ln, b, evidence.LhFirst()) {
+		pts += jsStream
+	}
+	return pts
 }
 
-func paFlushAll(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, wd *port.Cells, ln *port.Cells, et *port.Cells, dq *port.Cells) int32 {
-	// Close the open paragraph, then make a paragraph of each line queued in `dq` (the lines that are not
-	// upright, D136) and empty the queue.
+func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, cf *port.Cells, lo *port.Cells, r int32, med int32) int32 {
+	// The side fragment (row r of `cf`) as a `note` block of its role, under the root, its lines made
+	// paragraphs as any fragment's (D113).
+	var base int32 = r * cfStride
+	var first int32 = port.CellsAt(cf, base+cfFirst)
+	var cnt int32 = port.CellsAt(cf, base+cfCount)
+	var page int32 = port.CellsAt(cf, base+cfPage)
+	var note int32 = model.NodeNew(nodes, model.NkNote(), 0)
+	var mg int32 = paFmargin(ln, lo, first, cnt)
+	var i int32 = 1
+	var prev int32 = port.CellsAt(lo, first)
+	model.NodeSetSub(nodes, note, port.CellsAt(cf, base+cfRole))
+	model.NodeSetConf(nodes, note, 500)
+	model.NodeAddSrc(nodes, note, model.SrInfer())
+	model.NodeAddRegion(nodes, regions, note, page, port.CellsAt(cf, base+cfX0), port.CellsAt(cf, base+cfY0), port.CellsAt(cf, base+cfX1), port.CellsAt(cf, base+cfY1))
+	port.CellsDrop(raw, 0)
+	port.CellsDrop(fr, 0)
+	paFragOpen(fr, ln, page, prev, 0)
+	paAddLine(wd, ln, et, raw, prev)
+	for i < cnt {
+		var b int32 = port.CellsAt(lo, first+i)
+		if paNewPar(wd, ln, prev, b, med, mg) {
+			paFlush(nodes, attrs, regions, text, raw, tmp, fr, note)
+			paFragOpen(fr, ln, page, b, 0)
+		} else {
+			paJoin(wd, ln, et, raw, b)
+			paFragExtend(fr, ln, b)
+		}
+		paAddLine(wd, ln, et, raw, b)
+		prev = b
+		i += 1
+	}
+	paFlush(nodes, attrs, regions, text, raw, tmp, fr, note)
+	return 0
+}
+
+func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, cf *port.Cells, lo *port.Cells, med int32, from int32, cur int32, ty int32) int32 {
+	// Write the side fragments that have been read to: those beside a body fragment before row `cur`, and
+	// those beside `cur` that begin at or above y `ty`, each once, in the order of `cf`, after the paragraph
+	// that was open where they begin (D111). Scans from row `from`; answers the first side row not written yet
+	// (the row count when none).
+	var nf int32 = port.CellsLen(cf) / cfStride
+	var r int32 = from
+	var pend int32 = nf
+	for r < nf {
+		var base int32 = r * cfStride
+		if (port.CellsAt(cf, base+cfRole) != model.RlBody()) && (port.CellsAt(cf, base+cfDone) == 0) {
+			if (port.CellsAt(cf, base+cfAssoc) < cur) || ((port.CellsAt(cf, base+cfAssoc) == cur) && (port.CellsAt(cf, base+cfY0) <= ty)) {
+				port.CellsSet(cf, base+cfDone, 1)
+				paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, r, med)
+			} else if pend > r {
+				pend = r
+			}
+		}
+		r += 1
+	}
+	return pend
+}
+
+func paClose(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, cf *port.Cells, lo *port.Cells, dq *port.Cells, med int32, from int32, cur int32, ty int32) int32 {
+	// Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a
+	// paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
+	// Answers the first side row not written yet.
 	var nq int32 = port.CellsLen(dq)
 	var k int32 = 0
-	paFlush(nodes, attrs, regions, text, raw, tmp, fr)
+	var pend int32 = 0
+	paFlush(nodes, attrs, regions, text, raw, tmp, fr, 0)
+	pend = paNotes(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, med, from, cur, ty)
 	for k < nq {
 		var l int32 = port.CellsAt(dq, k)
 		var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
 		paFragOpen(fr, ln, pg, l, 0)
 		paAddLine(wd, ln, et, raw, l)
-		paFlush(nodes, attrs, regions, text, raw, tmp, fr)
+		paFlush(nodes, attrs, regions, text, raw, tmp, fr, 0)
 		k += 1
 	}
 	port.CellsDrop(dq, 0)
-	return 0
+	return pend
 }
 
 func paUprightCount(ln *port.Cells, ord *port.Cells) int32 {
@@ -642,82 +870,193 @@ func paUprightCount(ln *port.Cells, ord *port.Cells) int32 {
 	return n
 }
 
-func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells) int32 {
+func paLayout(cf *port.Cells, r0 int32, r1 int32, page int32, pages *port.Cells, layout *port.Cells) int32 {
+	// The page's `layout` (D111): one cell per (band, col) of the fragments cf[r0..r1), its box the union of
+	// theirs (the margin notes of a side, several fragments, are one column).
+	var r int32 = r0
+	var q int32 = 0
+	var dup int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	for r < r1 {
+		var b int32 = r * cfStride
+		var band int32 = port.CellsAt(cf, b+cfBand)
+		var col int32 = port.CellsAt(cf, b+cfCol)
+		dup = 0
+		q = r0
+		for q < r {
+			if (port.CellsAt(cf, (q*cfStride)+cfBand) == band) && (port.CellsAt(cf, (q*cfStride)+cfCol) == col) {
+				dup = 1
+			}
+			q += 1
+		}
+		if dup == 0 {
+			x0 = port.CellsAt(cf, b+cfX0)
+			y0 = port.CellsAt(cf, b+cfY0)
+			x1 = port.CellsAt(cf, b+cfX1)
+			y1 = port.CellsAt(cf, b+cfY1)
+			q = r + 1
+			for q < r1 {
+				if (port.CellsAt(cf, (q*cfStride)+cfBand) == band) && (port.CellsAt(cf, (q*cfStride)+cfCol) == col) {
+					if port.CellsAt(cf, (q*cfStride)+cfX0) < x0 {
+						x0 = port.CellsAt(cf, (q*cfStride)+cfX0)
+					}
+					if port.CellsAt(cf, (q*cfStride)+cfY0) < y0 {
+						y0 = port.CellsAt(cf, (q*cfStride)+cfY0)
+					}
+					if port.CellsAt(cf, (q*cfStride)+cfX1) > x1 {
+						x1 = port.CellsAt(cf, (q*cfStride)+cfX1)
+					}
+					if port.CellsAt(cf, (q*cfStride)+cfY1) > y1 {
+						y1 = port.CellsAt(cf, (q*cfStride)+cfY1)
+					}
+				}
+				q += 1
+			}
+			model.LayAdd(layout, pages, page-1, band, col, port.CellsAt(cf, b+cfRole), x0, y0, x1, y1)
+		}
+		r += 1
+	}
+	return 0
+}
+
+func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, lt *port.Cells, ord *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells) int32 {
+	// Phase one: every page's column fragments (`emon.columns`), and the page `layout` (D111) from them.
+	var p int32 = 1
+	var i int32 = 0
+	var nu int32 = 0
+	var r int32 = 0
+	port.CellsDrop(cf, 0)
+	port.CellsDrop(lo, 0)
+	for p <= npages {
+		paCollect(ord, lt, p)
+		nu = paUprightCount(lt, ord)
+		port.CellsDrop(ls, 0)
+		i = 0
+		for i < nu {
+			port.CellsPush(ls, port.CellsAt(ord, i))
+			i += 1
+		}
+		var r0 int32 = port.CellsLen(cf) / cfStride
+		columns.LcPage(wd, et, lt, p, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
+		paLayout(cf, r0, port.CellsLen(cf)/cfStride, p, pages, layout)
+		p += 1
+	}
+	return 0
+}
+
+func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells) int32 {
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
-	// `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-	// queue of lines that are not upright). Answers 0.
-	var med int32 = paMedian(ln, ord, gp, npages)
+	// `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
+	// Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
+	// stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not
+	// upright). Answers 0.
+	var med int32 = 0
+	var indents int32 = 0
 	var p int32 = 1
 	var i int32 = 0
 	var n int32 = 0
 	var nu int32 = 0
+	var nf int32 = 0
+	var r int32 = 0
+	var r1 int32 = 0
+	var first int32 = 0
+	var cnt int32 = 0
 	var b int32 = 0
 	var prev int32 = -1
+	var prevfr int32 = -1
 	var open int32 = 0
 	var cont int32 = 0
-	var prevmaxw int32 = 0
-	var pm int32 = 0
+	var pend int32 = 0
 	var rs int32 = 0
+	var mg int32 = 0
+	var ty int32 = 0
+	var score int32 = 0
+	columns.LcCopy(ln, lt)
+	paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
+	nf = port.CellsLen(cf) / cfStride
+	med = paMedian(lt, cf, lo, gp)
+	if paIndents(wd, lt, cf, lo) >= paIndentUse {
+		indents = 1
+	}
 	port.CellsDrop(gp, 0)
 	port.CellsDrop(raw, 0)
 	port.CellsDrop(fr, 0)
 	for p <= npages {
-		paCollect(ord, ln, p)
+		paCollect(ord, lt, p)
 		n = port.CellsLen(ord)
-		nu = paUprightCount(ln, ord)
-		pm = paMargin(ln, ord)
-		if nu == 0 {
-			paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+		nu = paUprightCount(lt, ord)
+		i = nu
+		for i < n {
+			port.CellsPush(gp, port.CellsAt(ord, i))
+			i += 1
+		}
+		for (r < nf) && (port.CellsAt(cf, (r*cfStride)+cfPage) < p) {
+			r += 1
+		}
+		r1 = r
+		for (r1 < nf) && (port.CellsAt(cf, (r1*cfStride)+cfPage) == p) && (port.CellsAt(cf, (r1*cfStride)+cfRole) == model.RlBody()) {
+			r1 += 1
+		}
+		if r == r1 {
+			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000)
 			open = 0
 			prev = -1
 			if p > 1 {
 				paMilestone(nodes, p)
 			}
 		} else {
-			b = port.CellsAt(ord, 0)
-			cont = 0
-			if open == 1 {
-				if paContinues(wd, ln, raw, prev, b, prevmaxw, pm) {
-					cont = 1
+			i = r
+			for i < r1 {
+				first = port.CellsAt(cf, (i*cfStride)+cfFirst)
+				cnt = port.CellsAt(cf, (i*cfStride)+cfCount)
+				mg = paFmargin(lt, lo, first, cnt)
+				b = port.CellsAt(lo, first)
+				cont = 0
+				if open == 1 {
+					score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents)
+					if score >= joinMin {
+						cont = 1
+					}
 				}
-			}
-			if cont == 0 {
-				paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
-				if p > 1 {
-					paMilestone(nodes, p)
-				}
-				paFragOpen(fr, ln, p, b, 0)
-			} else {
-				paJoin(wd, ln, et, raw, b)
-				rs = port.CellsLen(raw)
-				paFragOpen(fr, ln, p, b, rs)
-			}
-			open = 1
-			paAddLine(wd, ln, et, raw, b)
-			prev = b
-			i = 1
-			for i < nu {
-				b = port.CellsAt(ord, i)
-				if paNewPar(wd, ln, prev, b, med, pm) {
-					paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
-					paFragOpen(fr, ln, p, b, 0)
+				if cont == 0 {
+					ty = evidence.LnGet(lt, b, evidence.LhY0())
+					pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty)
+					if (i == r) && (p > 1) {
+						paMilestone(nodes, p)
+					}
+					paFragOpen(fr, lt, p, b, 0)
 				} else {
-					paJoin(wd, ln, et, raw, b)
-					paFragExtend(fr, ln, b)
+					paJoin(wd, lt, et, raw, b)
+					rs = port.CellsLen(raw)
+					paFragOpen(fr, lt, p, b, rs)
 				}
-				paAddLine(wd, ln, et, raw, b)
+				open = 1
+				paAddLine(wd, lt, et, raw, b)
 				prev = b
+				prevfr = i
+				cont = 1
+				for cont < cnt {
+					b = port.CellsAt(lo, first+cont)
+					if paNewPar(wd, lt, prev, b, med, mg) {
+						ty = evidence.LnGet(lt, b, evidence.LhY0())
+						pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty)
+						paFragOpen(fr, lt, p, b, 0)
+					} else {
+						paJoin(wd, lt, et, raw, b)
+						paFragExtend(fr, lt, b)
+					}
+					paAddLine(wd, lt, et, raw, b)
+					prev = b
+					cont += 1
+				}
 				i += 1
 			}
-			prevmaxw = paMaxw(ln, ord)
-		}
-		i = nu
-		for i < n {
-			port.CellsPush(gp, port.CellsAt(ord, i))
-			i += 1
 		}
 		p += 1
 	}
-	paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+	paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000)
 	return 0
 }

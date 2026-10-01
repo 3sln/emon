@@ -35,6 +35,22 @@ public final class Paratest {
         emon.Port.cellsDrop(et, 0);
         return 0;
     }
+    public static int ptBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp) {
+        // `pa-build`, with the column stage's scratch (`emon.columns`) made here.
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells sd = emon.Port.newCells();
+        emon.Port.Cells it = emon.Port.newCells();
+        emon.Port.Cells io = emon.Port.newCells();
+        emon.Port.Cells rw = emon.Port.newCells();
+        emon.Port.Cells gu = emon.Port.newCells();
+        emon.Port.Cells ac = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        emon.Port.Cells cf = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
+    }
     public static int ptRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
         int p = 1;
@@ -43,7 +59,7 @@ public final class Paratest {
             Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
             p += 1;
         }
-        Para.paBuild(wd, ln, et, npages, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+        ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
     public static int ptBrief(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text) {
@@ -321,7 +337,7 @@ public final class Paratest {
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
-        Para.paBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+        ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0) {
             return 3;
         }

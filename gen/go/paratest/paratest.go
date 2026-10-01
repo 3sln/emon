@@ -49,6 +49,23 @@ func ptClear(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
 	return 0
 }
 
+func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells) int32 {
+	// `pa-build`, with the column stage's scratch (`emon.columns`) made here.
+	var lt *port.Cells = port.NewCells()
+	var ls *port.Cells = port.NewCells()
+	var sd *port.Cells = port.NewCells()
+	var it *port.Cells = port.NewCells()
+	var io *port.Cells = port.NewCells()
+	var rw *port.Cells = port.NewCells()
+	var gu *port.Cells = port.NewCells()
+	var ac *port.Cells = port.NewCells()
+	var tm *port.Cells = port.NewCells()
+	var cf *port.Cells = port.NewCells()
+	var lo *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
+}
+
 func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {
 	// Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
 	var p int32 = 1
@@ -57,7 +74,7 @@ func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	para.PaBuild(wd, ln, et, npages, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
 
@@ -342,7 +359,7 @@ func ptGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	para.PaBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
 		return 3
 	}

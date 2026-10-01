@@ -1,0 +1,1372 @@
+;; Columns and reading order (P4.1; SPEC 10.1.1; D111, D151-D153). emon's own module (D039).
+;;
+;;   (lc-copy ln lt)                     the document's lines, copied: the stage splits lines, the evidence is not touched
+;;   (lc-page wd et lt p ...)            one page: its fragments (`cf`) and their lines in reading order (`lo`)
+;;
+;; WHAT IT READS is the text layer's v2 `words` and `lines` (SPEC 8.4.3) of the UPRIGHT lines of one page, and
+;; nothing else: no glyphs, no stream order, no paths or images (the content interpreter writes none yet, so
+;; a figure that is only ink is invisible here; its text, if any, is not). A line is a row of `lt`, a copy of
+;; `lines` (same stride, same fields: `lh-*` read it) to which this stage appends the pieces of the lines it
+;; splits.
+;;
+;; THE STEPS, in the order of SPEC 10.1.1:
+;;   0. the page's dominant size and its body block (the dominant-size lines at least 2/5 as long as the longest
+;;      of them); lines wholly outside the block, mostly in smaller type, are SIDE lines (margin notes and
+;;      sidebars: they are not part of the cut tree), a column of numbers among them is dropped (line numbers);
+;;   1. GUTTERS over WORDS: lines of ink rows (words by baseline), per row the free x-intervals between two
+;;      runs of ink at least `gutter-min` wide (the larger of 3/5 of the row's size and 1.5 times the median
+;;      word gap of the row); an interval that persists (intersection still `gutter-min` wide) for
+;;      `gutter-rows` rows, with at least `gutter-words` words (mean over the rows, the smaller side) on each
+;;      side, is a gutter. A vertical gap of more than `hole` sizes between two rows ends every gutter (a
+;;      figure with no text is as tall as that);
+;;   2. SPLIT every line whose words are on both sides of a gutter, at the gutter;
+;;   3. EXTEND each gutter along its columns: through the lines of body size that lie on one side of it, as long as
+;;      the next is within `hole` sizes (the tail of the longer column, a heading at a column's top), until a line
+;;      crosses it (a SPANNING element: a title, an abstract, a full-width caption) or the columns end;
+;;   4. THE CUT TREE: a gutter whose extent covers every line of the region cuts it vertically; if none, the
+;;      region is cut horizontally at the first top or bottom of the extent of a gutter that has lines on both
+;;      sides of it; if none, it is a LEAF. Horizontal gaps that happen to line up across columns are never
+;;      cuts (that is plain XY-cut's failure). A cut for the title above the body when there are side lines;
+;;   5. ORDER: left first (right first for a right-to-left page), top first. Leaves are COLUMN FRAGMENTS, numbered
+;;      `band` (horizontal cuts above, counted along the path) and `col` (the leaves of a band, in reading order);
+;;      a leaf's lines are in rows (`lc-before`).
+;;
+;; Everything is integers (centipoints). The output rows: `cf` (stride 12): page band col role x0 y0 x1 y1 first
+;; count assoc done; `lo` holds the fragments' lines, the lines of a fragment contiguously from `first`. The
+;; body fragments come first, in order, the side ones after, each with `assoc`, the body fragment it lies beside.
+(ns emon.columns
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1
+                                   lh-by1 lh-rot lh-dir lh-first lh-count hd-x0 hd-x1 hd-y0 hd-y1 hd-bx0 hd-by0
+                                   hd-bx1 hd-by1 hd-tstart hd-tlen hd-line wf-size]]
+            [emon.model :refer [rl-body rl-margin rl-sidebar]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem]]))
+
+;; the named settings (SPEC 10.1.1, 13): constants until the Engine has a settings table
+(defconst ^I32 LC_ROWS 3)          ;; gutter-rows: rows a gutter must persist
+(defconst ^I32 LC_GUT_NUM 3)       ;; gutter-min is 3/5 of the row's size, or 1.5 times its median word gap
+(defconst ^I32 LC_GUT_DEN 5)
+(defconst ^I32 LC_WORDS 3)         ;; gutter-words: the mean words of the smaller side of a gutter, per row
+(defconst ^I32 LC_HOLE 3)          ;; hole: a gap of more than 3 sizes between rows of body type ends a gutter
+(defconst ^I32 LC_BODY_DEN 10)     ;; a line is of the dominant size within 1/10
+(defconst ^I32 LC_LONG_NUM 2)      ;; ... and long when 2/5 of the longest such line
+(defconst ^I32 LC_LONG_DEN 5)
+(defconst ^I32 LC_SMALL_NUM 19)    ;; small type: under 19/20 of the dominant size
+(defconst ^I32 LC_SMALL_DEN 20)
+(defconst ^I32 LC_RUN_GAP 2)       ;; a side run ends at a gap of more than 2 sizes
+(defconst ^I32 LC_NOTE_LINES 4)    ;; a margin note is at most 4 lines
+(defconst ^I32 LC_TIGHT_NUM 4)     ;; a line is tight under another when the gap is under 4/5 of the size
+(defconst ^I32 LC_TIGHT_DEN 5)
+
+;; page registers (`pr`)
+(defconst ^I32 PR_DOM 0)           ;; the dominant size
+(defconst ^I32 PR_BX0 1)           ;; the body block
+(defconst ^I32 PR_BX1 2)
+(defconst ^I32 PR_RTL 3)           ;; 1 when most lines read right to left
+(defconst ^I32 PR_FORCED 4)        ;; the y of the cut under the title, -1 for none
+(defconst ^I32 PR_NSIDE 5)         ;; side fragments written
+
+;; fragment rows (`cf`)
+(defconst ^I32 CF_STRIDE 12)
+(defconst ^I32 CF_PAGE 0)
+(defconst ^I32 CF_BAND 1)
+(defconst ^I32 CF_COL 2)
+(defconst ^I32 CF_ROLE 3)
+(defconst ^I32 CF_X0 4)
+(defconst ^I32 CF_Y0 5)
+(defconst ^I32 CF_X1 6)
+(defconst ^I32 CF_Y1 7)
+(defconst ^I32 CF_FIRST 8)
+(defconst ^I32 CF_COUNT 9)
+(defconst ^I32 CF_ASSOC 10)
+(defconst ^I32 CF_DONE 11)
+
+(defn ^:pub ^I32 lc-cf-stride [] (return 12))
+
+;; items (`it`, stride 7): x0 x1 ymid2 size line y0 y1
+(defconst ^I32 IT_STRIDE 7)
+
+;; gutters (`gu`) and active intervals (`ac`), stride 10
+(defconst ^I32 GU_STRIDE 10)
+(defconst ^I32 GU_TOP 2)
+(defconst ^I32 GU_BOT 3)
+(defconst ^I32 GU_ROWS 4)      ;; rows of body-size type it was seen in
+(defconst ^I32 GU_LROWS 5)     ;; ... with words on its left
+(defconst ^I32 GU_RROWS 6)
+(defconst ^I32 GU_LSUM 7)      ;; the words on its left, in all
+(defconst ^I32 GU_RSUM 8)
+(defconst ^I32 GU_FLAG 9)
+
+;; ------------------------------------------------------------------ small things
+
+(defn ^I32 lc-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 lc-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 lc-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 lc-size [^Cells wd ^Cells lt ^I32 l]
+  (comment "A line's size: that of its middle word (a drop cap or a bold first word does not decide), its height")
+  (comment "when it has no words.")
+  (let [^I32 w0 (ln-get lt l (lh-first))
+        ^I32 wn (ln-get lt l (lh-count))]
+    (if (< wn 1) (return (- (ln-get lt l (lh-y1)) (ln-get lt l (lh-y0)))))
+    (return (wd-get wd (+ w0 (quot wn 2)) (wf-size)))))
+
+(defn ^I32 lc-width [^Cells lt ^I32 l]
+  (return (- (ln-get lt l (lh-x1)) (ln-get lt l (lh-x0)))))
+
+(defn ^I32 lc-ym2 [^Cells lt ^I32 l]
+  (comment "Twice the middle of the line's box: the cuts' key, exact.")
+  (return (+ (ln-get lt l (lh-y0)) (ln-get lt l (lh-y1)))))
+
+(defn ^I32 lc-bm2 [^Cells lt ^I32 l]
+  (comment "Twice the baseline's mean y: the reading key of a row (as `emon.para`'s).")
+  (return (+ (ln-get lt l (lh-by0)) (ln-get lt l (lh-by1)))))
+
+(defn ^Bool lc-is-body [^I32 size ^I32 dom]
+  (comment "Of the dominant size, within 1/10.")
+  (return (<= (* (lc-abs (- size dom)) LC_BODY_DEN) dom)))
+
+(defn ^Bool lc-is-class [^I32 size ^I32 dom]
+  (comment "Column-class type: between 3/4 and 1.35 of the dominant size (captions and notes, headings).")
+  (return (and (>= (* size 4) (* dom 3)) (<= (* size 20) (* dom 27)))))
+
+(defn ^Bool lc-before [^Cells lt ^I32 a ^I32 b]
+  (comment "Does line a come before line b in the rows of a fragment: higher (baselines), then further left, then")
+  (comment "the earlier line. A total order.")
+  (let [^I32 ya (lc-bm2 lt a)
+        ^I32 yb (lc-bm2 lt b)]
+    (if (!= ya yb) (return (< ya yb)))
+    (let [^I32 xa (ln-get lt a (lh-x0))
+          ^I32 xb (ln-get lt b (lh-x0))]
+      (if (!= xa xb) (return (< xa xb)))
+      (return (< a b)))))
+
+(defn ^I32 lc-sort-lines [^Cells lt ^:mut ^Cells c ^I32 from ^I32 to]
+  (comment "Insertion sort of the line ids c[from..to) into rows (`lc-before`); a fragment's lines are few")
+  (comment "and nearly sorted already.")
+  (let [^:mut ^I32 i (+ from 1)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< i to)
+      (do (set v (cells-at c i))
+          (set j i)
+          (set more 1)
+          (while (and (> j from) (== more 1))
+            (do (set u (cells-at c (- j 1)))
+                (if (lc-before lt v u)
+                  (do (cells-set c j u)
+                      (set j (- j 1)))
+                  (set more 0))))
+          (cells-set c j v)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 lc-sort-nums [^:mut ^Cells c]
+  (comment "Sort the numbers of c ascending (shell sort).")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at c i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at c (- j h)))
+                      (if (< v u)
+                        (do (cells-set c j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set c j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+;; ------------------------------------------------------------------ the lines
+
+(defn ^:pub ^I32 lc-copy [^Cells ln ^:mut ^Cells lt]
+  (comment "The document's lines into `lt`, cell for cell: the stage splits lines in the copy.")
+  (let [^I32 n (cells-len ln)
+        ^:mut ^I32 i 0]
+    (cells-drop lt 0)
+    (while (< i n)
+      (do (cells-push lt (cells-at ln i))
+          (set i (+ i 1))))
+    (return 0)))
+
+
+(defn ^I32 lc-piece [^Cells wd ^:mut ^Cells lt ^I32 l ^I32 w0 ^I32 wn]
+  (comment "Make line l cover the words w0..w0+wn: its box and its baseline are theirs.")
+  (let [^I32 wl (+ w0 (- wn 1))
+        ^:mut ^I32 x0 (wd-get wd w0 (hd-x0))
+        ^:mut ^I32 y0 (wd-get wd w0 (hd-y0))
+        ^:mut ^I32 x1 (wd-get wd w0 (hd-x1))
+        ^:mut ^I32 y1 (wd-get wd w0 (hd-y1))
+        ^:mut ^I32 k 1
+        ^I32 base (* l 16)]
+    (while (< k wn)
+      (do (let [^I32 w (+ w0 k)]
+            (set x0 (lc-min x0 (wd-get wd w (hd-x0))))
+            (set y0 (lc-min y0 (wd-get wd w (hd-y0))))
+            (set x1 (lc-max x1 (wd-get wd w (hd-x1))))
+            (set y1 (lc-max y1 (wd-get wd w (hd-y1)))))
+          (set k (+ k 1))))
+    (cells-set lt (+ base (lh-x0)) x0)
+    (cells-set lt (+ base (lh-y0)) y0)
+    (cells-set lt (+ base (lh-x1)) x1)
+    (cells-set lt (+ base (lh-y1)) y1)
+    (cells-set lt (+ base (lh-bx0)) (wd-get wd w0 (hd-bx0)))
+    (cells-set lt (+ base (lh-by0)) (wd-get wd w0 (hd-by0)))
+    (cells-set lt (+ base (lh-bx1)) (wd-get wd wl (hd-bx1)))
+    (cells-set lt (+ base (lh-by1)) (wd-get wd wl (hd-by1)))
+    (cells-set lt (+ base (lh-first)) w0)
+    (cells-set lt (+ base (lh-count)) wn)
+    (return 0)))
+
+(defn ^I32 lc-word-side [^Cells wd ^I32 w ^I32 gm2]
+  (comment "0 when the word's middle is left of the gutter's middle, else 1.")
+  (if (< (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) gm2) (return 0))
+  (return 1))
+
+(defn ^I32 lc-split [^Cells wd ^:mut ^Cells lt ^:mut ^Cells ls ^I32 l ^I32 gx0 ^I32 gx1]
+  (comment "Split line l at the gutter [gx0, gx1] when its words are on both sides of it, each side's together")
+  (comment "(left to right or right to left): l keeps the first run, a new line (appended to `lt` and `ls`) the")
+  (comment "second. Answers 1 when it split.")
+  (let [^I32 w0 (ln-get lt l (lh-first))
+        ^I32 wn (ln-get lt l (lh-count))
+        ^I32 gm2 (+ gx0 gx1)
+        ^:mut ^I32 k 1
+        ^:mut ^I32 cut 0
+        ^:mut ^I32 flips 0
+        ^:mut ^I32 prev (lc-word-side wd w0 gm2)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 v 0
+        ^I32 nl (quot (cells-len lt) 16)]
+    (if (< wn 2) (return 0))
+    (while (< k wn)
+      (do (set s (lc-word-side wd (+ w0 k) gm2))
+          (if (!= s prev)
+            (do (set flips (+ flips 1))
+                (set cut k)
+                (set prev s)))
+          (set k (+ k 1))))
+    (if (!= flips 1) (return 0))
+    (while (< f 16)
+      (do (set v (cells-at lt (+ (* l 16) f)))
+          (cells-push lt v)
+          (set f (+ f 1))))
+    (lc-piece wd lt l w0 cut)
+    (lc-piece wd lt nl (+ w0 cut) (- wn cut))
+    (cells-push ls nl)
+    (return 1)))
+
+;; ------------------------------------------------------------- the dominant size
+
+(defn ^I32 lc-dom [^Cells wd ^Cells lt ^Cells ls ^:mut ^Cells tm]
+  (comment "The page's dominant size: the size (within 1/20) whose lines have the most width in all. 0 for no lines.")
+  (let [^I32 n (cells-len ls)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 sum 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bestw -1
+        ^:mut ^I32 s 0]
+    (cells-drop tm 0)
+    (while (< i n)
+      (do (let [^I32 l (cells-at ls i)]
+            (cells-push tm (lc-size wd lt l)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set s (cells-at tm i))
+          (set sum 0)
+          (set j 0)
+          (while (< j n)
+            (do (let [^I32 sj (cells-at tm j)]
+                  (if (<= (* (lc-abs (- sj s)) 20) s)
+                    (set sum (+ sum (lc-width lt (cells-at ls j))))))
+                (set j (+ j 1))))
+          (if (> sum bestw)
+            (do (set bestw sum)
+                (set best s)))
+          (set i (+ i 1))))
+    (return best)))
+
+;; ------------------------------------------------------------------- side lines
+
+(defn ^Bool lc-numeric-line [^Cells wd ^Cells et ^Cells lt ^I32 l]
+  (comment "Is every word of the line digits only: a line number, a folio.")
+  (let [^I32 w0 (ln-get lt l (lh-first))
+        ^I32 wn (ln-get lt l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 any 0]
+    (while (< k wn)
+      (do (let [^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
+                ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
+            (if (and (>= ts 0) (> tl 0))
+              (do (set any 1)
+                  (set j 0)
+                  (while (< j tl)
+                    (do (let [^I32 c (cells-at et (+ ts j))]
+                          (if (or (< c 48) (> c 57)) (return (== 0 1))))
+                        (set j (+ j 1)))))))
+          (set k (+ k 1))))
+    (return (== any 1))))
+
+(defn ^Bool lc-beyond [^Cells lt ^I32 l ^I32 bx0 ^I32 bx1 ^I32 mg]
+  (comment "Does the line lie wholly outside the body block, by `mg`.")
+  (if (>= (ln-get lt l (lh-x0)) (+ bx1 mg)) (return (== 1 1)))
+  (if (<= (ln-get lt l (lh-x1)) (- bx0 mg)) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^I32 lc-side [^Cells wd ^Cells et ^Cells lt ^:mut ^Cells ls ^:mut ^Cells sd ^:mut ^Cells pr ^I32 dom]
+  (comment "Find the body block, and move the lines wholly outside it from `ls` to `sd`, when most of them are in")
+  (comment "smaller type (margin notes, sidebars). Numeric lines among them (line numbers) are dropped. Sets the")
+  (comment "block in `pr` and the cut under the title (`PR_FORCED`). Answers the lines in `sd`.")
+  (let [^I32 n (cells-len ls)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 maxw 0
+        ^:mut ^I32 bx0 1000000000
+        ^:mut ^I32 bx1 -1000000000
+        ^:mut ^I32 bt 1000000000
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 kept 0]
+    (cells-drop sd 0)
+    (while (< i n)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (lc-is-body (lc-size wd lt l) dom)
+              (set maxw (lc-max maxw (lc-width lt l)))))
+          (set i (+ i 1))))
+    (if (== maxw 0) (return 0))
+    (set i 0)
+    (while (< i n)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (and (lc-is-body (lc-size wd lt l) dom)
+                     (>= (* (lc-width lt l) LC_LONG_DEN) (* maxw LC_LONG_NUM)))
+              (do (set bx0 (lc-min bx0 (ln-get lt l (lh-x0))))
+                  (set bx1 (lc-max bx1 (ln-get lt l (lh-x1))))
+                  (set bt (lc-min bt (ln-get lt l (lh-y0)))))))
+          (set i (+ i 1))))
+    (cells-set pr PR_BX0 bx0)
+    (cells-set pr PR_BX1 bx1)
+    (set i 0)
+    (while (< i n)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (lc-beyond lt l bx0 bx1 (quot dom 2))
+              (do (set nb (+ nb 1))
+                  (if (< (* (lc-size wd lt l) LC_SMALL_DEN) (* dom LC_SMALL_NUM))
+                    (set ns (+ ns 1))))))
+          (set i (+ i 1))))
+    (if (== nb 0) (return 0))
+    (if (< (* ns 2) nb) (return 0))
+    (set i 0)
+    (while (< i n)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (lc-beyond lt l bx0 bx1 (quot dom 2))
+              (if (not (lc-numeric-line wd et lt l))
+                (cells-push sd l))
+              (do (cells-set ls kept l)
+                  (set kept (+ kept 1)))))
+          (set i (+ i 1))))
+    (cells-drop ls kept)
+    (if (== (cells-len sd) 0) (return 0))
+    ;; the cut under the title: the top of the first body line, when something lies above it
+    (set i 0)
+    (while (< i kept)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (< (lc-ym2 lt l) (* 2 bt))
+              (cells-set pr PR_FORCED bt)))
+          (set i (+ i 1))))
+    (return (cells-len sd))))
+
+;; ----------------------------------------------------------------------- gutters
+
+(defn ^Bool lc-item-lt [^Cells it ^I32 a ^I32 b ^I32 mode]
+  (comment "Item a before item b: mode 0 by baseline then x, mode 1 by x then baseline; ties by index.")
+  (let [^I32 ya (cells-at it (+ (* a IT_STRIDE) 2))
+        ^I32 yb (cells-at it (+ (* b IT_STRIDE) 2))
+        ^I32 xa (cells-at it (* a IT_STRIDE))
+        ^I32 xb (cells-at it (* b IT_STRIDE))]
+    (if (== mode 0)
+      (do (if (!= ya yb) (return (< ya yb)))
+          (if (!= xa xb) (return (< xa xb))))
+      (do (if (!= xa xb) (return (< xa xb)))
+          (if (!= ya yb) (return (< ya yb)))))
+    (return (< a b))))
+
+(defn ^I32 lc-sort-items [^Cells it ^:mut ^Cells io ^I32 from ^I32 to ^I32 mode]
+  (comment "Shell sort of the item indices io[from..to) (Knuth's gaps).")
+  (let [^I32 n (- to from)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i (+ from h))
+          (while (< i to)
+            (do (set v (cells-at io i))
+                (set j i)
+                (set more 1)
+                (while (and (>= (- j h) from) (== more 1))
+                  (do (set u (cells-at io (- j h)))
+                      (if (lc-item-lt it v u mode)
+                        (do (cells-set io j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set io j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 lc-items [^Cells wd ^Cells lt ^Cells ls ^:mut ^Cells it ^:mut ^Cells io]
+  (comment "The ink: one item per word of the lines in `ls` (x0 x1 baseline-mid-times-2 size line y0 y1), and")
+  (comment "their indices in `io`.")
+  (let [^I32 n (cells-len ls)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (cells-drop it 0)
+    (cells-drop io 0)
+    (while (< i n)
+      (do (let [^I32 l (cells-at ls i)
+                ^I32 w0 (ln-get lt l (lh-first))
+                ^I32 wn (ln-get lt l (lh-count))]
+            (set k 0)
+            (while (< k wn)
+              (do (let [^I32 w (+ w0 k)]
+                    (cells-push it (wd-get wd w (hd-x0)))
+                    (cells-push it (wd-get wd w (hd-x1)))
+                    (cells-push it (+ (wd-get wd w (hd-by0)) (wd-get wd w (hd-by1))))
+                    (cells-push it (wd-get wd w (wf-size)))
+                    (cells-push it l)
+                    (cells-push it (wd-get wd w (hd-y0)))
+                    (cells-push it (wd-get wd w (hd-y1)))
+                    (let [^I32 ni (- (quot (cells-len it) IT_STRIDE) 1)]
+                      (cells-push io ni)))
+                  (set k (+ k 1)))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 lc-close [^:mut ^Cells gu ^Cells ac ^I32 a]
+  (comment "An active interval ends: a gutter when it persisted `gutter-rows` rows and held, on each side, words")
+  (comment "in `gutter-rows` rows, `gutter-words` of them on average.")
+  (let [^I32 base (* a GU_STRIDE)
+        ^I32 rows (cells-at ac (+ base GU_ROWS))
+        ^I32 lrows (cells-at ac (+ base GU_LROWS))
+        ^I32 rrows (cells-at ac (+ base GU_RROWS))
+        ^I32 lsum (cells-at ac (+ base GU_LSUM))
+        ^I32 rsum (cells-at ac (+ base GU_RSUM))
+        ^:mut ^I32 f 0]
+    (if (and (>= rows LC_ROWS)
+             (and (>= lrows LC_ROWS) (>= rrows LC_ROWS))
+             (and (>= lsum (* lrows LC_WORDS)) (>= rsum (* rrows LC_WORDS))))
+      (do (while (< f GU_STRIDE)
+            (do (cells-push gu (cells-at ac (+ base f)))
+                (set f (+ f 1))))))
+    (return 0)))
+
+(defn ^I32 lc-close-all [^:mut ^Cells gu ^:mut ^Cells ac]
+  (let [^I32 na (quot (cells-len ac) GU_STRIDE)
+        ^:mut ^I32 a 0]
+    (while (< a na)
+      (do (lc-close gu ac a)
+          (set a (+ a 1))))
+    (cells-drop ac 0)
+    (return 0)))
+
+(defn ^I32 lc-best-piece [^Cells it ^Cells io ^I32 s ^I32 e ^I32 ax0 ^I32 ax1 ^:mut ^Cells tm]
+  (comment "The widest part of [ax0, ax1] that no item of the row io[s..e) (sorted by x) touches: its ends are")
+  (comment "put in tm[0] and tm[1], its width answered (0 when none).")
+  (let [^:mut ^I32 lo ax0
+        ^:mut ^I32 bw 0
+        ^:mut ^I32 b0 ax0
+        ^:mut ^I32 b1 ax0
+        ^:mut ^I32 k s]
+    (while (< k e)
+      (do (let [^I32 ix (cells-at io k)
+                ^I32 x0 (cells-at it (* ix IT_STRIDE))
+                ^I32 x1 (cells-at it (+ (* ix IT_STRIDE) 1))]
+            (if (and (< x0 ax1) (> x1 ax0))
+              (do (if (> (- (lc-min x0 ax1) lo) bw)
+                    (do (set bw (- (lc-min x0 ax1) lo))
+                        (set b0 lo)
+                        (set b1 (lc-min x0 ax1))))
+                  (set lo (lc-max lo x1)))))
+          (set k (+ k 1))))
+    (if (> (- ax1 lo) bw)
+      (do (set bw (- ax1 lo))
+          (set b0 lo)
+          (set b1 ax1)))
+    (cells-set tm 0 b0)
+    (cells-set tm 1 b1)
+    (return bw)))
+
+(defn ^I32 lc-count-left [^Cells it ^Cells io ^I32 s ^I32 e ^I32 x ^I32 gmin]
+  (comment "The words of the run of ink that ends at or left of x: the items whose right edge is at or left of")
+  (comment "x, from the one nearest back while no gap of `gmin` or more parts two. (A table's cell is a run of one")
+  (comment "or two words; a column's line has many.)")
+  (let [^:mut ^I32 k s
+        ^:mut ^I32 kl -1
+        ^:mut ^I32 n 0]
+    (while (< k e)
+      (do (if (<= (cells-at it (+ (* (cells-at io k) IT_STRIDE) 1)) x) (set kl k))
+          (set k (+ k 1))))
+    (if (< kl 0) (return 0))
+    (set n 1)
+    (set k (- kl 1))
+    (while (>= k s)
+      (do (let [^I32 a (cells-at io k)
+                ^I32 b (cells-at io (+ k 1))]
+            (if (>= (- (cells-at it (* b IT_STRIDE)) (cells-at it (+ (* a IT_STRIDE) 1))) gmin)
+              (return n)))
+          (set n (+ n 1))
+          (set k (- k 1))))
+    (return n)))
+
+(defn ^I32 lc-count-right [^Cells it ^Cells io ^I32 s ^I32 e ^I32 x ^I32 gmin]
+  (comment "The words of the run of ink that starts at or right of x, as `lc-count-left`.")
+  (let [^:mut ^I32 k e
+        ^:mut ^I32 kr -1
+        ^:mut ^I32 n 0]
+    (set k (- e 1))
+    (while (>= k s)
+      (do (if (>= (cells-at it (* (cells-at io k) IT_STRIDE)) x) (set kr k))
+          (set k (- k 1))))
+    (if (< kr 0) (return 0))
+    (set n 1)
+    (set k (+ kr 1))
+    (while (< k e)
+      (do (let [^I32 a (cells-at io (- k 1))
+                ^I32 b (cells-at io k)]
+            (if (>= (- (cells-at it (* b IT_STRIDE)) (cells-at it (+ (* a IT_STRIDE) 1))) gmin)
+              (return n)))
+          (set n (+ n 1))
+          (set k (+ k 1))))
+    (return n)))
+
+(defn ^I32 lc-row [^Cells it ^Cells io ^I32 s ^I32 e ^I32 size ^I32 ry0 ^I32 ry1 ^I32 hasclass
+                   ^:mut ^Cells ac ^:mut ^Cells gu ^:mut ^Cells tm ^:mut ^Cells rw]
+  (comment "One row of ink, its items io[s..e) sorted by x. Every active interval is cut down by the ink in it:")
+  (comment "it goes on where a part `gutter-min` wide is left, else it ends. Where the row has type of body size")
+  (comment "it also counts as a row of the interval, and the gaps between two runs of ink at least `gutter-min`")
+  (comment "wide that no active interval touches begin new ones.")
+  (let [^:mut ^I32 reach (cells-at it (+ (* (cells-at io s) IT_STRIDE) 1))
+        ^:mut ^I32 k (+ s 1)
+        ^:mut ^I32 med 0
+        ^:mut ^I32 gmin 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 bw 0
+        ^:mut ^I32 lc 0
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 hit 0]
+    (cells-drop rw 0)
+    (while (< k e)
+      (do (let [^I32 ix (cells-at io k)
+                ^I32 gap (- (cells-at it (* ix IT_STRIDE)) reach)]
+            (cells-push rw (lc-max gap 0))
+            (set reach (lc-max reach (cells-at it (+ (* ix IT_STRIDE) 1)))))
+          (set k (+ k 1))))
+    (lc-sort-nums rw)
+    (if (>= (cells-len rw) 3)
+      (set med (cells-at rw (quot (- (cells-len rw) 1) 2))))
+    (set gmin (lc-max (quot (* size LC_GUT_NUM) LC_GUT_DEN) (quot (* med 3) 2)))
+    ;; the active intervals, cut down by this row's ink
+    (let [^I32 na (quot (cells-len ac) GU_STRIDE)]
+      (set a 0)
+      (while (< a na)
+        (do (let [^I32 ab (* a GU_STRIDE)]
+              (set bw (lc-best-piece it io s e (cells-at ac ab) (cells-at ac (+ ab 1)) tm))
+              (if (>= bw gmin)
+                (do (let [^I32 p0 (cells-at tm 0)
+                          ^I32 p1 (cells-at tm 1)]
+                      (cells-set ac ab p0)
+                      (cells-set ac (+ ab 1) p1)
+                      (if (== hasclass 1)
+                        (do (set lc (lc-count-left it io s e p0 gmin))
+                            (set rc (lc-count-right it io s e p1 gmin))
+                            (let [^I32 o-bot (cells-at ac (+ ab GU_BOT))
+                                  ^I32 o-rows (cells-at ac (+ ab GU_ROWS))
+                                  ^I32 o-lr (cells-at ac (+ ab GU_LROWS))
+                                  ^I32 o-ls (cells-at ac (+ ab GU_LSUM))
+                                  ^I32 o-rr (cells-at ac (+ ab GU_RROWS))
+                                  ^I32 o-rs (cells-at ac (+ ab GU_RSUM))]
+                              (cells-set ac (+ ab GU_BOT) (lc-max o-bot ry1))
+                              (cells-set ac (+ ab GU_ROWS) (+ o-rows 1))
+                              (if (> lc 0)
+                                (do (cells-set ac (+ ab GU_LROWS) (+ o-lr 1))
+                                    (cells-set ac (+ ab GU_LSUM) (+ o-ls lc))))
+                              (if (> rc 0)
+                                (do (cells-set ac (+ ab GU_RROWS) (+ o-rr 1))
+                                    (cells-set ac (+ ab GU_RSUM) (+ o-rs rc))))))))
+                    (if (!= wi a)
+                      (do (set c 0)
+                          (while (< c GU_STRIDE)
+                            (do (let [^I32 v (cells-at ac (+ ab c))]
+                                  (cells-set ac (+ (* wi GU_STRIDE) c) v))
+                                (set c (+ c 1))))))
+                    (set wi (+ wi 1)))
+                (lc-close gu ac a)))
+            (set a (+ a 1))))
+      (cells-drop ac (* wi GU_STRIDE)))
+    ;; the gaps no active interval touches begin new ones
+    (if (== hasclass 1)
+      (do (set reach (cells-at it (+ (* (cells-at io s) IT_STRIDE) 1)))
+          (set k (+ s 1))
+          (while (< k e)
+            (do (let [^I32 ix (cells-at io k)
+                      ^I32 x0 (cells-at it (* ix IT_STRIDE))]
+                  (if (>= (- x0 reach) gmin)
+                    (do (set hit 0)
+                        (set a 0)
+                        (while (< a (quot (cells-len ac) GU_STRIDE))
+                          (do (if (and (< (cells-at ac (* a GU_STRIDE)) x0)
+                                       (> (cells-at ac (+ (* a GU_STRIDE) 1)) reach))
+                                (set hit 1))
+                              (set a (+ a 1))))
+                        (if (== hit 0)
+                          (do (cells-push ac reach)
+                              (cells-push ac x0)
+                              (cells-push ac ry0)
+                              (cells-push ac ry1)
+                              (cells-push ac 1)
+                              (cells-push ac 1)
+                              (cells-push ac 1)
+                              (cells-push ac (lc-count-left it io s e reach gmin))
+                              (cells-push ac (lc-count-right it io s e x0 gmin))
+                              (cells-push ac 0)))))
+                  (set reach (lc-max reach (cells-at it (+ (* ix IT_STRIDE) 1)))))
+                (set k (+ k 1))))))
+    (return 0)))
+
+(defn ^I32 lc-sweep [^Cells wd ^Cells lt ^Cells ls ^I32 dom
+                     ^:mut ^Cells it ^:mut ^Cells io ^:mut ^Cells rw ^:mut ^Cells gu ^:mut ^Cells ac
+                     ^:mut ^Cells tm]
+  (comment "The gutters of the words of the lines in `ls`: ink rows top to bottom (SPEC 10.1.1 step 1). A row")
+  (comment "is the words whose baselines are within half a size of the first's.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 size 0
+        ^:mut ^I32 ry0 0
+        ^:mut ^I32 ry1 0
+        ^:mut ^I32 hasclass 0
+        ^:mut ^I32 prevq -1000000000
+        ^:mut ^I32 k 0]
+    (cells-drop gu 0)
+    (cells-drop ac 0)
+    (cells-drop tm 0)
+    (cells-push tm 0)
+    (cells-push tm 0)
+    (lc-items wd lt ls it io)
+    (let [^I32 m (cells-len io)]
+      (if (== m 0) (return 0))
+      (lc-sort-items it io 0 m 0)
+      (while (< s m)
+        (do (let [^I32 i0 (cells-at io s)
+                  ^I32 y0 (cells-at it (+ (* i0 IT_STRIDE) 2))
+                  ^I32 sz0 (cells-at it (+ (* i0 IT_STRIDE) 3))]
+              (set e (+ s 1))
+              (while (and (< e m)
+                          (<= (- (cells-at it (+ (* (cells-at io e) IT_STRIDE) 2)) y0) sz0))
+                (set e (+ e 1))))
+            (lc-sort-items it io s e 1)
+            (set size 0)
+            (set ry0 1000000000)
+            (set ry1 -1000000000)
+            (set hasclass 0)
+            (set k s)
+            (while (< k e)
+              (do (let [^I32 ix (cells-at io k)
+                        ^I32 sz (cells-at it (+ (* ix IT_STRIDE) 3))]
+                    (set size (lc-max size sz))
+                    (if (lc-is-class sz dom) (set hasclass 1))
+                    (set ry0 (lc-min ry0 (cells-at it (+ (* ix IT_STRIDE) 5))))
+                    (set ry1 (lc-max ry1 (cells-at it (+ (* ix IT_STRIDE) 6)))))
+                  (set k (+ k 1))))
+            (if (and (== hasclass 1) (> (- ry0 prevq) (* LC_HOLE dom)))
+              (lc-close-all gu ac))
+            (lc-row it io s e size ry0 ry1 hasclass ac gu tm rw)
+            (if (== hasclass 1) (set prevq (lc-max prevq ry1)))
+            (set s e))))
+    (lc-close-all gu ac)
+    (return (quot (cells-len gu) GU_STRIDE))))
+
+;; ------------------------------------------------------- merge, split, extend
+
+(defn ^I32 lc-merge [^:mut ^Cells gu ^I32 dom]
+  (comment "Gutters of one column gap that the sweep saw in pieces (a figure in one column, a heading) are one:")
+  (comment "their x-intervals overlap by half of the narrower and their extents are within `hole` sizes.")
+  (let [^I32 n (quot (cells-len gu) GU_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 wi 0]
+    (while (< i n)
+      (do (set j (+ i 1))
+          (while (< j n)
+            (do (let [^I32 ib (* i GU_STRIDE)
+                      ^I32 jb (* j GU_STRIDE)]
+                  (if (and (== (cells-at gu (+ ib GU_FLAG)) 0) (== (cells-at gu (+ jb GU_FLAG)) 0))
+                    (do (let [^I32 ix0 (cells-at gu ib)
+                              ^I32 ix1 (cells-at gu (+ ib 1))
+                              ^I32 jx0 (cells-at gu jb)
+                              ^I32 jx1 (cells-at gu (+ jb 1))
+                              ^I32 ox (- (lc-min ix1 jx1) (lc-max ix0 jx0))
+                              ^I32 wmin (lc-min (- ix1 ix0) (- jx1 jx0))
+                              ^I32 itop (cells-at gu (+ ib GU_TOP))
+                              ^I32 ibot (cells-at gu (+ ib GU_BOT))
+                              ^I32 jtop (cells-at gu (+ jb GU_TOP))
+                              ^I32 jbot (cells-at gu (+ jb GU_BOT))]
+                          (if (and (> ox 0) (>= (* ox 2) wmin)
+                                   (<= jtop (+ ibot (* LC_HOLE dom)))
+                                   (<= itop (+ jbot (* LC_HOLE dom))))
+                            (do (cells-set gu ib (lc-max ix0 jx0))
+                                (cells-set gu (+ ib 1) (lc-min ix1 jx1))
+                                (cells-set gu (+ ib GU_TOP) (lc-min itop jtop))
+                                (cells-set gu (+ ib GU_BOT) (lc-max ibot jbot))
+                                (set f 4)
+                                (while (< f 9)
+                                  (do (let [^I32 sum (+ (cells-at gu (+ ib f)) (cells-at gu (+ jb f)))]
+                                        (cells-set gu (+ ib f) sum))
+                                      (set f (+ f 1))))
+                                (cells-set gu (+ jb GU_FLAG) 1))))))
+                  (set j (+ j 1)))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (if (== (cells-at gu (+ (* i GU_STRIDE) GU_FLAG)) 0)
+            (do (if (!= wi i)
+                  (do (set f 0)
+                      (while (< f GU_STRIDE)
+                        (do (let [^I32 v (cells-at gu (+ (* i GU_STRIDE) f))]
+                              (cells-set gu (+ (* wi GU_STRIDE) f) v))
+                            (set f (+ f 1))))))
+                (set wi (+ wi 1))))
+          (set i (+ i 1))))
+    (cells-drop gu (* wi GU_STRIDE))
+    (return wi)))
+
+(defn ^I32 lc-sort-gu [^:mut ^Cells gu]
+  (comment "Insertion sort of the gutters by their left edge.")
+  (let [^I32 n (quot (cells-len gu) GU_STRIDE)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 more 1]
+    (while (< i n)
+      (do (set j i)
+          (set more 1)
+          (while (and (> j 0) (== more 1))
+            (do (if (< (cells-at gu (* j GU_STRIDE)) (cells-at gu (* (- j 1) GU_STRIDE)))
+                  (do (set f 0)
+                      (while (< f GU_STRIDE)
+                        (do (let [^I32 a (cells-at gu (+ (* j GU_STRIDE) f))
+                                  ^I32 b (cells-at gu (+ (* (- j 1) GU_STRIDE) f))]
+                              (cells-set gu (+ (* j GU_STRIDE) f) b)
+                              (cells-set gu (+ (* (- j 1) GU_STRIDE) f) a))
+                            (set f (+ f 1))))
+                      (set j (- j 1)))
+                  (set more 0))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 lc-split-all [^Cells wd ^:mut ^Cells lt ^:mut ^Cells ls ^Cells gu]
+  (comment "SPLIT (step 2): every line inside a gutter's extent whose words are on both sides of it.")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0]
+    (while (< g ng)
+      (do (let [^I32 gb (* g GU_STRIDE)
+                ^I32 gx0 (cells-at gu gb)
+                ^I32 gx1 (cells-at gu (+ gb 1))
+                ^I32 top2 (* 2 (cells-at gu (+ gb GU_TOP)))
+                ^I32 bot2 (* 2 (cells-at gu (+ gb GU_BOT)))]
+            (set i 0)
+            (while (< i (cells-len ls))
+              (do (let [^I32 l (cells-at ls i)
+                        ^I32 ym (lc-ym2 lt l)]
+                    (if (and (>= ym top2) (<= ym bot2))
+                      (lc-split wd lt ls l gx0 gx1)))
+                  (set i (+ i 1)))))
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^Bool lc-crosses [^Cells lt ^I32 l ^I32 gx0 ^I32 gx1]
+  (return (and (< (ln-get lt l (lh-x0)) gx1) (> (ln-get lt l (lh-x1)) gx0))))
+
+(defn ^I32 lc-above [^Cells lt ^Cells ls ^I32 l]
+  (comment "The line nearest above line l (wholly above it, to a quarter of its height): the one with the lowest")
+  (comment "bottom. -1 for none.")
+  (let [^I32 n (cells-len ls)
+        ^I32 top (+ (ln-get lt l (lh-y0)) (quot (- (ln-get lt l (lh-y1)) (ln-get lt l (lh-y0))) 4))
+        ^:mut ^I32 best -1
+        ^:mut ^I32 by -1000000000
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (let [^I32 m (cells-at ls i)
+                ^I32 y1 (ln-get lt m (lh-y1))]
+            (if (and (<= y1 top) (> y1 by))
+              (do (set by y1)
+                  (set best m))))
+          (set i (+ i 1))))
+    (return best)))
+
+(defn ^I32 lc-below [^Cells lt ^Cells ls ^I32 l]
+  (comment "The line nearest below line l (wholly below it, to a quarter of its height): the one with the highest")
+  (comment "top. -1 for none.")
+  (let [^I32 n (cells-len ls)
+        ^I32 bot (- (ln-get lt l (lh-y1)) (quot (- (ln-get lt l (lh-y1)) (ln-get lt l (lh-y0))) 4))
+        ^:mut ^I32 best -1
+        ^:mut ^I32 by 1000000000
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (let [^I32 m (cells-at ls i)
+                ^I32 y0 (ln-get lt m (lh-y0))]
+            (if (and (>= y0 bot) (< y0 by))
+              (do (set by y0)
+                  (set best m))))
+          (set i (+ i 1))))
+    (return best)))
+
+(defn ^I32 lc-extend-up [^Cells wd ^Cells lt ^Cells ls ^:mut ^Cells gu ^I32 dom]
+  (comment "A gutter's extent goes up through the lines of body size that lie on one side of it (a heading or")
+  (comment "the first lines of one column before the other starts), until a line crosses it or a gap of `hole`")
+  (comment "sizes; not through the last line of a paragraph that spans the gutter, which is the line that has one")
+  (comment "close above it that crosses it. (Down, the sweep already carried it.)")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^I32 n (cells-len ls)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 done 0
+        ^:mut ^I32 cur 0]
+    (while (< g ng)
+      (do (let [^I32 gb (* g GU_STRIDE)
+                ^I32 gx0 (cells-at gu gb)
+                ^I32 gx1 (cells-at gu (+ gb 1))
+                ^I32 top0 (cells-at gu (+ gb GU_TOP))]
+            (set cur top0)
+            (set done 0)
+            (set i (- n 1))
+            (while (and (>= i 0) (== done 0))
+              (do (let [^I32 l (cells-at ls i)]
+                    (if (< (lc-ym2 lt l) (* 2 top0))
+                      (if (lc-crosses lt l gx0 gx1)
+                        (set done 1)
+                        (if (lc-is-class (lc-size wd lt l) dom)
+                          (if (> (- cur (ln-get lt l (lh-y1))) (* LC_HOLE dom))
+                            (set done 1)
+                            (do (let [^I32 a (lc-above lt ls l)]
+                                  (if (and (>= a 0) (lc-crosses lt a gx0 gx1)
+                                           (<= (* (- (ln-get lt l (lh-y0)) (ln-get lt a (lh-y1))) LC_TIGHT_DEN)
+                                               (* dom LC_TIGHT_NUM)))
+                                    (set done 1)
+                                    (set cur (lc-min cur (ln-get lt l (lh-y0))))))))))))
+                  (set i (- i 1))))
+            (cells-set gu (+ gb GU_TOP) cur))
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^I32 lc-trim-bottom [^Cells wd ^Cells lt ^Cells ls ^:mut ^Cells gu ^I32 dom]
+  (comment "A gutter's extent ends above a lone last line that has a line close below it that crosses the gutter: a")
+  (comment "heading that belongs to the spanning text under it, not to the columns above.")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^I32 n (cells-len ls)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 again 1
+        ^:mut ^I32 last -1
+        ^:mut ^I32 mate 0
+        ^:mut ^I32 prevb 0
+        ^:mut ^I32 hasprev 0]
+    (while (< g ng)
+      (do (set again 1)
+          (while (== again 1)
+            (do (set again 0)
+                (let [^I32 gb (* g GU_STRIDE)
+                      ^I32 gx0 (cells-at gu gb)
+                      ^I32 gx1 (cells-at gu (+ gb 1))
+                      ^I32 top2 (* 2 (cells-at gu (+ gb GU_TOP)))
+                      ^I32 bot2 (* 2 (cells-at gu (+ gb GU_BOT)))]
+                  (set last -1)
+                  (set i 0)
+                  (while (< i n)
+                    (do (let [^I32 l (cells-at ls i)
+                              ^I32 ym (lc-ym2 lt l)]
+                          (if (and (>= ym top2) (<= ym bot2))
+                            (if (or (< last 0) (> (ln-get lt l (lh-y1)) (ln-get lt last (lh-y1))))
+                              (set last l))))
+                        (set i (+ i 1))))
+                  (if (>= last 0)
+                    (do (set mate 0)
+                        (set hasprev 0)
+                        (set prevb 0)
+                        (set i 0)
+                        (while (< i n)
+                          (do (let [^I32 l (cells-at ls i)
+                                    ^I32 ym (lc-ym2 lt l)]
+                                (if (and (!= l last) (>= ym top2) (<= ym bot2))
+                                  (do (if (> (ln-get lt l (lh-y1)) (ln-get lt last (lh-y0)))
+                                        (set mate 1))
+                                      (if (<= (ln-get lt l (lh-y1)) (ln-get lt last (lh-y0)))
+                                        (do (set hasprev 1)
+                                            (set prevb (lc-max prevb (ln-get lt l (lh-y1)))))))))
+                              (set i (+ i 1))))
+                        (if (and (== mate 0) (== hasprev 1))
+                          (let [^I32 b (lc-below lt ls last)]
+                            (if (and (>= b 0) (lc-crosses lt b gx0 gx1)
+                                     (<= (* (- (ln-get lt b (lh-y0)) (ln-get lt last (lh-y1))) LC_TIGHT_DEN)
+                                         (* dom LC_TIGHT_NUM)))
+                              (do (cells-set gu (+ gb GU_BOT) prevb)
+                                  (set again 1))))))))))
+          (set g (+ g 1))))
+    (return 0)))
+
+;; ---------------------------------------------------------------------- the cut tree
+
+(defconst ^I32 PR_XMIN 8)
+(defconst ^I32 PR_XMAX 9)
+(defconst ^I32 PR_Y2MIN 10)
+(defconst ^I32 PR_Y2MAX 11)
+
+(defn ^I32 lc-stats [^Cells lt ^Cells ls ^I32 a ^I32 b ^:mut ^Cells pr]
+  (comment "The region ls[a..b): the extent of its lines' boxes (x) and of their middles (y, times 2).")
+  (let [^:mut ^I32 xmin 1000000000
+        ^:mut ^I32 xmax -1000000000
+        ^:mut ^I32 ymin 1000000000
+        ^:mut ^I32 ymax -1000000000
+        ^:mut ^I32 i a]
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)
+                ^I32 ym (lc-ym2 lt l)]
+            (set xmin (lc-min xmin (ln-get lt l (lh-x0))))
+            (set xmax (lc-max xmax (ln-get lt l (lh-x1))))
+            (set ymin (lc-min ymin ym))
+            (set ymax (lc-max ymax ym)))
+          (set i (+ i 1))))
+    (cells-set pr PR_XMIN xmin)
+    (cells-set pr PR_XMAX xmax)
+    (cells-set pr PR_Y2MIN ymin)
+    (cells-set pr PR_Y2MAX ymax)
+    (return 0)))
+
+(defn ^I32 lc-count-side [^Cells lt ^Cells ls ^I32 a ^I32 b ^I32 gx0 ^I32 gx1 ^I32 side]
+  (comment "The lines of the region wholly left (side 0) or right (side 1) of the gutter.")
+  (let [^:mut ^I32 i a
+        ^:mut ^I32 n 0]
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (== side 0)
+              (if (<= (ln-get lt l (lh-x1)) gx0) (set n (+ n 1)))
+              (if (>= (ln-get lt l (lh-x0)) gx1) (set n (+ n 1)))))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 lc-vcut [^Cells lt ^Cells ls ^Cells gu ^I32 a ^I32 b ^Cells pr]
+  (comment "A gutter whose extent covers every line of the region and that has lines on both sides: its index, or -1.")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^I32 xmin (cells-at pr PR_XMIN)
+        ^I32 xmax (cells-at pr PR_XMAX)
+        ^I32 ymin (cells-at pr PR_Y2MIN)
+        ^I32 ymax (cells-at pr PR_Y2MAX)
+        ^:mut ^I32 g 0]
+    (while (< g ng)
+      (do (let [^I32 gb (* g GU_STRIDE)
+                ^I32 gx0 (cells-at gu gb)
+                ^I32 gx1 (cells-at gu (+ gb 1))]
+            (if (and (< xmin gx0) (< gx1 xmax)
+                     (<= (* 2 (cells-at gu (+ gb GU_TOP))) ymin)
+                     (>= (* 2 (cells-at gu (+ gb GU_BOT))) ymax))
+              (if (and (> (lc-count-side lt ls a b gx0 gx1 0) 0) (> (lc-count-side lt ls a b gx0 gx1 1) 0))
+                (return g))))
+          (set g (+ g 1))))
+    (return -1)))
+
+(defn ^I32 lc-hcut [^Cells lt ^Cells ls ^Cells gu ^I32 a ^I32 b ^Cells pr]
+  (comment "The first y at which to cut the region horizontally: the least top or bottom of the extent of a gutter")
+  (comment "that has lines on both sides of it, strictly inside the region's lines. -1 for none.")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^I32 xmin (cells-at pr PR_XMIN)
+        ^I32 xmax (cells-at pr PR_XMAX)
+        ^I32 ymin (cells-at pr PR_Y2MIN)
+        ^I32 ymax (cells-at pr PR_Y2MAX)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 best -1]
+    (while (< g ng)
+      (do (let [^I32 gb (* g GU_STRIDE)
+                ^I32 gx0 (cells-at gu gb)
+                ^I32 gx1 (cells-at gu (+ gb 1))
+                ^I32 top (cells-at gu (+ gb GU_TOP))
+                ^I32 bot (cells-at gu (+ gb GU_BOT))]
+            (if (and (< xmin gx0) (< gx1 xmax))
+              (if (and (> (lc-count-side lt ls a b gx0 gx1 0) 0) (> (lc-count-side lt ls a b gx0 gx1 1) 0))
+                (do (if (and (> (* 2 top) ymin) (<= (* 2 top) ymax) (or (< best 0) (< top best)))
+                      (set best top))
+                    (if (and (> (* 2 bot) ymin) (<= (* 2 bot) ymax) (or (< best 0) (< bot best)))
+                      (set best bot))))))
+          (set g (+ g 1))))
+    (return best)))
+
+(defn ^I32 lc-part-x [^Cells lt ^:mut ^Cells ls ^:mut ^Cells tm ^I32 a ^I32 b ^I32 gm2]
+  (comment "Stable partition of the region: lines whose middle is left of the gutter's first. Answers how many.")
+  (let [^:mut ^I32 i a
+        ^:mut ^I32 nl 0]
+    (cells-drop tm 0)
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (< (+ (ln-get lt l (lh-x0)) (ln-get lt l (lh-x1))) gm2)
+              (do (cells-push tm l)
+                  (set nl (+ nl 1)))))
+          (set i (+ i 1))))
+    (set i a)
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (>= (+ (ln-get lt l (lh-x0)) (ln-get lt l (lh-x1))) gm2)
+              (cells-push tm l)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (- b a))
+      (do (let [^I32 v (cells-at tm i)]
+            (cells-set ls (+ a i) v))
+          (set i (+ i 1))))
+    (return nl)))
+
+(defn ^I32 lc-part-y [^Cells lt ^:mut ^Cells ls ^:mut ^Cells tm ^I32 a ^I32 b ^I32 p2]
+  (comment "Stable partition of the region: lines whose middle is above y (2p2). Answers how many.")
+  (let [^:mut ^I32 i a
+        ^:mut ^I32 na 0]
+    (cells-drop tm 0)
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (< (lc-ym2 lt l) p2)
+              (do (cells-push tm l)
+                  (set na (+ na 1)))))
+          (set i (+ i 1))))
+    (set i a)
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)]
+            (if (>= (lc-ym2 lt l) p2)
+              (cells-push tm l)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (- b a))
+      (do (let [^I32 v (cells-at tm i)]
+            (cells-set ls (+ a i) v))
+          (set i (+ i 1))))
+    (return na)))
+
+(defn ^I32 lc-leaf [^Cells lt ^:mut ^Cells ls ^:mut ^Cells lo ^:mut ^Cells cf
+                    ^I32 a ^I32 b ^I32 band ^I32 page]
+  (comment "A leaf: a column fragment. Its lines go to `lo` in rows; its row to `cf`.")
+  (let [^:mut ^I32 x0 1000000000
+        ^:mut ^I32 y0 1000000000
+        ^:mut ^I32 x1 -1000000000
+        ^:mut ^I32 y1 -1000000000
+        ^:mut ^I32 i a
+        ^I32 first (cells-len lo)]
+    (lc-sort-lines lt ls a b)
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)]
+            (set x0 (lc-min x0 (ln-get lt l (lh-x0))))
+            (set y0 (lc-min y0 (ln-get lt l (lh-y0))))
+            (set x1 (lc-max x1 (ln-get lt l (lh-x1))))
+            (set y1 (lc-max y1 (ln-get lt l (lh-y1))))
+            (cells-push lo l))
+          (set i (+ i 1))))
+    (cells-push cf page)
+    (cells-push cf band)
+    (cells-push cf 0)
+    (cells-push cf (rl-body))
+    (cells-push cf x0)
+    (cells-push cf y0)
+    (cells-push cf x1)
+    (cells-push cf y1)
+    (cells-push cf first)
+    (cells-push cf (- b a))
+    (cells-push cf -1)
+    (cells-push cf 0)
+    (return 0)))
+
+(defn ^I32 lc-region [^Cells lt ^:mut ^Cells ls ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
+                      ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^I32 page
+                      ^I32 a ^I32 b ^I32 band ^I32 root]
+  (comment "One region of the cut tree: cut it vertically, else horizontally, else it is a leaf. The halves go on")
+  (comment "the stack `ac` (4 cells: a b band root), the one to read first last.")
+  (let [^I32 n (- b a)
+        ^:mut ^I32 done 0
+        ^:mut ^I32 na 0
+        ^:mut ^I32 g -1
+        ^:mut ^I32 p -1]
+    (lc-stats lt ls a b pr)
+    (if (and (== root 1) (>= (cells-at pr PR_FORCED) 0))
+      (do (set na (lc-part-y lt ls tm a b (* 2 (cells-at pr PR_FORCED))))
+          (if (and (> na 0) (< na n))
+            (do (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac (+ band 1)) (cells-push ac 0)
+                (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)
+                (set done 1)))))
+    (if (== done 0)
+      (do (set g (lc-vcut lt ls gu a b pr))
+          (if (>= g 0)
+            (do (let [^I32 gb (* g GU_STRIDE)]
+                  (set na (lc-part-x lt ls tm a b (+ (cells-at gu gb) (cells-at gu (+ gb 1))))))
+                (if (and (> na 0) (< na n))
+                  (do (if (== (cells-at pr PR_RTL) 1)
+                        (do (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)
+                            (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac band) (cells-push ac 0))
+                        (do (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac band) (cells-push ac 0)
+                            (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)))
+                      (set done 1)))))))
+    (if (== done 0)
+      (do (set p (lc-hcut lt ls gu a b pr))
+          (if (>= p 0)
+            (do (set na (lc-part-y lt ls tm a b (* 2 p)))
+                (if (and (> na 0) (< na n))
+                  (do (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac (+ band 1)) (cells-push ac 0)
+                      (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)
+                      (set done 1)))))))
+    (if (== done 0)
+      (lc-leaf lt ls lo cf a b band page))
+    (return 0)))
+
+(defn ^I32 lc-tree [^Cells lt ^:mut ^Cells ls ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
+                    ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^I32 page]
+  (comment "The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`.")
+  (let [^I32 n (cells-len ls)]
+    (cells-drop ac 0)
+    (if (== n 0) (return 0))
+    (cells-push ac 0)
+    (cells-push ac n)
+    (cells-push ac 0)
+    (cells-push ac 1)
+    (while (> (cells-len ac) 0)
+      (do (let [^I32 top (- (cells-len ac) 4)
+                ^I32 a (cells-at ac top)
+                ^I32 b (cells-at ac (+ top 1))
+                ^I32 band (cells-at ac (+ top 2))
+                ^I32 root (cells-at ac (+ top 3))]
+            (cells-drop ac top)
+            (lc-region lt ls gu ac tm cf lo pr page a b band root))))
+    (return 0)))
+
+;; --------------------------------------------------------------------- side runs
+
+(defn ^I32 lc-side-of [^Cells lt ^I32 l ^I32 bx1]
+  (comment "1 for a line right of the body block, 0 for one left of it.")
+  (if (>= (ln-get lt l (lh-x0)) bx1) (return 1))
+  (return 0))
+
+(defn ^Bool lc-side-before [^Cells lt ^I32 a ^I32 b ^I32 bx1]
+  (let [^I32 sa (lc-side-of lt a bx1)
+        ^I32 sb (lc-side-of lt b bx1)]
+    (if (!= sa sb) (return (< sa sb)))
+    (return (lc-before lt a b))))
+
+(defn ^I32 lc-sort-side [^Cells lt ^:mut ^Cells sd ^I32 bx1]
+  (let [^I32 n (cells-len sd)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< i n)
+      (do (set v (cells-at sd i))
+          (set j i)
+          (set more 1)
+          (while (and (> j 0) (== more 1))
+            (do (set u (cells-at sd (- j 1)))
+                (if (lc-side-before lt v u bx1)
+                  (do (cells-set sd j u)
+                      (set j (- j 1)))
+                  (set more 0))))
+          (cells-set sd j v)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 lc-assoc [^Cells cf ^I32 cf0 ^I32 nb ^I32 y0 ^I32 y1]
+  (comment "The body fragment (a row of `cf`) a side run lies beside: most overlap in y, the first on a tie; the")
+  (comment "last one when none overlaps.")
+  (let [^:mut ^I32 r cf0
+        ^:mut ^I32 best (- (+ cf0 nb) 1)
+        ^:mut ^I32 bo 0]
+    (while (< r (+ cf0 nb))
+      (do (let [^I32 ov (- (lc-min y1 (cells-at cf (+ (* r CF_STRIDE) CF_Y1)))
+                           (lc-max y0 (cells-at cf (+ (* r CF_STRIDE) CF_Y0))))]
+            (if (> ov bo)
+              (do (set bo ov)
+                  (set best r))))
+          (set r (+ r 1))))
+    (return best)))
+
+(defn ^I32 lc-side-emit [^Cells wd ^Cells lt ^:mut ^Cells sd ^:mut ^Cells lo ^:mut ^Cells cf
+                         ^Cells pr ^I32 page ^I32 cf0 ^I32 nb]
+  (comment "The side lines as fragments: per side, in rows, a run ends at a gap of more than 2 sizes. A run of at")
+  (comment "most 4 lines, all in small type, is a margin note; any other is a sidebar. Each lies beside the body")
+  (comment "fragment (`assoc`) it overlaps most, in its band.")
+  (let [^I32 n (cells-len sd)
+        ^I32 dom (cells-at pr PR_DOM)
+        ^I32 bx1 (cells-at pr PR_BX1)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 allsmall 1
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 as 0
+        ^:mut ^I32 bandof 0
+        ^:mut ^I32 first 0]
+    (lc-sort-side lt sd bx1)
+    (while (< i n)
+      (do (set j i)
+          (set allsmall 1)
+          (let [^I32 l0 (cells-at sd i)]
+            (set x0 (ln-get lt l0 (lh-x0)))
+            (set y0 (ln-get lt l0 (lh-y0)))
+            (set x1 (ln-get lt l0 (lh-x1)))
+            (set y1 (ln-get lt l0 (lh-y1))))
+          (set first (cells-len lo))
+          (while (and (< j n)
+                      (or (== j i)
+                          (and (== (lc-side-of lt (cells-at sd j) bx1) (lc-side-of lt (cells-at sd i) bx1))
+                               (<= (- (ln-get lt (cells-at sd j) (lh-y0)) y1) (* LC_RUN_GAP dom)))))
+            (do (let [^I32 l (cells-at sd j)]
+                  (set x0 (lc-min x0 (ln-get lt l (lh-x0))))
+                  (set y0 (lc-min y0 (ln-get lt l (lh-y0))))
+                  (set x1 (lc-max x1 (ln-get lt l (lh-x1))))
+                  (set y1 (lc-max y1 (ln-get lt l (lh-y1))))
+                  (if (>= (* (lc-size wd lt l) LC_SMALL_DEN) (* dom LC_SMALL_NUM)) (set allsmall 0))
+                  (cells-push lo l))
+                (set j (+ j 1))))
+          (set role (rl-sidebar))
+          (if (and (== allsmall 1) (<= (- j i) LC_NOTE_LINES)) (set role (rl-margin)))
+          (set as (lc-assoc cf cf0 nb y0 y1))
+          (set bandof 0)
+          (if (>= as 0) (set bandof (cells-at cf (+ (* as CF_STRIDE) CF_BAND))))
+          (cells-push cf page)
+          (cells-push cf bandof)
+          (cells-push cf (+ 1000 (lc-side-of lt (cells-at sd i) bx1)))
+          (cells-push cf role)
+          (cells-push cf x0)
+          (cells-push cf y0)
+          (cells-push cf x1)
+          (cells-push cf y1)
+          (cells-push cf first)
+          (cells-push cf (- j i))
+          (cells-push cf as)
+          (cells-push cf 0)
+          (set i j)))
+    (return 0)))
+
+(defn ^I32 lc-number [^:mut ^Cells cf ^I32 r0 ^I32 r1]
+  (comment "`col`. A body fragment: how many body fragments of the page, before it, have its band. A side one (its")
+  (comment "`col` is 1000 left of the body block, 1001 right of it, set by `lc-side-emit`): after the body fragments of")
+  (comment "its band, the left strip before the right one; the notes of a side are ONE column.")
+  (let [^:mut ^I32 r r0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 nbody 0
+        ^:mut ^I32 hasleft 0]
+    (while (< r r1)
+      (do (if (== (cells-at cf (+ (* r CF_STRIDE) CF_ROLE)) (rl-body))
+            (do (set c 0)
+                (set q r0)
+                (while (< q r)
+                  (do (if (and (== (cells-at cf (+ (* q CF_STRIDE) CF_ROLE)) (rl-body))
+                               (== (cells-at cf (+ (* q CF_STRIDE) CF_BAND)) (cells-at cf (+ (* r CF_STRIDE) CF_BAND))))
+                        (set c (+ c 1)))
+                      (set q (+ q 1))))
+                (cells-set cf (+ (* r CF_STRIDE) CF_COL) c)))
+          (set r (+ r 1))))
+    (set r r0)
+    (while (< r r1)
+      (do (if (== (cells-at cf (+ (* r CF_STRIDE) CF_COL)) 1001)
+            (do (set nbody 0)
+                (set hasleft 0)
+                (set q r0)
+                (while (< q r1)
+                  (do (if (== (cells-at cf (+ (* q CF_STRIDE) CF_BAND)) (cells-at cf (+ (* r CF_STRIDE) CF_BAND)))
+                        (do (if (== (cells-at cf (+ (* q CF_STRIDE) CF_ROLE)) (rl-body)) (set nbody (+ nbody 1)))
+                            (if (== (cells-at cf (+ (* q CF_STRIDE) CF_COL)) 1000) (set hasleft 1))))
+                      (set q (+ q 1))))
+                (cells-set cf (+ (* r CF_STRIDE) CF_COL) (+ nbody hasleft))))
+          (set r (+ r 1))))
+    (set r r0)
+    (while (< r r1)
+      (do (if (== (cells-at cf (+ (* r CF_STRIDE) CF_COL)) 1000)
+            (do (set nbody 0)
+                (set q r0)
+                (while (< q r1)
+                  (do (if (and (== (cells-at cf (+ (* q CF_STRIDE) CF_BAND)) (cells-at cf (+ (* r CF_STRIDE) CF_BAND)))
+                               (== (cells-at cf (+ (* q CF_STRIDE) CF_ROLE)) (rl-body)))
+                        (set nbody (+ nbody 1)))
+                      (set q (+ q 1))))
+                (cells-set cf (+ (* r CF_STRIDE) CF_COL) nbody)))
+          (set r (+ r 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------------ the page
+
+(defn ^:pub ^I32 lc-page [^Cells wd ^Cells et ^:mut ^Cells lt ^I32 page ^:mut ^Cells ls ^:mut ^Cells sd
+                          ^:mut ^Cells it ^:mut ^Cells io ^:mut ^Cells rw ^:mut ^Cells gu ^:mut ^Cells ac
+                          ^:mut ^Cells tm ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr]
+  (comment "One page. `ls` holds its upright lines' ids (rows of `lt`, sorted in rows by `lc-before`); fragments are")
+  (comment "appended to `cf` (body ones first, then side) and their lines to `lo`. Answers the fragments written.")
+  (let [^I32 n (cells-len ls)
+        ^I32 cf0 (quot (cells-len cf) CF_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 dom 0
+        ^:mut ^I32 rtl 0
+        ^:mut ^I32 nb 0]
+    (if (== n 0) (return 0))
+    (cells-drop pr 0)
+    (while (< i 16)
+      (do (cells-push pr 0)
+          (set i (+ i 1))))
+    (cells-set pr PR_FORCED -1)
+    (set dom (lc-dom wd lt ls tm))
+    (cells-set pr PR_DOM dom)
+    (set i 0)
+    (while (< i n)
+      (do (if (== (ln-get lt (cells-at ls i) (lh-dir)) 1) (set rtl (+ rtl 1)))
+          (set i (+ i 1))))
+    (if (> (* rtl 2) n) (cells-set pr PR_RTL 1))
+    (lc-side wd et lt ls sd pr dom)
+    (lc-sweep wd lt ls dom it io rw gu ac tm)
+    (lc-merge gu dom)
+    (lc-sort-gu gu)
+    (lc-split-all wd lt ls gu)
+    (lc-sort-lines lt ls 0 (cells-len ls))
+    (lc-extend-up wd lt ls gu dom)
+    (lc-trim-bottom wd lt ls gu dom)
+    (lc-tree lt ls gu ac tm cf lo pr page)
+    (set nb (- (quot (cells-len cf) CF_STRIDE) cf0))
+    (if (> (cells-len sd) 0)
+      (lc-side-emit wd lt sd lo cf pr page cf0 nb))
+    (lc-number cf cf0 (quot (cells-len cf) CF_STRIDE))
+    (return (- (quot (cells-len cf) CF_STRIDE) cf0))))

@@ -60,6 +60,16 @@
   (cells-drop et 0)
   (return 0))
 
+(defn ^I32 pt-build [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
+                    ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp]
+  (comment "`pa-build`, with the column stage's scratch (`emon.columns`) made here.")
+  (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+        ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells)]
+    (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
+                      lt ls sd it io rw gu ac tm cf lo pr))))
+
 (defn ^I32 pt-run [^Cells wd ^Cells ln ^Cells et ^I32 npages
                    ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                    ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout
@@ -70,7 +80,7 @@
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
-    (pa-build wd ln et npages nodes attrs regions text ord raw tmp fr gp)
+    (pt-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp)
     (return (model-check nodes attrs regions text pages ledger layout st))))
 
 (defn ^I32 pt-brief [^:mut ^Text t ^Cells nodes ^Cells regions ^Cells text]
@@ -293,7 +303,7 @@
     (model-init nodes attrs regions text pages ledger layout)
     (pa-pages pg pages)
     (let [^I32 np (quot (cells-len pages) 16)]
-      (pa-build wd ln et np nodes attrs regions text ord raw tmp fr gp))
+      (pt-build wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp))
     (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
     (js-emit t 1 nodes attrs regions text pages ledger layout)
     (return 0)))

@@ -57,11 +57,16 @@ fn main() {
     let mut ord = port::Cells::new(); let mut raw = port::Cells::new();
     let mut tmp = port::Cells::new(); let mut fr = port::Cells::new();
     let mut gp = port::Cells::new(); let mut chk = port::Cells::new();
+    let mut lt = port::Cells::new(); let mut ls = port::Cells::new(); let mut sd = port::Cells::new();
+    let mut it = port::Cells::new(); let mut io = port::Cells::new(); let mut rw = port::Cells::new();
+    let mut gu = port::Cells::new(); let mut ac = port::Cells::new(); let mut tm = port::Cells::new();
+    let mut cf = port::Cells::new(); let mut lo = port::Cells::new(); let mut pr = port::Cells::new();
     model_init(&mut nodes, &mut attrs, &mut regions, &mut text, &mut pages, &mut ledger, &mut layout);
     let np = pd_pg_count(&mut pg);
     pa_pages(&mut pg, &mut pages);
-    pa_build(&mut wd, &mut ln, &mut et, np, &mut nodes, &mut attrs, &mut regions, &mut text,
-             &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp);
+    pa_build(&mut wd, &mut ln, &mut et, np, &mut pages, &mut layout, &mut nodes, &mut attrs, &mut regions, &mut text,
+             &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
+             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr);
     let c = model_check(&mut nodes, &mut attrs, &mut regions, &mut text, &mut pages, &mut ledger, &mut layout, &mut chk);
     if c != 0 { eprintln!("model-check {} at {}", c, port::cells_at(&chk, 0)); std::process::exit(5); }
     let mut t = String::new();
