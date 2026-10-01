@@ -269,4 +269,82 @@ public final class Normalizetest {
         ntLit(emon.Testport.textBlob("07 E9"), want);
         emon.Testport.assertEq(ntSame(out, want), 1, "only src[1,3) is read, and appended after the 7");
     }
+    public static int ntSemiTab(byte[] b, int i, int lim) {
+        int k = i;
+        while ((k < lim) && (emon.Port.blobU8(b, k) != 9)) {
+            k += 1;
+        }
+        return k;
+    }
+    public static int ntRadicalRow(byte[] rows, int from, int to, emon.Port.Cells src, emon.Port.Cells want, emon.Port.Cells out, emon.Port.Cells tmp) {
+        // Row `radical TAB ideograph` (hex): 1 when the flag folds the one to the other, NFC alone
+        // leaves it, and the fold is the same through `nz-radical-fold`.
+        int tab = ntSemiTab(rows, from, to);
+        ntCps(rows, from, tab, src);
+        ntCps(rows, tab + 1, to, want);
+        emon.Port.cellsDrop(out, 0);
+        Normalize.nzNfc(src, 0, emon.Port.cellsLen(src), out, tmp, Normalize.nzFlagRadicals());
+        if (ntSame(out, want) == 0) {
+            return 0;
+        }
+        emon.Port.cellsDrop(out, 0);
+        Normalize.nzNfc(src, 0, emon.Port.cellsLen(src), out, tmp, 0);
+        if (ntSame(out, src) == 0) {
+            return 0;
+        }
+        if (Normalize.nzRadicalFold(emon.Port.cellsAt(src, 0)) != emon.Port.cellsAt(want, 0)) {
+            return 0;
+        }
+        return 1;
+    }
+    public static void testEveryCjkRadicalFoldsToItsUnifiedIdeograph() {
+        // radicals.txt (kin/scripts/radicals.clj, from CJKRadicals.txt and UnicodeData.txt): the 214 Kangxi
+        // radicals and the 30 CJK Radicals Supplement characters with an equivalent.
+        byte[] rows = emon.Testport.testFile("normalize/radicals.txt");
+        emon.Port.Cells src = emon.Port.newCells();
+        emon.Port.Cells want = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        int n = emon.Port.blobLen(rows);
+        int pos = 0;
+        int e = 0;
+        int line = 0;
+        int count = 0;
+        while (pos < n) {
+            line += 1;
+            e = ntNl(rows, pos);
+            if ((pos < e) && (emon.Port.blobU8(rows, pos) != 35)) {
+                count += 1;
+                emon.Testport.assertEqAt(ntRadicalRow(rows, pos, e, src, want, out, tmp), 1, "radical row", line);
+            }
+            pos = e + 1;
+        }
+        emon.Testport.assertEq(count, 244, "214 Kangxi radicals and 30 supplement characters");
+    }
+    public static void testTheRadicalFoldLeavesEverythingElseAlone() {
+        emon.Port.Cells src = emon.Port.newCells();
+        emon.Port.Cells want = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        ntLit(emon.Testport.textBlob("2F00 61 2F01 4E00 2E80 2FD5 2FD6 2E7F 2EF3 2EF4 E9"), src);
+        ntLit(emon.Testport.textBlob("4E00 61 4E28 4E00 2E80 9FA0 2FD6 2E7F 9F9F 2EF4 E9"), want);
+        emon.Port.cellsDrop(out, 0);
+        Normalize.nzNfc(src, 0, emon.Port.cellsLen(src), out, tmp, Normalize.nzFlagRadicals());
+        emon.Testport.assertEq(ntSame(out, want), 1, "radicals fold; their neighbours, U+2E80 (no equivalent) and the block's ends stay");
+        emon.Testport.assertEq(Normalize.nzRadicalFold(12032), 19968, "U+2F00 is U+4E00");
+        emon.Testport.assertEq(Normalize.nzRadicalFold(12245), 40864, "U+2FD5 is U+9FA0");
+        emon.Testport.assertEq(Normalize.nzRadicalFold(12246), 12246, "U+2FD6 is not a radical");
+        emon.Testport.assertEq(Normalize.nzRadicalFold(11904), 11904, "U+2E80 has no equivalent");
+        emon.Testport.assertEq(Normalize.nzRadicalFold(65), 65, "ASCII");
+        emon.Testport.assertEq(Normalize.nzRadicalFold(-1), -1, "a negative number is nothing");
+        ntLit(emon.Testport.textBlob("2F00 FB01 AD 65 301"), src);
+        ntLit(emon.Testport.textBlob("4E00 66 69 E9"), want);
+        emon.Port.cellsDrop(out, 0);
+        Normalize.nzNfc(src, 0, emon.Port.cellsLen(src), out, tmp, 7);
+        emon.Testport.assertEq(ntSame(out, want), 1, "the three flags compose with NFC");
+        emon.Port.cellsDrop(out, 0);
+        Normalize.nzNfc(src, 0, emon.Port.cellsLen(src), out, tmp, 4);
+        ntLit(emon.Testport.textBlob("4E00 FB01 AD E9"), want);
+        emon.Testport.assertEq(ntSame(out, want), 1, "flag 4 alone folds the radical and does not drop the soft hyphen (the flags are bits)");
+    }
 }

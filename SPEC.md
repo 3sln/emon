@@ -314,9 +314,13 @@ header says `"conf": "uncalibrated"`.
 ### 3.6 Text
 
 * Stored as Unicode code points; serialized as UTF-8.
-* **Normalization** (D029): NFC, plus decomposition of the Alphabetic
-  Presentation Forms ligatures (`ﬁ` → `fi`, U+FB00–FB06) and removal of soft
-  hyphens (U+00AD) at line ends. Nothing else is folded — full-width forms,
+* **Normalization** (D029, D136): NFC, plus decomposition of the Alphabetic
+  Presentation Forms ligatures (`ﬁ` → `fi`, U+FB00–FB06), removal of soft
+  hyphens (U+00AD) at line ends, and the fold of the Kangxi Radicals
+  (U+2F00–2FD5) and the CJK Radicals Supplement characters the UCD pairs with a
+  unified ideograph to that ideograph (`⼀` → `一`: a PDF's ToUnicode names the
+  glyph by the radical where the text is the ideograph; the glyph evidence keeps
+  the code point the font said). Nothing else is folded — full-width forms,
   superscript digits and the like are content.
 * **Line-end hyphenation** (`-` + newline + lowercase) is joined **only** with
   a locale hint and a hyphenation dictionary agreeing (Liang patterns, emon's own tables);

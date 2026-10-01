@@ -717,6 +717,21 @@ public final class Pdfxnames {
     public static int pxTrapped() {
         return 101;
     }
+    public static int pxFontFile() {
+        return 102;
+    }
+    public static int pxFontFile2() {
+        return 103;
+    }
+    public static int pxFontFile3() {
+        return 104;
+    }
+    public static int pxCidToGidMap() {
+        return 105;
+    }
+    public static int pxW2() {
+        return 106;
+    }
     public static int pxEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "Annots");
@@ -1126,6 +1141,26 @@ public final class Pdfxnames {
             emon.Port.textAscii(t, "Trapped");
             return 1;
         }
+        if (code == 102) {
+            emon.Port.textAscii(t, "FontFile");
+            return 1;
+        }
+        if (code == 103) {
+            emon.Port.textAscii(t, "FontFile2");
+            return 1;
+        }
+        if (code == 104) {
+            emon.Port.textAscii(t, "FontFile3");
+            return 1;
+        }
+        if (code == 105) {
+            emon.Port.textAscii(t, "CIDToGIDMap");
+            return 1;
+        }
+        if (code == 106) {
+            emon.Port.textAscii(t, "W2");
+            return 1;
+        }
         return 0;
     }
     public static final int[] PX_CHARS = {
@@ -1161,7 +1196,9 @@ public final class Pdfxnames {
         85, 70, 70, 83, 86, 105, 101, 119, 101, 114, 80, 114, 101, 102, 101, 114,
         101, 110, 99, 101, 115, 68, 105, 115, 112, 108, 97, 121, 68, 111, 99, 84,
         105, 116, 108, 101, 81, 117, 97, 100, 80, 111, 105, 110, 116, 115, 67, 65,
-        79, 67, 84, 114, 97, 112, 112, 101, 100
+        79, 67, 84, 114, 97, 112, 112, 101, 100, 70, 111, 110, 116, 70, 105, 108,
+        101, 70, 111, 110, 116, 70, 105, 108, 101, 50, 70, 111, 110, 116, 70, 105,
+        108, 101, 51, 67, 73, 68, 84, 111, 71, 73, 68, 77, 97, 112, 87, 50
     };
     public static final int[] PX_SPAN = {
         0, 6,
@@ -1265,6 +1302,11 @@ public final class Pdfxnames {
         500, 10,
         510, 2,
         512, 2,
-        514, 7
+        514, 7,
+        521, 8,
+        529, 9,
+        538, 9,
+        547, 11,
+        558, 2
     };
 }

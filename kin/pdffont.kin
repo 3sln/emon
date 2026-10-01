@@ -38,15 +38,24 @@
 ;;   3. the base encoding (/BaseEncoding or /Encoding name, else Standard,
 ;;      WinAnsi for a TrueType font with no /Encoding, the built-in encoding
 ;;      of Symbol and ZapfDingbats): code -> glyph name -> AGL        encoding
-;;   Where only a GUESS is possible (a symbolic font whose built-in encoding
-;;   lives in a font program this module does not read) the guess is given and
-;;   the `how` is UNKNOWN, so a consumer can tell.
+;;   When the PDF names no encoding (P3.4, D135) the EMBEDDED FONT PROGRAM'S
+;;   built-in encoding replaces the base (`emon.fontprog`: a Type 1 /Encoding, a
+;;   CFF Encoding, a symbolic TrueType font's cmap and `post` names); /Differences
+;;   and ToUnicode still win. Only where nothing but a GUESS is possible (a symbolic
+;;   font whose program says nothing, or is no program) the guess is given and the
+;;   `how` is UNKNOWN, so a consumer can tell; a program that NAMES its glyphs and
+;;   gives a code no Unicode name withdraws the guess (no value at all).
+;;   MacExpertEncoding is read as TEXT (`emon.fontextra`): small capitals, old-style
+;;   figures and superiors mean the letters and digits they are variants of.
 ;; A COMPOSITE (Type0) font's code is looked up in its ToUnicode CMap; with no
 ;; entry, an Encoding that is a predefined Uni...-UCS2/UTF16 CMap means the
-;; code IS the Unicode value; else it is unknown (Identity-H with no ToUnicode
-;; says nothing). The predefined CID-keyed CMaps (90ms-RKSJ-H, GBK-EUC-H, ...)
-;; and the Adobe CID-to-Unicode tables are NOT here (P3): such a font is
-;; answered as unknown, with a warning bit.
+;; code IS the Unicode value; else the CID goes through the Adobe collection's
+;; CID-to-Unicode table (`emon.cjk`, D134) when the descendant's /CIDSystemInfo
+;; /Ordering is Japan1, GB1, CNS1 or Korea1 or a predefined CMap of one is the
+;; Encoding (`how` = cid); else it is unknown (Identity-H with no ToUnicode and
+;; another ordering says nothing, and is flagged 1024: no mapping at all). A
+;; predefined CMap gives the codespace, WMode and the CIDs (so /W is by the
+;; right CID); an embedded CMap is parsed as before.
 ;;
 ;; GLYPH NAMES follow the AGL specification: drop the suffix from the first
 ;; `.`, split on `_`, each component is an AGL name, `uniXXXX...` (groups of
@@ -66,9 +75,10 @@
 ;; AFM widths for codes the font's /Widths does not cover, and ascent/descent
 ;; when there is no descriptor.
 ;;
-;; WHAT IS NOT HERE: font programs (embedded CFF/TrueType cmaps and built-in
-;; encodings), Type 1 built-in encodings, vertical metrics /W2 (DW2 is kept),
-;; CIDToGIDMap, the predefined CID CMaps, MacExpertEncoding.
+;; VERTICAL METRICS: /DW2 and /W2 (`pfn-vertical-metric`).
+;;
+;; WHAT IS NOT HERE: /CIDToGIDMap, and a glyph-to-Unicode table for the cmap of an
+;; embedded CID-keyed TrueType or CFF font with no ToUnicode (D137).
 ;;
 ;; BOUNDS: a CMap holds at most 100000 ranges (a warning bit and the rest
 ;; dropped); a /W array at most 100000 entries; binary searches, a heap sort,
@@ -78,6 +88,11 @@
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
                                cells-bytes blob-len blob-u8]]
             [emon.agl :refer [agl-count agl-at agl-pool-at agl-uni-at]]
+            [emon.fontprog :refer [fp-simple fp-table-size fp-kind]]
+            [emon.fontextra :refer [mac-expert-cp-at]]
+            [emon.cjk :refer [cjk-find-name cjk-cmap-field cjk-cs cjk-cid cjk-uni]]
+            [emon.pdfx :refer [px-dget px-blen px-bat]]
+            [emon.pdfxnames :refer [px-font-file px-font-file2 px-font-file3 px-w2]]
             [emon.encodings :refer [enc-gid-at s14-count s14-at s14-metric-at
                                     s14-alias-count s14-alias-at s14-alias-pool-at
                                     cm-kw-count cm-kw-at cm-kw-pool-at]]
@@ -89,7 +104,8 @@
                                    pn-dw pn-dw2 pn-type0 pn-type1 pn-mm-type1
                                    pn-true-type pn-type3 pn-win-ansi-encoding
                                    pn-mac-roman-encoding pn-standard-encoding
-                                   pn-mac-expert-encoding pn-identity-h pn-identity-v]]
+                                   pn-mac-expert-encoding pn-identity-h pn-identity-v
+                                   pn-cid-system-info pn-ordering]]
             [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-name-is
                                  pl-name-len pl-name-byte pl-num-cp pl-ref-gen
                                  pl-stream-dict]]
@@ -123,13 +139,15 @@
   [[pfn-w-predefined 1 "predefined CMap not supported"]
    [pfn-w-tounicode-damaged 2 "ToUnicode stream damaged or unreadable"]
    [pfn-w-limit 4 "a CMap or width table was cut at its limit"]
-   [pfn-w-macexpert 8 "MacExpertEncoding or an unknown encoding name"]
+   [pfn-w-macexpert 8 "an unknown encoding name"]
    [pfn-w-no-widths 16 "no /Widths"]
    [pfn-w-no-descendant 32 "composite font without a descendant"]
    [pfn-w-usecmap 64 "usecmap ignored"]
    [pfn-w-long-dest 128 "a CMap destination had more than four code points"]
    [pfn-w-symbolic-guess 256 "symbolic font: built-in encoding guessed"]
-   [pfn-w-encoding-cmap 512 "embedded encoding CMap damaged"]])
+   [pfn-w-encoding-cmap 512 "embedded encoding CMap damaged"]
+   [pfn-w-no-mapping 1024 "no mapping at all: nothing in the PDF or the font program says what the codes are"]
+   [pfn-w-program 2048 "the embedded font program was unreadable"]])
 
 (defenum ^:pub pfn-kind
   [[pfn-k-none 0 "none"]
@@ -189,6 +207,12 @@
 (defconst ^I32 P_MODE 50)
 (defconst ^I32 P_COUNT 52)
 
+(defconst ^I32 H_COLL 144)    ;; a predefined CJK CMap: its collection (0 jp, 1 gb, 2 cns, 3 kr), -1 none
+(defconst ^I32 H_ROW 145)     ;; ... and its row in that collection
+(defconst ^I32 H_ORD 146)     ;; the Adobe collection the CIDs belong to (CIDSystemInfo), -1 none
+(defconst ^I32 H_W2_START 147)
+(defconst ^I32 H_W2_N 148)
+(defconst ^I32 H_PROGHOW 149) ;; what the font program gave: 0 nothing, else a count of codes + 1
 (defconst ^I32 CS_BASE 64)    ;; 16 codespace ranges of [bytes lohi lolo hihi hilo]
 (defconst ^I32 CS_MAX 16)
 (defconst ^I32 CS_STRIDE 5)
@@ -196,6 +220,7 @@
 (defconst ^I32 ENTRY 8)       ;; simple table: [n cp0 cp1 cp2 how width gid cp3]
 (defconst ^I32 TU_STRIDE 9)   ;; [lo hi n seq d0 d1 d2 d3 cummax]
 (defconst ^I32 VAL_STRIDE 5)  ;; [lo hi value seq cummax]
+(defconst ^I32 W2_STRIDE 7)   ;; [lo hi w1 seq vx vy cummax]
 (defconst ^I32 CM_MAX 100000)
 
 (defconst ^I32 SUB_TYPE1 1)
@@ -220,6 +245,8 @@
     (cells-set f H_DW2V 88000)
     (cells-set f H_DW2W -100000)
     (cells-set f H_T3SCALE 1000)
+    (cells-set f H_COLL -1)
+    (cells-set f H_ORD -1)
     (return 0)))
 
 (defn ^I32 pfn-warn-set [^:mut ^Cells f ^I32 bit]
@@ -1120,12 +1147,12 @@
     (return 0)))
 
 (defn ^I32 pfn-enc-of-name [^Cells ar ^I32 h]
-  (comment "0 Standard, 1 WinAnsi, 2 MacRoman, -2 MacExpert, -1 any other name.")
+  (comment "0 Standard, 1 WinAnsi, 2 MacRoman, 5 MacExpert, -1 any other name.")
   (if (!= (pl-kind-of ar h) 4) (return -1))
   (if (== (pl-name-is ar h (pn-standard-encoding)) 1) (return 0))
   (if (== (pl-name-is ar h (pn-win-ansi-encoding)) 1) (return 1))
   (if (== (pl-name-is ar h (pn-mac-roman-encoding)) 1) (return 2))
-  (if (== (pl-name-is ar h (pn-mac-expert-encoding)) 1) (return -2))
+  (if (== (pl-name-is ar h (pn-mac-expert-encoding)) 1) (return 5))
   (return -1))
 
 (defn ^I32 pfn-isnum [^Cells ar ^I32 h]
@@ -1321,6 +1348,33 @@
                  (+ (cells-at f (+ H_T0 (- cnt 1))) (- code (cells-at f rec)))))
     (return cnt)))
 
+(defn ^:pub ^I32 pfn-cid [^Cells f ^I32 code]
+  (comment "The CID of a code in a composite font: the code itself for Identity")
+  (comment "and unsupported CMaps, else the embedded CMap's (0 when it has none).")
+  (let [^:mut ^I32 rec 0]
+    (if (!= (cells-at f H_KIND) 2) (return code))
+    (if (and (>= (cells-at f H_COLL) 0) (or (== (cells-at f H_CMAP) 4) (== (cells-at f H_CMAP) 5)))
+      (return (cjk-cid (cells-at f H_COLL) (cells-at f H_ROW) code)))
+    (if (== (cells-at f H_CMAP) 2)
+      (do (set rec (pfn-find f (cells-at f H_CID_START) (cells-at f H_CID_N) VAL_STRIDE code))
+          (if (>= rec 0)
+            (return (+ (cells-at f (+ rec 2)) (- code (cells-at f rec)))))
+          (return 0)))
+    (return code)))
+
+(defn ^I32 pfn-sur-cp [^I32 code]
+  (comment "The code point of a four-byte UTF-16 code (a surrogate pair; a first byte of 128")
+  (comment "or more is a negative I32): 0 when the code is no pair.")
+  (let [^I32 u (+ (+ code 1073741824) 1073741824)
+        ^I32 hi (+ (quot u 65536) 32768)
+        ^I32 lo (rem u 65536)]
+    (if (>= code 0) (return 0))
+    (if (< hi 55296) (return 0))
+    (if (> hi 56319) (return 0))
+    (if (< lo 56320) (return 0))
+    (if (> lo 57343) (return 0))
+    (return (+ 65536 (+ (* (- hi 55296) 1024) (- lo 56320))))))
+
 (defn ^:pub ^I32 pfn-map [^:mut ^Cells f ^I32 code]
   (comment "The Unicode value of a character code: the number of code points")
   (comment "(0 when the font says nothing), which `pfn-cp` reads back, and how it")
@@ -1328,7 +1382,8 @@
   (let [^I32 kind (cells-at f H_KIND)
         ^:mut ^I32 at 0
         ^:mut ^I32 rec 0
-        ^:mut ^I32 cnt 0]
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 cp 0]
     (cells-set f H_TN 0)
     (cells-set f H_HOW 5)
     (if (== kind 1)
@@ -1349,26 +1404,25 @@
                   (do (cells-set f H_HOW 1)
                       (return cnt)))
                 (cells-set f H_TN 0)))
-          (if (and (== (cells-at f H_CMAP) 4) (and (>= code 0) (<= code 1114111)))
-            (if (or (< code 55296) (> code 57343))
-              (do (cells-set f H_TN 1)
-                  (cells-set f (+ H_T0 0) code)
-                  (cells-set f H_HOW 2)
-                  (return 1))))
+          (if (== (cells-at f H_CMAP) 4)
+            (do (set cp code)
+                (if (< code 0) (set cp (pfn-sur-cp code)))
+                (if (and (> cp 0) (and (<= cp 1114111) (or (< cp 55296) (> cp 57343))))
+                  (do (cells-set f H_TN 1)
+                      (cells-set f (+ H_T0 0) cp)
+                      (cells-set f H_HOW 2)
+                      (return 1)))))
+          (comment "the Adobe collection's CID -> Unicode table (Identity-H with an Adobe-Japan1 font, a")
+          (comment "predefined CMap's CIDs): what the CID is, by the collection's own table")
+          (if (>= (cells-at f H_ORD) 0)
+            (do (set cp (cjk-uni (cells-at f H_ORD) (pfn-cid f code)))
+                (if (> cp 0)
+                  (do (cells-set f H_TN 1)
+                      (cells-set f (+ H_T0 0) cp)
+                      (cells-set f H_HOW 4)
+                      (return 1)))))
           (return 0)))
     (return 0)))
-
-(defn ^:pub ^I32 pfn-cid [^Cells f ^I32 code]
-  (comment "The CID of a code in a composite font: the code itself for Identity")
-  (comment "and unsupported CMaps, else the embedded CMap's (0 when it has none).")
-  (let [^:mut ^I32 rec 0]
-    (if (!= (cells-at f H_KIND) 2) (return code))
-    (if (== (cells-at f H_CMAP) 2)
-      (do (set rec (pfn-find f (cells-at f H_CID_START) (cells-at f H_CID_N) VAL_STRIDE code))
-          (if (>= rec 0)
-            (return (+ (cells-at f (+ rec 2)) (- code (cells-at f rec)))))
-          (return 0)))
-    (return code)))
 
 (defn ^:pub ^I32 pfn-width [^Cells f ^I32 code]
   (comment "The advance of a code in hundredths of a thousandth of an em, or -1")
@@ -1417,6 +1471,97 @@
     (cells-set f H_HASTU 1)
     (return 1)))
 
+(defn ^I32 pfn-fill-macexpert [^:mut ^Cells f]
+  (comment "MacExpertEncoding as TEXT (`emon.fontextra`, `fold-expert`): the small capitals, old-style")
+  (comment "figures and superiors mean the characters they are variants of, not Adobe's private")
+  (comment "use area code points the AGL gives them.")
+  (let [^:mut ^I32 code 0
+        ^:mut ^I32 c0 0
+        ^:mut ^I32 c1 0]
+    (while (< code 256)
+      (do (set c0 (mac-expert-cp-at 0 code 0))
+          (set c1 (mac-expert-cp-at 0 code 1))
+          (if (>= c0 0)
+            (do (cells-set f H_TN 1)
+                (cells-set f (+ H_T0 0) c0)
+                (if (> c1 0)
+                  (do (cells-set f H_TN 2)
+                      (cells-set f (+ H_T0 1) c1)))
+                (pfn-entry-put f code 2)))
+          (set code (+ code 1))))
+    (return 0)))
+
+(defn ^I32 pfn-font-stream [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^I32 fd]
+  (comment "The embedded font program stream of a FontDescriptor (FontFile, FontFile2 or")
+  (comment "FontFile3), 0 when it has none.")
+  (let [^:mut ^I32 v (px-dget src ar dc a b st fd (px-font-file))]
+    (if (and (!= v 0) (== (pl-kind-of ar v) 8)) (return v))
+    (set v (px-dget src ar dc a b st fd (px-font-file2)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 8)) (return v))
+    (set v (px-dget src ar dc a b st fd (px-font-file3)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 8)) (return v))
+    (return 0)))
+
+(defn ^I32 pfn-apply-program [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                              ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells f
+                              ^:mut ^Cells out ^I32 pstm ^I32 zapf]
+  (comment "Decode the font program stream and let it say what its codes are (`emon.fontprog`):")
+  (comment "its built-in encoding replaces the base encoding wherever it names a glyph.")
+  (let [^I32 tbl (cells-len f)
+        ^I32 sz (fp-table-size)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 ps 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 w 0]
+    (set ps (pd-stream-data src ar dc a b st pstm out))
+    (if (!= ps 0) (pfn-warn-set f 2048))
+    (while (< i sz)
+      (do (cells-push f 0)
+          (set i (+ i 1))))
+    (set n (fp-simple f H_TN tbl (cells-bytes out) zapf))
+    (if (< n 0) (pfn-warn-set f 2048))
+    (if (>= n 0)
+      (do (set code 0)
+          (while (< code 256)
+            (do (set at (+ tbl (* code 6)))
+                (comment "a program that NAMES its glyphs (Type 1, CFF) and gives this code no Unicode name")
+                (comment "(`G12`, `a30`) has said what the code is not: the guess made without it goes")
+                (if (and (== (cells-at f at) 0) (and (== (fp-kind f tbl) 1)
+                         (== (cells-at f (+ (+ SIMPLE_BASE (* code ENTRY)) 4)) 5)))
+                  (pfn-entry-clear f code))
+                (if (> (cells-at f at) 0)
+                  (do (cells-set f H_TN (cells-at f at))
+                      (cells-set f (+ H_T0 0) (cells-at f (+ at 1)))
+                      (cells-set f (+ H_T0 1) (cells-at f (+ at 2)))
+                      (cells-set f (+ H_T0 2) (cells-at f (+ at 3)))
+                      (cells-set f (+ H_T0 3) (cells-at f (+ at 4)))
+                      (pfn-entry-put f code (cells-at f (+ at 5)))
+                      (cells-set f (+ (+ SIMPLE_BASE (* code ENTRY)) 6) -1)))
+                (set code (+ code 1))))
+          (comment "a program that names its glyphs knows the built-in encoding: it is no longer a guess (a")
+          (comment "TrueType font's cmap leaves the codes it does not cover to the guess)")
+          (set w (cells-at f H_WARN))
+          (if (and (== (fp-kind f tbl) 1) (== (rem (quot w 256) 2) 1))
+            (cells-set f H_WARN (- w 256)))))
+    (cells-drop f tbl)
+    (cells-set f H_PROGHOW (+ n 1))
+    (return n)))
+
+(defn ^I32 pfn-count-known [^Cells f]
+  (comment "How many of a simple font's codes have a value that is not a guess.")
+  (let [^:mut ^I32 code 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 at 0]
+    (while (< code 256)
+      (do (set at (+ SIMPLE_BASE (* code ENTRY)))
+          (if (and (> (cells-at f at) 0) (!= (cells-at f (+ at 4)) 5))
+            (set cnt (+ cnt 1)))
+          (set code (+ code 1))))
+    (return cnt)))
+
 (defn ^I32 pfn-load-simple [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                             ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells f
                             ^:mut ^Cells out ^I32 fh ^I32 sub]
@@ -1435,6 +1580,8 @@
         ^:mut ^I32 tustart 0
         ^:mut ^I32 tun 0
         ^:mut ^I32 ncp 0
+        ^:mut ^I32 given 0
+        ^:mut ^I32 pstm 0
         ^:mut ^I32 zapfnames 0]
     (cells-set f H_KIND 1)
     (cells-set f H_SUB sub)
@@ -1461,13 +1608,13 @@
       (do (set bn (pd-dget src ar dc a b st enc (pn-base-encoding)))
           (if (!= bn 0) (set base (pfn-enc-of-name ar bn)))
           (set diffs (pd-dget src ar dc a b st enc (pn-differences)))))
-    (if (== base -2)
-      (do (pfn-warn-set f 8) (set base 0) (set guess 1)))
     (if (and (== base -1) (and (!= enc 0) (== (pl-kind-of ar enc) 4)))
       (do (pfn-warn-set f 8) (set base 0) (set guess 1)))
     (if (== base -1)
       (do (if (== (cells-at f H_S14) 12) (set base 3))
           (if (== (cells-at f H_S14) 13) (set base 4))))
+    (comment "an encoding the PDF names (or Symbol, ZapfDingbats): the font program's own is not asked")
+    (if (and (>= base 0) (== guess 0)) (set given 1))
     (if (and (== base -1) (!= sub 4))
       (do (set base 0)
           (if (and (== sub 3) (== enc 0)) (set base 1))
@@ -1475,7 +1622,8 @@
             (do (set guess 1)
                 (pfn-warn-set f 256)))))
     (cells-set f H_ENC base)
-    (if (>= base 0)
+    (if (== base 5) (pfn-fill-macexpert f))
+    (if (and (>= base 0) (< base 5))
       (do (set code 0)
           (while (< code 256)
             (do (set gid (enc-gid-at 0 (+ (* base 256) code)))
@@ -1486,6 +1634,13 @@
                         (pfn-entry-put f code 2)
                         (pfn-entry-put f code 5))))
                 (set code (+ code 1))))))
+    (comment "no encoding named: the font program's built-in encoding (a Type 1 /Encoding, a CFF")
+    (comment "Encoding, a symbolic TrueType font's cmap), before /Differences, which still win")
+    (if (and (== given 0) (and (!= sub 4) (!= fd 0)))
+      (do (set pstm (pfn-font-stream src ar dc a b st fd))
+          (if (!= pstm 0)
+            (if (or (!= sub 3) (and (== (rem (quot flags 4) 2) 1) (== (rem (quot flags 32) 2) 0)))
+              (pfn-apply-program src ar dc a b st f out pstm zapfnames)))))
     (comment "/Differences: a number sets the code, each name after it takes the next")
     (if (and (!= diffs 0) (== (pl-kind-of ar diffs) 6))
       (do (set code 0)
@@ -1522,6 +1677,7 @@
             (pfn-t3-bbox src ar dc a b st f fh))))
     (pfn-load-widths src ar dc a b st f fh)
     (pfn-width-fallbacks f)
+    (if (== (pfn-count-known f) 0) (pfn-warn-set f 1024))
     (return 0)))
 
 ;; --------------------------------------------------------- composite fonts
@@ -1600,7 +1756,12 @@
   (comment "CMap stream.")
   (let [^:mut ^I32 ps 0
         ^:mut ^I32 n 0
-        ^:mut ^I32 vert 0]
+        ^:mut ^I32 vert 0
+        ^:mut ^I32 hit -1
+        ^:mut ^I32 coll 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 at 0]
     (if (== enc 0)
       (do (cells-set f H_CMAP 1)
           (pfn-cs-put f 2 0 0 0 65535)
@@ -1626,6 +1787,28 @@
     (if (and (> n 2) (== (pl-name-byte ar enc (- n 1)) 86))
       (if (== (pl-name-byte ar enc (- n 2)) 45) (set vert 1)))
     (cells-set f H_WMODE vert)
+    (comment "a predefined CMap whose tables we have (`emon.cjk`): codespace, CIDs, and the")
+    (comment "collection the CIDs belong to; `Uni*-UCS2/UTF16` codes are Unicode as well")
+    (set hit (cjk-find-name ar enc))
+    (if (>= hit 0)
+      (do (set coll (quot hit 1000))
+          (set row (rem hit 1000))
+          (cells-set f H_COLL coll)
+          (cells-set f H_ROW row)
+          (cells-set f H_ORD coll)
+          (cells-set f H_WMODE (cjk-cmap-field coll row 3))
+          (set k 0)
+          (while (< k (cjk-cmap-field coll row 5))
+            (do (set at (+ (cjk-cmap-field coll row 4) k))
+                (pfn-cs-put f (cjk-cs coll at 0) (cjk-cs coll at 1) (cjk-cs coll at 2)
+                            (cjk-cs coll at 3) (cjk-cs coll at 4))
+                (set k (+ k 1))))
+          (cells-set f H_CMAP 5)
+          (if (and (== (pfn-name-at ar enc 0) 85)
+                   (and (== (pfn-name-at ar enc 1) 110) (== (pfn-name-at ar enc 2) 105)))
+            (if (or (== (pfn-name-has ar enc 85 67 83 50 -1) 1) (== (pfn-name-has ar enc 85 84 70 49 54) 1))
+              (cells-set f H_CMAP 4)))
+          (return 0)))
     (comment "Uni*-UCS2-* and Uni*-UTF16-*: the code is the Unicode value")
     (if (and (== (pfn-name-at ar enc 0) 85)
              (and (== (pfn-name-at ar enc 1) 110) (== (pfn-name-at ar enc 2) 105)))
@@ -1645,6 +1828,130 @@
     (pfn-warn-set f 1)
     (return 0)))
 
+(defn ^I32 pfn-ordering-coll [^Cells ar ^I32 sh]
+  (comment "The Adobe collection a CIDSystemInfo /Ordering string names: 0 Japan1, 1 GB1, 2 CNS1,")
+  (comment "3 Korea1, -1 anything else (Identity, or a foundry's own).")
+  (let [^I32 n (px-blen ar sh)]
+    (if (and (== n 6) (and (== (px-bat ar sh 0) 74) (and (== (px-bat ar sh 1) 97)
+                       (and (== (px-bat ar sh 2) 112) (and (== (px-bat ar sh 3) 97)
+                            (and (== (px-bat ar sh 4) 110) (== (px-bat ar sh 5) 49)))))))
+      (return 0))
+    (if (and (== n 3) (and (== (px-bat ar sh 0) 71) (and (== (px-bat ar sh 1) 66) (== (px-bat ar sh 2) 49))))
+      (return 1))
+    (if (and (== n 4) (and (== (px-bat ar sh 0) 67) (and (== (px-bat ar sh 1) 78)
+                            (and (== (px-bat ar sh 2) 83) (== (px-bat ar sh 3) 49)))))
+      (return 2))
+    (if (and (== n 6) (and (== (px-bat ar sh 0) 75) (and (== (px-bat ar sh 1) 111)
+                       (and (== (px-bat ar sh 2) 114) (and (== (px-bat ar sh 3) 101)
+                            (and (== (px-bat ar sh 4) 97) (== (px-bat ar sh 5) 49)))))))
+      (return 3))
+    (return -1)))
+
+(defn ^I32 pfn-composite-mapped [^Cells f]
+  (comment "1 when something in the font can say what a code is: a ToUnicode CMap with entries, a")
+  (comment "Unicode CMap name, or an Adobe collection's CID table.")
+  (if (> (cells-at f H_TU_N) 0) (return 1))
+  (if (== (cells-at f H_CMAP) 4) (return 1))
+  (if (>= (cells-at f H_ORD) 0) (return 1))
+  (return 0))
+
+(defn ^I32 pfn-add-w2 [^:mut ^Cells f ^I32 lo ^I32 hi ^I32 w1 ^I32 vx ^I32 vy]
+  (if (< lo 0) (return 0))
+  (if (< hi lo) (return 0))
+  (if (>= (cells-at f P_COUNT) CM_MAX)
+    (do (pfn-warn-set f 4) (return 0)))
+  (let [^I32 seq (cells-at f H_SEQ)]
+    (cells-set f H_SEQ (+ seq 1))
+    (cells-set f P_COUNT (+ (cells-at f P_COUNT) 1))
+    (cells-push f lo)
+    (cells-push f hi)
+    (cells-push f w1)
+    (cells-push f seq)
+    (cells-push f vx)
+    (cells-push f vy)
+    (cells-push f 0)
+    (return 1)))
+
+(defn ^I32 pfn-num-or-zero [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                            ^:mut ^Cells b ^:mut ^Cells st ^I32 el]
+  (comment "The number (hundredths) an array element is, 0 when it is none.")
+  (let [^I32 ev (pd-resolve src ar dc a b st el)]
+    (if (== (pfn-isnum ar ev) 1) (return (pl-num-cp ar ev)))
+    (return 0)))
+
+(defn ^I32 pfn-parse-w2 [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells f ^I32 wa]
+  (comment "A /W2 array: `c [w1 vx vy ...]` and `c1 c2 w1 vx vy`, into the table at the end of `f`")
+  (comment "(vertical metrics, ISO 32000-1 9.7.4.3: the advance, then the position vector).")
+  (let [^:mut ^I32 k (pl-first ar wa)
+        ^:mut ^I32 k2 0
+        ^:mut ^I32 v1 0
+        ^:mut ^I32 v2 0
+        ^:mut ^I32 el 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c1 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 x2 0
+        ^:mut ^I32 e1 0
+        ^:mut ^I32 e2 0]
+    (cells-set f P_COUNT 0)
+    (while (!= k 0)
+      (do (set v1 (pd-resolve src ar dc a b st k))
+          (set k2 (pl-next ar k))
+          (if (== k2 0)
+            (set k 0)
+            (do (set c1 -1)
+                (if (== (pfn-isnum ar v1) 1) (set c1 (pl-int-value ar v1)))
+                (set v2 (pd-resolve src ar dc a b st k2))
+                (if (and (!= v2 0) (== (pl-kind-of ar v2) 6))
+                  (do (set j 0)
+                      (set el (pl-first ar v2))
+                      (while (!= el 0)
+                        (do (set e1 (pl-next ar el))
+                            (set e2 0)
+                            (if (!= e1 0) (set e2 (pl-next ar e1)))
+                            (if (== e2 0)
+                              (set el 0)
+                              (do (pfn-add-w2 f (+ c1 j) (+ c1 j)
+                                              (pfn-num-or-zero src ar dc a b st el)
+                                              (pfn-num-or-zero src ar dc a b st e1)
+                                              (pfn-num-or-zero src ar dc a b st e2))
+                                  (set j (+ j 1))
+                                  (set el (pl-next ar e2))))))
+                      (set k (pl-next ar k2)))
+                  (do (comment "c1 c2 w1 vx vy")
+                      (set x0 (pl-next ar k2))
+                      (set x1 0)
+                      (set x2 0)
+                      (if (!= x0 0) (set x1 (pl-next ar x0)))
+                      (if (!= x1 0) (set x2 (pl-next ar x1)))
+                      (if (== x2 0)
+                        (set k 0)
+                        (do (if (and (== (pfn-isnum ar v1) 1) (== (pfn-isnum ar v2) 1))
+                              (pfn-add-w2 f c1 (pl-int-value ar v2)
+                                          (pfn-num-or-zero src ar dc a b st x0)
+                                          (pfn-num-or-zero src ar dc a b st x1)
+                                          (pfn-num-or-zero src ar dc a b st x2)))
+                            (set k (pl-next ar x2))))))))))
+    (cells-set f H_W2_N (cells-at f P_COUNT))
+    (pfn-finish f (cells-at f H_W2_START) (cells-at f H_W2_N) W2_STRIDE)
+    (return 0)))
+
+(defn ^:pub ^I32 pfn-vertical-metric [^Cells f ^I32 code ^I32 which]
+  (comment "A composite font's vertical metrics of a code, in hundredths of a thousandth of an em")
+  (comment "(like widths): which 0 the vertical advance w1 (DW2's second number by default, -1000),")
+  (comment "1 the position vector's x (half the width by default), 2 its y (DW2's first number, 880).")
+  (let [^I32 cid (pfn-cid f code)
+        ^I32 rec (pfn-find f (cells-at f H_W2_START) (cells-at f H_W2_N) W2_STRIDE cid)]
+    (if (>= rec 0)
+      (do (if (== which 0) (return (cells-at f (+ rec 2))))
+          (if (== which 1) (return (cells-at f (+ rec 4))))
+          (return (cells-at f (+ rec 5)))))
+    (if (== which 0) (return (cells-at f H_DW2W)))
+    (if (== which 2) (return (cells-at f H_DW2V)))
+    (return (quot (pfn-width f code) 2))))
+
 (defn ^I32 pfn-load-composite [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                                ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells f
                                ^:mut ^Cells out ^I32 fh]
@@ -1658,7 +1965,11 @@
         ^:mut ^I32 wa 0
         ^:mut ^I32 d2f 0
         ^:mut ^I32 dfirst 0
-        ^:mut ^I32 d2v 0]
+        ^:mut ^I32 d2v 0
+        ^:mut ^I32 w2a 0
+        ^:mut ^I32 csi 0
+        ^:mut ^I32 ord 0
+        ^:mut ^I32 oc -1]
     (cells-set f H_KIND 2)
     (cells-set f H_SUB 5)
     (if (and (!= da 0) (== (pl-kind-of ar da) 6))
@@ -1683,13 +1994,26 @@
                   (do (set d2v (pd-resolve src ar dc a b st d2e))
                       (if (== (pfn-isnum ar d2v) 1)
                         (cells-set f H_DW2W (pl-num-cp ar d2v)))))))
-          (set wa (pd-dget src ar dc a b st dd (pn-w)))))
+          (set wa (pd-dget src ar dc a b st dd (pn-w)))
+          (set w2a (px-dget src ar dc a b st dd (px-w2)))
+          (set csi (pd-dget src ar dc a b st dd (pn-cid-system-info)))
+          (if (and (!= csi 0) (== (pl-kind-of ar csi) 7))
+            (do (set ord (pd-dget src ar dc a b st csi (pn-ordering)))
+                (if (and (!= ord 0) (== (pl-kind-of ar ord) 5))
+                  (set oc (pfn-ordering-coll ar ord)))))))
     (pfn-encoding-cmap src ar dc a b st f out enc)
+    (comment "the CIDSystemInfo says which Adobe collection the CIDs are; when it names none, none")
+    (if (and (!= ord 0) (== (pl-kind-of ar ord) 5)) (cells-set f H_ORD oc))
     (pfn-load-tounicode src ar dc a b st f out fh)
     (if (== (cells-at f H_NCS) 0)
       (pfn-cs-put f 2 0 0 0 65535))
     (if (and (!= wa 0) (== (pl-kind-of ar wa) 6))
       (pfn-parse-w src ar dc a b st f wa))
+    (cells-set f H_W2_START (cells-len f))
+    (cells-set f H_W2_N 0)
+    (if (and (!= w2a 0) (== (pl-kind-of ar w2a) 6))
+      (pfn-parse-w2 src ar dc a b st f w2a))
+    (if (== (pfn-composite-mapped f) 0) (pfn-warn-set f 1024))
     (return 0)))
 
 (defn ^:pub ^I32 pfn-from-cmap [^:mut ^Cells f ^Blob data ^I32 mode]

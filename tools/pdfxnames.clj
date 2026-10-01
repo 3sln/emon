@@ -26,7 +26,9 @@
    "NM" "Name" "M" "Reason" "Location" "ContactInfo" "ByteRange" "SubFilter" "Cert"
    "DocTimeStamp" "Perms" "DocMDP" "FixedPrint"
    "Last" "Next" "C" "Nums" "Limits" "P" "St" ["R" "r-upper"] ["r" "r-lower"] ["a" "a-lower"]
-   "UF" "FS" "ViewerPreferences" "DisplayDocTitle" "QuadPoints" "CA" "OC" "Trapped"])
+   "UF" "FS" "ViewerPreferences" "DisplayDocTitle" "QuadPoints" "CA" "OC" "Trapped"
+   ;; fonts (P3.4, D134): the font file keys, the glyph-index map and the vertical widths
+   "FontFile" "FontFile2" "FontFile3" "CIDToGIDMap" "W2"])
 
 ;; XMP (P3.9): namespace URIs and the local names the reader meets, as [symbol string].
 (def xstrings

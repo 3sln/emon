@@ -2,6 +2,7 @@
 // source: emon.normalize
 
 use crate::emon::nftable::*;
+use crate::emon::radicals::*;
 
 pub(crate) const S_BASE: i32 = 44032;
 pub(crate) const L_BASE: i32 = 4352;
@@ -17,6 +18,36 @@ pub fn nz_flag_ligatures() -> i32 {
 }
 pub fn nz_flag_soft_hyphens() -> i32 {
     return 2;
+}
+pub fn nz_flag_radicals() -> i32 {
+    return 4;
+}
+pub fn nz_radical_fold(cp: i32) -> i32 {
+    // The unified ideograph a Kangxi radical (U+2F00..2FD5) or a CJK Radicals Supplement
+    // character with an equivalent (U+2E80..2EF3) is drawn as; any other code point as it is.
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 244 - 1;
+    let mut mid: i32 = 0;
+    let mut v: i32 = 0;
+    if cp < 11904 {
+        return cp;
+    }
+    if cp > 12245 {
+        return cp;
+    }
+    while lo <= hi {
+        mid = lo + ((hi - lo) / 2);
+        v = RAD_FOLD[(mid * 2 + 0) as usize];
+        if v == cp {
+            return RAD_FOLD[(mid * 2 + 1) as usize];
+        }
+        if cp < v {
+            hi = mid - 1;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return cp;
 }
 pub fn nz_ccc(cp: i32) -> i32 {
     // Canonical_Combining_Class: 0 for nearly everything, which is why
@@ -162,16 +193,22 @@ pub(crate) fn nz_order(mut out: &mut crate::port::Cells, start: i32) -> i32 {
 pub fn nz_nfd(src: &mut crate::port::Cells, from: i32, to: i32, mut out: &mut crate::port::Cells, flags: i32) -> i32 {
     // Append NFD(src[from, to)) to out. `flags` as in the head.
     let start: i32 = crate::port::cells_len(out);
+    let want_lig: i32 = flags % 2;
+    let want_soft: i32 = (flags / 2) % 2;
+    let want_rad: i32 = (flags / 4) % 2;
     let mut i: i32 = from;
     let mut cp: i32 = 0;
     let mut lig: i32 = 0;
     while i < to {
         cp = crate::port::cells_at(src, i);
         lig = 0;
-        if ((flags % 2) == 1) && (cp >= 64256) {
+        if want_rad == 1 {
+            cp = nz_radical_fold(cp);
+        }
+        if (want_lig == 1) && (cp >= 64256) {
             lig = nz_put_ligature(cp, out);
         }
-        if (lig == 0) && (cp == 173) && (flags >= 2) {
+        if (lig == 0) && ((cp == 173) && (want_soft == 1)) {
             lig = 1;
         }
         if lig == 0 {

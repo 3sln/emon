@@ -20,6 +20,36 @@ public final class Normalize {
     public static int nzFlagSoftHyphens() {
         return 2;
     }
+    public static int nzFlagRadicals() {
+        return 4;
+    }
+    public static int nzRadicalFold(int cp) {
+        // The unified ideograph a Kangxi radical (U+2F00..2FD5) or a CJK Radicals Supplement
+        // character with an equivalent (U+2E80..2EF3) is drawn as; any other code point as it is.
+        int lo = 0;
+        int hi = 244 - 1;
+        int mid = 0;
+        int v = 0;
+        if (cp < 11904) {
+            return cp;
+        }
+        if (cp > 12245) {
+            return cp;
+        }
+        while (lo <= hi) {
+            mid = lo + ((hi - lo) / 2);
+            v = Radicals.RAD_FOLD[mid * 2 + 0];
+            if (v == cp) {
+                return Radicals.RAD_FOLD[mid * 2 + 1];
+            }
+            if (cp < v) {
+                hi = mid - 1;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        return cp;
+    }
     public static int nzCcc(int cp) {
         // Canonical_Combining_Class: 0 for nearly everything, which is why
         // the table is ranges of the exceptions, none below U+0300.
@@ -164,16 +194,22 @@ public final class Normalize {
     public static int nzNfd(emon.Port.Cells src, int from, int to, emon.Port.Cells out, int flags) {
         // Append NFD(src[from, to)) to out. `flags` as in the head.
         int start = emon.Port.cellsLen(out);
+        int wantLig = flags % 2;
+        int wantSoft = (flags / 2) % 2;
+        int wantRad = (flags / 4) % 2;
         int i = from;
         int cp = 0;
         int lig = 0;
         while (i < to) {
             cp = emon.Port.cellsAt(src, i);
             lig = 0;
-            if (((flags % 2) == 1) && (cp >= 64256)) {
+            if (wantRad == 1) {
+                cp = nzRadicalFold(cp);
+            }
+            if ((wantLig == 1) && (cp >= 64256)) {
                 lig = nzPutLigature(cp, out);
             }
-            if ((lig == 0) && (cp == 173) && (flags >= 2)) {
+            if ((lig == 0) && ((cp == 173) && (wantSoft == 1))) {
                 lig = 1;
             }
             if (lig == 0) {

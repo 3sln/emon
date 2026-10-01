@@ -6,6 +6,7 @@ package normalize
 import (
 	"emon/nftable"
 	"emon/port"
+	"emon/radicals"
 )
 
 const sBase int32 = 44032
@@ -32,6 +33,38 @@ func NzFlagLigatures() int32 {
 
 func NzFlagSoftHyphens() int32 {
 	return 2
+}
+
+func NzFlagRadicals() int32 {
+	return 4
+}
+
+func NzRadicalFold(cp int32) int32 {
+	// The unified ideograph a Kangxi radical (U+2F00..2FD5) or a CJK Radicals Supplement
+	// character with an equivalent (U+2E80..2EF3) is drawn as; any other code point as it is.
+	var lo int32 = 0
+	var hi int32 = 244 - 1
+	var mid int32 = 0
+	var v int32 = 0
+	if cp < 11904 {
+		return cp
+	}
+	if cp > 12245 {
+		return cp
+	}
+	for lo <= hi {
+		mid = lo + ((hi - lo) / 2)
+		v = radicals.RadFold[mid*2+0]
+		if v == cp {
+			return radicals.RadFold[mid*2+1]
+		}
+		if cp < v {
+			hi = mid - 1
+		} else {
+			lo = mid + 1
+		}
+	}
+	return cp
 }
 
 func NzCcc(cp int32) int32 {
@@ -184,16 +217,22 @@ func nzOrder(out *port.Cells, start int32) int32 {
 func NzNfd(src *port.Cells, from int32, to int32, out *port.Cells, flags int32) int32 {
 	// Append NFD(src[from, to)) to out. `flags` as in the head.
 	var start int32 = port.CellsLen(out)
+	var wantLig int32 = flags % 2
+	var wantSoft int32 = (flags / 2) % 2
+	var wantRad int32 = (flags / 4) % 2
 	var i int32 = from
 	var cp int32 = 0
 	var lig int32 = 0
 	for i < to {
 		cp = port.CellsAt(src, i)
 		lig = 0
-		if ((flags % 2) == 1) && (cp >= 64256) {
+		if wantRad == 1 {
+			cp = NzRadicalFold(cp)
+		}
+		if (wantLig == 1) && (cp >= 64256) {
 			lig = nzPutLigature(cp, out)
 		}
-		if (lig == 0) && (cp == 173) && (flags >= 2) {
+		if (lig == 0) && ((cp == 173) && (wantSoft == 1)) {
 			lig = 1
 		}
 		if lig == 0 {

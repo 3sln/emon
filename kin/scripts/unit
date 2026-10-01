@@ -69,6 +69,21 @@ command -v python3 > /dev/null && python3 kin/scripts/fontdata.py --check
 command -v python3 > /dev/null && python3 kin/scripts/font-names.py --check
 command -v python3 > /dev/null && python3 kin/scripts/font-cmaps.py --check
 
+# THE FONT LONG TAIL (P3.4, D134-D136; all babashka). The Adobe CMap resources and pdf.js's CFF and
+# Macintosh glyph tables are FETCHED into .cache/ (not committed) and held to the checksums of
+# test/fonts/cjk-sources.edn; the CJK tables (kin/cmap*.kin), the CFF/TrueType glyph tables
+# (kin/fontextra.kin) and the program-font fixtures must be what those bytes make. Without the network
+# (and without the cache) the checks that need them SKIP, loudly: a gate may skip a missing input, not
+# fail quietly. The radical fold is made from vendored UCD files and always runs.
+bb kin/scripts/radicals.clj --check
+if bb kin/scripts/cjkfetch.clj; then
+  bb kin/scripts/cjkdata.clj --check
+  bb kin/scripts/fontextra.clj --check
+  bb kin/scripts/font-prog-fixtures.clj --check
+else
+  echo "  SKIP cjkdata, fontextra, font-prog-fixtures -- the Adobe/pdf.js sources could not be fetched (kin/scripts/cjkfetch.clj)"
+fi
+
 # THE JSON GOLDENS' SECOND OPINION (P1.2): an independent serializer must
 # reproduce every test/json golden, and each must validate against
 # schema/emon-1.json. Tooling, not runtime (D054, D055).

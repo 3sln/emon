@@ -5,11 +5,16 @@ package pdffont
 
 import (
 	"emon/agl"
+	"emon/cjk"
 	"emon/encodings"
+	"emon/fontextra"
+	"emon/fontprog"
 	"emon/pdfdoc"
 	"emon/pdflex"
 	"emon/pdfnames"
 	"emon/pdfsrc"
+	"emon/pdfx"
+	"emon/pdfxnames"
 	"emon/port"
 	"strings"
 )
@@ -108,6 +113,12 @@ func PfnWSymbolicGuess() int32 {
 func PfnWEncodingCmap() int32 {
 	return 512
 }
+func PfnWNoMapping() int32 {
+	return 1024
+}
+func PfnWProgram() int32 {
+	return 2048
+}
 func PfnWarningEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "predefined CMap not supported")
@@ -122,7 +133,7 @@ func PfnWarningEmitName(t *strings.Builder, code int32) int32 {
 		return 1
 	}
 	if code == 8 {
-		port.TextAscii(t, "MacExpertEncoding or an unknown encoding name")
+		port.TextAscii(t, "an unknown encoding name")
 		return 1
 	}
 	if code == 16 {
@@ -147,6 +158,14 @@ func PfnWarningEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 512 {
 		port.TextAscii(t, "embedded encoding CMap damaged")
+		return 1
+	}
+	if code == 1024 {
+		port.TextAscii(t, "no mapping at all: nothing in the PDF or the font program says what the codes are")
+		return 1
+	}
+	if code == 2048 {
+		port.TextAscii(t, "the embedded font program was unreadable")
 		return 1
 	}
 	return 0
@@ -275,6 +294,18 @@ const pMode int32 = 50
 
 const pCount int32 = 52
 
+const hColl int32 = 144
+
+const hRow int32 = 145
+
+const hOrd int32 = 146
+
+const hW2Start int32 = 147
+
+const hW2N int32 = 148
+
+const hProghow int32 = 149
+
 const csBase int32 = 64
 
 const csMax int32 = 16
@@ -288,6 +319,8 @@ const entry int32 = 8
 const tuStride int32 = 9
 
 const valStride int32 = 5
+
+const w2Stride int32 = 7
 
 const cmMax int32 = 100000
 
@@ -316,6 +349,8 @@ func PfnInit(f *port.Cells) int32 {
 	port.CellsSet(f, hDw2v, 88000)
 	port.CellsSet(f, hDw2w, -100000)
 	port.CellsSet(f, hT3scale, 1000)
+	port.CellsSet(f, hColl, -1)
+	port.CellsSet(f, hOrd, -1)
 	return 0
 }
 
@@ -1597,7 +1632,7 @@ func pfnEntryPut(f *port.Cells, code int32, how int32) int32 {
 }
 
 func pfnEncOfName(ar *port.Cells, h int32) int32 {
-	// 0 Standard, 1 WinAnsi, 2 MacRoman, -2 MacExpert, -1 any other name.
+	// 0 Standard, 1 WinAnsi, 2 MacRoman, 5 MacExpert, -1 any other name.
 	if pdflex.PlKindOf(ar, h) != 4 {
 		return -1
 	}
@@ -1611,7 +1646,7 @@ func pfnEncOfName(ar *port.Cells, h int32) int32 {
 		return 2
 	}
 	if pdflex.PlNameIs(ar, h, pdfnames.PnMacExpertEncoding()) == 1 {
-		return -2
+		return 5
 	}
 	return -1
 }
@@ -1883,6 +1918,50 @@ func pfnTuLoad(f *port.Cells, rec int32, code int32) int32 {
 	return cnt
 }
 
+func PfnCid(f *port.Cells, code int32) int32 {
+	// The CID of a code in a composite font: the code itself for Identity
+	// and unsupported CMaps, else the embedded CMap's (0 when it has none).
+	var rec int32 = 0
+	if port.CellsAt(f, hKind) != 2 {
+		return code
+	}
+	if (port.CellsAt(f, hColl) >= 0) && ((port.CellsAt(f, hCmap) == 4) || (port.CellsAt(f, hCmap) == 5)) {
+		return cjk.CjkCid(port.CellsAt(f, hColl), port.CellsAt(f, hRow), code)
+	}
+	if port.CellsAt(f, hCmap) == 2 {
+		rec = pfnFind(f, port.CellsAt(f, hCidStart), port.CellsAt(f, hCidN), valStride, code)
+		if rec >= 0 {
+			return port.CellsAt(f, rec+2) + (code - port.CellsAt(f, rec))
+		}
+		return 0
+	}
+	return code
+}
+
+func pfnSurCp(code int32) int32 {
+	// The code point of a four-byte UTF-16 code (a surrogate pair; a first byte of 128
+	// or more is a negative I32): 0 when the code is no pair.
+	var u int32 = (code + 1073741824) + 1073741824
+	var hi int32 = (u / 65536) + 32768
+	var lo int32 = u % 65536
+	if code >= 0 {
+		return 0
+	}
+	if hi < 55296 {
+		return 0
+	}
+	if hi > 56319 {
+		return 0
+	}
+	if lo < 56320 {
+		return 0
+	}
+	if lo > 57343 {
+		return 0
+	}
+	return 65536 + (((hi - 55296) * 1024) + (lo - 56320))
+}
+
 func PfnMap(f *port.Cells, code int32) int32 {
 	// The Unicode value of a character code: the number of code points
 	// (0 when the font says nothing), which `pfn-cp` reads back, and how it
@@ -1891,6 +1970,7 @@ func PfnMap(f *port.Cells, code int32) int32 {
 	var at int32 = 0
 	var rec int32 = 0
 	var cnt int32 = 0
+	var cp int32 = 0
 	port.CellsSet(f, hTn, 0)
 	port.CellsSet(f, hHow, 5)
 	if kind == 1 {
@@ -1916,34 +1996,32 @@ func PfnMap(f *port.Cells, code int32) int32 {
 			}
 			port.CellsSet(f, hTn, 0)
 		}
-		if (port.CellsAt(f, hCmap) == 4) && ((code >= 0) && (code <= 1114111)) {
-			if (code < 55296) || (code > 57343) {
+		if port.CellsAt(f, hCmap) == 4 {
+			cp = code
+			if code < 0 {
+				cp = pfnSurCp(code)
+			}
+			if (cp > 0) && ((cp <= 1114111) && ((cp < 55296) || (cp > 57343))) {
 				port.CellsSet(f, hTn, 1)
-				port.CellsSet(f, hT0+0, code)
+				port.CellsSet(f, hT0+0, cp)
 				port.CellsSet(f, hHow, 2)
+				return 1
+			}
+		}
+		// the Adobe collection's CID -> Unicode table (Identity-H with an Adobe-Japan1 font, a
+		// predefined CMap's CIDs): what the CID is, by the collection's own table
+		if port.CellsAt(f, hOrd) >= 0 {
+			cp = cjk.CjkUni(port.CellsAt(f, hOrd), PfnCid(f, code))
+			if cp > 0 {
+				port.CellsSet(f, hTn, 1)
+				port.CellsSet(f, hT0+0, cp)
+				port.CellsSet(f, hHow, 4)
 				return 1
 			}
 		}
 		return 0
 	}
 	return 0
-}
-
-func PfnCid(f *port.Cells, code int32) int32 {
-	// The CID of a code in a composite font: the code itself for Identity
-	// and unsupported CMaps, else the embedded CMap's (0 when it has none).
-	var rec int32 = 0
-	if port.CellsAt(f, hKind) != 2 {
-		return code
-	}
-	if port.CellsAt(f, hCmap) == 2 {
-		rec = pfnFind(f, port.CellsAt(f, hCidStart), port.CellsAt(f, hCidN), valStride, code)
-		if rec >= 0 {
-			return port.CellsAt(f, rec+2) + (code - port.CellsAt(f, rec))
-		}
-		return 0
-	}
-	return code
 }
 
 func PfnWidth(f *port.Cells, code int32) int32 {
@@ -2010,6 +2088,118 @@ func pfnLoadTounicode(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cel
 	return 1
 }
 
+func pfnFillMacexpert(f *port.Cells) int32 {
+	// MacExpertEncoding as TEXT (`emon.fontextra`, `fold-expert`): the small capitals, old-style
+	// figures and superiors mean the characters they are variants of, not Adobe's private
+	// use area code points the AGL gives them.
+	var code int32 = 0
+	var c0 int32 = 0
+	var c1 int32 = 0
+	for code < 256 {
+		c0 = fontextra.MacExpertCp[code*2+0]
+		c1 = fontextra.MacExpertCp[code*2+1]
+		if c0 >= 0 {
+			port.CellsSet(f, hTn, 1)
+			port.CellsSet(f, hT0+0, c0)
+			if c1 > 0 {
+				port.CellsSet(f, hTn, 2)
+				port.CellsSet(f, hT0+1, c1)
+			}
+			pfnEntryPut(f, code, 2)
+		}
+		code += 1
+	}
+	return 0
+}
+
+func pfnFontStream(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, fd int32) int32 {
+	// The embedded font program stream of a FontDescriptor (FontFile, FontFile2 or
+	// FontFile3), 0 when it has none.
+	var v int32 = pdfx.PxDget(src, ar, dc, a, b, st, fd, pdfxnames.PxFontFile())
+	if (v != 0) && (pdflex.PlKindOf(ar, v) == 8) {
+		return v
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, fd, pdfxnames.PxFontFile2())
+	if (v != 0) && (pdflex.PlKindOf(ar, v) == 8) {
+		return v
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, fd, pdfxnames.PxFontFile3())
+	if (v != 0) && (pdflex.PlKindOf(ar, v) == 8) {
+		return v
+	}
+	return 0
+}
+
+func pfnApplyProgram(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, f *port.Cells, out *port.Cells, pstm int32, zapf int32) int32 {
+	// Decode the font program stream and let it say what its codes are (`emon.fontprog`):
+	// its built-in encoding replaces the base encoding wherever it names a glyph.
+	var tbl int32 = port.CellsLen(f)
+	var sz int32 = fontprog.FpTableSize()
+	var i int32 = 0
+	var n int32 = 0
+	var ps int32 = 0
+	var at int32 = 0
+	var code int32 = 0
+	var w int32 = 0
+	ps = pdfdoc.PdStreamData(src, ar, dc, a, b, st, pstm, out)
+	if ps != 0 {
+		pfnWarnSet(f, 2048)
+	}
+	for i < sz {
+		port.CellsPush(f, 0)
+		i += 1
+	}
+	n = fontprog.FpSimple(f, hTn, tbl, port.CellsBytes(out), zapf)
+	if n < 0 {
+		pfnWarnSet(f, 2048)
+	}
+	if n >= 0 {
+		code = 0
+		for code < 256 {
+			at = tbl + (code * 6)
+			// a program that NAMES its glyphs (Type 1, CFF) and gives this code no Unicode name
+			// (`G12`, `a30`) has said what the code is not: the guess made without it goes
+			if (port.CellsAt(f, at) == 0) && ((fontprog.FpKind(f, tbl) == 1) && (port.CellsAt(f, (simpleBase+(code*entry))+4) == 5)) {
+				pfnEntryClear(f, code)
+			}
+			if port.CellsAt(f, at) > 0 {
+				port.CellsSet(f, hTn, port.CellsAt(f, at))
+				port.CellsSet(f, hT0+0, port.CellsAt(f, at+1))
+				port.CellsSet(f, hT0+1, port.CellsAt(f, at+2))
+				port.CellsSet(f, hT0+2, port.CellsAt(f, at+3))
+				port.CellsSet(f, hT0+3, port.CellsAt(f, at+4))
+				pfnEntryPut(f, code, port.CellsAt(f, at+5))
+				port.CellsSet(f, (simpleBase+(code*entry))+6, -1)
+			}
+			code += 1
+		}
+		// a program that names its glyphs knows the built-in encoding: it is no longer a guess (a
+		// TrueType font's cmap leaves the codes it does not cover to the guess)
+		w = port.CellsAt(f, hWarn)
+		if (fontprog.FpKind(f, tbl) == 1) && (((w / 256) % 2) == 1) {
+			port.CellsSet(f, hWarn, w-256)
+		}
+	}
+	port.CellsDrop(f, tbl)
+	port.CellsSet(f, hProghow, n+1)
+	return n
+}
+
+func pfnCountKnown(f *port.Cells) int32 {
+	// How many of a simple font's codes have a value that is not a guess.
+	var code int32 = 0
+	var cnt int32 = 0
+	var at int32 = 0
+	for code < 256 {
+		at = simpleBase + (code * entry)
+		if (port.CellsAt(f, at) > 0) && (port.CellsAt(f, at+4) != 5) {
+			cnt += 1
+		}
+		code += 1
+	}
+	return cnt
+}
+
 func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, f *port.Cells, out *port.Cells, fh int32, sub int32) int32 {
 	var fd int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, fh, pdfnames.PnFontDescriptor())
 	var bf int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, fh, pdfnames.PnBaseFont())
@@ -2026,6 +2216,8 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 	var tustart int32 = 0
 	var tun int32 = 0
 	var ncp int32 = 0
+	var given int32 = 0
+	var pstm int32 = 0
 	var zapfnames int32 = 0
 	port.CellsSet(f, hKind, 1)
 	port.CellsSet(f, hSub, sub)
@@ -2068,11 +2260,6 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 		}
 		diffs = pdfdoc.PdDget(src, ar, dc, a, b, st, enc, pdfnames.PnDifferences())
 	}
-	if base == -2 {
-		pfnWarnSet(f, 8)
-		base = 0
-		guess = 1
-	}
 	if (base == -1) && ((enc != 0) && (pdflex.PlKindOf(ar, enc) == 4)) {
 		pfnWarnSet(f, 8)
 		base = 0
@@ -2086,6 +2273,10 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 			base = 4
 		}
 	}
+	// an encoding the PDF names (or Symbol, ZapfDingbats): the font program's own is not asked
+	if (base >= 0) && (guess == 0) {
+		given = 1
+	}
 	if (base == -1) && (sub != 4) {
 		base = 0
 		if (sub == 3) && (enc == 0) {
@@ -2097,7 +2288,10 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 		}
 	}
 	port.CellsSet(f, hEnc, base)
-	if base >= 0 {
+	if base == 5 {
+		pfnFillMacexpert(f)
+	}
+	if (base >= 0) && (base < 5) {
 		code = 0
 		for code < 256 {
 			gid = encodings.EncGid[(base*256)+code]
@@ -2111,6 +2305,16 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 				}
 			}
 			code += 1
+		}
+	}
+	// no encoding named: the font program's built-in encoding (a Type 1 /Encoding, a CFF
+	// Encoding, a symbolic TrueType font's cmap), before /Differences, which still win
+	if (given == 0) && ((sub != 4) && (fd != 0)) {
+		pstm = pfnFontStream(src, ar, dc, a, b, st, fd)
+		if pstm != 0 {
+			if (sub != 3) || ((((flags / 4) % 2) == 1) && (((flags / 32) % 2) == 0)) {
+				pfnApplyProgram(src, ar, dc, a, b, st, f, out, pstm, zapfnames)
+			}
 		}
 	}
 	// /Differences: a number sets the code, each name after it takes the next
@@ -2161,6 +2365,9 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 	}
 	pfnLoadWidths(src, ar, dc, a, b, st, f, fh)
 	pfnWidthFallbacks(f)
+	if pfnCountKnown(f) == 0 {
+		pfnWarnSet(f, 1024)
+	}
 	return 0
 }
 
@@ -2254,6 +2461,11 @@ func pfnEncodingCmap(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cell
 	var ps int32 = 0
 	var n int32 = 0
 	var vert int32 = 0
+	var hit int32 = -1
+	var coll int32 = 0
+	var row int32 = 0
+	var k int32 = 0
+	var at int32 = 0
 	if enc == 0 {
 		port.CellsSet(f, hCmap, 1)
 		pfnCsPut(f, 2, 0, 0, 0, 65535)
@@ -2290,6 +2502,30 @@ func pfnEncodingCmap(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cell
 		}
 	}
 	port.CellsSet(f, hWmode, vert)
+	// a predefined CMap whose tables we have (`emon.cjk`): codespace, CIDs, and the
+	// collection the CIDs belong to; `Uni*-UCS2/UTF16` codes are Unicode as well
+	hit = cjk.CjkFindName(ar, enc)
+	if hit >= 0 {
+		coll = hit / 1000
+		row = hit % 1000
+		port.CellsSet(f, hColl, coll)
+		port.CellsSet(f, hRow, row)
+		port.CellsSet(f, hOrd, coll)
+		port.CellsSet(f, hWmode, cjk.CjkCmapField(coll, row, 3))
+		k = 0
+		for k < cjk.CjkCmapField(coll, row, 5) {
+			at = cjk.CjkCmapField(coll, row, 4) + k
+			pfnCsPut(f, cjk.CjkCs(coll, at, 0), cjk.CjkCs(coll, at, 1), cjk.CjkCs(coll, at, 2), cjk.CjkCs(coll, at, 3), cjk.CjkCs(coll, at, 4))
+			k += 1
+		}
+		port.CellsSet(f, hCmap, 5)
+		if (pfnNameAt(ar, enc, 0) == 85) && ((pfnNameAt(ar, enc, 1) == 110) && (pfnNameAt(ar, enc, 2) == 105)) {
+			if (pfnNameHas(ar, enc, 85, 67, 83, 50, -1) == 1) || (pfnNameHas(ar, enc, 85, 84, 70, 49, 54) == 1) {
+				port.CellsSet(f, hCmap, 4)
+			}
+		}
+		return 0
+	}
 	// Uni*-UCS2-* and Uni*-UTF16-*: the code is the Unicode value
 	if (pfnNameAt(ar, enc, 0) == 85) && ((pfnNameAt(ar, enc, 1) == 110) && (pfnNameAt(ar, enc, 2) == 105)) {
 		if pfnNameHas(ar, enc, 85, 67, 83, 50, -1) == 1 {
@@ -2312,6 +2548,169 @@ func pfnEncodingCmap(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cell
 	return 0
 }
 
+func pfnOrderingColl(ar *port.Cells, sh int32) int32 {
+	// The Adobe collection a CIDSystemInfo /Ordering string names: 0 Japan1, 1 GB1, 2 CNS1,
+	// 3 Korea1, -1 anything else (Identity, or a foundry's own).
+	var n int32 = pdfx.PxBlen(ar, sh)
+	if (n == 6) && ((pdfx.PxBat(ar, sh, 0) == 74) && ((pdfx.PxBat(ar, sh, 1) == 97) && ((pdfx.PxBat(ar, sh, 2) == 112) && ((pdfx.PxBat(ar, sh, 3) == 97) && ((pdfx.PxBat(ar, sh, 4) == 110) && (pdfx.PxBat(ar, sh, 5) == 49)))))) {
+		return 0
+	}
+	if (n == 3) && ((pdfx.PxBat(ar, sh, 0) == 71) && ((pdfx.PxBat(ar, sh, 1) == 66) && (pdfx.PxBat(ar, sh, 2) == 49))) {
+		return 1
+	}
+	if (n == 4) && ((pdfx.PxBat(ar, sh, 0) == 67) && ((pdfx.PxBat(ar, sh, 1) == 78) && ((pdfx.PxBat(ar, sh, 2) == 83) && (pdfx.PxBat(ar, sh, 3) == 49)))) {
+		return 2
+	}
+	if (n == 6) && ((pdfx.PxBat(ar, sh, 0) == 75) && ((pdfx.PxBat(ar, sh, 1) == 111) && ((pdfx.PxBat(ar, sh, 2) == 114) && ((pdfx.PxBat(ar, sh, 3) == 101) && ((pdfx.PxBat(ar, sh, 4) == 97) && (pdfx.PxBat(ar, sh, 5) == 49)))))) {
+		return 3
+	}
+	return -1
+}
+
+func pfnCompositeMapped(f *port.Cells) int32 {
+	// 1 when something in the font can say what a code is: a ToUnicode CMap with entries, a
+	// Unicode CMap name, or an Adobe collection's CID table.
+	if port.CellsAt(f, hTuN) > 0 {
+		return 1
+	}
+	if port.CellsAt(f, hCmap) == 4 {
+		return 1
+	}
+	if port.CellsAt(f, hOrd) >= 0 {
+		return 1
+	}
+	return 0
+}
+
+func pfnAddW2(f *port.Cells, lo int32, hi int32, w1 int32, vx int32, vy int32) int32 {
+	if lo < 0 {
+		return 0
+	}
+	if hi < lo {
+		return 0
+	}
+	if port.CellsAt(f, pCount) >= cmMax {
+		pfnWarnSet(f, 4)
+		return 0
+	}
+	var seq int32 = port.CellsAt(f, hSeq)
+	port.CellsSet(f, hSeq, seq+1)
+	port.CellsSet(f, pCount, port.CellsAt(f, pCount)+1)
+	port.CellsPush(f, lo)
+	port.CellsPush(f, hi)
+	port.CellsPush(f, w1)
+	port.CellsPush(f, seq)
+	port.CellsPush(f, vx)
+	port.CellsPush(f, vy)
+	port.CellsPush(f, 0)
+	return 1
+}
+
+func pfnNumOrZero(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, el int32) int32 {
+	// The number (hundredths) an array element is, 0 when it is none.
+	var ev int32 = pdfdoc.PdResolve(src, ar, dc, a, b, st, el)
+	if pfnIsnum(ar, ev) == 1 {
+		return pdflex.PlNumCp(ar, ev)
+	}
+	return 0
+}
+
+func pfnParseW2(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, f *port.Cells, wa int32) int32 {
+	// A /W2 array: `c [w1 vx vy ...]` and `c1 c2 w1 vx vy`, into the table at the end of `f`
+	// (vertical metrics, ISO 32000-1 9.7.4.3: the advance, then the position vector).
+	var k int32 = pdflex.PlFirst(ar, wa)
+	var k2 int32 = 0
+	var v1 int32 = 0
+	var v2 int32 = 0
+	var el int32 = 0
+	var j int32 = 0
+	var c1 int32 = 0
+	var x0 int32 = 0
+	var x1 int32 = 0
+	var x2 int32 = 0
+	var e1 int32 = 0
+	var e2 int32 = 0
+	port.CellsSet(f, pCount, 0)
+	for k != 0 {
+		v1 = pdfdoc.PdResolve(src, ar, dc, a, b, st, k)
+		k2 = pdflex.PlNext(ar, k)
+		if k2 == 0 {
+			k = 0
+		} else {
+			c1 = -1
+			if pfnIsnum(ar, v1) == 1 {
+				c1 = pdflex.PlIntValue(ar, v1)
+			}
+			v2 = pdfdoc.PdResolve(src, ar, dc, a, b, st, k2)
+			if (v2 != 0) && (pdflex.PlKindOf(ar, v2) == 6) {
+				j = 0
+				el = pdflex.PlFirst(ar, v2)
+				for el != 0 {
+					e1 = pdflex.PlNext(ar, el)
+					e2 = 0
+					if e1 != 0 {
+						e2 = pdflex.PlNext(ar, e1)
+					}
+					if e2 == 0 {
+						el = 0
+					} else {
+						pfnAddW2(f, c1+j, c1+j, pfnNumOrZero(src, ar, dc, a, b, st, el), pfnNumOrZero(src, ar, dc, a, b, st, e1), pfnNumOrZero(src, ar, dc, a, b, st, e2))
+						j += 1
+						el = pdflex.PlNext(ar, e2)
+					}
+				}
+				k = pdflex.PlNext(ar, k2)
+			} else {
+				// c1 c2 w1 vx vy
+				x0 = pdflex.PlNext(ar, k2)
+				x1 = 0
+				x2 = 0
+				if x0 != 0 {
+					x1 = pdflex.PlNext(ar, x0)
+				}
+				if x1 != 0 {
+					x2 = pdflex.PlNext(ar, x1)
+				}
+				if x2 == 0 {
+					k = 0
+				} else {
+					if (pfnIsnum(ar, v1) == 1) && (pfnIsnum(ar, v2) == 1) {
+						pfnAddW2(f, c1, pdflex.PlIntValue(ar, v2), pfnNumOrZero(src, ar, dc, a, b, st, x0), pfnNumOrZero(src, ar, dc, a, b, st, x1), pfnNumOrZero(src, ar, dc, a, b, st, x2))
+					}
+					k = pdflex.PlNext(ar, x2)
+				}
+			}
+		}
+	}
+	port.CellsSet(f, hW2N, port.CellsAt(f, pCount))
+	pfnFinish(f, port.CellsAt(f, hW2Start), port.CellsAt(f, hW2N), w2Stride)
+	return 0
+}
+
+func PfnVerticalMetric(f *port.Cells, code int32, which int32) int32 {
+	// A composite font's vertical metrics of a code, in hundredths of a thousandth of an em
+	// (like widths): which 0 the vertical advance w1 (DW2's second number by default, -1000),
+	// 1 the position vector's x (half the width by default), 2 its y (DW2's first number, 880).
+	var cid int32 = PfnCid(f, code)
+	var rec int32 = pfnFind(f, port.CellsAt(f, hW2Start), port.CellsAt(f, hW2N), w2Stride, cid)
+	if rec >= 0 {
+		if which == 0 {
+			return port.CellsAt(f, rec+2)
+		}
+		if which == 1 {
+			return port.CellsAt(f, rec+4)
+		}
+		return port.CellsAt(f, rec+5)
+	}
+	if which == 0 {
+		return port.CellsAt(f, hDw2w)
+	}
+	if which == 2 {
+		return port.CellsAt(f, hDw2v)
+	}
+	return PfnWidth(f, code) / 2
+}
+
 func pfnLoadComposite(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, f *port.Cells, out *port.Cells, fh int32) int32 {
 	var da int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, fh, pdfnames.PnDescendantFonts())
 	var enc int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, fh, pdfnames.PnEncoding())
@@ -2324,6 +2723,10 @@ func pfnLoadComposite(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cel
 	var d2f int32 = 0
 	var dfirst int32 = 0
 	var d2v int32 = 0
+	var w2a int32 = 0
+	var csi int32 = 0
+	var ord int32 = 0
+	var oc int32 = -1
 	port.CellsSet(f, hKind, 2)
 	port.CellsSet(f, hSub, 5)
 	if (da != 0) && (pdflex.PlKindOf(ar, da) == 6) {
@@ -2360,14 +2763,34 @@ func pfnLoadComposite(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cel
 			}
 		}
 		wa = pdfdoc.PdDget(src, ar, dc, a, b, st, dd, pdfnames.PnW())
+		w2a = pdfx.PxDget(src, ar, dc, a, b, st, dd, pdfxnames.PxW2())
+		csi = pdfdoc.PdDget(src, ar, dc, a, b, st, dd, pdfnames.PnCidSystemInfo())
+		if (csi != 0) && (pdflex.PlKindOf(ar, csi) == 7) {
+			ord = pdfdoc.PdDget(src, ar, dc, a, b, st, csi, pdfnames.PnOrdering())
+			if (ord != 0) && (pdflex.PlKindOf(ar, ord) == 5) {
+				oc = pfnOrderingColl(ar, ord)
+			}
+		}
 	}
 	pfnEncodingCmap(src, ar, dc, a, b, st, f, out, enc)
+	// the CIDSystemInfo says which Adobe collection the CIDs are; when it names none, none
+	if (ord != 0) && (pdflex.PlKindOf(ar, ord) == 5) {
+		port.CellsSet(f, hOrd, oc)
+	}
 	pfnLoadTounicode(src, ar, dc, a, b, st, f, out, fh)
 	if port.CellsAt(f, hNcs) == 0 {
 		pfnCsPut(f, 2, 0, 0, 0, 65535)
 	}
 	if (wa != 0) && (pdflex.PlKindOf(ar, wa) == 6) {
 		pfnParseW(src, ar, dc, a, b, st, f, wa)
+	}
+	port.CellsSet(f, hW2Start, port.CellsLen(f))
+	port.CellsSet(f, hW2N, 0)
+	if (w2a != 0) && (pdflex.PlKindOf(ar, w2a) == 6) {
+		pfnParseW2(src, ar, dc, a, b, st, f, w2a)
+	}
+	if pfnCompositeMapped(f) == 0 {
+		pfnWarnSet(f, 1024)
 	}
 	return 0
 }

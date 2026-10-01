@@ -2,11 +2,16 @@
 // source: emon.pdffont
 
 use crate::emon::agl::*;
+use crate::emon::cjk::*;
 use crate::emon::encodings::*;
+use crate::emon::fontextra::*;
+use crate::emon::fontprog::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdflex::*;
 use crate::emon::pdfnames::*;
 use crate::emon::pdfsrc::*;
+use crate::emon::pdfx::*;
+use crate::emon::pdfxnames::*;
 
 pub fn pfn_how_tounicode() -> i32 {
     return 1;
@@ -100,6 +105,12 @@ pub fn pfn_w_symbolic_guess() -> i32 {
 pub fn pfn_w_encoding_cmap() -> i32 {
     return 512;
 }
+pub fn pfn_w_no_mapping() -> i32 {
+    return 1024;
+}
+pub fn pfn_w_program() -> i32 {
+    return 2048;
+}
 pub fn pfn_warning_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "predefined CMap not supported");
@@ -114,7 +125,7 @@ pub fn pfn_warning_emit_name(mut t: &mut String, code: i32) -> i32 {
         return 1;
     }
     if code == 8 {
-        crate::port::text_ascii(t, "MacExpertEncoding or an unknown encoding name");
+        crate::port::text_ascii(t, "an unknown encoding name");
         return 1;
     }
     if code == 16 {
@@ -139,6 +150,14 @@ pub fn pfn_warning_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 512 {
         crate::port::text_ascii(t, "embedded encoding CMap damaged");
+        return 1;
+    }
+    if code == 1024 {
+        crate::port::text_ascii(t, "no mapping at all: nothing in the PDF or the font program says what the codes are");
+        return 1;
+    }
+    if code == 2048 {
+        crate::port::text_ascii(t, "the embedded font program was unreadable");
         return 1;
     }
     return 0;
@@ -216,6 +235,12 @@ pub(crate) const P_HI: i32 = 48;
 pub(crate) const P_CSOK: i32 = 49;
 pub(crate) const P_MODE: i32 = 50;
 pub(crate) const P_COUNT: i32 = 52;
+pub(crate) const H_COLL: i32 = 144;
+pub(crate) const H_ROW: i32 = 145;
+pub(crate) const H_ORD: i32 = 146;
+pub(crate) const H_W2_START: i32 = 147;
+pub(crate) const H_W2_N: i32 = 148;
+pub(crate) const H_PROGHOW: i32 = 149;
 pub(crate) const CS_BASE: i32 = 64;
 pub(crate) const CS_MAX: i32 = 16;
 pub(crate) const CS_STRIDE: i32 = 5;
@@ -223,6 +248,7 @@ pub(crate) const SIMPLE_BASE: i32 = 160;
 pub(crate) const ENTRY: i32 = 8;
 pub(crate) const TU_STRIDE: i32 = 9;
 pub(crate) const VAL_STRIDE: i32 = 5;
+pub(crate) const W2_STRIDE: i32 = 7;
 pub(crate) const CM_MAX: i32 = 100000;
 pub(crate) const SUB_TYPE1: i32 = 1;
 pub(crate) const SUB_MMTYPE1: i32 = 2;
@@ -244,6 +270,8 @@ pub fn pfn_init(mut f: &mut crate::port::Cells) -> i32 {
     crate::port::cells_set(f, H_DW2V, 88000);
     crate::port::cells_set(f, H_DW2W, -100000);
     crate::port::cells_set(f, H_T3SCALE, 1000);
+    crate::port::cells_set(f, H_COLL, -1);
+    crate::port::cells_set(f, H_ORD, -1);
     return 0;
 }
 pub(crate) fn pfn_warn_set(mut f: &mut crate::port::Cells, bit: i32) -> i32 {
@@ -1467,7 +1495,7 @@ pub(crate) fn pfn_entry_put(mut f: &mut crate::port::Cells, code: i32, how: i32)
     return 0;
 }
 pub(crate) fn pfn_enc_of_name(ar: &mut crate::port::Cells, h: i32) -> i32 {
-    // 0 Standard, 1 WinAnsi, 2 MacRoman, -2 MacExpert, -1 any other name.
+    // 0 Standard, 1 WinAnsi, 2 MacRoman, 5 MacExpert, -1 any other name.
     if pl_kind_of(ar, h) != 4 {
         return -1;
     }
@@ -1481,7 +1509,7 @@ pub(crate) fn pfn_enc_of_name(ar: &mut crate::port::Cells, h: i32) -> i32 {
         return 2;
     }
     if pl_name_is(ar, h, pn_mac_expert_encoding()) == 1 {
-        return -2;
+        return 5;
     }
     return -1;
 }
@@ -1742,6 +1770,48 @@ pub(crate) fn pfn_tu_load(mut f: &mut crate::port::Cells, rec: i32, code: i32) -
     }
     return cnt;
 }
+pub fn pfn_cid(f: &mut crate::port::Cells, code: i32) -> i32 {
+    // The CID of a code in a composite font: the code itself for Identity
+    // and unsupported CMaps, else the embedded CMap's (0 when it has none).
+    let mut rec: i32 = 0;
+    if crate::port::cells_at(f, H_KIND) != 2 {
+        return code;
+    }
+    if (crate::port::cells_at(f, H_COLL) >= 0) && ((crate::port::cells_at(f, H_CMAP) == 4) || (crate::port::cells_at(f, H_CMAP) == 5)) {
+        return cjk_cid(crate::port::cells_at(f, H_COLL), crate::port::cells_at(f, H_ROW), code);
+    }
+    if crate::port::cells_at(f, H_CMAP) == 2 {
+        rec = pfn_find(f, crate::port::cells_at(f, H_CID_START), crate::port::cells_at(f, H_CID_N), VAL_STRIDE, code);
+        if rec >= 0 {
+            return crate::port::cells_at(f, rec + 2) + (code - crate::port::cells_at(f, rec));
+        }
+        return 0;
+    }
+    return code;
+}
+pub(crate) fn pfn_sur_cp(code: i32) -> i32 {
+    // The code point of a four-byte UTF-16 code (a surrogate pair; a first byte of 128
+    // or more is a negative I32): 0 when the code is no pair.
+    let u: i32 = (code + 1073741824) + 1073741824;
+    let hi: i32 = (u / 65536) + 32768;
+    let lo: i32 = u % 65536;
+    if code >= 0 {
+        return 0;
+    }
+    if hi < 55296 {
+        return 0;
+    }
+    if hi > 56319 {
+        return 0;
+    }
+    if lo < 56320 {
+        return 0;
+    }
+    if lo > 57343 {
+        return 0;
+    }
+    return 65536 + (((hi - 55296) * 1024) + (lo - 56320));
+}
 pub fn pfn_map(mut f: &mut crate::port::Cells, code: i32) -> i32 {
     // The Unicode value of a character code: the number of code points
     // (0 when the font says nothing), which `pfn-cp` reads back, and how it
@@ -1750,6 +1820,7 @@ pub fn pfn_map(mut f: &mut crate::port::Cells, code: i32) -> i32 {
     let mut at: i32 = 0;
     let mut rec: i32 = 0;
     let mut cnt: i32 = 0;
+    let mut cp: i32 = 0;
     crate::port::cells_set(f, H_TN, 0);
     crate::port::cells_set(f, H_HOW, 5);
     if kind == 1 {
@@ -1775,33 +1846,32 @@ pub fn pfn_map(mut f: &mut crate::port::Cells, code: i32) -> i32 {
             }
             crate::port::cells_set(f, H_TN, 0);
         }
-        if (crate::port::cells_at(f, H_CMAP) == 4) && ((code >= 0) && (code <= 1114111)) {
-            if (code < 55296) || (code > 57343) {
+        if crate::port::cells_at(f, H_CMAP) == 4 {
+            cp = code;
+            if code < 0 {
+                cp = pfn_sur_cp(code);
+            }
+            if (cp > 0) && ((cp <= 1114111) && ((cp < 55296) || (cp > 57343))) {
                 crate::port::cells_set(f, H_TN, 1);
-                crate::port::cells_set(f, H_T0 + 0, code);
+                crate::port::cells_set(f, H_T0 + 0, cp);
                 crate::port::cells_set(f, H_HOW, 2);
+                return 1;
+            }
+        }
+        // the Adobe collection's CID -> Unicode table (Identity-H with an Adobe-Japan1 font, a
+        // predefined CMap's CIDs): what the CID is, by the collection's own table
+        if crate::port::cells_at(f, H_ORD) >= 0 {
+            cp = cjk_uni(crate::port::cells_at(f, H_ORD), pfn_cid(f, code));
+            if cp > 0 {
+                crate::port::cells_set(f, H_TN, 1);
+                crate::port::cells_set(f, H_T0 + 0, cp);
+                crate::port::cells_set(f, H_HOW, 4);
                 return 1;
             }
         }
         return 0;
     }
     return 0;
-}
-pub fn pfn_cid(f: &mut crate::port::Cells, code: i32) -> i32 {
-    // The CID of a code in a composite font: the code itself for Identity
-    // and unsupported CMaps, else the embedded CMap's (0 when it has none).
-    let mut rec: i32 = 0;
-    if crate::port::cells_at(f, H_KIND) != 2 {
-        return code;
-    }
-    if crate::port::cells_at(f, H_CMAP) == 2 {
-        rec = pfn_find(f, crate::port::cells_at(f, H_CID_START), crate::port::cells_at(f, H_CID_N), VAL_STRIDE, code);
-        if rec >= 0 {
-            return crate::port::cells_at(f, rec + 2) + (code - crate::port::cells_at(f, rec));
-        }
-        return 0;
-    }
-    return code;
 }
 pub fn pfn_width(f: &mut crate::port::Cells, code: i32) -> i32 {
     // The advance of a code in hundredths of a thousandth of an em, or -1
@@ -1864,6 +1934,114 @@ pub(crate) fn pfn_load_tounicode(src: &crate::port::Src, mut ar: &mut crate::por
     crate::port::cells_set(f, H_HASTU, 1);
     return 1;
 }
+pub(crate) fn pfn_fill_macexpert(mut f: &mut crate::port::Cells) -> i32 {
+    // MacExpertEncoding as TEXT (`emon.fontextra`, `fold-expert`): the small capitals, old-style
+    // figures and superiors mean the characters they are variants of, not Adobe's private
+    // use area code points the AGL gives them.
+    let mut code: i32 = 0;
+    let mut c0: i32 = 0;
+    let mut c1: i32 = 0;
+    while code < 256 {
+        c0 = MAC_EXPERT_CP[(code * 2 + 0) as usize];
+        c1 = MAC_EXPERT_CP[(code * 2 + 1) as usize];
+        if c0 >= 0 {
+            crate::port::cells_set(f, H_TN, 1);
+            crate::port::cells_set(f, H_T0 + 0, c0);
+            if c1 > 0 {
+                crate::port::cells_set(f, H_TN, 2);
+                crate::port::cells_set(f, H_T0 + 1, c1);
+            }
+            pfn_entry_put(f, code, 2);
+        }
+        code += 1;
+    }
+    return 0;
+}
+pub(crate) fn pfn_font_stream(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, fd: i32) -> i32 {
+    // The embedded font program stream of a FontDescriptor (FontFile, FontFile2 or
+    // FontFile3), 0 when it has none.
+    let mut v: i32 = px_dget(src, ar, dc, a, b, st, fd, px_font_file());
+    if (v != 0) && (pl_kind_of(ar, v) == 8) {
+        return v;
+    }
+    v = px_dget(src, ar, dc, a, b, st, fd, px_font_file2());
+    if (v != 0) && (pl_kind_of(ar, v) == 8) {
+        return v;
+    }
+    v = px_dget(src, ar, dc, a, b, st, fd, px_font_file3());
+    if (v != 0) && (pl_kind_of(ar, v) == 8) {
+        return v;
+    }
+    return 0;
+}
+pub(crate) fn pfn_apply_program(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut f: &mut crate::port::Cells, mut out: &mut crate::port::Cells, pstm: i32, zapf: i32) -> i32 {
+    // Decode the font program stream and let it say what its codes are (`emon.fontprog`):
+    // its built-in encoding replaces the base encoding wherever it names a glyph.
+    let tbl: i32 = crate::port::cells_len(f);
+    let sz: i32 = fp_table_size();
+    let mut i: i32 = 0;
+    let mut n: i32 = 0;
+    let mut ps: i32 = 0;
+    let mut at: i32 = 0;
+    let mut code: i32 = 0;
+    let mut w: i32 = 0;
+    ps = pd_stream_data(src, ar, dc, a, b, st, pstm, out);
+    if ps != 0 {
+        pfn_warn_set(f, 2048);
+    }
+    while i < sz {
+        crate::port::cells_push(f, 0);
+        i += 1;
+    }
+    n = fp_simple(f, H_TN, tbl, &crate::port::cells_bytes(out)[..], zapf);
+    if n < 0 {
+        pfn_warn_set(f, 2048);
+    }
+    if n >= 0 {
+        code = 0;
+        while code < 256 {
+            at = tbl + (code * 6);
+            // a program that NAMES its glyphs (Type 1, CFF) and gives this code no Unicode name
+            // (`G12`, `a30`) has said what the code is not: the guess made without it goes
+            if (crate::port::cells_at(f, at) == 0) && ((fp_kind(f, tbl) == 1) && (crate::port::cells_at(f, (SIMPLE_BASE + (code * ENTRY)) + 4) == 5)) {
+                pfn_entry_clear(f, code);
+            }
+            if crate::port::cells_at(f, at) > 0 {
+                crate::port::cells_set(f, H_TN, crate::port::cells_at(f, at));
+                crate::port::cells_set(f, H_T0 + 0, crate::port::cells_at(f, at + 1));
+                crate::port::cells_set(f, H_T0 + 1, crate::port::cells_at(f, at + 2));
+                crate::port::cells_set(f, H_T0 + 2, crate::port::cells_at(f, at + 3));
+                crate::port::cells_set(f, H_T0 + 3, crate::port::cells_at(f, at + 4));
+                pfn_entry_put(f, code, crate::port::cells_at(f, at + 5));
+                crate::port::cells_set(f, (SIMPLE_BASE + (code * ENTRY)) + 6, -1);
+            }
+            code += 1;
+        }
+        // a program that names its glyphs knows the built-in encoding: it is no longer a guess (a
+        // TrueType font's cmap leaves the codes it does not cover to the guess)
+        w = crate::port::cells_at(f, H_WARN);
+        if (fp_kind(f, tbl) == 1) && (((w / 256) % 2) == 1) {
+            crate::port::cells_set(f, H_WARN, w - 256);
+        }
+    }
+    crate::port::cells_drop(f, tbl);
+    crate::port::cells_set(f, H_PROGHOW, n + 1);
+    return n;
+}
+pub(crate) fn pfn_count_known(f: &mut crate::port::Cells) -> i32 {
+    // How many of a simple font's codes have a value that is not a guess.
+    let mut code: i32 = 0;
+    let mut cnt: i32 = 0;
+    let mut at: i32 = 0;
+    while code < 256 {
+        at = SIMPLE_BASE + (code * ENTRY);
+        if (crate::port::cells_at(f, at) > 0) && (crate::port::cells_at(f, at + 4) != 5) {
+            cnt += 1;
+        }
+        code += 1;
+    }
+    return cnt;
+}
 pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut f: &mut crate::port::Cells, mut out: &mut crate::port::Cells, fh: i32, sub: i32) -> i32 {
     let fd: i32 = pd_dget(src, ar, dc, a, b, st, fh, pn_font_descriptor());
     let bf: i32 = pd_dget(src, ar, dc, a, b, st, fh, pn_base_font());
@@ -1880,6 +2058,8 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
     let mut tustart: i32 = 0;
     let mut tun: i32 = 0;
     let mut ncp: i32 = 0;
+    let mut given: i32 = 0;
+    let mut pstm: i32 = 0;
     let mut zapfnames: i32 = 0;
     crate::port::cells_set(f, H_KIND, 1);
     crate::port::cells_set(f, H_SUB, sub);
@@ -1922,11 +2102,6 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
         }
         diffs = pd_dget(src, ar, dc, a, b, st, enc, pn_differences());
     }
-    if base == -2 {
-        pfn_warn_set(f, 8);
-        base = 0;
-        guess = 1;
-    }
     if (base == -1) && ((enc != 0) && (pl_kind_of(ar, enc) == 4)) {
         pfn_warn_set(f, 8);
         base = 0;
@@ -1940,6 +2115,10 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
             base = 4;
         }
     }
+    // an encoding the PDF names (or Symbol, ZapfDingbats): the font program's own is not asked
+    if (base >= 0) && (guess == 0) {
+        given = 1;
+    }
     if (base == -1) && (sub != 4) {
         base = 0;
         if (sub == 3) && (enc == 0) {
@@ -1951,7 +2130,10 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
         }
     }
     crate::port::cells_set(f, H_ENC, base);
-    if base >= 0 {
+    if base == 5 {
+        pfn_fill_macexpert(f);
+    }
+    if (base >= 0) && (base < 5) {
         code = 0;
         while code < 256 {
             gid = ENC_GID[((base * 256) + code) as usize];
@@ -1965,6 +2147,16 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
                 }
             }
             code += 1;
+        }
+    }
+    // no encoding named: the font program's built-in encoding (a Type 1 /Encoding, a CFF
+    // Encoding, a symbolic TrueType font's cmap), before /Differences, which still win
+    if (given == 0) && ((sub != 4) && (fd != 0)) {
+        pstm = pfn_font_stream(src, ar, dc, a, b, st, fd);
+        if pstm != 0 {
+            if (sub != 3) || ((((flags / 4) % 2) == 1) && (((flags / 32) % 2) == 0)) {
+                pfn_apply_program(src, ar, dc, a, b, st, f, out, pstm, zapfnames);
+            }
         }
     }
     // /Differences: a number sets the code, each name after it takes the next
@@ -2015,6 +2207,9 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
     }
     pfn_load_widths(src, ar, dc, a, b, st, f, fh);
     pfn_width_fallbacks(f);
+    if pfn_count_known(f) == 0 {
+        pfn_warn_set(f, 1024);
+    }
     return 0;
 }
 pub(crate) fn pfn_parse_w(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut f: &mut crate::port::Cells, wa: i32) -> i32 {
@@ -2104,6 +2299,11 @@ pub(crate) fn pfn_encoding_cmap(src: &crate::port::Src, mut ar: &mut crate::port
     let mut ps: i32 = 0;
     let mut n: i32 = 0;
     let mut vert: i32 = 0;
+    let mut hit: i32 = -1;
+    let mut coll: i32 = 0;
+    let mut row: i32 = 0;
+    let mut k: i32 = 0;
+    let mut at: i32 = 0;
     if enc == 0 {
         crate::port::cells_set(f, H_CMAP, 1);
         pfn_cs_put(f, 2, 0, 0, 0, 65535);
@@ -2140,6 +2340,30 @@ pub(crate) fn pfn_encoding_cmap(src: &crate::port::Src, mut ar: &mut crate::port
         }
     }
     crate::port::cells_set(f, H_WMODE, vert);
+    // a predefined CMap whose tables we have (`emon.cjk`): codespace, CIDs, and the
+    // collection the CIDs belong to; `Uni*-UCS2/UTF16` codes are Unicode as well
+    hit = cjk_find_name(ar, enc);
+    if hit >= 0 {
+        coll = hit / 1000;
+        row = hit % 1000;
+        crate::port::cells_set(f, H_COLL, coll);
+        crate::port::cells_set(f, H_ROW, row);
+        crate::port::cells_set(f, H_ORD, coll);
+        crate::port::cells_set(f, H_WMODE, cjk_cmap_field(coll, row, 3));
+        k = 0;
+        while k < cjk_cmap_field(coll, row, 5) {
+            at = cjk_cmap_field(coll, row, 4) + k;
+            pfn_cs_put(f, cjk_cs(coll, at, 0), cjk_cs(coll, at, 1), cjk_cs(coll, at, 2), cjk_cs(coll, at, 3), cjk_cs(coll, at, 4));
+            k += 1;
+        }
+        crate::port::cells_set(f, H_CMAP, 5);
+        if (pfn_name_at(ar, enc, 0) == 85) && ((pfn_name_at(ar, enc, 1) == 110) && (pfn_name_at(ar, enc, 2) == 105)) {
+            if (pfn_name_has(ar, enc, 85, 67, 83, 50, -1) == 1) || (pfn_name_has(ar, enc, 85, 84, 70, 49, 54) == 1) {
+                crate::port::cells_set(f, H_CMAP, 4);
+            }
+        }
+        return 0;
+    }
     // Uni*-UCS2-* and Uni*-UTF16-*: the code is the Unicode value
     if (pfn_name_at(ar, enc, 0) == 85) && ((pfn_name_at(ar, enc, 1) == 110) && (pfn_name_at(ar, enc, 2) == 105)) {
         if pfn_name_has(ar, enc, 85, 67, 83, 50, -1) == 1 {
@@ -2161,6 +2385,163 @@ pub(crate) fn pfn_encoding_cmap(src: &crate::port::Src, mut ar: &mut crate::port
     pfn_warn_set(f, 1);
     return 0;
 }
+pub(crate) fn pfn_ordering_coll(ar: &mut crate::port::Cells, sh: i32) -> i32 {
+    // The Adobe collection a CIDSystemInfo /Ordering string names: 0 Japan1, 1 GB1, 2 CNS1,
+    // 3 Korea1, -1 anything else (Identity, or a foundry's own).
+    let n: i32 = px_blen(ar, sh);
+    if (n == 6) && ((px_bat(ar, sh, 0) == 74) && ((px_bat(ar, sh, 1) == 97) && ((px_bat(ar, sh, 2) == 112) && ((px_bat(ar, sh, 3) == 97) && ((px_bat(ar, sh, 4) == 110) && (px_bat(ar, sh, 5) == 49)))))) {
+        return 0;
+    }
+    if (n == 3) && ((px_bat(ar, sh, 0) == 71) && ((px_bat(ar, sh, 1) == 66) && (px_bat(ar, sh, 2) == 49))) {
+        return 1;
+    }
+    if (n == 4) && ((px_bat(ar, sh, 0) == 67) && ((px_bat(ar, sh, 1) == 78) && ((px_bat(ar, sh, 2) == 83) && (px_bat(ar, sh, 3) == 49)))) {
+        return 2;
+    }
+    if (n == 6) && ((px_bat(ar, sh, 0) == 75) && ((px_bat(ar, sh, 1) == 111) && ((px_bat(ar, sh, 2) == 114) && ((px_bat(ar, sh, 3) == 101) && ((px_bat(ar, sh, 4) == 97) && (px_bat(ar, sh, 5) == 49)))))) {
+        return 3;
+    }
+    return -1;
+}
+pub(crate) fn pfn_composite_mapped(f: &mut crate::port::Cells) -> i32 {
+    // 1 when something in the font can say what a code is: a ToUnicode CMap with entries, a
+    // Unicode CMap name, or an Adobe collection's CID table.
+    if crate::port::cells_at(f, H_TU_N) > 0 {
+        return 1;
+    }
+    if crate::port::cells_at(f, H_CMAP) == 4 {
+        return 1;
+    }
+    if crate::port::cells_at(f, H_ORD) >= 0 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn pfn_add_w2(mut f: &mut crate::port::Cells, lo: i32, hi: i32, w1: i32, vx: i32, vy: i32) -> i32 {
+    if lo < 0 {
+        return 0;
+    }
+    if hi < lo {
+        return 0;
+    }
+    if crate::port::cells_at(f, P_COUNT) >= CM_MAX {
+        pfn_warn_set(f, 4);
+        return 0;
+    }
+    let seq: i32 = crate::port::cells_at(f, H_SEQ);
+    crate::port::cells_set(f, H_SEQ, seq + 1);
+    crate::port::cells_set(f, P_COUNT, crate::port::cells_at(f, P_COUNT) + 1);
+    crate::port::cells_push(f, lo);
+    crate::port::cells_push(f, hi);
+    crate::port::cells_push(f, w1);
+    crate::port::cells_push(f, seq);
+    crate::port::cells_push(f, vx);
+    crate::port::cells_push(f, vy);
+    crate::port::cells_push(f, 0);
+    return 1;
+}
+pub(crate) fn pfn_num_or_zero(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, el: i32) -> i32 {
+    // The number (hundredths) an array element is, 0 when it is none.
+    let ev: i32 = pd_resolve(src, ar, dc, a, b, st, el);
+    if pfn_isnum(ar, ev) == 1 {
+        return pl_num_cp(ar, ev);
+    }
+    return 0;
+}
+pub(crate) fn pfn_parse_w2(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut f: &mut crate::port::Cells, wa: i32) -> i32 {
+    // A /W2 array: `c [w1 vx vy ...]` and `c1 c2 w1 vx vy`, into the table at the end of `f`
+    // (vertical metrics, ISO 32000-1 9.7.4.3: the advance, then the position vector).
+    let mut k: i32 = pl_first(ar, wa);
+    let mut k2: i32 = 0;
+    let mut v1: i32 = 0;
+    let mut v2: i32 = 0;
+    let mut el: i32 = 0;
+    let mut j: i32 = 0;
+    let mut c1: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut x2: i32 = 0;
+    let mut e1: i32 = 0;
+    let mut e2: i32 = 0;
+    crate::port::cells_set(f, P_COUNT, 0);
+    while k != 0 {
+        v1 = pd_resolve(src, ar, dc, a, b, st, k);
+        k2 = pl_next(ar, k);
+        if k2 == 0 {
+            k = 0;
+        } else {
+            c1 = -1;
+            if pfn_isnum(ar, v1) == 1 {
+                c1 = pl_int_value(ar, v1);
+            }
+            v2 = pd_resolve(src, ar, dc, a, b, st, k2);
+            if (v2 != 0) && (pl_kind_of(ar, v2) == 6) {
+                j = 0;
+                el = pl_first(ar, v2);
+                while el != 0 {
+                    e1 = pl_next(ar, el);
+                    e2 = 0;
+                    if e1 != 0 {
+                        e2 = pl_next(ar, e1);
+                    }
+                    if e2 == 0 {
+                        el = 0;
+                    } else {
+                        pfn_add_w2(f, c1 + j, c1 + j, pfn_num_or_zero(src, ar, dc, a, b, st, el), pfn_num_or_zero(src, ar, dc, a, b, st, e1), pfn_num_or_zero(src, ar, dc, a, b, st, e2));
+                        j += 1;
+                        el = pl_next(ar, e2);
+                    }
+                }
+                k = pl_next(ar, k2);
+            } else {
+                // c1 c2 w1 vx vy
+                x0 = pl_next(ar, k2);
+                x1 = 0;
+                x2 = 0;
+                if x0 != 0 {
+                    x1 = pl_next(ar, x0);
+                }
+                if x1 != 0 {
+                    x2 = pl_next(ar, x1);
+                }
+                if x2 == 0 {
+                    k = 0;
+                } else {
+                    if (pfn_isnum(ar, v1) == 1) && (pfn_isnum(ar, v2) == 1) {
+                        pfn_add_w2(f, c1, pl_int_value(ar, v2), pfn_num_or_zero(src, ar, dc, a, b, st, x0), pfn_num_or_zero(src, ar, dc, a, b, st, x1), pfn_num_or_zero(src, ar, dc, a, b, st, x2));
+                    }
+                    k = pl_next(ar, x2);
+                }
+            }
+        }
+    }
+    crate::port::cells_set(f, H_W2_N, crate::port::cells_at(f, P_COUNT));
+    pfn_finish(f, crate::port::cells_at(f, H_W2_START), crate::port::cells_at(f, H_W2_N), W2_STRIDE);
+    return 0;
+}
+pub fn pfn_vertical_metric(f: &mut crate::port::Cells, code: i32, which: i32) -> i32 {
+    // A composite font's vertical metrics of a code, in hundredths of a thousandth of an em
+    // (like widths): which 0 the vertical advance w1 (DW2's second number by default, -1000),
+    // 1 the position vector's x (half the width by default), 2 its y (DW2's first number, 880).
+    let cid: i32 = pfn_cid(f, code);
+    let rec: i32 = pfn_find(f, crate::port::cells_at(f, H_W2_START), crate::port::cells_at(f, H_W2_N), W2_STRIDE, cid);
+    if rec >= 0 {
+        if which == 0 {
+            return crate::port::cells_at(f, rec + 2);
+        }
+        if which == 1 {
+            return crate::port::cells_at(f, rec + 4);
+        }
+        return crate::port::cells_at(f, rec + 5);
+    }
+    if which == 0 {
+        return crate::port::cells_at(f, H_DW2W);
+    }
+    if which == 2 {
+        return crate::port::cells_at(f, H_DW2V);
+    }
+    return pfn_width(f, code) / 2;
+}
 pub(crate) fn pfn_load_composite(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut f: &mut crate::port::Cells, mut out: &mut crate::port::Cells, fh: i32) -> i32 {
     let da: i32 = pd_dget(src, ar, dc, a, b, st, fh, pn_descendant_fonts());
     let enc: i32 = pd_dget(src, ar, dc, a, b, st, fh, pn_encoding());
@@ -2173,6 +2554,10 @@ pub(crate) fn pfn_load_composite(src: &crate::port::Src, mut ar: &mut crate::por
     let mut d2f: i32 = 0;
     let mut dfirst: i32 = 0;
     let mut d2v: i32 = 0;
+    let mut w2a: i32 = 0;
+    let mut csi: i32 = 0;
+    let mut ord: i32 = 0;
+    let mut oc: i32 = -1;
     crate::port::cells_set(f, H_KIND, 2);
     crate::port::cells_set(f, H_SUB, 5);
     if (da != 0) && (pl_kind_of(ar, da) == 6) {
@@ -2209,14 +2594,34 @@ pub(crate) fn pfn_load_composite(src: &crate::port::Src, mut ar: &mut crate::por
             }
         }
         wa = pd_dget(src, ar, dc, a, b, st, dd, pn_w());
+        w2a = px_dget(src, ar, dc, a, b, st, dd, px_w2());
+        csi = pd_dget(src, ar, dc, a, b, st, dd, pn_cid_system_info());
+        if (csi != 0) && (pl_kind_of(ar, csi) == 7) {
+            ord = pd_dget(src, ar, dc, a, b, st, csi, pn_ordering());
+            if (ord != 0) && (pl_kind_of(ar, ord) == 5) {
+                oc = pfn_ordering_coll(ar, ord);
+            }
+        }
     }
     pfn_encoding_cmap(src, ar, dc, a, b, st, f, out, enc);
+    // the CIDSystemInfo says which Adobe collection the CIDs are; when it names none, none
+    if (ord != 0) && (pl_kind_of(ar, ord) == 5) {
+        crate::port::cells_set(f, H_ORD, oc);
+    }
     pfn_load_tounicode(src, ar, dc, a, b, st, f, out, fh);
     if crate::port::cells_at(f, H_NCS) == 0 {
         pfn_cs_put(f, 2, 0, 0, 0, 65535);
     }
     if (wa != 0) && (pl_kind_of(ar, wa) == 6) {
         pfn_parse_w(src, ar, dc, a, b, st, f, wa);
+    }
+    crate::port::cells_set(f, H_W2_START, crate::port::cells_len(f));
+    crate::port::cells_set(f, H_W2_N, 0);
+    if (w2a != 0) && (pl_kind_of(ar, w2a) == 6) {
+        pfn_parse_w2(src, ar, dc, a, b, st, f, w2a);
+    }
+    if pfn_composite_mapped(f) == 0 {
+        pfn_warn_set(f, 1024);
     }
     return 0;
 }

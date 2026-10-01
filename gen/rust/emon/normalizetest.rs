@@ -275,3 +275,83 @@ fn test_a_span_is_normalized_and_output_is_appended() {
     nt_lit(&crate::testport::text_blob("07 E9")[..], want);
     crate::testport::assert_eq(nt_same(out, want), 1, "only src[1,3) is read, and appended after the 7");
 }
+pub(crate) fn nt_semi_tab(b: &[u8], i: i32, lim: i32) -> i32 {
+    let mut k: i32 = i;
+    while (k < lim) && (crate::port::blob_u8(b, k) != 9) {
+        k += 1;
+    }
+    return k;
+}
+pub(crate) fn nt_radical_row(rows: &[u8], from: i32, to: i32, mut src: &mut crate::port::Cells, mut want: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells) -> i32 {
+    // Row `radical TAB ideograph` (hex): 1 when the flag folds the one to the other, NFC alone
+    // leaves it, and the fold is the same through `nz-radical-fold`.
+    let tab: i32 = nt_semi_tab(rows, from, to);
+    nt_cps(rows, from, tab, src);
+    nt_cps(rows, tab + 1, to, want);
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, nz_flag_radicals());
+    if nt_same(out, want) == 0 {
+        return 0;
+    }
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, 0);
+    if nt_same(out, src) == 0 {
+        return 0;
+    }
+    if nz_radical_fold(crate::port::cells_at(src, 0)) != crate::port::cells_at(want, 0) {
+        return 0;
+    }
+    return 1;
+}
+#[test]
+fn test_every_cjk_radical_folds_to_its_unified_ideograph() {
+    // radicals.txt (kin/scripts/radicals.clj, from CJKRadicals.txt and UnicodeData.txt): the 214 Kangxi
+    // radicals and the 30 CJK Radicals Supplement characters with an equivalent.
+    let rows: &[u8] = &crate::testport::test_file("normalize/radicals.txt")[..];
+    let src: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let want: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let n: i32 = crate::port::blob_len(rows);
+    let mut pos: i32 = 0;
+    let mut e: i32 = 0;
+    let mut line: i32 = 0;
+    let mut count: i32 = 0;
+    while pos < n {
+        line += 1;
+        e = nt_nl(rows, pos);
+        if (pos < e) && (crate::port::blob_u8(rows, pos) != 35) {
+            count += 1;
+            crate::testport::assert_eq_at(nt_radical_row(rows, pos, e, src, want, out, tmp), 1, "radical row", line);
+        }
+        pos = e + 1;
+    }
+    crate::testport::assert_eq(count, 244, "214 Kangxi radicals and 30 supplement characters");
+}
+#[test]
+fn test_the_radical_fold_leaves_everything_else_alone() {
+    let src: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let want: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    nt_lit(&crate::testport::text_blob("2F00 61 2F01 4E00 2E80 2FD5 2FD6 2E7F 2EF3 2EF4 E9")[..], src);
+    nt_lit(&crate::testport::text_blob("4E00 61 4E28 4E00 2E80 9FA0 2FD6 2E7F 9F9F 2EF4 E9")[..], want);
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, nz_flag_radicals());
+    crate::testport::assert_eq(nt_same(out, want), 1, "radicals fold; their neighbours, U+2E80 (no equivalent) and the block's ends stay");
+    crate::testport::assert_eq(nz_radical_fold(12032), 19968, "U+2F00 is U+4E00");
+    crate::testport::assert_eq(nz_radical_fold(12245), 40864, "U+2FD5 is U+9FA0");
+    crate::testport::assert_eq(nz_radical_fold(12246), 12246, "U+2FD6 is not a radical");
+    crate::testport::assert_eq(nz_radical_fold(11904), 11904, "U+2E80 has no equivalent");
+    crate::testport::assert_eq(nz_radical_fold(65), 65, "ASCII");
+    crate::testport::assert_eq(nz_radical_fold(-1), -1, "a negative number is nothing");
+    nt_lit(&crate::testport::text_blob("2F00 FB01 AD 65 301")[..], src);
+    nt_lit(&crate::testport::text_blob("4E00 66 69 E9")[..], want);
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, 7);
+    crate::testport::assert_eq(nt_same(out, want), 1, "the three flags compose with NFC");
+    crate::port::cells_drop(out, 0);
+    nz_nfc(src, 0, crate::port::cells_len(src), out, tmp, 4);
+    nt_lit(&crate::testport::text_blob("4E00 FB01 AD E9")[..], want);
+    crate::testport::assert_eq(nt_same(out, want), 1, "flag 4 alone folds the radical and does not drop the soft hyphen (the flags are bits)");
+}

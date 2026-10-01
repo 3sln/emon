@@ -108,7 +108,7 @@ len	00	2
 cid	2	2
 cid	1234	4660
 font	fonts/fonts.pdf	16	0	composite	0	0	0	1	-1
-code	41	-	unknown	100000
+code	41	0060	cid	100000
 dw2	16	90000	-110000
 font	fonts/fonts.pdf	19	0	composite	0	0	0	1	-1
 cid	41	34
@@ -117,26 +117,26 @@ cid	7E	95
 cid	7F	0
 cid	8140	500
 cid	8141	0
-code	41	-	unknown	65000
-code	20	-	unknown	90000
+code	41	0041	cid	65000
+code	20	0020	cid	90000
 len	41	1
 len	8140	2
 len	81	2
 len	A0	1
 len	7F81	1
 len	9FFC	2
-font	fonts/fonts.pdf	21	0	composite	0	0	1	0	-1
+font	fonts/fonts.pdf	21	0	composite	0	0	0	0	-1
 code	3042	3042	encoding	100000
 code	41	0041	encoding	100000
 code	D800	-	unknown	100000
 len	3042	2
-font	fonts/fonts.pdf	22	0	composite	0	0	1	1	-1
+font	fonts/fonts.pdf	22	0	composite	0	0	0	1	-1
 code	3042	3042	encoding	100000
 len	D83DDE00	4
 len	0041	2
 len	E000	2
-font	fonts/fonts.pdf	23	0	composite	0	0	1	0	-1
-code	82A0	-	unknown	100000
+font	fonts/fonts.pdf	23	0	composite	0	0	0	0	-1
+code	82A0	3042	cid	100000
 font	fonts/fonts.pdf	24	0	simple	1000	0	0	0	-1
 code	61	0061	glyphname	50000
 code	62	0062	glyphname	60500
@@ -147,7 +147,7 @@ code	42	0042	encoding	71000
 code	43	0043	encoding	72200
 font	fonts/fonts.pdf	26	0	simple	683	-217	16	0	11
 code	41	0041	encoding	66700
-font	fonts/fonts.pdf	28	0	simple	800	-200	272	0	-1
+font	fonts/fonts.pdf	28	0	simple	800	-200	1296	0	-1
 code	41	0041	unknown	-
 code	20	0020	unknown	-
 font	fonts/fonts.pdf	29	0	simple	718	-207	16	0	4
@@ -165,8 +165,9 @@ code	BD	03A9	encoding	-
 font	fonts/fonts.pdf	31	0	simple	718	-207	16	0	4
 code	8E	0160	glyphname	66700
 code	8F	00E8	encoding	55600
-font	fonts/fonts.pdf	32	0	simple	718	-207	24	0	4
-code	41	0041	unknown	66700
+font	fonts/fonts.pdf	32	0	simple	718	-207	16	0	4
+code	41	-	unknown	-
+code	61	0061	encoding	-
 font	fonts/fonts.pdf	33	1	none	0	0	0	0	-1
-font	fonts/fonts.pdf	34	0	composite	0	0	32	0	-1
+font	fonts/fonts.pdf	34	0	composite	0	0	1056	0	-1
 code	1	-	unknown	100000

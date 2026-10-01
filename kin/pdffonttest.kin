@@ -23,13 +23,17 @@
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that
                                assert-that-at assert-text assert-text-span
                                text-blob new-cells new-text test-file
-                               test-file-span cells-blob]]
+                               test-file-span cells-blob test-t TestT
+                               test-src-chunked test-src-view test-src-ctl]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
                                cells-push cells-drop text-cp text-i32 src-of-blob]]
             [emon.evidence :refer [gh-tounicode gh-encoding gh-glyphname gh-cid
                                    gh-unknown]]
             [emon.pdfdoc :refer [pd-open pd-get]]
+            [emon.pdfsrc :refer [ps-missed]]
             [emon.pdflex :refer [pl-init pl-seek pl-parse pl-kind-of pl-k-name]]
+            [emon.fontprog :refer [fp-simple fp-name-cps]]
+            [emon.cjk :refer [cjk-find-name cjk-cid cjk-uni]]
             [emon.pdffont :refer [pfn-init pfn-load pfn-from-cmap pfn-map pfn-cp
                                   pfn-how-of pfn-width pfn-cid pfn-code-len
                                   pfn-ascent pfn-descent pfn-vertical pfn-warn
@@ -37,7 +41,7 @@
                                   pfn-s14-of pfn-how-emit-name pfn-dw2-v pfn-dw2-w
                                   pfn-how-tounicode pfn-how-encoding
                                   pfn-how-glyphname pfn-how-cid pfn-how-unknown
-                                  pfn-w-limit]]
+                                  pfn-w-limit pfn-vertical-metric]]
             [kin.lang :refer [defn return let set while if comment do
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -588,3 +592,336 @@
                       (set cut (+ cut 1))))))
           (set pos (+ e 1))))
     (assert-that (> tries 100) "the prefixes were tried")))
+
+;; ============================================================ P3.4: the long tail
+;;
+;; progs.txt (kin/scripts/font-prog-fixtures.clj): fonts whose codes are decided by their embedded program,
+;; Type 3 fonts, MacExpert, composite fonts with predefined CJK CMaps, vertical metrics; cjk.txt
+;; (kin/scripts/cjkdata.clj): the CMaps as their Adobe files say, sampled; the programs cut at every byte.
+
+(defn ^I32 ft-code-n-row [^I32 code ^:mut ^Cells f ^:mut ^Text cps ^:mut ^Text how]
+  (comment "Map `code` (a number, possibly a negative four-byte one) and write its code points and `how`;")
+  (comment "answers its width.")
+  (let [^I32 cnt (pfn-map f code)]
+    (ft-emit-cps cps f cnt)
+    (pfn-how-emit-name how (pfn-how-of f))
+    (return (pfn-width f code))))
+
+(defn ^I32 ft-run-rows [^TestT emon-t ^Blob rows]
+  (comment "Every row of a fonts.txt-format file (and `coded`, `cidd`, `vm` rows): answers the count.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 s5 0
+        ^:mut ^I32 s6 0
+        ^:mut ^I32 s7 0
+        ^:mut ^I32 s8 0
+        ^:mut ^I32 lstatus 0
+        ^:mut ^I32 b0 0
+        ^:mut ^I32 width 0
+        ^:mut ^I32 klen 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set count (+ count 1))
+                (set b0 (blob-u8 rows pos))
+                (set s0 (ft-tab rows pos e))
+                (set klen (- s0 pos))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (set s2 (ft-tab rows (+ s1 1) e))
+                (set s3 (ft-tab rows (+ s2 1) e))
+                (if (== b0 102)
+                  (do (set s4 (ft-tab rows (+ s3 1) e))
+                      (set s5 (ft-tab rows (+ s4 1) e))
+                      (set s6 (ft-tab rows (+ s5 1) e))
+                      (set s7 (ft-tab rows (+ s6 1) e))
+                      (set s8 (ft-tab rows (+ s7 1) e))
+                      (set lstatus (ft-load-font rows (+ s0 1) s1 (ft-dec rows (+ s1 1) s2)
+                                                 ar dc a b st out f))
+                      (assert-eq-at lstatus (ft-dec rows (+ s2 1) s3) "load status" line)
+                      (assert-eq-at (pfn-kind-of f) (ft-kind-code (blob-u8 rows (+ s3 1))) "kind" line)
+                      (assert-eq-at (pfn-ascent f) (ft-dec rows (+ s4 1) s5) "ascent" line)
+                      (assert-eq-at (pfn-descent f) (ft-dec rows (+ s5 1) s6) "descent" line)
+                      (assert-eq-at (pfn-warn f) (ft-dec rows (+ s6 1) s7) "warning bits" line)
+                      (assert-eq-at (pfn-vertical f) (ft-dec rows (+ s7 1) s8) "vertical" line)
+                      (assert-eq-at (pfn-standard-font f) (ft-dec rows (+ s8 1) e) "standard font" line)))
+                (if (and (== b0 99) (== klen 4))
+                  (if (== (blob-u8 rows (+ pos 1)) 111)
+                    (let [^Text tcps (new-text)
+                          ^Text thow (new-text)]
+                      (set width (ft-code-row rows s0 s1 f tcps thow))
+                      (assert-text-span tcps rows (+ s1 1) s2 "code points" line)
+                      (assert-text-span thow rows (+ s2 1) s3 "how" line)
+                      (assert-eq-at width (ft-dec rows (+ s3 1) e) "width" line))))
+                (if (and (== b0 99) (== klen 5))
+                  (let [^Text tcps (new-text)
+                        ^Text thow (new-text)]
+                    (set width (ft-code-n-row (ft-dec rows (+ s0 1) s1) f tcps thow))
+                    (assert-text-span tcps rows (+ s1 1) s2 "code points" line)
+                    (assert-text-span thow rows (+ s2 1) s3 "how" line)
+                    (assert-eq-at width (ft-dec rows (+ s3 1) e) "width" line)))
+                (if (and (== b0 99) (== klen 3))
+                  (assert-eq-at (pfn-cid f (ft-hex rows (+ s0 1) s1)) (ft-dec rows (+ s1 1) e) "cid" line))
+                (if (and (== b0 99) (== klen 4))
+                  (if (== (blob-u8 rows (+ pos 1)) 105)
+                    (assert-eq-at (pfn-cid f (ft-dec rows (+ s0 1) s1)) (ft-dec rows (+ s1 1) e) "cid of a four-byte code" line)))
+                (if (== b0 108)
+                  (assert-eq-at (ft-len-row rows s0 s1 f) (ft-dec rows (+ s1 1) e) "code length" line))
+                (if (== b0 118)
+                  (assert-eq-at (pfn-vertical-metric f (ft-hex rows (+ s0 1) s1) (ft-dec rows (+ s1 1) s2))
+                                (ft-dec rows (+ s2 1) e) "vertical metric" line))))
+          (set pos (+ e 1))))
+    (return count)))
+
+(deftest test-every-embedded-program-font-answers-as-built
+  (comment "Rows of progs.txt: Type 1, CFF, TrueType and OpenType programs, Type 3, MacExpert, predefined")
+  (comment "CJK CMaps, Adobe CID collections, /W2: every expectation known by construction.")
+  (let [^I32 count (ft-run-rows (test-t) (test-file "fonts/progs.txt"))]
+    (assert-that (> count 100) "the program-font rows were read")))
+
+(defn ^I32 ft-cjk-code [^Blob rows ^I32 from ^I32 to]
+  (comment "A code of a cjk.txt row: hex, or `d` and a signed decimal (a four-byte code).")
+  (if (== (blob-u8 rows from) 100)
+    (return (ft-dec rows (+ from 1) to)))
+  (return (ft-hex rows from to)))
+
+(deftest test-every-predefined-cmap-row-maps-as-its-file-says
+  (comment "Rows of cjk.txt: `cid /Name code cid` (the CID the Adobe CMap file gives the code, 0 for none) and")
+  (comment "`uni Ordering cid code-point` (what cid2code.txt says), on every target.")
+  (let [^Blob rows (test-file "fonts/cjk.txt")
+        ^Cells ar (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 hit 0
+        ^:mut ^I32 coll 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set count (+ count 1))
+                (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (set s2 (ft-tab rows (+ s1 1) e))
+                (if (== (blob-u8 rows pos) 99)
+                  (do (pl-init ar)
+                      (pl-seek ar (+ s0 1) s1)
+                      (set h (pl-parse (src-of-blob rows) ar))
+                      (set hit (cjk-find-name ar h))
+                      (assert-that-at (>= hit 0) "the CMap is one of the four collections'" line)
+                      (assert-eq-at (cjk-cid (quot hit 1000) (rem hit 1000) (ft-cjk-code rows (+ s1 1) s2))
+                                    (ft-dec rows (+ s2 1) e) "CID" line)))
+                (if (== (blob-u8 rows pos) 117)
+                  (do (set coll 0)
+                      (if (== (blob-u8 rows (+ s0 1)) 71) (set coll 1))
+                      (if (== (blob-u8 rows (+ s0 1)) 67) (set coll 2))
+                      (if (== (blob-u8 rows (+ s0 1)) 75) (set coll 3))
+                      (assert-eq-at (cjk-uni coll (ft-dec rows (+ s1 1) s2))
+                                    (ft-hex rows (+ s2 1) e) "Unicode of the CID" line)))))
+          (set pos (+ e 1))))
+    (assert-that (> count 5000) "the CJK rows were read")))
+
+(defn ^I32 ft-push-zeros [^:mut ^Cells g ^I32 k]
+  (let [^:mut ^I32 i 0]
+    (while (< i k)
+      (do (cells-push g 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ft-cut-program [^Blob prog ^:mut ^Cells g]
+  (comment "`fp-simple` on every prefix of the program: answers how many prefixes were tried.")
+  (let [^I32 n (blob-len prog)
+        ^:mut ^I32 cut 0
+        ^:mut ^I32 tries 0]
+    (while (<= cut n)
+      (do (let [^Cells piece (new-cells)
+                ^:mut ^I32 j 0]
+            (while (< j cut)
+              (do (cells-push piece (blob-u8 prog j))
+                  (set j (+ j 1))))
+            (fp-simple g 16 32 (cells-blob piece) 0)
+            (fp-simple g 16 32 (cells-blob piece) 1))
+          (set tries (+ tries 1))
+          (set cut (+ cut 1))))
+    (return tries)))
+
+(deftest test-a-font-program-cut-at-every-byte-never-faults
+  (comment "Type 1, CFF, TrueType and OpenType programs, every prefix of each: no read past an end, no loop.")
+  (let [^Cells g (new-cells)]
+    (ft-push-zeros g 1700)
+    (let [^I32 tries (+ (+ (ft-cut-program (test-file "fonts/prog-t1.bin") g)
+                           (ft-cut-program (test-file "fonts/prog-cff.bin") g))
+                        (+ (ft-cut-program (test-file "fonts/prog-tt.bin") g)
+                           (ft-cut-program (test-file "fonts/prog-otf.bin") g)))]
+      (assert-that (> tries 1000) "the prefixes were tried"))))
+
+(defn ^I32 ft-name-bytes-row [^Blob rows ^I32 from ^I32 to ^:mut ^Cells g ^I32 kind ^:mut ^Text t]
+  (comment "`fp-name-cps` on the name bytes rows[from+1, to) (the slash skipped): the code points, `-` none.")
+  (let [^I32 cnt (fp-name-cps g 16 rows (+ from 1) to (quot kind 122))
+        ^:mut ^I32 i 0]
+    (if (== cnt 0)
+      (do (text-cp t 45) (return 0)))
+    (while (< i cnt)
+      (do (if (> i 0) (text-cp t 43))
+          (ft-emit-hex t (cells-at g (+ 17 i)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-font-program-glyph-names-are-read-as-the-pdf-readers-are
+  (comment "`emon.fontprog` reads names from font bytes; it must agree with `pfn-name-cps` (the AGL rules)")
+  (comment "on every row of names.txt.")
+  (let [^Blob rows (test-file "fonts/names.txt")
+        ^Cells g (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 esc 0]
+    (ft-push-zeros g 40)
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (ft-nl rows pos))
+          (if (and (< pos e) (or (== (blob-u8 rows pos) 110) (== (blob-u8 rows pos) 122)))
+            (do (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (set esc 0)
+                (set k (+ s0 1))
+                (while (< k s1)
+                  (do (if (== (blob-u8 rows k) 35) (set esc 1))
+                      (set k (+ k 1))))
+                (if (== esc 0)
+                  (let [^Text t (new-text)]
+                    (set count (+ count 1))
+                    (ft-name-bytes-row rows (+ s0 1) s1 g (blob-u8 rows pos) t)
+                    (assert-text-span t rows (+ s1 1) e "glyph name from font bytes" line)))))
+          (set pos (+ e 1))))
+    (assert-that (> count 4000) "the names were read")))
+
+;; ------------------------------------------------ a source that misses (D074, D075)
+;;
+;; A font read across a miss is not the font: `pfn-load` answers need-bytes, and the host fetches what was missed and
+;; re-runs on a fresh view. Every font of progs.pdf, whose programs, CMap streams and arrays are all read through the
+;; document layer, must come out the same through 64-byte and 512-byte chunks as from memory.
+
+(defn ^I32 ft-mix [^I32 acc ^I32 v]
+  (comment "A small order-sensitive digest, wrapping inside 2^24 so it cannot overflow.")
+  (return (rem (+ (* (rem acc 8388593) 31) (+ (rem v 8388593) 7)) 16777213)))
+
+(defn ^I32 ft-digest-font [^Src pdf ^I32 num]
+  (comment "Open the file, load font object `num`, and digest its status, warnings, metrics and the answer for")
+  (comment "each of 512 codes; -1 when the source missed (nothing of the attempt may be kept, D075).")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f (new-cells)
+        ^I32 ostatus (pd-open pdf ar dc a b st)
+        ^:mut ^I32 acc ostatus
+        ^:mut ^I32 h 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 i 0]
+    (if (ps-missed pdf) (return -1))
+    (set h (pd-get pdf ar dc a b st num))
+    (set status (pfn-load pdf ar dc a b st f out h))
+    (if (ps-missed pdf) (return -1))
+    (set acc (ft-mix acc status))
+    (set acc (ft-mix acc (pfn-warn f)))
+    (set acc (ft-mix acc (pfn-kind-of f)))
+    (set acc (ft-mix acc (pfn-ascent f)))
+    (while (< code 512)
+      (do (set cnt (pfn-map f code))
+          (set acc (ft-mix acc cnt))
+          (set i 0)
+          (while (< i cnt)
+            (do (set acc (ft-mix acc (pfn-cp f i)))
+                (set i (+ i 1))))
+          (set acc (ft-mix acc (pfn-how-of f)))
+          (set acc (ft-mix acc (pfn-width f code)))
+          (set acc (ft-mix acc (pfn-cid f code)))
+          (set code (+ code 1))))
+    (return acc)))
+
+(defn ^I32 ft-digest-async [^Blob bytes ^I32 num ^I32 chunk]
+  (comment "`ft-digest-font` through a source of `chunk`-byte chunks, re-run on a fresh view until an attempt")
+  (comment "does not miss; -2 after 60 rounds.")
+  (let [^Src base (test-src-chunked bytes chunk 0)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 d 0]
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)]
+            (set d (ft-digest-font v num))
+            (if (== d -1)
+              (do (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 60)
+                    (do (set more 0)
+                        (set d -2))))
+              (set more 0)))))
+    (return d)))
+
+(defn ^I32 ft-async-fonts [^I32 chunk]
+  (comment "Every font of progs.txt through an async source: the number whose digest is not the memory one.")
+  (let [^Blob rows (test-file "fonts/progs.txt")
+        ^Blob pdf (test-file "fonts/progs.pdf")
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 num 0
+        ^:mut ^I32 fonts 0
+        ^:mut ^I32 bad 0
+        ^:mut ^I32 want 0
+        ^:mut ^I32 got 0]
+    (while (< pos n)
+      (do (set e (ft-nl rows pos))
+          (if (and (< pos e) (== (blob-u8 rows pos) 102))
+            (do (set s0 (ft-tab rows pos e))
+                (set s1 (ft-tab rows (+ s0 1) e))
+                (set s2 (ft-tab rows (+ s1 1) e))
+                (set num (ft-dec rows (+ s1 1) s2))
+                (set fonts (+ fonts 1))
+                (set want (ft-digest-font (src-of-blob pdf) num))
+                (set got (ft-digest-async pdf num chunk))
+                (if (or (< want 0) (!= want got))
+                  (set bad (+ bad 1)))))
+          (set pos (+ e 1))))
+    (if (< fonts 25) (return -1))
+    (return bad)))
+
+(deftest test-every-program-font-is-the-same-through-an-async-source-of-64-byte-chunks
+  (assert-eq (ft-async-fonts 64) 0 "every font of progs.pdf through 64-byte chunks"))
+
+(deftest test-every-program-font-is-the-same-through-an-async-source-of-512-byte-chunks
+  (assert-eq (ft-async-fonts 512) 0 "every font of progs.pdf through 512-byte chunks"))

@@ -714,6 +714,21 @@ pub fn px_oc() -> i32 {
 pub fn px_trapped() -> i32 {
     return 101;
 }
+pub fn px_font_file() -> i32 {
+    return 102;
+}
+pub fn px_font_file2() -> i32 {
+    return 103;
+}
+pub fn px_font_file3() -> i32 {
+    return 104;
+}
+pub fn px_cid_to_gid_map() -> i32 {
+    return 105;
+}
+pub fn px_w2() -> i32 {
+    return 106;
+}
 pub fn px_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "Annots");
@@ -1123,9 +1138,29 @@ pub fn px_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "Trapped");
         return 1;
     }
+    if code == 102 {
+        crate::port::text_ascii(t, "FontFile");
+        return 1;
+    }
+    if code == 103 {
+        crate::port::text_ascii(t, "FontFile2");
+        return 1;
+    }
+    if code == 104 {
+        crate::port::text_ascii(t, "FontFile3");
+        return 1;
+    }
+    if code == 105 {
+        crate::port::text_ascii(t, "CIDToGIDMap");
+        return 1;
+    }
+    if code == 106 {
+        crate::port::text_ascii(t, "W2");
+        return 1;
+    }
     return 0;
 }
-pub static PX_CHARS: [i32; 521] = [
+pub static PX_CHARS: [i32; 560] = [
     65, 110, 110, 111, 116, 115, 65, 110, 110, 111, 116, 82, 101, 99, 116, 65,
     83, 85, 82, 73, 71, 111, 84, 111, 71, 111, 84, 111, 82, 71, 111, 84,
     111, 69, 76, 97, 117, 110, 99, 104, 78, 97, 109, 101, 100, 74, 97, 118,
@@ -1158,9 +1193,11 @@ pub static PX_CHARS: [i32; 521] = [
     85, 70, 70, 83, 86, 105, 101, 119, 101, 114, 80, 114, 101, 102, 101, 114,
     101, 110, 99, 101, 115, 68, 105, 115, 112, 108, 97, 121, 68, 111, 99, 84,
     105, 116, 108, 101, 81, 117, 97, 100, 80, 111, 105, 110, 116, 115, 67, 65,
-    79, 67, 84, 114, 97, 112, 112, 101, 100
+    79, 67, 84, 114, 97, 112, 112, 101, 100, 70, 111, 110, 116, 70, 105, 108,
+    101, 70, 111, 110, 116, 70, 105, 108, 101, 50, 70, 111, 110, 116, 70, 105,
+    108, 101, 51, 67, 73, 68, 84, 111, 71, 73, 68, 77, 97, 112, 87, 50
 ];
-pub static PX_SPAN: [i32; 204] = [
+pub static PX_SPAN: [i32; 214] = [
     0, 6,
     6, 5,
     11, 4,
@@ -1262,5 +1299,10 @@ pub static PX_SPAN: [i32; 204] = [
     500, 10,
     510, 2,
     512, 2,
-    514, 7
+    514, 7,
+    521, 8,
+    529, 9,
+    538, 9,
+    547, 11,
+    558, 2
 ];
