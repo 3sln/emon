@@ -14,6 +14,7 @@ public final class Para {
     public static final int PA_WIDE_NUM = 3;
     public static final int PA_WIDE_DEN = 5;
     public static final int FR_STRIDE = 6;
+    public static final int PA_ALL = 2000000000;
     public static int paPages(emon.Port.Cells pg, emon.Port.Cells pages) {
         // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
         // (`/Rotate` turns it), centipoints, the page's own turn in degrees, `vector`.
@@ -252,7 +253,7 @@ public final class Para {
         int l = 0;
         emon.Port.cellsDrop(ord, 0);
         while (l < n) {
-            if (Evidence.lnGet(ln, l, Evidence.lhPage()) == page) {
+            if ((Evidence.lnGet(ln, l, Evidence.lhPage()) == page) && (Table.tbClaimed(ln, l) == 0)) {
                 emon.Port.cellsPush(ord, l);
             }
             l += 1;
@@ -593,10 +594,23 @@ public final class Para {
         }
         return n;
     }
-    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp) {
+    public static int paTables(emon.Port.Cells tb, int tcur, int p, int ymid2, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp) {
+        // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
+        // a baseline y: the order key of `pa-ymid2`). The open paragraph has been flushed. Answers the next
+        // table to emit (P5.1: a table is a block, found before this and placed here by its top).
+        int k = tcur;
+        while (Table.tbDue(tb, k, p, ymid2)) {
+            Table.tbEmit(tb, k, wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
+            k += 1;
+        }
+        emon.Port.cellsDrop(raw, 0);
+        return k;
+    }
+    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq) {
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
-        // `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-        // queue of lines that are not upright). Answers 0.
+        // `model-init`), and the tables of `tb` (P5.1, `emon.table`) between them, where their tops put them.
+        // A line a table holds (`tb-claimed`) is left out. `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp`
+        // first holds the gaps, then the queue of lines that are not upright). Answers 0.
         int med = paMedian(ln, ord, gp, npages);
         int p = 1;
         int i = 0;
@@ -609,6 +623,7 @@ public final class Para {
         int prevmaxw = 0;
         int pm = 0;
         int rs = 0;
+        int tcur = 0;
         emon.Port.cellsDrop(gp, 0);
         emon.Port.cellsDrop(raw, 0);
         emon.Port.cellsDrop(fr, 0);
@@ -617,6 +632,7 @@ public final class Para {
             n = emon.Port.cellsLen(ord);
             nu = paUprightCount(ln, ord);
             pm = paMargin(ln, ord);
+            tcur = Table.tbSkip(tb, tcur, p);
             if (nu == 0) {
                 paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
                 open = 0;
@@ -624,12 +640,15 @@ public final class Para {
                 if (p > 1) {
                     paMilestone(nodes, p);
                 }
+                tcur = paTables(tb, tcur, p, PA_ALL, wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
             } else {
                 b = emon.Port.cellsAt(ord, 0);
                 cont = 0;
                 if (open == 1) {
                     if (paContinues(wd, ln, raw, prev, b, prevmaxw, pm)) {
-                        cont = 1;
+                        if (!Table.tbDue(tb, tcur, p, paYmid2(ln, b))) {
+                            cont = 1;
+                        }
                     }
                 }
                 if (cont == 0) {
@@ -637,6 +656,7 @@ public final class Para {
                     if (p > 1) {
                         paMilestone(nodes, p);
                     }
+                    tcur = paTables(tb, tcur, p, paYmid2(ln, b), wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
                     paFragOpen(fr, ln, p, b, 0);
                 } else {
                     paJoin(wd, ln, et, raw, b);
@@ -649,8 +669,9 @@ public final class Para {
                 i = 1;
                 while (i < nu) {
                     b = emon.Port.cellsAt(ord, i);
-                    if (paNewPar(wd, ln, prev, b, med, pm)) {
+                    if (paNewPar(wd, ln, prev, b, med, pm) || Table.tbDue(tb, tcur, p, paYmid2(ln, b))) {
                         paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                        tcur = paTables(tb, tcur, p, paYmid2(ln, b), wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
                         paFragOpen(fr, ln, p, b, 0);
                     } else {
                         paJoin(wd, ln, et, raw, b);
@@ -661,6 +682,12 @@ public final class Para {
                     i += 1;
                 }
                 prevmaxw = paMaxw(ln, ord);
+                if (Table.tbDue(tb, tcur, p, PA_ALL)) {
+                    paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                    open = 0;
+                    prev = -1;
+                    tcur = paTables(tb, tcur, p, PA_ALL, wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
+                }
             }
             i = nu;
             while (i < n) {

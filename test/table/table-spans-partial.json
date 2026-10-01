@@ -1,0 +1,401 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector"
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "paragraph",
+        "text": "Grouped Headers",
+        "at": [[1, 72, 94.58, 244.04, 119.57]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 2,
+        "kind": "paragraph",
+        "text": "The own such head where often often would left.",
+        "at": [[1, 72, 130.17, 306.77, 142.66]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 3,
+        "kind": "table",
+        "profile": "partial",
+        "columns": 5,
+        "children": [
+          {
+            "id": 4,
+            "kind": "rowgroup",
+            "role": "head",
+            "children": [
+              {
+                "id": 5,
+                "kind": "row",
+                "children": [
+                  {
+                    "id": 6,
+                    "kind": "cell",
+                    "rowspan": 2,
+                    "header": "col",
+                    "text": "Product",
+                    "at": [[1, 78, 158.8, 184.9, 168.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 7,
+                    "kind": "cell",
+                    "colspan": 2,
+                    "header": "col",
+                    "text": "2024",
+                    "at": [[1, 184.9, 158.8, 287.23, 168.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 8,
+                    "kind": "cell",
+                    "colspan": 2,
+                    "header": "col",
+                    "text": "2025",
+                    "at": [[1, 385.84, 158.8, 462.19, 168.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              },
+              {
+                "id": 9,
+                "kind": "row",
+                "children": [
+                  {
+                    "id": 10,
+                    "kind": "cell",
+                    "header": "col",
+                    "text": "Units",
+                    "at": [[1, 184.9, 176.8, 287.23, 186.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 11,
+                    "kind": "cell",
+                    "header": "col",
+                    "text": "Revenue",
+                    "at": [[1, 287.23, 176.8, 385.84, 186.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 12,
+                    "kind": "cell",
+                    "header": "col",
+                    "text": "Units",
+                    "at": [[1, 385.84, 176.8, 462.19, 186.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 13,
+                    "kind": "cell",
+                    "header": "col",
+                    "text": "Revenue",
+                    "at": [[1, 462.19, 176.8, 534, 186.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              }
+            ],
+            "src": ["infer"],
+            "conf": 600
+          },
+          {
+            "id": 14,
+            "kind": "rowgroup",
+            "role": "body",
+            "children": [
+              {
+                "id": 15,
+                "kind": "row",
+                "children": [
+                  {
+                    "id": 16,
+                    "kind": "cell",
+                    "align": "start",
+                    "text": "Alpha",
+                    "at": [[1, 78, 194.8, 184.9, 204.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 17,
+                    "kind": "cell",
+                    "text": "1000",
+                    "at": [[1, 184.9, 194.8, 287.23, 204.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 18,
+                    "kind": "cell",
+                    "text": "$20,000",
+                    "at": [[1, 287.23, 194.8, 385.84, 204.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 19,
+                    "kind": "cell",
+                    "text": "1100",
+                    "at": [[1, 385.84, 194.8, 462.19, 204.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 20,
+                    "kind": "cell",
+                    "align": "end",
+                    "text": "$23,000",
+                    "at": [[1, 462.19, 194.8, 534, 204.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              },
+              {
+                "id": 21,
+                "kind": "row",
+                "children": [
+                  {
+                    "id": 22,
+                    "kind": "cell",
+                    "align": "start",
+                    "text": "Beta",
+                    "at": [[1, 78, 212.05, 184.9, 222.05]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 23,
+                    "kind": "cell",
+                    "text": "1120",
+                    "at": [[1, 184.9, 212.05, 287.23, 222.05]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 24,
+                    "kind": "cell",
+                    "text": "$21,311",
+                    "at": [[1, 287.23, 212.05, 385.84, 222.05]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 25,
+                    "kind": "cell",
+                    "text": "1190",
+                    "at": [[1, 385.84, 212.05, 462.19, 222.05]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 26,
+                    "kind": "cell",
+                    "align": "end",
+                    "text": "$24,197",
+                    "at": [[1, 462.19, 212.05, 534, 222.05]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              },
+              {
+                "id": 27,
+                "kind": "row",
+                "children": [
+                  {
+                    "id": 28,
+                    "kind": "cell",
+                    "align": "start",
+                    "text": "Gamma",
+                    "at": [[1, 78, 229.3, 184.9, 239.3]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 29,
+                    "kind": "cell",
+                    "text": "1240",
+                    "at": [[1, 184.9, 229.3, 287.23, 239.3]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 30,
+                    "kind": "cell",
+                    "text": "$22,622",
+                    "at": [[1, 287.23, 229.3, 385.84, 239.3]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 31,
+                    "kind": "cell",
+                    "text": "1280",
+                    "at": [[1, 385.84, 229.3, 462.19, 239.3]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 32,
+                    "kind": "cell",
+                    "align": "end",
+                    "text": "$25,394",
+                    "at": [[1, 462.19, 229.3, 534, 239.3]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              },
+              {
+                "id": 33,
+                "kind": "row",
+                "children": [
+                  {
+                    "id": 34,
+                    "kind": "cell",
+                    "align": "start",
+                    "text": "Delta",
+                    "at": [[1, 78, 246.55, 184.9, 256.55]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 35,
+                    "kind": "cell",
+                    "text": "1360",
+                    "at": [[1, 184.9, 246.55, 287.23, 256.55]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 36,
+                    "kind": "cell",
+                    "text": "$23,933",
+                    "at": [[1, 287.23, 246.55, 385.84, 256.55]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 37,
+                    "kind": "cell",
+                    "text": "1370",
+                    "at": [[1, 385.84, 246.55, 462.19, 256.55]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 38,
+                    "kind": "cell",
+                    "align": "end",
+                    "text": "$26,591",
+                    "at": [[1, 462.19, 246.55, 534, 256.55]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              },
+              {
+                "id": 39,
+                "kind": "row",
+                "children": [
+                  {
+                    "id": 40,
+                    "kind": "cell",
+                    "colspan": 2,
+                    "text": "Combined total for the two years",
+                    "at": [[1, 78, 263.8, 287.23, 273.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 41,
+                    "kind": "cell",
+                    "empty": true,
+                    "at": [[1, 287.23, 263.8, 385.84, 273.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 42,
+                    "kind": "cell",
+                    "empty": true,
+                    "at": [[1, 385.84, 263.8, 462.19, 273.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 43,
+                    "kind": "cell",
+                    "align": "end",
+                    "text": "$190,000",
+                    "at": [[1, 462.19, 263.8, 534, 273.8]],
+                    "src": ["text", "infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              }
+            ],
+            "src": ["infer"],
+            "conf": 600
+          }
+        ],
+        "at": [[1, 72, 153.75, 540, 277.5]],
+        "src": ["text", "infer"],
+        "conf": 600
+      },
+      {
+        "id": 44,
+        "kind": "paragraph",
+        "text": "Three feet with its she five top much now.",
+        "at": [[1, 72, 279.42, 273.78, 291.91]],
+        "src": ["text", "infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [],
+  "dropped": []
+}

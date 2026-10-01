@@ -5,6 +5,7 @@ use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
 use crate::emon::pdfdoc::*;
+use crate::emon::table::*;
 
 pub(crate) const PA_GAP_NUM: i32 = 3;
 pub(crate) const PA_GAP_DEN: i32 = 2;
@@ -15,6 +16,7 @@ pub(crate) const PA_ROT_SLOP: i32 = 100;
 pub(crate) const PA_WIDE_NUM: i32 = 3;
 pub(crate) const PA_WIDE_DEN: i32 = 5;
 pub(crate) const FR_STRIDE: i32 = 6;
+pub(crate) const PA_ALL: i32 = 2000000000;
 pub fn pa_pages(pg: &mut crate::port::Cells, mut pages: &mut crate::port::Cells) -> i32 {
     // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
     // (`/Rotate` turns it), centipoints, the page's own turn in degrees, `vector`.
@@ -253,7 +255,7 @@ pub(crate) fn pa_collect(mut ord: &mut crate::port::Cells, ln: &mut crate::port:
     let mut l: i32 = 0;
     crate::port::cells_drop(ord, 0);
     while l < n {
-        if ln_get(ln, l, lh_page()) == page {
+        if (ln_get(ln, l, lh_page()) == page) && (tb_claimed(ln, l) == 0) {
             crate::port::cells_push(ord, l);
         }
         l += 1;
@@ -594,10 +596,23 @@ pub(crate) fn pa_upright_count(ln: &mut crate::port::Cells, ord: &mut crate::por
     }
     return n;
 }
-pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pa_tables(tb: &mut crate::port::Cells, tcur: i32, p: i32, ymid2: i32, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells) -> i32 {
+    // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
+    // a baseline y: the order key of `pa-ymid2`). The open paragraph has been flushed. Answers the next
+    // table to emit (P5.1: a table is a block, found before this and placed here by its top).
+    let mut k: i32 = tcur;
+    while tb_due(tb, k, p, ymid2) {
+        tb_emit(tb, k, wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
+        k += 1;
+    }
+    crate::port::cells_drop(raw, 0);
+    return k;
+}
+pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, tb: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells) -> i32 {
     // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
-    // `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-    // queue of lines that are not upright). Answers 0.
+    // `model-init`), and the tables of `tb` (P5.1, `emon.table`) between them, where their tops put them.
+    // A line a table holds (`tb-claimed`) is left out. `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp`
+    // first holds the gaps, then the queue of lines that are not upright). Answers 0.
     let med: i32 = pa_median(ln, ord, gp, npages);
     let mut p: i32 = 1;
     let mut i: i32 = 0;
@@ -610,6 +625,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
     let mut prevmaxw: i32 = 0;
     let mut pm: i32 = 0;
     let mut rs: i32 = 0;
+    let mut tcur: i32 = 0;
     crate::port::cells_drop(gp, 0);
     crate::port::cells_drop(raw, 0);
     crate::port::cells_drop(fr, 0);
@@ -618,6 +634,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
         n = crate::port::cells_len(ord);
         nu = pa_upright_count(ln, ord);
         pm = pa_margin(ln, ord);
+        tcur = tb_skip(tb, tcur, p);
         if nu == 0 {
             pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
             open = 0;
@@ -625,12 +642,15 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
             if p > 1 {
                 pa_milestone(nodes, p);
             }
+            tcur = pa_tables(tb, tcur, p, PA_ALL, wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
         } else {
             b = crate::port::cells_at(ord, 0);
             cont = 0;
             if open == 1 {
                 if pa_continues(wd, ln, raw, prev, b, prevmaxw, pm) {
-                    cont = 1;
+                    if !tb_due(tb, tcur, p, pa_ymid2(ln, b)) {
+                        cont = 1;
+                    }
                 }
             }
             if cont == 0 {
@@ -638,6 +658,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
                 if p > 1 {
                     pa_milestone(nodes, p);
                 }
+                tcur = pa_tables(tb, tcur, p, pa_ymid2(ln, b), wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
                 pa_frag_open(fr, ln, p, b, 0);
             } else {
                 pa_join(wd, ln, et, raw, b);
@@ -650,8 +671,9 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
             i = 1;
             while i < nu {
                 b = crate::port::cells_at(ord, i);
-                if pa_new_par(wd, ln, prev, b, med, pm) {
+                if pa_new_par(wd, ln, prev, b, med, pm) || tb_due(tb, tcur, p, pa_ymid2(ln, b)) {
                     pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                    tcur = pa_tables(tb, tcur, p, pa_ymid2(ln, b), wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
                     pa_frag_open(fr, ln, p, b, 0);
                 } else {
                     pa_join(wd, ln, et, raw, b);
@@ -662,6 +684,12 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
                 i += 1;
             }
             prevmaxw = pa_maxw(ln, ord);
+            if tb_due(tb, tcur, p, PA_ALL) {
+                pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                open = 0;
+                prev = -1;
+                tcur = pa_tables(tb, tcur, p, PA_ALL, wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp);
+            }
         }
         i = nu;
         while i < n {

@@ -38,12 +38,16 @@ public final class Paratest {
     public static int ptRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
         int p = 1;
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tq = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (p <= npages) {
             Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
             p += 1;
         }
-        Para.paBuild(wd, ln, et, npages, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+        Para.paBuild(wd, ln, et, npages, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
     public static int ptBrief(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text) {
@@ -315,6 +319,10 @@ public final class Paratest {
         emon.Port.Cells im = emon.Port.newCells();
         emon.Port.Cells pts = emon.Port.newCells();
         emon.Port.Cells gx = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tq = emon.Port.newCells();
         int o = Pdfdoc.pdOpen(src, ar, dc, a, b, st);
         if (o != 0) {
             return 1;
@@ -325,7 +333,7 @@ public final class Paratest {
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
-        Para.paBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp);
+        Para.paBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0) {
             return 3;
         }

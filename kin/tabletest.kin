@@ -1,0 +1,358 @@
+;; Laws for `emon.table` (P5.1-P5.3), on every target.
+;;
+;; TWO KINDS, as for the paragraph stage. (1) What the stage DECIDES, on evidence written by hand (a word is a row of
+;; `words` with its own box and a line of its own; a rule is a thin filled rectangle of `paths`, a fill a large one):
+;; a lattice and its spans, header and footer from bold, columns from whitespace, rules and fills, alignment of the
+;; columns, the caption, and what is NOT a table (two columns of prose). The answer is written out as a brief, the
+;; Model in document order:
+;;
+;;     T<columns><profile letter>;   a table: r ruled, p partial, s shaded, w whitespace
+;;     K[<label>|<text>];            its caption          G<h|b|f>;   a row group        R;   a row
+;;     C<r2><c2><h|w><s|c|e>[text];  a cell: row span, column span, header (h col, w row), alignment
+;;     P[text];                      a paragraph
+;;
+;; (2) What it MAKES of real files: the Chrome-printed table documents of the synthetic corpus run PDF -> content ->
+;; tables -> paragraphs -> Model -> pretty JSON, byte for byte against `test/table/NAME.json` (`kin/scripts/table-goldens`
+;; wrote them), and the paragraph documents, which have no table, make none.
+(ns emon.tabletest
+  (:require [emon.lang :refer [I32 Blob Src Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-text assert-text-span new-cells new-text
+                               test-file text-blob]]
+            [emon.port :refer [blob-len cells-len cells-at cells-drop text-cp text-i32 src-of-blob]]
+            [emon.mscript :refer [jt-end]]
+            [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind
+                                node-text-start node-text-len node-sub node-attr node-attr-int-or
+                                attr-value attr-len text-at text-append-utf8
+                                nk-paragraph nk-table nk-rowgroup nk-row nk-cell nk-caption
+                                fk-rowspan fk-colspan fk-columns fk-profile fk-label fk-align]]
+            [emon.json :refer [js-emit]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new wf-size wf-font wf-style
+                                   pa-new pa-set pa-rect pf-flags pf-fill pf-falpha pg-filled]]
+            [emon.pdfdoc :refer [pd-open]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.para :refer [pa-pages pa-build]]
+            [emon.table :refer [tb-build tb-count]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------ hand-made evidence
+
+(defn ^I32 tt-w [^:mut ^Cells wd ^:mut ^Cells et ^Blob b ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 style]
+  (comment "One word with its own box (page 1, size 1000, baseline 200 above the bottom).")
+  (let [^I32 ts (cells-len et)]
+    (text-append-utf8 et b 0 (blob-len b))
+    (let [^I32 r (wd-new wd 1 x0 y0 x1 y1 x0 (- y1 200) x1 (- y1 200) 0 0 ts (- (cells-len et) ts) -1 -1 -1)]
+      (wd-set wd r (wf-size) 1000)
+      (wd-set wd r (wf-font) 0)
+      (wd-set wd r (wf-style) style))
+    (return 0)))
+
+(defn ^I32 tt-word [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 style]
+  (comment "One word and a line of its own.")
+  (let [^I32 w0 (wd-count wd)]
+    (tt-w wd et b x0 y0 x1 y1 style)
+    (ln-new ln 1 x0 y0 x1 y1 x0 (- y1 200) x1 (- y1 200) 0 0 w0 1)
+    (return 0)))
+
+(defn ^I32 tt-at [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 x ^I32 y ^I32 style ^I32 right]
+  (comment "A word of 500 per character, its left edge at x (its right edge when `right` is 1), 800 tall from y.")
+  (let [^I32 w (* 500 (blob-len b))]
+    (if (== right 1)
+      (tt-word wd ln et b (- x w) y x (+ y 800) style)
+      (tt-word wd ln et b x y (+ x w) (+ y 800) style))
+    (return 0)))
+
+(defn ^I32 tt-line3 [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob a ^Blob b ^Blob c ^I32 x ^I32 y]
+  (comment "One line of three words, 500 per character and a 500 gap, 800 tall from y.")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 xb (+ (+ x (* 500 (blob-len a))) 500)
+        ^I32 xc (+ (+ xb (* 500 (blob-len b))) 500)]
+    (tt-w wd et a x y (+ x (* 500 (blob-len a))) (+ y 800) 0)
+    (tt-w wd et b xb y (+ xb (* 500 (blob-len b))) (+ y 800) 0)
+    (tt-w wd et c xc y (+ xc (* 500 (blob-len c))) (+ y 800) 0)
+    (ln-new ln 1 x y (+ xc (* 500 (blob-len c))) (+ y 800) x (- (+ y 800) 200) (+ xc (* 500 (blob-len c))) (- (+ y 800) 200) 0 0 w0 3)
+    (return 0)))
+
+(defn ^I32 tt-rule [^:mut ^Cells pa ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "A black filled rectangle: a rule when it is thin.")
+  (let [^I32 r (pa-new pa 1 (pa-rect) x0 y0 x1 y1)]
+    (pa-set pa r (pf-flags) (pg-filled))
+    (pa-set pa r (pf-fill) 0)
+    (pa-set pa r (pf-falpha) 1000)
+    (return 0)))
+
+(defn ^I32 tt-fill [^:mut ^Cells pa ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 colour]
+  (let [^I32 r (pa-new pa 1 (pa-rect) x0 y0 x1 y1)]
+    (pa-set pa r (pf-flags) (pg-filled))
+    (pa-set pa r (pf-fill) colour)
+    (pa-set pa r (pf-falpha) 1000)
+    (return 0)))
+
+(defn ^I32 tt-grid [^:mut ^Cells pa ^I32 x0 ^I32 x1 ^I32 x2 ^I32 x3 ^I32 y0 ^I32 y1 ^I32 y2 ^I32 y3]
+  (comment "The rules of a 3 x 3 lattice, the vertical at x2 missing between y2 and y3 (the last row's two cells are one).")
+  (tt-rule pa x0 (- y0 50) x3 (+ y0 50))
+  (tt-rule pa x0 (- y1 50) x3 (+ y1 50))
+  (tt-rule pa x0 (- y2 50) x3 (+ y2 50))
+  (tt-rule pa x0 (- y3 50) x3 (+ y3 50))
+  (tt-rule pa (- x0 50) y0 (+ x0 50) y3)
+  (tt-rule pa (- x1 50) y0 (+ x1 50) y3)
+  (tt-rule pa (- x2 50) y0 (+ x2 50) y2)
+  (tt-rule pa (- x3 50) y0 (+ x3 50) y3)
+  (return 0))
+
+(defn ^I32 tt-run-text [^Cells nodes ^I32 n ^Cells text ^:mut ^Text t]
+  (let [^I32 s (node-text-start nodes n)
+        ^:mut ^I32 k 0]
+    (while (< k (node-text-len nodes n))
+      (do (text-cp t (text-at text (+ s k)))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 tt-brief [^:mut ^Text t ^Cells nodes ^Cells attrs ^Cells text]
+  (comment "The brief of the Model (see the head of this file): every node but the root, in id order.")
+  (let [^I32 n (node-count nodes)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 v 0]
+    (while (< i n)
+      (do (set kind (node-kind nodes i))
+          (if (== kind (nk-paragraph))
+            (do (text-cp t 80) (text-cp t 91)
+                (tt-run-text nodes i text t)
+                (text-cp t 93) (text-cp t 59)))
+          (if (== kind (nk-table))
+            (do (text-cp t 84)
+                (text-i32 t (node-attr-int-or nodes attrs i (fk-columns) 0))
+                (set a (node-attr nodes attrs i (fk-profile)))
+                (if (>= a 0) (text-cp t (text-at text (attr-value attrs a))))
+                (text-cp t 59)))
+          (if (== kind (nk-caption))
+            (do (text-cp t 75) (text-cp t 91)
+                (set a (node-attr nodes attrs i (fk-label)))
+                (if (>= a 0)
+                  (do (set v 0)
+                      (while (< v (attr-len attrs a))
+                        (do (text-cp t (text-at text (+ (attr-value attrs a) v)))
+                            (set v (+ v 1))))))
+                (text-cp t 124)
+                (tt-run-text nodes i text t)
+                (text-cp t 93) (text-cp t 59)))
+          (if (== kind (nk-rowgroup))
+            (do (text-cp t 71)
+                (if (== (node-sub nodes i) 1) (text-cp t 104))
+                (if (== (node-sub nodes i) 2) (text-cp t 98))
+                (if (== (node-sub nodes i) 3) (text-cp t 102))
+                (text-cp t 59)))
+          (if (== kind (nk-row))
+            (do (text-cp t 82) (text-cp t 59)))
+          (if (== kind (nk-cell))
+            (do (text-cp t 67)
+                (set v (node-attr-int-or nodes attrs i (fk-rowspan) 1))
+                (if (> v 1) (do (text-cp t 114) (text-i32 t v)))
+                (set v (node-attr-int-or nodes attrs i (fk-colspan) 1))
+                (if (> v 1) (do (text-cp t 99) (text-i32 t v)))
+                (if (== (node-sub nodes i) 1) (text-cp t 104))
+                (if (== (node-sub nodes i) 2) (text-cp t 119))
+                (set v (node-attr-int-or nodes attrs i (fk-align) 0))
+                (if (== v 1) (text-cp t 115))
+                (if (== v 2) (text-cp t 99))
+                (if (== v 3) (text-cp t 101))
+                (text-cp t 91)
+                (tt-run-text nodes i text t)
+                (text-cp t 93) (text-cp t 59)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 tt-run [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t]
+  (comment "Tables, then paragraphs, then the brief of the Model. Answers `model-check`'s verdict.")
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells tx (new-cells)
+        ^Cells s0 (new-cells) ^Cells s1 (new-cells) ^Cells s2 (new-cells) ^Cells s3 (new-cells) ^Cells s4 (new-cells)
+        ^Cells s5 (new-cells) ^Cells s6 (new-cells) ^Cells s7 (new-cells) ^Cells s8 (new-cells) ^Cells s9 (new-cells)
+        ^Cells s10 (new-cells) ^Cells s11 (new-cells) ^Cells s12 (new-cells) ^Cells s13 (new-cells) ^Cells s14 (new-cells)
+        ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (tb-build wd ln et pa 1 tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18)
+    (pa-build wd ln et 1 nodes attrs regions text ord raw tmp fr gp tb tc tw tq)
+    (tt-brief t nodes attrs text)
+    (return (model-check nodes attrs regions text pages ledger layout st))))
+
+;; ------------------------------------------------------------------- ruled
+
+(deftest test-a-lattice-is-a-table-and-a-missing-rule-is-a-span
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-word wd ln et (text-blob "Intro") 7200 7000 10200 7800 0)
+    (tt-grid pa 7200 17200 27200 37200 10000 12000 14000 16000)
+    (tt-at wd ln et (text-blob "Item") 7600 10600 1 0)
+    (tt-at wd ln et (text-blob "Qty") 17600 10600 1 0)
+    (tt-at wd ln et (text-blob "Price") 27600 10600 1 0)
+    (tt-at wd ln et (text-blob "Bolt") 7600 12600 0 0)
+    (tt-at wd ln et (text-blob "10") 17600 12600 0 0)
+    (tt-at wd ln et (text-blob "2.50") 27600 12600 0 0)
+    (tt-at wd ln et (text-blob "Total") 7600 14600 0 0)
+    (tt-at wd ln et (text-blob "12.50") 17600 14600 0 0)
+    (tt-word wd ln et (text-blob "Outro") 7200 17200 10200 18000 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "lattice: well formed")
+    (assert-text t "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];"
+                 "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it")))
+
+;; --------------------------------------------------------------- whitespace
+
+(deftest test-columns-of-whitespace-are-a-table-and-prose-columns-are-not
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text) ^Text t2 (new-text)]
+    (comment "A header of bold words and four rows of a label and two numbers, right-aligned, no rule at all.")
+    (tt-at wd ln et (text-blob "Fund") 7200 10000 1 0)
+    (tt-at wd ln et (text-blob "Q1") 30000 10000 1 1)
+    (tt-at wd ln et (text-blob "Q2") 40000 10000 1 1)
+    (tt-at wd ln et (text-blob "Alpha") 7200 11600 0 0)
+    (tt-at wd ln et (text-blob "3.0%") 30000 11600 0 1)
+    (tt-at wd ln et (text-blob "111.5%") 40000 11600 0 1)
+    (tt-at wd ln et (text-blob "Bo") 7200 13200 0 0)
+    (tt-at wd ln et (text-blob "4.7%") 30000 13200 0 1)
+    (tt-at wd ln et (text-blob "4.3%") 40000 13200 0 1)
+    (tt-at wd ln et (text-blob "Gammarays") 7200 14800 0 0)
+    (tt-at wd ln et (text-blob "12.1%") 30000 14800 0 1)
+    (tt-at wd ln et (text-blob "9.5%") 40000 14800 0 1)
+    (tt-at wd ln et (text-blob "Total") 7200 16400 1 0)
+    (tt-at wd ln et (text-blob "6.4%") 30000 16400 1 1)
+    (tt-at wd ln et (text-blob "6.6%") 40000 16400 1 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "whitespace: well formed")
+    (assert-text t "@W"
+                 "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent")
+    (comment "Two columns of prose, four words a line: columns, not a table.")
+    (cells-drop wd 0)
+    (cells-drop ln 0)
+    (cells-drop et 0)
+    (tt-at wd ln et (text-blob "the old") 7200 10000 0 0)
+    (tt-at wd ln et (text-blob "was and") 30000 10000 0 0)
+    (tt-at wd ln et (text-blob "of the") 7200 11200 0 0)
+    (tt-at wd ln et (text-blob "that is") 30000 11200 0 0)
+    (tt-at wd ln et (text-blob "and then") 7200 12400 0 0)
+    (tt-at wd ln et (text-blob "went on") 30000 12400 0 0)
+    (tt-at wd ln et (text-blob "she said") 7200 13600 0 0)
+    (tt-at wd ln et (text-blob "to him") 30000 13600 0 0)
+    (assert-eq (tt-run wd ln et pa t2) 0 "prose: well formed")
+    (assert-text t2 "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];"
+                 "lowercase text with half the cells empty is not a table")))
+
+;; ------------------------------------------------------------ partial, shaded
+
+(deftest test-rules-above-and-below-make-a-partial-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Booktabs: a rule over the header, one under it, one at the foot, nothing else.")
+    (tt-rule pa 7200 9950 37200 10050)
+    (tt-rule pa 7200 11650 37200 11750)
+    (tt-rule pa 7200 16450 37200 16550)
+    (tt-at wd ln et (text-blob "Region") 7200 10100 1 0)
+    (tt-at wd ln et (text-blob "Units") 30000 10100 1 1)
+    (tt-at wd ln et (text-blob "Cost") 37200 10100 1 1)
+    (tt-at wd ln et (text-blob "North") 7200 11900 0 0)
+    (tt-at wd ln et (text-blob "120") 30000 11900 0 1)
+    (tt-at wd ln et (text-blob "9.5") 37200 11900 0 1)
+    (tt-at wd ln et (text-blob "So") 7200 13500 0 0)
+    (tt-at wd ln et (text-blob "8") 30000 13500 0 1)
+    (tt-at wd ln et (text-blob "7.1") 37200 13500 0 1)
+    (tt-at wd ln et (text-blob "Westerly") 7200 15100 0 0)
+    (tt-at wd ln et (text-blob "75") 30000 15100 0 1)
+    (tt-at wd ln et (text-blob "4.4") 37200 15100 0 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "partial: well formed")
+    (assert-text t "T3p;Gh;R;Ch[Region];Ch[Units];Ch[Cost];Gb;R;Cs[North];Ce[120];Ce[9.5];R;Cs[South];Ce[98];Ce[7.1];R;Cs[West];Ce[75];Ce[4.4];"
+                 "horizontal rules only: the header is the bold row above the rule under it")))
+
+(deftest test-bands-of-fill-make-a-shaded-table
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-fill pa 7200 10000 37200 11600 4000000)
+    (tt-fill pa 7200 11600 37200 13200 15000000)
+    (tt-fill pa 7200 13200 37200 14800 16777215)
+    (tt-fill pa 7200 14800 37200 16400 15000000)
+    (tt-at wd ln et (text-blob "Task") 7600 10400 1 0)
+    (tt-at wd ln et (text-blob "Owner") 20000 10400 1 0)
+    (tt-at wd ln et (text-blob "Due") 30000 10400 1 0)
+    (tt-at wd ln et (text-blob "Build") 7600 12000 0 0)
+    (tt-at wd ln et (text-blob "Ana") 20000 12000 0 0)
+    (tt-at wd ln et (text-blob "May") 30000 12000 0 0)
+    (tt-at wd ln et (text-blob "Test") 7600 13600 0 0)
+    (tt-at wd ln et (text-blob "Ben") 20000 13600 0 0)
+    (tt-at wd ln et (text-blob "June") 30000 13600 0 0)
+    (tt-at wd ln et (text-blob "Ship") 7600 15200 0 0)
+    (tt-at wd ln et (text-blob "Chen") 20000 15200 0 0)
+    (tt-at wd ln et (text-blob "July") 30000 15200 0 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "shaded: well formed")
+    (assert-text t "T3s;Gh;R;Ch[Task];Ch[Owner];Ch[Due];Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];"
+                 "four bands of fill of one extent, two colours: rows from the bands")))
+
+;; ---------------------------------------------------------- caption and foot
+
+(deftest test-a-caption-and-a-bold-last-row
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-line3 wd ln et (text-blob "Table") (text-blob "2.") (text-blob "Results") 7200 8400)
+    (tt-grid pa 7200 17200 27200 37200 10000 12000 14000 16000)
+    (tt-at wd ln et (text-blob "A") 7600 10600 1 0)
+    (tt-at wd ln et (text-blob "B") 17600 10600 1 0)
+    (tt-at wd ln et (text-blob "C") 27600 10600 1 0)
+    (tt-at wd ln et (text-blob "x") 7600 12600 0 0)
+    (tt-at wd ln et (text-blob "1") 17600 12600 0 0)
+    (tt-at wd ln et (text-blob "2") 27600 12600 0 0)
+    (tt-at wd ln et (text-blob "Sum") 7600 14600 0 0)
+    (tt-at wd ln et (text-blob "3") 17600 14600 0 0)
+    (assert-eq (tt-run wd ln et pa t) 0 "caption: well formed")
+    (assert-text t "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];"
+                 "the caption is the table's first child: label and text, not a paragraph")))
+
+;; --------------------------------------------------------------- real documents
+
+(defn ^I32 tt-golden [^Blob pdf ^:mut ^Text t]
+  (comment "PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a")
+  (comment "code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`.")
+  (let [^Cells ar (new-cells) ^Cells dc (new-cells) ^Cells a (new-cells) ^Cells b (new-cells) ^Cells st (new-cells)
+        ^Cells cx (new-cells) ^Cells ox (new-cells) ^Cells cs (new-cells) ^Cells out (new-cells)
+        ^Cells f0 (new-cells) ^Cells f1 (new-cells) ^Cells f2 (new-cells) ^Cells f3 (new-cells)
+        ^Cells gl (new-cells) ^Cells et (new-cells) ^Cells mk (new-cells) ^Cells fnt (new-cells) ^Cells pg (new-cells)
+        ^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells pa (new-cells) ^Cells im (new-cells) ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells tx (new-cells)
+        ^Cells s0 (new-cells) ^Cells s1 (new-cells) ^Cells s2 (new-cells) ^Cells s3 (new-cells) ^Cells s4 (new-cells)
+        ^Cells s5 (new-cells) ^Cells s6 (new-cells) ^Cells s7 (new-cells) ^Cells s8 (new-cells) ^Cells s9 (new-cells)
+        ^Cells s10 (new-cells) ^Cells s11 (new-cells) ^Cells s12 (new-cells) ^Cells s13 (new-cells) ^Cells s14 (new-cells)
+        ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)
+        ^Src src (src-of-blob pdf)
+        ^I32 o (pd-open src ar dc a b st)]
+    (if (!= o 0) (return 1))
+    (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0) (return 2))
+    (model-init nodes attrs regions text pages ledger layout)
+    (pa-pages pg pages)
+    (let [^I32 np (quot (cells-len pages) 16)]
+      (tb-build wd ln et pa np tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18)
+      (pa-build wd ln et np nodes attrs regions text ord raw tmp fr gp tb tc tw tq))
+    (if (!= (model-check nodes attrs regions text pages ledger layout st) 0) (return 3))
+    (js-emit t 1 nodes attrs regions text pages ledger layout)
+    (return 0)))
+
+(deftest test-real-documents-make-the-golden-models
+  (let [^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text) ^Text t4 (new-text) ^Text t5 (new-text) ^Text t6 (new-text)]
+    (assert-eq (tt-golden (test-file "corpus/synth/pdf/table-simple-ruled.pdf") t1) 0 "table-simple-ruled runs")
+    (assert-text-span t1 (test-file "table/table-simple-ruled.json") 0 (jt-end (test-file "table/table-simple-ruled.json")) "table-simple-ruled" 0)
+    (assert-eq (tt-golden (test-file "corpus/synth/pdf/table-shaded.pdf") t2) 0 "table-shaded runs")
+    (assert-text-span t2 (test-file "table/table-shaded.json") 0 (jt-end (test-file "table/table-shaded.json")) "table-shaded" 0)
+    (assert-eq (tt-golden (test-file "corpus/synth/pdf/table-spans-partial.pdf") t3) 0 "table-spans-partial runs")
+    (assert-text-span t3 (test-file "table/table-spans-partial.json") 0 (jt-end (test-file "table/table-spans-partial.json")) "table-spans-partial" 0)
+    (assert-eq (tt-golden (test-file "corpus/synth/pdf/table-whitespace.pdf") t4) 0 "table-whitespace runs")
+    (assert-text-span t4 (test-file "table/table-whitespace.json") 0 (jt-end (test-file "table/table-whitespace.json")) "table-whitespace" 0)
+    (assert-eq (tt-golden (test-file "corpus/synth/pdf/align-table-numeric.pdf") t5) 0 "align-table-numeric runs")
+    (assert-text-span t5 (test-file "table/align-table-numeric.json") 0 (jt-end (test-file "table/align-table-numeric.json")) "align-table-numeric" 0)
+    (comment "A document of paragraphs and two columns has no table (the stage's other half: it must not make one).")
+    (assert-eq (tt-golden (test-file "corpus/synth/pdf/h-plain.pdf") t6) 0 "h-plain runs")
+    (assert-text-span t6 (test-file "para/h-plain.json") 0 (jt-end (test-file "para/h-plain.json")) "h-plain makes no table" 0)))

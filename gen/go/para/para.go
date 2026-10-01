@@ -9,6 +9,7 @@ import (
 	"emon/normalize"
 	"emon/pdfdoc"
 	"emon/port"
+	"emon/table"
 )
 
 const paGapNum int32 = 3
@@ -28,6 +29,8 @@ const paWideNum int32 = 3
 const paWideDen int32 = 5
 
 const frStride int32 = 6
+
+const paAll int32 = 2000000000
 
 func PaPages(pg *port.Cells, pages *port.Cells) int32 {
 	// One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
@@ -283,7 +286,7 @@ func paCollect(ord *port.Cells, ln *port.Cells, page int32) int32 {
 	var l int32 = 0
 	port.CellsDrop(ord, 0)
 	for l < n {
-		if evidence.LnGet(ln, l, evidence.LhPage()) == page {
+		if (evidence.LnGet(ln, l, evidence.LhPage()) == page) && (table.TbClaimed(ln, l) == 0) {
 			port.CellsPush(ord, l)
 		}
 		l += 1
@@ -642,10 +645,24 @@ func paUprightCount(ln *port.Cells, ord *port.Cells) int32 {
 	return n
 }
 
-func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells) int32 {
+func paTables(tb *port.Cells, tcur int32, p int32, ymid2 int32, wd *port.Cells, ln *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells) int32 {
+	// Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
+	// a baseline y: the order key of `pa-ymid2`). The open paragraph has been flushed. Answers the next
+	// table to emit (P5.1: a table is a block, found before this and placed here by its top).
+	var k int32 = tcur
+	for table.TbDue(tb, k, p, ymid2) {
+		table.TbEmit(tb, k, wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp)
+		k += 1
+	}
+	port.CellsDrop(raw, 0)
+	return k
+}
+
+func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells) int32 {
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
-	// `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-	// queue of lines that are not upright). Answers 0.
+	// `model-init`), and the tables of `tb` (P5.1, `emon.table`) between them, where their tops put them.
+	// A line a table holds (`tb-claimed`) is left out. `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp`
+	// first holds the gaps, then the queue of lines that are not upright). Answers 0.
 	var med int32 = paMedian(ln, ord, gp, npages)
 	var p int32 = 1
 	var i int32 = 0
@@ -658,6 +675,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 	var prevmaxw int32 = 0
 	var pm int32 = 0
 	var rs int32 = 0
+	var tcur int32 = 0
 	port.CellsDrop(gp, 0)
 	port.CellsDrop(raw, 0)
 	port.CellsDrop(fr, 0)
@@ -666,6 +684,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 		n = port.CellsLen(ord)
 		nu = paUprightCount(ln, ord)
 		pm = paMargin(ln, ord)
+		tcur = table.TbSkip(tb, tcur, p)
 		if nu == 0 {
 			paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
 			open = 0
@@ -673,12 +692,15 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 			if p > 1 {
 				paMilestone(nodes, p)
 			}
+			tcur = paTables(tb, tcur, p, paAll, wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp)
 		} else {
 			b = port.CellsAt(ord, 0)
 			cont = 0
 			if open == 1 {
 				if paContinues(wd, ln, raw, prev, b, prevmaxw, pm) {
-					cont = 1
+					if !table.TbDue(tb, tcur, p, paYmid2(ln, b)) {
+						cont = 1
+					}
 				}
 			}
 			if cont == 0 {
@@ -686,6 +708,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 				if p > 1 {
 					paMilestone(nodes, p)
 				}
+				tcur = paTables(tb, tcur, p, paYmid2(ln, b), wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp)
 				paFragOpen(fr, ln, p, b, 0)
 			} else {
 				paJoin(wd, ln, et, raw, b)
@@ -698,8 +721,9 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 			i = 1
 			for i < nu {
 				b = port.CellsAt(ord, i)
-				if paNewPar(wd, ln, prev, b, med, pm) {
+				if paNewPar(wd, ln, prev, b, med, pm) || table.TbDue(tb, tcur, p, paYmid2(ln, b)) {
 					paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+					tcur = paTables(tb, tcur, p, paYmid2(ln, b), wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp)
 					paFragOpen(fr, ln, p, b, 0)
 				} else {
 					paJoin(wd, ln, et, raw, b)
@@ -710,6 +734,12 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 				i += 1
 			}
 			prevmaxw = paMaxw(ln, ord)
+			if table.TbDue(tb, tcur, p, paAll) {
+				paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+				open = 0
+				prev = -1
+				tcur = paTables(tb, tcur, p, paAll, wd, ln, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp)
+			}
 		}
 		i = nu
 		for i < n {

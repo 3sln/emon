@@ -1,7 +1,7 @@
 ;; Naive analysis: lines -> paragraphs (P1.8; SPEC 3.2, 3.6; D134-D139). emon's own module (D039).
 ;;
 ;;   (pa-pages pg pages)                              the Model's page table, from the document layer's
-;;   (pa-build wd ln et npages nodes attrs regions text ord raw tmp fr gp)
+;;   (pa-build wd ln et npages nodes attrs regions text ord raw tmp fr gp tb tc tw tq)
 ;;                                                    every line of the evidence as paragraphs
 ;;
 ;; The Model is made by the caller (`model-init`, one `page-new` each, or `pa-pages`); this appends to it.
@@ -48,6 +48,7 @@
                                 sr-infer pk-vector]]
             [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
+            [emon.table :refer [tb-due tb-skip tb-emit tb-claimed]]
             [kin.lang :refer [defn defconst return let set while if do comment
                               + - * < > <= >= == != and or not quot rem]]))
 
@@ -63,6 +64,7 @@
 
 ;; frag rows (`fr`): page x0 y0 x1 y1 raw-start
 (defconst ^I32 FR_STRIDE 6)
+(defconst ^I32 PA_ALL 2000000000)    ;; "every table of the page": above any line (an `emon.table` order key)
 
 ;; ---------------------------------------------------------------- the page table
 
@@ -260,7 +262,7 @@
         ^:mut ^I32 l 0]
     (cells-drop ord 0)
     (while (< l n)
-      (do (if (== (ln-get ln l (lh-page)) page)
+      (do (if (and (== (ln-get ln l (lh-page)) page) (== (tb-claimed ln l) 0))
             (cells-push ord l))
           (set l (+ l 1))))
     (pa-sort-lines ord ln)
@@ -543,12 +545,27 @@
           (set i (+ i 1))))
     (return n)))
 
+(defn ^I32 pa-tables [^Cells tb ^I32 tcur ^I32 p ^I32 ymid2 ^Cells wd ^Cells ln ^Cells et ^Cells tc ^Cells tw ^Cells tq
+                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                      ^:mut ^Cells raw ^:mut ^Cells tmp]
+  (comment "Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice")
+  (comment "a baseline y: the order key of `pa-ymid2`). The open paragraph has been flushed. Answers the next")
+  (comment "table to emit (P5.1: a table is a block, found before this and placed here by its top).")
+  (let [^:mut ^I32 k tcur]
+    (while (tb-due tb k p ymid2)
+      (do (tb-emit tb k wd et ln tc tw tq nodes attrs regions text raw tmp)
+          (set k (+ k 1))))
+    (cells-drop raw 0)
+    (return k)))
+
 (defn ^:pub ^I32 pa-build [^Cells wd ^Cells ln ^Cells et ^I32 npages
                            ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
-                           ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp]
+                           ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
+                           ^Cells tb ^Cells tc ^Cells tw ^Cells tq]
   (comment "Append every page's lines to the Model as paragraphs under the document root (node 0, made by")
-  (comment "`model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the")
-  (comment "queue of lines that are not upright). Answers 0.")
+  (comment "`model-init`), and the tables of `tb` (P5.1, `emon.table`) between them, where their tops put them.")
+  (comment "A line a table holds (`tb-claimed`) is left out. `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp`")
+  (comment "first holds the gaps, then the queue of lines that are not upright). Answers 0.")
   (let [^I32 med (pa-median ln ord gp npages)
         ^:mut ^I32 p 1
         ^:mut ^I32 i 0
@@ -560,7 +577,8 @@
         ^:mut ^I32 cont 0
         ^:mut ^I32 prevmaxw 0
         ^:mut ^I32 pm 0
-        ^:mut ^I32 rs 0]
+        ^:mut ^I32 rs 0
+        ^:mut ^I32 tcur 0]
     (cells-drop gp 0)
     (cells-drop raw 0)
     (cells-drop fr 0)
@@ -569,19 +587,23 @@
           (set n (cells-len ord))
           (set nu (pa-upright-count ln ord))
           (set pm (pa-margin ln ord))
+          (set tcur (tb-skip tb tcur p))
           (if (== nu 0)
             (do (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
                 (set open 0)
                 (set prev -1)
-                (if (> p 1) (pa-milestone nodes p)))
+                (if (> p 1) (pa-milestone nodes p))
+                (set tcur (pa-tables tb tcur p PA_ALL wd ln et tc tw tq nodes attrs regions text raw tmp)))
             (do (set b (cells-at ord 0))
                 (set cont 0)
                 (if (== open 1)
                   (if (pa-continues wd ln raw prev b prevmaxw pm)
-                    (set cont 1)))
+                    (if (not (tb-due tb tcur p (pa-ymid2 ln b)))
+                      (set cont 1))))
                 (if (== cont 0)
                   (do (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
                       (if (> p 1) (pa-milestone nodes p))
+                      (set tcur (pa-tables tb tcur p (pa-ymid2 ln b) wd ln et tc tw tq nodes attrs regions text raw tmp))
                       (pa-frag-open fr ln p b 0))
                   (do (pa-join wd ln et raw b)
                       (set rs (cells-len raw))
@@ -592,15 +614,21 @@
                 (set i 1)
                 (while (< i nu)
                   (do (set b (cells-at ord i))
-                      (if (pa-new-par wd ln prev b med pm)
+                      (if (or (pa-new-par wd ln prev b med pm) (tb-due tb tcur p (pa-ymid2 ln b)))
                         (do (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
+                            (set tcur (pa-tables tb tcur p (pa-ymid2 ln b) wd ln et tc tw tq nodes attrs regions text raw tmp))
                             (pa-frag-open fr ln p b 0))
                         (do (pa-join wd ln et raw b)
                             (pa-frag-extend fr ln b)))
                       (pa-add-line wd ln et raw b)
                       (set prev b)
                       (set i (+ i 1))))
-                (set prevmaxw (pa-maxw ln ord))))
+                (set prevmaxw (pa-maxw ln ord))
+                (if (tb-due tb tcur p PA_ALL)
+                  (do (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
+                      (set open 0)
+                      (set prev -1)
+                      (set tcur (pa-tables tb tcur p PA_ALL wd ln et tc tw tq nodes attrs regions text raw tmp))))))
           (set i nu)
           (while (< i n)
             (do (cells-push gp (cells-at ord i))
