@@ -35,7 +35,7 @@ const fuIsogap int32 = 1500
 
 const fuSisogap int32 = 2000
 
-const fuIso int32 = 60
+const fuIsopct int32 = 60
 
 const fuSiso int32 = 70
 
@@ -47,7 +47,7 @@ const fuPairs int32 = 75
 
 const fuMinnorm int32 = 4
 
-const fuSlots int32 = 8
+const fuMaxslots int32 = 8
 
 const cd int32 = 16
 
@@ -115,35 +115,35 @@ func fuAbs(a int32) int32 {
 }
 
 func cdGet(cd *port.Cells, r int32, f int32) int32 {
-	return port.CellsAt(cd, (r * 16) + f)
+	return port.CellsAt(cd, (r*16)+f)
 }
 
 func cdSet(cd *port.Cells, r int32, f int32, v int32) int32 {
-	port.CellsSet(cd, (r * 16) + f, v);
+	port.CellsSet(cd, (r*16)+f, v)
 	return 0
 }
 
 func slGet(sl *port.Cells, r int32, f int32) int32 {
-	return port.CellsAt(sl, (r * 10) + f)
+	return port.CellsAt(sl, (r*10)+f)
 }
 
 func grGet(gr *port.Cells, r int32, f int32) int32 {
-	return port.CellsAt(gr, (r * 16) + f)
+	return port.CellsAt(gr, (r*16)+f)
 }
 
 func grSet(gr *port.Cells, r int32, f int32, v int32) int32 {
-	port.CellsSet(gr, (r * 16) + f, v);
+	port.CellsSet(gr, (r*16)+f, v)
 	return 0
 }
 
 func grInc(gr *port.Cells, r int32, f int32) int32 {
 	var v int32 = grGet(gr, r, f)
-	grSet(gr, r, f, v + 1);
+	grSet(gr, r, f, v+1)
 	return 0
 }
 
 func foGet(fo *port.Cells, r int32, f int32) int32 {
-	return port.CellsAt(fo, (r * 12) + f)
+	return port.CellsAt(fo, (r*12)+f)
 }
 
 func fuPushRow(c *port.Cells, stride int32) int32 {
@@ -151,7 +151,7 @@ func fuPushRow(c *port.Cells, stride int32) int32 {
 	var r int32 = port.CellsLen(c) / stride
 	var i int32 = 0
 	for i < stride {
-		port.CellsPush(c, 0);
+		port.CellsPush(c, 0)
 		i += 1
 	}
 	return r
@@ -288,7 +288,7 @@ func fuRomanVal(tx *port.Cells, cs int32, ce int32) int32 {
 		return -1
 	}
 	for i < n {
-		c = port.CellsAt(tx, cs + i)
+		c = port.CellsAt(tx, cs+i)
 		if fuRomanSym(c) == 0 {
 			return -1
 		}
@@ -304,10 +304,10 @@ func fuRomanVal(tx *port.Cells, cs int32, ce int32) int32 {
 	}
 	i = 0
 	for i < n {
-		v = fuRomanSym(port.CellsAt(tx, cs + i))
+		v = fuRomanSym(port.CellsAt(tx, cs+i))
 		nx = 0
 		if (i + 1) < n {
-			nx = fuRomanSym(port.CellsAt(tx, cs + (i + 1)))
+			nx = fuRomanSym(port.CellsAt(tx, cs+(i+1)))
 		}
 		if v < nx {
 			total -= v
@@ -326,13 +326,13 @@ func fuRomanVal(tx *port.Cells, cs int32, ce int32) int32 {
 	var s2 int32 = 0
 	var cc int32 = 0
 	for k < 39 {
-		s1 = FuRn[k + 1]
-		s2 = FuRn[k + 2]
+		s1 = FuRn[k+1]
+		s2 = FuRn[k+2]
 		for left >= FuRn[k] {
 			if pos >= n {
 				return -1
 			}
-			cc = fuUpper(port.CellsAt(tx, cs + pos))
+			cc = fuUpper(port.CellsAt(tx, cs+pos))
 			if cc != s1 {
 				return -1
 			}
@@ -341,7 +341,7 @@ func fuRomanVal(tx *port.Cells, cs int32, ce int32) int32 {
 				if pos >= n {
 					return -1
 				}
-				cc = fuUpper(port.CellsAt(tx, cs + pos))
+				cc = fuUpper(port.CellsAt(tx, cs+pos))
 				if cc != s2 {
 					return -1
 				}
@@ -369,7 +369,7 @@ func fuCs(tx *port.Cells, s int32, e int32) int32 {
 func fuCe(tx *port.Cells, cs int32, e int32) int32 {
 	// The end of the core (exclusive): before the punctuation at the back; never before `cs`.
 	var i int32 = e
-	for (i > cs) && (fuPunct(port.CellsAt(tx, i - 1)) == 1) {
+	for (i > cs) && (fuPunct(port.CellsAt(tx, i-1)) == 1) {
 		i -= 1
 	}
 	return i
@@ -390,14 +390,14 @@ func fuPwKind(tx *port.Cells, cs int32, ce int32) int32 {
 		flag = FuPw[i]
 		i += 1
 		wl = 0
-		for FuPw[i + wl] != 0 {
+		for FuPw[i+wl] != 0 {
 			wl += 1
 		}
 		if wl == n {
 			ok = 1
 			j = 0
 			for j < n {
-				if fuLower(port.CellsAt(tx, cs + j)) != FuPw[i + j] {
+				if fuLower(port.CellsAt(tx, cs+j)) != FuPw[i+j] {
 					ok = 0
 				}
 				j += 1
@@ -433,14 +433,14 @@ func fuCaptionLead(tx *port.Cells, cd *port.Cells, r int32) int32 {
 	}
 	for FuCw[i] >= 0 {
 		wl = 0
-		for FuCw[i + wl] != 0 {
+		for FuCw[i+wl] != 0 {
 			wl += 1
 		}
 		if wl == (ce - cs) {
 			ok = 1
 			j = 0
 			for j < wl {
-				if fuLower(port.CellsAt(tx, cs + j)) != FuCw[i + j] {
+				if fuLower(port.CellsAt(tx, cs+j)) != FuCw[i+j] {
 					ok = 0
 				}
 				j += 1
@@ -514,16 +514,16 @@ func fuLineText(wd *port.Cells, ln *port.Cells, et *port.Cells, out *port.Cells,
 	var ts int32 = 0
 	var tl int32 = 0
 	for k < wn {
-		ts = evidence.WdGet(wd, w0 + k, evidence.HdTstart())
-		tl = evidence.WdGet(wd, w0 + k, evidence.HdTlen())
+		ts = evidence.WdGet(wd, w0+k, evidence.HdTstart())
+		tl = evidence.WdGet(wd, w0+k, evidence.HdTlen())
 		if (ts >= 0) && (tl > 0) {
 			if started == 1 {
-				port.CellsPush(out, 32);
+				port.CellsPush(out, 32)
 			}
 			started = 1
 			j = 0
 			for j < tl {
-				port.CellsPush(out, port.CellsAt(et, ts + j));
+				port.CellsPush(out, port.CellsAt(et, ts+j))
 				j += 1
 			}
 		}
@@ -534,16 +534,16 @@ func fuLineText(wd *port.Cells, ln *port.Cells, et *port.Cells, out *port.Cells,
 
 func fuSlotPush(sl *port.Cells, r int32, kind int32, value int32, ds int32, dl int32, tok int32, nd int32, up int32, ts int32, tl int32) int32 {
 	var s int32 = fuPushRow(sl, 10)
-	port.CellsSet(sl, (s * 10) + 0, r);
-	port.CellsSet(sl, (s * 10) + 1, kind);
-	port.CellsSet(sl, (s * 10) + 2, value);
-	port.CellsSet(sl, (s * 10) + 3, ds);
-	port.CellsSet(sl, (s * 10) + 4, dl);
-	port.CellsSet(sl, (s * 10) + 5, tok);
-	port.CellsSet(sl, (s * 10) + 6, nd);
-	port.CellsSet(sl, (s * 10) + 7, up);
-	port.CellsSet(sl, (s * 10) + 8, ts);
-	port.CellsSet(sl, (s * 10) + 9, tl);
+	port.CellsSet(sl, (s*10)+0, r)
+	port.CellsSet(sl, (s*10)+1, kind)
+	port.CellsSet(sl, (s*10)+2, value)
+	port.CellsSet(sl, (s*10)+3, ds)
+	port.CellsSet(sl, (s*10)+4, dl)
+	port.CellsSet(sl, (s*10)+5, tok)
+	port.CellsSet(sl, (s*10)+6, nd)
+	port.CellsSet(sl, (s*10)+7, up)
+	port.CellsSet(sl, (s*10)+8, ts)
+	port.CellsSet(sl, (s*10)+9, tl)
 	return s
 }
 
@@ -599,6 +599,7 @@ func fuSlots(tx *port.Cells, bs int32, n int32, sl *port.Cells, cd *port.Cells, 
 	var ns int32 = 0
 	var tok int32 = 0
 	var pf int32 = -1
+	var kind1 int32 = 3
 	var over int32 = 0
 	var h int64 = fuBasis()
 	for i < end {
@@ -617,7 +618,7 @@ func fuSlots(tx *port.Cells, bs int32, n int32, sl *port.Cells, cd *port.Cells, 
 			i = e
 		}
 	}
-	port.CellsSet(cd, (r * 16) + 13, port.CellsLen(sl) / 10);
+	port.CellsSet(cd, (r*16)+13, port.CellsLen(sl)/10)
 	i = bs
 	for i < end {
 		if port.CellsAt(tx, i) == 32 {
@@ -641,12 +642,12 @@ func fuSlots(tx *port.Cells, bs int32, n int32, sl *port.Cells, cd *port.Cells, 
 				j += 1
 			}
 			if (k == 4) && (pageish == 1) {
-				if ns < fuSlots {
+				if ns < fuMaxslots {
 					var up int32 = 0
 					if (port.CellsAt(tx, cs) >= 65) && (port.CellsAt(tx, cs) <= 90) {
 						up = 1
 					}
-					fuSlotPush(sl, r, 2, fuRomanVal(tx, cs, ce), cs - bs, ce - cs, tok, 0, up, i - bs, e - i);
+					fuSlotPush(sl, r, 2, fuRomanVal(tx, cs, ce), cs-bs, ce-cs, tok, 0, up, i-bs, e-i)
 					ns += 1
 				} else {
 					over = 1
@@ -668,14 +669,15 @@ func fuSlots(tx *port.Cells, bs int32, n int32, sl *port.Cells, cd *port.Cells, 
 						if (d - j) > 9 {
 							v = -1
 						}
-						if ns < fuSlots {
+						kind1 = 3
+						if k == 3 {
+							kind1 = 1
+						}
+						if ns < fuMaxslots {
 							if j == pf {
-								fuSlotPush(sl, r, 4, v, cs - bs, ce - cs, tok, d - j, 0, i - bs, e - i);
+								fuSlotPush(sl, r, 4, v, cs-bs, ce-cs, tok, d-j, 0, i-bs, e-i)
 							} else {
-								fuSlotPush(sl, r, 								if k == 3 {
-1								} else {
-3								}
-, v, j - bs, d - j, tok, d - j, 0, i - bs, e - i);
+								fuSlotPush(sl, r, kind1, v, j-bs, d-j, tok, d-j, 0, i-bs, e-i)
 							}
 							ns += 1
 						} else {
@@ -698,12 +700,12 @@ func fuSlots(tx *port.Cells, bs int32, n int32, sl *port.Cells, cd *port.Cells, 
 			i = e
 		}
 	}
-	port.CellsSet(cd, (r * 16) + 5, int32(h));
-	port.CellsSet(cd, (r * 16) + 6, int32(int64(uint64(h) >> uint(32))));
+	port.CellsSet(cd, (r*16)+5, int32(h))
+	port.CellsSet(cd, (r*16)+6, int32(int64(uint64(h)>>uint(32))))
 	if over == 1 {
-		port.CellsSet(cd, (r * 16) + 7, -1);
+		port.CellsSet(cd, (r*16)+7, -1)
 	} else {
-		port.CellsSet(cd, (r * 16) + 7, ns);
+		port.CellsSet(cd, (r*16)+7, ns)
 	}
 	return ns
 }
@@ -726,8 +728,8 @@ func fuTag(wd *port.Cells, ln *port.Cells, gl *port.Cells, mk *port.Cells, l int
 	var ty int32 = 0
 	var su int32 = 0
 	for k < wn {
-		g = evidence.WdGet(wd, w0 + k, evidence.WfGfirst())
-		if (g >= 0) && (evidence.WdGet(wd, w0 + k, evidence.WfGcount()) > 0) {
+		g = evidence.WdGet(wd, w0+k, evidence.WfGfirst())
+		if (g >= 0) && (evidence.WdGet(wd, w0+k, evidence.WfGcount()) > 0) {
 			tot += 1
 			m = evidence.GlGet(gl, g, evidence.GfMark())
 			if m >= 0 {
@@ -795,8 +797,8 @@ func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 			prev = p
 		}
 		if (p >= 1) && (p <= npages) {
-			w = model.PageW(pages, p - 1)
-			h = model.PageH(pages, p - 1)
+			w = model.PageW(pages, p-1)
+			h = model.PageH(pages, p-1)
 			rot = evidence.LnGet(ln, l, evidence.LhRot())
 			zone = 0
 			cy2 = evidence.LnGet(ln, l, evidence.LhY0()) + evidence.LnGet(ln, l, evidence.LhY1())
@@ -808,7 +810,7 @@ func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 				if cy2 > ((h * fuBot) / 500) {
 					zone = 2
 				}
-			} else if (fuAbs(rot - 9000) < 100) || (fuAbs(rot - 27000) < 100) {
+			} else if (fuAbs(rot-9000) < 100) || (fuAbs(rot-27000) < 100) {
 				if (cx2 < ((w * fuSide) / 500)) || (cx2 > ((w * (1000 - fuSide)) / 500)) {
 					zone = 3
 				}
@@ -817,21 +819,21 @@ func fuScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 				ts = port.CellsLen(tx)
 				tl = fuLineText(wd, ln, et, tx, l)
 				if (tl == 0) || (tl > fuMaxlen) {
-					port.CellsDrop(tx, ts);
+					port.CellsDrop(tx, ts)
 				} else {
 					r = fuPushRow(cd, 16)
-					cdSet(cd, r, 0, l);
-					cdSet(cd, r, 1, p);
-					cdSet(cd, r, 2, zone);
-					cdSet(cd, r, 3, evidence.LnGet(ln, l, evidence.LhY0()));
-					cdSet(cd, r, 4, evidence.LnGet(ln, l, evidence.LhY1()));
-					cdSet(cd, r, 8, -1);
-					cdSet(cd, r, 11, ts);
-					cdSet(cd, r, 12, tl);
-					fuSlots(tx, ts, tl, sl, cd, r);
-					cdSet(cd, r, 9, fuTag(wd, ln, gl, mk, l, zone));
+					cdSet(cd, r, 0, l)
+					cdSet(cd, r, 1, p)
+					cdSet(cd, r, 2, zone)
+					cdSet(cd, r, 3, evidence.LnGet(ln, l, evidence.LhY0()))
+					cdSet(cd, r, 4, evidence.LnGet(ln, l, evidence.LhY1()))
+					cdSet(cd, r, 8, -1)
+					cdSet(cd, r, 11, ts)
+					cdSet(cd, r, 12, tl)
+					fuSlots(tx, ts, tl, sl, cd, r)
+					cdSet(cd, r, 9, fuTag(wd, ln, gl, mk, l, zone))
 					var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
-					cdSet(cd, r, 14, evidence.WdGet(wd, w0, evidence.WfSize()));
+					cdSet(cd, r, 14, evidence.WdGet(wd, w0, evidence.WfSize()))
 				}
 			}
 		}
@@ -921,15 +923,15 @@ func fuSort(ord *port.Cells, cd *port.Cells, mode int32) int32 {
 			j = i
 			more = 1
 			for (j >= h) && (more == 1) {
-				u = port.CellsAt(ord, j - h)
+				u = port.CellsAt(ord, j-h)
 				if fuBefore(cd, mode, v, u) == 1 {
-					port.CellsSet(ord, j, u);
+					port.CellsSet(ord, j, u)
 					j -= h
 				} else {
 					more = 0
 				}
 			}
-			port.CellsSet(ord, j, v);
+			port.CellsSet(ord, j, v)
 			i += 1
 		}
 		h = (h - 1) / 3
@@ -941,8 +943,8 @@ func fuCluster(ord *port.Cells, cd *port.Cells, gr *port.Cells, pages *port.Cell
 	// Sort `ord` by the mode's keys and cut it into groups: a new group where the zone, the hash (mode 0) or the size
 	// (mode 2) change, or the vertical position moves more than FU_YTOL per mille of the page's height from the member
 	// before it. Fills `gr`'s kind, zone, first position and members, and every row's group. Answers the number of groups.
-	fuSort(ord, cd, mode);
-	port.CellsDrop(gr, 0);
+	fuSort(ord, cd, mode)
+	port.CellsDrop(gr, 0)
 	var n int32 = port.CellsLen(ord)
 	var i int32 = 0
 	var g int32 = -1
@@ -954,8 +956,8 @@ func fuCluster(ord *port.Cells, cd *port.Cells, gr *port.Cells, pages *port.Cell
 		r = port.CellsAt(ord, i)
 		cut = 1
 		if i > 0 {
-			q = port.CellsAt(ord, i - 1)
-			tol = (model.PageH(pages, cdGet(cd, r, 1) - 1) * fuYtol) / 1000
+			q = port.CellsAt(ord, i-1)
+			tol = (model.PageH(pages, cdGet(cd, r, 1)-1) * fuYtol) / 1000
 			if cdGet(cd, r, 2) == cdGet(cd, q, 2) {
 				if mode == 0 {
 					if (cdGet(cd, r, 5) == cdGet(cd, q, 5)) && (cdGet(cd, r, 6) == cdGet(cd, q, 6)) {
@@ -972,17 +974,18 @@ func fuCluster(ord *port.Cells, cd *port.Cells, gr *port.Cells, pages *port.Cell
 		}
 		if cut == 1 {
 			g = fuPushRow(gr, 16)
-			grSet(gr, g, 0, i);
-			grSet(gr, g, 3, cdGet(cd, r, 2));
-			grSet(gr, g, 5, 			if mode == 0 {
-1			} else {
-2			}
-);
-			grSet(gr, g, 6, -1);
-			grSet(gr, g, 7, -1);
+			grSet(gr, g, 0, i)
+			grSet(gr, g, 3, cdGet(cd, r, 2))
+			if mode == 0 {
+				grSet(gr, g, 5, 1)
+			} else {
+				grSet(gr, g, 5, 2)
+			}
+			grSet(gr, g, 6, -1)
+			grSet(gr, g, 7, -1)
 		}
-		grInc(gr, g, 1);
-		cdSet(cd, r, 8, g);
+		grInc(gr, g, 1)
+		cdSet(cd, r, 8, g)
 		i += 1
 	}
 	return port.CellsLen(gr) / 16
@@ -1001,21 +1004,21 @@ func fuStats(ord *port.Cells, cd *port.Cells, gr *port.Cells) int32 {
 		f = grGet(gr, g, 0)
 		m = grGet(gr, g, 1)
 		prev = -1
-		grSet(gr, g, 2, 0);
-		grSet(gr, g, 10, 0);
-		grSet(gr, g, 11, 0);
+		grSet(gr, g, 2, 0)
+		grSet(gr, g, 10, 0)
+		grSet(gr, g, 11, 0)
 		i = 0
 		for i < m {
-			r = port.CellsAt(ord, f + i)
+			r = port.CellsAt(ord, f+i)
 			if cdGet(cd, r, 1) != prev {
-				grInc(gr, g, 2);
+				grInc(gr, g, 2)
 				prev = cdGet(cd, r, 1)
 			}
 			if cdGet(cd, r, 9) == 1 {
-				grInc(gr, g, 10);
+				grInc(gr, g, 10)
 			}
 			if cdGet(cd, r, 9) == 2 {
-				grInc(gr, g, 11);
+				grInc(gr, g, 11)
 			}
 			i += 1
 		}
@@ -1035,12 +1038,12 @@ func fuIsoCount(ord *port.Cells, cd *port.Cells, gr *port.Cells) int32 {
 	for g < ng {
 		f = grGet(gr, g, 0)
 		m = grGet(gr, g, 1)
-		grSet(gr, g, 9, 0);
+		grSet(gr, g, 9, 0)
 		i = 0
 		for i < m {
-			r = port.CellsAt(ord, f + i)
+			r = port.CellsAt(ord, f+i)
 			if cdGet(cd, r, 10) >= fuIsogap {
-				grInc(gr, g, 9);
+				grInc(gr, g, 9)
 			}
 			i += 1
 		}
@@ -1086,7 +1089,7 @@ func fuIso(ln *port.Cells, cd *port.Cells, gr *port.Cells, ncd int32) int32 {
 		r = r0
 		for r < r1 {
 			if cdGet(cd, r, 2) == 3 {
-				cdSet(cd, r, 10, 100000);
+				cdSet(cd, r, 10, 100000)
 			} else {
 				y0 = cdGet(cd, r, 3)
 				y1 = cdGet(cd, r, 4)
@@ -1133,7 +1136,7 @@ func fuIso(ln *port.Cells, cd *port.Cells, gr *port.Cells, ncd int32) int32 {
 					l2 += 1
 				}
 				best = fuMin(best, 1000000)
-				cdSet(cd, r, 10, (best * 1000) / fuMax(1, y1 - y0));
+				cdSet(cd, r, 10, (best*1000)/fuMax(1, y1-y0))
 			}
 			r += 1
 		}
@@ -1144,11 +1147,11 @@ func fuIso(ln *port.Cells, cd *port.Cells, gr *port.Cells, ncd int32) int32 {
 }
 
 func fuSlotValue(cd *port.Cells, sl *port.Cells, r int32, j int32) int32 {
-	return slGet(sl, cdGet(cd, r, 13) + j, 2)
+	return slGet(sl, cdGet(cd, r, 13)+j, 2)
 }
 
 func fuSlotKind(cd *port.Cells, sl *port.Cells, r int32, j int32) int32 {
-	return slGet(sl, cdGet(cd, r, 13) + j, 1)
+	return slGet(sl, cdGet(cd, r, 13)+j, 1)
 }
 
 func fuClassBit(j int32) int32 {
@@ -1184,12 +1187,12 @@ func fuAnalyze(ord *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells, 
 	var v int32 = 0
 	var pv int32 = 0
 	var kind int32 = 0
-	grSet(gr, g, 6, -1);
-	grSet(gr, g, 7, -1);
-	grSet(gr, g, 12, 0);
-	grSet(gr, g, 13, ns);
-	grSet(gr, g, 14, 0);
-	grSet(gr, g, 15, 0);
+	grSet(gr, g, 6, -1)
+	grSet(gr, g, 7, -1)
+	grSet(gr, g, 12, 0)
+	grSet(gr, g, 13, ns)
+	grSet(gr, g, 14, 0)
+	grSet(gr, g, 15, 0)
 	if ns < 1 {
 		return 0
 	}
@@ -1201,7 +1204,7 @@ func fuAnalyze(ord *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells, 
 		pv = fuSlotValue(cd, sl, rep, j)
 		i = 1
 		for i < m {
-			r = port.CellsAt(ord, f + i)
+			r = port.CellsAt(ord, f+i)
 			v = fuSlotValue(cd, sl, r, j)
 			if v != fuSlotValue(cd, sl, rep, j) {
 				same = 0
@@ -1226,25 +1229,25 @@ func fuAnalyze(ord *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells, 
 		kind = fuSlotKind(cd, sl, rep, j)
 		bits += cls * fuClassBit(j)
 		if cls == 3 {
-			grSet(gr, g, 12, 1);
+			grSet(gr, g, 12, 1)
 		}
 		if cls == 2 {
 			if (kind != 3) && (grGet(gr, g, 6) == -1) {
-				grSet(gr, g, 6, j);
+				grSet(gr, g, 6, j)
 			} else if (kind == 3) && (grGet(gr, g, 7) == -1) {
-				grSet(gr, g, 7, j);
+				grSet(gr, g, 7, j)
 				if (nok == npairs) && (fuSlotValue(cd, sl, rep, j) == cdGet(cd, rep, 1)) {
-					grSet(gr, g, 15, 1);
+					grSet(gr, g, 15, 1)
 				}
 			} else {
-				grSet(gr, g, 12, 1);
+				grSet(gr, g, 12, 1)
 			}
 		}
 		j += 1
 	}
-	grSet(gr, g, 14, bits);
+	grSet(gr, g, 14, bits)
 	if (grGet(gr, g, 7) >= 0) && (grGet(gr, g, 15) == 0) {
-		grSet(gr, g, 12, 1);
+		grSet(gr, g, 12, 1)
 	}
 	return 0
 }
@@ -1254,7 +1257,7 @@ func fuQualify(ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, 
 	// page, 500 + 150 per page beyond, at most 1000) plus FU_TAGW tenths of `trust` times the share of members that are
 	// tagged artifacts in place minus the share that are tagged content; it needs FU_QUAL, and the coverage (at least
 	// FU_COVER per cent of the pages, or 3 pages for a page number, or the tree's word) and the isolation (at least
-	// FU_ISO per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is
+	// FU_ISOPCT per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is
 	// taken from one page. Answers 1 or 0 and sets gr 4, 8.
 	var f int32 = grGet(gr, g, 0)
 	var m int32 = grGet(gr, g, 1)
@@ -1265,13 +1268,12 @@ func fuQualify(ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, 
 	var o int32 = (grGet(gr, g, 11) * 1000) / m
 	var er int32 = 300
 	var score int32 = 0
-	var j int32 = 0
 	var pagelike int32 = 0
 	var covok int32 = 0
 	var isook int32 = 0
 	var tag int32 = 0
-	grSet(gr, g, 4, 0);
-	grSet(gr, g, 8, 0);
+	grSet(gr, g, 4, 0)
+	grSet(gr, g, 8, 0)
 	if ns < 0 {
 		return 0
 	}
@@ -1279,10 +1281,10 @@ func fuQualify(ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, 
 		return 0
 	}
 	if c >= 2 {
-		er = fuMin(1000, 500 + (150 * c))
+		er = fuMin(1000, 500+(150*c))
 	}
 	score = er + ((((trust * (s - o)) / 1000) * fuTagw) / 10)
-	grSet(gr, g, 8, fuMax(0, fuMin(1000, score)));
+	grSet(gr, g, 8, fuMax(0, fuMin(1000, score)))
 	if (s >= 800) && (trust >= 300) {
 		tag = 1
 	}
@@ -1298,7 +1300,7 @@ func fuQualify(ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, 
 	if tag == 1 {
 		covok = 1
 	}
-	if (grGet(gr, g, 9) * 100) >= (m * fuIso) {
+	if (grGet(gr, g, 9) * 100) >= (m * fuIsopct) {
 		isook = 1
 	}
 	if pagelike == 1 {
@@ -1314,7 +1316,7 @@ func fuQualify(ord *port.Cells, cd *port.Cells, sl *port.Cells, tx *port.Cells, 
 		}
 	}
 	if (score >= fuQual) && ((covok == 1) && (isook == 1)) {
-		grSet(gr, g, 4, 1);
+		grSet(gr, g, 4, 1)
 		return 1
 	}
 	return 0
@@ -1333,7 +1335,7 @@ func fuHashCells(c *port.Cells, s int32, n int32) int64 {
 	var x int32 = 0
 	var h int64 = fuBasis()
 	for i < n {
-		x = fuNormCp(port.CellsAt(c, s + i))
+		x = fuNormCp(port.CellsAt(c, s+i))
 		if x > 0 {
 			h = fuStep(h, x)
 		}
@@ -1346,7 +1348,7 @@ func fuNormLen(c *port.Cells, s int32, n int32) int32 {
 	var i int32 = 0
 	var k int32 = 0
 	for i < n {
-		if fuNormCp(port.CellsAt(c, s + i)) > 0 {
+		if fuNormCp(port.CellsAt(c, s+i)) > 0 {
 			k += 1
 		}
 		i += 1
@@ -1366,12 +1368,12 @@ func fuHashLines(wd *port.Cells, ln *port.Cells, et *port.Cells, l0 int32, k int
 	for l < (l0 + k) {
 		w = 0
 		for w < evidence.LnGet(ln, l, evidence.LhCount()) {
-			ts = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst()) + w, evidence.HdTstart())
-			tl = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst()) + w, evidence.HdTlen())
+			ts = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst())+w, evidence.HdTstart())
+			tl = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst())+w, evidence.HdTlen())
 			if (ts >= 0) && (tl > 0) {
 				j = 0
 				for j < tl {
-					x = fuNormCp(port.CellsAt(et, ts + j))
+					x = fuNormCp(port.CellsAt(et, ts+j))
 					if x > 0 {
 						h = fuStep(h, x)
 					}
@@ -1394,8 +1396,8 @@ func fuLenLines(wd *port.Cells, ln *port.Cells, et *port.Cells, l0 int32, k int3
 	for l < (l0 + k) {
 		w = 0
 		for w < evidence.LnGet(ln, l, evidence.LhCount()) {
-			ts = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst()) + w, evidence.HdTstart())
-			tl = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst()) + w, evidence.HdTlen())
+			ts = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst())+w, evidence.HdTstart())
+			tl = evidence.WdGet(wd, evidence.LnGet(ln, l, evidence.LhFirst())+w, evidence.HdTlen())
 			if (ts >= 0) && (tl > 0) {
 				n += fuNormLen(et, ts, tl)
 			}
@@ -1421,21 +1423,21 @@ func fuBhSort(bh *port.Cells) int32 {
 	for h >= 1 {
 		i = h
 		for i < n {
-			lo = port.CellsAt(bh, i * 2)
-			hi = port.CellsAt(bh, (i * 2) + 1)
+			lo = port.CellsAt(bh, i*2)
+			hi = port.CellsAt(bh, (i*2)+1)
 			j = i
 			more = 1
 			for (j >= h) && (more == 1) {
-				if (hi < port.CellsAt(bh, ((j - h) * 2) + 1)) || ((hi == port.CellsAt(bh, ((j - h) * 2) + 1)) && (lo < port.CellsAt(bh, (j - h) * 2))) {
-					port.CellsSet(bh, j * 2, port.CellsAt(bh, (j - h) * 2));
-					port.CellsSet(bh, (j * 2) + 1, port.CellsAt(bh, ((j - h) * 2) + 1));
+				if (hi < port.CellsAt(bh, ((j-h)*2)+1)) || ((hi == port.CellsAt(bh, ((j-h)*2)+1)) && (lo < port.CellsAt(bh, (j-h)*2))) {
+					port.CellsSet(bh, j*2, port.CellsAt(bh, (j-h)*2))
+					port.CellsSet(bh, (j*2)+1, port.CellsAt(bh, ((j-h)*2)+1))
 					j -= h
 				} else {
 					more = 0
 				}
 			}
-			port.CellsSet(bh, j * 2, lo);
-			port.CellsSet(bh, (j * 2) + 1, hi);
+			port.CellsSet(bh, j*2, lo)
+			port.CellsSet(bh, (j*2)+1, hi)
 			i += 1
 		}
 		h = (h - 1) / 3
@@ -1452,10 +1454,10 @@ func fuBhHas(bh *port.Cells, h int64) int32 {
 	var mid int32 = 0
 	for a < b {
 		mid = (a + b) / 2
-		if (port.CellsAt(bh, mid * 2) == lo) && (port.CellsAt(bh, (mid * 2) + 1) == hi) {
+		if (port.CellsAt(bh, mid*2) == lo) && (port.CellsAt(bh, (mid*2)+1) == hi) {
 			return 1
 		}
-		if (port.CellsAt(bh, (mid * 2) + 1) < hi) || ((port.CellsAt(bh, (mid * 2) + 1) == hi) && (port.CellsAt(bh, mid * 2) < lo)) {
+		if (port.CellsAt(bh, (mid*2)+1) < hi) || ((port.CellsAt(bh, (mid*2)+1) == hi) && (port.CellsAt(bh, mid*2) < lo)) {
 			a = mid + 1
 		} else {
 			b = mid
@@ -1487,7 +1489,7 @@ func fuBodyHashes(wd *port.Cells, ln *port.Cells, et *port.Cells, cd *port.Cells
 	// The hashes of everything the output will say: every line that is not a member of a qualified group, alone and with
 	// the one or two lines after it on the page, and the document's Info /Title, each of at least FU_MINNORM letters and
 	// digits; sorted. A running title that is already one of them is the output saying it twice.
-	port.CellsDrop(bh, 0);
+	port.CellsDrop(bh, 0)
 	var nl int32 = evidence.LnCount(ln)
 	var l int32 = 0
 	var k int32 = 0
@@ -1503,10 +1505,10 @@ func fuBodyHashes(wd *port.Cells, ln *port.Cells, et *port.Cells, cd *port.Cells
 			if (l + (k - 1)) >= nl {
 				ok = 0
 			} else {
-				if evidence.LnGet(ln, l + (k - 1), evidence.LhPage()) != p {
+				if evidence.LnGet(ln, l+(k-1), evidence.LhPage()) != p {
 					ok = 0
 				}
-				q = fuCdFind(cd, ncd, l + (k - 1))
+				q = fuCdFind(cd, ncd, l+(k-1))
 				if q >= 0 {
 					if cdGet(cd, q, 15) > 0 {
 						ok = 0
@@ -1516,22 +1518,22 @@ func fuBodyHashes(wd *port.Cells, ln *port.Cells, et *port.Cells, cd *port.Cells
 			if ok == 1 {
 				if fuLenLines(wd, ln, et, l, k) >= fuMinnorm {
 					h = fuHashLines(wd, ln, et, l, k)
-					port.CellsPush(bh, int32(h));
-					port.CellsPush(bh, int32(int64(uint64(h) >> uint(32))));
+					port.CellsPush(bh, int32(h))
+					port.CellsPush(bh, int32(int64(uint64(h)>>uint(32))))
 				}
 			}
 			k += 1
 		}
 		l += 1
 	}
-	if (port.CellsLen(md) > (fuMdTitle + 1)) && (port.CellsAt(md, fuMdTitle + 1) > 0) {
-		if fuNormLen(txt, port.CellsAt(md, fuMdTitle), port.CellsAt(md, fuMdTitle + 1)) >= fuMinnorm {
-			h = fuHashCells(txt, port.CellsAt(md, fuMdTitle), port.CellsAt(md, fuMdTitle + 1))
-			port.CellsPush(bh, int32(h));
-			port.CellsPush(bh, int32(int64(uint64(h) >> uint(32))));
+	if (port.CellsLen(md) > (fuMdTitle + 1)) && (port.CellsAt(md, fuMdTitle+1) > 0) {
+		if fuNormLen(txt, port.CellsAt(md, fuMdTitle), port.CellsAt(md, fuMdTitle+1)) >= fuMinnorm {
+			h = fuHashCells(txt, port.CellsAt(md, fuMdTitle), port.CellsAt(md, fuMdTitle+1))
+			port.CellsPush(bh, int32(h))
+			port.CellsPush(bh, int32(int64(uint64(h)>>uint(32))))
 		}
 	}
-	fuBhSort(bh);
+	fuBhSort(bh)
 	return 0
 }
 
@@ -1600,11 +1602,11 @@ func fuDecomp(tx *port.Cells, cd *port.Cells, sl *port.Cells, r int32, pj int32,
 	var started int32 = 0
 	var j int32 = 0
 	if pj >= 0 {
-		pjtok = slGet(sl, first + pj, 5)
+		pjtok = slGet(sl, first+pj, 5)
 	}
 	if ej >= 0 {
-		ejs = bs + slGet(sl, first + ej, 3)
-		ejl = slGet(sl, first + ej, 4)
+		ejs = bs + slGet(sl, first+ej, 3)
+		ejl = slGet(sl, first+ej, 4)
 	}
 	for i < end {
 		if port.CellsAt(tx, i) == 32 {
@@ -1643,23 +1645,23 @@ func fuDecomp(tx *port.Cells, cd *port.Cells, sl *port.Cells, r int32, pj int32,
 			}
 			if skip == 0 {
 				if started == 1 {
-					port.CellsPush(ft, 32);
+					port.CellsPush(ft, 32)
 				}
 				started = 1
 				j = i
 				for j < e {
 					if (ejs >= 0) && (j == ejs) {
-						port.CellsPush(ft, 123);
-						port.CellsPush(ft, 110);
+						port.CellsPush(ft, 123)
+						port.CellsPush(ft, 110)
 						if pad > 0 {
-							port.CellsPush(ft, 58);
-							port.CellsPush(ft, 48);
-							port.CellsPush(ft, 48 + pad);
+							port.CellsPush(ft, 58)
+							port.CellsPush(ft, 48)
+							port.CellsPush(ft, 48+pad)
 						}
-						port.CellsPush(ft, 125);
+						port.CellsPush(ft, 125)
 						j += ejl
 					} else {
-						port.CellsPush(ft, port.CellsAt(tx, j));
+						port.CellsPush(ft, port.CellsAt(tx, j))
 						j += 1
 					}
 				}
@@ -1743,7 +1745,7 @@ func fuPagenumSlot(tx *port.Cells, cd *port.Cells, sl *port.Cells, r int32, lone
 		return -1
 	}
 	for j < ns {
-		if slGet(sl, first + j, 1) != 3 {
+		if slGet(sl, first+j, 1) != 3 {
 			return j
 		}
 		j += 1
@@ -1756,7 +1758,7 @@ func fuPad(ord *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells, g in
 	// than W digits; else 0 (the template is `{n}`).
 	var f int32 = grGet(gr, g, 0)
 	var m int32 = grGet(gr, g, 1)
-	var w int32 = slGet(sl, cdGet(cd, port.CellsAt(ord, f), 13) + ej, 6)
+	var w int32 = slGet(sl, cdGet(cd, port.CellsAt(ord, f), 13)+ej, 6)
 	var i int32 = 0
 	var r int32 = 0
 	var lim int32 = 1
@@ -1771,7 +1773,7 @@ func fuPad(ord *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells, g in
 	}
 	i = 0
 	for i < m {
-		r = port.CellsAt(ord, f + i)
+		r = port.CellsAt(ord, f+i)
 		s = cdGet(cd, r, 13) + ej
 		if slGet(sl, s, 6) != w {
 			return 0
@@ -1789,39 +1791,39 @@ func fuPad(ord *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells, g in
 
 func fuOutLedger(fo *port.Cells, reason int32, page int32, x0 int32, y0 int32, x1 int32, y1 int32, conf int32, src int32, ts int32, tl int32) int32 {
 	var r int32 = fuPushRow(fo, 12)
-	port.CellsSet(fo, (r * 12) + 0, 1);
-	port.CellsSet(fo, (r * 12) + 1, reason);
-	port.CellsSet(fo, (r * 12) + 2, page);
-	port.CellsSet(fo, (r * 12) + 3, x0);
-	port.CellsSet(fo, (r * 12) + 4, y0);
-	port.CellsSet(fo, (r * 12) + 5, x1);
-	port.CellsSet(fo, (r * 12) + 6, y1);
-	port.CellsSet(fo, (r * 12) + 7, conf);
-	port.CellsSet(fo, (r * 12) + 8, src);
-	port.CellsSet(fo, (r * 12) + 9, ts);
-	port.CellsSet(fo, (r * 12) + 10, tl);
+	port.CellsSet(fo, (r*12)+0, 1)
+	port.CellsSet(fo, (r*12)+1, reason)
+	port.CellsSet(fo, (r*12)+2, page)
+	port.CellsSet(fo, (r*12)+3, x0)
+	port.CellsSet(fo, (r*12)+4, y0)
+	port.CellsSet(fo, (r*12)+5, x1)
+	port.CellsSet(fo, (r*12)+6, y1)
+	port.CellsSet(fo, (r*12)+7, conf)
+	port.CellsSet(fo, (r*12)+8, src)
+	port.CellsSet(fo, (r*12)+9, ts)
+	port.CellsSet(fo, (r*12)+10, tl)
 	return r
 }
 
 func fuOutFurniture(fo *port.Cells, role int32, conf int32, src int32, ts int32, tl int32, f0 int32, cnt int32) int32 {
 	var r int32 = fuPushRow(fo, 12)
-	port.CellsSet(fo, (r * 12) + 0, 2);
-	port.CellsSet(fo, (r * 12) + 1, role);
-	port.CellsSet(fo, (r * 12) + 2, conf);
-	port.CellsSet(fo, (r * 12) + 3, src);
-	port.CellsSet(fo, (r * 12) + 4, ts);
-	port.CellsSet(fo, (r * 12) + 5, tl);
-	port.CellsSet(fo, (r * 12) + 6, f0);
-	port.CellsSet(fo, (r * 12) + 7, cnt);
+	port.CellsSet(fo, (r*12)+0, 2)
+	port.CellsSet(fo, (r*12)+1, role)
+	port.CellsSet(fo, (r*12)+2, conf)
+	port.CellsSet(fo, (r*12)+3, src)
+	port.CellsSet(fo, (r*12)+4, ts)
+	port.CellsSet(fo, (r*12)+5, tl)
+	port.CellsSet(fo, (r*12)+6, f0)
+	port.CellsSet(fo, (r*12)+7, cnt)
 	return r
 }
 
 func fuFpPush(fp *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
-	port.CellsPush(fp, page);
-	port.CellsPush(fp, x0);
-	port.CellsPush(fp, y0);
-	port.CellsPush(fp, x1);
-	port.CellsPush(fp, y1);
+	port.CellsPush(fp, page)
+	port.CellsPush(fp, x0)
+	port.CellsPush(fp, y0)
+	port.CellsPush(fp, x1)
+	port.CellsPush(fp, y1)
 	return 0
 }
 
@@ -1830,7 +1832,7 @@ func fuCopy(src *port.Cells, s int32, n int32, ft *port.Cells) int32 {
 	var at int32 = port.CellsLen(ft)
 	var i int32 = 0
 	for i < n {
-		port.CellsPush(ft, port.CellsAt(src, s + i));
+		port.CellsPush(ft, port.CellsAt(src, s+i))
 		i += 1
 	}
 	return at
@@ -1840,9 +1842,9 @@ func fuLabel(pl *port.Cells, page int32, score int32, ts int32, tl int32) int32 
 	// Offer a page's label; the best score keeps it, the first of equals.
 	var at int32 = (page - 1) * 3
 	if score > port.CellsAt(pl, at) {
-		port.CellsSet(pl, at, score);
-		port.CellsSet(pl, at + 1, ts);
-		port.CellsSet(pl, at + 2, tl);
+		port.CellsSet(pl, at, score)
+		port.CellsSet(pl, at+1, ts)
+		port.CellsSet(pl, at+2, tl)
 	}
 	return 0
 }
@@ -1904,7 +1906,7 @@ func fuEmitGroup(ln *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells,
 		}
 	}
 	for i < m {
-		r = port.CellsAt(ord, f + i)
+		r = port.CellsAt(ord, f+i)
 		if cdGet(cd, r, 15) == 0 {
 			l = cdGet(cd, r, 0)
 			page = cdGet(cd, r, 1)
@@ -1930,28 +1932,28 @@ func fuEmitGroup(ln *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells,
 				}
 			}
 			if mpj >= 0 {
-				ds = cdGet(cd, r, 11) + slGet(sl, cdGet(cd, r, 13) + mpj, 3)
-				dl = slGet(sl, cdGet(cd, r, 13) + mpj, 4)
+				ds = cdGet(cd, r, 11) + slGet(sl, cdGet(cd, r, 13)+mpj, 3)
+				dl = slGet(sl, cdGet(cd, r, 13)+mpj, 4)
 				ts = fuCopy(tx, ds, dl, ft)
-				fuLabel(pl, page, score, ts, dl);
+				fuLabel(pl, page, score, ts, dl)
 				if mrl == 0 {
-					fuOutLedger(fo, model.DrPageNumber(), page, x0, y0, x1, y1, score, src, fuCopy(tx, cdGet(cd, r, 11), cdGet(cd, r, 12), ft), cdGet(cd, r, 12));
+					fuOutLedger(fo, model.DrPageNumber(), page, x0, y0, x1, y1, score, src, fuCopy(tx, cdGet(cd, r, 11), cdGet(cd, r, 12), ft), cdGet(cd, r, 12))
 				} else {
-					fuOutLedger(fo, model.DrPageNumber(), page, x0, y0, x1, y1, score, src, ts, dl);
+					fuOutLedger(fo, model.DrPageNumber(), page, x0, y0, x1, y1, score, src, ts, dl)
 				}
 			} else if mrl == 0 {
-				fuOutLedger(fo, model.DrRunningTitle(), page, x0, y0, x1, y1, score, src, fuCopy(tx, cdGet(cd, r, 11), cdGet(cd, r, 12), ft), cdGet(cd, r, 12));
+				fuOutLedger(fo, model.DrRunningTitle(), page, x0, y0, x1, y1, score, src, fuCopy(tx, cdGet(cd, r, 11), cdGet(cd, r, 12), ft), cdGet(cd, r, 12))
 			}
 			if mrl > 0 {
 				if (mtm == 1) || (mode == 2) {
-					fuOutLedger(fo, model.DrRunningTitle(), page, x0, y0, x1, y1, score, src, mrs, mrl);
+					fuOutLedger(fo, model.DrRunningTitle(), page, x0, y0, x1, y1, score, src, mrs, mrl)
 				} else if (varying == 1) || (kind == 2) {
 					f0 = port.CellsLen(fp) / 5
-					fuFpPush(fp, page, x0, y0, x1, y1);
-					fuOutFurniture(fo, role, score, src, mrs, mrl, f0, 1);
+					fuFpPush(fp, page, x0, y0, x1, y1)
+					fuOutFurniture(fo, role, score, src, mrs, mrl, f0, 1)
 				}
 			}
-			cdSet(cd, r, 15, kind);
+			cdSet(cd, r, 15, kind)
 		}
 		i += 1
 	}
@@ -1967,12 +1969,12 @@ func fuEmitGroup(ln *port.Cells, cd *port.Cells, sl *port.Cells, gr *port.Cells,
 		f0 = port.CellsLen(fp) / 5
 		i = 0
 		for i < m {
-			r = port.CellsAt(ord, f + i)
+			r = port.CellsAt(ord, f+i)
 			l = cdGet(cd, r, 0)
-			fuFpPush(fp, cdGet(cd, r, 1), evidence.LnGet(ln, l, evidence.LhX0()), evidence.LnGet(ln, l, evidence.LhY0()), evidence.LnGet(ln, l, evidence.LhX1()), evidence.LnGet(ln, l, evidence.LhY1()));
+			fuFpPush(fp, cdGet(cd, r, 1), evidence.LnGet(ln, l, evidence.LhX0()), evidence.LnGet(ln, l, evidence.LhY0()), evidence.LnGet(ln, l, evidence.LhX1()), evidence.LnGet(ln, l, evidence.LhY1()))
 			i += 1
 		}
-		fuOutFurniture(fo, role, score, src, ts, tl, f0, m);
+		fuOutFurniture(fo, role, score, src, ts, tl, f0, m)
 	}
 	return 0
 }
@@ -1996,15 +1998,15 @@ func fuSortNums(c *port.Cells) int32 {
 			j = i
 			more = 1
 			for (j >= h) && (more == 1) {
-				u = port.CellsAt(c, j - h)
+				u = port.CellsAt(c, j-h)
 				if v < u {
-					port.CellsSet(c, j, u);
+					port.CellsSet(c, j, u)
 					j -= h
 				} else {
 					more = 0
 				}
 			}
-			port.CellsSet(c, j, v);
+			port.CellsSet(c, j, v)
 			i += 1
 		}
 		h = (h - 1) / 3
@@ -2015,7 +2017,7 @@ func fuSortNums(c *port.Cells) int32 {
 func fuBodySize(wd *port.Cells, ln *port.Cells, cd *port.Cells, ncd int32, bh *port.Cells) int32 {
 	// The most common size (to a fifth of a point) of the first word of the lines that are not candidates: the body text's.
 	// 0 when there is none. `bh` is scratch.
-	port.CellsDrop(bh, 0);
+	port.CellsDrop(bh, 0)
 	var nl int32 = evidence.LnCount(ln)
 	var l int32 = 0
 	var q int32 = 0
@@ -2030,16 +2032,16 @@ func fuBodySize(wd *port.Cells, ln *port.Cells, cd *port.Cells, ncd int32, bh *p
 			q = fuCdFind(cd, ncd, l)
 			if q < 0 {
 				w0 = evidence.LnGet(ln, l, evidence.LhFirst())
-				port.CellsPush(bh, evidence.WdGet(wd, w0, evidence.WfSize()) / 20);
+				port.CellsPush(bh, evidence.WdGet(wd, w0, evidence.WfSize())/20)
 			}
 		}
 		l += 1
 	}
-	fuSortNums(bh);
+	fuSortNums(bh)
 	i = 0
 	for i < port.CellsLen(bh) {
 		v = port.CellsAt(bh, i)
-		if (i > 0) && (v == port.CellsAt(bh, i - 1)) {
+		if (i > 0) && (v == port.CellsAt(bh, i-1)) {
 			run += 1
 		} else {
 			run = 1
@@ -2050,7 +2052,7 @@ func fuBodySize(wd *port.Cells, ln *port.Cells, cd *port.Cells, ncd int32, bh *p
 		}
 		i += 1
 	}
-	port.CellsDrop(bh, 0);
+	port.CellsDrop(bh, 0)
 	return best * 20
 }
 
@@ -2071,53 +2073,52 @@ func fuStylePass(wd *port.Cells, ln *port.Cells, et *port.Cells, txt *port.Cells
 	var iso int32 = 0
 	var free int32 = 0
 	var ok int32 = 0
-	var q int32 = 0
 	var con int32 = 0
 	var capt int32 = 0
 	var longest int32 = 0
 	r = 0
 	for r < ncd {
-		h = model.PageH(pages, cdGet(cd, r, 1) - 1)
+		h = model.PageH(pages, cdGet(cd, r, 1)-1)
 		cy2 = cdGet(cd, r, 3) + cdGet(cd, r, 4)
 		if cdGet(cd, r, 2) == 1 {
 			if cy2 >= ((h * fuStop) / 500) {
-				cdSet(cd, r, 2, 0);
+				cdSet(cd, r, 2, 0)
 			}
 		}
 		if cdGet(cd, r, 2) == 2 {
 			if cy2 <= ((h * fuSbot) / 500) {
-				cdSet(cd, r, 2, 0);
+				cdSet(cd, r, 2, 0)
 			}
 		}
 		if cdGet(cd, r, 2) == 3 {
-			cdSet(cd, r, 2, 0);
+			cdSet(cd, r, 2, 0)
 		}
 		r += 1
 	}
 	r = 0
 	for r < ncd {
 		if (cdGet(cd, r, 2) > 0) && (cdGet(cd, r, 15) == 0) {
-			cdSet(cd, r, 15, 3);
+			cdSet(cd, r, 15, 3)
 		}
 		r += 1
 	}
-	fuBodyHashes(wd, ln, et, cd, ncd, txt, md, bh);
+	fuBodyHashes(wd, ln, et, cd, ncd, txt, md, bh)
 	r = 0
 	for r < ncd {
 		if cdGet(cd, r, 15) == 3 {
-			cdSet(cd, r, 15, 0);
+			cdSet(cd, r, 15, 0)
 		}
 		r += 1
 	}
-	port.CellsDrop(ord, 0);
+	port.CellsDrop(ord, 0)
 	r = 0
 	for r < ncd {
-		port.CellsPush(ord, r);
+		port.CellsPush(ord, r)
 		r += 1
 	}
 	ng = fuCluster(ord, cd, gr, pages, 2)
-	fuSort(ord, cd, 1);
-	fuStats(ord, cd, gr);
+	fuSort(ord, cd, 1)
+	fuStats(ord, cd, gr)
 	g = 0
 	for g < ng {
 		if grGet(gr, g, 3) > 0 {
@@ -2131,7 +2132,7 @@ func fuStylePass(wd *port.Cells, ln *port.Cells, et *port.Cells, txt *port.Cells
 			con = grGet(gr, g, 11)
 			i = 0
 			for i < m {
-				r = port.CellsAt(ord, f + i)
+				r = port.CellsAt(ord, f+i)
 				if cdGet(cd, r, 10) >= fuSisogap {
 					iso += 1
 				}
@@ -2175,12 +2176,12 @@ func fuStylePass(wd *port.Cells, ln *port.Cells, et *port.Cells, txt *port.Cells
 				ok = 0
 			}
 			if ok == 1 {
-				grSet(gr, g, 4, 1);
-				grSet(gr, g, 8, fuMin(1000, 500 + (100 * c)));
-				grSet(gr, g, 12, 1);
-				grSet(gr, g, 6, -1);
-				grSet(gr, g, 7, -1);
-				fuEmitGroup(ln, cd, sl, gr, ord, tx, bh, fo, fp, ft, pl, g, mode);
+				grSet(gr, g, 4, 1)
+				grSet(gr, g, 8, fuMin(1000, 500+(100*c)))
+				grSet(gr, g, 12, 1)
+				grSet(gr, g, 6, -1)
+				grSet(gr, g, 7, -1)
+				fuEmitGroup(ln, cd, sl, gr, ord, tx, bh, fo, fp, ft, pl, g, mode)
 			}
 		}
 		g += 1
@@ -2221,11 +2222,11 @@ func fuWatermarks(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, 
 					ts = port.CellsLen(ft)
 					tl = fuLineText(wd, ln, et, ft, l)
 					if (tl > 0) && (tl <= 40) {
-						fuOutLedger(fo, model.DrWatermark(), p, evidence.LnGet(ln, l, evidence.LhX0()), evidence.LnGet(ln, l, evidence.LhY0()), evidence.LnGet(ln, l, evidence.LhX1()), evidence.LnGet(ln, l, evidence.LhY1()), 600, model.SrText() + model.SrInfer(), ts, tl);
-						evidence.LnSet(ln, l, evidence.LhPage(), -7);
+						fuOutLedger(fo, model.DrWatermark(), p, evidence.LnGet(ln, l, evidence.LhX0()), evidence.LnGet(ln, l, evidence.LhY0()), evidence.LnGet(ln, l, evidence.LhX1()), evidence.LnGet(ln, l, evidence.LhY1()), 600, model.SrText()+model.SrInfer(), ts, tl)
+						evidence.LnSet(ln, l, evidence.LhPage(), -7)
 						taken += 1
 					} else {
-						port.CellsDrop(ft, ts);
+						port.CellsDrop(ft, ts)
 					}
 				}
 			}
@@ -2245,7 +2246,7 @@ func fuFoKey(fo *port.Cells, fp *port.Cells, r int32, k int32) int32 {
 	if k == 2 {
 		return foGet(fo, r, 1)
 	}
-	return port.CellsAt(fp, foGet(fo, r, 6) * 5)
+	return port.CellsAt(fp, foGet(fo, r, 6)*5)
 }
 
 func fuFoBefore(fo *port.Cells, fp *port.Cells, a int32, b int32) int32 {
@@ -2272,7 +2273,7 @@ func fuFoBefore(fo *port.Cells, fp *port.Cells, a int32, b int32) int32 {
 func fuMergeFurniture(fo *port.Cells, fp *port.Cells, ft *port.Cells, ord *port.Cells) int32 {
 	// Furniture kept once is kept ONCE (SPEC 10.2): rows with the same role and the same text, found on different pages or
 	// at different heights, become one row whose pages and regions are all of theirs, in page order. `ord` is scratch.
-	port.CellsDrop(ord, 0);
+	port.CellsDrop(ord, 0)
 	var nr int32 = port.CellsLen(fo) / 12
 	var r int32 = 0
 	var i int32 = 0
@@ -2297,12 +2298,12 @@ func fuMergeFurniture(fo *port.Cells, fp *port.Cells, ft *port.Cells, ord *port.
 			hh = fuBasis()
 			i = 0
 			for i < tl {
-				hh = fuStep(hh, port.CellsAt(ft, ts + i))
+				hh = fuStep(hh, port.CellsAt(ft, ts+i))
 				i += 1
 			}
-			port.CellsSet(fo, (r * 12) + 8, int32(hh));
-			port.CellsSet(fo, (r * 12) + 9, int32(int64(uint64(hh) >> uint(32))));
-			port.CellsPush(ord, r);
+			port.CellsSet(fo, (r*12)+8, int32(hh))
+			port.CellsSet(fo, (r*12)+9, int32(int64(uint64(hh)>>uint(32))))
+			port.CellsPush(ord, r)
 		}
 		r += 1
 	}
@@ -2320,15 +2321,15 @@ func fuMergeFurniture(fo *port.Cells, fp *port.Cells, ft *port.Cells, ord *port.
 			j = i
 			more = 1
 			for (j >= h) && (more == 1) {
-				u = port.CellsAt(ord, j - h)
+				u = port.CellsAt(ord, j-h)
 				if fuFoBefore(fo, fp, v, u) == 1 {
-					port.CellsSet(ord, j, u);
+					port.CellsSet(ord, j, u)
 					j -= h
 				} else {
 					more = 0
 				}
 			}
-			port.CellsSet(ord, j, v);
+			port.CellsSet(ord, j, v)
 			i += 1
 		}
 		h = (h - 1) / 3
@@ -2348,17 +2349,17 @@ func fuMergeFurniture(fo *port.Cells, fp *port.Cells, ft *port.Cells, ord *port.
 				r = port.CellsAt(ord, t)
 				m = 0
 				for m < foGet(fo, r, 7) {
-					fuFpPush(fp, port.CellsAt(fp, (foGet(fo, r, 6) + m) * 5), port.CellsAt(fp, ((foGet(fo, r, 6) + m) * 5) + 1), port.CellsAt(fp, ((foGet(fo, r, 6) + m) * 5) + 2), port.CellsAt(fp, ((foGet(fo, r, 6) + m) * 5) + 3), port.CellsAt(fp, ((foGet(fo, r, 6) + m) * 5) + 4));
+					fuFpPush(fp, port.CellsAt(fp, (foGet(fo, r, 6)+m)*5), port.CellsAt(fp, ((foGet(fo, r, 6)+m)*5)+1), port.CellsAt(fp, ((foGet(fo, r, 6)+m)*5)+2), port.CellsAt(fp, ((foGet(fo, r, 6)+m)*5)+3), port.CellsAt(fp, ((foGet(fo, r, 6)+m)*5)+4))
 					cnt += 1
 					m += 1
 				}
 				if t > i {
-					port.CellsSet(fo, r * 12, 0);
+					port.CellsSet(fo, r*12, 0)
 				}
 				t += 1
 			}
-			port.CellsSet(fo, (first * 12) + 6, f0);
-			port.CellsSet(fo, (first * 12) + 7, cnt);
+			port.CellsSet(fo, (first*12)+6, f0)
+			port.CellsSet(fo, (first*12)+7, cnt)
 		}
 		i = j
 	}
@@ -2373,11 +2374,9 @@ func fuCompact(ln *port.Cells, cd *port.Cells, ncd int32) int32 {
 	var j int32 = 0
 	var k int32 = 0
 	var v int32 = 0
-	var any int32 = 0
 	for r < ncd {
 		if cdGet(cd, r, 15) > 0 {
-			evidence.LnSet(ln, cdGet(cd, r, 0), evidence.LhPage(), -7);
-			any = 1
+			evidence.LnSet(ln, cdGet(cd, r, 0), evidence.LhPage(), -7)
 		}
 		r += 1
 	}
@@ -2387,7 +2386,7 @@ func fuCompact(ln *port.Cells, cd *port.Cells, ncd int32) int32 {
 				k = 0
 				for k < 16 {
 					v = evidence.LnGet(ln, l, k)
-					evidence.LnSet(ln, j, k, v);
+					evidence.LnSet(ln, j, k, v)
 					k += 1
 				}
 			}
@@ -2395,7 +2394,7 @@ func fuCompact(ln *port.Cells, cd *port.Cells, ncd int32) int32 {
 		}
 		l += 1
 	}
-	port.CellsDrop(ln, j * 16);
+	port.CellsDrop(ln, j*16)
 	return 0
 }
 
@@ -2404,16 +2403,16 @@ func FuFind(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 	// `fu-write` (see the head of this file). `txt md lb` are P3.9's (`md` and `lb` empty when it did not run), `trust` the
 	// tagged tree's score (0 when there is none), `mode` 0 policy, 1 keep, 2 skip. All the other arenas are scratch or output,
 	// cleared here. Answers the number of lines taken out of `ln`.
-	port.CellsDrop(cd, 0);
-	port.CellsDrop(sl, 0);
-	port.CellsDrop(gr, 0);
-	port.CellsDrop(ord, 0);
-	port.CellsDrop(tx, 0);
-	port.CellsDrop(bh, 0);
-	port.CellsDrop(fo, 0);
-	port.CellsDrop(fp, 0);
-	port.CellsDrop(ft, 0);
-	port.CellsDrop(pl, 0);
+	port.CellsDrop(cd, 0)
+	port.CellsDrop(sl, 0)
+	port.CellsDrop(gr, 0)
+	port.CellsDrop(ord, 0)
+	port.CellsDrop(tx, 0)
+	port.CellsDrop(bh, 0)
+	port.CellsDrop(fo, 0)
+	port.CellsDrop(fp, 0)
+	port.CellsDrop(ft, 0)
+	port.CellsDrop(pl, 0)
 	var p int32 = 0
 	var n int32 = 0
 	var ng int32 = 0
@@ -2424,9 +2423,9 @@ func FuFind(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 	var ts int32 = 0
 	var nn int32 = 0
 	for p < npages {
-		port.CellsPush(pl, 0);
-		port.CellsPush(pl, -1);
-		port.CellsPush(pl, 0);
+		port.CellsPush(pl, 0)
+		port.CellsPush(pl, -1)
+		port.CellsPush(pl, 0)
 		p += 1
 	}
 	if (port.CellsLen(md) > fuMdRanges) && (port.CellsAt(md, fuMdRanges) > 0) {
@@ -2435,7 +2434,7 @@ func FuFind(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 			ts = port.CellsLen(ft)
 			nn = pdfmeta.PmLabelCells(txt, lb, p, ft)
 			if nn > 0 {
-				fuLabel(pl, p + 1, 5000, ts, nn);
+				fuLabel(pl, p+1, 5000, ts, nn)
 			}
 			p += 1
 		}
@@ -2450,55 +2449,55 @@ func FuFind(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, mk *
 	if n >= 1 {
 		r = 0
 		for r < n {
-			port.CellsPush(ord, r);
+			port.CellsPush(ord, r)
 			r += 1
 		}
 		ng = fuCluster(ord, cd, gr, pages, 0)
-		fuSort(ord, cd, 1);
-		fuStats(ord, cd, gr);
-		fuIso(ln, cd, gr, n);
-		fuIsoCount(ord, cd, gr);
+		fuSort(ord, cd, 1)
+		fuStats(ord, cd, gr)
+		fuIso(ln, cd, gr, n)
+		fuIsoCount(ord, cd, gr)
 		g = 0
 		for g < ng {
-			fuAnalyze(ord, cd, sl, gr, g);
+			fuAnalyze(ord, cd, sl, gr, g)
 			if (grGet(gr, g, 2) == 1) && ((trust >= 300) && ((grGet(gr, g, 10) * 1000) >= (grGet(gr, g, 1) * 800))) {
 				r = port.CellsAt(ord, grGet(gr, g, 0))
 				nn = fuPagenumSlot(tx, cd, sl, r, 1)
-				grSet(gr, g, 6, nn);
+				grSet(gr, g, 6, nn)
 			}
-			fuQualify(ord, cd, sl, tx, gr, g, npages, trust);
+			fuQualify(ord, cd, sl, tx, gr, g, npages, trust)
 			if grGet(gr, g, 4) == 1 {
 				r = 0
 				for r < grGet(gr, g, 1) {
-					cdSet(cd, port.CellsAt(ord, grGet(gr, g, 0) + r), 15, 1);
+					cdSet(cd, port.CellsAt(ord, grGet(gr, g, 0)+r), 15, 1)
 					r += 1
 				}
 			}
 			g += 1
 		}
-		fuBodyHashes(wd, ln, et, cd, n, txt, md, bh);
+		fuBodyHashes(wd, ln, et, cd, n, txt, md, bh)
 		r = 0
 		for r < n {
 			if cdGet(cd, r, 15) == 1 {
-				cdSet(cd, r, 15, 0);
+				cdSet(cd, r, 15, 0)
 			}
 			r += 1
 		}
 		g = 0
 		for g < ng {
 			if grGet(gr, g, 4) == 1 {
-				fuEmitGroup(ln, cd, sl, gr, ord, tx, bh, fo, fp, ft, pl, g, mode);
+				fuEmitGroup(ln, cd, sl, gr, ord, tx, bh, fo, fp, ft, pl, g, mode)
 			}
 			g += 1
 		}
 	}
 	bsz = fuBodySize(wd, ln, cd, n, bh)
 	if n >= 1 {
-		fuStylePass(wd, ln, et, txt, md, cd, n, sl, gr, ord, tx, bh, fo, fp, ft, pl, pages, npages, trust, bsz, mode);
+		fuStylePass(wd, ln, et, txt, md, cd, n, sl, gr, ord, tx, bh, fo, fp, ft, pl, pages, npages, trust, bsz, mode)
 	}
-	fuWatermarks(wd, ln, et, npages, bsz, fo, ft);
-	fuMergeFurniture(fo, fp, ft, ord);
-	fuCompact(ln, cd, n);
+	fuWatermarks(wd, ln, et, npages, bsz, fo, ft)
+	fuMergeFurniture(fo, fp, ft, ord)
+	fuCompact(ln, cd, n)
 	return before - evidence.LnCount(ln)
 }
 
@@ -2513,18 +2512,17 @@ func FuWrite(fo *port.Cells, fp *port.Cells, ft *port.Cells, pl *port.Cells, npa
 	var l int32 = 0
 	var i int32 = 0
 	var q int32 = 0
-	var k int32 = 0
 	var prevpage int32 = 0
 	var nf int32 = 0
 	for p < npages {
-		if (port.CellsAt(pl, p * 3) > 0) && (port.CellsAt(pl, (p * 3) + 2) > 0) {
+		if (port.CellsAt(pl, p*3) > 0) && (port.CellsAt(pl, (p*3)+2) > 0) {
 			t0 = port.CellsLen(text)
 			i = 0
-			for i < port.CellsAt(pl, (p * 3) + 2) {
-				model.TextAppendCp(text, port.CellsAt(ft, port.CellsAt(pl, (p * 3) + 1) + i));
+			for i < port.CellsAt(pl, (p*3)+2) {
+				model.TextAppendCp(text, port.CellsAt(ft, port.CellsAt(pl, (p*3)+1)+i))
 				i += 1
 			}
-			model.PageSetLabel(pages, p, t0, port.CellsAt(pl, (p * 3) + 2));
+			model.PageSetLabel(pages, p, t0, port.CellsAt(pl, (p*3)+2))
 		}
 		p += 1
 	}
@@ -2533,24 +2531,24 @@ func FuWrite(fo *port.Cells, fp *port.Cells, ft *port.Cells, pl *port.Cells, npa
 		if foGet(fo, r, 0) == 1 {
 			l = model.LedgerAdd(ledger, foGet(fo, r, 1), foGet(fo, r, 2), foGet(fo, r, 3), foGet(fo, r, 4), foGet(fo, r, 5), foGet(fo, r, 6), foGet(fo, r, 7), foGet(fo, r, 8))
 			t0 = port.CellsLen(text)
-			normalize.NzNfc(ft, foGet(fo, r, 9), foGet(fo, r, 9) + foGet(fo, r, 10), text, tmp, normalize.NzFlagLigatures() + normalize.NzFlagRadicals());
-			model.LedgerSetText(ledger, l, t0, port.CellsLen(text) - t0);
+			normalize.NzNfc(ft, foGet(fo, r, 9), foGet(fo, r, 9)+foGet(fo, r, 10), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+			model.LedgerSetText(ledger, l, t0, port.CellsLen(text)-t0)
 		}
 		if foGet(fo, r, 0) == 2 {
 			nf = model.NodeNew(nodes, model.NkFurniture(), -1)
-			model.NodeSetSub(nodes, nf, foGet(fo, r, 1));
+			model.NodeSetSub(nodes, nf, foGet(fo, r, 1))
 			t0 = port.CellsLen(text)
-			normalize.NzNfc(ft, foGet(fo, r, 4), foGet(fo, r, 4) + foGet(fo, r, 5), text, tmp, normalize.NzFlagLigatures() + normalize.NzFlagRadicals());
-			model.NodeSetText(nodes, nf, t0, port.CellsLen(text) - t0);
-			model.NodeSetConf(nodes, nf, foGet(fo, r, 2));
-			model.NodeAddSrc(nodes, nf, foGet(fo, r, 3));
+			normalize.NzNfc(ft, foGet(fo, r, 4), foGet(fo, r, 4)+foGet(fo, r, 5), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+			model.NodeSetText(nodes, nf, t0, port.CellsLen(text)-t0)
+			model.NodeSetConf(nodes, nf, foGet(fo, r, 2))
+			model.NodeAddSrc(nodes, nf, foGet(fo, r, 3))
 			prevpage = 0
 			i = 0
 			for i < foGet(fo, r, 7) {
 				q = (foGet(fo, r, 6) + i) * 5
-				model.NodeAddRegion(nodes, regions, nf, port.CellsAt(fp, q), port.CellsAt(fp, q + 1), port.CellsAt(fp, q + 2), port.CellsAt(fp, q + 3), port.CellsAt(fp, q + 4));
+				model.NodeAddRegion(nodes, regions, nf, port.CellsAt(fp, q), port.CellsAt(fp, q+1), port.CellsAt(fp, q+2), port.CellsAt(fp, q+3), port.CellsAt(fp, q+4))
 				if port.CellsAt(fp, q) != prevpage {
-					model.NodeAddAttrInt(nodes, attrs, nf, model.FkPages(), port.CellsAt(fp, q));
+					model.NodeAddAttrInt(nodes, attrs, nf, model.FkPages(), port.CellsAt(fp, q))
 					prevpage = port.CellsAt(fp, q)
 				}
 				i += 1
@@ -2564,8 +2562,8 @@ func FuWrite(fo *port.Cells, fp *port.Cells, ft *port.Cells, pl *port.Cells, npa
 		if model.NodeKind(nodes, i) == model.NkBreak() {
 			p = model.NodeSub(nodes, i)
 			if (p >= 1) && (p <= model.PageCount(pages)) {
-				if model.PageLabelLen(pages, p - 1) > 0 {
-					model.NodeSetAttrText(nodes, attrs, i, model.FkLabel(), model.PageLabelStart(pages, p - 1), model.PageLabelLen(pages, p - 1));
+				if model.PageLabelLen(pages, p-1) > 0 {
+					model.NodeSetAttrText(nodes, attrs, i, model.FkLabel(), model.PageLabelStart(pages, p-1), model.PageLabelLen(pages, p-1))
 				}
 			}
 		}

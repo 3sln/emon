@@ -17,13 +17,13 @@ public static class Furniture {
     internal const int FuScover = 60;
     internal const int FuIsogap = 1500;
     internal const int FuSisogap = 2000;
-    internal const int FuIso = 60;
+    internal const int FuIsopct = 60;
     internal const int FuSiso = 70;
     internal const int FuQual = 600;
     internal const int FuTagw = 6;
     internal const int FuPairs = 75;
     internal const int FuMinnorm = 4;
-    internal const int FuSlots = 8;
+    internal const int FuMaxslots = 8;
     internal const int Cd = 16;
     internal const int Sl = 10;
     internal const int Gr = 16;
@@ -535,6 +535,7 @@ public static class Furniture {
         int ns = 0;
         int tok = 0;
         int pf = -1;
+        int kind1 = 3;
         int over = 0;
         long h = FuBasis();
         while (i < end) {
@@ -577,7 +578,7 @@ public static class Furniture {
                     j += 1;
                 }
                 if ((k == 4) && (pageish == 1)) {
-                    if (ns < FuSlots) {
+                    if (ns < FuMaxslots) {
                         int up = 0;
                         if ((emon.Port.CellsAt(tx, cs) >= 65) && (emon.Port.CellsAt(tx, cs) <= 90)) {
                             up = 1;
@@ -604,14 +605,15 @@ public static class Furniture {
                             if ((d - j) > 9) {
                                 v = -1;
                             }
-                            if (ns < FuSlots) {
+                            kind1 = 3;
+                            if (k == 3) {
+                                kind1 = 1;
+                            }
+                            if (ns < FuMaxslots) {
                                 if (j == pf) {
                                     FuSlotPush(sl, r, 4, v, cs - bs, ce - cs, tok, d - j, 0, i - bs, e - i);
                                 } else {
-                                    FuSlotPush(sl, r,                                     if (k == 3) {
-1                                    } else {
-3                                    }
-, v, j - bs, d - j, tok, d - j, 0, i - bs, e - i);
+                                    FuSlotPush(sl, r, kind1, v, j - bs, d - j, tok, d - j, 0, i - bs, e - i);
                                 }
                                 ns += 1;
                             } else {
@@ -904,10 +906,11 @@ public static class Furniture {
                 g = FuPushRow(gr, 16);
                 GrSet(gr, g, 0, i);
                 GrSet(gr, g, 3, CdGet(cd, r, 2));
-                GrSet(gr, g, 5,                 if (mode == 0) {
-1                } else {
-2                }
-);
+                if (mode == 0) {
+                    GrSet(gr, g, 5, 1);
+                } else {
+                    GrSet(gr, g, 5, 2);
+                }
                 GrSet(gr, g, 6, -1);
                 GrSet(gr, g, 7, -1);
             }
@@ -1176,7 +1179,7 @@ public static class Furniture {
         // page, 500 + 150 per page beyond, at most 1000) plus FU_TAGW tenths of `trust` times the share of members that are
         // tagged artifacts in place minus the share that are tagged content; it needs FU_QUAL, and the coverage (at least
         // FU_COVER per cent of the pages, or 3 pages for a page number, or the tree's word) and the isolation (at least
-        // FU_ISO per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is
+        // FU_ISOPCT per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is
         // taken from one page. Answers 1 or 0 and sets gr 4, 8.
         int f = GrGet(gr, g, 0);
         int m = GrGet(gr, g, 1);
@@ -1187,7 +1190,6 @@ public static class Furniture {
         int o = (GrGet(gr, g, 11) * 1000) / m;
         int er = 300;
         int score = 0;
-        int j = 0;
         int pagelike = 0;
         int covok = 0;
         int isook = 0;
@@ -1220,7 +1222,7 @@ public static class Furniture {
         if (tag == 1) {
             covok = 1;
         }
-        if ((GrGet(gr, g, 9) * 100) >= (m * FuIso)) {
+        if ((GrGet(gr, g, 9) * 100) >= (m * FuIsopct)) {
             isook = 1;
         }
         if (pagelike == 1) {
@@ -1969,7 +1971,6 @@ public static class Furniture {
         int iso = 0;
         int free = 0;
         int ok = 0;
-        int q = 0;
         int con = 0;
         int capt = 0;
         int longest = 0;
@@ -2266,11 +2267,9 @@ public static class Furniture {
         int j = 0;
         int k = 0;
         int v = 0;
-        int any = 0;
         while (r < ncd) {
             if (CdGet(cd, r, 15) > 0) {
                 Evidence.LnSet(ln, CdGet(cd, r, 0), Evidence.LhPage(), -7);
-                any = 1;
             }
             r += 1;
         }
@@ -2404,7 +2403,6 @@ public static class Furniture {
         int l = 0;
         int i = 0;
         int q = 0;
-        int k = 0;
         int prevpage = 0;
         int nf = 0;
         while (p < npages) {

@@ -18,13 +18,13 @@ pub(crate) const FU_COVER: i32 = 30;
 pub(crate) const FU_SCOVER: i32 = 60;
 pub(crate) const FU_ISOGAP: i32 = 1500;
 pub(crate) const FU_SISOGAP: i32 = 2000;
-pub(crate) const FU_ISO: i32 = 60;
+pub(crate) const FU_ISOPCT: i32 = 60;
 pub(crate) const FU_SISO: i32 = 70;
 pub(crate) const FU_QUAL: i32 = 600;
 pub(crate) const FU_TAGW: i32 = 6;
 pub(crate) const FU_PAIRS: i32 = 75;
 pub(crate) const FU_MINNORM: i32 = 4;
-pub(crate) const FU_SLOTS: i32 = 8;
+pub(crate) const FU_MAXSLOTS: i32 = 8;
 pub(crate) const CD: i32 = 16;
 pub(crate) const SL: i32 = 10;
 pub(crate) const GR: i32 = 16;
@@ -536,6 +536,7 @@ pub(crate) fn fu_slots(tx: &mut crate::port::Cells, bs: i32, n: i32, mut sl: &mu
     let mut ns: i32 = 0;
     let mut tok: i32 = 0;
     let mut pf: i32 = -1;
+    let mut kind1: i32 = 3;
     let mut over: i32 = 0;
     let mut h: i64 = fu_basis();
     while i < end {
@@ -578,7 +579,7 @@ pub(crate) fn fu_slots(tx: &mut crate::port::Cells, bs: i32, n: i32, mut sl: &mu
                 j += 1;
             }
             if (k == 4) && (pageish == 1) {
-                if ns < FU_SLOTS {
+                if ns < FU_MAXSLOTS {
                     let mut up: i32 = 0;
                     if (crate::port::cells_at(tx, cs) >= 65) && (crate::port::cells_at(tx, cs) <= 90) {
                         up = 1;
@@ -605,14 +606,15 @@ pub(crate) fn fu_slots(tx: &mut crate::port::Cells, bs: i32, n: i32, mut sl: &mu
                         if (d - j) > 9 {
                             v = -1;
                         }
-                        if ns < FU_SLOTS {
+                        kind1 = 3;
+                        if k == 3 {
+                            kind1 = 1;
+                        }
+                        if ns < FU_MAXSLOTS {
                             if j == pf {
                                 fu_slot_push(sl, r, 4, v, cs - bs, ce - cs, tok, d - j, 0, i - bs, e - i);
                             } else {
-                                fu_slot_push(sl, r,                                 if k == 3 {
-1                                } else {
-3                                }
-, v, j - bs, d - j, tok, d - j, 0, i - bs, e - i);
+                                fu_slot_push(sl, r, kind1, v, j - bs, d - j, tok, d - j, 0, i - bs, e - i);
                             }
                             ns += 1;
                         } else {
@@ -905,10 +907,11 @@ pub(crate) fn fu_cluster(mut ord: &mut crate::port::Cells, cd: &mut crate::port:
             g = fu_push_row(gr, 16);
             gr_set(gr, g, 0, i);
             gr_set(gr, g, 3, cd_get(cd, r, 2));
-            gr_set(gr, g, 5,             if mode == 0 {
-1            } else {
-2            }
-);
+            if mode == 0 {
+                gr_set(gr, g, 5, 1);
+            } else {
+                gr_set(gr, g, 5, 2);
+            }
             gr_set(gr, g, 6, -1);
             gr_set(gr, g, 7, -1);
         }
@@ -1177,7 +1180,7 @@ pub(crate) fn fu_qualify(ord: &mut crate::port::Cells, cd: &mut crate::port::Cel
     // page, 500 + 150 per page beyond, at most 1000) plus FU_TAGW tenths of `trust` times the share of members that are
     // tagged artifacts in place minus the share that are tagged content; it needs FU_QUAL, and the coverage (at least
     // FU_COVER per cent of the pages, or 3 pages for a page number, or the tree's word) and the isolation (at least
-    // FU_ISO per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is
+    // FU_ISOPCT per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is
     // taken from one page. Answers 1 or 0 and sets gr 4, 8.
     let f: i32 = gr_get(gr, g, 0);
     let m: i32 = gr_get(gr, g, 1);
@@ -1188,7 +1191,6 @@ pub(crate) fn fu_qualify(ord: &mut crate::port::Cells, cd: &mut crate::port::Cel
     let o: i32 = (gr_get(gr, g, 11) * 1000) / m;
     let mut er: i32 = 300;
     let mut score: i32 = 0;
-    let mut j: i32 = 0;
     let mut pagelike: i32 = 0;
     let mut covok: i32 = 0;
     let mut isook: i32 = 0;
@@ -1221,7 +1223,7 @@ pub(crate) fn fu_qualify(ord: &mut crate::port::Cells, cd: &mut crate::port::Cel
     if tag == 1 {
         covok = 1;
     }
-    if (gr_get(gr, g, 9) * 100) >= (m * FU_ISO) {
+    if (gr_get(gr, g, 9) * 100) >= (m * FU_ISOPCT) {
         isook = 1;
     }
     if pagelike == 1 {
@@ -1970,7 +1972,6 @@ pub(crate) fn fu_style_pass(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     let mut iso: i32 = 0;
     let mut free: i32 = 0;
     let mut ok: i32 = 0;
-    let mut q: i32 = 0;
     let mut con: i32 = 0;
     let mut capt: i32 = 0;
     let mut longest: i32 = 0;
@@ -2267,11 +2268,9 @@ pub(crate) fn fu_compact(mut ln: &mut crate::port::Cells, cd: &mut crate::port::
     let mut j: i32 = 0;
     let mut k: i32 = 0;
     let mut v: i32 = 0;
-    let mut any: i32 = 0;
     while r < ncd {
         if cd_get(cd, r, 15) > 0 {
             ln_set(ln, cd_get(cd, r, 0), lh_page(), -7);
-            any = 1;
         }
         r += 1;
     }
@@ -2405,7 +2404,6 @@ pub fn fu_write(fo: &mut crate::port::Cells, fp: &mut crate::port::Cells, ft: &m
     let mut l: i32 = 0;
     let mut i: i32 = 0;
     let mut q: i32 = 0;
-    let mut k: i32 = 0;
     let mut prevpage: i32 = 0;
     let mut nf: i32 = 0;
     while p < npages {

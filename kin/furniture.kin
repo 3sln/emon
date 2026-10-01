@@ -87,13 +87,13 @@
 (defconst ^I32 FU_SCOVER 60)        ;; per cent, the style rule
 (defconst ^I32 FU_ISOGAP 1500)       ;; isolation: the gap to the next line toward the inside, per mille of the line's height (a text group)
 (defconst ^I32 FU_SISOGAP 2000)      ;; the same for the style rule
-(defconst ^I32 FU_ISO 60)           ;; per cent of a group's members that must be isolated
+(defconst ^I32 FU_ISOPCT 60)           ;; per cent of a group's members that must be isolated
 (defconst ^I32 FU_SISO 70)          ;; the style rule
 (defconst ^I32 FU_QUAL 600)         ;; the score to qualify
 (defconst ^I32 FU_TAGW 6)           ;; tenths of the trust that the tag evidence is worth
 (defconst ^I32 FU_PAIRS 75)         ;; per cent of consecutive pairs that must step with the page for a slot to be the page number
 (defconst ^I32 FU_MINNORM 4)        ;; characters (letters and digits) a title match needs
-(defconst ^I32 FU_SLOTS 8)
+(defconst ^I32 FU_MAXSLOTS 8)
 
 ;; the work arenas' strides (documented where each is made)
 (defconst ^I32 CD 16)
@@ -454,6 +454,7 @@
         ^:mut ^I32 ns 0
         ^:mut ^I32 tok 0
         ^:mut ^I32 pf -1
+        ^:mut ^I32 kind1 3
         ^:mut ^I32 over 0
         ^:mut ^I64 h (fu-basis)]
     (while (< i end)
@@ -485,7 +486,7 @@
               (do (set h (fu-step h (cells-at tx j)))
                   (set j (+ j 1))))
             (if (and (== k 4) (== pageish 1))
-              (do (if (< ns FU_SLOTS)
+              (do (if (< ns FU_MAXSLOTS)
                     (do (let [^:mut ^I32 up 0]
                           (if (and (>= (cells-at tx cs) 65) (<= (cells-at tx cs) 90)) (set up 1))
                           (fu-slot-push sl r 2 (fu-roman-val tx cs ce) (- cs bs) (- ce cs) tok 0 up (- i bs) (- e i)))
@@ -502,10 +503,12 @@
                                 (do (if (< (- d j) 9) (set v (+ (* v 10) (- (cells-at tx d) 48))))
                                     (set d (+ d 1))))
                               (if (> (- d j) 9) (set v -1))
-                              (if (< ns FU_SLOTS)
+                              (set kind1 3)
+                              (if (== k 3) (set kind1 1))
+                              (if (< ns FU_MAXSLOTS)
                                 (do (if (== j pf)
                                       (fu-slot-push sl r 4 v (- cs bs) (- ce cs) tok (- d j) 0 (- i bs) (- e i))
-                                      (fu-slot-push sl r (if (== k 3) 1 3) v (- j bs) (- d j) tok (- d j) 0 (- i bs) (- e i)))
+                                      (fu-slot-push sl r kind1 v (- j bs) (- d j) tok (- d j) 0 (- i bs) (- e i)))
                                     (set ns (+ ns 1)))
                                 (set over 1))
                               (set h (fu-step h 35))
@@ -719,7 +722,9 @@
             (do (set g (fu-push-row gr 16))
                 (gr-set gr g 0 i)
                 (gr-set gr g 3 (cd-get cd r 2))
-                (gr-set gr g 5 (if (== mode 0) 1 2))
+                (if (== mode 0)
+                  (gr-set gr g 5 1)
+                  (gr-set gr g 5 2))
                 (gr-set gr g 6 -1)
                 (gr-set gr g 7 -1)))
           (gr-inc gr g 1)
@@ -930,7 +935,7 @@
   (comment "page, 500 + 150 per page beyond, at most 1000) plus FU_TAGW tenths of `trust` times the share of members that are")
   (comment "tagged artifacts in place minus the share that are tagged content; it needs FU_QUAL, and the coverage (at least")
   (comment "FU_COVER per cent of the pages, or 3 pages for a page number, or the tree's word) and the isolation (at least")
-  (comment "FU_ISO per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is")
+  (comment "FU_ISOPCT per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is")
   (comment "taken from one page. Answers 1 or 0 and sets gr 4, 8.")
   (let [^I32 f (gr-get gr g 0)
         ^I32 m (gr-get gr g 1)
@@ -941,7 +946,6 @@
         ^I32 o (quot (* (gr-get gr g 11) 1000) m)
         ^:mut ^I32 er 300
         ^:mut ^I32 score 0
-        ^:mut ^I32 j 0
         ^:mut ^I32 pagelike 0
         ^:mut ^I32 covok 0
         ^:mut ^I32 isook 0
@@ -959,7 +963,7 @@
     (if (>= (* c 100) (* npages FU_COVER)) (set covok 1))
     (if (and (== pagelike 1) (>= c 3)) (set covok 1))
     (if (== tag 1) (set covok 1))
-    (if (>= (* (gr-get gr g 9) 100) (* m FU_ISO)) (set isook 1))
+    (if (>= (* (gr-get gr g 9) 100) (* m FU_ISOPCT)) (set isook 1))
     (if (== pagelike 1) (set isook 1))
     (if (== tag 1) (set isook 1))
     (if (== (gr-get gr g 3) 3)
@@ -1546,7 +1550,6 @@
         ^:mut ^I32 iso 0
         ^:mut ^I32 free 0
         ^:mut ^I32 ok 0
-        ^:mut ^I32 q 0
         ^:mut ^I32 con 0
         ^:mut ^I32 capt 0
         ^:mut ^I32 longest 0]
@@ -1764,12 +1767,10 @@
         ^:mut ^I32 l 0
         ^:mut ^I32 j 0
         ^:mut ^I32 k 0
-        ^:mut ^I32 v 0
-        ^:mut ^I32 any 0]
+        ^:mut ^I32 v 0]
     (while (< r ncd)
       (do (if (> (cd-get cd r 15) 0)
-            (do (ln-set ln (cd-get cd r 0) (lh-page) -7)
-                (set any 1)))
+            (ln-set ln (cd-get cd r 0) (lh-page) -7))
           (set r (+ r 1))))
     (while (< l nl)
       (do (if (!= (ln-get ln l (lh-page)) -7)
@@ -1885,7 +1886,6 @@
         ^:mut ^I32 l 0
         ^:mut ^I32 i 0
         ^:mut ^I32 q 0
-        ^:mut ^I32 k 0
         ^:mut ^I32 prevpage 0
         ^:mut ^I32 nf 0]
     (while (< p npages)
