@@ -122,7 +122,7 @@ public final class Listtest {
         emon.Port.Cells out = emon.Port.newCells();
         emon.Testport.assertEq(ltFind(text, out, emon.Testport.textBlob("see https://example.org/a/b, and")), 1, "a URL with a scheme");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 4, "it starts at the h");
-        emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 28, "and ends before the comma");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 27, "and ends before the comma");
         emon.Testport.assertEq(ltFind(text, out, emon.Testport.textBlob("(see www.example.com)")), 2, "www. and a domain");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 20, "the bracket it did not open is not in it");
         emon.Testport.assertEq(ltFind(text, out, emon.Testport.textBlob("write to jane.doe@example.org.")), 3, "an address");

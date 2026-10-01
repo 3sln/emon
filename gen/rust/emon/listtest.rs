@@ -130,7 +130,7 @@ fn test_what_is_a_bare_link() {
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
     crate::testport::assert_eq(lt_find(text, out, &crate::testport::text_blob("see https://example.org/a/b, and")[..]), 1, "a URL with a scheme");
     crate::testport::assert_eq(crate::port::cells_at(out, 0), 4, "it starts at the h");
-    crate::testport::assert_eq(crate::port::cells_at(out, 1), 28, "and ends before the comma");
+    crate::testport::assert_eq(crate::port::cells_at(out, 1), 27, "and ends before the comma");
     crate::testport::assert_eq(lt_find(text, out, &crate::testport::text_blob("(see www.example.com)")[..]), 2, "www. and a domain");
     crate::testport::assert_eq(crate::port::cells_at(out, 1), 20, "the bracket it did not open is not in it");
     crate::testport::assert_eq(lt_find(text, out, &crate::testport::text_blob("write to jane.doe@example.org.")[..]), 3, "an address");

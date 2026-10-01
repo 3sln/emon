@@ -141,7 +141,7 @@ func TestWhatIsABareLink(emonT *testing.T) {
 	var out *port.Cells = port.NewCells()
 	port.AssertEq(emonT, ltFind(text, out, port.TextBlob("see https://example.org/a/b, and")), 1, "a URL with a scheme");
 	port.AssertEq(emonT, port.CellsAt(out, 0), 4, "it starts at the h");
-	port.AssertEq(emonT, port.CellsAt(out, 1), 28, "and ends before the comma");
+	port.AssertEq(emonT, port.CellsAt(out, 1), 27, "and ends before the comma");
 	port.AssertEq(emonT, ltFind(text, out, port.TextBlob("(see www.example.com)")), 2, "www. and a domain");
 	port.AssertEq(emonT, port.CellsAt(out, 1), 20, "the bracket it did not open is not in it");
 	port.AssertEq(emonT, ltFind(text, out, port.TextBlob("write to jane.doe@example.org.")), 3, "an address");
