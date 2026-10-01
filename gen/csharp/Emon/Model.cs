@@ -1979,6 +1979,10 @@ public static class Model {
     public static int PageSetHealth(emon.Port.Cells pages, int p, int v) {
         return Pset(pages, p, 7, v);
     }
+    public static int PageSetKind(emon.Port.Cells pages, int p, int kind) {
+        // A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D212).
+        return Pset(pages, p, 6, kind);
+    }
     public static int PageSetResolution(emon.Port.Cells pages, int p, int dpi, int pxw, int pxh) {
         Pset(pages, p, 8, dpi);
         Pset(pages, p, 9, pxw);

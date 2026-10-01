@@ -1316,10 +1316,11 @@ public final class Table {
         i = 0;
         while (i < n) {
             int w0i = emon.Port.cellsAt(wl, i);
-            int ref = Evidence.wdGet(wd, w0i, Evidence.hdBy1());
             int tol = (3 * tbMax(500, Evidence.wdGet(wd, w0i, Evidence.wfSize()))) / 10;
+            // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
+            // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
             j = i + 1;
-            while ((j < n) && (tbAbs(Evidence.wdGet(wd, emon.Port.cellsAt(wl, j), Evidence.hdBy1()) - ref) <= tol)) {
+            while ((j < n) && (tbAbs(Evidence.wdGet(wd, emon.Port.cellsAt(wl, j), Evidence.hdBy1()) - Evidence.wdGet(wd, emon.Port.cellsAt(wl, j - 1), Evidence.hdBy1())) <= tol)) {
                 j += 1;
             }
             tbSortWords(wl, wd, i, j, 1);

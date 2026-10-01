@@ -11,6 +11,20 @@ public final class Ocr {
     public static int ocfOsd() {
         return 2;
     }
+    public static int ocfDpiUnit() {
+        return 256;
+    }
+    public static int ocfDpi(int flags) {
+        // The resolution the request says its bitmap has, dots per inch; 0 none. A hint for the engine's size
+        // heuristics: the flags above the low byte.
+        return flags / ocfDpiUnit();
+    }
+    public static int ocwDict() {
+        return 1;
+    }
+    public static int ocwNumeric() {
+        return 2;
+    }
     public static int btText() {
         return 0;
     }
@@ -27,18 +41,21 @@ public final class Ocr {
         return 4;
     }
     public static int oxVersion() {
-        return 1;
+        return 2;
     }
     public static int oxHeader() {
-        return 10;
+        return 14;
     }
     public static int oxLineStride() {
-        return 11;
+        return 14;
     }
-    public static int oxBegin(emon.Port.Cells c, int orient, int wdir, int tlorder, int deskew, int osd, int script, int sconf, int oconf, int nlines) {
-        // Start the extension after the LAST word of an answer; then `nlines`
-        // calls of `ox-line`, then per word `ox-word` and its `ox-sym`s. The
-        // answer's own length is fixed by `an-ocr-end`, as ever.
+    public static int oxBlockStride() {
+        return 7;
+    }
+    public static int oxBegin(emon.Port.Cells c, int orient, int wdir, int tlorder, int deskew, int osd, int script, int sconf, int oconf, int nlines, int nblocks, int binary, int bw, int bh) {
+        // Start the extension after the LAST word of an answer; then `nlines` calls of `ox-line`,
+        // `nblocks` of `ox-block`, then per word `ox-word` and its `ox-sym`s. The answer's own length is
+        // fixed by `an-ocr-end`, as ever.
         int at = emon.Port.cellsLen(c);
         emon.Port.cellsPush(c, oxVersion());
         emon.Port.cellsPush(c, orient);
@@ -50,9 +67,13 @@ public final class Ocr {
         emon.Port.cellsPush(c, sconf);
         emon.Port.cellsPush(c, oconf);
         emon.Port.cellsPush(c, nlines);
+        emon.Port.cellsPush(c, nblocks);
+        emon.Port.cellsPush(c, binary);
+        emon.Port.cellsPush(c, bw);
+        emon.Port.cellsPush(c, bh);
         return at;
     }
-    public static int oxLine(emon.Port.Cells c, int x, int y, int w, int h, int bx0, int by0, int bx1, int by1, int block, int par, int btype) {
+    public static int oxLine(emon.Port.Cells c, int x, int y, int w, int h, int bx0, int by0, int bx1, int by1, int block, int par, int btype, int xheight, int asc, int desc) {
         emon.Port.cellsPush(c, x);
         emon.Port.cellsPush(c, y);
         emon.Port.cellsPush(c, w);
@@ -64,13 +85,28 @@ public final class Ocr {
         emon.Port.cellsPush(c, block);
         emon.Port.cellsPush(c, par);
         emon.Port.cellsPush(c, btype);
+        emon.Port.cellsPush(c, xheight);
+        emon.Port.cellsPush(c, asc);
+        emon.Port.cellsPush(c, desc);
         return 0;
     }
-    public static int oxWord(emon.Port.Cells c, int flags, int lang) {
+    public static int oxBlock(emon.Port.Cells c, int x, int y, int w, int h, int orient, int wdir, int tlorder) {
+        emon.Port.cellsPush(c, x);
+        emon.Port.cellsPush(c, y);
+        emon.Port.cellsPush(c, w);
+        emon.Port.cellsPush(c, h);
+        emon.Port.cellsPush(c, orient);
+        emon.Port.cellsPush(c, wdir);
+        emon.Port.cellsPush(c, tlorder);
+        return 0;
+    }
+    public static int oxWord(emon.Port.Cells c, int flags, int lang, int psize, int dflags) {
         // Start a word's extension; answers its start, which `ox-sym` wants.
         int at = emon.Port.cellsLen(c);
         emon.Port.cellsPush(c, flags);
         emon.Port.cellsPush(c, lang);
+        emon.Port.cellsPush(c, psize);
+        emon.Port.cellsPush(c, dflags);
         emon.Port.cellsPush(c, 0);
         return at;
     }
@@ -78,7 +114,7 @@ public final class Ocr {
         // Start a symbol of the word begun at `word`; answers the symbol's start.
         // Add its code points with `ox-sym-cp` THEN its alternatives with `ox-alt`.
         int at = emon.Port.cellsLen(c);
-        emon.Port.cellsSet(c, word + 2, emon.Port.cellsAt(c, word + 2) + 1);
+        emon.Port.cellsSet(c, word + 4, emon.Port.cellsAt(c, word + 4) + 1);
         emon.Port.cellsPush(c, x);
         emon.Port.cellsPush(c, y);
         emon.Port.cellsPush(c, w);
@@ -108,7 +144,7 @@ public final class Ocr {
     }
     public static int oxFind(emon.Port.Cells c, int at) {
         // The start of the extension of the OCR answer at `at`, or -1 when it has
-        // none (or is not version 1). Walks the words to find it.
+        // none (or is not version 2). Walks the words to find it.
         int end = at + emon.Port.cellsAt(c, at);
         int n = Plan.anOcrCount(c, at);
         int w = Plan.anOcrFirst(c, at);
@@ -155,13 +191,30 @@ public final class Ocr {
     public static int oxNlines(emon.Port.Cells c, int ext) {
         return emon.Port.cellsAt(c, ext + 9);
     }
+    public static int oxNblocks(emon.Port.Cells c, int ext) {
+        return emon.Port.cellsAt(c, ext + 10);
+    }
+    public static int oxBinary(emon.Port.Cells c, int ext) {
+        return emon.Port.cellsAt(c, ext + 11);
+    }
+    public static int oxBw(emon.Port.Cells c, int ext) {
+        return emon.Port.cellsAt(c, ext + 12);
+    }
+    public static int oxBh(emon.Port.Cells c, int ext) {
+        return emon.Port.cellsAt(c, ext + 13);
+    }
     public static int oxLineAt(emon.Port.Cells c, int ext, int k) {
         return (ext + oxHeader()) + (k * oxLineStride());
     }
+    public static int oxBlockAt(emon.Port.Cells c, int ext, int k) {
+        // The start of block `k`'s row in the block table, which follows the lines.
+        int n = oxNlines(c, ext);
+        return oxLineAt(c, ext, n) + (k * oxBlockStride());
+    }
     public static int oxFirstWord(emon.Port.Cells c, int ext) {
         // The start of the first word's extension.
-        int n = oxNlines(c, ext);
-        return oxLineAt(c, ext, n);
+        int n = oxNblocks(c, ext);
+        return oxBlockAt(c, ext, n);
     }
     public static int oxWflags(emon.Port.Cells c, int w) {
         return emon.Port.cellsAt(c, w);
@@ -169,11 +222,17 @@ public final class Ocr {
     public static int oxWlang(emon.Port.Cells c, int w) {
         return emon.Port.cellsAt(c, w + 1);
     }
-    public static int oxNsym(emon.Port.Cells c, int w) {
+    public static int oxWpsize(emon.Port.Cells c, int w) {
         return emon.Port.cellsAt(c, w + 2);
     }
+    public static int oxWdflags(emon.Port.Cells c, int w) {
+        return emon.Port.cellsAt(c, w + 3);
+    }
+    public static int oxNsym(emon.Port.Cells c, int w) {
+        return emon.Port.cellsAt(c, w + 4);
+    }
     public static int oxFirstSym(emon.Port.Cells c, int w) {
-        return w + 3;
+        return w + 5;
     }
     public static int oxAltNext(emon.Port.Cells c, int alt) {
         return (alt + 2) + emon.Port.cellsAt(c, alt);
@@ -193,7 +252,7 @@ public final class Ocr {
         return a;
     }
     public static int oxWordNext(emon.Port.Cells c, int w) {
-        int n = emon.Port.cellsAt(c, w + 2);
+        int n = emon.Port.cellsAt(c, w + 4);
         int s = oxFirstSym(c, w);
         int i = 0;
         while (i < n) {

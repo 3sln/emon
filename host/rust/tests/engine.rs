@@ -11,7 +11,7 @@
 //     about its length is `source-changed`;
 //   * `assets` other than `none` and several inputs as one document are refused, not approximated;
 //   * record and replay; the walkable Model; and that the library names no filesystem.
-use emon::{Assets, ByteSource, Config, Engine, Error, HtmlOptions, Input, JsonOptions, Kind, OcrPolicy, Options, SeekSource};
+use emon::{Assets, ByteSource, Config, Engine, Error, HtmlOptions, Input, JsonOptions, Kind, Ocr, OcrPolicy, OcrPort, Options, SeekSource};
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
@@ -346,8 +346,8 @@ fn an_image_becomes_pages_and_a_multi_page_tiff_several() {
     let px: Vec<(i32, i32)> = m.pages().iter().map(|p| (p.width, p.height)).collect();
     assert_eq!(px, vec![(1152, 864), (960, 720), (792, 600)]);
     assert_eq!(m.pages().iter().map(|p| p.number).collect::<Vec<_>>(), vec![1, 2, 3]);
-    // the body of an image page is empty until OCR is wired (P6.5)
-    assert!(m.root().children().is_empty());
+    // with no Ocr port an image page has no text: the body is the page milestones the paragraph stage writes between pages (P6.5)
+    assert!(m.root().children().iter().all(|n| n.kind().name() == "break"));
 }
 
 #[test]
@@ -364,10 +364,13 @@ fn an_image_records_its_pixels_and_replays_without_a_codec() {
     let e = Engine::new(Config::default());
     let o = Options::default();
     let (m, t) = e.record(Input::bytes(image("tiff-multi3-gray-none.tif")), &o).unwrap();
-    // three decode requests, round two asking for frames 1 and 2 together; each answer carries its bitmap
-    assert_eq!(t.entries.len(), 3);
-    assert_eq!(t.entries.iter().map(|x| x.round).collect::<Vec<_>>(), vec![0, 1, 1]);
-    assert!(t.entries.iter().all(|x| x.bitmap.is_some()));
+    // three decode requests, round two asking for frames 1 and 2 together (and for OCR of frame 0), each decode answer
+    // carrying its bitmap; then OCR of frames 1 and 2 (P6.5, D211): no Ocr port is configured, so each is answered `unsupported`
+    assert_eq!(t.entries.len(), 6);
+    assert_eq!(t.entries.iter().map(|x| x.round).collect::<Vec<_>>(), vec![0, 1, 1, 1, 2, 2]);
+    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2, 2, 3, 3, 3]);
+    assert!(t.entries.iter().filter(|x| x.req[1] == 2).all(|x| x.bitmap.is_some()));
+    assert!(t.entries.iter().filter(|x| x.req[1] == 3).all(|x| x.bitmap.is_none() && x.ans[3] == 2));
     // the transcript's files survive a round trip (the pixels as canonical PNG), and replaying them gives the same Model
     let files: std::collections::BTreeMap<String, Vec<u8>> = t.to_files().into_iter().collect();
     let t2 = emon::Transcript::from_files(&files).unwrap();
@@ -378,6 +381,92 @@ fn an_image_records_its_pixels_and_replays_without_a_codec() {
     assert!(miss.is_err());
     // a plain conversion keeps no pixels, and says the same thing
     assert_eq!(json(&e.convert(Input::bytes(image("tiff-multi3-gray-none.tif")), &o).unwrap()), json(&m));
+}
+
+// ------------------------------------------------------------------------------------- OCR (P6.5, D211-D216)
+//
+// A FAKE `Ocr` port: it answers every request with the word `Hello` in one line, through the same kin builders a real engine's
+// adapter uses, so the whole path (the request kin builds, the answer kin reads, the evidence, the pipeline's lines, the Model's
+// provenance) runs without Tesseract. What the real engine does to a real page is `bb ocr` (a replayed transcript) and `bb ocr-live`.
+struct FakeOcr;
+impl Ocr for FakeOcr {
+    fn fulfil(&self, req: &emon::plan::Request, _bm: &emon::plan::Bitmaps, _keep: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
+        use emon::emon::{ocr, plan};
+        let mut c = emon::port::Cells::new();
+        let at = plan::an_ocr(&mut c, req.id());
+        let w = plan::an_ocr_word(&mut c, at, 10, 10, 100, 30, 900, 0, 0);
+        for ch in "Hello".chars() {
+            plan::an_ocr_cp(&mut c, w, ch as i32);
+        }
+        ocr::ox_begin(&mut c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
+        ocr::ox_line(&mut c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
+        ocr::ox_block(&mut c, 10, 10, 100, 30, 0, 0, 0);
+        let _ = ocr::ox_word(&mut c, 0, 0, -1, 0);
+        plan::an_ocr_end(&mut c, at);
+        let rec = (0..emon::port::cells_len(&c)).map(|i| emon::port::cells_at(&c, i)).collect();
+        Ok(emon::plan::Answer { rec, bitmap: None })
+    }
+    fn producer(&self) -> Vec<(String, String)> {
+        vec![("engine".to_string(), "fake".to_string())]
+    }
+}
+
+fn with_ocr() -> Engine {
+    Engine::new(Config { ocr: Some(OcrPort(std::sync::Arc::new(FakeOcr))), ..Config::default() })
+}
+
+#[test]
+fn an_image_is_read_by_the_ocr_port_and_its_transcript_replays_without_it() {
+    let bytes = image("png-phys300.png");
+    let o = Options::default();
+    let (m, t) = with_ocr().record(Input::bytes(bytes.clone()), &o).unwrap();
+    let j = json(&m);
+    assert!(j.contains("\"text\": \"Hello\""), "{}", j);
+    assert!(j.contains("\"ocr\": \"always\""), "settings.ocr is written when OCR gave the text: {}", j);
+    assert!(j.contains("\"ocr\"") && j.contains("\"ocr-only\""), "{}", j);
+    assert_eq!(m.pages()[0].kind, "image");
+    // decode, then ocr; the transcript says whose engine answered
+    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 3]);
+    assert_eq!(t.producer, vec![("engine".to_string(), "fake".to_string())]);
+    // a replay needs no port, and gives the same Model; the files of the transcript survive a round trip
+    let files: std::collections::BTreeMap<String, Vec<u8>> = t.to_files().into_iter().collect();
+    assert!(String::from_utf8_lossy(&files["transcript.edn"]).contains(":producer {:engine \"fake\"}"));
+    let t2 = emon::Transcript::from_files(&files).unwrap();
+    assert_eq!(t2.producer, t.producer);
+    let r = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &o, &t2).unwrap();
+    assert_eq!(json(&r), j);
+    // `never` asks for nothing: no OCR request, no text and no setting
+    let (m_never, t_never) = with_ocr().record(Input::bytes(bytes.clone()), &Options { ocr: OcrPolicy::Never, ..Options::default() }).unwrap();
+    assert_eq!(t_never.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2]);
+    assert!(!json(&m_never).contains("Hello") && !json(&m_never).contains("\"ocr\""));
+    // with no port the request is answered `unsupported` and the page has no text, as before OCR existed
+    let m_none = Engine::new(Config::default()).convert(Input::bytes(bytes), &o).unwrap();
+    assert_eq!(json(&m_none), json(&m_never));
+}
+
+#[test]
+fn a_scanned_pdf_page_is_ocred_and_a_born_digital_one_keeps_its_text_layer() {
+    let scan = read("test/corpus/synth/scan/h-keyword.pdf");
+    let o = Options::default();
+    let (m, t) = with_ocr().record(Input::bytes(scan.clone()), &o).unwrap();
+    // the stream's own bytes (filter DCT, kind 2), then OCR of that bitmap (kind 3): two rounds
+    assert_eq!(t.entries.iter().map(|x| (x.round, x.req[1])).collect::<Vec<_>>(), vec![(0, 2), (1, 3)]);
+    assert_eq!(t.entries[0].req[6], 1, "the DCT filter");
+    assert!(t.entries[0].bitmap.is_some(), "an engine will read the pixels, so the transcript keeps them");
+    let j = json(&m);
+    assert!(j.contains("\"kind\": \"scanned\"") && j.contains("Hello"), "{}", j);
+    // a replay needs no port
+    let files: std::collections::BTreeMap<String, Vec<u8>> = t.to_files().into_iter().collect();
+    let t2 = emon::Transcript::from_files(&files).unwrap();
+    assert_eq!(json(&Engine::new(Config::default()).replay(Input::bytes(scan.clone()), &o, &t2).unwrap()), j);
+    // no port: the page is there and has no text, and the Model says nothing about OCR
+    let none = json(&Engine::new(Config::default()).convert(Input::bytes(scan), &o).unwrap());
+    assert!(!none.contains("Hello") && !none.contains("\"ocr\"") && none.contains("\"kind\": \"vector\""), "{}", none);
+    // a born-digital page keeps its text layer under `always`: no request, the same Model with or without a port (D212)
+    let born = synth("h-plain");
+    let (mb, tb) = with_ocr().record(Input::bytes(born.clone()), &o).unwrap();
+    assert!(tb.entries.is_empty(), "a text layer is read as it is: nothing is asked");
+    assert_eq!(json(&mb), json(&Engine::new(Config::default()).convert(Input::bytes(born), &o).unwrap()));
 }
 
 #[test]

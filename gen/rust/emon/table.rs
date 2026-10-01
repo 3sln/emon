@@ -1316,10 +1316,11 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
     i = 0;
     while i < n {
         let w0i: i32 = crate::port::cells_at(wl, i);
-        let r#ref: i32 = wd_get(wd, w0i, hd_by1());
         let tol: i32 = (3 * tb_max(500, wd_get(wd, w0i, wf_size()))) / 10;
+        // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
+        // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
         j = i + 1;
-        while (j < n) && (tb_abs(wd_get(wd, crate::port::cells_at(wl, j), hd_by1()) - r#ref) <= tol) {
+        while (j < n) && (tb_abs(wd_get(wd, crate::port::cells_at(wl, j), hd_by1()) - wd_get(wd, crate::port::cells_at(wl, j - 1), hd_by1())) <= tol) {
             j += 1;
         }
         tb_sort_words(wl, wd, i, j, 1);

@@ -4,6 +4,7 @@
 use crate::emon::model::*;
 use crate::emon::pdfsrc::*;
 use crate::emon::plan::*;
+use crate::emon::scan::*;
 
 pub fn rs_none() -> i32 {
     return 0;
@@ -106,10 +107,42 @@ pub(crate) fn rs_format_name(mut nodes: &mut crate::port::Cells, mut attrs: &mut
     node_set_attr_text(nodes, attrs, 0, fk_format(), start, crate::port::cells_len(text) - start);
     return 0;
 }
-pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells) -> i32 {
-    // One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the
-    // host. Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's
-    // `format` and `pages` and one page row per frame written.
+pub(crate) fn rs_eff_dpi100(dpi100: i32) -> i32 {
+    // The resolution a frame is read at: its own, or 300 dpi when it states none.
+    if dpi100 <= 0 {
+        return rs_default_dpi100();
+    }
+    return dpi100;
+}
+pub fn rs_ocr_id(frames: i32, f: i32) -> i32 {
+    // The request id of the OCR of frame `f` of a `frames`-frame input: after every decode's.
+    return (frames + f) + 1;
+}
+pub(crate) fn rs_want_ocr(info: i32, policy: i32) -> i32 {
+    // 1 when this attempt asks for OCR: not a header-only intake, and the policy is not `never`.
+    if info == 1 {
+        return 0;
+    }
+    if policy == 0 {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn rs_read_page(ans: &mut crate::port::Cells, ao: i32, ad: i32, page: i32, oid: i32, loc: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+    // The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).
+    let w: i32 = an_arg(ans, ad, 0);
+    let h: i32 = an_arg(ans, ad, 1);
+    let eff: i32 = rs_eff_dpi100(an_arg(ans, ad, 3));
+    let wc: i32 = rs_cpt(w, eff);
+    let hc: i32 = rs_cpt(h, eff);
+    return sc_page(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, sc_lang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+}
+pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, policy: i32, loc: &mut crate::port::Cells, mut mask: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+    // One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are
+    // the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points
+    // (empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and
+    // `pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and
+    // `lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.
     let nbytes: i32 = ps_len(src);
     let a0: i32 = an_find(ans, 1);
     if a0 < 0 {
@@ -120,8 +153,11 @@ pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mu
         return rs_fail(ans, a0);
     }
     let frames: i32 = an_arg(ans, a0, 5);
+    let want: i32 = rs_want_ocr(info, policy);
     let mut f: i32 = 1;
     let mut asked: i32 = 0;
+    let mut da: i32 = 0;
+    let mut dd: i32 = 0;
     if frames < 1 {
         return rs_undecodable();
     }
@@ -135,11 +171,26 @@ pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mu
         }
         f += 1;
     }
+    if want == 1 {
+        f = 0;
+        while f < frames {
+            da = an_find(ans, f + 1);
+            if (da >= 0) && (an_find(ans, rs_ocr_id(frames, f)) < 0) {
+                if an_ok(ans, da) == 1 {
+                    dd = rs_eff_dpi100(an_arg(ans, da, 3));
+                    sc_request(rq, rs_ocr_id(frames, f), f + 1, (dd + 50) / 100, loc);
+                    asked = 1;
+                }
+            }
+            f += 1;
+        }
+    }
     if asked == 1 {
         return us_requests();
     }
     rs_format_name(nodes, attrs, text, fmt);
     node_set_attr_int(nodes, attrs, 0, fk_pages(), frames);
+    crate::port::cells_drop(mask, 0);
     f = 0;
     while f < frames {
         let a: i32 = an_find(ans, f + 1);
@@ -162,7 +213,22 @@ pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mu
         }
         let p: i32 = page_new(pages, f + 1, rs_cpt(w, eff), rs_cpt(h, eff), 0, pk_image());
         page_set_resolution(pages, p, (dpi100 + 50) / 100, w, h);
+        crate::port::cells_push(mask, 0);
         f += 1;
+    }
+    if want == 1 {
+        f = 0;
+        while f < frames {
+            da = an_find(ans, rs_ocr_id(frames, f));
+            if da >= 0 {
+                if an_ok(ans, da) == 1 {
+                    dd = an_find(ans, f + 1);
+                    rs_read_page(ans, da, dd, f + 1, rs_ocr_id(frames, f), loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+                    crate::port::cells_set(mask, f, 1);
+                }
+            }
+            f += 1;
+        }
     }
     return 0;
 }

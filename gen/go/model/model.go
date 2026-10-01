@@ -2080,6 +2080,11 @@ func PageSetHealth(pages *port.Cells, p int32, v int32) int32 {
 	return pset(pages, p, 7, v)
 }
 
+func PageSetKind(pages *port.Cells, p int32, kind int32) int32 {
+	// A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D212).
+	return pset(pages, p, 6, kind)
+}
+
 func PageSetResolution(pages *port.Cells, p int32, dpi int32, pxw int32, pxh int32) int32 {
 	pset(pages, p, 8, dpi)
 	pset(pages, p, 9, pxw)

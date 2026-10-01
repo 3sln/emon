@@ -21,9 +21,10 @@ public final class Ocrtest {
         Plan.anOcrCp(c, w0, 105);
         int w1 = Plan.anOcrWord(c, at, 50, 20, 30, 40, 800, 0, 0);
         Plan.anOcrCp(c, w1, 33);
-        Ocr.oxBegin(c, 1, 2, 3, -85, 90, 1281455214, 17, 187, 1);
-        Ocr.oxLine(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 1);
-        int x0 = Ocr.oxWord(c, 65, 1701734144);
+        Ocr.oxBegin(c, 1, 2, 3, -85, 90, 1281455214, 17, 187, 1, 1, 1, 640, 480);
+        Ocr.oxLine(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 1, 22, 14, 6);
+        Ocr.oxBlock(c, 5, 15, 80, 50, 1, 2, 3);
+        int x0 = Ocr.oxWord(c, 65, 1701734144, 11, 3);
         int s0 = Ocr.oxSym(c, x0, 10, 20, 15, 40, 950);
         Ocr.oxSymCp(c, s0, 72);
         int a0 = Ocr.oxAlt(c, s0, 120);
@@ -33,7 +34,7 @@ public final class Ocrtest {
         Ocr.oxAltCp(c, a1, 77);
         int s1 = Ocr.oxSym(c, x0, 25, 20, 15, 40, 900);
         Ocr.oxSymCp(c, s1, 105);
-        int x1 = Ocr.oxWord(c, 0, 0);
+        int x1 = Ocr.oxWord(c, 0, 0, -1, 0);
         int s2 = Ocr.oxSym(c, x1, 50, 20, 30, 40, 800);
         Ocr.oxSymCp(c, s2, 33);
         Plan.anOcrEnd(c, at);
@@ -55,10 +56,25 @@ public final class Ocrtest {
         emon.Testport.assertEq(l, ext + Ocr.oxHeader(), "the line list follows the header");
         emon.Testport.assertEq(emon.Port.cellsAt(c, l + 6), 80, "baseline end x");
         emon.Testport.assertEq(emon.Port.cellsAt(c, l + 10), 1, "block type");
-        emon.Testport.assertEq(Ocr.oxFirstWord(c, ext), l + Ocr.oxLineStride(), "the word list follows the lines");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, l + 11), 22, "x-height");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, l + 12), 14, "ascenders");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, l + 13), 6, "descenders");
+        emon.Testport.assertEq(Ocr.oxBlockAt(c, ext, 0), l + Ocr.oxLineStride(), "the block table follows the lines");
+        emon.Testport.assertEq(Ocr.oxFirstWord(c, ext), Ocr.oxBlockAt(c, ext, 0) + Ocr.oxBlockStride(), "the word list follows the blocks");
+        emon.Testport.assertEq(Ocr.oxNblocks(c, ext), 1, "one block");
+        emon.Testport.assertEq(Ocr.oxBinary(c, ext), 1, "the thresholded image is there");
+        emon.Testport.assertEq(Ocr.oxBw(c, ext), 640, "its width");
+        emon.Testport.assertEq(Ocr.oxBh(c, ext), 480, "its height");
+        int bl = Ocr.oxBlockAt(c, ext, 0);
+        emon.Testport.assertEq(emon.Port.cellsAt(c, bl), 5, "block x");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, bl + 4), 1, "block orientation");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, bl + 5), 2, "block writing direction");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, bl + 6), 3, "block line order");
         int wx0 = Ocr.oxFirstWord(c, ext);
         emon.Testport.assertEq(Ocr.oxWflags(c, wx0), 65, "bold and mono");
         emon.Testport.assertEq(Ocr.oxWlang(c, wx0), 1701734144, "eng");
+        emon.Testport.assertEq(Ocr.oxWpsize(c, wx0), 11, "point size");
+        emon.Testport.assertEq(Ocr.oxWdflags(c, wx0), 3, "dictionary and numeric");
         emon.Testport.assertEq(Ocr.oxNsym(c, wx0), 2, "two symbols");
         int sy0 = Ocr.oxFirstSym(c, wx0);
         emon.Testport.assertEq(emon.Port.cellsAt(c, sy0 + 4), 950, "symbol confidence");
@@ -78,5 +94,28 @@ public final class Ocrtest {
         int s = Ocr.oxFirstSym(c, wx1);
         emon.Testport.assertEq(emon.Port.cellsAt(c, s + 7), 33, "!");
         emon.Testport.assertEq(Ocr.oxWordNext(c, wx1), emon.Port.cellsLen(c), "and is the last thing in the answer");
+    }
+    public static void testTheResolutionHintIsTheFlagsAboveTheLowByte() {
+        emon.Testport.assertEq(Ocr.ocfDpi(Ocr.ocfSymbols() + Ocr.ocfOsd()), 0, "no hint in the low flags");
+        emon.Testport.assertEq(Ocr.ocfDpi(3 + (150 * 256)), 150, "150 dpi");
+        emon.Testport.assertEq(Ocr.ocfDpi(3 + (300 * 256)), 300, "300 dpi");
+    }
+    public static void testAVersionOneExtensionIsNotRead() {
+        emon.Port.Cells c = emon.Port.newCells();
+        int at = Plan.anOcr(c, 3);
+        int w = Plan.anOcrWord(c, at, 10, 20, 30, 40, 900, 0, 0);
+        Plan.anOcrCp(c, w, 97);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        Plan.anOcrEnd(c, at);
+        emon.Testport.assertEq(Ocr.oxFind(c, at), -1, "version 1 reads as no extension");
     }
 }

@@ -15,7 +15,7 @@
 ;;   2. SPEC 3.9 and 13: every name the SPEC spells exists on BOTH hosts. What the SPEC specifies and neither has
 ;;      built yet (the asset accessors, D117) is listed as PENDING, not failed.
 ;;   3. NO FILESYSTEM (D058): no host LIBRARY file (Rust, Go, Java, C#: the Engine layers and the ports) and no
-;;      GENERATED non-test module names a filesystem type or function. Test support (`testport.*`, `tess.rs`),
+;;      GENERATED non-test module names a filesystem type or function. Test support (`testport.*`, `tess.rs`, `tess.go`),
 ;;      the tests and the drivers are not the library.
 ;;
 ;; Java and C# have ports only so far (their Engine layers are later phases): their surface is not compared,
@@ -221,7 +221,9 @@
 (def rust-only
   "[kind Type member] on the Rust side with no Go twin, and why."
   {[:type "Inputs" nil]
-   "a conversion wrapper for Rust's `impl Into<Inputs>` (a bare buffer, one Input or a Vec): Go has no overloading, takes `[]Input`, and `BytesInput(b)` is the bare-buffer shorthand (SPEC 13)"})
+   "a conversion wrapper for Rust's `impl Into<Inputs>` (a bare buffer, one Input or a Vec): Go has no overloading, takes `[]Input`, and `BytesInput(b)` is the bare-buffer shorthand (SPEC 13)"
+   [:type "OcrPort" nil]
+   "a newtype over `Arc<dyn Ocr>` so that `Config` stays `Debug` and `Clone` (D211): Go's `Config.Ocr` is the `Ocr` interface value itself"})
 
 (def go-only
   "Go surface with no Rust twin, and why: [kind Type member]."
@@ -397,7 +399,7 @@
 
 (def library-files
   (let [g (fn [d pat] (map str (fs/glob d pat)))
-        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|_test\.go|/tests/" %) fs))]
+        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|_test\.go|/tests/" %) fs))]
     {:rust (not-test (g "host/rust/src" "*.rs"))
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go")))
      :java (not-test (g "host/java/emon" "*.java"))

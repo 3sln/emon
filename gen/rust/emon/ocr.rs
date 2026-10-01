@@ -9,6 +9,20 @@ pub fn ocf_symbols() -> i32 {
 pub fn ocf_osd() -> i32 {
     return 2;
 }
+pub fn ocf_dpi_unit() -> i32 {
+    return 256;
+}
+pub fn ocf_dpi(flags: i32) -> i32 {
+    // The resolution the request says its bitmap has, dots per inch; 0 none. A hint for the engine's size
+    // heuristics: the flags above the low byte.
+    return flags / ocf_dpi_unit();
+}
+pub fn ocw_dict() -> i32 {
+    return 1;
+}
+pub fn ocw_numeric() -> i32 {
+    return 2;
+}
 pub fn bt_text() -> i32 {
     return 0;
 }
@@ -25,18 +39,21 @@ pub fn bt_other() -> i32 {
     return 4;
 }
 pub fn ox_version() -> i32 {
-    return 1;
+    return 2;
 }
 pub fn ox_header() -> i32 {
-    return 10;
+    return 14;
 }
 pub fn ox_line_stride() -> i32 {
-    return 11;
+    return 14;
 }
-pub fn ox_begin(mut c: &mut crate::port::Cells, orient: i32, wdir: i32, tlorder: i32, deskew: i32, osd: i32, script: i32, sconf: i32, oconf: i32, nlines: i32) -> i32 {
-    // Start the extension after the LAST word of an answer; then `nlines`
-    // calls of `ox-line`, then per word `ox-word` and its `ox-sym`s. The
-    // answer's own length is fixed by `an-ocr-end`, as ever.
+pub fn ox_block_stride() -> i32 {
+    return 7;
+}
+pub fn ox_begin(mut c: &mut crate::port::Cells, orient: i32, wdir: i32, tlorder: i32, deskew: i32, osd: i32, script: i32, sconf: i32, oconf: i32, nlines: i32, nblocks: i32, binary: i32, bw: i32, bh: i32) -> i32 {
+    // Start the extension after the LAST word of an answer; then `nlines` calls of `ox-line`,
+    // `nblocks` of `ox-block`, then per word `ox-word` and its `ox-sym`s. The answer's own length is
+    // fixed by `an-ocr-end`, as ever.
     let at: i32 = crate::port::cells_len(c);
     crate::port::cells_push(c, ox_version());
     crate::port::cells_push(c, orient);
@@ -48,9 +65,13 @@ pub fn ox_begin(mut c: &mut crate::port::Cells, orient: i32, wdir: i32, tlorder:
     crate::port::cells_push(c, sconf);
     crate::port::cells_push(c, oconf);
     crate::port::cells_push(c, nlines);
+    crate::port::cells_push(c, nblocks);
+    crate::port::cells_push(c, binary);
+    crate::port::cells_push(c, bw);
+    crate::port::cells_push(c, bh);
     return at;
 }
-pub fn ox_line(mut c: &mut crate::port::Cells, x: i32, y: i32, w: i32, h: i32, bx0: i32, by0: i32, bx1: i32, by1: i32, block: i32, par: i32, btype: i32) -> i32 {
+pub fn ox_line(mut c: &mut crate::port::Cells, x: i32, y: i32, w: i32, h: i32, bx0: i32, by0: i32, bx1: i32, by1: i32, block: i32, par: i32, btype: i32, xheight: i32, asc: i32, desc: i32) -> i32 {
     crate::port::cells_push(c, x);
     crate::port::cells_push(c, y);
     crate::port::cells_push(c, w);
@@ -62,13 +83,28 @@ pub fn ox_line(mut c: &mut crate::port::Cells, x: i32, y: i32, w: i32, h: i32, b
     crate::port::cells_push(c, block);
     crate::port::cells_push(c, par);
     crate::port::cells_push(c, btype);
+    crate::port::cells_push(c, xheight);
+    crate::port::cells_push(c, asc);
+    crate::port::cells_push(c, desc);
     return 0;
 }
-pub fn ox_word(mut c: &mut crate::port::Cells, flags: i32, lang: i32) -> i32 {
+pub fn ox_block(mut c: &mut crate::port::Cells, x: i32, y: i32, w: i32, h: i32, orient: i32, wdir: i32, tlorder: i32) -> i32 {
+    crate::port::cells_push(c, x);
+    crate::port::cells_push(c, y);
+    crate::port::cells_push(c, w);
+    crate::port::cells_push(c, h);
+    crate::port::cells_push(c, orient);
+    crate::port::cells_push(c, wdir);
+    crate::port::cells_push(c, tlorder);
+    return 0;
+}
+pub fn ox_word(mut c: &mut crate::port::Cells, flags: i32, lang: i32, psize: i32, dflags: i32) -> i32 {
     // Start a word's extension; answers its start, which `ox-sym` wants.
     let at: i32 = crate::port::cells_len(c);
     crate::port::cells_push(c, flags);
     crate::port::cells_push(c, lang);
+    crate::port::cells_push(c, psize);
+    crate::port::cells_push(c, dflags);
     crate::port::cells_push(c, 0);
     return at;
 }
@@ -76,7 +112,7 @@ pub fn ox_sym(mut c: &mut crate::port::Cells, word: i32, x: i32, y: i32, w: i32,
     // Start a symbol of the word begun at `word`; answers the symbol's start.
     // Add its code points with `ox-sym-cp` THEN its alternatives with `ox-alt`.
     let at: i32 = crate::port::cells_len(c);
-    crate::port::cells_set(c, word + 2, crate::port::cells_at(c, word + 2) + 1);
+    crate::port::cells_set(c, word + 4, crate::port::cells_at(c, word + 4) + 1);
     crate::port::cells_push(c, x);
     crate::port::cells_push(c, y);
     crate::port::cells_push(c, w);
@@ -106,7 +142,7 @@ pub fn ox_alt_cp(mut c: &mut crate::port::Cells, alt: i32, cp: i32) -> i32 {
 }
 pub fn ox_find(c: &mut crate::port::Cells, at: i32) -> i32 {
     // The start of the extension of the OCR answer at `at`, or -1 when it has
-    // none (or is not version 1). Walks the words to find it.
+    // none (or is not version 2). Walks the words to find it.
     let end: i32 = at + crate::port::cells_at(c, at);
     let n: i32 = an_ocr_count(c, at);
     let mut w: i32 = an_ocr_first(c, at);
@@ -153,13 +189,30 @@ pub fn ox_oconf(c: &mut crate::port::Cells, ext: i32) -> i32 {
 pub fn ox_nlines(c: &mut crate::port::Cells, ext: i32) -> i32 {
     return crate::port::cells_at(c, ext + 9);
 }
+pub fn ox_nblocks(c: &mut crate::port::Cells, ext: i32) -> i32 {
+    return crate::port::cells_at(c, ext + 10);
+}
+pub fn ox_binary(c: &mut crate::port::Cells, ext: i32) -> i32 {
+    return crate::port::cells_at(c, ext + 11);
+}
+pub fn ox_bw(c: &mut crate::port::Cells, ext: i32) -> i32 {
+    return crate::port::cells_at(c, ext + 12);
+}
+pub fn ox_bh(c: &mut crate::port::Cells, ext: i32) -> i32 {
+    return crate::port::cells_at(c, ext + 13);
+}
 pub fn ox_line_at(c: &mut crate::port::Cells, ext: i32, k: i32) -> i32 {
     return (ext + ox_header()) + (k * ox_line_stride());
 }
+pub fn ox_block_at(c: &mut crate::port::Cells, ext: i32, k: i32) -> i32 {
+    // The start of block `k`'s row in the block table, which follows the lines.
+    let n: i32 = ox_nlines(c, ext);
+    return ox_line_at(c, ext, n) + (k * ox_block_stride());
+}
 pub fn ox_first_word(c: &mut crate::port::Cells, ext: i32) -> i32 {
     // The start of the first word's extension.
-    let n: i32 = ox_nlines(c, ext);
-    return ox_line_at(c, ext, n);
+    let n: i32 = ox_nblocks(c, ext);
+    return ox_block_at(c, ext, n);
 }
 pub fn ox_wflags(c: &mut crate::port::Cells, w: i32) -> i32 {
     return crate::port::cells_at(c, w);
@@ -167,11 +220,17 @@ pub fn ox_wflags(c: &mut crate::port::Cells, w: i32) -> i32 {
 pub fn ox_wlang(c: &mut crate::port::Cells, w: i32) -> i32 {
     return crate::port::cells_at(c, w + 1);
 }
-pub fn ox_nsym(c: &mut crate::port::Cells, w: i32) -> i32 {
+pub fn ox_wpsize(c: &mut crate::port::Cells, w: i32) -> i32 {
     return crate::port::cells_at(c, w + 2);
 }
+pub fn ox_wdflags(c: &mut crate::port::Cells, w: i32) -> i32 {
+    return crate::port::cells_at(c, w + 3);
+}
+pub fn ox_nsym(c: &mut crate::port::Cells, w: i32) -> i32 {
+    return crate::port::cells_at(c, w + 4);
+}
 pub fn ox_first_sym(c: &mut crate::port::Cells, w: i32) -> i32 {
-    return w + 3;
+    return w + 5;
 }
 pub fn ox_alt_next(c: &mut crate::port::Cells, alt: i32) -> i32 {
     return (alt + 2) + crate::port::cells_at(c, alt);
@@ -191,7 +250,7 @@ pub fn ox_sym_next(c: &mut crate::port::Cells, sym: i32) -> i32 {
     return a;
 }
 pub fn ox_word_next(c: &mut crate::port::Cells, w: i32) -> i32 {
-    let n: i32 = crate::port::cells_at(c, w + 2);
+    let n: i32 = crate::port::cells_at(c, w + 4);
     let mut s: i32 = ox_first_sym(c, w);
     let mut i: i32 = 0;
     while i < n {

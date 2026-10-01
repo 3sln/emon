@@ -22,9 +22,10 @@ fn test_the_extension_follows_the_words_and_reads_back() {
     an_ocr_cp(c, w0, 105);
     let w1: i32 = an_ocr_word(c, at, 50, 20, 30, 40, 800, 0, 0);
     an_ocr_cp(c, w1, 33);
-    ox_begin(c, 1, 2, 3, -85, 90, 1281455214, 17, 187, 1);
-    ox_line(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 1);
-    let x0: i32 = ox_word(c, 65, 1701734144);
+    ox_begin(c, 1, 2, 3, -85, 90, 1281455214, 17, 187, 1, 1, 1, 640, 480);
+    ox_line(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 1, 22, 14, 6);
+    ox_block(c, 5, 15, 80, 50, 1, 2, 3);
+    let x0: i32 = ox_word(c, 65, 1701734144, 11, 3);
     let s0: i32 = ox_sym(c, x0, 10, 20, 15, 40, 950);
     ox_sym_cp(c, s0, 72);
     let a0: i32 = ox_alt(c, s0, 120);
@@ -34,7 +35,7 @@ fn test_the_extension_follows_the_words_and_reads_back() {
     ox_alt_cp(c, a1, 77);
     let s1: i32 = ox_sym(c, x0, 25, 20, 15, 40, 900);
     ox_sym_cp(c, s1, 105);
-    let x1: i32 = ox_word(c, 0, 0);
+    let x1: i32 = ox_word(c, 0, 0, -1, 0);
     let s2: i32 = ox_sym(c, x1, 50, 20, 30, 40, 800);
     ox_sym_cp(c, s2, 33);
     an_ocr_end(c, at);
@@ -56,10 +57,25 @@ fn test_the_extension_follows_the_words_and_reads_back() {
     crate::testport::assert_eq(l, ext + ox_header(), "the line list follows the header");
     crate::testport::assert_eq(crate::port::cells_at(c, l + 6), 80, "baseline end x");
     crate::testport::assert_eq(crate::port::cells_at(c, l + 10), 1, "block type");
-    crate::testport::assert_eq(ox_first_word(c, ext), l + ox_line_stride(), "the word list follows the lines");
+    crate::testport::assert_eq(crate::port::cells_at(c, l + 11), 22, "x-height");
+    crate::testport::assert_eq(crate::port::cells_at(c, l + 12), 14, "ascenders");
+    crate::testport::assert_eq(crate::port::cells_at(c, l + 13), 6, "descenders");
+    crate::testport::assert_eq(ox_block_at(c, ext, 0), l + ox_line_stride(), "the block table follows the lines");
+    crate::testport::assert_eq(ox_first_word(c, ext), ox_block_at(c, ext, 0) + ox_block_stride(), "the word list follows the blocks");
+    crate::testport::assert_eq(ox_nblocks(c, ext), 1, "one block");
+    crate::testport::assert_eq(ox_binary(c, ext), 1, "the thresholded image is there");
+    crate::testport::assert_eq(ox_bw(c, ext), 640, "its width");
+    crate::testport::assert_eq(ox_bh(c, ext), 480, "its height");
+    let bl: i32 = ox_block_at(c, ext, 0);
+    crate::testport::assert_eq(crate::port::cells_at(c, bl), 5, "block x");
+    crate::testport::assert_eq(crate::port::cells_at(c, bl + 4), 1, "block orientation");
+    crate::testport::assert_eq(crate::port::cells_at(c, bl + 5), 2, "block writing direction");
+    crate::testport::assert_eq(crate::port::cells_at(c, bl + 6), 3, "block line order");
     let wx0: i32 = ox_first_word(c, ext);
     crate::testport::assert_eq(ox_wflags(c, wx0), 65, "bold and mono");
     crate::testport::assert_eq(ox_wlang(c, wx0), 1701734144, "eng");
+    crate::testport::assert_eq(ox_wpsize(c, wx0), 11, "point size");
+    crate::testport::assert_eq(ox_wdflags(c, wx0), 3, "dictionary and numeric");
     crate::testport::assert_eq(ox_nsym(c, wx0), 2, "two symbols");
     let sy0: i32 = ox_first_sym(c, wx0);
     crate::testport::assert_eq(crate::port::cells_at(c, sy0 + 4), 950, "symbol confidence");
@@ -79,4 +95,29 @@ fn test_the_extension_follows_the_words_and_reads_back() {
     let s: i32 = ox_first_sym(c, wx1);
     crate::testport::assert_eq(crate::port::cells_at(c, s + 7), 33, "!");
     crate::testport::assert_eq(ox_word_next(c, wx1), crate::port::cells_len(c), "and is the last thing in the answer");
+}
+#[test]
+fn test_the_resolution_hint_is_the_flags_above_the_low_byte() {
+    crate::testport::assert_eq(ocf_dpi(ocf_symbols() + ocf_osd()), 0, "no hint in the low flags");
+    crate::testport::assert_eq(ocf_dpi(3 + (150 * 256)), 150, "150 dpi");
+    crate::testport::assert_eq(ocf_dpi(3 + (300 * 256)), 300, "300 dpi");
+}
+#[test]
+fn test_a_version_one_extension_is_not_read() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = an_ocr(c, 3);
+    let w: i32 = an_ocr_word(c, at, 10, 20, 30, 40, 900, 0, 0);
+    an_ocr_cp(c, w, 97);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    an_ocr_end(c, at);
+    crate::testport::assert_eq(ox_find(c, at), -1, "version 1 reads as no extension");
 }

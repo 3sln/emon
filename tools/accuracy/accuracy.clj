@@ -8,6 +8,12 @@
     bb accuracy --predictor \"CMD ...\"  any command (protocol in predict_oracle.clj)
     bb accuracy --update               record improvements and new entries in the scoreboard
     bb accuracy --only ID              score one document (no ratchet)
+    bb accuracy --variants scan,pdf    score only these variants of the corpus (default: every one)
+    bb accuracy --ids ID,ID            score only these documents
+    bb accuracy --predictor emon-live  the Rust Engine WITH LIVE TESSERACT (P6.5, D211): the scan variants through real OCR.
+                                       NOT a gate (it needs Tesseract and takes minutes); `bb ocr-live` runs it for the scans
+    bb accuracy --predictor emon-replay  the Rust Engine REPLAYING the committed OCR transcripts of test/ocr/scan/ID/ (a gate's:
+                                       `bb ocr` scores the documents that have one; no engine runs)
 
 RATCHET (SPEC 14.2): for every predictor that has a committed entry in
 test/scoreboard.edn, every tracked metric of every category must not be worse
@@ -49,7 +55,9 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 (def PREDICTORS
   {"oracle" oracle/predict
    "degraded" degraded/predict
-   "emon" ["sh" (str (fs/path HERE "predict-emon.sh"))]})
+   "emon" ["sh" (str (fs/path HERE "predict-emon.sh"))]
+   "emon-live" ["sh" (str (fs/path HERE "predict-emon-live.sh"))]
+   "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]})
 (def FAMILY {"h" "headings" "table" "tables" "furn" "furniture" "figures" "figures"
              "lists" "lists" "script" "scripts" "columns" "columns" "footnotes" "footnotes"
              "stamp" "seals" "watermark" "watermarks" "invoice" "forms" "bank" "forms"
@@ -164,11 +172,16 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
                                (System/exit 1))
         :else [(pyjson/parse (:out r)) ""]))))
 
+(def ^:dynamic *variants* nil)   ; a set of variant names, or nil for every one
+(def ^:dynamic *ids* nil)        ; a set of document ids, or nil for every one
+
 (defn corpus []
   (let [man (pyjson/parse-file (str (fs/path CORPUS "MANIFEST.json")))]
     (for [doc-id (sort (keys (get man "docs")))
+          :when (or (nil? *ids*) (contains? *ids* doc-id))
           :let [files (get-in man ["docs" doc-id "files"])]
           variant ["pdf" "scan" "pdf-tagged"]
+          :when (or (nil? *variants*) (contains? *variants* variant))
           :when (contains? files variant)]
       [doc-id variant (str (fs/path CORPUS (get-in files [variant "path"])))
        (str (fs/path CORPUS "gold" (str doc-id ".gold.json")))])))
@@ -308,7 +321,11 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
           "--predictor" (recur (nnext a) (second a) update only)
           "--update" (recur (next a) pred true only)
           "--only" (recur (nnext a) pred update (second a))
-          (do (println "usage: accuracy.clj [--predictor emon|oracle|degraded|fixtures|CMD] [--update] [--only ID]")
+          "--variants" (do (alter-var-root #'*variants* (constantly (set (str/split (second a) #","))))
+                           (recur (nnext a) pred update only))
+          "--ids" (do (alter-var-root #'*ids* (constantly (set (str/split (second a) #","))))
+                      (recur (nnext a) pred update only))
+          (do (println "usage: accuracy.clj [--predictor emon|emon-live|emon-replay|oracle|degraded|fixtures|CMD] [--update] [--only ID] [--variants V,V] [--ids ID,ID]")
               (System/exit 2))))
       (let [board (load-board)
             runs (cond (= pred "fixtures") [["oracle" (PREDICTORS "oracle")] ["degraded" (PREDICTORS "degraded")]]

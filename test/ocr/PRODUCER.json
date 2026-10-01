@@ -1,5 +1,5 @@
 {
- "note": "What produced test/ocr/*/ (D095). The transcript format (D090) has no producer field yet, so it lives here. Regenerate with `bb tools/ocr/record.clj`.",
+ "note": "What produced test/ocr/h-keyword/ (D095). Its transcript now carries the same facts as `:producer` (D214); this file stays as the prose record. test/ocr/scan/*/ (P6.5) carry only their own `:producer`. Re-recorded with extension version 2 (D214). Regenerate with `bb tools/ocr/record.clj`.",
  "bitmaps": "Re-encoded (D125): bitmap-0000.png was decoded and written again with the canonical kin PNG encoder (emon.png, D124), no Tesseract run; 2105628 -> 272174 bytes, same pixels (hash 8787ffdb), file hash 40abd3ac. Tesseract itself recorded the stored-block original.",
  "engine": {
   "name": "Tesseract (C API through FFI, host/rust/src/tess.rs)",

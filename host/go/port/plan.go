@@ -353,6 +353,10 @@ type PlanEntry struct {
 type Transcript struct {
 	Inputs  [][2]int32
 	Entries []PlanEntry
+	// Producer is WHO ANSWERED (D214): the live ports' identities as name/value pairs (an OCR engine and its version, the
+	// models it read with), written as `:producer {...}` when there are any and never read back for a replay: a replay
+	// depends on the answers, not on whose engine gave them. Empty leaves the file as it always was.
+	Producer [][2]string
 }
 
 // TranscriptFile is the name of the records file.
@@ -401,7 +405,18 @@ func planInts(v []int32) string {
 // same entries always give the same bytes (and the same bytes as the Rust host).
 func (t *Transcript) ToFiles() []PlanFile {
 	var sb strings.Builder
-	sb.WriteString("{:emon-transcript 1\n :inputs [")
+	sb.WriteString("{:emon-transcript 1\n")
+	if len(t.Producer) > 0 {
+		sb.WriteString(" :producer {")
+		for i, kv := range t.Producer {
+			if i > 0 {
+				sb.WriteString(" ")
+			}
+			fmt.Fprintf(&sb, ":%s \"%s\"", kv[0], strings.NewReplacer("\\", "/", "\"", "'").Replace(kv[1]))
+		}
+		sb.WriteString("}\n")
+	}
+	sb.WriteString(" :inputs [")
 	for i, in := range t.Inputs {
 		if i > 0 {
 			sb.WriteString(" ")
@@ -447,6 +462,9 @@ func TranscriptFromFiles(files map[string][]byte) (*Transcript, error) {
 		return nil, bad("not an emon-transcript of version 1")
 	}
 	t := &Transcript{}
+	if _, ok := m["producer"].(map[string]any); ok {
+		t.Producer = planProducerInOrder(string(raw))
+	}
 	ins, ok := m["inputs"].([]any)
 	if !ok {
 		return nil, bad("no :inputs")
@@ -504,6 +522,38 @@ func TranscriptFromFiles(files map[string][]byte) (*Transcript, error) {
 		t.Entries = append(t.Entries, ent)
 	}
 	return t, nil
+}
+
+// planProducerInOrder reads the `:producer {:name "value" ...}` map in the order the file has it (the EDN reader's maps are
+// unordered, and a transcript read and written again must be the same bytes).
+func planProducerInOrder(s string) [][2]string {
+	i := strings.Index(s, ":producer {")
+	if i < 0 {
+		return nil
+	}
+	s = s[i+len(":producer {"):]
+	var out [][2]string
+	for {
+		s = strings.TrimLeft(s, " \n\t,")
+		if s == "" || s[0] == '}' || s[0] != ':' {
+			return out
+		}
+		j := strings.IndexAny(s, " \n\t")
+		if j < 0 {
+			return out
+		}
+		key := s[1:j]
+		s = strings.TrimLeft(s[j:], " \n\t")
+		if s == "" || s[0] != '"' {
+			return out
+		}
+		k := strings.Index(s[1:], "\"")
+		if k < 0 {
+			return out
+		}
+		out = append(out, [2]string{key, s[1 : 1+k]})
+		s = s[1+k+1:]
+	}
 }
 
 func planIntVec(v any) ([]int32, bool) {

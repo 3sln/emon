@@ -1,5 +1,5 @@
-;; RASTER INTAKE: an image input becomes pages (P6.1; SPEC 2.0, 7.2, 7.3; D058, D074, D075, D089, D187-D190).
-;; emon's own module (D039).
+;; RASTER INTAKE: an image input becomes pages, and the pages are read by OCR (P6.1, P6.5; SPEC 2.0, 7.2, 7.3, 9.1; D058, D074,
+;; D075, D089, D187-D190, D211-D215). emon's own module (D039).
 ;;
 ;; kin ONLY SNIFFS (D058). `rs-sniff` reads the first eight bytes of a `Src` and says PNG, JPEG, TIFF or none; it
 ;; decodes nothing. Decoding is the host's `ImageDecode` port, and kin reaches it the way it reaches every
@@ -7,29 +7,33 @@
 ;; `f` of the input is request id `f + 1` (ids are kin's and derived from what is asked, D089), so a replay finds
 ;; every answer by the whole record.
 ;;
-;; THE UNIT, in two rounds (both under `max-rounds`):
+;; THE UNIT, in at most three rounds (all under `max-rounds`):
 ;;   1. ask for frame 0. Its answer names the frame count.
-;;   2. ask for every other frame, all at once (the host may take them in any order).
-;;   then build the page table: one `image` page per frame, in frame order.
-;; With `info` set the requests are header-only (frame < 0, D187): stage 0's `intake`, which must not decode pixels.
+;;   2. ask for every other frame, all at once (the host may take them in any order), and OCR of frame 0.
+;;   3. OCR of every other frame, all at once.
+;;   then build the page table, one `image` page per frame in frame order, and the OCR evidence and lines of each page (`emon.scan`).
+;; The OCR request of frame `f` has id `frames + f + 1`: derived from what is asked, as ever. With `info` set the requests are
+;; header-only (frame < 0, D187) and there is no OCR: stage 0's `intake` must not decode pixels. With `policy` 0 (`never`,
+;; D038) there is none either; `auto` and `always` both OCR an image, which has no text layer to prefer. A frame whose OCR
+;; the host cannot do (`unsupported`: no Ocr port) or failed has a page and no text, as before OCR existed.
 ;;
 ;; PAGE GEOMETRY. A frame of `w x h` pixels at `dpi100` (dots per inch x 100) is `w * 720000 / dpi100`
 ;; centipoints wide (SPEC 3.4). A frame that states no resolution is read AS 300 DPI and the document is flagged
-;; `dpi-unknown`: SPEC 3.4 wants the resolution estimated from the text size, which needs OCR (P6.5); until then
-;; this is the placeholder, and the pixel size is kept in the page table either way (D187).
-;;
-;; WHAT IT DOES NOT DO: no text. An image page has no words until OCR is wired (P6.5), so its Model is a document
-;; with its pages and nothing in the body.
+;; `dpi-unknown`: SPEC 3.4 wants the resolution estimated from the text size; that estimate is not made (D215), the
+;; 300 is the engine's own default, and the pixel size is kept in the page table either way (D187). The OCR request
+;; carries the resolution it read the frame at as a hint (D211).
 (ns emon.rasterin
   (:require [emon.lang :refer [I32 I64 Cells Src i64 i32 add64 mul64]]
-            [emon.port :refer [cells-len cells-at limit-of limit-breach]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push limit-of limit-breach]]
             [emon.pdfsrc :refer [ps-len ps-u8]]
-            [emon.plan :refer [rq-decode an-find an-status an-arg flt-none ps-ok ps-unsupported ps-limit
+            [emon.plan :refer [rq-decode an-find an-ok an-status an-arg flt-none ps-ok ps-unsupported ps-limit
                                us-requests]]
             [emon.model :refer [page-new page-set-resolution pk-image node-set-flags node-set-attr-int
                                 node-set-attr-text text-append-cp fk-format fk-pages fl-dpi-unknown]]
+            [emon.scan :refer [sc-request sc-lang sc-page]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
+
 
 ;; The formats `rs-sniff` answers. Codes are never reused (D050).
 (defn ^:pub ^I32 rs-none [] (return 0))
@@ -94,11 +98,48 @@
     (node-set-attr-text nodes attrs 0 (fk-format) start (- (cells-len text) start))
     (return 0)))
 
+
+(defn ^I32 rs-eff-dpi100 [^I32 dpi100]
+  (comment "The resolution a frame is read at: its own, or 300 dpi when it states none.")
+  (if (<= dpi100 0) (return (rs-default-dpi100)))
+  (return dpi100))
+
+(defn ^:pub ^I32 rs-ocr-id [^I32 frames ^I32 f]
+  (comment "The request id of the OCR of frame `f` of a `frames`-frame input: after every decode's.")
+  (return (+ (+ frames f) 1)))
+
+(defn ^I32 rs-want-ocr [^I32 info ^I32 policy]
+  (comment "1 when this attempt asks for OCR: not a header-only intake, and the policy is not `never`.")
+  (if (== info 1) (return 0))
+  (if (== policy 0) (return 0))
+  (return 1))
+
+(defn ^I32 rs-read-page [^Cells ans ^I32 ao ^I32 ad ^I32 page ^I32 oid ^Cells loc
+                         ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                         ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                         ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                         ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
+  (comment "The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).")
+  (let [^I32 w (an-arg ans ad 0)
+        ^I32 h (an-arg ans ad 1)
+        ^I32 eff (rs-eff-dpi100 (an-arg ans ad 3))
+        ^I32 wc (rs-cpt w eff)
+        ^I32 hc (rs-cpt h eff)]
+    (return (sc-page ans ao page oid page wc hc w h eff 0 0 0 0 0 wc hc (sc-lang loc)
+                     epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr))))
+
 (defn ^:pub ^I32 rs-unit [^Src src ^I32 input ^I32 fmt ^I32 info ^Cells ans ^:mut ^Cells rq
-                          ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells pages]
-  (comment "One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the")
-  (comment "host. Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's")
-  (comment "`format` and `pages` and one page row per frame written.")
+                          ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells pages
+                          ^I32 policy ^Cells loc ^:mut ^Cells mask
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
+  (comment "One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are")
+  (comment "the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points")
+  (comment "(empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and")
+  (comment "`pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and")
+  (comment "`lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.")
   (let [^I32 nbytes (ps-len src)
         ^I32 a0 (an-find ans 1)]
     (if (< a0 0)
@@ -106,8 +147,11 @@
           (return (us-requests))))
     (if (!= (an-status ans a0) (ps-ok)) (return (rs-fail ans a0)))
     (let [^I32 frames (an-arg ans a0 5)
+          ^I32 want (rs-want-ocr info policy)
           ^:mut ^I32 f 1
-          ^:mut ^I32 asked 0]
+          ^:mut ^I32 asked 0
+          ^:mut ^I32 da 0
+          ^:mut ^I32 dd 0]
       (if (< frames 1) (return (rs-undecodable)))
       (if (> frames (limit-of 8)) (limit-breach 8 frames))
       (while (< f frames)
@@ -115,9 +159,20 @@
               (do (rq-decode rq (+ f 1) input 0 nbytes (flt-none) (rs-frame-arg info f))
                   (set asked 1)))
             (set f (+ f 1))))
+      (if (== want 1)
+        (do (set f 0)
+            (while (< f frames)
+              (do (set da (an-find ans (+ f 1)))
+                  (if (and (>= da 0) (< (an-find ans (rs-ocr-id frames f)) 0))
+                    (if (== (an-ok ans da) 1)
+                      (do (set dd (rs-eff-dpi100 (an-arg ans da 3)))
+                          (sc-request rq (rs-ocr-id frames f) (+ f 1) (quot (+ dd 50) 100) loc)
+                          (set asked 1))))
+                  (set f (+ f 1))))))
       (if (== asked 1) (return (us-requests)))
       (rs-format-name nodes attrs text fmt)
       (node-set-attr-int nodes attrs 0 (fk-pages) frames)
+      (cells-drop mask 0)
       (set f 0)
       (while (< f frames)
         (do (let [^I32 a (an-find ans (+ f 1))]
@@ -133,5 +188,17 @@
                       (node-set-flags nodes 0 (fl-dpi-unknown))))
                 (let [^I32 p (page-new pages (+ f 1) (rs-cpt w eff) (rs-cpt h eff) 0 (pk-image))]
                   (page-set-resolution pages p (quot (+ dpi100 50) 100) w h))))
+            (cells-push mask 0)
             (set f (+ f 1))))
+      (if (== want 1)
+        (do (set f 0)
+            (while (< f frames)
+              (do (set da (an-find ans (rs-ocr-id frames f)))
+                  (if (>= da 0)
+                    (if (== (an-ok ans da) 1)
+                      (do (set dd (an-find ans (+ f 1)))
+                          (rs-read-page ans da dd (+ f 1) (rs-ocr-id frames f) loc
+                                        epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)
+                          (cells-set mask f 1))))
+                  (set f (+ f 1))))))
       (return 0))))
