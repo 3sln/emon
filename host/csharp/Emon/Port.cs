@@ -701,4 +701,128 @@ public static class Port {
         }
         return PushBytes(o, ct, ct.Length);
     }
+
+    // ;; P6.3 bulk forms (D197): see the Rust half for the contracts.
+
+    // @kin:link:form:bitmap-gray-into: {:template "emon.Port.BitmapGrayInto({0}, {1})" :arity 2}
+    public static int BitmapGrayInto(Bitmap src, Bitmap dst) {
+        if (src.W != dst.W || src.H != dst.H || dst.Ch != 1) {
+            throw new System.ArgumentException("bitmap size");
+        }
+        var s = src.D; var d = dst.D;
+        int ch = src.Ch;
+        for (int y = 0; y < src.H; y++) {
+            int si = y * src.Stride, di = y * dst.Stride;
+            if (ch < 3) {
+                for (int x = 0; x < src.W; x++) {
+                    d[di + x] = s[si + x * ch];
+                }
+            } else {
+                for (int x = 0; x < src.W; x++) {
+                    int p = si + x * ch;
+                    d[di + x] = (byte)((77 * s[p] + 150 * s[p + 1] + 29 * s[p + 2] + 128) >> 8);
+                }
+            }
+        }
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-hist-rgb: {:template "emon.Port.BitmapHistRgb({0}, {1}, {2})" :arity 3}
+    public static int BitmapHistRgb(Bitmap src, Cells cells, int off) {
+        if (off < 0 || off + 4096 > cells.N) {
+            throw new System.IndexOutOfRangeException();
+        }
+        var bins = cells.V;
+        var s = src.D;
+        int ch = src.Ch;
+        for (int y = 0; y < src.H; y++) {
+            int p = y * src.Stride;
+            if (ch < 3) {
+                for (int x = 0; x < src.W; x++, p += ch) {
+                    bins[off + (s[p] >> 4) * 273]++;
+                }
+            } else {
+                for (int x = 0; x < src.W; x++, p += ch) {
+                    bins[off + (((s[p] & 0xF0) << 4) | (s[p + 1] & 0xF0) | ((s[p + 2] & 0xF0) >> 4))]++;
+                }
+            }
+        }
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-lut-into: {:template "emon.Port.BitmapLutInto({0}, {1}, {2}, {3})" :arity 4}
+    public static int BitmapLutInto(Bitmap src, Cells lut, int off, Bitmap dst) {
+        if (src.W != dst.W || src.H != dst.H || dst.Ch != 1) {
+            throw new System.ArgumentException("bitmap size");
+        }
+        if (off < 0 || off + 4096 > lut.N) {
+            throw new System.IndexOutOfRangeException();
+        }
+        var t = lut.V;
+        var s = src.D; var d = dst.D;
+        int ch = src.Ch;
+        for (int y = 0; y < src.H; y++) {
+            int p = y * src.Stride, q = y * dst.Stride;
+            if (ch < 3) {
+                for (int x = 0; x < src.W; x++, p += ch) {
+                    d[q + x] = (byte)t[off + (s[p] >> 4) * 273];
+                }
+            } else {
+                for (int x = 0; x < src.W; x++, p += ch) {
+                    d[q + x] = (byte)t[off + (((s[p] & 0xF0) << 4) | (s[p + 1] & 0xF0) | ((s[p + 2] & 0xF0) >> 4))];
+                }
+            }
+        }
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-hash: {:template "emon.Port.BitmapHash({0}, {1}, {2})" :arity 3}
+    public static int BitmapHash(Bitmap b, Cells o, int off) {
+        if (off < 0 || off + 2 > o.N) {
+            throw new System.IndexOutOfRangeException();
+        }
+        ulong h = 0xcbf29ce484222325UL;
+        int[] head = { b.W, b.H, b.Ch };
+        unchecked {
+            foreach (int v in head) {
+                for (int k = 0; k < 4; k++) {
+                    h = (h ^ (ulong)(((uint)v >> (8 * k)) & 255)) * 0x100000001b3UL;
+                }
+            }
+            var d = b.D;
+            int n = b.W * b.Ch;
+            for (int y = 0; y < b.H; y++) {
+                int e = y * b.Stride + n;
+                for (int i = y * b.Stride; i < e; i++) {
+                    h = (h ^ d[i]) * 0x100000001b3UL;
+                }
+            }
+            o.V[off] = (int)(uint)(h >> 32);
+            o.V[off + 1] = (int)(uint)h;
+        }
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-quarter-into: {:template "emon.Port.BitmapQuarterInto({0}, {1}, {2})" :arity 3}
+    public static int BitmapQuarterInto(Bitmap src, Bitmap dst, int turns) {
+        int q = ((turns % 4) + 4) % 4;
+        if (src.Ch != dst.Ch || (q % 2 == 0 && (src.W != dst.W || src.H != dst.H))
+            || (q % 2 == 1 && (src.W != dst.H || src.H != dst.W))) {
+            throw new System.ArgumentException("bitmap size");
+        }
+        int ch = src.Ch;
+        for (int y = 0; y < dst.H; y++) {
+            for (int x = 0; x < dst.W; x++) {
+                int sx, sy;
+                switch (q) {
+                    case 0: sx = x; sy = y; break;
+                    case 1: sx = y; sy = src.H - 1 - x; break;
+                    case 2: sx = src.W - 1 - x; sy = src.H - 1 - y; break;
+                    default: sx = src.W - 1 - y; sy = x; break;
+                }
+                System.Array.Copy(src.D, sy * src.Stride + sx * ch, dst.D, y * dst.Stride + x * ch, ch);
+            }
+        }
+        return 0;
+    }
 }

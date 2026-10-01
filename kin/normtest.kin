@@ -1,0 +1,841 @@
+;; Laws for `emon.norm` and the P6.3 bulk forms (D197). Every host form is held byte-identical to its kin reference over
+;; random bitmaps; the hash against FNV-1a values computed independently in babashka; the layers against fixtures drawn
+;; by hand (a page of known colours, so the layer counts are exact); banded Sauvola against P2.7's whole-page
+;; `ras-sauvola`; deskew against pages drawn at a known skew.
+(ns emon.normtest
+  (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32]]
+            [emon.test :refer [deftest assert-eq assert-eq64 assert-that new-cells]]
+            [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
+                               bitmap-gray-into bitmap-hist-rgb bitmap-lut-into bitmap-hash bitmap-quarter-into
+                               cells-len cells-at cells-set cells-push cells-grow]]
+            [emon.splitmix :refer [sm-seed sm-below]]
+            [emon.raster :refer [ras-integral ras-sqrt-table ras-sauvola]]
+            [emon.evidence :refer [vw-new vw-get vw-count ik-get ik-count fe-new fe-get
+                                   vk-render vk-decode vk-gray vk-binary vk-ink-mask
+                                   vwf-kind vwf-parent vwf-deskew vwf-pxw vwf-a vwf-b vwf-c vwf-d vwf-e vwf-f
+                                   ikf-count ikf-role ikf-mask ikf-light ikf-chroma ikf-color
+                                   ir-body ir-light ir-color ir-background ir-unknown
+                                   xo-kin-ink xo-engine-ink xo-jaccard xo-body-share xo-ink-gray
+                                   xt-kin-ink xt-ink-without-text xt-body-share
+                                   ev-sin ev-cos]]
+            [emon.norm :refer [nm-ref-gray nm-ref-hist nm-ref-lut nm-ref-hash nm-ref-hash64 nm-ref-quarter
+                               nm-ws-init nm-ws-hist nm-ws-assign nm-layers nm-roles nm-mask-into nm-role-mask-into nm-label-into
+                               nm-layer-get nm-layer-count nm-paper-gray nm-ink-rows
+                               nm-ink-merge nm-ink-paper nm-ink-min nm-ink-spike nm-ink-light nm-ink-chroma nm-ink-bg
+                               nm-sqrt-table nm-sauvola nm-sauvola-r
+                               nm-skew-points nm-deskew nm-orient nm-reskew nm-osd-conf
+                               nm-box-ink nm-box-both nm-box-gray-sum nm-feat-ocr nm-feat-text nm-box-px
+                               nm-view nm-gray-view nm-binary-view]]
+            [kin.lang :refer [defn let set while do comment return if
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ---------------------------------------------------------------- helpers
+
+(defn ^I32 nt-sel [^I32 c ^I32 a ^I32 b]
+  (comment "c ? a : b.")
+  (if (!= c 0) (return a))
+  (return b))
+
+(defn ^I32 nt-fill [^Bitmap b ^:mut ^Cells st]
+  (comment "Every byte pseudo-random, from a seeded generator.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0]
+    (while (< y (bitmap-h b))
+      (do (set x 0)
+          (while (< x (bitmap-w b))
+            (do (set c 0)
+                (while (< c (bitmap-channels b))
+                  (do (bitmap-set-u8 b x y c (sm-below st 256))
+                      (set c (+ c 1))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 nt-same [^Bitmap a ^Bitmap b]
+  (comment "1 when the two have one shape and one set of bytes.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 same 1]
+    (if (!= (bitmap-w a) (bitmap-w b)) (return 0))
+    (if (!= (bitmap-h a) (bitmap-h b)) (return 0))
+    (if (!= (bitmap-channels a) (bitmap-channels b)) (return 0))
+    (while (< y (bitmap-h a))
+      (do (set x 0)
+          (while (< x (bitmap-w a))
+            (do (set c 0)
+                (while (< c (bitmap-channels a))
+                  (do (if (!= (bitmap-u8 a x y c) (bitmap-u8 b x y c)) (set same 0))
+                      (set c (+ c 1))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return same)))
+
+(defn ^I32 nt-rect [^Bitmap b ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 r ^I32 g ^I32 bl]
+  (comment "Fill [x0,x1) x [y0,y1) with a colour (a 1-channel bitmap takes r).")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y y0]
+    (while (< y y1)
+      (do (set x x0)
+          (while (< x x1)
+            (do (bitmap-set-u8 b x y 0 r)
+                (if (== (bitmap-channels b) 3)
+                  (do (bitmap-set-u8 b x y 1 g)
+                      (bitmap-set-u8 b x y 2 bl)))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 nt-count [^Bitmap m]
+  (comment "Nonzero pixels of channel 0.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 n 0]
+    (while (< y (bitmap-h m))
+      (do (set x 0)
+          (while (< x (bitmap-w m))
+            (do (if (!= (bitmap-u8 m x y 0) 0) (set n (+ n 1)))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return n)))
+
+(defn ^I32 nt-lut-fill [^:mut ^Cells lut ^:mut ^Cells st ^I32 n]
+  (comment "n random cells (high bits set too, so only the low 8 may reach the mask).")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (cells-push lut (+ (* (sm-below st 65536) 4096) (sm-below st 4096)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 nt-cells-same [^Cells a ^Cells b]
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 same 1]
+    (if (!= (cells-len a) (cells-len b)) (return 0))
+    (while (< i (cells-len a))
+      (do (if (!= (cells-at a i) (cells-at b i)) (set same 0))
+          (set i (+ i 1))))
+    (return same)))
+
+;; ---------------------------------------------------------------- the bulk forms against their kin references
+
+(defn ^I32 nt-gray-case [^I32 w ^I32 h ^I32 ch ^:mut ^Cells st]
+  (let [^Bitmap src (bitmap-new w h ch)
+        ^Bitmap a (bitmap-new w h 1)
+        ^Bitmap b (bitmap-new w h 1)]
+    (nt-fill src st)
+    (bitmap-gray-into src a)
+    (nm-ref-gray src b)
+    (return (nt-same a b))))
+
+(deftest test-gray-form-equals-its-reference-on-random-bitmaps
+  (let [^Cells st (new-cells)]
+    (sm-seed st 11)
+    (assert-eq (nt-gray-case 7 5 3 st) 1 "7x5 rgb")
+    (assert-eq (nt-gray-case 16 9 3 st) 1 "16x9 rgb")
+    (assert-eq (nt-gray-case 1 1 3 st) 1 "1x1 rgb")
+    (assert-eq (nt-gray-case 13 4 1 st) 1 "13x4 gray is copied")))
+
+(deftest test-gray-of-known-colours
+  (comment "(77 r + 150 g + 29 b + 128) >> 8: white 255, black 0, pure red 77+0.5 -> 30, pure green 150.5 -> 59?")
+  (let [^Bitmap s (bitmap-new 4 1 3)
+        ^Bitmap g (bitmap-new 4 1 1)]
+    (nt-rect s 0 0 1 1 255 255 255)
+    (nt-rect s 1 0 2 1 0 0 0)
+    (nt-rect s 2 0 3 1 255 0 0)
+    (nt-rect s 3 0 4 1 0 255 0)
+    (bitmap-gray-into s g)
+    (assert-eq (bitmap-u8 g 0 0 0) 255 "white")
+    (assert-eq (bitmap-u8 g 1 0 0) 0 "black")
+    (assert-eq (bitmap-u8 g 2 0 0) 77 "red: (19635 + 128) >> 8")
+    (assert-eq (bitmap-u8 g 3 0 0) 149 "green: (38250 + 128) >> 8")))
+
+(defn ^I32 nt-hist-case [^I32 w ^I32 h ^I32 ch ^:mut ^Cells st]
+  (let [^Bitmap src (bitmap-new w h ch)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)]
+    (nt-fill src st)
+    (cells-grow a 4100 3)
+    (cells-grow b 4100 3)
+    (bitmap-hist-rgb src a 2)
+    (nm-ref-hist src b 2)
+    (return (nt-cells-same a b))))
+
+(deftest test-hist-form-equals-its-reference-and-adds
+  (let [^Cells st (new-cells)]
+    (sm-seed st 12)
+    (assert-eq (nt-hist-case 9 7 3 st) 1 "9x7 rgb, added to 3s at an offset")
+    (assert-eq (nt-hist-case 20 20 3 st) 1 "20x20 rgb")
+    (assert-eq (nt-hist-case 11 3 1 st) 1 "11x3 gray uses v>>4 three times"))
+  (let [^Bitmap s (bitmap-new 2 1 3)
+        ^Cells h (new-cells)]
+    (nt-rect s 0 0 1 1 255 255 255)
+    (nt-rect s 1 0 2 1 31 63 159)
+    (cells-grow h 4096 0)
+    (bitmap-hist-rgb s h 0)
+    (assert-eq (cells-at h 4095) 1 "white is bin 0xFFF")
+    (assert-eq (cells-at h 313) 1 "blue 31 63 159 is bin (1,3,9) = 0x139")))
+
+(defn ^I32 nt-lut-case [^I32 w ^I32 h ^I32 ch ^:mut ^Cells st]
+  (let [^Bitmap src (bitmap-new w h ch)
+        ^Bitmap a (bitmap-new w h 1)
+        ^Bitmap b (bitmap-new w h 1)
+        ^Cells lut (new-cells)]
+    (nt-fill src st)
+    (nt-lut-fill lut st 4100)
+    (bitmap-lut-into src lut 3 a)
+    (nm-ref-lut src lut 3 b)
+    (return (nt-same a b))))
+
+(deftest test-lut-form-equals-its-reference-keeping-the-low-8-bits
+  (let [^Cells st (new-cells)]
+    (sm-seed st 13)
+    (assert-eq (nt-lut-case 9 7 3 st) 1 "9x7 rgb")
+    (assert-eq (nt-lut-case 30 12 3 st) 1 "30x12 rgb")
+    (assert-eq (nt-lut-case 8 8 1 st) 1 "8x8 gray"))
+  (let [^Bitmap s (bitmap-new 1 1 3)
+        ^Bitmap d (bitmap-new 1 1 1)
+        ^Cells lut (new-cells)]
+    (nt-rect s 0 0 1 1 255 255 255)
+    (cells-grow lut 4096 0)
+    (cells-set lut 4095 4863)
+    (bitmap-lut-into s lut 0 d)
+    (assert-eq (bitmap-u8 d 0 0 0) 255 "4863 = 0x12FF: the low byte, 255")))
+
+(deftest test-hash-of-known-bitmaps-is-fnv-1a-64
+  (comment "Values computed independently in babashka: FNV-1a 64 over w, h, channels (4 bytes LE each), then the bytes.")
+  (let [^Bitmap a (bitmap-new 1 1 1)
+        ^Bitmap b (bitmap-new 2 1 1)
+        ^Bitmap c (bitmap-new 2 2 3)
+        ^Cells o (new-cells)
+        ^:mut ^I32 i 0]
+    (cells-grow o 2 0)
+    (bitmap-hash a o 0)
+    (assert-eq (cells-at o 0) 1935683416 "1x1 gray 0, high")
+    (assert-eq (cells-at o 1) 767303708 "low")
+    (bitmap-set-u8 b 0 0 0 7)
+    (bitmap-set-u8 b 1 0 0 200)
+    (bitmap-hash b o 0)
+    (assert-eq (cells-at o 0) 1420858788 "2x1 gray 7 200, high")
+    (assert-eq (cells-at o 1) 367332152 "low")
+    (while (< i 12)
+      (do (bitmap-set-u8 c (rem (quot i 3) 2) (quot i 6) (rem i 3) (+ i 1))
+          (set i (+ i 1))))
+    (bitmap-hash c o 0)
+    (assert-eq (cells-at o 0) 2088399466 "2x2 rgb 1..12, high")
+    (assert-eq (cells-at o 1) -379269774 "low")
+    (assert-eq64 (nm-ref-hash64 c) 8969607411369561458 "the reference's 64 bits")))
+
+(deftest test-hash-form-equals-its-reference-and-tells-pictures-apart
+  (let [^Cells st (new-cells)
+        ^Bitmap a (bitmap-new 17 9 3)
+        ^Bitmap b (bitmap-new 17 9 3)
+        ^Bitmap t (bitmap-new 9 17 3)
+        ^Cells o1 (new-cells)
+        ^Cells o2 (new-cells)]
+    (sm-seed st 14)
+    (nt-fill a st)
+    (cells-grow o1 4 0)
+    (cells-grow o2 4 0)
+    (bitmap-hash a o1 1)
+    (nm-ref-hash a o2 1)
+    (assert-eq (cells-at o1 1) (cells-at o2 1) "high halves")
+    (assert-eq (cells-at o1 2) (cells-at o2 2) "low halves")
+    (assert-eq (cells-at o1 0) 0 "cells outside the pair are untouched")
+    (assert-eq (cells-at o1 3) 0 "and after it")
+    (nm-ref-quarter a b 0)
+    (bitmap-set-u8 b 16 8 2 (+ (bitmap-u8 b 16 8 2) 1))
+    (bitmap-hash b o2 1)
+    (assert-that (!= (cells-at o1 2) (cells-at o2 2)) "one byte changed, a different hash")
+    (bitmap-quarter-into a t 1)
+    (bitmap-hash t o2 1)
+    (assert-that (!= (cells-at o1 2) (cells-at o2 2)) "a turned picture, a different hash")))
+
+(defn ^I32 nt-quarter-case [^I32 w ^I32 h ^I32 ch ^I32 turns ^:mut ^Cells st]
+  (let [^I32 odd (rem (+ (rem turns 4) 4) 2)
+        ^Bitmap src (bitmap-new w h ch)
+        ^Bitmap a (bitmap-new (nt-sel odd h w) (nt-sel odd w h) ch)
+        ^Bitmap b (bitmap-new (nt-sel odd h w) (nt-sel odd w h) ch)]
+    (nt-fill src st)
+    (bitmap-quarter-into src a turns)
+    (nm-ref-quarter src b turns)
+    (return (nt-same a b))))
+
+(deftest test-quarter-form-equals-its-reference
+  (let [^Cells st (new-cells)]
+    (sm-seed st 15)
+    (assert-eq (nt-quarter-case 5 3 3 0 st) 1 "0 turns")
+    (assert-eq (nt-quarter-case 5 3 3 1 st) 1 "1 turn")
+    (assert-eq (nt-quarter-case 5 3 3 2 st) 1 "2 turns")
+    (assert-eq (nt-quarter-case 5 3 3 3 st) 1 "3 turns")
+    (assert-eq (nt-quarter-case 6 4 1 5 st) 1 "5 turns is 1, gray")
+    (assert-eq (nt-quarter-case 6 4 1 -1 st) 1 "-1 turn is 3")))
+
+(deftest test-quarter-turns-are-clockwise-and-four-make-none
+  (comment "A 3x2 picture, left to right and top to bottom 1..6; one clockwise turn makes a 2x3 picture whose rows are")
+  (comment "[4 1], [5 2], [6 3].")
+  (let [^Bitmap s (bitmap-new 3 2 1)
+        ^Bitmap q (bitmap-new 2 3 1)
+        ^Bitmap h (bitmap-new 3 2 1)
+        ^Bitmap w (bitmap-new 2 3 1)
+        ^Bitmap z (bitmap-new 3 2 1)]
+    (bitmap-set-u8 s 0 0 0 1)
+    (bitmap-set-u8 s 1 0 0 2)
+    (bitmap-set-u8 s 2 0 0 3)
+    (bitmap-set-u8 s 0 1 0 4)
+    (bitmap-set-u8 s 1 1 0 5)
+    (bitmap-set-u8 s 2 1 0 6)
+    (bitmap-quarter-into s q 1)
+    (assert-eq (bitmap-u8 q 0 0 0) 4 "row 0, col 0")
+    (assert-eq (bitmap-u8 q 1 0 0) 1 "row 0, col 1")
+    (assert-eq (bitmap-u8 q 0 1 0) 5 "row 1, col 0")
+    (assert-eq (bitmap-u8 q 1 1 0) 2 "row 1, col 1")
+    (assert-eq (bitmap-u8 q 0 2 0) 6 "row 2, col 0")
+    (assert-eq (bitmap-u8 q 1 2 0) 3 "row 2, col 1")
+    (bitmap-quarter-into s h 2)
+    (assert-eq (bitmap-u8 h 0 0 0) 6 "two turns: the last pixel comes first")
+    (assert-eq (bitmap-u8 h 2 1 0) 1 "and the first comes last")
+    (bitmap-quarter-into s w 3)
+    (assert-eq (bitmap-u8 w 0 0 0) 3 "three turns: row 0, col 0 is the old top right")
+    (assert-eq (bitmap-u8 w 1 2 0) 4 "and the old bottom left is at the far corner")
+    (bitmap-quarter-into s q 1)
+    (bitmap-quarter-into q z 1)
+    (bitmap-quarter-into z q 1)
+    (bitmap-quarter-into q h 1)
+    (assert-eq (nt-same s h) 1 "four single turns are the identity")))
+
+;; ---------------------------------------------------------------- ink layers
+
+(defn ^I32 nt-page-3 [^Bitmap b]
+  (comment "Paper, a black block (600 px), a blue block (400 px), a light-grey block (800 px), and a column of 20 mid-grey")
+  (comment "pixels beside the black block, an anti-aliased edge.")
+  (nt-rect b 0 0 100 80 255 255 255)
+  (nt-rect b 10 10 40 30 0 0 0)
+  (nt-rect b 60 40 80 60 31 63 159)
+  (nt-rect b 10 50 50 70 207 207 207)
+  (nt-rect b 40 10 41 30 102 102 102)
+  (return 0))
+
+(defn ^I32 nt-layers [^Bitmap b ^:mut ^Cells ws]
+  (let [^I32 n (nm-layers ws (nm-ink-merge) (nm-ink-paper) (nm-ink-min) (nm-ink-spike))]
+    (nm-roles ws (nm-ink-light) (nm-ink-chroma) (nm-ink-bg))
+    (return n)))
+
+(deftest test-a-page-of-three-inks-separates-into-three-layers-by-size
+  (let [^Bitmap b (bitmap-new 100 80 3)
+        ^Cells ws (new-cells)]
+    (nt-page-3 b)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (assert-eq (nt-layers b ws) 3 "paper and three inks: three layers")
+    (assert-eq (nm-layer-count ws) 3 "the count is kept")
+    (assert-eq (nm-layer-get ws 0 0) 800 "layer 1 is the light grey block, the largest")
+    (assert-eq (nm-layer-get ws 1 0) 620 "layer 2 is black and holds its anti-aliased edge: 600 + 20")
+    (assert-eq (nm-layer-get ws 2 0) 400 "layer 3 is the blue block")
+    (assert-eq (nm-paper-gray ws) 255 "the paper bin is white")
+    (assert-eq (nm-layer-get ws 0 8) (ir-light) "light grey: low chroma, lightness over ink-light")
+    (assert-eq (nm-layer-get ws 1 8) (ir-body) "black: the body")
+    (assert-eq (nm-layer-get ws 2 8) (ir-color) "blue: colour")
+    (assert-eq (nm-layer-get ws 2 4) 17 "blue's mean red is its bin centre, 1 * 17")))
+
+(deftest test-layer-masks-are-one-lut-pass-and-hold-exactly-their-ink
+  (let [^Bitmap b (bitmap-new 100 80 3)
+        ^Bitmap m (bitmap-new 100 80 1)
+        ^Bitmap lab (bitmap-new 100 80 1)
+        ^Cells ws (new-cells)]
+    (nt-page-3 b)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (nt-layers b ws)
+    (nm-mask-into b ws 2 m)
+    (assert-eq (nt-count m) 620 "the body mask: 600 + the edge column")
+    (assert-eq (bitmap-u8 m 10 10 0) 255 "inside the black block")
+    (assert-eq (bitmap-u8 m 40 10 0) 255 "on the anti-aliased column")
+    (assert-eq (bitmap-u8 m 9 10 0) 0 "outside")
+    (assert-eq (bitmap-u8 m 60 40 0) 0 "the blue block is not in it")
+    (nm-mask-into b ws 3 m)
+    (assert-eq (nt-count m) 400 "the blue mask")
+    (assert-eq (bitmap-u8 m 79 59 0) 255 "its last pixel")
+    (nm-label-into b ws lab)
+    (assert-eq (bitmap-u8 lab 0 0 0) 0 "paper is 0")
+    (assert-eq (bitmap-u8 lab 10 50 0) 1 "the grey block's id")
+    (assert-eq (bitmap-u8 lab 10 10 0) 2 "black's id")
+    (assert-eq (bitmap-u8 lab 60 40 0) 3 "blue's id")))
+
+(deftest test-a-blank-page-has-no-layers-and-near-colours-merge
+  (let [^Bitmap b (bitmap-new 40 30 3)
+        ^Cells ws (new-cells)]
+    (nt-rect b 0 0 40 30 255 255 255)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (assert-eq (nt-layers b ws) 0 "paper alone")
+    (nt-rect b 5 5 15 15 0 0 0)
+    (nt-rect b 20 5 30 15 17 17 17)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (assert-eq (nt-layers b ws) 1 "black and 17-grey are within ink-merge: one layer")
+    (assert-eq (nm-layer-get ws 0 0) 200 "with both blocks' pixels")
+    (assert-eq (nm-layer-get ws 0 8) (ir-body) "which is the body")))
+
+(deftest test-a-gray-scan-has-body-and-light-and-never-colour
+  (let [^Bitmap b (bitmap-new 60 40 1)
+        ^Cells ws (new-cells)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 bad 0]
+    (nt-rect b 0 0 60 40 255 0 0)
+    (nt-rect b 5 5 25 15 20 0 0)
+    (nt-rect b 30 20 55 38 204 0 0)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (assert-eq (nt-layers b ws) 2 "dark ink and a light watermark")
+    (while (< k 2)
+      (do (if (== (nm-layer-get ws k 8) (ir-color)) (set bad 1))
+          (set k (+ k 1))))
+    (assert-eq bad 0 "no layer of a gray source is colour")
+    (assert-eq (nm-layer-get ws 0 8) (ir-light) "the larger one is the light")
+    (assert-eq (nm-layer-get ws 1 8) (ir-body) "the other the body")))
+
+(deftest test-every-dark-neutral-layer-is-body-and-the-role-mask-is-their-union
+  (let [^Bitmap b (bitmap-new 100 80 3)
+        ^Bitmap m (bitmap-new 100 80 1)
+        ^Cells ws (new-cells)]
+    (nt-rect b 0 0 100 80 255 255 255)
+    (nt-rect b 10 10 30 30 0 0 0)
+    (nt-rect b 50 10 80 20 100 100 100)
+    (nt-rect b 20 50 40 60 31 63 159)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (assert-eq (nt-layers b ws) 3 "black, dark grey and blue")
+    (assert-eq (nm-layer-get ws 0 8) (ir-body) "black (400 px) is body")
+    (assert-eq (nm-layer-get ws 1 8) (ir-body) "so is the dark grey (300 px): one kind of ink in two clusters")
+    (assert-eq (nm-layer-get ws 2 8) (ir-color) "and blue is not")
+    (assert-eq (nm-roles ws (nm-ink-light) (nm-ink-chroma) (nm-ink-bg)) 0 "the largest body layer's row: black, 400 px")
+    (nm-role-mask-into b ws (ir-body) m)
+    (assert-eq (nt-count m) 700 "the body mask is both")
+    (nm-role-mask-into b ws (ir-color) m)
+    (assert-eq (nt-count m) 200 "the colour mask is the blue block")
+    (nm-role-mask-into b ws (ir-light) m)
+    (assert-eq (nt-count m) 0 "no light layer")))
+
+(deftest test-a-dark-mass-is-not-body
+  (let [^Bitmap b (bitmap-new 40 40 3)
+        ^Cells ws (new-cells)]
+    (nt-rect b 0 0 40 40 255 255 255)
+    (nt-rect b 0 0 20 32 0 0 0)
+    (nt-rect b 25 35 30 38 0 0 0)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (assert-eq (nt-layers b ws) 1 "one layer, black")
+    (assert-eq (nm-layer-get ws 0 8) (ir-unknown) "covering 40 per cent of the page it is a mass, not text")))
+
+(deftest test-a-large-light-layer-is-background
+  (let [^Bitmap b (bitmap-new 40 40 3)
+        ^Cells ws (new-cells)]
+    (nt-rect b 0 0 40 40 255 255 255)
+    (nt-rect b 0 0 40 16 221 238 255)
+    (nt-rect b 5 25 15 30 0 0 0)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (assert-eq (nt-layers b ws) 2 "a tinted half and some ink")
+    (assert-eq (nm-layer-get ws 0 8) (ir-background) "two fifths of the page, light and tinted: background")
+    (assert-eq (nm-layer-get ws 1 8) (ir-body) "the ink")))
+
+(deftest test-ink-rows-carry-colour-lightness-chroma-count-and-role
+  (let [^Bitmap b (bitmap-new 100 80 3)
+        ^Cells ws (new-cells)
+        ^Cells inks (new-cells)]
+    (nt-page-3 b)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb b ws (nm-ws-hist))
+    (nt-layers b ws)
+    (assert-eq (nm-ink-rows inks ws 4 9) 0 "the first row")
+    (assert-eq (ik-count inks) 3 "three rows")
+    (assert-eq (ik-get inks 1 (ikf-count)) 620 "black's count")
+    (assert-eq (ik-get inks 1 (ikf-role)) (ir-body) "black's role")
+    (assert-eq (ik-get inks 1 (ikf-color)) 197379 "black's colour: the mean of 600 black and 20 mid-grey bins, 3 3 3")
+    (assert-eq (ik-get inks 1 (ikf-light)) 12 "lightness 3 of 255, per mille")
+    (assert-eq (ik-get inks 0 (ikf-light)) 800 "the grey: 204 of 255, per mille")
+    (assert-eq (ik-get inks 0 (ikf-chroma)) 0 "no chroma")
+    (assert-that (> (ik-get inks 2 (ikf-chroma)) 100) "the blue has chroma")
+    (assert-eq (ik-get inks 2 (ikf-mask)) -1 "no mask view yet")
+    (assert-eq (ik-get inks 2 0) 4 "page")
+    (assert-eq (ik-get inks 2 1) 9 "the clustered view")))
+
+;; ---------------------------------------------------------------- banded Sauvola
+
+(defn ^I32 ras-sauvola-whole [^Bitmap g ^:mut ^Cells isum ^:mut ^Cells isq ^:mut ^Cells sq ^Bitmap m]
+  (ras-integral g isum isq)
+  (return (ras-sauvola g isum isq sq m)))
+
+(defn ^I32 nt-sauv-case [^Bitmap g ^:mut ^Cells sq]
+  (comment "1 when the banded form (r = 15, k = 87) equals the whole-page ras-sauvola, mask and ink count.")
+  (let [^Bitmap a (bitmap-new (bitmap-w g) (bitmap-h g) 1)
+        ^Bitmap b (bitmap-new (bitmap-w g) (bitmap-h g) 1)
+        ^Cells isum (new-cells)
+        ^Cells isq (new-cells)
+        ^Cells sv (new-cells)
+        ^I32 n1 (ras-sauvola-whole g isum isq sq a)
+        ^I32 n2 (nm-sauvola g b 15 87 sv)]
+    (if (!= n1 n2) (return 0))
+    (return (nt-same a b))))
+
+(deftest test-banded-sauvola-equals-the-whole-page-form-on-three-pages
+  (let [^Cells st (new-cells)
+        ^Cells sq (new-cells)
+        ^Bitmap a (bitmap-new 70 50 1)
+        ^Bitmap b (bitmap-new 90 64 1)
+        ^Bitmap c (bitmap-new 33 21 1)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (sm-seed st 21)
+    (ras-sqrt-table sq)
+    (nt-fill a st)
+    (assert-eq (nt-sauv-case a sq) 1 "random noise, 70x50")
+    (set y 0)
+    (while (< y 64)
+      (do (set x 0)
+          (while (< x 90)
+            (do (if (< (rem y 8) 3)
+                  (bitmap-set-u8 b x y 0 (+ 30 (sm-below st 40)))
+                  (bitmap-set-u8 b x y 0 (+ 200 (sm-below st 50))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (assert-eq (nt-sauv-case b sq) 1 "text-like stripes with noise, 90x64")
+    (set y 0)
+    (while (< y 21)
+      (do (set x 0)
+          (while (< x 33)
+            (do (bitmap-set-u8 c x y 0 (rem (+ (* x 7) (* y 3)) 256))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (assert-eq (nt-sauv-case c sq) 1 "a gradient narrower and shorter than the window, 33x21")))
+
+(defn ^I32 nt-sauv-brute [^Bitmap g ^Bitmap m ^I32 r ^I32 k ^Cells sq]
+  (comment "Sauvola by the definition: every window summed directly (no integral image).")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 mean 0
+        ^:mut ^I32 vr 0
+        ^:mut ^I32 thr 0
+        ^:mut ^I32 ink 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (set x0 (- x r)) (if (< x0 0) (set x0 0))
+                (set x1 (+ (+ x r) 1)) (if (> x1 w) (set x1 w))
+                (set y0 (- y r)) (if (< y0 0) (set y0 0))
+                (set y1 (+ (+ y r) 1)) (if (> y1 h) (set y1 h))
+                (set s 0)
+                (set q 0)
+                (set j y0)
+                (while (< j y1)
+                  (do (set i x0)
+                      (while (< i x1)
+                        (do (set v (bitmap-u8 g i j 0))
+                            (set s (+ s v))
+                            (set q (+ q (* v v)))
+                            (set i (+ i 1))))
+                      (set j (+ j 1))))
+                (set n (* (- x1 x0) (- y1 y0)))
+                (set mean (quot s n))
+                (set vr (- (quot q n) (* mean mean)))
+                (set thr (+ mean (i32 (quot (* (* (i64 mean) (i64 k)) (i64 (- (* 2 (cells-at sq vr)) 256))) 65536))))
+                (if (< (bitmap-u8 g x y 0) thr)
+                  (do (bitmap-set-u8 m x y 0 255) (set ink (+ ink 1)))
+                  (bitmap-set-u8 m x y 0 0))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return ink)))
+
+(deftest test-banded-sauvola-equals-the-definition-at-other-radii
+  (let [^Cells st (new-cells)
+        ^Cells sq (new-cells)
+        ^Cells sv (new-cells)
+        ^Bitmap g (bitmap-new 41 29 1)
+        ^Bitmap a (bitmap-new 41 29 1)
+        ^Bitmap b (bitmap-new 41 29 1)]
+    (sm-seed st 22)
+    (cells-grow sq 65536 0)
+    (nm-sqrt-table sq)
+    (nt-fill g st)
+    (assert-eq (nm-sauvola g a 3 87 sv) (nt-sauv-brute g b 3 87 sq) "r = 3: the ink counts")
+    (assert-eq (nt-same a b) 1 "r = 3: the masks")
+    (assert-eq (nm-sauvola g a 1 60 sv) (nt-sauv-brute g b 1 60 sq) "r = 1, k = 60: the ink counts")
+    (assert-eq (nt-same a b) 1 "r = 1: the masks")
+    (assert-eq (nm-sauvola g a 40 87 sv) (nt-sauv-brute g b 40 87 sq) "a window wider than the page")
+    (assert-eq (nt-same a b) 1 "the masks")))
+
+(deftest test-sauvola-radius-scales-with-the-dpi
+  (assert-eq (nm-sauvola-r 30000) 15 "300 dpi")
+  (assert-eq (nm-sauvola-r 15000) 8 "150 dpi")
+  (assert-eq (nm-sauvola-r 7200) 4 "72 dpi")
+  (assert-eq (nm-sauvola-r 60000) 30 "600 dpi")
+  (assert-eq (nm-sauvola-r 100) 1 "never under 1"))
+
+;; ---------------------------------------------------------------- deskew and orientation
+
+(defn ^I32 nt-text-lines [^Bitmap b ^I32 cdeg ^I32 ink]
+  (comment "Eight lines of ten two-part words (14 rows tall, a 4 px gap in each), the lines rising to the right by `cdeg`,")
+  (comment "drawn in `ink` on a 1000 x 700 page.")
+  (let [^I32 co (ev-cos cdeg)
+        ^I32 si (ev-sin cdeg)
+        ^:mut ^I32 li 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 on 0]
+    (while (< li 8)
+      (do (set wi 0)
+          (while (< wi 10)
+            (do (set x 0)
+                (while (< x 70)
+                  (do (set on 1)
+                      (if (and (>= x 32) (< x 36)) (set on 0))
+                      (if (== on 1)
+                        (do (set dy (i32 (quot (* (i64 (+ (+ 20 (* wi 90)) x)) (i64 si)) (i64 co))))
+                            (set j 0)
+                            (while (< j 14)
+                              (do (set y (+ (- (+ 60 (* li 70)) dy) j))
+                                  (if (>= y 0)
+                                    (if (< y (bitmap-h b))
+                                      (nt-rect b (+ (+ 20 (* wi 90)) x) y (+ (+ (+ 20 (* wi 90)) x) 1) (+ y 1) ink ink ink)))
+                                  (set j (+ j 1))))))
+                      (set x (+ x 1))))
+                (set wi (+ wi 1))))
+          (set li (+ li 1))))
+    (return 0)))
+
+(defn ^I32 nt-skew-of [^I32 cdeg]
+  (let [^Bitmap b (bitmap-new 1000 700 1)
+        ^Cells pts (new-cells)
+        ^Cells prof (new-cells)]
+    (nt-text-lines b cdeg 255)
+    (return (nm-deskew b pts prof))))
+
+(defn ^I32 nt-near [^I32 got ^I32 want ^I32 tol]
+  (let [^:mut ^I32 d (- got want)]
+    (if (< d 0) (set d (- 0 d)))
+    (if (<= d tol) (return 1))
+    (return 0)))
+
+(deftest test-deskew-finds-the-angle-the-lines-were-drawn-at
+  (assert-eq (nt-skew-of 0) 0 "an upright page")
+  (assert-eq (nt-near (nt-skew-of 150) 150 10) 1 "1.5 degrees counter-clockwise")
+  (assert-eq (nt-near (nt-skew-of -230) -230 10) 1 "-2.3 degrees")
+  (assert-eq (nt-near (nt-skew-of 400) 400 10) 1 "4 degrees")
+  (assert-eq (nt-near (nt-skew-of -490) -490 10) 1 "-4.9 degrees, at the edge of the range"))
+
+(deftest test-deskew-of-nothing-is-zero
+  (let [^Bitmap b (bitmap-new 200 100 1)
+        ^Cells pts (new-cells)
+        ^Cells prof (new-cells)]
+    (assert-eq (nm-deskew b pts prof) 0 "a blank page")
+    (nt-rect b 50 50 60 52 255 0 0)
+    (assert-eq (nm-deskew b pts prof) 0 "a speck: too few runs")))
+
+(deftest test-skew-points-are-one-per-run-with-its-length
+  (let [^Bitmap b (bitmap-new 100 10 1)
+        ^Cells pts (new-cells)]
+    (nt-rect b 10 3 20 4 255 0 0)
+    (nt-rect b 24 3 34 4 255 0 0)
+    (nt-rect b 60 3 70 4 255 0 0)
+    (assert-eq (nm-skew-points b pts 1 100) 3 "three runs in the one row")
+    (assert-eq (cells-at pts 0) 15 "the first run's midpoint x")
+    (assert-eq (cells-at pts 1) 3 "its row")
+    (assert-eq (cells-at pts 2) 10 "its length")
+    (assert-eq (cells-at pts 3) 29 "the second's midpoint")
+    (assert-eq (cells-at pts 8) 10 "the third's length")
+    (assert-eq (nm-skew-points b pts 1 2) 2 "the limit stops it")
+    (assert-eq (nm-skew-points b pts 4 100) 0 "every 4th row from row 2 (2, 6): the run is on row 3")
+    (assert-eq (nm-skew-points b pts 2 100) 3 "every 2nd row from row 1 (1, 3, 5, ...): row 3")))
+
+(deftest test-orientation-needs-a-confident-osd
+  (assert-eq (nm-orient 90 25 (nm-osd-conf)) 1 "90 degrees clockwise: one turn")
+  (assert-eq (nm-orient 270 20 (nm-osd-conf)) 3 "270: three")
+  (assert-eq (nm-orient 180 19 (nm-osd-conf)) -1 "not confident: the tracer decides")
+  (assert-eq (nm-orient -1 100 (nm-osd-conf)) -1 "no OSD at all")
+  (assert-eq (nm-orient 0 30 (nm-osd-conf)) 0 "upright"))
+
+;; ---------------------------------------------------------------- ink under a box
+
+(defn ^I32 nt-ink-fixture [^Bitmap bin ^Bitmap eng ^Bitmap body ^Bitmap gray]
+  (comment "Kin ink in columns 3..8 of rows 2..4 (18 px); the engine's in columns 6..11 (18 px, 9 shared); the body mask")
+  (comment "over columns 3..5 only; gray 60 under the ink, 255 elsewhere.")
+  (nt-rect gray 0 0 20 10 255 0 0)
+  (nt-rect gray 3 2 9 5 60 0 0)
+  (nt-rect bin 3 2 9 5 255 0 0)
+  (nt-rect eng 6 2 12 5 255 0 0)
+  (nt-rect body 3 2 6 5 255 0 0)
+  (return 0))
+
+(deftest test-box-counts-walk-ink-and-clamp-to-the-bitmap
+  (let [^Bitmap bin (bitmap-new 20 10 1)
+        ^Bitmap eng (bitmap-new 20 10 1)
+        ^Bitmap body (bitmap-new 20 10 1)
+        ^Bitmap gray (bitmap-new 20 10 1)]
+    (nt-ink-fixture bin eng body gray)
+    (assert-eq (nm-box-ink bin 0 0 20 10) 18 "the whole page")
+    (assert-eq (nm-box-ink bin 4 3 7 4) 3 "a box inside the ink: 3 x 1")
+    (assert-eq (nm-box-ink bin 0 0 4 10) 3 "a box cutting the ink: column 3, rows 2..4")
+    (assert-eq (nm-box-ink bin -5 -5 100 100) 18 "a box larger than the page")
+    (assert-eq (nm-box-ink bin 12 0 20 10) 0 "a box with none")
+    (assert-eq (nm-box-ink bin 5 5 5 9) 0 "an empty box")
+    (assert-eq (nm-box-both bin eng 0 0 20 10) 9 "shared with the engine's")
+    (assert-eq (nm-box-both bin body 0 0 20 10) 9 "shared with the body mask")
+    (assert-eq (nm-box-gray-sum bin gray 0 0 20 10) 1080 "18 pixels of gray 60")))
+
+(deftest test-an-ocr-words-ink-columns
+  (let [^Bitmap bin (bitmap-new 20 10 1)
+        ^Bitmap eng (bitmap-new 20 10 1)
+        ^Bitmap body (bitmap-new 20 10 1)
+        ^Bitmap gray (bitmap-new 20 10 1)
+        ^Cells feats (new-cells)]
+    (nt-ink-fixture bin eng body gray)
+    (fe-new feats 11 0)
+    (assert-eq (nm-feat-ocr feats 0 0 0 20 10 bin eng 1 body gray 255) 18 "the kin ink pixels")
+    (assert-eq (fe-get feats 0 (xo-kin-ink)) 90 "18 of 200, per mille")
+    (assert-eq (fe-get feats 0 (xo-engine-ink)) 90 "the engine's: 18 of 200")
+    (assert-eq (fe-get feats 0 (xo-jaccard)) 333 "9 shared of 27 in the union")
+    (assert-eq (fe-get feats 0 (xo-body-share)) 500 "half of its ink is on the body layer")
+    (assert-eq (fe-get feats 0 (xo-ink-gray)) 195 "paper 255 against ink 60")
+    (fe-new feats 11 1)
+    (nm-feat-ocr feats 1 0 0 20 10 bin eng 0 body gray 255)
+    (assert-eq (fe-get feats 1 (xo-engine-ink)) -1 "no engine binary: -1")
+    (assert-eq (fe-get feats 1 (xo-jaccard)) -1 "and no Jaccard")
+    (assert-eq (fe-get feats 1 (xo-kin-ink)) 90 "kin's ink is still there")
+    (fe-new feats 11 2)
+    (assert-eq (nm-feat-ocr feats 2 12 0 20 10 bin eng 1 body gray 255) 0 "a box with no ink")
+    (assert-eq (fe-get feats 2 (xo-kin-ink)) 0 "zero per mille")
+    (assert-eq (fe-get feats 2 (xo-body-share)) -1 "and no share of nothing")
+    (assert-eq (fe-get feats 2 (xo-ink-gray)) -1 "nor a gray")))
+
+(deftest test-a-text-layer-words-ink-columns
+  (let [^Bitmap bin (bitmap-new 20 10 1)
+        ^Bitmap eng (bitmap-new 20 10 1)
+        ^Bitmap body (bitmap-new 20 10 1)
+        ^Bitmap gray (bitmap-new 20 10 1)
+        ^Cells feats (new-cells)]
+    (nt-ink-fixture bin eng body gray)
+    (fe-new feats 10 0)
+    (assert-eq (nm-feat-text feats 0 0 0 20 10 bin eng 1 body) 18 "ink on the with-text render")
+    (assert-eq (fe-get feats 0 (xt-kin-ink)) 90 "per mille")
+    (assert-eq (fe-get feats 0 (xt-ink-without-text)) 90 "the no-text render's ink under the word")
+    (assert-eq (fe-get feats 0 (xt-body-share)) 500 "half on the body layer")
+    (nm-feat-text feats 0 0 0 20 10 bin eng 0 body)
+    (assert-eq (fe-get feats 0 (xt-ink-without-text)) -1 "no no-text render: -1")))
+
+(deftest test-a-page-box-maps-through-the-view-to-pixels
+  (let [^Cells views (new-cells)
+        ^Cells o (new-cells)]
+    (cells-grow o 8 0)
+    (vw-new views 0 (vk-render) -1 -1 100 80 7200 0 -1 0 0 0 0 0)
+    (vw-new views 0 (vk-render) -1 -1 100 80 7200 0 -1 2 0 0 0 0)
+    (nm-box-px views 0 1000 2000 3000 3000 o 0)
+    (assert-eq (cells-at o 0) 10 "upright: x0")
+    (assert-eq (cells-at o 1) 20 "y0")
+    (assert-eq (cells-at o 2) 30 "x1")
+    (assert-eq (cells-at o 3) 30 "y1")
+    (nm-box-px views 1 1000 2000 3000 3000 o 4)
+    (assert-eq (cells-at o 4) 70 "turned twice: x0 = (10000 - 3000) / 100")
+    (assert-eq (cells-at o 5) 50 "y0 = (8000 - 3000) / 100")
+    (assert-eq (cells-at o 6) 90 "x1")
+    (assert-eq (cells-at o 7) 60 "y1")))
+
+;; ---------------------------------------------------------------- views
+
+(deftest test-reskew-rebuilds-a-views-transform-in-place
+  (let [^Cells views (new-cells)
+        ^Cells ref (new-cells)]
+    (vw-new views 3 (vk-decode) 7 -1 200 100 20000 0 -1 1 0 500 600 0)
+    (vw-new views 3 (vk-gray) -1 0 200 100 20000 0 -1 1 0 500 600 0)
+    (vw-new ref 3 (vk-decode) 7 -1 200 100 20000 0 -1 1 150 500 600 0)
+    (assert-eq (nm-reskew views 0 150) 0 "reskew")
+    (assert-eq (vw-count views) 2 "no row left behind")
+    (assert-eq (vw-get views 0 (vwf-deskew)) 150 "the angle")
+    (assert-eq (vw-get views 0 (vwf-a)) (vw-get ref 0 (vwf-a)) "a")
+    (assert-eq (vw-get views 0 (vwf-b)) (vw-get ref 0 (vwf-b)) "b")
+    (assert-eq (vw-get views 0 (vwf-c)) (vw-get ref 0 (vwf-c)) "c")
+    (assert-eq (vw-get views 0 (vwf-d)) (vw-get ref 0 (vwf-d)) "d")
+    (assert-eq (vw-get views 0 (vwf-e)) (vw-get ref 0 (vwf-e)) "e")
+    (assert-eq (vw-get views 0 (vwf-f)) (vw-get ref 0 (vwf-f)) "f")
+    (assert-eq (vw-get views 1 (vwf-deskew)) 0 "the neighbouring row is untouched")))
+
+(deftest test-nm-view-makes-the-derived-views-the-ink-rows-and-the-masks
+  (let [^Bitmap src (bitmap-new 100 80 3)
+        ^Bitmap gray (bitmap-new 100 80 1)
+        ^Bitmap bin (bitmap-new 100 80 1)
+        ^Bitmap ref (bitmap-new 100 80 1)
+        ^Bitmap m (bitmap-new 100 80 1)
+        ^Cells views (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells sv (new-cells)
+        ^Cells aux (new-cells)]
+    (nt-page-3 src)
+    (vw-new views 5 (vk-render) 2 -1 100 80 15000 0 -1 0 0 0 0 0)
+    (assert-eq (nm-view views inks 5 0 src gray bin ws sv aux) 3 "three ink layers")
+    (nm-ref-gray src ref)
+    (assert-eq (nt-same gray ref) 1 "the gray view is the bulk form's")
+    (assert-eq (vw-count views) 6 "the render, gray, binary and three masks")
+    (assert-eq (nm-gray-view ws) 1 "the gray view's row")
+    (assert-eq (nm-binary-view ws) 2 "the binary view's row")
+    (assert-eq (vw-get views 1 (vwf-kind)) (vk-gray) "its kind")
+    (assert-eq (vw-get views 2 (vwf-kind)) (vk-binary) "binary")
+    (assert-eq (vw-get views 1 (vwf-parent)) 0 "parented on the render")
+    (assert-eq (ik-count inks) 3 "three inks rows")
+    (assert-eq (ik-get inks 1 (ikf-role)) (ir-body) "the second is the body")
+    (assert-eq (ik-get inks 1 (ikf-mask)) 4 "and its mask view is row 4")
+    (assert-eq (vw-get views 4 (vwf-kind)) (vk-ink-mask) "of kind ink-mask")
+    (nm-mask-into src ws 2 m)
+    (assert-eq (nt-count m) 620 "the body mask the caller makes for it")
+    (assert-eq (vw-get views 0 (vwf-deskew)) 0 "a render is not deskewed")
+    (nm-sauvola gray ref 8 87 sv)
+    (assert-eq (nt-same bin ref) 1 "the binary view is Sauvola at r = 8 for 150 dpi")))
+
+(deftest test-nm-view-of-a-bilevel-source-skips-sauvola
+  (let [^Bitmap src (bitmap-new 40 20 1)
+        ^Bitmap gray (bitmap-new 40 20 1)
+        ^Bitmap bin (bitmap-new 40 20 1)
+        ^Cells views (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells sv (new-cells)
+        ^Cells aux (new-cells)]
+    (nt-rect src 0 0 40 20 255 0 0)
+    (nt-rect src 5 5 15 15 0 0 0)
+    (vw-new views 0 (vk-render) -1 -1 40 20 15000 0 -1 0 0 0 0 1)
+    (nm-view views inks 0 0 src gray bin ws sv aux)
+    (assert-eq (nt-count bin) 100 "the black block, in full: a threshold, not a local one")
+    (assert-eq (cells-len sv) 0 "and Sauvola's scratch was never needed")))
+
+(deftest test-nm-view-measures-the-skew-of-a-decode-and-writes-it-everywhere
+  (let [^Bitmap src (bitmap-new 1000 700 3)
+        ^Bitmap gray (bitmap-new 1000 700 1)
+        ^Bitmap bin (bitmap-new 1000 700 1)
+        ^Cells views (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells sv (new-cells)
+        ^Cells aux (new-cells)]
+    (nt-rect src 0 0 1000 700 255 255 255)
+    (nt-text-lines src 150 0)
+    (vw-new views 0 (vk-decode) -1 -1 1000 700 15000 0 -1 0 0 0 0 0)
+    (assert-eq (nm-view views inks 0 0 src gray bin ws sv aux) 1 "one ink layer")
+    (assert-eq (nt-near (vw-get views 0 (vwf-deskew)) 150 10) 1 "the decode view carries the skew")
+    (assert-eq (vw-get views 1 (vwf-deskew)) (vw-get views 0 (vwf-deskew)) "so does the gray view")
+    (assert-eq (vw-get views 2 (vwf-deskew)) (vw-get views 0 (vwf-deskew)) "and the binary")
+    (assert-eq (vw-get views 3 (vwf-deskew)) (vw-get views 0 (vwf-deskew)) "and the mask")))

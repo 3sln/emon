@@ -1,0 +1,1108 @@
+;; Normalization of ONE raster (P6.3; SPEC 8.2 "As designed"; D092, D093, D197). emon's own module (D039).
+;;
+;;   Reference forms    `nm-ref-gray` `nm-ref-hist` `nm-ref-lut` `nm-ref-hash` `nm-ref-quarter`: each host bulk form of
+;;                      `bitmap-gray-into` ... `bitmap-quarter-into` written out per pixel over `bitmap-u8`, and held
+;;                      byte-identical to it by law on every target (D093: a host may later accelerate a stage, never
+;;                      change it).
+;;   Layers             `nm-layers` clusters the 4096-bin colour histogram of a raster into the paper and at most 8 INK LAYERS
+;;                      (integer opponent space, no pixel visited); `nm-mask-into` turns one layer into a mask bitmap by ONE
+;;                      `bitmap-lut-into` pass; `nm-ink-rows` writes the `inks` rows.
+;;   Binary             `nm-sauvola` is Sauvola over a BAND of `2r + 2` integral rows (memory O(w r), not the 70 MB of whole-page
+;;                      integral images), equal by law to P2.7's whole-page `ras-sauvola` at r = 15.
+;;   Skew, orientation  `nm-deskew` (projection profiles of text-cluster centres on a binary view, decode views only),
+;;                      `nm-orient` (OSD's quarter turns when it is confident enough).
+;;   Features           `nm-feat-ocr`, `nm-feat-text`: the ink columns of `feats` (SPEC 8.4.5, columns 10-13 and 16).
+;;   The stage          `nm-view` runs all of it for one raster and appends the `views` and `inks` rows.
+;;
+;; THE WIRING POINT (for P7.U / P7.3, D195, D196). This module allocates NO bitmap: the caller owns every bitmap it reads
+;; and writes, because kin cannot hold one in `Cells`. Today (no `BitmapSet` yet) a caller gives `nm-view` a `gray` and a
+;; `binary` bitmap (1 channel, the source's size, made with `bitmap-new`) and asks `nm-mask-into` for each layer it wants as a
+;; mask. In a page unit P7.U makes those same bitmaps with `bms-put` at ids >= KIN_VIEW_BASE, one per `views` row that
+;; `nm-view` appended (`nm-gray-view`, `nm-binary-view`, and the `ikf-mask` of each `inks` row), so the host keeps them; nothing
+;; here changes. The rows' `request` is -1: a kin-made view.
+;;
+;; THE SETTINGS are the zero-argument functions below, the way `al-min` is; the laws vary the thresholds by passing them to
+;; `nm-layers` directly.
+(ns emon.norm
+  (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32 add64 mul64 shr64 shl32 sar32]]
+            [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
+                               bitmap-gray-into bitmap-hist-rgb bitmap-lut-into bitmap-hash bitmap-quarter-into
+                               bitmap-next-nonzero bitmap-threshold-into bitmap-histogram
+                               cells-len cells-at cells-set cells-push cells-drop cells-grow]]
+            [emon.evidence :refer [vw-new vw-get vw-set vw-count vw-px-to-cpt vw-cpt-to-px ik-new ik-set ik-get
+                                   fe-set vk-gray vk-binary vk-decode vk-ink-mask
+                                   vwf-page vwf-kind vwf-request vwf-parent vwf-pxw vwf-pxh vwf-dpi vwf-layer vwf-ink
+                                   vwf-turns vwf-deskew vwf-cropx vwf-cropy vwf-flags
+                                   ikf-color ikf-light ikf-chroma ikf-count ikf-role ikf-mask ikf-spread
+                                   ir-body ir-light ir-color ir-background ir-unknown vg-bilevel
+                                   xo-kin-ink xo-engine-ink xo-jaccard xo-body-share xo-ink-gray
+                                   xt-kin-ink xt-ink-without-text xt-body-share ev-sin ev-cos]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem bit-and bit-or bit-xor]]))
+
+;; ---------------------------------------------------------------- settings (SPEC 8.2; D197)
+
+(defn ^:pub ^I32 nm-ink-merge [] (comment "Two ink centroids closer than this (L1 in the opponent space) are one layer.") (return 40))
+(defn ^:pub ^I32 nm-ink-paper [] (comment "A colour bin this close to the paper bin is paper.") (return 24))
+(defn ^:pub ^I32 nm-ink-min [] (comment "A layer under this per 10000 of the non-paper pixels is folded into its neighbour.") (return 50))
+(defn ^:pub ^I32 nm-ink-spike [] (comment "A bin on another layer's ink-to-paper segment is a layer of its own only above this share of the page, per mille: a flat watermark is, an anti-aliased edge is not.") (return 10))
+(defn ^:pub ^I32 nm-ink-light [] (comment "Lightness (0..255) from which a low-chroma layer is `light`, not `body`.") (return 150))
+(defn ^:pub ^I32 nm-ink-chroma [] (comment "|a| + |b| from which a layer is `colour`.") (return 48))
+(defn ^:pub ^I32 nm-ink-bg [] (comment "Page coverage, per mille, from which a light or coloured layer is `background`.") (return 250))
+(defn ^:pub ^I32 nm-osd-conf [] (comment "OSD orientation confidence (x10) from which kin trusts the engine's quarter turns.") (return 20))
+(defn ^:pub ^I32 nm-sauvola-k [] (return 87))
+(defn ^:pub ^I32 nm-sauvola-r [^I32 dpi100]
+  (comment "Sauvola's half window: 15 px at 300 dpi, scaled with the dpi, at least 1.")
+  (let [^I32 r (quot (+ (* 15 dpi100) 15000) 30000)]
+    (if (< r 1) (return 1))
+    (return r)))
+
+;; ---------------------------------------------------------------- the reference forms (D093)
+
+(defn ^I32 nm-ref-bin [^Bitmap b ^I32 x ^I32 y]
+  (comment "The colour bin of a pixel: r>>4, g>>4, b>>4 (a source of fewer than three channels: v>>4 three times).")
+  (if (< (bitmap-channels b) 3)
+    (return (* (sar32 (bitmap-u8 b x y 0) 4) 273)))
+  (return (+ (+ (shl32 (sar32 (bitmap-u8 b x y 0) 4) 8) (shl32 (sar32 (bitmap-u8 b x y 1) 4) 4))
+             (sar32 (bitmap-u8 b x y 2) 4))))
+
+(defn ^:pub ^I32 nm-ref-gray [^Bitmap src ^Bitmap dst]
+  (comment "`bitmap-gray-into`, per pixel.")
+  (let [^I32 w (bitmap-w src)
+        ^I32 h (bitmap-h src)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 v 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (if (< (bitmap-channels src) 3)
+                  (set v (bitmap-u8 src x y 0))
+                  (set v (sar32 (+ (+ (+ (* 77 (bitmap-u8 src x y 0)) (* 150 (bitmap-u8 src x y 1)))
+                                      (* 29 (bitmap-u8 src x y 2))) 128) 8)))
+                (bitmap-set-u8 dst x y 0 v)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 nm-ref-hist [^Bitmap src ^:mut ^Cells cells ^I32 off]
+  (comment "`bitmap-hist-rgb`, per pixel.")
+  (let [^I32 w (bitmap-w src)
+        ^I32 h (bitmap-h src)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (set i (+ off (nm-ref-bin src x y)))
+                (set n (cells-at cells i))
+                (cells-set cells i (+ n 1))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 nm-ref-lut [^Bitmap src ^Cells lut ^I32 off ^Bitmap dst]
+  (comment "`bitmap-lut-into`, per pixel.")
+  (let [^I32 w (bitmap-w src)
+        ^I32 h (bitmap-h src)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (bitmap-set-u8 dst x y 0 (bit-and (cells-at lut (+ off (nm-ref-bin src x y))) 255))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I64 nm-fnv [^I64 h ^I32 v]
+  (return (mul64 (bit-xor h (i64 v)) 1099511628211)))
+
+(defn ^I64 nm-fnv-int [^I64 h ^I32 v]
+  (comment "Four little-endian bytes of a non-negative int.")
+  (let [^:mut ^I64 a h]
+    (set a (nm-fnv a (bit-and v 255)))
+    (set a (nm-fnv a (bit-and (sar32 v 8) 255)))
+    (set a (nm-fnv a (bit-and (sar32 v 16) 255)))
+    (set a (nm-fnv a (bit-and (sar32 v 24) 255)))
+    (return a)))
+
+(defn ^:pub ^I64 nm-ref-hash64 [^Bitmap b]
+  (comment "`bitmap-hash` as one 64-bit value: FNV-1a over w, h, channels, then the pixel bytes row by row.")
+  (let [^I32 w (bitmap-w b)
+        ^I32 h (bitmap-h b)
+        ^I32 ch (bitmap-channels b)
+        ^:mut ^I64 a -3750763034362895579
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0]
+    (set a (nm-fnv-int a w))
+    (set a (nm-fnv-int a h))
+    (set a (nm-fnv-int a ch))
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (set c 0)
+                (while (< c ch)
+                  (do (set a (nm-fnv a (bitmap-u8 b x y c)))
+                      (set c (+ c 1))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return a)))
+
+(defn ^:pub ^I32 nm-ref-hash [^Bitmap b ^:mut ^Cells res ^I32 off]
+  (comment "`bitmap-hash`: the high and low halves of `nm-ref-hash64` to `res[off]` and `res[off + 1]`.")
+  (let [^I64 a (nm-ref-hash64 b)]
+    (cells-set res off (i32 (shr64 a 32)))
+    (cells-set res (+ off 1) (i32 a))
+    (return 0)))
+
+(defn ^:pub ^I32 nm-ref-quarter [^Bitmap src ^Bitmap dst ^I32 turns]
+  (comment "`bitmap-quarter-into`, per pixel (clockwise quarter turns).")
+  (let [^I32 q (rem (+ (rem turns 4) 4) 4)
+        ^I32 sw (bitmap-w src)
+        ^I32 sh (bitmap-h src)
+        ^I32 ch (bitmap-channels src)
+        ^I32 dw (bitmap-w dst)
+        ^I32 dh (bitmap-h dst)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 sx 0
+        ^:mut ^I32 sy 0]
+    (while (< y dh)
+      (do (set x 0)
+          (while (< x dw)
+            (do (if (== q 0) (do (set sx x) (set sy y)))
+                (if (== q 1) (do (set sx y) (set sy (- (- sh 1) x))))
+                (if (== q 2) (do (set sx (- (- sw 1) x)) (set sy (- (- sh 1) y))))
+                (if (== q 3) (do (set sx (- (- sw 1) y)) (set sy x)))
+                (set c 0)
+                (while (< c ch)
+                  (do (bitmap-set-u8 dst x y c (bitmap-u8 src sx sy c))
+                      (set c (+ c 1))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+;; ---------------------------------------------------------------- colour geometry
+
+(defn ^I32 nm-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 nm-bin-r [^I32 bin] (return (* (bit-and (sar32 bin 8) 15) 17)))
+(defn ^I32 nm-bin-g [^I32 bin] (return (* (bit-and (sar32 bin 4) 15) 17)))
+(defn ^I32 nm-bin-b [^I32 bin] (return (* (bit-and bin 15) 17)))
+(defn ^I32 nm-lum [^I32 r ^I32 g ^I32 b]
+  (return (sar32 (+ (+ (+ (* 77 r) (* 150 g)) (* 29 b)) 128) 8)))
+(defn ^I32 nm-opa [^I32 r ^I32 g] (return (- r g)))
+(defn ^I32 nm-opb [^I32 r ^I32 g ^I32 b] (return (- (quot (+ r g) 2) b)))
+
+(defn ^I32 nm-dist [^I32 l1 ^I32 a1 ^I32 b1 ^I32 l2 ^I32 a2 ^I32 b2]
+  (comment "L1 distance in (lightness, a, b).")
+  (return (+ (+ (nm-abs (- l1 l2)) (nm-abs (- a1 a2))) (nm-abs (- b1 b2)))))
+
+(defn ^I32 nm-segdist [^I32 l ^I32 a ^I32 b ^I32 cl ^I32 ca ^I32 cb ^I32 pl ^I32 pa ^I32 pb]
+  (comment "The L1 distance from the colour (l a b) to the SEGMENT between an ink centroid c and the paper p: what an")
+  (comment "anti-aliased edge of that ink on that paper is made of. The projection is Euclidean, in 1/1024ths.")
+  (let [^I64 vl (i64 (- pl cl))
+        ^I64 va (i64 (- pa ca))
+        ^I64 vb (i64 (- pb cb))
+        ^I64 vv (+ (+ (* vl vl) (* va va)) (* vb vb))
+        ^I64 dot (+ (+ (* (i64 (- l cl)) vl) (* (i64 (- a ca)) va)) (* (i64 (- b cb)) vb))
+        ^:mut ^I64 t 0]
+    (if (> vv 0)
+      (set t (quot (* dot 1024) vv)))
+    (if (< t 0) (set t 0))
+    (if (> t 1024) (set t 1024))
+    (return (nm-dist l a b
+                     (+ cl (i32 (quot (* vl t) 1024)))
+                     (+ ca (i32 (quot (* va t) 1024)))
+                     (+ cb (i32 (quot (* vb t) 1024)))))))
+
+;; ---------------------------------------------------------------- the layer workspace
+;;
+;; ONE `Cells`: hist 4096 | assign 4096 (bin -> 0 paper, 1..K layer) | lut 4096 | candidate bins 512 | layers 8 x 10 | misc.
+;; A layer row: count, L, a, b, R, G, B, spread, role, spare.
+
+(defn ^:pub ^I32 nm-ws-hist [] (return 0))
+(defn ^:pub ^I32 nm-ws-assign [] (return 4096))
+(defn ^:pub ^I32 nm-ws-lut [] (return 8192))
+(defn ^I32 nm-ws-cand [] (return 12288))
+(defn ^I32 nm-ws-cent [] (return 12800))
+(defn ^I32 nm-ws-misc [] (return 12900))
+(defn ^:pub ^I32 nm-ws-size [] (return 12960))
+(defn ^:pub ^I32 nm-lstride [] (return 10))
+(defn ^:pub ^I32 nm-max-layers [] (return 8))
+
+(defn ^:pub ^I32 nm-ws-init [^:mut ^Cells ws]
+  (comment "Empty the workspace: nm-ws-size zeros.")
+  (cells-drop ws 0)
+  (cells-grow ws (nm-ws-size) 0)
+  (return 0))
+
+(defn ^:pub ^I32 nm-layer-get [^Cells ws ^I32 k ^I32 f]
+  (comment "Field `f` of layer `k` (0-based): 0 count, 1 L, 2 a, 3 b, 4 R, 5 G, 6 B, 7 spread, 8 role.")
+  (return (cells-at ws (+ (nm-ws-cent) (+ (* k (nm-lstride)) f)))))
+
+(defn ^:pub ^I32 nm-layer-count [^Cells ws] (return (cells-at ws (nm-ws-misc))))
+(defn ^:pub ^I32 nm-paper-gray [^Cells ws] (return (cells-at ws (+ (nm-ws-misc) 1))))
+(defn ^:pub ^I32 nm-paper-bin [^Cells ws] (return (cells-at ws (+ (nm-ws-misc) 2))))
+(defn ^:pub ^I32 nm-pixels [^Cells ws] (return (cells-at ws (+ (nm-ws-misc) 3))))
+(defn ^:pub ^I32 nm-gray-view [^Cells ws] (return (cells-at ws (+ (nm-ws-misc) 4))))
+(defn ^:pub ^I32 nm-binary-view [^Cells ws] (return (cells-at ws (+ (nm-ws-misc) 5))))
+(defn ^:pub ^I32 nm-assigned [^Cells ws ^I32 bin] (return (cells-at ws (+ (nm-ws-assign) bin))))
+
+(defn ^I32 nm-lset [^:mut ^Cells ws ^I32 k ^I32 f ^I32 v]
+  (cells-set ws (+ (nm-ws-cent) (+ (* k (nm-lstride)) f)) v)
+  (return 0))
+
+;; ---------------------------------------------------------------- clustering
+
+(defn ^I32 nm-bin-l [^I32 bin] (return (nm-lum (nm-bin-r bin) (nm-bin-g bin) (nm-bin-b bin))))
+(defn ^I32 nm-bin-a [^I32 bin] (return (nm-opa (nm-bin-r bin) (nm-bin-g bin))))
+(defn ^I32 nm-bin-ob [^I32 bin] (return (nm-opb (nm-bin-r bin) (nm-bin-g bin) (nm-bin-b bin))))
+
+(defn ^I32 nm-bin-dist [^I32 a ^I32 b]
+  (return (nm-dist (nm-bin-l a) (nm-bin-a a) (nm-bin-ob a) (nm-bin-l b) (nm-bin-a b) (nm-bin-ob b))))
+
+(defn ^I32 nm-cand-before [^Cells ws ^I32 a ^I32 b]
+  (comment "Does bin a come before bin b among the seeds: heavier first, the smaller bin on a tie.")
+  (let [^I32 ca (cells-at ws (+ (nm-ws-hist) a))
+        ^I32 cb (cells-at ws (+ (nm-ws-hist) b))]
+    (if (> ca cb) (return 1))
+    (if (< ca cb) (return 0))
+    (if (< a b) (return 1))
+    (return 0)))
+
+(defn ^I32 nm-stats [^:mut ^Cells ws ^I32 id]
+  (comment "The statistics of layer `id` (1-based; row id - 1) from the bins assigned to it: count, mean L a b and")
+  (comment "R G B, and the mean L1 distance of its pixels to its centroid.")
+  (let [^I32 k (- id 1)
+        ^:mut ^I32 bin 0
+        ^:mut ^I32 c 0
+        ^:mut ^I64 n 0
+        ^:mut ^I64 sl 0
+        ^:mut ^I64 sa 0
+        ^:mut ^I64 sb 0
+        ^:mut ^I64 sr 0
+        ^:mut ^I64 sg 0
+        ^:mut ^I64 sbl 0
+        ^:mut ^I64 sd 0
+        ^:mut ^I32 ml 0
+        ^:mut ^I32 ma 0
+        ^:mut ^I32 mb 0]
+    (while (< bin 4096)
+      (do (if (== (cells-at ws (+ (nm-ws-assign) bin)) id)
+            (do (set c (cells-at ws (+ (nm-ws-hist) bin)))
+                (set n (+ n (i64 c)))
+                (set sl (+ sl (* (i64 c) (i64 (nm-bin-l bin)))))
+                (set sa (+ sa (* (i64 c) (i64 (nm-bin-a bin)))))
+                (set sb (+ sb (* (i64 c) (i64 (nm-bin-ob bin)))))
+                (set sr (+ sr (* (i64 c) (i64 (nm-bin-r bin)))))
+                (set sg (+ sg (* (i64 c) (i64 (nm-bin-g bin)))))
+                (set sbl (+ sbl (* (i64 c) (i64 (nm-bin-b bin)))))))
+          (set bin (+ bin 1))))
+    (nm-lset ws k 0 (i32 n))
+    (if (> n 0)
+      (do (set ml (i32 (quot sl n)))
+          (set ma (i32 (quot sa n)))
+          (set mb (i32 (quot sb n)))
+          (nm-lset ws k 1 ml)
+          (nm-lset ws k 2 ma)
+          (nm-lset ws k 3 mb)
+          (nm-lset ws k 4 (i32 (quot sr n)))
+          (nm-lset ws k 5 (i32 (quot sg n)))
+          (nm-lset ws k 6 (i32 (quot sbl n)))
+          (set bin 0)
+          (while (< bin 4096)
+            (do (if (== (cells-at ws (+ (nm-ws-assign) bin)) id)
+                  (do (set c (cells-at ws (+ (nm-ws-hist) bin)))
+                      (set sd (+ sd (* (i64 c) (i64 (nm-dist (nm-bin-l bin) (nm-bin-a bin) (nm-bin-ob bin) ml ma mb)))))))
+                (set bin (+ bin 1))))
+          (nm-lset ws k 7 (i32 (quot sd n)))))
+    (return (i32 n))))
+
+(defn ^I32 nm-pick [^Cells ws ^I32 bin ^I32 nlayers ^I32 merge ^I32 pl ^I32 pa ^I32 pb]
+  (comment "The layer (1-based) a colour bin belongs to, among layers 1..nlayers whose centroids are in the layer rows")
+  (comment "(a layer with no pixels is skipped): the nearest centroid when within half of `merge` (a layer's core), else the")
+  (comment "layer whose ink-to-paper segment is nearest (an anti-aliased edge), the nearer centroid on a tie.")
+  (let [^I32 l (nm-bin-l bin)
+        ^I32 a (nm-bin-a bin)
+        ^I32 b (nm-bin-ob bin)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 best 1000000
+        ^:mut ^I32 bk 0
+        ^:mut ^I32 sbest 1000000
+        ^:mut ^I32 sk 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 sdp 1000000]
+    (while (< k nlayers)
+      (do (if (> (nm-layer-get ws k 0) 0)
+            (do (set d (nm-dist l a b (nm-layer-get ws k 1) (nm-layer-get ws k 2) (nm-layer-get ws k 3)))
+                (if (< d best) (do (set best d) (set bk (+ k 1))))
+                (set sd (nm-segdist l a b (nm-layer-get ws k 1) (nm-layer-get ws k 2) (nm-layer-get ws k 3) pl pa pb))
+                (if (< sd sbest) (do (set sbest sd) (set sk (+ k 1)) (set sdp d)))
+                (if (== sd sbest) (if (< d sdp) (do (set sk (+ k 1)) (set sdp d))))))
+          (set k (+ k 1))))
+    (if (<= best (quot merge 2)) (return bk))
+    (return sk)))
+
+(defn ^I32 nm-reassign-dead [^:mut ^Cells ws ^I32 nlayers ^I32 merge ^I32 pl ^I32 pa ^I32 pb]
+  (comment "Re-home every bin assigned to a layer whose count is 0 (dead) to a live one; recompute all statistics.")
+  (let [^:mut ^I32 bin 0
+        ^:mut ^I32 id 0
+        ^:mut ^I32 k 0]
+    (while (< bin 4096)
+      (do (set id (cells-at ws (+ (nm-ws-assign) bin)))
+          (if (> id 0)
+            (if (== (nm-layer-get ws (- id 1) 0) 0)
+              (do (set k (nm-pick ws bin nlayers merge pl pa pb))
+                  (cells-set ws (+ (nm-ws-assign) bin) k))))
+          (set bin (+ bin 1))))
+    (return 0)))
+
+(defn ^I32 nm-restat [^:mut ^Cells ws ^I32 nlayers]
+  (let [^:mut ^I32 k 1]
+    (while (<= k nlayers)
+      (do (nm-stats ws k)
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 nm-layers [^:mut ^Cells ws ^I32 merge ^I32 ptol ^I32 minper ^I32 spike]
+  (comment "Cluster the 4096-bin histogram at `nm-ws-hist` into the paper and up to 8 ink layers (SPEC 8.2): the paper")
+  (comment "is the heaviest bin among the lightest, and every bin within `ptol` of it; seeds are the heaviest non-paper bins")
+  (comment "(ties by bin index) farther than `merge` from every earlier seed, and either off every earlier seed's ink-to-paper")
+  (comment "segment or holding `spike` per mille of the page; the other bins join the nearest seed within half of `merge`, else")
+  (comment "the seed whose ink-to-paper segment they lie nearest; layers under `minper` per 10000 of the")
+  (comment "non-paper pixels are folded away and centroids within `merge` merged; layers are numbered by size. Answers K.")
+  (comment "Fills `nm-ws-assign`, the layer rows and the paper's gray; roles are `nm-roles`'s.")
+  (let [^:mut ^I32 bin 0
+        ^:mut ^I64 n 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 lmax -1
+        ^:mut ^I32 pbin -1
+        ^:mut ^I32 pcount -1
+        ^:mut ^I32 nseeds 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 dmin 0
+        ^:mut ^I32 smin 0
+        ^:mut ^I32 ncand 0
+        ^:mut ^I32 thr 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 key 0
+        ^:mut ^I32 id 0
+        ^:mut ^I64 nonpaper 0]
+    (cells-set ws (nm-ws-misc) 0)
+    (comment "total pixels, and the lightest bin that holds a visible share")
+    (while (< bin 4096)
+      (do (set c (cells-at ws (+ (nm-ws-hist) bin)))
+          (set n (+ n (i64 c)))
+          (set bin (+ bin 1))))
+    (cells-set ws (+ (nm-ws-misc) 3) (i32 n))
+    (if (== n 0) (return 0))
+    (set bin 0)
+    (while (< bin 4096)
+      (do (set c (cells-at ws (+ (nm-ws-hist) bin)))
+          (if (>= (* (i64 c) 5000) n)
+            (if (> (nm-bin-l bin) lmax) (set lmax (nm-bin-l bin))))
+          (set bin (+ bin 1))))
+    (set bin 0)
+    (while (< bin 4096)
+      (do (set c (cells-at ws (+ (nm-ws-hist) bin)))
+          (if (>= (nm-bin-l bin) (- lmax 40))
+            (if (> c pcount) (do (set pcount c) (set pbin bin))))
+          (set bin (+ bin 1))))
+    (if (< pbin 0) (return 0))
+    (cells-set ws (+ (nm-ws-misc) 2) pbin)
+    (cells-set ws (+ (nm-ws-misc) 1) (nm-bin-l pbin))
+    (let [^I32 pl (nm-bin-l pbin)
+          ^I32 pa (nm-bin-a pbin)
+          ^I32 pb (nm-bin-ob pbin)]
+      (comment "paper bins, and the rest unassigned (-1)")
+      (set bin 0)
+      (while (< bin 4096)
+        (do (if (<= (nm-bin-dist bin pbin) ptol)
+              (cells-set ws (+ (nm-ws-assign) bin) 0)
+              (cells-set ws (+ (nm-ws-assign) bin) -1))
+            (set bin (+ bin 1))))
+      (comment "candidate seeds: non-paper bins holding at least n/40000 pixels, at most 512 (the threshold doubles)")
+      (set thr (i32 (quot n 40000)))
+      (if (< thr 1) (set thr 1))
+      (set ncand 513)
+      (while (> ncand 512)
+        (do (set ncand 0)
+            (set bin 0)
+            (while (< bin 4096)
+              (do (if (== (cells-at ws (+ (nm-ws-assign) bin)) -1)
+                    (if (>= (cells-at ws (+ (nm-ws-hist) bin)) thr)
+                      (do (if (< ncand 512) (cells-set ws (+ (nm-ws-cand) ncand) bin))
+                          (set ncand (+ ncand 1)))))
+                  (set bin (+ bin 1))))
+            (if (> ncand 512) (set thr (* thr 2)))))
+      (comment "insertion sort: heavier first")
+      (set i 1)
+      (while (< i ncand)
+        (do (set key (cells-at ws (+ (nm-ws-cand) i)))
+            (set j (- i 1))
+            (while (and (>= j 0) (== (nm-cand-before ws key (cells-at ws (+ (nm-ws-cand) j))) 1))
+              (do (cells-set ws (+ (nm-ws-cand) (+ j 1)) (cells-at ws (+ (nm-ws-cand) j)))
+                  (set j (- j 1))))
+            (cells-set ws (+ (nm-ws-cand) (+ j 1)) key)
+            (set i (+ i 1))))
+      (comment "seeds")
+      (set i 0)
+      (while (< i ncand)
+        (do (set bin (cells-at ws (+ (nm-ws-cand) i)))
+            (set dmin 1000000)
+            (set smin 1000000)
+            (set k 0)
+            (while (< k nseeds)
+              (do (set d (nm-dist (nm-bin-l bin) (nm-bin-a bin) (nm-bin-ob bin)
+                                  (nm-layer-get ws k 1) (nm-layer-get ws k 2) (nm-layer-get ws k 3)))
+                  (if (< d dmin) (set dmin d))
+                  (set d (nm-segdist (nm-bin-l bin) (nm-bin-a bin) (nm-bin-ob bin)
+                                     (nm-layer-get ws k 1) (nm-layer-get ws k 2) (nm-layer-get ws k 3) pl pa pb))
+                  (if (< d smin) (set smin d))
+                  (set k (+ k 1))))
+            (if (> dmin merge)
+             (if (or (> smin merge) (>= (* (i64 (cells-at ws (+ (nm-ws-hist) bin))) 1000) (* n (i64 spike))))
+              (if (< nseeds (nm-max-layers))
+                (do (nm-lset ws nseeds 0 1)
+                    (nm-lset ws nseeds 1 (nm-bin-l bin))
+                    (nm-lset ws nseeds 2 (nm-bin-a bin))
+                    (nm-lset ws nseeds 3 (nm-bin-ob bin))
+                    (set nseeds (+ nseeds 1))))))
+            (set i (+ i 1))))
+      (if (== nseeds 0) (return 0))
+      (comment "every non-paper bin to a seed")
+      (set bin 0)
+      (while (< bin 4096)
+        (do (if (== (cells-at ws (+ (nm-ws-assign) bin)) -1)
+              (do (set d (nm-pick ws bin nseeds merge pl pa pb))
+                  (cells-set ws (+ (nm-ws-assign) bin) d)))
+            (set bin (+ bin 1))))
+      (nm-restat ws nseeds)
+      (set k 0)
+      (while (< k nseeds)
+        (do (set nonpaper (+ nonpaper (i64 (nm-layer-get ws k 0))))
+            (set k (+ k 1))))
+      (comment "fold the tiny layers away (the largest always stays)")
+      (set k 0)
+      (while (< k nseeds)
+        (do (if (< (* (i64 (nm-layer-get ws k 0)) 10000) (* nonpaper (i64 minper)))
+              (nm-lset ws k 0 0))
+            (set k (+ k 1))))
+      (nm-reassign-dead ws nseeds merge pl pa pb)
+      (nm-restat ws nseeds)
+      (comment "merge centroids within `merge`, the smaller into the larger, until none is")
+      (set i 1)
+      (while (== i 1)
+        (do (set i 0)
+            (set j 0)
+            (set k 0)
+            (while (< k nseeds)
+              (do (set id (+ k 1))
+                  (set c 0)
+                  (while (< c k)
+                    (do (if (> (nm-layer-get ws c 0) 0)
+                          (if (> (nm-layer-get ws k 0) 0)
+                            (if (<= (nm-dist (nm-layer-get ws c 1) (nm-layer-get ws c 2) (nm-layer-get ws c 3)
+                                             (nm-layer-get ws k 1) (nm-layer-get ws k 2) (nm-layer-get ws k 3)) merge)
+                              (if (== i 0)
+                                (do (set i 1) (set j c) (set d k))))))
+                        (set c (+ c 1))))
+                  (set k (+ k 1))))
+            (if (== i 1)
+              (do (comment "layer rows j and d (j < d) merge: the larger absorbs the smaller")
+                  (if (< (nm-layer-get ws j 0) (nm-layer-get ws d 0))
+                    (do (set c j) (set j d) (set d c)))
+                  (comment "j keeps, d dies")
+                  (set bin 0)
+                  (while (< bin 4096)
+                    (do (if (== (cells-at ws (+ (nm-ws-assign) bin)) (+ d 1))
+                          (cells-set ws (+ (nm-ws-assign) bin) (+ j 1)))
+                        (set bin (+ bin 1))))
+                  (nm-lset ws d 0 0)
+                  (nm-restat ws nseeds)))))
+      (comment "number the live layers by size, largest first (ties by seed order)")
+      (let [^:mut ^I32 live 0
+            ^:mut ^I32 bigger 0]
+        (set k 0)
+        (while (< k nseeds)
+          (do (if (> (nm-layer-get ws k 0) 0) (set live (+ live 1)))
+              (set k (+ k 1))))
+        (comment "new id of old layer k+1 lives in the lut region, as scratch")
+        (set k 0)
+        (while (< k nseeds)
+          (do (cells-set ws (+ (nm-ws-lut) k) 0)
+              (if (> (nm-layer-get ws k 0) 0)
+                (do (set bigger 0)
+                    (set c 0)
+                    (while (< c nseeds)
+                      (do (if (> (nm-layer-get ws c 0) 0)
+                            (if (or (> (nm-layer-get ws c 0) (nm-layer-get ws k 0))
+                                    (and (== (nm-layer-get ws c 0) (nm-layer-get ws k 0)) (< c k)))
+                              (set bigger (+ bigger 1))))
+                          (set c (+ c 1))))
+                    (cells-set ws (+ (nm-ws-lut) k) (+ bigger 1))))
+              (set k (+ k 1))))
+        (set bin 0)
+        (while (< bin 4096)
+          (do (set id (cells-at ws (+ (nm-ws-assign) bin)))
+              (if (> id 0)
+                (cells-set ws (+ (nm-ws-assign) bin) (cells-at ws (+ (nm-ws-lut) (- id 1)))))
+              (set bin (+ bin 1))))
+        (comment "clear the old rows, then restat the new ones")
+        (set k 0)
+        (while (< k (nm-max-layers))
+          (do (set c 0)
+              (while (< c (nm-lstride))
+                (do (nm-lset ws k c 0)
+                    (set c (+ c 1))))
+              (set k (+ k 1))))
+        (set bin 0)
+        (while (< bin 4096)
+          (do (cells-set ws (+ (nm-ws-lut) bin) 0)
+              (set bin (+ bin 1))))
+        (nm-restat ws live)
+        (cells-set ws (nm-ws-misc) live)
+        (return live)))))
+
+(defn ^I32 nm-share-ge [^I32 n ^I64 npix ^I32 bgper]
+  (comment "1 when `n` pixels are at least `bgper` per mille of `npix`.")
+  (if (>= (* (i64 n) 1000) (* npix (i64 bgper))) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 nm-roles [^:mut ^Cells ws ^I32 light ^I32 chroma ^I32 bgper]
+  (comment "Guess each layer's role (`ir`, SPEC 8.2). A layer covering `bgper` per mille of the page is `background` when it is")
+  (comment "light or coloured and `unknown` when it is dark and neutral (a mass, not text); otherwise chroma over `chroma` is")
+  (comment "`colour`, a neutral layer of lightness `light` or more is `light`, and a neutral dark one is `body`: EVERY such layer,")
+  (comment "since black headings and dark-grey text on one page are two clusters and one kind of ink. Answers the largest body")
+  (comment "layer's row, or -1.")
+  (let [^I32 nl (nm-layer-count ws)
+        ^I64 npix (i64 (nm-pixels ws))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ch 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 big 0
+        ^:mut ^I32 body -1
+        ^:mut ^I32 role 0]
+    (while (< k nl)
+      (do (set ch (+ (nm-abs (nm-layer-get ws k 2)) (nm-abs (nm-layer-get ws k 3))))
+          (set l (nm-layer-get ws k 1))
+          (set big (nm-share-ge (nm-layer-get ws k 0) npix bgper))
+          (if (>= ch chroma)
+            (set role (ir-color))
+            (if (>= l light)
+              (set role (ir-light))
+              (set role (ir-body))))
+          (if (== big 1)
+            (if (== role (ir-body))
+              (set role (ir-unknown))
+              (set role (ir-background))))
+          (nm-lset ws k 8 role)
+          (if (== role (ir-body))
+            (if (< body 0)
+              (set body k)
+              (if (> (nm-layer-get ws k 0) (nm-layer-get ws body 0))
+                (set body k))))
+          (set k (+ k 1))))
+    (return body)))
+
+(defn ^:pub ^I32 nm-role-mask-into [^Bitmap src ^:mut ^Cells ws ^I32 role ^Bitmap mask]
+  (comment "The mask of every layer whose role is `role`, as one LUT pass: the body mask is the union of the body layers.")
+  (let [^:mut ^I32 bin 0
+        ^:mut ^I32 id 0]
+    (while (< bin 4096)
+      (do (set id (cells-at ws (+ (nm-ws-assign) bin)))
+          (if (> id 0)
+            (if (== (nm-layer-get ws (- id 1) 8) role)
+              (cells-set ws (+ (nm-ws-lut) bin) 255)
+              (cells-set ws (+ (nm-ws-lut) bin) 0))
+            (cells-set ws (+ (nm-ws-lut) bin) 0))
+          (set bin (+ bin 1))))
+    (bitmap-lut-into src ws (nm-ws-lut) mask)
+    (return 0)))
+
+(defn ^:pub ^I32 nm-mask-into [^Bitmap src ^:mut ^Cells ws ^I32 layer ^Bitmap mask]
+  (comment "The ink-mask of layer `layer` (1-based): 255 where the pixel's colour bin belongs to it, else 0. One LUT pass.")
+  (let [^:mut ^I32 bin 0]
+    (while (< bin 4096)
+      (do (if (== (cells-at ws (+ (nm-ws-assign) bin)) layer)
+            (cells-set ws (+ (nm-ws-lut) bin) 255)
+            (cells-set ws (+ (nm-ws-lut) bin) 0))
+          (set bin (+ bin 1))))
+    (bitmap-lut-into src ws (nm-ws-lut) mask)
+    (return 0)))
+
+(defn ^:pub ^I32 nm-label-into [^Bitmap src ^:mut ^Cells ws ^Bitmap labels]
+  (comment "Every pixel's layer id (0 paper, 1..K) in one LUT pass.")
+  (bitmap-lut-into src ws (nm-ws-assign) labels)
+  (return 0))
+
+(defn ^:pub ^I32 nm-ink-rows [^:mut ^Cells inks ^Cells ws ^I32 page ^I32 view]
+  (comment "Append one `inks` row per layer (SPEC 8.4.4): the centroid colour packed 0xRRGGBB, lightness 0..1000, chroma")
+  (comment "(|a| + |b|), pixel count, role, the mask view (-1 here), spread. Answers the first row's index (or the count).")
+  (let [^I32 nl (nm-layer-count ws)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 first -1]
+    (while (< k nl)
+      (do (set r (ik-new inks page view))
+          (if (< first 0) (set first r))
+          (ik-set inks r (ikf-color) (+ (+ (shl32 (nm-layer-get ws k 4) 16) (shl32 (nm-layer-get ws k 5) 8)) (nm-layer-get ws k 6)))
+          (ik-set inks r (ikf-light) (quot (+ (* (nm-layer-get ws k 1) 1000) 127) 255))
+          (ik-set inks r (ikf-chroma) (+ (nm-abs (nm-layer-get ws k 2)) (nm-abs (nm-layer-get ws k 3))))
+          (ik-set inks r (ikf-count) (nm-layer-get ws k 0))
+          (ik-set inks r (ikf-role) (nm-layer-get ws k 8))
+          (ik-set inks r (ikf-spread) (nm-layer-get ws k 7))
+          (set k (+ k 1))))
+    (return first)))
+
+;; ---------------------------------------------------------------- Sauvola over a band of integral rows
+
+(defn ^:pub ^I32 nm-sv-size [^I32 w ^I32 r]
+  (comment "Cells `nm-sauvola` uses: a 65536-entry square-root table, then two rings of 2r + 2 integral rows of w + 1.")
+  (return (+ 65536 (* (* 2 (* (+ (* 2 r) 2) (+ w 1))) 1))))
+
+(defn ^:pub ^I32 nm-sqrt-table [^:mut ^Cells t]
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (while (< i 65536)
+      (do (while (<= (* (+ k 1) (+ k 1)) i)
+            (set k (+ k 1)))
+          (cells-set t i k)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 nm-sv-row [^:mut ^Cells sv ^Bitmap g ^I32 k ^I32 rr ^I32 w1 ^I32 sqoff]
+  (comment "Integral row k (1..h) from row k - 1 and the pixel row k - 1; rows live in slot k mod rr of each ring.")
+  (let [^I32 w (- w1 1)
+        ^I32 cur (+ 65536 (* (rem k rr) w1))
+        ^I32 prev (+ 65536 (* (rem (- k 1) rr) w1))
+        ^:mut ^I32 x 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 rs 0
+        ^:mut ^I32 rq 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0]
+    (cells-set sv cur 0)
+    (cells-set sv (+ cur sqoff) 0)
+    (while (< x w)
+      (do (set v (bitmap-u8 g x (- k 1) 0))
+          (set rs (+ rs v))
+          (set rq (+ rq (* v v)))
+          (set a (cells-at sv (+ (+ prev x) 1)))
+          (set b (cells-at sv (+ (+ (+ prev sqoff) x) 1)))
+          (cells-set sv (+ (+ cur x) 1) (i32 (+ (i64 a) (i64 rs))))
+          (cells-set sv (+ (+ (+ cur sqoff) x) 1) (i32 (+ (i64 b) (i64 rq))))
+          (set x (+ x 1))))
+    (return 0)))
+
+(defn ^I32 nm-win [^Cells sv ^I32 top ^I32 bot ^I32 x0 ^I32 x1]
+  (comment "The window sum of one ring: four reads of its two live integral rows `top` and `bot` (offsets), as `ras-win`.")
+  (let [^:mut ^I64 s 0]
+    (set s (i64 (cells-at sv (+ bot x1))))
+    (set s (- s (i64 (cells-at sv (+ top x1)))))
+    (set s (- s (i64 (cells-at sv (+ bot x0)))))
+    (set s (+ s (i64 (cells-at sv (+ top x0)))))
+    (return (i32 s))))
+
+(defn ^:pub ^I32 nm-sauvola [^Bitmap g ^Bitmap m ^I32 r ^I32 k ^:mut ^Cells sv]
+  (comment "mask := 255 where the pixel is under the Sauvola threshold of its (2r + 1)-square window (clipped at the edges),")
+  (comment "else 0; answers the ink count. The same arithmetic as `ras-sauvola`, but over rings of 2r + 2 integral rows, so")
+  (comment "memory is O(w r). `sv` is a scratch `Cells` (`nm-sv-size` cells are made).")
+  (let [^I32 w (bitmap-w g)
+        ^I32 h (bitmap-h g)
+        ^I32 w1 (+ (bitmap-w g) 1)
+        ^I32 rr (+ (* 2 r) 2)
+        ^I32 sqoff (* rr w1)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 nxt 1
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 mean 0
+        ^:mut ^I32 vr 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 thr 0
+        ^:mut ^I32 top 0
+        ^:mut ^I32 bot 0
+        ^:mut ^I32 ink 0]
+    (if (< (cells-len sv) (nm-sv-size w r))
+      (do (cells-drop sv 0)
+          (cells-grow sv (nm-sv-size w r) 0)
+          (nm-sqrt-table sv)))
+    (comment "slot 0 of both rings is the zero row")
+    (set x 0)
+    (while (< x w1)
+      (do (cells-set sv (+ 65536 x) 0)
+          (cells-set sv (+ (+ 65536 sqoff) x) 0)
+          (set x (+ x 1))))
+    (while (< y h)
+      (do (set y0 (- y r))
+          (if (< y0 0) (set y0 0))
+          (set y1 (+ (+ y r) 1))
+          (if (> y1 h) (set y1 h))
+          (while (<= nxt y1)
+            (do (nm-sv-row sv g nxt rr w1 sqoff)
+                (set nxt (+ nxt 1))))
+          (set top (+ 65536 (* (rem y0 rr) w1)))
+          (set bot (+ 65536 (* (rem y1 rr) w1)))
+          (set x 0)
+          (while (< x w)
+            (do (set x0 (- x r))
+                (if (< x0 0) (set x0 0))
+                (set x1 (+ (+ x r) 1))
+                (if (> x1 w) (set x1 w))
+                (set n (* (- x1 x0) (- y1 y0)))
+                (set s (nm-win sv top bot x0 x1))
+                (set q (nm-win sv (+ top sqoff) (+ bot sqoff) x0 x1))
+                (set mean (quot s n))
+                (set vr (- (quot q n) (* mean mean)))
+                (set sd (cells-at sv vr))
+                (set thr (+ mean (i32 (quot (* (* (i64 mean) (i64 k)) (i64 (- (* 2 sd) 256))) 65536))))
+                (if (< (bitmap-u8 g x y 0) thr)
+                  (do (bitmap-set-u8 m x y 0 255)
+                      (set ink (+ ink 1)))
+                  (bitmap-set-u8 m x y 0 0))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return ink)))
+
+;; ---------------------------------------------------------------- deskew and orientation
+
+(defn ^:pub ^I32 nm-skew-points [^Bitmap m ^:mut ^Cells pts ^I32 ystep ^I32 limit]
+  (comment "The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its")
+  (comment "midpoint x with its length as the weight (a run's pixels all project within a pixel of its midpoint at the angles")
+  (comment "tried, so this is the row projection of the ink without visiting a pixel twice). At most `limit` runs. Answers how many.")
+  (let [^I32 w (bitmap-w m)
+        ^I32 h (bitmap-h m)
+        ^:mut ^I32 y (quot ystep 2)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 np 0]
+    (cells-drop pts 0)
+    (while (and (< y h) (< np limit))
+      (do (set x (bitmap-next-nonzero m 0 y))
+          (while (and (< x w) (< np limit))
+            (do (set ce x)
+                (while (and (< ce w) (!= (bitmap-u8 m ce y 0) 0))
+                  (set ce (+ ce 1)))
+                (cells-push pts (quot (+ x ce) 2))
+                (cells-push pts y)
+                (cells-push pts (- ce x))
+                (set np (+ np 1))
+                (set x (bitmap-next-nonzero m ce y))))
+          (set y (+ y ystep))))
+    (return np)))
+
+(defn ^I64 nm-skew-score [^:mut ^Cells pts ^I32 np ^:mut ^Cells prof ^I32 cdeg ^I32 off ^I32 nb]
+  (comment "The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,")
+  (comment "centi-degrees counter-clockwise), y*cos + x*sin is the same along a line; the score is the sum of squared")
+  (comment "per-pixel-row ink counts, which is largest when the lines fall into few rows. `prof` is left zero.")
+  (let [^I32 co (ev-cos cdeg)
+        ^I32 si (ev-sin cdeg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I64 sc 0]
+    (while (< i np)
+      (do (set b (sar32 (+ (+ (* (cells-at pts (+ (* 3 i) 1)) co) (* (cells-at pts (* 3 i)) si)) off) 16))
+          (set c (cells-at prof b))
+          (cells-set prof b (+ c (cells-at pts (+ (* 3 i) 2))))
+          (set i (+ i 1))))
+    (set b 0)
+    (while (< b nb)
+      (do (set c (cells-at prof b))
+          (if (!= c 0)
+            (do (set sc (+ sc (* (i64 c) (i64 c))))
+                (cells-set prof b 0)))
+          (set b (+ b 1))))
+    (return sc)))
+
+(defn ^:pub ^I32 nm-deskew [^Bitmap m ^:mut ^Cells pts ^:mut ^Cells prof]
+  (comment "The skew of a binary view in centi-degrees (positive: the text lines rise to the right, counter-clockwise, the")
+  (comment "sign of `vwf-deskew`): projection profiles of the ink runs over -5..5 degrees at 0.1, then 0.01 around the best;")
+  (comment "0 when the best is not clearly better than 0 (over 1/64) or there are under 50 runs. `pts` and `prof` are scratch.")
+  (let [^I32 w (bitmap-w m)
+        ^I32 h (bitmap-h m)
+        ^I32 off (* w 6000)
+        ^I32 nb (+ (sar32 (+ (+ (* (- h 1) 65536) (* (- w 1) 6000)) off) 16) 2)
+        ^I32 ystep (+ (quot h 800) 1)
+        ^:mut ^I32 np 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 best 0
+        ^:mut ^I64 bs 0
+        ^:mut ^I64 s 0
+        ^:mut ^I64 s0 0]
+    (if (> h 16000) (return 0))
+    (set np (nm-skew-points m pts ystep 120000))
+    (if (< np 50) (return 0))
+    (cells-drop prof 0)
+    (cells-grow prof nb 0)
+    (set s0 (nm-skew-score pts np prof 0 off nb))
+    (set bs s0)
+    (set a -500)
+    (while (<= a 500)
+      (do (set s (nm-skew-score pts np prof a off nb))
+          (if (> s bs) (do (set bs s) (set best a)))
+          (set a (+ a 10))))
+    (set a (- best 9))
+    (while (<= a (+ best 9))
+      (do (set s (nm-skew-score pts np prof a off nb))
+          (if (> s bs) (do (set bs s) (set best a)))
+          (set a (+ a 1))))
+    (if (<= bs (+ s0 (quot s0 64))) (return 0))
+    (return best)))
+
+(defn ^:pub ^I32 nm-orient [^I32 osd-deg ^I32 osd-conf ^I32 min-conf]
+  (comment "The quarter turns CLOCKWISE that make a page upright, from OSD (degrees to rotate clockwise, confidence x10), when")
+  (comment "its confidence reaches `min-conf` (`nm-osd-conf`); else -1 (the tracer's `tlines` decide later).")
+  (if (< osd-deg 0) (return -1))
+  (if (< osd-conf min-conf) (return -1))
+  (return (rem (quot osd-deg 90) 4)))
+
+(defn ^:pub ^I32 nm-reskew [^:mut ^Cells views ^I32 v ^I32 cdeg]
+  (comment "Give view row `v` the deskew `cdeg`, recomputing its transform: a view row is made once, so this builds the")
+  (comment "row again at the end of the arena, copies it over `v`, and drops it.")
+  (let [^I32 pg (vw-get views v (vwf-page))
+        ^I32 kd (vw-get views v (vwf-kind))
+        ^I32 rq (vw-get views v (vwf-request))
+        ^I32 pa (vw-get views v (vwf-parent))
+        ^I32 pw (vw-get views v (vwf-pxw))
+        ^I32 ph (vw-get views v (vwf-pxh))
+        ^I32 dp (vw-get views v (vwf-dpi))
+        ^I32 ly (vw-get views v (vwf-layer))
+        ^I32 ik (vw-get views v (vwf-ink))
+        ^I32 tn (vw-get views v (vwf-turns))
+        ^I32 cx (vw-get views v (vwf-cropx))
+        ^I32 cy (vw-get views v (vwf-cropy))
+        ^I32 fl (vw-get views v (vwf-flags))
+        ^I32 r (vw-new views pg kd rq pa pw ph dp ly ik tn cdeg cx cy fl)
+        ^:mut ^I32 f 0
+        ^:mut ^I32 x 0]
+    (while (< f 24)
+      (do (set x (vw-get views r f))
+          (vw-set views v f x)
+          (set f (+ f 1))))
+    (cells-drop views (* r 24))
+    (return 0)))
+
+;; ---------------------------------------------------------------- ink under a box (SPEC 8.4.5, columns 10-13, 16)
+
+(defn ^I32 nm-clamp [^I32 v ^I32 lo ^I32 hi]
+  (if (< v lo) (return lo))
+  (if (> v hi) (return hi))
+  (return v))
+
+(defn ^:pub ^I32 nm-permille [^I32 n ^I32 d]
+  (comment "n over d per mille, -1 when d is not positive.")
+  (if (<= d 0) (return -1))
+  (return (i32 (quot (* (i64 n) 1000) (i64 d)))))
+
+(defn ^:pub ^I32 nm-box-ink [^Bitmap m ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "Nonzero pixels of `m` in the half-open box, clamped to the bitmap: runs found by `bitmap-next-nonzero`, so the")
+  (comment "cost follows the ink, not the box.")
+  (let [^I32 x0 (nm-clamp bx0 0 (bitmap-w m))
+        ^I32 x1 (nm-clamp bx1 0 (bitmap-w m))
+        ^I32 y1 (nm-clamp by1 0 (bitmap-h m))
+        ^:mut ^I32 y (nm-clamp by0 0 (bitmap-h m))
+        ^:mut ^I32 x 0
+        ^:mut ^I32 n 0]
+    (while (< y y1)
+      (do (set x (bitmap-next-nonzero m x0 y))
+          (while (< x x1)
+            (do (set n (+ n 1))
+                (set x (bitmap-next-nonzero m (+ x 1) y))))
+          (set y (+ y 1))))
+    (return n)))
+
+(defn ^:pub ^I32 nm-box-both [^Bitmap a ^Bitmap b ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "Pixels of the box nonzero in BOTH `a` and `b` (same size), walking only `a`'s ink.")
+  (let [^I32 x0 (nm-clamp bx0 0 (bitmap-w a))
+        ^I32 x1 (nm-clamp bx1 0 (bitmap-w a))
+        ^I32 y1 (nm-clamp by1 0 (bitmap-h a))
+        ^:mut ^I32 y (nm-clamp by0 0 (bitmap-h a))
+        ^:mut ^I32 x 0
+        ^:mut ^I32 n 0]
+    (while (< y y1)
+      (do (set x (bitmap-next-nonzero a x0 y))
+          (while (< x x1)
+            (do (if (!= (bitmap-u8 b x y 0) 0) (set n (+ n 1)))
+                (set x (bitmap-next-nonzero a (+ x 1) y))))
+          (set y (+ y 1))))
+    (return n)))
+
+(defn ^:pub ^I32 nm-box-gray-sum [^Bitmap m ^Bitmap g ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The sum of `g` over the pixels of the box where `m` is nonzero.")
+  (let [^I32 x0 (nm-clamp bx0 0 (bitmap-w m))
+        ^I32 x1 (nm-clamp bx1 0 (bitmap-w m))
+        ^I32 y1 (nm-clamp by1 0 (bitmap-h m))
+        ^:mut ^I32 y (nm-clamp by0 0 (bitmap-h m))
+        ^:mut ^I32 x 0
+        ^:mut ^I32 n 0]
+    (while (< y y1)
+      (do (set x (bitmap-next-nonzero m x0 y))
+          (while (< x x1)
+            (do (set n (+ n (bitmap-u8 g x y 0)))
+                (set x (bitmap-next-nonzero m (+ x 1) y))))
+          (set y (+ y 1))))
+    (return n)))
+
+(defn ^I32 nm-box-area [^Bitmap m ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (return (* (- (nm-clamp bx1 0 (bitmap-w m)) (nm-clamp bx0 0 (bitmap-w m)))
+             (- (nm-clamp by1 0 (bitmap-h m)) (nm-clamp by0 0 (bitmap-h m))))))
+
+(defn ^:pub ^I32 nm-feat-ocr [^:mut ^Cells feats ^I32 frow ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                              ^Bitmap binary ^Bitmap eng ^I32 has-eng ^Bitmap body ^Bitmap gray ^I32 paper]
+  (comment "An OCR word's ink columns (`xo-*`, SPEC 8.4.5) from its pixel box on the view it was read from: 10 kin ink under")
+  (comment "the box on the Sauvola `binary` (per mille of the box), 11 the engine's own binary (`eng`, -1 when `has-eng` is")
+  (comment "0), 12 the Jaccard of the two inside the box, 13 the share of its ink in the `body` mask, 16 the contrast of its")
+  (comment "ink: the layer paper's gray (`paper`) minus the mean gray of its ink. A column that cannot be computed is -1.")
+  (let [^I32 area (nm-box-area binary x0 y0 x1 y1)
+        ^I32 kin (nm-box-ink binary x0 y0 x1 y1)
+        ^:mut ^I32 en 0
+        ^:mut ^I32 both 0
+        ^:mut ^I32 un 0
+        ^:mut ^I32 gs 0]
+    (fe-set feats frow (xo-kin-ink) (nm-permille kin area))
+    (if (== has-eng 1)
+      (do (set en (nm-box-ink eng x0 y0 x1 y1))
+          (set both (nm-box-both binary eng x0 y0 x1 y1))
+          (set un (- (+ kin en) both))
+          (fe-set feats frow (xo-engine-ink) (nm-permille en area))
+          (if (> un 0)
+            (fe-set feats frow (xo-jaccard) (nm-permille both un))
+            (fe-set feats frow (xo-jaccard) -1)))
+      (do (fe-set feats frow (xo-engine-ink) -1)
+          (fe-set feats frow (xo-jaccard) -1)))
+    (if (> kin 0)
+      (do (fe-set feats frow (xo-body-share) (nm-permille (nm-box-both binary body x0 y0 x1 y1) kin))
+          (set gs (nm-box-gray-sum binary gray x0 y0 x1 y1))
+          (fe-set feats frow (xo-ink-gray) (nm-clamp (- paper (quot gs kin)) 0 255)))
+      (do (fe-set feats frow (xo-body-share) -1)
+          (fe-set feats frow (xo-ink-gray) -1)))
+    (return kin)))
+
+(defn ^:pub ^I32 nm-feat-text [^:mut ^Cells feats ^I32 frow ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                               ^Bitmap with-bin ^Bitmap no-bin ^I32 has-no ^Bitmap body]
+  (comment "A text-layer word's ink columns (`xt-*`) from its pixel box: 10 ink under it on the `with-text` render's binary,")
+  (comment "11 ink under it on the `no-text` render's (text drawn over ink; -1 without one), 12 the share of its ink in the")
+  (comment "`with-text` body mask.")
+  (let [^I32 area (nm-box-area with-bin x0 y0 x1 y1)
+        ^I32 kin (nm-box-ink with-bin x0 y0 x1 y1)]
+    (fe-set feats frow (xt-kin-ink) (nm-permille kin area))
+    (if (== has-no 1)
+      (fe-set feats frow (xt-ink-without-text) (nm-permille (nm-box-ink no-bin x0 y0 x1 y1) area))
+      (fe-set feats frow (xt-ink-without-text) -1))
+    (if (> kin 0)
+      (fe-set feats frow (xt-body-share) (nm-permille (nm-box-both with-bin body x0 y0 x1 y1) kin))
+      (fe-set feats frow (xt-body-share) -1))
+    (return kin)))
+
+(defn ^:pub ^I32 nm-box-px [^Cells views ^I32 v ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^:mut ^Cells res ^I32 off]
+  (comment "A page box (centipoints) as a pixel box of view `v`, the smallest around its four mapped corners, written to")
+  (comment "`res[off..off+3]` as x0 y0 x1 y1 (half-open: the far edge is one past the last pixel). Corners map through")
+  (comment "`vw-cpt-to-px`, so quarter turns and deskew are honoured.")
+  (let [^I32 ax (vw-cpt-to-px views v 0 x0 y0)
+        ^I32 ay (vw-cpt-to-px views v 1 x0 y0)
+        ^I32 bx (vw-cpt-to-px views v 0 x1 y0)
+        ^I32 by (vw-cpt-to-px views v 1 x1 y0)
+        ^I32 cx (vw-cpt-to-px views v 0 x0 y1)
+        ^I32 cy (vw-cpt-to-px views v 1 x0 y1)
+        ^I32 dx (vw-cpt-to-px views v 0 x1 y1)
+        ^I32 dy (vw-cpt-to-px views v 1 x1 y1)
+        ^:mut ^I32 mnx ax
+        ^:mut ^I32 mxx ax
+        ^:mut ^I32 mny ay
+        ^:mut ^I32 mxy ay]
+    (if (< bx mnx) (set mnx bx))
+    (if (< cx mnx) (set mnx cx))
+    (if (< dx mnx) (set mnx dx))
+    (if (> bx mxx) (set mxx bx))
+    (if (> cx mxx) (set mxx cx))
+    (if (> dx mxx) (set mxx dx))
+    (if (< by mny) (set mny by))
+    (if (< cy mny) (set mny cy))
+    (if (< dy mny) (set mny dy))
+    (if (> by mxy) (set mxy by))
+    (if (> cy mxy) (set mxy cy))
+    (if (> dy mxy) (set mxy dy))
+    (cells-set res off mnx)
+    (cells-set res (+ off 1) mny)
+    (cells-set res (+ off 2) mxx)
+    (cells-set res (+ off 3) mxy)
+    (return 0)))
+
+;; ---------------------------------------------------------------- the stage
+
+(defn ^:pub ^I32 nm-view [^:mut ^Cells views ^:mut ^Cells inks ^I32 page ^I32 srcview
+                          ^Bitmap src ^Bitmap gray ^Bitmap binary
+                          ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux]
+  (comment "Normalize ONE raster: `src` is the bitmap of `views` row `srcview` (a render or a decode); `gray` and `binary` are")
+  (comment "1-channel bitmaps of its size that the caller made. Fills `gray` (`bitmap-gray-into`) and `binary` (banded Sauvola, or")
+  (comment "a plain threshold for a bilevel source), clusters the ink layers into `ws` (so `nm-mask-into` can make any layer's")
+  (comment "mask after), appends the `views` rows (gray, binary, and one ink-mask per layer) and `inks` rows, guesses roles, and")
+  (comment "for a decode view measures the skew, writing it to the source row and to every view derived from it. `sv` and")
+  (comment "`aux` are scratch `Cells`. Answers the number of ink layers. See the header for the wiring point.")
+  (let [^I32 pxw (bitmap-w src)
+        ^I32 pxh (bitmap-h src)
+        ^I32 dpi (vw-get views srcview (vwf-dpi))
+        ^I32 kind (vw-get views srcview (vwf-kind))
+        ^I32 layer (vw-get views srcview (vwf-layer))
+        ^I32 turns (vw-get views srcview (vwf-turns))
+        ^I32 cropx (vw-get views srcview (vwf-cropx))
+        ^I32 cropy (vw-get views srcview (vwf-cropy))
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 bin 0
+        ^:mut ^I32 other 0
+        ^:mut ^I32 ang (vw-get views srcview (vwf-deskew))
+        ^:mut ^I32 r 0
+        ^:mut ^I32 irow 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 mrow 0]
+    (bitmap-gray-into src gray)
+    (nm-ws-init ws)
+    (bitmap-hist-rgb src ws (nm-ws-hist))
+    (set nl (nm-layers ws (nm-ink-merge) (nm-ink-paper) (nm-ink-min) (nm-ink-spike)))
+    (nm-roles ws (nm-ink-light) (nm-ink-chroma) (nm-ink-bg))
+    (comment "a bilevel source has pixels in bin 0 and bin 4095 only")
+    (while (< bin 4096)
+      (do (if (!= (cells-at ws (+ (nm-ws-hist) bin)) 0)
+            (if (!= bin 0)
+              (if (!= bin 4095)
+                (set other 1))))
+          (set bin (+ bin 1))))
+    (comment "the skew is read off the BODY layers' ink (the body mask is borrowed `binary`, which is made after): a coloured")
+    (comment "seal, a light watermark or a texture has its own geometry and must not vote")
+    (if (== kind (vk-decode))
+      (do (nm-role-mask-into src ws (ir-body) binary)
+          (set ang (nm-deskew binary aux sv))
+          (if (!= ang (vw-get views srcview (vwf-deskew)))
+            (nm-reskew views srcview ang))))
+    (if (== other 0)
+      (bitmap-threshold-into gray 127 binary)
+      (nm-sauvola gray binary (nm-sauvola-r dpi) (nm-sauvola-k) sv))
+    (set r (vw-new views page (vk-gray) -1 srcview pxw pxh dpi layer -1 turns ang cropx cropy 0))
+    (cells-set ws (+ (nm-ws-misc) 4) r)
+    (set r (vw-new views page (vk-binary) -1 srcview pxw pxh dpi layer -1 turns ang cropx cropy 0))
+    (cells-set ws (+ (nm-ws-misc) 5) r)
+    (set irow (nm-ink-rows inks ws page srcview))
+    (while (< k nl)
+      (do (set mrow (vw-new views page (vk-ink-mask) -1 srcview pxw pxh dpi layer (+ irow k) turns ang cropx cropy 0))
+          (ik-set inks (+ irow k) (ikf-mask) mrow)
+          (set k (+ k 1))))
+    (return nl)))

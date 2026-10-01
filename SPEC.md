@@ -1020,11 +1020,18 @@ cheaply (text rendered as outlines, images of tables, scanned inserts).
   opponent space (`L = gray`, `a = r - g`, `b = (r + g)/2 - b`), seeded
   deterministically (heaviest bin first, ties by bin index) and merged while
   two centroids are within `ink-merge` (a named setting); at most 8 layers.
+  An anti-aliased edge is not a layer: a bin lying on the segment between an
+  existing layer's colour and the paper joins that layer unless it holds
+  `ink-spike` of the page (a flat watermark does, an edge does not), and a
+  bin outside every layer's core (half of `ink-merge`) goes to the layer
+  whose ink-to-paper segment it lies nearest (D217).
   Each layer's role (`ir`) is guessed from lightness, chroma and coverage:
-  `body` (the darkest low-chroma layer holding most text-like ink), `light`
+  `body` (every low-chroma layer darker than `ink-light`: black headings and
+  dark-grey text are two clusters of one kind of ink), `light`
   (low chroma, lightness over `ink-light`), `colour` (chroma over
-  `ink-chroma`: blue, red, purple seal inks), `background` (large connected
-  coverage), else `unknown`. A layer's mask is one `bitmap-lut-into` pass (a
+  `ink-chroma`: blue, red, purple seal inks), `background` (covers
+  `ink-bg` of the page, and is light or coloured), `unknown` (a dark neutral
+  mass of that coverage: not text). A layer's mask is one `bitmap-lut-into` pass (a
   4096-entry table from bin to mask value). On a **gray** source (a 1-channel
   scan) only lightness separates layers: `colour` cannot occur, and
   watermark separation rests on lightness, geometry and recurrence.
@@ -1034,8 +1041,10 @@ cheaply (text rendered as outlines, images of tables, scanned inserts).
   of P2.7 and costing `O(w r)` memory instead of 70 MB. Bilevel decodes
   skip it.
 * **Deskew** runs only on decode views (a render is unskewed by
-  construction): projection profiles of the body layer's component centres
-  at candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`. Kin
+  construction): projection profiles of the ink runs of the body layers' mask
+  (each run by its midpoint, weighted by its length, on every few rows) at
+  candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`; the angle
+  goes to the decode view and every view derived from it (D218). Kin
   never resamples for its own analysis; it maps coordinates through the
   view. **Orientation** (0/90/180/270) is OSD's when its confidence passes
   `osd-conf`, else the `tlines`' dominant direction; a page not upright is

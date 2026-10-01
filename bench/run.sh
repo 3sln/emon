@@ -15,6 +15,8 @@ cd "$(dirname "$0")/.."
 repo=$(pwd)
 N=${1:-10}
 mode=${2:-port}
+# P6.3's workload (gray, colour histogram, layers, banded Sauvola, deskew, nm-view) is its own script.
+if [ "$mode" = norm ]; then exec sh bench/norm.sh "$N"; fi
 work="$repo/bench/work"
 # PAGE=/abs/other.gray TAG=-clean bench/run.sh ... times another page (made
 # with bench/mkpage.clj SRC OUT); results land in results-<mode><TAG>.txt.
