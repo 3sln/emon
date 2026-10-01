@@ -638,6 +638,9 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 			evidence.OwSet(owords, ow, evidence.OwfStyle(), ocr.OxWflags(an, wx))
 			evidence.OwSet(owords, ow, evidence.OwfLang(), ocr.OxWlang(an, wx))
 			ps = ocr.OxWpsize(an, wx)
+			if ps > 1000000 {
+				ps = 1000000
+			}
 			if ps >= 0 {
 				evidence.OwSet(owords, ow, evidence.OwfPsize(), ps*100)
 			}
@@ -910,6 +913,16 @@ func scMetrics(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int3
 		x = scSample(olines, owords, osyms, l, 1, scr)
 		d = scSample(olines, owords, osyms, l, 3, scr)
 	}
+	// An answer is only as sane as its engine: sizes are held to 10 000 pt, so that no product below can overflow.
+	if a > 1000000 {
+		a = 1000000
+	}
+	if d > 1000000 {
+		d = 1000000
+	}
+	if x > 1000000 {
+		x = 1000000
+	}
 	port.CellsSet(scr, 0, a)
 	port.CellsSet(scr, 1, d)
 	return x
@@ -1024,6 +1037,13 @@ func scFit(scr *port.Cells, n int32) int32 {
 	if m >= 1 {
 		scIsort(scr, 242+(4*scCap()), m)
 		r = port.CellsAt(scr, (242+(4*scCap()))+((m-1)/2))
+	}
+	// a typeface's tall letters are 1.2 to 2 x its x-height; anything outside 1 to 3 is a bad measure, not a typeface
+	if r < 1000 {
+		r = 1000
+	}
+	if r > 3000 {
+		r = 3000
 	}
 	i = 0
 	for i < n {

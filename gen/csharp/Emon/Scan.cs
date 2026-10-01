@@ -620,6 +620,9 @@ public static class Scan {
                 Evidence.OwSet(owords, ow, Evidence.OwfStyle(), Ocr.OxWflags(an, wx));
                 Evidence.OwSet(owords, ow, Evidence.OwfLang(), Ocr.OxWlang(an, wx));
                 ps = Ocr.OxWpsize(an, wx);
+                if (ps > 1000000) {
+                    ps = 1000000;
+                }
                 if (ps >= 0) {
                     Evidence.OwSet(owords, ow, Evidence.OwfPsize(), ps * 100);
                 }
@@ -884,6 +887,16 @@ public static class Scan {
             x = ScSample(olines, owords, osyms, l, 1, scr);
             d = ScSample(olines, owords, osyms, l, 3, scr);
         }
+        // An answer is only as sane as its engine: sizes are held to 10 000 pt, so that no product below can overflow.
+        if (a > 1000000) {
+            a = 1000000;
+        }
+        if (d > 1000000) {
+            d = 1000000;
+        }
+        if (x > 1000000) {
+            x = 1000000;
+        }
         emon.Port.CellsSet(scr, 0, a);
         emon.Port.CellsSet(scr, 1, d);
         return x;
@@ -996,6 +1009,13 @@ public static class Scan {
         if (m >= 1) {
             ScIsort(scr, 242 + (4 * ScCap()), m);
             r = emon.Port.CellsAt(scr, (242 + (4 * ScCap())) + ((m - 1) / 2));
+        }
+        // a typeface's tall letters are 1.2 to 2 x its x-height; anything outside 1 to 3 is a bad measure, not a typeface
+        if (r < 1000) {
+            r = 1000;
+        }
+        if (r > 3000) {
+            r = 3000;
         }
         i = 0;
         while (i < n) {

@@ -624,6 +624,9 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
             ow_set(owords, ow, owf_style(), ox_wflags(an, wx));
             ow_set(owords, ow, owf_lang(), ox_wlang(an, wx));
             ps = ox_wpsize(an, wx);
+            if ps > 1000000 {
+                ps = 1000000;
+            }
             if ps >= 0 {
                 ow_set(owords, ow, owf_psize(), ps * 100);
             }
@@ -888,6 +891,16 @@ pub(crate) fn sc_metrics(olines: &mut crate::port::Cells, owords: &mut crate::po
         x = sc_sample(olines, owords, osyms, l, 1, scr);
         d = sc_sample(olines, owords, osyms, l, 3, scr);
     }
+    // An answer is only as sane as its engine: sizes are held to 10 000 pt, so that no product below can overflow.
+    if a > 1000000 {
+        a = 1000000;
+    }
+    if d > 1000000 {
+        d = 1000000;
+    }
+    if x > 1000000 {
+        x = 1000000;
+    }
     crate::port::cells_set(scr, 0, a);
     crate::port::cells_set(scr, 1, d);
     return x;
@@ -1000,6 +1013,13 @@ pub(crate) fn sc_fit(mut scr: &mut crate::port::Cells, n: i32) -> i32 {
     if m >= 1 {
         sc_isort(scr, 242 + (4 * sc_cap()), m);
         r = crate::port::cells_at(scr, (242 + (4 * sc_cap())) + ((m - 1) / 2));
+    }
+    // a typeface's tall letters are 1.2 to 2 x its x-height; anything outside 1 to 3 is a bad measure, not a typeface
+    if r < 1000 {
+        r = 1000;
+    }
+    if r > 3000 {
+        r = 3000;
     }
     i = 0;
     while i < n {
