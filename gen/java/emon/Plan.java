@@ -16,6 +16,9 @@ public final class Plan {
     public static int pkBytes() {
         return 4;
     }
+    public static int pkCrop() {
+        return 5;
+    }
     public static int psOk() {
         return 0;
     }
@@ -42,6 +45,12 @@ public final class Plan {
     }
     public static int layTextOnly() {
         return 2;
+    }
+    public static int layNoWatermark() {
+        return 3;
+    }
+    public static int layWatermarkOnly() {
+        return 4;
     }
     public static int fltNone() {
         return 0;
@@ -199,6 +208,20 @@ public final class Plan {
         emon.Port.cellsPush(c, page);
         emon.Port.cellsPush(c, dpi);
         emon.Port.cellsPush(c, layer);
+        recEnd(c, at);
+        return at;
+    }
+    public static int rqCrop(emon.Port.Cells c, int id, int input, int page, int dpi, int layer, int px, int py, int pw, int ph) {
+        // Ask for the pixel rectangle px py pw ph of page `page` as `rq-render` would answer it whole.
+        int at = recBegin(c, pkCrop(), id);
+        emon.Port.cellsPush(c, input);
+        emon.Port.cellsPush(c, page);
+        emon.Port.cellsPush(c, dpi);
+        emon.Port.cellsPush(c, layer);
+        emon.Port.cellsPush(c, px);
+        emon.Port.cellsPush(c, py);
+        emon.Port.cellsPush(c, pw);
+        emon.Port.cellsPush(c, ph);
         recEnd(c, at);
         return at;
     }

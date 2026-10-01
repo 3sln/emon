@@ -1,0 +1,114 @@
+#!/usr/bin/env bb
+;; A real renderer's pages, replayed from a transcript: recorded on Rust (pdfium), replayed on Rust and Go.
+;;                                                                  kin/scripts/render     (DEVLOG P6.2, D127)
+;;
+;; THE LIVE ENGINE IS NOT HERE. `tools/render/record.clj` ran pdfium (bblanchon/pdfium-binaries, pinned in
+;; tools/pdfium/pdfium.edn) once over test/render/cases.edn's requests and committed what it answered:
+;; `test/render/render/` (the transcript: one canonical PNG per page, D125) and `test/render/render.dump`
+;; (the driver's stdout at recording). This gate only REPLAYS, so it tests emon and never whose pdfium is
+;; installed (SPEC 7.3); it needs no pdfium, no cgo and no network. It holds:
+;;
+;;   1. the Rust replay and the Go replay print the IDENTICAL dump (every request and answer, each bitmap's
+;;      pixel hash, each file's hash), and it is the dump the live recording printed. THE TRANSCRIPT IS THE
+;;      IDENTITY MECHANISM: two hosts, two bindings, one set of pixels;
+;;   2. the answers are what the requests ask: sizes follow the geometry (floor(pt*dpi/72 + 1/2)), a crop is
+;;      its rectangle, a page that is not there and a crop outside the page are `failed`, the watermark layers
+;;      and a layer nobody has are `unsupported`: all of them answers, transcribed, replayed;
+;;   3. the layers are layers: on the fixture the full page shows everything, no-text shows no red (the
+;;      watermark word) and keeps the background, text-only shows no background and keeps the red; a crop is
+;;      exactly the cut of the whole-page render it names;
+;;   4. a replay never guesses: a changed request is `transcript-miss` on both.
+(require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
+         '[babashka.process :refer [shell]]
+         '[clojure.string :as str])
+(cp/add-classpath "tools")
+(require '[render.lib :as l])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def tdir (str "test/render/" (:name l/cases)))
+(def work (str (fs/absolutize (fs/create-temp-dir {:dir (do (fs/create-dirs ".cache") ".cache") :prefix "render-gate."}))))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+(defn built [what [prog err]]
+  (if prog prog (do (bad what " driver did not build:\n" err) nil)))
+
+;; no pdfium: the live engine is not compiled, not linked, not needed
+(def rust (if (fs/which "rustc") (built "rust" (l/build-rust work nil)) (do (println "  SKIP rust   -- rustc not on PATH") nil)))
+(def go (if (fs/which "go") (built "go" (l/build-go work nil)) (do (println "  SKIP go     -- go not on PATH") nil)))
+
+(def dargs (l/driver-args l/cases))
+(defn run [prog dir & extra]
+  (let [r (apply l/exec work prog "replay" dir (concat dargs extra))]
+    (assoc r :out (str/trim (:out r)))))
+
+(when (and rust go)
+  (let [want (str/trim (slurp (str tdir ".dump")))
+        t (l/abs tdir)
+        rr (run rust t)
+        rg (run go t)
+        lines (str/split-lines (:out rr))
+        entries (filter #(str/starts-with? % "entry ") lines)
+        ans (fn [id] (let [m (re-find (re-pattern (str "(?m)^entry " id " \\w+: req \\[[^\\]]*\\] ans \\[([^\\]]*)\\]")) (:out rr))]
+                       (when m (mapv #(Integer/parseInt %) (str/split (second m) #", ")))))
+        bm (into {} (for [l lines :let [m (re-find #"^bitmap (\d+): (\d+)x(\d+)x(\d+) ([0-9a-f]{8})" l)] :when m]
+                      [(Integer/parseInt (nth m 1)) {:w (Integer/parseInt (nth m 2)) :h (Integer/parseInt (nth m 3))
+                                                     :ch (Integer/parseInt (nth m 4)) :hash (nth m 5)}]))
+        nreq (count (:reqs l/cases))]
+    ;; 1. identity ----------------------------------------------------------
+    (check (and (zero? (:exit rr)) (= want (:out rr)))
+           "rust replays the committed transcript to the dump the live recording printed ("
+           (count (str/split-lines want)) " lines: every request and answer, each bitmap's pixel hash, each file's hash)")
+    (check (and (zero? (:exit rg)) (= (:out rr) (:out rg)))
+           "GO REPLAYS THE PDFIUM TRANSCRIPT: the identical dump, byte for byte")
+    ;; 2. what the answers are ----------------------------------------------
+    (check (= nreq (count entries) 17) nreq " requests, " (count entries) " answered, one round")
+    (check (every? #(= 3 (:ch %)) (vals bm)) (count bm) " bitmaps, all RGB")
+    ;; layers.pdf is 240 x 240 pt: 72 dpi -> 240 px, and crops are their rectangles
+    (check (every? #(= [240 240] ((juxt :w :h) (bm %))) [1 2 3])
+           "the 240 pt fixture at 72 dpi is 240 x 240 px in every layer that rendered")
+    (check (and (= [120 100] ((juxt :w :h) (bm 6))) (= [120 100] ((juxt :w :h) (bm 7))) (= [240 200] ((juxt :w :h) (bm 8))))
+           "a crop answers its rectangle (120 x 100 at 72 dpi, 240 x 200 at 144 dpi)")
+    (check (and (= [8 1 1 0 240 240 3 72] (ans 1)) (= [8 5 8 0 240 200 3 144] (ans 8)))
+           "an answer is [len kind id status w h channels dpi]; a crop's answer is of its own kind (5)")
+    (check (and (= [4 1 4 2] (ans 4)) (= [4 1 5 2] (ans 5)))
+           "the watermark and background layers are `unsupported` (status 2): pdfium cannot read /Artifact names")
+    (check (and (= [4 1 15 1] (ans 15)) (= [4 5 16 1] (ans 16)))
+           "a page that is not there and a crop outside the page are `failed` (status 1), with no bitmap")
+    (check (= [4 1 17 2] (ans 17)) "a layer nobody has is `unsupported`")
+    ;; 3. the layers are layers ----------------------------------------------
+    (let [f (l/exec work rust "facts" t)
+          facts (into {} (for [m (re-seq #"facts layer (\d+): nonwhite (\d+) blue (\d+) red (\d+) green (\d+)" (:out f))]
+                           [(Integer/parseInt (nth m 1)) (zipmap [:nonwhite :blue :red :green] (map #(Integer/parseInt %) (drop 2 m)))]))
+          full (facts 0) no-text (facts 1) text-only (facts 2)]
+      (check (and (pos? (:blue full)) (pos? (:red full)) (pos? (:green full)))
+             "full: the background, the watermark word and the form's bar are all there ("
+             (:blue full) " blue, " (:red full) " red, " (:green full) " green pixels)")
+      (check (and (pos? (:blue no-text)) (zero? (:red no-text)) (pos? (:green no-text)))
+             "no-text: the background and the path in a form stay, the red text is gone")
+      (check (and (zero? (:blue text-only)) (pos? (:red text-only)) (zero? (:green text-only)) (< (:nonwhite text-only) (quot (:nonwhite full) 4)))
+             "text-only: no background, no path, the red text stays (text inside the form was found by recursion)")
+      (check (= 3 (count (distinct (map #(:hash (bm %)) [1 2 3])))) "the three rendered layers are three different images"))
+    (let [c (l/exec work rust "crops" t)]
+      (check (and (zero? (:exit c)) (re-find #"crops: [1-9]\d* checked, 0 differ" (:out c)))
+             "every crop is exactly the cut of its whole-page render ("
+             (second (re-find #"(crops: \d+ checked)" (:out c))) ")"))
+    ;; the size of the evidence
+    (let [bytes (reduce + (map fs/size (fs/list-dir tdir)))]
+      (check (< bytes 400000) "the committed transcript is " bytes " bytes, " (count (fs/list-dir tdir)) " files"))
+    ;; 4. a replay never guesses --------------------------------------------
+    (doseq [[name prog] [["rust" rust] ["go" go]]]
+      (let [args (map #(if (= % "0:0:72:1") "0:0:73:1" %) dargs)
+            r (apply l/exec work prog "replay" t args)]
+        (check (and (= 3 (:exit r)) (= "error: transcript-miss" (str/trim (:out r))))
+               name " replay of a changed request (72 -> 73 dpi): transcript-miss, nothing guessed")))))
+
+(when (pos? @fails) (System/exit 1))
+(when (and rust go (zero? @fails))
+  (ok "one pdfium transcript, recorded on Rust, replayed on Rust and Go: one dump, one set of pixels"))

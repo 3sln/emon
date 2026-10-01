@@ -26,7 +26,10 @@
 ;; and never count against `max-rounds`; the layout is here so that the four
 ;; hosts spell it alike.
 ;;
-;;   render  args  input page dpi layer          (`lay`: 0 with text, 1 without, 2 text only)
+;;   render  args  input page dpi layer          (`lay`: 0 with text, 1 without, 2 text only, 3 without
+;;                 watermark/background, 4 those only; `page` is 0-based; the answer is RGB)
+;;   crop    args  input page dpi layer px py pw ph   (D117, answered as a render: the pixel rectangle of the
+;;                 page as it would be rendered whole at that dpi and layer, cut out, never re-fitted)
 ;;   decode  args  input offset length filter frame   (filter `flt`; 0 = the bytes are a whole image file)
 ;;   ocr     args  bitmap psm flags x y w h lang...   (bitmap = the id of the render/decode request
 ;;                 whose bitmap to read; w = 0 means the whole bitmap; flags bit 1 = symbol
@@ -63,6 +66,7 @@
 (defn ^:pub ^I32 pk-decode [] (return 2))
 (defn ^:pub ^I32 pk-ocr [] (return 3))
 (defn ^:pub ^I32 pk-bytes [] (return 4))
+(defn ^:pub ^I32 pk-crop [] (return 5))
 
 (defn ^:pub ^I32 ps-ok [] (return 0))
 (defn ^:pub ^I32 ps-failed [] (return 1))
@@ -76,6 +80,12 @@
 (defn ^:pub ^I32 lay-full [] (return 0))
 (defn ^:pub ^I32 lay-no-text [] (return 1))
 (defn ^:pub ^I32 lay-text-only [] (return 2))
+;; P6.2 (D127): the watermark and background layer, separated. `lay-no-watermark` is the page with the
+;; objects the PDF marked `/Artifact` with `/Subtype /Watermark` or `/Type /Background` (and Watermark
+;; annotations) left out; `lay-watermark-only` is exactly those, on white. An engine that cannot says
+;; `ps-unsupported`.
+(defn ^:pub ^I32 lay-no-watermark [] (return 3))
+(defn ^:pub ^I32 lay-watermark-only [] (return 4))
 
 ;; `decode`'s filter: what the requested span is encoded as (PDF image filters).
 (defn ^:pub ^I32 flt-none [] (return 0))
@@ -184,6 +194,21 @@
     (cells-push c page)
     (cells-push c dpi)
     (cells-push c layer)
+    (rec-end c at)
+    (return at)))
+
+(defn ^:pub ^I32 rq-crop [^:mut ^Cells c ^I32 id ^I32 input ^I32 page ^I32 dpi ^I32 layer
+                         ^I32 px ^I32 py ^I32 pw ^I32 ph]
+  (comment "Ask for the pixel rectangle px py pw ph of page `page` as `rq-render` would answer it whole.")
+  (let [^I32 at (rec-begin c (pk-crop) id)]
+    (cells-push c input)
+    (cells-push c page)
+    (cells-push c dpi)
+    (cells-push c layer)
+    (cells-push c px)
+    (cells-push c py)
+    (cells-push c pw)
+    (cells-push c ph)
     (rec-end c at)
     (return at)))
 

@@ -9,7 +9,8 @@
 //   - the input-bytes limit is checked against the SIZE before any byte is read; a source that lies about its
 //     size is `source-changed`;
 //   - `assets` other than `none` and several inputs as one document are refused, not approximated;
-//   - record and replay; the walkable Model; and that the library names no filesystem.
+//   - record and replay; the walkable Model; and that the library names no filesystem;
+//   - (render_test.go) the Renderer port, P6.2, D127.
 package emon
 
 import (
@@ -484,7 +485,7 @@ func TestTheLibraryNamesNoFilesystem(t *testing.T) {
 	// D058: nothing under host/go (the Engine, its sources, the loop, the ports) opens a file or names a path.
 	// `port/testport.go` (test support) is not the library.
 	bad := regexp.MustCompile(`"io/ioutil"|"io/fs"|"path"|"path/filepath"|\bos\.(Open|OpenFile|ReadFile|WriteFile|Create|Stat|ReadDir|Mkdir|Remove|File)\b`)
-	for _, f := range []string{"engine.go", "source.go", "model.go", "port/port.go", "port/plan.go"} {
+	for _, f := range []string{"engine.go", "source.go", "model.go", "port/port.go", "port/plan.go", "port/render.go", "pdfium/pdfium.go", "pdfium/callback.go"} {
 		src, err := os.ReadFile(f)
 		if err != nil {
 			src = read(t, "host/go/"+f)

@@ -760,9 +760,22 @@ host implement it however it likes.
   answer a **crop** (D117): the pixel rectangle `px py pw ph` of the page as
   it would be rendered whole at that resolution and layer — the same pixels,
   cut out, never a re-fit — with annotations' normal appearances painted (a
-  stamp is often an annotation). pdfium does this directly
-  (`FPDF_RenderPageBitmapWithMatrix` with a translation and a clip); an
-  engine that cannot may render the page and cut.
+  stamp is often an annotation). A render clipped natively is not always
+  that: measured on pdfium (D127), the pixels on the clip's edge move (a
+  vertical rule at the left edge of a crop differed by up to 107 of 255 from
+  the same pixels cut out of the whole page). So the contract is held by
+  the host's fulfiller, not by the engine: unless an engine declares its
+  clipped render exact (`exact_crop`), the fulfiller renders the whole page,
+  keeps the last whole page, and cuts (`render::cut`).
+  The page is returned as 8-bit RGB. The layers are `lay-full` 0,
+  `lay-no-text` 1, `lay-text-only` 2, and, separating what the PDF marked
+  `/Artifact` with `/Subtype /Watermark` or `/Background` (or `/Type
+  /Background`), `lay-no-watermark` 3 and `lay-watermark-only` 4. pdfium
+  does the first three (it has no switch, so the page's objects are removed
+  in memory, forms included); it answers `unsupported` to the last two,
+  because those marks' values are names and its mark API has no reader for
+  a name (D127). kin separates watermarks itself (§8.1 reads the marks;
+  §8.2.1 separates ink).
 * **`Ocr`** must: take a `Bitmap` and a request (languages, page-segmentation
   mode, region, whether symbol alternatives are wanted); return integers only
   — boxes in the *request bitmap's* pixels, confidences ×10 as integers,
@@ -824,6 +837,20 @@ and where its bytes are: a span of an input, or a span of the unit's
 filter), named by its SHA-256 so the record, and so the transcript key,
 never holds the bytes; a second such span for `JBIG2Globals`). A payload is
 input-derived, like a `bytes` answer, so it is never written to a transcript.
+
+**WASM.** pdfium has a WebAssembly build (bblanchon/pdfium-binaries ships
+`pdfium-wasm.tgz`, pinned beside the native ones in `tools/pdfium/pdfium.edn`;
+PDFium's own `FPDF_*` C API, exported through Emscripten). The JS host
+fulfils `render` and `crop` as it fulfils OCR: it owns the loop (§7.3, 2),
+loads the module once, serves pdfium's custom file-access callback from the
+async byte source (`FPDF_LoadCustomDocument` with `m_GetBlock` reading a
+resident span, or the request awaited first as a `bytes` round, D058), builds
+the same page edits for the layers and answers with RGB pixels in a
+`Uint8Array` that the Rust/WASM core writes into a `Bitmap`. Nothing in kin
+or in the transcript changes: what the browser's pdfium draws is recorded
+like any engine's, and a transcript recorded natively replays in the
+browser (and the reverse) to the same Model. This is an item of P9.3; it is
+not built.
 
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.

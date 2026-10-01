@@ -1,0 +1,19 @@
+;; The pdfium binary a host links, pinned (P6.2, D127). bblanchon/pdfium-binaries, non-V8, one archive per
+;; platform. The checksums are the SHA-256 GitHub published for each release asset and were re-computed
+;; here on download (`bb pdfium-fetch` refuses an archive whose hash is not the one below).
+;; To move the pin: change :version and the hashes together, re-run `bb pdfium-fetch --force`,
+;; re-record the render transcripts (`bb render-record`) and note the new tolerance in DEVLOG.
+{:version "chromium/8076"
+ :repo    "bblanchon/pdfium-binaries"
+ :url     "https://github.com/bblanchon/pdfium-binaries/releases/download/%s/pdfium-%s.tgz"
+ :platforms
+ {"mac-arm64"   {:sha256 "0d6781fe08906baff3d82c90953e519fbc4eb253fe76431e5ed53b157763b97c" :lib "lib/libpdfium.dylib"}
+  "mac-x64"     {:sha256 "40865f34642c34d82cc336132df9e0347133f4692cd46776647af160f9a5cca9" :lib "lib/libpdfium.dylib"}
+  "linux-x64"   {:sha256 "d9d67bc40af03aef4fe28a60b19b1086f28ace019c8c9caf19cb7fe3d14ceca3" :lib "lib/libpdfium.so"}
+  "linux-arm64" {:sha256 "d7247b33ae5545615a5e877235dd97afc879e3a8805689684f528cae3339d352" :lib "lib/libpdfium.so"}
+  "win-x64"     {:sha256 "808d36da9bc5a3104315fb307c80998121f565ee53953633bf33e80d7429e5ac" :lib "bin/pdfium.dll"}
+  "wasm"        {:sha256 "f0e18e471c0f40e769ff796a7a03955835f9782be4fd119c15349cc91b458f21" :lib "lib/pdfium.js"}}
+ ;; A release a year before the pin (2025-09), mac-arm64 only: `bb render-record --compare-build` renders with both and
+ ;; measures what two pdfium builds do to the same page (D127).
+ :previous {:version "chromium/7390" :platform "mac-arm64"
+            :sha256 "7cbd8e0bda3d744be4fb43ff7085a573a3c4d365db3d0f9812968cb18bf6996e"}}

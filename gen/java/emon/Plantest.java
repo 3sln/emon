@@ -30,6 +30,25 @@ public final class Plantest {
         emon.Testport.assertEq(Plan.rqArg(c, 0, 3), 2, "layer");
         emon.Testport.assertEq(Plan.rqNargs(c, 0), 4, "four args");
     }
+    public static void testACropRequestIsRenderPlusAPixelRectangle() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Testport.assertEq(Plan.pkCrop(), 5, "crop");
+        emon.Testport.assertEq(Plan.layNoWatermark(), 3, "no watermark");
+        emon.Testport.assertEq(Plan.layWatermarkOnly(), 4, "watermark only");
+        emon.Testport.assertEq(Plan.rqCrop(c, 8, 1, 4, 150, Plan.layNoWatermark(), 10, 20, 300, 400), 0, "starts at 0");
+        emon.Testport.assertEq(Plan.recLen(c, 0), 11, "length");
+        emon.Testport.assertEq(Plan.recKind(c, 0), 5, "kind");
+        emon.Testport.assertEq(Plan.recId(c, 0), 8, "id");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 0), 1, "input");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 1), 4, "page");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 2), 150, "dpi");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 3), 3, "layer");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 4), 10, "px");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 5), 20, "py");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 6), 300, "pw");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, 7), 400, "ph");
+        emon.Testport.assertEq(Plan.rqNargs(c, 0), 8, "eight args");
+    }
     public static void testADecodeRequestNamesItsInputByIndexAndSpan() {
         emon.Port.Cells c = emon.Port.newCells();
         Plan.rqDecode(c, 6, 1, 4096, 512, Plan.fltDct(), 2);

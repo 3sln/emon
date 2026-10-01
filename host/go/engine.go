@@ -230,6 +230,11 @@ type Config struct {
 	SimulateAsync bool
 	MaxRounds     int32
 	FetchRounds   int32
+	// Renderer is the `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine
+	// converts or records. nil (the default): none is configured, and a unit that asks for one fails with a
+	// named `fulfil-failed`. A replay never calls it (D008). `pdfium.New()` (build tag `pdfium`) is the default
+	// engine.
+	Renderer port.Renderer
 }
 
 // DefaultConfig is SPEC 13.1's defaults.
@@ -940,6 +945,12 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	pcfg := port.PlanConfig{MaxRounds: e.cfg.MaxRounds, FetchRounds: e.cfg.FetchRounds}
 	thisInput := [][2]int32{{int32(idx), int32(size)}}
 	var ports port.PlanFulfiller = noPorts{}
+	if e.cfg.Renderer != nil {
+		// the live port set (D127): `render` and `crop` go to the configured Renderer, reading the same input
+		// through the same byte source; anything else it has no port for fails by name, as noPorts does
+		rf := port.NewRenderFulfillerFor(e.cfg.Renderer, idx, port.RenderInput{Source: in.Source, Password: in.Password})
+		ports = (&port.KindMux{}).With([]int32{port.PlanKindRender, port.PlanKindCrop}, rf)
+	}
 	var replayer *port.Replayer
 	if rec != nil {
 		rec.Inputs = thisInput

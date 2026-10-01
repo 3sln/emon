@@ -33,6 +33,26 @@ fn test_a_render_request_is_seven_cells() {
     crate::testport::assert_eq(rq_nargs(c, 0), 4, "four args");
 }
 #[test]
+fn test_a_crop_request_is_render_plus_a_pixel_rectangle() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(pk_crop(), 5, "crop");
+    crate::testport::assert_eq(lay_no_watermark(), 3, "no watermark");
+    crate::testport::assert_eq(lay_watermark_only(), 4, "watermark only");
+    crate::testport::assert_eq(rq_crop(c, 8, 1, 4, 150, lay_no_watermark(), 10, 20, 300, 400), 0, "starts at 0");
+    crate::testport::assert_eq(rec_len(c, 0), 11, "length");
+    crate::testport::assert_eq(rec_kind(c, 0), 5, "kind");
+    crate::testport::assert_eq(rec_id(c, 0), 8, "id");
+    crate::testport::assert_eq(rq_arg(c, 0, 0), 1, "input");
+    crate::testport::assert_eq(rq_arg(c, 0, 1), 4, "page");
+    crate::testport::assert_eq(rq_arg(c, 0, 2), 150, "dpi");
+    crate::testport::assert_eq(rq_arg(c, 0, 3), 3, "layer");
+    crate::testport::assert_eq(rq_arg(c, 0, 4), 10, "px");
+    crate::testport::assert_eq(rq_arg(c, 0, 5), 20, "py");
+    crate::testport::assert_eq(rq_arg(c, 0, 6), 300, "pw");
+    crate::testport::assert_eq(rq_arg(c, 0, 7), 400, "ph");
+    crate::testport::assert_eq(rq_nargs(c, 0), 8, "eight args");
+}
+#[test]
 fn test_a_decode_request_names_its_input_by_index_and_span() {
     let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
     rq_decode(c, 6, 1, 4096, 512, flt_dct(), 2);

@@ -6,7 +6,8 @@
             [emon.test :refer [deftest assert-eq assert-that assert-text text-blob
                                new-cells new-text]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop src-of-blob]]
-            [emon.plan :refer [pk-render pk-decode pk-ocr pk-bytes ps-ok ps-failed
+            [emon.plan :refer [pk-render pk-decode pk-ocr pk-bytes pk-crop rq-crop
+                               lay-no-watermark lay-watermark-only ps-ok ps-failed
                                ps-unsupported us-done us-requests us-need-bytes
                                lay-full lay-text-only flt-none flt-dct
                                rec-len rec-kind rec-id rec-next rec-begin rec-end
@@ -46,6 +47,25 @@
     (assert-eq (rq-arg c 0 2) 300 "dpi")
     (assert-eq (rq-arg c 0 3) 2 "layer")
     (assert-eq (rq-nargs c 0) 4 "four args")))
+
+(deftest test-a-crop-request-is-render-plus-a-pixel-rectangle
+  (let [^Cells c (new-cells)]
+    (assert-eq (pk-crop) 5 "crop")
+    (assert-eq (lay-no-watermark) 3 "no watermark")
+    (assert-eq (lay-watermark-only) 4 "watermark only")
+    (assert-eq (rq-crop c 8 1 4 150 (lay-no-watermark) 10 20 300 400) 0 "starts at 0")
+    (assert-eq (rec-len c 0) 11 "length")
+    (assert-eq (rec-kind c 0) 5 "kind")
+    (assert-eq (rec-id c 0) 8 "id")
+    (assert-eq (rq-arg c 0 0) 1 "input")
+    (assert-eq (rq-arg c 0 1) 4 "page")
+    (assert-eq (rq-arg c 0 2) 150 "dpi")
+    (assert-eq (rq-arg c 0 3) 3 "layer")
+    (assert-eq (rq-arg c 0 4) 10 "px")
+    (assert-eq (rq-arg c 0 5) 20 "py")
+    (assert-eq (rq-arg c 0 6) 300 "pw")
+    (assert-eq (rq-arg c 0 7) 400 "ph")
+    (assert-eq (rq-nargs c 0) 8 "eight args")))
 
 (deftest test-a-decode-request-names-its-input-by-index-and-span
   (let [^Cells c (new-cells)]

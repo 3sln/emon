@@ -43,6 +43,7 @@ use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::pdfx::px_index_build;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
 use crate::port::{self, cells_at, cells_len, Cells, Src, SrcBacking};
+use crate::render::{KindMux, RenderFulfiller, RenderInput, Renderer};
 use crate::source::{ByteSource, Input, Inputs};
 use std::collections::BTreeSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -196,11 +197,15 @@ pub struct Config {
     pub simulate_async: bool,
     pub max_rounds: i32,
     pub fetch_rounds: i32,
+    // The `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine converts
+    // or records. `None` (the default): none is configured, and a unit that asks for one fails with a named
+    // `fulfil-failed`. A replay never calls it (D008). `pdfium::Pdfium` is the default engine (`--cfg pdfium`).
+    pub renderer: Option<Arc<dyn Renderer>>,
 }
 
 impl Default for Config {
     fn default() -> Config {
-        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS }
+        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS, renderer: None }
     }
 }
 
@@ -922,6 +927,12 @@ impl Engine {
         let this_input = vec![(idx as i32, len as i32)];
         let mut replayer: Option<Replayer> = None;
         let mut nop = NoPorts;
+        // The live port set (D127): `render` and `crop` go to the configured Renderer, reading the same input
+        // through the same byte source; anything else it has no port for fails by name, as NoPorts does.
+        let mut live: Option<KindMux> = self.cfg.renderer.as_ref().map(|r| {
+            let f = RenderFulfiller::for_input(r.clone(), idx, RenderInput { source: input.source.clone(), password: input.password.clone() });
+            KindMux::new().with(&[plan::KIND_RENDER, plan::KIND_CROP], Box::new(f))
+        });
         let mut recording: Option<&mut Transcript> = None;
         match mode {
             Mode::Live => {}
@@ -937,7 +948,10 @@ impl Engine {
         let result = {
             let ports: &mut dyn Fulfiller = match replayer.as_mut() {
                 Some(r) => r,
-                None => &mut nop,
+                None => match live.as_mut() {
+                    Some(l) => l,
+                    None => &mut nop,
+                },
             };
             plan::run(&pcfg, &mut unit, ports, &mut bytes, &mut *misses, recording)
         };
