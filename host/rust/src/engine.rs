@@ -538,7 +538,10 @@ fn image_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool) -> impl 
             return fail(&mut c, crate::emon::plan::ps_unsupported());
         }
         let span = Span { src: source.clone(), off: off as u64, len: len as u64 };
-        match imgdec::decode(&span, frame, port::limit_of(9) as u64) {
+        // a codec that panics on damage is a damaged image, not a crashed process
+        let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| imgdec::decode(&span, frame, port::limit_of(9) as u64)))
+            .unwrap_or_else(|_| Err(imgdec::Fail::Failed("the decoder panicked".to_string())));
+        match decoded {
             Ok(d) => {
                 crate::emon::plan::an_decode(&mut c, req.id(), d.w, d.h, d.ch, d.dpi100, d.bilevel as i32, d.frames);
                 let bitmap = match (&d.pixels, keep) {

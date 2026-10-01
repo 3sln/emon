@@ -311,8 +311,9 @@ impl<'a> Tf<'a> {
     // the offsets of the frames: the chain of IFDs, a loop or a bad link ending it
     fn chain(&self) -> Result<Vec<u32>, Fail> {
         let mut out: Vec<u32> = Vec::new();
+        let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
         let mut off = self.first_ifd()?;
-        while off != 0 && out.len() < (1 << 20) && !out.contains(&off) {
+        while off != 0 && out.len() < (1 << 20) && seen.insert(off) {
             let c = match read_exact(self.src, off as u64, 2) {
                 Ok(c) => c,
                 Err(e) => {
@@ -407,6 +408,55 @@ struct PngMeta {
     exif: Option<Vec<u8>>,
 }
 
+// CRC-32 (IEEE), table-driven: the PNG chunk checksum.
+const CRC_TABLE: [u32; 256] = {
+    let mut t = [0u32; 256];
+    let mut n = 0;
+    while n < 256 {
+        let mut c = n as u32;
+        let mut k = 0;
+        while k < 8 {
+            c = if c & 1 != 0 { 0xEDB88320 ^ (c >> 1) } else { c >> 1 };
+            k += 1;
+        }
+        t[n] = c;
+        n += 1;
+    }
+    t
+};
+
+fn crc32(d: &[u8]) -> u32 {
+    let mut c = 0xFFFF_FFFFu32;
+    for &b in d {
+        c = CRC_TABLE[((c ^ b as u32) & 0xFF) as usize] ^ (c >> 8);
+    }
+    !c
+}
+
+// A PNG is sound when every chunk up to IEND is whole and its checksum is right. The two hosts' PNG libraries differ
+// in how much damage they forgive (the Rust one lets an ancillary chunk's checksum or a missing last byte go), and the
+// two must answer alike (D176): neither is asked about a file that fails this.
+fn png_sound(p: &[u8]) -> bool {
+    let mut i = 8usize;
+    loop {
+        if i + 12 > p.len() {
+            return false;
+        }
+        let n = u32::from_be_bytes([p[i], p[i + 1], p[i + 2], p[i + 3]]) as usize;
+        if n > p.len() || i + 12 + n > p.len() {
+            return false;
+        }
+        let crc = u32::from_be_bytes([p[i + 8 + n], p[i + 9 + n], p[i + 10 + n], p[i + 11 + n]]);
+        if crc32(&p[i + 4..i + 8 + n]) != crc {
+            return false;
+        }
+        if &p[i + 4..i + 8] == b"IEND" {
+            return true;
+        }
+        i += 12 + n;
+    }
+}
+
 fn png_meta(p: &[u8]) -> Result<PngMeta, Fail> {
     let mut m = PngMeta { w: 0, h: 0, depth: 0, ctype: 255, dpi: (0, 0), exif: None };
     let mut have = false;
@@ -447,6 +497,9 @@ fn png_meta(p: &[u8]) -> Result<PngMeta, Fail> {
 
 fn png(src: &dyn Source, want: bool, max_pixels: u64) -> Result<Decoded, Fail> {
     let bytes = read_all(src)?;
+    if !png_sound(&bytes) {
+        return failed("a PNG with a damaged chunk, a bad checksum or no IEND");
+    }
     let m = png_meta(&bytes)?;
     let (o, ex, ey) = m.exif.as_deref().map_or((1, 0, 0), exif_of);
     let gray = m.ctype == 0 || m.ctype == 4;
@@ -468,6 +521,9 @@ fn png(src: &dyn Source, want: bool, max_pixels: u64) -> Result<Decoded, Fail> {
     let _ = image::ImageDecoder::set_limits(&mut dec, image::Limits::no_limits());
     let img = D::from_decoder(dec).map_err(|e| Fail::Failed(e.to_string()))?;
     let (iw, ih) = (img.width() as usize, img.height() as usize);
+    if iw as u64 != w || ih as u64 != h {
+        return failed("a PNG whose pixels are not the size its header says");
+    }
     let n = iw * ih;
     let mut px = vec![0u8; n * out.ch as usize];
     match img {
@@ -605,6 +661,9 @@ fn jpeg(src: &dyn Source, want: bool, max_pixels: u64) -> Result<Decoded, Fail> 
     let _ = image::ImageDecoder::set_limits(&mut dec, image::Limits::no_limits());
     let img = D::from_decoder(dec).map_err(|e| Fail::Failed(e.to_string()))?;
     let (iw, ih) = (img.width() as usize, img.height() as usize);
+    if iw as u64 != w || ih as u64 != h {
+        return failed("a JPEG whose pixels are not the size its header says");
+    }
     let px = match img {
         D::ImageLuma8(b) if m.ncomp == 1 => b.into_raw(),
         D::ImageRgb8(b) if m.ncomp == 3 => b.into_raw(),
@@ -763,9 +822,19 @@ fn ccitt(d: &[u8], g4: bool, cw: usize, rows: usize) -> Result<Vec<u8>, Fail> {
     let stride = (cw + 7) / 8;
     let mut out = vec![0u8; stride * rows];
     let mut y = 0usize;
+    // a G3 row is whole when its runs add up to the width: a damaged one is told apart by it (the decoders differ in
+    // what they make of a row that does not)
+    let mut bad_row = false;
     let mut put = |tr: &[u16]| {
         if y >= rows {
             return;
+        }
+        if !g4 && tr.last().map_or(true, |&l| l as usize != cw) {
+            bad_row = true;
+        }
+        // a G4 row's changing elements never go back and never pass the width
+        if g4 && (tr.windows(2).any(|p| p[1] < p[0]) || tr.last().map_or(false, |&l| l as usize > cw)) {
+            bad_row = true;
         }
         // transitions: white run, black run, white run, ...
         let mut x = 0usize;
@@ -792,15 +861,20 @@ fn ccitt(d: &[u8], g4: bool, cw: usize, rows: usize) -> Result<Vec<u8>, Fail> {
             return unsupported("a G4 strip wider or taller than 65535");
         }
         fax::decoder::decode_g4(d.iter().copied(), cw as u16, Some(rows as u16), |tr| put(tr)).ok_or_else(|| Fail::Failed("a bad CCITT G4 stream".to_string()))?;
+        if bad_row {
+            return failed("a bad CCITT G4 stream");
+        }
     } else {
-        // Group 3 one-dimensional, EOL-framed. A stream that ends early leaves the rest white. `fax` drops the last
+        // Group 3 one-dimensional, EOL-framed. `fax` drops the last
         // line of a stream that has no EOL after it (libtiff writes none), so six EOLs (the RTC) are appended:
         // they close the last line and end the decode, and do nothing to a stream that has its own.
         let mut data = d.to_vec();
         data.extend_from_slice(&[0x00, 0x10, 0x01, 0x00, 0x10, 0x01, 0x00, 0x10, 0x01]);
         let _ = fax::decoder::decode_g3(data.iter().copied(), |tr| put(tr));
-        if y == 0 {
-            return failed("a bad CCITT G3 stream");
+        // every row must have come: a damaged stream is told apart by the rows it did not give, which is
+        // all that `fax` and `x/image/ccitt` (whose error recovery differs) can be asked
+        if y < rows || bad_row {
+            return failed("a short or damaged CCITT G3 stream");
         }
     }
     Ok(out)

@@ -16,7 +16,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"errors"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -323,16 +323,12 @@ func (t *tifFile) chain() ([]uint32, error) {
 	if err != nil {
 		return nil, err
 	}
+	seen := map[uint32]bool{}
 	for off != 0 && len(out) < 1<<20 {
-		seen := false
-		for _, o := range out {
-			if o == off {
-				seen = true
-			}
-		}
-		if seen {
+		if seen[off] {
 			break
 		}
+		seen[off] = true
 		c, err := imgReadExact(t.src, int64(off), 2)
 		if err != nil {
 			if len(out) == 0 {
@@ -462,6 +458,28 @@ type pngMeta struct {
 	exif         []byte
 }
 
+// imgPngSound: a PNG is sound when every chunk up to IEND is whole and its checksum is right. The two hosts'
+// PNG libraries differ in how much damage they forgive, and the two must answer alike (D176).
+func imgPngSound(p []byte) bool {
+	i := 8
+	for {
+		if i+12 > len(p) {
+			return false
+		}
+		n := int(binary.BigEndian.Uint32(p[i:]))
+		if n < 0 || n > len(p) || i+12+n > len(p) {
+			return false
+		}
+		if crc32.ChecksumIEEE(p[i+4:i+8+n]) != binary.BigEndian.Uint32(p[i+8+n:]) {
+			return false
+		}
+		if string(p[i+4:i+8]) == "IEND" {
+			return true
+		}
+		i += 12 + n
+	}
+}
+
 func imgPngMeta(p []byte) (*pngMeta, error) {
 	m := &pngMeta{ctype: 255}
 	have := false
@@ -509,6 +527,9 @@ func imgPng(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !imgPngSound(b) {
+		return nil, imgFailedf("a PNG with a damaged chunk, a bad checksum or no IEND")
+	}
 	m, err := imgPngMeta(b)
 	if err != nil {
 		return nil, err
@@ -551,6 +572,9 @@ func imgPng(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 	}
 	r := img.Bounds()
 	iw, ih := r.Dx(), r.Dy()
+	if uint64(iw) != w || uint64(ih) != h {
+		return nil, imgFailedf("a PNG whose pixels are not the size its header says")
+	}
 	ch := int(out.Ch)
 	px := make([]byte, iw*ih*ch)
 	// pixel (x, y) as (c0, c1, c2, a) in 8 bits, c's straight (not premultiplied)
@@ -774,6 +798,9 @@ func imgJpeg(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 	}
 	r := img.Bounds()
 	iw, ih := r.Dx(), r.Dy()
+	if uint64(iw) != w || uint64(ih) != h {
+		return nil, imgFailedf("a JPEG whose pixels are not the size its header says")
+	}
 	var px []byte
 	switch im := img.(type) {
 	case *image.Gray:
@@ -1105,13 +1132,23 @@ func imgInflate(d []byte, expect int) ([]byte, error) {
 	if err != nil {
 		return nil, imgFailedf("a bad Deflate stream")
 	}
+	// The same three answers as the Rust host's `miniz_oxide`: a stream that ends cleanly (its checksum right)
+	// early gives what it has, one that fills `expect` bytes has its end read too (so a wrong checksum is seen), and
+	// one that has MORE is cut at `expect` without it; any damage is `failed`.
 	out := make([]byte, expect)
-	n, err := io.ReadFull(zr, out)
-	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
-		return nil, imgFailedf("a bad Deflate stream")
+	n := 0
+	for n < expect {
+		k, err := zr.Read(out[n:])
+		n += k
+		if err == io.EOF {
+			return out[:n], nil
+		}
+		if err != nil {
+			return nil, imgFailedf("a bad Deflate stream")
+		}
 	}
-	if errors.Is(err, io.ErrUnexpectedEOF) {
-		// a stream cut short: the fax library's twin, miniz, fails it, and so do we
+	var one [1]byte
+	if k, err := zr.Read(one[:]); k == 0 && err != nil && err != io.EOF {
 		return nil, imgFailedf("a bad Deflate stream")
 	}
 	return out[:n], nil
@@ -1130,13 +1167,15 @@ func imgCcitt(d []byte, g4 bool, cw, rows int) ([]byte, error) {
 	if err != nil && g4 {
 		return nil, imgFailedf("a bad CCITT G4 stream")
 	}
-	// Group 3 that stops early leaves the rest white (as the Rust host's `fax` does): only whole rows count
+	// only whole rows count
 	done := n / stride
 	if done > rows {
 		done = rows
 	}
-	if done == 0 && !g4 {
-		return nil, imgFailedf("a bad CCITT G3 stream")
+	// every row must have come: a damaged stream is told apart by the rows it did not give, which is all that
+	// `fax` and `x/image/ccitt` (whose error recovery differs) can be asked
+	if done < rows && !g4 {
+		return nil, imgFailedf("a short or damaged CCITT G3 stream")
 	}
 	for i := range out {
 		if i < done*stride {
