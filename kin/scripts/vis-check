@@ -1,0 +1,159 @@
+#!/usr/bin/env bb
+;; Hold emon's visibility classification to two witnesses that are not emon (DEVLOG P3.6, D134-D139).
+;;
+;;     kin/scripts/vis-check             the generated Rust against test/vis/rows.txt (the expectations
+;;                                       kin/scripts/vis-fixtures writes by hand)
+;;     kin/scripts/vis-check --render    and the poppler renderer (`pdftoppm`) against the same expectations: what is
+;;                                       expected to be seen must leave ink in its box on the rendered page, and
+;;                                       what is expected to be hidden must leave none
+;;
+;; A DEVELOPMENT TOOL, not a gate (it builds the Rust sweep, `kin/scripts/content-sweep`, which `bb unit` already
+;; compiles in another form: the laws of kin/pdfvistest.kin are the gate). It exists so that the claim "this glyph is
+;; invisible" is checked by something that draws pages.
+(require '[clojure.string :as str]
+         '[clojure.java.io :as io]
+         '[babashka.process :refer [shell process]])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+(def render? (some #{"--render"} *command-line-args*))
+
+(defn expectations []
+  (loop [lines (remove #(or (str/blank? %) (str/starts-with? % "#")) (str/split-lines (slurp (str root "/test/vis/rows.txt"))))
+         cur nil out {}]
+    (if-let [l (first lines)]
+      (let [f (str/split l #"\t")]
+        (case (first f)
+          "F" (recur (rest lines) (second f) (assoc out (second f) []))
+          "N" (recur (rest lines) cur (update out cur conj {:n (mapv parse-long (rest f))}))
+          "G" (recur (rest lines) cur (update out cur conj {:g (mapv parse-long (subvec f 1 5)) :text (nth f 5)}))
+          "O" (recur (rest lines) cur out)
+          "C" (recur (rest lines) cur (update out cur conj {:g [(parse-long (nth f 3)) -1 1 (parse-long (nth f 4))] :text (nth f 5)
+                                                           :c (nth f 1) :cls (parse-long (nth f 2))}))
+          "I" (recur (rest lines) cur (update out cur conj {:i (mapv parse-long (rest f))}))))
+      out)))
+
+(defn sweep [files]
+  (let [p (process {:dir root :out :string :err :string :in (str/join "\n" files)} "kin/scripts/content-sweep" "vis")
+        r @p]
+    (when-not (zero? (:exit r)) (println (:err r)) (System/exit 1))
+    (loop [lines (str/split-lines (:out r)) pending {:v [] :i [] :q []} out {}]
+      (if-let [l (first lines)]
+        (let [f (str/split l #"\t" -1)]
+          (case (first f)
+            "V" (recur (rest lines) (update pending :v conj (mapv #(if (re-matches #"-?\d+" %) (parse-long %) %) (rest f))) out)
+            "I" (recur (rest lines) (update pending :i conj (mapv parse-long (rest f))) out)
+            "Q" (recur (rest lines) (update pending :q conj (mapv parse-long (rest f))) out)
+            "F" (recur (rest lines) {:v [] :i [] :q []} (assoc out (second f) (assoc pending :status (nth f 2))))
+            (recur (rest lines) pending out)))
+        out))))
+
+;; --------------------------------------------------------------------------- the renderer's witness
+
+(defn render-pgm [pdf page]
+  (let [dir (io/file root ".claude" "scratch-vis")
+        _ (.mkdirs dir)
+        base (str (.getPath dir) "/r")
+        r (shell {:out :string :err :string :continue true} "pdftoppm" "-r" "72" "-gray" "-cropbox" "-f" (str page) "-l" (str page) pdf base)]
+    (when-not (zero? (:exit r)) (println (:err r)))
+    (let [f (first (filter #(.startsWith (.getName %) "r-") (.listFiles dir)))
+          bytes (with-open [in (io/input-stream f)] (.readAllBytes in))
+          s (String. bytes "ISO-8859-1")
+          m (re-find #"^P5\s+(\d+)\s+(\d+)\s+(\d+)\s" s)
+          [hdr w h _] m
+          off (count hdr)]
+      (.delete f)
+      {:w (parse-long w) :h (parse-long h) :px (fn [x y] (bit-and 0xff (aget bytes (+ off (* y (parse-long w)) x))))})))
+
+(defn region-variation
+  "max - min of the gray pixels in the page-space box [x0 y0 x1 y1] (centipoints) of a page rendered at 72 dpi."
+  [{:keys [w h px]} [x0 y0 x1 y1]]
+  (let [cx0 (max 0 (int (Math/floor (/ x0 100.0)))) cy0 (max 0 (int (Math/floor (/ y0 100.0))))
+        cx1 (min (dec w) (int (Math/ceil (/ x1 100.0)))) cy1 (min (dec h) (int (Math/ceil (/ y1 100.0))))]
+    (if (or (> cx0 cx1) (> cy0 cy1))
+      nil
+      (let [vs (for [y (range cy0 (inc cy1)) x (range cx0 (inc cx1))] (px x y))]
+        (- (apply max vs) (apply min vs))))))
+
+(declare render-witness)
+
+(defn -main []
+  (let [exp (expectations)
+        files (sort (keys exp))
+        got (sweep (map #(str root "/test/" %) files))
+        bad (atom 0) checked (atom 0)
+        say (fn [& xs] (swap! bad inc) (println (apply str "  FAIL " xs)))]
+    (doseq [f files]
+      (let [g (get got (str root "/test/" f))
+            vs (:v g) is (:i g)]
+        (if-not g
+          (say f ": the sweep did not report the file")
+          (loop [rows (get exp f) vi 0 ii 0]
+            (when-let [r (first rows)]
+              (cond
+                (:g r) (let [[vis by src n] (:g r)
+                             slice (take n (drop vi vs))]
+                         (when (< (count slice) n) (say f ": too few glyphs for \"" (:text r) "\""))
+                         (doseq [row slice]
+                           (swap! checked inc)
+                           (let [[_page gi mode gvis gby gchk _ _ _ _ gfill _ _ gcs] row]
+                             (when (:c r)
+                               (let [want (:c r)
+                                     chan (fn [v i] (bit-and 0xff (bit-shift-right v (* 8 i))))
+                                     ok (if (= want "-1") (< gfill 0)
+                                            (and (>= gfill 0) (every? #(<= (Math/abs (- (chan gfill %) (Long/parseLong (subs want (- 4 (* 2 %)) (- 6 (* 2 %))) 16))) 2) [0 1 2])))]
+                                 (when-not ok (say f " \"" (:text r) "\" glyph " gi ": fill " gfill " expected " want))
+                                 (when (not= (:cls r) (if (neg? gcs) 0 gcs)) (say f " \"" (:text r) "\" glyph " gi ": class " gcs " expected " (:cls r)))))
+                             (when (or (not= gvis vis) (not= gby by))
+                               (say f " \"" (:text r) "\" glyph " gi " (mode " mode "): vis " gvis " vby " gby " vchk " gchk "; expected vis " vis " vby " by))))
+                         (recur (rest rows) (+ vi n) ii))
+                (:i r) (let [[vis by] (:i r) row (nth is ii nil)]
+                         (swap! checked inc)
+                         (if-not row
+                           (say f ": no image row " ii)
+                           (let [[_page ivis iby ichk] row]
+                             (when (or (not= ivis vis) (not= iby by))
+                               (say f " image " ii ": vis " ivis " vby " iby " vchk " ichk "; expected vis " vis " vby " by))))
+                         (recur (rest rows) vi (inc ii)))
+                (:n r) (let [[ng ni] (:n r)]
+                         (when (not= ng (count vs)) (say f ": " (count vs) " glyphs, expected " ng))
+                         (when (not= ni (count is)) (say f ": " (count is) " images, expected " ni))
+                         (recur (rest rows) vi ii))))))))
+    (if (zero? @bad)
+      (println (str "  ok   vis-check: " @checked " glyphs and images of " (count files) " fixtures are classified as written"))
+      (do (println (str "  FAIL vis-check: " @bad " mismatches")) (System/exit 1)))
+    (when render? (render-witness exp got))))
+
+(defn judge
+  "The renderer's verdict on one glyph row against its expectation: nil when they agree or the renderer cannot say."
+  [img f row r]
+  (let [[_ gi mode _ _ _ x0 y0 x1 y1] row
+        vis (get-in r [:g 0])
+        space? (= " " (str (nth row 14)))]
+    ;; only judge what a renderer can show: no spaces, not zero-size, not off the page, not hidden-text modes
+    (when (and (not space?) (not (#{3 7} mode)) (not (#{2 4} vis)))
+      (when-let [v (region-variation img [x0 y0 x1 y1])]
+        (if (= vis 0)
+          (if (< v 8) [:bad (str f " glyph " gi " \"" (:text r) "\" should be seen but its box is uniform")] [:seen])
+          (if (>= v 8) [:bad (str f " glyph " gi " \"" (:text r) "\" (vis " vis ") leaves ink in its box, variation " v)] [:hidden]))))))
+
+(defn render-witness [exp got]
+  (let [verdicts
+        (for [f (sort (keys exp))
+              :let [pdf (str root "/test/" f) g (get got pdf)
+                    exp-g (mapcat (fn [r] (when (:g r) (repeat (get-in r [:g 3]) r))) (get exp f))
+                    pairs (map vector (:v g) exp-g)]
+              pg (sort (set (map first (:v g))))
+              :let [img (render-pgm pdf pg)]
+              [row r] pairs
+              :when (= pg (first row))
+              :let [v (judge img f row r)]
+              :when v]
+          v)
+        bad (filter #(= :bad (first %)) verdicts)]
+    (doseq [[_ msg] bad] (println "  FAIL render:" msg))
+    (if (empty? bad)
+      (println (str "  ok   vis-check --render: poppler agrees on " (count (filter #(= :seen (first %)) verdicts)) " visible and "
+                    (count (filter #(= :hidden (first %)) verdicts)) " hidden glyphs"))
+      (do (println (str "  FAIL vis-check --render: " (count bad) " disagreements")) (System/exit 1)))))
+
+(-main)

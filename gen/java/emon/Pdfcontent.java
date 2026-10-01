@@ -37,6 +37,34 @@ public final class Pdfcontent {
     public static final int OP_SC = 25459;
     public static final int OP_SCN = 7234419;
     public static final int OP_CS = 29539;
+    public static final int OP_GRAY_S = 71;
+    public static final int OP_RGB_S = 18258;
+    public static final int OP_CMYK_S = 75;
+    public static final int OP_SC_S = 17235;
+    public static final int OP_SCN_S = 5129043;
+    public static final int OP_CS_S = 21315;
+    public static final int OP_MOVE = 109;
+    public static final int OP_LINE = 108;
+    public static final int OP_CURVE = 99;
+    public static final int OP_CURVE_V = 118;
+    public static final int OP_CURVE_Y = 121;
+    public static final int OP_CLOSE = 104;
+    public static final int OP_RECT = 25970;
+    public static final int OP_STROKE = 83;
+    public static final int OP_CLOSESTROKE = 115;
+    public static final int OP_FILL = 102;
+    public static final int OP_FILL2 = 70;
+    public static final int OP_FILLEO = 10854;
+    public static final int OP_FS = 66;
+    public static final int OP_FSEO = 10818;
+    public static final int OP_CFS = 98;
+    public static final int OP_CFSEO = 10850;
+    public static final int OP_ENDPATH = 110;
+    public static final int OP_CLIP = 87;
+    public static final int OP_CLIPEO = 10839;
+    public static final int OP_SH = 26739;
+    public static final int OP_LW = 119;
+    public static final int OP_DASH = 100;
     public static final int C_NFONT = 0;
     public static final int C_CLOCK = 1;
     public static final int C_SLOTS = 8;
@@ -88,11 +116,37 @@ public final class Pdfcontent {
     public static final int C_BASE = 700;
     public static final int C_TMP = 712;
     public static final int C_CUR = 728;
-    public static final int C_STACK = 768;
+    public static final int C_STACK = 800;
     public static final int MAX_GS = 256;
-    public static final int C_SIZE = 8960;
     public static final int MAX_MC = 256;
-    public static final int GS_STRIDE = 32;
+    public static final int C_PW = 17184;
+    public static final int C_PH = 17185;
+    public static final int C_PPTS = 17186;
+    public static final int C_PN = 17187;
+    public static final int C_PCX = 17188;
+    public static final int C_PCY = 17190;
+    public static final int C_PSX = 17192;
+    public static final int C_PSY = 17194;
+    public static final int C_PBX0 = 17196;
+    public static final int C_PBY0 = 17197;
+    public static final int C_PBX1 = 17198;
+    public static final int C_PBY1 = 17199;
+    public static final int C_PFLAGS = 17200;
+    public static final int C_PNSUB = 17201;
+    public static final int C_CLIPP = 17202;
+    public static final int C_TCX0 = 17203;
+    public static final int C_TCY0 = 17204;
+    public static final int C_TCX1 = 17205;
+    public static final int C_TCY1 = 17206;
+    public static final int C_TCN = 17207;
+    public static final int C_NPATH = 17208;
+    public static final int C_NIMG = 17209;
+    public static final int C_PKEEP = 17210;
+    public static final int C_BB = 17212;
+    public static final int C_SIZE = 17248;
+    public static final int PATH_KEEP = 128;
+    public static final int PATH_ROWS = 200000;
+    public static final int GS_STRIDE = 64;
     public static final int G_CTM = 0;
     public static final int G_TC = 12;
     public static final int G_TW = 14;
@@ -106,6 +160,16 @@ public final class Pdfcontent {
     public static final int G_ALPHA = 27;
     public static final int G_FAM = 28;
     public static final int G_FOBJ = 29;
+    public static final int G_SCOLOR = 30;
+    public static final int G_SALPHA = 31;
+    public static final int G_FCS = 32;
+    public static final int G_SCS = 33;
+    public static final int G_SFAM = 34;
+    public static final int G_CLIP = 35;
+    public static final int G_BM = 36;
+    public static final int G_SMASK = 37;
+    public static final int G_LW = 38;
+    public static final int G_DASH = 40;
     public static final int MAX_ENT = 4096;
     public static final int OX_BASE = 16384;
     public static final int K_NUM = 1;
@@ -124,6 +188,7 @@ public final class Pdfcontent {
     public static final int W_WIDTH = 128;
     public static final int W_TEXT = 256;
     public static final int W_PROPS = 512;
+    public static final int W_PATHS = 1024;
     public static int pcWs(int c) {
         if ((c == 32) || ((c == 10) || ((c == 13) || ((c == 9) || ((c == 12) || (c == 0)))))) {
             return 1;
@@ -622,6 +687,16 @@ public final class Pdfcontent {
         emon.Port.cellsSet(cx, C_CUR + G_COLOR, 0);
         emon.Port.cellsSet(cx, C_CUR + G_ALPHA, 1000);
         emon.Port.cellsSet(cx, C_CUR + G_FAM, 1);
+        emon.Port.cellsSet(cx, C_CUR + G_SCOLOR, 0);
+        emon.Port.cellsSet(cx, C_CUR + G_SALPHA, 1000);
+        emon.Port.cellsSet(cx, C_CUR + G_FCS, -1);
+        emon.Port.cellsSet(cx, C_CUR + G_SCS, -1);
+        emon.Port.cellsSet(cx, C_CUR + G_SFAM, 1);
+        emon.Port.cellsSet(cx, C_CUR + G_CLIP, -1);
+        emon.Port.cellsSet(cx, C_CUR + G_BM, 0);
+        emon.Port.cellsSet(cx, C_CUR + G_SMASK, 0);
+        Fx.fxPut(cx, C_CUR + G_LW, Fx.fxOne());
+        emon.Port.cellsSet(cx, C_CUR + G_DASH, 0);
         return 0;
     }
     public static int pcBaseMatrix(emon.Port.Cells cx, int x0, int y0, int x1, int y1, int rot) {
@@ -724,31 +799,6 @@ public final class Pdfcontent {
     }
     public static int pcRgb(int r, int g, int bl) {
         return (r * 65536) + ((g * 256) + bl);
-    }
-    public static int pcSetColor(emon.Port.Cells cx, emon.Port.Cells ox, int n) {
-        // sc / scn / g / rg / k: set the fill colour from n operands by their count
-        // (1 gray, 3 RGB, 4 CMYK). A component list of another length (a pattern, an
-        // Indexed or Separation colour) leaves the colour as it was.
-        long o0 = pcNum(ox, n, 0);
-        long o1 = pcNum(ox, n, 1);
-        long o2 = pcNum(ox, n, 2);
-        long o3 = pcNum(ox, n, 3);
-        long one = Fx.fxOne();
-        if (n == 1) {
-            int gy = pcByte(o0);
-            emon.Port.cellsSet(cx, C_CUR + G_COLOR, pcRgb(gy, gy, gy));
-            return 0;
-        }
-        if (n == 3) {
-            emon.Port.cellsSet(cx, C_CUR + G_COLOR, pcRgb(pcByte(o0), pcByte(o1), pcByte(o2)));
-            return 0;
-        }
-        if (n == 4) {
-            long kk = one - o3;
-            emon.Port.cellsSet(cx, C_CUR + G_COLOR, pcRgb(pcByte(Fx.fxMul(one - o0, kk)), pcByte(Fx.fxMul(one - o1, kk)), pcByte(Fx.fxMul(one - o2, kk))));
-            return 0;
-        }
-        return 0;
     }
     public static int pcDictLookup(emon.Port.Cells ar, int dict, emon.Port.Cells ox, int ns, int nl) {
         // The value (unresolved) under the key spelled ox[ns, ns+nl), or 0. The
@@ -1283,6 +1333,7 @@ public final class Pdfcontent {
         int fid = -1;
         int tstart = -1;
         int i = 0;
+        int vch = 0;
         int idx = 0;
         if (slot >= 0) {
             sat = C_SLOTS + (slot * SLOT_STRIDE);
@@ -1371,9 +1422,44 @@ public final class Pdfcontent {
         Evidence.glSet(gl, g, Evidence.gfRot(), rot);
         Evidence.glSet(gl, g, Evidence.gfFill(), emon.Port.cellsAt(cx, C_CUR + G_COLOR));
         Evidence.glSet(gl, g, Evidence.gfFalpha(), emon.Port.cellsAt(cx, C_CUR + G_ALPHA));
+        Evidence.glSet(gl, g, Evidence.gfStroke(), emon.Port.cellsAt(cx, C_CUR + G_SCOLOR));
+        Evidence.glSet(gl, g, Evidence.gfSalpha(), emon.Port.cellsAt(cx, C_CUR + G_SALPHA));
+        Evidence.glSet(gl, g, Evidence.gfClip(), emon.Port.cellsAt(cx, C_CUR + G_CLIP));
         Evidence.glSet(gl, g, Evidence.gfMode(), emon.Port.cellsAt(cx, C_CUR + G_MODE));
-        if (fam > 0) {
+        if ((fam > 0) && (emon.Port.cellsAt(cx, C_CUR + G_MODE) != 1) && (emon.Port.cellsAt(cx, C_CUR + G_MODE) != 5)) {
             Evidence.glSet(gl, g, Evidence.gfCs(), fam);
+        }
+        if ((emon.Port.cellsAt(cx, C_CUR + G_SFAM) > 0) && ((emon.Port.cellsAt(cx, C_CUR + G_MODE) == 1) || (emon.Port.cellsAt(cx, C_CUR + G_MODE) == 5))) {
+            Evidence.glSet(gl, g, Evidence.gfCs(), emon.Port.cellsAt(cx, C_CUR + G_SFAM));
+        }
+        if (emon.Port.cellsAt(cx, C_CUR + G_BM) != 0) {
+            vch = Evidence.vcBlend();
+        }
+        if (emon.Port.cellsAt(cx, C_CUR + G_SMASK) != 0) {
+            vch += Evidence.vcSoftmask();
+        }
+        Evidence.glSet(gl, g, Evidence.gfVchk(), vch);
+        if (emon.Port.cellsAt(cx, C_CUR + G_MODE) >= 4) {
+            if (emon.Port.cellsAt(cx, C_TCN) == 0) {
+                emon.Port.cellsSet(cx, C_TCX0, Evidence.glGet(gl, g, Evidence.chX0()));
+                emon.Port.cellsSet(cx, C_TCY0, Evidence.glGet(gl, g, Evidence.chY0()));
+                emon.Port.cellsSet(cx, C_TCX1, Evidence.glGet(gl, g, Evidence.chX1()));
+                emon.Port.cellsSet(cx, C_TCY1, Evidence.glGet(gl, g, Evidence.chY1()));
+            } else {
+                if (Evidence.glGet(gl, g, Evidence.chX0()) < emon.Port.cellsAt(cx, C_TCX0)) {
+                    emon.Port.cellsSet(cx, C_TCX0, Evidence.glGet(gl, g, Evidence.chX0()));
+                }
+                if (Evidence.glGet(gl, g, Evidence.chY0()) < emon.Port.cellsAt(cx, C_TCY0)) {
+                    emon.Port.cellsSet(cx, C_TCY0, Evidence.glGet(gl, g, Evidence.chY0()));
+                }
+                if (Evidence.glGet(gl, g, Evidence.chX1()) > emon.Port.cellsAt(cx, C_TCX1)) {
+                    emon.Port.cellsSet(cx, C_TCX1, Evidence.glGet(gl, g, Evidence.chX1()));
+                }
+                if (Evidence.glGet(gl, g, Evidence.chY1()) > emon.Port.cellsAt(cx, C_TCY1)) {
+                    emon.Port.cellsSet(cx, C_TCY1, Evidence.glGet(gl, g, Evidence.chY1()));
+                }
+            }
+            emon.Port.cellsSet(cx, C_TCN, emon.Port.cellsAt(cx, C_TCN) + 1);
         }
         Evidence.glSet(gl, g, Evidence.gfZ(), z);
         emon.Port.cellsSet(cx, C_Z, z + 1);
@@ -1831,7 +1917,7 @@ public final class Pdfcontent {
         }
         return 0;
     }
-    public static int pcMcBegin(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int n, int props) {
+    public static int pcMcBegin(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells gx, int n, int props) {
         // BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an
         // inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,
         // `optional-content` for /OC (its object number is the /Properties entry's, when that is a
@@ -1893,6 +1979,7 @@ public final class Pdfcontent {
                     if (Pdflex.plKindOf(ar, raw) == 9) {
                         Evidence.mkSet(mk, span, Evidence.mkfOcg(), Pdflex.plIntValue(ar, raw));
                     }
+                    Evidence.mkSet(mk, span, Evidence.mkfOcgdef(), Pdfgfx.gxOcState(src, ar, dc, a, b, st, gx, raw, 0));
                 }
                 if ((dh != 0) && (Pdflex.plKindOf(ar, dh) == 7)) {
                     d = pcIngestProps(src, ar, dc, a, b, st, cx, ox, dh);
@@ -1963,6 +2050,1090 @@ public final class Pdfcontent {
         emon.Port.cellsSet(cx, C_POS, p);
         return 0;
     }
+    public static long pcTx(emon.Port.Cells cx, long x, long y) {
+        // The user-space point (x, y) in page space: x of it (Fx).
+        return Fx.fxClamp(Fx.mxX(cx, C_CUR + G_CTM, x, y));
+    }
+    public static long pcTy(emon.Port.Cells cx, long x, long y) {
+        return Fx.fxClamp(Fx.mxY(cx, C_CUR + G_CTM, x, y));
+    }
+    public static int pcFlagOr(int v, int bit) {
+        // v with the one-bit flag `bit` set.
+        if ((v & bit) != 0) {
+            return v;
+        }
+        return v + bit;
+    }
+    public static int pcPathReset(emon.Port.Cells cx, emon.Port.Cells pts) {
+        // No path: the next point starts one. The pts arena keeps what an earlier row of the evidence put there.
+        int n = Evidence.ptCount(pts);
+        emon.Port.cellsSet(cx, C_PPTS, n);
+        emon.Port.cellsSet(cx, C_PN, 0);
+        emon.Port.cellsSet(cx, C_PKEEP, 0);
+        emon.Port.cellsSet(cx, C_PBX0, 2147483647);
+        emon.Port.cellsSet(cx, C_PBY0, 2147483647);
+        emon.Port.cellsSet(cx, C_PBX1, -2147483647);
+        emon.Port.cellsSet(cx, C_PBY1, -2147483647);
+        emon.Port.cellsSet(cx, C_PFLAGS, 0);
+        emon.Port.cellsSet(cx, C_PNSUB, 0);
+        return 0;
+    }
+    public static int pcPathAdd(emon.Port.Cells cx, emon.Port.Cells pts, long px, long py, int op) {
+        // Append the page-space point (px, py) to the path: its box, the current point, and (for the first
+        // PATH_KEEP points) a row of `pts`.
+        int x = Fx.fxRound(px);
+        int y = Fx.fxRound(py);
+        int keep = emon.Port.cellsAt(cx, C_PKEEP);
+        if (x < emon.Port.cellsAt(cx, C_PBX0)) {
+            emon.Port.cellsSet(cx, C_PBX0, x);
+        }
+        if (y < emon.Port.cellsAt(cx, C_PBY0)) {
+            emon.Port.cellsSet(cx, C_PBY0, y);
+        }
+        if (x > emon.Port.cellsAt(cx, C_PBX1)) {
+            emon.Port.cellsSet(cx, C_PBX1, x);
+        }
+        if (y > emon.Port.cellsAt(cx, C_PBY1)) {
+            emon.Port.cellsSet(cx, C_PBY1, y);
+        }
+        if (keep < PATH_KEEP) {
+            Evidence.ptAdd(pts, x, y, op);
+            emon.Port.cellsSet(cx, C_PKEEP, keep + 1);
+        } else {
+            emon.Port.cellsSet(cx, C_PFLAGS, pcFlagOr(emon.Port.cellsAt(cx, C_PFLAGS), 4));
+        }
+        emon.Port.cellsSet(cx, C_PN, emon.Port.cellsAt(cx, C_PN) + 1);
+        Fx.fxPut(cx, C_PCX, px);
+        Fx.fxPut(cx, C_PCY, py);
+        return 0;
+    }
+    public static int pcOpMove(emon.Port.Cells cx, emon.Port.Cells pts, emon.Port.Cells ox, int n) {
+        if (n < 2) {
+            return 0;
+        }
+        long x = pcNum(ox, n, 0);
+        long y = pcNum(ox, n, 1);
+        long px = pcTx(cx, x, y);
+        long py = pcTy(cx, x, y);
+        emon.Port.cellsSet(cx, C_PNSUB, emon.Port.cellsAt(cx, C_PNSUB) + 1);
+        pcPathAdd(cx, pts, px, py, Evidence.poMove());
+        Fx.fxPut(cx, C_PSX, px);
+        Fx.fxPut(cx, C_PSY, py);
+        return 0;
+    }
+    public static int pcOpLine(emon.Port.Cells cx, emon.Port.Cells pts, emon.Port.Cells ox, int n) {
+        if (n < 2) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(cx, C_PN) == 0) {
+            return 0;
+        }
+        long x = pcNum(ox, n, 0);
+        long y = pcNum(ox, n, 1);
+        long px = pcTx(cx, x, y);
+        long py = pcTy(cx, x, y);
+        pcPathAdd(cx, pts, px, py, Evidence.poLine());
+        return 0;
+    }
+    public static int pcOpCurve(emon.Port.Cells cx, emon.Port.Cells pts, emon.Port.Cells ox, int n, int kind) {
+        // c (kind 0, six numbers), v (kind 1: the first control point is the current point) and y (kind 2: the
+        // second control point is the end point). Each puts three curve points in the path.
+        if (emon.Port.cellsAt(cx, C_PN) == 0) {
+            return 0;
+        }
+        long x1 = (long) 0;
+        long y1 = (long) 0;
+        long x2 = (long) 0;
+        long y2 = (long) 0;
+        long x3 = (long) 0;
+        long y3 = (long) 0;
+        long q1x = (long) 0;
+        long q1y = (long) 0;
+        if (kind == 0) {
+            if (n < 6) {
+                return 0;
+            }
+            x1 = pcNum(ox, n, 0);
+            y1 = pcNum(ox, n, 1);
+            x2 = pcNum(ox, n, 2);
+            y2 = pcNum(ox, n, 3);
+            x3 = pcNum(ox, n, 4);
+            y3 = pcNum(ox, n, 5);
+        }
+        if (kind == 1) {
+            if (n < 4) {
+                return 0;
+            }
+            x2 = pcNum(ox, n, 0);
+            y2 = pcNum(ox, n, 1);
+            x3 = pcNum(ox, n, 2);
+            y3 = pcNum(ox, n, 3);
+        }
+        if (kind == 2) {
+            if (n < 4) {
+                return 0;
+            }
+            x1 = pcNum(ox, n, 0);
+            y1 = pcNum(ox, n, 1);
+            x3 = pcNum(ox, n, 2);
+            y3 = pcNum(ox, n, 3);
+            x2 = x3;
+            y2 = y3;
+        }
+        if (kind == 1) {
+            q1x = Fx.fxGet(cx, C_PCX);
+            q1y = Fx.fxGet(cx, C_PCY);
+        } else {
+            q1x = pcTx(cx, x1, y1);
+            q1y = pcTy(cx, x1, y1);
+        }
+        pcPathAdd(cx, pts, q1x, q1y, Evidence.poCurve());
+        long q2x = pcTx(cx, x2, y2);
+        long q2y = pcTy(cx, x2, y2);
+        long q3x = pcTx(cx, x3, y3);
+        long q3y = pcTy(cx, x3, y3);
+        pcPathAdd(cx, pts, q2x, q2y, Evidence.poCurve());
+        pcPathAdd(cx, pts, q3x, q3y, Evidence.poCurve());
+        emon.Port.cellsSet(cx, C_PFLAGS, pcFlagOr(emon.Port.cellsAt(cx, C_PFLAGS), 1));
+        return 0;
+    }
+    public static int pcOpClose(emon.Port.Cells cx, emon.Port.Cells pts) {
+        // h: a close row at the subpath's start, which is the current point again.
+        if (emon.Port.cellsAt(cx, C_PN) == 0) {
+            return 0;
+        }
+        long sx = Fx.fxGet(cx, C_PSX);
+        long sy = Fx.fxGet(cx, C_PSY);
+        pcPathAdd(cx, pts, sx, sy, Evidence.poClose());
+        return 0;
+    }
+    public static int pcRectPath(emon.Port.Cells cx, emon.Port.Cells pts, long x, long y, long w, long h) {
+        // The rectangle x y w h (user space) as a closed subpath of four corners, each through the CTM.
+        long xw = Fx.fxClamp(x + w);
+        long yh = Fx.fxClamp(y + h);
+        long ax = pcTx(cx, x, y);
+        long ay = pcTy(cx, x, y);
+        long bx = pcTx(cx, xw, y);
+        long by = pcTy(cx, xw, y);
+        long dx = pcTx(cx, xw, yh);
+        long dy = pcTy(cx, xw, yh);
+        long ex = pcTx(cx, x, yh);
+        long ey = pcTy(cx, x, yh);
+        emon.Port.cellsSet(cx, C_PNSUB, emon.Port.cellsAt(cx, C_PNSUB) + 1);
+        pcPathAdd(cx, pts, ax, ay, Evidence.poMove());
+        Fx.fxPut(cx, C_PSX, ax);
+        Fx.fxPut(cx, C_PSY, ay);
+        pcPathAdd(cx, pts, bx, by, Evidence.poLine());
+        pcPathAdd(cx, pts, dx, dy, Evidence.poLine());
+        pcPathAdd(cx, pts, ex, ey, Evidence.poLine());
+        pcPathAdd(cx, pts, ax, ay, Evidence.poClose());
+        return 0;
+    }
+    public static int pcOpRect(emon.Port.Cells cx, emon.Port.Cells pts, emon.Port.Cells ox, int n) {
+        // re: the rectangle x y w h.
+        if (n < 4) {
+            return 0;
+        }
+        long x = pcNum(ox, n, 0);
+        long y = pcNum(ox, n, 1);
+        long w = pcNum(ox, n, 2);
+        long h = pcNum(ox, n, 3);
+        pcRectPath(cx, pts, x, y, w, h);
+        return 0;
+    }
+    public static int pcNear(int p, int q) {
+        // 1 when two centipoint coordinates differ by at most one (a corner rounded two ways).
+        int d = p - q;
+        if ((d <= 1) && (d >= -1)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int pcIsRect(emon.Port.Cells cx, emon.Port.Cells pts) {
+        // 1 when the path is one subpath of four corners (a line back to the first corner, and a close, allowed)
+        // whose sides are axis-aligned to a centipoint.
+        int n = emon.Port.cellsAt(cx, C_PN);
+        int s = emon.Port.cellsAt(cx, C_PPTS);
+        int k = 0;
+        int np = 0;
+        int opk = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int x2 = 0;
+        int y2 = 0;
+        int x3 = 0;
+        int y3 = 0;
+        int px = 0;
+        int py = 0;
+        if ((n < 4) || (n > 6)) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(cx, C_PNSUB) != 1) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(cx, C_PFLAGS) & 5) != 0) {
+            return 0;
+        }
+        // The points that are not a close row, in order; the first must be a move.
+        while (k < n) {
+            opk = Evidence.ptGet(pts, s + k, Evidence.ptfOp());
+            px = Evidence.ptGet(pts, s + k, Evidence.ptfX());
+            py = Evidence.ptGet(pts, s + k, Evidence.ptfY());
+            if (k == 0) {
+                if (opk != Evidence.poMove()) {
+                    return 0;
+                }
+            }
+            if ((k > 0) && (opk == Evidence.poMove())) {
+                return 0;
+            }
+            if (opk != Evidence.poClose()) {
+                if (np == 0) {
+                    x0 = px;
+                    y0 = py;
+                }
+                if (np == 1) {
+                    x1 = px;
+                    y1 = py;
+                }
+                if (np == 2) {
+                    x2 = px;
+                    y2 = py;
+                }
+                if (np == 3) {
+                    x3 = px;
+                    y3 = py;
+                }
+                if (np == 4) {
+                    if ((pcNear(px, x0) == 0) || (pcNear(py, y0) == 0)) {
+                        return 0;
+                    }
+                }
+                np += 1;
+            }
+            k += 1;
+        }
+        if ((np != 4) && (np != 5)) {
+            return 0;
+        }
+        if ((pcNear(x0, x1) == 1) && ((pcNear(y1, y2) == 1) && ((pcNear(x2, x3) == 1) && (pcNear(y3, y0) == 1)))) {
+            return 1;
+        }
+        if ((pcNear(y0, y1) == 1) && ((pcNear(x1, x2) == 1) && ((pcNear(y2, y3) == 1) && (pcNear(x3, x0) == 1)))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int pcScaleCpt(emon.Port.Cells cx, long w) {
+        // A length in user units (an Fx) as centipoints under the current CTM: through the length of its x axis.
+        long a = Fx.fxGet(cx, C_CUR + G_CTM);
+        long b = Fx.fxGet(cx, (C_CUR + G_CTM) + 2);
+        long hyp = Fx.fxHypot(a, b);
+        int v = Fx.fxRound(Fx.fxMul(Fx.fxAbs(w), hyp));
+        if (v > 10000000) {
+            return 10000000;
+        }
+        return v;
+    }
+    public static int pcDashOp(emon.Port.Cells cx, emon.Port.Cells ox, int n) {
+        // d: the dash array's first length (centipoints under the CTM), 0 for a solid line.
+        emon.Port.cellsSet(cx, C_CUR + G_DASH, 0);
+        if (n < 1) {
+            return 0;
+        }
+        if (pcKind(ox, 0) != K_ARR) {
+            return 0;
+        }
+        if (pcEa(ox, 0) < 1) {
+            return 0;
+        }
+        if (pcKind(ox, 1) != K_NUM) {
+            return 0;
+        }
+        long v = pcNum(ox, n, 1);
+        int sc = pcScaleCpt(cx, v);
+        emon.Port.cellsSet(cx, C_CUR + G_DASH, sc);
+        return 0;
+    }
+    public static int pcClipBox(emon.Port.Cells cx, emon.Port.Cells pa, int x0, int y0, int x1, int y1, int kind, int flags, int pfirst, int pcount) {
+        // Clip to the box (x0, y0, x1, y1) of a shape of `kind`: the region becomes its intersection with the clip in
+        // force. When that does not shrink the region there is nothing to record; else a `paths` row (a clip, SPEC
+        // 8.4.3: z -1) holds the intersection, naming the clip it was cut from, and becomes the clip in force.
+        int cur = emon.Port.cellsAt(cx, C_CUR + G_CLIP);
+        int ix0 = x0;
+        int iy0 = y0;
+        int ix1 = x1;
+        int iy1 = y1;
+        int same = 0;
+        int cb = 0;
+        int r = 0;
+        if (cur >= 0) {
+            cb = Evidence.paGet(pa, cur, Evidence.pfX0());
+            if (cb > ix0) {
+                ix0 = cb;
+            }
+            cb = Evidence.paGet(pa, cur, Evidence.pfY0());
+            if (cb > iy0) {
+                iy0 = cb;
+            }
+            cb = Evidence.paGet(pa, cur, Evidence.pfX1());
+            if (cb < ix1) {
+                ix1 = cb;
+            }
+            cb = Evidence.paGet(pa, cur, Evidence.pfY1());
+            if (cb < iy1) {
+                iy1 = cb;
+            }
+            if ((ix0 == Evidence.paGet(pa, cur, Evidence.pfX0())) && ((iy0 == Evidence.paGet(pa, cur, Evidence.pfY0())) && ((ix1 == Evidence.paGet(pa, cur, Evidence.pfX1())) && (iy1 == Evidence.paGet(pa, cur, Evidence.pfY1()))))) {
+                same = 1;
+            }
+        }
+        if (same == 1) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(cx, C_NPATH) >= PATH_ROWS) {
+            pcWarnSet(cx, W_PATHS);
+            return 0;
+        }
+        r = Evidence.paNew(pa, emon.Port.cellsAt(cx, C_PAGE), kind, ix0, iy0, ix1, iy1);
+        Evidence.paSet(pa, r, Evidence.pfFlags(), Evidence.pgClip() + flags);
+        Evidence.paSet(pa, r, Evidence.pfClip(), cur);
+        Evidence.paSet(pa, r, Evidence.pfMark(), emon.Port.cellsAt(cx, C_MCTOP));
+        Evidence.paSet(pa, r, Evidence.pfOcg(), emon.Port.cellsAt(cx, C_CUROCG));
+        Evidence.paSet(pa, r, Evidence.pfPfirst(), pfirst);
+        Evidence.paSet(pa, r, Evidence.pfPcount(), pcount);
+        emon.Port.cellsSet(cx, C_NPATH, emon.Port.cellsAt(cx, C_NPATH) + 1);
+        emon.Port.cellsSet(cx, C_CUR + G_CLIP, r);
+        return 0;
+    }
+    public static int pcKindOfPath(emon.Port.Cells cx, emon.Port.Cells pts) {
+        // The `pa` kind of the path: a rectangle, a curve, a single line, else other.
+        if (pcIsRect(cx, pts) == 1) {
+            return Evidence.paRect();
+        }
+        if ((emon.Port.cellsAt(cx, C_PFLAGS) & 1) != 0) {
+            return Evidence.paCurve();
+        }
+        if ((emon.Port.cellsAt(cx, C_PN) == 2) && (emon.Port.cellsAt(cx, C_PNSUB) == 1)) {
+            return Evidence.paLine();
+        }
+        return Evidence.paOther();
+    }
+    public static int pcGeomKept(emon.Port.Cells cx) {
+        // 1 when the whole path is in `pts` (it had no more than PATH_KEEP points).
+        if ((emon.Port.cellsAt(cx, C_PFLAGS) & 4) != 0) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int pcEndPath(emon.Port.Cells cx, emon.Port.Cells pa, emon.Port.Cells pts, int fill, int stroke, int evenodd, int closed) {
+        // A paint operator (or `n`) ends the path. If it filled or stroked, a `paths` row records it; then a pending
+        // `W` or `W*` clips to it. The row's box is the path's box, grown by half the stroke width when it strokes;
+        // its geometry is the path's rows of `pts` (kept when the path was short enough, else dropped).
+        int n = emon.Port.cellsAt(cx, C_PN);
+        int start = emon.Port.cellsAt(cx, C_PPTS);
+        int kept = pcGeomKept(cx);
+        int pend = emon.Port.cellsAt(cx, C_CLIPP);
+        int kind = 0;
+        int half = 0;
+        int r = 0;
+        int fl = 0;
+        int wd = 0;
+        long lwv = (long) 0;
+        int nrows = 0;
+        int pfst = -1;
+        int geom = 0;
+        int painted = 0;
+        emon.Port.cellsSet(cx, C_CLIPP, 0);
+        if (n == 0) {
+            pcPathReset(cx, pts);
+            return 0;
+        }
+        kind = pcKindOfPath(cx, pts);
+        nrows = n;
+        if (kept == 0) {
+            nrows = 0;
+        }
+        if (nrows > 0) {
+            pfst = start;
+        }
+        if ((kept == 0) && (emon.Port.cellsAt(cx, C_PKEEP) > 0)) {
+            emon.Port.cellsDrop(pts, start * 3);
+        }
+        geom = nrows;
+        if ((fill == 1) || (stroke == 1)) {
+            if (emon.Port.cellsAt(cx, C_NPATH) >= PATH_ROWS) {
+                pcWarnSet(cx, W_PATHS);
+            } else {
+                painted = 1;
+                fl = 0;
+                if (closed != 0) {
+                    fl += Evidence.pgClosed();
+                }
+                if (evenodd == 1) {
+                    fl += Evidence.pgEvenodd();
+                }
+                if (stroke == 1) {
+                    lwv = Fx.fxGet(cx, C_CUR + G_LW);
+                    wd = pcScaleCpt(cx, lwv);
+                    half = (wd + 1) / 2;
+                    fl += Evidence.pgStroked();
+                }
+                if (fill == 1) {
+                    fl += Evidence.pgFilled();
+                    if (emon.Port.cellsAt(cx, C_CUR + G_FAM) == 5) {
+                        fl += Evidence.pgPattern();
+                    }
+                }
+                if (emon.Port.cellsAt(cx, C_CUR + G_BM) != 0) {
+                    fl += Evidence.pgBlend();
+                }
+                if (emon.Port.cellsAt(cx, C_CUR + G_SMASK) != 0) {
+                    fl += Evidence.pgSoftmask();
+                }
+                r = Evidence.paNew(pa, emon.Port.cellsAt(cx, C_PAGE), kind, emon.Port.cellsAt(cx, C_PBX0) - half, emon.Port.cellsAt(cx, C_PBY0) - half, emon.Port.cellsAt(cx, C_PBX1) + half, emon.Port.cellsAt(cx, C_PBY1) + half);
+                Evidence.paSet(pa, r, Evidence.pfFlags(), fl);
+                if (fill == 1) {
+                    Evidence.paSet(pa, r, Evidence.pfFill(), emon.Port.cellsAt(cx, C_CUR + G_COLOR));
+                }
+                if (stroke == 1) {
+                    Evidence.paSet(pa, r, Evidence.pfStroke(), emon.Port.cellsAt(cx, C_CUR + G_SCOLOR));
+                    Evidence.paSet(pa, r, Evidence.pfWidth(), wd);
+                    Evidence.paSet(pa, r, Evidence.pfDash(), emon.Port.cellsAt(cx, C_CUR + G_DASH));
+                }
+                Evidence.paSet(pa, r, Evidence.pfFalpha(), emon.Port.cellsAt(cx, C_CUR + G_ALPHA));
+                Evidence.paSet(pa, r, Evidence.pfSalpha(), emon.Port.cellsAt(cx, C_CUR + G_SALPHA));
+                Evidence.paSet(pa, r, Evidence.pfZ(), emon.Port.cellsAt(cx, C_Z));
+                emon.Port.cellsSet(cx, C_Z, emon.Port.cellsAt(cx, C_Z) + 1);
+                Evidence.paSet(pa, r, Evidence.pfClip(), emon.Port.cellsAt(cx, C_CUR + G_CLIP));
+                Evidence.paSet(pa, r, Evidence.pfMark(), emon.Port.cellsAt(cx, C_MCTOP));
+                Evidence.paSet(pa, r, Evidence.pfOcg(), emon.Port.cellsAt(cx, C_CUROCG));
+                Evidence.paSet(pa, r, Evidence.pfPfirst(), pfst);
+                Evidence.paSet(pa, r, Evidence.pfPcount(), geom);
+                emon.Port.cellsSet(cx, C_NPATH, emon.Port.cellsAt(cx, C_NPATH) + 1);
+            }
+        }
+        if (pend != 0) {
+            fl = 0;
+            if (pend == 2) {
+                fl = Evidence.pgEvenodd();
+            }
+            pcClipBox(cx, pa, emon.Port.cellsAt(cx, C_PBX0), emon.Port.cellsAt(cx, C_PBY0), emon.Port.cellsAt(cx, C_PBX1), emon.Port.cellsAt(cx, C_PBY1), kind, fl, pfst, geom);
+        }
+        // A path whose geometry nobody kept leaves no rows behind.
+        if ((painted == 0) && (pend == 0)) {
+            emon.Port.cellsDrop(pts, start * 3);
+        }
+        pcPathReset(cx, pts);
+        return 0;
+    }
+    public static int pcPaintOp(emon.Port.Cells cx, emon.Port.Cells pa, emon.Port.Cells pts, int op) {
+        // S s f F f* B B* b b* n: which of fill, stroke, even-odd and close each one means.
+        int fill = 0;
+        int stroke = 0;
+        int eo = 0;
+        int shut = 0;
+        if (op == OP_STROKE) {
+            stroke = 1;
+        }
+        if (op == OP_CLOSESTROKE) {
+            stroke = 1;
+            shut = 1;
+        }
+        if ((op == OP_FILL) || (op == OP_FILL2)) {
+            fill = 1;
+        }
+        if (op == OP_FILLEO) {
+            fill = 1;
+            eo = 1;
+        }
+        if (op == OP_FS) {
+            fill = 1;
+            stroke = 1;
+        }
+        if (op == OP_FSEO) {
+            fill = 1;
+            stroke = 1;
+            eo = 1;
+        }
+        if (op == OP_CFS) {
+            fill = 1;
+            stroke = 1;
+            shut = 1;
+        }
+        if (op == OP_CFSEO) {
+            fill = 1;
+            stroke = 1;
+            shut = 1;
+            eo = 1;
+        }
+        if (shut == 1) {
+            pcOpClose(cx, pts);
+        }
+        pcEndPath(cx, pa, pts, fill, stroke, eo, shut);
+        return 0;
+    }
+    public static int pcSetInk(emon.Port.Cells cx, int stroke, int key, int cls, int rgb) {
+        // Make (key, class, colour) the fill (stroke 0) or stroking (stroke 1) colour of the current state.
+        if (stroke == 1) {
+            emon.Port.cellsSet(cx, C_CUR + G_SCS, key);
+            emon.Port.cellsSet(cx, C_CUR + G_SFAM, cls);
+            emon.Port.cellsSet(cx, C_CUR + G_SCOLOR, rgb);
+        } else {
+            emon.Port.cellsSet(cx, C_CUR + G_FCS, key);
+            emon.Port.cellsSet(cx, C_CUR + G_FAM, cls);
+            emon.Port.cellsSet(cx, C_CUR + G_COLOR, rgb);
+        }
+        return 0;
+    }
+    public static int pcDeviceRgb(emon.Port.Cells ox, emon.Port.Cells gx, int n, int space) {
+        // The colour of the first operands under DeviceGray (space 1), DeviceRGB (2) or DeviceCMYK (3): -1 when there are
+        // too few. The conversion is the colour module's, so a colour is the same however it was set.
+        int need = 1;
+        int i = 0;
+        long v = (long) 0;
+        if (space == 2) {
+            need = 3;
+        }
+        if (space == 3) {
+            need = 4;
+        }
+        if (n < need) {
+            return -1;
+        }
+        while (i < need) {
+            v = pcNum(ox, n, i);
+            Pdfgfx.gxInput(gx, i, v);
+            i += 1;
+        }
+        return Pdfgfx.gxEntryRgb(gx, space - 1, need);
+    }
+    public static int pcColorDevice(emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gx, int n, int stroke, int space) {
+        // g rg k G RG K: the device space, its class, and the colour.
+        int rgb = pcDeviceRgb(ox, gx, n, space);
+        if (rgb < 0) {
+            return 0;
+        }
+        pcSetInk(cx, stroke, 0 - space, space, rgb);
+        return 0;
+    }
+    public static int pcCsOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells out, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gx, int n, int stroke) {
+        // cs, CS: the colour space named by operand 0: a device space, Pattern, or a /ColorSpace resource. The colour
+        // becomes the space's initial colour. A space this reader cannot read leaves an unknown colour (-1) and no class.
+        if (n < 1) {
+            return 0;
+        }
+        if (pcKind(ox, 0) != K_NAME) {
+            return 0;
+        }
+        int key = 0;
+        int raw = 0;
+        int h = 0;
+        int e = -1;
+        if (pcEntryNameIs(ox, 0, Pdfnames.pnDeviceGray()) == 1) {
+            key = -1;
+        }
+        if (pcEntryNameIs(ox, 0, Pdfnames.pnDeviceRgb()) == 1) {
+            key = -2;
+        }
+        if (pcEntryNameIs(ox, 0, Pdfnames.pnDeviceCmyk()) == 1) {
+            key = -3;
+        }
+        if (pcEntryNameIs(ox, 0, Pdfnames.pnPattern()) == 1) {
+            key = -4;
+        }
+        if (key == 0) {
+            raw = pcResEntry(src, ar, dc, a, b, st, cx, ox, Pdfnames.pnColorSpace(), 0);
+            if (raw != 0) {
+                h = Pdfdoc.pdResolve(src, ar, dc, a, b, st, raw);
+            }
+            if (Pdfsrc.psMissed(src)) {
+                emon.Port.cellsSet(cx, C_ABORT, 1);
+                return 0;
+            }
+            if (h != 0) {
+                key = Pdfgfx.gxKeyOf(src, ar, dc, a, b, st, h);
+            }
+        }
+        if (key != 0) {
+            e = Pdfgfx.gxLookup(src, ar, dc, a, b, st, out, gx, key);
+        }
+        if (Pdfsrc.psMissed(src)) {
+            emon.Port.cellsSet(cx, C_ABORT, 1);
+            return 0;
+        }
+        if (e < 0) {
+            pcSetInk(cx, stroke, key, 0, -1);
+            return 0;
+        }
+        int cls = Pdfgfx.gxClass(gx, e);
+        int rgb = Pdfgfx.gxInitial(gx, e);
+        pcSetInk(cx, stroke, key, cls, rgb);
+        return 0;
+    }
+    public static int pcScOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells out, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells gx, int n, int stroke) {
+        // sc, scn, SC, SCN: a colour in the current space. A pattern space takes no components (its colour is
+        // unknown); a colour whose component count is not the space's is read by its count, as a device colour.
+        int key = 0;
+        int e = -1;
+        int nn = 0;
+        int i = 0;
+        int ncomp = 0;
+        int rgb = -1;
+        int cls = 0;
+        long v = (long) 0;
+        if (stroke == 1) {
+            key = emon.Port.cellsAt(cx, C_CUR + G_SCS);
+        } else {
+            key = emon.Port.cellsAt(cx, C_CUR + G_FCS);
+        }
+        if (key != 0) {
+            e = Pdfgfx.gxLookup(src, ar, dc, a, b, st, out, gx, key);
+        }
+        if (Pdfsrc.psMissed(src)) {
+            emon.Port.cellsSet(cx, C_ABORT, 1);
+            return 0;
+        }
+        while ((nn < n) && (pcKind(ox, nn) == K_NUM)) {
+            nn += 1;
+        }
+        if (e == -1) {
+            // A space that is not known: whatever colour was set is not.
+            pcSetInk(cx, stroke, key, 0, -1);
+            return 0;
+        }
+        if (Pdfgfx.gxIsPattern(gx, e) == 1) {
+            pcSetInk(cx, stroke, key, 5, -1);
+            return 0;
+        }
+        ncomp = Pdfgfx.gxNcomp(gx, e);
+        if (nn > 32) {
+            nn = 32;
+        }
+        if ((nn > 0) && (nn == ncomp)) {
+            i = 0;
+            while (i < nn) {
+                v = pcNum(ox, n, i);
+                Pdfgfx.gxInput(gx, i, v);
+                i += 1;
+            }
+            rgb = Pdfgfx.gxEntryRgb(gx, e, nn);
+            cls = Pdfgfx.gxClass(gx, e);
+            pcSetInk(cx, stroke, key, cls, rgb);
+            return 0;
+        }
+        // The operands do not fit the space: read them by count, as a device colour, and keep the space.
+        if ((nn > 0) && ((nn == 1) || ((nn == 3) || (nn == 4)))) {
+            if (nn == 1) {
+                rgb = pcDeviceRgb(ox, gx, n, 1);
+            }
+            if (nn == 3) {
+                rgb = pcDeviceRgb(ox, gx, n, 2);
+            }
+            if (nn == 4) {
+                rgb = pcDeviceRgb(ox, gx, n, 3);
+            }
+            if (stroke == 1) {
+                emon.Port.cellsSet(cx, C_CUR + G_SCOLOR, rgb);
+            } else {
+                emon.Port.cellsSet(cx, C_CUR + G_COLOR, rgb);
+            }
+        }
+        return 0;
+    }
+    public static int pcBmCode(emon.Port.Cells ar, int h) {
+        // A blend mode name's code: 0 Normal and Compatible, 1 Multiply, 2 Screen, 3 Overlay, 4 Darken, 5 Lighten,
+        // 6 ColorDodge, 7 ColorBurn, 8 HardLight, 9 SoftLight, 10 Difference, 11 Exclusion, 12 Hue, 13 Saturation,
+        // 14 Color, 15 Luminosity, 99 a name that is none of those.
+        if (h == 0) {
+            return 0;
+        }
+        if (Pdflex.plKindOf(ar, h) != 4) {
+            return 0;
+        }
+        if ((Pdfx.pxIs(ar, h, Pdfxnames.pxNormal()) == 1) || (Pdfx.pxIs(ar, h, Pdfxnames.pxCompatible()) == 1)) {
+            return 0;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxMultiply()) == 1) {
+            return 1;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxScreen()) == 1) {
+            return 2;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxOverlay()) == 1) {
+            return 3;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxDarken()) == 1) {
+            return 4;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxLighten()) == 1) {
+            return 5;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxColorDodge()) == 1) {
+            return 6;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxColorBurn()) == 1) {
+            return 7;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxHardLight()) == 1) {
+            return 8;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxSoftLight()) == 1) {
+            return 9;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxDifference()) == 1) {
+            return 10;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxExclusion()) == 1) {
+            return 11;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxHue()) == 1) {
+            return 12;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxSaturation()) == 1) {
+            return 13;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxColor()) == 1) {
+            return 14;
+        }
+        if (Pdfx.pxIs(ar, h, Pdfxnames.pxLuminosity()) == 1) {
+            return 15;
+        }
+        return 99;
+    }
+    public static int pcAlphaOf(emon.Port.Cells ar, int h) {
+        // A constant alpha as per-mille, clamped to 0..1000.
+        int al = Fx.fxRound(Fx.fxMul(pcArFx64(ar, h), Fx.fxOfInt(1000)));
+        if (al < 0) {
+            return 0;
+        }
+        if (al > 1000) {
+            return 1000;
+        }
+        return al;
+    }
+    public static int pcGsOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, int n) {
+        // gs: the entries of the named ExtGState that matter here: /ca and /CA (alpha), /BM (the blend mode, the first
+        // name of an array), /SMask (/None, or a dictionary: its /S, Alpha or Luminosity) and /LW (the line width).
+        if (n < 1) {
+            return 0;
+        }
+        if (pcKind(ox, 0) != K_NAME) {
+            return 0;
+        }
+        int raw = pcResEntry(src, ar, dc, a, b, st, cx, ox, Pdfnames.pnExtGState(), 0);
+        int gd = 0;
+        int v = 0;
+        int s = 0;
+        if (raw == 0) {
+            return 0;
+        }
+        gd = Pdfdoc.pdResolve(src, ar, dc, a, b, st, raw);
+        if (Pdfsrc.psMissed(src)) {
+            emon.Port.cellsSet(cx, C_ABORT, 1);
+            return 0;
+        }
+        if (gd == 0) {
+            return 0;
+        }
+        v = Pdfdoc.pdDget(src, ar, dc, a, b, st, gd, Pdfnames.pnCa());
+        if (v != 0) {
+            emon.Port.cellsSet(cx, C_CUR + G_ALPHA, pcAlphaOf(ar, v));
+        }
+        v = Pdfx.pxDget(src, ar, dc, a, b, st, gd, Pdfxnames.pxCa());
+        if (v != 0) {
+            emon.Port.cellsSet(cx, C_CUR + G_SALPHA, pcAlphaOf(ar, v));
+        }
+        v = Pdfx.pxDget(src, ar, dc, a, b, st, gd, Pdfxnames.pxBm());
+        if (v != 0) {
+            if (Pdflex.plKindOf(ar, v) == 6) {
+                s = Pdflex.plFirst(ar, v);
+                v = Pdfdoc.pdResolve(src, ar, dc, a, b, st, s);
+            }
+            emon.Port.cellsSet(cx, C_CUR + G_BM, pcBmCode(ar, v));
+        }
+        v = Pdfx.pxDget(src, ar, dc, a, b, st, gd, Pdfxnames.pxSMask());
+        if (v != 0) {
+            if (Pdflex.plKindOf(ar, v) == 4) {
+                emon.Port.cellsSet(cx, C_CUR + G_SMASK, 0);
+            }
+            if (Pdflex.plKindOf(ar, v) == 7) {
+                s = Pdfx.pxDget(src, ar, dc, a, b, st, v, Pdfxnames.pxS());
+                emon.Port.cellsSet(cx, C_CUR + G_SMASK, 2);
+                if (Pdfx.pxIs(ar, s, Pdfxnames.pxAlpha()) == 1) {
+                    emon.Port.cellsSet(cx, C_CUR + G_SMASK, 1);
+                }
+            }
+        }
+        v = Pdfx.pxDget(src, ar, dc, a, b, st, gd, Pdfxnames.pxLw());
+        if (v != 0) {
+            if (Pdfx.pxIsNum(ar, v) == 1) {
+                Fx.fxPut(cx, C_CUR + G_LW, pcArFx64(ar, v));
+            }
+        }
+        if (Pdfsrc.psMissed(src)) {
+            emon.Port.cellsSet(cx, C_ABORT, 1);
+        }
+        return 0;
+    }
+    public static int pcImagePlace(emon.Port.Cells cx, emon.Port.Cells im, int obj, int pxw, int pxh, int flags) {
+        // One image placement (SPEC 8.4.3): the unit square through the CTM. Its box is that parallelogram's, its `rot` the
+        // angle of the image's x axis, `skewed` 1 when its axes are not at a right angle (to half a degree).
+        long one = Fx.fxOne();
+        long zero = (long) 0;
+        long ma = Fx.fxGet(cx, C_CUR + G_CTM);
+        long mb = Fx.fxGet(cx, (C_CUR + G_CTM) + 2);
+        long mc = Fx.fxGet(cx, (C_CUR + G_CTM) + 4);
+        long md = Fx.fxGet(cx, (C_CUR + G_CTM) + 6);
+        long ax = pcTx(cx, zero, zero);
+        long ay = pcTy(cx, zero, zero);
+        long bx = pcTx(cx, one, zero);
+        long by = pcTy(cx, one, zero);
+        long dx = pcTx(cx, one, one);
+        long dy = pcTy(cx, one, one);
+        long ex = pcTx(cx, zero, one);
+        long ey = pcTy(cx, zero, one);
+        int rot = pcDirAngle(ma, mb);
+        int roty = pcDirAngle(mc, md);
+        int diff = 0;
+        int skew = 1;
+        int fl = flags;
+        int chk = 0;
+        int r = 0;
+        if (emon.Port.cellsAt(cx, C_CUR + G_BM) != 0) {
+            fl += Evidence.mgBlend();
+        }
+        if (emon.Port.cellsAt(cx, C_CUR + G_SMASK) != 0) {
+            fl += Evidence.mgSoftmask();
+        }
+        if (emon.Port.cellsAt(cx, C_CUR + G_BM) != 0) {
+            chk += Evidence.vcBlend();
+        }
+        if (emon.Port.cellsAt(cx, C_CUR + G_SMASK) != 0) {
+            chk += Evidence.vcSoftmask();
+        }
+        diff = roty - rot;
+        if (diff < 0) {
+            diff += 36000;
+        }
+        if ((diff >= 8950) && (diff <= 9050)) {
+            skew = 0;
+        }
+        if ((diff >= 26950) && (diff <= 27050)) {
+            skew = 0;
+        }
+        if (emon.Port.cellsAt(cx, C_NIMG) >= PATH_ROWS) {
+            pcWarnSet(cx, W_PATHS);
+            return 0;
+        }
+        r = Evidence.imNew(im, emon.Port.cellsAt(cx, C_PAGE), Fx.fxRound(pcMin4(ax, bx, dx, ex)), Fx.fxRound(pcMin4(ay, by, dy, ey)), Fx.fxRound(pcMax4(ax, bx, dx, ex)), Fx.fxRound(pcMax4(ay, by, dy, ey)), obj, pxw, pxh);
+        Evidence.imSet(im, r, Evidence.mfAlpha(), emon.Port.cellsAt(cx, C_CUR + G_ALPHA));
+        Evidence.imSet(im, r, Evidence.mfFlags(), fl);
+        Evidence.imSet(im, r, Evidence.mfRot(), rot);
+        Evidence.imSet(im, r, Evidence.mfSkewed(), skew);
+        Evidence.imSet(im, r, Evidence.mfZ(), emon.Port.cellsAt(cx, C_Z));
+        emon.Port.cellsSet(cx, C_Z, emon.Port.cellsAt(cx, C_Z) + 1);
+        Evidence.imSet(im, r, Evidence.mfClip(), emon.Port.cellsAt(cx, C_CUR + G_CLIP));
+        Evidence.imSet(im, r, Evidence.mfMark(), emon.Port.cellsAt(cx, C_MCTOP));
+        Evidence.imSet(im, r, Evidence.mfOcg(), emon.Port.cellsAt(cx, C_CUROCG));
+        Evidence.imSet(im, r, Evidence.mfVchk(), chk);
+        emon.Port.cellsSet(cx, C_NIMG, emon.Port.cellsAt(cx, C_NIMG) + 1);
+        return 0;
+    }
+    public static int pcOcOpen(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells gx, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, int raw) {
+        // Open an optional-content span for the /OC entry `raw` of a Form XObject or an image (a `marks` row, kind
+        // optional-content, flagged `xobject`): its state is `gx-oc-state`'s. Answers 1 when opened, 0 when spans are
+        // too deep. The caller closes it with `pc-mc-pop`.
+        int depth = emon.Port.cellsAt(cx, C_MCDEPTH);
+        int span = 0;
+        int state = 1;
+        if (depth >= MAX_MC) {
+            return 0;
+        }
+        state = Pdfgfx.gxOcState(src, ar, dc, a, b, st, gx, raw, 0);
+        span = Evidence.mkOpen(mk, emon.Port.cellsAt(cx, C_PAGE), Evidence.mkOptionalContent(), emon.Port.cellsLen(et), 0, emon.Port.cellsAt(cx, C_MCTOP), Evidence.glCount(gl), emon.Port.cellsAt(cx, C_Z));
+        Evidence.mkSet(mk, span, Evidence.mkfStm(), emon.Port.cellsAt(cx, C_STM));
+        Evidence.mkSet(mk, span, Evidence.mkfFlags(), Evidence.mcXobject());
+        Evidence.mkSet(mk, span, Evidence.mkfOcgdef(), state);
+        if (Pdflex.plKindOf(ar, raw) == 9) {
+            Evidence.mkSet(mk, span, Evidence.mkfOcg(), Pdflex.plIntValue(ar, raw));
+        }
+        emon.Port.cellsSet(cx, C_MCTOP, span);
+        emon.Port.cellsSet(cx, C_MCDEPTH, depth + 1);
+        emon.Port.cellsSet(cx, C_CUROCG, span);
+        return 1;
+    }
+    public static int pcImageDo(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells gx, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells im, int objnum, int xh) {
+        // Do of an image XObject: a placement row. Its width and height are the dictionary's; the mask flags say what
+        // could make it translucent (a stencil mask, an /SMask, a /Mask); an /OC makes it a span of its own.
+        int w = Pdfdoc.pdDint(src, ar, dc, a, b, st, xh, Pdfnames.pnWidth(), 0);
+        int h = Pdfdoc.pdDint(src, ar, dc, a, b, st, xh, Pdfnames.pnHeight(), 0);
+        int fl = 0;
+        int v = 0;
+        int ocraw = 0;
+        int opened = 0;
+        v = Pdfx.pxDget(src, ar, dc, a, b, st, xh, Pdfxnames.pxImageMask());
+        if (v != 0) {
+            if ((Pdflex.plKindOf(ar, v) == 1) && (Pdflex.plIntValue(ar, v) == 1)) {
+                fl += Evidence.mgMask();
+            }
+        }
+        v = Pdfx.pxDget(src, ar, dc, a, b, st, xh, Pdfxnames.pxSMask());
+        if (v != 0) {
+            fl += Evidence.mgSmask();
+        }
+        v = Pdfx.pxDget(src, ar, dc, a, b, st, xh, Pdfxnames.pxMask());
+        if (v != 0) {
+            fl += Evidence.mgMasked();
+        }
+        ocraw = Pdfx.pxGet(ar, xh, Pdfxnames.pxOc());
+        if (Pdfsrc.psMissed(src)) {
+            emon.Port.cellsSet(cx, C_ABORT, 1);
+            return 0;
+        }
+        if (ocraw != 0) {
+            opened = pcOcOpen(src, ar, dc, a, b, st, cx, gx, gl, et, mk, ocraw);
+        }
+        pcImagePlace(cx, im, objnum, w, h, fl);
+        if (opened == 1) {
+            pcMcPop(cx, mk, gl, 0);
+        }
+        return 0;
+    }
+    public static int pcNamePx(emon.Port.Cells ox, int s, int l, int id) {
+        // 1 when the name operand bytes ox[s, s+l) are row `id` of the catalogue name table (emon.pdfxnames).
+        int n = Pdfxnames.PX_SPAN[id * 2 + 1];
+        int o = Pdfxnames.PX_SPAN[id * 2 + 0];
+        int i = 0;
+        if (l != n) {
+            return 0;
+        }
+        while (i < n) {
+            if (emon.Port.cellsAt(ox, s + i) != Pdfxnames.PX_CHARS[o + i]) {
+                return 0;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    public static int pcFindId(emon.Port.Cells cx, emon.Port.Cells cs) {
+        // BI: where the `ID` that ends the inline image's dictionary starts (the index of its `I`), or -1.
+        int end = emon.Port.cellsAt(cx, C_END);
+        int p = emon.Port.cellsAt(cx, C_POS);
+        while ((p + 2) < end) {
+            if ((pcWs(emon.Port.cellsAt(cs, p)) == 1) && ((emon.Port.cellsAt(cs, p + 1) == 73) && ((emon.Port.cellsAt(cs, p + 2) == 68) && (((p + 3) >= end) || (pcWs(emon.Port.cellsAt(cs, p + 3)) == 1))))) {
+                return p + 1;
+            }
+            p += 1;
+        }
+        return -1;
+    }
+    public static int pcInlineImage(emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells im) {
+        // BI: read the dictionary up to `ID` (width, height, whether it is a stencil mask), record the placement, then
+        // leave the lexer where it was for `pc-skip-inline` to find the end of the data.
+        int start = emon.Port.cellsAt(cx, C_POS);
+        int end = emon.Port.cellsAt(cx, C_END);
+        int idp = pcFindId(cx, cs);
+        int w = 0;
+        int h = 0;
+        int fl = 0;
+        int j = 0;
+        int v = 0;
+        int ks = 0;
+        int kl = 0;
+        int r = 1;
+        int total = 0;
+        int nxt = 0;
+        if (idp < 0) {
+            pcImagePlace(cx, im, 0, 0, 0, Evidence.mgInline());
+            return 0;
+        }
+        emon.Port.cellsSet(cx, C_END, idp);
+        pcOxClear(cx, ox);
+        while (r == 1) {
+            r = pcLex(cx, ox, cs);
+            if (r == 2) {
+                r = 0;
+            }
+        }
+        total = emon.Port.cellsAt(cx, C_OXN);
+        j = 0;
+        while (j < total) {
+            nxt = j + 1;
+            if ((pcKind(ox, j) == K_NAME) && (nxt < total)) {
+                ks = pcEa(ox, j);
+                kl = pcEb(ox, j);
+                if (pcKind(ox, nxt) == K_NUM) {
+                    v = Fx.fxRound(Fx.fxJoin(pcEa(ox, nxt), pcEb(ox, nxt)));
+                    if ((pcNameEq(ox, ks, kl, Pdfnames.pnWidth()) == 1) || (pcNameEq(ox, ks, kl, Pdfnames.pnW()) == 1)) {
+                        w = v;
+                    }
+                    if ((pcNameEq(ox, ks, kl, Pdfnames.pnHeight()) == 1) || (pcNamePx(ox, ks, kl, Pdfxnames.pxH()) == 1)) {
+                        h = v;
+                    }
+                }
+                if (pcKind(ox, nxt) == K_BOOL) {
+                    if ((pcNamePx(ox, ks, kl, Pdfxnames.pxIm()) == 1) || (pcNamePx(ox, ks, kl, Pdfxnames.pxImageMask()) == 1)) {
+                        if (pcEa(ox, nxt) == 1) {
+                            fl = Evidence.mgMask();
+                        }
+                    }
+                }
+                j = nxt + pcEsize(ox, nxt);
+            } else {
+                j += pcEsize(ox, j);
+            }
+        }
+        emon.Port.cellsSet(cx, C_END, end);
+        emon.Port.cellsSet(cx, C_POS, start);
+        pcOxClear(cx, ox);
+        pcImagePlace(cx, im, 0, w, h, Evidence.mgInline() + fl);
+        return 0;
+    }
+    public static int pcShOp(emon.Port.Cells cx, emon.Port.Cells pa) {
+        // sh: a shading fills the whole clip region. A row of kind `other`, flagged `shading`, whose box is the region's
+        // (the page when nothing clips) and whose colour is unknown: P3.6 reads it as paint that is not exactly known.
+        int cur = emon.Port.cellsAt(cx, C_CUR + G_CLIP);
+        int r = 0;
+        int bx0 = 0;
+        int by0 = 0;
+        int bx1 = 0;
+        int by1 = 0;
+        int fl = 0;
+        if (emon.Port.cellsAt(cx, C_NPATH) >= PATH_ROWS) {
+            pcWarnSet(cx, W_PATHS);
+            return 0;
+        }
+        bx0 = 0;
+        by0 = 0;
+        bx1 = emon.Port.cellsAt(cx, C_PW);
+        by1 = emon.Port.cellsAt(cx, C_PH);
+        if (cur >= 0) {
+            bx0 = Evidence.paGet(pa, cur, Evidence.pfX0());
+            by0 = Evidence.paGet(pa, cur, Evidence.pfY0());
+            bx1 = Evidence.paGet(pa, cur, Evidence.pfX1());
+            by1 = Evidence.paGet(pa, cur, Evidence.pfY1());
+        }
+        r = Evidence.paNew(pa, emon.Port.cellsAt(cx, C_PAGE), Evidence.paOther(), bx0, by0, bx1, by1);
+        fl = Evidence.pgFilled() + Evidence.pgShading();
+        if (emon.Port.cellsAt(cx, C_CUR + G_BM) != 0) {
+            fl += Evidence.pgBlend();
+        }
+        if (emon.Port.cellsAt(cx, C_CUR + G_SMASK) != 0) {
+            fl += Evidence.pgSoftmask();
+        }
+        Evidence.paSet(pa, r, Evidence.pfFlags(), fl);
+        Evidence.paSet(pa, r, Evidence.pfFalpha(), emon.Port.cellsAt(cx, C_CUR + G_ALPHA));
+        Evidence.paSet(pa, r, Evidence.pfZ(), emon.Port.cellsAt(cx, C_Z));
+        emon.Port.cellsSet(cx, C_Z, emon.Port.cellsAt(cx, C_Z) + 1);
+        Evidence.paSet(pa, r, Evidence.pfClip(), cur);
+        Evidence.paSet(pa, r, Evidence.pfMark(), emon.Port.cellsAt(cx, C_MCTOP));
+        Evidence.paSet(pa, r, Evidence.pfOcg(), emon.Port.cellsAt(cx, C_CUROCG));
+        emon.Port.cellsSet(cx, C_NPATH, emon.Port.cellsAt(cx, C_NPATH) + 1);
+        return 0;
+    }
     public static int pcAppendStream(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells out, emon.Port.Cells cs, int sh) {
         // Decode stream sh and append its bytes (and a line feed) to `cs`. Answers
         // the filter chain's status (0 ok), or -1 when the source missed.
@@ -1984,11 +3155,10 @@ public final class Pdfcontent {
         emon.Port.cellsPush(cs, 10);
         return status;
     }
-    public static int pcDo(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int n) {
-        // Do: run the Form XObject named by operand 0. Images and everything that is
-        // not a form are skipped. The form's /Matrix is concatenated to the CTM, its
-        // /Resources replace the current ones (else they are inherited), and it runs
-        // inside its own `q`/`Q`.
+    public static int pcDo(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells pts, emon.Port.Cells gx, int n) {
+        // Do: an image XObject is a placement (`pc-image-do`); a Form XObject is run. The form's /Matrix is
+        // concatenated to the CTM, its /BBox clips (a rectangle in its own space), its /Resources replace the current
+        // ones (else they are inherited), an /OC makes it an optional-content span, and it runs inside its own `q`/`Q`.
         if (n < 1) {
             return 0;
         }
@@ -2010,6 +3180,13 @@ public final class Pdfcontent {
         int start = 0;
         int endcs = 0;
         int status = 0;
+        int bb = 0;
+        int ocraw = 0;
+        int opened = 0;
+        long bx0 = (long) 0;
+        long by0 = (long) 0;
+        long bx1 = (long) 0;
+        long by1 = (long) 0;
         if (Pdfsrc.psMissed(src)) {
             emon.Port.cellsSet(cx, C_ABORT, 1);
             return 0;
@@ -2039,6 +3216,10 @@ public final class Pdfcontent {
             return 0;
         }
         if (sub == 0) {
+            return 0;
+        }
+        if (Pdflex.plNameIs(ar, sub, Pdfnames.pnImage()) == 1) {
+            pcImageDo(src, ar, dc, a, b, st, cx, gx, gl, et, mk, im, objnum, xh);
             return 0;
         }
         if (Pdflex.plNameIs(ar, sub, Pdfnames.pnForm()) == 0) {
@@ -2074,6 +3255,24 @@ public final class Pdfcontent {
                 Fx.mxIdent(cx, C_TMP);
             }
         }
+        // Its /BBox, kept as four Fx until the form's state is made.
+        bb = Pdfdoc.pdDget(src, ar, dc, a, b, st, xh, Pdfnames.pnBBox());
+        got = 0;
+        if ((bb != 0) && (Pdflex.plKindOf(ar, bb) == 6)) {
+            el = Pdflex.plFirst(ar, bb);
+            while ((el != 0) && (got < 4)) {
+                sub = Pdfdoc.pdResolve(src, ar, dc, a, b, st, el);
+                if (Pdfx.pxIsNum(ar, sub) == 0) {
+                    got = 0;
+                    el = 0;
+                } else {
+                    Fx.fxPut(cx, C_BB + (got * 2), pcArFx64(ar, sub));
+                    el = Pdflex.plNext(ar, el);
+                    got += 1;
+                }
+            }
+        }
+        ocraw = Pdfx.pxGet(ar, xh, Pdfxnames.pxOc());
         res = Pdfdoc.pdDget(src, ar, dc, a, b, st, xh, Pdfnames.pnResources());
         oldres = emon.Port.cellsAt(cx, C_RES);
         oldstm = emon.Port.cellsAt(cx, C_STM);
@@ -2087,11 +3286,28 @@ public final class Pdfcontent {
         }
         pcSave(cx);
         Fx.mxMul(cx, C_CUR + G_CTM, C_TMP, C_CUR + G_CTM);
+        if (got == 4) {
+            // The form's box clips what it paints: a rectangle through the CTM.
+            pcPathReset(cx, pts);
+            bx0 = Fx.fxGet(cx, C_BB);
+            by0 = Fx.fxGet(cx, C_BB + 2);
+            bx1 = Fx.fxGet(cx, C_BB + 4);
+            by1 = Fx.fxGet(cx, C_BB + 6);
+            pcRectPath(cx, pts, bx0, by0, bx1 - bx0, by1 - by0);
+            emon.Port.cellsSet(cx, C_CLIPP, 1);
+            pcEndPath(cx, pa, pts, 0, 0, 0, 1);
+        }
+        if (ocraw != 0) {
+            opened = pcOcOpen(src, ar, dc, a, b, st, cx, gx, gl, et, mk, ocraw);
+        }
         emon.Port.cellsSet(cx, C_FSTACK + fd, objnum);
         emon.Port.cellsSet(cx, C_FDEPTH, fd + 1);
         emon.Port.cellsSet(cx, C_STM, objnum);
         endcs = emon.Port.cellsLen(cs);
-        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, start, endcs);
+        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, start, endcs);
+        if (opened == 1) {
+            pcMcPop(cx, mk, gl, 0);
+        }
         emon.Port.cellsSet(cx, C_FDEPTH, fd);
         emon.Port.cellsSet(cx, C_STM, oldstm);
         emon.Port.cellsSet(cx, C_RES, oldres);
@@ -2108,7 +3324,7 @@ public final class Pdfcontent {
         }
         return 0;
     }
-    public static int pcOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int op, int n) {
+    public static int pcOp(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells pts, emon.Port.Cells gx, int op, int n) {
         // Execute one operator; `ox` holds its n operands. Unknown operators do
         // nothing (their operands are dropped by the caller).
         if (op == OP_SAVE) {
@@ -2130,10 +3346,16 @@ public final class Pdfcontent {
             Fx.mxIdent(cx, C_TM);
             Fx.mxIdent(cx, C_TLM);
             emon.Port.cellsSet(cx, C_INTEXT, 1);
+            emon.Port.cellsSet(cx, C_TCN, 0);
             return 0;
         }
         if (op == OP_ET) {
             emon.Port.cellsSet(cx, C_INTEXT, 0);
+            if (emon.Port.cellsAt(cx, C_TCN) > 0) {
+                // Glyphs shown in a clipping render mode (4 to 7) clip to their boxes' union (a superset of the glyphs).
+                pcClipBox(cx, pa, emon.Port.cellsAt(cx, C_TCX0), emon.Port.cellsAt(cx, C_TCY0), emon.Port.cellsAt(cx, C_TCX1), emon.Port.cellsAt(cx, C_TCY1), Evidence.paOther(), 0, -1, 0);
+                emon.Port.cellsSet(cx, C_TCN, 0);
+            }
             return 0;
         }
         if (op == OP_TF) {
@@ -2216,15 +3438,15 @@ public final class Pdfcontent {
             return 0;
         }
         if (op == OP_DO) {
-            pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, n);
+            pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, n);
             return 0;
         }
         if (op == OP_BDC) {
-            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 1);
+            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, gx, n, 1);
             return 0;
         }
         if (op == OP_BMC) {
-            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 0);
+            pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, gx, n, 0);
             return 0;
         }
         if (op == OP_EMC) {
@@ -2232,57 +3454,115 @@ public final class Pdfcontent {
             return 0;
         }
         if (op == OP_BI) {
+            pcInlineImage(cx, ox, cs, im);
             pcSkipInline(cx, cs);
             return 0;
         }
-        if ((op == OP_GRAY) || ((op == OP_RGB) || ((op == OP_CMYK) || ((op == OP_SC) || (op == OP_SCN))))) {
-            pcSetColor(cx, ox, n);
+        // Colour: the device operators, the named spaces, the components.
+        if (op == OP_GRAY) {
+            pcColorDevice(cx, ox, gx, n, 0, 1);
+            return 0;
+        }
+        if (op == OP_RGB) {
+            pcColorDevice(cx, ox, gx, n, 0, 2);
+            return 0;
+        }
+        if (op == OP_CMYK) {
+            pcColorDevice(cx, ox, gx, n, 0, 3);
+            return 0;
+        }
+        if (op == OP_GRAY_S) {
+            pcColorDevice(cx, ox, gx, n, 1, 1);
+            return 0;
+        }
+        if (op == OP_RGB_S) {
+            pcColorDevice(cx, ox, gx, n, 1, 2);
+            return 0;
+        }
+        if (op == OP_CMYK_S) {
+            pcColorDevice(cx, ox, gx, n, 1, 3);
+            return 0;
+        }
+        if ((op == OP_SC) || (op == OP_SCN)) {
+            pcScOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 0);
+            return 0;
+        }
+        if ((op == OP_SC_S) || (op == OP_SCN_S)) {
+            pcScOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 1);
             return 0;
         }
         if (op == OP_CS) {
-            emon.Port.cellsSet(cx, C_CUR + G_COLOR, 0);
-            if ((n >= 1) && (pcKind(ox, 0) == K_NAME)) {
-                emon.Port.cellsSet(cx, C_CUR + G_FAM, 0);
-                if (pcEntryNameIs(ox, 0, Pdfnames.pnDeviceGray()) == 1) {
-                    emon.Port.cellsSet(cx, C_CUR + G_FAM, 1);
-                }
-                if (pcEntryNameIs(ox, 0, Pdfnames.pnDeviceRgb()) == 1) {
-                    emon.Port.cellsSet(cx, C_CUR + G_FAM, 2);
-                }
-                if (pcEntryNameIs(ox, 0, Pdfnames.pnDeviceCmyk()) == 1) {
-                    emon.Port.cellsSet(cx, C_CUR + G_FAM, 3);
-                }
-            }
+            pcCsOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 0);
+            return 0;
+        }
+        if (op == OP_CS_S) {
+            pcCsOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 1);
             return 0;
         }
         if (op == OP_GS) {
-            if ((n >= 1) && (pcKind(ox, 0) == K_NAME)) {
-                int raw = pcResEntry(src, ar, dc, a, b, st, cx, ox, Pdfnames.pnExtGState(), 0);
-                if (raw != 0) {
-                    int gd = Pdfdoc.pdResolve(src, ar, dc, a, b, st, raw);
-                    if (gd != 0) {
-                        int cav = Pdfdoc.pdDget(src, ar, dc, a, b, st, gd, Pdfnames.pnCa());
-                        if (cav != 0) {
-                            int al = Fx.fxRound(Fx.fxMul(pcArFx64(ar, cav), Fx.fxOfInt(1000)));
-                            if (al < 0) {
-                                emon.Port.cellsSet(cx, C_CUR + G_ALPHA, 0);
-                            } else if (al > 1000) {
-                                emon.Port.cellsSet(cx, C_CUR + G_ALPHA, 1000);
-                            } else {
-                                emon.Port.cellsSet(cx, C_CUR + G_ALPHA, al);
-                            }
-                        }
-                    }
-                }
-                if (Pdfsrc.psMissed(src)) {
-                    emon.Port.cellsSet(cx, C_ABORT, 1);
-                }
-            }
+            pcGsOp(src, ar, dc, a, b, st, cx, ox, n);
+            return 0;
+        }
+        // Paths: construction, painting, clipping.
+        if (op == OP_MOVE) {
+            pcOpMove(cx, pts, ox, n);
+            return 0;
+        }
+        if (op == OP_LINE) {
+            pcOpLine(cx, pts, ox, n);
+            return 0;
+        }
+        if (op == OP_CURVE) {
+            pcOpCurve(cx, pts, ox, n, 0);
+            return 0;
+        }
+        if (op == OP_CURVE_V) {
+            pcOpCurve(cx, pts, ox, n, 1);
+            return 0;
+        }
+        if (op == OP_CURVE_Y) {
+            pcOpCurve(cx, pts, ox, n, 2);
+            return 0;
+        }
+        if (op == OP_CLOSE) {
+            pcOpClose(cx, pts);
+            return 0;
+        }
+        if (op == OP_RECT) {
+            pcOpRect(cx, pts, ox, n);
+            return 0;
+        }
+        if ((op == OP_STROKE) || ((op == OP_CLOSESTROKE) || ((op == OP_FILL) || ((op == OP_FILL2) || ((op == OP_FILLEO) || ((op == OP_FS) || ((op == OP_FSEO) || ((op == OP_CFS) || (op == OP_CFSEO))))))))) {
+            pcPaintOp(cx, pa, pts, op);
+            return 0;
+        }
+        if (op == OP_ENDPATH) {
+            pcEndPath(cx, pa, pts, 0, 0, 0, 0);
+            return 0;
+        }
+        if (op == OP_CLIP) {
+            emon.Port.cellsSet(cx, C_CLIPP, 1);
+            return 0;
+        }
+        if (op == OP_CLIPEO) {
+            emon.Port.cellsSet(cx, C_CLIPP, 2);
+            return 0;
+        }
+        if (op == OP_SH) {
+            pcShOp(cx, pa);
+            return 0;
+        }
+        if (op == OP_LW) {
+            Fx.fxPut(cx, C_CUR + G_LW, pcNum(ox, n, 0));
+            return 0;
+        }
+        if (op == OP_DASH) {
+            pcDashOp(cx, ox, n);
             return 0;
         }
         return 0;
     }
-    public static int pcRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, int start, int end) {
+    public static int pcRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells pts, emon.Port.Cells gx, int start, int end) {
         // Run the content bytes cs[start, end): read operands, then execute each
         // operator. The caller's lexer position, graphics-state floor and marked-
         // content floor are kept and restored, so a form can run inside an operator.
@@ -2312,7 +3592,7 @@ public final class Pdfcontent {
                 }
                 opc = emon.Port.cellsAt(cx, C_OP);
                 nop = emon.Port.cellsAt(cx, C_OXN);
-                pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, opc, nop);
+                pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, opc, nop);
                 pcOxClear(cx, ox);
             }
         }
@@ -2455,6 +3735,13 @@ public final class Pdfcontent {
         }
         return 0;
     }
+    public static int pcHiddenMode(int mode) {
+        // 1 for the invisible render modes, 3 and 7.
+        if ((mode == 3) || (mode == 7)) {
+            return 1;
+        }
+        return 0;
+    }
     public static int pcContinues(emon.Port.Cells gl, int p, int g) {
         // 1 when glyph g continues the word glyph p is in: the same rotation, on the
         // same baseline (to 45 percent of the size: sub- and superscripts stay), and
@@ -2467,6 +3754,14 @@ public final class Pdfcontent {
         int gap = 0;
         int off = 0;
         if (pcRotSame(rot, Evidence.glGet(gl, g, Evidence.gfRot())) == 0) {
+            return 0;
+        }
+        // A word is one thing to see: a glyph of another visibility, or one that is hidden (mode 3, 7) where the other
+        // is not, starts a new word (P3.6).
+        if (Evidence.glGet(gl, p, Evidence.gfVis()) != Evidence.glGet(gl, g, Evidence.gfVis())) {
+            return 0;
+        }
+        if (pcHiddenMode(Evidence.glGet(gl, p, Evidence.gfMode())) != pcHiddenMode(Evidence.glGet(gl, g, Evidence.gfMode()))) {
             return 0;
         }
         if (sizep > sz) {
@@ -2574,7 +3869,7 @@ public final class Pdfcontent {
             if (Evidence.glGet(gl, j, Evidence.chY1()) > y1) {
                 y1 = Evidence.glGet(gl, j, Evidence.chY1());
             }
-            if (Evidence.glGet(gl, j, Evidence.gfMode()) != 3) {
+            if ((Evidence.glGet(gl, j, Evidence.gfMode()) != 3) && (Evidence.glGet(gl, j, Evidence.gfMode()) != 7)) {
                 visible = 1;
             }
             cl = pcGcls(gl, j);
@@ -2920,13 +4215,17 @@ public final class Pdfcontent {
         emon.Port.cellsSet(cx, C_CUROCG, -1);
         emon.Port.cellsSet(cx, C_Z, 0);
         emon.Port.cellsSet(cx, C_INTEXT, 0);
+        emon.Port.cellsSet(cx, C_CLIPP, 0);
+        emon.Port.cellsSet(cx, C_TCN, 0);
+        emon.Port.cellsSet(cx, C_NPATH, 0);
+        emon.Port.cellsSet(cx, C_NIMG, 0);
         emon.Port.cellsSet(cx, C_GSBASE, 0);
         Fx.mxIdent(cx, C_TM);
         Fx.mxIdent(cx, C_TLM);
         Fx.mxIdent(cx, C_M);
         return 0;
     }
-    public static int pcPage(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, int pi, int page, emon.Port.Cells wd, emon.Port.Cells ln) {
+    public static int pcPage(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, int pi, int page, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells pts, emon.Port.Cells gx) {
         // Interpret page index pi of the page table pg (page number `page`, 1-based, is
         // what the evidence records): its content streams, then the words and lines.
         // Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is
@@ -2934,12 +4233,27 @@ public final class Pdfcontent {
         int con = Pdfdoc.pdPgContents(pg, pi);
         int g0 = Evidence.glCount(gl);
         int w0 = Evidence.wdCount(wd);
+        int p0 = Evidence.paCount(pa);
+        int i0 = Evidence.imCount(im);
+        int rot = Pdfdoc.pdPgRotate(pg, pi);
+        int cw = Pdfdoc.pdPgCrop(pg, pi, 2) - Pdfdoc.pdPgCrop(pg, pi, 0);
+        int ch = Pdfdoc.pdPgCrop(pg, pi, 3) - Pdfdoc.pdPgCrop(pg, pi, 1);
         int el = 0;
         int eh = 0;
         int endcs = 0;
         pcBeginPage(cx, page);
         pcBaseMatrix(cx, Pdfdoc.pdPgCrop(pg, pi, 0), Pdfdoc.pdPgCrop(pg, pi, 1), Pdfdoc.pdPgCrop(pg, pi, 2), Pdfdoc.pdPgCrop(pg, pi, 3), Pdfdoc.pdPgRotate(pg, pi));
         pcGsReset(cx);
+        Pdfgfx.gxPage(gx);
+        Pdfgfx.gxOcRead(src, ar, dc, a, b, st, gx);
+        if ((rot == 90) || (rot == 270)) {
+            emon.Port.cellsSet(cx, C_PW, ch);
+            emon.Port.cellsSet(cx, C_PH, cw);
+        } else {
+            emon.Port.cellsSet(cx, C_PW, cw);
+            emon.Port.cellsSet(cx, C_PH, ch);
+        }
+        pcPathReset(cx, pts);
         emon.Port.cellsSet(cx, C_RES, Pdfdoc.pdPgResources(pg, pi));
         emon.Port.cellsDrop(cs, 0);
         if (con != 0) {
@@ -2964,21 +4278,25 @@ public final class Pdfcontent {
             return 7;
         }
         endcs = emon.Port.cellsLen(cs);
-        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, 0, endcs);
+        pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, 0, endcs);
         if (emon.Port.cellsAt(cx, C_ABORT) == 1) {
             return 7;
         }
         if (Pdfsrc.psMissed(src)) {
             return 7;
         }
+        // The path in progress when the page ended never painted: its points are dropped.
+        emon.Port.cellsDrop(pts, emon.Port.cellsAt(cx, C_PPTS) * 3);
+        Pdfvis.pvPage(gl, mk, pa, im, emon.Port.cellsAt(cx, C_PW), emon.Port.cellsAt(cx, C_PH), g0, p0, i0);
         pcGroup(gl, et, wd, ln, fnt, page, g0, w0);
         return 0;
     }
-    public static int pcDocument(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
+    public static int pcDocument(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells pts, emon.Port.Cells gx) {
         // Every page of an opened document (`pd-open` has answered 0): clears `cx`,
         // then `pc-page` for each page. Answers 0, or 7 when the source missed.
         pcInit(cx, ox);
         emon.Port.cellsDrop(fnt, 0);
+        emon.Port.cellsDrop(gx, 0);
         int n = Pdfdoc.pdPages(src, ar, dc, a, b, st, pg);
         int i = 0;
         int status = 0;
@@ -2986,7 +4304,7 @@ public final class Pdfcontent {
             return 7;
         }
         while (i < n) {
-            status = pcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i + 1, wd, ln);
+            status = pcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i + 1, wd, ln, pa, im, pts, gx);
             if (status == 7) {
                 return 7;
             }

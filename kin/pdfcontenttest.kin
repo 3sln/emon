@@ -97,22 +97,39 @@
 
 ;; ---------------------------------------------------------------- the driver
 
-(defn ^I32 ct-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
-                   ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
-                   ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
-                   ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
-                   ^:mut ^Cells wd ^:mut ^Cells ln]
+(defn ^I32 ct-run2 [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                    ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                    ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
+                    ^:mut ^Cells wd ^:mut ^Cells ln
+                    ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx]
   (comment "Open the file and run every page: 0 when both went well, 100 + the open")
-  (comment "status when it did not open, else `pc-document`'s (7: the source missed).")
+  (comment "status when it did not open, else `pc-document`'s (7: the source missed). The paths, images, their")
+  (comment "points and the colour workspace are the caller's too.")
   (cells-drop gl 0)
   (cells-drop et 0)
   (cells-drop mk 0)
   (cells-drop fnt 0)
   (cells-drop wd 0)
   (cells-drop ln 0)
+  (cells-drop pa 0)
+  (cells-drop im 0)
+  (cells-drop pts 0)
   (let [^I32 o (pd-open src ar dc a b st)]
     (if (!= o 0) (return (+ 100 o)))
-    (return (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))))
+    (return (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))))
+
+(defn ^I32 ct-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                   ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                   ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                   ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
+                   ^:mut ^Cells wd ^:mut ^Cells ln]
+  (comment "`ct-run2` with arenas of its own for the paths, images, points and colours.")
+  (let [^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)]
+    (return (ct-run2 src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))))
 
 (defn ^I32 ct-g-row [^TestT emon-t ^Blob rows ^I32 s ^I32 e ^Cells gl ^:mut ^Cells vals ^I32 g ^I32 line]
   (comment "One G row against glyph g: the code point exactly, the geometry within a")
@@ -324,6 +341,7 @@
         ^Cells rules (new-cells)
         ^Cells prims (new-cells)
         ^Cells tlines (new-cells)
+        ^Cells gx (new-cells)
         ^I32 n (blob-len rows)
         ^:mut ^I32 pos 0
         ^:mut ^I32 line 0
@@ -337,8 +355,8 @@
           (if (and (< pos e) (!= (blob-u8 rows pos) 35))
             (do (set tb (ct-tab rows pos e))
                 (set files (+ files 1))
-                (set status (ct-run (src-of-blob (test-file-span rows pos tb))
-                                    ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
+                (set status (ct-run2 (src-of-blob (test-file-span rows pos tb))
+                                     ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln paths images pts gx))
                 (assert-eq-at status 0 "the file ran" line)
                 (assert-eq-at (ev-check epages views pts refs et feats gl wd ln mk fnt paths images oruns oblocks olines owords osyms oalts inks components rules prims tlines) 0 "the evidence is well formed" line)
                 (let [^Text t (new-text)]
@@ -369,7 +387,8 @@
                      ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
                      ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
                      ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
-                     ^:mut ^Cells wd ^:mut ^Cells ln]
+                     ^:mut ^Cells wd ^:mut ^Cells ln
+                     ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx]
   (comment "Run `bytes` through an async source of `chunk`-byte chunks, re-running on a fresh")
   (comment "view after each fetch until an attempt does not miss. `ctr` gets [rounds, attempts")
   (comment "that missed and answered something other than need-bytes].")
@@ -382,7 +401,7 @@
     (cells-push ctr 0)
     (while (== more 1)
       (do (let [^Src v (test-src-view base)]
-            (set status (ct-run v ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
+            (set status (ct-run2 v ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))
             (if (ps-missed v)
               (do (if (and (!= status 7) (!= status 0) (< status 100))
                     (cells-set ctr 1 (+ (cells-at ctr 1) 1)))
@@ -437,6 +456,14 @@
         ^Cells pg2 (new-cells)
         ^Cells wd2 (new-cells)
         ^Cells ln2 (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells pa2 (new-cells)
+        ^Cells im2 (new-cells)
+        ^Cells pts2 (new-cells)
+        ^Cells gx2 (new-cells)
         ^Cells ctr (new-cells)
         ^I32 n (blob-len rows)
         ^:mut ^I32 pos 0
@@ -460,10 +487,11 @@
           (if (>= s 0)
             (do (set q (ct-tab rows s e))
                 (set files (+ files 1))
-                (set s1 (ct-run (src-of-blob (test-file-span rows s q))
-                                ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
+                (set s1 (ct-run2 (src-of-blob (test-file-span rows s q))
+                                 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))
                 (set s2 (ct-async (test-file-span rows s q) chunk ctr
-                                  ar2 dc2 a2 b2 st2 cx2 ox2 cs2 out2 f02 f12 f22 f32 gl2 et2 mk2 fnt2 pg2 wd2 ln2))
+                                  ar2 dc2 a2 b2 st2 cx2 ox2 cs2 out2 f02 f12 f22 f32 gl2 et2 mk2 fnt2 pg2 wd2 ln2
+                                  pa2 im2 pts2 gx2))
                 (assert-eq-at s2 s1 "the kept attempt's status is the in-memory run's" line)
                 (assert-eq-at (ct-diff gl gl2) -1 "glyphs" line)
                 (assert-eq-at (ct-diff et et2) -1 "evidence text" line)
@@ -471,6 +499,10 @@
                 (assert-eq-at (ct-diff fnt fnt2) -1 "fonts" line)
                 (assert-eq-at (ct-diff wd wd2) -1 "words" line)
                 (assert-eq-at (ct-diff ln ln2) -1 "lines" line)
+                (assert-eq-at (ct-diff pa pa2) -1 "paths" line)
+                (assert-eq-at (ct-diff im im2) -1 "images" line)
+                (assert-eq-at (ct-diff pts pts2) -1 "path points" line)
+                (assert-eq-at (ct-diff gx gx2) -1 "the colour workspace" line)
                 (assert-eq-at (pc-warn cx2) (pc-warn cx) "warnings" line)
                 (assert-eq-at (cells-at ctr 1) 0 "a missed attempt answered only need-bytes" line)
                 (assert-that-at (<= (cells-at ctr 0) 24) "within 24 rounds" line)
@@ -632,3 +664,18 @@
   (assert-that (> (ct-fuzz-file (test-t) (test-file "content/fonts.pdf") 300 37) 300) "fonts.pdf")
   (assert-that (> (ct-fuzz-file (test-t) (test-file "content/damaged.pdf") 300 29) 300) "damaged.pdf")
   (assert-that (> (ct-fuzz-file (test-t) (test-file "pdf/html-chrome.pdf") 100 401) 100) "a Chrome file"))
+
+;; ------------------------------------------------- P3.5, P3.6: the visibility fixtures
+
+(deftest test-the-visibility-fixtures-are-the-same-through-an-async-source-of-512-byte-chunks
+  (comment "Paths, images, their points and the colour workspace too, cell for cell (D075).")
+  (let [^I32 r (ct-async-rows (test-t) (test-file "vis/rows.txt") 0 512)]
+    (assert-that (>= r 1700) "seventeen files were run")))
+
+(deftest test-corrupted-and-cut-visibility-fixtures-never-fault
+  (comment "Colour spaces, functions, clips, optional content and soft masks, damaged: no fault, whatever they say.")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/spaces.pdf") 300 53) 300) "spaces.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/white.pdf") 300 61) 300) "white.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/ocg.pdf") 300 59) 300) "ocg.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/occluded.pdf") 300 67) 300) "occluded.pdf")
+  (assert-that (> (ct-fuzz-file (test-t) (test-file "vis/clip.pdf") 300 47) 300) "clip.pdf"))

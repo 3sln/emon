@@ -84,14 +84,22 @@ func fzContent(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	var fnt *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
-	var s int32 = pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gx *port.Cells = port.NewCells()
+	var s int32 = pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx)
 	var g int32 = 0
 	var h int32 = 7
+	var hv int32 = 7
 	port.TextAscii(t, " content=")
 	port.TextI32(t, s)
 	if s == 0 {
 		for g < evidence.GlCount(gl) {
 			h = fzMix(h, evidence.GlGet(gl, g, evidence.ChCp()))
+			hv = fzMix(hv, evidence.GlGet(gl, g, evidence.GfVis()))
+			hv = fzMix(hv, evidence.GlGet(gl, g, evidence.GfVby()))
+			hv = fzMix(hv, evidence.GlGet(gl, g, evidence.GfVchk()))
 			g += 1
 		}
 		port.TextAscii(t, " cwarn=")
@@ -106,6 +114,12 @@ func fzContent(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 		port.TextI32(t, evidence.MkCount(mk))
 		port.TextAscii(t, " cps=")
 		port.TextI32(t, h)
+		port.TextAscii(t, " paths=")
+		port.TextI32(t, evidence.PaCount(pa))
+		port.TextAscii(t, " images=")
+		port.TextI32(t, evidence.ImCount(im))
+		port.TextAscii(t, " vis=")
+		port.TextI32(t, hv)
 	}
 	return s
 }

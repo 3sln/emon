@@ -724,6 +724,258 @@ func PxOc() int32 {
 func PxTrapped() int32 {
 	return 101
 }
+func PxCalGray() int32 {
+	return 102
+}
+func PxCalRgb() int32 {
+	return 103
+}
+func PxLab() int32 {
+	return 104
+}
+func PxIccBased() int32 {
+	return 105
+}
+func PxIndexed() int32 {
+	return 106
+}
+func PxSeparation() int32 {
+	return 107
+}
+func PxDeviceN() int32 {
+	return 108
+}
+func PxAlternate() int32 {
+	return 109
+}
+func PxWhitePoint() int32 {
+	return 110
+}
+func PxBlackPoint() int32 {
+	return 111
+}
+func PxGamma() int32 {
+	return 112
+}
+func PxRange() int32 {
+	return 113
+}
+func PxNone() int32 {
+	return 114
+}
+func PxAll() int32 {
+	return 115
+}
+func PxG() int32 {
+	return 116
+}
+func PxRgb() int32 {
+	return 117
+}
+func PxCmyk() int32 {
+	return 118
+}
+func PxI() int32 {
+	return 119
+}
+func PxCs() int32 {
+	return 120
+}
+func PxIm() int32 {
+	return 121
+}
+func PxBpc() int32 {
+	return 122
+}
+func PxH() int32 {
+	return 123
+}
+func PxImageMask() int32 {
+	return 124
+}
+func PxMask() int32 {
+	return 125
+}
+func PxSMask() int32 {
+	return 126
+}
+func PxSMaskInData() int32 {
+	return 127
+}
+func PxFunctionType() int32 {
+	return 128
+}
+func PxDomain() int32 {
+	return 129
+}
+func PxC0() int32 {
+	return 130
+}
+func PxC1() int32 {
+	return 131
+}
+func PxFunctions() int32 {
+	return 132
+}
+func PxBounds() int32 {
+	return 133
+}
+func PxEncode() int32 {
+	return 134
+}
+func PxDecode() int32 {
+	return 135
+}
+func PxBitsPerSample() int32 {
+	return 136
+}
+func PxOrder() int32 {
+	return 137
+}
+func PxBm() int32 {
+	return 138
+}
+func PxLw() int32 {
+	return 139
+}
+func PxBc() int32 {
+	return 140
+}
+func PxNormal() int32 {
+	return 141
+}
+func PxCompatible() int32 {
+	return 142
+}
+func PxMultiply() int32 {
+	return 143
+}
+func PxOverlay() int32 {
+	return 144
+}
+func PxDarken() int32 {
+	return 145
+}
+func PxLighten() int32 {
+	return 146
+}
+func PxColorDodge() int32 {
+	return 147
+}
+func PxColorBurn() int32 {
+	return 148
+}
+func PxHardLight() int32 {
+	return 149
+}
+func PxSoftLight() int32 {
+	return 150
+}
+func PxDifference() int32 {
+	return 151
+}
+func PxExclusion() int32 {
+	return 152
+}
+func PxHue() int32 {
+	return 153
+}
+func PxSaturation() int32 {
+	return 154
+}
+func PxColor() int32 {
+	return 155
+}
+func PxLuminosity() int32 {
+	return 156
+}
+func PxAlpha() int32 {
+	return 157
+}
+func PxOcProperties() int32 {
+	return 158
+}
+func PxOcgs() int32 {
+	return 159
+}
+func PxOcg() int32 {
+	return 160
+}
+func PxOcmd() int32 {
+	return 161
+}
+func PxBaseState() int32 {
+	return 162
+}
+func PxOnUpper() int32 {
+	return 163
+}
+func PxOffUpper() int32 {
+	return 164
+}
+func PxEvent() int32 {
+	return 165
+}
+func PxCategory() int32 {
+	return 166
+}
+func PxUsage() int32 {
+	return 167
+}
+func PxView() int32 {
+	return 168
+}
+func PxViewState() int32 {
+	return 169
+}
+func PxPrint() int32 {
+	return 170
+}
+func PxPrintState() int32 {
+	return 171
+}
+func PxExport() int32 {
+	return 172
+}
+func PxExportState() int32 {
+	return 173
+}
+func PxAllOn() int32 {
+	return 174
+}
+func PxAnyOn() int32 {
+	return 175
+}
+func PxAnyOff() int32 {
+	return 176
+}
+func PxAllOff() int32 {
+	return 177
+}
+func PxVe() int32 {
+	return 178
+}
+func PxAnd() int32 {
+	return 179
+}
+func PxOr() int32 {
+	return 180
+}
+func PxNot() int32 {
+	return 181
+}
+func PxUnchanged() int32 {
+	return 182
+}
+func PxShadingType() int32 {
+	return 183
+}
+func PxPatternType() int32 {
+	return 184
+}
+func PxExtend() int32 {
+	return 185
+}
 func PxEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "Annots")
@@ -1133,10 +1385,346 @@ func PxEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "Trapped")
 		return 1
 	}
+	if code == 102 {
+		port.TextAscii(t, "CalGray")
+		return 1
+	}
+	if code == 103 {
+		port.TextAscii(t, "CalRGB")
+		return 1
+	}
+	if code == 104 {
+		port.TextAscii(t, "Lab")
+		return 1
+	}
+	if code == 105 {
+		port.TextAscii(t, "ICCBased")
+		return 1
+	}
+	if code == 106 {
+		port.TextAscii(t, "Indexed")
+		return 1
+	}
+	if code == 107 {
+		port.TextAscii(t, "Separation")
+		return 1
+	}
+	if code == 108 {
+		port.TextAscii(t, "DeviceN")
+		return 1
+	}
+	if code == 109 {
+		port.TextAscii(t, "Alternate")
+		return 1
+	}
+	if code == 110 {
+		port.TextAscii(t, "WhitePoint")
+		return 1
+	}
+	if code == 111 {
+		port.TextAscii(t, "BlackPoint")
+		return 1
+	}
+	if code == 112 {
+		port.TextAscii(t, "Gamma")
+		return 1
+	}
+	if code == 113 {
+		port.TextAscii(t, "Range")
+		return 1
+	}
+	if code == 114 {
+		port.TextAscii(t, "None")
+		return 1
+	}
+	if code == 115 {
+		port.TextAscii(t, "All")
+		return 1
+	}
+	if code == 116 {
+		port.TextAscii(t, "G")
+		return 1
+	}
+	if code == 117 {
+		port.TextAscii(t, "RGB")
+		return 1
+	}
+	if code == 118 {
+		port.TextAscii(t, "CMYK")
+		return 1
+	}
+	if code == 119 {
+		port.TextAscii(t, "I")
+		return 1
+	}
+	if code == 120 {
+		port.TextAscii(t, "CS")
+		return 1
+	}
+	if code == 121 {
+		port.TextAscii(t, "IM")
+		return 1
+	}
+	if code == 122 {
+		port.TextAscii(t, "BPC")
+		return 1
+	}
+	if code == 123 {
+		port.TextAscii(t, "H")
+		return 1
+	}
+	if code == 124 {
+		port.TextAscii(t, "ImageMask")
+		return 1
+	}
+	if code == 125 {
+		port.TextAscii(t, "Mask")
+		return 1
+	}
+	if code == 126 {
+		port.TextAscii(t, "SMask")
+		return 1
+	}
+	if code == 127 {
+		port.TextAscii(t, "SMaskInData")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "FunctionType")
+		return 1
+	}
+	if code == 129 {
+		port.TextAscii(t, "Domain")
+		return 1
+	}
+	if code == 130 {
+		port.TextAscii(t, "C0")
+		return 1
+	}
+	if code == 131 {
+		port.TextAscii(t, "C1")
+		return 1
+	}
+	if code == 132 {
+		port.TextAscii(t, "Functions")
+		return 1
+	}
+	if code == 133 {
+		port.TextAscii(t, "Bounds")
+		return 1
+	}
+	if code == 134 {
+		port.TextAscii(t, "Encode")
+		return 1
+	}
+	if code == 135 {
+		port.TextAscii(t, "Decode")
+		return 1
+	}
+	if code == 136 {
+		port.TextAscii(t, "BitsPerSample")
+		return 1
+	}
+	if code == 137 {
+		port.TextAscii(t, "Order")
+		return 1
+	}
+	if code == 138 {
+		port.TextAscii(t, "BM")
+		return 1
+	}
+	if code == 139 {
+		port.TextAscii(t, "LW")
+		return 1
+	}
+	if code == 140 {
+		port.TextAscii(t, "BC")
+		return 1
+	}
+	if code == 141 {
+		port.TextAscii(t, "Normal")
+		return 1
+	}
+	if code == 142 {
+		port.TextAscii(t, "Compatible")
+		return 1
+	}
+	if code == 143 {
+		port.TextAscii(t, "Multiply")
+		return 1
+	}
+	if code == 144 {
+		port.TextAscii(t, "Overlay")
+		return 1
+	}
+	if code == 145 {
+		port.TextAscii(t, "Darken")
+		return 1
+	}
+	if code == 146 {
+		port.TextAscii(t, "Lighten")
+		return 1
+	}
+	if code == 147 {
+		port.TextAscii(t, "ColorDodge")
+		return 1
+	}
+	if code == 148 {
+		port.TextAscii(t, "ColorBurn")
+		return 1
+	}
+	if code == 149 {
+		port.TextAscii(t, "HardLight")
+		return 1
+	}
+	if code == 150 {
+		port.TextAscii(t, "SoftLight")
+		return 1
+	}
+	if code == 151 {
+		port.TextAscii(t, "Difference")
+		return 1
+	}
+	if code == 152 {
+		port.TextAscii(t, "Exclusion")
+		return 1
+	}
+	if code == 153 {
+		port.TextAscii(t, "Hue")
+		return 1
+	}
+	if code == 154 {
+		port.TextAscii(t, "Saturation")
+		return 1
+	}
+	if code == 155 {
+		port.TextAscii(t, "Color")
+		return 1
+	}
+	if code == 156 {
+		port.TextAscii(t, "Luminosity")
+		return 1
+	}
+	if code == 157 {
+		port.TextAscii(t, "Alpha")
+		return 1
+	}
+	if code == 158 {
+		port.TextAscii(t, "OCProperties")
+		return 1
+	}
+	if code == 159 {
+		port.TextAscii(t, "OCGs")
+		return 1
+	}
+	if code == 160 {
+		port.TextAscii(t, "OCG")
+		return 1
+	}
+	if code == 161 {
+		port.TextAscii(t, "OCMD")
+		return 1
+	}
+	if code == 162 {
+		port.TextAscii(t, "BaseState")
+		return 1
+	}
+	if code == 163 {
+		port.TextAscii(t, "ON")
+		return 1
+	}
+	if code == 164 {
+		port.TextAscii(t, "OFF")
+		return 1
+	}
+	if code == 165 {
+		port.TextAscii(t, "Event")
+		return 1
+	}
+	if code == 166 {
+		port.TextAscii(t, "Category")
+		return 1
+	}
+	if code == 167 {
+		port.TextAscii(t, "Usage")
+		return 1
+	}
+	if code == 168 {
+		port.TextAscii(t, "View")
+		return 1
+	}
+	if code == 169 {
+		port.TextAscii(t, "ViewState")
+		return 1
+	}
+	if code == 170 {
+		port.TextAscii(t, "Print")
+		return 1
+	}
+	if code == 171 {
+		port.TextAscii(t, "PrintState")
+		return 1
+	}
+	if code == 172 {
+		port.TextAscii(t, "Export")
+		return 1
+	}
+	if code == 173 {
+		port.TextAscii(t, "ExportState")
+		return 1
+	}
+	if code == 174 {
+		port.TextAscii(t, "AllOn")
+		return 1
+	}
+	if code == 175 {
+		port.TextAscii(t, "AnyOn")
+		return 1
+	}
+	if code == 176 {
+		port.TextAscii(t, "AnyOff")
+		return 1
+	}
+	if code == 177 {
+		port.TextAscii(t, "AllOff")
+		return 1
+	}
+	if code == 178 {
+		port.TextAscii(t, "VE")
+		return 1
+	}
+	if code == 179 {
+		port.TextAscii(t, "And")
+		return 1
+	}
+	if code == 180 {
+		port.TextAscii(t, "Or")
+		return 1
+	}
+	if code == 181 {
+		port.TextAscii(t, "Not")
+		return 1
+	}
+	if code == 182 {
+		port.TextAscii(t, "Unchanged")
+		return 1
+	}
+	if code == 183 {
+		port.TextAscii(t, "ShadingType")
+		return 1
+	}
+	if code == 184 {
+		port.TextAscii(t, "PatternType")
+		return 1
+	}
+	if code == 185 {
+		port.TextAscii(t, "Extend")
+		return 1
+	}
 	return 0
 }
 
-var PxChars [521]int32 = [521]int32{
+var PxChars [1036]int32 = [1036]int32{
 	65, 110, 110, 111, 116, 115, 65, 110, 110, 111, 116, 82, 101, 99, 116, 65,
 	83, 85, 82, 73, 71, 111, 84, 111, 71, 111, 84, 111, 82, 71, 111, 84,
 	111, 69, 76, 97, 117, 110, 99, 104, 78, 97, 109, 101, 100, 74, 97, 118,
@@ -1169,10 +1757,42 @@ var PxChars [521]int32 = [521]int32{
 	85, 70, 70, 83, 86, 105, 101, 119, 101, 114, 80, 114, 101, 102, 101, 114,
 	101, 110, 99, 101, 115, 68, 105, 115, 112, 108, 97, 121, 68, 111, 99, 84,
 	105, 116, 108, 101, 81, 117, 97, 100, 80, 111, 105, 110, 116, 115, 67, 65,
-	79, 67, 84, 114, 97, 112, 112, 101, 100,
+	79, 67, 84, 114, 97, 112, 112, 101, 100, 67, 97, 108, 71, 114, 97, 121,
+	67, 97, 108, 82, 71, 66, 76, 97, 98, 73, 67, 67, 66, 97, 115, 101,
+	100, 73, 110, 100, 101, 120, 101, 100, 83, 101, 112, 97, 114, 97, 116, 105,
+	111, 110, 68, 101, 118, 105, 99, 101, 78, 65, 108, 116, 101, 114, 110, 97,
+	116, 101, 87, 104, 105, 116, 101, 80, 111, 105, 110, 116, 66, 108, 97, 99,
+	107, 80, 111, 105, 110, 116, 71, 97, 109, 109, 97, 82, 97, 110, 103, 101,
+	78, 111, 110, 101, 65, 108, 108, 71, 82, 71, 66, 67, 77, 89, 75, 73,
+	67, 83, 73, 77, 66, 80, 67, 72, 73, 109, 97, 103, 101, 77, 97, 115,
+	107, 77, 97, 115, 107, 83, 77, 97, 115, 107, 83, 77, 97, 115, 107, 73,
+	110, 68, 97, 116, 97, 70, 117, 110, 99, 116, 105, 111, 110, 84, 121, 112,
+	101, 68, 111, 109, 97, 105, 110, 67, 48, 67, 49, 70, 117, 110, 99, 116,
+	105, 111, 110, 115, 66, 111, 117, 110, 100, 115, 69, 110, 99, 111, 100, 101,
+	68, 101, 99, 111, 100, 101, 66, 105, 116, 115, 80, 101, 114, 83, 97, 109,
+	112, 108, 101, 79, 114, 100, 101, 114, 66, 77, 76, 87, 66, 67, 78, 111,
+	114, 109, 97, 108, 67, 111, 109, 112, 97, 116, 105, 98, 108, 101, 77, 117,
+	108, 116, 105, 112, 108, 121, 79, 118, 101, 114, 108, 97, 121, 68, 97, 114,
+	107, 101, 110, 76, 105, 103, 104, 116, 101, 110, 67, 111, 108, 111, 114, 68,
+	111, 100, 103, 101, 67, 111, 108, 111, 114, 66, 117, 114, 110, 72, 97, 114,
+	100, 76, 105, 103, 104, 116, 83, 111, 102, 116, 76, 105, 103, 104, 116, 68,
+	105, 102, 102, 101, 114, 101, 110, 99, 101, 69, 120, 99, 108, 117, 115, 105,
+	111, 110, 72, 117, 101, 83, 97, 116, 117, 114, 97, 116, 105, 111, 110, 67,
+	111, 108, 111, 114, 76, 117, 109, 105, 110, 111, 115, 105, 116, 121, 65, 108,
+	112, 104, 97, 79, 67, 80, 114, 111, 112, 101, 114, 116, 105, 101, 115, 79,
+	67, 71, 115, 79, 67, 71, 79, 67, 77, 68, 66, 97, 115, 101, 83, 116,
+	97, 116, 101, 79, 78, 79, 70, 70, 69, 118, 101, 110, 116, 67, 97, 116,
+	101, 103, 111, 114, 121, 85, 115, 97, 103, 101, 86, 105, 101, 119, 86, 105,
+	101, 119, 83, 116, 97, 116, 101, 80, 114, 105, 110, 116, 80, 114, 105, 110,
+	116, 83, 116, 97, 116, 101, 69, 120, 112, 111, 114, 116, 69, 120, 112, 111,
+	114, 116, 83, 116, 97, 116, 101, 65, 108, 108, 79, 110, 65, 110, 121, 79,
+	110, 65, 110, 121, 79, 102, 102, 65, 108, 108, 79, 102, 102, 86, 69, 65,
+	110, 100, 79, 114, 78, 111, 116, 85, 110, 99, 104, 97, 110, 103, 101, 100,
+	83, 104, 97, 100, 105, 110, 103, 84, 121, 112, 101, 80, 97, 116, 116, 101,
+	114, 110, 84, 121, 112, 101, 69, 120, 116, 101, 110, 100,
 }
 
-var PxSpan [204]int32 = [204]int32{
+var PxSpan [372]int32 = [372]int32{
 	0, 6,
 	6, 5,
 	11, 4,
@@ -1275,4 +1895,88 @@ var PxSpan [204]int32 = [204]int32{
 	510, 2,
 	512, 2,
 	514, 7,
+	521, 7,
+	528, 6,
+	534, 3,
+	537, 8,
+	545, 7,
+	552, 10,
+	562, 7,
+	569, 9,
+	578, 10,
+	588, 10,
+	598, 5,
+	603, 5,
+	608, 4,
+	612, 3,
+	615, 1,
+	616, 3,
+	619, 4,
+	623, 1,
+	624, 2,
+	626, 2,
+	628, 3,
+	631, 1,
+	632, 9,
+	641, 4,
+	645, 5,
+	650, 11,
+	661, 12,
+	673, 6,
+	679, 2,
+	681, 2,
+	683, 9,
+	692, 6,
+	698, 6,
+	704, 6,
+	710, 13,
+	723, 5,
+	728, 2,
+	730, 2,
+	732, 2,
+	734, 6,
+	740, 10,
+	750, 8,
+	758, 7,
+	765, 6,
+	771, 7,
+	778, 10,
+	788, 9,
+	797, 9,
+	806, 9,
+	815, 10,
+	825, 9,
+	834, 3,
+	837, 10,
+	847, 5,
+	852, 10,
+	862, 5,
+	867, 12,
+	879, 4,
+	883, 3,
+	886, 4,
+	890, 9,
+	899, 2,
+	901, 3,
+	904, 5,
+	909, 8,
+	917, 5,
+	922, 4,
+	926, 9,
+	935, 5,
+	940, 10,
+	950, 6,
+	956, 11,
+	967, 5,
+	972, 5,
+	977, 6,
+	983, 6,
+	989, 2,
+	991, 3,
+	994, 2,
+	996, 3,
+	999, 9,
+	1008, 11,
+	1019, 11,
+	1030, 6,
 }

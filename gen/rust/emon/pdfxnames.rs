@@ -714,6 +714,258 @@ pub fn px_oc() -> i32 {
 pub fn px_trapped() -> i32 {
     return 101;
 }
+pub fn px_cal_gray() -> i32 {
+    return 102;
+}
+pub fn px_cal_rgb() -> i32 {
+    return 103;
+}
+pub fn px_lab() -> i32 {
+    return 104;
+}
+pub fn px_icc_based() -> i32 {
+    return 105;
+}
+pub fn px_indexed() -> i32 {
+    return 106;
+}
+pub fn px_separation() -> i32 {
+    return 107;
+}
+pub fn px_device_n() -> i32 {
+    return 108;
+}
+pub fn px_alternate() -> i32 {
+    return 109;
+}
+pub fn px_white_point() -> i32 {
+    return 110;
+}
+pub fn px_black_point() -> i32 {
+    return 111;
+}
+pub fn px_gamma() -> i32 {
+    return 112;
+}
+pub fn px_range() -> i32 {
+    return 113;
+}
+pub fn px_none() -> i32 {
+    return 114;
+}
+pub fn px_all() -> i32 {
+    return 115;
+}
+pub fn px_g() -> i32 {
+    return 116;
+}
+pub fn px_rgb() -> i32 {
+    return 117;
+}
+pub fn px_cmyk() -> i32 {
+    return 118;
+}
+pub fn px_i() -> i32 {
+    return 119;
+}
+pub fn px_cs() -> i32 {
+    return 120;
+}
+pub fn px_im() -> i32 {
+    return 121;
+}
+pub fn px_bpc() -> i32 {
+    return 122;
+}
+pub fn px_h() -> i32 {
+    return 123;
+}
+pub fn px_image_mask() -> i32 {
+    return 124;
+}
+pub fn px_mask() -> i32 {
+    return 125;
+}
+pub fn px_s_mask() -> i32 {
+    return 126;
+}
+pub fn px_s_mask_in_data() -> i32 {
+    return 127;
+}
+pub fn px_function_type() -> i32 {
+    return 128;
+}
+pub fn px_domain() -> i32 {
+    return 129;
+}
+pub fn px_c0() -> i32 {
+    return 130;
+}
+pub fn px_c1() -> i32 {
+    return 131;
+}
+pub fn px_functions() -> i32 {
+    return 132;
+}
+pub fn px_bounds() -> i32 {
+    return 133;
+}
+pub fn px_encode() -> i32 {
+    return 134;
+}
+pub fn px_decode() -> i32 {
+    return 135;
+}
+pub fn px_bits_per_sample() -> i32 {
+    return 136;
+}
+pub fn px_order() -> i32 {
+    return 137;
+}
+pub fn px_bm() -> i32 {
+    return 138;
+}
+pub fn px_lw() -> i32 {
+    return 139;
+}
+pub fn px_bc() -> i32 {
+    return 140;
+}
+pub fn px_normal() -> i32 {
+    return 141;
+}
+pub fn px_compatible() -> i32 {
+    return 142;
+}
+pub fn px_multiply() -> i32 {
+    return 143;
+}
+pub fn px_overlay() -> i32 {
+    return 144;
+}
+pub fn px_darken() -> i32 {
+    return 145;
+}
+pub fn px_lighten() -> i32 {
+    return 146;
+}
+pub fn px_color_dodge() -> i32 {
+    return 147;
+}
+pub fn px_color_burn() -> i32 {
+    return 148;
+}
+pub fn px_hard_light() -> i32 {
+    return 149;
+}
+pub fn px_soft_light() -> i32 {
+    return 150;
+}
+pub fn px_difference() -> i32 {
+    return 151;
+}
+pub fn px_exclusion() -> i32 {
+    return 152;
+}
+pub fn px_hue() -> i32 {
+    return 153;
+}
+pub fn px_saturation() -> i32 {
+    return 154;
+}
+pub fn px_color() -> i32 {
+    return 155;
+}
+pub fn px_luminosity() -> i32 {
+    return 156;
+}
+pub fn px_alpha() -> i32 {
+    return 157;
+}
+pub fn px_oc_properties() -> i32 {
+    return 158;
+}
+pub fn px_ocgs() -> i32 {
+    return 159;
+}
+pub fn px_ocg() -> i32 {
+    return 160;
+}
+pub fn px_ocmd() -> i32 {
+    return 161;
+}
+pub fn px_base_state() -> i32 {
+    return 162;
+}
+pub fn px_on_upper() -> i32 {
+    return 163;
+}
+pub fn px_off_upper() -> i32 {
+    return 164;
+}
+pub fn px_event() -> i32 {
+    return 165;
+}
+pub fn px_category() -> i32 {
+    return 166;
+}
+pub fn px_usage() -> i32 {
+    return 167;
+}
+pub fn px_view() -> i32 {
+    return 168;
+}
+pub fn px_view_state() -> i32 {
+    return 169;
+}
+pub fn px_print() -> i32 {
+    return 170;
+}
+pub fn px_print_state() -> i32 {
+    return 171;
+}
+pub fn px_export() -> i32 {
+    return 172;
+}
+pub fn px_export_state() -> i32 {
+    return 173;
+}
+pub fn px_all_on() -> i32 {
+    return 174;
+}
+pub fn px_any_on() -> i32 {
+    return 175;
+}
+pub fn px_any_off() -> i32 {
+    return 176;
+}
+pub fn px_all_off() -> i32 {
+    return 177;
+}
+pub fn px_ve() -> i32 {
+    return 178;
+}
+pub fn px_and() -> i32 {
+    return 179;
+}
+pub fn px_or() -> i32 {
+    return 180;
+}
+pub fn px_not() -> i32 {
+    return 181;
+}
+pub fn px_unchanged() -> i32 {
+    return 182;
+}
+pub fn px_shading_type() -> i32 {
+    return 183;
+}
+pub fn px_pattern_type() -> i32 {
+    return 184;
+}
+pub fn px_extend() -> i32 {
+    return 185;
+}
 pub fn px_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "Annots");
@@ -1123,9 +1375,345 @@ pub fn px_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "Trapped");
         return 1;
     }
+    if code == 102 {
+        crate::port::text_ascii(t, "CalGray");
+        return 1;
+    }
+    if code == 103 {
+        crate::port::text_ascii(t, "CalRGB");
+        return 1;
+    }
+    if code == 104 {
+        crate::port::text_ascii(t, "Lab");
+        return 1;
+    }
+    if code == 105 {
+        crate::port::text_ascii(t, "ICCBased");
+        return 1;
+    }
+    if code == 106 {
+        crate::port::text_ascii(t, "Indexed");
+        return 1;
+    }
+    if code == 107 {
+        crate::port::text_ascii(t, "Separation");
+        return 1;
+    }
+    if code == 108 {
+        crate::port::text_ascii(t, "DeviceN");
+        return 1;
+    }
+    if code == 109 {
+        crate::port::text_ascii(t, "Alternate");
+        return 1;
+    }
+    if code == 110 {
+        crate::port::text_ascii(t, "WhitePoint");
+        return 1;
+    }
+    if code == 111 {
+        crate::port::text_ascii(t, "BlackPoint");
+        return 1;
+    }
+    if code == 112 {
+        crate::port::text_ascii(t, "Gamma");
+        return 1;
+    }
+    if code == 113 {
+        crate::port::text_ascii(t, "Range");
+        return 1;
+    }
+    if code == 114 {
+        crate::port::text_ascii(t, "None");
+        return 1;
+    }
+    if code == 115 {
+        crate::port::text_ascii(t, "All");
+        return 1;
+    }
+    if code == 116 {
+        crate::port::text_ascii(t, "G");
+        return 1;
+    }
+    if code == 117 {
+        crate::port::text_ascii(t, "RGB");
+        return 1;
+    }
+    if code == 118 {
+        crate::port::text_ascii(t, "CMYK");
+        return 1;
+    }
+    if code == 119 {
+        crate::port::text_ascii(t, "I");
+        return 1;
+    }
+    if code == 120 {
+        crate::port::text_ascii(t, "CS");
+        return 1;
+    }
+    if code == 121 {
+        crate::port::text_ascii(t, "IM");
+        return 1;
+    }
+    if code == 122 {
+        crate::port::text_ascii(t, "BPC");
+        return 1;
+    }
+    if code == 123 {
+        crate::port::text_ascii(t, "H");
+        return 1;
+    }
+    if code == 124 {
+        crate::port::text_ascii(t, "ImageMask");
+        return 1;
+    }
+    if code == 125 {
+        crate::port::text_ascii(t, "Mask");
+        return 1;
+    }
+    if code == 126 {
+        crate::port::text_ascii(t, "SMask");
+        return 1;
+    }
+    if code == 127 {
+        crate::port::text_ascii(t, "SMaskInData");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "FunctionType");
+        return 1;
+    }
+    if code == 129 {
+        crate::port::text_ascii(t, "Domain");
+        return 1;
+    }
+    if code == 130 {
+        crate::port::text_ascii(t, "C0");
+        return 1;
+    }
+    if code == 131 {
+        crate::port::text_ascii(t, "C1");
+        return 1;
+    }
+    if code == 132 {
+        crate::port::text_ascii(t, "Functions");
+        return 1;
+    }
+    if code == 133 {
+        crate::port::text_ascii(t, "Bounds");
+        return 1;
+    }
+    if code == 134 {
+        crate::port::text_ascii(t, "Encode");
+        return 1;
+    }
+    if code == 135 {
+        crate::port::text_ascii(t, "Decode");
+        return 1;
+    }
+    if code == 136 {
+        crate::port::text_ascii(t, "BitsPerSample");
+        return 1;
+    }
+    if code == 137 {
+        crate::port::text_ascii(t, "Order");
+        return 1;
+    }
+    if code == 138 {
+        crate::port::text_ascii(t, "BM");
+        return 1;
+    }
+    if code == 139 {
+        crate::port::text_ascii(t, "LW");
+        return 1;
+    }
+    if code == 140 {
+        crate::port::text_ascii(t, "BC");
+        return 1;
+    }
+    if code == 141 {
+        crate::port::text_ascii(t, "Normal");
+        return 1;
+    }
+    if code == 142 {
+        crate::port::text_ascii(t, "Compatible");
+        return 1;
+    }
+    if code == 143 {
+        crate::port::text_ascii(t, "Multiply");
+        return 1;
+    }
+    if code == 144 {
+        crate::port::text_ascii(t, "Overlay");
+        return 1;
+    }
+    if code == 145 {
+        crate::port::text_ascii(t, "Darken");
+        return 1;
+    }
+    if code == 146 {
+        crate::port::text_ascii(t, "Lighten");
+        return 1;
+    }
+    if code == 147 {
+        crate::port::text_ascii(t, "ColorDodge");
+        return 1;
+    }
+    if code == 148 {
+        crate::port::text_ascii(t, "ColorBurn");
+        return 1;
+    }
+    if code == 149 {
+        crate::port::text_ascii(t, "HardLight");
+        return 1;
+    }
+    if code == 150 {
+        crate::port::text_ascii(t, "SoftLight");
+        return 1;
+    }
+    if code == 151 {
+        crate::port::text_ascii(t, "Difference");
+        return 1;
+    }
+    if code == 152 {
+        crate::port::text_ascii(t, "Exclusion");
+        return 1;
+    }
+    if code == 153 {
+        crate::port::text_ascii(t, "Hue");
+        return 1;
+    }
+    if code == 154 {
+        crate::port::text_ascii(t, "Saturation");
+        return 1;
+    }
+    if code == 155 {
+        crate::port::text_ascii(t, "Color");
+        return 1;
+    }
+    if code == 156 {
+        crate::port::text_ascii(t, "Luminosity");
+        return 1;
+    }
+    if code == 157 {
+        crate::port::text_ascii(t, "Alpha");
+        return 1;
+    }
+    if code == 158 {
+        crate::port::text_ascii(t, "OCProperties");
+        return 1;
+    }
+    if code == 159 {
+        crate::port::text_ascii(t, "OCGs");
+        return 1;
+    }
+    if code == 160 {
+        crate::port::text_ascii(t, "OCG");
+        return 1;
+    }
+    if code == 161 {
+        crate::port::text_ascii(t, "OCMD");
+        return 1;
+    }
+    if code == 162 {
+        crate::port::text_ascii(t, "BaseState");
+        return 1;
+    }
+    if code == 163 {
+        crate::port::text_ascii(t, "ON");
+        return 1;
+    }
+    if code == 164 {
+        crate::port::text_ascii(t, "OFF");
+        return 1;
+    }
+    if code == 165 {
+        crate::port::text_ascii(t, "Event");
+        return 1;
+    }
+    if code == 166 {
+        crate::port::text_ascii(t, "Category");
+        return 1;
+    }
+    if code == 167 {
+        crate::port::text_ascii(t, "Usage");
+        return 1;
+    }
+    if code == 168 {
+        crate::port::text_ascii(t, "View");
+        return 1;
+    }
+    if code == 169 {
+        crate::port::text_ascii(t, "ViewState");
+        return 1;
+    }
+    if code == 170 {
+        crate::port::text_ascii(t, "Print");
+        return 1;
+    }
+    if code == 171 {
+        crate::port::text_ascii(t, "PrintState");
+        return 1;
+    }
+    if code == 172 {
+        crate::port::text_ascii(t, "Export");
+        return 1;
+    }
+    if code == 173 {
+        crate::port::text_ascii(t, "ExportState");
+        return 1;
+    }
+    if code == 174 {
+        crate::port::text_ascii(t, "AllOn");
+        return 1;
+    }
+    if code == 175 {
+        crate::port::text_ascii(t, "AnyOn");
+        return 1;
+    }
+    if code == 176 {
+        crate::port::text_ascii(t, "AnyOff");
+        return 1;
+    }
+    if code == 177 {
+        crate::port::text_ascii(t, "AllOff");
+        return 1;
+    }
+    if code == 178 {
+        crate::port::text_ascii(t, "VE");
+        return 1;
+    }
+    if code == 179 {
+        crate::port::text_ascii(t, "And");
+        return 1;
+    }
+    if code == 180 {
+        crate::port::text_ascii(t, "Or");
+        return 1;
+    }
+    if code == 181 {
+        crate::port::text_ascii(t, "Not");
+        return 1;
+    }
+    if code == 182 {
+        crate::port::text_ascii(t, "Unchanged");
+        return 1;
+    }
+    if code == 183 {
+        crate::port::text_ascii(t, "ShadingType");
+        return 1;
+    }
+    if code == 184 {
+        crate::port::text_ascii(t, "PatternType");
+        return 1;
+    }
+    if code == 185 {
+        crate::port::text_ascii(t, "Extend");
+        return 1;
+    }
     return 0;
 }
-pub static PX_CHARS: [i32; 521] = [
+pub static PX_CHARS: [i32; 1036] = [
     65, 110, 110, 111, 116, 115, 65, 110, 110, 111, 116, 82, 101, 99, 116, 65,
     83, 85, 82, 73, 71, 111, 84, 111, 71, 111, 84, 111, 82, 71, 111, 84,
     111, 69, 76, 97, 117, 110, 99, 104, 78, 97, 109, 101, 100, 74, 97, 118,
@@ -1158,9 +1746,41 @@ pub static PX_CHARS: [i32; 521] = [
     85, 70, 70, 83, 86, 105, 101, 119, 101, 114, 80, 114, 101, 102, 101, 114,
     101, 110, 99, 101, 115, 68, 105, 115, 112, 108, 97, 121, 68, 111, 99, 84,
     105, 116, 108, 101, 81, 117, 97, 100, 80, 111, 105, 110, 116, 115, 67, 65,
-    79, 67, 84, 114, 97, 112, 112, 101, 100
+    79, 67, 84, 114, 97, 112, 112, 101, 100, 67, 97, 108, 71, 114, 97, 121,
+    67, 97, 108, 82, 71, 66, 76, 97, 98, 73, 67, 67, 66, 97, 115, 101,
+    100, 73, 110, 100, 101, 120, 101, 100, 83, 101, 112, 97, 114, 97, 116, 105,
+    111, 110, 68, 101, 118, 105, 99, 101, 78, 65, 108, 116, 101, 114, 110, 97,
+    116, 101, 87, 104, 105, 116, 101, 80, 111, 105, 110, 116, 66, 108, 97, 99,
+    107, 80, 111, 105, 110, 116, 71, 97, 109, 109, 97, 82, 97, 110, 103, 101,
+    78, 111, 110, 101, 65, 108, 108, 71, 82, 71, 66, 67, 77, 89, 75, 73,
+    67, 83, 73, 77, 66, 80, 67, 72, 73, 109, 97, 103, 101, 77, 97, 115,
+    107, 77, 97, 115, 107, 83, 77, 97, 115, 107, 83, 77, 97, 115, 107, 73,
+    110, 68, 97, 116, 97, 70, 117, 110, 99, 116, 105, 111, 110, 84, 121, 112,
+    101, 68, 111, 109, 97, 105, 110, 67, 48, 67, 49, 70, 117, 110, 99, 116,
+    105, 111, 110, 115, 66, 111, 117, 110, 100, 115, 69, 110, 99, 111, 100, 101,
+    68, 101, 99, 111, 100, 101, 66, 105, 116, 115, 80, 101, 114, 83, 97, 109,
+    112, 108, 101, 79, 114, 100, 101, 114, 66, 77, 76, 87, 66, 67, 78, 111,
+    114, 109, 97, 108, 67, 111, 109, 112, 97, 116, 105, 98, 108, 101, 77, 117,
+    108, 116, 105, 112, 108, 121, 79, 118, 101, 114, 108, 97, 121, 68, 97, 114,
+    107, 101, 110, 76, 105, 103, 104, 116, 101, 110, 67, 111, 108, 111, 114, 68,
+    111, 100, 103, 101, 67, 111, 108, 111, 114, 66, 117, 114, 110, 72, 97, 114,
+    100, 76, 105, 103, 104, 116, 83, 111, 102, 116, 76, 105, 103, 104, 116, 68,
+    105, 102, 102, 101, 114, 101, 110, 99, 101, 69, 120, 99, 108, 117, 115, 105,
+    111, 110, 72, 117, 101, 83, 97, 116, 117, 114, 97, 116, 105, 111, 110, 67,
+    111, 108, 111, 114, 76, 117, 109, 105, 110, 111, 115, 105, 116, 121, 65, 108,
+    112, 104, 97, 79, 67, 80, 114, 111, 112, 101, 114, 116, 105, 101, 115, 79,
+    67, 71, 115, 79, 67, 71, 79, 67, 77, 68, 66, 97, 115, 101, 83, 116,
+    97, 116, 101, 79, 78, 79, 70, 70, 69, 118, 101, 110, 116, 67, 97, 116,
+    101, 103, 111, 114, 121, 85, 115, 97, 103, 101, 86, 105, 101, 119, 86, 105,
+    101, 119, 83, 116, 97, 116, 101, 80, 114, 105, 110, 116, 80, 114, 105, 110,
+    116, 83, 116, 97, 116, 101, 69, 120, 112, 111, 114, 116, 69, 120, 112, 111,
+    114, 116, 83, 116, 97, 116, 101, 65, 108, 108, 79, 110, 65, 110, 121, 79,
+    110, 65, 110, 121, 79, 102, 102, 65, 108, 108, 79, 102, 102, 86, 69, 65,
+    110, 100, 79, 114, 78, 111, 116, 85, 110, 99, 104, 97, 110, 103, 101, 100,
+    83, 104, 97, 100, 105, 110, 103, 84, 121, 112, 101, 80, 97, 116, 116, 101,
+    114, 110, 84, 121, 112, 101, 69, 120, 116, 101, 110, 100
 ];
-pub static PX_SPAN: [i32; 204] = [
+pub static PX_SPAN: [i32; 372] = [
     0, 6,
     6, 5,
     11, 4,
@@ -1262,5 +1882,89 @@ pub static PX_SPAN: [i32; 204] = [
     500, 10,
     510, 2,
     512, 2,
-    514, 7
+    514, 7,
+    521, 7,
+    528, 6,
+    534, 3,
+    537, 8,
+    545, 7,
+    552, 10,
+    562, 7,
+    569, 9,
+    578, 10,
+    588, 10,
+    598, 5,
+    603, 5,
+    608, 4,
+    612, 3,
+    615, 1,
+    616, 3,
+    619, 4,
+    623, 1,
+    624, 2,
+    626, 2,
+    628, 3,
+    631, 1,
+    632, 9,
+    641, 4,
+    645, 5,
+    650, 11,
+    661, 12,
+    673, 6,
+    679, 2,
+    681, 2,
+    683, 9,
+    692, 6,
+    698, 6,
+    704, 6,
+    710, 13,
+    723, 5,
+    728, 2,
+    730, 2,
+    732, 2,
+    734, 6,
+    740, 10,
+    750, 8,
+    758, 7,
+    765, 6,
+    771, 7,
+    778, 10,
+    788, 9,
+    797, 9,
+    806, 9,
+    815, 10,
+    825, 9,
+    834, 3,
+    837, 10,
+    847, 5,
+    852, 10,
+    862, 5,
+    867, 12,
+    879, 4,
+    883, 3,
+    886, 4,
+    890, 9,
+    899, 2,
+    901, 3,
+    904, 5,
+    909, 8,
+    917, 5,
+    922, 4,
+    926, 9,
+    935, 5,
+    940, 10,
+    950, 6,
+    956, 11,
+    967, 5,
+    972, 5,
+    977, 6,
+    983, 6,
+    989, 2,
+    991, 3,
+    994, 2,
+    996, 3,
+    999, 9,
+    1008, 11,
+    1019, 11,
+    1030, 6
 ];

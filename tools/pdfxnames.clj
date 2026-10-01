@@ -26,7 +26,19 @@
    "NM" "Name" "M" "Reason" "Location" "ContactInfo" "ByteRange" "SubFilter" "Cert"
    "DocTimeStamp" "Perms" "DocMDP" "FixedPrint"
    "Last" "Next" "C" "Nums" "Limits" "P" "St" ["R" "r-upper"] ["r" "r-lower"] ["a" "a-lower"]
-   "UF" "FS" "ViewerPreferences" "DisplayDocTitle" "QuadPoints" "CA" "OC" "Trapped"])
+   "UF" "FS" "ViewerPreferences" "DisplayDocTitle" "QuadPoints" "CA" "OC" "Trapped"
+   ;; P3.5, P3.6 (graphics state, colour spaces, functions, optional content, images)
+   "CalGray" "CalRGB" "Lab" "ICCBased" "Indexed" "Separation" "DeviceN" "Alternate"
+   "WhitePoint" "BlackPoint" "Gamma" "Range" "None" "All"
+   "G" "RGB" "CMYK" "I" "CS" "IM" "BPC" "H" "ImageMask" "Mask" "SMask" "SMaskInData"
+   "FunctionType" "Domain" "C0" "C1" "Functions" "Bounds" "Encode" "Decode" "BitsPerSample" "Order"
+   ["BM" "bm"] ["LW" "lw"] ["BC" "bc"] "Normal" "Compatible" "Multiply" "Overlay"
+   "Darken" "Lighten" "ColorDodge" "ColorBurn" "HardLight" "SoftLight" "Difference"
+   "Exclusion" "Hue" "Saturation" "Color" "Luminosity" "Alpha"
+   ["OCProperties" "oc-properties"] ["OCGs" "ocgs"] "OCG" "OCMD" "BaseState" ["ON" "on-upper"] ["OFF" "off-upper"]
+   "Event" "Category" "Usage" "View" "ViewState" "Print" "PrintState" "Export" "ExportState"
+   "AllOn" "AnyOn" "AnyOff" "AllOff" ["VE" "ve"] "And" "Or" "Not" "Unchanged"
+   "ShadingType" "PatternType" "Extend"])
 
 ;; XMP (P3.9): namespace URIs and the local names the reader meets, as [symbol string].
 (def xstrings

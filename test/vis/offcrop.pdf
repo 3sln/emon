@@ -1,0 +1,41 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /CropBox [100 100 500 700] /Resources << /Font << /F1 10 0 R >>  >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 202 >>
+stream
+q BT /F1 14 Tf 150 650 Td (In the crop box) Tj ET Q
+q BT /F1 14 Tf 5 650 Td (Left of crop) Tj ET Q
+q BT /F1 14 Tf 150 750 Td (Above the crop box) Tj ET Q
+q BT /F1 14 Tf 150 300 Td (Inside again) Tj ET Q
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000276 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000530 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+628
+%%EOF

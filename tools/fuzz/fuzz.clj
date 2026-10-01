@@ -255,7 +255,7 @@
 ;; ---------------------------------------------------------------- fixtures
 
 (defn fixture-files []
-  (->> (concat (fs/glob "test/pdf" "*.pdf") (fs/glob "test/pdf/p3" "*.pdf") (fs/glob "test/corpus/synth" "**/*.pdf"))
+  (->> (concat (fs/glob "test/pdf" "*.pdf") (fs/glob "test/pdf/p3" "*.pdf") (fs/glob "test/vis" "*.pdf") (fs/glob "test/corpus/synth" "**/*.pdf"))
        (map str) sort vec))
 
 (defn gen-case

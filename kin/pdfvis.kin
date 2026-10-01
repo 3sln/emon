@@ -1,0 +1,465 @@
+;; Visibility classification (P3.6; SPEC 8.1, 8.4.3; D134, D137-D139).
+;; emon's own module (D039).
+;;
+;;   (pv-page gl mk pa im pw ph g0 p0 i0)   after a page's content has been read
+;;
+;; WHAT IT DECIDES. For every glyph and every image the page painted (the rows from g0, i0 on) it fills the
+;; evidence's `vis` (why it is not visible: `clipped`, `offpage`, `white-on-white`, `zero-size`, `occluded`,
+;; `ocg-hidden`, `transparent`; 0 when none of the checks that ran failed), `vby` (the `z` of the object that
+;; covers it, for `occluded`) and `vchk` (the checks that ran, one bit each: clip 1, offpage 2, white 4,
+;; zero-size 8, occlusion 16, ocg 32, transparent 64; the interpreter already set 128 for a non-Normal
+;; blend mode and 256 for a soft mask in force). `vis` names the FIRST check that failed, in that order, and
+;; a check that is not reached after a failure has not run (its bit is clear). So `vis` 0 means "passed what
+;; `vchk` says ran", never "visible" outright.
+;;
+;; RENDER MODE 3 AND 7 ARE NOT A CLASS (SPEC 8.1, 8.4.3: `hidden-text` is a SOURCE). A glyph of such a mode paints
+;; nothing, so the checks about paint (white, occlusion, transparent) do not apply to it and a hidden OCR layer
+;; over a scan is never "occluded" by the scan it describes or "white" on it; its geometry is still checked
+;; (a hidden glyph that is off the page or clipped away is junk of another kind).
+;;
+;; THE CHECKS, each conservative: a verdict of invisible is given only when it is certain from what the
+;; interpreter recorded, and "cannot tell" is visible.
+;;   clip       the glyph's cell lies outside the box of the clip in force (a `paths` row: its box is the
+;;              INTERSECTION of every clip on its chain, D134), with no overlap at all
+;;   offpage    the cell lies outside the page (the crop box, in page space), with no overlap at all
+;;   white      the ink is the colour of what is behind it: for fill modes the fill, for stroke modes the stroke,
+;;              for both modes both. The backdrop is the page's white, or the colour of the NEAREST EARLIER
+;;              opaque axis-aligned rectangle fill that covers the whole glyph; any other earlier paint that
+;;              touches the glyph (an image, a shading, a pattern, a non-rectangle, a translucent or blended
+;;              fill, a partial cover) makes the backdrop unknown and the check silent. Colours are equal
+;;              within PV_TOL per channel; an unknown ink colour (a pattern) is never equal to anything.
+;;   zero-size  the glyph's size is under one point (zero included): ZERO_SIZE_CPT
+;;   occlusion  a LATER paint, opaque and exactly known (an axis-aligned rectangle fill with alpha 1, no blend
+;;              mode, no soft mask, a known colour, itself visible; an image that is no mask, has no
+;;              /SMask or /Mask, alpha 1 and is axis-aligned), covers the glyph's visible cell: `vby` is
+;;              its `z`
+;;   ocg        an enclosing optional-content span is off by default (the span's `ocgdef` is 0)
+;;   transparent  every painted component's alpha is 0
+;; A paint's own region is its box intersected with the box of its clip, with a stroked rectangle's box
+;; shrunk by half its width. COVER_SLACK absorbs the centipoint rounding of two boxes that meet.
+;;
+;; BOUNDS. Looking for what is behind a glyph and what is above it visits at most PV_SCAN rows each way, so a
+;; page of a million paths costs a bounded amount: past that the answer is "cannot tell" (visible).
+(ns emon.pdfvis
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-at cells-set]]
+            [emon.evidence :refer [gl-count gl-get gl-set mk-get pa-count pa-get im-count im-get im-set
+                                   ch-x0 ch-y0 ch-x1 ch-y1
+                                   gf-size gf-mode gf-fill gf-stroke gf-falpha gf-salpha gf-z gf-clip gf-mark
+                                   gf-vis gf-vby gf-vchk
+                                   pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-width pf-falpha pf-flags pf-z
+                                   pf-clip pf-mark
+                                   mf-x0 mf-y0 mf-x1 mf-y1 mf-alpha mf-flags mf-rot mf-skewed mf-z mf-clip
+                                   mf-mark mf-vis mf-vby mf-vchk
+                                   mkf-kind mkf-ocgdef mkf-parent
+                                   mk-optional-content pa-rect
+                                   vz-clipped vz-offpage vz-white vz-zero-size vz-occluded vz-ocg-hidden
+                                   vz-transparent
+                                   vc-clip vc-offpage vc-white vc-zero-size vc-occlusion vc-ocg vc-transparent
+                                   pg-filled pg-stroked pg-shading pg-pattern pg-blend pg-softmask pg-clip
+                                   mg-mask mg-smask mg-masked mg-blend mg-softmask]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defconst ^I32 PV_SCAN 4096)
+(defconst ^I32 PV_TOL 4)
+(defconst ^I32 ZERO_SIZE_CPT 100)
+(defconst ^I32 COVER_SLACK 2)
+(defconst ^I32 PV_BIG 2000000000)
+
+;; ------------------------------------------------------------------ geometry
+
+(defn ^I32 pv-hit [^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "1 when two boxes overlap with a positive area.")
+  (if (and (< x0 bx1) (and (< bx0 x1) (and (< y0 by1) (< by0 y1)))) (return 1))
+  (return 0))
+
+(defn ^I32 pv-covers [^I32 ox0 ^I32 oy0 ^I32 ox1 ^I32 oy1 ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when the outer box contains the inner, within COVER_SLACK.")
+  (if (and (<= ox0 (+ x0 COVER_SLACK)) (and (<= oy0 (+ y0 COVER_SLACK))
+           (and (>= ox1 (- x1 COVER_SLACK)) (>= oy1 (- y1 COVER_SLACK)))))
+    (return 1))
+  (return 0))
+
+(defn ^I32 pv-clip-k [^:mut ^Cells pa ^I32 c ^I32 k]
+  (comment "Component k (0 x0, 1 y0, 2 x1, 3 y1) of clip row c's box; the whole plane when c is -1.")
+  (if (< c 0)
+    (do (if (< k 2) (return (- 0 PV_BIG)))
+        (return PV_BIG)))
+  (if (== k 0) (return (pa-get pa c (pf-x0))))
+  (if (== k 1) (return (pa-get pa c (pf-y0))))
+  (if (== k 2) (return (pa-get pa c (pf-x1))))
+  (return (pa-get pa c (pf-y1))))
+
+(defn ^I32 pv-max [^I32 p ^I32 q]
+  (if (> p q) (return p))
+  (return q))
+
+(defn ^I32 pv-min [^I32 p ^I32 q]
+  (if (< p q) (return p))
+  (return q))
+
+(defn ^I32 pv-chain-off [^:mut ^Cells mk ^I32 m0]
+  (comment "1 when an optional-content span on the chain from mark m0 up is off by default.")
+  (let [^:mut ^I32 m m0
+        ^:mut ^I32 guard 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 st 0]
+    (while (and (>= m 0) (< guard 300))
+      (do (set kind (mk-get mk m (mkf-kind)))
+          (if (== kind (mk-optional-content))
+            (do (set st (mk-get mk m (mkf-ocgdef)))
+                (if (== st 0) (return 1))))
+          (set m (mk-get mk m (mkf-parent)))
+          (set guard (+ guard 1))))
+    (return 0)))
+
+(defn ^I32 pv-close [^I32 p ^I32 q]
+  (comment "1 when two 0xRRGGBB colours are within PV_TOL in every channel; an unknown (-1) is close to nothing.")
+  (if (or (< p 0) (< q 0)) (return 0))
+  (let [^I32 dr (- (quot p 65536) (quot q 65536))
+        ^I32 dg (- (rem (quot p 256) 256) (rem (quot q 256) 256))
+        ^I32 db (- (rem p 256) (rem q 256))]
+    (if (and (<= dr PV_TOL) (and (>= dr (- 0 PV_TOL))
+             (and (<= dg PV_TOL) (and (>= dg (- 0 PV_TOL))
+                  (and (<= db PV_TOL) (>= db (- 0 PV_TOL)))))))
+      (return 1))
+    (return 0)))
+
+;; --------------------------------------------------------- the paints' regions
+
+(defn ^I32 pv-path-k [^:mut ^Cells pa ^I32 r ^I32 k]
+  (comment "Component k of the region path row r paints, for a rectangle fill: its box (shrunk by half its stroke")
+  (comment "width when it is also stroked) intersected with the box of its clip.")
+  (let [^I32 fl (pa-get pa r (pf-flags))
+        ^I32 cl (pa-get pa r (pf-clip))
+        ^:mut ^I32 v 0
+        ^:mut ^I32 half 0
+        ^:mut ^I32 cv 0]
+    (if (!= (bit-and fl (pg-stroked)) 0)
+      (set half (quot (+ (pa-get pa r (pf-width)) 1) 2)))
+    (if (== k 0) (set v (+ (pa-get pa r (pf-x0)) half)))
+    (if (== k 1) (set v (+ (pa-get pa r (pf-y0)) half)))
+    (if (== k 2) (set v (- (pa-get pa r (pf-x1)) half)))
+    (if (== k 3) (set v (- (pa-get pa r (pf-y1)) half)))
+    (set cv (pv-clip-k pa cl k))
+    (if (< k 2) (return (pv-max v cv)))
+    (return (pv-min v cv))))
+
+(defn ^I32 pv-img-k [^:mut ^Cells im ^:mut ^Cells pa ^I32 r ^I32 k]
+  (comment "Component k of the region image row r paints: its box intersected with the box of its clip.")
+  (let [^I32 cl (im-get im r (mf-clip))
+        ^:mut ^I32 v 0
+        ^:mut ^I32 cv 0]
+    (if (== k 0) (set v (im-get im r (mf-x0))))
+    (if (== k 1) (set v (im-get im r (mf-y0))))
+    (if (== k 2) (set v (im-get im r (mf-x1))))
+    (if (== k 3) (set v (im-get im r (mf-y1))))
+    (set cv (pv-clip-k pa cl k))
+    (if (< k 2) (return (pv-max v cv)))
+    (return (pv-min v cv))))
+
+(defn ^I32 pv-opaque-rect [^:mut ^Cells pa ^:mut ^Cells mk ^I32 r]
+  (comment "1 when path row r is a fill we know completely: not a clip, a rectangle, filled with a known colour at alpha")
+  (comment "1 under no blend mode, no soft mask, no pattern and no shading, and not hidden by optional content.")
+  (let [^I32 fl (pa-get pa r (pf-flags))]
+    (if (!= (bit-and fl (pg-clip)) 0) (return 0))
+    (if (== (bit-and fl (pg-filled)) 0) (return 0))
+    (if (!= (bit-and fl (+ (pg-shading) (+ (pg-pattern) (+ (pg-blend) (pg-softmask))))) 0) (return 0))
+    (if (!= (pa-get pa r (pf-kind)) (pa-rect)) (return 0))
+    (if (< (pa-get pa r (pf-fill)) 0) (return 0))
+    (if (< (pa-get pa r (pf-falpha)) 1000) (return 0))
+    (if (== (pv-chain-off mk (pa-get pa r (pf-mark))) 1) (return 0))
+    (return 1)))
+
+(defn ^I32 pv-opaque-img [^:mut ^Cells im ^:mut ^Cells mk ^I32 r]
+  (comment "1 when image row r covers its region completely: no stencil mask, no /SMask, no /Mask, alpha 1, no blend,")
+  (comment "no soft mask, an axis-aligned placement, and not hidden by optional content.")
+  (let [^I32 fl (im-get im r (mf-flags))
+        ^I32 rot (im-get im r (mf-rot))]
+    (if (!= (bit-and fl (+ (mg-mask) (+ (mg-smask) (+ (mg-masked) (+ (mg-blend) (mg-softmask))))))  0) (return 0))
+    (if (< (im-get im r (mf-alpha)) 1000) (return 0))
+    (if (!= (im-get im r (mf-skewed)) 0) (return 0))
+    (if (!= (rem rot 9000) 0) (return 0))
+    (if (== (pv-chain-off mk (im-get im r (mf-mark))) 1) (return 0))
+    (return 1)))
+
+;; ----------------------------------------------------------------- the glyphs
+
+(defn ^I32 pv-painted [^I32 mode ^I32 comp]
+  (comment "1 when a glyph of render mode `mode` paints its fill (comp 0) or its stroke (comp 1): fill for 0, 2, 4, 6;")
+  (comment "stroke for 1, 2, 5, 6; nothing for the invisible 3 and 7.")
+  (if (or (== mode 3) (== mode 7)) (return 0))
+  (if (== comp 0)
+    (do (if (or (== mode 1) (== mode 5)) (return 0))
+        (return 1)))
+  (if (or (== mode 1) (or (== mode 2) (or (== mode 5) (== mode 6)))) (return 1))
+  (return 0))
+
+(defn ^I32 pv-backdrop [^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells mk
+                        ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 gz ^I32 jp ^I32 ji ^I32 p0 ^I32 i0]
+  (comment "The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths")
+  (comment "are searched backwards from row jp (the first with a later z), images from row ji.")
+  (let [^:mut ^I32 r (- jp 1)
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 zp -1
+        ^:mut ^I32 res 16777215
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 rx0 0
+        ^:mut ^I32 ry0 0
+        ^:mut ^I32 rx1 0
+        ^:mut ^I32 ry1 0
+        ^:mut ^I32 zi -1
+        ^:mut ^I32 found 0]
+    (while (and (>= r p0) (and (< steps PV_SCAN) (== found 0)))
+      (do (set fl (pa-get pa r (pf-flags)))
+          (if (and (== (bit-and fl (pg-clip)) 0) (!= (bit-and fl (pg-filled)) 0))
+            (do (set rx0 (pv-path-k pa r 0))
+                (set ry0 (pv-path-k pa r 1))
+                (set rx1 (pv-path-k pa r 2))
+                (set ry1 (pv-path-k pa r 3))
+                (if (== (pv-hit x0 y0 x1 y1 rx0 ry0 rx1 ry1) 1)
+                  (do (set found 1)
+                      (set zp (pa-get pa r (pf-z)))
+                      (if (and (== (pv-opaque-rect pa mk r) 1) (== (pv-covers rx0 ry0 rx1 ry1 x0 y0 x1 y1) 1))
+                        (set res (pa-get pa r (pf-fill)))
+                        (set res -2))))))
+          (set r (- r 1))
+          (set steps (+ steps 1))))
+    (comment "The nearest earlier image that touches the cell.")
+    (set r (- ji 1))
+    (set steps 0)
+    (set found 0)
+    (while (and (>= r i0) (and (< steps PV_SCAN) (== found 0)))
+      (do (set rx0 (pv-img-k im pa r 0))
+          (set ry0 (pv-img-k im pa r 1))
+          (set rx1 (pv-img-k im pa r 2))
+          (set ry1 (pv-img-k im pa r 3))
+          (if (== (pv-hit x0 y0 x1 y1 rx0 ry0 rx1 ry1) 1)
+            (do (set found 1)
+                (set zi (im-get im r (mf-z)))))
+          (set r (- r 1))
+          (set steps (+ steps 1))))
+    (if (> zi zp) (return -2))
+    (return res)))
+
+(defn ^I32 pv-occluder [^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells mk
+                        ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 jp ^I32 ji ^I32 p1 ^I32 i1]
+  (comment "The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths")
+  (comment "are searched forwards from row jp to p1, images from ji to i1.")
+  (let [^:mut ^I32 r jp
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 zp -1
+        ^:mut ^I32 zi -1]
+    (while (and (< r p1) (and (< steps PV_SCAN) (< zp 0)))
+      (do (if (== (pv-opaque-rect pa mk r) 1)
+            (if (== (pv-covers (pv-path-k pa r 0) (pv-path-k pa r 1) (pv-path-k pa r 2) (pv-path-k pa r 3) x0 y0 x1 y1) 1)
+              (set zp (pa-get pa r (pf-z)))))
+          (set r (+ r 1))
+          (set steps (+ steps 1))))
+    (set r ji)
+    (set steps 0)
+    (while (and (< r i1) (and (< steps PV_SCAN) (< zi 0)))
+      (do (if (== (pv-opaque-img im mk r) 1)
+            (if (== (pv-covers (pv-img-k im pa r 0) (pv-img-k im pa r 1) (pv-img-k im pa r 2) (pv-img-k im pa r 3) x0 y0 x1 y1) 1)
+              (set zi (im-get im r (mf-z)))))
+          (set r (+ r 1))
+          (set steps (+ steps 1))))
+    (if (and (>= zp 0) (>= zi 0))
+      (do (if (< zp zi) (return zp))
+          (return zi)))
+    (if (>= zp 0) (return zp))
+    (return zi)))
+
+(defn ^I32 pv-bit [^I32 chk ^I32 bt]
+  (comment "chk with `bt` set (bits are distinct powers of two, so adding when clear is an or).")
+  (if (!= (bit-and chk bt) 0) (return chk))
+  (return (+ chk bt)))
+
+(defn ^I32 pv-glyph [^:mut ^Cells gl ^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im
+                     ^I32 pw ^I32 ph ^I32 g ^I32 jp ^I32 ji ^I32 p0 ^I32 i0 ^I32 p1 ^I32 i1]
+  (comment "Classify glyph g: see the header. jp and ji are the first path and image rows painted after it.")
+  (let [^I32 gx0 (gl-get gl g (ch-x0))
+        ^I32 gy0 (gl-get gl g (ch-y0))
+        ^I32 gx1 (gl-get gl g (ch-x1))
+        ^I32 gy1 (gl-get gl g (ch-y1))
+        ^I32 mode (gl-get gl g (gf-mode))
+        ^I32 gz (gl-get gl g (gf-z))
+        ^I32 clip (gl-get gl g (gf-clip))
+        ^I32 mark (gl-get gl g (gf-mark))
+        ^:mut ^I32 chk (gl-get gl g (gf-vchk))
+        ^:mut ^I32 vis 0
+        ^:mut ^I32 vby -1
+        ^:mut ^I32 vx0 0
+        ^:mut ^I32 vy0 0
+        ^:mut ^I32 vx1 0
+        ^:mut ^I32 vy1 0
+        ^:mut ^I32 back 0
+        ^:mut ^I32 ink 0
+        ^:mut ^I32 npaint 0
+        ^:mut ^I32 nsame 0
+        ^:mut ^I32 nclear 0
+        ^:mut ^I32 occ -1]
+    (comment "1. the clip in force.")
+    (set vx0 gx0)
+    (set vy0 gy0)
+    (set vx1 gx1)
+    (set vy1 gy1)
+    (set chk (pv-bit chk (vc-clip)))
+    (if (>= clip 0)
+      (do (set vx0 (pv-max gx0 (pv-clip-k pa clip 0)))
+          (set vy0 (pv-max gy0 (pv-clip-k pa clip 1)))
+          (set vx1 (pv-min gx1 (pv-clip-k pa clip 2)))
+          (set vy1 (pv-min gy1 (pv-clip-k pa clip 3)))
+          (if (== (pv-hit gx0 gy0 gx1 gy1 (pv-clip-k pa clip 0) (pv-clip-k pa clip 1) (pv-clip-k pa clip 2) (pv-clip-k pa clip 3)) 0)
+            (set vis (vz-clipped)))))
+    (comment "2. the page.")
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-offpage)))
+          (if (== (pv-hit gx0 gy0 gx1 gy1 0 0 pw ph) 0)
+            (set vis (vz-offpage)))))
+    (comment "3. the ink against what is behind it (only for glyphs that paint).")
+    (if (and (== vis 0) (or (== (pv-painted mode 0) 1) (== (pv-painted mode 1) 1)))
+      (do (set chk (pv-bit chk (vc-white)))
+          (set back (pv-backdrop pa im mk vx0 vy0 vx1 vy1 gz jp ji p0 i0))
+          (if (>= back 0)
+            (do (set npaint 0)
+                (set nsame 0)
+                (if (== (pv-painted mode 0) 1)
+                  (do (set npaint (+ npaint 1))
+                      (set ink (gl-get gl g (gf-fill)))
+                      (if (== (pv-close ink back) 1) (set nsame (+ nsame 1)))))
+                (if (== (pv-painted mode 1) 1)
+                  (do (set npaint (+ npaint 1))
+                      (set ink (gl-get gl g (gf-stroke)))
+                      (if (== (pv-close ink back) 1) (set nsame (+ nsame 1)))))
+                (if (and (> npaint 0) (== nsame npaint))
+                  (set vis (vz-white)))))))
+    (comment "4. a size under a point.")
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-zero-size)))
+          (if (< (gl-get gl g (gf-size)) ZERO_SIZE_CPT)
+            (set vis (vz-zero-size)))))
+    (comment "5. a later opaque paint over the visible cell.")
+    (if (and (== vis 0) (or (== (pv-painted mode 0) 1) (== (pv-painted mode 1) 1)))
+      (do (set chk (pv-bit chk (vc-occlusion)))
+          (if (and (< vx0 vx1) (< vy0 vy1))
+            (do (set occ (pv-occluder pa im mk vx0 vy0 vx1 vy1 jp ji p1 i1))
+                (if (>= occ 0)
+                  (do (set vis (vz-occluded))
+                      (set vby occ)))))))
+    (comment "6. optional content that is off.")
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-ocg)))
+          (if (== (pv-chain-off mk mark) 1)
+            (set vis (vz-ocg-hidden)))))
+    (comment "7. fully transparent ink.")
+    (if (and (== vis 0) (or (== (pv-painted mode 0) 1) (== (pv-painted mode 1) 1)))
+      (do (set chk (pv-bit chk (vc-transparent)))
+          (set npaint 0)
+          (set nclear 0)
+          (if (== (pv-painted mode 0) 1)
+            (do (set npaint (+ npaint 1))
+                (if (== (gl-get gl g (gf-falpha)) 0) (set nclear (+ nclear 1)))))
+          (if (== (pv-painted mode 1) 1)
+            (do (set npaint (+ npaint 1))
+                (if (== (gl-get gl g (gf-salpha)) 0) (set nclear (+ nclear 1)))))
+          (if (and (> npaint 0) (== nclear npaint))
+            (set vis (vz-transparent)))))
+    (gl-set gl g (gf-vis) vis)
+    (gl-set gl g (gf-vby) vby)
+    (gl-set gl g (gf-vchk) chk)
+    (return 0)))
+
+;; ----------------------------------------------------------------- the images
+
+(defn ^I32 pv-image [^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im
+                     ^I32 pw ^I32 ph ^I32 r ^I32 jp ^I32 ji ^I32 p1 ^I32 i1]
+  (comment "Classify image row r by the same checks that apply to a thing that is painted whole: clip, offpage, empty")
+  (comment "(a box with no area, the image's zero-size), a later opaque cover, optional content, alpha 0.")
+  (let [^I32 x0 (im-get im r (mf-x0))
+        ^I32 y0 (im-get im r (mf-y0))
+        ^I32 x1 (im-get im r (mf-x1))
+        ^I32 y1 (im-get im r (mf-y1))
+        ^I32 clip (im-get im r (mf-clip))
+        ^I32 mark (im-get im r (mf-mark))
+        ^:mut ^I32 chk (im-get im r (mf-vchk))
+        ^:mut ^I32 vis 0
+        ^:mut ^I32 vby -1
+        ^:mut ^I32 vx0 0
+        ^:mut ^I32 vy0 0
+        ^:mut ^I32 vx1 0
+        ^:mut ^I32 vy1 0
+        ^:mut ^I32 occ -1]
+    (set vx0 x0)
+    (set vy0 y0)
+    (set vx1 x1)
+    (set vy1 y1)
+    (set chk (pv-bit chk (vc-clip)))
+    (if (>= clip 0)
+      (do (set vx0 (pv-max x0 (pv-clip-k pa clip 0)))
+          (set vy0 (pv-max y0 (pv-clip-k pa clip 1)))
+          (set vx1 (pv-min x1 (pv-clip-k pa clip 2)))
+          (set vy1 (pv-min y1 (pv-clip-k pa clip 3)))
+          (if (== (pv-hit x0 y0 x1 y1 (pv-clip-k pa clip 0) (pv-clip-k pa clip 1) (pv-clip-k pa clip 2) (pv-clip-k pa clip 3)) 0)
+            (set vis (vz-clipped)))))
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-offpage)))
+          (if (== (pv-hit x0 y0 x1 y1 0 0 pw ph) 0)
+            (set vis (vz-offpage)))))
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-zero-size)))
+          (if (or (>= x0 x1) (>= y0 y1))
+            (set vis (vz-zero-size)))))
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-occlusion)))
+          (if (and (< vx0 vx1) (< vy0 vy1))
+            (do (set occ (pv-occluder pa im mk vx0 vy0 vx1 vy1 jp ji p1 i1))
+                (if (>= occ 0)
+                  (do (set vis (vz-occluded))
+                      (set vby occ)))))))
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-ocg)))
+          (if (== (pv-chain-off mk mark) 1)
+            (set vis (vz-ocg-hidden)))))
+    (if (== vis 0)
+      (do (set chk (pv-bit chk (vc-transparent)))
+          (if (== (im-get im r (mf-alpha)) 0)
+            (set vis (vz-transparent)))))
+    (im-set im r (mf-vis) vis)
+    (im-set im r (mf-vby) vby)
+    (im-set im r (mf-vchk) chk)
+    (return 0)))
+
+;; ------------------------------------------------------------------- the page
+
+(defn ^:pub ^I32 pv-page [^:mut ^Cells gl ^:mut ^Cells mk ^:mut ^Cells pa ^:mut ^Cells im
+                          ^I32 pw ^I32 ph ^I32 g0 ^I32 p0 ^I32 i0]
+  (comment "Classify the glyphs from row g0, and the images from row i0, of the page whose paths start at row p0 and")
+  (comment "whose size (the crop box in page space) is pw by ph centipoints. Rows are in paint order, so for each")
+  (comment "object the first path and image row painted after it only moves forward.")
+  (let [^I32 g1 (gl-count gl)
+        ^I32 p1 (pa-count pa)
+        ^I32 i1 (im-count im)
+        ^:mut ^I32 g g0
+        ^:mut ^I32 jp p0
+        ^:mut ^I32 ji i0
+        ^:mut ^I32 gz 0
+        ^:mut ^I32 ig i0]
+    (while (< g g1)
+      (do (set gz (gl-get gl g (gf-z)))
+          (while (and (< jp p1) (or (< (pa-get pa jp (pf-z)) 0) (< (pa-get pa jp (pf-z)) gz)))
+            (set jp (+ jp 1)))
+          (while (and (< ji i1) (< (im-get im ji (mf-z)) gz))
+            (set ji (+ ji 1)))
+          (pv-glyph gl mk pa im pw ph g jp ji p0 i0 p1 i1)
+          (set g (+ g 1))))
+    (set jp p0)
+    (while (< ig i1)
+      (do (set gz (im-get im ig (mf-z)))
+          (while (and (< jp p1) (or (< (pa-get pa jp (pf-z)) 0) (< (pa-get pa jp (pf-z)) gz)))
+            (set jp (+ jp 1)))
+          (set ji (+ ig 1))
+          (pv-image mk pa im pw ph ig jp ji p1 i1)
+          (set ig (+ ig 1))))
+    (return 0)))

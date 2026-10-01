@@ -72,14 +72,22 @@ public static class Fuzzprobe {
         emon.Port.Cells fnt = emon.Port.NewCells();
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();
-        int s = Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells gx = emon.Port.NewCells();
+        int s = Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
         int g = 0;
         int h = 7;
+        int hv = 7;
         emon.Port.TextAscii(t, " content=");
         emon.Port.TextI32(t, s);
         if (s == 0) {
             while (g < Evidence.GlCount(gl)) {
                 h = FzMix(h, Evidence.GlGet(gl, g, Evidence.ChCp()));
+                hv = FzMix(hv, Evidence.GlGet(gl, g, Evidence.GfVis()));
+                hv = FzMix(hv, Evidence.GlGet(gl, g, Evidence.GfVby()));
+                hv = FzMix(hv, Evidence.GlGet(gl, g, Evidence.GfVchk()));
                 g += 1;
             }
             emon.Port.TextAscii(t, " cwarn=");
@@ -94,6 +102,12 @@ public static class Fuzzprobe {
             emon.Port.TextI32(t, Evidence.MkCount(mk));
             emon.Port.TextAscii(t, " cps=");
             emon.Port.TextI32(t, h);
+            emon.Port.TextAscii(t, " paths=");
+            emon.Port.TextI32(t, Evidence.PaCount(pa));
+            emon.Port.TextAscii(t, " images=");
+            emon.Port.TextI32(t, Evidence.ImCount(im));
+            emon.Port.TextAscii(t, " vis=");
+            emon.Port.TextI32(t, hv);
         }
         return s;
     }

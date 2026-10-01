@@ -22,6 +22,13 @@
 ;;   gl et mk fnt           the evidence's `glyphs`, `etext`, `marks` (D101's spans, folded in by D127) and `fonts`
 ;;                          (a row the first time the document shows a font; its index is its id) (SPEC 8.4.3)
 ;;
+;; P3.5, P3.6 (D134-D139) ADD, to the text layer below: the whole graphics state (the clip in force as a `paths` row, the
+;; stroking colour, colour spaces by `emon.pdfgfx`, `ca` and `CA`, the blend mode, a soft mask in force, the line width and
+;; dash), paths and their painting as `paths` rows (geometry in `pts`), image placements (`Do` and inline) as `images`
+;; rows, shadings as filled regions, optional-content spans for the state an `/OC` names, Form XObject `/BBox` clips, and
+;; at the end of each page the visibility classification of `emon.pdfvis`. The arenas it writes are the evidence's `pa`
+;; (`paths`), `im` (`images`), `pts` and the colour/optional-content workspace `gx` (all after `ln`).
+;;
 ;; WHAT IT DOES, per operator. `q Q cm` (the graphics-state stack, depth 256),
 ;; `BT ET Tf Tc Tw Tz TL Ts Tr Td TD Tm T* Tj TJ ' "` (the text state and every
 ;; glyph shown, with its code point(s) and how they were obtained, from
@@ -73,17 +80,27 @@
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
                                limit-of limit-breach]]
             [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfgfx :refer [gx-page gx-key-of gx-lookup gx-entry-rgb gx-initial gx-class gx-ncomp
+                                 gx-is-pattern gx-input gx-oc-read gx-oc-state]]
+            [emon.pdfvis :refer [pv-page]]
+            [emon.pdfx :refer [px-dget px-get px-is px-nth px-int-of px-is-num]]
+            [emon.pdfxnames :refer [px-ca px-bm px-s-mask px-s px-lw px-image-mask px-mask px-oc px-h px-im
+                                    px-alpha px-normal px-compatible px-multiply px-screen px-overlay
+                                    px-darken px-lighten px-color-dodge px-color-burn px-hard-light
+                                    px-soft-light px-difference px-exclusion px-hue px-saturation
+                                    px-color px-luminosity px-chars-at px-span-at]]
             [emon.pdfnames :refer [pn-font pn-x-object pn-ext-g-state pn-properties
                                    pn-subtype pn-form pn-matrix pn-resources pn-type
                                    pn-lang pn-mcid pn-actual-text pn-alt pn-e
                                    pn-artifact pn-pagination pn-layout pn-background
                                    pn-watermark pn-header pn-footer pn-page
                                    pn-device-gray pn-device-rgb pn-device-cmyk pn-ca
-                                   pn-span-at pn-chars-at pn-base-font]]
+                                   pn-span-at pn-chars-at pn-base-font pn-color-space pn-image pn-b-box pn-pattern pn-width pn-height
+                                   pn-w]]
             [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-count pl-int-value
                                  pl-name-is pl-name-len pl-name-byte pl-str-len
                                  pl-str-byte pl-stream-dict pl-dict-get pl-num-cp pl-ref-gen]]
-            [emon.pdfdoc :refer [pd-resolve pd-dget pd-get pd-stream-data pd-pg-count
+            [emon.pdfdoc :refer [pd-resolve pd-dget pd-dint pd-get pd-stream-data pd-pg-count
                                  pd-pg-crop pd-pg-rotate pd-pg-resources
                                  pd-pg-contents pd-pages]]
             [emon.pdffont :refer [pfn-init pfn-load pfn-map pfn-cp pfn-how-of
@@ -101,7 +118,16 @@
                                    lh-rot lh-dir lf-src lf-order ld-rtl hd-dir hd-x0 hd-bx0 hd-by0 hd-bx1 hd-by1 fnf-style
                                    ch-page ch-x0 ch-y0 ch-x1 ch-y1 ch-cp ch-tstart ch-tlen ch-word
                                    gf-bx0 gf-by0 gf-bx1 gf-by1 gf-asc gf-desc gf-rot gf-how gf-font gf-size gf-mode
-                                   gf-fill gf-falpha gf-cs gf-z gf-mark gf-ocg
+                                   gf-fill gf-falpha gf-cs gf-z gf-mark gf-ocg gf-stroke gf-salpha gf-clip gf-vchk gf-vis
+                                   pa-new pa-get pa-set pa-count im-new im-set im-count pt-add pt-get pt-count
+                                   ptf-x ptf-y ptf-op po-move po-line po-curve po-close
+                                   pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width pf-falpha pf-salpha pf-flags
+                                   pf-z pf-clip pf-mark pf-ocg pf-pfirst pf-pcount pf-dash
+                                   pa-line pa-rect pa-curve pa-other
+                                   pg-closed pg-evenodd pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-blend pg-softmask
+                                   mf-alpha mf-flags mf-rot mf-skewed mf-z mf-clip mf-mark mf-ocg mf-vchk
+                                   mg-mask mg-smask mg-inline mg-masked mg-blend mg-softmask
+                                   vc-blend vc-softmask mc-xobject mkf-ocgdef
                                    mkf-parent mkf-mcid mkf-artype mkf-arsub mkf-actual mkf-actuallen mkf-alt mkf-altlen
                                    mkf-exp mkf-explen mkf-lang mkf-langlen mkf-flags mkf-stm mkf-ocg
                                    fnf-obj fnf-subtype fnf-flags fnf-program fnf-tounicode fnf-enc fnf-tstart fnf-tlen
@@ -152,6 +178,34 @@
 (defconst ^I32 OP_SC 25459)
 (defconst ^I32 OP_SCN 7234419)
 (defconst ^I32 OP_CS 29539)        ;; cs
+(defconst ^I32 OP_GRAY_S 71)       ;; G
+(defconst ^I32 OP_RGB_S 18258)     ;; RG
+(defconst ^I32 OP_CMYK_S 75)       ;; K
+(defconst ^I32 OP_SC_S 17235)      ;; SC
+(defconst ^I32 OP_SCN_S 5129043)   ;; SCN
+(defconst ^I32 OP_CS_S 21315)      ;; CS
+(defconst ^I32 OP_MOVE 109)        ;; m
+(defconst ^I32 OP_LINE 108)        ;; l
+(defconst ^I32 OP_CURVE 99)        ;; c
+(defconst ^I32 OP_CURVE_V 118)     ;; v
+(defconst ^I32 OP_CURVE_Y 121)     ;; y
+(defconst ^I32 OP_CLOSE 104)       ;; h
+(defconst ^I32 OP_RECT 25970)      ;; re
+(defconst ^I32 OP_STROKE 83)       ;; S
+(defconst ^I32 OP_CLOSESTROKE 115) ;; s
+(defconst ^I32 OP_FILL 102)        ;; f
+(defconst ^I32 OP_FILL2 70)        ;; F
+(defconst ^I32 OP_FILLEO 10854)    ;; f*
+(defconst ^I32 OP_FS 66)           ;; B
+(defconst ^I32 OP_FSEO 10818)      ;; B*
+(defconst ^I32 OP_CFS 98)          ;; b
+(defconst ^I32 OP_CFSEO 10850)     ;; b*
+(defconst ^I32 OP_ENDPATH 110)     ;; n
+(defconst ^I32 OP_CLIP 87)         ;; W
+(defconst ^I32 OP_CLIPEO 10839)    ;; W*
+(defconst ^I32 OP_SH 26739)        ;; sh
+(defconst ^I32 OP_LW 119)          ;; w
+(defconst ^I32 OP_DASH 100)        ;; d
 
 ;; ------------------------------------------------------ the interpreter's cells
 ;; Document part: survives `pc-page`.
@@ -207,13 +261,40 @@
 (defconst ^I32 C_BASE 700)       ;; the page's base matrix
 (defconst ^I32 C_TMP 712)        ;; scratch matrix
 (defconst ^I32 C_CUR 728)        ;; the current graphics state (GS_STRIDE cells)
-(defconst ^I32 C_STACK 768)      ;; 256 saved states
+(defconst ^I32 C_STACK 800)      ;; 256 saved states
 (defconst ^I32 MAX_GS 256)
-(defconst ^I32 C_SIZE 8960)      ;; 768 + 256 * 32
 (defconst ^I32 MAX_MC 256)
+;; The path under construction and the page's counters (P3.5), after the saved states.
+(defconst ^I32 C_PW 17184)       ;; the page's width and height in page space, centipoints
+(defconst ^I32 C_PH 17185)
+(defconst ^I32 C_PPTS 17186)     ;; the first `pts` row of the path under construction
+(defconst ^I32 C_PN 17187)       ;; its points
+(defconst ^I32 C_PCX 17188)      ;; the current point (Fx, page space)
+(defconst ^I32 C_PCY 17190)
+(defconst ^I32 C_PSX 17192)      ;; the current subpath's first point
+(defconst ^I32 C_PSY 17194)
+(defconst ^I32 C_PBX0 17196)     ;; its box, centipoints
+(defconst ^I32 C_PBY0 17197)
+(defconst ^I32 C_PBX1 17198)
+(defconst ^I32 C_PBY1 17199)
+(defconst ^I32 C_PFLAGS 17200)   ;; 1 has a curve, 4 more points than `pts` keeps
+(defconst ^I32 C_PNSUB 17201)    ;; subpaths
+(defconst ^I32 C_CLIPP 17202)    ;; a pending W (1) or W* (2)
+(defconst ^I32 C_TCX0 17203)     ;; the union of the boxes of glyphs shown in a clipping render mode
+(defconst ^I32 C_TCY0 17204)
+(defconst ^I32 C_TCX1 17205)
+(defconst ^I32 C_TCY1 17206)
+(defconst ^I32 C_TCN 17207)
+(defconst ^I32 C_NPATH 17208)    ;; `paths` rows this page made
+(defconst ^I32 C_NIMG 17209)     ;; `images` rows this page made
+(defconst ^I32 C_PKEEP 17210)    ;; rows of `pts` the path under construction has
+(defconst ^I32 C_BB 17212)       ;; a Form XObject's /BBox, four Fx
+(defconst ^I32 C_SIZE 17248)
+(defconst ^I32 PATH_KEEP 128)    ;; points a path keeps in `pts` (a longer one keeps its box only)
+(defconst ^I32 PATH_ROWS 200000) ;; `paths` rows, and `images` rows, a page may make (the rest are counted in warning 1024)
 
 ;; A graphics state: what `q` saves.
-(defconst ^I32 GS_STRIDE 32)
+(defconst ^I32 GS_STRIDE 64)
 (defconst ^I32 G_CTM 0)          ;; 12 cells
 (defconst ^I32 G_TC 12)          ;; Fx (2 cells each)
 (defconst ^I32 G_TW 14)
@@ -227,6 +308,16 @@
 (defconst ^I32 G_ALPHA 27)       ;; per-mille
 (defconst ^I32 G_FAM 28)         ;; fill colour space: 0 unknown, 1 gray, 2 rgb, 3 cmyk
 (defconst ^I32 G_FOBJ 29)        ;; the object number of the current font dictionary, 0 when direct or none
+(defconst ^I32 G_SCOLOR 30)      ;; stroking colour 0xRRGGBB, -1 unknown
+(defconst ^I32 G_SALPHA 31)      ;; per-mille
+(defconst ^I32 G_FCS 32)         ;; fill colour space: a key of `emon.pdfgfx` (-1 DeviceGray, -2 RGB, -3 CMYK, -4 Pattern, else a handle)
+(defconst ^I32 G_SCS 33)         ;; stroking colour space
+(defconst ^I32 G_SFAM 34)        ;; stroking colour class (`cs` code, 0 unknown)
+(defconst ^I32 G_CLIP 35)        ;; the `paths` row of the clip in force, -1
+(defconst ^I32 G_BM 36)          ;; blend mode code (0 Normal)
+(defconst ^I32 G_SMASK 37)       ;; soft mask in force: 0 none, 1 alpha, 2 luminosity
+(defconst ^I32 G_LW 38)          ;; line width, Fx (two cells)
+(defconst ^I32 G_DASH 40)        ;; first dash length in centipoints, 0 solid
 
 ;; Operands: entries of four cells, then the bytes of names and strings.
 (defconst ^I32 MAX_ENT 4096)
@@ -249,6 +340,7 @@
 (defconst ^I32 W_WIDTH 128)      ;; a glyph of unknown width took half an em
 (defconst ^I32 W_TEXT 256)       ;; a show operator outside BT or with no font
 (defconst ^I32 W_PROPS 512)      ;; a /Properties name was not found
+(defconst ^I32 W_PATHS 1024)     ;; more paths or images than a page records (PATH_ROWS)
 
 ;; ------------------------------------------------------------- small things
 
@@ -647,6 +739,16 @@
   (cells-set cx (+ C_CUR G_COLOR) 0)
   (cells-set cx (+ C_CUR G_ALPHA) 1000)
   (cells-set cx (+ C_CUR G_FAM) 1)
+  (cells-set cx (+ C_CUR G_SCOLOR) 0)
+  (cells-set cx (+ C_CUR G_SALPHA) 1000)
+  (cells-set cx (+ C_CUR G_FCS) -1)
+  (cells-set cx (+ C_CUR G_SCS) -1)
+  (cells-set cx (+ C_CUR G_SFAM) 1)
+  (cells-set cx (+ C_CUR G_CLIP) -1)
+  (cells-set cx (+ C_CUR G_BM) 0)
+  (cells-set cx (+ C_CUR G_SMASK) 0)
+  (fx-put cx (+ C_CUR G_LW) (fx-one))
+  (cells-set cx (+ C_CUR G_DASH) 0)
   (return 0))
 
 (defn ^I32 pc-base-matrix [^:mut ^Cells cx ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 rot]
@@ -734,7 +836,7 @@
     (pc-td cx (i64 0) (- (i64 0) tl))
     (return 0)))
 
-;; ------------------------------------------------------------ colour and alpha
+;; ------------------------------------------------------------ colour bytes
 
 (defn ^I32 pc-byte [^I64 v]
   (comment "A colour component in 0..1 (an Fx) as 0..255, rounded.")
@@ -745,31 +847,6 @@
 
 (defn ^I32 pc-rgb [^I32 r ^I32 g ^I32 bl]
   (return (+ (* r 65536) (+ (* g 256) bl))))
-
-(defn ^I32 pc-set-color [^:mut ^Cells cx ^Cells ox ^I32 n]
-  (comment "sc / scn / g / rg / k: set the fill colour from n operands by their count")
-  (comment "(1 gray, 3 RGB, 4 CMYK). A component list of another length (a pattern, an")
-  (comment "Indexed or Separation colour) leaves the colour as it was.")
-  (let [^I64 o0 (pc-num ox n 0)
-        ^I64 o1 (pc-num ox n 1)
-        ^I64 o2 (pc-num ox n 2)
-        ^I64 o3 (pc-num ox n 3)
-        ^I64 one (fx-one)]
-    (if (== n 1)
-      (do (let [^I32 gy (pc-byte o0)]
-            (cells-set cx (+ C_CUR G_COLOR) (pc-rgb gy gy gy)))
-          (return 0)))
-    (if (== n 3)
-      (do (cells-set cx (+ C_CUR G_COLOR) (pc-rgb (pc-byte o0) (pc-byte o1) (pc-byte o2)))
-          (return 0)))
-    (if (== n 4)
-      (do (let [^I64 kk (- one o3)]
-            (cells-set cx (+ C_CUR G_COLOR)
-                       (pc-rgb (pc-byte (fx-mul (- one o0) kk))
-                               (pc-byte (fx-mul (- one o1) kk))
-                               (pc-byte (fx-mul (- one o2) kk)))))
-          (return 0)))
-    (return 0)))
 
 ;; --------------------------------------------------- resources and dictionaries
 
@@ -1131,6 +1208,7 @@
         ^:mut ^I32 fid -1
         ^:mut ^I32 tstart -1
         ^:mut ^I32 i 0
+        ^:mut ^I32 vch 0
         ^:mut ^I32 idx 0]
     (if (>= slot 0)
       (do (set sat (+ C_SLOTS (* slot SLOT_STRIDE)))
@@ -1211,8 +1289,28 @@
         (gl-set gl g (gf-rot) rot)
         (gl-set gl g (gf-fill) (cells-at cx (+ C_CUR G_COLOR)))
         (gl-set gl g (gf-falpha) (cells-at cx (+ C_CUR G_ALPHA)))
+        (gl-set gl g (gf-stroke) (cells-at cx (+ C_CUR G_SCOLOR)))
+        (gl-set gl g (gf-salpha) (cells-at cx (+ C_CUR G_SALPHA)))
+        (gl-set gl g (gf-clip) (cells-at cx (+ C_CUR G_CLIP)))
         (gl-set gl g (gf-mode) (cells-at cx (+ C_CUR G_MODE)))
-        (if (> fam 0) (gl-set gl g (gf-cs) fam))
+        (if (and (> fam 0) (!= (cells-at cx (+ C_CUR G_MODE)) 1) (!= (cells-at cx (+ C_CUR G_MODE)) 5))
+          (gl-set gl g (gf-cs) fam))
+        (if (and (> (cells-at cx (+ C_CUR G_SFAM)) 0) (or (== (cells-at cx (+ C_CUR G_MODE)) 1) (== (cells-at cx (+ C_CUR G_MODE)) 5)))
+          (gl-set gl g (gf-cs) (cells-at cx (+ C_CUR G_SFAM))))
+        (if (!= (cells-at cx (+ C_CUR G_BM)) 0) (set vch (vc-blend)))
+        (if (!= (cells-at cx (+ C_CUR G_SMASK)) 0) (set vch (+ vch (vc-softmask))))
+        (gl-set gl g (gf-vchk) vch)
+        (if (>= (cells-at cx (+ C_CUR G_MODE)) 4)
+          (do (if (== (cells-at cx C_TCN) 0)
+                (do (cells-set cx C_TCX0 (gl-get gl g (ch-x0)))
+                    (cells-set cx C_TCY0 (gl-get gl g (ch-y0)))
+                    (cells-set cx C_TCX1 (gl-get gl g (ch-x1)))
+                    (cells-set cx C_TCY1 (gl-get gl g (ch-y1))))
+                (do (if (< (gl-get gl g (ch-x0)) (cells-at cx C_TCX0)) (cells-set cx C_TCX0 (gl-get gl g (ch-x0))))
+                    (if (< (gl-get gl g (ch-y0)) (cells-at cx C_TCY0)) (cells-set cx C_TCY0 (gl-get gl g (ch-y0))))
+                    (if (> (gl-get gl g (ch-x1)) (cells-at cx C_TCX1)) (cells-set cx C_TCX1 (gl-get gl g (ch-x1))))
+                    (if (> (gl-get gl g (ch-y1)) (cells-at cx C_TCY1)) (cells-set cx C_TCY1 (gl-get gl g (ch-y1))))))
+              (cells-set cx C_TCN (+ (cells-at cx C_TCN) 1))))
         (gl-set gl g (gf-z) z)
         (cells-set cx C_Z (+ z 1))
         (gl-set gl g (gf-mark) (cells-at cx C_MCTOP))
@@ -1560,7 +1658,7 @@
 
 (defn ^I32 pc-mc-begin [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
-                        ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt
+                        ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells gx
                         ^I32 n ^I32 props]
   (comment "BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an")
   (comment "inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,")
@@ -1607,8 +1705,9 @@
                 (if (ps-missed src)
                   (cells-set cx C_ABORT 1))
                 (if (and (== isoc 1) (!= raw 0))
-                  (if (== (pl-kind-of ar raw) 9)
-                    (mk-set mk span (mkf-ocg) (pl-int-value ar raw))))
+                  (do (if (== (pl-kind-of ar raw) 9)
+                        (mk-set mk span (mkf-ocg) (pl-int-value ar raw)))
+                      (mk-set mk span (mkf-ocgdef) (gx-oc-state src ar dc a b st gx raw 0))))
                 (if (and (!= dh 0) (== (pl-kind-of ar dh) 7))
                   (do (set d (pc-ingest-props src ar dc a b st cx ox dh))
                       (set flags (mc-resource)))
@@ -1668,6 +1767,793 @@
     (cells-set cx C_POS p)
     (return 0)))
 
+;; --------------------------------------------- paths, clipping, images, colours (P3.5)
+;;
+;; A path under construction lives in the page cells (C_P*) and, point by point, in the evidence's `pts` arena
+;; (page space, centipoints: the first PATH_KEEP points of a path; a longer one keeps its box and no geometry).
+;; A paint operator ends it: a `paths` row when it paints (SPEC 8.4.3), then a pending `W`/`W*` makes the clip.
+;; A CLIP is a `paths` row whose box is the INTERSECTION of the new clip and the one in force (D134): the
+;; clip row a glyph, path or image names is therefore the whole clip region's bounding box, and P3.6 never has
+;; to walk a chain. A clip that would not shrink the region makes no row.
+
+(defn ^I64 pc-tx [^Cells cx ^I64 x ^I64 y]
+  (comment "The user-space point (x, y) in page space: x of it (Fx).")
+  (return (fx-clamp (mx-x cx (+ C_CUR G_CTM) x y))))
+
+(defn ^I64 pc-ty [^Cells cx ^I64 x ^I64 y]
+  (return (fx-clamp (mx-y cx (+ C_CUR G_CTM) x y))))
+
+(defn ^I32 pc-flag-or [^I32 v ^I32 bit]
+  (comment "v with the one-bit flag `bit` set.")
+  (if (!= (bit-and v bit) 0) (return v))
+  (return (+ v bit)))
+
+(defn ^I32 pc-path-reset [^:mut ^Cells cx ^:mut ^Cells pts]
+  (comment "No path: the next point starts one. The pts arena keeps what an earlier row of the evidence put there.")
+  (let [^I32 n (pt-count pts)]
+    (cells-set cx C_PPTS n)
+    (cells-set cx C_PN 0)
+    (cells-set cx C_PKEEP 0)
+    (cells-set cx C_PBX0 2147483647)
+    (cells-set cx C_PBY0 2147483647)
+    (cells-set cx C_PBX1 -2147483647)
+    (cells-set cx C_PBY1 -2147483647)
+    (cells-set cx C_PFLAGS 0)
+    (cells-set cx C_PNSUB 0)
+    (return 0)))
+
+(defn ^I32 pc-path-add [^:mut ^Cells cx ^:mut ^Cells pts ^I64 px ^I64 py ^I32 op]
+  (comment "Append the page-space point (px, py) to the path: its box, the current point, and (for the first")
+  (comment "PATH_KEEP points) a row of `pts`.")
+  (let [^I32 x (fx-round px)
+        ^I32 y (fx-round py)
+        ^I32 keep (cells-at cx C_PKEEP)]
+    (if (< x (cells-at cx C_PBX0)) (cells-set cx C_PBX0 x))
+    (if (< y (cells-at cx C_PBY0)) (cells-set cx C_PBY0 y))
+    (if (> x (cells-at cx C_PBX1)) (cells-set cx C_PBX1 x))
+    (if (> y (cells-at cx C_PBY1)) (cells-set cx C_PBY1 y))
+    (if (< keep PATH_KEEP)
+      (do (pt-add pts x y op)
+          (cells-set cx C_PKEEP (+ keep 1)))
+      (cells-set cx C_PFLAGS (pc-flag-or (cells-at cx C_PFLAGS) 4)))
+    (cells-set cx C_PN (+ (cells-at cx C_PN) 1))
+    (fx-put cx C_PCX px)
+    (fx-put cx C_PCY py)
+    (return 0)))
+
+(defn ^I32 pc-op-move [^:mut ^Cells cx ^:mut ^Cells pts ^Cells ox ^I32 n]
+  (if (< n 2) (return 0))
+  (let [^I64 x (pc-num ox n 0)
+        ^I64 y (pc-num ox n 1)
+        ^I64 px (pc-tx cx x y)
+        ^I64 py (pc-ty cx x y)]
+    (cells-set cx C_PNSUB (+ (cells-at cx C_PNSUB) 1))
+    (pc-path-add cx pts px py (po-move))
+    (fx-put cx C_PSX px)
+    (fx-put cx C_PSY py)
+    (return 0)))
+
+(defn ^I32 pc-op-line [^:mut ^Cells cx ^:mut ^Cells pts ^Cells ox ^I32 n]
+  (if (< n 2) (return 0))
+  (if (== (cells-at cx C_PN) 0) (return 0))
+  (let [^I64 x (pc-num ox n 0)
+        ^I64 y (pc-num ox n 1)
+        ^I64 px (pc-tx cx x y)
+        ^I64 py (pc-ty cx x y)]
+    (pc-path-add cx pts px py (po-line))
+    (return 0)))
+
+(defn ^I32 pc-op-curve [^:mut ^Cells cx ^:mut ^Cells pts ^Cells ox ^I32 n ^I32 kind]
+  (comment "c (kind 0, six numbers), v (kind 1: the first control point is the current point) and y (kind 2: the")
+  (comment "second control point is the end point). Each puts three curve points in the path.")
+  (if (== (cells-at cx C_PN) 0) (return 0))
+  (let [^:mut ^I64 x1 (i64 0)
+        ^:mut ^I64 y1 (i64 0)
+        ^:mut ^I64 x2 (i64 0)
+        ^:mut ^I64 y2 (i64 0)
+        ^:mut ^I64 x3 (i64 0)
+        ^:mut ^I64 y3 (i64 0)
+        ^:mut ^I64 q1x (i64 0)
+        ^:mut ^I64 q1y (i64 0)]
+    (if (== kind 0)
+      (do (if (< n 6) (return 0))
+          (set x1 (pc-num ox n 0))
+          (set y1 (pc-num ox n 1))
+          (set x2 (pc-num ox n 2))
+          (set y2 (pc-num ox n 3))
+          (set x3 (pc-num ox n 4))
+          (set y3 (pc-num ox n 5))))
+    (if (== kind 1)
+      (do (if (< n 4) (return 0))
+          (set x2 (pc-num ox n 0))
+          (set y2 (pc-num ox n 1))
+          (set x3 (pc-num ox n 2))
+          (set y3 (pc-num ox n 3))))
+    (if (== kind 2)
+      (do (if (< n 4) (return 0))
+          (set x1 (pc-num ox n 0))
+          (set y1 (pc-num ox n 1))
+          (set x3 (pc-num ox n 2))
+          (set y3 (pc-num ox n 3))
+          (set x2 x3)
+          (set y2 y3)))
+    (if (== kind 1)
+      (do (set q1x (fx-get cx C_PCX))
+          (set q1y (fx-get cx C_PCY)))
+      (do (set q1x (pc-tx cx x1 y1))
+          (set q1y (pc-ty cx x1 y1))))
+    (pc-path-add cx pts q1x q1y (po-curve))
+    (let [^I64 q2x (pc-tx cx x2 y2)
+          ^I64 q2y (pc-ty cx x2 y2)
+          ^I64 q3x (pc-tx cx x3 y3)
+          ^I64 q3y (pc-ty cx x3 y3)]
+      (pc-path-add cx pts q2x q2y (po-curve))
+      (pc-path-add cx pts q3x q3y (po-curve)))
+    (cells-set cx C_PFLAGS (pc-flag-or (cells-at cx C_PFLAGS) 1))
+    (return 0)))
+
+(defn ^I32 pc-op-close [^:mut ^Cells cx ^:mut ^Cells pts]
+  (comment "h: a close row at the subpath's start, which is the current point again.")
+  (if (== (cells-at cx C_PN) 0) (return 0))
+  (let [^I64 sx (fx-get cx C_PSX)
+        ^I64 sy (fx-get cx C_PSY)]
+    (pc-path-add cx pts sx sy (po-close))
+    (return 0)))
+
+(defn ^I32 pc-rect-path [^:mut ^Cells cx ^:mut ^Cells pts ^I64 x ^I64 y ^I64 w ^I64 h]
+  (comment "The rectangle x y w h (user space) as a closed subpath of four corners, each through the CTM.")
+  (let [^I64 xw (fx-clamp (add64 x w))
+        ^I64 yh (fx-clamp (add64 y h))
+        ^I64 ax (pc-tx cx x y)
+        ^I64 ay (pc-ty cx x y)
+        ^I64 bx (pc-tx cx xw y)
+        ^I64 by (pc-ty cx xw y)
+        ^I64 dx (pc-tx cx xw yh)
+        ^I64 dy (pc-ty cx xw yh)
+        ^I64 ex (pc-tx cx x yh)
+        ^I64 ey (pc-ty cx x yh)]
+    (cells-set cx C_PNSUB (+ (cells-at cx C_PNSUB) 1))
+    (pc-path-add cx pts ax ay (po-move))
+    (fx-put cx C_PSX ax)
+    (fx-put cx C_PSY ay)
+    (pc-path-add cx pts bx by (po-line))
+    (pc-path-add cx pts dx dy (po-line))
+    (pc-path-add cx pts ex ey (po-line))
+    (pc-path-add cx pts ax ay (po-close))
+    (return 0)))
+
+(defn ^I32 pc-op-rect [^:mut ^Cells cx ^:mut ^Cells pts ^Cells ox ^I32 n]
+  (comment "re: the rectangle x y w h.")
+  (if (< n 4) (return 0))
+  (let [^I64 x (pc-num ox n 0)
+        ^I64 y (pc-num ox n 1)
+        ^I64 w (pc-num ox n 2)
+        ^I64 h (pc-num ox n 3)]
+    (pc-rect-path cx pts x y w h)
+    (return 0)))
+
+(defn ^I32 pc-near [^I32 p ^I32 q]
+  (comment "1 when two centipoint coordinates differ by at most one (a corner rounded two ways).")
+  (let [^I32 d (- p q)]
+    (if (and (<= d 1) (>= d -1)) (return 1))
+    (return 0)))
+
+(defn ^I32 pc-is-rect [^:mut ^Cells cx ^:mut ^Cells pts]
+  (comment "1 when the path is one subpath of four corners (a line back to the first corner, and a close, allowed)")
+  (comment "whose sides are axis-aligned to a centipoint.")
+  (let [^I32 n (cells-at cx C_PN)
+        ^I32 s (cells-at cx C_PPTS)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 np 0
+        ^:mut ^I32 opk 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 x2 0
+        ^:mut ^I32 y2 0
+        ^:mut ^I32 x3 0
+        ^:mut ^I32 y3 0
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0]
+    (if (or (< n 4) (> n 6)) (return 0))
+    (if (!= (cells-at cx C_PNSUB) 1) (return 0))
+    (if (!= (bit-and (cells-at cx C_PFLAGS) 5) 0) (return 0))
+    (comment "The points that are not a close row, in order; the first must be a move.")
+    (while (< k n)
+      (do (set opk (pt-get pts (+ s k) (ptf-op)))
+          (set px (pt-get pts (+ s k) (ptf-x)))
+          (set py (pt-get pts (+ s k) (ptf-y)))
+          (if (== k 0)
+            (if (!= opk (po-move)) (return 0)))
+          (if (and (> k 0) (== opk (po-move))) (return 0))
+          (if (!= opk (po-close))
+            (do (if (== np 0) (do (set x0 px) (set y0 py)))
+                (if (== np 1) (do (set x1 px) (set y1 py)))
+                (if (== np 2) (do (set x2 px) (set y2 py)))
+                (if (== np 3) (do (set x3 px) (set y3 py)))
+                (if (== np 4)
+                  (do (if (or (== (pc-near px x0) 0) (== (pc-near py y0) 0)) (return 0))))
+                (set np (+ np 1))))
+          (set k (+ k 1))))
+    (if (and (!= np 4) (!= np 5)) (return 0))
+    (if (and (== (pc-near x0 x1) 1) (and (== (pc-near y1 y2) 1) (and (== (pc-near x2 x3) 1) (== (pc-near y3 y0) 1))))
+      (return 1))
+    (if (and (== (pc-near y0 y1) 1) (and (== (pc-near x1 x2) 1) (and (== (pc-near y2 y3) 1) (== (pc-near x3 x0) 1))))
+      (return 1))
+    (return 0)))
+
+(defn ^I32 pc-scale-cpt [^Cells cx ^I64 w]
+  (comment "A length in user units (an Fx) as centipoints under the current CTM: through the length of its x axis.")
+  (let [^I64 a (fx-get cx (+ C_CUR G_CTM))
+        ^I64 b (fx-get cx (+ (+ C_CUR G_CTM) 2))
+        ^I64 hyp (fx-hypot a b)
+        ^I32 v (fx-round (fx-mul (fx-abs w) hyp))]
+    (if (> v 10000000) (return 10000000))
+    (return v)))
+
+(defn ^I32 pc-dash-op [^:mut ^Cells cx ^Cells ox ^I32 n]
+  (comment "d: the dash array's first length (centipoints under the CTM), 0 for a solid line.")
+  (cells-set cx (+ C_CUR G_DASH) 0)
+  (if (< n 1) (return 0))
+  (if (!= (pc-kind ox 0) K_ARR) (return 0))
+  (if (< (pc-ea ox 0) 1) (return 0))
+  (if (!= (pc-kind ox 1) K_NUM) (return 0))
+  (let [^I64 v (pc-num ox n 1)
+        ^I32 sc (pc-scale-cpt cx v)]
+    (cells-set cx (+ C_CUR G_DASH) sc)
+    (return 0)))
+
+(defn ^I32 pc-clip-box [^:mut ^Cells cx ^:mut ^Cells pa ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 kind
+                        ^I32 flags ^I32 pfirst ^I32 pcount]
+  (comment "Clip to the box (x0, y0, x1, y1) of a shape of `kind`: the region becomes its intersection with the clip in")
+  (comment "force. When that does not shrink the region there is nothing to record; else a `paths` row (a clip, SPEC")
+  (comment "8.4.3: z -1) holds the intersection, naming the clip it was cut from, and becomes the clip in force.")
+  (let [^I32 cur (cells-at cx (+ C_CUR G_CLIP))
+        ^:mut ^I32 ix0 x0
+        ^:mut ^I32 iy0 y0
+        ^:mut ^I32 ix1 x1
+        ^:mut ^I32 iy1 y1
+        ^:mut ^I32 same 0
+        ^:mut ^I32 cb 0
+        ^:mut ^I32 r 0]
+    (if (>= cur 0)
+      (do (set cb (pa-get pa cur (pf-x0)))
+          (if (> cb ix0) (set ix0 cb))
+          (set cb (pa-get pa cur (pf-y0)))
+          (if (> cb iy0) (set iy0 cb))
+          (set cb (pa-get pa cur (pf-x1)))
+          (if (< cb ix1) (set ix1 cb))
+          (set cb (pa-get pa cur (pf-y1)))
+          (if (< cb iy1) (set iy1 cb))
+          (if (and (== ix0 (pa-get pa cur (pf-x0)))
+                   (and (== iy0 (pa-get pa cur (pf-y0)))
+                        (and (== ix1 (pa-get pa cur (pf-x1))) (== iy1 (pa-get pa cur (pf-y1))))))
+            (set same 1))))
+    (if (== same 1) (return 0))
+    (if (>= (cells-at cx C_NPATH) PATH_ROWS)
+      (do (pc-warn-set cx W_PATHS)
+          (return 0)))
+    (set r (pa-new pa (cells-at cx C_PAGE) kind ix0 iy0 ix1 iy1))
+    (pa-set pa r (pf-flags) (+ (pg-clip) flags))
+    (pa-set pa r (pf-clip) cur)
+    (pa-set pa r (pf-mark) (cells-at cx C_MCTOP))
+    (pa-set pa r (pf-ocg) (cells-at cx C_CUROCG))
+    (pa-set pa r (pf-pfirst) pfirst)
+    (pa-set pa r (pf-pcount) pcount)
+    (cells-set cx C_NPATH (+ (cells-at cx C_NPATH) 1))
+    (cells-set cx (+ C_CUR G_CLIP) r)
+    (return 0)))
+
+(defn ^I32 pc-kind-of-path [^:mut ^Cells cx ^:mut ^Cells pts]
+  (comment "The `pa` kind of the path: a rectangle, a curve, a single line, else other.")
+  (if (== (pc-is-rect cx pts) 1) (return (pa-rect)))
+  (if (!= (bit-and (cells-at cx C_PFLAGS) 1) 0) (return (pa-curve)))
+  (if (and (== (cells-at cx C_PN) 2) (== (cells-at cx C_PNSUB) 1)) (return (pa-line)))
+  (return (pa-other)))
+
+(defn ^I32 pc-geom-kept [^Cells cx]
+  (comment "1 when the whole path is in `pts` (it had no more than PATH_KEEP points).")
+  (if (!= (bit-and (cells-at cx C_PFLAGS) 4) 0) (return 0))
+  (return 1))
+
+(defn ^I32 pc-end-path [^:mut ^Cells cx ^:mut ^Cells pa ^:mut ^Cells pts ^I32 fill ^I32 stroke ^I32 evenodd ^I32 closed]
+  (comment "A paint operator (or `n`) ends the path. If it filled or stroked, a `paths` row records it; then a pending")
+  (comment "`W` or `W*` clips to it. The row's box is the path's box, grown by half the stroke width when it strokes;")
+  (comment "its geometry is the path's rows of `pts` (kept when the path was short enough, else dropped).")
+  (let [^I32 n (cells-at cx C_PN)
+        ^I32 start (cells-at cx C_PPTS)
+        ^I32 kept (pc-geom-kept cx)
+        ^I32 pend (cells-at cx C_CLIPP)
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 half 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 wd 0
+        ^:mut ^I64 lwv (i64 0)
+        ^:mut ^I32 nrows 0
+        ^:mut ^I32 pfst -1
+        ^:mut ^I32 geom 0
+        ^:mut ^I32 painted 0]
+    (cells-set cx C_CLIPP 0)
+    (if (== n 0)
+      (do (pc-path-reset cx pts)
+          (return 0)))
+    (set kind (pc-kind-of-path cx pts))
+    (set nrows n)
+    (if (== kept 0) (set nrows 0))
+    (if (> nrows 0) (set pfst start))
+    (if (and (== kept 0) (> (cells-at cx C_PKEEP) 0))
+      (cells-drop pts (* start 3)))
+    (set geom nrows)
+    (if (or (== fill 1) (== stroke 1))
+      (do (if (>= (cells-at cx C_NPATH) PATH_ROWS)
+            (pc-warn-set cx W_PATHS)
+            (do (set painted 1)
+                (set fl 0)
+                (if (!= closed 0) (set fl (+ fl (pg-closed))))
+                (if (== evenodd 1) (set fl (+ fl (pg-evenodd))))
+                (if (== stroke 1)
+                  (do (set lwv (fx-get cx (+ C_CUR G_LW)))
+                      (set wd (pc-scale-cpt cx lwv))
+                      (set half (quot (+ wd 1) 2))
+                      (set fl (+ fl (pg-stroked)))))
+                (if (== fill 1)
+                  (do (set fl (+ fl (pg-filled)))
+                      (if (== (cells-at cx (+ C_CUR G_FAM)) 5) (set fl (+ fl (pg-pattern))))))
+                (if (!= (cells-at cx (+ C_CUR G_BM)) 0) (set fl (+ fl (pg-blend))))
+                (if (!= (cells-at cx (+ C_CUR G_SMASK)) 0) (set fl (+ fl (pg-softmask))))
+                (set r (pa-new pa (cells-at cx C_PAGE) kind
+                               (- (cells-at cx C_PBX0) half) (- (cells-at cx C_PBY0) half)
+                               (+ (cells-at cx C_PBX1) half) (+ (cells-at cx C_PBY1) half)))
+                (pa-set pa r (pf-flags) fl)
+                (if (== fill 1) (pa-set pa r (pf-fill) (cells-at cx (+ C_CUR G_COLOR))))
+                (if (== stroke 1)
+                  (do (pa-set pa r (pf-stroke) (cells-at cx (+ C_CUR G_SCOLOR)))
+                      (pa-set pa r (pf-width) wd)
+                      (pa-set pa r (pf-dash) (cells-at cx (+ C_CUR G_DASH)))))
+                (pa-set pa r (pf-falpha) (cells-at cx (+ C_CUR G_ALPHA)))
+                (pa-set pa r (pf-salpha) (cells-at cx (+ C_CUR G_SALPHA)))
+                (pa-set pa r (pf-z) (cells-at cx C_Z))
+                (cells-set cx C_Z (+ (cells-at cx C_Z) 1))
+                (pa-set pa r (pf-clip) (cells-at cx (+ C_CUR G_CLIP)))
+                (pa-set pa r (pf-mark) (cells-at cx C_MCTOP))
+                (pa-set pa r (pf-ocg) (cells-at cx C_CUROCG))
+                (pa-set pa r (pf-pfirst) pfst)
+                (pa-set pa r (pf-pcount) geom)
+                (cells-set cx C_NPATH (+ (cells-at cx C_NPATH) 1))))))
+    (if (!= pend 0)
+      (do (set fl 0)
+          (if (== pend 2) (set fl (pg-evenodd)))
+          (pc-clip-box cx pa (cells-at cx C_PBX0) (cells-at cx C_PBY0) (cells-at cx C_PBX1) (cells-at cx C_PBY1)
+                       kind fl pfst geom)))
+    (comment "A path whose geometry nobody kept leaves no rows behind.")
+    (if (and (== painted 0) (== pend 0))
+      (cells-drop pts (* start 3)))
+    (pc-path-reset cx pts)
+    (return 0)))
+
+(defn ^I32 pc-paint-op [^:mut ^Cells cx ^:mut ^Cells pa ^:mut ^Cells pts ^I32 op]
+  (comment "S s f F f* B B* b b* n: which of fill, stroke, even-odd and close each one means.")
+  (let [^:mut ^I32 fill 0
+        ^:mut ^I32 stroke 0
+        ^:mut ^I32 eo 0
+        ^:mut ^I32 shut 0]
+    (if (== op OP_STROKE) (set stroke 1))
+    (if (== op OP_CLOSESTROKE) (do (set stroke 1) (set shut 1)))
+    (if (or (== op OP_FILL) (== op OP_FILL2)) (set fill 1))
+    (if (== op OP_FILLEO) (do (set fill 1) (set eo 1)))
+    (if (== op OP_FS) (do (set fill 1) (set stroke 1)))
+    (if (== op OP_FSEO) (do (set fill 1) (set stroke 1) (set eo 1)))
+    (if (== op OP_CFS) (do (set fill 1) (set stroke 1) (set shut 1)))
+    (if (== op OP_CFSEO) (do (set fill 1) (set stroke 1) (set shut 1) (set eo 1)))
+    (if (== shut 1) (pc-op-close cx pts))
+    (pc-end-path cx pa pts fill stroke eo shut)
+    (return 0)))
+
+;; ---------------------------------------------------------------- colours
+
+(defn ^I32 pc-set-ink [^:mut ^Cells cx ^I32 stroke ^I32 key ^I32 cls ^I32 rgb]
+  (comment "Make (key, class, colour) the fill (stroke 0) or stroking (stroke 1) colour of the current state.")
+  (if (== stroke 1)
+    (do (cells-set cx (+ C_CUR G_SCS) key)
+        (cells-set cx (+ C_CUR G_SFAM) cls)
+        (cells-set cx (+ C_CUR G_SCOLOR) rgb))
+    (do (cells-set cx (+ C_CUR G_FCS) key)
+        (cells-set cx (+ C_CUR G_FAM) cls)
+        (cells-set cx (+ C_CUR G_COLOR) rgb)))
+  (return 0))
+
+(defn ^I32 pc-device-rgb [^Cells ox ^:mut ^Cells gx ^I32 n ^I32 space]
+  (comment "The colour of the first operands under DeviceGray (space 1), DeviceRGB (2) or DeviceCMYK (3): -1 when there are")
+  (comment "too few. The conversion is the colour module's, so a colour is the same however it was set.")
+  (let [^:mut ^I32 need 1
+        ^:mut ^I32 i 0
+        ^:mut ^I64 v (i64 0)]
+    (if (== space 2) (set need 3))
+    (if (== space 3) (set need 4))
+    (if (< n need) (return -1))
+    (while (< i need)
+      (do (set v (pc-num ox n i))
+          (gx-input gx i v)
+          (set i (+ i 1))))
+    (return (gx-entry-rgb gx (- space 1) need))))
+
+(defn ^I32 pc-color-device [^:mut ^Cells cx ^Cells ox ^:mut ^Cells gx ^I32 n ^I32 stroke ^I32 space]
+  (comment "g rg k G RG K: the device space, its class, and the colour.")
+  (let [^I32 rgb (pc-device-rgb ox gx n space)]
+    (if (< rgb 0) (return 0))
+    (pc-set-ink cx stroke (- 0 space) space rgb)
+    (return 0)))
+
+(defn ^I32 pc-cs-op [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                     ^:mut ^Cells out ^:mut ^Cells cx ^Cells ox ^:mut ^Cells gx ^I32 n ^I32 stroke]
+  (comment "cs, CS: the colour space named by operand 0: a device space, Pattern, or a /ColorSpace resource. The colour")
+  (comment "becomes the space's initial colour. A space this reader cannot read leaves an unknown colour (-1) and no class.")
+  (if (< n 1) (return 0))
+  (if (!= (pc-kind ox 0) K_NAME) (return 0))
+  (let [^:mut ^I32 key 0
+        ^:mut ^I32 raw 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 e -1]
+    (if (== (pc-entry-name-is ox 0 (pn-device-gray)) 1) (set key -1))
+    (if (== (pc-entry-name-is ox 0 (pn-device-rgb)) 1) (set key -2))
+    (if (== (pc-entry-name-is ox 0 (pn-device-cmyk)) 1) (set key -3))
+    (if (== (pc-entry-name-is ox 0 (pn-pattern)) 1) (set key -4))
+    (if (== key 0)
+      (do (set raw (pc-res-entry src ar dc a b st cx ox (pn-color-space) 0))
+          (if (!= raw 0) (set h (pd-resolve src ar dc a b st raw)))
+          (if (ps-missed src)
+            (do (cells-set cx C_ABORT 1)
+                (return 0)))
+          (if (!= h 0) (set key (gx-key-of src ar dc a b st h)))))
+    (if (!= key 0) (set e (gx-lookup src ar dc a b st out gx key)))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (if (< e 0)
+      (do (pc-set-ink cx stroke key 0 -1)
+          (return 0)))
+    (let [^I32 cls (gx-class gx e)
+          ^I32 rgb (gx-initial gx e)]
+      (pc-set-ink cx stroke key cls rgb)
+      (return 0))))
+
+(defn ^I32 pc-sc-op [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                     ^:mut ^Cells out ^:mut ^Cells cx ^Cells ox ^:mut ^Cells gx ^I32 n ^I32 stroke]
+  (comment "sc, scn, SC, SCN: a colour in the current space. A pattern space takes no components (its colour is")
+  (comment "unknown); a colour whose component count is not the space's is read by its count, as a device colour.")
+  (let [^:mut ^I32 key 0
+        ^:mut ^I32 e -1
+        ^:mut ^I32 nn 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 ncomp 0
+        ^:mut ^I32 rgb -1
+        ^:mut ^I32 cls 0
+        ^:mut ^I64 v (i64 0)]
+    (if (== stroke 1)
+      (set key (cells-at cx (+ C_CUR G_SCS)))
+      (set key (cells-at cx (+ C_CUR G_FCS))))
+    (if (!= key 0) (set e (gx-lookup src ar dc a b st out gx key)))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (while (and (< nn n) (== (pc-kind ox nn) K_NUM))
+      (set nn (+ nn 1)))
+    (if (== e -1)
+      (do (comment "A space that is not known: whatever colour was set is not.")
+          (pc-set-ink cx stroke key 0 -1)
+          (return 0)))
+    (if (== (gx-is-pattern gx e) 1)
+      (do (pc-set-ink cx stroke key 5 -1)
+          (return 0)))
+    (set ncomp (gx-ncomp gx e))
+    (if (> nn 32) (set nn 32))
+    (if (and (> nn 0) (== nn ncomp))
+      (do (set i 0)
+          (while (< i nn)
+            (do (set v (pc-num ox n i))
+                (gx-input gx i v)
+                (set i (+ i 1))))
+          (set rgb (gx-entry-rgb gx e nn))
+          (set cls (gx-class gx e))
+          (pc-set-ink cx stroke key cls rgb)
+          (return 0)))
+    (comment "The operands do not fit the space: read them by count, as a device colour, and keep the space.")
+    (if (and (> nn 0) (or (== nn 1) (or (== nn 3) (== nn 4))))
+      (do (if (== nn 1) (set rgb (pc-device-rgb ox gx n 1)))
+          (if (== nn 3) (set rgb (pc-device-rgb ox gx n 2)))
+          (if (== nn 4) (set rgb (pc-device-rgb ox gx n 3)))
+          (if (== stroke 1)
+            (cells-set cx (+ C_CUR G_SCOLOR) rgb)
+            (cells-set cx (+ C_CUR G_COLOR) rgb))))
+    (return 0)))
+
+;; ------------------------------------------------------ the extended graphics state
+
+(defn ^I32 pc-bm-code [^Cells ar ^I32 h]
+  (comment "A blend mode name's code: 0 Normal and Compatible, 1 Multiply, 2 Screen, 3 Overlay, 4 Darken, 5 Lighten,")
+  (comment "6 ColorDodge, 7 ColorBurn, 8 HardLight, 9 SoftLight, 10 Difference, 11 Exclusion, 12 Hue, 13 Saturation,")
+  (comment "14 Color, 15 Luminosity, 99 a name that is none of those.")
+  (if (== h 0) (return 0))
+  (if (!= (pl-kind-of ar h) 4) (return 0))
+  (if (or (== (px-is ar h (px-normal)) 1) (== (px-is ar h (px-compatible)) 1)) (return 0))
+  (if (== (px-is ar h (px-multiply)) 1) (return 1))
+  (if (== (px-is ar h (px-screen)) 1) (return 2))
+  (if (== (px-is ar h (px-overlay)) 1) (return 3))
+  (if (== (px-is ar h (px-darken)) 1) (return 4))
+  (if (== (px-is ar h (px-lighten)) 1) (return 5))
+  (if (== (px-is ar h (px-color-dodge)) 1) (return 6))
+  (if (== (px-is ar h (px-color-burn)) 1) (return 7))
+  (if (== (px-is ar h (px-hard-light)) 1) (return 8))
+  (if (== (px-is ar h (px-soft-light)) 1) (return 9))
+  (if (== (px-is ar h (px-difference)) 1) (return 10))
+  (if (== (px-is ar h (px-exclusion)) 1) (return 11))
+  (if (== (px-is ar h (px-hue)) 1) (return 12))
+  (if (== (px-is ar h (px-saturation)) 1) (return 13))
+  (if (== (px-is ar h (px-color)) 1) (return 14))
+  (if (== (px-is ar h (px-luminosity)) 1) (return 15))
+  (return 99))
+
+(defn ^I32 pc-alpha-of [^Cells ar ^I32 h]
+  (comment "A constant alpha as per-mille, clamped to 0..1000.")
+  (let [^I32 al (fx-round (fx-mul (pc-ar-fx64 ar h) (fx-of-int 1000)))]
+    (if (< al 0) (return 0))
+    (if (> al 1000) (return 1000))
+    (return al)))
+
+(defn ^I32 pc-gs-op [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                     ^:mut ^Cells cx ^Cells ox ^I32 n]
+  (comment "gs: the entries of the named ExtGState that matter here: /ca and /CA (alpha), /BM (the blend mode, the first")
+  (comment "name of an array), /SMask (/None, or a dictionary: its /S, Alpha or Luminosity) and /LW (the line width).")
+  (if (< n 1) (return 0))
+  (if (!= (pc-kind ox 0) K_NAME) (return 0))
+  (let [^I32 raw (pc-res-entry src ar dc a b st cx ox (pn-ext-g-state) 0)
+        ^:mut ^I32 gd 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 s 0]
+    (if (== raw 0) (return 0))
+    (set gd (pd-resolve src ar dc a b st raw))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (if (== gd 0) (return 0))
+    (set v (pd-dget src ar dc a b st gd (pn-ca)))
+    (if (!= v 0) (cells-set cx (+ C_CUR G_ALPHA) (pc-alpha-of ar v)))
+    (set v (px-dget src ar dc a b st gd (px-ca)))
+    (if (!= v 0) (cells-set cx (+ C_CUR G_SALPHA) (pc-alpha-of ar v)))
+    (set v (px-dget src ar dc a b st gd (px-bm)))
+    (if (!= v 0)
+      (do (if (== (pl-kind-of ar v) 6)
+            (do (set s (pl-first ar v))
+                (set v (pd-resolve src ar dc a b st s))))
+          (cells-set cx (+ C_CUR G_BM) (pc-bm-code ar v))))
+    (set v (px-dget src ar dc a b st gd (px-s-mask)))
+    (if (!= v 0)
+      (do (if (== (pl-kind-of ar v) 4)
+            (cells-set cx (+ C_CUR G_SMASK) 0))
+          (if (== (pl-kind-of ar v) 7)
+            (do (set s (px-dget src ar dc a b st v (px-s)))
+                (cells-set cx (+ C_CUR G_SMASK) 2)
+                (if (== (px-is ar s (px-alpha)) 1) (cells-set cx (+ C_CUR G_SMASK) 1))))))
+    (set v (px-dget src ar dc a b st gd (px-lw)))
+    (if (!= v 0)
+      (if (== (px-is-num ar v) 1)
+        (fx-put cx (+ C_CUR G_LW) (pc-ar-fx64 ar v))))
+    (if (ps-missed src) (cells-set cx C_ABORT 1))
+    (return 0)))
+
+;; ------------------------------------------------------------------- images
+
+(defn ^I32 pc-image-place [^:mut ^Cells cx ^:mut ^Cells im ^I32 obj ^I32 pxw ^I32 pxh ^I32 flags]
+  (comment "One image placement (SPEC 8.4.3): the unit square through the CTM. Its box is that parallelogram's, its `rot` the")
+  (comment "angle of the image's x axis, `skewed` 1 when its axes are not at a right angle (to half a degree).")
+  (let [^I64 one (fx-one)
+        ^I64 zero (i64 0)
+        ^I64 ma (fx-get cx (+ C_CUR G_CTM))
+        ^I64 mb (fx-get cx (+ (+ C_CUR G_CTM) 2))
+        ^I64 mc (fx-get cx (+ (+ C_CUR G_CTM) 4))
+        ^I64 md (fx-get cx (+ (+ C_CUR G_CTM) 6))
+        ^I64 ax (pc-tx cx zero zero)
+        ^I64 ay (pc-ty cx zero zero)
+        ^I64 bx (pc-tx cx one zero)
+        ^I64 by (pc-ty cx one zero)
+        ^I64 dx (pc-tx cx one one)
+        ^I64 dy (pc-ty cx one one)
+        ^I64 ex (pc-tx cx zero one)
+        ^I64 ey (pc-ty cx zero one)
+        ^I32 rot (pc-dir-angle ma mb)
+        ^I32 roty (pc-dir-angle mc md)
+        ^:mut ^I32 diff 0
+        ^:mut ^I32 skew 1
+        ^:mut ^I32 fl flags
+        ^:mut ^I32 chk 0
+        ^:mut ^I32 r 0]
+    (if (!= (cells-at cx (+ C_CUR G_BM)) 0) (set fl (+ fl (mg-blend))))
+    (if (!= (cells-at cx (+ C_CUR G_SMASK)) 0) (set fl (+ fl (mg-softmask))))
+    (if (!= (cells-at cx (+ C_CUR G_BM)) 0) (set chk (+ chk (vc-blend))))
+    (if (!= (cells-at cx (+ C_CUR G_SMASK)) 0) (set chk (+ chk (vc-softmask))))
+    (set diff (- roty rot))
+    (if (< diff 0) (set diff (+ diff 36000)))
+    (if (and (>= diff 8950) (<= diff 9050)) (set skew 0))
+    (if (and (>= diff 26950) (<= diff 27050)) (set skew 0))
+    (if (>= (cells-at cx C_NIMG) PATH_ROWS)
+      (do (pc-warn-set cx W_PATHS)
+          (return 0)))
+    (set r (im-new im (cells-at cx C_PAGE)
+                   (fx-round (pc-min4 ax bx dx ex)) (fx-round (pc-min4 ay by dy ey))
+                   (fx-round (pc-max4 ax bx dx ex)) (fx-round (pc-max4 ay by dy ey))
+                   obj pxw pxh))
+    (im-set im r (mf-alpha) (cells-at cx (+ C_CUR G_ALPHA)))
+    (im-set im r (mf-flags) fl)
+    (im-set im r (mf-rot) rot)
+    (im-set im r (mf-skewed) skew)
+    (im-set im r (mf-z) (cells-at cx C_Z))
+    (cells-set cx C_Z (+ (cells-at cx C_Z) 1))
+    (im-set im r (mf-clip) (cells-at cx (+ C_CUR G_CLIP)))
+    (im-set im r (mf-mark) (cells-at cx C_MCTOP))
+    (im-set im r (mf-ocg) (cells-at cx C_CUROCG))
+    (im-set im r (mf-vchk) chk)
+    (cells-set cx C_NIMG (+ (cells-at cx C_NIMG) 1))
+    (return 0)))
+
+(defn ^I32 pc-oc-open [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                       ^:mut ^Cells cx ^:mut ^Cells gx ^Cells gl ^Cells et ^:mut ^Cells mk ^I32 raw]
+  (comment "Open an optional-content span for the /OC entry `raw` of a Form XObject or an image (a `marks` row, kind")
+  (comment "optional-content, flagged `xobject`): its state is `gx-oc-state`'s. Answers 1 when opened, 0 when spans are")
+  (comment "too deep. The caller closes it with `pc-mc-pop`.")
+  (let [^I32 depth (cells-at cx C_MCDEPTH)
+        ^:mut ^I32 span 0
+        ^:mut ^I32 state 1]
+    (if (>= depth MAX_MC) (return 0))
+    (set state (gx-oc-state src ar dc a b st gx raw 0))
+    (set span (mk-open mk (cells-at cx C_PAGE) (mk-optional-content) (cells-len et) 0
+                       (cells-at cx C_MCTOP) (gl-count gl) (cells-at cx C_Z)))
+    (mk-set mk span (mkf-stm) (cells-at cx C_STM))
+    (mk-set mk span (mkf-flags) (mc-xobject))
+    (mk-set mk span (mkf-ocgdef) state)
+    (if (== (pl-kind-of ar raw) 9) (mk-set mk span (mkf-ocg) (pl-int-value ar raw)))
+    (cells-set cx C_MCTOP span)
+    (cells-set cx C_MCDEPTH (+ depth 1))
+    (cells-set cx C_CUROCG span)
+    (return 1)))
+
+(defn ^I32 pc-image-do [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                        ^:mut ^Cells cx ^:mut ^Cells gx ^Cells gl ^Cells et ^:mut ^Cells mk ^:mut ^Cells im
+                        ^I32 objnum ^I32 xh]
+  (comment "Do of an image XObject: a placement row. Its width and height are the dictionary's; the mask flags say what")
+  (comment "could make it translucent (a stencil mask, an /SMask, a /Mask); an /OC makes it a span of its own.")
+  (let [^I32 w (pd-dint src ar dc a b st xh (pn-width) 0)
+        ^I32 h (pd-dint src ar dc a b st xh (pn-height) 0)
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 ocraw 0
+        ^:mut ^I32 opened 0]
+    (set v (px-dget src ar dc a b st xh (px-image-mask)))
+    (if (!= v 0)
+      (if (and (== (pl-kind-of ar v) 1) (== (pl-int-value ar v) 1)) (set fl (+ fl (mg-mask)))))
+    (set v (px-dget src ar dc a b st xh (px-s-mask)))
+    (if (!= v 0) (set fl (+ fl (mg-smask))))
+    (set v (px-dget src ar dc a b st xh (px-mask)))
+    (if (!= v 0) (set fl (+ fl (mg-masked))))
+    (set ocraw (px-get ar xh (px-oc)))
+    (if (ps-missed src)
+      (do (cells-set cx C_ABORT 1)
+          (return 0)))
+    (if (!= ocraw 0)
+      (set opened (pc-oc-open src ar dc a b st cx gx gl et mk ocraw)))
+    (pc-image-place cx im objnum w h fl)
+    (if (== opened 1) (pc-mc-pop cx mk gl 0))
+    (return 0)))
+
+(defn ^I32 pc-name-px [^Cells ox ^I32 s ^I32 l ^I32 id]
+  (comment "1 when the name operand bytes ox[s, s+l) are row `id` of the catalogue name table (emon.pdfxnames).")
+  (let [^I32 n (px-span-at 0 id 1)
+        ^I32 o (px-span-at 0 id 0)
+        ^:mut ^I32 i 0]
+    (if (!= l n) (return 0))
+    (while (< i n)
+      (do (if (!= (cells-at ox (+ s i)) (px-chars-at 0 (+ o i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 pc-find-id [^Cells cx ^Cells cs]
+  (comment "BI: where the `ID` that ends the inline image's dictionary starts (the index of its `I`), or -1.")
+  (let [^I32 end (cells-at cx C_END)
+        ^:mut ^I32 p (cells-at cx C_POS)]
+    (while (< (+ p 2) end)
+      (do (if (and (== (pc-ws (cells-at cs p)) 1)
+                   (and (== (cells-at cs (+ p 1)) 73)
+                        (and (== (cells-at cs (+ p 2)) 68)
+                             (or (>= (+ p 3) end) (== (pc-ws (cells-at cs (+ p 3))) 1)))))
+            (return (+ p 1)))
+          (set p (+ p 1))))
+    (return -1)))
+
+(defn ^I32 pc-inline-image [^:mut ^Cells cx ^:mut ^Cells ox ^Cells cs ^:mut ^Cells im]
+  (comment "BI: read the dictionary up to `ID` (width, height, whether it is a stencil mask), record the placement, then")
+  (comment "leave the lexer where it was for `pc-skip-inline` to find the end of the data.")
+  (let [^I32 start (cells-at cx C_POS)
+        ^I32 end (cells-at cx C_END)
+        ^I32 idp (pc-find-id cx cs)
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 ks 0
+        ^:mut ^I32 kl 0
+        ^:mut ^I32 r 1
+        ^:mut ^I32 total 0
+        ^:mut ^I32 nxt 0]
+    (if (< idp 0)
+      (do (pc-image-place cx im 0 0 0 (mg-inline))
+          (return 0)))
+    (cells-set cx C_END idp)
+    (pc-ox-clear cx ox)
+    (while (== r 1)
+      (do (set r (pc-lex cx ox cs))
+          (if (== r 2) (set r 0))))
+    (set total (cells-at cx C_OXN))
+    (set j 0)
+    (while (< j total)
+      (do (set nxt (+ j 1))
+          (if (and (== (pc-kind ox j) K_NAME) (< nxt total))
+            (do (set ks (pc-ea ox j))
+                (set kl (pc-eb ox j))
+                (if (== (pc-kind ox nxt) K_NUM)
+                  (do (set v (fx-round (fx-join (pc-ea ox nxt) (pc-eb ox nxt))))
+                      (if (or (== (pc-name-eq ox ks kl (pn-width)) 1) (== (pc-name-eq ox ks kl (pn-w)) 1)) (set w v))
+                      (if (or (== (pc-name-eq ox ks kl (pn-height)) 1) (== (pc-name-px ox ks kl (px-h)) 1)) (set h v))))
+                (if (== (pc-kind ox nxt) K_BOOL)
+                  (if (or (== (pc-name-px ox ks kl (px-im)) 1) (== (pc-name-px ox ks kl (px-image-mask)) 1))
+                    (if (== (pc-ea ox nxt) 1) (set fl (mg-mask)))))
+                (set j (+ nxt (pc-esize ox nxt))))
+            (set j (+ j (pc-esize ox j))))))
+    (cells-set cx C_END end)
+    (cells-set cx C_POS start)
+    (pc-ox-clear cx ox)
+    (pc-image-place cx im 0 w h (+ (mg-inline) fl))
+    (return 0)))
+
+;; ---------------------------------------------------------------- shading fills
+
+(defn ^I32 pc-sh-op [^:mut ^Cells cx ^:mut ^Cells pa]
+  (comment "sh: a shading fills the whole clip region. A row of kind `other`, flagged `shading`, whose box is the region's")
+  (comment "(the page when nothing clips) and whose colour is unknown: P3.6 reads it as paint that is not exactly known.")
+  (let [^I32 cur (cells-at cx (+ C_CUR G_CLIP))
+        ^:mut ^I32 r 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 fl 0]
+    (if (>= (cells-at cx C_NPATH) PATH_ROWS)
+      (do (pc-warn-set cx W_PATHS)
+          (return 0)))
+    (set bx0 0)
+    (set by0 0)
+    (set bx1 (cells-at cx C_PW))
+    (set by1 (cells-at cx C_PH))
+    (if (>= cur 0)
+      (do (set bx0 (pa-get pa cur (pf-x0)))
+          (set by0 (pa-get pa cur (pf-y0)))
+          (set bx1 (pa-get pa cur (pf-x1)))
+          (set by1 (pa-get pa cur (pf-y1)))))
+    (set r (pa-new pa (cells-at cx C_PAGE) (pa-other) bx0 by0 bx1 by1))
+    (set fl (+ (pg-filled) (pg-shading)))
+    (if (!= (cells-at cx (+ C_CUR G_BM)) 0) (set fl (+ fl (pg-blend))))
+    (if (!= (cells-at cx (+ C_CUR G_SMASK)) 0) (set fl (+ fl (pg-softmask))))
+    (pa-set pa r (pf-flags) fl)
+    (pa-set pa r (pf-falpha) (cells-at cx (+ C_CUR G_ALPHA)))
+    (pa-set pa r (pf-z) (cells-at cx C_Z))
+    (cells-set cx C_Z (+ (cells-at cx C_Z) 1))
+    (pa-set pa r (pf-clip) cur)
+    (pa-set pa r (pf-mark) (cells-at cx C_MCTOP))
+    (pa-set pa r (pf-ocg) (cells-at cx C_CUROCG))
+    (cells-set cx C_NPATH (+ (cells-at cx C_NPATH) 1))
+    (return 0)))
+
 ;; ----------------------------------------------------------- Form XObjects
 
 (defn ^I32 pc-append-stream [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
@@ -1694,11 +2580,11 @@
                   ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
                   ^:mut ^Cells cs ^:mut ^Cells out
                   ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
-                  ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^I32 n]
-  (comment "Do: run the Form XObject named by operand 0. Images and everything that is")
-  (comment "not a form are skipped. The form's /Matrix is concatenated to the CTM, its")
-  (comment "/Resources replace the current ones (else they are inherited), and it runs")
-  (comment "inside its own `q`/`Q`.")
+                  ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt
+                  ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx ^I32 n]
+  (comment "Do: an image XObject is a placement (`pc-image-do`); a Form XObject is run. The form's /Matrix is")
+  (comment "concatenated to the CTM, its /BBox clips (a rectangle in its own space), its /Resources replace the current")
+  (comment "ones (else they are inherited), an /OC makes it an optional-content span, and it runs inside its own `q`/`Q`.")
   (if (< n 1) (return 0))
   (if (!= (pc-kind ox 0) K_NAME) (return 0))
   (let [^I32 raw (pc-res-entry src ar dc a b st cx ox (pn-x-object) 0)
@@ -1715,7 +2601,14 @@
         ^:mut ^I32 oldstm 0
         ^:mut ^I32 start 0
         ^:mut ^I32 endcs 0
-        ^:mut ^I32 status 0]
+        ^:mut ^I32 status 0
+        ^:mut ^I32 bb 0
+        ^:mut ^I32 ocraw 0
+        ^:mut ^I32 opened 0
+        ^:mut ^I64 bx0 (i64 0)
+        ^:mut ^I64 by0 (i64 0)
+        ^:mut ^I64 bx1 (i64 0)
+        ^:mut ^I64 by1 (i64 0)]
     (if (ps-missed src)
       (do (cells-set cx C_ABORT 1)
           (return 0)))
@@ -1737,6 +2630,9 @@
       (do (cells-set cx C_ABORT 1)
           (return 0)))
     (if (== sub 0) (return 0))
+    (if (== (pl-name-is ar sub (pn-image)) 1)
+      (do (pc-image-do src ar dc a b st cx gx gl et mk im objnum xh)
+          (return 0)))
     (if (== (pl-name-is ar sub (pn-form)) 0) (return 0))
     (comment "Depth and cycles: a form deeper than FORM_DEPTH, or already running, is skipped.")
     (set fd (cells-at cx C_FDEPTH))
@@ -1760,6 +2656,20 @@
                 (set el (pl-next ar el))
                 (set got (+ got 1))))
           (if (< got 6) (mx-ident cx C_TMP))))
+    (comment "Its /BBox, kept as four Fx until the form's state is made.")
+    (set bb (pd-dget src ar dc a b st xh (pn-b-box)))
+    (set got 0)
+    (if (and (!= bb 0) (== (pl-kind-of ar bb) 6))
+      (do (set el (pl-first ar bb))
+          (while (and (!= el 0) (< got 4))
+            (do (set sub (pd-resolve src ar dc a b st el))
+                (if (== (px-is-num ar sub) 0)
+                  (do (set got 0)
+                      (set el 0))
+                  (do (fx-put cx (+ C_BB (* got 2)) (pc-ar-fx64 ar sub))
+                      (set el (pl-next ar el))
+                      (set got (+ got 1))))))))
+    (set ocraw (px-get ar xh (px-oc)))
     (set res (pd-dget src ar dc a b st xh (pn-resources)))
     (set oldres (cells-at cx C_RES))
     (set oldstm (cells-at cx C_STM))
@@ -1770,11 +2680,24 @@
     (if (== status -1) (return 0))
     (pc-save cx)
     (mx-mul cx (+ C_CUR G_CTM) C_TMP (+ C_CUR G_CTM))
+    (if (== got 4)
+      (do (comment "The form's box clips what it paints: a rectangle through the CTM.")
+          (pc-path-reset cx pts)
+          (set bx0 (fx-get cx C_BB))
+          (set by0 (fx-get cx (+ C_BB 2)))
+          (set bx1 (fx-get cx (+ C_BB 4)))
+          (set by1 (fx-get cx (+ C_BB 6)))
+          (pc-rect-path cx pts bx0 by0 (- bx1 bx0) (- by1 by0))
+          (cells-set cx C_CLIPP 1)
+          (pc-end-path cx pa pts 0 0 0 1)))
+    (if (!= ocraw 0)
+      (set opened (pc-oc-open src ar dc a b st cx gx gl et mk ocraw)))
     (cells-set cx (+ C_FSTACK fd) objnum)
     (cells-set cx C_FDEPTH (+ fd 1))
     (cells-set cx C_STM objnum)
     (set endcs (cells-len cs))
-    (pc-run src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt start endcs)
+    (pc-run src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pa im pts gx start endcs)
+    (if (== opened 1) (pc-mc-pop cx mk gl 0))
     (cells-set cx C_FDEPTH fd)
     (cells-set cx C_STM oldstm)
     (cells-set cx C_RES oldres)
@@ -1799,7 +2722,8 @@
                   ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells cx ^:mut ^Cells ox
                   ^:mut ^Cells cs ^:mut ^Cells out
                   ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
-                  ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^I32 op ^I32 n]
+                  ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt
+                  ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx ^I32 op ^I32 n]
   (comment "Execute one operator; `ox` holds its n operands. Unknown operators do")
   (comment "nothing (their operands are dropped by the caller).")
   (if (== op OP_SAVE)
@@ -1816,9 +2740,16 @@
     (do (mx-ident cx C_TM)
         (mx-ident cx C_TLM)
         (cells-set cx C_INTEXT 1)
+        (cells-set cx C_TCN 0)
         (return 0)))
   (if (== op OP_ET)
-    (do (cells-set cx C_INTEXT 0) (return 0)))
+    (do (cells-set cx C_INTEXT 0)
+        (if (> (cells-at cx C_TCN) 0)
+          (do (comment "Glyphs shown in a clipping render mode (4 to 7) clip to their boxes' union (a superset of the glyphs).")
+              (pc-clip-box cx pa (cells-at cx C_TCX0) (cells-at cx C_TCY0) (cells-at cx C_TCX1) (cells-at cx C_TCY1)
+                           (pa-other) 0 -1 0)
+              (cells-set cx C_TCN 0)))
+        (return 0)))
   (if (== op OP_TF)
     (do (pc-tf src ar dc a b st cx ox n) (return 0)))
   (if (== op OP_TCHAR)
@@ -1871,43 +2802,70 @@
               (pc-show-str cx ox gl et f0 f1 f2 f3 2)))
         (return 0)))
   (if (== op OP_DO)
-    (do (pc-do src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt n) (return 0)))
+    (do (pc-do src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pa im pts gx n) (return 0)))
   (if (== op OP_BDC)
-    (do (pc-mc-begin src ar dc a b st cx ox gl et mk fnt n 1) (return 0)))
+    (do (pc-mc-begin src ar dc a b st cx ox gl et mk fnt gx n 1) (return 0)))
   (if (== op OP_BMC)
-    (do (pc-mc-begin src ar dc a b st cx ox gl et mk fnt n 0) (return 0)))
+    (do (pc-mc-begin src ar dc a b st cx ox gl et mk fnt gx n 0) (return 0)))
   (if (== op OP_EMC)
     (do (pc-mc-end cx mk gl) (return 0)))
   (if (== op OP_BI)
-    (do (pc-skip-inline cx cs) (return 0)))
-  (if (or (== op OP_GRAY) (or (== op OP_RGB) (or (== op OP_CMYK) (or (== op OP_SC) (== op OP_SCN)))))
-    (do (pc-set-color cx ox n) (return 0)))
+    (do (pc-inline-image cx ox cs im)
+        (pc-skip-inline cx cs)
+        (return 0)))
+  (comment "Colour: the device operators, the named spaces, the components.")
+  (if (== op OP_GRAY)
+    (do (pc-color-device cx ox gx n 0 1) (return 0)))
+  (if (== op OP_RGB)
+    (do (pc-color-device cx ox gx n 0 2) (return 0)))
+  (if (== op OP_CMYK)
+    (do (pc-color-device cx ox gx n 0 3) (return 0)))
+  (if (== op OP_GRAY_S)
+    (do (pc-color-device cx ox gx n 1 1) (return 0)))
+  (if (== op OP_RGB_S)
+    (do (pc-color-device cx ox gx n 1 2) (return 0)))
+  (if (== op OP_CMYK_S)
+    (do (pc-color-device cx ox gx n 1 3) (return 0)))
+  (if (or (== op OP_SC) (== op OP_SCN))
+    (do (pc-sc-op src ar dc a b st out cx ox gx n 0) (return 0)))
+  (if (or (== op OP_SC_S) (== op OP_SCN_S))
+    (do (pc-sc-op src ar dc a b st out cx ox gx n 1) (return 0)))
   (if (== op OP_CS)
-    (do (cells-set cx (+ C_CUR G_COLOR) 0)
-        (if (and (>= n 1) (== (pc-kind ox 0) K_NAME))
-          (do (cells-set cx (+ C_CUR G_FAM) 0)
-              (if (== (pc-entry-name-is ox 0 (pn-device-gray)) 1)
-                (cells-set cx (+ C_CUR G_FAM) 1))
-              (if (== (pc-entry-name-is ox 0 (pn-device-rgb)) 1)
-                (cells-set cx (+ C_CUR G_FAM) 2))
-              (if (== (pc-entry-name-is ox 0 (pn-device-cmyk)) 1)
-                (cells-set cx (+ C_CUR G_FAM) 3))))
-        (return 0)))
+    (do (pc-cs-op src ar dc a b st out cx ox gx n 0) (return 0)))
+  (if (== op OP_CS_S)
+    (do (pc-cs-op src ar dc a b st out cx ox gx n 1) (return 0)))
   (if (== op OP_GS)
-    (do (if (and (>= n 1) (== (pc-kind ox 0) K_NAME))
-          (do (let [^I32 raw (pc-res-entry src ar dc a b st cx ox (pn-ext-g-state) 0)]
-                (if (!= raw 0)
-                  (do (let [^I32 gd (pd-resolve src ar dc a b st raw)]
-                        (if (!= gd 0)
-                          (do (let [^I32 cav (pd-dget src ar dc a b st gd (pn-ca))]
-                                (if (!= cav 0)
-                                  (do (let [^I32 al (fx-round (fx-mul (pc-ar-fx64 ar cav) (fx-of-int 1000)))]
-                                        (if (< al 0) (cells-set cx (+ C_CUR G_ALPHA) 0)
-                                          (if (> al 1000) (cells-set cx (+ C_CUR G_ALPHA) 1000)
-                                            (cells-set cx (+ C_CUR G_ALPHA) al)))))))))))))
-              (if (ps-missed src)
-                (cells-set cx C_ABORT 1))))
-        (return 0)))
+    (do (pc-gs-op src ar dc a b st cx ox n) (return 0)))
+  (comment "Paths: construction, painting, clipping.")
+  (if (== op OP_MOVE)
+    (do (pc-op-move cx pts ox n) (return 0)))
+  (if (== op OP_LINE)
+    (do (pc-op-line cx pts ox n) (return 0)))
+  (if (== op OP_CURVE)
+    (do (pc-op-curve cx pts ox n 0) (return 0)))
+  (if (== op OP_CURVE_V)
+    (do (pc-op-curve cx pts ox n 1) (return 0)))
+  (if (== op OP_CURVE_Y)
+    (do (pc-op-curve cx pts ox n 2) (return 0)))
+  (if (== op OP_CLOSE)
+    (do (pc-op-close cx pts) (return 0)))
+  (if (== op OP_RECT)
+    (do (pc-op-rect cx pts ox n) (return 0)))
+  (if (or (== op OP_STROKE) (or (== op OP_CLOSESTROKE) (or (== op OP_FILL) (or (== op OP_FILL2) (or (== op OP_FILLEO)
+          (or (== op OP_FS) (or (== op OP_FSEO) (or (== op OP_CFS) (== op OP_CFSEO)))))))))
+    (do (pc-paint-op cx pa pts op) (return 0)))
+  (if (== op OP_ENDPATH)
+    (do (pc-end-path cx pa pts 0 0 0 0) (return 0)))
+  (if (== op OP_CLIP)
+    (do (cells-set cx C_CLIPP 1) (return 0)))
+  (if (== op OP_CLIPEO)
+    (do (cells-set cx C_CLIPP 2) (return 0)))
+  (if (== op OP_SH)
+    (do (pc-sh-op cx pa) (return 0)))
+  (if (== op OP_LW)
+    (do (fx-put cx (+ C_CUR G_LW) (pc-num ox n 0)) (return 0)))
+  (if (== op OP_DASH)
+    (do (pc-dash-op cx ox n) (return 0)))
   (return 0))
 
 ;; ------------------------------------------------------------------ the loop
@@ -1917,6 +2875,7 @@
                    ^:mut ^Cells cs ^:mut ^Cells out
                    ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
                    ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt
+                   ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx
                    ^I32 start ^I32 end]
   (comment "Run the content bytes cs[start, end): read operands, then execute each")
   (comment "operator. The caller's lexer position, graphics-state floor and marked-")
@@ -1946,7 +2905,7 @@
                   (limit-breach 5 ops))
                 (set opc (cells-at cx C_OP))
                 (set nop (cells-at cx C_OXN))
-                (pc-op src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt opc nop)
+                (pc-op src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pa im pts gx opc nop)
                 (pc-ox-clear cx ox)))))
     (comment "What the stream left open: spans, graphics states.")
     (while (> (cells-at cx C_MCDEPTH) (cells-at cx C_MCBASE))
@@ -2059,6 +3018,11 @@
     (if (<= d 50) (return 1))
     (return 0)))
 
+(defn ^I32 pc-hidden-mode [^I32 mode]
+  (comment "1 for the invisible render modes, 3 and 7.")
+  (if (or (== mode 3) (== mode 7)) (return 1))
+  (return 0))
+
 (defn ^I32 pc-continues [^Cells gl ^I32 p ^I32 g]
   (comment "1 when glyph g continues the word glyph p is in: the same rotation, on the")
   (comment "same baseline (to 45 percent of the size: sub- and superscripts stay), and")
@@ -2071,6 +3035,10 @@
         ^:mut ^I32 gap 0
         ^:mut ^I32 off 0]
     (if (== (pc-rot-same rot (gl-get gl g (gf-rot))) 0) (return 0))
+    (comment "A word is one thing to see: a glyph of another visibility, or one that is hidden (mode 3, 7) where the other")
+    (comment "is not, starts a new word (P3.6).")
+    (if (!= (gl-get gl p (gf-vis)) (gl-get gl g (gf-vis))) (return 0))
+    (if (!= (pc-hidden-mode (gl-get gl p (gf-mode))) (pc-hidden-mode (gl-get gl g (gf-mode)))) (return 0))
     (if (> sizep sz) (set sz sizep))
     (if (> sz 200000) (set sz 200000))
     (if (< sz (- 0 200000)) (set sz (- 0 200000)))
@@ -2143,7 +3111,7 @@
           (if (< (gl-get gl j (ch-y0)) y0) (set y0 (gl-get gl j (ch-y0))))
           (if (> (gl-get gl j (ch-x1)) x1) (set x1 (gl-get gl j (ch-x1))))
           (if (> (gl-get gl j (ch-y1)) y1) (set y1 (gl-get gl j (ch-y1))))
-          (if (!= (gl-get gl j (gf-mode)) 3) (set visible 1))
+          (if (and (!= (gl-get gl j (gf-mode)) 3) (!= (gl-get gl j (gf-mode)) 7)) (set visible 1))
           (set cl (pc-gcls gl j))
           (if (== cl 1) (set nr (+ nr 1)))
           (if (== cl 2) (set nl (+ nl 1)))
@@ -2410,6 +3378,10 @@
   (cells-set cx C_CUROCG -1)
   (cells-set cx C_Z 0)
   (cells-set cx C_INTEXT 0)
+  (cells-set cx C_CLIPP 0)
+  (cells-set cx C_TCN 0)
+  (cells-set cx C_NPATH 0)
+  (cells-set cx C_NIMG 0)
   (cells-set cx C_GSBASE 0)
   (mx-ident cx C_TM)
   (mx-ident cx C_TLM)
@@ -2421,7 +3393,8 @@
                           ^:mut ^Cells cs ^:mut ^Cells out
                           ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
                           ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt
-                          ^Cells pg ^I32 pi ^I32 page ^:mut ^Cells wd ^:mut ^Cells ln]
+                          ^Cells pg ^I32 pi ^I32 page ^:mut ^Cells wd ^:mut ^Cells ln
+                          ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx]
   (comment "Interpret page index pi of the page table pg (page number `page`, 1-based, is")
   (comment "what the evidence records): its content streams, then the words and lines.")
   (comment "Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is")
@@ -2429,6 +3402,11 @@
   (let [^I32 con (pd-pg-contents pg pi)
         ^I32 g0 (gl-count gl)
         ^I32 w0 (wd-count wd)
+        ^I32 p0 (pa-count pa)
+        ^I32 i0 (im-count im)
+        ^I32 rot (pd-pg-rotate pg pi)
+        ^I32 cw (- (pd-pg-crop pg pi 2) (pd-pg-crop pg pi 0))
+        ^I32 ch (- (pd-pg-crop pg pi 3) (pd-pg-crop pg pi 1))
         ^:mut ^I32 el 0
         ^:mut ^I32 eh 0
         ^:mut ^I32 endcs 0]
@@ -2436,6 +3414,14 @@
     (pc-base-matrix cx (pd-pg-crop pg pi 0) (pd-pg-crop pg pi 1) (pd-pg-crop pg pi 2)
                     (pd-pg-crop pg pi 3) (pd-pg-rotate pg pi))
     (pc-gs-reset cx)
+    (gx-page gx)
+    (gx-oc-read src ar dc a b st gx)
+    (if (or (== rot 90) (== rot 270))
+      (do (cells-set cx C_PW ch)
+          (cells-set cx C_PH cw))
+      (do (cells-set cx C_PW cw)
+          (cells-set cx C_PH ch)))
+    (pc-path-reset cx pts)
     (cells-set cx C_RES (pd-pg-resources pg pi))
     (cells-drop cs 0)
     (if (!= con 0)
@@ -2452,9 +3438,12 @@
                       (set el (pl-next ar el))))))))
     (if (== (cells-at cx C_ABORT) 1) (return 7))
     (set endcs (cells-len cs))
-    (pc-run src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt 0 endcs)
+    (pc-run src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pa im pts gx 0 endcs)
     (if (== (cells-at cx C_ABORT) 1) (return 7))
     (if (ps-missed src) (return 7))
+    (comment "The path in progress when the page ended never painted: its points are dropped.")
+    (cells-drop pts (* (cells-at cx C_PPTS) 3))
+    (pv-page gl mk pa im (cells-at cx C_PW) (cells-at cx C_PH) g0 p0 i0)
     (pc-group gl et wd ln fnt page g0 w0)
     (return 0)))
 
@@ -2463,17 +3452,19 @@
                               ^:mut ^Cells cs ^:mut ^Cells out
                               ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
                               ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt
-                              ^:mut ^Cells pg ^:mut ^Cells wd ^:mut ^Cells ln]
+                              ^:mut ^Cells pg ^:mut ^Cells wd ^:mut ^Cells ln
+                              ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx]
   (comment "Every page of an opened document (`pd-open` has answered 0): clears `cx`,")
   (comment "then `pc-page` for each page. Answers 0, or 7 when the source missed.")
   (pc-init cx ox)
   (cells-drop fnt 0)
+  (cells-drop gx 0)
   (let [^I32 n (pd-pages src ar dc a b st pg)
         ^:mut ^I32 i 0
         ^:mut ^I32 status 0]
     (if (< n 0) (return 7))
     (while (< i n)
-      (do (set status (pc-page src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg i (+ i 1) wd ln))
+      (do (set status (pc-page src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg i (+ i 1) wd ln pa im pts gx))
           (if (== status 7) (return 7))
           (set i (+ i 1))))
     (return 0)))

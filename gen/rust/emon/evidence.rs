@@ -58,6 +58,12 @@ pub fn vz_zero_size() -> i32 {
 pub fn vz_occluded() -> i32 {
     return 5;
 }
+pub fn vz_ocg_hidden() -> i32 {
+    return 6;
+}
+pub fn vz_transparent() -> i32 {
+    return 7;
+}
 pub fn vz_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "clipped");
@@ -77,6 +83,14 @@ pub fn vz_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 5 {
         crate::port::text_ascii(t, "occluded");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "ocg-hidden");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "transparent");
         return 1;
     }
     return 0;
@@ -280,6 +294,24 @@ pub fn pg_evenodd() -> i32 {
 pub fn pg_clip() -> i32 {
     return 4;
 }
+pub fn pg_filled() -> i32 {
+    return 8;
+}
+pub fn pg_stroked() -> i32 {
+    return 16;
+}
+pub fn pg_shading() -> i32 {
+    return 32;
+}
+pub fn pg_pattern() -> i32 {
+    return 64;
+}
+pub fn pg_blend() -> i32 {
+    return 128;
+}
+pub fn pg_softmask() -> i32 {
+    return 256;
+}
 pub fn pg_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "closed");
@@ -293,6 +325,30 @@ pub fn pg_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "clip");
         return 1;
     }
+    if code == 8 {
+        crate::port::text_ascii(t, "filled");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "stroked");
+        return 1;
+    }
+    if code == 32 {
+        crate::port::text_ascii(t, "shading");
+        return 1;
+    }
+    if code == 64 {
+        crate::port::text_ascii(t, "pattern");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "blend");
+        return 1;
+    }
+    if code == 256 {
+        crate::port::text_ascii(t, "softmask");
+        return 1;
+    }
     return 0;
 }
 pub fn mg_mask() -> i32 {
@@ -303,6 +359,15 @@ pub fn mg_smask() -> i32 {
 }
 pub fn mg_inline() -> i32 {
     return 4;
+}
+pub fn mg_masked() -> i32 {
+    return 8;
+}
+pub fn mg_blend() -> i32 {
+    return 16;
+}
+pub fn mg_softmask() -> i32 {
+    return 32;
 }
 pub fn mg_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
@@ -315,6 +380,18 @@ pub fn mg_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 4 {
         crate::port::text_ascii(t, "inline");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "masked");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "blend");
+        return 1;
+    }
+    if code == 32 {
+        crate::port::text_ascii(t, "softmask");
         return 1;
     }
     return 0;
@@ -331,6 +408,9 @@ pub fn mc_unresolved() -> i32 {
 pub fn mc_unterminated() -> i32 {
     return 8;
 }
+pub fn mc_xobject() -> i32 {
+    return 16;
+}
 pub fn mc_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "inline");
@@ -346,6 +426,10 @@ pub fn mc_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 8 {
         crate::port::text_ascii(t, "unterminated");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "xobject");
         return 1;
     }
     return 0;
@@ -461,6 +545,18 @@ pub fn vc_zero_size() -> i32 {
 pub fn vc_occlusion() -> i32 {
     return 16;
 }
+pub fn vc_ocg() -> i32 {
+    return 32;
+}
+pub fn vc_transparent() -> i32 {
+    return 64;
+}
+pub fn vc_blend() -> i32 {
+    return 128;
+}
+pub fn vc_softmask() -> i32 {
+    return 256;
+}
 pub fn vc_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "clip");
@@ -480,6 +576,22 @@ pub fn vc_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 16 {
         crate::port::text_ascii(t, "occlusion");
+        return 1;
+    }
+    if code == 32 {
+        crate::port::text_ascii(t, "ocg");
+        return 1;
+    }
+    if code == 64 {
+        crate::port::text_ascii(t, "transparent");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "blend");
+        return 1;
+    }
+    if code == 256 {
+        crate::port::text_ascii(t, "softmask");
         return 1;
     }
     return 0;
@@ -5988,7 +6100,7 @@ pub(crate) fn ev_fbits(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port:
     }
     if which > 3 {
         crate::port::text_ascii(t, "[");
-        while b < 8 {
+        while b < 16 {
             if (v & bit) != 0 {
                 js_fsep(t, pr, k);
                 crate::port::text_ascii(t, "\"");

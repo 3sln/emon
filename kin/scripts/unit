@@ -99,6 +99,10 @@ bb -cp tools:tools/lib tools/accuracy/test_score.clj
 kin/scripts/content-fixtures --check
 kin/scripts/content-check
 
+# THE VISIBILITY FIXTURES (P3.5, P3.6, D134-D139): the PDFs and the by-hand expectation rows are what the babashka script writes
+# (the colours of the colour-space fixture come from its second evaluator). The laws of kin/pdfvistest.kin are the gate.
+kin/scripts/vis-fixtures --check
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then

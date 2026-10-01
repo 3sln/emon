@@ -75,14 +75,22 @@ pub(crate) fn fz_content(src: &crate::port::Src, mut ar: &mut crate::port::Cells
     let fnt: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let s: i32 = pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s: i32 = pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
     let mut g: i32 = 0;
     let mut h: i32 = 7;
+    let mut hv: i32 = 7;
     crate::port::text_ascii(t, " content=");
     crate::port::text_i32(t, s);
     if s == 0 {
         while g < gl_count(gl) {
             h = fz_mix(h, gl_get(gl, g, ch_cp()));
+            hv = fz_mix(hv, gl_get(gl, g, gf_vis()));
+            hv = fz_mix(hv, gl_get(gl, g, gf_vby()));
+            hv = fz_mix(hv, gl_get(gl, g, gf_vchk()));
             g += 1;
         }
         crate::port::text_ascii(t, " cwarn=");
@@ -97,6 +105,12 @@ pub(crate) fn fz_content(src: &crate::port::Src, mut ar: &mut crate::port::Cells
         crate::port::text_i32(t, mk_count(mk));
         crate::port::text_ascii(t, " cps=");
         crate::port::text_i32(t, h);
+        crate::port::text_ascii(t, " paths=");
+        crate::port::text_i32(t, pa_count(pa));
+        crate::port::text_ascii(t, " images=");
+        crate::port::text_i32(t, im_count(im));
+        crate::port::text_ascii(t, " vis=");
+        crate::port::text_i32(t, hv);
     }
     return s;
 }

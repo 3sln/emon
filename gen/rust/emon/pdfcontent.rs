@@ -6,9 +6,13 @@ use crate::emon::fx::*;
 use crate::emon::model::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdffont::*;
+use crate::emon::pdfgfx::*;
 use crate::emon::pdflex::*;
 use crate::emon::pdfnames::*;
 use crate::emon::pdfsrc::*;
+use crate::emon::pdfvis::*;
+use crate::emon::pdfx::*;
+use crate::emon::pdfxnames::*;
 
 pub(crate) const OP_SAVE: i32 = 113;
 pub(crate) const OP_RESTORE: i32 = 81;
@@ -42,6 +46,34 @@ pub(crate) const OP_CMYK: i32 = 107;
 pub(crate) const OP_SC: i32 = 25459;
 pub(crate) const OP_SCN: i32 = 7234419;
 pub(crate) const OP_CS: i32 = 29539;
+pub(crate) const OP_GRAY_S: i32 = 71;
+pub(crate) const OP_RGB_S: i32 = 18258;
+pub(crate) const OP_CMYK_S: i32 = 75;
+pub(crate) const OP_SC_S: i32 = 17235;
+pub(crate) const OP_SCN_S: i32 = 5129043;
+pub(crate) const OP_CS_S: i32 = 21315;
+pub(crate) const OP_MOVE: i32 = 109;
+pub(crate) const OP_LINE: i32 = 108;
+pub(crate) const OP_CURVE: i32 = 99;
+pub(crate) const OP_CURVE_V: i32 = 118;
+pub(crate) const OP_CURVE_Y: i32 = 121;
+pub(crate) const OP_CLOSE: i32 = 104;
+pub(crate) const OP_RECT: i32 = 25970;
+pub(crate) const OP_STROKE: i32 = 83;
+pub(crate) const OP_CLOSESTROKE: i32 = 115;
+pub(crate) const OP_FILL: i32 = 102;
+pub(crate) const OP_FILL2: i32 = 70;
+pub(crate) const OP_FILLEO: i32 = 10854;
+pub(crate) const OP_FS: i32 = 66;
+pub(crate) const OP_FSEO: i32 = 10818;
+pub(crate) const OP_CFS: i32 = 98;
+pub(crate) const OP_CFSEO: i32 = 10850;
+pub(crate) const OP_ENDPATH: i32 = 110;
+pub(crate) const OP_CLIP: i32 = 87;
+pub(crate) const OP_CLIPEO: i32 = 10839;
+pub(crate) const OP_SH: i32 = 26739;
+pub(crate) const OP_LW: i32 = 119;
+pub(crate) const OP_DASH: i32 = 100;
 pub(crate) const C_NFONT: i32 = 0;
 pub(crate) const C_CLOCK: i32 = 1;
 pub(crate) const C_SLOTS: i32 = 8;
@@ -93,11 +125,37 @@ pub(crate) const C_M: i32 = 688;
 pub(crate) const C_BASE: i32 = 700;
 pub(crate) const C_TMP: i32 = 712;
 pub(crate) const C_CUR: i32 = 728;
-pub(crate) const C_STACK: i32 = 768;
+pub(crate) const C_STACK: i32 = 800;
 pub(crate) const MAX_GS: i32 = 256;
-pub(crate) const C_SIZE: i32 = 8960;
 pub(crate) const MAX_MC: i32 = 256;
-pub(crate) const GS_STRIDE: i32 = 32;
+pub(crate) const C_PW: i32 = 17184;
+pub(crate) const C_PH: i32 = 17185;
+pub(crate) const C_PPTS: i32 = 17186;
+pub(crate) const C_PN: i32 = 17187;
+pub(crate) const C_PCX: i32 = 17188;
+pub(crate) const C_PCY: i32 = 17190;
+pub(crate) const C_PSX: i32 = 17192;
+pub(crate) const C_PSY: i32 = 17194;
+pub(crate) const C_PBX0: i32 = 17196;
+pub(crate) const C_PBY0: i32 = 17197;
+pub(crate) const C_PBX1: i32 = 17198;
+pub(crate) const C_PBY1: i32 = 17199;
+pub(crate) const C_PFLAGS: i32 = 17200;
+pub(crate) const C_PNSUB: i32 = 17201;
+pub(crate) const C_CLIPP: i32 = 17202;
+pub(crate) const C_TCX0: i32 = 17203;
+pub(crate) const C_TCY0: i32 = 17204;
+pub(crate) const C_TCX1: i32 = 17205;
+pub(crate) const C_TCY1: i32 = 17206;
+pub(crate) const C_TCN: i32 = 17207;
+pub(crate) const C_NPATH: i32 = 17208;
+pub(crate) const C_NIMG: i32 = 17209;
+pub(crate) const C_PKEEP: i32 = 17210;
+pub(crate) const C_BB: i32 = 17212;
+pub(crate) const C_SIZE: i32 = 17248;
+pub(crate) const PATH_KEEP: i32 = 128;
+pub(crate) const PATH_ROWS: i32 = 200000;
+pub(crate) const GS_STRIDE: i32 = 64;
 pub(crate) const G_CTM: i32 = 0;
 pub(crate) const G_TC: i32 = 12;
 pub(crate) const G_TW: i32 = 14;
@@ -111,6 +169,16 @@ pub(crate) const G_COLOR: i32 = 26;
 pub(crate) const G_ALPHA: i32 = 27;
 pub(crate) const G_FAM: i32 = 28;
 pub(crate) const G_FOBJ: i32 = 29;
+pub(crate) const G_SCOLOR: i32 = 30;
+pub(crate) const G_SALPHA: i32 = 31;
+pub(crate) const G_FCS: i32 = 32;
+pub(crate) const G_SCS: i32 = 33;
+pub(crate) const G_SFAM: i32 = 34;
+pub(crate) const G_CLIP: i32 = 35;
+pub(crate) const G_BM: i32 = 36;
+pub(crate) const G_SMASK: i32 = 37;
+pub(crate) const G_LW: i32 = 38;
+pub(crate) const G_DASH: i32 = 40;
 pub(crate) const MAX_ENT: i32 = 4096;
 pub(crate) const OX_BASE: i32 = 16384;
 pub(crate) const K_NUM: i32 = 1;
@@ -129,6 +197,7 @@ pub(crate) const W_MC: i32 = 64;
 pub(crate) const W_WIDTH: i32 = 128;
 pub(crate) const W_TEXT: i32 = 256;
 pub(crate) const W_PROPS: i32 = 512;
+pub(crate) const W_PATHS: i32 = 1024;
 pub(crate) fn pc_ws(c: i32) -> i32 {
     if (c == 32) || ((c == 10) || ((c == 13) || ((c == 9) || ((c == 12) || (c == 0))))) {
         return 1;
@@ -627,6 +696,16 @@ pub(crate) fn pc_gs_reset(mut cx: &mut crate::port::Cells) -> i32 {
     crate::port::cells_set(cx, C_CUR + G_COLOR, 0);
     crate::port::cells_set(cx, C_CUR + G_ALPHA, 1000);
     crate::port::cells_set(cx, C_CUR + G_FAM, 1);
+    crate::port::cells_set(cx, C_CUR + G_SCOLOR, 0);
+    crate::port::cells_set(cx, C_CUR + G_SALPHA, 1000);
+    crate::port::cells_set(cx, C_CUR + G_FCS, -1);
+    crate::port::cells_set(cx, C_CUR + G_SCS, -1);
+    crate::port::cells_set(cx, C_CUR + G_SFAM, 1);
+    crate::port::cells_set(cx, C_CUR + G_CLIP, -1);
+    crate::port::cells_set(cx, C_CUR + G_BM, 0);
+    crate::port::cells_set(cx, C_CUR + G_SMASK, 0);
+    fx_put(cx, C_CUR + G_LW, fx_one());
+    crate::port::cells_set(cx, C_CUR + G_DASH, 0);
     return 0;
 }
 pub(crate) fn pc_base_matrix(mut cx: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, rot: i32) -> i32 {
@@ -729,31 +808,6 @@ pub(crate) fn pc_byte(v: i64) -> i32 {
 }
 pub(crate) fn pc_rgb(r: i32, g: i32, bl: i32) -> i32 {
     return (r * 65536) + ((g * 256) + bl);
-}
-pub(crate) fn pc_set_color(mut cx: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32) -> i32 {
-    // sc / scn / g / rg / k: set the fill colour from n operands by their count
-    // (1 gray, 3 RGB, 4 CMYK). A component list of another length (a pattern, an
-    // Indexed or Separation colour) leaves the colour as it was.
-    let o0: i64 = pc_num(ox, n, 0);
-    let o1: i64 = pc_num(ox, n, 1);
-    let o2: i64 = pc_num(ox, n, 2);
-    let o3: i64 = pc_num(ox, n, 3);
-    let one: i64 = fx_one();
-    if n == 1 {
-        let gy: i32 = pc_byte(o0);
-        crate::port::cells_set(cx, C_CUR + G_COLOR, pc_rgb(gy, gy, gy));
-        return 0;
-    }
-    if n == 3 {
-        crate::port::cells_set(cx, C_CUR + G_COLOR, pc_rgb(pc_byte(o0), pc_byte(o1), pc_byte(o2)));
-        return 0;
-    }
-    if n == 4 {
-        let kk: i64 = one - o3;
-        crate::port::cells_set(cx, C_CUR + G_COLOR, pc_rgb(pc_byte(fx_mul(one - o0, kk)), pc_byte(fx_mul(one - o1, kk)), pc_byte(fx_mul(one - o2, kk))));
-        return 0;
-    }
-    return 0;
 }
 pub(crate) fn pc_dict_lookup(ar: &mut crate::port::Cells, dict: i32, ox: &mut crate::port::Cells, ns: i32, nl: i32) -> i32 {
     // The value (unresolved) under the key spelled ox[ns, ns+nl), or 0. The
@@ -1288,6 +1342,7 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
     let mut fid: i32 = -1;
     let mut tstart: i32 = -1;
     let mut i: i32 = 0;
+    let mut vch: i32 = 0;
     let mut idx: i32 = 0;
     if slot >= 0 {
         sat = C_SLOTS + (slot * SLOT_STRIDE);
@@ -1376,9 +1431,44 @@ pub(crate) fn pc_glyph(mut cx: &mut crate::port::Cells, mut gl: &mut crate::port
     gl_set(gl, g, gf_rot(), rot);
     gl_set(gl, g, gf_fill(), crate::port::cells_at(cx, C_CUR + G_COLOR));
     gl_set(gl, g, gf_falpha(), crate::port::cells_at(cx, C_CUR + G_ALPHA));
+    gl_set(gl, g, gf_stroke(), crate::port::cells_at(cx, C_CUR + G_SCOLOR));
+    gl_set(gl, g, gf_salpha(), crate::port::cells_at(cx, C_CUR + G_SALPHA));
+    gl_set(gl, g, gf_clip(), crate::port::cells_at(cx, C_CUR + G_CLIP));
     gl_set(gl, g, gf_mode(), crate::port::cells_at(cx, C_CUR + G_MODE));
-    if fam > 0 {
+    if (fam > 0) && (crate::port::cells_at(cx, C_CUR + G_MODE) != 1) && (crate::port::cells_at(cx, C_CUR + G_MODE) != 5) {
         gl_set(gl, g, gf_cs(), fam);
+    }
+    if (crate::port::cells_at(cx, C_CUR + G_SFAM) > 0) && ((crate::port::cells_at(cx, C_CUR + G_MODE) == 1) || (crate::port::cells_at(cx, C_CUR + G_MODE) == 5)) {
+        gl_set(gl, g, gf_cs(), crate::port::cells_at(cx, C_CUR + G_SFAM));
+    }
+    if crate::port::cells_at(cx, C_CUR + G_BM) != 0 {
+        vch = vc_blend();
+    }
+    if crate::port::cells_at(cx, C_CUR + G_SMASK) != 0 {
+        vch += vc_softmask();
+    }
+    gl_set(gl, g, gf_vchk(), vch);
+    if crate::port::cells_at(cx, C_CUR + G_MODE) >= 4 {
+        if crate::port::cells_at(cx, C_TCN) == 0 {
+            crate::port::cells_set(cx, C_TCX0, gl_get(gl, g, ch_x0()));
+            crate::port::cells_set(cx, C_TCY0, gl_get(gl, g, ch_y0()));
+            crate::port::cells_set(cx, C_TCX1, gl_get(gl, g, ch_x1()));
+            crate::port::cells_set(cx, C_TCY1, gl_get(gl, g, ch_y1()));
+        } else {
+            if gl_get(gl, g, ch_x0()) < crate::port::cells_at(cx, C_TCX0) {
+                crate::port::cells_set(cx, C_TCX0, gl_get(gl, g, ch_x0()));
+            }
+            if gl_get(gl, g, ch_y0()) < crate::port::cells_at(cx, C_TCY0) {
+                crate::port::cells_set(cx, C_TCY0, gl_get(gl, g, ch_y0()));
+            }
+            if gl_get(gl, g, ch_x1()) > crate::port::cells_at(cx, C_TCX1) {
+                crate::port::cells_set(cx, C_TCX1, gl_get(gl, g, ch_x1()));
+            }
+            if gl_get(gl, g, ch_y1()) > crate::port::cells_at(cx, C_TCY1) {
+                crate::port::cells_set(cx, C_TCY1, gl_get(gl, g, ch_y1()));
+            }
+        }
+        crate::port::cells_set(cx, C_TCN, crate::port::cells_at(cx, C_TCN) + 1);
     }
     gl_set(gl, g, gf_z(), z);
     crate::port::cells_set(cx, C_Z, z + 1);
@@ -1836,7 +1926,7 @@ pub(crate) fn pc_mc_pop(mut cx: &mut crate::port::Cells, mut mk: &mut crate::por
     }
     return 0;
 }
-pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, n: i32, props: i32) -> i32 {
+pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, n: i32, props: i32) -> i32 {
     // BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an
     // inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,
     // `optional-content` for /OC (its object number is the /Properties entry's, when that is a
@@ -1898,6 +1988,7 @@ pub(crate) fn pc_mc_begin(src: &crate::port::Src, mut ar: &mut crate::port::Cell
                 if pl_kind_of(ar, raw) == 9 {
                     mk_set(mk, span, mkf_ocg(), pl_int_value(ar, raw));
                 }
+                mk_set(mk, span, mkf_ocgdef(), gx_oc_state(src, ar, dc, a, b, st, gx, raw, 0));
             }
             if (dh != 0) && (pl_kind_of(ar, dh) == 7) {
                 d = pc_ingest_props(src, ar, dc, a, b, st, cx, ox, dh);
@@ -1968,6 +2059,1090 @@ pub(crate) fn pc_skip_inline(mut cx: &mut crate::port::Cells, cs: &mut crate::po
     crate::port::cells_set(cx, C_POS, p);
     return 0;
 }
+pub(crate) fn pc_tx(cx: &mut crate::port::Cells, x: i64, y: i64) -> i64 {
+    // The user-space point (x, y) in page space: x of it (Fx).
+    return fx_clamp(mx_x(cx, C_CUR + G_CTM, x, y));
+}
+pub(crate) fn pc_ty(cx: &mut crate::port::Cells, x: i64, y: i64) -> i64 {
+    return fx_clamp(mx_y(cx, C_CUR + G_CTM, x, y));
+}
+pub(crate) fn pc_flag_or(v: i32, bit: i32) -> i32 {
+    // v with the one-bit flag `bit` set.
+    if (v & bit) != 0 {
+        return v;
+    }
+    return v + bit;
+}
+pub(crate) fn pc_path_reset(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells) -> i32 {
+    // No path: the next point starts one. The pts arena keeps what an earlier row of the evidence put there.
+    let n: i32 = pt_count(pts);
+    crate::port::cells_set(cx, C_PPTS, n);
+    crate::port::cells_set(cx, C_PN, 0);
+    crate::port::cells_set(cx, C_PKEEP, 0);
+    crate::port::cells_set(cx, C_PBX0, 2147483647);
+    crate::port::cells_set(cx, C_PBY0, 2147483647);
+    crate::port::cells_set(cx, C_PBX1, -2147483647);
+    crate::port::cells_set(cx, C_PBY1, -2147483647);
+    crate::port::cells_set(cx, C_PFLAGS, 0);
+    crate::port::cells_set(cx, C_PNSUB, 0);
+    return 0;
+}
+pub(crate) fn pc_path_add(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, px: i64, py: i64, op: i32) -> i32 {
+    // Append the page-space point (px, py) to the path: its box, the current point, and (for the first
+    // PATH_KEEP points) a row of `pts`.
+    let x: i32 = fx_round(px);
+    let y: i32 = fx_round(py);
+    let keep: i32 = crate::port::cells_at(cx, C_PKEEP);
+    if x < crate::port::cells_at(cx, C_PBX0) {
+        crate::port::cells_set(cx, C_PBX0, x);
+    }
+    if y < crate::port::cells_at(cx, C_PBY0) {
+        crate::port::cells_set(cx, C_PBY0, y);
+    }
+    if x > crate::port::cells_at(cx, C_PBX1) {
+        crate::port::cells_set(cx, C_PBX1, x);
+    }
+    if y > crate::port::cells_at(cx, C_PBY1) {
+        crate::port::cells_set(cx, C_PBY1, y);
+    }
+    if keep < PATH_KEEP {
+        pt_add(pts, x, y, op);
+        crate::port::cells_set(cx, C_PKEEP, keep + 1);
+    } else {
+        crate::port::cells_set(cx, C_PFLAGS, pc_flag_or(crate::port::cells_at(cx, C_PFLAGS), 4));
+    }
+    crate::port::cells_set(cx, C_PN, crate::port::cells_at(cx, C_PN) + 1);
+    fx_put(cx, C_PCX, px);
+    fx_put(cx, C_PCY, py);
+    return 0;
+}
+pub(crate) fn pc_op_move(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32) -> i32 {
+    if n < 2 {
+        return 0;
+    }
+    let x: i64 = pc_num(ox, n, 0);
+    let y: i64 = pc_num(ox, n, 1);
+    let px: i64 = pc_tx(cx, x, y);
+    let py: i64 = pc_ty(cx, x, y);
+    crate::port::cells_set(cx, C_PNSUB, crate::port::cells_at(cx, C_PNSUB) + 1);
+    pc_path_add(cx, pts, px, py, po_move());
+    fx_put(cx, C_PSX, px);
+    fx_put(cx, C_PSY, py);
+    return 0;
+}
+pub(crate) fn pc_op_line(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32) -> i32 {
+    if n < 2 {
+        return 0;
+    }
+    if crate::port::cells_at(cx, C_PN) == 0 {
+        return 0;
+    }
+    let x: i64 = pc_num(ox, n, 0);
+    let y: i64 = pc_num(ox, n, 1);
+    let px: i64 = pc_tx(cx, x, y);
+    let py: i64 = pc_ty(cx, x, y);
+    pc_path_add(cx, pts, px, py, po_line());
+    return 0;
+}
+pub(crate) fn pc_op_curve(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32, kind: i32) -> i32 {
+    // c (kind 0, six numbers), v (kind 1: the first control point is the current point) and y (kind 2: the
+    // second control point is the end point). Each puts three curve points in the path.
+    if crate::port::cells_at(cx, C_PN) == 0 {
+        return 0;
+    }
+    let mut x1: i64 = 0 as i64;
+    let mut y1: i64 = 0 as i64;
+    let mut x2: i64 = 0 as i64;
+    let mut y2: i64 = 0 as i64;
+    let mut x3: i64 = 0 as i64;
+    let mut y3: i64 = 0 as i64;
+    let mut q1x: i64 = 0 as i64;
+    let mut q1y: i64 = 0 as i64;
+    if kind == 0 {
+        if n < 6 {
+            return 0;
+        }
+        x1 = pc_num(ox, n, 0);
+        y1 = pc_num(ox, n, 1);
+        x2 = pc_num(ox, n, 2);
+        y2 = pc_num(ox, n, 3);
+        x3 = pc_num(ox, n, 4);
+        y3 = pc_num(ox, n, 5);
+    }
+    if kind == 1 {
+        if n < 4 {
+            return 0;
+        }
+        x2 = pc_num(ox, n, 0);
+        y2 = pc_num(ox, n, 1);
+        x3 = pc_num(ox, n, 2);
+        y3 = pc_num(ox, n, 3);
+    }
+    if kind == 2 {
+        if n < 4 {
+            return 0;
+        }
+        x1 = pc_num(ox, n, 0);
+        y1 = pc_num(ox, n, 1);
+        x3 = pc_num(ox, n, 2);
+        y3 = pc_num(ox, n, 3);
+        x2 = x3;
+        y2 = y3;
+    }
+    if kind == 1 {
+        q1x = fx_get(cx, C_PCX);
+        q1y = fx_get(cx, C_PCY);
+    } else {
+        q1x = pc_tx(cx, x1, y1);
+        q1y = pc_ty(cx, x1, y1);
+    }
+    pc_path_add(cx, pts, q1x, q1y, po_curve());
+    let q2x: i64 = pc_tx(cx, x2, y2);
+    let q2y: i64 = pc_ty(cx, x2, y2);
+    let q3x: i64 = pc_tx(cx, x3, y3);
+    let q3y: i64 = pc_ty(cx, x3, y3);
+    pc_path_add(cx, pts, q2x, q2y, po_curve());
+    pc_path_add(cx, pts, q3x, q3y, po_curve());
+    crate::port::cells_set(cx, C_PFLAGS, pc_flag_or(crate::port::cells_at(cx, C_PFLAGS), 1));
+    return 0;
+}
+pub(crate) fn pc_op_close(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells) -> i32 {
+    // h: a close row at the subpath's start, which is the current point again.
+    if crate::port::cells_at(cx, C_PN) == 0 {
+        return 0;
+    }
+    let sx: i64 = fx_get(cx, C_PSX);
+    let sy: i64 = fx_get(cx, C_PSY);
+    pc_path_add(cx, pts, sx, sy, po_close());
+    return 0;
+}
+pub(crate) fn pc_rect_path(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, x: i64, y: i64, w: i64, h: i64) -> i32 {
+    // The rectangle x y w h (user space) as a closed subpath of four corners, each through the CTM.
+    let xw: i64 = fx_clamp((x).wrapping_add(w));
+    let yh: i64 = fx_clamp((y).wrapping_add(h));
+    let ax: i64 = pc_tx(cx, x, y);
+    let ay: i64 = pc_ty(cx, x, y);
+    let bx: i64 = pc_tx(cx, xw, y);
+    let by: i64 = pc_ty(cx, xw, y);
+    let dx: i64 = pc_tx(cx, xw, yh);
+    let dy: i64 = pc_ty(cx, xw, yh);
+    let ex: i64 = pc_tx(cx, x, yh);
+    let ey: i64 = pc_ty(cx, x, yh);
+    crate::port::cells_set(cx, C_PNSUB, crate::port::cells_at(cx, C_PNSUB) + 1);
+    pc_path_add(cx, pts, ax, ay, po_move());
+    fx_put(cx, C_PSX, ax);
+    fx_put(cx, C_PSY, ay);
+    pc_path_add(cx, pts, bx, by, po_line());
+    pc_path_add(cx, pts, dx, dy, po_line());
+    pc_path_add(cx, pts, ex, ey, po_line());
+    pc_path_add(cx, pts, ax, ay, po_close());
+    return 0;
+}
+pub(crate) fn pc_op_rect(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32) -> i32 {
+    // re: the rectangle x y w h.
+    if n < 4 {
+        return 0;
+    }
+    let x: i64 = pc_num(ox, n, 0);
+    let y: i64 = pc_num(ox, n, 1);
+    let w: i64 = pc_num(ox, n, 2);
+    let h: i64 = pc_num(ox, n, 3);
+    pc_rect_path(cx, pts, x, y, w, h);
+    return 0;
+}
+pub(crate) fn pc_near(p: i32, q: i32) -> i32 {
+    // 1 when two centipoint coordinates differ by at most one (a corner rounded two ways).
+    let d: i32 = p - q;
+    if (d <= 1) && (d >= -1) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn pc_is_rect(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells) -> i32 {
+    // 1 when the path is one subpath of four corners (a line back to the first corner, and a close, allowed)
+    // whose sides are axis-aligned to a centipoint.
+    let n: i32 = crate::port::cells_at(cx, C_PN);
+    let s: i32 = crate::port::cells_at(cx, C_PPTS);
+    let mut k: i32 = 0;
+    let mut np: i32 = 0;
+    let mut opk: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut x2: i32 = 0;
+    let mut y2: i32 = 0;
+    let mut x3: i32 = 0;
+    let mut y3: i32 = 0;
+    let mut px: i32 = 0;
+    let mut py: i32 = 0;
+    if (n < 4) || (n > 6) {
+        return 0;
+    }
+    if crate::port::cells_at(cx, C_PNSUB) != 1 {
+        return 0;
+    }
+    if (crate::port::cells_at(cx, C_PFLAGS) & 5) != 0 {
+        return 0;
+    }
+    // The points that are not a close row, in order; the first must be a move.
+    while k < n {
+        opk = pt_get(pts, s + k, ptf_op());
+        px = pt_get(pts, s + k, ptf_x());
+        py = pt_get(pts, s + k, ptf_y());
+        if k == 0 {
+            if opk != po_move() {
+                return 0;
+            }
+        }
+        if (k > 0) && (opk == po_move()) {
+            return 0;
+        }
+        if opk != po_close() {
+            if np == 0 {
+                x0 = px;
+                y0 = py;
+            }
+            if np == 1 {
+                x1 = px;
+                y1 = py;
+            }
+            if np == 2 {
+                x2 = px;
+                y2 = py;
+            }
+            if np == 3 {
+                x3 = px;
+                y3 = py;
+            }
+            if np == 4 {
+                if (pc_near(px, x0) == 0) || (pc_near(py, y0) == 0) {
+                    return 0;
+                }
+            }
+            np += 1;
+        }
+        k += 1;
+    }
+    if (np != 4) && (np != 5) {
+        return 0;
+    }
+    if (pc_near(x0, x1) == 1) && ((pc_near(y1, y2) == 1) && ((pc_near(x2, x3) == 1) && (pc_near(y3, y0) == 1))) {
+        return 1;
+    }
+    if (pc_near(y0, y1) == 1) && ((pc_near(x1, x2) == 1) && ((pc_near(y2, y3) == 1) && (pc_near(x3, x0) == 1))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn pc_scale_cpt(cx: &mut crate::port::Cells, w: i64) -> i32 {
+    // A length in user units (an Fx) as centipoints under the current CTM: through the length of its x axis.
+    let a: i64 = fx_get(cx, C_CUR + G_CTM);
+    let b: i64 = fx_get(cx, (C_CUR + G_CTM) + 2);
+    let hyp: i64 = fx_hypot(a, b);
+    let v: i32 = fx_round(fx_mul(fx_abs(w), hyp));
+    if v > 10000000 {
+        return 10000000;
+    }
+    return v;
+}
+pub(crate) fn pc_dash_op(mut cx: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32) -> i32 {
+    // d: the dash array's first length (centipoints under the CTM), 0 for a solid line.
+    crate::port::cells_set(cx, C_CUR + G_DASH, 0);
+    if n < 1 {
+        return 0;
+    }
+    if pc_kind(ox, 0) != K_ARR {
+        return 0;
+    }
+    if pc_ea(ox, 0) < 1 {
+        return 0;
+    }
+    if pc_kind(ox, 1) != K_NUM {
+        return 0;
+    }
+    let v: i64 = pc_num(ox, n, 1);
+    let sc: i32 = pc_scale_cpt(cx, v);
+    crate::port::cells_set(cx, C_CUR + G_DASH, sc);
+    return 0;
+}
+pub(crate) fn pc_clip_box(mut cx: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, kind: i32, flags: i32, pfirst: i32, pcount: i32) -> i32 {
+    // Clip to the box (x0, y0, x1, y1) of a shape of `kind`: the region becomes its intersection with the clip in
+    // force. When that does not shrink the region there is nothing to record; else a `paths` row (a clip, SPEC
+    // 8.4.3: z -1) holds the intersection, naming the clip it was cut from, and becomes the clip in force.
+    let cur: i32 = crate::port::cells_at(cx, C_CUR + G_CLIP);
+    let mut ix0: i32 = x0;
+    let mut iy0: i32 = y0;
+    let mut ix1: i32 = x1;
+    let mut iy1: i32 = y1;
+    let mut same: i32 = 0;
+    let mut cb: i32 = 0;
+    let mut r: i32 = 0;
+    if cur >= 0 {
+        cb = pa_get(pa, cur, pf_x0());
+        if cb > ix0 {
+            ix0 = cb;
+        }
+        cb = pa_get(pa, cur, pf_y0());
+        if cb > iy0 {
+            iy0 = cb;
+        }
+        cb = pa_get(pa, cur, pf_x1());
+        if cb < ix1 {
+            ix1 = cb;
+        }
+        cb = pa_get(pa, cur, pf_y1());
+        if cb < iy1 {
+            iy1 = cb;
+        }
+        if (ix0 == pa_get(pa, cur, pf_x0())) && ((iy0 == pa_get(pa, cur, pf_y0())) && ((ix1 == pa_get(pa, cur, pf_x1())) && (iy1 == pa_get(pa, cur, pf_y1())))) {
+            same = 1;
+        }
+    }
+    if same == 1 {
+        return 0;
+    }
+    if crate::port::cells_at(cx, C_NPATH) >= PATH_ROWS {
+        pc_warn_set(cx, W_PATHS);
+        return 0;
+    }
+    r = pa_new(pa, crate::port::cells_at(cx, C_PAGE), kind, ix0, iy0, ix1, iy1);
+    pa_set(pa, r, pf_flags(), pg_clip() + flags);
+    pa_set(pa, r, pf_clip(), cur);
+    pa_set(pa, r, pf_mark(), crate::port::cells_at(cx, C_MCTOP));
+    pa_set(pa, r, pf_ocg(), crate::port::cells_at(cx, C_CUROCG));
+    pa_set(pa, r, pf_pfirst(), pfirst);
+    pa_set(pa, r, pf_pcount(), pcount);
+    crate::port::cells_set(cx, C_NPATH, crate::port::cells_at(cx, C_NPATH) + 1);
+    crate::port::cells_set(cx, C_CUR + G_CLIP, r);
+    return 0;
+}
+pub(crate) fn pc_kind_of_path(mut cx: &mut crate::port::Cells, mut pts: &mut crate::port::Cells) -> i32 {
+    // The `pa` kind of the path: a rectangle, a curve, a single line, else other.
+    if pc_is_rect(cx, pts) == 1 {
+        return pa_rect();
+    }
+    if (crate::port::cells_at(cx, C_PFLAGS) & 1) != 0 {
+        return pa_curve();
+    }
+    if (crate::port::cells_at(cx, C_PN) == 2) && (crate::port::cells_at(cx, C_PNSUB) == 1) {
+        return pa_line();
+    }
+    return pa_other();
+}
+pub(crate) fn pc_geom_kept(cx: &mut crate::port::Cells) -> i32 {
+    // 1 when the whole path is in `pts` (it had no more than PATH_KEEP points).
+    if (crate::port::cells_at(cx, C_PFLAGS) & 4) != 0 {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn pc_end_path(mut cx: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, fill: i32, stroke: i32, evenodd: i32, closed: i32) -> i32 {
+    // A paint operator (or `n`) ends the path. If it filled or stroked, a `paths` row records it; then a pending
+    // `W` or `W*` clips to it. The row's box is the path's box, grown by half the stroke width when it strokes;
+    // its geometry is the path's rows of `pts` (kept when the path was short enough, else dropped).
+    let n: i32 = crate::port::cells_at(cx, C_PN);
+    let start: i32 = crate::port::cells_at(cx, C_PPTS);
+    let kept: i32 = pc_geom_kept(cx);
+    let pend: i32 = crate::port::cells_at(cx, C_CLIPP);
+    let mut kind: i32 = 0;
+    let mut half: i32 = 0;
+    let mut r: i32 = 0;
+    let mut fl: i32 = 0;
+    let mut wd: i32 = 0;
+    let mut lwv: i64 = 0 as i64;
+    let mut nrows: i32 = 0;
+    let mut pfst: i32 = -1;
+    let mut geom: i32 = 0;
+    let mut painted: i32 = 0;
+    crate::port::cells_set(cx, C_CLIPP, 0);
+    if n == 0 {
+        pc_path_reset(cx, pts);
+        return 0;
+    }
+    kind = pc_kind_of_path(cx, pts);
+    nrows = n;
+    if kept == 0 {
+        nrows = 0;
+    }
+    if nrows > 0 {
+        pfst = start;
+    }
+    if (kept == 0) && (crate::port::cells_at(cx, C_PKEEP) > 0) {
+        crate::port::cells_drop(pts, start * 3);
+    }
+    geom = nrows;
+    if (fill == 1) || (stroke == 1) {
+        if crate::port::cells_at(cx, C_NPATH) >= PATH_ROWS {
+            pc_warn_set(cx, W_PATHS);
+        } else {
+            painted = 1;
+            fl = 0;
+            if closed != 0 {
+                fl += pg_closed();
+            }
+            if evenodd == 1 {
+                fl += pg_evenodd();
+            }
+            if stroke == 1 {
+                lwv = fx_get(cx, C_CUR + G_LW);
+                wd = pc_scale_cpt(cx, lwv);
+                half = (wd + 1) / 2;
+                fl += pg_stroked();
+            }
+            if fill == 1 {
+                fl += pg_filled();
+                if crate::port::cells_at(cx, C_CUR + G_FAM) == 5 {
+                    fl += pg_pattern();
+                }
+            }
+            if crate::port::cells_at(cx, C_CUR + G_BM) != 0 {
+                fl += pg_blend();
+            }
+            if crate::port::cells_at(cx, C_CUR + G_SMASK) != 0 {
+                fl += pg_softmask();
+            }
+            r = pa_new(pa, crate::port::cells_at(cx, C_PAGE), kind, crate::port::cells_at(cx, C_PBX0) - half, crate::port::cells_at(cx, C_PBY0) - half, crate::port::cells_at(cx, C_PBX1) + half, crate::port::cells_at(cx, C_PBY1) + half);
+            pa_set(pa, r, pf_flags(), fl);
+            if fill == 1 {
+                pa_set(pa, r, pf_fill(), crate::port::cells_at(cx, C_CUR + G_COLOR));
+            }
+            if stroke == 1 {
+                pa_set(pa, r, pf_stroke(), crate::port::cells_at(cx, C_CUR + G_SCOLOR));
+                pa_set(pa, r, pf_width(), wd);
+                pa_set(pa, r, pf_dash(), crate::port::cells_at(cx, C_CUR + G_DASH));
+            }
+            pa_set(pa, r, pf_falpha(), crate::port::cells_at(cx, C_CUR + G_ALPHA));
+            pa_set(pa, r, pf_salpha(), crate::port::cells_at(cx, C_CUR + G_SALPHA));
+            pa_set(pa, r, pf_z(), crate::port::cells_at(cx, C_Z));
+            crate::port::cells_set(cx, C_Z, crate::port::cells_at(cx, C_Z) + 1);
+            pa_set(pa, r, pf_clip(), crate::port::cells_at(cx, C_CUR + G_CLIP));
+            pa_set(pa, r, pf_mark(), crate::port::cells_at(cx, C_MCTOP));
+            pa_set(pa, r, pf_ocg(), crate::port::cells_at(cx, C_CUROCG));
+            pa_set(pa, r, pf_pfirst(), pfst);
+            pa_set(pa, r, pf_pcount(), geom);
+            crate::port::cells_set(cx, C_NPATH, crate::port::cells_at(cx, C_NPATH) + 1);
+        }
+    }
+    if pend != 0 {
+        fl = 0;
+        if pend == 2 {
+            fl = pg_evenodd();
+        }
+        pc_clip_box(cx, pa, crate::port::cells_at(cx, C_PBX0), crate::port::cells_at(cx, C_PBY0), crate::port::cells_at(cx, C_PBX1), crate::port::cells_at(cx, C_PBY1), kind, fl, pfst, geom);
+    }
+    // A path whose geometry nobody kept leaves no rows behind.
+    if (painted == 0) && (pend == 0) {
+        crate::port::cells_drop(pts, start * 3);
+    }
+    pc_path_reset(cx, pts);
+    return 0;
+}
+pub(crate) fn pc_paint_op(mut cx: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, op: i32) -> i32 {
+    // S s f F f* B B* b b* n: which of fill, stroke, even-odd and close each one means.
+    let mut fill: i32 = 0;
+    let mut stroke: i32 = 0;
+    let mut eo: i32 = 0;
+    let mut shut: i32 = 0;
+    if op == OP_STROKE {
+        stroke = 1;
+    }
+    if op == OP_CLOSESTROKE {
+        stroke = 1;
+        shut = 1;
+    }
+    if (op == OP_FILL) || (op == OP_FILL2) {
+        fill = 1;
+    }
+    if op == OP_FILLEO {
+        fill = 1;
+        eo = 1;
+    }
+    if op == OP_FS {
+        fill = 1;
+        stroke = 1;
+    }
+    if op == OP_FSEO {
+        fill = 1;
+        stroke = 1;
+        eo = 1;
+    }
+    if op == OP_CFS {
+        fill = 1;
+        stroke = 1;
+        shut = 1;
+    }
+    if op == OP_CFSEO {
+        fill = 1;
+        stroke = 1;
+        shut = 1;
+        eo = 1;
+    }
+    if shut == 1 {
+        pc_op_close(cx, pts);
+    }
+    pc_end_path(cx, pa, pts, fill, stroke, eo, shut);
+    return 0;
+}
+pub(crate) fn pc_set_ink(mut cx: &mut crate::port::Cells, stroke: i32, key: i32, cls: i32, rgb: i32) -> i32 {
+    // Make (key, class, colour) the fill (stroke 0) or stroking (stroke 1) colour of the current state.
+    if stroke == 1 {
+        crate::port::cells_set(cx, C_CUR + G_SCS, key);
+        crate::port::cells_set(cx, C_CUR + G_SFAM, cls);
+        crate::port::cells_set(cx, C_CUR + G_SCOLOR, rgb);
+    } else {
+        crate::port::cells_set(cx, C_CUR + G_FCS, key);
+        crate::port::cells_set(cx, C_CUR + G_FAM, cls);
+        crate::port::cells_set(cx, C_CUR + G_COLOR, rgb);
+    }
+    return 0;
+}
+pub(crate) fn pc_device_rgb(ox: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, n: i32, space: i32) -> i32 {
+    // The colour of the first operands under DeviceGray (space 1), DeviceRGB (2) or DeviceCMYK (3): -1 when there are
+    // too few. The conversion is the colour module's, so a colour is the same however it was set.
+    let mut need: i32 = 1;
+    let mut i: i32 = 0;
+    let mut v: i64 = 0 as i64;
+    if space == 2 {
+        need = 3;
+    }
+    if space == 3 {
+        need = 4;
+    }
+    if n < need {
+        return -1;
+    }
+    while i < need {
+        v = pc_num(ox, n, i);
+        gx_input(gx, i, v);
+        i += 1;
+    }
+    return gx_entry_rgb(gx, space - 1, need);
+}
+pub(crate) fn pc_color_device(mut cx: &mut crate::port::Cells, ox: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, n: i32, stroke: i32, space: i32) -> i32 {
+    // g rg k G RG K: the device space, its class, and the colour.
+    let rgb: i32 = pc_device_rgb(ox, gx, n, space);
+    if rgb < 0 {
+        return 0;
+    }
+    pc_set_ink(cx, stroke, 0 - space, space, rgb);
+    return 0;
+}
+pub(crate) fn pc_cs_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, ox: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, n: i32, stroke: i32) -> i32 {
+    // cs, CS: the colour space named by operand 0: a device space, Pattern, or a /ColorSpace resource. The colour
+    // becomes the space's initial colour. A space this reader cannot read leaves an unknown colour (-1) and no class.
+    if n < 1 {
+        return 0;
+    }
+    if pc_kind(ox, 0) != K_NAME {
+        return 0;
+    }
+    let mut key: i32 = 0;
+    let mut raw: i32 = 0;
+    let mut h: i32 = 0;
+    let mut e: i32 = -1;
+    if pc_entry_name_is(ox, 0, pn_device_gray()) == 1 {
+        key = -1;
+    }
+    if pc_entry_name_is(ox, 0, pn_device_rgb()) == 1 {
+        key = -2;
+    }
+    if pc_entry_name_is(ox, 0, pn_device_cmyk()) == 1 {
+        key = -3;
+    }
+    if pc_entry_name_is(ox, 0, pn_pattern()) == 1 {
+        key = -4;
+    }
+    if key == 0 {
+        raw = pc_res_entry(src, ar, dc, a, b, st, cx, ox, pn_color_space(), 0);
+        if raw != 0 {
+            h = pd_resolve(src, ar, dc, a, b, st, raw);
+        }
+        if ps_missed(src) {
+            crate::port::cells_set(cx, C_ABORT, 1);
+            return 0;
+        }
+        if h != 0 {
+            key = gx_key_of(src, ar, dc, a, b, st, h);
+        }
+    }
+    if key != 0 {
+        e = gx_lookup(src, ar, dc, a, b, st, out, gx, key);
+    }
+    if ps_missed(src) {
+        crate::port::cells_set(cx, C_ABORT, 1);
+        return 0;
+    }
+    if e < 0 {
+        pc_set_ink(cx, stroke, key, 0, -1);
+        return 0;
+    }
+    let cls: i32 = gx_class(gx, e);
+    let rgb: i32 = gx_initial(gx, e);
+    pc_set_ink(cx, stroke, key, cls, rgb);
+    return 0;
+}
+pub(crate) fn pc_sc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, ox: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, n: i32, stroke: i32) -> i32 {
+    // sc, scn, SC, SCN: a colour in the current space. A pattern space takes no components (its colour is
+    // unknown); a colour whose component count is not the space's is read by its count, as a device colour.
+    let mut key: i32 = 0;
+    let mut e: i32 = -1;
+    let mut nn: i32 = 0;
+    let mut i: i32 = 0;
+    let mut ncomp: i32 = 0;
+    let mut rgb: i32 = -1;
+    let mut cls: i32 = 0;
+    let mut v: i64 = 0 as i64;
+    if stroke == 1 {
+        key = crate::port::cells_at(cx, C_CUR + G_SCS);
+    } else {
+        key = crate::port::cells_at(cx, C_CUR + G_FCS);
+    }
+    if key != 0 {
+        e = gx_lookup(src, ar, dc, a, b, st, out, gx, key);
+    }
+    if ps_missed(src) {
+        crate::port::cells_set(cx, C_ABORT, 1);
+        return 0;
+    }
+    while (nn < n) && (pc_kind(ox, nn) == K_NUM) {
+        nn += 1;
+    }
+    if e == -1 {
+        // A space that is not known: whatever colour was set is not.
+        pc_set_ink(cx, stroke, key, 0, -1);
+        return 0;
+    }
+    if gx_is_pattern(gx, e) == 1 {
+        pc_set_ink(cx, stroke, key, 5, -1);
+        return 0;
+    }
+    ncomp = gx_ncomp(gx, e);
+    if nn > 32 {
+        nn = 32;
+    }
+    if (nn > 0) && (nn == ncomp) {
+        i = 0;
+        while i < nn {
+            v = pc_num(ox, n, i);
+            gx_input(gx, i, v);
+            i += 1;
+        }
+        rgb = gx_entry_rgb(gx, e, nn);
+        cls = gx_class(gx, e);
+        pc_set_ink(cx, stroke, key, cls, rgb);
+        return 0;
+    }
+    // The operands do not fit the space: read them by count, as a device colour, and keep the space.
+    if (nn > 0) && ((nn == 1) || ((nn == 3) || (nn == 4))) {
+        if nn == 1 {
+            rgb = pc_device_rgb(ox, gx, n, 1);
+        }
+        if nn == 3 {
+            rgb = pc_device_rgb(ox, gx, n, 2);
+        }
+        if nn == 4 {
+            rgb = pc_device_rgb(ox, gx, n, 3);
+        }
+        if stroke == 1 {
+            crate::port::cells_set(cx, C_CUR + G_SCOLOR, rgb);
+        } else {
+            crate::port::cells_set(cx, C_CUR + G_COLOR, rgb);
+        }
+    }
+    return 0;
+}
+pub(crate) fn pc_bm_code(ar: &mut crate::port::Cells, h: i32) -> i32 {
+    // A blend mode name's code: 0 Normal and Compatible, 1 Multiply, 2 Screen, 3 Overlay, 4 Darken, 5 Lighten,
+    // 6 ColorDodge, 7 ColorBurn, 8 HardLight, 9 SoftLight, 10 Difference, 11 Exclusion, 12 Hue, 13 Saturation,
+    // 14 Color, 15 Luminosity, 99 a name that is none of those.
+    if h == 0 {
+        return 0;
+    }
+    if pl_kind_of(ar, h) != 4 {
+        return 0;
+    }
+    if (px_is(ar, h, px_normal()) == 1) || (px_is(ar, h, px_compatible()) == 1) {
+        return 0;
+    }
+    if px_is(ar, h, px_multiply()) == 1 {
+        return 1;
+    }
+    if px_is(ar, h, px_screen()) == 1 {
+        return 2;
+    }
+    if px_is(ar, h, px_overlay()) == 1 {
+        return 3;
+    }
+    if px_is(ar, h, px_darken()) == 1 {
+        return 4;
+    }
+    if px_is(ar, h, px_lighten()) == 1 {
+        return 5;
+    }
+    if px_is(ar, h, px_color_dodge()) == 1 {
+        return 6;
+    }
+    if px_is(ar, h, px_color_burn()) == 1 {
+        return 7;
+    }
+    if px_is(ar, h, px_hard_light()) == 1 {
+        return 8;
+    }
+    if px_is(ar, h, px_soft_light()) == 1 {
+        return 9;
+    }
+    if px_is(ar, h, px_difference()) == 1 {
+        return 10;
+    }
+    if px_is(ar, h, px_exclusion()) == 1 {
+        return 11;
+    }
+    if px_is(ar, h, px_hue()) == 1 {
+        return 12;
+    }
+    if px_is(ar, h, px_saturation()) == 1 {
+        return 13;
+    }
+    if px_is(ar, h, px_color()) == 1 {
+        return 14;
+    }
+    if px_is(ar, h, px_luminosity()) == 1 {
+        return 15;
+    }
+    return 99;
+}
+pub(crate) fn pc_alpha_of(ar: &mut crate::port::Cells, h: i32) -> i32 {
+    // A constant alpha as per-mille, clamped to 0..1000.
+    let al: i32 = fx_round(fx_mul(pc_ar_fx64(ar, h), fx_of_int(1000)));
+    if al < 0 {
+        return 0;
+    }
+    if al > 1000 {
+        return 1000;
+    }
+    return al;
+}
+pub(crate) fn pc_gs_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, ox: &mut crate::port::Cells, n: i32) -> i32 {
+    // gs: the entries of the named ExtGState that matter here: /ca and /CA (alpha), /BM (the blend mode, the first
+    // name of an array), /SMask (/None, or a dictionary: its /S, Alpha or Luminosity) and /LW (the line width).
+    if n < 1 {
+        return 0;
+    }
+    if pc_kind(ox, 0) != K_NAME {
+        return 0;
+    }
+    let raw: i32 = pc_res_entry(src, ar, dc, a, b, st, cx, ox, pn_ext_g_state(), 0);
+    let mut gd: i32 = 0;
+    let mut v: i32 = 0;
+    let mut s: i32 = 0;
+    if raw == 0 {
+        return 0;
+    }
+    gd = pd_resolve(src, ar, dc, a, b, st, raw);
+    if ps_missed(src) {
+        crate::port::cells_set(cx, C_ABORT, 1);
+        return 0;
+    }
+    if gd == 0 {
+        return 0;
+    }
+    v = pd_dget(src, ar, dc, a, b, st, gd, pn_ca());
+    if v != 0 {
+        crate::port::cells_set(cx, C_CUR + G_ALPHA, pc_alpha_of(ar, v));
+    }
+    v = px_dget(src, ar, dc, a, b, st, gd, px_ca());
+    if v != 0 {
+        crate::port::cells_set(cx, C_CUR + G_SALPHA, pc_alpha_of(ar, v));
+    }
+    v = px_dget(src, ar, dc, a, b, st, gd, px_bm());
+    if v != 0 {
+        if pl_kind_of(ar, v) == 6 {
+            s = pl_first(ar, v);
+            v = pd_resolve(src, ar, dc, a, b, st, s);
+        }
+        crate::port::cells_set(cx, C_CUR + G_BM, pc_bm_code(ar, v));
+    }
+    v = px_dget(src, ar, dc, a, b, st, gd, px_s_mask());
+    if v != 0 {
+        if pl_kind_of(ar, v) == 4 {
+            crate::port::cells_set(cx, C_CUR + G_SMASK, 0);
+        }
+        if pl_kind_of(ar, v) == 7 {
+            s = px_dget(src, ar, dc, a, b, st, v, px_s());
+            crate::port::cells_set(cx, C_CUR + G_SMASK, 2);
+            if px_is(ar, s, px_alpha()) == 1 {
+                crate::port::cells_set(cx, C_CUR + G_SMASK, 1);
+            }
+        }
+    }
+    v = px_dget(src, ar, dc, a, b, st, gd, px_lw());
+    if v != 0 {
+        if px_is_num(ar, v) == 1 {
+            fx_put(cx, C_CUR + G_LW, pc_ar_fx64(ar, v));
+        }
+    }
+    if ps_missed(src) {
+        crate::port::cells_set(cx, C_ABORT, 1);
+    }
+    return 0;
+}
+pub(crate) fn pc_image_place(mut cx: &mut crate::port::Cells, mut im: &mut crate::port::Cells, obj: i32, pxw: i32, pxh: i32, flags: i32) -> i32 {
+    // One image placement (SPEC 8.4.3): the unit square through the CTM. Its box is that parallelogram's, its `rot` the
+    // angle of the image's x axis, `skewed` 1 when its axes are not at a right angle (to half a degree).
+    let one: i64 = fx_one();
+    let zero: i64 = 0 as i64;
+    let ma: i64 = fx_get(cx, C_CUR + G_CTM);
+    let mb: i64 = fx_get(cx, (C_CUR + G_CTM) + 2);
+    let mc: i64 = fx_get(cx, (C_CUR + G_CTM) + 4);
+    let md: i64 = fx_get(cx, (C_CUR + G_CTM) + 6);
+    let ax: i64 = pc_tx(cx, zero, zero);
+    let ay: i64 = pc_ty(cx, zero, zero);
+    let bx: i64 = pc_tx(cx, one, zero);
+    let by: i64 = pc_ty(cx, one, zero);
+    let dx: i64 = pc_tx(cx, one, one);
+    let dy: i64 = pc_ty(cx, one, one);
+    let ex: i64 = pc_tx(cx, zero, one);
+    let ey: i64 = pc_ty(cx, zero, one);
+    let rot: i32 = pc_dir_angle(ma, mb);
+    let roty: i32 = pc_dir_angle(mc, md);
+    let mut diff: i32 = 0;
+    let mut skew: i32 = 1;
+    let mut fl: i32 = flags;
+    let mut chk: i32 = 0;
+    let mut r: i32 = 0;
+    if crate::port::cells_at(cx, C_CUR + G_BM) != 0 {
+        fl += mg_blend();
+    }
+    if crate::port::cells_at(cx, C_CUR + G_SMASK) != 0 {
+        fl += mg_softmask();
+    }
+    if crate::port::cells_at(cx, C_CUR + G_BM) != 0 {
+        chk += vc_blend();
+    }
+    if crate::port::cells_at(cx, C_CUR + G_SMASK) != 0 {
+        chk += vc_softmask();
+    }
+    diff = roty - rot;
+    if diff < 0 {
+        diff += 36000;
+    }
+    if (diff >= 8950) && (diff <= 9050) {
+        skew = 0;
+    }
+    if (diff >= 26950) && (diff <= 27050) {
+        skew = 0;
+    }
+    if crate::port::cells_at(cx, C_NIMG) >= PATH_ROWS {
+        pc_warn_set(cx, W_PATHS);
+        return 0;
+    }
+    r = im_new(im, crate::port::cells_at(cx, C_PAGE), fx_round(pc_min4(ax, bx, dx, ex)), fx_round(pc_min4(ay, by, dy, ey)), fx_round(pc_max4(ax, bx, dx, ex)), fx_round(pc_max4(ay, by, dy, ey)), obj, pxw, pxh);
+    im_set(im, r, mf_alpha(), crate::port::cells_at(cx, C_CUR + G_ALPHA));
+    im_set(im, r, mf_flags(), fl);
+    im_set(im, r, mf_rot(), rot);
+    im_set(im, r, mf_skewed(), skew);
+    im_set(im, r, mf_z(), crate::port::cells_at(cx, C_Z));
+    crate::port::cells_set(cx, C_Z, crate::port::cells_at(cx, C_Z) + 1);
+    im_set(im, r, mf_clip(), crate::port::cells_at(cx, C_CUR + G_CLIP));
+    im_set(im, r, mf_mark(), crate::port::cells_at(cx, C_MCTOP));
+    im_set(im, r, mf_ocg(), crate::port::cells_at(cx, C_CUROCG));
+    im_set(im, r, mf_vchk(), chk);
+    crate::port::cells_set(cx, C_NIMG, crate::port::cells_at(cx, C_NIMG) + 1);
+    return 0;
+}
+pub(crate) fn pc_oc_open(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, gl: &mut crate::port::Cells, et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, raw: i32) -> i32 {
+    // Open an optional-content span for the /OC entry `raw` of a Form XObject or an image (a `marks` row, kind
+    // optional-content, flagged `xobject`): its state is `gx-oc-state`'s. Answers 1 when opened, 0 when spans are
+    // too deep. The caller closes it with `pc-mc-pop`.
+    let depth: i32 = crate::port::cells_at(cx, C_MCDEPTH);
+    let mut span: i32 = 0;
+    let mut state: i32 = 1;
+    if depth >= MAX_MC {
+        return 0;
+    }
+    state = gx_oc_state(src, ar, dc, a, b, st, gx, raw, 0);
+    span = mk_open(mk, crate::port::cells_at(cx, C_PAGE), mk_optional_content(), crate::port::cells_len(et), 0, crate::port::cells_at(cx, C_MCTOP), gl_count(gl), crate::port::cells_at(cx, C_Z));
+    mk_set(mk, span, mkf_stm(), crate::port::cells_at(cx, C_STM));
+    mk_set(mk, span, mkf_flags(), mc_xobject());
+    mk_set(mk, span, mkf_ocgdef(), state);
+    if pl_kind_of(ar, raw) == 9 {
+        mk_set(mk, span, mkf_ocg(), pl_int_value(ar, raw));
+    }
+    crate::port::cells_set(cx, C_MCTOP, span);
+    crate::port::cells_set(cx, C_MCDEPTH, depth + 1);
+    crate::port::cells_set(cx, C_CUROCG, span);
+    return 1;
+}
+pub(crate) fn pc_image_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, gl: &mut crate::port::Cells, et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut im: &mut crate::port::Cells, objnum: i32, xh: i32) -> i32 {
+    // Do of an image XObject: a placement row. Its width and height are the dictionary's; the mask flags say what
+    // could make it translucent (a stencil mask, an /SMask, a /Mask); an /OC makes it a span of its own.
+    let w: i32 = pd_dint(src, ar, dc, a, b, st, xh, pn_width(), 0);
+    let h: i32 = pd_dint(src, ar, dc, a, b, st, xh, pn_height(), 0);
+    let mut fl: i32 = 0;
+    let mut v: i32 = 0;
+    let mut ocraw: i32 = 0;
+    let mut opened: i32 = 0;
+    v = px_dget(src, ar, dc, a, b, st, xh, px_image_mask());
+    if v != 0 {
+        if (pl_kind_of(ar, v) == 1) && (pl_int_value(ar, v) == 1) {
+            fl += mg_mask();
+        }
+    }
+    v = px_dget(src, ar, dc, a, b, st, xh, px_s_mask());
+    if v != 0 {
+        fl += mg_smask();
+    }
+    v = px_dget(src, ar, dc, a, b, st, xh, px_mask());
+    if v != 0 {
+        fl += mg_masked();
+    }
+    ocraw = px_get(ar, xh, px_oc());
+    if ps_missed(src) {
+        crate::port::cells_set(cx, C_ABORT, 1);
+        return 0;
+    }
+    if ocraw != 0 {
+        opened = pc_oc_open(src, ar, dc, a, b, st, cx, gx, gl, et, mk, ocraw);
+    }
+    pc_image_place(cx, im, objnum, w, h, fl);
+    if opened == 1 {
+        pc_mc_pop(cx, mk, gl, 0);
+    }
+    return 0;
+}
+pub(crate) fn pc_name_px(ox: &mut crate::port::Cells, s: i32, l: i32, id: i32) -> i32 {
+    // 1 when the name operand bytes ox[s, s+l) are row `id` of the catalogue name table (emon.pdfxnames).
+    let n: i32 = PX_SPAN[(id * 2 + 1) as usize];
+    let o: i32 = PX_SPAN[(id * 2 + 0) as usize];
+    let mut i: i32 = 0;
+    if l != n {
+        return 0;
+    }
+    while i < n {
+        if crate::port::cells_at(ox, s + i) != PX_CHARS[(o + i) as usize] {
+            return 0;
+        }
+        i += 1;
+    }
+    return 1;
+}
+pub(crate) fn pc_find_id(cx: &mut crate::port::Cells, cs: &mut crate::port::Cells) -> i32 {
+    // BI: where the `ID` that ends the inline image's dictionary starts (the index of its `I`), or -1.
+    let end: i32 = crate::port::cells_at(cx, C_END);
+    let mut p: i32 = crate::port::cells_at(cx, C_POS);
+    while (p + 2) < end {
+        if (pc_ws(crate::port::cells_at(cs, p)) == 1) && ((crate::port::cells_at(cs, p + 1) == 73) && ((crate::port::cells_at(cs, p + 2) == 68) && (((p + 3) >= end) || (pc_ws(crate::port::cells_at(cs, p + 3)) == 1)))) {
+            return p + 1;
+        }
+        p += 1;
+    }
+    return -1;
+}
+pub(crate) fn pc_inline_image(mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, cs: &mut crate::port::Cells, mut im: &mut crate::port::Cells) -> i32 {
+    // BI: read the dictionary up to `ID` (width, height, whether it is a stencil mask), record the placement, then
+    // leave the lexer where it was for `pc-skip-inline` to find the end of the data.
+    let start: i32 = crate::port::cells_at(cx, C_POS);
+    let end: i32 = crate::port::cells_at(cx, C_END);
+    let idp: i32 = pc_find_id(cx, cs);
+    let mut w: i32 = 0;
+    let mut h: i32 = 0;
+    let mut fl: i32 = 0;
+    let mut j: i32 = 0;
+    let mut v: i32 = 0;
+    let mut ks: i32 = 0;
+    let mut kl: i32 = 0;
+    let mut r: i32 = 1;
+    let mut total: i32 = 0;
+    let mut nxt: i32 = 0;
+    if idp < 0 {
+        pc_image_place(cx, im, 0, 0, 0, mg_inline());
+        return 0;
+    }
+    crate::port::cells_set(cx, C_END, idp);
+    pc_ox_clear(cx, ox);
+    while r == 1 {
+        r = pc_lex(cx, ox, cs);
+        if r == 2 {
+            r = 0;
+        }
+    }
+    total = crate::port::cells_at(cx, C_OXN);
+    j = 0;
+    while j < total {
+        nxt = j + 1;
+        if (pc_kind(ox, j) == K_NAME) && (nxt < total) {
+            ks = pc_ea(ox, j);
+            kl = pc_eb(ox, j);
+            if pc_kind(ox, nxt) == K_NUM {
+                v = fx_round(fx_join(pc_ea(ox, nxt), pc_eb(ox, nxt)));
+                if (pc_name_eq(ox, ks, kl, pn_width()) == 1) || (pc_name_eq(ox, ks, kl, pn_w()) == 1) {
+                    w = v;
+                }
+                if (pc_name_eq(ox, ks, kl, pn_height()) == 1) || (pc_name_px(ox, ks, kl, px_h()) == 1) {
+                    h = v;
+                }
+            }
+            if pc_kind(ox, nxt) == K_BOOL {
+                if (pc_name_px(ox, ks, kl, px_im()) == 1) || (pc_name_px(ox, ks, kl, px_image_mask()) == 1) {
+                    if pc_ea(ox, nxt) == 1 {
+                        fl = mg_mask();
+                    }
+                }
+            }
+            j = nxt + pc_esize(ox, nxt);
+        } else {
+            j += pc_esize(ox, j);
+        }
+    }
+    crate::port::cells_set(cx, C_END, end);
+    crate::port::cells_set(cx, C_POS, start);
+    pc_ox_clear(cx, ox);
+    pc_image_place(cx, im, 0, w, h, mg_inline() + fl);
+    return 0;
+}
+pub(crate) fn pc_sh_op(mut cx: &mut crate::port::Cells, mut pa: &mut crate::port::Cells) -> i32 {
+    // sh: a shading fills the whole clip region. A row of kind `other`, flagged `shading`, whose box is the region's
+    // (the page when nothing clips) and whose colour is unknown: P3.6 reads it as paint that is not exactly known.
+    let cur: i32 = crate::port::cells_at(cx, C_CUR + G_CLIP);
+    let mut r: i32 = 0;
+    let mut bx0: i32 = 0;
+    let mut by0: i32 = 0;
+    let mut bx1: i32 = 0;
+    let mut by1: i32 = 0;
+    let mut fl: i32 = 0;
+    if crate::port::cells_at(cx, C_NPATH) >= PATH_ROWS {
+        pc_warn_set(cx, W_PATHS);
+        return 0;
+    }
+    bx0 = 0;
+    by0 = 0;
+    bx1 = crate::port::cells_at(cx, C_PW);
+    by1 = crate::port::cells_at(cx, C_PH);
+    if cur >= 0 {
+        bx0 = pa_get(pa, cur, pf_x0());
+        by0 = pa_get(pa, cur, pf_y0());
+        bx1 = pa_get(pa, cur, pf_x1());
+        by1 = pa_get(pa, cur, pf_y1());
+    }
+    r = pa_new(pa, crate::port::cells_at(cx, C_PAGE), pa_other(), bx0, by0, bx1, by1);
+    fl = pg_filled() + pg_shading();
+    if crate::port::cells_at(cx, C_CUR + G_BM) != 0 {
+        fl += pg_blend();
+    }
+    if crate::port::cells_at(cx, C_CUR + G_SMASK) != 0 {
+        fl += pg_softmask();
+    }
+    pa_set(pa, r, pf_flags(), fl);
+    pa_set(pa, r, pf_falpha(), crate::port::cells_at(cx, C_CUR + G_ALPHA));
+    pa_set(pa, r, pf_z(), crate::port::cells_at(cx, C_Z));
+    crate::port::cells_set(cx, C_Z, crate::port::cells_at(cx, C_Z) + 1);
+    pa_set(pa, r, pf_clip(), cur);
+    pa_set(pa, r, pf_mark(), crate::port::cells_at(cx, C_MCTOP));
+    pa_set(pa, r, pf_ocg(), crate::port::cells_at(cx, C_CUROCG));
+    crate::port::cells_set(cx, C_NPATH, crate::port::cells_at(cx, C_NPATH) + 1);
+    return 0;
+}
 pub(crate) fn pc_append_stream(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, sh: i32) -> i32 {
     // Decode stream sh and append its bytes (and a line feed) to `cs`. Answers
     // the filter chain's status (0 ok), or -1 when the source missed.
@@ -1989,11 +3164,10 @@ pub(crate) fn pc_append_stream(src: &crate::port::Src, mut ar: &mut crate::port:
     crate::port::cells_push(cs, 10);
     return status;
 }
-pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, n: i32) -> i32 {
-    // Do: run the Form XObject named by operand 0. Images and everything that is
-    // not a form are skipped. The form's /Matrix is concatenated to the CTM, its
-    // /Resources replace the current ones (else they are inherited), and it runs
-    // inside its own `q`/`Q`.
+pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, n: i32) -> i32 {
+    // Do: an image XObject is a placement (`pc-image-do`); a Form XObject is run. The form's /Matrix is
+    // concatenated to the CTM, its /BBox clips (a rectangle in its own space), its /Resources replace the current
+    // ones (else they are inherited), an /OC makes it an optional-content span, and it runs inside its own `q`/`Q`.
     if n < 1 {
         return 0;
     }
@@ -2015,6 +3189,13 @@ pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
     let mut start: i32 = 0;
     let mut endcs: i32 = 0;
     let mut status: i32 = 0;
+    let mut bb: i32 = 0;
+    let mut ocraw: i32 = 0;
+    let mut opened: i32 = 0;
+    let mut bx0: i64 = 0 as i64;
+    let mut by0: i64 = 0 as i64;
+    let mut bx1: i64 = 0 as i64;
+    let mut by1: i64 = 0 as i64;
     if ps_missed(src) {
         crate::port::cells_set(cx, C_ABORT, 1);
         return 0;
@@ -2044,6 +3225,10 @@ pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
         return 0;
     }
     if sub == 0 {
+        return 0;
+    }
+    if pl_name_is(ar, sub, pn_image()) == 1 {
+        pc_image_do(src, ar, dc, a, b, st, cx, gx, gl, et, mk, im, objnum, xh);
         return 0;
     }
     if pl_name_is(ar, sub, pn_form()) == 0 {
@@ -2079,6 +3264,24 @@ pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
             mx_ident(cx, C_TMP);
         }
     }
+    // Its /BBox, kept as four Fx until the form's state is made.
+    bb = pd_dget(src, ar, dc, a, b, st, xh, pn_b_box());
+    got = 0;
+    if (bb != 0) && (pl_kind_of(ar, bb) == 6) {
+        el = pl_first(ar, bb);
+        while (el != 0) && (got < 4) {
+            sub = pd_resolve(src, ar, dc, a, b, st, el);
+            if px_is_num(ar, sub) == 0 {
+                got = 0;
+                el = 0;
+            } else {
+                fx_put(cx, C_BB + (got * 2), pc_ar_fx64(ar, sub));
+                el = pl_next(ar, el);
+                got += 1;
+            }
+        }
+    }
+    ocraw = px_get(ar, xh, px_oc());
     res = pd_dget(src, ar, dc, a, b, st, xh, pn_resources());
     oldres = crate::port::cells_at(cx, C_RES);
     oldstm = crate::port::cells_at(cx, C_STM);
@@ -2092,11 +3295,28 @@ pub(crate) fn pc_do(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
     }
     pc_save(cx);
     mx_mul(cx, C_CUR + G_CTM, C_TMP, C_CUR + G_CTM);
+    if got == 4 {
+        // The form's box clips what it paints: a rectangle through the CTM.
+        pc_path_reset(cx, pts);
+        bx0 = fx_get(cx, C_BB);
+        by0 = fx_get(cx, C_BB + 2);
+        bx1 = fx_get(cx, C_BB + 4);
+        by1 = fx_get(cx, C_BB + 6);
+        pc_rect_path(cx, pts, bx0, by0, bx1 - bx0, by1 - by0);
+        crate::port::cells_set(cx, C_CLIPP, 1);
+        pc_end_path(cx, pa, pts, 0, 0, 0, 1);
+    }
+    if ocraw != 0 {
+        opened = pc_oc_open(src, ar, dc, a, b, st, cx, gx, gl, et, mk, ocraw);
+    }
     crate::port::cells_set(cx, C_FSTACK + fd, objnum);
     crate::port::cells_set(cx, C_FDEPTH, fd + 1);
     crate::port::cells_set(cx, C_STM, objnum);
     endcs = crate::port::cells_len(cs);
-    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, start, endcs);
+    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, start, endcs);
+    if opened == 1 {
+        pc_mc_pop(cx, mk, gl, 0);
+    }
     crate::port::cells_set(cx, C_FDEPTH, fd);
     crate::port::cells_set(cx, C_STM, oldstm);
     crate::port::cells_set(cx, C_RES, oldres);
@@ -2113,7 +3333,7 @@ pub(crate) fn pc_prep(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
     }
     return 0;
 }
-pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, op: i32, n: i32) -> i32 {
+pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, op: i32, n: i32) -> i32 {
     // Execute one operator; `ox` holds its n operands. Unknown operators do
     // nothing (their operands are dropped by the caller).
     if op == OP_SAVE {
@@ -2135,10 +3355,16 @@ pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
         mx_ident(cx, C_TM);
         mx_ident(cx, C_TLM);
         crate::port::cells_set(cx, C_INTEXT, 1);
+        crate::port::cells_set(cx, C_TCN, 0);
         return 0;
     }
     if op == OP_ET {
         crate::port::cells_set(cx, C_INTEXT, 0);
+        if crate::port::cells_at(cx, C_TCN) > 0 {
+            // Glyphs shown in a clipping render mode (4 to 7) clip to their boxes' union (a superset of the glyphs).
+            pc_clip_box(cx, pa, crate::port::cells_at(cx, C_TCX0), crate::port::cells_at(cx, C_TCY0), crate::port::cells_at(cx, C_TCX1), crate::port::cells_at(cx, C_TCY1), pa_other(), 0, -1, 0);
+            crate::port::cells_set(cx, C_TCN, 0);
+        }
         return 0;
     }
     if op == OP_TF {
@@ -2221,15 +3447,15 @@ pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
         return 0;
     }
     if op == OP_DO {
-        pc_do(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, n);
+        pc_do(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, n);
         return 0;
     }
     if op == OP_BDC {
-        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 1);
+        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, gx, n, 1);
         return 0;
     }
     if op == OP_BMC {
-        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 0);
+        pc_mc_begin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, gx, n, 0);
         return 0;
     }
     if op == OP_EMC {
@@ -2237,57 +3463,115 @@ pub(crate) fn pc_op(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut
         return 0;
     }
     if op == OP_BI {
+        pc_inline_image(cx, ox, cs, im);
         pc_skip_inline(cx, cs);
         return 0;
     }
-    if (op == OP_GRAY) || ((op == OP_RGB) || ((op == OP_CMYK) || ((op == OP_SC) || (op == OP_SCN)))) {
-        pc_set_color(cx, ox, n);
+    // Colour: the device operators, the named spaces, the components.
+    if op == OP_GRAY {
+        pc_color_device(cx, ox, gx, n, 0, 1);
+        return 0;
+    }
+    if op == OP_RGB {
+        pc_color_device(cx, ox, gx, n, 0, 2);
+        return 0;
+    }
+    if op == OP_CMYK {
+        pc_color_device(cx, ox, gx, n, 0, 3);
+        return 0;
+    }
+    if op == OP_GRAY_S {
+        pc_color_device(cx, ox, gx, n, 1, 1);
+        return 0;
+    }
+    if op == OP_RGB_S {
+        pc_color_device(cx, ox, gx, n, 1, 2);
+        return 0;
+    }
+    if op == OP_CMYK_S {
+        pc_color_device(cx, ox, gx, n, 1, 3);
+        return 0;
+    }
+    if (op == OP_SC) || (op == OP_SCN) {
+        pc_sc_op(src, ar, dc, a, b, st, out, cx, ox, gx, n, 0);
+        return 0;
+    }
+    if (op == OP_SC_S) || (op == OP_SCN_S) {
+        pc_sc_op(src, ar, dc, a, b, st, out, cx, ox, gx, n, 1);
         return 0;
     }
     if op == OP_CS {
-        crate::port::cells_set(cx, C_CUR + G_COLOR, 0);
-        if (n >= 1) && (pc_kind(ox, 0) == K_NAME) {
-            crate::port::cells_set(cx, C_CUR + G_FAM, 0);
-            if pc_entry_name_is(ox, 0, pn_device_gray()) == 1 {
-                crate::port::cells_set(cx, C_CUR + G_FAM, 1);
-            }
-            if pc_entry_name_is(ox, 0, pn_device_rgb()) == 1 {
-                crate::port::cells_set(cx, C_CUR + G_FAM, 2);
-            }
-            if pc_entry_name_is(ox, 0, pn_device_cmyk()) == 1 {
-                crate::port::cells_set(cx, C_CUR + G_FAM, 3);
-            }
-        }
+        pc_cs_op(src, ar, dc, a, b, st, out, cx, ox, gx, n, 0);
+        return 0;
+    }
+    if op == OP_CS_S {
+        pc_cs_op(src, ar, dc, a, b, st, out, cx, ox, gx, n, 1);
         return 0;
     }
     if op == OP_GS {
-        if (n >= 1) && (pc_kind(ox, 0) == K_NAME) {
-            let raw: i32 = pc_res_entry(src, ar, dc, a, b, st, cx, ox, pn_ext_g_state(), 0);
-            if raw != 0 {
-                let gd: i32 = pd_resolve(src, ar, dc, a, b, st, raw);
-                if gd != 0 {
-                    let cav: i32 = pd_dget(src, ar, dc, a, b, st, gd, pn_ca());
-                    if cav != 0 {
-                        let al: i32 = fx_round(fx_mul(pc_ar_fx64(ar, cav), fx_of_int(1000)));
-                        if al < 0 {
-                            crate::port::cells_set(cx, C_CUR + G_ALPHA, 0);
-                        } else if al > 1000 {
-                            crate::port::cells_set(cx, C_CUR + G_ALPHA, 1000);
-                        } else {
-                            crate::port::cells_set(cx, C_CUR + G_ALPHA, al);
-                        }
-                    }
-                }
-            }
-            if ps_missed(src) {
-                crate::port::cells_set(cx, C_ABORT, 1);
-            }
-        }
+        pc_gs_op(src, ar, dc, a, b, st, cx, ox, n);
+        return 0;
+    }
+    // Paths: construction, painting, clipping.
+    if op == OP_MOVE {
+        pc_op_move(cx, pts, ox, n);
+        return 0;
+    }
+    if op == OP_LINE {
+        pc_op_line(cx, pts, ox, n);
+        return 0;
+    }
+    if op == OP_CURVE {
+        pc_op_curve(cx, pts, ox, n, 0);
+        return 0;
+    }
+    if op == OP_CURVE_V {
+        pc_op_curve(cx, pts, ox, n, 1);
+        return 0;
+    }
+    if op == OP_CURVE_Y {
+        pc_op_curve(cx, pts, ox, n, 2);
+        return 0;
+    }
+    if op == OP_CLOSE {
+        pc_op_close(cx, pts);
+        return 0;
+    }
+    if op == OP_RECT {
+        pc_op_rect(cx, pts, ox, n);
+        return 0;
+    }
+    if (op == OP_STROKE) || ((op == OP_CLOSESTROKE) || ((op == OP_FILL) || ((op == OP_FILL2) || ((op == OP_FILLEO) || ((op == OP_FS) || ((op == OP_FSEO) || ((op == OP_CFS) || (op == OP_CFSEO)))))))) {
+        pc_paint_op(cx, pa, pts, op);
+        return 0;
+    }
+    if op == OP_ENDPATH {
+        pc_end_path(cx, pa, pts, 0, 0, 0, 0);
+        return 0;
+    }
+    if op == OP_CLIP {
+        crate::port::cells_set(cx, C_CLIPP, 1);
+        return 0;
+    }
+    if op == OP_CLIPEO {
+        crate::port::cells_set(cx, C_CLIPP, 2);
+        return 0;
+    }
+    if op == OP_SH {
+        pc_sh_op(cx, pa);
+        return 0;
+    }
+    if op == OP_LW {
+        fx_put(cx, C_CUR + G_LW, pc_num(ox, n, 0));
+        return 0;
+    }
+    if op == OP_DASH {
+        pc_dash_op(cx, ox, n);
         return 0;
     }
     return 0;
 }
-pub(crate) fn pc_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
+pub(crate) fn pc_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
     // Run the content bytes cs[start, end): read operands, then execute each
     // operator. The caller's lexer position, graphics-state floor and marked-
     // content floor are kept and restored, so a form can run inside an operator.
@@ -2317,7 +3601,7 @@ pub(crate) fn pc_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mu
             }
             opc = crate::port::cells_at(cx, C_OP);
             nop = crate::port::cells_at(cx, C_OXN);
-            pc_op(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, opc, nop);
+            pc_op(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, opc, nop);
             pc_ox_clear(cx, ox);
         }
     }
@@ -2460,6 +3744,13 @@ pub(crate) fn pc_rot_same(r1: i32, r2: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn pc_hidden_mode(mode: i32) -> i32 {
+    // 1 for the invisible render modes, 3 and 7.
+    if (mode == 3) || (mode == 7) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     // 1 when glyph g continues the word glyph p is in: the same rotation, on the
     // same baseline (to 45 percent of the size: sub- and superscripts stay), and
@@ -2472,6 +3763,14 @@ pub(crate) fn pc_continues(gl: &mut crate::port::Cells, p: i32, g: i32) -> i32 {
     let mut gap: i32 = 0;
     let mut off: i32 = 0;
     if pc_rot_same(rot, gl_get(gl, g, gf_rot())) == 0 {
+        return 0;
+    }
+    // A word is one thing to see: a glyph of another visibility, or one that is hidden (mode 3, 7) where the other
+    // is not, starts a new word (P3.6).
+    if gl_get(gl, p, gf_vis()) != gl_get(gl, g, gf_vis()) {
+        return 0;
+    }
+    if pc_hidden_mode(gl_get(gl, p, gf_mode())) != pc_hidden_mode(gl_get(gl, g, gf_mode())) {
         return 0;
     }
     if sizep > sz {
@@ -2579,7 +3878,7 @@ pub(crate) fn pc_emit_word(mut gl: &mut crate::port::Cells, mut et: &mut crate::
         if gl_get(gl, j, ch_y1()) > y1 {
             y1 = gl_get(gl, j, ch_y1());
         }
-        if gl_get(gl, j, gf_mode()) != 3 {
+        if (gl_get(gl, j, gf_mode()) != 3) && (gl_get(gl, j, gf_mode()) != 7) {
             visible = 1;
         }
         cl = pc_gcls(gl, j);
@@ -2925,13 +4224,17 @@ pub(crate) fn pc_begin_page(mut cx: &mut crate::port::Cells, page: i32) -> i32 {
     crate::port::cells_set(cx, C_CUROCG, -1);
     crate::port::cells_set(cx, C_Z, 0);
     crate::port::cells_set(cx, C_INTEXT, 0);
+    crate::port::cells_set(cx, C_CLIPP, 0);
+    crate::port::cells_set(cx, C_TCN, 0);
+    crate::port::cells_set(cx, C_NPATH, 0);
+    crate::port::cells_set(cx, C_NIMG, 0);
     crate::port::cells_set(cx, C_GSBASE, 0);
     mx_ident(cx, C_TM);
     mx_ident(cx, C_TLM);
     mx_ident(cx, C_M);
     return 0;
 }
-pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, pg: &mut crate::port::Cells, pi: i32, page: i32, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, pg: &mut crate::port::Cells, pi: i32, page: i32, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut gx: &mut crate::port::Cells) -> i32 {
     // Interpret page index pi of the page table pg (page number `page`, 1-based, is
     // what the evidence records): its content streams, then the words and lines.
     // Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is
@@ -2939,12 +4242,27 @@ pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
     let con: i32 = pd_pg_contents(pg, pi);
     let g0: i32 = gl_count(gl);
     let w0: i32 = wd_count(wd);
+    let p0: i32 = pa_count(pa);
+    let i0: i32 = im_count(im);
+    let rot: i32 = pd_pg_rotate(pg, pi);
+    let cw: i32 = pd_pg_crop(pg, pi, 2) - pd_pg_crop(pg, pi, 0);
+    let ch: i32 = pd_pg_crop(pg, pi, 3) - pd_pg_crop(pg, pi, 1);
     let mut el: i32 = 0;
     let mut eh: i32 = 0;
     let mut endcs: i32 = 0;
     pc_begin_page(cx, page);
     pc_base_matrix(cx, pd_pg_crop(pg, pi, 0), pd_pg_crop(pg, pi, 1), pd_pg_crop(pg, pi, 2), pd_pg_crop(pg, pi, 3), pd_pg_rotate(pg, pi));
     pc_gs_reset(cx);
+    gx_page(gx);
+    gx_oc_read(src, ar, dc, a, b, st, gx);
+    if (rot == 90) || (rot == 270) {
+        crate::port::cells_set(cx, C_PW, ch);
+        crate::port::cells_set(cx, C_PH, cw);
+    } else {
+        crate::port::cells_set(cx, C_PW, cw);
+        crate::port::cells_set(cx, C_PH, ch);
+    }
+    pc_path_reset(cx, pts);
     crate::port::cells_set(cx, C_RES, pd_pg_resources(pg, pi));
     crate::port::cells_drop(cs, 0);
     if con != 0 {
@@ -2969,21 +4287,25 @@ pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
         return 7;
     }
     endcs = crate::port::cells_len(cs);
-    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, 0, endcs);
+    pc_run(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, 0, endcs);
     if crate::port::cells_at(cx, C_ABORT) == 1 {
         return 7;
     }
     if ps_missed(src) {
         return 7;
     }
+    // The path in progress when the page ended never painted: its points are dropped.
+    crate::port::cells_drop(pts, crate::port::cells_at(cx, C_PPTS) * 3);
+    pv_page(gl, mk, pa, im, crate::port::cells_at(cx, C_PW), crate::port::cells_at(cx, C_PH), g0, p0, i0);
     pc_group(gl, et, wd, ln, fnt, page, g0, w0);
     return 0;
 }
-pub fn pc_document(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+pub fn pc_document(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut gx: &mut crate::port::Cells) -> i32 {
     // Every page of an opened document (`pd-open` has answered 0): clears `cx`,
     // then `pc-page` for each page. Answers 0, or 7 when the source missed.
     pc_init(cx, ox);
     crate::port::cells_drop(fnt, 0);
+    crate::port::cells_drop(gx, 0);
     let n: i32 = pd_pages(src, ar, dc, a, b, st, pg);
     let mut i: i32 = 0;
     let mut status: i32 = 0;
@@ -2991,7 +4313,7 @@ pub fn pc_document(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut 
         return 7;
     }
     while i < n {
-        status = pc_page(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i + 1, wd, ln);
+        status = pc_page(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i + 1, wd, ln, pa, im, pts, gx);
         if status == 7 {
             return 7;
         }

@@ -100,20 +100,33 @@ func ctNearAngle(emonT *testing.T, got int32, want int32, law string, row int32)
 	return 0
 }
 
-func ctRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+func ctRun2(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells, pa *port.Cells, im *port.Cells, pts *port.Cells, gx *port.Cells) int32 {
 	// Open the file and run every page: 0 when both went well, 100 + the open
-	// status when it did not open, else `pc-document`'s (7: the source missed).
+	// status when it did not open, else `pc-document`'s (7: the source missed). The paths, images, their
+	// points and the colour workspace are the caller's too.
 	port.CellsDrop(gl, 0)
 	port.CellsDrop(et, 0)
 	port.CellsDrop(mk, 0)
 	port.CellsDrop(fnt, 0)
 	port.CellsDrop(wd, 0)
 	port.CellsDrop(ln, 0)
+	port.CellsDrop(pa, 0)
+	port.CellsDrop(im, 0)
+	port.CellsDrop(pts, 0)
 	var o int32 = pdfdoc.PdOpen(src, ar, dc, a, b, st)
 	if o != 0 {
 		return 100 + o
 	}
-	return pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
+	return pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx)
+}
+
+func ctRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+	// `ct-run2` with arenas of its own for the paths, images, points and colours.
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gx *port.Cells = port.NewCells()
+	return ctRun2(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx)
 }
 
 func ctGRow(emonT *testing.T, rows []byte, s int32, e int32, gl *port.Cells, vals *port.Cells, g int32, line int32) int32 {
@@ -343,6 +356,7 @@ func ctDumpRows(emonT *testing.T, rows []byte) int32 {
 	var rules *port.Cells = port.NewCells()
 	var prims *port.Cells = port.NewCells()
 	var tlines *port.Cells = port.NewCells()
+	var gx *port.Cells = port.NewCells()
 	var n int32 = port.BlobLen(rows)
 	var pos int32 = 0
 	var line int32 = 0
@@ -356,7 +370,7 @@ func ctDumpRows(emonT *testing.T, rows []byte) int32 {
 		if (pos < e) && (port.BlobU8(rows, pos) != 35) {
 			tb = ctTab(rows, pos, e)
 			files += 1
-			status = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, pos, tb)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
+			status = ctRun2(port.SrcOfBlob(port.TestFileSpan(rows, pos, tb)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, paths, images, pts, gx)
 			port.AssertEqAt(emonT, status, 0, "the file ran", line)
 			port.AssertEqAt(emonT, evidence.EvCheck(epages, views, pts, refs, et, feats, gl, wd, ln, mk, fnt, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the evidence is well formed", line)
 			var t *strings.Builder = port.NewText()
@@ -389,7 +403,7 @@ func ctDiff(x *port.Cells, y *port.Cells) int32 {
 	return -1
 }
 
-func ctAsync(bytes []byte, chunk int32, ctr *port.Cells, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+func ctAsync(bytes []byte, chunk int32, ctr *port.Cells, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells, pa *port.Cells, im *port.Cells, pts *port.Cells, gx *port.Cells) int32 {
 	// Run `bytes` through an async source of `chunk`-byte chunks, re-running on a fresh
 	// view after each fetch until an attempt does not miss. `ctr` gets [rounds, attempts
 	// that missed and answered something other than need-bytes].
@@ -402,7 +416,7 @@ func ctAsync(bytes []byte, chunk int32, ctr *port.Cells, ar *port.Cells, dc *por
 	port.CellsPush(ctr, 0)
 	for more == 1 {
 		var v *port.Src = port.SrcView(base)
-		status = ctRun(v, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
+		status = ctRun2(v, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx)
 		if pdfsrc.PsMissed(v) {
 			if (status != 7) && (status != 0) && (status < 100) {
 				port.CellsSet(ctr, 1, port.CellsAt(ctr, 1)+1)
@@ -464,6 +478,14 @@ func ctAsyncRows(emonT *testing.T, rows []byte, mode int32, chunk int32) int32 {
 	var pg2 *port.Cells = port.NewCells()
 	var wd2 *port.Cells = port.NewCells()
 	var ln2 *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gx *port.Cells = port.NewCells()
+	var pa2 *port.Cells = port.NewCells()
+	var im2 *port.Cells = port.NewCells()
+	var pts2 *port.Cells = port.NewCells()
+	var gx2 *port.Cells = port.NewCells()
 	var ctr *port.Cells = port.NewCells()
 	var n int32 = port.BlobLen(rows)
 	var pos int32 = 0
@@ -490,8 +512,8 @@ func ctAsyncRows(emonT *testing.T, rows []byte, mode int32, chunk int32) int32 {
 		if s >= 0 {
 			q = ctTab(rows, s, e)
 			files += 1
-			s1 = ctRun(port.SrcOfBlob(port.TestFileSpan(rows, s, q)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
-			s2 = ctAsync(port.TestFileSpan(rows, s, q), chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, mk2, fnt2, pg2, wd2, ln2)
+			s1 = ctRun2(port.SrcOfBlob(port.TestFileSpan(rows, s, q)), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx)
+			s2 = ctAsync(port.TestFileSpan(rows, s, q), chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, mk2, fnt2, pg2, wd2, ln2, pa2, im2, pts2, gx2)
 			port.AssertEqAt(emonT, s2, s1, "the kept attempt's status is the in-memory run's", line)
 			port.AssertEqAt(emonT, ctDiff(gl, gl2), -1, "glyphs", line)
 			port.AssertEqAt(emonT, ctDiff(et, et2), -1, "evidence text", line)
@@ -499,6 +521,10 @@ func ctAsyncRows(emonT *testing.T, rows []byte, mode int32, chunk int32) int32 {
 			port.AssertEqAt(emonT, ctDiff(fnt, fnt2), -1, "fonts", line)
 			port.AssertEqAt(emonT, ctDiff(wd, wd2), -1, "words", line)
 			port.AssertEqAt(emonT, ctDiff(ln, ln2), -1, "lines", line)
+			port.AssertEqAt(emonT, ctDiff(pa, pa2), -1, "paths", line)
+			port.AssertEqAt(emonT, ctDiff(im, im2), -1, "images", line)
+			port.AssertEqAt(emonT, ctDiff(pts, pts2), -1, "path points", line)
+			port.AssertEqAt(emonT, ctDiff(gx, gx2), -1, "the colour workspace", line)
 			port.AssertEqAt(emonT, pdfcontent.PcWarn(cx2), pdfcontent.PcWarn(cx), "warnings", line)
 			port.AssertEqAt(emonT, port.CellsAt(ctr, 1), 0, "a missed attempt answered only need-bytes", line)
 			port.AssertThatAt(emonT, port.CellsAt(ctr, 0) <= 24, "within 24 rounds", line)
@@ -677,4 +703,19 @@ func TestCorruptedAndCutFilesNeverFault(emonT *testing.T) {
 	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("content/fonts.pdf"), 300, 37) > 300, "fonts.pdf")
 	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("content/damaged.pdf"), 300, 29) > 300, "damaged.pdf")
 	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("pdf/html-chrome.pdf"), 100, 401) > 100, "a Chrome file")
+}
+
+func TestTheVisibilityFixturesAreTheSameThroughAnAsyncSourceOf512ByteChunks(emonT *testing.T) {
+	// Paths, images, their points and the colour workspace too, cell for cell (D075).
+	var r int32 = ctAsyncRows(emonT, port.TestFile("vis/rows.txt"), 0, 512)
+	port.AssertThat(emonT, r >= 1700, "seventeen files were run")
+}
+
+func TestCorruptedAndCutVisibilityFixturesNeverFault(emonT *testing.T) {
+	// Colour spaces, functions, clips, optional content and soft masks, damaged: no fault, whatever they say.
+	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("vis/spaces.pdf"), 300, 53) > 300, "spaces.pdf")
+	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("vis/white.pdf"), 300, 61) > 300, "white.pdf")
+	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("vis/ocg.pdf"), 300, 59) > 300, "ocg.pdf")
+	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("vis/occluded.pdf"), 300, 67) > 300, "occluded.pdf")
+	port.AssertThat(emonT, ctFuzzFile(emonT, port.TestFile("vis/clip.pdf"), 300, 47) > 300, "clip.pdf")
 }

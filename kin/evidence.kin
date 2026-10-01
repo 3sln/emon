@@ -65,13 +65,16 @@
    [gh-unknown 5 "unknown"]])
 
 ;; Why a glyph is not visible (SPEC 8.1); 0 is "visible" and is not written.
-;; Render mode 3 is NOT here: it is the `hidden-text` source, not invisibility.
+;; Render mode 3 is NOT here: it is the `hidden-text` source, not invisibility. `ocg-hidden` (an optional-content group
+;; that is off by default) and `transparent` (the ink's alpha is 0) are P3.6's (D134).
 (defenum ^:pub vz
   [[vz-clipped 1 "clipped"]
    [vz-offpage 2 "offpage"]
    [vz-white 3 "white-on-white"]
    [vz-zero-size 4 "zero-size"]
-   [vz-occluded 5 "occluded"]])
+   [vz-occluded 5 "occluded"]
+   [vz-ocg-hidden 6 "ocg-hidden"]
+   [vz-transparent 7 "transparent"]])
 
 ;; An `/Artifact`'s `/Type` (SPEC 8.4.3, D101). CODES ARE FOREVER. v2 writes `pagination` 1, `layout` 3,
 ;; `background` 4, `page` 6 and `other` 5 (a Type that is none of those, or absent: an artifact span always
@@ -121,19 +124,30 @@
 (defenum ^:pub pg
   [[pg-closed 1 "closed"]
    [pg-evenodd 2 "evenodd"]
-   [pg-clip 4 "clip"]])
+   [pg-clip 4 "clip"]
+   [pg-filled 8 "filled"]
+   [pg-stroked 16 "stroked"]
+   [pg-shading 32 "shading"]
+   [pg-pattern 64 "pattern"]
+   [pg-blend 128 "blend"]
+   [pg-softmask 256 "softmask"]])
 
 (defenum ^:pub mg
   [[mg-mask 1 "mask"]
    [mg-smask 2 "smask"]
-   [mg-inline 4 "inline"]])
+   [mg-inline 4 "inline"]
+   [mg-masked 8 "masked"]
+   [mg-blend 16 "blend"]
+   [mg-softmask 32 "softmask"]])
 
-;; `/Properties` reference (2), inline dictionary (1), name not found (4), closed by the end of its stream (8).
+;; `/Properties` reference (2), inline dictionary (1), name not found (4), closed by the end of its stream (8), an
+;; optional-content span made for a Form XObject's or an image's own `/OC` (16, D134).
 (defenum ^:pub mc
   [[mc-inline 1 "inline"]
    [mc-resource 2 "resource"]
    [mc-unresolved 4 "unresolved"]
-   [mc-unterminated 8 "unterminated"]])
+   [mc-unterminated 8 "unterminated"]
+   [mc-xobject 16 "xobject"]])
 
 (defenum ^:pub eg
   [[eg-text-layer 1 "text-layer"]
@@ -161,7 +175,11 @@
    [vc-offpage 2 "offpage"]
    [vc-white 4 "white"]
    [vc-zero-size 8 "zero-size"]
-   [vc-occlusion 16 "occlusion"]])
+   [vc-occlusion 16 "occlusion"]
+   [vc-ocg 32 "ocg"]
+   [vc-transparent 64 "transparent"]
+   [vc-blend 128 "blend"]
+   [vc-softmask 256 "softmask"]])
 
 ;; The arenas' codes (SPEC 8.4.6), in the order of the bundles. A reference is `(ea, index)`.
 (defenum ^:pub ea
@@ -2764,7 +2782,7 @@
     (if (== which 3) (js-bits-style t pr v))
     (if (> which 3)
       (do (emit-ascii t "[")
-          (while (< b 8)
+          (while (< b 16)
             (do (if (!= (bit-and v bit) 0)
                   (do (js-fsep t pr k)
                       (emit-ascii t "\"")

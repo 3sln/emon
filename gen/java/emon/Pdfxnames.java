@@ -717,6 +717,258 @@ public final class Pdfxnames {
     public static int pxTrapped() {
         return 101;
     }
+    public static int pxCalGray() {
+        return 102;
+    }
+    public static int pxCalRgb() {
+        return 103;
+    }
+    public static int pxLab() {
+        return 104;
+    }
+    public static int pxIccBased() {
+        return 105;
+    }
+    public static int pxIndexed() {
+        return 106;
+    }
+    public static int pxSeparation() {
+        return 107;
+    }
+    public static int pxDeviceN() {
+        return 108;
+    }
+    public static int pxAlternate() {
+        return 109;
+    }
+    public static int pxWhitePoint() {
+        return 110;
+    }
+    public static int pxBlackPoint() {
+        return 111;
+    }
+    public static int pxGamma() {
+        return 112;
+    }
+    public static int pxRange() {
+        return 113;
+    }
+    public static int pxNone() {
+        return 114;
+    }
+    public static int pxAll() {
+        return 115;
+    }
+    public static int pxG() {
+        return 116;
+    }
+    public static int pxRgb() {
+        return 117;
+    }
+    public static int pxCmyk() {
+        return 118;
+    }
+    public static int pxI() {
+        return 119;
+    }
+    public static int pxCs() {
+        return 120;
+    }
+    public static int pxIm() {
+        return 121;
+    }
+    public static int pxBpc() {
+        return 122;
+    }
+    public static int pxH() {
+        return 123;
+    }
+    public static int pxImageMask() {
+        return 124;
+    }
+    public static int pxMask() {
+        return 125;
+    }
+    public static int pxSMask() {
+        return 126;
+    }
+    public static int pxSMaskInData() {
+        return 127;
+    }
+    public static int pxFunctionType() {
+        return 128;
+    }
+    public static int pxDomain() {
+        return 129;
+    }
+    public static int pxC0() {
+        return 130;
+    }
+    public static int pxC1() {
+        return 131;
+    }
+    public static int pxFunctions() {
+        return 132;
+    }
+    public static int pxBounds() {
+        return 133;
+    }
+    public static int pxEncode() {
+        return 134;
+    }
+    public static int pxDecode() {
+        return 135;
+    }
+    public static int pxBitsPerSample() {
+        return 136;
+    }
+    public static int pxOrder() {
+        return 137;
+    }
+    public static int pxBm() {
+        return 138;
+    }
+    public static int pxLw() {
+        return 139;
+    }
+    public static int pxBc() {
+        return 140;
+    }
+    public static int pxNormal() {
+        return 141;
+    }
+    public static int pxCompatible() {
+        return 142;
+    }
+    public static int pxMultiply() {
+        return 143;
+    }
+    public static int pxOverlay() {
+        return 144;
+    }
+    public static int pxDarken() {
+        return 145;
+    }
+    public static int pxLighten() {
+        return 146;
+    }
+    public static int pxColorDodge() {
+        return 147;
+    }
+    public static int pxColorBurn() {
+        return 148;
+    }
+    public static int pxHardLight() {
+        return 149;
+    }
+    public static int pxSoftLight() {
+        return 150;
+    }
+    public static int pxDifference() {
+        return 151;
+    }
+    public static int pxExclusion() {
+        return 152;
+    }
+    public static int pxHue() {
+        return 153;
+    }
+    public static int pxSaturation() {
+        return 154;
+    }
+    public static int pxColor() {
+        return 155;
+    }
+    public static int pxLuminosity() {
+        return 156;
+    }
+    public static int pxAlpha() {
+        return 157;
+    }
+    public static int pxOcProperties() {
+        return 158;
+    }
+    public static int pxOcgs() {
+        return 159;
+    }
+    public static int pxOcg() {
+        return 160;
+    }
+    public static int pxOcmd() {
+        return 161;
+    }
+    public static int pxBaseState() {
+        return 162;
+    }
+    public static int pxOnUpper() {
+        return 163;
+    }
+    public static int pxOffUpper() {
+        return 164;
+    }
+    public static int pxEvent() {
+        return 165;
+    }
+    public static int pxCategory() {
+        return 166;
+    }
+    public static int pxUsage() {
+        return 167;
+    }
+    public static int pxView() {
+        return 168;
+    }
+    public static int pxViewState() {
+        return 169;
+    }
+    public static int pxPrint() {
+        return 170;
+    }
+    public static int pxPrintState() {
+        return 171;
+    }
+    public static int pxExport() {
+        return 172;
+    }
+    public static int pxExportState() {
+        return 173;
+    }
+    public static int pxAllOn() {
+        return 174;
+    }
+    public static int pxAnyOn() {
+        return 175;
+    }
+    public static int pxAnyOff() {
+        return 176;
+    }
+    public static int pxAllOff() {
+        return 177;
+    }
+    public static int pxVe() {
+        return 178;
+    }
+    public static int pxAnd() {
+        return 179;
+    }
+    public static int pxOr() {
+        return 180;
+    }
+    public static int pxNot() {
+        return 181;
+    }
+    public static int pxUnchanged() {
+        return 182;
+    }
+    public static int pxShadingType() {
+        return 183;
+    }
+    public static int pxPatternType() {
+        return 184;
+    }
+    public static int pxExtend() {
+        return 185;
+    }
     public static int pxEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "Annots");
@@ -1126,6 +1378,342 @@ public final class Pdfxnames {
             emon.Port.textAscii(t, "Trapped");
             return 1;
         }
+        if (code == 102) {
+            emon.Port.textAscii(t, "CalGray");
+            return 1;
+        }
+        if (code == 103) {
+            emon.Port.textAscii(t, "CalRGB");
+            return 1;
+        }
+        if (code == 104) {
+            emon.Port.textAscii(t, "Lab");
+            return 1;
+        }
+        if (code == 105) {
+            emon.Port.textAscii(t, "ICCBased");
+            return 1;
+        }
+        if (code == 106) {
+            emon.Port.textAscii(t, "Indexed");
+            return 1;
+        }
+        if (code == 107) {
+            emon.Port.textAscii(t, "Separation");
+            return 1;
+        }
+        if (code == 108) {
+            emon.Port.textAscii(t, "DeviceN");
+            return 1;
+        }
+        if (code == 109) {
+            emon.Port.textAscii(t, "Alternate");
+            return 1;
+        }
+        if (code == 110) {
+            emon.Port.textAscii(t, "WhitePoint");
+            return 1;
+        }
+        if (code == 111) {
+            emon.Port.textAscii(t, "BlackPoint");
+            return 1;
+        }
+        if (code == 112) {
+            emon.Port.textAscii(t, "Gamma");
+            return 1;
+        }
+        if (code == 113) {
+            emon.Port.textAscii(t, "Range");
+            return 1;
+        }
+        if (code == 114) {
+            emon.Port.textAscii(t, "None");
+            return 1;
+        }
+        if (code == 115) {
+            emon.Port.textAscii(t, "All");
+            return 1;
+        }
+        if (code == 116) {
+            emon.Port.textAscii(t, "G");
+            return 1;
+        }
+        if (code == 117) {
+            emon.Port.textAscii(t, "RGB");
+            return 1;
+        }
+        if (code == 118) {
+            emon.Port.textAscii(t, "CMYK");
+            return 1;
+        }
+        if (code == 119) {
+            emon.Port.textAscii(t, "I");
+            return 1;
+        }
+        if (code == 120) {
+            emon.Port.textAscii(t, "CS");
+            return 1;
+        }
+        if (code == 121) {
+            emon.Port.textAscii(t, "IM");
+            return 1;
+        }
+        if (code == 122) {
+            emon.Port.textAscii(t, "BPC");
+            return 1;
+        }
+        if (code == 123) {
+            emon.Port.textAscii(t, "H");
+            return 1;
+        }
+        if (code == 124) {
+            emon.Port.textAscii(t, "ImageMask");
+            return 1;
+        }
+        if (code == 125) {
+            emon.Port.textAscii(t, "Mask");
+            return 1;
+        }
+        if (code == 126) {
+            emon.Port.textAscii(t, "SMask");
+            return 1;
+        }
+        if (code == 127) {
+            emon.Port.textAscii(t, "SMaskInData");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.textAscii(t, "FunctionType");
+            return 1;
+        }
+        if (code == 129) {
+            emon.Port.textAscii(t, "Domain");
+            return 1;
+        }
+        if (code == 130) {
+            emon.Port.textAscii(t, "C0");
+            return 1;
+        }
+        if (code == 131) {
+            emon.Port.textAscii(t, "C1");
+            return 1;
+        }
+        if (code == 132) {
+            emon.Port.textAscii(t, "Functions");
+            return 1;
+        }
+        if (code == 133) {
+            emon.Port.textAscii(t, "Bounds");
+            return 1;
+        }
+        if (code == 134) {
+            emon.Port.textAscii(t, "Encode");
+            return 1;
+        }
+        if (code == 135) {
+            emon.Port.textAscii(t, "Decode");
+            return 1;
+        }
+        if (code == 136) {
+            emon.Port.textAscii(t, "BitsPerSample");
+            return 1;
+        }
+        if (code == 137) {
+            emon.Port.textAscii(t, "Order");
+            return 1;
+        }
+        if (code == 138) {
+            emon.Port.textAscii(t, "BM");
+            return 1;
+        }
+        if (code == 139) {
+            emon.Port.textAscii(t, "LW");
+            return 1;
+        }
+        if (code == 140) {
+            emon.Port.textAscii(t, "BC");
+            return 1;
+        }
+        if (code == 141) {
+            emon.Port.textAscii(t, "Normal");
+            return 1;
+        }
+        if (code == 142) {
+            emon.Port.textAscii(t, "Compatible");
+            return 1;
+        }
+        if (code == 143) {
+            emon.Port.textAscii(t, "Multiply");
+            return 1;
+        }
+        if (code == 144) {
+            emon.Port.textAscii(t, "Overlay");
+            return 1;
+        }
+        if (code == 145) {
+            emon.Port.textAscii(t, "Darken");
+            return 1;
+        }
+        if (code == 146) {
+            emon.Port.textAscii(t, "Lighten");
+            return 1;
+        }
+        if (code == 147) {
+            emon.Port.textAscii(t, "ColorDodge");
+            return 1;
+        }
+        if (code == 148) {
+            emon.Port.textAscii(t, "ColorBurn");
+            return 1;
+        }
+        if (code == 149) {
+            emon.Port.textAscii(t, "HardLight");
+            return 1;
+        }
+        if (code == 150) {
+            emon.Port.textAscii(t, "SoftLight");
+            return 1;
+        }
+        if (code == 151) {
+            emon.Port.textAscii(t, "Difference");
+            return 1;
+        }
+        if (code == 152) {
+            emon.Port.textAscii(t, "Exclusion");
+            return 1;
+        }
+        if (code == 153) {
+            emon.Port.textAscii(t, "Hue");
+            return 1;
+        }
+        if (code == 154) {
+            emon.Port.textAscii(t, "Saturation");
+            return 1;
+        }
+        if (code == 155) {
+            emon.Port.textAscii(t, "Color");
+            return 1;
+        }
+        if (code == 156) {
+            emon.Port.textAscii(t, "Luminosity");
+            return 1;
+        }
+        if (code == 157) {
+            emon.Port.textAscii(t, "Alpha");
+            return 1;
+        }
+        if (code == 158) {
+            emon.Port.textAscii(t, "OCProperties");
+            return 1;
+        }
+        if (code == 159) {
+            emon.Port.textAscii(t, "OCGs");
+            return 1;
+        }
+        if (code == 160) {
+            emon.Port.textAscii(t, "OCG");
+            return 1;
+        }
+        if (code == 161) {
+            emon.Port.textAscii(t, "OCMD");
+            return 1;
+        }
+        if (code == 162) {
+            emon.Port.textAscii(t, "BaseState");
+            return 1;
+        }
+        if (code == 163) {
+            emon.Port.textAscii(t, "ON");
+            return 1;
+        }
+        if (code == 164) {
+            emon.Port.textAscii(t, "OFF");
+            return 1;
+        }
+        if (code == 165) {
+            emon.Port.textAscii(t, "Event");
+            return 1;
+        }
+        if (code == 166) {
+            emon.Port.textAscii(t, "Category");
+            return 1;
+        }
+        if (code == 167) {
+            emon.Port.textAscii(t, "Usage");
+            return 1;
+        }
+        if (code == 168) {
+            emon.Port.textAscii(t, "View");
+            return 1;
+        }
+        if (code == 169) {
+            emon.Port.textAscii(t, "ViewState");
+            return 1;
+        }
+        if (code == 170) {
+            emon.Port.textAscii(t, "Print");
+            return 1;
+        }
+        if (code == 171) {
+            emon.Port.textAscii(t, "PrintState");
+            return 1;
+        }
+        if (code == 172) {
+            emon.Port.textAscii(t, "Export");
+            return 1;
+        }
+        if (code == 173) {
+            emon.Port.textAscii(t, "ExportState");
+            return 1;
+        }
+        if (code == 174) {
+            emon.Port.textAscii(t, "AllOn");
+            return 1;
+        }
+        if (code == 175) {
+            emon.Port.textAscii(t, "AnyOn");
+            return 1;
+        }
+        if (code == 176) {
+            emon.Port.textAscii(t, "AnyOff");
+            return 1;
+        }
+        if (code == 177) {
+            emon.Port.textAscii(t, "AllOff");
+            return 1;
+        }
+        if (code == 178) {
+            emon.Port.textAscii(t, "VE");
+            return 1;
+        }
+        if (code == 179) {
+            emon.Port.textAscii(t, "And");
+            return 1;
+        }
+        if (code == 180) {
+            emon.Port.textAscii(t, "Or");
+            return 1;
+        }
+        if (code == 181) {
+            emon.Port.textAscii(t, "Not");
+            return 1;
+        }
+        if (code == 182) {
+            emon.Port.textAscii(t, "Unchanged");
+            return 1;
+        }
+        if (code == 183) {
+            emon.Port.textAscii(t, "ShadingType");
+            return 1;
+        }
+        if (code == 184) {
+            emon.Port.textAscii(t, "PatternType");
+            return 1;
+        }
+        if (code == 185) {
+            emon.Port.textAscii(t, "Extend");
+            return 1;
+        }
         return 0;
     }
     public static final int[] PX_CHARS = {
@@ -1161,7 +1749,39 @@ public final class Pdfxnames {
         85, 70, 70, 83, 86, 105, 101, 119, 101, 114, 80, 114, 101, 102, 101, 114,
         101, 110, 99, 101, 115, 68, 105, 115, 112, 108, 97, 121, 68, 111, 99, 84,
         105, 116, 108, 101, 81, 117, 97, 100, 80, 111, 105, 110, 116, 115, 67, 65,
-        79, 67, 84, 114, 97, 112, 112, 101, 100
+        79, 67, 84, 114, 97, 112, 112, 101, 100, 67, 97, 108, 71, 114, 97, 121,
+        67, 97, 108, 82, 71, 66, 76, 97, 98, 73, 67, 67, 66, 97, 115, 101,
+        100, 73, 110, 100, 101, 120, 101, 100, 83, 101, 112, 97, 114, 97, 116, 105,
+        111, 110, 68, 101, 118, 105, 99, 101, 78, 65, 108, 116, 101, 114, 110, 97,
+        116, 101, 87, 104, 105, 116, 101, 80, 111, 105, 110, 116, 66, 108, 97, 99,
+        107, 80, 111, 105, 110, 116, 71, 97, 109, 109, 97, 82, 97, 110, 103, 101,
+        78, 111, 110, 101, 65, 108, 108, 71, 82, 71, 66, 67, 77, 89, 75, 73,
+        67, 83, 73, 77, 66, 80, 67, 72, 73, 109, 97, 103, 101, 77, 97, 115,
+        107, 77, 97, 115, 107, 83, 77, 97, 115, 107, 83, 77, 97, 115, 107, 73,
+        110, 68, 97, 116, 97, 70, 117, 110, 99, 116, 105, 111, 110, 84, 121, 112,
+        101, 68, 111, 109, 97, 105, 110, 67, 48, 67, 49, 70, 117, 110, 99, 116,
+        105, 111, 110, 115, 66, 111, 117, 110, 100, 115, 69, 110, 99, 111, 100, 101,
+        68, 101, 99, 111, 100, 101, 66, 105, 116, 115, 80, 101, 114, 83, 97, 109,
+        112, 108, 101, 79, 114, 100, 101, 114, 66, 77, 76, 87, 66, 67, 78, 111,
+        114, 109, 97, 108, 67, 111, 109, 112, 97, 116, 105, 98, 108, 101, 77, 117,
+        108, 116, 105, 112, 108, 121, 79, 118, 101, 114, 108, 97, 121, 68, 97, 114,
+        107, 101, 110, 76, 105, 103, 104, 116, 101, 110, 67, 111, 108, 111, 114, 68,
+        111, 100, 103, 101, 67, 111, 108, 111, 114, 66, 117, 114, 110, 72, 97, 114,
+        100, 76, 105, 103, 104, 116, 83, 111, 102, 116, 76, 105, 103, 104, 116, 68,
+        105, 102, 102, 101, 114, 101, 110, 99, 101, 69, 120, 99, 108, 117, 115, 105,
+        111, 110, 72, 117, 101, 83, 97, 116, 117, 114, 97, 116, 105, 111, 110, 67,
+        111, 108, 111, 114, 76, 117, 109, 105, 110, 111, 115, 105, 116, 121, 65, 108,
+        112, 104, 97, 79, 67, 80, 114, 111, 112, 101, 114, 116, 105, 101, 115, 79,
+        67, 71, 115, 79, 67, 71, 79, 67, 77, 68, 66, 97, 115, 101, 83, 116,
+        97, 116, 101, 79, 78, 79, 70, 70, 69, 118, 101, 110, 116, 67, 97, 116,
+        101, 103, 111, 114, 121, 85, 115, 97, 103, 101, 86, 105, 101, 119, 86, 105,
+        101, 119, 83, 116, 97, 116, 101, 80, 114, 105, 110, 116, 80, 114, 105, 110,
+        116, 83, 116, 97, 116, 101, 69, 120, 112, 111, 114, 116, 69, 120, 112, 111,
+        114, 116, 83, 116, 97, 116, 101, 65, 108, 108, 79, 110, 65, 110, 121, 79,
+        110, 65, 110, 121, 79, 102, 102, 65, 108, 108, 79, 102, 102, 86, 69, 65,
+        110, 100, 79, 114, 78, 111, 116, 85, 110, 99, 104, 97, 110, 103, 101, 100,
+        83, 104, 97, 100, 105, 110, 103, 84, 121, 112, 101, 80, 97, 116, 116, 101,
+        114, 110, 84, 121, 112, 101, 69, 120, 116, 101, 110, 100
     };
     public static final int[] PX_SPAN = {
         0, 6,
@@ -1265,6 +1885,90 @@ public final class Pdfxnames {
         500, 10,
         510, 2,
         512, 2,
-        514, 7
+        514, 7,
+        521, 7,
+        528, 6,
+        534, 3,
+        537, 8,
+        545, 7,
+        552, 10,
+        562, 7,
+        569, 9,
+        578, 10,
+        588, 10,
+        598, 5,
+        603, 5,
+        608, 4,
+        612, 3,
+        615, 1,
+        616, 3,
+        619, 4,
+        623, 1,
+        624, 2,
+        626, 2,
+        628, 3,
+        631, 1,
+        632, 9,
+        641, 4,
+        645, 5,
+        650, 11,
+        661, 12,
+        673, 6,
+        679, 2,
+        681, 2,
+        683, 9,
+        692, 6,
+        698, 6,
+        704, 6,
+        710, 13,
+        723, 5,
+        728, 2,
+        730, 2,
+        732, 2,
+        734, 6,
+        740, 10,
+        750, 8,
+        758, 7,
+        765, 6,
+        771, 7,
+        778, 10,
+        788, 9,
+        797, 9,
+        806, 9,
+        815, 10,
+        825, 9,
+        834, 3,
+        837, 10,
+        847, 5,
+        852, 10,
+        862, 5,
+        867, 12,
+        879, 4,
+        883, 3,
+        886, 4,
+        890, 9,
+        899, 2,
+        901, 3,
+        904, 5,
+        909, 8,
+        917, 5,
+        922, 4,
+        926, 9,
+        935, 5,
+        940, 10,
+        950, 6,
+        956, 11,
+        967, 5,
+        972, 5,
+        977, 6,
+        983, 6,
+        989, 2,
+        991, 3,
+        994, 2,
+        996, 3,
+        999, 9,
+        1008, 11,
+        1019, 11,
+        1030, 6
     };
 }

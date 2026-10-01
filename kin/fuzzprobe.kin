@@ -35,7 +35,7 @@
                                  pd-object-count]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.pdfcontent :refer [pc-document pc-warn pc-ops]]
-            [emon.evidence :refer [gl-count gl-get wd-count mk-count ch-cp]]
+            [emon.evidence :refer [gl-count gl-get wd-count mk-count ch-cp gf-vis gf-vby gf-vchk pa-count im-count]]
             [emon.pdflex :refer [pl-kind-of]]
             [emon.pdffont :refer [pfn-load pfn-map pfn-cp pfn-how-of pfn-width
                                   pfn-warn pfn-kind-of]]
@@ -106,14 +106,22 @@
         ^Cells fnt (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
-        ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx)
         ^:mut ^I32 g 0
-        ^:mut ^I32 h 7]
+        ^:mut ^I32 h 7
+        ^:mut ^I32 hv 7]
     (emit-ascii t " content=")
     (text-i32 t s)
     (if (== s 0)
       (do (while (< g (gl-count gl))
             (do (set h (fz-mix h (gl-get gl g (ch-cp))))
+                (set hv (fz-mix hv (gl-get gl g (gf-vis))))
+                (set hv (fz-mix hv (gl-get gl g (gf-vby))))
+                (set hv (fz-mix hv (gl-get gl g (gf-vchk))))
                 (set g (+ g 1))))
           (emit-ascii t " cwarn=")
           (text-i32 t (pc-warn cx))
@@ -126,7 +134,13 @@
           (emit-ascii t " marks=")
           (text-i32 t (mk-count mk))
           (emit-ascii t " cps=")
-          (text-i32 t h)))
+          (text-i32 t h)
+          (emit-ascii t " paths=")
+          (text-i32 t (pa-count pa))
+          (emit-ascii t " images=")
+          (text-i32 t (im-count im))
+          (emit-ascii t " vis=")
+          (text-i32 t hv)))
     (return s)))
 
 (defn ^I32 fz-run [^Src src ^:mut ^Text t]

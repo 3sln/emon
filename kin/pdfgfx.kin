@@ -1,0 +1,1842 @@
+;; Colour spaces, PDF functions and optional content (P3.5; SPEC 8.1, 8.4.3; D134-D136).
+;; emon's own module (D039), written from ISO 32000-1 7.10 (functions), 8.6 (colour spaces) and
+;; 8.11 (optional content). nome is not consulted.
+;;
+;; WHAT IT IS FOR. The content interpreter (`emon.pdfcontent`) needs, for every painted object,
+;; the INK COLOUR as 0xRRGGBB (so P3.6 can say "white on white"), the colour-space CLASS (`cs`: gray,
+;; rgb, cmyk, spot, pattern, other), and whether an optional-content group is on. This module answers
+;; those, reading the document through the object arena like every other P3 reader. It keeps its state
+;; in ONE `Cells`, `gx`, which the caller owns (kin cannot allocate), laid out as:
+;;
+;;     GX_*  control cells; the input and output components of a conversion (Fx, two cells each); the
+;;           stack of a PostScript calculator function; the TABLE of colour spaces the page has used
+;;           (`CSD` cells an entry, a cache keyed by the space object's handle in `ar`, replaced round
+;;           robin when it is full, and four permanent entries: DeviceGray, DeviceRGB, DeviceCMYK,
+;;           Pattern); a palette slab (256 colours) and a function slab per entry; the optional-content
+;;           state of the document.
+;;
+;; COLOUR SPACES. DeviceGray, DeviceRGB, DeviceCMYK, CalGray and CalRGB (read as gray and RGB: the
+;; gamma and matrix are not applied), Lab (converted through XYZ and sRGB, from the white point and
+;; range, by integer arithmetic only), ICCBased (by `/N`: no profile is read, an ICC-Lab profile is
+;; read as RGB), Indexed (its whole palette is converted when the space is first seen, from any base),
+;; Separation and DeviceN (by the alternate space and the tint transform: the function is compiled
+;; into cells and run, types 0 (sampled, multilinear for one input, nearest sample for more), 2, 3 and
+;; 4 (PostScript calculator, the whole operator set but `exp` with a fractional exponent, `ln` and
+;; `log`, which make the function unusable); a Separation's 256-colour palette is evaluated once),
+;; and Pattern (no colour: -1, class `pattern`). A space this module cannot read, and a colour it
+;; cannot convert, is -1 (unknown): P3.6 never calls an unknown colour white.
+;; CMYK is `(1-c)(1-k)` per channel, the naive rule: it is exact at the ends that matter (paper white
+;; and solid black) and every caller compares colours with a tolerance.
+;;
+;; OPTIONAL CONTENT. `gx-oc-read` reads the catalogue's `/OCProperties /D` once per document: the base
+;; state, the `/ON` and `/OFF` arrays, and `/AS` auto states for the `View` event (an OCG whose
+;; `/Usage /View /ViewState` is `OFF`). `gx-oc-state` answers whether an OCG or an OCMD (the
+;; membership policies `AllOn AnyOn AnyOff AllOff`, and a `/VE` visibility expression with `And Or
+;; Not`, to depth 8) is on: 1 on, 0 off.
+;;
+;; A SOURCE THAT MISSES (D074, D075): every function here that loads an object checks `ps-missed` and
+;; answers what it has; the caller (the interpreter) checks the view after the call, abandons the run
+;; and never uses what was cached.
+(ns emon.pdfgfx
+  (:require [emon.lang :refer [I32 I64 Src Cells i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfnames :refer [pn-n pn-width pn-height pn-subtype pn-type pn-matrix pn-size
+                                   pn-device-gray pn-device-rgb pn-device-cmyk pn-pattern pn-filter]]
+            [emon.pdfxnames :refer [px-cal-gray px-cal-rgb px-lab px-icc-based px-indexed px-separation
+                                    px-device-n px-alternate px-white-point px-range px-none
+                                    px-g px-rgb px-cmyk px-i px-function-type px-domain px-c0 px-c1
+                                    px-functions px-bounds px-encode px-decode px-bits-per-sample
+                                    px-oc-properties px-ocgs px-ocg px-ocmd px-base-state px-on-upper
+                                    px-off-upper px-as px-event px-category px-usage px-view
+                                    px-view-state px-ve px-and px-or px-not px-all-on px-any-on
+                                    px-any-off px-all-off px-p px-d px-off]]
+            [emon.pdfx :refer [px-is px-get px-dget px-nth px-int-of px-is-num]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-count pl-int-value pl-ref-gen
+                                 pl-name-len pl-name-byte pl-str-len pl-str-byte pl-name-is
+                                 pl-stream-dict]]
+            [emon.pdfdoc :refer [pd-resolve pd-dget pd-root pd-stream-data]]
+            [emon.fx :refer [fx-one fx-of-int fx-mul fx-div fx-muldiv fx-of-real fx-round fx-floor fx-abs
+                             fx-sqrt fx-atan2 fx-sin fx-cos fx-get fx-put fx-clamp fx-hi fx-lo fx-join]]
+            [kin.lang :refer [defn defconst defdata declarefn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or bit-xor]]))
+
+(declarefn gx-fn-compile)
+(declarefn gx-read-nums-in)
+(declarefn gx-fn-eval)
+(declarefn gx-lookup)
+(declarefn gx-oc-state)
+
+;; ------------------------------------------------------------------- the cells
+
+(defconst ^I32 GX_OCREAD 0)      ;; 1 once the document's optional content has been read
+(defconst ^I32 GX_OCBASE 1)      ;; the base state: 1 on, 0 off
+(defconst ^I32 GX_OCN 2)         ;; (object number, state) pairs in GX_OC
+(defconst ^I32 GX_RR 3)          ;; the next table entry to replace
+(defconst ^I32 GX_FNPOS 4)       ;; where the next compiled function is written
+(defconst ^I32 GX_FNLIM 5)       ;; the end of the entry's function slab
+(defconst ^I32 GX_ERR 6)         ;; a function run failed
+(defconst ^I32 GX_SP 7)          ;; the calculator's stack: entries now
+(defconst ^I32 GX_FAIL 8)        ;; a compile failed
+(defconst ^I32 GX_IN 16)         ;; 32 input components, Fx (two cells each)
+(defconst ^I32 GX_OUT 80)        ;; 32 output components
+(defconst ^I32 GX_STK 144)       ;; the calculator's stack: 128 entries of three cells (tag, hi, lo)
+(defconst ^I32 GX_STKMAX 128)
+(defconst ^I32 GX_TAB 528)       ;; the table: GX_NENT entries of CSD cells
+(defconst ^I32 GX_NENT 24)
+(defconst ^I32 CSD 24)
+(defconst ^I32 GX_OC 1104)       ;; 528 + 24 * 24: 1024 pairs
+(defconst ^I32 GX_OCMAX 1024)
+(defconst ^I32 GX_PAL 3152)      ;; 1104 + 2048: one 256-colour slab an entry
+(defconst ^I32 GX_FN 9296)       ;; 3152 + 24 * 256: one function slab an entry
+(defconst ^I32 FN_SLAB 2048)
+(defconst ^I32 GX_SIZE 58448)    ;; 9296 + 24 * 2048
+
+;; an entry (CSD cells)
+(defconst ^I32 CS_KEY 0)         ;; the colour space object's handle in `ar` (0 free; -1..-4 the permanent four)
+(defconst ^I32 CS_KIND 1)
+(defconst ^I32 CS_NCOMP 2)
+(defconst ^I32 CS_CLASS 3)       ;; the evidence's `cs` code
+(defconst ^I32 CS_MODEL 4)       ;; 1 gray, 2 rgb, 3 cmyk, 6 lab: how components become RGB
+(defconst ^I32 CS_PAL 5)         ;; 1 when the slab holds a palette
+(defconst ^I32 CS_NPAL 6)
+(defconst ^I32 CS_FN 7)          ;; 1 when the function slab holds a compiled tint transform
+(defconst ^I32 CS_INIT 8)        ;; the initial colour (RGB, or -1)
+(defconst ^I32 CS_NONE 9)        ;; 1 when the space paints nothing (every colorant is /None)
+(defconst ^I32 CS_XW 10)         ;; Lab: the white point times 100000
+(defconst ^I32 CS_YW 11)
+(defconst ^I32 CS_ZW 12)
+(defconst ^I32 CS_AMIN 13)       ;; Lab: the range
+(defconst ^I32 CS_AMAX 14)
+(defconst ^I32 CS_BMIN 15)
+(defconst ^I32 CS_BMAX 16)
+
+;; kinds
+(defconst ^I32 CK_GRAY 1)
+(defconst ^I32 CK_RGB 2)
+(defconst ^I32 CK_CMYK 3)
+(defconst ^I32 CK_CALGRAY 4)
+(defconst ^I32 CK_CALRGB 5)
+(defconst ^I32 CK_LAB 6)
+(defconst ^I32 CK_ICC 7)
+(defconst ^I32 CK_INDEXED 8)
+(defconst ^I32 CK_SEP 9)
+(defconst ^I32 CK_DEVN 10)
+(defconst ^I32 CK_PATTERN 11)
+
+;; the evidence's `cs` classes (emon.evidence's `cs` enum; repeated here so the module stands alone)
+(defconst ^I32 CLS_GRAY 1)
+(defconst ^I32 CLS_RGB 2)
+(defconst ^I32 CLS_CMYK 3)
+(defconst ^I32 CLS_SPOT 4)
+(defconst ^I32 CLS_PATTERN 5)
+(defconst ^I32 CLS_OTHER 6)
+
+;; ----------------------------------------------------------------- accessors
+
+(defn ^:pub ^I32 gx-cells [] (return GX_SIZE))
+
+(defn ^I32 gx-e [^I32 e ^I32 f]
+  (comment "The absolute cell of field f of table entry e.")
+  (return (+ GX_TAB (+ (* e CSD) f))))
+
+(defn ^:pub ^I32 gx-kind [^Cells gx ^I32 e] (return (cells-at gx (gx-e e CS_KIND))))
+(defn ^:pub ^I32 gx-ncomp [^Cells gx ^I32 e] (return (cells-at gx (gx-e e CS_NCOMP))))
+(defn ^:pub ^I32 gx-class [^Cells gx ^I32 e] (return (cells-at gx (gx-e e CS_CLASS))))
+(defn ^:pub ^I32 gx-initial [^Cells gx ^I32 e] (return (cells-at gx (gx-e e CS_INIT))))
+(defn ^:pub ^I32 gx-input [^:mut ^Cells gx ^I32 i ^I64 v]
+  (comment "Component i (0..31) of the colour about to be converted, an Fx.")
+  (fx-put gx (+ GX_IN (* 2 i)) v)
+  (return 0))
+
+(defn ^:pub ^I32 gx-is-pattern [^Cells gx ^I32 e] (if (== (gx-kind gx e) CK_PATTERN) (return 1)) (return 0))
+
+;; ------------------------------------------------------------------ initialise
+
+(defn ^I32 gx-set-device [^:mut ^Cells gx ^I32 e ^I32 key ^I32 kind ^I32 ncomp ^I32 cls ^I32 model ^I32 init]
+  (cells-set gx (gx-e e CS_KEY) key)
+  (cells-set gx (gx-e e CS_KIND) kind)
+  (cells-set gx (gx-e e CS_NCOMP) ncomp)
+  (cells-set gx (gx-e e CS_CLASS) cls)
+  (cells-set gx (gx-e e CS_MODEL) model)
+  (cells-set gx (gx-e e CS_INIT) init)
+  (return 0))
+
+(defn ^:pub ^I32 gx-page [^:mut ^Cells gx]
+  (comment "Start a page: the cache of colour spaces is emptied (its four permanent entries stay). Fills `gx` with")
+  (comment "zeros first when it is not yet the right size (a document's first page).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0]
+    (if (!= (cells-len gx) GX_SIZE)
+      (do (cells-drop gx 0)
+          (while (< i GX_SIZE)
+            (do (cells-push gx 0)
+                (set i (+ i 1))))
+          (cells-set gx GX_OCREAD 0)
+          (cells-set gx GX_OCBASE 1)))
+    (set i 0)
+    (while (< i GX_NENT)
+      (do (set j 0)
+          (while (< j CSD)
+            (do (cells-set gx (gx-e i j) 0)
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (gx-set-device gx 0 -1 CK_GRAY 1 CLS_GRAY 1 0)
+    (gx-set-device gx 1 -2 CK_RGB 3 CLS_RGB 2 0)
+    (gx-set-device gx 2 -3 CK_CMYK 4 CLS_CMYK 3 0)
+    (gx-set-device gx 3 -4 CK_PATTERN 0 CLS_PATTERN 1 -1)
+    (cells-set gx GX_RR 4)
+    (return 0)))
+
+;; ---------------------------------------------------------- numbers from objects
+
+(defn ^:pub ^I64 gx-num [^Cells ar ^I32 h]
+  (comment "An integer or real object as Fx; 0 for anything else.")
+  (if (== h 0) (return (i64 0)))
+  (let [^I32 kind (pl-kind-of ar h)]
+    (if (== kind 2) (return (fx-of-int (pl-int-value ar h))))
+    (if (== kind 3) (return (fx-of-real (pl-int-value ar h) (pl-ref-gen ar h))))
+    (return (i64 0))))
+
+(defn ^I32 gx-count [^Cells ar ^I32 arr]
+  (comment "The element count of an array object, 0 for anything else.")
+  (if (== arr 0) (return 0))
+  (if (!= (pl-kind-of ar arr) 6) (return 0))
+  (return (pl-count ar arr)))
+
+(defn ^I32 gx-read-nums [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                         ^:mut ^Cells gx ^I32 arr ^I32 dst ^I32 n]
+  (comment "Up to n numbers of array `arr` into gx at dst (Fx, two cells each), unresolved entries resolved. Answers")
+  (comment "how many numbers were read (an element that is no number ends the read).")
+  (if (!= (gx-count ar arr) 0) (return (gx-read-nums-in src ar dc a b st gx arr dst n)))
+  (return 0))
+
+(defn ^I32 gx-read-nums-in [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                            ^:mut ^Cells gx ^I32 arr ^I32 dst ^I32 n]
+  (comment "`gx-read-nums` of an array that is one.")
+  (let [^:mut ^I32 el (pl-first ar arr)
+        ^:mut ^I32 got 0
+        ^:mut ^I32 rv 0]
+    (while (and (!= el 0) (< got n))
+      (do (set rv (pd-resolve src ar dc a b st el))
+          (if (== (px-is-num ar rv) 0)
+            (do (set el 0))
+            (do (fx-put gx (+ dst (* got 2)) (gx-num ar rv))
+                (set got (+ got 1))
+                (set el (pl-next ar el))))))
+    (return got)))
+
+;; ------------------------------------------------------------------ colour maths
+
+(defn ^I32 gx-byte [^I64 v]
+  (comment "A component in 0..1 (Fx) as 0..255, rounded and clamped.")
+  (let [^I32 n (fx-round (fx-mul v (fx-of-int 255)))]
+    (if (< n 0) (return 0))
+    (if (> n 255) (return 255))
+    (return n)))
+
+(defn ^I32 gx-pack [^I32 r ^I32 g ^I32 bl]
+  (return (+ (* r 65536) (+ (* g 256) bl))))
+
+(defn ^I64 gx-unit [^I64 v]
+  (comment "Clamp an Fx to [0, 1].")
+  (if (< v (i64 0)) (return (i64 0)))
+  (if (> v (fx-one)) (return (fx-one)))
+  (return v))
+
+(defn ^I64 gx-cbrt [^I64 c]
+  (comment "The cube root of an Fx in (0, 1], by Newton's iteration from 1.")
+  (if (<= c (i64 0)) (return (i64 0)))
+  (let [^:mut ^I64 x (fx-one)
+        ^:mut ^I32 i 0]
+    (while (< i 40)
+      (do (set x (quot (add64 (mul64 x (i64 2)) (fx-div c (fx-mul x x))) (i64 3)))
+          (set i (+ i 1))))
+    (return x)))
+
+(defn ^I64 gx-compand [^I64 lin]
+  (comment "sRGB's transfer function on a linear component in [0, 1]: 12.92 c below 0.0031308, else")
+  (comment "1.055 c^(1/2.4) - 0.055, with c^(5/12) as cbrt(c) * sqrt(sqrt(cbrt(c))).")
+  (let [^I64 c (gx-unit lin)]
+    (if (<= c (i64 52519))
+      (return (fx-mul c (fx-div (fx-of-int 1292) (fx-of-int 100)))))
+    (let [^I64 u (gx-cbrt c)
+          ^I64 p (fx-mul u (fx-sqrt (fx-sqrt u)))]
+      (return (- (fx-mul p (fx-div (fx-of-int 1055) (fx-of-int 1000))) (fx-div (fx-of-int 55) (fx-of-int 1000)))))))
+
+(defn ^I64 gx-labinv [^I64 t]
+  (comment "The inverse of Lab's f: t^3 above 6/29, else 108/841 (t - 4/29).")
+  (if (> t (fx-div (fx-of-int 6) (fx-of-int 29)))
+    (return (fx-mul t (fx-mul t t))))
+  (return (fx-mul (fx-div (fx-of-int 108) (fx-of-int 841))
+                  (- t (fx-div (fx-of-int 4) (fx-of-int 29))))))
+
+(defn ^I32 gx-cmyk-rgb [^I64 c ^I64 m ^I64 y ^I64 k]
+  (let [^I64 kk (- (fx-one) (gx-unit k))]
+    (return (gx-pack (gx-byte (fx-mul (- (fx-one) (gx-unit c)) kk))
+                     (gx-byte (fx-mul (- (fx-one) (gx-unit m)) kk))
+                     (gx-byte (fx-mul (- (fx-one) (gx-unit y)) kk))))))
+
+(defn ^I32 gx-lab-rgb [^Cells gx ^I32 e ^I64 l0 ^I64 a0 ^I64 b0]
+  (comment "Lab to sRGB: L in [0, 100], a and b clamped to the space's range; the white point's own X, Y and Z;")
+  (comment "the linear matrix of D50 when the white point is D50-like (X above 0.957: D50's is 0.9642, D65's 0.9505), D65's otherwise.")
+  (let [^I64 hundred (fx-of-int 100)
+        ^:mut ^I64 l l0
+        ^:mut ^I64 aa a0
+        ^:mut ^I64 bb b0
+        ^I64 xw (fx-muldiv (i64 (cells-at gx (gx-e e CS_XW))) (fx-one) (i64 100000))
+        ^I64 yw (fx-muldiv (i64 (cells-at gx (gx-e e CS_YW))) (fx-one) (i64 100000))
+        ^I64 zw (fx-muldiv (i64 (cells-at gx (gx-e e CS_ZW))) (fx-one) (i64 100000))
+        ^I64 amin (fx-of-int (cells-at gx (gx-e e CS_AMIN)))
+        ^I64 amax (fx-of-int (cells-at gx (gx-e e CS_AMAX)))
+        ^I64 bmin (fx-of-int (cells-at gx (gx-e e CS_BMIN)))
+        ^I64 bmax (fx-of-int (cells-at gx (gx-e e CS_BMAX)))]
+    (if (< l (i64 0)) (set l (i64 0)))
+    (if (> l hundred) (set l hundred))
+    (if (< aa amin) (set aa amin))
+    (if (> aa amax) (set aa amax))
+    (if (< bb bmin) (set bb bmin))
+    (if (> bb bmax) (set bb bmax))
+    (let [^I64 fy (fx-div (add64 l (fx-of-int 16)) (fx-of-int 116))
+          ^I64 fxx (add64 fy (fx-div aa (fx-of-int 500)))
+          ^I64 fz (- fy (fx-div bb (fx-of-int 200)))
+          ^I64 xx (fx-mul xw (gx-labinv fxx))
+          ^I64 yy (fx-mul yw (gx-labinv fy))
+          ^I64 zz (fx-mul zw (gx-labinv fz))
+          ^:mut ^I64 lr (i64 0)
+          ^:mut ^I64 lg (i64 0)
+          ^:mut ^I64 lb (i64 0)]
+      (if (> xw (fx-div (fx-of-int 957) (fx-of-int 1000)))
+        (do (set lr (add64 (add64 (fx-mul xx (fx-div (fx-of-int 31339) (fx-of-int 10000)))
+                                  (fx-mul yy (fx-div (fx-of-int -16169) (fx-of-int 10000))))
+                           (fx-mul zz (fx-div (fx-of-int -4906) (fx-of-int 10000)))))
+            (set lg (add64 (add64 (fx-mul xx (fx-div (fx-of-int -9788) (fx-of-int 10000)))
+                                  (fx-mul yy (fx-div (fx-of-int 19161) (fx-of-int 10000))))
+                           (fx-mul zz (fx-div (fx-of-int 335) (fx-of-int 10000)))))
+            (set lb (add64 (add64 (fx-mul xx (fx-div (fx-of-int 719) (fx-of-int 10000)))
+                                  (fx-mul yy (fx-div (fx-of-int -2290) (fx-of-int 10000))))
+                           (fx-mul zz (fx-div (fx-of-int 14052) (fx-of-int 10000))))))
+        (do (set lr (add64 (add64 (fx-mul xx (fx-div (fx-of-int 32406) (fx-of-int 10000)))
+                                  (fx-mul yy (fx-div (fx-of-int -15372) (fx-of-int 10000))))
+                           (fx-mul zz (fx-div (fx-of-int -4986) (fx-of-int 10000)))))
+            (set lg (add64 (add64 (fx-mul xx (fx-div (fx-of-int -9689) (fx-of-int 10000)))
+                                  (fx-mul yy (fx-div (fx-of-int 18758) (fx-of-int 10000))))
+                           (fx-mul zz (fx-div (fx-of-int 415) (fx-of-int 10000)))))
+            (set lb (add64 (add64 (fx-mul xx (fx-div (fx-of-int 557) (fx-of-int 10000)))
+                                  (fx-mul yy (fx-div (fx-of-int -2040) (fx-of-int 10000))))
+                           (fx-mul zz (fx-div (fx-of-int 10570) (fx-of-int 10000)))))))
+      (return (gx-pack (gx-byte (gx-compand lr)) (gx-byte (gx-compand lg)) (gx-byte (gx-compand lb)))))))
+
+(defn ^I32 gx-model-rgb [^Cells gx ^I32 e ^I32 model ^I32 base]
+  (comment "The components at gx[base...] (Fx, two cells each) as RGB under colour model `model` (1 gray, 2 rgb, 3 cmyk,")
+  (comment "6 lab) of entry e (which holds Lab's white point and range).")
+  (let [^I64 c0 (fx-get gx base)
+        ^I64 c1 (fx-get gx (+ base 2))
+        ^I64 c2 (fx-get gx (+ base 4))
+        ^I64 c3 (fx-get gx (+ base 6))]
+    (if (== model 1)
+      (do (let [^I32 gy (gx-byte c0)]
+            (return (gx-pack gy gy gy)))))
+    (if (== model 2) (return (gx-pack (gx-byte c0) (gx-byte c1) (gx-byte c2))))
+    (if (== model 3) (return (gx-cmyk-rgb c0 c1 c2 c3)))
+    (if (== model 6) (return (gx-lab-rgb gx e c0 c1 c2)))
+    (return -1)))
+
+;; ------------------------------------------------------------------ functions
+;;
+;; A compiled function lives in an entry's slab, from its first cell `f`:
+;;   f+0 type (0 sampled, 2 exponential, 3 stitching, 4 calculator)  f+1 inputs  f+2 outputs
+;;   f+3 1 when it has a /Range  f+4 the length in cells  then the domain (inputs x 4 cells: lo, hi as Fx),
+;;   the range (outputs x 4), and the body:
+;;   type 2: C0 (outputs x 2), C1 (outputs x 2), N (2)
+;;   type 3: k (1), bounds (k-1 x 2), encode (k x 4), the k sub-functions' first cells (k), then the sub-functions
+;;   type 0: size (inputs), bits per sample (1), encode (inputs x 4), decode (outputs x 4), samples (1), the samples
+;;   type 4: the program's length in cells (1), then tokens of three cells (kind a b)
+;; Tokens: 0 number (a hi, b lo), 1 operator (a code), 2 `if` (a: the cells of its block), 3 the first block of `ifelse`
+;; (a: its cells, b: the cells of the second block), 4 a second block's mark that is run only when the first was
+;; (skips b cells), 5 an open block, patched when its operator is read.
+
+(defconst ^I32 FT_SAMPLED 0)
+(defconst ^I32 FT_EXP 2)
+(defconst ^I32 FT_STITCH 3)
+(defconst ^I32 FT_CALC 4)
+
+(defn ^I32 gx-fn-room [^:mut ^Cells gx ^I32 n]
+  (comment "Reserve n cells of the function slab: the first one's index, or -1 when the slab is full (the compile")
+  (comment "then fails).")
+  (let [^I32 at (cells-at gx GX_FNPOS)]
+    (if (> (+ at n) (cells-at gx GX_FNLIM))
+      (do (cells-set gx GX_FAIL 1)
+          (return -1)))
+    (cells-set gx GX_FNPOS (+ at n))
+    (return at)))
+
+;; --- the calculator: tokens from text
+
+(defconst ^I32 PS_ABS 1)
+(defconst ^I32 PS_ADD 2)
+(defconst ^I32 PS_ATAN 3)
+(defconst ^I32 PS_CEIL 4)
+(defconst ^I32 PS_COS 5)
+(defconst ^I32 PS_CVI 6)
+(defconst ^I32 PS_CVR 7)
+(defconst ^I32 PS_DIV 8)
+(defconst ^I32 PS_EXP 9)
+(defconst ^I32 PS_FLOOR 10)
+(defconst ^I32 PS_IDIV 11)
+(defconst ^I32 PS_LN 12)
+(defconst ^I32 PS_LOG 13)
+(defconst ^I32 PS_MOD 14)
+(defconst ^I32 PS_MUL 15)
+(defconst ^I32 PS_NEG 16)
+(defconst ^I32 PS_ROUND 17)
+(defconst ^I32 PS_SIN 18)
+(defconst ^I32 PS_SQRT 19)
+(defconst ^I32 PS_SUB 20)
+(defconst ^I32 PS_TRUNC 21)
+(defconst ^I32 PS_AND 22)
+(defconst ^I32 PS_BITSHIFT 23)
+(defconst ^I32 PS_EQ 24)
+(defconst ^I32 PS_FALSE 25)
+(defconst ^I32 PS_GE 26)
+(defconst ^I32 PS_GT 27)
+(defconst ^I32 PS_LE 28)
+(defconst ^I32 PS_LT 29)
+(defconst ^I32 PS_NE 30)
+(defconst ^I32 PS_NOT 31)
+(defconst ^I32 PS_OR 32)
+(defconst ^I32 PS_TRUE 33)
+(defconst ^I32 PS_XOR 34)
+(defconst ^I32 PS_COPY 35)
+(defconst ^I32 PS_DUP 36)
+(defconst ^I32 PS_EXCH 37)
+(defconst ^I32 PS_INDEX 38)
+(defconst ^I32 PS_POP 39)
+(defconst ^I32 PS_ROLL 40)
+(defconst ^I32 PS_IF 41)
+(defconst ^I32 PS_IFELSE 42)
+
+;; the spellings of the 42 operators, back to back (generated from the list above in order; `ps-span` gives start and length)
+(defdata ps-chars
+  :emitter kin.lang/flat-array
+  :data [97 98 115 97 100 100 97 116 97 110 99 101 105 108 105 110 103 99 111 115 99 118 105 99 118 114 100 105 118
+         101 120 112 102 108 111 111 114 105 100 105 118 108 110 108 111 103 109 111 100 109 117 108 110 101 103
+         114 111 117 110 100 115 105 110 115 113 114 116 115 117 98 116 114 117 110 99 97 116 101 97 110 100 98
+         105 116 115 104 105 102 116 101 113 102 97 108 115 101 103 101 103 116 108 101 108 116 110 101 110 111
+         116 111 114 116 114 117 101 120 111 114 99 111 112 121 100 117 112 101 120 99 104 105 110 100 101 120
+         112 111 112 114 111 108 108 105 102 105 102 101 108 115 101]
+  :accessors {^I32 ps-chars-at [^I32 ignored ^I32 i]})
+
+(defdata ps-span
+  :emitter kin.lang/flat-array
+  :stride 2
+  :data [0 3 3 3 6 4 10 7 17 3 20 3 23 3 26 3 29 3 32 5 37 4 41 2 43 3 46 3 49 3 52 3 55 5 60 3 63 4 67 3 70 8
+         78 3 81 8 89 2 91 5 96 2 98 2 100 2 102 2 104 2 106 3 109 2 111 4 115 3 118 4 122 3 125 4 129 5 134 3
+         137 4 141 2 143 6]
+  :accessors {^I32 ps-span-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^I32 gx-ps-code [^Cells ox ^I32 start ^I32 n]
+  (comment "The operator whose spelling is the n bytes of `ox` from start (as 0 cells ahead: the caller passes the")
+  (comment "cells of `cs`-like bytes), or 0.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 same 0]
+    (while (< k 42)
+      (do (if (== (ps-span-at 0 k 1) n)
+            (do (set same 1)
+                (set j 0)
+                (while (and (== same 1) (< j n))
+                  (do (if (!= (ps-chars-at 0 (+ (ps-span-at 0 k 0) j)) (cells-at ox (+ start j)))
+                        (set same 0))
+                      (set j (+ j 1))))
+                (if (== same 1) (return (+ k 1)))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 gx-ps-ws [^I32 c]
+  (if (or (== c 32) (or (== c 10) (or (== c 13) (or (== c 9) (or (== c 12) (== c 0)))))) (return 1))
+  (return 0))
+
+(defn ^I32 gx-ps-tok [^:mut ^Cells gx ^I32 kind ^I32 a ^I32 b]
+  (comment "Append one token of three cells to the function slab: 0 when it fit, 1 when the slab is full.")
+  (let [^I32 at (cells-at gx GX_FNPOS)]
+    (if (> (+ at 3) (cells-at gx GX_FNLIM))
+      (do (cells-set gx GX_FAIL 1)
+          (return 1)))
+    (cells-set gx at kind)
+    (cells-set gx (+ at 1) a)
+    (cells-set gx (+ at 2) b)
+    (cells-set gx GX_FNPOS (+ at 3))
+    (return 0)))
+
+(defn ^I32 gx-ps-compile [^:mut ^Cells gx ^Cells bytes ^I32 n]
+  (comment "Compile the calculator program in `bytes[0, n)` into tokens from the cursor. The block stack and, per nesting")
+  (comment "level, the last two blocks closed live in the calculator's stack area (free while compiling): an `if` takes")
+  (comment "the last, an `ifelse` the last two. Answers 0, or 1 when the program is damaged, uses an operator that is not")
+  (comment "in the language, or does not fit.")
+  (let [^:mut ^I32 p 0
+        ^:mut ^I32 depth 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 sb 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 neg 0
+        ^:mut ^I32 mant 0
+        ^:mut ^I32 digs 0
+        ^:mut ^I32 scale 0
+        ^:mut ^I32 seen 0
+        ^:mut ^I32 isnum 0
+        ^:mut ^I32 here 0
+        ^:mut ^I32 prev 0
+        ^:mut ^I32 la 0
+        ^:mut ^I32 lb 0
+        ^:mut ^I64 fv (i64 0)]
+    (comment "GX_STK + d: the start token of the block open at level d; GX_STK + 32 + 2 d, + 33 + 2 d: the two last closed at level d.")
+    (cells-set gx (+ GX_STK 32) -1)
+    (cells-set gx (+ GX_STK 33) -1)
+    (while (< p n)
+      (do (set c (cells-at bytes p))
+          (if (== (gx-ps-ws c) 1)
+            (set p (+ p 1))
+            (if (== c 37)
+              (do (while (and (< p n) (and (!= (cells-at bytes p) 10) (!= (cells-at bytes p) 13)))
+                    (set p (+ p 1))))
+              (if (== c 123)
+                (do (set p (+ p 1))
+                    (if (>= depth 15) (return 1))
+                    (if (> depth 0)
+                      (do (set here (cells-at gx GX_FNPOS))
+                          (if (== (gx-ps-tok gx 5 0 0) 1) (return 1))
+                          (cells-set gx (+ GX_STK depth) here))
+                      (cells-set gx (+ GX_STK depth) -1))
+                    (set depth (+ depth 1))
+                    (cells-set gx (+ GX_STK (+ 32 (* 2 depth))) -1)
+                    (cells-set gx (+ GX_STK (+ 33 (* 2 depth))) -1))
+                (if (== c 125)
+                  (do (set p (+ p 1))
+                      (if (== depth 0) (return 1))
+                      (set depth (- depth 1))
+                      (set sb (cells-at gx (+ GX_STK depth)))
+                      (if (>= sb 0)
+                        (do (cells-set gx (+ sb 1) (- (- (cells-at gx GX_FNPOS) sb) 3))
+                            (set lb (cells-at gx (+ GX_STK (+ 33 (* 2 depth)))))
+                            (cells-set gx (+ GX_STK (+ 32 (* 2 depth))) lb)
+                            (cells-set gx (+ GX_STK (+ 33 (* 2 depth))) sb))))
+                  (do (comment "A word: a number or an operator.")
+                      (set q p)
+                      (while (and (< q n) (and (== (gx-ps-ws (cells-at bytes q)) 0)
+                                               (and (!= (cells-at bytes q) 123) (!= (cells-at bytes q) 125))))
+                        (set q (+ q 1)))
+                      (set isnum 1)
+                      (set neg 0)
+                      (set mant 0)
+                      (set digs 0)
+                      (set scale 0)
+                      (set seen 0)
+                      (set prev p)
+                      (set c (cells-at bytes prev))
+                      (if (or (== c 45) (== c 43))
+                        (do (if (== c 45) (set neg 1))
+                            (set prev (+ prev 1))))
+                      (if (>= prev q) (set isnum 0))
+                      (while (and (== isnum 1) (< prev q))
+                        (do (set c (cells-at bytes prev))
+                            (if (and (>= c 48) (<= c 57))
+                              (do (if (< digs 9)
+                                    (do (set mant (+ (* mant 10) (- c 48)))
+                                        (set digs (+ digs 1))
+                                        (if (== seen 1) (set scale (+ scale 1))))
+                                    (if (== seen 0) (set isnum 0))))
+                              (if (and (== c 46) (== seen 0))
+                                (set seen 1)
+                                (set isnum 0)))
+                            (set prev (+ prev 1))))
+                      (if (== isnum 1)
+                        (do (set fv (fx-of-real mant scale))
+                            (if (== neg 1) (set fv (- (i64 0) fv)))
+                            (if (== (gx-ps-tok gx 0 (fx-hi fv) (fx-lo fv)) 1) (return 1)))
+                        (do (set code (gx-ps-code bytes p (- q p)))
+                            (if (== code 0) (return 1))
+                            (set la (cells-at gx (+ GX_STK (+ 32 (* 2 depth)))))
+                            (set lb (cells-at gx (+ GX_STK (+ 33 (* 2 depth)))))
+                            (if (== code PS_IF)
+                              (do (if (< lb 0) (return 1))
+                                  (cells-set gx lb 2)
+                                  (cells-set gx (+ GX_STK (+ 32 (* 2 depth))) -1)
+                                  (cells-set gx (+ GX_STK (+ 33 (* 2 depth))) -1)))
+                            (if (== code PS_IFELSE)
+                              (do (if (< la 0) (return 1))
+                                  (cells-set gx la 3)
+                                  (cells-set gx lb 4)
+                                  (cells-set gx (+ GX_STK (+ 32 (* 2 depth))) -1)
+                                  (cells-set gx (+ GX_STK (+ 33 (* 2 depth))) -1)))
+                            (if (and (!= code PS_IF) (!= code PS_IFELSE))
+                              (if (== (gx-ps-tok gx 1 code 0) 1) (return 1)))))
+                      (set p q))))))))
+    (if (!= depth 0) (return 1))
+    (return 0)))
+
+(defn ^I32 gx-pow2 [^I32 n]
+  (let [^:mut ^I32 r 1
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (set r (* r 2))
+          (set i (+ i 1))))
+    (return r)))
+
+(defn ^I32 gx-fn-compile [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                          ^:mut ^Cells out ^:mut ^Cells gx ^I32 fh ^I32 depth]
+  (comment "Compile the function object `fh` (a dictionary or a stream, resolved) into the function slab at the cursor.")
+  (comment "Answers the first cell of the compiled function, or -1 (it is not one this module reads, or does not fit).")
+  (if (== fh 0) (return -1))
+  (if (> depth 3) (return -1))
+  (let [^I32 ftv (px-dget src ar dc a b st fh (px-function-type))
+        ^I32 fty (px-int-of ar ftv -1)
+        ^I32 dom (px-dget src ar dc a b st fh (px-domain))
+        ^I32 ran (px-dget src ar dc a b st fh (px-range))
+        ^I32 nin (quot (gx-count ar dom) 2)
+        ^:mut ^I32 nout (quot (gx-count ar ran) 2)
+        ^:mut ^I32 f 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 hasrange 0
+        ^:mut ^I32 arr 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 bps 0
+        ^:mut ^I32 el 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 subf 0
+        ^:mut ^I32 nbytes 0
+        ^:mut ^I32 bitpos 0
+        ^:mut ^I32 val 0
+        ^:mut ^I32 bit 0
+        ^:mut ^I32 sz 0]
+    (if (ps-missed src) (return -1))
+    (if (or (< nin 1) (> nin 8)) (return -1))
+    (if (> nout 32) (return -1))
+    (if (> nout 0) (set hasrange 1))
+    (if (== fty 2)
+      (do (set arr (px-dget src ar dc a b st fh (px-c0)))
+          (if (!= arr 0) (set nout (gx-count ar arr)))
+          (if (== arr 0) (set nout 1))
+          (if (or (< nout 1) (> nout 32)) (return -1))
+          (if (!= nin 1) (return -1))))
+    (if (== fty 3)
+      (do (if (!= nin 1) (return -1))
+          (set nout 0)))
+    (if (and (or (== fty 0) (== fty 4)) (== hasrange 0)) (return -1))
+    (if (and (!= fty 0) (and (!= fty 2) (and (!= fty 3) (!= fty 4)))) (return -1))
+    (set f (gx-fn-room gx (+ 5 (+ (* 4 nin) (* 4 (* hasrange nout))))))
+    (if (< f 0) (return -1))
+    (cells-set gx f fty)
+    (cells-set gx (+ f 1) nin)
+    (cells-set gx (+ f 2) nout)
+    (cells-set gx (+ f 3) hasrange)
+    (set got (gx-read-nums src ar dc a b st gx dom (+ f 5) (* 2 nin)))
+    (if (< got (* 2 nin)) (return -1))
+    (if (== hasrange 1)
+      (do (set got (gx-read-nums src ar dc a b st gx ran (+ f (+ 5 (* 4 nin))) (* 2 nout)))
+          (if (< got (* 2 nout)) (return -1))))
+    (if (ps-missed src) (return -1))
+    (comment "Type 2: C0, C1, N.")
+    (if (== fty 2)
+      (do (set total (gx-fn-room gx (+ (* 4 nout) 2)))
+          (if (< total 0) (return -1))
+          (set arr (px-dget src ar dc a b st fh (px-c0)))
+          (set got (gx-read-nums src ar dc a b st gx arr total nout))
+          (if (< got nout) (return -1))
+          (set arr (px-dget src ar dc a b st fh (px-c1)))
+          (if (== arr 0)
+            (do (set i 0)
+                (while (< i nout)
+                  (do (fx-put gx (+ total (+ (* 2 nout) (* 2 i))) (fx-one))
+                      (set i (+ i 1)))))
+            (do (set got (gx-read-nums src ar dc a b st gx arr (+ total (* 2 nout)) nout))
+                (if (< got nout) (return -1))))
+          (fx-put gx (+ total (* 4 nout)) (fx-one))
+          (set sub (pd-dget src ar dc a b st fh (pn-n)))
+          (if (== (px-is-num ar sub) 0) (return -1))
+          (fx-put gx (+ total (* 4 nout)) (gx-num ar sub))
+          (cells-set gx (+ f 4) (+ (- total f) (+ (* 4 nout) 2)))
+          (return f)))
+    (comment "Type 3: Functions, Bounds, Encode.")
+    (if (== fty 3)
+      (do (set arr (px-dget src ar dc a b st fh (px-functions)))
+          (set k (gx-count ar arr))
+          (if (or (< k 1) (> k 32)) (return -1))
+          (set total (gx-fn-room gx (+ 1 (+ (* 2 (- k 1)) (+ (* 4 k) k)))))
+          (if (< total 0) (return -1))
+          (cells-set gx total k)
+          (set sub (px-dget src ar dc a b st fh (px-bounds)))
+          (if (> k 1)
+            (do (set got (gx-read-nums src ar dc a b st gx sub (+ total 1) (- k 1)))
+                (if (< got (- k 1)) (return -1))))
+          (set sub (px-dget src ar dc a b st fh (px-encode)))
+          (set got (gx-read-nums src ar dc a b st gx sub (+ total (+ 1 (* 2 (- k 1)))) (* 2 k)))
+          (if (< got (* 2 k)) (return -1))
+          (set el (pl-first ar arr))
+          (set i 0)
+          (while (and (!= el 0) (< i k))
+            (do (set sub (pd-resolve src ar dc a b st el))
+                (if (ps-missed src) (return -1))
+                (set subf (gx-fn-compile src ar dc a b st out gx sub (+ depth 1)))
+                (if (< subf 0) (return -1))
+                (cells-set gx (+ total (+ 1 (+ (* 2 (- k 1)) (+ (* 4 k) i)))) subf)
+                (if (== i 0) (cells-set gx (+ f 2) (cells-at gx (+ subf 2))))
+                (set el (pl-next ar el))
+                (set i (+ i 1))))
+          (if (< i k) (return -1))
+          (cells-set gx (+ f 4) (- (cells-at gx GX_FNPOS) f))
+          (return f)))
+    (comment "Type 0: Size, BitsPerSample, Encode, Decode, the samples.")
+    (if (== fty 0)
+      (do (set arr (pd-dget src ar dc a b st fh (pn-size)))
+          (if (!= (gx-count ar arr) nin) (return -1))
+          (set sub (px-dget src ar dc a b st fh (px-bits-per-sample)))
+          (set bps (px-int-of ar sub 0))
+          (if (and (!= bps 1) (and (!= bps 2) (and (!= bps 4) (and (!= bps 8) (!= bps 16))))) (return -1))
+          (set total (gx-fn-room gx (+ nin (+ 1 (+ (* 4 nin) (+ (* 4 nout) 1))))))
+          (if (< total 0) (return -1))
+          (set el (pl-first ar arr))
+          (set cnt 1)
+          (set i 0)
+          (while (< i nin)
+            (do (set sub (pd-resolve src ar dc a b st el))
+                (set sz (px-int-of ar sub 0))
+                (if (< sz 1) (return -1))
+                (if (> sz 65536) (return -1))
+                (cells-set gx (+ total i) sz)
+                (if (> cnt 65536) (return -1))
+                (set cnt (* cnt sz))
+                (set el (pl-next ar el))
+                (set i (+ i 1))))
+          (if (> cnt 16384) (return -1))
+          (cells-set gx (+ total nin) bps)
+          (set sub (px-dget src ar dc a b st fh (px-encode)))
+          (if (== sub 0)
+            (do (set i 0)
+                (while (< i nin)
+                  (do (fx-put gx (+ total (+ nin (+ 1 (* 4 i)))) (i64 0))
+                      (fx-put gx (+ total (+ nin (+ 3 (* 4 i)))) (fx-of-int (- (cells-at gx (+ total i)) 1)))
+                      (set i (+ i 1)))))
+            (do (set got (gx-read-nums src ar dc a b st gx sub (+ total (+ nin 1)) (* 2 nin)))
+                (if (< got (* 2 nin)) (return -1))))
+          (set sub (px-dget src ar dc a b st fh (px-decode)))
+          (if (== sub 0)
+            (do (set i 0)
+                (while (< i (* 4 nout))
+                  (do (cells-set gx (+ total (+ nin (+ 1 (+ (* 4 nin) i)))) (cells-at gx (+ f (+ 5 (+ (* 4 nin) i)))))
+                      (set i (+ i 1)))))
+            (do (set got (gx-read-nums src ar dc a b st gx sub (+ total (+ nin (+ 1 (* 4 nin)))) (* 2 nout)))
+                (if (< got (* 2 nout)) (return -1))))
+          (comment "The samples: cnt * nout of them, one cell each.")
+          (set nbytes (* cnt nout))
+          (pd-stream-data src ar dc a b st fh out)
+          (if (ps-missed src) (return -1))
+          (if (< (cells-len out) (quot (+ (* nbytes bps) 7) 8)) (return -1))
+          (cells-set gx (+ total (+ nin (+ 1 (+ (* 4 nin) (* 4 nout))))) nbytes)
+          (set subf (gx-fn-room gx nbytes))
+          (if (< subf 0) (return -1))
+          (set i 0)
+          (while (< i nbytes)
+            (do (set bitpos (* i bps))
+                (set val 0)
+                (set j 0)
+                (while (< j bps)
+                  (do (set bit (rem (quot (cells-at out (quot (+ bitpos j) 8)) (gx-pow2 (- 7 (rem (+ bitpos j) 8)))) 2))
+                      (set val (+ (* val 2) bit))
+                      (set j (+ j 1))))
+                (cells-set gx (+ subf i) val)
+                (set i (+ i 1))))
+          (cells-set gx (+ f 4) (- (cells-at gx GX_FNPOS) f))
+          (return f)))
+    (comment "Type 4: the calculator.")
+    (pd-stream-data src ar dc a b st fh out)
+    (if (ps-missed src) (return -1))
+    (set nbytes (cells-len out))
+    (set total (gx-fn-room gx 1))
+    (if (< total 0) (return -1))
+    (set k (cells-at gx GX_FNPOS))
+    (if (== (gx-ps-compile gx out nbytes) 1) (return -1))
+    (cells-set gx total (- (cells-at gx GX_FNPOS) k))
+    (cells-set gx (+ f 4) (- (cells-at gx GX_FNPOS) f))
+    (return f)))
+
+;; --- running a compiled function
+
+(defn ^I32 gx-st-push [^:mut ^Cells gx ^I32 tag ^I64 v]
+  (let [^I32 sp (cells-at gx GX_SP)]
+    (if (>= sp GX_STKMAX)
+      (do (cells-set gx GX_ERR 1)
+          (return 1)))
+    (cells-set gx (+ GX_STK (* sp 3)) tag)
+    (fx-put gx (+ GX_STK (+ (* sp 3) 1)) v)
+    (cells-set gx GX_SP (+ sp 1))
+    (return 0)))
+
+(defn ^I64 gx-st-val [^Cells gx ^I32 i]
+  (return (fx-get gx (+ GX_STK (+ (* i 3) 1)))))
+
+(defn ^I32 gx-st-tag [^Cells gx ^I32 i]
+  (return (cells-at gx (+ GX_STK (* i 3)))))
+
+(defn ^I32 gx-st-set [^:mut ^Cells gx ^I32 i ^I32 tag ^I64 v]
+  (cells-set gx (+ GX_STK (* i 3)) tag)
+  (fx-put gx (+ GX_STK (+ (* i 3) 1)) v)
+  (return 0))
+
+(defn ^I64 gx-trunc [^I64 v]
+  (comment "Toward zero, as an Fx integer.")
+  (if (>= v (i64 0)) (return (fx-of-int (fx-floor v))))
+  (return (- (i64 0) (fx-of-int (fx-floor (- (i64 0) v))))))
+
+(defn ^I64 gx-pow [^:mut ^Cells gx ^I64 x ^I64 n]
+  (comment "x^n by squaring for the integer part and square roots for the fraction (sixteen binary digits); a negative")
+  (comment "base with a fractional exponent, and 0 to a negative power, are errors.")
+  (let [^:mut ^I64 r (fx-one)
+        ^:mut ^I64 base (fx-abs x)
+        ^:mut ^I64 en (fx-abs n)
+        ^:mut ^I32 ip 0
+        ^:mut ^I64 fp (i64 0)
+        ^:mut ^I64 sq (i64 0)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 odd 0]
+    (if (== n (i64 0)) (return (fx-one)))
+    (set ip (fx-floor en))
+    (set fp (- en (fx-of-int ip)))
+    (if (and (< x (i64 0)) (!= fp (i64 0)))
+      (do (cells-set gx GX_ERR 1)
+          (return (i64 0))))
+    (if (and (== base (i64 0)) (< n (i64 0)))
+      (do (cells-set gx GX_ERR 1)
+          (return (i64 0))))
+    (if (> ip 4096) (set ip 4096))
+    (set sq base)
+    (set odd (rem ip 2))
+    (while (> ip 0)
+      (do (if (== (rem ip 2) 1) (set r (fx-mul r sq)))
+          (set sq (fx-mul sq sq))
+          (set ip (quot ip 2))))
+    (set sq base)
+    (while (and (< k 16) (> fp (i64 0)))
+      (do (set sq (fx-sqrt sq))
+          (set fp (mul64 fp (i64 2)))
+          (if (>= fp (fx-one))
+            (do (set r (fx-mul r sq))
+                (set fp (- fp (fx-one)))))
+          (set k (+ k 1))))
+    (if (and (< x (i64 0)) (== odd 1)) (set r (- (i64 0) r)))
+    (if (< n (i64 0))
+      (do (if (== r (i64 0))
+            (do (cells-set gx GX_ERR 1)
+                (return (i64 0))))
+          (return (fx-div (fx-one) r))))
+    (return r)))
+
+(defn ^I32 gx-ps-unary [^I32 op]
+  (comment "1 for the operators that take one operand.")
+  (if (or (== op PS_ABS) (or (== op PS_NEG) (or (== op PS_CEIL) (or (== op PS_FLOOR) (== op PS_ROUND)))))
+    (return 1))
+  (if (or (== op PS_TRUNC) (or (== op PS_CVI) (or (== op PS_CVR) (or (== op PS_SQRT) (== op PS_NOT)))))
+    (return 1))
+  (if (or (== op PS_SIN) (or (== op PS_COS) (or (== op PS_LN) (== op PS_LOG))))
+    (return 1))
+  (return 0))
+
+(defn ^I32 gx-ps-op [^:mut ^Cells gx ^I32 op]
+  (comment "One calculator operator on the stack. Answers 0, or 1 and sets GX_ERR (underflow, a division by zero,")
+  (comment "an operator outside the language).")
+  (let [^:mut ^I32 sp (cells-at gx GX_SP)
+        ^:mut ^I64 x (i64 0)
+        ^:mut ^I64 y (i64 0)
+        ^:mut ^I64 z (i64 0)
+        ^:mut ^I32 tx 0
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 res 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 ia 0
+        ^:mut ^I32 ib 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 cd 0
+        ^:mut ^I32 tag 0
+        ^:mut ^I32 kk 0]
+    (comment "Stack operators first.")
+    (if (== op PS_POP)
+      (do (if (< sp 1) (do (cells-set gx GX_ERR 1) (return 1)))
+          (cells-set gx GX_SP (- sp 1))
+          (return 0)))
+    (if (== op PS_DUP)
+      (do (if (< sp 1) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set x (gx-st-val gx (- sp 1)))
+          (set tx (gx-st-tag gx (- sp 1)))
+          (return (gx-st-push gx tx x))))
+    (if (== op PS_TRUE) (return (gx-st-push gx 1 (fx-one))))
+    (if (== op PS_FALSE) (return (gx-st-push gx 1 (i64 0))))
+    (if (== op PS_EXCH)
+      (do (if (< sp 2) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set x (gx-st-val gx (- sp 2)))
+          (set tx (gx-st-tag gx (- sp 2)))
+          (set y (gx-st-val gx (- sp 1)))
+          (set ty (gx-st-tag gx (- sp 1)))
+          (gx-st-set gx (- sp 2) ty y)
+          (gx-st-set gx (- sp 1) tx x)
+          (return 0)))
+    (if (== op PS_COPY)
+      (do (if (< sp 1) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set n (fx-floor (gx-st-val gx (- sp 1))))
+          (cells-set gx GX_SP (- sp 1))
+          (set sp (- sp 1))
+          (if (or (< n 0) (> n sp)) (do (cells-set gx GX_ERR 1) (return 1)))
+          (if (> (+ sp n) GX_STKMAX) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set kk 0)
+          (while (< kk n)
+            (do (set x (gx-st-val gx (+ (- sp n) kk)))
+                (set tx (gx-st-tag gx (+ (- sp n) kk)))
+                (gx-st-push gx tx x)
+                (set kk (+ kk 1))))
+          (return 0)))
+    (if (== op PS_INDEX)
+      (do (if (< sp 1) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set n (fx-floor (gx-st-val gx (- sp 1))))
+          (cells-set gx GX_SP (- sp 1))
+          (set sp (- sp 1))
+          (if (or (< n 0) (>= n sp)) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set x (gx-st-val gx (- (- sp 1) n)))
+          (set tx (gx-st-tag gx (- (- sp 1) n)))
+          (return (gx-st-push gx tx x))))
+    (if (== op PS_ROLL)
+      (do (if (< sp 2) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set n (fx-floor (gx-st-val gx (- sp 2))))
+          (set m (fx-floor (gx-st-val gx (- sp 1))))
+          (cells-set gx GX_SP (- sp 2))
+          (set sp (- sp 2))
+          (if (or (< n 0) (> n sp)) (do (cells-set gx GX_ERR 1) (return 1)))
+          (if (== n 0) (return 0))
+          (set m (rem m n))
+          (if (< m 0) (set m (+ m n)))
+          (comment "A positive roll moves the top element under the others, m times.")
+          (while (> m 0)
+            (do (set x (gx-st-val gx (- sp 1)))
+                (set tx (gx-st-tag gx (- sp 1)))
+                (set kk (- sp 1))
+                (while (> kk (- sp n))
+                  (do (set y (gx-st-val gx (- kk 1)))
+                      (set ty (gx-st-tag gx (- kk 1)))
+                      (gx-st-set gx kk ty y)
+                      (set kk (- kk 1))))
+                (gx-st-set gx (- sp n) tx x)
+                (set m (- m 1))))
+          (return 0)))
+    (comment "Unary operators.")
+    (if (== (gx-ps-unary op) 1)
+      (do (if (< sp 1) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set x (gx-st-val gx (- sp 1)))
+          (set tx (gx-st-tag gx (- sp 1)))
+          (set z x)
+          (set tag 0)
+          (if (== op PS_ABS) (set z (fx-abs x)))
+          (if (== op PS_NEG) (set z (- (i64 0) x)))
+          (if (== op PS_CEIL) (set z (- (i64 0) (fx-of-int (fx-floor (- (i64 0) x))))))
+          (if (== op PS_FLOOR) (set z (fx-of-int (fx-floor x))))
+          (if (== op PS_ROUND) (set z (fx-of-int (fx-floor (add64 x (quot (fx-one) (i64 2)))))))
+          (if (or (== op PS_TRUNC) (== op PS_CVI)) (set z (gx-trunc x)))
+          (if (== op PS_SQRT)
+            (do (if (< x (i64 0)) (do (cells-set gx GX_ERR 1) (return 1)))
+                (set z (fx-sqrt x))))
+          (if (or (== op PS_SIN) (== op PS_COS))
+            (do (set cd (rem (fx-round (fx-mul x (fx-of-int 100))) 36000))
+                (if (< cd 0) (set cd (+ cd 36000)))
+                (if (== op PS_SIN) (set z (fx-sin cd)))
+                (if (== op PS_COS) (set z (fx-cos cd)))))
+          (if (== op PS_NOT)
+            (do (if (== tx 1)
+                  (do (set tag 1)
+                      (if (== x (i64 0)) (set z (fx-one)) (set z (i64 0))))
+                  (do (set ia (fx-floor x))
+                      (set z (fx-of-int (- (- 0 ia) 1)))))))
+          (if (or (== op PS_LN) (== op PS_LOG))
+            (do (cells-set gx GX_ERR 1) (return 1)))
+          (gx-st-set gx (- sp 1) tag z)
+          (return 0)))
+    (comment "Binary operators.")
+    (if (< sp 2) (do (cells-set gx GX_ERR 1) (return 1)))
+    (set x (gx-st-val gx (- sp 2)))
+    (set tx (gx-st-tag gx (- sp 2)))
+    (set y (gx-st-val gx (- sp 1)))
+    (set ty (gx-st-tag gx (- sp 1)))
+    (set z (i64 0))
+    (set tag 0)
+    (set res 0)
+    (if (== op PS_ADD) (set z (fx-clamp (add64 x y))))
+    (if (== op PS_SUB) (set z (fx-clamp (- x y))))
+    (if (== op PS_MUL) (set z (fx-clamp (fx-mul x y))))
+    (if (== op PS_DIV)
+      (do (if (== y (i64 0)) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set z (fx-clamp (fx-div x y)))))
+    (if (== op PS_IDIV)
+      (do (set ia (fx-floor (gx-trunc x)))
+          (set ib (fx-floor (gx-trunc y)))
+          (if (== ib 0) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set z (fx-of-int (quot ia ib)))))
+    (if (== op PS_MOD)
+      (do (set ia (fx-floor (gx-trunc x)))
+          (set ib (fx-floor (gx-trunc y)))
+          (if (== ib 0) (do (cells-set gx GX_ERR 1) (return 1)))
+          (set z (fx-of-int (rem ia ib)))))
+    (if (== op PS_ATAN)
+      (do (set cd (fx-atan2 x y))
+          (set z (fx-muldiv (i64 cd) (fx-one) (i64 100)))))
+    (if (== op PS_EXP)
+      (do (set z (fx-clamp (gx-pow gx x y)))
+          (if (== (cells-at gx GX_ERR) 1) (return 1))))
+    (if (or (== op PS_AND) (or (== op PS_OR) (== op PS_XOR)))
+      (do (if (and (== tx 1) (== ty 1))
+            (do (set tag 1)
+                (set ia 0)
+                (set ib 0)
+                (if (!= x (i64 0)) (set ia 1))
+                (if (!= y (i64 0)) (set ib 1))
+                (if (== op PS_AND) (set w (bit-and ia ib)))
+                (if (== op PS_OR) (set w (bit-or ia ib)))
+                (if (== op PS_XOR) (set w (bit-xor ia ib)))
+                (set z (fx-of-int w)))
+            (do (set ia (fx-floor x))
+                (set ib (fx-floor y))
+                (if (== op PS_AND) (set w (bit-and ia ib)))
+                (if (== op PS_OR) (set w (bit-or ia ib)))
+                (if (== op PS_XOR) (set w (bit-xor ia ib)))
+                (set z (fx-of-int w))))))
+    (if (== op PS_BITSHIFT)
+      (do (set ia (fx-floor x))
+          (set ib (fx-floor y))
+          (if (> ib 30) (set ib 30))
+          (if (< ib -30) (set ib -30))
+          (if (>= ib 0)
+            (set w (* ia (gx-pow2 ib)))
+            (set w (quot ia (gx-pow2 (- 0 ib)))))
+          (set z (fx-of-int w))))
+    (if (or (== op PS_EQ) (or (== op PS_NE) (or (== op PS_GT) (or (== op PS_GE) (or (== op PS_LT) (== op PS_LE))))))
+      (do (set tag 1)
+          (set res 0)
+          (if (and (== op PS_EQ) (== x y)) (set res 1))
+          (if (and (== op PS_NE) (!= x y)) (set res 1))
+          (if (and (== op PS_GT) (> x y)) (set res 1))
+          (if (and (== op PS_GE) (>= x y)) (set res 1))
+          (if (and (== op PS_LT) (< x y)) (set res 1))
+          (if (and (== op PS_LE) (<= x y)) (set res 1))
+          (if (== res 1) (set z (fx-one)) (set z (i64 0)))))
+    (cells-set gx GX_SP (- sp 1))
+    (gx-st-set gx (- sp 2) tag z)
+    (return 0)))
+
+(defn ^I32 gx-ps-run [^:mut ^Cells gx ^I32 prog ^I32 end]
+  (let [^:mut ^I32 pc prog
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 av 0
+        ^:mut ^I32 sp 0
+        ^:mut ^I64 cv (i64 0)]
+    (while (and (< pc end) (== (cells-at gx GX_ERR) 0))
+      (do (set kind (cells-at gx pc))
+          (set av (cells-at gx (+ pc 1)))
+          (if (== kind 0)
+            (do (gx-st-push gx 0 (fx-join (cells-at gx (+ pc 1)) (cells-at gx (+ pc 2))))
+                (set pc (+ pc 3))))
+          (if (== kind 1)
+            (do (gx-ps-op gx av)
+                (set pc (+ pc 3))))
+          (if (or (== kind 2) (== kind 3))
+            (do (set sp (cells-at gx GX_SP))
+                (if (< sp 1)
+                  (cells-set gx GX_ERR 1)
+                  (do (set cv (gx-st-val gx (- sp 1)))
+                      (cells-set gx GX_SP (- sp 1))
+                      (if (!= cv (i64 0))
+                        (set pc (+ pc 3))
+                        (do (if (== kind 2) (set pc (+ pc (+ 3 av))))
+                            (if (== kind 3) (set pc (+ pc (+ 6 av))))))))))
+          (if (== kind 4)
+            (set pc (+ pc (+ 3 av))))
+          (if (== kind 5)
+            (cells-set gx GX_ERR 1))))
+    (if (== (cells-at gx GX_ERR) 1) (return 1))
+    (return 0)))
+
+(defn ^I32 gx-clip-range [^:mut ^Cells gx ^I32 f ^I32 nout]
+  (comment "Clip the outputs to the function's /Range when it has one.")
+  (if (== (cells-at gx (+ f 3)) 0) (return 0))
+  (let [^I32 rbase (+ f (+ 5 (* 4 (cells-at gx (+ f 1)))))
+        ^:mut ^I32 j 0
+        ^:mut ^I64 v (i64 0)
+        ^:mut ^I64 lo (i64 0)
+        ^:mut ^I64 hi (i64 0)]
+    (while (< j nout)
+      (do (set v (fx-get gx (+ GX_OUT (* 2 j))))
+          (set lo (fx-get gx (+ rbase (* 4 j))))
+          (set hi (fx-get gx (+ rbase (+ (* 4 j) 2))))
+          (if (< v lo) (set v lo))
+          (if (> v hi) (set v hi))
+          (fx-put gx (+ GX_OUT (* 2 j)) v)
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^I32 gx-fn-eval [^:mut ^Cells gx ^I32 f]
+  (comment "Run the compiled function at f on the inputs at GX_IN (Fx): the outputs are at GX_OUT. Answers the number of")
+  (comment "outputs, or -1 (GX_ERR is set). The caller has cleared GX_ERR.")
+  (let [^I32 fty (cells-at gx f)
+        ^I32 nin (cells-at gx (+ f 1))
+        ^I32 nout (cells-at gx (+ f 2))
+        ^I32 dbase (+ f 5)
+        ^I32 body (+ f (+ 5 (+ (* 4 nin) (* 4 (* (cells-at gx (+ f 3)) nout)))))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I64 x (i64 0)
+        ^:mut ^I64 lo (i64 0)
+        ^:mut ^I64 hi (i64 0)
+        ^:mut ^I64 y (i64 0)
+        ^:mut ^I64 y1 (i64 0)
+        ^:mut ^I64 e (i64 0)
+        ^:mut ^I64 xn (i64 0)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 sz 0
+        ^:mut ^I32 idx 0
+        ^:mut ^I32 stride 0
+        ^:mut ^I32 i0 0
+        ^:mut ^I32 i1 0
+        ^:mut ^I32 bps 0
+        ^:mut ^I32 sbase 0
+        ^:mut ^I32 ebase 0
+        ^:mut ^I32 cb 0
+        ^:mut ^I32 got 0
+        ^:mut ^I64 fr (i64 0)
+        ^:mut ^I64 dlo (i64 0)
+        ^:mut ^I64 dhi (i64 0)
+        ^:mut ^I32 plen 0]
+    (comment "Clip every input to its domain.")
+    (while (< i nin)
+      (do (set x (fx-get gx (+ GX_IN (* 2 i))))
+          (set lo (fx-get gx (+ dbase (* 4 i))))
+          (set hi (fx-get gx (+ dbase (+ (* 4 i) 2))))
+          (if (< x lo) (set x lo))
+          (if (> x hi) (set x hi))
+          (fx-put gx (+ GX_IN (* 2 i)) x)
+          (set i (+ i 1))))
+    (if (== fty 2)
+      (do (set x (fx-get gx GX_IN))
+          (set y (fx-get gx (+ body (* 4 nout))))
+          (set xn (gx-pow gx x y))
+          (if (== (cells-at gx GX_ERR) 1) (return -1))
+          (set j 0)
+          (while (< j nout)
+            (do (set y (fx-get gx (+ body (* 2 j))))
+                (set y1 (fx-get gx (+ body (+ (* 2 nout) (* 2 j)))))
+                (fx-put gx (+ GX_OUT (* 2 j)) (fx-clamp (add64 y (fx-mul xn (- y1 y)))))
+                (set j (+ j 1))))
+          (gx-clip-range gx f nout)
+          (return nout)))
+    (if (== fty 3)
+      (do (set k (cells-at gx body))
+          (set x (fx-get gx GX_IN))
+          (set lo (fx-get gx dbase))
+          (set hi (fx-get gx (+ dbase 2)))
+          (comment "The sub-domain x lies in: the number of bounds <= x, but not past the last.")
+          (set i 0)
+          (while (and (< i (- k 1)) (>= x (fx-get gx (+ body (+ 1 (* 2 i))))))
+            (set i (+ i 1)))
+          (set dlo lo)
+          (if (> i 0) (set dlo (fx-get gx (+ body (+ 1 (* 2 (- i 1)))))))
+          (set dhi hi)
+          (if (< i (- k 1)) (set dhi (fx-get gx (+ body (+ 1 (* 2 i))))))
+          (set ebase (+ body (+ 1 (* 2 (- k 1)))))
+          (set y (fx-get gx (+ ebase (* 4 i))))
+          (set y1 (fx-get gx (+ ebase (+ (* 4 i) 2))))
+          (if (== dhi dlo)
+            (set e y)
+            (set e (fx-clamp (add64 y (fx-muldiv (- x dlo) (- y1 y) (- dhi dlo))))))
+          (fx-put gx GX_IN e)
+          (set sub (cells-at gx (+ ebase (+ (* 4 k) i))))
+          (set got (gx-fn-eval gx sub))
+          (if (< got 0) (return -1))
+          (gx-clip-range gx f got)
+          (return got)))
+    (if (== fty 0)
+      (do (set bps (cells-at gx (+ body nin)))
+          (set ebase (+ body (+ nin 1)))
+          (set cb (+ ebase (* 4 nin)))
+          (set sbase (+ cb (+ (* 4 nout) 1)))
+          (comment "Encode each input into sample coordinates, clamped to [0, size-1].")
+          (if (== nin 1)
+            (do (set sz (cells-at gx body))
+                (set x (fx-get gx GX_IN))
+                (set lo (fx-get gx dbase))
+                (set hi (fx-get gx (+ dbase 2)))
+                (set dlo (fx-get gx ebase))
+                (set dhi (fx-get gx (+ ebase 2)))
+                (if (== hi lo)
+                  (set e dlo)
+                  (set e (fx-clamp (add64 dlo (fx-muldiv (- x lo) (- dhi dlo) (- hi lo))))))
+                (if (< e (i64 0)) (set e (i64 0)))
+                (if (> e (fx-of-int (- sz 1))) (set e (fx-of-int (- sz 1))))
+                (set i0 (fx-floor e))
+                (set fr (- e (fx-of-int i0)))
+                (set i1 i0)
+                (if (< (+ i0 1) sz) (set i1 (+ i0 1)))
+                (set j 0)
+                (while (< j nout)
+                  (do (set y (fx-of-int (cells-at gx (+ sbase (+ (* i0 nout) j)))))
+                      (set y1 (fx-of-int (cells-at gx (+ sbase (+ (* i1 nout) j)))))
+                      (set y (fx-clamp (add64 y (fx-mul fr (- y1 y)))))
+                      (set dlo (fx-get gx (+ cb (* 4 j))))
+                      (set dhi (fx-get gx (+ cb (+ (* 4 j) 2))))
+                      (fx-put gx (+ GX_OUT (* 2 j))
+                              (fx-clamp (add64 dlo (fx-muldiv y (- dhi dlo) (fx-of-int (- (gx-pow2 bps) 1))))))
+                      (set j (+ j 1)))))
+            (do (set idx 0)
+                (set stride 1)
+                (set i 0)
+                (while (< i nin)
+                  (do (set sz (cells-at gx (+ body i)))
+                      (set x (fx-get gx (+ GX_IN (* 2 i))))
+                      (set lo (fx-get gx (+ dbase (* 4 i))))
+                      (set hi (fx-get gx (+ dbase (+ (* 4 i) 2))))
+                      (set dlo (fx-get gx (+ ebase (* 4 i))))
+                      (set dhi (fx-get gx (+ ebase (+ (* 4 i) 2))))
+                      (if (== hi lo)
+                        (set e dlo)
+                        (set e (fx-clamp (add64 dlo (fx-muldiv (- x lo) (- dhi dlo) (- hi lo))))))
+                      (set i0 (fx-round e))
+                      (if (< i0 0) (set i0 0))
+                      (if (> i0 (- sz 1)) (set i0 (- sz 1)))
+                      (set idx (+ idx (* i0 stride)))
+                      (set stride (* stride sz))
+                      (set i (+ i 1))))
+                (set j 0)
+                (while (< j nout)
+                  (do (set y (fx-of-int (cells-at gx (+ sbase (+ (* idx nout) j)))))
+                      (set dlo (fx-get gx (+ cb (* 4 j))))
+                      (set dhi (fx-get gx (+ cb (+ (* 4 j) 2))))
+                      (fx-put gx (+ GX_OUT (* 2 j))
+                              (fx-clamp (add64 dlo (fx-muldiv y (- dhi dlo) (fx-of-int (- (gx-pow2 bps) 1))))))
+                      (set j (+ j 1))))))
+          (gx-clip-range gx f nout)
+          (return nout)))
+    (if (== fty 4)
+      (do (set plen (cells-at gx body))
+          (cells-set gx GX_SP 0)
+          (set i 0)
+          (while (< i nin)
+            (do (set x (fx-get gx (+ GX_IN (* 2 i))))
+                (gx-st-push gx 0 x)
+                (set i (+ i 1))))
+          (if (== (gx-ps-run gx (+ body 1) (+ (+ body 1) plen)) 1) (return -1))
+          (set k (cells-at gx GX_SP))
+          (if (< k nout) (return -1))
+          (set j 0)
+          (while (< j nout)
+            (do (set x (gx-st-val gx (+ (- k nout) j)))
+                (fx-put gx (+ GX_OUT (* 2 j)) x)
+                (set j (+ j 1))))
+          (gx-clip-range gx f nout)
+          (return nout)))
+    (return -1)))
+
+(defn ^I32 gx-fn-run [^:mut ^Cells gx ^I32 f]
+  (comment "`gx-fn-eval` from a clean error flag.")
+  (cells-set gx GX_ERR 0)
+  (return (gx-fn-eval gx f)))
+
+;; ------------------------------------------------------------ colour spaces
+
+(defconst ^I32 CS_FNAT 17)       ;; the first cell of the entry's compiled tint transform
+(defconst ^I32 CS_HIVAL 18)      ;; Indexed: the highest index
+
+(defn ^I32 gx-find [^Cells gx ^I32 key]
+  (comment "The table entry whose key is `key`, or -1.")
+  (let [^:mut ^I32 i 0]
+    (while (< i GX_NENT)
+      (do (if (== (cells-at gx (gx-e i CS_KEY)) key) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 gx-alloc [^:mut ^Cells gx ^I32 key]
+  (comment "A fresh entry for `key`, replacing the oldest of the cache (the permanent four never go).")
+  (let [^:mut ^I32 e (cells-at gx GX_RR)
+        ^:mut ^I32 j 0]
+    (if (or (< e 4) (>= e GX_NENT)) (set e 4))
+    (cells-set gx GX_RR (+ e 1))
+    (while (< j CSD)
+      (do (cells-set gx (gx-e e j) 0)
+          (set j (+ j 1))))
+    (cells-set gx (gx-e e CS_KEY) key)
+    (cells-set gx (gx-e e CS_INIT) -1)
+    (cells-set gx (gx-e e CS_XW) 96420)
+    (cells-set gx (gx-e e CS_YW) 100000)
+    (cells-set gx (gx-e e CS_ZW) 82490)
+    (cells-set gx (gx-e e CS_AMIN) -100)
+    (cells-set gx (gx-e e CS_AMAX) 100)
+    (cells-set gx (gx-e e CS_BMIN) -100)
+    (cells-set gx (gx-e e CS_BMAX) 100)
+    (return e)))
+
+(defn ^I32 gx-pal-at [^Cells gx ^I32 e ^I32 i]
+  (return (cells-at gx (+ GX_PAL (+ (* e 256) i)))))
+
+(defn ^:pub ^I32 gx-entry-rgb [^:mut ^Cells gx ^I32 e ^I32 n]
+  (comment "The colour whose n components are at GX_IN (Fx), in the space of entry e, as 0xRRGGBB; -1 when it is not")
+  (comment "known (a pattern, a function that cannot run, a space that was not read).")
+  (let [^I32 kind (cells-at gx (gx-e e CS_KIND))
+        ^I32 model (cells-at gx (gx-e e CS_MODEL))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 idx 0
+        ^:mut ^I32 nout 0
+        ^:mut ^I64 t (i64 0)]
+    (if (== kind 0) (return -1))
+    (if (== kind CK_PATTERN) (return -1))
+    (comment "Components the operator did not give are 0.")
+    (set j n)
+    (while (< j 4)
+      (do (fx-put gx (+ GX_IN (* 2 j)) (i64 0))
+          (set j (+ j 1))))
+    (if (== kind CK_INDEXED)
+      (do (set idx (fx-round (fx-get gx GX_IN)))
+          (if (< idx 0) (set idx 0))
+          (if (>= idx (cells-at gx (gx-e e CS_NPAL))) (set idx (- (cells-at gx (gx-e e CS_NPAL)) 1)))
+          (if (< idx 0) (return -1))
+          (return (gx-pal-at gx e idx))))
+    (if (== kind CK_SEP)
+      (do (if (== (cells-at gx (gx-e e CS_PAL)) 0) (return -1))
+          (set t (gx-unit (fx-get gx GX_IN)))
+          (return (gx-pal-at gx e (gx-byte t)))))
+    (if (== kind CK_DEVN)
+      (do (if (== (cells-at gx (gx-e e CS_FN)) 0) (return -1))
+          (set nout (gx-fn-run gx (cells-at gx (gx-e e CS_FNAT))))
+          (if (< nout 0) (return -1))
+          (set j nout)
+          (while (< j 4)
+            (do (fx-put gx (+ GX_OUT (* 2 j)) (i64 0))
+                (set j (+ j 1))))
+          (return (gx-model-rgb gx e model GX_OUT))))
+    (return (gx-model-rgb gx e model GX_IN))))
+
+(defn ^I32 gx-model-of [^Cells gx ^I32 e]
+  (comment "The colour model (1 gray, 2 rgb, 3 cmyk, 6 lab) an alternate space converts its components with, or 0 for a")
+  (comment "space that cannot be an alternate.")
+  (let [^I32 kind (cells-at gx (gx-e e CS_KIND))]
+    (if (or (== kind CK_INDEXED) (or (== kind CK_SEP) (or (== kind CK_DEVN) (or (== kind CK_PATTERN) (== kind 0)))))
+      (return 0))
+    (return (cells-at gx (gx-e e CS_MODEL)))))
+
+(defn ^:pub ^I32 gx-key-of [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                      ^I32 h]
+  (comment "The key of a colour space object (resolved): -1 DeviceGray, -2 DeviceRGB, -3 DeviceCMYK, -4 Pattern, else its")
+  (comment "own handle for a space that is an array; 0 for what is no colour space.")
+  (if (== h 0) (return 0))
+  (let [^I32 kind (pl-kind-of ar h)
+        ^:mut ^I32 n0 0]
+    (if (== kind 4)
+      (do (if (or (== (pl-name-is ar h (pn-device-gray)) 1) (== (px-is ar h (px-g)) 1)) (return -1))
+          (if (or (== (pl-name-is ar h (pn-device-rgb)) 1) (== (px-is ar h (px-rgb)) 1)) (return -2))
+          (if (or (== (pl-name-is ar h (pn-device-cmyk)) 1) (== (px-is ar h (px-cmyk)) 1)) (return -3))
+          (if (== (pl-name-is ar h (pn-pattern)) 1) (return -4))
+          (return 0)))
+    (if (== kind 6)
+      (do (set n0 (pl-first ar h))
+          (if (== n0 0) (return 0))
+          (set n0 (pd-resolve src ar dc a b st n0))
+          (if (== n0 0) (return 0))
+          (if (== (pl-kind-of ar n0) 4)
+            (do (if (== (pl-name-is ar n0 (pn-pattern)) 1) (return -4))
+                (if (== (pl-name-is ar n0 (pn-device-gray)) 1) (return -1))
+                (if (== (pl-name-is ar n0 (pn-device-rgb)) 1) (return -2))
+                (if (== (pl-name-is ar n0 (pn-device-cmyk)) 1) (return -3))))
+          (return h)))
+    (return 0)))
+
+(defn ^I32 gx-set-lab-params [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                              ^:mut ^Cells gx ^I32 e ^I32 dict]
+  (comment "Lab's /WhitePoint and /Range (and CalRGB's white point, which is unused) from the dictionary.")
+  (let [^I32 wp (px-dget src ar dc a b st dict (px-white-point))
+        ^I32 rg (px-dget src ar dc a b st dict (px-range))
+        ^:mut ^I32 got 0
+        ^:mut ^I64 w0 (i64 0)
+        ^:mut ^I64 w1 (i64 0)
+        ^:mut ^I64 w2 (i64 0)
+        ^:mut ^I64 w3 (i64 0)]
+    (if (!= (gx-count ar wp) 0)
+      (do (set got (gx-read-nums src ar dc a b st gx wp (+ GX_OUT 20) 3))
+          (if (== got 3)
+            (do (set w0 (fx-get gx (+ GX_OUT 20)))
+                (set w1 (fx-get gx (+ GX_OUT 22)))
+                (set w2 (fx-get gx (+ GX_OUT 24)))
+                (cells-set gx (gx-e e CS_XW) (fx-round (fx-mul w0 (fx-of-int 100000))))
+                (cells-set gx (gx-e e CS_YW) (fx-round (fx-mul w1 (fx-of-int 100000))))
+                (cells-set gx (gx-e e CS_ZW) (fx-round (fx-mul w2 (fx-of-int 100000))))))))
+    (if (!= (gx-count ar rg) 0)
+      (do (set got (gx-read-nums src ar dc a b st gx rg (+ GX_OUT 20) 4))
+          (if (== got 4)
+            (do (set w0 (fx-get gx (+ GX_OUT 20)))
+                (set w1 (fx-get gx (+ GX_OUT 22)))
+                (set w2 (fx-get gx (+ GX_OUT 24)))
+                (set w3 (fx-get gx (+ GX_OUT 26)))
+                (cells-set gx (gx-e e CS_AMIN) (fx-round w0))
+                (cells-set gx (gx-e e CS_AMAX) (fx-round w1))
+                (cells-set gx (gx-e e CS_BMIN) (fx-round w2))
+                (cells-set gx (gx-e e CS_BMAX) (fx-round w3))))))
+    (return 0)))
+
+(defn ^I32 gx-copy-model [^:mut ^Cells gx ^I32 dst ^I32 srce]
+  (comment "Give entry dst the colour model of entry srce, with Lab's white point and range.")
+  (let [^I32 mo (gx-model-of gx srce)]
+    (cells-set gx (gx-e dst CS_MODEL) mo))
+  (cells-set gx (gx-e dst CS_XW) (cells-at gx (gx-e srce CS_XW)))
+  (cells-set gx (gx-e dst CS_YW) (cells-at gx (gx-e srce CS_YW)))
+  (cells-set gx (gx-e dst CS_ZW) (cells-at gx (gx-e srce CS_ZW)))
+  (cells-set gx (gx-e dst CS_AMIN) (cells-at gx (gx-e srce CS_AMIN)))
+  (cells-set gx (gx-e dst CS_AMAX) (cells-at gx (gx-e srce CS_AMAX)))
+  (cells-set gx (gx-e dst CS_BMIN) (cells-at gx (gx-e srce CS_BMIN)))
+  (cells-set gx (gx-e dst CS_BMAX) (cells-at gx (gx-e srce CS_BMAX)))
+  (return 0))
+
+(defn ^I32 gx-tint [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                    ^:mut ^Cells out ^:mut ^Cells gx ^I32 e ^I32 arr ^I32 ncomp]
+  (comment "Separation and DeviceN: the alternate space is element 2 of `arr`, the tint transform element 3. Fills the")
+  (comment "entry's colour model from the alternate and compiles the transform into its function slab. Answers 1 when")
+  (comment "both worked.")
+  (let [^I32 aeh (px-nth ar arr 2)
+        ^I32 feh (px-nth ar arr 3)
+        ^I32 ah (pd-resolve src ar dc a b st aeh)
+        ^I32 fh (pd-resolve src ar dc a b st feh)
+        ^:mut ^I32 ak 0
+        ^:mut ^I32 ae -1
+        ^:mut ^I32 at 0
+        ^:mut ^I32 ff -1]
+    (if (ps-missed src) (return 0))
+    (set ak (gx-key-of src ar dc a b st ah))
+    (if (== ak 0) (return 0))
+    (set ae (gx-lookup src ar dc a b st out gx ak))
+    (if (< ae 0) (return 0))
+    (if (== (gx-model-of gx ae) 0) (return 0))
+    (gx-copy-model gx e ae)
+    (set at (+ GX_FN (* e FN_SLAB)))
+    (cells-set gx GX_FNPOS at)
+    (cells-set gx GX_FNLIM (+ at FN_SLAB))
+    (cells-set gx GX_FAIL 0)
+    (set ff (gx-fn-compile src ar dc a b st out gx fh 0))
+    (if (ps-missed src) (return 0))
+    (if (or (< ff 0) (== (cells-at gx GX_FAIL) 1)) (return 0))
+    (if (!= (cells-at gx (+ ff 1)) ncomp) (return 0))
+    (cells-set gx (gx-e e CS_FN) 1)
+    (cells-set gx (gx-e e CS_FNAT) ff)
+    (return 1)))
+
+(defn ^I32 gx-parse [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                     ^:mut ^Cells out ^:mut ^Cells gx ^I32 e ^I32 h]
+  (comment "Fill table entry e from the colour space array h (resolved). Leaves the kind 0 (unreadable) when it is not")
+  (comment "one this module reads.")
+  (let [^I32 f0 (pl-first ar h)
+        ^I32 e1 (px-nth ar h 1)
+        ^I32 n0 (pd-resolve src ar dc a b st f0)
+        ^I32 d1 (pd-resolve src ar dc a b st e1)
+        ^:mut ^I32 n 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 bk 0
+        ^:mut ^I32 be -1
+        ^:mut ^I32 hival 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 lk 0
+        ^:mut ^I32 ll 0
+        ^:mut ^I32 bv 0
+        ^:mut ^I32 ok 0
+        ^:mut ^I32 allnone 0
+        ^:mut ^I32 el 0
+        ^:mut ^I32 rv 0
+        ^:mut ^I64 cv (i64 0)
+        ^:mut ^I32 pcol 0
+        ^:mut ^I32 mo 0
+        ^:mut ^I32 lh 0]
+    (if (ps-missed src) (return 0))
+    (if (== n0 0) (return 0))
+    (if (!= (pl-kind-of ar n0) 4) (return 0))
+    (if (== (px-is ar n0 (px-cal-gray)) 1)
+      (do (cells-set gx (gx-e e CS_KIND) CK_CALGRAY)
+          (cells-set gx (gx-e e CS_NCOMP) 1)
+          (cells-set gx (gx-e e CS_CLASS) CLS_GRAY)
+          (cells-set gx (gx-e e CS_MODEL) 1)
+          (cells-set gx (gx-e e CS_INIT) 0)
+          (return 1)))
+    (if (== (px-is ar n0 (px-cal-rgb)) 1)
+      (do (cells-set gx (gx-e e CS_KIND) CK_CALRGB)
+          (cells-set gx (gx-e e CS_NCOMP) 3)
+          (cells-set gx (gx-e e CS_CLASS) CLS_RGB)
+          (cells-set gx (gx-e e CS_MODEL) 2)
+          (cells-set gx (gx-e e CS_INIT) 0)
+          (return 1)))
+    (if (== (px-is ar n0 (px-lab)) 1)
+      (do (cells-set gx (gx-e e CS_KIND) CK_LAB)
+          (cells-set gx (gx-e e CS_NCOMP) 3)
+          (cells-set gx (gx-e e CS_CLASS) CLS_OTHER)
+          (cells-set gx (gx-e e CS_MODEL) 6)
+          (cells-set gx (gx-e e CS_INIT) 0)
+          (if (!= d1 0) (gx-set-lab-params src ar dc a b st gx e d1))
+          (return 1)))
+    (if (== (px-is ar n0 (px-icc-based)) 1)
+      (do (if (== d1 0) (return 0))
+          (set rv (pd-dget src ar dc a b st d1 (pn-n)))
+          (set n (px-int-of ar rv 0))
+          (if (and (!= n 1) (and (!= n 3) (!= n 4))) (return 0))
+          (cells-set gx (gx-e e CS_KIND) CK_ICC)
+          (cells-set gx (gx-e e CS_NCOMP) n)
+          (if (== n 1)
+            (do (cells-set gx (gx-e e CS_CLASS) CLS_GRAY)
+                (cells-set gx (gx-e e CS_MODEL) 1)))
+          (if (== n 3)
+            (do (cells-set gx (gx-e e CS_CLASS) CLS_RGB)
+                (cells-set gx (gx-e e CS_MODEL) 2)))
+          (if (== n 4)
+            (do (cells-set gx (gx-e e CS_CLASS) CLS_CMYK)
+                (cells-set gx (gx-e e CS_MODEL) 3)))
+          (cells-set gx (gx-e e CS_INIT) 0)
+          (return 1)))
+    (if (or (== (px-is ar n0 (px-indexed)) 1) (== (px-is ar n0 (px-i)) 1))
+      (do (set rv (px-nth ar h 1))
+          (set rv (pd-resolve src ar dc a b st rv))
+          (set bk (gx-key-of src ar dc a b st rv))
+          (if (or (== bk 0) (== bk -4)) (return 0))
+          (set be (gx-lookup src ar dc a b st out gx bk))
+          (if (< be 0) (return 0))
+          (if (== (gx-kind gx be) CK_INDEXED) (return 0))
+          (set nb (gx-ncomp gx be))
+          (set rv (px-nth ar h 2))
+          (set rv (pd-resolve src ar dc a b st rv))
+          (set hival (px-int-of ar rv -1))
+          (if (or (< hival 0) (> hival 255)) (return 0))
+          (set rv (px-nth ar h 3))
+          (set rv (pd-resolve src ar dc a b st rv))
+          (if (ps-missed src) (return 0))
+          (if (== rv 0) (return 0))
+          (cells-set gx (gx-e e CS_KIND) CK_INDEXED)
+          (cells-set gx (gx-e e CS_NCOMP) 1)
+          (cells-set gx (gx-e e CS_CLASS) CLS_OTHER)
+          (cells-set gx (gx-e e CS_NPAL) (+ hival 1))
+          (cells-set gx (gx-e e CS_HIVAL) hival)
+          (comment "The lookup table: a string, or a stream.")
+          (set lk 0)
+          (if (== (pl-kind-of ar rv) 5) (set lk 1))
+          (if (== (pl-kind-of ar rv) 8)
+            (do (set lk 2)
+                (pd-stream-data src ar dc a b st rv out)
+                (if (ps-missed src) (return 0))))
+          (if (== lk 0) (return 0))
+          (if (== lk 1) (set ll (pl-str-len ar rv)) (set ll (cells-len out)))
+          (set i 0)
+          (while (<= i hival)
+            (do (set j 0)
+                (while (< j nb)
+                  (do (set bv 0)
+                      (if (< (+ (* i nb) j) ll)
+                        (do (if (== lk 1) (set bv (pl-str-byte ar rv (+ (* i nb) j))))
+                            (if (== lk 2) (set bv (cells-at out (+ (* i nb) j))))))
+                      (set cv (fx-div (fx-of-int bv) (fx-of-int 255)))
+                      (comment "A Lab base's components have their own ranges.")
+                      (if (== (gx-kind gx be) CK_LAB)
+                        (do (if (== j 0) (set cv (fx-mul cv (fx-of-int 100))))
+                            (if (== j 1)
+                              (set cv (add64 (fx-of-int (cells-at gx (gx-e be CS_AMIN)))
+                                             (fx-mul cv (fx-of-int (- (cells-at gx (gx-e be CS_AMAX)) (cells-at gx (gx-e be CS_AMIN))))))))
+                            (if (== j 2)
+                              (set cv (add64 (fx-of-int (cells-at gx (gx-e be CS_BMIN)))
+                                             (fx-mul cv (fx-of-int (- (cells-at gx (gx-e be CS_BMAX)) (cells-at gx (gx-e be CS_BMIN))))))))))
+                      (fx-put gx (+ GX_IN (* 2 j)) cv)
+                      (set j (+ j 1))))
+                (set pcol (gx-entry-rgb gx be nb))
+                (cells-set gx (+ GX_PAL (+ (* e 256) i)) pcol)
+                (set i (+ i 1))))
+          (cells-set gx (gx-e e CS_PAL) 1)
+          (set pcol (gx-pal-at gx e 0))
+          (cells-set gx (gx-e e CS_INIT) pcol)
+          (return 1)))
+    (if (== (px-is ar n0 (px-separation)) 1)
+      (do (cells-set gx (gx-e e CS_KIND) CK_SEP)
+          (cells-set gx (gx-e e CS_NCOMP) 1)
+          (cells-set gx (gx-e e CS_CLASS) CLS_SPOT)
+          (set el (px-nth ar h 1))
+          (set rv (pd-resolve src ar dc a b st el))
+          (if (== (px-is ar rv (px-none)) 1) (cells-set gx (gx-e e CS_NONE) 1))
+          (set ok (gx-tint src ar dc a b st out gx e h 1))
+          (if (ps-missed src) (return 0))
+          (if (== ok 0) (return 1))
+          (comment "The 256 colours of tints 0, 1/255 ... 1.")
+          (set i 0)
+          (while (< i 256)
+            (do (fx-put gx GX_IN (fx-div (fx-of-int i) (fx-of-int 255)))
+                (set pcol -1)
+                (set lh (gx-fn-run gx (cells-at gx (gx-e e CS_FNAT))))
+                (if (>= lh 0)
+                  (do (set j lh)
+                      (while (< j 4)
+                        (do (fx-put gx (+ GX_OUT (* 2 j)) (i64 0))
+                            (set j (+ j 1))))
+                      (set mo (cells-at gx (gx-e e CS_MODEL)))
+                      (set pcol (gx-model-rgb gx e mo GX_OUT))))
+                (cells-set gx (+ GX_PAL (+ (* e 256) i)) pcol)
+                (set i (+ i 1))))
+          (cells-set gx (gx-e e CS_PAL) 1)
+          (cells-set gx (gx-e e CS_NPAL) 256)
+          (set pcol (gx-pal-at gx e 255))
+          (cells-set gx (gx-e e CS_INIT) pcol)
+          (return 1)))
+    (if (== (px-is ar n0 (px-device-n)) 1)
+      (do (set el (px-nth ar h 1))
+          (set el (pd-resolve src ar dc a b st el))
+          (if (== el 0) (return 0))
+          (set n (gx-count ar el))
+          (if (or (< n 1) (> n 32)) (return 0))
+          (cells-set gx (gx-e e CS_KIND) CK_DEVN)
+          (cells-set gx (gx-e e CS_NCOMP) n)
+          (cells-set gx (gx-e e CS_CLASS) CLS_SPOT)
+          (comment "Every colorant /None: the space paints nothing.")
+          (set allnone 1)
+          (set rv (pl-first ar el))
+          (while (!= rv 0)
+            (do (set pcol (pd-resolve src ar dc a b st rv))
+                (if (== (px-is ar pcol (px-none)) 0) (set allnone 0))
+                (set rv (pl-next ar rv))))
+          (cells-set gx (gx-e e CS_NONE) allnone)
+          (set ok (gx-tint src ar dc a b st out gx e h n))
+          (if (ps-missed src) (return 0))
+          (if (== ok 1)
+            (do (set i 0)
+                (while (< i n)
+                  (do (fx-put gx (+ GX_IN (* 2 i)) (fx-one))
+                      (set i (+ i 1))))
+                (set pcol (gx-entry-rgb gx e n))
+                (cells-set gx (gx-e e CS_INIT) pcol)))
+          (return 1)))
+    (return 0)))
+
+(defn ^:pub ^I32 gx-lookup [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                      ^:mut ^Cells out ^:mut ^Cells gx ^I32 key]
+  (comment "The table entry for a colour-space key (`gx-key-of`): the permanent four by their negative keys, a cached")
+  (comment "entry, or a new one parsed from the object. Answers -1 when the space is not one this module reads (the")
+  (comment "colour is then unknown) or the source missed.")
+  (if (== key 0) (return -1))
+  (if (< key 0) (return (- (- 0 key) 1)))
+  (let [^:mut ^I32 e (gx-find gx key)
+        ^:mut ^I32 okp 0]
+    (if (>= e 0)
+      (do (if (== (gx-kind gx e) 0) (return -1))
+          (return e)))
+    (set e (gx-alloc gx key))
+    (set okp (gx-parse src ar dc a b st out gx e key))
+    (if (ps-missed src)
+      (do (cells-set gx (gx-e e CS_KEY) 0)
+          (return -1)))
+    (if (== okp 0)
+      (do (cells-set gx (gx-e e CS_KIND) 0)
+          (return -1)))
+    (return e)))
+
+;; ------------------------------------------------------------ optional content
+
+(declarefn gx-oc-ve)
+
+(defn ^I32 gx-oc-set [^:mut ^Cells gx ^I32 num ^I32 state]
+  (comment "Record the state of OCG object `num`: the last one stated wins.")
+  (let [^I32 n (cells-at gx GX_OCN)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (cells-at gx (+ GX_OC (* 2 i))) num)
+            (do (cells-set gx (+ GX_OC (+ (* 2 i) 1)) state)
+                (return 0)))
+          (set i (+ i 1))))
+    (if (>= n GX_OCMAX) (return 1))
+    (cells-set gx (+ GX_OC (* 2 n)) num)
+    (cells-set gx (+ GX_OC (+ (* 2 n) 1)) state)
+    (cells-set gx GX_OCN (+ n 1))
+    (return 0)))
+
+(defn ^I32 gx-oc-get [^Cells gx ^I32 num]
+  (comment "The state of OCG object `num`: as stated, else the document's base state.")
+  (let [^I32 n (cells-at gx GX_OCN)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (cells-at gx (+ GX_OC (* 2 i))) num)
+            (return (cells-at gx (+ GX_OC (+ (* 2 i) 1)))))
+          (set i (+ i 1))))
+    (return (cells-at gx GX_OCBASE))))
+
+(defn ^:pub ^I32 gx-oc-read [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                       ^:mut ^Cells gx]
+  (comment "Read the document's optional-content configuration once: `/Root /OCProperties /D` (SPEC 8.4.3's \"default")
+  (comment "state\"): `/BaseState`, the `/ON` and `/OFF` arrays, then the `/AS` auto states for the `View` event.")
+  (if (== (cells-at gx GX_OCREAD) 1) (return 0))
+  (cells-set gx GX_OCREAD 1)
+  (cells-set gx GX_OCBASE 1)
+  (cells-set gx GX_OCN 0)
+  (let [^I32 root (pd-root dc)
+        ^I32 ocp (px-dget src ar dc a b st root (px-oc-properties))
+        ^:mut ^I32 d 0
+        ^:mut ^I32 arr 0
+        ^:mut ^I32 el 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 ev 0
+        ^:mut ^I32 cat 0
+        ^:mut ^I32 isview 0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 ocgs 0
+        ^:mut ^I32 oe 0
+        ^:mut ^I32 od 0
+        ^:mut ^I32 us 0
+        ^:mut ^I32 vw 0
+        ^:mut ^I32 vs 0]
+    (if (== ocp 0) (return 0))
+    (set d (px-dget src ar dc a b st ocp (px-d)))
+    (if (== d 0) (return 0))
+    (set v (px-dget src ar dc a b st d (px-base-state)))
+    (if (== (px-is ar v (px-off-upper)) 1) (cells-set gx GX_OCBASE 0))
+    (set arr (px-dget src ar dc a b st d (px-on-upper)))
+    (if (!= (gx-count ar arr) 0)
+      (do (set el (pl-first ar arr))
+          (while (!= el 0)
+            (do (if (== (pl-kind-of ar el) 9) (gx-oc-set gx (pl-int-value ar el) 1))
+                (set el (pl-next ar el))))))
+    (set arr (px-dget src ar dc a b st d (px-off-upper)))
+    (if (!= (gx-count ar arr) 0)
+      (do (set el (pl-first ar arr))
+          (while (!= el 0)
+            (do (if (== (pl-kind-of ar el) 9) (gx-oc-set gx (pl-int-value ar el) 0))
+                (set el (pl-next ar el))))))
+    (comment "/AS: [<< /Event /View /Category [/View] /OCGs [...] >> ...]: an OCG whose /Usage /View /ViewState says")
+    (comment "so is on or off while viewing.")
+    (set arr (px-dget src ar dc a b st d (px-as)))
+    (if (!= (gx-count ar arr) 0)
+      (do (set el (pl-first ar arr))
+          (while (!= el 0)
+            (do (set v (pd-resolve src ar dc a b st el))
+                (if (and (!= v 0) (== (pl-kind-of ar v) 7))
+                  (do (set ev (px-dget src ar dc a b st v (px-event)))
+                      (set isview 0)
+                      (if (== (px-is ar ev (px-view)) 1) (set isview 1))
+                      (comment "A category that is stated must name View.")
+                      (set cat (px-dget src ar dc a b st v (px-category)))
+                      (if (!= (gx-count ar cat) 0)
+                        (do (set isview 0)
+                            (if (== (px-is ar ev (px-view)) 1)
+                              (do (set ce (pl-first ar cat))
+                                  (while (!= ce 0)
+                                    (do (set vw (pd-resolve src ar dc a b st ce))
+                                        (if (== (px-is ar vw (px-view)) 1) (set isview 1))
+                                        (set ce (pl-next ar ce))))))))
+                      (if (== isview 1)
+                        (do (set ocgs (px-dget src ar dc a b st v (px-ocgs)))
+                            (if (!= (gx-count ar ocgs) 0)
+                              (do (set oe (pl-first ar ocgs))
+                                  (while (!= oe 0)
+                                    (do (if (== (pl-kind-of ar oe) 9)
+                                          (do (set od (pd-resolve src ar dc a b st oe))
+                                              (set us (px-dget src ar dc a b st od (px-usage)))
+                                              (set vw (px-dget src ar dc a b st us (px-view)))
+                                              (set vs (px-dget src ar dc a b st vw (px-view-state)))
+                                              (if (== (px-is ar vs (px-off-upper)) 1) (gx-oc-set gx (pl-int-value ar oe) 2))
+                                              (if (== (px-is ar vs (px-on-upper)) 1) (gx-oc-set gx (pl-int-value ar oe) 1))))
+                                        (set oe (pl-next ar oe))))))))))
+                (set el (pl-next ar el))))))
+    (return 0)))
+
+(defn ^:pub ^I32 gx-oc-state [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                        ^:mut ^Cells gx ^I32 raw ^I32 depth]
+  (comment "Whether the optional-content group or membership dictionary `raw` (a reference, usually) is on: 1 on, 0 off, and for")
+  (comment "a group that the configuration leaves on but whose /Usage /View /ViewState says OFF (an /AS auto state) 2: the")
+  (comment "readers that draw pages (poppler, Ghostscript, pdf.js) show it, Acrobat's View event hides it, so it is not \"off\".")
+  (comment "A group that cannot be read is on (the document's content is not hidden by damage). An OCMD is on by its")
+  (comment "`/VE` expression when it has one, else by its `/P` policy over its `/OCGs` (AnyOn is the default).")
+  (if (== raw 0) (return 1))
+  (let [^:mut ^I32 num 0
+        ^I32 d (pd-resolve src ar dc a b st raw)
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 ve 0
+        ^:mut ^I32 pol 0
+        ^:mut ^I32 members 0
+        ^:mut ^I32 el 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 non 0
+        ^:mut ^I32 noff 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 stt 0]
+    (if (== (pl-kind-of ar raw) 9) (set num (pl-int-value ar raw)))
+    (if (== d 0) (return 1))
+    (if (!= (pl-kind-of ar d) 7) (return 1))
+    (set ty (pd-dget src ar dc a b st d (pn-type)))
+    (if (== (px-is ar ty (px-ocmd)) 1)
+      (do (if (> depth 8) (return 1))
+          (set ve (px-dget src ar dc a b st d (px-ve)))
+          (if (!= (gx-count ar ve) 0)
+            (return (gx-oc-ve src ar dc a b st gx ve depth)))
+          (set pol (px-dget src ar dc a b st d (px-p)))
+          (set members (px-get ar d (px-ocgs)))
+          (if (== members 0) (return 1))
+          (set sd (pd-resolve src ar dc a b st members))
+          (if (== sd 0) (return 1))
+          (if (== (pl-kind-of ar sd) 7)
+            (do (set stt (gx-oc-state src ar dc a b st gx members (+ depth 1)))
+                (set n 1)
+                (if (!= stt 0) (set non 1) (set noff 1))))
+          (if (== (pl-kind-of ar sd) 6)
+            (do (set el (pl-first ar sd))
+                (while (!= el 0)
+                  (do (set stt (gx-oc-state src ar dc a b st gx el (+ depth 1)))
+                      (set n (+ n 1))
+                      (if (!= stt 0) (set non (+ non 1)) (set noff (+ noff 1)))
+                      (set el (pl-next ar el))))))
+          (if (== n 0) (return 1))
+          (if (== (px-is ar pol (px-all-on)) 1)
+            (do (if (== noff 0) (return 1))
+                (return 0)))
+          (if (== (px-is ar pol (px-any-off)) 1)
+            (do (if (> noff 0) (return 1))
+                (return 0)))
+          (if (== (px-is ar pol (px-all-off)) 1)
+            (do (if (== non 0) (return 1))
+                (return 0)))
+          (if (> non 0) (return 1))
+          (return 0)))
+    (if (== num 0) (return (cells-at gx GX_OCBASE)))
+    (return (gx-oc-get gx num))))
+
+(defn ^I32 gx-oc-ve [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                     ^:mut ^Cells gx ^I32 arr ^I32 depth]
+  (comment "A visibility expression: [/And x ...], [/Or x ...], [/Not x], x an OCG or a nested expression.")
+  (if (> depth 8) (return 1))
+  (let [^I32 opf (pl-first ar arr)
+        ^I32 opn (pd-resolve src ar dc a b st opf)
+        ^:mut ^I32 el 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 acc 0
+        ^:mut ^I32 isand 0
+        ^:mut ^I32 isnot 0]
+    (if (== opn 0) (return 1))
+    (if (== (px-is ar opn (px-and)) 1) (set isand 1))
+    (if (== (px-is ar opn (px-not)) 1) (set isnot 1))
+    (if (and (== isand 0) (and (== isnot 0) (== (px-is ar opn (px-or)) 0))) (return 1))
+    (if (== isand 1) (set acc 1))
+    (set el (pl-next ar opf))
+    (while (!= el 0)
+      (do (set sd (pd-resolve src ar dc a b st el))
+          (set v 1)
+          (if (and (!= sd 0) (== (pl-kind-of ar sd) 6))
+            (set v (gx-oc-ve src ar dc a b st gx sd (+ depth 1)))
+            (set v (gx-oc-state src ar dc a b st gx el (+ depth 1))))
+          (if (!= v 0) (set v 1))
+          (if (== isnot 1)
+            (do (if (== v 1) (return 0))
+                (return 1)))
+          (if (and (== isand 1) (== v 0)) (set acc 0))
+          (if (and (== isand 0) (== v 1)) (set acc 1))
+          (set el (pl-next ar el))))
+    (return acc)))
