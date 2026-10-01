@@ -25,7 +25,7 @@ pub fn nm_ink_light() -> i32 {
 }
 pub fn nm_ink_chroma() -> i32 {
     // |a| + |b| from which a layer is `colour`.
-    return 48;
+    return 32;
 }
 pub fn nm_ink_bg() -> i32 {
     // Page coverage, per mille, from which a light or coloured layer is `background`.
@@ -1002,26 +1002,28 @@ pub fn nm_skew_points(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells,
 pub(crate) fn nm_skew_score(mut pts: &mut crate::port::Cells, np: i32, mut prof: &mut crate::port::Cells, cdeg: i32, off: i32, nb: i32) -> i64 {
     // The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,
     // centi-degrees counter-clockwise), y*cos + x*sin is the same along a line; the score is the sum of squared
-    // per-pixel-row ink counts, which is largest when the lines fall into few rows. `prof` is left zero.
+    // counts of ink per two-pixel row, differenced: the sum of squared steps between neighbouring rows, which is largest
+    // when the lines' edges fall into few rows (a rotation made by integer shears leaves one-pixel stairs, which two-pixel
+    // rows do not see). `prof` has `nb` + 1 cells and is left zero.
     let co: i32 = ev_cos(cdeg);
     let si: i32 = ev_sin(cdeg);
     let mut i: i32 = 0;
     let mut b: i32 = 0;
     let mut c: i32 = 0;
+    let mut pc: i32 = 0;
     let mut sc: i64 = 0;
     while i < np {
-        b = (((crate::port::cells_at(pts, (3 * i) + 1) * co) + (crate::port::cells_at(pts, 3 * i) * si)) + off) >> (16);
+        b = (((crate::port::cells_at(pts, (3 * i) + 1) * co) + (crate::port::cells_at(pts, 3 * i) * si)) + off) >> (17);
         c = crate::port::cells_at(prof, b);
         crate::port::cells_set(prof, b, c + crate::port::cells_at(pts, (3 * i) + 2));
         i += 1;
     }
     b = 0;
-    while b < nb {
+    while b <= nb {
         c = crate::port::cells_at(prof, b);
-        if c != 0 {
-            sc += (c as i64) * (c as i64);
-            crate::port::cells_set(prof, b, 0);
-        }
+        sc += ((c - pc) as i64) * ((c - pc) as i64);
+        pc = c;
+        crate::port::cells_set(prof, b, 0);
         b += 1;
     }
     return sc;
@@ -1033,7 +1035,7 @@ pub fn nm_deskew(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells, mut 
     let w: i32 = crate::port::bitmap_w(m);
     let h: i32 = crate::port::bitmap_h(m);
     let off: i32 = w * 6000;
-    let nb: i32 = (((((h - 1) * 65536) + ((w - 1) * 6000)) + off) >> (16)) + 2;
+    let nb: i32 = (((((h - 1) * 65536) + ((w - 1) * 6000)) + off) >> (17)) + 2;
     let ystep: i32 = (h / 800) + 1;
     let mut np: i32 = 0;
     let mut a: i32 = 0;
@@ -1049,7 +1051,7 @@ pub fn nm_deskew(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells, mut 
         return 0;
     }
     crate::port::cells_drop(prof, 0);
-    crate::port::cells_grow(prof, nb, 0);
+    crate::port::cells_grow(prof, nb + 1, 0);
     s0 = nm_skew_score(pts, np, prof, 0, off, nb);
     bs = s0;
     a = -500;

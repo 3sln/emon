@@ -47,7 +47,7 @@
 (defn ^:pub ^I32 nm-ink-min [] (comment "A layer under this per 10000 of the non-paper pixels is folded into its neighbour.") (return 50))
 (defn ^:pub ^I32 nm-ink-spike [] (comment "A bin on another layer's ink-to-paper segment is a layer of its own only above this share of the page, per mille: a flat watermark is, an anti-aliased edge is not.") (return 10))
 (defn ^:pub ^I32 nm-ink-light [] (comment "Lightness (0..255) from which a low-chroma layer is `light`, not `body`.") (return 150))
-(defn ^:pub ^I32 nm-ink-chroma [] (comment "|a| + |b| from which a layer is `colour`.") (return 48))
+(defn ^:pub ^I32 nm-ink-chroma [] (comment "|a| + |b| from which a layer is `colour`.") (return 32))
 (defn ^:pub ^I32 nm-ink-bg [] (comment "Page coverage, per mille, from which a light or coloured layer is `background`.") (return 250))
 (defn ^:pub ^I32 nm-osd-conf [] (comment "OSD orientation confidence (x10) from which kin trusts the engine's quarter turns.") (return 20))
 (defn ^:pub ^I32 nm-sauvola-k [] (return 87))
@@ -812,24 +812,27 @@
 (defn ^I64 nm-skew-score [^:mut ^Cells pts ^I32 np ^:mut ^Cells prof ^I32 cdeg ^I32 off ^I32 nb]
   (comment "The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,")
   (comment "centi-degrees counter-clockwise), y*cos + x*sin is the same along a line; the score is the sum of squared")
-  (comment "per-pixel-row ink counts, which is largest when the lines fall into few rows. `prof` is left zero.")
+  (comment "counts of ink per two-pixel row, differenced: the sum of squared steps between neighbouring rows, which is largest")
+  (comment "when the lines' edges fall into few rows (a rotation made by integer shears leaves one-pixel stairs, which two-pixel")
+  (comment "rows do not see). `prof` has `nb` + 1 cells and is left zero.")
   (let [^I32 co (ev-cos cdeg)
         ^I32 si (ev-sin cdeg)
         ^:mut ^I32 i 0
         ^:mut ^I32 b 0
         ^:mut ^I32 c 0
+        ^:mut ^I32 pc 0
         ^:mut ^I64 sc 0]
     (while (< i np)
-      (do (set b (sar32 (+ (+ (* (cells-at pts (+ (* 3 i) 1)) co) (* (cells-at pts (* 3 i)) si)) off) 16))
+      (do (set b (sar32 (+ (+ (* (cells-at pts (+ (* 3 i) 1)) co) (* (cells-at pts (* 3 i)) si)) off) 17))
           (set c (cells-at prof b))
           (cells-set prof b (+ c (cells-at pts (+ (* 3 i) 2))))
           (set i (+ i 1))))
     (set b 0)
-    (while (< b nb)
+    (while (<= b nb)
       (do (set c (cells-at prof b))
-          (if (!= c 0)
-            (do (set sc (+ sc (* (i64 c) (i64 c))))
-                (cells-set prof b 0)))
+          (set sc (+ sc (* (i64 (- c pc)) (i64 (- c pc)))))
+          (set pc c)
+          (cells-set prof b 0)
           (set b (+ b 1))))
     (return sc)))
 
@@ -840,7 +843,7 @@
   (let [^I32 w (bitmap-w m)
         ^I32 h (bitmap-h m)
         ^I32 off (* w 6000)
-        ^I32 nb (+ (sar32 (+ (+ (* (- h 1) 65536) (* (- w 1) 6000)) off) 16) 2)
+        ^I32 nb (+ (sar32 (+ (+ (* (- h 1) 65536) (* (- w 1) 6000)) off) 17) 2)
         ^I32 ystep (+ (quot h 800) 1)
         ^:mut ^I32 np 0
         ^:mut ^I32 a 0
@@ -852,7 +855,7 @@
     (set np (nm-skew-points m pts ystep 120000))
     (if (< np 50) (return 0))
     (cells-drop prof 0)
-    (cells-grow prof nb 0)
+    (cells-grow prof (+ nb 1) 0)
     (set s0 (nm-skew-score pts np prof 0 off nb))
     (set bs s0)
     (set a -500)

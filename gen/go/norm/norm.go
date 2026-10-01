@@ -35,7 +35,7 @@ func NmInkLight() int32 {
 
 func NmInkChroma() int32 {
 	// |a| + |b| from which a layer is `colour`.
-	return 48
+	return 32
 }
 
 func NmInkBg() int32 {
@@ -1076,26 +1076,28 @@ func NmSkewPoints(m *port.Bitmap, pts *port.Cells, ystep int32, limit int32) int
 func nmSkewScore(pts *port.Cells, np int32, prof *port.Cells, cdeg int32, off int32, nb int32) int64 {
 	// The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,
 	// centi-degrees counter-clockwise), y*cos + x*sin is the same along a line; the score is the sum of squared
-	// per-pixel-row ink counts, which is largest when the lines fall into few rows. `prof` is left zero.
+	// counts of ink per two-pixel row, differenced: the sum of squared steps between neighbouring rows, which is largest
+	// when the lines' edges fall into few rows (a rotation made by integer shears leaves one-pixel stairs, which two-pixel
+	// rows do not see). `prof` has `nb` + 1 cells and is left zero.
 	var co int32 = evidence.EvCos(cdeg)
 	var si int32 = evidence.EvSin(cdeg)
 	var i int32 = 0
 	var b int32 = 0
 	var c int32 = 0
+	var pc int32 = 0
 	var sc int64 = 0
 	for i < np {
-		b = (((port.CellsAt(pts, (3*i)+1) * co) + (port.CellsAt(pts, 3*i) * si)) + off) >> uint(16)
+		b = (((port.CellsAt(pts, (3*i)+1) * co) + (port.CellsAt(pts, 3*i) * si)) + off) >> uint(17)
 		c = port.CellsAt(prof, b)
 		port.CellsSet(prof, b, c+port.CellsAt(pts, (3*i)+2))
 		i += 1
 	}
 	b = 0
-	for b < nb {
+	for b <= nb {
 		c = port.CellsAt(prof, b)
-		if c != 0 {
-			sc += int64(c) * int64(c)
-			port.CellsSet(prof, b, 0)
-		}
+		sc += int64(c-pc) * int64(c-pc)
+		pc = c
+		port.CellsSet(prof, b, 0)
 		b += 1
 	}
 	return sc
@@ -1108,7 +1110,7 @@ func NmDeskew(m *port.Bitmap, pts *port.Cells, prof *port.Cells) int32 {
 	var w int32 = port.BitmapW(m)
 	var h int32 = port.BitmapH(m)
 	var off int32 = w * 6000
-	var nb int32 = (((((h - 1) * 65536) + ((w - 1) * 6000)) + off) >> uint(16)) + 2
+	var nb int32 = (((((h - 1) * 65536) + ((w - 1) * 6000)) + off) >> uint(17)) + 2
 	var ystep int32 = (h / 800) + 1
 	var np int32 = 0
 	var a int32 = 0
@@ -1124,7 +1126,7 @@ func NmDeskew(m *port.Bitmap, pts *port.Cells, prof *port.Cells) int32 {
 		return 0
 	}
 	port.CellsDrop(prof, 0)
-	port.CellsGrow(prof, nb, 0)
+	port.CellsGrow(prof, nb+1, 0)
 	s0 = nmSkewScore(pts, np, prof, 0, off, nb)
 	bs = s0
 	a = -500

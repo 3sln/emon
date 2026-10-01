@@ -27,7 +27,7 @@ public final class Norm {
     }
     public static int nmInkChroma() {
         // |a| + |b| from which a layer is `colour`.
-        return 48;
+        return 32;
     }
     public static int nmInkBg() {
         // Page coverage, per mille, from which a light or coloured layer is `background`.
@@ -1004,26 +1004,28 @@ public final class Norm {
     public static long nmSkewScore(emon.Port.Cells pts, int np, emon.Port.Cells prof, int cdeg, int off, int nb) {
         // The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,
         // centi-degrees counter-clockwise), y*cos + x*sin is the same along a line; the score is the sum of squared
-        // per-pixel-row ink counts, which is largest when the lines fall into few rows. `prof` is left zero.
+        // counts of ink per two-pixel row, differenced: the sum of squared steps between neighbouring rows, which is largest
+        // when the lines' edges fall into few rows (a rotation made by integer shears leaves one-pixel stairs, which two-pixel
+        // rows do not see). `prof` has `nb` + 1 cells and is left zero.
         int co = Evidence.evCos(cdeg);
         int si = Evidence.evSin(cdeg);
         int i = 0;
         int b = 0;
         int c = 0;
+        int pc = 0;
         long sc = 0;
         while (i < np) {
-            b = (((emon.Port.cellsAt(pts, (3 * i) + 1) * co) + (emon.Port.cellsAt(pts, 3 * i) * si)) + off) >> (16);
+            b = (((emon.Port.cellsAt(pts, (3 * i) + 1) * co) + (emon.Port.cellsAt(pts, 3 * i) * si)) + off) >> (17);
             c = emon.Port.cellsAt(prof, b);
             emon.Port.cellsSet(prof, b, c + emon.Port.cellsAt(pts, (3 * i) + 2));
             i += 1;
         }
         b = 0;
-        while (b < nb) {
+        while (b <= nb) {
             c = emon.Port.cellsAt(prof, b);
-            if (c != 0) {
-                sc += ((long) c) * ((long) c);
-                emon.Port.cellsSet(prof, b, 0);
-            }
+            sc += ((long) (c - pc)) * ((long) (c - pc));
+            pc = c;
+            emon.Port.cellsSet(prof, b, 0);
             b += 1;
         }
         return sc;
@@ -1035,7 +1037,7 @@ public final class Norm {
         int w = emon.Port.bitmapW(m);
         int h = emon.Port.bitmapH(m);
         int off = w * 6000;
-        int nb = (((((h - 1) * 65536) + ((w - 1) * 6000)) + off) >> (16)) + 2;
+        int nb = (((((h - 1) * 65536) + ((w - 1) * 6000)) + off) >> (17)) + 2;
         int ystep = (h / 800) + 1;
         int np = 0;
         int a = 0;
@@ -1051,7 +1053,7 @@ public final class Norm {
             return 0;
         }
         emon.Port.cellsDrop(prof, 0);
-        emon.Port.cellsGrow(prof, nb, 0);
+        emon.Port.cellsGrow(prof, nb + 1, 0);
         s0 = nmSkewScore(pts, np, prof, 0, off, nb);
         bs = s0;
         a = -500;
