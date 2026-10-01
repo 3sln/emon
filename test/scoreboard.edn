@@ -3,7 +3,7 @@
 ;; records improvements and new entries (the ratchet only moves toward better).
 ;; predictor -> "VARIANT/CATEGORY" -> metric -> value.  Edit by running, not by hand.
 ;; `oracle` and `degraded` are fixtures that prove the scorer; `emon` is the real pipeline (the Rust
-;; Engine, P1.10): its first run is the baseline (D141) and `bb gates` runs the ratchet.
+;; Engine, P1.10): its first run is the baseline (D145) and `bb gates` runs the ratchet.
 {
   :format 1
   :predictors {

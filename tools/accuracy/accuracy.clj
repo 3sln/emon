@@ -1,7 +1,7 @@
 (ns accuracy.accuracy
   "bb accuracy: score a predictor over the synthetic corpus and ratchet (D023, D077, D078).
 
-    bb accuracy                        predictor \"emon\": the Rust Engine's driver (P1.10); the ratchet binds it (D078, D141)
+    bb accuracy                        predictor \"emon\": the Rust Engine's driver (P1.10); the ratchet binds it (D078, D145)
     bb accuracy --predictor oracle     reference: gold -> Model, must score perfect
     bb accuracy --predictor degraded   fixture: damaged gold, proves the metrics move
     bb accuracy --predictor fixtures   both of the above
@@ -139,7 +139,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 ;; records improvements and new entries (the ratchet only moves toward better).
 ;; predictor -> \"VARIANT/CATEGORY\" -> metric -> value.  Edit by running, not by hand.
 ;; `oracle` and `degraded` are fixtures that prove the scorer; `emon` is the real pipeline (the Rust
-;; Engine, P1.10): its first run is the baseline (D141) and `bb gates` runs the ratchet.
+;; Engine, P1.10): its first run is the baseline (D145) and `bb gates` runs the ratchet.
 ")
 
 (defn load-board []

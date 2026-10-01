@@ -15,7 +15,7 @@
 # writes (`gen`, `emit`). A gate added to bb.edn and not to this list is
 # caught below: every bb.edn task must be either a gate here or named in
 # `not_gates`. (`accuracy` was one until the real pipeline existed; with the Rust Engine (P1.10)
-# its ratchet binds `emon` and it is a gate, and so is `slice`. D078, D141.)
+# its ratchet binds `emon` and it is a gate, and so is `slice`. D078, D145.)
 #
 # `check` and `unit` are slow (they compile four languages); the rest are
 # seconds. The order is cheapest first, so a stale generated tree fails fast.

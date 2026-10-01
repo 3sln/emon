@@ -824,19 +824,19 @@ analysis beyond "top-to-bottom lines on a single column".
   spooled-`Read` adapters with identical JSON.
   **This is the first vertical slice.** Record
   timings for the fixtures (baseline, not a target).
-  *Done (P1.10, D140-D143).* `host/rust/src/{engine,source,lib}.rs` (the Engine API, the byte sources and adapters, the crate
-  root; the file is `engine.rs`, not `emon.rs`, D140), `host/rust/tests/engine.rs` (11 native tests), the driver
+  *Done (P1.10, D144-D147).* `host/rust/src/{engine,source,lib}.rs` (the Engine API, the byte sources and adapters, the crate
+  root; the file is `engine.rs`, not `emon.rs`, D144), `host/rust/tests/engine.rs` (11 native tests), the driver
   `test/driver/rust/main.rs` (`emon-rs`), `kin/scripts/emon-rs-build` (assembles and builds the crate into `.cache/`),
   `kin/scripts/slice` (`bb slice`, now a gate). **Done-when, met**: `bb slice` is green in memory and with `--chunk=512 --async`
   (identical JSON and HTML; attempts, rounds and bytes fetched on stderr: 3 attempts, 2 fetch rounds, the whole file, on each of
   the six fixtures); three adapters (bytes, `Read + Seek`, spooled `Read`) give identical JSON and HTML, and the 512-byte async source
-  equals memory on 70 PDFs of the fixture trees, errors included (D143). It reads D040 (the three encryption errors, a password that
+  equals memory on 70 PDFs of the fixture trees, errors included (D147). It reads D040 (the three encryption errors, a password that
   travels with its `Input`), D058/D074/D075 (`Src` over a chunk cache, the re-run loop on `need-bytes`, no `std::fs` in the library,
   tested), D089-D091 (the plan/fulfil loop is wired and the slice issues zero requests), D117 (`assets`: `none` only, the rest refused).
-  **Not wired, in the open (D140)**: OCR (the option is accepted, nothing runs, no `ocr` in the header), several inputs as one
+  **Not wired, in the open (D144)**: OCR (the option is accepted, nothing runs, no `ocr` in the header), several inputs as one
   document (`intake` takes many, `convert` refuses), images, the header's `source`/`meta`. **The first real baseline is recorded
-  and `accuracy` is a gate (D141)**: `pdf/all` CER 0.1848, WER 0.2423, paragraph-boundary F1 0.125; `scan/all` CER 1.0. The temporary
-  predictor of D139 is retired (D143). Timings: 4-5 ms per fixture, in memory, process start to exit. Commit: pending (D037).
+  and `accuracy` is a gate (D145)**: `pdf/all` CER 0.1848, WER 0.2423, paragraph-boundary F1 0.125; `scan/all` CER 1.0. The temporary
+  predictor of D139 is retired (D147). Timings: 4-5 ms per fixture, in memory, process start to exit. Commit: pending (D037).
 
 - [x] **P1.13 — The Model's vocabulary for initials, alignment and layout**
   (`kin/model.kin`, `kin/json.kin`, `kin/html.kin`, `kin/mscript.kin`, their
@@ -1054,7 +1054,7 @@ analysis beyond "top-to-bottom lines on a single column".
   paragraph boundaries), `test/scoreboard.edn`, the ratchet rule. Built and
   proven on fixtures (oracle perfect, degraded worse); the real emon driver was a
   placeholder until P1.10 and `bb accuracy` was not in `bb gates` (D078); since P1.10
-  the predictor is the Rust Engine's driver, `emon` has a baseline and `accuracy` is a gate (D141).
+  the predictor is the Rust Engine's driver, `emon` has a baseline and `accuracy` is a gate (D145).
   `tools/accuracy/`: `score`, `accuracy`, `predict-*`, `test_score` (babashka since
   D094; run by `bb unit`).
 - [ ] **P2.10 — Baselines against the field** (SPEC §14.4): pinned versions
@@ -5087,7 +5087,7 @@ sentences are compared with the source, which is why they showed here.
 **Alternatives**: updating the scoreboard now (D078: P1.10's); a hand-picked subset.
 - [ ] **Signed off** (maintainer)
 
-### D140 — The Rust Engine API, as built: what it takes, what it gives, and what the slice refuses instead of approximating (P1.10; SPEC 13, 3.9; D038, D040, D058, D117)
+### D144 — The Rust Engine API, as built: what it takes, what it gives, and what the slice refuses instead of approximating (P1.10; SPEC 13, 3.9; D038, D040, D058, D117)
 **Decision**: the crate is `emon` (assembled by `kin/scripts/emon-rs-build` from `gen/rust/emon/` and `host/rust/src/`, below); the
 Engine is `host/rust/src/engine.rs`, **not `emon.rs`**: the generated module tree is `crate::emon::*` (its call sites say so) and a
 file `emon.rs` is the script's list of those modules. `Engine::new(Config)`; `intake(inputs)` (stage 0: format, version, page count,
@@ -5110,7 +5110,7 @@ limits (`input-bytes`, `pages`, `objects`, ..., `max-rounds`, `fetch-rounds`), `
 default is `always`) and changes nothing: no Renderer, ImageDecode or Ocr port is configured, a page without a text layer comes out with
 no text, and **the Model's header writes no `ocr` setting**, because it would claim a run that did not happen; the loop's port fulfiller
 answers a request with a named `fulfil-failed` (the slice issues none, D089). The scanned variants of the corpus are therefore empty
-Models and score CER 1.0 (D141). (2) **`assets` other than `none` is `Error::Unsupported`** (D117: specified, not implemented), not
+Models and score CER 1.0 (D145). (2) **`assets` other than `none` is `Error::Unsupported`** (D117: specified, not implemented), not
 ignored. (3) **Several inputs as one document are `Error::Unsupported`**: `pa-build` pools its line gap over the document and numbers
 pages from 1, and a merge of two inputs' evidence is not written; `intake` takes any number, and so the slice's loop already has one
 `Src`, cache and password per input. (4) Images and TIFF are `unsupported-format`. (5) The header's `source` (format, version, pages,
@@ -5129,7 +5129,7 @@ those things yet.
 the pooled line gap would be wrong, silently).
 - [ ] **Signed off** (maintainer)
 
-### D141 — `bb accuracy` is now a gate, its first baseline is the Rust Engine's, and the numbers are what P4 and P5 must beat (resolves D078)
+### D145 — `bb accuracy` is now a gate, its first baseline is the Rust Engine's, and the numbers are what P4 and P5 must beat (resolves D078)
 **Decision**: `tools/accuracy/predict-emon.sh` runs the Engine's driver (`emon-rs`, built by `kin/scripts/emon-rs-build` into `.cache/`,
 rebuilt when `gen/`, `host/rust/` or the driver changes, by a cksum stamp so 160 documents do not each ask cargo; no `cargo` on PATH is
 exit 3, "not available", loudly). **Every variant goes through the Engine**, the scanned ones too: with no OCR wired their Models have
@@ -5154,7 +5154,7 @@ checks do not score); gating only `pdf/all` (the scan rows are the OCR work's fl
 would drop the metrics from the ratchet exactly when P2.x makes them move).
 - [ ] **Signed off** (maintainer)
 
-### D142 — Byte sources, the chunk cache, and the simulated async source live in the library (P1.10; D058, D074, D075, SPEC 13.1)
+### D146 — Byte sources, the chunk cache, and the simulated async source live in the library (P1.10; D058, D074, D075, SPEC 13.1)
 **Decision**: `host/rust/src/source.rs` has `trait ByteSource { len() -> u64; read_at(off, buf) -> io::Result<usize>; as_slice() }`
 (SPEC 13.1's Rust row; `as_slice` is the in-memory shortcut) and the three adapters: `Vec<u8>`/`Arc<[u8]>`/`BytesSource` (`&[u8]`,
 copied: a source outlives its argument), `SeekSource<R: Read + Seek + Send>` (the length from one seek to the end; a lock around the
@@ -5179,7 +5179,7 @@ hints) reach the end of the file by round 2 (`bytes-fetched` = file length, neve
 panics on a bad op, names no error); reading a `Read + Seek` whole (no bound on a file that is bigger than memory).
 - [ ] **Signed off** (maintainer)
 
-### D143 — The slice gate: `bb slice`, the driver `emon-rs`, and the retirement of the temporary predictor (P1.10; D025, D139)
+### D147 — The slice gate: `bb slice`, the driver `emon-rs`, and the retirement of the temporary predictor (P1.10; D025, D139)
 **Decision**: the driver is `test/driver/rust/main.rs` (test-only: it reads the file, which the library never does; the brief's
 `test/driver/rust` and `driver --out=json|html|evidence FILE`). Binary `emon-rs`; flags `--out=json|html|evidence|intake`, `--pretty`,
 `--html=ids,geometry,confidence=N,ledger,pretty,drop-furniture,no-milestones,initials-plain,align-style`, `--locale`, `--ocr`,
@@ -5192,7 +5192,7 @@ differ so cargo's mtimes hold; warnings off because generated code is noisy, and
 HTML (and a tiny sync cache, and `&[u8]`); a 512-byte async source equals memory on the six fixtures, and **on every PDF of `test/pdf`,
 `test/pdf/p3`, `test/content` and `test/fuzz` (70 files: 50 convert, 20 are refused, and the result, Model or error name, is the same
 both ways)**; D040's errors, the owner and user passwords against the plain twin, the empty password tried by itself; the limits (by
-length, deep in kin, not leaking to the next conversion); a lying source; the refusals of D140; `intake`; record and replay; the walk of
+length, deep in kin, not leaking to the next conversion); a lying source; the refusals of D144; `intake`; record and replay; the walk of
 the Model; and that `lib.rs`, `engine.rs`, `source.rs`, `plan.rs` and `port.rs` name no `std::fs`, `std::path`, `Path`, `File::open` or
 `read_dir` in code (`tess.rs`, the Tesseract adapter's tessdata directory, and `testport.rs` are not the library); (2) per fixture
 (`test/para`'s six documents, not three: they are the ones with a witness) the driver's pretty JSON is `test/para/NAME.json`, its HTML

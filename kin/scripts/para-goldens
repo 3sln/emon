@@ -7,7 +7,7 @@
 ;; `kin/paratest.kin` hold every target to what this wrote (PDF -> content -> paragraphs -> Model -> JSON,
 ;; byte for byte), and `kin/scripts/para-check` holds the goldens to the source HTML: what makes a golden of
 ;; kin's own output worth anything. The driver is the Engine's, `emon-rs` (`test/driver/rust/main.rs`, built by
-;; `kin/scripts/emon-rs-build`; the temporary `predict-naive.sh` it replaced is retired, D140).
+;; `kin/scripts/emon-rs-build`; the temporary `predict-naive.sh` it replaced is retired, D144).
 ;;
 ;; THE DOCUMENTS are the Chrome-printed synthetic ones whose paragraphs and headings are all there is on the
 ;; page (single column, no list, table or initial the naive stage would have to guess at): the paragraphs the
