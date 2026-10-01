@@ -44,6 +44,7 @@
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
                                    lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
             [emon.columns :refer [lc-copy lc-page]]
+            [emon.table :refer [tb-due tb-skip tb-emit tb-claimed]]
             [emon.model :refer [node-new node-set-text node-set-sub node-set-conf node-add-src
                                 node-add-region page-new nk-paragraph nk-break nk-text nk-note sr-text
                                 sr-infer pk-vector lay-add rl-body nk-heading node-set-attr-text
@@ -62,6 +63,7 @@
 (defconst ^I32 PA_INDENT_DIV 2)     ;; an indent: more than 1/2 of the size
 (defconst ^I32 PA_SIZE_DIV 20)      ;; a size change: more than 1/20
 (defconst ^I32 PA_ROT_SLOP 100)     ;; upright: within one degree of 0
+(defconst ^I32 PA_ALL 2000000000)    ;; "every table of the page": above any line (an `emon.table` order key)
 (defconst ^I32 PA_INDENT_USE 1)     ;; the document's paragraphs have first-line indents from this many
 
 ;; the points of a continuation (SPEC 10.1.2, D164) against `join-min`
@@ -849,13 +851,38 @@
           (set p (+ p 1))))
     (return 0)))
 
+(defn ^I32 pa-live [^Cells ln ^Cells lo ^I32 first ^I32 cnt]
+  (comment "How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage")
+  (comment "sees every line of the page, tables included, so that what it makes of the rest is what it always made;")
+  (comment "the lines a table holds are left out here, where the paragraphs are made.")
+  (let [^:mut ^I32 k 0]
+    (while (and (< k cnt) (!= (tb-claimed ln (cells-at lo (+ first k))) 0))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 pa-tables [^Cells tb ^I32 tcur ^I32 p ^I32 ymid2 ^Cells wd ^Cells ln ^Cells et ^Cells tc ^Cells tw ^Cells tq
+                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                      ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells ledger ^Cells hc]
+  (comment "Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice")
+  (comment "a baseline y: the order key of `pa-ymid2`). The open paragraph has been closed. Answers the next table")
+  (comment "to emit (P5.1: a table is a block, found before this and placed here by its top, D178).")
+  (let [^:mut ^I32 k tcur]
+    (while (tb-due tb k p ymid2)
+      (do (tb-emit tb k (hd-cur hc) wd et ln tc tw tq nodes attrs regions text raw tmp ledger)
+          (set k (+ k 1))))
+    (cells-drop raw 0)
+    (return k)))
+
 (defn ^:pub ^I32 pa-build [^Cells wd ^Cells ln ^Cells et ^I32 npages
                            ^:mut ^Cells pages ^:mut ^Cells layout
                            ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                            ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
                            ^:mut ^Cells lt ^:mut ^Cells ls ^:mut ^Cells sd ^:mut ^Cells it ^:mut ^Cells io
                            ^:mut ^Cells rw ^:mut ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
-                           ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^:mut ^Cells dbg ^:mut ^Cells hc]
+                           ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^:mut ^Cells dbg ^:mut ^Cells hc
+                           ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^:mut ^Cells ledger]
+  (comment "Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table")
+  (comment "holds is not in the reading order at all.")
   (comment "Append every page's lines to the Model as paragraphs under the document root (node 0, made by")
   (comment "`model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the")
   (comment "Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column")
@@ -884,6 +911,8 @@
         ^:mut ^I32 rs 0
         ^:mut ^I32 mg 0
         ^:mut ^I32 ty 0
+        ^:mut ^I32 tcur 0
+        ^:mut ^I32 k0 0
         ^:mut ^I32 score 0]
     (lc-copy ln lt)
     (pa-columns wd et npages pages layout lt ord ls sd it io rw gu ac tm cf lo pr)
@@ -899,6 +928,7 @@
           (set n (cells-len ord))
           (set nu (pa-upright-count lt ord))
           ;; the rows of cf of this page: the body ones, then the side ones
+          (set tcur (tb-skip tb tcur p))
           (while (and (< r nf) (< (cells-at cf (+ (* r CF_STRIDE) CF_PAGE)) p))
             (set r (+ r 1)))
           (set r1 r)
@@ -909,11 +939,17 @@
             (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend nf 1000000000 hc))
                 (set open 0)
                 (set prev -1)
-                (if (> p 1) (pa-milestone nodes p hc)))
+                (if (> p 1) (pa-milestone nodes p hc))
+                (set tcur (pa-tables tb tcur p PA_ALL wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc)))
             (do (set i r)
                 (while (< i r1)
                   (do (set first (cells-at cf (+ (* i CF_STRIDE) CF_FIRST)))
                       (set cnt (cells-at cf (+ (* i CF_STRIDE) CF_COUNT)))
+                      (set k0 (pa-live lt lo first cnt))
+                      (set first (+ first k0))
+                      (set cnt (- cnt k0))
+                      (if (> cnt 0)
+                       (do
                       (set mg (pa-fmargin lt lo first cnt))
                       (set b (cells-at lo first))
                       (set cont 0)
@@ -934,11 +970,13 @@
                             (cells-push dbg (cells-at cf (+ (* prevfr CF_STRIDE) CF_X1)))
                             (cells-push dbg (ln-get lt prev (lh-x1)))
                             (cells-push dbg (cells-at cf (+ (* prevfr CF_STRIDE) CF_COUNT)))
-                            (if (>= score JOIN_MIN) (set cont 1))))
+                            (if (>= score JOIN_MIN) (set cont 1))
+                            (if (tb-due tb tcur p (pa-ymid2 lt b)) (set cont 0))))
                       (if (== cont 0)
                         (do (set ty (ln-get lt b (lh-y0)))
                             (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend i ty hc))
                             (if (and (== i r) (> p 1)) (pa-milestone nodes p hc))
+                            (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
                             (pa-frag-open fr lt p b 0))
                         (do (pa-join wd lt et raw b)
                             (set rs (cells-len raw))
@@ -950,21 +988,29 @@
                       (set cont 1)
                       (while (< cont cnt)
                         (do (set b (cells-at lo (+ first cont)))
-                            (if (pa-new-par wd lt prev b med mg hc)
-                              (do (set ty (ln-get lt b (lh-y0)))
-                                  (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend i ty hc))
-                                  (pa-frag-open fr lt p b 0))
-                              (do (pa-join wd lt et raw b)
-                                  (pa-frag-extend fr lt b)))
-                            (pa-add-line wd lt et raw b)
-                            (set prev b)
-                            (set cont (+ cont 1))))
-                      (set i (+ i 1))))))
+                            (if (== (tb-claimed lt b) 0)
+                              (do (if (or (pa-new-par wd lt prev b med mg hc) (tb-due tb tcur p (pa-ymid2 lt b)))
+                                    (do (set ty (ln-get lt b (lh-y0)))
+                                        (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend i ty hc))
+                                        (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
+                                        (pa-frag-open fr lt p b 0))
+                                    (do (pa-join wd lt et raw b)
+                                        (pa-frag-extend fr lt b)))
+                                  (pa-add-line wd lt et raw b)
+                                  (set prev b)))
+                            (set cont (+ cont 1))))))
+                      (set i (+ i 1))))
+                (if (tb-due tb tcur p PA_ALL)
+                  (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend nf 1000000000 hc))
+                      (set open 0)
+                      (set prev -1)
+                      (set tcur (pa-tables tb tcur p PA_ALL wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))))))
           ;; the lines that are not upright stand alone, after the page's upright ones (D136): queued now,
           ;; written at the next close
           (set i nu)
           (while (< i n)
-            (do (cells-push gp (cells-at ord i))
+            (do (if (== (tb-claimed lt (cells-at ord i)) 0)
+                  (cells-push gp (cells-at ord i)))
                 (set i (+ i 1))))
           (set p (+ p 1))))
     (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend nf 1000000000 hc)

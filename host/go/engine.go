@@ -37,6 +37,7 @@ import (
 	"emon/html"
 	"emon/model"
 	"emon/para"
+	"emon/table"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
 	"emon/pdfmeta"
@@ -770,6 +771,9 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	fc := newCellsN(10)
 	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
 	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
+	// Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
+	tb := newCellsN(24)
+	table.TbBuild(wd, ln, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
@@ -780,7 +784,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
 	heading.HdAnalyze(wd, ln, et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
 	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
-		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2])
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger)
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)

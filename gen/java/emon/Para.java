@@ -11,6 +11,7 @@ public final class Para {
     public static final int PA_INDENT_DIV = 2;
     public static final int PA_SIZE_DIV = 20;
     public static final int PA_ROT_SLOP = 100;
+    public static final int PA_ALL = 2000000000;
     public static final int PA_INDENT_USE = 1;
     public static final int JS_HYPHEN = 3;
     public static final int JS_EDGE = 2;
@@ -957,7 +958,31 @@ public final class Para {
         }
         return 0;
     }
-    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc) {
+    public static int paLive(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
+        // How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
+        // sees every line of the page, tables included, so that what it makes of the rest is what it always made;
+        // the lines a table holds are left out here, where the paragraphs are made.
+        int k = 0;
+        while ((k < cnt) && (Table.tbClaimed(ln, emon.Port.cellsAt(lo, first + k)) != 0)) {
+            k += 1;
+        }
+        return k;
+    }
+    public static int paTables(emon.Port.Cells tb, int tcur, int p, int ymid2, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells ledger, emon.Port.Cells hc) {
+        // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
+        // a baseline y: the order key of `pa-ymid2`). The open paragraph has been closed. Answers the next table
+        // to emit (P5.1: a table is a block, found before this and placed here by its top, D178).
+        int k = tcur;
+        while (Table.tbDue(tb, k, p, ymid2)) {
+            Table.tbEmit(tb, k, Heading.hdCur(hc), wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger);
+            k += 1;
+        }
+        emon.Port.cellsDrop(raw, 0);
+        return k;
+    }
+    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger) {
+        // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
+        // holds is not in the reading order at all.
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
         // `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
         // Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
@@ -986,6 +1011,8 @@ public final class Para {
         int rs = 0;
         int mg = 0;
         int ty = 0;
+        int tcur = 0;
+        int k0 = 0;
         int score = 0;
         Columns.lcCopy(ln, lt);
         paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
@@ -1002,6 +1029,7 @@ public final class Para {
             paCollect(ord, lt, p);
             n = emon.Port.cellsLen(ord);
             nu = paUprightCount(lt, ord);
+            tcur = Table.tbSkip(tb, tcur, p);
             while ((r < nf) && (emon.Port.cellsAt(cf, (r * CF_STRIDE) + CF_PAGE) < p)) {
                 r += 1;
             }
@@ -1016,65 +1044,86 @@ public final class Para {
                 if (p > 1) {
                     paMilestone(nodes, p, hc);
                 }
+                tcur = paTables(tb, tcur, p, PA_ALL, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
             } else {
                 i = r;
                 while (i < r1) {
                     first = emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_FIRST);
                     cnt = emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_COUNT);
-                    mg = paFmargin(lt, lo, first, cnt);
-                    b = emon.Port.cellsAt(lo, first);
-                    cont = 0;
-                    if (open == 1) {
-                        score = paJoinScore(wd, lt, et, raw, prev, b, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X1), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents, paBottom(cf, prevfr), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X1), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_COUNT), hc);
-                        emon.Port.cellsPush(dbg, i);
-                        emon.Port.cellsPush(dbg, prev);
-                        emon.Port.cellsPush(dbg, b);
-                        emon.Port.cellsPush(dbg, score);
-                        emon.Port.cellsPush(dbg, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X0));
-                        emon.Port.cellsPush(dbg, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X1));
-                        emon.Port.cellsPush(dbg, Evidence.lnGet(lt, prev, Evidence.lhX1()));
-                        emon.Port.cellsPush(dbg, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_COUNT));
-                        if (score >= JOIN_MIN) {
-                            cont = 1;
+                    k0 = paLive(lt, lo, first, cnt);
+                    first += k0;
+                    cnt -= k0;
+                    if (cnt > 0) {
+                        mg = paFmargin(lt, lo, first, cnt);
+                        b = emon.Port.cellsAt(lo, first);
+                        cont = 0;
+                        if (open == 1) {
+                            score = paJoinScore(wd, lt, et, raw, prev, b, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X1), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents, paBottom(cf, prevfr), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X1), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_COUNT), hc);
+                            emon.Port.cellsPush(dbg, i);
+                            emon.Port.cellsPush(dbg, prev);
+                            emon.Port.cellsPush(dbg, b);
+                            emon.Port.cellsPush(dbg, score);
+                            emon.Port.cellsPush(dbg, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X0));
+                            emon.Port.cellsPush(dbg, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X1));
+                            emon.Port.cellsPush(dbg, Evidence.lnGet(lt, prev, Evidence.lhX1()));
+                            emon.Port.cellsPush(dbg, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_COUNT));
+                            if (score >= JOIN_MIN) {
+                                cont = 1;
+                            }
+                            if (Table.tbDue(tb, tcur, p, paYmid2(lt, b))) {
+                                cont = 0;
+                            }
                         }
-                    }
-                    if (cont == 0) {
-                        ty = Evidence.lnGet(lt, b, Evidence.lhY0());
-                        pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
-                        if ((i == r) && (p > 1)) {
-                            paMilestone(nodes, p, hc);
-                        }
-                        paFragOpen(fr, lt, p, b, 0);
-                    } else {
-                        paJoin(wd, lt, et, raw, b);
-                        rs = emon.Port.cellsLen(raw);
-                        paFragOpen(fr, lt, p, b, rs);
-                    }
-                    open = 1;
-                    paAddLine(wd, lt, et, raw, b);
-                    prev = b;
-                    prevfr = i;
-                    cont = 1;
-                    while (cont < cnt) {
-                        b = emon.Port.cellsAt(lo, first + cont);
-                        if (paNewPar(wd, lt, prev, b, med, mg, hc)) {
+                        if (cont == 0) {
                             ty = Evidence.lnGet(lt, b, Evidence.lhY0());
                             pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                            if ((i == r) && (p > 1)) {
+                                paMilestone(nodes, p, hc);
+                            }
+                            tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                             paFragOpen(fr, lt, p, b, 0);
                         } else {
                             paJoin(wd, lt, et, raw, b);
-                            paFragExtend(fr, lt, b);
+                            rs = emon.Port.cellsLen(raw);
+                            paFragOpen(fr, lt, p, b, rs);
                         }
+                        open = 1;
                         paAddLine(wd, lt, et, raw, b);
                         prev = b;
-                        cont += 1;
+                        prevfr = i;
+                        cont = 1;
+                        while (cont < cnt) {
+                            b = emon.Port.cellsAt(lo, first + cont);
+                            if (Table.tbClaimed(lt, b) == 0) {
+                                if (paNewPar(wd, lt, prev, b, med, mg, hc) || Table.tbDue(tb, tcur, p, paYmid2(lt, b))) {
+                                    ty = Evidence.lnGet(lt, b, Evidence.lhY0());
+                                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                                    tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
+                                    paFragOpen(fr, lt, p, b, 0);
+                                } else {
+                                    paJoin(wd, lt, et, raw, b);
+                                    paFragExtend(fr, lt, b);
+                                }
+                                paAddLine(wd, lt, et, raw, b);
+                                prev = b;
+                            }
+                            cont += 1;
+                        }
                     }
                     i += 1;
+                }
+                if (Table.tbDue(tb, tcur, p, PA_ALL)) {
+                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                    open = 0;
+                    prev = -1;
+                    tcur = paTables(tb, tcur, p, PA_ALL, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                 }
             }
             i = nu;
             while (i < n) {
-                emon.Port.cellsPush(gp, emon.Port.cellsAt(ord, i));
+                if (Table.tbClaimed(lt, emon.Port.cellsAt(ord, i)) == 0) {
+                    emon.Port.cellsPush(gp, emon.Port.cellsAt(ord, i));
+                }
                 i += 1;
             }
             p += 1;

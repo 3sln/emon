@@ -1,0 +1,2515 @@
+;; Tables (P5.1-P5.3; SPEC 10.5, 10.10; D178-D182). emon's own module (D039).
+;;
+;;   (tb-build wd ln et pa np tb tc tw tq tx  <scratch>)      find every page's tables, claim their lines
+;;   (tb-emit tb k parent wd et ln tc tw tq nodes attrs regions text raw tmp)   one table as Model nodes
+;;
+;; WHAT IT READS is the text layer's `words` and `lines` and `etext` and the vector evidence `paths` (SPEC 8.4.3):
+;; every thin filled rectangle and every stroked line is a RULE; a filled rectangle is a FILL. Rules are merged
+;; (collinear pieces that touch are one rule, Chrome and Word draw a table border cell by cell), positions are
+;; clustered, and the rules that touch each other are one component.
+;;
+;; THE PROFILES (SPEC 10.5) are each a way to find a grid; all of them end in the same CELL records (`tc`) and the
+;; same post-processing (header rows, footer, alignment, caption), and the best-scoring interpretation of a region
+;; wins (`tb-select`):
+;;   ruled       a component with at least two horizontal and two vertical rules: its distinct positions are the
+;;               row and column boundaries; an edge between two grid cells that is not covered by a rule is OPEN
+;;               and the cells it joins are one cell with a span.
+;;   partial     (P5.2) horizontal rules only: columns from the whitespace channels of the text between them.
+;;   shaded      (P5.2) a stack of fills: rows are the fills' bands, columns from the channels.
+;;   whitespace  (P5.2) rows of text with several chunks each, aligned.
+;;
+;; THE ARENAS (all `Cells` of integers; kin cannot allocate):
+;;   tb  the tables, stride 24:  page x0 y0 x1 y1 profile score nrows ncols cfirst ncells nhead nfoot state
+;;       qfirst qcount xfirst xcount continued flags spare*4
+;;   tc  the cells, stride 16:   row col rowspan colspan x0 y0 x1 y1 wfirst wcount header align flags tx0 tx1 spare
+;;   tw  the words of every cell, each cell's in reading order (indices into `words`)
+;;   tq  the caption lines of every table (indices into `lines`)
+;;   tx  the column boundaries of every table (centipoints)
+;;
+;; A TABLE'S LINES ARE CLAIMED: the spare cell of a claimed line holds its table's index + 1 (`tb-claimed`), and
+;; `emon.para` leaves such lines out of its paragraphs and calls `tb-emit` where the table belongs.
+(ns emon.table
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count pa-get pa-count
+                                   hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen
+                                   wf-style wf-size
+                                   lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-first lh-count
+                                   pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width
+                                   pf-falpha pf-salpha pf-flags pg-clip pg-filled pg-stroked pg-pattern pg-shading
+                                   pa-rect]]
+            [emon.model :refer [node-new node-set-text node-set-sub node-set-aux node-set-conf node-add-src
+                                node-add-region ledger-add ledger-set-text page-h dr-duplicate-header-row node-set-attr-int node-set-attr-text node-set-align
+                                text-append-cp nk-table nk-rowgroup nk-row nk-cell nk-caption
+                                sr-text sr-infer sr-vector fk-profile fk-columns fk-rowspan fk-colspan
+                                fk-label fk-continued rl-head rl-body rl-foot sy-bold fl-reconstructed]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
+            [kin.lang :refer [defn defconst defdata return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem
+                              bit-and]]))
+
+;; strides
+(defconst ^I32 TBS 24)
+(defconst ^I32 TCS 16)
+(defconst ^I32 RLS 8)
+(defconst ^I32 RWS 10)           ;; text rows, see `tb-rows`
+(defconst ^I32 SGS 6)            ;; chunks
+(defconst ^I32 SEG_NUM 6)        ;; a gap wider than 6/10 of the size cuts a row into chunks
+(defconst ^I32 SEG_DEN 10)
+
+;; profiles
+(defconst ^I32 PF_RULED 1)
+(defconst ^I32 PF_PARTIAL 2)
+(defconst ^I32 PF_SHADED 3)
+(defconst ^I32 PF_WHITESPACE 4)
+
+;; thresholds, centipoints
+(defconst ^I32 RULE_T 400)        ;; a rule is at most 4 pt thick
+(defconst ^I32 RULE_MIN 500)      ;; ... and at least 5 pt long
+(defconst ^I32 POS_TOL 200)       ;; two rules this close are one line
+(defconst ^I32 GAP_TOL 300)       ;; two collinear rules this close are one rule
+(defconst ^I32 HIT_TOL 300)       ;; a horizontal and a vertical rule this close touch
+(defconst ^I32 MAX_RULES 1500)    ;; a page with more rules is a drawing, not a table
+(defconst ^I32 COVER_NUM 3)       ;; an edge is closed when a rule covers 3/5 of it
+(defconst ^I32 COVER_DEN 5)
+
+;; ------------------------------------------------------------------ small
+
+(defn ^I32 tb-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 tb-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 tb-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 tb-rows-of [^Cells c ^I32 stride]
+  (return (quot (cells-len c) stride)))
+
+(defn ^:pub ^I32 tb-claimed [^Cells ln ^I32 l]
+  (comment "The table (index + 1) that holds line l, 0 when none does.")
+  (return (ln-get ln l 15)))
+
+;; ------------------------------------------------------------------ sorting
+
+(defn ^Bool tb-less [^Cells d ^I32 st ^I32 k1 ^I32 k2 ^I32 a ^I32 b]
+  (comment "Does row a of d come before row b: by field k1, then k2, then the row.")
+  (let [^I32 a1 (cells-at d (+ (* a st) k1))
+        ^I32 b1 (cells-at d (+ (* b st) k1))]
+    (if (!= a1 b1) (return (< a1 b1)))
+    (let [^I32 a2 (cells-at d (+ (* a st) k2))
+          ^I32 b2 (cells-at d (+ (* b st) k2))]
+      (if (!= a2 b2) (return (< a2 b2)))
+      (return (< a b)))))
+
+(defn ^I32 tb-sort-idx [^:mut ^Cells ord ^Cells d ^I32 st ^I32 k1 ^I32 k2]
+  (comment "Shell sort of the row numbers in `ord` by (field k1, field k2, number) of the rows of d.")
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at ord i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at ord (- j h)))
+                      (if (tb-less d st k1 k2 v u)
+                        (do (cells-set ord j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set ord j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 tb-sort-nums [^:mut ^Cells c]
+  (comment "Shell sort of the numbers in c, ascending.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at c i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at c (- j h)))
+                      (if (< v u)
+                        (do (cells-set c j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set c j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 tb-cluster [^:mut ^Cells c ^I32 tol]
+  (comment "Sort the numbers of c and replace each run whose neighbours are within tol of each other by its")
+  (comment "mean: the distinct positions. Answers how many there are.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 sum 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 prev 0]
+    (tb-sort-nums c)
+    (while (< i n)
+      (do (let [^I32 v (cells-at c i)]
+            (if (and (> cnt 0) (> (- v prev) tol))
+              (do (cells-set c w (quot sum cnt))
+                  (set w (+ w 1))
+                  (set sum 0)
+                  (set cnt 0)))
+            (set sum (+ sum v))
+            (set cnt (+ cnt 1))
+            (set prev v))
+          (set i (+ i 1))))
+    (if (> cnt 0)
+      (do (cells-set c w (quot sum cnt))
+          (set w (+ w 1))))
+    (cells-drop c w)
+    (return w)))
+
+;; --------------------------------------------------------------------- rules
+
+(defn ^I32 tb-lum [^I32 rgb]
+  (comment "The mean of the three channels of 0xRRGGBB, 255 for none or white.")
+  (if (< rgb 0) (return 255))
+  (return (quot (+ (+ (bit-and (quot rgb 65536) 255) (bit-and (quot rgb 256) 255)) (bit-and rgb 255)) 3)))
+
+(defn ^I32 tb-rule-add [^:mut ^Cells rl ^I32 kind ^I32 pos ^I32 a0 ^I32 a1 ^I32 thick ^I32 colour]
+  (cells-push rl kind)
+  (cells-push rl pos)
+  (cells-push rl a0)
+  (cells-push rl a1)
+  (cells-push rl thick)
+  (cells-push rl colour)
+  (cells-push rl 0)
+  (cells-push rl 0)
+  (return 0))
+
+(defn ^I32 tb-collect-one [^Cells pa ^I32 i ^:mut ^Cells rl ^:mut ^Cells fl]
+  (comment "One path as a rule (a thin box, or an edge of a stroked rectangle) or a fill (a large filled box).")
+  (let [^I32 fg (pa-get pa i (pf-flags))
+        ^I32 x0 (pa-get pa i (pf-x0))
+        ^I32 y0 (pa-get pa i (pf-y0))
+        ^I32 x1 (pa-get pa i (pf-x1))
+        ^I32 y1 (pa-get pa i (pf-y1))
+        ^I32 w (- x1 x0)
+        ^I32 h (- y1 y0)
+        ^I32 filled (bit-and fg (pg-filled))
+        ^I32 stroked (bit-and fg (pg-stroked))
+        ^I32 kind (pa-get pa i (pf-kind))
+        ^I32 lw (pa-get pa i (pf-width))
+        ^:mut ^I32 colour (pa-get pa i (pf-fill))
+        ^:mut ^I32 al (pa-get pa i (pf-salpha))]
+    (if (!= (bit-and fg (pg-clip)) 0) (return 0))
+    (if (!= (bit-and fg (+ (pg-pattern) (pg-shading))) 0) (return 0))
+    (if (and (== filled 0) (== stroked 0)) (return 0))
+    (if (!= filled 0)
+      (do (set al (pa-get pa i (pf-falpha)))
+          (set colour (pa-get pa i (pf-fill))))
+      (set colour (pa-get pa i (pf-stroke))))
+    (if (<= al 0) (return 0))
+    (if (and (<= (tb-min w h) RULE_T) (>= (tb-max w h) RULE_MIN))
+      (do (if (< (tb-lum colour) 240)
+            (do (if (>= w h)
+                  (tb-rule-add rl 0 (quot (+ y0 y1) 2) x0 x1 h colour)
+                  (tb-rule-add rl 1 (quot (+ x0 x1) 2) y0 y1 w colour))))
+          (return 0)))
+    (if (and (== kind (pa-rect)) (!= stroked 0) (> w RULE_MIN) (> h RULE_MIN))
+      (let [^I32 hw (quot lw 2)
+            ^I32 sc (pa-get pa i (pf-stroke))]
+        (if (< (tb-lum sc) 240)
+          (do (tb-rule-add rl 0 (+ y0 hw) x0 x1 lw sc)
+              (tb-rule-add rl 0 (- y1 hw) x0 x1 lw sc)
+              (tb-rule-add rl 1 (+ x0 hw) y0 y1 lw sc)
+              (tb-rule-add rl 1 (- x1 hw) y0 y1 lw sc)))))
+    (if (and (!= filled 0) (> w RULE_MIN) (> h RULE_MIN))
+      (do (cells-push fl x0)
+          (cells-push fl y0)
+          (cells-push fl x1)
+          (cells-push fl y1)
+          (cells-push fl (pa-get pa i (pf-fill)))
+          (cells-push fl 0)))
+    (return 0)))
+
+(defn ^I32 tb-collect [^Cells pa ^I32 p0 ^I32 p1 ^:mut ^Cells rl ^:mut ^Cells fl]
+  (comment "The page's paths p0..p1 as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness,")
+  (comment "colour) and fills (`fl`: box and colour).")
+  (let [^:mut ^I32 i p0]
+    (cells-drop rl 0)
+    (cells-drop fl 0)
+    (while (< i p1)
+      (do (tb-collect-one pa i rl fl)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 tb-canon [^Cells rl ^Cells vals ^I32 i]
+  (comment "The cluster value nearest to the position of rule i.")
+  (let [^I32 p (cells-at rl (+ (* i RLS) 1))
+        ^:mut ^I32 best (cells-at vals 0)
+        ^:mut ^I32 j 0]
+    (while (< j (cells-len vals))
+      (do (if (< (tb-abs (- (cells-at vals j) p)) (tb-abs (- best p)))
+            (set best (cells-at vals j)))
+          (set j (+ j 1))))
+    (return best)))
+
+(defn ^I32 tb-merge-rules [^:mut ^Cells rl ^:mut ^Cells rm ^:mut ^Cells so ^:mut ^Cells vals]
+  (comment "Merge the rules of `rl` into `rm`: first the positions of each orientation clustered (POS_TOL), then")
+  (comment "collinear pieces that touch (GAP_TOL) are one. `rm` rows are `rl` rows with the parent (a union-find")
+  (comment "link, itself) in cell 6. `so` and `vals` are scratch.")
+  (let [^I32 n (tb-rows-of rl RLS)
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 i 0]
+    (cells-drop rm 0)
+    (while (< kind 2)
+      (do (cells-drop vals 0)
+          (set i 0)
+          (while (< i n)
+            (do (if (== (cells-at rl (* i RLS)) kind)
+                  (cells-push vals (cells-at rl (+ (* i RLS) 1))))
+                (set i (+ i 1))))
+          (tb-cluster vals POS_TOL)
+          (if (> (cells-len vals) 0)
+            (do (set i 0)
+                (while (< i n)
+                  (do (if (== (cells-at rl (* i RLS)) kind)
+                        (do (let [^I32 cv (tb-canon rl vals i)]
+                              (cells-set rl (+ (* i RLS) 1) cv))))
+                      (set i (+ i 1))))
+                (cells-drop so 0)
+                (set i 0)
+                (while (< i n)
+                  (do (if (== (cells-at rl (* i RLS)) kind) (cells-push so i))
+                      (set i (+ i 1))))
+                (tb-sort-idx so rl RLS 1 2)
+                (set i 0)
+                (while (< i (cells-len so))
+                  (do (let [^I32 r (cells-at so i)
+                            ^I32 pos (cells-at rl (+ (* r RLS) 1))
+                            ^I32 a0 (cells-at rl (+ (* r RLS) 2))
+                            ^I32 a1 (cells-at rl (+ (* r RLS) 3))
+                            ^I32 th (cells-at rl (+ (* r RLS) 4))
+                            ^I32 nm (tb-rows-of rm RLS)
+                            ^:mut ^I32 merged 0]
+                        (if (> nm 0)
+                          (let [^I32 lb (* (- nm 1) RLS)]
+                            (if (and (== (cells-at rm lb) kind)
+                                     (and (== (cells-at rm (+ lb 1)) pos)
+                                          (<= a0 (+ (cells-at rm (+ lb 3)) GAP_TOL))))
+                              (do (if (> a1 (cells-at rm (+ lb 3))) (cells-set rm (+ lb 3) a1))
+                                  (if (> th (cells-at rm (+ lb 4))) (cells-set rm (+ lb 4) th))
+                                  (set merged 1)))))
+                        (if (== merged 0)
+                          (do (cells-push rm kind)
+                              (cells-push rm pos)
+                              (cells-push rm a0)
+                              (cells-push rm a1)
+                              (cells-push rm th)
+                              (cells-push rm (cells-at rl (+ (* r RLS) 5)))
+                              (cells-push rm nm)
+                              (cells-push rm 0))))
+                      (set i (+ i 1))))))
+          (set kind (+ kind 1))))
+    (return (tb-rows-of rm RLS))))
+(defn ^I32 tb-find [^:mut ^Cells rm ^I32 i]
+  (let [^:mut ^I32 x i]
+    (while (!= (cells-at rm (+ (* x RLS) 6)) x)
+      (do (let [^I32 par (cells-at rm (+ (* x RLS) 6))
+                ^I32 gp (cells-at rm (+ (* par RLS) 6))]
+            (cells-set rm (+ (* x RLS) 6) gp)
+            (set x gp))))
+    (return x)))
+
+(defn ^Bool tb-touch [^Cells rm ^I32 h ^I32 v]
+  (comment "Do the horizontal rule h and the vertical rule v meet.")
+  (let [^I32 hy (cells-at rm (+ (* h RLS) 1))
+        ^I32 vx (cells-at rm (+ (* v RLS) 1))]
+    (return (and (>= vx (- (cells-at rm (+ (* h RLS) 2)) HIT_TOL))
+                 (and (<= vx (+ (cells-at rm (+ (* h RLS) 3)) HIT_TOL))
+                      (and (>= hy (- (cells-at rm (+ (* v RLS) 2)) HIT_TOL))
+                           (<= hy (+ (cells-at rm (+ (* v RLS) 3)) HIT_TOL))))))))
+
+(defn ^I32 tb-components [^:mut ^Cells rm]
+  (comment "Union the rules that touch, by the smaller root.")
+  (let [^I32 n (tb-rows-of rm RLS)
+        ^:mut ^I32 h 0
+        ^:mut ^I32 v 0]
+    (while (< h n)
+      (do (if (== (cells-at rm (* h RLS)) 0)
+            (do (set v 0)
+                (while (< v n)
+                  (do (if (== (cells-at rm (* v RLS)) 1)
+                        (if (tb-touch rm h v)
+                          (do (let [^I32 a (tb-find rm h)
+                                    ^I32 b (tb-find rm v)]
+                                (if (< a b) (cells-set rm (+ (* b RLS) 6) a))
+                                (if (> a b) (cells-set rm (+ (* a RLS) 6) b))))))
+                      (set v (+ v 1))))))
+          (set h (+ h 1))))
+    (return 0)))
+
+(defn ^I32 tb-covered [^Cells rm ^I32 root ^I32 kind ^I32 pos ^I32 a0 ^I32 a1]
+  (comment "How much of [a0, a1] the rules of the component lie over: rules of this orientation at pos (within")
+  (comment "2 POS_TOL), their overlaps summed and capped at the length.")
+  (let [^I32 n (tb-rows-of rm RLS)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 sum 0]
+    (while (< i n)
+      (do (if (== (cells-at rm (* i RLS)) kind)
+            (if (<= (tb-abs (- (cells-at rm (+ (* i RLS) 1)) pos)) (* 2 POS_TOL))
+              (if (== (tb-find rm i) root)
+                (do (let [^I32 lo (tb-max a0 (cells-at rm (+ (* i RLS) 2)))
+                          ^I32 hi (tb-min a1 (cells-at rm (+ (* i RLS) 3)))]
+                      (if (> hi lo) (set sum (+ sum (- hi lo)))))))))
+          (set i (+ i 1))))
+    (return (tb-min sum (- a1 a0)))))
+
+(defn ^Bool tb-closed [^Cells rm ^I32 root ^I32 kind ^I32 pos ^I32 a0 ^I32 a1]
+  (comment "Is the edge at pos from a0 to a1 drawn: a rule covers COVER_NUM/COVER_DEN of it.")
+  (let [^I32 span (- a1 a0)]
+    (if (<= span 0) (return (== 1 1)))
+    (return (>= (* (tb-covered rm root kind pos a0 a1) COVER_DEN) (* span COVER_NUM)))))
+
+;; ------------------------------------------------------------- the table list
+
+(defn ^I32 tb-add [^:mut ^Cells tb ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 profile ^I32 score
+                   ^I32 nrows ^I32 ncols ^I32 cfirst ^I32 ncells]
+  (comment "Append a candidate table; answers its index.")
+  (let [^I32 k (tb-rows-of tb TBS)]
+    (cells-push tb page)
+    (cells-push tb x0)
+    (cells-push tb y0)
+    (cells-push tb x1)
+    (cells-push tb y1)
+    (cells-push tb profile)
+    (cells-push tb score)
+    (cells-push tb nrows)
+    (cells-push tb ncols)
+    (cells-push tb cfirst)
+    (cells-push tb ncells)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 1)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (cells-push tb 0)
+    (return k)))
+
+(defn ^I32 tb-cell-add [^:mut ^Cells tc ^I32 row ^I32 col ^I32 rowspan ^I32 colspan
+                        ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (let [^I32 c (tb-rows-of tc TCS)]
+    (cells-push tc row)
+    (cells-push tc col)
+    (cells-push tc rowspan)
+    (cells-push tc colspan)
+    (cells-push tc x0)
+    (cells-push tc y0)
+    (cells-push tc x1)
+    (cells-push tc y1)
+    (cells-push tc 0)
+    (cells-push tc 0)
+    (cells-push tc 0)
+    (cells-push tc 0)
+    (cells-push tc 0)
+    (cells-push tc 0)
+    (cells-push tc 0)
+    (cells-push tc 0)
+    (return c)))
+
+;; ----------------------------------------------------------- words into cells
+
+(defn ^Bool tb-pair-less [^Cells d ^I32 a ^I32 b]
+  (comment "Pairs (stride 6: cell, word, baseline, x0, size, spare) in a cell's reading order: by cell, then")
+  (comment "by baseline (the same line when they differ by under a third of the size), then by x.")
+  (let [^I32 ca (cells-at d (* a 6))
+        ^I32 cb (cells-at d (* b 6))]
+    (if (!= ca cb) (return (< ca cb)))
+    (let [^I32 ya (cells-at d (+ (* a 6) 2))
+          ^I32 yb (cells-at d (+ (* b 6) 2))
+          ^I32 sz (cells-at d (+ (* a 6) 4))]
+      (if (> (* 3 (tb-abs (- ya yb))) sz) (return (< ya yb)))
+      (let [^I32 xa (cells-at d (+ (* a 6) 3))
+            ^I32 xb (cells-at d (+ (* b 6) 3))]
+        (if (!= xa xb) (return (< xa xb)))
+        (return (< a b))))))
+
+(defn ^I32 tb-sort-pairs [^:mut ^Cells ord ^Cells d]
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at ord i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at ord (- j h)))
+                      (if (tb-pair-less d v u)
+                        (do (cells-set ord j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set ord j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 tb-pair-add [^:mut ^Cells pr ^Cells wd ^I32 cell ^I32 w]
+  (cells-push pr cell)
+  (cells-push pr w)
+  (cells-push pr (wd-get wd w (hd-by1)))
+  (cells-push pr (wd-get wd w (hd-x0)))
+  (cells-push pr (tb-max 1 (wd-get wd w (wf-size))))
+  (cells-push pr 0)
+  (return 0))
+
+(defn ^I32 tb-flush-pairs [^:mut ^Cells pr ^:mut ^Cells so ^Cells wd ^:mut ^Cells tc ^:mut ^Cells tw]
+  (comment "Sort the pairs (cell = an absolute `tc` row, word) and append each cell's words to `tw`, setting its")
+  (comment "wfirst, wcount and text extent. Cells that no pair names keep wcount 0 and an extent of nothing.")
+  (let [^I32 n (tb-rows-of pr 6)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cur -1]
+    (cells-drop so 0)
+    (while (< i n)
+      (do (cells-push so i)
+          (set i (+ i 1))))
+    (tb-sort-pairs so pr)
+    (set i 0)
+    (while (< i n)
+      (do (let [^I32 p (cells-at so i)
+                ^I32 cell (cells-at pr (* p 6))
+                ^I32 w (cells-at pr (+ (* p 6) 1))
+                ^I32 wx0 (wd-get wd w (hd-x0))
+                ^I32 wx1 (wd-get wd w (hd-x1))]
+            (if (!= cell cur)
+              (do (set cur cell)
+                  (cells-set tc (+ (* cell TCS) 8) (cells-len tw))
+                  (cells-set tc (+ (* cell TCS) 9) 0)
+                  (cells-set tc (+ (* cell TCS) 13) wx0)
+                  (cells-set tc (+ (* cell TCS) 14) wx1)))
+            (cells-push tw w)
+            (let [^I32 wcn (cells-at tc (+ (* cell TCS) 9))]
+              (cells-set tc (+ (* cell TCS) 9) (+ wcn 1)))
+            (if (< wx0 (cells-at tc (+ (* cell TCS) 13))) (cells-set tc (+ (* cell TCS) 13) wx0))
+            (if (> wx1 (cells-at tc (+ (* cell TCS) 14))) (cells-set tc (+ (* cell TCS) 14) wx1)))
+          (set i (+ i 1))))
+    (cells-drop pr 0)
+    (return 0)))
+
+;; -------------------------------------------------------------------- ruled
+
+(defn ^I32 tb-index-of [^Cells b ^I32 v]
+  (comment "The interval of the sorted boundaries b that holds v: the greatest i with b[i] <= v, and -1 when v")
+  (comment "is before the first or at or after the last.")
+  (let [^I32 n (cells-len b)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r -1]
+    (if (< n 2) (return -1))
+    (if (or (< v (cells-at b 0)) (>= v (cells-at b (- n 1)))) (return -1))
+    (while (< i (- n 1))
+      (do (if (<= (cells-at b i) v) (set r i))
+          (set i (+ i 1))))
+    (return r)))
+
+(defn ^I32 tb-wide-cells [^Cells tc ^I32 cfirst ^I32 cend ^Cells wd ^Cells tw]
+  (comment "How many cells have a gap between two words of one line wider than SEG_NUM/SEG_DEN of their size: the")
+  (comment "cell of a lattice with too few rules, whose columns are in the text.")
+  (let [^:mut ^I32 c cfirst
+        ^:mut ^I32 n 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 wide 0]
+    (while (< c cend)
+      (do (set wide 0)
+          (set k 1)
+          (while (and (< k (cells-at tc (+ (* c TCS) 9))) (== wide 0))
+            (do (let [^I32 a (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) (- k 1)))
+                      ^I32 b (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) k))
+                      ^I32 sz (tb-max 1 (wd-get wd b (wf-size)))]
+                  (if (<= (tb-abs (- (wd-get wd a (hd-by1)) (wd-get wd b (hd-by1)))) (quot sz 3))
+                    (if (> (* (- (wd-get wd b (hd-x0)) (wd-get wd a (hd-x1))) SEG_DEN) (* sz SEG_NUM))
+                      (set wide 1))))
+                (set k (+ k 1))))
+          (set n (+ n wide))
+          (set c (+ c 1))))
+    (return n)))
+
+(defn ^I32 tb-lattice [^Cells rm ^I32 root ^Cells xs ^Cells ys ^I32 page ^:mut ^Cells gm
+                       ^:mut ^Cells tb ^:mut ^Cells tc ^Cells wd ^I32 w0 ^I32 w1
+                       ^:mut ^Cells pr ^:mut ^Cells so ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "The cells of one component's lattice, their words, and the candidate table. Answers its index, -1")
+  (comment "when it is not a table.")
+  (let [^I32 nc (- (cells-len xs) 1)
+        ^I32 nr (- (cells-len ys) 1)
+        ^I32 cfirst (tb-rows-of tc TCS)
+        ^I32 tw0 (cells-len tw)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 cs 1
+        ^:mut ^I32 rs 1
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 cc 0]
+    (if (or (< nc 2) (< nr 2)) (return -1))
+    (if (> (* nc nr) 4000) (return -1))
+    (cells-drop gm 0)
+    (set r 0)
+    (while (< r (* nc nr))
+      (do (cells-push gm -1)
+          (set r (+ r 1))))
+    (set r 0)
+    (while (< r nr)
+      (do (set c 0)
+          (while (< c nc)
+            (do (if (== (cells-at gm (+ (* r nc) c)) -1)
+                  (do (set cs 1)
+                      (set ok 1)
+                      (while (and (== ok 1) (< (+ c cs) nc))
+                        (do (if (and (== (cells-at gm (+ (+ (* r nc) c) cs)) -1)
+                                     (not (tb-closed rm root 1 (cells-at xs (+ c cs)) (cells-at ys r) (cells-at ys (+ r 1)))))
+                              (set cs (+ cs 1))
+                              (set ok 0))))
+                      (set rs 1)
+                      (set ok 1)
+                      (while (and (== ok 1) (< (+ r rs) nr))
+                        (do (set cc c)
+                            (while (and (== ok 1) (< cc (+ c cs)))
+                              (do (if (== (cells-at gm (+ (* (+ r rs) nc) cc)) -1)
+                                    (if (tb-closed rm root 0 (cells-at ys (+ r rs)) (cells-at xs cc) (cells-at xs (+ cc 1)))
+                                      (set ok 0))
+                                    (set ok 0))
+                                  (if (and (== ok 1) (> cc c))
+                                    (if (tb-closed rm root 1 (cells-at xs cc) (cells-at ys (+ r rs)) (cells-at ys (+ (+ r rs) 1)))
+                                      (set ok 0)))
+                                  (set cc (+ cc 1))))
+                            (if (== ok 1) (set rs (+ rs 1)))))
+                      (let [^I32 kc (tb-cell-add tc r c rs cs (cells-at xs c) (cells-at ys r)
+                                                (cells-at xs (+ c cs)) (cells-at ys (+ r rs)))
+                            ^:mut ^I32 rr r]
+                        (while (< rr (+ r rs))
+                          (do (set cc c)
+                              (while (< cc (+ c cs))
+                                (do (cells-set gm (+ (* rr nc) cc) kc)
+                                    (set cc (+ cc 1))))
+                              (set rr (+ rr 1)))))))
+                (set c (+ c 1))))
+          (set r (+ r 1))))
+    ;; the words, by the cell their centre is in
+    (cells-drop pr 0)
+    (let [^:mut ^I32 w w0]
+      (while (< w w1)
+        (do (let [^I32 cx (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)
+                  ^I32 cy (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)
+                  ^I32 ci (tb-index-of xs cx)
+                  ^I32 ri (tb-index-of ys cy)]
+              (if (and (>= ci 0) (>= ri 0))
+                (if (> (wd-get wd w (hd-tlen)) 0)
+                  (tb-pair-add pr wd (cells-at gm (+ (* ri nc) ci)) w))))
+            (set w (+ w 1)))))
+    (tb-flush-pairs pr so wd tc tw)
+    ;; enough text for a table
+    (let [^I32 total (- (tb-rows-of tc TCS) cfirst)
+          ^:mut ^I32 filled 0
+          ^:mut ^I32 k cfirst]
+      (while (< k (tb-rows-of tc TCS))
+        (do (if (> (cells-at tc (+ (* k TCS) 9)) 0) (set filled (+ filled 1)))
+            (set k (+ k 1))))
+      (if (or (< filled 4) (< (* filled 5) (* total 2)))
+        (do (cells-drop tc (* cfirst TCS))
+            (cells-drop tw tw0)
+            (return -1)))
+      (if (>= (* (tb-wide-cells tc cfirst (+ cfirst total) wd tw) 10) (* filled 3))
+        (do (cells-drop tc (* cfirst TCS))
+            (cells-drop tw tw0)
+            (return -1)))
+      (let [^I32 t (tb-add tb page (cells-at xs 0) (cells-at ys 0) (cells-at xs nc) (cells-at ys nr)
+                           PF_RULED 900 nr nc cfirst total)
+            ^:mut ^I32 i 0]
+        (cells-set tb (+ (* t TBS) 16) (cells-len tx))
+        (cells-set tb (+ (* t TBS) 17) (+ nc 1))
+        (while (<= i nc)
+          (do (cells-push tx (cells-at xs i))
+              (set i (+ i 1))))
+        (return t)))))
+
+(defn ^I32 tb-ruled-page [^:mut ^Cells rm ^I32 page ^:mut ^Cells xs ^:mut ^Cells ys ^:mut ^Cells gm
+                          ^:mut ^Cells tb ^:mut ^Cells tc ^Cells wd ^I32 w0 ^I32 w1
+                          ^:mut ^Cells pr ^:mut ^Cells so ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "Every component of the page's merged rules with two rules each way is a lattice candidate.")
+  (let [^I32 n (tb-rows-of rm RLS)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 nh 0
+        ^:mut ^I32 nv 0]
+    (tb-components rm)
+    (while (< i n)
+      (do (if (== (tb-find rm i) i)
+            (do (cells-drop xs 0)
+                (cells-drop ys 0)
+                (set nh 0)
+                (set nv 0)
+                (set j 0)
+                (while (< j n)
+                  (do (if (== (tb-find rm j) i)
+                        (do (let [^I32 pos (cells-at rm (+ (* j RLS) 1))
+                                  ^I32 a0 (cells-at rm (+ (* j RLS) 2))
+                                  ^I32 a1 (cells-at rm (+ (* j RLS) 3))]
+                              (if (== (cells-at rm (* j RLS)) 0)
+                                (do (set nh (+ nh 1))
+                                    (cells-push ys pos)
+                                    (cells-push xs a0)
+                                    (cells-push xs a1))
+                                (do (set nv (+ nv 1))
+                                    (cells-push xs pos)
+                                    (cells-push ys a0)
+                                    (cells-push ys a1))))))
+                      (set j (+ j 1))))
+                (if (and (>= nh 2) (>= nv 2))
+                  (do (tb-cluster xs (* 2 POS_TOL))
+                      (tb-cluster ys (* 2 POS_TOL))
+                      (tb-lattice rm i xs ys page gm tb tc wd w0 w1 pr so tw tx)))))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ----------------------------------------------------------------- selection
+
+(defn ^Bool tb-overlap [^Cells tb ^I32 a ^I32 b]
+  (comment "Do the boxes of candidates a and b overlap by more than a rule's width both ways.")
+  (let [^I32 ax0 (cells-at tb (+ (* a TBS) 1))
+        ^I32 ay0 (cells-at tb (+ (* a TBS) 2))
+        ^I32 ax1 (cells-at tb (+ (* a TBS) 3))
+        ^I32 ay1 (cells-at tb (+ (* a TBS) 4))
+        ^I32 bx0 (cells-at tb (+ (* b TBS) 1))
+        ^I32 by0 (cells-at tb (+ (* b TBS) 2))
+        ^I32 bx1 (cells-at tb (+ (* b TBS) 3))
+        ^I32 by1 (cells-at tb (+ (* b TBS) 4))]
+    (return (and (> (- (tb-min ax1 bx1) (tb-max ax0 bx0)) POS_TOL)
+                 (> (- (tb-min ay1 by1) (tb-max ay0 by0)) POS_TOL)))))
+
+(defn ^I32 tb-select [^:mut ^Cells tb ^I32 t0 ^:mut ^Cells so ^:mut ^Cells vals ^:mut ^Cells sa]
+  (comment "Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and")
+  (comment "leave them in tb in the order of their tops. Answers how many are kept.")
+  (let [^I32 n (tb-rows-of tb TBS)
+        ^:mut ^I32 i t0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 hit 0]
+    (cells-drop so 0)
+    (cells-drop vals 0)
+    (while (< i n)
+      (do (cells-push so (- i t0))
+          (cells-push vals (- 0 (cells-at tb (+ (* i TBS) 6))))
+          (cells-push vals i)
+          (set i (+ i 1))))
+    (tb-sort-idx so vals 2 0 1)
+    (set i 0)
+    (while (< i (cells-len so))
+      (do (let [^I32 c (+ t0 (cells-at so i))]
+            (set hit 0)
+            (set j 0)
+            (while (< j i)
+              (do (let [^I32 o (+ t0 (cells-at so j))]
+                    (if (== (cells-at tb (+ (* o TBS) 13)) 1)
+                      (if (tb-overlap tb c o) (set hit 1))))
+                  (set j (+ j 1))))
+            (if (== hit 0)
+              (do (cells-set tb (+ (* c TBS) 13) 1)
+                  (set kept (+ kept 1)))
+              (cells-set tb (+ (* c TBS) 13) 2)))
+          (set i (+ i 1))))
+    ;; the kept ones, by top
+    (cells-drop so 0)
+    (cells-drop vals 0)
+    (set i t0)
+    (while (< i n)
+      (do (if (== (cells-at tb (+ (* i TBS) 13)) 1)
+            (do (cells-push so (quot (cells-len vals) 2))
+                (cells-push vals (cells-at tb (+ (* i TBS) 2)))
+                (cells-push vals i)))
+          (set i (+ i 1))))
+    (tb-sort-idx so vals 2 0 1)
+    (cells-drop sa 0)
+    (set i 0)
+    (while (< i (cells-len so))
+      (do (let [^I32 src (cells-at vals (+ (* (cells-at so i) 2) 1))
+                ^:mut ^I32 f 0]
+            (while (< f TBS)
+              (do (cells-push sa (cells-at tb (+ (* src TBS) f)))
+                  (set f (+ f 1)))))
+          (set i (+ i 1))))
+    (cells-drop tb (* t0 TBS))
+    (set i 0)
+    (while (< i (cells-len sa))
+      (do (cells-push tb (cells-at sa i))
+          (set i (+ i 1))))
+    (return kept)))
+
+(defn ^I32 tb-claim [^Cells tb ^I32 t0 ^:mut ^Cells ln ^I32 l0 ^I32 l1]
+  (comment "Mark the lines of l0..l1 whose centre is in a kept table (t0.. of tb) with the table's index + 1.")
+  (let [^I32 n (tb-rows-of tb TBS)
+        ^:mut ^I32 k t0
+        ^:mut ^I32 l 0]
+    (while (< k n)
+      (do (set l l0)
+          (while (< l l1)
+            (do (let [^I32 cx (quot (+ (ln-get ln l (lh-x0)) (ln-get ln l (lh-x1))) 2)
+                      ^I32 cy (quot (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1))) 2)]
+                  (if (and (>= cx (cells-at tb (+ (* k TBS) 1))) (<= cx (cells-at tb (+ (* k TBS) 3))))
+                    (if (and (>= cy (cells-at tb (+ (* k TBS) 2))) (<= cy (cells-at tb (+ (* k TBS) 4))))
+                      (if (== (ln-get ln l 15) 0) (ln-set ln l 15 (+ k 1))))))
+                (set l (+ l 1))))
+          (set k (+ k 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------- the build
+
+;; ------------------------------------------------------------------ emission
+
+(defn ^I32 tb-put-profile [^:mut ^Cells text ^I32 prof]
+  (comment "The profile's name (SPEC 10.5) appended to the text arena.")
+  (if (== prof PF_RULED)
+    (do (text-append-cp text 114) (text-append-cp text 117) (text-append-cp text 108)
+        (text-append-cp text 101) (text-append-cp text 100)))
+  (if (== prof PF_PARTIAL)
+    (do (text-append-cp text 112) (text-append-cp text 97) (text-append-cp text 114)
+        (text-append-cp text 116) (text-append-cp text 105) (text-append-cp text 97)
+        (text-append-cp text 108)))
+  (if (== prof PF_SHADED)
+    (do (text-append-cp text 115) (text-append-cp text 104) (text-append-cp text 97)
+        (text-append-cp text 100) (text-append-cp text 101) (text-append-cp text 100)))
+  (if (== prof PF_WHITESPACE)
+    (do (text-append-cp text 119) (text-append-cp text 104) (text-append-cp text 105)
+        (text-append-cp text 116) (text-append-cp text 101) (text-append-cp text 115)
+        (text-append-cp text 112) (text-append-cp text 97) (text-append-cp text 99)
+        (text-append-cp text 101)))
+  (return 0))
+
+(defn ^I32 tb-words-raw [^Cells wd ^Cells et ^Cells tw ^I32 from ^I32 num ^:mut ^Cells raw]
+  (comment "The words tw[first..first+count) as code points into `raw`: a space between two words, none after a")
+  (comment "soft hyphen (which goes). `raw` is emptied first.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 started 0]
+    (cells-drop raw 0)
+    (while (< k num)
+      (do (let [^I32 w (cells-at tw (+ from k))
+                ^I32 ts (wd-get wd w (hd-tstart))
+                ^I32 tl (wd-get wd w (hd-tlen))]
+            (if (and (>= ts 0) (> tl 0))
+              (do (if (== started 1)
+                    (do (let [^I32 n (cells-len raw)]
+                          (if (and (> n 0) (== (cells-at raw (- n 1)) 173))
+                            (cells-drop raw (- n 1))
+                            (cells-push raw 32)))))
+                  (set started 1)
+                  (set j 0)
+                  (while (< j tl)
+                    (do (cells-push raw (cells-at et (+ ts j)))
+                        (set j (+ j 1)))))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 tb-emit-cell [^Cells tb ^I32 k ^I32 c ^I32 row ^Cells wd ^Cells et ^Cells tc ^Cells tw
+                         ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                         ^:mut ^Cells raw ^:mut ^Cells tmp]
+  (let [^I32 cb (* c TCS)
+        ^I32 page (cells-at tb (* k TBS))
+        ^I32 n (node-new nodes (nk-cell) row)
+        ^I32 wc (cells-at tc (+ cb 9))]
+    (node-set-conf nodes n 600)
+    (node-add-src nodes n (sr-text))
+    (node-add-src nodes n (sr-infer))
+    (if (> (cells-at tc (+ cb 10)) 0) (node-set-sub nodes n (cells-at tc (+ cb 10))))
+    (if (> (cells-at tc (+ cb 2)) 1) (node-set-attr-int nodes attrs n (fk-rowspan) (cells-at tc (+ cb 2))))
+    (if (> (cells-at tc (+ cb 3)) 1) (node-set-attr-int nodes attrs n (fk-colspan) (cells-at tc (+ cb 3))))
+    (if (> (cells-at tc (+ cb 11)) 0) (node-set-align nodes attrs n (cells-at tc (+ cb 11))))
+    (node-add-region nodes regions n page (cells-at tc (+ cb 4)) (cells-at tc (+ cb 5))
+                     (cells-at tc (+ cb 6)) (cells-at tc (+ cb 7)))
+    (if (== wc 0)
+      (node-set-aux nodes n 1)
+      (do (tb-words-raw wd et tw (cells-at tc (+ cb 8)) wc raw)
+          (let [^I32 t0 (cells-len text)]
+            (nz-nfc raw 0 (cells-len raw) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+            (node-set-text nodes n t0 (- (cells-len text) t0)))))
+    (return 0)))
+
+(defn ^I32 tb-put-word [^:mut ^Cells text ^Cells wd ^Cells et ^I32 w]
+  (comment "The word's code points appended to the text arena without its trailing full stops and colons.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^:mut ^I32 tl (wd-get wd w (hd-tlen))
+        ^:mut ^I32 j 0]
+    (while (and (> tl 1) (or (== (cells-at et (+ ts (- tl 1))) 46) (== (cells-at et (+ ts (- tl 1))) 58)))
+      (set tl (- tl 1)))
+    (while (< j tl)
+      (do (text-append-cp text (cells-at et (+ ts j)))
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^Bool tb-separator [^Cells wd ^Cells et ^I32 w]
+  (comment "A word that is only a separator between a label and its text: . : - en dash em dash.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))]
+    (if (!= tl 1) (return (== 0 1)))
+    (let [^I32 cp (cells-at et ts)]
+      (return (or (== cp 46) (or (== cp 58) (or (== cp 45) (or (== cp 8211) (== cp 8212)))))))))
+
+(defn ^I32 tb-emit-caption [^Cells tb ^I32 k ^Cells wd ^Cells et ^Cells ln ^Cells tq ^I32 t
+                            ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                            ^:mut ^Cells raw ^:mut ^Cells tmp]
+  (comment "The caption of table k as the table's first child: `label` (the keyword and the number), the rest as its text.")
+  (let [^I32 b (* k TBS)
+        ^I32 qn (cells-at tb (+ b 15))
+        ^I32 qf (cells-at tb (+ b 14))]
+    (if (== qn 0) (return 0))
+    (let [^I32 capn (node-new nodes (nk-caption) t)
+          ^I32 l0 (cells-at tq qf)
+          ^I32 w0 (ln-get ln l0 (lh-first))
+          ^I32 s (cells-len text)
+          ^:mut ^I32 x0 2000000000
+          ^:mut ^I32 y0 2000000000
+          ^:mut ^I32 x1 -2000000000
+          ^:mut ^I32 y1 -2000000000
+          ^:mut ^I32 q 0
+          ^:mut ^I32 gi 0
+          ^:mut ^I32 j 0
+          ^:mut ^I32 started 0]
+      (node-set-conf nodes capn 600)
+      (node-add-src nodes capn (sr-text))
+      (node-add-src nodes capn (sr-infer))
+      (tb-put-word text wd et w0)
+      (text-append-cp text 32)
+      (tb-put-word text wd et (+ w0 1))
+      (node-set-attr-text nodes attrs capn (fk-label) s (- (cells-len text) s))
+      (cells-drop raw 0)
+      (while (< q qn)
+        (do (let [^I32 l (cells-at tq (+ qf q))
+                  ^I32 lf (ln-get ln l (lh-first))
+                  ^I32 lc (ln-get ln l (lh-count))]
+              (if (< (ln-get ln l (lh-x0)) x0) (set x0 (ln-get ln l (lh-x0))))
+              (if (< (ln-get ln l (lh-y0)) y0) (set y0 (ln-get ln l (lh-y0))))
+              (if (> (ln-get ln l (lh-x1)) x1) (set x1 (ln-get ln l (lh-x1))))
+              (if (> (ln-get ln l (lh-y1)) y1) (set y1 (ln-get ln l (lh-y1))))
+              (set j 0)
+              (while (< j lc)
+                (do (let [^I32 w (+ lf j)
+                          ^I32 ts (wd-get wd w (hd-tstart))
+                          ^I32 tl (wd-get wd w (hd-tlen))]
+                      (if (and (>= gi 2) (> tl 0))
+                        (if (not (and (== started 0) (tb-separator wd et w)))
+                          (do (if (== started 1) (cells-push raw 32))
+                              (set started 1)
+                              (let [^:mut ^I32 m 0]
+                                (while (< m tl)
+                                  (do (cells-push raw (cells-at et (+ ts m)))
+                                      (set m (+ m 1)))))))))
+                    (set gi (+ gi 1))
+                    (set j (+ j 1)))))
+            (set q (+ q 1))))
+      (let [^I32 t0 (cells-len text)]
+        (nz-nfc raw 0 (cells-len raw) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+        (node-set-text nodes capn t0 (- (cells-len text) t0)))
+      (node-add-region nodes regions capn (cells-at tb b) x0 y0 x1 y1)
+      (return capn))))
+
+(defn ^:pub ^I32 tb-count [^Cells tb] (return (tb-rows-of tb TBS)))
+(defn ^:pub ^I32 tb-page [^Cells tb ^I32 k] (return (cells-at tb (* k TBS))))
+(defn ^:pub ^I32 tb-top [^Cells tb ^I32 k] (return (cells-at tb (+ (* k TBS) 2))))
+
+(defn ^:pub ^Bool tb-due [^Cells tb ^I32 k ^I32 page ^I32 ymid2]
+  (comment "Is table k on this page, and its top at or above twice-the-y `ymid2` (a line's baseline sum).")
+  (if (>= k (tb-rows-of tb TBS)) (return (== 0 1)))
+  (if (!= (cells-at tb (* k TBS)) page) (return (== 0 1)))
+  (return (<= (* 2 (cells-at tb (+ (* k TBS) 2))) ymid2)))
+
+(defn ^:pub ^I32 tb-skip [^Cells tb ^I32 k ^I32 page]
+  (comment "The first table at or after k that is on a page at or after `page`.")
+  (let [^:mut ^I32 i k]
+    (while (and (< i (tb-rows-of tb TBS)) (< (cells-at tb (* i TBS)) page))
+      (set i (+ i 1)))
+    (return i)))
+
+(defn ^I32 tb-emit-dropped [^Cells tb ^I32 f ^I32 r ^Cells wd ^Cells et ^Cells tc ^Cells tw
+                            ^:mut ^Cells text ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells ledger]
+  (comment "A header row of fragment f that repeats the first fragment's (P5.4): into the ledger as `duplicate-header-row`,")
+  (comment "its box, and its cells' text joined by a space.")
+  (let [^I32 b (* f TBS)
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 c cfirst
+        ^:mut ^I32 x0 2000000000
+        ^:mut ^I32 y0 2000000000
+        ^:mut ^I32 x1 -2000000000
+        ^:mut ^I32 y1 -2000000000
+        ^:mut ^I32 any 0
+        ^I32 s (cells-len text)]
+    (while (< c cend)
+      (do (if (== (cells-at tc (* c TCS)) r)
+            (do (if (< (cells-at tc (+ (* c TCS) 4)) x0) (set x0 (cells-at tc (+ (* c TCS) 4))))
+                (if (< (cells-at tc (+ (* c TCS) 5)) y0) (set y0 (cells-at tc (+ (* c TCS) 5))))
+                (if (> (cells-at tc (+ (* c TCS) 6)) x1) (set x1 (cells-at tc (+ (* c TCS) 6))))
+                (if (> (cells-at tc (+ (* c TCS) 7)) y1) (set y1 (cells-at tc (+ (* c TCS) 7))))
+                (if (> (cells-at tc (+ (* c TCS) 9)) 0)
+                  (do (if (== any 1) (text-append-cp text 32))
+                      (set any 1)
+                      (tb-words-raw wd et tw (cells-at tc (+ (* c TCS) 8)) (cells-at tc (+ (* c TCS) 9)) raw)
+                      (nz-nfc raw 0 (cells-len raw) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))))))
+          (set c (+ c 1))))
+    (let [^I32 l (ledger-add ledger (dr-duplicate-header-row) (cells-at tb b) x0 y0 x1 y1 700 (+ (sr-text) (sr-infer)))]
+      (ledger-set-text ledger l s (- (cells-len text) s)))
+    (return 0)))
+
+(defn ^:pub ^I32 tb-emit [^Cells tb ^I32 k ^I32 parent ^Cells wd ^Cells et ^Cells ln ^Cells tc ^Cells tw ^Cells tq
+                          ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                          ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells ledger]
+  (comment "Append table k to the Model under `parent` (the root, or the open section, D178): the table node, its caption, its row groups, rows")
+  (comment "and cells, in document order; the fragments that follow it on later pages (`tb-link`) are its rows too, and")
+  (comment "their repeated header rows go to the ledger. A table that is a later fragment of another is not written")
+  (comment "(answers -1). Answers the table's node.")
+  (if (!= (cells-at tb (+ (* k TBS) 21)) 0) (return -1))
+  (let [^I32 b (* k TBS)
+        ^I32 prof (cells-at tb (+ b 5))
+        ^I32 nhead (cells-at tb (+ b 11))
+        ^I32 t (node-new nodes (nk-table) parent)
+        ^:mut ^I32 f k
+        ^:mut ^I32 g -1
+        ^:mut ^I32 role 0
+        ^:mut ^I32 row -1
+        ^:mut ^I32 r 0
+        ^:mut ^I32 ci 0
+        ^:mut ^I32 want 0]
+    (node-set-conf nodes t 600)
+    (node-add-src nodes t (sr-text))
+    (node-add-src nodes t (sr-infer))
+    (if (== prof PF_RULED) (node-add-src nodes t (sr-vector)))
+    (let [^I32 s (cells-len text)]
+      (tb-put-profile text prof)
+      (node-set-attr-text nodes attrs t (fk-profile) s (- (cells-len text) s)))
+    (node-set-attr-int nodes attrs t (fk-columns) (cells-at tb (+ b 8)))
+    (if (> (cells-at tb (+ b 18)) 1)
+      (node-set-attr-int nodes attrs t (fk-continued) (cells-at tb (+ b 18))))
+    (tb-emit-caption tb k wd et ln tq t nodes attrs regions text raw tmp)
+    (while (>= f 0)
+      (do (let [^I32 fb (* f TBS)
+                ^I32 nrows (cells-at tb (+ fb 7))
+                ^I32 cfirst (cells-at tb (+ fb 9))
+                ^I32 cend (+ cfirst (cells-at tb (+ fb 10)))
+                ^I32 nfoot (cells-at tb (+ fb 12))
+                ^I32 nxt (cells-at tb (+ fb 19))
+                ^I32 skip (cells-at tb (+ fb 20))]
+            (node-add-region nodes regions t (cells-at tb fb) (cells-at tb (+ fb 1)) (cells-at tb (+ fb 2))
+                             (cells-at tb (+ fb 3)) (cells-at tb (+ fb 4)))
+            (set r 0)
+            (while (< r skip)
+              (do (tb-emit-dropped tb f r wd et tc tw text raw tmp ledger)
+                  (set r (+ r 1))))
+            (set ci cfirst)
+            (while (and (< ci cend) (< (cells-at tc (* ci TCS)) skip))
+              (set ci (+ ci 1)))
+            (while (< r nrows)
+              (do (set want (rl-body))
+                  (if (and (== f k) (< r nhead)) (set want (rl-head)))
+                  (if (and (== nxt 0) (>= r (- nrows nfoot))) (set want (rl-foot)))
+                  (if (!= want role)
+                    (do (set g (node-new nodes (nk-rowgroup) t))
+                        (node-set-sub nodes g want)
+                        (node-set-conf nodes g 600)
+                        (node-add-src nodes g (sr-infer))
+                        (set role want)))
+                  (set row (node-new nodes (nk-row) g))
+                  (node-set-conf nodes row 600)
+                  (node-add-src nodes row (sr-infer))
+                  (while (and (< ci cend) (== (cells-at tc (* ci TCS)) r))
+                    (do (if (== (bit-and (cells-at tc (+ (* ci TCS) 12)) 1) 0)
+                          (tb-emit-cell tb f ci row wd et tc tw nodes attrs regions text raw tmp))
+                        (set ci (+ ci 1))))
+                  (set r (+ r 1))))
+            (set f (- nxt 1)))))
+    (return t)))
+
+;; =============================================================== text rows (P5.2)
+;;
+;; The text-based profiles (partial, shaded, whitespace) share one machine: the words of a region are sorted into
+;; BASELINE ROWS (`rw`, stride 10: first count by size x0 x1 y0 y1 sfirst scount; the words are `wl[first, first+count)`
+;; in x order), each row is cut into CHUNKS (`sg`, stride 6: row x0 x1 wfirst wcount spare) where a gap is wider than
+;; SEG_NUM/SEG_DEN of the row's size, the chunks of the rows of a candidate are projected on the x axis, and the
+;; CHANNELS (`ch`, stride 2: x0 x1) are the stretches wider than a gap where at most `allow` rows have a word:
+;; the columns are what lies between them. A chunk that crosses a channel is a cell with a span.
+
+
+(defn ^Bool tb-upright [^Cells wd ^I32 w]
+  (let [^I32 r (wd-get wd w (hd-rot))]
+    (return (or (< r 100) (> r 35900)))))
+
+(defn ^Bool tb-wless [^Cells wd ^I32 a ^I32 b ^I32 mode]
+  (comment "Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.")
+  (if (== mode 0)
+    (do (let [^I32 ya (wd-get wd a (hd-by1))
+              ^I32 yb (wd-get wd b (hd-by1))]
+          (if (!= ya yb) (return (< ya yb))))))
+  (let [^I32 xa (wd-get wd a (hd-x0))
+        ^I32 xb (wd-get wd b (hd-x0))]
+    (if (!= xa xb) (return (< xa xb)))
+    (return (< a b))))
+
+(defn ^I32 tb-sort-words [^:mut ^Cells wl ^Cells wd ^I32 from ^I32 to ^I32 mode]
+  (comment "Shell sort of wl[from, to) by `tb-wless`.")
+  (let [^I32 n (- to from)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at wl (+ from i)))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at wl (+ from (- j h))))
+                      (if (tb-wless wd v u mode)
+                        (do (cells-set wl (+ from j) u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set wl (+ from j) v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 tb-rows [^Cells wd ^I32 w0 ^I32 w1 ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1
+                    ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg]
+  (comment "The upright words w0..w1 of the page whose centre is in the box, as baseline rows and chunks (see the")
+  (comment "head of this section). Answers the number of rows.")
+  (let [^:mut ^I32 w w0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0]
+    (cells-drop wl 0)
+    (cells-drop rw 0)
+    (cells-drop sg 0)
+    (while (< w w1)
+      (do (let [^I32 cx (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)
+                ^I32 cy (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)]
+            (if (and (> (wd-get wd w (hd-tlen)) 0) (tb-upright wd w))
+              (if (and (>= cx rx0) (and (<= cx rx1) (and (>= cy ry0) (<= cy ry1))))
+                (cells-push wl w))))
+          (set w (+ w 1))))
+    (set n (cells-len wl))
+    (tb-sort-words wl wd 0 n 0)
+    (set i 0)
+    (while (< i n)
+      (do (let [^I32 w0i (cells-at wl i)
+                ^I32 ref (wd-get wd w0i (hd-by1))
+                ^I32 tol (quot (* 3 (tb-max 500 (wd-get wd w0i (wf-size)))) 10)]
+            (set j (+ i 1))
+            (while (and (< j n) (<= (tb-abs (- (wd-get wd (cells-at wl j) (hd-by1)) ref)) tol))
+              (set j (+ j 1)))
+            (tb-sort-words wl wd i j 1)
+            ;; the row
+            (let [^I32 ri (tb-rows-of rw RWS)
+                  ^:mut ^I32 sumy 0
+                  ^:mut ^I32 sums 0
+                  ^:mut ^I32 x0 2000000000
+                  ^:mut ^I32 x1 -2000000000
+                  ^:mut ^I32 y0 2000000000
+                  ^:mut ^I32 y1 -2000000000
+                  ^:mut ^I32 k i]
+              (while (< k j)
+                (do (let [^I32 wk (cells-at wl k)]
+                      (set sumy (+ sumy (wd-get wd wk (hd-by1))))
+                      (set sums (+ sums (tb-max 1 (wd-get wd wk (wf-size)))))
+                      (if (< (wd-get wd wk (hd-x0)) x0) (set x0 (wd-get wd wk (hd-x0))))
+                      (if (> (wd-get wd wk (hd-x1)) x1) (set x1 (wd-get wd wk (hd-x1))))
+                      (if (< (wd-get wd wk (hd-y0)) y0) (set y0 (wd-get wd wk (hd-y0))))
+                      (if (> (wd-get wd wk (hd-y1)) y1) (set y1 (wd-get wd wk (hd-y1)))))
+                    (set k (+ k 1))))
+              (let [^I32 cnt (- j i)
+                    ^I32 size (quot sums cnt)
+                    ^I32 thr (quot (* size SEG_NUM) SEG_DEN)
+                    ^I32 sf (tb-rows-of sg SGS)
+                    ^:mut ^I32 cstart i
+                    ^:mut ^I32 cmax (wd-get wd (cells-at wl i) (hd-x1))]
+                (cells-push rw i)
+                (cells-push rw cnt)
+                (cells-push rw (quot sumy cnt))
+                (cells-push rw size)
+                (cells-push rw x0)
+                (cells-push rw x1)
+                (cells-push rw y0)
+                (cells-push rw y1)
+                (cells-push rw sf)
+                (cells-push rw 0)
+                (set k (+ i 1))
+                (while (<= k j)
+                  (do (if (or (== k j) (> (- (wd-get wd (cells-at wl k) (hd-x0)) cmax) thr))
+                        (do (cells-push sg ri)
+                            (cells-push sg (wd-get wd (cells-at wl cstart) (hd-x0)))
+                            (cells-push sg cmax)
+                            (cells-push sg cstart)
+                            (cells-push sg (- k cstart))
+                            (cells-push sg 0)
+                            (if (< k j)
+                              (do (set cstart k)
+                                  (set cmax (wd-get wd (cells-at wl k) (hd-x1)))))))
+                      (if (< k j)
+                        (if (> (wd-get wd (cells-at wl k) (hd-x1)) cmax)
+                          (set cmax (wd-get wd (cells-at wl k) (hd-x1)))))
+                      (set k (+ k 1))))
+                (cells-set rw (+ (* ri RWS) 9) (- (tb-rows-of sg SGS) sf)))))
+          (set i j)))
+    (return (tb-rows-of rw RWS))))
+
+(defn ^I32 tb-channels [^Cells wd ^Cells wl ^Cells rw ^Cells sg ^I32 ra ^I32 rb ^I32 allow ^I32 minw
+                        ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en]
+  (comment "The channels of rows ra..rb: the stretches of the x axis, at least minw wide, that at most `allow` of the")
+  (comment "tabular rows' words (rows of two chunks or more) cover. `st` and `en` are scratch. Answers how many.")
+  (let [^:mut ^I32 r ra
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cov 0
+        ^:mut ^I32 prev 0
+        ^:mut ^I32 cs -1
+        ^:mut ^I32 ce 0]
+    (cells-drop ch 0)
+    (cells-drop st 0)
+    (cells-drop en 0)
+    (while (< r rb)
+      (do (if (>= (cells-at rw (+ (* r RWS) 9)) 2)
+            (do (set k 0)
+                (while (< k (cells-at rw (+ (* r RWS) 1)))
+                  (do (let [^I32 w (cells-at wl (+ (cells-at rw (* r RWS)) k))]
+                        (cells-push st (wd-get wd w (hd-x0)))
+                        (cells-push en (wd-get wd w (hd-x1))))
+                      (set k (+ k 1))))))
+          (set r (+ r 1))))
+    (tb-sort-nums st)
+    (tb-sort-nums en)
+    (let [^I32 n (cells-len st)]
+      (if (== n 0) (return 0))
+      (set prev (cells-at st 0))
+      (while (or (< i n) (< j n))
+        (do (let [^:mut ^I32 x 0]
+              (if (< i n)
+                (set x (cells-at st i))
+                (set x (cells-at en j)))
+              (if (and (< j n) (< (cells-at en j) x)) (set x (cells-at en j)))
+              ;; the piece (prev, x) has coverage cov
+              (if (<= cov allow)
+                (do (if (< cs 0) (set cs prev))
+                    (set ce x))
+                (do (if (>= cs 0)
+                      (do (if (>= (- ce cs) minw)
+                            (do (cells-push ch cs)
+                                (cells-push ch ce)))
+                          (set cs -1)))))
+              (while (and (< i n) (== (cells-at st i) x))
+                (do (set cov (+ cov 1))
+                    (set i (+ i 1))))
+              (while (and (< j n) (== (cells-at en j) x))
+                (do (set cov (- cov 1))
+                    (set j (+ j 1))))
+              (set prev x))))
+    (if (and (>= cs 0) (>= (- ce cs) minw))
+      (do (cells-push ch cs)
+          (cells-push ch ce)))
+    (return (quot (cells-len ch) 2)))))
+
+(defn ^I32 tb-col-of [^Cells ch ^I32 x]
+  (comment "The column of x: how many channel midpoints are at or before it.")
+  (let [^I32 n (quot (cells-len ch) 2)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 c 0]
+    (while (< i n)
+      (do (if (<= (quot (+ (cells-at ch (* i 2)) (cells-at ch (+ (* i 2) 1))) 2) x)
+            (set c (+ c 1)))
+          (set i (+ i 1))))
+    (return c)))
+
+(defn ^I32 tb-word-cx [^Cells wd ^I32 w]
+  (return (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)))
+
+(defn ^I32 tb-chunk-a [^Cells wd ^Cells wl ^Cells sg ^Cells ch ^I32 s]
+  (comment "The first column of chunk s: the column of its first word's centre.")
+  (return (tb-col-of ch (tb-word-cx wd (cells-at wl (cells-at sg (+ (* s SGS) 3)))))))
+
+(defn ^I32 tb-chunk-b [^Cells wd ^Cells wl ^Cells sg ^Cells ch ^I32 s]
+  (comment "The last column of chunk s: the column of its last word's centre.")
+  (return (tb-col-of ch (tb-word-cx wd (cells-at wl (- (+ (cells-at sg (+ (* s SGS) 3)) (cells-at sg (+ (* s SGS) 4))) 1))))))
+
+(defn ^I32 tb-row-map [^Cells wd ^Cells wl ^Cells rw ^Cells sg ^Cells ch ^I32 ra ^I32 rb ^I32 ncols
+                       ^:mut ^Cells rmap ^:mut ^Cells occ]
+  (comment "The table row of each baseline row ra..rb (rmap[r - ra]): a baseline row goes on the row above when")
+  (comment "it is a continuation of a wrapped cell: a tight line pitch (at most 1.35 of the size and 4/5 of the")
+  (comment "mean pitch), no chunk with a span, and chunks only in columns the row above had, at most half of them.")
+  (comment "Answers the number of table rows.")
+  (let [^:mut ^I32 r ra
+        ^:mut ^I32 rows -1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 cont 0
+        ^:mut ^I32 occn 0
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 s 0
+        ^:mut ^I32 mean 0]
+    (if (> (- rb ra) 1)
+      (set mean (quot (- (cells-at rw (+ (* (- rb 1) RWS) 2)) (cells-at rw (+ (* ra RWS) 2))) (- (- rb ra) 1))))
+    (cells-drop rmap 0)
+    (cells-drop occ 0)
+    (while (< c ncols)
+      (do (cells-push occ 0)
+          (set c (+ c 1))))
+    (while (< r rb)
+      (do (set cont 0)
+          (if (and (> rows -1) (> r ra))
+            (do (let [^I32 pitch (- (cells-at rw (+ (* r RWS) 2)) (cells-at rw (+ (* (- r 1) RWS) 2)))
+                      ^I32 size (cells-at rw (+ (* r RWS) 3))
+                      ^I32 nchunks (cells-at rw (+ (* r RWS) 9))]
+                  (if (and (<= (* pitch 20) (* size 27)) (and (> mean 0) (<= (* pitch 5) (* mean 4))))
+                    (do (set occn 0)
+                        (set c 0)
+                        (while (< c ncols)
+                          (do (if (== (cells-at occ c) 1) (set occn (+ occn 1)))
+                              (set c (+ c 1))))
+                        (if (and (< nchunks occn) (<= (* nchunks 2) occn))
+                          (do (set ok 1)
+                              (set s 0)
+                              (while (< s nchunks)
+                                (do (let [^I32 si (+ (cells-at rw (+ (* r RWS) 8)) s)
+                                          ^I32 a (tb-chunk-a wd wl sg ch si)
+                                          ^I32 b (tb-chunk-b wd wl sg ch si)]
+                                      (if (!= a b) (set ok 0))
+                                      (if (!= (cells-at occ a) 1) (set ok 0)))
+                                    (set s (+ s 1))))
+                              (set cont ok))))))))
+          (if (== cont 0)
+            (do (set rows (+ rows 1))
+                (set c 0)
+                (while (< c ncols)
+                  (do (cells-set occ c 0)
+                      (set c (+ c 1))))))
+          (set s 0)
+          (while (< s (cells-at rw (+ (* r RWS) 9)))
+            (do (let [^I32 si (+ (cells-at rw (+ (* r RWS) 8)) s)
+                      ^I32 a (tb-chunk-a wd wl sg ch si)
+                      ^I32 b (tb-chunk-b wd wl sg ch si)]
+                  (set c a)
+                  (while (<= c b)
+                    (do (cells-set occ c 1)
+                        (set c (+ c 1)))))
+                (set s (+ s 1))))
+          (cells-push rmap rows)
+          (set r (+ r 1))))
+    (return (+ rows 1))))
+
+(defn ^I32 tb-cut [^Cells ch ^I32 k ^I32 lo ^I32 hi]
+  (comment "The boundary before column k: lo for the first, else the midpoint of channel k-1; hi after the last.")
+  (let [^I32 n (quot (cells-len ch) 2)]
+    (if (<= k 0) (return lo))
+    (if (> k n) (return hi))
+    (return (quot (+ (cells-at ch (* (- k 1) 2)) (cells-at ch (+ (* (- k 1) 2) 1))) 2))))
+
+(defn ^I32 tb-text-grid [^Cells wd ^Cells wl ^Cells rw ^Cells sg
+                         ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                         ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                         ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx
+                         ^I32 page ^I32 ra ^I32 rb ^I32 profile ^I32 score ^I32 ext
+                         ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The cells of the rows ra..rb (see the head of this section) as a candidate table of this profile:")
+  (comment "ext 1 means `rmap` already says which table row each baseline row is (shaded: the fills' bands). The box")
+  (comment "bx0..by1 widens the box of the words (the rules, the fills): 2000000000 2000000000 -2000000000 -2000000000")
+  (comment "for none. Answers the")
+  (comment "table's index, -1 when there are not two columns and two rows.")
+  (let [^:mut ^I32 ntab 0
+        ^:mut ^I32 sumsz 0
+        ^:mut ^I32 r ra
+        ^:mut ^I32 nch 0
+        ^:mut ^I32 ncols 0
+        ^:mut ^I32 nrows 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 tr 0
+        ^:mut ^I32 minx 2000000000
+        ^:mut ^I32 maxx -2000000000
+        ^:mut ^I32 miny 2000000000
+        ^:mut ^I32 maxy -2000000000]
+    (while (< r rb)
+      (do (if (>= (cells-at rw (+ (* r RWS) 9)) 2) (set ntab (+ ntab 1)))
+          (set sumsz (+ sumsz (cells-at rw (+ (* r RWS) 3))))
+          (if (< (cells-at rw (+ (* r RWS) 4)) minx) (set minx (cells-at rw (+ (* r RWS) 4))))
+          (if (> (cells-at rw (+ (* r RWS) 5)) maxx) (set maxx (cells-at rw (+ (* r RWS) 5))))
+          (if (< (cells-at rw (+ (* r RWS) 6)) miny) (set miny (cells-at rw (+ (* r RWS) 6))))
+          (if (> (cells-at rw (+ (* r RWS) 7)) maxy) (set maxy (cells-at rw (+ (* r RWS) 7))))
+          (set r (+ r 1))))
+    (if (or (< ntab 2) (<= (- rb ra) 1)) (return -1))
+    (set nch (tb-channels wd wl rw sg ra rb (quot ntab 6) (quot (* (quot sumsz (- rb ra)) SEG_NUM) SEG_DEN) ch st en))
+    (if (< nch 1) (return -1))
+    (set ncols (+ nch 1))
+    (if (> ncols 40) (return -1))
+    (if (== ext 0)
+      (set nrows (tb-row-map wd wl rw sg ch ra rb ncols rmap st))
+      (do (set nrows 0)
+          (set r 0)
+          (while (< r (- rb ra))
+            (do (if (>= (cells-at rmap r) nrows) (set nrows (+ (cells-at rmap r) 1)))
+                (set r (+ r 1))))))
+    (if (< nrows 2) (return -1))
+    ;; the cover maps, the table rows' y ranges
+    (cells-drop gm 0)
+    (cells-drop gs 0)
+    (cells-drop en 0)
+    (cells-drop ry 0)
+    (set c 0)
+    (while (< c (* nrows ncols))
+      (do (cells-push gm -1)
+          (cells-push gs 0)
+          (cells-push en -1)
+          (set c (+ c 1))))
+    (set c 0)
+    (while (< c nrows)
+      (do (cells-push ry 2000000000)
+          (cells-push ry -2000000000)
+          (set c (+ c 1))))
+    (set r ra)
+    (while (< r rb)
+      (do (set tr (cells-at rmap (- r ra)))
+          (if (>= tr 0)
+            (do (if (< (cells-at rw (+ (* r RWS) 6)) (cells-at ry (* tr 2)))
+                  (cells-set ry (* tr 2) (cells-at rw (+ (* r RWS) 6))))
+                (if (> (cells-at rw (+ (* r RWS) 7)) (cells-at ry (+ (* tr 2) 1)))
+                  (cells-set ry (+ (* tr 2) 1) (cells-at rw (+ (* r RWS) 7))))
+                (set s 0)
+                (while (< s (cells-at rw (+ (* r RWS) 9)))
+                  (do (set q (+ (cells-at rw (+ (* r RWS) 8)) s))
+                      (set a (tb-chunk-a wd wl sg ch q))
+                      (set b (tb-chunk-b wd wl sg ch q))
+                      (if (== (cells-at gm (+ (* tr ncols) a)) -1)
+                        (do (let [^:mut ^I32 free 1
+                                  ^:mut ^I32 kf a]
+                              (while (<= kf b)
+                                (do (if (!= (cells-at gm (+ (* tr ncols) kf)) -1) (set free 0))
+                                    (set kf (+ kf 1))))
+                              (if (== free 0) (set b a))
+                              (set kf a)
+                              (while (<= kf b)
+                                (do (cells-set gm (+ (* tr ncols) kf) a)
+                                    (set kf (+ kf 1))))
+                              (cells-set gs (+ (* tr ncols) a) (+ (- b a) 1)))))
+                      (set s (+ s 1))))))
+          (set r (+ r 1))))
+    ;; the cells, row-major
+    (let [^I32 cfirst (tb-rows-of tc TCS)]
+      (set tr 0)
+      (while (< tr nrows)
+        (do (set c 0)
+            (while (< c ncols)
+              (do (let [^I32 st0 (cells-at gm (+ (* tr ncols) c))
+                        ^:mut ^I32 span 1]
+                    (if (>= st0 0) (set span (cells-at gs (+ (* tr ncols) st0))))
+                    (if (or (< st0 0) (== st0 c))
+                      (do (let [^I32 idx (tb-cell-add tc tr c 1 span
+                                                      (tb-cut ch c minx maxx) (cells-at ry (* tr 2))
+                                                      (tb-cut ch (+ c span) minx maxx) (cells-at ry (+ (* tr 2) 1)))
+                                ^:mut ^I32 ki c]
+                            (while (< ki (+ c span))
+                              (do (cells-set en (+ (* tr ncols) ki) idx)
+                                  (set ki (+ ki 1)))))))
+                    (set c (+ c span)))))
+            (set tr (+ tr 1))))
+      ;; the words
+      (cells-drop pr 0)
+      (set r ra)
+      (while (< r rb)
+        (do (set tr (cells-at rmap (- r ra)))
+            (if (>= tr 0)
+              (do (set s 0)
+                  (while (< s (cells-at rw (+ (* r RWS) 9)))
+                    (do (set q (+ (cells-at rw (+ (* r RWS) 8)) s))
+                        (set a (tb-chunk-a wd wl sg ch q))
+                        (let [^I32 cell (cells-at en (+ (* tr ncols) a))
+                              ^:mut ^I32 kw (cells-at sg (+ (* q SGS) 3))]
+                          (while (< kw (+ (cells-at sg (+ (* q SGS) 3)) (cells-at sg (+ (* q SGS) 4))))
+                            (do (tb-pair-add pr wd cell (cells-at wl kw))
+                                (set kw (+ kw 1)))))
+                        (set s (+ s 1))))))
+            (set r (+ r 1))))
+      (tb-flush-pairs pr so wd tc tw)
+      ;; the box
+      (let [^:mut ^I32 x0 minx
+            ^:mut ^I32 y0 miny
+            ^:mut ^I32 x1 maxx
+            ^:mut ^I32 y1 maxy]
+        (if (< bx0 x0) (set x0 bx0))
+        (if (< by0 y0) (set y0 by0))
+        (if (> bx1 x1) (set x1 bx1))
+        (if (> by1 y1) (set y1 by1))
+        (let [^I32 t (tb-add tb page x0 y0 x1 y1 profile score nrows ncols cfirst (- (tb-rows-of tc TCS) cfirst))
+              ^:mut ^I32 k 0]
+          (cells-set tb (+ (* t TBS) 16) (cells-len tx))
+          (cells-set tb (+ (* t TBS) 17) (+ ncols 1))
+          (while (<= k ncols)
+            (do (cells-push tx (tb-cut ch k minx maxx))
+                (set k (+ k 1))))
+          (return t))))))
+
+;; ========================================================= what the cells say (P5.3)
+
+(defn ^Bool tb-num-char [^I32 cp]
+  (comment "A character a number may hold besides digits: separators, signs, currency, percent, brackets.")
+  (return (or (== cp 44) (or (== cp 46) (or (== cp 45) (or (== cp 43) (or (== cp 37) (or (== cp 36)
+          (or (== cp 8364) (or (== cp 163) (or (== cp 165) (or (== cp 40) (or (== cp 41) (or (== cp 47)
+          (or (== cp 58) (or (== cp 8722) (or (== cp 8211) (or (== cp 160) (or (== cp 8201) (== cp 8239))))))))))))))))))))
+
+(defn ^I32 tb-cell-numeric [^Cells wd ^Cells et ^Cells tw ^Cells tc ^I32 c]
+  (comment "1 when the cell is up to three words made only of digits and number marks, with a digit; else 0.")
+  (let [^I32 cb (* c TCS)
+        ^I32 n (cells-at tc (+ cb 9))
+        ^I32 from (cells-at tc (+ cb 8))
+        ^:mut ^I32 digits 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0]
+    (if (or (== n 0) (> n 3)) (return 0))
+    (while (< k n)
+      (do (let [^I32 w (cells-at tw (+ from k))
+                ^I32 ts (wd-get wd w (hd-tstart))
+                ^I32 tl (wd-get wd w (hd-tlen))]
+            (set j 0)
+            (while (< j tl)
+              (do (let [^I32 cp (cells-at et (+ ts j))]
+                    (if (and (>= cp 48) (<= cp 57))
+                      (set digits (+ digits 1))
+                      (if (not (tb-num-char cp)) (return 0))))
+                  (set j (+ j 1)))))
+          (set k (+ k 1))))
+    (if (> digits 0) (return 1))
+    (return 0)))
+
+(defn ^I32 tb-cell-bold [^Cells wd ^Cells tw ^Cells tc ^I32 c]
+  (comment "1 when every word of the cell is bold, 0 when one is not, -1 for an empty cell.")
+  (let [^I32 cb (* c TCS)
+        ^I32 n (cells-at tc (+ cb 9))
+        ^I32 from (cells-at tc (+ cb 8))
+        ^:mut ^I32 k 0]
+    (if (== n 0) (return -1))
+    (while (< k n)
+      (do (if (== (bit-and (wd-get wd (cells-at tw (+ from k)) (wf-style)) (sy-bold)) 0) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 tb-row-stat [^Cells tc ^I32 cfirst ^I32 cend ^I32 r ^Cells wd ^Cells et ^Cells tw ^I32 what]
+  (comment "Of the cells that start in row r: what 0 how many are not empty, 1 how many are bold, 2 how many are")
+  (comment "numeric, 3 how many there are.")
+  (let [^:mut ^I32 c cfirst
+        ^:mut ^I32 n 0]
+    (while (< c cend)
+      (do (if (== (cells-at tc (* c TCS)) r)
+            (do (if (== what 3) (set n (+ n 1)))
+                (if (and (== what 0) (> (cells-at tc (+ (* c TCS) 9)) 0)) (set n (+ n 1)))
+                (if (and (== what 1) (== (tb-cell-bold wd tw tc c) 1)) (set n (+ n 1)))
+                (if (and (== what 2) (== (tb-cell-numeric wd et tw tc c) 1)) (set n (+ n 1)))))
+          (set c (+ c 1))))
+    (return n)))
+
+(defn ^Bool tb-row-bold [^Cells tc ^I32 cfirst ^I32 cend ^I32 r ^Cells wd ^Cells et ^Cells tw]
+  (comment "Is row r bold: it has cells and every one that is not empty is bold.")
+  (let [^I32 ne (tb-row-stat tc cfirst cend r wd et tw 0)]
+    (return (and (> ne 0) (== (tb-row-stat tc cfirst cend r wd et tw 1) ne)))))
+
+(defn ^I32 tb-num-cols [^Cells tb ^I32 k ^I32 r0 ^Cells wd ^Cells et ^Cells tc ^Cells tw]
+  (comment "How many columns, over the rows from r0 on, have at least 3 cells of which 4/5 are numeric.")
+  (let [^I32 b (* k TBS)
+        ^I32 ncols (cells-at tb (+ b 8))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 col 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ne 0
+        ^:mut ^I32 nn 0
+        ^:mut ^I32 total 0]
+    (while (< col ncols)
+      (do (set ne 0)
+          (set nn 0)
+          (set c cfirst)
+          (while (< c cend)
+            (do (if (and (== (cells-at tc (+ (* c TCS) 1)) col) (and (>= (cells-at tc (* c TCS)) r0) (== (cells-at tc (+ (* c TCS) 3)) 1)))
+                  (if (> (cells-at tc (+ (* c TCS) 9)) 0)
+                    (do (set ne (+ ne 1))
+                        (if (== (tb-cell-numeric wd et tw tc c) 1) (set nn (+ nn 1))))))
+                (set c (+ c 1))))
+          (if (and (>= ne 3) (>= (* nn 10) (* ne 8))) (set total (+ total 1)))
+          (set col (+ col 1))))
+    (return total)))
+
+(defn ^I32 tb-head-rows [^Cells tb ^I32 k ^Cells wd ^Cells et ^Cells tc ^Cells tw]
+  (comment "How many leading rows are the header: the bold ones (a table of bold rows has none, and a header is")
+  (comment "at most half of the rows); else, when the first row has no number and a column below it is numeric,")
+  (comment "that one row.")
+  (let [^I32 b (* k TBS)
+        ^I32 nrows (cells-at tb (+ b 7))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 h 0]
+    (while (and (< h (- nrows 1)) (tb-row-bold tc cfirst cend h wd et tw))
+      (set h (+ h 1)))
+    (if (and (> h 0) (<= (* h 2) (+ nrows 1))) (return h))
+    (if (and (>= nrows 3) (== (tb-row-stat tc cfirst cend 0 wd et tw 2) 0))
+      (if (and (>= (tb-row-stat tc cfirst cend 0 wd et tw 0) 2) (>= (tb-num-cols tb k 1 wd et tc tw) 1))
+        (return 1)))
+    (return 0)))
+
+(defn ^I32 tb-foot-rows [^Cells tb ^I32 k ^I32 nhead ^Cells wd ^Cells et ^Cells tc ^Cells tw]
+  (comment "1 when the last row is bold and the row above it is not, with at least two body rows; else 0.")
+  (let [^I32 b (* k TBS)
+        ^I32 nrows (cells-at tb (+ b 7))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))]
+    (if (< (- nrows nhead) 3) (return 0))
+    (if (and (tb-row-bold tc cfirst cend (- nrows 1) wd et tw) (not (tb-row-bold tc cfirst cend (- nrows 2) wd et tw)))
+      (return 1))
+    (return 0)))
+
+;; ------------------------------------------------------------------ alignment
+
+(defn ^I32 tb-col-align [^Cells tb ^I32 k ^I32 col ^I32 r0 ^I32 r1 ^Cells wd ^Cells tc ^Cells tw]
+  (comment "The alignment (an `al` code, 0 none) of the cells of column `col` in rows r0..r1 (single-column ones),")
+  (comment "decided together against their text extent (SPEC 10.10): start when every start gap is within t (a")
+  (comment "quarter of the size) and the end gaps vary by more than 2t, end the other way round, center when the")
+  (comment "two gaps agree within t on every cell and the start gap varies.")
+  (let [^I32 b (* k TBS)
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 c cfirst
+        ^:mut ^I32 n 0
+        ^:mut ^I32 box0 2000000000
+        ^:mut ^I32 box1 -2000000000
+        ^:mut ^I32 size 0
+        ^:mut ^I32 smax -2000000000
+        ^:mut ^I32 smin 2000000000
+        ^:mut ^I32 emax -2000000000
+        ^:mut ^I32 emin 2000000000
+        ^:mut ^I32 cen 1
+        ^:mut ^I32 res 0]
+    (while (< c cend)
+      (do (if (and (== (cells-at tc (+ (* c TCS) 1)) col)
+                   (and (>= (cells-at tc (* c TCS)) r0) (and (< (cells-at tc (* c TCS)) r1)
+                        (and (== (cells-at tc (+ (* c TCS) 3)) 1) (> (cells-at tc (+ (* c TCS) 9)) 0)))))
+            (do (set n (+ n 1))
+                (if (< (cells-at tc (+ (* c TCS) 13)) box0) (set box0 (cells-at tc (+ (* c TCS) 13))))
+                (if (> (cells-at tc (+ (* c TCS) 14)) box1) (set box1 (cells-at tc (+ (* c TCS) 14))))
+                (if (== size 0)
+                  (set size (wd-get wd (cells-at tw (cells-at tc (+ (* c TCS) 8))) (wf-size))))))
+          (set c (+ c 1))))
+    (if (< n 2) (return 0))
+    (let [^I32 t (quot size 4)]
+      (set c cfirst)
+      (while (< c cend)
+        (do (if (and (== (cells-at tc (+ (* c TCS) 1)) col)
+                     (and (>= (cells-at tc (* c TCS)) r0) (and (< (cells-at tc (* c TCS)) r1)
+                          (and (== (cells-at tc (+ (* c TCS) 3)) 1) (> (cells-at tc (+ (* c TCS) 9)) 0)))))
+              (do (let [^I32 sg0 (- (cells-at tc (+ (* c TCS) 13)) box0)
+                        ^I32 eg0 (- box1 (cells-at tc (+ (* c TCS) 14)))]
+                    (if (> sg0 smax) (set smax sg0))
+                    (if (< sg0 smin) (set smin sg0))
+                    (if (> eg0 emax) (set emax eg0))
+                    (if (< eg0 emin) (set emin eg0))
+                    (if (> (tb-abs (- sg0 eg0)) t) (set cen 0)))))
+            (set c (+ c 1))))
+      (if (and (<= smax t) (> (- emax emin) (* 2 t))) (set res 1))
+      (if (and (== res 0) (and (<= emax t) (> (- smax smin) (* 2 t)))) (set res 3))
+      (if (and (== res 0) (and (== cen 1) (> (- smax smin) (* 2 t)))) (set res 2)))
+    (return res)))
+
+(defn ^I32 tb-head-align [^Cells tb ^I32 k ^I32 c ^I32 colal ^Cells wd ^Cells tc ^Cells tw]
+  (comment "The alignment of header cell c: against its cell box in a ruled table (and when it spans columns),")
+  (comment "else against the extent of its column's BODY text (the header is not its own measure): centre or end when")
+  (comment "the text is clear of the body's edges by 4t, start when it is flush and the column's body is start.")
+  (let [^I32 b (* k TBS)
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^I32 cb (* c TCS)
+        ^I32 col (cells-at tc (+ cb 1))
+        ^:mut ^I32 bx0 (cells-at tc (+ cb 4))
+        ^:mut ^I32 bx1 (cells-at tc (+ cb 6))
+        ^:mut ^I32 j cfirst]
+    (if (== (cells-at tc (+ cb 9)) 0) (return 0))
+    (if (and (!= (cells-at tb (+ b 5)) PF_RULED) (== (cells-at tc (+ cb 3)) 1))
+      (do (set bx0 2000000000)
+          (set bx1 -2000000000)
+          (while (< j cend)
+            (do (if (and (== (cells-at tc (+ (* j TCS) 1)) col)
+                         (and (== (cells-at tc (+ (* j TCS) 3)) 1)
+                              (and (>= (cells-at tc (* j TCS)) (cells-at tb (+ b 11))) (> (cells-at tc (+ (* j TCS) 9)) 0))))
+                  (do (if (< (cells-at tc (+ (* j TCS) 13)) bx0) (set bx0 (cells-at tc (+ (* j TCS) 13))))
+                      (if (> (cells-at tc (+ (* j TCS) 14)) bx1) (set bx1 (cells-at tc (+ (* j TCS) 14))))))
+                (set j (+ j 1))))
+          (if (> bx0 bx1) (return 0))))
+    (let [^I32 t (quot (wd-get wd (cells-at tw (cells-at tc (+ cb 8))) (wf-size)) 4)
+          ^I32 sg0 (- (cells-at tc (+ cb 13)) bx0)
+          ^I32 eg0 (- bx1 (cells-at tc (+ cb 14)))]
+      (if (and (<= (tb-abs (- sg0 eg0)) t) (>= (tb-min sg0 eg0) (* 4 t))) (return 2))
+      (if (and (>= eg0 0) (and (<= eg0 t) (>= sg0 (* 4 t)))) (return 3))
+      (if (and (>= sg0 0) (and (<= sg0 t) (and (== colal 1) (>= eg0 0)))) (return 1))
+      (return 0))))
+
+(defn ^I32 tb-aligns [^Cells tb ^I32 k ^Cells wd ^Cells tc ^Cells tw]
+  (comment "Set the `align` of every cell of table k: the body columns together, the header cells each, the foot")
+  (comment "cells as their column.")
+  (let [^I32 b (* k TBS)
+        ^I32 nrows (cells-at tb (+ b 7))
+        ^I32 ncols (cells-at tb (+ b 8))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^I32 nhead (cells-at tb (+ b 11))
+        ^I32 nfoot (cells-at tb (+ b 12))
+        ^:mut ^I32 col 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 al 0]
+    (while (< col ncols)
+      (do (set al (tb-col-align tb k col nhead (- nrows nfoot) wd tc tw))
+          (set c cfirst)
+          (while (< c cend)
+            (do (if (and (== (cells-at tc (+ (* c TCS) 1)) col) (== (cells-at tc (+ (* c TCS) 3)) 1))
+                  (do (if (>= (cells-at tc (* c TCS)) nhead)
+                        (cells-set tc (+ (* c TCS) 11) al)
+                        (do (let [^I32 ha (tb-head-align tb k c al wd tc tw)]
+                              (cells-set tc (+ (* c TCS) 11) ha))))))
+                (set c (+ c 1))))
+          (set col (+ col 1))))
+    (set c cfirst)
+    (while (< c cend)
+      (do (if (and (< (cells-at tc (* c TCS)) nhead) (> (cells-at tc (+ (* c TCS) 3)) 1))
+            (do (let [^I32 ha (tb-head-align tb k c 0 wd tc tw)]
+                  (cells-set tc (+ (* c TCS) 11) ha))))
+          (set c (+ c 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------- captions
+
+(defdata tb-kw
+  :emitter kin.lang/flat-array
+  :stride 9
+  :data [5 116 97 98 108 101 0 0 0
+         3 116 97 98 0 0 0 0 0
+         7 116 97 98 101 108 108 101 0
+         7 116 97 98 108 101 97 117 0
+         5 116 97 98 108 97 0 0 0
+         6 116 97 98 101 108 97 0 0
+         7 116 97 98 101 108 108 97 0
+         5 116 97 98 101 108 0 0 0
+         6 116 97 98 101 108 108 0 0]
+  :accessors {^I32 tb-kw-count [^I32 ignored]
+              ^I32 tb-kw-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^I32 tb-lower [^I32 cp]
+  (if (and (>= cp 65) (<= cp 90)) (return (+ cp 32)))
+  (return cp))
+
+(defn ^Bool tb-is-label-word [^Cells wd ^Cells et ^I32 w]
+  (comment "Is the word a table keyword (any case, a trailing full stop ignored): Table, Tab., Tabelle, Tableau...")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^:mut ^I32 tl (wd-get wd w (hd-tlen))
+        ^:mut ^I32 r 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 same 1]
+    (if (< tl 1) (return (== 0 1)))
+    (if (== (cells-at et (+ ts (- tl 1))) 46) (set tl (- tl 1)))
+    (while (< r (tb-kw-count 0))
+      (do (if (== (tb-kw-at 0 r 0) tl)
+            (do (set same 1)
+                (set j 0)
+                (while (< j tl)
+                  (do (if (!= (tb-lower (cells-at et (+ ts j))) (tb-kw-at 0 r (+ j 1))) (set same 0))
+                      (set j (+ j 1))))
+                (if (== same 1) (return (== 1 1)))))
+          (set r (+ r 1))))
+    (return (== 0 1))))
+
+(defn ^Bool tb-is-label-number [^Cells wd ^Cells et ^I32 w]
+  (comment "A table number: starts with a digit, or a capital letter and a digit (S1).")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))]
+    (if (< tl 1) (return (== 0 1)))
+    (let [^I32 c0 (cells-at et ts)]
+      (if (and (>= c0 48) (<= c0 57)) (return (== 1 1)))
+      (if (and (>= tl 2) (and (>= c0 65) (<= c0 90)))
+        (do (let [^I32 c1 (cells-at et (+ ts 1))]
+              (return (and (>= c1 48) (<= c1 57))))))
+      (return (== 0 1)))))
+
+(defn ^Bool tb-line-label [^Cells wd ^Cells et ^Cells ln ^I32 l]
+  (comment "Does line l start with a table keyword and a table number.")
+  (let [^I32 w0 (ln-get ln l (lh-first))]
+    (if (< (ln-get ln l (lh-count)) 2) (return (== 0 1)))
+    (return (and (tb-is-label-word wd et w0) (tb-is-label-number wd et (+ w0 1))))))
+
+(defn ^I32 tb-caption [^:mut ^Cells tb ^I32 k ^Cells wd ^Cells et ^:mut ^Cells ln ^I32 l0 ^I32 l1 ^:mut ^Cells tq]
+  (comment "Find the caption of table k among the unclaimed lines l0..l1: a line that starts with a table keyword")
+  (comment "and a number, over the table or under it within two and a half line heights, preferring the one over it;")
+  (comment "the lines on its baseline to its right and the lines under it that continue it are part of it. They are")
+  (comment "claimed and their numbers pushed on `tq` (qfirst, qcount in the table's cells 14 and 15).")
+  (let [^I32 b (* k TBS)
+        ^I32 tx0 (cells-at tb (+ b 1))
+        ^I32 ty0 (cells-at tb (+ b 2))
+        ^I32 tx1 (cells-at tb (+ b 3))
+        ^I32 ty1 (cells-at tb (+ b 4))
+        ^:mut ^I32 l l0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestd 2000000000
+        ^:mut ^I32 above 0]
+    (while (< l l1)
+      (do (if (== (ln-get ln l 15) 0)
+            (if (tb-line-label wd et ln l)
+              (if (and (< (ln-get ln l (lh-x0)) tx1) (> (ln-get ln l (lh-x1)) tx0))
+                (do (let [^I32 lht (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0)))
+                          ^I32 da (- ty0 (ln-get ln l (lh-y1)))
+                          ^I32 db (- (ln-get ln l (lh-y0)) ty1)]
+                      (if (and (>= da -300) (<= (* da 2) (* lht 5)))
+                        (if (< (tb-abs da) bestd)
+                          (do (set best l) (set bestd (tb-abs da)) (set above 1))))
+                      (if (and (>= db -300) (and (<= (* db 2) (* lht 5)) (== above 0)))
+                        (if (< (tb-abs db) bestd)
+                          (do (set best l) (set bestd (tb-abs db))))))))))
+          (set l (+ l 1))))
+    (if (< best 0) (return 0))
+    (cells-set tb (+ b 14) (cells-len tq))
+    (cells-push tq best)
+    (ln-set ln best 15 (+ k 1))
+    (let [^I32 h (- (ln-get ln best (lh-y1)) (ln-get ln best (lh-y0)))
+          ^:mut ^I32 curx1 (ln-get ln best (lh-x1))
+          ^:mut ^I32 cury1 (ln-get ln best (lh-y1))
+          ^:mut ^I32 more 1
+          ^:mut ^I32 rounds 0
+          ^:mut ^I32 pick -1]
+      (set l l0)
+      (while (< l l1)
+        (do (if (== (ln-get ln l 15) 0)
+              (if (and (> (ln-get ln l (lh-x0)) (- curx1 100)) (<= (- (ln-get ln l (lh-x0)) curx1) (* 2 h)))
+                (if (<= (tb-abs (- (ln-get ln l (lh-by0)) (ln-get ln best (lh-by0)))) (quot h 3))
+                  (do (cells-push tq l)
+                      (ln-set ln l 15 (+ k 1))
+                      (set curx1 (ln-get ln l (lh-x1)))))))
+            (set l (+ l 1))))
+      (while (and (== more 1) (< rounds 6))
+        (do (set more 0)
+            (set rounds (+ rounds 1))
+            (set pick -1)
+            (set l l0)
+            (while (< l l1)
+              (do (if (== (ln-get ln l 15) 0)
+                    (if (and (>= (ln-get ln l (lh-y0)) (- cury1 200)) (<= (- (ln-get ln l (lh-y0)) cury1) (quot (* h 3) 5)))
+                      (if (and (< (ln-get ln l (lh-x0)) tx1) (> (ln-get ln l (lh-x1)) tx0))
+                        (if (not (tb-line-label wd et ln l))
+                          (if (< (ln-get ln l (lh-y1)) (+ ty0 300))
+                            (if (< pick 0) (set pick l)))))))
+                  (set l (+ l 1))))
+            (if (and (>= pick 0) (== above 1))
+              (do (cells-push tq pick)
+                  (ln-set ln pick 15 (+ k 1))
+                  (set cury1 (ln-get ln pick (lh-y1)))
+                  (set more 1)))))
+      (cells-set tb (+ b 15) (- (cells-len tq) (cells-at tb (+ b 14)))))
+    (return 1)))
+
+;; ============================================================ the text profiles (P5.2)
+
+(defn ^I32 tb-reject [^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx
+                      ^I32 nt ^I32 c0 ^I32 w0 ^I32 x0]
+  (comment "Forget the candidate that was just built: every arena goes back to the length it had.")
+  (cells-drop tb (* nt TBS))
+  (cells-drop tc (* c0 TCS))
+  (cells-drop tw w0)
+  (cells-drop tx x0)
+  (return 0))
+
+(defn ^I32 tb-tabular-rows [^Cells tb ^I32 k ^Cells tc]
+  (comment "How many rows of table k have two cells or more with text.")
+  (let [^I32 b (* k TBS)
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 c cfirst
+        ^:mut ^I32 row -1
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 total 0]
+    (while (< c cend)
+      (do (if (!= (cells-at tc (* c TCS)) row)
+            (do (if (>= cnt 2) (set total (+ total 1)))
+                (set row (cells-at tc (* c TCS)))
+                (set cnt 0)))
+          (if (> (cells-at tc (+ (* c TCS) 9)) 0) (set cnt (+ cnt 1)))
+          (set c (+ c 1))))
+    (if (>= cnt 2) (set total (+ total 1)))
+    (return total)))
+
+(defn ^I32 tb-score [^Cells tb ^I32 k ^Cells wd ^Cells et ^Cells tc ^Cells tw]
+  (comment "The score (0 to 1000, 0 = not a table) of text-based candidate k of its profile (SPEC 10.5): prose in")
+  (comment "columns is not a table, so cells that are long, or that end like sentences, refuse it. The whitespace")
+  (comment "profile has no rules or fills to vouch for it and asks for more: three columns or a numeric column, and a header.")
+  (let [^I32 b (* k TBS)
+        ^I32 prof (cells-at tb (+ b 5))
+        ^I32 ncols (cells-at tb (+ b 8))
+        ^I32 nrows (cells-at tb (+ b 7))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 c cfirst
+        ^:mut ^I32 ne 0
+        ^:mut ^I32 nw 0
+        ^:mut ^I32 nlong 0
+        ^:mut ^I32 nend 0
+        ^:mut ^I32 nprose 0
+        ^:mut ^I32 score 0]
+    (while (< c cend)
+      (do (let [^I32 cn (cells-at tc (+ (* c TCS) 9))]
+            (if (> cn 0)
+              (do (set ne (+ ne 1))
+                  (set nw (+ nw cn))
+                  (if (> cn 8) (set nlong (+ nlong 1)))
+                  (if (>= cn 2)
+                    (do (let [^I32 fw (cells-at tw (cells-at tc (+ (* c TCS) 8)))
+                              ^I32 lw2 (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) (- cn 1)))
+                              ^I32 c0 (cells-at et (wd-get wd fw (hd-tstart)))
+                              ^I32 ts2 (wd-get wd lw2 (hd-tstart))
+                              ^I32 tl2 (wd-get wd lw2 (hd-tlen))]
+                          (if (and (>= c0 97) (<= c0 122)) (set nprose (+ nprose 1)))
+                          (if (and (> tl2 1) (== (cells-at et (+ ts2 (- tl2 1))) 45)) (set nprose (+ nprose 1))))))
+                  (if (>= cn 3)
+                    (do (let [^I32 lw (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) (- cn 1)))
+                              ^I32 ts (wd-get wd lw (hd-tstart))
+                              ^I32 tl (wd-get wd lw (hd-tlen))]
+                          (if (and (> tl 0) (== (cells-at et (+ ts (- tl 1))) 46)) (set nend (+ nend 1)))))))))
+          (set c (+ c 1))))
+    (if (< ne 4) (return 0))
+    (if (> (* nprose 10) (* ne 3)) (return 0))
+    (if (and (== prof PF_WHITESPACE) (< (* ne 100) (* (* nrows ncols) 55))) (return 0))
+    (if (< (* ne 100) (* (* nrows ncols) 35)) (return 0))
+    (if (> (* nend 5) (* ne 2)) (return 0))
+    (if (> (* nlong 5) ne) (return 0))
+    (if (== prof PF_WHITESPACE)
+      (do (if (> (* nw 10) (* ne 40)) (return 0))
+          (set score 400)
+          (if (>= ncols 3) (set score (+ score 100)))
+          (if (>= (tb-num-cols tb k 1 wd et tc tw) 1) (set score (+ score 100)))
+          (if (>= (tb-head-rows tb k wd et tc tw) 1) (set score (+ score 100)))
+          (if (>= nrows 4) (set score (+ score 50)))
+          (if (and (== ncols 2) (and (>= nrows 3) (and (== (tb-num-cols tb k 1 wd et tc tw) 1) (<= (* nw 10) (* ne 25)))))
+            (set score (+ score 100)))
+          (if (< score 600) (return 0))
+          (return score)))
+    (if (> (* nw 10) (* ne 80)) (return 0))
+    (if (== prof PF_PARTIAL) (return (+ 800 (quot (* 90 (tb-tabular-rows tb k tc)) (tb-max 1 nrows)))))
+    (return (+ 750 (quot (* 40 (tb-tabular-rows tb k tc)) (tb-max 1 nrows))))))
+
+(defn ^I32 tb-first-row [^Cells rw ^I32 nr ^I32 y0]
+  (comment "The first row of a partial candidate: the first row whose centre is below the top rule y0, and the")
+  (comment "tabular rows (at most three) directly above it, which are the header when the rule is the one under it.")
+  (let [^:mut ^I32 ra 0
+        ^:mut ^I32 n 0]
+    (while (and (< ra nr) (< (quot (+ (cells-at rw (+ (* ra RWS) 6)) (cells-at rw (+ (* ra RWS) 7))) 2) y0))
+      (set ra (+ ra 1)))
+    (while (and (> ra 0) (and (< ra nr) (and (< n 3) (and (>= (cells-at rw (+ (* (- ra 1) RWS) 9)) 2)
+                                           (<= (* 10 (- (cells-at rw (+ (* ra RWS) 2)) (cells-at rw (+ (* (- ra 1) RWS) 2))))
+                                               (* 24 (cells-at rw (+ (* ra RWS) 3))))))))
+      (do (set ra (- ra 1))
+          (set n (+ n 1))))
+    (return ra)))
+
+(defn ^I32 tb-partial-try [^Cells wd ^Cells et ^I32 w0 ^I32 w1 ^I32 page ^I32 ex0 ^I32 ex1 ^I32 ya ^I32 yb
+                            ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
+                            ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                            ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "One partial candidate: the words between the rules at ya and yb (and the tabular rows directly above ya),")
+  (comment "columns from their channels; kept when it scores.")
+  (let [^I32 nr (tb-rows wd w0 w1 (- ex0 POS_TOL) (- ya 9000) (+ ex1 POS_TOL) yb wl rw sg)
+        ^I32 ra (tb-first-row rw nr ya)
+        ^I32 nt (tb-rows-of tb TBS)
+        ^I32 c0 (tb-rows-of tc TCS)
+        ^I32 wl0 (cells-len tw)
+        ^I32 xl0 (cells-len tx)]
+    (if (>= (- nr ra) 3)
+      (do (let [^I32 t (tb-text-grid wd wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx
+                                     page ra nr PF_PARTIAL 850 0 ex0 ya ex1 yb)]
+            (if (>= t 0)
+              (do (let [^I32 sc (tb-score tb t wd et tc tw)]
+                    (if (== sc 0)
+                      (tb-reject tb tc tw tx nt c0 wl0 xl0)
+                      (cells-set tb (+ (* t TBS) 6) sc))))))))
+    (return 0)))
+
+(defn ^I32 tb-partial-page [^Cells rm ^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
+                            ^:mut ^Cells used ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
+                            ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                            ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "Chains of horizontal rules of one extent (booktabs: top, mid, bottom) are partial candidates: the")
+  (comment "words between the first and the last rule, columns from the channels of their text.")
+  (let [^I32 n (tb-rows-of rm RLS)
+        ^:mut ^I32 nh 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 ex0 0
+        ^:mut ^I32 ex1 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 last 0]
+    (while (and (< nh n) (== (cells-at rm (* nh RLS)) 0))
+      (set nh (+ nh 1)))
+    (cells-drop used 0)
+    (while (< i nh)
+      (do (cells-push used 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nh)
+      (do (if (and (== (cells-at used i) 0) (>= (- (cells-at rm (+ (* i RLS) 3)) (cells-at rm (+ (* i RLS) 2))) 3000))
+            (do (set cnt 1)
+                (set ex0 (cells-at rm (+ (* i RLS) 2)))
+                (set ex1 (cells-at rm (+ (* i RLS) 3)))
+                (set last (cells-at rm (+ (* i RLS) 1)))
+                (cells-set used i 1)
+                (cells-push used (cells-at rm (+ (* i RLS) 1)))
+                (set j (+ i 1))
+                (while (and (< j nh) (<= (- (cells-at rm (+ (* j RLS) 1)) last) 30000))
+                  (do (if (== (cells-at used j) 0)
+                        (do (let [^I32 a0 (cells-at rm (+ (* j RLS) 2))
+                                  ^I32 a1 (cells-at rm (+ (* j RLS) 3))
+                                  ^I32 ov (- (tb-min ex1 a1) (tb-max ex0 a0))
+                                  ^I32 lj (- a1 a0)]
+                              (if (and (>= lj 2000) (and (>= (* ov 10) (* lj 6)) (>= (* ov 10) (* (- ex1 ex0) 3))))
+                                (do (set cnt (+ cnt 1))
+                                    (set last (cells-at rm (+ (* j RLS) 1)))
+                                    (if (< a0 ex0) (set ex0 a0))
+                                    (if (> a1 ex1) (set ex1 a1))
+                                    (cells-set used j 1)
+                                    (cells-push used (cells-at rm (+ (* j RLS) 1))))))))
+                      (set j (+ j 1))))
+                (if (>= cnt 2)
+                  (do (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at rm (+ (* i RLS) 1)) last wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
+                      (if (>= cnt 3)
+                        (do (set m nh)
+                            (while (< (+ m 1) (cells-len used))
+                              (do (tb-partial-try wd et w0 w1 page ex0 ex1 (cells-at used m) (cells-at used (+ m 1)) wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx)
+                                  (set m (+ m 1))))))))
+                (cells-drop used nh)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 tb-bands [^Cells fl ^:mut ^Cells so ^:mut ^Cells bd]
+  (comment "The page's fills (`fl`) grouped into bands of one top and bottom (`bd`, stride 6: y0 y1 x0 x1 colour n),")
+  (comment "in order of their tops. Answers how many bands.")
+  (let [^I32 n (tb-rows-of fl 6)
+        ^:mut ^I32 i 0]
+    (cells-drop so 0)
+    (cells-drop bd 0)
+    (while (< i n)
+      (do (cells-push so i)
+          (set i (+ i 1))))
+    (tb-sort-idx so fl 6 1 0)
+    (set i 0)
+    (while (< i n)
+      (do (let [^I32 f (cells-at so i)
+                ^I32 x0 (cells-at fl (* f 6))
+                ^I32 y0 (cells-at fl (+ (* f 6) 1))
+                ^I32 x1 (cells-at fl (+ (* f 6) 2))
+                ^I32 y1 (cells-at fl (+ (* f 6) 3))
+                ^I32 nb (tb-rows-of bd 6)]
+            (if (and (> nb 0)
+                     (and (<= (tb-abs (- y0 (cells-at bd (* (- nb 1) 6)))) 150)
+                          (and (<= (tb-abs (- y1 (cells-at bd (+ (* (- nb 1) 6) 1)))) 150)
+                               (<= x0 (+ (cells-at bd (+ (* (- nb 1) 6) 3)) 300)))))
+              (do (let [^I32 lb (* (- nb 1) 6)]
+                    (if (< x0 (cells-at bd (+ lb 2))) (cells-set bd (+ lb 2) x0))
+                    (if (> x1 (cells-at bd (+ lb 3))) (cells-set bd (+ lb 3) x1))
+                    (cells-set bd (+ lb 5) (+ (cells-at bd (+ lb 5)) 1))))
+              (do (cells-push bd y0)
+                  (cells-push bd y1)
+                  (cells-push bd x0)
+                  (cells-push bd x1)
+                  (cells-push bd (cells-at fl (+ (* f 6) 4)))
+                  (cells-push bd 1))))
+          (set i (+ i 1))))
+    (return (tb-rows-of bd 6))))
+
+(defn ^I32 tb-band-member [^Cells bd ^Cells used ^I32 b0 ^I32 b1 ^I32 y]
+  (comment "The band of b0..b1 that belongs to the stack being built (used = 2) and whose top and bottom hold y.")
+  (let [^:mut ^I32 i b0]
+    (while (<= i b1)
+      (do (if (and (== (cells-at used i) 2) (and (>= y (cells-at bd (* i 6))) (<= y (cells-at bd (+ (* i 6) 1)))))
+            (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 tb-shaded-page [^Cells fl ^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
+                           ^:mut ^Cells bd ^:mut ^Cells used ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
+                           ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                           ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                           ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "Stacks of three or more bands of one extent, each starting where the one before ended or one row")
+  (comment "later, with two colours or a gap (zebra), are shaded candidates: a band is a row (several baselines may")
+  (comment "be in one), a baseline row that is in no band is a row of its own, columns from the channels.")
+  (let [^I32 nb (tb-bands fl so bd)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 last 0
+        ^:mut ^I32 ncol 0
+        ^:mut ^I32 gapseen 0]
+    (cells-drop used 0)
+    (while (< i nb)
+      (do (cells-push used 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nb)
+      (do (if (== (cells-at used i) 0)
+            (do (let [^I32 sx0 (cells-at bd (+ (* i 6) 2))
+                      ^I32 sx1 (cells-at bd (+ (* i 6) 3))
+                      ^I32 colour0 (cells-at bd (+ (* i 6) 4))]
+                  (set cnt 1)
+                  (set last i)
+                  (set ncol 1)
+                  (set gapseen 0)
+                  (cells-set used i 2)
+                  (set j (+ i 1))
+                  (while (and (< j nb) (<= (- (cells-at bd (* j 6)) (cells-at bd (+ (* last 6) 1))) 3000))
+                    (do (if (and (== (cells-at used j) 0)
+                                 (and (<= (tb-abs (- (cells-at bd (+ (* j 6) 2)) sx0)) 400)
+                                      (<= (tb-abs (- (cells-at bd (+ (* j 6) 3)) sx1)) 400)))
+                          (do (let [^I32 g (- (cells-at bd (* j 6)) (cells-at bd (+ (* last 6) 1)))
+                                    ^I32 hj (- (cells-at bd (+ (* j 6) 1)) (cells-at bd (* j 6)))]
+                                (if (and (>= g -150) (<= (* g 5) (* hj 6)))
+                                  (do (cells-set used j 2)
+                                      (set cnt (+ cnt 1))
+                                      (if (> g 150) (set gapseen 1))
+                                      (if (!= (cells-at bd (+ (* j 6) 4)) colour0) (set ncol 2))
+                                      (set last j))))))
+                        (set j (+ j 1))))
+                  (if (and (>= cnt 3) (or (== ncol 2) (== gapseen 1)))
+                    (do (let [^I32 y0 (cells-at bd (* i 6))
+                              ^I32 y1 (cells-at bd (+ (* last 6) 1))
+                              ^I32 nr (tb-rows wd w0 w1 sx0 y0 sx1 y1 wl rw sg)
+                              ^I32 nt (tb-rows-of tb TBS)
+                              ^I32 c0 (tb-rows-of tc TCS)
+                              ^I32 wl0 (cells-len tw)
+                              ^I32 xl0 (cells-len tx)
+                              ^:mut ^I32 r 0
+                              ^:mut ^I32 trow -1
+                              ^:mut ^I32 prevkey -999999
+                              ^:mut ^I32 key 0]
+                          (if (>= nr 3)
+                            (do (cells-drop rmap 0)
+                                (while (< r nr)
+                                  (do (set key (tb-band-member bd used i last
+                                                               (quot (+ (cells-at rw (+ (* r RWS) 6)) (cells-at rw (+ (* r RWS) 7))) 2)))
+                                      (if (< key 0) (set key (- (- 0 r) 10)))
+                                      (if (!= key prevkey)
+                                        (do (set trow (+ trow 1))
+                                            (set prevkey key)))
+                                      (cells-push rmap trow)
+                                      (set r (+ r 1))))
+                                (let [^I32 t (tb-text-grid wd wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx
+                                                           page 0 nr PF_SHADED 800 1 sx0 y0 sx1 y1)]
+                                  (if (>= t 0)
+                                    (do (let [^I32 sc (tb-score tb t wd et tc tw)]
+                                          (if (== sc 0)
+                                            (tb-reject tb tc tw tx nt c0 wl0 xl0)
+                                            (cells-set tb (+ (* t TBS) 6) sc)))))))))))
+                  (set j i)
+                  (while (<= j last)
+                    (do (if (== (cells-at used j) 2) (cells-set used j 1))
+                        (set j (+ j 1)))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 tb-whitespace-page [^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
+                               ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
+                               ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
+                               ^:mut ^Cells gm ^:mut ^Cells gs ^:mut ^Cells ry ^:mut ^Cells pr ^:mut ^Cells so
+                               ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx]
+  (comment "The rows of the whole page, in runs of rows that are cut in two or more chunks (a row of one chunk")
+  (comment "goes in a run when a row of two follows it), each run of three such rows or more a whitespace candidate.")
+  (let [^I32 nr (tb-rows wd w0 w1 -2000000000 -2000000000 2000000000 2000000000 wl rw sg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ntab 0
+        ^:mut ^I32 more 1]
+    (while (< i nr)
+      (do (if (>= (cells-at rw (+ (* i RWS) 9)) 2)
+            (do (set j i)
+                (set ntab 1)
+                (set more 1)
+                (while (== more 1)
+                  (do (set k (+ j 1))
+                      (if (>= k nr)
+                        (set more 0)
+                        (do (let [^I32 gapk (- (cells-at rw (+ (* k RWS) 2)) (cells-at rw (+ (* j RWS) 2)))
+                                  ^I32 szk (cells-at rw (+ (* k RWS) 3))]
+                              (if (> (* gapk 10) (* szk 30))
+                                (set more 0)
+                                (if (>= (cells-at rw (+ (* k RWS) 9)) 2)
+                                  (do (set j k)
+                                      (set ntab (+ ntab 1)))
+                                  (if (and (== (cells-at rw (+ (* k RWS) 9)) 1) (< (+ k 1) nr))
+                                    (if (>= (cells-at rw (+ (* (+ k 1) RWS) 9)) 2)
+                                      (set j k)
+                                      (set more 0))
+                                    (set more 0)))))))))
+                (while (and (> j i) (< (cells-at rw (+ (* j RWS) 9)) 2))
+                  (set j (- j 1)))
+                (if (>= ntab 3)
+                  (do (let [^I32 nt (tb-rows-of tb TBS)
+                            ^I32 c0 (tb-rows-of tc TCS)
+                            ^I32 wl0 (cells-len tw)
+                            ^I32 xl0 (cells-len tx)
+                            ^I32 t (tb-text-grid wd wl rw sg ch st en rmap gm gs ry pr so tb tc tw tx
+                                                 page i (+ j 1) PF_WHITESPACE 0 0
+                                                 2000000000 2000000000 -2000000000 -2000000000)]
+                        (if (>= t 0)
+                          (do (let [^I32 sc (tb-score tb t wd et tc tw)]
+                                (if (== sc 0)
+                                  (tb-reject tb tc tw tx nt c0 wl0 xl0)
+                                  (cells-set tb (+ (* t TBS) 6) sc)))))))))
+            (set j i))
+          (set i (+ j 1))))
+    (return 0)))
+
+;; ====================================================== across pages (P5.4, SPEC 10.5)
+;;
+;; Two tables on consecutive pages are one table when the first is the last body block of its page and the second is
+;; the first of its page (page furniture, the top and bottom eighth of the page, is not a block), they have the same
+;; columns (the same count, the boundaries within a few points), no caption of its own that is not the first's again
+;; (`Table 3 (continued)`), and the second either has no header or repeats the first's header rows text for text. The
+;; repeated rows are dropped to the ledger at emission (`tb-emit`). The link is in the table's spare cells: 19 the
+;; next fragment + 1, 20 the rows of this fragment that are dropped, 21 the first fragment + 1 (a later fragment is
+;; not written by itself), and 18 of the first the number of pages it spans.
+
+(defn ^Bool tb-body-line-outside [^Cells ln ^I32 page ^I32 y0 ^I32 y1 ^I32 zlo ^I32 zhi]
+  (comment "Is there a line, not claimed by a table, on `page` whose centre is in y0..y1 and outside the furniture")
+  (comment "zones (above zlo, below zhi)?")
+  (let [^I32 n (ln-count ln)
+        ^:mut ^I32 l 0]
+    (while (< l n)
+      (do (if (and (== (ln-get ln l (lh-page)) page) (== (ln-get ln l 15) 0))
+            (do (let [^I32 cy (quot (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1))) 2)]
+                  (if (and (>= cy y0) (and (<= cy y1) (and (> cy zlo) (< cy zhi))))
+                    (return (== 1 1))))))
+          (set l (+ l 1))))
+    (return (== 0 1))))
+
+(defn ^Bool tb-same-columns [^Cells tb ^I32 a ^I32 b ^Cells tx]
+  (comment "The same number of columns, every boundary of b within 1/60 of the width of a's (at least 5 pt) of a's.")
+  (let [^I32 na (cells-at tb (+ (* a TBS) 17))
+        ^I32 nb (cells-at tb (+ (* b TBS) 17))
+        ^I32 xa (cells-at tb (+ (* a TBS) 16))
+        ^I32 xb (cells-at tb (+ (* b TBS) 16))
+        ^:mut ^I32 i 0]
+    (if (!= na nb) (return (== 0 1)))
+    (if (< na 3) (return (== 0 1)))
+    (let [^I32 tol (tb-max 500 (quot (- (cells-at tx (+ xa (- na 1))) (cells-at tx xa)) 60))]
+      (while (< i na)
+        (do (if (> (tb-abs (- (cells-at tx (+ xa i)) (cells-at tx (+ xb i)))) tol) (return (== 0 1)))
+            (set i (+ i 1))))
+      (return (== 1 1)))))
+
+(defn ^Bool tb-word-same [^Cells wd ^Cells et ^I32 a ^I32 b]
+  (let [^I32 n (wd-get wd a (hd-tlen))
+        ^I32 sa (wd-get wd a (hd-tstart))
+        ^I32 sb (wd-get wd b (hd-tstart))
+        ^:mut ^I32 i 0]
+    (if (!= n (wd-get wd b (hd-tlen))) (return (== 0 1)))
+    (while (< i n)
+      (do (if (!= (cells-at et (+ sa i)) (cells-at et (+ sb i))) (return (== 0 1)))
+          (set i (+ i 1))))
+    (return (== 1 1))))
+
+(defn ^Bool tb-row-same [^Cells tb ^I32 a ^I32 ra ^I32 b ^I32 rb ^Cells tc ^Cells tw ^Cells wd ^Cells et]
+  (comment "Does row ra of table a say, cell for cell and word for word, what row rb of table b says.")
+  (let [^I32 ca0 (cells-at tb (+ (* a TBS) 9))
+        ^I32 ca1 (+ ca0 (cells-at tb (+ (* a TBS) 10)))
+        ^I32 cb0 (cells-at tb (+ (* b TBS) 9))
+        ^I32 cb1 (+ cb0 (cells-at tb (+ (* b TBS) 10)))
+        ^:mut ^I32 i ca0
+        ^:mut ^I32 j cb0
+        ^:mut ^I32 k 0]
+    (while (and (< i ca1) (!= (cells-at tc (* i TCS)) ra))
+      (set i (+ i 1)))
+    (while (and (< j cb1) (!= (cells-at tc (* j TCS)) rb))
+      (set j (+ j 1)))
+    (while (and (< i ca1) (and (< j cb1) (and (== (cells-at tc (* i TCS)) ra) (== (cells-at tc (* j TCS)) rb))))
+      (do (if (or (!= (cells-at tc (+ (* i TCS) 1)) (cells-at tc (+ (* j TCS) 1)))
+                  (!= (cells-at tc (+ (* i TCS) 9)) (cells-at tc (+ (* j TCS) 9))))
+            (return (== 0 1)))
+          (set k 0)
+          (while (< k (cells-at tc (+ (* i TCS) 9)))
+            (do (if (not (tb-word-same wd et (cells-at tw (+ (cells-at tc (+ (* i TCS) 8)) k))
+                                       (cells-at tw (+ (cells-at tc (+ (* j TCS) 8)) k))))
+                  (return (== 0 1)))
+                (set k (+ k 1))))
+          (set i (+ i 1))
+          (set j (+ j 1))))
+    (return (and (or (>= i ca1) (!= (cells-at tc (* i TCS)) ra)) (or (>= j cb1) (!= (cells-at tc (* j TCS)) rb))))))
+
+(defn ^Bool tb-caption-again [^Cells tb ^I32 a ^I32 b ^Cells wd ^Cells et ^Cells ln ^Cells tq]
+  (comment "Does table b have a caption, and is it the label (keyword and number) of table a's?")
+  (let [^I32 qa (cells-at tb (+ (* a TBS) 15))]
+    (if (== qa 0) (return (== 0 1)))
+    (let [^I32 wa (ln-get ln (cells-at tq (cells-at tb (+ (* a TBS) 14))) (lh-first))
+          ^I32 wb (ln-get ln (cells-at tq (cells-at tb (+ (* b TBS) 14))) (lh-first))]
+      (return (and (tb-word-same wd et wa wb) (tb-word-same wd et (+ wa 1) (+ wb 1)))))))
+
+(defn ^I32 tb-unfoot [^:mut ^Cells tb ^I32 a ^:mut ^Cells tc]
+  (comment "A table that goes on has no foot on this page: its bold last row is a row.")
+  (let [^I32 b (* a TBS)
+        ^I32 nrows (cells-at tb (+ b 7))
+        ^I32 nfoot (cells-at tb (+ b 12))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 c cfirst]
+    (while (< c cend)
+      (do (if (>= (cells-at tc (* c TCS)) (- nrows nfoot)) (cells-set tc (+ (* c TCS) 10) 0))
+          (set c (+ c 1))))
+    (cells-set tb (+ b 12) 0)
+    (return 0)))
+
+(defn ^I32 tb-link [^:mut ^Cells tb ^Cells tc ^Cells tw ^Cells tx ^Cells tq ^Cells wd ^Cells et ^:mut ^Cells ln
+                    ^Cells pages]
+  (comment "Link the fragments of tables that go on across a page break (see the head of this section).")
+  (let [^I32 n (tb-rows-of tb TBS)
+        ^:mut ^I32 j 1
+        ^:mut ^I32 a 0
+        ^:mut ^I32 head 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 ok 0
+        ^:mut ^I32 skip 0
+        ^:mut ^I32 span 0
+        ^:mut ^I32 r 0]
+    (while (< j n)
+      (do (set a (- j 1))
+          (set head a)
+          (if (!= (cells-at tb (+ (* a TBS) 21)) 0) (set head (- (cells-at tb (+ (* a TBS) 21)) 1)))
+          (if (and (== (cells-at tb (+ (* a TBS) 0)) (- (cells-at tb (* j TBS)) 1))
+                   (== (cells-at tb (+ (* a TBS) 19)) 0))
+            (do (set ok 1)
+                (if (not (tb-same-columns tb a j tx)) (set ok 0))
+                (if (== ok 1)
+                  (do (let [^I32 pg0 (cells-at tb (* a TBS))
+                            ^I32 pj (cells-at tb (* j TBS))
+                            ^I32 hpa (page-h pages (- pg0 1))
+                            ^I32 hpj (page-h pages (- pj 1))]
+                        (if (tb-body-line-outside ln pg0 (cells-at tb (+ (* a TBS) 4)) hpa (quot (* hpa 8) 100) (quot (* hpa 92) 100))
+                          (set ok 0))
+                        (if (tb-body-line-outside ln pj 0 (cells-at tb (+ (* j TBS) 2)) (quot (* hpj 8) 100) (quot (* hpj 92) 100))
+                          (set ok 0)))))
+                (if (and (== ok 1) (> (cells-at tb (+ (* j TBS) 15)) 0))
+                  (if (not (tb-caption-again tb head j wd et ln tq)) (set ok 0)))
+                (set skip 0)
+                (if (and (== ok 1) (> (cells-at tb (+ (* j TBS) 11)) 0))
+                  (do (set h (cells-at tb (+ (* head TBS) 11)))
+                      (if (!= h (cells-at tb (+ (* j TBS) 11)))
+                        (set ok 0)
+                        (do (set r 0)
+                            (while (< r h)
+                              (do (if (not (tb-row-same tb head r j r tc tw wd et)) (set ok 0))
+                                  (set r (+ r 1))))
+                            (set skip h)))))
+                (if (== ok 1)
+                  (do (cells-set tb (+ (* a TBS) 19) (+ j 1))
+                      (cells-set tb (+ (* j TBS) 20) skip)
+                      (cells-set tb (+ (* j TBS) 21) (+ head 1))
+                      (set span (+ (- (cells-at tb (* j TBS)) (cells-at tb (* head TBS))) 1))
+                      (cells-set tb (+ (* head TBS) 18) span)
+                      (tb-unfoot tb a tc)))))
+          (set j (+ j 1))))
+    (return 0)))
+
+;; ============================================================= finishing, the build
+
+(defn ^I32 tb-cell-at [^Cells tc ^I32 cfirst ^I32 cend ^I32 row ^I32 col]
+  (comment "The live cell whose rows and columns cover (row, col), -1 when none does.")
+  (let [^:mut ^I32 c cfirst]
+    (while (< c cend)
+      (do (let [^I32 cb (* c TCS)]
+            (if (== (bit-and (cells-at tc (+ cb 12)) 1) 0)
+              (if (and (<= (cells-at tc cb) row) (< row (+ (cells-at tc cb) (cells-at tc (+ cb 2)))))
+                (if (and (<= (cells-at tc (+ cb 1)) col) (< col (+ (cells-at tc (+ cb 1)) (cells-at tc (+ cb 3)))))
+                  (return c)))))
+          (set c (+ c 1))))
+    (return -1)))
+
+(defn ^I32 tb-header-spans [^Cells tb ^I32 k ^:mut ^Cells tc]
+  (comment "Text-based tables have no rules to say where a header cell spans: a header cell whose cell below it is")
+  (comment "empty spans down (the empty cell is absorbed: flag 1), and a header cell followed by empty cells over cells")
+  (comment "with text spans across them. Only header rows with a header row below them are looked at.")
+  (let [^I32 b (* k TBS)
+        ^I32 nhead (cells-at tb (+ b 11))
+        ^I32 ncols (cells-at tb (+ b 8))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 c cfirst
+        ^:mut ^I32 rs 1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 y -1
+        ^:mut ^I32 more 1]
+    (if (< nhead 2) (return 0))
+    (while (< c cend)
+      (do (let [^I32 cb (* c TCS)
+                ^I32 r (cells-at tc cb)
+                ^I32 col (cells-at tc (+ cb 1))]
+            (if (and (< r (- nhead 1)) (and (== (bit-and (cells-at tc (+ cb 12)) 1) 0) (> (cells-at tc (+ cb 9)) 0)))
+              (do (set rs 1)
+                  (set more 1)
+                  (while (and (== more 1) (< (+ r rs) nhead))
+                    (do (set y (tb-cell-at tc cfirst cend (+ r rs) col))
+                        (if (and (>= y 0)
+                                 (and (== (cells-at tc (* y TCS)) (+ r rs))
+                                      (and (== (cells-at tc (+ (* y TCS) 1)) col)
+                                           (and (== (cells-at tc (+ (* y TCS) 3)) (cells-at tc (+ cb 3)))
+                                                (== (cells-at tc (+ (* y TCS) 9)) 0)))))
+                          (do (cells-set tc (+ (* y TCS) 12) 1)
+                              (set rs (+ rs 1)))
+                          (set more 0))))
+                  (if (> rs 1) (cells-set tc (+ cb 2) rs))
+                  (if (== (cells-at tc (+ cb 3)) 1)
+                    (do (set j (+ col 1))
+                        (set more 1)
+                        (while (and (== more 1) (< j ncols))
+                          (do (let [^I32 e (tb-cell-at tc cfirst cend r j)
+                                    ^I32 under (tb-cell-at tc cfirst cend (+ r 1) j)]
+                                (if (and (>= e 0) (>= under 0))
+                                  (if (and (== (cells-at tc (+ (* e TCS) 1)) j)
+                                           (and (== (cells-at tc (+ (* e TCS) 3)) 1)
+                                                (and (== (cells-at tc (+ (* e TCS) 9)) 0)
+                                                     (> (cells-at tc (+ (* under TCS) 9)) 0))))
+                                    (do (cells-set tc (+ (* e TCS) 12) 1)
+                                        (cells-set tc (+ cb 3) (+ (cells-at tc (+ cb 3)) 1))
+                                        (set j (+ j 1)))
+                                    (set more 0))
+                                  (set more 0)))))))))
+            (set c (+ c 1)))))
+    (return 0)))
+
+(defn ^I32 tb-finish [^:mut ^Cells tb ^I32 k ^Cells wd ^Cells et ^:mut ^Cells tc ^Cells tw
+                      ^:mut ^Cells ln ^I32 l0 ^I32 l1 ^:mut ^Cells tq]
+  (comment "What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows, the footer,")
+  (comment "which cells are header cells (`col` in the header, `row` in the footer), each cell's alignment, the caption.")
+  (let [^I32 b (* k TBS)
+        ^I32 nrows (cells-at tb (+ b 7))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^I32 nhead (tb-head-rows tb k wd et tc tw)
+        ^I32 nfoot (tb-foot-rows tb k nhead wd et tc tw)
+        ^:mut ^I32 c cfirst]
+    (cells-set tb (+ b 11) nhead)
+    (cells-set tb (+ b 12) nfoot)
+    (while (< c cend)
+      (do (let [^I32 r (cells-at tc (* c TCS))]
+            (if (< r nhead) (cells-set tc (+ (* c TCS) 10) 1))
+            (if (>= r (- nrows nfoot)) (cells-set tc (+ (* c TCS) 10) 2)))
+          (set c (+ c 1))))
+    (if (!= (cells-at tb (+ b 5)) PF_RULED) (tb-header-spans tb k tc))
+    (tb-aligns tb k wd tc tw)
+    (tb-caption tb k wd et ln l0 l1 tq)
+    (return 0)))
+
+(defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells pa ^I32 np
+                           ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
+                           ^:mut ^Cells s0 ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4
+                           ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells s7 ^:mut ^Cells s8 ^:mut ^Cells s9
+                           ^:mut ^Cells s10 ^:mut ^Cells s11 ^:mut ^Cells s12 ^:mut ^Cells s13 ^:mut ^Cells s14
+                           ^:mut ^Cells s15 ^:mut ^Cells s16 ^:mut ^Cells s17 ^:mut ^Cells s18
+                           ^Cells pages]
+  (comment "Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are")
+  (comment "scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb")
+  (comment "rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and")
+  (comment "row extents (one name each in the calls below). Answers the number of tables.")
+  (let [^I32 nw (wd-count wd)
+        ^I32 nl (ln-count ln)
+        ^I32 nq (pa-count pa)
+        ^:mut ^I32 p 1
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 wj 0
+        ^:mut ^I32 li 0
+        ^:mut ^I32 lj 0
+        ^:mut ^I32 qi 0
+        ^:mut ^I32 qj 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 k 0]
+    (cells-drop tb 0)
+    (cells-drop tc 0)
+    (cells-drop tw 0)
+    (cells-drop tq 0)
+    (cells-drop tx 0)
+    (while (<= p np)
+      (do (while (and (< wi nw) (< (wd-get wd wi (hd-page)) p))
+            (set wi (+ wi 1)))
+          (set wj wi)
+          (while (and (< wj nw) (== (wd-get wd wj (hd-page)) p))
+            (set wj (+ wj 1)))
+          (while (and (< li nl) (< (ln-get ln li (lh-page)) p))
+            (set li (+ li 1)))
+          (set lj li)
+          (while (and (< lj nl) (== (ln-get ln lj (lh-page)) p))
+            (set lj (+ lj 1)))
+          (while (and (< qi nq) (< (pa-get pa qi (pf-page)) p))
+            (set qi (+ qi 1)))
+          (set qj qi)
+          (while (and (< qj nq) (== (pa-get pa qj (pf-page)) p))
+            (set qj (+ qj 1)))
+          (set t0 (tb-rows-of tb TBS))
+          (if (> (- wj wi) 0)
+            (do (tb-collect pa qi qj s0 s2)
+                (if (<= (tb-rows-of s0 RLS) MAX_RULES)
+                  (do (tb-merge-rules s0 s1 s3 s9)
+                      (tb-ruled-page s1 p s4 s5 s6 tb tc wd wi wj s7 s3 tw tx)
+                      (tb-partial-page s1 p wd et wi wj s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)))
+                (if (<= (tb-rows-of s2 6) MAX_RULES)
+                  (tb-shaded-page s2 p wd et wi wj s8 s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
+                (tb-whitespace-page p wd et wi wj s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)
+                (tb-select tb t0 s3 s9 s8)
+                (set k t0)
+                (while (< k (tb-rows-of tb TBS))
+                  (do (tb-finish tb k wd et tc tw ln li lj tq)
+                      (set k (+ k 1))))
+                (tb-claim tb t0 ln li lj)))
+          (set wi wj)
+          (set li lj)
+          (set qi qj)
+          (set p (+ p 1))))
+    (tb-link tb tc tw tx tq wd et ln pages)
+    (return (tb-rows-of tb TBS))))

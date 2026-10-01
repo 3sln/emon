@@ -131,7 +131,12 @@ pub(crate) fn pt_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    return pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
 }
 pub(crate) fn pt_dump(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut t: &mut String) -> i32 {
     // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -161,13 +166,17 @@ pub(crate) fn pt_dump(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
     let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mut p: i32 = 1;
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     while p <= npages {
         page_new(pages, p, 61200, 79200, 0, pk_vector());
         p += 1;
     }
-    pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+    pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
     pa_dump(t, cf, dbg);
     return 0;
 }
