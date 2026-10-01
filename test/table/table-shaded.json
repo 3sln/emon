@@ -10,7 +10,15 @@
       "w": 612,
       "h": 792,
       "rot": 0,
-      "kind": "vector"
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 94.58, 477.46, 270.16]
+        }
+      ]
     }
   ],
   "body": {

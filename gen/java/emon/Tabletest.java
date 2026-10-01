@@ -5,15 +5,20 @@ package emon;
 
 
 public final class Tabletest {
-    public static int ttWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int x0, int y0, int x1, int y1, int style) {
-        // One word with its own box (page 1, size 1000, baseline 200 above the bottom) and a line of its own.
-        int w0 = Evidence.wdCount(wd);
+    public static int ttW(emon.Port.Cells wd, emon.Port.Cells et, byte[] b, int x0, int y0, int x1, int y1, int style) {
+        // One word with its own box (page 1, size 1000, baseline 200 above the bottom).
         int ts = emon.Port.cellsLen(et);
         Model.textAppendUtf8(et, b, 0, emon.Port.blobLen(b));
         int r = Evidence.wdNew(wd, 1, x0, y0, x1, y1, x0, y1 - 200, x1, y1 - 200, 0, 0, ts, emon.Port.cellsLen(et) - ts, -1, -1, -1);
         Evidence.wdSet(wd, r, Evidence.wfSize(), 1000);
         Evidence.wdSet(wd, r, Evidence.wfFont(), 0);
         Evidence.wdSet(wd, r, Evidence.wfStyle(), style);
+        return 0;
+    }
+    public static int ttWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int x0, int y0, int x1, int y1, int style) {
+        // One word and a line of its own.
+        int w0 = Evidence.wdCount(wd);
+        ttW(wd, et, b, x0, y0, x1, y1, style);
         Evidence.lnNew(ln, 1, x0, y0, x1, y1, x0, y1 - 200, x1, y1 - 200, 0, 0, w0, 1);
         return 0;
     }
@@ -25,6 +30,17 @@ public final class Tabletest {
         } else {
             ttWord(wd, ln, et, b, x, y, x + w, y + 800, style);
         }
+        return 0;
+    }
+    public static int ttLine3(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] a, byte[] b, byte[] c, int x, int y) {
+        // One line of three words, 500 per character and a 500 gap, 800 tall from y.
+        int w0 = Evidence.wdCount(wd);
+        int xb = (x + (500 * emon.Port.blobLen(a))) + 500;
+        int xc = (xb + (500 * emon.Port.blobLen(b))) + 500;
+        ttW(wd, et, a, x, y, x + (500 * emon.Port.blobLen(a)), y + 800, 0);
+        ttW(wd, et, b, xb, y, xb + (500 * emon.Port.blobLen(b)), y + 800, 0);
+        ttW(wd, et, c, xc, y, xc + (500 * emon.Port.blobLen(c)), y + 800, 0);
+        Evidence.lnNew(ln, 1, x, y, xc + (500 * emon.Port.blobLen(c)), y + 800, x, (y + 800) - 200, xc + (500 * emon.Port.blobLen(c)), (y + 800) - 200, 0, 0, w0, 3);
         return 0;
     }
     public static int ttRule(emon.Port.Cells pa, int x0, int y0, int x1, int y1) {
@@ -173,6 +189,19 @@ public final class Tabletest {
         emon.Port.Cells fr = emon.Port.newCells();
         emon.Port.Cells gp = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells sd = emon.Port.newCells();
+        emon.Port.Cells it = emon.Port.newCells();
+        emon.Port.Cells io = emon.Port.newCells();
+        emon.Port.Cells rw = emon.Port.newCells();
+        emon.Port.Cells gu = emon.Port.newCells();
+        emon.Port.Cells ac = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        emon.Port.Cells cf = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells dbg = emon.Port.newCells();
         emon.Port.Cells tb = emon.Port.newCells();
         emon.Port.Cells tc = emon.Port.newCells();
         emon.Port.Cells tw = emon.Port.newCells();
@@ -199,8 +228,8 @@ public final class Tabletest {
         emon.Port.Cells s18 = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
-        Table.tbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18);
-        Para.paBuild(wd, ln, et, 1, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
+        Table.tbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Para.paBuild(wd, ln, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger);
         ttBrief(t, nodes, attrs, text);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
@@ -222,7 +251,7 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("12.50"), 17600, 14600, 0, 0);
         ttWord(wd, ln, et, emon.Testport.textBlob("Outro"), 7200, 17200, 10200, 18000, 0);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "lattice: well formed");
-        emon.Testport.assertText(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];C c2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
+        emon.Testport.assertText(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
     }
     public static void testColumnsOfWhitespaceAreATableAndProseColumnsAreNot() {
         emon.Port.Cells wd = emon.Port.newCells();
@@ -237,18 +266,18 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("Q2"), 40000, 10000, 1, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("Alpha"), 7200, 11600, 0, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("3.0%"), 30000, 11600, 0, 1);
-        ttAt(wd, ln, et, emon.Testport.textBlob("11.5%"), 40000, 11600, 0, 1);
-        ttAt(wd, ln, et, emon.Testport.textBlob("Beta"), 7200, 13200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("111.5%"), 40000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Bo"), 7200, 13200, 0, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("4.7%"), 30000, 13200, 0, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("4.3%"), 40000, 13200, 0, 1);
-        ttAt(wd, ln, et, emon.Testport.textBlob("Gamma"), 7200, 14800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Gammarays"), 7200, 14800, 0, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("12.1%"), 30000, 14800, 0, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("9.5%"), 40000, 14800, 0, 1);
-        ttAt(wd, ln, et, emon.Testport.textBlob("Delta"), 7200, 16400, 0, 0);
-        ttAt(wd, ln, et, emon.Testport.textBlob("6.4%"), 30000, 16400, 0, 1);
-        ttAt(wd, ln, et, emon.Testport.textBlob("6.6%"), 40000, 16400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7200, 16400, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("6.4%"), 30000, 16400, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("6.6%"), 40000, 16400, 1, 1);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "whitespace: well formed");
-        emon.Testport.assertText(t, "T3w;Gh;R;Ch[Fund];Ch[Q1];Ch[Q2];Gb;R;Cs[Alpha];Ce[3.0%];Ce[11.5%];R;Cs[Beta];Ce[4.7%];Ce[4.3%];R;Cs[Gamma];Ce[12.1%];Ce[9.5%];R;Cs[Delta];Ce[6.4%];Ce[6.6%];", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
+        emon.Testport.assertText(t, "@W", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
         // Two columns of prose, four words a line: columns, not a table.
         emon.Port.cellsDrop(wd, 0);
         emon.Port.cellsDrop(ln, 0);
@@ -280,10 +309,10 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("North"), 7200, 11900, 0, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("120"), 30000, 11900, 0, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("9.5"), 37200, 11900, 0, 1);
-        ttAt(wd, ln, et, emon.Testport.textBlob("South"), 7200, 13500, 0, 0);
-        ttAt(wd, ln, et, emon.Testport.textBlob("98"), 30000, 13500, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("So"), 7200, 13500, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("8"), 30000, 13500, 0, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("7.1"), 37200, 13500, 0, 1);
-        ttAt(wd, ln, et, emon.Testport.textBlob("West"), 7200, 15100, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Westerly"), 7200, 15100, 0, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("75"), 30000, 15100, 0, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("4.4"), 37200, 15100, 0, 1);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "partial: well formed");
@@ -320,9 +349,7 @@ public final class Tabletest {
         emon.Port.Cells et = emon.Port.newCells();
         emon.Port.Cells pa = emon.Port.newCells();
         StringBuilder t = emon.Testport.newText();
-        ttWord(wd, ln, et, emon.Testport.textBlob("Table"), 7200, 8400, 10000, 9200, 0);
-        ttWord(wd, ln, et, emon.Testport.textBlob("2."), 10200, 8400, 11200, 9200, 0);
-        ttWord(wd, ln, et, emon.Testport.textBlob("Results"), 11700, 8400, 15000, 9200, 0);
+        ttLine3(wd, ln, et, emon.Testport.textBlob("Table"), emon.Testport.textBlob("2."), emon.Testport.textBlob("Results"), 7200, 8400);
         ttGrid(pa, 7200, 17200, 27200, 37200, 10000, 12000, 14000, 16000);
         ttAt(wd, ln, et, emon.Testport.textBlob("A"), 7600, 10600, 1, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("B"), 17600, 10600, 1, 0);
@@ -330,10 +357,10 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("x"), 7600, 12600, 0, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("1"), 17600, 12600, 0, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("2"), 27600, 12600, 0, 0);
-        ttAt(wd, ln, et, emon.Testport.textBlob("Sum"), 7600, 14600, 1, 0);
-        ttAt(wd, ln, et, emon.Testport.textBlob("3"), 17600, 14600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Sum"), 7600, 14600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("3"), 17600, 14600, 0, 0);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "caption: well formed");
-        emon.Testport.assertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];Gf;R;Cw[Sum];Cc2w[3];", "the caption is the table's first child, label and text; a bold last row under a plain one is the foot");
+        emon.Testport.assertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];", "the caption is the table's first child: label and text, not a paragraph");
     }
     public static int ttGolden(byte[] pdf, StringBuilder t) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
@@ -374,6 +401,19 @@ public final class Tabletest {
         emon.Port.Cells tmp = emon.Port.newCells();
         emon.Port.Cells fr = emon.Port.newCells();
         emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells sd = emon.Port.newCells();
+        emon.Port.Cells it = emon.Port.newCells();
+        emon.Port.Cells io = emon.Port.newCells();
+        emon.Port.Cells rw = emon.Port.newCells();
+        emon.Port.Cells gu = emon.Port.newCells();
+        emon.Port.Cells ac = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        emon.Port.Cells cf = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells dbg = emon.Port.newCells();
         emon.Port.Cells tb = emon.Port.newCells();
         emon.Port.Cells tc = emon.Port.newCells();
         emon.Port.Cells tw = emon.Port.newCells();
@@ -409,8 +449,8 @@ public final class Tabletest {
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
-        Table.tbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18);
-        Para.paBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
+        Table.tbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Para.paBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger);
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return 3;
         }

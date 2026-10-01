@@ -1458,6 +1458,22 @@ the page's `layout` (§3.7).
    trees of nearly equal score. Newspaper jumps (`continued on page 4`) are
    not followed: the two parts stay two blocks.
 
+**As built (P4.1, D163, D165).** The text layer's stage reads what steps 1-6
+say with these departures, each forced by a document and held by a named
+constant: a row counts for a gutter only where it has type of body class
+(17/20 to 27/20 of the dominant size; a footnote or a chart label is not),
+rows with words on one side only continue it, `gutter-min` is asked when a
+gutter starts and 3/5 of a size after, `gutter-words` is 3 words in the run
+of ink next to it, a gap of more than `hole` (3 sizes) between rows ends
+every gutter; a row of four runs of ink or more, none of more than three
+words, three sizes apart, is a spanning element; the cut tree's horizontal
+cuts are the title cut (when there are side lines), the first full-width
+gap of more than 5/2 sizes where a gutter divides the region, and the end
+of an extent that is not inside another dividing gutter's extent; margin
+notes and sidebars are the lines outside the body block, not a gutter's
+fragments; `band` counts the horizontal cuts above a fragment and across its
+x-range.
+
 #### 10.1.2 Continuation across column and page breaks (D112)
 
 Between the last body block of a fragment and the first body block of the
@@ -1485,6 +1501,15 @@ follows §3.6 exactly. Blocks that sit between the two fragments in reading
 order (a note, a figure, a table, a caption) move after the joined
 paragraph, in their order. A join near the threshold lowers the paragraph's
 confidence.
+
+**As built (P4.1, D164).** `join-min` is 4; the points are +3 hyphen, +2 edge
+(within 15 % of the width), +2 no terminal mark (a footnote mark after the
+mark is not read), +3 lowercase, −3 indent, −3 list marker, −3 another size
+or style, −3 short, +1 following in the stream, and two the table above does
+not have: +1 the last line is at the bottom of its column set (the bottom of
+the region the fragment's vertical cuts came from) and −3 the fragments are
+not of one width (a table or figure is not a column). The tagged `P`
+signal is not read yet (P4.2).
 
 ### 10.2 Running headers, footers and page numbers (D017)
 

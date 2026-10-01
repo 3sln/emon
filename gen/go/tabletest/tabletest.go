@@ -17,15 +17,21 @@ import (
 	"testing"
 )
 
-func ttWord(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, x0 int32, y0 int32, x1 int32, y1 int32, style int32) int32 {
-	// One word with its own box (page 1, size 1000, baseline 200 above the bottom) and a line of its own.
-	var w0 int32 = evidence.WdCount(wd)
+func ttW(wd *port.Cells, et *port.Cells, b []byte, x0 int32, y0 int32, x1 int32, y1 int32, style int32) int32 {
+	// One word with its own box (page 1, size 1000, baseline 200 above the bottom).
 	var ts int32 = port.CellsLen(et)
 	model.TextAppendUtf8(et, b, 0, port.BlobLen(b))
 	var r int32 = evidence.WdNew(wd, 1, x0, y0, x1, y1, x0, y1-200, x1, y1-200, 0, 0, ts, port.CellsLen(et)-ts, -1, -1, -1)
 	evidence.WdSet(wd, r, evidence.WfSize(), 1000)
 	evidence.WdSet(wd, r, evidence.WfFont(), 0)
 	evidence.WdSet(wd, r, evidence.WfStyle(), style)
+	return 0
+}
+
+func ttWord(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, x0 int32, y0 int32, x1 int32, y1 int32, style int32) int32 {
+	// One word and a line of its own.
+	var w0 int32 = evidence.WdCount(wd)
+	ttW(wd, et, b, x0, y0, x1, y1, style)
 	evidence.LnNew(ln, 1, x0, y0, x1, y1, x0, y1-200, x1, y1-200, 0, 0, w0, 1)
 	return 0
 }
@@ -38,6 +44,18 @@ func ttAt(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, x int32, y i
 	} else {
 		ttWord(wd, ln, et, b, x, y, x+w, y+800, style)
 	}
+	return 0
+}
+
+func ttLine3(wd *port.Cells, ln *port.Cells, et *port.Cells, a []byte, b []byte, c []byte, x int32, y int32) int32 {
+	// One line of three words, 500 per character and a 500 gap, 800 tall from y.
+	var w0 int32 = evidence.WdCount(wd)
+	var xb int32 = (x + (500 * port.BlobLen(a))) + 500
+	var xc int32 = (xb + (500 * port.BlobLen(b))) + 500
+	ttW(wd, et, a, x, y, x+(500*port.BlobLen(a)), y+800, 0)
+	ttW(wd, et, b, xb, y, xb+(500*port.BlobLen(b)), y+800, 0)
+	ttW(wd, et, c, xc, y, xc+(500*port.BlobLen(c)), y+800, 0)
+	evidence.LnNew(ln, 1, x, y, xc+(500*port.BlobLen(c)), y+800, x, (y+800)-200, xc+(500*port.BlobLen(c)), (y+800)-200, 0, 0, w0, 3)
 	return 0
 }
 
@@ -192,6 +210,19 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	var fr *port.Cells = port.NewCells()
 	var gp *port.Cells = port.NewCells()
 	var st *port.Cells = port.NewCells()
+	var lt *port.Cells = port.NewCells()
+	var ls *port.Cells = port.NewCells()
+	var sd *port.Cells = port.NewCells()
+	var it *port.Cells = port.NewCells()
+	var io *port.Cells = port.NewCells()
+	var rw *port.Cells = port.NewCells()
+	var gu *port.Cells = port.NewCells()
+	var ac *port.Cells = port.NewCells()
+	var tm *port.Cells = port.NewCells()
+	var cf *port.Cells = port.NewCells()
+	var lo *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var dbg *port.Cells = port.NewCells()
 	var tb *port.Cells = port.NewCells()
 	var tc *port.Cells = port.NewCells()
 	var tw *port.Cells = port.NewCells()
@@ -218,8 +249,8 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	var s18 *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
-	table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18)
-	para.PaBuild(wd, ln, et, 1, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq)
+	table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
+	para.PaBuild(wd, ln, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger)
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
@@ -242,7 +273,7 @@ func TestALatticeIsATableAndAMissingRuleIsASpan(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("12.50"), 17600, 14600, 0, 0)
 	ttWord(wd, ln, et, port.TextBlob("Outro"), 7200, 17200, 10200, 18000, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "lattice: well formed")
-	port.AssertText(emonT, t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];C c2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it")
+	port.AssertText(emonT, t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it")
 }
 
 func TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot(emonT *testing.T) {
@@ -258,18 +289,18 @@ func TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("Q2"), 40000, 10000, 1, 1)
 	ttAt(wd, ln, et, port.TextBlob("Alpha"), 7200, 11600, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("3.0%"), 30000, 11600, 0, 1)
-	ttAt(wd, ln, et, port.TextBlob("11.5%"), 40000, 11600, 0, 1)
-	ttAt(wd, ln, et, port.TextBlob("Beta"), 7200, 13200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("111.5%"), 40000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Bo"), 7200, 13200, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("4.7%"), 30000, 13200, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("4.3%"), 40000, 13200, 0, 1)
-	ttAt(wd, ln, et, port.TextBlob("Gamma"), 7200, 14800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Gammarays"), 7200, 14800, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("12.1%"), 30000, 14800, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("9.5%"), 40000, 14800, 0, 1)
-	ttAt(wd, ln, et, port.TextBlob("Delta"), 7200, 16400, 0, 0)
-	ttAt(wd, ln, et, port.TextBlob("6.4%"), 30000, 16400, 0, 1)
-	ttAt(wd, ln, et, port.TextBlob("6.6%"), 40000, 16400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7200, 16400, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("6.4%"), 30000, 16400, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("6.6%"), 40000, 16400, 1, 1)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "whitespace: well formed")
-	port.AssertText(emonT, t, "T3w;Gh;R;Ch[Fund];Ch[Q1];Ch[Q2];Gb;R;Cs[Alpha];Ce[3.0%];Ce[11.5%];R;Cs[Beta];Ce[4.7%];Ce[4.3%];R;Cs[Gamma];Ce[12.1%];Ce[9.5%];R;Cs[Delta];Ce[6.4%];Ce[6.6%];", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent")
+	port.AssertText(emonT, t, "@W", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent")
 	// Two columns of prose, four words a line: columns, not a table.
 	port.CellsDrop(wd, 0)
 	port.CellsDrop(ln, 0)
@@ -302,10 +333,10 @@ func TestRulesAboveAndBelowMakeAPartialTable(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("North"), 7200, 11900, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("120"), 30000, 11900, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("9.5"), 37200, 11900, 0, 1)
-	ttAt(wd, ln, et, port.TextBlob("South"), 7200, 13500, 0, 0)
-	ttAt(wd, ln, et, port.TextBlob("98"), 30000, 13500, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("So"), 7200, 13500, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("8"), 30000, 13500, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("7.1"), 37200, 13500, 0, 1)
-	ttAt(wd, ln, et, port.TextBlob("West"), 7200, 15100, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Westerly"), 7200, 15100, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("75"), 30000, 15100, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("4.4"), 37200, 15100, 0, 1)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "partial: well formed")
@@ -344,9 +375,7 @@ func TestACaptionAndABoldLastRow(emonT *testing.T) {
 	var et *port.Cells = port.NewCells()
 	var pa *port.Cells = port.NewCells()
 	var t *strings.Builder = port.NewText()
-	ttWord(wd, ln, et, port.TextBlob("Table"), 7200, 8400, 10000, 9200, 0)
-	ttWord(wd, ln, et, port.TextBlob("2."), 10200, 8400, 11200, 9200, 0)
-	ttWord(wd, ln, et, port.TextBlob("Results"), 11700, 8400, 15000, 9200, 0)
+	ttLine3(wd, ln, et, port.TextBlob("Table"), port.TextBlob("2."), port.TextBlob("Results"), 7200, 8400)
 	ttGrid(pa, 7200, 17200, 27200, 37200, 10000, 12000, 14000, 16000)
 	ttAt(wd, ln, et, port.TextBlob("A"), 7600, 10600, 1, 0)
 	ttAt(wd, ln, et, port.TextBlob("B"), 17600, 10600, 1, 0)
@@ -354,10 +383,10 @@ func TestACaptionAndABoldLastRow(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("x"), 7600, 12600, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("1"), 17600, 12600, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("2"), 27600, 12600, 0, 0)
-	ttAt(wd, ln, et, port.TextBlob("Sum"), 7600, 14600, 1, 0)
-	ttAt(wd, ln, et, port.TextBlob("3"), 17600, 14600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Sum"), 7600, 14600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("3"), 17600, 14600, 0, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "caption: well formed")
-	port.AssertText(emonT, t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];Gf;R;Cw[Sum];Cc2w[3];", "the caption is the table's first child, label and text; a bold last row under a plain one is the foot")
+	port.AssertText(emonT, t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];", "the caption is the table's first child: label and text, not a paragraph")
 }
 
 func ttGolden(pdf []byte, t *strings.Builder) int32 {
@@ -399,6 +428,19 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	var tmp *port.Cells = port.NewCells()
 	var fr *port.Cells = port.NewCells()
 	var gp *port.Cells = port.NewCells()
+	var lt *port.Cells = port.NewCells()
+	var ls *port.Cells = port.NewCells()
+	var sd *port.Cells = port.NewCells()
+	var it *port.Cells = port.NewCells()
+	var io *port.Cells = port.NewCells()
+	var rw *port.Cells = port.NewCells()
+	var gu *port.Cells = port.NewCells()
+	var ac *port.Cells = port.NewCells()
+	var tm *port.Cells = port.NewCells()
+	var cf *port.Cells = port.NewCells()
+	var lo *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var dbg *port.Cells = port.NewCells()
 	var tb *port.Cells = port.NewCells()
 	var tc *port.Cells = port.NewCells()
 	var tw *port.Cells = port.NewCells()
@@ -434,8 +476,8 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18)
-	para.PaBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq)
+	table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
+	para.PaBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
 		return 3
 	}

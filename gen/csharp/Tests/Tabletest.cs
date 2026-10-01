@@ -5,15 +5,20 @@ namespace emon;
 
 
 public static class Tabletest {
-    internal static int TtWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int x0, int y0, int x1, int y1, int style) {
-        // One word with its own box (page 1, size 1000, baseline 200 above the bottom) and a line of its own.
-        int w0 = Evidence.WdCount(wd);
+    internal static int TtW(emon.Port.Cells wd, emon.Port.Cells et, byte[] b, int x0, int y0, int x1, int y1, int style) {
+        // One word with its own box (page 1, size 1000, baseline 200 above the bottom).
         int ts = emon.Port.CellsLen(et);
         Model.TextAppendUtf8(et, b, 0, emon.Port.BlobLen(b));
         int r = Evidence.WdNew(wd, 1, x0, y0, x1, y1, x0, y1 - 200, x1, y1 - 200, 0, 0, ts, emon.Port.CellsLen(et) - ts, -1, -1, -1);
         Evidence.WdSet(wd, r, Evidence.WfSize(), 1000);
         Evidence.WdSet(wd, r, Evidence.WfFont(), 0);
         Evidence.WdSet(wd, r, Evidence.WfStyle(), style);
+        return 0;
+    }
+    internal static int TtWord(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int x0, int y0, int x1, int y1, int style) {
+        // One word and a line of its own.
+        int w0 = Evidence.WdCount(wd);
+        TtW(wd, et, b, x0, y0, x1, y1, style);
         Evidence.LnNew(ln, 1, x0, y0, x1, y1, x0, y1 - 200, x1, y1 - 200, 0, 0, w0, 1);
         return 0;
     }
@@ -25,6 +30,17 @@ public static class Tabletest {
         } else {
             TtWord(wd, ln, et, b, x, y, x + w, y + 800, style);
         }
+        return 0;
+    }
+    internal static int TtLine3(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] a, byte[] b, byte[] c, int x, int y) {
+        // One line of three words, 500 per character and a 500 gap, 800 tall from y.
+        int w0 = Evidence.WdCount(wd);
+        int xb = (x + (500 * emon.Port.BlobLen(a))) + 500;
+        int xc = (xb + (500 * emon.Port.BlobLen(b))) + 500;
+        TtW(wd, et, a, x, y, x + (500 * emon.Port.BlobLen(a)), y + 800, 0);
+        TtW(wd, et, b, xb, y, xb + (500 * emon.Port.BlobLen(b)), y + 800, 0);
+        TtW(wd, et, c, xc, y, xc + (500 * emon.Port.BlobLen(c)), y + 800, 0);
+        Evidence.LnNew(ln, 1, x, y, xc + (500 * emon.Port.BlobLen(c)), y + 800, x, (y + 800) - 200, xc + (500 * emon.Port.BlobLen(c)), (y + 800) - 200, 0, 0, w0, 3);
         return 0;
     }
     internal static int TtRule(emon.Port.Cells pa, int x0, int y0, int x1, int y1) {
@@ -173,6 +189,19 @@ public static class Tabletest {
         emon.Port.Cells fr = emon.Port.NewCells();
         emon.Port.Cells gp = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ls = emon.Port.NewCells();
+        emon.Port.Cells sd = emon.Port.NewCells();
+        emon.Port.Cells it = emon.Port.NewCells();
+        emon.Port.Cells io = emon.Port.NewCells();
+        emon.Port.Cells rw = emon.Port.NewCells();
+        emon.Port.Cells gu = emon.Port.NewCells();
+        emon.Port.Cells ac = emon.Port.NewCells();
+        emon.Port.Cells tm = emon.Port.NewCells();
+        emon.Port.Cells cf = emon.Port.NewCells();
+        emon.Port.Cells lo = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells dbg = emon.Port.NewCells();
         emon.Port.Cells tb = emon.Port.NewCells();
         emon.Port.Cells tc = emon.Port.NewCells();
         emon.Port.Cells tw = emon.Port.NewCells();
@@ -199,8 +228,8 @@ public static class Tabletest {
         emon.Port.Cells s18 = emon.Port.NewCells();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
-        Table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18);
-        Para.PaBuild(wd, ln, et, 1, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
+        Table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Para.PaBuild(wd, ln, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger);
         TtBrief(t, nodes, attrs, text);
         return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
@@ -223,7 +252,7 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("12.50"), 17600, 14600, 0, 0);
         TtWord(wd, ln, et, emon.Testport.TextBlob("Outro"), 7200, 17200, 10200, 18000, 0);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "lattice: well formed");
-        emon.Testport.AssertText(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];C c2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
+        emon.Testport.AssertText(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
     }
     [Xunit.Fact]
     public static void TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot() {
@@ -239,18 +268,18 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("Q2"), 40000, 10000, 1, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("Alpha"), 7200, 11600, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("3.0%"), 30000, 11600, 0, 1);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("11.5%"), 40000, 11600, 0, 1);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("Beta"), 7200, 13200, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("111.5%"), 40000, 11600, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Bo"), 7200, 13200, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("4.7%"), 30000, 13200, 0, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("4.3%"), 40000, 13200, 0, 1);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("Gamma"), 7200, 14800, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Gammarays"), 7200, 14800, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("12.1%"), 30000, 14800, 0, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("9.5%"), 40000, 14800, 0, 1);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("Delta"), 7200, 16400, 0, 0);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("6.4%"), 30000, 16400, 0, 1);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("6.6%"), 40000, 16400, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7200, 16400, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("6.4%"), 30000, 16400, 1, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("6.6%"), 40000, 16400, 1, 1);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "whitespace: well formed");
-        emon.Testport.AssertText(t, "T3w;Gh;R;Ch[Fund];Ch[Q1];Ch[Q2];Gb;R;Cs[Alpha];Ce[3.0%];Ce[11.5%];R;Cs[Beta];Ce[4.7%];Ce[4.3%];R;Cs[Gamma];Ce[12.1%];Ce[9.5%];R;Cs[Delta];Ce[6.4%];Ce[6.6%];", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
+        emon.Testport.AssertText(t, "@W", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
         // Two columns of prose, four words a line: columns, not a table.
         emon.Port.CellsDrop(wd, 0);
         emon.Port.CellsDrop(ln, 0);
@@ -283,10 +312,10 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("North"), 7200, 11900, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("120"), 30000, 11900, 0, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("9.5"), 37200, 11900, 0, 1);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("South"), 7200, 13500, 0, 0);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("98"), 30000, 13500, 0, 1);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("So"), 7200, 13500, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("8"), 30000, 13500, 0, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("7.1"), 37200, 13500, 0, 1);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("West"), 7200, 15100, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Westerly"), 7200, 15100, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("75"), 30000, 15100, 0, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("4.4"), 37200, 15100, 0, 1);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "partial: well formed");
@@ -325,9 +354,7 @@ public static class Tabletest {
         emon.Port.Cells et = emon.Port.NewCells();
         emon.Port.Cells pa = emon.Port.NewCells();
         System.Text.StringBuilder t = emon.Testport.NewText();
-        TtWord(wd, ln, et, emon.Testport.TextBlob("Table"), 7200, 8400, 10000, 9200, 0);
-        TtWord(wd, ln, et, emon.Testport.TextBlob("2."), 10200, 8400, 11200, 9200, 0);
-        TtWord(wd, ln, et, emon.Testport.TextBlob("Results"), 11700, 8400, 15000, 9200, 0);
+        TtLine3(wd, ln, et, emon.Testport.TextBlob("Table"), emon.Testport.TextBlob("2."), emon.Testport.TextBlob("Results"), 7200, 8400);
         TtGrid(pa, 7200, 17200, 27200, 37200, 10000, 12000, 14000, 16000);
         TtAt(wd, ln, et, emon.Testport.TextBlob("A"), 7600, 10600, 1, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("B"), 17600, 10600, 1, 0);
@@ -335,10 +362,10 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("x"), 7600, 12600, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("1"), 17600, 12600, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("2"), 27600, 12600, 0, 0);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("Sum"), 7600, 14600, 1, 0);
-        TtAt(wd, ln, et, emon.Testport.TextBlob("3"), 17600, 14600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Sum"), 7600, 14600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("3"), 17600, 14600, 0, 0);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "caption: well formed");
-        emon.Testport.AssertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];Gf;R;Cw[Sum];Cc2w[3];", "the caption is the table's first child, label and text; a bold last row under a plain one is the foot");
+        emon.Testport.AssertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];", "the caption is the table's first child: label and text, not a paragraph");
     }
     internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
@@ -379,6 +406,19 @@ public static class Tabletest {
         emon.Port.Cells tmp = emon.Port.NewCells();
         emon.Port.Cells fr = emon.Port.NewCells();
         emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ls = emon.Port.NewCells();
+        emon.Port.Cells sd = emon.Port.NewCells();
+        emon.Port.Cells it = emon.Port.NewCells();
+        emon.Port.Cells io = emon.Port.NewCells();
+        emon.Port.Cells rw = emon.Port.NewCells();
+        emon.Port.Cells gu = emon.Port.NewCells();
+        emon.Port.Cells ac = emon.Port.NewCells();
+        emon.Port.Cells tm = emon.Port.NewCells();
+        emon.Port.Cells cf = emon.Port.NewCells();
+        emon.Port.Cells lo = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells dbg = emon.Port.NewCells();
         emon.Port.Cells tb = emon.Port.NewCells();
         emon.Port.Cells tc = emon.Port.NewCells();
         emon.Port.Cells tw = emon.Port.NewCells();
@@ -414,8 +454,8 @@ public static class Tabletest {
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.PaPages(pg, pages);
         int np = emon.Port.CellsLen(pages) / 16;
-        Table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18);
-        Para.PaBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
+        Table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Para.PaBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger);
         if (Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return 3;
         }

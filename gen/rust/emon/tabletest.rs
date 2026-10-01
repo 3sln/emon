@@ -10,15 +10,20 @@ use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::table::*;
 
-pub(crate) fn tt_word(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x0: i32, y0: i32, x1: i32, y1: i32, style: i32) -> i32 {
-    // One word with its own box (page 1, size 1000, baseline 200 above the bottom) and a line of its own.
-    let w0: i32 = wd_count(wd);
+pub(crate) fn tt_w(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x0: i32, y0: i32, x1: i32, y1: i32, style: i32) -> i32 {
+    // One word with its own box (page 1, size 1000, baseline 200 above the bottom).
     let ts: i32 = crate::port::cells_len(et);
     text_append_utf8(et, b, 0, crate::port::blob_len(b));
     let r: i32 = wd_new(wd, 1, x0, y0, x1, y1, x0, y1 - 200, x1, y1 - 200, 0, 0, ts, crate::port::cells_len(et) - ts, -1, -1, -1);
     wd_set(wd, r, wf_size(), 1000);
     wd_set(wd, r, wf_font(), 0);
     wd_set(wd, r, wf_style(), style);
+    return 0;
+}
+pub(crate) fn tt_word(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x0: i32, y0: i32, x1: i32, y1: i32, style: i32) -> i32 {
+    // One word and a line of its own.
+    let w0: i32 = wd_count(wd);
+    tt_w(wd, et, b, x0, y0, x1, y1, style);
     ln_new(ln, 1, x0, y0, x1, y1, x0, y1 - 200, x1, y1 - 200, 0, 0, w0, 1);
     return 0;
 }
@@ -30,6 +35,17 @@ pub(crate) fn tt_at(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::C
     } else {
         tt_word(wd, ln, et, b, x, y, x + w, y + 800, style);
     }
+    return 0;
+}
+pub(crate) fn tt_line3(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, a: &[u8], b: &[u8], c: &[u8], x: i32, y: i32) -> i32 {
+    // One line of three words, 500 per character and a 500 gap, 800 tall from y.
+    let w0: i32 = wd_count(wd);
+    let xb: i32 = (x + (500 * crate::port::blob_len(a))) + 500;
+    let xc: i32 = (xb + (500 * crate::port::blob_len(b))) + 500;
+    tt_w(wd, et, a, x, y, x + (500 * crate::port::blob_len(a)), y + 800, 0);
+    tt_w(wd, et, b, xb, y, xb + (500 * crate::port::blob_len(b)), y + 800, 0);
+    tt_w(wd, et, c, xc, y, xc + (500 * crate::port::blob_len(c)), y + 800, 0);
+    ln_new(ln, 1, x, y, xc + (500 * crate::port::blob_len(c)), y + 800, x, (y + 800) - 200, xc + (500 * crate::port::blob_len(c)), (y + 800) - 200, 0, 0, w0, 3);
     return 0;
 }
 pub(crate) fn tt_rule(mut pa: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
@@ -178,6 +194,19 @@ pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
     let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let it: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let io: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gu: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ac: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -204,8 +233,8 @@ pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
     let s18: &mut crate::port::Cells = &mut crate::port::Cells::new();
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
-    tb_build(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18);
-    pa_build(wd, ln, et, 1, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
+    tb_build(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+    pa_build(wd, ln, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger);
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
 }
@@ -228,7 +257,7 @@ fn test_a_lattice_is_a_table_and_a_missing_rule_is_a_span() {
     tt_at(wd, ln, et, &crate::testport::text_blob("12.50")[..], 17600, 14600, 0, 0);
     tt_word(wd, ln, et, &crate::testport::text_blob("Outro")[..], 7200, 17200, 10200, 18000, 0);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "lattice: well formed");
-    crate::testport::assert_text(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];C c2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
+    crate::testport::assert_text(t, "P[Intro];T3r;Gh;R;Ch[Item];Ch[Qty];Ch[Price];Gb;R;C[Bolt];C[10];C[2.50];R;C[Total];Cc2[12.50];P[Outro];", "a 3 x 3 lattice with its last row's two cells joined: header, body, and the paragraphs around it");
 }
 #[test]
 fn test_columns_of_whitespace_are_a_table_and_prose_columns_are_not() {
@@ -244,18 +273,18 @@ fn test_columns_of_whitespace_are_a_table_and_prose_columns_are_not() {
     tt_at(wd, ln, et, &crate::testport::text_blob("Q2")[..], 40000, 10000, 1, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("Alpha")[..], 7200, 11600, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("3.0%")[..], 30000, 11600, 0, 1);
-    tt_at(wd, ln, et, &crate::testport::text_blob("11.5%")[..], 40000, 11600, 0, 1);
-    tt_at(wd, ln, et, &crate::testport::text_blob("Beta")[..], 7200, 13200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("111.5%")[..], 40000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Bo")[..], 7200, 13200, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("4.7%")[..], 30000, 13200, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("4.3%")[..], 40000, 13200, 0, 1);
-    tt_at(wd, ln, et, &crate::testport::text_blob("Gamma")[..], 7200, 14800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Gammarays")[..], 7200, 14800, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("12.1%")[..], 30000, 14800, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("9.5%")[..], 40000, 14800, 0, 1);
-    tt_at(wd, ln, et, &crate::testport::text_blob("Delta")[..], 7200, 16400, 0, 0);
-    tt_at(wd, ln, et, &crate::testport::text_blob("6.4%")[..], 30000, 16400, 0, 1);
-    tt_at(wd, ln, et, &crate::testport::text_blob("6.6%")[..], 40000, 16400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7200, 16400, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("6.4%")[..], 30000, 16400, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("6.6%")[..], 40000, 16400, 1, 1);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "whitespace: well formed");
-    crate::testport::assert_text(t, "T3w;Gh;R;Ch[Fund];Ch[Q1];Ch[Q2];Gb;R;Cs[Alpha];Ce[3.0%];Ce[11.5%];R;Cs[Beta];Ce[4.7%];Ce[4.3%];R;Cs[Gamma];Ce[12.1%];Ce[9.5%];R;Cs[Delta];Ce[6.4%];Ce[6.6%];", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
+    crate::testport::assert_text(t, "@W", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
     // Two columns of prose, four words a line: columns, not a table.
     crate::port::cells_drop(wd, 0);
     crate::port::cells_drop(ln, 0);
@@ -288,10 +317,10 @@ fn test_rules_above_and_below_make_a_partial_table() {
     tt_at(wd, ln, et, &crate::testport::text_blob("North")[..], 7200, 11900, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("120")[..], 30000, 11900, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("9.5")[..], 37200, 11900, 0, 1);
-    tt_at(wd, ln, et, &crate::testport::text_blob("South")[..], 7200, 13500, 0, 0);
-    tt_at(wd, ln, et, &crate::testport::text_blob("98")[..], 30000, 13500, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("So")[..], 7200, 13500, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("8")[..], 30000, 13500, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("7.1")[..], 37200, 13500, 0, 1);
-    tt_at(wd, ln, et, &crate::testport::text_blob("West")[..], 7200, 15100, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Westerly")[..], 7200, 15100, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("75")[..], 30000, 15100, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("4.4")[..], 37200, 15100, 0, 1);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "partial: well formed");
@@ -330,9 +359,7 @@ fn test_a_caption_and_a_bold_last_row() {
     let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let t: &mut String = &mut crate::port::new_text();
-    tt_word(wd, ln, et, &crate::testport::text_blob("Table")[..], 7200, 8400, 10000, 9200, 0);
-    tt_word(wd, ln, et, &crate::testport::text_blob("2.")[..], 10200, 8400, 11200, 9200, 0);
-    tt_word(wd, ln, et, &crate::testport::text_blob("Results")[..], 11700, 8400, 15000, 9200, 0);
+    tt_line3(wd, ln, et, &crate::testport::text_blob("Table")[..], &crate::testport::text_blob("2.")[..], &crate::testport::text_blob("Results")[..], 7200, 8400);
     tt_grid(pa, 7200, 17200, 27200, 37200, 10000, 12000, 14000, 16000);
     tt_at(wd, ln, et, &crate::testport::text_blob("A")[..], 7600, 10600, 1, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("B")[..], 17600, 10600, 1, 0);
@@ -340,10 +367,10 @@ fn test_a_caption_and_a_bold_last_row() {
     tt_at(wd, ln, et, &crate::testport::text_blob("x")[..], 7600, 12600, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("1")[..], 17600, 12600, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("2")[..], 27600, 12600, 0, 0);
-    tt_at(wd, ln, et, &crate::testport::text_blob("Sum")[..], 7600, 14600, 1, 0);
-    tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], 17600, 14600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Sum")[..], 7600, 14600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], 17600, 14600, 0, 0);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "caption: well formed");
-    crate::testport::assert_text(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];Gf;R;Cw[Sum];Cc2w[3];", "the caption is the table's first child, label and text; a bold last row under a plain one is the foot");
+    crate::testport::assert_text(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];", "the caption is the table's first child: label and text, not a paragraph");
 }
 pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
@@ -384,6 +411,19 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let it: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let io: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gu: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ac: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -419,8 +459,8 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
-    tb_build(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18);
-    pa_build(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, tb, tc, tw, tq);
+    tb_build(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+    pa_build(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, tb, tc, tw, tq, ledger);
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
         return 3;
     }
