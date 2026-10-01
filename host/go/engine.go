@@ -264,6 +264,11 @@ type Config struct {
 	FetchRounds   int32
 	// Ocr is the `Ocr` port, if the embedder has one (D211). nil: no live OCR; a replay needs none.
 	Ocr Ocr
+	// Renderer is the `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine
+	// converts or records. nil (the default): none is configured, and a request for one is answered
+	// `unsupported` (D199). A replay never calls it (D008). `pdfium.New()` (build tag `pdfium`) is the default
+	// engine.
+	Renderer port.Renderer
 }
 
 // DefaultConfig is SPEC 13.1's defaults.
@@ -635,8 +640,14 @@ func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr) *p
 			}
 			return ocrSafe(ocr, req, bm, recording, failed)
 		}
+		if req.Kind() == port.PlanKindRender || req.Kind() == port.PlanKindCrop {
+			// no Renderer is configured (D199): an answer, as an Engine with no Ocr answers `ocr`
+			c := port.NewCells()
+			plan.AnFail(c, req.Kind(), req.ID(), plan.PsUnsupported())
+			return port.PlanAnswer{Rec: cellsVec(c)}, nil
+		}
 		if req.Kind() != port.PlanKindDecode {
-			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no Renderer port is configured (only ImageDecode and Ocr are)"}
+			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no port is configured for this request kind"}
 		}
 		input, off, n, filter, frame := req.Arg(0), req.Arg(1), req.Arg(2), req.Arg(3), req.Arg(4)
 		if int(input) != idx || off < 0 || n < 0 || int64(off)+int64(n) > source.Size() {
@@ -1251,9 +1262,15 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	}
 	pcfg := port.PlanConfig{MaxRounds: e.cfg.MaxRounds, FetchRounds: e.cfg.FetchRounds}
 	thisInput := [][2]int32{{int32(idx), int32(size)}}
-	// the live ports: ImageDecode, and Ocr when the Engine was given one (a Renderer comes with P6.2); pixels are kept in
-	// the answers when a transcript is being recorded or an OCR engine will read them
-	var ports port.PlanFulfiller = portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr)
+	// the live port set (D127, D211): `render` and `crop` go to the configured Renderer, reading the same input through the
+	// same byte source; with none they, like the other kinds, fall to the host's own fulfiller, which answers them
+	// `unsupported` (D199). Pixels are kept in the answers when a transcript is being recorded or an OCR engine will read them.
+	mux := &port.KindMux{}
+	if e.cfg.Renderer != nil {
+		rf := port.NewRenderFulfillerFor(e.cfg.Renderer, idx, port.RenderInput{Source: in.Source, Password: in.Password})
+		mux.With([]int32{port.PlanKindRender, port.PlanKindCrop}, rf)
+	}
+	var ports port.PlanFulfiller = mux.With([]int32{port.PlanKindRender, port.PlanKindCrop, port.PlanKindDecode, port.PlanKindOcr}, portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr))
 	var replayer *port.Replayer
 	if rec != nil {
 		rec.Inputs = thisInput

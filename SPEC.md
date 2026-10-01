@@ -881,6 +881,20 @@ filter), named by its SHA-256 so the record, and so the transcript key,
 never holds the bytes; a second such span for `JBIG2Globals`). A payload is
 input-derived, like a `bytes` answer, so it is never written to a transcript.
 
+**WASM.** pdfium has a WebAssembly build (bblanchon/pdfium-binaries ships
+`pdfium-wasm.tgz`, pinned beside the native ones in `tools/pdfium/pdfium.edn`;
+PDFium's own `FPDF_*` C API, exported through Emscripten). The JS host
+fulfils `render` and `crop` as it fulfils OCR: it owns the loop (§7.3, 2),
+loads the module once, serves pdfium's custom file-access callback from the
+async byte source (`FPDF_LoadCustomDocument` with `m_GetBlock` reading a
+resident span, or the request awaited first as a `bytes` round, D058), builds
+the same page edits for the layers and answers with RGB pixels in a
+`Uint8Array` that the Rust/WASM core writes into a `Bitmap`. Nothing in kin
+or in the transcript changes: what the browser's pdfium draws is recorded
+like any engine's, and a transcript recorded natively replays in the
+browser (and the reverse) to the same Model. This is an item of P9.3; it is
+not built.
+
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.
 

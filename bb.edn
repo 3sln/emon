@@ -32,6 +32,12 @@
         :task (shell "kin/scripts/ocr")}
   ocr-live {:doc "LIVE Tesseract over the 55 synthetic scans (the scoreboard's emon-live, ratcheted) and a sample of FUNSD, SROIE and CORD gold: NOT a gate (needs Tesseract, takes minutes; P6.5, D216).  bb ocr-live [--update] [--no-gold] [--gold-n N]"
             :task (apply shell "bb" "tools/ocr/live.clj" *command-line-args*)}
+  render {:doc "A real pdfium transcript (pages, layers, crops, failures) replayed on Rust and Go: identical dump and pixels; layers and crops held to what they are (P6.2, D127). Recording it is `bb render-record` (live, not a gate)."
+          :task (shell "kin/scripts/render")}
+  render-record {:doc "Record the render cases LIVE with the pinned pdfium and measure: --go (Rust vs Go pixels), --compare-build (a year-older pdfium), --scratch (do not overwrite the committed transcript). NOT a gate (P6.2, D127).  bb render-record [--go] [--compare-build] [--scratch]"
+                 :task (apply shell "bb" "tools/render/record.clj" *command-line-args*)}
+  pdfium-fetch {:doc "Download the pinned pdfium (tools/pdfium/pdfium.edn) into .cache/pdfium/, checksum-verified. NOT a gate (P6.2, D127).  bb pdfium-fetch [--platform P] [--previous] [--force]"
+                :task (apply shell "bb" "tools/pdfium/fetch.clj" *command-line-args*)}
   png-check {:doc "Do independent decoders (ImageMagick, java.util.zip) read emon's canonical PNGs to the same pixels; size against zlib level 6 (P3.11, D117).  bb png-check [--update-digests]"
              :task (apply shell "kin/scripts/png-check" *command-line-args*)}
   png-bench {:doc "ms per target to write a real scanned page and a photo as PNG, and whether the four write the same file (NOT a gate; needs corpus/).  bb png-bench [N]"

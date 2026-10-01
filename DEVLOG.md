@@ -1967,9 +1967,56 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: JPX (lossless), JBIG2 and CCITT cases equal the generator's pixels
   exactly, DCT within 2 per channel of `pdfimages -png`; the replay's JSON, HTML and
   asset files are byte-identical on Rust and Go.
-- [ ] P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
-  available (D007); pdfium loads through its custom-loader callback over the
-  byte source, not a path or a whole-file copy (D058).
+- [x] **P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
+  available** (D007, D008, D058, D089-D091, D117, D124, D125; D191-D194).
+  pdfium loads through its custom-loader callback over the byte source, not a path or
+  a whole-file copy (D058). *Done 2026-10-01.* **Built**: `host/rust/src/render.rs` and
+  `host/go/port/render.go` (the PORT, no engine and no filesystem: `Renderer`,
+  `RenderRequest`, `Clip`, `RenderError`, `RenderFulfiller` for kinds `render` 1 and
+  `crop` 5, `KindMux`, `cut`, `pixels_of`); `host/rust/src/pdfium.rs` (hand FFI to the
+  C API, `--cfg pdfium`) and `host/go/pdfium/` (cgo, `-tags pdfium`), the default
+  engine; `Config.renderer` / `Config.Renderer` on both Engines (the port set the loop
+  fulfils with when it converts or records; a replay never calls it); `kin/plan.kin`:
+  `pk-crop` 5, `rq-crop`, `lay-no-watermark` 3, `lay-watermark-only` 4 (laws in
+  `plantest`; `gen/` regenerated); `tools/pdfium/pdfium.edn` + `fetch.clj`
+  (`bb pdfium-fetch`: pdfium `chromium/8076` = 156.0.8076.0, bblanchon/pdfium-binaries,
+  SHA-256 pinned per platform, unpacked into the ignored `.cache/pdfium/`);
+  `tools/render/{record,lib,mkfixture}.clj` (`bb render-record`, live, not a gate);
+  `test/render/` (cases, the fixture `layers.pdf`, the Rust and Go drivers, the
+  committed transcript `render/` of 17 requests, 12 PNGs, 230 KB, and its dump);
+  `kin/scripts/render` = `bb render`, **a gate** (replay only: no pdfium, no cgo, no
+  network); tests of the fulfiller and of the Engine wiring in both hosts' native tests.
+  **Answers**
+  1. *Do Rust and Go render the same page differently?* Not with the same pdfium:
+     `bb render-record --go` records the 17 requests on both hosts (Rust FFI, Go cgo, the
+     same `libpdfium`): 12 bitmaps, 885,827 pixels, maximum channel difference 0, and
+     the identical dump. *Builds do:* against pdfium `chromium/7390` (a year older, same
+     platform) the vector fixture and the scan are identical, and the three
+     born-digital text renders differ in 686 to 4,888 pixels (4-5% of a text page) by at
+     most **3 of 255** per channel (text anti-aliasing). Tolerance recorded: a host that
+     renders live may stray from the transcript by 3/255 on text pixels and by nothing
+     on vector and image pages; the TRANSCRIPT is the identity mechanism (D008), not
+     the pixels, so no gate has a tolerance.
+  2. *Layers.* No-text and text-only are real and tested on a fixture of known objects
+     (text, a path, a form XObject with both); the watermark and background layers are
+     `unsupported` on pdfium (D193). *Crops* are cuts of a whole render (D193).
+  3. *Reading the input.* A 431 KB scan rendered by reading 290 KB in 32 `read_at`
+     calls; a 1 KB file in a handful; no copy of the file (D192).
+  4. *Cost.* 17 renders at 36 to 144 dpi took 55 ms (Rust, warm); the document is
+     opened afresh for each request (a per-input document cache is a later measurement).
+  **Coordination with P6.5** (in progress elsewhere): nothing in kin asks for a render
+  yet (the slice issues zero requests), so OCR can use real renders as soon as its unit
+  writes `rq-render` for a scanned page. The merge point is the Engine's port set in
+  `run_input_bounded` / `runInputBounded`: `KindMux` takes `render` and `crop` here and
+  takes `ocr` (and `decode`) with one more `.with(...)` line each. Renders are RGB
+  (`channels` 3); `Bitmap` has no gray conversion yet (P6.3 normalization), and
+  `tess.rs` already takes 1 or 3 channels. The first scanned-page OCR can replace the
+  stand-in of `tools/ocr/record.clj` (`pdfimages` + ImageMagick) by `pdfium::Pdfium`
+  at the same 150 dpi.
+  **Not done**: the watermark layers on pdfium (D193); a per-input document cache; the
+  JS host's pdfium WASM fulfiller (SPEC 7.3, D194; P9.3); Windows and Linux builds of
+  the live drivers are untested here (the pins exist for `linux-x64`, `linux-arm64`,
+  `mac-x64`, `win-x64`, `wasm`).
 - [ ] **P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew, orientation** (SPEC §8.2 "As designed", D092,
   D093, D096, D197). **Critical path, wave 1.** Depends on: P6.2 and P6.5 merged to main (renders and the evidence's
   `views`). Parallel with P7.0, P7.U, P6.6 (different files; see "Who edits what" under Phase 7).
@@ -7318,6 +7365,30 @@ rule is wrong, and P7.G's errors would hide inside the profile's tolerance).
 text is body; and five sources already say where figures are, so fusing them once spares P8.1 a second alignment.
 **Alternatives**: deciding table-in-image in stage 3 (too late: rule 150 has held its words); leaving figures to P8.1
 entirely (rule 140 needs them now).
+- [ ] **Signed off** (maintainer)
+
+### D191 — The `Renderer` port: `render` and `crop` are one fulfiller; RGB; the page geometry is stated; a crop is answered with its own kind (P6.2; SPEC 7.2, D007, D089, D117)
+**Decision**: (1) A `Renderer` is `render(input: ByteSource, password, request) -> Bitmap | failed | unsupported`, with `layers()` (a bit set) and `exact_crop()`. The request is D089's `input page dpi layer` (page 0-based) and, for a crop, D117's `crop` kind 5: the same four plus the pixel rectangle `px py pw ph`. `kin/plan.kin` gains `pk-crop`, `rq-crop`, and two layers beyond text-on/off/only: `lay-no-watermark` 3 and `lay-watermark-only` 4. (2) One fulfiller, `RenderFulfiller` (Rust and Go), takes both kinds, reads the input BY INDEX through the run's byte source (D058), and answers `[len kind id status w h channels dpi]`. A crop's answer carries kind 5 (the loop matches an answer to its request by id and kind) with a render's layout. `failed` and `unsupported` are answers (header and status), transcribed and replayed; a malformed request or a missing input is the loop's `fulfil-failed`, not an answer. (3) The page is RGB, 3 channels: the tracer's ink separation wants colour (SPEC 8.2.1), OCR takes 1 or 3. (4) The whole-page size is `floor(pt * dpi / 72 + 1/2)` per side (`pixels_of`), at least 1; a crop is a rectangle of that bitmap. (5) The Engine's port set is `Config.renderer`: when it is set and the Engine converts or records, `render` and `crop` go to it through a `KindMux` (a request goes to the fulfiller that takes its kind; `ocr` and `decode` join with one `.with` each); when it is not set a unit that asks fails with a named `fulfil-failed`, as before. A replay never calls it. `Renderer` requires `Debug` in Rust so `Config` stays `Debug + Clone`.
+**Why**: kin's side of D089 already had `render`; D117 reserved `crop`, whose only difference is the rectangle, so one function serves both and a second fulfiller per kind would be two places to drift. Stating the geometry makes two engines and two hosts agree on the size before they disagree on a pixel. The mux is the seam P6.5 and P6.1a need.
+**Alternatives**: the clip as optional trailing arguments of `render` (rejected: D117 and SPEC 7.2 name `crop` as its own kind); a gray render when OCR wants it (a request flag later; gray is P6.3's conversion, and a flag changes transcripts' keys); one fulfiller per kind (above); the Engine owning pdfium (rejected: an embedder registers any engine, D007).
+- [ ] **Signed off** (maintainer)
+
+### D192 — pdfium is a pinned bblanchon/pdfium-binaries build, fetched by a bb script into an ignored cache, bound by hand through its C API (Rust FFI, Go cgo), reading through `FPDF_LoadCustomDocument` (P6.2; D007, D058, D074, D095)
+**Decision**: (1) `tools/pdfium/pdfium.edn` pins `chromium/8076` (pdfium 156.0.8076.0) with the SHA-256 GitHub published for each non-V8 archive (`mac-arm64`, `mac-x64`, `linux-x64`, `linux-arm64`, `win-x64`, and `pdfium-wasm`); `bb pdfium-fetch` downloads one into `.cache/pdfium/<version>/<platform>/`, REFUSES an archive whose hash is not the pin's before unpacking it, and links `.cache/pdfium/current`. On macOS it rewrites the dylib's install name to `@rpath/libpdfium.dylib` and ad-hoc re-signs it. `.cache/` is ignored; nothing is committed. (2) The binding is hand-written against the C API: `host/rust/src/pdfium.rs` (`#[link(name = "pdfium")]`, compiled under `--cfg pdfium`) and `host/go/pdfium/` (cgo, `-tags pdfium`), about 25 functions, as D095 bound Tesseract. They are NOT the `pdfium-render` crate or `go-pdfium`: a crate adds a build script and a version axis to a dependency that is already one pinned binary; the layer edits (D193) need the raw object API either way; and the same C functions in both hosts is what makes "same pdfium, same pixels" a statement we can measure. (3) The document is read through `FPDF_LoadCustomDocument` and an `FPDF_FILEACCESS` whose `m_GetBlock` calls the run's `ByteSource::read_at` / Go `ReadAt` (Go: a `runtime/cgo.Handle` in `m_Param`, the exported callback in its own file, the access struct and the pixel buffer in C memory). No path, no copy, no whole-file buffer: a 431 KB scan rendered by 32 reads of 290 KB. (4) pdfium is not thread-safe: one process-wide lock; the Go binary on macOS needs `codesign -f -s -` after `go build` (the kernel kills it otherwise: exit 137). (5) Gates never need any of this: `bb render` replays the committed transcript; only `bb render-record` (live, not a gate) builds the engines.
+**Why**: the brief's order of preference (a host project would download a prebuilt pdfium by version and checksum), D058 (the loader), D095's pattern (live recording, replay gate).
+**Alternatives**: `pdfium-render` and `go-pdfium` (above); building pdfium from source (hours and a Chromium toolchain for a binary that is published); the system's pdfium (no version to pin, which defeats the transcript's producer record).
+- [ ] **Signed off** (maintainer)
+
+### D193 — Layers are made by removing page objects in memory; the watermark layers are `unsupported` on pdfium; a crop is the cut of a whole-page render, which the fulfiller keeps (P6.2; SPEC 7.2, D117)
+**Decision**: (1) pdfium has no switch to hide text, so after `FPDF_LoadPage` the page's objects are removed in memory (`FPDFPage_RemoveObject`; `FPDFFormObj_RemoveObject` inside Form XObjects, recursively) and the page is rendered; nothing is saved, the page is closed after. `no-text` removes text objects and keeps annotations' appearances (their text is not separable); `text-only` keeps only text and no annotations; both were found right on a fixture of known objects (`test/render/layers.pdf`, made by `tools/render/mkfixture.clj`): no red watermark word without text, no background or path with text only, the text inside a form found by the recursion. (2) `lay-no-watermark` and `lay-watermark-only` are `unsupported` on pdfium: the layer is `/Artifact` marked content with `/Subtype /Watermark` or `/Background` (or `/Type /Background`), whose values are NAMES, and pdfium's mark API reads the mark's name and its string, number and blob parameters but has no reader for a name (`GetParamValueType` says NAME; the string and blob getters answer false: checked). Guessing from the key alone would drop headers and footers with the watermark. The engine says it cannot (SPEC 7.2) and kin separates watermarks itself: §8.1 reads the marks, §8.2.1 separates ink by colour. The codes exist for an engine that can. (3) pdfium's clipped render is NOT the cut of the whole render: a crop of a bank statement at 36 dpi differed from the same rectangle cut out of the whole page in 70 pixels of 15,000, all in the two left columns, by up to 107 of 255 (a clip moves the edge pixels). D117 and SPEC 7.2 say a crop is "the same pixels, cut out, never a re-fit", so the CONTRACT is the fulfiller's: unless a `Renderer` declares `exact_crop()`, it is handed the whole page, and the fulfiller cuts (`cut`, `RenderCut`) and keeps the last whole page, so a page and the regions of it (P8.5) render once. `bb render` holds every committed crop to equality with the cut of its whole page.
+**Why**: the maintainer asked for text-off and ink-only renders so OCR sees the page without the text layer (SPEC 9.5); a layer an engine cannot make honestly is better refused than approximated; a crop that disagrees with its page would move boxes by a pixel between a render and its figures.
+**Alternatives**: hiding text by `FPDFTextObj_SetTextRenderMode` invisible (text only, no path removal for text-only, no form recursion for free); rendering a margin around the crop and cutting (not exact at every operator, so not a law); `FPDF_RenderPageBitmapWithMatrix` with a clip (the same edge, measured); a watermark heuristic from the mark's key set (drops headers).
+- [ ] **Signed off** (maintainer)
+
+### D194 — Rust and Go render the same pdfium build to the same pixels; two builds differ by 3/255 on text; the transcript is the identity mechanism, so no gate has a tolerance; WASM is the browser's engine (P6.2; D008, D095; SPEC 7.3)
+**Decision**: (1) Measured by `bb render-record --go --compare-build` (live, not a gate), 17 requests, 12 bitmaps, 885,827 pixels, on macOS arm64: Rust (FFI) against Go (cgo), one `libpdfium`: **0 differing pixels**, identical dumps. pdfium `chromium/8076` against `chromium/7390` (a year earlier): the vector fixture (five layer renders, three crops) and the scan (image only) identical; the three born-digital text renders differ in 686, 4,878 and 4,888 pixels (4-5%) by at most **3 of 255** per channel. The recorded tolerance, for whoever re-pins or runs another build: text anti-aliasing may move a text pixel by 3/255 and nothing else moves. Other platforms (FMA, SIMD paths) are unmeasured. (2) No gate has that tolerance. The transcript is the identity mechanism (D008): `bb render` replays the committed `test/render/render/` on Rust and Go and requires the identical dump (every request and answer, each bitmap's FNV-1a pixel hash, each file's size and hash) and that it is the dump the live recording printed; a changed request is `transcript-miss` on both. (3) WASM: pdfium's own WebAssembly build is pinned beside the native ones; the JS host fulfils `render` and `crop` in the browser the way it fulfils OCR (SPEC 7.3: it owns the loop), serving the custom file-access callback from the async byte source, and a transcript recorded natively replays in the browser and the reverse. Not built (P9.3).
+**Why**: D095's lesson: a gate that runs a live engine tests whose engine is installed. The measurement tells an embedder how far a live host may stray, and the pin and its re-record procedure (`tools/pdfium/pdfium.edn`) say how to move.
+**Alternatives**: a gate that renders live and compares within the tolerance (machine-dependent, which D008 exists to prevent); a bigger committed transcript (230 KB is enough to hold layers, crops and failures).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

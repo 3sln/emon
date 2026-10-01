@@ -37,6 +37,7 @@ pub const KIND_RENDER: i32 = 1;
 pub const KIND_DECODE: i32 = 2;
 pub const KIND_OCR: i32 = 3;
 pub const KIND_BYTES: i32 = 4;
+pub const KIND_CROP: i32 = 5;
 
 pub const STATUS_OK: i32 = 0;
 pub const STATUS_FAILED: i32 = 1;
@@ -262,7 +263,7 @@ fn read_requests(rq: &Cells, answered: &HashSet<i32>) -> Result<Vec<Request>, Pl
             return Err(PlanError::Bad(format!("a request at {} has length {}", at, len)));
         }
         let rec = record_at(rq, at, len);
-        if rec[1] < KIND_RENDER || rec[1] > KIND_OCR {
+        if rec[1] < KIND_RENDER || (rec[1] > KIND_OCR && rec[1] != KIND_CROP) {
             return Err(PlanError::Bad(format!("request {} has kind {}, which kin may not ask for", rec[2], rec[1])));
         }
         if rec[2] < 1 {
@@ -415,6 +416,7 @@ fn kind_name(k: i32) -> &'static str {
         KIND_RENDER => "render",
         KIND_DECODE => "decode",
         KIND_OCR => "ocr",
+        KIND_CROP => "crop",
         _ => "unknown",
     }
 }
@@ -424,6 +426,7 @@ fn kind_code(s: &str) -> Option<i32> {
         "render" => Some(KIND_RENDER),
         "decode" => Some(KIND_DECODE),
         "ocr" => Some(KIND_OCR),
+        "crop" => Some(KIND_CROP),
         _ => None,
     }
 }

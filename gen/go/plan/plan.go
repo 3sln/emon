@@ -23,6 +23,10 @@ func PkBytes() int32 {
 	return 4
 }
 
+func PkCrop() int32 {
+	return 5
+}
+
 func PsOk() int32 {
 	return 0
 }
@@ -61,6 +65,14 @@ func LayNoText() int32 {
 
 func LayTextOnly() int32 {
 	return 2
+}
+
+func LayNoWatermark() int32 {
+	return 3
+}
+
+func LayWatermarkOnly() int32 {
+	return 4
 }
 
 func FltNone() int32 {
@@ -244,6 +256,21 @@ func RqRender(c *port.Cells, id int32, input int32, page int32, dpi int32, layer
 	port.CellsPush(c, page)
 	port.CellsPush(c, dpi)
 	port.CellsPush(c, layer)
+	RecEnd(c, at)
+	return at
+}
+
+func RqCrop(c *port.Cells, id int32, input int32, page int32, dpi int32, layer int32, px int32, py int32, pw int32, ph int32) int32 {
+	// Ask for the pixel rectangle px py pw ph of page `page` as `rq-render` would answer it whole.
+	var at int32 = RecBegin(c, PkCrop(), id)
+	port.CellsPush(c, input)
+	port.CellsPush(c, page)
+	port.CellsPush(c, dpi)
+	port.CellsPush(c, layer)
+	port.CellsPush(c, px)
+	port.CellsPush(c, py)
+	port.CellsPush(c, pw)
+	port.CellsPush(c, ph)
 	RecEnd(c, at)
 	return at
 }

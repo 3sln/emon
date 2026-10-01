@@ -10,7 +10,8 @@
 //   * the input-bytes limit is checked against the LENGTH before any byte is read; a source that lies
 //     about its length is `source-changed`;
 //   * `assets` other than `none` and several inputs as one document are refused, not approximated;
-//   * record and replay; the walkable Model; and that the library names no filesystem.
+//   * record and replay; the walkable Model; and that the library names no filesystem;
+//   * the Renderer port (P6.2, D127): a fake engine through `RenderFulfiller` and through the Engine's Config.
 use emon::{Assets, ByteSource, Config, Engine, Error, HtmlOptions, Input, JsonOptions, Kind, Ocr, OcrPolicy, OcrPort, Options, SeekSource};
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -306,7 +307,7 @@ fn the_model_can_be_walked() {
 fn the_library_names_no_filesystem() {
     // D058: nothing under host/rust/src (the Engine, its sources, the loop, the ports) opens a file or names a path.
     // `tess.rs` (the Tesseract adapter's tessdata directory) and `testport.rs` (test support) are not the library.
-    for f in ["lib.rs", "engine.rs", "source.rs", "plan.rs", "port.rs"] {
+    for f in ["lib.rs", "engine.rs", "source.rs", "plan.rs", "port.rs", "render.rs", "pdfium.rs"] {
         let text = String::from_utf8(read(&format!("host/rust/src/{}", f))).unwrap();
         for (i, line) in text.lines().enumerate() {
             let code = line.split("//").next().unwrap();
@@ -491,4 +492,107 @@ fn an_image_that_cannot_be_read_is_refused_by_name() {
     let small = Engine::new(Config { limits: vec![(9, 1000)], ..Config::default() });
     let r = small.convert(Input::bytes(image("png-rgb8.png")), &Options::default());
     assert_eq!(r.err().map(|e| e.name()), Some("pixels".to_string()));
+}
+
+// ------------------------------------------------------------------ the Renderer port (P6.2, D127)
+
+use emon::plan::{Fulfiller, Request};
+use emon::{Clip, RenderError, RenderFulfiller, RenderInput, RenderRequest, Renderer};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+// A fake engine: a 20 x 30 RGB page whose pixel (x, y) is a function of x, y, the layer and the first byte
+// of the input it READ through the byte source; layer 3 is unsupported, page 9 is not there. It counts calls.
+#[derive(Debug, Default)]
+struct Fake {
+    calls: AtomicUsize,
+    saw_clip: AtomicUsize,
+}
+impl Renderer for Fake {
+    fn render(&self, input: &dyn ByteSource, _pw: Option<&[u8]>, req: &RenderRequest) -> Result<emon::port::Bitmap, RenderError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if req.clip.is_some() {
+            self.saw_clip.fetch_add(1, Ordering::SeqCst);
+        }
+        if req.layer == 3 {
+            return Err(RenderError::Unsupported("no watermark layer".to_string()));
+        }
+        if req.page == 9 {
+            return Err(RenderError::Failed("no such page".to_string()));
+        }
+        let mut first = [0u8; 1];
+        assert_eq!(input.read_at(0, &mut first).unwrap(), 1);
+        let mut px = Vec::new();
+        for y in 0..30u32 {
+            for x in 0..20u32 {
+                let v = (x * 7 + y * 3 + req.layer as u32 * 50 + first[0] as u32) as u8;
+                px.extend_from_slice(&[v, v ^ 0x55, 255 - v]);
+            }
+        }
+        Ok(emon::port::Bitmap::from_bytes(20, 30, 3, &px))
+    }
+}
+
+fn ask(f: &mut RenderFulfiller, rec: Vec<i32>) -> emon::plan::Answer {
+    let r = Request { rec };
+    f.start(&r, &Default::default()).unwrap();
+    f.next().unwrap()
+}
+
+#[test]
+fn a_render_fulfiller_answers_renders_and_crops_and_failures_as_records() {
+    let fake = Arc::new(Fake::default());
+    let pdf = synth("h-plain");
+    let mut f = RenderFulfiller::new(fake.clone(), vec![RenderInput { source: Arc::new(pdf.clone()), password: None }]);
+    // render: [len kind id input page dpi layer]; the answer is [len kind id status w h channels dpi]
+    let a = ask(&mut f, vec![7, 1, 1, 0, 0, 72, 0]);
+    assert_eq!(a.rec, vec![8, 1, 1, 0, 20, 30, 3, 72]);
+    let whole = a.bitmap.clone().unwrap();
+    // a crop of the same page: answered with a crop record, the very pixels of the cut, from ONE engine call
+    let c = ask(&mut f, vec![11, 5, 2, 0, 0, 72, 0, 4, 5, 8, 9]);
+    assert_eq!(c.rec, vec![8, 5, 2, 0, 8, 9, 3, 72]);
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 1, "a page and its crops are rendered once");
+    assert_eq!(fake.saw_clip.load(Ordering::SeqCst), 0, "an engine without exact crops is never handed a clip");
+    let cut = emon::render::cut(&whole, Clip { x: 4, y: 5, w: 8, h: 9 }).unwrap();
+    assert_eq!(c.bitmap.unwrap().to_bytes(), cut.to_bytes());
+    let wb = whole.to_bytes();
+    assert_eq!(&cut.to_bytes()[..3], &wb[(5 * 20 + 4) * 3..(5 * 20 + 4) * 3 + 3]);
+    // another layer is another render, and the input was READ through the source (its first byte is in the pixels)
+    let l1 = ask(&mut f, vec![7, 1, 3, 0, 0, 72, 1]);
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 2);
+    assert_ne!(l1.bitmap.unwrap().to_bytes(), wb);
+    assert_eq!(wb[0], pdf[0], "pixel (0,0) of layer 0 is the input's first byte");
+    // failures are answers: header and status only, and no bitmap
+    let un = ask(&mut f, vec![7, 1, 4, 0, 0, 72, 3]);
+    assert_eq!((un.rec.clone(), un.bitmap.is_none()), (vec![4, 1, 4, 2], true));
+    let nopage = ask(&mut f, vec![7, 1, 5, 0, 9, 72, 0]);
+    assert_eq!(nopage.rec, vec![4, 1, 5, 1]);
+    let outside = ask(&mut f, vec![11, 5, 6, 0, 0, 72, 0, 15, 0, 10, 10]);
+    assert_eq!((outside.rec, outside.bitmap.is_none()), (vec![4, 5, 6, 1], true));
+    let unsupported_crop = ask(&mut f, vec![11, 5, 7, 0, 0, 72, 3, 0, 0, 1, 1]);
+    assert_eq!(unsupported_crop.rec, vec![4, 5, 7, 2]);
+    // a request for an input the run does not have, or a malformed one, is the loop's error and not an answer
+    let bad_input = Request { rec: vec![7, 1, 8, 4, 0, 72, 0] };
+    f.start(&bad_input, &Default::default()).unwrap();
+    assert!(matches!(f.next(), Err(emon::plan::PlanError::Fulfil(_))));
+    let short = Request { rec: vec![6, 1, 9, 0, 0, 72] };
+    f.start(&short, &Default::default()).unwrap();
+    assert!(matches!(f.next(), Err(emon::plan::PlanError::Fulfil(_))));
+}
+
+#[test]
+fn an_engine_with_a_renderer_is_the_same_engine_and_the_slice_never_calls_it() {
+    // The Engine's port set (D127): `render` and `crop` go to Config.renderer. The slice issues no request
+    // (D008: nothing asks for a render until the OCR plan, P6.5), so the Model is byte-for-byte the one of an
+    // Engine with no renderer, and the renderer is never called.
+    let fake = Arc::new(Fake::default());
+    let with = Engine::new(Config { renderer: Some(fake.clone()), ..Config::default() });
+    let without = Engine::new(Config::default());
+    for name in SLICE {
+        let bytes = synth(name);
+        let a = with.convert(Input::bytes(bytes.clone()), &Options::default()).unwrap();
+        let b = without.convert(Input::bytes(bytes), &Options::default()).unwrap();
+        assert_eq!(json(&a), json(&b), "{}", name);
+    }
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 0);
 }

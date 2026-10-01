@@ -12,12 +12,16 @@
 pub mod emon;
 pub mod engine;
 mod imgdec;
+#[cfg(pdfium)]
+pub mod pdfium;
 pub mod plan;
 pub mod port;
+pub mod render;
 pub mod source;
 // the Tesseract adapter of the `Ocr` port (D211): live only, built under the `tesseract` feature (it links libtesseract)
 #[cfg(feature = "tesseract")]
 pub mod tess;
 
 pub use engine::{Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrPolicy, OcrPort, Options, Output, Page, Region, RunStats, Transcript};
+pub use render::{Clip, KindMux, RenderError, RenderFulfiller, RenderInput, RenderRequest, Renderer};
 pub use source::{ByteSource, BytesSource, Input, Inputs, SeekSource, SpoolSource};

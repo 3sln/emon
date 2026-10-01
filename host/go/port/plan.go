@@ -34,6 +34,7 @@ const (
 	PlanKindDecode int32 = 2
 	PlanKindOcr    int32 = 3
 	PlanKindBytes  int32 = 4
+	PlanKindCrop   int32 = 5
 
 	PlanStatusOk     int32 = 0
 	PlanStatusFailed int32 = 1
@@ -209,7 +210,7 @@ func planReadRequests(rq *Cells, answered map[int32]bool) ([]PlanRequest, error)
 			return nil, planErr("bad-record", "a request at %d has length %d", at, ln)
 		}
 		rec := planRecordAt(rq, at, ln)
-		if rec[1] < PlanKindRender || rec[1] > PlanKindOcr {
+		if rec[1] < PlanKindRender || (rec[1] > PlanKindOcr && rec[1] != PlanKindCrop) {
 			return nil, planErr("bad-record", "request %d has kind %d, which kin may not ask for", rec[2], rec[1])
 		}
 		if rec[2] < 1 {
@@ -376,6 +377,8 @@ func planKindName(k int32) string {
 		return "decode"
 	case PlanKindOcr:
 		return "ocr"
+	case PlanKindCrop:
+		return "crop"
 	}
 	return "unknown"
 }
@@ -388,6 +391,8 @@ func planKindCode(s string) (int32, bool) {
 		return PlanKindDecode, true
 	case "ocr":
 		return PlanKindOcr, true
+	case "crop":
+		return PlanKindCrop, true
 	}
 	return 0, false
 }

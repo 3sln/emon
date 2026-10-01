@@ -56,6 +56,7 @@ use crate::emon::pdfx::px_index_build;
 use crate::imgdec;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
 use crate::port::{self, cells_at, cells_len, cells_push, Cells, Src, SrcBacking};
+use crate::render::{KindMux, RenderFulfiller, RenderInput, Renderer};
 use crate::source::{ByteSource, Input, Inputs};
 use std::collections::BTreeSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -249,11 +250,15 @@ pub struct Config {
     pub fetch_rounds: i32,
     // The `Ocr` port, if the embedder has one (D211). None: no live OCR; a replay needs none.
     pub ocr: Option<OcrPort>,
+    // The `Renderer` port (D007, D127): what fulfils `render` and `crop` requests when the Engine converts
+    // or records. `None` (the default): none is configured, and a request for one is answered `unsupported` (D199;
+    // an Engine with no Renderer is a gate with no engine). A replay never calls it (D008). `pdfium::Pdfium` is the default engine (`--cfg pdfium`).
+    pub renderer: Option<Arc<dyn Renderer>>,
 }
 
 impl Default for Config {
     fn default() -> Config {
-        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS, ocr: None }
+        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS, ocr: None, renderer: None }
     }
 }
 
@@ -606,8 +611,14 @@ fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording
                 None => failed(crate::emon::plan::ps_unsupported()),
             };
         }
+        if req.kind() == plan::KIND_RENDER || req.kind() == plan::KIND_CROP {
+            // no Renderer is configured (D199): an answer, as an Engine with no Ocr answers `ocr`
+            let mut c = Cells::new();
+            crate::emon::plan::an_fail(&mut c, req.kind(), req.id(), crate::emon::plan::ps_unsupported());
+            return Ok(Answer { rec: to_vec(&c), bitmap: None });
+        }
         if req.kind() != plan::KIND_DECODE {
-            return Err(PlanError::Fulfil("no Renderer port is configured (only ImageDecode and Ocr are)".to_string()));
+            return Err(PlanError::Fulfil("no port is configured for this request kind".to_string()));
         }
         let (input, off, len, filter, frame) = (req.arg(0), req.arg(1), req.arg(2), req.arg(3), req.arg(4));
         if input != idx as i32 || off < 0 || len < 0 || off as u64 + len as u64 > source.len() {
@@ -1245,10 +1256,18 @@ impl Engine {
         let pcfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
         let this_input = vec![(idx as i32, len as i32)];
         let mut replayer: Option<Replayer> = None;
-        // the live ports: ImageDecode, and Ocr when the Engine was given one (a Renderer comes with P6.2); pixels are
-        // kept in the answers when a transcript is being recorded or an OCR engine will read them
+        // The live port set (D127, D211): `render` and `crop` go to the configured Renderer, reading the same input
+        // through the same byte source; with none they, like the other kinds, fall to the host's own fulfiller, which
+        // answers them `unsupported` (D199). Pixels are kept in the answers when a transcript is being recorded or an
+        // OCR engine will read them.
         let is_recording = matches!(mode, Mode::Record(_));
-        let mut nop = SyncFulfiller::new(port_fulfiller(input.source.clone(), idx, is_recording || self.cfg.ocr.is_some(), is_recording, self.cfg.ocr.clone()));
+        let nop = SyncFulfiller::new(port_fulfiller(input.source.clone(), idx, is_recording || self.cfg.ocr.is_some(), is_recording, self.cfg.ocr.clone()));
+        let mut mux = KindMux::new();
+        if let Some(r) = &self.cfg.renderer {
+            let f = RenderFulfiller::for_input(r.clone(), idx, RenderInput { source: input.source.clone(), password: input.password.clone() });
+            mux = mux.with(&[plan::KIND_RENDER, plan::KIND_CROP], Box::new(f));
+        }
+        let mut live = mux.with(&[plan::KIND_RENDER, plan::KIND_CROP, plan::KIND_DECODE, plan::KIND_OCR], Box::new(nop));
         let mut recording: Option<&mut Transcript> = None;
         match mode {
             Mode::Live => {}
@@ -1267,7 +1286,7 @@ impl Engine {
         let result = {
             let ports: &mut dyn Fulfiller = match replayer.as_mut() {
                 Some(r) => r,
-                None => &mut nop,
+                None => &mut live,
             };
             plan::run(&pcfg, &mut unit, ports, &mut bytes, &mut *misses, recording)
         };
