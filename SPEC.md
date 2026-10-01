@@ -742,6 +742,15 @@ host implement it however it likes.
   frames of a multi-page TIFF without decoding the others. It must **never**
   resample. Bilevel images (JBIG2, CCITT, 1-bit TIFF) arrive as 8-bit gray
   0/255 with a `bilevel` flag — kin skips binarisation for them.
+  *As built (P6.1, D187-D190)*: the formats are PNG, JPEG and TIFF, sniffed by
+  signature in kin; the reduction to eight bits is `(v * 255 + max / 2) / max`,
+  alpha is composited after it, gray stays gray, orientation comes from EXIF
+  (JPEG, PNG `eXIf`) or the TIFF tag, and CMYK is the naive `(255 - c)(255 - k)`
+  with no ICC (the platforms have none the four hosts share). What the port
+  does not read is refused by name (`unsupported-image`): CMYK JPEG and the PDF
+  filters until P6.1a, JPEG in TIFF, float samples, Lab. Pixels are identical on
+  Rust and Go for PNG and TIFF; a JPEG's live decode may differ by at most 6 per
+  byte between hosts, and is exact through a transcript (D190).
 * **`ImageDecode` and `Renderer` read the input from the host's byte
   source** (§13.1), named in the request by input index — never by a path,
   and never by kin handing them a copy of the file. A codec or rasteriser
@@ -814,6 +823,13 @@ name their input by index. A transcript is a directory: `transcript.edn`
 plus one lossless PNG per bitmap. Replay looks a request up by its whole record
 and answers `transcript-miss` rather than guess. `max-rounds` and `fetch-rounds`
 are named limits of the host loop.
+
+**`decode`** 2 (`input offset length filter frame`) is `ImageDecode` (D187): the span
+is a whole image file (`filter` 0), `frame` >= 0 asks for that frame's pixels and a negative
+`frame` for the header of frame `-frame - 1` only (size after orientation, resolution, frame
+count: stage 0 of a raster input, §2.0). Its answer is `status w h channels dpi100 bilevel
+frames`, and `status` is `ok`, `failed`, `unsupported` or `limit` (the host's pixel bound,
+which kin names as the `pixels` limit).
 
 Assets (D117) add two kinds, both transcribed like `render`: **`crop`** 5
 (`input page dpi layer px py pw ph`, answered as a render) and

@@ -12,16 +12,24 @@
 //   * OCR. `Options::ocr` is accepted and kept (D038: the default is `always`) but NOTHING OCRs yet: no
 //     Renderer or Ocr port is configured, so a page with no text layer comes out empty and the Model's
 //     header does not write an `ocr` setting (it would claim a run that did not happen).
-//   * images and TIFF (no PDF header: `Error::UnsupportedFormat`), several inputs as one document
-//     (`convert` of more than one input is `Error::Unsupported`; `intake` takes any number),
+//   * several inputs as one document (`convert` of more than one input is `Error::Unsupported`; `intake`
+//     takes any number; P6.1 left image sets and PDF+image mixes to the follow-up, D187).
+//
+// IMAGES ARE READ (P6.1, D187-D190; this was `unsupported-format` in D144): a PNG, JPEG or TIFF (by
+// signature, in kin) becomes one `image` page per frame, a multi-page TIFF becoming several. The host's
+// `ImageDecode` port (`imgdec.rs`) is asked through the plan/fulfil loop, so `record` writes the pixels as
+// canonical PNG and `replay` needs no codec. There is no OCR yet (P6.5): an image page has no text. What is
+// not an image or a PDF is still `unsupported-format`; an image the port cannot read is `undecodable` (damaged)
+// or `unsupported-image` (a coding it does not read: D187).
 //   * `assets` other than `none` (D117: specified, not implemented: `Error::Unsupported`),
 //   * document metadata in the header (`source`, `meta`) and every structure above the paragraph.
 //
 // THE LOOP IS WIRED (D058 revised, D089-D091). `convert` runs `plan::run` over one unit (everything kin
 // does for one input: open, text layer, paragraphs, Model). The unit gets a fresh `Src` view and fresh
 // arenas per attempt; when it answers `need-bytes` the loop fetches what the cache missed (doubling
-// read-ahead, coalesced, `FETCH_ROUNDS`) and re-runs it; when it answers `requests` the loop would
-// start them, but this slice issues ZERO requests, so no Renderer or Ocr is called. A sync source is
+// read-ahead, coalesced, `FETCH_ROUNDS`) and re-runs it; when it answers `requests` the loop starts them:
+// a PDF issues ZERO requests in this slice, so no Renderer or Ocr is called, and an image issues `decode`
+// requests only (the `ImageDecode` port). A sync source is
 // read inline and never misses; `Config::simulate_async` makes the cache behave like a browser `Blob`
 // (misses, fetch rounds), which is what `--chunk=N --async` of the driver runs, and the Model it keeps
 // is the in-memory run's, byte for byte.
@@ -38,11 +46,13 @@ use crate::emon::furniture::{fu_find, fu_write};
 use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::table::*;
+use crate::emon::rasterin::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfmeta::pm_run;
 use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::pdfx::px_index_build;
+use crate::imgdec;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
 use crate::port::{self, cells_at, cells_len, cells_push, Cells, Src, SrcBacking};
 use crate::source::{ByteSource, Input, Inputs};
@@ -64,9 +74,10 @@ pub enum Error {
     PasswordRequired { input: usize },
     PasswordIncorrect { input: usize },
     EncryptionUnsupported { input: usize },
-    // Not a PDF (no `%PDF-` header): an image or something else; not read in this slice.
+    // Not a PDF (no `%PDF-` header) and not a PNG, JPEG or TIFF either.
     UnsupportedFormat { input: usize },
-    // A PDF kin could not open: its named status (`no-startxref`, `bad-xref`, `no-root`, `no-pages`, ...).
+    // A PDF kin could not open (its named status: `no-startxref`, `bad-xref`, `no-root`, `no-pages`, ...), or an image the
+    // host could not read (`undecodable`) or reads no coding of (`unsupported-image`).
     Damaged { input: usize, status: &'static str },
     // A source that answered fewer bytes than its length said, or an error from its read.
     SourceChanged { input: usize },
@@ -107,8 +118,8 @@ impl std::fmt::Display for Error {
             Error::PasswordRequired { input } => write!(f, "password-required: input {} is encrypted and needs a password", input),
             Error::PasswordIncorrect { input } => write!(f, "password-incorrect: the password does not open input {}", input),
             Error::EncryptionUnsupported { input } => write!(f, "encryption-unsupported: input {} uses a security handler emon does not read", input),
-            Error::UnsupportedFormat { input } => write!(f, "unsupported-format: input {} is not a PDF (images are not read in this slice)", input),
-            Error::Damaged { input, status } => write!(f, "{}: input {} could not be opened as a PDF", status, input),
+            Error::UnsupportedFormat { input } => write!(f, "unsupported-format: input {} is not a PDF, PNG, JPEG or TIFF", input),
+            Error::Damaged { input, status } => write!(f, "{}: input {} could not be opened", status, input),
             Error::SourceChanged { input } => write!(f, "source-changed: input {} gave fewer bytes than its length", input),
             Error::Io { input, message } => write!(f, "io: input {}: {}", input, message),
             Error::Unsupported(what) => write!(f, "unsupported: {}", what),
@@ -505,16 +516,129 @@ impl Misses for CacheMisses {
     }
 }
 
-// The kin-side requests this slice issues: none. A `Renderer`, `ImageDecode` or `Ocr` port is not
-// configured, so were the unit to ask, the loop says so (a named `fulfil-failed`) rather than guess.
-struct NoPorts;
+// ------------------------------------------------------------ raster intake
+//
+// An input that kin's `rs-sniff` says is a PNG, a JPEG or a TIFF (SPEC 2.0, D187) is not a PDF: its unit is
+// `emon.rasterin`'s `rs-unit`, which asks the host's `ImageDecode` port (`imgdec.rs`) for each frame through
+// the plan/fulfil loop and builds one `image` page per frame. THIS IS SEPARATE FROM `attempt()`, which is the
+// PDF unit and is not called for an image. OCR is not wired (P6.5), so an image page has no text.
 
-impl Fulfiller for NoPorts {
-    fn start(&mut self, _req: &Request, _bitmaps: &plan::Bitmaps) -> Result<(), PlanError> {
-        Err(PlanError::Fulfil("no Renderer, ImageDecode or Ocr port is configured (this slice issues no requests)".to_string()))
+// An `imgdec::Source` over a span of an input's `ByteSource`: what the decode request names (input, offset,
+// length), read in place; nothing is copied until the codec asks for a range.
+struct Span {
+    src: Arc<dyn ByteSource>,
+    off: u64,
+    len: u64,
+}
+
+impl imgdec::Source for Span {
+    fn size(&self) -> u64 {
+        self.len
     }
-    fn next(&mut self) -> Result<Answer, PlanError> {
-        Err(PlanError::Fulfil("no port is configured".to_string()))
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> std::io::Result<usize> {
+        if off >= self.len {
+            return Ok(0);
+        }
+        let n = std::cmp::min(buf.len() as u64, self.len - off) as usize;
+        self.src.read_at(self.off + off, &mut buf[..n])
+    }
+}
+
+// The `ImageDecode` fulfiller (SPEC 7.2, D187): answers `decode` requests for this input from the host's
+// codecs, and nothing else (no Renderer or Ocr port is configured). `keep` holds the pixels in the answer
+// (a recording wants them, as canonical PNG; a plain conversion needs only the numbers).
+fn image_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
+    move |req: &Request, _bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
+        if req.kind() != plan::KIND_DECODE {
+            return Err(PlanError::Fulfil("no Renderer or Ocr port is configured (only ImageDecode is)".to_string()));
+        }
+        let (input, off, len, filter, frame) = (req.arg(0), req.arg(1), req.arg(2), req.arg(3), req.arg(4));
+        if input != idx as i32 || off < 0 || len < 0 || off as u64 + len as u64 > source.len() {
+            return Err(PlanError::Fulfil("a decode request names bytes the input does not have".to_string()));
+        }
+        let mut c = Cells::new();
+        let fail = |c: &mut Cells, status: i32| {
+            crate::emon::plan::an_fail(c, plan::KIND_DECODE, req.id(), status);
+            Ok(Answer { rec: to_vec(c), bitmap: None })
+        };
+        if filter != crate::emon::plan::flt_none() {
+            // the PDF image filters (DCT, JPX, JBIG2, CCITT) are P6.1a's
+            return fail(&mut c, crate::emon::plan::ps_unsupported());
+        }
+        let span = Span { src: source.clone(), off: off as u64, len: len as u64 };
+        // a codec that panics on damage is a damaged image, not a crashed process
+        let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| imgdec::decode(&span, frame, port::limit_of(9) as u64)))
+            .unwrap_or_else(|_| Err(imgdec::Fail::Failed("the decoder panicked".to_string())));
+        match decoded {
+            Ok(d) => {
+                crate::emon::plan::an_decode(&mut c, req.id(), d.w, d.h, d.ch, d.dpi100, d.bilevel as i32, d.frames);
+                let bitmap = match (&d.pixels, keep) {
+                    (Some(px), true) => Some(Arc::new(port::Bitmap::from_bytes(d.w, d.h, d.ch, px))),
+                    _ => None,
+                };
+                Ok(Answer { rec: to_vec(&c), bitmap })
+            }
+            Err(imgdec::Fail::Failed(_)) => fail(&mut c, plan::STATUS_FAILED),
+            Err(imgdec::Fail::Unsupported(_)) => fail(&mut c, crate::emon::plan::ps_unsupported()),
+            Err(imgdec::Fail::Limit(n)) => Ok(Answer { rec: vec![5, plan::KIND_DECODE, req.id(), crate::emon::plan::ps_limit(), std::cmp::min(n, i32::MAX as u64) as i32], bitmap: None }),
+        }
+    }
+}
+
+// One attempt's end for a raster input: it missed, it asked for something, or it finished.
+enum RStep {
+    Miss,
+    Requests,
+    Done(Outcome),
+}
+
+// ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF.
+fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, fmt: i32, intake_only: bool, len: u64) -> RStep {
+    let mut m = Arenas::new();
+    model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
+    let status = rs_unit(view, idx as i32, fmt, intake_only as i32, answers, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages);
+    if view.missed() {
+        return RStep::Miss;
+    }
+    match status {
+        0 => {}
+        1 => return RStep::Requests,
+        21 => return RStep::Done(Outcome::Failed(Error::Damaged { input: idx, status: "undecodable" })),
+        22 => return RStep::Done(Outcome::Failed(Error::Damaged { input: idx, status: "unsupported-image" })),
+        s => return RStep::Done(Outcome::Failed(Error::Internal(format!("the raster unit answered status {}", s)))),
+    }
+    let format = if fmt == rs_png() {
+        "png"
+    } else if fmt == rs_jpeg() {
+        "jpeg"
+    } else {
+        "tiff"
+    };
+    let info = Intake { format, version: (0, 0), pages: page_count(&mut m.pages).max(0) as usize, encrypted: false, bytes: len };
+    if intake_only {
+        return RStep::Done(Outcome::Intake(info));
+    }
+    let mut chk = Cells::new();
+    let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
+    if c != 0 {
+        return RStep::Done(Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0)))));
+    }
+    RStep::Done(Outcome::Built(Built { arenas: m, evidence: None, intake: info }))
+}
+
+// The unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything else by the
+// PDF one (`attempt`, which refuses what is not a PDF by name).
+fn dispatch(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, opts: &Options, intake_only: bool, len: u64) -> RStep {
+    let fmt = rs_sniff(view);
+    if view.missed() {
+        return RStep::Miss;
+    }
+    if fmt != rs_none() {
+        return attempt_raster(view, answers, rq, idx, fmt, intake_only, len);
+    }
+    match attempt(view, pw, idx, opts, intake_only, len) {
+        Step::Miss => RStep::Miss,
+        Step::Done(o) => RStep::Done(o),
     }
 }
 
@@ -899,11 +1023,12 @@ impl Engine {
         let base = Src::new(backing);
         let pw = Src::of_bytes(input.password.clone().unwrap_or_default());
         let mut outcome = Outcome::None;
-        let mut unit = |_answers: &mut Cells, _rq: &mut Cells| -> i32 {
+        let mut unit = |answers: &mut Cells, rq: &mut Cells| -> i32 {
             let view = base.view();
-            match catch_unwind(AssertUnwindSafe(|| attempt(&view, &pw, idx, opts, intake_only, len))) {
-                Ok(Step::Miss) => plan::UNIT_NEED_BYTES,
-                Ok(Step::Done(o)) => {
+            match catch_unwind(AssertUnwindSafe(|| dispatch(&view, &pw, answers, rq, idx, opts, intake_only, len))) {
+                Ok(RStep::Miss) => plan::UNIT_NEED_BYTES,
+                Ok(RStep::Requests) => plan::UNIT_REQUESTS,
+                Ok(RStep::Done(o)) => {
                     outcome = o;
                     plan::UNIT_DONE
                 }
@@ -934,7 +1059,9 @@ impl Engine {
         let pcfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
         let this_input = vec![(idx as i32, len as i32)];
         let mut replayer: Option<Replayer> = None;
-        let mut nop = NoPorts;
+        // the live ports: ImageDecode only (a Renderer and an Ocr come with P6.2 and P6.5); pixels are kept in
+        // the answers only when a transcript is being recorded
+        let mut nop = SyncFulfiller::new(image_fulfiller(input.source.clone(), idx, matches!(mode, Mode::Record(_))));
         let mut recording: Option<&mut Transcript> = None;
         match mode {
             Mode::Live => {}

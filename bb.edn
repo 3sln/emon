@@ -20,6 +20,8 @@
          :task (apply shell "bb" "kin/scripts/slice" *command-line-args*)}
   identity {:doc "Every driver arm over the corpus of (input, transcript) pairs gives byte-identical JSON, HTML, evidence and refusals: Rust and Go, four byte-source adapters each, a 512-byte async source, and the transcript recorded on one host replayed on the other (P2.2, SPEC 14.1.5).  bb identity [--full] [--only S] [--corpus [--limit N] [--sample K]]"
             :task (apply shell "bb" "kin/scripts/identity" *command-line-args*)}
+  image {:doc "The ImageDecode port (P6.1, D187-D190): every image fixture of test/image decoded by Rust and Go, PNG and TIFF to exactly the pixels ImageMagick says, JPEG within a stated tolerance, refusals by name, the same through a source that misses.  bb image [--corpus]"
+         :task (apply shell "bb" "kin/scripts/image" *command-line-args*)}
   embedders {:doc "The Rust and Go public API surfaces (names, arities) compared with each other and with SPEC 3.9/13, and no filesystem in any host library or generated module (P2.3, D058)."
              :task (shell "bb" "kin/scripts/embedders")}
   repeat {:doc "Run vs run, serial vs eight conversions at once, and the document with its objects in reverse file order: byte-identical, on Rust and Go (P2.4, SPEC 12.2).  bb repeat [--full] [--only S] [--corpus [--limit N] [--sample K]]"

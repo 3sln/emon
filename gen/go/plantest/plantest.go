@@ -20,6 +20,7 @@ func TestTheKindsAndStatusesAreFixed(emonT *testing.T) {
 	port.AssertEq(emonT, plan.PsOk(), 0, "ok")
 	port.AssertEq(emonT, plan.PsFailed(), 1, "failed")
 	port.AssertEq(emonT, plan.PsUnsupported(), 2, "unsupported")
+	port.AssertEq(emonT, plan.PsLimit(), 3, "limit (D187)")
 	port.AssertEq(emonT, plan.UsDone(), 0, "done")
 	port.AssertEq(emonT, plan.UsRequests(), 1, "requests")
 	port.AssertEq(emonT, plan.UsNeedBytes(), 7, "need-bytes is D075's 7")

@@ -22,6 +22,9 @@ pub fn ps_failed() -> i32 {
 pub fn ps_unsupported() -> i32 {
     return 2;
 }
+pub fn ps_limit() -> i32 {
+    return 3;
+}
 pub fn us_done() -> i32 {
     return 0;
 }

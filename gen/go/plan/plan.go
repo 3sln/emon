@@ -35,6 +35,10 @@ func PsUnsupported() int32 {
 	return 2
 }
 
+func PsLimit() int32 {
+	return 3
+}
+
 func UsDone() int32 {
 	return 0
 }

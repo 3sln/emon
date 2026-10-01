@@ -1,0 +1,94 @@
+;; WRITTEN by tools/image-fixtures.clj: what ImageMagick says each fixture's pixels are (D178-D181).
+;; :px is per frame [w h fnv] AFTER orientation, over white, eight bits; :tol is the allowed difference of a
+;; host's byte from the oracle's (0 exact); a :refuse row is an input the port reads no coding of, or damage.
+{
+ "jpeg-420.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "a1499b7f0df3963a"}]}
+ "jpeg-422.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "ea1e753363a62c05"}]}
+ "jpeg-444.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 2, :frames 1, :px [{:w 48, :h 36, :fnv "ffc260c986e3024f"}]}
+ "jpeg-cmyk.jpg" {:refuse "unsupported-image"}
+ "jpeg-exif-dpi-cm.jpg" {:ch 3, :bilevel 0, :dpi100 25400, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "7fd86b2d8abbac2f"}]}
+ "jpeg-exif-dpi.jpg" {:ch 3, :bilevel 0, :dpi100 30000, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "7fd86b2d8abbac2f"}]}
+ "jpeg-exif-orient8-dpi.jpg" {:ch 3, :bilevel 0, :dpi100 30000, :tol 6, :frames 1, :px [{:w 36, :h 48, :fnv "8228788e6aa26e8d"}]}
+ "jpeg-gray.jpg" {:ch 1, :bilevel 0, :dpi100 0, :tol 1, :frames 1, :px [{:w 48, :h 36, :fnv "531156868aea0e4f"}]}
+ "jpeg-jfif-cm.jpg" {:ch 3, :bilevel 0, :dpi100 25400, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "7fd86b2d8abbac2f"}]}
+ "jpeg-jfif300.jpg" {:ch 3, :bilevel 0, :dpi100 30000, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "7fd86b2d8abbac2f"}]}
+ "jpeg-orient2.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "9465e36cd14ec4f3"}]}
+ "jpeg-orient3.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "d16114ad74476ab7"}]}
+ "jpeg-orient4.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "b4f598728b77cc03"}]}
+ "jpeg-orient5.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 36, :h 48, :fnv "30a3bd36d2f73749"}]}
+ "jpeg-orient6.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 36, :h 48, :fnv "46dd08e71908120d"}]}
+ "jpeg-orient7.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 36, :h 48, :fnv "9f534d39986daa99"}]}
+ "jpeg-orient8.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 36, :h 48, :fnv "8228788e6aa26e8d"}]}
+ "jpeg-progressive.jpg" {:ch 3, :bilevel 0, :dpi100 0, :tol 6, :frames 1, :px [{:w 48, :h 36, :fnv "7fd86b2d8abbac2f"}]}
+ "jpeg-truncated.jpg" {:refuse "undecodable"}
+ "png-exif-orient5.png" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "7b04229507dfb28d"}]}
+ "png-exif-orient6.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "86df584e8afc9ed5"}]}
+ "png-gray-alpha16.png" {:ch 1, :bilevel 0, :dpi100 0, :tol 1, :frames 1, :px [{:w 48, :h 36, :fnv "9d072657cb5e33fc"}]}
+ "png-gray-alpha8.png" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fa154d2b0984302a"}]}
+ "png-gray1.png" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
+ "png-gray16.png" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "png-gray2.png" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "356460eca1f28c10"}]}
+ "png-gray4.png" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "e78b6b25a558d77a"}]}
+ "png-gray8.png" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "png-interlaced.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "png-palette-trns.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "2fa47f70991c1351"}]}
+ "png-palette4.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "c15aff8f1399f2e1"}]}
+ "png-palette8.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "54df16c1a87bf999"}]}
+ "png-phys-cm.png" {:ch 3, :bilevel 0, :dpi100 25400, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "png-phys300.png" {:ch 3, :bilevel 0, :dpi100 30000, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "png-rgb16.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "png-rgb8.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "png-rgba16.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 1, :frames 1, :px [{:w 48, :h 36, :fnv "d7ee53350afd0e21"}]}
+ "png-rgba8.png" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "06c02da2b443e10e"}]}
+ "png-truncated.png" {:refuse "undecodable"}
+ "tiff-bilevel-g3-2d.tif" {:refuse "unsupported-image"}
+ "tiff-bilevel-g3-fill.tif" {:refuse "unsupported-image"}
+ "tiff-bilevel-g3.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
+ "tiff-bilevel-g4.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
+ "tiff-bilevel-lzw.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
+ "tiff-bilevel-none.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
+ "tiff-bilevel-packbits.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "ffca0541128ba7c8"}]}
+ "tiff-cmyk8.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 1, :frames 1, :px [{:w 48, :h 36, :fnv "f4f4cf5ade56b8a1"}]}
+ "tiff-dpi-cm.tif" {:ch 3, :bilevel 0, :dpi100 25400, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-dpi200.tif" {:ch 3, :bilevel 0, :dpi100 20000, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-float32.tif" {:refuse "unsupported-image"}
+ "tiff-gray-alpha8.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fa154d2b0984302a"}]}
+ "tiff-gray16-lzw-pred2.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray16-none-be.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray16-none-le.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray4.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "e78b6b25a558d77a"}]}
+ "tiff-gray8-lzw-pred2.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray8-lzw.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray8-none.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray8-packbits.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray8-zip-pred2.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-gray8-zip.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-jpeg.tif" {:refuse "unsupported-image"}
+ "tiff-multi3-g4.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 3, :px [{:w 48, :h 36, :fnv "ecc1be67effc3662"} {:w 40, :h 30, :fnv "b282cb3e3af1278a"} {:w 33, :h 25, :fnv "2fea395adae3c928"}]}
+ "tiff-multi3-gray-none.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 3, :px [{:w 48, :h 36, :fnv "da5595401d132334"} {:w 40, :h 30, :fnv "6c958c4fb8dae02d"} {:w 33, :h 25, :fnv "5101bbfe7572403f"}]}
+ "tiff-multi3-rgb-lzw.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 3, :px [{:w 48, :h 36, :fnv "e59bffc6cfc06984"} {:w 40, :h 30, :fnv "6319a130eb5df5c8"} {:w 33, :h 25, :fnv "e2d2b0b973de6ac2"}]}
+ "tiff-orient2.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "e88d2a8a12b87bf9"}]}
+ "tiff-orient3.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "203747c2f1e39141"}]}
+ "tiff-orient4.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "589e1a116f21c63d"}]}
+ "tiff-orient5.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "c4b8652df6d7d3fd"}]}
+ "tiff-orient6-bilevel-g4.tif" {:ch 1, :bilevel 1, :dpi100 0, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "22136b66222e3654"}]}
+ "tiff-orient6.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "86df584e8afc9ed5"}]}
+ "tiff-orient7.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "b34d66baee31f289"}]}
+ "tiff-orient8-dpi.tif" {:ch 3, :bilevel 0, :dpi100 30000, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "6a09d02ce05ff0e9"}]}
+ "tiff-orient8.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 36, :h 48, :fnv "6a09d02ce05ff0e9"}]}
+ "tiff-palette8.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "b5077703082fd331"}]}
+ "tiff-planar-rgb.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-planar-strips.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-rgb16-lzw-pred2.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-rgb8-lzw-pred2.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-rgb8-lzw.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-rgb8-none.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-rgb8-packbits.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-rgb8-zip.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-rgba8-assoc.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "380fbadffd9a913d"}]}
+ "tiff-rgba8-unassoc.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "06c02da2b443e10e"}]}
+ "tiff-strips5.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-tiled-none.tif" {:ch 1, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "9d9e647c7d4905ad"}]}
+ "tiff-tiled16.tif" {:ch 3, :bilevel 0, :dpi100 0, :tol 0, :frames 1, :px [{:w 48, :h 36, :fnv "fd06c9ff6ad5ac15"}]}
+ "tiff-truncated.tif" {:refuse "undecodable"}
+}

@@ -8,7 +8,8 @@
 #     .cache/emon-go/port/            host/go/port/ without `testport.go` (test support is not the library)
 #     .cache/emon-go/pngenc/          host/go/pngenc/ (links the canonical PNG encoder in; the driver's
 #                                     transcript writer needs it, the Engine does not)
-#     .cache/emon-go/*.go             host/go/*.go: the root package `emon` (source, model, engine)
+#     .cache/emon-go/*.go             host/go/*.go: the root package `emon` (source, model, engine, imgdec)
+#     .cache/emon-go/go.sum           host/go/go.sum: the checksums of golang.org/x/image (the ImageDecode port, D189)
 #     .cache/emon-go/cmd/emon-go/     test/driver/go/main.go, the `emon-go` binary
 #
 # `.cache/` is gitignored. A file is copied only when it differs; a package no longer generated is removed.
@@ -40,8 +41,9 @@ done
 put host/go/pngenc/pngenc.go "$mod/pngenc/pngenc.go"
 for f in host/go/*.go; do put "$f" "$mod/$(basename "$f")"; done
 put test/driver/go/main.go "$mod/cmd/emon-go/main.go"
-printf 'module emon\n\ngo 1.21\n' > "$mod/go.mod.new"
+printf 'module emon\n\ngo 1.21\n\nrequire golang.org/x/image v0.18.0\n' > "$mod/go.mod.new"
 put "$mod/go.mod.new" "$mod/go.mod"
+put host/go/go.sum "$mod/go.sum"
 rm -f "$mod/go.mod.new"
 
 out=$(cd "$mod" && go build -o emon-go ./cmd/emon-go 2>&1) || { echo "$out" | head -80 >&2; echo "emon-go: build failed" >&2; exit 1; }

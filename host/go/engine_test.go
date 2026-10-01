@@ -21,6 +21,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	_ "emon/pngenc" // the canonical PNG writer: a transcript's files need it
+	"emon/port"
 )
 
 func root() string {
@@ -495,5 +498,128 @@ func TestTheLibraryNamesNoFilesystem(t *testing.T) {
 				t.Errorf("%s:%d names a filesystem: %s", f, i+1, line)
 			}
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------------------------- raster intake
+// (P6.1, D187-D190) An image input is read through the `ImageDecode` port: one `image` page per frame.
+
+func imageFx(t *testing.T, name string) []byte { return read(t, "test/image/"+name) }
+
+func TestAnImageBecomesPagesAndAMultiPageTiffSeveral(t *testing.T) {
+	e := NewEngine(DefaultConfig())
+	m, err := e.Convert(one(BytesInput(imageFx(t, "png-phys300.png"))), DefaultOptions())
+	m = must(t, m, err)
+	pages := m.Pages()
+	if len(pages) != 1 || pages[0].Kind != "image" {
+		t.Fatalf("pages: %+v", pages)
+	}
+	// 48 x 36 pixels at 300 dpi: 11.52 x 8.64 pt, in centipoints
+	if pages[0].Width != 1152 || pages[0].Height != 864 {
+		t.Errorf("page size %dx%d", pages[0].Width, pages[0].Height)
+	}
+	if m.Source().Format != "png" {
+		t.Errorf("format %q", m.Source().Format)
+	}
+	j := m.ToJSON(JSONOptions{})
+	if !strings.Contains(j, `"source":{"format":"png","pages":1}`) || !strings.Contains(j, `"dpi":300,"px":[48,36]`) || strings.Contains(j, "dpi-unknown") {
+		t.Errorf("json: %s", j)
+	}
+	// no stated resolution: read as 300 and flagged
+	m, err = e.Convert(one(BytesInput(imageFx(t, "png-rgb8.png"))), DefaultOptions())
+	if m = must(t, m, err); !strings.Contains(m.ToJSON(JSONOptions{}), "dpi-unknown") {
+		t.Error("an image with no resolution is not flagged")
+	}
+	// a multi-page TIFF: three frames of three sizes, in order
+	m, err = e.Convert(one(BytesInput(imageFx(t, "tiff-multi3-rgb-lzw.tif"))), DefaultOptions())
+	m = must(t, m, err)
+	var got [][3]int32
+	for _, p := range m.Pages() {
+		got = append(got, [3]int32{p.Number, p.Width, p.Height})
+	}
+	want := [][3]int32{{1, 1152, 864}, {2, 960, 720}, {3, 792, 600}}
+	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("pages %v, want %v", got, want)
+	}
+	// the body of an image page is empty until OCR is wired (P6.5)
+	if len(m.Root().Children()) != 0 {
+		t.Error("an image page has text before OCR")
+	}
+}
+
+func TestStageZeroOfAnImageReadsNoPixels(t *testing.T) {
+	e := NewEngine(DefaultConfig())
+	v, err := e.Intake([]Input{BytesInput(imageFx(t, "tiff-multi3-g4.tif")), BytesInput(imageFx(t, "jpeg-420.jpg")), BytesInput(synth(t, "h-plain"))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v[0].Format != "tiff" || v[0].Pages != 3 || v[1].Format != "jpeg" || v[1].Pages != 1 || v[2].Format != "pdf" || v[2].Pages != 2 {
+		t.Errorf("intake %+v", v)
+	}
+}
+
+func TestAnImageRecordsItsPixelsAndReplaysWithoutACodec(t *testing.T) {
+	e := NewEngine(DefaultConfig())
+	in := imageFx(t, "tiff-multi3-gray-none.tif")
+	m, tr, err := e.Record(one(BytesInput(in)), DefaultOptions())
+	m = must(t, m, err)
+	// three decode requests, round two asking for frames 1 and 2 together; each answer carries its bitmap
+	if len(tr.Entries) != 3 || tr.Entries[0].Round != 0 || tr.Entries[1].Round != 1 || tr.Entries[2].Round != 1 {
+		t.Fatalf("entries: %d", len(tr.Entries))
+	}
+	for _, en := range tr.Entries {
+		if en.Bitmap == nil {
+			t.Error("an answer without its pixels")
+		}
+	}
+	// the transcript's files survive a round trip (the pixels as canonical PNG), and replaying them gives the same Model
+	files := map[string][]byte{}
+	for _, f := range tr.ToFiles() {
+		files[f.Name] = f.Bytes
+	}
+	t2, err := port.TranscriptFromFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.Replay(one(BytesInput(in)), DefaultOptions(), t2)
+	if r = must(t, r, err); js(r) != js(m) {
+		t.Error("the replay differs from the recording")
+	}
+	// a replay of another image misses: the request is not in the transcript
+	if _, err := e.Replay(one(BytesInput(imageFx(t, "tiff-multi3-rgb-lzw.tif"))), DefaultOptions(), t2); err == nil {
+		t.Error("a replay of another image did not miss")
+	}
+	// a plain conversion keeps no pixels, and says the same thing
+	c, err := e.Convert(one(BytesInput(in)), DefaultOptions())
+	if c = must(t, c, err); js(c) != js(m) {
+		t.Error("convert differs from record")
+	}
+}
+
+func TestAnImageThroughASourceThatMissesIsTheInMemoryOne(t *testing.T) {
+	for _, name := range []string{"png-rgba8.png", "jpeg-444.jpg", "tiff-multi3-g4.tif", "tiff-tiled16.tif"} {
+		b := imageFx(t, name)
+		a, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(b)), DefaultOptions())
+		a = must(t, a, err)
+		c, err := asyncEngine(64).Convert(one(BytesInput(b)), DefaultOptions())
+		if c = must(t, c, err); js(a) != js(c) {
+			t.Errorf("%s: the async run differs", name)
+		}
+	}
+}
+
+func TestAnImageThatCannotBeReadIsRefusedByName(t *testing.T) {
+	e := NewEngine(DefaultConfig())
+	for name, want := range map[string]string{"tiff-jpeg.tif": "unsupported-image", "jpeg-cmyk.jpg": "unsupported-image",
+		"png-truncated.png": "undecodable", "tiff-truncated.tif": "undecodable"} {
+		if _, err := e.Convert(one(BytesInput(imageFx(t, name))), DefaultOptions()); errName(err) != want {
+			t.Errorf("%s: %v, want %s", name, err, want)
+		}
+	}
+	// the pixels bound is a named limit, checked from the header before a pixel is decoded
+	c := DefaultConfig()
+	c.Limits = append(c.Limits, [2]int32{9, 1000})
+	if _, err := NewEngine(c).Convert(one(BytesInput(imageFx(t, "png-rgb8.png"))), DefaultOptions()); errName(err) != "pixels" {
+		t.Errorf("the pixels bound: %v", err)
 	}
 }
