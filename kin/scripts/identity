@@ -15,9 +15,9 @@
 ;;      `--record` writes the same directory, byte for byte, and each host REPLAYS the other's to the reference
 ;;      bundle (SPEC 14.1.5: the pair is (input bytes, transcript), replayed anywhere).
 ;;
-;; The corpus: the committed synthetic documents (`test/corpus/synth/{pdf,scan,pdf-tagged}`), every PDF fixture of
-;; `test/pdf` (with each (file, password) row of `test/pdf/p3.txt`, wrong passwords included), and two non-PDF
-;; inputs (images are `unsupported-format`, D144).
+;; The corpus: every committed PDF under `test/` (the synthetic documents and their scans, the fixtures of the PDF
+;; layer, the repaired and encrypted ones, the tagged ones, the fuzz crashers), each (file, password) row of
+;; `test/pdf/p3.txt` (wrong passwords included), and two non-PDF inputs (images are `unsupported-format`, D144).
 ;;
 ;;   bb identity                        the gate: every document, the five-and-four arms above, in parallel
 ;;   bb identity --full                 also: more chunk sizes (7, 100, 4096) async and sync, on both hosts
@@ -70,11 +70,7 @@
     (let [p3 (p3-rows)
           p3files (set (map :file p3))
           plain (fn [fs] (map (fn [f] {:file f :pw nil}) fs))]
-      (vec (concat (plain (globs "test/corpus/synth/pdf" "*.pdf"))
-                   (plain (globs "test/corpus/synth/scan" "*.pdf"))
-                   (plain (globs "test/corpus/synth/pdf-tagged" "*.pdf"))
-                   (plain (globs "test/pdf" "*.pdf"))
-                   (plain (remove p3files (globs "test/pdf/p3" "*.pdf")))
+      (vec (concat (plain (remove p3files (globs "test" "**/*.pdf")))
                    p3
                    (plain ["test/ocr/h-keyword/bitmap-0000.png" "test/corpus/synth/html/img/initial-W.png"]))))))
 

@@ -67,8 +67,7 @@
                 (let [all (sort (map str (fs/glob "corpus" "**/*.pdf" {:follow-links true})))
                       all (if sample (take-nth (max 1 (quot (count all) sample)) all) all)]
                   (cond->> all limit (take limit)))
-                (concat (globs "test/corpus/synth/pdf" "*.pdf") (globs "test/corpus/synth/scan" "*.pdf")
-                        (globs "test/pdf" "*.pdf") (globs "test/pdf/p3" "*.pdf")))]
+                (globs "test" "**/*.pdf"))]
     (->> files (filter #(or (nil? only) (str/includes? % only))) (mapv (fn [f] {:file f :pw (get p3-passwords f)})))))
 
 ;; ------------------------------------------------------------------ driving

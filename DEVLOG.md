@@ -893,20 +893,47 @@ analysis beyond "top-to-bottom lines on a single column".
 
 ## Phase 2 — Second host, identity, measurement, spikes
 
-- [ ] **P2.1 — Go host layer, thin**: ports (already there from P0.2),
+- [x] **P2.1 — Go host layer, thin**: ports (already there from P0.2),
   Engine/Model wrapper, driver; inputs as `io.ReaderAt` + size (D058).
   *Done when*: `bb slice` passes on Go too.
-- [ ] **P2.2 — `bb identity`**: every driver arm over the corpus of (input,
+  *Done (P2.1, D158).* `host/go/{source,engine,model}.go` (the Engine API, the byte sources and adapters, the walkable Model: the Go
+  twin of `engine.rs`/`source.rs`), `host/go/engine_test.go` (12 native tests, run by `go test` on the assembled module),
+  `test/driver/go/main.go` (`emon-go`: the flags and exit codes of `emon-rs`, plus `--source=readerat`), `kin/scripts/emon-go-build`
+  (assembles and builds the module into `.cache/emon-go`), `port.WithLimits` (the Go half of `Config.limits`: a process-wide table
+  behind a `sync.RWMutex`; a conversion with custom limits runs alone). **Done-when, met**: `bb slice` runs every section on both hosts
+  and is green on Go: the six fixtures to `test/para` and `test/slice` (byte for byte), `--chunk=512 --async` (it missed and re-ran),
+  `--source=seek|spool`, the evidence golden, the named errors and exit codes; `go vet` is clean. Both drivers gained `--record`,
+  `--replay`, `--parallel=N` and `--out=bundle`. The refusals are the Rust slice's (OCR inert, images, several inputs, `assets`).
+  Commit: pending (D037).
+- [x] **P2.2 — `bb identity`**: every driver arm over the corpus of (input,
   transcript) pairs; byte-identical JSON and HTML required (SPEC §14.1.5).
   Transcripts are empty in this phase; the format is fixed now (P2.5).
   Each arm also runs every input through a 512-byte-chunk async test
   source and must match its in-memory run (D058).
-- [ ] **P2.3 — `bb embedders`**: compare the Rust and Go public API surfaces
+  *Done (P2.2, D159).* `kin/scripts/identity` (`bb identity`, a gate; `--full` adds chunks of 7, 100 and 4096 bytes and a sync 64-byte
+  cache; `--corpus` the public corpus, a non-gate). **258 inputs** (every committed PDF under `test/`, each (file, password) row of
+  `test/pdf/p3.txt`, two PNGs) x 9 arms (Rust: bytes, `Read + Seek`, spooled `Read`, 512-byte async; Go: bytes, `io.ReaderAt`,
+  `io.ReadSeeker`, spooled `io.Reader`, 512-byte async), each answer the bundle's bytes (compact and pretty JSON, default and full
+  HTML, evidence, intake) AND the exit code and stderr, and the record/replay trip across hosts (each host's `--record` directory equal
+  byte for byte, each host replaying the other's): **no difference found** (226 converted, 32 refused by name, the same on every arm),
+  14 s. The public corpus: all 3,689 PDFs of the never-committed public corpus (`corpus/`, 12 GB) were run through the same nine arms and the transcript trip with `bb identity --corpus` (30 minutes): all 3,689 converted and every answer was byte-identical, no difference.
+  Java and C# are not arms (ports only).
+- [x] **P2.3 — `bb embedders`**: compare the Rust and Go public API surfaces
   (names, arities) against SPEC §3.9/§13. nome learnt this late (its D568).
   Includes the `Input`/byte-source surface (§13.1) and a check that no host
   library file names a filesystem type (D058).
-- [ ] **P2.4 — `bb repeat`**: run vs run, and pages submitted in reverse,
+  *Done (P2.3, D160).* `kin/scripts/embedders` (`bb embedders`, a gate, about a second, no compiler): the Rust crate root and the Go
+  package compared by name and arity (24 types, 74 fields and variants, 38 methods, 13 constructors and defaults agree; every
+  difference is a table entry with its reason or a failure), SPEC 3.9/13's spelled names present on both (the asset accessors listed as
+  PENDING, D117), and no filesystem in 13 host library files or 168 generated non-test modules of the four languages. No API difference
+  found between the layers as written; the gate was shown to fail on a rename, an extra parameter and an `os.Open`.
+- [x] **P2.4 — `bb repeat`**: run vs run, and pages submitted in reverse,
   byte-identical.
+  *Done (P2.4, D161).* `kin/scripts/repeat` (`bb repeat`, a gate; `--full` adds the reversed file over an async source) and
+  `tools/lib/pdfreverse.clj`. 210 documents on Rust and Go: run vs run, serial vs eight conversions at once on one Engine, and the file
+  with its objects in REVERSE file order (168 of the 200 that convert are rewritable): byte-identical JSON, HTML and evidence. **There
+  is no page submission to reverse yet** (the Engine reads a whole document as one unit): what is reversed is the file's layout of its
+  pages, tree and resources, and D161 says what the gate gains when per-page units exist. The public corpus: a sample of 308 of the 3,689 public-corpus PDFs (`bb repeat --corpus --sample 300`, 2 minutes): green, 241 rewritten in reverse object order, no difference.
 - [x] **P2.5 — The plan/fulfil protocol and transcript format** (D008, D089-D091):
   request/answer record layouts in `emon.plan` (render, decode, ocr; `bytes`
   issued by the D058 re-run loop, never transcribed, not counted in
@@ -5443,6 +5470,122 @@ run (a span with a nested MCID span would double-count); strict left-to-right (a
 **Decision** (P3.7, D094, D100, D122). (1) **Oracle**: `tools/oracle/tagged-check.py` (Python, pypdf from `~/.cache/emon/pylib`: the third-party-oracle exception of D094) walks the structure tree itself from the standard, with no code in common with kin, and `kin/scripts/struct-sweep` (the generated Rust over a list of files: every page interpreted, the catalogue read, the tree read, joined, dumped) must agree on every ITEM: `/MarkInfo`, the element count; per element its object number, parent, depth, `/S`, resolved role and how, page, effective-language source, Scope, RowSpan, ColSpan, ListNumbering and the six text properties; its kids by kind and target; per marked-content reference its element, kind, page, MCID and stream, whether the text layer has a span for `(page, stream, MCID)` (the spans are pypdf's own walk of the content streams, Form XObjects included), and its ParentTree verdict; per object reference the same. One disagreement fails the file. Counting `/MarkInfo /Marked true` by pypdf alone: **476 of the 3,689 corpus PDFs**, 504 with a StructTreeRoot, 473 both; emon's catalogue reader (D121) gives the same three numbers. **Results**: all 504 tree-bearing PDFs, 455,057 elements, 269,721 marked-content references, **11,944,254 items, 0 differ**; the 3 Chrome-tagged synthetic PDFs (5,249 items) and the 7 fixtures below; `tools/oracle/tagged-check.py` still holds the P1.7 span check (111 spans, 2,553 of 2,553 glyphs) on the three. The first sweep found two things, both fixed: the `px-page-of` overflow (D148) and a ParentTree verdict that was left unset for a document with no ParentTree (now `absent`, as the oracle says). (2) **Fixtures**: `tools/synth/tagged_pair.clj` (babashka, `--check`ed by `bb unit`) writes `test/pdf/tagged/`: `good.pdf` (a title, four sections, paragraphs, a numbered list, a ruled table with header cells, a figure with Alt, a caption, a Span with ActualText and E, a French paragraph, running header, footer and a DRAFT watermark, custom roles through a RoleMap, a ClassMap, a ParentTree) and five twins of the SAME page that say it wrongly (`bad.pdf`: the three failures D076 names together; `bad-allp`, `bad-levels`, `bad-artifacts`, `bad-order`: one each), and `odd.pdf` (a RoleMap loop, a custom role, a remapped standard role, H7, a `/K` naming its own element, an element reached twice, nulls and strings in a `/K`, a duplicate and an unclaimed MCID, Form XObject content joined through `/Stm`, an OBJR to a Link, `/A` arrays with a revision number and a foreign owner, 70 nested elements, stray text and an artifact). (3) **Goldens**: `kin/scripts/struct-goldens` writes the dump of each (`test/pdf/tagged/*.json`, `test/pdf/tagged.txt`) from the generated Rust and runs the oracle on them; `kin/pdfstructtest.kin` holds all four targets to the dumps byte for byte, to what the fixtures were built to say as literals (roles and how, text properties, tables and lists, the join, the artifacts, the scores), to the separation of the correct tree from each twin, through 64- and 512-byte async sources, and on cut and corrupted copies. (4) **Fuzz**: `kin/fuzzprobe.kin` also reads and joins the tree and the fuzz seeds include `test/pdf/tagged`.
 **Why**: accuracy is paramount (D023) and emon cannot be its own oracle (D100); a tree of 455,000 elements read by two programs that share only the PDF standard is the strongest check available, and the twins show the score does what D076 asked.
 **Alternatives**: qpdf's JSON for the tree (it lists objects, not the tree's resolved roles); comparing whole dumps (a format change would be an oracle change); real mis-tagged files only (nobody knows their truth).
+- [ ] **Signed off** (maintainer)
+
+### D158 — The Go Engine API, as built: the same machine as the Rust one in Go's idiom, sources are `io.ReaderAt` + a size, and what Go cannot say the way Rust does (P2.1; SPEC 13, 13.1, 3.9; D058, D040, D144-D147)
+**Decision**: the Go host is a root package `emon` (`host/go/source.go`, `engine.go`, `model.go`) over the generated packages and
+`host/go/port`; like the Rust crate it is ASSEMBLED, not committed as a module (`kin/scripts/emon-go-build` builds `.cache/emon-go`:
+`gen/go` without the `*test` and `*probe` packages, `host/go/port` without `testport.go`, `pngenc`, the root files, and the driver
+`test/driver/go/main.go`, binary `emon-go`). It is a line-for-line port of `engine.rs`: `NewEngine(Config)`; `Intake`, `Convert`,
+`ConvertStats`, `Record`, `Replay` (each takes `[]Input`, as Rust's `Inputs`); `Options`, `Config`, `JSONOptions`, `HTMLOptions`
+(`DefaultOptions()`, `DefaultConfig()`, `DefaultHTMLOptions()`: the zero value of `HTMLOptions` is NOT the default, `Milestones` is false
+in it); `Model` (`Root`, `Pages`, `Furniture`, `Dropped`, `Find`, `Evidence`, `ToJSON`, `ToHTML`, `Serialize`, `Source`, `NodeCount`) and
+`Node` (`Kind`, `ID`, `Conf`, `Sources`, `Flags`, `Parent`, `Children`, `Inlines`, `Blocks`, `Text`, `Regions`, `Attr`, `Index`);
+`Intake`; `RunStats`; `Transcript` (an alias of `port.Transcript`). **Sources are SPEC 13.1's Go row**: `ByteSource` is
+`io.ReaderAt` + `Size()`; `BytesInput`/`NewBytesSource` (in memory; an optional `SliceSource.AsSlice` lets the engine skip the chunk
+cache, as `as_slice` does), `ReaderAtInput(r, size)` (an `*os.File` and its Stat size, an `*io.SectionReader`: the Go-only form),
+`SeekableInput` (an `io.ReadSeeker` behind a lock), `SpooledInput` (an `io.Reader`, spooled to the input-bytes bound). The password
+travels with the `Input` (`WithPassword`), is bytes, and `Input.String()` never prints it. **The loop is the Rust loop**: a fresh `Src`
+view and fresh arenas per attempt, a miss checked after each stage, a panic (Go: `recover`) in an attempt that missed is a miss and in
+one that did not is a named `*Error`, `ChunkCache` with doubling read-ahead and coalesced ranges, the `bytes` fulfiller, `simulate async`.
+**The refusals are the Rust slice's, in the same words** (D144): OCR accepted and inert, images `unsupported-format`, several inputs and
+`assets` other than `none` `unsupported`. **What Go says differently, each with its reason in `kin/scripts/embedders`**: errors are one
+`*Error` with a `Kind` tag and flattened payload fields (Go has no sum type; `Name()` is the same stable name); `Option<T>` is a second
+return value (`Attr`, `Parent`, `Evidence`) or, for `HTMLOptions.ConfidenceBelow`, a `*uint32`; `Page.Label` is a string and a
+`HasLabel` flag; `Type::new` is `NewType`; an enum is a named int and constants (`OcrAlways`, `AssetsNone`, `ErrNoInput`). **One real
+difference of mechanism**: Rust's `Config.limits` is a per-thread override table; Go has no goroutine-local state, so
+`port.WithLimits` keeps a process-wide table behind a `sync.RWMutex`: a conversion WITHOUT limits takes it shared (and never sees an
+override), one WITH `Config.Limits` takes it exclusively, so conversions with custom limits run alone in the process. kin still reads a
+bound only through `limit-of`. A `Model` locks its arenas on every accessor and is read from many goroutines (a test does). **Tests**:
+`host/go/engine_test.go` is the Rust file test for test (11) plus a concurrent-read test (12), run by `bb slice` with `go test` on the
+assembled module, and `go vet` is held clean. The driver `emon-go` has the flags and exit codes of `emon-rs` (it adds
+`--source=readerat`); both drivers gained `--record=DIR`, `--replay=DIR` (a transcript directory), `--parallel=N` (N conversions at once on
+one Engine, all N required equal; not with record/replay: a Rust `Transcript` holds `Arc<Bitmap>` over a `Cell` and is not `Send`, so a
+transcript is one thread's) and `--out=bundle` (one conversion, every output, sections `== json`, `== json-pretty`, `== html`,
+`== html-full`, `== evidence`, `== intake`). **`bb slice` now runs every section on both hosts** and passes on Go: six fixtures to
+`test/para` and `test/slice`, `--chunk=512 --async` (it missed and re-ran), `--source=seek|spool`, the evidence golden, the named
+errors and exit codes.
+**Why**: SPEC 13 asks for the same small API in four languages; D058 for sources, never paths; the Go row of 13.1 says `io.ReaderAt` +
+size, and `*os.File` satisfies it with its size. **Merge note**: `attempt()` is the one place the Engine calls the text-layer stages in
+both languages (`engine.rs`, `engine.go`); when P3.5/P3.6 change `pc_document`'s signature, both change together, and `bb identity`
+fails if only one does.
+**Alternatives**: a Go `Engine` that mirrors `Inputs` with a variadic or an `any` (rejected: `[]Input` and `BytesInput` say it plainly);
+`context.Context` on `Convert` (the loop has no suspension point to cancel at yet; it arrives with the Task port); a limits table per
+`Engine` (kin's `limit-of(kind)` has no engine argument, so a per-engine table needs a thread or goroutine id to find it).
+- [ ] **Signed off** (maintainer)
+
+### D159 — `bb identity`: the bundle, the arms, the corpus, and what an answer is (P2.2; SPEC 14.1.5, D058)
+**Decision**: both drivers print a BUNDLE (`--out=bundle`: compact and pretty JSON, default and full HTML, the text layer's evidence
+dump, the intake line) so a document is one process per arm, and an ANSWER is the bundle's bytes, the exit code and the stderr, so a
+document that is refused (damaged, encrypted, an image, a wrong password) must be refused by the same name, the same message, the same
+way on every arm. **The arms** (`kin/scripts/identity`): Rust over bytes, `Read + Seek`, spooled `Read` and a 512-byte async source;
+Go over bytes, `io.ReaderAt` (+ size), `io.ReadSeeker`, spooled `io.Reader` and the same async source; and the transcript trip: each
+host's `--record` writes a directory, the two directories must be equal byte for byte, and each host REPLAYS the other's to the
+reference bundle (the corpus is (input, transcript) pairs: the transcripts are empty because the slice issues no requests, D089, but a
+transcript is recorded, checked against the input's index and length, and read back). `--full` adds async chunks of 7, 100 and 4096 bytes
+and a sync 64-byte cache on both hosts. **The corpus**: every committed PDF under `test/` (the synthetic documents and their scans, the
+PDF-layer, repaired, encrypted, tagged and fuzz-crasher fixtures: 210 files), each (file, password) row of `test/pdf/p3.txt` (wrong
+passwords included, 258 inputs with them) and two PNGs (`unsupported-format`). `--corpus` runs the never-committed public corpus
+(`corpus/`, a symlink in a worktree) INSTEAD: a non-gate, slow. **Results**: the gate is green and found NO difference between hosts or
+arms: 258 inputs, 226 converted, 32 refused by name (`bad-xref` 1, `encryption-unsupported` 5, `no-pages` 1, `password-incorrect` 10,
+`password-required` 11, `unsupported-format` 4), each across nine arms and the record/replay trip, in 14 s on this machine. The gate
+was shown to see: a one-byte change in the Go driver's HTML is reported with its section and byte offset on every Go arm. **The public
+corpus**: all 3,689 PDFs of the never-committed public corpus (`corpus/`, 12 GB) were run through the same nine arms and the transcript trip with `bb identity --corpus` (30 minutes): all 3,689 converted and every answer was byte-identical, no difference. **What is NOT an arm yet**: Java and C# (they have ports only; their Engine layers are later phases, and each gets an
+arm when it has a driver), images and several inputs (refused by name on both), OCR and every request/answer in a transcript (nothing
+is issued; `bb plan` exercises the protocol and the transcript format across the two hosts with a probe, D089), `assets` modes (D117
+is not built). Both drivers are built by `kin/scripts/emon-rs-build` and `kin/scripts/emon-go-build`; neither reads anything but the
+file it is given.
+**Why**: SPEC 14.1.5: identity is over (input bytes, transcript) pairs, and 13.1: how the bytes arrive is not an input. A gate that compares only
+the happy path would miss exactly the divergences in error handling that a crawler routes on.
+**Alternatives**: comparing JSON and HTML only (a refusal that reads differently on two hosts is a bug a crawler would see); one process per
+output (about 6x the spawns for the same claim); keeping the identity gate on the Rust and Go arms only after `--full` (the five
+adapters are cheap and the Go one is the one that has never been exercised).
+- [ ] **Signed off** (maintainer)
+
+### D160 — `bb embedders`: the surface is read from the source, every difference is a failure or a table entry with its reason, and the library names no filesystem (P2.3; SPEC 3.9, 13, 13.1, D058)
+**Decision**: `kin/scripts/embedders` reads the two Engine layers' SOURCE (no compiler: seconds, and it runs on a machine without cargo or
+go) and compares (1) THE SURFACE: Rust's is what `host/rust/src/lib.rs` re-exports (25 types), Go's every exported identifier of
+`host/go/{source,engine,model}.go` and the loop's `Transcript`; each reduces to `type`, `field`, `variant`, `method` (with arity,
+receiver not counted) and constructor lines, compared without case or underscores (`to_json` is `ToJSON`). Today they agree on 24 types,
+74 fields and variants, 38 methods with equal arities and 13 constructors and defaults. A name or an arity on one side only fails the
+gate unless it is in a table in the script WITH ITS REASON (`static-names`, `default-names`, `member-renames`, `go-only`, `rust-only`:
+`Type::new` is `NewType`, an enum with payloads is a tagged struct, `Option<String>` is a string and a flag, `Inputs` is Rust's `Into`
+wrapper), and an entry that is no longer needed is a failure too. (2) SPEC 3.9 and 13: every name the SPEC spells (27 members, 9 types,
+the byte-source adapters of 13.1) exists on both with the arity the SPEC gives; the asset accessors (`assets`, `asset`, `asset_files`,
+`Asset`: D117) are listed as PENDING on both, not failed. (3) NO FILESYSTEM (D058), the Rust test of D144 widened: no host library file
+(Rust, Go, Java, C#: 13 files) and no generated non-test module (168, in the four languages) names a file, path or directory function or
+type; `testport.*`, `tess.rs`, the tests and the drivers are not the library, and the only operating-system reads are
+`std::env`/`os.LookupEnv` for `EMON_LIMIT_*`. **Differences found and fixed**: none between the two layers as written (the Go layer was
+built from the Rust surface), and the gate was shown to see: a renamed Go method, an extra Go parameter and an `os.Open` in `model.go`
+each fail with the name. The first run of the parser itself found two of its own faults (char literals `'}'` in `plan.rs` broke depth
+counting; a greedy argument match miscounted `to_files`), fixed. **Not compared**: Java and C# (ports only), the `plan` and `port` module
+surfaces (the loop's internals are held by `bb plan` and `bb hosts`), types and return types (arity and names only: SPEC 3.9's own level).
+**Why**: nome's D568: the surfaces drift by hand and are found late; here a mismatch fails the next `bb gates`.
+**Alternatives**: `go doc` and `cargo doc --output-format json` (accurate types, but a compiler per host and a nightly flag for Rust); a Go
+program using `go/ast` (the language of the thing compared, but not babashka, and the Go source here is regular enough).
+- [ ] **Signed off** (maintainer)
+
+### D161 — `bb repeat`: run vs run, serial vs eight at once, and the file with its objects in reverse order; there is no page submission to reverse yet (P2.4; SPEC 12, 14.1.6)
+**Decision**: for every document and each of Rust and Go (`kin/scripts/repeat`, 210 documents): (1) RUN VS RUN: two processes give the
+same bundle, exit code and stderr; (2) SERIAL VS PARALLEL (SPEC 12.1): `--parallel=8` converts the document eight times at once on ONE
+Engine (threads on Rust, goroutines on Go), the driver itself fails if any of the eight differs from the first, and the first must equal
+the serial run (this also holds that a `Model` and the source cache are safe under concurrent use); (3) REVERSED: the document with
+its objects laid out in reverse file order (`tools/lib/pdfreverse.clj`: each object's bytes untouched, a fresh classic cross-reference
+table, the same trailer, `/Prev` and `/XRefStm` refused) gives the same JSON, pretty JSON, HTML (default and full) and evidence on both
+hosts; the intake line carries the file's byte count and is left out; `--full` also runs the reversed file over a 512-byte async source
+and a second repeat. **The honest limit**: SPEC 12.1's "pages submitted in reverse" needs a seam where a host submits page units and
+merges results in submission order; the Engine reads a whole document as ONE unit today (`pc_document` loops the pages inside kin), so
+there is no host-side page submission to reverse. What can be reversed is the order in which the FILE presents its pages, page tree and
+resources, which exercises the same property (nothing in the output may depend on where in the file a part is met) and is checked in
+both languages; when per-page units exist (the Task port, D022), the same gate gets an arm that submits them reversed and merges by
+submission order. 168 of the 200 documents that convert are rewritable (single classic table, entries that point at their own
+objects); the other 32 (xref streams, hybrid, incremental, repaired, damaged) are counted, not compared. A repaired file whose table
+lies (`repair-offsets-shifted.pdf`) was first rewritten from its false offsets: a fault of the rewriter, not the Engine, fixed by
+requiring every entry to point at `N G obj`. **Results**: green on both hosts, no difference. `--corpus` runs the public corpus: a sample of 308 of the 3,689 public-corpus PDFs (`bb repeat --corpus --sample 300`, 2 minutes): green, 241 rewritten in reverse object order, no difference.
+**Why**: SPEC 12.2: the same input gives the same bytes every run, and a reader that let the file order leak (a hash order, a first-seen
+tie-break) would show here first.
+**Alternatives**: reversing only the page tree's `/Kids` (a different document); submitting pages from the host (no seam yet);
+shuffling instead of reversing (reverse is deterministic, and the interesting order is the extreme one).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here
