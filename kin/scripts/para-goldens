@@ -6,8 +6,8 @@
 ;; A DEVELOPMENT SCRIPT, run by a person after the stage changed on purpose; no gate runs it. The laws in
 ;; `kin/paratest.kin` hold every target to what this wrote (PDF -> content -> paragraphs -> Model -> JSON,
 ;; byte for byte), and `kin/scripts/para-check` holds the goldens to the source HTML: what makes a golden of
-;; kin's own output worth anything. The driver is `tools/accuracy/naive/main.rs` (built by
-;; `tools/accuracy/predict-naive.sh`, the temporary predictor of the P1.8 measurement).
+;; kin's own output worth anything. The driver is the Engine's, `emon-rs` (`test/driver/rust/main.rs`, built by
+;; `kin/scripts/emon-rs-build`; the temporary `predict-naive.sh` it replaced is retired, D140).
 ;;
 ;; THE DOCUMENTS are the Chrome-printed synthetic ones whose paragraphs and headings are all there is on the
 ;; page (single column, no list, table or initial the naive stage would have to guess at): the paragraphs the
@@ -25,11 +25,11 @@
     (when-not (zero? (:exit r)) (println (:err r)) (System/exit 1))
     (:out r)))
 
-;; builds .cache/naive when gen/rust changed (its own stamp), by asking it for a document
-(run "tools/accuracy/predict-naive.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
+;; builds the driver when gen/ or host/ changed (predict-emon.sh's stamp), by asking it for a document
+(run "tools/accuracy/predict-emon.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
 
 (.mkdirs (io/file root "test" "para"))
 (doseq [d docs]
-  (let [out (run ".cache/naive" (str "test/corpus/synth/pdf/" d ".pdf") "pretty")]
+  (let [out (run ".cache/emon-rs/target/release/emon-rs" "--pretty" (str "test/corpus/synth/pdf/" d ".pdf"))]
     (spit (io/file root "test" "para" (str d ".json")) (str out "\n") :encoding "UTF-8")
     (println "  wrote test/para/" (str d ".json") (count out) "bytes")))

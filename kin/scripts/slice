@@ -1,0 +1,134 @@
+#!/usr/bin/env bb
+;; THE FIRST VERTICAL SLICE, end to end on the Rust host (DEVLOG P1.10).   kin/scripts/slice [--update]
+;;
+;; A born-digital PDF -> text layer -> paragraphs -> Model -> JSON and HTML, through the Engine API's
+;; driver (`test/driver/rust/main.rs`, binary `emon-rs`), whose STDOUT is all this reads:
+;;
+;;   1. the Engine's native tests (`host/rust/tests/engine.rs`): the three byte-source adapters give
+;;      identical JSON, a 512-byte async source equals memory over the slice's fixtures AND every PDF
+;;      fixture, D040's errors, limits, record/replay, the walkable Model, and no filesystem in the library;
+;;   2. for each fixture (test/para's six documents): the driver's pretty JSON is `test/para/NAME.json`
+;;      (which `kin/scripts/para-check` holds to the HTML the document was printed from); its HTML is
+;;      `test/slice/NAME.html` (default options) and `NAME.full.html` (ids, geometry, confidence, ledger,
+;;      pretty), whose paragraphs are, in order, the JSON's (an independent reading of the HTML);
+;;   3. `--chunk=512 --async` and `--source=seek|spool` give the SAME JSON and HTML as memory, and the
+;;      async run missed (more than one attempt) and says so on stderr;
+;;   4. the text layer's evidence dump of `test/pdf/minimal.pdf` is the P1.7 golden;
+;;   5. the driver's named errors and their exit codes.
+;;
+;; Timings (ms, driver wall time per fixture, in memory) are printed: a baseline, not a target.
+;; `--update` writes the HTML goldens from the driver (a development act; a person reviews the diff).
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [shell process]]
+         '[cheshire.core :as json]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def update? (some #{"--update"} *command-line-args*))
+(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "footnotes-endnotes" "initial-image" "initial-vector"])
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+(def build (let [r @(process {:out :string :err :string} "kin/scripts/emon-rs-build")]
+             (when-not (zero? (:exit r))
+               (println "  FAIL the Rust driver did not build:\n" (:err r))
+               (System/exit 1))
+             (str/trim (:out r))))
+
+(defn drive [& args]
+  (let [t0 (System/nanoTime)
+        r @(apply process {:out :string :err :string} build args)]
+    (assoc r :ms (/ (- (System/nanoTime) t0) 1e6))))
+
+;; ------------------------------------------------------ 1. the native tests
+
+(let [r @(process {:dir ".cache/emon-rs" :out :string :err :string :extra-env {"RUSTFLAGS" "-A warnings"}}
+                  "cargo" "test" "--release" "--offline" "-q" "--test" "engine")
+      n (some->> (re-find #"test result: ok\. (\d+) passed; 0 failed" (:out r)) second)]
+  (if (and (zero? (:exit r)) n)
+    (ok "the Engine API's native tests: " n " passed (adapters identical; async 512 = memory over every PDF fixture; D040; limits; record/replay; the Model walks; no filesystem in the library)")
+    (bad "the Engine API's native tests failed:\n" (str/join "\n" (take 40 (str/split-lines (str (:out r) (:err r))))))))
+
+;; --------------------------------------------------------- 2. the fixtures
+
+(defn pdf [d] (str "test/corpus/synth/pdf/" d ".pdf"))
+(def FULL "--html=ids,geometry,confidence=950,ledger,pretty")
+
+(defn html-paragraphs
+  "The text of each <p> of a default-options HTML, tags removed, entities decoded."
+  [html]
+  (->> (re-seq #"<p(?: [^>]*)?>(.*?)</p>" html)
+       (map (fn [[_ inner]]
+              (-> inner
+                  (str/replace #"<[^>]*>" "")
+                  (str/replace "&lt;" "<") (str/replace "&gt;" ">") (str/replace "&quot;" "\"") (str/replace "&amp;" "&"))))))
+
+(defn json-paragraphs [j]
+  (->> (get-in (json/parse-string j) ["body" "children"])
+       (filter #(= "paragraph" (get % "kind")))
+       (map #(get % "text"))))
+
+(def timings (atom []))
+(drive (pdf "h-plain"))                  ; warm the file cache and the binary: the timings below are not a cold start
+
+(doseq [d docs]
+  (let [m (drive "--pretty" (pdf d))
+        golden (slurp (str "test/para/" d ".json"))
+        h (drive "--out=html" (pdf d))
+        hf (drive "--out=html" FULL (pdf d))
+        hg (str "test/slice/" d ".html")
+        hfg (str "test/slice/" d ".full.html")]
+    (swap! timings conj [d (:ms m)])
+    (check (zero? (:exit m)) d ": the driver ran")
+    (check (= (str (:out m) "\n") golden) d ": JSON is test/para/" d ".json")
+    (when update?
+      (fs/create-dirs "test/slice")
+      (spit hg (:out h)) (spit hfg (:out hf)))
+    (check (and (fs/exists? hg) (= (:out h) (slurp hg))) d ": HTML is " hg)
+    (check (and (fs/exists? hfg) (= (:out hf) (slurp hfg))) d ": full HTML is " hfg)
+    (check (= (html-paragraphs (:out h)) (json-paragraphs (:out m)))
+           d ": the HTML's <p> are the JSON's paragraphs, in order (" (count (json-paragraphs (:out m))) ")")
+    ;; 3. the async source and the other adapters
+    (let [a (drive "--pretty" "--chunk=512" "--async" "--stats" (pdf d))
+          ah (drive "--out=html" "--chunk=512" "--async" (pdf d))
+          stats (re-find #"attempts=(\d+) fetch-rounds=(\d+) bytes-requests=(\d+) source-reads=(\d+) bytes-fetched=(\d+) of (\d+)" (:err a))]
+      (check (and (= (:out a) (:out m)) (= (:out ah) (:out h)))
+             d ": --chunk=512 --async is the in-memory JSON and HTML, byte for byte")
+      (check (and stats (> (Long/parseLong (nth stats 1)) 1) (> (Long/parseLong (nth stats 2)) 0))
+             d ": it missed and re-ran: " (str/trim (:err a))))
+    (doseq [src ["seek" "spool"]]
+      (check (= (:out (drive "--pretty" (str "--source=" src) (pdf d))) (:out m)) d ": --source=" src " is the same JSON"))))
+
+(ok "driver wall time per fixture (ms, in memory, baseline): "
+    (str/join ", " (for [[d ms] @timings] (format "%s %.0f" d ms))))
+
+;; ------------------------------------------------------- 4. the evidence dump
+
+(let [e (drive "--out=evidence" "test/pdf/minimal.pdf")]
+  (check (= (str (:out e) "\n") (slurp "test/content/minimal.evidence.json"))
+         "--out=evidence of test/pdf/minimal.pdf is the P1.7 golden"))
+
+;; ----------------------------------------------------------- 5. the errors
+
+(defn err [name code & args]
+  (let [r (apply drive args)]
+    (check (and (= code (:exit r)) (= "" (:out r)) (str/includes? (:err r) (str "error: " name)))
+           "driver " (str/join " " args) " -> error: " name ", exit " code)))
+
+(err "password-required" 4 "test/pdf/p3/crypt-aes-128-user.pdf")
+(err "password-incorrect" 4 "--password=wrong" "test/pdf/p3/crypt-aes-128-user.pdf")
+(err "encryption-unsupported" 4 "test/pdf/p3/unsupported-pubsec.pdf")
+(err "unsupported-format" 4 "test/pdf/notpdf.pdf")
+(err "unsupported" 4 "--assets=images" (pdf "h-plain"))
+(let [r (drive "--password=user-secret" "test/pdf/p3/crypt-aes-128-user.pdf")
+      p (drive "test/pdf/p3/plain.pdf")]
+  (check (and (zero? (:exit r)) (= (:out r) (:out p))) "--password=user-secret opens the locked file to the plain twin's Model"))
+(check (= 2 (:exit (drive "--nonsense" (pdf "h-plain")))) "an unknown flag is a usage error, exit 2")
+
+(if (zero? @fails)
+  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, in memory and async")
+  (do (println "  FAIL" @fails "check(s) failed") (System/exit 1)))

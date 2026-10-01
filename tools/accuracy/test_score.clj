@@ -547,8 +547,9 @@ the same, the stream is not Python's.)"
     (is (> (count reg) 100))
     (is (= [[] [] []] (A/compare-boards good good 0.002)))))
 
-(deftest placeholder-is-not-a-failure
-  (is (nil? (first (A/run-predictor (A/PREDICTORS "emon") "x" "pdf" "x" "x")))))
+(deftest unavailable-predictor-is-not-a-failure
+  ;; exit 3 is the protocol's "not available" (a predictor without its toolchain says so), not a failure
+  (is (nil? (first (A/run-predictor ["sh" "-c" "echo no toolchain >&2; exit 3"] "x" "pdf" "x" "x")))))
 
 (let [res (binding [clojure.test/*test-out* *err*]
              (if-let [only (System/getenv "EMON_TEST_ONLY")]

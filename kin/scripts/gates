@@ -14,16 +14,16 @@
 # `hosts`, `drift`, P0.3/P0.6 `lang-test`, P0.5 `unit`) and nothing that only
 # writes (`gen`, `emit`). A gate added to bb.edn and not to this list is
 # caught below: every bb.edn task must be either a gate here or named in
-# `not_gates`. (`accuracy` is one: it needs the real pipeline, P1.10, to mean
-# anything; until then it scores fixtures only. D078.)
+# `not_gates`. (`accuracy` was one until the real pipeline existed; with the Rust Engine (P1.10)
+# its ratchet binds `emon` and it is a gate, and so is `slice`. D078, D141.)
 #
 # `check` and `unit` are slow (they compile four languages); the rest are
 # seconds. The order is cheapest first, so a stale generated tree fails fast.
 set -e
 cd "$(dirname "$0")/../.."
 
-gates="hosts drift lang-test check unit plan ocr fuzz png-check"
-not_gates="gen emit gates accuracy import corpus-push corpus-pull corpus-test png-bench"
+gates="hosts drift lang-test check unit plan ocr fuzz png-check slice accuracy"
+not_gates="gen emit gates import corpus-push corpus-pull corpus-test png-bench"
 
 fails=0
 
