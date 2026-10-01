@@ -1,0 +1,153 @@
+#!/usr/bin/env bb
+;; REPEAT: the same answer every time, however the work is arranged.   kin/scripts/repeat   (DEVLOG P2.4, SPEC 12, 14.1.6)
+;;
+;; SPEC 12.2: same input + same transcript + same settings -> byte-identical Model JSON and HTML, every run. For
+;; each document and each host (Rust and Go), over the BUNDLE `--out=bundle` (compact and pretty JSON, default and
+;; full HTML, the evidence dump, the intake line):
+;;
+;;   1. RUN VS RUN: two separate processes give the same bundle, and the same exit code and stderr when the
+;;      document is refused (nothing in a run, an address or a hash order, may reach the output);
+;;   2. SERIAL VS PARALLEL (SPEC 12.1): `--parallel=8` converts the document eight times at once on ONE Engine,
+;;      on eight threads (Rust) or goroutines (Go), and the driver itself fails if any differs from the first;
+;;      that answer must also be the serial run's. The Model is read from every thread that made it;
+;;   3. REVERSED: the document with its objects laid out in REVERSE file order (`tools/lib/pdfreverse.clj`: each
+;;      object's bytes untouched, a fresh cross-reference table, the same trailer) must give the same Model.
+;;      The Engine reads a whole document as one unit today, so there is no page submission to reverse inside it
+;;      (D149); what is reversed is the order in which the file presents its pages, page tree and resources, so
+;;      every page's parts are met last-first. The JSON and HTML sections must be byte-identical; the evidence
+;;      and intake sections are compared too when the file's own offsets and size cannot show in them (the
+;;      intake line names the file's byte count, which a rewrite changes, and is left out). A file that is not a
+;;      single classic table (xref streams, incremental updates, damage) cannot be rewritten and is counted, not
+;;      compared.
+;;
+;;   bb repeat                          the gate: the committed corpus, both hosts
+;;   bb repeat --full                   also: the reversed file over a 512-byte async source, and 3 runs not 2
+;;   bb repeat --corpus [--limit N] [--sample K]   INSTEAD the public corpus (never committed): a non-gate, slow
+;;   bb repeat --only SUBSTR
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process shell destroy-tree]]
+         '[clojure.string :as str])
+(load-file "tools/lib/pdfreverse.clj")
+(require '[pdfreverse :as rev])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+
+(def args (vec *command-line-args*))
+(def full? (some #{"--full"} args))
+(def corpus? (some #{"--corpus"} args))
+(defn opt [k] (some->> (map-indexed vector args) (some (fn [[i a]] (when (= a k) (get args (inc i)))))))
+(def only (opt "--only"))
+(def limit (some-> (opt "--limit") parse-long))
+(def sample (some-> (opt "--sample") parse-long))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+(defn build [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r)) (str/trim (:out r))
+        (do (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1)))))
+(def drivers {:rust (build "kin/scripts/emon-rs-build" "Rust") :go (build "kin/scripts/emon-go-build" "Go")})
+
+(def work (str (fs/create-temp-dir {:dir (fs/create-dirs ".cache/repeat") :prefix "run."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+
+;; --------------------------------------------------------------- the corpus
+
+(defn globs [dir pat] (sort (map str (fs/glob dir pat))))
+(def p3-passwords
+  (->> (str/split-lines (slurp "test/pdf/p3.txt"))
+       (remove #(or (str/blank? %) (str/starts-with? % "#")))
+       (map #(str/split % #"\t"))
+       (keep (fn [[f pw]] (when (and (not= pw "-") (not= pw "wrong-password") (not= pw "not-the-password")) [(str "test/" f) pw])))
+       (into {})))
+
+(def corpus
+  (let [files (if corpus?
+                (let [all (sort (map str (fs/glob "corpus" "**/*.pdf" {:follow-links true})))
+                      all (if sample (take-nth (max 1 (quot (count all) sample)) all) all)]
+                  (cond->> all limit (take limit)))
+                (globs "test" "**/*.pdf"))]
+    (->> files (filter #(or (nil? only) (str/includes? % only))) (mapv (fn [f] {:file f :pw (get p3-passwords f)})))))
+
+;; ------------------------------------------------------------------ driving
+
+(defn drive [host args {:keys [file pw]}]
+  (let [p (apply process {:out :string :err :string}
+                 (drivers host) "--out=bundle" (concat args (when pw [(str "--password=" pw)]) [file]))
+        r (deref p 180000 ::timeout)]
+    (if (= r ::timeout)
+      (do (destroy-tree p) {:exit -1 :out "" :err "TIMEOUT"})
+      (select-keys r [:exit :out :err]))))
+
+(defn sections [^String bundle]
+  (into {} (map (fn [[_ k body]] [k body]) (re-seq #"(?s)== (\S+)\n(.*?)(?=\n== \S+\n|\z)" bundle))))
+
+(defn first-diff [a b]
+  (cond
+    (not= (:exit a) (:exit b)) (str "exit " (:exit a) " vs " (:exit b))
+    (not= (:err a) (:err b)) (str "stderr differs: " (pr-str (subs (:err a) 0 (min 100 (count (:err a))))) " vs " (pr-str (subs (:err b) 0 (min 100 (count (:err b))))))
+    :else (let [sa (sections (:out a)) sb (sections (:out b))
+                k (first (filter #(not= (sa %) (sb %)) (sort (set (concat (keys sa) (keys sb))))))
+                x (str (sa k)) y (str (sb k))
+                i (or (first (filter #(not= (.charAt x %) (.charAt y %)) (range (min (count x) (count y))))) (min (count x) (count y)))]
+            (str "section " k " at char " i " (" (count x) " vs " (count y) ")"))))
+
+(defn same? [a b] (and (= (:exit a) (:exit b)) (= (:err a) (:err b)) (= (:out a) (:out b))))
+
+(def rewritable (atom 0))
+(def not-rewritable (atom 0))
+
+(defn one [i item]
+  (let [probs (atom []) note (fn [& xs] (swap! probs conj (apply str xs)))
+        converted (atom 0) reversed (atom 0)]
+    (doseq [host [:rust :go]]
+      (let [h (name host)
+            a (drive host [] item)]
+        (when (= -1 (:exit a)) (note h ": the first run timed out"))
+        ;; 1. run vs run
+        (dotimes [_ (if full? 2 1)]
+          (let [b (drive host [] item)]
+            (when-not (same? a b) (note h ": run vs run: " (first-diff a b)))))
+        ;; 2. serial vs parallel (the driver also checks its eight against each other)
+        (let [p (drive host ["--parallel=8"] item)]
+          (when-not (same? a p) (note h ": --parallel=8 vs serial: " (first-diff a p))))
+        ;; 3. reversed object order, over documents that convert
+        (when (zero? (:exit a))
+          (when (= host :rust) (swap! converted inc))
+          (let [bytes (fs/read-all-bytes (:file item))
+                r (try (rev/reverse-objects bytes) (catch Exception _ nil))]
+            (when (and r (= host :rust)) (swap! reversed inc))
+            (when r
+              (let [f (str work "/" i ".pdf")
+                    _ (fs/write-bytes f r)
+                    ritem (assoc item :file f)
+                    modes (cond-> [[]] full? (conj ["--chunk=512" "--async"]))]
+                (doseq [m modes]
+                  (let [x (drive host m ritem)
+                        sa (sections (:out a)) sx (sections (:out x))]
+                    (when-not (zero? (:exit x)) (note h ": reversed file " (pr-str m) " fails: " (str/trim (:err x))))
+                    ;; the intake line carries the file's size: left out, as the comment says
+                    (doseq [k ["json" "json-pretty" "html" "html-full" "evidence"] :when (not= (sa k) (sx k))]
+                      (note h ": REVERSED differs in " k " " (pr-str m)))))
+                (fs/delete f)))))))
+    {:probs @probs :converted @converted :reversed @reversed}))
+
+(println (str "  repeat: " (count corpus) " documents x 2 hosts: run vs run, serial vs parallel(8), reversed object order"
+              (when full? " (--full)") (when corpus? " (--corpus: the public corpus)")))
+(def t0 (System/currentTimeMillis))
+(def results (doall (pmap (fn [[i item]] [item (one i item)]) (map-indexed vector corpus))))
+(doseq [[item {:keys [probs]}] results :when (seq probs)]
+  (bad (:file item) ": " (str/join "; " probs)))
+
+(when (zero? @fails)
+  (let [conv (reduce + (map (comp :converted second) results))
+        revd (reduce + (map (comp :reversed second) results))]
+    (ok "REPEAT: " (count results) " documents on Rust and Go: run vs run, serial vs eight at once, identical bundles and refusals; "
+        revd " of the " conv " that convert were rewritten with their objects in reverse file order (" (- conv revd)
+        " are not a single classic table) and gave the same JSON, HTML and evidence on both hosts ("
+        (quot (- (System/currentTimeMillis) t0) 1000) " s)")))
+
+(if (zero? @fails)
+  (System/exit 0)
+  (do (println "  FAIL" @fails "document(s) differ") (System/exit 1)))

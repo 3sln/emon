@@ -1,0 +1,426 @@
+#!/usr/bin/env bb
+;; EMBEDDERS: do the hosts' public API surfaces agree, with each other and with SPEC 3.9/13?   kin/scripts/embedders
+;;                                                                                     (DEVLOG P2.3, SPEC 14.1.9)
+;; nome learnt this late (its D568), and the surface was drifting by hand. This reads the SOURCE of the two
+;; Engine layers (no compiler needed, so it is a cheap gate) and holds:
+;;
+;;   1. THE SURFACE. The Rust crate's public API is what `host/rust/src/lib.rs` re-exports at the crate root;
+;;      the Go package's is every exported identifier of `host/go/{source,engine,model}.go` (and the loop's
+;;      `Transcript`). Each is reduced to the same kind of line (`type Engine`, `field Options.locale`,
+;;      `variant OcrPolicy.Always`, `method Engine.convert/2`) with arities (a receiver does not count), names
+;;      compared without case and underscores (`to_json` is `ToJSON`). A name or an arity on one side only is a
+;;      FAILURE, unless it is in a table below WITH ITS REASON: an idiom (Rust has `Option` and enums with
+;;      payloads where Go has a second return value and a tag; `Type::new` is Go's `NewType`) or a thing one
+;;      language cannot say.
+;;   2. SPEC 3.9 and 13: every name the SPEC spells exists on BOTH hosts. What the SPEC specifies and neither has
+;;      built yet (the asset accessors, D117) is listed as PENDING, not failed.
+;;   3. NO FILESYSTEM (D058): no host LIBRARY file (Rust, Go, Java, C#: the Engine layers and the ports) and no
+;;      GENERATED non-test module names a filesystem type or function. Test support (`testport.*`, `tess.rs`),
+;;      the tests and the drivers are not the library.
+;;
+;; Java and C# have ports only so far (their Engine layers are later phases): their surface is not compared,
+;; their no-filesystem check is.
+(require '[babashka.fs :as fs]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+
+;; ------------------------------------------------------------ reading code
+
+(defn strip-strings [s]
+  (-> s (str/replace #"\"(\\.|[^\"\\])*\"" "\"\"") (str/replace #"'(\\.|[^'\\])'" "''")))
+(defn code-lines
+  "The lines of a file with block comments, line comments and string contents removed."
+  [text]
+  (->> (str/split-lines (str/replace text #"(?s)/\*.*?\*/" ""))
+       (map #(-> % strip-strings (str/replace #"//.*$" "")))))
+
+(defn split-top
+  "Split on commas that are not inside (), [], <> or {}."
+  [s]
+  (loop [cs (seq s) depth 0 prev nil cur [] out []]
+    (if-let [c (first cs)]
+      (cond
+        (and (= c \,) (zero? depth)) (recur (rest cs) depth c [] (conj out (apply str cur)))
+        (#{\( \[ \< \{} c) (recur (rest cs) (inc depth) c (conj cur c) out)
+        (and (= c \>) (= prev \-)) (recur (rest cs) depth c (conj cur c) out)   ; the arrow of `-> T`
+        (#{\) \] \> \}} c) (recur (rest cs) (dec depth) c (conj cur c) out)
+        :else (recur (rest cs) depth c (conj cur c) out))
+      (->> (conj out (apply str cur)) (map str/trim) (remove str/blank?) vec))))
+
+(defn paren-args
+  "The text between the first `(` after `fn NAME` in a signature and its matching `)`."
+  [sig]
+  (when-let [m (re-matcher #"fn [a-z_0-9]+(?:<[^>(]*>)?\(" sig)]
+    (when (.find m)
+      (loop [cs (seq (subs sig (.end m))) depth 1 out []]
+        (when-let [c (first cs)]
+          (cond (= c \() (recur (rest cs) (inc depth) (conj out c))
+                (= c \)) (if (= depth 1) (apply str out) (recur (rest cs) (dec depth) (conj out c)))
+                :else (recur (rest cs) depth (conj out c))))))))
+
+(defn nm [s] (-> s (str/replace "_" "") str/lower-case))
+
+(defn signature-from
+  "The text of a signature from line i to its closing paren."
+  [lines i]
+  (loop [j i s ""]
+    (let [s (str s " " (nth lines j))
+          o (count (re-seq #"\(" s)) c (count (re-seq #"\)" s))]
+      (if (and (pos? o) (= o c)) s (recur (inc j) s)))))
+
+;; ------------------------------------------------------------- Rust surface
+
+(defn rust-items
+  "Every pub item of a Rust file as facts: [:type Name] [:field Type f] [:variant Type V] [:method Type f arity]
+   [:static Type f arity] [:default Type]. Members are the pub fields, the enum variants and the pub methods of an
+  inherent impl (or the methods of a trait); a fn without self is a static."
+  [file]
+  (let [lines (vec (code-lines (slurp file)))
+        n (count lines)]
+    (loop [i 0 depth 0 ctx nil acc []]
+      (if (>= i n)
+        acc
+        (let [l (nth lines i)
+              t (str/trim l)
+              opens (count (re-seq #"\{" l)) closes (count (re-seq #"\}" l))
+              header? (zero? depth)
+              [ctx acc]
+              (cond
+                (not header?) [ctx acc]
+                (re-find #"^pub (struct|enum|trait) " t)
+                (let [[_ k name] (re-find #"^pub (struct|enum|trait) ([A-Za-z0-9_]+)" t)]
+                  [{:kind (keyword k) :name name} (conj acc [:type name])])
+                (re-find #"^impl.* Default for [A-Z]" t)
+                [{:kind :other} (conj acc [:default (second (re-find #"Default for ([A-Za-z0-9_]+)" t))])]
+                (re-find #"^impl.* for [A-Z&]" t) [{:kind :other} acc]
+                (re-find #"^impl" t)
+                [{:kind :impl :name (second (re-find #"^impl(?:<[^>]*>)? ([A-Za-z0-9_]+)" t))} acc]
+                :else [ctx acc])
+              acc
+              (if (= depth 1)
+                (case (:kind ctx)
+                  :struct (if-let [[_ f] (re-find #"^pub ([a-z_0-9]+):" t)] (conj acc [:field (:name ctx) f]) acc)
+                  :enum (if-let [[_ v] (re-find #"^([A-Z][A-Za-z0-9]*)" t)] (conj acc [:variant (:name ctx) v]) acc)
+                  (:impl :trait)
+                  (if-let [[_ f] (re-find #"^(?:pub )?fn ([a-z_0-9]+)" t)]
+                    (if (or (= (:kind ctx) :trait) (str/starts-with? t "pub fn"))
+                      (let [sig (signature-from lines i)
+                            args (paren-args sig)
+                            parts (split-top (or args ""))
+                            self? (and (seq parts) (boolean (re-find #"(^|[& ])self$|^&(mut )?(')?[a-z]* ?(mut )?self$" (first parts))))
+                            arity (- (count parts) (if self? 1 0))]
+                        (conj acc (if self? [:method (:name ctx) f arity] [:static (:name ctx) f arity])))
+                      acc)
+                    acc)
+                  acc)
+                acc)
+              depth' (+ depth opens (- closes))]
+          (recur (inc i) depth' (if (zero? depth') nil ctx) acc))))))
+
+(defn rust-exports
+  "The names `lib.rs` re-exports at the crate root."
+  [file]
+  (->> (re-seq #"pub use [a-z_:]+::\{([^}]*)\};" (slurp file))
+       (mapcat (fn [[_ names]] (map str/trim (str/split names #","))))
+       (remove str/blank?)
+       set))
+
+;; --------------------------------------------------------------- Go surface
+
+(defn exported? [s] (boolean (re-find #"^[A-Z]" s)))
+
+(defn go-items
+  "Every exported item of a Go file as facts: [:type Name] [:field Type f] [:method Type f arity]
+   [:func f arity] [:const Type Name]. A receiver does not count in an arity."
+  [file]
+  (let [lines (vec (code-lines (slurp file)))
+        n (count lines)
+        arity (fn [args] (count (split-top (or args ""))))]
+    (loop [i 0 ctx nil consts nil acc []]
+      (if (>= i n)
+        acc
+        (let [t (str/trim (nth lines i))]
+          (cond
+            (re-find #"^type [A-Z][A-Za-z0-9]* " t)
+            (let [[_ name rest] (re-find #"^type ([A-Za-z0-9]+) (.*)$" t)
+                  acc (conj acc [:type name])]
+              (cond
+                (str/starts-with? rest "struct {") (recur (inc i) {:kind :struct :name name} nil acc)
+                (str/starts-with? rest "interface {") (recur (inc i) {:kind :interface :name name} nil acc)
+                :else (recur (inc i) nil nil acc)))
+            (and ctx (= t "}")) (recur (inc i) nil consts acc)
+            (and ctx (= (:kind ctx) :struct) (seq t))
+            (if-let [[_ names] (re-find #"^([A-Za-z0-9_, ]+?)\s+[\*\[\]A-Za-z0-9_\.]+$" t)]
+              (recur (inc i) ctx nil
+                     (into acc (for [f (map str/trim (str/split names #",")) :when (exported? f)] [:field (:name ctx) f])))
+              (recur (inc i) ctx nil acc))
+            (and ctx (= (:kind ctx) :interface) (seq t))
+            (cond
+              (= t "io.ReaderAt") (recur (inc i) ctx nil (conj acc [:method (:name ctx) "ReadAt" 2]))
+              (re-find #"^[A-Z][A-Za-z0-9]*\(" t)
+              (let [[_ f args] (re-find #"^([A-Za-z0-9]+)\((.*?)\)" t)]
+                (recur (inc i) ctx nil (conj acc [:method (:name ctx) f (arity args)])))
+              :else (recur (inc i) ctx nil acc))
+            (= t "const (") (recur (inc i) nil :open acc)
+            (and consts (= t ")")) (recur (inc i) nil nil acc)
+            (and consts (re-find #"^[A-Z][A-Za-z0-9]*( |$)" t))
+            (let [[_ name typ] (re-find #"^([A-Za-z0-9]+)(?: ([A-Za-z0-9]+))?" t)
+                  ct (if (= consts :open) typ consts)]
+              (recur (inc i) nil (or ct consts) (if ct (conj acc [:const ct name]) acc)))
+            (re-find #"^func \(" t)
+            (let [[_ recv f args] (re-find #"^func \([a-z]+ \*?([A-Za-z0-9]+)\) ([A-Za-z0-9]+)\((.*?)\)" t)]
+              (recur (inc i) nil nil (if (and f (exported? f) (exported? recv)) (conj acc [:method recv f (arity args)]) acc)))
+            (re-find #"^func [A-Z]" t)
+            (let [[_ f args] (re-find #"^func ([A-Za-z0-9]+)\((.*?)\)" t)]
+              (recur (inc i) nil nil (conj acc [:func f (arity args)])))
+            :else (recur (inc i) ctx consts acc)))))))
+
+;; ----------------------------------------------------- the idiom tables
+;; Every entry says WHY. A difference not here is a failure.
+
+(def static-names
+  "Rust `Type::f` (a fn without self), and the Go function that is the same thing: Go has no associated
+  functions, so a constructor is `NewType` and the others are spelled by hand."
+  {["Engine" "new"] "NewEngine"
+   ["Input" "new"] "NewInput"
+   ["Input" "bytes"] "BytesInput"
+   ["Input" "seekable"] "SeekableInput"
+   ["Input" "spooled"] "SpooledInput"
+   ["Kind" "named"] "KindNamed"
+   ["BytesSource" "new"] "NewBytesSource"
+   ["SeekSource" "new"] "NewSeekSource"
+   ["SpoolSource" "spool"] "Spool"
+   ["Transcript" "from_files"] "TranscriptFromFiles"})
+
+(def default-names
+  "Rust `impl Default for T` and Go's `DefaultT()` (the zero value is not the default for these)."
+  {"Config" "DefaultConfig" "Options" "DefaultOptions" "HtmlOptions" "DefaultHTMLOptions"})
+
+(def member-renames
+  "Rust member -> the Go member, where the Go spelling is not the same word."
+  {["ByteSource" "len"] ["ByteSource" "Size"]            ; a Rust trait's len() is Go's Size() (io.Reader style)
+   ["ByteSource" "read_at"] ["ByteSource" "ReadAt"]      ; io.ReaderAt, as the SPEC's table says
+   ["ByteSource" "as_slice"] ["SliceSource" "AsSlice"]   ; a default method in Rust; an optional interface in Go
+   ["Intake" "version"] ["Intake" "VersionMajor"]})      ; Rust's (major, minor) tuple is two Go fields
+
+(def go-const-prefix
+  "Go enums are a named int and constants `<Prefix><Variant>`; Rust's are variants `Type.Variant`."
+  {"OcrPolicy" "Ocr" "Assets" "Assets" "ErrorKind" "Err" "AttrKind" "Attr"})
+
+(def go-const-type-as
+  "The Rust enum a Go constant type stands for."
+  {"OcrPolicy" "OcrPolicy" "Assets" "Assets" "ErrorKind" "Error" "AttrKind" "Attr"})
+
+(def go-struct-as-enum
+  "A Rust enum with payloads is, in Go, a struct with one field per variant (set or nil) and, for Attr, a tag."
+  #{"Output" "Attr"})
+
+(def rust-only
+  "[kind Type member] on the Rust side with no Go twin, and why."
+  {[:type "Inputs" nil]
+   "a conversion wrapper for Rust's `impl Into<Inputs>` (a bare buffer, one Input or a Vec): Go has no overloading, takes `[]Input`, and `BytesInput(b)` is the bare-buffer shorthand (SPEC 13)"})
+
+(def go-only
+  "Go surface with no Rust twin, and why: [kind Type member]."
+  {[:func "ReaderAtInput" nil] "SPEC 13.1's Go form: an `io.ReaderAt` and a size (an *os.File and its Stat size, an *io.SectionReader); Rust's twin is `Input::new(impl ByteSource)`"
+   [:type "SliceSource" nil] "Rust's `ByteSource::as_slice` default method; Go's optional interface"
+   [:type "ErrorKind" nil] "the tag of Go's flattened Error (Rust: the enum's variants)"
+   [:type "AttrKind" nil] "the tag of Go's Attr (Rust: the enum's variants)"
+   [:field "Error" "Kind"] "the tag (Rust: which variant)"
+   [:field "Error" "Input"] "a payload of several Rust variants, flattened"
+   [:field "Error" "Limit"] "payload of Rust's Error::Limit, flattened"
+   [:field "Error" "Actual"] "payload of Rust's Error::Limit, flattened"
+   [:field "Error" "Status"] "payload of Rust's Error::Limit and Error::Damaged, flattened"
+   [:field "Error" "Message"] "payload of Rust's Error::Io, Unsupported and Internal, flattened"
+   [:field "Error" "Plan"] "payload of Rust's Error::Plan, flattened"
+   [:method "Error" "Error"] "Go's `error` interface (Rust: Display + std::error::Error)"
+   [:method "Error" "Unwrap"] "Go's errors.Unwrap (Rust: Error::source, unused)"
+   [:variant "Attr" "Kind"] "the tag (Rust: which variant)"
+   [:field "Page" "HasLabel"] "Rust's `label: Option<String>` is a string and a flag in Go"
+   [:field "Intake" "VersionMinor"] "the second half of Rust's (major, minor) tuple"
+   [:method "Input" "String"] "fmt.Stringer, which never prints the password (Rust: a Debug impl that does the same)"
+   [:method "Node" "String"] "fmt.Stringer (Rust: Debug)"})
+
+;; -------------------------------------------------------------- the compare
+
+(def rust-lib "host/rust/src/lib.rs")
+(def rust-files ["host/rust/src/engine.rs" "host/rust/src/source.rs" "host/rust/src/plan.rs"])
+(def go-files ["host/go/source.go" "host/go/engine.go" "host/go/model.go"])
+
+(def exports (rust-exports rust-lib))
+(def rust-facts (vec (mapcat rust-items rust-files)))
+(def go-facts
+  (vec (concat (mapcat go-items go-files)
+               ;; Go's Transcript is an alias for port.Transcript: its members are the loop's
+               (filter (fn [[k a]] (and (#{:field :method} k) (= a "Transcript"))) (go-items "host/go/port/plan.go"))
+               (filter (fn [[k a]] (and (= k :func) (= a "TranscriptFromFiles"))) (go-items "host/go/port/plan.go")))))
+
+(def rs-types (set (for [[k n] rust-facts :when (and (= k :type) (exports n))] n)))
+
+;; Each side becomes a map {[kind type member] #{arities}} (kind :type, :field, :variant, :method, :func).
+(defn nkey [kind ty m] [kind (nm ty) (some-> m nm)])
+(defn add [m k a] (update m k (fnil conj #{}) a))
+
+(def rust-surface
+  (reduce
+   (fn [m fact]
+     (let [[k a b c] fact]
+       (case k
+         :type (if (rs-types a) (add m (nkey :type a nil) nil) m)
+         :field (if (rs-types a)
+                  (let [[ty2 f2] (get member-renames [a b] [a b])] (add m (nkey :field ty2 f2) nil))
+                  m)
+         :variant (if (rs-types a) (add m (nkey :variant a b) nil) m)
+         :method (if (rs-types a)
+                   (let [[ty2 m2] (get member-renames [a b] [a b])] (add m (nkey :method ty2 m2) c))
+                   m)
+         :static (if (rs-types a)
+                   (if-let [g (get static-names [a b])]
+                     (add m (nkey :func g nil) c)
+                     (add m [:unmapped (str a "::" b) nil] c))
+                   m)
+         :default (if (rs-types a)
+                    (if-let [g (get default-names a)] (add m (nkey :func g nil) 0) (add m [:unmapped (str a "::default") nil] 0))
+                    m)
+         m)))
+   {} rust-facts))
+
+(def go-surface
+  (reduce
+   (fn [m fact]
+     (let [[k a b c] fact]
+       (case k
+         :type (add m (nkey :type a nil) nil)
+         :field (if (go-struct-as-enum a) (add m (nkey :variant a b) nil) (add m (nkey :field a b) nil))
+         ;; the methods that make a Go type a ByteSource are Rust's `impl ByteSource for T`, not an inherent API
+         :method (if (and (#{"Size" "ReadAt" "AsSlice"} b) (not (#{"ByteSource" "SliceSource"} a)))
+                   m
+                   (add m (nkey :method a b) c))
+         :func (add m (nkey :func a nil) b)
+         :const (if-let [p (get go-const-prefix a)]
+                  (if (str/starts-with? b p) (add m (nkey :variant (get go-const-type-as a) (subs b (count p))) nil) m)
+                  m)
+         m)))
+   {} go-facts))
+
+(defn pretty [[k a b]] (case k :type (str "type " a) :func (str "func " a) :field (str "field " a "." b)
+                         :variant (str "variant " a "." b) :method (str "method " a "." b) :unmapped (str "static " a) (pr-str [k a b])))
+
+(defn allowed-key [[[k ty m] _]] (nkey k ty m))
+(def go-only-keys (set (map allowed-key go-only)))
+(def rust-only-keys (set (map allowed-key rust-only)))
+
+(let [rk (set (keys rust-surface)) gk (set (keys go-surface))
+      only-rust (remove (some-fn gk rust-only-keys) rk)
+      only-go (remove (some-fn rk go-only-keys) gk)
+      both (filter gk rk)
+      arity-diffs (for [k both :let [ra (get rust-surface k) ga (get go-surface k)] :when (not= ra ga)] [k ra ga])]
+  (doseq [k (sort only-rust)] (bad "Rust has " (pretty k) " and Go does not (name it in Go, or add it to `rust-only` with a reason)"))
+  (doseq [k (sort only-go)] (bad "Go has " (pretty k) " and Rust does not (name it in Rust, or add it to `go-only` with a reason)"))
+  (doseq [[k ra ga] arity-diffs] (bad "arity differs for " (pretty k) ": Rust " (sort ra) ", Go " (sort ga)))
+  (doseq [k go-only-keys :when (contains? rk k)] (bad "`go-only` lists " (pretty k) " but Rust has it: take it off the list"))
+  (doseq [k rust-only-keys :when (contains? gk k)] (bad "`rust-only` lists " (pretty k) " but Go has it: take it off the list"))
+  (def surface-counts
+    (frequencies (map first both)))
+  (when (zero? @fails)
+    (ok "SURFACE: Rust (crate root: " (count rs-types) " types) and Go agree on " (surface-counts :type) " types, "
+        (+ (get surface-counts :field 0) (get surface-counts :variant 0)) " fields and variants, "
+        (get surface-counts :method 0) " methods with equal arities and " (get surface-counts :func 0)
+        " constructors/defaults; " (count go-only) " Go-only and " (count rust-only) " Rust-only entries, each with its reason (the tables in kin/scripts/embedders)")))
+
+;; ---------------------------------------------------- SPEC 3.9 and 13
+
+(def spec-names
+  "Every name SPEC 3.9 / 13 / 13.1 spells, as [Type member] (arity where the SPEC fixes it) on BOTH hosts."
+  [["Engine" "intake" 1] ["Engine" "convert" 2] ["Engine" "record" 2] ["Engine" "replay" 3]
+   ["Input" "with_password" 1]
+   ["Model" "root" 0] ["Model" "pages" 0] ["Model" "furniture" 0] ["Model" "dropped" 0] ["Model" "find" 1]
+   ["Model" "to_json" 1] ["Model" "to_html" 1]
+   ["Node" "kind" 0] ["Node" "id" 0] ["Node" "conf" 0] ["Node" "sources" 0] ["Node" "flags" 0]
+   ["Node" "children" 0] ["Node" "text" 0] ["Node" "regions" 0] ["Node" "attr" 1]
+   ["Options" "ocr"] ["Options" "locale"] ["Options" "assets"]
+   ["Config" "limits"] ["Config" "max_rounds"] ["Config" "fetch_rounds"]])
+
+(def spec-pending
+  "Specified and built by neither host yet (D117's asset accessors, SPEC 3.9)."
+  ["Model.assets" "Model.asset" "Model.asset_files" "Node.asset" "Asset (id name media_type origin sha256 width height uses bytes)"])
+
+(def spec-types ["Engine" "Input" "Model" "Node" "Transcript" "ByteSource" "Options" "Config" "Intake"])
+
+(let [rk (set (keys rust-surface)) gk (set (keys go-surface))
+      missing (atom [])]
+  (doseq [t spec-types
+          [host ks] [["Rust" rk] ["Go" gk]]]
+    (when-not (contains? ks (nkey :type t nil)) (swap! missing conj (str host " has no type " t))))
+  (doseq [[t m a] spec-names
+          [host surf] [["Rust" rust-surface] ["Go" go-surface]]]
+    (let [k1 [:method (nm t) (nm m)] k2 [:field (nm t) (nm m)]]
+      (cond
+        (and (contains? surf k1) a (not (contains? (get surf k1) a)))
+        (swap! missing conj (str host " " t "." m " has arity " (sort (get surf k1)) ", the SPEC says " a))
+        (not (or (contains? surf k1) (contains? surf k2)))
+        (swap! missing conj (str host " has no " t "." m)))))
+  ;; the byte-source adapters of SPEC 13.1: bytes, a seekable, a spooled stream (and Go's io.ReaderAt + size)
+  (doseq [[host surf names] [["Rust" rust-surface ["BytesInput" "SeekableInput" "SpooledInput"]]
+                             ["Go" go-surface ["BytesInput" "SeekableInput" "SpooledInput" "ReaderAtInput"]]]
+          nmv names]
+    (when-not (or (contains? surf (nkey :func nmv nil))
+                  (and (= host "Rust") (= nmv "ReaderAtInput")))
+      (swap! missing conj (str host " has no input adapter " nmv))))
+  (doseq [m @missing] (bad "SPEC 3.9/13: " m))
+  (when (empty? @missing)
+    (ok "SPEC 3.9/13: every spelled name (" (count spec-names) " members of Engine, Input, Model, Node, Options, Config; "
+        (count spec-types) " types; the byte-source adapters of 13.1) exists on Rust and on Go; "
+        "PENDING on both, specified and not built (D117): " (str/join ", " spec-pending))))
+
+;; ------------------------------------------------------ no filesystem (D058)
+
+(defn banned-in
+  "[file line token] for every banned token in the code of `file` (comments and strings stripped)."
+  [file tokens]
+  (for [[i l] (map-indexed vector (code-lines (slurp file)))
+        tok tokens
+        :when (re-find tok l)]
+    [file (inc i) (str tok)]))
+
+(def rust-tokens [#"std::fs" #"std::path" #"\bPath(Buf)?\b" #"File::open" #"read_dir" #"\bOpenOptions\b"])
+(def go-tokens [#"\"io/ioutil\"" #"\"io/fs\"" #"\"path\"" #"\"path/filepath\"" #"\"embed\""
+                #"\bos\.(Open|OpenFile|ReadFile|WriteFile|Create|Stat|Lstat|ReadDir|Mkdir|MkdirAll|Remove|RemoveAll|File|Getwd|Chdir|TempDir)\b"
+                #"\bfilepath\." #"\bioutil\."])
+(def java-tokens [#"java\.io\.File" #"java\.nio\.file" #"\bFileInputStream\b" #"\bFileOutputStream\b" #"\bRandomAccessFile\b"
+                  #"\bFiles\." #"\bPaths\." #"\bFileReader\b" #"\bFileWriter\b"])
+(def cs-tokens [#"\bFile\.(Open|Read|Write|Exists|Create|Append)" #"\bDirectory\." #"\bFileStream\b" #"System\.IO\.Path" #"\bFileInfo\b" #"\bDirectoryInfo\b"
+                #"\bStreamReader\(\s*[a-z]*[Pp]ath"])
+
+(def library-files
+  (let [g (fn [d pat] (map str (fs/glob d pat)))
+        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|_test\.go|/tests/" %) fs))]
+    {:rust (not-test (g "host/rust/src" "*.rs"))
+     :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go")))
+     :java (not-test (g "host/java/emon" "*.java"))
+     :csharp (not-test (g "host/csharp/Emon" "*.cs"))}))
+
+(def generated-files
+  (let [lib? #(not (re-find #"(?i)(test|probe)[^/]*\.(rs|go|java|cs)$|/Tests/" %))]
+    {:rust (filter lib? (map str (fs/glob "gen/rust" "**/*.rs")))
+     :go (filter lib? (map str (fs/glob "gen/go" "**/*.go")))
+     :java (filter lib? (map str (fs/glob "gen/java" "**/*.java")))
+     :csharp (filter lib? (map str (fs/glob "gen/csharp" "**/*.cs")))}))
+
+(let [toks {:rust rust-tokens :go go-tokens :java java-tokens :csharp cs-tokens}
+      hits (for [[host files] (merge-with concat library-files generated-files)
+                 f files
+                 h (banned-in f (toks host))]
+             h)
+      libs (reduce + (map count (vals library-files)))
+      gens (reduce + (map count (vals generated-files)))]
+  (doseq [[f line tok] hits] (bad f ":" line " names a filesystem (" tok "): D058, the library never opens a file or names a path"))
+  (when (and (empty? hits) (pos? libs) (pos? gens))
+    (ok "NO FILESYSTEM (D058): " libs " host library files and " gens " generated non-test modules, in Rust, Go, Java and C#, name no file, path or directory function or type (`os.LookupEnv`/`std::env` for the EMON_LIMIT_* bounds are the only operating-system reads)")))
+
+(if (zero? @fails)
+  (System/exit 0)
+  (do (println "  FAIL" @fails "difference(s)") (System/exit 1)))
