@@ -346,8 +346,8 @@ fn an_image_becomes_pages_and_a_multi_page_tiff_several() {
     let px: Vec<(i32, i32)> = m.pages().iter().map(|p| (p.width, p.height)).collect();
     assert_eq!(px, vec![(1152, 864), (960, 720), (792, 600)]);
     assert_eq!(m.pages().iter().map(|p| p.number).collect::<Vec<_>>(), vec![1, 2, 3]);
-    // the body of an image page is empty until OCR is wired (P6.5)
-    assert!(m.root().children().is_empty());
+    // with no Ocr port an image page has no text: the body is the page milestones the paragraph stage writes between pages (P6.5)
+    assert!(m.root().children().iter().all(|n| n.kind().name() == "break"));
 }
 
 #[test]
@@ -383,7 +383,6 @@ fn an_image_records_its_pixels_and_replays_without_a_codec() {
     assert_eq!(json(&e.convert(Input::bytes(image("tiff-multi3-gray-none.tif")), &o).unwrap()), json(&m));
 }
 
-;; the OCR tests
 // ------------------------------------------------------------------------------------- OCR (P6.5, D184-D189)
 //
 // A FAKE `Ocr` port: it answers every request with the word `Hello` in one line, through the same kin builders a real engine's

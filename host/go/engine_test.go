@@ -543,9 +543,11 @@ func TestAnImageBecomesPagesAndAMultiPageTiffSeveral(t *testing.T) {
 	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
 		t.Errorf("pages %v, want %v", got, want)
 	}
-	// the body of an image page is empty until OCR is wired (P6.5)
-	if len(m.Root().Children()) != 0 {
-		t.Error("an image page has text before OCR")
+	// with no Ocr port an image page has no text: the body is the page milestones the paragraph stage writes between pages (P6.5)
+	for _, c := range m.Root().Children() {
+		if c.Kind().Name() != "break" {
+			t.Errorf("an image page has a %s with no OCR port", c.Kind().Name())
+		}
 	}
 }
 

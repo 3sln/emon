@@ -831,6 +831,16 @@ count: stage 0 of a raster input, §2.0). Its answer is `status w h channels dpi
 frames`, and `status` is `ok`, `failed`, `unsupported` or `limit` (the host's pixel bound,
 which kin names as the `pixels` limit).
 
+**`ocr`** 3 (`bitmap psm flags x y w h lang...`; D184, D187) is `Ocr`: `bitmap` names the `render` or `decode` request whose
+bitmap is read, `w` 0 the whole of it; `flags` bit 1 asks for symbols and their alternatives, bit 2 for orientation and script
+detection, and the flags above the low byte are the bitmap's resolution in dpi, a hint (`flags / 256`); each `lang` is an ISO
+639-3 code of up to four ASCII chars (`chs`/`cht` for simplified and traditional Chinese): none means every model the engine has
+(D038). The answer is `status nwords word...` and then, in the same record, the extension `emon.ocr` version 2 (`kin/ocr.kin`:
+lines with baselines, a block table with each block's own orientation, symbols and alternatives, each word's dictionary and
+numeric flags and point size, orientation, script, and whether the answer's `bitmap` is the engine's thresholded image). A host with
+no `Ocr` port answers `unsupported`, which is an answer (a page then has no text); a transcript names the engine that answered in
+`:producer`. A `decode` of a PDF's embedded JPEG has `filter` 1 (DCT): the span is a JPEG file.
+
 Assets (D117) add two kinds, both transcribed like `render`: **`crop`** 5
 (`input page dpi layer px py pw ph`, answered as a render) and
 **`decode-img`** 6 (a PDF image codestream with the parameters a codec
