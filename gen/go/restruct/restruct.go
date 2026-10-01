@@ -346,6 +346,25 @@ func rsColumnX(lay *port.Cells, on *port.Cells, orr *port.Cells, c int32) int32 
 	return 0
 }
 
+func rsContinues(stk *port.Cells, f int32, sch int32, val int32, dx int32) int32 {
+	// 1 when the item is the very next of the list whose frame starts at f: its scheme, its value one past the last, and its
+	// text no further off than 60 pt of the list's (a first line indented in some paragraphs and not in others, as a
+	// contract's `(f)` is, is not a list inside `(e)`). A bullet has no value to say it.
+	if (sch == 1) || (val <= 0) {
+		return 0
+	}
+	if sch != port.CellsAt(stk, f+2) {
+		return 0
+	}
+	if val != (port.CellsAt(stk, f+3) + 1) {
+		return 0
+	}
+	if rsAbs(dx) <= 6000 {
+		return 1
+	}
+	return 0
+}
+
 func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, stk *port.Cells, lay *port.Cells, base int32, c int32, np int32) int32 {
 	// The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has
 	// left. Answers the new list's node; the frame on top of the stack is its.
@@ -377,7 +396,9 @@ func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Ce
 				shift = cx - fc
 			}
 			var dx int32 = (tx - shift) - ind
-			if (dx > rsNest) && (d < rsDeep) {
+			if rsContinues(stk, f, sch, val, dx) == 1 {
+				more = 0
+			} else if (dx > rsNest) && (d < rsDeep) {
 				var held int32 = port.CellsAt(stk, f+4)
 				rsOpenList(nodes, attrs, text, stk, held, tx-shift, sch, val, cx)
 				more = 0

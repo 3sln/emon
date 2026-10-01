@@ -297,6 +297,16 @@
             (set i (+ i 1))))
       (return 0))))
 
+(defn ^I32 rs-continues [^Cells stk ^I32 f ^I32 sch ^I32 val ^I32 dx]
+  (comment "1 when the item is the very next of the list whose frame starts at f: its scheme, its value one past the last, and its")
+  (comment "text no further off than 60 pt of the list's (a first line indented in some paragraphs and not in others, as a")
+  (comment "contract's `(f)` is, is not a list inside `(e)`). A bullet has no value to say it.")
+  (if (or (== sch 1) (<= val 0)) (return 0))
+  (if (!= sch (cells-at stk (+ f 2))) (return 0))
+  (if (!= val (+ (cells-at stk (+ f 3)) 1)) (return 0))
+  (if (<= (rs-abs dx) 6000) (return 1))
+  (return 0))
+
 (defn ^I32 rs-place-item [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
                           ^:mut ^Cells text ^:mut ^Cells stk ^Cells lay ^I32 base ^I32 c ^I32 np]
   (comment "The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has")
@@ -321,6 +331,8 @@
                     (set shift 0)
                     (if (and (> fc 0) (> cx 0) (< tx 5000000) (> (rs-abs (- cx fc)) 2000)) (set shift (- cx fc)))
                     (let [^I32 dx (- (- tx shift) ind)]
+                    (if (== (rs-continues stk f sch val dx) 1)
+                      (set more 0)
                     (if (and (> dx RS_NEST) (< d RS_DEEP))
                       (do (let [^I32 held (cells-at stk (+ f 4))]
                             (rs-open-list nodes attrs text stk held (- tx shift) sch val cx)
@@ -333,7 +345,7 @@
                               (do (let [^I32 par (cells-at stk (+ f 6))]
                                     (rs-close-top nodes regions stk base)
                                     (rs-open-list nodes attrs text stk par (- tx shift) sch val cx)
-                                    (set more 0))))))))))))))
+                                    (set more 0)))))))))))))))
     (let [^I32 d2 (rs-depth stk base)]
       (if (== d2 0) (return np))
       (return (cells-at stk (+ base (* (- d2 1) RS_FR)))))))

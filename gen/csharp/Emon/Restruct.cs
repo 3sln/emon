@@ -322,6 +322,24 @@ public static class Restruct {
         }
         return 0;
     }
+    internal static int RsContinues(emon.Port.Cells stk, int f, int sch, int val, int dx) {
+        // 1 when the item is the very next of the list whose frame starts at f: its scheme, its value one past the last, and its
+        // text no further off than 60 pt of the list's (a first line indented in some paragraphs and not in others, as a
+        // contract's `(f)` is, is not a list inside `(e)`). A bullet has no value to say it.
+        if ((sch == 1) || (val <= 0)) {
+            return 0;
+        }
+        if (sch != emon.Port.CellsAt(stk, f + 2)) {
+            return 0;
+        }
+        if (val != (emon.Port.CellsAt(stk, f + 3) + 1)) {
+            return 0;
+        }
+        if (RsAbs(dx) <= 6000) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int RsPlaceItem(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells stk, emon.Port.Cells lay, int @base, int c, int np) {
         // The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has
         // left. Answers the new list's node; the frame on top of the stack is its.
@@ -353,7 +371,9 @@ public static class Restruct {
                     shift = cx - fc;
                 }
                 int dx = (tx - shift) - ind;
-                if ((dx > RsNest) && (d < RsDeep)) {
+                if (RsContinues(stk, f, sch, val, dx) == 1) {
+                    more = 0;
+                } else if ((dx > RsNest) && (d < RsDeep)) {
                     int held = emon.Port.CellsAt(stk, f + 4);
                     RsOpenList(nodes, attrs, text, stk, held, tx - shift, sch, val, cx);
                     more = 0;

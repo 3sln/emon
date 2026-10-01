@@ -321,6 +321,24 @@ pub(crate) fn rs_column_x(lay: &mut crate::port::Cells, on: &mut crate::port::Ce
     }
     return 0;
 }
+pub(crate) fn rs_continues(stk: &mut crate::port::Cells, f: i32, sch: i32, val: i32, dx: i32) -> i32 {
+    // 1 when the item is the very next of the list whose frame starts at f: its scheme, its value one past the last, and its
+    // text no further off than 60 pt of the list's (a first line indented in some paragraphs and not in others, as a
+    // contract's `(f)` is, is not a list inside `(e)`). A bullet has no value to say it.
+    if (sch == 1) || (val <= 0) {
+        return 0;
+    }
+    if sch != crate::port::cells_at(stk, f + 2) {
+        return 0;
+    }
+    if val != (crate::port::cells_at(stk, f + 3) + 1) {
+        return 0;
+    }
+    if rs_abs(dx) <= 6000 {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, lay: &mut crate::port::Cells, base: i32, c: i32, np: i32) -> i32 {
     // The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has
     // left. Answers the new list's node; the frame on top of the stack is its.
@@ -352,7 +370,9 @@ pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::C
                 shift = cx - fc;
             }
             let dx: i32 = (tx - shift) - ind;
-            if (dx > RS_NEST) && (d < RS_DEEP) {
+            if rs_continues(stk, f, sch, val, dx) == 1 {
+                more = 0;
+            } else if (dx > RS_NEST) && (d < RS_DEEP) {
                 let held: i32 = crate::port::cells_at(stk, f + 4);
                 rs_open_list(nodes, attrs, text, stk, held, tx - shift, sch, val, cx);
                 more = 0;

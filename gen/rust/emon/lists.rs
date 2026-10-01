@@ -271,8 +271,9 @@ pub(crate) fn ls_symbol(c: i32) -> bool {
     return (c >= 61440) && (c <= 61695);
 }
 pub(crate) fn ls_weak(c: i32) -> bool {
-    // A dash, a star or a middle dot standing alone: a bullet only among siblings of its own kind.
-    return (c == 45) || ((c == 8211) || ((c == 8212) || ((c == 42) || ((c == 8722) || (c == 183)))));
+    // A dash or a middle dot standing alone: a bullet only among siblings of its own kind. (Not `*`: it is the footnote
+    // symbol of a contract's page foot far oftener than a bullet.)
+    return (c == 45) || ((c == 8211) || ((c == 8212) || ((c == 8722) || (c == 183))));
 }
 pub fn ls_wl(wd: &mut crate::port::Cells, w: i32) -> i32 {
     let ts: i32 = wd_get(wd, w, hd_tstart());

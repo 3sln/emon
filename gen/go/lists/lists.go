@@ -325,8 +325,9 @@ func lsSymbol(c int32) bool {
 }
 
 func lsWeak(c int32) bool {
-	// A dash, a star or a middle dot standing alone: a bullet only among siblings of its own kind.
-	return (c == 45) || ((c == 8211) || ((c == 8212) || ((c == 42) || ((c == 8722) || (c == 183)))))
+	// A dash or a middle dot standing alone: a bullet only among siblings of its own kind. (Not `*`: it is the footnote
+	// symbol of a contract's page foot far oftener than a bullet.)
+	return (c == 45) || ((c == 8211) || ((c == 8212) || ((c == 8722) || (c == 183))))
 }
 
 func LsWl(wd *port.Cells, w int32) int32 {

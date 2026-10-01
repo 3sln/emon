@@ -209,8 +209,9 @@
   (return (and (>= c 61440) (<= c 61695))))
 
 (defn ^Bool ls-weak [^I32 c]
-  (comment "A dash, a star or a middle dot standing alone: a bullet only among siblings of its own kind.")
-  (return (or (== c 45) (or (== c 8211) (or (== c 8212) (or (== c 42) (or (== c 8722) (== c 183))))))))
+  (comment "A dash or a middle dot standing alone: a bullet only among siblings of its own kind. (Not `*`: it is the footnote")
+  (comment "symbol of a contract's page foot far oftener than a bullet.)")
+  (return (or (== c 45) (or (== c 8211) (or (== c 8212) (or (== c 8722) (== c 183)))))))
 
 (defn ^:pub ^I32 ls-wl [^Cells wd ^I32 w]
   (let [^I32 ts (wd-get wd w (hd-tstart))
