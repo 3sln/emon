@@ -150,7 +150,7 @@
   (let [^Cells text (new-cells) ^Cells out (new-cells)]
     (assert-eq (lt-find text out (text-blob "see https://example.org/a/b, and")) 1 "a URL with a scheme")
     (assert-eq (cells-at out 0) 4 "it starts at the h")
-    (assert-eq (cells-at out 1) 28 "and ends before the comma")
+    (assert-eq (cells-at out 1) 27 "and ends before the comma")
     (assert-eq (lt-find text out (text-blob "(see www.example.com)")) 2 "www. and a domain")
     (assert-eq (cells-at out 1) 20 "the bracket it did not open is not in it")
     (assert-eq (lt-find text out (text-blob "write to jane.doe@example.org.")) 3 "an address")
