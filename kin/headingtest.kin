@@ -29,6 +29,7 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build]]
+            [emon.columns :refer [lc-copy]]
             [emon.style :refer [st-build st-get st-hget sc-get sfh-body sfh-gap sfh-size
                                 sfk-class sfk-caps sck-chars sck-size]]
             [emon.heading :refer [hd-analyze hd-level hd-marker hd-prior-add hd-prior-outline]]
@@ -89,9 +90,12 @@
   (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
+        ^Cells ii (new-cells) ^Cells al (new-cells)
         ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)]
-    (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger))))
+    (comment "The lines' copy, and no initials in it: these laws read hand-made evidence and the heading analysis has run on `ln`.")
+    (lc-copy ln lt)
+    (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))))
 
 (defn ^I32 ht-model [^Cells wd ^Cells ln ^Cells et ^I32 npages
                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text

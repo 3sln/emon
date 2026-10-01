@@ -20,7 +20,8 @@
             [emon.mscript :refer [jt-end]]
             [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind
                                 node-text-start node-text-len node-region-count node-sub text-at
-                                text-append-utf8 nk-paragraph nk-break nk-text nk-note
+                                text-append-utf8 nk-paragraph nk-break nk-text nk-note nk-initial node-aux node-flags
+                                ifm-drop ifm-margin fl-low-conf al-start al-center al-end al-justify
                                 page-layout-count page-layout-first layout-band layout-col layout-role layout-x0]]
             [emon.json :refer [js-emit]]
             [emon.html :refer [html-emit]]
@@ -28,6 +29,8 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build pa-dump]]
+            [emon.columns :refer [lc-copy]]
+            [emon.initial :refer [in-detect]]
             [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -133,17 +136,27 @@
   (cells-drop et 0)
   (return 0))
 
-(defn ^I32 pt-build [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
+(defn ^I32 pt-prep [^Cells wd ^Cells ln ^Cells et ^I32 npages ^Cells gl ^Cells fo ^:mut ^Cells lt ^:mut ^Cells ii]
+  (comment "The lines' copy `lt` and the initials found in it (`in-detect`), as the Engine prepares them before the heading")
+  (comment "analysis; no locale. Answers the initials found.")
+  (let [^Cells loc (new-cells) ^Cells ls (new-cells) ^Cells lo (new-cells) ^Cells tm (new-cells)]
+    (lc-copy ln lt)
+    (return (in-detect wd gl fo et npages loc lt ls lo tm ii))))
+
+(defn ^I32 pt-build [^Cells wd ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
-                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells hc]
-  (comment "`pa-build`, with the column stage's scratch (`emon.columns`) made here; `hc` is the heading analysis")
-  (comment "(`emon.heading`), empty for the paragraphs alone.")
-  (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells hc
+                    ^:mut ^Cells lt ^:mut ^Cells ii]
+  (comment "`pa-build`, with the column stage's scratch (`emon.columns`) and the alignment's made here; `hc` is the heading")
+  (comment "analysis (`emon.heading`), empty for the paragraphs alone; `lt` and `ii` are the lines' copy and the initials' table,")
+  (comment "prepared by `pt-prep` (the heading analysis reads the same copy).")
+  (let [^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
+        ^Cells al (new-cells)
         ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)]
-    (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger))))
+    (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))))
 
 (defn ^I32 pt-dump [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Text t]
   (comment "`pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.")
@@ -153,15 +166,16 @@
         ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
-        ^Cells hc (new-cells)
+        ^Cells hc (new-cells) ^Cells g0 (new-cells) ^Cells f0 (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
         ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells)
         ^:mut ^I32 p 1]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
-    (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-              lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger)
+    (pt-prep wd ln et npages g0 f0 lt ii)
+    (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
+              lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
     (pa-dump t cf dbg)
     (return 0)))
 
@@ -171,12 +185,13 @@
                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells st]
   (comment "Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.")
   (let [^:mut ^I32 p 1
-        ^Cells hc (new-cells)]
+        ^Cells hc (new-cells) ^Cells g0 (new-cells) ^Cells f0 (new-cells) ^Cells lt (new-cells) ^Cells ii (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
-    (pt-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp hc)
+    (pt-prep wd ln et npages g0 f0 lt ii)
+    (pt-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp hc lt ii)
     (return (model-check nodes attrs regions text pages ledger layout st))))
 
 (defn ^I32 pt-brief [^:mut ^Text t ^Cells nodes ^Cells regions ^Cells text]
@@ -567,9 +582,11 @@
     (pa-pages pg pages)
     (let [^I32 np (quot (cells-len pages) 16)
           ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells)
-          ^Cells htmp (new-cells) ^Cells hpr (new-cells) ^Cells hptxt (new-cells)]
-      (hd-analyze wd ln et gl sf sc hc ws htmp hpr hptxt)
-      (pt-build wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp hc))
+          ^Cells htmp (new-cells) ^Cells hpr (new-cells) ^Cells hptxt (new-cells)
+          ^Cells lt (new-cells) ^Cells ii (new-cells)]
+      (pt-prep wd ln et np gl fnt lt ii)
+      (hd-analyze wd lt et gl sf sc hc ws htmp hpr hptxt)
+      (pt-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp hc lt ii))
     (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
     (js-emit t 1 nodes attrs regions text pages ledger layout)
     (return 0)))
@@ -597,3 +614,161 @@
     (assert-text-span t5 (test-file "para/initial-image.json") 0 (jt-end (test-file "para/initial-image.json")) "initial-image" 0)
     (assert-eq (pt-golden (test-file "corpus/synth/pdf/initial-vector.pdf") t6 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst) 0 "initial-vector runs")
     (assert-text-span t6 (test-file "para/initial-vector.json") 0 (jt-end (test-file "para/initial-vector.json")) "initial-vector" 0)))
+
+(deftest test-real-initial-documents-make-the-golden-models
+  (comment "P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D183; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its")
+  (comment "initial inline, and the `align` of the paragraphs (D184), byte for byte (`para-check` holds them to the HTML).")
+  (let [^Cells ar (new-cells) ^Cells dc (new-cells) ^Cells a (new-cells) ^Cells b (new-cells) ^Cells st (new-cells)
+        ^Cells cx (new-cells) ^Cells ox (new-cells) ^Cells cs (new-cells) ^Cells out (new-cells)
+        ^Cells f0 (new-cells) ^Cells f1 (new-cells) ^Cells f2 (new-cells) ^Cells f3 (new-cells)
+        ^Cells gl (new-cells) ^Cells et (new-cells) ^Cells mk (new-cells) ^Cells fnt (new-cells) ^Cells pg (new-cells)
+        ^Cells wd (new-cells) ^Cells ln (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells mst (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text) ^Text t4 (new-text)]
+    (assert-eq (pt-golden (test-file "corpus/synth/pdf/initial-raised.pdf") t1 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst) 0 "initial-raised runs")
+    (assert-text-span t1 (test-file "para/initial-raised.json") 0 (jt-end (test-file "para/initial-raised.json")) "initial-raised" 0)
+    (assert-eq (pt-golden (test-file "corpus/synth/pdf/initial-firstword.pdf") t2 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst) 0 "initial-firstword runs")
+    (assert-text-span t2 (test-file "para/initial-firstword.json") 0 (jt-end (test-file "para/initial-firstword.json")) "initial-firstword" 0)
+    (assert-eq (pt-golden (test-file "corpus/synth/pdf/initial-columns.pdf") t3 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst) 0 "initial-columns runs")
+    (assert-text-span t3 (test-file "para/initial-columns.json") 0 (jt-end (test-file "para/initial-columns.json")) "initial-columns" 0)
+    (assert-eq (pt-golden (test-file "corpus/synth/pdf/initial-rtl.pdf") t4 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst) 0 "initial-rtl runs")
+    (assert-text-span t4 (test-file "para/initial-rtl.json") 0 (jt-end (test-file "para/initial-rtl.json")) "initial-rtl" 0)))
+
+;; ------------------------------------------------------------------- initials (P4.10)
+
+(defn ^I32 pt-find [^Cells nodes ^I32 kind ^I32 after]
+  (comment "The first node of that kind with an index above `after`, -1 for none.")
+  (let [^I32 n (node-count nodes)
+        ^:mut ^I32 i (+ after 1)]
+    (while (< i n)
+      (do (if (== (node-kind nodes i) kind) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(deftest test-a-drop-initial-joins-its-first-word-and-the-paragraph-is-one
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text)]
+    (comment "An `O` 36 pt on 10 pt text: its cap top is the first line's (within half a size), its baseline in line 2's band,")
+    (comment "lines 1 and 2 start after it, line 3 back at its start edge. One paragraph, `Once upon ...`, the initial an")
+    (comment "inline `initial` (a drop of two lines) holding `O`, then the rest as text; justified, since lines 1 and 2 count")
+    (comment "from the initial's edge. Without a locale the join is flagged: `O` is a word in some language.")
+    (pt-line wd ln et (text-blob "O") 1 7200 10200 9400 13000 0 0 3600)
+    (pt-line wd ln et (text-blob "nce upon a time") 1 9800 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "there was a mill") 1 9800 11500 50000 12700 0 0 1000)
+    (pt-line wd ln et (text-blob "that nobody saw") 1 7200 13000 50000 14200 0 0 1000)
+    (pt-line wd ln et (text-blob "the end of it") 1 7200 14500 30000 15700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "drop: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:Once upon a time there was a mill that nobody saw the end of it;;T:O;T:nce upon a time there was a mill that nobody saw the end of it;" "a drop initial: one paragraph, joined, no space")
+    (let [^I32 ini (pt-find nodes (nk-initial) 0)]
+      (assert-eq (node-sub nodes ini) (ifm-drop) "the form is drop")
+      (assert-eq (node-aux nodes ini) 2 "of two lines")
+      (assert-eq (node-flags nodes ini) (fl-low-conf) "and the join is in doubt")
+      (assert-eq (node-sub nodes 1) (al-justify) "justified: lines 1 and 2 start at the initial's edge"))
+    (comment "A letter divider: a big letter with nothing wrapping it. The line below starts at the same edge, not after the")
+    (comment "letter, so it is no initial and stays a block of its own.")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "A") 1 7200 10000 9500 13400 0 0 3000)
+    (pt-line wd ln et (text-blob "Aardvark an animal here") 1 7200 14000 50000 15200 0 0 1000)
+    (pt-line wd ln et (text-blob "that digs at night") 1 7200 15500 50000 16700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "divider: well formed")
+    (pt-brief t2 nodes regions text)
+    (assert-text t2 "P1:A;P1:Aardvark an animal here that digs at night;" "a letter divider is no initial")
+    (assert-eq (pt-find nodes (nk-initial) 0) -1 "no initial inline")
+    (comment "A margin initial: it hangs left of the column (its end edge before the lines' start), the lines are not")
+    (comment "indented, and there are lines after its two.")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "Q") 1 3000 10200 6200 13000 0 0 3600)
+    (pt-line wd ln et (text-blob "uiet nights in town") 1 7200 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "were rare that year") 1 7200 11500 50000 12700 0 0 1000)
+    (pt-line wd ln et (text-blob "and the lamps burned") 1 7200 13000 50000 14200 0 0 1000)
+    (pt-line wd ln et (text-blob "low until dawn") 1 7200 14500 40000 15700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "margin: well formed")
+    (pt-brief t3 nodes regions text)
+    (assert-text t3 "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;" "a margin initial")
+    (let [^I32 ini2 (pt-find nodes (nk-initial) 0)]
+      (assert-eq (node-sub nodes ini2) (ifm-margin) "the form is margin")
+      (assert-eq (node-aux nodes ini2) 2 "of two lines")
+      (assert-eq (node-flags nodes ini2) 0 "a `Q` is no word: the join is sure"))))
+
+(deftest test-a-right-to-left-initial-is-mirrored
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text)]
+    (comment "The initial at the right (a start edge of -x1), the first two lines to its left, the third back at the right edge.")
+    (pt-line wd ln et (text-blob "B") 1 43000 10200 45000 13000 0 1 3600)
+    (pt-line wd ln et (text-blob "ab cd ef gh") 1 7200 10000 42500 11200 0 1 1000)
+    (pt-line wd ln et (text-blob "ij kl mn op") 1 7200 11500 42500 12700 0 1 1000)
+    (pt-line wd ln et (text-blob "qr st uv wx") 1 7200 13000 45000 14200 0 1 1000)
+    (pt-line wd ln et (text-blob "yz ab cd ef") 1 7200 14500 45000 15700 0 1 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "rtl: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;" "a right-to-left initial")
+    (let [^I32 ini3 (pt-find nodes (nk-initial) 0)]
+      (assert-eq (node-sub nodes ini3) (ifm-drop) "a drop"))))
+
+;; ------------------------------------------------------------------ alignment (P4.11)
+
+(deftest test-a-paragraphs-alignment-is-measured-against-its-fragment
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)]
+    (comment "Justified: three lines flush at both edges of the fragment, the last short.")
+    (pt-line wd ln et (text-blob "aa bb cc dd") 1 7200 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "ee ff gg hh") 1 7200 11500 50000 12700 0 0 1000)
+    (pt-line wd ln et (text-blob "ii jj kk ll") 1 7200 13000 50000 14200 0 0 1000)
+    (pt-line wd ln et (text-blob "mm nn") 1 7200 14500 20000 15700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "justify: well formed")
+    (assert-eq (node-sub nodes 1) (al-justify) "justify")
+    (comment "Left-aligned: a ragged end edge, every start at the edge (the fragment's box is the widest line's).")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "aa bb cc dd") 1 7200 10000 45000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "ee ff gg hh") 1 7200 11500 42000 12700 0 0 1000)
+    (pt-line wd ln et (text-blob "ii jj kk ll") 1 7200 13000 50000 14200 0 0 1000)
+    (pt-line wd ln et (text-blob "mm nn") 1 7200 14500 30000 15700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "start: well formed")
+    (assert-eq (node-sub nodes 1) (al-start) "start")
+    (comment "Right-aligned: a ragged start edge, every end at the edge.")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "aa bb cc dd") 1 12200 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "ee ff gg hh") 1 15200 11500 50000 12700 0 0 1000)
+    (pt-line wd ln et (text-blob "ii jj kk ll") 1 7200 13000 50000 14200 0 0 1000)
+    (pt-line wd ln et (text-blob "mm nn") 1 33000 14500 50000 15700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "end: well formed")
+    (assert-eq (node-sub nodes 1) (al-end) "end")
+    (comment "Centred: equal gaps either side, and the lines differ in width.")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "aa bb cc dd") 1 17200 10000 40000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "ee ff gg hh") 1 12200 11500 45000 12700 0 0 1000)
+    (pt-line wd ln et (text-blob "ii jj kk ll") 1 7200 13000 50000 14200 0 0 1000)
+    (pt-line wd ln et (text-blob "mm nn") 1 25000 14500 32200 15700 0 0 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "center: well formed")
+    (assert-eq (node-sub nodes 1) (al-center) "center")
+    (comment "Right to left, every line ending at the box's LEFT edge (a right-to-left line's end): LOGICALLY `end`, though these")
+    (comment "are the lines the left-to-right case calls `start`; and the same page set flush right is `start`.")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "aa bb cc dd") 1 7200 10000 45000 11200 0 1 1000)
+    (pt-line wd ln et (text-blob "ee ff gg hh") 1 7200 11500 42000 12700 0 1 1000)
+    (pt-line wd ln et (text-blob "ii jj kk ll") 1 7200 13000 50000 14200 0 1 1000)
+    (pt-line wd ln et (text-blob "mm nn") 1 7200 14500 30000 15700 0 1 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "rtl end: well formed")
+    (assert-eq (node-sub nodes 1) (al-end) "right-to-left, flush left: end")
+    (pt-clear wd ln et)
+    (pt-line wd ln et (text-blob "aa bb cc dd") 1 12200 10000 50000 11200 0 1 1000)
+    (pt-line wd ln et (text-blob "ee ff gg hh") 1 15200 11500 50000 12700 0 1 1000)
+    (pt-line wd ln et (text-blob "ii jj kk ll") 1 7200 13000 50000 14200 0 1 1000)
+    (pt-line wd ln et (text-blob "mm nn") 1 33000 14500 50000 15700 0 1 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "rtl start: well formed")
+    (assert-eq (node-sub nodes 1) (al-start) "right-to-left, flush right: start")))

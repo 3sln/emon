@@ -159,14 +159,18 @@
   (let [^I32 w0 (st-ln ln l (lh-first))
         ^:mut ^I32 wn (st-ln ln l (lh-count))
         ^:mut ^I32 i 0
+        ^:mut ^I32 i0 0
         ^:mut ^I32 j 0
         ^:mut ^I32 c 0
         ^:mut ^I32 best -1
         ^:mut ^I32 bestc 0]
     (if (> wn 32) (set wn 32))
+    (comment "A line that opens with a raised initial: its first word is partly the initial and does not vote (P4.10, cell 15).")
+    (if (and (== (rem (st-ln ln l 15) 2) 1) (> wn 1)) (set i 1))
+    (set i0 i)
     (while (< i wn)
       (do (set c 0)
-          (set j 0)
+          (set j i0)
           (while (< j wn)
             (do (if (and (== (st-size (wd-get wd (+ w0 i) (wf-size))) (st-size (wd-get wd (+ w0 j) (wf-size))))
                          (and (== (wd-get wd (+ w0 i) (wf-font)) (wd-get wd (+ w0 j) (wf-font)))

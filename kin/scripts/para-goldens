@@ -10,15 +10,18 @@
 ;; `kin/scripts/emon-rs-build`; the temporary `predict-naive.sh` it replaced is retired, D144).
 ;;
 ;; THE DOCUMENTS are the Chrome-printed synthetic ones whose paragraphs and headings are all there is on the
-;; page (single column, no list, table or initial the naive stage would have to guess at): the paragraphs the
-;; stage writes are exactly the HTML's `<h1>`..`<h6>` and `<p>`, in order.
+;; page (single column or columns, no list or table the naive stage would have to guess at): the paragraphs the
+;; stage writes are exactly the HTML's `<h1>`..`<h6>` and `<p>`, in order. The initials documents are here since P4.10
+;; (D167): an initial is joined to its first word, so the paragraph's text is still the HTML's; `initial-firstletter` is
+;; not (`A long` and `Along` are the same page, SPEC 10.9: without a locale the join is `Along`).
 (require '[clojure.java.io :as io]
          '[clojure.java.shell :as sh]
          '[clojure.string :as str])
 
 (def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
 
-(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "footnotes-endnotes" "initial-image" "initial-vector"])
+(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "footnotes-endnotes" "initial-image" "initial-vector"
+           "initial-raised" "initial-firstword" "initial-columns" "initial-rtl"])
 
 (defn run [& args]
   (let [r (apply sh/sh (concat args [:dir root]))]

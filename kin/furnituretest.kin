@@ -29,6 +29,7 @@
             [emon.pdfmeta :refer [pm-run]]
             [emon.pdfstruct :refer [tg-read tg-join tg-trust]]
             [emon.para :refer [pa-pages pa-build]]
+            [emon.columns :refer [lc-copy]]
             [emon.furniture :refer [fu-find fu-write]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -199,9 +200,11 @@
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
         ^Cells hc (new-cells)
-        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)]
-    (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger))))
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)
+        ^Cells ii (new-cells) ^Cells al (new-cells)]
+    (lc-copy ln lt)
+    (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))))
 
 (defn ^I32 fl-run [^Cells wd ^Cells ln0 ^Cells et ^I32 npages ^I32 trust ^I32 mode ^Cells txt ^Cells md ^Cells lb
                    ^:mut ^Text t]

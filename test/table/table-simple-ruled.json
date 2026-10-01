@@ -34,6 +34,7 @@
             "id": 2,
             "kind": "heading",
             "level": 1,
+            "align": "start",
             "text": "Regional Sales",
             "at": [[1, 72, 94.58, 213.11, 119.57]],
             "src": ["text", "infer"],

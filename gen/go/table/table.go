@@ -10,6 +10,8 @@ import (
 	"emon/port"
 )
 
+const tbHeld int32 = 1073741824
+
 const tbs int32 = 24
 
 const tcs int32 = 16
@@ -75,7 +77,11 @@ func tbRowsOf(c *port.Cells, stride int32) int32 {
 
 func TbClaimed(ln *port.Cells, l int32) int32 {
 	// The table (index + 1) that holds line l, 0 when none does.
-	return evidence.LnGet(ln, l, 15)
+	var c int32 = evidence.LnGet(ln, l, 15)
+	if c >= tbHeld {
+		return (c - tbHeld) + 1
+	}
+	return 0
 }
 
 func tbLess(d *port.Cells, st int32, k1 int32, k2 int32, a int32, b int32) bool {
@@ -929,7 +935,7 @@ func tbClaim(tb *port.Cells, t0 int32, ln *port.Cells, l0 int32, l1 int32) int32
 			if (cx >= port.CellsAt(tb, (k*tbs)+1)) && (cx <= port.CellsAt(tb, (k*tbs)+3)) {
 				if (cy >= port.CellsAt(tb, (k*tbs)+2)) && (cy <= port.CellsAt(tb, (k*tbs)+4)) {
 					if evidence.LnGet(ln, l, 15) == 0 {
-						evidence.LnSet(ln, l, 15, k+1)
+						evidence.LnSet(ln, l, 15, tbHeld+k)
 					}
 				}
 			}
@@ -2291,7 +2297,7 @@ func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port
 	}
 	port.CellsSet(tb, b+14, port.CellsLen(tq))
 	port.CellsPush(tq, best)
-	evidence.LnSet(ln, best, 15, k+1)
+	evidence.LnSet(ln, best, 15, tbHeld+k)
 	var h int32 = evidence.LnGet(ln, best, evidence.LhY1()) - evidence.LnGet(ln, best, evidence.LhY0())
 	var curx1 int32 = evidence.LnGet(ln, best, evidence.LhX1())
 	var cury1 int32 = evidence.LnGet(ln, best, evidence.LhY1())
@@ -2304,7 +2310,7 @@ func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port
 			if (evidence.LnGet(ln, l, evidence.LhX0()) > (curx1 - 100)) && ((evidence.LnGet(ln, l, evidence.LhX0()) - curx1) <= (2 * h)) {
 				if tbAbs(evidence.LnGet(ln, l, evidence.LhBy0())-evidence.LnGet(ln, best, evidence.LhBy0())) <= (h / 3) {
 					port.CellsPush(tq, l)
-					evidence.LnSet(ln, l, 15, k+1)
+					evidence.LnSet(ln, l, 15, tbHeld+k)
 					curx1 = evidence.LnGet(ln, l, evidence.LhX1())
 				}
 			}
@@ -2334,7 +2340,7 @@ func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port
 		}
 		if (pick >= 0) && (above == 1) {
 			port.CellsPush(tq, pick)
-			evidence.LnSet(ln, pick, 15, k+1)
+			evidence.LnSet(ln, pick, 15, tbHeld+k)
 			cury1 = evidence.LnGet(ln, pick, evidence.LhY1())
 			more = 1
 		}

@@ -189,6 +189,8 @@ public static class Tabletest {
         emon.Port.Cells fr = emon.Port.NewCells();
         emon.Port.Cells gp = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells ii = emon.Port.NewCells();
+        emon.Port.Cells al = emon.Port.NewCells();
         emon.Port.Cells lt = emon.Port.NewCells();
         emon.Port.Cells ls = emon.Port.NewCells();
         emon.Port.Cells sd = emon.Port.NewCells();
@@ -230,7 +232,8 @@ public static class Tabletest {
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
         Table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
-        Para.PaBuild(wd, ln, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
+        Columns.LcCopy(ln, lt);
+        Para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         TtBrief(t, nodes, attrs, text);
         return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
@@ -451,6 +454,9 @@ public static class Tabletest {
         emon.Port.Cells htmp = emon.Port.NewCells();
         emon.Port.Cells hpr = emon.Port.NewCells();
         emon.Port.Cells hptxt = emon.Port.NewCells();
+        emon.Port.Cells loc = emon.Port.NewCells();
+        emon.Port.Cells ii = emon.Port.NewCells();
+        emon.Port.Cells al = emon.Port.NewCells();
         emon.Port.Src src = emon.Port.SrcOfBlob(pdf);
         int o = Pdfdoc.PdOpen(src, ar, dc, a, b, st);
         if (o != 0) {
@@ -463,8 +469,10 @@ public static class Tabletest {
         Para.PaPages(pg, pages);
         int np = emon.Port.CellsLen(pages) / 16;
         Table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
-        Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-        Para.PaBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
+        Columns.LcCopy(ln, lt);
+        Initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
+        Heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
+        Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         if (Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return 3;
         }

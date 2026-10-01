@@ -604,7 +604,7 @@ public final class Heading {
         }
         // a line a table holds (the spare cell 15, `tb-claimed`, P5, D178) is a cell, never a heading; it still counts
         // as a neighbour (the heading above a table is followed by it) and in the style classes
-        if (Evidence.lnGet(ln, l, 15) != 0) {
+        if (Evidence.lnGet(ln, l, 15) >= 1073741824) {
             return 0;
         }
         if (Style.stGet(sf, l, Style.sfkClass()) < 0) {

@@ -675,7 +675,7 @@ func hdHeadish(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, s
 	}
 	// a line a table holds (the spare cell 15, `tb-claimed`, P5, D178) is a cell, never a heading; it still counts
 	// as a neighbour (the heading above a table is followed by it) and in the style classes
-	if evidence.LnGet(ln, l, 15) != 0 {
+	if evidence.LnGet(ln, l, 15) >= 1073741824 {
 		return 0
 	}
 	if style.StGet(sf, l, style.SfkClass()) < 0 {

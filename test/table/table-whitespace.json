@@ -34,6 +34,7 @@
             "id": 2,
             "kind": "heading",
             "level": 1,
+            "align": "start",
             "text": "Fund Performance",
             "at": [[1, 72, 94.58, 253.93, 119.57]],
             "src": ["text", "infer"],
@@ -42,6 +43,7 @@
           {
             "id": 3,
             "kind": "paragraph",
+            "align": "start",
             "text": "Second could made part however day number pay now.",
             "at": [[1, 72, 130.17, 339.61, 142.66]],
             "src": ["text", "infer"],

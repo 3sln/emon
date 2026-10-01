@@ -34,6 +34,7 @@
             "id": 2,
             "kind": "heading",
             "level": 1,
+            "align": "start",
             "text": "Grouped Headers",
             "at": [[1, 72, 94.58, 244.04, 119.57]],
             "src": ["text", "infer"],
@@ -42,6 +43,7 @@
           {
             "id": 3,
             "kind": "paragraph",
+            "align": "start",
             "text": "The own such head where often often would left.",
             "at": [[1, 72, 130.17, 306.77, 142.66]],
             "src": ["text", "infer"],
@@ -403,6 +405,7 @@
           {
             "id": 45,
             "kind": "paragraph",
+            "align": "start",
             "text": "Three feet with its she five top much now.",
             "at": [[1, 72, 279.42, 273.78, 291.91]],
             "src": ["text", "infer"],

@@ -5,6 +5,7 @@ package emon;
 
 
 public final class Table {
+    public static final int TB_HELD = 1073741824;
     public static final int TBS = 24;
     public static final int TCS = 16;
     public static final int RLS = 8;
@@ -47,7 +48,11 @@ public final class Table {
     }
     public static int tbClaimed(emon.Port.Cells ln, int l) {
         // The table (index + 1) that holds line l, 0 when none does.
-        return Evidence.lnGet(ln, l, 15);
+        int c = Evidence.lnGet(ln, l, 15);
+        if (c >= TB_HELD) {
+            return (c - TB_HELD) + 1;
+        }
+        return 0;
     }
     public static boolean tbLess(emon.Port.Cells d, int st, int k1, int k2, int a, int b) {
         // Does row a of d come before row b: by field k1, then k2, then the row.
@@ -873,7 +878,7 @@ public final class Table {
                 if ((cx >= emon.Port.cellsAt(tb, (k * TBS) + 1)) && (cx <= emon.Port.cellsAt(tb, (k * TBS) + 3))) {
                     if ((cy >= emon.Port.cellsAt(tb, (k * TBS) + 2)) && (cy <= emon.Port.cellsAt(tb, (k * TBS) + 4))) {
                         if (Evidence.lnGet(ln, l, 15) == 0) {
-                            Evidence.lnSet(ln, l, 15, k + 1);
+                            Evidence.lnSet(ln, l, 15, TB_HELD + k);
                         }
                     }
                 }
@@ -2193,7 +2198,7 @@ public final class Table {
         }
         emon.Port.cellsSet(tb, b + 14, emon.Port.cellsLen(tq));
         emon.Port.cellsPush(tq, best);
-        Evidence.lnSet(ln, best, 15, k + 1);
+        Evidence.lnSet(ln, best, 15, TB_HELD + k);
         int h = Evidence.lnGet(ln, best, Evidence.lhY1()) - Evidence.lnGet(ln, best, Evidence.lhY0());
         int curx1 = Evidence.lnGet(ln, best, Evidence.lhX1());
         int cury1 = Evidence.lnGet(ln, best, Evidence.lhY1());
@@ -2206,7 +2211,7 @@ public final class Table {
                 if ((Evidence.lnGet(ln, l, Evidence.lhX0()) > (curx1 - 100)) && ((Evidence.lnGet(ln, l, Evidence.lhX0()) - curx1) <= (2 * h))) {
                     if (tbAbs(Evidence.lnGet(ln, l, Evidence.lhBy0()) - Evidence.lnGet(ln, best, Evidence.lhBy0())) <= (h / 3)) {
                         emon.Port.cellsPush(tq, l);
-                        Evidence.lnSet(ln, l, 15, k + 1);
+                        Evidence.lnSet(ln, l, 15, TB_HELD + k);
                         curx1 = Evidence.lnGet(ln, l, Evidence.lhX1());
                     }
                 }
@@ -2236,7 +2241,7 @@ public final class Table {
             }
             if ((pick >= 0) && (above == 1)) {
                 emon.Port.cellsPush(tq, pick);
-                Evidence.lnSet(ln, pick, 15, k + 1);
+                Evidence.lnSet(ln, pick, 15, TB_HELD + k);
                 cury1 = Evidence.lnGet(ln, pick, Evidence.lhY1());
                 more = 1;
             }

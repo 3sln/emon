@@ -79,6 +79,7 @@
             "id": 2,
             "kind": "heading",
             "level": 1,
+            "align": "start",
             "text": "Purchase Ledger",
             "at": [[1, 72, 94.58, 233.79, 119.57]],
             "src": ["text", "infer"],
@@ -5093,6 +5094,7 @@
           {
             "id": 585,
             "kind": "paragraph",
+            "align": "center",
             "text": "2",
             "at": [[2, 303.49, 752.07, 308.5, 761.07]],
             "src": ["text", "infer"],
@@ -5108,6 +5110,7 @@
           {
             "id": 587,
             "kind": "paragraph",
+            "align": "center",
             "text": "3",
             "at": [[3, 303.49, 752.07, 308.5, 761.07]],
             "src": ["text", "infer"],

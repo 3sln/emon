@@ -49,6 +49,9 @@
                               bit-and]]))
 
 ;; strides
+;; Cell 15 of a line the tables hold is TB_HELD + the table's index (D178; D186): a bit of its own, so that the initials' codes
+;; (`emon.initial`, small, signed) never meet it. `emon.initial` and `emon.columns` know the value as 1073741824.
+(defconst ^I32 TB_HELD 1073741824)
 (defconst ^I32 TBS 24)
 (defconst ^I32 TCS 16)
 (defconst ^I32 RLS 8)
@@ -92,7 +95,9 @@
 
 (defn ^:pub ^I32 tb-claimed [^Cells ln ^I32 l]
   (comment "The table (index + 1) that holds line l, 0 when none does.")
-  (return (ln-get ln l 15)))
+  (let [^I32 c (ln-get ln l 15)]
+    (if (>= c TB_HELD) (return (+ (- c TB_HELD) 1)))
+    (return 0)))
 
 ;; ------------------------------------------------------------------ sorting
 
@@ -789,7 +794,7 @@
                       ^I32 cy (quot (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1))) 2)]
                   (if (and (>= cx (cells-at tb (+ (* k TBS) 1))) (<= cx (cells-at tb (+ (* k TBS) 3))))
                     (if (and (>= cy (cells-at tb (+ (* k TBS) 2))) (<= cy (cells-at tb (+ (* k TBS) 4))))
-                      (if (== (ln-get ln l 15) 0) (ln-set ln l 15 (+ k 1))))))
+                      (if (== (ln-get ln l 15) 0) (ln-set ln l 15 (+ TB_HELD k))))))
                 (set l (+ l 1))))
           (set k (+ k 1))))
     (return 0)))
@@ -1811,7 +1816,7 @@
     (if (< best 0) (return 0))
     (cells-set tb (+ b 14) (cells-len tq))
     (cells-push tq best)
-    (ln-set ln best 15 (+ k 1))
+    (ln-set ln best 15 (+ TB_HELD k))
     (let [^I32 h (- (ln-get ln best (lh-y1)) (ln-get ln best (lh-y0)))
           ^:mut ^I32 curx1 (ln-get ln best (lh-x1))
           ^:mut ^I32 cury1 (ln-get ln best (lh-y1))
@@ -1824,7 +1829,7 @@
               (if (and (> (ln-get ln l (lh-x0)) (- curx1 100)) (<= (- (ln-get ln l (lh-x0)) curx1) (* 2 h)))
                 (if (<= (tb-abs (- (ln-get ln l (lh-by0)) (ln-get ln best (lh-by0)))) (quot h 3))
                   (do (cells-push tq l)
-                      (ln-set ln l 15 (+ k 1))
+                      (ln-set ln l 15 (+ TB_HELD k))
                       (set curx1 (ln-get ln l (lh-x1)))))))
             (set l (+ l 1))))
       (while (and (== more 1) (< rounds 6))
@@ -1842,7 +1847,7 @@
                   (set l (+ l 1))))
             (if (and (>= pick 0) (== above 1))
               (do (cells-push tq pick)
-                  (ln-set ln pick 15 (+ k 1))
+                  (ln-set ln pick 15 (+ TB_HELD k))
                   (set cury1 (ln-get ln pick (lh-y1)))
                   (set more 1)))))
       (cells-set tb (+ b 15) (- (cells-len tq) (cells-at tb (+ b 14)))))

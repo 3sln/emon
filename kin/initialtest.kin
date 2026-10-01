@@ -1,0 +1,79 @@
+;; Laws for `emon.initial`'s join (P4.10; SPEC 10.9; D108, D183), on every target.
+;;
+;; WHAT THE PAGE CANNOT SAY is whether a one-letter initial is a word of its own: `A` + `long` and `Along` are the same
+;; 4.5 pt gap and no space glyph. `in-join` answers 0 (joined, sure), 1 (joined, flagged low-conf) or 2 (a space): joined
+;; is the default; flagged when the letter is a word in its own right in the locale's one-letter table (the union of the
+;; tables without a locale); and with English, the first word after the initial decides when a list knows it (the
+;; geometry of the detection is in `kin/paratest.kin`, on hand-made lines and on the files).
+(ns emon.initialtest
+  (:require [emon.lang :refer [I32 Blob Cells]]
+            [emon.test :refer [deftest assert-eq new-cells text-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-push cells-drop]]
+            [emon.initial :refer [in-lang in-join]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 it-put [^:mut ^Cells c ^Blob b]
+  (comment "The ASCII text of b as code points appended to c; answers where they start.")
+  (let [^I32 start (blob-len b)
+        ^:mut ^I32 i 0]
+    (while (< i start)
+      (do (cells-push c (blob-u8 b i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 it-join [^Cells loc ^I32 cp ^Blob word]
+  (comment "`in-join` for an initial of the one code point cp before `word`.")
+  (let [^Cells et (new-cells)]
+    (it-put et word)
+    (return (in-join loc cp et 0 (blob-len word)))))
+
+(defn ^I32 it-lang [^Blob tag]
+  (let [^Cells loc (new-cells)]
+    (it-put loc tag)
+    (return (in-lang loc))))
+
+(deftest test-a-locale-tag-names-a-language
+  (assert-eq (it-lang (text-blob "")) 0 "no tag")
+  (assert-eq (it-lang (text-blob "e")) 0 "one letter is no tag")
+  (assert-eq (it-lang (text-blob "en")) 1 "en")
+  (assert-eq (it-lang (text-blob "EN-us")) 1 "case does not matter, a region follows")
+  (assert-eq (it-lang (text-blob "en_GB")) 1 "an underscore too")
+  (assert-eq (it-lang (text-blob "de-CH")) 2 "de")
+  (assert-eq (it-lang (text-blob "fr")) 3 "fr")
+  (assert-eq (it-lang (text-blob "es-419")) 4 "es")
+  (assert-eq (it-lang (text-blob "pt-BR")) 5 "pt")
+  (assert-eq (it-lang (text-blob "it")) 6 "it")
+  (assert-eq (it-lang (text-blob "nl-BE")) 7 "nl")
+  (assert-eq (it-lang (text-blob "zh-Hans")) 99 "a language without a table")
+  (assert-eq (it-lang (text-blob "english")) 99 "a word is not a tag"))
+
+(deftest test-the-join-without-a-locale
+  (let [^Cells none (new-cells)]
+    (assert-eq (it-join none 65 (text-blob "long")) 1 "`A` + `long`: joined, flagged (the union of the tables has `A`)")
+    (assert-eq (it-join none 73 (text-blob "t")) 1 "`I` + `t`: flagged too")
+    (assert-eq (it-join none 69 (text-blob "verything")) 1 "`E` is a word in Spanish, Italian, Portuguese")
+    (assert-eq (it-join none 84 (text-blob "he")) 0 "`T` + `he`: no language has a word `T`")
+    (assert-eq (it-join none 81 (text-blob "uiet")) 0 "`Q` + `uiet`")
+    (assert-eq (it-join none 65 (text-blob "")) 1 "no word after it: still flagged")))
+
+(deftest test-the-join-with-a-locale
+  (let [^Cells en (new-cells) ^Cells de (new-cells) ^Cells fr (new-cells) ^Cells zh (new-cells)]
+    (it-put en (text-blob "en-US"))
+    (it-put de (text-blob "de"))
+    (it-put fr (text-blob "fr"))
+    (it-put zh (text-blob "zh"))
+    (comment "English lists: the words a one-letter word is followed by, and the rest of a word the letter begins.")
+    (assert-eq (it-join en 65 (text-blob "long")) 2 "`A` + `long`: a space, the letter is a word")
+    (assert-eq (it-join en 73 (text-blob "was")) 2 "`I` + `was`")
+    (assert-eq (it-join en 73 (text-blob "t")) 0 "`I` + `t`: `It`, sure")
+    (assert-eq (it-join en 65 (text-blob "t")) 0 "`A` + `t`: `At`")
+    (assert-eq (it-join en 79 (text-blob "nce")) 0 "`O` + `nce`: `Once`")
+    (assert-eq (it-join en 65 (text-blob "xyzzy")) 1 "a word neither list knows: joined, flagged")
+    (assert-eq (it-join en 84 (text-blob "he")) 0 "`T` is no word")
+    (assert-eq (it-join en 97 (text-blob "long")) 2 "a lower-case letter is read as its capital")
+    (comment "A language with a one-letter table and no list joins and flags; one without the letter joins.")
+    (assert-eq (it-join de 79 (text-blob "ma")) 1 "German `O`")
+    (assert-eq (it-join de 65 (text-blob "long")) 0 "German has no one-letter `A`")
+    (assert-eq (it-join fr 192 (text-blob "propos")) 1 "French `À`")
+    (assert-eq (it-join zh 65 (text-blob "long")) 1 "a language without a table: the union")))

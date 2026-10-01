@@ -272,6 +272,11 @@ pub(crate) fn lc_split(wd: &mut crate::port::Cells, mut lt: &mut crate::port::Ce
         crate::port::cells_push(lt, v);
         f += 1;
     }
+    // Cell 15 of a row is the initials' (P4.10, `emon.initial`), or a table's claim (kept: a piece of a line a table holds is held too, D186): the piece that is new does not open the paragraph its
+    // parent does, and its first word is not a raised initial's.
+    if crate::port::cells_at(lt, (l * 16) + 15) < 1073741824 {
+        crate::port::cells_set(lt, (nl * 16) + 15, 0);
+    }
     lc_piece(wd, lt, l, w0, cut);
     lc_piece(wd, lt, nl, w0 + cut, wn - cut);
     crate::port::cells_push(ls, nl);

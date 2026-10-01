@@ -1731,7 +1731,7 @@ analysis beyond "top-to-bottom lines on a single column".
   zh, ja), dehyphenation with emon's own Liang `hyphen` (D021, D029).
 - [ ] P4.9 — Code blocks, quotes, formulas (placeholder by font/glyph
   signals), form fields into the flow.
-- [ ] P4.10 — Initials on the text layer (SPEC 10.9, D108, D109; new
+- [x] P4.10 — Initials on the text layer (SPEC 10.9, D108, D109; new
   `kin/initial.kin`). *After P1.8 and P1.12* (it reads v2 glyph sizes,
   baselines and fonts), *before P4.2 and P4.4* (the inventory and heading
   candidates must already exclude initials). *Brief*: the candidate, drop,
@@ -1750,7 +1750,39 @@ analysis beyond "top-to-bottom lines on a single column".
   `first-word-acc` 1.0 except the declared `A`/`I` word cases,
   `initial-false-heading` 0, and `initial-letter-headings` keeps its three
   headings; the four real files of D108 are checked by hand in the entry.
-- [ ] P4.11 — Alignment (SPEC 10.10, D110; `kin/align.kin`). *After P4.1*
+  **DONE (D183, D185).** `kin/initial.kin`, wired into `pa-build` right after `lc-copy` and before `pa-columns`, and in `attempt()` of
+  both hosts (the glyphs, the fonts and the locale as code points are new arguments). Measured with `bb accuracy`, the Rust Engine
+  over the 55 synthetic documents (`pdf/all`): `initial-p` 0 -> 1.0, `initial-r` 0 -> 0.8696 (20 of 23: the three that are left are
+  `initial-image` and `initial-vector`, glyph-less, P6.7's), `initial-f1` 0 -> 0.9302, `initial-form-acc` 0 -> 1.0, `first-word-acc`
+  0.0435 -> 0.6522 (the rest are the declared `A`/`I` cases: no locale joins, `A` + `long` is `Along`; with `--locale=en` it is `A long`),
+  `initial-false-heading` 0 (the heading stage is not in yet: the divider letters of `initial-letter-headings` stay paragraphs of
+  their own and the three headings are P4.4's to keep), and on the initials documents `cer` 0.005534 -> 0.001383 and `wer`
+  0.018251 -> 0.009642 (`pdf/initials`). The four real files of D108, by hand: `layout/pdfa-eng-wds` 0182448 p1 is one paragraph
+  `THE BUREAU has designed and constructed ...` (a drop `T` of two lines whose baseline is its second line's: the text layer made the
+  `T` a glyph of that line, and the stage takes it out and puts it first), 4271234 p2 a drop `B` of three lines, 0795114 p2 a drop `W`
+  of two, 0116458 a drop of two on p1 (`O`, the first word `On`, whose baseline is the second line's), p3 (`I`) and p4 (`G`, and a
+  `W`). A survey of 243 + 160 files of `corpus/` (every 6th of `layout`, `multilingual`, `forms`, `formats`, `tables/gov-reports`;
+  every 14th of `doclaynet`, `financial`, `tables`) found 1 more true drop cap (1085401 `S`, 4788866 `S`+`T. LUKE`), Russell's
+  chapter openers (`4904875`: fifteen, `IS there`, `THE word`), a raised `m` (0422963), and two kinds of false positive that
+  are now rules (D183): a column of lettered labels (`2983077`: `B` `Domestic ...`) and statistic callouts (`3794508`: `89%`).
+  *Where it differs from the brief*: `/CapHeight` is read when `fonts` has one (`fnf-capheight`, -1 until a reader writes it) but
+  no reader does: the descriptor reader, its name table and the evidence goldens (`capheight` would appear in every dump) are
+  P1.12's and a change to all of them for a fallback that works (0.7, and a per-script value) is not this item's; the join
+  tables are `defdata` in `initial.kin` and, instead of waiting for P4.8, have English lists (D169).
+  *Still wrong*: the join does not ask a tagged tree or `/ActualText` for the space (SPEC 10.9: "a space only when a healthy tagged tree
+  or `/ActualText` holds one"): the marks are not read here, so a tagged file's `A long` is still the lists' or the flag's decision;
+  a glyph-less initial (P6.7); a drop initial whose paragraph has one line (no line N+1 and N = 1: not found); an
+  initial in a table cell or a figure (its geometry is found, and it is then a paragraph with an initial inside it); a margin
+  initial at the end of a column with no lines after its N is recorded as a drop (the two cannot be told apart there); a
+  CJK paragraph's lines are still joined with a space (`initial-cjk` `wer` 5.5: not this stage's, SPEC 3.6 has no CJK rule yet).
+  *Learnt*: Chrome's floats (the whole synthetic corpus) are one placement of the baseline and print is another: the initial
+  stands on the baseline of its LAST line, which the text layer then makes a glyph of that line (and a line's baseline
+  segment starts at the first glyph's origin, so `0116458`'s first line has a slanted baseline and is not below its second); a
+  stage that reads only the synthetic corpus would have found 20 of 23 and none of the real ones. A Hebrew `ב` is not 0.7 of its
+  size tall (the cap-top rule failed `initial-rtl` by 1.4 pt until caseless scripts got their own ratio and an upward tolerance), and a
+  CJK glyph's baseline is not where the ink starts (a quote mark `「` took the alphabetic ratio of the letter's script).
+  *Commit*: on this branch (D037).
+- [x] P4.11 — Alignment (SPEC 10.10, D110; `kin/align.kin`). *After P4.1*
   (it needs the fragment boxes); the cell part is P5.3's. *Brief*: the
   SPEC 10.10 tests and single-line rules, tolerance and `align-min` as
   named settings, base direction by P4.1's `bidi` (UAX #9 P2-P3); `align`
@@ -1758,6 +1790,19 @@ analysis beyond "top-to-bottom lines on a single column".
   `align-justify-hyphen`, `align-rtl` and the column documents: `align-acc`
   at least 0.98 and `align-wrong` at most 0.01; `align-cov` recorded
   (single lines lower it by design).
+  **DONE (D184).** `kin/align.kin`, called from `pa-build`: `pa-al-add` per line and a marker per block at its flush, `al-pass` after the
+  last close. `pdf/all`: `align-acc` 0 -> 1.0, `align-wrong` 0, `align-cov` 0 -> 0.3976 (`paragraph` 0.85, `heading` 0.9412, `caption`
+  and `cell` 0: the table cells are P5.3's and the one caption's fragment is its own box; of the gold's 83 aligned blocks 45 are cells).
+  `align-paragraphs`: 1.0 and cov 0.643, `align-justify-hyphen` 1.0 and 0.615, `align-rtl` 1.0 and 0.556. The pass runs over the
+  stream of marked blocks, so a stage that retypes a paragraph (a heading from P4.4, a caption) runs `al-pass` after it and the
+  value goes to the right attribute (`node-set-align` knows the kinds).
+  *Where it differs from the brief*: the cell part is P5.3's as briefed; the base direction is the lines' own (`lh-dir`, the
+  text layer's UAX #9 result per line) and not a second P2-P3 over the text: a paragraph's lines all read one way (the paragraph
+  builder breaks on a change), and it is what `bidi` has already decided.
+  *Still wrong*: a block of two lines that are both flush at both edges has no value (justify wants one non-last line more); a
+  flush-start single line in a class with justified multi-line blocks gets none (it may be their last line); a centred caption
+  alone in its fragment (its own box is the fragment's) has none.
+  *Commit*: on this branch (D037).
 
 ## Phase 5 — Tables
 
@@ -5959,6 +6004,95 @@ page from the Engine (it would hold the open paragraph across calls: the paragra
 **Decision**: table B on page p+1 continues table A on page p when A is the last table of its page and B the first of its page, they have the same number of columns with every boundary within 1/60 of the width (at least 5 pt), no line outside the page's furniture zones (the top and bottom eighth) lies under A or over B, B has no caption or has A's label again, and B has no head rows or its head rows say, cell for cell and word for word, what A's say. B's repeated head rows are dropped to the ledger as `duplicate-header-row` (their box and text) at emission and A's table node takes B's other rows, `continued` is the number of pages spanned, A's foot is not a foot (it was a row before the break). Chains of three pages or more link tail to tail. Not done: a row split across the break (flagged `reconstructed`), a "(continued)" line that is not a caption of the table's own label, the page furniture zone as a decision (P4.3 decides furniture; the eighths are a stand-in).
 **Measured** (not a gate; `corpus/_gold`): ICDAR 2013 (66 PDFs, human-annotated, 66 scored): `block-table` P 0.78, R 0.86, F1 0.82 (IoU 0.5), `table-teds-lite` 0.48, `table-teds-struct-lite` 0.68. cTDaR 2019 and FinTabNet-OTSL are image datasets: `emon-rs` refuses them as `unsupported-format` until P6.1's raster intake, so there is nothing to score. The synthetic corpus (`bb accuracy`, `pdf/all`): `table-teds-lite` 0.83, `table-teds-struct-lite` 0.89, `block-table` P 1.0 R 0.89, `table-continued-acc` 0.89 (the misses are `bank-statement`'s key/value `form` table, P5.5, and `invoice`'s two-column totals, which score under the whitespace threshold); the eight table documents themselves score 1.0 except the partial table's last row, whose gold spans three columns where the text spans two. The ICDAR failures that remain are a table taking the rows above it into its region, a header over a column whose first cell is empty (the gold has three cells, a grid has four), superscripts splitting rows, and chunks that touch. Survey of 88 public PDFs (ICDAR, gov reports, arXiv, derived): no panic, 3 to 17% of the words of a paper in tables.
 **Held to**: `table-multipage-thead`, `-no-thead`, `-nohead-repeat` (TEDS-lite 1.0, `table-continued-acc` 1.0) and `table-consecutive-distinct` (two tables on consecutive pages that must stay two).
+### D183 — Initials are found on the lines' copy, right after lines and before the column stage; the baseline of a drop initial is one of three places, and a rule rejects labels and statistics (P4.10; D108, D109, SPEC 10.9)
+**Decision**: `kin/initial.kin` (`in-detect`) is run by BOTH Engines right after `lc-copy` (the lines' copy `lt`, which `pa-build` now takes
+prepared) and BEFORE `hd-analyze` (P4.2/P4.4, D170-D172, which reads `lt` and not the evidence), so the style inventory, the heading
+analysis, the column stage and the paragraph builder never see an initial as a line. A drop or margin initial's line is turned a quarter
+turn (`rot` 9000: not upright, which the style and heading stages skip) and `in-retire`, the first thing `pa-build` does, takes it off its page
+(page 0); `st-dom` skips a raised first word as `pa-dom` does. It reads words, lines,
+etext, and for an initial inside a line the glyphs (`gl`) and fonts (`fo`), and rewrites the copy `lt`. **A line of its own** (what
+Chrome's floats give: the whole synthetic corpus): a one-word line of at most 12 code points that holds a letter or digit (one
+with a digit or a sign in it, `89%`, is a statistic and no initial), at least `initial-min` 2.0 times the page's median line size
+(a pre-filter, so the work is not quadratic) and 2.0 times line 1's. Line 1 is the highest line that reads the same way, starts
+after the initial's end edge (a quarter of its size of overlap, 1.5 sizes of gap) and has its cap top within half a size of the
+initial's. N is the first line whose band holds the initial's baseline (a quarter size of slack), N >= 2; a DROP has exactly N
+indented lines and line N+1 back at the start edge within half a size, or none; a MARGIN has every line at one start edge beyond
+the initial's end edge and lines after its N. The initial's line leaves the page (`page` 0), lines 1..N of a drop start at its
+start edge (so the indent rule and the column box see a paragraph at the margin), and line 1 is marked as the paragraph's first.
+**In a line** (print: the initial stands on the baseline of its last line, and the text layer made it a glyph of THAT line, or of the
+first line's first word with a later line's baseline): the leading glyphs (at most three, or the whole word) of a line's first word
+at least 2.0 times the size of the glyphs after them, saying the text they say. On the line's own baseline with lines above it
+that start after it, the highest of them with its cap top where the initial's is and the line below back at the start edge: a drop
+whose paragraph begins at the highest of those lines, the initial's code points skipped in its own (cell 15 holds minus their
+number: `pa-add-line`, `pa-first-cp`). On the line's baseline with none: raised, line 2 at its start edge. Below the line's baseline
+(the initial and the rest of its word share the first line, the baseline is a later line's): a drop in the first line's first word,
+lines 2..N after it, line N+1 back. In all three the line's box becomes the box of its other glyphs, and its baseline the
+first of theirs (a line's baseline segment starts at its first glyph's origin, the initial's, and `0116458`'s first line was
+`not below` its second). **Cap tops**: the font's `/CapHeight` when `fonts` has one, else 0.7 of the size for a cased script, 0.6 for
+the other caseless scripts (Hebrew, Arabic, Indic, Thai) with the candidate's cap top allowed to lie 0.15 of its size above line 1's,
+0.88 for CJK and its punctuation. **Rejected**: a big letter with nothing wrapping it (a letter divider: the line below is not
+beside it); a big letter whose first word after it is in title case (`B` `Domestic and international`: a column of lettered labels,
+`2983077`); a word with a digit or a sign (statistic callouts, `3794508`, `6994074`). **How the paragraph is told**: cell 15 of the
+target line's row of `lt` (a spare cell of the evidence line stride; cleared at the start, cleared again in the new piece of a line
+`lc-split` makes) is `(row of ii + 1) * 4`, plus 1 where the first word is partly the initial (it does not vote on the line's size
+and style: `pa-dom`), plus 2 where the initial is its whole first word and joins the next with no space; `ii` is the table (stride 12:
+form, lines, initial's line, target line, code points, box, word, join). `pa-ini-start` puts a separate line's text at the head of
+`raw` and records the initial in the paragraph's first fragment row (`fr` is 10 wide now); `pa-flush` writes `initial` (`sub` the
+form, `aux` the lines, `src` {text, infer}, `conf` 800, or 500 and `low-conf` when the join is in doubt) holding a `text` child, then the rest as
+a `text` child, and for a paragraph on one page the paragraph's own `text` too, equal to the two (D052); on several pages only the
+inlines' text, as before. The paragraph's region takes in the initial's box. A new inline never has `at` of its own.
+**Why**: SPEC 10.9 puts detection before blocks because a heading stage or a paragraph builder that sees `O` as a line has already
+broken what a detector would have kept; the copy is the only place a stage may rewrite lines (the evidence is not touched). The three
+baselines are three producers' work: the first is Chrome's float, the others are what `0182448` and `0116458` were laid out with, and a
+stage written on the first alone would have found none of the four real files of D108 but one.
+**Alternatives**: detection after blocks (the paragraph builder has split the paragraph and a heading stage has made the letter a
+heading); the glyph list for every line (a glyph read per line: only the first word of a line with a large leading glyph is read);
+a separate scratch `im` map from a line to its initial (`lc-split` makes rows it does not index: cell 15 clears itself with the row);
+reading `/CapHeight` in this item (the descriptor reader, its generated name table and every evidence golden would change for a fallback that
+works: left to a reader that is P1.12's; the code reads the cell when it is set).
+- [ ] **Signed off** (maintainer)
+
+### D184 — Alignment as built: per line against the fragment box, a verdict with a confidence, a second pass by style class for the single flush-start line (P4.11; D110, SPEC 10.10)
+**Decision**: `kin/align.kin`. `pa-build` records, for every line of every block (`pa-al-add`), the start and end gaps against the box of the
+fragment the line sits in (`cf` x0 and x1, each from the line's own side: a right-to-left line is measured from the right, so
+`start` and `end` are logical), its size and style bits, in the stream `al` (rows of 4), and closes the block with a marker row
+(`al-mark`); `al-pass` runs after the last close. With t a quarter of the first line's size and a first-line indent taken out of line 1's start
+gap when every other line starts at the edge: `justify` is at least three lines, every non-last line within t at both edges and the
+last at the start; `start` every start within t and the end edge ragged (a non-last end gap above t, or a spread above 2t over the
+non-last lines); `end` every end within t and a start spread above 2t; `center` |S - E| <= t on every line and an S spread above
+2t. A single line is `center` (S and E at least 4t, within t of each other) or `end` (E within t and S at least 8t: an indented
+line that fills its row is not right-aligned). The confidence is 400 + 100 for each line after the first that agrees (at most four) + up to
+200 for the margin + 100 where the ragged edge is plain; `align-min` is 800 (named setting, `al-min`; Phase 10 calibrates). A single
+flush-start line (S <= t, E > t) is the second pass's: its style class (size within a twentieth, style bits) is looked up in
+the tally the multi-line decided blocks made: all `start` makes it `start`, any other value leaves it with none (it may be a justified
+block's last line), a class with no multi-line block (a heading, a label) makes it `start`. At most 64 classes are tallied. The pass is
+over the marked blocks of the whole stream, so a stage that retypes a paragraph runs it after: `node-set-align` writes `sub` of a paragraph and
+`fk-align` of a heading, caption or cell, and refuses justify on a cell (D131).
+**Why**: against the block's own box everything is justified (D110); the fragment box is what P4.1 makes. The single-line rule is the one
+D110 calls for ("by its style class's majority"); a heading is never justified, so a class of single lines is `start`. The pass is
+document-wide because a class is: the 20-point bold lines of `align-justify-hyphen` have no multi-line peer and are still `start` in the gold.
+**Alternatives**: the verdict at each flush (the single-line rule needs the class of blocks that come later); one quarter-size tolerance for every
+block (a one-line `end` that is a full row with an indent); a decimal value for cells (D110).
+- [ ] **Signed off** (maintainer)
+
+### D185 — Joining an initial: joined by default and flagged when the letter could be a word; English lists decide with a locale; a whole enlarged word is followed by a space (P4.10; D108, D109, SPEC 10.9)
+**Decision**: `in-join` answers 0 (joined, sure), 1 (joined, `low-conf`) or 2 (a space). A one-letter initial that is a word of its own in the
+locale's table is flagged: `en` A I O; `de` O; `fr` A À Y O Ô; `es` A E O U Y; `pt` A E O; `it` A E O È; `nl` A U; no locale, or a language without a
+table: the union (`defdata in-one`). With `en` the first word after the initial decides where a list knows it: a word in the list of
+what `A` or `I` is followed by (`long`, `few`, `was`, `have`...) is a space (`A long`, `I was`), a word in the list of what a
+letter begins (`t`, `s`, `nd`, `nce`...) is a join and sure (`It`, `At`, `Once`); a word in neither is joined and flagged. The lists are
+`defdata in-follow`, English only, small, and say so (`kin/initialtest.kin` has every case); a language without lists joins and flags.
+A whole enlarged first word of two code points or more (`IT`, `ONCE`) is a word: a space follows, unless its script is written without
+them (CJK); `“N` (an opening mark and a letter) is joined; a digit initial is joined. A raised or in-line initial that is only part of
+its word has nothing to join; one that is the whole first word (`T` of `T HE BUREAU`) takes the same decision against the next word, and joined
+means the line's text is read with no space after it (cell 15, bit 2). The locale reaches the stage as its code points, an argument
+of `pa-build`; it was a setting that decided nothing.
+**Why**: the page cannot say whether `A long` is `Along` (SPEC 10.9: the same 4.5 pt gap and no space glyph); joined is the better default
+(`It`, `In`, `At`, `As` open more paragraphs than `I` and `A`), flagged says where it might be wrong, and with a locale the one place
+a lexicon can help is the one the maintainer's novels have most. The union flags `E` and `U` too: a document with no locale gets more
+flags than a document with one, which is what no locale means.
+**Alternatives**: no lists (the default is correct for `It`, wrong for `A long` and `I was`, which a locale-aware reader of a novel meets every page); a lexicon
+of the language's words (SPEC 17.4: the maintainer's call, still open); a space by default (wrong for the commonest openings).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here
@@ -6095,3 +6229,8 @@ them; offer them upstream when they have proved general.
 - **Key/value extraction** for scanned forms (FUNSD-style) beyond AcroForm.
 - **Other inputs**: XPS/OXPS (fixed-layout like PDF), DjVu.
 - **Signature validation** (cryptographic) — out of scope unless asked.
+
+### D186 — A table's claim on a line and the initials' code share cell 15 without meeting: the claim is TB_HELD (2^30) + the table's index
+
+**Decision**: cell 15 of a line row was the table stage's claim (D178) and, on the lines' copy, the initials' code (D183: minus the drop's code points, or `4*(row+1)` plus flags). Both Engines run furniture, then the tables on the evidence lines, then the copy and `in-detect`, then headings, then `pa-build`; so the two met. A table's claim is now `TB_HELD + k` (1073741824 + the table's index, `tb-claimed` answers index + 1 or 0); `in-detect` leaves a held line's cell 15 as it is and never sees the line (`in-collect` skips it, so a big first glyph in a table cell is no initial, and a table's lines never take part in a drop initial's neighbours); `in-row`, `in-cell` (para's raised-initial and no-space bits and `pa-skip`) read a held line as no initial; the column stage's split copies the claim to the new piece instead of clearing it; the heading stage's "a held line is never a heading" tests `>= TB_HELD`, so a heading that opens with a raised initial is still a heading. `pa-build` takes the prepared copy (`lt`) of the lines and no `ln`; the tables' laws and the Engine's hosts prepare it as the Engine does. **Held to**: the unit laws on all four arms (356), the table goldens (now carrying `align`), the accuracy gate (no metric lowered; the branch's lowering of `pdf/forms block-paragraph-r` was not carried over).
+**Alternatives**: a 17th line cell (every stride changes in the evidence, the columns and the readers); the claim kept on the original lines only (a column split's new rows are not there to ask).

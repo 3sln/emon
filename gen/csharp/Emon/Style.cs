@@ -229,6 +229,7 @@ public static class Style {
         int w0 = StLn(ln, l, Evidence.LhFirst());
         int wn = StLn(ln, l, Evidence.LhCount());
         int i = 0;
+        int i0 = 0;
         int j = 0;
         int c = 0;
         int best = -1;
@@ -236,9 +237,14 @@ public static class Style {
         if (wn > 32) {
             wn = 32;
         }
+        // A line that opens with a raised initial: its first word is partly the initial and does not vote (P4.10, cell 15).
+        if (((StLn(ln, l, 15) % 2) == 1) && (wn > 1)) {
+            i = 1;
+        }
+        i0 = i;
         while (i < wn) {
             c = 0;
-            j = 0;
+            j = i0;
             while (j < wn) {
                 if ((StSize(Evidence.WdGet(wd, w0 + i, Evidence.WfSize())) == StSize(Evidence.WdGet(wd, w0 + j, Evidence.WfSize()))) && ((Evidence.WdGet(wd, w0 + i, Evidence.WfFont()) == Evidence.WdGet(wd, w0 + j, Evidence.WfFont())) && (Evidence.WdGet(wd, w0 + i, Evidence.WfStyle()) == Evidence.WdGet(wd, w0 + j, Evidence.WfStyle())))) {
                     c += 1;

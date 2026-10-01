@@ -1,0 +1,1086 @@
+;; Initials on the text layer: drop caps and their kin (P4.10; SPEC 10.9; D108, D109, D183). emon's own module (D039).
+;;
+;;   (in-detect wd gl fo et npages loc lt sc sq tm ii)      every page's initials, found right after lines
+;;   (in-join loc cp rest-first rest-len)                  how the initial joins the first word: 0 joined, 1 joined and
+;;                                                         flagged low-conf, 2 a space
+;;
+;; WHERE IT RUNS: after the lines are built and BEFORE the paragraph builder, the column stage, the style and size
+;; statistics, and the heading measures read them (SPEC 10.9: "detection runs per page right after lines"). So a huge
+;; first glyph never becomes a heading and never splits its paragraph: the lines are the stage's COPY `lt` (the
+;; evidence is not touched), and detection rewrites the copy:
+;;   * a DROP or MARGIN initial is a line of its own in the text layer (its baseline is on no line's). Its row is turned a
+;;     quarter turn (`rot` 9000: not upright, so the style and heading stages, which read upright lines, take no notice of it)
+;;     and `in-retire` takes it off its page when the paragraph builder begins (page 0); lines 1..N (a drop's) start at the initial's start edge (SPEC
+;;     10.9, "Effects"), so the indent rule and the column box see a paragraph whose lines all start at the margin;
+;;   * a RAISED initial is the first glyph(s) of line 1's first word (D104 put it there): the line's box is made the box
+;;     of its other glyphs (a raised initial's top is not where the line begins: the paragraph gap is measured from line
+;;     1, not from the initial's top), and cell 15 of the row says "the first word does not vote on the line's size and
+;;     style" (`pa-dom`).
+;;
+;; WHAT IT READS: words, lines and etext, and for a raised initial the glyph sizes, baselines and boxes of the first word
+;; (`glyphs`); a font's `/CapHeight` from `fonts` when the reader has put one there (-1 until P1.12's reader does), else
+;; 0.7 of the size (0.88 for an ideograph, which has no cap height). A glyph with no code point (outlines, an image, a
+;; Type 3 font with no Unicode) is not here: its geometry has no text layer row to find (P6.7).
+;;
+;; THE TEST (SPEC 10.9; every threshold a `defconst`, named settings until the Engine has a table):
+;;   candidate  a line of ONE word (a run of up to `IN_MAXCP` code points that holds a letter or digit) whose size is at
+;;              least `initial-min` (2.0) times that of the line beside it;
+;;   drop       the candidate's cap top is within half a body size of line 1's; lines 1..N (N >= 2) start after its end
+;;              edge (within 1.5 body sizes), its baseline is inside line N's band, and line N+1 starts back at its start
+;;              edge. "Beside" is a start edge, mirrored for a right-to-left line; the same code, sense 1;
+;;   margin     as drop, but lines 1..N and the lines after them all start at one edge, which the initial's end edge
+;;              precedes (it hangs in the margin, nothing is indented);
+;;   raised     leading glyphs of a line's first word at least 2.0 times the size of the glyphs after them, on the line's
+;;              baseline, line 2 at the same start edge. An enlarged whole first word on the baseline is the same;
+;;   not one    a big letter with nothing wrapping it (a letter divider: the line below is not beside it), a logo, a big
+;;              page number (no line N+1 where it is not one).
+;;
+;; THE TABLE `ii` (stride 12): form (`ifm`), lines N (0 for raised), the initial's line row (-1 for a raised initial),
+;; the target line row (line 1 of the paragraph it opens), the code points of the initial's text, its box x0 y0 x1 y1,
+;; the initial's word, how it joins the first word (`in-join`: 0 joined, 1 joined and flagged, 2 a space), spare. Cell 15
+;; of the TARGET line's row of `lt` (the line's spare cell) is `(row of ii + 1) * 2`, plus 1 for a raised initial (whose first
+;; word does not vote on its line's size and style, `pa-dom`); a row made later by the column stage's splitting clears it.
+(ns emon.initial
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-get ln-get ln-count gl-get fo-get lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
+                                   lh-rot lh-dir lh-first lh-count hd-x0 hd-y0 hd-x1 hd-y1 hd-by0 hd-tstart hd-tlen
+                                   wf-font wf-size wf-gfirst wf-gcount ch-x0 ch-y0 ch-x1 ch-y1 ch-cp gf-size gf-by0
+                                   fnf-capheight]]
+            [emon.model :refer [ifm-drop ifm-raised ifm-margin]]
+            [kin.lang :refer [defn defdata defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem]]))
+
+;; the named settings (SPEC 10.9)
+;; cell 15 of a line a table holds is this and up (`emon.table` TB_HELD, D186): not an initial's, never read as one
+(defconst ^I32 IN_HELD 1073741824)
+(defconst ^I32 IN_MIN 20)           ;; initial-min, in tenths: 2.0 times the size of the lines beside it
+(defconst ^I32 IN_MIN_PAGE 19)      ;; the page's pre-filter, in tenths of the page's median line size
+(defconst ^I32 IN_CAP_TOP_DIV 2)    ;; a cap top within 1/2 of a body size of line 1's
+(defconst ^I32 IN_GAP_NUM 3)        ;; lines start within 3/2 of a body size of the initial's end edge
+(defconst ^I32 IN_GAP_DEN 2)
+(defconst ^I32 IN_SLACK_DIV 4)      ;; an edge, a band: within 1/4 of a body size
+(defconst ^I32 IN_BACK_DIV 2)       ;; line N+1 starts back at the initial's start edge within 1/2 of a body size
+(defconst ^I32 IN_MAXCP 12)         ;; the longest first word taken whole
+(defconst ^I32 IN_MAXLINES 12)      ;; the longest initial, in lines
+(defconst ^I32 IN_ROT_SLOP 100)     ;; upright: within one degree of 0
+(defconst ^I32 IN_CAP_ALPHA 700)    ;; the cap height of an alphabetic letter when the font has none, per mille of the size
+(defconst ^I32 IN_CAP_OTHER 600)  ;; ... of a letter of another caseless script
+(defconst ^I32 IN_CAP_IDEO 880)     ;; ... of an ideograph
+(defconst ^I32 IN_BIG 100000000)    ;; a coordinate or size held to +-10^8: a hostile file's must not overflow a sum
+
+(defconst ^I32 II_STRIDE 12)
+(defconst ^I32 II_FORM 0)
+(defconst ^I32 II_LINES 1)
+(defconst ^I32 II_IL 2)
+(defconst ^I32 II_TL 3)
+(defconst ^I32 II_NCP 4)
+(defconst ^I32 II_X0 5)
+(defconst ^I32 II_Y0 6)
+(defconst ^I32 II_X1 7)
+(defconst ^I32 II_Y1 8)
+(defconst ^I32 II_WORD 9)
+(defconst ^I32 II_JOIN 10)
+
+(defn ^:pub ^I32 in-stride [] (return 12))
+
+;; ------------------------------------------------------------------ small things
+
+(defn ^I32 in-clamp [^I32 v]
+  (if (> v IN_BIG) (return IN_BIG))
+  (if (< v (- 0 IN_BIG)) (return (- 0 IN_BIG)))
+  (return v))
+
+(defn ^I32 in-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 in-lo [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 in-hi [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 in-get [^Cells lt ^I32 l ^I32 f]
+  (comment "A field of a row of `lt`, held to +-IN_BIG.")
+  (return (in-clamp (ln-get lt l f))))
+
+(defn ^Bool in-upright [^Cells lt ^I32 l]
+  (let [^I32 r (ln-get lt l (lh-rot))]
+    (return (or (< r IN_ROT_SLOP) (> r (- 36000 IN_ROT_SLOP))))))
+
+(defn ^I32 in-dirv [^Cells lt ^I32 l]
+  (comment "1 for a line that reads right to left, else 0.")
+  (if (== (ln-get lt l (lh-dir)) 1) (return 1))
+  (return 0))
+
+(defn ^I32 in-start [^Cells lt ^I32 l ^I32 s]
+  (comment "Where the line starts in sense s, as a distance that grows INWARD: x0 left to right, minus x1 right to left.")
+  (if (== s 1) (return (- 0 (in-get lt l (lh-x1)))))
+  (return (in-get lt l (lh-x0))))
+
+(defn ^I32 in-end [^Cells lt ^I32 l ^I32 s]
+  (if (== s 1) (return (- 0 (in-get lt l (lh-x0)))))
+  (return (in-get lt l (lh-x1))))
+
+(defn ^I32 in-ymid2 [^Cells lt ^I32 l]
+  (return (+ (in-get lt l (lh-by0)) (in-get lt l (lh-by1)))))
+
+(defn ^I32 in-baseline [^Cells lt ^I32 l]
+  (return (quot (in-ymid2 lt l) 2)))
+
+(defn ^I32 in-cap [^I32 v]
+  (comment "A size, held to 10^6 (10 000 pt): its products here stay inside an I32.")
+  (if (> v 1000000) (return 1000000))
+  (if (< v 0) (return 0))
+  (return v))
+
+(defn ^I32 in-lsize [^Cells wd ^Cells lt ^I32 l]
+  (comment "A line's size: that of its middle word (a raised or dropped first word does not decide); its height")
+  (comment "when it has no words.")
+  (let [^I32 w0 (ln-get lt l (lh-first))
+        ^I32 wn (ln-get lt l (lh-count))]
+    (if (< wn 1) (return (in-cap (- (in-get lt l (lh-y1)) (in-get lt l (lh-y0))))))
+    (return (in-cap (wd-get wd (+ w0 (quot wn 2)) (wf-size))))))
+
+(defn ^Bool in-ideo [^I32 cp]
+  (comment "A code point of the CJK scripts, their punctuation and the full-width forms: written on an em square, with no")
+  (comment "cap height (U+3000-U+30FF, U+3400-U+9FFF, hangul, compatibility ideographs, U+FF00-U+FFEF).")
+  (return (or (and (>= cp 12288) (<= cp 12543))
+              (or (and (>= cp 13312) (<= cp 40959))
+                  (or (and (>= cp 44032) (<= cp 55215))
+                      (or (and (>= cp 63744) (<= cp 64255))
+                          (and (>= cp 65280) (<= cp 65519))))))))
+
+(defn ^Bool in-alnum [^I32 cp]
+  (comment "A letter or digit of any script a first word may begin with: Basic Latin, Latin-1 and Latin Extended,")
+  (comment "Greek, Cyrillic, Hebrew, Arabic and the scripts after them up to the punctuation and symbol blocks, kana,")
+  (comment "ideographs, hangul; not punctuation, the CJK punctuation block, or the full-width punctuation.")
+  (if (and (>= cp 48) (<= cp 57)) (return (== 1 1)))
+  (if (and (>= cp 65) (<= cp 90)) (return (== 1 1)))
+  (if (and (>= cp 97) (<= cp 122)) (return (== 1 1)))
+  (if (and (>= cp 192) (<= cp 591) (!= cp 215) (!= cp 247)) (return (== 1 1)))
+  (if (and (>= cp 880) (<= cp 8191)) (return (== 1 1)))
+  (if (and (>= cp 12352) (<= cp 64255)) (return (== 1 1)))
+  (if (and (>= cp 65296) (<= cp 65305)) (return (== 1 1)))
+  (if (and (>= cp 65313) (<= cp 65338)) (return (== 1 1)))
+  (if (and (>= cp 65345) (<= cp 65370)) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^I32 in-ratio [^Cells fo ^I32 font ^I32 cp]
+  (comment "The cap height of a (font, code point) per mille of the size: the font's `/CapHeight` when `fonts` has")
+  (comment "one, else IN_CAP_ALPHA for a cased script, IN_CAP_IDEO for an ideograph and IN_CAP_OTHER for the other caseless")
+  (comment "scripts (Hebrew, Arabic, Indic, Thai: their letters stand lower than a capital).")
+  (if (and (>= font 0) (< font (quot (cells-len fo) 16)))
+    (let [^I32 c (fo-get fo font (fnf-capheight))]
+      (if (and (> c 0) (< c 2000)) (return c))))
+  (if (in-ideo cp) (return IN_CAP_IDEO))
+  (if (>= cp 1424) (return IN_CAP_OTHER))
+  (return IN_CAP_ALPHA))
+
+(defn ^I32 in-up [^I32 cp ^I32 size]
+  (comment "How far above line 1's cap top the cap top of a candidate in script `cp` may lie: nothing for a cased script, which has")
+  (comment "a cap height; 0.15 of its size for the caseless ones, whose nominal cap top is a guess.")
+  (if (< cp 1424) (return 0))
+  (return (quot (* size 150) 1000)))
+
+(defn ^I32 in-first-cp [^Cells wd ^Cells et ^I32 w]
+  (comment "The first code point of word w's text, -1 when it has none.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))]
+    (if (or (< ts 0) (< tl 1)) (return -1))
+    (return (cells-at et ts))))
+
+(defn ^I32 in-cp0 [^Cells wd ^Cells et ^I32 w]
+  (comment "The code point that tells the word's script: its first letter or digit (the opening quote of `“N` does not),")
+  (comment "else its first code point; -1 for none.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))
+        ^:mut ^I32 k 0]
+    (if (or (< ts 0) (< tl 1)) (return -1))
+    (while (< k tl)
+      (do (if (in-alnum (cells-at et (+ ts k))) (return (cells-at et (+ ts k))))
+          (set k (+ k 1))))
+    (return (cells-at et ts))))
+
+(defn ^I32 in-line-cp [^Cells wd ^Cells lt ^Cells et ^I32 l]
+  (comment "The first code point of the line's first word.")
+  (if (< (ln-get lt l (lh-count)) 1) (return -1))
+  (return (in-first-cp wd et (ln-get lt l (lh-first)))))
+
+(defn ^I32 in-captop [^Cells wd ^Cells lt ^Cells fo ^Cells et ^I32 l ^I32 size]
+  (comment "Line l's cap top: its baseline minus the cap height of `size` in its first word's font.")
+  (let [^I32 w0 (ln-get lt l (lh-first))
+        ^I32 font (wd-get wd w0 (wf-font))
+        ^I32 cp (in-cp0 wd et w0)]
+    (return (- (in-baseline lt l) (quot (* size (in-ratio fo font cp)) 1000)))))
+
+(defn ^Bool in-upper [^I32 cp]
+  (return (or (and (>= cp 65) (<= cp 90))
+              (or (and (>= cp 192) (and (<= cp 222) (!= cp 215)))
+                  (or (and (>= cp 913) (<= cp 937))
+                      (and (>= cp 1040) (<= cp 1071)))))))
+
+(defn ^Bool in-lowercase [^I32 cp]
+  (return (or (and (>= cp 97) (<= cp 122))
+              (or (and (>= cp 223) (and (<= cp 255) (!= cp 247)))
+                  (or (and (>= cp 945) (<= cp 969))
+                      (and (>= cp 1072) (<= cp 1103)))))))
+
+(defn ^Bool in-title [^Cells wd ^Cells et ^I32 w]
+  (comment "Is word w written in title case: a capital and a lower-case letter after it (`Domestic`)? An initial is followed by")
+  (comment "the rest of its word, in lower case, or by small capitals; a capitalised word after a big letter means the letter is a")
+  (comment "label (`B` `Domestic and international ...`), one of a column of them.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))]
+    (if (or (< ts 0) (< tl 2)) (return (== 0 1)))
+    (return (and (in-upper (cells-at et ts)) (in-lowercase (cells-at et (+ ts 1)))))))
+
+(defn ^Bool in-labelish [^I32 cp]
+  (comment "A digit or a sign that a figure carries (`89%`, `5.9`, `$4`): a first word that has one is a statistic, not an initial.")
+  (return (or (and (>= cp 48) (<= cp 57))
+              (or (== cp 37) (or (== cp 46) (or (== cp 44) (or (== cp 58) (or (== cp 59) (or (== cp 47) (or (== cp 43)
+              (or (== cp 61) (or (== cp 35) (or (== cp 36) (or (== cp 38) (or (== cp 64) (or (== cp 33) (== cp 63)))))))))))))))))
+
+(defn ^Bool in-figure [^Cells et ^I32 ts ^I32 tl]
+  (comment "Does the word et[ts, ts+tl), of two code points or more, carry a digit or a sign (`in-labelish`)?")
+  (let [^:mut ^I32 k 0]
+    (if (< tl 2) (return (== 0 1)))
+    (while (< k tl)
+      (do (if (in-labelish (cells-at et (+ ts k))) (return (== 1 1)))
+          (set k (+ k 1))))
+    (return (== 0 1))))
+
+(defn ^Bool in-word-ok [^Cells wd ^Cells et ^I32 w]
+  (comment "A first word an initial may be: 1..IN_MAXCP code points, no space, at least one letter or digit.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 alpha 0]
+    (if (or (< ts 0) (< tl 1)) (return (== 0 1)))
+    (if (> tl IN_MAXCP) (return (== 0 1)))
+    (if (in-figure et ts tl) (return (== 0 1)))
+    (while (< k tl)
+      (do (let [^I32 c (cells-at et (+ ts k))]
+            (if (or (== c 32) (== c 160)) (return (== 0 1)))
+            (if (in-alnum c) (set alpha 1)))
+          (set k (+ k 1))))
+    (return (== alpha 1))))
+
+;; --------------------------------------------------------------- the page's lines
+
+(defn ^I32 in-collect [^Cells wd ^Cells lt ^I32 page ^:mut ^Cells sc ^:mut ^Cells tm]
+  (comment "The page's upright lines that have words into `sc` (rows of `lt`, as far as `ln-count` of the lines")
+  (comment "that existed when detection began: the caller passes it as `n`), their sizes into `tm`.")
+  (let [^I32 n (quot (cells-len lt) 16)
+        ^:mut ^I32 l 0]
+    (cells-drop sc 0)
+    (cells-drop tm 0)
+    (while (< l n)
+      (do (if (and (== (ln-get lt l (lh-page)) page) (and (in-upright lt l) (and (> (ln-get lt l (lh-count)) 0) (< (ln-get lt l 15) IN_HELD))))
+            (do (cells-push sc l)
+                (cells-push tm (in-lsize wd lt l))))
+          (set l (+ l 1))))
+    (return 0)))
+
+(defn ^I32 in-sort [^:mut ^Cells c]
+  (comment "Shell sort of the numbers in `c`, ascending.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at c i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at c (- j h)))
+                      (if (< v u)
+                        (do (cells-set c j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set c j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 in-median [^:mut ^Cells tm]
+  (comment "The median of the sizes in `tm` (sorts it); 0 for none.")
+  (let [^I32 n (cells-len tm)]
+    (if (== n 0) (return 0))
+    (in-sort tm)
+    (return (cells-at tm (quot n 2)))))
+
+(defn ^I32 in-next [^Cells lt ^Cells sc ^I32 cur ^I32 s ^I32 xlo ^I32 xhi]
+  (comment "The line of `sc` nearest below line `cur` (by the middle of its baseline, at least half its own height")
+  (comment "lower) that reads in sense s and whose start edge is in [xlo, xhi]; -1 for none.")
+  (let [^I32 n (cells-len sc)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 by 0
+        ^I32 cy (in-ymid2 lt cur)]
+    (while (< i n)
+      (do (let [^I32 m (cells-at sc i)]
+            (if (and (!= m cur) (and (in-upright lt m) (== (in-dirv lt m) s)))
+              (let [^I32 st (in-start lt m s)
+                    ^I32 hm (- (in-get lt m (lh-y1)) (in-get lt m (lh-y0)))
+                    ^I32 d2 (- (in-ymid2 lt m) cy)]
+                (if (and (>= st xlo) (<= st xhi) (>= d2 hm) (> d2 0))
+                  (if (or (< best 0) (< (in-ymid2 lt m) by) (and (== (in-ymid2 lt m) by) (< m best)))
+                    (do (set best m)
+                        (set by (in-ymid2 lt m))))))))
+          (set i (+ i 1))))
+    (return best)))
+
+;; ------------------------------------------------------------------- recording
+
+(defn ^I32 in-record [^:mut ^Cells ii ^I32 form ^I32 lines ^I32 il ^I32 tl ^I32 ncp
+                      ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 word]
+  (cells-push ii form)
+  (cells-push ii lines)
+  (cells-push ii il)
+  (cells-push ii tl)
+  (cells-push ii ncp)
+  (cells-push ii x0)
+  (cells-push ii y0)
+  (cells-push ii x1)
+  (cells-push ii y1)
+  (cells-push ii word)
+  (cells-push ii 0)
+  (cells-push ii 0)
+  (return 0))
+
+(defn ^Bool in-taken [^Cells ii ^I32 tl]
+  (comment "Is line `tl` already the target of an initial?")
+  (let [^I32 n (quot (cells-len ii) II_STRIDE)
+        ^:mut ^I32 r 0]
+    (while (< r n)
+      (do (if (== (cells-at ii (+ (* r II_STRIDE) II_TL)) tl) (return (== 1 1)))
+          (set r (+ r 1))))
+    (return (== 0 1))))
+
+;; ------------------------------------------------------------- a drop or margin initial
+
+(defn ^I32 in-first-line [^Cells wd ^Cells lt ^Cells fo ^Cells et ^Cells sc ^I32 c ^I32 s ^I32 csize ^I32 captop ^I32 ce
+                          ^I32 up]
+  (comment "Line 1 for candidate c in sense s: of the lines that read that way and start after c's end edge ce (within")
+  (comment "1.5 of their size; a quarter size of overlap), whose size is at most 1/IN_MIN of c's and whose cap top is within")
+  (comment "half a size of c's, the highest one. -1 for none.")
+  (let [^I32 n (cells-len sc)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 by 0]
+    (while (< i n)
+      (do (let [^I32 l (cells-at sc i)]
+            (if (and (!= l c) (and (in-upright lt l) (== (in-dirv lt l) s)))
+              (let [^I32 b (in-lsize wd lt l)
+                    ^I32 gap (- (in-start lt l s) ce)]
+                (if (and (> b 0)
+                         (>= (* csize 10) (* IN_MIN b))
+                         (>= (* gap IN_SLACK_DIV) (- 0 b))
+                         (<= (* gap IN_GAP_DEN) (* b IN_GAP_NUM)))
+                  (let [^I32 d (- captop (in-captop wd lt fo et l b))]
+                    (if (and (<= (* d IN_CAP_TOP_DIV) b) (>= (* (+ d up) IN_CAP_TOP_DIV) (- 0 b)))
+                      (if (or (< best 0) (< (in-ymid2 lt l) by))
+                        (do (set best l)
+                            (set by (in-ymid2 lt l))))))))))
+          (set i (+ i 1))))
+    (return best)))
+
+(defn ^I32 in-try-drop [^Cells wd ^Cells lt ^Cells fo ^Cells et ^Cells sc ^:mut ^Cells sq ^:mut ^Cells ii ^I32 c ^I32 s]
+  (comment "Is line c, a one-word line, a drop or margin initial reading in sense s? Records it and answers 1, else 0.")
+  (let [^I32 w (ln-get lt c (lh-first))
+        ^I32 csize (in-cap (wd-get wd w (wf-size)))
+        ^I32 cs (in-start lt c s)
+        ^I32 ce (in-end lt c s)
+        ^I32 bc (in-baseline lt c)
+        ^I32 captop (in-captop wd lt fo et c csize)
+        ^I32 up (in-up (in-cp0 wd et w) csize)
+        ^I32 l1 (in-first-line wd lt fo et sc c s csize captop ce up)]
+    (if (< l1 0) (return 0))
+    (let [^I32 b (in-lsize wd lt l1)
+          ^:mut ^I32 cur l1
+          ^:mut ^I32 m 0
+          ^:mut ^I32 p 0
+          ^:mut ^I32 ng 0
+          ^:mut ^I32 k 0
+          ^:mut ^I32 more 1
+          ^:mut ^I32 form 0]
+      (cells-drop sq 0)
+      (cells-push sq l1)
+      (while (and (== more 1) (< (cells-len sq) IN_MAXLINES))
+        (do (set m (in-next lt sc cur s (- cs (quot b IN_BACK_DIV)) (+ ce (* b 2))))
+            (if (< m 0)
+              (set more 0)
+              (if (> (* (in-abs (- (in-lsize wd lt m) b)) 10) (* b 2))
+                (set more 0)
+                (do (cells-push sq m)
+                    (set cur m))))))
+      ;; the indented prefix: lines that start after the initial's end edge
+      (set p 0)
+      (while (and (< p (cells-len sq))
+                  (>= (* (- (in-start lt (cells-at sq p) s) ce) IN_SLACK_DIV) (- 0 b)))
+        (set p (+ p 1)))
+      ;; N by geometry: the first line whose band holds the baseline
+      (set ng 0)
+      (set k 0)
+      (while (and (== ng 0) (< k (cells-len sq)))
+        (do (if (<= (* (- bc (in-get lt (cells-at sq k) (lh-y1))) IN_SLACK_DIV) b)
+              (set ng (+ k 1)))
+            (set k (+ k 1))))
+      (if (< ng 2) (return 0))
+      (if (< p ng) (return 0))
+      ;; a drop: exactly N lines are indented, and line N+1 starts back at the initial's start edge; a margin: every line
+      ;; starts at one edge, beyond the initial's end edge, and there are lines after N
+      (if (== p ng)
+        (if (< p (cells-len sq))
+          (if (<= (* (in-abs (- (in-start lt (cells-at sq p) s) cs)) IN_BACK_DIV) b)
+            (set form (ifm-drop)))
+          (set form (ifm-drop))))
+      (if (and (== form 0) (> p ng))
+        (do (set k 0)
+            (set form (ifm-margin))
+            (while (< k (cells-len sq))
+              (do (if (> (* (in-abs (- (in-start lt (cells-at sq k) s) (in-start lt l1 s))) IN_SLACK_DIV) b)
+                    (set form 0))
+                  (set k (+ k 1))))))
+      (if (== form 0) (return 0))
+      (if (in-taken ii l1) (return 0))
+      (if (in-title wd et (ln-get lt l1 (lh-first))) (return 0))
+      (in-record ii form ng c l1 (wd-get wd w (hd-tlen)) (in-get lt c (lh-x0)) (in-get lt c (lh-y0))
+                 (in-get lt c (lh-x1)) (in-get lt c (lh-y1)) w)
+      (return 1))))
+
+;; ----------------------------------------------------------------- a raised initial
+
+(defn ^I32 in-eend [^I32 s ^I32 x0 ^I32 x1]
+  (comment "The end edge of a box in sense s, growing inward: x1 left to right, minus x0 right to left.")
+  (if (== s 1) (return (- 0 x0)))
+  (return x1))
+
+(defn ^I32 in-apply [^Cells lt ^Cells sq ^I32 form ^I32 n ^I32 il ^I32 s]
+  (comment "A drop or margin initial found: its line leaves the page, lines 1..N of a drop start at its start edge.")
+  (let [^:mut ^I32 k 0]
+    (if (== form (ifm-drop))
+      (while (< k n)
+        (do (let [^I32 l (cells-at sq k)
+                  ^I32 nx1 (in-hi (ln-get lt l (lh-x1)) (ln-get lt il (lh-x1)))
+                  ^I32 nx0 (in-lo (ln-get lt l (lh-x0)) (ln-get lt il (lh-x0)))]
+              (if (== s 1)
+                (cells-set lt (+ (* l 16) (lh-x1)) nx1)
+                (cells-set lt (+ (* l 16) (lh-x0)) nx0)))
+            (set k (+ k 1)))))
+    (return 0)))
+
+(defn ^I32 in-prev [^Cells lt ^Cells sc ^I32 cur ^I32 s ^I32 xlo ^I32 xhi ^I32 body]
+  (comment "The line of `sc` nearest ABOVE line `cur` (its baseline's middle at least half its own height higher, and no more than")
+  (comment "two and a half body sizes) that reads in sense s and whose start edge is in [xlo, xhi]; -1 for none.")
+  (let [^I32 n (cells-len sc)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 by 0
+        ^I32 cy (in-ymid2 lt cur)]
+    (while (< i n)
+      (do (let [^I32 m (cells-at sc i)]
+            (if (and (!= m cur) (and (in-upright lt m) (== (in-dirv lt m) s)))
+              (let [^I32 st (in-start lt m s)
+                    ^I32 hm (- (in-get lt m (lh-y1)) (in-get lt m (lh-y0)))
+                    ^I32 d2 (- cy (in-ymid2 lt m))]
+                (if (and (>= st xlo) (<= st xhi) (>= d2 hm) (> d2 0) (<= d2 (* body 5)))
+                  (if (or (< best 0) (> (in-ymid2 lt m) by) (and (== (in-ymid2 lt m) by) (< m best)))
+                    (do (set best m)
+                        (set by (in-ymid2 lt m))))))))
+          (set i (+ i 1))))
+    (return best)))
+
+(defn ^I32 in-try-inline [^Cells wd ^Cells gl ^:mut ^Cells lt ^Cells fo ^Cells et ^Cells sc ^:mut ^Cells sq ^:mut ^Cells ii
+                          ^I32 l ^I32 s]
+  (comment "Is the start of line l's first word an initial that the text layer put in the line: leading glyphs at least IN_MIN")
+  (comment "tenths of the size of the glyphs after them? Three kinds, by where their baseline is (SPEC 10.9):")
+  (comment "  * ON THE LINE'S BASELINE with lines above it that start after it: a DROP initial whose baseline is that of its last")
+  (comment "    line (the print convention), so the lines are made of it. The highest of the lines above begins the paragraph, its cap")
+  (comment "    top is the initial's, line N+1 starts back at the initial's start edge; the line's cell 15 is minus the code points")
+  (comment "    that are the initial's;")
+  (comment "  * ON THE LINE'S BASELINE with no line above beside it: a RAISED initial, line 2 at its start edge;")
+  (comment "  * BELOW THE LINE'S BASELINE (the initial and the rest of its word share a line, the initial's baseline is that of a")
+  (comment "    later line): a DROP initial in the first line's first word, lines 2..N start after it, line N+1 back at its start edge.")
+  (comment "The line's box is made the box of its other glyphs. Records it and answers 1, else 0.")
+  (let [^I32 w0 (ln-get lt l (lh-first))
+        ^I32 wn (ln-get lt l (lh-count))
+        ^I32 g0 (wd-get wd w0 (wf-gfirst))
+        ^I32 gn (wd-get wd w0 (wf-gcount))
+        ^I32 ts (wd-get wd w0 (hd-tstart))
+        ^I32 tl (wd-get wd w0 (hd-tlen))
+        ^I32 ngl (quot (cells-len gl) 32)]
+    (if (< wn 2) (return 0))
+    (if (or (< g0 0) (< gn 1) (> (+ g0 gn) ngl)) (return 0))
+    (if (or (< ts 0) (!= tl gn)) (return 0))
+    (let [^I32 big (in-cap (gl-get gl g0 (gf-size)))
+          ^I32 ibase (in-clamp (gl-get gl g0 (gf-by0)))
+          ^:mut ^I32 line-base 0
+          ^:mut ^I32 r 1
+          ^:mut ^I32 g 0
+          ^:mut ^I32 body 0
+          ^:mut ^I32 ok 1]
+      (if (< big 1) (return 0))
+      ;; the run: leading glyphs of the first word within 5 per cent of the first one's size
+      (while (and (< r gn) (>= (* (in-cap (gl-get gl (+ g0 r) (gf-size))) 100) (* big 95)))
+        (set r (+ r 1)))
+      (if (> r 3)
+        (if (< r gn) (return 0)))
+      (if (> r IN_MAXCP) (return 0))
+      ;; the size after it: the next glyph of the word, or the second word's
+      (if (< r gn)
+        (set body (in-cap (gl-get gl (+ g0 r) (gf-size))))
+        (set body (in-cap (wd-get wd (+ w0 1) (wf-size)))))
+      (if (< body 1) (return 0))
+      (if (< (* big 10) (* IN_MIN body)) (return 0))
+      (comment "The line's own baseline is that of the glyphs after the initial: the text layer gives a line the baseline of its")
+      (comment "first glyph at its start, which is the initial's.")
+      (if (< r gn)
+        (set line-base (in-clamp (gl-get gl (+ g0 r) (gf-by0))))
+        (set line-base (in-clamp (wd-get wd (+ w0 1) (hd-by0)))))
+      ;; the run is the text it says, on one baseline
+      (set g 0)
+      (while (< g r)
+        (do (if (!= (gl-get gl (+ g0 g) (ch-cp)) (cells-at et (+ ts g))) (set ok 0))
+            (if (> (* (in-abs (- (in-clamp (gl-get gl (+ g0 g) (gf-by0))) ibase)) IN_SLACK_DIV) body) (set ok 0))
+            (set g (+ g 1))))
+      (if (== ok 0) (return 0))
+      (if (not (in-alnum (cells-at et ts)))
+        (if (or (< tl 2) (not (in-alnum (cells-at et (+ ts 1))))) (return 0)))
+      (if (and (== r gn) (in-figure et ts tl)) (return 0))
+      ;; the box of the initial, and of the line without it
+      (let [^:mut ^I32 y0 0
+            ^:mut ^I32 y1 0
+            ^:mut ^I32 ix0 0
+            ^:mut ^I32 iy0 0
+            ^:mut ^I32 ix1 0
+            ^:mut ^I32 iy1 0
+            ^:mut ^I32 have 0
+            ^:mut ^I32 k 0
+            ^:mut ^I32 above 0
+            ^:mut ^I32 cur l
+            ^:mut ^I32 m 0
+            ^:mut ^I32 p 0
+            ^:mut ^I32 ng 0
+            ^:mut ^I32 more 1]
+        (set g 0)
+        (while (< g gn)
+          (do (let [^I32 gy0 (in-clamp (gl-get gl (+ g0 g) (ch-y0)))
+                    ^I32 gy1 (in-clamp (gl-get gl (+ g0 g) (ch-y1)))
+                    ^I32 gx0 (in-clamp (gl-get gl (+ g0 g) (ch-x0)))
+                    ^I32 gx1 (in-clamp (gl-get gl (+ g0 g) (ch-x1)))]
+                (if (< g r)
+                  (do (if (== g 0)
+                        (do (set ix0 gx0) (set iy0 gy0) (set ix1 gx1) (set iy1 gy1))
+                        (do (set ix0 (in-lo ix0 gx0)) (set iy0 (in-lo iy0 gy0))
+                            (set ix1 (in-hi ix1 gx1)) (set iy1 (in-hi iy1 gy1)))))
+                  (do (if (== have 0)
+                        (do (set y0 gy0) (set y1 gy1) (set have 1))
+                        (do (set y0 (in-lo y0 gy0)) (set y1 (in-hi y1 gy1)))))))
+              (set g (+ g 1))))
+        (set k 1)
+        (while (< k wn)
+          (do (let [^I32 wy0 (in-clamp (wd-get wd (+ w0 k) (hd-y0)))
+                    ^I32 wy1 (in-clamp (wd-get wd (+ w0 k) (hd-y1)))]
+                (if (== have 0)
+                  (do (set y0 wy0) (set y1 wy1) (set have 1))
+                  (do (set y0 (in-lo y0 wy0)) (set y1 (in-hi y1 wy1)))))
+              (set k (+ k 1))))
+        (if (== have 0) (return 0))
+        (comment "The line's baseline is the body's from here on (the lines around it are placed by it): kept whether or not the")
+        (comment "line proves to hold an initial, since it is the truer one.")
+        (cells-set lt (+ (* l 16) (lh-by0)) line-base)
+        (let [^I32 cs (in-start lt l s)
+              ^I32 ce (in-eend s ix0 ix1)
+              ^I32 font (wd-get wd w0 (wf-font))
+              ^I32 cp0 (in-cp0 wd et w0)
+              ^I32 ratio (in-ratio fo font cp0)
+              ^I32 up (in-up cp0 big)
+              ^I32 captop (- ibase (quot (* big ratio) 1000))]
+          (if (<= (* (in-abs (- ibase line-base)) IN_SLACK_DIV) body)
+            ;; on the line's baseline: lines above that start after it make it a drop initial of the last of them
+            (do (cells-drop sq 0)
+                (while (and (== more 1) (< (cells-len sq) IN_MAXLINES))
+                  (do (set m (in-prev lt sc cur s (- ce (quot body IN_SLACK_DIV)) (+ ce (* body 2)) body))
+                      (if (< m 0)
+                        (set more 0)
+                        (if (> (* (in-abs (- (in-lsize wd lt m) body)) 10) (* body 2))
+                          (set more 0)
+                          (do (cells-push sq m)
+                              (set cur m))))))
+                (set above (cells-len sq))
+                (if (> above 0)
+                  (let [^I32 top (cells-at sq (- above 1))
+                        ^I32 tsize (in-lsize wd lt top)
+                        ^I32 d (- captop (in-captop wd lt fo et top tsize))
+                        ^I32 lb (in-next lt sc l s (- cs (quot body IN_BACK_DIV)) (+ ce (* body 2)))]
+                    (if (> (* d IN_CAP_TOP_DIV) body) (return 0))
+                    (if (< (* (+ d up) IN_CAP_TOP_DIV) (- 0 body)) (return 0))
+                    (if (>= lb 0)
+                      (if (> (* (in-abs (- (in-start lt lb s) cs)) IN_BACK_DIV) (in-lsize wd lt lb)) (return 0)))
+                    (if (in-taken ii top) (return 0))
+                    (cells-set lt (+ (* l 16) (lh-y0)) y0)
+                    (cells-set lt (+ (* l 16) (lh-y1)) y1)
+                    (cells-set lt (+ (* l 16) (lh-by0)) line-base)
+                    (cells-set lt (+ (* l 16) 15) (- 0 r))
+                    (in-apply lt sq (ifm-drop) above l s)
+                    (in-record ii (ifm-drop) (+ above 1) l top r ix0 iy0 ix1 iy1 w0)
+                    (return 1)))
+                ;; a raised initial: line 2 starts at line 1's start edge
+                (let [^I32 l2 (in-next lt sc l s (- cs (* body 2)) (+ cs (* body 2)))]
+                  (if (< l2 0) (return 0))
+                  (if (> (* (in-abs (- (in-start lt l2 s) cs)) IN_BACK_DIV) (in-lsize wd lt l2)) (return 0)))
+                (cells-set lt (+ (* l 16) (lh-y0)) y0)
+                (cells-set lt (+ (* l 16) (lh-y1)) y1)
+                (cells-set lt (+ (* l 16) (lh-by0)) line-base)
+                (in-record ii (ifm-raised) 0 -1 l r ix0 iy0 ix1 iy1 w0)
+                (return 1))
+            ;; below the line's baseline: a drop initial in the first line's first word, lines 2..N after it
+            (do (if (< (* (- ibase line-base) IN_SLACK_DIV) body) (return 0))
+                (let [^I32 d (- captop (- line-base (quot (* body ratio) 1000)))]
+                  (if (> (* d IN_CAP_TOP_DIV) body) (return 0))
+                  (if (< (* (+ d up) IN_CAP_TOP_DIV) (- 0 body)) (return 0)))
+                (cells-drop sq 0)
+                (set cur l)
+                (while (and (== more 1) (< (cells-len sq) IN_MAXLINES))
+                  (do (set m (in-next lt sc cur s (- cs (quot body IN_BACK_DIV)) (+ ce (* body 2))))
+                      (if (< m 0)
+                        (set more 0)
+                        (if (> (* (in-abs (- (in-lsize wd lt m) body)) 10) (* body 2))
+                          (set more 0)
+                          (do (cells-push sq m)
+                              (set cur m))))))
+                (set p 0)
+                (while (and (< p (cells-len sq))
+                            (>= (* (- (in-start lt (cells-at sq p) s) ce) IN_SLACK_DIV) (- 0 body)))
+                  (set p (+ p 1)))
+                (set ng 0)
+                (set k 0)
+                (while (and (== ng 0) (< k (cells-len sq)))
+                  (do (if (<= (* (- ibase (in-get lt (cells-at sq k) (lh-y1))) IN_SLACK_DIV) body)
+                        (set ng (+ k 1)))
+                      (set k (+ k 1))))
+                (if (< ng 1) (return 0))
+                (if (!= p ng) (return 0))
+                (if (< p (cells-len sq))
+                  (if (> (* (in-abs (- (in-start lt (cells-at sq p) s) cs)) IN_BACK_DIV) body) (return 0)))
+                (cells-set lt (+ (* l 16) (lh-y0)) y0)
+                (cells-set lt (+ (* l 16) (lh-y1)) y1)
+                (cells-set lt (+ (* l 16) (lh-by0)) line-base)
+                (in-apply lt sq (ifm-drop) p l s)
+                (in-record ii (ifm-drop) (+ p 1) -1 l r ix0 iy0 ix1 iy1 w0)
+                (return 1))))))))
+
+;; ---------------------------------------------------------------------- the page
+
+(defn ^I32 in-page [^Cells wd ^Cells gl ^Cells fo ^Cells et ^:mut ^Cells lt ^I32 page ^:mut ^Cells sc ^:mut ^Cells sq
+                    ^:mut ^Cells tm ^:mut ^Cells ii]
+  (comment "One page: its drop and margin initials, then its raised ones.")
+  (let [^:mut ^I32 med 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 r0 0]
+    (in-collect wd lt page sc tm)
+    (set n (cells-len sc))
+    (if (== n 0) (return 0))
+    (set med (in-median tm))
+    (if (< med 1) (return 0))
+    (set i 0)
+    (while (< i n)
+      (do (set c (cells-at sc i))
+          (if (and (== (ln-get lt c (lh-count)) 1)
+                   (>= (* (in-lsize wd lt c) 10) (* IN_MIN_PAGE med))
+                   (in-word-ok wd et (ln-get lt c (lh-first))))
+            (do (set s 0)
+                (set got 0)
+                (while (and (< s 2) (== got 0))
+                  (do (set r0 (quot (cells-len ii) II_STRIDE))
+                      (set got (in-try-drop wd lt fo et sc sq ii c s))
+                      (if (== got 1)
+                        (let [^I32 rr (* r0 II_STRIDE)]
+                          (in-apply lt sq (cells-at ii (+ rr II_FORM)) (cells-at ii (+ rr II_LINES)) c s)
+                          (cells-set lt (+ (* c 16) (lh-rot)) 9000)))
+                      (set s (+ s 1))))))
+          (set i (+ i 1))))
+    ;; the lines that are still on the page, for the raised ones
+    (in-collect wd lt page sc tm)
+    (set n (cells-len sc))
+    (set i 0)
+    (while (< i n)
+      (do (set c (cells-at sc i))
+          (if (and (not (in-taken ii c)) (and (== (ln-get lt c 15) 0) (> (ln-get lt c (lh-count)) 1)))
+            (do (set s (in-dirv lt c))
+                (in-try-inline wd gl lt fo et sc sq ii c s)))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------------ the join
+;;
+;; The page cannot say whether a one-letter initial is a word of its own (SPEC 10.9: `A long` and `Along` are the same
+;; 4.5 pt gap and no space glyph). Joined is the default (`It`, `In`, `At`, `As` open more paragraphs than `I` and `A`
+;; alone), flagged `low-conf` when the letter is a word in its own right in the locale's one-letter table; WITHOUT a
+;; locale the union of the tables is the table. WITH a locale that has a list of the words a one-letter word is
+;; usually followed by (`en`), the first word after the initial decides: in the list, the letter is a word and a space
+;; follows; not in it, the join stands and is flagged all the same (the lists are small and say so).
+
+(defconst ^I32 LG_NONE 0)
+(defconst ^I32 LG_EN 1)
+(defconst ^I32 LG_DE 2)
+(defconst ^I32 LG_FR 3)
+(defconst ^I32 LG_ES 4)
+(defconst ^I32 LG_PT 5)
+(defconst ^I32 LG_IT 6)
+(defconst ^I32 LG_NL 7)
+(defconst ^I32 LG_OTHER 99)
+
+;; the one-letter words, upper case: language, then the letters (0 ends a language)
+(defdata ^:pub in-one
+  :emitter kin.lang/flat-array
+  :data [1 65 73 79 0
+         2 79 0
+         3 65 192 89 79 212 0
+         4 65 69 79 85 89 0
+         5 65 69 79 0
+         6 65 69 79 200 0
+         7 65 85 0
+         0]
+  :accessors {^I32 in-one-len [^I32 ignored]
+              ^I32 in-one-at [^I32 ignored ^I32 i]})
+
+;; the lists, English only (a locale without one joins and flags): a block per language and kind (language * 10 + 1 for the
+;; words a one-letter word is followed by, + 2 for the rest of a word its letter begins), in it a block per letter (upper
+;; case), then words as length and lower-case letters, 0 ends a letter, 0 again a block, 0 again the data.
+(defdata ^:pub in-follow
+  :emitter kin.lang/flat-array
+  :data [11 65
+         3 102 101 119
+         4 108 111 110 103
+         6 108 105 116 116 108 101
+         3 109 97 110
+         5 119 111 109 97 110
+         3 110 101 119
+         5 103 114 101 97 116
+         4 103 111 111 100
+         5 115 109 97 108 108
+         3 98 105 103
+         3 98 105 116
+         3 108 111 116
+         4 118 101 114 121
+         5 121 111 117 110 103
+         3 111 108 100
+         6 115 105 110 103 108 101
+         5 108 97 114 103 101
+         6 110 117 109 98 101 114
+         4 116 105 109 101
+         3 100 97 121
+         4 121 101 97 114
+         6 109 111 109 101 110 116
+         5 119 104 105 108 101
+         6 99 111 117 112 108 101
+         5 113 117 105 101 116
+         4 99 111 108 100
+         6 98 114 105 103 104 116
+         7 115 116 114 97 110 103 101
+         4 116 97 108 108
+         5 98 114 105 101 102
+         5 115 104 111 114 116
+         5 108 105 103 104 116
+         4 100 97 114 107
+         4 116 104 105 110
+         4 104 117 103 101
+         0
+         73
+         3 119 97 115
+         2 97 109
+         3 104 97 100
+         4 104 97 118 101
+         2 100 111
+         3 100 105 100
+         5 119 111 117 108 100
+         4 119 105 108 108
+         3 99 97 110
+         5 99 111 117 108 100
+         5 116 104 105 110 107
+         4 107 110 111 119
+         3 115 101 101
+         3 115 97 119
+         4 115 97 105 100
+         7 116 104 111 117 103 104 116
+         4 119 101 110 116
+         4 102 101 108 116
+         6 119 97 110 116 101 100
+         4 119 97 110 116
+         4 108 105 107 101
+         4 108 111 118 101
+         4 110 101 101 100
+         8 114 101 109 101 109 98 101 114
+         5 110 101 118 101 114
+         6 97 108 119 97 121 115
+         5 115 104 97 108 108
+         6 115 104 111 117 108 100
+         5 109 105 103 104 116
+         4 109 117 115 116
+         4 104 111 112 101
+         4 119 105 115 104
+         7 98 101 108 105 101 118 101
+         5 104 101 97 114 100
+         5 102 111 117 110 100
+         4 116 111 111 107
+         0
+         0
+         12 65
+         1 116
+         1 115
+         1 110
+         2 110 100
+         2 114 101
+         2 108 108
+         2 110 121
+         4 102 116 101 114
+         4 98 111 117 116
+         4 98 111 118 101
+         4 103 97 105 110
+         5 108 119 97 121 115
+         5 114 111 117 110 100
+         4 109 111 110 103
+         6 110 111 116 104 101 114
+         5 110 115 119 101 114
+         3 108 115 111
+         5 108 109 111 115 116
+         7 108 116 104 111 117 103 104
+         6 108 114 101 97 100 121
+         8 99 99 111 114 100 105 110 103
+         5 99 114 111 115 115
+         4 100 100 101 100
+         4 100 109 105 116
+         6 103 97 105 110 115 116
+         4 104 101 97 100
+         4 108 111 110 101
+         7 99 116 117 97 108 108 121
+         0
+         73
+         1 116
+         1 110
+         1 115
+         1 102
+         1 100
+         3 110 116 111
+         2 116 115
+         6 110 115 116 101 97 100
+         5 110 115 105 100 101
+         5 110 100 101 101 100
+         8 109 112 111 114 116 97 110 116
+         6 109 97 103 105 110 101
+         0
+         79
+         1 110
+         1 102
+         1 114
+         2 110 101
+         3 110 108 121
+         3 110 99 101
+         2 117 116
+         3 118 101 114
+         4 116 104 101 114
+         2 117 114
+         2 108 100
+         4 102 116 101 110
+         2 102 102
+         5 102 102 105 99 101
+         7 99 99 97 115 105 111 110
+         3 112 101 110
+         7 112 112 111 115 105 116 101
+         4 114 100 101 114
+         11 114 103 97 110 105 122 97 116 105 111 110
+         2 119 110
+         0
+         0
+         0]
+  :accessors {^I32 in-follow-len [^I32 ignored]
+              ^I32 in-follow-at [^I32 ignored ^I32 i]})
+
+(defn ^I32 in-lower [^I32 cp]
+  (if (and (>= cp 65) (<= cp 90)) (return (+ cp 32)))
+  (return cp))
+
+(defn ^:pub ^I32 in-lang [^Cells loc]
+  (comment "The language of a locale tag held as code points (`en`, `en-US`, `DE_ch`): LG_NONE for no tag, else an LG_")
+  (comment "code, LG_OTHER for a language without a table.")
+  (let [^I32 n (cells-len loc)]
+    (if (< n 2) (return LG_NONE))
+    (let [^I32 a (in-lower (cells-at loc 0))
+          ^I32 b (in-lower (cells-at loc 1))
+          ^:mut ^I32 c 45]
+      (if (> n 2) (set c (cells-at loc 2)))
+      (if (and (!= c 45) (!= c 95)) (return LG_OTHER))
+      (if (and (== a 101) (== b 110)) (return LG_EN))
+      (if (and (== a 100) (== b 101)) (return LG_DE))
+      (if (and (== a 102) (== b 114)) (return LG_FR))
+      (if (and (== a 101) (== b 115)) (return LG_ES))
+      (if (and (== a 112) (== b 116)) (return LG_PT))
+      (if (and (== a 105) (== b 116)) (return LG_IT))
+      (if (and (== a 110) (== b 108)) (return LG_NL))
+      (return LG_OTHER))))
+
+(defn ^Bool in-one-letter [^I32 lang ^I32 cp]
+  (comment "Is the upper-case code point cp a word of its own in language `lang` (the union of the tables when LG_NONE or")
+  (comment "LG_OTHER)?")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 cur -1]
+    (while (< i (in-one-len 0))
+      (do (let [^I32 v (in-one-at 0 i)]
+            (if (< cur 0)
+              (set cur v)
+              (if (== v 0)
+                (set cur -1)
+                (if (and (== v cp) (or (== cur lang) (or (== lang LG_NONE) (== lang LG_OTHER))))
+                  (return (== 1 1))))))
+          (set i (+ i 1))))
+    (return (== 0 1))))
+
+(defn ^Bool in-follows [^I32 lang ^I32 kind ^I32 letter ^Cells et ^I32 ts ^I32 tl]
+  (comment "Is the word et[ts, ts+tl) (lower-cased) in the list `kind` (1 the words a one-letter word is followed by, 2 the")
+  (comment "rest of a word the letter begins) for (lang, letter)?")
+  (let [^I32 n (in-follow-len 0)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 inlang 0
+        ^:mut ^I32 inlet 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 same 0]
+    (while (< i n)
+      (do (let [^I32 v (in-follow-at 0 i)]
+            (if (== inlang 0)
+              (do (if (== v 0) (return (== 0 1)))
+                  (set inlang v)
+                  (set inlet 0)
+                  (set i (+ i 1)))
+              (if (== inlet 0)
+                (do (if (== v 0)
+                      (do (set inlang 0) (set i (+ i 1)))
+                      (do (set inlet v) (set i (+ i 1)))))
+                (do (if (== v 0)
+                      (do (set inlet 0) (set i (+ i 1)))
+                      (do (set w v)
+                          (if (and (== inlang (+ (* lang 10) kind)) (== inlet letter) (== w tl))
+                            (do (set same 1)
+                                (set k 0)
+                                (while (< k w)
+                                  (do (if (!= (in-follow-at 0 (+ i (+ 1 k))) (in-lower (cells-at et (+ ts k))))
+                                        (set same 0))
+                                      (set k (+ k 1))))
+                                (if (== same 1) (return (== 1 1)))))
+                          (set i (+ i (+ 1 w)))))))))))
+    (return (== 0 1))))
+
+(defn ^:pub ^I32 in-join [^Cells loc ^I32 cp ^Cells et ^I32 ts ^I32 tl]
+  (comment "How an initial whose whole text is the code point cp (upper case or not) meets the first word of its first")
+  (comment "line, et[ts, ts+tl) (an empty word is tl 0): 0 joined and sure, 1 joined and flagged low-conf, 2 a space.")
+  (let [^I32 lang (in-lang loc)
+        ^:mut ^I32 up cp]
+    (if (and (>= cp 97) (<= cp 122)) (set up (- cp 32)))
+    (if (not (in-one-letter lang up)) (return 0))
+    (if (and (== lang LG_EN) (> tl 0))
+      (do (if (in-follows lang 1 up et ts tl) (return 2))
+          (if (in-follows lang 2 up et ts tl) (return 0))))
+    (return 1)))
+
+(defn ^I32 in-join-of [^Cells wd ^Cells et ^Cells lt ^Cells loc ^Cells ii ^I32 r]
+  (comment "How the initial of row r of `ii` meets the first word of its first line: 0 joined and sure, 1 joined and")
+  (comment "flagged low-conf, 2 a space. One code point: `in-join`'s table and lists. Two or more that begin with a letter or")
+  (comment "digit: a whole first word (`IT`), a space, unless it is of a script written without spaces; one that begins with")
+  (comment "punctuation (`“N`) is joined. A raised initial is part of its word.")
+  (let [^I32 rr (* r II_STRIDE)
+        ^I32 il (cells-at ii (+ rr II_IL))
+        ^I32 ncp (cells-at ii (+ rr II_NCP))
+        ^I32 iw (cells-at ii (+ rr II_WORD))
+        ^I32 w1 (ln-get lt (cells-at ii (+ rr II_TL)) (lh-first))]
+    (if (and (< il 0) (< ncp (wd-get wd iw (hd-tlen)))) (return 0))
+    (let [^I32 c0 (in-first-cp wd et iw)]
+      (if (< c0 0) (return 0))
+      (if (== ncp 1)
+        (return (in-join loc c0 et (wd-get wd w1 (hd-tstart)) (wd-get wd w1 (hd-tlen)))))
+      (if (not (in-alnum c0)) (return 0))
+      (if (in-ideo c0) (return 0))
+      (return 2))))
+
+(defn ^:pub ^I32 in-detect [^Cells wd ^Cells gl ^Cells fo ^Cells et ^I32 npages ^Cells loc ^:mut ^Cells lt
+                            ^:mut ^Cells sc ^:mut ^Cells sq ^:mut ^Cells tm ^:mut ^Cells ii]
+  (comment "Every page's initials. `lt` is the lines' copy (`lc-copy`): rewritten as the header says. `ii` is the table")
+  (comment "of initials (stride 12); `loc` the locale tag as code points (empty for none), which decides the join. `sc sq tm`")
+  (comment "are scratch. Answers the initials found.")
+  (let [^I32 nl (quot (cells-len lt) 16)
+        ^:mut ^I32 p 1
+        ^:mut ^I32 r 0
+        ^:mut ^I32 q 0]
+    (cells-drop ii 0)
+    (comment "Cell 15 is this stage's alone, but for a line a table holds (IN_HELD and up, left as it is; such lines are not seen):")
+    (comment "whatever else a producer left there is cleared.")
+    (while (< r nl)
+      (do (if (< (cells-at lt (+ (* r 16) 15)) IN_HELD) (cells-set lt (+ (* r 16) 15) 0))
+          (set r (+ r 1))))
+    (while (<= p npages)
+      (do (in-page wd gl fo et lt p sc sq tm ii)
+          (set p (+ p 1))))
+    (set q (quot (cells-len ii) II_STRIDE))
+    (set r 0)
+    (while (< r q)
+      (do (let [^I32 rr (* r II_STRIDE)
+                ^I32 t (cells-at ii (+ rr II_TL))
+                ^I32 jn (in-join-of wd et lt loc ii r)]
+            (cells-set ii (+ rr II_JOIN) jn)
+            (if (and (>= t 0) (< t nl))
+              (let [^:mut ^I32 v (* (+ r 1) 4)]
+                (if (< (cells-at ii (+ rr II_IL)) 0)
+                  (do (set v (+ v 1))
+                      (if (and (== (cells-at ii (+ rr II_NCP)) (wd-get wd (cells-at ii (+ rr II_WORD)) (hd-tlen)))
+                               (!= jn 2))
+                        (set v (+ v 2)))))
+                (cells-set lt (+ (* t 16) 15) v))))
+          (set r (+ r 1))))
+    (return q)))
+
+(defn ^:pub ^I32 in-retire [^:mut ^Cells lt ^Cells ii]
+  (comment "The lines of their own that initials were found in (`ii`: an initial's line that holds no other text) leave the page, so")
+  (comment "no stage that builds from the pages sees them. Answers how many.")
+  (let [^I32 n (quot (cells-len ii) II_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 got 0]
+    (while (< r n)
+      (do (let [^I32 il (cells-at ii (+ (* r II_STRIDE) II_IL))]
+            (if (>= il 0)
+              (if (>= (cells-at lt (+ (* il 16) 15)) 0)
+                (do (cells-set lt (+ (* il 16) (lh-page)) 0)
+                    (set got (+ got 1))))))
+          (set r (+ r 1))))
+    (return got)))
+
+(defn ^:pub ^I32 in-get-ii [^Cells ii ^I32 r ^I32 f]
+  (return (cells-at ii (+ (* r II_STRIDE) f))))
+
+(defn ^:pub ^I32 in-row [^Cells lt ^I32 l]
+  (comment "The row of `ii` whose target is row l of `lt`, -1 for none.")
+  (if (or (< l 0) (> (* (+ l 1) 16) (cells-len lt))) (return -1))
+  (let [^I32 c (cells-at lt (+ (* l 16) 15))]
+    (if (or (< c 4) (>= c IN_HELD)) (return -1))
+    (return (- (quot c 4) 1))))
+
+(defn ^:pub ^I32 in-cell [^Cells lt ^I32 l]
+  (comment "Cell 15 of row l as the initials' code: 0 for a line a table holds.")
+  (let [^I32 c (cells-at lt (+ (* l 16) 15))]
+    (if (>= c IN_HELD) (return 0))
+    (return c)))

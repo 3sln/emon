@@ -189,6 +189,8 @@ public final class Tabletest {
         emon.Port.Cells fr = emon.Port.newCells();
         emon.Port.Cells gp = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
+        emon.Port.Cells al = emon.Port.newCells();
         emon.Port.Cells lt = emon.Port.newCells();
         emon.Port.Cells ls = emon.Port.newCells();
         emon.Port.Cells sd = emon.Port.newCells();
@@ -230,7 +232,8 @@ public final class Tabletest {
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
         Table.tbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
-        Para.paBuild(wd, ln, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
+        Columns.lcCopy(ln, lt);
+        Para.paBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         ttBrief(t, nodes, attrs, text);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
@@ -446,6 +449,9 @@ public final class Tabletest {
         emon.Port.Cells htmp = emon.Port.newCells();
         emon.Port.Cells hpr = emon.Port.newCells();
         emon.Port.Cells hptxt = emon.Port.newCells();
+        emon.Port.Cells loc = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
+        emon.Port.Cells al = emon.Port.newCells();
         emon.Port.Src src = emon.Port.srcOfBlob(pdf);
         int o = Pdfdoc.pdOpen(src, ar, dc, a, b, st);
         if (o != 0) {
@@ -458,8 +464,10 @@ public final class Tabletest {
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
         Table.tbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
-        Heading.hdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-        Para.paBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
+        Columns.lcCopy(ln, lt);
+        Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
+        Heading.hdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
+        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return 3;
         }

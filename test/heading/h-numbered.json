@@ -107,6 +107,7 @@
                   {
                     "id": 9,
                     "kind": "paragraph",
+                    "align": "start",
                     "text": "Like us time own get right looked time father soon point tell night words read tell.",
                     "at": [[1, 72, 259.17, 467.74, 271.66]],
                     "src": ["text", "infer"],
@@ -123,6 +124,7 @@
                         "level": 4,
                         "number": "1.1.1.1",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Normative",
                         "at": [[1, 72, 286.28, 179.42, 297.28]],
                         "src": ["text", "infer"],
@@ -131,6 +133,7 @@
                       {
                         "id": 12,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "Right each measure could keep white something see try up been also quarter on not.",
                         "at": [[1, 72, 301.92, 479.16, 314.41]],
                         "src": ["text", "infer"],
@@ -151,6 +154,7 @@
                         "level": 4,
                         "number": "1.1.1.2",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Informative",
                         "at": [[1, 72, 329.03, 184.91, 340.03]],
                         "src": ["text", "infer"],
@@ -159,6 +163,7 @@
                       {
                         "id": 15,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "Write came without next to make it very.",
                         "at": [[1, 72, 345.42, 269.21, 357.91]],
                         "src": ["text", "infer"],
@@ -207,6 +212,7 @@
                         "level": 4,
                         "number": "1.1.2.1",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Normative",
                         "at": [[1, 72, 421.28, 179.42, 432.28]],
                         "src": ["text", "infer"],
@@ -215,6 +221,7 @@
                       {
                         "id": 21,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "It later city best there help your much young do not mother being say around hard.",
                         "at": [[1, 72, 437.67, 472.81, 450.16]],
                         "src": ["text", "infer"],
@@ -235,6 +242,7 @@
                         "level": 4,
                         "number": "1.1.2.2",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Informative",
                         "at": [[1, 72, 464.78, 184.91, 475.78]],
                         "src": ["text", "infer"],
@@ -243,6 +251,7 @@
                       {
                         "id": 24,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "Pay earth however own now earth did not no such should region.",
                         "at": [[1, 72, 480.42, 385.87, 492.91]],
                         "src": ["text", "infer"],
@@ -303,6 +312,7 @@
                   {
                     "id": 30,
                     "kind": "paragraph",
+                    "align": "start",
                     "text": "Along write does go like between best turn must over later hear.",
                     "at": [[1, 72, 599.67, 380.49, 612.16]],
                     "src": ["text", "infer"],
@@ -319,6 +329,7 @@
                         "level": 4,
                         "number": "1.2.1.1",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Normative",
                         "at": [[1, 72, 626.03, 179.42, 637.03]],
                         "src": ["text", "infer"],
@@ -327,6 +338,7 @@
                       {
                         "id": 33,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "Friend big paper page long house also city second be side region word soon hard.",
                         "at": [[1, 72, 642.42, 463.48, 654.91]],
                         "src": ["text", "infer"],
@@ -347,6 +359,7 @@
                         "level": 4,
                         "number": "1.2.1.2",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Informative",
                         "at": [[1, 72, 669.53, 184.91, 680.53]],
                         "src": ["text", "infer"],
@@ -355,6 +368,7 @@
                       {
                         "id": 36,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "Number as across body always because mother at.",
                         "at": [[1, 72, 685.92, 314.37, 698.41]],
                         "src": ["text", "infer"],
@@ -394,6 +408,7 @@
                   {
                     "id": 40,
                     "kind": "paragraph",
+                    "align": "start",
                     "text": "So big why need have did enough much sentence form car.",
                     "at": [[2, 72, 93.42, 355.15, 105.91]],
                     "src": ["text", "infer"],
@@ -410,6 +425,7 @@
                         "level": 4,
                         "number": "1.2.2.1",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Normative",
                         "at": [[2, 72, 120.53, 179.42, 131.53]],
                         "src": ["text", "infer"],
@@ -418,6 +434,7 @@
                       {
                         "id": 43,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "New like usually two below body between small something however an morning.",
                         "at": [[2, 72, 136.17, 461.45, 148.66]],
                         "src": ["text", "infer"],
@@ -438,6 +455,7 @@
                         "level": 4,
                         "number": "1.2.2.2",
                         "numbering": "decimal",
+                        "align": "start",
                         "text": "Informative",
                         "at": [[2, 72, 163.28, 184.91, 174.28]],
                         "src": ["text", "infer"],
@@ -446,6 +464,7 @@
                       {
                         "id": 46,
                         "kind": "paragraph",
+                        "align": "start",
                         "text": "Home in time been today however even number four quarter got leave do study your last.",
                         "at": [[2, 72, 179.67, 503.54, 192.16]],
                         "src": ["text", "infer"],
@@ -506,6 +525,7 @@
                   {
                     "id": 52,
                     "kind": "paragraph",
+                    "align": "start",
                     "text": "Boy seen page going do not five enough important on body children think.",
                     "at": [[2, 72, 298.17, 430.53, 310.66]],
                     "src": ["text", "infer"],
@@ -618,6 +638,7 @@
                   {
                     "id": 64,
                     "kind": "paragraph",
+                    "align": "start",
                     "text": "Same market give if world think story policy water has air being does turn animal form.",
                     "at": [[2, 72, 564.42, 494.5, 576.91]],
                     "src": ["text", "infer"],

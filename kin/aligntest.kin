@@ -1,0 +1,112 @@
+;; Laws for `emon.align` (P4.11; SPEC 10.10; D110, D184), on every target.
+;;
+;; The verdict of a block from the rows its lines make (a start gap, an end gap, a size, a style: centipoints, a size of
+;; 1000 is 10 pt, so t, a quarter of it, is 250): every row of the table of SPEC 10.10, the single-line rules, the first-line
+;; indent, a block that has no verdict (two justified lines are not enough), and the second pass over the style classes
+;; (`al-pass`): a single flush-start line follows the multi-line blocks of its class, a class with none makes it `start`.
+(ns emon.aligntest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.port :refer [cells-drop]]
+            [emon.model :refer [model-init node-new node-sub nk-paragraph al-start al-center al-end al-justify]]
+            [emon.align :refer [al-line al-mark al-pass al-judge al-code al-conf al-min]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 at-code [^Cells al ^I32 n]
+  (comment "The code of the verdict on the n rows from row 0, 0 when it is below `align-min` or none.")
+  (let [^I32 v (al-judge al 0 n)]
+    (if (< (al-conf v) (al-min)) (return 0))
+    (return (al-code v))))
+
+(deftest test-every-row-of-the-table
+  (let [^Cells al (new-cells)]
+    (comment "justify: four lines flush at both edges (a hair off), the last flush at the start and short.")
+    (al-line al 0 40 1000 0) (al-line al 20 0 1000 0) (al-line al 0 30 1000 0) (al-line al 10 5400 1000 0)
+    (assert-eq (at-code al 4) (al-justify) "justify")
+    (cells-drop al 0)
+    (comment "start: every S at the edge, the end edge ragged.")
+    (al-line al 0 1500 1000 0) (al-line al 0 800 1000 0) (al-line al 0 3000 1000 0) (al-line al 0 6000 1000 0)
+    (assert-eq (at-code al 4) (al-start) "start")
+    (cells-drop al 0)
+    (comment "end: every E at the edge, the start edge ragged.")
+    (al-line al 1500 0 1000 0) (al-line al 800 0 1000 0) (al-line al 3000 0 1000 0) (al-line al 600 0 1000 0)
+    (assert-eq (at-code al 4) (al-end) "end")
+    (cells-drop al 0)
+    (comment "center: S = E on every line, and the lines differ.")
+    (al-line al 1000 1000 1000 0) (al-line al 2500 2500 1000 0) (al-line al 500 500 1000 0) (al-line al 3000 3100 1000 0)
+    (assert-eq (at-code al 4) (al-center) "center")
+    (cells-drop al 0)
+    (comment "a first-line indent comes out of line 1's S: the block is start, not none.")
+    (al-line al 1500 1800 1000 0) (al-line al 0 900 1000 0) (al-line al 0 2600 1000 0) (al-line al 0 5000 1000 0)
+    (assert-eq (at-code al 4) (al-start) "an indented first line")
+    (cells-drop al 0)
+    (comment "a justified block with an indented first line is justify.")
+    (al-line al 1500 0 1000 0) (al-line al 0 0 1000 0) (al-line al 0 0 1000 0) (al-line al 0 4000 1000 0)
+    (assert-eq (at-code al 4) (al-justify) "justify with an indent")))
+
+(deftest test-what-has-no-verdict
+  (let [^Cells al (new-cells)]
+    (comment "Two lines, both flush at both edges: not enough to say justify (one non-last line), and not start, end or center.")
+    (al-line al 0 0 1000 0) (al-line al 0 4000 1000 0)
+    (assert-eq (at-code al 2) 0 "two lines")
+    (cells-drop al 0)
+    (comment "A block that wanders: S and E both vary, S - E does not hold.")
+    (al-line al 0 3000 1000 0) (al-line al 2000 100 1000 0) (al-line al 700 4000 1000 0) (al-line al 0 100 1000 0)
+    (assert-eq (at-code al 4) 0 "no pattern")
+    (cells-drop al 0)
+    (assert-eq (al-judge al 0 0) 0 "no lines")))
+
+(deftest test-a-single-line
+  (let [^Cells al (new-cells)]
+    (comment "Centred: S and E at least four t, and within t of each other.")
+    (al-line al 5000 5100 1000 0)
+    (assert-eq (at-code al 1) (al-center) "a centred line")
+    (cells-drop al 0)
+    (comment "At the end edge, started two body sizes in.")
+    (al-line al 9000 0 1000 0)
+    (assert-eq (at-code al 1) (al-end) "a line at the end edge")
+    (cells-drop al 0)
+    (comment "At the end edge but started only a body size in: an indented line that happens to fill its row.")
+    (al-line al 1200 0 1000 0)
+    (assert-eq (at-code al 1) 0 "an indented full line is not right-aligned")
+    (cells-drop al 0)
+    (comment "Flush at the start: `start`, but below `align-min`, for the second pass (the class) to decide.")
+    (al-line al 0 5000 1000 0)
+    (assert-eq (al-code (al-judge al 0 1)) (al-start) "a flush-start line, tentatively start")
+    (assert-eq (at-code al 1) 0 "and not written on its own")))
+
+(deftest test-the-second-pass-follows-the-style-class
+  (let [^Cells al (new-cells) ^Cells cl (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (comment "Block 1: a start block of 4 lines in the 10 pt class; block 2: a single flush-start line of the same class")
+    (comment "(start, it follows its peers); block 3: a single flush-start line of 20 pt, a class with no multi-line block")
+    (comment "(a heading: start); block 4: a justified block of 4 lines in the 9 pt bold class and block 5 a single")
+    (comment "flush-start line of that class (the last line of a justified block, perhaps: none); block 6: a centred line.")
+    (let [^I32 b1 (node-new nodes (nk-paragraph) 0)
+          ^I32 b2 (node-new nodes (nk-paragraph) 0)
+          ^I32 b3 (node-new nodes (nk-paragraph) 0)
+          ^I32 b4 (node-new nodes (nk-paragraph) 0)
+          ^I32 b5 (node-new nodes (nk-paragraph) 0)
+          ^I32 b6 (node-new nodes (nk-paragraph) 0)]
+      (al-line al 0 1500 1000 0) (al-line al 0 800 1000 0) (al-line al 0 3000 1000 0) (al-line al 0 6000 1000 0)
+      (al-mark al b1)
+      (al-line al 0 4000 1000 0)
+      (al-mark al b2)
+      (al-line al 0 4000 2000 0)
+      (al-mark al b3)
+      (al-line al 0 40 900 1) (al-line al 20 0 900 1) (al-line al 0 30 900 1) (al-line al 10 5400 900 1)
+      (al-mark al b4)
+      (al-line al 0 4000 900 1)
+      (al-mark al b5)
+      (al-line al 5000 5100 1000 0)
+      (al-mark al b6)
+      (assert-eq (al-pass nodes attrs al cl) 5 "five blocks got an align")
+      (assert-eq (node-sub nodes b1) (al-start) "the multi-line start block")
+      (assert-eq (node-sub nodes b2) (al-start) "a single line follows a class of start blocks")
+      (assert-eq (node-sub nodes b3) (al-start) "a single line in a class with no multi-line block")
+      (assert-eq (node-sub nodes b4) (al-justify) "the justified block")
+      (assert-eq (node-sub nodes b5) 0 "a single line in a class of justified blocks gets none")
+      (assert-eq (node-sub nodes b6) (al-center) "a centred line"))))

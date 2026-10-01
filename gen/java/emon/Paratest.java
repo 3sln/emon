@@ -109,10 +109,20 @@ public final class Paratest {
         emon.Port.cellsDrop(et, 0);
         return 0;
     }
-    public static int ptBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells hc) {
-        // `pa-build`, with the column stage's scratch (`emon.columns`) made here; `hc` is the heading analysis
-        // (`emon.heading`), empty for the paragraphs alone.
-        emon.Port.Cells lt = emon.Port.newCells();
+    public static int ptPrep(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells gl, emon.Port.Cells fo, emon.Port.Cells lt, emon.Port.Cells ii) {
+        // The lines' copy `lt` and the initials found in it (`in-detect`), as the Engine prepares them before the heading
+        // analysis; no locale. Answers the initials found.
+        emon.Port.Cells loc = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        Columns.lcCopy(ln, lt);
+        return Initial.inDetect(wd, gl, fo, et, npages, loc, lt, ls, lo, tm, ii);
+    }
+    public static int ptBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells hc, emon.Port.Cells lt, emon.Port.Cells ii) {
+        // `pa-build`, with the column stage's scratch (`emon.columns`) and the alignment's made here; `hc` is the heading
+        // analysis (`emon.heading`), empty for the paragraphs alone; `lt` and `ii` are the lines' copy and the initials' table,
+        // prepared by `pt-prep` (the heading analysis reads the same copy).
         emon.Port.Cells ls = emon.Port.newCells();
         emon.Port.Cells sd = emon.Port.newCells();
         emon.Port.Cells it = emon.Port.newCells();
@@ -125,12 +135,13 @@ public final class Paratest {
         emon.Port.Cells lo = emon.Port.newCells();
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
+        emon.Port.Cells al = emon.Port.newCells();
         emon.Port.Cells tb = emon.Port.newCells();
         emon.Port.Cells tc = emon.Port.newCells();
         emon.Port.Cells tw = emon.Port.newCells();
         emon.Port.Cells tq = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
+        return Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     }
     public static int ptDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, StringBuilder t) {
         // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -160,6 +171,10 @@ public final class Paratest {
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
         emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells g0 = emon.Port.newCells();
+        emon.Port.Cells f0 = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
+        emon.Port.Cells al = emon.Port.newCells();
         emon.Port.Cells tb = emon.Port.newCells();
         emon.Port.Cells tc = emon.Port.newCells();
         emon.Port.Cells tw = emon.Port.newCells();
@@ -170,7 +185,8 @@ public final class Paratest {
             Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
             p += 1;
         }
-        Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
+        ptPrep(wd, ln, et, npages, g0, f0, lt, ii);
+        Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         Para.paDump(t, cf, dbg);
         return 0;
     }
@@ -178,12 +194,17 @@ public final class Paratest {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
         int p = 1;
         emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells g0 = emon.Port.newCells();
+        emon.Port.Cells f0 = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (p <= npages) {
             Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
             p += 1;
         }
-        ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc);
+        ptPrep(wd, ln, et, npages, g0, f0, lt, ii);
+        ptBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
     public static int ptBrief(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text) {
@@ -693,8 +714,11 @@ public final class Paratest {
         emon.Port.Cells htmp = emon.Port.newCells();
         emon.Port.Cells hpr = emon.Port.newCells();
         emon.Port.Cells hptxt = emon.Port.newCells();
-        Heading.hdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-        ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc);
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
+        ptPrep(wd, ln, et, np, gl, fnt, lt, ii);
+        Heading.hdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
+        ptBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii);
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0) {
             return 3;
         }
@@ -753,5 +777,224 @@ public final class Paratest {
         emon.Testport.assertTextSpan(t5, emon.Testport.testFile("para/initial-image.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/initial-image.json")), "initial-image", 0);
         emon.Testport.assertEq(ptGolden(emon.Testport.testFile("corpus/synth/pdf/initial-vector.pdf"), t6, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-vector runs");
         emon.Testport.assertTextSpan(t6, emon.Testport.testFile("para/initial-vector.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/initial-vector.json")), "initial-vector", 0);
+    }
+    public static void testRealInitialDocumentsMakeTheGoldenModels() {
+        // P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D183; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
+        // initial inline, and the `align` of the paragraphs (D184), byte for byte (`para-check` holds them to the HTML).
+        emon.Port.Cells ar = emon.Port.newCells();
+        emon.Port.Cells dc = emon.Port.newCells();
+        emon.Port.Cells a = emon.Port.newCells();
+        emon.Port.Cells b = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells cx = emon.Port.newCells();
+        emon.Port.Cells ox = emon.Port.newCells();
+        emon.Port.Cells cs = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells f0 = emon.Port.newCells();
+        emon.Port.Cells f1 = emon.Port.newCells();
+        emon.Port.Cells f2 = emon.Port.newCells();
+        emon.Port.Cells f3 = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells fnt = emon.Port.newCells();
+        emon.Port.Cells pg = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells mst = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        StringBuilder t3 = emon.Testport.newText();
+        StringBuilder t4 = emon.Testport.newText();
+        emon.Testport.assertEq(ptGolden(emon.Testport.testFile("corpus/synth/pdf/initial-raised.pdf"), t1, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-raised runs");
+        emon.Testport.assertTextSpan(t1, emon.Testport.testFile("para/initial-raised.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/initial-raised.json")), "initial-raised", 0);
+        emon.Testport.assertEq(ptGolden(emon.Testport.testFile("corpus/synth/pdf/initial-firstword.pdf"), t2, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-firstword runs");
+        emon.Testport.assertTextSpan(t2, emon.Testport.testFile("para/initial-firstword.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/initial-firstword.json")), "initial-firstword", 0);
+        emon.Testport.assertEq(ptGolden(emon.Testport.testFile("corpus/synth/pdf/initial-columns.pdf"), t3, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-columns runs");
+        emon.Testport.assertTextSpan(t3, emon.Testport.testFile("para/initial-columns.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/initial-columns.json")), "initial-columns", 0);
+        emon.Testport.assertEq(ptGolden(emon.Testport.testFile("corpus/synth/pdf/initial-rtl.pdf"), t4, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-rtl runs");
+        emon.Testport.assertTextSpan(t4, emon.Testport.testFile("para/initial-rtl.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/initial-rtl.json")), "initial-rtl", 0);
+    }
+    public static int ptFind(emon.Port.Cells nodes, int kind, int after) {
+        // The first node of that kind with an index above `after`, -1 for none.
+        int n = Model.nodeCount(nodes);
+        int i = after + 1;
+        while (i < n) {
+            if (Model.nodeKind(nodes, i) == kind) {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static void testADropInitialJoinsItsFirstWordAndTheParagraphIsOne() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        StringBuilder t3 = emon.Testport.newText();
+        // An `O` 36 pt on 10 pt text: its cap top is the first line's (within half a size), its baseline in line 2's band,
+        // lines 1 and 2 start after it, line 3 back at its start edge. One paragraph, `Once upon ...`, the initial an
+        // inline `initial` (a drop of two lines) holding `O`, then the rest as text; justified, since lines 1 and 2 count
+        // from the initial's edge. Without a locale the join is flagged: `O` is a word in some language.
+        ptLine(wd, ln, et, emon.Testport.textBlob("O"), 1, 7200, 10200, 9400, 13000, 0, 0, 3600);
+        ptLine(wd, ln, et, emon.Testport.textBlob("nce upon a time"), 1, 9800, 10000, 50000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("there was a mill"), 1, 9800, 11500, 50000, 12700, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("that nobody saw"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("the end of it"), 1, 7200, 14500, 30000, 15700, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "drop: well formed");
+        ptBrief(t1, nodes, regions, text);
+        emon.Testport.assertText(t1, "P1:Once upon a time there was a mill that nobody saw the end of it;;T:O;T:nce upon a time there was a mill that nobody saw the end of it;", "a drop initial: one paragraph, joined, no space");
+        int ini = ptFind(nodes, Model.nkInitial(), 0);
+        emon.Testport.assertEq(Model.nodeSub(nodes, ini), Model.ifmDrop(), "the form is drop");
+        emon.Testport.assertEq(Model.nodeAux(nodes, ini), 2, "of two lines");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, ini), Model.flLowConf(), "and the join is in doubt");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alJustify(), "justified: lines 1 and 2 start at the initial's edge");
+        // A letter divider: a big letter with nothing wrapping it. The line below starts at the same edge, not after the
+        // letter, so it is no initial and stays a block of its own.
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("A"), 1, 7200, 10000, 9500, 13400, 0, 0, 3000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("Aardvark an animal here"), 1, 7200, 14000, 50000, 15200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("that digs at night"), 1, 7200, 15500, 50000, 16700, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "divider: well formed");
+        ptBrief(t2, nodes, regions, text);
+        emon.Testport.assertText(t2, "P1:A;P1:Aardvark an animal here that digs at night;", "a letter divider is no initial");
+        emon.Testport.assertEq(ptFind(nodes, Model.nkInitial(), 0), -1, "no initial inline");
+        // A margin initial: it hangs left of the column (its end edge before the lines' start), the lines are not
+        // indented, and there are lines after its two.
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("Q"), 1, 3000, 10200, 6200, 13000, 0, 0, 3600);
+        ptLine(wd, ln, et, emon.Testport.textBlob("uiet nights in town"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("were rare that year"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("and the lamps burned"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("low until dawn"), 1, 7200, 14500, 40000, 15700, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed");
+        ptBrief(t3, nodes, regions, text);
+        emon.Testport.assertText(t3, "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;", "a margin initial");
+        int ini2 = ptFind(nodes, Model.nkInitial(), 0);
+        emon.Testport.assertEq(Model.nodeSub(nodes, ini2), Model.ifmMargin(), "the form is margin");
+        emon.Testport.assertEq(Model.nodeAux(nodes, ini2), 2, "of two lines");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, ini2), 0, "a `Q` is no word: the join is sure");
+    }
+    public static void testARightToLeftInitialIsMirrored() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        // The initial at the right (a start edge of -x1), the first two lines to its left, the third back at the right edge.
+        ptLine(wd, ln, et, emon.Testport.textBlob("B"), 1, 43000, 10200, 45000, 13000, 0, 1, 3600);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ab cd ef gh"), 1, 7200, 10000, 42500, 11200, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ij kl mn op"), 1, 7200, 11500, 42500, 12700, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("qr st uv wx"), 1, 7200, 13000, 45000, 14200, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("yz ab cd ef"), 1, 7200, 14500, 45000, 15700, 0, 1, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed");
+        ptBrief(t1, nodes, regions, text);
+        emon.Testport.assertText(t1, "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;", "a right-to-left initial");
+        int ini3 = ptFind(nodes, Model.nkInitial(), 0);
+        emon.Testport.assertEq(Model.nodeSub(nodes, ini3), Model.ifmDrop(), "a drop");
+    }
+    public static void testAParagraphsAlignmentIsMeasuredAgainstItsFragment() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        // Justified: three lines flush at both edges of the fragment, the last short.
+        ptLine(wd, ln, et, emon.Testport.textBlob("aa bb cc dd"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ee ff gg hh"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("mm nn"), 1, 7200, 14500, 20000, 15700, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "justify: well formed");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alJustify(), "justify");
+        // Left-aligned: a ragged end edge, every start at the edge (the fragment's box is the widest line's).
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("aa bb cc dd"), 1, 7200, 10000, 45000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ee ff gg hh"), 1, 7200, 11500, 42000, 12700, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("mm nn"), 1, 7200, 14500, 30000, 15700, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "start: well formed");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alStart(), "start");
+        // Right-aligned: a ragged start edge, every end at the edge.
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("aa bb cc dd"), 1, 12200, 10000, 50000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ee ff gg hh"), 1, 15200, 11500, 50000, 12700, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("mm nn"), 1, 33000, 14500, 50000, 15700, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "end: well formed");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alEnd(), "end");
+        // Centred: equal gaps either side, and the lines differ in width.
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("aa bb cc dd"), 1, 17200, 10000, 40000, 11200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ee ff gg hh"), 1, 12200, 11500, 45000, 12700, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("mm nn"), 1, 25000, 14500, 32200, 15700, 0, 0, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "center: well formed");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alCenter(), "center");
+        // Right to left, every line ending at the box's LEFT edge (a right-to-left line's end): LOGICALLY `end`, though these
+        // are the lines the left-to-right case calls `start`; and the same page set flush right is `start`.
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("aa bb cc dd"), 1, 7200, 10000, 45000, 11200, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ee ff gg hh"), 1, 7200, 11500, 42000, 12700, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("mm nn"), 1, 7200, 14500, 30000, 15700, 0, 1, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl end: well formed");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alEnd(), "right-to-left, flush left: end");
+        ptClear(wd, ln, et);
+        ptLine(wd, ln, et, emon.Testport.textBlob("aa bb cc dd"), 1, 12200, 10000, 50000, 11200, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ee ff gg hh"), 1, 15200, 11500, 50000, 12700, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 1, 1000);
+        ptLine(wd, ln, et, emon.Testport.textBlob("mm nn"), 1, 33000, 14500, 50000, 15700, 0, 1, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl start: well formed");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), Model.alStart(), "right-to-left, flush right: start");
     }
 }

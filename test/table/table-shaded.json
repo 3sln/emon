@@ -34,6 +34,7 @@
             "id": 2,
             "kind": "heading",
             "level": 1,
+            "align": "start",
             "text": "Project Status",
             "at": [[1, 72, 94.58, 207, 119.57]],
             "src": ["text", "infer"],
@@ -42,6 +43,7 @@
           {
             "id": 3,
             "kind": "paragraph",
+            "align": "start",
             "text": "Father revenue looked year himself then what white no found.",
             "at": [[1, 72, 130.17, 372.83, 142.66]],
             "src": ["text", "infer"],
@@ -340,6 +342,7 @@
           {
             "id": 37,
             "kind": "paragraph",
+            "align": "start",
             "text": "Did many knew something is some people near often down take.",
             "at": [[1, 72, 257.67, 383.65, 270.16]],
             "src": ["text", "infer"],

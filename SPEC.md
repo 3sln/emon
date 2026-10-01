@@ -1753,6 +1753,24 @@ a raised initial's top; the initial's box is part of the paragraph's region;
 its glyphs are left out of the style inventory, the body-size statistics and
 feature column 18 of its line.
 
+**As built (P4.10, D183, D185).** `kin/initial.kin` runs right after the lines are copied for the column stage and
+before anything measures them, on that copy: a drop or margin initial's line leaves the page and lines 1..N of a drop start at
+its start edge; a raised initial's line takes the box of its other glyphs and its first word does not vote on the line's size or
+style. *Candidates* are one-word lines of at most 12 code points (a letter or digit among them) at least `initial-min` (2.0)
+times the page's median line size (a pre-filter) and the size of line 1. *Cap tops* are the font's `/CapHeight` when `fonts` has
+one (the reader does not yet write it: -1), else 0.7 of the size for a cased script, 0.6 for the other caseless scripts
+(Hebrew, Arabic, Indic, Thai: their letters stand lower than a capital) and 0.88 for CJK (an ideograph has none); for the
+caseless scripts the candidate's cap top may lie up to 0.15 of its size above line 1's. A drop has N >= 2 indented lines and
+line N+1 back at the start edge (within half a size) or, when no line follows in the column, nothing else beside the initial; a
+margin initial has lines 1..N and at least one more at one start edge, beyond its end edge. A raised initial is the leading
+glyphs (at most three, or the whole word) of a line's first word at least 2.0 times the size of the glyphs after them, on the
+line's baseline, with line 2 at the same start edge; a line with one word is not looked at. The join is `0` (joined, sure),
+`1` (joined, `low-conf`) or `2` (a space): a one-letter initial that is a word in the locale's table (the union without one;
+`A I O` for `en`, tables for `de fr es pt it nl`) is flagged; with `en` the first word after it decides where a list knows it
+(`A` + `long` is `A long`, `I` + `t` is `It`, sure); a whole enlarged first word (`IT`) is followed by a space unless its script
+is written without them; `“N` is joined. The `initial` inline is `src {text, infer}`, `conf` 800 (500 and `low-conf` when the
+join is flagged); a paragraph on one page has its own `text` as well as the inlines (equal), on several only the inlines'.
+
 ### 10.10 Alignment (D110)
 
 Per block, from its lines against the **box of the fragment it sits in**
@@ -1781,6 +1799,19 @@ column's text extent is its box): numeric columns are usually `end`, and a
 decimal-aligned column whose end edges disagree gets none (there is no
 `decimal` value: the numbers read the same). Headings and captions are
 tested like paragraphs.
+
+**As built (P4.11, D184).** `kin/align.kin`: the caller makes, for every line of a block, its start and end gaps against
+the box of the fragment it sits in (`cf`'s box, each from the line's own side, so a right-to-left line is measured from the
+right and `start`/`end` are logical), its size and style bits, and closes the block with a marker; `al-pass` decides at the
+end of the stage. The tests are the table's, with *t* a quarter of the first line's size, a first-line indent taken out of line
+1's S when every other line starts at the edge, and `justify` needing three lines (two non-last and the last). The confidence
+is 400 + 100 for each line after the first that agrees (at most four) + up to 200 for the margin + 100 where the ragged edge is
+plain (a spread of more than 2*t*); `align-min` is 800. A single line is `center` (S and E at least 4*t*, within *t*) or `end`
+(E within *t*, S at least 8*t*: a one-line paragraph that fills its row and has an indent is not right-aligned); a single
+flush-start line is the second pass's: its **style class** (size within a twentieth, the style bits) decides, the blocks of two
+lines or more of the class all `start` making it `start`, any other value leaving it with none, and a class with no such block
+(a heading, a label: nothing is justified in one line) making it `start`. The pass is over the stream of blocks, so a later stage
+that retypes a paragraph (a heading, a caption) is judged by the same rules. Table cells are P5.3's.
 
 ### 10.11 Assets: opt-in pixels for figures and seals (D117)
 

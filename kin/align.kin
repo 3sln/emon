@@ -1,0 +1,279 @@
+;; Alignment of a block from its lines (P4.11; SPEC 10.10; D110, D184). emon's own module (D039).
+;;
+;;   (al-line al s e size style)  append one line's measure to the stream `al` (rows of 4): its start gap, its end gap, its
+;;                                size, its style (`sy` bits)
+;;   (al-mark al node)            close a block: a marker row naming its node and how many line rows came before it since
+;;                                the last marker (`al-line` rows are the lines, a marker row has -1 in its last cell)
+;;   (al-pass nodes attrs al cl)  the verdicts on every marked block, written with `node-set-align`
+;;   (al-judge al first n)        the verdict on the n lines from row `first`: 0 for none, else `conf * 8 + code`, `code` an
+;;                                `al` code (1 start, 2 center, 3 end, 4 justify), `conf` per mille
+;;   (al-code v) (al-conf v)      the two halves of a verdict
+;;
+;; WHAT IT MEASURES (SPEC 10.10): per line, the START gap S and the END gap E in the line's WRITING direction, against the
+;; box of the FRAGMENT the line sits in (the column fragment of SPEC 10.1.1), never against the block's own bounding box
+;; (against which every block is justified). The caller (`emon.para`) makes the two numbers: S = line start - fragment
+;; start, E = fragment end - line end, each from the line's own side, so a right-to-left line is measured from the right and
+;; `start` and `end` are LOGICAL (a right-to-left paragraph set flush left is `end`). Let t be a quarter of the body size
+;; (the first line's); the last line is left out of the justify and ragged tests, a first-line indent out of line 1's S:
+;;
+;;   justify  >= 2 non-last lines, every one with S <= t and E <= t, the last line's S <= t
+;;   start    every S <= t, and E varies by more than 2t over the non-last lines, or the block is ragged (some non-last E > t)
+;;   end      every E <= t and S varies by more than 2t
+;;   center   |S - E| <= t on every line, and S varies by more than 2t (or a single line with S and E >= 4t)
+;;
+;; A single line can only be `center` or `end` from its own geometry (`end` when S is at least two body sizes: a one-line
+;; paragraph that happens to fill its line and has an indent is not right-aligned). A single flush-start line is `start`
+;; only by its STYLE CLASS (its size within a twentieth, its style bits): the class's blocks of two lines or more decide, all
+;; `start` makes it `start`, any other value leaves it with none (it may be the last line of a justified block); a class with
+;; no such block (a heading, a label: nothing is justified in one line) makes it `start`. That is the second pass, `al-pass`.
+;;
+;; CONFIDENCE rises with the lines that pass and with the margin by which they pass: 400 + 100 for each line after the
+;; first that agrees (at most 4) + up to 200 for the margin (how far inside t the worst line is) + 100 where the ragged edge
+;; is plain (a spread of more than 2t, which is the only evidence `start`, `end` and `center` have against `justify`).
+;; Written only at or above `align-min` (setting, default 800 while uncalibrated: Phase 10 calibrates).
+(ns emon.align
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [al-start al-center al-end al-justify node-set-align]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem]]))
+
+(defconst ^I32 AL_FLOOR 800)          ;; align-min, per mille (D110: a default of 800 while uncalibrated)
+(defconst ^I32 AL_STRIDE 4)
+(defconst ^I32 AL_BIG 100000000)    ;; a gap is held to +-10^8: a hostile file's box must not overflow the sums
+(defconst ^I32 AL_CLASSES 64)       ;; the style classes tallied: more than this many in one document are ignored
+(defconst ^I32 AL_CL_STRIDE 4)
+
+(defn ^:pub ^I32 al-min [] (return 800))
+
+(defn ^I32 al-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 al-clamp [^I32 v]
+  (if (> v AL_BIG) (return AL_BIG))
+  (if (< v (- 0 AL_BIG)) (return (- 0 AL_BIG)))
+  (return v))
+
+(defn ^I32 al-size [^I32 v]
+  (if (< v 0) (return 0))
+  (if (> v 1000000) (return 1000000))
+  (return v))
+
+(defn ^I32 al-style [^I32 v]
+  (if (< v 0) (return 0))
+  (return v))
+
+(defn ^:pub ^I32 al-line [^:mut ^Cells al ^I32 s ^I32 e ^I32 size ^I32 style]
+  (cells-push al (al-clamp s))
+  (cells-push al (al-clamp e))
+  (cells-push al (al-size size))
+  (cells-push al (al-style style))
+  (return 0))
+
+(defn ^:pub ^I32 al-mark [^:mut ^Cells al ^I32 node]
+  (comment "Close the block `node`: a marker row (node, the line rows since the last marker, 0, -1).")
+  (let [^:mut ^I32 r (quot (cells-len al) AL_STRIDE)
+        ^:mut ^I32 n 0]
+    (while (and (> r 0) (!= (cells-at al (+ (* (- r 1) AL_STRIDE) 3)) -1))
+      (do (set r (- r 1))
+          (set n (+ n 1))))
+    (cells-push al node)
+    (cells-push al n)
+    (cells-push al 0)
+    (cells-push al -1)
+    (return n)))
+
+(defn ^:pub ^I32 al-code [^I32 v] (return (rem v 8)))
+(defn ^:pub ^I32 al-conf [^I32 v] (return (quot v 8)))
+
+(defn ^I32 al-s [^Cells al ^I32 k] (return (cells-at al (* k AL_STRIDE))))
+(defn ^I32 al-e [^Cells al ^I32 k] (return (cells-at al (+ (* k AL_STRIDE) 1))))
+
+(defn ^I32 al-flag [^Bool b]
+  (if b (return 1))
+  (return 0))
+
+(defn ^I32 al-margin [^I32 t ^I32 dev]
+  (comment "How far inside t a deviation lies, 0..1000.")
+  (if (<= t 0) (return 0))
+  (if (>= dev t) (return 0))
+  (return (quot (* (- t dev) 1000) t)))
+
+(defn ^I32 al-pack [^I32 code ^I32 agree ^I32 margin ^I32 plain]
+  (comment "A verdict: 400 + 100 for each agreeing line after the first (at most 4) + 200 * margin + 100 where plain.")
+  (let [^:mut ^I32 a agree
+        ^:mut ^I32 conf 400]
+    (if (> a 4) (set a 4))
+    (set conf (+ conf (* a 100)))
+    (set conf (+ conf (quot (* margin 200) 1000)))
+    (if (== plain 1) (set conf (+ conf 100)))
+    (if (> conf 1000) (set conf 1000))
+    (return (+ (* conf 8) code))))
+
+(defn ^I32 al-sk [^Cells al ^I32 first ^I32 k ^I32 s1]
+  (comment "The start gap of line k of the block that begins at row `first`; line 0's is `s1`, its indent removed.")
+  (if (== k 0) (return s1))
+  (return (al-s al (+ first k))))
+
+(defn ^:pub ^I32 al-judge [^Cells al ^I32 first ^I32 n]
+  (comment "The verdict on the block of the n line rows from row `first` of `al` (see the header). 0 when it has none; a single")
+  (comment "flush-start line is answered `start` at confidence 500, for `al-pass` to decide.")
+  (if (< n 1) (return 0))
+  (let [^I32 size (cells-at al (+ (* first AL_STRIDE) 2))
+        ^I32 t (quot size 4)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 s1 (al-s al first)
+        ^:mut ^I32 maxs 0
+        ^:mut ^I32 mins 0
+        ^:mut ^I32 maxe 0
+        ^:mut ^I32 mine 0
+        ^:mut ^I32 maxen 0
+        ^:mut ^I32 minen 0
+        ^:mut ^I32 maxd 0
+        ^:mut ^I32 rest 1
+        ^:mut ^I32 ok 1]
+    (if (< t 1) (return 0))
+    (if (== n 1)
+      (let [^I32 s (al-s al first)
+            ^I32 e (al-e al first)]
+        (if (and (>= s (* t 4)) (and (>= e (* t 4)) (<= (al-abs (- s e)) t)))
+          (return (al-pack (al-center) 3 (al-margin t (al-abs (- s e))) 0)))
+        (if (and (>= s (* t 8)) (<= e t))
+          (return (al-pack (al-end) 3 (al-margin t e) 0)))
+        (if (and (<= s t) (> e t))
+          (return (+ (* 500 8) (al-start))))
+        (return 0)))
+    ;; a first-line indent: line 1 starts further in than t while every other line starts at the edge
+    (set k 1)
+    (while (< k n)
+      (do (if (> (al-sk al first k s1) t) (set rest 0))
+          (set k (+ k 1))))
+    (if (and (== rest 1) (> s1 t)) (set s1 0))
+    ;; the spreads: all lines, and the non-last ones
+    (set k 0)
+    (while (< k n)
+      (do (let [^I32 s (al-sk al first k s1)
+                ^I32 e (al-e al (+ first k))]
+            (if (== k 0)
+              (do (set maxs s) (set mins s) (set maxe e) (set mine e))
+              (do (if (> s maxs) (set maxs s))
+                  (if (< s mins) (set mins s))
+                  (if (> e maxe) (set maxe e))
+                  (if (< e mine) (set mine e))))
+            (if (< k (- n 1))
+              (if (== k 0)
+                (do (set maxen e) (set minen e))
+                (do (if (> e maxen) (set maxen e))
+                    (if (< e minen) (set minen e))))))
+          (set k (+ k 1))))
+    ;; justify: at least two non-last lines flush at both edges, the last flush at the start
+    (if (>= n 3)
+      (do (set ok 1)
+          (set k 0)
+          (set maxd 0)
+          (while (< k (- n 1))
+            (do (let [^I32 s (al-sk al first k s1)
+                      ^I32 e (al-e al (+ first k))]
+                  (if (or (> s t) (> e t)) (set ok 0))
+                  (if (> s maxd) (set maxd s))
+                  (if (> e maxd) (set maxd e)))
+                (set k (+ k 1))))
+          (let [^I32 sl (al-sk al first (- n 1) s1)]
+            (if (> sl t) (set ok 0))
+            (if (> sl maxd) (set maxd sl)))
+          (if (== ok 1)
+            (return (al-pack (al-justify) (- n 1) (al-margin t maxd) 0)))))
+    ;; start: every S <= t, and the end edge ragged
+    (if (<= maxs t)
+      (if (or (> (- maxen minen) (* t 2)) (> maxen t))
+        (return (al-pack (al-start) (- n 1) (al-margin t maxs)
+                         (al-flag (> (- maxen minen) (* t 2)))))))
+    ;; end: every E <= t and the start edge ragged
+    (if (and (<= maxe t) (> (- maxs mins) (* t 2)))
+      (return (al-pack (al-end) (- n 1) (al-margin t maxe) 1)))
+    ;; center: |S - E| <= t on every line, and S varies
+    (set ok 1)
+    (set k 0)
+    (set maxd 0)
+    (while (< k n)
+      (do (let [^I32 d (al-abs (- (al-sk al first k s1) (al-e al (+ first k))))]
+            (if (> d t) (set ok 0))
+            (if (> d maxd) (set maxd d)))
+          (set k (+ k 1))))
+    (if (and (== ok 1) (> (- maxs mins) (* t 2)))
+      (return (al-pack (al-center) (- n 1) (al-margin t maxd) 1)))
+    (return 0)))
+
+;; ---------------------------------------------------------------- the second pass
+
+(defn ^I32 al-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 al-same-size [^I32 a ^I32 b]
+  (comment "1 when the two sizes are within a twentieth of each other, else 0.")
+  (if (<= (* (al-abs (- a b)) 20) (al-max a b)) (return 1))
+  (return 0))
+
+(defn ^I32 al-class [^:mut ^Cells cl ^I32 size ^I32 style ^I32 add]
+  (comment "The row of the style class (size within a twentieth, style bits) in `cl` (rows: size style starts others), made when")
+  (comment "`add` is 1 and there are fewer than AL_CLASSES; -1 for none.")
+  (let [^I32 n (quot (cells-len cl) AL_CL_STRIDE)
+        ^:mut ^I32 r 0]
+    (while (< r n)
+      (do (if (and (== (cells-at cl (+ (* r AL_CL_STRIDE) 1)) style)
+                   (== (al-same-size size (cells-at cl (* r AL_CL_STRIDE))) 1))
+            (return r))
+          (set r (+ r 1))))
+    (if (and (== add 1) (< n AL_CLASSES))
+      (do (cells-push cl size)
+          (cells-push cl style)
+          (cells-push cl 0)
+          (cells-push cl 0)
+          (return n)))
+    (return -1)))
+
+(defn ^:pub ^I32 al-pass [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells al ^:mut ^Cells cl]
+  (comment "The verdict on every block marked in `al` (`al-mark`), written to its node. First every block that is decided by")
+  (comment "its own lines, tallying the style classes (`cl`) its multi-line blocks make; then the single flush-start lines by")
+  (comment "their class. Answers the nodes that got an `align`.")
+  (let [^I32 nr (quot (cells-len al) AL_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 c 0]
+    (cells-drop cl 0)
+    ;; pass 1: markers carry their verdict in cell 2 (0 none, -1 pending a class)
+    (while (< r nr)
+      (do (if (== (cells-at al (+ (* r AL_STRIDE) 3)) -1)
+            (let [^I32 n (cells-at al (+ (* r AL_STRIDE) 1))
+                  ^I32 node (cells-at al (* r AL_STRIDE))
+                  ^I32 f (- r n)
+                  ^I32 v (al-judge al f n)]
+              (cells-set al (+ (* r AL_STRIDE) 2) 0)
+              (if (> v 0)
+                (if (>= (al-conf v) AL_FLOOR)
+                  (do (if (== (node-set-align nodes attrs node (al-code v)) 0)
+                        (set got (+ got 1)))
+                      (cells-set al (+ (* r AL_STRIDE) 2) (al-code v))
+                      (if (>= n 2)
+                        (do (set c (al-class cl (cells-at al (+ (* f AL_STRIDE) 2)) (cells-at al (+ (* f AL_STRIDE) 3)) 1))
+                            (if (>= c 0)
+                              (if (== (al-code v) (al-start))
+                                (cells-set cl (+ (* c AL_CL_STRIDE) 2) (+ (cells-at cl (+ (* c AL_CL_STRIDE) 2)) 1))
+                                (cells-set cl (+ (* c AL_CL_STRIDE) 3) (+ (cells-at cl (+ (* c AL_CL_STRIDE) 3)) 1)))))))
+                  (if (and (== n 1) (== (al-code v) (al-start)))
+                    (cells-set al (+ (* r AL_STRIDE) 2) -1))))))
+          (set r (+ r 1))))
+    ;; pass 2: the single flush-start lines
+    (set r 0)
+    (while (< r nr)
+      (do (if (and (== (cells-at al (+ (* r AL_STRIDE) 3)) -1) (== (cells-at al (+ (* r AL_STRIDE) 2)) -1))
+            (let [^I32 f (- r (cells-at al (+ (* r AL_STRIDE) 1)))
+                  ^I32 node (cells-at al (* r AL_STRIDE))]
+              (set c (al-class cl (cells-at al (+ (* f AL_STRIDE) 2)) (cells-at al (+ (* f AL_STRIDE) 3)) 0))
+              (if (or (< c 0) (== (cells-at cl (+ (* c AL_CL_STRIDE) 3)) 0))
+                (if (== (node-set-align nodes attrs node (al-start)) 0)
+                  (set got (+ got 1))))))
+          (set r (+ r 1))))
+    (return got)))

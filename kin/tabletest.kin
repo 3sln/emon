@@ -31,6 +31,8 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build]]
+            [emon.columns :refer [lc-copy]]
+            [emon.initial :refer [in-detect]]
             [emon.table :refer [tb-build tb-count]]
             [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
@@ -170,7 +172,7 @@
   (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
         ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
         ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
-        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
         ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells) ^Cells hc (new-cells)
@@ -182,7 +184,8 @@
     (model-init nodes attrs regions text pages ledger layout)
     (page-new pages 1 61200 79200 0 (pk-vector))
     (tb-build wd ln et pa 1 tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages)
-    (pa-build wd ln et 1 pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger)
+    (lc-copy ln lt)
+    (pa-build wd et 1 pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
     (tt-brief t nodes attrs text)
     (return (model-check nodes attrs regions text pages ledger layout st))))
 
@@ -336,7 +339,7 @@
         ^Cells s10 (new-cells) ^Cells s11 (new-cells) ^Cells s12 (new-cells) ^Cells s13 (new-cells) ^Cells s14 (new-cells)
         ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)
         ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells ws (new-cells) ^Cells htmp (new-cells)
-        ^Cells hpr (new-cells) ^Cells hptxt (new-cells)
+        ^Cells hpr (new-cells) ^Cells hptxt (new-cells) ^Cells loc (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
         ^Src src (src-of-blob pdf)
         ^I32 o (pd-open src ar dc a b st)]
     (if (!= o 0) (return 1))
@@ -345,8 +348,10 @@
     (pa-pages pg pages)
     (let [^I32 np (quot (cells-len pages) 16)]
       (tb-build wd ln et pa np tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages)
-      (hd-analyze wd ln et gl sf sc hc ws htmp hpr hptxt)
-      (pa-build wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger))
+      (lc-copy ln lt)
+      (in-detect wd gl fnt et np loc lt ls lo tm ii)
+      (hd-analyze wd lt et gl sf sc hc ws htmp hpr hptxt)
+      (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))
     (if (!= (model-check nodes attrs regions text pages ledger layout st) 0) (return 3))
     (js-emit t 1 nodes attrs regions text pages ledger layout)
     (return 0)))

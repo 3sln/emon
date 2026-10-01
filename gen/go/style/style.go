@@ -292,6 +292,7 @@ func stDom(wd *port.Cells, ln *port.Cells, l int32) int32 {
 	var w0 int32 = stLn(ln, l, evidence.LhFirst())
 	var wn int32 = stLn(ln, l, evidence.LhCount())
 	var i int32 = 0
+	var i0 int32 = 0
 	var j int32 = 0
 	var c int32 = 0
 	var best int32 = -1
@@ -299,9 +300,14 @@ func stDom(wd *port.Cells, ln *port.Cells, l int32) int32 {
 	if wn > 32 {
 		wn = 32
 	}
+	// A line that opens with a raised initial: its first word is partly the initial and does not vote (P4.10, cell 15).
+	if ((stLn(ln, l, 15) % 2) == 1) && (wn > 1) {
+		i = 1
+	}
+	i0 = i
 	for i < wn {
 		c = 0
-		j = 0
+		j = i0
 		for j < wn {
 			if (stSize(evidence.WdGet(wd, w0+i, evidence.WfSize())) == stSize(evidence.WdGet(wd, w0+j, evidence.WfSize()))) && ((evidence.WdGet(wd, w0+i, evidence.WfFont()) == evidence.WdGet(wd, w0+j, evidence.WfFont())) && (evidence.WdGet(wd, w0+i, evidence.WfStyle()) == evidence.WdGet(wd, w0+j, evidence.WfStyle()))) {
 				c += 1

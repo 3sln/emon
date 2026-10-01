@@ -31,8 +31,10 @@ import (
 	"strings"
 	"sync"
 
+	"emon/columns"
 	"emon/evidence"
 	"emon/furniture"
+	"emon/initial"
 	"emon/heading"
 	"emon/html"
 	"emon/model"
@@ -202,7 +204,8 @@ func (f Furniture) mode() int32 { return int32(f) }
 
 // Options is what a conversion is asked to do. DefaultOptions is SPEC 13's defaults.
 type Options struct {
-	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides nothing yet.
+	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides how an initial
+	// (a drop cap) joins its first word when the letter could be a word of its own (SPEC 10.9).
 	Locale string
 	Ocr    OcrPolicy
 	Assets Assets
@@ -777,14 +780,23 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
+	// the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an
+	// initial joins its first word); ia is their table and the open paragraph's alignment rows (kin/align.kin, P4.11). They are
+	// found in the copy of the lines BEFORE the heading analysis reads it: a big first letter must never be a heading
+	ia := newCellsN(3)
+	for _, ch := range opts.Locale {
+		port.CellsPush(ia[0], int32(ch))
+	}
+	columns.LcCopy(ln, c[0])
+	initial.InDetect(wd, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
 	// the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
 	// paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
 	h := newCellsN(7)
 	// the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
 	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
-	heading.HdAnalyze(wd, ln, et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
-	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
-		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger)
+	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)

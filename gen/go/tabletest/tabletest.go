@@ -4,8 +4,10 @@
 package tabletest
 
 import (
+	"emon/columns"
 	"emon/evidence"
 	"emon/heading"
+	"emon/initial"
 	"emon/json"
 	"emon/model"
 	"emon/mscript"
@@ -211,6 +213,8 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	var fr *port.Cells = port.NewCells()
 	var gp *port.Cells = port.NewCells()
 	var st *port.Cells = port.NewCells()
+	var ii *port.Cells = port.NewCells()
+	var al *port.Cells = port.NewCells()
 	var lt *port.Cells = port.NewCells()
 	var ls *port.Cells = port.NewCells()
 	var sd *port.Cells = port.NewCells()
@@ -252,7 +256,8 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
 	table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
-	para.PaBuild(wd, ln, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger)
+	columns.LcCopy(ln, lt)
+	para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
@@ -474,6 +479,9 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	var htmp *port.Cells = port.NewCells()
 	var hpr *port.Cells = port.NewCells()
 	var hptxt *port.Cells = port.NewCells()
+	var loc *port.Cells = port.NewCells()
+	var ii *port.Cells = port.NewCells()
+	var al *port.Cells = port.NewCells()
 	var src *port.Src = port.SrcOfBlob(pdf)
 	var o int32 = pdfdoc.PdOpen(src, ar, dc, a, b, st)
 	if o != 0 {
@@ -486,8 +494,10 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
 	table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
-	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
-	para.PaBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger)
+	columns.LcCopy(ln, lt)
+	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
+	heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
+	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
 		return 3
 	}

@@ -5,6 +5,7 @@ namespace emon;
 
 
 public static class Table {
+    internal const int TbHeld = 1073741824;
     internal const int Tbs = 24;
     internal const int Tcs = 16;
     internal const int Rls = 8;
@@ -47,7 +48,11 @@ public static class Table {
     }
     public static int TbClaimed(emon.Port.Cells ln, int l) {
         // The table (index + 1) that holds line l, 0 when none does.
-        return Evidence.LnGet(ln, l, 15);
+        int c = Evidence.LnGet(ln, l, 15);
+        if (c >= TbHeld) {
+            return (c - TbHeld) + 1;
+        }
+        return 0;
     }
     internal static bool TbLess(emon.Port.Cells d, int st, int k1, int k2, int a, int b) {
         // Does row a of d come before row b: by field k1, then k2, then the row.
@@ -873,7 +878,7 @@ public static class Table {
                 if ((cx >= emon.Port.CellsAt(tb, (k * Tbs) + 1)) && (cx <= emon.Port.CellsAt(tb, (k * Tbs) + 3))) {
                     if ((cy >= emon.Port.CellsAt(tb, (k * Tbs) + 2)) && (cy <= emon.Port.CellsAt(tb, (k * Tbs) + 4))) {
                         if (Evidence.LnGet(ln, l, 15) == 0) {
-                            Evidence.LnSet(ln, l, 15, k + 1);
+                            Evidence.LnSet(ln, l, 15, TbHeld + k);
                         }
                     }
                 }
@@ -2193,7 +2198,7 @@ public static class Table {
         }
         emon.Port.CellsSet(tb, b + 14, emon.Port.CellsLen(tq));
         emon.Port.CellsPush(tq, best);
-        Evidence.LnSet(ln, best, 15, k + 1);
+        Evidence.LnSet(ln, best, 15, TbHeld + k);
         int h = Evidence.LnGet(ln, best, Evidence.LhY1()) - Evidence.LnGet(ln, best, Evidence.LhY0());
         int curx1 = Evidence.LnGet(ln, best, Evidence.LhX1());
         int cury1 = Evidence.LnGet(ln, best, Evidence.LhY1());
@@ -2206,7 +2211,7 @@ public static class Table {
                 if ((Evidence.LnGet(ln, l, Evidence.LhX0()) > (curx1 - 100)) && ((Evidence.LnGet(ln, l, Evidence.LhX0()) - curx1) <= (2 * h))) {
                     if (TbAbs(Evidence.LnGet(ln, l, Evidence.LhBy0()) - Evidence.LnGet(ln, best, Evidence.LhBy0())) <= (h / 3)) {
                         emon.Port.CellsPush(tq, l);
-                        Evidence.LnSet(ln, l, 15, k + 1);
+                        Evidence.LnSet(ln, l, 15, TbHeld + k);
                         curx1 = Evidence.LnGet(ln, l, Evidence.LhX1());
                     }
                 }
@@ -2236,7 +2241,7 @@ public static class Table {
             }
             if ((pick >= 0) && (above == 1)) {
                 emon.Port.CellsPush(tq, pick);
-                Evidence.LnSet(ln, pick, 15, k + 1);
+                Evidence.LnSet(ln, pick, 15, TbHeld + k);
                 cury1 = Evidence.LnGet(ln, pick, Evidence.LhY1());
                 more = 1;
             }

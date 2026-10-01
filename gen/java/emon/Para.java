@@ -40,7 +40,12 @@ public final class Para {
     public static final int CF_ASSOC = 10;
     public static final int CF_DONE = 11;
     public static final int CF_REF = 12;
-    public static final int FR_STRIDE = 7;
+    public static final int FR_STRIDE = 11;
+    public static final int FR_NCP = 7;
+    public static final int FR_FORM = 8;
+    public static final int FR_LINES = 9;
+    public static final int FR_FLAG = 10;
+    public static final int PA_BIG = 100000000;
     public static int paPages(emon.Port.Cells pg, emon.Port.Cells pages) {
         // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
         // (`/Rotate` turns it), centipoints, the page's own turn in degrees, `vector`.
@@ -142,6 +147,7 @@ public final class Para {
         int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
         int wn = Evidence.lnGet(ln, l, Evidence.lhCount());
         int i = 0;
+        int i0 = 0;
         int j = 0;
         int c = 0;
         int best = -1;
@@ -149,9 +155,14 @@ public final class Para {
         if (wn > 32) {
             wn = 32;
         }
+        // A line that opens with a raised initial: the first word, which is partly the initial, does not vote (P4.10).
+        if (((Initial.inCell(ln, l) % 2) == 1) && (wn > 1)) {
+            i = 1;
+        }
+        i0 = i;
         while (i < wn) {
             c = 0;
-            j = 0;
+            j = i0;
             while (j < wn) {
                 int fi = Evidence.wdGet(wd, w0 + i, Evidence.wfFont());
                 int si = Evidence.wdGet(wd, w0 + i, Evidence.wfSize());
@@ -432,14 +443,28 @@ public final class Para {
         }
         return 0 == 1;
     }
+    public static int paSkip(emon.Port.Cells ln, int l) {
+        // How many code points at the start of the line's text are the initial of the paragraph above it (P4.10: a drop
+        // initial whose baseline is this line's is a glyph of this line in the text layer; cell 15 holds minus their number).
+        int c = Initial.inCell(ln, l);
+        if (c < 0) {
+            return 0 - c;
+        }
+        return 0;
+    }
     public static int paFirstCp(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
         // The first code point of the line's text, -1 when it has none.
         int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
         int wn = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int sk = paSkip(ln, l);
         int k = 0;
         while (k < wn) {
             int ts = Evidence.wdGet(wd, w0 + k, Evidence.hdTstart());
             int tl = Evidence.wdGet(wd, w0 + k, Evidence.hdTlen());
+            if ((k == 0) && (tl >= sk)) {
+                ts += sk;
+                tl -= sk;
+            }
             if ((ts >= 0) && (tl > 0)) {
                 return emon.Port.cellsAt(et, ts);
             }
@@ -472,14 +497,21 @@ public final class Para {
         // Append the line's words, a space between two.
         int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
         int wn = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int sk = paSkip(ln, l);
+        int nospace = (Initial.inCell(ln, l) / 2) % 2;
         int k = 0;
         int j = 0;
         int started = 0;
+        // A line that opens a paragraph whose initial is its whole first word and joins the next with no space (cell 15, bit 1).
         while (k < wn) {
             int ts = Evidence.wdGet(wd, w0 + k, Evidence.hdTstart());
             int tl = Evidence.wdGet(wd, w0 + k, Evidence.hdTlen());
+            if ((k == 0) && (tl >= sk)) {
+                ts += sk;
+                tl -= sk;
+            }
             if ((ts >= 0) && (tl > 0)) {
-                if (started == 1) {
+                if ((started == 1) && !((nospace == 1) && (k == 1))) {
                     emon.Port.cellsPush(raw, 32);
                 }
                 started = 1;
@@ -503,6 +535,77 @@ public final class Para {
         emon.Port.cellsPush(fr, Evidence.lnGet(ln, l, Evidence.lhY1()));
         emon.Port.cellsPush(fr, rawstart);
         emon.Port.cellsPush(fr, l);
+        emon.Port.cellsPush(fr, 0);
+        emon.Port.cellsPush(fr, 0);
+        emon.Port.cellsPush(fr, 0);
+        emon.Port.cellsPush(fr, 0);
+        return 0;
+    }
+    public static int paIniStart(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, emon.Port.Cells fr, emon.Port.Cells ii, int l) {
+        // The paragraph that begins at line l, if an initial opens it (P4.10): a drop or margin initial's text is put at the
+        // head of `raw` (a space after it when its join says so), the fragment row just opened (`pa-frag-open`) records its
+        // length, form, lines and flag, and takes in its box. A raised initial is already in the line's first word.
+        int r = Initial.inRow(ln, l);
+        if (r < 0) {
+            return 0;
+        }
+        int base = ((emon.Port.cellsLen(fr) / FR_STRIDE) - 1) * FR_STRIDE;
+        int il = Initial.inGetIi(ii, r, 2);
+        int jn = Initial.inGetIi(ii, r, 10);
+        int w = Initial.inGetIi(ii, r, 9);
+        int j = 0;
+        if (il >= 0) {
+            int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
+            // (the initial's text: `ncp` code points of the word, all of it when it has a line of its own)
+            while (j < Initial.inGetIi(ii, r, 4)) {
+                emon.Port.cellsPush(raw, emon.Port.cellsAt(et, ts + j));
+                j += 1;
+            }
+            if (jn == 2) {
+                emon.Port.cellsPush(raw, 32);
+            }
+        }
+        emon.Port.cellsSet(fr, base + FR_NCP, Initial.inGetIi(ii, r, 4));
+        emon.Port.cellsSet(fr, base + FR_FORM, Initial.inGetIi(ii, r, 0));
+        emon.Port.cellsSet(fr, base + FR_LINES, Initial.inGetIi(ii, r, 1));
+        if (jn == 1) {
+            emon.Port.cellsSet(fr, base + FR_FLAG, 1);
+        }
+        if (Initial.inGetIi(ii, r, 5) < emon.Port.cellsAt(fr, base + 1)) {
+            emon.Port.cellsSet(fr, base + 1, Initial.inGetIi(ii, r, 5));
+        }
+        if (Initial.inGetIi(ii, r, 6) < emon.Port.cellsAt(fr, base + 2)) {
+            emon.Port.cellsSet(fr, base + 2, Initial.inGetIi(ii, r, 6));
+        }
+        if (Initial.inGetIi(ii, r, 7) > emon.Port.cellsAt(fr, base + 3)) {
+            emon.Port.cellsSet(fr, base + 3, Initial.inGetIi(ii, r, 7));
+        }
+        if (Initial.inGetIi(ii, r, 8) > emon.Port.cellsAt(fr, base + 4)) {
+            emon.Port.cellsSet(fr, base + 4, Initial.inGetIi(ii, r, 8));
+        }
+        return 1;
+    }
+    public static int paCl(int v) {
+        if (v > PA_BIG) {
+            return PA_BIG;
+        }
+        if (v < (0 - PA_BIG)) {
+            return 0 - PA_BIG;
+        }
+        return v;
+    }
+    public static int paAlAdd(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells al, int l, int fx0, int fx1) {
+        // One line of the open paragraph for the alignment test (P4.11, SPEC 10.10): its start and end gaps against the box
+        // [fx0, fx1] of the fragment it sits in, each from the line's own side, and its size.
+        int x0 = paCl(Evidence.lnGet(ln, l, Evidence.lhX0()));
+        int x1 = paCl(Evidence.lnGet(ln, l, Evidence.lhX1()));
+        int b0 = paCl(fx0);
+        int b1 = paCl(fx1);
+        if (Evidence.lnGet(ln, l, Evidence.lhDir()) == 1) {
+            Align.alLine(al, b1 - x1, x0 - b0, paSize(wd, ln, l), paStyle(wd, ln, l));
+        } else {
+            Align.alLine(al, x0 - b0, b1 - x1, paSize(wd, ln, l), paStyle(wd, ln, l));
+        }
         return 0;
     }
     public static int paFragExtend(emon.Port.Cells fr, emon.Port.Cells ln, int l) {
@@ -551,12 +654,15 @@ public final class Para {
         Model.nodeSetAttrText(nodes, attrs, par, Model.fkNumbering(), t1, n);
         return skip;
     }
-    public static int paFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells hc, int parent) {
+    public static int paFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells hc, int parent) {
         // Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
         // column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
         // inline per page it is on with a `break` milestone between two, a column break being only a new region
-        // (SPEC 10.1.2). Empties `raw` and `fr`. Under the root (parent 0) a paragraph the heading analysis
-        // found a heading in is a `heading` of its level under the open section it belongs in (D167).
+        // (SPEC 10.1.2). Under the root (parent 0) a paragraph the heading analysis found a heading in is a `heading` of its
+        // level under the open section it belongs in (D167). A paragraph that an initial opens (`fr`'s first row, P4.10) has an
+        // `initial` inline first, holding the initial's text, and the rest of its text as a `text` inline (also when it is on one
+        // page, where it has its own `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`,
+        // `al-pass` decides at the end). Empties `raw` and `fr`.
         int nfr = emon.Port.cellsLen(fr) / FR_STRIDE;
         int rawn = emon.Port.cellsLen(raw);
         if (nfr == 0) {
@@ -564,6 +670,7 @@ public final class Para {
             return 0;
         }
         int hl = emon.Port.cellsAt(fr, 6);
+        int ncp = emon.Port.cellsAt(fr, FR_NCP);
         int lev = 0;
         int sect = parent;
         int kind = Model.nkParagraph();
@@ -571,8 +678,11 @@ public final class Para {
         int k = 0;
         int kend = 0;
         int runs = 1;
+        int kids = 0;
         int from = 0;
         int to = 0;
+        int cut = 0;
+        int ini = 0;
         int t0 = 0;
         int child = 0;
         if (parent == 0) {
@@ -596,6 +706,9 @@ public final class Para {
             }
             k += 1;
         }
+        if ((runs > 1) || (ncp > 0)) {
+            kids = 1;
+        }
         k = 0;
         while (k < nfr) {
             int pg = emon.Port.cellsAt(fr, k * FR_STRIDE);
@@ -608,20 +721,52 @@ public final class Para {
             if (kend < nfr) {
                 to = emon.Port.cellsAt(fr, (kend * FR_STRIDE) + 5);
             }
-            if (runs > 1) {
+            if (kids == 1) {
                 if (k > 0) {
                     child = Model.nodeNew(nodes, Model.nkBreak(), par);
                     Model.nodeSetSub(nodes, child, pg);
                     Model.nodeSetConf(nodes, child, 500);
                     Model.nodeAddSrc(nodes, child, Model.srInfer());
                 }
-                child = Model.nodeNew(nodes, Model.nkText(), par);
-                t0 = emon.Port.cellsLen(text);
-                Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
-                int tn = emon.Port.cellsLen(text) - t0;
-                Model.nodeSetText(nodes, child, t0, tn);
-                Model.nodeSetConf(nodes, child, 1000);
-                Model.nodeAddSrc(nodes, child, Model.srText());
+                cut = from;
+                if ((k == 0) && (ncp > 0)) {
+                    cut = from + ncp;
+                    if (cut > to) {
+                        cut = to;
+                    }
+                    ini = Model.nodeNew(nodes, Model.nkInitial(), par);
+                    Model.nodeSetSub(nodes, ini, emon.Port.cellsAt(fr, FR_FORM));
+                    Model.nodeSetAux(nodes, ini, emon.Port.cellsAt(fr, FR_LINES));
+                    Model.nodeSetConf(nodes, ini, 800);
+                    if (emon.Port.cellsAt(fr, FR_FLAG) == 1) {
+                        Model.nodeSetConf(nodes, ini, 500);
+                        Model.nodeAddFlag(nodes, ini, Model.flLowConf());
+                    }
+                    Model.nodeAddSrc(nodes, ini, Model.srText());
+                    Model.nodeAddSrc(nodes, ini, Model.srInfer());
+                    child = Model.nodeNew(nodes, Model.nkText(), ini);
+                    t0 = emon.Port.cellsLen(text);
+                    Normalize.nzNfc(raw, from, cut, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+                    int tn0 = emon.Port.cellsLen(text) - t0;
+                    Model.nodeSetText(nodes, child, t0, tn0);
+                    Model.nodeSetConf(nodes, child, 1000);
+                    Model.nodeAddSrc(nodes, child, Model.srText());
+                }
+                if ((runs > 1) || (cut < to)) {
+                    child = Model.nodeNew(nodes, Model.nkText(), par);
+                    t0 = emon.Port.cellsLen(text);
+                    Normalize.nzNfc(raw, cut, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+                    int tn = emon.Port.cellsLen(text) - t0;
+                    Model.nodeSetText(nodes, child, t0, tn);
+                    Model.nodeSetConf(nodes, child, 1000);
+                    Model.nodeAddSrc(nodes, child, Model.srText());
+                }
+                if (runs == 1) {
+                    t0 = emon.Port.cellsLen(text);
+                    Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+                    int tn1 = emon.Port.cellsLen(text) - t0;
+                    Model.nodeSetText(nodes, par, t0, tn1);
+                }
             } else {
                 if (lev > 0) {
                     from += paHeadingNumber(nodes, attrs, text, raw, tmp, par, from, to, hc, hl);
@@ -644,6 +789,7 @@ public final class Para {
                 k += 1;
             }
         }
+        Align.alMark(al, par);
         emon.Port.cellsDrop(raw, 0);
         emon.Port.cellsDrop(fr, 0);
         return 0;
@@ -794,7 +940,7 @@ public final class Para {
         }
         return pts;
     }
-    public static int paNote(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells cf, emon.Port.Cells lo, int r, int med, emon.Port.Cells hc) {
+    public static int paNote(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, int r, int med, emon.Port.Cells hc) {
         // The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
         // paragraphs as any fragment's (D113).
         int base = r * CF_STRIDE;
@@ -812,24 +958,28 @@ public final class Para {
         emon.Port.cellsDrop(raw, 0);
         emon.Port.cellsDrop(fr, 0);
         paFragOpen(fr, ln, page, prev, 0);
+        paIniStart(wd, ln, et, raw, fr, ii, prev);
         paAddLine(wd, ln, et, raw, prev);
+        paAlAdd(wd, ln, al, prev, emon.Port.cellsAt(cf, base + CF_X0), emon.Port.cellsAt(cf, base + CF_X1));
         while (i < cnt) {
             int b = emon.Port.cellsAt(lo, first + i);
-            if (paNewPar(wd, ln, prev, b, med, mg, hc)) {
-                paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc, note);
+            if ((Initial.inRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc)) {
+                paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
                 paFragOpen(fr, ln, page, b, 0);
+                paIniStart(wd, ln, et, raw, fr, ii, b);
             } else {
                 paJoin(wd, ln, et, raw, b);
                 paFragExtend(fr, ln, b);
             }
             paAddLine(wd, ln, et, raw, b);
+            paAlAdd(wd, ln, al, b, emon.Port.cellsAt(cf, base + CF_X0), emon.Port.cellsAt(cf, base + CF_X1));
             prev = b;
             i += 1;
         }
-        paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc, note);
+        paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
         return 0;
     }
-    public static int paNotes(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells cf, emon.Port.Cells lo, int med, int from, int cur, int ty, emon.Port.Cells hc) {
+    public static int paNotes(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, int med, int from, int cur, int ty, emon.Port.Cells hc) {
         // Write the side fragments that have been read to: those beside a body fragment before row `cur`, and
         // those beside `cur` that begin at or above y `ty`, each once, in the order of `cf`, after the paragraph
         // that was open where they begin (D111). Scans from row `from`; answers the first side row not written yet
@@ -842,7 +992,7 @@ public final class Para {
             if ((emon.Port.cellsAt(cf, base + CF_ROLE) != Model.rlBody()) && (emon.Port.cellsAt(cf, base + CF_DONE) == 0)) {
                 if ((emon.Port.cellsAt(cf, base + CF_ASSOC) < cur) || ((emon.Port.cellsAt(cf, base + CF_ASSOC) == cur) && (emon.Port.cellsAt(cf, base + CF_Y0) <= ty))) {
                     emon.Port.cellsSet(cf, base + CF_DONE, 1);
-                    paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, r, med, hc);
+                    paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
                 } else if (pend > r) {
                     pend = r;
                 }
@@ -851,21 +1001,21 @@ public final class Para {
         }
         return pend;
     }
-    public static int paClose(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells dq, int med, int from, int cur, int ty, emon.Port.Cells hc) {
+    public static int paClose(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells dq, int med, int from, int cur, int ty, emon.Port.Cells hc) {
         // Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a
         // paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
         // Answers the first side row not written yet.
         int nq = emon.Port.cellsLen(dq);
         int k = 0;
         int pend = 0;
-        paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc, 0);
-        pend = paNotes(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, med, from, cur, ty, hc);
+        paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, 0);
+        pend = paNotes(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, med, from, cur, ty, hc);
         while (k < nq) {
             int l = emon.Port.cellsAt(dq, k);
             int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
             paFragOpen(fr, ln, pg, l, 0);
             paAddLine(wd, ln, et, raw, l);
-            paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc, 0);
+            paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, 0);
             k += 1;
         }
         emon.Port.cellsDrop(dq, 0);
@@ -980,7 +1130,7 @@ public final class Para {
         emon.Port.cellsDrop(raw, 0);
         return k;
     }
-    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger) {
+    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger, emon.Port.Cells ii, emon.Port.Cells al) {
         // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
         // holds is not in the reading order at all.
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -990,7 +1140,10 @@ public final class Para {
         // upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the
         // fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).
         // `hc` is the heading analysis (`emon.heading`, P4.4, D167): an EMPTY `hc` means none and the paragraphs are
-        // what they were; it is also where the open sections are kept. Answers 0.
+        // what they were; it is also where the open sections are kept.
+        // `lt` is PREPARED by the caller: the lines copied (`lc-copy`), the initials found in the copy (`in-detect`, P4.10:
+        // before the style and heading analysis reads the lines, so a big first letter is never a heading), and `hc` made from
+        // it; `ii` is the initials' table, `al` the open paragraph's alignment rows (P4.11). Answers 0.
         int med = 0;
         int indents = 0;
         int p = 1;
@@ -1014,7 +1167,7 @@ public final class Para {
         int tcur = 0;
         int k0 = 0;
         int score = 0;
-        Columns.lcCopy(ln, lt);
+        Initial.inRetire(lt, ii);
         paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
         nf = emon.Port.cellsLen(cf) / CF_STRIDE;
         med = paMedian(lt, cf, lo, gp);
@@ -1024,6 +1177,7 @@ public final class Para {
         emon.Port.cellsDrop(gp, 0);
         emon.Port.cellsDrop(raw, 0);
         emon.Port.cellsDrop(fr, 0);
+        emon.Port.cellsDrop(al, 0);
         emon.Port.cellsDrop(dbg, 0);
         while (p <= npages) {
             paCollect(ord, lt, p);
@@ -1038,7 +1192,7 @@ public final class Para {
                 r1 += 1;
             }
             if (r == r1) {
-                pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
                 open = 0;
                 prev = -1;
                 if (p > 1) {
@@ -1074,14 +1228,18 @@ public final class Para {
                                 cont = 0;
                             }
                         }
+                        if (Initial.inRow(lt, b) >= 0) {
+                            cont = 0;
+                        }
                         if (cont == 0) {
                             ty = Evidence.lnGet(lt, b, Evidence.lhY0());
-                            pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                            pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
                             if ((i == r) && (p > 1)) {
                                 paMilestone(nodes, p, hc);
                             }
                             tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                             paFragOpen(fr, lt, p, b, 0);
+                            paIniStart(wd, lt, et, raw, fr, ii, b);
                         } else {
                             paJoin(wd, lt, et, raw, b);
                             rs = emon.Port.cellsLen(raw);
@@ -1089,22 +1247,25 @@ public final class Para {
                         }
                         open = 1;
                         paAddLine(wd, lt, et, raw, b);
+                        paAlAdd(wd, lt, al, b, emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X1));
                         prev = b;
                         prevfr = i;
                         cont = 1;
                         while (cont < cnt) {
                             b = emon.Port.cellsAt(lo, first + cont);
                             if (Table.tbClaimed(lt, b) == 0) {
-                                if (paNewPar(wd, lt, prev, b, med, mg, hc) || Table.tbDue(tb, tcur, p, paYmid2(lt, b))) {
+                                if ((Initial.inRow(lt, b) >= 0) || (paNewPar(wd, lt, prev, b, med, mg, hc) || Table.tbDue(tb, tcur, p, paYmid2(lt, b)))) {
                                     ty = Evidence.lnGet(lt, b, Evidence.lhY0());
-                                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc);
                                     tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                                     paFragOpen(fr, lt, p, b, 0);
+                                    paIniStart(wd, lt, et, raw, fr, ii, b);
                                 } else {
                                     paJoin(wd, lt, et, raw, b);
                                     paFragExtend(fr, lt, b);
                                 }
                                 paAddLine(wd, lt, et, raw, b);
+                                paAlAdd(wd, lt, al, b, emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X1));
                                 prev = b;
                             }
                             cont += 1;
@@ -1113,7 +1274,7 @@ public final class Para {
                     i += 1;
                 }
                 if (Table.tbDue(tb, tcur, p, PA_ALL)) {
-                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                    pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
                     open = 0;
                     prev = -1;
                     tcur = paTables(tb, tcur, p, PA_ALL, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
@@ -1128,7 +1289,8 @@ public final class Para {
             }
             p += 1;
         }
-        paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000, hc);
+        paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc);
+        Align.alPass(nodes, attrs, al, tm);
         return 0;
     }
     public static int paDumpNum(StringBuilder t, int v) {

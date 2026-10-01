@@ -5,6 +5,7 @@ use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
 
+pub(crate) const TB_HELD: i32 = 1073741824;
 pub(crate) const TBS: i32 = 24;
 pub(crate) const TCS: i32 = 16;
 pub(crate) const RLS: i32 = 8;
@@ -47,7 +48,11 @@ pub(crate) fn tb_rows_of(c: &mut crate::port::Cells, stride: i32) -> i32 {
 }
 pub fn tb_claimed(ln: &mut crate::port::Cells, l: i32) -> i32 {
     // The table (index + 1) that holds line l, 0 when none does.
-    return ln_get(ln, l, 15);
+    let c: i32 = ln_get(ln, l, 15);
+    if c >= TB_HELD {
+        return (c - TB_HELD) + 1;
+    }
+    return 0;
 }
 pub(crate) fn tb_less(d: &mut crate::port::Cells, st: i32, k1: i32, k2: i32, a: i32, b: i32) -> bool {
     // Does row a of d come before row b: by field k1, then k2, then the row.
@@ -873,7 +878,7 @@ pub(crate) fn tb_claim(tb: &mut crate::port::Cells, t0: i32, mut ln: &mut crate:
             if (cx >= crate::port::cells_at(tb, (k * TBS) + 1)) && (cx <= crate::port::cells_at(tb, (k * TBS) + 3)) {
                 if (cy >= crate::port::cells_at(tb, (k * TBS) + 2)) && (cy <= crate::port::cells_at(tb, (k * TBS) + 4)) {
                     if ln_get(ln, l, 15) == 0 {
-                        ln_set(ln, l, 15, k + 1);
+                        ln_set(ln, l, 15, TB_HELD + k);
                     }
                 }
             }
@@ -2193,7 +2198,7 @@ pub(crate) fn tb_caption(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate
     }
     crate::port::cells_set(tb, b + 14, crate::port::cells_len(tq));
     crate::port::cells_push(tq, best);
-    ln_set(ln, best, 15, k + 1);
+    ln_set(ln, best, 15, TB_HELD + k);
     let h: i32 = ln_get(ln, best, lh_y1()) - ln_get(ln, best, lh_y0());
     let mut curx1: i32 = ln_get(ln, best, lh_x1());
     let mut cury1: i32 = ln_get(ln, best, lh_y1());
@@ -2206,7 +2211,7 @@ pub(crate) fn tb_caption(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate
             if (ln_get(ln, l, lh_x0()) > (curx1 - 100)) && ((ln_get(ln, l, lh_x0()) - curx1) <= (2 * h)) {
                 if tb_abs(ln_get(ln, l, lh_by0()) - ln_get(ln, best, lh_by0())) <= (h / 3) {
                     crate::port::cells_push(tq, l);
-                    ln_set(ln, l, 15, k + 1);
+                    ln_set(ln, l, 15, TB_HELD + k);
                     curx1 = ln_get(ln, l, lh_x1());
                 }
             }
@@ -2236,7 +2241,7 @@ pub(crate) fn tb_caption(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate
         }
         if (pick >= 0) && (above == 1) {
             crate::port::cells_push(tq, pick);
-            ln_set(ln, pick, 15, k + 1);
+            ln_set(ln, pick, 15, TB_HELD + k);
             cury1 = ln_get(ln, pick, lh_y1());
             more = 1;
         }

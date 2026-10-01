@@ -227,6 +227,7 @@ pub(crate) fn st_dom(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l
     let w0: i32 = st_ln(ln, l, lh_first());
     let mut wn: i32 = st_ln(ln, l, lh_count());
     let mut i: i32 = 0;
+    let mut i0: i32 = 0;
     let mut j: i32 = 0;
     let mut c: i32 = 0;
     let mut best: i32 = -1;
@@ -234,9 +235,14 @@ pub(crate) fn st_dom(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l
     if wn > 32 {
         wn = 32;
     }
+    // A line that opens with a raised initial: its first word is partly the initial and does not vote (P4.10, cell 15).
+    if ((st_ln(ln, l, 15) % 2) == 1) && (wn > 1) {
+        i = 1;
+    }
+    i0 = i;
     while i < wn {
         c = 0;
-        j = 0;
+        j = i0;
         while j < wn {
             if (st_size(wd_get(wd, w0 + i, wf_size())) == st_size(wd_get(wd, w0 + j, wf_size()))) && ((wd_get(wd, w0 + i, wf_font()) == wd_get(wd, w0 + j, wf_font())) && (wd_get(wd, w0 + i, wf_style()) == wd_get(wd, w0 + j, wf_style()))) {
                 c += 1;

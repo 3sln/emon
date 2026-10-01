@@ -469,7 +469,7 @@
   (if (!= (st-get sf l (sfk-upright)) 1) (return 0))
   (comment "a line a table holds (the spare cell 15, `tb-claimed`, P5, D178) is a cell, never a heading; it still counts")
   (comment "as a neighbour (the heading above a table is followed by it) and in the style classes")
-  (if (!= (ln-get ln l 15) 0) (return 0))
+  (if (>= (ln-get ln l 15) 1073741824) (return 0))
   (if (< (st-get sf l (sfk-class)) 0) (return 0))
   (if (< (st-get sf l (sfk-cps)) 1) (return 0))
   (let [^I32 sib (st-get sf l (sfk-sib))
