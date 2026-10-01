@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; Tagged-PDF synthetic pairs (DEVLOG P3.7, D076, D136): one CORRECTLY tagged document and deliberately MIS-TAGGED twins
+;; Tagged-PDF synthetic pairs (DEVLOG P3.7, D076, D150): one CORRECTLY tagged document and deliberately MIS-TAGGED twins
 ;; of it, written byte for byte from a description (no PDF producer, no PDF library).
 ;;
 ;;     bb tools/synth/tagged_pair.clj            write test/pdf/tagged/*.pdf

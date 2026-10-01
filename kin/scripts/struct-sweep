@@ -1,5 +1,5 @@
 #!/bin/sh
-# Read the tagged-PDF structure tree (P3.7, D134) of every PDF named on stdin with the GENERATED RUST, joined
+# Read the tagged-PDF structure tree (P3.7, D148) of every PDF named on stdin with the GENERATED RUST, joined
 # to the marked content of the same file's page interpretation, and print one row each:
 #
 #     path<TAB>status<TAB>json

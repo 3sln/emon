@@ -1249,7 +1249,7 @@ stride, strings as runs of an `etext`-shaped arena, absent is -1).
 `/Lang` are read once, at stage 0, into `emon.pdfmeta`'s arenas (`md`, `xm`, `ol`, `lb`, `nd`), and
 join the Source (§2.0) as facts about the document, not observations on a page.
 
-**The tagged tree has its own arenas too (P3.7, D134-D137)**, in `emon.pdfstruct` (`kin/pdfstruct.kin`), joined to the
+**The tagged tree has its own arenas too (P3.7, D148-D151)**, in `emon.pdfstruct` (`kin/pdfstruct.kin`), joined to the
 text layer by `marks`: `se` (the StructTreeRoot as row 0, then every structure element in pre-order: its role as written and
 the standard type it resolves to through the RoleMap, how, heading level and level prior, page, `/Alt` `/ActualText` `/E`
 `/Lang` `/ID` `/T`, Scope, Headers, RowSpan, ColSpan, Summary, ListNumbering, its subtree's glyphs, sizes and box, a table's
@@ -1303,7 +1303,7 @@ for the text layer):
   and the engine's own binarisation (a word over blank paper is a ghost),
   its ink layer, and whether the region overlaps a seal, watermark or
   background layer.
-* **Structure tree** (P3.7, D135): role diversity; agreement of its reading order with
+* **Structure tree** (P3.7, D149): role diversity; agreement of its reading order with
   geometry; coverage (fraction of visible text reachable from it); and the checks of
   what it claims against the page: heading roles against type size, heading levels
   against each other, artifacts against their position, table and list roles against

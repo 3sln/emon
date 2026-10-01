@@ -1,4 +1,4 @@
-;; Tagged PDF (P3.7, D134-D136): the structure tree read into arenas, joined to the marked content the
+;; Tagged PDF (P3.7, D148-D150): the structure tree read into arenas, joined to the marked content the
 ;; content interpreter recorded, and scored for how much it can be believed. emon's own module (D039),
 ;; from ISO 32000-1 14.6-14.8 (marked content, the structure tree, standard structure types and
 ;; attributes) and ISO 14289-1 (PDF/UA). Evidence, not truth (D034): a tree is READ whole, JOINED to the
@@ -54,7 +54,7 @@
 ;; for it (`marks.stm` is the Form XObject, D101). Every glyph is then OWNED by the structure element of
 ;; its innermost marked content that carries an MCID, or is an artifact, or is neither.
 ;;
-;; THE SCORE (D135) is a weighted harmonic mean of integer per-mille components, each a check of the
+;; THE SCORE (D149) is a weighted harmonic mean of integer per-mille components, each a check of the
 ;; tree against the page: coverage, role diversity, reading order against geometry, headings against type
 ;; size, heading levels, artifacts against position, and the nesting of table and list roles.
 ;;

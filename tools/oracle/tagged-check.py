@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tagged PDF against an independent reader (DEVLOG P1.7 D101, P3.7 D134-D136).
+"""Tagged PDF against an independent reader (DEVLOG P1.7 D101, P3.7 D148-D150).
 
     python3 tools/oracle/tagged-check.py                       the three PDFs of test/corpus/synth/pdf-tagged:
                                                                marked-content spans, then the structure tree
