@@ -1,0 +1,25 @@
+#!/bin/sh
+# Read the tagged-PDF structure tree (P3.7, D148) of every PDF named on stdin with the GENERATED RUST, joined
+# to the marked content of the same file's page interpretation, and print one row each:
+#
+#     path<TAB>status<TAB>json
+#
+#     find corpus -name '*.pdf' | kin/scripts/struct-sweep
+#     echo 'corpus/forms/irs/fw4.pdf<TAB>secret' | kin/scripts/struct-sweep
+#
+# A line may be `path<TAB>password` (D098). `json` is `{"pages":N,"content":status,"read":elements,
+# "join":status,"ms":N,"s":dump}` where the dump is `tg-dump` of kin/pdfstruct.kin. A DEVELOPMENT TOOL, run by
+# tools/oracle/tagged-check.py and by a person; no gate runs it. A fault in the code is a `PANIC` row, not a
+# crash. Built with overflow and bounds checks ON.
+set -e
+cd "$(dirname "$0")/../.."
+./kin/scripts/emit > /dev/null
+work=$(mktemp -d "${TMPDIR:-/tmp}/emon-struct.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+mkdir -p "$work/emon"
+cp gen/rust/emon/*.rs "$work/emon/"
+cp host/rust/src/port.rs host/rust/src/testport.rs "$work/"
+( for f in gen/rust/emon/*.rs; do echo "pub mod $(basename "$f" .rs);"; done ) > "$work/emon.rs"
+cp kin/scripts/struct-sweep.rs "$work/main.rs"
+( cd "$work" && rustc -O -C debug-assertions=on -C overflow-checks=on -o struct main.rs 2>&1 | grep -E '^(error|warning: unused)' -A8 | head -400 || true )
+"$work/struct"

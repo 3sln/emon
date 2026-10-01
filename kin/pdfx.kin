@@ -457,7 +457,7 @@
 (defn ^:pub ^I32 px-page-of [^Cells idx ^I32 num]
   (comment "The page index of object number `num`, -1 when it is not a page.")
   (if (<= num 0) (return -1))
-  (if (>= (+ IX_HEAD num) (cells-len idx)) (return -1))
+  (if (>= num (- (cells-len idx) IX_HEAD)) (return -1))
   (return (- (cells-at idx (+ IX_HEAD num)) 1)))
 
 (defn ^:pub ^I32 px-page-x [^Cells pg ^I32 i ^I32 x ^I32 y]

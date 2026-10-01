@@ -1,0 +1,557 @@
+;; Laws for the tagged-PDF reader (P3.7): `emon.pdfstruct` over the fixtures of `tools/synth/tagged_pair.clj`
+;; (babashka) and the three Chrome-tagged synthetic documents, on every target.
+;;
+;; THE FIXTURES are `test/pdf/tagged/*.pdf`, listed with their goldens in `test/pdf/tagged.txt`. A golden is the
+;; canonical dump (`tg-dump`: the tree, the join, the score) that the generated Rust wrote and
+;; `tools/oracle/tagged-check.py` compared item by item with an independent walk of the same tree in pypdf (every
+;; element, kid, role, attribute, join and ParentTree entry); every target must write it byte for byte. The laws then
+;; state what the fixtures were BUILT to say, as literals, so that a golden that is wrong in the same way on every
+;; target still fails: the roles and how each was found (a RoleMap that turns `Heading` into H1), the text
+;; properties, the table and the list, the join and where each glyph went, the artifacts and where they sit, and the
+;; score of a correctly tagged document against five mis-tagged twins (everything P, wrong heading levels, artifacts
+;; mis-marked, all three, and a tree that reads from the bottom).
+;;
+;; `odd.pdf` is not a twin: a RoleMap with a loop, a custom role, a standard role the RoleMap remaps, H7, an element
+;; that names itself, one reached from two parents, nulls and strings in a /K, an MCID claimed twice and one nobody
+;; claims, Form XObject content joined through /Stm, an object reference to a Link, attributes through /A and the
+;; ClassMap, 70 nested elements. And the truncated and corrupted fixtures read without a fault, and every fixture is the
+;; same through an async source (D075).
+(ns emon.pdfstructtest
+  (:require [emon.lang :refer [I32 I64 Blob Src Cells Text emit-ascii i64]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at
+                               assert-text assert-text-span new-cells new-text test-file test-file-span
+                               cells-blob test-src-chunked test-src-view test-src-ctl]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop
+                               src-of-blob text-cp text-i32]]
+            [emon.splitmix :refer [sm-seed sm-below]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfdoc :refer [pd-open]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.pdfx :refer [px-index-build]]
+            [emon.pdfmeta :refer [pm-run]]
+            [emon.pdfsnames :refer [sr-emit-name]]
+            [emon.pdfstruct :refer [tg-read tg-join tg-dump tg-listnum-emit-name]]
+            [kin.lang :refer [defn declarefn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem bit-or]]))
+
+;; ------------------------------------------------------------------ the pipeline
+
+(defn ^I32 tt-put [^:mut ^Text t ^Cells txt ^I32 s ^I32 n]
+  (comment "A run of `txt` as ASCII text: a code point past 126 (or a control) is `{N}`, its number.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 c 0]
+    (if (< s 0)
+      (do (emit-ascii t "-") (return 0)))
+    (while (< i n)
+      (do (set c (cells-at txt (+ s i)))
+          (if (and (>= c 32) (<= c 126))
+            (text-cp t c)
+            (do (emit-ascii t "{")
+                (text-i32 t c)
+                (emit-ascii t "}")))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 tt-role [^:mut ^Text t ^Cells se ^I32 row]
+  (comment "The standard type of element `row` as its name (`H2` for an Hn), `?` for none.")
+  (let [^I32 at (* row 64)]
+    (if (== (cells-at se (+ at 5)) 0)
+      (do (emit-ascii t "?") (return 0)))
+    (if (== (cells-at se (+ at 5)) 17)
+      (do (emit-ascii t "H")
+          (text-i32 t (cells-at se (+ at 7)))
+          (return 0)))
+    (sr-emit-name t (cells-at se (+ at 5)))
+    (return 0)))
+
+(defn ^I32 tt-line [^Src pdf ^I32 which ^:mut ^Text t ^:mut ^Cells res]
+  (comment "Read a file through the whole pipeline (open, interpret every page, the catalogue, the tree, the join) and")
+  (comment "write one view of what was found into t, by `which`: 0 the whole dump (`tg-dump`), 1 every element's role")
+  (comment "and how it was found (`Role:how`, how 0 standard 1 RoleMap 2 custom 3 loop 4 none 5 shadowed), 2 the text")
+  (comment "properties, 3 tables and lists, 4 the join, the glyphs and the ParentTree, 5 the artifact spans, 6 the score.")
+  (comment "`res` gets the numbers: the score, then the seven components, the elements and the content references.")
+  (comment "Answers 0, the open status when it did not open, or -1 when the source missed.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells idx (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells w (new-cells)
+        ^Cells seen (new-cells)
+        ^Cells md (new-cells)
+        ^Cells xm (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells lb (new-cells)
+        ^Cells nd (new-cells)
+        ^Cells nt (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells ss (new-cells)
+        ^Cells se (new-cells)
+        ^Cells sk (new-cells)
+        ^Cells sc (new-cells)
+        ^Cells so (new-cells)
+        ^Cells sa (new-cells)
+        ^Cells wk (new-cells)
+        ^Cells ha (new-cells)
+        ^Cells hb (new-cells)
+        ^Cells hh (new-cells)
+        ^:mut ^I32 status 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 nse 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 any 0
+        ^:mut ^I32 role 0]
+    (set status (pd-open pdf ar dc a b st))
+    (if (!= status 0) (return status))
+    (set r (pc-document pdf ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln))
+    (if (!= r 0) (return -1))
+    (px-index-build pdf ar dc a b st pg idx)
+    (set r (pm-run pdf ar dc a b st pg idx txt w seen md xm ol lb nd nt))
+    (if (< r 0) (return -1))
+    (set r (tg-read pdf ar dc a b st pg idx txt w seen ss se sk sc so wk md))
+    (if (< r 0) (return -1))
+    (set r (tg-join ss se sk sc so sa gl mk fnt pg ha hb hh))
+    (cells-drop res 0)
+    (cells-push res (cells-at ss 54))
+    (cells-push res (cells-at ss 47))
+    (cells-push res (cells-at ss 48))
+    (cells-push res (cells-at ss 49))
+    (cells-push res (cells-at ss 50))
+    (cells-push res (cells-at ss 51))
+    (cells-push res (cells-at ss 52))
+    (cells-push res (cells-at ss 53))
+    (cells-push res (cells-at ss 9))
+    (cells-push res (cells-at ss 10))
+    (if (== which 0)
+      (do (tg-dump t txt ss se sk sc so sa)
+          (return 0)))
+    (set nse (quot (cells-len se) 64))
+    (if (or (== which 1) (== which 8))
+      (do (set i 1)
+          (if (and (== which 8) (> nse 20)) (set nse 20))
+          (while (< i nse)
+            (do (if (> i 1) (emit-ascii t " "))
+                (tt-role t se i)
+                (emit-ascii t ":")
+                (text-i32 t (cells-at se (+ (* i 64) 6)))
+                (set i (+ i 1))))
+          (return 0)))
+    (if (== which 2)
+      (do (set i 1)
+          (while (< i nse)
+            (do (set at (* i 64))
+                (if (or (>= (cells-at se (+ at 16)) 0) (>= (cells-at se (+ at 18)) 0) (>= (cells-at se (+ at 20)) 0)
+                        (>= (cells-at se (+ at 22)) 0) (>= (cells-at se (+ at 25)) 0) (>= (cells-at se (+ at 27)) 0))
+                  (do (if (== any 1) (emit-ascii t " | "))
+                      (set any 1)
+                      (text-i32 t i)
+                      (emit-ascii t ":")
+                      (if (>= (cells-at se (+ at 16)) 0)
+                        (do (emit-ascii t " alt=")
+                            (tt-put t txt (cells-at se (+ at 16)) (cells-at se (+ at 17)))))
+                      (if (>= (cells-at se (+ at 18)) 0)
+                        (do (emit-ascii t " actual=")
+                            (tt-put t txt (cells-at se (+ at 18)) (cells-at se (+ at 19)))))
+                      (if (>= (cells-at se (+ at 20)) 0)
+                        (do (emit-ascii t " exp=")
+                            (tt-put t txt (cells-at se (+ at 20)) (cells-at se (+ at 21)))))
+                      (if (>= (cells-at se (+ at 22)) 0)
+                        (do (emit-ascii t " lang=")
+                            (tt-put t txt (cells-at se (+ at 22)) (cells-at se (+ at 23)))))
+                      (if (>= (cells-at se (+ at 25)) 0)
+                        (do (emit-ascii t " id=")
+                            (tt-put t txt (cells-at se (+ at 25)) (cells-at se (+ at 26)))))
+                      (if (>= (cells-at se (+ at 27)) 0)
+                        (do (emit-ascii t " title=")
+                            (tt-put t txt (cells-at se (+ at 27)) (cells-at se (+ at 28)))))
+                      (emit-ascii t " from=")
+                      (text-i32 t (cells-at se (+ at 24)))))
+                (set i (+ i 1))))
+          (return 0)))
+    (if (or (== which 3) (== which 9))
+      (do (set i 1)
+          (while (< i nse)
+            (do (set at (* i 64))
+                (set role (cells-at se (+ at 5)))
+                (if (== role 42)
+                  (do (if (== any 1) (emit-ascii t " | "))
+                      (set any 1)
+                      (emit-ascii t "Table rows=")
+                      (text-i32 t (cells-at se (+ at 54)))
+                      (emit-ascii t " cols=")
+                      (text-i32 t (cells-at se (+ at 55)))
+                      (emit-ascii t " regular=")
+                      (text-i32 t (cells-at se (+ at 56)))
+                      (emit-ascii t " summary=")
+                      (tt-put t txt (cells-at se (+ at 34)) (cells-at se (+ at 35)))))
+                (if (and (== which 3) (or (== role 44) (== role 45)))
+                  (if (or (> (cells-at se (+ at 29)) 0) (>= (cells-at se (+ at 30)) 0) (>= (cells-at se (+ at 31)) 0)
+                          (>= (cells-at se (+ at 32)) 0))
+                    (do (if (== any 1) (emit-ascii t " | "))
+                        (set any 1)
+                        (if (== role 44) (emit-ascii t "TH") (emit-ascii t "TD"))
+                        (emit-ascii t " scope=")
+                        (text-i32 t (cells-at se (+ at 29)))
+                        (emit-ascii t " rowspan=")
+                        (text-i32 t (cells-at se (+ at 30)))
+                        (emit-ascii t " colspan=")
+                        (text-i32 t (cells-at se (+ at 31)))
+                        (emit-ascii t " headers=")
+                        (tt-put t txt (cells-at se (+ at 32)) (cells-at se (+ at 33))))))
+                (if (and (== which 3) (== role 19))
+                  (do (if (== any 1) (emit-ascii t " | "))
+                      (set any 1)
+                      (emit-ascii t "L items=")
+                      (text-i32 t (cells-at se (+ at 57)))
+                      (emit-ascii t " labelled=")
+                      (text-i32 t (cells-at se (+ at 58)))
+                      (emit-ascii t " agree=")
+                      (text-i32 t (cells-at se (+ at 59)))
+                      (emit-ascii t " differ=")
+                      (text-i32 t (cells-at se (+ at 60)))
+                      (emit-ascii t " numbering=")
+                      (tg-listnum-emit-name t (cells-at se (+ at 36)))
+                      (emit-ascii t " kind=")
+                      (text-i32 t (cells-at se (+ at 61)))))
+                (set i (+ i 1))))
+          (return 0)))
+    (if (== which 4)
+      (do (text-i32 t (cells-at ss 23))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 24))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 25))
+          (emit-ascii t " | ")
+          (text-i32 t (cells-at ss 26))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 27))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 28))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 29))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 30))
+          (emit-ascii t " | ")
+          (text-i32 t (cells-at ss 19))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 20))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 21))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 22))
+          (emit-ascii t " | ")
+          (text-i32 t (cells-at ss 9))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 10))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 11))
+          (return 0)))
+    (if (== which 5)
+      (do (set i 0)
+          (while (< i (quot (cells-len sa) 16))
+            (do (set at (* i 16))
+                (if (> i 0) (emit-ascii t " "))
+                (text-i32 t (cells-at sa (+ at 2)))
+                (emit-ascii t ".")
+                (text-i32 t (cells-at sa (+ at 3)))
+                (emit-ascii t "@")
+                (text-i32 t (cells-at sa (+ at 9)))
+                (emit-ascii t ":")
+                (text-i32 t (cells-at sa (+ at 12)))
+                (emit-ascii t "(")
+                (text-i32 t (cells-at sa (+ at 4)))
+                (emit-ascii t ")")
+                (set i (+ i 1))))
+          (return 0)))
+    (if (== which 6)
+      (do (text-i32 t (cells-at ss 47))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 48))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 49))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 50))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 51))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 52))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 53))
+          (emit-ascii t " ")
+          (text-i32 t (cells-at ss 54))
+          (return 0)))
+    (return 0)))
+
+;; ------------------------------------------------------------ row helpers
+
+(defn ^I32 tt-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 tt-tab [^Blob b ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+;; -------------------------------------------------------------- the goldens
+
+(defn ^I32 tt-dump [^Src pdf ^:mut ^Text t]
+  (let [^Cells res (new-cells)]
+    (return (tt-line pdf 0 t res))))
+
+(deftest test-every-fixture-dump-is-its-golden
+  (comment "Row: file, golden. The dump of the file, read in memory, is the golden's bytes (less its line feed):")
+  (comment "every element with its role and how it was found, its kids, attributes and text properties, every")
+  (comment "marked-content reference with the span it joined, the artifact spans, and the score, on all four targets.")
+  (let [^Blob f (test-file "pdf/tagged.txt")
+        ^I32 n (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s0 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (tt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s0 (tt-tab f pos e))
+                (let [^Text t (new-text)
+                      ^Blob g (test-file-span f (+ s0 1) e)]
+                  (assert-eq-at (tt-dump (src-of-blob (test-file-span f pos s0)) t) 0 "opened and read" line)
+                  (assert-text-span t g 0 (- (blob-len g) 1) "the golden" line))))
+          (set pos (+ e 1))))
+    (assert-that (>= rows 10) "the fixtures were read")))
+
+
+;; ------------------------------------------------------ what they were built to say
+
+(defn ^I32 tt-say [^Blob pdf ^I32 which ^:mut ^Text t]
+  (let [^Cells res (new-cells)]
+    (return (tt-line (src-of-blob pdf) which t res))))
+
+(defn ^I32 tt-score [^Blob pdf]
+  (comment "The score of a file, -1 when it did not read.")
+  (let [^Cells res (new-cells)
+        ^Text t (new-text)]
+    (if (!= (tt-line (src-of-blob pdf) 7 t res) 0) (return -1))
+    (return (cells-at res 0))))
+
+(deftest test-the-correct-document-says-what-it-was-built-to-say
+  (comment "good.pdf: Document > H1 (a custom `Heading` the RoleMap makes H1), Body (custom, P), four Sect with an H2")
+  (comment "each, a list of three items with Lbl and LBody and ListNumbering Decimal, a ruled table of three rows with")
+  (comment "TH cells whose Scope comes through a class, a Figure with Alt, a Caption, a Span with ActualText and E, a French")
+  (comment "paragraph. Header, footer, watermark and the rules are artifacts of the right Type and Subtype.")
+  (let [^Blob pdf (test-file "pdf/tagged/good.pdf")
+        ^Text t1 (new-text)
+        ^Text t2 (new-text)
+        ^Text t3 (new-text)
+        ^Text t4 (new-text)
+        ^Text t5 (new-text)
+        ^Text t6 (new-text)]
+    (assert-eq (tt-say pdf 1 t1) 0 "read")
+    (assert-text t1 "Document:0 H1:1 P:1 Sect:0 H2:0 P:0 Sect:0 H2:0 L:0 LI:0 Lbl:0 LBody:0 LI:0 Lbl:0 LBody:0 LI:0 Lbl:0 LBody:0 Sect:0 H2:0 Table:0 TR:0 TH:0 TH:0 TH:0 TR:0 TD:0 TD:0 TD:0 TR:0 TD:0 TD:0 TD:0 Sect:0 H2:0 P:0 Span:0 Span:0 Figure:0 Caption:0 P:0" "roles and how")
+    (assert-eq (tt-say pdf 2 t2) 0 "read")
+    (assert-text t2 "1: lang=en-US from=1 | 37: actual=third quarter exp=Quarter three from=1 | 39: alt=Bar chart of revenue by month from=1 | 41: lang=fr-FR from=41" "text properties")
+    (assert-eq (tt-say pdf 3 t3) 0 "read")
+    (assert-text t3 "L items=3 labelled=3 agree=3 differ=0 numbering=Decimal kind=2 | Table rows=3 cols=3 regular=1 summary=Revenue and growth by region | TH scope=2 rowspan=-1 colspan=-1 headers=- | TH scope=2 rowspan=-1 colspan=-1 headers=- | TH scope=2 rowspan=-1 colspan=-1 headers=-" "tables and lists")
+    (assert-eq (tt-say pdf 4 t4) 0 "read")
+    (assert-text t4 "28 0 0 | 594 545 49 0 0 | 2 28 0 0 | 42 28 0" "the join: every reference joined, 545 glyphs owned by an element and 49 in artifacts, the ParentTree agrees 28 times")
+    (assert-eq (tt-say pdf 5 t5) 0 "read")
+    (assert-text t5 "1.1@2:1(16) 1.3@1:1(5) 3.0@0:0(0) 1.2@3:1(6) 1.1@2:1(16) 1.2@3:1(6)" "artifacts: a header at the top, a turned watermark, the rules (no text), a footer at the bottom, again")
+    (assert-eq (tt-say pdf 6 t6) 0 "read")
+    (assert-text t6 "1000 1000 1000 1000 1000 1000 1000 1000" "the score: every component and the whole")))
+
+(deftest test-the-twins-say-what-they-were-built-to-say
+  (comment "Each twin keeps the page and changes what the file says about it. bad.pdf: P under the Document for every")
+  (comment "block, headings with the wrong levels, a running header tagged P, a section heading marked as a Footer and a")
+  (comment "paragraph as Pagination. bad-allp: only the P. bad-levels: the tree with H6 H3 H1 H4 H2. bad-artifacts: only")
+  (comment "the artifacts. bad-order: every list of kids reversed.")
+  (let [^Text ta (new-text)
+        ^Text tb (new-text)
+        ^Text tc (new-text)
+        ^Text td (new-text)
+        ^Text te (new-text)
+        ^Text tf (new-text)
+        ^Text tg (new-text)
+        ^Text th (new-text)]
+    (assert-eq (tt-say (test-file "pdf/tagged/bad.pdf") 5 ta) 0 "read bad")
+    (assert-text ta "1.2@1:2(10) 1.0@1:2(96) 3.0@0:0(0)" "bad: a heading marked Footer and a paragraph marked Pagination, both in the body")
+    (assert-eq (tt-say (test-file "pdf/tagged/bad.pdf") 6 tb) 0 "read bad")
+    (assert-text tb "1000 500 1000 900 332 0 -1 113" "bad: score")
+    (assert-eq (tt-say (test-file "pdf/tagged/bad-allp.pdf") 1 tc) 0 "read allp")
+    (assert-text tc "Document:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0 P:0" "all P")
+    (assert-eq (tt-say (test-file "pdf/tagged/bad-allp.pdf") 6 td) 0 "read allp")
+    (assert-text td "1000 0 1000 0 -1 1000 -1 63" "all P: nothing but paragraphs, and the big text is not in a heading")
+    (assert-eq (tt-say (test-file "pdf/tagged/bad-levels.pdf") 6 te) 0 "read levels")
+    (assert-text te "1000 1000 1000 1000 500 1000 1000 656" "wrong levels: only the level component falls")
+    (assert-eq (tt-say (test-file "pdf/tagged/bad-artifacts.pdf") 6 tf) 0 "read artifacts")
+    (assert-text tf "1000 1000 1000 900 1000 0 1000 134" "mis-marked artifacts: only the artifact component falls")
+    (assert-eq (tt-say (test-file "pdf/tagged/bad-order.pdf") 6 tg) 0 "read order")
+    (assert-text tg "1000 1000 120 1000 1000 1000 1000 273" "reversed: the reading order falls to chance")
+    (assert-eq (tt-say (test-file "pdf/tagged/bad-order.pdf") 4 th) 0 "read order")
+    (assert-text th "28 0 0 | 594 545 49 0 0 | 2 28 0 0 | 42 28 0" "reversed: the join is the same")))
+
+(deftest test-the-score-separates-a-correct-tree-from-mis-tagged-twins
+  (comment "D076: the informativeness score must separate them clearly: the correct tree is above 950, the three")
+  (comment "failures together are below 150, and each failure alone is below 700.")
+  (let [^I32 good (tt-score (test-file "pdf/tagged/good.pdf"))
+        ^I32 bad (tt-score (test-file "pdf/tagged/bad.pdf"))
+        ^I32 allp (tt-score (test-file "pdf/tagged/bad-allp.pdf"))
+        ^I32 levels (tt-score (test-file "pdf/tagged/bad-levels.pdf"))
+        ^I32 arts (tt-score (test-file "pdf/tagged/bad-artifacts.pdf"))
+        ^I32 order (tt-score (test-file "pdf/tagged/bad-order.pdf"))]
+    (assert-that (>= good 950) "good")
+    (assert-that (<= bad 150) "all three failures")
+    (assert-that (<= allp 150) "everything P")
+    (assert-that (<= levels 700) "wrong heading levels")
+    (assert-that (<= arts 150) "artifacts mis-marked")
+    (assert-that (<= order 300) "reading order reversed")
+    (assert-that (> (- good bad) 800) "the gap between good and bad")))
+
+(deftest test-the-odd-tree-is-read-whole-and-without-a-fault
+  (comment "odd.pdf: a RoleMap loop (`?:3`), a custom role nobody mapped (`?:2`), P remapped to Span and Quote to")
+  (comment "itself (`P:5`, `Quote:5`: used as they are), Heading -> H2 (`H2:1`), H7, Para -> P (`P:1`), and 70 nested Div cut at")
+  (comment "the depth limit; an element reached twice is read once; the MCID claimed twice is a duplicate, the one nobody")
+  (comment "claims and the stray text are not covered; the form's MCIDs join through /Stm; the Link is an object reference.")
+  (let [^Blob pdf (test-file "pdf/tagged/odd.pdf")
+        ^Text t1 (new-text)
+        ^Text t2 (new-text)
+        ^Text t3 (new-text)
+        ^Text t4 (new-text)
+        ^Text t5 (new-text)]
+    (assert-eq (tt-say pdf 8 t1) 0 "read")
+    (assert-text t1 "Document:0 P:5 H2:1 Span:0 P:5 ?:3 ?:2 H7:0 P:1 Table:0 TR:0 TH:0 TD:0 TD:0 L:0 LI:0 Lbl:0 LBody:0 Quote:5" "roles and how")
+    (assert-eq (tt-say pdf 2 t2) 0 "read")
+    (assert-text t2 "1: lang=de-DE from=1 | 9: alt=alternative actual=AB exp=expansion lang=fr id=id27 title=title from=9" "text properties: UTF-16 ActualText, an own /Lang")
+    (assert-eq (tt-say pdf 3 t3) 0 "read")
+    (assert-text t3 "Table rows=1 cols=6 regular=1 summary=a table | TH scope=1 rowspan=2 colspan=2 headers=a b | TD scope=0 rowspan=3 colspan=-1 headers=- | TD scope=2 rowspan=-1 colspan=3 headers=- | L items=1 labelled=1 agree=0 differ=0 numbering=Disc kind=0" "attributes through /A, an array of /A, /C, a ClassMap array")
+    (assert-eq (tt-say pdf 4 t4) 0 "read")
+    (assert-text t4 "8 2 1 | 55 44 6 5 0 | 3 6 1 3 | 82 10 1" "the join: 8 joined (two through /Stm), 2 not, a duplicate claim; ParentTree 3 keys, 6 agree, 1 differs, 3 absent")
+    (assert-eq (tt-say pdf 6 t5) 0 "read")
+    (assert-text t5 "909 750 666 1000 -1 1000 1000 715" "the score")))
+
+(deftest test-the-chrome-tagged-documents-say-what-chrome-wrote
+  (comment "The three Chrome-tagged synthetic documents: a table, lists, inverted headings. A correct table scores 1000;")
+  (comment "the heading document, whose heading sizes were inverted on purpose, scores lower on levels.")
+  (assert-eq (tt-score (test-file "corpus/synth/pdf-tagged/table-simple-ruled.pdf")) 1000 "table")
+  (assert-eq (tt-score (test-file "corpus/synth/pdf-tagged/lists-basic.pdf")) 937 "lists")
+  (assert-eq (tt-score (test-file "corpus/synth/pdf-tagged/h-inverted.pdf")) 695 "inverted headings")
+  (let [^Text t (new-text)]
+    (assert-eq (tt-say (test-file "corpus/synth/pdf-tagged/table-simple-ruled.pdf") 9 t) 0 "read")
+    (assert-text t "Table rows=7 cols=5 regular=1 summary=-" "the table")))
+
+;; ------------------------------------------------------------------- hardening
+
+(defn ^I32 tt-survive [^Src pdf]
+  (let [^Text t (new-text)]
+    (return (tt-dump pdf t))))
+
+(defn ^I32 tt-cut [^Blob f ^I32 n ^:mut ^Cells cut]
+  (let [^:mut ^I32 i 0]
+    (cells-drop cut 0)
+    (while (< i n)
+      (do (cells-push cut (blob-u8 f i))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 tt-truncations [^Blob f ^I32 step ^:mut ^Cells cut]
+  (comment "Every truncation of f, every `step` bytes: none may fault. Answers how many still read.")
+  (let [^I32 n (blob-len f)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ok 0]
+    (while (<= k n)
+      (do (tt-cut f k cut)
+          (if (== (tt-survive (src-of-blob (cells-blob cut))) 0)
+            (set ok (+ ok 1)))
+          (set k (+ k step))))
+    (return ok)))
+
+(defn ^I32 tt-corruptions [^Blob f ^I32 rounds ^I32 flips ^I32 seed ^:mut ^Cells cut ^:mut ^Cells rng]
+  (comment "`rounds` copies of f with `flips` random bytes replaced (SplitMix, so every target damages the same bytes):")
+  (comment "none may fault. Answers how many still read.")
+  (let [^I32 n (blob-len f)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 ok 0]
+    (sm-seed rng (i64 seed))
+    (while (< r rounds)
+      (do (tt-cut f n cut)
+          (set j 0)
+          (while (< j flips)
+            (do (set at (sm-below rng n))
+                (cells-set cut at (sm-below rng 256))
+                (set j (+ j 1))))
+          (if (== (tt-survive (src-of-blob (cells-blob cut))) 0)
+            (set ok (+ ok 1)))
+          (set r (+ r 1))))
+    (return ok)))
+
+(deftest test-no-truncation-of-a-fixture-faults
+  (comment "Every 97th cut of each tagged fixture (a tree cut anywhere): nothing faults.")
+  (let [^Cells cut (new-cells)]
+    (assert-that (>= (tt-truncations (test-file "pdf/tagged/good.pdf") 97 cut) 1) "good")
+    (assert-that (>= (tt-truncations (test-file "pdf/tagged/bad-artifacts.pdf") 97 cut) 1) "bad-artifacts")
+    (assert-that (>= (tt-truncations (test-file "pdf/tagged/odd.pdf") 61 cut) 1) "odd")))
+
+(deftest test-no-corruption-of-a-fixture-faults
+  (comment "Copies with three bytes replaced: a wrong /K, /P, /Pg, /MCID, /S, /Nums, a broken RoleMap; none faults.")
+  (let [^Cells cut (new-cells)
+        ^Cells rng (new-cells)]
+    (assert-that (>= (tt-corruptions (test-file "pdf/tagged/good.pdf") 120 3 1 cut rng) 0) "good")
+    (assert-that (>= (tt-corruptions (test-file "pdf/tagged/odd.pdf") 120 3 2 cut rng) 0) "odd")
+    (assert-that (>= (tt-corruptions (test-file "pdf/tagged/bad-order.pdf") 120 4 3 cut rng) 0) "bad-order")))
+
+;; ------------------------------------------------ a source that misses (P1.11)
+
+(defn ^I32 tt-async [^Blob bytes ^I32 chunk ^:mut ^Text t]
+  (comment "Read `bytes` through an async source of `chunk`-byte chunks, re-running until an attempt does not miss; the dump")
+  (comment "of that attempt goes to t. Answers that attempt's verdict, or -2 after 40 rounds.")
+  (let [^Src base (test-src-chunked bytes chunk 0)
+        ^:mut ^I32 round 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 verdict 0]
+    (while (== more 1)
+      (do (let [^Src v (test-src-view base)]
+            (set verdict (tt-dump v t))
+            (if (ps-missed v)
+              (do (test-src-ctl base 0 round)
+                  (set round (+ round 1))
+                  (if (> round 40)
+                    (do (set more 0)
+                        (set verdict -2))))
+              (set more 0)))))
+    (return verdict)))
+
+(deftest test-fixtures-through-an-async-source-are-their-golden-bytes
+  (comment "D075: a missed attempt answers -1 and writes nothing; the host fetches what was missed and re-runs on a fresh")
+  (comment "view. The correct document and the odd one, through 64-byte chunks, are their goldens.")
+  (let [^Text t (new-text)
+        ^Blob g (test-file "pdf/tagged/good.json")]
+    (assert-eq (tt-async (test-file "pdf/tagged/good.pdf") 64 t) 0 "read")
+    (assert-text-span t g 0 (- (blob-len g) 1) "good through 64-byte chunks" 1))
+  (let [^Text t2 (new-text)
+        ^Blob g2 (test-file "pdf/tagged/odd.json")]
+    (assert-eq (tt-async (test-file "pdf/tagged/odd.pdf") 512 t2) 0 "read")
+    (assert-text-span t2 g2 0 (- (blob-len g2) 1) "odd through 512-byte chunks" 2)))
