@@ -1,0 +1,71 @@
+#!/bin/sh
+# Build the Rust Engine and its driver; print the driver's path.   kin/scripts/emon-rs-build
+#
+# The crate is ASSEMBLED, not committed (the generated code lives in gen/, the host in host/rust/src/):
+#
+#     .cache/emon-rs/src/emon/*.rs     gen/rust/emon/*.rs, every module that is NOT a law (`emon.test`) or
+#                                      a probe/test namespace (names ending `test` or `probe`)
+#     .cache/emon-rs/src/emon.rs       the module list, written here
+#     .cache/emon-rs/src/{lib,port,plan,source,engine}.rs   host/rust/src/
+#     .cache/emon-rs/src/driver.rs     test/driver/rust/main.rs, the `emon-rs` binary
+#     .cache/emon-rs/tests/engine.rs   host/rust/tests/engine.rs, the Engine API's native tests (`bb slice` runs them)
+#
+# `.cache/` is gitignored. A file is copied only when it differs (cargo rebuilds by mtime), and a module
+# that is no longer generated is removed. `bb emit` is NOT run here: callers that must be current
+# (`bb slice`) run it first. Warnings are off (generated code is noisy); the host files are held clean
+# by `bb slice`, which builds them once with warnings on.
+#
+#   EMON_RS_WARN=1   build with warnings on (for the host files)
+set -e
+cd "$(dirname "$0")/../.."
+crate=.cache/emon-rs
+mkdir -p "$crate/src/emon"
+
+put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
+
+keep=""
+for f in gen/rust/emon/*.rs; do
+  m=$(basename "$f" .rs)
+  case "$m" in *test|*probe) continue ;; esac
+  keep="$keep $m"
+  put "$f" "$crate/src/emon/$m.rs"
+done
+for f in "$crate"/src/emon/*.rs; do
+  [ -e "$f" ] || continue
+  m=$(basename "$f" .rs)
+  case " $keep " in *" $m "*) ;; *) rm -f "$f" ;; esac
+done
+for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
+put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
+rm -f "$crate/src/emon.rs.new"
+
+for f in lib port plan source engine; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+put test/driver/rust/main.rs "$crate/src/driver.rs"
+mkdir -p "$crate/tests"
+put host/rust/tests/engine.rs "$crate/tests/engine.rs"
+cat > "$crate/Cargo.toml.new" <<'TOML'
+[package]
+name = "emon"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "emon-rs"
+path = "src/driver.rs"
+
+[profile.release]
+opt-level = 3
+overflow-checks = true
+debug = false
+TOML
+put "$crate/Cargo.toml.new" "$crate/Cargo.toml"
+rm -f "$crate/Cargo.toml.new"
+
+flags="-A warnings"
+[ "${EMON_RS_WARN:-}" = 1 ] && flags=""
+out=$(cd "$crate" && RUSTFLAGS="$flags" cargo build --release --offline -q 2>&1) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
+[ -z "$out" ] || echo "$out" >&2
+echo "$crate/target/release/emon-rs"

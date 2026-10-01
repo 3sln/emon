@@ -1,0 +1,314 @@
+// The Engine API's native tests (DEVLOG P1.10), run by `bb slice` (`kin/scripts/slice`) against the assembled
+// crate (`kin/scripts/emon-rs-build`). They read fixtures from the repository's `test/`: a TEST may read files,
+// the library may not (D058). What they hold:
+//
+//   * the three byte-source adapters (bytes, Read + Seek, spooled Read) give IDENTICAL JSON and HTML;
+//   * a 512-byte ASYNC source (misses, fetch rounds, re-runs) gives the in-memory run's output, byte for byte,
+//     over the slice's fixtures AND every PDF fixture of `test/pdf` (damaged, repaired, incremental,
+//     encrypted ones included: an Err must be the same Err);
+//   * D040's three encryption errors, distinct; a password opens what it opens, and equals the plain twin;
+//   * the input-bytes limit is checked against the LENGTH before any byte is read; a source that lies
+//     about its length is `source-changed`;
+//   * `assets` other than `none` and several inputs as one document are refused, not approximated;
+//   * record and replay; the walkable Model; and that the library names no filesystem.
+use emon::{Assets, ByteSource, Config, Engine, Error, HtmlOptions, Input, JsonOptions, Kind, OcrPolicy, Options, SeekSource};
+use std::io::{Cursor, Read};
+use std::path::{Path, PathBuf};
+
+fn root() -> PathBuf {
+    match std::env::var("EMON_ROOT") {
+        Ok(r) => PathBuf::from(r),
+        Err(_) => Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".."),
+    }
+}
+
+fn read(rel: &str) -> Vec<u8> {
+    let p = root().join(rel);
+    std::fs::read(&p).unwrap_or_else(|e| panic!("{}: {}", p.display(), e))
+}
+
+const SLICE: [&str; 6] = ["h-plain", "h-keyword", "h-inverted-numbered", "footnotes-endnotes", "initial-image", "initial-vector"];
+
+fn synth(name: &str) -> Vec<u8> {
+    read(&format!("test/corpus/synth/pdf/{}.pdf", name))
+}
+
+fn json(m: &emon::Model) -> String {
+    m.to_json(&JsonOptions { pretty: true })
+}
+
+// a plain `Read`: no seek
+struct Forward(Cursor<Vec<u8>>);
+impl Read for Forward {
+    fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+        self.0.read(b)
+    }
+}
+
+fn async_engine(chunk: usize) -> Engine {
+    Engine::new(Config { chunk_size: chunk, simulate_async: true, ..Config::default() })
+}
+
+#[test]
+fn the_three_adapters_give_identical_json_and_html() {
+    for name in SLICE {
+        let bytes = synth(name);
+        let e = Engine::new(Config::default());
+        let o = Options::default();
+        let by_bytes = e.convert(Input::bytes(bytes.clone()), &o).unwrap();
+        let by_slice = e.convert(&bytes[..], &o).unwrap();
+        let by_seek = e.convert(Input::seekable(Cursor::new(bytes.clone())).unwrap(), &o).unwrap();
+        let by_spool = e.convert(Input::spooled(Forward(Cursor::new(bytes.clone())), 1 << 30).unwrap(), &o).unwrap();
+        // a seekable source through a tiny SYNC cache: chunks filled inline, no miss ever
+        let tiny = Engine::new(Config { chunk_size: 64, ..Config::default() });
+        let by_chunks = tiny.convert(Input::new(SeekSource::new(Cursor::new(bytes.clone())).unwrap()), &o).unwrap();
+        let want = json(&by_bytes);
+        let want_html = by_bytes.to_html(&HtmlOptions::default());
+        assert!(want.contains("\"paragraph\""), "{} has paragraphs", name);
+        for (what, m) in [("slice", &by_slice), ("seek", &by_seek), ("spool", &by_spool), ("sync chunks", &by_chunks)] {
+            assert_eq!(json(m), want, "{}: {} JSON", name, what);
+            assert_eq!(m.to_html(&HtmlOptions::default()), want_html, "{}: {} HTML", name, what);
+        }
+    }
+}
+
+#[test]
+fn a_512_byte_async_source_equals_the_in_memory_run_with_rounds_and_bytes_reported() {
+    for name in SLICE {
+        let bytes = synth(name);
+        let o = Options::default();
+        let (mem, ms) = Engine::new(Config::default()).convert_stats(Input::bytes(bytes.clone()), &o).unwrap();
+        assert_eq!((ms.attempts, ms.fetch_rounds), (1, 0), "in memory: one attempt, no fetch");
+        let (asy, st) = async_engine(512).convert_stats(Input::bytes(bytes.clone()), &o).unwrap();
+        assert_eq!(json(&asy), json(&mem), "{}: JSON", name);
+        assert_eq!(asy.to_html(&HtmlOptions::default()), mem.to_html(&HtmlOptions::default()), "{}: HTML", name);
+        assert!(st.fetch_rounds >= 1 && st.attempts == st.fetch_rounds + 1, "{}: it missed and re-ran: {:?}", name, st);
+        assert!(st.bytes_fetched <= bytes.len() as u64, "{}: never more than the input: {:?}", name, st);
+        assert!(st.fetch_rounds <= 24, "{}: inside FETCH_ROUNDS", name);
+        eprintln!("{}: {} bytes, {:?}", name, bytes.len(), st);
+        // the same through a Read + Seek source
+        let seek = async_engine(512).convert(Input::seekable(Cursor::new(bytes.clone())).unwrap(), &o).unwrap();
+        assert_eq!(json(&seek), json(&mem), "{}: async over Read + Seek", name);
+    }
+}
+
+fn result_of(e: &Engine, bytes: Vec<u8>, pw: Option<&str>) -> Result<String, String> {
+    let mut input = Input::bytes(bytes);
+    if let Some(p) = pw {
+        input = input.with_password(p.as_bytes().to_vec());
+    }
+    match e.convert(input, &Options::default()) {
+        Ok(m) => Ok(m.to_json(&JsonOptions::default())),
+        Err(e) => Err(e.name()),
+    }
+}
+
+#[test]
+fn every_pdf_fixture_is_the_same_result_in_memory_and_from_a_512_byte_async_source() {
+    let mem = Engine::new(Config::default());
+    let asy = async_engine(512);
+    let mut files: Vec<PathBuf> = Vec::new();
+    for dir in ["test/pdf", "test/pdf/p3", "test/content", "test/fuzz"] {
+        if let Ok(rd) = std::fs::read_dir(root().join(dir)) {
+            for f in rd.flatten() {
+                if f.path().extension().map(|x| x == "pdf").unwrap_or(false) {
+                    files.push(f.path());
+                }
+            }
+        }
+    }
+    files.sort();
+    assert!(files.len() > 60, "found the fixtures: {}", files.len());
+    let (mut ok, mut err) = (0, 0);
+    for f in &files {
+        let b = std::fs::read(f).unwrap();
+        let a = result_of(&mem, b.clone(), None);
+        let c = result_of(&asy, b, None);
+        assert_eq!(a, c, "{}: in memory and async 512", f.display());
+        match a {
+            Ok(_) => ok += 1,
+            Err(_) => err += 1,
+        }
+    }
+    eprintln!("{} fixtures: {} converted, {} refused with a named error, each the same both ways", files.len(), ok, err);
+    assert!(ok > 20);
+}
+
+#[test]
+fn encryption_errors_are_distinct_and_a_password_opens_what_it_opens() {
+    let e = Engine::new(Config::default());
+    let plain = result_of(&e, read("test/pdf/p3/plain.pdf"), None).unwrap();
+    let locked = read("test/pdf/p3/crypt-aes-128-user.pdf");
+    assert_eq!(result_of(&e, locked.clone(), None), Err("password-required".to_string()));
+    assert_eq!(result_of(&e, locked.clone(), Some("wrong-password")), Err("password-incorrect".to_string()));
+    assert_eq!(result_of(&e, locked.clone(), Some("user-secret")), Ok(plain.clone()), "the user password: the plain twin's Model");
+    assert_eq!(result_of(&e, locked, Some("owner-secret")), Ok(plain.clone()), "the owner password too");
+    assert_eq!(result_of(&e, read("test/pdf/p3/crypt-aes-128-empty.pdf"), None), Ok(plain), "the empty user password is tried by itself");
+    assert_eq!(result_of(&e, read("test/pdf/p3/unsupported-pubsec.pdf"), None), Err("encryption-unsupported".to_string()));
+    // and over an async source, the password never read from the file's chunks
+    let asy = async_engine(512);
+    assert_eq!(result_of(&asy, read("test/pdf/p3/crypt-aes-256-r6-user.pdf"), None), Err("password-required".to_string()));
+    assert_eq!(result_of(&asy, read("test/pdf/p3/crypt-aes-256-r6-user.pdf"), Some("nope")), Err("password-incorrect".to_string()));
+    // a password is never in the Debug of an Input
+    assert!(!format!("{:?}", Input::bytes(vec![1]).with_password(b"hunter2".to_vec())).contains("hunter2"));
+}
+
+// A source that must not be read: a length check that happens first never reads it.
+struct Unreadable(u64);
+impl ByteSource for Unreadable {
+    fn len(&self) -> u64 {
+        self.0
+    }
+    fn read_at(&self, _off: u64, _buf: &mut [u8]) -> std::io::Result<usize> {
+        panic!("a source over the input-bytes limit was read")
+    }
+}
+
+// A source whose length says more than it has.
+struct Liar(Vec<u8>, u64);
+impl ByteSource for Liar {
+    fn len(&self) -> u64 {
+        self.1
+    }
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> std::io::Result<usize> {
+        if off as usize >= self.0.len() {
+            return Ok(0);
+        }
+        let n = std::cmp::min(buf.len(), self.0.len() - off as usize);
+        buf[..n].copy_from_slice(&self.0[off as usize..off as usize + n]);
+        Ok(n)
+    }
+}
+
+#[test]
+fn the_input_bytes_limit_is_checked_against_the_length_before_a_byte_is_read() {
+    let e = Engine::new(Config { limits: vec![(0, 1000)], ..Config::default() });
+    match e.convert(Input::new(Unreadable(5000)), &Options::default()) {
+        Err(Error::Limit { name, limit, actual }) => assert_eq!((name.as_str(), limit, actual), ("input-bytes", 1000, 5000)),
+        other => panic!("{:?}", other.map(|_| ())),
+    }
+    // the default is SPEC 7.4's 1 GiB: a length above it is refused too
+    match Engine::new(Config::default()).convert(Input::new(Unreadable(5 << 30)), &Options::default()) {
+        Err(Error::Limit { name, .. }) => assert_eq!(name, "input-bytes"),
+        other => panic!("{:?}", other.map(|_| ())),
+    }
+    // a spool that runs past its bound is the same named limit
+    let big = Cursor::new(vec![0u8; 5000]);
+    let err = Input::spooled(big, 1000).err().expect("refused");
+    assert!(err.to_string().starts_with("input-bytes"));
+    // a limit deeper in kin is named too (pages), and does not leak into the next conversion
+    let few = Engine::new(Config { limits: vec![(8, 1)], ..Config::default() });
+    match few.convert(Input::bytes(read("test/pdf/p3/plain.pdf")), &Options::default()) {
+        Err(Error::Limit { name, .. }) => assert_eq!(name, "pages"),
+        other => panic!("{:?}", other.map(|_| ())),
+    }
+    assert!(Engine::new(Config::default()).convert(Input::bytes(read("test/pdf/p3/plain.pdf")), &Options::default()).is_ok());
+}
+
+#[test]
+fn a_source_that_gives_fewer_bytes_than_its_length_is_source_changed() {
+    let b = synth("h-plain");
+    for (name, e) in [("sync", Engine::new(Config { chunk_size: 4096, ..Config::default() })), ("async", async_engine(512))] {
+        let r = e.convert(Input::new(Liar(b.clone(), b.len() as u64 + 10_000)), &Options::default());
+        assert_eq!(r.err().map(|e| e.name()), Some("source-changed".to_string()), "{}", name);
+    }
+}
+
+#[test]
+fn what_is_not_implemented_is_refused() {
+    let e = Engine::new(Config::default());
+    let b = synth("h-plain");
+    for a in [Assets::Images, Assets::Figures] {
+        let r = e.convert(Input::bytes(b.clone()), &Options { assets: a, ..Options::default() });
+        assert_eq!(r.err().map(|e| e.name()), Some("unsupported".to_string()));
+    }
+    let r = e.convert(vec![Input::bytes(b.clone()), Input::bytes(b.clone())], &Options::default());
+    assert_eq!(r.err().map(|e| e.name()), Some("unsupported".to_string()));
+    assert_eq!(e.convert(Vec::<Input>::new(), &Options::default()).err().map(|e| e.name()), Some("no-input".to_string()));
+    assert_eq!(e.convert(Input::bytes(read("test/pdf/notpdf.pdf")), &Options::default()).err().map(|e| e.name()), Some("unsupported-format".to_string()));
+    // OCR is accepted and has no effect yet (D038's default is `always`): no policy changes the Model
+    let always = e.convert(Input::bytes(b.clone()), &Options { ocr: OcrPolicy::Always, ..Options::default() }).unwrap();
+    let never = e.convert(Input::bytes(b), &Options { ocr: OcrPolicy::Never, ..Options::default() }).unwrap();
+    assert_eq!(json(&always), json(&never));
+}
+
+#[test]
+fn intake_takes_any_number_of_inputs() {
+    let e = Engine::new(Config::default());
+    let v = e.intake(vec![Input::bytes(synth("h-plain")), Input::bytes(read("test/pdf/p3/crypt-aes-128-empty.pdf"))]).unwrap();
+    assert_eq!(v.len(), 2);
+    assert_eq!((v[0].format, v[0].pages, v[0].encrypted), ("pdf", 2, false));
+    assert_eq!((v[1].pages, v[1].encrypted), (3, true));
+    let locked = e.intake(Input::bytes(read("test/pdf/p3/crypt-aes-128-user.pdf")));
+    assert_eq!(locked.err().map(|e| e.name()), Some("password-required".to_string()));
+    let m = e.convert(synth("h-plain"), &Options::default()).unwrap();
+    assert_eq!((m.source().pages, m.source().encrypted), (2, false));
+}
+
+#[test]
+fn record_and_replay_with_the_slice_issuing_no_requests() {
+    let e = Engine::new(Config::default());
+    let b = synth("h-plain");
+    let (m, t) = e.record(Input::bytes(b.clone()), &Options::default()).unwrap();
+    assert!(t.entries.is_empty(), "the slice issues zero requests");
+    assert_eq!(t.inputs, vec![(0, b.len() as i32)]);
+    let r = e.replay(Input::bytes(b.clone()), &Options::default(), &t).unwrap();
+    assert_eq!(json(&r), json(&m));
+    // a transcript is of the input it was recorded from
+    let other = synth("h-keyword");
+    assert_eq!(e.replay(Input::bytes(other), &Options::default(), &t).err().map(|e| e.name()), Some("transcript-bad".to_string()));
+}
+
+#[test]
+fn the_model_can_be_walked() {
+    let e = Engine::new(Config::default());
+    let m = e.convert(Input::bytes(synth("h-plain")), &Options { locale: Some("en-GB".to_string()), ..Options::default() }).unwrap();
+    let root = m.root();
+    assert_eq!(root.kind().name(), "document");
+    assert_eq!(root.attr("locale"), Some(emon::Attr::Text("en-GB".to_string())));
+    assert!(m.to_json(&JsonOptions::default()).contains("\"locale\":\"en-GB\""));
+    let kids = root.children();
+    assert!(kids.len() > 2);
+    assert_eq!(kids[0].kind().name(), "paragraph");
+    assert_eq!(kids[0].text(), "Field Notes on Soil Moisture");
+    assert_eq!(kids[0].sources(), vec!["text".to_string(), "infer".to_string()]);
+    assert_eq!(kids[0].conf(), 500);
+    assert_eq!(kids[0].parent().map(|p| p.index()), Some(0));
+    let regions = kids[0].regions();
+    assert_eq!(regions.len(), 1);
+    assert_eq!((regions[0].page, regions[0].x0, regions[0].y0), (1, 7200, 9781));
+    let para = Kind::named("paragraph").unwrap();
+    assert_eq!(Kind::named("nonsense"), None);
+    let all = m.find(para);
+    assert!(all.len() >= kids.iter().filter(|k| k.kind() == para).count());
+    assert!(all.windows(2).all(|w| w[0].index() < w[1].index()), "document order");
+    let pages = m.pages();
+    assert_eq!(pages.len(), 2);
+    assert_eq!((pages[0].number, pages[0].width, pages[0].height, pages[0].kind.as_str()), (1, 61200, 79200, "vector"));
+    assert!(m.furniture().is_empty() && m.dropped().is_empty());
+    // the walk and the JSON say the same text, paragraph by paragraph
+    let texts: Vec<String> = kids.iter().filter(|k| k.kind() == para).map(|k| k.text()).collect();
+    let js = m.to_json(&JsonOptions::default());
+    for t in &texts {
+        assert!(js.contains(&format!("\"text\":\"{}\"", t.replace('\\', "\\\\").replace('"', "\\\""))), "JSON has {:?}", t);
+    }
+    // the keep-evidence option
+    let ev = e.convert(Input::bytes(synth("h-plain")), &Options { keep_evidence: true, ..Options::default() }).unwrap();
+    assert!(ev.evidence().unwrap().starts_with("{\"emon-evidence\""), "{:?}", &ev.evidence().unwrap()[..40]);
+    assert!(m.evidence().is_none());
+}
+
+#[test]
+fn the_library_names_no_filesystem() {
+    // D058: nothing under host/rust/src (the Engine, its sources, the loop, the ports) opens a file or names a path.
+    // `tess.rs` (the Tesseract adapter's tessdata directory) and `testport.rs` (test support) are not the library.
+    for f in ["lib.rs", "engine.rs", "source.rs", "plan.rs", "port.rs"] {
+        let text = String::from_utf8(read(&format!("host/rust/src/{}", f))).unwrap();
+        for (i, line) in text.lines().enumerate() {
+            let code = line.split("//").next().unwrap();
+            for bad in ["std::fs", "std::path", "Path", "File::open", "read_dir"] {
+                assert!(!code.contains(bad), "{}:{} names `{}`: {}", f, i + 1, bad, line);
+            }
+        }
+    }
+}

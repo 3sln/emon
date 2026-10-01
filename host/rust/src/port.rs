@@ -562,8 +562,41 @@ pub fn new_text() -> String {
 // Environment `EMON_LIMIT_<NAME>` is the low-level poke; an embedder's API
 // installs bounds through its own layer.
 
+// THE ENGINE'S LIMITS (P1.10, SPEC 13: `Config` carries the limits): a per-thread table of
+// overrides that `limit_of` consults before the environment, installed for the duration of one
+// conversion by `with_limits` (the Engine runs a conversion on the calling thread). Nothing else
+// writes it and kin never sees it: `limit-of` is still the only way a bound is read.
+thread_local! {
+    static LIMIT_OVERRIDES: std::cell::RefCell<Vec<(i32, i32)>> = std::cell::RefCell::new(Vec::new());
+}
+
+fn limit_override(kind: i32) -> Option<i32> {
+    LIMIT_OVERRIDES.with(|o| o.borrow().iter().rev().find(|(k, _)| *k == kind).map(|(_, v)| *v))
+}
+
+// Run `f` with these (kind, value) bounds in force on this thread; the previous table is restored
+// afterwards, a panic included.
+pub fn with_limits<T>(overrides: &[(i32, i32)], f: impl FnOnce() -> T) -> T {
+    struct Restore(usize);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            LIMIT_OVERRIDES.with(|o| o.borrow_mut().truncate(self.0));
+        }
+    }
+    let _r = LIMIT_OVERRIDES.with(|o| {
+        let mut o = o.borrow_mut();
+        let n = o.len();
+        o.extend_from_slice(overrides);
+        Restore(n)
+    });
+    f()
+}
+
 // @kin:link:form:limit-of: {:template "crate::port::limit_of({0})" :arity 1}
 pub fn limit_of(kind: i32) -> i32 {
+    if let Some(v) = limit_override(kind) {
+        return v;
+    }
     let (name, default) = limit_spec(kind);
     match std::env::var(format!("EMON_LIMIT_{}", name)) {
         Ok(v) => v.parse().unwrap_or(default),
