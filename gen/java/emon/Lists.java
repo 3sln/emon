@@ -170,6 +170,49 @@ public final class Lists {
         emon.Port.cellsSet(hc, (e + (l * LS_STRIDE)) + f, v);
         return 1;
     }
+    public static int lsLineOf(emon.Port.Cells ln, int w) {
+        // The line of the table whose words are w (`lh-first`, `lh-count`: the lines are in word order, and a stage that took
+        // lines out (furniture) kept it, so a word's own `line` field may name a line that is no longer there): by
+        // bisection. -1 when no line holds the word.
+        int lo = 0;
+        int hi = Evidence.lnCount(ln);
+        while (lo < hi) {
+            int mid = (lo + hi) / 2;
+            if (Evidence.lnGet(ln, mid, Evidence.lhFirst()) <= w) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if (lo == 0) {
+            return -1;
+        }
+        int l = lo - 1;
+        if (w < (Evidence.lnGet(ln, l, Evidence.lhFirst()) + Evidence.lnGet(ln, l, Evidence.lhCount()))) {
+            return l;
+        }
+        return -1;
+    }
+    public static int lsTaint(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells hc, emon.Port.Cells tw) {
+        // Take every line that has a word in a table's cell (`tw`, `emon.table`) out of reach of this module and of
+        // `emon.notes`: flag 32 in its row. A table writes a cell's text from the words, not from the line, and a line the
+        // table does not claim (its centre is outside) can still hold one; a group in a word of a cell would be in the cell's
+        // text.
+        int i = 0;
+        while (i < emon.Port.cellsLen(tw)) {
+            int w = emon.Port.cellsAt(tw, i);
+            if ((w >= 0) && (w < Evidence.wdCount(wd))) {
+                int l = lsLineOf(ln, w);
+                if (l >= 0) {
+                    if (lsGet(hc, l, lsKFlags()) == 0) {
+                        lsPut(hc, l, lsKFlags(), 32);
+                    }
+                }
+            }
+            i += 1;
+        }
+        return 0;
+    }
     public static int lsStart(emon.Port.Cells hc, int l) {
         // 1 when line l starts an item, a note body or a caption: it must begin a paragraph.
         if ((lsGet(hc, l, lsKFlags()) & 13) != 0) {
@@ -1162,13 +1205,14 @@ public final class Lists {
         }
         return 0;
     }
-    public static int lsAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells pa, emon.Port.Cells hc, emon.Port.Cells cd, emon.Port.Cells pi, emon.Port.Cells ws) {
-        // Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.
+    public static int lsAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, emon.Port.Cells pa, emon.Port.Cells hc, emon.Port.Cells cd, emon.Port.Cells pi, emon.Port.Cells ws, emon.Port.Cells tw) {
+        // Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch, `tw` the words of the tables' cells.
         // Answers the number of item lines found. The heading rows of `hc` must be there (`hd-analyze` ran); when
         // they are not nothing is done.
         if (lsOpen(hc) == 0) {
             return 0;
         }
+        lsTaint(wd, ln, hc, tw);
         int i = 0;
         int found = 0;
         emon.Port.cellsDrop(ws, 0);

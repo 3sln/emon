@@ -705,6 +705,20 @@ public final class Restruct {
         }
         return 0;
     }
+    public static int rsScrubText(emon.Port.Cells text) {
+        // A last safety: no Unicode noncharacter (U+FDD0..U+FDEF: what the groups of `emon.lists` are made of) is in the
+        // Model's text, whoever wrote it (a table's cell is written from the words, and a word of one that the stages here
+        // rewrote would have carried a group into it): U+FFFD stands for it, where it can be seen.
+        int i = 0;
+        while (i < emon.Port.cellsLen(text)) {
+            int c = emon.Port.cellsAt(text, i);
+            if ((c >= 64976) && (c <= 65007)) {
+                emon.Port.cellsSet(text, i, 65533);
+            }
+            i += 1;
+        }
+        return 0;
+    }
     public static int rsRun(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells stk, emon.Port.Cells used, emon.Port.Cells out, emon.Port.Cells lay) {
         // Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
         // `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
@@ -735,6 +749,7 @@ public final class Restruct {
         rsRemap(attrs, nm);
         rsTargets(nodes, attrs, out);
         rsLinkRefs(nodes, attrs, text, used);
+        rsScrubText(text);
         return Model.nodeCount(nodes);
     }
 }

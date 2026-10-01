@@ -34,7 +34,7 @@
 (ns emon.lists
   (:require [emon.lang :refer [I32 Bool Cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.evidence :refer [wd-get wd-set ln-get ln-set ln-count pa-get pa-count
+            [emon.evidence :refer [wd-get wd-set wd-count ln-get ln-set ln-count pa-get pa-count hd-line
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-rot lh-first lh-count
                                    hd-tstart hd-tlen hd-x0 hd-x1
                                    pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-flags pa-curve]]
@@ -141,6 +141,37 @@
     (if (< (cells-len hc) (+ e (* (cells-at hc 0) LS_STRIDE))) (return 0))
     (cells-set hc (+ (+ e (* l LS_STRIDE)) f) v)
     (return 1)))
+
+(defn ^I32 ls-line-of [^Cells ln ^I32 w]
+  (comment "The line of the table whose words are w (`lh-first`, `lh-count`: the lines are in word order, and a stage that took")
+  (comment "lines out (furniture) kept it, so a word's own `line` field may name a line that is no longer there): by")
+  (comment "bisection. -1 when no line holds the word.")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (ln-count ln)]
+    (while (< lo hi)
+      (do (let [^I32 mid (quot (+ lo hi) 2)]
+            (if (<= (ln-get ln mid (lh-first)) w)
+              (set lo (+ mid 1))
+              (set hi mid)))))
+    (if (== lo 0) (return -1))
+    (let [^I32 l (- lo 1)]
+      (if (< w (+ (ln-get ln l (lh-first)) (ln-get ln l (lh-count)))) (return l))
+      (return -1))))
+
+(defn ^:pub ^I32 ls-taint [^Cells wd ^Cells ln ^:mut ^Cells hc ^Cells tw]
+  (comment "Take every line that has a word in a table's cell (`tw`, `emon.table`) out of reach of this module and of")
+  (comment "`emon.notes`: flag 32 in its row. A table writes a cell's text from the words, not from the line, and a line the")
+  (comment "table does not claim (its centre is outside) can still hold one; a group in a word of a cell would be in the cell's")
+  (comment "text.")
+  (let [^:mut ^I32 i 0]
+    (while (< i (cells-len tw))
+      (do (let [^I32 w (cells-at tw i)]
+            (if (and (>= w 0) (< w (wd-count wd)))
+              (do (let [^I32 l (ls-line-of ln w)]
+                    (if (>= l 0)
+                      (do (if (== (ls-get hc l (ls-k-flags)) 0) (ls-put hc l (ls-k-flags) 32))))))))
+          (set i (+ i 1))))
+    (return 0)))
 
 (defn ^:pub ^I32 ls-start [^Cells hc ^I32 l]
   (comment "1 when line l starts an item, a note body or a caption: it must begin a paragraph.")
@@ -868,11 +899,12 @@
   (return 0))
 
 (defn ^:pub ^I32 ls-analyze [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Cells sf ^Cells pa
-                             ^:mut ^Cells hc ^:mut ^Cells cd ^:mut ^Cells pi ^:mut ^Cells ws]
-  (comment "Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.")
+                             ^:mut ^Cells hc ^:mut ^Cells cd ^:mut ^Cells pi ^:mut ^Cells ws ^Cells tw]
+  (comment "Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch, `tw` the words of the tables' cells.")
   (comment "Answers the number of item lines found. The heading rows of `hc` must be there (`hd-analyze` ran); when")
   (comment "they are not nothing is done.")
   (if (== (ls-open hc) 0) (return 0))
+  (ls-taint wd ln hc tw)
   (let [^:mut ^I32 i 0
         ^:mut ^I32 found 0]
     (cells-drop ws 0)

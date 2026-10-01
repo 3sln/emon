@@ -225,8 +225,9 @@ func ltRun(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, sc *p
 	var cd *port.Cells = port.NewCells()
 	var pi *port.Cells = port.NewCells()
 	var lws *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
 	heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt)
-	return lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws)
+	return lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw)
 }
 
 func TestARunOfNumbersIsAListAndALoneLetterIsNot(emonT *testing.T) {

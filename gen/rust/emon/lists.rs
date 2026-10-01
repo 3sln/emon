@@ -171,6 +171,49 @@ pub fn ls_put(mut hc: &mut crate::port::Cells, l: i32, f: i32, v: i32) -> i32 {
     crate::port::cells_set(hc, (e + (l * LS_STRIDE)) + f, v);
     return 1;
 }
+pub(crate) fn ls_line_of(ln: &mut crate::port::Cells, w: i32) -> i32 {
+    // The line of the table whose words are w (`lh-first`, `lh-count`: the lines are in word order, and a stage that took
+    // lines out (furniture) kept it, so a word's own `line` field may name a line that is no longer there): by
+    // bisection. -1 when no line holds the word.
+    let mut lo: i32 = 0;
+    let mut hi: i32 = ln_count(ln);
+    while lo < hi {
+        let mid: i32 = (lo + hi) / 2;
+        if ln_get(ln, mid, lh_first()) <= w {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    if lo == 0 {
+        return -1;
+    }
+    let l: i32 = lo - 1;
+    if w < (ln_get(ln, l, lh_first()) + ln_get(ln, l, lh_count())) {
+        return l;
+    }
+    return -1;
+}
+pub fn ls_taint(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
+    // Take every line that has a word in a table's cell (`tw`, `emon.table`) out of reach of this module and of
+    // `emon.notes`: flag 32 in its row. A table writes a cell's text from the words, not from the line, and a line the
+    // table does not claim (its centre is outside) can still hold one; a group in a word of a cell would be in the cell's
+    // text.
+    let mut i: i32 = 0;
+    while i < crate::port::cells_len(tw) {
+        let w: i32 = crate::port::cells_at(tw, i);
+        if (w >= 0) && (w < wd_count(wd)) {
+            let l: i32 = ls_line_of(ln, w);
+            if l >= 0 {
+                if ls_get(hc, l, ls_k_flags()) == 0 {
+                    ls_put(hc, l, ls_k_flags(), 32);
+                }
+            }
+        }
+        i += 1;
+    }
+    return 0;
+}
 pub fn ls_start(hc: &mut crate::port::Cells, l: i32) -> i32 {
     // 1 when line l starts an item, a note body or a caption: it must begin a paragraph.
     if (ls_get(hc, l, ls_k_flags()) & 13) != 0 {
@@ -1163,13 +1206,14 @@ pub(crate) fn ls_initial_like(cd: &mut crate::port::Cells, i: i32) -> i32 {
     }
     return 0;
 }
-pub fn ls_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, sf: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, mut pi: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
-    // Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.
+pub fn ls_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, sf: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut cd: &mut crate::port::Cells, mut pi: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
+    // Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch, `tw` the words of the tables' cells.
     // Answers the number of item lines found. The heading rows of `hc` must be there (`hd-analyze` ran); when
     // they are not nothing is done.
     if ls_open(hc) == 0 {
         return 0;
     }
+    ls_taint(wd, ln, hc, tw);
     let mut i: i32 = 0;
     let mut found: i32 = 0;
     crate::port::cells_drop(ws, 0);

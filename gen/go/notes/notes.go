@@ -1192,12 +1192,13 @@ func ntApplyRefs(wd *port.Cells, et *port.Cells, gl *port.Cells, rf *port.Cells,
 	return 0
 }
 
-func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, sc *port.Cells, pages *port.Cells, hc *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells) int32 {
+func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *port.Cells, sc *port.Cells, pages *port.Cells, hc *port.Cells, rf *port.Cells, nb *port.Cells, mk *port.Cells, tw *port.Cells) int32 {
 	// Find the captions, the note bodies and the references that point at them, and mark them (see the module's head).
 	// `rf`, `nb`, `mk` are scratch. Answers the number of captions plus note bodies.
 	if lists.LsOpen(hc) == 0 {
 		return 0
 	}
+	lists.LsTaint(wd, ln, hc, tw)
 	var n int32 = evidence.LnCount(ln)
 	var l int32 = 0
 	var nhl int32 = -1

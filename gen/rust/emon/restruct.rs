@@ -704,6 +704,20 @@ pub(crate) fn rs_link_refs(mut nodes: &mut crate::port::Cells, mut attrs: &mut c
     }
     return 0;
 }
+pub(crate) fn rs_scrub_text(mut text: &mut crate::port::Cells) -> i32 {
+    // A last safety: no Unicode noncharacter (U+FDD0..U+FDEF: what the groups of `emon.lists` are made of) is in the
+    // Model's text, whoever wrote it (a table's cell is written from the words, and a word of one that the stages here
+    // rewrote would have carried a group into it): U+FFFD stands for it, where it can be seen.
+    let mut i: i32 = 0;
+    while i < crate::port::cells_len(text) {
+        let c: i32 = crate::port::cells_at(text, i);
+        if (c >= 64976) && (c <= 65007) {
+            crate::port::cells_set(text, i, 65533);
+        }
+        i += 1;
+    }
+    return 0;
+}
 pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, mut used: &mut crate::port::Cells, mut out: &mut crate::port::Cells, lay: &mut crate::port::Cells) -> i32 {
     // Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
     // `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
@@ -734,5 +748,6 @@ pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mu
     rs_remap(attrs, nm);
     rs_targets(nodes, attrs, out);
     rs_link_refs(nodes, attrs, text, used);
+    rs_scrub_text(text);
     return node_count(nodes);
 }

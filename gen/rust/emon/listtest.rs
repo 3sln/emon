@@ -211,8 +211,9 @@ pub(crate) fn lt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
     let cd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pi: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let lws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     hd_analyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-    return ls_analyze(wd, ln, et, sf, pa, hc, cd, pi, lws);
+    return ls_analyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw);
 }
 #[test]
 fn test_a_run_of_numbers_is_a_list_and_a_lone_letter_is_not() {

@@ -219,9 +219,9 @@
 (defn ^I32 lt-run [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc]
   (comment "The heading analysis and then the list analysis of the evidence. Answers the items found.")
   (let [^Cells gl (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
-        ^Cells pa (new-cells) ^Cells cd (new-cells) ^Cells pi (new-cells) ^Cells lws (new-cells)]
+        ^Cells pa (new-cells) ^Cells cd (new-cells) ^Cells pi (new-cells) ^Cells lws (new-cells) ^Cells tw (new-cells)]
     (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
-    (return (ls-analyze wd ln et sf pa hc cd pi lws))))
+    (return (ls-analyze wd ln et sf pa hc cd pi lws tw))))
 
 (deftest test-a-run-of-numbers-is-a-list-and-a-lone-letter-is-not
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)

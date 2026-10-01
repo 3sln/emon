@@ -35,7 +35,7 @@
             [emon.heading :refer [hd-level hd-rows-end]]
             [emon.lists :refer [ls-open ls-get ls-put ls-f-note ls-f-cap ls-f-ref ls-k-flags ls-upright ls-wl ls-wc
                                 ls-first-word ls-second-word ls-line-size ls-abs ls-max ls-cap
-                                ls-s-cap ls-s-note ls-s-ref ls-wrap-begin ls-wrap-end ls-wrap-set ls-copy-word
+                                ls-taint ls-s-cap ls-s-note ls-s-ref ls-wrap-begin ls-wrap-end ls-wrap-set ls-copy-word
                                 ls-digit]]
             [kin.lang :refer [defn defconst defdata return let set while if do comment
                               + - * < > <= >= == != and or not quot rem bit-and]]))
@@ -877,10 +877,11 @@
     (return 0)))
 
 (defn ^:pub ^I32 nt-analyze [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Cells gl ^Cells sf ^Cells sc ^Cells pages
-                             ^:mut ^Cells hc ^:mut ^Cells rf ^:mut ^Cells nb ^:mut ^Cells mk]
+                             ^:mut ^Cells hc ^:mut ^Cells rf ^:mut ^Cells nb ^:mut ^Cells mk ^Cells tw]
   (comment "Find the captions, the note bodies and the references that point at them, and mark them (see the module's head).")
   (comment "`rf`, `nb`, `mk` are scratch. Answers the number of captions plus note bodies.")
   (if (== (ls-open hc) 0) (return 0))
+  (ls-taint wd ln hc tw)
   (let [^I32 n (ln-count ln)
         ^:mut ^I32 l 0
         ^:mut ^I32 nhl -1

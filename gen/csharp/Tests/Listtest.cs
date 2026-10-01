@@ -207,8 +207,9 @@ public static class Listtest {
         emon.Port.Cells cd = emon.Port.NewCells();
         emon.Port.Cells pi = emon.Port.NewCells();
         emon.Port.Cells lws = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
         Heading.HdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws);
+        return Lists.LsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw);
     }
     [Xunit.Fact]
     public static void TestARunOfNumbersIsAListAndALoneLetterIsNot() {

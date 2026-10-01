@@ -789,8 +789,8 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	// captions, note bodies and their references (kin/notes.kin, P4.6), then lists (kin/lists.kin, P4.5): which lines begin them, written
 	// into et and the rows after hc's, which the paragraph stage reads; the notes first, the lists never take a line they took
 	l := newCellsN(6)
-	notes.NtAnalyze(wd, ln, et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2])
-	lists.LsAnalyze(wd, ln, et, h[0], pa, h[2], l[3], l[4], l[5])
+	notes.NtAnalyze(wd, ln, et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
+	lists.LsAnalyze(wd, ln, et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
 	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger)
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the

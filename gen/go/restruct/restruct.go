@@ -745,6 +745,21 @@ func rsLinkRefs(nodes *port.Cells, attrs *port.Cells, text *port.Cells, used *po
 	return 0
 }
 
+func rsScrubText(text *port.Cells) int32 {
+	// A last safety: no Unicode noncharacter (U+FDD0..U+FDEF: what the groups of `emon.lists` are made of) is in the
+	// Model's text, whoever wrote it (a table's cell is written from the words, and a word of one that the stages here
+	// rewrote would have carried a group into it): U+FFFD stands for it, where it can be seen.
+	var i int32 = 0
+	for i < port.CellsLen(text) {
+		var c int32 = port.CellsAt(text, i)
+		if (c >= 64976) && (c <= 65007) {
+			port.CellsSet(text, i, 65533)
+		}
+		i += 1
+	}
+	return 0
+}
+
 func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, stk *port.Cells, used *port.Cells, out *port.Cells, lay *port.Cells) int32 {
 	// Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
 	// `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
@@ -775,5 +790,6 @@ func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, no
 	rsRemap(attrs, nm)
 	rsTargets(nodes, attrs, out)
 	rsLinkRefs(nodes, attrs, text, used)
+	rsScrubText(text)
 	return model.NodeCount(nodes)
 }

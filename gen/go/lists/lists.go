@@ -217,6 +217,51 @@ func LsPut(hc *port.Cells, l int32, f int32, v int32) int32 {
 	return 1
 }
 
+func lsLineOf(ln *port.Cells, w int32) int32 {
+	// The line of the table whose words are w (`lh-first`, `lh-count`: the lines are in word order, and a stage that took
+	// lines out (furniture) kept it, so a word's own `line` field may name a line that is no longer there): by
+	// bisection. -1 when no line holds the word.
+	var lo int32 = 0
+	var hi int32 = evidence.LnCount(ln)
+	for lo < hi {
+		var mid int32 = (lo + hi) / 2
+		if evidence.LnGet(ln, mid, evidence.LhFirst()) <= w {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	if lo == 0 {
+		return -1
+	}
+	var l int32 = lo - 1
+	if w < (evidence.LnGet(ln, l, evidence.LhFirst()) + evidence.LnGet(ln, l, evidence.LhCount())) {
+		return l
+	}
+	return -1
+}
+
+func LsTaint(wd *port.Cells, ln *port.Cells, hc *port.Cells, tw *port.Cells) int32 {
+	// Take every line that has a word in a table's cell (`tw`, `emon.table`) out of reach of this module and of
+	// `emon.notes`: flag 32 in its row. A table writes a cell's text from the words, not from the line, and a line the
+	// table does not claim (its centre is outside) can still hold one; a group in a word of a cell would be in the cell's
+	// text.
+	var i int32 = 0
+	for i < port.CellsLen(tw) {
+		var w int32 = port.CellsAt(tw, i)
+		if (w >= 0) && (w < evidence.WdCount(wd)) {
+			var l int32 = lsLineOf(ln, w)
+			if l >= 0 {
+				if LsGet(hc, l, LsKFlags()) == 0 {
+					LsPut(hc, l, LsKFlags(), 32)
+				}
+			}
+		}
+		i += 1
+	}
+	return 0
+}
+
 func LsStart(hc *port.Cells, l int32) int32 {
 	// 1 when line l starts an item, a note body or a caption: it must begin a paragraph.
 	if (LsGet(hc, l, LsKFlags()) & 13) != 0 {
@@ -1256,13 +1301,14 @@ func lsInitialLike(cd *port.Cells, i int32) int32 {
 	return 0
 }
 
-func LsAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, pa *port.Cells, hc *port.Cells, cd *port.Cells, pi *port.Cells, ws *port.Cells) int32 {
-	// Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch.
+func LsAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, pa *port.Cells, hc *port.Cells, cd *port.Cells, pi *port.Cells, ws *port.Cells, tw *port.Cells) int32 {
+	// Find the lines that start an item and mark them (see the module's head). `cd`, `pi`, `ws` are scratch, `tw` the words of the tables' cells.
 	// Answers the number of item lines found. The heading rows of `hc` must be there (`hd-analyze` ran); when
 	// they are not nothing is done.
 	if LsOpen(hc) == 0 {
 		return 0
 	}
+	LsTaint(wd, ln, hc, tw)
 	var i int32 = 0
 	var found int32 = 0
 	port.CellsDrop(ws, 0)

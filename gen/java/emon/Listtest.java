@@ -202,8 +202,9 @@ public final class Listtest {
         emon.Port.Cells cd = emon.Port.newCells();
         emon.Port.Cells pi = emon.Port.newCells();
         emon.Port.Cells lws = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
         Heading.hdAnalyze(wd, ln, et, gl, sf, sc, hc, ws, tmp, pr, ptxt);
-        return Lists.lsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws);
+        return Lists.lsAnalyze(wd, ln, et, sf, pa, hc, cd, pi, lws, tw);
     }
     public static void testARunOfNumbersIsAListAndALoneLetterIsNot() {
         emon.Port.Cells wd = emon.Port.newCells();

@@ -1131,12 +1131,13 @@ public final class Notes {
         }
         return 0;
     }
-    public static int ntAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells pages, emon.Port.Cells hc, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk) {
+    public static int ntAnalyze(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells pages, emon.Port.Cells hc, emon.Port.Cells rf, emon.Port.Cells nb, emon.Port.Cells mk, emon.Port.Cells tw) {
         // Find the captions, the note bodies and the references that point at them, and mark them (see the module's head).
         // `rf`, `nb`, `mk` are scratch. Answers the number of captions plus note bodies.
         if (Lists.lsOpen(hc) == 0) {
             return 0;
         }
+        Lists.lsTaint(wd, ln, hc, tw);
         int n = Evidence.lnCount(ln);
         int l = 0;
         int nhl = -1;

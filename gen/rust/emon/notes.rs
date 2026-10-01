@@ -1133,12 +1133,13 @@ pub(crate) fn nt_apply_refs(mut wd: &mut crate::port::Cells, mut et: &mut crate:
     }
     return 0;
 }
-pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, gl: &mut crate::port::Cells, sf: &mut crate::port::Cells, sc: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mut mk: &mut crate::port::Cells) -> i32 {
+pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, gl: &mut crate::port::Cells, sf: &mut crate::port::Cells, sc: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, mut rf: &mut crate::port::Cells, mut nb: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
     // Find the captions, the note bodies and the references that point at them, and mark them (see the module's head).
     // `rf`, `nb`, `mk` are scratch. Answers the number of captions plus note bodies.
     if ls_open(hc) == 0 {
         return 0;
     }
+    ls_taint(wd, ln, hc, tw);
     let n: i32 = ln_count(ln);
     let mut l: i32 = 0;
     let mut nhl: i32 = -1;
