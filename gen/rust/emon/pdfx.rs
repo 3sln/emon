@@ -630,7 +630,7 @@ pub fn px_page_of(idx: &mut crate::port::Cells, num: i32) -> i32 {
     if num <= 0 {
         return -1;
     }
-    if (IX_HEAD + num) >= crate::port::cells_len(idx) {
+    if num >= (crate::port::cells_len(idx) - IX_HEAD) {
         return -1;
     }
     return crate::port::cells_at(idx, IX_HEAD + num) - 1;

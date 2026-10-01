@@ -7,6 +7,8 @@ use crate::emon::pdfdoc::*;
 use crate::emon::pdffont::*;
 use crate::emon::pdflex::*;
 use crate::emon::pdfsrc::*;
+use crate::emon::pdfstruct::*;
+use crate::emon::pdfx::*;
 
 pub(crate) fn fz_mix(h: i32, v: i32) -> i32 {
     // A rolling 23-bit hash step; any I32 v.
@@ -75,6 +77,23 @@ pub(crate) fn fz_content(src: &crate::port::Src, mut ar: &mut crate::port::Cells
     let fnt: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let idx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let w: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let seen: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let md: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ss: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let se: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let so: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ha: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hh: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut ts: i32 = 0;
+    let mut tj: i32 = 0;
     let s: i32 = pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
     let mut g: i32 = 0;
     let mut h: i32 = 7;
@@ -97,6 +116,19 @@ pub(crate) fn fz_content(src: &crate::port::Src, mut ar: &mut crate::port::Cells
         crate::port::text_i32(t, mk_count(mk));
         crate::port::text_ascii(t, " cps=");
         crate::port::text_i32(t, h);
+        px_index_build(src, ar, dc, a, b, st, pg, idx);
+        ts = tg_read(src, ar, dc, a, b, st, pg, idx, txt, w, seen, ss, se, sk, sc, so, wk, md);
+        crate::port::text_ascii(t, " tags=");
+        crate::port::text_i32(t, ts);
+        if ts > 0 {
+            tj = tg_join(ss, se, sk, sc, so, sa, gl, mk, fnt, pg, ha, hb, hh);
+            crate::port::text_ascii(t, ":");
+            crate::port::text_i32(t, tj);
+            crate::port::text_ascii(t, ":");
+            crate::port::text_i32(t, crate::port::cells_at(ss, 54));
+            crate::port::text_ascii(t, ":");
+            crate::port::text_i32(t, crate::port::cells_len(sc));
+        }
     }
     return s;
 }
