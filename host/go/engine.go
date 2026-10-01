@@ -732,7 +732,10 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	model.ModelInit(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout)
 	para.PaPages(pg, m.pages)
 	t := newCellsN(5)
-	para.PaBuild(wd, ln, et, np, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4])
+	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
+	c := newCellsN(13)
+	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12])
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
 		for _, ch := range opts.Locale {

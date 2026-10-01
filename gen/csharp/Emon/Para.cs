@@ -11,8 +11,34 @@ public static class Para {
     internal const int PaIndentDiv = 2;
     internal const int PaSizeDiv = 20;
     internal const int PaRotSlop = 100;
-    internal const int PaWideNum = 3;
-    internal const int PaWideDen = 5;
+    internal const int PaIndentUse = 1;
+    internal const int JsHyphen = 3;
+    internal const int JsEdge = 2;
+    internal const int JsShort = -3;
+    internal const int JsNoterm = 2;
+    internal const int JsLower = 3;
+    internal const int JsIndent = -3;
+    internal const int JsMarker = -3;
+    internal const int JsStyle = -3;
+    internal const int JsStream = 1;
+    internal const int JsWidth = -3;
+    internal const int JsBottom = 1;
+    internal const int JoinMin = 4;
+    internal const int PaEdgePct = 15;
+    internal const int CfStride = 13;
+    internal const int CfPage = 0;
+    internal const int CfBand = 1;
+    internal const int CfCol = 2;
+    internal const int CfRole = 3;
+    internal const int CfX0 = 4;
+    internal const int CfY0 = 5;
+    internal const int CfX1 = 6;
+    internal const int CfY1 = 7;
+    internal const int CfFirst = 8;
+    internal const int CfCount = 9;
+    internal const int CfAssoc = 10;
+    internal const int CfDone = 11;
+    internal const int CfRef = 12;
     internal const int FrStride = 6;
     public static int PaPages(emon.Port.Cells pg, emon.Port.Cells pages) {
         // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
@@ -79,10 +105,25 @@ public static class Para {
         return (cp == 41) || ((cp == 93) || ((cp == 34) || ((cp == 39) || ((cp == 8221) || ((cp == 8217) || (cp == 187))))));
     }
     internal static bool PaEndsSentence(emon.Port.Cells raw) {
-        // Does the text so far end a sentence: a closing mark, or a closer after one.
+        // Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
+        // three digits after a mark that follows a letter: `thing.3`) is not read.
         int n = emon.Port.CellsLen(raw);
+        int nd = 0;
         if (n < 1) {
             return 0 == 1;
+        }
+        while ((n > 2) && (nd < 3) && (emon.Port.CellsAt(raw, n - 1) >= 48) && (emon.Port.CellsAt(raw, n - 1) <= 57)) {
+            n -= 1;
+            nd += 1;
+        }
+        if (nd > 0) {
+            if ((n == 0) || !PaFinalMark(emon.Port.CellsAt(raw, n - 1))) {
+                return 0 == 1;
+            }
+            if ((emon.Port.CellsAt(raw, n - 2) >= 48) && (emon.Port.CellsAt(raw, n - 2) <= 57)) {
+                return 0 == 1;
+            }
+            return 1 == 1;
         }
         int c = emon.Port.CellsAt(raw, n - 1);
         if (PaFinalMark(c)) {
@@ -274,32 +315,77 @@ public static class Para {
         // Do the two lines' extents overlap across the page?
         return (Evidence.LnGet(ln, b, Evidence.LhX0()) < Evidence.LnGet(ln, a, Evidence.LhX1())) && (Evidence.LnGet(ln, a, Evidence.LhX0()) < Evidence.LnGet(ln, b, Evidence.LhX1()));
     }
-    internal static int PaMedian(emon.Port.Cells ln, emon.Port.Cells ord, emon.Port.Cells gp, int npages) {
-        // The median line gap of the document: every pair of consecutive lines of a page (in reading
-        // order) that are upright, read the same way and the second below the first. 0 when there is none.
-        int p = 1;
+    internal static int PaMedian(emon.Port.Cells ln, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells gp) {
+        // The line gap of the document: the lower quartile of the gaps between consecutive lines of a body
+        // fragment (D135) that are read the same way, the second below the first. 0 when there is none.
+        int nf = emon.Port.CellsLen(cf) / CfStride;
+        int r = 0;
         int i = 0;
-        int n = 0;
         emon.Port.CellsDrop(gp, 0);
-        while (p <= npages) {
-            PaCollect(ord, ln, p);
-            n = emon.Port.CellsLen(ord);
-            i = 1;
-            while (i < n) {
-                int a = emon.Port.CellsAt(ord, i - 1);
-                int b = emon.Port.CellsAt(ord, i);
-                if (PaUpright(ln, a) && (PaUpright(ln, b) && ((Evidence.LnGet(ln, a, Evidence.LhDir()) == Evidence.LnGet(ln, b, Evidence.LhDir())) && PaBelow(ln, a, b)))) {
-                    emon.Port.CellsPush(gp, PaGap(ln, a, b));
+        while (r < nf) {
+            if (emon.Port.CellsAt(cf, (r * CfStride) + CfRole) == Model.RlBody()) {
+                i = 1;
+                while (i < emon.Port.CellsAt(cf, (r * CfStride) + CfCount)) {
+                    int a = emon.Port.CellsAt(lo, emon.Port.CellsAt(cf, (r * CfStride) + CfFirst) + (i - 1));
+                    int b = emon.Port.CellsAt(lo, emon.Port.CellsAt(cf, (r * CfStride) + CfFirst) + i);
+                    if ((Evidence.LnGet(ln, a, Evidence.LhDir()) == Evidence.LnGet(ln, b, Evidence.LhDir())) && PaBelow(ln, a, b)) {
+                        emon.Port.CellsPush(gp, PaGap(ln, a, b));
+                    }
+                    i += 1;
                 }
-                i += 1;
             }
-            p += 1;
+            r += 1;
         }
         if (emon.Port.CellsLen(gp) == 0) {
             return 0;
         }
         PaSortNums(gp);
         return emon.Port.CellsAt(gp, emon.Port.CellsLen(gp) / 4);
+    }
+    internal static int PaFmargin(emon.Port.Cells ln, emon.Port.Cells lo, int first, int count) {
+        // The margin of a fragment, in `pa-start`'s terms: the least start of its lines.
+        int i = 0;
+        int m = 0;
+        while (i < count) {
+            int s = PaStart(ln, emon.Port.CellsAt(lo, first + i));
+            if ((i == 0) || (s < m)) {
+                m = s;
+            }
+            i += 1;
+        }
+        return m;
+    }
+    internal static int PaIndents(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells cf, emon.Port.Cells lo) {
+        // How many times, in the body fragments, a line starts further in than a line at the margin before it,
+        // by more than half its size and is close below it, or a fragment starts with such a line: the document's
+        // paragraphs have first-line indents when this is at least PA_INDENT_USE.
+        int nf = emon.Port.CellsLen(cf) / CfStride;
+        int r = 0;
+        int i = 0;
+        int n = 0;
+        while (r < nf) {
+            if (emon.Port.CellsAt(cf, (r * CfStride) + CfRole) == Model.RlBody()) {
+                int first = emon.Port.CellsAt(cf, (r * CfStride) + CfFirst);
+                int cnt = emon.Port.CellsAt(cf, (r * CfStride) + CfCount);
+                int mg = PaFmargin(ln, lo, first, cnt);
+                int b0 = emon.Port.CellsAt(lo, first);
+                if (((PaStart(ln, b0) - mg) * PaIndentDiv) > PaSize(wd, ln, b0)) {
+                    n += 1;
+                }
+                i = 1;
+                while (i < cnt) {
+                    int a = emon.Port.CellsAt(lo, first + (i - 1));
+                    int b = emon.Port.CellsAt(lo, first + i);
+                    int sb = PaSize(wd, ln, b);
+                    if (PaBelow(ln, a, b) && ((((PaStart(ln, a) - mg) * PaIndentDiv) <= sb) && (((PaStart(ln, b) - PaStart(ln, a)) * PaIndentDiv) > sb))) {
+                        n += 1;
+                    }
+                    i += 1;
+                }
+            }
+            r += 1;
+        }
+        return n;
     }
     internal static bool PaNewPar(emon.Port.Cells wd, emon.Port.Cells ln, int a, int b, int med, int margin) {
         // Does line b, the next one on the page, start a paragraph after line a (D135).
@@ -434,39 +520,48 @@ public static class Para {
         }
         return 0;
     }
-    internal static int PaFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr) {
-        // Close the open paragraph, if there is one: its node (own `text` when it is on one page, else
-        // `text`, `break`, `text` inlines), `at` one region per page, `src`, `conf`. Empties `raw` and `fr`.
+    internal static int PaFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, int parent) {
+        // Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
+        // column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
+        // inline per page it is on with a `break` milestone between two, a column break being only a new region
+        // (SPEC 10.1.2). Empties `raw` and `fr`.
         int nfr = emon.Port.CellsLen(fr) / FrStride;
         int rawn = emon.Port.CellsLen(raw);
         if (nfr == 0) {
             emon.Port.CellsDrop(raw, 0);
             return 0;
         }
-        int par = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        int par = Model.NodeNew(nodes, Model.NkParagraph(), parent);
         int k = 0;
+        int kend = 0;
+        int runs = 1;
         int from = 0;
         int to = 0;
-        int @base = 0;
         int t0 = 0;
         int child = 0;
         Model.NodeSetConf(nodes, par, 500);
         Model.NodeAddSrc(nodes, par, Model.SrText());
         Model.NodeAddSrc(nodes, par, Model.SrInfer());
+        k = 1;
         while (k < nfr) {
-            @base = k * FrStride;
-            from = emon.Port.CellsAt(fr, @base + 5);
-            to = rawn;
-            if ((k + 1) < nfr) {
-                to = emon.Port.CellsAt(fr, ((k + 1) * FrStride) + 5);
+            if (emon.Port.CellsAt(fr, k * FrStride) != emon.Port.CellsAt(fr, (k - 1) * FrStride)) {
+                runs += 1;
             }
-            int pg = emon.Port.CellsAt(fr, @base);
-            int rx0 = emon.Port.CellsAt(fr, @base + 1);
-            int ry0 = emon.Port.CellsAt(fr, @base + 2);
-            int rx1 = emon.Port.CellsAt(fr, @base + 3);
-            int ry1 = emon.Port.CellsAt(fr, @base + 4);
-            Model.NodeAddRegion(nodes, regions, par, pg, rx0, ry0, rx1, ry1);
-            if (nfr > 1) {
+            k += 1;
+        }
+        k = 0;
+        while (k < nfr) {
+            int pg = emon.Port.CellsAt(fr, k * FrStride);
+            kend = k + 1;
+            while ((kend < nfr) && (emon.Port.CellsAt(fr, kend * FrStride) == pg)) {
+                kend += 1;
+            }
+            from = emon.Port.CellsAt(fr, (k * FrStride) + 5);
+            to = rawn;
+            if (kend < nfr) {
+                to = emon.Port.CellsAt(fr, (kend * FrStride) + 5);
+            }
+            if (runs > 1) {
                 if (k > 0) {
                     child = Model.NodeNew(nodes, Model.NkBreak(), par);
                     Model.NodeSetSub(nodes, child, pg);
@@ -480,14 +575,24 @@ public static class Para {
                 Model.NodeSetText(nodes, child, t0, tn);
                 Model.NodeSetConf(nodes, child, 1000);
                 Model.NodeAddSrc(nodes, child, Model.SrText());
-                Model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
             } else {
                 t0 = emon.Port.CellsLen(text);
                 Normalize.NzNfc(raw, from, to, text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
                 int tn2 = emon.Port.CellsLen(text) - t0;
                 Model.NodeSetText(nodes, par, t0, tn2);
             }
-            k += 1;
+            while (k < kend) {
+                int @base = k * FrStride;
+                int rx0 = emon.Port.CellsAt(fr, @base + 1);
+                int ry0 = emon.Port.CellsAt(fr, @base + 2);
+                int rx1 = emon.Port.CellsAt(fr, @base + 3);
+                int ry1 = emon.Port.CellsAt(fr, @base + 4);
+                Model.NodeAddRegion(nodes, regions, par, pg, rx0, ry0, rx1, ry1);
+                if (runs > 1) {
+                    Model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
+                }
+                k += 1;
+            }
         }
         emon.Port.CellsDrop(raw, 0);
         emon.Port.CellsDrop(fr, 0);
@@ -501,84 +606,217 @@ public static class Para {
         Model.NodeAddSrc(nodes, b, Model.SrInfer());
         return 0;
     }
-    internal static int PaMaxw(emon.Port.Cells ln, emon.Port.Cells ord) {
-        // The widest upright line of the page (0 when there is none).
-        int n = emon.Port.CellsLen(ord);
-        int i = 0;
-        int m = 0;
-        while (i < n) {
-            int l = emon.Port.CellsAt(ord, i);
-            if (PaUpright(ln, l)) {
-                int w = Evidence.LnGet(ln, l, Evidence.LhX1()) - Evidence.LnGet(ln, l, Evidence.LhX0());
-                if (w > m) {
-                    m = w;
-                }
-            }
-            i += 1;
+    internal static bool PaLetter(int cp) {
+        // A letter, for the hyphen at a break: Basic Latin, Latin-1, Greek, Cyrillic, and anything above U+2FF
+        // that is not punctuation or a symbol (the CJK block and beyond).
+        if ((cp >= 65) && (cp <= 90)) {
+            return 1 == 1;
         }
-        return m;
+        if (PaLower(cp)) {
+            return 1 == 1;
+        }
+        if ((cp >= 192) && (cp <= 591)) {
+            return 1 == 1;
+        }
+        if ((cp >= 880) && (cp <= 1327)) {
+            return 1 == 1;
+        }
+        return 0 == 1;
     }
-    internal static int PaMargin(emon.Port.Cells ln, emon.Port.Cells ord) {
-        // The page's margin, in `pa-start`'s terms: the least start of an upright line (0 when none).
-        int n = emon.Port.CellsLen(ord);
-        int i = 0;
-        int m = 0;
-        int any = 0;
-        while (i < n) {
-            int l = emon.Port.CellsAt(ord, i);
-            if (PaUpright(ln, l)) {
-                int s = PaStart(ln, l);
-                if ((any == 0) || (s < m)) {
-                    m = s;
-                }
-                any = 1;
-            }
-            i += 1;
+    internal static bool PaBullet(int cp) {
+        // A bullet or a dash that stands alone as a word: a list marker.
+        if ((cp == 8226) || (cp == 183) || (cp == 9679)) {
+            return 1 == 1;
         }
-        return m;
+        if ((cp == 9632) || (cp == 9642) || (cp == 8259)) {
+            return 1 == 1;
+        }
+        if ((cp == 42) || (cp == 45) || (cp == 8211) || (cp == 8212)) {
+            return 1 == 1;
+        }
+        return 0 == 1;
     }
-    internal static bool PaContinues(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells raw, int a, int b, int amaxw, int bmargin) {
-        // Does the paragraph that ended the last page (its last line a) go on with line b, the first of the
-        // next (D137): both upright and one way; a is long (3/5 of its page's longest) and does not close
-        // a sentence; b is not indented past the margin of its page.
-        if (!PaUpright(ln, a)) {
+    internal static bool PaMarker(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int l) {
+        // Does the line start with a list marker: a bullet or dash alone, `1.`, `12)`, `a)`, `(a)`.
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
+        if (wn < 1) {
             return 0 == 1;
         }
-        if (!PaUpright(ln, b)) {
+        int ts = Evidence.WdGet(wd, w0, Evidence.HdTstart());
+        int tl = Evidence.WdGet(wd, w0, Evidence.HdTlen());
+        if ((ts < 0) || (tl < 1)) {
             return 0 == 1;
         }
-        if (Evidence.LnGet(ln, a, Evidence.LhDir()) != Evidence.LnGet(ln, b, Evidence.LhDir())) {
+        int c0 = emon.Port.CellsAt(et, ts);
+        if (tl == 1) {
+            return PaBullet(c0);
+        }
+        if (tl > 5) {
             return 0 == 1;
         }
-        if (PaEndsSentence(raw)) {
-            return 0 == 1;
+        int cl = emon.Port.CellsAt(et, ts + (tl - 1));
+        if ((c0 >= 48) && (c0 <= 57)) {
+            if ((cl != 46) && (cl != 41)) {
+                return 0 == 1;
+            }
+            int k = 1;
+            while (k < (tl - 1)) {
+                int c = emon.Port.CellsAt(et, ts + k);
+                if ((c < 48) || (c > 57)) {
+                    return 0 == 1;
+                }
+                k += 1;
+            }
+            return 1 == 1;
         }
-        int wa = Evidence.LnGet(ln, a, Evidence.LhX1()) - Evidence.LnGet(ln, a, Evidence.LhX0());
+        if ((c0 == 40) && (cl == 41) && (tl == 3)) {
+            return 1 == 1;
+        }
+        if ((tl == 2) && PaLetter(c0) && (cl == 41)) {
+            return 1 == 1;
+        }
+        return 0 == 1;
+    }
+    internal static int PaBottom(emon.Port.Cells cf, int r) {
+        // The bottom a fragment's last line is compared with: the bottom of the region its vertical cuts came from, so
+        // the columns of one set (side by side, whatever else lies above or below beside them) end together.
+        return emon.Port.CellsAt(cf, (r * CfStride) + CfRef);
+    }
+    internal static int PaMaxi(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    internal static int PaJoinScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int a, int b, int colx0, int colx1, int ncol, int bmargin, int indents, int bottom, int bx0, int bx1, int bn) {
+        // The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
+        // on with line b, the first of the next fragment (SPEC 10.1.2, D164). `colx0`..`colx1` is the extent of a's
+        // fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
+        // the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.
+        int n = emon.Port.CellsLen(raw);
+        int sa = PaSize(wd, ln, a);
         int sb = PaSize(wd, ln, b);
-        if ((wa * PaWideDen) < (amaxw * PaWideNum)) {
-            return 0 == 1;
+        int pts = 0;
+        if (n < 1) {
+            return -100;
         }
-        if (((PaStart(ln, b) - bmargin) * PaIndentDiv) > sb) {
-            return 0 == 1;
+        int last = emon.Port.CellsAt(raw, n - 1);
+        if (((last == 45) || (last == 173)) && (n >= 2)) {
+            if (PaLetter(emon.Port.CellsAt(raw, n - 2))) {
+                pts += JsHyphen;
+            }
         }
-        return 1 == 1;
+        if (ncol >= 2) {
+            if (((colx1 - Evidence.LnGet(ln, a, Evidence.LhX1())) * 100) <= (PaEdgePct * (colx1 - colx0))) {
+                pts += JsEdge;
+            }
+            if (((colx1 - Evidence.LnGet(ln, a, Evidence.LhX1())) * 5) > (colx1 - colx0)) {
+                pts += JsShort;
+            }
+        }
+        if (!PaEndsSentence(raw)) {
+            pts += JsNoterm;
+        }
+        if (PaLower(PaFirstCp(wd, ln, et, b))) {
+            pts += JsLower;
+        }
+        if ((indents == 1) && (((PaStart(ln, b) - bmargin) * PaIndentDiv) > sb)) {
+            pts += JsIndent;
+        }
+        if (PaMarker(wd, ln, et, b)) {
+            pts += JsMarker;
+        }
+        if (((PaAbs(sa - sb) * PaSizeDiv) > sa) || (PaStyle(wd, ln, a) != PaStyle(wd, ln, b))) {
+            pts += JsStyle;
+        }
+        if ((Evidence.LnGet(ln, a, Evidence.LhFirst()) + Evidence.LnGet(ln, a, Evidence.LhCount())) == Evidence.LnGet(ln, b, Evidence.LhFirst())) {
+            pts += JsStream;
+        }
+        if ((ncol >= 2) && ((Evidence.LnGet(ln, a, Evidence.LhY1()) + (sa / 2)) >= bottom)) {
+            pts += JsBottom;
+        }
+        if ((ncol >= 3) && (bn >= 3) && ((PaAbs((colx1 - colx0) - (bx1 - bx0)) * 4) > (PaMaxi(colx1 - colx0, bx1 - bx0) - 0))) {
+            pts += JsWidth;
+        }
+        return pts;
     }
-    internal static int PaFlushAll(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells dq) {
-        // Close the open paragraph, then make a paragraph of each line queued in `dq` (the lines that are not
-        // upright, D136) and empty the queue.
+    internal static int PaNote(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells cf, emon.Port.Cells lo, int r, int med) {
+        // The side fragment (row r of `cf`) as a `note` block of its role, under the root, its lines made
+        // paragraphs as any fragment's (D113).
+        int @base = r * CfStride;
+        int first = emon.Port.CellsAt(cf, @base + CfFirst);
+        int cnt = emon.Port.CellsAt(cf, @base + CfCount);
+        int page = emon.Port.CellsAt(cf, @base + CfPage);
+        int note = Model.NodeNew(nodes, Model.NkNote(), 0);
+        int mg = PaFmargin(ln, lo, first, cnt);
+        int i = 1;
+        int prev = emon.Port.CellsAt(lo, first);
+        Model.NodeSetSub(nodes, note, emon.Port.CellsAt(cf, @base + CfRole));
+        Model.NodeSetConf(nodes, note, 500);
+        Model.NodeAddSrc(nodes, note, Model.SrInfer());
+        Model.NodeAddRegion(nodes, regions, note, page, emon.Port.CellsAt(cf, @base + CfX0), emon.Port.CellsAt(cf, @base + CfY0), emon.Port.CellsAt(cf, @base + CfX1), emon.Port.CellsAt(cf, @base + CfY1));
+        emon.Port.CellsDrop(raw, 0);
+        emon.Port.CellsDrop(fr, 0);
+        PaFragOpen(fr, ln, page, prev, 0);
+        PaAddLine(wd, ln, et, raw, prev);
+        while (i < cnt) {
+            int b = emon.Port.CellsAt(lo, first + i);
+            if (PaNewPar(wd, ln, prev, b, med, mg)) {
+                PaFlush(nodes, attrs, regions, text, raw, tmp, fr, note);
+                PaFragOpen(fr, ln, page, b, 0);
+            } else {
+                PaJoin(wd, ln, et, raw, b);
+                PaFragExtend(fr, ln, b);
+            }
+            PaAddLine(wd, ln, et, raw, b);
+            prev = b;
+            i += 1;
+        }
+        PaFlush(nodes, attrs, regions, text, raw, tmp, fr, note);
+        return 0;
+    }
+    internal static int PaNotes(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells cf, emon.Port.Cells lo, int med, int from, int cur, int ty) {
+        // Write the side fragments that have been read to: those beside a body fragment before row `cur`, and
+        // those beside `cur` that begin at or above y `ty`, each once, in the order of `cf`, after the paragraph
+        // that was open where they begin (D111). Scans from row `from`; answers the first side row not written yet
+        // (the row count when none).
+        int nf = emon.Port.CellsLen(cf) / CfStride;
+        int r = from;
+        int pend = nf;
+        while (r < nf) {
+            int @base = r * CfStride;
+            if ((emon.Port.CellsAt(cf, @base + CfRole) != Model.RlBody()) && (emon.Port.CellsAt(cf, @base + CfDone) == 0)) {
+                if ((emon.Port.CellsAt(cf, @base + CfAssoc) < cur) || ((emon.Port.CellsAt(cf, @base + CfAssoc) == cur) && (emon.Port.CellsAt(cf, @base + CfY0) <= ty))) {
+                    emon.Port.CellsSet(cf, @base + CfDone, 1);
+                    PaNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, r, med);
+                } else if (pend > r) {
+                    pend = r;
+                }
+            }
+            r += 1;
+        }
+        return pend;
+    }
+    internal static int PaClose(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells dq, int med, int from, int cur, int ty) {
+        // Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a
+        // paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
+        // Answers the first side row not written yet.
         int nq = emon.Port.CellsLen(dq);
         int k = 0;
-        PaFlush(nodes, attrs, regions, text, raw, tmp, fr);
+        int pend = 0;
+        PaFlush(nodes, attrs, regions, text, raw, tmp, fr, 0);
+        pend = PaNotes(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, med, from, cur, ty);
         while (k < nq) {
             int l = emon.Port.CellsAt(dq, k);
             int pg = Evidence.LnGet(ln, l, Evidence.LhPage());
             PaFragOpen(fr, ln, pg, l, 0);
             PaAddLine(wd, ln, et, raw, l);
-            PaFlush(nodes, attrs, regions, text, raw, tmp, fr);
+            PaFlush(nodes, attrs, regions, text, raw, tmp, fr, 0);
             k += 1;
         }
         emon.Port.CellsDrop(dq, 0);
-        return 0;
+        return pend;
     }
     internal static int PaUprightCount(emon.Port.Cells ln, emon.Port.Cells ord) {
         // How many lines at the head of the sorted `ord` are upright (`pa-before` puts them first).
@@ -593,74 +831,193 @@ public static class Para {
         }
         return n;
     }
-    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp) {
+    internal static int PaLayout(emon.Port.Cells cf, int r0, int r1, int page, emon.Port.Cells pages, emon.Port.Cells layout) {
+        // The page's `layout` (D111): one cell per (band, col) of the fragments cf[r0..r1), its box the union of
+        // theirs (the margin notes of a side, several fragments, are one column).
+        int r = r0;
+        int q = 0;
+        int dup = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        while (r < r1) {
+            int b = r * CfStride;
+            int band = emon.Port.CellsAt(cf, b + CfBand);
+            int col = emon.Port.CellsAt(cf, b + CfCol);
+            dup = 0;
+            q = r0;
+            while (q < r) {
+                if ((emon.Port.CellsAt(cf, (q * CfStride) + CfBand) == band) && (emon.Port.CellsAt(cf, (q * CfStride) + CfCol) == col)) {
+                    dup = 1;
+                }
+                q += 1;
+            }
+            if (dup == 0) {
+                x0 = emon.Port.CellsAt(cf, b + CfX0);
+                y0 = emon.Port.CellsAt(cf, b + CfY0);
+                x1 = emon.Port.CellsAt(cf, b + CfX1);
+                y1 = emon.Port.CellsAt(cf, b + CfY1);
+                q = r + 1;
+                while (q < r1) {
+                    if ((emon.Port.CellsAt(cf, (q * CfStride) + CfBand) == band) && (emon.Port.CellsAt(cf, (q * CfStride) + CfCol) == col)) {
+                        if (emon.Port.CellsAt(cf, (q * CfStride) + CfX0) < x0) {
+                            x0 = emon.Port.CellsAt(cf, (q * CfStride) + CfX0);
+                        }
+                        if (emon.Port.CellsAt(cf, (q * CfStride) + CfY0) < y0) {
+                            y0 = emon.Port.CellsAt(cf, (q * CfStride) + CfY0);
+                        }
+                        if (emon.Port.CellsAt(cf, (q * CfStride) + CfX1) > x1) {
+                            x1 = emon.Port.CellsAt(cf, (q * CfStride) + CfX1);
+                        }
+                        if (emon.Port.CellsAt(cf, (q * CfStride) + CfY1) > y1) {
+                            y1 = emon.Port.CellsAt(cf, (q * CfStride) + CfY1);
+                        }
+                    }
+                    q += 1;
+                }
+                Model.LayAdd(layout, pages, page - 1, band, col, emon.Port.CellsAt(cf, b + CfRole), x0, y0, x1, y1);
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    internal static int PaColumns(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells lt, emon.Port.Cells ord, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr) {
+        // Phase one: every page's column fragments (`emon.columns`), and the page `layout` (D111) from them.
+        int p = 1;
+        int i = 0;
+        int nu = 0;
+        emon.Port.CellsDrop(cf, 0);
+        emon.Port.CellsDrop(lo, 0);
+        while (p <= npages) {
+            PaCollect(ord, lt, p);
+            nu = PaUprightCount(lt, ord);
+            emon.Port.CellsDrop(ls, 0);
+            i = 0;
+            while (i < nu) {
+                emon.Port.CellsPush(ls, emon.Port.CellsAt(ord, i));
+                i += 1;
+            }
+            int r0 = emon.Port.CellsLen(cf) / CfStride;
+            Columns.LcPage(wd, et, lt, p, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
+            PaLayout(cf, r0, emon.Port.CellsLen(cf) / CfStride, p, pages, layout);
+            p += 1;
+        }
+        return 0;
+    }
+    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg) {
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
-        // `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-        // queue of lines that are not upright). Answers 0.
-        int med = PaMedian(ln, ord, gp, npages);
+        // `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
+        // Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
+        // stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not
+        // upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the
+        // fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).
+        // Answers 0.
+        int med = 0;
+        int indents = 0;
         int p = 1;
         int i = 0;
         int n = 0;
         int nu = 0;
+        int nf = 0;
+        int r = 0;
+        int r1 = 0;
+        int first = 0;
+        int cnt = 0;
         int b = 0;
         int prev = -1;
+        int prevfr = -1;
         int open = 0;
         int cont = 0;
-        int prevmaxw = 0;
-        int pm = 0;
+        int pend = 0;
         int rs = 0;
+        int mg = 0;
+        int ty = 0;
+        int score = 0;
+        Columns.LcCopy(ln, lt);
+        PaColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
+        nf = emon.Port.CellsLen(cf) / CfStride;
+        med = PaMedian(lt, cf, lo, gp);
+        if (PaIndents(wd, lt, cf, lo) >= PaIndentUse) {
+            indents = 1;
+        }
         emon.Port.CellsDrop(gp, 0);
         emon.Port.CellsDrop(raw, 0);
         emon.Port.CellsDrop(fr, 0);
+        emon.Port.CellsDrop(dbg, 0);
         while (p <= npages) {
-            PaCollect(ord, ln, p);
+            PaCollect(ord, lt, p);
             n = emon.Port.CellsLen(ord);
-            nu = PaUprightCount(ln, ord);
-            pm = PaMargin(ln, ord);
-            if (nu == 0) {
-                PaFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+            nu = PaUprightCount(lt, ord);
+            while ((r < nf) && (emon.Port.CellsAt(cf, (r * CfStride) + CfPage) < p)) {
+                r += 1;
+            }
+            r1 = r;
+            while ((r1 < nf) && (emon.Port.CellsAt(cf, (r1 * CfStride) + CfPage) == p) && (emon.Port.CellsAt(cf, (r1 * CfStride) + CfRole) == Model.RlBody())) {
+                r1 += 1;
+            }
+            if (r == r1) {
+                pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000);
                 open = 0;
                 prev = -1;
                 if (p > 1) {
                     PaMilestone(nodes, p);
                 }
             } else {
-                b = emon.Port.CellsAt(ord, 0);
-                cont = 0;
-                if (open == 1) {
-                    if (PaContinues(wd, ln, raw, prev, b, prevmaxw, pm)) {
-                        cont = 1;
+                i = r;
+                while (i < r1) {
+                    first = emon.Port.CellsAt(cf, (i * CfStride) + CfFirst);
+                    cnt = emon.Port.CellsAt(cf, (i * CfStride) + CfCount);
+                    mg = PaFmargin(lt, lo, first, cnt);
+                    b = emon.Port.CellsAt(lo, first);
+                    cont = 0;
+                    if (open == 1) {
+                        score = PaJoinScore(wd, lt, et, raw, prev, b, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount), mg, indents, PaBottom(cf, prevfr), emon.Port.CellsAt(cf, (i * CfStride) + CfX0), emon.Port.CellsAt(cf, (i * CfStride) + CfX1), emon.Port.CellsAt(cf, (i * CfStride) + CfCount));
+                        emon.Port.CellsPush(dbg, i);
+                        emon.Port.CellsPush(dbg, prev);
+                        emon.Port.CellsPush(dbg, b);
+                        emon.Port.CellsPush(dbg, score);
+                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0));
+                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1));
+                        emon.Port.CellsPush(dbg, Evidence.LnGet(lt, prev, Evidence.LhX1()));
+                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount));
+                        if (score >= JoinMin) {
+                            cont = 1;
+                        }
                     }
-                }
-                if (cont == 0) {
-                    PaFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
-                    if (p > 1) {
-                        PaMilestone(nodes, p);
-                    }
-                    PaFragOpen(fr, ln, p, b, 0);
-                } else {
-                    PaJoin(wd, ln, et, raw, b);
-                    rs = emon.Port.CellsLen(raw);
-                    PaFragOpen(fr, ln, p, b, rs);
-                }
-                open = 1;
-                PaAddLine(wd, ln, et, raw, b);
-                prev = b;
-                i = 1;
-                while (i < nu) {
-                    b = emon.Port.CellsAt(ord, i);
-                    if (PaNewPar(wd, ln, prev, b, med, pm)) {
-                        PaFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
-                        PaFragOpen(fr, ln, p, b, 0);
+                    if (cont == 0) {
+                        ty = Evidence.LnGet(lt, b, Evidence.LhY0());
+                        pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty);
+                        if ((i == r) && (p > 1)) {
+                            PaMilestone(nodes, p);
+                        }
+                        PaFragOpen(fr, lt, p, b, 0);
                     } else {
-                        PaJoin(wd, ln, et, raw, b);
-                        PaFragExtend(fr, ln, b);
+                        PaJoin(wd, lt, et, raw, b);
+                        rs = emon.Port.CellsLen(raw);
+                        PaFragOpen(fr, lt, p, b, rs);
                     }
-                    PaAddLine(wd, ln, et, raw, b);
+                    open = 1;
+                    PaAddLine(wd, lt, et, raw, b);
                     prev = b;
+                    prevfr = i;
+                    cont = 1;
+                    while (cont < cnt) {
+                        b = emon.Port.CellsAt(lo, first + cont);
+                        if (PaNewPar(wd, lt, prev, b, med, mg)) {
+                            ty = Evidence.LnGet(lt, b, Evidence.LhY0());
+                            pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty);
+                            PaFragOpen(fr, lt, p, b, 0);
+                        } else {
+                            PaJoin(wd, lt, et, raw, b);
+                            PaFragExtend(fr, lt, b);
+                        }
+                        PaAddLine(wd, lt, et, raw, b);
+                        prev = b;
+                        cont += 1;
+                    }
                     i += 1;
                 }
-                prevmaxw = PaMaxw(ln, ord);
             }
             i = nu;
             while (i < n) {
@@ -669,7 +1026,52 @@ public static class Para {
             }
             p += 1;
         }
-        PaFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+        PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000);
+        return 0;
+    }
+    internal static int PaDumpNum(System.Text.StringBuilder t, int v) {
+        emon.Port.TextCp(t, 32);
+        emon.Port.TextI32(t, v);
+        return 0;
+    }
+    public static int PaDump(System.Text.StringBuilder t, emon.Port.Cells cf, emon.Port.Cells dbg) {
+        // The column stage's evidence as debug lines (SPEC 10.1.1; D163, D164), from what `pa-build` was given:
+        // one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,
+        // in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one
+        // `J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the
+        // points against `JOIN_MIN`). Not a contract.
+        int nf = emon.Port.CellsLen(cf) / CfStride;
+        int nj = emon.Port.CellsLen(dbg) / 8;
+        int r = 0;
+        int f = 0;
+        int j = 0;
+        int k = 0;
+        while (r < nf) {
+            if (k > 0) {
+                emon.Port.TextCp(t, 10);
+            }
+            k += 1;
+            emon.Port.TextAscii(t, "F");
+            f = 0;
+            while (f < 11) {
+                PaDumpNum(t, emon.Port.CellsAt(cf, (r * CfStride) + f));
+                f += 1;
+            }
+            r += 1;
+        }
+        while (j < nj) {
+            if (k > 0) {
+                emon.Port.TextCp(t, 10);
+            }
+            k += 1;
+            emon.Port.TextAscii(t, "J");
+            f = 0;
+            while (f < 4) {
+                PaDumpNum(t, emon.Port.CellsAt(dbg, (j * 8) + f));
+                f += 1;
+            }
+            j += 1;
+        }
         return 0;
     }
 }

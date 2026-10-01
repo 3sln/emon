@@ -10,14 +10,30 @@
       "w": 612,
       "h": 792,
       "rot": 0,
-      "kind": "vector"
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 82.32, 522.76, 711.91]
+        }
+      ]
     },
     {
       "n": 2,
       "w": 612,
       "h": 792,
       "rot": 0,
-      "kind": "vector"
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 73.17, 490.35, 226.66]
+        }
+      ]
     }
   ],
   "body": {
