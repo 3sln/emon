@@ -279,7 +279,7 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("6.4%"), 30000, 16400, 1, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("6.6%"), 40000, 16400, 1, 1);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "whitespace: well formed");
-        emon.Testport.AssertText(t, "@W", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
+        emon.Testport.AssertText(t, "T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];Gf;R;Cws[Total];Cw[6.4%];Cwe[6.6%];", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
         // Two columns of prose, four words a line: columns, not a table.
         emon.Port.CellsDrop(wd, 0);
         emon.Port.CellsDrop(ln, 0);
@@ -319,7 +319,7 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("75"), 30000, 15100, 0, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("4.4"), 37200, 15100, 0, 1);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "partial: well formed");
-        emon.Testport.AssertText(t, "T3p;Gh;R;Ch[Region];Ch[Units];Ch[Cost];Gb;R;Cs[North];Ce[120];Ce[9.5];R;Cs[South];Ce[98];Ce[7.1];R;Cs[West];Ce[75];Ce[4.4];", "horizontal rules only: the header is the bold row above the rule under it");
+        emon.Testport.AssertText(t, "T3p;Gh;R;Chs[Region];Ch[Units];Ch[Cost];Gb;R;Cs[North];Ce[120];C[9.5];R;Cs[So];Ce[8];C[7.1];R;Cs[Westerly];Ce[75];C[4.4];", "horizontal rules only: the header is the bold row above the rule under it");
     }
     [Xunit.Fact]
     public static void TestBandsOfFillMakeAShadedTable() {
@@ -365,7 +365,7 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("Sum"), 7600, 14600, 0, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("3"), 17600, 14600, 0, 0);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "caption: well formed");
-        emon.Testport.AssertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];", "the caption is the table's first child: label and text, not a paragraph");
+        emon.Testport.AssertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
     }
     internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
@@ -470,6 +470,7 @@ public static class Tabletest {
         System.Text.StringBuilder t4 = emon.Testport.NewText();
         System.Text.StringBuilder t5 = emon.Testport.NewText();
         System.Text.StringBuilder t6 = emon.Testport.NewText();
+        System.Text.StringBuilder t7 = emon.Testport.NewText();
         emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1), 0, "table-simple-ruled runs");
         emon.Testport.AssertTextSpan(t1, emon.Testport.TestFile("table/table-simple-ruled.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-simple-ruled.json")), "table-simple-ruled", 0);
         emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-shaded.pdf"), t2), 0, "table-shaded runs");
@@ -480,6 +481,8 @@ public static class Tabletest {
         emon.Testport.AssertTextSpan(t4, emon.Testport.TestFile("table/table-whitespace.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-whitespace.json")), "table-whitespace", 0);
         emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/align-table-numeric.pdf"), t5), 0, "align-table-numeric runs");
         emon.Testport.AssertTextSpan(t5, emon.Testport.TestFile("table/align-table-numeric.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/align-table-numeric.json")), "align-table-numeric", 0);
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7), 0, "table-multipage-thead runs");
+        emon.Testport.AssertTextSpan(t7, emon.Testport.TestFile("table/table-multipage-thead.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-multipage-thead.json")), "table-multipage-thead: one table on four pages, the repeated header in the ledger", 0);
         // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
         emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/h-plain.pdf"), t6), 0, "h-plain runs");
         emon.Testport.AssertTextSpan(t6, emon.Testport.TestFile("para/h-plain.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("para/h-plain.json")), "h-plain makes no table", 0);

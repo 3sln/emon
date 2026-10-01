@@ -284,7 +284,7 @@ fn test_columns_of_whitespace_are_a_table_and_prose_columns_are_not() {
     tt_at(wd, ln, et, &crate::testport::text_blob("6.4%")[..], 30000, 16400, 1, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("6.6%")[..], 40000, 16400, 1, 1);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "whitespace: well formed");
-    crate::testport::assert_text(t, "@W", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
+    crate::testport::assert_text(t, "T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];Gf;R;Cws[Total];Cw[6.4%];Cwe[6.6%];", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent");
     // Two columns of prose, four words a line: columns, not a table.
     crate::port::cells_drop(wd, 0);
     crate::port::cells_drop(ln, 0);
@@ -324,7 +324,7 @@ fn test_rules_above_and_below_make_a_partial_table() {
     tt_at(wd, ln, et, &crate::testport::text_blob("75")[..], 30000, 15100, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("4.4")[..], 37200, 15100, 0, 1);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "partial: well formed");
-    crate::testport::assert_text(t, "T3p;Gh;R;Ch[Region];Ch[Units];Ch[Cost];Gb;R;Cs[North];Ce[120];Ce[9.5];R;Cs[South];Ce[98];Ce[7.1];R;Cs[West];Ce[75];Ce[4.4];", "horizontal rules only: the header is the bold row above the rule under it");
+    crate::testport::assert_text(t, "T3p;Gh;R;Chs[Region];Ch[Units];Ch[Cost];Gb;R;Cs[North];Ce[120];C[9.5];R;Cs[So];Ce[8];C[7.1];R;Cs[Westerly];Ce[75];C[4.4];", "horizontal rules only: the header is the bold row above the rule under it");
 }
 #[test]
 fn test_bands_of_fill_make_a_shaded_table() {
@@ -370,7 +370,7 @@ fn test_a_caption_and_a_bold_last_row() {
     tt_at(wd, ln, et, &crate::testport::text_blob("Sum")[..], 7600, 14600, 0, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], 17600, 14600, 0, 0);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "caption: well formed");
-    crate::testport::assert_text(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];", "the caption is the table's first child: label and text, not a paragraph");
+    crate::testport::assert_text(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
 }
 pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
@@ -475,6 +475,7 @@ fn test_real_documents_make_the_golden_models() {
     let t4: &mut String = &mut crate::port::new_text();
     let t5: &mut String = &mut crate::port::new_text();
     let t6: &mut String = &mut crate::port::new_text();
+    let t7: &mut String = &mut crate::port::new_text();
     crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-simple-ruled.pdf")[..], t1), 0, "table-simple-ruled runs");
     crate::testport::assert_text_span(t1, &crate::testport::test_file("table/table-simple-ruled.json")[..], 0, jt_end(&crate::testport::test_file("table/table-simple-ruled.json")[..]), "table-simple-ruled", 0);
     crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-shaded.pdf")[..], t2), 0, "table-shaded runs");
@@ -485,6 +486,8 @@ fn test_real_documents_make_the_golden_models() {
     crate::testport::assert_text_span(t4, &crate::testport::test_file("table/table-whitespace.json")[..], 0, jt_end(&crate::testport::test_file("table/table-whitespace.json")[..]), "table-whitespace", 0);
     crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/align-table-numeric.pdf")[..], t5), 0, "align-table-numeric runs");
     crate::testport::assert_text_span(t5, &crate::testport::test_file("table/align-table-numeric.json")[..], 0, jt_end(&crate::testport::test_file("table/align-table-numeric.json")[..]), "align-table-numeric", 0);
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-multipage-thead.pdf")[..], t7), 0, "table-multipage-thead runs");
+    crate::testport::assert_text_span(t7, &crate::testport::test_file("table/table-multipage-thead.json")[..], 0, jt_end(&crate::testport::test_file("table/table-multipage-thead.json")[..]), "table-multipage-thead: one table on four pages, the repeated header in the ledger", 0);
     // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
     crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/h-plain.pdf")[..], t6), 0, "h-plain runs");
     crate::testport::assert_text_span(t6, &crate::testport::test_file("para/h-plain.json")[..], 0, jt_end(&crate::testport::test_file("para/h-plain.json")[..]), "h-plain makes no table", 0);

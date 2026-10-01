@@ -675,12 +675,12 @@ public static class Table {
                             rs += 1;
                         }
                     }
-                    int k = TbCellAdd(tc, r, c, rs, cs, emon.Port.CellsAt(xs, c), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(xs, c + cs), emon.Port.CellsAt(ys, r + rs));
+                    int kc = TbCellAdd(tc, r, c, rs, cs, emon.Port.CellsAt(xs, c), emon.Port.CellsAt(ys, r), emon.Port.CellsAt(xs, c + cs), emon.Port.CellsAt(ys, r + rs));
                     int rr = r;
                     while (rr < (r + rs)) {
                         cc = c;
                         while (cc < (c + cs)) {
-                            emon.Port.CellsSet(gm, (rr * nc) + cc, k);
+                            emon.Port.CellsSet(gm, (rr * nc) + cc, kc);
                             cc += 1;
                         }
                         rr += 1;
@@ -1676,20 +1676,20 @@ public static class Table {
                     b = TbChunkB(wd, wl, sg, ch, q);
                     if (emon.Port.CellsAt(gm, (tr * ncols) + a) == -1) {
                         int free = 1;
-                        int k = a;
-                        while (k <= b) {
-                            if (emon.Port.CellsAt(gm, (tr * ncols) + k) != -1) {
+                        int kf = a;
+                        while (kf <= b) {
+                            if (emon.Port.CellsAt(gm, (tr * ncols) + kf) != -1) {
                                 free = 0;
                             }
-                            k += 1;
+                            kf += 1;
                         }
                         if (free == 0) {
                             b = a;
                         }
-                        k = a;
-                        while (k <= b) {
-                            emon.Port.CellsSet(gm, (tr * ncols) + k, a);
-                            k += 1;
+                        kf = a;
+                        while (kf <= b) {
+                            emon.Port.CellsSet(gm, (tr * ncols) + kf, a);
+                            kf += 1;
                         }
                         emon.Port.CellsSet(gs, (tr * ncols) + a, (b - a) + 1);
                     }
@@ -1710,10 +1710,10 @@ public static class Table {
                 }
                 if ((st0 < 0) || (st0 == c)) {
                     int idx = TbCellAdd(tc, tr, c, 1, span, TbCut(ch, c, minx, maxx), emon.Port.CellsAt(ry, tr * 2), TbCut(ch, c + span, minx, maxx), emon.Port.CellsAt(ry, (tr * 2) + 1));
-                    int k = c;
-                    while (k < (c + span)) {
-                        emon.Port.CellsSet(en, (tr * ncols) + k, idx);
-                        k += 1;
+                    int ki = c;
+                    while (ki < (c + span)) {
+                        emon.Port.CellsSet(en, (tr * ncols) + ki, idx);
+                        ki += 1;
                     }
                 }
                 c += span;
@@ -1730,10 +1730,10 @@ public static class Table {
                     q = emon.Port.CellsAt(rw, (r * Rws) + 8) + s;
                     a = TbChunkA(wd, wl, sg, ch, q);
                     int cell = emon.Port.CellsAt(en, (tr * ncols) + a);
-                    int k = emon.Port.CellsAt(sg, (q * Sgs) + 3);
-                    while (k < (emon.Port.CellsAt(sg, (q * Sgs) + 3) + emon.Port.CellsAt(sg, (q * Sgs) + 4))) {
-                        TbPairAdd(pr, wd, cell, emon.Port.CellsAt(wl, k));
-                        k += 1;
+                    int kw = emon.Port.CellsAt(sg, (q * Sgs) + 3);
+                    while (kw < (emon.Port.CellsAt(sg, (q * Sgs) + 3) + emon.Port.CellsAt(sg, (q * Sgs) + 4))) {
+                        TbPairAdd(pr, wd, cell, emon.Port.CellsAt(wl, kw));
+                        kw += 1;
                     }
                     s += 1;
                 }
@@ -2167,17 +2167,17 @@ public static class Table {
             if (Evidence.LnGet(ln, l, 15) == 0) {
                 if (TbLineLabel(wd, et, ln, l)) {
                     if ((Evidence.LnGet(ln, l, Evidence.LhX0()) < tx1) && (Evidence.LnGet(ln, l, Evidence.LhX1()) > tx0)) {
-                        int h = Evidence.LnGet(ln, l, Evidence.LhY1()) - Evidence.LnGet(ln, l, Evidence.LhY0());
+                        int lht = Evidence.LnGet(ln, l, Evidence.LhY1()) - Evidence.LnGet(ln, l, Evidence.LhY0());
                         int da = ty0 - Evidence.LnGet(ln, l, Evidence.LhY1());
                         int db = Evidence.LnGet(ln, l, Evidence.LhY0()) - ty1;
-                        if ((da >= -300) && ((da * 2) <= (h * 5))) {
+                        if ((da >= -300) && ((da * 2) <= (lht * 5))) {
                             if (TbAbs(da) < bestd) {
                                 best = l;
                                 bestd = TbAbs(da);
                                 above = 1;
                             }
                         }
-                        if ((db >= -300) && (((db * 2) <= (h * 5)) && (above == 0))) {
+                        if ((db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0))) {
                             if (TbAbs(db) < bestd) {
                                 best = l;
                                 bestd = TbAbs(db);
@@ -2779,7 +2779,6 @@ public static class Table {
     internal static bool TbCaptionAgain(emon.Port.Cells tb, int a, int b, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells tq) {
         // Does table b have a caption, and is it the label (keyword and number) of table a's?
         int qa = emon.Port.CellsAt(tb, (a * Tbs) + 15);
-        int qb = emon.Port.CellsAt(tb, (b * Tbs) + 15);
         if (qa == 0) {
             return 0 == 1;
         }

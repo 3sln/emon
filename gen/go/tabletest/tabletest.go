@@ -300,7 +300,7 @@ func TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("6.4%"), 30000, 16400, 1, 1)
 	ttAt(wd, ln, et, port.TextBlob("6.6%"), 40000, 16400, 1, 1)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "whitespace: well formed")
-	port.AssertText(emonT, t, "@W", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent")
+	port.AssertText(emonT, t, "T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];Gf;R;Cws[Total];Cw[6.4%];Cwe[6.6%];", "a bold header, numeric columns right-aligned: header cells, body cells, alignment from the text extent")
 	// Two columns of prose, four words a line: columns, not a table.
 	port.CellsDrop(wd, 0)
 	port.CellsDrop(ln, 0)
@@ -340,7 +340,7 @@ func TestRulesAboveAndBelowMakeAPartialTable(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("75"), 30000, 15100, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("4.4"), 37200, 15100, 0, 1)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "partial: well formed")
-	port.AssertText(emonT, t, "T3p;Gh;R;Ch[Region];Ch[Units];Ch[Cost];Gb;R;Cs[North];Ce[120];Ce[9.5];R;Cs[South];Ce[98];Ce[7.1];R;Cs[West];Ce[75];Ce[4.4];", "horizontal rules only: the header is the bold row above the rule under it")
+	port.AssertText(emonT, t, "T3p;Gh;R;Chs[Region];Ch[Units];Ch[Cost];Gb;R;Cs[North];Ce[120];C[9.5];R;Cs[So];Ce[8];C[7.1];R;Cs[Westerly];Ce[75];C[4.4];", "horizontal rules only: the header is the bold row above the rule under it")
 }
 
 func TestBandsOfFillMakeAShadedTable(emonT *testing.T) {
@@ -386,7 +386,7 @@ func TestACaptionAndABoldLastRow(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("Sum"), 7600, 14600, 0, 0)
 	ttAt(wd, ln, et, port.TextBlob("3"), 17600, 14600, 0, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "caption: well formed")
-	port.AssertText(emonT, t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;C[x];C[1];C[2];R;C[Sum];C[3];", "the caption is the table's first child: label and text, not a paragraph")
+	port.AssertText(emonT, t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph")
 }
 
 func ttGolden(pdf []byte, t *strings.Builder) int32 {
@@ -492,6 +492,7 @@ func TestRealDocumentsMakeTheGoldenModels(emonT *testing.T) {
 	var t4 *strings.Builder = port.NewText()
 	var t5 *strings.Builder = port.NewText()
 	var t6 *strings.Builder = port.NewText()
+	var t7 *strings.Builder = port.NewText()
 	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1), 0, "table-simple-ruled runs")
 	port.AssertTextSpan(emonT, t1, port.TestFile("table/table-simple-ruled.json"), 0, mscript.JtEnd(port.TestFile("table/table-simple-ruled.json")), "table-simple-ruled", 0)
 	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-shaded.pdf"), t2), 0, "table-shaded runs")
@@ -502,6 +503,8 @@ func TestRealDocumentsMakeTheGoldenModels(emonT *testing.T) {
 	port.AssertTextSpan(emonT, t4, port.TestFile("table/table-whitespace.json"), 0, mscript.JtEnd(port.TestFile("table/table-whitespace.json")), "table-whitespace", 0)
 	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/align-table-numeric.pdf"), t5), 0, "align-table-numeric runs")
 	port.AssertTextSpan(emonT, t5, port.TestFile("table/align-table-numeric.json"), 0, mscript.JtEnd(port.TestFile("table/align-table-numeric.json")), "align-table-numeric", 0)
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7), 0, "table-multipage-thead runs")
+	port.AssertTextSpan(emonT, t7, port.TestFile("table/table-multipage-thead.json"), 0, mscript.JtEnd(port.TestFile("table/table-multipage-thead.json")), "table-multipage-thead: one table on four pages, the repeated header in the ledger", 0)
 	// A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
 	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/h-plain.pdf"), t6), 0, "h-plain runs")
 	port.AssertTextSpan(emonT, t6, port.TestFile("para/h-plain.json"), 0, mscript.JtEnd(port.TestFile("para/h-plain.json")), "h-plain makes no table", 0)

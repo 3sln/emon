@@ -10,14 +10,14 @@
 ;; is committed: a golden of kin's own output is only as good as that.
 ;;
 ;; THE DOCUMENTS are the Chrome-printed synthetic ones that make one table on one page of each profile, and one with
-;; numeric columns (alignment); tables across pages are P5.4's.
+;; numeric columns (alignment), and one table on four pages (P5.4).
 (require '[clojure.java.io :as io]
          '[clojure.java.shell :as sh]
          '[clojure.string :as str])
 
 (def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
 
-(def docs ["table-simple-ruled" "table-shaded" "table-spans-partial" "table-whitespace" "align-table-numeric"])
+(def docs ["table-simple-ruled" "table-shaded" "table-spans-partial" "table-whitespace" "align-table-numeric" "table-multipage-thead"])
 
 (defn run [& args]
   (let [r (apply sh/sh (concat args [:dir root]))]

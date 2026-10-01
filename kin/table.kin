@@ -616,13 +616,13 @@
                                       (set ok 0)))
                                   (set cc (+ cc 1))))
                             (if (== ok 1) (set rs (+ rs 1)))))
-                      (let [^I32 k (tb-cell-add tc r c rs cs (cells-at xs c) (cells-at ys r)
+                      (let [^I32 kc (tb-cell-add tc r c rs cs (cells-at xs c) (cells-at ys r)
                                                 (cells-at xs (+ c cs)) (cells-at ys (+ r rs)))
                             ^:mut ^I32 rr r]
                         (while (< rr (+ r rs))
                           (do (set cc c)
                               (while (< cc (+ c cs))
-                                (do (cells-set gm (+ (* rr nc) cc) k)
+                                (do (cells-set gm (+ (* rr nc) cc) kc)
                                     (set cc (+ cc 1))))
                               (set rr (+ rr 1)))))))
                 (set c (+ c 1))))
@@ -1423,15 +1423,15 @@
                       (set b (tb-chunk-b wd wl sg ch q))
                       (if (== (cells-at gm (+ (* tr ncols) a)) -1)
                         (do (let [^:mut ^I32 free 1
-                                  ^:mut ^I32 k a]
-                              (while (<= k b)
-                                (do (if (!= (cells-at gm (+ (* tr ncols) k)) -1) (set free 0))
-                                    (set k (+ k 1))))
+                                  ^:mut ^I32 kf a]
+                              (while (<= kf b)
+                                (do (if (!= (cells-at gm (+ (* tr ncols) kf)) -1) (set free 0))
+                                    (set kf (+ kf 1))))
                               (if (== free 0) (set b a))
-                              (set k a)
-                              (while (<= k b)
-                                (do (cells-set gm (+ (* tr ncols) k) a)
-                                    (set k (+ k 1))))
+                              (set kf a)
+                              (while (<= kf b)
+                                (do (cells-set gm (+ (* tr ncols) kf) a)
+                                    (set kf (+ kf 1))))
                               (cells-set gs (+ (* tr ncols) a) (+ (- b a) 1)))))
                       (set s (+ s 1))))))
           (set r (+ r 1))))
@@ -1448,10 +1448,10 @@
                       (do (let [^I32 idx (tb-cell-add tc tr c 1 span
                                                       (tb-cut ch c minx maxx) (cells-at ry (* tr 2))
                                                       (tb-cut ch (+ c span) minx maxx) (cells-at ry (+ (* tr 2) 1)))
-                                ^:mut ^I32 k c]
-                            (while (< k (+ c span))
-                              (do (cells-set en (+ (* tr ncols) k) idx)
-                                  (set k (+ k 1)))))))
+                                ^:mut ^I32 ki c]
+                            (while (< ki (+ c span))
+                              (do (cells-set en (+ (* tr ncols) ki) idx)
+                                  (set ki (+ ki 1)))))))
                     (set c (+ c span)))))
             (set tr (+ tr 1))))
       ;; the words
@@ -1465,10 +1465,10 @@
                     (do (set q (+ (cells-at rw (+ (* r RWS) 8)) s))
                         (set a (tb-chunk-a wd wl sg ch q))
                         (let [^I32 cell (cells-at en (+ (* tr ncols) a))
-                              ^:mut ^I32 k (cells-at sg (+ (* q SGS) 3))]
-                          (while (< k (+ (cells-at sg (+ (* q SGS) 3)) (cells-at sg (+ (* q SGS) 4))))
-                            (do (tb-pair-add pr wd cell (cells-at wl k))
-                                (set k (+ k 1)))))
+                              ^:mut ^I32 kw (cells-at sg (+ (* q SGS) 3))]
+                          (while (< kw (+ (cells-at sg (+ (* q SGS) 3)) (cells-at sg (+ (* q SGS) 4))))
+                            (do (tb-pair-add pr wd cell (cells-at wl kw))
+                                (set kw (+ kw 1)))))
                         (set s (+ s 1))))))
             (set r (+ r 1))))
       (tb-flush-pairs pr so wd tc tw)
@@ -1798,13 +1798,13 @@
       (do (if (== (ln-get ln l 15) 0)
             (if (tb-line-label wd et ln l)
               (if (and (< (ln-get ln l (lh-x0)) tx1) (> (ln-get ln l (lh-x1)) tx0))
-                (do (let [^I32 h (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0)))
+                (do (let [^I32 lht (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0)))
                           ^I32 da (- ty0 (ln-get ln l (lh-y1)))
                           ^I32 db (- (ln-get ln l (lh-y0)) ty1)]
-                      (if (and (>= da -300) (<= (* da 2) (* h 5)))
+                      (if (and (>= da -300) (<= (* da 2) (* lht 5)))
                         (if (< (tb-abs da) bestd)
                           (do (set best l) (set bestd (tb-abs da)) (set above 1))))
-                      (if (and (>= db -300) (and (<= (* db 2) (* h 5)) (== above 0)))
+                      (if (and (>= db -300) (and (<= (* db 2) (* lht 5)) (== above 0)))
                         (if (< (tb-abs db) bestd)
                           (do (set best l) (set bestd (tb-abs db))))))))))
           (set l (+ l 1))))
@@ -2287,8 +2287,7 @@
 
 (defn ^Bool tb-caption-again [^Cells tb ^I32 a ^I32 b ^Cells wd ^Cells et ^Cells ln ^Cells tq]
   (comment "Does table b have a caption, and is it the label (keyword and number) of table a's?")
-  (let [^I32 qa (cells-at tb (+ (* a TBS) 15))
-        ^I32 qb (cells-at tb (+ (* b TBS) 15))]
+  (let [^I32 qa (cells-at tb (+ (* a TBS) 15))]
     (if (== qa 0) (return (== 0 1)))
     (let [^I32 wa (ln-get ln (cells-at tq (cells-at tb (+ (* a TBS) 14))) (lh-first))
           ^I32 wb (ln-get ln (cells-at tq (cells-at tb (+ (* b TBS) 14))) (lh-first))]

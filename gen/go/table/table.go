@@ -727,12 +727,12 @@ func tbLattice(rm *port.Cells, root int32, xs *port.Cells, ys *port.Cells, page 
 						rs += 1
 					}
 				}
-				var k int32 = tbCellAdd(tc, r, c, rs, cs, port.CellsAt(xs, c), port.CellsAt(ys, r), port.CellsAt(xs, c+cs), port.CellsAt(ys, r+rs))
+				var kc int32 = tbCellAdd(tc, r, c, rs, cs, port.CellsAt(xs, c), port.CellsAt(ys, r), port.CellsAt(xs, c+cs), port.CellsAt(ys, r+rs))
 				var rr int32 = r
 				for rr < (r + rs) {
 					cc = c
 					for cc < (c + cs) {
-						port.CellsSet(gm, (rr*nc)+cc, k)
+						port.CellsSet(gm, (rr*nc)+cc, kc)
 						cc += 1
 					}
 					rr += 1
@@ -1757,20 +1757,20 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 				b = tbChunkB(wd, wl, sg, ch, q)
 				if port.CellsAt(gm, (tr*ncols)+a) == -1 {
 					var free int32 = 1
-					var k int32 = a
-					for k <= b {
-						if port.CellsAt(gm, (tr*ncols)+k) != -1 {
+					var kf int32 = a
+					for kf <= b {
+						if port.CellsAt(gm, (tr*ncols)+kf) != -1 {
 							free = 0
 						}
-						k += 1
+						kf += 1
 					}
 					if free == 0 {
 						b = a
 					}
-					k = a
-					for k <= b {
-						port.CellsSet(gm, (tr*ncols)+k, a)
-						k += 1
+					kf = a
+					for kf <= b {
+						port.CellsSet(gm, (tr*ncols)+kf, a)
+						kf += 1
 					}
 					port.CellsSet(gs, (tr*ncols)+a, (b-a)+1)
 				}
@@ -1791,10 +1791,10 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 			}
 			if (st0 < 0) || (st0 == c) {
 				var idx int32 = tbCellAdd(tc, tr, c, 1, span, tbCut(ch, c, minx, maxx), port.CellsAt(ry, tr*2), tbCut(ch, c+span, minx, maxx), port.CellsAt(ry, (tr*2)+1))
-				var k int32 = c
-				for k < (c + span) {
-					port.CellsSet(en, (tr*ncols)+k, idx)
-					k += 1
+				var ki int32 = c
+				for ki < (c + span) {
+					port.CellsSet(en, (tr*ncols)+ki, idx)
+					ki += 1
 				}
 			}
 			c += span
@@ -1811,10 +1811,10 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 				q = port.CellsAt(rw, (r*rws)+8) + s
 				a = tbChunkA(wd, wl, sg, ch, q)
 				var cell int32 = port.CellsAt(en, (tr*ncols)+a)
-				var k int32 = port.CellsAt(sg, (q*sgs)+3)
-				for k < (port.CellsAt(sg, (q*sgs)+3) + port.CellsAt(sg, (q*sgs)+4)) {
-					tbPairAdd(pr, wd, cell, port.CellsAt(wl, k))
-					k += 1
+				var kw int32 = port.CellsAt(sg, (q*sgs)+3)
+				for kw < (port.CellsAt(sg, (q*sgs)+3) + port.CellsAt(sg, (q*sgs)+4)) {
+					tbPairAdd(pr, wd, cell, port.CellsAt(wl, kw))
+					kw += 1
 				}
 				s += 1
 			}
@@ -2265,17 +2265,17 @@ func tbCaption(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, ln *port
 		if evidence.LnGet(ln, l, 15) == 0 {
 			if tbLineLabel(wd, et, ln, l) {
 				if (evidence.LnGet(ln, l, evidence.LhX0()) < tx1) && (evidence.LnGet(ln, l, evidence.LhX1()) > tx0) {
-					var h int32 = evidence.LnGet(ln, l, evidence.LhY1()) - evidence.LnGet(ln, l, evidence.LhY0())
+					var lht int32 = evidence.LnGet(ln, l, evidence.LhY1()) - evidence.LnGet(ln, l, evidence.LhY0())
 					var da int32 = ty0 - evidence.LnGet(ln, l, evidence.LhY1())
 					var db int32 = evidence.LnGet(ln, l, evidence.LhY0()) - ty1
-					if (da >= -300) && ((da * 2) <= (h * 5)) {
+					if (da >= -300) && ((da * 2) <= (lht * 5)) {
 						if tbAbs(da) < bestd {
 							best = l
 							bestd = tbAbs(da)
 							above = 1
 						}
 					}
-					if (db >= -300) && (((db * 2) <= (h * 5)) && (above == 0)) {
+					if (db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) {
 						if tbAbs(db) < bestd {
 							best = l
 							bestd = tbAbs(db)
@@ -2892,7 +2892,6 @@ func tbRowSame(tb *port.Cells, a int32, ra int32, b int32, rb int32, tc *port.Ce
 func tbCaptionAgain(tb *port.Cells, a int32, b int32, wd *port.Cells, et *port.Cells, ln *port.Cells, tq *port.Cells) bool {
 	// Does table b have a caption, and is it the label (keyword and number) of table a's?
 	var qa int32 = port.CellsAt(tb, (a*tbs)+15)
-	var qb int32 = port.CellsAt(tb, (b*tbs)+15)
 	if qa == 0 {
 		return 0 == 1
 	}

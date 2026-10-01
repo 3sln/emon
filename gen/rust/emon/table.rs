@@ -675,12 +675,12 @@ pub(crate) fn tb_lattice(rm: &mut crate::port::Cells, root: i32, xs: &mut crate:
                         rs += 1;
                     }
                 }
-                let k: i32 = tb_cell_add(tc, r, c, rs, cs, crate::port::cells_at(xs, c), crate::port::cells_at(ys, r), crate::port::cells_at(xs, c + cs), crate::port::cells_at(ys, r + rs));
+                let kc: i32 = tb_cell_add(tc, r, c, rs, cs, crate::port::cells_at(xs, c), crate::port::cells_at(ys, r), crate::port::cells_at(xs, c + cs), crate::port::cells_at(ys, r + rs));
                 let mut rr: i32 = r;
                 while rr < (r + rs) {
                     cc = c;
                     while cc < (c + cs) {
-                        crate::port::cells_set(gm, (rr * nc) + cc, k);
+                        crate::port::cells_set(gm, (rr * nc) + cc, kc);
                         cc += 1;
                     }
                     rr += 1;
@@ -1676,20 +1676,20 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
                 b = tb_chunk_b(wd, wl, sg, ch, q);
                 if crate::port::cells_at(gm, (tr * ncols) + a) == -1 {
                     let mut free: i32 = 1;
-                    let mut k: i32 = a;
-                    while k <= b {
-                        if crate::port::cells_at(gm, (tr * ncols) + k) != -1 {
+                    let mut kf: i32 = a;
+                    while kf <= b {
+                        if crate::port::cells_at(gm, (tr * ncols) + kf) != -1 {
                             free = 0;
                         }
-                        k += 1;
+                        kf += 1;
                     }
                     if free == 0 {
                         b = a;
                     }
-                    k = a;
-                    while k <= b {
-                        crate::port::cells_set(gm, (tr * ncols) + k, a);
-                        k += 1;
+                    kf = a;
+                    while kf <= b {
+                        crate::port::cells_set(gm, (tr * ncols) + kf, a);
+                        kf += 1;
                     }
                     crate::port::cells_set(gs, (tr * ncols) + a, (b - a) + 1);
                 }
@@ -1710,10 +1710,10 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
             }
             if (st0 < 0) || (st0 == c) {
                 let idx: i32 = tb_cell_add(tc, tr, c, 1, span, tb_cut(ch, c, minx, maxx), crate::port::cells_at(ry, tr * 2), tb_cut(ch, c + span, minx, maxx), crate::port::cells_at(ry, (tr * 2) + 1));
-                let mut k: i32 = c;
-                while k < (c + span) {
-                    crate::port::cells_set(en, (tr * ncols) + k, idx);
-                    k += 1;
+                let mut ki: i32 = c;
+                while ki < (c + span) {
+                    crate::port::cells_set(en, (tr * ncols) + ki, idx);
+                    ki += 1;
                 }
             }
             c += span;
@@ -1730,10 +1730,10 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
                 q = crate::port::cells_at(rw, (r * RWS) + 8) + s;
                 a = tb_chunk_a(wd, wl, sg, ch, q);
                 let cell: i32 = crate::port::cells_at(en, (tr * ncols) + a);
-                let mut k: i32 = crate::port::cells_at(sg, (q * SGS) + 3);
-                while k < (crate::port::cells_at(sg, (q * SGS) + 3) + crate::port::cells_at(sg, (q * SGS) + 4)) {
-                    tb_pair_add(pr, wd, cell, crate::port::cells_at(wl, k));
-                    k += 1;
+                let mut kw: i32 = crate::port::cells_at(sg, (q * SGS) + 3);
+                while kw < (crate::port::cells_at(sg, (q * SGS) + 3) + crate::port::cells_at(sg, (q * SGS) + 4)) {
+                    tb_pair_add(pr, wd, cell, crate::port::cells_at(wl, kw));
+                    kw += 1;
                 }
                 s += 1;
             }
@@ -2167,17 +2167,17 @@ pub(crate) fn tb_caption(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate
         if ln_get(ln, l, 15) == 0 {
             if tb_line_label(wd, et, ln, l) {
                 if (ln_get(ln, l, lh_x0()) < tx1) && (ln_get(ln, l, lh_x1()) > tx0) {
-                    let h: i32 = ln_get(ln, l, lh_y1()) - ln_get(ln, l, lh_y0());
+                    let lht: i32 = ln_get(ln, l, lh_y1()) - ln_get(ln, l, lh_y0());
                     let da: i32 = ty0 - ln_get(ln, l, lh_y1());
                     let db: i32 = ln_get(ln, l, lh_y0()) - ty1;
-                    if (da >= -300) && ((da * 2) <= (h * 5)) {
+                    if (da >= -300) && ((da * 2) <= (lht * 5)) {
                         if tb_abs(da) < bestd {
                             best = l;
                             bestd = tb_abs(da);
                             above = 1;
                         }
                     }
-                    if (db >= -300) && (((db * 2) <= (h * 5)) && (above == 0)) {
+                    if (db >= -300) && (((db * 2) <= (lht * 5)) && (above == 0)) {
                         if tb_abs(db) < bestd {
                             best = l;
                             bestd = tb_abs(db);
@@ -2779,7 +2779,6 @@ pub(crate) fn tb_row_same(tb: &mut crate::port::Cells, a: i32, ra: i32, b: i32, 
 pub(crate) fn tb_caption_again(tb: &mut crate::port::Cells, a: i32, b: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, ln: &mut crate::port::Cells, tq: &mut crate::port::Cells) -> bool {
     // Does table b have a caption, and is it the label (keyword and number) of table a's?
     let qa: i32 = crate::port::cells_at(tb, (a * TBS) + 15);
-    let qb: i32 = crate::port::cells_at(tb, (b * TBS) + 15);
     if qa == 0 {
         return 0 == 1;
     }
