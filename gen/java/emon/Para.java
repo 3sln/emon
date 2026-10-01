@@ -11,7 +11,7 @@ public final class Para {
     public static final int PA_INDENT_DIV = 2;
     public static final int PA_SIZE_DIV = 20;
     public static final int PA_ROT_SLOP = 100;
-    public static final int PA_INDENT_USE = 3;
+    public static final int PA_INDENT_USE = 1;
     public static final int JS_HYPHEN = 3;
     public static final int JS_EDGE = 2;
     public static final int JS_SHORT = -3;
@@ -21,9 +21,11 @@ public final class Para {
     public static final int JS_MARKER = -3;
     public static final int JS_STYLE = -3;
     public static final int JS_STREAM = 1;
+    public static final int JS_WIDTH = -3;
+    public static final int JS_BOTTOM = 1;
     public static final int JOIN_MIN = 4;
     public static final int PA_EDGE_PCT = 15;
-    public static final int CF_STRIDE = 12;
+    public static final int CF_STRIDE = 13;
     public static final int CF_PAGE = 0;
     public static final int CF_BAND = 1;
     public static final int CF_COL = 2;
@@ -36,6 +38,7 @@ public final class Para {
     public static final int CF_COUNT = 9;
     public static final int CF_ASSOC = 10;
     public static final int CF_DONE = 11;
+    public static final int CF_REF = 12;
     public static final int FR_STRIDE = 6;
     public static int paPages(emon.Port.Cells pg, emon.Port.Cells pages) {
         // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
@@ -354,8 +357,8 @@ public final class Para {
     }
     public static int paIndents(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells cf, emon.Port.Cells lo) {
         // How many times, in the body fragments, a line starts further in than a line at the margin before it,
-        // by more than half its size and is close below it: the document's paragraphs have first-line indents
-        // when this is at least PA_INDENT_USE.
+        // by more than half its size and is close below it, or a fragment starts with such a line: the document's
+        // paragraphs have first-line indents when this is at least PA_INDENT_USE.
         int nf = emon.Port.cellsLen(cf) / CF_STRIDE;
         int r = 0;
         int i = 0;
@@ -365,6 +368,10 @@ public final class Para {
                 int first = emon.Port.cellsAt(cf, (r * CF_STRIDE) + CF_FIRST);
                 int cnt = emon.Port.cellsAt(cf, (r * CF_STRIDE) + CF_COUNT);
                 int mg = paFmargin(ln, lo, first, cnt);
+                int b0 = emon.Port.cellsAt(lo, first);
+                if (((paStart(ln, b0) - mg) * PA_INDENT_DIV) > paSize(wd, ln, b0)) {
+                    n += 1;
+                }
                 i = 1;
                 while (i < cnt) {
                     int a = emon.Port.cellsAt(lo, first + (i - 1));
@@ -671,11 +678,22 @@ public final class Para {
         }
         return 0 == 1;
     }
-    public static int paJoinScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int a, int b, int colx0, int colx1, int ncol, int bmargin, int indents) {
+    public static int paBottom(emon.Port.Cells cf, int r) {
+        // The bottom a fragment's last line is compared with: the bottom of the region its vertical cuts came from, so
+        // the columns of one set (side by side, whatever else lies above or below beside them) end together.
+        return emon.Port.cellsAt(cf, (r * CF_STRIDE) + CF_REF);
+    }
+    public static int paMaxi(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    public static int paJoinScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int a, int b, int colx0, int colx1, int ncol, int bmargin, int indents, int bottom, int bx0, int bx1, int bn) {
         // The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
         // on with line b, the first of the next fragment (SPEC 10.1.2, D152). `colx0`..`colx1` is the extent of a's
-        // fragment, `ncol` its lines (the edge signals need three), `bmargin` the margin of b's, `indents` whether
-        // the document's paragraphs have first-line indents.
+        // fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
+        // the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.
         int n = emon.Port.cellsLen(raw);
         int sa = paSize(wd, ln, a);
         int sb = paSize(wd, ln, b);
@@ -689,7 +707,7 @@ public final class Para {
                 pts += JS_HYPHEN;
             }
         }
-        if (ncol >= 3) {
+        if (ncol >= 2) {
             if (((colx1 - Evidence.lnGet(ln, a, Evidence.lhX1())) * 100) <= (PA_EDGE_PCT * (colx1 - colx0))) {
                 pts += JS_EDGE;
             }
@@ -714,6 +732,12 @@ public final class Para {
         }
         if ((Evidence.lnGet(ln, a, Evidence.lhFirst()) + Evidence.lnGet(ln, a, Evidence.lhCount())) == Evidence.lnGet(ln, b, Evidence.lhFirst())) {
             pts += JS_STREAM;
+        }
+        if ((ncol >= 2) && ((Evidence.lnGet(ln, a, Evidence.lhY1()) + (sa / 2)) >= bottom)) {
+            pts += JS_BOTTOM;
+        }
+        if ((ncol >= 3) && (bn >= 3) && ((paAbs((colx1 - colx0) - (bx1 - bx0)) * 4) > (paMaxi(colx1 - colx0, bx1 - bx0) - 0))) {
+            pts += JS_WIDTH;
         }
         return pts;
     }
@@ -863,7 +887,6 @@ public final class Para {
         int p = 1;
         int i = 0;
         int nu = 0;
-        int r = 0;
         emon.Port.cellsDrop(cf, 0);
         emon.Port.cellsDrop(lo, 0);
         while (p <= npages) {
@@ -926,11 +949,6 @@ public final class Para {
             paCollect(ord, lt, p);
             n = emon.Port.cellsLen(ord);
             nu = paUprightCount(lt, ord);
-            i = nu;
-            while (i < n) {
-                emon.Port.cellsPush(gp, emon.Port.cellsAt(ord, i));
-                i += 1;
-            }
             while ((r < nf) && (emon.Port.cellsAt(cf, (r * CF_STRIDE) + CF_PAGE) < p)) {
                 r += 1;
             }
@@ -954,7 +972,7 @@ public final class Para {
                     b = emon.Port.cellsAt(lo, first);
                     cont = 0;
                     if (open == 1) {
-                        score = paJoinScore(wd, lt, et, raw, prev, b, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X1), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents);
+                        score = paJoinScore(wd, lt, et, raw, prev, b, emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_X1), emon.Port.cellsAt(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents, paBottom(cf, prevfr), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X0), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_X1), emon.Port.cellsAt(cf, (i * CF_STRIDE) + CF_COUNT));
                         emon.Port.cellsPush(dbg, i);
                         emon.Port.cellsPush(dbg, prev);
                         emon.Port.cellsPush(dbg, b);
@@ -1000,6 +1018,11 @@ public final class Para {
                     }
                     i += 1;
                 }
+            }
+            i = nu;
+            while (i < n) {
+                emon.Port.cellsPush(gp, emon.Port.cellsAt(ord, i));
+                i += 1;
             }
             p += 1;
         }

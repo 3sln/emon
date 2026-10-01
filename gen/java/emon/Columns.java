@@ -10,6 +10,8 @@ public final class Columns {
     public static final int LC_GUT_DEN = 5;
     public static final int LC_WORDS = 3;
     public static final int LC_HOLE = 3;
+    public static final int LC_GAP_NUM = 5;
+    public static final int LC_GAP_DEN = 2;
     public static final int LC_BODY_DEN = 10;
     public static final int LC_LONG_NUM = 2;
     public static final int LC_LONG_DEN = 5;
@@ -27,7 +29,7 @@ public final class Columns {
     public static final int PR_RTL = 3;
     public static final int PR_FORCED = 4;
     public static final int PR_NSIDE = 5;
-    public static final int CF_STRIDE = 12;
+    public static final int CF_STRIDE = 13;
     public static final int CF_PAGE = 0;
     public static final int CF_BAND = 1;
     public static final int CF_COL = 2;
@@ -40,11 +42,12 @@ public final class Columns {
     public static final int CF_COUNT = 9;
     public static final int CF_ASSOC = 10;
     public static final int CF_DONE = 11;
+    public static final int CF_REF = 12;
     public static int lcCfStride() {
-        return 12;
+        return 13;
     }
     public static final int IT_STRIDE = 7;
-    public static final int GU_STRIDE = 10;
+    public static final int GU_STRIDE = 12;
     public static final int GU_TOP = 2;
     public static final int GU_BOT = 3;
     public static final int GU_ROWS = 4;
@@ -53,6 +56,8 @@ public final class Columns {
     public static final int GU_LSUM = 7;
     public static final int GU_RSUM = 8;
     public static final int GU_FLAG = 9;
+    public static final int GU_PBOT = 10;
+    public static final int GU_ONE = 11;
     public static int lcMin(int a, int b) {
         if (a < b) {
             return a;
@@ -517,6 +522,26 @@ public final class Columns {
         }
         return 0;
     }
+    public static int lcOneSided(int lc, int rc) {
+        if ((lc == 0) || (rc == 0)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int lcCloseTrim(emon.Port.Cells gu, emon.Port.Cells ac, int a, int ry0, int size) {
+        // An active interval ends because ink crosses it. If its last row had words on one side only and the ink
+        // is close under it (a heading that goes with the spanning text below, not with the columns), the extent
+        // ends above that row.
+        int base = a * GU_STRIDE;
+        int bot = emon.Port.cellsAt(ac, base + GU_BOT);
+        int pbot = emon.Port.cellsAt(ac, base + GU_PBOT);
+        int top = emon.Port.cellsAt(ac, base + GU_TOP);
+        if ((emon.Port.cellsAt(ac, base + GU_ONE) == 1) && (pbot > top) && (((ry0 - bot) * LC_TIGHT_DEN) <= (size * LC_TIGHT_NUM))) {
+            emon.Port.cellsSet(ac, base + GU_BOT, pbot);
+        }
+        lcClose(gu, ac, a);
+        return 0;
+    }
     public static int lcCloseAll(emon.Port.Cells gu, emon.Port.Cells ac) {
         int na = emon.Port.cellsLen(ac) / GU_STRIDE;
         int a = 0;
@@ -683,7 +708,7 @@ public final class Columns {
         while (k < e) {
             int ix = emon.Port.cellsAt(io, k);
             int x0 = emon.Port.cellsAt(it, ix * IT_STRIDE);
-            if ((x0 - reach) >= ((size * 3) / 2)) {
+            if ((x0 - reach) >= (size * 3)) {
                 nrun += 1;
                 cur = 1;
             } else {
@@ -709,6 +734,8 @@ public final class Columns {
             emon.Port.cellsPush(gu, 0);
             emon.Port.cellsPush(gu, 0);
             emon.Port.cellsPush(gu, 2);
+            emon.Port.cellsPush(gu, 0);
+            emon.Port.cellsPush(gu, 0);
             lcCloseWithin(gu, ac, rx0, rx1);
         }
         int na = emon.Port.cellsLen(ac) / GU_STRIDE;
@@ -716,7 +743,7 @@ public final class Columns {
         while (a < na) {
             int ab = a * GU_STRIDE;
             bw = lcBestPiece(it, io, s, e, emon.Port.cellsAt(ac, ab), emon.Port.cellsAt(ac, ab + 1), tm);
-            if (bw >= gmin) {
+            if (bw >= ((size * LC_GUT_NUM) / LC_GUT_DEN)) {
                 int p0 = emon.Port.cellsAt(tm, 0);
                 int p1 = emon.Port.cellsAt(tm, 1);
                 emon.Port.cellsSet(ac, ab, p0);
@@ -724,12 +751,15 @@ public final class Columns {
                 if (hasclass == 1) {
                     lc = lcCountLeft(it, io, s, e, p0, gmin);
                     rc = lcCountRight(it, io, s, e, p1, gmin);
+                    int one = lcOneSided(lc, rc);
                     int oBot = emon.Port.cellsAt(ac, ab + GU_BOT);
                     int oRows = emon.Port.cellsAt(ac, ab + GU_ROWS);
                     int oLr = emon.Port.cellsAt(ac, ab + GU_LROWS);
                     int oLs = emon.Port.cellsAt(ac, ab + GU_LSUM);
                     int oRr = emon.Port.cellsAt(ac, ab + GU_RROWS);
                     int oRs = emon.Port.cellsAt(ac, ab + GU_RSUM);
+                    emon.Port.cellsSet(ac, ab + GU_PBOT, oBot);
+                    emon.Port.cellsSet(ac, ab + GU_ONE, one);
                     emon.Port.cellsSet(ac, ab + GU_BOT, lcMax(oBot, ry1));
                     emon.Port.cellsSet(ac, ab + GU_ROWS, oRows + 1);
                     if (lc > 0) {
@@ -751,7 +781,7 @@ public final class Columns {
                 }
                 wi += 1;
             } else {
-                lcClose(gu, ac, a);
+                lcCloseTrim(gu, ac, a, ry0, size);
             }
             a += 1;
         }
@@ -781,6 +811,8 @@ public final class Columns {
                         emon.Port.cellsPush(ac, 1);
                         emon.Port.cellsPush(ac, lcCountLeft(it, io, s, e, reach, gmin));
                         emon.Port.cellsPush(ac, lcCountRight(it, io, s, e, x0, gmin));
+                        emon.Port.cellsPush(ac, 0);
+                        emon.Port.cellsPush(ac, ry0);
                         emon.Port.cellsPush(ac, 0);
                     }
                 }
@@ -1063,94 +1095,30 @@ public final class Columns {
         }
         return 0;
     }
-    public static int lcTrimBottom(emon.Port.Cells wd, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, int dom) {
-        // A gutter's extent ends above a lone last line that has a line close below it that crosses the gutter: a
-        // heading that belongs to the spanning text under it, not to the columns above.
-        int ng = emon.Port.cellsLen(gu) / GU_STRIDE;
-        int n = emon.Port.cellsLen(ls);
-        int g = 0;
-        int i = 0;
-        int again = 1;
-        int last = -1;
-        int mate = 0;
-        int prevb = 0;
-        int hasprev = 0;
-        while (g < ng) {
-            again = 1;
-            if (emon.Port.cellsAt(gu, (g * GU_STRIDE) + GU_FLAG) != 0) {
-                again = 0;
-            }
-            while (again == 1) {
-                again = 0;
-                int gb = g * GU_STRIDE;
-                int gx0 = emon.Port.cellsAt(gu, gb);
-                int gx1 = emon.Port.cellsAt(gu, gb + 1);
-                int top2 = 2 * emon.Port.cellsAt(gu, gb + GU_TOP);
-                int bot2 = 2 * emon.Port.cellsAt(gu, gb + GU_BOT);
-                last = -1;
-                i = 0;
-                while (i < n) {
-                    int l = emon.Port.cellsAt(ls, i);
-                    int ym = lcYm2(lt, l);
-                    if ((ym >= top2) && (ym <= bot2)) {
-                        if ((last < 0) || (Evidence.lnGet(lt, l, Evidence.lhY1()) > Evidence.lnGet(lt, last, Evidence.lhY1()))) {
-                            last = l;
-                        }
-                    }
-                    i += 1;
-                }
-                if (last >= 0) {
-                    mate = 0;
-                    hasprev = 0;
-                    prevb = 0;
-                    i = 0;
-                    while (i < n) {
-                        int l = emon.Port.cellsAt(ls, i);
-                        int ym = lcYm2(lt, l);
-                        if ((l != last) && (ym >= top2) && (ym <= bot2)) {
-                            if (Evidence.lnGet(lt, l, Evidence.lhY1()) > Evidence.lnGet(lt, last, Evidence.lhY0())) {
-                                mate = 1;
-                            }
-                            if (Evidence.lnGet(lt, l, Evidence.lhY1()) <= Evidence.lnGet(lt, last, Evidence.lhY0())) {
-                                hasprev = 1;
-                                prevb = lcMax(prevb, Evidence.lnGet(lt, l, Evidence.lhY1()));
-                            }
-                        }
-                        i += 1;
-                    }
-                    if ((mate == 0) && (hasprev == 1)) {
-                        int b = lcBelow(lt, ls, last);
-                        if ((b >= 0) && lcCrosses(lt, b, gx0, gx1) && (((Evidence.lnGet(lt, b, Evidence.lhY0()) - Evidence.lnGet(lt, last, Evidence.lhY1())) * LC_TIGHT_DEN) <= (dom * LC_TIGHT_NUM))) {
-                            emon.Port.cellsSet(gu, gb + GU_BOT, prevb);
-                            again = 1;
-                        }
-                    }
-                }
-            }
-            g += 1;
-        }
-        return 0;
-    }
     public static final int PR_XMIN = 8;
     public static final int PR_XMAX = 9;
     public static final int PR_Y2MIN = 10;
     public static final int PR_Y2MAX = 11;
+    public static final int PR_Y1MAX = 12;
     public static int lcStats(emon.Port.Cells lt, emon.Port.Cells ls, int a, int b, emon.Port.Cells pr) {
         // The region ls[a..b): the extent of its lines' boxes (x) and of their middles (y, times 2).
         int xmin = 1000000000;
         int xmax = -1000000000;
         int ymin = 1000000000;
         int ymax = -1000000000;
+        int bmax = -1000000000;
         int i = a;
         while (i < b) {
             int l = emon.Port.cellsAt(ls, i);
             int ym = lcYm2(lt, l);
             xmin = lcMin(xmin, Evidence.lnGet(lt, l, Evidence.lhX0()));
             xmax = lcMax(xmax, Evidence.lnGet(lt, l, Evidence.lhX1()));
+            bmax = lcMax(bmax, Evidence.lnGet(lt, l, Evidence.lhY1()));
             ymin = lcMin(ymin, ym);
             ymax = lcMax(ymax, ym);
             i += 1;
         }
+        emon.Port.cellsSet(pr, PR_Y1MAX, bmax);
         emon.Port.cellsSet(pr, PR_XMIN, xmin);
         emon.Port.cellsSet(pr, PR_XMAX, xmax);
         emon.Port.cellsSet(pr, PR_Y2MIN, ymin);
@@ -1195,35 +1163,92 @@ public final class Columns {
         }
         return -1;
     }
+    public static boolean lcRelevant(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, int g, int a, int b, emon.Port.Cells pr) {
+        // Does gutter g divide the region: its x-interval inside the region's lines, lines wholly on each side.
+        int gb = g * GU_STRIDE;
+        int gx0 = emon.Port.cellsAt(gu, gb);
+        int gx1 = emon.Port.cellsAt(gu, gb + 1);
+        if (emon.Port.cellsAt(gu, gb + GU_FLAG) != 0) {
+            return 0 == 1;
+        }
+        if (!((emon.Port.cellsAt(pr, PR_XMIN) < gx0) && (gx1 < emon.Port.cellsAt(pr, PR_XMAX)))) {
+            return 0 == 1;
+        }
+        return (lcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (lcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0);
+    }
+    public static boolean lcInsideOther(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, int g, int a, int b, emon.Port.Cells pr, int p) {
+        // Is y strictly inside the extent of another gutter that divides the region: its columns go on across
+        // it, so it cannot be a cut (the cut is made between the columns of the other gutters, not through them).
+        int ng = emon.Port.cellsLen(gu) / GU_STRIDE;
+        int h = 0;
+        while (h < ng) {
+            if (h != g) {
+                if (lcRelevant(lt, ls, gu, h, a, b, pr)) {
+                    if ((emon.Port.cellsAt(gu, (h * GU_STRIDE) + GU_TOP) < p) && (p < emon.Port.cellsAt(gu, (h * GU_STRIDE) + GU_BOT))) {
+                        return 1 == 1;
+                    }
+                }
+            }
+            h += 1;
+        }
+        return 0 == 1;
+    }
     public static int lcHcut(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, int a, int b, emon.Port.Cells pr) {
         // The first y at which to cut the region horizontally: the least top or bottom of the extent of a gutter
-        // that has lines on both sides of it, strictly inside the region's lines. -1 for none.
+        // that divides it, strictly inside the region's lines, and not inside the extent of another gutter that
+        // divides it. -1 for none.
         int ng = emon.Port.cellsLen(gu) / GU_STRIDE;
-        int xmin = emon.Port.cellsAt(pr, PR_XMIN);
-        int xmax = emon.Port.cellsAt(pr, PR_XMAX);
         int ymin = emon.Port.cellsAt(pr, PR_Y2MIN);
         int ymax = emon.Port.cellsAt(pr, PR_Y2MAX);
         int g = 0;
         int best = -1;
         while (g < ng) {
             int gb = g * GU_STRIDE;
-            int gx0 = emon.Port.cellsAt(gu, gb);
-            int gx1 = emon.Port.cellsAt(gu, gb + 1);
             int top = emon.Port.cellsAt(gu, gb + GU_TOP);
             int bot = emon.Port.cellsAt(gu, gb + GU_BOT);
-            if ((xmin < gx0) && (gx1 < xmax) && (emon.Port.cellsAt(gu, gb + GU_FLAG) == 0)) {
-                if ((lcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (lcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0)) {
-                    if (((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best))) {
-                        best = top;
-                    }
-                    if (((2 * bot) > ymin) && ((2 * bot) <= ymax) && ((best < 0) || (bot < best))) {
-                        best = bot;
-                    }
+            if (lcRelevant(lt, ls, gu, g, a, b, pr)) {
+                if (((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best)) && !lcInsideOther(lt, ls, gu, g, a, b, pr, top)) {
+                    best = top;
+                }
+                if (((2 * bot) > ymin) && ((2 * bot) <= ymax) && ((best < 0) || (bot < best)) && !lcInsideOther(lt, ls, gu, g, a, b, pr, bot)) {
+                    best = bot;
                 }
             }
             g += 1;
         }
         return best;
+    }
+    public static int lcGapcut(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, int a, int b, emon.Port.Cells pr) {
+        // A full-width gap: where the region's lines leave a gap of more than `hole` sizes with nothing across it,
+        // the first such y (its middle), when a gutter divides the region (a region of one column is not cut
+        // at every paragraph gap). -1 for none. A cut at a gap that lines up across balanced columns is never
+        // made: only a gap wider than a paragraph gap is one (SPEC 10.1.1 step 4).
+        int ng = emon.Port.cellsLen(gu) / GU_STRIDE;
+        int thr = (LC_GAP_NUM * emon.Port.cellsAt(pr, PR_DOM)) / LC_GAP_DEN;
+        int g = 0;
+        int any = 0;
+        int i = a + 1;
+        int reach = 0;
+        while (g < ng) {
+            if (lcRelevant(lt, ls, gu, g, a, b, pr)) {
+                any = 1;
+            }
+            g += 1;
+        }
+        if (any == 0) {
+            return -1;
+        }
+        reach = Evidence.lnGet(lt, emon.Port.cellsAt(ls, a), Evidence.lhY1());
+        while (i < b) {
+            int l = emon.Port.cellsAt(ls, i);
+            int y0 = Evidence.lnGet(lt, l, Evidence.lhY0());
+            if ((y0 - reach) > thr) {
+                return (reach + y0) / 2;
+            }
+            reach = lcMax(reach, Evidence.lnGet(lt, l, Evidence.lhY1()));
+            i += 1;
+        }
+        return -1;
     }
     public static int lcPartX(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells tm, int a, int b, int gm2) {
         // Stable partition of the region: lines whose middle is left of the gutter's first. Answers how many.
@@ -1283,7 +1308,15 @@ public final class Columns {
         }
         return na;
     }
-    public static int lcLeaf(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells lo, emon.Port.Cells cf, int a, int b, int band, int page) {
+    public static int lcRef(int pbot, int y1) {
+        // The bottom a column fragment is compared with: that of the region its vertical cuts came from (the
+        // columns of one set end together), else its own.
+        if (pbot > 0) {
+            return pbot;
+        }
+        return y1;
+    }
+    public static int lcLeaf(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells lo, emon.Port.Cells cf, int a, int b, int band, int page, int pbot) {
         // A leaf: a column fragment. Its lines go to `lo` in rows; its row to `cf`.
         int x0 = 1000000000;
         int y0 = 1000000000;
@@ -1313,29 +1346,55 @@ public final class Columns {
         emon.Port.cellsPush(cf, b - a);
         emon.Port.cellsPush(cf, -1);
         emon.Port.cellsPush(cf, 0);
+        emon.Port.cellsPush(cf, lcRef(pbot, y1));
         return 0;
     }
-    public static int lcRegion(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, int page, int a, int b, int band, int root) {
-        // One region of the cut tree: cut it vertically, else horizontally, else it is a leaf. The halves go on
-        // the stack `ac` (4 cells: a b band root), the one to read first last.
+    public static int lcNoteCut(emon.Port.Cells rw, emon.Port.Cells pr, int p) {
+        // A horizontal cut at y = p, made on a region with the x-extent in `pr`: noted in `rw` (y x0 x1) for `lc-bands`.
+        emon.Port.cellsPush(rw, p);
+        emon.Port.cellsPush(rw, emon.Port.cellsAt(pr, PR_XMIN));
+        emon.Port.cellsPush(rw, emon.Port.cellsAt(pr, PR_XMAX));
+        return 0;
+    }
+    public static int lcPush(emon.Port.Cells ac, int a, int b, int band, int pbot) {
+        emon.Port.cellsPush(ac, a);
+        emon.Port.cellsPush(ac, b);
+        emon.Port.cellsPush(ac, band);
+        emon.Port.cellsPush(ac, pbot);
+        return 0;
+    }
+    public static int lcRegion(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells rw, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, int page, int a, int b, int band, int pbot) {
+        // One region of the cut tree: cut it horizontally at the forced y or a full-width gap, else vertically, else
+        // horizontally at the end of a gutter's extent, else it is a leaf. The halves go on the stack `ac` (4 cells: a b
+        // band pbot), the one to read first last. `pbot` is the bottom of the region the vertical cuts above came from
+        // (-1 for the whole page, 0 after a horizontal cut).
         int n = b - a;
         int done = 0;
         int na = 0;
         int g = -1;
         int p = -1;
+        int ref = 0;
         lcStats(lt, ls, a, b, pr);
-        if ((root == 1) && (emon.Port.cellsAt(pr, PR_FORCED) >= 0)) {
+        ref = pbot;
+        if ((pbot == -1) && (emon.Port.cellsAt(pr, PR_FORCED) >= 0)) {
             na = lcPartY(lt, ls, tm, a, b, 2 * emon.Port.cellsAt(pr, PR_FORCED));
             if ((na > 0) && (na < n)) {
-                emon.Port.cellsPush(ac, a + na);
-                emon.Port.cellsPush(ac, b);
-                emon.Port.cellsPush(ac, band + 1);
-                emon.Port.cellsPush(ac, 0);
-                emon.Port.cellsPush(ac, a);
-                emon.Port.cellsPush(ac, a + na);
-                emon.Port.cellsPush(ac, band);
-                emon.Port.cellsPush(ac, 0);
+                lcPush(ac, a + na, b, band + 1, 0);
+                lcPush(ac, a, a + na, band, 0);
+                lcNoteCut(rw, pr, emon.Port.cellsAt(pr, PR_FORCED));
                 done = 1;
+            }
+        }
+        if (done == 0) {
+            p = lcGapcut(lt, ls, gu, a, b, pr);
+            if (p >= 0) {
+                na = lcPartY(lt, ls, tm, a, b, 2 * p);
+                if ((na > 0) && (na < n)) {
+                    lcPush(ac, a + na, b, band + 1, 0);
+                    lcPush(ac, a, a + na, band, 0);
+                    lcNoteCut(rw, pr, p);
+                    done = 1;
+                }
             }
         }
         if (done == 0) {
@@ -1344,24 +1403,15 @@ public final class Columns {
                 int gb = g * GU_STRIDE;
                 na = lcPartX(lt, ls, tm, a, b, emon.Port.cellsAt(gu, gb) + emon.Port.cellsAt(gu, gb + 1));
                 if ((na > 0) && (na < n)) {
+                    if (ref <= 0) {
+                        ref = emon.Port.cellsAt(pr, PR_Y1MAX);
+                    }
                     if (emon.Port.cellsAt(pr, PR_RTL) == 1) {
-                        emon.Port.cellsPush(ac, a);
-                        emon.Port.cellsPush(ac, a + na);
-                        emon.Port.cellsPush(ac, band);
-                        emon.Port.cellsPush(ac, 0);
-                        emon.Port.cellsPush(ac, a + na);
-                        emon.Port.cellsPush(ac, b);
-                        emon.Port.cellsPush(ac, band);
-                        emon.Port.cellsPush(ac, 0);
+                        lcPush(ac, a, a + na, band, ref);
+                        lcPush(ac, a + na, b, band, ref);
                     } else {
-                        emon.Port.cellsPush(ac, a + na);
-                        emon.Port.cellsPush(ac, b);
-                        emon.Port.cellsPush(ac, band);
-                        emon.Port.cellsPush(ac, 0);
-                        emon.Port.cellsPush(ac, a);
-                        emon.Port.cellsPush(ac, a + na);
-                        emon.Port.cellsPush(ac, band);
-                        emon.Port.cellsPush(ac, 0);
+                        lcPush(ac, a + na, b, band, ref);
+                        lcPush(ac, a, a + na, band, ref);
                     }
                     done = 1;
                 }
@@ -1372,42 +1422,36 @@ public final class Columns {
             if (p >= 0) {
                 na = lcPartY(lt, ls, tm, a, b, 2 * p);
                 if ((na > 0) && (na < n)) {
-                    emon.Port.cellsPush(ac, a + na);
-                    emon.Port.cellsPush(ac, b);
-                    emon.Port.cellsPush(ac, band + 1);
-                    emon.Port.cellsPush(ac, 0);
-                    emon.Port.cellsPush(ac, a);
-                    emon.Port.cellsPush(ac, a + na);
-                    emon.Port.cellsPush(ac, band);
-                    emon.Port.cellsPush(ac, 0);
+                    lcPush(ac, a + na, b, band + 1, 0);
+                    lcPush(ac, a, a + na, band, 0);
+                    lcNoteCut(rw, pr, p);
                     done = 1;
                 }
             }
         }
         if (done == 0) {
-            lcLeaf(lt, ls, lo, cf, a, b, band, page);
+            lcLeaf(lt, ls, lo, cf, a, b, band, page, pbot);
         }
         return 0;
     }
-    public static int lcTree(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, int page) {
-        // The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`.
+    public static int lcTree(emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells rw, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, int page) {
+        // The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`; the
+        // horizontal cuts made are noted in `rw`.
         int n = emon.Port.cellsLen(ls);
         emon.Port.cellsDrop(ac, 0);
+        emon.Port.cellsDrop(rw, 0);
         if (n == 0) {
             return 0;
         }
-        emon.Port.cellsPush(ac, 0);
-        emon.Port.cellsPush(ac, n);
-        emon.Port.cellsPush(ac, 0);
-        emon.Port.cellsPush(ac, 1);
+        lcPush(ac, 0, n, 0, -1);
         while (emon.Port.cellsLen(ac) > 0) {
             int top = emon.Port.cellsLen(ac) - 4;
             int a = emon.Port.cellsAt(ac, top);
             int b = emon.Port.cellsAt(ac, top + 1);
             int band = emon.Port.cellsAt(ac, top + 2);
-            int root = emon.Port.cellsAt(ac, top + 3);
+            int pbot = emon.Port.cellsAt(ac, top + 3);
             emon.Port.cellsDrop(ac, top);
-            lcRegion(lt, ls, gu, ac, tm, cf, lo, pr, page, a, b, band, root);
+            lcRegion(lt, ls, gu, ac, tm, rw, cf, lo, pr, page, a, b, band, pbot);
         }
         return 0;
     }
@@ -1528,7 +1572,34 @@ public final class Columns {
             emon.Port.cellsPush(cf, j - i);
             emon.Port.cellsPush(cf, as);
             emon.Port.cellsPush(cf, 0);
+            emon.Port.cellsPush(cf, 0);
             i = j;
+        }
+        return 0;
+    }
+    public static int lcBands(emon.Port.Cells cf, int r0, int r1, emon.Port.Cells rw) {
+        // `band` of each body fragment: how many horizontal cuts lie above its middle and across its x-range (the
+        // cuts of a part of the page count for the fragments of that part only), so the bands run top to bottom
+        // whatever the order the tree made its cuts in.
+        int nc = emon.Port.cellsLen(rw) / 3;
+        int r = r0;
+        int c = 0;
+        int n = 0;
+        while (r < r1) {
+            int b = r * CF_STRIDE;
+            int ym2 = emon.Port.cellsAt(cf, b + CF_Y0) + emon.Port.cellsAt(cf, b + CF_Y1);
+            int fx0 = emon.Port.cellsAt(cf, b + CF_X0);
+            int fx1 = emon.Port.cellsAt(cf, b + CF_X1);
+            n = 0;
+            c = 0;
+            while (c < nc) {
+                if (((2 * emon.Port.cellsAt(rw, c * 3)) <= ym2) && (emon.Port.cellsAt(rw, (c * 3) + 1) < fx1) && (emon.Port.cellsAt(rw, (c * 3) + 2) > fx0)) {
+                    n += 1;
+                }
+                c += 1;
+            }
+            emon.Port.cellsSet(cf, b + CF_BAND, n);
+            r += 1;
         }
         return 0;
     }
@@ -1630,8 +1701,8 @@ public final class Columns {
         lcSplitAll(wd, lt, ls, gu);
         lcSortLines(lt, ls, 0, emon.Port.cellsLen(ls));
         lcExtendUp(wd, lt, ls, gu, dom);
-        lcTrimBottom(wd, lt, ls, gu, dom);
-        lcTree(lt, ls, gu, ac, tm, cf, lo, pr, page);
+        lcTree(lt, ls, gu, ac, tm, rw, cf, lo, pr, page);
+        lcBands(cf, cf0, emon.Port.cellsLen(cf) / CF_STRIDE, rw);
         nb = (emon.Port.cellsLen(cf) / CF_STRIDE) - cf0;
         if (emon.Port.cellsLen(sd) > 0) {
             lcSideEmit(wd, lt, sd, lo, cf, pr, page, cf0, nb);

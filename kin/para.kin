@@ -59,7 +59,7 @@
 (defconst ^I32 PA_INDENT_DIV 2)     ;; an indent: more than 1/2 of the size
 (defconst ^I32 PA_SIZE_DIV 20)      ;; a size change: more than 1/20
 (defconst ^I32 PA_ROT_SLOP 100)     ;; upright: within one degree of 0
-(defconst ^I32 PA_INDENT_USE 3)     ;; the document's paragraphs have first-line indents from this many
+(defconst ^I32 PA_INDENT_USE 1)     ;; the document's paragraphs have first-line indents from this many
 
 ;; the points of a continuation (SPEC 10.1.2, D152) against `join-min`
 (defconst ^I32 JS_HYPHEN 3)         ;; the last line ends in a hyphen after a letter
@@ -71,11 +71,13 @@
 (defconst ^I32 JS_MARKER -3)        ;; ... starts with a list marker
 (defconst ^I32 JS_STYLE -3)         ;; ... is of another size or style
 (defconst ^I32 JS_STREAM 1)         ;; ... follows in the content stream
+(defconst ^I32 JS_WIDTH -3)         ;; the two fragments are not of one width (a table, a figure, another structure: D152)
+(defconst ^I32 JS_BOTTOM 1)         ;; the last line is at the bottom of its column: the column is full (D152)
 (defconst ^I32 JOIN_MIN 4)
 (defconst ^I32 PA_EDGE_PCT 15)       ;; the last line reaches the column's end: at most 15 per cent of the width short
 
 ;; fragment rows of `emon.columns` (`cf`), mirrored: its constants are private
-(defconst ^I32 CF_STRIDE 12)
+(defconst ^I32 CF_STRIDE 13)
 (defconst ^I32 CF_PAGE 0)
 (defconst ^I32 CF_BAND 1)
 (defconst ^I32 CF_COL 2)
@@ -88,6 +90,7 @@
 (defconst ^I32 CF_COUNT 9)
 (defconst ^I32 CF_ASSOC 10)
 (defconst ^I32 CF_DONE 11)
+(defconst ^I32 CF_REF 12)
 
 ;; frag rows (`fr`): page x0 y0 x1 y1 raw-start
 (defconst ^I32 FR_STRIDE 6)
@@ -352,8 +355,8 @@
 
 (defn ^I32 pa-indents [^Cells wd ^Cells ln ^Cells cf ^Cells lo]
   (comment "How many times, in the body fragments, a line starts further in than a line at the margin before it,")
-  (comment "by more than half its size and is close below it: the document's paragraphs have first-line indents")
-  (comment "when this is at least PA_INDENT_USE.")
+  (comment "by more than half its size and is close below it, or a fragment starts with such a line: the document's")
+  (comment "paragraphs have first-line indents when this is at least PA_INDENT_USE.")
   (let [^I32 nf (quot (cells-len cf) CF_STRIDE)
         ^:mut ^I32 r 0
         ^:mut ^I32 i 0
@@ -362,7 +365,10 @@
       (do (if (== (cells-at cf (+ (* r CF_STRIDE) CF_ROLE)) (rl-body))
             (do (let [^I32 first (cells-at cf (+ (* r CF_STRIDE) CF_FIRST))
                       ^I32 cnt (cells-at cf (+ (* r CF_STRIDE) CF_COUNT))
-                      ^I32 mg (pa-fmargin ln lo first cnt)]
+                      ^I32 mg (pa-fmargin ln lo first cnt)
+                      ^I32 b0 (cells-at lo first)]
+                  (if (> (* (- (pa-start ln b0) mg) PA_INDENT_DIV) (pa-size wd ln b0))
+                    (set n (+ n 1)))
                   (set i 1)
                   (while (< i cnt)
                     (do (let [^I32 a (cells-at lo (+ first (- i 1)))
@@ -598,12 +604,22 @@
           (if (and (== tl 2) (pa-letter c0) (== cl 41)) (return (== 1 1)))
           (return (== 0 1)))))))
 
+(defn ^I32 pa-bottom [^Cells cf ^I32 r]
+  (comment "The bottom a fragment's last line is compared with: the bottom of the region its vertical cuts came from, so")
+  (comment "the columns of one set (side by side, whatever else lies above or below beside them) end together.")
+  (return (cells-at cf (+ (* r CF_STRIDE) CF_REF))))
+
+(defn ^I32 pa-maxi [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
 (defn ^I32 pa-join-score [^Cells wd ^Cells ln ^Cells et ^Cells raw ^I32 a ^I32 b
-                          ^I32 colx0 ^I32 colx1 ^I32 ncol ^I32 bmargin ^I32 indents]
+                          ^I32 colx0 ^I32 colx1 ^I32 ncol ^I32 bmargin ^I32 indents ^I32 bottom
+                          ^I32 bx0 ^I32 bx1 ^I32 bn]
   (comment "The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going")
   (comment "on with line b, the first of the next fragment (SPEC 10.1.2, D152). `colx0`..`colx1` is the extent of a's")
-  (comment "fragment, `ncol` its lines (the edge signals need three), `bmargin` the margin of b's, `indents` whether")
-  (comment "the document's paragraphs have first-line indents.")
+  (comment "fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether")
+  (comment "the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.")
   (let [^I32 n (cells-len raw)
         ^I32 sa (pa-size wd ln a)
         ^I32 sb (pa-size wd ln b)
@@ -612,7 +628,7 @@
     (let [^I32 last (cells-at raw (- n 1))]
       (if (and (or (== last 45) (== last 173)) (>= n 2))
         (if (pa-letter (cells-at raw (- n 2))) (set pts (+ pts JS_HYPHEN)))))
-    (if (>= ncol 3)
+    (if (>= ncol 2)
       (do (if (<= (* (- colx1 (ln-get ln a (lh-x1))) 100) (* PA_EDGE_PCT (- colx1 colx0)))
             (set pts (+ pts JS_EDGE)))
           (if (> (* (- colx1 (ln-get ln a (lh-x1))) 5) (- colx1 colx0))
@@ -627,6 +643,11 @@
       (set pts (+ pts JS_STYLE)))
     (if (== (+ (ln-get ln a (lh-first)) (ln-get ln a (lh-count))) (ln-get ln b (lh-first)))
       (set pts (+ pts JS_STREAM)))
+    (if (and (>= ncol 2) (>= (+ (ln-get ln a (lh-y1)) (quot sa 2)) bottom))
+      (set pts (+ pts JS_BOTTOM)))
+    (if (and (>= ncol 3) (>= bn 3)
+             (> (* (pa-abs (- (- colx1 colx0) (- bx1 bx0))) 4) (- (pa-maxi (- colx1 colx0) (- bx1 bx0)) 0)))
+      (set pts (+ pts JS_WIDTH)))
     (return pts)))
 
 ;; --------------------------------------------------------------------- notes
@@ -771,8 +792,7 @@
   (comment "Phase one: every page's column fragments (`emon.columns`), and the page `layout` (D111) from them.")
   (let [^:mut ^I32 p 1
         ^:mut ^I32 i 0
-        ^:mut ^I32 nu 0
-        ^:mut ^I32 r 0]
+        ^:mut ^I32 nu 0]
     (cells-drop cf 0)
     (cells-drop lo 0)
     (while (<= p npages)
@@ -837,10 +857,6 @@
       (do (pa-collect ord lt p)
           (set n (cells-len ord))
           (set nu (pa-upright-count lt ord))
-          (set i nu)
-          (while (< i n)
-            (do (cells-push gp (cells-at ord i))
-                (set i (+ i 1))))
           ;; the rows of cf of this page: the body ones, then the side ones
           (while (and (< r nf) (< (cells-at cf (+ (* r CF_STRIDE) CF_PAGE)) p))
             (set r (+ r 1)))
@@ -865,7 +881,10 @@
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_X0))
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_X1))
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_COUNT))
-                                                      mg indents))
+                                                      mg indents (pa-bottom cf prevfr)
+                                                      (cells-at cf (+ (* i CF_STRIDE) CF_X0))
+                                                      (cells-at cf (+ (* i CF_STRIDE) CF_X1))
+                                                      (cells-at cf (+ (* i CF_STRIDE) CF_COUNT))))
                             (cells-push dbg i)
                             (cells-push dbg prev)
                             (cells-push dbg b)
@@ -900,6 +919,12 @@
                             (set prev b)
                             (set cont (+ cont 1))))
                       (set i (+ i 1))))))
+          ;; the lines that are not upright stand alone, after the page's upright ones (D136): queued now,
+          ;; written at the next close
+          (set i nu)
+          (while (< i n)
+            (do (cells-push gp (cells-at ord i))
+                (set i (+ i 1))))
           (set p (+ p 1))))
     (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend nf 1000000000)
     (return 0)))

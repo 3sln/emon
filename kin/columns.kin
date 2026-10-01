@@ -50,6 +50,8 @@
 (defconst ^I32 LC_GUT_DEN 5)
 (defconst ^I32 LC_WORDS 3)         ;; gutter-words: the mean words of the smaller side of a gutter, per row
 (defconst ^I32 LC_HOLE 3)          ;; hole: a gap of more than 3 sizes between rows of body type ends a gutter
+(defconst ^I32 LC_GAP_NUM 5)        ;; a full-width gap is more than 5/2 sizes: a story break, not a paragraph gap
+(defconst ^I32 LC_GAP_DEN 2)
 (defconst ^I32 LC_BODY_DEN 10)     ;; a line is of the dominant size within 1/10
 (defconst ^I32 LC_LONG_NUM 2)      ;; ... and long when 2/5 of the longest such line
 (defconst ^I32 LC_LONG_DEN 5)
@@ -71,7 +73,7 @@
 (defconst ^I32 PR_NSIDE 5)         ;; side fragments written
 
 ;; fragment rows (`cf`)
-(defconst ^I32 CF_STRIDE 12)
+(defconst ^I32 CF_STRIDE 13)
 (defconst ^I32 CF_PAGE 0)
 (defconst ^I32 CF_BAND 1)
 (defconst ^I32 CF_COL 2)
@@ -84,14 +86,15 @@
 (defconst ^I32 CF_COUNT 9)
 (defconst ^I32 CF_ASSOC 10)
 (defconst ^I32 CF_DONE 11)
+(defconst ^I32 CF_REF 12)
 
-(defn ^:pub ^I32 lc-cf-stride [] (return 12))
+(defn ^:pub ^I32 lc-cf-stride [] (return 13))
 
 ;; items (`it`, stride 7): x0 x1 ymid2 size line y0 y1
 (defconst ^I32 IT_STRIDE 7)
 
 ;; gutters (`gu`) and active intervals (`ac`), stride 10
-(defconst ^I32 GU_STRIDE 10)
+(defconst ^I32 GU_STRIDE 12)
 (defconst ^I32 GU_TOP 2)
 (defconst ^I32 GU_BOT 3)
 (defconst ^I32 GU_ROWS 4)      ;; rows of body-size type it was seen in
@@ -100,6 +103,8 @@
 (defconst ^I32 GU_LSUM 7)      ;; the words on its left, in all
 (defconst ^I32 GU_RSUM 8)
 (defconst ^I32 GU_FLAG 9)
+(defconst ^I32 GU_PBOT 10)     ;; the bottom before the last row it was seen in
+(defconst ^I32 GU_ONE 11)      ;; ... and that last row had words on one side of it only
 
 ;; ------------------------------------------------------------------ small things
 
@@ -492,6 +497,25 @@
                 (set f (+ f 1))))))
     (return 0)))
 
+(defn ^I32 lc-one-sided [^I32 lc ^I32 rc]
+  (if (or (== lc 0) (== rc 0)) (return 1))
+  (return 0))
+
+(defn ^I32 lc-close-trim [^:mut ^Cells gu ^:mut ^Cells ac ^I32 a ^I32 ry0 ^I32 size]
+  (comment "An active interval ends because ink crosses it. If its last row had words on one side only and the ink")
+  (comment "is close under it (a heading that goes with the spanning text below, not with the columns), the extent")
+  (comment "ends above that row.")
+  (let [^I32 base (* a GU_STRIDE)
+        ^I32 bot (cells-at ac (+ base GU_BOT))
+        ^I32 pbot (cells-at ac (+ base GU_PBOT))
+        ^I32 top (cells-at ac (+ base GU_TOP))]
+    (if (and (== (cells-at ac (+ base GU_ONE)) 1)
+             (> pbot top)
+             (<= (* (- ry0 bot) LC_TIGHT_DEN) (* size LC_TIGHT_NUM)))
+      (cells-set ac (+ base GU_BOT) pbot))
+    (lc-close gu ac a)
+    (return 0)))
+
 (defn ^I32 lc-close-all [^:mut ^Cells gu ^:mut ^Cells ac]
   (let [^I32 na (quot (cells-len ac) GU_STRIDE)
         ^:mut ^I32 a 0]
@@ -634,7 +658,7 @@
     (while (< k e)
       (do (let [^I32 ix (cells-at io k)
                 ^I32 x0 (cells-at it (* ix IT_STRIDE))]
-            (if (>= (- x0 reach) (quot (* size 3) 2))
+            (if (>= (- x0 reach) (* size 3))
               (do (set nrun (+ nrun 1))
                   (set cur 1))
               (do (set cur (+ cur 1))
@@ -646,7 +670,7 @@
           (set rx0 (cells-at it (* (cells-at io s) IT_STRIDE)))
           (set rx1 reach)
           (cells-push gu rx0) (cells-push gu rx1) (cells-push gu ry0) (cells-push gu ry1) (cells-push gu 0)
-          (cells-push gu 0) (cells-push gu 0) (cells-push gu 0) (cells-push gu 0) (cells-push gu 2)
+          (cells-push gu 0) (cells-push gu 0) (cells-push gu 0) (cells-push gu 0) (cells-push gu 2) (cells-push gu 0) (cells-push gu 0)
           (lc-close-within gu ac rx0 rx1)))
     ;; the active intervals, cut down by this row's ink
     (let [^I32 na (quot (cells-len ac) GU_STRIDE)]
@@ -654,7 +678,7 @@
       (while (< a na)
         (do (let [^I32 ab (* a GU_STRIDE)]
               (set bw (lc-best-piece it io s e (cells-at ac ab) (cells-at ac (+ ab 1)) tm))
-              (if (>= bw gmin)
+              (if (>= bw (quot (* size LC_GUT_NUM) LC_GUT_DEN))
                 (do (let [^I32 p0 (cells-at tm 0)
                           ^I32 p1 (cells-at tm 1)]
                       (cells-set ac ab p0)
@@ -662,12 +686,15 @@
                       (if (== hasclass 1)
                         (do (set lc (lc-count-left it io s e p0 gmin))
                             (set rc (lc-count-right it io s e p1 gmin))
-                            (let [^I32 o-bot (cells-at ac (+ ab GU_BOT))
+                            (let [^I32 one (lc-one-sided lc rc)
+                                  ^I32 o-bot (cells-at ac (+ ab GU_BOT))
                                   ^I32 o-rows (cells-at ac (+ ab GU_ROWS))
                                   ^I32 o-lr (cells-at ac (+ ab GU_LROWS))
                                   ^I32 o-ls (cells-at ac (+ ab GU_LSUM))
                                   ^I32 o-rr (cells-at ac (+ ab GU_RROWS))
                                   ^I32 o-rs (cells-at ac (+ ab GU_RSUM))]
+                              (cells-set ac (+ ab GU_PBOT) o-bot)
+                              (cells-set ac (+ ab GU_ONE) one)
                               (cells-set ac (+ ab GU_BOT) (lc-max o-bot ry1))
                               (cells-set ac (+ ab GU_ROWS) (+ o-rows 1))
                               (if (> lc 0)
@@ -683,7 +710,7 @@
                                   (cells-set ac (+ (* wi GU_STRIDE) c) v))
                                 (set c (+ c 1))))))
                     (set wi (+ wi 1)))
-                (lc-close gu ac a)))
+                (lc-close-trim gu ac a ry0 size)))
             (set a (+ a 1))))
       (cells-drop ac (* wi GU_STRIDE)))
     ;; the gaps no active interval touches begin new ones
@@ -711,6 +738,8 @@
                               (cells-push ac 1)
                               (cells-push ac (lc-count-left it io s e reach gmin))
                               (cells-push ac (lc-count-right it io s e x0 gmin))
+                              (cells-push ac 0)
+                              (cells-push ac ry0)
                               (cells-push ac 0)))))
                   (set reach (lc-max reach (cells-at it (+ (* ix IT_STRIDE) 1)))))
                 (set k (+ k 1))))))
@@ -958,68 +987,13 @@
           (set g (+ g 1))))
     (return 0)))
 
-(defn ^I32 lc-trim-bottom [^Cells wd ^Cells lt ^Cells ls ^:mut ^Cells gu ^I32 dom]
-  (comment "A gutter's extent ends above a lone last line that has a line close below it that crosses the gutter: a")
-  (comment "heading that belongs to the spanning text under it, not to the columns above.")
-  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
-        ^I32 n (cells-len ls)
-        ^:mut ^I32 g 0
-        ^:mut ^I32 i 0
-        ^:mut ^I32 again 1
-        ^:mut ^I32 last -1
-        ^:mut ^I32 mate 0
-        ^:mut ^I32 prevb 0
-        ^:mut ^I32 hasprev 0]
-    (while (< g ng)
-      (do (set again 1)
-          (if (!= (cells-at gu (+ (* g GU_STRIDE) GU_FLAG)) 0) (set again 0))
-          (while (== again 1)
-            (do (set again 0)
-                (let [^I32 gb (* g GU_STRIDE)
-                      ^I32 gx0 (cells-at gu gb)
-                      ^I32 gx1 (cells-at gu (+ gb 1))
-                      ^I32 top2 (* 2 (cells-at gu (+ gb GU_TOP)))
-                      ^I32 bot2 (* 2 (cells-at gu (+ gb GU_BOT)))]
-                  (set last -1)
-                  (set i 0)
-                  (while (< i n)
-                    (do (let [^I32 l (cells-at ls i)
-                              ^I32 ym (lc-ym2 lt l)]
-                          (if (and (>= ym top2) (<= ym bot2))
-                            (if (or (< last 0) (> (ln-get lt l (lh-y1)) (ln-get lt last (lh-y1))))
-                              (set last l))))
-                        (set i (+ i 1))))
-                  (if (>= last 0)
-                    (do (set mate 0)
-                        (set hasprev 0)
-                        (set prevb 0)
-                        (set i 0)
-                        (while (< i n)
-                          (do (let [^I32 l (cells-at ls i)
-                                    ^I32 ym (lc-ym2 lt l)]
-                                (if (and (!= l last) (>= ym top2) (<= ym bot2))
-                                  (do (if (> (ln-get lt l (lh-y1)) (ln-get lt last (lh-y0)))
-                                        (set mate 1))
-                                      (if (<= (ln-get lt l (lh-y1)) (ln-get lt last (lh-y0)))
-                                        (do (set hasprev 1)
-                                            (set prevb (lc-max prevb (ln-get lt l (lh-y1)))))))))
-                              (set i (+ i 1))))
-                        (if (and (== mate 0) (== hasprev 1))
-                          (let [^I32 b (lc-below lt ls last)]
-                            (if (and (>= b 0) (lc-crosses lt b gx0 gx1)
-                                     (<= (* (- (ln-get lt b (lh-y0)) (ln-get lt last (lh-y1))) LC_TIGHT_DEN)
-                                         (* dom LC_TIGHT_NUM)))
-                              (do (cells-set gu (+ gb GU_BOT) prevb)
-                                  (set again 1))))))))))
-          (set g (+ g 1))))
-    (return 0)))
-
 ;; ---------------------------------------------------------------------- the cut tree
 
 (defconst ^I32 PR_XMIN 8)
 (defconst ^I32 PR_XMAX 9)
 (defconst ^I32 PR_Y2MIN 10)
 (defconst ^I32 PR_Y2MAX 11)
+(defconst ^I32 PR_Y1MAX 12)
 
 (defn ^I32 lc-stats [^Cells lt ^Cells ls ^I32 a ^I32 b ^:mut ^Cells pr]
   (comment "The region ls[a..b): the extent of its lines' boxes (x) and of their middles (y, times 2).")
@@ -1027,15 +1001,18 @@
         ^:mut ^I32 xmax -1000000000
         ^:mut ^I32 ymin 1000000000
         ^:mut ^I32 ymax -1000000000
+        ^:mut ^I32 bmax -1000000000
         ^:mut ^I32 i a]
     (while (< i b)
       (do (let [^I32 l (cells-at ls i)
                 ^I32 ym (lc-ym2 lt l)]
             (set xmin (lc-min xmin (ln-get lt l (lh-x0))))
             (set xmax (lc-max xmax (ln-get lt l (lh-x1))))
+            (set bmax (lc-max bmax (ln-get lt l (lh-y1))))
             (set ymin (lc-min ymin ym))
             (set ymax (lc-max ymax ym)))
           (set i (+ i 1))))
+    (cells-set pr PR_Y1MAX bmax)
     (cells-set pr PR_XMIN xmin)
     (cells-set pr PR_XMAX xmax)
     (cells-set pr PR_Y2MIN ymin)
@@ -1074,30 +1051,75 @@
           (set g (+ g 1))))
     (return -1)))
 
+(defn ^Bool lc-relevant [^Cells lt ^Cells ls ^Cells gu ^I32 g ^I32 a ^I32 b ^Cells pr]
+  (comment "Does gutter g divide the region: its x-interval inside the region's lines, lines wholly on each side.")
+  (let [^I32 gb (* g GU_STRIDE)
+        ^I32 gx0 (cells-at gu gb)
+        ^I32 gx1 (cells-at gu (+ gb 1))]
+    (if (!= (cells-at gu (+ gb GU_FLAG)) 0) (return (== 0 1)))
+    (if (not (and (< (cells-at pr PR_XMIN) gx0) (< gx1 (cells-at pr PR_XMAX)))) (return (== 0 1)))
+    (return (and (> (lc-count-side lt ls a b gx0 gx1 0) 0) (> (lc-count-side lt ls a b gx0 gx1 1) 0)))))
+
+(defn ^Bool lc-inside-other [^Cells lt ^Cells ls ^Cells gu ^I32 g ^I32 a ^I32 b ^Cells pr ^I32 p]
+  (comment "Is y strictly inside the extent of another gutter that divides the region: its columns go on across")
+  (comment "it, so it cannot be a cut (the cut is made between the columns of the other gutters, not through them).")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^:mut ^I32 h 0]
+    (while (< h ng)
+      (do (if (!= h g)
+            (if (lc-relevant lt ls gu h a b pr)
+              (if (and (< (cells-at gu (+ (* h GU_STRIDE) GU_TOP)) p) (< p (cells-at gu (+ (* h GU_STRIDE) GU_BOT))))
+                (return (== 1 1)))))
+          (set h (+ h 1))))
+    (return (== 0 1))))
+
 (defn ^I32 lc-hcut [^Cells lt ^Cells ls ^Cells gu ^I32 a ^I32 b ^Cells pr]
   (comment "The first y at which to cut the region horizontally: the least top or bottom of the extent of a gutter")
-  (comment "that has lines on both sides of it, strictly inside the region's lines. -1 for none.")
+  (comment "that divides it, strictly inside the region's lines, and not inside the extent of another gutter that")
+  (comment "divides it. -1 for none.")
   (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
-        ^I32 xmin (cells-at pr PR_XMIN)
-        ^I32 xmax (cells-at pr PR_XMAX)
         ^I32 ymin (cells-at pr PR_Y2MIN)
         ^I32 ymax (cells-at pr PR_Y2MAX)
         ^:mut ^I32 g 0
         ^:mut ^I32 best -1]
     (while (< g ng)
       (do (let [^I32 gb (* g GU_STRIDE)
-                ^I32 gx0 (cells-at gu gb)
-                ^I32 gx1 (cells-at gu (+ gb 1))
                 ^I32 top (cells-at gu (+ gb GU_TOP))
                 ^I32 bot (cells-at gu (+ gb GU_BOT))]
-            (if (and (< xmin gx0) (< gx1 xmax) (== (cells-at gu (+ gb GU_FLAG)) 0))
-              (if (and (> (lc-count-side lt ls a b gx0 gx1 0) 0) (> (lc-count-side lt ls a b gx0 gx1 1) 0))
-                (do (if (and (> (* 2 top) ymin) (<= (* 2 top) ymax) (or (< best 0) (< top best)))
-                      (set best top))
-                    (if (and (> (* 2 bot) ymin) (<= (* 2 bot) ymax) (or (< best 0) (< bot best)))
-                      (set best bot))))))
+            (if (lc-relevant lt ls gu g a b pr)
+              (do (if (and (> (* 2 top) ymin) (<= (* 2 top) ymax) (or (< best 0) (< top best))
+                           (not (lc-inside-other lt ls gu g a b pr top)))
+                    (set best top))
+                  (if (and (> (* 2 bot) ymin) (<= (* 2 bot) ymax) (or (< best 0) (< bot best))
+                           (not (lc-inside-other lt ls gu g a b pr bot)))
+                    (set best bot)))))
           (set g (+ g 1))))
     (return best)))
+
+(defn ^I32 lc-gapcut [^Cells lt ^Cells ls ^Cells gu ^I32 a ^I32 b ^Cells pr]
+  (comment "A full-width gap: where the region's lines leave a gap of more than `hole` sizes with nothing across it,")
+  (comment "the first such y (its middle), when a gutter divides the region (a region of one column is not cut")
+  (comment "at every paragraph gap). -1 for none. A cut at a gap that lines up across balanced columns is never")
+  (comment "made: only a gap wider than a paragraph gap is one (SPEC 10.1.1 step 4).")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^I32 thr (quot (* LC_GAP_NUM (cells-at pr PR_DOM)) LC_GAP_DEN)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 any 0
+        ^:mut ^I32 i (+ a 1)
+        ^:mut ^I32 reach 0]
+    (while (< g ng)
+      (do (if (lc-relevant lt ls gu g a b pr) (set any 1))
+          (set g (+ g 1))))
+    (if (== any 0) (return -1))
+    (set reach (ln-get lt (cells-at ls a) (lh-y1)))
+    (while (< i b)
+      (do (let [^I32 l (cells-at ls i)
+                ^I32 y0 (ln-get lt l (lh-y0))]
+            (if (> (- y0 reach) thr)
+              (return (quot (+ reach y0) 2)))
+            (set reach (lc-max reach (ln-get lt l (lh-y1)))))
+          (set i (+ i 1))))
+    (return -1)))
 
 (defn ^I32 lc-part-x [^Cells lt ^:mut ^Cells ls ^:mut ^Cells tm ^I32 a ^I32 b ^I32 gm2]
   (comment "Stable partition of the region: lines whose middle is left of the gutter's first. Answers how many.")
@@ -1147,8 +1169,14 @@
           (set i (+ i 1))))
     (return na)))
 
+(defn ^I32 lc-ref [^I32 pbot ^I32 y1]
+  (comment "The bottom a column fragment is compared with: that of the region its vertical cuts came from (the")
+  (comment "columns of one set end together), else its own.")
+  (if (> pbot 0) (return pbot))
+  (return y1))
+
 (defn ^I32 lc-leaf [^Cells lt ^:mut ^Cells ls ^:mut ^Cells lo ^:mut ^Cells cf
-                    ^I32 a ^I32 b ^I32 band ^I32 page]
+                    ^I32 a ^I32 b ^I32 band ^I32 page ^I32 pbot]
   (comment "A leaf: a column fragment. Its lines go to `lo` in rows; its row to `cf`.")
   (let [^:mut ^I32 x0 1000000000
         ^:mut ^I32 y0 1000000000
@@ -1177,67 +1205,97 @@
     (cells-push cf (- b a))
     (cells-push cf -1)
     (cells-push cf 0)
+    (cells-push cf (lc-ref pbot y1))
     (return 0)))
 
-(defn ^I32 lc-region [^Cells lt ^:mut ^Cells ls ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
+(defn ^I32 lc-note-cut [^:mut ^Cells rw ^Cells pr ^I32 p]
+  (comment "A horizontal cut at y = p, made on a region with the x-extent in `pr`: noted in `rw` (y x0 x1) for `lc-bands`.")
+  (cells-push rw p)
+  (cells-push rw (cells-at pr PR_XMIN))
+  (cells-push rw (cells-at pr PR_XMAX))
+  (return 0))
+
+(defn ^I32 lc-push [^:mut ^Cells ac ^I32 a ^I32 b ^I32 band ^I32 pbot]
+  (cells-push ac a)
+  (cells-push ac b)
+  (cells-push ac band)
+  (cells-push ac pbot)
+  (return 0))
+
+(defn ^I32 lc-region [^Cells lt ^:mut ^Cells ls ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm ^:mut ^Cells rw
                       ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^I32 page
-                      ^I32 a ^I32 b ^I32 band ^I32 root]
-  (comment "One region of the cut tree: cut it vertically, else horizontally, else it is a leaf. The halves go on")
-  (comment "the stack `ac` (4 cells: a b band root), the one to read first last.")
+                      ^I32 a ^I32 b ^I32 band ^I32 pbot]
+  (comment "One region of the cut tree: cut it horizontally at the forced y or a full-width gap, else vertically, else")
+  (comment "horizontally at the end of a gutter's extent, else it is a leaf. The halves go on the stack `ac` (4 cells: a b")
+  (comment "band pbot), the one to read first last. `pbot` is the bottom of the region the vertical cuts above came from")
+  (comment "(-1 for the whole page, 0 after a horizontal cut).")
   (let [^I32 n (- b a)
         ^:mut ^I32 done 0
         ^:mut ^I32 na 0
         ^:mut ^I32 g -1
-        ^:mut ^I32 p -1]
+        ^:mut ^I32 p -1
+        ^:mut ^I32 ref 0]
     (lc-stats lt ls a b pr)
-    (if (and (== root 1) (>= (cells-at pr PR_FORCED) 0))
+    (set ref pbot)
+    (if (and (== pbot -1) (>= (cells-at pr PR_FORCED) 0))
       (do (set na (lc-part-y lt ls tm a b (* 2 (cells-at pr PR_FORCED))))
           (if (and (> na 0) (< na n))
-            (do (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac (+ band 1)) (cells-push ac 0)
-                (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)
+            (do (lc-push ac (+ a na) b (+ band 1) 0)
+                (lc-push ac a (+ a na) band 0)
+                (lc-note-cut rw pr (cells-at pr PR_FORCED))
                 (set done 1)))))
+    (if (== done 0)
+      (do (set p (lc-gapcut lt ls gu a b pr))
+          (if (>= p 0)
+            (do (set na (lc-part-y lt ls tm a b (* 2 p)))
+                (if (and (> na 0) (< na n))
+                  (do (lc-push ac (+ a na) b (+ band 1) 0)
+                      (lc-push ac a (+ a na) band 0)
+                      (lc-note-cut rw pr p)
+                      (set done 1)))))))
     (if (== done 0)
       (do (set g (lc-vcut lt ls gu a b pr))
           (if (>= g 0)
             (do (let [^I32 gb (* g GU_STRIDE)]
                   (set na (lc-part-x lt ls tm a b (+ (cells-at gu gb) (cells-at gu (+ gb 1))))))
                 (if (and (> na 0) (< na n))
-                  (do (if (== (cells-at pr PR_RTL) 1)
-                        (do (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)
-                            (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac band) (cells-push ac 0))
-                        (do (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac band) (cells-push ac 0)
-                            (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)))
+                  (do (if (<= ref 0) (set ref (cells-at pr PR_Y1MAX)))
+                      (if (== (cells-at pr PR_RTL) 1)
+                        (do (lc-push ac a (+ a na) band ref)
+                            (lc-push ac (+ a na) b band ref))
+                        (do (lc-push ac (+ a na) b band ref)
+                            (lc-push ac a (+ a na) band ref)))
                       (set done 1)))))))
     (if (== done 0)
       (do (set p (lc-hcut lt ls gu a b pr))
           (if (>= p 0)
             (do (set na (lc-part-y lt ls tm a b (* 2 p)))
                 (if (and (> na 0) (< na n))
-                  (do (cells-push ac (+ a na)) (cells-push ac b) (cells-push ac (+ band 1)) (cells-push ac 0)
-                      (cells-push ac a) (cells-push ac (+ a na)) (cells-push ac band) (cells-push ac 0)
+                  (do (lc-push ac (+ a na) b (+ band 1) 0)
+                      (lc-push ac a (+ a na) band 0)
+                      (lc-note-cut rw pr p)
                       (set done 1)))))))
     (if (== done 0)
-      (lc-leaf lt ls lo cf a b band page))
+      (lc-leaf lt ls lo cf a b band page pbot))
     (return 0)))
 
-(defn ^I32 lc-tree [^Cells lt ^:mut ^Cells ls ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
+(defn ^I32 lc-tree [^Cells lt ^:mut ^Cells ls ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm ^:mut ^Cells rw
                     ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^I32 page]
-  (comment "The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`.")
+  (comment "The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`; the")
+  (comment "horizontal cuts made are noted in `rw`.")
   (let [^I32 n (cells-len ls)]
     (cells-drop ac 0)
+    (cells-drop rw 0)
     (if (== n 0) (return 0))
-    (cells-push ac 0)
-    (cells-push ac n)
-    (cells-push ac 0)
-    (cells-push ac 1)
+    (lc-push ac 0 n 0 -1)
     (while (> (cells-len ac) 0)
       (do (let [^I32 top (- (cells-len ac) 4)
                 ^I32 a (cells-at ac top)
                 ^I32 b (cells-at ac (+ top 1))
                 ^I32 band (cells-at ac (+ top 2))
-                ^I32 root (cells-at ac (+ top 3))]
+                ^I32 pbot (cells-at ac (+ top 3))]
             (cells-drop ac top)
-            (lc-region lt ls gu ac tm cf lo pr page a b band root))))
+            (lc-region lt ls gu ac tm rw cf lo pr page a b band pbot))))
     (return 0)))
 
 ;; --------------------------------------------------------------------- side runs
@@ -1347,7 +1405,33 @@
           (cells-push cf (- j i))
           (cells-push cf as)
           (cells-push cf 0)
+          (cells-push cf 0)
           (set i j)))
+    (return 0)))
+
+(defn ^I32 lc-bands [^:mut ^Cells cf ^I32 r0 ^I32 r1 ^Cells rw]
+  (comment "`band` of each body fragment: how many horizontal cuts lie above its middle and across its x-range (the")
+  (comment "cuts of a part of the page count for the fragments of that part only), so the bands run top to bottom")
+  (comment "whatever the order the tree made its cuts in.")
+  (let [^I32 nc (quot (cells-len rw) 3)
+        ^:mut ^I32 r r0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 n 0]
+    (while (< r r1)
+      (do (let [^I32 b (* r CF_STRIDE)
+                ^I32 ym2 (+ (cells-at cf (+ b CF_Y0)) (cells-at cf (+ b CF_Y1)))
+                ^I32 fx0 (cells-at cf (+ b CF_X0))
+                ^I32 fx1 (cells-at cf (+ b CF_X1))]
+            (set n 0)
+            (set c 0)
+            (while (< c nc)
+              (do (if (and (<= (* 2 (cells-at rw (* c 3))) ym2)
+                           (< (cells-at rw (+ (* c 3) 1)) fx1)
+                           (> (cells-at rw (+ (* c 3) 2)) fx0))
+                    (set n (+ n 1)))
+                  (set c (+ c 1))))
+            (cells-set cf (+ b CF_BAND) n))
+          (set r (+ r 1))))
     (return 0)))
 
 (defn ^I32 lc-number [^:mut ^Cells cf ^I32 r0 ^I32 r1]
@@ -1430,8 +1514,8 @@
     (lc-split-all wd lt ls gu)
     (lc-sort-lines lt ls 0 (cells-len ls))
     (lc-extend-up wd lt ls gu dom)
-    (lc-trim-bottom wd lt ls gu dom)
-    (lc-tree lt ls gu ac tm cf lo pr page)
+    (lc-tree lt ls gu ac tm rw cf lo pr page)
+    (lc-bands cf cf0 (quot (cells-len cf) CF_STRIDE) rw)
     (set nb (- (quot (cells-len cf) CF_STRIDE) cf0))
     (if (> (cells-len sd) 0)
       (lc-side-emit wd lt sd lo cf pr page cf0 nb))

@@ -24,7 +24,7 @@ const paSizeDiv int32 = 20
 
 const paRotSlop int32 = 100
 
-const paIndentUse int32 = 3
+const paIndentUse int32 = 1
 
 const jsHyphen int32 = 3
 
@@ -44,11 +44,15 @@ const jsStyle int32 = -3
 
 const jsStream int32 = 1
 
+const jsWidth int32 = -3
+
+const jsBottom int32 = 1
+
 const joinMin int32 = 4
 
 const paEdgePct int32 = 15
 
-const cfStride int32 = 12
+const cfStride int32 = 13
 
 const cfPage int32 = 0
 
@@ -73,6 +77,8 @@ const cfCount int32 = 9
 const cfAssoc int32 = 10
 
 const cfDone int32 = 11
+
+const cfRef int32 = 12
 
 const frStride int32 = 6
 
@@ -415,8 +421,8 @@ func paFmargin(ln *port.Cells, lo *port.Cells, first int32, count int32) int32 {
 
 func paIndents(wd *port.Cells, ln *port.Cells, cf *port.Cells, lo *port.Cells) int32 {
 	// How many times, in the body fragments, a line starts further in than a line at the margin before it,
-	// by more than half its size and is close below it: the document's paragraphs have first-line indents
-	// when this is at least PA_INDENT_USE.
+	// by more than half its size and is close below it, or a fragment starts with such a line: the document's
+	// paragraphs have first-line indents when this is at least PA_INDENT_USE.
 	var nf int32 = port.CellsLen(cf) / cfStride
 	var r int32 = 0
 	var i int32 = 0
@@ -426,6 +432,10 @@ func paIndents(wd *port.Cells, ln *port.Cells, cf *port.Cells, lo *port.Cells) i
 			var first int32 = port.CellsAt(cf, (r*cfStride)+cfFirst)
 			var cnt int32 = port.CellsAt(cf, (r*cfStride)+cfCount)
 			var mg int32 = paFmargin(ln, lo, first, cnt)
+			var b0 int32 = port.CellsAt(lo, first)
+			if ((paStart(ln, b0) - mg) * paIndentDiv) > paSize(wd, ln, b0) {
+				n += 1
+			}
 			i = 1
 			for i < cnt {
 				var a int32 = port.CellsAt(lo, first+(i-1))
@@ -744,11 +754,24 @@ func paMarker(wd *port.Cells, ln *port.Cells, et *port.Cells, l int32) bool {
 	return 0 == 1
 }
 
-func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, a int32, b int32, colx0 int32, colx1 int32, ncol int32, bmargin int32, indents int32) int32 {
+func paBottom(cf *port.Cells, r int32) int32 {
+	// The bottom a fragment's last line is compared with: the bottom of the region its vertical cuts came from, so
+	// the columns of one set (side by side, whatever else lies above or below beside them) end together.
+	return port.CellsAt(cf, (r*cfStride)+cfRef)
+}
+
+func paMaxi(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, a int32, b int32, colx0 int32, colx1 int32, ncol int32, bmargin int32, indents int32, bottom int32, bx0 int32, bx1 int32, bn int32) int32 {
 	// The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
 	// on with line b, the first of the next fragment (SPEC 10.1.2, D152). `colx0`..`colx1` is the extent of a's
-	// fragment, `ncol` its lines (the edge signals need three), `bmargin` the margin of b's, `indents` whether
-	// the document's paragraphs have first-line indents.
+	// fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
+	// the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.
 	var n int32 = port.CellsLen(raw)
 	var sa int32 = paSize(wd, ln, a)
 	var sb int32 = paSize(wd, ln, b)
@@ -762,7 +785,7 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 			pts += jsHyphen
 		}
 	}
-	if ncol >= 3 {
+	if ncol >= 2 {
 		if ((colx1 - evidence.LnGet(ln, a, evidence.LhX1())) * 100) <= (paEdgePct * (colx1 - colx0)) {
 			pts += jsEdge
 		}
@@ -787,6 +810,12 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	}
 	if (evidence.LnGet(ln, a, evidence.LhFirst()) + evidence.LnGet(ln, a, evidence.LhCount())) == evidence.LnGet(ln, b, evidence.LhFirst()) {
 		pts += jsStream
+	}
+	if (ncol >= 2) && ((evidence.LnGet(ln, a, evidence.LhY1()) + (sa / 2)) >= bottom) {
+		pts += jsBottom
+	}
+	if (ncol >= 3) && (bn >= 3) && ((paAbs((colx1-colx0)-(bx1-bx0)) * 4) > (paMaxi(colx1-colx0, bx1-bx0) - 0)) {
+		pts += jsWidth
 	}
 	return pts
 }
@@ -942,7 +971,6 @@ func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, 
 	var p int32 = 1
 	var i int32 = 0
 	var nu int32 = 0
-	var r int32 = 0
 	port.CellsDrop(cf, 0)
 	port.CellsDrop(lo, 0)
 	for p <= npages {
@@ -1006,11 +1034,6 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 		paCollect(ord, lt, p)
 		n = port.CellsLen(ord)
 		nu = paUprightCount(lt, ord)
-		i = nu
-		for i < n {
-			port.CellsPush(gp, port.CellsAt(ord, i))
-			i += 1
-		}
 		for (r < nf) && (port.CellsAt(cf, (r*cfStride)+cfPage) < p) {
 			r += 1
 		}
@@ -1034,7 +1057,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 				b = port.CellsAt(lo, first)
 				cont = 0
 				if open == 1 {
-					score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents)
+					score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents, paBottom(cf, prevfr), port.CellsAt(cf, (i*cfStride)+cfX0), port.CellsAt(cf, (i*cfStride)+cfX1), port.CellsAt(cf, (i*cfStride)+cfCount))
 					port.CellsPush(dbg, i)
 					port.CellsPush(dbg, prev)
 					port.CellsPush(dbg, b)
@@ -1080,6 +1103,11 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 				}
 				i += 1
 			}
+		}
+		i = nu
+		for i < n {
+			port.CellsPush(gp, port.CellsAt(ord, i))
+			i += 1
 		}
 		p += 1
 	}

@@ -9,6 +9,8 @@ pub(crate) const LC_GUT_NUM: i32 = 3;
 pub(crate) const LC_GUT_DEN: i32 = 5;
 pub(crate) const LC_WORDS: i32 = 3;
 pub(crate) const LC_HOLE: i32 = 3;
+pub(crate) const LC_GAP_NUM: i32 = 5;
+pub(crate) const LC_GAP_DEN: i32 = 2;
 pub(crate) const LC_BODY_DEN: i32 = 10;
 pub(crate) const LC_LONG_NUM: i32 = 2;
 pub(crate) const LC_LONG_DEN: i32 = 5;
@@ -26,7 +28,7 @@ pub(crate) const PR_BX1: i32 = 2;
 pub(crate) const PR_RTL: i32 = 3;
 pub(crate) const PR_FORCED: i32 = 4;
 pub(crate) const PR_NSIDE: i32 = 5;
-pub(crate) const CF_STRIDE: i32 = 12;
+pub(crate) const CF_STRIDE: i32 = 13;
 pub(crate) const CF_PAGE: i32 = 0;
 pub(crate) const CF_BAND: i32 = 1;
 pub(crate) const CF_COL: i32 = 2;
@@ -39,11 +41,12 @@ pub(crate) const CF_FIRST: i32 = 8;
 pub(crate) const CF_COUNT: i32 = 9;
 pub(crate) const CF_ASSOC: i32 = 10;
 pub(crate) const CF_DONE: i32 = 11;
+pub(crate) const CF_REF: i32 = 12;
 pub fn lc_cf_stride() -> i32 {
-    return 12;
+    return 13;
 }
 pub(crate) const IT_STRIDE: i32 = 7;
-pub(crate) const GU_STRIDE: i32 = 10;
+pub(crate) const GU_STRIDE: i32 = 12;
 pub(crate) const GU_TOP: i32 = 2;
 pub(crate) const GU_BOT: i32 = 3;
 pub(crate) const GU_ROWS: i32 = 4;
@@ -52,6 +55,8 @@ pub(crate) const GU_RROWS: i32 = 6;
 pub(crate) const GU_LSUM: i32 = 7;
 pub(crate) const GU_RSUM: i32 = 8;
 pub(crate) const GU_FLAG: i32 = 9;
+pub(crate) const GU_PBOT: i32 = 10;
+pub(crate) const GU_ONE: i32 = 11;
 pub(crate) fn lc_min(a: i32, b: i32) -> i32 {
     if a < b {
         return a;
@@ -516,6 +521,26 @@ pub(crate) fn lc_close(mut gu: &mut crate::port::Cells, ac: &mut crate::port::Ce
     }
     return 0;
 }
+pub(crate) fn lc_one_sided(lc: i32, rc: i32) -> i32 {
+    if (lc == 0) || (rc == 0) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn lc_close_trim(mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, a: i32, ry0: i32, size: i32) -> i32 {
+    // An active interval ends because ink crosses it. If its last row had words on one side only and the ink
+    // is close under it (a heading that goes with the spanning text below, not with the columns), the extent
+    // ends above that row.
+    let base: i32 = a * GU_STRIDE;
+    let bot: i32 = crate::port::cells_at(ac, base + GU_BOT);
+    let pbot: i32 = crate::port::cells_at(ac, base + GU_PBOT);
+    let top: i32 = crate::port::cells_at(ac, base + GU_TOP);
+    if (crate::port::cells_at(ac, base + GU_ONE) == 1) && (pbot > top) && (((ry0 - bot) * LC_TIGHT_DEN) <= (size * LC_TIGHT_NUM)) {
+        crate::port::cells_set(ac, base + GU_BOT, pbot);
+    }
+    lc_close(gu, ac, a);
+    return 0;
+}
 pub(crate) fn lc_close_all(mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells) -> i32 {
     let na: i32 = crate::port::cells_len(ac) / GU_STRIDE;
     let mut a: i32 = 0;
@@ -682,7 +707,7 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
     while k < e {
         let ix: i32 = crate::port::cells_at(io, k);
         let x0: i32 = crate::port::cells_at(it, ix * IT_STRIDE);
-        if (x0 - reach) >= ((size * 3) / 2) {
+        if (x0 - reach) >= (size * 3) {
             nrun += 1;
             cur = 1;
         } else {
@@ -708,6 +733,8 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
         crate::port::cells_push(gu, 0);
         crate::port::cells_push(gu, 0);
         crate::port::cells_push(gu, 2);
+        crate::port::cells_push(gu, 0);
+        crate::port::cells_push(gu, 0);
         lc_close_within(gu, ac, rx0, rx1);
     }
     let na: i32 = crate::port::cells_len(ac) / GU_STRIDE;
@@ -715,7 +742,7 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
     while a < na {
         let ab: i32 = a * GU_STRIDE;
         bw = lc_best_piece(it, io, s, e, crate::port::cells_at(ac, ab), crate::port::cells_at(ac, ab + 1), tm);
-        if bw >= gmin {
+        if bw >= ((size * LC_GUT_NUM) / LC_GUT_DEN) {
             let p0: i32 = crate::port::cells_at(tm, 0);
             let p1: i32 = crate::port::cells_at(tm, 1);
             crate::port::cells_set(ac, ab, p0);
@@ -723,12 +750,15 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
             if hasclass == 1 {
                 lc = lc_count_left(it, io, s, e, p0, gmin);
                 rc = lc_count_right(it, io, s, e, p1, gmin);
+                let one: i32 = lc_one_sided(lc, rc);
                 let o_bot: i32 = crate::port::cells_at(ac, ab + GU_BOT);
                 let o_rows: i32 = crate::port::cells_at(ac, ab + GU_ROWS);
                 let o_lr: i32 = crate::port::cells_at(ac, ab + GU_LROWS);
                 let o_ls: i32 = crate::port::cells_at(ac, ab + GU_LSUM);
                 let o_rr: i32 = crate::port::cells_at(ac, ab + GU_RROWS);
                 let o_rs: i32 = crate::port::cells_at(ac, ab + GU_RSUM);
+                crate::port::cells_set(ac, ab + GU_PBOT, o_bot);
+                crate::port::cells_set(ac, ab + GU_ONE, one);
                 crate::port::cells_set(ac, ab + GU_BOT, lc_max(o_bot, ry1));
                 crate::port::cells_set(ac, ab + GU_ROWS, o_rows + 1);
                 if lc > 0 {
@@ -750,7 +780,7 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
             }
             wi += 1;
         } else {
-            lc_close(gu, ac, a);
+            lc_close_trim(gu, ac, a, ry0, size);
         }
         a += 1;
     }
@@ -780,6 +810,8 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
                     crate::port::cells_push(ac, 1);
                     crate::port::cells_push(ac, lc_count_left(it, io, s, e, reach, gmin));
                     crate::port::cells_push(ac, lc_count_right(it, io, s, e, x0, gmin));
+                    crate::port::cells_push(ac, 0);
+                    crate::port::cells_push(ac, ry0);
                     crate::port::cells_push(ac, 0);
                 }
             }
@@ -1062,94 +1094,30 @@ pub(crate) fn lc_extend_up(wd: &mut crate::port::Cells, lt: &mut crate::port::Ce
     }
     return 0;
 }
-pub(crate) fn lc_trim_bottom(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, dom: i32) -> i32 {
-    // A gutter's extent ends above a lone last line that has a line close below it that crosses the gutter: a
-    // heading that belongs to the spanning text under it, not to the columns above.
-    let ng: i32 = crate::port::cells_len(gu) / GU_STRIDE;
-    let n: i32 = crate::port::cells_len(ls);
-    let mut g: i32 = 0;
-    let mut i: i32 = 0;
-    let mut again: i32 = 1;
-    let mut last: i32 = -1;
-    let mut mate: i32 = 0;
-    let mut prevb: i32 = 0;
-    let mut hasprev: i32 = 0;
-    while g < ng {
-        again = 1;
-        if crate::port::cells_at(gu, (g * GU_STRIDE) + GU_FLAG) != 0 {
-            again = 0;
-        }
-        while again == 1 {
-            again = 0;
-            let gb: i32 = g * GU_STRIDE;
-            let gx0: i32 = crate::port::cells_at(gu, gb);
-            let gx1: i32 = crate::port::cells_at(gu, gb + 1);
-            let top2: i32 = 2 * crate::port::cells_at(gu, gb + GU_TOP);
-            let bot2: i32 = 2 * crate::port::cells_at(gu, gb + GU_BOT);
-            last = -1;
-            i = 0;
-            while i < n {
-                let l: i32 = crate::port::cells_at(ls, i);
-                let ym: i32 = lc_ym2(lt, l);
-                if (ym >= top2) && (ym <= bot2) {
-                    if (last < 0) || (ln_get(lt, l, lh_y1()) > ln_get(lt, last, lh_y1())) {
-                        last = l;
-                    }
-                }
-                i += 1;
-            }
-            if last >= 0 {
-                mate = 0;
-                hasprev = 0;
-                prevb = 0;
-                i = 0;
-                while i < n {
-                    let l: i32 = crate::port::cells_at(ls, i);
-                    let ym: i32 = lc_ym2(lt, l);
-                    if (l != last) && (ym >= top2) && (ym <= bot2) {
-                        if ln_get(lt, l, lh_y1()) > ln_get(lt, last, lh_y0()) {
-                            mate = 1;
-                        }
-                        if ln_get(lt, l, lh_y1()) <= ln_get(lt, last, lh_y0()) {
-                            hasprev = 1;
-                            prevb = lc_max(prevb, ln_get(lt, l, lh_y1()));
-                        }
-                    }
-                    i += 1;
-                }
-                if (mate == 0) && (hasprev == 1) {
-                    let b: i32 = lc_below(lt, ls, last);
-                    if (b >= 0) && lc_crosses(lt, b, gx0, gx1) && (((ln_get(lt, b, lh_y0()) - ln_get(lt, last, lh_y1())) * LC_TIGHT_DEN) <= (dom * LC_TIGHT_NUM)) {
-                        crate::port::cells_set(gu, gb + GU_BOT, prevb);
-                        again = 1;
-                    }
-                }
-            }
-        }
-        g += 1;
-    }
-    return 0;
-}
 pub(crate) const PR_XMIN: i32 = 8;
 pub(crate) const PR_XMAX: i32 = 9;
 pub(crate) const PR_Y2MIN: i32 = 10;
 pub(crate) const PR_Y2MAX: i32 = 11;
+pub(crate) const PR_Y1MAX: i32 = 12;
 pub(crate) fn lc_stats(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, a: i32, b: i32, mut pr: &mut crate::port::Cells) -> i32 {
     // The region ls[a..b): the extent of its lines' boxes (x) and of their middles (y, times 2).
     let mut xmin: i32 = 1000000000;
     let mut xmax: i32 = -1000000000;
     let mut ymin: i32 = 1000000000;
     let mut ymax: i32 = -1000000000;
+    let mut bmax: i32 = -1000000000;
     let mut i: i32 = a;
     while i < b {
         let l: i32 = crate::port::cells_at(ls, i);
         let ym: i32 = lc_ym2(lt, l);
         xmin = lc_min(xmin, ln_get(lt, l, lh_x0()));
         xmax = lc_max(xmax, ln_get(lt, l, lh_x1()));
+        bmax = lc_max(bmax, ln_get(lt, l, lh_y1()));
         ymin = lc_min(ymin, ym);
         ymax = lc_max(ymax, ym);
         i += 1;
     }
+    crate::port::cells_set(pr, PR_Y1MAX, bmax);
     crate::port::cells_set(pr, PR_XMIN, xmin);
     crate::port::cells_set(pr, PR_XMAX, xmax);
     crate::port::cells_set(pr, PR_Y2MIN, ymin);
@@ -1194,35 +1162,92 @@ pub(crate) fn lc_vcut(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, 
     }
     return -1;
 }
+pub(crate) fn lc_relevant(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, g: i32, a: i32, b: i32, pr: &mut crate::port::Cells) -> bool {
+    // Does gutter g divide the region: its x-interval inside the region's lines, lines wholly on each side.
+    let gb: i32 = g * GU_STRIDE;
+    let gx0: i32 = crate::port::cells_at(gu, gb);
+    let gx1: i32 = crate::port::cells_at(gu, gb + 1);
+    if crate::port::cells_at(gu, gb + GU_FLAG) != 0 {
+        return 0 == 1;
+    }
+    if !((crate::port::cells_at(pr, PR_XMIN) < gx0) && (gx1 < crate::port::cells_at(pr, PR_XMAX))) {
+        return 0 == 1;
+    }
+    return (lc_count_side(lt, ls, a, b, gx0, gx1, 0) > 0) && (lc_count_side(lt, ls, a, b, gx0, gx1, 1) > 0);
+}
+pub(crate) fn lc_inside_other(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, g: i32, a: i32, b: i32, pr: &mut crate::port::Cells, p: i32) -> bool {
+    // Is y strictly inside the extent of another gutter that divides the region: its columns go on across
+    // it, so it cannot be a cut (the cut is made between the columns of the other gutters, not through them).
+    let ng: i32 = crate::port::cells_len(gu) / GU_STRIDE;
+    let mut h: i32 = 0;
+    while h < ng {
+        if h != g {
+            if lc_relevant(lt, ls, gu, h, a, b, pr) {
+                if (crate::port::cells_at(gu, (h * GU_STRIDE) + GU_TOP) < p) && (p < crate::port::cells_at(gu, (h * GU_STRIDE) + GU_BOT)) {
+                    return 1 == 1;
+                }
+            }
+        }
+        h += 1;
+    }
+    return 0 == 1;
+}
 pub(crate) fn lc_hcut(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, a: i32, b: i32, pr: &mut crate::port::Cells) -> i32 {
     // The first y at which to cut the region horizontally: the least top or bottom of the extent of a gutter
-    // that has lines on both sides of it, strictly inside the region's lines. -1 for none.
+    // that divides it, strictly inside the region's lines, and not inside the extent of another gutter that
+    // divides it. -1 for none.
     let ng: i32 = crate::port::cells_len(gu) / GU_STRIDE;
-    let xmin: i32 = crate::port::cells_at(pr, PR_XMIN);
-    let xmax: i32 = crate::port::cells_at(pr, PR_XMAX);
     let ymin: i32 = crate::port::cells_at(pr, PR_Y2MIN);
     let ymax: i32 = crate::port::cells_at(pr, PR_Y2MAX);
     let mut g: i32 = 0;
     let mut best: i32 = -1;
     while g < ng {
         let gb: i32 = g * GU_STRIDE;
-        let gx0: i32 = crate::port::cells_at(gu, gb);
-        let gx1: i32 = crate::port::cells_at(gu, gb + 1);
         let top: i32 = crate::port::cells_at(gu, gb + GU_TOP);
         let bot: i32 = crate::port::cells_at(gu, gb + GU_BOT);
-        if (xmin < gx0) && (gx1 < xmax) && (crate::port::cells_at(gu, gb + GU_FLAG) == 0) {
-            if (lc_count_side(lt, ls, a, b, gx0, gx1, 0) > 0) && (lc_count_side(lt, ls, a, b, gx0, gx1, 1) > 0) {
-                if ((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best)) {
-                    best = top;
-                }
-                if ((2 * bot) > ymin) && ((2 * bot) <= ymax) && ((best < 0) || (bot < best)) {
-                    best = bot;
-                }
+        if lc_relevant(lt, ls, gu, g, a, b, pr) {
+            if ((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best)) && !lc_inside_other(lt, ls, gu, g, a, b, pr, top) {
+                best = top;
+            }
+            if ((2 * bot) > ymin) && ((2 * bot) <= ymax) && ((best < 0) || (bot < best)) && !lc_inside_other(lt, ls, gu, g, a, b, pr, bot) {
+                best = bot;
             }
         }
         g += 1;
     }
     return best;
+}
+pub(crate) fn lc_gapcut(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, a: i32, b: i32, pr: &mut crate::port::Cells) -> i32 {
+    // A full-width gap: where the region's lines leave a gap of more than `hole` sizes with nothing across it,
+    // the first such y (its middle), when a gutter divides the region (a region of one column is not cut
+    // at every paragraph gap). -1 for none. A cut at a gap that lines up across balanced columns is never
+    // made: only a gap wider than a paragraph gap is one (SPEC 10.1.1 step 4).
+    let ng: i32 = crate::port::cells_len(gu) / GU_STRIDE;
+    let thr: i32 = (LC_GAP_NUM * crate::port::cells_at(pr, PR_DOM)) / LC_GAP_DEN;
+    let mut g: i32 = 0;
+    let mut any: i32 = 0;
+    let mut i: i32 = a + 1;
+    let mut reach: i32 = 0;
+    while g < ng {
+        if lc_relevant(lt, ls, gu, g, a, b, pr) {
+            any = 1;
+        }
+        g += 1;
+    }
+    if any == 0 {
+        return -1;
+    }
+    reach = ln_get(lt, crate::port::cells_at(ls, a), lh_y1());
+    while i < b {
+        let l: i32 = crate::port::cells_at(ls, i);
+        let y0: i32 = ln_get(lt, l, lh_y0());
+        if (y0 - reach) > thr {
+            return (reach + y0) / 2;
+        }
+        reach = lc_max(reach, ln_get(lt, l, lh_y1()));
+        i += 1;
+    }
+    return -1;
 }
 pub(crate) fn lc_part_x(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, a: i32, b: i32, gm2: i32) -> i32 {
     // Stable partition of the region: lines whose middle is left of the gutter's first. Answers how many.
@@ -1282,7 +1307,15 @@ pub(crate) fn lc_part_y(lt: &mut crate::port::Cells, mut ls: &mut crate::port::C
     }
     return na;
 }
-pub(crate) fn lc_leaf(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, a: i32, b: i32, band: i32, page: i32) -> i32 {
+pub(crate) fn lc_ref(pbot: i32, y1: i32) -> i32 {
+    // The bottom a column fragment is compared with: that of the region its vertical cuts came from (the
+    // columns of one set end together), else its own.
+    if pbot > 0 {
+        return pbot;
+    }
+    return y1;
+}
+pub(crate) fn lc_leaf(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, a: i32, b: i32, band: i32, page: i32, pbot: i32) -> i32 {
     // A leaf: a column fragment. Its lines go to `lo` in rows; its row to `cf`.
     let mut x0: i32 = 1000000000;
     let mut y0: i32 = 1000000000;
@@ -1312,29 +1345,55 @@ pub(crate) fn lc_leaf(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cel
     crate::port::cells_push(cf, b - a);
     crate::port::cells_push(cf, -1);
     crate::port::cells_push(cf, 0);
+    crate::port::cells_push(cf, lc_ref(pbot, y1));
     return 0;
 }
-pub(crate) fn lc_region(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, page: i32, a: i32, b: i32, band: i32, root: i32) -> i32 {
-    // One region of the cut tree: cut it vertically, else horizontally, else it is a leaf. The halves go on
-    // the stack `ac` (4 cells: a b band root), the one to read first last.
+pub(crate) fn lc_note_cut(mut rw: &mut crate::port::Cells, pr: &mut crate::port::Cells, p: i32) -> i32 {
+    // A horizontal cut at y = p, made on a region with the x-extent in `pr`: noted in `rw` (y x0 x1) for `lc-bands`.
+    crate::port::cells_push(rw, p);
+    crate::port::cells_push(rw, crate::port::cells_at(pr, PR_XMIN));
+    crate::port::cells_push(rw, crate::port::cells_at(pr, PR_XMAX));
+    return 0;
+}
+pub(crate) fn lc_push(mut ac: &mut crate::port::Cells, a: i32, b: i32, band: i32, pbot: i32) -> i32 {
+    crate::port::cells_push(ac, a);
+    crate::port::cells_push(ac, b);
+    crate::port::cells_push(ac, band);
+    crate::port::cells_push(ac, pbot);
+    return 0;
+}
+pub(crate) fn lc_region(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, page: i32, a: i32, b: i32, band: i32, pbot: i32) -> i32 {
+    // One region of the cut tree: cut it horizontally at the forced y or a full-width gap, else vertically, else
+    // horizontally at the end of a gutter's extent, else it is a leaf. The halves go on the stack `ac` (4 cells: a b
+    // band pbot), the one to read first last. `pbot` is the bottom of the region the vertical cuts above came from
+    // (-1 for the whole page, 0 after a horizontal cut).
     let n: i32 = b - a;
     let mut done: i32 = 0;
     let mut na: i32 = 0;
     let mut g: i32 = -1;
     let mut p: i32 = -1;
+    let mut r#ref: i32 = 0;
     lc_stats(lt, ls, a, b, pr);
-    if (root == 1) && (crate::port::cells_at(pr, PR_FORCED) >= 0) {
+    r#ref = pbot;
+    if (pbot == -1) && (crate::port::cells_at(pr, PR_FORCED) >= 0) {
         na = lc_part_y(lt, ls, tm, a, b, 2 * crate::port::cells_at(pr, PR_FORCED));
         if (na > 0) && (na < n) {
-            crate::port::cells_push(ac, a + na);
-            crate::port::cells_push(ac, b);
-            crate::port::cells_push(ac, band + 1);
-            crate::port::cells_push(ac, 0);
-            crate::port::cells_push(ac, a);
-            crate::port::cells_push(ac, a + na);
-            crate::port::cells_push(ac, band);
-            crate::port::cells_push(ac, 0);
+            lc_push(ac, a + na, b, band + 1, 0);
+            lc_push(ac, a, a + na, band, 0);
+            lc_note_cut(rw, pr, crate::port::cells_at(pr, PR_FORCED));
             done = 1;
+        }
+    }
+    if done == 0 {
+        p = lc_gapcut(lt, ls, gu, a, b, pr);
+        if p >= 0 {
+            na = lc_part_y(lt, ls, tm, a, b, 2 * p);
+            if (na > 0) && (na < n) {
+                lc_push(ac, a + na, b, band + 1, 0);
+                lc_push(ac, a, a + na, band, 0);
+                lc_note_cut(rw, pr, p);
+                done = 1;
+            }
         }
     }
     if done == 0 {
@@ -1343,24 +1402,15 @@ pub(crate) fn lc_region(lt: &mut crate::port::Cells, mut ls: &mut crate::port::C
             let gb: i32 = g * GU_STRIDE;
             na = lc_part_x(lt, ls, tm, a, b, crate::port::cells_at(gu, gb) + crate::port::cells_at(gu, gb + 1));
             if (na > 0) && (na < n) {
+                if r#ref <= 0 {
+                    r#ref = crate::port::cells_at(pr, PR_Y1MAX);
+                }
                 if crate::port::cells_at(pr, PR_RTL) == 1 {
-                    crate::port::cells_push(ac, a);
-                    crate::port::cells_push(ac, a + na);
-                    crate::port::cells_push(ac, band);
-                    crate::port::cells_push(ac, 0);
-                    crate::port::cells_push(ac, a + na);
-                    crate::port::cells_push(ac, b);
-                    crate::port::cells_push(ac, band);
-                    crate::port::cells_push(ac, 0);
+                    lc_push(ac, a, a + na, band, r#ref);
+                    lc_push(ac, a + na, b, band, r#ref);
                 } else {
-                    crate::port::cells_push(ac, a + na);
-                    crate::port::cells_push(ac, b);
-                    crate::port::cells_push(ac, band);
-                    crate::port::cells_push(ac, 0);
-                    crate::port::cells_push(ac, a);
-                    crate::port::cells_push(ac, a + na);
-                    crate::port::cells_push(ac, band);
-                    crate::port::cells_push(ac, 0);
+                    lc_push(ac, a + na, b, band, r#ref);
+                    lc_push(ac, a, a + na, band, r#ref);
                 }
                 done = 1;
             }
@@ -1371,42 +1421,36 @@ pub(crate) fn lc_region(lt: &mut crate::port::Cells, mut ls: &mut crate::port::C
         if p >= 0 {
             na = lc_part_y(lt, ls, tm, a, b, 2 * p);
             if (na > 0) && (na < n) {
-                crate::port::cells_push(ac, a + na);
-                crate::port::cells_push(ac, b);
-                crate::port::cells_push(ac, band + 1);
-                crate::port::cells_push(ac, 0);
-                crate::port::cells_push(ac, a);
-                crate::port::cells_push(ac, a + na);
-                crate::port::cells_push(ac, band);
-                crate::port::cells_push(ac, 0);
+                lc_push(ac, a + na, b, band + 1, 0);
+                lc_push(ac, a, a + na, band, 0);
+                lc_note_cut(rw, pr, p);
                 done = 1;
             }
         }
     }
     if done == 0 {
-        lc_leaf(lt, ls, lo, cf, a, b, band, page);
+        lc_leaf(lt, ls, lo, cf, a, b, band, page, pbot);
     }
     return 0;
 }
-pub(crate) fn lc_tree(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, page: i32) -> i32 {
-    // The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`.
+pub(crate) fn lc_tree(lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, page: i32) -> i32 {
+    // The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`; the
+    // horizontal cuts made are noted in `rw`.
     let n: i32 = crate::port::cells_len(ls);
     crate::port::cells_drop(ac, 0);
+    crate::port::cells_drop(rw, 0);
     if n == 0 {
         return 0;
     }
-    crate::port::cells_push(ac, 0);
-    crate::port::cells_push(ac, n);
-    crate::port::cells_push(ac, 0);
-    crate::port::cells_push(ac, 1);
+    lc_push(ac, 0, n, 0, -1);
     while crate::port::cells_len(ac) > 0 {
         let top: i32 = crate::port::cells_len(ac) - 4;
         let a: i32 = crate::port::cells_at(ac, top);
         let b: i32 = crate::port::cells_at(ac, top + 1);
         let band: i32 = crate::port::cells_at(ac, top + 2);
-        let root: i32 = crate::port::cells_at(ac, top + 3);
+        let pbot: i32 = crate::port::cells_at(ac, top + 3);
         crate::port::cells_drop(ac, top);
-        lc_region(lt, ls, gu, ac, tm, cf, lo, pr, page, a, b, band, root);
+        lc_region(lt, ls, gu, ac, tm, rw, cf, lo, pr, page, a, b, band, pbot);
     }
     return 0;
 }
@@ -1527,7 +1571,34 @@ pub(crate) fn lc_side_emit(wd: &mut crate::port::Cells, lt: &mut crate::port::Ce
         crate::port::cells_push(cf, j - i);
         crate::port::cells_push(cf, r#as);
         crate::port::cells_push(cf, 0);
+        crate::port::cells_push(cf, 0);
         i = j;
+    }
+    return 0;
+}
+pub(crate) fn lc_bands(mut cf: &mut crate::port::Cells, r0: i32, r1: i32, rw: &mut crate::port::Cells) -> i32 {
+    // `band` of each body fragment: how many horizontal cuts lie above its middle and across its x-range (the
+    // cuts of a part of the page count for the fragments of that part only), so the bands run top to bottom
+    // whatever the order the tree made its cuts in.
+    let nc: i32 = crate::port::cells_len(rw) / 3;
+    let mut r: i32 = r0;
+    let mut c: i32 = 0;
+    let mut n: i32 = 0;
+    while r < r1 {
+        let b: i32 = r * CF_STRIDE;
+        let ym2: i32 = crate::port::cells_at(cf, b + CF_Y0) + crate::port::cells_at(cf, b + CF_Y1);
+        let fx0: i32 = crate::port::cells_at(cf, b + CF_X0);
+        let fx1: i32 = crate::port::cells_at(cf, b + CF_X1);
+        n = 0;
+        c = 0;
+        while c < nc {
+            if ((2 * crate::port::cells_at(rw, c * 3)) <= ym2) && (crate::port::cells_at(rw, (c * 3) + 1) < fx1) && (crate::port::cells_at(rw, (c * 3) + 2) > fx0) {
+                n += 1;
+            }
+            c += 1;
+        }
+        crate::port::cells_set(cf, b + CF_BAND, n);
+        r += 1;
     }
     return 0;
 }
@@ -1629,8 +1700,8 @@ pub fn lc_page(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut lt:
     lc_split_all(wd, lt, ls, gu);
     lc_sort_lines(lt, ls, 0, crate::port::cells_len(ls));
     lc_extend_up(wd, lt, ls, gu, dom);
-    lc_trim_bottom(wd, lt, ls, gu, dom);
-    lc_tree(lt, ls, gu, ac, tm, cf, lo, pr, page);
+    lc_tree(lt, ls, gu, ac, tm, rw, cf, lo, pr, page);
+    lc_bands(cf, cf0, crate::port::cells_len(cf) / CF_STRIDE, rw);
     nb = (crate::port::cells_len(cf) / CF_STRIDE) - cf0;
     if crate::port::cells_len(sd) > 0 {
         lc_side_emit(wd, lt, sd, lo, cf, pr, page, cf0, nb);

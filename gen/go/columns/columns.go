@@ -19,6 +19,10 @@ const lcWords int32 = 3
 
 const lcHole int32 = 3
 
+const lcGapNum int32 = 5
+
+const lcGapDen int32 = 2
+
 const lcBodyDen int32 = 10
 
 const lcLongNum int32 = 2
@@ -53,7 +57,7 @@ const prForced int32 = 4
 
 const prNside int32 = 5
 
-const cfStride int32 = 12
+const cfStride int32 = 13
 
 const cfPage int32 = 0
 
@@ -79,13 +83,15 @@ const cfAssoc int32 = 10
 
 const cfDone int32 = 11
 
+const cfRef int32 = 12
+
 func LcCfStride() int32 {
-	return 12
+	return 13
 }
 
 const itStride int32 = 7
 
-const guStride int32 = 10
+const guStride int32 = 12
 
 const guTop int32 = 2
 
@@ -102,6 +108,10 @@ const guLsum int32 = 7
 const guRsum int32 = 8
 
 const guFlag int32 = 9
+
+const guPbot int32 = 10
+
+const guOne int32 = 11
 
 func lcMin(a int32, b int32) int32 {
 	if a < b {
@@ -591,6 +601,28 @@ func lcClose(gu *port.Cells, ac *port.Cells, a int32) int32 {
 	return 0
 }
 
+func lcOneSided(lc int32, rc int32) int32 {
+	if (lc == 0) || (rc == 0) {
+		return 1
+	}
+	return 0
+}
+
+func lcCloseTrim(gu *port.Cells, ac *port.Cells, a int32, ry0 int32, size int32) int32 {
+	// An active interval ends because ink crosses it. If its last row had words on one side only and the ink
+	// is close under it (a heading that goes with the spanning text below, not with the columns), the extent
+	// ends above that row.
+	var base int32 = a * guStride
+	var bot int32 = port.CellsAt(ac, base+guBot)
+	var pbot int32 = port.CellsAt(ac, base+guPbot)
+	var top int32 = port.CellsAt(ac, base+guTop)
+	if (port.CellsAt(ac, base+guOne) == 1) && (pbot > top) && (((ry0 - bot) * lcTightDen) <= (size * lcTightNum)) {
+		port.CellsSet(ac, base+guBot, pbot)
+	}
+	lcClose(gu, ac, a)
+	return 0
+}
+
 func lcCloseAll(gu *port.Cells, ac *port.Cells) int32 {
 	var na int32 = port.CellsLen(ac) / guStride
 	var a int32 = 0
@@ -762,7 +794,7 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 	for k < e {
 		var ix int32 = port.CellsAt(io, k)
 		var x0 int32 = port.CellsAt(it, ix*itStride)
-		if (x0 - reach) >= ((size * 3) / 2) {
+		if (x0 - reach) >= (size * 3) {
 			nrun += 1
 			cur = 1
 		} else {
@@ -788,6 +820,8 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 		port.CellsPush(gu, 0)
 		port.CellsPush(gu, 0)
 		port.CellsPush(gu, 2)
+		port.CellsPush(gu, 0)
+		port.CellsPush(gu, 0)
 		lcCloseWithin(gu, ac, rx0, rx1)
 	}
 	var na int32 = port.CellsLen(ac) / guStride
@@ -795,7 +829,7 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 	for a < na {
 		var ab int32 = a * guStride
 		bw = lcBestPiece(it, io, s, e, port.CellsAt(ac, ab), port.CellsAt(ac, ab+1), tm)
-		if bw >= gmin {
+		if bw >= ((size * lcGutNum) / lcGutDen) {
 			var p0 int32 = port.CellsAt(tm, 0)
 			var p1 int32 = port.CellsAt(tm, 1)
 			port.CellsSet(ac, ab, p0)
@@ -803,12 +837,15 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 			if hasclass == 1 {
 				lc = lcCountLeft(it, io, s, e, p0, gmin)
 				rc = lcCountRight(it, io, s, e, p1, gmin)
+				var one int32 = lcOneSided(lc, rc)
 				var oBot int32 = port.CellsAt(ac, ab+guBot)
 				var oRows int32 = port.CellsAt(ac, ab+guRows)
 				var oLr int32 = port.CellsAt(ac, ab+guLrows)
 				var oLs int32 = port.CellsAt(ac, ab+guLsum)
 				var oRr int32 = port.CellsAt(ac, ab+guRrows)
 				var oRs int32 = port.CellsAt(ac, ab+guRsum)
+				port.CellsSet(ac, ab+guPbot, oBot)
+				port.CellsSet(ac, ab+guOne, one)
 				port.CellsSet(ac, ab+guBot, lcMax(oBot, ry1))
 				port.CellsSet(ac, ab+guRows, oRows+1)
 				if lc > 0 {
@@ -830,7 +867,7 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 			}
 			wi += 1
 		} else {
-			lcClose(gu, ac, a)
+			lcCloseTrim(gu, ac, a, ry0, size)
 		}
 		a += 1
 	}
@@ -860,6 +897,8 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 					port.CellsPush(ac, 1)
 					port.CellsPush(ac, lcCountLeft(it, io, s, e, reach, gmin))
 					port.CellsPush(ac, lcCountRight(it, io, s, e, x0, gmin))
+					port.CellsPush(ac, 0)
+					port.CellsPush(ac, ry0)
 					port.CellsPush(ac, 0)
 				}
 			}
@@ -1152,75 +1191,6 @@ func lcExtendUp(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells, 
 	return 0
 }
 
-func lcTrimBottom(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells, dom int32) int32 {
-	// A gutter's extent ends above a lone last line that has a line close below it that crosses the gutter: a
-	// heading that belongs to the spanning text under it, not to the columns above.
-	var ng int32 = port.CellsLen(gu) / guStride
-	var n int32 = port.CellsLen(ls)
-	var g int32 = 0
-	var i int32 = 0
-	var again int32 = 1
-	var last int32 = -1
-	var mate int32 = 0
-	var prevb int32 = 0
-	var hasprev int32 = 0
-	for g < ng {
-		again = 1
-		if port.CellsAt(gu, (g*guStride)+guFlag) != 0 {
-			again = 0
-		}
-		for again == 1 {
-			again = 0
-			var gb int32 = g * guStride
-			var gx0 int32 = port.CellsAt(gu, gb)
-			var gx1 int32 = port.CellsAt(gu, gb+1)
-			var top2 int32 = 2 * port.CellsAt(gu, gb+guTop)
-			var bot2 int32 = 2 * port.CellsAt(gu, gb+guBot)
-			last = -1
-			i = 0
-			for i < n {
-				var l int32 = port.CellsAt(ls, i)
-				var ym int32 = lcYm2(lt, l)
-				if (ym >= top2) && (ym <= bot2) {
-					if (last < 0) || (evidence.LnGet(lt, l, evidence.LhY1()) > evidence.LnGet(lt, last, evidence.LhY1())) {
-						last = l
-					}
-				}
-				i += 1
-			}
-			if last >= 0 {
-				mate = 0
-				hasprev = 0
-				prevb = 0
-				i = 0
-				for i < n {
-					var l int32 = port.CellsAt(ls, i)
-					var ym int32 = lcYm2(lt, l)
-					if (l != last) && (ym >= top2) && (ym <= bot2) {
-						if evidence.LnGet(lt, l, evidence.LhY1()) > evidence.LnGet(lt, last, evidence.LhY0()) {
-							mate = 1
-						}
-						if evidence.LnGet(lt, l, evidence.LhY1()) <= evidence.LnGet(lt, last, evidence.LhY0()) {
-							hasprev = 1
-							prevb = lcMax(prevb, evidence.LnGet(lt, l, evidence.LhY1()))
-						}
-					}
-					i += 1
-				}
-				if (mate == 0) && (hasprev == 1) {
-					var b int32 = lcBelow(lt, ls, last)
-					if (b >= 0) && lcCrosses(lt, b, gx0, gx1) && (((evidence.LnGet(lt, b, evidence.LhY0()) - evidence.LnGet(lt, last, evidence.LhY1())) * lcTightDen) <= (dom * lcTightNum)) {
-						port.CellsSet(gu, gb+guBot, prevb)
-						again = 1
-					}
-				}
-			}
-		}
-		g += 1
-	}
-	return 0
-}
-
 const prXmin int32 = 8
 
 const prXmax int32 = 9
@@ -1229,22 +1199,27 @@ const prY2min int32 = 10
 
 const prY2max int32 = 11
 
+const prY1max int32 = 12
+
 func lcStats(lt *port.Cells, ls *port.Cells, a int32, b int32, pr *port.Cells) int32 {
 	// The region ls[a..b): the extent of its lines' boxes (x) and of their middles (y, times 2).
 	var xmin int32 = 1000000000
 	var xmax int32 = -1000000000
 	var ymin int32 = 1000000000
 	var ymax int32 = -1000000000
+	var bmax int32 = -1000000000
 	var i int32 = a
 	for i < b {
 		var l int32 = port.CellsAt(ls, i)
 		var ym int32 = lcYm2(lt, l)
 		xmin = lcMin(xmin, evidence.LnGet(lt, l, evidence.LhX0()))
 		xmax = lcMax(xmax, evidence.LnGet(lt, l, evidence.LhX1()))
+		bmax = lcMax(bmax, evidence.LnGet(lt, l, evidence.LhY1()))
 		ymin = lcMin(ymin, ym)
 		ymax = lcMax(ymax, ym)
 		i += 1
 	}
+	port.CellsSet(pr, prY1max, bmax)
 	port.CellsSet(pr, prXmin, xmin)
 	port.CellsSet(pr, prXmax, xmax)
 	port.CellsSet(pr, prY2min, ymin)
@@ -1292,35 +1267,95 @@ func lcVcut(lt *port.Cells, ls *port.Cells, gu *port.Cells, a int32, b int32, pr
 	return -1
 }
 
+func lcRelevant(lt *port.Cells, ls *port.Cells, gu *port.Cells, g int32, a int32, b int32, pr *port.Cells) bool {
+	// Does gutter g divide the region: its x-interval inside the region's lines, lines wholly on each side.
+	var gb int32 = g * guStride
+	var gx0 int32 = port.CellsAt(gu, gb)
+	var gx1 int32 = port.CellsAt(gu, gb+1)
+	if port.CellsAt(gu, gb+guFlag) != 0 {
+		return 0 == 1
+	}
+	if !((port.CellsAt(pr, prXmin) < gx0) && (gx1 < port.CellsAt(pr, prXmax))) {
+		return 0 == 1
+	}
+	return (lcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (lcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0)
+}
+
+func lcInsideOther(lt *port.Cells, ls *port.Cells, gu *port.Cells, g int32, a int32, b int32, pr *port.Cells, p int32) bool {
+	// Is y strictly inside the extent of another gutter that divides the region: its columns go on across
+	// it, so it cannot be a cut (the cut is made between the columns of the other gutters, not through them).
+	var ng int32 = port.CellsLen(gu) / guStride
+	var h int32 = 0
+	for h < ng {
+		if h != g {
+			if lcRelevant(lt, ls, gu, h, a, b, pr) {
+				if (port.CellsAt(gu, (h*guStride)+guTop) < p) && (p < port.CellsAt(gu, (h*guStride)+guBot)) {
+					return 1 == 1
+				}
+			}
+		}
+		h += 1
+	}
+	return 0 == 1
+}
+
 func lcHcut(lt *port.Cells, ls *port.Cells, gu *port.Cells, a int32, b int32, pr *port.Cells) int32 {
 	// The first y at which to cut the region horizontally: the least top or bottom of the extent of a gutter
-	// that has lines on both sides of it, strictly inside the region's lines. -1 for none.
+	// that divides it, strictly inside the region's lines, and not inside the extent of another gutter that
+	// divides it. -1 for none.
 	var ng int32 = port.CellsLen(gu) / guStride
-	var xmin int32 = port.CellsAt(pr, prXmin)
-	var xmax int32 = port.CellsAt(pr, prXmax)
 	var ymin int32 = port.CellsAt(pr, prY2min)
 	var ymax int32 = port.CellsAt(pr, prY2max)
 	var g int32 = 0
 	var best int32 = -1
 	for g < ng {
 		var gb int32 = g * guStride
-		var gx0 int32 = port.CellsAt(gu, gb)
-		var gx1 int32 = port.CellsAt(gu, gb+1)
 		var top int32 = port.CellsAt(gu, gb+guTop)
 		var bot int32 = port.CellsAt(gu, gb+guBot)
-		if (xmin < gx0) && (gx1 < xmax) && (port.CellsAt(gu, gb+guFlag) == 0) {
-			if (lcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (lcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0) {
-				if ((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best)) {
-					best = top
-				}
-				if ((2 * bot) > ymin) && ((2 * bot) <= ymax) && ((best < 0) || (bot < best)) {
-					best = bot
-				}
+		if lcRelevant(lt, ls, gu, g, a, b, pr) {
+			if ((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best)) && !lcInsideOther(lt, ls, gu, g, a, b, pr, top) {
+				best = top
+			}
+			if ((2 * bot) > ymin) && ((2 * bot) <= ymax) && ((best < 0) || (bot < best)) && !lcInsideOther(lt, ls, gu, g, a, b, pr, bot) {
+				best = bot
 			}
 		}
 		g += 1
 	}
 	return best
+}
+
+func lcGapcut(lt *port.Cells, ls *port.Cells, gu *port.Cells, a int32, b int32, pr *port.Cells) int32 {
+	// A full-width gap: where the region's lines leave a gap of more than `hole` sizes with nothing across it,
+	// the first such y (its middle), when a gutter divides the region (a region of one column is not cut
+	// at every paragraph gap). -1 for none. A cut at a gap that lines up across balanced columns is never
+	// made: only a gap wider than a paragraph gap is one (SPEC 10.1.1 step 4).
+	var ng int32 = port.CellsLen(gu) / guStride
+	var thr int32 = (lcGapNum * port.CellsAt(pr, prDom)) / lcGapDen
+	var g int32 = 0
+	var any int32 = 0
+	var i int32 = a + 1
+	var reach int32 = 0
+	for g < ng {
+		if lcRelevant(lt, ls, gu, g, a, b, pr) {
+			any = 1
+		}
+		g += 1
+	}
+	if any == 0 {
+		return -1
+	}
+	reach = evidence.LnGet(lt, port.CellsAt(ls, a), evidence.LhY1())
+	for i < b {
+		var l int32 = port.CellsAt(ls, i)
+		var y0 int32 = evidence.LnGet(lt, l, evidence.LhY0())
+		if (y0 - reach) > thr {
+			return (reach + y0) / 2
+		}
+		reach = lcMax(reach, evidence.LnGet(lt, l, evidence.LhY1()))
+		i += 1
+	}
+	return -1
 }
 
 func lcPartX(lt *port.Cells, ls *port.Cells, tm *port.Cells, a int32, b int32, gm2 int32) int32 {
@@ -1383,7 +1418,16 @@ func lcPartY(lt *port.Cells, ls *port.Cells, tm *port.Cells, a int32, b int32, p
 	return na
 }
 
-func lcLeaf(lt *port.Cells, ls *port.Cells, lo *port.Cells, cf *port.Cells, a int32, b int32, band int32, page int32) int32 {
+func lcRef(pbot int32, y1 int32) int32 {
+	// The bottom a column fragment is compared with: that of the region its vertical cuts came from (the
+	// columns of one set end together), else its own.
+	if pbot > 0 {
+		return pbot
+	}
+	return y1
+}
+
+func lcLeaf(lt *port.Cells, ls *port.Cells, lo *port.Cells, cf *port.Cells, a int32, b int32, band int32, page int32, pbot int32) int32 {
 	// A leaf: a column fragment. Its lines go to `lo` in rows; its row to `cf`.
 	var x0 int32 = 1000000000
 	var y0 int32 = 1000000000
@@ -1413,30 +1457,58 @@ func lcLeaf(lt *port.Cells, ls *port.Cells, lo *port.Cells, cf *port.Cells, a in
 	port.CellsPush(cf, b-a)
 	port.CellsPush(cf, -1)
 	port.CellsPush(cf, 0)
+	port.CellsPush(cf, lcRef(pbot, y1))
 	return 0
 }
 
-func lcRegion(lt *port.Cells, ls *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, page int32, a int32, b int32, band int32, root int32) int32 {
-	// One region of the cut tree: cut it vertically, else horizontally, else it is a leaf. The halves go on
-	// the stack `ac` (4 cells: a b band root), the one to read first last.
+func lcNoteCut(rw *port.Cells, pr *port.Cells, p int32) int32 {
+	// A horizontal cut at y = p, made on a region with the x-extent in `pr`: noted in `rw` (y x0 x1) for `lc-bands`.
+	port.CellsPush(rw, p)
+	port.CellsPush(rw, port.CellsAt(pr, prXmin))
+	port.CellsPush(rw, port.CellsAt(pr, prXmax))
+	return 0
+}
+
+func lcPush(ac *port.Cells, a int32, b int32, band int32, pbot int32) int32 {
+	port.CellsPush(ac, a)
+	port.CellsPush(ac, b)
+	port.CellsPush(ac, band)
+	port.CellsPush(ac, pbot)
+	return 0
+}
+
+func lcRegion(lt *port.Cells, ls *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, rw *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, page int32, a int32, b int32, band int32, pbot int32) int32 {
+	// One region of the cut tree: cut it horizontally at the forced y or a full-width gap, else vertically, else
+	// horizontally at the end of a gutter's extent, else it is a leaf. The halves go on the stack `ac` (4 cells: a b
+	// band pbot), the one to read first last. `pbot` is the bottom of the region the vertical cuts above came from
+	// (-1 for the whole page, 0 after a horizontal cut).
 	var n int32 = b - a
 	var done int32 = 0
 	var na int32 = 0
 	var g int32 = -1
 	var p int32 = -1
+	var ref int32 = 0
 	lcStats(lt, ls, a, b, pr)
-	if (root == 1) && (port.CellsAt(pr, prForced) >= 0) {
+	ref = pbot
+	if (pbot == -1) && (port.CellsAt(pr, prForced) >= 0) {
 		na = lcPartY(lt, ls, tm, a, b, 2*port.CellsAt(pr, prForced))
 		if (na > 0) && (na < n) {
-			port.CellsPush(ac, a+na)
-			port.CellsPush(ac, b)
-			port.CellsPush(ac, band+1)
-			port.CellsPush(ac, 0)
-			port.CellsPush(ac, a)
-			port.CellsPush(ac, a+na)
-			port.CellsPush(ac, band)
-			port.CellsPush(ac, 0)
+			lcPush(ac, a+na, b, band+1, 0)
+			lcPush(ac, a, a+na, band, 0)
+			lcNoteCut(rw, pr, port.CellsAt(pr, prForced))
 			done = 1
+		}
+	}
+	if done == 0 {
+		p = lcGapcut(lt, ls, gu, a, b, pr)
+		if p >= 0 {
+			na = lcPartY(lt, ls, tm, a, b, 2*p)
+			if (na > 0) && (na < n) {
+				lcPush(ac, a+na, b, band+1, 0)
+				lcPush(ac, a, a+na, band, 0)
+				lcNoteCut(rw, pr, p)
+				done = 1
+			}
 		}
 	}
 	if done == 0 {
@@ -1445,24 +1517,15 @@ func lcRegion(lt *port.Cells, ls *port.Cells, gu *port.Cells, ac *port.Cells, tm
 			var gb int32 = g * guStride
 			na = lcPartX(lt, ls, tm, a, b, port.CellsAt(gu, gb)+port.CellsAt(gu, gb+1))
 			if (na > 0) && (na < n) {
+				if ref <= 0 {
+					ref = port.CellsAt(pr, prY1max)
+				}
 				if port.CellsAt(pr, prRtl) == 1 {
-					port.CellsPush(ac, a)
-					port.CellsPush(ac, a+na)
-					port.CellsPush(ac, band)
-					port.CellsPush(ac, 0)
-					port.CellsPush(ac, a+na)
-					port.CellsPush(ac, b)
-					port.CellsPush(ac, band)
-					port.CellsPush(ac, 0)
+					lcPush(ac, a, a+na, band, ref)
+					lcPush(ac, a+na, b, band, ref)
 				} else {
-					port.CellsPush(ac, a+na)
-					port.CellsPush(ac, b)
-					port.CellsPush(ac, band)
-					port.CellsPush(ac, 0)
-					port.CellsPush(ac, a)
-					port.CellsPush(ac, a+na)
-					port.CellsPush(ac, band)
-					port.CellsPush(ac, 0)
+					lcPush(ac, a+na, b, band, ref)
+					lcPush(ac, a, a+na, band, ref)
 				}
 				done = 1
 			}
@@ -1473,43 +1536,37 @@ func lcRegion(lt *port.Cells, ls *port.Cells, gu *port.Cells, ac *port.Cells, tm
 		if p >= 0 {
 			na = lcPartY(lt, ls, tm, a, b, 2*p)
 			if (na > 0) && (na < n) {
-				port.CellsPush(ac, a+na)
-				port.CellsPush(ac, b)
-				port.CellsPush(ac, band+1)
-				port.CellsPush(ac, 0)
-				port.CellsPush(ac, a)
-				port.CellsPush(ac, a+na)
-				port.CellsPush(ac, band)
-				port.CellsPush(ac, 0)
+				lcPush(ac, a+na, b, band+1, 0)
+				lcPush(ac, a, a+na, band, 0)
+				lcNoteCut(rw, pr, p)
 				done = 1
 			}
 		}
 	}
 	if done == 0 {
-		lcLeaf(lt, ls, lo, cf, a, b, band, page)
+		lcLeaf(lt, ls, lo, cf, a, b, band, page, pbot)
 	}
 	return 0
 }
 
-func lcTree(lt *port.Cells, ls *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, page int32) int32 {
-	// The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`.
+func lcTree(lt *port.Cells, ls *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, rw *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, page int32) int32 {
+	// The cut tree of the page's lines (SPEC 10.1.1 step 4), iteratively: a stack of regions in `ac`; the
+	// horizontal cuts made are noted in `rw`.
 	var n int32 = port.CellsLen(ls)
 	port.CellsDrop(ac, 0)
+	port.CellsDrop(rw, 0)
 	if n == 0 {
 		return 0
 	}
-	port.CellsPush(ac, 0)
-	port.CellsPush(ac, n)
-	port.CellsPush(ac, 0)
-	port.CellsPush(ac, 1)
+	lcPush(ac, 0, n, 0, -1)
 	for port.CellsLen(ac) > 0 {
 		var top int32 = port.CellsLen(ac) - 4
 		var a int32 = port.CellsAt(ac, top)
 		var b int32 = port.CellsAt(ac, top+1)
 		var band int32 = port.CellsAt(ac, top+2)
-		var root int32 = port.CellsAt(ac, top+3)
+		var pbot int32 = port.CellsAt(ac, top+3)
 		port.CellsDrop(ac, top)
-		lcRegion(lt, ls, gu, ac, tm, cf, lo, pr, page, a, b, band, root)
+		lcRegion(lt, ls, gu, ac, tm, rw, cf, lo, pr, page, a, b, band, pbot)
 	}
 	return 0
 }
@@ -1635,7 +1692,35 @@ func lcSideEmit(wd *port.Cells, lt *port.Cells, sd *port.Cells, lo *port.Cells, 
 		port.CellsPush(cf, j-i)
 		port.CellsPush(cf, as)
 		port.CellsPush(cf, 0)
+		port.CellsPush(cf, 0)
 		i = j
+	}
+	return 0
+}
+
+func lcBands(cf *port.Cells, r0 int32, r1 int32, rw *port.Cells) int32 {
+	// `band` of each body fragment: how many horizontal cuts lie above its middle and across its x-range (the
+	// cuts of a part of the page count for the fragments of that part only), so the bands run top to bottom
+	// whatever the order the tree made its cuts in.
+	var nc int32 = port.CellsLen(rw) / 3
+	var r int32 = r0
+	var c int32 = 0
+	var n int32 = 0
+	for r < r1 {
+		var b int32 = r * cfStride
+		var ym2 int32 = port.CellsAt(cf, b+cfY0) + port.CellsAt(cf, b+cfY1)
+		var fx0 int32 = port.CellsAt(cf, b+cfX0)
+		var fx1 int32 = port.CellsAt(cf, b+cfX1)
+		n = 0
+		c = 0
+		for c < nc {
+			if ((2 * port.CellsAt(rw, c*3)) <= ym2) && (port.CellsAt(rw, (c*3)+1) < fx1) && (port.CellsAt(rw, (c*3)+2) > fx0) {
+				n += 1
+			}
+			c += 1
+		}
+		port.CellsSet(cf, b+cfBand, n)
+		r += 1
 	}
 	return 0
 }
@@ -1739,8 +1824,8 @@ func LcPage(wd *port.Cells, et *port.Cells, lt *port.Cells, page int32, ls *port
 	lcSplitAll(wd, lt, ls, gu)
 	lcSortLines(lt, ls, 0, port.CellsLen(ls))
 	lcExtendUp(wd, lt, ls, gu, dom)
-	lcTrimBottom(wd, lt, ls, gu, dom)
-	lcTree(lt, ls, gu, ac, tm, cf, lo, pr, page)
+	lcTree(lt, ls, gu, ac, tm, rw, cf, lo, pr, page)
+	lcBands(cf, cf0, port.CellsLen(cf)/cfStride, rw)
 	nb = (port.CellsLen(cf) / cfStride) - cf0
 	if port.CellsLen(sd) > 0 {
 		lcSideEmit(wd, lt, sd, lo, cf, pr, page, cf0, nb)

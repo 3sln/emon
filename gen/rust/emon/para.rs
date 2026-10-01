@@ -13,7 +13,7 @@ pub(crate) const PA_TINY_DIV: i32 = 8;
 pub(crate) const PA_INDENT_DIV: i32 = 2;
 pub(crate) const PA_SIZE_DIV: i32 = 20;
 pub(crate) const PA_ROT_SLOP: i32 = 100;
-pub(crate) const PA_INDENT_USE: i32 = 3;
+pub(crate) const PA_INDENT_USE: i32 = 1;
 pub(crate) const JS_HYPHEN: i32 = 3;
 pub(crate) const JS_EDGE: i32 = 2;
 pub(crate) const JS_SHORT: i32 = -3;
@@ -23,9 +23,11 @@ pub(crate) const JS_INDENT: i32 = -3;
 pub(crate) const JS_MARKER: i32 = -3;
 pub(crate) const JS_STYLE: i32 = -3;
 pub(crate) const JS_STREAM: i32 = 1;
+pub(crate) const JS_WIDTH: i32 = -3;
+pub(crate) const JS_BOTTOM: i32 = 1;
 pub(crate) const JOIN_MIN: i32 = 4;
 pub(crate) const PA_EDGE_PCT: i32 = 15;
-pub(crate) const CF_STRIDE: i32 = 12;
+pub(crate) const CF_STRIDE: i32 = 13;
 pub(crate) const CF_PAGE: i32 = 0;
 pub(crate) const CF_BAND: i32 = 1;
 pub(crate) const CF_COL: i32 = 2;
@@ -38,6 +40,7 @@ pub(crate) const CF_FIRST: i32 = 8;
 pub(crate) const CF_COUNT: i32 = 9;
 pub(crate) const CF_ASSOC: i32 = 10;
 pub(crate) const CF_DONE: i32 = 11;
+pub(crate) const CF_REF: i32 = 12;
 pub(crate) const FR_STRIDE: i32 = 6;
 pub fn pa_pages(pg: &mut crate::port::Cells, mut pages: &mut crate::port::Cells) -> i32 {
     // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
@@ -356,8 +359,8 @@ pub(crate) fn pa_fmargin(ln: &mut crate::port::Cells, lo: &mut crate::port::Cell
 }
 pub(crate) fn pa_indents(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, cf: &mut crate::port::Cells, lo: &mut crate::port::Cells) -> i32 {
     // How many times, in the body fragments, a line starts further in than a line at the margin before it,
-    // by more than half its size and is close below it: the document's paragraphs have first-line indents
-    // when this is at least PA_INDENT_USE.
+    // by more than half its size and is close below it, or a fragment starts with such a line: the document's
+    // paragraphs have first-line indents when this is at least PA_INDENT_USE.
     let nf: i32 = crate::port::cells_len(cf) / CF_STRIDE;
     let mut r: i32 = 0;
     let mut i: i32 = 0;
@@ -367,6 +370,10 @@ pub(crate) fn pa_indents(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
             let first: i32 = crate::port::cells_at(cf, (r * CF_STRIDE) + CF_FIRST);
             let cnt: i32 = crate::port::cells_at(cf, (r * CF_STRIDE) + CF_COUNT);
             let mg: i32 = pa_fmargin(ln, lo, first, cnt);
+            let b0: i32 = crate::port::cells_at(lo, first);
+            if ((pa_start(ln, b0) - mg) * PA_INDENT_DIV) > pa_size(wd, ln, b0) {
+                n += 1;
+            }
             i = 1;
             while i < cnt {
                 let a: i32 = crate::port::cells_at(lo, first + (i - 1));
@@ -673,11 +680,22 @@ pub(crate) fn pa_marker(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells
     }
     return 0 == 1;
 }
-pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, raw: &mut crate::port::Cells, a: i32, b: i32, colx0: i32, colx1: i32, ncol: i32, bmargin: i32, indents: i32) -> i32 {
+pub(crate) fn pa_bottom(cf: &mut crate::port::Cells, r: i32) -> i32 {
+    // The bottom a fragment's last line is compared with: the bottom of the region its vertical cuts came from, so
+    // the columns of one set (side by side, whatever else lies above or below beside them) end together.
+    return crate::port::cells_at(cf, (r * CF_STRIDE) + CF_REF);
+}
+pub(crate) fn pa_maxi(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, raw: &mut crate::port::Cells, a: i32, b: i32, colx0: i32, colx1: i32, ncol: i32, bmargin: i32, indents: i32, bottom: i32, bx0: i32, bx1: i32, bn: i32) -> i32 {
     // The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
     // on with line b, the first of the next fragment (SPEC 10.1.2, D152). `colx0`..`colx1` is the extent of a's
-    // fragment, `ncol` its lines (the edge signals need three), `bmargin` the margin of b's, `indents` whether
-    // the document's paragraphs have first-line indents.
+    // fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
+    // the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.
     let n: i32 = crate::port::cells_len(raw);
     let sa: i32 = pa_size(wd, ln, a);
     let sb: i32 = pa_size(wd, ln, b);
@@ -691,7 +709,7 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
             pts += JS_HYPHEN;
         }
     }
-    if ncol >= 3 {
+    if ncol >= 2 {
         if ((colx1 - ln_get(ln, a, lh_x1())) * 100) <= (PA_EDGE_PCT * (colx1 - colx0)) {
             pts += JS_EDGE;
         }
@@ -716,6 +734,12 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     }
     if (ln_get(ln, a, lh_first()) + ln_get(ln, a, lh_count())) == ln_get(ln, b, lh_first()) {
         pts += JS_STREAM;
+    }
+    if (ncol >= 2) && ((ln_get(ln, a, lh_y1()) + (sa / 2)) >= bottom) {
+        pts += JS_BOTTOM;
+    }
+    if (ncol >= 3) && (bn >= 3) && ((pa_abs((colx1 - colx0) - (bx1 - bx0)) * 4) > (pa_maxi(colx1 - colx0, bx1 - bx0) - 0)) {
+        pts += JS_WIDTH;
     }
     return pts;
 }
@@ -865,7 +889,6 @@ pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
     let mut p: i32 = 1;
     let mut i: i32 = 0;
     let mut nu: i32 = 0;
-    let mut r: i32 = 0;
     crate::port::cells_drop(cf, 0);
     crate::port::cells_drop(lo, 0);
     while p <= npages {
@@ -928,11 +951,6 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
         pa_collect(ord, lt, p);
         n = crate::port::cells_len(ord);
         nu = pa_upright_count(lt, ord);
-        i = nu;
-        while i < n {
-            crate::port::cells_push(gp, crate::port::cells_at(ord, i));
-            i += 1;
-        }
         while (r < nf) && (crate::port::cells_at(cf, (r * CF_STRIDE) + CF_PAGE) < p) {
             r += 1;
         }
@@ -956,7 +974,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
                 b = crate::port::cells_at(lo, first);
                 cont = 0;
                 if open == 1 {
-                    score = pa_join_score(wd, lt, et, raw, prev, b, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents);
+                    score = pa_join_score(wd, lt, et, raw, prev, b, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents, pa_bottom(cf, prevfr), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_COUNT));
                     crate::port::cells_push(dbg, i);
                     crate::port::cells_push(dbg, prev);
                     crate::port::cells_push(dbg, b);
@@ -1002,6 +1020,11 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
                 }
                 i += 1;
             }
+        }
+        i = nu;
+        while i < n {
+            crate::port::cells_push(gp, crate::port::cells_at(ord, i));
+            i += 1;
         }
         p += 1;
     }
