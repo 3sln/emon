@@ -39,6 +39,7 @@ fn main() {
             let mut f0 = cells(); let mut f1 = cells(); let mut f2 = cells(); let mut f3 = cells();
             let mut gl = cells(); let mut et = cells(); let mut mk = cells(); let mut fnt = cells();
             let mut wd = cells(); let mut ln = cells();
+            let mut pa = cells(); let mut im = cells(); let mut pts = cells(); let mut gx = cells();
             let mut ss = cells(); let mut se = cells(); let mut sk = cells(); let mut sc = cells();
             let mut so = cells(); let mut sa = cells(); let mut wk = cells(); let mut ha = cells();
             let mut hb = cells(); let mut hh = cells();
@@ -56,7 +57,7 @@ fn main() {
             if status == 0 {
                 let cst = pc_document(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut cx, &mut ox,
                                       &mut cs, &mut out, &mut f0, &mut f1, &mut f2, &mut f3,
-                                      &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln);
+                                      &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln, &mut pa, &mut im, &mut pts, &mut gx);
                 let n = pd_pg_count(&mut pg);
                 px_index_build(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx);
                 pm_run(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx,

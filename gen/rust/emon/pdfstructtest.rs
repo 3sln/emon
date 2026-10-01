@@ -83,6 +83,10 @@ pub(crate) fn tt_line(pdf: &crate::port::Src, which: i32, mut t: &mut String, mu
     let fnt: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ss: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let se: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let sk: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -104,7 +108,7 @@ pub(crate) fn tt_line(pdf: &crate::port::Src, which: i32, mut t: &mut String, mu
     if status != 0 {
         return status;
     }
-    r = pc_document(pdf, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+    r = pc_document(pdf, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
     if r != 0 {
         return -1;
     }

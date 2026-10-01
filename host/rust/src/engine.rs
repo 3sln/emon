@@ -674,7 +674,11 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     let mut fnt = Cells::new();
     let mut wd = Cells::new();
     let mut ln = Cells::new();
-    let status = pc_document(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut cx, &mut ox, &mut cs, &mut out, &mut f0, &mut f1, &mut f2, &mut f3, &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln);
+    let mut pa = Cells::new();
+    let mut im = Cells::new();
+    let mut pts = Cells::new();
+    let mut gx = Cells::new();
+    let status = pc_document(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut cx, &mut ox, &mut cs, &mut out, &mut f0, &mut f1, &mut f2, &mut f3, &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln, &mut pa, &mut im, &mut pts, &mut gx);
     if view.missed() || status == pd_need_bytes() {
         return Step::Miss;
     }

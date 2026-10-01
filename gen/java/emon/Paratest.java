@@ -660,11 +660,15 @@ public final class Paratest {
         emon.Port.cellsDrop(wd, 0);
         emon.Port.cellsDrop(ln, 0);
         emon.Port.Src src = emon.Port.srcOfBlob(pdf);
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gx = emon.Port.newCells();
         int o = Pdfdoc.pdOpen(src, ar, dc, a, b, st);
         if (o != 0) {
             return 1;
         }
-        if (Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln) != 0) {
+        if (Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);

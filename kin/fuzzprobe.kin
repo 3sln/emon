@@ -37,7 +37,7 @@
             [emon.pdfcontent :refer [pc-document pc-warn pc-ops]]
             [emon.pdfx :refer [px-index-build]]
             [emon.pdfstruct :refer [tg-read tg-join]]
-            [emon.evidence :refer [gl-count gl-get wd-count mk-count ch-cp]]
+            [emon.evidence :refer [gl-count gl-get wd-count mk-count ch-cp gf-vis gf-vby gf-vchk pa-count im-count]]
             [emon.pdflex :refer [pl-kind-of]]
             [emon.pdffont :refer [pfn-load pfn-map pfn-cp pfn-how-of pfn-width
                                   pfn-warn pfn-kind-of]]
@@ -125,14 +125,22 @@
         ^Cells hh (new-cells)
         ^:mut ^I32 ts 0
         ^:mut ^I32 tj 0
-        ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx)
         ^:mut ^I32 g 0
-        ^:mut ^I32 h 7]
+        ^:mut ^I32 h 7
+        ^:mut ^I32 hv 7]
     (emit-ascii t " content=")
     (text-i32 t s)
     (if (== s 0)
       (do (while (< g (gl-count gl))
             (do (set h (fz-mix h (gl-get gl g (ch-cp))))
+                (set hv (fz-mix hv (gl-get gl g (gf-vis))))
+                (set hv (fz-mix hv (gl-get gl g (gf-vby))))
+                (set hv (fz-mix hv (gl-get gl g (gf-vchk))))
                 (set g (+ g 1))))
           (emit-ascii t " cwarn=")
           (text-i32 t (pc-warn cx))
@@ -146,6 +154,12 @@
           (text-i32 t (mk-count mk))
           (emit-ascii t " cps=")
           (text-i32 t h)
+          (emit-ascii t " paths=")
+          (text-i32 t (pa-count pa))
+          (emit-ascii t " images=")
+          (text-i32 t (im-count im))
+          (emit-ascii t " vis=")
+          (text-i32 t hv)
           (px-index-build src ar dc a b st pg idx)
           (set ts (tg-read src ar dc a b st pg idx txt w seen ss se sk sc so wk md))
           (emit-ascii t " tags=")

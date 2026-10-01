@@ -1,0 +1,315 @@
+;; Laws for visibility classification, graphics state and optional content (P3.5, P3.6; D152-D157), on every target.
+;;
+;; THE CORPUS is test/vis/, written by `kin/scripts/vis-fixtures` (babashka), which says BY HAND what every glyph
+;; of every fixture must come out as, from what the operators mean, and computes the colours of the colour-space
+;; fixture with a second, independent evaluator in double precision (`kin/scripts/vis-check` holds the same rows
+;; to the generated Rust and, with --render, to what the poppler renderer draws). Here every target is held to the
+;; rows (test/vis/rows.txt):
+;;
+;;   F path                       run the file (path relative to test/)
+;;   G vis vby src ncp text       the next ncp glyphs: `vis`, `vby`, and their words' source (1 text, 2 hidden-text)
+;;   C rgb cls vis ncp text       the next ncp glyphs: filled with this colour (within two levels a channel; -1 unknown),
+;;                                of this colour-space class (0 none), with this `vis`
+;;   O ocgdef ncp                 the ncp glyphs just given are in an optional-content span whose default state is this
+;;   I vis vby                    the next image placement
+;;   N glyphs images              how many of each the file made
+;;
+;; AND LAWS ABOUT HOW: a word is one thing to see (no word mixes visibilities), every classification's `vchk` says which
+;; checks ran, the evidence is well formed (`ev-check`), and the paths the interpreter makes read back (a rectangle is a
+;; rectangle, a clip's box is the intersection of the clips on its chain).
+(ns emon.pdfvistest
+  (:require [emon.lang :refer [I32 Blob Src Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells
+                               test-file test-file-span test-t Str TestT]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-drop src-of-blob]]
+            [emon.pdfdoc :refer [pd-open]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.evidence :refer [gl-count gl-get wd-count wd-get mk-get pa-count pa-get im-count im-get
+                                   ch-word ch-x0 ch-y0 ch-x1 ch-y1
+                                   gf-vis gf-vby gf-vchk gf-fill gf-cs gf-mark gf-clip gf-mode
+                                   wf-src wf-gfirst wf-gcount mkf-ocgdef mk-ocg-of
+                                   pf-kind pf-flags pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-pcount pf-clip
+                                   mf-vis mf-vby mf-vchk mf-page
+                                   pa-rect pg-clip pg-filled
+                                   vc-clip vc-offpage vc-white vc-zero-size vc-occlusion vc-ocg vc-transparent
+                                   ev-check]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ------------------------------------------------------------ row helpers
+
+(defn ^I32 vt-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 vt-tab [^Blob b ^I32 i ^I32 lim]
+  (comment "Index of the next tab in [i, lim), or lim.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 vt-dec [^Blob b ^I32 from ^I32 to]
+  (comment "A decimal, possibly negative.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0
+        ^:mut ^I32 neg 0]
+    (if (and (< k to) (== (blob-u8 b k) 45))
+      (do (set neg 1) (set k (+ k 1))))
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (if (== neg 1) (return (- 0 v)))
+    (return v)))
+
+(defn ^I32 vt-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^I32 vt-rgb [^Blob b ^I32 from ^I32 to]
+  (comment "rrggbb as a number, or -1 for the field `-1`.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0]
+    (if (== (- to from) 2) (return -1))
+    (while (< k to)
+      (do (set v (+ (* v 16) (vt-hexval (blob-u8 b k))))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 vt-chan [^I32 v ^I32 i]
+  (comment "Channel i (0 blue, 1 green, 2 red) of a 0xRRGGBB colour.")
+  (let [^:mut ^I32 w v
+        ^:mut ^I32 k 0]
+    (while (< k i)
+      (do (set w (quot w 256))
+          (set k (+ k 1))))
+    (return (rem w 256))))
+
+(defn ^I32 vt-near [^I32 got ^I32 want]
+  (comment "1 when two colours are within two levels in every channel (-1 is only near -1).")
+  (if (or (< got 0) (< want 0))
+    (do (if (and (< got 0) (< want 0)) (return 1))
+        (return 0)))
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 d 0]
+    (while (< i 3)
+      (do (set d (- (vt-chan got i) (vt-chan want i)))
+          (if (or (> d 2) (< d -2)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+;; -------------------------------------------------------------- the run
+
+(defn ^I32 vt-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                   ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                   ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                   ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
+                   ^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells pa ^:mut ^Cells im ^:mut ^Cells pts ^:mut ^Cells gx]
+  (cells-drop gl 0)
+  (cells-drop et 0)
+  (cells-drop mk 0)
+  (cells-drop fnt 0)
+  (cells-drop wd 0)
+  (cells-drop ln 0)
+  (cells-drop pa 0)
+  (cells-drop im 0)
+  (cells-drop pts 0)
+  (let [^I32 o (pd-open src ar dc a b st)]
+    (if (!= o 0) (return (+ 100 o)))
+    (return (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))))
+
+(defn ^I32 vt-glyphs [^TestT emon-t ^Cells gl ^Cells wd ^Cells mk ^I32 g ^I32 n ^I32 vis ^I32 by ^I32 src
+                      ^I32 want-rgb ^I32 cls ^I32 colour ^I32 line]
+  (comment "Check n glyphs from g: `vis`, `vby`, the word's source, and for a colour row the fill and class.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 got 0]
+    (assert-that-at (<= (+ g n) (gl-count gl)) "there are glyphs for the row" line)
+    (if (> (+ g n) (gl-count gl)) (return 0))
+    (while (< k n)
+      (do (assert-eq-at (gl-get gl (+ g k) (gf-vis)) vis "vis" line)
+          (assert-eq-at (gl-get gl (+ g k) (gf-vby)) by "vby" line)
+          (set w (gl-get gl (+ g k) (ch-word)))
+          (if (>= w 0)
+            (assert-eq-at (wd-get wd w (wf-src)) src "the word's source" line))
+          (if (== colour 1)
+            (do (assert-that-at (== (vt-near (gl-get gl (+ g k) (gf-fill)) want-rgb) 1) "fill colour" line)
+                (set got (gl-get gl (+ g k) (gf-cs)))
+                (if (< got 0) (set got 0))
+                (assert-eq-at got cls "colour-space class" line)))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 vt-ocg [^TestT emon-t ^Cells gl ^Cells mk ^I32 g ^I32 n ^I32 want ^I32 line]
+  (comment "The glyphs [g, g+n) are in an optional-content span whose default state is `want`.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 m 0]
+    (while (< k n)
+      (do (set m (mk-ocg-of mk (gl-get gl (+ g k) (gf-mark))))
+          (assert-that-at (>= m 0) "an optional-content span encloses the glyph" line)
+          (if (>= m 0)
+            (assert-eq-at (mk-get mk m (mkf-ocgdef)) want "the span's default state" line))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 vt-words [^TestT emon-t ^Cells gl ^Cells wd ^I32 line]
+  (comment "No word mixes visibilities: every glyph of a word has its first glyph's `vis` (and hidden-ness is the same, by")
+  (comment "the source of the word).")
+  (let [^:mut ^I32 w 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 g0 0
+        ^:mut ^I32 n 0]
+    (while (< w (wd-count wd))
+      (do (set g0 (wd-get wd w (wf-gfirst)))
+          (set n (wd-get wd w (wf-gcount)))
+          (set k 1)
+          (while (< k n)
+            (do (assert-eq-at (gl-get gl (+ g0 k) (gf-vis)) (gl-get gl g0 (gf-vis)) "a word has one visibility" line)
+                (set k (+ k 1))))
+          (set w (+ w 1))))
+    (return 0)))
+
+(defn ^I32 vt-rows [^TestT emon-t ^Blob rows]
+  (comment "Check the row file; answers how many rows were checked.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells views (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells oblocks (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells oalts (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells components (new-cells)
+        ^Cells rules (new-cells)
+        ^Cells prims (new-cells)
+        ^Cells tlines (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 checked 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 gprev 0
+        ^:mut ^I32 nprev 0
+        ^:mut ^I32 ii 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 vis 0
+        ^:mut ^I32 by 0
+        ^:mut ^I32 src 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 rgb 0
+        ^:mut ^I32 cls 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (vt-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set kind (blob-u8 rows pos))
+                (set checked (+ checked 1))
+                (if (== kind 70)
+                  (do (set status (vt-run (src-of-blob (test-file-span rows (+ pos 2) e))
+                                          ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))
+                      (assert-eq-at status 0 "the file ran" line)
+                      (assert-eq-at (ev-check epages views pts refs et feats gl wd ln mk fnt pa im oruns oblocks olines owords osyms oalts inks components rules prims tlines) 0 "the evidence is well formed" line)
+                      (vt-words emon-t gl wd line)
+                      (set g 0)
+                      (set ii 0)))
+                (if (== kind 71)
+                  (do (comment "G vis vby src ncp text")
+                      (set p (+ pos 2))
+                      (set q (vt-tab rows p e))
+                      (set vis (vt-dec rows p q))
+                      (set p (+ q 1))
+                      (set q (vt-tab rows p e))
+                      (set by (vt-dec rows p q))
+                      (set p (+ q 1))
+                      (set q (vt-tab rows p e))
+                      (set src (vt-dec rows p q))
+                      (set p (+ q 1))
+                      (set q (vt-tab rows p e))
+                      (set cnt (vt-dec rows p q))
+                      (vt-glyphs emon-t gl wd mk g cnt vis by src 0 0 0 line)
+                      (set gprev g)
+                      (set nprev cnt)
+                      (set g (+ g cnt))))
+                (if (== kind 67)
+                  (do (comment "C rgb cls vis ncp text")
+                      (set p (+ pos 2))
+                      (set q (vt-tab rows p e))
+                      (set rgb (vt-rgb rows p q))
+                      (set p (+ q 1))
+                      (set q (vt-tab rows p e))
+                      (set cls (vt-dec rows p q))
+                      (set p (+ q 1))
+                      (set q (vt-tab rows p e))
+                      (set vis (vt-dec rows p q))
+                      (set p (+ q 1))
+                      (set q (vt-tab rows p e))
+                      (set cnt (vt-dec rows p q))
+                      (vt-glyphs emon-t gl wd mk g cnt vis -1 1 rgb cls 1 line)
+                      (set gprev g)
+                      (set nprev cnt)
+                      (set g (+ g cnt))))
+                (if (== kind 79)
+                  (do (comment "O ocgdef ncp")
+                      (set p (+ pos 2))
+                      (set q (vt-tab rows p e))
+                      (set vis (vt-dec rows p q))
+                      (vt-ocg emon-t gl mk gprev nprev vis line)))
+                (if (== kind 73)
+                  (do (comment "I vis vby")
+                      (set p (+ pos 2))
+                      (set q (vt-tab rows p e))
+                      (set vis (vt-dec rows p q))
+                      (set by (vt-dec rows (+ q 1) e))
+                      (assert-that-at (< ii (im-count im)) "there is an image row" line)
+                      (if (< ii (im-count im))
+                        (do (assert-eq-at (im-get im ii (mf-vis)) vis "image vis" line)
+                            (assert-eq-at (im-get im ii (mf-vby)) by "image vby" line)))
+                      (set ii (+ ii 1))))
+                (if (== kind 78)
+                  (do (comment "N glyphs images")
+                      (set p (+ pos 2))
+                      (set q (vt-tab rows p e))
+                      (assert-eq-at (gl-count gl) (vt-dec rows p q) "glyph count" line)
+                      (assert-eq-at (im-count im) (vt-dec rows (+ q 1) e) "image count" line)))))
+          (set pos (+ e 1))))
+    (return checked)))
+
+(deftest test-every-visibility-fixture-is-classified-as-written
+  (comment "The files of test/vis: white on white and the same colour as the background, clipped, off the page, tiny, painted")
+  (comment "over, optional content, alpha, hidden OCR layers and a page as a crawler is fed it, and the colour spaces.")
+  (assert-that (> (vt-rows (test-t) (test-file "vis/rows.txt")) 150) "the rows were read"))

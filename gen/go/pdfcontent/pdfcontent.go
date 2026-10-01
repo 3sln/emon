@@ -9,9 +9,13 @@ import (
 	"emon/model"
 	"emon/pdfdoc"
 	"emon/pdffont"
+	"emon/pdfgfx"
 	"emon/pdflex"
 	"emon/pdfnames"
 	"emon/pdfsrc"
+	"emon/pdfvis"
+	"emon/pdfx"
+	"emon/pdfxnames"
 	"emon/port"
 )
 
@@ -78,6 +82,62 @@ const opSc int32 = 25459
 const opScn int32 = 7234419
 
 const opCs int32 = 29539
+
+const opGrayS int32 = 71
+
+const opRgbS int32 = 18258
+
+const opCmykS int32 = 75
+
+const opScS int32 = 17235
+
+const opScnS int32 = 5129043
+
+const opCsS int32 = 21315
+
+const opMove int32 = 109
+
+const opLine int32 = 108
+
+const opCurve int32 = 99
+
+const opCurveV int32 = 118
+
+const opCurveY int32 = 121
+
+const opClose int32 = 104
+
+const opRect int32 = 25970
+
+const opStroke int32 = 83
+
+const opClosestroke int32 = 115
+
+const opFill int32 = 102
+
+const opFill2 int32 = 70
+
+const opFilleo int32 = 10854
+
+const opFs int32 = 66
+
+const opFseo int32 = 10818
+
+const opCfs int32 = 98
+
+const opCfseo int32 = 10850
+
+const opEndpath int32 = 110
+
+const opClip int32 = 87
+
+const opClipeo int32 = 10839
+
+const opSh int32 = 26739
+
+const opLw int32 = 119
+
+const opDash int32 = 100
 
 const cNfont int32 = 0
 
@@ -181,15 +241,67 @@ const cTmp int32 = 712
 
 const cCur int32 = 728
 
-const cStack int32 = 768
+const cStack int32 = 800
 
 const maxGs int32 = 256
 
-const cSize int32 = 8960
-
 const maxMc int32 = 256
 
-const gsStride int32 = 32
+const cPw int32 = 17184
+
+const cPh int32 = 17185
+
+const cPpts int32 = 17186
+
+const cPn int32 = 17187
+
+const cPcx int32 = 17188
+
+const cPcy int32 = 17190
+
+const cPsx int32 = 17192
+
+const cPsy int32 = 17194
+
+const cPbx0 int32 = 17196
+
+const cPby0 int32 = 17197
+
+const cPbx1 int32 = 17198
+
+const cPby1 int32 = 17199
+
+const cPflags int32 = 17200
+
+const cPnsub int32 = 17201
+
+const cClipp int32 = 17202
+
+const cTcx0 int32 = 17203
+
+const cTcy0 int32 = 17204
+
+const cTcx1 int32 = 17205
+
+const cTcy1 int32 = 17206
+
+const cTcn int32 = 17207
+
+const cNpath int32 = 17208
+
+const cNimg int32 = 17209
+
+const cPkeep int32 = 17210
+
+const cBb int32 = 17212
+
+const cSize int32 = 17248
+
+const pathKeep int32 = 128
+
+const pathRows int32 = 200000
+
+const gsStride int32 = 64
 
 const gCtm int32 = 0
 
@@ -216,6 +328,26 @@ const gAlpha int32 = 27
 const gFam int32 = 28
 
 const gFobj int32 = 29
+
+const gScolor int32 = 30
+
+const gSalpha int32 = 31
+
+const gFcs int32 = 32
+
+const gScs int32 = 33
+
+const gSfam int32 = 34
+
+const gClip int32 = 35
+
+const gBm int32 = 36
+
+const gSmask int32 = 37
+
+const gLw int32 = 38
+
+const gDash int32 = 40
 
 const maxEnt int32 = 4096
 
@@ -252,6 +384,8 @@ const wWidth int32 = 128
 const wText int32 = 256
 
 const wProps int32 = 512
+
+const wPaths int32 = 1024
 
 func pcWs(c int32) int32 {
 	if (c == 32) || ((c == 10) || ((c == 13) || ((c == 9) || ((c == 12) || (c == 0))))) {
@@ -782,6 +916,16 @@ func pcGsReset(cx *port.Cells) int32 {
 	port.CellsSet(cx, cCur+gColor, 0)
 	port.CellsSet(cx, cCur+gAlpha, 1000)
 	port.CellsSet(cx, cCur+gFam, 1)
+	port.CellsSet(cx, cCur+gScolor, 0)
+	port.CellsSet(cx, cCur+gSalpha, 1000)
+	port.CellsSet(cx, cCur+gFcs, -1)
+	port.CellsSet(cx, cCur+gScs, -1)
+	port.CellsSet(cx, cCur+gSfam, 1)
+	port.CellsSet(cx, cCur+gClip, -1)
+	port.CellsSet(cx, cCur+gBm, 0)
+	port.CellsSet(cx, cCur+gSmask, 0)
+	fx.FxPut(cx, cCur+gLw, fx.FxOne())
+	port.CellsSet(cx, cCur+gDash, 0)
 	return 0
 }
 
@@ -894,32 +1038,6 @@ func pcByte(v int64) int32 {
 
 func pcRgb(r int32, g int32, bl int32) int32 {
 	return (r * 65536) + ((g * 256) + bl)
-}
-
-func pcSetColor(cx *port.Cells, ox *port.Cells, n int32) int32 {
-	// sc / scn / g / rg / k: set the fill colour from n operands by their count
-	// (1 gray, 3 RGB, 4 CMYK). A component list of another length (a pattern, an
-	// Indexed or Separation colour) leaves the colour as it was.
-	var o0 int64 = pcNum(ox, n, 0)
-	var o1 int64 = pcNum(ox, n, 1)
-	var o2 int64 = pcNum(ox, n, 2)
-	var o3 int64 = pcNum(ox, n, 3)
-	var one int64 = fx.FxOne()
-	if n == 1 {
-		var gy int32 = pcByte(o0)
-		port.CellsSet(cx, cCur+gColor, pcRgb(gy, gy, gy))
-		return 0
-	}
-	if n == 3 {
-		port.CellsSet(cx, cCur+gColor, pcRgb(pcByte(o0), pcByte(o1), pcByte(o2)))
-		return 0
-	}
-	if n == 4 {
-		var kk int64 = one - o3
-		port.CellsSet(cx, cCur+gColor, pcRgb(pcByte(fx.FxMul(one-o0, kk)), pcByte(fx.FxMul(one-o1, kk)), pcByte(fx.FxMul(one-o2, kk))))
-		return 0
-	}
-	return 0
 }
 
 func pcDictLookup(ar *port.Cells, dict int32, ox *port.Cells, ns int32, nl int32) int32 {
@@ -1473,6 +1591,7 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 	var fid int32 = -1
 	var tstart int32 = -1
 	var i int32 = 0
+	var vch int32 = 0
 	var idx int32 = 0
 	if slot >= 0 {
 		sat = cSlots + (slot * slotStride)
@@ -1561,9 +1680,44 @@ func pcGlyph(cx *port.Cells, gl *port.Cells, et *port.Cells, f0 *port.Cells, f1 
 	evidence.GlSet(gl, g, evidence.GfRot(), rot)
 	evidence.GlSet(gl, g, evidence.GfFill(), port.CellsAt(cx, cCur+gColor))
 	evidence.GlSet(gl, g, evidence.GfFalpha(), port.CellsAt(cx, cCur+gAlpha))
+	evidence.GlSet(gl, g, evidence.GfStroke(), port.CellsAt(cx, cCur+gScolor))
+	evidence.GlSet(gl, g, evidence.GfSalpha(), port.CellsAt(cx, cCur+gSalpha))
+	evidence.GlSet(gl, g, evidence.GfClip(), port.CellsAt(cx, cCur+gClip))
 	evidence.GlSet(gl, g, evidence.GfMode(), port.CellsAt(cx, cCur+gMode))
-	if fam > 0 {
+	if (fam > 0) && (port.CellsAt(cx, cCur+gMode) != 1) && (port.CellsAt(cx, cCur+gMode) != 5) {
 		evidence.GlSet(gl, g, evidence.GfCs(), fam)
+	}
+	if (port.CellsAt(cx, cCur+gSfam) > 0) && ((port.CellsAt(cx, cCur+gMode) == 1) || (port.CellsAt(cx, cCur+gMode) == 5)) {
+		evidence.GlSet(gl, g, evidence.GfCs(), port.CellsAt(cx, cCur+gSfam))
+	}
+	if port.CellsAt(cx, cCur+gBm) != 0 {
+		vch = evidence.VcBlend()
+	}
+	if port.CellsAt(cx, cCur+gSmask) != 0 {
+		vch += evidence.VcSoftmask()
+	}
+	evidence.GlSet(gl, g, evidence.GfVchk(), vch)
+	if port.CellsAt(cx, cCur+gMode) >= 4 {
+		if port.CellsAt(cx, cTcn) == 0 {
+			port.CellsSet(cx, cTcx0, evidence.GlGet(gl, g, evidence.ChX0()))
+			port.CellsSet(cx, cTcy0, evidence.GlGet(gl, g, evidence.ChY0()))
+			port.CellsSet(cx, cTcx1, evidence.GlGet(gl, g, evidence.ChX1()))
+			port.CellsSet(cx, cTcy1, evidence.GlGet(gl, g, evidence.ChY1()))
+		} else {
+			if evidence.GlGet(gl, g, evidence.ChX0()) < port.CellsAt(cx, cTcx0) {
+				port.CellsSet(cx, cTcx0, evidence.GlGet(gl, g, evidence.ChX0()))
+			}
+			if evidence.GlGet(gl, g, evidence.ChY0()) < port.CellsAt(cx, cTcy0) {
+				port.CellsSet(cx, cTcy0, evidence.GlGet(gl, g, evidence.ChY0()))
+			}
+			if evidence.GlGet(gl, g, evidence.ChX1()) > port.CellsAt(cx, cTcx1) {
+				port.CellsSet(cx, cTcx1, evidence.GlGet(gl, g, evidence.ChX1()))
+			}
+			if evidence.GlGet(gl, g, evidence.ChY1()) > port.CellsAt(cx, cTcy1) {
+				port.CellsSet(cx, cTcy1, evidence.GlGet(gl, g, evidence.ChY1()))
+			}
+		}
+		port.CellsSet(cx, cTcn, port.CellsAt(cx, cTcn)+1)
 	}
 	evidence.GlSet(gl, g, evidence.GfZ(), z)
 	port.CellsSet(cx, cZ, z+1)
@@ -2035,7 +2189,7 @@ func pcMcPop(cx *port.Cells, mk *port.Cells, gl *port.Cells, unterminated int32)
 	return 0
 }
 
-func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, n int32, props int32) int32 {
+func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, gx *port.Cells, n int32, props int32) int32 {
 	// BMC / BDC: open a mark with the tag of operand 0 and, for BDC, the properties of operand 1 (an
 	// inline dictionary, or a name in /Properties). Its kind is `artifact` for /Artifact,
 	// `optional-content` for /OC (its object number is the /Properties entry's, when that is a
@@ -2097,6 +2251,7 @@ func pcMcBegin(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 				if pdflex.PlKindOf(ar, raw) == 9 {
 					evidence.MkSet(mk, span, evidence.MkfOcg(), pdflex.PlIntValue(ar, raw))
 				}
+				evidence.MkSet(mk, span, evidence.MkfOcgdef(), pdfgfx.GxOcState(src, ar, dc, a, b, st, gx, raw, 0))
 			}
 			if (dh != 0) && (pdflex.PlKindOf(ar, dh) == 7) {
 				d = pcIngestProps(src, ar, dc, a, b, st, cx, ox, dh)
@@ -2170,6 +2325,1125 @@ func pcSkipInline(cx *port.Cells, cs *port.Cells) int32 {
 	return 0
 }
 
+func pcTx(cx *port.Cells, x int64, y int64) int64 {
+	// The user-space point (x, y) in page space: x of it (Fx).
+	return fx.FxClamp(fx.MxX(cx, cCur+gCtm, x, y))
+}
+
+func pcTy(cx *port.Cells, x int64, y int64) int64 {
+	return fx.FxClamp(fx.MxY(cx, cCur+gCtm, x, y))
+}
+
+func pcFlagOr(v int32, bit int32) int32 {
+	// v with the one-bit flag `bit` set.
+	if (v & bit) != 0 {
+		return v
+	}
+	return v + bit
+}
+
+func pcPathReset(cx *port.Cells, pts *port.Cells) int32 {
+	// No path: the next point starts one. The pts arena keeps what an earlier row of the evidence put there.
+	var n int32 = evidence.PtCount(pts)
+	port.CellsSet(cx, cPpts, n)
+	port.CellsSet(cx, cPn, 0)
+	port.CellsSet(cx, cPkeep, 0)
+	port.CellsSet(cx, cPbx0, 2147483647)
+	port.CellsSet(cx, cPby0, 2147483647)
+	port.CellsSet(cx, cPbx1, -2147483647)
+	port.CellsSet(cx, cPby1, -2147483647)
+	port.CellsSet(cx, cPflags, 0)
+	port.CellsSet(cx, cPnsub, 0)
+	return 0
+}
+
+func pcPathAdd(cx *port.Cells, pts *port.Cells, px int64, py int64, op int32) int32 {
+	// Append the page-space point (px, py) to the path: its box, the current point, and (for the first
+	// PATH_KEEP points) a row of `pts`.
+	var x int32 = fx.FxRound(px)
+	var y int32 = fx.FxRound(py)
+	var keep int32 = port.CellsAt(cx, cPkeep)
+	if x < port.CellsAt(cx, cPbx0) {
+		port.CellsSet(cx, cPbx0, x)
+	}
+	if y < port.CellsAt(cx, cPby0) {
+		port.CellsSet(cx, cPby0, y)
+	}
+	if x > port.CellsAt(cx, cPbx1) {
+		port.CellsSet(cx, cPbx1, x)
+	}
+	if y > port.CellsAt(cx, cPby1) {
+		port.CellsSet(cx, cPby1, y)
+	}
+	if keep < pathKeep {
+		evidence.PtAdd(pts, x, y, op)
+		port.CellsSet(cx, cPkeep, keep+1)
+	} else {
+		port.CellsSet(cx, cPflags, pcFlagOr(port.CellsAt(cx, cPflags), 4))
+	}
+	port.CellsSet(cx, cPn, port.CellsAt(cx, cPn)+1)
+	fx.FxPut(cx, cPcx, px)
+	fx.FxPut(cx, cPcy, py)
+	return 0
+}
+
+func pcOpMove(cx *port.Cells, pts *port.Cells, ox *port.Cells, n int32) int32 {
+	if n < 2 {
+		return 0
+	}
+	var x int64 = pcNum(ox, n, 0)
+	var y int64 = pcNum(ox, n, 1)
+	var px int64 = pcTx(cx, x, y)
+	var py int64 = pcTy(cx, x, y)
+	port.CellsSet(cx, cPnsub, port.CellsAt(cx, cPnsub)+1)
+	pcPathAdd(cx, pts, px, py, evidence.PoMove())
+	fx.FxPut(cx, cPsx, px)
+	fx.FxPut(cx, cPsy, py)
+	return 0
+}
+
+func pcOpLine(cx *port.Cells, pts *port.Cells, ox *port.Cells, n int32) int32 {
+	if n < 2 {
+		return 0
+	}
+	if port.CellsAt(cx, cPn) == 0 {
+		return 0
+	}
+	var x int64 = pcNum(ox, n, 0)
+	var y int64 = pcNum(ox, n, 1)
+	var px int64 = pcTx(cx, x, y)
+	var py int64 = pcTy(cx, x, y)
+	pcPathAdd(cx, pts, px, py, evidence.PoLine())
+	return 0
+}
+
+func pcOpCurve(cx *port.Cells, pts *port.Cells, ox *port.Cells, n int32, kind int32) int32 {
+	// c (kind 0, six numbers), v (kind 1: the first control point is the current point) and y (kind 2: the
+	// second control point is the end point). Each puts three curve points in the path.
+	if port.CellsAt(cx, cPn) == 0 {
+		return 0
+	}
+	var x1 int64 = int64(0)
+	var y1 int64 = int64(0)
+	var x2 int64 = int64(0)
+	var y2 int64 = int64(0)
+	var x3 int64 = int64(0)
+	var y3 int64 = int64(0)
+	var q1x int64 = int64(0)
+	var q1y int64 = int64(0)
+	if kind == 0 {
+		if n < 6 {
+			return 0
+		}
+		x1 = pcNum(ox, n, 0)
+		y1 = pcNum(ox, n, 1)
+		x2 = pcNum(ox, n, 2)
+		y2 = pcNum(ox, n, 3)
+		x3 = pcNum(ox, n, 4)
+		y3 = pcNum(ox, n, 5)
+	}
+	if kind == 1 {
+		if n < 4 {
+			return 0
+		}
+		x2 = pcNum(ox, n, 0)
+		y2 = pcNum(ox, n, 1)
+		x3 = pcNum(ox, n, 2)
+		y3 = pcNum(ox, n, 3)
+	}
+	if kind == 2 {
+		if n < 4 {
+			return 0
+		}
+		x1 = pcNum(ox, n, 0)
+		y1 = pcNum(ox, n, 1)
+		x3 = pcNum(ox, n, 2)
+		y3 = pcNum(ox, n, 3)
+		x2 = x3
+		y2 = y3
+	}
+	if kind == 1 {
+		q1x = fx.FxGet(cx, cPcx)
+		q1y = fx.FxGet(cx, cPcy)
+	} else {
+		q1x = pcTx(cx, x1, y1)
+		q1y = pcTy(cx, x1, y1)
+	}
+	pcPathAdd(cx, pts, q1x, q1y, evidence.PoCurve())
+	var q2x int64 = pcTx(cx, x2, y2)
+	var q2y int64 = pcTy(cx, x2, y2)
+	var q3x int64 = pcTx(cx, x3, y3)
+	var q3y int64 = pcTy(cx, x3, y3)
+	pcPathAdd(cx, pts, q2x, q2y, evidence.PoCurve())
+	pcPathAdd(cx, pts, q3x, q3y, evidence.PoCurve())
+	port.CellsSet(cx, cPflags, pcFlagOr(port.CellsAt(cx, cPflags), 1))
+	return 0
+}
+
+func pcOpClose(cx *port.Cells, pts *port.Cells) int32 {
+	// h: a close row at the subpath's start, which is the current point again.
+	if port.CellsAt(cx, cPn) == 0 {
+		return 0
+	}
+	var sx int64 = fx.FxGet(cx, cPsx)
+	var sy int64 = fx.FxGet(cx, cPsy)
+	pcPathAdd(cx, pts, sx, sy, evidence.PoClose())
+	return 0
+}
+
+func pcRectPath(cx *port.Cells, pts *port.Cells, x int64, y int64, w int64, h int64) int32 {
+	// The rectangle x y w h (user space) as a closed subpath of four corners, each through the CTM.
+	var xw int64 = fx.FxClamp(x + w)
+	var yh int64 = fx.FxClamp(y + h)
+	var ax int64 = pcTx(cx, x, y)
+	var ay int64 = pcTy(cx, x, y)
+	var bx int64 = pcTx(cx, xw, y)
+	var by int64 = pcTy(cx, xw, y)
+	var dx int64 = pcTx(cx, xw, yh)
+	var dy int64 = pcTy(cx, xw, yh)
+	var ex int64 = pcTx(cx, x, yh)
+	var ey int64 = pcTy(cx, x, yh)
+	port.CellsSet(cx, cPnsub, port.CellsAt(cx, cPnsub)+1)
+	pcPathAdd(cx, pts, ax, ay, evidence.PoMove())
+	fx.FxPut(cx, cPsx, ax)
+	fx.FxPut(cx, cPsy, ay)
+	pcPathAdd(cx, pts, bx, by, evidence.PoLine())
+	pcPathAdd(cx, pts, dx, dy, evidence.PoLine())
+	pcPathAdd(cx, pts, ex, ey, evidence.PoLine())
+	pcPathAdd(cx, pts, ax, ay, evidence.PoClose())
+	return 0
+}
+
+func pcOpRect(cx *port.Cells, pts *port.Cells, ox *port.Cells, n int32) int32 {
+	// re: the rectangle x y w h.
+	if n < 4 {
+		return 0
+	}
+	var x int64 = pcNum(ox, n, 0)
+	var y int64 = pcNum(ox, n, 1)
+	var w int64 = pcNum(ox, n, 2)
+	var h int64 = pcNum(ox, n, 3)
+	pcRectPath(cx, pts, x, y, w, h)
+	return 0
+}
+
+func pcNear(p int32, q int32) int32 {
+	// 1 when two centipoint coordinates differ by at most one (a corner rounded two ways).
+	var d int32 = p - q
+	if (d <= 1) && (d >= -1) {
+		return 1
+	}
+	return 0
+}
+
+func pcIsRect(cx *port.Cells, pts *port.Cells) int32 {
+	// 1 when the path is one subpath of four corners (a line back to the first corner, and a close, allowed)
+	// whose sides are axis-aligned to a centipoint.
+	var n int32 = port.CellsAt(cx, cPn)
+	var s int32 = port.CellsAt(cx, cPpts)
+	var k int32 = 0
+	var np int32 = 0
+	var opk int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var x2 int32 = 0
+	var y2 int32 = 0
+	var x3 int32 = 0
+	var y3 int32 = 0
+	var px int32 = 0
+	var py int32 = 0
+	if (n < 4) || (n > 6) {
+		return 0
+	}
+	if port.CellsAt(cx, cPnsub) != 1 {
+		return 0
+	}
+	if (port.CellsAt(cx, cPflags) & 5) != 0 {
+		return 0
+	}
+	// The points that are not a close row, in order; the first must be a move.
+	for k < n {
+		opk = evidence.PtGet(pts, s+k, evidence.PtfOp())
+		px = evidence.PtGet(pts, s+k, evidence.PtfX())
+		py = evidence.PtGet(pts, s+k, evidence.PtfY())
+		if k == 0 {
+			if opk != evidence.PoMove() {
+				return 0
+			}
+		}
+		if (k > 0) && (opk == evidence.PoMove()) {
+			return 0
+		}
+		if opk != evidence.PoClose() {
+			if np == 0 {
+				x0 = px
+				y0 = py
+			}
+			if np == 1 {
+				x1 = px
+				y1 = py
+			}
+			if np == 2 {
+				x2 = px
+				y2 = py
+			}
+			if np == 3 {
+				x3 = px
+				y3 = py
+			}
+			if np == 4 {
+				if (pcNear(px, x0) == 0) || (pcNear(py, y0) == 0) {
+					return 0
+				}
+			}
+			np += 1
+		}
+		k += 1
+	}
+	if (np != 4) && (np != 5) {
+		return 0
+	}
+	if (pcNear(x0, x1) == 1) && ((pcNear(y1, y2) == 1) && ((pcNear(x2, x3) == 1) && (pcNear(y3, y0) == 1))) {
+		return 1
+	}
+	if (pcNear(y0, y1) == 1) && ((pcNear(x1, x2) == 1) && ((pcNear(y2, y3) == 1) && (pcNear(x3, x0) == 1))) {
+		return 1
+	}
+	return 0
+}
+
+func pcScaleCpt(cx *port.Cells, w int64) int32 {
+	// A length in user units (an Fx) as centipoints under the current CTM: through the length of its x axis.
+	var a int64 = fx.FxGet(cx, cCur+gCtm)
+	var b int64 = fx.FxGet(cx, (cCur+gCtm)+2)
+	var hyp int64 = fx.FxHypot(a, b)
+	var v int32 = fx.FxRound(fx.FxMul(fx.FxAbs(w), hyp))
+	if v > 10000000 {
+		return 10000000
+	}
+	return v
+}
+
+func pcDashOp(cx *port.Cells, ox *port.Cells, n int32) int32 {
+	// d: the dash array's first length (centipoints under the CTM), 0 for a solid line.
+	port.CellsSet(cx, cCur+gDash, 0)
+	if n < 1 {
+		return 0
+	}
+	if pcKind(ox, 0) != kArr {
+		return 0
+	}
+	if pcEa(ox, 0) < 1 {
+		return 0
+	}
+	if pcKind(ox, 1) != kNum {
+		return 0
+	}
+	var v int64 = pcNum(ox, n, 1)
+	var sc int32 = pcScaleCpt(cx, v)
+	port.CellsSet(cx, cCur+gDash, sc)
+	return 0
+}
+
+func pcClipBox(cx *port.Cells, pa *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, kind int32, flags int32, pfirst int32, pcount int32) int32 {
+	// Clip to the box (x0, y0, x1, y1) of a shape of `kind`: the region becomes its intersection with the clip in
+	// force. When that does not shrink the region there is nothing to record; else a `paths` row (a clip, SPEC
+	// 8.4.3: z -1) holds the intersection, naming the clip it was cut from, and becomes the clip in force.
+	var cur int32 = port.CellsAt(cx, cCur+gClip)
+	var ix0 int32 = x0
+	var iy0 int32 = y0
+	var ix1 int32 = x1
+	var iy1 int32 = y1
+	var same int32 = 0
+	var cb int32 = 0
+	var r int32 = 0
+	if cur >= 0 {
+		cb = evidence.PaGet(pa, cur, evidence.PfX0())
+		if cb > ix0 {
+			ix0 = cb
+		}
+		cb = evidence.PaGet(pa, cur, evidence.PfY0())
+		if cb > iy0 {
+			iy0 = cb
+		}
+		cb = evidence.PaGet(pa, cur, evidence.PfX1())
+		if cb < ix1 {
+			ix1 = cb
+		}
+		cb = evidence.PaGet(pa, cur, evidence.PfY1())
+		if cb < iy1 {
+			iy1 = cb
+		}
+		if (ix0 == evidence.PaGet(pa, cur, evidence.PfX0())) && ((iy0 == evidence.PaGet(pa, cur, evidence.PfY0())) && ((ix1 == evidence.PaGet(pa, cur, evidence.PfX1())) && (iy1 == evidence.PaGet(pa, cur, evidence.PfY1())))) {
+			same = 1
+		}
+	}
+	if same == 1 {
+		return 0
+	}
+	if port.CellsAt(cx, cNpath) >= pathRows {
+		pcWarnSet(cx, wPaths)
+		return 0
+	}
+	r = evidence.PaNew(pa, port.CellsAt(cx, cPage), kind, ix0, iy0, ix1, iy1)
+	evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgClip()+flags)
+	evidence.PaSet(pa, r, evidence.PfClip(), cur)
+	evidence.PaSet(pa, r, evidence.PfMark(), port.CellsAt(cx, cMctop))
+	evidence.PaSet(pa, r, evidence.PfOcg(), port.CellsAt(cx, cCurocg))
+	evidence.PaSet(pa, r, evidence.PfPfirst(), pfirst)
+	evidence.PaSet(pa, r, evidence.PfPcount(), pcount)
+	port.CellsSet(cx, cNpath, port.CellsAt(cx, cNpath)+1)
+	port.CellsSet(cx, cCur+gClip, r)
+	return 0
+}
+
+func pcKindOfPath(cx *port.Cells, pts *port.Cells) int32 {
+	// The `pa` kind of the path: a rectangle, a curve, a single line, else other.
+	if pcIsRect(cx, pts) == 1 {
+		return evidence.PaRect()
+	}
+	if (port.CellsAt(cx, cPflags) & 1) != 0 {
+		return evidence.PaCurve()
+	}
+	if (port.CellsAt(cx, cPn) == 2) && (port.CellsAt(cx, cPnsub) == 1) {
+		return evidence.PaLine()
+	}
+	return evidence.PaOther()
+}
+
+func pcGeomKept(cx *port.Cells) int32 {
+	// 1 when the whole path is in `pts` (it had no more than PATH_KEEP points).
+	if (port.CellsAt(cx, cPflags) & 4) != 0 {
+		return 0
+	}
+	return 1
+}
+
+func pcEndPath(cx *port.Cells, pa *port.Cells, pts *port.Cells, fill int32, stroke int32, evenodd int32, closed int32) int32 {
+	// A paint operator (or `n`) ends the path. If it filled or stroked, a `paths` row records it; then a pending
+	// `W` or `W*` clips to it. The row's box is the path's box, grown by half the stroke width when it strokes;
+	// its geometry is the path's rows of `pts` (kept when the path was short enough, else dropped).
+	var n int32 = port.CellsAt(cx, cPn)
+	var start int32 = port.CellsAt(cx, cPpts)
+	var kept int32 = pcGeomKept(cx)
+	var pend int32 = port.CellsAt(cx, cClipp)
+	var kind int32 = 0
+	var half int32 = 0
+	var r int32 = 0
+	var fl int32 = 0
+	var wd int32 = 0
+	var lwv int64 = int64(0)
+	var nrows int32 = 0
+	var pfst int32 = -1
+	var geom int32 = 0
+	var painted int32 = 0
+	port.CellsSet(cx, cClipp, 0)
+	if n == 0 {
+		pcPathReset(cx, pts)
+		return 0
+	}
+	kind = pcKindOfPath(cx, pts)
+	nrows = n
+	if kept == 0 {
+		nrows = 0
+	}
+	if nrows > 0 {
+		pfst = start
+	}
+	if (kept == 0) && (port.CellsAt(cx, cPkeep) > 0) {
+		port.CellsDrop(pts, start*3)
+	}
+	geom = nrows
+	if (fill == 1) || (stroke == 1) {
+		if port.CellsAt(cx, cNpath) >= pathRows {
+			pcWarnSet(cx, wPaths)
+		} else {
+			painted = 1
+			fl = 0
+			if closed != 0 {
+				fl += evidence.PgClosed()
+			}
+			if evenodd == 1 {
+				fl += evidence.PgEvenodd()
+			}
+			if stroke == 1 {
+				lwv = fx.FxGet(cx, cCur+gLw)
+				wd = pcScaleCpt(cx, lwv)
+				half = (wd + 1) / 2
+				fl += evidence.PgStroked()
+			}
+			if fill == 1 {
+				fl += evidence.PgFilled()
+				if port.CellsAt(cx, cCur+gFam) == 5 {
+					fl += evidence.PgPattern()
+				}
+			}
+			if port.CellsAt(cx, cCur+gBm) != 0 {
+				fl += evidence.PgBlend()
+			}
+			if port.CellsAt(cx, cCur+gSmask) != 0 {
+				fl += evidence.PgSoftmask()
+			}
+			r = evidence.PaNew(pa, port.CellsAt(cx, cPage), kind, port.CellsAt(cx, cPbx0)-half, port.CellsAt(cx, cPby0)-half, port.CellsAt(cx, cPbx1)+half, port.CellsAt(cx, cPby1)+half)
+			evidence.PaSet(pa, r, evidence.PfFlags(), fl)
+			if fill == 1 {
+				evidence.PaSet(pa, r, evidence.PfFill(), port.CellsAt(cx, cCur+gColor))
+			}
+			if stroke == 1 {
+				evidence.PaSet(pa, r, evidence.PfStroke(), port.CellsAt(cx, cCur+gScolor))
+				evidence.PaSet(pa, r, evidence.PfWidth(), wd)
+				evidence.PaSet(pa, r, evidence.PfDash(), port.CellsAt(cx, cCur+gDash))
+			}
+			evidence.PaSet(pa, r, evidence.PfFalpha(), port.CellsAt(cx, cCur+gAlpha))
+			evidence.PaSet(pa, r, evidence.PfSalpha(), port.CellsAt(cx, cCur+gSalpha))
+			evidence.PaSet(pa, r, evidence.PfZ(), port.CellsAt(cx, cZ))
+			port.CellsSet(cx, cZ, port.CellsAt(cx, cZ)+1)
+			evidence.PaSet(pa, r, evidence.PfClip(), port.CellsAt(cx, cCur+gClip))
+			evidence.PaSet(pa, r, evidence.PfMark(), port.CellsAt(cx, cMctop))
+			evidence.PaSet(pa, r, evidence.PfOcg(), port.CellsAt(cx, cCurocg))
+			evidence.PaSet(pa, r, evidence.PfPfirst(), pfst)
+			evidence.PaSet(pa, r, evidence.PfPcount(), geom)
+			port.CellsSet(cx, cNpath, port.CellsAt(cx, cNpath)+1)
+		}
+	}
+	if pend != 0 {
+		fl = 0
+		if pend == 2 {
+			fl = evidence.PgEvenodd()
+		}
+		pcClipBox(cx, pa, port.CellsAt(cx, cPbx0), port.CellsAt(cx, cPby0), port.CellsAt(cx, cPbx1), port.CellsAt(cx, cPby1), kind, fl, pfst, geom)
+	}
+	// A path whose geometry nobody kept leaves no rows behind.
+	if (painted == 0) && (pend == 0) {
+		port.CellsDrop(pts, start*3)
+	}
+	pcPathReset(cx, pts)
+	return 0
+}
+
+func pcPaintOp(cx *port.Cells, pa *port.Cells, pts *port.Cells, op int32) int32 {
+	// S s f F f* B B* b b* n: which of fill, stroke, even-odd and close each one means.
+	var fill int32 = 0
+	var stroke int32 = 0
+	var eo int32 = 0
+	var shut int32 = 0
+	if op == opStroke {
+		stroke = 1
+	}
+	if op == opClosestroke {
+		stroke = 1
+		shut = 1
+	}
+	if (op == opFill) || (op == opFill2) {
+		fill = 1
+	}
+	if op == opFilleo {
+		fill = 1
+		eo = 1
+	}
+	if op == opFs {
+		fill = 1
+		stroke = 1
+	}
+	if op == opFseo {
+		fill = 1
+		stroke = 1
+		eo = 1
+	}
+	if op == opCfs {
+		fill = 1
+		stroke = 1
+		shut = 1
+	}
+	if op == opCfseo {
+		fill = 1
+		stroke = 1
+		shut = 1
+		eo = 1
+	}
+	if shut == 1 {
+		pcOpClose(cx, pts)
+	}
+	pcEndPath(cx, pa, pts, fill, stroke, eo, shut)
+	return 0
+}
+
+func pcSetInk(cx *port.Cells, stroke int32, key int32, cls int32, rgb int32) int32 {
+	// Make (key, class, colour) the fill (stroke 0) or stroking (stroke 1) colour of the current state.
+	if stroke == 1 {
+		port.CellsSet(cx, cCur+gScs, key)
+		port.CellsSet(cx, cCur+gSfam, cls)
+		port.CellsSet(cx, cCur+gScolor, rgb)
+	} else {
+		port.CellsSet(cx, cCur+gFcs, key)
+		port.CellsSet(cx, cCur+gFam, cls)
+		port.CellsSet(cx, cCur+gColor, rgb)
+	}
+	return 0
+}
+
+func pcDeviceRgb(ox *port.Cells, gx *port.Cells, n int32, space int32) int32 {
+	// The colour of the first operands under DeviceGray (space 1), DeviceRGB (2) or DeviceCMYK (3): -1 when there are
+	// too few. The conversion is the colour module's, so a colour is the same however it was set.
+	var need int32 = 1
+	var i int32 = 0
+	var v int64 = int64(0)
+	if space == 2 {
+		need = 3
+	}
+	if space == 3 {
+		need = 4
+	}
+	if n < need {
+		return -1
+	}
+	for i < need {
+		v = pcNum(ox, n, i)
+		pdfgfx.GxInput(gx, i, v)
+		i += 1
+	}
+	return pdfgfx.GxEntryRgb(gx, space-1, need)
+}
+
+func pcColorDevice(cx *port.Cells, ox *port.Cells, gx *port.Cells, n int32, stroke int32, space int32) int32 {
+	// g rg k G RG K: the device space, its class, and the colour.
+	var rgb int32 = pcDeviceRgb(ox, gx, n, space)
+	if rgb < 0 {
+		return 0
+	}
+	pcSetInk(cx, stroke, 0-space, space, rgb)
+	return 0
+}
+
+func pcCsOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, out *port.Cells, cx *port.Cells, ox *port.Cells, gx *port.Cells, n int32, stroke int32) int32 {
+	// cs, CS: the colour space named by operand 0: a device space, Pattern, or a /ColorSpace resource. The colour
+	// becomes the space's initial colour. A space this reader cannot read leaves an unknown colour (-1) and no class.
+	if n < 1 {
+		return 0
+	}
+	if pcKind(ox, 0) != kName {
+		return 0
+	}
+	var key int32 = 0
+	var raw int32 = 0
+	var h int32 = 0
+	var e int32 = -1
+	if pcEntryNameIs(ox, 0, pdfnames.PnDeviceGray()) == 1 {
+		key = -1
+	}
+	if pcEntryNameIs(ox, 0, pdfnames.PnDeviceRgb()) == 1 {
+		key = -2
+	}
+	if pcEntryNameIs(ox, 0, pdfnames.PnDeviceCmyk()) == 1 {
+		key = -3
+	}
+	if pcEntryNameIs(ox, 0, pdfnames.PnPattern()) == 1 {
+		key = -4
+	}
+	if key == 0 {
+		raw = pcResEntry(src, ar, dc, a, b, st, cx, ox, pdfnames.PnColorSpace(), 0)
+		if raw != 0 {
+			h = pdfdoc.PdResolve(src, ar, dc, a, b, st, raw)
+		}
+		if pdfsrc.PsMissed(src) {
+			port.CellsSet(cx, cAbort, 1)
+			return 0
+		}
+		if h != 0 {
+			key = pdfgfx.GxKeyOf(src, ar, dc, a, b, st, h)
+		}
+	}
+	if key != 0 {
+		e = pdfgfx.GxLookup(src, ar, dc, a, b, st, out, gx, key)
+	}
+	if pdfsrc.PsMissed(src) {
+		port.CellsSet(cx, cAbort, 1)
+		return 0
+	}
+	if e < 0 {
+		pcSetInk(cx, stroke, key, 0, -1)
+		return 0
+	}
+	var cls int32 = pdfgfx.GxClass(gx, e)
+	var rgb int32 = pdfgfx.GxInitial(gx, e)
+	pcSetInk(cx, stroke, key, cls, rgb)
+	return 0
+}
+
+func pcScOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, out *port.Cells, cx *port.Cells, ox *port.Cells, gx *port.Cells, n int32, stroke int32) int32 {
+	// sc, scn, SC, SCN: a colour in the current space. A pattern space takes no components (its colour is
+	// unknown); a colour whose component count is not the space's is read by its count, as a device colour.
+	var key int32 = 0
+	var e int32 = -1
+	var nn int32 = 0
+	var i int32 = 0
+	var ncomp int32 = 0
+	var rgb int32 = -1
+	var cls int32 = 0
+	var v int64 = int64(0)
+	if stroke == 1 {
+		key = port.CellsAt(cx, cCur+gScs)
+	} else {
+		key = port.CellsAt(cx, cCur+gFcs)
+	}
+	if key != 0 {
+		e = pdfgfx.GxLookup(src, ar, dc, a, b, st, out, gx, key)
+	}
+	if pdfsrc.PsMissed(src) {
+		port.CellsSet(cx, cAbort, 1)
+		return 0
+	}
+	for (nn < n) && (pcKind(ox, nn) == kNum) {
+		nn += 1
+	}
+	if e == -1 {
+		// A space that is not known: whatever colour was set is not.
+		pcSetInk(cx, stroke, key, 0, -1)
+		return 0
+	}
+	if pdfgfx.GxIsPattern(gx, e) == 1 {
+		pcSetInk(cx, stroke, key, 5, -1)
+		return 0
+	}
+	ncomp = pdfgfx.GxNcomp(gx, e)
+	if nn > 32 {
+		nn = 32
+	}
+	if (nn > 0) && (nn == ncomp) {
+		i = 0
+		for i < nn {
+			v = pcNum(ox, n, i)
+			pdfgfx.GxInput(gx, i, v)
+			i += 1
+		}
+		rgb = pdfgfx.GxEntryRgb(gx, e, nn)
+		cls = pdfgfx.GxClass(gx, e)
+		pcSetInk(cx, stroke, key, cls, rgb)
+		return 0
+	}
+	// The operands do not fit the space: read them by count, as a device colour, and keep the space.
+	if (nn > 0) && ((nn == 1) || ((nn == 3) || (nn == 4))) {
+		if nn == 1 {
+			rgb = pcDeviceRgb(ox, gx, n, 1)
+		}
+		if nn == 3 {
+			rgb = pcDeviceRgb(ox, gx, n, 2)
+		}
+		if nn == 4 {
+			rgb = pcDeviceRgb(ox, gx, n, 3)
+		}
+		if stroke == 1 {
+			port.CellsSet(cx, cCur+gScolor, rgb)
+		} else {
+			port.CellsSet(cx, cCur+gColor, rgb)
+		}
+	}
+	return 0
+}
+
+func pcBmCode(ar *port.Cells, h int32) int32 {
+	// A blend mode name's code: 0 Normal and Compatible, 1 Multiply, 2 Screen, 3 Overlay, 4 Darken, 5 Lighten,
+	// 6 ColorDodge, 7 ColorBurn, 8 HardLight, 9 SoftLight, 10 Difference, 11 Exclusion, 12 Hue, 13 Saturation,
+	// 14 Color, 15 Luminosity, 99 a name that is none of those.
+	if h == 0 {
+		return 0
+	}
+	if pdflex.PlKindOf(ar, h) != 4 {
+		return 0
+	}
+	if (pdfx.PxIs(ar, h, pdfxnames.PxNormal()) == 1) || (pdfx.PxIs(ar, h, pdfxnames.PxCompatible()) == 1) {
+		return 0
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxMultiply()) == 1 {
+		return 1
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxScreen()) == 1 {
+		return 2
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxOverlay()) == 1 {
+		return 3
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxDarken()) == 1 {
+		return 4
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxLighten()) == 1 {
+		return 5
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxColorDodge()) == 1 {
+		return 6
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxColorBurn()) == 1 {
+		return 7
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxHardLight()) == 1 {
+		return 8
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxSoftLight()) == 1 {
+		return 9
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxDifference()) == 1 {
+		return 10
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxExclusion()) == 1 {
+		return 11
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxHue()) == 1 {
+		return 12
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxSaturation()) == 1 {
+		return 13
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxColor()) == 1 {
+		return 14
+	}
+	if pdfx.PxIs(ar, h, pdfxnames.PxLuminosity()) == 1 {
+		return 15
+	}
+	return 99
+}
+
+func pcAlphaOf(ar *port.Cells, h int32) int32 {
+	// A constant alpha as per-mille, clamped to 0..1000.
+	var al int32 = fx.FxRound(fx.FxMul(pcArFx64(ar, h), fx.FxOfInt(1000)))
+	if al < 0 {
+		return 0
+	}
+	if al > 1000 {
+		return 1000
+	}
+	return al
+}
+
+func pcGsOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, n int32) int32 {
+	// gs: the entries of the named ExtGState that matter here: /ca and /CA (alpha), /BM (the blend mode, the first
+	// name of an array), /SMask (/None, or a dictionary: its /S, Alpha or Luminosity) and /LW (the line width).
+	if n < 1 {
+		return 0
+	}
+	if pcKind(ox, 0) != kName {
+		return 0
+	}
+	var raw int32 = pcResEntry(src, ar, dc, a, b, st, cx, ox, pdfnames.PnExtGState(), 0)
+	var gd int32 = 0
+	var v int32 = 0
+	var s int32 = 0
+	if raw == 0 {
+		return 0
+	}
+	gd = pdfdoc.PdResolve(src, ar, dc, a, b, st, raw)
+	if pdfsrc.PsMissed(src) {
+		port.CellsSet(cx, cAbort, 1)
+		return 0
+	}
+	if gd == 0 {
+		return 0
+	}
+	v = pdfdoc.PdDget(src, ar, dc, a, b, st, gd, pdfnames.PnCa())
+	if v != 0 {
+		port.CellsSet(cx, cCur+gAlpha, pcAlphaOf(ar, v))
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, gd, pdfxnames.PxCa())
+	if v != 0 {
+		port.CellsSet(cx, cCur+gSalpha, pcAlphaOf(ar, v))
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, gd, pdfxnames.PxBm())
+	if v != 0 {
+		if pdflex.PlKindOf(ar, v) == 6 {
+			s = pdflex.PlFirst(ar, v)
+			v = pdfdoc.PdResolve(src, ar, dc, a, b, st, s)
+		}
+		port.CellsSet(cx, cCur+gBm, pcBmCode(ar, v))
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, gd, pdfxnames.PxSMask())
+	if v != 0 {
+		if pdflex.PlKindOf(ar, v) == 4 {
+			port.CellsSet(cx, cCur+gSmask, 0)
+		}
+		if pdflex.PlKindOf(ar, v) == 7 {
+			s = pdfx.PxDget(src, ar, dc, a, b, st, v, pdfxnames.PxS())
+			port.CellsSet(cx, cCur+gSmask, 2)
+			if pdfx.PxIs(ar, s, pdfxnames.PxAlpha()) == 1 {
+				port.CellsSet(cx, cCur+gSmask, 1)
+			}
+		}
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, gd, pdfxnames.PxLw())
+	if v != 0 {
+		if pdfx.PxIsNum(ar, v) == 1 {
+			fx.FxPut(cx, cCur+gLw, pcArFx64(ar, v))
+		}
+	}
+	if pdfsrc.PsMissed(src) {
+		port.CellsSet(cx, cAbort, 1)
+	}
+	return 0
+}
+
+func pcImagePlace(cx *port.Cells, im *port.Cells, obj int32, pxw int32, pxh int32, flags int32) int32 {
+	// One image placement (SPEC 8.4.3): the unit square through the CTM. Its box is that parallelogram's, its `rot` the
+	// angle of the image's x axis, `skewed` 1 when its axes are not at a right angle (to half a degree).
+	var one int64 = fx.FxOne()
+	var zero int64 = int64(0)
+	var ma int64 = fx.FxGet(cx, cCur+gCtm)
+	var mb int64 = fx.FxGet(cx, (cCur+gCtm)+2)
+	var mc int64 = fx.FxGet(cx, (cCur+gCtm)+4)
+	var md int64 = fx.FxGet(cx, (cCur+gCtm)+6)
+	var ax int64 = pcTx(cx, zero, zero)
+	var ay int64 = pcTy(cx, zero, zero)
+	var bx int64 = pcTx(cx, one, zero)
+	var by int64 = pcTy(cx, one, zero)
+	var dx int64 = pcTx(cx, one, one)
+	var dy int64 = pcTy(cx, one, one)
+	var ex int64 = pcTx(cx, zero, one)
+	var ey int64 = pcTy(cx, zero, one)
+	var rot int32 = pcDirAngle(ma, mb)
+	var roty int32 = pcDirAngle(mc, md)
+	var diff int32 = 0
+	var skew int32 = 1
+	var fl int32 = flags
+	var chk int32 = 0
+	var r int32 = 0
+	if port.CellsAt(cx, cCur+gBm) != 0 {
+		fl += evidence.MgBlend()
+	}
+	if port.CellsAt(cx, cCur+gSmask) != 0 {
+		fl += evidence.MgSoftmask()
+	}
+	if port.CellsAt(cx, cCur+gBm) != 0 {
+		chk += evidence.VcBlend()
+	}
+	if port.CellsAt(cx, cCur+gSmask) != 0 {
+		chk += evidence.VcSoftmask()
+	}
+	diff = roty - rot
+	if diff < 0 {
+		diff += 36000
+	}
+	if (diff >= 8950) && (diff <= 9050) {
+		skew = 0
+	}
+	if (diff >= 26950) && (diff <= 27050) {
+		skew = 0
+	}
+	if port.CellsAt(cx, cNimg) >= pathRows {
+		pcWarnSet(cx, wPaths)
+		return 0
+	}
+	r = evidence.ImNew(im, port.CellsAt(cx, cPage), fx.FxRound(pcMin4(ax, bx, dx, ex)), fx.FxRound(pcMin4(ay, by, dy, ey)), fx.FxRound(pcMax4(ax, bx, dx, ex)), fx.FxRound(pcMax4(ay, by, dy, ey)), obj, pxw, pxh)
+	evidence.ImSet(im, r, evidence.MfAlpha(), port.CellsAt(cx, cCur+gAlpha))
+	evidence.ImSet(im, r, evidence.MfFlags(), fl)
+	evidence.ImSet(im, r, evidence.MfRot(), rot)
+	evidence.ImSet(im, r, evidence.MfSkewed(), skew)
+	evidence.ImSet(im, r, evidence.MfZ(), port.CellsAt(cx, cZ))
+	port.CellsSet(cx, cZ, port.CellsAt(cx, cZ)+1)
+	evidence.ImSet(im, r, evidence.MfClip(), port.CellsAt(cx, cCur+gClip))
+	evidence.ImSet(im, r, evidence.MfMark(), port.CellsAt(cx, cMctop))
+	evidence.ImSet(im, r, evidence.MfOcg(), port.CellsAt(cx, cCurocg))
+	evidence.ImSet(im, r, evidence.MfVchk(), chk)
+	port.CellsSet(cx, cNimg, port.CellsAt(cx, cNimg)+1)
+	return 0
+}
+
+func pcOcOpen(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, gx *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, raw int32) int32 {
+	// Open an optional-content span for the /OC entry `raw` of a Form XObject or an image (a `marks` row, kind
+	// optional-content, flagged `xobject`): its state is `gx-oc-state`'s. Answers 1 when opened, 0 when spans are
+	// too deep. The caller closes it with `pc-mc-pop`.
+	var depth int32 = port.CellsAt(cx, cMcdepth)
+	var span int32 = 0
+	var state int32 = 1
+	if depth >= maxMc {
+		return 0
+	}
+	state = pdfgfx.GxOcState(src, ar, dc, a, b, st, gx, raw, 0)
+	span = evidence.MkOpen(mk, port.CellsAt(cx, cPage), evidence.MkOptionalContent(), port.CellsLen(et), 0, port.CellsAt(cx, cMctop), evidence.GlCount(gl), port.CellsAt(cx, cZ))
+	evidence.MkSet(mk, span, evidence.MkfStm(), port.CellsAt(cx, cStm))
+	evidence.MkSet(mk, span, evidence.MkfFlags(), evidence.McXobject())
+	evidence.MkSet(mk, span, evidence.MkfOcgdef(), state)
+	if pdflex.PlKindOf(ar, raw) == 9 {
+		evidence.MkSet(mk, span, evidence.MkfOcg(), pdflex.PlIntValue(ar, raw))
+	}
+	port.CellsSet(cx, cMctop, span)
+	port.CellsSet(cx, cMcdepth, depth+1)
+	port.CellsSet(cx, cCurocg, span)
+	return 1
+}
+
+func pcImageDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, gx *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, im *port.Cells, objnum int32, xh int32) int32 {
+	// Do of an image XObject: a placement row. Its width and height are the dictionary's; the mask flags say what
+	// could make it translucent (a stencil mask, an /SMask, a /Mask); an /OC makes it a span of its own.
+	var w int32 = pdfdoc.PdDint(src, ar, dc, a, b, st, xh, pdfnames.PnWidth(), 0)
+	var h int32 = pdfdoc.PdDint(src, ar, dc, a, b, st, xh, pdfnames.PnHeight(), 0)
+	var fl int32 = 0
+	var v int32 = 0
+	var ocraw int32 = 0
+	var opened int32 = 0
+	v = pdfx.PxDget(src, ar, dc, a, b, st, xh, pdfxnames.PxImageMask())
+	if v != 0 {
+		if (pdflex.PlKindOf(ar, v) == 1) && (pdflex.PlIntValue(ar, v) == 1) {
+			fl += evidence.MgMask()
+		}
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, xh, pdfxnames.PxSMask())
+	if v != 0 {
+		fl += evidence.MgSmask()
+	}
+	v = pdfx.PxDget(src, ar, dc, a, b, st, xh, pdfxnames.PxMask())
+	if v != 0 {
+		fl += evidence.MgMasked()
+	}
+	ocraw = pdfx.PxGet(ar, xh, pdfxnames.PxOc())
+	if pdfsrc.PsMissed(src) {
+		port.CellsSet(cx, cAbort, 1)
+		return 0
+	}
+	if ocraw != 0 {
+		opened = pcOcOpen(src, ar, dc, a, b, st, cx, gx, gl, et, mk, ocraw)
+	}
+	pcImagePlace(cx, im, objnum, w, h, fl)
+	if opened == 1 {
+		pcMcPop(cx, mk, gl, 0)
+	}
+	return 0
+}
+
+func pcNamePx(ox *port.Cells, s int32, l int32, id int32) int32 {
+	// 1 when the name operand bytes ox[s, s+l) are row `id` of the catalogue name table (emon.pdfxnames).
+	var n int32 = pdfxnames.PxSpan[id*2+1]
+	var o int32 = pdfxnames.PxSpan[id*2+0]
+	var i int32 = 0
+	if l != n {
+		return 0
+	}
+	for i < n {
+		if port.CellsAt(ox, s+i) != pdfxnames.PxChars[o+i] {
+			return 0
+		}
+		i += 1
+	}
+	return 1
+}
+
+func pcFindId(cx *port.Cells, cs *port.Cells) int32 {
+	// BI: where the `ID` that ends the inline image's dictionary starts (the index of its `I`), or -1.
+	var end int32 = port.CellsAt(cx, cEnd)
+	var p int32 = port.CellsAt(cx, cPos)
+	for (p + 2) < end {
+		if (pcWs(port.CellsAt(cs, p)) == 1) && ((port.CellsAt(cs, p+1) == 73) && ((port.CellsAt(cs, p+2) == 68) && (((p + 3) >= end) || (pcWs(port.CellsAt(cs, p+3)) == 1)))) {
+			return p + 1
+		}
+		p += 1
+	}
+	return -1
+}
+
+func pcInlineImage(cx *port.Cells, ox *port.Cells, cs *port.Cells, im *port.Cells) int32 {
+	// BI: read the dictionary up to `ID` (width, height, whether it is a stencil mask), record the placement, then
+	// leave the lexer where it was for `pc-skip-inline` to find the end of the data.
+	var start int32 = port.CellsAt(cx, cPos)
+	var end int32 = port.CellsAt(cx, cEnd)
+	var idp int32 = pcFindId(cx, cs)
+	var w int32 = 0
+	var h int32 = 0
+	var fl int32 = 0
+	var j int32 = 0
+	var v int32 = 0
+	var ks int32 = 0
+	var kl int32 = 0
+	var r int32 = 1
+	var total int32 = 0
+	var nxt int32 = 0
+	if idp < 0 {
+		pcImagePlace(cx, im, 0, 0, 0, evidence.MgInline())
+		return 0
+	}
+	port.CellsSet(cx, cEnd, idp)
+	pcOxClear(cx, ox)
+	for r == 1 {
+		r = pcLex(cx, ox, cs)
+		if r == 2 {
+			r = 0
+		}
+	}
+	total = port.CellsAt(cx, cOxn)
+	j = 0
+	for j < total {
+		nxt = j + 1
+		if (pcKind(ox, j) == kName) && (nxt < total) {
+			ks = pcEa(ox, j)
+			kl = pcEb(ox, j)
+			if pcKind(ox, nxt) == kNum {
+				v = fx.FxRound(fx.FxJoin(pcEa(ox, nxt), pcEb(ox, nxt)))
+				if (pcNameEq(ox, ks, kl, pdfnames.PnWidth()) == 1) || (pcNameEq(ox, ks, kl, pdfnames.PnW()) == 1) {
+					w = v
+				}
+				if (pcNameEq(ox, ks, kl, pdfnames.PnHeight()) == 1) || (pcNamePx(ox, ks, kl, pdfxnames.PxH()) == 1) {
+					h = v
+				}
+			}
+			if pcKind(ox, nxt) == kBool {
+				if (pcNamePx(ox, ks, kl, pdfxnames.PxIm()) == 1) || (pcNamePx(ox, ks, kl, pdfxnames.PxImageMask()) == 1) {
+					if pcEa(ox, nxt) == 1 {
+						fl = evidence.MgMask()
+					}
+				}
+			}
+			j = nxt + pcEsize(ox, nxt)
+		} else {
+			j += pcEsize(ox, j)
+		}
+	}
+	port.CellsSet(cx, cEnd, end)
+	port.CellsSet(cx, cPos, start)
+	pcOxClear(cx, ox)
+	pcImagePlace(cx, im, 0, w, h, evidence.MgInline()+fl)
+	return 0
+}
+
+func pcShOp(cx *port.Cells, pa *port.Cells) int32 {
+	// sh: a shading fills the whole clip region. A row of kind `other`, flagged `shading`, whose box is the region's
+	// (the page when nothing clips) and whose colour is unknown: P3.6 reads it as paint that is not exactly known.
+	var cur int32 = port.CellsAt(cx, cCur+gClip)
+	var r int32 = 0
+	var bx0 int32 = 0
+	var by0 int32 = 0
+	var bx1 int32 = 0
+	var by1 int32 = 0
+	var fl int32 = 0
+	if port.CellsAt(cx, cNpath) >= pathRows {
+		pcWarnSet(cx, wPaths)
+		return 0
+	}
+	bx0 = 0
+	by0 = 0
+	bx1 = port.CellsAt(cx, cPw)
+	by1 = port.CellsAt(cx, cPh)
+	if cur >= 0 {
+		bx0 = evidence.PaGet(pa, cur, evidence.PfX0())
+		by0 = evidence.PaGet(pa, cur, evidence.PfY0())
+		bx1 = evidence.PaGet(pa, cur, evidence.PfX1())
+		by1 = evidence.PaGet(pa, cur, evidence.PfY1())
+	}
+	r = evidence.PaNew(pa, port.CellsAt(cx, cPage), evidence.PaOther(), bx0, by0, bx1, by1)
+	fl = evidence.PgFilled() + evidence.PgShading()
+	if port.CellsAt(cx, cCur+gBm) != 0 {
+		fl += evidence.PgBlend()
+	}
+	if port.CellsAt(cx, cCur+gSmask) != 0 {
+		fl += evidence.PgSoftmask()
+	}
+	evidence.PaSet(pa, r, evidence.PfFlags(), fl)
+	evidence.PaSet(pa, r, evidence.PfFalpha(), port.CellsAt(cx, cCur+gAlpha))
+	evidence.PaSet(pa, r, evidence.PfZ(), port.CellsAt(cx, cZ))
+	port.CellsSet(cx, cZ, port.CellsAt(cx, cZ)+1)
+	evidence.PaSet(pa, r, evidence.PfClip(), cur)
+	evidence.PaSet(pa, r, evidence.PfMark(), port.CellsAt(cx, cMctop))
+	evidence.PaSet(pa, r, evidence.PfOcg(), port.CellsAt(cx, cCurocg))
+	port.CellsSet(cx, cNpath, port.CellsAt(cx, cNpath)+1)
+	return 0
+}
+
 func pcAppendStream(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, out *port.Cells, cs *port.Cells, sh int32) int32 {
 	// Decode stream sh and append its bytes (and a line feed) to `cs`. Answers
 	// the filter chain's status (0 ok), or -1 when the source missed.
@@ -2192,11 +3466,10 @@ func pcAppendStream(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells
 	return status
 }
 
-func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, n int32) int32 {
-	// Do: run the Form XObject named by operand 0. Images and everything that is
-	// not a form are skipped. The form's /Matrix is concatenated to the CTM, its
-	// /Resources replace the current ones (else they are inherited), and it runs
-	// inside its own `q`/`Q`.
+func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pa *port.Cells, im *port.Cells, pts *port.Cells, gx *port.Cells, n int32) int32 {
+	// Do: an image XObject is a placement (`pc-image-do`); a Form XObject is run. The form's /Matrix is
+	// concatenated to the CTM, its /BBox clips (a rectangle in its own space), its /Resources replace the current
+	// ones (else they are inherited), an /OC makes it an optional-content span, and it runs inside its own `q`/`Q`.
 	if n < 1 {
 		return 0
 	}
@@ -2218,6 +3491,13 @@ func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	var start int32 = 0
 	var endcs int32 = 0
 	var status int32 = 0
+	var bb int32 = 0
+	var ocraw int32 = 0
+	var opened int32 = 0
+	var bx0 int64 = int64(0)
+	var by0 int64 = int64(0)
+	var bx1 int64 = int64(0)
+	var by1 int64 = int64(0)
 	if pdfsrc.PsMissed(src) {
 		port.CellsSet(cx, cAbort, 1)
 		return 0
@@ -2247,6 +3527,10 @@ func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 		return 0
 	}
 	if sub == 0 {
+		return 0
+	}
+	if pdflex.PlNameIs(ar, sub, pdfnames.PnImage()) == 1 {
+		pcImageDo(src, ar, dc, a, b, st, cx, gx, gl, et, mk, im, objnum, xh)
 		return 0
 	}
 	if pdflex.PlNameIs(ar, sub, pdfnames.PnForm()) == 0 {
@@ -2282,6 +3566,24 @@ func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 			fx.MxIdent(cx, cTmp)
 		}
 	}
+	// Its /BBox, kept as four Fx until the form's state is made.
+	bb = pdfdoc.PdDget(src, ar, dc, a, b, st, xh, pdfnames.PnBBox())
+	got = 0
+	if (bb != 0) && (pdflex.PlKindOf(ar, bb) == 6) {
+		el = pdflex.PlFirst(ar, bb)
+		for (el != 0) && (got < 4) {
+			sub = pdfdoc.PdResolve(src, ar, dc, a, b, st, el)
+			if pdfx.PxIsNum(ar, sub) == 0 {
+				got = 0
+				el = 0
+			} else {
+				fx.FxPut(cx, cBb+(got*2), pcArFx64(ar, sub))
+				el = pdflex.PlNext(ar, el)
+				got += 1
+			}
+		}
+	}
+	ocraw = pdfx.PxGet(ar, xh, pdfxnames.PxOc())
 	res = pdfdoc.PdDget(src, ar, dc, a, b, st, xh, pdfnames.PnResources())
 	oldres = port.CellsAt(cx, cRes)
 	oldstm = port.CellsAt(cx, cStm)
@@ -2295,11 +3597,28 @@ func pcDo(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 	}
 	pcSave(cx)
 	fx.MxMul(cx, cCur+gCtm, cTmp, cCur+gCtm)
+	if got == 4 {
+		// The form's box clips what it paints: a rectangle through the CTM.
+		pcPathReset(cx, pts)
+		bx0 = fx.FxGet(cx, cBb)
+		by0 = fx.FxGet(cx, cBb+2)
+		bx1 = fx.FxGet(cx, cBb+4)
+		by1 = fx.FxGet(cx, cBb+6)
+		pcRectPath(cx, pts, bx0, by0, bx1-bx0, by1-by0)
+		port.CellsSet(cx, cClipp, 1)
+		pcEndPath(cx, pa, pts, 0, 0, 0, 1)
+	}
+	if ocraw != 0 {
+		opened = pcOcOpen(src, ar, dc, a, b, st, cx, gx, gl, et, mk, ocraw)
+	}
 	port.CellsSet(cx, cFstack+fd, objnum)
 	port.CellsSet(cx, cFdepth, fd+1)
 	port.CellsSet(cx, cStm, objnum)
 	endcs = port.CellsLen(cs)
-	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, start, endcs)
+	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, start, endcs)
+	if opened == 1 {
+		pcMcPop(cx, mk, gl, 0)
+	}
 	port.CellsSet(cx, cFdepth, fd)
 	port.CellsSet(cx, cStm, oldstm)
 	port.CellsSet(cx, cRes, oldres)
@@ -2318,7 +3637,7 @@ func pcPrep(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	return 0
 }
 
-func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, op int32, n int32) int32 {
+func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pa *port.Cells, im *port.Cells, pts *port.Cells, gx *port.Cells, op int32, n int32) int32 {
 	// Execute one operator; `ox` holds its n operands. Unknown operators do
 	// nothing (their operands are dropped by the caller).
 	if op == opSave {
@@ -2340,10 +3659,16 @@ func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 		fx.MxIdent(cx, cTm)
 		fx.MxIdent(cx, cTlm)
 		port.CellsSet(cx, cIntext, 1)
+		port.CellsSet(cx, cTcn, 0)
 		return 0
 	}
 	if op == opEt {
 		port.CellsSet(cx, cIntext, 0)
+		if port.CellsAt(cx, cTcn) > 0 {
+			// Glyphs shown in a clipping render mode (4 to 7) clip to their boxes' union (a superset of the glyphs).
+			pcClipBox(cx, pa, port.CellsAt(cx, cTcx0), port.CellsAt(cx, cTcy0), port.CellsAt(cx, cTcx1), port.CellsAt(cx, cTcy1), evidence.PaOther(), 0, -1, 0)
+			port.CellsSet(cx, cTcn, 0)
+		}
 		return 0
 	}
 	if op == opTf {
@@ -2426,15 +3751,15 @@ func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 		return 0
 	}
 	if op == opDo {
-		pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, n)
+		pcDo(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, n)
 		return 0
 	}
 	if op == opBdc {
-		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 1)
+		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, gx, n, 1)
 		return 0
 	}
 	if op == opBmc {
-		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, n, 0)
+		pcMcBegin(src, ar, dc, a, b, st, cx, ox, gl, et, mk, fnt, gx, n, 0)
 		return 0
 	}
 	if op == opEmc {
@@ -2442,58 +3767,116 @@ func pcOp(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.
 		return 0
 	}
 	if op == opBi {
+		pcInlineImage(cx, ox, cs, im)
 		pcSkipInline(cx, cs)
 		return 0
 	}
-	if (op == opGray) || ((op == opRgb) || ((op == opCmyk) || ((op == opSc) || (op == opScn)))) {
-		pcSetColor(cx, ox, n)
+	// Colour: the device operators, the named spaces, the components.
+	if op == opGray {
+		pcColorDevice(cx, ox, gx, n, 0, 1)
+		return 0
+	}
+	if op == opRgb {
+		pcColorDevice(cx, ox, gx, n, 0, 2)
+		return 0
+	}
+	if op == opCmyk {
+		pcColorDevice(cx, ox, gx, n, 0, 3)
+		return 0
+	}
+	if op == opGrayS {
+		pcColorDevice(cx, ox, gx, n, 1, 1)
+		return 0
+	}
+	if op == opRgbS {
+		pcColorDevice(cx, ox, gx, n, 1, 2)
+		return 0
+	}
+	if op == opCmykS {
+		pcColorDevice(cx, ox, gx, n, 1, 3)
+		return 0
+	}
+	if (op == opSc) || (op == opScn) {
+		pcScOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 0)
+		return 0
+	}
+	if (op == opScS) || (op == opScnS) {
+		pcScOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 1)
 		return 0
 	}
 	if op == opCs {
-		port.CellsSet(cx, cCur+gColor, 0)
-		if (n >= 1) && (pcKind(ox, 0) == kName) {
-			port.CellsSet(cx, cCur+gFam, 0)
-			if pcEntryNameIs(ox, 0, pdfnames.PnDeviceGray()) == 1 {
-				port.CellsSet(cx, cCur+gFam, 1)
-			}
-			if pcEntryNameIs(ox, 0, pdfnames.PnDeviceRgb()) == 1 {
-				port.CellsSet(cx, cCur+gFam, 2)
-			}
-			if pcEntryNameIs(ox, 0, pdfnames.PnDeviceCmyk()) == 1 {
-				port.CellsSet(cx, cCur+gFam, 3)
-			}
-		}
+		pcCsOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 0)
+		return 0
+	}
+	if op == opCsS {
+		pcCsOp(src, ar, dc, a, b, st, out, cx, ox, gx, n, 1)
 		return 0
 	}
 	if op == opGs {
-		if (n >= 1) && (pcKind(ox, 0) == kName) {
-			var raw int32 = pcResEntry(src, ar, dc, a, b, st, cx, ox, pdfnames.PnExtGState(), 0)
-			if raw != 0 {
-				var gd int32 = pdfdoc.PdResolve(src, ar, dc, a, b, st, raw)
-				if gd != 0 {
-					var cav int32 = pdfdoc.PdDget(src, ar, dc, a, b, st, gd, pdfnames.PnCa())
-					if cav != 0 {
-						var al int32 = fx.FxRound(fx.FxMul(pcArFx64(ar, cav), fx.FxOfInt(1000)))
-						if al < 0 {
-							port.CellsSet(cx, cCur+gAlpha, 0)
-						} else if al > 1000 {
-							port.CellsSet(cx, cCur+gAlpha, 1000)
-						} else {
-							port.CellsSet(cx, cCur+gAlpha, al)
-						}
-					}
-				}
-			}
-			if pdfsrc.PsMissed(src) {
-				port.CellsSet(cx, cAbort, 1)
-			}
-		}
+		pcGsOp(src, ar, dc, a, b, st, cx, ox, n)
+		return 0
+	}
+	// Paths: construction, painting, clipping.
+	if op == opMove {
+		pcOpMove(cx, pts, ox, n)
+		return 0
+	}
+	if op == opLine {
+		pcOpLine(cx, pts, ox, n)
+		return 0
+	}
+	if op == opCurve {
+		pcOpCurve(cx, pts, ox, n, 0)
+		return 0
+	}
+	if op == opCurveV {
+		pcOpCurve(cx, pts, ox, n, 1)
+		return 0
+	}
+	if op == opCurveY {
+		pcOpCurve(cx, pts, ox, n, 2)
+		return 0
+	}
+	if op == opClose {
+		pcOpClose(cx, pts)
+		return 0
+	}
+	if op == opRect {
+		pcOpRect(cx, pts, ox, n)
+		return 0
+	}
+	if (op == opStroke) || ((op == opClosestroke) || ((op == opFill) || ((op == opFill2) || ((op == opFilleo) || ((op == opFs) || ((op == opFseo) || ((op == opCfs) || (op == opCfseo)))))))) {
+		pcPaintOp(cx, pa, pts, op)
+		return 0
+	}
+	if op == opEndpath {
+		pcEndPath(cx, pa, pts, 0, 0, 0, 0)
+		return 0
+	}
+	if op == opClip {
+		port.CellsSet(cx, cClipp, 1)
+		return 0
+	}
+	if op == opClipeo {
+		port.CellsSet(cx, cClipp, 2)
+		return 0
+	}
+	if op == opSh {
+		pcShOp(cx, pa)
+		return 0
+	}
+	if op == opLw {
+		fx.FxPut(cx, cCur+gLw, pcNum(ox, n, 0))
+		return 0
+	}
+	if op == opDash {
+		pcDashOp(cx, ox, n)
 		return 0
 	}
 	return 0
 }
 
-func pcRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, start int32, end int32) int32 {
+func pcRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pa *port.Cells, im *port.Cells, pts *port.Cells, gx *port.Cells, start int32, end int32) int32 {
 	// Run the content bytes cs[start, end): read operands, then execute each
 	// operator. The caller's lexer position, graphics-state floor and marked-
 	// content floor are kept and restored, so a form can run inside an operator.
@@ -2523,7 +3906,7 @@ func pcRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port
 			}
 			opc = port.CellsAt(cx, cOp)
 			nop = port.CellsAt(cx, cOxn)
-			pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, opc, nop)
+			pcOp(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, opc, nop)
 			pcOxClear(cx, ox)
 		}
 	}
@@ -2682,6 +4065,14 @@ func pcRotSame(r1 int32, r2 int32) int32 {
 	return 0
 }
 
+func pcHiddenMode(mode int32) int32 {
+	// 1 for the invisible render modes, 3 and 7.
+	if (mode == 3) || (mode == 7) {
+		return 1
+	}
+	return 0
+}
+
 func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	// 1 when glyph g continues the word glyph p is in: the same rotation, on the
 	// same baseline (to 45 percent of the size: sub- and superscripts stay), and
@@ -2694,6 +4085,14 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	var gap int32 = 0
 	var off int32 = 0
 	if pcRotSame(rot, evidence.GlGet(gl, g, evidence.GfRot())) == 0 {
+		return 0
+	}
+	// A word is one thing to see: a glyph of another visibility, or one that is hidden (mode 3, 7) where the other
+	// is not, starts a new word (P3.6).
+	if evidence.GlGet(gl, p, evidence.GfVis()) != evidence.GlGet(gl, g, evidence.GfVis()) {
+		return 0
+	}
+	if pcHiddenMode(evidence.GlGet(gl, p, evidence.GfMode())) != pcHiddenMode(evidence.GlGet(gl, g, evidence.GfMode())) {
 		return 0
 	}
 	if sizep > sz {
@@ -2805,7 +4204,7 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells,
 		if evidence.GlGet(gl, j, evidence.ChY1()) > y1 {
 			y1 = evidence.GlGet(gl, j, evidence.ChY1())
 		}
-		if evidence.GlGet(gl, j, evidence.GfMode()) != 3 {
+		if (evidence.GlGet(gl, j, evidence.GfMode()) != 3) && (evidence.GlGet(gl, j, evidence.GfMode()) != 7) {
 			visible = 1
 		}
 		cl = pcGcls(gl, j)
@@ -3157,6 +4556,10 @@ func pcBeginPage(cx *port.Cells, page int32) int32 {
 	port.CellsSet(cx, cCurocg, -1)
 	port.CellsSet(cx, cZ, 0)
 	port.CellsSet(cx, cIntext, 0)
+	port.CellsSet(cx, cClipp, 0)
+	port.CellsSet(cx, cTcn, 0)
+	port.CellsSet(cx, cNpath, 0)
+	port.CellsSet(cx, cNimg, 0)
 	port.CellsSet(cx, cGsbase, 0)
 	fx.MxIdent(cx, cTm)
 	fx.MxIdent(cx, cTlm)
@@ -3164,7 +4567,7 @@ func pcBeginPage(cx *port.Cells, page int32) int32 {
 	return 0
 }
 
-func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, pi int32, page int32, wd *port.Cells, ln *port.Cells) int32 {
+func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, pi int32, page int32, wd *port.Cells, ln *port.Cells, pa *port.Cells, im *port.Cells, pts *port.Cells, gx *port.Cells) int32 {
 	// Interpret page index pi of the page table pg (page number `page`, 1-based, is
 	// what the evidence records): its content streams, then the words and lines.
 	// Answers 0, or 7 (`need-bytes`) when the source missed: then nothing written is
@@ -3172,12 +4575,27 @@ func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	var con int32 = pdfdoc.PdPgContents(pg, pi)
 	var g0 int32 = evidence.GlCount(gl)
 	var w0 int32 = evidence.WdCount(wd)
+	var p0 int32 = evidence.PaCount(pa)
+	var i0 int32 = evidence.ImCount(im)
+	var rot int32 = pdfdoc.PdPgRotate(pg, pi)
+	var cw int32 = pdfdoc.PdPgCrop(pg, pi, 2) - pdfdoc.PdPgCrop(pg, pi, 0)
+	var ch int32 = pdfdoc.PdPgCrop(pg, pi, 3) - pdfdoc.PdPgCrop(pg, pi, 1)
 	var el int32 = 0
 	var eh int32 = 0
 	var endcs int32 = 0
 	pcBeginPage(cx, page)
 	pcBaseMatrix(cx, pdfdoc.PdPgCrop(pg, pi, 0), pdfdoc.PdPgCrop(pg, pi, 1), pdfdoc.PdPgCrop(pg, pi, 2), pdfdoc.PdPgCrop(pg, pi, 3), pdfdoc.PdPgRotate(pg, pi))
 	pcGsReset(cx)
+	pdfgfx.GxPage(gx)
+	pdfgfx.GxOcRead(src, ar, dc, a, b, st, gx)
+	if (rot == 90) || (rot == 270) {
+		port.CellsSet(cx, cPw, ch)
+		port.CellsSet(cx, cPh, cw)
+	} else {
+		port.CellsSet(cx, cPw, cw)
+		port.CellsSet(cx, cPh, ch)
+	}
+	pcPathReset(cx, pts)
 	port.CellsSet(cx, cRes, pdfdoc.PdPgResources(pg, pi))
 	port.CellsDrop(cs, 0)
 	if con != 0 {
@@ -3202,22 +4620,26 @@ func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 		return 7
 	}
 	endcs = port.CellsLen(cs)
-	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, 0, endcs)
+	pcRun(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pa, im, pts, gx, 0, endcs)
 	if port.CellsAt(cx, cAbort) == 1 {
 		return 7
 	}
 	if pdfsrc.PsMissed(src) {
 		return 7
 	}
+	// The path in progress when the page ended never painted: its points are dropped.
+	port.CellsDrop(pts, port.CellsAt(cx, cPpts)*3)
+	pdfvis.PvPage(gl, mk, pa, im, port.CellsAt(cx, cPw), port.CellsAt(cx, cPh), g0, p0, i0)
 	PcGroup(gl, et, wd, ln, fnt, page, g0, w0)
 	return 0
 }
 
-func PcDocument(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells) int32 {
+func PcDocument(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *port.Cells, pg *port.Cells, wd *port.Cells, ln *port.Cells, pa *port.Cells, im *port.Cells, pts *port.Cells, gx *port.Cells) int32 {
 	// Every page of an opened document (`pd-open` has answered 0): clears `cx`,
 	// then `pc-page` for each page. Answers 0, or 7 when the source missed.
 	PcInit(cx, ox)
 	port.CellsDrop(fnt, 0)
+	port.CellsDrop(gx, 0)
 	var n int32 = pdfdoc.PdPages(src, ar, dc, a, b, st, pg)
 	var i int32 = 0
 	var status int32 = 0
@@ -3225,7 +4647,7 @@ func PcDocument(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b 
 		return 7
 	}
 	for i < n {
-		status = PcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i+1, wd, ln)
+		status = PcPage(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, i, i+1, wd, ln, pa, im, pts, gx)
 		if status == 7 {
 			return 7
 		}

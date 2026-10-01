@@ -676,11 +676,15 @@ pub(crate) fn pt_golden(pdf: &[u8], mut t: &mut String, mut ar: &mut crate::port
     crate::port::cells_drop(wd, 0);
     crate::port::cells_drop(ln, 0);
     let src: &crate::port::Src = &crate::port::src_of_blob(pdf);
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let o: i32 = pd_open(src, ar, dc, a, b, st);
     if o != 0 {
         return 1;
     }
-    if pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln) != 0 {
+    if pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
         return 2;
     }
     model_init(nodes, attrs, regions, text, pages, ledger, layout);

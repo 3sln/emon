@@ -86,20 +86,32 @@ pub(crate) fn ct_near_angle(emon_t: i32, got: i32, want: i32, law: &str, row: i3
     crate::testport::assert_that_at(d <= 3, law, row);
     return 0;
 }
-pub(crate) fn ct_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+pub(crate) fn ct_run2(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut gx: &mut crate::port::Cells) -> i32 {
     // Open the file and run every page: 0 when both went well, 100 + the open
-    // status when it did not open, else `pc-document`'s (7: the source missed).
+    // status when it did not open, else `pc-document`'s (7: the source missed). The paths, images, their
+    // points and the colour workspace are the caller's too.
     crate::port::cells_drop(gl, 0);
     crate::port::cells_drop(et, 0);
     crate::port::cells_drop(mk, 0);
     crate::port::cells_drop(fnt, 0);
     crate::port::cells_drop(wd, 0);
     crate::port::cells_drop(ln, 0);
+    crate::port::cells_drop(pa, 0);
+    crate::port::cells_drop(im, 0);
+    crate::port::cells_drop(pts, 0);
     let o: i32 = pd_open(src, ar, dc, a, b, st);
     if o != 0 {
         return 100 + o;
     }
-    return pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+    return pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
+}
+pub(crate) fn ct_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+    // `ct-run2` with arenas of its own for the paths, images, points and colours.
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return ct_run2(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
 }
 pub(crate) fn ct_g_row(emon_t: i32, rows: &[u8], s: i32, e: i32, gl: &mut crate::port::Cells, mut vals: &mut crate::port::Cells, g: i32, line: i32) -> i32 {
     // One G row against glyph g: the code point exactly, the geometry within a
@@ -324,6 +336,7 @@ pub(crate) fn ct_dump_rows(emon_t: i32, rows: &[u8]) -> i32 {
     let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let n: i32 = crate::port::blob_len(rows);
     let mut pos: i32 = 0;
     let mut line: i32 = 0;
@@ -337,7 +350,7 @@ pub(crate) fn ct_dump_rows(emon_t: i32, rows: &[u8]) -> i32 {
         if (pos < e) && (crate::port::blob_u8(rows, pos) != 35) {
             tb = ct_tab(rows, pos, e);
             files += 1;
-            status = ct_run(&crate::port::src_of_blob(&crate::testport::test_file_span(rows, pos, tb)[..]), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+            status = ct_run2(&crate::port::src_of_blob(&crate::testport::test_file_span(rows, pos, tb)[..]), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, paths, images, pts, gx);
             crate::testport::assert_eq_at(status, 0, "the file ran", line);
             crate::testport::assert_eq_at(ev_check(epages, views, pts, refs, et, feats, gl, wd, ln, mk, fnt, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the evidence is well formed", line);
             let t: &mut String = &mut crate::port::new_text();
@@ -368,7 +381,7 @@ pub(crate) fn ct_diff(x: &mut crate::port::Cells, y: &mut crate::port::Cells) ->
     }
     return -1;
 }
-pub(crate) fn ct_async(bytes: &[u8], chunk: i32, mut ctr: &mut crate::port::Cells, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells) -> i32 {
+pub(crate) fn ct_async(bytes: &[u8], chunk: i32, mut ctr: &mut crate::port::Cells, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut gl: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut fnt: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut gx: &mut crate::port::Cells) -> i32 {
     // Run `bytes` through an async source of `chunk`-byte chunks, re-running on a fresh
     // view after each fetch until an attempt does not miss. `ctr` gets [rounds, attempts
     // that missed and answered something other than need-bytes].
@@ -381,7 +394,7 @@ pub(crate) fn ct_async(bytes: &[u8], chunk: i32, mut ctr: &mut crate::port::Cell
     crate::port::cells_push(ctr, 0);
     while more == 1 {
         let v: &crate::port::Src = &crate::testport::src_view(base);
-        status = ct_run(v, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+        status = ct_run2(v, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
         if ps_missed(v) {
             if (status != 7) && (status != 0) && (status < 100) {
                 crate::port::cells_set(ctr, 1, crate::port::cells_at(ctr, 1) + 1);
@@ -442,6 +455,14 @@ pub(crate) fn ct_async_rows(emon_t: i32, rows: &[u8], mode: i32, chunk: i32) -> 
     let pg2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let wd2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gx2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ctr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let n: i32 = crate::port::blob_len(rows);
     let mut pos: i32 = 0;
@@ -468,8 +489,8 @@ pub(crate) fn ct_async_rows(emon_t: i32, rows: &[u8], mode: i32, chunk: i32) -> 
         if s >= 0 {
             q = ct_tab(rows, s, e);
             files += 1;
-            s1 = ct_run(&crate::port::src_of_blob(&crate::testport::test_file_span(rows, s, q)[..]), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
-            s2 = ct_async(&crate::testport::test_file_span(rows, s, q)[..], chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, mk2, fnt2, pg2, wd2, ln2);
+            s1 = ct_run2(&crate::port::src_of_blob(&crate::testport::test_file_span(rows, s, q)[..]), ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
+            s2 = ct_async(&crate::testport::test_file_span(rows, s, q)[..], chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, mk2, fnt2, pg2, wd2, ln2, pa2, im2, pts2, gx2);
             crate::testport::assert_eq_at(s2, s1, "the kept attempt's status is the in-memory run's", line);
             crate::testport::assert_eq_at(ct_diff(gl, gl2), -1, "glyphs", line);
             crate::testport::assert_eq_at(ct_diff(et, et2), -1, "evidence text", line);
@@ -477,6 +498,10 @@ pub(crate) fn ct_async_rows(emon_t: i32, rows: &[u8], mode: i32, chunk: i32) -> 
             crate::testport::assert_eq_at(ct_diff(fnt, fnt2), -1, "fonts", line);
             crate::testport::assert_eq_at(ct_diff(wd, wd2), -1, "words", line);
             crate::testport::assert_eq_at(ct_diff(ln, ln2), -1, "lines", line);
+            crate::testport::assert_eq_at(ct_diff(pa, pa2), -1, "paths", line);
+            crate::testport::assert_eq_at(ct_diff(im, im2), -1, "images", line);
+            crate::testport::assert_eq_at(ct_diff(pts, pts2), -1, "path points", line);
+            crate::testport::assert_eq_at(ct_diff(gx, gx2), -1, "the colour workspace", line);
             crate::testport::assert_eq_at(pc_warn(cx2), pc_warn(cx), "warnings", line);
             crate::testport::assert_eq_at(crate::port::cells_at(ctr, 1), 0, "a missed attempt answered only need-bytes", line);
             crate::testport::assert_that_at(crate::port::cells_at(ctr, 0) <= 24, "within 24 rounds", line);
@@ -651,4 +676,19 @@ fn test_corrupted_and_cut_files_never_fault() {
     crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("content/fonts.pdf")[..], 300, 37) > 300, "fonts.pdf");
     crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("content/damaged.pdf")[..], 300, 29) > 300, "damaged.pdf");
     crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("pdf/html-chrome.pdf")[..], 100, 401) > 100, "a Chrome file");
+}
+#[test]
+fn test_the_visibility_fixtures_are_the_same_through_an_async_source_of_512_byte_chunks() {
+    // Paths, images, their points and the colour workspace too, cell for cell (D075).
+    let r: i32 = ct_async_rows(0, &crate::testport::test_file("vis/rows.txt")[..], 0, 512);
+    crate::testport::assert_that(r >= 1700, "seventeen files were run");
+}
+#[test]
+fn test_corrupted_and_cut_visibility_fixtures_never_fault() {
+    // Colour spaces, functions, clips, optional content and soft masks, damaged: no fault, whatever they say.
+    crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("vis/spaces.pdf")[..], 300, 53) > 300, "spaces.pdf");
+    crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("vis/white.pdf")[..], 300, 61) > 300, "white.pdf");
+    crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("vis/ocg.pdf")[..], 300, 59) > 300, "ocg.pdf");
+    crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("vis/occluded.pdf")[..], 300, 67) > 300, "occluded.pdf");
+    crate::testport::assert_that(ct_fuzz_file(0, &crate::testport::test_file("vis/clip.pdf")[..], 300, 47) > 300, "clip.pdf");
 }

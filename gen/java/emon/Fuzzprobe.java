@@ -89,14 +89,22 @@ public final class Fuzzprobe {
         emon.Port.Cells hh = emon.Port.newCells();
         int ts = 0;
         int tj = 0;
-        int s = Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gx = emon.Port.newCells();
+        int s = Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
         int g = 0;
         int h = 7;
+        int hv = 7;
         emon.Port.textAscii(t, " content=");
         emon.Port.textI32(t, s);
         if (s == 0) {
             while (g < Evidence.glCount(gl)) {
                 h = fzMix(h, Evidence.glGet(gl, g, Evidence.chCp()));
+                hv = fzMix(hv, Evidence.glGet(gl, g, Evidence.gfVis()));
+                hv = fzMix(hv, Evidence.glGet(gl, g, Evidence.gfVby()));
+                hv = fzMix(hv, Evidence.glGet(gl, g, Evidence.gfVchk()));
                 g += 1;
             }
             emon.Port.textAscii(t, " cwarn=");
@@ -111,6 +119,12 @@ public final class Fuzzprobe {
             emon.Port.textI32(t, Evidence.mkCount(mk));
             emon.Port.textAscii(t, " cps=");
             emon.Port.textI32(t, h);
+            emon.Port.textAscii(t, " paths=");
+            emon.Port.textI32(t, Evidence.paCount(pa));
+            emon.Port.textAscii(t, " images=");
+            emon.Port.textI32(t, Evidence.imCount(im));
+            emon.Port.textAscii(t, " vis=");
+            emon.Port.textI32(t, hv);
             Pdfx.pxIndexBuild(src, ar, dc, a, b, st, pg, idx);
             ts = Pdfstruct.tgRead(src, ar, dc, a, b, st, pg, idx, txt, w, seen, ss, se, sk, sc, so, wk, md);
             emon.Port.textAscii(t, " tags=");

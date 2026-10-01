@@ -671,11 +671,15 @@ public static class Paratest {
         emon.Port.CellsDrop(wd, 0);
         emon.Port.CellsDrop(ln, 0);
         emon.Port.Src src = emon.Port.SrcOfBlob(pdf);
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells gx = emon.Port.NewCells();
         int o = Pdfdoc.PdOpen(src, ar, dc, a, b, st);
         if (o != 0) {
             return 1;
         }
-        if (Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln) != 0) {
+        if (Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);

@@ -12,6 +12,8 @@
 #   json    one row `J path <TAB> the compact emon-evidence dump` per file
 #   glyphs  `G page cp[+cp] how font size x0 y0 x1 y1 baseline rot mode mcid word artifact` per glyph
 #   text    `T page y0 x0 line-text` per emon line, words joined by a space
+#   vis     `V page glyph mode vis vby vchk x0 y0 x1 y1 fill stroke size cs cp` per glyph (P3.6, D152), then `I page vis vby vchk box`
+#           per image and `Q page kind flags fill stroke box z clip` per path row
 #   stats   (default) `F path open-status pages glyphs words lines spans warn fonts ms`
 set -e
 cd "$(dirname "$0")/../.."
@@ -86,6 +88,7 @@ fn main() {
             let mut rules = port::Cells::new();
             let mut prims = port::Cells::new();
             let mut tlines = port::Cells::new();
+            let mut gx = port::Cells::new();
             let mut rows: Vec<String> = vec![];
             let ostatus = pd_open(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st);
             if ostatus != 0 {
@@ -94,7 +97,8 @@ fn main() {
             }
             let status = pc_document(&src, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut cx, &mut ox,
                                      &mut cs, &mut out, &mut f0, &mut f1, &mut f2, &mut f3,
-                                     &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln);
+                                     &mut gl, &mut et, &mut mk, &mut fnt, &mut pg, &mut wd, &mut ln,
+                                     &mut paths, &mut images, &mut pts, &mut gx);
             let npages = pd_pg_count(&mut pg);
             if mode == "json" {
                 let mut t = String::new();
@@ -122,6 +126,27 @@ fn main() {
                         cr_span(&mut t, &mut mk, &mut et, i);
                         rows.push(format!("S\t{}", t));
                     }
+                }
+            }
+            if mode == "vis" {
+                for g in 0..gl_count(&mut gl) {
+                    let ts = gl_get(&mut gl, g, ch_tstart());
+                    let cp = if ts >= 0 { cps_str(&et, ts, gl_get(&mut gl, g, ch_tlen())) }
+                             else if gl_get(&mut gl, g, ch_cp()) < 0 { "?".to_string() }
+                             else { char::from_u32(gl_get(&mut gl, g, ch_cp()) as u32).unwrap_or('?').to_string() };
+                    rows.push(format!("V\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", gl_get(&mut gl, g, ch_page()), g, gl_get(&mut gl, g, gf_mode()),
+                        gl_get(&mut gl, g, gf_vis()), gl_get(&mut gl, g, gf_vby()), gl_get(&mut gl, g, gf_vchk()),
+                        gl_get(&mut gl, g, ch_x0()), gl_get(&mut gl, g, ch_y0()), gl_get(&mut gl, g, ch_x1()), gl_get(&mut gl, g, ch_y1()),
+                        gl_get(&mut gl, g, gf_fill()), gl_get(&mut gl, g, gf_stroke()), gl_get(&mut gl, g, gf_size()), gl_get(&mut gl, g, gf_cs()), cp));
+                }
+                for r in 0..im_count(&mut images) {
+                    rows.push(format!("I\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", im_get(&mut images, r, mf_page()), im_get(&mut images, r, mf_vis()), im_get(&mut images, r, mf_vby()),
+                        im_get(&mut images, r, mf_vchk()), im_get(&mut images, r, mf_x0()), im_get(&mut images, r, mf_y0()), im_get(&mut images, r, mf_x1()), im_get(&mut images, r, mf_y1()), im_get(&mut images, r, mf_z())));
+                }
+                for r in 0..pa_count(&mut paths) {
+                    rows.push(format!("Q\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", pa_get(&mut paths, r, pf_page()), pa_get(&mut paths, r, pf_kind()), pa_get(&mut paths, r, pf_flags()),
+                        pa_get(&mut paths, r, pf_fill()), pa_get(&mut paths, r, pf_stroke()), pa_get(&mut paths, r, pf_x0()), pa_get(&mut paths, r, pf_y0()),
+                        pa_get(&mut paths, r, pf_x1()), pa_get(&mut paths, r, pf_y1()), pa_get(&mut paths, r, pf_z()), pa_get(&mut paths, r, pf_clip())));
                 }
             }
             if mode == "glyphs" || mode == "all" {

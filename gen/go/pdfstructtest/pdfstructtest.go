@@ -92,6 +92,10 @@ func ttLine(pdf *port.Src, which int32, t *strings.Builder, res *port.Cells) int
 	var fnt *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gx *port.Cells = port.NewCells()
 	var ss *port.Cells = port.NewCells()
 	var se *port.Cells = port.NewCells()
 	var sk *port.Cells = port.NewCells()
@@ -113,7 +117,7 @@ func ttLine(pdf *port.Src, which int32, t *strings.Builder, res *port.Cells) int
 	if status != 0 {
 		return status
 	}
-	r = pdfcontent.PcDocument(pdf, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
+	r = pdfcontent.PcDocument(pdf, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx)
 	if r != 0 {
 		return -1
 	}

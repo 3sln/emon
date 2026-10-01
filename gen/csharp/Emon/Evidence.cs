@@ -58,6 +58,12 @@ public static class Evidence {
     public static int VzOccluded() {
         return 5;
     }
+    public static int VzOcgHidden() {
+        return 6;
+    }
+    public static int VzTransparent() {
+        return 7;
+    }
     public static int VzEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "clipped");
@@ -77,6 +83,14 @@ public static class Evidence {
         }
         if (code == 5) {
             emon.Port.TextAscii(t, "occluded");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.TextAscii(t, "ocg-hidden");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.TextAscii(t, "transparent");
             return 1;
         }
         return 0;
@@ -280,6 +294,24 @@ public static class Evidence {
     public static int PgClip() {
         return 4;
     }
+    public static int PgFilled() {
+        return 8;
+    }
+    public static int PgStroked() {
+        return 16;
+    }
+    public static int PgShading() {
+        return 32;
+    }
+    public static int PgPattern() {
+        return 64;
+    }
+    public static int PgBlend() {
+        return 128;
+    }
+    public static int PgSoftmask() {
+        return 256;
+    }
     public static int PgEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "closed");
@@ -293,6 +325,30 @@ public static class Evidence {
             emon.Port.TextAscii(t, "clip");
             return 1;
         }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "filled");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "stroked");
+            return 1;
+        }
+        if (code == 32) {
+            emon.Port.TextAscii(t, "shading");
+            return 1;
+        }
+        if (code == 64) {
+            emon.Port.TextAscii(t, "pattern");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.TextAscii(t, "blend");
+            return 1;
+        }
+        if (code == 256) {
+            emon.Port.TextAscii(t, "softmask");
+            return 1;
+        }
         return 0;
     }
     public static int MgMask() {
@@ -303,6 +359,15 @@ public static class Evidence {
     }
     public static int MgInline() {
         return 4;
+    }
+    public static int MgMasked() {
+        return 8;
+    }
+    public static int MgBlend() {
+        return 16;
+    }
+    public static int MgSoftmask() {
+        return 32;
     }
     public static int MgEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
@@ -315,6 +380,18 @@ public static class Evidence {
         }
         if (code == 4) {
             emon.Port.TextAscii(t, "inline");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "masked");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "blend");
+            return 1;
+        }
+        if (code == 32) {
+            emon.Port.TextAscii(t, "softmask");
             return 1;
         }
         return 0;
@@ -331,6 +408,9 @@ public static class Evidence {
     public static int McUnterminated() {
         return 8;
     }
+    public static int McXobject() {
+        return 16;
+    }
     public static int McEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "inline");
@@ -346,6 +426,10 @@ public static class Evidence {
         }
         if (code == 8) {
             emon.Port.TextAscii(t, "unterminated");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "xobject");
             return 1;
         }
         return 0;
@@ -461,6 +545,18 @@ public static class Evidence {
     public static int VcOcclusion() {
         return 16;
     }
+    public static int VcOcg() {
+        return 32;
+    }
+    public static int VcTransparent() {
+        return 64;
+    }
+    public static int VcBlend() {
+        return 128;
+    }
+    public static int VcSoftmask() {
+        return 256;
+    }
     public static int VcEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "clip");
@@ -480,6 +576,22 @@ public static class Evidence {
         }
         if (code == 16) {
             emon.Port.TextAscii(t, "occlusion");
+            return 1;
+        }
+        if (code == 32) {
+            emon.Port.TextAscii(t, "ocg");
+            return 1;
+        }
+        if (code == 64) {
+            emon.Port.TextAscii(t, "transparent");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.TextAscii(t, "blend");
+            return 1;
+        }
+        if (code == 256) {
+            emon.Port.TextAscii(t, "softmask");
             return 1;
         }
         return 0;
@@ -5988,7 +6100,7 @@ public static class Evidence {
         }
         if (which > 3) {
             emon.Port.TextAscii(t, "[");
-            while (b < 8) {
+            while (b < 16) {
                 if ((v & bit) != 0) {
                     Json.JsFsep(t, pr, k);
                     emon.Port.TextAscii(t, "\"");

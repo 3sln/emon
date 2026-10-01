@@ -1336,14 +1336,24 @@ analysis beyond "top-to-bottom lines on a single column".
   1,288 corpus files against pdfminer.six: shown-character agreement 99.92% before and after, `unknown` 1.50% -> 0.40% of
   shown characters; CJK documents 99.94% -> 99.97% (D143). **Gates**: `bb unit` on every arm; `bb unit red` fails on every
   arm. Out: `/CIDToGIDMap` and a reverse cmap for composite TrueType fonts; `pdfcontent` reading `/W2`.
-- [ ] P3.5 — Full graphics state: clipping paths (visibility), colour spaces
+- [x] P3.5 — Full graphics state: clipping paths (visibility), colour spaces
   (to classify ink colour), `ExtGState` alpha, render modes, paths recorded as
   `vector` evidence (lines, rects, fills), image placements (`Do` image,
-  inline `BI…EI`), shadings as filled regions.
-- [ ] P3.6 — Visibility classification (SPEC §8.1): clipped, off-page,
+  inline `BI…EI`), shadings as filled regions. **Done** (D152-D154): the
+  interpreter reads `m l c v y h re S s f F f* B B* b b* n W W* sh w d`, the stroking colours and
+  every colour space of `emon.pdfgfx`, `gs` (`ca CA BM SMask LW`), Form XObject `/BBox` clips, image
+  placements (XObject and inline) and `/OC` spans; the evidence has `paths` rows with their geometry in `pts`,
+  `images` rows, clip rows, and the glyph's stroke colour, stroke alpha, clip and blend/soft-mask bits. Not done: a
+  tiling pattern's own content, `/Font` in an ExtGState, a soft mask's group (its presence is recorded and makes
+  paint "not exactly known"), exact (non-bounding-box) clipping by a non-rectangular path.
+- [x] P3.6 — Visibility classification (SPEC §8.1): clipped, off-page,
   white-on-white, covered-by-later-opaque-paint, invisible mode. Writes the
   evidence hooks `vis`, `vby` (the occluder's `z`) and `vchk` on glyphs and
-  images (SPEC §8.4.3, D096).
+  images (SPEC §8.4.3, D096). **Done** (D155, D156): `emon.pdfvis`, run at the end of each page; classes clipped,
+  offpage, white-on-white, zero-size (under one point), occluded, ocg-hidden, transparent; render modes 3 and 7 stay the
+  `hidden-text` source and a Tr 3 OCR layer over a scan is never dropped or "occluded". 17 fixtures (3,278 hand
+  or independently computed expectations) on every target; poppler's text and page agree on the real corpus (D156).
+  `bb gates` green; `bb unit red` fails on every arm.
 - [x] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
   `/Alt`, `/ActualText` (use it when present — it is the author's answer),
   informativeness score (D034). Also (D076): Artifact subtypes as
@@ -1613,16 +1623,16 @@ analysis beyond "top-to-bottom lines on a single column".
   tau at least 0.95, no `join-p` below 0.95; on `layout/arxiv` 1512.03385,
   1810.04805 and 2206.01062 a person reads the HTML in order and the entry
   lists what is wrong; first numbers recorded in the scoreboard (D023).
-  *Done (P4.1, D152-D155).* New `kin/columns.kin` (`emon.columns`: `lc-copy`, `lc-page`) and `kin/para.kin` rebuilt around it
+  *Done (P4.1, D158-D161).* New `kin/columns.kin` (`emon.columns`: `lc-copy`, `lc-page`) and `kin/para.kin` rebuilt around it
   (`pa-build` has a new, longer signature: the column stage's scratch and a debug log are arguments; `host/rust/src/engine.rs` was
   changed to pass them). Per page: the lines are copied (the evidence is not touched), side lines (margin notes, sidebars) are set
   aside, **gutters are found over words**, lines that cross one are **split**, the extents are carried along the columns, the **cut
   tree** is made (vertical first; horizontal only at a full-width gap, at the end of an extent that no other gutter's extent
   contains, or under a title) and its leaves are the **column fragments**, numbered `band`/`col`; the page's `layout` map is written
   for every page that has text (one cell for a one-column page); then the paragraphs are built fragment by fragment and a paragraph
-  that fills its fragment is **joined** to the next by the points of D153, with hyphenation at the break by the rule of SPEC 3.6
+  that fills its fragment is **joined** to the next by the points of D159, with hyphenation at the break by the rule of SPEC 3.6
   (no locale: the hyphen is kept). Margin notes and sidebars become `note` blocks placed after the paragraph beside which they begin
-  (D154). `bb unit` has seven new laws in `kin/paratest.kin` (two columns, the join, the hyphen at the break, a title across the
+  (D160). `bb unit` has seven new laws in `kin/paratest.kin` (two columns, the join, the hyphen at the break, a title across the
   gutter, margin notes, a right-to-left page, a table across the gutter and a gap, a line written across the gutter and split at
   it); `kin/scripts/slice --update` rewrote the six `.full.html` goldens (they now carry `data-emon-col`), `test/para/*.json` the
   page `layout`; no paragraph of them changed.
@@ -1643,7 +1653,7 @@ analysis beyond "top-to-bottom lines on a single column".
   title and authors are band 0, then two columns, in order; the abstract, section heads and footnote at the foot of column 1 are in
   their column; the figure's labels (CIFAR curves, `20`, `56-layer`, tick numbers) are paragraphs in the right column's top (P5), and
   the sentence that straddles the figure (`have also` / `greatly benefited from very deep models.`) is not joined (the first line of
-  the next column is a chart label, not the continuation: D153). **1810.04805**: title and authors band 0, two columns in order,
+  the next column is a chart label, not the continuation: D159). **1810.04805**: title and authors band 0, two columns in order,
   bullet items cut after their marker line (the hanging indent starts a paragraph: D135, P4.5), hyphenated words kept hyphenated (`representa-tion`), `In this paper...` joined from
   page 1 to page 2; correct. **2206.01062**: the page-1 header (author block of five authors in three cells) is read in a plausible
   order but `Rueschlikon, Switzerland bpf@zurich.ibm.com` is joined across the author cells and the abstract's lines are each a
@@ -1656,13 +1666,13 @@ analysis beyond "top-to-bottom lines on a single column".
   footer is a paragraph and a header can be joined to the first paragraph of the page (GAO page 5/6); (3) line numbers in a margin
   (a column of digits) are dropped from the flow without a ledger entry; (4) a paragraph that ends exactly at the bottom of a column in a
   full line closing a sentence and whose next column starts in capitals has no evidence of continuing but "the column is full": it
-  is joined when the line reaches the edge (D153), and the synthetic corpus has paragraphs that do and do not; (5) two columns that
+  is joined when the line reaches the edge (D159), and the synthetic corpus has paragraphs that do and do not; (5) two columns that
   continue a paragraph for fewer than three rows at a page's top are read row by row; (6) the first line of a continuation after a
   figure at the head of a column; (7) tight-leading and loose-leading text in one document (`pa-new-par`'s document-wide median);
   (8) a table of cells of three words or more with a gap of under three sizes is read as columns (no table stage yet); (9) a
   producer that writes one word per line in a column (rare) gives words, not lines, to split.
   *Learnt*: a page's structure is found by dumping what the algorithm decided (each gutter's extent and why it ended, each fragment's
-  box), not by reading the code: every constant of D152 that is not the SPEC's came from one such dump (the median word gap that
+  box), not by reading the code: every constant of D158 that is not the SPEC's came from one such dump (the median word gap that
   ended every gutter of a justified three-word column, the table row that closed the gutters of a newspaper, the footnote that
   was body type at 0.77 of the size). Go's `declared and not used` found a local that `rustc` accepted (`r` of `pa-columns`, kept as `^:mut` and never read);
   the nested-read-of-a-mutated-`Cells` borrow error occurred twice (a call that took `(ln-get lt ...)` as an argument while `lt` was the
@@ -5500,12 +5510,87 @@ run (a span with a nested MCID span would double-count); strict left-to-right (a
 **Alternatives**: qpdf's JSON for the tree (it lists objects, not the tree's resolved roles); comparing whole dumps (a format change would be an oracle change); real mis-tagged files only (nobody knows their truth).
 - [ ] **Signed off** (maintainer)
 
-### D152 — The column stage as built: gutters from the rows of a page's words, extents carried along the columns, a cut tree that cuts at full-width gaps and between gutters, never through them (P4.1; D111, SPEC 10.1.1)
+### D152 — The graphics state as built: paths, clips as the intersection box, images, `pa im pts gx` (P3.5; D096, D102, D126)
+**Decision**: `pc-page`/`pc-document`/`pc-run`/`pc-do`/`pc-op` take four more arenas after `ln`: the evidence's `paths` (`pa`),
+`images` (`im`), `pts`, and `gx`, the colour and optional-content workspace of `emon.pdfgfx` (one `Cells`, D153). A graphics state is 64 cells
+(was 32): stroking colour and alpha, both colour-space keys and classes, the clip in force (a `paths` row, -1 none), blend mode,
+soft mask in force, line width, first dash length. PATHS: `m l c v y h re` build a path in page space (D009) in `pts` (the first
+128 points of a path; a longer one keeps its box and no geometry), its box and kind (a rectangle is one subpath of four
+corners axis-aligned to a centipoint, with or without the closing line; else curve, single line, other). A paint operator makes a `paths` row (flags
+`filled stroked pattern blend softmask closed evenodd`, fill and stroke colour, alpha, stroke width and dash in centipoints, `z`, `clip`,
+`mark`, `ocg`, geometry); the box grows by half the stroke width. 200,000 paths or images a page are recorded (the rest set warning 1024).
+A CLIP IS A ROW WHOSE BOX IS THE INTERSECTION of the new clip with the one in force (so a glyph's `clip` names the whole region's bounding box and
+P3.6 never walks a chain); a clip that does not shrink the region makes no row; `W`/`W*` is pending until the next paint operator or
+`n`. A Form XObject's `/BBox` is a clip, and glyphs shown in a clipping render mode (4-7) clip, at `ET`, to the union of their cells. THE
+LIMIT: a clip by a non-rectangular path is its bounding box (a glyph in the corner a triangle leaves out is not clipped), and an even-odd
+clip is its box: conservative, never a false "clipped". An IMAGE placement (`Do` and inline `BI`, whose dictionary is read for `W H IM`) is a
+row: the unit square through the CTM, `rot` of its x axis, `skewed` unless its axes are within half a degree of a right angle, flags `mask smask
+masked inline blend softmask`. `sh` is a `paths` row of kind `other` flagged `shading`, over the clip region. Alpha: `ca` and `CA`; blend modes and soft
+masks are recorded as bits (`pg-blend pg-softmask`, `mg-blend mg-softmask`, `vc-blend vc-softmask`) and make a paint "not exactly known". `rg`
+and `k` now set the colour-space class (D127 said they did and they did not: the Chrome goldens changed from `gray` to `rgb`).
+**Why**: the visibility pass (D155) needs exactly this and nothing more; everything else of a graphics state is already evidence.
+**Alternatives**: a clip chain walked by the reader; polygon clipping (a bounded add-on to `emon.pdfvis` if a crawler's trick ever needs it).
+- [ ] **Signed off** (maintainer)
+
+### D153 — Colour spaces and PDF functions (`emon.pdfgfx`, P3.5)
+**Decision**: the ink colour of every painted object is 0xRRGGBB or -1 (unknown), and the colour-space class is `gray rgb cmyk spot pattern other`.
+DeviceGray, DeviceRGB, DeviceCMYK, CalGray and CalRGB (read as gray and RGB: no gamma, no matrix), Lab (through XYZ and sRGB's transfer function, by
+integer arithmetic, from the white point and range; D50's and D65's published matrices), ICCBased by `/N` (no profile is read), Indexed (its whole
+palette is converted when it is first seen, from any base), Separation and DeviceN by the alternate space and the tint transform (a Separation's
+256-colour palette is evaluated once), Pattern (-1). Functions are compiled into cells and run: type 2 (any real exponent, by squaring and square
+roots), 3 (stitching), 0 (sampled: linear for one input, the nearest sample for more) and 4 (the whole PostScript calculator language but `ln`, `log` and `exp`
+with a negative base and a fractional exponent, which make the function unusable and the colour -1). CMYK is `(1-c)(1-k)`. A space that is not read, and a
+colour that cannot be converted, is -1: P3.6 never calls an unknown colour white. A cache of 24 spaces keyed by the object's handle, replaced round
+robin. **Validated**: `test/vis/spaces.pdf` holds 27 colours (every space above, stitched, sampled, calculator and gamma-exponent tint transforms,
+a Lab alternate); their expected values are computed by a SECOND implementation in `kin/scripts/vis-fixtures` (double precision, a Clojure
+PostScript interpreter) and every target is within two levels a channel.
+**Alternatives**: reading ICC profiles (a separate task, and the white test needs only the hit at 1 1 1); exact CalRGB.
+- [ ] **Signed off** (maintainer)
+
+### D154 — Optional content: `ocgdef`, OCMD and `/VE`, form and image `/OC`, `/AS` is not "off" (P3.5)
+**Decision**: `/OCProperties /D` is read once a document: `/BaseState`, `/ON`, `/OFF`. A `BDC /OC` mark's `ocgdef` is 1 on, 0 off (an OCG by its configured
+state; an OCMD by `/VE` (`And Or Not`, depth 8) or its policy `AllOn AnyOn AnyOff AllOff`). An `/OC` entry of a Form XObject or an image is a `marks` row
+of its own (`mc-xobject`) around the form's run or the image's row. A group whose configuration is on but whose `/Usage /View /ViewState` is OFF
+(an `/AS` auto state: a "print only" layer) is `ocgdef` 2: poppler and Ghostscript both DRAW it (checked on `test/vis/ocg.pdf`; Ghostscript also warns that it ignores
+`/VE`), Acrobat hides it, so it is not `off` for P3.6 and fusion can read it as a watermark hint. A glyph or image inside any span whose state is 0 on its chain is `ocg-hidden`.
+- [ ] **Signed off** (maintainer)
+
+### D155 — Visibility classification (`emon.pdfvis`, P3.6; SPEC 8.1, 8.4.3)
+**Decision**: after a page's content is read, every glyph and image gets `vis`, `vby`, `vchk` (SPEC 8.4.3 as amended): `clipped`, `offpage`,
+`white-on-white` (the ink is within 4 levels a channel of the backdrop: the page's white, or the NEAREST EARLIER opaque axis-aligned rectangle that covers the whole glyph;
+any other earlier paint that touches the cell, an image, a shading, a pattern, a translucent or blended fill, a partial cover, makes the backdrop unknown and the check silent),
+`zero-size` (under one point), `occluded` (a LATER opaque paint covers the visible cell: a rectangle fill at alpha 1 with a known colour, no blend or soft mask and itself visible, or an
+image with no stencil, `/SMask` or `/Mask`, alpha 1 and an axis-aligned placement; `vby` is its `z`), `ocg-hidden`, `transparent` (alpha 0). The first failing check names the class and
+later checks do not run. Render modes 3 and 7 are NOT a class: they paint nothing, so white, occlusion and transparent do not apply (a hidden OCR layer over its scan is never "occluded" by it), while clip, offpage,
+zero-size and ocg still do. A word never mixes visibilities: `pc-continues` breaks where `vis` or hidden-ness changes, and `hidden-text` is the source of a word whose glyphs are all mode 3 or 7. At most
+4,096 rows are looked at each way per object (past that: "cannot tell"). TEXT UNDER A SCAN drawn in a visible mode (some older producers' OCR layers) is `occluded` with `vby` the scan's `z`: the ledger keeps its text, and fusion (P7.6)
+may read an occluder that is a page-sized image as "this is an OCR layer".
+**Limits**: a glyph is its CELL (ascent to descent), not its ink; a clip by a non-rectangle is its box (D152); a rotated picture is not an exact occluder.
+- [ ] **Signed off** (maintainer)
+
+### D156 — How P3.5 and P3.6 were validated
+**Decision**: (1) `kin/scripts/vis-fixtures` (bb) writes 17 PDFs (`test/vis/`) and 3,278 expectation rows: one fixture per class (white in gray, RGB, CMYK, Separation, Lab, Indexed, ICC, DeviceN, on a same-colour rectangle; clipped by a rectangle, a form box,
+a nested clip; off the page, off the crop box, on a rotated page; sizes 0, 0.5, 0.9, 1 pt and a `cm` scale; painted over by a rectangle, a picture, a page wall; NOT occluded by a translucent rectangle, a Multiply blend, a soft mask, a stencil, a colour-key image, a clipped-away
+or layer-hidden rectangle, a partial cover, a rotated picture; every OCMD policy and `/VE`; alpha 0; Tr 3 and 7 OCR layers before and after a scan; and `spam.pdf`, one page with every trick). Every row is what the operators MEAN. (2) The laws of
+`kin/pdfvistest.kin` (all four targets: 278 laws each, `bb unit red` fails on all) check each glyph's `vis`, `vby`, its word's source, the colour and class, `ocgdef`, image rows, counts, `ev-check`, and that no word mixes visibilities; `pdfcontenttest` runs the same files through
+the 512-byte async source (paths, images, points and the colour workspace cell for cell) and corrupts and cuts five of them. (3) `kin/scripts/vis-check [--render]`: the generated Rust against the same rows, and the poppler RENDERER (`pdftoppm`): what is expected to be seen leaves ink in its box and what is expected to be hidden leaves none: 1,333 visible and 911 hidden glyphs agree,
+every one. (4) `tools/vis/corpus-vis.clj` on the real corpus (899 files, the first three pages): see D157.
+**Found**: the corruption law found a fault (a mutated `/Domain` that is not an array was walked as one in `gx-read-nums`: an index out of bounds); fixed, and 9,600 more random mutants of 12 fixtures through the Rust sweep fault nowhere. Two of my own expectations were wrong in the way
+a per-glyph classifier is right and a per-string expectation is not (text partly over a rectangle is some glyphs seen and some not); the fixtures now use single straddling glyphs.
+- [ ] **Signed off** (maintainer)
+
+### D157 — Hidden-text detection against poppler on the real corpus
+**Result** (`bb tools/vis/corpus-vis.clj --n 900 --max-kb 1500`, 899 files judged, first 3 pages, 2.78M text glyphs): the VISIBLE glyphs are in poppler's text 99.75% (2,768,799 of 2,775,784) and leave ink on poppler's rendered page 99.83% (2,751,832 of 2,756,629). OFFPAGE: 330 of 330 are also dropped by `pdftotext`. CLIPPED: 26,620 glyphs, 26,617 (99.99%) are also not in
+`pdftotext`'s words: poppler clips too. `hidden-text` (Tr 3, 7): 68,429 glyphs, 67,180 (98.2%) are in poppler's text (it extracts OCR layers; the rest it drops were not examined). WHITE (349 glyphs, in 6 files) and OCCLUDED (536, 8 files): `pdftotext` keeps all, as it does not look at paint; the renderer cannot judge them because something else is
+drawn where they are (a picture, a patch, the same text again) for all but 3 of the 27,505 glyphs of the hidden classes (those 3 had no ink, as claimed): the fixtures (D156) are the witness for those classes. ZERO-SIZE: 137. No sampled file had transparent or `ocg-hidden` text. Pdfminer.six does not reason about visibility at all (it extracts Tr 3 text and white text); the glyph streams were already held to it (D127: 99.6% of 2.0M characters).
+**Also found**: poppler and Ghostscript ignore the `/AS` View state (D154); `pdftotext` drops clipped text; the corpus's white and occluded text is in a handful of files (white text in a brochure, text under white patches in a form).
+
+### D158 — The column stage as built: gutters from the rows of a page's words, extents carried along the columns, a cut tree that cuts at full-width gaps and between gutters, never through them (P4.1; D111, SPEC 10.1.1)
 **Decision**: `kin/columns.kin` (`emon.columns`) does SPEC 10.1.1's steps over a page's UPRIGHT lines (non-upright ones stand alone, D136), on a
 COPY of `lines` (`lc-copy`; the evidence is never written). Everything is an integer in centipoints; each number below is a named constant
 (`LC_*`), the settings of SPEC 13 until the Engine has a table. **(0) The page**: its dominant size is the size (within 1/20) with the most line width;
 the body block is the dominant-size lines at least 2/5 as long as the longest of them (`LC_LONG`); lines wholly outside it by half a size,
-when most of them are in type under 19/20 of the dominant, are SIDE lines (D154) and a line of digits among them is dropped (line numbers).
+when most of them are in type under 19/20 of the dominant, are SIDE lines (D160) and a line of digits among them is dropped (line numbers).
 **(1) Gutters, over words**: items are the words (a producer that writes a row across the columns gives one LINE with a gap in it); rows
 are the words whose baselines are within half of the smaller size; per row, the free x-intervals between two runs of ink at least
 `gutter-min` wide start an interval (the larger of 3/5 of the row's size and 1.5 times its median word gap: a river of a justified line
@@ -5522,7 +5607,7 @@ a line whose words are on both sides of a gutter inside its extent is split at i
 through one-sided lines of body size until a line crosses or a gap of `hole` sizes, except the last line of a spanning paragraph (a line
 whose neighbour above crosses the gutter within 4/5 of a size); carried down by the sweep itself, and trimmed above a last row that has
 words on one side only when ink crosses the gutter close under it (a heading that goes with the spanning text under it). Gutters of one
-column gap seen in pieces are merged. **(4) The cut tree**, a stack, a region cut in this order: the cut under the title (see D154); the
+column gap seen in pieces are merged. **(4) The cut tree**, a stack, a region cut in this order: the cut under the title (see D160); the
 first full-width gap of more than 5/2 sizes between the lines of the region (`LC_GAP`: the story break of a newspaper, a figure's hole), made
 only when some gutter divides the region (a region of one column is not cut at every paragraph gap), and never a gap that lines up in
 balanced columns, which is not wider than a paragraph gap; a gutter whose extent covers every line of the region, vertically; the first top
@@ -5531,7 +5616,7 @@ or bottom of the extent of a gutter that divides the region, strictly inside its
 Right-to-left pages (the majority of the page's lines, D104) put the right half first. **(5) Fragments**: leaves, their lines in rows
 (baseline, then x); `band` is the number of horizontal cuts above the middle of the fragment and across its x-range, `col` the number
 of earlier body fragments of its band; the page's `layout` has one cell per (band, col); a fragment also keeps the bottom of the region its
-vertical cuts came from (the columns of one set end together: D153).
+vertical cuts came from (the columns of one set end together: D159).
 **Why**: SPEC 10.1.1 as written finds gutters from persistence rows with ink on both sides in every row, which fails exactly where real
 pages are: columns whose baselines are offset by headings (every row would be one-sided), figures and tables whose labels live in one column, narrow
 justified columns, page tails. Each departure was forced by a document of the corpus or a paper (the dump showed it) and is a constant a
@@ -5544,7 +5629,7 @@ scores badly); gutter rows counted over lines rather than words (misses the rows
 that also ends a gutter (ends them in every narrow justified column).
 - [ ] **Signed off** (maintainer)
 
-### D153 — A paragraph that fills its fragment goes on in the next one when the points say so: the table, `join-min` 4, and what each signal is worth (P4.1; D112, SPEC 10.1.2)
+### D159 — A paragraph that fills its fragment goes on in the next one when the points say so: the table, `join-min` 4, and what each signal is worth (P4.1; D112, SPEC 10.1.2)
 **Decision**: between the last line of a body fragment and the first of the next, in reading order (next column, or the first of the next page),
 a paragraph continues when its points reach `join-min` 4. The points (`JS_*` in `kin/para.kin`): last line ends in a hyphen after a letter **+3**;
 reaches the column's end edge (within 15 per cent of the fragment's width) **+2**; ends without a sentence mark (a footnote mark of one to
@@ -5558,7 +5643,7 @@ than its neighbours ended a paragraph). The edge and bottom signals need a fragm
 `P` that holds both (decisive in the SPEC) is not read: the tagged tree is P3.7's and reaches this stage with P4.2. A join is one
 paragraph, `at` one region per fragment, `text` inlines and a `break` milestone only where the page changes, the column break only
 the regions; the hyphen at the break is `pa-join`'s (SPEC 3.6: no locale, hyphen kept, a soft hyphen goes); notes that begin
-between the two are written after the joined paragraph (D154). `pa-dump` prints every fragment and every join decision as lines
+between the two are written after the joined paragraph (D160). `pa-dump` prints every fragment and every join decision as lines
 (`F` and `J`, one law, `test/para/two-columns.dump`): the evidence dump of the stage.
 **Why**: the table is the SPEC's with weights chosen on the corpus so that the cases with evidence join (a hyphen, a lowercase start, a
 full line without a stop) and the cases without do not unless the column is full and the line reaches the
@@ -5570,8 +5655,8 @@ ends at a page's foot, with a footnote mark). The width signal made a table afte
 the corpus with a learned weight (the corpus is 11 joins); a signal for the paragraph's own length (unknown here).
 - [ ] **Signed off** (maintainer)
 
-### D154 — Margin notes and sidebars are lines outside the body block; a column of them is one `layout` cell, each run of them one `note`; the title above columns is cut from them (P4.1; D111, D113)
-**Decision**: the side lines of D152 (outside the body block by half a size, mostly under 19/20 of the dominant size; a digits-only line among
+### D160 — Margin notes and sidebars are lines outside the body block; a column of them is one `layout` cell, each run of them one `note`; the title above columns is cut from them (P4.1; D111, D113)
+**Decision**: the side lines of D158 (outside the body block by half a size, mostly under 19/20 of the dominant size; a digits-only line among
 them is a line number and is dropped, with no ledger entry yet: P4.3's) are grouped, per side, into RUNS (a gap of more than two sizes ends
 one); a run of at most four lines, all of them in small type, is a `margin` note, any other a `sidebar`; each is a fragment with the body
 fragment it overlaps most in y as `assoc` and its band; the notes of one side are ONE column of the page's `layout` (the left strip first, after the body
@@ -5580,14 +5665,14 @@ is written when the paragraph open beside it is closed: after the last paragraph
 paragraph (a note beside a paragraph that goes on to the next column waits for the next paragraph break). When the page has side
 lines and something lies above the body's first line that is not of body type (a title), the cut under it is the page's first horizontal cut (the
 gold's `band 0`). Not found: a sidebar INSIDE the body block (a box between two columns); it is a column.
-**Why**: the gold's notes (`columns-margin-notes`, `columns-uneven`) have no gutter: a note is one or two lines, too few rows for D152's gutter, so
+**Why**: the gold's notes (`columns-margin-notes`, `columns-uneven`) have no gutter: a note is one or two lines, too few rows for D158's gutter, so
 the margin is found by what lies outside the text, which is what a person does; the placement is D111's "after the body block being read
 where it begins".
 **Alternatives**: gutters only (the notes are in the middle of the paragraphs they stand beside); a note per line; a sidebar by a box (the
 interpreter writes no paths yet).
 - [ ] **Signed off** (maintainer)
 
-### D155 — `pa-build` makes the Model in two phases from the column fragments; the page `layout` is written for every page; HTML carries the column of a block with `geometry` (P4.1; D112, D113, D132)
+### D161 — `pa-build` makes the Model in two phases from the column fragments; the page `layout` is written for every page; HTML carries the column of a block with `geometry` (P4.1; D112, D113, D132)
 **Decision**: `pa-build` copies the lines, runs `lc-page` on every page (phase one: fragments, and the page `layout` from them: `lay-add`, one
 cell per (band, col) with the union of the fragments' boxes), then builds paragraphs per fragment (phase two), the line gap being the
 lower quartile over the fragments' consecutive lines. A page with text has at least one `layout` cell (a one-column page has one), so every Model's JSON has a
@@ -5702,6 +5787,7 @@ them; offer them upstream when they have proved general.
   `&mut Cells` tag again (two mutable borrows in one call): every one of P3.8's and P3.9's Rust errors
   was that or a `let` that was assigned later without `^:mut`. The `CellsRo` tag of the audit above
   would have removed the first kind outright.
+- P3.5/P3.6 (`pdfgfx`, `pdfvis`, `pdfcontent`): the Rust `&mut` rule is wider than the audit says: EVERY kin function that takes a `Cells` is `&mut` in Rust (only the `emon.port` primitives `cells-at` etc. take `&`), so `(f cells (g cells))` fails when `g` is a kin reader (`fx-get`, `pl-first`, `px-nth`, `gl-get`), not only a writer: 40-odd sites were hoisted into `let`s. `close` is a Go builtin (refused at generation time, clear); a `defconst GX_SIZE` and a `defn gx-size` are both `GxSize` in C# (again nothing at generation time says so: the `PG`/`pg` case, found by the C# build only). A `^:mut` local that is only assigned and never read is a Go error too.
 
 ## Open questions for the maintainer
 

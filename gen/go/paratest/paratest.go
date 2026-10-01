@@ -696,11 +696,15 @@ func ptGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	port.CellsDrop(wd, 0)
 	port.CellsDrop(ln, 0)
 	var src *port.Src = port.SrcOfBlob(pdf)
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gx *port.Cells = port.NewCells()
 	var o int32 = pdfdoc.PdOpen(src, ar, dc, a, b, st)
 	if o != 0 {
 		return 1
 	}
-	if pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln) != 0 {
+	if pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
 		return 2
 	}
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
