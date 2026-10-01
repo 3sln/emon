@@ -183,6 +183,15 @@ func HdField(hc *port.Cells, l int32, f int32) int32 {
 	return port.CellsAt(hc, (hcHdr+(l*hcStride))+f)
 }
 
+func HdRowsEnd(hc *port.Cells) int32 {
+	// Where the heading rows end in `hc`: the first cell the list stage (`emon.lists`, P4.5) may append its own rows at;
+	// -1 when `hc` is empty. Nothing in this module reads past it.
+	if hdLive(hc) == 0 {
+		return -1
+	}
+	return hcHdr + (port.CellsAt(hc, 0) * hcStride)
+}
+
 func HdLevel(hc *port.Cells, l int32) int32 {
 	return HdField(hc, l, HckLevel())
 }

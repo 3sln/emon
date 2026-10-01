@@ -142,6 +142,12 @@
   (if (or (< l 0) (>= l (cells-at hc 0))) (return 0))
   (return (cells-at hc (+ (+ HC_HDR (* l HC_STRIDE)) f))))
 
+(defn ^:pub ^I32 hd-rows-end [^Cells hc]
+  (comment "Where the heading rows end in `hc`: the first cell the list stage (`emon.lists`, P4.5) may append its own rows at;")
+  (comment "-1 when `hc` is empty. Nothing in this module reads past it.")
+  (if (== (hd-live hc) 0) (return -1))
+  (return (+ HC_HDR (* (cells-at hc 0) HC_STRIDE))))
+
 (defn ^:pub ^I32 hd-level [^Cells hc ^I32 l]
   (return (hd-field hc l (hck-level))))
 

@@ -132,6 +132,14 @@ public final class Heading {
         }
         return emon.Port.cellsAt(hc, (HC_HDR + (l * HC_STRIDE)) + f);
     }
+    public static int hdRowsEnd(emon.Port.Cells hc) {
+        // Where the heading rows end in `hc`: the first cell the list stage (`emon.lists`, P4.5) may append its own rows at;
+        // -1 when `hc` is empty. Nothing in this module reads past it.
+        if (hdLive(hc) == 0) {
+            return -1;
+        }
+        return HC_HDR + (emon.Port.cellsAt(hc, 0) * HC_STRIDE);
+    }
     public static int hdLevel(emon.Port.Cells hc, int l) {
         return hdField(hc, l, hckLevel());
     }
