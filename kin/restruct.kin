@@ -417,6 +417,17 @@
           (set i (+ i 2))))
     (return 0)))
 
+(defn ^Bool rs-in-link [^Cells on ^I32 p]
+  (comment "Is node p, or one of its three nearest ancestors, a `link`? A bare URL in text under a link annotation is not")
+  (comment "linked again (P4.7, D193), and a `span` can stand between the text and its link.")
+  (let [^:mut ^I32 q p
+        ^:mut ^I32 d 0]
+    (while (and (>= q 0) (< d 4))
+      (do (if (== (node-kind on q) (nk-link)) (return (== 1 1)))
+          (set q (node-parent on q))
+          (set d (+ d 1))))
+    (return (== 0 1))))
+
 (defn ^I32 rs-classify [^Cells on ^Cells text ^I32 p ^I32 c ^I32 depth ^:mut ^Cells out]
   (comment "What to do with child c of old node p, with `depth` lists open: 1 an item (into a list), 2 a milestone or a")
   (comment "note inside a list that goes on, 3 a caption above its object, 4 a figure caption with no figure (wrapped),")
@@ -431,7 +442,7 @@
           (if (== (node-aux on c) 1) (return 4))
           (return 7)))
     (if (and (or (== k (nk-table)) (== k (nk-figure))) (rs-grab on c)) (return 5))
-    (if (and (== k (nk-text)) (== (node-has-text on c) 1) (!= (node-kind on p) (nk-link)))
+    (if (and (== k (nk-text)) (== (node-has-text on c) 1) (not (rs-in-link on p)))
       (do (if (== (rs-has-link text (node-text-start on c) (+ (node-text-start on c) (node-text-len on c)) out) 1)
             (return 6))))
     (if (and (rs-linkable k) (== (node-has-text on c) 1) (== (node-first-child on c) -1))
@@ -606,6 +617,104 @@
           (set i (+ i 1))))
     (return 0)))
 
+(defn ^Bool rs-dest-kind [^I32 k]
+  (comment "The blocks a link can name: what a reader would call the place a destination is.")
+  (return (or (== k (nk-heading)) (or (== k (nk-paragraph)) (or (== k (nk-item)) (or (== k (nk-caption))
+              (or (== k (nk-figure)) (or (== k (nk-table)) (or (== k (nk-note)) (== k (nk-quote)))))))))))
+
+(defn ^I32 rs-dest-build [^Cells nodes ^Cells regions ^:mut ^Cells used]
+  (comment "`used`: a row of six for each region of each block a link can name (`rs-dest-kind`): the node, its page, its box.")
+  (let [^I32 cnt (node-count nodes)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0]
+    (cells-drop used 0)
+    (while (< i cnt)
+      (do (if (rs-dest-kind (node-kind nodes i))
+            (do (set r (node-region-head nodes i))
+                (while (>= r 0)
+                  (do (cells-push used i)
+                      (cells-push used (region-page regions r))
+                      (cells-push used (region-x0 regions r))
+                      (cells-push used (region-y0 regions r))
+                      (cells-push used (region-x1 regions r))
+                      (cells-push used (region-y1 regions r))
+                      (set r (region-next regions r))))))
+          (set i (+ i 1))))
+    (return (quot (cells-len used) 6))))
+
+(defn ^I32 rs-xdist [^I32 x0 ^I32 x1 ^I32 x]
+  (comment "How far x is outside [x0, x1]: 0 inside.")
+  (if (< x x0) (return (- x0 x)))
+  (if (> x x1) (return (- x x1)))
+  (return 0))
+
+(defn ^I32 rs-dest-find [^Cells used ^I32 page ^I32 y ^I32 x ^I32 mode]
+  (comment "The block a destination names (P4.7, D193): of the blocks on `page` that do not end above the point (3 pt of")
+  (comment "slack: a destination is set a little above its heading, a paragraph that ends there is not it), the topmost; a")
+  (comment "destination with no y has no top to be under. The point's x tells the column: mode 0 takes only the blocks whose")
+  (comment "extent is within 6 pt of it (a destination is at its entry's left edge or a little outside it, and the gutter is")
+  (comment "wider), mode 1 within 20 pt, mode 2 without the x; mode 3 the topmost block of the first page at or after `page`")
+  (comment "that has one. -1 when none.")
+  (let [^I32 n (quot (cells-len used) 6)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bp 0
+        ^:mut ^I32 by 0
+        ^:mut ^I32 tol 2000]
+    (if (== mode 0) (set tol 600))
+    (while (< j n)
+      (do (let [^I32 b (* j 6)
+                ^I32 p (cells-at used (+ b 1))
+                ^I32 y0 (cells-at used (+ b 3))]
+            (if (and (< mode 3) (== p page))
+              (if (or (< y 0) (> (cells-at used (+ b 5)) (+ y 300)))
+                (if (or (== mode 2) (< x 0)
+                        (<= (rs-xdist (cells-at used (+ b 2)) (cells-at used (+ b 4)) x) tol))
+                  (if (or (< best 0) (< y0 by))
+                    (do (set best (cells-at used b))
+                        (set by y0))))))
+            (if (and (== mode 3) (>= p page))
+              (if (or (< best 0) (< p bp) (and (== p bp) (< y0 by)))
+                (do (set best (cells-at used b))
+                    (set bp p)
+                    (set by y0)))))
+          (set j (+ j 1))))
+    (return best)))
+
+(defn ^I32 rs-resolve-links [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells regions ^:mut ^Cells used]
+  (comment "Every internal link (`sub` the destination's page + 1, `aux` its point as `emon.inline` packed it) gets the")
+  (comment "`target` of the block it names and its `sub` and `aux` back to 0. The work is bounded (50 million rows looked at):")
+  (comment "a link past it keeps no target.")
+  (let [^I32 cnt (node-count nodes)
+        ^I32 rows (rs-dest-build nodes regions used)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 tg -1
+        ^:mut ^I32 work 0
+        ^:mut ^I32 ys 0
+        ^:mut ^I32 xs 0
+        ^:mut ^I32 y -1
+        ^:mut ^I32 x -1]
+    (while (< i cnt)
+      (do (if (and (== (node-kind nodes i) (nk-link)) (> (node-sub nodes i) 0))
+            (do (set ys (quot (node-aux nodes i) 32768))
+                (set xs (rem (node-aux nodes i) 32768))
+                (set y -1)
+                (set x -1)
+                (if (> ys 0) (set y (* (- ys 1) 100)))
+                (if (> xs 0) (set x (* (- xs 1) 100)))
+                (set tg -1)
+                (if (< work 50000000)
+                  (do (set tg (rs-dest-find used (node-sub nodes i) y x 0))
+                      (if (< tg 0) (set tg (rs-dest-find used (node-sub nodes i) y x 1)))
+                      (if (< tg 0) (set tg (rs-dest-find used (node-sub nodes i) y x 2)))
+                      (if (< tg 0) (set tg (rs-dest-find used (node-sub nodes i) y x 3)))
+                      (set work (+ work (* 4 rows)))))
+                (if (>= tg 0) (node-set-attr-node nodes attrs i (fk-target) tg))
+                (node-set-sub nodes i 0)
+                (node-set-aux nodes i 0)))
+          (set i (+ i 1))))
+    (return 0)))
+
 (defn ^:pub ^I32 rs-run [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text
                          ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
                          ^:mut ^Cells nm ^:mut ^Cells stk ^:mut ^Cells used ^:mut ^Cells out ^Cells lay]
@@ -635,5 +744,6 @@
     (rs-remap attrs nm)
     (rs-targets nodes attrs out)
     (rs-link-refs nodes attrs text used)
+    (rs-resolve-links nodes attrs regions used)
     (rs-scrub-text text)
     (return (node-count nodes))))

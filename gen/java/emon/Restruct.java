@@ -485,6 +485,20 @@ public final class Restruct {
         }
         return 0;
     }
+    public static boolean rsInLink(emon.Port.Cells on, int p) {
+        // Is node p, or one of its three nearest ancestors, a `link`? A bare URL in text under a link annotation is not
+        // linked again (P4.7, D193), and a `span` can stand between the text and its link.
+        int q = p;
+        int d = 0;
+        while ((q >= 0) && (d < 4)) {
+            if (Model.nodeKind(on, q) == Model.nkLink()) {
+                return 1 == 1;
+            }
+            q = Model.nodeParent(on, q);
+            d += 1;
+        }
+        return 0 == 1;
+    }
     public static int rsClassify(emon.Port.Cells on, emon.Port.Cells text, int p, int c, int depth, emon.Port.Cells out) {
         // What to do with child c of old node p, with `depth` lists open: 1 an item (into a list), 2 a milestone or a
         // note inside a list that goes on, 3 a caption above its object, 4 a figure caption with no figure (wrapped),
@@ -510,7 +524,7 @@ public final class Restruct {
         if (((k == Model.nkTable()) || (k == Model.nkFigure())) && rsGrab(on, c)) {
             return 5;
         }
-        if ((k == Model.nkText()) && (Model.nodeHasText(on, c) == 1) && (Model.nodeKind(on, p) != Model.nkLink())) {
+        if ((k == Model.nkText()) && (Model.nodeHasText(on, c) == 1) && !rsInLink(on, p)) {
             if (rsHasLink(text, Model.nodeTextStart(on, c), Model.nodeTextStart(on, c) + Model.nodeTextLen(on, c), out) == 1) {
                 return 6;
             }
@@ -719,6 +733,133 @@ public final class Restruct {
         }
         return 0;
     }
+    public static boolean rsDestKind(int k) {
+        // The blocks a link can name: what a reader would call the place a destination is.
+        return (k == Model.nkHeading()) || ((k == Model.nkParagraph()) || ((k == Model.nkItem()) || ((k == Model.nkCaption()) || ((k == Model.nkFigure()) || ((k == Model.nkTable()) || ((k == Model.nkNote()) || (k == Model.nkQuote())))))));
+    }
+    public static int rsDestBuild(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells used) {
+        // `used`: a row of six for each region of each block a link can name (`rs-dest-kind`): the node, its page, its box.
+        int cnt = Model.nodeCount(nodes);
+        int i = 0;
+        int r = 0;
+        emon.Port.cellsDrop(used, 0);
+        while (i < cnt) {
+            if (rsDestKind(Model.nodeKind(nodes, i))) {
+                r = Model.nodeRegionHead(nodes, i);
+                while (r >= 0) {
+                    emon.Port.cellsPush(used, i);
+                    emon.Port.cellsPush(used, Model.regionPage(regions, r));
+                    emon.Port.cellsPush(used, Model.regionX0(regions, r));
+                    emon.Port.cellsPush(used, Model.regionY0(regions, r));
+                    emon.Port.cellsPush(used, Model.regionX1(regions, r));
+                    emon.Port.cellsPush(used, Model.regionY1(regions, r));
+                    r = Model.regionNext(regions, r);
+                }
+            }
+            i += 1;
+        }
+        return emon.Port.cellsLen(used) / 6;
+    }
+    public static int rsXdist(int x0, int x1, int x) {
+        // How far x is outside [x0, x1]: 0 inside.
+        if (x < x0) {
+            return x0 - x;
+        }
+        if (x > x1) {
+            return x - x1;
+        }
+        return 0;
+    }
+    public static int rsDestFind(emon.Port.Cells used, int page, int y, int x, int mode) {
+        // The block a destination names (P4.7, D193): of the blocks on `page` that do not end above the point (3 pt of
+        // slack: a destination is set a little above its heading, a paragraph that ends there is not it), the topmost; a
+        // destination with no y has no top to be under. The point's x tells the column: mode 0 takes only the blocks whose
+        // extent is within 6 pt of it (a destination is at its entry's left edge or a little outside it, and the gutter is
+        // wider), mode 1 within 20 pt, mode 2 without the x; mode 3 the topmost block of the first page at or after `page`
+        // that has one. -1 when none.
+        int n = emon.Port.cellsLen(used) / 6;
+        int j = 0;
+        int best = -1;
+        int bp = 0;
+        int by = 0;
+        int tol = 2000;
+        if (mode == 0) {
+            tol = 600;
+        }
+        while (j < n) {
+            int b = j * 6;
+            int p = emon.Port.cellsAt(used, b + 1);
+            int y0 = emon.Port.cellsAt(used, b + 3);
+            if ((mode < 3) && (p == page)) {
+                if ((y < 0) || (emon.Port.cellsAt(used, b + 5) > (y + 300))) {
+                    if ((mode == 2) || (x < 0) || (rsXdist(emon.Port.cellsAt(used, b + 2), emon.Port.cellsAt(used, b + 4), x) <= tol)) {
+                        if ((best < 0) || (y0 < by)) {
+                            best = emon.Port.cellsAt(used, b);
+                            by = y0;
+                        }
+                    }
+                }
+            }
+            if ((mode == 3) && (p >= page)) {
+                if ((best < 0) || (p < bp) || ((p == bp) && (y0 < by))) {
+                    best = emon.Port.cellsAt(used, b);
+                    bp = p;
+                    by = y0;
+                }
+            }
+            j += 1;
+        }
+        return best;
+    }
+    public static int rsResolveLinks(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells used) {
+        // Every internal link (`sub` the destination's page + 1, `aux` its point as `emon.inline` packed it) gets the
+        // `target` of the block it names and its `sub` and `aux` back to 0. The work is bounded (50 million rows looked at):
+        // a link past it keeps no target.
+        int cnt = Model.nodeCount(nodes);
+        int rows = rsDestBuild(nodes, regions, used);
+        int i = 0;
+        int tg = -1;
+        int work = 0;
+        int ys = 0;
+        int xs = 0;
+        int y = -1;
+        int x = -1;
+        while (i < cnt) {
+            if ((Model.nodeKind(nodes, i) == Model.nkLink()) && (Model.nodeSub(nodes, i) > 0)) {
+                ys = Model.nodeAux(nodes, i) / 32768;
+                xs = Model.nodeAux(nodes, i) % 32768;
+                y = -1;
+                x = -1;
+                if (ys > 0) {
+                    y = (ys - 1) * 100;
+                }
+                if (xs > 0) {
+                    x = (xs - 1) * 100;
+                }
+                tg = -1;
+                if (work < 50000000) {
+                    tg = rsDestFind(used, Model.nodeSub(nodes, i), y, x, 0);
+                    if (tg < 0) {
+                        tg = rsDestFind(used, Model.nodeSub(nodes, i), y, x, 1);
+                    }
+                    if (tg < 0) {
+                        tg = rsDestFind(used, Model.nodeSub(nodes, i), y, x, 2);
+                    }
+                    if (tg < 0) {
+                        tg = rsDestFind(used, Model.nodeSub(nodes, i), y, x, 3);
+                    }
+                    work += 4 * rows;
+                }
+                if (tg >= 0) {
+                    Model.nodeSetAttrNode(nodes, attrs, i, Model.fkTarget(), tg);
+                }
+                Model.nodeSetSub(nodes, i, 0);
+                Model.nodeSetAux(nodes, i, 0);
+            }
+            i += 1;
+        }
+        return 0;
+    }
     public static int rsRun(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells stk, emon.Port.Cells used, emon.Port.Cells out, emon.Port.Cells lay) {
         // Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
         // `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
@@ -749,6 +890,7 @@ public final class Restruct {
         rsRemap(attrs, nm);
         rsTargets(nodes, attrs, out);
         rsLinkRefs(nodes, attrs, text, used);
+        rsResolveLinks(nodes, attrs, regions, used);
         rsScrubText(text);
         return Model.nodeCount(nodes);
     }

@@ -491,29 +491,105 @@ public static class Para {
         emon.Port.CellsPush(raw, 32);
         return 0;
     }
-    internal static int PaAddLine(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int l) {
-        // Append the line's words, a space between two.
+    internal static int PaLeadEnd(emon.Port.Cells et, int ts, int tl) {
+        // Where the group at the start of a word's text (the list, note or caption stage's) ends in the word; 0 when
+        // the text does not start with one.
+        int j = 1;
+        int e = 0;
+        if (tl < 1) {
+            return 0;
+        }
+        int c = emon.Port.CellsAt(et, ts);
+        if ((c == Lists.LsSItem()) || ((c == Lists.LsSNote()) || (c == Lists.LsSCap()))) {
+            e = tl;
+            while (j < tl) {
+                if (emon.Port.CellsAt(et, ts + j) == Lists.LsSEnd()) {
+                    e = j + 1;
+                    j = tl;
+                } else {
+                    j += 1;
+                }
+            }
+        }
+        return e;
+    }
+    internal static int PaAddLine(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int l, emon.Port.Cells hc, emon.Port.Cells fr) {
+        // Append the line's words, a space between two. Where the style or the link changes (`emon.inline`, P4.7, D192) a
+        // marker goes in first: the space between two words has what the two have in common, a group at the start of a
+        // word is not a character, and a heading line has no markers (its number is found by offset). The state the
+        // text is in is kept in the block of `hc`; the space `pa-join` pushed is taken back and pushed again, after a marker,
+        // and the raw start of the fragment that line opens (`fr`, the last row) moves to after it.
         int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
         int wn = Evidence.LnGet(ln, l, Evidence.LhCount());
+        int n0 = emon.Port.CellsLen(raw);
+        int nfr = emon.Port.CellsLen(fr) / FrStride;
+        int marks = 0;
+        int spc = 0;
+        int cur = 0;
         int k = 0;
         int j = 0;
         int started = 0;
+        int le = 0;
+        int s1 = 0;
+        int c = 0;
+        if ((Inline.IlBase(hc) >= 0) && (Heading.HdLevel(hc, l) == 0)) {
+            marks = 1;
+        }
+        if (marks == 1) {
+            if (n0 == 0) {
+                Inline.IlSetCur(hc, 0);
+            }
+            cur = Inline.IlCur(hc);
+            if ((n0 > 0) && (emon.Port.CellsAt(raw, n0 - 1) == 32)) {
+                emon.Port.CellsDrop(raw, n0 - 1);
+                spc = 1;
+            }
+        }
         while (k < wn) {
             int ts = Evidence.WdGet(wd, w0 + k, Evidence.HdTstart());
             int tl = Evidence.WdGet(wd, w0 + k, Evidence.HdTlen());
             if ((ts >= 0) && (tl > 0)) {
-                if (started == 1) {
+                le = PaLeadEnd(et, ts, tl);
+                if ((started == 1) || (spc == 1)) {
+                    if (marks == 1) {
+                        s1 = cur;
+                        if (le < tl) {
+                            s1 = Inline.IlWstate(hc, w0 + k, le);
+                        }
+                        s1 = Inline.IlMix(cur, s1);
+                        if (s1 != cur) {
+                            Inline.IlMark(raw, s1);
+                            cur = s1;
+                        }
+                    }
                     emon.Port.CellsPush(raw, 32);
+                    if ((spc == 1) && (nfr > 0) && (emon.Port.CellsAt(fr, ((nfr - 1) * FrStride) + 5) == n0)) {
+                        emon.Port.CellsSet(fr, ((nfr - 1) * FrStride) + 5, emon.Port.CellsLen(raw));
+                    }
                 }
                 started = 1;
+                spc = 0;
                 j = 0;
                 while (j < tl) {
-                    int c = emon.Port.CellsAt(et, ts + j);
+                    c = emon.Port.CellsAt(et, ts + j);
+                    if ((marks == 1) && (j >= le)) {
+                        s1 = Inline.IlWstate(hc, w0 + k, j);
+                        if (s1 != cur) {
+                            Inline.IlMark(raw, s1);
+                            cur = s1;
+                        }
+                    }
                     emon.Port.CellsPush(raw, c);
                     j += 1;
                 }
             }
             k += 1;
+        }
+        if (spc == 1) {
+            emon.Port.CellsPush(raw, 32);
+        }
+        if (marks == 1) {
+            Inline.IlSetCur(hc, cur);
         }
         return 0;
     }
@@ -686,51 +762,182 @@ public static class Para {
         Model.NodeAddSrc(nodes, child, Model.SrText());
         return child;
     }
-    internal static int PaInlines(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to) {
-        // The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference
-        // group (its marker; the target is set later, when the notes are known). A space before a reference is not
-        // text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1
-        // when there is none.
+    internal static int PaSpanNode(emon.Port.Cells nodes, int par, int bits) {
+        // A `span` inline of the style bits under par (P4.7, D192); -1 when the Model's depth limit says no.
+        int sp = Model.NodeNew(nodes, Model.NkSpan(), par);
+        if (sp < 0) {
+            return -1;
+        }
+        Model.NodeSetSub(nodes, sp, bits);
+        Model.NodeSetConf(nodes, sp, 900);
+        Model.NodeAddSrc(nodes, sp, Model.SrText());
+        return sp;
+    }
+    internal static int PaLinkNode(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells hc, int par, int id) {
+        // A `link` inline for link `id` of the block in `hc` (`emon.inline`) under par: a URI is its `href`; an internal
+        // link holds its destination (the page + 1 in `sub`, the point packed in `aux`) until `emon.restruct` finds the block
+        // it names and makes it the `target`. -1 when the Model's depth limit says no.
+        int lk = Model.NodeNew(nodes, Model.NkLink(), par);
+        if (lk < 0) {
+            return -1;
+        }
+        Model.NodeAddSrc(nodes, lk, Model.SrAnnot());
+        if (Inline.IlLinkGet(hc, id, 0) == 1) {
+            Model.NodeSetConf(nodes, lk, 1000);
+            Model.NodeSetAttrText(nodes, attrs, lk, Model.FkHref(), Inline.IlLinkGet(hc, id, 1), Inline.IlLinkGet(hc, id, 2));
+        } else {
+            Model.NodeSetConf(nodes, lk, 700);
+            Model.NodeAddSrc(nodes, lk, Model.SrInfer());
+            Model.NodeSetSub(nodes, lk, Inline.IlLinkGet(hc, id, 3) + 1);
+            Model.NodeSetAux(nodes, lk, Inline.IlLinkGet(hc, id, 4));
+        }
+        return lk;
+    }
+    internal static int PaInlines(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to, int @base, emon.Port.Cells hc) {
+        // The inline children of the paragraph for raw[from..to): `text` runs, in a `span` where the style is marked and a
+        // `link` where the text is under one (`emon.inline`, P4.7: a marker in the text is a change of state, `base` the
+        // style the paragraph is set in, which is not marked), and a `ref` for every note reference group (its marker;
+        // the target is set later, when the notes are known). A space before a reference is not text: the reference
+        // stands where the marker was printed, against the word. A reference ends the span and the link it is in. Answers
+        // the first child that is not a `ref`, -1 when there is none.
         int i = from;
         int seg = from;
         int first = -1;
         int child = 0;
-        while (i < to) {
-            if (emon.Port.CellsAt(raw, i) == Lists.LsSRef()) {
-                int gend = PaGroupEnd(raw, i, to);
-                int sep = PaGroupSep(raw, i, gend);
-                if ((gend < 0) || (sep < 0)) {
-                    i += 1;
-                } else {
-                    int se = i;
-                    if ((se > seg) && (emon.Port.CellsAt(raw, se - 1) == 32)) {
-                        se -= 1;
+        int st = Inline.IlStateAt(raw, from);
+        int cl = 0;
+        int cb = 0;
+        int lk = -1;
+        int sp = -1;
+        int pp = 0;
+        int ev = 0;
+        int ge = 0;
+        int sep = 0;
+        int se = 0;
+        int eff = 0;
+        while (i <= to) {
+            ev = 0;
+            if (i == to) {
+                ev = 3;
+            } else {
+                int c = emon.Port.CellsAt(raw, i);
+                if (c == Inline.IlSSty()) {
+                    ge = Inline.IlMarkEnd(raw, i, to);
+                    if (ge > 0) {
+                        ev = 1;
                     }
-                    if (se > seg) {
-                        child = PaTextChild(nodes, text, raw, tmp, par, seg, se);
-                        if (first < 0) {
-                            first = child;
+                }
+                if (c == Lists.LsSRef()) {
+                    ge = PaGroupEnd(raw, i, to);
+                    sep = -1;
+                    if (ge > 0) {
+                        sep = PaGroupSep(raw, i, ge);
+                    }
+                    if (sep >= 0) {
+                        ev = 2;
+                    }
+                }
+            }
+            if (ev == 0) {
+                i += 1;
+            } else {
+                se = i;
+                if ((ev == 2) && (se > seg) && (emon.Port.CellsAt(raw, se - 1) == 32)) {
+                    se -= 1;
+                }
+                if (se > seg) {
+                    eff = Inline.IlEff(st, @base);
+                    if (Inline.IlLink(eff) != cl) {
+                        cl = Inline.IlLink(eff);
+                        cb = 0;
+                        sp = -1;
+                        lk = -1;
+                        if (cl > 0) {
+                            lk = PaLinkNode(nodes, attrs, hc, par, cl - 1);
+                            if ((lk >= 0) && (first < 0)) {
+                                first = lk;
+                            }
                         }
                     }
+                    pp = par;
+                    if (lk >= 0) {
+                        pp = lk;
+                    }
+                    if (Inline.IlBits(eff) != cb) {
+                        cb = Inline.IlBits(eff);
+                        sp = -1;
+                        if (cb > 0) {
+                            sp = PaSpanNode(nodes, pp, cb);
+                            if ((sp >= 0) && (lk < 0) && (first < 0)) {
+                                first = sp;
+                            }
+                        }
+                    }
+                    if (sp >= 0) {
+                        pp = sp;
+                    }
+                    child = PaTextChild(nodes, text, raw, tmp, pp, seg, se);
+                    if ((sp < 0) && (lk < 0) && (first < 0)) {
+                        first = child;
+                    }
+                }
+                if (ev == 1) {
+                    st = Inline.IlMarkValue(raw, i, ge);
+                    i = ge;
+                    seg = ge;
+                }
+                if (ev == 2) {
+                    cl = 0;
+                    cb = 0;
+                    lk = -1;
+                    sp = -1;
                     child = Model.NodeNew(nodes, Model.NkRef(), par);
                     Model.NodeSetConf(nodes, child, 500);
                     Model.NodeAddSrc(nodes, child, Model.SrText());
                     Model.NodeAddSrc(nodes, child, Model.SrInfer());
-                    PaPutMarker(nodes, attrs, text, raw, child, Model.FkMarker(), sep + 1, gend - 1);
-                    i = gend;
-                    seg = gend;
+                    PaPutMarker(nodes, attrs, text, raw, child, Model.FkMarker(), sep + 1, ge - 1);
+                    i = ge;
+                    seg = ge;
                 }
-            } else {
-                i += 1;
-            }
-        }
-        if (seg < to) {
-            child = PaTextChild(nodes, text, raw, tmp, par, seg, to);
-            if (first < 0) {
-                first = child;
+                if (ev == 3) {
+                    i = to + 1;
+                }
             }
         }
         return first;
+    }
+    internal static int PaCompact(emon.Port.Cells raw, emon.Port.Cells fr) {
+        // Take every style marker out of raw in one pass, and move the raw starts of the fragments (`fr`, cell 5 of a row,
+        // ascending) with it.
+        int n = emon.Port.CellsLen(raw);
+        int nfr = emon.Port.CellsLen(fr) / FrStride;
+        int i = 0;
+        int o = 0;
+        int k = 0;
+        int ge = 0;
+        while (i < n) {
+            while ((k < nfr) && (emon.Port.CellsAt(fr, (k * FrStride) + 5) <= i)) {
+                emon.Port.CellsSet(fr, (k * FrStride) + 5, o);
+                k += 1;
+            }
+            ge = -1;
+            if (emon.Port.CellsAt(raw, i) == Inline.IlSSty()) {
+                ge = Inline.IlMarkEnd(raw, i, n);
+            }
+            if (ge > 0) {
+                i = ge;
+            } else {
+                emon.Port.CellsSet(raw, o, emon.Port.CellsAt(raw, i));
+                o += 1;
+                i += 1;
+            }
+        }
+        while (k < nfr) {
+            emon.Port.CellsSet(fr, (k * FrStride) + 5, o);
+            k += 1;
+        }
+        emon.Port.CellsDrop(raw, o);
+        return 0;
     }
     internal static int PaFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells hc, int parent) {
         // Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
@@ -766,7 +973,18 @@ public static class Para {
         int to = 0;
         int t0 = 0;
         int child = 0;
+        int sbase = 0;
+        int sty = 0;
         int kids = 0;
+        // style markers (P4.7): written, or, when nothing in the paragraph is marked against its own style, taken out
+        if (Inline.IlHas(raw, rawn) == 1) {
+            sbase = Inline.IlBaseOf(raw, rawn);
+            sty = Inline.IlStyled(raw, rawn, sbase);
+            if (sty == 0) {
+                PaCompact(raw, fr);
+                rawn = emon.Port.CellsLen(raw);
+            }
+        }
         if (parent == 0) {
             lev = Heading.HdLevel(hc, hl);
             sect = Heading.HdParent(hc, nodes, lev);
@@ -876,6 +1094,9 @@ public static class Para {
             if (PaHasRef(raw, from, to) == 1) {
                 kids = 1;
             }
+            if (sty == 1) {
+                kids = 1;
+            }
             child = -1;
             if (kids == 1) {
                 if ((runs > 1) && (k > 0)) {
@@ -884,7 +1105,7 @@ public static class Para {
                     Model.NodeSetConf(nodes, br, 500);
                     Model.NodeAddSrc(nodes, br, Model.SrInfer());
                 }
-                child = PaInlines(nodes, attrs, text, raw, tmp, par, from, to);
+                child = PaInlines(nodes, attrs, text, raw, tmp, par, from, to, sbase, hc);
             } else {
                 if (lev > 0) {
                     from += PaHeadingNumber(nodes, attrs, text, raw, tmp, par, from, to, hc, hl);
@@ -1081,7 +1302,7 @@ public static class Para {
         emon.Port.CellsDrop(raw, 0);
         emon.Port.CellsDrop(fr, 0);
         PaFragOpen(fr, ln, page, prev, 0);
-        PaAddLine(wd, ln, et, raw, prev);
+        PaAddLine(wd, ln, et, raw, prev, hc, fr);
         while (i < cnt) {
             int b = emon.Port.CellsAt(lo, first + i);
             if (PaNewPar(wd, ln, prev, b, med, mg, hc)) {
@@ -1091,7 +1312,7 @@ public static class Para {
                 PaJoin(wd, ln, et, raw, b);
                 PaFragExtend(fr, ln, b);
             }
-            PaAddLine(wd, ln, et, raw, b);
+            PaAddLine(wd, ln, et, raw, b, hc, fr);
             prev = b;
             i += 1;
         }
@@ -1133,7 +1354,7 @@ public static class Para {
             int l = emon.Port.CellsAt(dq, k);
             int pg = Evidence.LnGet(ln, l, Evidence.LhPage());
             PaFragOpen(fr, ln, pg, l, 0);
-            PaAddLine(wd, ln, et, raw, l);
+            PaAddLine(wd, ln, et, raw, l, hc, fr);
             PaFlush(nodes, attrs, regions, text, raw, tmp, fr, hc, 0);
             k += 1;
         }
@@ -1357,7 +1578,7 @@ public static class Para {
                             PaFragOpen(fr, lt, p, b, rs);
                         }
                         open = 1;
-                        PaAddLine(wd, lt, et, raw, b);
+                        PaAddLine(wd, lt, et, raw, b, hc, fr);
                         prev = b;
                         prevfr = i;
                         cont = 1;
@@ -1373,7 +1594,7 @@ public static class Para {
                                     PaJoin(wd, lt, et, raw, b);
                                     PaFragExtend(fr, lt, b);
                                 }
-                                PaAddLine(wd, lt, et, raw, b);
+                                PaAddLine(wd, lt, et, raw, b, hc, fr);
                                 prev = b;
                             }
                             cont += 1;

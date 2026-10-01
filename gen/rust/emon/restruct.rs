@@ -484,6 +484,20 @@ pub(crate) fn rs_targets(mut nodes: &mut crate::port::Cells, mut attrs: &mut cra
     }
     return 0;
 }
+pub(crate) fn rs_in_link(on: &mut crate::port::Cells, p: i32) -> bool {
+    // Is node p, or one of its three nearest ancestors, a `link`? A bare URL in text under a link annotation is not
+    // linked again (P4.7, D193), and a `span` can stand between the text and its link.
+    let mut q: i32 = p;
+    let mut d: i32 = 0;
+    while (q >= 0) && (d < 4) {
+        if node_kind(on, q) == nk_link() {
+            return 1 == 1;
+        }
+        q = node_parent(on, q);
+        d += 1;
+    }
+    return 0 == 1;
+}
 pub(crate) fn rs_classify(on: &mut crate::port::Cells, text: &mut crate::port::Cells, p: i32, c: i32, depth: i32, mut out: &mut crate::port::Cells) -> i32 {
     // What to do with child c of old node p, with `depth` lists open: 1 an item (into a list), 2 a milestone or a
     // note inside a list that goes on, 3 a caption above its object, 4 a figure caption with no figure (wrapped),
@@ -509,7 +523,7 @@ pub(crate) fn rs_classify(on: &mut crate::port::Cells, text: &mut crate::port::C
     if ((k == nk_table()) || (k == nk_figure())) && rs_grab(on, c) {
         return 5;
     }
-    if (k == nk_text()) && (node_has_text(on, c) == 1) && (node_kind(on, p) != nk_link()) {
+    if (k == nk_text()) && (node_has_text(on, c) == 1) && !rs_in_link(on, p) {
         if rs_has_link(text, node_text_start(on, c), node_text_start(on, c) + node_text_len(on, c), out) == 1 {
             return 6;
         }
@@ -718,6 +732,133 @@ pub(crate) fn rs_scrub_text(mut text: &mut crate::port::Cells) -> i32 {
     }
     return 0;
 }
+pub(crate) fn rs_dest_kind(k: i32) -> bool {
+    // The blocks a link can name: what a reader would call the place a destination is.
+    return (k == nk_heading()) || ((k == nk_paragraph()) || ((k == nk_item()) || ((k == nk_caption()) || ((k == nk_figure()) || ((k == nk_table()) || ((k == nk_note()) || (k == nk_quote())))))));
+}
+pub(crate) fn rs_dest_build(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, mut used: &mut crate::port::Cells) -> i32 {
+    // `used`: a row of six for each region of each block a link can name (`rs-dest-kind`): the node, its page, its box.
+    let cnt: i32 = node_count(nodes);
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    crate::port::cells_drop(used, 0);
+    while i < cnt {
+        if rs_dest_kind(node_kind(nodes, i)) {
+            r = node_region_head(nodes, i);
+            while r >= 0 {
+                crate::port::cells_push(used, i);
+                crate::port::cells_push(used, region_page(regions, r));
+                crate::port::cells_push(used, region_x0(regions, r));
+                crate::port::cells_push(used, region_y0(regions, r));
+                crate::port::cells_push(used, region_x1(regions, r));
+                crate::port::cells_push(used, region_y1(regions, r));
+                r = region_next(regions, r);
+            }
+        }
+        i += 1;
+    }
+    return crate::port::cells_len(used) / 6;
+}
+pub(crate) fn rs_xdist(x0: i32, x1: i32, x: i32) -> i32 {
+    // How far x is outside [x0, x1]: 0 inside.
+    if x < x0 {
+        return x0 - x;
+    }
+    if x > x1 {
+        return x - x1;
+    }
+    return 0;
+}
+pub(crate) fn rs_dest_find(used: &mut crate::port::Cells, page: i32, y: i32, x: i32, mode: i32) -> i32 {
+    // The block a destination names (P4.7, D193): of the blocks on `page` that do not end above the point (3 pt of
+    // slack: a destination is set a little above its heading, a paragraph that ends there is not it), the topmost; a
+    // destination with no y has no top to be under. The point's x tells the column: mode 0 takes only the blocks whose
+    // extent is within 6 pt of it (a destination is at its entry's left edge or a little outside it, and the gutter is
+    // wider), mode 1 within 20 pt, mode 2 without the x; mode 3 the topmost block of the first page at or after `page`
+    // that has one. -1 when none.
+    let n: i32 = crate::port::cells_len(used) / 6;
+    let mut j: i32 = 0;
+    let mut best: i32 = -1;
+    let mut bp: i32 = 0;
+    let mut by: i32 = 0;
+    let mut tol: i32 = 2000;
+    if mode == 0 {
+        tol = 600;
+    }
+    while j < n {
+        let b: i32 = j * 6;
+        let p: i32 = crate::port::cells_at(used, b + 1);
+        let y0: i32 = crate::port::cells_at(used, b + 3);
+        if (mode < 3) && (p == page) {
+            if (y < 0) || (crate::port::cells_at(used, b + 5) > (y + 300)) {
+                if (mode == 2) || (x < 0) || (rs_xdist(crate::port::cells_at(used, b + 2), crate::port::cells_at(used, b + 4), x) <= tol) {
+                    if (best < 0) || (y0 < by) {
+                        best = crate::port::cells_at(used, b);
+                        by = y0;
+                    }
+                }
+            }
+        }
+        if (mode == 3) && (p >= page) {
+            if (best < 0) || (p < bp) || ((p == bp) && (y0 < by)) {
+                best = crate::port::cells_at(used, b);
+                bp = p;
+                by = y0;
+            }
+        }
+        j += 1;
+    }
+    return best;
+}
+pub(crate) fn rs_resolve_links(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, mut used: &mut crate::port::Cells) -> i32 {
+    // Every internal link (`sub` the destination's page + 1, `aux` its point as `emon.inline` packed it) gets the
+    // `target` of the block it names and its `sub` and `aux` back to 0. The work is bounded (50 million rows looked at):
+    // a link past it keeps no target.
+    let cnt: i32 = node_count(nodes);
+    let rows: i32 = rs_dest_build(nodes, regions, used);
+    let mut i: i32 = 0;
+    let mut tg: i32 = -1;
+    let mut work: i32 = 0;
+    let mut ys: i32 = 0;
+    let mut xs: i32 = 0;
+    let mut y: i32 = -1;
+    let mut x: i32 = -1;
+    while i < cnt {
+        if (node_kind(nodes, i) == nk_link()) && (node_sub(nodes, i) > 0) {
+            ys = node_aux(nodes, i) / 32768;
+            xs = node_aux(nodes, i) % 32768;
+            y = -1;
+            x = -1;
+            if ys > 0 {
+                y = (ys - 1) * 100;
+            }
+            if xs > 0 {
+                x = (xs - 1) * 100;
+            }
+            tg = -1;
+            if work < 50000000 {
+                tg = rs_dest_find(used, node_sub(nodes, i), y, x, 0);
+                if tg < 0 {
+                    tg = rs_dest_find(used, node_sub(nodes, i), y, x, 1);
+                }
+                if tg < 0 {
+                    tg = rs_dest_find(used, node_sub(nodes, i), y, x, 2);
+                }
+                if tg < 0 {
+                    tg = rs_dest_find(used, node_sub(nodes, i), y, x, 3);
+                }
+                work += 4 * rows;
+            }
+            if tg >= 0 {
+                node_set_attr_node(nodes, attrs, i, fk_target(), tg);
+            }
+            node_set_sub(nodes, i, 0);
+            node_set_aux(nodes, i, 0);
+        }
+        i += 1;
+    }
+    return 0;
+}
 pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, mut stk: &mut crate::port::Cells, mut used: &mut crate::port::Cells, mut out: &mut crate::port::Cells, lay: &mut crate::port::Cells) -> i32 {
     // Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
     // `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
@@ -748,6 +889,7 @@ pub fn rs_run(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mu
     rs_remap(attrs, nm);
     rs_targets(nodes, attrs, out);
     rs_link_refs(nodes, attrs, text, used);
+    rs_resolve_links(nodes, attrs, regions, used);
     rs_scrub_text(text);
     return node_count(nodes);
 }

@@ -39,7 +39,7 @@ func read(t *testing.T, rel string) []byte {
 	return b
 }
 
-var slice = []string{"h-plain", "h-keyword", "h-inverted-numbered", "h-numbered", "initial-image", "initial-vector"}
+var slice = []string{"h-plain", "h-keyword", "h-inverted-numbered", "h-numbered", "initial-image", "initial-vector", "furn-informative"}
 
 func synth(t *testing.T, name string) []byte {
 	return read(t, "test/corpus/synth/pdf/"+name+".pdf")

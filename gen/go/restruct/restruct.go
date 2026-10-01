@@ -519,6 +519,21 @@ func rsTargets(nodes *port.Cells, attrs *port.Cells, out *port.Cells) int32 {
 	return 0
 }
 
+func rsInLink(on *port.Cells, p int32) bool {
+	// Is node p, or one of its three nearest ancestors, a `link`? A bare URL in text under a link annotation is not
+	// linked again (P4.7, D193), and a `span` can stand between the text and its link.
+	var q int32 = p
+	var d int32 = 0
+	for (q >= 0) && (d < 4) {
+		if model.NodeKind(on, q) == model.NkLink() {
+			return 1 == 1
+		}
+		q = model.NodeParent(on, q)
+		d += 1
+	}
+	return 0 == 1
+}
+
 func rsClassify(on *port.Cells, text *port.Cells, p int32, c int32, depth int32, out *port.Cells) int32 {
 	// What to do with child c of old node p, with `depth` lists open: 1 an item (into a list), 2 a milestone or a
 	// note inside a list that goes on, 3 a caption above its object, 4 a figure caption with no figure (wrapped),
@@ -544,7 +559,7 @@ func rsClassify(on *port.Cells, text *port.Cells, p int32, c int32, depth int32,
 	if ((k == model.NkTable()) || (k == model.NkFigure())) && rsGrab(on, c) {
 		return 5
 	}
-	if (k == model.NkText()) && (model.NodeHasText(on, c) == 1) && (model.NodeKind(on, p) != model.NkLink()) {
+	if (k == model.NkText()) && (model.NodeHasText(on, c) == 1) && !rsInLink(on, p) {
 		if rsHasLink(text, model.NodeTextStart(on, c), model.NodeTextStart(on, c)+model.NodeTextLen(on, c), out) == 1 {
 			return 6
 		}
@@ -760,6 +775,138 @@ func rsScrubText(text *port.Cells) int32 {
 	return 0
 }
 
+func rsDestKind(k int32) bool {
+	// The blocks a link can name: what a reader would call the place a destination is.
+	return (k == model.NkHeading()) || ((k == model.NkParagraph()) || ((k == model.NkItem()) || ((k == model.NkCaption()) || ((k == model.NkFigure()) || ((k == model.NkTable()) || ((k == model.NkNote()) || (k == model.NkQuote())))))))
+}
+
+func rsDestBuild(nodes *port.Cells, regions *port.Cells, used *port.Cells) int32 {
+	// `used`: a row of six for each region of each block a link can name (`rs-dest-kind`): the node, its page, its box.
+	var cnt int32 = model.NodeCount(nodes)
+	var i int32 = 0
+	var r int32 = 0
+	port.CellsDrop(used, 0)
+	for i < cnt {
+		if rsDestKind(model.NodeKind(nodes, i)) {
+			r = model.NodeRegionHead(nodes, i)
+			for r >= 0 {
+				port.CellsPush(used, i)
+				port.CellsPush(used, model.RegionPage(regions, r))
+				port.CellsPush(used, model.RegionX0(regions, r))
+				port.CellsPush(used, model.RegionY0(regions, r))
+				port.CellsPush(used, model.RegionX1(regions, r))
+				port.CellsPush(used, model.RegionY1(regions, r))
+				r = model.RegionNext(regions, r)
+			}
+		}
+		i += 1
+	}
+	return port.CellsLen(used) / 6
+}
+
+func rsXdist(x0 int32, x1 int32, x int32) int32 {
+	// How far x is outside [x0, x1]: 0 inside.
+	if x < x0 {
+		return x0 - x
+	}
+	if x > x1 {
+		return x - x1
+	}
+	return 0
+}
+
+func rsDestFind(used *port.Cells, page int32, y int32, x int32, mode int32) int32 {
+	// The block a destination names (P4.7, D193): of the blocks on `page` that do not end above the point (3 pt of
+	// slack: a destination is set a little above its heading, a paragraph that ends there is not it), the topmost; a
+	// destination with no y has no top to be under. The point's x tells the column: mode 0 takes only the blocks whose
+	// extent is within 6 pt of it (a destination is at its entry's left edge or a little outside it, and the gutter is
+	// wider), mode 1 within 20 pt, mode 2 without the x; mode 3 the topmost block of the first page at or after `page`
+	// that has one. -1 when none.
+	var n int32 = port.CellsLen(used) / 6
+	var j int32 = 0
+	var best int32 = -1
+	var bp int32 = 0
+	var by int32 = 0
+	var tol int32 = 2000
+	if mode == 0 {
+		tol = 600
+	}
+	for j < n {
+		var b int32 = j * 6
+		var p int32 = port.CellsAt(used, b+1)
+		var y0 int32 = port.CellsAt(used, b+3)
+		if (mode < 3) && (p == page) {
+			if (y < 0) || (port.CellsAt(used, b+5) > (y + 300)) {
+				if (mode == 2) || (x < 0) || (rsXdist(port.CellsAt(used, b+2), port.CellsAt(used, b+4), x) <= tol) {
+					if (best < 0) || (y0 < by) {
+						best = port.CellsAt(used, b)
+						by = y0
+					}
+				}
+			}
+		}
+		if (mode == 3) && (p >= page) {
+			if (best < 0) || (p < bp) || ((p == bp) && (y0 < by)) {
+				best = port.CellsAt(used, b)
+				bp = p
+				by = y0
+			}
+		}
+		j += 1
+	}
+	return best
+}
+
+func rsResolveLinks(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, used *port.Cells) int32 {
+	// Every internal link (`sub` the destination's page + 1, `aux` its point as `emon.inline` packed it) gets the
+	// `target` of the block it names and its `sub` and `aux` back to 0. The work is bounded (50 million rows looked at):
+	// a link past it keeps no target.
+	var cnt int32 = model.NodeCount(nodes)
+	var rows int32 = rsDestBuild(nodes, regions, used)
+	var i int32 = 0
+	var tg int32 = -1
+	var work int32 = 0
+	var ys int32 = 0
+	var xs int32 = 0
+	var y int32 = -1
+	var x int32 = -1
+	for i < cnt {
+		if (model.NodeKind(nodes, i) == model.NkLink()) && (model.NodeSub(nodes, i) > 0) {
+			ys = model.NodeAux(nodes, i) / 32768
+			xs = model.NodeAux(nodes, i) % 32768
+			y = -1
+			x = -1
+			if ys > 0 {
+				y = (ys - 1) * 100
+			}
+			if xs > 0 {
+				x = (xs - 1) * 100
+			}
+			tg = -1
+			if work < 50000000 {
+				tg = rsDestFind(used, model.NodeSub(nodes, i), y, x, 0)
+				if tg < 0 {
+					tg = rsDestFind(used, model.NodeSub(nodes, i), y, x, 1)
+				}
+				if tg < 0 {
+					tg = rsDestFind(used, model.NodeSub(nodes, i), y, x, 2)
+				}
+				if tg < 0 {
+					tg = rsDestFind(used, model.NodeSub(nodes, i), y, x, 3)
+				}
+				work += 4 * rows
+			}
+			if tg >= 0 {
+				model.NodeSetAttrNode(nodes, attrs, i, model.FkTarget(), tg)
+			}
+			model.NodeSetSub(nodes, i, 0)
+			model.NodeSetAux(nodes, i, 0)
+		}
+		i += 1
+	}
+	return 0
+}
+
 func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, stk *port.Cells, used *port.Cells, out *port.Cells, lay *port.Cells) int32 {
 	// Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
 	// `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
@@ -790,6 +937,7 @@ func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, no
 	rsRemap(attrs, nm)
 	rsTargets(nodes, attrs, out)
 	rsLinkRefs(nodes, attrs, text, used)
+	rsResolveLinks(nodes, attrs, regions, used)
 	rsScrubText(text)
 	return model.NodeCount(nodes)
 }

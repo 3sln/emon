@@ -33,6 +33,7 @@ use crate::emon::heading::*;
 use crate::emon::html::*;
 use crate::emon::json::*;
 use crate::emon::furniture::{fu_find, fu_write};
+use crate::emon::inline::{il_analyze, il_fonts};
 use crate::emon::lists::ls_analyze;
 use crate::emon::notes::nt_analyze;
 use crate::emon::restruct::rs_run;
@@ -41,6 +42,7 @@ use crate::emon::para::*;
 use crate::emon::table::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
+use crate::emon::pdfannot::pa_run;
 use crate::emon::pdfmeta::pm_run;
 use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::pdfx::px_index_build;
@@ -738,6 +740,10 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     pm_run(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut md, &mut xm, &mut ol, &mut lb, &mut nd, &mut nt);
     tg_read(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut wk, &mut md);
     tg_join(&mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut sa, &mut gl, &mut mk, &mut fnt, &mut pg, &mut ha, &mut hb, &mut hh);
+    // inline styles and links (P4.7): what each font says of weight and slant, and the link annotations (P3.8)
+    let (mut ift, mut fs, mut fm, mut an, mut aq, mut fd, mut sg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    il_fonts(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut fnt, &mut et, &mut ift);
+    pa_run(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut fs, &mut seen, &mut fm, &mut an, &mut aq, &mut fd, &mut sg);
     if view.missed() {
         return Step::Miss;
     }
@@ -773,6 +779,9 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     // lists (kin/lists.kin, P4.5): which lines begin an item, written into `et` and the rows after `hc`'s, which the paragraph stage reads
     let (mut lcd, mut lpi, mut lws) = (Cells::new(), Cells::new(), Cells::new());
     ls_analyze(&mut wd, &mut ln, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
+    // the style and the link of every character (kin/inline.kin, P4.7): written after the lists' rows in `hc`, which the paragraph stage reads
+    let mut isw = Cells::new();
+    il_analyze(&mut wd, &mut ln, &mut et, &mut gl, &mut ift, &mut sf, &mut an, &mut txt, &mut pg, &mut m.pages, np, &mut m.text, &mut hc, &mut isw);
     pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger);
     // restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the

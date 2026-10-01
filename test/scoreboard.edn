@@ -1210,6 +1210,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
@@ -1271,6 +1274,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :wer 0.0}
       "pdf-tagged/tables" {
         :block-caption-f1 1.0
@@ -1425,11 +1431,23 @@
         :join-f1 0.952381
         :join-p 1.0
         :join-r 0.909091
+        :link-f1 1.0
+        :link-p 1.0
+        :link-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
         :para-boundary-f1 0.853731
         :para-boundary-p 0.757951
         :para-boundary-r 0.977221
+        :span-bold-f1 0.857143
+        :span-bold-p 0.857143
+        :span-bold-r 0.857143
+        :span-italic-f1 1.0
+        :span-italic-p 1.0
+        :span-italic-r 1.0
+        :span-mono-f1 1.0
+        :span-mono-p 1.0
+        :span-mono-r 1.0
         :table-continued-acc 0.888889
         :table-teds-lite 0.830984
         :table-teds-struct-lite 0.885305
@@ -1543,6 +1561,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-italic-f1 1.0
+        :span-italic-p 1.0
+        :span-italic-r 1.0
         :wer 0.0}
       "pdf/forms" {
         :block-heading-f1 1.0
@@ -1572,6 +1593,9 @@
         :para-boundary-f1 0.434783
         :para-boundary-p 0.277778
         :para-boundary-r 1.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-continued-acc 0.5
         :table-teds-lite 0.5
         :table-teds-struct-lite 0.5
@@ -1601,6 +1625,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :wer 0.0}
       "pdf/headings" {
         :block-heading-f1 1.0
@@ -1663,6 +1690,9 @@
         :para-boundary-f1 0.580645
         :para-boundary-p 0.442623
         :para-boundary-r 0.84375
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :wer 0.018251}
       "pdf/lists" {
         :block-heading-f1 1.0
@@ -1690,11 +1720,23 @@
         :heading-level-near 1.0
         :heading-p 1.0
         :heading-r 1.0
+        :link-f1 1.0
+        :link-p 1.0
+        :link-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
+        :span-italic-f1 1.0
+        :span-italic-p 1.0
+        :span-italic-r 1.0
+        :span-mono-f1 1.0
+        :span-mono-p 1.0
+        :span-mono-r 1.0
         :wer 0.0}
       "pdf/scripts" {
         :block-heading-f1 0.933333
@@ -1762,6 +1804,9 @@
         :para-boundary-f1 0.111111
         :para-boundary-p 0.058824
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :wer 0.653846}
       "pdf/tables" {
         :block-caption-f1 1.0
@@ -1933,10 +1978,22 @@
         :join-f1 0.0
         :join-p 0.0
         :join-r 0.0
+        :link-f1 0.0
+        :link-p 0.0
+        :link-r 0.0
         :page-label-acc 0.706522
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
+        :span-italic-f1 0.0
+        :span-italic-p 0.0
+        :span-italic-r 0.0
+        :span-mono-f1 0.0
+        :span-mono-p 0.0
+        :span-mono-r 0.0
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
@@ -2039,6 +2096,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-italic-f1 0.0
+        :span-italic-p 0.0
+        :span-italic-r 0.0
         :wer 1.0}
       "scan/forms" {
         :block-heading-f1 0.0
@@ -2065,6 +2125,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
@@ -2091,6 +2154,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :wer 1.0}
       "scan/headings" {
         :block-heading-f1 0.0
@@ -2147,6 +2213,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :wer 1.0}
       "scan/lists" {
         :block-heading-f1 0.0
@@ -2172,10 +2241,22 @@
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
+        :link-f1 0.0
+        :link-p 0.0
+        :link-r 0.0
         :page-label-acc 0.4
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
+        :span-italic-f1 0.0
+        :span-italic-p 0.0
+        :span-italic-r 0.0
+        :span-mono-f1 0.0
+        :span-mono-p 0.0
+        :span-mono-r 0.0
         :wer 1.0}
       "scan/scripts" {
         :block-heading-f1 0.0
@@ -2237,6 +2318,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :wer 1.0}
       "scan/tables" {
         :block-caption-f1 0.0

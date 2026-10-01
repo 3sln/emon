@@ -1,0 +1,781 @@
+;; Inline styles and links (P4.7; SPEC 5.1, 10.8; D191-D195). emon's own module (D039).
+;;
+;;   (il-fonts src ar dc a b st fnt et ift)                      what each font row says of weight and slant
+;;   (il-analyze wd ln et gl ift sf an txt pg pages text hc sw)  the style and the link of every character of every word
+;;
+;; A SPAN (bold, italic, monospace, subscript, superscript) and a LINK (a PDF link annotation) are what a character LOOKS
+;; like and WHERE it is: the text layer has both, the paragraph stage (`emon.para`) has neither. So this stage runs
+;; BEFORE the paragraph stage, the way `emon.lists` and `emon.notes` do, writes what it found after their rows in `hc`
+;; (the evidence is not touched), and the paragraph stage asks three things of it: the STATE of a word's characters
+;; (`il-wstate`), what a link is (`il-link-*`), and, in the text it is building, it leaves a MARKER where the state
+;; changes (`il-mark`), a group of noncharacters like the other stages' (D179). `emon.para` makes the nodes from them.
+;;
+;; THE STATE of a character is one number: the style bits of `emon.model`'s `sy` in its low 8 bits (bold 1, italic 2,
+;; monospace 64, subscript 16, superscript 32) and, above them, 256 times (a link's number plus one). It is
+;;   * BOLD, ITALIC, MONO from the glyph's font: the font row's style (the descriptor's flags and the name, P1.6)
+;;     and what this stage adds from the font file's descriptor and name (`il-fonts`): a /FontWeight of 600 or more, a
+;;     /StemV 1.25 times that of the thinnest face of its family the document has (Skia writes Georgia 134 and
+;;     Georgia-Bold 190: a stem is no evidence across families), a name that says `bold`, `black`, `heavy`, `demi` or
+;;     `cmbx`; a /ItalicAngle of -3 degrees or
+;;     more slanted, a name that says `italic`, `oblique`, `cmti`, `cmsl` or `cmmi`. Evidence of weight and slant is only
+;;     ever ADDED: a face that does not say is regular. The glyph's own font, not the word's: a word can change face.
+;;   * SUPERSCRIPT or SUBSCRIPT from the glyph's baseline against its line's: set smaller than the line's text (88 per
+;;     cent) AND raised (superscript) or lowered (subscript) by 12 per cent of the line's size. An upright line only.
+;;   * a LINK from the link annotations (`emon.pdfannot`, P3.8): the annotation whose rectangle holds the centre of the
+;;     glyph's box, the smallest when two do. A /URI action is an `href` (only the schemes http, https, ftp, ftps,
+;;     mailto and tel, and a reference without a scheme: never `javascript:`); a /GoTo (a destination, or a named one the
+;;     catalogue resolved) is an internal link: the page and the point it names, and `emon.restruct` finds the block.
+;;     An annotation hidden or not to be viewed, with no rectangle, or as large as half a page is not a link.
+;; A word whose text is not its glyphs one for one (a ligature; a text the list or note stage rewrote) has one state,
+;; its first glyph's font and the centre of its box, and no sub- or superscript.
+;;
+;; THE BLOCK in `hc` follows the lists' rows (`hd-rows-end` + lines x 8). Cells: 0 the magic, 1 words, 2 the state the
+;; text being built is in (the paragraph stage keeps it here), 3 links, 4 the word table, 5 the data, 6 the link
+;; table, 7 spare; the word table (2 cells per word: the data offset, -1 for a word whose characters are all plain, and
+;; the number of states, 1 or its characters); the data; the link table (6 cells per link: kind 1 uri 2 internal, the
+;; `href` as a run of the Model's text arena, the destination page, the destination point packed). When no character
+;; of the document has a state, nothing is added and the paragraph stage is what it was.
+(ns emon.inline
+  (:require [emon.lang :refer [I32 Bool Src Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-count wd-get ln-count ln-get gl-get fo-count fo-get
+                                   lh-page lh-first lh-count lh-by0 lh-rot hd-page hd-x0 hd-y0 hd-x1 hd-y1
+                                   hd-tstart hd-tlen wf-gfirst wf-gcount wf-font gf-font gf-size gf-by0
+                                   fnf-obj fnf-style fnf-tstart fnf-tlen]]
+            [emon.lists :refer [ls-cap ls-line-size ls-s-item ls-s-end ls-s-note ls-s-cap ls-s-ref]]
+            [emon.heading :refer [hd-rows-end]]
+            [emon.model :refer [text-append-cp page-w page-h]]
+            [emon.pdfdoc :refer [pd-get pd-dget pd-resolve pd-pg-crop]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-num-cp]]
+            [emon.pdfnames :refer [pn-font-descriptor pn-descendant-fonts]]
+            [emon.pdfxnames :refer [px-stem-v px-italic-angle px-font-weight]]
+            [emon.pdfx :refer [px-dget px-is-num px-page-x px-page-y px-null]]
+            [kin.lang :refer [defn defconst defdata return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem bit-and bit-or]]))
+
+(defconst ^I32 IL_MAGIC 1229998672)
+(defconst ^I32 IL_LS 8)            ;; the lists' row (`LS_STRIDE` of `emon.lists`, private there)
+(defconst ^I32 IL_HDR 8)
+(defconst ^I32 IL_AN 38)           ;; an annotation row (`AN_STRIDE` of `emon.pdfannot`)
+(defconst ^I32 IL_CAND 12)         ;; a candidate link: page, rectangle, kind, href run, destination, table id, annotation
+(defconst ^I32 IL_LK 6)            ;; a row of the link table
+(defconst ^I32 IL_MAXC 100000)
+(defconst ^I32 IL_MAXG 4000)       ;; a word with more glyphs than this has one state
+(defconst ^I32 IL_MAXF 400)        ;; more fonts than this: no family comparison (it is quadratic)
+(defconst ^I32 IL_STYLE 195)       ;; the bits the fonts speak of: bold, italic, monospace, small capitals
+
+;; the opener of a style marker in the text being built: a noncharacter after `emon.lists`'s (U+FDD5)
+(defn ^:pub ^I32 il-s-sty [] (return 64981))
+
+;; ------------------------------------------------------------------------------------------- the fonts
+
+;; names: bold (black heavy demi cmbx) then italic (oblique cmti cmsl cmmi), lower case
+(defdata ^:pub il-names
+  :emitter kin.lang/flat-array
+  :data [98 111 108 100
+         98 108 97 99 107
+         104 101 97 118 121
+         100 101 109 105
+         99 109 98 120
+         105 116 97 108 105 99
+         111 98 108 105 113 117 101
+         99 109 116 105
+         99 109 115 108
+         99 109 109 105]
+  :accessors {^I32 il-name-at [^I32 ignored ^I32 i]})
+
+(defn ^I32 il-name-off [^I32 p]
+  (if (== p 1) (return 0))
+  (if (== p 2) (return 4))
+  (if (== p 3) (return 9))
+  (if (== p 4) (return 14))
+  (if (== p 5) (return 18))
+  (if (== p 6) (return 22))
+  (if (== p 7) (return 28))
+  (if (== p 8) (return 35))
+  (if (== p 9) (return 39))
+  (return 43))
+
+(defn ^I32 il-name-len [^I32 p]
+  (if (== p 1) (return 4))
+  (if (== p 2) (return 5))
+  (if (== p 3) (return 5))
+  (if (== p 4) (return 4))
+  (if (== p 5) (return 4))
+  (if (== p 6) (return 6))
+  (if (== p 7) (return 7))
+  (return 4))
+
+(defn ^I32 il-fold [^I32 c]
+  (comment "ASCII lower case.")
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (return c))
+
+(defn ^:pub ^I32 il-name-has [^Cells et ^I32 s ^I32 n ^I32 p]
+  (comment "1 when the font name et[s, s+n) holds the word p of `il-names`, ignoring ASCII case.")
+  (let [^I32 off (il-name-off p)
+        ^I32 pl (il-name-len p)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ok 1]
+    (while (<= (+ i pl) n)
+      (do (set j 0)
+          (set ok 1)
+          (while (and (== ok 1) (< j pl))
+            (do (if (!= (il-fold (cells-at et (+ (+ s i) j))) (il-name-at 0 (+ off j))) (set ok 0))
+                (set j (+ j 1))))
+          (if (== ok 1) (return 1))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 il-font-style [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                          ^Cells fnt ^Cells et ^I32 i]
+  (comment "The bits of a font row: bold 1, italic 2, monospace 64. The row's own style, and what the name and the")
+  (comment "descriptor add (see the head).")
+  (let [^:mut ^I32 sty (bit-and (fo-get fnt i (fnf-style)) IL_STYLE)
+        ^I32 obj (fo-get fnt i (fnf-obj))
+        ^I32 ts (fo-get fnt i (fnf-tstart))
+        ^I32 tl (fo-get fnt i (fnf-tlen))
+        ^:mut ^I32 p 1
+        ^:mut ^I32 fh 0
+        ^:mut ^I32 fd 0
+        ^:mut ^I32 da 0
+        ^:mut ^I32 dd 0
+        ^:mut ^I32 dh 0
+        ^:mut ^I32 stem 0
+        ^:mut ^I32 v 0]
+    (if (and (>= ts 0) (> tl 0))
+      (while (<= p 10)
+        (do (if (== (il-name-has et ts tl p) 1)
+              (if (<= p 5)
+                (set sty (bit-or sty 1))
+                (set sty (bit-or sty 2))))
+            (set p (+ p 1)))))
+    (if (> obj 0)
+      (do (set fh (pd-get src ar dc a b st obj))
+          (if (and (!= fh 0) (== (pl-kind-of ar fh) 7))
+            (do (set fd (pd-dget src ar dc a b st fh (pn-font-descriptor)))
+                (if (== fd 0)
+                  (do (set da (pd-dget src ar dc a b st fh (pn-descendant-fonts)))
+                      (if (and (!= da 0) (== (pl-kind-of ar da) 6))
+                        (do (set dh (pl-first ar da))
+                            (set dd (pd-resolve src ar dc a b st dh))
+                            (if (and (!= dd 0) (== (pl-kind-of ar dd) 7))
+                              (set fd (pd-dget src ar dc a b st dd (pn-font-descriptor))))))))
+                (if (and (!= fd 0) (== (pl-kind-of ar fd) 7))
+                  (do (set v (px-dget src ar dc a b st fd (px-font-weight)))
+                      (if (and (== (px-is-num ar v) 1) (>= (pl-num-cp ar v) 60000)) (set sty (bit-or sty 1)))
+                      (set v (px-dget src ar dc a b st fd (px-stem-v)))
+                      (if (and (== (px-is-num ar v) 1) (> (pl-num-cp ar v) 0) (< (pl-num-cp ar v) 100000))
+                        (set stem (pl-num-cp ar v)))
+                      (set v (px-dget src ar dc a b st fd (px-italic-angle)))
+                      (if (and (== (px-is-num ar v) 1) (<= (pl-num-cp ar v) -300)) (set sty (bit-or sty 2)))))))))
+    (return (+ sty (* 256 stem)))))
+
+(defn ^I32 il-root [^Cells et ^I32 s ^I32 n]
+  (comment "Where the family name of the font name et[s, s+n) starts: after a subset tag (six capitals and a plus).")
+  (let [^:mut ^I32 i 0]
+    (if (< n 8) (return s))
+    (if (!= (cells-at et (+ s 6)) 43) (return s))
+    (while (< i 6)
+      (do (if (or (< (cells-at et (+ s i)) 65) (> (cells-at et (+ s i)) 90)) (return s))
+          (set i (+ i 1))))
+    (return (+ s 7))))
+
+(defn ^I32 il-root-len [^Cells et ^I32 s ^I32 e]
+  (comment "The length of the family name in et[s, e): up to the first hyphen or comma.")
+  (let [^:mut ^I32 i s]
+    (while (and (< i e) (!= (cells-at et i) 45) (!= (cells-at et i) 44))
+      (set i (+ i 1)))
+    (return (- i s))))
+
+(defn ^I32 il-same-family [^Cells fnt ^Cells et ^I32 f ^I32 g]
+  (comment "1 when font rows f and g have the same family name (the name without its subset tag and its style).")
+  (let [^I32 ft (fo-get fnt f (fnf-tstart))
+        ^I32 gt (fo-get fnt g (fnf-tstart))
+        ^I32 fs (il-root et ft (fo-get fnt f (fnf-tlen)))
+        ^I32 gs (il-root et gt (fo-get fnt g (fnf-tlen)))
+        ^I32 fl (il-root-len et fs (+ ft (fo-get fnt f (fnf-tlen))))
+        ^I32 gl (il-root-len et gs (+ gt (fo-get fnt g (fnf-tlen))))
+        ^:mut ^I32 i 0]
+    (if (or (< ft 0) (< gt 0)) (return 0))
+    (if (or (== fl 0) (!= fl gl)) (return 0))
+    (while (< i fl)
+      (do (if (!= (il-fold (cells-at et (+ fs i))) (il-fold (cells-at et (+ gs i)))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 il-fonts [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                           ^Cells fnt ^Cells et ^:mut ^Cells ift]
+  (comment "`ift`: one cell for each font row, its bits (bold 1, italic 2, monospace 64). Answers the rows.")
+  (let [^I32 n (fo-count fnt)
+        ^:mut ^I32 i 0]
+    (cells-drop ift 0)
+    (while (< i n)
+      (do (cells-push ift (il-font-style src ar dc a b st fnt et i))
+          (set i (+ i 1))))
+    (comment "a stem 1.25 times the thinnest of its family's, where the document has two faces of the family: bold. A stem")
+    (comment "alone says nothing across families (Skia: Georgia 134, Georgia-Bold 190, Helvetica 89). The bits first, the")
+    (comment "stems after them (cell + 256 * stem), the answer after those.")
+    (set i 0)
+    (while (< i n)
+      (do (let [^I32 stem (quot (cells-at ift i) 256)
+                ^:mut ^I32 lo (quot (cells-at ift i) 256)
+                ^:mut ^I32 bits (rem (cells-at ift i) 256)
+                ^:mut ^I32 g 0]
+            (if (and (> stem 0) (<= n IL_MAXF))
+              (do (while (< g n)
+                    (do (let [^I32 gs (quot (cells-at ift g) 256)]
+                          (if (and (> gs 0) (< gs lo) (== (bit-and (rem (cells-at ift g) 256) 2) (bit-and bits 2))
+                                     (== (il-same-family fnt et i g) 1))
+                            (set lo gs)))
+                        (set g (+ g 1))))
+                  (if (>= (* stem 100) (* lo 125)) (set bits (bit-or bits 1)))))
+            (cells-push ift bits))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (cells-set ift i (cells-at ift (+ n i)))
+          (set i (+ i 1))))
+    (cells-drop ift n)
+    (return n)))
+
+;; ------------------------------------------------------------------------------------------ the links
+
+;; the schemes a `href` may have: http https ftp ftps mailto tel
+(defdata ^:pub il-schemes
+  :emitter kin.lang/flat-array
+  :data [104 116 116 112
+         104 116 116 112 115
+         102 116 112
+         102 116 112 115
+         109 97 105 108 116 111
+         116 101 108]
+  :accessors {^I32 il-scheme-at [^I32 ignored ^I32 i]})
+
+(defn ^I32 il-scheme-off [^I32 p]
+  (if (== p 1) (return 0))
+  (if (== p 2) (return 4))
+  (if (== p 3) (return 9))
+  (if (== p 4) (return 12))
+  (if (== p 5) (return 16))
+  (return 22))
+
+(defn ^I32 il-scheme-len [^I32 p]
+  (if (== p 1) (return 4))
+  (if (== p 2) (return 5))
+  (if (== p 3) (return 3))
+  (if (== p 4) (return 4))
+  (if (== p 5) (return 6))
+  (return 3))
+
+(defn ^I32 il-scheme-is [^Cells txt ^I32 s ^I32 n]
+  (comment "1 when txt[s, s+n) is one of the allowed schemes, ignoring ASCII case.")
+  (let [^:mut ^I32 p 1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ok 1]
+    (while (<= p 6)
+      (do (if (== (il-scheme-len p) n)
+            (do (set j 0)
+                (set ok 1)
+                (while (and (== ok 1) (< j n))
+                  (do (if (!= (il-fold (cells-at txt (+ s j))) (il-scheme-at 0 (+ (il-scheme-off p) j))) (set ok 0))
+                      (set j (+ j 1))))
+                (if (== ok 1) (return 1))))
+          (set p (+ p 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 il-uri-ok [^Cells txt ^I32 s ^I32 n]
+  (comment "1 when the /URI txt[s, s+n) may be an `href`: no control character, and either no scheme (a reference) or")
+  (comment "an allowed one (never `javascript:` or `data:`).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 colon -1
+        ^:mut ^I32 stop 0]
+    (if (<= n 0) (return 0))
+    (if (> n 8192) (return 0))
+    (while (< i n)
+      (do (set c (cells-at txt (+ s i)))
+          (if (or (< c 32) (== c 127)) (return 0))
+          (if (and (== stop 0) (or (== c 47) (or (== c 63) (== c 35))))
+            (set stop 1))
+          (if (and (== stop 0) (== c 58))
+            (do (set colon i)
+                (set stop 1)))
+          (set i (+ i 1))))
+    (if (< colon 0) (return 1))
+    (if (== colon 0) (return 0))
+    (return (il-scheme-is txt s colon))))
+
+(defn ^I32 il-pt [^I32 v ^I32 mx]
+  (comment "Centipoints as whole points held to 0..mx.")
+  (if (< v 0) (return 0))
+  (let [^I32 p (quot v 100)]
+    (if (> p mx) (return mx))
+    (return p)))
+
+(defn ^I32 il-dest-aux [^Cells pg ^Cells an ^I32 base]
+  (comment "Where the destination of annotation row `base` points, in PAGE SPACE of its page, as whole points: (y + 1) *")
+  (comment "32768 + (x + 1), a part the destination does not give 0 (a fit with no point; a point is the left and the top).")
+  (let [^I32 dp (cells-at an (+ base 15))
+        ^I32 kind (rem (cells-at an (+ base 16)) 16)
+        ^I32 pa (cells-at an (+ base 17))
+        ^I32 pb (cells-at an (+ base 18))
+        ^I32 pd (cells-at an (+ base 20))
+        ^:mut ^I32 left (px-null)
+        ^:mut ^I32 top (px-null)
+        ^:mut ^I32 ux 0
+        ^:mut ^I32 xs 0
+        ^:mut ^I32 ys 0]
+    (if (== kind 1) (do (set left pa) (set top pb)))
+    (if (or (== kind 3) (== kind 7)) (set top pa))
+    (if (or (== kind 4) (== kind 8)) (set left pa))
+    (if (== kind 5) (do (set left pa) (set top pd)))
+    (if (== top (px-null)) (return 0))
+    (set ux (pd-pg-crop pg dp 0))
+    (if (!= left (px-null)) (set ux left))
+    (set ys (+ (il-pt (px-page-y pg dp ux top) 65533) 1))
+    (if (!= left (px-null))
+      (set xs (+ (il-pt (px-page-x pg dp ux top) 32765) 1)))
+    (return (+ (* ys 32768) xs))))
+
+(defn ^I32 il-cands [^Cells an ^Cells txt ^Cells pg ^Cells pages ^I32 npages ^:mut ^Cells sw]
+  (comment "The link annotations that are links, in `sw`, `IL_CAND` cells each and in page order (the annotations are):")
+  (comment "page (1 based), the rectangle in page space, kind (1 uri, 2 internal), the /URI in `txt`, the destination's")
+  (comment "page (0 based) and point, the link table id (-1: not used yet), the annotation's row. Answers how many.")
+  (let [^I32 n (quot (cells-len an) IL_AN)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0]
+    (cells-drop sw 0)
+    (while (and (< r n) (< got IL_MAXC))
+      (do (let [^I32 b (* r IL_AN)
+                ^I32 pi (cells-at an b)
+                ^I32 flags (cells-at an (+ b 3))
+                ^I32 x0 (cells-at an (+ b 4))
+                ^I32 y0 (cells-at an (+ b 5))
+                ^I32 x1 (cells-at an (+ b 6))
+                ^I32 y1 (cells-at an (+ b 7))
+                ^I32 act (cells-at an (+ b 12))
+                ^I32 ts (cells-at an (+ b 13))
+                ^I32 tl (cells-at an (+ b 14))
+                ^I32 dp (cells-at an (+ b 15))]
+            (set kind 0)
+            (if (== act 1)
+              (if (and (>= ts 0) (== (il-uri-ok txt ts tl) 1)) (set kind 1)))
+            (if (or (== act 2) (and (== act 0) (!= (bit-and (cells-at an (+ b 30)) 8) 0)))
+              (if (and (>= dp 0) (< dp npages)) (set kind 2)))
+            (if (and (== (cells-at an (+ b 1)) 1) (> kind 0) (>= pi 0) (< pi npages)
+                     (== (bit-and flags 34) 0) (> x1 x0) (> y1 y0))
+              (do (set pw (page-w pages pi))
+                  (set ph (page-h pages pi))
+                  (if (and (> pw 0) (> ph 0)
+                           (<= (* (quot (- x1 x0) 100) (quot (- y1 y0) 100)) (quot (* (quot pw 100) (quot ph 100)) 2)))
+                    (do (cells-push sw (+ pi 1))
+                        (cells-push sw x0)
+                        (cells-push sw y0)
+                        (cells-push sw x1)
+                        (cells-push sw y1)
+                        (cells-push sw kind)
+                        (if (== kind 1)
+                          (do (cells-push sw ts)
+                              (cells-push sw tl)
+                              (cells-push sw -1)
+                              (cells-push sw 0))
+                          (do (cells-push sw -1)
+                              (cells-push sw 0)
+                              (cells-push sw dp)
+                              (cells-push sw (il-dest-aux pg an b))))
+                        (cells-push sw -1)
+                        (cells-push sw r)
+                        (set got (+ got 1)))))))
+          (set r (+ r 1))))
+    (return got)))
+
+(defn ^I32 il-hit [^Cells sw ^I32 lo ^I32 hi ^I32 cx ^I32 cy]
+  (comment "The candidate of rows lo..hi whose rectangle holds the point, the smallest when several do; -1.")
+  (let [^:mut ^I32 j lo
+        ^:mut ^I32 best -1
+        ^:mut ^I32 barea 0
+        ^:mut ^I32 area 0]
+    (while (< j hi)
+      (do (let [^I32 b (* j IL_CAND)]
+            (if (and (>= cx (cells-at sw (+ b 1))) (<= cx (cells-at sw (+ b 3)))
+                     (>= cy (cells-at sw (+ b 2))) (<= cy (cells-at sw (+ b 4))))
+              (do (set area (* (quot (- (cells-at sw (+ b 3)) (cells-at sw (+ b 1))) 100)
+                               (quot (- (cells-at sw (+ b 4)) (cells-at sw (+ b 2))) 100)))
+                  (if (or (< best 0) (< area barea))
+                    (do (set best j)
+                        (set barea area))))))
+          (set j (+ j 1))))
+    (return best)))
+
+(defn ^I32 il-use [^:mut ^Cells sw ^I32 ncand ^:mut ^Cells text ^Cells txt ^I32 j]
+  (comment "The link table id of candidate j, the row made (and the `href` copied into the Model's text) on first use.")
+  (let [^I32 b (* j IL_CAND)
+        ^I32 have (cells-at sw (+ b 10))]
+    (if (>= have 0) (return have))
+    (let [^I32 tid (quot (- (cells-len sw) (* ncand IL_CAND)) IL_LK)
+          ^I32 kind (cells-at sw (+ b 5))
+          ^:mut ^I32 t0 0
+          ^:mut ^I32 i 0]
+      (cells-push sw kind)
+      (if (== kind 1)
+        (do (set t0 (cells-len text))
+            (while (< i (cells-at sw (+ b 7)))
+              (do (text-append-cp text (cells-at txt (+ (cells-at sw (+ b 6)) i)))
+                  (set i (+ i 1))))
+            (cells-push sw t0)
+            (cells-push sw (cells-at sw (+ b 7)))
+            (cells-push sw 0)
+            (cells-push sw 0))
+        (do (cells-push sw -1)
+            (cells-push sw 0)
+            (cells-push sw (cells-at sw (+ b 8)))
+            (cells-push sw (cells-at sw (+ b 9)))))
+      (cells-push sw 0)
+      (cells-set sw (+ b 10) tid)
+      (return tid))))
+
+;; -------------------------------------------------------------------------------- the block in hc
+
+(defn ^:pub ^I32 il-base [^Cells hc]
+  (comment "Where the block starts in `hc`, -1 when there is none.")
+  (let [^I32 e (hd-rows-end hc)]
+    (if (< e 0) (return -1))
+    (let [^I32 b (+ e (* (cells-at hc 0) IL_LS))]
+      (if (< (cells-len hc) (+ b IL_HDR)) (return -1))
+      (if (!= (cells-at hc b) IL_MAGIC) (return -1))
+      (return b))))
+
+(defn ^:pub ^I32 il-cur [^Cells hc]
+  (comment "The state the text being built is in.")
+  (let [^I32 b (il-base hc)]
+    (if (< b 0) (return 0))
+    (return (cells-at hc (+ b 2)))))
+
+(defn ^:pub ^I32 il-set-cur [^:mut ^Cells hc ^I32 v]
+  (let [^I32 b (il-base hc)]
+    (if (< b 0) (return 0))
+    (cells-set hc (+ b 2) v)
+    (return 0)))
+
+(defn ^:pub ^I32 il-wcnt [^Cells hc ^I32 w]
+  (comment "How many states word w has: 0 (every character plain), 1 (every character in it) or one for each.")
+  (let [^I32 b (il-base hc)]
+    (if (< b 0) (return 0))
+    (if (or (< w 0) (>= w (cells-at hc (+ b 1)))) (return 0))
+    (return (cells-at hc (+ (cells-at hc (+ b 4)) (+ (* w 2) 1))))))
+
+(defn ^:pub ^I32 il-wstate [^Cells hc ^I32 w ^I32 j]
+  (comment "The state of the j-th character of word w.")
+  (let [^I32 b (il-base hc)]
+    (if (< b 0) (return 0))
+    (if (or (< w 0) (>= w (cells-at hc (+ b 1)))) (return 0))
+    (let [^I32 t (+ (cells-at hc (+ b 4)) (* w 2))
+          ^I32 n (cells-at hc (+ t 1))
+          ^I32 at (+ (cells-at hc (+ b 5)) (cells-at hc t))]
+      (if (<= n 0) (return 0))
+      (if (== n 1) (return (cells-at hc at)))
+      (if (>= j n) (return (cells-at hc (+ at (- n 1)))))
+      (if (< j 0) (return (cells-at hc at)))
+      (return (cells-at hc (+ at j))))))
+
+(defn ^:pub ^I32 il-links [^Cells hc]
+  (let [^I32 b (il-base hc)]
+    (if (< b 0) (return 0))
+    (return (cells-at hc (+ b 3)))))
+
+(defn ^:pub ^I32 il-link-get [^Cells hc ^I32 id ^I32 f]
+  (comment "A cell of link `id` (0 based): 0 kind (1 uri, 2 internal), 1 href start in the Model's text, 2 its length, 3 the")
+  (comment "destination page (0 based), 4 the destination point packed (`il-dest-aux`); 0 for a link that is not there.")
+  (let [^I32 b (il-base hc)]
+    (if (< b 0) (return 0))
+    (if (or (< id 0) (>= id (cells-at hc (+ b 3)))) (return 0))
+    (return (cells-at hc (+ (+ (cells-at hc (+ b 6)) (* id IL_LK)) f)))))
+
+;; ---------------------------------------------------------------------------------------- the states
+
+(defn ^I32 il-glyph-bits [^Cells gl ^Cells ift ^I32 g ^I32 sz0 ^I32 base ^I32 upright]
+  (comment "The style bits of glyph g: its font's, and sub- or superscript by its place against the line's. A glyph set")
+  (comment "half as large again as its line's text has none: it is a raised initial (SPEC 10.9) or a display capital, and what its")
+  (comment "font is does not say the text was emphasised.")
+  (let [^I32 fi (gl-get gl g (gf-font))
+        ^:mut ^I32 bits 0]
+    (if (and (>= fi 0) (< fi (cells-len ift))) (set bits (cells-at ift fi)))
+    (if (and (> sz0 0) (> (* (ls-cap (gl-get gl g (gf-size))) 100) (* sz0 150))) (return 0))
+    (if (and (== upright 1) (> sz0 0))
+      (do (let [^I32 sz (ls-cap (gl-get gl g (gf-size)))
+                ^I32 by (ls-cap (gl-get gl g (gf-by0)))]
+            (if (<= (* sz 100) (* sz0 88))
+              (do (if (>= (* (- (ls-cap base) by) 100) (* sz0 12)) (set bits (bit-or bits 32)))
+                  (if (>= (* (- by (ls-cap base)) 100) (* sz0 12)) (set bits (bit-or bits 16))))))))
+    (return bits)))
+
+(defn ^I32 il-link-of [^Cells sw ^I32 ncand ^I32 lo ^I32 hi ^:mut ^Cells text ^Cells txt ^I32 cx ^I32 cy]
+  (comment "The link number plus one of the link at the point, 0 when there is none.")
+  (if (>= lo hi) (return 0))
+  (let [^I32 j (il-hit sw lo hi cx cy)]
+    (if (< j 0) (return 0))
+    (return (+ (il-use sw ncand text txt j) 1))))
+
+(defn ^I32 il-grouped [^Cells wd ^Cells et ^I32 w]
+  (comment "1 when the word's text holds a group of the list or note stage (U+FDD0..U+FDEF): it is not its glyphs.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))
+        ^:mut ^I32 i 0]
+    (while (< i tl)
+      (do (let [^I32 c (cells-at et (+ ts i))]
+            (if (and (>= c 64976) (<= c 65007)) (return 1)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 il-word [^Cells wd ^Cells et ^Cells gl ^Cells ift ^:mut ^Cells sw ^I32 ncand ^I32 lo ^I32 hi
+                    ^:mut ^Cells text ^Cells txt ^:mut ^Cells hc ^I32 b ^I32 w ^I32 sz0 ^I32 base ^I32 upright]
+  (comment "Write word w's states at the end of the data and its word table entry (see the head). Answers 1 when any")
+  (comment "character of it has a state.")
+  (let [^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))
+        ^I32 gn (wd-get wd w (wf-gcount))
+        ^I32 g0 (wd-get wd w (wf-gfirst))
+        ^I32 d0 (cells-len hc)
+        ^I32 te (+ (cells-at hc (+ b 4)) (* w 2))
+        ^:mut ^I32 eq 0
+        ^:mut ^I32 nz 0
+        ^:mut ^I32 same 1
+        ^:mut ^I32 first 0
+        ^:mut ^I32 st 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 g 0]
+    (if (or (< ts 0) (<= tl 0)) (return 0))
+    (if (and (== tl gn) (> gn 0) (<= gn IL_MAXG) (>= g0 0) (== (il-grouped wd et w) 0)) (set eq 1))
+    (if (== eq 1)
+      (while (< j tl)
+        (do (set g (+ g0 j))
+            (set st (il-glyph-bits gl ift g sz0 base upright))
+            (set st (+ st (* 256 (il-link-of sw ncand lo hi text txt
+                                             (quot (+ (gl-get gl g (hd-x0)) (gl-get gl g (hd-x1))) 2)
+                                             (quot (+ (gl-get gl g (hd-y0)) (gl-get gl g (hd-y1))) 2)))))
+            (cells-push hc st)
+            (if (!= st 0) (set nz 1))
+            (if (== j 0) (set first st))
+            (if (!= st first) (set same 0))
+            (set j (+ j 1))))
+      (do (let [^I32 fi (wd-get wd w (wf-font))]
+            (if (and (>= fi 0) (< fi (cells-len ift))) (set st (cells-at ift fi)))
+            (set st (+ st (* 256 (il-link-of sw ncand lo hi text txt
+                                             (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)
+                                             (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)))))
+            (cells-push hc st)
+            (if (!= st 0) (set nz 1)))))
+    (if (== nz 0)
+      (do (cells-drop hc d0)
+          (return 0)))
+    (if (== same 1) (cells-drop hc (+ d0 1)))
+    (cells-set hc te (- d0 (cells-at hc (+ b 5))))
+    (cells-set hc (+ te 1) (- (cells-len hc) d0))
+    (return 1)))
+
+(defn ^:pub ^I32 il-analyze [^Cells wd ^Cells ln ^Cells et ^Cells gl ^Cells ift ^Cells sf ^Cells an ^Cells txt ^Cells pg
+                             ^Cells pages ^I32 npages ^:mut ^Cells text ^:mut ^Cells hc ^:mut ^Cells sw]
+  (comment "Find the style and the link of every character of every word and write them after the lists' rows in `hc`")
+  (comment "(see the head). `sw` is scratch. Answers 1 when the block was written, 0 when no character has a state (and `hc`")
+  (comment "is as it was).")
+  (let [^I32 e (hd-rows-end hc)
+        ^I32 nw (wd-count wd)
+        ^I32 nl (ln-count ln)
+        ^:mut ^I32 b -1
+        ^:mut ^I32 ncand 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 any 0
+        ^:mut ^I32 cp -1
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 sz0 0
+        ^:mut ^I32 base 0
+        ^:mut ^I32 up 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 wn 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 nlk 0
+        ^:mut ^I32 i 0]
+    (if (< e 0) (return 0))
+    (set b (+ e (* (cells-at hc 0) IL_LS)))
+    (if (!= (cells-len hc) b) (return 0))
+    (if (or (== nw 0) (== nl 0)) (return 0))
+    (set ncand (il-cands an txt pg pages npages sw))
+    (cells-push hc IL_MAGIC)
+    (cells-push hc nw)
+    (cells-push hc 0)
+    (cells-push hc 0)
+    (cells-push hc (+ b IL_HDR))
+    (cells-push hc (+ (+ b IL_HDR) (* nw 2)))
+    (cells-push hc 0)
+    (cells-push hc 0)
+    (while (< i nw)
+      (do (cells-push hc -1)
+          (cells-push hc 0)
+          (set i (+ i 1))))
+    (while (< l nl)
+      (do (let [^I32 pgn (ln-get ln l (lh-page))]
+            (if (!= pgn cp)
+              (do (set cp pgn)
+                  (set lo 0)
+                  (while (and (< lo ncand) (< (cells-at sw (* lo IL_CAND)) pgn))
+                    (set lo (+ lo 1)))
+                  (set hi lo)
+                  (while (and (< hi ncand) (== (cells-at sw (* hi IL_CAND)) pgn))
+                    (set hi (+ hi 1))))))
+          (set rot (ln-get ln l (lh-rot)))
+          (set up 0)
+          (if (or (< rot 100) (> rot 35900)) (set up 1))
+          (set sz0 (ls-line-size sf ln l))
+          (set base (ln-get ln l (lh-by0)))
+          (set w0 (ln-get ln l (lh-first)))
+          (set wn (ln-get ln l (lh-count)))
+          (set k 0)
+          (while (< k wn)
+            (do (if (and (>= (+ w0 k) 0) (< (+ w0 k) nw))
+                  (if (== (il-word wd et gl ift sw ncand lo hi text txt hc b (+ w0 k) sz0 base up) 1)
+                    (set any 1)))
+                (set k (+ k 1))))
+          (set l (+ l 1))))
+    (if (== any 0)
+      (do (cells-drop hc b)
+          (return 0)))
+    (set nlk (quot (- (cells-len sw) (* ncand IL_CAND)) IL_LK))
+    (cells-set hc (+ b 6) (cells-len hc))
+    (cells-set hc (+ b 3) nlk)
+    (set i (* ncand IL_CAND))
+    (while (< i (cells-len sw))
+      (do (cells-push hc (cells-at sw i))
+          (set i (+ i 1))))
+    (return 1)))
+
+;; ------------------------------------------------------------------------ the markers in the text
+
+(defn ^:pub ^I32 il-mark [^:mut ^Cells raw ^I32 v]
+  (comment "Push the marker for state v: the opener, the number's digits, the end of a group.")
+  (let [^:mut ^I32 d 1
+        ^:mut ^I32 x 0]
+    (cells-push raw (il-s-sty))
+    (while (<= (* d 10) v)
+      (set d (* d 10)))
+    (set x v)
+    (while (> d 0)
+      (do (cells-push raw (+ 48 (quot x d)))
+          (set x (rem x d))
+          (set d (quot d 10))))
+    (cells-push raw (ls-s-end))
+    (return 0)))
+
+(defn ^:pub ^I32 il-mark-end [^Cells raw ^I32 s ^I32 n]
+  (comment "One past the end of the marker that opens at s, -1 when it is not closed before n.")
+  (let [^:mut ^I32 i (+ s 1)]
+    (while (< i n)
+      (do (if (== (cells-at raw i) (ls-s-end)) (return (+ i 1)))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 il-mark-value [^Cells raw ^I32 s ^I32 gend]
+  (comment "The state of the marker raw[s, gend).")
+  (let [^:mut ^I32 i (+ s 1)
+        ^:mut ^I32 v 0]
+    (while (< i (- gend 1))
+      (do (set v (+ (* v 10) (- (cells-at raw i) 48)))
+          (set i (+ i 1))))
+    (return v)))
+
+(defn ^:pub ^I32 il-bits [^I32 st]
+  (return (rem st 256)))
+
+(defn ^:pub ^I32 il-link [^I32 st]
+  (comment "The link number plus one of a state, 0 for none.")
+  (return (quot st 256)))
+
+(defn ^:pub ^I32 il-mix [^I32 a ^I32 b]
+  (comment "What two neighbours share: the bits they have both, the link when it is the same. The space between two")
+  (comment "words has this state.")
+  (let [^:mut ^I32 v (bit-and (il-bits a) (il-bits b))]
+    (if (== (il-link a) (il-link b)) (set v (+ v (* 256 (il-link a)))))
+    (return v)))
+
+(defn ^:pub ^I32 il-eff [^I32 st ^I32 base]
+  (comment "The state as it is written, against the style the paragraph is set in (bold, italic and monospace that most of")
+  (comment "its characters have are not marked).")
+  (let [^I32 bits (il-bits st)]
+    (return (+ (- bits (bit-and bits (bit-and base IL_STYLE))) (* 256 (il-link st))))))
+
+(defn ^:pub ^I32 il-state-at [^Cells raw ^I32 upto]
+  (comment "The state the text is in at raw[upto]: the last marker before it.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (while (< i upto)
+      (do (if (== (cells-at raw i) (il-s-sty))
+            (do (let [^I32 ge (il-mark-end raw i upto)]
+                  (if (> ge 0)
+                    (do (set v (il-mark-value raw i ge))
+                        (set i (- ge 1)))))))
+          (set i (+ i 1))))
+    (return v)))
+
+(defn ^:pub ^I32 il-has [^Cells raw ^I32 n]
+  (comment "1 when raw[0, n) has a marker.")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (cells-at raw i) (il-s-sty)) (return 1))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 il-base-of [^Cells raw ^I32 n]
+  (comment "The style bits most of the characters of raw[0, n) have: bold, italic, monospace each when more than half of")
+  (comment "the characters that are not spaces are in it. A group of another stage is not a character.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 ni 0
+        ^:mut ^I32 nm 0
+        ^:mut ^I32 nc 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ge 0
+        ^:mut ^I32 res 0]
+    (while (< i n)
+      (do (set c (cells-at raw i))
+          (if (== c (il-s-sty))
+            (do (set ge (il-mark-end raw i n))
+                (if (> ge 0)
+                  (do (set v (il-mark-value raw i ge))
+                      (set i ge))
+                  (set i (+ i 1))))
+            (if (or (== c (ls-s-item)) (or (== c (ls-s-note)) (or (== c (ls-s-cap)) (== c (ls-s-ref)))))
+              (do (set ge (il-mark-end raw i n))
+                  (if (> ge 0) (set i ge) (set i (+ i 1))))
+              (do (if (!= c 32)
+                    (do (set total (+ total 1))
+                        (if (!= (bit-and (il-bits v) 1) 0) (set nb (+ nb 1)))
+                        (if (!= (bit-and (il-bits v) 2) 0) (set ni (+ ni 1)))
+                        (if (!= (bit-and (il-bits v) 64) 0) (set nm (+ nm 1)))
+                        (if (!= (bit-and (il-bits v) 128) 0) (set nc (+ nc 1)))))
+                  (set i (+ i 1)))))))
+    (if (> (* nb 2) total) (set res (+ res 1)))
+    (if (> (* ni 2) total) (set res (+ res 2)))
+    (if (> (* nm 2) total) (set res (+ res 64)))
+    (if (> (* nc 2) total) (set res (+ res 128)))
+    (return res)))
+
+(defn ^:pub ^I32 il-styled [^Cells raw ^I32 n ^I32 base]
+  (comment "1 when some marker in raw[0, n) is a state that is written (`il-eff` not zero).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 ge 0]
+    (while (< i n)
+      (do (if (== (cells-at raw i) (il-s-sty))
+            (do (set ge (il-mark-end raw i n))
+                (if (> ge 0)
+                  (do (if (!= (il-eff (il-mark-value raw i ge) base) 0) (return 1))
+                      (set i (- ge 1))))))
+          (set i (+ i 1))))
+    (return 0)))

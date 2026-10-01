@@ -491,29 +491,105 @@ public final class Para {
         emon.Port.cellsPush(raw, 32);
         return 0;
     }
-    public static int paAddLine(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int l) {
-        // Append the line's words, a space between two.
+    public static int paLeadEnd(emon.Port.Cells et, int ts, int tl) {
+        // Where the group at the start of a word's text (the list, note or caption stage's) ends in the word; 0 when
+        // the text does not start with one.
+        int j = 1;
+        int e = 0;
+        if (tl < 1) {
+            return 0;
+        }
+        int c = emon.Port.cellsAt(et, ts);
+        if ((c == Lists.lsSItem()) || ((c == Lists.lsSNote()) || (c == Lists.lsSCap()))) {
+            e = tl;
+            while (j < tl) {
+                if (emon.Port.cellsAt(et, ts + j) == Lists.lsSEnd()) {
+                    e = j + 1;
+                    j = tl;
+                } else {
+                    j += 1;
+                }
+            }
+        }
+        return e;
+    }
+    public static int paAddLine(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int l, emon.Port.Cells hc, emon.Port.Cells fr) {
+        // Append the line's words, a space between two. Where the style or the link changes (`emon.inline`, P4.7, D192) a
+        // marker goes in first: the space between two words has what the two have in common, a group at the start of a
+        // word is not a character, and a heading line has no markers (its number is found by offset). The state the
+        // text is in is kept in the block of `hc`; the space `pa-join` pushed is taken back and pushed again, after a marker,
+        // and the raw start of the fragment that line opens (`fr`, the last row) moves to after it.
         int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
         int wn = Evidence.lnGet(ln, l, Evidence.lhCount());
+        int n0 = emon.Port.cellsLen(raw);
+        int nfr = emon.Port.cellsLen(fr) / FR_STRIDE;
+        int marks = 0;
+        int spc = 0;
+        int cur = 0;
         int k = 0;
         int j = 0;
         int started = 0;
+        int le = 0;
+        int s1 = 0;
+        int c = 0;
+        if ((Inline.ilBase(hc) >= 0) && (Heading.hdLevel(hc, l) == 0)) {
+            marks = 1;
+        }
+        if (marks == 1) {
+            if (n0 == 0) {
+                Inline.ilSetCur(hc, 0);
+            }
+            cur = Inline.ilCur(hc);
+            if ((n0 > 0) && (emon.Port.cellsAt(raw, n0 - 1) == 32)) {
+                emon.Port.cellsDrop(raw, n0 - 1);
+                spc = 1;
+            }
+        }
         while (k < wn) {
             int ts = Evidence.wdGet(wd, w0 + k, Evidence.hdTstart());
             int tl = Evidence.wdGet(wd, w0 + k, Evidence.hdTlen());
             if ((ts >= 0) && (tl > 0)) {
-                if (started == 1) {
+                le = paLeadEnd(et, ts, tl);
+                if ((started == 1) || (spc == 1)) {
+                    if (marks == 1) {
+                        s1 = cur;
+                        if (le < tl) {
+                            s1 = Inline.ilWstate(hc, w0 + k, le);
+                        }
+                        s1 = Inline.ilMix(cur, s1);
+                        if (s1 != cur) {
+                            Inline.ilMark(raw, s1);
+                            cur = s1;
+                        }
+                    }
                     emon.Port.cellsPush(raw, 32);
+                    if ((spc == 1) && (nfr > 0) && (emon.Port.cellsAt(fr, ((nfr - 1) * FR_STRIDE) + 5) == n0)) {
+                        emon.Port.cellsSet(fr, ((nfr - 1) * FR_STRIDE) + 5, emon.Port.cellsLen(raw));
+                    }
                 }
                 started = 1;
+                spc = 0;
                 j = 0;
                 while (j < tl) {
-                    int c = emon.Port.cellsAt(et, ts + j);
+                    c = emon.Port.cellsAt(et, ts + j);
+                    if ((marks == 1) && (j >= le)) {
+                        s1 = Inline.ilWstate(hc, w0 + k, j);
+                        if (s1 != cur) {
+                            Inline.ilMark(raw, s1);
+                            cur = s1;
+                        }
+                    }
                     emon.Port.cellsPush(raw, c);
                     j += 1;
                 }
             }
             k += 1;
+        }
+        if (spc == 1) {
+            emon.Port.cellsPush(raw, 32);
+        }
+        if (marks == 1) {
+            Inline.ilSetCur(hc, cur);
         }
         return 0;
     }
@@ -686,51 +762,182 @@ public final class Para {
         Model.nodeAddSrc(nodes, child, Model.srText());
         return child;
     }
-    public static int paInlines(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to) {
-        // The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference
-        // group (its marker; the target is set later, when the notes are known). A space before a reference is not
-        // text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1
-        // when there is none.
+    public static int paSpanNode(emon.Port.Cells nodes, int par, int bits) {
+        // A `span` inline of the style bits under par (P4.7, D192); -1 when the Model's depth limit says no.
+        int sp = Model.nodeNew(nodes, Model.nkSpan(), par);
+        if (sp < 0) {
+            return -1;
+        }
+        Model.nodeSetSub(nodes, sp, bits);
+        Model.nodeSetConf(nodes, sp, 900);
+        Model.nodeAddSrc(nodes, sp, Model.srText());
+        return sp;
+    }
+    public static int paLinkNode(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells hc, int par, int id) {
+        // A `link` inline for link `id` of the block in `hc` (`emon.inline`) under par: a URI is its `href`; an internal
+        // link holds its destination (the page + 1 in `sub`, the point packed in `aux`) until `emon.restruct` finds the block
+        // it names and makes it the `target`. -1 when the Model's depth limit says no.
+        int lk = Model.nodeNew(nodes, Model.nkLink(), par);
+        if (lk < 0) {
+            return -1;
+        }
+        Model.nodeAddSrc(nodes, lk, Model.srAnnot());
+        if (Inline.ilLinkGet(hc, id, 0) == 1) {
+            Model.nodeSetConf(nodes, lk, 1000);
+            Model.nodeSetAttrText(nodes, attrs, lk, Model.fkHref(), Inline.ilLinkGet(hc, id, 1), Inline.ilLinkGet(hc, id, 2));
+        } else {
+            Model.nodeSetConf(nodes, lk, 700);
+            Model.nodeAddSrc(nodes, lk, Model.srInfer());
+            Model.nodeSetSub(nodes, lk, Inline.ilLinkGet(hc, id, 3) + 1);
+            Model.nodeSetAux(nodes, lk, Inline.ilLinkGet(hc, id, 4));
+        }
+        return lk;
+    }
+    public static int paInlines(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to, int base, emon.Port.Cells hc) {
+        // The inline children of the paragraph for raw[from..to): `text` runs, in a `span` where the style is marked and a
+        // `link` where the text is under one (`emon.inline`, P4.7: a marker in the text is a change of state, `base` the
+        // style the paragraph is set in, which is not marked), and a `ref` for every note reference group (its marker;
+        // the target is set later, when the notes are known). A space before a reference is not text: the reference
+        // stands where the marker was printed, against the word. A reference ends the span and the link it is in. Answers
+        // the first child that is not a `ref`, -1 when there is none.
         int i = from;
         int seg = from;
         int first = -1;
         int child = 0;
-        while (i < to) {
-            if (emon.Port.cellsAt(raw, i) == Lists.lsSRef()) {
-                int gend = paGroupEnd(raw, i, to);
-                int sep = paGroupSep(raw, i, gend);
-                if ((gend < 0) || (sep < 0)) {
-                    i += 1;
-                } else {
-                    int se = i;
-                    if ((se > seg) && (emon.Port.cellsAt(raw, se - 1) == 32)) {
-                        se -= 1;
+        int st = Inline.ilStateAt(raw, from);
+        int cl = 0;
+        int cb = 0;
+        int lk = -1;
+        int sp = -1;
+        int pp = 0;
+        int ev = 0;
+        int ge = 0;
+        int sep = 0;
+        int se = 0;
+        int eff = 0;
+        while (i <= to) {
+            ev = 0;
+            if (i == to) {
+                ev = 3;
+            } else {
+                int c = emon.Port.cellsAt(raw, i);
+                if (c == Inline.ilSSty()) {
+                    ge = Inline.ilMarkEnd(raw, i, to);
+                    if (ge > 0) {
+                        ev = 1;
                     }
-                    if (se > seg) {
-                        child = paTextChild(nodes, text, raw, tmp, par, seg, se);
-                        if (first < 0) {
-                            first = child;
+                }
+                if (c == Lists.lsSRef()) {
+                    ge = paGroupEnd(raw, i, to);
+                    sep = -1;
+                    if (ge > 0) {
+                        sep = paGroupSep(raw, i, ge);
+                    }
+                    if (sep >= 0) {
+                        ev = 2;
+                    }
+                }
+            }
+            if (ev == 0) {
+                i += 1;
+            } else {
+                se = i;
+                if ((ev == 2) && (se > seg) && (emon.Port.cellsAt(raw, se - 1) == 32)) {
+                    se -= 1;
+                }
+                if (se > seg) {
+                    eff = Inline.ilEff(st, base);
+                    if (Inline.ilLink(eff) != cl) {
+                        cl = Inline.ilLink(eff);
+                        cb = 0;
+                        sp = -1;
+                        lk = -1;
+                        if (cl > 0) {
+                            lk = paLinkNode(nodes, attrs, hc, par, cl - 1);
+                            if ((lk >= 0) && (first < 0)) {
+                                first = lk;
+                            }
                         }
                     }
+                    pp = par;
+                    if (lk >= 0) {
+                        pp = lk;
+                    }
+                    if (Inline.ilBits(eff) != cb) {
+                        cb = Inline.ilBits(eff);
+                        sp = -1;
+                        if (cb > 0) {
+                            sp = paSpanNode(nodes, pp, cb);
+                            if ((sp >= 0) && (lk < 0) && (first < 0)) {
+                                first = sp;
+                            }
+                        }
+                    }
+                    if (sp >= 0) {
+                        pp = sp;
+                    }
+                    child = paTextChild(nodes, text, raw, tmp, pp, seg, se);
+                    if ((sp < 0) && (lk < 0) && (first < 0)) {
+                        first = child;
+                    }
+                }
+                if (ev == 1) {
+                    st = Inline.ilMarkValue(raw, i, ge);
+                    i = ge;
+                    seg = ge;
+                }
+                if (ev == 2) {
+                    cl = 0;
+                    cb = 0;
+                    lk = -1;
+                    sp = -1;
                     child = Model.nodeNew(nodes, Model.nkRef(), par);
                     Model.nodeSetConf(nodes, child, 500);
                     Model.nodeAddSrc(nodes, child, Model.srText());
                     Model.nodeAddSrc(nodes, child, Model.srInfer());
-                    paPutMarker(nodes, attrs, text, raw, child, Model.fkMarker(), sep + 1, gend - 1);
-                    i = gend;
-                    seg = gend;
+                    paPutMarker(nodes, attrs, text, raw, child, Model.fkMarker(), sep + 1, ge - 1);
+                    i = ge;
+                    seg = ge;
                 }
-            } else {
-                i += 1;
-            }
-        }
-        if (seg < to) {
-            child = paTextChild(nodes, text, raw, tmp, par, seg, to);
-            if (first < 0) {
-                first = child;
+                if (ev == 3) {
+                    i = to + 1;
+                }
             }
         }
         return first;
+    }
+    public static int paCompact(emon.Port.Cells raw, emon.Port.Cells fr) {
+        // Take every style marker out of raw in one pass, and move the raw starts of the fragments (`fr`, cell 5 of a row,
+        // ascending) with it.
+        int n = emon.Port.cellsLen(raw);
+        int nfr = emon.Port.cellsLen(fr) / FR_STRIDE;
+        int i = 0;
+        int o = 0;
+        int k = 0;
+        int ge = 0;
+        while (i < n) {
+            while ((k < nfr) && (emon.Port.cellsAt(fr, (k * FR_STRIDE) + 5) <= i)) {
+                emon.Port.cellsSet(fr, (k * FR_STRIDE) + 5, o);
+                k += 1;
+            }
+            ge = -1;
+            if (emon.Port.cellsAt(raw, i) == Inline.ilSSty()) {
+                ge = Inline.ilMarkEnd(raw, i, n);
+            }
+            if (ge > 0) {
+                i = ge;
+            } else {
+                emon.Port.cellsSet(raw, o, emon.Port.cellsAt(raw, i));
+                o += 1;
+                i += 1;
+            }
+        }
+        while (k < nfr) {
+            emon.Port.cellsSet(fr, (k * FR_STRIDE) + 5, o);
+            k += 1;
+        }
+        emon.Port.cellsDrop(raw, o);
+        return 0;
     }
     public static int paFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells hc, int parent) {
         // Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
@@ -766,7 +973,18 @@ public final class Para {
         int to = 0;
         int t0 = 0;
         int child = 0;
+        int sbase = 0;
+        int sty = 0;
         int kids = 0;
+        // style markers (P4.7): written, or, when nothing in the paragraph is marked against its own style, taken out
+        if (Inline.ilHas(raw, rawn) == 1) {
+            sbase = Inline.ilBaseOf(raw, rawn);
+            sty = Inline.ilStyled(raw, rawn, sbase);
+            if (sty == 0) {
+                paCompact(raw, fr);
+                rawn = emon.Port.cellsLen(raw);
+            }
+        }
         if (parent == 0) {
             lev = Heading.hdLevel(hc, hl);
             sect = Heading.hdParent(hc, nodes, lev);
@@ -876,6 +1094,9 @@ public final class Para {
             if (paHasRef(raw, from, to) == 1) {
                 kids = 1;
             }
+            if (sty == 1) {
+                kids = 1;
+            }
             child = -1;
             if (kids == 1) {
                 if ((runs > 1) && (k > 0)) {
@@ -884,7 +1105,7 @@ public final class Para {
                     Model.nodeSetConf(nodes, br, 500);
                     Model.nodeAddSrc(nodes, br, Model.srInfer());
                 }
-                child = paInlines(nodes, attrs, text, raw, tmp, par, from, to);
+                child = paInlines(nodes, attrs, text, raw, tmp, par, from, to, sbase, hc);
             } else {
                 if (lev > 0) {
                     from += paHeadingNumber(nodes, attrs, text, raw, tmp, par, from, to, hc, hl);
@@ -1081,7 +1302,7 @@ public final class Para {
         emon.Port.cellsDrop(raw, 0);
         emon.Port.cellsDrop(fr, 0);
         paFragOpen(fr, ln, page, prev, 0);
-        paAddLine(wd, ln, et, raw, prev);
+        paAddLine(wd, ln, et, raw, prev, hc, fr);
         while (i < cnt) {
             int b = emon.Port.cellsAt(lo, first + i);
             if (paNewPar(wd, ln, prev, b, med, mg, hc)) {
@@ -1091,7 +1312,7 @@ public final class Para {
                 paJoin(wd, ln, et, raw, b);
                 paFragExtend(fr, ln, b);
             }
-            paAddLine(wd, ln, et, raw, b);
+            paAddLine(wd, ln, et, raw, b, hc, fr);
             prev = b;
             i += 1;
         }
@@ -1133,7 +1354,7 @@ public final class Para {
             int l = emon.Port.cellsAt(dq, k);
             int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
             paFragOpen(fr, ln, pg, l, 0);
-            paAddLine(wd, ln, et, raw, l);
+            paAddLine(wd, ln, et, raw, l, hc, fr);
             paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc, 0);
             k += 1;
         }
@@ -1357,7 +1578,7 @@ public final class Para {
                             paFragOpen(fr, lt, p, b, rs);
                         }
                         open = 1;
-                        paAddLine(wd, lt, et, raw, b);
+                        paAddLine(wd, lt, et, raw, b, hc, fr);
                         prev = b;
                         prevfr = i;
                         cont = 1;
@@ -1373,7 +1594,7 @@ public final class Para {
                                     paJoin(wd, lt, et, raw, b);
                                     paFragExtend(fr, lt, b);
                                 }
-                                paAddLine(wd, lt, et, raw, b);
+                                paAddLine(wd, lt, et, raw, b, hc, fr);
                                 prev = b;
                             }
                             cont += 1;

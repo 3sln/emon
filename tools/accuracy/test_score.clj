@@ -368,6 +368,73 @@ the same, the stream is not Python's.)"
     (is (not-any? #(str/starts-with? % "align") (keys c)))
     (is (not-any? #(str/starts-with? % "align") (keys (M c))))))
 
+;; ------------------------------------------------- inline styles and links (P4.7, D194) ----
+
+(defn T [t] {"kind" "text" "text" t})
+(defn SP [styles t] {"kind" "span" "style" styles "children" [(T t)]})
+(defn LK [href t] {"kind" "link" "href" href "children" [(T t)]})
+(defn IP [inl] {"kind" "paragraph" "text" "x" "inlines" inl})
+(defn ic [g p] (counts (gold [g] :inlines true) (pred [p])))
+
+(def INL-GOLD (IP [(T "a ") (SP ["bold"] "b c") (T " d ") (SP ["italic"] "e") (LK "http://x" "f")]))
+
+(deftest inline-perfect
+  ;; one bold span, one italic, one link: each tp 1, gold 1, pred 1; no other style is counted at all
+  (let [c (ic INL-GOLD INL-GOLD) m (M c)]
+    (is (= [1 1 1] [(c "span.bold.tp") (c "span.bold.gold") (c "span.bold.pred")]))
+    (is (= [1 1 1] [(c "link.tp") (c "link.gold") (c "link.pred")]))
+    (is (nil? (c "span.mono.gold")))
+    (is (nil? (m "span-mono-p")))
+    (doseq [k ["span-bold-p" "span-bold-r" "span-bold-f1" "span-italic-f1" "link-p" "link-r" "link-f1"]]
+      (is (= 1.0 (m k)) k))))
+
+(deftest inline-wrong-missing-and-extra
+  ;; pred: bold on "b" (not "b c"), no italic, an extra mono span "z", no link
+  ;; bold: tp 0 of gold 1 and pred 1 -> P 0, R 0; italic: tp 0, gold 1, pred 0 -> P 0 (nothing predicted, something there), R 0;
+  ;; mono: gold 0, pred 1 -> P 0, R 0; link: tp 0, gold 1, pred 0 -> P 0, R 0
+  (let [p (IP [(T "a ") (SP ["bold"] "b") (SP ["mono"] "z")])
+        c (ic INL-GOLD p) m (M c)]
+    (is (= [0 1 1] [(c "span.bold.tp") (c "span.bold.gold") (c "span.bold.pred")]))
+    (is (= [0 1 0] [(c "span.italic.tp") (c "span.italic.gold") (c "span.italic.pred")]))
+    (is (= [0 0 1] [(c "span.mono.tp") (c "span.mono.gold") (c "span.mono.pred")]))
+    (is (= [0 1 0] [(c "link.tp") (c "link.gold") (c "link.pred")]))
+    (doseq [k ["span-bold-p" "span-bold-r" "span-italic-p" "span-italic-r" "span-mono-p" "span-mono-r" "link-p" "link-r"]]
+      (is (= 0.0 (m k)) k))))
+
+(deftest inline-two-styles-count-once-each-and-whitespace-is-one-space
+  ;; gold: one span of bold AND italic with the text "x  y" (two spaces); pred: a bold span "x y" only.
+  ;; the text normalizes to "x y" on both sides; bold tp 1 of 1 and 1; italic tp 0 of gold 1, pred 0
+  (let [c (ic (IP [(SP ["bold" "italic"] "x  y")]) (IP [(SP ["bold"] "x y")]))]
+    (is (= [1 1 1] [(c "span.bold.tp") (c "span.bold.gold") (c "span.bold.pred")]))
+    (is (= [0 1 0] [(c "span.italic.tp") (c "span.italic.gold") (c "span.italic.pred")]))))
+
+(deftest inline-spans-count-where-they-are-and-twice-is-twice
+  ;; the same bold word twice in the gold (a paragraph and a list item) and once in the pred, anywhere: tp 1 of gold 2, pred 1
+  (let [g (gold [(IP [(SP ["bold"] "w")]) {"kind" "item" "text" "y" "inlines" [(SP ["bold"] "w")]}] :inlines true)
+        p (pred [{"kind" "list" "children" [{"kind" "item" "text" "y" "inlines" [(SP ["bold"] "w")]}]}])
+        c (counts g p)]
+    (is (= [1 2 1] [(c "span.bold.tp") (c "span.bold.gold") (c "span.bold.pred")]))
+    (is (almost= 1.0 ((M c) "span-bold-p")))
+    (is (almost= 0.5 ((M c) "span-bold-r")))))
+
+(deftest inline-internal-link-is-hash-and-a-span-in-a-link-is-both
+  ;; an internal link (a `target`) in the gold matches an internal link in the pred whatever node it names;
+  ;; a bold span inside a link counts as a span and the link counts with the text of the whole
+  (let [gl {"kind" "link" "target" 5 "children" [(T "see ") (SP ["bold"] "p. 3")]}
+        pl {"kind" "link" "target" 9 "children" [(T "see ") (SP ["bold"] "p. 3")]}
+        c (ic (IP [gl]) (IP [pl]))]
+    (is (= [1 1 1] [(c "link.tp") (c "link.gold") (c "link.pred")]))
+    (is (= [1 1 1] [(c "span.bold.tp") (c "span.bold.gold") (c "span.bold.pred")])))
+  ;; a link with another href is another link
+  (let [c (ic (IP [(LK "http://a" "t")]) (IP [(LK "http://b" "t")]))]
+    (is (= [0 1 1] [(c "link.tp") (c "link.gold") (c "link.pred")]))))
+
+(deftest inline-unannotated-is-absent
+  ;; a gold that does not claim its inlines has no inline counts, whatever the pred has
+  (let [c (counts (gold [(P "a")]) (pred [(IP [(SP ["bold"] "a")])]))]
+    (is (nil? (c "span.bold.pred")))
+    (is (nil? ((M c) "span-bold-p")))))
+
 (def LAYOUT-PAGE
   {"n" 1 "layout" [{"band" 0 "col" 0 "role" "body" "box" [0 0 90 90]}
                    {"band" 0 "col" 1 "role" "body" "box" [100 0 190 90]}]})

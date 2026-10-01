@@ -7,6 +7,7 @@ import (
 	"emon/columns"
 	"emon/evidence"
 	"emon/heading"
+	"emon/inline"
 	"emon/lists"
 	"emon/model"
 	"emon/normalize"
@@ -565,29 +566,106 @@ func paJoin(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, l i
 	return 0
 }
 
-func paAddLine(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, l int32) int32 {
-	// Append the line's words, a space between two.
+func paLeadEnd(et *port.Cells, ts int32, tl int32) int32 {
+	// Where the group at the start of a word's text (the list, note or caption stage's) ends in the word; 0 when
+	// the text does not start with one.
+	var j int32 = 1
+	var e int32 = 0
+	if tl < 1 {
+		return 0
+	}
+	var c int32 = port.CellsAt(et, ts)
+	if (c == lists.LsSItem()) || ((c == lists.LsSNote()) || (c == lists.LsSCap())) {
+		e = tl
+		for j < tl {
+			if port.CellsAt(et, ts+j) == lists.LsSEnd() {
+				e = j + 1
+				j = tl
+			} else {
+				j += 1
+			}
+		}
+	}
+	return e
+}
+
+func paAddLine(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, l int32, hc *port.Cells, fr *port.Cells) int32 {
+	// Append the line's words, a space between two. Where the style or the link changes (`emon.inline`, P4.7, D192) a
+	// marker goes in first: the space between two words has what the two have in common, a group at the start of a
+	// word is not a character, and a heading line has no markers (its number is found by offset). The state the
+	// text is in is kept in the block of `hc`; the space `pa-join` pushed is taken back and pushed again, after a marker,
+	// and the raw start of the fragment that line opens (`fr`, the last row) moves to after it.
 	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
 	var wn int32 = evidence.LnGet(ln, l, evidence.LhCount())
+	var n0 int32 = port.CellsLen(raw)
+	var nfr int32 = port.CellsLen(fr) / frStride
+	var marks int32 = 0
+	var spc int32 = 0
+	var cur int32 = 0
 	var k int32 = 0
 	var j int32 = 0
 	var started int32 = 0
+	var le int32 = 0
+	var s1 int32 = 0
+	var c int32 = 0
+	if (inline.IlBase(hc) >= 0) && (heading.HdLevel(hc, l) == 0) {
+		marks = 1
+	}
+	if marks == 1 {
+		if n0 == 0 {
+			inline.IlSetCur(hc, 0)
+		}
+		cur = inline.IlCur(hc)
+		if (n0 > 0) && (port.CellsAt(raw, n0-1) == 32) {
+			port.CellsDrop(raw, n0-1)
+			spc = 1
+		}
+	}
 	for k < wn {
 		var ts int32 = evidence.WdGet(wd, w0+k, evidence.HdTstart())
 		var tl int32 = evidence.WdGet(wd, w0+k, evidence.HdTlen())
 		if (ts >= 0) && (tl > 0) {
-			if started == 1 {
+			le = paLeadEnd(et, ts, tl)
+			if (started == 1) || (spc == 1) {
+				if marks == 1 {
+					s1 = cur
+					if le < tl {
+						s1 = inline.IlWstate(hc, w0+k, le)
+					}
+					s1 = inline.IlMix(cur, s1)
+					if s1 != cur {
+						inline.IlMark(raw, s1)
+						cur = s1
+					}
+				}
 				port.CellsPush(raw, 32)
+				if (spc == 1) && (nfr > 0) && (port.CellsAt(fr, ((nfr-1)*frStride)+5) == n0) {
+					port.CellsSet(fr, ((nfr-1)*frStride)+5, port.CellsLen(raw))
+				}
 			}
 			started = 1
+			spc = 0
 			j = 0
 			for j < tl {
-				var c int32 = port.CellsAt(et, ts+j)
+				c = port.CellsAt(et, ts+j)
+				if (marks == 1) && (j >= le) {
+					s1 = inline.IlWstate(hc, w0+k, j)
+					if s1 != cur {
+						inline.IlMark(raw, s1)
+						cur = s1
+					}
+				}
 				port.CellsPush(raw, c)
 				j += 1
 			}
 		}
 		k += 1
+	}
+	if spc == 1 {
+		port.CellsPush(raw, 32)
+	}
+	if marks == 1 {
+		inline.IlSetCur(hc, cur)
 	}
 	return 0
 }
@@ -772,51 +850,185 @@ func paTextChild(nodes *port.Cells, text *port.Cells, raw *port.Cells, tmp *port
 	return child
 }
 
-func paInlines(nodes *port.Cells, attrs *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, par int32, from int32, to int32) int32 {
-	// The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference
-	// group (its marker; the target is set later, when the notes are known). A space before a reference is not
-	// text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1
-	// when there is none.
+func paSpanNode(nodes *port.Cells, par int32, bits int32) int32 {
+	// A `span` inline of the style bits under par (P4.7, D192); -1 when the Model's depth limit says no.
+	var sp int32 = model.NodeNew(nodes, model.NkSpan(), par)
+	if sp < 0 {
+		return -1
+	}
+	model.NodeSetSub(nodes, sp, bits)
+	model.NodeSetConf(nodes, sp, 900)
+	model.NodeAddSrc(nodes, sp, model.SrText())
+	return sp
+}
+
+func paLinkNode(nodes *port.Cells, attrs *port.Cells, hc *port.Cells, par int32, id int32) int32 {
+	// A `link` inline for link `id` of the block in `hc` (`emon.inline`) under par: a URI is its `href`; an internal
+	// link holds its destination (the page + 1 in `sub`, the point packed in `aux`) until `emon.restruct` finds the block
+	// it names and makes it the `target`. -1 when the Model's depth limit says no.
+	var lk int32 = model.NodeNew(nodes, model.NkLink(), par)
+	if lk < 0 {
+		return -1
+	}
+	model.NodeAddSrc(nodes, lk, model.SrAnnot())
+	if inline.IlLinkGet(hc, id, 0) == 1 {
+		model.NodeSetConf(nodes, lk, 1000)
+		model.NodeSetAttrText(nodes, attrs, lk, model.FkHref(), inline.IlLinkGet(hc, id, 1), inline.IlLinkGet(hc, id, 2))
+	} else {
+		model.NodeSetConf(nodes, lk, 700)
+		model.NodeAddSrc(nodes, lk, model.SrInfer())
+		model.NodeSetSub(nodes, lk, inline.IlLinkGet(hc, id, 3)+1)
+		model.NodeSetAux(nodes, lk, inline.IlLinkGet(hc, id, 4))
+	}
+	return lk
+}
+
+func paInlines(nodes *port.Cells, attrs *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, par int32, from int32, to int32, base int32, hc *port.Cells) int32 {
+	// The inline children of the paragraph for raw[from..to): `text` runs, in a `span` where the style is marked and a
+	// `link` where the text is under one (`emon.inline`, P4.7: a marker in the text is a change of state, `base` the
+	// style the paragraph is set in, which is not marked), and a `ref` for every note reference group (its marker;
+	// the target is set later, when the notes are known). A space before a reference is not text: the reference
+	// stands where the marker was printed, against the word. A reference ends the span and the link it is in. Answers
+	// the first child that is not a `ref`, -1 when there is none.
 	var i int32 = from
 	var seg int32 = from
 	var first int32 = -1
 	var child int32 = 0
-	for i < to {
-		if port.CellsAt(raw, i) == lists.LsSRef() {
-			var gend int32 = paGroupEnd(raw, i, to)
-			var sep int32 = paGroupSep(raw, i, gend)
-			if (gend < 0) || (sep < 0) {
-				i += 1
-			} else {
-				var se int32 = i
-				if (se > seg) && (port.CellsAt(raw, se-1) == 32) {
-					se -= 1
+	var st int32 = inline.IlStateAt(raw, from)
+	var cl int32 = 0
+	var cb int32 = 0
+	var lk int32 = -1
+	var sp int32 = -1
+	var pp int32 = 0
+	var ev int32 = 0
+	var ge int32 = 0
+	var sep int32 = 0
+	var se int32 = 0
+	var eff int32 = 0
+	for i <= to {
+		ev = 0
+		if i == to {
+			ev = 3
+		} else {
+			var c int32 = port.CellsAt(raw, i)
+			if c == inline.IlSSty() {
+				ge = inline.IlMarkEnd(raw, i, to)
+				if ge > 0 {
+					ev = 1
 				}
-				if se > seg {
-					child = paTextChild(nodes, text, raw, tmp, par, seg, se)
-					if first < 0 {
-						first = child
+			}
+			if c == lists.LsSRef() {
+				ge = paGroupEnd(raw, i, to)
+				sep = -1
+				if ge > 0 {
+					sep = paGroupSep(raw, i, ge)
+				}
+				if sep >= 0 {
+					ev = 2
+				}
+			}
+		}
+		if ev == 0 {
+			i += 1
+		} else {
+			se = i
+			if (ev == 2) && (se > seg) && (port.CellsAt(raw, se-1) == 32) {
+				se -= 1
+			}
+			if se > seg {
+				eff = inline.IlEff(st, base)
+				if inline.IlLink(eff) != cl {
+					cl = inline.IlLink(eff)
+					cb = 0
+					sp = -1
+					lk = -1
+					if cl > 0 {
+						lk = paLinkNode(nodes, attrs, hc, par, cl-1)
+						if (lk >= 0) && (first < 0) {
+							first = lk
+						}
 					}
 				}
+				pp = par
+				if lk >= 0 {
+					pp = lk
+				}
+				if inline.IlBits(eff) != cb {
+					cb = inline.IlBits(eff)
+					sp = -1
+					if cb > 0 {
+						sp = paSpanNode(nodes, pp, cb)
+						if (sp >= 0) && (lk < 0) && (first < 0) {
+							first = sp
+						}
+					}
+				}
+				if sp >= 0 {
+					pp = sp
+				}
+				child = paTextChild(nodes, text, raw, tmp, pp, seg, se)
+				if (sp < 0) && (lk < 0) && (first < 0) {
+					first = child
+				}
+			}
+			if ev == 1 {
+				st = inline.IlMarkValue(raw, i, ge)
+				i = ge
+				seg = ge
+			}
+			if ev == 2 {
+				cl = 0
+				cb = 0
+				lk = -1
+				sp = -1
 				child = model.NodeNew(nodes, model.NkRef(), par)
 				model.NodeSetConf(nodes, child, 500)
 				model.NodeAddSrc(nodes, child, model.SrText())
 				model.NodeAddSrc(nodes, child, model.SrInfer())
-				paPutMarker(nodes, attrs, text, raw, child, model.FkMarker(), sep+1, gend-1)
-				i = gend
-				seg = gend
+				paPutMarker(nodes, attrs, text, raw, child, model.FkMarker(), sep+1, ge-1)
+				i = ge
+				seg = ge
 			}
-		} else {
-			i += 1
-		}
-	}
-	if seg < to {
-		child = paTextChild(nodes, text, raw, tmp, par, seg, to)
-		if first < 0 {
-			first = child
+			if ev == 3 {
+				i = to + 1
+			}
 		}
 	}
 	return first
+}
+
+func paCompact(raw *port.Cells, fr *port.Cells) int32 {
+	// Take every style marker out of raw in one pass, and move the raw starts of the fragments (`fr`, cell 5 of a row,
+	// ascending) with it.
+	var n int32 = port.CellsLen(raw)
+	var nfr int32 = port.CellsLen(fr) / frStride
+	var i int32 = 0
+	var o int32 = 0
+	var k int32 = 0
+	var ge int32 = 0
+	for i < n {
+		for (k < nfr) && (port.CellsAt(fr, (k*frStride)+5) <= i) {
+			port.CellsSet(fr, (k*frStride)+5, o)
+			k += 1
+		}
+		ge = -1
+		if port.CellsAt(raw, i) == inline.IlSSty() {
+			ge = inline.IlMarkEnd(raw, i, n)
+		}
+		if ge > 0 {
+			i = ge
+		} else {
+			port.CellsSet(raw, o, port.CellsAt(raw, i))
+			o += 1
+			i += 1
+		}
+	}
+	for k < nfr {
+		port.CellsSet(fr, (k*frStride)+5, o)
+		k += 1
+	}
+	port.CellsDrop(raw, o)
+	return 0
 }
 
 func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, hc *port.Cells, parent int32) int32 {
@@ -853,7 +1065,18 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	var to int32 = 0
 	var t0 int32 = 0
 	var child int32 = 0
+	var sbase int32 = 0
+	var sty int32 = 0
 	var kids int32 = 0
+	// style markers (P4.7): written, or, when nothing in the paragraph is marked against its own style, taken out
+	if inline.IlHas(raw, rawn) == 1 {
+		sbase = inline.IlBaseOf(raw, rawn)
+		sty = inline.IlStyled(raw, rawn, sbase)
+		if sty == 0 {
+			paCompact(raw, fr)
+			rawn = port.CellsLen(raw)
+		}
+	}
 	if parent == 0 {
 		lev = heading.HdLevel(hc, hl)
 		sect = heading.HdParent(hc, nodes, lev)
@@ -963,6 +1186,9 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		if paHasRef(raw, from, to) == 1 {
 			kids = 1
 		}
+		if sty == 1 {
+			kids = 1
+		}
 		child = -1
 		if kids == 1 {
 			if (runs > 1) && (k > 0) {
@@ -971,7 +1197,7 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 				model.NodeSetConf(nodes, br, 500)
 				model.NodeAddSrc(nodes, br, model.SrInfer())
 			}
-			child = paInlines(nodes, attrs, text, raw, tmp, par, from, to)
+			child = paInlines(nodes, attrs, text, raw, tmp, par, from, to, sbase, hc)
 		} else {
 			if lev > 0 {
 				from += paHeadingNumber(nodes, attrs, text, raw, tmp, par, from, to, hc, hl)
@@ -1176,7 +1402,7 @@ func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, a
 	port.CellsDrop(raw, 0)
 	port.CellsDrop(fr, 0)
 	paFragOpen(fr, ln, page, prev, 0)
-	paAddLine(wd, ln, et, raw, prev)
+	paAddLine(wd, ln, et, raw, prev, hc, fr)
 	for i < cnt {
 		var b int32 = port.CellsAt(lo, first+i)
 		if paNewPar(wd, ln, prev, b, med, mg, hc) {
@@ -1186,7 +1412,7 @@ func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, a
 			paJoin(wd, ln, et, raw, b)
 			paFragExtend(fr, ln, b)
 		}
-		paAddLine(wd, ln, et, raw, b)
+		paAddLine(wd, ln, et, raw, b, hc, fr)
 		prev = b
 		i += 1
 	}
@@ -1230,7 +1456,7 @@ func paClose(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 		var l int32 = port.CellsAt(dq, k)
 		var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
 		paFragOpen(fr, ln, pg, l, 0)
-		paAddLine(wd, ln, et, raw, l)
+		paAddLine(wd, ln, et, raw, l, hc, fr)
 		paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc, 0)
 		k += 1
 	}
@@ -1460,7 +1686,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 						paFragOpen(fr, lt, p, b, rs)
 					}
 					open = 1
-					paAddLine(wd, lt, et, raw, b)
+					paAddLine(wd, lt, et, raw, b, hc, fr)
 					prev = b
 					prevfr = i
 					cont = 1
@@ -1476,7 +1702,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 								paJoin(wd, lt, et, raw, b)
 								paFragExtend(fr, lt, b)
 							}
-							paAddLine(wd, lt, et, raw, b)
+							paAddLine(wd, lt, et, raw, b, hc, fr)
 							prev = b
 						}
 						cont += 1
