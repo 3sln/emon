@@ -1,9 +1,9 @@
-;; The content-stream interpreter, text subset (P1.7; SPEC 3.4, 8.1; D076, D101-D104).
+;; The content-stream interpreter, text subset (P1.7; SPEC 3.4, 8.1; D076, D101-D104), writing evidence v2 (P1.12, D119).
 ;; emon's own module (D039), written from ISO 32000-1 section 8 (graphics) and
 ;; 9 (text), 14.6-14.8 (marked content, tagged PDF) and Annex D.
 ;;
 ;;   (pc-init cx ox)                        once per document (fonts forgotten)
-;;   (pc-page W pg pi page wd ln)           one page: glyphs, spans, words, lines
+;;   (pc-page W pg pi page wd ln)           one page: glyphs, marks, fonts, words, lines
 ;;   (pc-document W pg wd ln)               every page of an opened document
 ;;
 ;; `W` is the workspace every function takes, in this order (kin cannot allocate
@@ -19,7 +19,8 @@
 ;;   f0 f1 f2 f3            FOUR FONT SLOTS (`emon.pdffont` keeps a font in one
 ;;                          `Cells`); least-recently-used replacement, so a page
 ;;                          that alternates among more than four fonts reloads them
-;;   gl et mk fnt               the evidence's `glyphs`, `etext` and `spans` (D056, D101)
+;;   gl et mk fnt           the evidence's `glyphs`, `etext`, `marks` (D101's spans, folded in by D119) and `fonts`
+;;                          (a row the first time the document shows a font; its index is its id) (SPEC 8.4.3)
 ;;
 ;; WHAT IT DOES, per operator. `q Q cm` (the graphics-state stack, depth 256),
 ;; `BT ET Tf Tc Tw Tz TL Ts Tr Td TD Tm T* Tj TJ ' "` (the text state and every
