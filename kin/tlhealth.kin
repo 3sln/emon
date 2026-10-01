@@ -1,0 +1,626 @@
+;; The text layer's own triage and health, before any OCR (P7.0; SPEC 8.1, 8.4.5, 9.3 "without OCR", 9.4 rule 1, 9.7; D203, D208, D211-D213).
+;; emon's own module (D039).
+;;
+;;   (th-run pg gl et mk fnt wd ln im epages feats fw fl fa hl sc)
+;;       the document pass's one call, after `pc-document`: `epages` (a row for EVERY page), the stage-1 `xt` features of every text-layer
+;;       word (`ev-feat-text`), the visibility triage (`th-triage`, D208) that COPIES the flow into `fw`/`fl` without the words that
+;;       failed a P3.6 check (the set-aside ones are `fa` rows), and the font health per (font, page) (`th-health`: `hl` rows, the
+;;       score written into each word's `xt` column 13). Stage 3 reads `fw`/`fl` from here on, never `wd`/`ln`.
+;;   (th-write fa wd et ledger text tmp tt)
+;;       after `fu-write`: the `fa` rows become ledger rows (a line's run of words of one reason is one row, its words joined by a space).
+;;
+;; WHAT A WORD'S HEALTH IS, in per-mille components of its (font, page) pooled over the glyphs (D211): MAPPED (glyphs whose Unicode came
+;; from a `ToUnicode` or an encoding), GARBAGE (Private Use Area, control, U+FFFD or no code point), OVERLAP (the worst overlap of
+;; neighbouring glyph boxes, a word's, averaged), GAP (the worst gap inside a word over the font's space width, averaged). The score is
+;; the weighted harmonic mean of D150's shape: components 1000 - garbage, mapped, a ramp of the overlap and a ramp of the gap, each
+;; floored at 50, weights 4, 3, 2, 1, scaled by `(1000 + weakest) / 2000`. `tl-trusted` (700) is the score a font must reach for the
+;; text layer to be trusted outright, `auto-health` (500) the one under which `ocr: auto` asks for OCR; both are settings (SPEC 9.4).
+;;
+;; TRIAGE (D208): a word whose glyphs failed a P3.6 check (`vis` is not 0) leaves the flow: `clipped` and `offpage` under those
+;; ledger reasons, `white-on-white`, `zero-size`, `transparent`, `ocg-hidden` and `occluded` as `invisible`. EXCEPT a word occluded
+;; by an image covering at least `tl-page-image` of the page (an older producer's OCR layer under its scan), which stays in the
+;; flow as a `hidden-text` word (D155; P7.6 decides what it is worth). `hidden-text` words (render modes 3 and 7) that passed the
+;; checks stay too.
+(ns emon.tlhealth
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [ledger-add ledger-set-text text-append-cp sr-text sr-hidden-text
+                                dr-clipped dr-offpage dr-invisible dr-watermark]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
+            [emon.evidence :refer [wd-get wd-set wd-count ln-get ln-count gl-get gl-count im-get im-count mk-artifact-of mk-count
+                                   fo-get ep-new ep-get ep-set ep-count ev-page-row ev-floordiv ev-overlap-small ev-baseline-at ev-sin ev-cos
+                                   fe-new fe-set fe-get
+                                   hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-tstart hd-tlen hd-line hd-feat
+                                   lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1 lh-rot lh-first lh-count lh-page
+                                   ch-cp ch-tstart ch-tlen ch-x0 ch-y0 ch-x1 ch-y1
+                                   gf-bx0 gf-by0 gf-bx1 gf-by1 gf-how gf-font gf-size gf-mode gf-fill gf-falpha gf-salpha gf-vis gf-vby
+                                   wf-gfirst wf-gcount wf-font wf-src wf-size
+                                   mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-z
+                                   fnf-space epf-page epf-width epf-height eg-text-layer ea-words
+                                   xt-trust xt-bad-cp xt-overlap xt-gap-anomaly xt-vis xt-mode-class xt-alpha xt-contrast xt-font-health
+                                   xt-in-artifact xt-rel-height xt-angle xt-base-dev xt-spacing xt-length xt-edge
+                                   vz-clipped vz-offpage vz-white vz-zero-size vz-occluded vz-ocg-hidden vz-transparent as-watermark gf-mark]]
+            [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
+            [emon.player :refer [fw-copy-word fl-copy-line fw-count fl-count fa-new fa-count fa-get hl-new hl-count hl-get hl-set
+                                 plh-font-page hlf-subject hlf-page hlf-mapped hlf-garbage hlf-overlap hlf-gap hlf-score]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 9.4: named, first values, P10.1 calibrates)
+
+(defn ^:pub ^I32 th-trusted [] (comment "`tl-trusted`: the score at which a (font, page) is trusted outright.") (return 700))
+(defn ^:pub ^I32 th-auto-health [] (comment "`auto-health`: the score under which `ocr: auto` asks for OCR.") (return 500))
+(defn ^:pub ^I32 th-overlap-ok [] (comment "`tl-overlap-ok`: a mean worst overlap (per mille) up to which the overlap component is 1000.") (return 500))
+(defn ^:pub ^I32 th-gap-ok [] (comment "`tl-gap-ok`: a mean worst gap (per mille of the space width) up to which the gap component is 1000.") (return 500))
+(defn ^:pub ^I32 th-gap-bad [] (comment "`tl-gap-bad`: the one from which the gap component is 0.") (return 3000))
+(defn ^:pub ^I32 th-page-image [] (comment "`tl-page-image`: the share of the page (per mille) an occluding image covers for its text to be a hidden OCR layer.") (return 500))
+(defn ^:pub ^I32 th-gap-cap [] (comment "The largest gap anomaly a feature row records (10 space widths).") (return 10000))
+(defn ^:pub ^I32 th-line-cap [] (comment "The words of a line the median height is taken over (the first 64).") (return 64))
+
+;; ------------------------------------------------------------- small helpers
+
+(defn ^I32 th-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 th-proj [^I32 dx ^I32 dy ^I32 cs ^I32 sn]
+  (comment "The vector (dx, dy) of page space (y down) along the direction of an angle whose cos and sin are `cs` and `sn` (16.16),")
+  (comment "centipoints: floor((dx cs - dy sn + 2^15) / 2^16).")
+  (return (i32 (ev-floordiv (add64 (add64 (mul64 (i64 dx) (i64 cs)) (mul64 (i64 (- 0 dy)) (i64 sn))) (i64 32768)) (i64 65536)))))
+
+(defn ^I32 th-bad-cp [^I32 cp]
+  (comment "1 for a code point the text layer should not hold: none (-1), a control character, the replacement character, or a")
+  (comment "Private Use Area code point (the BMP's, and planes 15 and 16).")
+  (if (< cp 0) (return 1))
+  (if (< cp 32) (return 1))
+  (if (and (>= cp 127) (<= cp 159)) (return 1))
+  (if (== cp 65533) (return 1))
+  (if (and (>= cp 57344) (<= cp 63743)) (return 1))
+  (if (>= cp 983040) (return 1))
+  (return 0))
+
+(defn ^I32 th-combining [^I32 cp]
+  (comment "1 for a combining mark of the Combining Diacritical Marks blocks, which sits on its base and so overlaps it.")
+  (if (and (>= cp 768) (<= cp 879)) (return 1))
+  (if (and (>= cp 6832) (<= cp 6911)) (return 1))
+  (if (and (>= cp 7616) (<= cp 7679)) (return 1))
+  (if (and (>= cp 8400) (<= cp 8447)) (return 1))
+  (if (and (>= cp 65056) (<= cp 65071)) (return 1))
+  (return 0))
+
+(defn ^I32 th-lum [^I32 rgb]
+  (comment "The luminance (0..255, Rec. 601 weights, truncating) of a 0xRRGGBB colour.")
+  (let [^I32 r (bit-and (quot rgb 65536) 255)
+        ^I32 g (bit-and (quot rgb 256) 255)
+        ^I32 b (bit-and rgb 255)]
+    (return (quot (+ (+ (* r 299) (* g 587)) (* b 114)) 1000))))
+
+(defn ^I32 th-glyph-cp [^Cells et ^Cells gl ^I32 g]
+  (comment "A glyph's first code point: its `cp`, else the first of its `etext` run (a ligature), else -1.")
+  (let [^I32 cp (gl-get gl g (ch-cp))
+        ^I32 ts (gl-get gl g (ch-tstart))
+        ^I32 tl (gl-get gl g (ch-tlen))]
+    (if (and (< cp 0) (and (>= ts 0) (> tl 0))) (return (cells-at et ts)))
+    (return cp)))
+
+(defn ^I32 th-mode-class [^I32 mode]
+  (comment "Column 7: 0 fill (modes 0, 2, 4, 6), 1 stroke (1, 5), 2 clip only (7), 3 invisible (3).")
+  (if (== mode 3) (return 3))
+  (if (== mode 7) (return 2))
+  (if (or (== mode 1) (== mode 5)) (return 1))
+  (return 0))
+
+;; ------------------------------------------------------------- epages
+
+(defn ^:pub ^I32 th-epages [^Cells pg ^Cells wd ^:mut ^Cells epages]
+  (comment "An `epages` row for EVERY page, not only scanned ones: the crop box's size as displayed, the quarter turns of `/Rotate`")
+  (comment "applied (0..3), `has-text-layer` set where the page has a text-layer word. Answers the page count.")
+  (let [^I32 n (pd-pg-count pg)
+        ^I32 nw (wd-count wd)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 row 0]
+    (while (< i n)
+      (do (set w (- (pd-pg-crop pg i 2) (pd-pg-crop pg i 0)))
+          (set h (- (pd-pg-crop pg i 3) (pd-pg-crop pg i 1)))
+          (set r (pd-pg-rotate pg i))
+          (if (or (== r 90) (or (== r 270) (or (== r -90) (== r -270))))
+            (do (set row w) (set w h) (set h row)))
+          (set row (ep-new epages (+ i 1) w h))
+          (set r (rem (quot (+ (rem r 360) 360) 90) 4))
+          (ep-set epages row 3 r)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nw)
+      (do (set p (wd-get wd i (hd-page)))
+          (if (and (>= p 1) (<= p n))
+            (do (set row (ep-get epages (- p 1) 4))
+                (if (== (bit-and row 1) 0) (ep-set epages (- p 1) 4 (+ row 1)))))
+          (set i (+ i 1))))
+    (return n)))
+
+;; ------------------------------------------------------------- stage 1 features of a text-layer word
+
+(defn ^I32 th-line-median [^Cells wd ^I32 first ^I32 cnt]
+  (comment "The lower median of the box heights of a line's words, over its first `th-line-cap`; 0 for none.")
+  (let [^:mut ^I32 m cnt
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 less 0
+        ^:mut ^I32 leq 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 hj 0]
+    (if (> m (th-line-cap)) (set m (th-line-cap)))
+    (if (<= m 0) (return 0))
+    (let [^I32 k (quot (- m 1) 2)]
+      (while (< i m)
+        (do (set h (- (wd-get wd (+ first i) (hd-y1)) (wd-get wd (+ first i) (hd-y0))))
+            (set less 0)
+            (set leq 0)
+            (set j 0)
+            (while (< j m)
+              (do (set hj (- (wd-get wd (+ first j) (hd-y1)) (wd-get wd (+ first j) (hd-y0))))
+                  (if (< hj h) (set less (+ less 1)))
+                  (if (<= hj h) (set leq (+ leq 1)))
+                  (set j (+ j 1))))
+            (if (and (<= less k) (< k leq)) (return h))
+            (set i (+ i 1)))))
+    (return 0)))
+
+(defn ^:pub ^I32 ev-feat-text [^:mut ^Cells feats ^Cells epages ^Cells et ^Cells gl ^Cells fnt ^Cells mk
+                               ^Cells wd ^Cells ln ^I32 w ^I32 l ^I32 dom ^I32 medh]
+  (comment "Stage 1 features of text-layer word w, of line l (SPEC 8.4.5): a new `feats` row (answered; the caller points the flow's copy of the")
+  (comment "word at it: the interpreter's own `words` are the evidence and stay as they were, D213), columns")
+  (comment "2-9, 16, 17, 19-21, 28, 29 (18 is -1 until P4.2's size inventory; 10-15, 22-27 are later stages'; 13 is `th-health`'s).")
+  (comment "2 glyphs mapped by ToUnicode or an encoding; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap")
+  (comment "of neighbouring glyph boxes (a combining mark is not a neighbour); 5 the worst gap between a glyph's advance and the next origin,")
+  (comment "over the font's space width (capped, `th-gap-cap`); 6 the worst `vis`; 7 the render mode class of the first glyph; 8 the lowest")
+  (comment "alpha of the ink the mode paints; 9 the lowest contrast of the fill against white paper (|255 - luminance| per mille; -1 when no")
+  (comment "glyph has a colour); 16 inside an /Artifact span (0/1); 17 the word's height over its line's median (`medh`); 19 the angle to")
+  (comment "the page's dominant text angle `dom`; 20 the distance of its baseline midpoint from its line's baseline; 21 the mean gap between")
+  (comment "glyphs over their mean advance; 28 its code points; 29 the distance to the nearest page edge. All per mille where a share.")
+  (let [^I32 row (fe-new feats 8 w)
+        ^I32 g0 (wd-get wd w (wf-gfirst))
+        ^I32 gn (wd-get wd w (wf-gcount))
+        ^I32 wrot (wd-get wd w (hd-rot))
+        ^I32 pgno (wd-get wd w (hd-page))
+        ^I32 cs (ev-cos wrot)
+        ^I32 sn (ev-sin wrot)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 mapped 0
+        ^:mut ^I32 bad 0
+        ^:mut ^I32 vis 0
+        ^:mut ^I32 alpha 1000
+        ^:mut ^I32 contrast -1
+        ^:mut ^I32 worst 0
+        ^:mut ^I32 anomaly 0
+        ^:mut ^I32 gaps 0
+        ^:mut ^I32 widths 0
+        ^:mut ^I32 art 0
+        ^:mut ^I32 cp0 0
+        ^:mut ^I32 cp1 0
+        ^:mut ^I32 ov 0
+        ^:mut ^I32 gp 0
+        ^:mut ^I32 sw 0
+        ^:mut ^I32 fnrow 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 ep 0]
+    (fe-set feats row (xt-length) (wd-get wd w (hd-tlen)))
+    (if (> gn 0)
+      (do (set g g0)
+          (while (< g (+ g0 gn))
+            (do (set cp0 (th-glyph-cp et gl g))
+                (set v (gl-get gl g (gf-how)))
+                (if (or (== v 1) (== v 2)) (set mapped (+ mapped 1)))
+                (set bad (+ bad (th-bad-cp cp0)))
+                (if (> (gl-get gl g (gf-vis)) vis) (set vis (gl-get gl g (gf-vis))))
+                (set v (gl-get gl g (gf-mode)))
+                (if (or (== v 1) (== v 5))
+                  (set d (gl-get gl g (gf-salpha)))
+                  (set d (gl-get gl g (gf-falpha))))
+                (if (and (>= d 0) (< d alpha)) (set alpha d))
+                (if (== (gl-get gl g (gf-fill)) -1)
+                  (set d -1)
+                  (set d (quot (* (th-abs (- 255 (th-lum (gl-get gl g (gf-fill))))) 1000) 255)))
+                (if (>= d 0)
+                  (if (or (< contrast 0) (< d contrast)) (set contrast d)))
+                (if (> (mk-artifact-of mk (gl-get gl g (gf-mark))) 0) (set art 1))
+                (if (< (+ g 1) (+ g0 gn))
+                  (do (set cp1 (th-glyph-cp et gl (+ g 1)))
+                      (set fnrow (gl-get gl g (gf-font)))
+                      (set sw 0)
+                      (if (>= fnrow 0) (set sw (fo-get fnt fnrow (fnf-space))))
+                      (if (<= sw 0) (set sw 250))
+                      (set sw (quot (* sw (gl-get gl g (gf-size))) 1000))
+                      (set gp (th-proj (- (gl-get gl (+ g 1) (gf-bx0)) (gl-get gl g (gf-bx1)))
+                                       (- (gl-get gl (+ g 1) (gf-by0)) (gl-get gl g (gf-by1))) cs sn))
+                      (set gaps (+ gaps gp))
+                      (set widths (+ widths (th-proj (- (gl-get gl g (gf-bx1)) (gl-get gl g (gf-bx0)))
+                                                     (- (gl-get gl g (gf-by1)) (gl-get gl g (gf-by0))) cs sn)))
+                      (if (and (> gp 0) (> sw 0))
+                        (do (set d (quot (* gp 1000) sw))
+                            (if (> d (th-gap-cap)) (set d (th-gap-cap)))
+                            (if (> d anomaly) (set anomaly d))))
+                      (if (and (== (th-combining cp0) 0) (== (th-combining cp1) 0))
+                        (do (set ov (ev-overlap-small (gl-get gl g (ch-x0)) (gl-get gl g (ch-y0)) (gl-get gl g (ch-x1)) (gl-get gl g (ch-y1))
+                                                      (gl-get gl (+ g 1) (ch-x0)) (gl-get gl (+ g 1) (ch-y0)) (gl-get gl (+ g 1) (ch-x1)) (gl-get gl (+ g 1) (ch-y1))))
+                            (if (> ov worst) (set worst ov))))))
+                (set g (+ g 1))))
+          (fe-set feats row (xt-trust) (quot (* mapped 1000) gn))
+          (fe-set feats row (xt-bad-cp) (quot (* bad 1000) gn))
+          (fe-set feats row (xt-overlap) worst)
+          (fe-set feats row (xt-gap-anomaly) anomaly)
+          (fe-set feats row (xt-vis) vis)
+          (fe-set feats row (xt-mode-class) (th-mode-class (gl-get gl g0 (gf-mode))))
+          (fe-set feats row (xt-alpha) alpha)
+          (fe-set feats row (xt-contrast) contrast)
+          (fe-set feats row (xt-in-artifact) art)
+          (if (and (> gn 1) (> widths 0))
+            (fe-set feats row (xt-spacing) (i32 (quot (mul64 (mul64 (i64 gaps) (i64 1000)) (i64 gn)) (mul64 (i64 widths) (i64 (- gn 1)))))))))
+    (if (> medh 0)
+      (fe-set feats row (xt-rel-height)
+              (i32 (quot (mul64 (i64 (- (wd-get wd w (hd-y1)) (wd-get wd w (hd-y0)))) (i64 1000)) (i64 medh)))))
+    (set d (th-abs (- wrot dom)))
+    (if (> d 18000) (set d (- 36000 d)))
+    (fe-set feats row (xt-angle) d)
+    (set v (wd-get wd w (hd-bx0)))
+    (set d (quot (+ v (wd-get wd w (hd-bx1))) 2))
+    (set v (quot (+ (wd-get wd w (hd-by0)) (wd-get wd w (hd-by1))) 2))
+    (set gp (- v (ev-baseline-at (ln-get ln l (lh-bx0)) (ln-get ln l (lh-by0)) (ln-get ln l (lh-bx1)) (ln-get ln l (lh-by1)) d)))
+    (fe-set feats row (xt-base-dev) (th-abs gp))
+    (set ep (ev-page-row epages pgno))
+    (if (>= ep 0)
+      (do (set d (wd-get wd w (hd-x0)))
+          (if (< (wd-get wd w (hd-y0)) d) (set d (wd-get wd w (hd-y0))))
+          (set v (- (ep-get epages ep (epf-width)) (wd-get wd w (hd-x1))))
+          (if (< v d) (set d v))
+          (set v (- (ep-get epages ep (epf-height)) (wd-get wd w (hd-y1))))
+          (if (< v d) (set d v))
+          (if (< d 0) (set d 0))
+          (fe-set feats row (xt-edge) d)))
+    (return row)))
+
+;; ------------------------------------------------------------- triage (D208)
+
+(defn ^I32 th-diagonal [^I32 rot]
+  (comment "1 when an angle (centi-degrees) is at least 3 degrees off every right angle: text set on the diagonal.")
+  (let [^:mut ^I32 r (rem rot 9000)
+        ^:mut ^I32 dev 0]
+    (if (< r 0) (set r (+ r 9000)))
+    (set dev r)
+    (if (< (- 9000 r) dev) (set dev (- 9000 r)))
+    (if (>= dev 300) (return 1))
+    (return 0)))
+
+(defn ^I32 th-set-aside [^Cells gl ^Cells mk ^Cells wd ^I32 w]
+  (comment "The ledger reason of a word set aside as `invisible` (white, zero-size, transparent, off by an optional-content group,")
+  (comment "occluded): `watermark` when it is also what a watermark is, an /Artifact of subtype Watermark or text on the diagonal")
+  (comment "(the page hides its watermark; it is still a watermark, as the furniture stage's geometry would have said, D212).")
+  (let [^I32 g0 (wd-get wd w (wf-gfirst))
+        ^I32 art (mk-artifact-of mk (gl-get gl g0 (gf-mark)))]
+    (if (and (> art 0) (== (rem art 16) (as-watermark))) (return (dr-watermark)))
+    (if (== (th-diagonal (wd-get wd w (hd-rot))) 1) (return (dr-watermark)))
+    (return (dr-invisible))))
+
+(defn ^I32 th-class [^Cells gl ^Cells mk ^Cells im ^Cells epages ^Cells wd ^I32 w ^I32 ip]
+  (comment "What becomes of word w: 0 it stays; -1 it stays as a `hidden-text` word (occluded by an image covering `th-page-image` of")
+  (comment "the page); else the ledger reason (`dr`) it is set aside under. `ip` is the first image row of the word's page.")
+  (let [^I32 g0 (wd-get wd w (wf-gfirst))
+        ^I32 pgno (wd-get wd w (hd-page))
+        ^:mut ^I32 vis 0
+        ^:mut ^I32 by 0
+        ^:mut ^I32 k ip
+        ^:mut ^I32 ep 0
+        ^:mut ^I64 area (i64 0)]
+    (if (<= (wd-get wd w (wf-gcount)) 0) (return 0))
+    (set vis (gl-get gl g0 (gf-vis)))
+    (if (== vis 0) (return 0))
+    (if (== vis (vz-clipped)) (return (dr-clipped)))
+    (if (== vis (vz-offpage)) (return (dr-offpage)))
+    (if (== vis (vz-occluded))
+      (do (set by (gl-get gl g0 (gf-vby)))
+          (set ep (ev-page-row epages pgno))
+          (if (>= ep 0)
+            (do (set area (mul64 (i64 (ep-get epages ep (epf-width))) (i64 (ep-get epages ep (epf-height)))))
+                (while (and (< k (im-count im)) (== (im-get im k (mf-page)) pgno))
+                  (do (if (== (im-get im k (mf-z)) by)
+                        (if (>= (mul64 (mul64 (i64 (- (im-get im k (mf-x1)) (im-get im k (mf-x0)))) (i64 (- (im-get im k (mf-y1)) (im-get im k (mf-y0))))) (i64 1000))
+                                (mul64 area (i64 (th-page-image))))
+                          (if (> area (i64 0)) (return -1))))
+                      (set k (+ k 1))))))))
+    (return (th-set-aside gl mk wd w))))
+
+(defn ^I32 th-dominant [^Cells ln ^I32 l0 ^I32 l1 ^:mut ^Cells sc]
+  (comment "The page's dominant text angle (`rot` of its lines l0..l1): the 1-degree bucket most lines fall in (the lowest on a tie),")
+  (comment "answered as the `rot` of the first line in it. `sc` is 360 cells of scratch.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bc 0]
+    (cells-drop sc 0)
+    (while (< i 360)
+      (do (cells-push sc 0)
+          (set i (+ i 1))))
+    (set i l0)
+    (while (< i l1)
+      (do (set b (quot (ln-get ln i (lh-rot)) 100))
+          (if (and (>= b 0) (< b 360)) (cells-set sc b (+ (cells-at sc b) 1)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 360)
+      (do (if (> (cells-at sc i) bc)
+            (do (set bc (cells-at sc i))
+                (set best i)))
+          (set i (+ i 1))))
+    (set i l0)
+    (while (< i l1)
+      (do (if (== (quot (ln-get ln i (lh-rot)) 100) best) (return (ln-get ln i (lh-rot))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 th-remeasure [^:mut ^Cells fl ^Cells fw ^I32 l ^I32 first ^I32 cnt]
+  (comment "Re-measure line l of `fl` from its remaining words (a run of `fw`): the union of their boxes, the baseline from the first")
+  (comment "word's start to the last word's end.")
+  (let [^:mut ^I32 x0 (cells-at fw (+ (* first 24) 1))
+        ^:mut ^I32 y0 (cells-at fw (+ (* first 24) 2))
+        ^:mut ^I32 x1 (cells-at fw (+ (* first 24) 3))
+        ^:mut ^I32 y1 (cells-at fw (+ (* first 24) 4))
+        ^:mut ^I32 i 1
+        ^:mut ^I32 v 0]
+    (while (< i cnt)
+      (do (set v (cells-at fw (+ (* (+ first i) 24) 1)))
+          (if (< v x0) (set x0 v))
+          (set v (cells-at fw (+ (* (+ first i) 24) 2)))
+          (if (< v y0) (set y0 v))
+          (set v (cells-at fw (+ (* (+ first i) 24) 3)))
+          (if (> v x1) (set x1 v))
+          (set v (cells-at fw (+ (* (+ first i) 24) 4)))
+          (if (> v y1) (set y1 v))
+          (set i (+ i 1))))
+    (cells-set fl (+ (* l 16) 1) x0)
+    (cells-set fl (+ (* l 16) 2) y0)
+    (cells-set fl (+ (* l 16) 3) x1)
+    (cells-set fl (+ (* l 16) 4) y1)
+    (cells-set fl (+ (* l 16) 5) (cells-at fw (+ (* first 24) 5)))
+    (cells-set fl (+ (* l 16) 6) (cells-at fw (+ (* first 24) 6)))
+    (cells-set fl (+ (* l 16) 7) (cells-at fw (+ (* (+ first (- cnt 1)) 24) 7)))
+    (cells-set fl (+ (* l 16) 8) (cells-at fw (+ (* (+ first (- cnt 1)) 24) 8)))
+    (return 0)))
+
+;; ------------------------------------------------------------- health (D211)
+
+(defn ^I32 th-ramp [^I32 v ^I32 ok ^I32 bad]
+  (comment "1000 up to `ok`, 0 from `bad`, linear between.")
+  (if (<= v ok) (return 1000))
+  (if (>= v bad) (return 0))
+  (return (quot (* (- bad v) 1000) (- bad ok))))
+
+(defn ^I32 th-floor [^I32 c]
+  (if (< c 50) (return 50))
+  (return c))
+
+(defn ^:pub ^I32 th-score [^I32 mapped ^I32 garbage ^I32 overlap ^I32 gap]
+  (comment "The score of the pooled per-mille components: the weighted harmonic mean (weights 4, 3, 2, 1) of mapped, 1000 - garbage, the")
+  (comment "overlap ramp (`th-overlap-ok` to 1000) and the gap ramp (`th-gap-ok` to `th-gap-bad`), each floored at 50, scaled by")
+  (comment "`(1000 + weakest) / 2000`, the weakest being the smallest component before the floor (D150's shape).")
+  (let [^I32 c0 mapped
+        ^I32 c1 (- 1000 garbage)
+        ^I32 c2 (th-ramp overlap (th-overlap-ok) 1000)
+        ^I32 c3 (th-ramp gap (th-gap-ok) (th-gap-bad))
+        ^:mut ^I32 weakest c0
+        ^:mut ^I64 sum (i64 0)
+        ^:mut ^I32 h 0]
+    (if (< c1 weakest) (set weakest c1))
+    (if (< c2 weakest) (set weakest c2))
+    (if (< c3 weakest) (set weakest c3))
+    (set sum (add64 (add64 (i64 (quot 4000000 (th-floor c0))) (i64 (quot 3000000 (th-floor c1))))
+                    (add64 (i64 (quot 2000000 (th-floor c2))) (i64 (quot 1000000 (th-floor c3))))))
+    (set h (i32 (quot (i64 10000000) sum)))
+    (if (< weakest 0) (set weakest 0))
+    (return (quot (* h (+ 1000 weakest)) 2000))))
+
+(defn ^I32 th-hl-row [^Cells hl ^I32 from ^I32 page ^I32 font]
+  (comment "The row of `hl` at or after `from` for (page, font), -1 when none.")
+  (let [^I32 n (hl-count hl)
+        ^:mut ^I32 i from]
+    (while (< i n)
+      (do (if (and (== (hl-get hl i (hlf-page)) page) (== (hl-get hl i (hlf-subject)) font)) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 th-hl-add [^:mut ^Cells hl ^I32 r ^I32 f ^I32 v]
+  (let [^I32 old (hl-get hl r f)]
+    (hl-set hl r f (+ old v))
+    (return 0)))
+
+(defn ^I32 th-hl-div [^:mut ^Cells hl ^I32 r ^I32 f ^I32 n]
+  (let [^I32 old (hl-get hl r f)]
+    (hl-set hl r f (quot old n))
+    (return 0)))
+
+(defn ^:pub ^I32 th-health [^:mut ^Cells feats ^Cells fw ^:mut ^Cells hl]
+  (comment "Per (font, page) of the flow `fw`: the pooled stage-1 columns 2-5, glyph-weighted (4 and 5 are each word's worst, averaged),")
+  (comment "as `hl` rows (kind font-page, subject the font row; components mapped, garbage, overlap, gap; agreement and ink -1 until")
+  (comment "P7.2) and their score, which is written into each word's `xt` column 13. Answers the rows made.")
+  (let [^I32 nw (fw-count fw)
+        ^I32 h0 (hl-count hl)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 hstart (hl-count hl)
+        ^:mut ^I32 curpage -1
+        ^:mut ^I32 r 0
+        ^:mut ^I32 ft 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 pgno 0
+        ^:mut ^I32 sc0 0
+        ^:mut ^I32 font 0]
+    (while (< i nw)
+      (do (set n (cells-at fw (+ (* i 24) 18)))
+          (set ft (cells-at fw (+ (* i 24) 15)))
+          (if (and (> n 0) (>= ft 0))
+            (do (set pgno (cells-at fw (* i 24)))
+                (set font (cells-at fw (+ (* i 24) 19)))
+                (if (!= pgno curpage)
+                  (do (set curpage pgno)
+                      (set hstart (hl-count hl))))
+                (set r (th-hl-row hl hstart pgno font))
+                (if (< r 0)
+                  (do (set r (hl-new hl (plh-font-page) pgno font))
+                      (hl-set hl r (hlf-mapped) 0)
+                      (hl-set hl r (hlf-garbage) 0)
+                      (hl-set hl r (hlf-overlap) 0)
+                      (hl-set hl r (hlf-gap) 0)
+                      (hl-set hl r 11 0)))
+                (th-hl-add hl r (hlf-mapped) (* (fe-get feats ft (xt-trust)) n))
+                (th-hl-add hl r (hlf-garbage) (* (fe-get feats ft (xt-bad-cp)) n))
+                (th-hl-add hl r (hlf-overlap) (* (fe-get feats ft (xt-overlap)) n))
+                (th-hl-add hl r (hlf-gap) (* (fe-get feats ft (xt-gap-anomaly)) n))
+                (th-hl-add hl r 11 n)))
+          (set i (+ i 1))))
+    (set i h0)
+    (while (< i (hl-count hl))
+      (do (set n (hl-get hl i 11))
+          (th-hl-div hl i (hlf-mapped) n)
+          (th-hl-div hl i (hlf-garbage) n)
+          (th-hl-div hl i (hlf-overlap) n)
+          (th-hl-div hl i (hlf-gap) n)
+          (set sc0 (th-score (hl-get hl i (hlf-mapped)) (hl-get hl i (hlf-garbage)) (hl-get hl i (hlf-overlap)) (hl-get hl i (hlf-gap))))
+          (hl-set hl i (hlf-score) sc0)
+          (hl-set hl i 11 0)
+          (set i (+ i 1))))
+    (comment "each word's column 13: its (font, page)'s score")
+    (set i 0)
+    (set curpage -1)
+    (set hstart h0)
+    (while (< i nw)
+      (do (set n (cells-at fw (+ (* i 24) 18)))
+          (set ft (cells-at fw (+ (* i 24) 15)))
+          (if (and (> n 0) (>= ft 0))
+            (do (set pgno (cells-at fw (* i 24)))
+                (set font (cells-at fw (+ (* i 24) 19)))
+                (if (!= pgno curpage)
+                  (do (set curpage pgno)
+                      (while (and (< hstart (hl-count hl)) (!= (hl-get hl hstart (hlf-page)) pgno))
+                        (set hstart (+ hstart 1)))))
+                (set r (th-hl-row hl hstart pgno font))
+                (if (>= r 0) (fe-set feats ft (xt-font-health) (hl-get hl r (hlf-score))))))
+          (set i (+ i 1))))
+    (return (- (hl-count hl) h0))))
+
+;; ------------------------------------------------------------- the document pass's call
+
+(defn ^:pub ^I32 th-run [^Cells pg ^Cells gl ^Cells et ^Cells mk ^Cells fnt ^Cells wd ^Cells ln ^Cells im
+                         ^:mut ^Cells epages ^:mut ^Cells feats ^:mut ^Cells fw ^:mut ^Cells fl ^:mut ^Cells fa ^:mut ^Cells hl
+                         ^:mut ^Cells sc]
+  (comment "P7.0's stage (D195): `epages` of every page, the stage-1 features of every word of `wd`, the triage of `wd`/`ln` into the")
+  (comment "flow `fw`/`fl` and the set-aside `fa`, and the health of the fonts (`hl`, column 13). `sc` is 360 cells of scratch. Answers 0.")
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 l1 0
+        ^:mut ^I32 pgno 0
+        ^:mut ^I32 dom 0
+        ^:mut ^I32 ip 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 wend 0
+        ^:mut ^I32 medh 0
+        ^:mut ^I32 cls 0
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 fl-row 0
+        ^:mut ^I32 fr 0
+        ^:mut ^I32 frow 0
+        ^:mut ^I32 dropped 0]
+    (th-epages pg wd epages)
+    (while (< l nl)
+      (do (set pgno (ln-get ln l (lh-page)))
+          (set l1 l)
+          (while (and (< l1 nl) (== (ln-get ln l1 (lh-page)) pgno))
+            (set l1 (+ l1 1)))
+          (set dom (th-dominant ln l l1 sc))
+          (while (and (< ip (im-count im)) (< (im-get im ip (mf-page)) pgno))
+            (set ip (+ ip 1)))
+          (while (< l l1)
+            (do (set w (ln-get ln l (lh-first)))
+                (set wend (+ w (ln-get ln l (lh-count))))
+                (set medh (th-line-median wd w (ln-get ln l (lh-count))))
+                (set kept 0)
+                (set dropped 0)
+                (set first (fw-count fw))
+                (set fl-row (fl-count fl))
+                (while (< w wend)
+                  (do (set frow (ev-feat-text feats epages et gl fnt mk wd ln w l dom medh))
+                      (set cls (th-class gl mk im epages wd w ip))
+                      (if (> cls 0)
+                        (do (fa-new fa pgno (wd-get wd w (hd-x0)) (wd-get wd w (hd-y0)) (wd-get wd w (hd-x1)) (wd-get wd w (hd-y1)) cls (ea-words) w)
+                            (set dropped 1))
+                        (do (set fr (fw-copy-word fw wd w fl-row))
+                            (cells-set fw (+ (* fr 24) (hd-feat)) frow)
+                            (if (< cls 0) (cells-set fw (+ (* fr 24) (wf-src)) (sr-hidden-text)))
+                            (set kept (+ kept 1))))
+                      (set w (+ w 1))))
+                (if (> kept 0)
+                  (do (fl-copy-line fl ln l first kept)
+                      (if (== dropped 1) (th-remeasure fl fw fl-row first kept))))
+                (set l (+ l 1))))))
+    (th-health feats fw hl)
+    (return 0)))
+
+;; ------------------------------------------------------------- the ledger (after `fu-write`)
+
+(defn ^:pub ^I32 th-write [^Cells fa ^Cells wd ^Cells et ^:mut ^Cells ledger ^:mut ^Cells text ^:mut ^Cells tmp ^:mut ^Cells tt]
+  (comment "The set-aside words as ledger rows: a run of `fa` rows of one reason, page and line is ONE row, its box the union of theirs,")
+  (comment "its text the words joined by a space (NFC, ligatures folded, as every ledger text), conf 1000 (a check says invisible only when")
+  (comment "certain), src `text`. `tt` and `tmp` are scratch. Answers the rows written.")
+  (let [^I32 n (fa-count fa)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 lr 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 w 0]
+    (while (< i n)
+      (do (set j (+ i 1))
+          (set w (fa-get fa i 7))
+          (set line (wd-get wd w (hd-line)))
+          (while (and (< j n)
+                      (and (== (fa-get fa j 5) (fa-get fa i 5))
+                           (and (== (fa-get fa j 0) (fa-get fa i 0))
+                                (== (wd-get wd (fa-get fa j 7) (hd-line)) line))))
+            (set j (+ j 1)))
+          (set x0 (fa-get fa i 1))
+          (set y0 (fa-get fa i 2))
+          (set x1 (fa-get fa i 3))
+          (set y1 (fa-get fa i 4))
+          (cells-drop tt 0)
+          (set k i)
+          (while (< k j)
+            (do (if (> k i) (cells-push tt 32))
+                (if (< (fa-get fa k 1) x0) (set x0 (fa-get fa k 1)))
+                (if (< (fa-get fa k 2) y0) (set y0 (fa-get fa k 2)))
+                (if (> (fa-get fa k 3) x1) (set x1 (fa-get fa k 3)))
+                (if (> (fa-get fa k 4) y1) (set y1 (fa-get fa k 4)))
+                (set w (fa-get fa k 7))
+                (set s (wd-get wd w (hd-tstart)))
+                (set e (+ s (wd-get wd w (hd-tlen))))
+                (while (< s e)
+                  (do (cells-push tt (cells-at et s))
+                      (set s (+ s 1))))
+                (set k (+ k 1))))
+          (set lr (ledger-add ledger (fa-get fa i 5) (fa-get fa i 0) x0 y0 x1 y1 1000 (sr-text)))
+          (set t0 (cells-len text))
+          (nz-nfc tt 0 (cells-len tt) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+          (ledger-set-text ledger lr t0 (- (cells-len text) t0))
+          (set rows (+ rows 1))
+          (set i j)))
+    (return rows)))

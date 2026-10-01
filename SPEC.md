@@ -1446,12 +1446,15 @@ for the text layer):
   where the standard puts them. Integer per-mille components, a weighted harmonic mean,
   scaled by the weakest check; PDF/UA raises the trust and never the score.
 
-**As designed (P7.0, P7.2, D203).** The text layer's health is computed in
-two steps. **Without OCR** (P7.0, the document pass): per (font, page) the
+**As designed (P7.0, P7.2, D203); step one as built (P7.0, D211-D214).** The text layer's health is computed in
+two steps. **Without OCR** (P7.0, the document pass, `kin/tlhealth.kin`): per (font, page) the
 pooled stage-1 `xt` columns (mapped share, PUA/control/U+FFFD share, worst
-overlap, worst gap anomaly) give `tl-health`, a per-mille in the `hl` arena,
+overlap, worst gap anomaly: glyph-weighted means over the words) give `tl-health`, a per-mille in the `hl` arena
+(components 1000 - garbage, mapped, an overlap ramp, a gap ramp; weights 4, 3, 2, 1; each floored at 50; scaled by
+`(1000 + weakest) / 2000`),
 and fill `xt` column 13; this alone drives `ocr: auto` and is what a run with
-no OCR engine has. **With OCR** (P7.2, the page unit): the agreement rate of
+no OCR engine has. It catches a font that has no Unicode for its glyphs (`tl-broken-unmapped`: 34 against `tl-trusted` 700) and
+does NOT catch a plausible wrong mapping (`tl-broken-shift`): only OCR agreement can. **With OCR** (P7.2, the page unit): the agreement rate of
 the (font, page) — groups with a text-layer and an OCR candidate whose
 case-folded similarity is at least `agree-sim` (900), over groups with both
 — joins as a component, and a font whose agreement is low on **every** page
@@ -1609,11 +1612,11 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on):
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (2 cells), similarity (case kept), similarity (case-folded letters), flags (`gf`: text-only, OCR-only, split, merged, in-figure, in-seal), spare |
+| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D211), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal) |
 | `fw` | 24 | **the layout of `words`** (word head 16, style, glyph run, font, size, gap, `wbreak`, `src`): `src` is the sources bitset (`sr`: text, hidden-text, ocr, trace), the glyph run is the text-layer word's when it won, empty otherwise |
 | `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D186 measures an OCR line |
 | `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |
-| `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (2) |
+| `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (1: D211) |
 | `fx` | 4 | explanation: group, rule, feature column, value read — a run per group, every column the deciding rule read |
 | `hl` | 12 | health: subject kind (font-page, OCR block, region), page, subject index, components (6: mapped, garbage, overlap, gap, agreement, ink), score |
 | `fpa` | the layout of `paths` | the fused graphics: the vector paths, plus tracer rules no vector path explains (flag `traced`), which is what the table stage reads on a raster page |

@@ -50,6 +50,7 @@ import (
 	"emon/plan"
 	"emon/port"
 	"emon/rasterin"
+	"emon/tlhealth"
 )
 
 // Transcript is the plan/fulfil transcript (SPEC 13): per input its index and length, and every request
@@ -908,6 +909,14 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	}
 	np := pdfdoc.PdPgCount(pg)
 	info := intake(np)
+	// The text layer's own triage and health (P7.0, D195, D208): epages, the stage-1 features, the flow COPIED into fw/fl without the
+	// words that failed a P3.6 check (set aside in fa, written to the ledger after FuWrite), and the font health in hl. Stage 3 reads
+	// fw/fl from here on, never wd/ln.
+	l7 := newCellsN(7)
+	tlEpages, tlFeats, fw, fl, fa, hl, hsc := l7[0], l7[1], l7[2], l7[3], l7[4], l7[5], l7[6]
+	tlhealth.ThRun(pg, gl, et, mk, fnt, wd, ln, im, tlEpages, tlFeats, fw, fl, fa, hl, hsc)
+	// The evidence dump is still the interpreter's own (version "1", the content goldens' bytes): the layer's arenas join it as
+	// version "2" with P7.3, when the goldens move with it (D213).
 	var ev *string
 	if opts.KeepEvidence {
 		e := newCellsN(18)
@@ -937,10 +946,10 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	// Running furniture (P4.3): found BEFORE the headings and paragraphs, which then never see it, and written after them.
 	fc := newCellsN(10)
 	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
-	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
+	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	// Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
 	tb := newCellsN(24)
-	table.TbBuild(wd, ln, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	table.TbBuild(fw, fl, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
@@ -951,17 +960,19 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	for _, ch := range opts.Locale {
 		port.CellsPush(ia[0], int32(ch))
 	}
-	columns.LcCopy(ln, c[0])
-	initial.InDetect(wd, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
+	columns.LcCopy(fl, c[0])
+	initial.InDetect(fw, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
 	// the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
 	// paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
 	h := newCellsN(7)
 	// the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
 	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
-	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
-	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
+	heading.HdAnalyze(fw, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
+	// the words the triage set aside (P7.0): ledger rows, after the furniture's
+	tlhealth.ThWrite(fa, wd, et, m.ledger, m.text, t[2], port.NewCells())
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
 		for _, ch := range opts.Locale {

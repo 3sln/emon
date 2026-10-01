@@ -1,0 +1,260 @@
+;; Laws for `emon.tlhealth` (P7.0; SPEC 8.1, 8.4.5, 9.3, 9.7; D203, D208, D211-D213), on every target.
+;;
+;; THE FIXTURES are P3.6's (test/vis/, whose by-hand expectations `emon.pdfvistest` holds the classifications to) and P6.6's
+;; broken-encoding documents (test/corpus/synth/pdf/tl-broken-*.pdf): each is run as the Engine runs it (`pd-open`,
+;; `pc-document`, `th-run`, `th-write`), and the laws are about what the triage and the health made of them:
+;;
+;;   * the flow `fw` plus the set-aside `fa` is every word of `wd`; no word of `fw` failed a check, except a word occluded by an image
+;;     covering half the page, which is a `hidden-text` word; every `fa` word failed one, under the reason its class says;
+;;   * the lines are what is left: every `fl` row has words, and together they are every `fw` word;
+;;   * the layer is sound (`pl-check` 0), and the ledger has one row per run of a line's set-aside words;
+;;   * every word has a feature row whose columns say what its glyphs say (worst `vis`, code points, health);
+;;   * the health: the healthy documents' fonts are at least `tl-trusted`, an unmapped font is far under it, a shifted but plausible
+;;     mapping is NOT caught here (OCR agreement is what catches it, P7.2);
+;;   * `th-score` on hand-made components, and the page table of every page.
+(ns emon.tlhealthtest
+  (:require [emon.lang :refer [I32 Blob Src Cells]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells test-file TestT test-t Str]]
+            [emon.port :refer [cells-len cells-at cells-drop src-of-blob]]
+            [emon.model :refer [sr-hidden-text ledger-count ledger-reason ledger-text-len dr-clipped dr-offpage dr-invisible dr-watermark]]
+            [emon.pdfdoc :refer [pd-open pd-pg-count]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.evidence :refer [gl-get wd-get wd-count ln-count ln-get fe-get ep-get ep-count
+                                   wf-gfirst gf-vis xt-vis xt-length epf-width epf-height vz-occluded]]
+            [emon.player :refer [fw-count fl-count fa-count fa-get hl-count hl-get hlf-score hlf-mapped hlf-garbage pl-check]]
+            [emon.tlhealth :refer [th-run th-write th-score th-trusted th-auto-health]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defn ^I32 tt-fixture [^TestT emon-t ^Blob file ^I32 want-fa ^I32 want-hidden ^I32 want-rows ^I32 ctx]
+  (comment "Run one document through the document pass up to the ledger and check what the laws above say; the numbers are")
+  (comment "the fixture's (`want-fa` set-aside words, `want-hidden` hidden-text words left in the flow, `want-rows` ledger rows).")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells fa (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells sc (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells fpa (new-cells)
+        ^Cells sl (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells text (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells tt (new-cells)
+        ^Src src (src-of-blob file)
+        ^I32 o (pd-open src ar dc a b st)
+        ^:mut ^I32 status 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 hidden 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 g0 0
+        ^:mut ^I32 ft 0
+        ^:mut ^I32 vis 0
+        ^:mut ^I32 rows 0]
+    (assert-eq-at o 0 "the file opened" ctx)
+    (set status (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))
+    (assert-eq-at status 0 "the file ran" ctx)
+    (th-run pg gl et mk fnt wd ln im epages feats fw fl fa hl sc)
+    (comment "the flow and the set-aside are every word")
+    (assert-eq-at (+ (fw-count fw) (fa-count fa)) (wd-count wd) "fw + fa is every word" ctx)
+    (assert-eq-at (fa-count fa) want-fa "set-aside words" ctx)
+    (comment "no failed word in the flow, but a hidden OCR layer under a page-sized image")
+    (set i 0)
+    (while (< i (fw-count fw))
+      (do (set g0 (cells-at fw (+ (* i 24) 17)))
+          (set vis (gl-get gl g0 (gf-vis)))
+          (if (== (bit-and (cells-at fw (+ (* i 24) 23)) 2) 2) (set hidden (+ hidden 1)))
+          (if (!= vis 0)
+            (do (assert-eq-at vis (vz-occluded) "only an occluded word stays" ctx)
+                (assert-eq-at (cells-at fw (+ (* i 24) 23)) (sr-hidden-text) "and as hidden-text" ctx)))
+          (set ft (cells-at fw (+ (* i 24) 15)))
+          (assert-that-at (>= ft 0) "every word has a feature row" ctx)
+          (assert-eq-at (fe-get feats ft (xt-length)) (cells-at fw (+ (* i 24) 12)) "its length" ctx)
+          (assert-eq-at (fe-get feats ft (xt-vis)) vis "its worst vis" ctx)
+          (set i (+ i 1))))
+    (assert-eq-at hidden want-hidden "hidden-text words left in the flow" ctx)
+    (comment "every set-aside word failed a check, under the reason its class says")
+    (set i 0)
+    (while (< i (fa-count fa))
+      (do (set w (fa-get fa i 7))
+          (set vis (gl-get gl (wd-get wd w (wf-gfirst)) (gf-vis)))
+          (assert-that-at (!= vis 0) "a set-aside word failed a check" ctx)
+          (if (== vis 1) (assert-eq-at (fa-get fa i 5) (dr-clipped) "clipped" ctx))
+          (if (== vis 2) (assert-eq-at (fa-get fa i 5) (dr-offpage) "offpage" ctx))
+          (if (> vis 2)
+            (assert-that-at (or (== (fa-get fa i 5) (dr-invisible)) (== (fa-get fa i 5) (dr-watermark))) "invisible (or a watermark)" ctx))
+          (set i (+ i 1))))
+    (comment "the lines are what is left")
+    (set i 0)
+    (set total 0)
+    (while (< i (fl-count fl))
+      (do (assert-that-at (> (cells-at fl (+ (* i 16) 12)) 0) "no empty line" ctx)
+          (assert-eq-at (cells-at fl (+ (* i 16) 11)) total "the lines run over the words in order" ctx)
+          (set total (+ total (cells-at fl (+ (* i 16) 12))))
+          (set i (+ i 1))))
+    (assert-eq-at total (fw-count fw) "the lines hold every word" ctx)
+    (assert-that-at (<= (fl-count fl) (ln-count ln)) "no line is made" ctx)
+    (assert-eq-at (pl-check cg fw fl fv fa fx hl fpa sl et refs gl) 0 "the layer is sound" ctx)
+    (comment "the ledger")
+    (set rows (th-write fa wd et ledger text tmp tt))
+    (assert-eq-at rows want-rows "ledger rows" ctx)
+    (assert-eq-at (ledger-count ledger) want-rows "ledger rows written" ctx)
+    (set i 0)
+    (while (< i rows)
+      (do (assert-that-at (> (ledger-text-len ledger i) 0) "a ledger row has its text" ctx)
+          (set i (+ i 1))))
+    (comment "the page table: a row for every page, with its size and its text layer")
+    (assert-eq-at (ep-count epages) (pd-pg-count pg) "an epages row for every page" ctx)
+    (set i 0)
+    (while (< i (ep-count epages))
+      (do (assert-that-at (> (ep-get epages i (epf-width)) 0) "a page has a width" ctx)
+          (assert-that-at (> (ep-get epages i (epf-height)) 0) "a page has a height" ctx)
+          (set i (+ i 1))))
+    (return (hl-count hl))))
+
+;; one law per class of P3.6, with the numbers `bb`'s evidence dump of each fixture says (words are `wd` rows; a ledger row is a
+;; line's run of one reason)
+(deftest test-white-text-leaves-the-flow
+  (tt-fixture (test-t) (test-file "vis/white.pdf") 60 0 14 1))
+
+(deftest test-clipped-text-leaves-the-flow
+  (tt-fixture (test-t) (test-file "vis/clip.pdf") 22 0 5 2)
+  (tt-fixture (test-t) (test-file "vis/offpage.pdf") 14 0 4 3)
+  (tt-fixture (test-t) (test-file "vis/offcrop.pdf") 7 0 2 4)
+  (tt-fixture (test-t) (test-file "vis/rotated.pdf") 4 0 1 5))
+
+(deftest test-transparent-hidden-and-sized-text-leave-the-flow
+  (tt-fixture (test-t) (test-file "vis/alpha.pdf") 15 0 3 6)
+  (tt-fixture (test-t) (test-file "vis/ocg.pdf") 27 0 4 7)
+  (tt-fixture (test-t) (test-file "vis/size.pdf") 15 0 4 8)
+  (tt-fixture (test-t) (test-file "vis/pagewall.pdf") 12 0 2 9)
+  (tt-fixture (test-t) (test-file "vis/spam.pdf") 48 0 7 10)
+  (tt-fixture (test-t) (test-file "vis/hiddenjunk.pdf") 15 0 3 11))
+
+(deftest test-occluded-text-is-invisible-unless-an-image-covers-the-page
+  (comment "a rectangle or a small image over text: invisible; the whole page's image over it: an older producer's OCR layer")
+  (tt-fixture (test-t) (test-file "vis/occluded.pdf") 16 0 3 12)
+  (tt-fixture (test-t) (test-file "vis/ocrlayer.pdf") 0 25 0 13)
+  (tt-fixture (test-t) (test-file "vis/ocrfirst.pdf") 0 22 0 14))
+
+(deftest test-visible-text-stays-and-pages-have-rows
+  (tt-fixture (test-t) (test-file "vis/visible.pdf") 1 0 1 15)
+  (tt-fixture (test-t) (test-file "vis/pages.pdf") 12 0 2 16)
+  (tt-fixture (test-t) (test-file "vis/spaces.pdf") 2 0 2 17))
+
+(deftest test-a-watermark-in-an-optional-content-group-is-still-a-watermark
+  (comment "off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D212), as it did before the triage")
+  (tt-fixture (test-t) (test-file "corpus/synth/pdf/wm-ocg.pdf") 2 0 2 18))
+
+(deftest test-a-hidden-ocr-layer-stays
+  (tt-fixture (test-t) (test-file "corpus/synth/pdf/hidden-older-ocr.pdf") 0 200 0 19))
+
+;; ------------------------------------------------------------------ health
+
+(deftest test-health-scores
+  (assert-eq (th-score 1000 0 0 0) 1000 "a perfect font")
+  (assert-eq (th-score 1000 0 500 500) 1000 "the limits are free")
+  (assert-that (>= (th-score 1000 0 100 0) (th-trusted)) "a normal font is trusted")
+  (assert-that (< (th-score 0 1000 0 0) 300) "an unmapped font is far under 300")
+  (assert-that (< (th-score 500 0 0 0) (th-trusted)) "half unmapped is not trusted")
+  (assert-that (< (th-score 1000 0 1000 0) (th-auto-health)) "every glyph on its neighbour is not healthy")
+  (assert-that (< (th-score 1000 0 0 3000) (th-auto-health)) "words torn apart are not healthy")
+  (assert-that (< (th-score 1000 500 0 0) (th-trusted)) "half garbage is not trusted")
+  (assert-that (> (th-score 800 0 0 0) (th-score 600 0 0 0)) "more mapped, better"))
+
+(defn ^I32 tt-health [^Blob file ^I32 which]
+  (comment "Run a document to its health rows; answer, for which 0 the rows, 1 how many are at least `tl-trusted`, 2 the lowest score,")
+  (comment "3 the highest score of the rows that are not at least `tl-trusted`.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells fa (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells sc (new-cells)
+        ^Src src (src-of-blob file)
+        ^I32 o (pd-open src ar dc a b st)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 good 0
+        ^:mut ^I32 low 100000
+        ^:mut ^I32 high 0]
+    (if (!= o 0) (return -1))
+    (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx)
+    (th-run pg gl et mk fnt wd ln im epages feats fw fl fa hl sc)
+    (while (< i (hl-count hl))
+      (do (if (>= (hl-get hl i (hlf-score)) (th-trusted))
+            (set good (+ good 1))
+            (if (> (hl-get hl i (hlf-score)) high) (set high (hl-get hl i (hlf-score)))))
+          (if (< (hl-get hl i (hlf-score)) low) (set low (hl-get hl i (hlf-score))))
+          (set i (+ i 1))))
+    (if (== which 0) (return (hl-count hl)))
+    (if (== which 1) (return good))
+    (if (== which 2) (return low))
+    (return high)))
+
+(deftest test-an-unmapped-font-is-caught-and-a-shifted-one-is-not
+  (comment "tl-broken-unmapped: one font whose glyphs have no Unicode (score far under 300); every other font of both pages is trusted")
+  (assert-eq (tt-health (test-file "corpus/synth/pdf/tl-broken-unmapped.pdf") 0) 7 "unmapped: rows")
+  (assert-eq (tt-health (test-file "corpus/synth/pdf/tl-broken-unmapped.pdf") 1) 5 "unmapped: trusted rows")
+  (assert-that (< (tt-health (test-file "corpus/synth/pdf/tl-broken-unmapped.pdf") 2) 300) "unmapped: the broken font is under 300")
+  (comment "tl-broken-shift: a plausible mapping that is wrong; the text layer cannot tell, OCR agreement can (P7.2)")
+  (assert-eq (tt-health (test-file "corpus/synth/pdf/tl-broken-shift.pdf") 0) (tt-health (test-file "corpus/synth/pdf/tl-broken-shift.pdf") 1) "shifted: every font passes"))
+
+(deftest test-healthy-documents-are-trusted
+  (assert-eq (tt-health (test-file "corpus/synth/pdf/align-rtl.pdf") 0) (tt-health (test-file "corpus/synth/pdf/align-rtl.pdf") 1) "rtl")
+  (assert-eq (tt-health (test-file "corpus/synth/pdf/bank-statement.pdf") 0) (tt-health (test-file "corpus/synth/pdf/bank-statement.pdf") 1) "bank statement")
+  (assert-eq (tt-health (test-file "vis/visible.pdf") 0) (tt-health (test-file "vis/visible.pdf") 1) "visible"))

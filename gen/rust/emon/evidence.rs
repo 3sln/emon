@@ -5932,7 +5932,7 @@ pub fn ev_check(mut epages: &mut crate::port::Cells, mut views: &mut crate::port
     }
     return 0;
 }
-pub(crate) fn ev_begin(mut t: &mut String, pr: i32, d: i32, started: i32, code: i32) -> i32 {
+pub fn ev_begin(mut t: &mut String, pr: i32, d: i32, started: i32, code: i32) -> i32 {
     if started == 1 {
         crate::port::text_ascii(t, ",");
     }
@@ -6255,7 +6255,7 @@ pub(crate) fn ev_field(mut t: &mut String, pr: i32, d: i32, c: &mut crate::port:
     }
     return started;
 }
-pub(crate) fn ev_row(mut t: &mut String, pr: i32, d: i32, ea: i32, c: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
+pub fn ev_row(mut t: &mut String, pr: i32, d: i32, ea: i32, c: &mut crate::port::Cells, etext: &mut crate::port::Cells, row: i32) -> i32 {
     // One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
     let stride: i32 = EV_STRIDES[(ea - 1) as usize];
     let first: i32 = EV_FX[((ea - 1) * 2 + 0) as usize];
@@ -6374,13 +6374,10 @@ pub(crate) fn ev_arena_feats(mut t: &mut String, pr: i32, started: i32, feats: &
     js_aend(t, pr, 1, n);
     return 1;
 }
-pub fn ev_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
-    // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
-    // in the order of the `ea` codes, each row in its fixed key order.
-    let mut s: i32 = 0;
-    crate::port::text_ascii(t, "{");
-    s = ev_begin(t, pretty, 0, s, ek_version());
-    crate::port::text_ascii(t, "\"1\"");
+pub fn ev_emit_body(mut t: &mut String, pretty: i32, s0: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // The arenas of the evidence dump, `epages` to `tlines`, written as members of the object the caller opened;
+    // `s0` is 1 when a member came before. Answers 1. (`ev-emit` and the layer dump of `emon.player` share it.)
+    let mut s: i32 = s0;
     s = ev_arena(t, pretty, s, 1, epages, etext);
     s = ev_arena(t, pretty, s, 2, views, etext);
     s = ev_arena(t, pretty, s, 3, pts, etext);
@@ -6405,6 +6402,16 @@ pub fn ev_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Ce
     s = ev_arena(t, pretty, s, 22, rules, etext);
     s = ev_arena(t, pretty, s, 23, prims, etext);
     s = ev_arena(t, pretty, s, 24, tlines, etext);
+    return s;
+}
+pub fn ev_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+    // in the order of the `ea` codes, each row in its fixed key order.
+    let mut s: i32 = 0;
+    crate::port::text_ascii(t, "{");
+    s = ev_begin(t, pretty, 0, s, ek_version());
+    crate::port::text_ascii(t, "\"1\"");
+    s = ev_emit_body(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
     js_close(t, pretty, 0, s);
     return 0;
 }

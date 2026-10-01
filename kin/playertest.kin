@@ -1,0 +1,183 @@
+;; Laws for `emon.player` (P7.0; SPEC 9.7; D195, D203, D211), on every target.
+;;
+;; THE HAND-BUILT LAYER: a page has two words ("ab", "cd") and their line, one correspondence group whose runs point into `refs` (one
+;; reference into the evidence, one into the layer's own `fw`), the verdicts of both words, one set-aside item, one explanation row, one
+;; health row and one seal candidate. Two such pages are appended; the laws say what was re-based and what was not, that `pl-check` is
+;; satisfied and notices each way of being broken, that every cell of every stride is either printed by the dump or named spare, and
+;; what the dump of a small layer looks like.
+(ns emon.playertest
+  (:require [emon.lang :refer [I32 Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-text new-cells new-text]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [dr-invisible]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ea-words wf-gfirst rf-add]]
+            [emon.player :refer [cg-new cg-set cg-get cg-count fw-copy-word fl-copy-line fw-count fl-count fv-new fv-get fv-count
+                                 fa-new fa-set fa-get fa-count fx-new fx-count hl-new hl-set hl-get hl-count sl-new sl-get sl-count
+                                 pl-ea-fw pl-ea-cg pl-append pl-check pl-emit-layer pl-fd-count pl-fd-at pl-fx-at
+                                 cgf-tfirst cgf-ofirst cgf-hfirst hlf-mapped hlf-score slf-wfirst slf-wcount
+                                 plh-font-page pls-seal]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 pt-page [^:mut ^Cells cg ^:mut ^Cells fw ^:mut ^Cells fl ^:mut ^Cells fv ^:mut ^Cells fa ^:mut ^Cells fx
+                    ^:mut ^Cells hl ^:mut ^Cells sl ^:mut ^Cells etext ^:mut ^Cells refs
+                    ^:mut ^Cells words ^:mut ^Cells lines ^I32 page]
+  (comment "One page of the hand-built layer: etext 'abcd', two words, a line, a group, verdicts, a set-aside item, an explanation,")
+  (comment "a health row and a seal candidate; the page's own `etext` and `refs`.")
+  (let [^:mut ^I32 g 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 ra 0
+        ^:mut ^I32 rh 0
+        ^:mut ^I32 rs 0]
+    (cells-drop words 0)
+    (cells-drop lines 0)
+    (cells-push etext 97)
+    (cells-push etext 98)
+    (cells-push etext 99)
+    (cells-push etext 100)
+    (wd-new words page 0 0 1000 1000 0 900 1000 900 0 0 0 2 -1 -1 -1)
+    (wd-new words page 1000 0 2000 1000 1000 900 2000 900 0 0 2 2 -1 -1 -1)
+    (ln-new lines page 0 0 2000 1000 0 900 2000 900 0 0 0 2)
+    (set r (fl-copy-line fl lines 0 (fw-count fw) 2))
+    (fw-copy-word fw words 0 r)
+    (fw-copy-word fw words 1 r)
+    (comment "the group: one text candidate in the evidence's words, one OCR candidate that is the layer's own first word")
+    (set g (cg-new cg page 0 0 2000 1000 0))
+    (rf-add refs (ea-words) 0)
+    (rf-add refs (pl-ea-fw) (- (fw-count fw) 2))
+    (cg-set cg g (cgf-tfirst) (- (quot (cells-len refs) 2) 2))
+    (cg-set cg g 7 1)
+    (cg-set cg g (cgf-ofirst) (- (quot (cells-len refs) 2) 1))
+    (cg-set cg g 9 1)
+    (fv-new fv g 1 100 900 0)
+    (fv-new fv g 1 100 900 0)
+    (set ra (fa-new fa page 10 10 20 20 (dr-invisible) (ea-words) 5))
+    (fa-set fa ra 9 g)
+    (fx-new fx g 100 24 950)
+    (set rh (hl-new hl (plh-font-page) page 0))
+    (hl-set hl rh 3 1000)
+    (set rs (sl-new sl page 0 0 500 500 (pls-seal)))
+    (cells-set sl (+ (* rs 16) 10) (- (quot (cells-len refs) 2) 2))
+    (cells-set sl (+ (* rs 16) 11) 2)
+    (return 0)))
+
+(deftest test-two-pages-append-and-check
+  (let [^Cells cg (new-cells) ^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells fv (new-cells) ^Cells fa (new-cells)
+        ^Cells fx (new-cells) ^Cells hl (new-cells) ^Cells fpa (new-cells) ^Cells sl (new-cells) ^Cells et (new-cells) ^Cells rf (new-cells)
+        ^Cells words (new-cells) ^Cells lines (new-cells) ^Cells gl (new-cells)
+        ^Cells pcg (new-cells) ^Cells pfw (new-cells) ^Cells pfl (new-cells) ^Cells pfv (new-cells) ^Cells pfa (new-cells)
+        ^Cells pfx (new-cells) ^Cells phl (new-cells) ^Cells pfpa (new-cells) ^Cells psl (new-cells) ^Cells pet (new-cells) ^Cells prf (new-cells)]
+    (pt-page pcg pfw pfl pfv pfa pfx phl psl pet prf words lines 1)
+    (assert-eq (pl-check pcg pfw pfl pfv pfa pfx phl pfpa psl pet prf gl) 0 "a page's layer is sound")
+    (pl-append cg fw fl fv fa fx hl fpa sl et rf pcg pfw pfl pfv pfa pfx phl pfpa psl pet prf)
+    (cells-drop pcg 0) (cells-drop pfw 0) (cells-drop pfl 0) (cells-drop pfv 0) (cells-drop pfa 0) (cells-drop pfx 0)
+    (cells-drop phl 0) (cells-drop psl 0) (cells-drop pet 0) (cells-drop prf 0)
+    (pt-page pcg pfw pfl pfv pfa pfx phl psl pet prf words lines 2)
+    (pl-append cg fw fl fv fa fx hl fpa sl et rf pcg pfw pfl pfv pfa pfx phl pfpa psl pet prf)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 0 "two pages are sound")
+    (assert-eq (cg-count cg) 2 "groups")
+    (assert-eq (fw-count fw) 4 "words")
+    (assert-eq (fl-count fl) 2 "lines")
+    (assert-eq (cells-len et) 8 "etext")
+    (assert-eq (quot (cells-len rf) 2) 4 "refs")
+    (comment "re-based: the second page's text runs, its line, its line's words, its refs runs, its groups")
+    (assert-eq (cells-at fw (+ (* 2 24) 11)) 4 "the second page's first word's text starts after the first page's")
+    (assert-eq (cells-at fw (+ (* 3 24) 11)) 6 "and its second")
+    (assert-eq (cells-at fw (+ (* 2 24) 13)) 1 "its line is the document's second")
+    (assert-eq (cells-at fl (+ (* 1 16) 11)) 2 "the second line's words start after the first page's")
+    (assert-eq (cg-get cg 1 (cgf-tfirst)) 2 "the second group's text candidates start after the first page's refs")
+    (assert-eq (cg-get cg 1 (cgf-ofirst)) 3 "and its OCR candidates")
+    (assert-eq (cg-get cg 1 (cgf-hfirst)) -1 "an absent run stays absent")
+    (assert-eq (cells-at rf (+ (* 3 2) 1)) 2 "a reference into the layer's `fw` is re-based")
+    (assert-eq (cells-at rf (+ (* 2 2) 1)) 0 "a reference into the evidence is not")
+    (assert-eq (fv-get fv 2 0) 1 "a verdict's group is re-based")
+    (assert-eq (fv-count fv) 4 "verdicts")
+    (assert-eq (fa-get fa 1 9) 1 "a set-aside item's group is re-based")
+    (assert-eq (fa-get fa 1 7) 5 "and its subject, an evidence row, is not")
+    (assert-eq (hl-count hl) 2 "health rows are appended as they are")
+    (assert-eq (hl-get hl 1 (hlf-mapped)) 1000 "and keep their components")
+    (assert-eq (sl-get sl 1 (slf-wfirst)) 2 "a candidate's OCR words run is re-based")
+    (assert-eq (sl-get sl 1 (slf-wcount)) 2 "and keeps its count")
+    (assert-eq (sl-count sl) 2 "candidates")
+    (assert-eq (fx-count fx) 2 "explanations")
+    (assert-eq (fa-count fa) 2 "set-aside items")))
+
+(deftest test-the-checker-notices-every-way-of-being-broken
+  (let [^Cells cg (new-cells) ^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells fv (new-cells) ^Cells fa (new-cells)
+        ^Cells fx (new-cells) ^Cells hl (new-cells) ^Cells fpa (new-cells) ^Cells sl (new-cells) ^Cells et (new-cells) ^Cells rf (new-cells)
+        ^Cells words (new-cells) ^Cells lines (new-cells) ^Cells gl (new-cells)]
+    (pt-page cg fw fl fv fa fx hl sl et rf words lines 1)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 0 "sound")
+    (cells-push fa 0)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 1 "a stride")
+    (cells-drop fa 12)
+    (cg-set cg 0 (cgf-tfirst) 5)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 2 "a group's run outside refs")
+    (cg-set cg 0 (cgf-tfirst) 0)
+    (cells-set fw 11 9)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 3 "a text run outside etext")
+    (cells-set fw 11 0)
+    (cells-set fw 13 7)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 4 "a line outside fl")
+    (cells-set fw 13 0)
+    (cells-set fw 17 3)
+    (cells-set fw 18 2)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 5 "a glyph run outside glyphs")
+    (cells-set fw 17 -1)
+    (cells-set fw 18 0)
+    (cells-set fl 12 5)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 6 "a line's run outside fw")
+    (cells-set fl 12 2)
+    (fv-new fv 0 1 100 900 0)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 7 "verdicts that are not one per word")
+    (cells-drop fv 16)
+    (cells-set fa 9 4)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 8 "a set-aside item's group outside cg")
+    (cells-set fa 9 0)
+    (cells-set fx 0 3)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 9 "an explanation's group outside cg")
+    (cells-set fx 0 0)
+    (cells-set sl 11 9)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 10 "a candidate's words outside refs")
+    (cells-set sl 11 2)
+    (cells-set rf 3 9)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 11 "a reference into a layer row that is not there")
+    (cells-set rf 3 0)
+    (assert-eq (pl-check cg fw fl fv fa fx hl fpa sl et rf gl) 0 "sound again")))
+
+(defn ^I32 pt-width [^I32 kind ^I32 arg]
+  (comment "How many cells a field of the dump table covers.")
+  (if (== kind 3) (return 4))
+  (if (or (== kind 4) (== kind 5)) (return 2))
+  (if (== kind 7) (return arg))
+  (return 1))
+
+(deftest test-every-cell-is-printed-or-named-spare
+  (comment "per arena of the field table: the cells its rows cover, plus its spare cells, are its stride, and no two rows overlap")
+  (let [^:mut ^I32 a 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 covered 0
+        ^:mut ^I32 next 0
+        ^:mut ^I32 f 0]
+    (while (< a 6)
+      (do (set covered 0)
+          (set next 0)
+          (set k 0)
+          (while (< k (pl-fx-at 0 a 1))
+            (do (set f (pl-fd-at 0 (+ (pl-fx-at 0 a 0) k) 1))
+                (assert-that (>= f next) "the fields are in stride order and do not overlap")
+                (set covered (+ covered (pt-width (pl-fd-at 0 (+ (pl-fx-at 0 a 0) k) 2) (pl-fd-at 0 (+ (pl-fx-at 0 a 0) k) 5))))
+                (set next (+ f (pt-width (pl-fd-at 0 (+ (pl-fx-at 0 a 0) k) 2) (pl-fd-at 0 (+ (pl-fx-at 0 a 0) k) 5))))
+                (set k (+ k 1))))
+          (assert-eq (+ covered (pl-fx-at 0 a 3)) (pl-fx-at 0 a 2) "printed plus spare is the stride")
+          (set a (+ a 1))))
+    (assert-eq a 6 "six arenas")))
+
+(deftest test-the-layer-dump
+  (let [^Cells cg (new-cells) ^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells fv (new-cells) ^Cells fa (new-cells)
+        ^Cells fx (new-cells) ^Cells hl (new-cells) ^Cells fpa (new-cells) ^Cells sl (new-cells) ^Cells et (new-cells) ^Cells rf (new-cells)
+        ^Cells words (new-cells) ^Cells lines (new-cells)
+        ^Text t (new-text)]
+    (pt-page cg fw fl fv fa fx hl sl et rf words lines 1)
+    (pl-emit-layer t 0 0 cg fw fl fv fa fx hl fpa sl et)
+    (assert-text t "\"cg\":[{\"page\":1,\"box\":[0,0,20,10],\"text\":[0,1],\"ocr\":[1,1]}],\"fw\":[{\"page\":1,\"box\":[0,0,10,10],\"baseline\":[0,9,10,9],\"text\":\"ab\",\"line\":0,\"gap\":-1},{\"page\":1,\"box\":[10,0,20,10],\"baseline\":[10,9,20,9],\"text\":\"cd\",\"line\":0,\"gap\":-1}],\"fl\":[{\"page\":1,\"box\":[0,0,20,10],\"baseline\":[0,9,20,9],\"words\":[0,2]}],\"fv\":[{\"group\":0,\"source\":1,\"rule\":100,\"conf\":900},{\"group\":0,\"source\":1,\"rule\":100,\"conf\":900}],\"fa\":[{\"page\":1,\"box\":[0.1,0.1,0.2,0.2],\"reason\":\"invisible\",\"subject\":[\"words\",5],\"group\":0}],\"fx\":[{\"group\":0,\"rule\":100,\"column\":24,\"value\":950}],\"hl\":[{\"kind\":\"font-page\",\"page\":1,\"subject\":0,\"components\":[1000,-1,-1,-1,-1,-1],\"score\":-1}],\"fpa\":[],\"sl\":[{\"page\":1,\"box\":[0,0,5,5],\"kind\":\"seal\",\"words\":[0,2]}]" "the dump")))
