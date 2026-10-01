@@ -158,15 +158,15 @@ func paEndsSentence(raw *port.Cells) bool {
 	// Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
 	// three digits after a mark that follows a letter: `thing.3`) is not read.
 	var n int32 = port.CellsLen(raw)
-	var d int32 = 0
+	var nd int32 = 0
 	if n < 1 {
 		return 0 == 1
 	}
-	for (n > 2) && (d < 3) && (port.CellsAt(raw, n-1) >= 48) && (port.CellsAt(raw, n-1) <= 57) {
+	for (n > 2) && (nd < 3) && (port.CellsAt(raw, n-1) >= 48) && (port.CellsAt(raw, n-1) <= 57) {
 		n -= 1
-		d += 1
+		nd += 1
 	}
-	if d > 0 {
+	if nd > 0 {
 		if (n == 0) || !paFinalMark(port.CellsAt(raw, n-1)) {
 			return 0 == 1
 		}
