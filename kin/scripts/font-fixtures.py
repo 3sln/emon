@@ -302,7 +302,7 @@ endcmap
     n = pdf.add(f"<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-V /DescendantFonts [{cidf} 0 R] >>")
     fonts.append(("T0V", n))
     font(pdf, n, 0, "composite", 0, 0, 0, 1, -1)
-    code(0x41, [], "unknown", 1000)
+    code(0x41, [0x60], "cid", 1000)         # Identity: CID 65 of Adobe-Japan1 (P3.4), U+0060
     rows.append(("dw2", n, 90000, -110000))
 
     # 9. Type0 with an embedded encoding CMap: mixed 1- and 2-byte codespace, cidrange, cidchar, /WMode
@@ -333,8 +333,8 @@ end
     font(pdf, n, 0, "composite", 0, 0, 0, 1, -1)
     for c, cid_ in [(0x41, 0x41 - 0x20 + 1), (0x20, 1), (0x7E, 0x7E - 0x20 + 1), (0x7F, 0), (0x8140, 500), (0x8141, 0)]:
         cid(c, cid_)
-    code(0x41, [], "unknown", 650)           # cid 34 has /W [34 [650]]
-    code(0x20, [], "unknown", 900)
+    code(0x41, [0x41], "cid", 650)           # cid 34 has /W [34 [650]]; Adobe-Japan1 CID 34 is A (P3.4)
+    code(0x20, [0x20], "cid", 900)
     length("41", 1)
     length("8140", 2)
     length("81", 2)
@@ -347,23 +347,23 @@ end
                    "/Ordering (Japan1) /Supplement 2 >> >>")
     n = pdf.add(f"<< /Type /Font /Subtype /Type0 /BaseFont /Y /Encoding /UniJIS-UCS2-H /DescendantFonts [{cidf} 0 R] >>")
     fonts.append(("UCS", n))
-    font(pdf, n, 0, "composite", 0, 0, 1, 0, -1)
+    font(pdf, n, 0, "composite", 0, 0, 0, 0, -1)
     code(0x3042, [0x3042], "encoding", 1000)
     code(0x41, [0x41], "encoding", 1000)
     code(0xD800, [], "unknown", 1000)
     length("3042", 2)
     n = pdf.add(f"<< /Type /Font /Subtype /Type0 /BaseFont /Y /Encoding /UniJIS-UTF16-V /DescendantFonts [{cidf} 0 R] >>")
     fonts.append(("U16", n))
-    font(pdf, n, 0, "composite", 0, 0, 1, 1, -1)
+    font(pdf, n, 0, "composite", 0, 0, 0, 1, -1)
     code(0x3042, [0x3042], "encoding", 1000)
     length("D83DDE00", 4)
     length("0041", 2)
     length("E000", 2)
-    # a predefined CID CMap we cannot read
+    # a predefined CID CMap (P3.4 reads it): 82A0 is CID 843, Adobe-Japan1's hiragana A
     n = pdf.add(f"<< /Type /Font /Subtype /Type0 /BaseFont /Z /Encoding /90ms-RKSJ-H /DescendantFonts [{cidf} 0 R] >>")
     fonts.append(("RKS", n))
-    font(pdf, n, 0, "composite", 0, 0, 1, 0, -1)
-    code(0x82A0, [], "unknown", 1000)
+    font(pdf, n, 0, "composite", 0, 0, 0, 0, -1)
+    code(0x82A0, [0x3042], "cid", 1000)
 
     # 11. Type 3: FontMatrix scales /Widths; Differences name the glyphs
     n = pdf.add("<< /Type /Font /Subtype /Type3 /FontBBox [0 0 100 100] /FontMatrix [0.01 0 0 0.01 0 0] "
@@ -394,7 +394,7 @@ end
     dsc = fd(pdf, 4, 800, -200)
     n = pdf.add(f"<< /Type /Font /Subtype /TrueType /BaseFont /Wingdings-Regular /FontDescriptor {dsc} 0 R >>")
     fonts.append(("Wng", n))
-    font(pdf, n, 0, "simple", 800, -200, 16 + 256, 0, -1)
+    font(pdf, n, 0, "simple", 800, -200, 16 + 256 + 1024, 0, -1)    # nothing known: a guess, and "no mapping at all" (P3.4)
     code(0x41, [0x41], "unknown", None)
     code(0x20, [0x20], "unknown", None)
 
@@ -423,8 +423,9 @@ end
     n = pdf.add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /MacExpertEncoding >>")
     fonts.append(("MEx", n))
     a, d = afm("Helvetica")[2:]
-    font(pdf, n, 0, "simple", a, d, 16 + 8, 0, 4)
-    code(0x41, [0x41], "unknown", HW["A"])
+    font(pdf, n, 0, "simple", a, d, 16, 0, 4)
+    code(0x41, [], "unknown", None)         # MacExpertEncoding is read (P3.4): code 0x41 has no glyph in it
+    code(0x61, [0x61], "encoding", None)       # Asmall, the small capital A, is the letter a
 
     # 15. Not a font at all
     n = pdf.add("7")
@@ -432,7 +433,7 @@ end
     # a Type0 whose descendant is missing
     n = pdf.add("<< /Type /Font /Subtype /Type0 /BaseFont /Q /Encoding /Identity-H >>")
     fonts.append(("Bad", n))
-    font(pdf, n, 0, "composite", 0, 0, 32, 0, -1)
+    font(pdf, n, 0, "composite", 0, 0, 32 + 1024, 0, -1)    # no descendant, nothing to map (P3.4)
     code(1, [], "unknown", 1000)
 
     # the page, for readers that want one

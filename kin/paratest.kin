@@ -195,10 +195,10 @@
     (assert-text t1 "P1:a multi-page one information and Smith- Jones end;" "hyphens at line ends")
     (comment "NFC and the ligatures: U+FB01 is `fi`, `e` and U+0301 are U+00E9; a soft hyphen inside a line stays.")
     (pt-clear wd ln et)
-    (pt-line wd ln et (text-blob "oﬀice étﬆ") 1 7200 10000 50000 11200 0 0 1000)
+    (pt-line wd ln et (text-blob "oﬀice étﬆ ⼀") 1 7200 10000 50000 11200 0 0 1000)
     (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "nfc: well formed")
     (pt-brief t2 nodes regions text)
-    (assert-text t2 "P1:office étst;" "normalization")))
+    (assert-text t2 "P1:office étst 一;" "normalization (radical U+2F00 folds, D142)")))
 
 ;; ------------------------------------------------------------- across a page's end
 

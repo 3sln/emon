@@ -517,7 +517,7 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 			}
 			child = model.NodeNew(nodes, model.NkText(), par)
 			t0 = port.CellsLen(text)
-			normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures())
+			normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 			var tn int32 = port.CellsLen(text) - t0
 			model.NodeSetText(nodes, child, t0, tn)
 			model.NodeSetConf(nodes, child, 1000)
@@ -525,7 +525,7 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 			model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1)
 		} else {
 			t0 = port.CellsLen(text)
-			normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures())
+			normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 			var tn2 int32 = port.CellsLen(text) - t0
 			model.NodeSetText(nodes, par, t0, tn2)
 		}

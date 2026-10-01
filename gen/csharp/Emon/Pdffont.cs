@@ -97,6 +97,12 @@ public static class Pdffont {
     public static int PfnWEncodingCmap() {
         return 512;
     }
+    public static int PfnWNoMapping() {
+        return 1024;
+    }
+    public static int PfnWProgram() {
+        return 2048;
+    }
     public static int PfnWarningEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "predefined CMap not supported");
@@ -111,7 +117,7 @@ public static class Pdffont {
             return 1;
         }
         if (code == 8) {
-            emon.Port.TextAscii(t, "MacExpertEncoding or an unknown encoding name");
+            emon.Port.TextAscii(t, "an unknown encoding name");
             return 1;
         }
         if (code == 16) {
@@ -136,6 +142,14 @@ public static class Pdffont {
         }
         if (code == 512) {
             emon.Port.TextAscii(t, "embedded encoding CMap damaged");
+            return 1;
+        }
+        if (code == 1024) {
+            emon.Port.TextAscii(t, "no mapping at all: nothing in the PDF or the font program says what the codes are");
+            return 1;
+        }
+        if (code == 2048) {
+            emon.Port.TextAscii(t, "the embedded font program was unreadable");
             return 1;
         }
         return 0;
@@ -213,6 +227,12 @@ public static class Pdffont {
     internal const int PCsok = 49;
     internal const int PMode = 50;
     internal const int PCount = 52;
+    internal const int HColl = 144;
+    internal const int HRow = 145;
+    internal const int HOrd = 146;
+    internal const int HW2Start = 147;
+    internal const int HW2N = 148;
+    internal const int HProghow = 149;
     internal const int CsBase = 64;
     internal const int CsMax = 16;
     internal const int CsStride = 5;
@@ -220,6 +240,7 @@ public static class Pdffont {
     internal const int Entry = 8;
     internal const int TuStride = 9;
     internal const int ValStride = 5;
+    internal const int W2Stride = 7;
     internal const int CmMax = 100000;
     internal const int SubType1 = 1;
     internal const int SubMmtype1 = 2;
@@ -241,6 +262,8 @@ public static class Pdffont {
         emon.Port.CellsSet(f, HDw2v, 88000);
         emon.Port.CellsSet(f, HDw2w, -100000);
         emon.Port.CellsSet(f, HT3scale, 1000);
+        emon.Port.CellsSet(f, HColl, -1);
+        emon.Port.CellsSet(f, HOrd, -1);
         return 0;
     }
     internal static int PfnWarnSet(emon.Port.Cells f, int bit) {
@@ -1464,7 +1487,7 @@ public static class Pdffont {
         return 0;
     }
     internal static int PfnEncOfName(emon.Port.Cells ar, int h) {
-        // 0 Standard, 1 WinAnsi, 2 MacRoman, -2 MacExpert, -1 any other name.
+        // 0 Standard, 1 WinAnsi, 2 MacRoman, 5 MacExpert, -1 any other name.
         if (Pdflex.PlKindOf(ar, h) != 4) {
             return -1;
         }
@@ -1478,7 +1501,7 @@ public static class Pdffont {
             return 2;
         }
         if (Pdflex.PlNameIs(ar, h, Pdfnames.PnMacExpertEncoding()) == 1) {
-            return -2;
+            return 5;
         }
         return -1;
     }
@@ -1739,6 +1762,48 @@ public static class Pdffont {
         }
         return cnt;
     }
+    public static int PfnCid(emon.Port.Cells f, int code) {
+        // The CID of a code in a composite font: the code itself for Identity
+        // and unsupported CMaps, else the embedded CMap's (0 when it has none).
+        int rec = 0;
+        if (emon.Port.CellsAt(f, HKind) != 2) {
+            return code;
+        }
+        if ((emon.Port.CellsAt(f, HColl) >= 0) && ((emon.Port.CellsAt(f, HCmap) == 4) || (emon.Port.CellsAt(f, HCmap) == 5))) {
+            return Cjk.CjkCid(emon.Port.CellsAt(f, HColl), emon.Port.CellsAt(f, HRow), code);
+        }
+        if (emon.Port.CellsAt(f, HCmap) == 2) {
+            rec = PfnFind(f, emon.Port.CellsAt(f, HCidStart), emon.Port.CellsAt(f, HCidN), ValStride, code);
+            if (rec >= 0) {
+                return emon.Port.CellsAt(f, rec + 2) + (code - emon.Port.CellsAt(f, rec));
+            }
+            return 0;
+        }
+        return code;
+    }
+    internal static int PfnSurCp(int code) {
+        // The code point of a four-byte UTF-16 code (a surrogate pair; a first byte of 128
+        // or more is a negative I32): 0 when the code is no pair.
+        int u = (code + 1073741824) + 1073741824;
+        int hi = (u / 65536) + 32768;
+        int lo = u % 65536;
+        if (code >= 0) {
+            return 0;
+        }
+        if (hi < 55296) {
+            return 0;
+        }
+        if (hi > 56319) {
+            return 0;
+        }
+        if (lo < 56320) {
+            return 0;
+        }
+        if (lo > 57343) {
+            return 0;
+        }
+        return 65536 + (((hi - 55296) * 1024) + (lo - 56320));
+    }
     public static int PfnMap(emon.Port.Cells f, int code) {
         // The Unicode value of a character code: the number of code points
         // (0 when the font says nothing), which `pfn-cp` reads back, and how it
@@ -1747,6 +1812,7 @@ public static class Pdffont {
         int at = 0;
         int rec = 0;
         int cnt = 0;
+        int cp = 0;
         emon.Port.CellsSet(f, HTn, 0);
         emon.Port.CellsSet(f, HHow, 5);
         if (kind == 1) {
@@ -1772,33 +1838,32 @@ public static class Pdffont {
                 }
                 emon.Port.CellsSet(f, HTn, 0);
             }
-            if ((emon.Port.CellsAt(f, HCmap) == 4) && ((code >= 0) && (code <= 1114111))) {
-                if ((code < 55296) || (code > 57343)) {
+            if (emon.Port.CellsAt(f, HCmap) == 4) {
+                cp = code;
+                if (code < 0) {
+                    cp = PfnSurCp(code);
+                }
+                if ((cp > 0) && ((cp <= 1114111) && ((cp < 55296) || (cp > 57343)))) {
                     emon.Port.CellsSet(f, HTn, 1);
-                    emon.Port.CellsSet(f, HT0 + 0, code);
+                    emon.Port.CellsSet(f, HT0 + 0, cp);
                     emon.Port.CellsSet(f, HHow, 2);
+                    return 1;
+                }
+            }
+            // the Adobe collection's CID -> Unicode table (Identity-H with an Adobe-Japan1 font, a
+            // predefined CMap's CIDs): what the CID is, by the collection's own table
+            if (emon.Port.CellsAt(f, HOrd) >= 0) {
+                cp = Cjk.CjkUni(emon.Port.CellsAt(f, HOrd), PfnCid(f, code));
+                if (cp > 0) {
+                    emon.Port.CellsSet(f, HTn, 1);
+                    emon.Port.CellsSet(f, HT0 + 0, cp);
+                    emon.Port.CellsSet(f, HHow, 4);
                     return 1;
                 }
             }
             return 0;
         }
         return 0;
-    }
-    public static int PfnCid(emon.Port.Cells f, int code) {
-        // The CID of a code in a composite font: the code itself for Identity
-        // and unsupported CMaps, else the embedded CMap's (0 when it has none).
-        int rec = 0;
-        if (emon.Port.CellsAt(f, HKind) != 2) {
-            return code;
-        }
-        if (emon.Port.CellsAt(f, HCmap) == 2) {
-            rec = PfnFind(f, emon.Port.CellsAt(f, HCidStart), emon.Port.CellsAt(f, HCidN), ValStride, code);
-            if (rec >= 0) {
-                return emon.Port.CellsAt(f, rec + 2) + (code - emon.Port.CellsAt(f, rec));
-            }
-            return 0;
-        }
-        return code;
     }
     public static int PfnWidth(emon.Port.Cells f, int code) {
         // The advance of a code in hundredths of a thousandth of an em, or -1
@@ -1861,6 +1926,114 @@ public static class Pdffont {
         emon.Port.CellsSet(f, HHastu, 1);
         return 1;
     }
+    internal static int PfnFillMacexpert(emon.Port.Cells f) {
+        // MacExpertEncoding as TEXT (`emon.fontextra`, `fold-expert`): the small capitals, old-style
+        // figures and superiors mean the characters they are variants of, not Adobe's private
+        // use area code points the AGL gives them.
+        int code = 0;
+        int c0 = 0;
+        int c1 = 0;
+        while (code < 256) {
+            c0 = Fontextra.MacExpertCp[code * 2 + 0];
+            c1 = Fontextra.MacExpertCp[code * 2 + 1];
+            if (c0 >= 0) {
+                emon.Port.CellsSet(f, HTn, 1);
+                emon.Port.CellsSet(f, HT0 + 0, c0);
+                if (c1 > 0) {
+                    emon.Port.CellsSet(f, HTn, 2);
+                    emon.Port.CellsSet(f, HT0 + 1, c1);
+                }
+                PfnEntryPut(f, code, 2);
+            }
+            code += 1;
+        }
+        return 0;
+    }
+    internal static int PfnFontStream(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int fd) {
+        // The embedded font program stream of a FontDescriptor (FontFile, FontFile2 or
+        // FontFile3), 0 when it has none.
+        int v = Pdfx.PxDget(src, ar, dc, a, b, st, fd, Pdfxnames.PxFontFile());
+        if ((v != 0) && (Pdflex.PlKindOf(ar, v) == 8)) {
+            return v;
+        }
+        v = Pdfx.PxDget(src, ar, dc, a, b, st, fd, Pdfxnames.PxFontFile2());
+        if ((v != 0) && (Pdflex.PlKindOf(ar, v) == 8)) {
+            return v;
+        }
+        v = Pdfx.PxDget(src, ar, dc, a, b, st, fd, Pdfxnames.PxFontFile3());
+        if ((v != 0) && (Pdflex.PlKindOf(ar, v) == 8)) {
+            return v;
+        }
+        return 0;
+    }
+    internal static int PfnApplyProgram(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells f, emon.Port.Cells @out, int pstm, int zapf) {
+        // Decode the font program stream and let it say what its codes are (`emon.fontprog`):
+        // its built-in encoding replaces the base encoding wherever it names a glyph.
+        int tbl = emon.Port.CellsLen(f);
+        int sz = Fontprog.FpTableSize();
+        int i = 0;
+        int n = 0;
+        int ps = 0;
+        int at = 0;
+        int code = 0;
+        int w = 0;
+        ps = Pdfdoc.PdStreamData(src, ar, dc, a, b, st, pstm, @out);
+        if (ps != 0) {
+            PfnWarnSet(f, 2048);
+        }
+        while (i < sz) {
+            emon.Port.CellsPush(f, 0);
+            i += 1;
+        }
+        n = Fontprog.FpSimple(f, HTn, tbl, emon.Port.CellsBytes(@out), zapf);
+        if (n < 0) {
+            PfnWarnSet(f, 2048);
+        }
+        if (n >= 0) {
+            code = 0;
+            while (code < 256) {
+                at = tbl + (code * 6);
+                // a program that NAMES its glyphs (Type 1, CFF) and gives this code no Unicode name
+                // (`G12`, `a30`) has said what the code is not: the guess made without it goes
+                if ((emon.Port.CellsAt(f, at) == 0) && ((Fontprog.FpKind(f, tbl) == 1) && (emon.Port.CellsAt(f, (SimpleBase + (code * Entry)) + 4) == 5))) {
+                    PfnEntryClear(f, code);
+                }
+                if (emon.Port.CellsAt(f, at) > 0) {
+                    emon.Port.CellsSet(f, HTn, emon.Port.CellsAt(f, at));
+                    emon.Port.CellsSet(f, HT0 + 0, emon.Port.CellsAt(f, at + 1));
+                    emon.Port.CellsSet(f, HT0 + 1, emon.Port.CellsAt(f, at + 2));
+                    emon.Port.CellsSet(f, HT0 + 2, emon.Port.CellsAt(f, at + 3));
+                    emon.Port.CellsSet(f, HT0 + 3, emon.Port.CellsAt(f, at + 4));
+                    PfnEntryPut(f, code, emon.Port.CellsAt(f, at + 5));
+                    emon.Port.CellsSet(f, (SimpleBase + (code * Entry)) + 6, -1);
+                }
+                code += 1;
+            }
+            // a program that names its glyphs knows the built-in encoding: it is no longer a guess (a
+            // TrueType font's cmap leaves the codes it does not cover to the guess)
+            w = emon.Port.CellsAt(f, HWarn);
+            if ((Fontprog.FpKind(f, tbl) == 1) && (((w / 256) % 2) == 1)) {
+                emon.Port.CellsSet(f, HWarn, w - 256);
+            }
+        }
+        emon.Port.CellsDrop(f, tbl);
+        emon.Port.CellsSet(f, HProghow, n + 1);
+        return n;
+    }
+    internal static int PfnCountKnown(emon.Port.Cells f) {
+        // How many of a simple font's codes have a value that is not a guess.
+        int code = 0;
+        int cnt = 0;
+        int at = 0;
+        while (code < 256) {
+            at = SimpleBase + (code * Entry);
+            if ((emon.Port.CellsAt(f, at) > 0) && (emon.Port.CellsAt(f, at + 4) != 5)) {
+                cnt += 1;
+            }
+            code += 1;
+        }
+        return cnt;
+    }
     internal static int PfnLoadSimple(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells f, emon.Port.Cells @out, int fh, int sub) {
         int fd = Pdfdoc.PdDget(src, ar, dc, a, b, st, fh, Pdfnames.PnFontDescriptor());
         int bf = Pdfdoc.PdDget(src, ar, dc, a, b, st, fh, Pdfnames.PnBaseFont());
@@ -1877,6 +2050,8 @@ public static class Pdffont {
         int tustart = 0;
         int tun = 0;
         int ncp = 0;
+        int given = 0;
+        int pstm = 0;
         int zapfnames = 0;
         emon.Port.CellsSet(f, HKind, 1);
         emon.Port.CellsSet(f, HSub, sub);
@@ -1919,11 +2094,6 @@ public static class Pdffont {
             }
             diffs = Pdfdoc.PdDget(src, ar, dc, a, b, st, enc, Pdfnames.PnDifferences());
         }
-        if (@base == -2) {
-            PfnWarnSet(f, 8);
-            @base = 0;
-            guess = 1;
-        }
         if ((@base == -1) && ((enc != 0) && (Pdflex.PlKindOf(ar, enc) == 4))) {
             PfnWarnSet(f, 8);
             @base = 0;
@@ -1937,6 +2107,10 @@ public static class Pdffont {
                 @base = 4;
             }
         }
+        // an encoding the PDF names (or Symbol, ZapfDingbats): the font program's own is not asked
+        if ((@base >= 0) && (guess == 0)) {
+            given = 1;
+        }
         if ((@base == -1) && (sub != 4)) {
             @base = 0;
             if ((sub == 3) && (enc == 0)) {
@@ -1948,7 +2122,10 @@ public static class Pdffont {
             }
         }
         emon.Port.CellsSet(f, HEnc, @base);
-        if (@base >= 0) {
+        if (@base == 5) {
+            PfnFillMacexpert(f);
+        }
+        if ((@base >= 0) && (@base < 5)) {
             code = 0;
             while (code < 256) {
                 gid = Encodings.EncGid[(@base * 256) + code];
@@ -1962,6 +2139,16 @@ public static class Pdffont {
                     }
                 }
                 code += 1;
+            }
+        }
+        // no encoding named: the font program's built-in encoding (a Type 1 /Encoding, a CFF
+        // Encoding, a symbolic TrueType font's cmap), before /Differences, which still win
+        if ((given == 0) && ((sub != 4) && (fd != 0))) {
+            pstm = PfnFontStream(src, ar, dc, a, b, st, fd);
+            if (pstm != 0) {
+                if ((sub != 3) || ((((flags / 4) % 2) == 1) && (((flags / 32) % 2) == 0))) {
+                    PfnApplyProgram(src, ar, dc, a, b, st, f, @out, pstm, zapfnames);
+                }
             }
         }
         // /Differences: a number sets the code, each name after it takes the next
@@ -2012,6 +2199,9 @@ public static class Pdffont {
         }
         PfnLoadWidths(src, ar, dc, a, b, st, f, fh);
         PfnWidthFallbacks(f);
+        if (PfnCountKnown(f) == 0) {
+            PfnWarnSet(f, 1024);
+        }
         return 0;
     }
     internal static int PfnParseW(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells f, int wa) {
@@ -2101,6 +2291,11 @@ public static class Pdffont {
         int ps = 0;
         int n = 0;
         int vert = 0;
+        int hit = -1;
+        int coll = 0;
+        int row = 0;
+        int k = 0;
+        int at = 0;
         if (enc == 0) {
             emon.Port.CellsSet(f, HCmap, 1);
             PfnCsPut(f, 2, 0, 0, 0, 65535);
@@ -2137,6 +2332,30 @@ public static class Pdffont {
             }
         }
         emon.Port.CellsSet(f, HWmode, vert);
+        // a predefined CMap whose tables we have (`emon.cjk`): codespace, CIDs, and the
+        // collection the CIDs belong to; `Uni*-UCS2/UTF16` codes are Unicode as well
+        hit = Cjk.CjkFindName(ar, enc);
+        if (hit >= 0) {
+            coll = hit / 1000;
+            row = hit % 1000;
+            emon.Port.CellsSet(f, HColl, coll);
+            emon.Port.CellsSet(f, HRow, row);
+            emon.Port.CellsSet(f, HOrd, coll);
+            emon.Port.CellsSet(f, HWmode, Cjk.CjkCmapField(coll, row, 3));
+            k = 0;
+            while (k < Cjk.CjkCmapField(coll, row, 5)) {
+                at = Cjk.CjkCmapField(coll, row, 4) + k;
+                PfnCsPut(f, Cjk.CjkCs(coll, at, 0), Cjk.CjkCs(coll, at, 1), Cjk.CjkCs(coll, at, 2), Cjk.CjkCs(coll, at, 3), Cjk.CjkCs(coll, at, 4));
+                k += 1;
+            }
+            emon.Port.CellsSet(f, HCmap, 5);
+            if ((PfnNameAt(ar, enc, 0) == 85) && ((PfnNameAt(ar, enc, 1) == 110) && (PfnNameAt(ar, enc, 2) == 105))) {
+                if ((PfnNameHas(ar, enc, 85, 67, 83, 50, -1) == 1) || (PfnNameHas(ar, enc, 85, 84, 70, 49, 54) == 1)) {
+                    emon.Port.CellsSet(f, HCmap, 4);
+                }
+            }
+            return 0;
+        }
         // Uni*-UCS2-* and Uni*-UTF16-*: the code is the Unicode value
         if ((PfnNameAt(ar, enc, 0) == 85) && ((PfnNameAt(ar, enc, 1) == 110) && (PfnNameAt(ar, enc, 2) == 105))) {
             if (PfnNameHas(ar, enc, 85, 67, 83, 50, -1) == 1) {
@@ -2158,6 +2377,163 @@ public static class Pdffont {
         PfnWarnSet(f, 1);
         return 0;
     }
+    internal static int PfnOrderingColl(emon.Port.Cells ar, int sh) {
+        // The Adobe collection a CIDSystemInfo /Ordering string names: 0 Japan1, 1 GB1, 2 CNS1,
+        // 3 Korea1, -1 anything else (Identity, or a foundry's own).
+        int n = Pdfx.PxBlen(ar, sh);
+        if ((n == 6) && ((Pdfx.PxBat(ar, sh, 0) == 74) && ((Pdfx.PxBat(ar, sh, 1) == 97) && ((Pdfx.PxBat(ar, sh, 2) == 112) && ((Pdfx.PxBat(ar, sh, 3) == 97) && ((Pdfx.PxBat(ar, sh, 4) == 110) && (Pdfx.PxBat(ar, sh, 5) == 49))))))) {
+            return 0;
+        }
+        if ((n == 3) && ((Pdfx.PxBat(ar, sh, 0) == 71) && ((Pdfx.PxBat(ar, sh, 1) == 66) && (Pdfx.PxBat(ar, sh, 2) == 49)))) {
+            return 1;
+        }
+        if ((n == 4) && ((Pdfx.PxBat(ar, sh, 0) == 67) && ((Pdfx.PxBat(ar, sh, 1) == 78) && ((Pdfx.PxBat(ar, sh, 2) == 83) && (Pdfx.PxBat(ar, sh, 3) == 49))))) {
+            return 2;
+        }
+        if ((n == 6) && ((Pdfx.PxBat(ar, sh, 0) == 75) && ((Pdfx.PxBat(ar, sh, 1) == 111) && ((Pdfx.PxBat(ar, sh, 2) == 114) && ((Pdfx.PxBat(ar, sh, 3) == 101) && ((Pdfx.PxBat(ar, sh, 4) == 97) && (Pdfx.PxBat(ar, sh, 5) == 49))))))) {
+            return 3;
+        }
+        return -1;
+    }
+    internal static int PfnCompositeMapped(emon.Port.Cells f) {
+        // 1 when something in the font can say what a code is: a ToUnicode CMap with entries, a
+        // Unicode CMap name, or an Adobe collection's CID table.
+        if (emon.Port.CellsAt(f, HTuN) > 0) {
+            return 1;
+        }
+        if (emon.Port.CellsAt(f, HCmap) == 4) {
+            return 1;
+        }
+        if (emon.Port.CellsAt(f, HOrd) >= 0) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int PfnAddW2(emon.Port.Cells f, int lo, int hi, int w1, int vx, int vy) {
+        if (lo < 0) {
+            return 0;
+        }
+        if (hi < lo) {
+            return 0;
+        }
+        if (emon.Port.CellsAt(f, PCount) >= CmMax) {
+            PfnWarnSet(f, 4);
+            return 0;
+        }
+        int seq = emon.Port.CellsAt(f, HSeq);
+        emon.Port.CellsSet(f, HSeq, seq + 1);
+        emon.Port.CellsSet(f, PCount, emon.Port.CellsAt(f, PCount) + 1);
+        emon.Port.CellsPush(f, lo);
+        emon.Port.CellsPush(f, hi);
+        emon.Port.CellsPush(f, w1);
+        emon.Port.CellsPush(f, seq);
+        emon.Port.CellsPush(f, vx);
+        emon.Port.CellsPush(f, vy);
+        emon.Port.CellsPush(f, 0);
+        return 1;
+    }
+    internal static int PfnNumOrZero(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int el) {
+        // The number (hundredths) an array element is, 0 when it is none.
+        int ev = Pdfdoc.PdResolve(src, ar, dc, a, b, st, el);
+        if (PfnIsnum(ar, ev) == 1) {
+            return Pdflex.PlNumCp(ar, ev);
+        }
+        return 0;
+    }
+    internal static int PfnParseW2(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells f, int wa) {
+        // A /W2 array: `c [w1 vx vy ...]` and `c1 c2 w1 vx vy`, into the table at the end of `f`
+        // (vertical metrics, ISO 32000-1 9.7.4.3: the advance, then the position vector).
+        int k = Pdflex.PlFirst(ar, wa);
+        int k2 = 0;
+        int v1 = 0;
+        int v2 = 0;
+        int el = 0;
+        int j = 0;
+        int c1 = 0;
+        int x0 = 0;
+        int x1 = 0;
+        int x2 = 0;
+        int e1 = 0;
+        int e2 = 0;
+        emon.Port.CellsSet(f, PCount, 0);
+        while (k != 0) {
+            v1 = Pdfdoc.PdResolve(src, ar, dc, a, b, st, k);
+            k2 = Pdflex.PlNext(ar, k);
+            if (k2 == 0) {
+                k = 0;
+            } else {
+                c1 = -1;
+                if (PfnIsnum(ar, v1) == 1) {
+                    c1 = Pdflex.PlIntValue(ar, v1);
+                }
+                v2 = Pdfdoc.PdResolve(src, ar, dc, a, b, st, k2);
+                if ((v2 != 0) && (Pdflex.PlKindOf(ar, v2) == 6)) {
+                    j = 0;
+                    el = Pdflex.PlFirst(ar, v2);
+                    while (el != 0) {
+                        e1 = Pdflex.PlNext(ar, el);
+                        e2 = 0;
+                        if (e1 != 0) {
+                            e2 = Pdflex.PlNext(ar, e1);
+                        }
+                        if (e2 == 0) {
+                            el = 0;
+                        } else {
+                            PfnAddW2(f, c1 + j, c1 + j, PfnNumOrZero(src, ar, dc, a, b, st, el), PfnNumOrZero(src, ar, dc, a, b, st, e1), PfnNumOrZero(src, ar, dc, a, b, st, e2));
+                            j += 1;
+                            el = Pdflex.PlNext(ar, e2);
+                        }
+                    }
+                    k = Pdflex.PlNext(ar, k2);
+                } else {
+                    // c1 c2 w1 vx vy
+                    x0 = Pdflex.PlNext(ar, k2);
+                    x1 = 0;
+                    x2 = 0;
+                    if (x0 != 0) {
+                        x1 = Pdflex.PlNext(ar, x0);
+                    }
+                    if (x1 != 0) {
+                        x2 = Pdflex.PlNext(ar, x1);
+                    }
+                    if (x2 == 0) {
+                        k = 0;
+                    } else {
+                        if ((PfnIsnum(ar, v1) == 1) && (PfnIsnum(ar, v2) == 1)) {
+                            PfnAddW2(f, c1, Pdflex.PlIntValue(ar, v2), PfnNumOrZero(src, ar, dc, a, b, st, x0), PfnNumOrZero(src, ar, dc, a, b, st, x1), PfnNumOrZero(src, ar, dc, a, b, st, x2));
+                        }
+                        k = Pdflex.PlNext(ar, x2);
+                    }
+                }
+            }
+        }
+        emon.Port.CellsSet(f, HW2N, emon.Port.CellsAt(f, PCount));
+        PfnFinish(f, emon.Port.CellsAt(f, HW2Start), emon.Port.CellsAt(f, HW2N), W2Stride);
+        return 0;
+    }
+    public static int PfnVerticalMetric(emon.Port.Cells f, int code, int which) {
+        // A composite font's vertical metrics of a code, in hundredths of a thousandth of an em
+        // (like widths): which 0 the vertical advance w1 (DW2's second number by default, -1000),
+        // 1 the position vector's x (half the width by default), 2 its y (DW2's first number, 880).
+        int cid = PfnCid(f, code);
+        int rec = PfnFind(f, emon.Port.CellsAt(f, HW2Start), emon.Port.CellsAt(f, HW2N), W2Stride, cid);
+        if (rec >= 0) {
+            if (which == 0) {
+                return emon.Port.CellsAt(f, rec + 2);
+            }
+            if (which == 1) {
+                return emon.Port.CellsAt(f, rec + 4);
+            }
+            return emon.Port.CellsAt(f, rec + 5);
+        }
+        if (which == 0) {
+            return emon.Port.CellsAt(f, HDw2w);
+        }
+        if (which == 2) {
+            return emon.Port.CellsAt(f, HDw2v);
+        }
+        return PfnWidth(f, code) / 2;
+    }
     internal static int PfnLoadComposite(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells f, emon.Port.Cells @out, int fh) {
         int da = Pdfdoc.PdDget(src, ar, dc, a, b, st, fh, Pdfnames.PnDescendantFonts());
         int enc = Pdfdoc.PdDget(src, ar, dc, a, b, st, fh, Pdfnames.PnEncoding());
@@ -2170,6 +2546,10 @@ public static class Pdffont {
         int d2f = 0;
         int dfirst = 0;
         int d2v = 0;
+        int w2a = 0;
+        int csi = 0;
+        int ord = 0;
+        int oc = -1;
         emon.Port.CellsSet(f, HKind, 2);
         emon.Port.CellsSet(f, HSub, 5);
         if ((da != 0) && (Pdflex.PlKindOf(ar, da) == 6)) {
@@ -2206,14 +2586,34 @@ public static class Pdffont {
                 }
             }
             wa = Pdfdoc.PdDget(src, ar, dc, a, b, st, dd, Pdfnames.PnW());
+            w2a = Pdfx.PxDget(src, ar, dc, a, b, st, dd, Pdfxnames.PxW2());
+            csi = Pdfdoc.PdDget(src, ar, dc, a, b, st, dd, Pdfnames.PnCidSystemInfo());
+            if ((csi != 0) && (Pdflex.PlKindOf(ar, csi) == 7)) {
+                ord = Pdfdoc.PdDget(src, ar, dc, a, b, st, csi, Pdfnames.PnOrdering());
+                if ((ord != 0) && (Pdflex.PlKindOf(ar, ord) == 5)) {
+                    oc = PfnOrderingColl(ar, ord);
+                }
+            }
         }
         PfnEncodingCmap(src, ar, dc, a, b, st, f, @out, enc);
+        // the CIDSystemInfo says which Adobe collection the CIDs are; when it names none, none
+        if ((ord != 0) && (Pdflex.PlKindOf(ar, ord) == 5)) {
+            emon.Port.CellsSet(f, HOrd, oc);
+        }
         PfnLoadTounicode(src, ar, dc, a, b, st, f, @out, fh);
         if (emon.Port.CellsAt(f, HNcs) == 0) {
             PfnCsPut(f, 2, 0, 0, 0, 65535);
         }
         if ((wa != 0) && (Pdflex.PlKindOf(ar, wa) == 6)) {
             PfnParseW(src, ar, dc, a, b, st, f, wa);
+        }
+        emon.Port.CellsSet(f, HW2Start, emon.Port.CellsLen(f));
+        emon.Port.CellsSet(f, HW2N, 0);
+        if ((w2a != 0) && (Pdflex.PlKindOf(ar, w2a) == 6)) {
+            PfnParseW2(src, ar, dc, a, b, st, f, w2a);
+        }
+        if (PfnCompositeMapped(f) == 0) {
+            PfnWarnSet(f, 1024);
         }
         return 0;
     }

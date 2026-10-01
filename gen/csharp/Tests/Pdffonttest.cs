@@ -643,4 +643,375 @@ public static class Pdffonttest {
         }
         emon.Testport.AssertThat(tries > 100, "the prefixes were tried");
     }
+    internal static int FtCodeNRow(int code, emon.Port.Cells f, System.Text.StringBuilder cps, System.Text.StringBuilder how) {
+        // Map `code` (a number, possibly a negative four-byte one) and write its code points and `how`;
+        // answers its width.
+        int cnt = Pdffont.PfnMap(f, code);
+        FtEmitCps(cps, f, cnt);
+        Pdffont.PfnHowEmitName(how, Pdffont.PfnHowOf(f));
+        return Pdffont.PfnWidth(f, code);
+    }
+    internal static int FtRunRows(int emonT, byte[] rows) {
+        // Every row of a fonts.txt-format file (and `coded`, `cidd`, `vm` rows): answers the count.
+        emon.Port.Cells ar = emon.Port.NewCells();
+        emon.Port.Cells dc = emon.Port.NewCells();
+        emon.Port.Cells a = emon.Port.NewCells();
+        emon.Port.Cells b = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells f = emon.Port.NewCells();
+        int n = emon.Port.BlobLen(rows);
+        int pos = 0;
+        int line = 0;
+        int count = 0;
+        int e = 0;
+        int s0 = 0;
+        int s1 = 0;
+        int s2 = 0;
+        int s3 = 0;
+        int s4 = 0;
+        int s5 = 0;
+        int s6 = 0;
+        int s7 = 0;
+        int s8 = 0;
+        int lstatus = 0;
+        int b0 = 0;
+        int width = 0;
+        int klen = 0;
+        while (pos < n) {
+            line += 1;
+            e = FtNl(rows, pos);
+            if ((pos < e) && (emon.Port.BlobU8(rows, pos) != 35)) {
+                count += 1;
+                b0 = emon.Port.BlobU8(rows, pos);
+                s0 = FtTab(rows, pos, e);
+                klen = s0 - pos;
+                s1 = FtTab(rows, s0 + 1, e);
+                s2 = FtTab(rows, s1 + 1, e);
+                s3 = FtTab(rows, s2 + 1, e);
+                if (b0 == 102) {
+                    s4 = FtTab(rows, s3 + 1, e);
+                    s5 = FtTab(rows, s4 + 1, e);
+                    s6 = FtTab(rows, s5 + 1, e);
+                    s7 = FtTab(rows, s6 + 1, e);
+                    s8 = FtTab(rows, s7 + 1, e);
+                    lstatus = FtLoadFont(rows, s0 + 1, s1, FtDec(rows, s1 + 1, s2), ar, dc, a, b, st, @out, f);
+                    emon.Testport.AssertEqAt(lstatus, FtDec(rows, s2 + 1, s3), "load status", line);
+                    emon.Testport.AssertEqAt(Pdffont.PfnKindOf(f), FtKindCode(emon.Port.BlobU8(rows, s3 + 1)), "kind", line);
+                    emon.Testport.AssertEqAt(Pdffont.PfnAscent(f), FtDec(rows, s4 + 1, s5), "ascent", line);
+                    emon.Testport.AssertEqAt(Pdffont.PfnDescent(f), FtDec(rows, s5 + 1, s6), "descent", line);
+                    emon.Testport.AssertEqAt(Pdffont.PfnWarn(f), FtDec(rows, s6 + 1, s7), "warning bits", line);
+                    emon.Testport.AssertEqAt(Pdffont.PfnVertical(f), FtDec(rows, s7 + 1, s8), "vertical", line);
+                    emon.Testport.AssertEqAt(Pdffont.PfnStandardFont(f), FtDec(rows, s8 + 1, e), "standard font", line);
+                }
+                if ((b0 == 99) && (klen == 4)) {
+                    if (emon.Port.BlobU8(rows, pos + 1) == 111) {
+                        System.Text.StringBuilder tcps = emon.Testport.NewText();
+                        System.Text.StringBuilder thow = emon.Testport.NewText();
+                        width = FtCodeRow(rows, s0, s1, f, tcps, thow);
+                        emon.Testport.AssertTextSpan(tcps, rows, s1 + 1, s2, "code points", line);
+                        emon.Testport.AssertTextSpan(thow, rows, s2 + 1, s3, "how", line);
+                        emon.Testport.AssertEqAt(width, FtDec(rows, s3 + 1, e), "width", line);
+                    }
+                }
+                if ((b0 == 99) && (klen == 5)) {
+                    System.Text.StringBuilder tcps = emon.Testport.NewText();
+                    System.Text.StringBuilder thow = emon.Testport.NewText();
+                    width = FtCodeNRow(FtDec(rows, s0 + 1, s1), f, tcps, thow);
+                    emon.Testport.AssertTextSpan(tcps, rows, s1 + 1, s2, "code points", line);
+                    emon.Testport.AssertTextSpan(thow, rows, s2 + 1, s3, "how", line);
+                    emon.Testport.AssertEqAt(width, FtDec(rows, s3 + 1, e), "width", line);
+                }
+                if ((b0 == 99) && (klen == 3)) {
+                    emon.Testport.AssertEqAt(Pdffont.PfnCid(f, FtHex(rows, s0 + 1, s1)), FtDec(rows, s1 + 1, e), "cid", line);
+                }
+                if ((b0 == 99) && (klen == 4)) {
+                    if (emon.Port.BlobU8(rows, pos + 1) == 105) {
+                        emon.Testport.AssertEqAt(Pdffont.PfnCid(f, FtDec(rows, s0 + 1, s1)), FtDec(rows, s1 + 1, e), "cid of a four-byte code", line);
+                    }
+                }
+                if (b0 == 108) {
+                    emon.Testport.AssertEqAt(FtLenRow(rows, s0, s1, f), FtDec(rows, s1 + 1, e), "code length", line);
+                }
+                if (b0 == 118) {
+                    emon.Testport.AssertEqAt(Pdffont.PfnVerticalMetric(f, FtHex(rows, s0 + 1, s1), FtDec(rows, s1 + 1, s2)), FtDec(rows, s2 + 1, e), "vertical metric", line);
+                }
+            }
+            pos = e + 1;
+        }
+        return count;
+    }
+    [Xunit.Fact]
+    public static void TestEveryEmbeddedProgramFontAnswersAsBuilt() {
+        // Rows of progs.txt: Type 1, CFF, TrueType and OpenType programs, Type 3, MacExpert, predefined
+        // CJK CMaps, Adobe CID collections, /W2: every expectation known by construction.
+        int count = FtRunRows(0, emon.Testport.TestFile("fonts/progs.txt"));
+        emon.Testport.AssertThat(count > 100, "the program-font rows were read");
+    }
+    internal static int FtCjkCode(byte[] rows, int from, int to) {
+        // A code of a cjk.txt row: hex, or `d` and a signed decimal (a four-byte code).
+        if (emon.Port.BlobU8(rows, from) == 100) {
+            return FtDec(rows, from + 1, to);
+        }
+        return FtHex(rows, from, to);
+    }
+    [Xunit.Fact]
+    public static void TestEveryPredefinedCmapRowMapsAsItsFileSays() {
+        // Rows of cjk.txt: `cid /Name code cid` (the CID the Adobe CMap file gives the code, 0 for none) and
+        // `uni Ordering cid code-point` (what cid2code.txt says), on every target.
+        byte[] rows = emon.Testport.TestFile("fonts/cjk.txt");
+        emon.Port.Cells ar = emon.Port.NewCells();
+        int n = emon.Port.BlobLen(rows);
+        int pos = 0;
+        int line = 0;
+        int count = 0;
+        int e = 0;
+        int s0 = 0;
+        int s1 = 0;
+        int s2 = 0;
+        int h = 0;
+        int hit = 0;
+        int coll = 0;
+        while (pos < n) {
+            line += 1;
+            e = FtNl(rows, pos);
+            if ((pos < e) && (emon.Port.BlobU8(rows, pos) != 35)) {
+                count += 1;
+                s0 = FtTab(rows, pos, e);
+                s1 = FtTab(rows, s0 + 1, e);
+                s2 = FtTab(rows, s1 + 1, e);
+                if (emon.Port.BlobU8(rows, pos) == 99) {
+                    Pdflex.PlInit(ar);
+                    Pdflex.PlSeek(ar, s0 + 1, s1);
+                    h = Pdflex.PlParse(emon.Port.SrcOfBlob(rows), ar);
+                    hit = Cjk.CjkFindName(ar, h);
+                    emon.Testport.AssertThatAt(hit >= 0, "the CMap is one of the four collections'", line);
+                    emon.Testport.AssertEqAt(Cjk.CjkCid(hit / 1000, hit % 1000, FtCjkCode(rows, s1 + 1, s2)), FtDec(rows, s2 + 1, e), "CID", line);
+                }
+                if (emon.Port.BlobU8(rows, pos) == 117) {
+                    coll = 0;
+                    if (emon.Port.BlobU8(rows, s0 + 1) == 71) {
+                        coll = 1;
+                    }
+                    if (emon.Port.BlobU8(rows, s0 + 1) == 67) {
+                        coll = 2;
+                    }
+                    if (emon.Port.BlobU8(rows, s0 + 1) == 75) {
+                        coll = 3;
+                    }
+                    emon.Testport.AssertEqAt(Cjk.CjkUni(coll, FtDec(rows, s1 + 1, s2)), FtHex(rows, s2 + 1, e), "Unicode of the CID", line);
+                }
+            }
+            pos = e + 1;
+        }
+        emon.Testport.AssertThat(count > 5000, "the CJK rows were read");
+    }
+    internal static int FtPushZeros(emon.Port.Cells g, int k) {
+        int i = 0;
+        while (i < k) {
+            emon.Port.CellsPush(g, 0);
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int FtCutProgram(byte[] prog, emon.Port.Cells g) {
+        // `fp-simple` on every prefix of the program: answers how many prefixes were tried.
+        int n = emon.Port.BlobLen(prog);
+        int cut = 0;
+        int tries = 0;
+        while (cut <= n) {
+            emon.Port.Cells piece = emon.Port.NewCells();
+            int j = 0;
+            while (j < cut) {
+                emon.Port.CellsPush(piece, emon.Port.BlobU8(prog, j));
+                j += 1;
+            }
+            Fontprog.FpSimple(g, 16, 32, emon.Testport.CellsBlob(piece), 0);
+            Fontprog.FpSimple(g, 16, 32, emon.Testport.CellsBlob(piece), 1);
+            tries += 1;
+            cut += 1;
+        }
+        return tries;
+    }
+    [Xunit.Fact]
+    public static void TestAFontProgramCutAtEveryByteNeverFaults() {
+        // Type 1, CFF, TrueType and OpenType programs, every prefix of each: no read past an end, no loop.
+        emon.Port.Cells g = emon.Port.NewCells();
+        FtPushZeros(g, 1700);
+        int tries = (FtCutProgram(emon.Testport.TestFile("fonts/prog-t1.bin"), g) + FtCutProgram(emon.Testport.TestFile("fonts/prog-cff.bin"), g)) + (FtCutProgram(emon.Testport.TestFile("fonts/prog-tt.bin"), g) + FtCutProgram(emon.Testport.TestFile("fonts/prog-otf.bin"), g));
+        emon.Testport.AssertThat(tries > 1000, "the prefixes were tried");
+    }
+    internal static int FtNameBytesRow(byte[] rows, int from, int to, emon.Port.Cells g, int kind, System.Text.StringBuilder t) {
+        // `fp-name-cps` on the name bytes rows[from+1, to) (the slash skipped): the code points, `-` none.
+        int cnt = Fontprog.FpNameCps(g, 16, rows, from + 1, to, kind / 122);
+        int i = 0;
+        if (cnt == 0) {
+            emon.Port.TextCp(t, 45);
+            return 0;
+        }
+        while (i < cnt) {
+            if (i > 0) {
+                emon.Port.TextCp(t, 43);
+            }
+            FtEmitHex(t, emon.Port.CellsAt(g, 17 + i));
+            i += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestFontProgramGlyphNamesAreReadAsThePdfReadersAre() {
+        // `emon.fontprog` reads names from font bytes; it must agree with `pfn-name-cps` (the AGL rules)
+        // on every row of names.txt.
+        byte[] rows = emon.Testport.TestFile("fonts/names.txt");
+        emon.Port.Cells g = emon.Port.NewCells();
+        int n = emon.Port.BlobLen(rows);
+        int pos = 0;
+        int line = 0;
+        int count = 0;
+        int e = 0;
+        int s0 = 0;
+        int s1 = 0;
+        int k = 0;
+        int esc = 0;
+        FtPushZeros(g, 40);
+        while (pos < n) {
+            line += 1;
+            e = FtNl(rows, pos);
+            if ((pos < e) && ((emon.Port.BlobU8(rows, pos) == 110) || (emon.Port.BlobU8(rows, pos) == 122))) {
+                s0 = FtTab(rows, pos, e);
+                s1 = FtTab(rows, s0 + 1, e);
+                esc = 0;
+                k = s0 + 1;
+                while (k < s1) {
+                    if (emon.Port.BlobU8(rows, k) == 35) {
+                        esc = 1;
+                    }
+                    k += 1;
+                }
+                if (esc == 0) {
+                    System.Text.StringBuilder t = emon.Testport.NewText();
+                    count += 1;
+                    FtNameBytesRow(rows, s0 + 1, s1, g, emon.Port.BlobU8(rows, pos), t);
+                    emon.Testport.AssertTextSpan(t, rows, s1 + 1, e, "glyph name from font bytes", line);
+                }
+            }
+            pos = e + 1;
+        }
+        emon.Testport.AssertThat(count > 4000, "the names were read");
+    }
+    internal static int FtMix(int acc, int v) {
+        // A small order-sensitive digest, wrapping inside 2^24 so it cannot overflow.
+        return (((acc % 8388593) * 31) + ((v % 8388593) + 7)) % 16777213;
+    }
+    internal static int FtDigestFont(emon.Port.Src pdf, int num) {
+        // Open the file, load font object `num`, and digest its status, warnings, metrics and the answer for
+        // each of 512 codes; -1 when the source missed (nothing of the attempt may be kept, D075).
+        emon.Port.Cells ar = emon.Port.NewCells();
+        emon.Port.Cells dc = emon.Port.NewCells();
+        emon.Port.Cells a = emon.Port.NewCells();
+        emon.Port.Cells b = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells f = emon.Port.NewCells();
+        int ostatus = Pdfdoc.PdOpen(pdf, ar, dc, a, b, st);
+        int acc = ostatus;
+        int h = 0;
+        int status = 0;
+        int code = 0;
+        int cnt = 0;
+        int i = 0;
+        if (Pdfsrc.PsMissed(pdf)) {
+            return -1;
+        }
+        h = Pdfdoc.PdGet(pdf, ar, dc, a, b, st, num);
+        status = Pdffont.PfnLoad(pdf, ar, dc, a, b, st, f, @out, h);
+        if (Pdfsrc.PsMissed(pdf)) {
+            return -1;
+        }
+        acc = FtMix(acc, status);
+        acc = FtMix(acc, Pdffont.PfnWarn(f));
+        acc = FtMix(acc, Pdffont.PfnKindOf(f));
+        acc = FtMix(acc, Pdffont.PfnAscent(f));
+        while (code < 512) {
+            cnt = Pdffont.PfnMap(f, code);
+            acc = FtMix(acc, cnt);
+            i = 0;
+            while (i < cnt) {
+                acc = FtMix(acc, Pdffont.PfnCp(f, i));
+                i += 1;
+            }
+            acc = FtMix(acc, Pdffont.PfnHowOf(f));
+            acc = FtMix(acc, Pdffont.PfnWidth(f, code));
+            acc = FtMix(acc, Pdffont.PfnCid(f, code));
+            code += 1;
+        }
+        return acc;
+    }
+    internal static int FtDigestAsync(byte[] bytes, int num, int chunk) {
+        // `ft-digest-font` through a source of `chunk`-byte chunks, re-run on a fresh view until an attempt
+        // does not miss; -2 after 60 rounds.
+        emon.Port.Src @base = emon.Testport.SrcChunked(bytes, chunk, 0);
+        int round = 0;
+        int more = 1;
+        int d = 0;
+        while (more == 1) {
+            emon.Port.Src v = emon.Testport.SrcView(@base);
+            d = FtDigestFont(v, num);
+            if (d == -1) {
+                emon.Testport.SrcCtl(@base, 0, round);
+                round += 1;
+                if (round > 60) {
+                    more = 0;
+                    d = -2;
+                }
+            } else {
+                more = 0;
+            }
+        }
+        return d;
+    }
+    internal static int FtAsyncFonts(int chunk) {
+        // Every font of progs.txt through an async source: the number whose digest is not the memory one.
+        byte[] rows = emon.Testport.TestFile("fonts/progs.txt");
+        byte[] pdf = emon.Testport.TestFile("fonts/progs.pdf");
+        int n = emon.Port.BlobLen(rows);
+        int pos = 0;
+        int e = 0;
+        int s0 = 0;
+        int s1 = 0;
+        int s2 = 0;
+        int num = 0;
+        int fonts = 0;
+        int bad = 0;
+        int want = 0;
+        int got = 0;
+        while (pos < n) {
+            e = FtNl(rows, pos);
+            if ((pos < e) && (emon.Port.BlobU8(rows, pos) == 102)) {
+                s0 = FtTab(rows, pos, e);
+                s1 = FtTab(rows, s0 + 1, e);
+                s2 = FtTab(rows, s1 + 1, e);
+                num = FtDec(rows, s1 + 1, s2);
+                fonts += 1;
+                want = FtDigestFont(emon.Port.SrcOfBlob(pdf), num);
+                got = FtDigestAsync(pdf, num, chunk);
+                if ((want < 0) || (want != got)) {
+                    bad += 1;
+                }
+            }
+            pos = e + 1;
+        }
+        if (fonts < 25) {
+            return -1;
+        }
+        return bad;
+    }
+    [Xunit.Fact]
+    public static void TestEveryProgramFontIsTheSameThroughAnAsyncSourceOf64ByteChunks() {
+        emon.Testport.AssertEq(FtAsyncFonts(64), 0, "every font of progs.pdf through 64-byte chunks");
+    }
+    [Xunit.Fact]
+    public static void TestEveryProgramFontIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
+        emon.Testport.AssertEq(FtAsyncFonts(512), 0, "every font of progs.pdf through 512-byte chunks");
+    }
 }

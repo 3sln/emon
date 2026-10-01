@@ -475,7 +475,7 @@ public static class Para {
                 }
                 child = Model.NodeNew(nodes, Model.NkText(), par);
                 t0 = emon.Port.CellsLen(text);
-                Normalize.NzNfc(raw, from, to, text, tmp, Normalize.NzFlagLigatures());
+                Normalize.NzNfc(raw, from, to, text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
                 int tn = emon.Port.CellsLen(text) - t0;
                 Model.NodeSetText(nodes, child, t0, tn);
                 Model.NodeSetConf(nodes, child, 1000);
@@ -483,7 +483,7 @@ public static class Para {
                 Model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
             } else {
                 t0 = emon.Port.CellsLen(text);
-                Normalize.NzNfc(raw, from, to, text, tmp, Normalize.NzFlagLigatures());
+                Normalize.NzNfc(raw, from, to, text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
                 int tn2 = emon.Port.CellsLen(text) - t0;
                 Model.NodeSetText(nodes, par, t0, tn2);
             }

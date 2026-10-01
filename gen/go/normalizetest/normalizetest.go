@@ -288,3 +288,85 @@ func TestASpanIsNormalizedAndOutputIsAppended(emonT *testing.T) {
 	ntLit(port.TextBlob("07 E9"), want)
 	port.AssertEq(emonT, ntSame(out, want), 1, "only src[1,3) is read, and appended after the 7")
 }
+
+func ntSemiTab(b []byte, i int32, lim int32) int32 {
+	var k int32 = i
+	for (k < lim) && (port.BlobU8(b, k) != 9) {
+		k += 1
+	}
+	return k
+}
+
+func ntRadicalRow(rows []byte, from int32, to int32, src *port.Cells, want *port.Cells, out *port.Cells, tmp *port.Cells) int32 {
+	// Row `radical TAB ideograph` (hex): 1 when the flag folds the one to the other, NFC alone
+	// leaves it, and the fold is the same through `nz-radical-fold`.
+	var tab int32 = ntSemiTab(rows, from, to)
+	ntCps(rows, from, tab, src)
+	ntCps(rows, tab+1, to, want)
+	port.CellsDrop(out, 0)
+	normalize.NzNfc(src, 0, port.CellsLen(src), out, tmp, normalize.NzFlagRadicals())
+	if ntSame(out, want) == 0 {
+		return 0
+	}
+	port.CellsDrop(out, 0)
+	normalize.NzNfc(src, 0, port.CellsLen(src), out, tmp, 0)
+	if ntSame(out, src) == 0 {
+		return 0
+	}
+	if normalize.NzRadicalFold(port.CellsAt(src, 0)) != port.CellsAt(want, 0) {
+		return 0
+	}
+	return 1
+}
+
+func TestEveryCjkRadicalFoldsToItsUnifiedIdeograph(emonT *testing.T) {
+	// radicals.txt (kin/scripts/radicals.clj, from CJKRadicals.txt and UnicodeData.txt): the 214 Kangxi
+	// radicals and the 30 CJK Radicals Supplement characters with an equivalent.
+	var rows []byte = port.TestFile("normalize/radicals.txt")
+	var src *port.Cells = port.NewCells()
+	var want *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(rows)
+	var pos int32 = 0
+	var e int32 = 0
+	var line int32 = 0
+	var count int32 = 0
+	for pos < n {
+		line += 1
+		e = ntNl(rows, pos)
+		if (pos < e) && (port.BlobU8(rows, pos) != 35) {
+			count += 1
+			port.AssertEqAt(emonT, ntRadicalRow(rows, pos, e, src, want, out, tmp), 1, "radical row", line)
+		}
+		pos = e + 1
+	}
+	port.AssertEq(emonT, count, 244, "214 Kangxi radicals and 30 supplement characters")
+}
+
+func TestTheRadicalFoldLeavesEverythingElseAlone(emonT *testing.T) {
+	var src *port.Cells = port.NewCells()
+	var want *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	ntLit(port.TextBlob("2F00 61 2F01 4E00 2E80 2FD5 2FD6 2E7F 2EF3 2EF4 E9"), src)
+	ntLit(port.TextBlob("4E00 61 4E28 4E00 2E80 9FA0 2FD6 2E7F 9F9F 2EF4 E9"), want)
+	port.CellsDrop(out, 0)
+	normalize.NzNfc(src, 0, port.CellsLen(src), out, tmp, normalize.NzFlagRadicals())
+	port.AssertEq(emonT, ntSame(out, want), 1, "radicals fold; their neighbours, U+2E80 (no equivalent) and the block's ends stay")
+	port.AssertEq(emonT, normalize.NzRadicalFold(12032), 19968, "U+2F00 is U+4E00")
+	port.AssertEq(emonT, normalize.NzRadicalFold(12245), 40864, "U+2FD5 is U+9FA0")
+	port.AssertEq(emonT, normalize.NzRadicalFold(12246), 12246, "U+2FD6 is not a radical")
+	port.AssertEq(emonT, normalize.NzRadicalFold(11904), 11904, "U+2E80 has no equivalent")
+	port.AssertEq(emonT, normalize.NzRadicalFold(65), 65, "ASCII")
+	port.AssertEq(emonT, normalize.NzRadicalFold(-1), -1, "a negative number is nothing")
+	ntLit(port.TextBlob("2F00 FB01 AD 65 301"), src)
+	ntLit(port.TextBlob("4E00 66 69 E9"), want)
+	port.CellsDrop(out, 0)
+	normalize.NzNfc(src, 0, port.CellsLen(src), out, tmp, 7)
+	port.AssertEq(emonT, ntSame(out, want), 1, "the three flags compose with NFC")
+	port.CellsDrop(out, 0)
+	normalize.NzNfc(src, 0, port.CellsLen(src), out, tmp, 4)
+	ntLit(port.TextBlob("4E00 FB01 AD E9"), want)
+	port.AssertEq(emonT, ntSame(out, want), 1, "flag 4 alone folds the radical and does not drop the soft hyphen (the flags are bits)")
+}

@@ -18,7 +18,8 @@
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
                                cells-drop]]
             [emon.normalize :refer [nz-nfd nz-nfc nz-ccc nz-compose-pair
-                                    nz-flag-ligatures nz-flag-soft-hyphens]]
+                                    nz-flag-ligatures nz-flag-soft-hyphens
+                                    nz-flag-radicals nz-radical-fold]]
             [kin.lang :refer [defn return let set while if comment do
                               + - * < > <= >= == != and or quot]]))
 
@@ -251,3 +252,75 @@
     (nz-nfc src 1 3 out tmp 0)
     (nt-lit (text-blob "07 E9") want)
     (assert-eq (nt-same out want) 1 "only src[1,3) is read, and appended after the 7")))
+
+;; ------------------------------------------------------- the CJK radical fold (P3.4, D142)
+
+(defn ^I32 nt-semi-tab [^Blob b ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) 9))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 nt-radical-row [^Blob rows ^I32 from ^I32 to ^:mut ^Cells src ^:mut ^Cells want
+                           ^:mut ^Cells out ^:mut ^Cells tmp]
+  (comment "Row `radical TAB ideograph` (hex): 1 when the flag folds the one to the other, NFC alone")
+  (comment "leaves it, and the fold is the same through `nz-radical-fold`.")
+  (let [^I32 tab (nt-semi-tab rows from to)]
+    (nt-cps rows from tab src)
+    (nt-cps rows (+ tab 1) to want)
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp (nz-flag-radicals))
+    (if (== (nt-same out want) 0) (return 0))
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 0)
+    (if (== (nt-same out src) 0) (return 0))
+    (if (!= (nz-radical-fold (cells-at src 0)) (cells-at want 0)) (return 0))
+    (return 1)))
+
+(deftest test-every-cjk-radical-folds-to-its-unified-ideograph
+  (comment "radicals.txt (kin/scripts/radicals.clj, from CJKRadicals.txt and UnicodeData.txt): the 214 Kangxi")
+  (comment "radicals and the 30 CJK Radicals Supplement characters with an equivalent.")
+  (let [^Blob rows (test-file "normalize/radicals.txt")
+        ^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 count 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (nt-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (set count (+ count 1))
+                (assert-eq-at (nt-radical-row rows pos e src want out tmp) 1 "radical row" line)))
+          (set pos (+ e 1))))
+    (assert-eq count 244 "214 Kangxi radicals and 30 supplement characters")))
+
+(deftest test-the-radical-fold-leaves-everything-else-alone
+  (let [^Cells src (new-cells)
+        ^Cells want (new-cells)
+        ^Cells out (new-cells)
+        ^Cells tmp (new-cells)]
+    (nt-lit (text-blob "2F00 61 2F01 4E00 2E80 2FD5 2FD6 2E7F 2EF3 2EF4 E9") src)
+    (nt-lit (text-blob "4E00 61 4E28 4E00 2E80 9FA0 2FD6 2E7F 9F9F 2EF4 E9") want)
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp (nz-flag-radicals))
+    (assert-eq (nt-same out want) 1 "radicals fold; their neighbours, U+2E80 (no equivalent) and the block's ends stay")
+    (assert-eq (nz-radical-fold 12032) 19968 "U+2F00 is U+4E00")
+    (assert-eq (nz-radical-fold 12245) 40864 "U+2FD5 is U+9FA0")
+    (assert-eq (nz-radical-fold 12246) 12246 "U+2FD6 is not a radical")
+    (assert-eq (nz-radical-fold 11904) 11904 "U+2E80 has no equivalent")
+    (assert-eq (nz-radical-fold 65) 65 "ASCII")
+    (assert-eq (nz-radical-fold -1) -1 "a negative number is nothing")
+    (nt-lit (text-blob "2F00 FB01 AD 65 301") src)
+    (nt-lit (text-blob "4E00 66 69 E9") want)
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 7)
+    (assert-eq (nt-same out want) 1 "the three flags compose with NFC")
+    (cells-drop out 0)
+    (nz-nfc src 0 (cells-len src) out tmp 4)
+    (nt-lit (text-blob "4E00 FB01 AD E9") want)
+    (assert-eq (nt-same out want) 1 "flag 4 alone folds the radical and does not drop the soft hyphen (the flags are bits)")))

@@ -1,0 +1,124 @@
+# Written by kin/scripts/font-prog-fixtures.clj; read by kin/pdffonttest.kin (DEVLOG P3.4, D140, D141).
+# The format of fonts.txt, against fonts/progs.pdf; `cidd`/`coded` take a four-byte code as the signed
+# 32-bit decimal the content interpreter builds; `vm`: hex code, which (0 w1, 1 vx, 2 vy), the value in
+# 1/100000 em.
+font	fonts/progs.pdf	21	0	simple	800	-200	0	0	-1
+code	41	2126	encoding	50000
+code	42	0416	encoding	50000
+code	43	FB01	encoding	50000
+code	44	-	unknown	50000
+code	45	-	unknown	50000
+code	46	0066+0066+0069	encoding	50000
+code	47	0041	encoding	50000
+code	48	1F600	encoding	50000
+code	30	-	unknown	50000
+font	fonts/progs.pdf	22	0	simple	800	-200	0	0	-1
+code	27	2019	encoding	50000
+code	41	0041	encoding	50000
+font	fonts/progs.pdf	23	0	simple	800	-200	0	0	-1
+code	41	20AC	glyphname	50000
+code	42	0416	encoding	50000
+font	fonts/progs.pdf	24	0	simple	800	-200	0	0	-1
+code	41	0041	encoding	50000
+code	80	20AC	encoding	50000
+font	fonts/progs.pdf	25	0	simple	800	-200	0	0	-1
+code	41	0041	encoding	50000
+code	42	0416	encoding	50000
+code	43	-	unknown	50000
+code	44	2126	encoding	50000
+code	45	0063	encoding	50000
+code	46	-	unknown	50000
+code	47	-	unknown	50000
+font	fonts/progs.pdf	26	0	simple	800	-200	0	0	-1
+code	50	0041	encoding	50000
+code	51	0042	encoding	50000
+code	52	0043	encoding	50000
+code	60	0044	encoding	50000
+code	61	0045	encoding	50000
+code	62	-	unknown	50000
+font	fonts/progs.pdf	27	0	simple	800	-200	0	0	-1
+code	27	2019	encoding	50000
+code	41	0041	encoding	50000
+font	fonts/progs.pdf	28	0	simple	800	-200	0	0	-1
+code	42	0416	encoding	50000
+font	fonts/progs.pdf	29	0	simple	800	-200	256	0	-1
+code	41	0416	encoding	50000
+code	42	042F	encoding	50000
+code	43	2126	glyphname	50000
+code	45	3042	encoding	50000
+code	44	0044	unknown	50000
+font	fonts/progs.pdf	30	0	simple	800	-200	256	0	-1
+code	61	1F600	encoding	50000
+code	62	0416	encoding	50000
+code	63	00E9	encoding	50000
+font	fonts/progs.pdf	31	0	simple	800	-200	256	0	-1
+code	30	0031	glyphname	50000
+code	31	0024	glyphname	50000
+code	32	20AC	glyphname	50000
+font	fonts/progs.pdf	32	0	simple	800	-200	1280	0	-1
+code	41	0041	unknown	50000
+font	fonts/progs.pdf	33	0	simple	800	-200	0	0	-1
+code	80	20AC	encoding	50000
+font	fonts/progs.pdf	34	0	simple	800	-200	3328	0	-1
+code	41	0041	unknown	50000
+font	fonts/progs.pdf	40	0	simple	800	-200	0	0	-1
+code	61	0061	encoding	50000
+code	30	0030	encoding	50000
+code	56	FB00	encoding	50000
+code	57	FB01	encoding	50000
+code	31	0031	encoding	50000
+code	27	00B4	encoding	50000
+code	41	-	unknown	50000
+font	fonts/progs.pdf	41	0	simple	100	0	0	0	-1
+code	41	0041	glyphname	50000
+code	42	0042	glyphname	50000
+code	43	-	unknown	50000
+code	44	-	unknown	50000
+code	45	0393	glyphname	50000
+font	fonts/progs.pdf	43	0	simple	100	0	1024	0	-1
+code	1	-	unknown	50000
+font	fonts/progs.pdf	50	0	composite	800	-200	0	0	-1
+len	82A0	2
+len	41	1
+cid	82A0	843
+cid	41	264
+code	82A0	3042	cid	77700
+font	fonts/progs.pdf	51	0	composite	800	-200	0	0	-1
+len	3042	2
+cid	3042	843
+code	3042	3042	encoding	88800
+font	fonts/progs.pdf	52	0	composite	800	-200	0	0	-1
+len	D840DC0B	4
+len	3042	2
+cidd	-666838005	13839
+coded	-666838005	2000B	encoding	55500
+font	fonts/progs.pdf	53	0	composite	800	-200	0	0	-1
+len	B0A1	2
+len	41	1
+cid	B0A1	940
+code	B0A1	554A	cid	100000
+font	fonts/progs.pdf	54	0	composite	800	-200	0	0	-1
+cid	A440	595
+code	A440	4E00	cid	100000
+font	fonts/progs.pdf	55	0	composite	800	-200	0	0	-1
+cid	B0A1	1086
+code	B0A1	AC00	cid	100000
+font	fonts/progs.pdf	56	0	composite	800	-200	0	0	-1
+cid	34B	843
+code	34B	3042	cid	100000
+font	fonts/progs.pdf	57	0	composite	800	-200	1024	0	-1
+code	34B	-	unknown	100000
+font	fonts/progs.pdf	58	0	composite	800	-200	0	1	-1
+vm	82A0	0	-110000
+vm	82A0	1	40000
+vm	82A0	2	80000
+vm	82A2	0	-70000
+vm	82A2	1	30000
+vm	82A2	2	75000
+vm	8140	0	-90000
+vm	8140	2	85000
+font	fonts/progs.pdf	59	0	composite	800	-200	0	0	-1
+code	82A0	0041	tounicode	100000
+font	fonts/progs.pdf	61	0	composite	800	-200	0	0	-1
+code	1	2F00	tounicode	100000
+code	2	2EA6	tounicode	100000

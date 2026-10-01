@@ -1,0 +1,150 @@
+;; The predefined CJK CMaps and the Adobe CID -> Unicode tables, as `emon.pdffont` reads them (P3.4, D140).
+;; The data is generated (`kin/scripts/cjkdata.clj`: one module per Adobe collection, `emon.cmapjp` Japan1,
+;; `cmapgb` GB1, `cmapcns` CNS1, `cmapkr` Korea1); this module is the four of them behind one set of
+;; questions, a collection being 0 jp, 1 gb, 2 cns, 3 kr. A CMap is named by its row in its collection's
+;; table. No allocation, no recursion.
+;;
+;;   (cjk-find-name ar nh)            the CMap a name object is: collection * 1000 + row, -1 when none
+;;   (cjk-cmap-field coll row field)  a CMap's row: 0 name offset, 1 name length, 2 base row, 3 WMode,
+;;                                    4 codespace offset, 5 count, 6 range offset, 7 count
+;;   (cjk-cs coll i field)            codespace range i: bytes, lower high/low halves, upper high/low halves
+;;   (cjk-cid coll row code)          the CID of a code (a four-byte code is a signed 32-bit number); 0 when
+;;                                    the CMap does not map it
+;;   (cjk-uni coll cid)               the Unicode of a CID by the collection's table; 0 when it has none
+;;
+;; A CMap is stored as its differences from a BASE CMap of the collection (`usecmap` and, where two CMaps are
+;; nearly one, the generator's choice): a lookup asks the CMap's own ranges, then its base's, to a depth of
+;; eight. A range whose CID is -1 says "this CMap does not map the code, whatever its base says".
+(ns emon.cjk
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-at]]
+            [emon.pdflex :refer [pl-name-len pl-name-byte]]
+            [emon.cmapjp :refer [jp-name-at jp-cmap-count jp-cmap-at jp-cs-at jp-rng-at jp-uni-count jp-uni-at]]
+            [emon.cmapgb :refer [gb-name-at gb-cmap-count gb-cmap-at gb-cs-at gb-rng-at gb-uni-count gb-uni-at]]
+            [emon.cmapcns :refer [cns-name-at cns-cmap-count cns-cmap-at cns-cs-at cns-rng-at cns-uni-count cns-uni-at]]
+            [emon.cmapkr :refer [kr-name-at kr-cmap-count kr-cmap-at kr-cs-at kr-rng-at kr-uni-count kr-uni-at]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 cjk-name-at [^I32 coll ^I32 i]
+  (if (== coll 0) (return (jp-name-at 0 i)))
+  (if (== coll 1) (return (gb-name-at 0 i)))
+  (if (== coll 2) (return (cns-name-at 0 i)))
+  (return (kr-name-at 0 i)))
+
+(defn ^:pub ^I32 cjk-count [^I32 coll]
+  (comment "How many predefined CMaps collection `coll` has.")
+  (if (== coll 0) (return (jp-cmap-count 0)))
+  (if (== coll 1) (return (gb-cmap-count 0)))
+  (if (== coll 2) (return (cns-cmap-count 0)))
+  (return (kr-cmap-count 0)))
+
+(defn ^:pub ^I32 cjk-cmap-field [^I32 coll ^I32 row ^I32 field]
+  (if (== coll 0) (return (jp-cmap-at 0 row field)))
+  (if (== coll 1) (return (gb-cmap-at 0 row field)))
+  (if (== coll 2) (return (cns-cmap-at 0 row field)))
+  (return (kr-cmap-at 0 row field)))
+
+(defn ^:pub ^I32 cjk-cs [^I32 coll ^I32 i ^I32 field]
+  (if (== coll 0) (return (jp-cs-at 0 i field)))
+  (if (== coll 1) (return (gb-cs-at 0 i field)))
+  (if (== coll 2) (return (cns-cs-at 0 i field)))
+  (return (kr-cs-at 0 i field)))
+
+(defn ^I32 cjk-rng [^I32 coll ^I32 i ^I32 field]
+  (if (== coll 0) (return (jp-rng-at 0 i field)))
+  (if (== coll 1) (return (gb-rng-at 0 i field)))
+  (if (== coll 2) (return (cns-rng-at 0 i field)))
+  (return (kr-rng-at 0 i field)))
+
+(defn ^I32 cjk-uni-row [^I32 coll ^I32 i ^I32 field]
+  (if (== coll 0) (return (jp-uni-at 0 i field)))
+  (if (== coll 1) (return (gb-uni-at 0 i field)))
+  (if (== coll 2) (return (cns-uni-at 0 i field)))
+  (return (kr-uni-at 0 i field)))
+
+(defn ^I32 cjk-uni-count [^I32 coll]
+  (if (== coll 0) (return (jp-uni-count 0)))
+  (if (== coll 1) (return (gb-uni-count 0)))
+  (if (== coll 2) (return (cns-uni-count 0)))
+  (return (kr-uni-count 0)))
+
+(defn ^I32 cjk-name-is [^Cells ar ^I32 nh ^I32 coll ^I32 row]
+  (comment "1 when name object nh spells the name of CMap `row`.")
+  (let [^I32 off (cjk-cmap-field coll row 0)
+        ^I32 ln (cjk-cmap-field coll row 1)
+        ^:mut ^I32 j 0]
+    (if (!= (pl-name-len ar nh) ln) (return 0))
+    (while (< j ln)
+      (do (if (!= (pl-name-byte ar nh j) (cjk-name-at coll (+ off j))) (return 0))
+          (set j (+ j 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 cjk-find-name [^Cells ar ^I32 nh]
+  (comment "The predefined CMap a name object is: collection * 1000 + row, or -1.")
+  (let [^:mut ^I32 coll 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 n 0]
+    (while (< coll 4)
+      (do (set n (cjk-count coll))
+          (set row 0)
+          (while (< row n)
+            (do (if (== (cjk-name-is ar nh coll row) 1)
+                  (return (+ (* coll 1000) row)))
+                (set row (+ row 1))))
+          (set coll (+ coll 1))))
+    (return -1)))
+
+(defn ^I32 cjk-own [^I32 coll ^I32 row ^I32 code]
+  (comment "What the ranges of CMap `row` itself say about `code`: the CID, -1 when they say")
+  (comment "'unmapped', -2 when they say nothing.")
+  (let [^I32 off (cjk-cmap-field coll row 6)
+        ^I32 n (cjk-cmap-field coll row 7)
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- n 1)
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 ans -1]
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (set first (cjk-rng coll (+ off mid) 0))
+          (if (<= first code)
+            (do (set ans mid)
+                (set lo (+ mid 1)))
+            (set hi (- mid 1)))))
+    (if (< ans 0) (return -2))
+    (set first (cjk-rng coll (+ off ans) 0))
+    (if (> (- code first) (cjk-rng coll (+ off ans) 1)) (return -2))
+    (if (< (cjk-rng coll (+ off ans) 2) 0) (return -1))
+    (return (+ (cjk-rng coll (+ off ans) 2) (- code first)))))
+
+(defn ^:pub ^I32 cjk-cid [^I32 coll ^I32 row0 ^I32 code]
+  (let [^:mut ^I32 row row0
+        ^:mut ^I32 depth 0
+        ^:mut ^I32 v 0]
+    (while (and (>= row 0) (< depth 8))
+      (do (set v (cjk-own coll row code))
+          (if (>= v 0) (return v))
+          (if (== v -1) (return 0))
+          (set row (cjk-cmap-field coll row 2))
+          (set depth (+ depth 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 cjk-uni [^I32 coll ^I32 cid]
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (cjk-uni-count coll) 1)
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 ans -1]
+    (if (< cid 0) (return 0))
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (set first (cjk-uni-row coll mid 0))
+          (if (<= first cid)
+            (do (set ans mid)
+                (set lo (+ mid 1)))
+            (set hi (- mid 1)))))
+    (if (< ans 0) (return 0))
+    (set first (cjk-uni-row coll ans 0))
+    (if (> (- cid first) (cjk-uni-row coll ans 1)) (return 0))
+    (return (+ (cjk-uni-row coll ans 2) (- cid first)))))

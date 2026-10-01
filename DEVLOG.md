@@ -1303,11 +1303,25 @@ analysis beyond "top-to-bottom lines on a single column".
   **Gates**: `bb unit` 192 laws on every arm; `bb unit red` fails on every arm.
 - [ ] P3.3 — Remaining non-image filters: `LZWDecode` (early change),
   `RunLengthDecode`, TIFF predictor 2; `Crypt` filter identity.
-- [ ] P3.4 — Fonts, the long tail: predefined CJK CMaps (as `defdata`),
+- [x] P3.4 — Fonts, the long tail: predefined CJK CMaps (as `defdata`),
   CID orderings → Unicode (Adobe-Japan1/GB1/CNS1/Korea1 tables), embedded font
   program glyph names (emon's own `cff`, `cmap`, a Type 1 eexec reader, TrueType
   `post`), Type 3 fonts, symbolic fonts, the "no mapping at all" path
   (flagged; OCR's problem later).
+  *Done (P3.4, D140-D143)*: **CJK**: `kin/scripts/cjkfetch.clj` fetches Adobe's cmap-resources at a pinned commit into
+  `.cache/` and checks `test/fonts/cjk-sources.edn`'s SHA-256s; `cjkdata.clj` makes `kin/cmapjp|gb|cns|kr.kin` (112
+  predefined CMaps, each stored as its differences from a base, and the four CID -> Unicode tables) and `emon.cjk` reads
+  them; `pdffont` takes a predefined CMap's codespace, WMode and CIDs, and a `/CIDSystemInfo` ordering (Identity-H and
+  embedded CMaps too) selects the Unicode table (`how` = `cid`). **Font programs**: `kin/fontprog.kin` reads a Type 1
+  clear-text `/Encoding`, a CFF Encoding with its charset and strings, and a symbolic TrueType font's cmap and `post` (and
+  an OpenType wrapper), with no read that can fault; the program's built-in encoding replaces the guess of P1.6 (this was the
+  remaining source of `unknown`), and a program that names glyphs withdraws the guess for a code it gives no Unicode name.
+  **MacExpert** is read as text (`fontextra.kin`), **/W2** is parsed (`pfn-vertical-metric`), Type 3 names that name
+  drawings are unknown, and a font nothing explains carries warning bit 1024 ("no mapping at all"). **Radicals**: Kangxi and
+  CJK radical code points fold to the ideographs they are drawn as, in `emon.normalize` (flag 4; D142). **Validated** on
+  1,288 corpus files against pdfminer.six: shown-character agreement 99.92% before and after, `unknown` 1.50% -> 0.40% of
+  shown characters; CJK documents 99.94% -> 99.97% (D143). **Gates**: `bb unit` on every arm; `bb unit red` fails on every
+  arm. Out: `/CIDToGIDMap` and a reverse cmap for composite TrueType fonts; `pdfcontent` reading `/W2`.
 - [ ] P3.5 — Full graphics state: clipping paths (visibility), colour spaces
   (to classify ink colour), `ExtGState` alpha, render modes, paths recorded as
   `vector` evidence (lines, rects, fills), image placements (`Do` image,
@@ -5071,6 +5085,123 @@ Skia gave no ToUnicode** (D105 counts 37 characters). All three are the text lay
 sentences are compared with the source, which is why they showed here.
 **Why**: these are the numbers P1.10 and P4 have to beat; the predictor is deliberately not an Engine API.
 **Alternatives**: updating the scoreboard now (D078: P1.10's); a hand-picked subset.
+- [ ] **Signed off** (maintainer)
+
+### D140 — Predefined CJK CMaps and the Adobe CID-to-Unicode tables: fetched at a pinned commit, checksummed, stored as differences, read through `emon.cjk` (P3.4; D084)
+**Decision**: `kin/scripts/cjkfetch.clj` (babashka) fetches, from `adobe-type-tools/cmap-resources` at ONE pinned commit
+(`f5cf3bc`, BSD-3-Clause), every CMap of the four collections (Adobe-Japan1-7, GB1-6, CNS1-7, Korea1-2) except the UTF-8 and
+UTF-32 ones, each collection's `cid2code.txt`, and four pdf.js files (below, D141) into `.cache/cjk/` (ignored: about 10 MB);
+`test/fonts/cjk-sources.edn` (committed) records the commit and every file's size and SHA-256, and a file that does not match is
+an error. `kin/scripts/cjkdata.clj` makes `kin/cmapjp.kin`, `cmapgb.kin`, `cmapcns.kin`, `cmapkr.kin` (one module per
+collection, so no Java class needs more than 65535 constants): per CMap a row (name, base, WMode, codespace and range
+spans), codespace ranges, ranges `[first code, last - first, CID]` (a four-byte code is the signed 32-bit number the content
+interpreter builds), and the collection's CID -> Unicode `[first CID, last - first, first code point]`. 112 CMaps in
+89,000 ranges instead of 353,000: a CMap is stored as its DIFFERENCES from a base CMap of the collection (a range whose CID is
+-1 says "not mapped here, whatever the base says"): `usecmap` (the vertical CMaps), and where two CMaps are nearly one
+(`UniJIS-UCS2-H` against `UniJIS-UTF16-H`, the GBK family) the nearest of six by size; chains are at most four deep and the
+generator checks that every CMap resolves to exactly what its FILE says. CID -> Unicode takes the first of `cid2code.txt`'s
+UTF-32, UCS-2, UTF-16 columns that has a value, and within it the candidate that is not a vertical variant and is not
+decomposable in UnicodeData (CID 1 is U+0020, not U+00A0; a CID drawn by U+2F00 and U+4E00 is U+4E00). `emon.cjk` is the four
+modules behind one set of questions (`cjk-find-name`, `cjk-cid`, `cjk-uni`). In `emon.pdffont`: an `/Encoding` that names one of
+them gives the font its codespace, WMode and CIDs (so `/W` widths are by the right CID), and the collection; a `/CIDSystemInfo`
+`/Ordering` of Japan1, GB1, CNS1 or Korea1 (an embedded CMap and Identity-H included) selects the CID -> Unicode table, answered
+with `how` = `cid`; ToUnicode still wins, and a `Uni*-UCS2/UTF16` name still means the code IS Unicode (a surrogate pair is one
+four-byte code now). `test/fonts/cjk.txt` (7,190 rows, `cjkdata.clj`, from the CMaps as their FILES say, not the compressed
+tables) is held on all four targets; `tools/oracle/cjk-check.py` holds the same rows to pdfminer.six's CMaps (4,395 agree; the
+151 that do not are pdfminer answering a code the CMap does not map, a `usecmap` CMap it does not resolve (`ETenms-B5`,
+the `-V` CMaps) and CIDs newer than its copy). `bb unit` regenerates and compares (`cjkfetch` first; without the network
+the checks that need the sources SKIP, loudly).
+**Why**: a CJK PDF without a ToUnicode says what its text is only through these tables; widths by CID need the CMap even when
+the code is Unicode. Fetching with a checksum rather than vendoring keeps 10 MB of Adobe's files out of git while making
+the generated tables a function of exactly those bytes.
+**Alternatives**: vendoring the files (10 MB); whole CMaps (353,000 ranges, 11 MB of generated source per target and a Java
+class near its constant-pool limit); UCS2 treated as UTF-16 (their CIDs differ for a few thousand codes, and a CID is a
+width); an inverse-CMap CID -> Unicode (pdfminer's: it picks U+00A6 for the CID that U+007C also names).
+- [ ] **Signed off** (maintainer)
+
+### D141 — Embedded font programs give a symbolic font's built-in encoding; MacExpert and `/W2` are read; a code nothing explains is `unknown` with NO value when the program names its glyphs; "no mapping at all" is a warning bit (P3.4; D080, D084)
+**Decision**: `kin/fontprog.kin` (emon's own reader, D039, from the Type 1, CFF TN 5176 and OpenType specifications; no
+read can fault: every byte is `fp-u8`, 0 past either end, every loop is bounded) answers, for a simple font whose PDF names no
+encoding, what each of the 256 codes is in the font program: **Type 1** (`FontFile`): the clear-text `/Encoding` (the array,
+`8#101` radix numbers, or `StandardEncoding`; the encrypted part is never read); **CFF** (`FontFile3`, or the `CFF ` table of
+an OpenType file): predefined Standard or Expert, or format 0 or 1 with supplements, glyph names through the charset
+(ISOAdobe, Expert, ExpertSubset, formats 0, 1, 2) and the String INDEX; **TrueType/OpenType glyf**: ISO 32000-1 9.6.6.4's
+symbolic rule (the (3,0) cmap at the code and +0xF000/F100/F200, else (1,0)), the glyph then named by the Unicode cmap read
+BACKWARDS (formats 0, 4, 6, 12; the smallest code point), else by its `post` name (formats 1 and 2). It is asked only when
+nothing names the encoding (`/Encoding`, `/BaseEncoding`, Symbol, ZapfDingbats), for any Type 1/CFF font, and for a TrueType font
+only when it is flagged symbolic; its answer replaces the base encoding, `/Differences` still win, ToUnicode still wins. The
+answer is `encoding` (a table or a Unicode cmap) or `glyphname` (a name). A font program that NAMES its glyphs and gives a code
+no Unicode name (`G12`, `a30`: Afenegus, Type 3-like Type 1 fonts) has said what the code is not: the Standard-encoding GUESS is
+withdrawn (`unknown`, no value, where P1.6 gave a guess pdfminer.six also gave and nobody could trust); a TrueType program
+with no names leaves the guess, flagged. The glyph tables are `kin/fontextra.kin` (`kin/scripts/fontextra.clj`: the 391 CFF
+standard strings, the Expert charsets and encoding, MacExpert, the 258 Macintosh glyph names, taken from pdf.js at a pinned
+commit through `cjkfetch`, turned into rows of the AGL table, and checked against the AGL and against the Standard encoding
+emon derives from the AFMs). **MacExpertEncoding** is read as TEXT: the AGL gives the expert set's small capitals,
+old-style figures, superiors and accents code points of Adobe's private use area (`Asmall` is U+F761), which no reader can
+use, so `fold-expert` makes them the letters, digits and accents they are variants of (`Asmall` is `a`: code 0x61 is Asmall;
+`oneoldstyle` `1`; `rupiah` `Rp`). **`/W2`** is read (`pfn-vertical-metric f code which`: the vertical advance, then the
+position vector, in the unit of widths, with `/DW2` and half the width as defaults); `pdfcontent` does not use it yet. **Type 3**
+fonts: a glyph name is a name only where it is a text name; `a1`..`a206` are ZapfDingbats' own and `g4`, `c12` name drawings, so
+they are `unknown` with no value (pdfminer.six reads `a1` as a dingbat). New warning bits: 1024 **no mapping at all** (no code of
+a simple font has a value that is not a guess; a composite font with no ToUnicode, no Unicode CMap and no Adobe ordering: this
+is OCR's problem, flagged, P5) and 2048 the font program was unreadable; 256 (symbolic guess) is cleared when a program that
+names glyphs knew the encoding; 1 (predefined CMap unsupported) and 8 (MacExpert) now mean only an unknown name.
+**Why**: the font program is where a symbolic font's built-in encoding lives (D084), and what it says beats a guess: on MathType's
+CFF fonts the guess read `(` as `.` and `ω` as `!` (poppler agrees with the program). A guess that is not a reading must not
+be passed on as one.
+**Alternatives**: always keeping the guess (it is the half of the old `unknown` that pdfminer.six agreed with, and wrong
+for every font whose names are not the standard ones); CIDToGIDMap and a reverse cmap for composite TrueType fonts (the
+glyph-to-Unicode table would have to live in the font's `Cells` for the whole document; not done, below); the AGL's private-use
+values for MacExpert (unreadable text).
+- [ ] **Signed off** (maintainer)
+
+### D142 — CJK radicals are folded to the ideographs they are drawn as, in the text layer, as an `emon.normalize` flag; the evidence keeps what the font said (P3.4; D029, SPEC 3.6)
+**Decision**: Chrome/Skia PDFs give CJK glyphs a ToUnicode of the Kangxi Radicals (U+2F00..2FD5) and CJK Radicals
+Supplement (U+2E80..2EF3) code points where the text is the unified ideograph (U+2F00 is drawn as U+4E00); NFC leaves them (their
+mapping is a compatibility one). `kin/scripts/radicals.clj` (babashka) makes `kin/radicals.kin` and `test/normalize/radicals.txt`
+from the vendored UCD files (Unicode 18.0.0, `CJKRadicals.txt` added beside `UnicodeData.txt`): the 214 Kangxi radicals and the
+two supplement characters (U+2E9F, U+2EF3) that UnicodeData gives a `<compat>` decomposition, and the 29 supplement characters
+CJKRadicals.txt pairs with a unified ideograph (the two agree where both speak, or the script fails): 244 in all.
+`emon.normalize` gains `nz-flag-radicals` (4; the flags are bits now, they were `rem 2` and `>= 2`) and `nz-radical-fold`;
+a caller that wants SPEC 3.6's text passes 7. The glyph rows (`how` `tounicode`) keep the code point the font said, which is
+the "original" for anyone who needs it: nothing is added to the evidence. Measured on the corpus: `ja-wikipedia-tokyo.pdf`
+(Chrome) shows 438 radical-block characters of 5,957 (7.4%); the table folds 422; the other 16 are U+2EA0, U+2EC4, U+2ED1, which
+NamesList.txt cross-references ("x 6C11", "x 897F", "x 9577") but UnicodeData and CJKRadicals do not pair.
+**Why**: a search for the text, and a CER against the real text, are wrong by the whole of every such character otherwise
+(`script-cjk` was 0.18 in P1.8's measurement). **Alternatives**: folding in `pfn-map` (the evidence would no longer say what the
+font said); NFKC (full-width forms and superscripts are content, D029); also folding the NamesList cross-references (the
+three above, two more candidates each for 2E81, 2E8E, 2EAB: "see also" is not equivalence; the maintainer may extend the
+table, one line each).
+**Wired (merge of P3.4 onto P1.8)**: `emon.para` called `nz-nfc` with flag 1 only; it now passes 1+4, so the Model's paragraph text is radical-folded while the glyph rows keep the font's code point. Soft hyphens (2) stay out: `para` handles line ends itself (D138).
+- [ ] **Signed off** (maintainer)
+
+### D143 — P3.4 validation, and what is still out (P3.4; D084)
+**Decision**: validated with `kin/scripts/font-sweep` and `font-corpus.py` against pdfminer.six on 1,288 corpus files (6,993
+fonts, 8.69M shown characters; the harness now reads whole strings for composite fonts with predefined CMaps and splits them
+by emon's own code lengths): agreement of shown characters 99.92% before and after (8,687,773 and 8,687,311 characters), of
+distinct codes 99.75% before, 99.87% after; `how` = `unknown` 130,202 shown characters (1.50%) before, 34,723 (0.40%) after, and
+what remains is nothing a program or a table says (Afenegus `G12` names, a Hebrew Type 3 font of `a1`.., symbolic TrueType
+subsets with no names, ArialUnicodeMS, non-embedded Identity-H with no ToUnicode); the confident answers (`how` not
+`unknown`) agree 99.99% before, 99.98% after. The characters the two disagree on now are pdfminer's: MathType's CFF fonts
+(`(` read as `.`; poppler agrees with emon), Symbol-like fonts (`dln_00327`: the font's own `second`), `a1` read as a dingbat,
+a guess where emon says unknown. CJK documents (12 files: the multilingual UDHR, Chrome and Acrobat Japan1, GB1, CNS1, Korea1,
+UCS2 CMap files): 99.94% before, 99.97% after, `unknown` 7.76% before and 7.73% after (what remains is `jpn.pdf` and
+`chn.pdf`'s symbolic ArialUnicodeMS digits and punctuation: glyph ids with no names, flagged); the predefined-CMap fonts the
+sample lacks are covered by the fixtures. `bb unit` holds 7,190 CMap rows, 120 program-font rows (`test/fonts/progs.pdf`,
+`progs.txt`, built by `kin/scripts/font-prog-fixtures.clj` so every expectation is known by construction: Type 1, CFF in three
+encoding shapes, an OpenType wrapper, five TrueType shapes, MacExpert, Type 3, six predefined CMaps from the Adobe FILES, an
+Identity-H font with an Adobe ordering, vertical metrics, ToUnicode over a table), the truncation of each program at every
+byte, the names of `fontprog` against `names.txt`'s 4,000 AGL rows, and the 244 radicals. `fonts.txt` and `real.txt` were
+regenerated (the expectations that changed are the ones this decision says: predefined CMaps and MacExpert are read, a font
+with nothing to say is flagged 1024), and two rows of `test/content/real.txt` whose digests changed (MathType's `(`, a
+Symbol-like font) were dropped from the ratchet. STILL OUT: `/CIDToGIDMap` and a glyph-to-Unicode table for composite
+TrueType/CFF fonts with no ToUnicode (the 5,433 shown characters of `1149465.pdf` are not embedded, so nothing says);
+Type 1 charstring names inside the encrypted part (the encoding is not there, but a font that gives names only there is not read);
+`pdfcontent` using `pfn-vertical-metric` (P3.5 owns that file); the `how` code for a font program is `encoding`/`glyphname`
+(a new `gh` would change the evidence schema).
+**Why**: the oracle's agreement cannot be the target where the oracle guesses; the numbers say so and the cases are named.
+**Alternatives**: scoring against poppler's text (needs P1.7's layout to align); keeping `fonts.txt`'s old rows (they
+asserted that a predefined CMap is unsupported).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

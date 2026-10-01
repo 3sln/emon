@@ -2,11 +2,14 @@
 ;; (D039), data from `emon.nftable`, which `kin/scripts/ucd.py` generates
 ;; from the UCD files vendored under `test/normalize/`.
 ;;
-;; WHAT SPEC 3.6 ASKS FOR (D029) and so what is here: NFC, plus the
-;; decomposition of the seven Latin ligatures U+FB00..FB06 (`ﬁ` -> `fi`) and
-;; removal of soft hyphens (U+00AD). NOT NFKC: full-width forms, superscripts
-;; and the like are content. So there is no compatibility data beyond those
-;; seven ligatures. NFD is here because NFC is defined through it.
+;; WHAT SPEC 3.6 ASKS FOR (D029, D142) and so what is here: NFC, plus the
+;; decomposition of the seven Latin ligatures U+FB00..FB06 (`ﬁ` -> `fi`),
+;; removal of soft hyphens (U+00AD), and the fold of the Kangxi Radicals
+;; (U+2F00..2FD5) and CJK Radicals Supplement (U+2E80..2EF3) characters that
+;; have an equivalent to the unified ideograph they are drawn as (U+2F00 to
+;; U+4E00; `emon.radicals`, from the UCD). NOT NFKC: full-width forms,
+;; superscripts and the like are content. So there is no compatibility data
+;; beyond those. NFD is here because NFC is defined through it.
 ;;
 ;; WHY NFC MATTERS TO A PDF READER. A PDF draws glyphs, not characters: the
 ;; text layer for `é` may be the precomposed U+00E9 or `e` + U+0301, chosen
@@ -23,12 +26,14 @@
 ;; WHAT IT TAKES AND GIVES: code points in a `Cells` (one per cell, the
 ;; model's text representation, SPEC 3.6) over a span [from, to), APPENDED to
 ;; an output `Cells`. NFC needs a scratch `Cells` for the decomposed text
-;; (kin cannot allocate). `flags`: 1 expands ligatures, 2 drops U+00AD; the
-;; caller decides WHICH soft hyphens, since removing them only "at line
-;; ends" (SPEC 3.6) needs the layout this module cannot see.
+;; (kin cannot allocate). `flags` are bits: 1 expands ligatures, 2 drops U+00AD, 4 folds
+;; the CJK radicals; the caller decides WHICH soft hyphens, since removing them only "at
+;; line ends" (SPEC 3.6) needs the layout this module cannot see. The evidence keeps the
+;; code point the font said (a glyph row is not touched): the fold is of the TEXT.
 (ns emon.normalize
   (:require [emon.lang :refer [I32 Cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.radicals :refer [rad-count rad-at]]
             [emon.nftable :refer [nf-ccc-count nf-ccc-at nf-dec-count nf-dec-at
                                   nf-pool-at nf-comp-count nf-comp-at
                                   nf-lig-count nf-lig-at]]
@@ -49,6 +54,25 @@
 
 (defn ^:pub ^I32 nz-flag-ligatures [] (return 1))
 (defn ^:pub ^I32 nz-flag-soft-hyphens [] (return 2))
+(defn ^:pub ^I32 nz-flag-radicals [] (return 4))
+
+(defn ^:pub ^I32 nz-radical-fold [^I32 cp]
+  (comment "The unified ideograph a Kangxi radical (U+2F00..2FD5) or a CJK Radicals Supplement")
+  (comment "character with an equivalent (U+2E80..2EF3) is drawn as; any other code point as it is.")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (rad-count 0) 1)
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 v 0]
+    (if (< cp 11904) (return cp))
+    (if (> cp 12245) (return cp))
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (set v (rad-at 0 mid 0))
+          (if (== v cp) (return (rad-at 0 mid 1)))
+          (if (< cp v)
+            (set hi (- mid 1))
+            (set lo (+ mid 1)))))
+    (return cp)))
 
 ;; ---------------------------------------------------------- the lookups
 
@@ -172,15 +196,19 @@
 (defn ^:pub ^I32 nz-nfd [^Cells src ^I32 from ^I32 to ^:mut ^Cells out ^I32 flags]
   (comment "Append NFD(src[from, to)) to out. `flags` as in the head.")
   (let [^I32 start (cells-len out)
+        ^I32 want-lig (rem flags 2)
+        ^I32 want-soft (rem (quot flags 2) 2)
+        ^I32 want-rad (rem (quot flags 4) 2)
         ^:mut ^I32 i from
         ^:mut ^I32 cp 0
         ^:mut ^I32 lig 0]
     (while (< i to)
       (do (set cp (cells-at src i))
           (set lig 0)
-          (if (and (== (rem flags 2) 1) (>= cp 64256))
+          (if (== want-rad 1) (set cp (nz-radical-fold cp)))
+          (if (and (== want-lig 1) (>= cp 64256))
             (set lig (nz-put-ligature cp out)))
-          (if (and (== lig 0) (== cp 173) (>= flags 2))
+          (if (and (== lig 0) (and (== cp 173) (== want-soft 1)))
             (set lig 1))
           (if (== lig 0) (nz-put-full cp out))
           (set i (+ i 1))))

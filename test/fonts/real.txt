@@ -19,7 +19,7 @@ code	20	0020	encoding	27800
 code	63	0063	encoding	55600
 code	72	0072	encoding	38900
 code	6F	006F	encoding	61100
-font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	2252	0	simple	699	-205	256	0	9
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	2252	0	simple	699	-205	0	0	9
 code	41	0041	tounicode	72200
 code	52	0052	tounicode	72200
 code	45	0045	tounicode	66700
@@ -55,7 +55,7 @@ code	61	0061	encoding	44800
 code	69	0069	encoding	28100
 code	74	0074	encoding	28100
 code	63	0063	encoding	33300
-font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1814	0	simple	688	-176	256	0	-1
+font	../corpus/financial/annual-reports/berkshire-2023-annual-report-10k.pdf	1814	0	simple	688	-176	0	0	-1
 code	20	0020	tounicode	25000
 code	65	0065	tounicode	52500
 code	74	0074	tounicode	32200
@@ -396,7 +396,7 @@ code	78	0078	encoding	64700
 font	../corpus/layout/arxiv/1409.1556.pdf	196	0	simple	705	-194	0	0	-1
 code	53	0053	encoding	62700
 code	51	0051	encoding	81000
-font	../corpus/layout/arxiv/1512.03385.pdf	46	0	simple	690	-209	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	46	0	simple	690	-209	0	0	-1
 code	65	0065	glyphname	44400
 code	74	0074	glyphname	33300
 code	2E	002E	glyphname	25000
@@ -405,7 +405,7 @@ code	6E	006E	glyphname	55600
 code	73	0073	glyphname	38900
 code	72	0072	glyphname	44400
 code	6F	006F	glyphname	50000
-font	../corpus/layout/arxiv/1512.03385.pdf	47	0	simple	678	-216	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	47	0	simple	678	-216	0	0	-1
 code	65	0065	glyphname	44400
 code	74	0074	glyphname	27800
 code	61	0061	glyphname	44400
@@ -414,10 +414,14 @@ code	6E	006E	glyphname	50000
 code	72	0072	glyphname	33300
 code	6F	006F	glyphname	50000
 code	73	0073	glyphname	38900
-font	../corpus/layout/arxiv/1512.03385.pdf	48	0	simple	775	-960	256	0	-1
-code	46	0046	unknown	71870
-code	48	0048	unknown	84450
-font	../corpus/layout/arxiv/1512.03385.pdf	50	0	simple	669	-193	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	48	0	simple	775	-960	0	0	-1
+code	2	00D7	encoding	77780
+code	46	0046	encoding	71870
+code	66	007B	encoding	50000
+code	67	007D	encoding	50000
+code	48	0048	encoding	84450
+code	0	2212	encoding	77780
+font	../corpus/layout/arxiv/1512.03385.pdf	50	0	simple	669	-193	0	0	-1
 code	65	0065	glyphname	44400
 code	74	0074	glyphname	27800
 code	6E	006E	glyphname	50000
@@ -426,7 +430,7 @@ code	69	0069	glyphname	27800
 code	73	0073	glyphname	38900
 code	6F	006F	glyphname	50000
 code	72	0072	glyphname	38900
-font	../corpus/layout/arxiv/1512.03385.pdf	53	0	simple	625	-147	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	53	0	simple	625	-147	0	0	-1
 code	2F	002F	glyphname	60000
 code	74	0074	glyphname	60000
 code	65	0065	glyphname	60000
@@ -464,7 +468,7 @@ code	76	0076	encoding	50000
 code	32	0032	encoding	50000
 code	2E	002E	encoding	25000
 code	33	0033	encoding	50000
-font	../corpus/layout/arxiv/1512.03385.pdf	135	0	simple	332	-87	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	135	0	simple	332	-87	0	0	-1
 code	4	0065	tounicode	49400
 code	2	0069	tounicode	22700
 code	6	0074	tounicode	33300
@@ -473,7 +477,7 @@ code	9	006C	tounicode	22700
 code	A	0075	tounicode	52000
 code	3	0064	tounicode	52000
 code	5	006E	tounicode	52000
-font	../corpus/layout/arxiv/1512.03385.pdf	136	0	simple	332	-87	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	136	0	simple	332	-87	0	0	-1
 code	3	0065	tounicode	49300
 code	2	0077	tounicode	71700
 code	4	0069	tounicode	22400
@@ -482,37 +486,40 @@ code	6	0068	tounicode	52200
 code	7	0074	tounicode	32900
 code	8	0020	tounicode	22400
 code	9	006C	tounicode	22400
-font	../corpus/layout/arxiv/1512.03385.pdf	139	0	simple	775	-960	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	139	0	simple	775	-960	0	0	-1
 code	46	0046	tounicode	71900
-font	../corpus/layout/arxiv/1512.03385.pdf	142	0	simple	750	-250	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	142	0	simple	750	-250	0	0	-1
 code	28	0028	tounicode	38800
 code	29	0029	tounicode	38800
 code	2B	002B	tounicode	77700
-font	../corpus/layout/arxiv/1512.03385.pdf	145	0	simple	750	-250	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	145	0	simple	750	-250	0	0	-1
 code	78	0078	tounicode	60600
-font	../corpus/layout/arxiv/1512.03385.pdf	131	0	simple	750	-250	256	0	-1
-code	28	0028	unknown	38890
-code	29	0029	unknown	38890
-code	30	0030	unknown	50000
-code	2B	002B	unknown	77780
-code	3D	003D	unknown	77780
-code	31	0031	unknown	50000
-code	34	0034	unknown	50000
-code	32	0032	unknown	50000
-font	../corpus/layout/arxiv/1512.03385.pdf	132	0	simple	750	-250	256	0	-1
-code	78	0078	unknown	60690
-code	79	0079	unknown	60690
-font	../corpus/layout/arxiv/1512.03385.pdf	229	0	simple	694	-194	256	0	-1
-code	57	0057	unknown	94440
-font	../corpus/layout/arxiv/1512.03385.pdf	230	0	simple	694	-194	256	0	-1
-code	69	0069	unknown	40420
-code	73	0073	unknown	53920
-font	../corpus/layout/arxiv/1512.03385.pdf	231	0	simple	694	-194	256	0	-1
-code	39	0039	unknown	56950
-code	31	0031	unknown	56950
-code	32	0032	unknown	56950
-code	34	0034	unknown	56950
-font	../corpus/layout/arxiv/1512.03385.pdf	269	0	simple	717	-179	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	131	0	simple	750	-250	0	0	-1
+code	28	0028	encoding	38890
+code	29	0029	encoding	38890
+code	30	0030	encoding	50000
+code	2B	002B	encoding	77780
+code	3D	003D	encoding	77780
+code	31	0031	encoding	50000
+code	34	0034	encoding	50000
+code	32	0032	encoding	50000
+font	../corpus/layout/arxiv/1512.03385.pdf	132	0	simple	750	-250	0	0	-1
+code	78	0078	encoding	60690
+code	79	0079	encoding	60690
+font	../corpus/layout/arxiv/1512.03385.pdf	229	0	simple	694	-194	0	0	-1
+code	57	0057	encoding	94440
+code	3B	002C	encoding	27780
+code	1B	03C3	encoding	57140
+code	3A	002E	encoding	27780
+font	../corpus/layout/arxiv/1512.03385.pdf	230	0	simple	694	-194	0	0	-1
+code	69	0069	encoding	40420
+code	73	0073	encoding	53920
+font	../corpus/layout/arxiv/1512.03385.pdf	231	0	simple	694	-194	0	0	-1
+code	39	0039	encoding	56950
+code	31	0031	encoding	56950
+code	32	0032	encoding	56950
+code	34	0034	encoding	56950
+font	../corpus/layout/arxiv/1512.03385.pdf	269	0	simple	717	-179	0	0	-1
 code	4	0020	tounicode	21400
 code	10	0033	tounicode	50000
 code	6	006F	tounicode	52400
@@ -521,7 +528,7 @@ code	5	0063	tounicode	42900
 code	D	0032	tounicode	50000
 code	8	0076	tounicode	45300
 code	3	0078	tounicode	42900
-font	../corpus/layout/arxiv/1512.03385.pdf	270	0	simple	680	-178	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	270	0	simple	680	-178	0	0	-1
 code	9	006C	tounicode	22400
 code	A	0061	tounicode	47800
 code	4	002D	tounicode	31300
@@ -530,6 +537,11 @@ code	D	0072	tounicode	34300
 code	3	0047	tounicode	62700
 code	7	0033	tounicode	50800
 code	8	0034	tounicode	50800
+font	../corpus/layout/arxiv/1512.03385.pdf	301	0	simple	40	-600	0	0	-1
+code	32	F8EE	encoding	66670
+code	34	F8F0	encoding	66670
+code	33	F8F9	encoding	66670
+code	35	F8FB	encoding	66670
 font	../corpus/layout/arxiv/1512.03385.pdf	305	0	simple	699	-217	0	0	8
 code	30	0030	encoding	50000
 code	65	0065	encoding	44400
@@ -550,10 +562,14 @@ code	65	0065	encoding	44000
 code	72	0072	encoding	34000
 code	31	0031	encoding	50000
 code	38	0038	encoding	50000
-font	../corpus/layout/arxiv/1512.03385.pdf	353	0	simple	688	-209	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	303	0	simple	750	-194	0	0	-1
+code	2	00D7	encoding	82640
+font	../corpus/layout/arxiv/1512.03385.pdf	350	0	simple	750	-194	0	0	-1
+code	79	2020	encoding	57410
+font	../corpus/layout/arxiv/1512.03385.pdf	353	0	simple	688	-209	0	0	-1
 code	76	0076	glyphname	44400
 code	73	0073	glyphname	38900
-font	../corpus/layout/arxiv/1512.03385.pdf	357	0	simple	641	-142	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	357	0	simple	641	-142	0	0	-1
 code	2	0033	tounicode	50600
 code	3	0078	tounicode	43400
 code	4	002C	tounicode	25300
@@ -562,7 +578,7 @@ code	6	0036	tounicode	50600
 code	7	0034	tounicode	50600
 code	8	0031	tounicode	50600
 code	9	0032	tounicode	50600
-font	../corpus/layout/arxiv/1512.03385.pdf	358	0	simple	680	-10	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	358	0	simple	680	-10	0	0	-1
 code	2	0072	tounicode	34700
 code	3	0065	tounicode	49400
 code	4	006C	tounicode	22700
@@ -571,9 +587,10 @@ code	6	0036	tounicode	50700
 code	8	002D	tounicode	30700
 code	9	0064	tounicode	52000
 code	7	0034	tounicode	50700
-font	../corpus/layout/arxiv/1512.03385.pdf	354	0	simple	750	-194	256	0	-1
-code	46	0046	unknown	73630
-font	../corpus/layout/arxiv/1706.03762.pdf	104	0	simple	678	-216	256	0	-1
+font	../corpus/layout/arxiv/1512.03385.pdf	354	0	simple	750	-194	0	0	-1
+code	46	0046	encoding	73630
+code	2	00D7	encoding	79940
+font	../corpus/layout/arxiv/1706.03762.pdf	104	0	simple	678	-216	0	0	-1
 code	65	0065	tounicode	44400
 code	74	0074	tounicode	27800
 code	6E	006E	tounicode	50000
@@ -582,7 +599,7 @@ code	69	0069	tounicode	27800
 code	61	0061	tounicode	44400
 code	73	0073	tounicode	38900
 code	72	0072	tounicode	33300
-font	../corpus/layout/arxiv/1706.03762.pdf	105	0	simple	690	-209	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	105	0	simple	690	-209	0	0	-1
 code	6F	006F	tounicode	50000
 code	74	0074	tounicode	33300
 code	65	0065	tounicode	44400
@@ -591,14 +608,14 @@ code	69	0069	tounicode	27800
 code	61	0061	tounicode	50000
 code	64	0064	tounicode	55600
 code	72	0072	tounicode	44400
-font	../corpus/layout/arxiv/1706.03762.pdf	106	0	simple	750	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	106	0	simple	750	-194	0	0	-1
 code	3	2217	tounicode	58530
 code	2	00D7	tounicode	89290
 code	70	221A	tounicode	93850
 code	79	2020	tounicode	52380
 code	7A	2021	tounicode	52380
 code	0	2212	tounicode	89290
-font	../corpus/layout/arxiv/1706.03762.pdf	107	0	simple	611	-222	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	107	0	simple	611	-222	0	0	-1
 code	6F	006F	tounicode	52490
 code	67	0067	tounicode	52490
 code	6C	006C	tounicode	52490
@@ -607,7 +624,7 @@ code	69	0069	tounicode	52490
 code	2E	002E	tounicode	52490
 code	6D	006D	tounicode	52490
 code	40	0040	tounicode	52490
-font	../corpus/layout/arxiv/1706.03762.pdf	108	0	simple	750	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	108	0	simple	750	-194	0	0	-1
 code	3	2217	tounicode	63890
 code	79	2020	tounicode	57410
 code	7A	2021	tounicode	57410
@@ -620,7 +637,7 @@ code	76	0076	encoding	50000
 code	36	0036	encoding	50000
 code	2E	002E	encoding	25000
 code	33	0033	encoding	50000
-font	../corpus/layout/arxiv/1706.03762.pdf	139	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	139	0	simple	694	-194	0	0	-1
 code	64	0064	tounicode	52050
 code	3B	002C	tounicode	27780
 code	3A	002E	tounicode	27780
@@ -629,7 +646,7 @@ code	6E	006E	tounicode	60020
 code	78	0078	tounicode	57150
 code	57	0057	tounicode	94440
 code	68	0068	tounicode	57620
-font	../corpus/layout/arxiv/1706.03762.pdf	140	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	140	0	simple	694	-194	0	0	-1
 code	64	0064	tounicode	59470
 code	69	0069	tounicode	40420
 code	6B	006B	tounicode	60730
@@ -638,7 +655,7 @@ code	76	0076	tounicode	57140
 code	70	0070	tounicode	58890
 code	6F	006F	tounicode	56390
 code	73	0073	tounicode	53920
-font	../corpus/layout/arxiv/1706.03762.pdf	141	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	141	0	simple	694	-194	0	0	-1
 code	31	0031	tounicode	56950
 code	32	0032	tounicode	56950
 code	28	0028	tounicode	44640
@@ -646,7 +663,7 @@ code	29	0029	tounicode	44640
 code	2B	002B	tounicode	87700
 code	68	0068	tounicode	63100
 code	69	0069	tounicode	32340
-font	../corpus/layout/arxiv/1706.03762.pdf	142	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	142	0	simple	694	-194	0	0	-1
 code	28	0028	tounicode	38890
 code	29	0029	tounicode	38890
 code	3D	003D	tounicode	77780
@@ -655,37 +672,37 @@ code	61	0061	tounicode	50000
 code	65	0065	tounicode	44440
 code	31	0031	tounicode	50000
 code	74	0074	tounicode	38890
-font	../corpus/layout/arxiv/1706.03762.pdf	143	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	143	0	simple	694	-194	0	0	-1
 code	7A	007A	tounicode	51110
-font	../corpus/layout/arxiv/1706.03762.pdf	190	0	simple	750	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	190	0	simple	750	-194	0	0	-1
 code	1	00B7	tounicode	27780
 code	32	2208	tounicode	66670
 code	70	221A	tounicode	83330
 code	0	2212	tounicode	77780
 code	31	221E	tounicode	100000
-font	../corpus/layout/arxiv/1706.03762.pdf	192	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	192	0	simple	694	-194	0	0	-1
 code	6B	006B	tounicode	75810
 code	76	0076	tounicode	72220
-font	../corpus/layout/arxiv/1706.03762.pdf	194	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	194	0	simple	694	-194	0	0	-1
 code	71	0071	tounicode	45920
 code	6B	006B	tounicode	53510
 code	64	0064	tounicode	53250
-font	../corpus/layout/arxiv/1706.03762.pdf	195	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	195	0	simple	694	-194	0	0	-1
 code	30	0030	tounicode	51390
 code	31	0031	tounicode	51390
 code	3D	003D	tounicode	79940
-font	../corpus/layout/arxiv/1706.03762.pdf	196	0	simple	750	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	196	0	simple	750	-194	0	0	-1
 code	1	00B7	tounicode	28550
-font	../corpus/layout/arxiv/1706.03762.pdf	198	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	198	0	simple	694	-194	0	0	-1
 code	69	0069	tounicode	44560
 code	64	0064	tounicode	64250
 code	6B	006B	tounicode	66090
-font	../corpus/layout/arxiv/1706.03762.pdf	199	0	simple	694	-194	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	199	0	simple	694	-194	0	0	-1
 code	3D	003D	tounicode	93520
 code	31	0031	tounicode	61110
-font	../corpus/layout/arxiv/1706.03762.pdf	214	0	simple	464	0	256	0	-1
+font	../corpus/layout/arxiv/1706.03762.pdf	214	0	simple	464	0	0	0	-1
 code	52	0052	tounicode	72220
-font	../corpus/layout/arxiv/2005.14165.pdf	140	0	simple	690	-209	256	0	-1
+font	../corpus/layout/arxiv/2005.14165.pdf	140	0	simple	690	-209	0	0	-1
 code	65	0065	glyphname	44400
 code	61	0061	glyphname	50000
 code	6E	006E	glyphname	55600
@@ -694,7 +711,10 @@ code	72	0072	glyphname	44400
 code	74	0074	glyphname	33300
 code	6F	006F	glyphname	50000
 code	73	0073	glyphname	38900
-font	../corpus/layout/arxiv/2005.14165.pdf	142	0	simple	678	-216	256	0	-1
+font	../corpus/layout/arxiv/2005.14165.pdf	141	0	simple	750	-194	0	0	-1
+code	3	2217	encoding	58530
+code	79	2020	encoding	52380
+font	../corpus/layout/arxiv/2005.14165.pdf	142	0	simple	678	-216	0	0	-1
 code	65	0065	glyphname	44400
 code	74	0074	glyphname	27800
 code	61	0061	glyphname	44400
@@ -703,6 +723,9 @@ code	73	0073	glyphname	38900
 code	69	0069	glyphname	27800
 code	6F	006F	glyphname	50000
 code	72	0072	glyphname	33300
+font	../corpus/layout/arxiv/2005.14165.pdf	143	0	simple	750	-194	0	0	-1
+code	3	2217	encoding	63890
+code	79	2020	encoding	57410
 font	../corpus/layout/arxiv/2005.14165.pdf	1618	0	simple	683	-217	16	0	8
 code	20	0020	encoding	25000
 code	32	0032	encoding	50000
@@ -712,21 +735,21 @@ code	35	0035	encoding	50000
 code	2E	002E	encoding	25000
 code	31	0031	encoding	50000
 code	34	0034	encoding	50000
-font	../corpus/layout/arxiv/2005.14165.pdf	209	0	simple	694	-194	256	0	-1
-code	2B	002B	unknown	87700
-code	63	0063	unknown	50790
-code	74	0074	unknown	44640
-code	78	0078	unknown	60020
-font	../corpus/layout/arxiv/2005.14165.pdf	266	0	simple	694	-194	256	0	-1
-code	4B	004B	unknown	84930
-code	6E	006E	unknown	60020
-font	../corpus/layout/arxiv/2005.14165.pdf	294	0	simple	694	-194	256	0	-1
-code	3D	003D	unknown	77780
-code	32	0032	unknown	50000
-code	30	0030	unknown	50000
-code	34	0034	unknown	50000
-code	38	0038	unknown	50000
-font	../corpus/layout/arxiv/2103.00020.pdf	51	0	simple	690	-209	256	0	-1
+font	../corpus/layout/arxiv/2005.14165.pdf	209	0	simple	694	-194	0	0	-1
+code	2B	002B	encoding	87700
+code	63	0063	encoding	50790
+code	74	0074	encoding	44640
+code	78	0078	encoding	60020
+font	../corpus/layout/arxiv/2005.14165.pdf	266	0	simple	694	-194	0	0	-1
+code	4B	004B	encoding	84930
+code	6E	006E	encoding	60020
+font	../corpus/layout/arxiv/2005.14165.pdf	294	0	simple	694	-194	0	0	-1
+code	3D	003D	encoding	77780
+code	32	0032	encoding	50000
+code	30	0030	encoding	50000
+code	34	0034	encoding	50000
+code	38	0038	encoding	50000
+font	../corpus/layout/arxiv/2103.00020.pdf	51	0	simple	690	-209	0	0	-1
 code	61	0061	glyphname	50000
 code	65	0065	glyphname	44400
 code	72	0072	glyphname	44400
@@ -735,7 +758,7 @@ code	69	0069	glyphname	27800
 code	73	0073	glyphname	38900
 code	6C	006C	glyphname	27800
 code	6F	006F	glyphname	50000
-font	../corpus/layout/arxiv/2103.00020.pdf	52	0	simple	678	-216	256	0	-1
+font	../corpus/layout/arxiv/2103.00020.pdf	52	0	simple	678	-216	0	0	-1
 code	65	0065	glyphname	44400
 code	74	0074	glyphname	27800
 code	61	0061	glyphname	44400
@@ -744,7 +767,7 @@ code	6F	006F	glyphname	50000
 code	6E	006E	glyphname	50000
 code	73	0073	glyphname	38900
 code	72	0072	glyphname	33300
-font	../corpus/layout/arxiv/2103.00020.pdf	54	0	simple	625	-147	256	0	-1
+font	../corpus/layout/arxiv/2103.00020.pdf	54	0	simple	625	-147	0	0	-1
 code	2F	002F	glyphname	60000
 code	4F	004F	glyphname	60000
 code	31	0031	glyphname	60000
@@ -753,9 +776,12 @@ code	74	0074	glyphname	60000
 code	5B	005B	glyphname	60000
 code	5D	005D	glyphname	60000
 code	68	0068	glyphname	60000
-font	../corpus/layout/arxiv/2103.00020.pdf	58	0	simple	694	-194	256	0	-1
-code	3C	003C	unknown	79940
-code	3E	003E	unknown	79940
+font	../corpus/layout/arxiv/2103.00020.pdf	58	0	simple	694	-194	0	0	-1
+code	3C	003C	encoding	79940
+code	3E	003E	encoding	79940
+font	../corpus/layout/arxiv/2103.00020.pdf	59	0	simple	750	-194	0	0	-1
+code	66	007B	encoding	51390
+code	67	007D	encoding	51390
 font	../corpus/layout/arxiv/2103.00020.pdf	5645	0	simple	683	-217	16	0	8
 code	30	0030	encoding	50000
 code	20	0020	encoding	25000
@@ -804,7 +830,7 @@ code	52	006F	tounicode	55615
 code	47	0064	tounicode	55615
 code	55	0072	tounicode	33301
 code	2C	0049	tounicode	27783
-font	../corpus/layout/arxiv/2103.00020.pdf	105	0	simple	678	-216	256	0	-1
+font	../corpus/layout/arxiv/2103.00020.pdf	105	0	simple	678	-216	0	0	-1
 code	46	0046	glyphname	55600
 code	69	0069	glyphname	27800
 code	67	0067	glyphname	50000
@@ -822,7 +848,7 @@ code	61	0061	glyphname	61300
 code	63	0063	glyphname	55000
 code	66	0066	glyphname	35200
 code	69	0069	glyphname	27800
-font	../corpus/layout/arxiv/2103.00020.pdf	187	0	simple	669	-193	256	0	-1
+font	../corpus/layout/arxiv/2103.00020.pdf	187	0	simple	669	-193	0	0	-1
 code	61	0061	glyphname	50000
 code	6E	006E	glyphname	50000
 code	6C	006C	glyphname	27800
@@ -831,14 +857,18 @@ code	73	0073	glyphname	38900
 code	69	0069	glyphname	27800
 code	72	0072	glyphname	38900
 code	74	0074	glyphname	27800
-font	../corpus/layout/arxiv/2103.00020.pdf	291	0	simple	694	-194	256	0	-1
-code	4E	004E	unknown	80350
-code	74	0074	unknown	36110
-font	../corpus/layout/arxiv/2103.00020.pdf	293	0	simple	694	-194	256	0	-1
-code	32	0032	unknown	56950
-font	../corpus/layout/arxiv/2103.00020.pdf	295	0	simple	694	-194	256	0	-1
-code	75	0075	unknown	67540
-code	76	0076	unknown	57140
+font	../corpus/layout/arxiv/2103.00020.pdf	291	0	simple	694	-194	0	0	-1
+code	4E	004E	encoding	80350
+code	1C	03C4	encoding	43720
+code	74	0074	encoding	36110
+font	../corpus/layout/arxiv/2103.00020.pdf	292	0	simple	750	-194	0	0	-1
+code	2	00D7	encoding	77780
+code	0	2212	encoding	77780
+font	../corpus/layout/arxiv/2103.00020.pdf	293	0	simple	694	-194	0	0	-1
+code	32	0032	encoding	56950
+font	../corpus/layout/arxiv/2103.00020.pdf	295	0	simple	694	-194	0	0	-1
+code	75	0075	encoding	67540
+code	76	0076	encoding	57140
 font	../corpus/layout/arxiv/2103.00020.pdf	357	0	composite	1047	-270	0	0	-1
 code	1	0020	tounicode	60000
 code	20	0065	tounicode	60000
@@ -1088,53 +1118,3 @@ code	69	0069	encoding	27800
 code	61	0061	encoding	44400
 code	6F	006F	encoding	50000
 code	72	0072	encoding	33300
-font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	246	0	composite	693	-215	0	0	-1
-code	3	00A0	tounicode	25000
-code	48	0065	tounicode	44300
-code	57	0074	tounicode	27700
-code	51	006E	tounicode	50000
-code	4C	0069	tounicode	27700
-code	52	006F	tounicode	50000
-code	44	0061	tounicode	44300
-code	56	0073	tounicode	38900
-font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Agency Agreements/BLUEHILLSBANCORP,INC_05_20_2014-EX-1.1-AGENCY AGREEMENT.PDF	162	0	simple	728	-210	0	0	4
-code	20	0020	encoding	27800
-font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	34	0	simple	693	-216	0	0	8
-code	1	0020	tounicode	25000
-code	B	002E	tounicode	25000
-code	10	006F	tounicode	50000
-code	11	006D	tounicode	77800
-code	15	0074	tounicode	27800
-code	18	0072	tounicode	33300
-code	5	0049	tounicode	33300
-code	8	0031	tounicode	50000
-font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	36	0	simple	677	-216	0	0	9
-code	1	0020	tounicode	25000
-code	1D	0065	tounicode	44400
-code	1E	006E	tounicode	55600
-code	24	0061	tounicode	50000
-code	1F	0074	tounicode	33300
-code	27	006F	tounicode	50000
-code	1C	0072	tounicode	44400
-code	26	0069	tounicode	27800
-font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	4	0	simple	677	-216	0	0	9
-code	1	0020	tounicode	25000
-code	1D	0065	tounicode	44400
-code	1F	0074	tounicode	33300
-code	1E	006E	tounicode	55600
-code	24	0061	tounicode	50000
-code	1C	0072	tounicode	44400
-code	26	0069	tounicode	27800
-code	27	006F	tounicode	50000
-font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	7	0	simple	693	-216	0	0	8
-code	1	0020	tounicode	25000
-code	1A	002D	tounicode	33300
-font	../corpus/layout/cuad/CUAD_v1/full_contract_pdf/Part_III/Maintenance/PRIMEENERGYRESOURCESCORP_04_02_2007-EX-10.28-COMPLETION AND LIQUIDITY MAINTENANCE AGREEMENT.PDF	15	0	simple	677	-216	0	0	9
-code	53	005F	tounicode	50000
-code	1	0020	tounicode	25000
-code	26	0069	tounicode	27800
-code	29	0063	tounicode	44400
-code	1E	006E	tounicode	55600
-code	3D	002E	tounicode	25000
-code	1C	0072	tounicode	44400
-code	1D	0065	tounicode	44400

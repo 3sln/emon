@@ -277,4 +277,84 @@ public static class Normalizetest {
         NtLit(emon.Testport.TextBlob("07 E9"), want);
         emon.Testport.AssertEq(NtSame(@out, want), 1, "only src[1,3) is read, and appended after the 7");
     }
+    internal static int NtSemiTab(byte[] b, int i, int lim) {
+        int k = i;
+        while ((k < lim) && (emon.Port.BlobU8(b, k) != 9)) {
+            k += 1;
+        }
+        return k;
+    }
+    internal static int NtRadicalRow(byte[] rows, int from, int to, emon.Port.Cells src, emon.Port.Cells want, emon.Port.Cells @out, emon.Port.Cells tmp) {
+        // Row `radical TAB ideograph` (hex): 1 when the flag folds the one to the other, NFC alone
+        // leaves it, and the fold is the same through `nz-radical-fold`.
+        int tab = NtSemiTab(rows, from, to);
+        NtCps(rows, from, tab, src);
+        NtCps(rows, tab + 1, to, want);
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, Normalize.NzFlagRadicals());
+        if (NtSame(@out, want) == 0) {
+            return 0;
+        }
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, 0);
+        if (NtSame(@out, src) == 0) {
+            return 0;
+        }
+        if (Normalize.NzRadicalFold(emon.Port.CellsAt(src, 0)) != emon.Port.CellsAt(want, 0)) {
+            return 0;
+        }
+        return 1;
+    }
+    [Xunit.Fact]
+    public static void TestEveryCjkRadicalFoldsToItsUnifiedIdeograph() {
+        // radicals.txt (kin/scripts/radicals.clj, from CJKRadicals.txt and UnicodeData.txt): the 214 Kangxi
+        // radicals and the 30 CJK Radicals Supplement characters with an equivalent.
+        byte[] rows = emon.Testport.TestFile("normalize/radicals.txt");
+        emon.Port.Cells src = emon.Port.NewCells();
+        emon.Port.Cells want = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        int n = emon.Port.BlobLen(rows);
+        int pos = 0;
+        int e = 0;
+        int line = 0;
+        int count = 0;
+        while (pos < n) {
+            line += 1;
+            e = NtNl(rows, pos);
+            if ((pos < e) && (emon.Port.BlobU8(rows, pos) != 35)) {
+                count += 1;
+                emon.Testport.AssertEqAt(NtRadicalRow(rows, pos, e, src, want, @out, tmp), 1, "radical row", line);
+            }
+            pos = e + 1;
+        }
+        emon.Testport.AssertEq(count, 244, "214 Kangxi radicals and 30 supplement characters");
+    }
+    [Xunit.Fact]
+    public static void TestTheRadicalFoldLeavesEverythingElseAlone() {
+        emon.Port.Cells src = emon.Port.NewCells();
+        emon.Port.Cells want = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        NtLit(emon.Testport.TextBlob("2F00 61 2F01 4E00 2E80 2FD5 2FD6 2E7F 2EF3 2EF4 E9"), src);
+        NtLit(emon.Testport.TextBlob("4E00 61 4E28 4E00 2E80 9FA0 2FD6 2E7F 9F9F 2EF4 E9"), want);
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, Normalize.NzFlagRadicals());
+        emon.Testport.AssertEq(NtSame(@out, want), 1, "radicals fold; their neighbours, U+2E80 (no equivalent) and the block's ends stay");
+        emon.Testport.AssertEq(Normalize.NzRadicalFold(12032), 19968, "U+2F00 is U+4E00");
+        emon.Testport.AssertEq(Normalize.NzRadicalFold(12245), 40864, "U+2FD5 is U+9FA0");
+        emon.Testport.AssertEq(Normalize.NzRadicalFold(12246), 12246, "U+2FD6 is not a radical");
+        emon.Testport.AssertEq(Normalize.NzRadicalFold(11904), 11904, "U+2E80 has no equivalent");
+        emon.Testport.AssertEq(Normalize.NzRadicalFold(65), 65, "ASCII");
+        emon.Testport.AssertEq(Normalize.NzRadicalFold(-1), -1, "a negative number is nothing");
+        NtLit(emon.Testport.TextBlob("2F00 FB01 AD 65 301"), src);
+        NtLit(emon.Testport.TextBlob("4E00 66 69 E9"), want);
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, 7);
+        emon.Testport.AssertEq(NtSame(@out, want), 1, "the three flags compose with NFC");
+        emon.Port.CellsDrop(@out, 0);
+        Normalize.NzNfc(src, 0, emon.Port.CellsLen(src), @out, tmp, 4);
+        NtLit(emon.Testport.TextBlob("4E00 FB01 AD E9"), want);
+        emon.Testport.AssertEq(NtSame(@out, want), 1, "flag 4 alone folds the radical and does not drop the soft hyphen (the flags are bits)");
+    }
 }

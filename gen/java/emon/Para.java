@@ -475,7 +475,7 @@ public final class Para {
                 }
                 child = Model.nodeNew(nodes, Model.nkText(), par);
                 t0 = emon.Port.cellsLen(text);
-                Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures());
+                Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
                 int tn = emon.Port.cellsLen(text) - t0;
                 Model.nodeSetText(nodes, child, t0, tn);
                 Model.nodeSetConf(nodes, child, 1000);
@@ -483,7 +483,7 @@ public final class Para {
                 Model.nodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
             } else {
                 t0 = emon.Port.cellsLen(text);
-                Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures());
+                Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
                 int tn2 = emon.Port.cellsLen(text) - t0;
                 Model.nodeSetText(nodes, par, t0, tn2);
             }

@@ -209,10 +209,10 @@ public static class Paratest {
         emon.Testport.AssertText(t1, "P1:a multi-page one information and Smith- Jones end;", "hyphens at line ends");
         // NFC and the ligatures: U+FB01 is `fi`, `e` and U+0301 are U+00E9; a soft hyphen inside a line stays.
         PtClear(wd, ln, et);
-        PtLine(wd, ln, et, emon.Testport.TextBlob("oﬀice étﬆ"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+        PtLine(wd, ln, et, emon.Testport.TextBlob("oﬀice étﬆ ⼀"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
         emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "nfc: well formed");
         PtBrief(t2, nodes, regions, text);
-        emon.Testport.AssertText(t2, "P1:office étst;", "normalization");
+        emon.Testport.AssertText(t2, "P1:office étst 一;", "normalization (radical U+2F00 folds, D142)");
     }
     [Xunit.Fact]
     public static void TestAPageEndIsAMilestoneBetweenBlocksOrInsideAParagraph() {

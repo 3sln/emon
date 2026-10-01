@@ -4,10 +4,13 @@
 package pdffonttest
 
 import (
+	"emon/cjk"
 	"emon/evidence"
+	"emon/fontprog"
 	"emon/pdfdoc"
 	"emon/pdffont"
 	"emon/pdflex"
+	"emon/pdfsrc"
 	"emon/port"
 	"strings"
 	"testing"
@@ -670,4 +673,385 @@ func TestACmapCutAtEveryByteNeverFaults(emonT *testing.T) {
 		pos = e + 1
 	}
 	port.AssertThat(emonT, tries > 100, "the prefixes were tried")
+}
+
+func ftCodeNRow(code int32, f *port.Cells, cps *strings.Builder, how *strings.Builder) int32 {
+	// Map `code` (a number, possibly a negative four-byte one) and write its code points and `how`;
+	// answers its width.
+	var cnt int32 = pdffont.PfnMap(f, code)
+	ftEmitCps(cps, f, cnt)
+	pdffont.PfnHowEmitName(how, pdffont.PfnHowOf(f))
+	return pdffont.PfnWidth(f, code)
+}
+
+func ftRunRows(emonT *testing.T, rows []byte) int32 {
+	// Every row of a fonts.txt-format file (and `coded`, `cidd`, `vm` rows): answers the count.
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var f *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(rows)
+	var pos int32 = 0
+	var line int32 = 0
+	var count int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	var s1 int32 = 0
+	var s2 int32 = 0
+	var s3 int32 = 0
+	var s4 int32 = 0
+	var s5 int32 = 0
+	var s6 int32 = 0
+	var s7 int32 = 0
+	var s8 int32 = 0
+	var lstatus int32 = 0
+	var b0 int32 = 0
+	var width int32 = 0
+	var klen int32 = 0
+	for pos < n {
+		line += 1
+		e = ftNl(rows, pos)
+		if (pos < e) && (port.BlobU8(rows, pos) != 35) {
+			count += 1
+			b0 = port.BlobU8(rows, pos)
+			s0 = ftTab(rows, pos, e)
+			klen = s0 - pos
+			s1 = ftTab(rows, s0+1, e)
+			s2 = ftTab(rows, s1+1, e)
+			s3 = ftTab(rows, s2+1, e)
+			if b0 == 102 {
+				s4 = ftTab(rows, s3+1, e)
+				s5 = ftTab(rows, s4+1, e)
+				s6 = ftTab(rows, s5+1, e)
+				s7 = ftTab(rows, s6+1, e)
+				s8 = ftTab(rows, s7+1, e)
+				lstatus = ftLoadFont(rows, s0+1, s1, ftDec(rows, s1+1, s2), ar, dc, a, b, st, out, f)
+				port.AssertEqAt(emonT, lstatus, ftDec(rows, s2+1, s3), "load status", line)
+				port.AssertEqAt(emonT, pdffont.PfnKindOf(f), ftKindCode(port.BlobU8(rows, s3+1)), "kind", line)
+				port.AssertEqAt(emonT, pdffont.PfnAscent(f), ftDec(rows, s4+1, s5), "ascent", line)
+				port.AssertEqAt(emonT, pdffont.PfnDescent(f), ftDec(rows, s5+1, s6), "descent", line)
+				port.AssertEqAt(emonT, pdffont.PfnWarn(f), ftDec(rows, s6+1, s7), "warning bits", line)
+				port.AssertEqAt(emonT, pdffont.PfnVertical(f), ftDec(rows, s7+1, s8), "vertical", line)
+				port.AssertEqAt(emonT, pdffont.PfnStandardFont(f), ftDec(rows, s8+1, e), "standard font", line)
+			}
+			if (b0 == 99) && (klen == 4) {
+				if port.BlobU8(rows, pos+1) == 111 {
+					var tcps *strings.Builder = port.NewText()
+					var thow *strings.Builder = port.NewText()
+					width = ftCodeRow(rows, s0, s1, f, tcps, thow)
+					port.AssertTextSpan(emonT, tcps, rows, s1+1, s2, "code points", line)
+					port.AssertTextSpan(emonT, thow, rows, s2+1, s3, "how", line)
+					port.AssertEqAt(emonT, width, ftDec(rows, s3+1, e), "width", line)
+				}
+			}
+			if (b0 == 99) && (klen == 5) {
+				var tcps *strings.Builder = port.NewText()
+				var thow *strings.Builder = port.NewText()
+				width = ftCodeNRow(ftDec(rows, s0+1, s1), f, tcps, thow)
+				port.AssertTextSpan(emonT, tcps, rows, s1+1, s2, "code points", line)
+				port.AssertTextSpan(emonT, thow, rows, s2+1, s3, "how", line)
+				port.AssertEqAt(emonT, width, ftDec(rows, s3+1, e), "width", line)
+			}
+			if (b0 == 99) && (klen == 3) {
+				port.AssertEqAt(emonT, pdffont.PfnCid(f, ftHex(rows, s0+1, s1)), ftDec(rows, s1+1, e), "cid", line)
+			}
+			if (b0 == 99) && (klen == 4) {
+				if port.BlobU8(rows, pos+1) == 105 {
+					port.AssertEqAt(emonT, pdffont.PfnCid(f, ftDec(rows, s0+1, s1)), ftDec(rows, s1+1, e), "cid of a four-byte code", line)
+				}
+			}
+			if b0 == 108 {
+				port.AssertEqAt(emonT, ftLenRow(rows, s0, s1, f), ftDec(rows, s1+1, e), "code length", line)
+			}
+			if b0 == 118 {
+				port.AssertEqAt(emonT, pdffont.PfnVerticalMetric(f, ftHex(rows, s0+1, s1), ftDec(rows, s1+1, s2)), ftDec(rows, s2+1, e), "vertical metric", line)
+			}
+		}
+		pos = e + 1
+	}
+	return count
+}
+
+func TestEveryEmbeddedProgramFontAnswersAsBuilt(emonT *testing.T) {
+	// Rows of progs.txt: Type 1, CFF, TrueType and OpenType programs, Type 3, MacExpert, predefined
+	// CJK CMaps, Adobe CID collections, /W2: every expectation known by construction.
+	var count int32 = ftRunRows(emonT, port.TestFile("fonts/progs.txt"))
+	port.AssertThat(emonT, count > 100, "the program-font rows were read")
+}
+
+func ftCjkCode(rows []byte, from int32, to int32) int32 {
+	// A code of a cjk.txt row: hex, or `d` and a signed decimal (a four-byte code).
+	if port.BlobU8(rows, from) == 100 {
+		return ftDec(rows, from+1, to)
+	}
+	return ftHex(rows, from, to)
+}
+
+func TestEveryPredefinedCmapRowMapsAsItsFileSays(emonT *testing.T) {
+	// Rows of cjk.txt: `cid /Name code cid` (the CID the Adobe CMap file gives the code, 0 for none) and
+	// `uni Ordering cid code-point` (what cid2code.txt says), on every target.
+	var rows []byte = port.TestFile("fonts/cjk.txt")
+	var ar *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(rows)
+	var pos int32 = 0
+	var line int32 = 0
+	var count int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	var s1 int32 = 0
+	var s2 int32 = 0
+	var h int32 = 0
+	var hit int32 = 0
+	var coll int32 = 0
+	for pos < n {
+		line += 1
+		e = ftNl(rows, pos)
+		if (pos < e) && (port.BlobU8(rows, pos) != 35) {
+			count += 1
+			s0 = ftTab(rows, pos, e)
+			s1 = ftTab(rows, s0+1, e)
+			s2 = ftTab(rows, s1+1, e)
+			if port.BlobU8(rows, pos) == 99 {
+				pdflex.PlInit(ar)
+				pdflex.PlSeek(ar, s0+1, s1)
+				h = pdflex.PlParse(port.SrcOfBlob(rows), ar)
+				hit = cjk.CjkFindName(ar, h)
+				port.AssertThatAt(emonT, hit >= 0, "the CMap is one of the four collections'", line)
+				port.AssertEqAt(emonT, cjk.CjkCid(hit/1000, hit%1000, ftCjkCode(rows, s1+1, s2)), ftDec(rows, s2+1, e), "CID", line)
+			}
+			if port.BlobU8(rows, pos) == 117 {
+				coll = 0
+				if port.BlobU8(rows, s0+1) == 71 {
+					coll = 1
+				}
+				if port.BlobU8(rows, s0+1) == 67 {
+					coll = 2
+				}
+				if port.BlobU8(rows, s0+1) == 75 {
+					coll = 3
+				}
+				port.AssertEqAt(emonT, cjk.CjkUni(coll, ftDec(rows, s1+1, s2)), ftHex(rows, s2+1, e), "Unicode of the CID", line)
+			}
+		}
+		pos = e + 1
+	}
+	port.AssertThat(emonT, count > 5000, "the CJK rows were read")
+}
+
+func ftPushZeros(g *port.Cells, k int32) int32 {
+	var i int32 = 0
+	for i < k {
+		port.CellsPush(g, 0)
+		i += 1
+	}
+	return 0
+}
+
+func ftCutProgram(prog []byte, g *port.Cells) int32 {
+	// `fp-simple` on every prefix of the program: answers how many prefixes were tried.
+	var n int32 = port.BlobLen(prog)
+	var cut int32 = 0
+	var tries int32 = 0
+	for cut <= n {
+		var piece *port.Cells = port.NewCells()
+		var j int32 = 0
+		for j < cut {
+			port.CellsPush(piece, port.BlobU8(prog, j))
+			j += 1
+		}
+		fontprog.FpSimple(g, 16, 32, port.CellsBlob(piece), 0)
+		fontprog.FpSimple(g, 16, 32, port.CellsBlob(piece), 1)
+		tries += 1
+		cut += 1
+	}
+	return tries
+}
+
+func TestAFontProgramCutAtEveryByteNeverFaults(emonT *testing.T) {
+	// Type 1, CFF, TrueType and OpenType programs, every prefix of each: no read past an end, no loop.
+	var g *port.Cells = port.NewCells()
+	ftPushZeros(g, 1700)
+	var tries int32 = (ftCutProgram(port.TestFile("fonts/prog-t1.bin"), g) + ftCutProgram(port.TestFile("fonts/prog-cff.bin"), g)) + (ftCutProgram(port.TestFile("fonts/prog-tt.bin"), g) + ftCutProgram(port.TestFile("fonts/prog-otf.bin"), g))
+	port.AssertThat(emonT, tries > 1000, "the prefixes were tried")
+}
+
+func ftNameBytesRow(rows []byte, from int32, to int32, g *port.Cells, kind int32, t *strings.Builder) int32 {
+	// `fp-name-cps` on the name bytes rows[from+1, to) (the slash skipped): the code points, `-` none.
+	var cnt int32 = fontprog.FpNameCps(g, 16, rows, from+1, to, kind/122)
+	var i int32 = 0
+	if cnt == 0 {
+		port.TextCp(t, 45)
+		return 0
+	}
+	for i < cnt {
+		if i > 0 {
+			port.TextCp(t, 43)
+		}
+		ftEmitHex(t, port.CellsAt(g, 17+i))
+		i += 1
+	}
+	return 0
+}
+
+func TestFontProgramGlyphNamesAreReadAsThePdfReadersAre(emonT *testing.T) {
+	// `emon.fontprog` reads names from font bytes; it must agree with `pfn-name-cps` (the AGL rules)
+	// on every row of names.txt.
+	var rows []byte = port.TestFile("fonts/names.txt")
+	var g *port.Cells = port.NewCells()
+	var n int32 = port.BlobLen(rows)
+	var pos int32 = 0
+	var line int32 = 0
+	var count int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	var s1 int32 = 0
+	var k int32 = 0
+	var esc int32 = 0
+	ftPushZeros(g, 40)
+	for pos < n {
+		line += 1
+		e = ftNl(rows, pos)
+		if (pos < e) && ((port.BlobU8(rows, pos) == 110) || (port.BlobU8(rows, pos) == 122)) {
+			s0 = ftTab(rows, pos, e)
+			s1 = ftTab(rows, s0+1, e)
+			esc = 0
+			k = s0 + 1
+			for k < s1 {
+				if port.BlobU8(rows, k) == 35 {
+					esc = 1
+				}
+				k += 1
+			}
+			if esc == 0 {
+				var t *strings.Builder = port.NewText()
+				count += 1
+				ftNameBytesRow(rows, s0+1, s1, g, port.BlobU8(rows, pos), t)
+				port.AssertTextSpan(emonT, t, rows, s1+1, e, "glyph name from font bytes", line)
+			}
+		}
+		pos = e + 1
+	}
+	port.AssertThat(emonT, count > 4000, "the names were read")
+}
+
+func ftMix(acc int32, v int32) int32 {
+	// A small order-sensitive digest, wrapping inside 2^24 so it cannot overflow.
+	return (((acc % 8388593) * 31) + ((v % 8388593) + 7)) % 16777213
+}
+
+func ftDigestFont(pdf *port.Src, num int32) int32 {
+	// Open the file, load font object `num`, and digest its status, warnings, metrics and the answer for
+	// each of 512 codes; -1 when the source missed (nothing of the attempt may be kept, D075).
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var f *port.Cells = port.NewCells()
+	var ostatus int32 = pdfdoc.PdOpen(pdf, ar, dc, a, b, st)
+	var acc int32 = ostatus
+	var h int32 = 0
+	var status int32 = 0
+	var code int32 = 0
+	var cnt int32 = 0
+	var i int32 = 0
+	if pdfsrc.PsMissed(pdf) {
+		return -1
+	}
+	h = pdfdoc.PdGet(pdf, ar, dc, a, b, st, num)
+	status = pdffont.PfnLoad(pdf, ar, dc, a, b, st, f, out, h)
+	if pdfsrc.PsMissed(pdf) {
+		return -1
+	}
+	acc = ftMix(acc, status)
+	acc = ftMix(acc, pdffont.PfnWarn(f))
+	acc = ftMix(acc, pdffont.PfnKindOf(f))
+	acc = ftMix(acc, pdffont.PfnAscent(f))
+	for code < 512 {
+		cnt = pdffont.PfnMap(f, code)
+		acc = ftMix(acc, cnt)
+		i = 0
+		for i < cnt {
+			acc = ftMix(acc, pdffont.PfnCp(f, i))
+			i += 1
+		}
+		acc = ftMix(acc, pdffont.PfnHowOf(f))
+		acc = ftMix(acc, pdffont.PfnWidth(f, code))
+		acc = ftMix(acc, pdffont.PfnCid(f, code))
+		code += 1
+	}
+	return acc
+}
+
+func ftDigestAsync(bytes []byte, num int32, chunk int32) int32 {
+	// `ft-digest-font` through a source of `chunk`-byte chunks, re-run on a fresh view until an attempt
+	// does not miss; -2 after 60 rounds.
+	var base *port.Src = port.SrcChunked(bytes, chunk, 0)
+	var round int32 = 0
+	var more int32 = 1
+	var d int32 = 0
+	for more == 1 {
+		var v *port.Src = port.SrcView(base)
+		d = ftDigestFont(v, num)
+		if d == -1 {
+			port.SrcCtl(base, 0, round)
+			round += 1
+			if round > 60 {
+				more = 0
+				d = -2
+			}
+		} else {
+			more = 0
+		}
+	}
+	return d
+}
+
+func ftAsyncFonts(chunk int32) int32 {
+	// Every font of progs.txt through an async source: the number whose digest is not the memory one.
+	var rows []byte = port.TestFile("fonts/progs.txt")
+	var pdf []byte = port.TestFile("fonts/progs.pdf")
+	var n int32 = port.BlobLen(rows)
+	var pos int32 = 0
+	var e int32 = 0
+	var s0 int32 = 0
+	var s1 int32 = 0
+	var s2 int32 = 0
+	var num int32 = 0
+	var fonts int32 = 0
+	var bad int32 = 0
+	var want int32 = 0
+	var got int32 = 0
+	for pos < n {
+		e = ftNl(rows, pos)
+		if (pos < e) && (port.BlobU8(rows, pos) == 102) {
+			s0 = ftTab(rows, pos, e)
+			s1 = ftTab(rows, s0+1, e)
+			s2 = ftTab(rows, s1+1, e)
+			num = ftDec(rows, s1+1, s2)
+			fonts += 1
+			want = ftDigestFont(port.SrcOfBlob(pdf), num)
+			got = ftDigestAsync(pdf, num, chunk)
+			if (want < 0) || (want != got) {
+				bad += 1
+			}
+		}
+		pos = e + 1
+	}
+	if fonts < 25 {
+		return -1
+	}
+	return bad
+}
+
+func TestEveryProgramFontIsTheSameThroughAnAsyncSourceOf64ByteChunks(emonT *testing.T) {
+	port.AssertEq(emonT, ftAsyncFonts(64), 0, "every font of progs.pdf through 64-byte chunks")
+}
+
+func TestEveryProgramFontIsTheSameThroughAnAsyncSourceOf512ByteChunks(emonT *testing.T) {
+	port.AssertEq(emonT, ftAsyncFonts(512), 0, "every font of progs.pdf through 512-byte chunks")
 }

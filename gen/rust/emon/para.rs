@@ -476,7 +476,7 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
             }
             child = node_new(nodes, nk_text(), par);
             t0 = crate::port::cells_len(text);
-            nz_nfc(raw, from, to, text, tmp, nz_flag_ligatures());
+            nz_nfc(raw, from, to, text, tmp, nz_flag_ligatures() + nz_flag_radicals());
             let tn: i32 = crate::port::cells_len(text) - t0;
             node_set_text(nodes, child, t0, tn);
             node_set_conf(nodes, child, 1000);
@@ -484,7 +484,7 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
             node_add_region(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
         } else {
             t0 = crate::port::cells_len(text);
-            nz_nfc(raw, from, to, text, tmp, nz_flag_ligatures());
+            nz_nfc(raw, from, to, text, tmp, nz_flag_ligatures() + nz_flag_radicals());
             let tn2: i32 = crate::port::cells_len(text) - t0;
             node_set_text(nodes, par, t0, tn2);
         }

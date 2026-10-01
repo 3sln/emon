@@ -160,7 +160,11 @@ def split_codes(fontdict, uses):
         enc = fontdict.get("/Encoding")
         enc = enc.get_object() if hasattr(enc, "get_object") else enc
         if enc not in ("/Identity-H", "/Identity-V"):
-            return None, "composite-other"
+            if not isinstance(enc, str):
+                return None, "composite-embedded-cmap"
+            for s, n in uses.items():
+                weights["s" + s.hex().upper()] = weights.get("s" + s.hex().upper(), 0) + n
+            return "composite-str", weights
         for s, n in uses.items():
             for i in range(0, len(s) - 1, 2):
                 c = (s[i] << 8) | s[i + 1]
@@ -188,6 +192,27 @@ def reference(path, wanted):
                 font = rm.get_font(objid, spec)
             except Exception:
                 continue
+            if kind == "composite-str":
+                for tok in codes:
+                    try:
+                        raw = bytes.fromhex(tok[1:])
+                        cids = list(font.decode(raw))
+                    except Exception:
+                        continue
+                    res = []
+                    for cid in cids:
+                        try:
+                            u = font.to_unichr(cid)
+                            cps = tuple(ord(ch) for ch in u) if u else None
+                        except Exception:
+                            cps = None
+                        try:
+                            w = int(round(font.char_width(cid) * 100000))
+                        except Exception:
+                            w = None
+                        res.append((cps, w))
+                    out[(objid, tok)] = res
+                continue
             for code in codes:
                 try:
                     cid = list(font.decode(code.to_bytes(2, "big") if kind == "composite" else bytes([code])))[0]
@@ -207,12 +232,12 @@ def reference(path, wanted):
 
 
 def sweep(requests):
-    text = "".join(f"{p}\t{o}\t{','.join('%X' % c for c in codes)}\n" for p, o, codes in requests)
+    text = "".join(f"{p}\t{o}\t{','.join(c if isinstance(c, str) else '%X' % c for c in codes)}\n" for p, o, codes in requests)
     r = subprocess.run([os.path.join(HERE, "font-sweep")], input=text, capture_output=True, text=True, cwd=ROOT)
     if r.returncode != 0:
         print(r.stderr[-2000:])
         sys.exit(1)
-    fonts, codes = {}, {}
+    fonts, codes, strs = {}, {}, {}
     cur = None
     for line in r.stdout.splitlines():
         f = line.split("\t")
@@ -222,7 +247,15 @@ def sweep(requests):
         elif f[0] == "C":
             cps = None if f[2] == "-" else tuple(int(x, 16) for x in f[2].split("+"))
             codes[(cur[0], cur[1], int(f[1], 16))] = (cps, f[3], None if f[4] == "-" else int(f[4]))
-    return fonts, codes
+        elif f[0] == "P":
+            cps = None if f[4] == "-" else tuple(int(x, 16) for x in f[4].split("+"))
+            strs.setdefault((cur[0], cur[1], "s" + f[1]), []).append((cps, f[5], None if f[6] == "-" else int(f[6])))
+    return fonts, codes, strs
+
+
+def cstr(code):
+    """A code for display: a hex number, or `string#position` for a synthetic position of a string."""
+    return "%X" % code if code < 10_000_000 else "str%d" % (code - 10_000_000)
 
 
 def main():
@@ -231,6 +264,13 @@ def main():
         extra = int(sys.argv[sys.argv.index("--extra") + 1])
     write = "--write" in sys.argv
     files = sample_files(extra)
+    if "--files" in sys.argv:
+        # only these files (paths relative to the repository root, or to corpus/)
+        files = []
+        for a in sys.argv[sys.argv.index("--files") + 1:]:
+            if a.startswith("--"):
+                break
+            files.append(a if os.path.exists(a) else os.path.join(CORPUS, a))
     signal.signal(signal.SIGALRM, alarm)
     plan = []            # (path, objid, kind, {code: weight})
     skipped = {}
@@ -276,7 +316,31 @@ def main():
         finally:
             signal.alarm(0)
 
-    fonts, answers = sweep([(p, o, list(w)) for p, o, k, w in plan])
+    fonts, answers, strs = sweep([(p, o, list(w)) for p, o, k, w in plan])
+    # a string is compared position by position; a position gets a synthetic code (an int) so that the
+    # accounting below is the one a simple font's codes get. A string split into a different NUMBER of codes
+    # by the two libraries counts every position as a disagreement ("split").
+    synth = {}
+    newplan = []
+    for path, objid, kind, w in plan:
+        if kind != "composite-str":
+            newplan.append((path, objid, kind, w))
+            continue
+        w2 = {}
+        for tok, weight in w.items():
+            mine = strs.get((path, objid, tok), [])
+            theirs = ref.get((path, objid, tok), [])
+            n = max(len(mine), len(theirs))
+            for i in range(n):
+                key = 10_000_000 + len(synth)
+                synth[key] = (tok, i)
+                w2[key] = w2.get(key, 0) + weight
+                e = mine[i] if i < len(mine) and len(mine) == len(theirs) else (None, "split", None)
+                r = theirs[i] if i < len(theirs) and len(mine) == len(theirs) else (None, None)
+                answers[(path, objid, key)] = e
+                ref[(path, objid, key)] = r
+        newplan.append((path, objid, "composite", w2))
+    plan = newplan
 
     tot = {"distinct": 0, "weighted": 0}
     agree = {"distinct": 0, "weighted": 0}
@@ -339,14 +403,14 @@ def main():
             if c not in ("equal", "both-none"):
                 gk = (c, how, tuple(ecps or ()), tuple(rcps or ()))
                 groups[gk] = groups.get(gk, 0) + weight
-                groupfiles.setdefault(gk, os.path.relpath(path, CORPUS) + ":%d:%X" % (objid, code))
+                groupfiles.setdefault(gk, os.path.relpath(path, CORPUS) + ":%d:%s" % (objid, cstr(code)))
             if c not in ("equal", "both-none") and len(examples.setdefault(c + "/" + how, [])) < 6:
-                examples[c + "/" + how].append((os.path.relpath(path, CORPUS), objid, "%X" % code,
+                examples[c + "/" + how].append((os.path.relpath(path, CORPUS), objid, cstr(code),
                                                 ecps and ["%04X" % x for x in ecps], rcps and ["%04X" % x for x in rcps]))
             wboth["none-emon" if ew is None else "none-ref" if rw is None else "both"] = \
                 wboth.get("none-emon" if ew is None else "none-ref" if rw is None else "both", 0) + weight
             if ew is not None and rw is not None and abs(ew - rw) > 100:
-                wdiff.append((weight, os.path.relpath(path, CORPUS), objid, "%X" % code, ew, rw))
+                wdiff.append((weight, os.path.relpath(path, CORPUS), objid, cstr(code), ew, rw))
             if ew is not None and rw is not None:
                 wagree["distinct"] += 1 if abs(ew - rw) <= 100 else 0
                 wagree["weighted"] += weight if abs(ew - rw) <= 100 else 0
@@ -394,6 +458,8 @@ def main():
                 continue
             good = []
             for code in sorted(w, key=lambda c: -w[c]):
+                if code >= 10_000_000:
+                    continue
                 e = answers.get((path, objid, code))
                 r = ref.get((path, objid, code))
                 if not e or not r or e[0] is None or e[0] != r[0]:

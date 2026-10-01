@@ -214,10 +214,10 @@ fn test_line_ends_join_per_spec_3_6() {
     crate::testport::assert_text(t1, "P1:a multi-page one information and Smith- Jones end;", "hyphens at line ends");
     // NFC and the ligatures: U+FB01 is `fi`, `e` and U+0301 are U+00E9; a soft hyphen inside a line stays.
     pt_clear(wd, ln, et);
-    pt_line(wd, ln, et, &crate::testport::text_blob("oﬀice étﬆ")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
+    pt_line(wd, ln, et, &crate::testport::text_blob("oﬀice étﬆ ⼀")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
     crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "nfc: well formed");
     pt_brief(t2, nodes, regions, text);
-    crate::testport::assert_text(t2, "P1:office étst;", "normalization");
+    crate::testport::assert_text(t2, "P1:office étst 一;", "normalization (radical U+2F00 folds, D142)");
 }
 #[test]
 fn test_a_page_end_is_a_milestone_between_blocks_or_inside_a_paragraph() {

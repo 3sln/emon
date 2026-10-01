@@ -1,0 +1,913 @@
+;; The built-in encoding of an EMBEDDED FONT PROGRAM (P3.4, D141): what a simple font's codes mean when the
+;; PDF does not say, and the font file does. emon's own reader (D039), written from Adobe Type 1 Font Format
+;; (the clear-text header: `/Encoding`), Adobe Technical Note #5176 (CFF), and the OpenType / TrueType
+;; specification (`cmap`, `post`, `maxp`).
+;;
+;; THE QUESTION is one: for each code 0..255, what are the code points of the glyph the font program itself
+;; draws for it? `fp-simple` answers all 256 at once into a table the caller owns:
+;;
+;;   Type 1 (FontFile)          the `/Encoding` array of the clear-text part, or StandardEncoding. The
+;;                              encrypted part is never read: the encoding is not in it.
+;;   CFF (FontFile3 Type1C, or the `CFF ` table of an OpenType file)
+;;                              the Encoding of the Top DICT: predefined Standard or Expert, or the table
+;;                              (formats 0 and 1, and supplements) with glyph names through the charset
+;;                              (predefined or formats 0, 1, 2) and the String INDEX.
+;;   TrueType / OpenType glyf   a symbolic font's rule of ISO 32000-1 9.6.6.4: the (3,0) cmap at the code plus
+;;                              0xF000, 0xF100, 0xF200 (and the code itself), else the (1,0) cmap; the glyph
+;;                              is then named by the font's Unicode cmap read BACKWARDS (the smallest code
+;;                              point that draws it), else by its `post` name (AGL rules).
+;;
+;; THE TABLE (`tbl`, in the caller's `Cells` `g`): 256 entries of six cells [n cp0 cp1 cp2 cp3 how]: `n` code
+;; points (0: the font program says nothing), and `how` 2 (an encoding table or a Unicode cmap) or 3 (a glyph
+;; name). 16 cells of scratch follow the table (`SCR`). The answer registers `reg` (`g[reg]` the count, then
+;; four code points) are the ones `emon.pdffont` calls H_TN and H_T0.
+;;
+;; NO READ CAN FAULT: every byte comes through `fp-u8`, which is 0 past either end, every loop is bounded, and
+;; a font that makes no sense answers -1 (the caller keeps what it guessed). The data of a table is the
+;; decoded stream bytes (a `Blob`): this module is handed them by `emon.pdffont`, which read them through the
+;; document layer (and checks the source's miss flag, D075, after the whole font is loaded).
+(ns emon.fontprog
+  (:require [emon.lang :refer [I32 Blob Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop blob-len blob-u8]]
+            [emon.agl :refer [agl-count agl-at agl-pool-at agl-uni-at]]
+            [emon.encodings :refer [enc-gid-at]]
+            [emon.fontextra :refer [cff-std-string-at cff-expert-charset-count cff-expert-charset-at
+                                    cff-expertsub-charset-count cff-expertsub-charset-at
+                                    cff-expert-enc-at mac-glyph-order-at]]
+            [kin.lang :refer [defn defconst return let set while if comment do
+                              + - * < > <= >= == != and or quot rem
+                              bit-and bit-or]]))
+
+(defconst ^I32 T_STRIDE 6)
+(defconst ^I32 T_SIZE 1536)       ;; 256 * 6
+(defconst ^I32 SCR 1536)          ;; the scratch cells that follow the table
+
+(defconst ^I32 S_CHARSET 0)
+(defconst ^I32 S_ENC 1)
+(defconst ^I32 S_CHARSTR 2)
+(defconst ^I32 S_CID 3)
+(defconst ^I32 S_NG 4)
+(defconst ^I32 S_STR 5)
+(defconst ^I32 S_C30 6)
+(defconst ^I32 S_C10 7)
+(defconst ^I32 S_UNI 8)
+(defconst ^I32 S_POST 9)
+(defconst ^I32 S_BUDGET 10)
+(defconst ^I32 S_OP 11)
+(defconst ^I32 S_VAL 12)
+(defconst ^I32 S_KIND 13)         ;; 1 a program with glyph NAMES (Type 1, CFF), 2 an sfnt (glyf)
+
+;; ----------------------------------------------------------------- reads
+
+(defn ^:pub ^I32 fp-u8 [^Blob d ^I32 i]
+  (if (< i 0) (return 0))
+  (if (>= i (blob-len d)) (return 0))
+  (return (blob-u8 d i)))
+
+(defn ^:pub ^I32 fp-u16 [^Blob d ^I32 i]
+  (return (+ (* (fp-u8 d i) 256) (fp-u8 d (+ i 1)))))
+
+(defn ^I32 fp-s16 [^Blob d ^I32 i]
+  (let [^I32 v (fp-u16 d i)]
+    (if (>= v 32768) (return (- v 65536)))
+    (return v)))
+
+(defn ^I32 fp-u32 [^Blob d ^I32 i]
+  (comment "Saturates at 2^28-1: an offset or a count that large is past any font's end anyway,")
+  (comment "and a sum of a few of them cannot overflow.")
+  (if (>= (fp-u8 d i) 16) (return 268435455))
+  (return (+ (* (fp-u8 d i) 16777216)
+             (+ (* (fp-u8 d (+ i 1)) 65536)
+                (+ (* (fp-u8 d (+ i 2)) 256) (fp-u8 d (+ i 3)))))))
+
+(defn ^I32 fp-in [^Blob d ^I32 i]
+  (comment "1 when i is a byte of d.")
+  (if (< i 0) (return 0))
+  (if (>= i (blob-len d)) (return 0))
+  (return 1))
+
+;; ------------------------------------------------- glyph names -> Unicode
+
+(defn ^I32 fp-hexv [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (return -1))
+
+(defn ^I32 fp-agl-cmp [^Blob d ^I32 s ^I32 e ^I32 row]
+  (comment "Compare the bytes d[s, e) with glyph name `row` of the AGL: -1, 0, 1.")
+  (let [^I32 off (agl-at 0 row 0)
+        ^I32 ln (agl-at 0 row 1)
+        ^:mut ^I32 lim (- e s)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (if (> lim ln) (set lim ln))
+    (while (< j lim)
+      (do (set x (fp-u8 d (+ s j)))
+          (set y (agl-pool-at 0 (+ off j)))
+          (if (< x y) (return -1))
+          (if (> x y) (return 1))
+          (set j (+ j 1))))
+    (if (< (- e s) ln) (return -1))
+    (if (> (- e s) ln) (return 1))
+    (return 0)))
+
+(defn ^I32 fp-agl-find [^Blob d ^I32 s ^I32 e]
+  (comment "The glyph id (a row of the AGL table) of the name d[s, e), or -1.")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (agl-count 0) 1)
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 c 0]
+    (while (<= lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (set c (fp-agl-cmp d s e mid))
+          (if (== c 0) (return mid))
+          (if (< c 0)
+            (set hi (- mid 1))
+            (set lo (+ mid 1)))))
+    (return -1)))
+
+(defn ^I32 fp-add [^:mut ^Cells g ^I32 reg ^I32 cp]
+  (let [^I32 n (cells-at g reg)]
+    (if (< n 4)
+      (do (cells-set g (+ reg (+ 1 n)) cp)
+          (cells-set g reg (+ n 1))))
+    (return 0)))
+
+(defn ^I32 fp-all-hex [^Blob d ^I32 s ^I32 e]
+  (let [^:mut ^I32 k s]
+    (while (< k e)
+      (do (if (< (fp-hexv (fp-u8 d k)) 0) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 fp-hex-val [^Blob d ^I32 s ^I32 e]
+  (let [^:mut ^I32 k s
+        ^:mut ^I32 v 0]
+    (while (< k e)
+      (do (set v (+ (* v 16) (fp-hexv (fp-u8 d k))))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^:pub ^I32 fp-gid-cps [^:mut ^Cells g ^I32 reg ^I32 gid]
+  (comment "Glyph `gid` of the AGL table: its code points into the registers.")
+  (let [^I32 cnt (agl-at 0 gid 3)
+        ^I32 off (agl-at 0 gid 2)
+        ^:mut ^I32 i 0]
+    (cells-set g reg 0)
+    (while (< i cnt)
+      (do (fp-add g reg (agl-uni-at 0 (+ off i)))
+          (set i (+ i 1))))
+    (return cnt)))
+
+(defn ^I32 fp-component [^:mut ^Cells g ^I32 reg ^Blob d ^I32 s ^I32 e ^I32 zapf]
+  (comment "One `_`-separated component of a glyph name, appended: an AGL name, `uniXXXX...`")
+  (comment "or `uXXXX`..`uXXXXXX` (the AGL specification; as `emon.pdffont` does for a /Differences")
+  (comment "name). The names a1..a206 are ZapfDingbats' own (zapf 1).")
+  (let [^I32 ln (- e s)
+        ^I32 gd (fp-agl-find d s e)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (if (<= ln 0) (return 0))
+    (if (and (>= gd 0) (and (== (agl-at 0 gd 4) 1) (== zapf 0)))
+      (return 0))
+    (if (>= gd 0)
+      (do (set i 0)
+          (while (< i (agl-at 0 gd 3))
+            (do (fp-add g reg (agl-uni-at 0 (+ (agl-at 0 gd 2) i)))
+                (set i (+ i 1))))
+          (return 1)))
+    (if (>= ln 7)
+      (if (and (== (fp-u8 d s) 117) (and (== (fp-u8 d (+ s 1)) 110) (== (fp-u8 d (+ s 2)) 105)))
+        (if (== (rem (- ln 3) 4) 0)
+          (if (== (fp-all-hex d (+ s 3) e) 1)
+            (do (set i (+ s 3))
+                (while (< i e)
+                  (do (set v (fp-hex-val d i (+ i 4)))
+                      (if (or (< v 55296) (> v 57343))
+                        (fp-add g reg v))
+                      (set i (+ i 4))))
+                (return 1))))))
+    (if (and (== (fp-u8 d s) 117) (and (>= ln 5) (<= ln 7)))
+      (if (== (fp-all-hex d (+ s 1) e) 1)
+        (do (set v (fp-hex-val d (+ s 1) e))
+            (if (and (<= v 1114111) (or (< v 55296) (> v 57343)))
+              (fp-add g reg v))
+            (return 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 fp-name-cps [^:mut ^Cells g ^I32 reg ^Blob d ^I32 s ^I32 e ^I32 zapf]
+  (comment "The Unicode value of the glyph NAME d[s, e) by the AGL specification, into")
+  (comment "the registers; answers the count of code points (0: none).")
+  (let [^:mut ^I32 end s
+        ^:mut ^I32 cs s
+        ^:mut ^I32 k s]
+    (cells-set g reg 0)
+    (while (and (< end e) (!= (fp-u8 d end) 46))
+      (set end (+ end 1)))
+    (if (== end s) (return 0))
+    (set k s)
+    (while (<= k end)
+      (do (if (or (== k end) (== (fp-u8 d k) 95))
+            (do (fp-component g reg d cs k zapf)
+                (set cs (+ k 1))))
+          (set k (+ k 1))))
+    (return (cells-at g reg))))
+
+;; ------------------------------------------------------------ the table
+
+(defn ^I32 fp-scratch [^:mut ^Cells g ^I32 tbl]
+  (let [^:mut ^I32 i 0]
+    (while (< i 16)
+      (do (cells-set g (+ (+ tbl SCR) i) 0)
+          (set i (+ i 1))))
+    (cells-set g (+ (+ tbl SCR) S_BUDGET) 400000)
+    (return 0)))
+
+(defn ^I32 fp-clear [^:mut ^Cells g ^I32 tbl]
+  (let [^:mut ^I32 i 0]
+    (while (< i T_SIZE)
+      (do (cells-set g (+ tbl i) 0)
+          (set i (+ i 1))))
+    (fp-scratch g tbl)
+    (return 0)))
+
+(defn ^I32 fp-put [^:mut ^Cells g ^I32 reg ^I32 tbl ^I32 code ^I32 how]
+  (comment "The registers become code's entry (when they hold something).")
+  (let [^I32 at (+ tbl (* code T_STRIDE))
+        ^I32 n (cells-at g reg)
+        ^:mut ^I32 i 0]
+    (if (or (< code 0) (> code 255)) (return 0))
+    (if (== n 0) (return 0))
+    (cells-set g at n)
+    (while (< i 4)
+      (do (cells-set g (+ at (+ 1 i)) (cells-at g (+ reg (+ 1 i))))
+          (set i (+ i 1))))
+    (cells-set g (+ at 5) how)
+    (return 1)))
+
+(defn ^I32 fp-fill-gids [^:mut ^Cells g ^I32 reg ^I32 tbl ^I32 enc]
+  (comment "Encoding number `enc` of `emon.encodings` (0 Standard) into the table.")
+  (let [^:mut ^I32 code 0
+        ^:mut ^I32 gd 0
+        ^:mut ^I32 cnt 0]
+    (while (< code 256)
+      (do (set gd (enc-gid-at 0 (+ (* enc 256) code)))
+          (if (>= gd 0)
+            (do (fp-gid-cps g reg gd)
+                (set cnt (+ cnt (fp-put g reg tbl code 2)))))
+          (set code (+ code 1))))
+    (return cnt)))
+
+;; ----------------------------------------------------------------- Type 1
+
+(defn ^I32 fp-lit [^Blob d ^I32 i ^I32 n ^I32 c0 ^I32 c1 ^I32 c2 ^I32 c3 ^I32 c4
+                   ^I32 c5 ^I32 c6 ^I32 c7 ^I32 c8 ^I32 c9]
+  (comment "1 when the first n (at most ten) bytes at i are c0..c9.")
+  (if (!= (fp-u8 d i) c0) (return 0))
+  (if (>= n 2) (if (!= (fp-u8 d (+ i 1)) c1) (return 0)))
+  (if (>= n 3) (if (!= (fp-u8 d (+ i 2)) c2) (return 0)))
+  (if (>= n 4) (if (!= (fp-u8 d (+ i 3)) c3) (return 0)))
+  (if (>= n 5) (if (!= (fp-u8 d (+ i 4)) c4) (return 0)))
+  (if (>= n 6) (if (!= (fp-u8 d (+ i 5)) c5) (return 0)))
+  (if (>= n 7) (if (!= (fp-u8 d (+ i 6)) c6) (return 0)))
+  (if (>= n 8) (if (!= (fp-u8 d (+ i 7)) c7) (return 0)))
+  (if (>= n 9) (if (!= (fp-u8 d (+ i 8)) c8) (return 0)))
+  (if (>= n 10) (if (!= (fp-u8 d (+ i 9)) c9) (return 0)))
+  (return 1))
+
+(defn ^I32 fp-ws [^I32 c]
+  (if (== c 32) (return 1))
+  (if (== c 10) (return 1))
+  (if (== c 13) (return 1))
+  (if (== c 9) (return 1))
+  (if (== c 12) (return 1))
+  (if (== c 0) (return 1))
+  (return 0))
+
+(defn ^I32 fp-delim [^I32 c]
+  (if (== c 47) (return 1))
+  (if (== c 40) (return 1))
+  (if (== c 41) (return 1))
+  (if (== c 60) (return 1))
+  (if (== c 62) (return 1))
+  (if (== c 91) (return 1))
+  (if (== c 93) (return 1))
+  (if (== c 123) (return 1))
+  (if (== c 125) (return 1))
+  (if (== c 37) (return 1))
+  (return 0))
+
+(defn ^I32 fp-skip-ws [^Blob d ^I32 i ^I32 lim]
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (== (fp-ws (fp-u8 d k)) 1))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 fp-tok-end [^Blob d ^I32 i ^I32 lim]
+  (comment "The end of the PostScript token that starts at i (a name keeps its slash;")
+  (comment "a delimiter is a token of its own).")
+  (let [^:mut ^I32 k (+ i 1)]
+    (if (>= i lim) (return lim))
+    (if (and (== (fp-delim (fp-u8 d i)) 1) (!= (fp-u8 d i) 47))
+      (return (+ i 1)))
+    (while (and (< k lim) (and (== (fp-ws (fp-u8 d k)) 0) (== (fp-delim (fp-u8 d k)) 0)))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 fp-t1-num [^Blob d ^I32 s ^I32 e]
+  (comment "A token as an integer: decimal, or radix#digits (8#101); -1 if it is neither.")
+  (let [^:mut ^I32 k s
+        ^:mut ^I32 v 0
+        ^:mut ^I32 radix 10
+        ^:mut ^I32 c 0
+        ^:mut ^I32 dv 0]
+    (if (>= s e) (return -1))
+    (while (< k e)
+      (do (set c (fp-u8 d k))
+          (if (and (== c 35) (> k s))
+            (do (set radix v)
+                (set v 0)
+                (if (or (< radix 2) (> radix 16)) (return -1)))
+            (do (set dv (fp-hexv c))
+                (if (or (< dv 0) (>= dv radix)) (return -1))
+                (set v (+ (* v radix) dv))
+                (if (> v 100000) (return -1))))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 fp-is-word [^Blob d ^I32 pos ^I32 te ^I32 n ^I32 c0 ^I32 c1 ^I32 c2]
+  (if (!= (- te pos) n) (return 0))
+  (return (fp-lit d pos n c0 c1 c2 0 0 0 0 0 0 0)))
+
+(defn ^I32 fp-t1 [^:mut ^Cells g ^I32 reg ^I32 tbl ^Blob d ^I32 zapf]
+  (comment "A Type 1 font program's built-in encoding from its clear-text header. -1 when")
+  (comment "the data has no /Encoding; else the count of codes set.")
+  (let [^I32 n (blob-len d)
+        ^:mut ^I32 lim n
+        ^:mut ^I32 i 0
+        ^:mut ^I32 p -1
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 te 0
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 more 1]
+    (if (> lim 1048576) (set lim 1048576))
+    (comment "the clear-text part ends at `eexec`")
+    (set i 0)
+    (while (< i (- lim 5))
+      (do (if (== (fp-lit d i 5 101 101 120 101 99 0 0 0 0 0) 1)
+            (do (set lim i) (set i n)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (- lim 9))
+      (do (if (== (fp-lit d i 9 47 69 110 99 111 100 105 110 103 0) 1)
+            (do (set p (+ i 9)) (set i n)))
+          (set i (+ i 1))))
+    (if (< p 0) (return -1))
+    (cells-set g (+ (+ tbl SCR) S_KIND) 1)
+    (set pos (fp-skip-ws d p lim))
+    (if (== (fp-lit d pos 8 83 116 97 110 100 97 114 100 0 0) 1)
+      (return (fp-fill-gids g reg tbl 0)))
+    (while (and (== more 1) (and (< pos lim) (< steps 4000)))
+      (do (set steps (+ steps 1))
+          (set pos (fp-skip-ws d pos lim))
+          (if (>= pos lim)
+            (set more 0)
+            (do (set te (fp-tok-end d pos lim))
+                (if (== (fp-is-word d pos te 3 100 101 102) 1)
+                  (set more 0))
+                (if (== (fp-is-word d pos te 3 100 117 112) 1)
+                  (do (set pos (fp-skip-ws d te lim))
+                      (set te (fp-tok-end d pos lim))
+                      (set code (fp-t1-num d pos te))
+                      (set pos (fp-skip-ws d te lim))
+                      (set te (fp-tok-end d pos lim))
+                      (if (and (>= code 0) (and (<= code 255) (and (> (- te pos) 1) (== (fp-u8 d pos) 47))))
+                        (do (fp-name-cps g reg d (+ pos 1) te zapf)
+                            (set cnt (+ cnt (fp-put g reg tbl code 2)))))))
+                (set pos te)))))
+    (return cnt)))
+
+;; ------------------------------------------------------------------- CFF
+
+(defn ^I32 fp-be [^Blob d ^I32 i ^I32 size]
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 v 0]
+    (while (< k size)
+      (do (if (> v 4194303)
+            (set v 8388607)
+            (set v (+ (* v 256) (fp-u8 d (+ i k)))))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 fp-idx-count [^Blob d ^I32 off]
+  (if (== (fp-in d off) 0) (return 0))
+  (return (fp-u16 d off)))
+
+(defn ^I32 fp-idx-start [^Blob d ^I32 off ^I32 i]
+  (comment "The absolute offset of object i of the INDEX at off (i = count: one past the last).")
+  (let [^I32 count (fp-u16 d off)
+        ^I32 osz (fp-u8 d (+ off 2))]
+    (if (== count 0) (return off))
+    (if (or (< osz 1) (> osz 4)) (return off))
+    (return (+ (+ (+ off 3) (* (+ count 1) osz)) (- (fp-be d (+ (+ off 3) (* i osz)) osz) 1)))))
+
+(defn ^I32 fp-idx-end [^Blob d ^I32 off]
+  (comment "The offset just past the INDEX at off.")
+  (let [^I32 count (fp-u16 d off)]
+    (if (== count 0) (return (+ off 2)))
+    (return (fp-idx-start d off count))))
+
+(defn ^I32 fp-real-len [^Blob d ^I32 k ^I32 e]
+  (comment "The length of the real number operand (byte 30) at k: nibbles to an 0xF nibble.")
+  (let [^:mut ^I32 j (+ k 1)]
+    (while (and (< j e) (and (!= (rem (fp-u8 d j) 16) 15) (!= (quot (fp-u8 d j) 16) 15)))
+      (set j (+ j 1)))
+    (return (+ (- j k) 1))))
+
+(defn ^I32 fp-dict [^:mut ^Cells g ^I32 tbl ^Blob d ^I32 s ^I32 e]
+  (comment "Walk the DICT d[s, e): Charset (15), Encoding (16), CharStrings (17) and ROS (12 30)")
+  (comment "into the scratch cells.")
+  (let [^I32 sc (+ tbl SCR)
+        ^:mut ^I32 k s
+        ^:mut ^I32 b 0
+        ^:mut ^I32 last 0
+        ^:mut ^I32 op 0
+        ^:mut ^I32 adv 1
+        ^:mut ^I32 steps 0]
+    (while (and (< k e) (< steps 2000))
+      (do (set steps (+ steps 1))
+          (set b (fp-u8 d k))
+          (if (<= b 21)
+            (do (set op b)
+                (set k (+ k 1))
+                (if (== b 12)
+                  (do (set op (+ 1200 (fp-u8 d k)))
+                      (set k (+ k 1))))
+                (if (== op 15) (cells-set g (+ sc S_CHARSET) last))
+                (if (== op 16) (cells-set g (+ sc S_ENC) last))
+                (if (== op 17) (cells-set g (+ sc S_CHARSTR) last))
+                (if (== op 1230) (cells-set g (+ sc S_CID) 1))
+                (set last 0))
+            (do (set adv 1)
+                (if (== b 28) (do (set last (fp-s16 d (+ k 1))) (set adv 3)))
+                (if (== b 29) (do (set last (fp-u32 d (+ k 1))) (set adv 5)))
+                (if (== b 30) (do (set last 0) (set adv (fp-real-len d k e))))
+                (if (and (>= b 32) (<= b 246)) (do (set last (- b 139)) (set adv 1)))
+                (if (and (>= b 247) (<= b 250))
+                  (do (set last (+ (+ (* (- b 247) 256) (fp-u8 d (+ k 1))) 108))
+                      (set adv 2)))
+                (if (and (>= b 251) (<= b 254))
+                  (do (set last (- (- 0 (* (- b 251) 256)) (+ (fp-u8 d (+ k 1)) 108)))
+                      (set adv 2)))
+                (set k (+ k adv))))))
+    (return 0)))
+
+(defn ^I32 fp-sid-cps [^:mut ^Cells g ^I32 reg ^I32 tbl ^Blob d ^I32 base ^I32 sid ^I32 zapf]
+  (comment "The code points of the glyph named by string id `sid` (standard strings 0..390,")
+  (comment "then the font's String INDEX).")
+  (let [^I32 str (cells-at g (+ (+ tbl SCR) S_STR))
+        ^:mut ^I32 st 0
+        ^:mut ^I32 en 0
+        ^:mut ^I32 gd 0]
+    (cells-set g reg 0)
+    (if (< sid 0) (return 0))
+    (if (< sid 391)
+      (do (set gd (cff-std-string-at 0 sid))
+          (if (>= gd 0) (fp-gid-cps g reg gd))
+          (return (cells-at g reg))))
+    (if (>= (- sid 391) (fp-idx-count d str)) (return 0))
+    (set st (fp-idx-start d str (- sid 391)))
+    (set en (fp-idx-start d str (+ (- sid 391) 1)))
+    (if (or (< en st) (> (- en st) 200)) (return 0))
+    (return (fp-name-cps g reg d st en zapf))))
+
+(defn ^I32 fp-charset-sid [^Blob d ^I32 cs ^I32 nglyphs ^I32 gid]
+  (comment "A custom charset's string id of glyph `gid`.")
+  (let [^I32 fmt (fp-u8 d cs)
+        ^:mut ^I32 pos (+ cs 1)
+        ^:mut ^I32 gi 1
+        ^:mut ^I32 size 0
+        ^:mut ^I32 steps 0]
+    (if (== gid 0) (return 0))
+    (if (== fmt 0) (return (fp-u16 d (+ (+ cs 1) (* (- gid 1) 2)))))
+    (if (or (== fmt 1) (== fmt 2))
+      (while (and (< gi nglyphs) (< steps 70000))
+        (do (set steps (+ steps 1))
+            (if (== fmt 1)
+              (set size (+ (fp-u8 d (+ pos 2)) 1))
+              (set size (+ (fp-u16 d (+ pos 2)) 1)))
+            (if (< gid (+ gi size))
+              (return (+ (fp-u16 d pos) (- gid gi))))
+            (set gi (+ gi size))
+            (if (== fmt 1) (set pos (+ pos 3)) (set pos (+ pos 4))))))
+    (return -1)))
+
+(defn ^I32 fp-glyph-cps [^:mut ^Cells g ^I32 reg ^I32 tbl ^Blob d ^I32 base ^I32 gid ^I32 zapf]
+  (comment "The code points of glyph index `gid` of the CFF font by its charset.")
+  (let [^I32 sc (+ tbl SCR)
+        ^I32 cs (cells-at g (+ sc S_CHARSET))
+        ^I32 ng (cells-at g (+ sc S_NG))
+        ^:mut ^I32 sid 0]
+    (cells-set g reg 0)
+    (if (>= gid ng) (return 0))
+    (if (== cs 0)
+      (do (if (> gid 228) (return 0))
+          (return (fp-sid-cps g reg tbl d base gid zapf))))
+    (if (== cs 1)
+      (do (if (>= gid (cff-expert-charset-count 0)) (return 0))
+          (if (>= (cff-expert-charset-at 0 gid) 0) (fp-gid-cps g reg (cff-expert-charset-at 0 gid)))
+          (return (cells-at g reg))))
+    (if (== cs 2)
+      (do (if (>= gid (cff-expertsub-charset-count 0)) (return 0))
+          (if (>= (cff-expertsub-charset-at 0 gid) 0) (fp-gid-cps g reg (cff-expertsub-charset-at 0 gid)))
+          (return (cells-at g reg))))
+    (set sid (fp-charset-sid d (+ base cs) ng gid))
+    (return (fp-sid-cps g reg tbl d base sid zapf))))
+
+(defn ^I32 fp-cff [^:mut ^Cells g ^I32 reg ^I32 tbl ^Blob d ^I32 base ^I32 zapf]
+  (comment "A CFF font's built-in encoding. -1 when it is not a (name-keyed) CFF font.")
+  (let [^I32 sc (+ tbl SCR)
+        ^I32 hdr (fp-u8 d (+ base 2))
+        ^I32 nidx (+ base hdr)
+        ^I32 tidx (fp-idx-end d nidx)
+        ^I32 sidx (fp-idx-end d tidx)
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 te 0
+        ^:mut ^I32 enc 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 gd 0
+        ^:mut ^I32 fmt 0
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 cso 0]
+    (if (!= (fp-u8 d base) 1) (return -1))
+    (if (< hdr 4) (return -1))
+    (cells-set g (+ sc S_KIND) 1)
+    (if (< (fp-idx-count d tidx) 1) (return -1))
+    (set ts (fp-idx-start d tidx 0))
+    (set te (fp-idx-start d tidx 1))
+    (if (or (< te ts) (> (- te ts) 65536)) (return -1))
+    (cells-set g (+ sc S_STR) sidx)
+    (fp-dict g tbl d ts te)
+    (if (== (cells-at g (+ sc S_CID)) 1) (return -1))
+    (set cso (cells-at g (+ sc S_CHARSTR)))
+    (if (<= cso 0) (return -1))
+    (cells-set g (+ sc S_NG) (fp-idx-count d (+ base cso)))
+    (set enc (cells-at g (+ sc S_ENC)))
+    (if (== enc 0) (return (fp-fill-gids g reg tbl 0)))
+    (if (== enc 1)
+      (do (set code 0)
+          (while (< code 256)
+            (do (set gd (cff-expert-enc-at 0 code))
+                (if (>= gd 0)
+                  (do (fp-gid-cps g reg gd)
+                      (set cnt (+ cnt (fp-put g reg tbl code 2)))))
+                (set code (+ code 1))))
+          (return cnt)))
+    (set pos (+ base enc))
+    (set fmt (fp-u8 d pos))
+    (if (== (rem fmt 128) 0)
+      (do (set nl (fp-u8 d (+ pos 1)))
+          (set j 0)
+          (while (< j nl)
+            (do (set code (fp-u8 d (+ (+ pos 2) j)))
+                (fp-glyph-cps g reg tbl d base (+ j 1) zapf)
+                (set cnt (+ cnt (fp-put g reg tbl code 2)))
+                (set j (+ j 1))))
+          (set pos (+ (+ pos 2) nl))))
+    (if (== (rem fmt 128) 1)
+      (do (set nl (fp-u8 d (+ pos 1)))
+          (set pos (+ pos 2))
+          (set gd 1)
+          (set j 0)
+          (while (< j nl)
+            (do (set ns 0)
+                (while (<= ns (fp-u8 d (+ pos 1)))
+                  (do (set code (+ (fp-u8 d pos) ns))
+                      (if (<= code 255)
+                        (do (fp-glyph-cps g reg tbl d base gd zapf)
+                            (set cnt (+ cnt (fp-put g reg tbl code 2)))))
+                      (set gd (+ gd 1))
+                      (set ns (+ ns 1))))
+                (set pos (+ pos 2))
+                (set j (+ j 1))))))
+    (if (>= fmt 128)
+      (do (set nl (fp-u8 d pos))
+          (set pos (+ pos 1))
+          (set j 0)
+          (while (< j nl)
+            (do (set code (fp-u8 d pos))
+                (fp-sid-cps g reg tbl d base (fp-u16 d (+ pos 1)) zapf)
+                (set cnt (+ cnt (fp-put g reg tbl code 2)))
+                (set pos (+ pos 3))
+                (set j (+ j 1))))))
+    (return cnt)))
+
+;; ----------------------------------------------------------------- sfnt
+
+(defn ^I32 fp-sfnt-start [^Blob d]
+  (comment "The offset of the table directory: 0, or the first font of a collection; -1")
+  (comment "when the data is no sfnt.")
+  (let [^I32 v (fp-u32 d 0)]
+    (if (== v 65536) (return 0))
+    (if (and (== (fp-u8 d 0) 116) (and (== (fp-u8 d 1) 114) (and (== (fp-u8 d 2) 117) (== (fp-u8 d 3) 101))))
+      (return 0))
+    (if (and (== (fp-u8 d 0) 79) (and (== (fp-u8 d 1) 84) (and (== (fp-u8 d 2) 84) (== (fp-u8 d 3) 79))))
+      (return 0))
+    (if (and (== (fp-u8 d 0) 116) (and (== (fp-u8 d 1) 116) (and (== (fp-u8 d 2) 99) (== (fp-u8 d 3) 102))))
+      (return (fp-u32 d 12)))
+    (return -1)))
+
+(defn ^I32 fp-sfnt-table [^Blob d ^I32 start ^I32 t0 ^I32 t1 ^I32 t2 ^I32 t3]
+  (comment "The offset of the table tagged t0 t1 t2 t3, or -1.")
+  (let [^I32 nt (fp-u16 d (+ start 4))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0]
+    (while (and (< i nt) (< i 200))
+      (do (set r (+ (+ start 12) (* i 16)))
+          (if (and (== (fp-u8 d r) t0) (and (== (fp-u8 d (+ r 1)) t1) (and (== (fp-u8 d (+ r 2)) t2) (== (fp-u8 d (+ r 3)) t3))))
+            (do (if (== (fp-in d (fp-u32 d (+ r 8))) 1) (return (fp-u32 d (+ r 8))))
+                (return -1)))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 fp-cmap-find [^:mut ^Cells g ^I32 tbl ^Blob d ^I32 cm]
+  (comment "Choose the cmap subtables: (3,0), (1,0), and the best Unicode one ((3,10), (3,1),")
+  (comment "(0,x)) into the scratch cells (the absolute offsets, 0 none).")
+  (let [^I32 sc (+ tbl SCR)
+        ^I32 nt (fp-u16 d (+ cm 2))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 plat 0
+        ^:mut ^I32 enc 0
+        ^:mut ^I32 off 0
+        ^:mut ^I32 rank 0
+        ^:mut ^I32 best 0]
+    (cells-set g (+ sc S_C30) 0)
+    (cells-set g (+ sc S_C10) 0)
+    (cells-set g (+ sc S_UNI) 0)
+    (while (and (< i nt) (< i 64))
+      (do (set r (+ (+ cm 4) (* i 8)))
+          (set plat (fp-u16 d r))
+          (set enc (fp-u16 d (+ r 2)))
+          (set off (fp-u32 d (+ r 4)))
+          (if (== (fp-in d (+ cm off)) 1)
+            (do (set off (+ cm off))
+                (if (and (== plat 3) (== enc 0)) (cells-set g (+ sc S_C30) off))
+                (if (and (== plat 1) (== enc 0)) (cells-set g (+ sc S_C10) off))
+                (set rank 0)
+                (if (== plat 0) (set rank 1))
+                (if (and (== plat 3) (== enc 1)) (set rank 2))
+                (if (and (== plat 3) (== enc 10)) (set rank 3))
+                (if (> rank best)
+                  (do (set best rank)
+                      (cells-set g (+ sc S_UNI) off)))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fp-cmap-get [^Blob d ^I32 sub ^I32 code]
+  (comment "The glyph index a cmap subtable (formats 0, 4, 6, 12) gives a code; 0 none.")
+  (let [^I32 fmt (fp-u16 d sub)
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 segx2 0
+        ^:mut ^I32 ec 0
+        ^:mut ^I32 sc 0
+        ^:mut ^I32 delta 0
+        ^:mut ^I32 ro 0
+        ^:mut ^I32 ra 0
+        ^:mut ^I32 gd 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 cnt 0]
+    (if (< code 0) (return 0))
+    (if (== fmt 0)
+      (do (if (> code 255) (return 0))
+          (return (fp-u8 d (+ (+ sub 6) code)))))
+    (if (== fmt 6)
+      (do (set first (fp-u16 d (+ sub 6)))
+          (set cnt (fp-u16 d (+ sub 8)))
+          (if (and (>= code first) (< code (+ first cnt)))
+            (return (fp-u16 d (+ (+ sub 10) (* (- code first) 2)))))
+          (return 0)))
+    (if (== fmt 4)
+      (do (if (> code 65535) (return 0))
+          (set segx2 (fp-u16 d (+ sub 6)))
+          (set hi (- (quot segx2 2) 1))
+          (while (<= lo hi)
+            (do (set mid (+ lo (quot (- hi lo) 2)))
+                (set ec (fp-u16 d (+ (+ sub 14) (* mid 2))))
+                (if (< ec code)
+                  (set lo (+ mid 1))
+                  (do (set sc (fp-u16 d (+ (+ (+ sub 16) segx2) (* mid 2))))
+                      (if (> sc code)
+                        (set hi (- mid 1))
+                        (do (set delta (fp-u16 d (+ (+ (+ sub 16) (* segx2 2)) (* mid 2))))
+                            (set ra (+ (+ (+ sub 16) (* segx2 3)) (* mid 2)))
+                            (set ro (fp-u16 d ra))
+                            (if (== ro 0)
+                              (return (rem (+ code delta) 65536)))
+                            (set gd (fp-u16 d (+ (+ ra ro) (* (- code sc) 2))))
+                            (if (== gd 0) (return 0))
+                            (return (rem (+ gd delta) 65536))))))))
+          (return 0)))
+    (if (== fmt 12)
+      (do (set hi (- (fp-u32 d (+ sub 12)) 1))
+          (if (> hi 1000000) (set hi 1000000))
+          (while (<= lo hi)
+            (do (set mid (+ lo (quot (- hi lo) 2)))
+                (set sc (fp-u32 d (+ (+ sub 16) (* mid 12))))
+                (set ec (fp-u32 d (+ (+ (+ sub 16) (* mid 12)) 4)))
+                (if (< ec code)
+                  (set lo (+ mid 1))
+                  (if (> sc code)
+                    (set hi (- mid 1))
+                    (return (+ (fp-u32 d (+ (+ (+ sub 16) (* mid 12)) 8)) (- code sc)))))))
+          (return 0)))
+    (return 0)))
+
+(defn ^I32 fp-cmap-rev [^:mut ^Cells g ^I32 tbl ^Blob d ^I32 sub ^I32 gid]
+  (comment "The smallest code a cmap subtable maps to glyph `gid` (formats 0, 4, 6, 12), or -1.")
+  (comment "Scanning is bounded by the font's step budget.")
+  (let [^I32 sc (+ tbl SCR)
+        ^I32 fmt (fp-u16 d sub)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 segx2 0
+        ^:mut ^I32 st 0
+        ^:mut ^I32 en 0
+        ^:mut ^I32 delta 0
+        ^:mut ^I32 ro 0
+        ^:mut ^I32 ra 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 gv 0
+        ^:mut ^I32 first 0]
+    (if (<= gid 0) (return -1))
+    (if (== fmt 0)
+      (do (while (< i 256)
+            (do (if (== (fp-u8 d (+ (+ sub 6) i)) gid) (return i))
+                (set i (+ i 1))))
+          (return -1)))
+    (if (== fmt 6)
+      (do (set first (fp-u16 d (+ sub 6)))
+          (set n (fp-u16 d (+ sub 8)))
+          (while (< i n)
+            (do (if (== (fp-u16 d (+ (+ sub 10) (* i 2))) gid) (return (+ first i)))
+                (set i (+ i 1))))
+          (return -1)))
+    (if (== fmt 4)
+      (do (set segx2 (fp-u16 d (+ sub 6)))
+          (set n (quot segx2 2))
+          (while (< i n)
+            (do (set en (fp-u16 d (+ (+ sub 14) (* i 2))))
+                (set st (fp-u16 d (+ (+ (+ sub 16) segx2) (* i 2))))
+                (set delta (fp-u16 d (+ (+ (+ sub 16) (* segx2 2)) (* i 2))))
+                (set ra (+ (+ (+ sub 16) (* segx2 3)) (* i 2)))
+                (set ro (fp-u16 d ra))
+                (if (and (<= st en) (!= st 65535))
+                  (if (== ro 0)
+                    (do (set cp (rem (+ gid (- 65536 delta)) 65536))
+                        (if (and (>= cp st) (<= cp en)) (return cp)))
+                    (do (set cp st)
+                        (while (<= cp en)
+                          (do (cells-set g (+ sc S_BUDGET) (- (cells-at g (+ sc S_BUDGET)) 1))
+                              (if (< (cells-at g (+ sc S_BUDGET)) 0) (return -1))
+                              (set gv (fp-u16 d (+ (+ ra ro) (* (- cp st) 2))))
+                              (if (!= gv 0)
+                                (if (== (rem (+ gv delta) 65536) gid) (return cp)))
+                              (set cp (+ cp 1)))))))
+                (set i (+ i 1))))
+          (return -1)))
+    (if (== fmt 12)
+      (do (set n (fp-u32 d (+ sub 12)))
+          (if (> n 100000) (set n 100000))
+          (while (< i n)
+            (do (set st (fp-u32 d (+ (+ sub 16) (* i 12))))
+                (set en (fp-u32 d (+ (+ (+ sub 16) (* i 12)) 4)))
+                (set gv (fp-u32 d (+ (+ (+ sub 16) (* i 12)) 8)))
+                (if (and (>= gid gv) (<= (- gid gv) (- en st)))
+                  (return (+ st (- gid gv))))
+                (set i (+ i 1))))
+          (return -1)))
+    (return -1)))
+
+(defn ^I32 fp-post-name [^:mut ^Cells g ^I32 reg ^Blob d ^I32 post ^I32 gid ^I32 zapf]
+  (comment "The code points of glyph `gid`'s name in the `post` table (formats 1 and 2).")
+  (let [^I32 ver (fp-u32 d post)
+        ^:mut ^I32 ng 0
+        ^:mut ^I32 idx 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ln 0]
+    (cells-set g reg 0)
+    (if (or (< post 0) (< gid 0)) (return 0))
+    (if (== ver 65536)
+      (do (if (>= gid 258) (return 0))
+          (if (>= (mac-glyph-order-at 0 gid) 0) (fp-gid-cps g reg (mac-glyph-order-at 0 gid)))
+          (return (cells-at g reg))))
+    (if (== ver 131072)
+      (do (set ng (fp-u16 d (+ post 32)))
+          (if (>= gid ng) (return 0))
+          (set idx (fp-u16 d (+ (+ post 34) (* gid 2))))
+          (if (< idx 258)
+            (do (if (>= (mac-glyph-order-at 0 idx) 0) (fp-gid-cps g reg (mac-glyph-order-at 0 idx)))
+                (return (cells-at g reg))))
+          (set p (+ (+ post 34) (* ng 2)))
+          (set k 0)
+          (while (and (< k (- idx 258)) (< k 70000))
+            (do (if (== (fp-in d p) 0) (return 0))
+                (set p (+ p (+ 1 (fp-u8 d p))))
+                (set k (+ k 1))))
+          (set ln (fp-u8 d p))
+          (if (== (fp-in d (+ p ln)) 0) (return 0))
+          (return (fp-name-cps g reg d (+ p 1) (+ (+ p 1) ln) zapf))))
+    (return 0)))
+
+(defn ^I32 fp-glyph-unicode [^:mut ^Cells g ^I32 reg ^I32 tbl ^Blob d ^I32 gid ^I32 zapf]
+  (comment "What glyph `gid` of a TrueType font is: the font's Unicode cmap read backwards, else")
+  (comment "its post name. 0: nothing, else the `how` (2 cmap, 3 name); the code points are in the")
+  (comment "registers.")
+  (let [^I32 sc (+ tbl SCR)
+        ^I32 uni (cells-at g (+ sc S_UNI))
+        ^I32 post (cells-at g (+ sc S_POST))
+        ^:mut ^I32 cp 0]
+    (cells-set g reg 0)
+    (if (> uni 0)
+      (do (set cp (fp-cmap-rev g tbl d uni gid))
+          (if (and (> cp 0) (and (!= cp 65535) (or (< cp 55296) (> cp 57343))))
+            (do (fp-add g reg cp)
+                (return 2)))))
+    (if (> post 0)
+      (if (> (fp-post-name g reg d post gid zapf) 0)
+        (return 3)))
+    (return 0)))
+
+(defn ^I32 fp-sfnt [^:mut ^Cells g ^I32 reg ^I32 tbl ^Blob d ^I32 start ^I32 zapf]
+  (comment "A TrueType or OpenType font's codes. A font with a `CFF ` table is read as CFF;")
+  (comment "else each code goes through the symbolic-font rule. -1 when there is no cmap.")
+  (let [^I32 sc (+ tbl SCR)
+        ^I32 cff (fp-sfnt-table d start 67 70 70 32)
+        ^I32 cm (fp-sfnt-table d start 99 109 97 112)
+        ^:mut ^I32 code 0
+        ^:mut ^I32 gd 0
+        ^:mut ^I32 how 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 c30 0
+        ^:mut ^I32 c10 0]
+    (if (>= cff 0) (return (fp-cff g reg tbl d cff zapf)))
+    (if (< cm 0) (return -1))
+    (cells-set g (+ sc S_POST) (fp-sfnt-table d start 112 111 115 116))
+    (if (< (cells-at g (+ sc S_POST)) 0) (cells-set g (+ sc S_POST) 0))
+    (fp-cmap-find g tbl d cm)
+    (set c30 (cells-at g (+ sc S_C30)))
+    (set c10 (cells-at g (+ sc S_C10)))
+    (if (and (== c30 0) (== c10 0)) (return -1))
+    (cells-set g (+ sc S_KIND) 2)
+    (while (< code 256)
+      (do (set gd 0)
+          (if (> c30 0)
+            (do (set gd (fp-cmap-get d c30 (+ 61440 code)))
+                (if (== gd 0) (set gd (fp-cmap-get d c30 (+ 61696 code))))
+                (if (== gd 0) (set gd (fp-cmap-get d c30 (+ 61952 code))))
+                (if (== gd 0) (set gd (fp-cmap-get d c30 code)))))
+          (if (and (== gd 0) (> c10 0))
+            (set gd (fp-cmap-get d c10 code)))
+          (if (> gd 0)
+            (do (set how (fp-glyph-unicode g reg tbl d gd zapf))
+                (if (> how 0)
+                  (set cnt (+ cnt (fp-put g reg tbl code how))))))
+          (set code (+ code 1))))
+    (return cnt)))
+
+;; --------------------------------------------------------------- the entry
+
+(defn ^:pub ^I32 fp-simple [^:mut ^Cells g ^I32 reg ^I32 tbl ^Blob d ^I32 zapf]
+  (comment "Read a font program's built-in encoding into the table at `tbl` of `g`, which the")
+  (comment "caller made 1552 cells long (`T_SIZE` + 16 of scratch); the registers are `reg`.")
+  (comment "Answers the count of codes the program gave a value (-1: nothing recognised).")
+  (let [^:mut ^I32 start 0]
+    (fp-clear g tbl)
+    (if (< (blob-len d) 4) (return -1))
+    (if (or (== (fp-u8 d 0) 128) (and (== (fp-u8 d 0) 37) (== (fp-u8 d 1) 33)))
+      (return (fp-t1 g reg tbl d zapf)))
+    (set start (fp-sfnt-start d))
+    (if (>= start 0)
+      (return (fp-sfnt g reg tbl d start zapf)))
+    (if (and (== (fp-u8 d 0) 1) (== (fp-u8 d 1) 0))
+      (return (fp-cff g reg tbl d 0 zapf)))
+    (return -1)))
+
+(defn ^:pub ^I32 fp-table-size []
+  (return (+ T_SIZE 16)))
+
+(defn ^:pub ^I32 fp-kind [^Cells g ^I32 tbl]
+  (comment "After `fp-simple`: 1 when the program names its glyphs (Type 1, CFF: what it does not")
+  (comment "name, it does not draw), 2 for a TrueType font, 0 when nothing was recognised.")
+  (return (cells-at g (+ (+ tbl SCR) S_KIND))))

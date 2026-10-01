@@ -34,7 +34,7 @@
 ;; `text` (SPEC 3.6, D138): a line's words joined by a space, the lines joined by a space, except that a
 ;; line ending in `-` before a line starting with a lowercase letter, and one ending in a soft hyphen,
 ;; join WITHOUT one (the hyphen kept, the soft hyphen dropped: no dehyphenation without a locale and a
-;; dictionary), then NFC and the seven Latin ligatures decomposed (`emon.normalize`). `at` is a LIST of
+;; dictionary), then NFC, the seven Latin ligatures decomposed and the CJK radicals folded (`emon.normalize`, flags 1+4; D142). `at` is a LIST of
 ;; regions, one per page the paragraph is on (one per column fragment after P4.1, D112). Every block
 ;; has `src` {text, infer} and `conf` 500 (its structure is inferred; Phase 10 calibrates), every text
 ;; inline `src` {text} and `conf` 1000 (a glyph's own text); the milestone `src` {infer} and 500.
@@ -46,7 +46,7 @@
             [emon.model :refer [node-new node-set-text node-set-sub node-set-conf node-add-src
                                 node-add-region page-new nk-paragraph nk-break nk-text sr-text
                                 sr-infer pk-vector]]
-            [emon.normalize :refer [nz-nfc nz-flag-ligatures]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
             [kin.lang :refer [defn defconst return let set while if do comment
                               + - * < > <= >= == != and or not quot rem]]))
@@ -446,14 +446,14 @@
                           (node-add-src nodes child (sr-infer))))
                     (set child (node-new nodes (nk-text) par))
                     (set t0 (cells-len text))
-                    (nz-nfc raw from to text tmp (nz-flag-ligatures))
+                    (nz-nfc raw from to text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
                     (let [^I32 tn (- (cells-len text) t0)]
                       (node-set-text nodes child t0 tn))
                     (node-set-conf nodes child 1000)
                     (node-add-src nodes child (sr-text))
                     (node-add-region nodes regions child pg rx0 ry0 rx1 ry1))
                 (do (set t0 (cells-len text))
-                    (nz-nfc raw from to text tmp (nz-flag-ligatures))
+                    (nz-nfc raw from to text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
                     (let [^I32 tn2 (- (cells-len text) t0)]
                       (node-set-text nodes par t0 tn2)))))
             (set k (+ k 1))))

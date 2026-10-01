@@ -44,7 +44,12 @@ fn main() {
         if parts.len() < 3 { continue; }
         let path = parts[0].to_string();
         let num: i32 = parts[1].parse().unwrap_or(0);
-        let codes: Vec<i32> = parts[2].split(',').filter(|s| !s.is_empty())
+        // a token that starts with `s` is a whole STRING (hex bytes): it is split into codes by the
+        // font's own code lengths (a composite font with a predefined CMap), each answered on a `P` line
+        let strings: Vec<Vec<u8>> = parts[2].split(',').filter(|s| s.starts_with('s'))
+            .map(|s| (1..s.len()).step_by(2).filter(|i| i + 2 <= s.len())
+                 .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap_or(0)).collect()).collect();
+        let codes: Vec<i32> = parts[2].split(',').filter(|s| !s.is_empty() && !s.starts_with('s'))
             .map(|s| i32::from_str_radix(s, 16).unwrap_or(0)).collect();
         if !cache.contains_key(&path) {
             if cache.len() > 4 { cache.clear(); }
@@ -78,6 +83,35 @@ fn main() {
                     let w = pfn_width(&mut f, *c);
                     let ws = if w == -1 { "-".to_string() } else { w.to_string() };
                     rows.push(format!("C\t{:X}\t{}\t{}\t{}\t{}", c, hexs(&cps), t, ws, pfn_cid(&mut f, *c)));
+                }
+            }
+            if status == 0 {
+                for st8 in &strings {
+                    let hex: String = st8.iter().map(|b| format!("{:02X}", b)).collect();
+                    let mut i = 0usize;
+                    let mut idx = 0;
+                    while i < st8.len() {
+                        let g = |k: usize| if i + k < st8.len() { st8[i + k] as i32 } else { -1 };
+                        let mut n = pfn_code_len(&mut f, g(0), g(1), g(2), g(3));
+                        if n < 1 { n = 1; }
+                        if n > 4 { n = 4; }
+                        if i + (n as usize) > st8.len() { n = (st8.len() - i) as i32; }
+                        let mut code: i32 = 0;
+                        for k in 0..(n as usize) {
+                            if n == 4 && k == 0 && st8[i] >= 128 { code = (st8[i] as i32 - 256) * 16777216; }
+                            else { code = code.wrapping_mul(256).wrapping_add(st8[i + k] as i32); }
+                        }
+                        let cnt = pfn_map(&mut f, code);
+                        let cps: Vec<i32> = (0..cnt).map(|j| pfn_cp(&mut f, j)).collect();
+                        let how = pfn_how_of(&mut f);
+                        let mut t = String::new();
+                        pfn_how_emit_name(&mut t, how);
+                        let w = pfn_width(&mut f, code);
+                        rows.push(format!("P\t{}\t{}\t{:X}\t{}\t{}\t{}\t{}", hex, idx, code, hexs(&cps), t,
+                                          if w == -1 { "-".to_string() } else { w.to_string() }, pfn_cid(&mut f, code)));
+                        i += n as usize;
+                        idx += 1;
+                    }
                 }
             }
             rows
