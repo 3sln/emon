@@ -1,0 +1,526 @@
+{
+ "emon-gold": "1.0",
+ "id": "outlined-heading",
+ "provenance": {
+  "html": "html/outlined-heading.html",
+  "pdf": "pdf/outlined-heading.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/outlined-heading.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Results Bulletin"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Read time was there him also go right upon cut. Toward best upon enough country knew man new world form side up going. Every new water told whole because by often. Be read different want those see used some more but need think this took change. Little white should or great through few same until paper been land point."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "Quarterly Results"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "She why asked later said let face another why tell. Should said world did made point just across asked friend back when. Room air old those learn soon turned might without help answer that when. Try face same try five group will done. Same than that very together three work answer feet name during him."
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Against without back me me try the country will something hard from to. Then would answer however all turned review every at story try word. Or take do little another into we revenue still without again place upon will until figure. On another this its some each these between answer small answer soon us have door. Sentence find all set air thought or knew."
+        },
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "text": "More through later know them these toward her market. As being of body her always mother need our move the work however. Some country the night how set be as same. Have study think take two school make is very light. Write review said at number many write work being."
+        },
+        {
+         "id": 9,
+         "kind": "seal",
+         "subkind": "seal",
+         "color": "purple",
+         "text": "BOARD OF EDUCATION APPROVED"
+        },
+        {
+         "id": 10,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 5,
+         "children": [
+          {
+           "id": 11,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 12,
+             "kind": "row",
+             "children": [
+              {
+               "id": 13,
+               "kind": "cell",
+               "header": "col",
+               "text": "Ref"
+              },
+              {
+               "id": 14,
+               "kind": "cell",
+               "header": "col",
+               "text": "Item"
+              },
+              {
+               "id": 15,
+               "kind": "cell",
+               "header": "col",
+               "text": "Category"
+              },
+              {
+               "id": 16,
+               "kind": "cell",
+               "header": "col",
+               "text": "Qty"
+              },
+              {
+               "id": 17,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 18,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 19,
+             "kind": "row",
+             "children": [
+              {
+               "id": 20,
+               "kind": "cell",
+               "text": "F0001"
+              },
+              {
+               "id": 21,
+               "kind": "cell",
+               "text": "Him need picture"
+              },
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "18"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "text": "6052.29"
+              }
+             ]
+            },
+            {
+             "id": 25,
+             "kind": "row",
+             "children": [
+              {
+               "id": 26,
+               "kind": "cell",
+               "text": "F0002"
+              },
+              {
+               "id": 27,
+               "kind": "cell",
+               "text": "More change write"
+              },
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "40"
+              },
+              {
+               "id": 30,
+               "kind": "cell",
+               "text": "1425.47"
+              }
+             ]
+            },
+            {
+             "id": 31,
+             "kind": "row",
+             "children": [
+              {
+               "id": 32,
+               "kind": "cell",
+               "text": "F0003"
+              },
+              {
+               "id": 33,
+               "kind": "cell",
+               "text": "Many next sun"
+              },
+              {
+               "id": 34,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 35,
+               "kind": "cell",
+               "text": "7"
+              },
+              {
+               "id": 36,
+               "kind": "cell",
+               "text": "6010.18"
+              }
+             ]
+            },
+            {
+             "id": 37,
+             "kind": "row",
+             "children": [
+              {
+               "id": 38,
+               "kind": "cell",
+               "text": "F0004"
+              },
+              {
+               "id": 39,
+               "kind": "cell",
+               "text": "Feet until until"
+              },
+              {
+               "id": 40,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 41,
+               "kind": "cell",
+               "text": "24"
+              },
+              {
+               "id": 42,
+               "kind": "cell",
+               "text": "2444.45"
+              }
+             ]
+            },
+            {
+             "id": 43,
+             "kind": "row",
+             "children": [
+              {
+               "id": 44,
+               "kind": "cell",
+               "text": "F0005"
+              },
+              {
+               "id": 45,
+               "kind": "cell",
+               "text": "Where being asked"
+              },
+              {
+               "id": 46,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 47,
+               "kind": "cell",
+               "text": "24"
+              },
+              {
+               "id": 48,
+               "kind": "cell",
+               "text": "5957.05"
+              }
+             ]
+            },
+            {
+             "id": 49,
+             "kind": "row",
+             "children": [
+              {
+               "id": 50,
+               "kind": "cell",
+               "text": "F0006"
+              },
+              {
+               "id": 51,
+               "kind": "cell",
+               "text": "Name until her"
+              },
+              {
+               "id": 52,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 53,
+               "kind": "cell",
+               "text": "33"
+              },
+              {
+               "id": 54,
+               "kind": "cell",
+               "text": "4906.18"
+              }
+             ]
+            },
+            {
+             "id": 55,
+             "kind": "row",
+             "children": [
+              {
+               "id": 56,
+               "kind": "cell",
+               "text": "F0007"
+              },
+              {
+               "id": 57,
+               "kind": "cell",
+               "text": "Like part every"
+              },
+              {
+               "id": 58,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 59,
+               "kind": "cell",
+               "text": "9"
+              },
+              {
+               "id": 60,
+               "kind": "cell",
+               "text": "5879.93"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 61,
+         "kind": "paragraph",
+         "text": "Knew sample answer have heard by called did away three point whole. Had region more did not world story also first made. No with budget children us measure air boy almost morning form much knew seen market. Heard water face animal face make then best right going us friend car without part. Side above people small review review better need me animal school be thing world little."
+        }
+       ]
+      },
+      {
+       "id": 62,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 63,
+         "kind": "heading",
+         "level": 2,
+         "text": "Outlook and Risks"
+        },
+        {
+         "id": 64,
+         "kind": "paragraph",
+         "text": "Looked make hand results that just or knew tell house of look between three just. Move saw used near as point how were never. Have must always last form one almost once results long only man hear. Almost only page good three all sound read money called has review. Number upon think such best than several at water."
+        },
+        {
+         "id": 65,
+         "kind": "paragraph",
+         "text": "Took thought market young children turn asked here top. Something often turned know soon thing enough let near sea these. Far earth often each got the left long going hear. Most saw not several some is learn light across man sound. True looked word which one him far thought could boy."
+        },
+        {
+         "id": 66,
+         "kind": "paragraph",
+         "text": "To made animal me know the your point so high. Thought my last for words must four right try. Sample color way take she she same number far tell some as without left top. Then until something side color much page number might then large at make back. Her say using pay study often night make three knew results have different think air no."
+        },
+        {
+         "id": 67,
+         "kind": "seal",
+         "subkind": "signature",
+         "color": "blue",
+         "text": ""
+        },
+        {
+         "id": 68,
+         "kind": "paragraph",
+         "text": "That out room were with no in called even big some change well first face. Would picture cut against around above line kind method pay life told morning place. Like had soon page far will high very still did not name himself go house see. Do best large home on when learn water budget looked up told. Method your side said usually were very red always until over set name light must number."
+        },
+        {
+         "id": 69,
+         "kind": "paragraph",
+         "text": "Line toward red took used which revenue where animal men try out away example sun however. Of leave will against quarter until morning high my even up morning top there. Went most long play between thought our mother morning few. Something were even show to how heard against. Much just figure can every below if end."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   },
+   {
+    "reason": "watermark",
+    "page": 2,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Results Bulletin"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

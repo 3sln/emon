@@ -61,7 +61,10 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 (def FAMILY {"h" "headings" "table" "tables" "furn" "furniture" "figures" "figures"
              "lists" "lists" "script" "scripts" "columns" "columns" "footnotes" "footnotes"
              "stamp" "seals" "watermark" "watermarks" "invoice" "forms" "bank" "forms"
-             "initial" "initials" "align" "align"})
+             "initial" "initials" "align" "align"
+             ;; the fusion corpus (P6.6, D209)
+             "wm" "watermarks" "bg" "watermarks" "seal" "seals" "sig" "seals"
+             "outlined" "headings" "tl" "textlayer" "hidden" "textlayer"})
 
 (defn category [doc-id]
   (get FAMILY (first (str/split doc-id #"-" 2)) "other"))
@@ -174,17 +177,20 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 
 (def ^:dynamic *variants* nil)   ; a set of variant names, or nil for every one
 (def ^:dynamic *ids* nil)        ; a set of document ids, or nil for every one
+(def VARIANTS ["pdf" "scan" "pdf-tagged" "scan-color" "scan-ovl"])
 
 (defn corpus []
   (let [man (pyjson/parse-file (str (fs/path CORPUS "MANIFEST.json")))]
     (for [doc-id (sort (keys (get man "docs")))
           :when (or (nil? *ids*) (contains? *ids* doc-id))
           :let [files (get-in man ["docs" doc-id "files"])]
-          variant ["pdf" "scan" "pdf-tagged"]
+          variant VARIANTS
           :when (or (nil? *variants*) (contains? *variants* variant))
           :when (contains? files variant)]
       [doc-id variant (str (fs/path CORPUS (get-in files [variant "path"])))
-       (str (fs/path CORPUS "gold" (str doc-id ".gold.json")))])))
+       ;; the overlay scans have their own gold: the document's, plus the overlays' ledger and seal nodes (D209)
+       (str (fs/path CORPUS (if (= variant "scan-ovl") "gold-ovl" "gold")
+                     (str doc-id (if (= variant "scan-ovl") ".ovl" "") ".gold.json")))])))
 
 (defn evaluate
   "-> [board entry {\"variant/cat\" {\":metric\" v}}, per-document metrics] or [nil why] if unavailable."
@@ -201,7 +207,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
      (if (nil? (first preds))
        [nil (second preds)]
        (loop [rs (pmap (fn [[doc-id variant _ gp] pred]
-                         [doc-id variant (get (S/score pred (pyjson/parse-file gp)) "counts")])
+                         [doc-id variant (get (S/score pred (pyjson/parse-file gp) {:variant variant}) "counts")])
                        docs (first preds))
               pools {}, per-doc (array-map)]
          (if-let [[[doc-id variant c] & more] (seq rs)]

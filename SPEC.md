@@ -2629,6 +2629,10 @@ commit (the ratchet). Metrics:
    synthetically (noise, blur, skew, JPEG artefacts, low resolution, added
    watermarks, overlaid seals and signatures from a small licensed library,
    bleed-through), giving a scanned corpus whose truth is still known.
+   The fusion corpus (D209) adds, for a 22-document set, colour scans and overlay scans (generated watermarks,
+   seals, signatures, bleed-through, turned pages, with their own gold) and six hand-edited PDFs (watermark as marked
+   content, optional content group and annotation; two broken ToUnicode maps; a worse hidden OCR layer); newly committed
+   pixels stay within about 10 MB, larger sets live in the S3 corpus store and feed long runs only (no LFS).
    **The generated PDFs, images and gold Models are committed**; no gate,
    build or test invokes a producer. Regenerating the corpus is a human
    action whose diff is reviewed, and a missing producer only means the

@@ -7,7 +7,8 @@
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
    "pdf-tagged": "pdf-tagged/table-simple-ruled.pdf",
-   "scan": "scan/table-simple-ruled.pdf"
+   "scan": "scan/table-simple-ruled.pdf",
+   "scan-color": "scan-color/table-simple-ruled.pdf"
   }
  },
  "annotated": {

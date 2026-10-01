@@ -239,6 +239,103 @@ the same, the stream is not Python's.)"
     (is (= 20 (c "contam.body-chars")))
     (is (almost= 0.25 ((M c) "watermark-leak")))))
 
+;; ---------------------------------------------------------------- Fusion ----
+;; D206 / SPEC 14.2: ghost-rate, seal-leak, src-ocr-share, tl-override. Every expected number is worked by hand.
+
+(defn- T [t & {:as prov}] (merge {"kind" "text" "text" t} (update-keys prov name)))
+(defn- PX
+  "A paragraph made of inlines (text = their concatenation) and the provenance of the block itself."
+  ([inlines] (PX inlines {}))
+  ([inlines prov]
+   (merge {"kind" "paragraph" "text" (apply str (map #(get % "text") inlines)) "inlines" (vec inlines)}
+          (update-keys prov name))))
+
+(deftest ghost-rate
+  ;; gold body: "alpha beta gamma". Pred: `alpha beta` from the text layer, `gamma delta delta` from OCR alone.
+  ;; OCR-only words: gamma 1, delta 2. The gold has gamma once (predicted once: no excess), delta never
+  ;; (predicted twice: excess 2). ghosts = min(1, 0) + min(2, 2) = 2 of 5 predicted words.
+  (let [g (gold [(P "alpha beta gamma")])
+        p (pred [(PX [(T "alpha beta " :src ["text"]) (T "gamma delta delta" :src ["ocr"])])])
+        c (counts g p)]
+    (is (= [2 5] [(c "fusion.ghost-words") (c "fusion.body-words")]))
+    (is (almost= 0.4 ((M c) "ghost-rate"))))
+  ;; the same words with the provenance on the BLOCK (no inlines): the block's sources are used
+  (let [c (counts (gold [(P "alpha beta gamma")])
+                  (pred [{"kind" "paragraph" "text" "alpha beta gamma delta delta" "src" ["ocr"]}]))]
+    (is (= [2 5] [(c "fusion.ghost-words") (c "fusion.body-words")])))
+  ;; an inline's own `src` beats its block's: the block says ocr, the inlines say text, so nothing is OCR-only
+  (let [c (counts (gold [(P "alpha beta")])
+                  (pred [(PX [(T "alpha" :src ["text"]) (T " beta" :src ["text" "ocr"])] {:src ["ocr"]})]))]
+    (is (= 0 (c "fusion.ghost-words"))))
+  ;; a word the gold has once, predicted twice, once from each source: one excess, and it is the OCR one
+  (let [c (counts (gold [(P "alpha")])
+                  (pred [(PX [(T "alpha " :src ["text"]) (T "alpha" :src ["ocr"])])]))]
+    (is (= [1 2] [(c "fusion.ghost-words") (c "fusion.body-words")])))
+  ;; no provenance, no ghosts; a seal's own OCR words are not counted
+  (let [c (counts (gold [(P "alpha")])
+                  (pred [(P "alpha") {"kind" "seal" "subkind" "stamp" "text" "PAID" "src" ["ocr"]}]))]
+    (is (= [0 1] [(c "fusion.ghost-words") (c "fusion.body-words")]))))
+
+(deftest seal-leak
+  ;; gold: body "real body text" and a stamp PAID NOW. Pred A has the stamp's PAID in the paragraph:
+  ;; 4 leaked characters over the 19 characters of "real body text PAID".
+  (let [g (gold [(P "real body text") {"kind" "seal" "subkind" "stamp" "text" "PAID NOW"}])
+        a (counts g (pred [(P "real body text PAID")]))
+        b (counts g (pred [(P "real body text") {"kind" "seal" "subkind" "stamp" "text" "PAID NOW"}]))
+        c' (counts g (pred [(P "real body text NOW PAID PAID")]))]
+    (is (= [4 19] [(a "fusion.seal-leak-chars") (a "fusion.seal-body-chars")]))
+    (is (almost= (/ 4.0 19) ((M a) "seal-leak")))
+    ;; the stamp where it belongs (a seal node) is no leak, and its text is not body text
+    (is (= [0 14] [(b "fusion.seal-leak-chars") (b "fusion.seal-body-chars")]))
+    (is (= 0.0 ((M b) "seal-leak")))
+    ;; counts are by occurrence: NOW once and PAID twice = 3 + 4 + 4 = 11 over 28 characters
+    (is (= [11 28] [(c' "fusion.seal-leak-chars") (c' "fusion.seal-body-chars")])))
+  ;; a word the gold body has itself is no leak: "now" is not NOW, but NOW in the body is
+  (let [g (gold [(P "pay NOW please") {"kind" "seal" "subkind" "stamp" "text" "NOW"}])
+        c (counts g (pred [(P "pay NOW please")]))]
+    (is (= 0 (c "fusion.seal-leak-chars"))))
+  ;; a gold with no seal text has no seal-leak metric at all
+  (is (nil? ((M (counts (gold [(P "alpha")]) (pred [(P "alpha")]))) "seal-leak"))))
+
+(deftest src-ocr-share
+  ;; "abcd" (4 characters) from OCR alone, "efghij" (6) from the text layer: 4 of 10
+  (let [g (gold [(P "abcd") (P "efghij")])
+        c (counts g (pred [{"kind" "paragraph" "text" "abcd" "src" ["ocr"]}
+                           {"kind" "paragraph" "text" "efghij" "src" ["text"]}]))]
+    (is (= [4 10] [(c "fusion.src-ocr-chars") (c "fusion.src-chars")]))
+    (is (almost= 0.4 ((M c) "src-ocr-share"))))
+  ;; both sources, `text` and `ocr`, is not OCR-only; inline over block: ab is OCR, cd inherits the block's text
+  (let [c (counts (gold [(P "abcd")])
+                  (pred [(PX [(T "ab" :src ["ocr"]) (T "cd")] {:src ["text"]})]))]
+    (is (= [2 4] [(c "fusion.src-ocr-chars") (c "fusion.src-chars")])))
+  (let [c (counts (gold [(P "ab")]) (pred [{"kind" "paragraph" "text" "ab" "src" ["text" "ocr"]}]))]
+    (is (= 0 (c "fusion.src-ocr-chars"))))
+  ;; a prediction that says nothing of its sources has no share (not zero): the metric is absent
+  (is (nil? ((M (counts (gold [(P "ab")]) (pred [(P "ab")]))) "src-ocr-share"))))
+
+(deftest tl-override
+  ;; the suspect flag on "abc" of "abcdef": 3 of 6, on a born-digital variant
+  (let [g (gold [(P "abcdef")])
+        p (pred [(PX [(T "abc" :flags ["text-layer-suspect"]) (T "def")])])
+        pdf (get (S/score p g {:variant "pdf"}) "counts")
+        scan (get (S/score p g {:variant "scan"}) "counts")
+        untrusted (get (S/score p (assoc g "facts" {"tl-untrusted" true}) {:variant "pdf"}) "counts")]
+    (is (= [3 6] [(pdf "fusion.tl-susp-chars") (pdf "fusion.tl-chars")]))
+    (is (almost= 0.5 ((M pdf) "tl-override")))
+    ;; a scan has no text layer to override; a text layer that is wrong on purpose is overridden rightly
+    (is (nil? ((M scan) "tl-override")))
+    (is (nil? ((M untrusted) "tl-override"))))
+  ;; the flag on the block applies to its inlines, and a seal's text is not counted
+  (let [c (get (S/score (pred [(PX [(T "ab") (T "cd")] {:flags ["text-layer-suspect"]})
+                               {"kind" "seal" "subkind" "stamp" "text" "ZZ" "flags" ["text-layer-suspect"]}])
+                        (gold [(P "abcd")]) {:variant "pdf"})
+               "counts")]
+    (is (= [4 4] [(c "fusion.tl-susp-chars") (c "fusion.tl-chars")]))))
+
+(deftest fusion-metrics-ratchet-lower
+  (doseq [m ["ghost-rate" "seal-leak" "src-ocr-share" "tl-override"]]
+    (is (contains? S/LOWER-IS-BETTER m) m)))
+
 (deftest table-teds-lite
   (let [cell (fn [t] {"kind" "cell" "text" t})
         row (fn [& ts] {"kind" "row" "children" (mapv cell ts)})

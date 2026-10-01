@@ -1,0 +1,1093 @@
+{
+ "bank-statement": {
+  "pages": 3,
+  "skew": [
+   2.716,
+   -1.6,
+   0.623
+  ],
+  "skew-ovl": [
+   0.268,
+   2.377,
+   0.365
+  ],
+  "turns": {},
+  "bleed": true,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 202
+  },
+  "seal": 0,
+  "overlays": [
+   {
+    "kind": "signature",
+    "page": 3,
+    "path": [
+     "children",
+     1,
+     "children",
+     2,
+     "children",
+     2
+    ],
+    "box": [
+     178,
+     574,
+     308,
+     608
+    ]
+   }
+  ]
+ },
+ "bg-texture": {
+  "pages": 2,
+  "skew": [
+   2.333,
+   -1.843
+  ],
+  "skew-ovl": [
+   -1.692,
+   -2.563
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 201
+  },
+  "seal": 3,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 3,
+    "path": [
+     "children",
+     0,
+     "children",
+     2,
+     "children",
+     1
+    ],
+    "box": [
+     427,
+     212,
+     495,
+     280
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     4,
+     "children",
+     2
+    ],
+    "box": [
+     192,
+     151,
+     322,
+     185
+    ]
+   }
+  ]
+ },
+ "columns-two": {
+  "pages": 2,
+  "skew": [
+   0.406,
+   0.777
+  ],
+  "skew-ovl": [
+   -0.679,
+   -2.031
+  ],
+  "turns": {},
+  "bleed": true,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 214
+  },
+  "seal": 3,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 3,
+    "path": [
+     "children",
+     0,
+     "children",
+     5,
+     "children",
+     2
+    ],
+    "box": [
+     446,
+     603,
+     514,
+     671
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     6,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     114,
+     322,
+     148
+    ]
+   }
+  ]
+ },
+ "figures-logo-screenshot": {
+  "pages": 1,
+  "skew": [
+   0.315
+  ],
+  "skew-ovl": [
+   2.324
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 203
+  },
+  "seal": 0,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 0,
+    "path": [
+     "children",
+     1,
+     "children",
+     3
+    ],
+    "box": [
+     434,
+     338,
+     502,
+     406
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 1,
+    "path": [
+     "children",
+     1,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     164,
+     322,
+     198
+    ]
+   }
+  ]
+ },
+ "h-numbered": {
+  "pages": 2,
+  "skew": [
+   1.803,
+   -0.079
+  ],
+  "skew-ovl": [
+   -2.586,
+   2.306
+  ],
+  "turns": {
+   "2": 180
+  },
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 215
+  },
+  "seal": 2,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     2,
+     "children",
+     3,
+     "children",
+     1
+    ],
+    "box": [
+     220,
+     658,
+     288,
+     726
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     1,
+     "children",
+     2,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     490,
+     322,
+     524
+    ]
+   }
+  ]
+ },
+ "hidden-older-ocr": {
+  "pages": 2,
+  "skew": [
+   0.492,
+   2.301
+  ],
+  "skew-ovl": [
+   2.826,
+   -2.775
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 209
+  },
+  "seal": 0,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 0,
+    "path": [
+     "children",
+     0,
+     "children",
+     2,
+     "children",
+     3,
+     "children",
+     2,
+     "children",
+     1
+    ],
+    "box": [
+     212,
+     436,
+     280,
+     504
+    ]
+   }
+  ]
+ },
+ "invoice": {
+  "pages": 1,
+  "skew": [
+   0.685
+  ],
+  "skew-ovl": [
+   -0.931
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 210
+  },
+  "seal": 1,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 1,
+    "path": [
+     "children",
+     2,
+     "children",
+     3,
+     "children",
+     1
+    ],
+    "box": [
+     403,
+     412,
+     471,
+     480
+    ]
+   }
+  ]
+ },
+ "lists-basic": {
+  "pages": 1,
+  "skew": [
+   -0.132
+  ],
+  "skew-ovl": [
+   -2.223
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 204
+  },
+  "seal": 5,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 5,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     2
+    ],
+    "box": [
+     433,
+     435,
+     501,
+     503
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 1,
+    "path": [
+     "children",
+     0,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     120,
+     322,
+     154
+    ]
+   }
+  ]
+ },
+ "outlined-heading": {
+  "pages": 2,
+  "skew": [
+   0.758,
+   0.943
+  ],
+  "skew-ovl": [
+   2.982,
+   2.529
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 210
+  },
+  "seal": 5,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 5,
+    "path": [
+     "children",
+     0,
+     "children",
+     2,
+     "children",
+     3
+    ],
+    "box": [
+     401,
+     381,
+     469,
+     449
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     3
+    ],
+    "box": [
+     192,
+     207,
+     322,
+     241
+    ]
+   }
+  ]
+ },
+ "script-mixed": {
+  "pages": 1,
+  "skew": [
+   2.389
+  ],
+  "skew-ovl": [
+   -0.186
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 204
+  },
+  "seal": 0,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 0,
+    "path": [
+     "children",
+     0,
+     "children",
+     1
+    ],
+    "box": [
+     286,
+     96,
+     354,
+     164
+    ]
+   }
+  ]
+ },
+ "seal-over-text": {
+  "pages": 2,
+  "skew": [
+   1.353,
+   1.569
+  ],
+  "skew-ovl": [
+   2.28,
+   1.913
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 200
+  },
+  "seal": 2,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     4
+    ],
+    "box": [
+     418,
+     561,
+     486,
+     629
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     4,
+     "children",
+     2
+    ],
+    "box": [
+     192,
+     79,
+     322,
+     113
+    ]
+   }
+  ]
+ },
+ "sig-over-name": {
+  "pages": 2,
+  "skew": [
+   1.616,
+   -0.665
+  ],
+  "skew-ovl": [
+   -0.629,
+   0.738
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 204
+  },
+  "seal": 1,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 1,
+    "path": [
+     "children",
+     0,
+     "children",
+     2,
+     "children",
+     2
+    ],
+    "box": [
+     288,
+     315,
+     356,
+     383
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     4,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     79,
+     322,
+     113
+    ]
+   }
+  ]
+ },
+ "stamp-seal": {
+  "pages": 1,
+  "skew": [
+   -1.071
+  ],
+  "skew-ovl": [
+   2.811
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 200
+  },
+  "seal": 1,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 1,
+    "path": [
+     "children",
+     0,
+     "children",
+     1
+    ],
+    "box": [
+     428,
+     96,
+     496,
+     164
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 1,
+    "path": [
+     "children",
+     0,
+     "children",
+     2
+    ],
+    "box": [
+     192,
+     154,
+     322,
+     188
+    ]
+   }
+  ]
+ },
+ "table-simple-ruled": {
+  "pages": 1,
+  "skew": [
+   2.369
+  ],
+  "skew-ovl": [
+   1.443
+  ],
+  "turns": {
+   "1": 90
+  },
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 210
+  },
+  "seal": 3,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 3,
+    "path": [
+     "children",
+     0,
+     "children",
+     1
+    ],
+    "box": [
+     214,
+     119,
+     282,
+     187
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 1,
+    "path": [
+     "children",
+     0,
+     "children",
+     3
+    ],
+    "box": [
+     192,
+     317,
+     322,
+     351
+    ]
+   }
+  ]
+ },
+ "tl-broken-shift": {
+  "pages": 2,
+  "skew": [
+   1.066,
+   1.563
+  ],
+  "skew-ovl": [
+   2.868,
+   -1.753
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 213
+  },
+  "seal": 3,
+  "overlays": []
+ },
+ "tl-broken-unmapped": {
+  "pages": 2,
+  "skew": [
+   -0.664,
+   1.245
+  ],
+  "skew-ovl": [
+   0.217,
+   0.54
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 209
+  },
+  "seal": 3,
+  "overlays": []
+ },
+ "watermark-draft": {
+  "pages": 2,
+  "skew": [
+   2.382,
+   2.896
+  ],
+  "skew-ovl": [
+   -2.434,
+   2.31
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 213
+  },
+  "seal": 0,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 0,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     1
+    ],
+    "box": [
+     445,
+     608,
+     513,
+     676
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     5,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     460,
+     322,
+     494
+    ]
+   }
+  ]
+ },
+ "wm-annot": {
+  "pages": 2,
+  "skew": [
+   -2.326,
+   0.046
+  ],
+  "skew-ovl": [
+   -0.14,
+   -0.41
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 209
+  },
+  "seal": 2,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     1
+    ],
+    "box": [
+     445,
+     414,
+     513,
+     482
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     4,
+     "children",
+     2
+    ],
+    "box": [
+     192,
+     119,
+     322,
+     153
+    ]
+   }
+  ]
+ },
+ "wm-gray-behind": {
+  "pages": 2,
+  "skew": [
+   -2.399,
+   0.496
+  ],
+  "skew-ovl": [
+   -2.125,
+   -1.78
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 201
+  },
+  "seal": 4,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 4,
+    "path": [
+     "children",
+     0,
+     "children",
+     2,
+     "children",
+     1
+    ],
+    "box": [
+     431,
+     212,
+     499,
+     280
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     5,
+     "children",
+     2
+    ],
+    "box": [
+     192,
+     409,
+     322,
+     443
+    ]
+   }
+  ]
+ },
+ "wm-image-behind": {
+  "pages": 2,
+  "skew": [
+   -0.173,
+   1.539
+  ],
+  "skew-ovl": [
+   2.342,
+   1.312
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 211
+  },
+  "seal": 0,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 0,
+    "path": [
+     "children",
+     0,
+     "children",
+     2,
+     "children",
+     1
+    ],
+    "box": [
+     425,
+     228,
+     493,
+     296
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     4,
+     "children",
+     3
+    ],
+    "box": [
+     192,
+     190,
+     322,
+     224
+    ]
+   }
+  ]
+ },
+ "wm-marked": {
+  "pages": 2,
+  "skew": [
+   2.11,
+   0.184
+  ],
+  "skew-ovl": [
+   0.72,
+   1.572
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 215
+  },
+  "seal": 3,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 3,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     1
+    ],
+    "box": [
+     426,
+     399,
+     494,
+     467
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     5,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     306,
+     322,
+     340
+    ]
+   }
+  ]
+ },
+ "wm-ocg": {
+  "pages": 2,
+  "skew": [
+   0.357,
+   1.21
+  ],
+  "skew-ovl": [
+   -0.074,
+   2.722
+  ],
+  "turns": {},
+  "bleed": false,
+  "watermark": {
+   "text": "COPY",
+   "lightness": 208
+  },
+  "seal": 2,
+  "overlays": [
+   {
+    "kind": "seal",
+    "page": 1,
+    "seal": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     3,
+     "children",
+     1
+    ],
+    "box": [
+     441,
+     399,
+     509,
+     467
+    ]
+   },
+   {
+    "kind": "signature",
+    "page": 2,
+    "path": [
+     "children",
+     0,
+     "children",
+     5,
+     "children",
+     1
+    ],
+    "box": [
+     192,
+     321,
+     322,
+     355
+    ]
+   }
+  ]
+ }
+}

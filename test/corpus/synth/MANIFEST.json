@@ -405,6 +405,16 @@
      "path": "scan/bank-statement.pdf",
      "sha256": "97fa800ae6e496de0c9b90b8518579bd258d704b699a3d648b401d9b9ce1d51a",
      "bytes": 431618
+    },
+    "scan-color": {
+     "path": "scan-color/bank-statement.pdf",
+     "sha256": "bec00fa80d63de4153a6f53ad7766cda653238a0baaeb716466ddfef6c8781b4",
+     "bytes": 341196
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/bank-statement.pdf",
+     "sha256": "505a4f936801300f0f04963b860a0ad8d9898c7c5e5debb31fbca3a06c68d3db",
+     "bytes": 374438
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -537,7 +547,140 @@
       3,
       3
      ]
+    },
+    "skew": [
+     2.716,
+     -1.6,
+     0.623
+    ],
+    "skew-ovl": [
+     0.268,
+     2.377,
+     0.365
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "signature",
+      "page": 3,
+      "path": [
+       "children",
+       1,
+       "children",
+       2,
+       "children",
+       2
+      ],
+      "box": [
+       178,
+       574,
+       308,
+       608
+      ]
+     }
+    ],
+    "seal": 0,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 202
+    },
+    "bleed": true
+   }
+  },
+  "bg-texture": {
+   "files": {
+    "html": {
+     "path": "html/bg-texture.html",
+     "sha256": "a025619566f36d92611334ab01917b4bfde0b41b48dc9921a3aef98db0bcf39d",
+     "bytes": 5449
+    },
+    "pdf": {
+     "path": "pdf/bg-texture.pdf",
+     "sha256": "a6844d331e89d635a0dc240499fba1c7445e0348bfd51c840e5e0aa861e47c30",
+     "bytes": 73123
+    },
+    "asset": {
+     "path": "html/img/bg-texture.jpg",
+     "sha256": "62ff58aa0a7ffe649f6390ddcb10f9a7080640423c5564ae6fb9e2f93426223c",
+     "bytes": 17168
+    },
+    "scan-color": {
+     "path": "scan-color/bg-texture.pdf",
+     "sha256": "c704c5f04b342aff8dffc705e29a5a7b4fcd10308cc28bc097e2f9cf43f7e0c6",
+     "bytes": 200339
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/bg-texture.pdf",
+     "sha256": "cf0b2728ee0654327474609b4e21dff6adcaf9d248e1569c18f90367537ab520",
+     "bytes": 213904
     }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     2.333,
+     -1.843
+    ],
+    "skew-ovl": [
+     -1.692,
+     -2.563
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 3,
+      "path": [
+       "children",
+       0,
+       "children",
+       2,
+       "children",
+       1
+      ],
+      "box": [
+       427,
+       212,
+       495,
+       280
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       4,
+       "children",
+       2
+      ],
+      "box": [
+       192,
+       151,
+       322,
+       185
+      ]
+     }
+    ],
+    "seal": 3,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 201
+    },
+    "bleed": false
    }
   },
   "columns-continue": {
@@ -1630,6 +1773,16 @@
      "path": "scan/columns-two.pdf",
      "sha256": "bc10155bd616aee350a5d3d1ac08ec10635b67fc03528058b8440a1f54142426",
      "bytes": 296512
+    },
+    "scan-color": {
+     "path": "scan-color/columns-two.pdf",
+     "sha256": "3011850dfc9e4b96aaff085fe679837cd6520bd952e54b1ffa766627415a78d6",
+     "bytes": 209431
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/columns-two.pdf",
+     "sha256": "ad71f30948fdfc3bf05876b2156e239cdae9a2bc45f70e1344b3591fec714e6c",
+     "bytes": 247247
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -1643,7 +1796,61 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     0.406,
+     0.777
+    ],
+    "skew-ovl": [
+     -0.679,
+     -2.031
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 3,
+      "path": [
+       "children",
+       0,
+       "children",
+       5,
+       "children",
+       2
+      ],
+      "box": [
+       446,
+       603,
+       514,
+       671
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       6,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       114,
+       322,
+       148
+      ]
+     }
+    ],
+    "seal": 3,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 214
+    },
+    "bleed": true
    }
   },
   "columns-uneven": {
@@ -1789,6 +1996,16 @@
      "path": "scan/figures-logo-screenshot.pdf",
      "sha256": "375d9121edb093eb5db03d63378cf419ae96fa03954dc32d712114bf19209000",
      "bytes": 48137
+    },
+    "scan-color": {
+     "path": "scan-color/figures-logo-screenshot.pdf",
+     "sha256": "26f7bad492b9dc3c7753247c58411cf8a896202b8cb776f773f06dbe662dd32a",
+     "bytes": 34523
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/figures-logo-screenshot.pdf",
+     "sha256": "3839e683a8f01c093b226a5ec7da38d95ad1d9de51cc84608030d04f15e4317b",
+     "bytes": 41557
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -1798,7 +2015,55 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     0.315
+    ],
+    "skew-ovl": [
+     2.324
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 0,
+      "path": [
+       "children",
+       1,
+       "children",
+       3
+      ],
+      "box": [
+       434,
+       338,
+       502,
+       406
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 1,
+      "path": [
+       "children",
+       1,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       164,
+       322,
+       198
+      ]
+     }
+    ],
+    "seal": 0,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 203
+    },
+    "bleed": false
    }
   },
   "footnotes-endnotes": {
@@ -2142,6 +2407,16 @@
      "path": "scan/h-numbered.pdf",
      "sha256": "de1bba18f4afc36a89cc4acab2fc64d72bfbe2765da0daee4b3647d3e8164fad",
      "bytes": 196537
+    },
+    "scan-color": {
+     "path": "scan-color/h-numbered.pdf",
+     "sha256": "b87d97d62370de606545570a427a7ef8f7b3bb852a536a73b50e9ae2a2e2b1b1",
+     "bytes": 135606
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/h-numbered.pdf",
+     "sha256": "06cffd4fd25ce5b56714ca39ff53a9a3607632fd5f84451b1eca3d408e73480f",
+     "bytes": 151098
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -2155,7 +2430,67 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     1.803,
+     -0.079
+    ],
+    "skew-ovl": [
+     -2.586,
+     2.306
+    ],
+    "turns": {
+     "2": 180
+    },
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       2,
+       "children",
+       3,
+       "children",
+       1
+      ],
+      "box": [
+       220,
+       658,
+       288,
+       726
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       1,
+       "children",
+       2,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       490,
+       322,
+       524
+      ]
+     }
+    ],
+    "seal": 2,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 215
+    },
+    "bleed": false
    }
   },
   "h-plain": {
@@ -2188,6 +2523,84 @@
       792.0
      ]
     ]
+   }
+  },
+  "hidden-older-ocr": {
+   "files": {
+    "html": {
+     "path": "html/hidden-older-ocr.html",
+     "sha256": "75550cb0a65b6ab1b53e3efd6449145bdd00efb59e432cdbb2e4e4480d94cc3c",
+     "bytes": 2723
+    },
+    "pdf": {
+     "path": "pdf/hidden-older-ocr.pdf",
+     "sha256": "2139627590f15f12727e78b516607768d63933791e390ae9aa908fa66259a922",
+     "bytes": 160855
+    },
+    "scan-color": {
+     "path": "scan-color/hidden-older-ocr.pdf",
+     "sha256": "3ea5dde3434868981cbcafe57614f89bf88151b953f3ad5ab61aeb6c9cd9dd4b",
+     "bytes": 94390
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/hidden-older-ocr.pdf",
+     "sha256": "cdb75459b138954a6e79df82e37a214d4f7b6c0cabc2cdf58a20ea9ab3b7b8a9",
+     "bytes": 106418
+    }
+   },
+   "pdf-producer": "https://imagemagick.org\u0000",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "tl-untrusted": true,
+    "skew": [
+     0.492,
+     2.301
+    ],
+    "skew-ovl": [
+     2.826,
+     -2.775
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 0,
+      "path": [
+       "children",
+       0,
+       "children",
+       2,
+       "children",
+       3,
+       "children",
+       2,
+       "children",
+       1
+      ],
+      "box": [
+       212,
+       436,
+       280,
+       504
+      ]
+     }
+    ],
+    "seal": 0,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 209
+    },
+    "bleed": false
    }
   },
   "initial-cjk": {
@@ -2564,6 +2977,16 @@
      "path": "scan/invoice.pdf",
      "sha256": "0faf1186944813676994598bcf23da2299d6b9e593ea2b968ea5aa3deb7cef8c",
      "bytes": 66767
+    },
+    "scan-color": {
+     "path": "scan-color/invoice.pdf",
+     "sha256": "96f2d5be7f9618cf9729cf4ad227b8518a8e0f9a684c9b0e000a2b137c9b87c5",
+     "bytes": 49386
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/invoice.pdf",
+     "sha256": "0b463edbbd7f6b99284cdcdf322da71cab7310612c0b7f33b76eb9e6f1dc6b85",
+     "bytes": 58365
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -2573,7 +2996,41 @@
       594.96,
       841.92
      ]
-    ]
+    ],
+    "skew": [
+     0.685
+    ],
+    "skew-ovl": [
+     -0.931
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 1,
+      "path": [
+       "children",
+       2,
+       "children",
+       3,
+       "children",
+       1
+      ],
+      "box": [
+       403,
+       412,
+       471,
+       480
+      ]
+     }
+    ],
+    "seal": 1,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 210
+    },
+    "bleed": false
    }
   },
   "lists-basic": {
@@ -2597,6 +3054,16 @@
      "path": "scan/lists-basic.pdf",
      "sha256": "bd77ad0207229e8d47d7f79c7eba9f0c769ac730b2d6f28a0c98ef21b009ec93",
      "bytes": 50450
+    },
+    "scan-color": {
+     "path": "scan-color/lists-basic.pdf",
+     "sha256": "d0de2e57e7c61487c681aa1af82694681531a03b0353fcf5908c340d0958d827",
+     "bytes": 31950
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/lists-basic.pdf",
+     "sha256": "23616a7b57735765f1cd7d4ee1226ecc0038eca4c2d101d9925482d97bd8ff9e",
+     "bytes": 43113
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -2606,7 +3073,57 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     -0.132
+    ],
+    "skew-ovl": [
+     -2.223
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 5,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       2
+      ],
+      "box": [
+       433,
+       435,
+       501,
+       503
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 1,
+      "path": [
+       "children",
+       0,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       120,
+       322,
+       154
+      ]
+     }
+    ],
+    "seal": 5,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 204
+    },
+    "bleed": false
    }
   },
   "lists-long-multipage": {
@@ -2671,6 +3188,97 @@
       792.0
      ]
     ]
+   }
+  },
+  "outlined-heading": {
+   "files": {
+    "html": {
+     "path": "html/outlined-heading.html",
+     "sha256": "f0566ff85a88feca30e3cfae1eb3737925f747eabf3b404954c37e96e167cf7f",
+     "bytes": 27575
+    },
+    "pdf": {
+     "path": "pdf/outlined-heading.pdf",
+     "sha256": "31a39bfe61a953ee3712e093ed8bbd2fffc55eba1fa1ebf5e2f1b28427ba3bcb",
+     "bytes": 55113
+    },
+    "scan-color": {
+     "path": "scan-color/outlined-heading.pdf",
+     "sha256": "3206d54369ab5bd3f0e2538cf54b822202c9868f73c36f052e91b4b15d91edc3",
+     "bytes": 189938
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/outlined-heading.pdf",
+     "sha256": "9e90980a5ca60454fd08f5da08347e44db0551846ca84def832829fbc57bd2fd",
+     "bytes": 203842
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     0.758,
+     0.943
+    ],
+    "skew-ovl": [
+     2.982,
+     2.529
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 5,
+      "path": [
+       "children",
+       0,
+       "children",
+       2,
+       "children",
+       3
+      ],
+      "box": [
+       401,
+       381,
+       469,
+       449
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       3
+      ],
+      "box": [
+       192,
+       207,
+       322,
+       241
+      ]
+     }
+    ],
+    "seal": 5,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 210
+    },
+    "bleed": false
    }
   },
   "script-arabic": {
@@ -2801,6 +3409,16 @@
      "path": "scan/script-mixed.pdf",
      "sha256": "c6fa77699769ab355745aba0cbf16afeee72991412a0ae0b8839cba53ed66dcc",
      "bytes": 46312
+    },
+    "scan-color": {
+     "path": "scan-color/script-mixed.pdf",
+     "sha256": "96598171eb4684cf0e78d261c9339cf0905839e95c3a56d920a70cd71e326ed7",
+     "bytes": 31734
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/script-mixed.pdf",
+     "sha256": "fad7a9cf3936717b8e5d4b68ced69dd155482b1bc4619fc7301e712a50f2bb4a",
+     "bytes": 39395
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -2810,7 +3428,221 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     2.389
+    ],
+    "skew-ovl": [
+     -0.186
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 0,
+      "path": [
+       "children",
+       0,
+       "children",
+       1
+      ],
+      "box": [
+       286,
+       96,
+       354,
+       164
+      ]
+     }
+    ],
+    "seal": 0,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 204
+    },
+    "bleed": false
+   }
+  },
+  "seal-over-text": {
+   "files": {
+    "html": {
+     "path": "html/seal-over-text.html",
+     "sha256": "8aa8d3f19034824c919494c0e1649cac942693769704beab20fd2464ffb57b14",
+     "bytes": 5980
+    },
+    "pdf": {
+     "path": "pdf/seal-over-text.pdf",
+     "sha256": "93d9d2c93a9e854d7afb8e30f3bc73303037949b27d3ba462a18ed0f031fcd0f",
+     "bytes": 72792
+    },
+    "scan-color": {
+     "path": "scan-color/seal-over-text.pdf",
+     "sha256": "391080b123667d9413c1578bec3ea6b99a1e55666b73216691cb519f597f6333",
+     "bytes": 202879
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/seal-over-text.pdf",
+     "sha256": "68f6d132b80d0a092d10d71fb6a992ce5d7237bdac956dafb0619f44d4de80be",
+     "bytes": 213418
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     1.353,
+     1.569
+    ],
+    "skew-ovl": [
+     2.28,
+     1.913
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       4
+      ],
+      "box": [
+       418,
+       561,
+       486,
+       629
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       4,
+       "children",
+       2
+      ],
+      "box": [
+       192,
+       79,
+       322,
+       113
+      ]
+     }
+    ],
+    "seal": 2,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 200
+    },
+    "bleed": false
+   }
+  },
+  "sig-over-name": {
+   "files": {
+    "html": {
+     "path": "html/sig-over-name.html",
+     "sha256": "b2632bcd5b176c1b7e4de558c48a0adf1f2e8f906a909fd4361817c33f37ecdd",
+     "bytes": 6328
+    },
+    "pdf": {
+     "path": "pdf/sig-over-name.pdf",
+     "sha256": "36464425435b2b01f7657af94e4e683336ec2e30854dde2c600c080777b39002",
+     "bytes": 72198
+    },
+    "scan-color": {
+     "path": "scan-color/sig-over-name.pdf",
+     "sha256": "e834b827509afc67de972cff5174750a1f0698e8ee733d4cd7f174b42801e8a2",
+     "bytes": 210301
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/sig-over-name.pdf",
+     "sha256": "69fcbac1d08442a0aa1de7e3dd2880426ef5c197f97fe735d33ff37b61d88576",
+     "bytes": 219001
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     1.616,
+     -0.665
+    ],
+    "skew-ovl": [
+     -0.629,
+     0.738
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 1,
+      "path": [
+       "children",
+       0,
+       "children",
+       2,
+       "children",
+       2
+      ],
+      "box": [
+       288,
+       315,
+       356,
+       383
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       4,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       79,
+       322,
+       113
+      ]
+     }
+    ],
+    "seal": 1,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 204
+    },
+    "bleed": false
    }
   },
   "stamp-seal": {
@@ -2829,6 +3661,16 @@
      "path": "scan/stamp-seal.pdf",
      "sha256": "dd93a8d8e90efed468c6ed7c171452a1130b445010fca34c4fd0c5e58e59597e",
      "bytes": 48584
+    },
+    "scan-color": {
+     "path": "scan-color/stamp-seal.pdf",
+     "sha256": "48d04d888120c775f51e8a0048a6d76b66d975a81012d75ef08b024bfc29597f",
+     "bytes": 37143
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/stamp-seal.pdf",
+     "sha256": "12a9e74fbaaac7884d418da69c7693415a8a6bb0392e94edb026cbc1d136d740",
+     "bytes": 44505
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -2838,7 +3680,55 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     -1.071
+    ],
+    "skew-ovl": [
+     2.811
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 1,
+      "path": [
+       "children",
+       0,
+       "children",
+       1
+      ],
+      "box": [
+       428,
+       96,
+       496,
+       164
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 1,
+      "path": [
+       "children",
+       0,
+       "children",
+       2
+      ],
+      "box": [
+       192,
+       154,
+       322,
+       188
+      ]
+     }
+    ],
+    "seal": 1,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 200
+    },
+    "bleed": false
    }
   },
   "table-consecutive-distinct": {
@@ -3346,6 +4236,16 @@
      "path": "scan/table-simple-ruled.pdf",
      "sha256": "3d44200b712dd91bfc83c9d69572e9ca47fa5d23ea207605e881c0ea203da501",
      "bytes": 68549
+    },
+    "scan-color": {
+     "path": "scan-color/table-simple-ruled.pdf",
+     "sha256": "177789780ddbe12b5a754330d05b4a5ed7c0e981a41bbe2c1d0cd0b38ce7f37c",
+     "bytes": 49507
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/table-simple-ruled.pdf",
+     "sha256": "5dd7530c893ed1334f549af8ebb922d0de5e489aea91015ab5d85030f4d39185",
+     "bytes": 57447
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -3355,7 +4255,57 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     2.369
+    ],
+    "skew-ovl": [
+     1.443
+    ],
+    "turns": {
+     "1": 90
+    },
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 3,
+      "path": [
+       "children",
+       0,
+       "children",
+       1
+      ],
+      "box": [
+       214,
+       119,
+       282,
+       187
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 1,
+      "path": [
+       "children",
+       0,
+       "children",
+       3
+      ],
+      "box": [
+       192,
+       317,
+       322,
+       351
+      ]
+     }
+    ],
+    "seal": 3,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 210
+    },
+    "bleed": false
    }
   },
   "table-spans-partial": {
@@ -3414,6 +4364,114 @@
     ]
    }
   },
+  "tl-broken-shift": {
+   "files": {
+    "html": {
+     "path": "html/tl-broken-shift.html",
+     "sha256": "f6e78ad977dad1067cb8fe3954d0db01712b4046f6a821e25ff0cbaf3578d5d6",
+     "bytes": 5193
+    },
+    "pdf": {
+     "path": "pdf/tl-broken-shift.pdf",
+     "sha256": "1a46148612bcfac8725b21cfd231de685e5a8e8327dce771cc8be0824b1316da",
+     "bytes": 55717
+    },
+    "scan-color": {
+     "path": "scan-color/tl-broken-shift.pdf",
+     "sha256": "3d69b498415d2c80b7618c631df4e130b82e4a817b810aaf885964ee7b00f93c",
+     "bytes": 185770
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/tl-broken-shift.pdf",
+     "sha256": "0e28f5c7d5710cdf1436b8c35ab1f5641e211a0f754ec21829d48e11189e1397",
+     "bytes": 189745
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "tl-untrusted": true,
+    "skew": [
+     1.066,
+     1.563
+    ],
+    "skew-ovl": [
+     2.868,
+     -1.753
+    ],
+    "turns": {},
+    "overlays": [],
+    "seal": 3,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 213
+    },
+    "bleed": false
+   }
+  },
+  "tl-broken-unmapped": {
+   "files": {
+    "html": {
+     "path": "html/tl-broken-unmapped.html",
+     "sha256": "5a1467823c693d0798f72673b6f8c89b6d69fc5d183d46b96e083b266d8c3c7c",
+     "bytes": 5305
+    },
+    "pdf": {
+     "path": "pdf/tl-broken-unmapped.pdf",
+     "sha256": "3c4587586d8b48db15cc8dd0310c0854c9bc7bfc57527dff6ca29f2d6598cc5d",
+     "bytes": 55195
+    },
+    "scan-color": {
+     "path": "scan-color/tl-broken-unmapped.pdf",
+     "sha256": "3f0d278a7250c1b1a5e20f9dc2eca31f79bc4555a2c757c626a9ff86f1f9af97",
+     "bytes": 190872
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/tl-broken-unmapped.pdf",
+     "sha256": "76aa4c17da42a3fcbc3735f8bd69963b62226affb1d6f79c5628077faa6b7c19",
+     "bytes": 194920
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "tl-untrusted": true,
+    "skew": [
+     -0.664,
+     1.245
+    ],
+    "skew-ovl": [
+     0.217,
+     0.54
+    ],
+    "turns": {},
+    "overlays": [],
+    "seal": 3,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 209
+    },
+    "bleed": false
+   }
+  },
   "watermark-draft": {
    "files": {
     "html": {
@@ -3430,6 +4488,16 @@
      "path": "scan/watermark-draft.pdf",
      "sha256": "f84095613d1f9d2068f777a69d7fce23c9b2b1c3c9eff134f87c0b8d49cb2604",
      "bytes": 348155
+    },
+    "scan-color": {
+     "path": "scan-color/watermark-draft.pdf",
+     "sha256": "fc7f2754398c2ad3f45c80ab232e50157a7d322fa7036f67fc6105fe55e32208",
+     "bytes": 262784
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/watermark-draft.pdf",
+     "sha256": "827da61e17e9339ccd3d99ef1abf148a10fd38244fd6fc23019ffac88330e8aa",
+     "bytes": 266025
     }
    },
    "pdf-producer": "Skia/PDF m154",
@@ -3443,7 +4511,521 @@
       612.0,
       792.0
      ]
-    ]
+    ],
+    "skew": [
+     2.382,
+     2.896
+    ],
+    "skew-ovl": [
+     -2.434,
+     2.31
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 0,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       1
+      ],
+      "box": [
+       445,
+       608,
+       513,
+       676
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       5,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       460,
+       322,
+       494
+      ]
+     }
+    ],
+    "seal": 0,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 213
+    },
+    "bleed": false
+   }
+  },
+  "wm-annot": {
+   "files": {
+    "html": {
+     "path": "html/wm-annot.html",
+     "sha256": "19c1b539dc06b1471c4a539d6073b2a069cc3ce49345c53c544ac0e9c82799a8",
+     "bytes": 5365
+    },
+    "pdf": {
+     "path": "pdf/wm-annot.pdf",
+     "sha256": "4ff95b4b73160d902d2566319e1cbc88fd259b671f582543a0e4cd39a662d0bb",
+     "bytes": 56554
+    },
+    "scan-color": {
+     "path": "scan-color/wm-annot.pdf",
+     "sha256": "417c6d80d6480d003a4a2ba900d9107d1b92b4e8bef282b81be7ca1a0686befb",
+     "bytes": 188779
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/wm-annot.pdf",
+     "sha256": "061d5355aebb41a23f9ed119b2ff41bf3e06f4fd6c6ff17b0a707c57e7fe1c85",
+     "bytes": 202238
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     -2.326,
+     0.046
+    ],
+    "skew-ovl": [
+     -0.14,
+     -0.41
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       1
+      ],
+      "box": [
+       445,
+       414,
+       513,
+       482
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       4,
+       "children",
+       2
+      ],
+      "box": [
+       192,
+       119,
+       322,
+       153
+      ]
+     }
+    ],
+    "seal": 2,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 209
+    },
+    "bleed": false
+   }
+  },
+  "wm-gray-behind": {
+   "files": {
+    "html": {
+     "path": "html/wm-gray-behind.html",
+     "sha256": "afa8483d2ac4aef9d8b49bf243ae75e9bf7773f9836944c8be02b6dbb911ca7a",
+     "bytes": 5523
+    },
+    "pdf": {
+     "path": "pdf/wm-gray-behind.pdf",
+     "sha256": "63ebb24992171565192ca8b84eb74bc9fba13b254ec5c20e8aac5600ad7a8545",
+     "bytes": 60099
+    },
+    "scan-color": {
+     "path": "scan-color/wm-gray-behind.pdf",
+     "sha256": "485469ad1b11a39bf1696a760b9d813e799a45f6d4c1c22018f683a12f42d126",
+     "bytes": 191502
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/wm-gray-behind.pdf",
+     "sha256": "200f492963d62c292813b296909bf456be73d8e4c104e0211caab972757b697e",
+     "bytes": 202609
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     -2.399,
+     0.496
+    ],
+    "skew-ovl": [
+     -2.125,
+     -1.78
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 4,
+      "path": [
+       "children",
+       0,
+       "children",
+       2,
+       "children",
+       1
+      ],
+      "box": [
+       431,
+       212,
+       499,
+       280
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       5,
+       "children",
+       2
+      ],
+      "box": [
+       192,
+       409,
+       322,
+       443
+      ]
+     }
+    ],
+    "seal": 4,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 201
+    },
+    "bleed": false
+   }
+  },
+  "wm-image-behind": {
+   "files": {
+    "html": {
+     "path": "html/wm-image-behind.html",
+     "sha256": "cb8fec6618f5803bc4dac1d8842ecc982423df53c1e44574467c8e85557ddf43",
+     "bytes": 5459
+    },
+    "pdf": {
+     "path": "pdf/wm-image-behind.pdf",
+     "sha256": "7c39f6d7ca5d4da1db80136302025c6253069bb4a0ed9d57efbbc3650617220e",
+     "bytes": 92191
+    },
+    "asset": {
+     "path": "html/img/wm-sample.png",
+     "sha256": "0657bcafcfa7e94303d26e4781636543393ee3e428754b82fc255494dcae4dbf",
+     "bytes": 26781
+    },
+    "scan-color": {
+     "path": "scan-color/wm-image-behind.pdf",
+     "sha256": "a238fe0c68be666dabc51e318c3cb84b30c389c1ba3e7af60e957971dd287154",
+     "bytes": 186971
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/wm-image-behind.pdf",
+     "sha256": "49564835f44d684387f51c2bcf43b16bb91b1c4e332152f655bd931cce2c367f",
+     "bytes": 200266
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     -0.173,
+     1.539
+    ],
+    "skew-ovl": [
+     2.342,
+     1.312
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 0,
+      "path": [
+       "children",
+       0,
+       "children",
+       2,
+       "children",
+       1
+      ],
+      "box": [
+       425,
+       228,
+       493,
+       296
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       4,
+       "children",
+       3
+      ],
+      "box": [
+       192,
+       190,
+       322,
+       224
+      ]
+     }
+    ],
+    "seal": 0,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 211
+    },
+    "bleed": false
+   }
+  },
+  "wm-marked": {
+   "files": {
+    "html": {
+     "path": "html/wm-marked.html",
+     "sha256": "80345b4e7d9e17e38a2e175015c2c13b5b9eab33185ff14e7e40ba967fbac13d",
+     "bytes": 5240
+    },
+    "pdf": {
+     "path": "pdf/wm-marked.pdf",
+     "sha256": "717fe342585cd0fe3804ebfc6c66e195119190d4095b4245b7d856b1d1acc514",
+     "bytes": 55451
+    },
+    "scan-color": {
+     "path": "scan-color/wm-marked.pdf",
+     "sha256": "8acbac9e60f30695221afa15b418c1ecd8ce63d9875130f64720c022fca43329",
+     "bytes": 187655
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/wm-marked.pdf",
+     "sha256": "6cb83b955169a433f91ad8844d4b50ddb913f96dcf509afba27d78985b0dbcf6",
+     "bytes": 198963
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     2.11,
+     0.184
+    ],
+    "skew-ovl": [
+     0.72,
+     1.572
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 3,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       1
+      ],
+      "box": [
+       426,
+       399,
+       494,
+       467
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       5,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       306,
+       322,
+       340
+      ]
+     }
+    ],
+    "seal": 3,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 215
+    },
+    "bleed": false
+   }
+  },
+  "wm-ocg": {
+   "files": {
+    "html": {
+     "path": "html/wm-ocg.html",
+     "sha256": "4af6062af215f2b3d2d65a83e317b5833131f87466ca56b41200e087ffbeaea9",
+     "bytes": 5581
+    },
+    "pdf": {
+     "path": "pdf/wm-ocg.pdf",
+     "sha256": "0daec5b4d8673521a50ba74d4e3e7f203c407bb535a96c8bfa5e61d6c0b13439",
+     "bytes": 57471
+    },
+    "scan-color": {
+     "path": "scan-color/wm-ocg.pdf",
+     "sha256": "e671d3dd856908ee4d4e6c4d3ca2af52cdc1f73e239d79ec2c6a9a8756720a10",
+     "bytes": 199035
+    },
+    "scan-ovl": {
+     "path": "scan-ovl/wm-ocg.pdf",
+     "sha256": "e1d200cce26027b96848417cb8512b111d534f80d18b24f8d58d4794589e9089",
+     "bytes": 212201
+    }
+   },
+   "pdf-producer": "Skia/PDF m154",
+   "facts": {
+    "pages": [
+     [
+      612.0,
+      792.0
+     ],
+     [
+      612.0,
+      792.0
+     ]
+    ],
+    "skew": [
+     0.357,
+     1.21
+    ],
+    "skew-ovl": [
+     -0.074,
+     2.722
+    ],
+    "turns": {},
+    "overlays": [
+     {
+      "kind": "seal",
+      "page": 1,
+      "seal": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       3,
+       "children",
+       1
+      ],
+      "box": [
+       441,
+       399,
+       509,
+       467
+      ]
+     },
+     {
+      "kind": "signature",
+      "page": 2,
+      "path": [
+       "children",
+       0,
+       "children",
+       5,
+       "children",
+       1
+      ],
+      "box": [
+       192,
+       321,
+       322,
+       355
+      ]
+     }
+    ],
+    "seal": 2,
+    "watermark": {
+     "text": "COPY",
+     "lightness": 208
+    },
+    "bleed": false
    }
   }
  }

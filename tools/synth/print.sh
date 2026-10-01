@@ -8,8 +8,12 @@
 #   1. headless Chromium/Chrome prints test/corpus/synth/html/STEM.html to
 #      pdf/STEM.pdf (untagged: no struct tree, so structure must come from the
 #      page) -- and, for the stems in TAGGED, also to pdf-tagged/STEM.pdf;
+#   1b. (P6.6, D209) wm_pdf.clj EDITS six of those PDFs by appended updates (watermark as marked content, as an
+#      optional content group, as an annotation; two rewritten ToUnicode CMaps) and MAKES `hidden-older-ocr` from
+#      scan/h-plain.pdf and a worse previous OCR's text layer (Chrome does not print that one);
 #   2. degrade.clj rasterises each PDF and writes scan/STEM.pdf, an image-only
-#      skewed/noisy/JPEG variant with the same gold;
+#      skewed/noisy/JPEG variant with the same gold -- except for the 12 documents of P6.6, which are scanned in
+#      colour and with overlays instead (scan-color/, scan-ovl/ of the FUSION set: `degrade.clj --fusion`);
 #   3. build.clj extracts the layout facts (page count and size, the page each
 #      multi-page table row landed on), writes MANIFEST.json (producer and
 #      version, sha256 of every file) and regenerates gold/STEM.gold.json.
@@ -22,6 +26,7 @@ set -e
 cd "$(dirname "$0")/../.."
 corpus=test/corpus/synth
 TAGGED="h-inverted table-simple-ruled lists-basic"
+HAND="hidden-older-ocr"          # made by wm_pdf.clj, not printed by Chrome
 
 chrome="${CHROME:-}"
 if [ -z "$chrome" ]; then
@@ -54,6 +59,7 @@ print_pdf() { # print_pdf OUT [flags...]
 }
 
 for s in $stems; do
+  case " $HAND " in *" $s "*) continue ;; esac
   print_pdf "$corpus/pdf/$s.pdf" --disable-pdf-tagging
   case " $TAGGED " in
     *" $s "*) print_pdf "$corpus/pdf-tagged/$s.pdf" ;;
@@ -61,5 +67,8 @@ for s in $stems; do
   echo "  printed $s"
 done
 
+[ -z "$PRINT_ONLY" ] || exit 0       # PRINT_ONLY=1: stop after Chrome (to look at the pages)
+bb -cp tools:tools/lib tools/synth/wm_pdf.clj patch
 bb -cp tools:tools/lib -m synth.degrade $stems
+bb -cp tools:tools/lib -m synth.degrade-fusion
 bb -cp tools:tools/lib -m synth.build

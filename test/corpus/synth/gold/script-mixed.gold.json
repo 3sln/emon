@@ -6,7 +6,8 @@
   "pdf": "pdf/script-mixed.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/script-mixed.pdf"
+   "scan": "scan/script-mixed.pdf",
+   "scan-color": "scan-color/script-mixed.pdf"
   }
  },
  "annotated": {

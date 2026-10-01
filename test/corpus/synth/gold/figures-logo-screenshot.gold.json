@@ -6,7 +6,8 @@
   "pdf": "pdf/figures-logo-screenshot.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/figures-logo-screenshot.pdf"
+   "scan": "scan/figures-logo-screenshot.pdf",
+   "scan-color": "scan-color/figures-logo-screenshot.pdf"
   }
  },
  "annotated": {

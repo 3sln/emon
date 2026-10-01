@@ -7,7 +7,8 @@
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
    "pdf-tagged": "pdf-tagged/lists-basic.pdf",
-   "scan": "scan/lists-basic.pdf"
+   "scan": "scan/lists-basic.pdf",
+   "scan-color": "scan-color/lists-basic.pdf"
   }
  },
  "annotated": {

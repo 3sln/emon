@@ -1,0 +1,339 @@
+{
+ "emon-gold": "1.0",
+ "id": "lists-basic",
+ "provenance": {
+  "html": "html/lists-basic.html",
+  "pdf": "pdf/lists-basic.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/lists-basic.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Packing Checklist"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Young seen since word take see part turned been some night family own have."
+      },
+      {
+       "id": 4,
+       "kind": "seal",
+       "subkind": "signature",
+       "color": "blue",
+       "text": ""
+      },
+      {
+       "id": 5,
+       "kind": "list",
+       "ordered": false,
+       "scheme": "bullet",
+       "children": [
+        {
+         "id": 6,
+         "kind": "item",
+         "marker": "•",
+         "text": "Tent and groundsheet"
+        },
+        {
+         "id": 7,
+         "kind": "item",
+         "marker": "•",
+         "text": "Stove, with spare fuel canister",
+         "inlines": [
+          {
+           "kind": "text",
+           "text": "Stove, with "
+          },
+          {
+           "kind": "span",
+           "style": [
+            "bold"
+           ],
+           "children": [
+            {
+             "kind": "text",
+             "text": "spare"
+            }
+           ]
+          },
+          {
+           "kind": "text",
+           "text": " fuel canister"
+          }
+         ]
+        },
+        {
+         "id": 8,
+         "kind": "item",
+         "marker": "•",
+         "text": "Water filter",
+         "children": [
+          {
+           "id": 9,
+           "kind": "list",
+           "ordered": false,
+           "scheme": "bullet",
+           "children": [
+            {
+             "id": 10,
+             "kind": "item",
+             "marker": "◦",
+             "text": "Backup tablets"
+            },
+            {
+             "id": 11,
+             "kind": "item",
+             "marker": "◦",
+             "text": "Bottle",
+             "children": [
+              {
+               "id": 12,
+               "kind": "list",
+               "ordered": false,
+               "scheme": "bullet",
+               "children": [
+                {
+                 "id": 13,
+                 "kind": "item",
+                 "marker": "▪",
+                 "text": "One litre"
+                },
+                {
+                 "id": 14,
+                 "kind": "item",
+                 "marker": "▪",
+                 "text": "Two litre"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 15,
+         "kind": "item",
+         "marker": "•",
+         "text": "First aid kit"
+        }
+       ]
+      },
+      {
+       "id": 16,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 17,
+         "kind": "heading",
+         "level": 2,
+         "text": "Steps"
+        },
+        {
+         "id": 18,
+         "kind": "list",
+         "ordered": true,
+         "scheme": "decimal",
+         "children": [
+          {
+           "id": 19,
+           "kind": "item",
+           "marker": "1.",
+           "text": "Lay out the groundsheet."
+          },
+          {
+           "id": 20,
+           "kind": "item",
+           "marker": "2.",
+           "text": "Stake the corners."
+          },
+          {
+           "id": 21,
+           "kind": "item",
+           "marker": "3.",
+           "text": "Raise the poles",
+           "children": [
+            {
+             "id": 22,
+             "kind": "list",
+             "ordered": true,
+             "scheme": "lower-alpha",
+             "children": [
+              {
+               "id": 23,
+               "kind": "item",
+               "marker": "a.",
+               "text": "Short pole first."
+              },
+              {
+               "id": 24,
+               "kind": "item",
+               "marker": "b.",
+               "text": "Long pole second."
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 25,
+           "kind": "item",
+           "marker": "4.",
+           "text": "Attach the fly."
+          }
+         ]
+        },
+        {
+         "id": 26,
+         "kind": "paragraph",
+         "text": "Usually family four best much or form animal write example once something two car by think."
+        },
+        {
+         "id": 27,
+         "kind": "seal",
+         "subkind": "seal",
+         "color": "purple",
+         "text": "BOARD OF EDUCATION APPROVED"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Packing Checklist"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

@@ -6,7 +6,8 @@
   "pdf": "pdf/bank-statement.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/bank-statement.pdf"
+   "scan": "scan/bank-statement.pdf",
+   "scan-color": "scan-color/bank-statement.pdf"
   }
  },
  "annotated": {

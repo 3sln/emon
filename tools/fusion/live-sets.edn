@@ -1,0 +1,34 @@
+;; The LIVE sets of fusion's evaluation (P6.6, D209, SPEC 14.3): real pixels that are NEVER committed.
+;; They are read from `corpus/` (untracked: `bb corpus-pull`, `corpus/fetch.sh`, `bb import`), by the long runs
+;; (`bb fusion-live`) and never by a gate. A missing set is reported and skipped, not a failure.
+;;
+;; THE LICENCES, which is why nothing here is in git (test/corpus/DATASETS.md):
+;;   sroie2019   CC-BY-4.0 on the third-party HF re-upload only; ICDAR RRC terms unread. The derived files below are
+;;               made from its pixels by tools/import (corpus/formats/derived), so they inherit that.
+;;   mapo80      CC-BY-4.0 on the HF card, but an aggregate of community sets with unverified upstream licences;
+;;               its `neg_*` images come from RVL-CDIP and FUNSD and are research-only. Measured live, never copied.
+{:sets
+ {:sroie-fusion
+  {:doc "SROIE receipts with the derived artifacts fusion must see through, and the SROIE line transcription as gold."
+   :root "corpus/formats/derived"
+   :files ["sroie_*.watermark.png" "sroie_*.stamp.png" "sroie_*.ocr-layer.pdf"]
+   :gold-dir "corpus/_gold/sroie"          ; sroie-test-sroie_NNNNN.gold.json: text only, top to bottom
+   :gold-pattern "sroie-test-%s.gold.json" ; %s = the file's stem up to the first dot
+   :metrics [:cer :wer :watermark-leak :ghost-rate]
+   :note "hidden-older-ocr (P6.6, committed) is the synthetic twin of the .ocr-layer.pdf files"}
+
+  :mapo80-val
+  {:doc "mapo80 `val`: 785 images (660 with stamps, 125 `neg_*` without) with YOLO boxes of the single class `stamp`."
+   :images "corpus/seals/mapo80-stamps/images/val"
+   :labels "corpus/seals/mapo80-stamps/labels/val"   ; one line per stamp: `0 cx cy w h`, fractions of the image
+   :yolo {:class 0 :fields [:cx :cy :w :h] :unit :fraction-of-image}
+   :page-unit "1 px = 1 pt (D088): a box in points is the fraction times the image size from the dump's `epages`"
+   :metrics [:stamp-ghost]
+   ;; stamp-ghost = OCR words whose CENTRE lies in a labelled stamp box and that REACH THE BODY (are in no `fa`
+   ;; artifact box), over OCR words whose centre lies in one. Lower is better; never ratcheted (research set).
+   :command "bb fusion-live --stamps [--dumps DIR]"
+   :licence-note "nothing from this set is committed (D209)"}}
+
+ ;; where `bb fusion-live` looks for each image's evidence dump (version 2): DIR/STEM.json, written by the
+ ;; fusion driver of P7.S over the image
+ :dumps-dir ".cache/fusion-live/dumps"}

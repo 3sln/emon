@@ -376,10 +376,14 @@
   (let [r (apply p/sh cmd)]
     (first (str/split-lines (str/trim (str (:out r) (:err r)))))))
 
+(def TL-UNTRUSTED #{"tl-broken-shift" "tl-broken-unmapped" "hidden-older-ocr"})
+
 (defn -main [& _]
   (let [stems (sort (for [f (.list (io/file CORPUS "html")) :when (str/ends-with? f ".html")] (subs f 0 (- (count f) 5))))
         producer (pj/oparse (slurp (str CORPUS "/PRODUCER.json") :encoding "UTF-8"))
         docs (volatile! (om))
+        ;; what degrade_fusion.clj did to the FUSION set's pages (P6.6, D209): skew, turns, overlay boxes, the seal
+        fusion (let [f (io/file CORPUS "scan-ovl" "FACTS.json")] (if (.exists f) (pj/oparse (slurp f :encoding "UTF-8")) (om)))
         _ (.mkdirs (io/file CORPUS "gold"))]
     (doseq [stem stems]
       (let [hp (str CORPUS "/html/" stem ".html")
@@ -391,16 +395,26 @@
             extra (extra-facts html pp stem facts)
             _ (when extra (println (str "  facts " stem ": " (:report extra))))
             facts (reduce-kv oassoc facts (or (:facts extra) {}))
+            ;; a text layer that is wrong or older than the pixels ON PURPOSE (the scorer's tl-override skips it)
+            facts (cond-> facts (contains? TL-UNTRUSTED stem) (oassoc "tl-untrusted" true))
+            ff (get fusion stem)
+            manifest-facts (cond-> facts
+                             ff (-> (oassoc "skew" (get ff "skew")) (oassoc "skew-ovl" (get ff "skew-ovl"))
+                                    (oassoc "turns" (get ff "turns")) (oassoc "overlays" (get ff "overlays"))
+                                    (oassoc "seal" (get ff "seal")) (oassoc "watermark" (get ff "watermark"))
+                                    (oassoc "bleed" (get ff "bleed"))))
             rel (fn [d & [ext]] (str d "/" stem (or ext ".pdf")))
             files (cond-> (om "html" (rel "html" ".html") "pdf" (rel "pdf"))
                     (re-find #"src=\"img/" html) (assoc "asset" (str "html/" (second (re-find #"src=\"(img/[^\"]+)\"" html))))
                     (.exists (io/file CORPUS (rel "pdf-tagged"))) (assoc "pdf-tagged" (rel "pdf-tagged"))
-                    (.exists (io/file CORPUS (rel "scan"))) (assoc "scan" (rel "scan")))
+                    (.exists (io/file CORPUS (rel "scan"))) (assoc "scan" (rel "scan"))
+                    (.exists (io/file CORPUS (rel "scan-color"))) (assoc "scan-color" (rel "scan-color"))
+                    (.exists (io/file CORPUS (rel "scan-ovl"))) (assoc "scan-ovl" (rel "scan-ovl")))
             entry (om "files" (apply om (mapcat (fn [[k v]] [k (om "path" v "sha256" (sha (str CORPUS "/" v))
                                                                   "bytes" (.length (io/file CORPUS v)))]) files))
-                      "pdf-producer" prod "facts" facts)
+                      "pdf-producer" prod "facts" manifest-facts)
             prov (om "html" (files "html") "pdf" (files "pdf") "producer" (str (get producer "version") "; " prod))
-            variants (into (om) (filter (fn [[k _]] (#{"pdf-tagged" "scan"} k)) files))
+            variants (into (om) (filter (fn [[k _]] (#{"pdf-tagged" "scan" "scan-color"} k)) files))
             prov (if (seq variants) (assoc prov "variants" variants) prov)
             gold (h2g/convert html (pj/parse (pj/dumps facts)) stem prov)]
         (vswap! docs oassoc stem entry)

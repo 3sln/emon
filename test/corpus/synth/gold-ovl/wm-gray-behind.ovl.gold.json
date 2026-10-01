@@ -1,0 +1,562 @@
+{
+ "emon-gold": "1.0",
+ "id": "wm-gray-behind",
+ "provenance": {
+  "html": "html/wm-gray-behind.html",
+  "pdf": "pdf/wm-gray-behind.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/wm-gray-behind.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Operating Review"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "House were them figure policy had group words. Here ever only your high out large words. Today show give until almost water sentence food take one white father well best. Place turned long four look now top every car being. Of on almost next little together method until using next show so sun."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "Overview"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Hear end door like such should growth the. Again room set will were thought house often be. For just market animal world method sea top color animal had country usually for take. Upon soon market with pay while put children often father one like still. Above best year up several been new called usually what city small over know."
+        },
+        {
+         "id": 7,
+         "kind": "seal",
+         "subkind": "seal",
+         "color": "red",
+         "text": "CERTIFIED TRUE RECORD VERIFIED"
+        },
+        {
+         "id": 8,
+         "kind": "paragraph",
+         "text": "Turn also small set life these very saw between. Next feet water several enough friend hard always which. World since leave saw tell earth sea if. Saw far car review of up left put sure not other way time big even whole. For top body me or again being their or leave whole head usually more time best."
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 10,
+         "kind": "heading",
+         "level": 2,
+         "text": "Findings"
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "text": "And measure man want into city figure find father may its top from boy car world. After never can home second leave other those until two each day no region. Hear can great both turn an sample home five need. Both our report under region time himself set thing. Going answer when since do why later white point."
+        },
+        {
+         "id": 12,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 5,
+         "children": [
+          {
+           "id": 13,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 14,
+             "kind": "row",
+             "children": [
+              {
+               "id": 15,
+               "kind": "cell",
+               "header": "col",
+               "text": "Ref"
+              },
+              {
+               "id": 16,
+               "kind": "cell",
+               "header": "col",
+               "text": "Item"
+              },
+              {
+               "id": 17,
+               "kind": "cell",
+               "header": "col",
+               "text": "Category"
+              },
+              {
+               "id": 18,
+               "kind": "cell",
+               "header": "col",
+               "text": "Qty"
+              },
+              {
+               "id": 19,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 20,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 21,
+             "kind": "row",
+             "children": [
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "F0001"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "Name food them"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 25,
+               "kind": "cell",
+               "text": "6"
+              },
+              {
+               "id": 26,
+               "kind": "cell",
+               "text": "6068.60"
+              }
+             ]
+            },
+            {
+             "id": 27,
+             "kind": "row",
+             "children": [
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "F0002"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "Use only take"
+              },
+              {
+               "id": 30,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "35"
+              },
+              {
+               "id": 32,
+               "kind": "cell",
+               "text": "4940.79"
+              }
+             ]
+            },
+            {
+             "id": 33,
+             "kind": "row",
+             "children": [
+              {
+               "id": 34,
+               "kind": "cell",
+               "text": "F0003"
+              },
+              {
+               "id": 35,
+               "kind": "cell",
+               "text": "Called keep make"
+              },
+              {
+               "id": 36,
+               "kind": "cell",
+               "text": "Hardware"
+              },
+              {
+               "id": 37,
+               "kind": "cell",
+               "text": "19"
+              },
+              {
+               "id": 38,
+               "kind": "cell",
+               "text": "8141.46"
+              }
+             ]
+            },
+            {
+             "id": 39,
+             "kind": "row",
+             "children": [
+              {
+               "id": 40,
+               "kind": "cell",
+               "text": "F0004"
+              },
+              {
+               "id": 41,
+               "kind": "cell",
+               "text": "Him saw don't"
+              },
+              {
+               "id": 42,
+               "kind": "cell",
+               "text": "Hardware"
+              },
+              {
+               "id": 43,
+               "kind": "cell",
+               "text": "7"
+              },
+              {
+               "id": 44,
+               "kind": "cell",
+               "text": "5671.60"
+              }
+             ]
+            },
+            {
+             "id": 45,
+             "kind": "row",
+             "children": [
+              {
+               "id": 46,
+               "kind": "cell",
+               "text": "F0005"
+              },
+              {
+               "id": 47,
+               "kind": "cell",
+               "text": "Boy people going"
+              },
+              {
+               "id": 48,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 49,
+               "kind": "cell",
+               "text": "1"
+              },
+              {
+               "id": 50,
+               "kind": "cell",
+               "text": "4904.52"
+              }
+             ]
+            },
+            {
+             "id": 51,
+             "kind": "row",
+             "children": [
+              {
+               "id": 52,
+               "kind": "cell",
+               "text": "F0006"
+              },
+              {
+               "id": 53,
+               "kind": "cell",
+               "text": "More him same"
+              },
+              {
+               "id": 54,
+               "kind": "cell",
+               "text": "Hardware"
+              },
+              {
+               "id": 55,
+               "kind": "cell",
+               "text": "14"
+              },
+              {
+               "id": 56,
+               "kind": "cell",
+               "text": "1370.58"
+              }
+             ]
+            },
+            {
+             "id": 57,
+             "kind": "row",
+             "children": [
+              {
+               "id": 58,
+               "kind": "cell",
+               "text": "F0007"
+              },
+              {
+               "id": 59,
+               "kind": "cell",
+               "text": "And began right"
+              },
+              {
+               "id": 60,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 61,
+               "kind": "cell",
+               "text": "6"
+              },
+              {
+               "id": 62,
+               "kind": "cell",
+               "text": "4084.92"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 63,
+         "kind": "paragraph",
+         "text": "That each knew any ever high so must night saw life like put time of. Long life place this your during water study had like took under. Us the whole morning looked again food will. Like always night came sentence back along also at use market same soon find using. Day where every sample something house review form him do been."
+        }
+       ]
+      },
+      {
+       "id": 64,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 65,
+         "kind": "heading",
+         "level": 2,
+         "text": "Recommendations"
+        },
+        {
+         "id": 66,
+         "kind": "paragraph",
+         "text": "Boy if were end face said place same father between before go face light our if. Land never using world small by ever give took been called. Year market new into has best back did not boy method city all money story. When used play will white under need in soon leave sea where even report go. Going saw turn second face different room good many first."
+        },
+        {
+         "id": 67,
+         "kind": "paragraph",
+         "text": "Said live looked little morning get which can near got between. In do again money might house food best day as she its. New young show later we part is red through now very did not took region or. Has second friend once if my not night always friend much. Live own city when come another market over make feet review several never me would."
+        },
+        {
+         "id": 68,
+         "kind": "paragraph",
+         "text": "Didn't feet her all animal feet want down might soon. Also seen often cut morning after old down earth use done. Car just head help above put we method here was away food done is than show. Need face no from story going five every as. Her never without had year all will work small that."
+        }
+       ]
+      },
+      {
+       "id": 69,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 70,
+         "kind": "heading",
+         "level": 2,
+         "text": "Annex"
+        },
+        {
+         "id": 71,
+         "kind": "paragraph",
+         "text": "May kind we thought where number two find came any little pay. Play to young answer measure young if example. Earth has left long night turn cut another your one and. Move earth three turned sometimes read like enough saw growth policy. Should same end it between most against read try your began of."
+        },
+        {
+         "id": 72,
+         "kind": "paragraph",
+         "text": "Knew second come car light night why same before change. Went results using life thing make sun old part around true. Big head our usually word get review school. Found how people would has hard it about friend now against few than read. Pay school do not answer heard line it did not at then review then other."
+        },
+        {
+         "id": 73,
+         "kind": "seal",
+         "subkind": "signature",
+         "color": "blue",
+         "text": ""
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "page": 1,
+    "reason": "watermark",
+    "text": "CONFIDENTIAL"
+   },
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   },
+   {
+    "page": 2,
+    "reason": "watermark",
+    "text": "CONFIDENTIAL"
+   },
+   {
+    "reason": "watermark",
+    "page": 2,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Operating Review"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}
