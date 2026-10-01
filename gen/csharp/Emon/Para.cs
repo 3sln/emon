@@ -11,6 +11,7 @@ public static class Para {
     internal const int PaIndentDiv = 2;
     internal const int PaSizeDiv = 20;
     internal const int PaRotSlop = 100;
+    internal const int PaAll = 2000000000;
     internal const int PaIndentUse = 1;
     internal const int JsHyphen = 3;
     internal const int JsEdge = 2;
@@ -1226,7 +1227,31 @@ public static class Para {
         }
         return 0;
     }
-    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc) {
+    internal static int PaLive(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
+        // How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
+        // sees every line of the page, tables included, so that what it makes of the rest is what it always made;
+        // the lines a table holds are left out here, where the paragraphs are made.
+        int k = 0;
+        while ((k < cnt) && (Table.TbClaimed(ln, emon.Port.CellsAt(lo, first + k)) != 0)) {
+            k += 1;
+        }
+        return k;
+    }
+    internal static int PaTables(emon.Port.Cells tb, int tcur, int p, int ymid2, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells ledger, emon.Port.Cells hc) {
+        // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
+        // a baseline y: the order key of `pa-ymid2`). The open paragraph has been closed. Answers the next table
+        // to emit (P5.1: a table is a block, found before this and placed here by its top, D178).
+        int k = tcur;
+        while (Table.TbDue(tb, k, p, ymid2)) {
+            Table.TbEmit(tb, k, Heading.HdCur(hc), wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger);
+            k += 1;
+        }
+        emon.Port.CellsDrop(raw, 0);
+        return k;
+    }
+    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger) {
+        // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
+        // holds is not in the reading order at all.
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
         // `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
         // Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
@@ -1255,6 +1280,8 @@ public static class Para {
         int rs = 0;
         int mg = 0;
         int ty = 0;
+        int tcur = 0;
+        int k0 = 0;
         int score = 0;
         Columns.LcCopy(ln, lt);
         PaColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
@@ -1271,6 +1298,7 @@ public static class Para {
             PaCollect(ord, lt, p);
             n = emon.Port.CellsLen(ord);
             nu = PaUprightCount(lt, ord);
+            tcur = Table.TbSkip(tb, tcur, p);
             while ((r < nf) && (emon.Port.CellsAt(cf, (r * CfStride) + CfPage) < p)) {
                 r += 1;
             }
@@ -1285,65 +1313,86 @@ public static class Para {
                 if (p > 1) {
                     PaMilestone(nodes, p, hc);
                 }
+                tcur = PaTables(tb, tcur, p, PaAll, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
             } else {
                 i = r;
                 while (i < r1) {
                     first = emon.Port.CellsAt(cf, (i * CfStride) + CfFirst);
                     cnt = emon.Port.CellsAt(cf, (i * CfStride) + CfCount);
-                    mg = PaFmargin(lt, lo, first, cnt);
-                    b = emon.Port.CellsAt(lo, first);
-                    cont = 0;
-                    if (open == 1) {
-                        score = PaJoinScore(wd, lt, et, raw, prev, b, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount), mg, indents, PaBottom(cf, prevfr), emon.Port.CellsAt(cf, (i * CfStride) + CfX0), emon.Port.CellsAt(cf, (i * CfStride) + CfX1), emon.Port.CellsAt(cf, (i * CfStride) + CfCount), hc);
-                        emon.Port.CellsPush(dbg, i);
-                        emon.Port.CellsPush(dbg, prev);
-                        emon.Port.CellsPush(dbg, b);
-                        emon.Port.CellsPush(dbg, score);
-                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0));
-                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1));
-                        emon.Port.CellsPush(dbg, Evidence.LnGet(lt, prev, Evidence.LhX1()));
-                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount));
-                        if (score >= JoinMin) {
-                            cont = 1;
+                    k0 = PaLive(lt, lo, first, cnt);
+                    first += k0;
+                    cnt -= k0;
+                    if (cnt > 0) {
+                        mg = PaFmargin(lt, lo, first, cnt);
+                        b = emon.Port.CellsAt(lo, first);
+                        cont = 0;
+                        if (open == 1) {
+                            score = PaJoinScore(wd, lt, et, raw, prev, b, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount), mg, indents, PaBottom(cf, prevfr), emon.Port.CellsAt(cf, (i * CfStride) + CfX0), emon.Port.CellsAt(cf, (i * CfStride) + CfX1), emon.Port.CellsAt(cf, (i * CfStride) + CfCount), hc);
+                            emon.Port.CellsPush(dbg, i);
+                            emon.Port.CellsPush(dbg, prev);
+                            emon.Port.CellsPush(dbg, b);
+                            emon.Port.CellsPush(dbg, score);
+                            emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0));
+                            emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1));
+                            emon.Port.CellsPush(dbg, Evidence.LnGet(lt, prev, Evidence.LhX1()));
+                            emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount));
+                            if (score >= JoinMin) {
+                                cont = 1;
+                            }
+                            if (Table.TbDue(tb, tcur, p, PaYmid2(lt, b))) {
+                                cont = 0;
+                            }
                         }
-                    }
-                    if (cont == 0) {
-                        ty = Evidence.LnGet(lt, b, Evidence.LhY0());
-                        pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
-                        if ((i == r) && (p > 1)) {
-                            PaMilestone(nodes, p, hc);
-                        }
-                        PaFragOpen(fr, lt, p, b, 0);
-                    } else {
-                        PaJoin(wd, lt, et, raw, b);
-                        rs = emon.Port.CellsLen(raw);
-                        PaFragOpen(fr, lt, p, b, rs);
-                    }
-                    open = 1;
-                    PaAddLine(wd, lt, et, raw, b);
-                    prev = b;
-                    prevfr = i;
-                    cont = 1;
-                    while (cont < cnt) {
-                        b = emon.Port.CellsAt(lo, first + cont);
-                        if (PaNewPar(wd, lt, prev, b, med, mg, hc)) {
+                        if (cont == 0) {
                             ty = Evidence.LnGet(lt, b, Evidence.LhY0());
                             pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                            if ((i == r) && (p > 1)) {
+                                PaMilestone(nodes, p, hc);
+                            }
+                            tcur = PaTables(tb, tcur, p, PaYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                             PaFragOpen(fr, lt, p, b, 0);
                         } else {
                             PaJoin(wd, lt, et, raw, b);
-                            PaFragExtend(fr, lt, b);
+                            rs = emon.Port.CellsLen(raw);
+                            PaFragOpen(fr, lt, p, b, rs);
                         }
+                        open = 1;
                         PaAddLine(wd, lt, et, raw, b);
                         prev = b;
-                        cont += 1;
+                        prevfr = i;
+                        cont = 1;
+                        while (cont < cnt) {
+                            b = emon.Port.CellsAt(lo, first + cont);
+                            if (Table.TbClaimed(lt, b) == 0) {
+                                if (PaNewPar(wd, lt, prev, b, med, mg, hc) || Table.TbDue(tb, tcur, p, PaYmid2(lt, b))) {
+                                    ty = Evidence.LnGet(lt, b, Evidence.LhY0());
+                                    pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                                    tcur = PaTables(tb, tcur, p, PaYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
+                                    PaFragOpen(fr, lt, p, b, 0);
+                                } else {
+                                    PaJoin(wd, lt, et, raw, b);
+                                    PaFragExtend(fr, lt, b);
+                                }
+                                PaAddLine(wd, lt, et, raw, b);
+                                prev = b;
+                            }
+                            cont += 1;
+                        }
                     }
                     i += 1;
+                }
+                if (Table.TbDue(tb, tcur, p, PaAll)) {
+                    pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                    open = 0;
+                    prev = -1;
+                    tcur = PaTables(tb, tcur, p, PaAll, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                 }
             }
             i = nu;
             while (i < n) {
-                emon.Port.CellsPush(gp, emon.Port.CellsAt(ord, i));
+                if (Table.TbClaimed(lt, emon.Port.CellsAt(ord, i)) == 0) {
+                    emon.Port.CellsPush(gp, emon.Port.CellsAt(ord, i));
+                }
                 i += 1;
             }
             p += 1;

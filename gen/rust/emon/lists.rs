@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::heading::*;
 use crate::emon::style::*;
+use crate::emon::table::*;
 
 pub(crate) const LS_STRIDE: i32 = 8;
 pub(crate) const LS_WIN: i32 = 48;
@@ -670,7 +671,13 @@ pub(crate) fn ls_wrap_item(mut wd: &mut crate::port::Cells, mut et: &mut crate::
     return 0;
 }
 pub fn ls_upright(ln: &mut crate::port::Cells, l: i32) -> bool {
+    // An upright line a table does not hold (P5: a table's lines are claimed and its cells are written from them: a
+    // group in one would be in the cell's text). Every stage of this module and of `emon.notes` asks this, and only this,
+    // of a line before it looks at it.
     let r: i32 = ln_get(ln, l, lh_rot());
+    if tb_claimed(ln, l) != 0 {
+        return 0 == 1;
+    }
     return (r < 100) || (r > 35900);
 }
 pub fn ls_line_size(sf: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32) -> i32 {

@@ -40,6 +40,7 @@
                                    pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-flags pa-curve]]
             [emon.style :refer [st-hget sfh-size st-get sfk-size sfk-below sfk-gap-below sfk-upright sfk-height sfk-sibline sfk-nsib]]
             [emon.heading :refer [hd-level hd-rows-end]]
+            [emon.table :refer [tb-claimed]]
             [kin.lang :refer [defn defconst return let set while if do comment
                               + - * < > <= >= == != and or not quot rem bit-and bit-or]]))
 
@@ -479,7 +480,11 @@
 ;; --------------------------------------------------------------------------- bullet shapes
 
 (defn ^:pub ^Bool ls-upright [^Cells ln ^I32 l]
+  (comment "An upright line a table does not hold (P5: a table's lines are claimed and its cells are written from them: a")
+  (comment "group in one would be in the cell's text). Every stage of this module and of `emon.notes` asks this, and only this,")
+  (comment "of a line before it looks at it.")
   (let [^I32 r (ln-get ln l (lh-rot))]
+    (if (!= (tb-claimed ln l) 0) (return (== 0 1)))
     (return (or (< r 100) (> r 35900)))))
 
 (defn ^:pub ^I32 ls-line-size [^Cells sf ^Cells ln ^I32 l]

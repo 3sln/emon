@@ -198,9 +198,10 @@
   (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
-        ^Cells hc (new-cells)]
+        ^Cells hc (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)]
     (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc))))
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger))))
 
 (defn ^I32 fl-run [^Cells wd ^Cells ln0 ^Cells et ^I32 npages ^I32 trust ^I32 mode ^Cells txt ^Cells md ^Cells lb
                    ^:mut ^Text t]

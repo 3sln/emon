@@ -8,6 +8,7 @@ use crate::emon::lists::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
 use crate::emon::pdfdoc::*;
+use crate::emon::table::*;
 
 pub(crate) const PA_GAP_NUM: i32 = 3;
 pub(crate) const PA_GAP_DEN: i32 = 2;
@@ -15,6 +16,7 @@ pub(crate) const PA_TINY_DIV: i32 = 8;
 pub(crate) const PA_INDENT_DIV: i32 = 2;
 pub(crate) const PA_SIZE_DIV: i32 = 20;
 pub(crate) const PA_ROT_SLOP: i32 = 100;
+pub(crate) const PA_ALL: i32 = 2000000000;
 pub(crate) const PA_INDENT_USE: i32 = 1;
 pub(crate) const JS_HYPHEN: i32 = 3;
 pub(crate) const JS_EDGE: i32 = 2;
@@ -1230,7 +1232,31 @@ pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
     }
     return 0;
 }
-pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut dbg: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pa_live(ln: &mut crate::port::Cells, lo: &mut crate::port::Cells, first: i32, cnt: i32) -> i32 {
+    // How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
+    // sees every line of the page, tables included, so that what it makes of the rest is what it always made;
+    // the lines a table holds are left out here, where the paragraphs are made.
+    let mut k: i32 = 0;
+    while (k < cnt) && (tb_claimed(ln, crate::port::cells_at(lo, first + k)) != 0) {
+        k += 1;
+    }
+    return k;
+}
+pub(crate) fn pa_tables(tb: &mut crate::port::Cells, tcur: i32, p: i32, ymid2: i32, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, hc: &mut crate::port::Cells) -> i32 {
+    // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
+    // a baseline y: the order key of `pa-ymid2`). The open paragraph has been closed. Answers the next table
+    // to emit (P5.1: a table is a block, found before this and placed here by its top, D178).
+    let mut k: i32 = tcur;
+    while tb_due(tb, k, p, ymid2) {
+        tb_emit(tb, k, hd_cur(hc), wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger);
+        k += 1;
+    }
+    crate::port::cells_drop(raw, 0);
+    return k;
+}
+pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut dbg: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, tb: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
+    // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
+    // holds is not in the reading order at all.
     // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
     // `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
     // Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
@@ -1259,6 +1285,8 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
     let mut rs: i32 = 0;
     let mut mg: i32 = 0;
     let mut ty: i32 = 0;
+    let mut tcur: i32 = 0;
+    let mut k0: i32 = 0;
     let mut score: i32 = 0;
     lc_copy(ln, lt);
     pa_columns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
@@ -1275,6 +1303,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
         pa_collect(ord, lt, p);
         n = crate::port::cells_len(ord);
         nu = pa_upright_count(lt, ord);
+        tcur = tb_skip(tb, tcur, p);
         while (r < nf) && (crate::port::cells_at(cf, (r * CF_STRIDE) + CF_PAGE) < p) {
             r += 1;
         }
@@ -1289,65 +1318,86 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
             if p > 1 {
                 pa_milestone(nodes, p, hc);
             }
+            tcur = pa_tables(tb, tcur, p, PA_ALL, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
         } else {
             i = r;
             while i < r1 {
                 first = crate::port::cells_at(cf, (i * CF_STRIDE) + CF_FIRST);
                 cnt = crate::port::cells_at(cf, (i * CF_STRIDE) + CF_COUNT);
-                mg = pa_fmargin(lt, lo, first, cnt);
-                b = crate::port::cells_at(lo, first);
-                cont = 0;
-                if open == 1 {
-                    score = pa_join_score(wd, lt, et, raw, prev, b, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents, pa_bottom(cf, prevfr), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_COUNT), hc);
-                    crate::port::cells_push(dbg, i);
-                    crate::port::cells_push(dbg, prev);
-                    crate::port::cells_push(dbg, b);
-                    crate::port::cells_push(dbg, score);
-                    crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0));
-                    crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1));
-                    crate::port::cells_push(dbg, ln_get(lt, prev, lh_x1()));
-                    crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT));
-                    if score >= JOIN_MIN {
-                        cont = 1;
+                k0 = pa_live(lt, lo, first, cnt);
+                first += k0;
+                cnt -= k0;
+                if cnt > 0 {
+                    mg = pa_fmargin(lt, lo, first, cnt);
+                    b = crate::port::cells_at(lo, first);
+                    cont = 0;
+                    if open == 1 {
+                        score = pa_join_score(wd, lt, et, raw, prev, b, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents, pa_bottom(cf, prevfr), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (i * CF_STRIDE) + CF_COUNT), hc);
+                        crate::port::cells_push(dbg, i);
+                        crate::port::cells_push(dbg, prev);
+                        crate::port::cells_push(dbg, b);
+                        crate::port::cells_push(dbg, score);
+                        crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0));
+                        crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1));
+                        crate::port::cells_push(dbg, ln_get(lt, prev, lh_x1()));
+                        crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT));
+                        if score >= JOIN_MIN {
+                            cont = 1;
+                        }
+                        if tb_due(tb, tcur, p, pa_ymid2(lt, b)) {
+                            cont = 0;
+                        }
                     }
-                }
-                if cont == 0 {
-                    ty = ln_get(lt, b, lh_y0());
-                    pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
-                    if (i == r) && (p > 1) {
-                        pa_milestone(nodes, p, hc);
-                    }
-                    pa_frag_open(fr, lt, p, b, 0);
-                } else {
-                    pa_join(wd, lt, et, raw, b);
-                    rs = crate::port::cells_len(raw);
-                    pa_frag_open(fr, lt, p, b, rs);
-                }
-                open = 1;
-                pa_add_line(wd, lt, et, raw, b);
-                prev = b;
-                prevfr = i;
-                cont = 1;
-                while cont < cnt {
-                    b = crate::port::cells_at(lo, first + cont);
-                    if pa_new_par(wd, lt, prev, b, med, mg, hc) {
+                    if cont == 0 {
                         ty = ln_get(lt, b, lh_y0());
                         pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                        if (i == r) && (p > 1) {
+                            pa_milestone(nodes, p, hc);
+                        }
+                        tcur = pa_tables(tb, tcur, p, pa_ymid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                         pa_frag_open(fr, lt, p, b, 0);
                     } else {
                         pa_join(wd, lt, et, raw, b);
-                        pa_frag_extend(fr, lt, b);
+                        rs = crate::port::cells_len(raw);
+                        pa_frag_open(fr, lt, p, b, rs);
                     }
+                    open = 1;
                     pa_add_line(wd, lt, et, raw, b);
                     prev = b;
-                    cont += 1;
+                    prevfr = i;
+                    cont = 1;
+                    while cont < cnt {
+                        b = crate::port::cells_at(lo, first + cont);
+                        if tb_claimed(lt, b) == 0 {
+                            if pa_new_par(wd, lt, prev, b, med, mg, hc) || tb_due(tb, tcur, p, pa_ymid2(lt, b)) {
+                                ty = ln_get(lt, b, lh_y0());
+                                pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc);
+                                tcur = pa_tables(tb, tcur, p, pa_ymid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
+                                pa_frag_open(fr, lt, p, b, 0);
+                            } else {
+                                pa_join(wd, lt, et, raw, b);
+                                pa_frag_extend(fr, lt, b);
+                            }
+                            pa_add_line(wd, lt, et, raw, b);
+                            prev = b;
+                        }
+                        cont += 1;
+                    }
                 }
                 i += 1;
+            }
+            if tb_due(tb, tcur, p, PA_ALL) {
+                pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000, hc);
+                open = 0;
+                prev = -1;
+                tcur = pa_tables(tb, tcur, p, PA_ALL, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
             }
         }
         i = nu;
         while i < n {
-            crate::port::cells_push(gp, crate::port::cells_at(ord, i));
+            if tb_claimed(lt, crate::port::cells_at(ord, i)) == 0 {
+                crate::port::cells_push(gp, crate::port::cells_at(ord, i));
+            }
             i += 1;
         }
         p += 1;

@@ -670,7 +670,13 @@ public static class Lists {
         return 0;
     }
     public static bool LsUpright(emon.Port.Cells ln, int l) {
+        // An upright line a table does not hold (P5: a table's lines are claimed and its cells are written from them: a
+        // group in one would be in the cell's text). Every stage of this module and of `emon.notes` asks this, and only this,
+        // of a line before it looks at it.
         int r = Evidence.LnGet(ln, l, Evidence.LhRot());
+        if (Table.TbClaimed(ln, l) != 0) {
+            return 0 == 1;
+        }
         return (r < 100) || (r > 35900);
     }
     public static int LsLineSize(emon.Port.Cells sf, emon.Port.Cells ln, int l) {

@@ -237,7 +237,12 @@ func flBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
 	var hc *port.Cells = port.NewCells()
-	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc)
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var tq *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger)
 }
 
 func flRun(wd *port.Cells, ln0 *port.Cells, et *port.Cells, npages int32, trust int32, mode int32, txt *port.Cells, md *port.Cells, lb *port.Cells, t *strings.Builder) int32 {

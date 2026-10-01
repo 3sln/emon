@@ -216,7 +216,12 @@ public final class Furnituretest {
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
         emon.Port.Cells hc = emon.Port.newCells();
-        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tq = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
     }
     public static int flRun(emon.Port.Cells wd, emon.Port.Cells ln0, emon.Port.Cells et, int npages, int trust, int mode, emon.Port.Cells txt, emon.Port.Cells md, emon.Port.Cells lb, StringBuilder t) {
         // Run the stage as the Engine does (find, paragraphs, write) over the evidence, and write the brief into `t`. Answers

@@ -12,6 +12,7 @@ import (
 	"emon/normalize"
 	"emon/pdfdoc"
 	"emon/port"
+	"emon/table"
 	"strings"
 )
 
@@ -26,6 +27,8 @@ const paIndentDiv int32 = 2
 const paSizeDiv int32 = 20
 
 const paRotSlop int32 = 100
+
+const paAll int32 = 2000000000
 
 const paIndentUse int32 = 1
 
@@ -1325,7 +1328,33 @@ func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, 
 	return 0
 }
 
-func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, hc *port.Cells) int32 {
+func paLive(ln *port.Cells, lo *port.Cells, first int32, cnt int32) int32 {
+	// How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
+	// sees every line of the page, tables included, so that what it makes of the rest is what it always made;
+	// the lines a table holds are left out here, where the paragraphs are made.
+	var k int32 = 0
+	for (k < cnt) && (table.TbClaimed(ln, port.CellsAt(lo, first+k)) != 0) {
+		k += 1
+	}
+	return k
+}
+
+func paTables(tb *port.Cells, tcur int32, p int32, ymid2 int32, wd *port.Cells, ln *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, ledger *port.Cells, hc *port.Cells) int32 {
+	// Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice
+	// a baseline y: the order key of `pa-ymid2`). The open paragraph has been closed. Answers the next table
+	// to emit (P5.1: a table is a block, found before this and placed here by its top, D178).
+	var k int32 = tcur
+	for table.TbDue(tb, k, p, ymid2) {
+		table.TbEmit(tb, k, heading.HdCur(hc), wd, et, ln, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger)
+		k += 1
+	}
+	port.CellsDrop(raw, 0)
+	return k
+}
+
+func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, hc *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, ledger *port.Cells) int32 {
+	// Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
+	// holds is not in the reading order at all.
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
 	// `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
 	// Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
@@ -1354,6 +1383,8 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var rs int32 = 0
 	var mg int32 = 0
 	var ty int32 = 0
+	var tcur int32 = 0
+	var k0 int32 = 0
 	var score int32 = 0
 	columns.LcCopy(ln, lt)
 	paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
@@ -1370,6 +1401,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 		paCollect(ord, lt, p)
 		n = port.CellsLen(ord)
 		nu = paUprightCount(lt, ord)
+		tcur = table.TbSkip(tb, tcur, p)
 		for (r < nf) && (port.CellsAt(cf, (r*cfStride)+cfPage) < p) {
 			r += 1
 		}
@@ -1384,65 +1416,86 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 			if p > 1 {
 				paMilestone(nodes, p, hc)
 			}
+			tcur = paTables(tb, tcur, p, paAll, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
 		} else {
 			i = r
 			for i < r1 {
 				first = port.CellsAt(cf, (i*cfStride)+cfFirst)
 				cnt = port.CellsAt(cf, (i*cfStride)+cfCount)
-				mg = paFmargin(lt, lo, first, cnt)
-				b = port.CellsAt(lo, first)
-				cont = 0
-				if open == 1 {
-					score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents, paBottom(cf, prevfr), port.CellsAt(cf, (i*cfStride)+cfX0), port.CellsAt(cf, (i*cfStride)+cfX1), port.CellsAt(cf, (i*cfStride)+cfCount), hc)
-					port.CellsPush(dbg, i)
-					port.CellsPush(dbg, prev)
-					port.CellsPush(dbg, b)
-					port.CellsPush(dbg, score)
-					port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfX0))
-					port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfX1))
-					port.CellsPush(dbg, evidence.LnGet(lt, prev, evidence.LhX1()))
-					port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfCount))
-					if score >= joinMin {
-						cont = 1
+				k0 = paLive(lt, lo, first, cnt)
+				first += k0
+				cnt -= k0
+				if cnt > 0 {
+					mg = paFmargin(lt, lo, first, cnt)
+					b = port.CellsAt(lo, first)
+					cont = 0
+					if open == 1 {
+						score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents, paBottom(cf, prevfr), port.CellsAt(cf, (i*cfStride)+cfX0), port.CellsAt(cf, (i*cfStride)+cfX1), port.CellsAt(cf, (i*cfStride)+cfCount), hc)
+						port.CellsPush(dbg, i)
+						port.CellsPush(dbg, prev)
+						port.CellsPush(dbg, b)
+						port.CellsPush(dbg, score)
+						port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfX0))
+						port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfX1))
+						port.CellsPush(dbg, evidence.LnGet(lt, prev, evidence.LhX1()))
+						port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfCount))
+						if score >= joinMin {
+							cont = 1
+						}
+						if table.TbDue(tb, tcur, p, paYmid2(lt, b)) {
+							cont = 0
+						}
 					}
-				}
-				if cont == 0 {
-					ty = evidence.LnGet(lt, b, evidence.LhY0())
-					pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc)
-					if (i == r) && (p > 1) {
-						paMilestone(nodes, p, hc)
-					}
-					paFragOpen(fr, lt, p, b, 0)
-				} else {
-					paJoin(wd, lt, et, raw, b)
-					rs = port.CellsLen(raw)
-					paFragOpen(fr, lt, p, b, rs)
-				}
-				open = 1
-				paAddLine(wd, lt, et, raw, b)
-				prev = b
-				prevfr = i
-				cont = 1
-				for cont < cnt {
-					b = port.CellsAt(lo, first+cont)
-					if paNewPar(wd, lt, prev, b, med, mg, hc) {
+					if cont == 0 {
 						ty = evidence.LnGet(lt, b, evidence.LhY0())
 						pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc)
+						if (i == r) && (p > 1) {
+							paMilestone(nodes, p, hc)
+						}
+						tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
 						paFragOpen(fr, lt, p, b, 0)
 					} else {
 						paJoin(wd, lt, et, raw, b)
-						paFragExtend(fr, lt, b)
+						rs = port.CellsLen(raw)
+						paFragOpen(fr, lt, p, b, rs)
 					}
+					open = 1
 					paAddLine(wd, lt, et, raw, b)
 					prev = b
-					cont += 1
+					prevfr = i
+					cont = 1
+					for cont < cnt {
+						b = port.CellsAt(lo, first+cont)
+						if table.TbClaimed(lt, b) == 0 {
+							if paNewPar(wd, lt, prev, b, med, mg, hc) || table.TbDue(tb, tcur, p, paYmid2(lt, b)) {
+								ty = evidence.LnGet(lt, b, evidence.LhY0())
+								pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, i, ty, hc)
+								tcur = paTables(tb, tcur, p, paYmid2(lt, b), wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
+								paFragOpen(fr, lt, p, b, 0)
+							} else {
+								paJoin(wd, lt, et, raw, b)
+								paFragExtend(fr, lt, b)
+							}
+							paAddLine(wd, lt, et, raw, b)
+							prev = b
+						}
+						cont += 1
+					}
 				}
 				i += 1
+			}
+			if table.TbDue(tb, tcur, p, paAll) {
+				pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000, hc)
+				open = 0
+				prev = -1
+				tcur = paTables(tb, tcur, p, paAll, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
 			}
 		}
 		i = nu
 		for i < n {
-			port.CellsPush(gp, port.CellsAt(ord, i))
+			if table.TbClaimed(lt, port.CellsAt(ord, i)) == 0 {
+				port.CellsPush(gp, port.CellsAt(ord, i))
+			}
 			i += 1
 		}
 		p += 1

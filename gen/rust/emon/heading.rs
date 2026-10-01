@@ -610,6 +610,11 @@ pub(crate) fn hd_headish(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     if st_get(sf, l, sfk_upright()) != 1 {
         return 0;
     }
+    // a line a table holds (the spare cell 15, `tb-claimed`, P5, D178) is a cell, never a heading; it still counts
+    // as a neighbour (the heading above a table is followed by it) and in the style classes
+    if ln_get(ln, l, 15) != 0 {
+        return 0;
+    }
     if st_get(sf, l, sfk_class()) < 0 {
         return 0;
     }

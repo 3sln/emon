@@ -1599,7 +1599,7 @@ after a page break or a figure continues its numbering), nesting by indent.
 A numbered paragraph that is really a heading is disambiguated by the heading
 analysis, which runs first.
 
-As built (D178-D181). A marker is read from the characters, in no language: a
+As built (D183-D186). A marker is read from the characters, in no language: a
 bullet or a dash standing alone (a strong bullet glued to its text), one to
 three digits of any decimal script with `.` or `)`, the same in parentheses or
 brackets, a letter (Latin, Greek, Cyrillic) or a roman numeral with `.` or `)`,
@@ -1710,7 +1710,7 @@ small-font block in the page's bottom band starting with the same marker →
 plus bare URLs and e-mail addresses in text (a conservative recogniser; not a
 guess at every dotted string).
 
-As built (D182-D184). A caption starts with a label: a keyword of a table of
+As built (D187-D189). A caption starts with a label: a keyword of a table of
 caption words (English and a dozen other languages until P4.8's locale tables
 replace it) and a number (`1`, `2.3`, `A.1`, `4b`, `IV`), and then a full stop, a
 colon, a dash, or the line's own style (smaller than the body, or italic or bold

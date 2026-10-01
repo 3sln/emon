@@ -8,6 +8,7 @@ import (
 	"emon/heading"
 	"emon/port"
 	"emon/style"
+	"emon/table"
 )
 
 const lsStride int32 = 8
@@ -740,7 +741,13 @@ func lsWrapItem(wd *port.Cells, et *port.Cells, w int32, scheme int32, value int
 }
 
 func LsUpright(ln *port.Cells, l int32) bool {
+	// An upright line a table does not hold (P5: a table's lines are claimed and its cells are written from them: a
+	// group in one would be in the cell's text). Every stage of this module and of `emon.notes` asks this, and only this,
+	// of a line before it looks at it.
 	var r int32 = evidence.LnGet(ln, l, evidence.LhRot())
+	if table.TbClaimed(ln, l) != 0 {
+		return 0 == 1
+	}
 	return (r < 100) || (r > 35900)
 }
 

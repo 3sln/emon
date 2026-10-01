@@ -125,7 +125,12 @@ public final class Paratest {
         emon.Port.Cells lo = emon.Port.newCells();
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
-        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tq = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
     }
     public static int ptDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, StringBuilder t) {
         // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -155,13 +160,17 @@ public final class Paratest {
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
         emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tq = emon.Port.newCells();
         int p = 1;
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (p <= npages) {
             Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
             p += 1;
         }
-        Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+        Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
         Para.paDump(t, cf, dbg);
         return 0;
     }

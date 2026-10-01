@@ -125,7 +125,12 @@ public static class Paratest {
         emon.Port.Cells lo = emon.Port.NewCells();
         emon.Port.Cells pr = emon.Port.NewCells();
         emon.Port.Cells dbg = emon.Port.NewCells();
-        return Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tq = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        return Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
     }
     internal static int PtDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, System.Text.StringBuilder t) {
         // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -155,13 +160,17 @@ public static class Paratest {
         emon.Port.Cells pr = emon.Port.NewCells();
         emon.Port.Cells dbg = emon.Port.NewCells();
         emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tq = emon.Port.NewCells();
         int p = 1;
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (p <= npages) {
             Model.PageNew(pages, p, 61200, 79200, 0, Model.PkVector());
             p += 1;
         }
-        Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+        Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
         Para.PaDump(t, cf, dbg);
         return 0;
     }

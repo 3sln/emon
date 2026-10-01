@@ -1,0 +1,37 @@
+#!/usr/bin/env bb
+;; Write the table stage's goldens from the generated Rust (DEVLOG P5.1-P5.3).
+;;
+;;     kin/scripts/table-goldens            write test/table/NAME.json (pretty canonical JSON) for each document below
+;;
+;; A DEVELOPMENT SCRIPT, run by a person after the stage changed on purpose; no gate runs it. The laws in
+;; `kin/tabletest.kin` hold every target to what this wrote (PDF -> content -> tables -> paragraphs -> Model -> JSON,
+;; byte for byte). The driver is the Engine's, `emon-rs` (built by `kin/scripts/emon-rs-build`). A golden is checked by
+;; eye against the document it was made from (and against the synthetic gold, `bb accuracy`: the same cells) before it
+;; is committed: a golden of kin's own output is only as good as that.
+;;
+;; FURNITURE IS KEPT (`--furniture=keep`): the laws in `kin/tabletest.kin` run content, tables, headings and paragraphs, not
+;; the furniture stage (P4.3), so a page number must stay a paragraph for the golden to be what they make.
+;;
+;; THE DOCUMENTS are the Chrome-printed synthetic ones that make one table on one page of each profile, and one with
+;; numeric columns (alignment), and one table on four pages (P5.4).
+(require '[clojure.java.io :as io]
+         '[clojure.java.shell :as sh]
+         '[clojure.string :as str])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+
+(def docs ["table-simple-ruled" "table-shaded" "table-spans-partial" "table-whitespace" "align-table-numeric" "table-multipage-thead"])
+
+(defn run [& args]
+  (let [r (apply sh/sh (concat args [:dir root]))]
+    (when-not (zero? (:exit r)) (println (:err r)) (System/exit 1))
+    (:out r)))
+
+;; builds the driver when gen/ or host/ changed (predict-emon.sh's stamp), by asking it for a document
+(run "sh" "tools/accuracy/predict-emon.sh" "x" "pdf" "test/corpus/synth/pdf/table-simple-ruled.pdf" "x")
+
+(.mkdirs (io/file root "test" "table"))
+(doseq [d docs]
+  (let [out (run ".cache/emon-rs/target/release/emon-rs" "--pretty" "--furniture=keep" (str "test/corpus/synth/pdf/" d ".pdf"))]
+    (spit (io/file root "test" "table" (str d ".json")) (str out "\n") :encoding "UTF-8")
+    (println "  wrote test/table/" (str d ".json") (count out) "bytes")))

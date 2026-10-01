@@ -140,9 +140,10 @@
   (comment "(`emon.heading`), empty for the paragraphs alone.")
   (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
-        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)]
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)]
     (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg hc))))
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger))))
 
 (defn ^I32 pt-dump [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Text t]
   (comment "`pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.")
@@ -153,13 +154,14 @@
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
         ^Cells hc (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells)
         ^:mut ^I32 p 1]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
     (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-              lt ls sd it io rw gu ac tm cf lo pr dbg hc)
+              lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger)
     (pa-dump t cf dbg)
     (return 0)))
 

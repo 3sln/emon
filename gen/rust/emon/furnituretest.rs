@@ -222,7 +222,12 @@ pub(crate) fn fl_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    return pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger);
 }
 pub(crate) fn fl_run(wd: &mut crate::port::Cells, ln0: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, trust: i32, mode: i32, txt: &mut crate::port::Cells, md: &mut crate::port::Cells, lb: &mut crate::port::Cells, mut t: &mut String) -> i32 {
     // Run the stage as the Engine does (find, paragraphs, write) over the evidence, and write the brief into `t`. Answers

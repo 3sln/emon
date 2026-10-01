@@ -40,6 +40,7 @@ import (
 	"emon/html"
 	"emon/model"
 	"emon/para"
+	"emon/table"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
 	"emon/pdfmeta"
@@ -773,6 +774,9 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	fc := newCellsN(10)
 	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
 	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
+	// Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
+	tb := newCellsN(24)
+	table.TbBuild(wd, ln, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
@@ -788,7 +792,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	notes.NtAnalyze(wd, ln, et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2])
 	lists.LsAnalyze(wd, ln, et, h[0], pa, h[2], l[3], l[4], l[5])
 	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
-		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2])
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger)
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
 	// body is copied into new arenas, in document order, and they replace the old ones
 	r := newCellsN(10)
