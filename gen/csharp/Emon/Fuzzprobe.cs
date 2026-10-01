@@ -72,6 +72,23 @@ public static class Fuzzprobe {
         emon.Port.Cells fnt = emon.Port.NewCells();
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells idx = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells w = emon.Port.NewCells();
+        emon.Port.Cells seen = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells ss = emon.Port.NewCells();
+        emon.Port.Cells se = emon.Port.NewCells();
+        emon.Port.Cells sk = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells so = emon.Port.NewCells();
+        emon.Port.Cells sa = emon.Port.NewCells();
+        emon.Port.Cells wk = emon.Port.NewCells();
+        emon.Port.Cells ha = emon.Port.NewCells();
+        emon.Port.Cells hb = emon.Port.NewCells();
+        emon.Port.Cells hh = emon.Port.NewCells();
+        int ts = 0;
+        int tj = 0;
         int s = Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
         int g = 0;
         int h = 7;
@@ -94,6 +111,19 @@ public static class Fuzzprobe {
             emon.Port.TextI32(t, Evidence.MkCount(mk));
             emon.Port.TextAscii(t, " cps=");
             emon.Port.TextI32(t, h);
+            Pdfx.PxIndexBuild(src, ar, dc, a, b, st, pg, idx);
+            ts = Pdfstruct.TgRead(src, ar, dc, a, b, st, pg, idx, txt, w, seen, ss, se, sk, sc, so, wk, md);
+            emon.Port.TextAscii(t, " tags=");
+            emon.Port.TextI32(t, ts);
+            if (ts > 0) {
+                tj = Pdfstruct.TgJoin(ss, se, sk, sc, so, sa, gl, mk, fnt, pg, ha, hb, hh);
+                emon.Port.TextAscii(t, ":");
+                emon.Port.TextI32(t, tj);
+                emon.Port.TextAscii(t, ":");
+                emon.Port.TextI32(t, emon.Port.CellsAt(ss, 54));
+                emon.Port.TextAscii(t, ":");
+                emon.Port.TextI32(t, emon.Port.CellsLen(sc));
+            }
         }
         return s;
     }

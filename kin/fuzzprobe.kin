@@ -35,6 +35,8 @@
                                  pd-object-count]]
             [emon.pdfsrc :refer [ps-missed]]
             [emon.pdfcontent :refer [pc-document pc-warn pc-ops]]
+            [emon.pdfx :refer [px-index-build]]
+            [emon.pdfstruct :refer [tg-read tg-join]]
             [emon.evidence :refer [gl-count gl-get wd-count mk-count ch-cp]]
             [emon.pdflex :refer [pl-kind-of]]
             [emon.pdffont :refer [pfn-load pfn-map pfn-cp pfn-how-of pfn-width
@@ -106,6 +108,23 @@
         ^Cells fnt (new-cells)
         ^Cells wd (new-cells)
         ^Cells ln (new-cells)
+        ^Cells idx (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells w (new-cells)
+        ^Cells seen (new-cells)
+        ^Cells md (new-cells)
+        ^Cells ss (new-cells)
+        ^Cells se (new-cells)
+        ^Cells sk (new-cells)
+        ^Cells sc (new-cells)
+        ^Cells so (new-cells)
+        ^Cells sa (new-cells)
+        ^Cells wk (new-cells)
+        ^Cells ha (new-cells)
+        ^Cells hb (new-cells)
+        ^Cells hh (new-cells)
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tj 0
         ^I32 s (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln)
         ^:mut ^I32 g 0
         ^:mut ^I32 h 7]
@@ -126,7 +145,19 @@
           (emit-ascii t " marks=")
           (text-i32 t (mk-count mk))
           (emit-ascii t " cps=")
-          (text-i32 t h)))
+          (text-i32 t h)
+          (px-index-build src ar dc a b st pg idx)
+          (set ts (tg-read src ar dc a b st pg idx txt w seen ss se sk sc so wk md))
+          (emit-ascii t " tags=")
+          (text-i32 t ts)
+          (if (> ts 0)
+            (do (set tj (tg-join ss se sk sc so sa gl mk fnt pg ha hb hh))
+                (emit-ascii t ":")
+                (text-i32 t tj)
+                (emit-ascii t ":")
+                (text-i32 t (cells-at ss 54))
+                (emit-ascii t ":")
+                (text-i32 t (cells-len sc))))))
     (return s)))
 
 (defn ^I32 fz-run [^Src src ^:mut ^Text t]

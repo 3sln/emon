@@ -72,6 +72,23 @@ public final class Fuzzprobe {
         emon.Port.Cells fnt = emon.Port.newCells();
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells idx = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells w = emon.Port.newCells();
+        emon.Port.Cells seen = emon.Port.newCells();
+        emon.Port.Cells md = emon.Port.newCells();
+        emon.Port.Cells ss = emon.Port.newCells();
+        emon.Port.Cells se = emon.Port.newCells();
+        emon.Port.Cells sk = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells so = emon.Port.newCells();
+        emon.Port.Cells sa = emon.Port.newCells();
+        emon.Port.Cells wk = emon.Port.newCells();
+        emon.Port.Cells ha = emon.Port.newCells();
+        emon.Port.Cells hb = emon.Port.newCells();
+        emon.Port.Cells hh = emon.Port.newCells();
+        int ts = 0;
+        int tj = 0;
         int s = Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
         int g = 0;
         int h = 7;
@@ -94,6 +111,19 @@ public final class Fuzzprobe {
             emon.Port.textI32(t, Evidence.mkCount(mk));
             emon.Port.textAscii(t, " cps=");
             emon.Port.textI32(t, h);
+            Pdfx.pxIndexBuild(src, ar, dc, a, b, st, pg, idx);
+            ts = Pdfstruct.tgRead(src, ar, dc, a, b, st, pg, idx, txt, w, seen, ss, se, sk, sc, so, wk, md);
+            emon.Port.textAscii(t, " tags=");
+            emon.Port.textI32(t, ts);
+            if (ts > 0) {
+                tj = Pdfstruct.tgJoin(ss, se, sk, sc, so, sa, gl, mk, fnt, pg, ha, hb, hh);
+                emon.Port.textAscii(t, ":");
+                emon.Port.textI32(t, tj);
+                emon.Port.textAscii(t, ":");
+                emon.Port.textI32(t, emon.Port.cellsAt(ss, 54));
+                emon.Port.textAscii(t, ":");
+                emon.Port.textI32(t, emon.Port.cellsLen(sc));
+            }
         }
         return s;
     }

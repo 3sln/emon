@@ -1,0 +1,80 @@
+#!/usr/bin/env bb
+;; Write P3.7's goldens: what the generated Rust says of each tagged fixture, checked against an independent reader.
+;;
+;;     bb kin/scripts/struct-goldens            write test/pdf/tagged/*.json and test/pdf/tagged.txt
+;;     bb kin/scripts/struct-goldens --check    fail if a committed golden is out of date (no oracle)
+;;
+;; A DEVELOPMENT TOOL (babashka; the oracle step needs Python with pypdf in ~/.cache/emon/pylib, D094), run by a person, not a
+;; gate; `bb unit --check`s that the goldens are current only by reading them, so no tool is needed to run the laws. The files
+;; are the PDFs of `tools/synth/tagged_pair.clj` (a correctly tagged document, five mis-tagged twins and the odd one) and
+;; the three Chrome-tagged synthetic documents. It writes
+;;
+;;   test/pdf/tagged/NAME.json   `kin/scripts/struct-sweep`'s dump (`tg-dump`) of the file: the goldens `kin/pdfstructtest.kin`
+;;                               holds all four targets to, byte for byte
+;;   test/pdf/tagged.txt         the fixtures, one a row: the file (relative to test/), then its golden
+;;
+;; THE GOLDENS ARE EMON'S OWN OUTPUT, reviewed, so each is also held to the oracle: after writing, this runs
+;; `tools/oracle/tagged-check.py` over the fixtures (it walks the tree itself in pypdf and compares every element, kid,
+;; role, attribute, join and ParentTree entry) and stops on a disagreement.
+(require '[babashka.process :as p]
+         '[clojure.java.io :as io]
+         '[clojure.string :as str])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParent))
+(def check? (some #{"--check"} *command-line-args*))
+
+(def fixtures
+  [["pdf/tagged/good.pdf" "pdf/tagged/good.json"]
+   ["pdf/tagged/bad.pdf" "pdf/tagged/bad.json"]
+   ["pdf/tagged/bad-allp.pdf" "pdf/tagged/bad-allp.json"]
+   ["pdf/tagged/bad-levels.pdf" "pdf/tagged/bad-levels.json"]
+   ["pdf/tagged/bad-artifacts.pdf" "pdf/tagged/bad-artifacts.json"]
+   ["pdf/tagged/bad-order.pdf" "pdf/tagged/bad-order.json"]
+   ["pdf/tagged/odd.pdf" "pdf/tagged/odd.json"]
+   ["corpus/synth/pdf-tagged/h-inverted.pdf" "pdf/tagged/chrome-h-inverted.json"]
+   ["corpus/synth/pdf-tagged/lists-basic.pdf" "pdf/tagged/chrome-lists-basic.json"]
+   ["corpus/synth/pdf-tagged/table-simple-ruled.pdf" "pdf/tagged/chrome-table-simple-ruled.json"]])
+
+(def manifest
+  (str "# emon P3.7: the fixtures of tools/synth/tagged_pair.clj and the Chrome-tagged synthetic documents, read by kin/pdfstructtest.kin.\n"
+       "# file (relative to test/) <TAB> its golden (kin/scripts/struct-goldens)\n"
+       (str/join "" (for [[f g] fixtures] (str f "\t" g "\n")))))
+
+(defn sweep []
+  (let [r (p/shell {:out :string :err :string :continue true :dir root :in (str/join "\n" (for [[f _] fixtures] (str "test/" f)))}
+                   "kin/scripts/struct-sweep")]
+    (into {}
+          (for [l (str/split-lines (:out r)) :let [[path status js] (str/split l #"\t" 3)]]
+            (do (when-not (= status "ok") (println "  FAIL" path status) (System/exit 1))
+                (let [m (re-matches #"(?s)\{\"pages\":\d+,\"content\":-?\d+,\"read\":-?\d+,\"join\":-?\d+,\"ms\":\d+,\"s\":(.*)\}" js)]
+                  (when-not m (println "  FAIL" path "unexpected row") (System/exit 1))
+                  [(subs path 5) (str (m 1) "\n")]))))))
+
+(let [dumps (sweep)
+      bad (atom 0)]
+  (doseq [[f g] fixtures]
+    (let [path (str root "/test/" g)
+          want (get dumps f)]
+      (if check?
+        (when-not (and (.exists (io/file path)) (= want (slurp path)))
+          (swap! bad inc)
+          (println "  FAIL" (str "test/" g) "is not what the generated Rust says of" f))
+        (spit path want))))
+  (let [mpath (str root "/test/pdf/tagged.txt")]
+    (if check?
+      (when-not (and (.exists (io/file mpath)) (= manifest (slurp mpath)))
+        (swap! bad inc)
+        (println "  FAIL test/pdf/tagged.txt is not what kin/scripts/struct-goldens writes"))
+      (spit mpath manifest)))
+  (cond
+    (pos? @bad) (System/exit 1)
+    check? (println "  ok   the tagged goldens are current")
+    :else
+    (let [r (p/shell {:continue true :dir root}
+                     "python3" "tools/oracle/tagged-check.py" "--tree"
+                     "test/pdf/tagged/good.pdf" "test/pdf/tagged/bad.pdf" "test/pdf/tagged/bad-allp.pdf"
+                     "test/pdf/tagged/bad-levels.pdf" "test/pdf/tagged/bad-artifacts.pdf" "test/pdf/tagged/bad-order.pdf"
+                     "test/pdf/tagged/odd.pdf" "test/corpus/synth/pdf-tagged/h-inverted.pdf"
+                     "test/corpus/synth/pdf-tagged/lists-basic.pdf" "test/corpus/synth/pdf-tagged/table-simple-ruled.pdf")]
+      (when-not (zero? (:exit r)) (System/exit 1))
+      (println "wrote" (count fixtures) "goldens"))))

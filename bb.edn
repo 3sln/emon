@@ -16,6 +16,8 @@
          :task (apply shell "kin/scripts/unit" *command-line-args*)}
   plan {:doc "The plan/fulfil protocol: a transcript recorded on Rust, replayed on Go, identical evidence (P2.5)."
         :task (shell "kin/scripts/plan")}
+  slice {:doc "The first vertical slice on the Rust host: the Engine API's native tests, then born-digital PDFs through the driver to JSON and HTML, in memory and from a 512-byte async source, against the goldens (P1.10).  bb slice [--update]"
+         :task (apply shell "bb" "kin/scripts/slice" *command-line-args*)}
   fuzz {:doc "Mutate the PDF fixtures (truncation, byte flips, corrupt xref/Length/headers/stream boundaries), run every mutant through Rust and Go (memory and a 512-byte async source): no panic, no hang, hosts agree, async = memory (P2.12). No args: the fixed-seed smoke subset (a gate).  bb fuzz [--long N] [--seed S] [--cases N] [--hosts all] [--only I --dump F] [--replay FILE...]"
         :task (apply shell "bb" "tools/fuzz/fuzz.clj" *command-line-args*)}
   ocr  {:doc "A real Tesseract transcript (one scanned page) replayed on Rust and Go: identical evidence, a first CER (P2.6). Recording it is tools/ocr/record.clj (live, not a gate)."
@@ -28,7 +30,7 @@
          :task (shell "kin/scripts/drift")}
   hosts {:doc "Do the four host trees agree, and do the call sites match?"
          :task (shell "kin/scripts/hosts")}
-  accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (NOT a gate, D078).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
+  accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (a gate since P1.10, D145).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
             :task (apply shell "bb" "tools/accuracy/accuracy.clj" *command-line-args*)}
   import {:doc "Run every public-dataset importer into corpus/_gold/, validate, report counts (NOT a gate: the corpus is not in git).  bb import [--limit N] [name ...]"
           :task (apply shell "bb" "tools/import/import_all.clj" *command-line-args*)}
