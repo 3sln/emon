@@ -3253,3 +3253,11 @@ pub fn tg_dump(mut t: &mut String, txt: &mut crate::port::Cells, ss: &mut crate:
     crate::port::text_ascii(t, "]}");
     return 0;
 }
+pub fn tg_trust(ss: &mut crate::port::Cells) -> i32 {
+    // The tree's TRUST (D150): the informativeness score, raised a tenth by a PDF/UA claim; 0 when there is no tree, no
+    // text to check, or `tg-join` has not run. What other stages weigh the tree's word by (D034, D076).
+    if crate::port::cells_len(ss) <= SS_TRUST {
+        return 0;
+    }
+    return crate::port::cells_at(ss, SS_TRUST);
+}

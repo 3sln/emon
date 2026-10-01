@@ -356,6 +356,29 @@
     (assert-eq (hd-level hc 0) 0 "the running header on page 1")
     (assert-eq (hd-level hc 4) 1 "`Overview`")))
 
+(deftest test-a-masthead-above-a-larger-title-is-not-a-heading
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^:mut ^I32 y 3000]
+    (ht-heading wd ln et (text-blob "Marlow Savings Bank") y 1500 1)
+    (set y (+ y 2700))
+    (ht-heading wd ln et (text-blob "Statement of Account") y 1800 1)
+    (set y (+ y 3000))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Transactions") y 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Summary") y 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 2))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 3 "three headings: the masthead is none of them")
+    (assert-eq (hd-level hc 0) 0 "the masthead is not a heading: a larger title follows it directly")
+    (assert-eq (hd-level hc 1) 1 "the title is level 1")
+    (assert-eq (hd-level hc 4) 2 "`Transactions` is level 2")))
+
 ;; ---------------------------------------------------------------- what the paragraph stage makes of it
 
 (deftest test-sections-nest-by-level

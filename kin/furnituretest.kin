@@ -1,0 +1,558 @@
+;; Laws for `emon.furniture` (P4.3; SPEC 10.2; D017, D173-D176), on every target.
+;;
+;; THE EVIDENCE IS WRITTEN BY HAND (a line is a row of `lines` with its words, in centipoints; the page is Letter), the
+;; stage is run as the Engine runs it (`fu-find`, the paragraph stage, `fu-write`), and what it decided is written as a brief:
+;;
+;;     L<n>=<label>;                     a page's label
+;;     F<role><pages>:<template>;        a furniture root: role h(eader) f(ooter) m(argin), its pages joined by `,`
+;;     D<reason>@<page>:<text>;          a ledger row: p(age-number) r(unning-title) w(atermark)
+;;     P:<text>;                         a paragraph of the body
+;;
+;; in that order. The cases are the ones SPEC 10.2 names and the ones the synthetic corpus and the real files showed: a page number
+;; alone, `Page N of M`, the roman and arabic of a front matter, a title that the body already says, a court filing's header (kept),
+;; a Bates number (a template), odd and even pages, a header seen once (NOT furniture), a table's repeated header row (NOT
+;; furniture), a number that is not the page's, the setting (`keep`, `drop`), /PageLabels, and the tagged fixtures read whole.
+(ns emon.furnituretest
+  (:require [emon.lang :refer [I32 Blob Src Cells Text emit-ascii]]
+            [emon.test :refer [deftest assert-eq assert-text new-cells new-text test-file text-blob]]
+            [emon.port :refer [blob-len blob-u8 src-of-blob cells-len cells-at cells-set cells-push cells-drop text-cp text-i32]]
+            [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind node-parent node-sub
+                                node-text-start node-text-len node-first-child node-next node-attr attr-find-next attr-value text-at
+                                page-label-start page-label-len page-count
+                                ledger-count ledger-reason ledger-page ledger-text-start ledger-text-len
+                                text-append-utf8 nk-paragraph nk-furniture nk-break fk-pages fk-label
+                                dr-page-number dr-running-title dr-watermark rl-header rl-footer rl-margin]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count ln-get ln-set lh-page wf-size wf-font]]
+            [emon.pdfdoc :refer [pd-open pd-pg-count]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.pdfx :refer [px-index-build]]
+            [emon.pdfmeta :refer [pm-run]]
+            [emon.pdfstruct :refer [tg-read tg-join tg-trust]]
+            [emon.para :refer [pa-pages pa-build]]
+            [emon.furniture :refer [fu-find fu-write]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------ hand-made evidence
+(defn ^I32 fl-line [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 rot ^I32 size]
+  (comment "Append one line: the words of the UTF-8 text b (split at spaces), each a row of `words` whose box is the line's, and")
+  (comment "the line (page, box, baseline 2 pt above the box's bottom, rot, left to right).")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 n (blob-len b)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0]
+    (while (<= k n)
+      (do (if (or (== k n) (== (blob-u8 b k) 32))
+            (do (if (> k s)
+                  (do (let [^I32 ts (cells-len et)]
+                        (text-append-utf8 et b s k)
+                        (let [^I32 tl (- (cells-len et) ts)
+                              ^I32 r (wd-new wd page x0 y0 x1 y1 x0 (- y1 200) x1 (- y1 200) rot 0 ts tl -1 -1 -1)]
+                          (wd-set wd r (wf-size) size)
+                          (wd-set wd r (wf-font) 0)))))
+                (set s (+ k 1))))
+          (set k (+ k 1))))
+    (ln-new ln page x0 y0 x1 y1 x0 (- y1 200) x1 (- y1 200) rot 0 w0 (- (wd-count wd) w0))
+    (return 0)))
+
+(defn ^I32 fl-top [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 x0 ^I32 x1]
+  (comment "A line in the top margin (36 pt from the top, 10 pt high, size 9 pt).")
+  (return (fl-line wd ln et b page x0 3600 x1 4600 0 900)))
+
+(defn ^I32 fl-bottom [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 x0 ^I32 x1]
+  (comment "A line in the bottom margin (750 pt from the top).")
+  (return (fl-line wd ln et b page x0 75000 x1 76000 0 900)))
+
+(defn ^I32 fl-body [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 row]
+  (comment "A body line at 100 pt + 14 pt per row, 11 pt text.")
+  (return (fl-line wd ln et b page 7200 (+ 10000 (* row 1400)) 50000 (+ 11100 (* row 1400)) 0 1100)))
+
+(defn ^I32 fl-pages [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 npages]
+  (comment "Every page gets one body line (`alpha beta.` at row 0), nothing else.")
+  (let [^:mut ^I32 p 1]
+    (while (<= p npages)
+      (do (fl-body wd ln et (text-blob "alpha beta.") p 0)
+          (set p (+ p 1))))
+    (return 0)))
+
+(defn ^I32 fl-copy [^Cells from ^:mut ^Cells to]
+  (comment "The stage takes the furniture's lines out of `lines` in place, as the Engine lets it: every run gets a copy.")
+  (let [^:mut ^I32 i 0]
+    (cells-drop to 0)
+    (while (< i (cells-len from))
+      (do (cells-push to (cells-at from i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fl-order [^:mut ^Cells ln]
+  (comment "Put the rows of `lines` in page order, as the content interpreter writes them (a stable insertion sort: the tests add")
+  (comment "a page's furniture after the next pages' body).")
+  (let [^I32 n (ln-count ln)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0]
+    (while (< i n)
+      (do (set j i)
+          (while (and (> j 0) (> (ln-get ln (- j 1) (lh-page)) (ln-get ln j (lh-page))))
+            (do (set k 0)
+                (while (< k 16)
+                  (do (set a (ln-get ln (- j 1) k))
+                      (set b (ln-get ln j k))
+                      (ln-set ln (- j 1) k b)
+                      (ln-set ln j k a)
+                      (set k (+ k 1))))
+                (set j (- j 1))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fl-brief [^:mut ^Text t ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^Cells ledger ^I32 body]
+  (comment "What the stage decided, in the brief of the head of this file.")
+  (let [^I32 np (page-count pages)
+        ^I32 nn (node-count nodes)
+        ^I32 nl (ledger-count ledger)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 first 1]
+    (while (< i np)
+      (do (if (> (page-label-len pages i) 0)
+            (do (emit-ascii t "L")
+                (text-i32 t (+ i 1))
+                (text-cp t 61)
+                (set s (page-label-start pages i))
+                (set k 0)
+                (while (< k (page-label-len pages i))
+                  (do (text-cp t (text-at text (+ s k)))
+                      (set k (+ k 1))))
+                (text-cp t 59)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nn)
+      (do (if (and (== (node-kind nodes i) (nk-furniture)) (== (node-parent nodes i) -1))
+            (do (text-cp t 70)
+                (if (== (node-sub nodes i) (rl-header)) (text-cp t 104))
+                (if (== (node-sub nodes i) (rl-footer)) (text-cp t 102))
+                (if (== (node-sub nodes i) (rl-margin)) (text-cp t 109))
+                (set a (node-attr nodes attrs i (fk-pages)))
+                (set first 1)
+                (while (>= a 0)
+                  (do (if (== first 0) (text-cp t 44))
+                      (set first 0)
+                      (text-i32 t (attr-value attrs a))
+                      (set a (attr-find-next attrs a (fk-pages)))))
+                (text-cp t 58)
+                (set s (node-text-start nodes i))
+                (set k 0)
+                (while (< k (node-text-len nodes i))
+                  (do (text-cp t (text-at text (+ s k)))
+                      (set k (+ k 1))))
+                (text-cp t 59)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nl)
+      (do (text-cp t 68)
+          (if (== (ledger-reason ledger i) (dr-page-number)) (text-cp t 112))
+          (if (== (ledger-reason ledger i) (dr-running-title)) (text-cp t 114))
+          (if (== (ledger-reason ledger i) (dr-watermark)) (text-cp t 119))
+          (text-cp t 64)
+          (text-i32 t (ledger-page ledger i))
+          (text-cp t 58)
+          (set s (ledger-text-start ledger i))
+          (set k 0)
+          (while (< k (ledger-text-len ledger i))
+            (do (text-cp t (text-at text (+ s k)))
+                (set k (+ k 1))))
+          (text-cp t 59)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (and (< i nn) (== body 1))
+      (do (if (== (node-kind nodes i) (nk-paragraph))
+            (do (emit-ascii t "P:")
+                (set s (node-text-start nodes i))
+                (set k 0)
+                (while (< k (node-text-len nodes i))
+                  (do (text-cp t (text-at text (+ s k)))
+                      (set k (+ k 1))))
+                (comment "a paragraph across a page's end has its text in inlines: `text`, then `|` for the milestone, then `text`")
+                (set c (node-first-child nodes i))
+                (while (>= c 0)
+                  (do (if (== (node-kind nodes c) (nk-break)) (text-cp t 124))
+                      (set s (node-text-start nodes c))
+                      (set k 0)
+                      (while (and (>= s 0) (< k (node-text-len nodes c)))
+                        (do (text-cp t (text-at text (+ s k)))
+                            (set k (+ k 1))))
+                      (set c (node-next nodes c))))
+                (text-cp t 59)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fl-build [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
+                    ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp]
+  (comment "`pa-build` with the column stage's scratch and no heading analysis (`hc` empty), as the paragraph laws make it.")
+  (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+        ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
+        ^Cells hc (new-cells)]
+    (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc))))
+
+(defn ^I32 fl-run [^Cells wd ^Cells ln0 ^Cells et ^I32 npages ^I32 trust ^I32 mode ^Cells txt ^Cells md ^Cells lb
+                   ^:mut ^Text t]
+  (comment "Run the stage as the Engine does (find, paragraphs, write) over the evidence, and write the brief into `t`. Answers")
+  (comment "`model-check`'s verdict.")
+  (let [^Cells ln (new-cells)
+        ^Cells gl (new-cells) ^Cells mk (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells cd (new-cells) ^Cells sl (new-cells) ^Cells gr (new-cells) ^Cells ford (new-cells) ^Cells tx (new-cells)
+        ^Cells bh (new-cells) ^Cells fo (new-cells) ^Cells fp (new-cells) ^Cells ft (new-cells) ^Cells pl (new-cells)
+        ^Cells st (new-cells)
+        ^:mut ^I32 p 1]
+    (model-init nodes attrs regions text pages ledger layout)
+    (while (<= p npages)
+      (do (page-new pages p 61200 79200 0 (pk-vector))
+          (set p (+ p 1))))
+    (fl-copy ln0 ln)
+    (fl-order ln)
+    (fu-find wd ln et gl mk pages npages txt md lb trust mode cd sl gr ford tx bh fo fp ft pl)
+    (fl-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp)
+    (fu-write fo fp ft pl npages nodes attrs regions text pages ledger tmp)
+    (fl-brief t nodes attrs text pages ledger 1)
+    (return (model-check nodes attrs regions text pages ledger layout st))))
+
+(defn ^I32 fl-clear [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et]
+  (cells-drop wd 0)
+  (cells-drop ln 0)
+  (cells-drop et 0)
+  (return 0))
+
+;; ----------------------------------------------------------------------- page numbers
+
+(deftest test-a-number-alone-at-the-foot-of_every-page-is-a-page-number
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text)]
+    (comment "Four pages, a bare number centred in the bottom margin: dropped from the flow, kept as the page's label.")
+    (fl-pages wd ln et 4)
+    (fl-bottom wd ln et (text-blob "1") 1 30000 31000)
+    (fl-bottom wd ln et (text-blob "2") 2 30000 31000)
+    (fl-bottom wd ln et (text-blob "3") 3 30000 31000)
+    (fl-bottom wd ln et (text-blob "4") 4 30000 31000)
+    (assert-eq (fl-run wd ln et 4 0 0 txt md lb t1) 0 "number: well formed")
+    (assert-text t1 "L1=1;L2=2;L3=3;L4=4;Dp@1:1;Dp@2:2;Dp@3:3;Dp@4:4;P:alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
+                "page numbers: labels, ledger rows, and not a word of them in the body")
+    (comment "`keep`: nothing leaves the flow (the labels of /PageLabels would still come, but there are none).")
+    (assert-eq (fl-run wd ln et 4 0 1 txt md lb t2) 0 "keep: well formed")
+    (assert-text t2 "P:alpha beta.;P:1;P:alpha beta.;P:2;P:alpha beta.;P:3;P:alpha beta.;P:4;"
+                "keep: every line stays where it was")
+    (comment "`drop` takes the same here: a page number is dropped by the policy too.")
+    (assert-eq (fl-run wd ln et 4 0 2 txt md lb t3) 0 "drop: well formed")
+    (assert-text t3 "L1=1;L2=2;L3=3;L4=4;Dp@1:1;Dp@2:2;Dp@3:3;Dp@4:4;P:alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
+                "drop: the same")))
+
+(deftest test-page-n-of-m-is-a-page-number-and-its-total-goes-with-it
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text)]
+    (fl-pages wd ln et 3)
+    (fl-bottom wd ln et (text-blob "Page 1 of 3") 1 28000 33000)
+    (fl-bottom wd ln et (text-blob "Page 2 of 3") 2 28000 33000)
+    (fl-bottom wd ln et (text-blob "Page 3 of 3") 3 28000 33000)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t1) 0 "page of: well formed")
+    (assert-text t1 "L1=1;L2=2;L3=3;Dp@1:Page 1 of 3;Dp@2:Page 2 of 3;Dp@3:Page 3 of 3;P:alpha beta. |alpha beta. |alpha beta.;"
+                "`Page N of M`: dropped whole, the label is N")
+    (comment "`3/10` and `- 3 -` and `Seite 3 von 10` are the same thing.")
+    (fl-clear wd ln et)
+    (fl-pages wd ln et 3)
+    (fl-bottom wd ln et (text-blob "1/10") 1 29000 32000)
+    (fl-bottom wd ln et (text-blob "2/10") 2 29000 32000)
+    (fl-bottom wd ln et (text-blob "3/10") 3 29000 32000)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t2) 0 "slash: well formed")
+    (assert-text t2 "L1=1;L2=2;L3=3;Dp@1:1/10;Dp@2:2/10;Dp@3:3/10;P:alpha beta. |alpha beta. |alpha beta.;"
+                "`n/m`: the label is n")))
+
+(deftest test-roman-numerals-and-arabic-are-two-runs-of-labels
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text)]
+    (comment "Front matter in roman numerals (centred), the body in arabic: the label is the number AS PRINTED.")
+    (fl-pages wd ln et 6)
+    (fl-bottom wd ln et (text-blob "i") 1 30000 31000)
+    (fl-bottom wd ln et (text-blob "ii") 2 30000 31000)
+    (fl-bottom wd ln et (text-blob "iii") 3 30000 31000)
+    (fl-bottom wd ln et (text-blob "1") 4 30000 31000)
+    (fl-bottom wd ln et (text-blob "2") 5 30000 31000)
+    (fl-bottom wd ln et (text-blob "3") 6 30000 31000)
+    (assert-eq (fl-run wd ln et 6 0 0 txt md lb t1) 0 "roman: well formed")
+    (assert-text t1 "L1=i;L2=ii;L3=iii;L4=1;L5=2;L6=3;Dp@1:i;Dp@2:ii;Dp@3:iii;Dp@4:1;Dp@5:2;Dp@6:3;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
+                "`i ii iii` then `1 2 3`")
+    (comment "A word that is a roman numeral is a word: `mix` at the foot of two pages is not a page number, and neither is a lone `I`.")
+    (fl-clear wd ln et)
+    (fl-pages wd ln et 3)
+    (fl-bottom wd ln et (text-blob "mix") 1 30000 32000)
+    (fl-bottom wd ln et (text-blob "mix") 2 30000 32000)
+    (fl-bottom wd ln et (text-blob "mix") 3 30000 32000)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t2) 0 "mix: well formed")
+    (assert-text t2 "Ff1,2,3:mix;P:alpha beta. |alpha beta. |alpha beta.;"
+                "a word at the foot of every page is furniture to keep, never a label")))
+
+;; -------------------------------------------------------------------- headers and titles
+
+(deftest test-a-running-title-the-body-already-says-is-dropped-and-the-rest-is-kept
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text)]
+    (comment "Page 1 has the title as a heading; every page repeats it in the top margin, with `Page N of M` at the foot.")
+    (fl-pages wd ln et 3)
+    (fl-line wd ln et (text-blob "Annual Report") 1 7200 9000 30000 10000 0 1800)
+    (fl-top wd ln et (text-blob "Annual Report") 1 28000 33000)
+    (fl-top wd ln et (text-blob "Annual Report") 2 28000 33000)
+    (fl-top wd ln et (text-blob "Annual Report") 3 28000 33000)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t1) 0 "title: well formed")
+    (assert-text t1 "Dr@1:Annual Report;Dr@2:Annual Report;Dr@3:Annual Report;P:Annual Report;P:alpha beta. |alpha beta. |alpha beta.;"
+                "a running title that is one line of the body is the output saying it twice: dropped, in the ledger")
+    (comment "A company name that the body does not say is information: ONE furniture root for all the pages.")
+    (fl-clear wd ln et)
+    (fl-pages wd ln et 3)
+    (fl-top wd ln et (text-blob "ACME Corporation") 1 28000 33000)
+    (fl-top wd ln et (text-blob "ACME Corporation") 2 28000 33000)
+    (fl-top wd ln et (text-blob "ACME Corporation") 3 28000 33000)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t2) 0 "company: well formed")
+    (assert-text t2 "Fh1,2,3:ACME Corporation;P:alpha beta. |alpha beta. |alpha beta.;"
+                "kept once, with the pages it was on")
+    (comment "`drop` takes it out too, and says so.")
+    (assert-eq (fl-run wd ln et 3 0 2 txt md lb t3) 0 "company drop: well formed")
+    (assert-text t3 "Dr@1:ACME Corporation;Dr@2:ACME Corporation;Dr@3:ACME Corporation;P:alpha beta. |alpha beta. |alpha beta.;"
+                "drop: nothing kept, everything in the ledger")))
+
+(deftest test-a-court-filings-header-is-kept-its-page-number-and-bates-number-are-not-lost
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text)]
+    (comment "SPEC 10.2: `Case 1:21-cv-00123-ABC Document 14 Filed 05/03/21` and `CONFIDENTIAL` are the same on every page (kept")
+    (comment "once), `Page 1 of 2` is the page number (the label), `ACME-01` is an identifier that follows the page: a template.")
+    (fl-pages wd ln et 2)
+    (fl-top wd ln et (text-blob "Case 1:21-cv-00123-ABC Document 14 Filed 05/03/21") 1 7200 30000)
+    (fl-top wd ln et (text-blob "Page 1 of 2") 1 50000 54000)
+    (fl-bottom wd ln et (text-blob "CONFIDENTIAL - ATTORNEYS' EYES ONLY") 1 7200 23000)
+    (fl-bottom wd ln et (text-blob "ACME-01") 1 50000 54000)
+    (fl-top wd ln et (text-blob "Case 1:21-cv-00123-ABC Document 14 Filed 05/03/21") 2 7200 30000)
+    (fl-top wd ln et (text-blob "Page 2 of 2") 2 50000 54000)
+    (fl-bottom wd ln et (text-blob "CONFIDENTIAL - ATTORNEYS' EYES ONLY") 2 7200 23000)
+    (fl-bottom wd ln et (text-blob "ACME-02") 2 50000 54000)
+    (assert-eq (fl-run wd ln et 2 0 0 txt md lb t1) 0 "court: well formed")
+    (assert-text t1 "L1=1;L2=2;Fh1,2:Case 1:21-cv-00123-ABC Document 14 Filed 05/03/21;Ff1,2:CONFIDENTIAL - ATTORNEYS' EYES ONLY;Ff1,2:ACME-{n:02};Dp@1:Page 1 of 2;Dp@2:Page 2 of 2;P:alpha beta. |alpha beta.;"
+                "the header and the confidentiality line are kept, the Bates number is a template, the page number is the label")))
+
+(deftest test-a-number-with-a-title-beside-it-keeps-the-title-and-gives-the-page-its-label
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text)]
+    (comment "`7 September 17-18, 2024` on odd pages and `Minutes of the Committee 8` on even ones: the number is the label, what")
+    (comment "stays is the date (kept once: it is not what the body says) or the title (dropped: the body's first heading).")
+    (fl-pages wd ln et 4)
+    (fl-line wd ln et (text-blob "Minutes of the Committee") 1 7200 8000 30000 9500 0 1800)
+    (fl-top wd ln et (text-blob "1 Meeting of 17-18 September") 1 7200 30000)
+    (fl-top wd ln et (text-blob "Minutes of the Committee 2") 2 7200 30000)
+    (fl-top wd ln et (text-blob "3 Meeting of 17-18 September") 3 7200 30000)
+    (fl-top wd ln et (text-blob "Minutes of the Committee 4") 4 7200 30000)
+    (assert-eq (fl-run wd ln et 4 0 0 txt md lb t1) 0 "number beside: well formed")
+    (assert-text t1 "L1=1;L2=2;L3=3;L4=4;Fh1,3:Meeting of 17-18 September;Dp@2:2;Dr@2:Minutes of the Committee;Dp@4:4;Dr@4:Minutes of the Committee;Dp@1:1;Dp@3:3;P:Minutes of the Committee;P:alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
+                "the number is the label; the date is kept; the title is what the body says")))
+
+;; -------------------------------------------------------------------- what is NOT furniture
+
+(deftest test-a-line-seen-on-one-page-is-not-furniture
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text)]
+    (comment "A single page has no recurrence to find: a line in the margin of a SIXTEEN-page document that is on one page only is")
+    (comment "left in the flow.")
+    (fl-pages wd ln et 16)
+    (fl-top wd ln et (text-blob "Draft for review") 5 7200 30000)
+    (assert-eq (fl-run wd ln et 16 0 0 txt md lb t1) 0 "once: well formed")
+    (comment "(A one-line page's line fills its fragment, so P4.1 continues the paragraph over the page break: `|`.)")
+    (assert-text t1 "P:alpha beta. |alpha beta. |alpha beta. |alpha beta.;P:Draft for review;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
+                "a line on one page of sixteen stays in the flow")
+    (comment "On two pages of sixteen it is still not enough (30 per cent of the pages are needed).")
+    (fl-clear wd ln et)
+    (fl-pages wd ln et 16)
+    (fl-top wd ln et (text-blob "Draft for review") 5 7200 30000)
+    (fl-top wd ln et (text-blob "Draft for review") 9 7200 30000)
+    (assert-eq (fl-run wd ln et 16 0 0 txt md lb t2) 0 "twice: well formed")
+    (assert-text t2 "P:alpha beta. |alpha beta. |alpha beta. |alpha beta.;P:Draft for review;P:alpha beta. |alpha beta. |alpha beta. |alpha beta.;P:Draft for review;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
+                "on two pages of sixteen it is still not enough")))
+
+(deftest test-a-tables-repeated-header-row-is-not-furniture
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text)]
+    (comment "A header row at the top of each page, followed at once by the rows of the table: the rows are not set apart from it")
+    (comment "(isolation, SPEC 10.2 evidence 3), so it is a table's, not a page's.")
+    (comment "The header row is the same on the three pages; the rows under it are not.")
+    (fl-line wd ln et (text-blob "Item") 1 7200 6000 15000 7000 0 1000)
+    (fl-line wd ln et (text-blob "Amount") 1 30000 6000 38000 7000 0 1000)
+    (fl-line wd ln et (text-blob "Pens") 1 7200 7300 15000 8300 0 1000)
+    (fl-line wd ln et (text-blob "12.50") 1 30000 7300 38000 8300 0 1000)
+    (fl-line wd ln et (text-blob "Ink") 1 7200 8600 15000 9600 0 1000)
+    (fl-line wd ln et (text-blob "7.00") 1 30000 8600 38000 9600 0 1000)
+    (fl-line wd ln et (text-blob "Item") 2 7200 6000 15000 7000 0 1000)
+    (fl-line wd ln et (text-blob "Amount") 2 30000 6000 38000 7000 0 1000)
+    (fl-line wd ln et (text-blob "Glue") 2 7200 7300 15000 8300 0 1000)
+    (fl-line wd ln et (text-blob "3.10") 2 30000 7300 38000 8300 0 1000)
+    (fl-line wd ln et (text-blob "Tape") 2 7200 8600 15000 9600 0 1000)
+    (fl-line wd ln et (text-blob "4.20") 2 30000 8600 38000 9600 0 1000)
+    (fl-line wd ln et (text-blob "Item") 3 7200 6000 15000 7000 0 1000)
+    (fl-line wd ln et (text-blob "Amount") 3 30000 6000 38000 7000 0 1000)
+    (fl-line wd ln et (text-blob "Cups") 3 7200 7300 15000 8300 0 1000)
+    (fl-line wd ln et (text-blob "8.80") 3 30000 7300 38000 8300 0 1000)
+    (fl-line wd ln et (text-blob "Mugs") 3 7200 8600 15000 9600 0 1000)
+    (fl-line wd ln et (text-blob "6.40") 3 30000 8600 38000 9600 0 1000)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t1) 0 "table: well formed")
+    (assert-text t1 "P:Item;P:Amount;P:Pens;P:12.50;P:Ink;P:7.00 |Item;P:Amount;P:Glue;P:3.10;P:Tape;P:4.20 |Item;P:Amount;P:Cups;P:8.80;P:Mugs;P:6.40;"
+                "nothing is taken out of a table")))
+
+(deftest test-a-number-that-does-not-follow-the-pages-is-not-a-page-number
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text)]
+    (comment "`Report 2024` (the same on every page) is a constant: furniture, kept once. `No. 7`, `No. 3`, `No. 9` vary: kept per page.")
+    (fl-pages wd ln et 3)
+    (fl-top wd ln et (text-blob "Report 2024") 1 7200 20000)
+    (fl-top wd ln et (text-blob "Report 2024") 2 7200 20000)
+    (fl-top wd ln et (text-blob "Report 2024") 3 7200 20000)
+    (fl-bottom wd ln et (text-blob "No. 7") 1 40000 45000)
+    (fl-bottom wd ln et (text-blob "No. 3") 2 40000 45000)
+    (fl-bottom wd ln et (text-blob "No. 9") 3 40000 45000)
+    (assert-eq (fl-run wd ln et 3 0 0 txt md lb t1) 0 "not a page number: well formed")
+    (assert-text t1 "Fh1,2,3:Report 2024;Ff1:No. 7;Ff2:No. 3;Ff3:No. 9;P:alpha beta. |alpha beta. |alpha beta.;"
+                "a constant is one root, a number that varies is one per page, and neither is a label")))
+
+(deftest test-odd-and-even-pages-have-their-own-headers
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text)]
+    (comment "Even pages say the book's title (the body's heading too: dropped), odd pages the chapter (kept), page numbers at the foot")
+    (comment "of every page but the first.")
+    (fl-pages wd ln et 5)
+    (fl-line wd ln et (text-blob "The Handbook") 1 7200 8000 30000 9500 0 1800)
+    (fl-top wd ln et (text-blob "The Handbook") 2 7200 20000)
+    (fl-top wd ln et (text-blob "Employee Chapter") 3 40000 52000)
+    (fl-top wd ln et (text-blob "The Handbook") 4 7200 20000)
+    (fl-top wd ln et (text-blob "Employee Chapter") 5 40000 52000)
+    (fl-bottom wd ln et (text-blob "2") 2 30000 31000)
+    (fl-bottom wd ln et (text-blob "3") 3 30000 31000)
+    (fl-bottom wd ln et (text-blob "4") 4 30000 31000)
+    (fl-bottom wd ln et (text-blob "5") 5 30000 31000)
+    (assert-eq (fl-run wd ln et 5 0 0 txt md lb t1) 0 "odd even: well formed")
+    (assert-text t1 "L2=2;L3=3;L4=4;L5=5;Fh3,5:Employee Chapter;Dr@2:The Handbook;Dr@4:The Handbook;Dp@2:2;Dp@3:3;Dp@4:4;Dp@5:5;P:The Handbook;P:alpha beta. |alpha beta. |alpha beta. |alpha beta. |alpha beta.;"
+                "the first page has no label; the chapter is kept; the book's title is dropped")))
+
+(deftest test-a-diagonal-word-much-larger-than-the-text-is-a-watermark
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text)]
+    (fl-pages wd ln et 2)
+    (fl-line wd ln et (text-blob "DRAFT") 1 11000 22000 62600 60600 3000 15000)
+    (fl-line wd ln et (text-blob "DRAFT") 2 11000 22000 62600 60600 3000 15000)
+    (assert-eq (fl-run wd ln et 2 0 0 txt md lb t1) 0 "watermark: well formed")
+    (assert-text t1 "Dw@1:DRAFT;Dw@2:DRAFT;P:alpha beta. |alpha beta.;"
+                "a watermark is in the ledger and not in the flow")
+    (comment "Turned the same way but no larger than the text: a diagram label, left alone.")
+    (fl-clear wd ln et)
+    (fl-pages wd ln et 1)
+    (fl-line wd ln et (text-blob "label") 1 20000 30000 25000 31000 3000 1100)
+    (assert-eq (fl-run wd ln et 1 0 0 txt md lb t2) 0 "label: well formed")
+    (assert-text t2 "P:alpha beta.;P:label;" "a small turned word is content")))
+
+;; ------------------------------------------------------------------------ /PageLabels
+
+(deftest test-page-labels-of-the-catalogue-win-over-the-printed-numbers
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells txt (new-cells) ^Cells md (new-cells) ^Cells lb (new-cells)
+        ^Text t1 (new-text) ^:mut ^I32 i 0]
+    (comment "Two pages numbered 5 and 6 at the foot, and a catalogue that says lower roman from page 0 (ii at page 2): the labels")
+    (comment "are the catalogue's, the printed numbers are still taken out of the flow.")
+    (fl-pages wd ln et 2)
+    (fl-bottom wd ln et (text-blob "5") 1 30000 31000)
+    (fl-bottom wd ln et (text-blob "6") 2 30000 31000)
+    (while (< i 60)
+      (do (cells-push md 0)
+          (set i (+ i 1))))
+    (cells-set md 54 1)
+    (comment "one range: first page 0, style r (3), no prefix, number 1 on the first page, 1 + the pages after the last, no bits")
+    (cells-push lb 0)
+    (cells-push lb 3)
+    (cells-push lb -1)
+    (cells-push lb 0)
+    (cells-push lb 1)
+    (cells-push lb 2)
+    (cells-push lb 0)
+    (cells-push lb 0)
+    (assert-eq (fl-run wd ln et 2 0 0 txt md lb t1) 0 "labels: well formed")
+    (assert-text t1 "L1=i;L2=ii;Dp@1:5;Dp@2:6;P:alpha beta. |alpha beta.;"
+                "the catalogue's labels, the printed numbers dropped")))
+
+;; ----------------------------------------------------------------- the tagged fixtures
+
+(defn ^I32 fl-file [^Blob blob ^I32 mode ^:mut ^Text t]
+  (comment "A real file through the whole pipeline as the Engine runs it, and the brief of the Model. Answers 0, or the open")
+  (comment "status, or -1.")
+  (let [^Cells ar (new-cells) ^Cells dc (new-cells) ^Cells a (new-cells) ^Cells b (new-cells) ^Cells st (new-cells)
+        ^Cells pg (new-cells) ^Cells idx (new-cells) ^Cells txt (new-cells) ^Cells w (new-cells) ^Cells seen (new-cells)
+        ^Cells md (new-cells) ^Cells xm (new-cells) ^Cells ol (new-cells) ^Cells lb (new-cells) ^Cells nd (new-cells)
+        ^Cells nt (new-cells) ^Cells cx (new-cells) ^Cells ox (new-cells) ^Cells cs (new-cells) ^Cells out (new-cells)
+        ^Cells f0 (new-cells) ^Cells f1 (new-cells) ^Cells f2 (new-cells) ^Cells f3 (new-cells) ^Cells gl (new-cells)
+        ^Cells et (new-cells) ^Cells mk (new-cells) ^Cells fnt (new-cells) ^Cells wd (new-cells) ^Cells ln (new-cells)
+        ^Cells ss (new-cells) ^Cells se (new-cells) ^Cells sk (new-cells) ^Cells sc (new-cells) ^Cells so (new-cells)
+        ^Cells sa (new-cells) ^Cells wk (new-cells) ^Cells ha (new-cells) ^Cells hb (new-cells) ^Cells hh (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells cd (new-cells) ^Cells sl (new-cells) ^Cells gr (new-cells) ^Cells ford (new-cells) ^Cells tx (new-cells)
+        ^Cells bh (new-cells) ^Cells fo (new-cells) ^Cells fp (new-cells) ^Cells ft (new-cells) ^Cells pl (new-cells)
+        ^Cells chk (new-cells) ^Cells pa (new-cells) ^Cells im (new-cells) ^Cells pts (new-cells) ^Cells gx (new-cells)
+        ^Src pdf (src-of-blob blob)
+        ^:mut ^I32 status 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 np 0]
+    (set status (pd-open pdf ar dc a b st))
+    (if (!= status 0) (return status))
+    (set r (pc-document pdf ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))
+    (if (!= r 0) (return -1))
+    (set np (pd-pg-count pg))
+    (px-index-build pdf ar dc a b st pg idx)
+    (set r (pm-run pdf ar dc a b st pg idx txt w seen md xm ol lb nd nt))
+    (if (< r 0) (return -1))
+    (set r (tg-read pdf ar dc a b st pg idx txt w seen ss se sk sc so wk md))
+    (if (< r 0) (return -1))
+    (set r (tg-join ss se sk sc so sa gl mk fnt pg ha hb hh))
+    (model-init nodes attrs regions text pages ledger layout)
+    (pa-pages pg pages)
+    (fu-find wd ln et gl mk pages np txt md lb (tg-trust ss) mode cd sl gr ford tx bh fo fp ft pl)
+    (fl-build wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp)
+    (fu-write fo fp ft pl np nodes attrs regions text pages ledger tmp)
+    (fl-brief t nodes attrs text pages ledger 0)
+    (set r (model-check nodes attrs regions text pages ledger layout chk))
+    (return r)))
+
+(deftest test-the-tagged-fixtures-lose-their-running-header-footer-and-watermark
+  (comment "`good.pdf` is tagged (its running header, footer and DRAFT watermark are /Artifact marked content: the tree is trusted);")
+  (comment "`bad.pdf` says the same page wrongly (the running header is tagged P, a heading is marked Footer): the geometry and the")
+  (comment "repetition still find the furniture, whatever the tree says (D034, D076). Each page has `Page N` and `Quarterly Report`.")
+  (let [^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text)]
+    (assert-eq (fl-file (test-file "pdf/tagged/good.pdf") 0 t1) 0 "good: well formed")
+    (assert-text t1 "L1=1;L2=2;Dr@1:Quarterly Report;Dr@2:Quarterly Report;Dp@1:Page 1;Dp@2:Page 2;Dw@1:DRAFT;"
+                "good: header, footer, watermark out, the content as it was")
+    (assert-eq (fl-file (test-file "pdf/tagged/bad.pdf") 0 t2) 0 "bad: well formed")
+    (assert-text t2 "L1=1;L2=2;Dr@1:Quarterly Report;Dr@2:Quarterly Report;Dp@1:Page 1;Dp@2:Page 2;Dw@1:DRAFT;"
+                "bad: the same page told wrongly by the tree is cleaned up the same way (D034: verified, not obeyed)")
+    (assert-eq (fl-file (test-file "pdf/tagged/good.pdf") 1 t3) 0 "good, keep: well formed")
+    (assert-text t3 "" "keep: nothing leaves the flow, and nothing is said")))

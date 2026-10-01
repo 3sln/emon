@@ -15,6 +15,7 @@ pub(crate) const W_ORPHAN: i32 = 4;
 pub(crate) const W_SAME: i32 = 2;
 pub(crate) const W_TWIN: i32 = 2;
 pub(crate) const W_PROM: i32 = 1;
+pub(crate) const KICKER_RATIO: i32 = 110;
 pub(crate) const HD_KMAX: i32 = 16;
 pub(crate) const HD_EXHAUSTIVE: i32 = 6;
 pub(crate) const HC_HDR: i32 = 48;
@@ -981,6 +982,33 @@ pub(crate) fn hd_lone(ws: &mut crate::port::Cells, sf: &mut crate::port::Cells, 
     }
     return 0;
 }
+pub(crate) fn hd_kicker(ws: &mut crate::port::Cells, sf: &mut crate::port::Cells, u: i32, nu: i32) -> i32 {
+    // A masthead, letterhead or kicker: an unnumbered unit set directly above a unit of a clearly larger size
+    // (no text between them, one page), where both are one-offs: each of the two styles is set once in the
+    // document. What stands over the title is the publisher's name or the series, not a section of the
+    // document. A title above recurring heads that print larger (letter dividers) is a title: the larger
+    // style recurs, so it is a rank of the document's own. 1 = a kicker.
+    if (u + 1) < nu {
+        let last: i32 = hd_un(ws, u, 1);
+        let nxt: i32 = hd_un(ws, u + 1, 0);
+        let sz: i32 = st_get(sf, hd_un(ws, u, 0), sfk_size());
+        let cu: i32 = st_get(sf, hd_un(ws, u, 0), sfk_class());
+        let cn: i32 = st_get(sf, nxt, sfk_class());
+        let mut v: i32 = 0;
+        if (hd_un(ws, u, 5) == 0) && ((st_get(sf, last, sfk_below()) == nxt) && ((hd_un(ws, u, 10) == hd_un(ws, u + 1, 10)) && ((st_get(sf, nxt, sfk_size()) * 100) > (sz * KICKER_RATIO)))) {
+            while v < nu {
+                if (v != u) && (v != (u + 1)) {
+                    if (st_get(sf, hd_un(ws, v, 0), sfk_class()) == cu) || (st_get(sf, hd_un(ws, v, 0), sfk_class()) == cn) {
+                        return 0;
+                    }
+                }
+                v += 1;
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
 pub(crate) fn hd_drop_lone(mut ws: &mut crate::port::Cells, mut sf: &mut crate::port::Cells, n: i32) -> i32 {
     // Remove the lone letter-numbered units (`hd-lone`) from the table and from the lines. Answers how many
     // units are left.
@@ -994,7 +1022,7 @@ pub(crate) fn hd_drop_lone(mut ws: &mut crate::port::Cells, mut sf: &mut crate::
         return nu;
     }
     while u < nu {
-        if (hd_lone(ws, sf, u, nu) == 1) || (hd_recurs(ws, u, nu) == 1) {
+        if (hd_lone(ws, sf, u, nu) == 1) || ((hd_recurs(ws, u, nu) == 1) || (hd_kicker(ws, sf, u, nu) == 1)) {
             crate::port::cells_push(ws, -2);
         } else {
             crate::port::cells_push(ws, w);

@@ -2418,3 +2418,9 @@
           (set i (+ i 1))))
     (emit-ascii t "]}")
     (return 0)))
+
+(defn ^:pub ^I32 tg-trust [^Cells ss]
+  (comment "The tree's TRUST (D150): the informativeness score, raised a tenth by a PDF/UA claim; 0 when there is no tree, no")
+  (comment "text to check, or `tg-join` has not run. What other stages weigh the tree's word by (D034, D076).")
+  (if (<= (cells-len ss) SS_TRUST) (return 0))
+  (return (cells-at ss SS_TRUST)))

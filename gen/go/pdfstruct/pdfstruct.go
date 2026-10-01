@@ -3503,3 +3503,12 @@ func TgDump(t *strings.Builder, txt *port.Cells, ss *port.Cells, se *port.Cells,
 	port.TextAscii(t, "]}")
 	return 0
 }
+
+func TgTrust(ss *port.Cells) int32 {
+	// The tree's TRUST (D150): the informativeness score, raised a tenth by a PDF/UA claim; 0 when there is no tree, no
+	// text to check, or `tg-join` has not run. What other stages weigh the tree's word by (D034, D076).
+	if port.CellsLen(ss) <= ssTrust {
+		return 0
+	}
+	return port.CellsAt(ss, ssTrust)
+}

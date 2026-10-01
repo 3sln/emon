@@ -15,6 +15,7 @@ public final class Heading {
     public static final int W_SAME = 2;
     public static final int W_TWIN = 2;
     public static final int W_PROM = 1;
+    public static final int KICKER_RATIO = 110;
     public static final int HD_KMAX = 16;
     public static final int HD_EXHAUSTIVE = 6;
     public static final int HC_HDR = 48;
@@ -981,6 +982,33 @@ public final class Heading {
         }
         return 0;
     }
+    public static int hdKicker(emon.Port.Cells ws, emon.Port.Cells sf, int u, int nu) {
+        // A masthead, letterhead or kicker: an unnumbered unit set directly above a unit of a clearly larger size
+        // (no text between them, one page), where both are one-offs: each of the two styles is set once in the
+        // document. What stands over the title is the publisher's name or the series, not a section of the
+        // document. A title above recurring heads that print larger (letter dividers) is a title: the larger
+        // style recurs, so it is a rank of the document's own. 1 = a kicker.
+        if ((u + 1) < nu) {
+            int last = hdUn(ws, u, 1);
+            int nxt = hdUn(ws, u + 1, 0);
+            int sz = Style.stGet(sf, hdUn(ws, u, 0), Style.sfkSize());
+            int cu = Style.stGet(sf, hdUn(ws, u, 0), Style.sfkClass());
+            int cn = Style.stGet(sf, nxt, Style.sfkClass());
+            int v = 0;
+            if ((hdUn(ws, u, 5) == 0) && ((Style.stGet(sf, last, Style.sfkBelow()) == nxt) && ((hdUn(ws, u, 10) == hdUn(ws, u + 1, 10)) && ((Style.stGet(sf, nxt, Style.sfkSize()) * 100) > (sz * KICKER_RATIO))))) {
+                while (v < nu) {
+                    if ((v != u) && (v != (u + 1))) {
+                        if ((Style.stGet(sf, hdUn(ws, v, 0), Style.sfkClass()) == cu) || (Style.stGet(sf, hdUn(ws, v, 0), Style.sfkClass()) == cn)) {
+                            return 0;
+                        }
+                    }
+                    v += 1;
+                }
+                return 1;
+            }
+        }
+        return 0;
+    }
     public static int hdDropLone(emon.Port.Cells ws, emon.Port.Cells sf, int n) {
         // Remove the lone letter-numbered units (`hd-lone`) from the table and from the lines. Answers how many
         // units are left.
@@ -994,7 +1022,7 @@ public final class Heading {
             return nu;
         }
         while (u < nu) {
-            if ((hdLone(ws, sf, u, nu) == 1) || (hdRecurs(ws, u, nu) == 1)) {
+            if ((hdLone(ws, sf, u, nu) == 1) || ((hdRecurs(ws, u, nu) == 1) || (hdKicker(ws, sf, u, nu) == 1))) {
                 emon.Port.cellsPush(ws, -2);
             } else {
                 emon.Port.cellsPush(ws, w);
