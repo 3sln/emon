@@ -1,0 +1,102 @@
+;; Laws for `emon.rasterin` (P6.1, D173): the signature sniff, the unit's two rounds of `decode` requests (frame 0,
+;; then every other frame, ids `f + 1`), the header-only form, the page table it builds from the answers (pixels to
+;; centipoints at the stated resolution, 300 dpi and a flag when there is none), and its failure statuses.
+(ns emon.rasterintest
+  (:require [emon.lang :refer [I32 Cells Src]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells hex-blob]]
+            [emon.port :refer [cells-len cells-at src-of-blob]]
+            [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
+                               us-requests pk-decode flt-none]]
+            [emon.model :refer [model-init node-flags node-attr-int-or page-count page-number page-w page-h
+                                page-kind page-dpi page-px-w page-px-h pk-image fl-dpi-unknown fk-pages]]
+            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-tiff rs-unit rs-cpt rs-undecodable
+                                   rs-unsupported]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(deftest test-the-sniff-reads-the-signature-and-nothing-else
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "89504e470d0a1a0a0000000d"))) (rs-png) "PNG")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "ffd8ffe000104a46"))) (rs-jpeg) "JPEG")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "49492a0008000000"))) (rs-tiff) "TIFF, little endian")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "4d4d002a00000008"))) (rs-tiff) "TIFF, big endian")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "255044462d312e37"))) (rs-none) "a PDF is none of them")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "89504e470d0a1a0b"))) (rs-none) "a PNG signature with one byte wrong")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "89504e47"))) (rs-none) "a PNG signature cut short")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "4949"))) (rs-none) "too short to say")
+  (assert-eq (rs-sniff (src-of-blob (hex-blob "49492b0008000000"))) (rs-none) "BigTIFF is not read")
+  (assert-eq (rs-cpt 463 20000) 16668 "463 px at 200 dpi is 166.68 pt")
+  (assert-eq (rs-cpt 2481 30000) 59544 "A4 at 300 dpi, rounded")
+  (assert-eq (rs-cpt 1 100000000) 1 "never zero"))
+
+(defn ^I32 unit-of [^Cells ans ^Cells rq ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^I32 info]
+  (let [^Cells regions (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (return (rs-unit (src-of-blob (hex-blob "49492a0008000000")) 7 (rs-tiff) info ans rq nodes attrs text pages))))
+
+(deftest test-the-first-round-asks-for-frame-zero-and-nothing-more
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)]
+    (assert-eq (unit-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0) (us-requests) "it asks")
+    (assert-eq (cells-len rq) 8 "one request of eight cells")
+    (assert-eq (rec-kind rq 0) (pk-decode) "a decode")
+    (assert-eq (rec-id rq 0) 1 "frame 0 is id 1")
+    (assert-eq (rq-arg rq 0 0) 7 "the input's index")
+    (assert-eq (rq-arg rq 0 1) 0 "from its first byte")
+    (assert-eq (rq-arg rq 0 2) 8 "the whole input")
+    (assert-eq (rq-arg rq 0 3) (flt-none) "a whole image file, not a PDF filter")
+    (assert-eq (rq-arg rq 0 4) 0 "frame 0")))
+
+(deftest test-the-header-only-form-asks-with-a-negative-frame
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)]
+    (assert-eq (unit-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) 1) (us-requests) "it asks")
+    (assert-eq (rq-arg rq 0 4) -1 "frame 0, header only, is -1")))
+
+(deftest test-the-second-round-asks-for-every-other-frame
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)]
+    (an-decode ans 1 463 894 1 20000 1 3)
+    (assert-eq (unit-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0) (us-requests) "it asks again")
+    (assert-eq (cells-len rq) 16 "two more requests")
+    (assert-eq (rec-id rq 0) 2 "frame 1 is id 2")
+    (assert-eq (rq-arg rq 0 4) 1 "frame 1")
+    (assert-eq (rec-id rq 8) 3 "frame 2 is id 3")
+    (assert-eq (rq-arg rq 8 4) 2 "frame 2")))
+
+(deftest test-with-every-answer-in-the-unit-builds-the-pages
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells pages (new-cells)]
+    (an-decode ans 1 463 894 1 20000 1 2)
+    (an-decode ans 2 992 1403 3 0 0 2)
+    (assert-eq (unit-of ans rq nodes attrs (new-cells) pages 0) 0 "done")
+    (assert-eq (cells-len rq) 0 "asks for nothing")
+    (assert-eq (page-count pages) 2 "one page a frame")
+    (assert-eq (page-number pages 1) 2 "numbered from 1 in frame order")
+    (assert-eq (page-kind pages 0) (pk-image) "an image page")
+    (assert-eq (page-w pages 0) 16668 "463 px at 200 dpi")
+    (assert-eq (page-h pages 0) 32184 "894 px at 200 dpi")
+    (assert-eq (page-dpi pages 0) 200 "the stated resolution")
+    (assert-eq (page-px-w pages 0) 463 "the pixel width is kept")
+    (assert-eq (page-px-h pages 0) 894 "and the height")
+    (assert-eq (page-w pages 1) 23808 "992 px at the assumed 300 dpi")
+    (assert-eq (page-dpi pages 1) 0 "no resolution is stated, and none is claimed")
+    (assert-eq (node-attr-int-or nodes attrs 0 (fk-pages) -1) 2 "the root says how many pages")
+    (assert-eq (node-flags nodes 0) (fl-dpi-unknown) "and that one of them has no stated resolution")))
+
+(deftest test-a-failed-decode-is-the-units-failure
+  (let [^Cells a1 (new-cells)
+        ^Cells a2 (new-cells)
+        ^Cells a3 (new-cells)
+        ^Cells rq (new-cells)]
+    (an-fail a1 (pk-decode) 1 (ps-failed))
+    (assert-eq (unit-of a1 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) 0) (rs-undecodable) "damaged")
+    (an-fail a2 (pk-decode) 1 (ps-unsupported))
+    (assert-eq (unit-of a2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) 0) (rs-unsupported) "not read")
+    (an-decode a3 1 10 10 1 0 0 2)
+    (an-fail a3 (pk-decode) 2 (ps-failed))
+    (assert-eq (unit-of a3 rq (new-cells) (new-cells) (new-cells) (new-cells) 0) (rs-undecodable) "a later frame that fails fails the unit")))

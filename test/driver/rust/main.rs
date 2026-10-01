@@ -13,10 +13,14 @@
 //   --out=bundle     one conversion, every output, for `bb identity`: sections `== json`, `== json-pretty`, `== html`,
 //                    `== html-full` (ids,geometry,confidence=950,ledger,pretty), `== evidence`, `== intake`, each a line
 //                    `== NAME` then the text and a newline (the flags --pretty and --html are ignored)
-//   --out=intake     stage 0 only: `pdf VERSION pages=N encrypted=BOOL bytes=N`
+//   --out=intake     stage 0 only: `FORMAT VERSION pages=N encrypted=BOOL bytes=N`
+//   --out=pixels     one RECORDING, printed as one line per `decode` entry: `frame F w W h H ch C dpi100 D bilevel B frames N
+//                    fnv HEX` (FNV-1a 64 of the decoded pixels), or `frame F status S` for an answer that is not ok: what
+//                    `bb image` compares across hosts and with the generator's pixels (D176)
 //   --source=        which adapter reads FILE: `bytes` (in memory), `seek` (Read + Seek: a File), `spool` (Read, spooled)
 //   --chunk=N        the source cache's chunk size; with --async the cache behaves like a browser Blob (it
 //                    misses, the loop fetches and re-runs): the output must equal the in-memory run's
+//   --dump=DIR       with --out=pixels, also write each frame's pixels to DIR/frame-N.raw (w*h*ch bytes)
 //   --stats          print the loop's attempts, fetch rounds and bytes fetched on stderr
 //   --record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
 //   --replay=DIR     convert from the transcript in DIR (no port is called)
@@ -56,6 +60,35 @@ fn html_options(list: &str) -> HtmlOptions {
 }
 
 // The text of `--out=NAME` (or the whole bundle) for a converted Model.
+// The `--out=pixels` text of a recording: its decode entries, in order.
+fn pixel_lines(t: &emon::Transcript, dump: Option<&str>) -> String {
+    let mut s = String::new();
+    for e in &t.entries {
+        if e.req.get(1) != Some(&2) {
+            continue;
+        }
+        let frame = e.req[7];
+        if e.ans[3] != 0 {
+            s.push_str(&format!("frame {} status {}\n", frame, e.ans[3]));
+            continue;
+        }
+        let mut h = 0xcbf29ce484222325u64;
+        if let Some(b) = &e.bitmap {
+            let bytes = b.to_bytes();
+            for &x in &bytes {
+                h ^= x as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
+            if let Some(d) = dump {
+                std::fs::create_dir_all(d).expect("--dump");
+                std::fs::write(std::path::Path::new(d).join(format!("frame-{}.raw", frame)), &bytes).expect("--dump");
+            }
+        }
+        s.push_str(&format!("frame {} w {} h {} ch {} dpi100 {} bilevel {} frames {} fnv {:016x}\n", frame, e.ans[4], e.ans[5], e.ans[6], e.ans[7], e.ans[8], e.ans[9], h));
+    }
+    s
+}
+
 fn render(engine: &Engine, input: &Input, model: &emon::Model, out: &str, pretty: bool, html: HtmlOptions) -> String {
     match out {
         "json" => model.serialize(&Output::Json(JsonOptions { pretty })),
@@ -93,6 +126,7 @@ fn main() {
     let mut record: Option<String> = None;
     let mut replay: Option<String> = None;
     let mut parallel: usize = 1;
+    let mut dump: Option<String> = None;
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
             out = v.to_string();
@@ -130,6 +164,8 @@ fn main() {
             record = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--replay=") {
             replay = Some(v.to_string());
+        } else if let Some(v) = a.strip_prefix("--dump=") {
+            dump = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--parallel=") {
             parallel = v.parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--parallel=N wants a positive number"));
         } else if a.starts_with("--") {
@@ -194,8 +230,8 @@ fn main() {
         }
         return;
     }
-    if !matches!(out.as_str(), "json" | "html" | "evidence" | "bundle") {
-        usage("--out is json, html, evidence or intake");
+    if !matches!(out.as_str(), "json" | "html" | "evidence" | "bundle" | "pixels") {
+        usage("--out is json, html, evidence, bundle, pixels or intake");
     }
     let transcript = replay.as_ref().map(|dir| {
         let mut files = std::collections::BTreeMap::new();
@@ -208,6 +244,10 @@ fn main() {
     // one conversion's whole answer: the text (and what the loop did, and the transcript recorded), or the error
     type Answer = Result<(String, emon::RunStats), emon::Error>;
     let one = || -> Answer {
+        if out == "pixels" {
+            let (_, t) = engine.record(input.clone(), &opts)?;
+            return Ok((pixel_lines(&t, dump.as_deref()), emon::RunStats::default()));
+        }
         let (model, rs) = if let Some(t) = &transcript {
             (engine.replay(input.clone(), &opts, t)?, emon::RunStats::default())
         } else if let Some(dir) = &record {

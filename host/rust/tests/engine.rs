@@ -316,3 +316,90 @@ fn the_library_names_no_filesystem() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------- raster intake
+// (P6.1, D173-D176) An image input is read through the `ImageDecode` port: one `image` page per frame.
+
+fn image(name: &str) -> Vec<u8> {
+    read(&format!("test/image/{}", name))
+}
+
+#[test]
+fn an_image_becomes_pages_and_a_multi_page_tiff_several() {
+    let e = Engine::new(Config::default());
+    let m = e.convert(Input::bytes(image("png-phys300.png")), &Options::default()).unwrap();
+    let pages = m.pages();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(pages[0].kind, "image");
+    // 48 x 36 pixels at 300 dpi: 11.52 x 8.64 pt, in centipoints
+    assert_eq!((pages[0].width, pages[0].height), (1152, 864));
+    assert_eq!(m.source().format, "png");
+    let j = m.to_json(&JsonOptions::default());
+    assert!(j.contains("\"source\":{\"format\":\"png\",\"pages\":1}"), "{}", j);
+    assert!(j.contains("\"dpi\":300,\"px\":[48,36]"), "{}", j);
+    assert!(!j.contains("dpi-unknown"), "{}", j);
+    // no stated resolution: read as 300 and flagged
+    let m = e.convert(Input::bytes(image("png-rgb8.png")), &Options::default()).unwrap();
+    assert!(m.to_json(&JsonOptions::default()).contains("dpi-unknown"));
+    // a multi-page TIFF: three frames of three sizes, in order
+    let m = e.convert(Input::bytes(image("tiff-multi3-rgb-lzw.tif")), &Options::default()).unwrap();
+    let px: Vec<(i32, i32)> = m.pages().iter().map(|p| (p.width, p.height)).collect();
+    assert_eq!(px, vec![(1152, 864), (960, 720), (792, 600)]);
+    assert_eq!(m.pages().iter().map(|p| p.number).collect::<Vec<_>>(), vec![1, 2, 3]);
+    // the body of an image page is empty until OCR is wired (P6.5)
+    assert!(m.root().children().is_empty());
+}
+
+#[test]
+fn stage_zero_of_an_image_reads_no_pixels() {
+    let e = Engine::new(Config::default());
+    let v = e.intake(vec![Input::bytes(image("tiff-multi3-g4.tif")), Input::bytes(image("jpeg-420.jpg")), Input::bytes(synth("h-plain"))]).unwrap();
+    assert_eq!((v[0].format, v[0].pages), ("tiff", 3));
+    assert_eq!((v[1].format, v[1].pages), ("jpeg", 1));
+    assert_eq!((v[2].format, v[2].pages), ("pdf", 2));
+}
+
+#[test]
+fn an_image_records_its_pixels_and_replays_without_a_codec() {
+    let e = Engine::new(Config::default());
+    let o = Options::default();
+    let (m, t) = e.record(Input::bytes(image("tiff-multi3-gray-none.tif")), &o).unwrap();
+    // three decode requests, round two asking for frames 1 and 2 together; each answer carries its bitmap
+    assert_eq!(t.entries.len(), 3);
+    assert_eq!(t.entries.iter().map(|x| x.round).collect::<Vec<_>>(), vec![0, 1, 1]);
+    assert!(t.entries.iter().all(|x| x.bitmap.is_some()));
+    // the transcript's files survive a round trip (the pixels as canonical PNG), and replaying them gives the same Model
+    let files: std::collections::BTreeMap<String, Vec<u8>> = t.to_files().into_iter().collect();
+    let t2 = emon::Transcript::from_files(&files).unwrap();
+    let r = e.replay(Input::bytes(image("tiff-multi3-gray-none.tif")), &o, &t2).unwrap();
+    assert_eq!(json(&m), json(&r));
+    // a replay of another image misses: the request is not in the transcript
+    let miss = e.replay(Input::bytes(image("tiff-multi3-rgb-lzw.tif")), &o, &t2);
+    assert!(miss.is_err());
+    // a plain conversion keeps no pixels, and says the same thing
+    assert_eq!(json(&e.convert(Input::bytes(image("tiff-multi3-gray-none.tif")), &o).unwrap()), json(&m));
+}
+
+#[test]
+fn an_image_through_a_source_that_misses_is_the_in_memory_one() {
+    for name in ["png-rgba8.png", "jpeg-444.jpg", "tiff-multi3-g4.tif", "tiff-tiled16.tif"] {
+        let bytes = image(name);
+        let a = Engine::new(Config::default()).convert(Input::bytes(bytes.clone()), &Options::default()).unwrap();
+        let b = async_engine(64).convert(Input::bytes(bytes), &Options::default()).unwrap();
+        assert_eq!(json(&a), json(&b), "{}", name);
+    }
+}
+
+#[test]
+fn an_image_that_cannot_be_read_is_refused_by_name() {
+    let e = Engine::new(Config::default());
+    let name = |f: &str| e.convert(Input::bytes(image(f)), &Options::default()).err().map(|e| e.name());
+    assert_eq!(name("tiff-jpeg.tif"), Some("unsupported-image".to_string()));
+    assert_eq!(name("jpeg-cmyk.jpg"), Some("unsupported-image".to_string()));
+    assert_eq!(name("png-truncated.png"), Some("undecodable".to_string()));
+    assert_eq!(name("tiff-truncated.tif"), Some("undecodable".to_string()));
+    // the pixels bound is a named limit, checked from the header before a pixel is decoded
+    let small = Engine::new(Config { limits: vec![(9, 1000)], ..Config::default() });
+    let r = small.convert(Input::bytes(image("png-rgb8.png")), &Options::default());
+    assert_eq!(r.err().map(|e| e.name()), Some("pixels".to_string()));
+}

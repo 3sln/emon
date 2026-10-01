@@ -44,6 +44,13 @@
 ;; A request that fails answers `ps-failed` (or `ps-unsupported`) with no args
 ;; beyond the header: a failure is an answer too, and is transcribed, so a replay
 ;; reproduces it. A MISSING answer is not a failure: it means "not asked yet".
+;; `ps-limit` (D173) is a failure that is the HOST'S bound: its one arg is the
+;; number of pixels the image has, which kin names as the `pixels` limit.
+;;
+;; `decode` (D173): `frame` >= 0 asks for that frame's pixels (the answer's
+;; bitmap, canonical PNG in a transcript); `frame` < 0 asks only for the header of
+;; frame `-frame - 1` (an answer with no bitmap: size, resolution, frame count),
+;; which is what stage 0 of a raster input is. The size is AFTER EXIF orientation.
 ;;
 ;; UNIT STATUSES (`us`). A unit answers `us-done` (0; it asked for nothing),
 ;; `us-requests` (1; the requests are in the `Cells`, answer them and re-run) or
@@ -67,6 +74,7 @@
 (defn ^:pub ^I32 ps-ok [] (return 0))
 (defn ^:pub ^I32 ps-failed [] (return 1))
 (defn ^:pub ^I32 ps-unsupported [] (return 2))
+(defn ^:pub ^I32 ps-limit [] (return 3))
 
 (defn ^:pub ^I32 us-done [] (return 0))
 (defn ^:pub ^I32 us-requests [] (return 1))

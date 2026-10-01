@@ -25,6 +25,9 @@ public final class Plan {
     public static int psUnsupported() {
         return 2;
     }
+    public static int psLimit() {
+        return 3;
+    }
     public static int usDone() {
         return 0;
     }

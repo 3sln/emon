@@ -11,6 +11,7 @@
 #[doc(hidden)]
 pub mod emon;
 pub mod engine;
+mod imgdec;
 pub mod plan;
 pub mod port;
 pub mod source;

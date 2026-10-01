@@ -14,6 +14,7 @@ public static class Plantest {
         emon.Testport.AssertEq(Plan.PsOk(), 0, "ok");
         emon.Testport.AssertEq(Plan.PsFailed(), 1, "failed");
         emon.Testport.AssertEq(Plan.PsUnsupported(), 2, "unsupported");
+        emon.Testport.AssertEq(Plan.PsLimit(), 3, "limit (D173)");
         emon.Testport.AssertEq(Plan.UsDone(), 0, "done");
         emon.Testport.AssertEq(Plan.UsRequests(), 1, "requests");
         emon.Testport.AssertEq(Plan.UsNeedBytes(), 7, "need-bytes is D075's 7");

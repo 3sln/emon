@@ -13,6 +13,7 @@ public final class Plantest {
         emon.Testport.assertEq(Plan.psOk(), 0, "ok");
         emon.Testport.assertEq(Plan.psFailed(), 1, "failed");
         emon.Testport.assertEq(Plan.psUnsupported(), 2, "unsupported");
+        emon.Testport.assertEq(Plan.psLimit(), 3, "limit (D173)");
         emon.Testport.assertEq(Plan.usDone(), 0, "done");
         emon.Testport.assertEq(Plan.usRequests(), 1, "requests");
         emon.Testport.assertEq(Plan.usNeedBytes(), 7, "need-bytes is D075's 7");

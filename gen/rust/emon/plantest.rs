@@ -14,6 +14,7 @@ fn test_the_kinds_and_statuses_are_fixed() {
     crate::testport::assert_eq(ps_ok(), 0, "ok");
     crate::testport::assert_eq(ps_failed(), 1, "failed");
     crate::testport::assert_eq(ps_unsupported(), 2, "unsupported");
+    crate::testport::assert_eq(ps_limit(), 3, "limit (D173)");
     crate::testport::assert_eq(us_done(), 0, "done");
     crate::testport::assert_eq(us_requests(), 1, "requests");
     crate::testport::assert_eq(us_need_bytes(), 7, "need-bytes is D075's 7");

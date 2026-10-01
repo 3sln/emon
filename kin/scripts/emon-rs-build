@@ -39,7 +39,7 @@ for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
 put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
-for f in lib port plan source engine; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+for f in lib port plan source engine imgdec; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 put test/driver/rust/main.rs "$crate/src/driver.rs"
 mkdir -p "$crate/tests"
 put host/rust/tests/engine.rs "$crate/tests/engine.rs"
@@ -56,6 +56,13 @@ path = "src/lib.rs"
 name = "emon-rs"
 path = "src/driver.rs"
 
+[dependencies]
+# the ImageDecode port's codecs (D175): PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned; the
+# lock file is host/rust/Cargo.lock.
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
+fax = "=0.2.7"
+miniz_oxide = "=0.8.9"
+
 [profile.release]
 opt-level = 3
 overflow-checks = true
@@ -66,6 +73,8 @@ rm -f "$crate/Cargo.toml.new"
 
 flags="-A warnings"
 [ "${EMON_RS_WARN:-}" = 1 ] && flags=""
-out=$(cd "$crate" && RUSTFLAGS="$flags" cargo build --release --offline -q 2>&1) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
+# the lock file is committed (host/rust/Cargo.lock); the registry is reached only when a crate is not cached
+put host/rust/Cargo.lock "$crate/Cargo.lock"
+out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q 2>&1 || RUSTFLAGS="$flags" cargo build --release -q 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
 echo "$crate/target/release/emon-rs"

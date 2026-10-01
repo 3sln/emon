@@ -1,0 +1,157 @@
+#!/usr/bin/env bb
+;; IMAGE: do the two hosts decode every image to the same pixels, and are they the pixels another decoder says?
+;;                                                                  kin/scripts/image   (DEVLOG P6.1, D173-D176, SPEC 7.2)
+;;
+;; The `ImageDecode` port (`host/rust/src/imgdec.rs`, `host/go/imgdec.go`) is two implementations of one contract:
+;; 8-bit gray or RGB, EXIF orientation applied, alpha over white, resolution in dpi x100, a `bilevel` flag, never
+;; resampled. Each driver's `--out=pixels` records one conversion and prints, per decoded frame, its size, channels,
+;; resolution, flag, frame count and an FNV-1a 64 hash of the pixels (`--dump` also writes the raw bytes). For every
+;; fixture of `test/image/` (written by `tools/image-fixtures.clj`; `expect.edn` is what ImageMagick says they are):
+;;
+;;   1. a refused input (a coding the port does not read, or damage) is refused BY THE SAME NAME on both hosts
+;;      (`error: unsupported-image`, `error: undecodable`), exit 4;
+;;   2. every other fixture decodes on both hosts to the line `expect.edn` states: the pixels EXACTLY (the hash) for
+;;      PNG and TIFF, and for JPEG (two decoders' inverse DCTs and chroma upsampling) the line without the hash, the
+;;      hosts' pixels within SIX of each other in every byte and within the row's `:tol` of ImageMagick's (D176);
+;;   3. a source that misses (`--chunk=512 --async`, a browser Blob) and one that does not give the same lines.
+;;
+;;   bb image                  the gate
+;;   bb image --corpus         INSTEAD every image of corpus/formats (never committed): the hosts to each other, and
+;;                             the refusals by name; a non-gate, slow
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process shell]]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+
+(def corpus? (some #{"--corpus"} *command-line-args*))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+(defn build [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r))
+      (str/trim (:out r))
+      (do (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1)))))
+(def rust (build "kin/scripts/emon-rs-build" "Rust"))
+(def go (build "kin/scripts/emon-go-build" "Go"))
+
+(def work (str (fs/create-temp-dir {:dir (fs/create-dirs ".cache/image") :prefix "run."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+
+(defn drive [exe tag file & args]
+  (let [d (str work "/" (hash [tag file args]))
+        p (apply process {:out :string :err :string} exe "--out=pixels" (str "--dump=" d) (concat args [file]))
+        r (deref p 120000 ::timeout)]
+    {:exit (if (= r ::timeout) -1 (:exit r)) :out (:out r) :err (:err r) :dump d}))
+
+(defn err-name [r] (second (re-find #"(?m)^error: (\S+)" (:err r))))
+(defn raw [r frame]
+  (let [f (str (:dump r) "/frame-" frame ".raw")]
+    (when (fs/exists? f) (fs/read-all-bytes f))))
+(defn maxdiff [^bytes a ^bytes b]
+  (if (not= (alength a) (alength b))
+    Integer/MAX_VALUE
+    (loop [i 0 m 0]
+      (if (< i (alength a))
+        (recur (inc i) (max m (Math/abs (- (bit-and 255 (aget a i)) (bit-and 255 (aget b i))))))
+        m))))
+
+(defn expected-lines [{:keys [ch bilevel dpi100 frames px]} lossy?]
+  (vec (for [[i {:keys [w h fnv]}] (map-indexed vector px)]
+         (str "frame " i " w " w " h " h " ch " ch " dpi100 " dpi100 " bilevel " bilevel " frames " frames
+              (when-not lossy? (str " fnv " fnv))))))
+
+(defn strip-fnv [l] (str/replace l #" fnv [0-9a-f]+$" ""))
+
+(def magick? (some? (fs/which "magick")))
+(defn oracle-raw [file i ch]
+  (:out @(process {:out :bytes :err :string} "magick" (str file "[" i "]") "-auto-orient" "-background" "white" "-alpha" "remove"
+                  "-alpha" "off" "-depth" "8" "-colorspace" (if (= ch 1) "Gray" "sRGB") (str (if (= ch 1) "gray" "rgb") ":-"))))
+
+(def skipped-oracle (atom 0))
+
+(defn check [name row]
+  (let [file (str "test/image/" name)
+        probs (atom [])
+        note (fn [& xs] (swap! probs conj (apply str xs)))
+        jpeg? (str/ends-with? name ".jpg")
+        lossy? (or jpeg? (pos? (or (:tol row) 0)))
+        rr (drive rust :r file)
+        gr (drive go :g file)]
+    (if-let [want (:refuse row)]
+      (doseq [[h r] [["rust" rr] ["go" gr]]]
+        (when-not (and (= 4 (:exit r)) (= want (err-name r)))
+          (note h " should refuse with " want " and exits " (:exit r) ": " (pr-str (err-name r)))))
+      (let [want (expected-lines row lossy?)
+            lines (fn [r] (str/split-lines (:out r)))]
+        (doseq [[h r] [["rust" rr] ["go" gr]]]
+          (cond
+            (not (zero? (:exit r))) (note h " exits " (:exit r) ": " (str/trim (:err r)))
+            (not= want (if lossy? (mapv strip-fnv (lines r)) (lines r)))
+            (note h " says " (pr-str (lines r)) ", expected " (pr-str want))))
+        (when (and (zero? (:exit rr)) (zero? (:exit gr)))
+          ;; the hosts to each other: exact, but for JPEG one
+          (doseq [i (range (:frames row))]
+            (let [a (raw rr i) b (raw gr i)
+                  d (if (and a b) (maxdiff a b) Integer/MAX_VALUE)]
+              (when (> d (if jpeg? 6 0)) (note "frame " i ": the hosts differ by " d (if jpeg? " (at most 6 for JPEG, D176)" " (exactly equal expected)")))
+              ;; the hosts to the oracle
+              (when (and a (pos? (:tol row)))
+                (if magick?
+                  (let [o (oracle-raw file i (:ch row))
+                        d (maxdiff a o)]
+                    (when (> d (:tol row)) (note "frame " i ": rust differs from ImageMagick by " d ", more than " (:tol row))))
+                  (swap! skipped-oracle inc))))))
+        ;; a source that misses must give the same lines
+        (doseq [[h exe tag] [["rust" rust :r] ["go" go :g]]]
+          (let [a (drive exe tag file "--chunk=512" "--async")
+                base (if (= tag :r) rr gr)]
+            (when-not (= (:out a) (:out base)) (note h " --chunk=512 --async differs from the in-memory run"))))))
+    {:name name :probs @probs}))
+
+;; the fixtures still say to ImageMagick what expect.edn says (the oracle's own check; skipped without ImageMagick)
+(when-not corpus?
+  (if magick?
+    (let [r @(process {:out :string :err :string} "bb" "tools/image-fixtures.clj" "--check")]
+      (if (zero? (:exit r)) (print (:out r)) (bad "tools/image-fixtures.clj --check: " (:out r) (:err r))))
+    (println "  SKIP tools/image-fixtures.clj --check -- ImageMagick is not installed")))
+
+(def exp (edn/read-string (slurp "test/image/expect.edn")))
+
+(if corpus?
+  (let [files (sort (map str (fs/glob "corpus/formats" "**/*.{tif,tiff,png,jpg,jpeg}" {:follow-links true})))
+        jpeg? #(re-find #"(?i)\.jpe?g$" %)
+        same? (fn [f r g]
+                (and (= (:exit r) (:exit g)) (= (err-name r) (err-name g))
+                     (if (jpeg? f)
+                       ;; JPEG: the line without the hash, and the pixels within six (D176)
+                       (and (= (mapv strip-fnv (str/split-lines (:out r))) (mapv strip-fnv (str/split-lines (:out g))))
+                            (or (not (zero? (:exit r))) (<= (maxdiff (raw r 0) (raw g 0)) 6)))
+                       (= (:out r) (:out g)))))
+        res (doall (pmap (fn [f] (let [r (drive rust :r f) g (drive go :g f)]
+                                   {:f f :same (same? f r g) :r r :g g}))
+                         files))]
+    (doseq [{:keys [f same r g]} res :when (not same)]
+      (bad f ": rust " (:exit r) " " (err-name r) " " (pr-str (take 2 (str/split-lines (:out r))))
+           " / go " (:exit g) " " (err-name g) " " (pr-str (take 2 (str/split-lines (:out g))))))
+    (when (zero? @fails)
+      (ok "IMAGE corpus: " (count res) " images, both hosts the same line (or the same refusal) for each: "
+          (frequencies (map #(or (err-name (:r %)) "decoded") res)))))
+  (let [t0 (System/currentTimeMillis)
+        results (doall (pmap (fn [[name row]] (check name row)) (sort-by key exp)))
+        refused (count (filter :refuse (vals exp)))]
+    (doseq [{:keys [name probs]} results :when (seq probs)]
+      (bad name ": " (str/join "; " probs)))
+    (when (zero? @fails)
+      (ok "IMAGE: " (count results) " fixtures (" (- (count results) refused) " decoded, " refused " refused by name) on Rust and Go: "
+          "the pixels of PNG and TIFF exactly what ImageMagick says, JPEG within six bytes of each other and the row's tolerance of ImageMagick's, "
+          "the same lines through a source that misses (" (quot (- (System/currentTimeMillis) t0) 1000) " s)"))
+    (when (and (pos? @skipped-oracle) (not magick?))
+      (println "  SKIP the tolerance rows were not compared with ImageMagick (not installed)"))))
+
+(if (zero? @fails)
+  (System/exit 0)
+  (do (println "  FAIL" @fails "image(s) differ") (System/exit 1)))

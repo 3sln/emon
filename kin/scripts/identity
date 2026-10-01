@@ -17,7 +17,11 @@
 ;;
 ;; The corpus: every committed PDF under `test/` (the synthetic documents and their scans, the fixtures of the PDF
 ;; layer, the repaired and encrypted ones, the tagged ones, the fuzz crashers), each (file, password) row of
-;; `test/pdf/p3.txt` (wrong passwords included), and two non-PDF inputs (images are `unsupported-format`, D144).
+;; `test/pdf/p3.txt` (wrong passwords included), the image fixtures of `test/image/` (P6.1, D173-D176: PNG, JPEG, TIFF,
+;; multi-page TIFF, and the refusals, each converted to pages by both hosts), and two small PNGs.
+;; For a JPEG the two hosts' live decoders may differ in the last bits (D176), so their transcripts differ in those
+;; pixels: their `transcript.edn` must still be the same, and each host must replay the OTHER's transcript to the
+;; same bundle (the decode answer through the transcript is what makes a JPEG's replay identical, D089).
 ;;
 ;;   bb identity                        the gate: every document, the five-and-four arms above, in parallel
 ;;   bb identity --full                 also: more chunk sizes (7, 100, 4096) async and sync, on both hosts
@@ -72,6 +76,7 @@
           plain (fn [fs] (map (fn [f] {:file f :pw nil}) fs))]
       (vec (concat (plain (remove p3files (globs "test" "**/*.pdf")))
                    p3
+                   (plain (globs "test/image" "*.{png,jpg,tif}"))
                    (plain ["test/ocr/h-keyword/bitmap-0000.png" "test/corpus/synth/html/img/initial-W.png"]))))))
 
 (def corpus* (if only (filterv #(str/includes? (:file %) only) corpus) corpus))
@@ -150,8 +155,11 @@
             gr (drive :go [(str "--record=" gd)] item)]
         (when-not (same? ref rr) (note "rust --record changes the answer: " (first-diff ref rr)))
         (when-not (same? ref gr) (note "go --record changes the answer: " (first-diff ref gr)))
-        (when-not (= (dir-files rd) (dir-files gd))
-          (note "the transcripts differ: rust " (some-> (dir-files rd) keys vec) " go " (some-> (dir-files gd) keys vec)))
+        (let [rf (dir-files rd) gf (dir-files gd)
+              lossy? (re-find #"(?i)\.jpe?g$" (:file item))
+              strip-png (fn [m] (into {} (remove (fn [[k _]] (str/ends-with? k ".png")) m)))]
+          (when-not (if lossy? (= (strip-png rf) (strip-png gf) ) (= rf gf))
+            (note "the transcripts differ: rust " (some-> rf keys vec) " go " (some-> gf keys vec))))
         (let [gp (drive :go [(str "--replay=" rd)] item)
               rp (drive :rust [(str "--replay=" gd)] item)]
           (when-not (same? ref gp) (note "go replaying rust's transcript differs: " (first-diff ref gp)))

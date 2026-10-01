@@ -149,6 +149,14 @@
   (err "password-incorrect" 4 "--password=wrong" "test/pdf/p3/crypt-aes-128-user.pdf")
   (err "encryption-unsupported" 4 "test/pdf/p3/unsupported-pubsec.pdf")
   (err "unsupported-format" 4 "test/pdf/notpdf.pdf")
+  ;; images are read (P6.1, D173): one `image` page per frame; what the port cannot read is refused by name
+  (let [r (drive "test/image/png-rgb8.png") k (drive "test/image/tiff-multi3-g4.tif")]
+    (check (and (zero? (:exit r)) (str/includes? (:out r) "\"kind\":\"image\"") (str/includes? (:out r) "\"format\":\"png\""))
+           "driver test/image/png-rgb8.png -> a Model of one image page")
+    (check (and (zero? (:exit k)) (= 3 (count (re-seq #"\"kind\":\"image\"" (:out k)))))
+           "driver test/image/tiff-multi3-g4.tif -> a Model of three image pages"))
+  (err "unsupported-image" 4 "test/image/tiff-jpeg.tif")
+  (err "undecodable" 4 "test/image/png-truncated.png")
   (err "unsupported" 4 "--assets=images" (pdf "h-plain"))
   (let [r (drive "--password=user-secret" "test/pdf/p3/crypt-aes-128-user.pdf")
         p (drive "test/pdf/p3/plain.pdf")]

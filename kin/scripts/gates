@@ -22,7 +22,7 @@
 set -e
 cd "$(dirname "$0")/../.."
 
-gates="hosts drift lang-test check unit plan ocr fuzz png-check slice embedders identity repeat accuracy"
+gates="hosts drift lang-test check unit plan ocr fuzz png-check slice embedders identity image repeat accuracy"
 not_gates="gen emit gates import corpus-push corpus-pull corpus-test png-bench"
 
 fails=0

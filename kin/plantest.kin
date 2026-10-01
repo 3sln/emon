@@ -7,7 +7,7 @@
                                new-cells new-text]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop src-of-blob]]
             [emon.plan :refer [pk-render pk-decode pk-ocr pk-bytes ps-ok ps-failed
-                               ps-unsupported us-done us-requests us-need-bytes
+                               ps-unsupported ps-limit us-done us-requests us-need-bytes
                                lay-full lay-text-only flt-none flt-dct
                                rec-len rec-kind rec-id rec-next rec-begin rec-end
                                rec-find rec-count rec-check
@@ -30,6 +30,7 @@
   (assert-eq (ps-ok) 0 "ok")
   (assert-eq (ps-failed) 1 "failed")
   (assert-eq (ps-unsupported) 2 "unsupported")
+  (assert-eq (ps-limit) 3 "limit (D173)")
   (assert-eq (us-done) 0 "done")
   (assert-eq (us-requests) 1 "requests")
   (assert-eq (us-need-bytes) 7 "need-bytes is D075's 7"))

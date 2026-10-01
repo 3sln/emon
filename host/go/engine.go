@@ -9,8 +9,10 @@
 //
 // WHAT THE SLICE DOES is the Rust slice's, and says so in the same words (D144): a born-digital PDF's text
 // layer -> lines -> paragraphs -> Model -> JSON/HTML. OCR is not wired (the option is kept and changes
-// nothing; the Model's header writes no `ocr`), images and TIFF are `unsupported-format`, several inputs as
-// one document and `assets` other than `none` are `ErrUnsupported`. The loop is wired (D058): a fresh `Src`
+// nothing; the Model's header writes no `ocr`), several inputs as one document and `assets` other than
+// `none` are `ErrUnsupported`. IMAGES ARE READ (P6.1, D173-D176; they were `unsupported-format` in D144): a PNG,
+// JPEG or TIFF becomes one `image` page per frame, through the `ImageDecode` port (`imgdec.go`) asked by the
+// plan/fulfil loop, with no OCR yet (P6.5). The loop is wired (D058): a fresh `Src`
 // view and fresh arenas per attempt, a miss checked after each stage, a panic in an attempt that missed is
 // a miss, never reported. A sync source is read inline and never misses; `Config.SimulateAsync` makes the
 // cache behave like a browser Blob.
@@ -40,6 +42,7 @@ import (
 	"emon/pdfdoc"
 	"emon/plan"
 	"emon/port"
+	"emon/rasterin"
 )
 
 // Transcript is the plan/fulfil transcript (SPEC 13): per input its index and length, and every request
@@ -60,7 +63,7 @@ const (
 	ErrPasswordRequired
 	ErrPasswordIncorrect
 	ErrEncryptionUnsupported
-	// ErrUnsupportedFormat: not a PDF (no `%PDF-` header): an image or something else; not read in this slice.
+	// ErrUnsupportedFormat: not a PDF (no `%PDF-` header) and not a PNG, JPEG or TIFF either.
 	ErrUnsupportedFormat
 	// ErrDamaged: a PDF kin could not open: its named status (`no-startxref`, `bad-xref`, `no-root`, `no-pages`, ...).
 	ErrDamaged
@@ -129,9 +132,9 @@ func (e *Error) Error() string {
 	case ErrEncryptionUnsupported:
 		return fmt.Sprintf("encryption-unsupported: input %d uses a security handler emon does not read", e.Input)
 	case ErrUnsupportedFormat:
-		return fmt.Sprintf("unsupported-format: input %d is not a PDF (images are not read in this slice)", e.Input)
+		return fmt.Sprintf("unsupported-format: input %d is not a PDF, PNG, JPEG or TIFF", e.Input)
 	case ErrDamaged:
-		return fmt.Sprintf("%s: input %d could not be opened as a PDF", e.Status, e.Input)
+		return fmt.Sprintf("%s: input %d could not be opened", e.Status, e.Input)
 	case ErrSourceChanged:
 		return fmt.Sprintf("source-changed: input %d gave fewer bytes than its length", e.Input)
 	case ErrIO:
@@ -531,15 +534,166 @@ type cacheMisses struct {
 
 func (m *cacheMisses) Take(round int32) []port.PlanRange { return m.cache.planFetch(m.input, round) }
 
-// noPorts is the kin-side requests this slice issues: none. A Renderer, ImageDecode or Ocr port is not
-// configured, so were the unit to ask, the loop says so (a named `fulfil-failed`) rather than guess.
-type noPorts struct{}
+// ------------------------------------------------------------ raster intake
+//
+// An input that kin's `RsSniff` says is a PNG, a JPEG or a TIFF (SPEC 2.0, D173) is not a PDF: its unit is
+// `emon.rasterin`'s `RsUnit`, which asks the host's `ImageDecode` port (`imgdec.go`) for each frame through the
+// plan/fulfil loop and builds one `image` page per frame. THIS IS SEPARATE FROM `attempt`, which is the PDF unit
+// and is not called for an image. OCR is not wired (P6.5), so an image page has no text.
 
-func (noPorts) Start(port.PlanRequest, port.PlanBitmaps) error {
-	return &port.PlanError{Name: "fulfil-failed", Msg: "no Renderer, ImageDecode or Ocr port is configured (this slice issues no requests)"}
+// spanSource is a ByteSource over a span of an input's ByteSource: what the decode request names (input,
+// offset, length), read in place.
+type spanSource struct {
+	src      ByteSource
+	off, len int64
 }
-func (noPorts) Next() (port.PlanAnswer, error) {
-	return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no port is configured"}
+
+func (s spanSource) Size() int64 { return s.len }
+func (s spanSource) ReadAt(p []byte, off int64) (int, error) {
+	if off >= s.len {
+		return 0, io.EOF
+	}
+	n := len(p)
+	short := false
+	if int64(n) > s.len-off {
+		n = int(s.len - off)
+		short = true
+	}
+	got, err := s.src.ReadAt(p[:n], s.off+off)
+	if err == nil && short {
+		err = io.EOF
+	}
+	return got, err
+}
+
+// imageFulfiller is the `ImageDecode` port as a fulfiller (SPEC 7.2, D173): it answers `decode` requests for
+// this input from the host's codecs, and nothing else (no Renderer or Ocr port is configured). `keep` holds
+// the pixels in the answer (a recording wants them, as canonical PNG; a plain conversion needs only the numbers).
+func imageFulfiller(source ByteSource, idx int, keep bool) *port.PlanSync {
+	return &port.PlanSync{F: func(req port.PlanRequest, _ port.PlanBitmaps) (port.PlanAnswer, error) {
+		if req.Kind() != port.PlanKindDecode {
+			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no Renderer or Ocr port is configured (only ImageDecode is)"}
+		}
+		input, off, n, filter, frame := req.Arg(0), req.Arg(1), req.Arg(2), req.Arg(3), req.Arg(4)
+		if int(input) != idx || off < 0 || n < 0 || int64(off)+int64(n) > source.Size() {
+			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "a decode request names bytes the input does not have"}
+		}
+		fail := func(status int32) (port.PlanAnswer, error) {
+			c := port.NewCells()
+			plan.AnFail(c, port.PlanKindDecode, req.ID(), status)
+			return port.PlanAnswer{Rec: cellsVec(c)}, nil
+		}
+		if filter != plan.FltNone() {
+			// the PDF image filters (DCT, JPX, JBIG2, CCITT) are P6.1a's
+			return fail(plan.PsUnsupported())
+		}
+		span := spanSource{src: source, off: int64(off), len: int64(n)}
+		d, err := imgDecode(span, frame, uint64(port.LimitOf(9)))
+		if err != nil {
+			var f *imgFail
+			if errors.As(err, &f) {
+				switch f.Kind {
+				case imgUnsupported:
+					return fail(plan.PsUnsupported())
+				case imgLimit:
+					actual := int32(1<<31 - 1)
+					if f.Pixels < uint64(actual) {
+						actual = int32(f.Pixels)
+					}
+					return port.PlanAnswer{Rec: []int32{5, port.PlanKindDecode, req.ID(), plan.PsLimit(), actual}}, nil
+				}
+			}
+			return fail(plan.PsFailed())
+		}
+		c := port.NewCells()
+		bl := int32(0)
+		if d.Bilevel {
+			bl = 1
+		}
+		plan.AnDecode(c, req.ID(), d.W, d.H, d.Ch, d.Dpi100, bl, d.Frames)
+		a := port.PlanAnswer{Rec: cellsVec(c)}
+		if keep && d.Pixels != nil {
+			a.Bitmap = port.BitmapFromBytes(d.W, d.H, d.Ch, d.Pixels)
+		}
+		return a, nil
+	}}
+}
+
+// rstep is one attempt's end for either kind of input: it missed, it asked for something, or it finished.
+type rstep struct {
+	miss, requests bool
+	out            outcome
+}
+
+// attemptRaster is ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF.
+func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int32, intakeOnly bool, n uint64) rstep {
+	m := newArenas()
+	model.ModelInit(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout)
+	status := rasterin.RsUnit(view, int32(idx), format, boolInt(intakeOnly), answers, rq, m.nodes, m.attrs, m.text, m.pages)
+	if view.Missed() {
+		return rstep{miss: true}
+	}
+	fail := func(s string) rstep {
+		return rstep{out: outcome{err: &Error{Kind: ErrDamaged, Input: idx, Status: s}}}
+	}
+	switch status {
+	case 0:
+	case 1:
+		return rstep{requests: true}
+	case 21:
+		return fail("undecodable")
+	case 22:
+		return fail("unsupported-image")
+	default:
+		return rstep{out: outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("the raster unit answered status %d", status)}}}
+	}
+	name := "tiff"
+	switch format {
+	case rasterin.RsPng():
+		name = "png"
+	case rasterin.RsJpeg():
+		name = "jpeg"
+	}
+	info := Intake{Format: name, Pages: int(max(model.PageCount(m.pages), 0)), Bytes: n}
+	if intakeOnly {
+		return rstep{out: outcome{intake: &info}}
+	}
+	chk := port.NewCells()
+	if c := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); c != 0 {
+		return rstep{out: outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", c, port.CellsAt(chk, 0))}}}
+	}
+	return rstep{out: outcome{built: &built{arenas: m, intake: info}}}
+}
+
+func boolInt(b bool) int32 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// dispatch is the unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything
+// else by the PDF one (`attempt`, which refuses what is not a PDF by name). A panic in an attempt that missed is
+// a miss, never reported (SPEC 13.1).
+func dispatch(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options, intakeOnly bool, n uint64) (s rstep) {
+	defer func() {
+		if p := recover(); p != nil {
+			if view.Missed() {
+				s = rstep{miss: true}
+			} else {
+				s = rstep{out: outcome{err: panicError(panicMessage(p))}}
+			}
+		}
+	}()
+	format := rasterin.RsSniff(view)
+	if view.Missed() {
+		return rstep{miss: true}
+	}
+	if format != rasterin.RsNone() {
+		return attemptRaster(view, answers, rq, idx, format, intakeOnly, n)
+	}
+	a := attempt(view, pw, idx, opts, intakeOnly, n)
+	return rstep{miss: a.miss, out: a.out}
 }
 
 // ------------------------------------------------------------------- stats
@@ -758,20 +912,6 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	return step{out: outcome{built: &built{arenas: m, evidence: ev, intake: info}}}
 }
 
-// safeAttempt runs attempt and turns a panic into a miss (when the view missed) or a named error.
-func safeAttempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint64) (s step) {
-	defer func() {
-		if p := recover(); p != nil {
-			if view.Missed() {
-				s = step{miss: true}
-			} else {
-				s = step{out: outcome{err: panicError(panicMessage(p))}}
-			}
-		}
-	}()
-	return attempt(view, pw, idx, opts, intakeOnly, n)
-}
-
 // Intake is stage 0 of each input: format, version, page count, whether it is encrypted. Any number of inputs.
 func (e *Engine) Intake(inputs []Input) ([]Intake, error) {
 	if len(inputs) == 0 {
@@ -871,11 +1011,14 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	base := port.NewSrc(backing)
 	pw := port.SrcOfBlob(append([]byte(nil), in.Password...))
 	var res outcome
-	unit := func(_, _ *port.Cells) int32 {
+	unit := func(answers, rq *port.Cells) int32 {
 		view := base.View()
-		s := safeAttempt(view, pw, idx, opts, intakeOnly, uint64(size))
+		s := dispatch(view, pw, answers, rq, idx, opts, intakeOnly, uint64(size))
 		if s.miss {
 			return port.PlanUnitNeedBytes
+		}
+		if s.requests {
+			return port.PlanUnitRequests
 		}
 		res = s.out
 		return port.PlanUnitDone
@@ -894,7 +1037,9 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	}
 	pcfg := port.PlanConfig{MaxRounds: e.cfg.MaxRounds, FetchRounds: e.cfg.FetchRounds}
 	thisInput := [][2]int32{{int32(idx), int32(size)}}
-	var ports port.PlanFulfiller = noPorts{}
+	// the live ports: ImageDecode only (a Renderer and an Ocr come with P6.2 and P6.5); pixels are kept in the
+	// answers only when a transcript is being recorded
+	var ports port.PlanFulfiller = imageFulfiller(in.Source, idx, rec != nil)
 	var replayer *port.Replayer
 	if rec != nil {
 		rec.Inputs = thisInput

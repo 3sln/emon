@@ -1,0 +1,137 @@
+;; RASTER INTAKE: an image input becomes pages (P6.1; SPEC 2.0, 7.2, 7.3; D058, D074, D075, D089, D173-D176).
+;; emon's own module (D039).
+;;
+;; kin ONLY SNIFFS (D058). `rs-sniff` reads the first eight bytes of a `Src` and says PNG, JPEG, TIFF or none; it
+;; decodes nothing. Decoding is the host's `ImageDecode` port, and kin reaches it the way it reaches every
+;; expensive port (SPEC 7.3): a `decode` request, a unit status of `us-requests`, a re-run on the answers. Frame
+;; `f` of the input is request id `f + 1` (ids are kin's and derived from what is asked, D089), so a replay finds
+;; every answer by the whole record.
+;;
+;; THE UNIT, in two rounds (both under `max-rounds`):
+;;   1. ask for frame 0. Its answer names the frame count.
+;;   2. ask for every other frame, all at once (the host may take them in any order).
+;;   then build the page table: one `image` page per frame, in frame order.
+;; With `info` set the requests are header-only (frame < 0, D173): stage 0's `intake`, which must not decode pixels.
+;;
+;; PAGE GEOMETRY. A frame of `w x h` pixels at `dpi100` (dots per inch x 100) is `w * 720000 / dpi100`
+;; centipoints wide (SPEC 3.4). A frame that states no resolution is read AS 300 DPI and the document is flagged
+;; `dpi-unknown`: SPEC 3.4 wants the resolution estimated from the text size, which needs OCR (P6.5); until then
+;; this is the placeholder, and the pixel size is kept in the page table either way (D173).
+;;
+;; WHAT IT DOES NOT DO: no text. An image page has no words until OCR is wired (P6.5), so its Model is a document
+;; with its pages and nothing in the body.
+(ns emon.rasterin
+  (:require [emon.lang :refer [I32 I64 Cells Src i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at limit-of limit-breach]]
+            [emon.pdfsrc :refer [ps-len ps-u8]]
+            [emon.plan :refer [rq-decode an-find an-status an-arg flt-none ps-ok ps-unsupported ps-limit
+                               us-requests]]
+            [emon.model :refer [page-new page-set-resolution pk-image node-set-flags node-set-attr-int
+                                node-set-attr-text text-append-cp fk-format fk-pages fl-dpi-unknown]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; The formats `rs-sniff` answers. Codes are never reused (D050).
+(defn ^:pub ^I32 rs-none [] (return 0))
+(defn ^:pub ^I32 rs-png [] (return 1))
+(defn ^:pub ^I32 rs-jpeg [] (return 2))
+(defn ^:pub ^I32 rs-tiff [] (return 3))
+
+;; The unit's own failure statuses (the PDF unit's are 1..10, D075).
+(defn ^:pub ^I32 rs-undecodable [] (return 21))
+(defn ^:pub ^I32 rs-unsupported [] (return 22))
+
+;; The resolution assumed for a frame that states none.
+(defn ^:pub ^I32 rs-default-dpi100 [] (return 30000))
+
+(defn ^:pub ^I32 rs-sniff [^Src src]
+  (comment "The format by signature at offset 0, never by name: PNG (the eight-byte signature), JPEG (FF D8 FF),")
+  (comment "TIFF (II*\\0 or MM\\0*; BigTIFF is not read). 0 when it is none of them, and then the input is the PDF")
+  (comment "path's to refuse or read. The host's `sniff` reads the same bytes the same way.")
+  (let [^I32 n (ps-len src)]
+    (if (< n 4) (return (rs-none)))
+    (let [^I32 a (ps-u8 src 0)
+          ^I32 b (ps-u8 src 1)
+          ^I32 c (ps-u8 src 2)
+          ^I32 d (ps-u8 src 3)]
+      (if (and (>= n 8) (and (== a 137) (and (== b 80) (and (== c 78) (== d 71)))))
+        (if (and (== (ps-u8 src 4) 13) (and (== (ps-u8 src 5) 10) (and (== (ps-u8 src 6) 26) (== (ps-u8 src 7) 10))))
+          (return (rs-png))))
+      (if (and (== a 255) (and (== b 216) (== c 255))) (return (rs-jpeg)))
+      (if (and (== a 73) (and (== b 73) (and (== c 42) (== d 0)))) (return (rs-tiff)))
+      (if (and (== a 77) (and (== b 77) (and (== c 0) (== d 42)))) (return (rs-tiff)))
+      (return (rs-none)))))
+
+(defn ^I32 rs-frame-arg [^I32 info ^I32 f]
+  (comment "The `frame` field of the request for frame `f`: itself, or `-f - 1` for a header-only request.")
+  (if (== info 1) (return (- (- 0 f) 1)))
+  (return f))
+
+(defn ^I32 rs-fail [^Cells ans ^I32 a]
+  (comment "The unit's answer to a decode that did not succeed. A limit is a breach, and never returns.")
+  (let [^I32 s (an-status ans a)]
+    (if (== s (ps-limit))
+      (limit-breach 9 (an-arg ans a 0)))
+    (if (== s (ps-unsupported)) (return (rs-unsupported)))
+    (return (rs-undecodable))))
+
+(defn ^:pub ^I32 rs-cpt [^I32 px ^I32 dpi100]
+  (comment "`px` pixels at `dpi100` (dots per inch x 100) in centipoints, rounded; at least 1, and held under 2e9.")
+  (let [^I64 v (quot (add64 (mul64 (i64 px) (i64 720000)) (i64 (quot dpi100 2))) (i64 dpi100))]
+    (if (> v (i64 2000000000)) (return 2000000000))
+    (if (< v (i64 1)) (return 1))
+    (return (i32 v))))
+
+(defn ^I32 rs-format-name [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 fmt]
+  (comment "The root's `format` attribute: \"png\", \"jpeg\" or \"tiff\".")
+  (let [^I32 start (cells-len text)]
+    (if (== fmt (rs-png))
+      (do (text-append-cp text 112) (text-append-cp text 110) (text-append-cp text 103)))
+    (if (== fmt (rs-jpeg))
+      (do (text-append-cp text 106) (text-append-cp text 112) (text-append-cp text 101) (text-append-cp text 103)))
+    (if (== fmt (rs-tiff))
+      (do (text-append-cp text 116) (text-append-cp text 105) (text-append-cp text 102) (text-append-cp text 102)))
+    (node-set-attr-text nodes attrs 0 (fk-format) start (- (cells-len text) start))
+    (return 0)))
+
+(defn ^:pub ^I32 rs-unit [^Src src ^I32 input ^I32 fmt ^I32 info ^Cells ans ^:mut ^Cells rq
+                          ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells pages]
+  (comment "One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the")
+  (comment "host. Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's")
+  (comment "`format` and `pages` and one page row per frame written.")
+  (let [^I32 nbytes (ps-len src)
+        ^I32 a0 (an-find ans 1)]
+    (if (< a0 0)
+      (do (rq-decode rq 1 input 0 nbytes (flt-none) (rs-frame-arg info 0))
+          (return (us-requests))))
+    (if (!= (an-status ans a0) (ps-ok)) (return (rs-fail ans a0)))
+    (let [^I32 frames (an-arg ans a0 5)
+          ^:mut ^I32 f 1
+          ^:mut ^I32 asked 0]
+      (if (< frames 1) (return (rs-undecodable)))
+      (if (> frames (limit-of 8)) (limit-breach 8 frames))
+      (while (< f frames)
+        (do (if (< (an-find ans (+ f 1)) 0)
+              (do (rq-decode rq (+ f 1) input 0 nbytes (flt-none) (rs-frame-arg info f))
+                  (set asked 1)))
+            (set f (+ f 1))))
+      (if (== asked 1) (return (us-requests)))
+      (rs-format-name nodes attrs text fmt)
+      (node-set-attr-int nodes attrs 0 (fk-pages) frames)
+      (set f 0)
+      (while (< f frames)
+        (do (let [^I32 a (an-find ans (+ f 1))]
+              (if (!= (an-status ans a) (ps-ok)) (return (rs-fail ans a)))
+              (let [^I32 w (an-arg ans a 0)
+                    ^I32 h (an-arg ans a 1)
+                    ^I32 dpi100 (an-arg ans a 3)
+                    ^:mut ^I32 eff dpi100]
+                (if (<= w 0) (return (rs-undecodable)))
+                (if (<= h 0) (return (rs-undecodable)))
+                (if (<= dpi100 0)
+                  (do (set eff (rs-default-dpi100))
+                      (node-set-flags nodes 0 (fl-dpi-unknown))))
+                (let [^I32 p (page-new pages (+ f 1) (rs-cpt w eff) (rs-cpt h eff) 0 (pk-image))]
+                  (page-set-resolution pages p (quot (+ dpi100 50) 100) w h))))
+            (set f (+ f 1))))
+      (return 0))))

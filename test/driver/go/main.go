@@ -12,6 +12,8 @@
 //	--source=        which adapter reads FILE: `bytes` (in memory), `readerat` (*os.File + size: Go's native
 //	                 form, SPEC 13.1), `seek` (io.ReadSeeker), `spool` (io.Reader, spooled)
 //	--out=bundle     one conversion, every output, for `bb identity` (see the Rust driver: the sections are the same)
+//	--out=pixels     one recording as one line per decode entry (see the Rust driver; `bb image` compares them)
+//	--dump=DIR       with --out=pixels, also write each frame's pixels to DIR/frame-N.raw
 //	--record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
 //	--replay=DIR     convert from the transcript in DIR (no port is called)
 //	--parallel=N     run N conversions at once on one Engine; all N must give the same answer (`bb repeat`)
@@ -107,7 +109,7 @@ func main() {
 	var password *string
 	source := "bytes"
 	stats := false
-	var file, record, replay string
+	var file, record, replay, dump string
 	parallel := 1
 	for _, a := range os.Args[1:] {
 		switch {
@@ -156,6 +158,8 @@ func main() {
 			cfg.SimulateAsync = true
 		case a == "--stats":
 			stats = true
+		case strings.HasPrefix(a, "--dump="):
+			dump = strings.TrimPrefix(a, "--dump=")
 		case strings.HasPrefix(a, "--record="):
 			record = strings.TrimPrefix(a, "--record=")
 		case strings.HasPrefix(a, "--replay="):
@@ -259,9 +263,9 @@ func main() {
 		return
 	}
 	switch out {
-	case "json", "html", "evidence", "bundle":
+	case "json", "html", "evidence", "bundle", "pixels":
 	default:
-		usage("--out is json, html, evidence or intake")
+		usage("--out is json, html, evidence, bundle, pixels or intake")
 	}
 
 	var tin *emon.Transcript
@@ -279,6 +283,15 @@ func main() {
 		var m *emon.Model
 		var r result
 		var err error
+		if out == "pixels" {
+			var t *emon.Transcript
+			if _, t, err = engine.Record(inputs, opts); err != nil {
+				r.err = err
+				return r
+			}
+			r.text = pixelLines(t, dump)
+			return r
+		}
 		switch {
 		case tin != nil:
 			m, err = engine.Replay(inputs, opts, tin)
@@ -336,6 +349,37 @@ func main() {
 			s.Attempts, s.FetchRounds, s.BytesRequests, s.SourceReads, s.BytesFetched, s.InputBytes, s.Requests)
 	}
 	fmt.Print(r.text)
+}
+
+// pixelLines is the `--out=pixels` text of a recording: its decode entries, in order.
+func pixelLines(t *emon.Transcript, dump string) string {
+	var sb strings.Builder
+	for _, e := range t.Entries {
+		if len(e.Req) < 8 || e.Req[1] != 2 {
+			continue
+		}
+		if e.Ans[3] != 0 {
+			fmt.Fprintf(&sb, "frame %d status %d\n", e.Req[7], e.Ans[3])
+			continue
+		}
+		h := uint64(0xcbf29ce484222325)
+		if e.Bitmap != nil {
+			for _, x := range e.Bitmap.D {
+				h ^= uint64(x)
+				h *= 0x100000001b3
+			}
+			if dump != "" {
+				if err := os.MkdirAll(dump, 0o755); err != nil {
+					panic(err)
+				}
+				if err := os.WriteFile(filepath.Join(dump, fmt.Sprintf("frame-%d.raw", e.Req[7])), e.Bitmap.D, 0o644); err != nil {
+					panic(err)
+				}
+			}
+		}
+		fmt.Fprintf(&sb, "frame %d w %d h %d ch %d dpi100 %d bilevel %d frames %d fnv %016x\n", e.Req[7], e.Ans[4], e.Ans[5], e.Ans[6], e.Ans[7], e.Ans[8], e.Ans[9], h)
+	}
+	return sb.String()
 }
 
 // render is the text of `--out=NAME` (or the whole bundle) for a converted Model.
