@@ -3,9 +3,10 @@
 // itself and hands the Engine bytes, a seekable `File` or a spooled `Read` (D058).
 //
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//             [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool]
+//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool]
 //             [--chunk=N --async] [--stats] FILE
 //
+//   --furniture=     running headers, footers and page numbers (SPEC 10.2, D017): `policy` (the default), `keep`, `drop`
 //   --out=json       the canonical JSON (compact; --pretty indents)           (default)
 //   --out=html       the HTML; OPTS is a comma list of ids,geometry,confidence=N,ledger,pretty,
 //                    drop-furniture,no-milestones,initials-plain,align-style
@@ -17,12 +18,12 @@
 //   --stats          print the loop's attempts, fetch rounds and bytes fetched on stderr
 //
 // Exit: 0 ok; 2 usage; 4 a named emon error (`error: NAME` on stderr, nothing on stdout); 1 anything else.
-use emon::{Assets, Config, Engine, HtmlOptions, Input, JsonOptions, OcrPolicy, Options, Output};
+use emon::{Assets, Config, Engine, Furniture, HtmlOptions, Input, JsonOptions, OcrPolicy, Options, Output};
 use std::io::Read;
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] FILE");
     std::process::exit(2);
 }
 
@@ -72,6 +73,13 @@ fn main() {
                 "auto" => OcrPolicy::Auto,
                 "never" => OcrPolicy::Never,
                 _ => usage("--ocr is always, auto or never"),
+            };
+        } else if let Some(v) = a.strip_prefix("--furniture=") {
+            opts.furniture = match v {
+                "policy" => Furniture::Policy,
+                "keep" => Furniture::Keep,
+                "drop" => Furniture::Drop,
+                _ => usage("--furniture is policy, keep or drop"),
             };
         } else if let Some(v) = a.strip_prefix("--assets=") {
             opts.assets = match v {

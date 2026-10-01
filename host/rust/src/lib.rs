@@ -15,5 +15,5 @@ pub mod plan;
 pub mod port;
 pub mod source;
 
-pub use engine::{Assets, Attr, Config, Dropped, Engine, Error, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, OcrPolicy, Options, Output, Page, Region, RunStats, Transcript};
+pub use engine::{Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, OcrPolicy, Options, Output, Page, Region, RunStats, Transcript};
 pub use source::{ByteSource, BytesSource, Input, Inputs, SeekSource, SpoolSource};

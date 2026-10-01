@@ -1377,24 +1377,24 @@
         :block-note-f1 0.0
         :block-note-p 0.0
         :block-note-r 0.0
-        :block-paragraph-f1 0.125877
-        :block-paragraph-p 0.068931
-        :block-paragraph-r 0.723958
+        :block-paragraph-f1 0.127864
+        :block-paragraph-p 0.070101
+        :block-paragraph-r 0.726562
         :block-seal-f1 0.0
         :block-seal-p 0.0
         :block-seal-r 0.0
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
-        :bow-f1 0.9795
-        :bow-p 0.966248
+        :bow-f1 0.983742
+        :bow-p 0.974539
         :bow-r 0.993119
-        :cer 0.184245
+        :cer 0.176052
         :first-word-acc 0.043478
         :frag-col-acc 0.0
-        :furniture-f1 0.0
-        :furniture-p 0.0
-        :furniture-r 0.0
+        :furniture-f1 0.954955
+        :furniture-p 1.0
+        :furniture-r 0.913793
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -1409,15 +1409,15 @@
         :join-p 0.0
         :join-r 0.0
         :order-tau 1.0
-        :page-label-acc 0.706522
-        :para-boundary-f1 0.125877
-        :para-boundary-p 0.069884
+        :page-label-acc 1.0
+        :para-boundary-f1 0.127406
+        :para-boundary-p 0.070828
         :para-boundary-r 0.633257
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
-        :watermark-leak 0.00201
-        :wer 0.241972}
+        :watermark-leak 0.0
+        :wer 0.233228}
       "pdf/columns" {
         :block-caption-f1 0.0
         :block-caption-p 0.0
@@ -1499,80 +1499,80 @@
         :block-note-f1 0.0
         :block-note-p 0.0
         :block-note-r 0.0
-        :block-paragraph-f1 0.466667
-        :block-paragraph-p 0.411765
-        :block-paragraph-r 0.538462
-        :bow-f1 0.961977
-        :bow-p 0.951128
+        :block-paragraph-f1 0.571429
+        :block-paragraph-p 0.533333
+        :block-paragraph-r 0.615385
+        :bow-f1 0.965649
+        :bow-p 0.958333
         :bow-r 0.973077
-        :cer 0.012418
-        :furniture-f1 0.0
-        :furniture-p 0.0
-        :furniture-r 0.0
+        :cer 0.009804
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
         :order-tau 1.0
-        :page-label-acc 0.333333
-        :para-boundary-f1 0.538462
-        :para-boundary-p 0.466667
+        :page-label-acc 1.0
+        :para-boundary-f1 0.583333
+        :para-boundary-p 0.538462
         :para-boundary-r 0.636364
-        :wer 0.05}
+        :wer 0.042308}
       "pdf/forms" {
         :block-heading-f1 0.0
         :block-heading-p 0.0
         :block-heading-r 0.0
-        :block-paragraph-f1 0.015674
-        :block-paragraph-p 0.007924
+        :block-paragraph-f1 0.015873
+        :block-paragraph-p 0.008026
         :block-paragraph-r 0.714286
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
-        :bow-f1 0.95791
-        :bow-p 0.91922
+        :bow-f1 0.993976
+        :bow-p 0.988024
         :bow-r 1.0
-        :cer 0.09075
-        :furniture-f1 0.0
-        :furniture-p 0.0
-        :furniture-r 0.0
+        :cer 0.025747
+        :furniture-f1 0.909091
+        :furniture-p 1.0
+        :furniture-r 0.833333
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
         :order-tau 1.0
-        :page-label-acc 0.25
-        :para-boundary-f1 0.015773
-        :para-boundary-p 0.007949
+        :page-label-acc 1.0
+        :para-boundary-f1 0.015974
+        :para-boundary-p 0.008052
         :para-boundary-r 1.0
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
-        :wer 0.1}
+        :wer 0.024242}
       "pdf/furniture" {
         :block-heading-f1 0.0
         :block-heading-p 0.0
         :block-heading-r 0.0
-        :block-paragraph-f1 0.739583
-        :block-paragraph-p 0.586777
+        :block-paragraph-f1 0.855422
+        :block-paragraph-p 0.747368
         :block-paragraph-r 1.0
-        :bow-f1 0.989358
-        :bow-p 0.97894
+        :bow-f1 1.0
+        :bow-p 1.0
         :bow-r 1.0
-        :cer 0.023069
-        :furniture-f1 0.0
-        :furniture-p 0.0
-        :furniture-r 0.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
         :order-tau 1.0
-        :page-label-acc 0.363636
-        :para-boundary-f1 0.728261
-        :para-boundary-p 0.57265
+        :page-label-acc 1.0
+        :para-boundary-f1 0.848101
+        :para-boundary-p 0.736264
         :para-boundary-r 1.0
-        :wer 0.021513}
+        :wer 0.0}
       "pdf/headings" {
         :block-heading-f1 0.0
         :block-heading-p 0.0
@@ -1641,26 +1641,26 @@
         :block-list-f1 0.0
         :block-list-p 0.0
         :block-list-r 0.0
-        :block-paragraph-f1 0.08
-        :block-paragraph-p 0.041667
+        :block-paragraph-f1 0.082474
+        :block-paragraph-p 0.043011
         :block-paragraph-r 1.0
-        :bow-f1 0.966227
-        :bow-p 0.934661
+        :bow-f1 0.967423
+        :bow-p 0.936901
         :bow-r 1.0
-        :cer 0.045915
-        :furniture-f1 0.0
-        :furniture-p 0.0
-        :furniture-r 0.0
+        :cer 0.044994
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
         :order-tau 1.0
-        :page-label-acc 0.4
-        :para-boundary-f1 0.044199
-        :para-boundary-p 0.043011
+        :page-label-acc 1.0
+        :para-boundary-f1 0.044944
+        :para-boundary-p 0.044444
         :para-boundary-r 0.045455
-        :wer 0.069906}
+        :wer 0.067349}
       "pdf/scripts" {
         :block-heading-f1 0.0
         :block-heading-p 0.0
@@ -1731,57 +1731,57 @@
         :block-heading-f1 0.0
         :block-heading-p 0.0
         :block-heading-r 0.0
-        :block-paragraph-f1 0.015739
-        :block-paragraph-p 0.007932
+        :block-paragraph-f1 0.015846
+        :block-paragraph-p 0.007986
         :block-paragraph-r 1.0
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
-        :bow-f1 0.99455
-        :bow-p 0.989159
+        :bow-f1 0.996798
+        :bow-p 0.993616
         :bow-r 1.0
-        :cer 0.007727
-        :furniture-f1 0.0
-        :furniture-p 0.0
-        :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
-        :order-tau 1.0
-        :page-label-acc 0.333333
-        :para-boundary-f1 0.007932
-        :para-boundary-p 0.003984
-        :para-boundary-r 0.875
-        :table-continued-acc 0.0
-        :table-teds-lite 0.0
-        :table-teds-struct-lite 0.0
-        :wer 0.01096}
-      "pdf/watermarks" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.789474
-        :block-paragraph-p 0.652174
-        :block-paragraph-r 1.0
-        :bow-f1 0.998906
-        :bow-p 0.997814
-        :bow-r 1.0
-        :cer 0.002418
-        :furniture-f1 0.0
-        :furniture-p 0.0
-        :furniture-r 0.0
+        :cer 0.006182
+        :furniture-f1 0.888889
+        :furniture-p 1.0
+        :furniture-r 0.8
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.777778
-        :para-boundary-p 0.636364
+        :para-boundary-f1 0.007986
+        :para-boundary-p 0.004011
+        :para-boundary-r 0.875
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :wer 0.006425}
+      "pdf/watermarks" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.833333
+        :block-paragraph-p 0.714286
+        :block-paragraph-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.823529
+        :para-boundary-p 0.7
         :para-boundary-r 1.0
-        :watermark-leak 0.00201
-        :wer 0.002191}
+        :watermark-leak 0.0
+        :wer 0.0}
       "scan/align" {
         :align-acc 0.0
         :align-acc-caption 0.0

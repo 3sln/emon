@@ -1,0 +1,1937 @@
+;; Running furniture: headers, footers and page numbers (P4.3; SPEC 10.2; D017, D034, D076, D164-D167). emon's own module (D039).
+;;
+;;   (fu-find wd ln et gl mk pages npages txt md lb trust mode  cd sl gr ord tx bh fo fp ft pl)
+;;                         BEFORE the paragraph stage: find the furniture, take its lines OUT of `ln` (so P1.8's
+;;                         paragraphs, and P4.1's gutters after them, never see it), and write what was decided into the
+;;                         work arenas
+;;   (fu-write fo fp ft pl npages nodes attrs regions text pages ledger)
+;;                         AFTER it: the page labels, the dropped-items ledger, the `furniture` roots, and the `label`
+;;                         of every page milestone, into the Model
+;;
+;; THE RULE (SPEC 10.2, D017): drop what the output already says; keep once what is the same on every page; keep per page
+;; what varies; turn page numbers into page labels. The maintainer's form: a page number, running header or footer is
+;; dropped only when it is just page numbering and a title; anything else is KEPT (as an aside), so "Case 1:21-cv-00123
+;; Filed 05/03/21", "CONFIDENTIAL" and a Bates number survive, and a ledger row says what was dropped and why.
+;;
+;; THE EVIDENCE, in the order it is used (every one is a signal, none is believed alone: D034):
+;;   1. POSITION. A candidate is an upright line whose centre is in the top or bottom 11 % of the page, or a sideways one in
+;;      the outer 12 % of its width (a margin stamp). The text layer's `lines` already split a header's left, centre and
+;;      right parts, so each is a candidate of its own.
+;;   2. RECURRENCE ON A TEMPLATE. The text with every digit run abstracted (`#`) and every roman-numeral page number
+;;      abstracted (`$`), hashed (64 bits), grouped by (zone, hash) and then by vertical position (a chain within 1.5 % of
+;;      the page's height). `Page 3 of 10` and `Page 4 of 10` are one template; `ACME-01` and `ACME-02` are one. The
+;;      group is analysed SLOT by slot (a slot is one abstracted number): a slot that is the same on every page is a
+;;      CONSTANT (`of 10`, `2024`), one that rises by exactly the page step from one member to the next is the PAGE NUMBER
+;;      (`3`, `iii`; at least 3 of 4 pairs), anything else VARIES (a Bates number that skips). A page number is a whole
+;;      token, so `ACME-01` is an identifier, not a page number: its slot is EMBEDDED, and when it equals the page index
+;;      the template says `ACME-{n:02}` (the same spelling the gold uses: `{n}` the page, `{n:0W}` zero-padded).
+;;   3. ISOLATION. A running header is set apart from the body: the next line toward the page's inside is at least half a line
+;;      away, counting only lines that do not themselves recur. A table's repeated header row is not: it is followed at once
+;;      by its first row. (A pure page number is exempt: it needs no isolation.)
+;;   4. THE TAGGED TREE (P3.7, D076). A line whose glyphs are /Artifact marked content is evidence FOR (Pagination, or a Header
+;;      in the top zone, or a Footer in the bottom zone: an artifact in the wrong place is ignored), a line inside tagged
+;;      content is evidence AGAINST, and each counts for `trust` (the informativeness score of the tree, 0..1000) per
+;;      mille: `score = recurrence + 0.6 x trust x (artifact share - content share)`, 600 to qualify.
+;;      Recurrence is 300 for one page, 500 + 150 x pages (at most 1000) for two or more.
+;;   5. COVERAGE. A recurring template covers at least 30 % of the pages (a page-number template at least 3 pages), or the
+;;      tree says so. A line seen on two of fifty pages is not furniture.
+;;   6. STYLE AND POSITION (a header whose text changes: a chapter title, an odd/even pair). Lines in the tighter top and
+;;      bottom 8.5 % bands, with the same size (to 0.5 pt) and the same vertical position, on at least 60 % of the pages,
+;;      isolated on 70 % of them, no larger than the body text (the most common line size outside the bands, plus 3 %):
+;;      furniture whose text varies, kept per page.
+;;
+;; DECOMPOSITION (SPEC 10.2 step 2). The tokens of a template minus the PAGE SLOT, the page words (`Page`, `Seite`, `de`, ...)
+;; and the total after an "of" word, minus punctuation-only tokens, is what REMAINS. Nothing remains: a page number, DROPPED
+;; (`page-number`) and its number kept as the page's label. Something remains and it is the document's title (the Info
+;; /Title) or the text of a line of the body, or of two or three consecutive lines (a title that wraps, a heading that the
+;; running section title repeats), compared by letters and digits only, 64-bit hashes, at least 4 characters: it is already
+;; in the output, DROPPED (`running-title`). Anything else is KEPT: ONE `furniture` root when the same on every page (its
+;; template and pages), one per page when it varies. The page number part of a mixed line is still the page's label.
+;;
+;; PAGE LABELS (SPEC 3.7). /PageLabels (P3.9) wins when the catalogue has it; otherwise the printed number (as printed:
+;; `iii`, `03`) of the best page-number group. A page with neither has none; none is inferred.
+;;
+;; THE POLICY SETTING (SPEC 13, `furniture: drop|keep|policy`): `mode` 0 policy (above), 1 keep (nothing leaves the flow; the
+;; labels still come out), 2 drop (every furniture group leaves the flow and nothing is kept: the ledger says what).
+;;
+;; WHAT IT DOES NOT DO: visibility (P3.5/P3.6) and watermarks; the page number of a line that is part of a longer
+;; paragraph; the language of a page-number word beyond the table below; a number written in words.
+(ns emon.furniture
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 mul64 shr64 defenum]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-get ln-get ln-set ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-rot
+                                   lh-first lh-count hd-tstart hd-tlen wf-size wf-gfirst wf-gcount gf-mark
+                                   gl-get mk-get mk-artifact-of mkf-mcid mkf-parent]]
+            [emon.model :refer [node-new node-set-text node-set-sub node-set-conf node-add-src node-add-region
+                                node-count node-kind node-sub page-count node-set-attr-text node-add-attr-int
+                                page-new page-w page-h page-set-label page-label-start page-label-len
+                                ledger-add ledger-set-text text-append-cp
+                                nk-furniture nk-break fk-label fk-pages sr-text sr-struct sr-infer
+                                dr-page-number dr-running-title dr-watermark rl-header rl-footer rl-margin]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
+            [emon.pdfmeta :refer [pm-label-cells]]
+            [kin.lang :refer [defn defconst defdata return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-xor]]))
+
+;; ------------------------------------------------------------- the knobs
+;; Every threshold is here, named, in per mille or in the unit it judges. First values: P10.1 calibrates them.
+(defconst ^I32 FU_TOP 110)          ;; top zone: the line's centre is above this per mille of the page's height
+(defconst ^I32 FU_BOT 890)          ;; bottom zone: below this
+(defconst ^I32 FU_SIDE 120)         ;; margin zone: a sideways line's centre is within this per mille of the width of an edge
+(defconst ^I32 FU_STOP 85)          ;; the tighter bands of the style rule (6)
+(defconst ^I32 FU_SBOT 915)
+(defconst ^I32 FU_YTOL 15)          ;; vertical position tolerance, per mille of the page's height
+(defconst ^I32 FU_MAXLEN 160)       ;; a longer line is a sentence, not furniture
+(defconst ^I32 FU_SPCLEN 100)       ;; and for the style rule
+(defconst ^I32 FU_COVER 30)         ;; per cent of the pages a recurring template must cover
+(defconst ^I32 FU_SCOVER 60)        ;; per cent, the style rule
+(defconst ^I32 FU_ISOGAP 1500)       ;; isolation: the gap to the next line toward the inside, per mille of the line's height (a text group)
+(defconst ^I32 FU_SISOGAP 2000)      ;; the same for the style rule
+(defconst ^I32 FU_ISO 60)           ;; per cent of a group's members that must be isolated
+(defconst ^I32 FU_SISO 70)          ;; the style rule
+(defconst ^I32 FU_QUAL 600)         ;; the score to qualify
+(defconst ^I32 FU_TAGW 6)           ;; tenths of the trust that the tag evidence is worth
+(defconst ^I32 FU_PAIRS 75)         ;; per cent of consecutive pairs that must step with the page for a slot to be the page number
+(defconst ^I32 FU_MINNORM 4)        ;; characters (letters and digits) a title match needs
+(defconst ^I32 FU_SLOTS 8)
+
+;; the work arenas' strides (documented where each is made)
+(defconst ^I32 CD 16)
+(defconst ^I32 SL 10)
+(defconst ^I32 GR 16)
+(defconst ^I32 FO 12)
+(defconst ^I32 FP 5)
+
+;; `md` (emon.pdfmeta's header): 2 the Info /Title as a run in `txt`, 54 the number of page label ranges.
+(defconst ^I32 FU_MD_TITLE 2)
+(defconst ^I32 FU_MD_RANGES 54)
+
+;; ------------------------------------------------------------ the tables
+;; Page words and "of" words (flag 1 page word, 2 "of" word; each a run of lowercase code points ended by 0; -1 ends the table).
+(defdata ^:pub fu-pw
+  :emitter kin.lang/flat-array
+  :data [1 112 97 103 101 0 1 112 97 103 101 115 0 1 112 97 103 0 1 112 97 103 105 110 97 0 1 112 225 103 105 110 97 0 1 112 103 0 1 112 112 0 1 112 0 1 115 101 105 116 101 0 1 115 0 1 115 105 100 97 0 1 115 116 114 111 110 97 0 1 115 116 114 0 1 115 105 100 101 0 1 102 111 108 105 111 0 1 98 108 97 116 116 0 2 111 102 0 2 100 101 0 2 118 111 110 0 2 115 117 114 0 2 100 105 0 2 100 117 0 2 118 97 110 0 2 97 118 0 2 122 0 -1]
+  :accessors {^I32 fu-pw-at [^I32 ignored ^I32 i]})
+
+;; Caption words (a line that begins with one is a caption, never a running header): lowercase, each ended by 0, -1 ends.
+(defdata ^:pub fu-cw
+  :emitter kin.lang/flat-array
+  :data [116 97 98 108 101 0 102 105 103 117 114 101 0 102 105 103 0 99 104 97 114 116 0 101 120 104 105 98 105 116 0 103 114 97 112 104 0 116 97 98 101 108 108 101 0 97 98 98 105 108 100 117 110 103 0 116 97 98 108 101 97 117 0 102 105 103 117 114 97 0 116 97 98 108 97 0 116 97 98 101 108 108 97 0 99 117 97 100 114 111 0 103 114 225 102 105 99 111 0 103 114 97 102 105 99 111 0 112 108 97 116 101 0 115 99 104 101 109 101 0 108 105 115 116 105 110 103 0 98 111 120 0 109 97 112 0 -1]
+  :accessors {^I32 fu-cw-at [^I32 ignored ^I32 i]})
+
+;; The roman numeral table: value, first symbol, second symbol (0: none), greedily from the largest.
+(defdata ^:pub fu-rn
+  :emitter kin.lang/flat-array
+  :data [1000 77 0 900 67 77 500 68 0 400 67 68 100 67 0 90 88 67 50 76 0 40 88 76 10 88 0 9 73 88 5 86 0 4 73 86 1 73 0]
+  :accessors {^I32 fu-rn-at [^I32 ignored ^I32 i]})
+
+;; ------------------------------------------------------------ small things
+(defn ^I32 fu-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 fu-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 fu-abs [^I32 a]
+  (if (< a 0) (return (- 0 a)))
+  (return a))
+
+(defn ^I32 cd-get [^Cells cd ^I32 r ^I32 f] (return (cells-at cd (+ (* r 16) f))))
+(defn ^I32 cd-set [^:mut ^Cells cd ^I32 r ^I32 f ^I32 v]
+  (cells-set cd (+ (* r 16) f) v)
+  (return 0))
+(defn ^I32 sl-get [^Cells sl ^I32 r ^I32 f] (return (cells-at sl (+ (* r 10) f))))
+(defn ^I32 gr-get [^Cells gr ^I32 r ^I32 f] (return (cells-at gr (+ (* r 16) f))))
+(defn ^I32 gr-set [^:mut ^Cells gr ^I32 r ^I32 f ^I32 v]
+  (cells-set gr (+ (* r 16) f) v)
+  (return 0))
+(defn ^I32 gr-inc [^:mut ^Cells gr ^I32 r ^I32 f]
+  (let [^I32 v (gr-get gr r f)]
+    (gr-set gr r f (+ v 1))
+    (return 0)))
+(defn ^I32 fo-get [^Cells fo ^I32 r ^I32 f] (return (cells-at fo (+ (* r 12) f))))
+
+(defn ^I32 fu-push-row [^:mut ^Cells c ^I32 stride]
+  (comment "Append a row of zeros; answer its index.")
+  (let [^I32 r (quot (cells-len c) stride)
+        ^:mut ^I32 i 0]
+    (while (< i stride)
+      (do (cells-push c 0)
+          (set i (+ i 1))))
+    (return r)))
+
+(defn ^I32 fu-digit [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (return 0))
+
+(defn ^I32 fu-lower [^I32 c]
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (if (and (>= c 192) (and (<= c 222) (!= c 215))) (return (+ c 32)))
+  (return c))
+
+(defn ^I32 fu-alnum [^I32 c]
+  (comment "A letter or a digit, for the comparison of titles: ASCII, and everything from U+00C0 up except the general")
+  (comment "punctuation, arrows and symbols (U+2000..2BFF), the CJK and full-width punctuation.")
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 1))
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (< c 192) (return 0))
+  (if (== c 215) (return 0))
+  (if (== c 247) (return 0))
+  (if (and (>= c 8192) (<= c 11263)) (return 0))
+  (if (and (>= c 12288) (<= c 12351)) (return 0))
+  (if (and (>= c 65280) (<= c 65295)) (return 0))
+  (return 1))
+
+(defn ^I32 fu-punct [^I32 c]
+  (comment "A character that is stripped from both ends of a token to find its core: brackets, quotes, dashes, bullets,")
+  (comment "stops and slashes.")
+  (if (and (>= c 40) (<= c 47))
+    (if (!= c 43) (return 1)))
+  (if (or (== c 33) (or (== c 34) (or (== c 39) (or (== c 58) (or (== c 59) (or (== c 60) (or (== c 62) (or (== c 63) (or (== c 91) (or (== c 92) (or (== c 93) (or (== c 95) (or (== c 123) (or (== c 124) (or (== c 125) (== c 126)))))))))))))))) (return 1))
+  (if (or (== c 183) (or (== c 171) (== c 187))) (return 1))
+  (if (and (>= c 8208) (<= c 8213)) (return 1))
+  (if (or (== c 8216) (or (== c 8217) (or (== c 8220) (or (== c 8221) (or (== c 8226) (or (== c 8249) (== c 8250))))))) (return 1))
+  (return 0))
+
+(defn ^I64 fu-step [^I64 h ^I32 c]
+  (comment "One step of a 64-bit FNV-1a over code points.")
+  (return (mul64 (bit-xor h (i64 c)) 1099511628211)))
+
+(defn ^I64 fu-basis []
+  (return -3750763034362895579))
+
+;; --------------------------------------------------------------- roman numerals
+(defn ^I32 fu-upper [^I32 c]
+  (if (and (>= c 97) (<= c 122)) (return (- c 32)))
+  (return c))
+
+(defn ^I32 fu-roman-sym [^I32 c]
+  (comment "The value of a roman symbol of either case, 0 for anything else.")
+  (let [^I32 u (fu-upper c)]
+    (if (== u 73) (return 1))
+    (if (== u 86) (return 5))
+    (if (== u 88) (return 10))
+    (if (== u 76) (return 50))
+    (if (== u 67) (return 100))
+    (if (== u 68) (return 500))
+    (if (== u 77) (return 1000))
+    (return 0)))
+
+(defn ^I32 fu-roman-val [^Cells tx ^I32 cs ^I32 ce]
+  (comment "The value of tx[cs, ce) read as a roman numeral of one case, in its canonical spelling and at most 3999; -1")
+  (comment "for anything else (so `mim`, `iiii` and `vx` are not numerals).")
+  (let [^I32 n (- ce cs)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 nx 0
+        ^:mut ^I32 up 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 c 0]
+    (if (or (< n 1) (> n 15)) (return -1))
+    (while (< i n)
+      (do (set c (cells-at tx (+ cs i)))
+          (if (== (fu-roman-sym c) 0) (return -1))
+          (if (and (>= c 65) (<= c 90)) (set up 1) (set lo 1))
+          (set i (+ i 1))))
+    (if (and (== up 1) (== lo 1)) (return -1))
+    (set i 0)
+    (while (< i n)
+      (do (set v (fu-roman-sym (cells-at tx (+ cs i))))
+          (set nx 0)
+          (if (< (+ i 1) n) (set nx (fu-roman-sym (cells-at tx (+ cs (+ i 1))))))
+          (if (< v nx)
+            (set total (- total v))
+            (set total (+ total v)))
+          (set i (+ i 1))))
+    (if (or (< total 1) (> total 3999)) (return -1))
+    ;; canonical: regenerate the numeral greedily and compare symbol by symbol
+    (let [^:mut ^I32 left total
+          ^:mut ^I32 pos 0
+          ^:mut ^I32 k 0
+          ^:mut ^I32 s1 0
+          ^:mut ^I32 s2 0
+          ^:mut ^I32 cc 0]
+      (while (< k 39)
+        (do (set s1 (fu-rn-at 0 (+ k 1)))
+            (set s2 (fu-rn-at 0 (+ k 2)))
+            (while (>= left (fu-rn-at 0 k))
+              (do (if (>= pos n) (return -1))
+                  (set cc (fu-upper (cells-at tx (+ cs pos))))
+                  (if (!= cc s1) (return -1))
+                  (set pos (+ pos 1))
+                  (if (> s2 0)
+                    (do (if (>= pos n) (return -1))
+                        (set cc (fu-upper (cells-at tx (+ cs pos))))
+                        (if (!= cc s2) (return -1))
+                        (set pos (+ pos 1))))
+                  (set left (- left (fu-rn-at 0 k)))))
+            (set k (+ k 3))))
+      (if (!= pos n) (return -1))
+      (return total))))
+
+;; --------------------------------------------------------------- tokens
+(defn ^I32 fu-cs [^Cells tx ^I32 s ^I32 e]
+  (comment "The start of the core of the token tx[s, e): past the punctuation at its front.")
+  (let [^:mut ^I32 i s]
+    (while (and (< i e) (== (fu-punct (cells-at tx i)) 1))
+      (set i (+ i 1)))
+    (return i)))
+
+(defn ^I32 fu-ce [^Cells tx ^I32 cs ^I32 e]
+  (comment "The end of the core (exclusive): before the punctuation at the back; never before `cs`.")
+  (let [^:mut ^I32 i e]
+    (while (and (> i cs) (== (fu-punct (cells-at tx (- i 1))) 1))
+      (set i (- i 1)))
+    (return i)))
+
+(defn ^I32 fu-pw-kind [^Cells tx ^I32 cs ^I32 ce]
+  (comment "0 for a core that is no page word, 1 for a page word (`Page`, `Seite`, `p`), 2 for an \"of\" word (`of`, `de`, `von`).")
+  (let [^I32 n (- ce cs)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 flag 0
+        ^:mut ^I32 wl 0
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 j 0]
+    (if (< n 1) (return 0))
+    (while (>= (fu-pw-at 0 i) 0)
+      (do (set flag (fu-pw-at 0 i))
+          (set i (+ i 1))
+          (set wl 0)
+          (while (!= (fu-pw-at 0 (+ i wl)) 0)
+            (set wl (+ wl 1)))
+          (if (== wl n)
+            (do (set ok 1)
+                (set j 0)
+                (while (< j n)
+                  (do (if (!= (fu-lower (cells-at tx (+ cs j))) (fu-pw-at 0 (+ i j))) (set ok 0))
+                      (set j (+ j 1))))
+                (if (== ok 1) (return flag))))
+          (set i (+ i (+ wl 1)))))
+    (return 0)))
+
+(defn ^I32 fu-caption-lead [^Cells tx ^Cells cd ^I32 r]
+  (comment "1 when the candidate's text begins with a caption word (`Table 3.`, `Figure 2`, `Abbildung`): a caption is content, not")
+  (comment "a running header, whatever its position.")
+  (let [^I32 bs (cd-get cd r 11)
+        ^I32 end (+ bs (cd-get cd r 12))
+        ^:mut ^I32 e bs
+        ^:mut ^I32 cs 0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 wl 0
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 j 0]
+    (while (and (< e end) (!= (cells-at tx e) 32))
+      (set e (+ e 1)))
+    (set cs (fu-cs tx bs e))
+    (set ce (fu-ce tx cs e))
+    (if (>= cs ce) (return 0))
+    (while (>= (fu-cw-at 0 i) 0)
+      (do (set wl 0)
+          (while (!= (fu-cw-at 0 (+ i wl)) 0)
+            (set wl (+ wl 1)))
+          (if (== wl (- ce cs))
+            (do (set ok 1)
+                (set j 0)
+                (while (< j wl)
+                  (do (if (!= (fu-lower (cells-at tx (+ cs j))) (fu-cw-at 0 (+ i j))) (set ok 0))
+                      (set j (+ j 1))))
+                (if (== ok 1) (return 1))))
+          (set i (+ i (+ wl 1)))))
+    (return 0)))
+
+(defn ^I32 fu-numeric [^Cells tx ^I32 cs ^I32 ce]
+  (comment "1 when the core is digits, and slashes between digit runs of at most nine digits: `3`, `03`, `3/10`.")
+  (let [^:mut ^I32 i cs
+        ^:mut ^I32 run 0
+        ^:mut ^I32 c 0]
+    (if (>= cs ce) (return 0))
+    (while (< i ce)
+      (do (set c (cells-at tx i))
+          (if (== (fu-digit c) 1)
+            (set run (+ run 1))
+            (do (if (!= c 47) (return 0))
+                (if (== run 0) (return 0))
+                (set run 0)))
+          (if (> run 9) (return 0))
+          (set i (+ i 1))))
+    (if (== run 0) (return 0))
+    (return 1)))
+
+;; token classes: 0 nothing but punctuation, 1 page word, 2 "of" word, 3 numeric, 4 roman numeral, 5 anything else
+(defn ^I32 fu-tclass [^Cells tx ^I32 cs ^I32 ce]
+  (if (>= cs ce) (return 0))
+  (let [^I32 pk (fu-pw-kind tx cs ce)]
+    (if (> pk 0) (return pk)))
+  (if (== (fu-numeric tx cs ce) 1) (return 3))
+  (if (> (fu-roman-val tx cs ce) 0) (return 4))
+  (return 5))
+
+;; ------------------------------------------------------------- a candidate's text and slots
+;; cd (candidate rows, CD = 16): 0 line, 1 page (1-based), 2 zone (1 top, 2 bottom, 3 margin), 3 y0, 4 y1, 5 template hash low,
+;; 6 template hash high, 7 slots (-1: too many, never grouped), 8 group, 9 tag state (0 none, 1 artifact in place,
+;; 2 tagged content, 3 artifact out of place), 10 isolated (0/1), 11 text start in `tx`, 12 text length, 13 first slot row in `sl`,
+;; 14 size of the first word, 15 state (0 free, 1 member of a qualified template group, 2 of a qualified style group).
+;; sl (slot rows, SL = 10): 0 candidate row, 1 kind (1 a number token, 2 a roman numeral token, 3 digits inside another
+;; token), 2 value (-1 unknown), 3 start of the digit run or the numeral in the line's text, 4 its length, 5 token ordinal,
+;; 6 digits (0 for a numeral), 7 1 for an upper-case numeral, 8 the token's start in the line's text, 9 its length.
+
+(defn ^I32 fu-line-text [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells out ^I32 l]
+  (comment "The line's words joined by one space, appended to `out`; answers the length.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^I32 start (cells-len out)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 started 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0]
+    (while (< k wn)
+      (do (set ts (wd-get wd (+ w0 k) (hd-tstart)))
+          (set tl (wd-get wd (+ w0 k) (hd-tlen)))
+          (if (and (>= ts 0) (> tl 0))
+            (do (if (== started 1) (cells-push out 32))
+                (set started 1)
+                (set j 0)
+                (while (< j tl)
+                  (do (cells-push out (cells-at et (+ ts j)))
+                      (set j (+ j 1))))))
+          (set k (+ k 1))))
+    (return (- (cells-len out) start))))
+
+(defn ^I32 fu-slot-push [^:mut ^Cells sl ^I32 r ^I32 kind ^I32 value ^I32 ds ^I32 dl ^I32 tok ^I32 nd ^I32 up ^I32 ts ^I32 tl]
+  (let [^I32 s (fu-push-row sl 10)]
+    (cells-set sl (+ (* s 10) 0) r)
+    (cells-set sl (+ (* s 10) 1) kind)
+    (cells-set sl (+ (* s 10) 2) value)
+    (cells-set sl (+ (* s 10) 3) ds)
+    (cells-set sl (+ (* s 10) 4) dl)
+    (cells-set sl (+ (* s 10) 5) tok)
+    (cells-set sl (+ (* s 10) 6) nd)
+    (cells-set sl (+ (* s 10) 7) up)
+    (cells-set sl (+ (* s 10) 8) ts)
+    (cells-set sl (+ (* s 10) 9) tl)
+    (return s)))
+
+(defn ^I32 fu-prefixed [^Cells tx ^I32 cs ^I32 ce]
+  (comment "The start of the digits of a core that is one or two letters, perhaps a `-` or a `.`, and at most nine digits (`K-1`,")
+  (comment "`A-12`, `F3`): a page number of a part of a document (SPEC 10.2); -1 for any other core. `ACME-01` is an identifier.")
+  (let [^:mut ^I32 i cs
+        ^:mut ^I32 c 0]
+    (while (and (< i ce) (and (< (- i cs) 3) (or (and (>= (cells-at tx i) 65) (<= (cells-at tx i) 90)) (and (>= (cells-at tx i) 97) (<= (cells-at tx i) 122)))))
+      (set i (+ i 1)))
+    (if (or (< (- i cs) 1) (> (- i cs) 2)) (return -1))
+    (if (>= i ce) (return -1))
+    (set c (cells-at tx i))
+    (if (or (== c 45) (or (== c 46) (== c 8211))) (set i (+ i 1)))
+    (if (>= i ce) (return -1))
+    (if (> (- ce i) 9) (return -1))
+    (set c i)
+    (while (< c ce)
+      (do (if (== (fu-digit (cells-at tx c)) 0) (return -1))
+          (set c (+ c 1))))
+    (return i)))
+
+(defn ^I32 fu-slots [^Cells tx ^I32 bs ^I32 n ^:mut ^Cells sl ^:mut ^Cells cd ^I32 r]
+  (comment "Tokenise the candidate's text tx[bs, bs+n): find its number slots (pushed on `sl`), and its template hash.")
+  (comment "A roman numeral is a slot only when every token of the line is a page word, an \"of\" word, a number or a numeral")
+  (comment "(`iv`, `Page iv`, `- IV -`): a numeral is otherwise a word (`mix`, `did`, `I`).")
+  (let [^I32 end (+ bs n)
+        ^:mut ^I32 i bs
+        ^:mut ^I32 e 0
+        ^:mut ^I32 cs 0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 pageish 1
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 tok 0
+        ^:mut ^I32 pf -1
+        ^:mut ^I32 over 0
+        ^:mut ^I64 h (fu-basis)]
+    (while (< i end)
+      (if (== (cells-at tx i) 32)
+        (set i (+ i 1))
+        (do (set e i)
+            (while (and (< e end) (!= (cells-at tx e) 32))
+              (set e (+ e 1)))
+            (set cs (fu-cs tx i e))
+            (set ce (fu-ce tx cs e))
+            (if (== (fu-tclass tx cs ce) 5) (set pageish 0))
+            (set i e))))
+    (cells-set cd (+ (* r 16) 13) (quot (cells-len sl) 10))
+    (set i bs)
+    (while (< i end)
+      (if (== (cells-at tx i) 32)
+        (do (set h (fu-step h 32))
+            (set i (+ i 1)))
+        (do (set e i)
+            (while (and (< e end) (!= (cells-at tx e) 32))
+              (set e (+ e 1)))
+            (set cs (fu-cs tx i e))
+            (set ce (fu-ce tx cs e))
+            (set k (fu-tclass tx cs ce))
+            (set pf -1)
+            (if (== k 5) (set pf (fu-prefixed tx cs ce)))
+            (set j i)
+            (while (< j cs)
+              (do (set h (fu-step h (cells-at tx j)))
+                  (set j (+ j 1))))
+            (if (and (== k 4) (== pageish 1))
+              (do (if (< ns FU_SLOTS)
+                    (do (let [^:mut ^I32 up 0]
+                          (if (and (>= (cells-at tx cs) 65) (<= (cells-at tx cs) 90)) (set up 1))
+                          (fu-slot-push sl r 2 (fu-roman-val tx cs ce) (- cs bs) (- ce cs) tok 0 up (- i bs) (- e i)))
+                        (set ns (+ ns 1)))
+                    (set over 1))
+                  (set h (fu-step h 36)))
+              (do (set j cs)
+                  (while (< j ce)
+                    (do (set c (cells-at tx j))
+                        (if (== (fu-digit c) 1)
+                          (do (set d j)
+                              (set v 0)
+                              (while (and (< d ce) (== (fu-digit (cells-at tx d)) 1))
+                                (do (if (< (- d j) 9) (set v (+ (* v 10) (- (cells-at tx d) 48))))
+                                    (set d (+ d 1))))
+                              (if (> (- d j) 9) (set v -1))
+                              (if (< ns FU_SLOTS)
+                                (do (if (== j pf)
+                                      (fu-slot-push sl r 4 v (- cs bs) (- ce cs) tok (- d j) 0 (- i bs) (- e i))
+                                      (fu-slot-push sl r (if (== k 3) 1 3) v (- j bs) (- d j) tok (- d j) 0 (- i bs) (- e i)))
+                                    (set ns (+ ns 1)))
+                                (set over 1))
+                              (set h (fu-step h 35))
+                              (set j d))
+                          (do (set h (fu-step h c))
+                              (set j (+ j 1))))))))
+            (set j ce)
+            (while (< j e)
+              (do (set h (fu-step h (cells-at tx j)))
+                  (set j (+ j 1))))
+            (set tok (+ tok 1))
+            (set i e))))
+    (cells-set cd (+ (* r 16) 5) (i32 h))
+    (cells-set cd (+ (* r 16) 6) (i32 (shr64 h 32)))
+    (if (== over 1)
+      (cells-set cd (+ (* r 16) 7) -1)
+      (cells-set cd (+ (* r 16) 7) ns))
+    (return ns)))
+
+(defn ^I32 fu-tag [^Cells wd ^Cells ln ^Cells gl ^Cells mk ^I32 l ^I32 zone]
+  (comment "What the tagged PDF says about the line (SPEC 8.4.3, D076): by the marked content of its words' first glyphs,")
+  (comment "the share that is an /Artifact in its place (1: Pagination; Header in the top zone; Footer in the bottom zone), an")
+  (comment "/Artifact out of place (3), or inside a marked content with an MCID (2). 0 when no share reaches 60 %.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 sup 0
+        ^:mut ^I32 oth 0
+        ^:mut ^I32 con 0
+        ^:mut ^I32 tot 0
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 su 0]
+    (while (< k wn)
+      (do (set g (wd-get wd (+ w0 k) (wf-gfirst)))
+          (if (and (>= g 0) (> (wd-get wd (+ w0 k) (wf-gcount)) 0))
+            (do (set tot (+ tot 1))
+                (set m (gl-get gl g (gf-mark)))
+                (if (>= m 0)
+                  (do (set a (mk-artifact-of mk m))
+                      (if (> a 0)
+                        (do (set ty (quot a 16))
+                            (set su (rem a 16))
+                            (if (or (== ty 1) (or (and (== su 1) (== zone 1)) (and (== su 2) (== zone 2))))
+                              (set sup (+ sup 1))
+                              (set oth (+ oth 1))))
+                        (do (set t m)
+                            (while (>= t 0)
+                              (do (if (>= (mk-get mk t (mkf-mcid)) 0)
+                                    (do (set con (+ con 1))
+                                        (set t -1))
+                                    (set t (mk-get mk t (mkf-parent))))))))))))
+          (set k (+ k 1))))
+    (if (== tot 0) (return 0))
+    (if (>= (* sup 10) (* tot 6)) (return 1))
+    (if (>= (* oth 10) (* tot 6)) (return 3))
+    (if (>= (* con 10) (* tot 6)) (return 2))
+    (return 0)))
+
+(defn ^I32 fu-scan [^Cells wd ^Cells ln ^Cells et ^Cells gl ^Cells mk ^Cells pages ^I32 npages
+                    ^:mut ^Cells cd ^:mut ^Cells sl ^:mut ^Cells tx]
+  (comment "Every candidate line of the document as a row of `cd`, in line order. Answers the number of rows, or -1 when the")
+  (comment "lines are not in page order (nothing here is then safe to say).")
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 prev 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 zone 0
+        ^:mut ^I32 cy2 0
+        ^:mut ^I32 cx2 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 r 0]
+    (while (< l nl)
+      (do (set p (ln-get ln l (lh-page)))
+          (if (< p prev) (return -1))
+          (if (> p prev) (set prev p))
+          (if (and (>= p 1) (<= p npages))
+            (do (set w (page-w pages (- p 1)))
+                (set h (page-h pages (- p 1)))
+                (set rot (ln-get ln l (lh-rot)))
+                (set zone 0)
+                (set cy2 (+ (ln-get ln l (lh-y0)) (ln-get ln l (lh-y1))))
+                (set cx2 (+ (ln-get ln l (lh-x0)) (ln-get ln l (lh-x1))))
+                (if (or (< rot 100) (> rot 35900))
+                  (do (if (< cy2 (quot (* h FU_TOP) 500)) (set zone 1))
+                      (if (> cy2 (quot (* h FU_BOT) 500)) (set zone 2)))
+                  (if (or (< (fu-abs (- rot 9000)) 100) (< (fu-abs (- rot 27000)) 100))
+                    (if (or (< cx2 (quot (* w FU_SIDE) 500)) (> cx2 (quot (* w (- 1000 FU_SIDE)) 500)))
+                      (set zone 3))))
+                (if (> zone 0)
+                  (do (set ts (cells-len tx))
+                      (set tl (fu-line-text wd ln et tx l))
+                      (if (or (== tl 0) (> tl FU_MAXLEN))
+                        (cells-drop tx ts)
+                        (do (set r (fu-push-row cd 16))
+                            (cd-set cd r 0 l)
+                            (cd-set cd r 1 p)
+                            (cd-set cd r 2 zone)
+                            (cd-set cd r 3 (ln-get ln l (lh-y0)))
+                            (cd-set cd r 4 (ln-get ln l (lh-y1)))
+                            (cd-set cd r 8 -1)
+                            (cd-set cd r 11 ts)
+                            (cd-set cd r 12 tl)
+                            (fu-slots tx ts tl sl cd r)
+                            (cd-set cd r 9 (fu-tag wd ln gl mk l zone))
+                            (let [^I32 w0 (ln-get ln l (lh-first))]
+                              (cd-set cd r 14 (wd-get wd w0 (wf-size))))))))))
+          (set l (+ l 1))))
+    (return (quot (cells-len cd) 16))))
+
+;; ------------------------------------------------------------------------- groups
+;; The sort keys. mode 0: (zone, hash high, hash low, y0, page): the template groups. mode 1: (group, page): a group's
+;; members in page order. mode 2: (zone, size in half points, y0, page): the style groups.
+(defn ^I32 fu-key [^Cells cd ^I32 mode ^I32 r ^I32 k]
+  (if (== mode 0)
+    (do (if (== k 0) (return (cd-get cd r 2)))
+        (if (== k 1) (return (cd-get cd r 6)))
+        (if (== k 2) (return (cd-get cd r 5)))
+        (if (== k 3) (return (cd-get cd r 3)))
+        (return (cd-get cd r 1))))
+  (if (== mode 1)
+    (do (if (== k 0) (return (cd-get cd r 8)))
+        (if (== k 1) (return (cd-get cd r 1)))
+        (return 0)))
+  (if (== k 0) (return (cd-get cd r 2)))
+  (if (== k 1) (return (quot (+ (cd-get cd r 14) 25) 50)))
+  (if (== k 2) (return (cd-get cd r 3)))
+  (if (== k 3) (return (cd-get cd r 1)))
+  (return 0))
+
+(defn ^I32 fu-before [^Cells cd ^I32 mode ^I32 a ^I32 b]
+  (comment "1 when row a sorts before row b: lexicographic on the mode's five keys, then the row (a total order).")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< k 5)
+      (do (set x (fu-key cd mode a k))
+          (set y (fu-key cd mode b k))
+          (if (< x y) (return 1))
+          (if (> x y) (return 0))
+          (set k (+ k 1))))
+    (if (< a b) (return 1))
+    (return 0)))
+
+(defn ^I32 fu-sort [^:mut ^Cells ord ^Cells cd ^I32 mode]
+  (comment "Shell sort of the row indices in `ord` (Knuth's gaps).")
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at ord i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at ord (- j h)))
+                      (if (== (fu-before cd mode v u) 1)
+                        (do (cells-set ord j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set ord j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+;; gr (group rows, GR = 16): 0 first position in `ord`, 1 members, 2 distinct pages, 3 zone, 4 qualified (0/1), 5 kind (1 template,
+;; 2 style), 6 the page slot (an ordinal, -1), 7 the embedded slot that follows the page (-1), 8 score, 9 isolated members,
+;; 10 members with the tag evidence for, 11 against, 12 varying (1: the members differ beyond the page), 13 slots,
+;; 14 the class of each slot, two bits each (1 constant, 2 follows the page, 3 varies), 15 1 when the embedded slot equals the page index.
+
+(defn ^I32 fu-cluster [^:mut ^Cells ord ^Cells cd ^:mut ^Cells gr ^Cells pages ^I32 mode]
+  (comment "Sort `ord` by the mode's keys and cut it into groups: a new group where the zone, the hash (mode 0) or the size")
+  (comment "(mode 2) change, or the vertical position moves more than FU_YTOL per mille of the page's height from the member")
+  (comment "before it. Fills `gr`'s kind, zone, first position and members, and every row's group. Answers the number of groups.")
+  (fu-sort ord cd mode)
+  (cells-drop gr 0)
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 g -1
+        ^:mut ^I32 r 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 cut 0
+        ^:mut ^I32 tol 0]
+    (while (< i n)
+      (do (set r (cells-at ord i))
+          (set cut 1)
+          (if (> i 0)
+            (do (set q (cells-at ord (- i 1)))
+                (set tol (quot (* (page-h pages (- (cd-get cd r 1) 1)) FU_YTOL) 1000))
+                (if (== (cd-get cd r 2) (cd-get cd q 2))
+                  (if (== mode 0)
+                    (if (and (== (cd-get cd r 5) (cd-get cd q 5)) (== (cd-get cd r 6) (cd-get cd q 6)))
+                      (if (<= (- (cd-get cd r 3) (cd-get cd q 3)) tol) (set cut 0)))
+                    (if (== (fu-key cd 2 r 1) (fu-key cd 2 q 1))
+                      (if (<= (- (cd-get cd r 3) (cd-get cd q 3)) tol) (set cut 0)))))))
+          (if (== cut 1)
+            (do (set g (fu-push-row gr 16))
+                (gr-set gr g 0 i)
+                (gr-set gr g 3 (cd-get cd r 2))
+                (gr-set gr g 5 (if (== mode 0) 1 2))
+                (gr-set gr g 6 -1)
+                (gr-set gr g 7 -1)))
+          (gr-inc gr g 1)
+          (cd-set cd r 8 g)
+          (set i (+ i 1))))
+    (return (quot (cells-len gr) 16))))
+
+(defn ^I32 fu-stats [^Cells ord ^Cells cd ^:mut ^Cells gr]
+  (comment "Per group: the distinct pages and the tag evidence for and against, over its members (in page order).")
+  (let [^I32 ng (quot (cells-len gr) 16)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 prev 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 m 0]
+    (while (< g ng)
+      (do (set f (gr-get gr g 0))
+          (set m (gr-get gr g 1))
+          (set prev -1)
+          (gr-set gr g 2 0)
+          (gr-set gr g 10 0)
+          (gr-set gr g 11 0)
+          (set i 0)
+          (while (< i m)
+            (do (set r (cells-at ord (+ f i)))
+                (if (!= (cd-get cd r 1) prev)
+                  (do (gr-inc gr g 2)
+                      (set prev (cd-get cd r 1))))
+                (if (== (cd-get cd r 9) 1) (gr-inc gr g 10))
+                (if (== (cd-get cd r 9) 2) (gr-inc gr g 11))
+                (set i (+ i 1))))
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^I32 fu-iso-count [^Cells ord ^Cells cd ^:mut ^Cells gr]
+  (comment "Per group: how many members are isolated (gr 9).")
+  (let [^I32 ng (quot (cells-len gr) 16)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 r 0]
+    (while (< g ng)
+      (do (set f (gr-get gr g 0))
+          (set m (gr-get gr g 1))
+          (gr-set gr g 9 0)
+          (set i 0)
+          (while (< i m)
+            (do (set r (cells-at ord (+ f i)))
+                (if (>= (cd-get cd r 10) FU_ISOGAP) (gr-inc gr g 9))
+                (set i (+ i 1))))
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^I32 fu-iso [^Cells ln ^:mut ^Cells cd ^Cells gr ^I32 ncd]
+  (comment "Isolation (3): for each candidate, is the nearest other line toward the inside of the page at least half a line")
+  (comment "away? The lines that are members of a template group seen on two or more pages do not count: they are the")
+  (comment "furniture. A margin line is isolated by definition. Answers 0.")
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 r0 0
+        ^:mut ^I32 r1 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 l2 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 gap 0
+        ^:mut ^I32 cy2 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 skip 0
+        ^:mut ^I32 rr 0]
+    (while (< l nl)
+      (do (set p (ln-get ln l (lh-page)))
+          (set e l)
+          (while (and (< e nl) (== (ln-get ln e (lh-page)) p))
+            (set e (+ e 1)))
+          (while (and (< r0 ncd) (< (cd-get cd r0 1) p))
+            (set r0 (+ r0 1)))
+          (set r1 r0)
+          (while (and (< r1 ncd) (== (cd-get cd r1 1) p))
+            (set r1 (+ r1 1)))
+          (set r r0)
+          (while (< r r1)
+            (do (if (== (cd-get cd r 2) 3)
+                  (cd-set cd r 10 100000)
+                  (do (set y0 (cd-get cd r 3))
+                      (set y1 (cd-get cd r 4))
+                      (set best 1000000000)
+                      (set q r0)
+                      (set l2 l)
+                      (while (< l2 e)
+                        (do (set skip 0)
+                            (if (== l2 (cd-get cd r 0)) (set skip 1))
+                            (set rot (ln-get ln l2 (lh-rot)))
+                            (if (and (>= rot 100) (<= rot 35900)) (set skip 1))
+                            (while (and (< q r1) (< (cd-get cd q 0) l2))
+                              (set q (+ q 1)))
+                            (if (and (< q r1) (== (cd-get cd q 0) l2))
+                              (do (set rr (cd-get cd q 8))
+                                  (if (>= (gr-get gr rr 2) 2) (set skip 1))))
+                            (if (== skip 0)
+                              (do (set cy2 (+ (ln-get ln l2 (lh-y0)) (ln-get ln l2 (lh-y1))))
+                                  (if (== (cd-get cd r 2) 1)
+                                    (if (> cy2 (* 2 y1))
+                                      (do (set gap (- (ln-get ln l2 (lh-y0)) y1))
+                                          (if (< gap best) (set best gap)))))
+                                  (if (== (cd-get cd r 2) 2)
+                                    (if (< cy2 (* 2 y0))
+                                      (do (set gap (- y0 (ln-get ln l2 (lh-y1))))
+                                          (if (< gap best) (set best gap)))))))
+                            (set l2 (+ l2 1))))
+                      (set best (fu-min best 1000000))
+                      (cd-set cd r 10 (quot (* best 1000) (fu-max 1 (- y1 y0))))))
+                (set r (+ r 1))))
+          (set r0 r1)
+          (set l e)))
+    (return 0)))
+
+;; --------------------------------------------------------------- the slots of a group
+(defn ^I32 fu-slot-value [^Cells cd ^Cells sl ^I32 r ^I32 j]
+  (return (sl-get sl (+ (cd-get cd r 13) j) 2)))
+
+(defn ^I32 fu-slot-kind [^Cells cd ^Cells sl ^I32 r ^I32 j]
+  (return (sl-get sl (+ (cd-get cd r 13) j) 1)))
+
+(defn ^I32 fu-class-bit [^I32 j]
+  (comment "4 to the j: where the two bits of slot j's class sit in gr 14.")
+  (let [^:mut ^I32 v 1
+        ^:mut ^I32 i 0]
+    (while (< i j)
+      (do (set v (* v 4))
+          (set i (+ i 1))))
+    (return v)))
+
+(defn ^I32 fu-analyze [^Cells ord ^Cells cd ^Cells sl ^:mut ^Cells gr ^I32 g]
+  (comment "Classify each slot of the group's template over its members, in page order: 1 the same on every page, 2 follows")
+  (comment "the page (the value steps by the page step in at least FU_PAIRS per cent of consecutive pairs), 3 varies. The first")
+  (comment "standalone slot that follows the page is the PAGE SLOT; the first embedded one is the EMBEDDED slot, `exact` (gr 15)")
+  (comment "when every pair stepped and its value is the page index. A group varies (gr 12) when a slot varies or an embedded")
+  (comment "slot is not exact. Answers 0.")
+  (let [^I32 f (gr-get gr g 0)
+        ^I32 m (gr-get gr g 1)
+        ^I32 rep (cells-at ord f)
+        ^I32 ns (cd-get cd rep 7)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cls 0
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 same 0
+        ^:mut ^I32 npairs 0
+        ^:mut ^I32 nok 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 pr 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 pv 0
+        ^:mut ^I32 kind 0]
+    (gr-set gr g 6 -1)
+    (gr-set gr g 7 -1)
+    (gr-set gr g 12 0)
+    (gr-set gr g 13 ns)
+    (gr-set gr g 14 0)
+    (gr-set gr g 15 0)
+    (if (< ns 1) (return 0))
+    (while (< j ns)
+      (do (set same 1)
+          (set npairs 0)
+          (set nok 0)
+          (set pr rep)
+          (set pv (fu-slot-value cd sl rep j))
+          (set i 1)
+          (while (< i m)
+            (do (set r (cells-at ord (+ f i)))
+                (set v (fu-slot-value cd sl r j))
+                (if (!= v (fu-slot-value cd sl rep j)) (set same 0))
+                (if (!= (cd-get cd r 1) (cd-get cd pr 1))
+                  (do (set npairs (+ npairs 1))
+                      (if (and (>= v 0) (and (>= pv 0) (== (- v pv) (- (cd-get cd r 1) (cd-get cd pr 1)))))
+                        (set nok (+ nok 1)))))
+                (set pr r)
+                (set pv v)
+                (set i (+ i 1))))
+          (set cls 3)
+          (if (== same 1) (set cls 1))
+          (if (and (== cls 3) (and (>= npairs 1) (>= (* nok 100) (* npairs FU_PAIRS)))) (set cls 2))
+          (set kind (fu-slot-kind cd sl rep j))
+          (set bits (+ bits (* cls (fu-class-bit j))))
+          (if (== cls 3) (gr-set gr g 12 1))
+          (if (== cls 2)
+            (do (if (and (!= kind 3) (== (gr-get gr g 6) -1))
+                  (gr-set gr g 6 j)
+                  (if (and (== kind 3) (== (gr-get gr g 7) -1))
+                    (do (gr-set gr g 7 j)
+                        (if (and (== nok npairs) (== (fu-slot-value cd sl rep j) (cd-get cd rep 1)))
+                          (gr-set gr g 15 1)))
+                    (gr-set gr g 12 1)))))
+          (set j (+ j 1))))
+    (gr-set gr g 14 bits)
+    (if (and (>= (gr-get gr g 7) 0) (== (gr-get gr g 15) 0)) (gr-set gr g 12 1))
+    (return 0)))
+
+(defn ^I32 fu-qualify [^Cells ord ^Cells cd ^Cells sl ^Cells tx ^:mut ^Cells gr ^I32 g ^I32 npages ^I32 trust]
+  (comment "SPEC 10.2 step 1 and D076: does the template group qualify as furniture? The score is the recurrence (300 for one")
+  (comment "page, 500 + 150 per page beyond, at most 1000) plus FU_TAGW tenths of `trust` times the share of members that are")
+  (comment "tagged artifacts in place minus the share that are tagged content; it needs FU_QUAL, and the coverage (at least")
+  (comment "FU_COVER per cent of the pages, or 3 pages for a page number, or the tree's word) and the isolation (at least")
+  (comment "FU_ISO per cent of the members, or a page number, or the tree's word). A page number the tree marks Pagination is")
+  (comment "taken from one page. Answers 1 or 0 and sets gr 4, 8.")
+  (let [^I32 f (gr-get gr g 0)
+        ^I32 m (gr-get gr g 1)
+        ^I32 c (gr-get gr g 2)
+        ^I32 rep (cells-at ord f)
+        ^I32 ns (cd-get cd rep 7)
+        ^I32 s (quot (* (gr-get gr g 10) 1000) m)
+        ^I32 o (quot (* (gr-get gr g 11) 1000) m)
+        ^:mut ^I32 er 300
+        ^:mut ^I32 score 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 pagelike 0
+        ^:mut ^I32 covok 0
+        ^:mut ^I32 isook 0
+        ^:mut ^I32 tag 0]
+    (gr-set gr g 4 0)
+    (gr-set gr g 8 0)
+    (if (< ns 0) (return 0))
+    ;; a caption that changes from page to page is content
+    (if (and (== (gr-get gr g 12) 1) (== (fu-caption-lead tx cd rep) 1)) (return 0))
+    (if (>= c 2) (set er (fu-min 1000 (+ 500 (* 150 c)))))
+    (set score (+ er (quot (* (quot (* trust (- s o)) 1000) FU_TAGW) 10)))
+    (gr-set gr g 8 (fu-max 0 (fu-min 1000 score)))
+    (if (and (>= s 800) (>= trust 300)) (set tag 1))
+    (if (>= (gr-get gr g 6) 0) (set pagelike 1))
+    (if (>= (* c 100) (* npages FU_COVER)) (set covok 1))
+    (if (and (== pagelike 1) (>= c 3)) (set covok 1))
+    (if (== tag 1) (set covok 1))
+    (if (>= (* (gr-get gr g 9) 100) (* m FU_ISO)) (set isook 1))
+    (if (== pagelike 1) (set isook 1))
+    (if (== tag 1) (set isook 1))
+    (if (== (gr-get gr g 3) 3)
+      (do (set covok 0)
+          (if (and (>= c 3) (>= (* c 100) (* npages 50))) (set covok 1))))
+    (if (and (>= score FU_QUAL) (and (== covok 1) (== isook 1)))
+      (do (gr-set gr g 4 1)
+          (return 1)))
+    (return 0)))
+
+;; ---------------------------------------------------------------- normalised text and hashes
+(defn ^I32 fu-norm-cp [^I32 c]
+  (comment "What a character is in a comparison of titles: a letter or a digit, lowercase; 0 for anything else.")
+  (if (== (fu-alnum c) 0) (return 0))
+  (return (fu-lower c)))
+
+(defn ^I64 fu-hash-cells [^Cells c ^I32 s ^I32 n]
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 x 0
+        ^:mut ^I64 h (fu-basis)]
+    (while (< i n)
+      (do (set x (fu-norm-cp (cells-at c (+ s i))))
+          (if (> x 0) (set h (fu-step h x)))
+          (set i (+ i 1))))
+    (return h)))
+
+(defn ^I32 fu-norm-len [^Cells c ^I32 s ^I32 n]
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (while (< i n)
+      (do (if (> (fu-norm-cp (cells-at c (+ s i))) 0) (set k (+ k 1)))
+          (set i (+ i 1))))
+    (return k)))
+
+(defn ^I64 fu-hash-lines [^Cells wd ^Cells ln ^Cells et ^I32 l0 ^I32 k]
+  (comment "The hash of the normalised text of k consecutive lines read as one.")
+  (let [^:mut ^I32 l l0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 x 0
+        ^:mut ^I64 h (fu-basis)]
+    (while (< l (+ l0 k))
+      (do (set w 0)
+          (while (< w (ln-get ln l (lh-count)))
+            (do (set ts (wd-get wd (+ (ln-get ln l (lh-first)) w) (hd-tstart)))
+                (set tl (wd-get wd (+ (ln-get ln l (lh-first)) w) (hd-tlen)))
+                (if (and (>= ts 0) (> tl 0))
+                  (do (set j 0)
+                      (while (< j tl)
+                        (do (set x (fu-norm-cp (cells-at et (+ ts j))))
+                            (if (> x 0) (set h (fu-step h x)))
+                            (set j (+ j 1))))))
+                (set w (+ w 1))))
+          (set l (+ l 1))))
+    (return h)))
+
+(defn ^I32 fu-len-lines [^Cells wd ^Cells ln ^Cells et ^I32 l0 ^I32 k]
+  (let [^:mut ^I32 l l0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0]
+    (while (< l (+ l0 k))
+      (do (set w 0)
+          (while (< w (ln-get ln l (lh-count)))
+            (do (set ts (wd-get wd (+ (ln-get ln l (lh-first)) w) (hd-tstart)))
+                (set tl (wd-get wd (+ (ln-get ln l (lh-first)) w) (hd-tlen)))
+                (if (and (>= ts 0) (> tl 0))
+                  (set n (+ n (fu-norm-len et ts tl))))
+                (set w (+ w 1))))
+          (set l (+ l 1))))
+    (return n)))
+
+(defn ^I32 fu-bh-sort [^:mut ^Cells bh]
+  (comment "Shell sort of the rows (low, high) of `bh` by (high, low).")
+  (let [^I32 n (quot (cells-len bh) 2)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set lo (cells-at bh (* i 2)))
+                (set hi (cells-at bh (+ (* i 2) 1)))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (if (or (< hi (cells-at bh (+ (* (- j h) 2) 1)))
+                              (and (== hi (cells-at bh (+ (* (- j h) 2) 1))) (< lo (cells-at bh (* (- j h) 2)))))
+                        (do (cells-set bh (* j 2) (cells-at bh (* (- j h) 2)))
+                            (cells-set bh (+ (* j 2) 1) (cells-at bh (+ (* (- j h) 2) 1)))
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set bh (* j 2) lo)
+                (cells-set bh (+ (* j 2) 1) hi)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 fu-bh-has [^Cells bh ^I64 h]
+  (comment "Is the 64-bit hash one of the rows of the sorted `bh`?")
+  (let [^I32 lo (i32 h)
+        ^I32 hi (i32 (shr64 h 32))
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b (quot (cells-len bh) 2)
+        ^:mut ^I32 mid 0]
+    (while (< a b)
+      (do (set mid (quot (+ a b) 2))
+          (if (and (== (cells-at bh (* mid 2)) lo) (== (cells-at bh (+ (* mid 2) 1)) hi)) (return 1))
+          (if (or (< (cells-at bh (+ (* mid 2) 1)) hi)
+                  (and (== (cells-at bh (+ (* mid 2) 1)) hi) (< (cells-at bh (* mid 2)) lo)))
+            (set a (+ mid 1))
+            (set b mid))))
+    (return 0)))
+
+(defn ^I32 fu-cd-find [^Cells cd ^I32 ncd ^I32 l]
+  (comment "The candidate row of line l (candidate rows are in line order), or -1.")
+  (let [^:mut ^I32 a 0
+        ^:mut ^I32 b ncd
+        ^:mut ^I32 mid 0]
+    (while (< a b)
+      (do (set mid (quot (+ a b) 2))
+          (if (== (cd-get cd mid 0) l) (return mid))
+          (if (< (cd-get cd mid 0) l) (set a (+ mid 1)) (set b mid))))
+    (return -1)))
+
+(defn ^I32 fu-body-hashes [^Cells wd ^Cells ln ^Cells et ^Cells cd ^I32 ncd ^Cells txt ^Cells md ^:mut ^Cells bh]
+  (comment "The hashes of everything the output will say: every line that is not a member of a qualified group, alone and with")
+  (comment "the one or two lines after it on the page, and the document's Info /Title, each of at least FU_MINNORM letters and")
+  (comment "digits; sorted. A running title that is already one of them is the output saying it twice.")
+  (cells-drop bh 0)
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ok 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 p 0
+        ^:mut ^I64 h 0]
+    (while (< l nl)
+      (do (set p (ln-get ln l (lh-page)))
+          (set k 1)
+          (set ok 1)
+          (while (and (<= k 3) (== ok 1))
+            (do (if (>= (+ l (- k 1)) nl)
+                  (set ok 0)
+                  (do (if (!= (ln-get ln (+ l (- k 1)) (lh-page)) p) (set ok 0))
+                      (set q (fu-cd-find cd ncd (+ l (- k 1))))
+                      (if (>= q 0) (if (> (cd-get cd q 15) 0) (set ok 0)))))
+                (if (== ok 1)
+                  (if (>= (fu-len-lines wd ln et l k) FU_MINNORM)
+                    (do (set h (fu-hash-lines wd ln et l k))
+                        (cells-push bh (i32 h))
+                        (cells-push bh (i32 (shr64 h 32))))))
+                (set k (+ k 1))))
+          (set l (+ l 1))))
+    (if (and (> (cells-len md) (+ FU_MD_TITLE 1)) (> (cells-at md (+ FU_MD_TITLE 1)) 0))
+      (if (>= (fu-norm-len txt (cells-at md FU_MD_TITLE) (cells-at md (+ FU_MD_TITLE 1))) FU_MINNORM)
+        (do (set h (fu-hash-cells txt (cells-at md FU_MD_TITLE) (cells-at md (+ FU_MD_TITLE 1))))
+            (cells-push bh (i32 h))
+            (cells-push bh (i32 (shr64 h 32))))))
+    (fu-bh-sort bh)
+    (return 0)))
+
+(defn ^I32 fu-title-match [^Cells bh ^Cells c ^I32 s ^I32 n]
+  (comment "Is the text c[s, s+n) (normalised) something the output already says? At least FU_MINNORM letters and digits.")
+  (if (< (fu-norm-len c s n) FU_MINNORM) (return 0))
+  (return (fu-bh-has bh (fu-hash-cells c s n))))
+
+;; ------------------------------------------------------------------- decomposition (SPEC 10.2 step 2)
+(defn ^I32 fu-next-tok [^Cells tx ^I32 i ^I32 end ^I32 tok]
+  (comment "From i (just after the token numbered `tok`), the next token that is not only punctuation, as its ordinal * 8 + its")
+  (comment "class (`fu-tclass`); -1 when there is none.")
+  (let [^:mut ^I32 p i
+        ^:mut ^I32 e 0
+        ^:mut ^I32 cs 0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 n (+ tok 1)]
+    (while (< p end)
+      (if (== (cells-at tx p) 32)
+        (set p (+ p 1))
+        (do (set e p)
+            (while (and (< e end) (!= (cells-at tx e) 32))
+              (set e (+ e 1)))
+            (set cs (fu-cs tx p e))
+            (set ce (fu-ce tx cs e))
+            (set k (fu-tclass tx cs ce))
+            (if (!= k 0) (return (+ (* n 8) k)))
+            (set n (+ n 1))
+            (set p e))))
+    (return -1)))
+
+(defn ^I32 fu-decomp [^Cells tx ^Cells cd ^Cells sl ^I32 r ^I32 pj ^I32 ej ^I32 pad ^:mut ^Cells ft]
+  (comment "What REMAINS of candidate r's text once the page numbering is taken out, appended to `ft`; answers its length.")
+  (comment "With a PAGE SLOT `pj` (an ordinal among the candidate's slots; -1 none) out go: its token; a page word (`Page`, `Seite`)")
+  (comment "next to it; an \"of\" word (`of`, `de`, `von`) before a number, and that number, the total; and the tokens that are only")
+  (comment "punctuation. Without one the text is copied as it is. The EMBEDDED slot `ej`, when given, is written as the template `{n}`")
+  (comment "(`{n:0W}` when `pad` is the width W of its zero-padded digits) in place of its digits.")
+  (let [^I32 bs (cd-get cd r 11)
+        ^I32 end (+ bs (cd-get cd r 12))
+        ^I32 first (cd-get cd r 13)
+        ^I32 start (cells-len ft)
+        ^:mut ^I32 pjtok -1
+        ^:mut ^I32 ejs -1
+        ^:mut ^I32 ejl 0
+        ^:mut ^I32 i bs
+        ^:mut ^I32 e 0
+        ^:mut ^I32 cs 0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 nx 0
+        ^:mut ^I32 prevslot 0
+        ^:mut ^I32 prevof 0
+        ^:mut ^I32 sepof 0
+        ^:mut ^I32 tok 0
+        ^:mut ^I32 skip 0
+        ^:mut ^I32 started 0
+        ^:mut ^I32 j 0]
+    (if (>= pj 0) (set pjtok (sl-get sl (+ first pj) 5)))
+    (if (>= ej 0)
+      (do (set ejs (+ bs (sl-get sl (+ first ej) 3)))
+          (set ejl (sl-get sl (+ first ej) 4))))
+    (while (< i end)
+      (if (== (cells-at tx i) 32)
+        (set i (+ i 1))
+        (do (set e i)
+            (while (and (< e end) (!= (cells-at tx e) 32))
+              (set e (+ e 1)))
+            (set cs (fu-cs tx i e))
+            (set ce (fu-ce tx cs e))
+            (set k (fu-tclass tx cs ce))
+            (set nx -1)
+            (if (>= pj 0) (set nx (fu-next-tok tx e end tok)))
+            (set skip 0)
+            (if (and (== k 0) (>= pj 0)) (set skip 1))
+            (if (== tok pjtok) (set skip 1))
+            (if (and (>= pj 0) (== k 1))
+              (if (or (== prevslot 1) (and (>= nx 0) (== (quot nx 8) pjtok))) (set skip 1)))
+            (if (and (>= pj 0) (== k 2))
+              (if (and (>= nx 0) (== (rem nx 8) 3)) (set skip 1)))
+            (if (and (>= pj 0) (and (== k 3) (or (== prevof 1) (== sepof 1)))) (set skip 1))
+            (if (== skip 0)
+              (do (if (== started 1) (cells-push ft 32))
+                  (set started 1)
+                  (set j i)
+                  (while (< j e)
+                    (if (and (>= ejs 0) (== j ejs))
+                      (do (cells-push ft 123)
+                          (cells-push ft 110)
+                          (if (> pad 0)
+                            (do (cells-push ft 58)
+                                (cells-push ft 48)
+                                (cells-push ft (+ 48 pad))))
+                          (cells-push ft 125)
+                          (set j (+ j ejl)))
+                      (do (cells-push ft (cells-at tx j))
+                          (set j (+ j 1)))))))
+            (if (!= k 0)
+              (do (set prevslot 0)
+                  (if (== tok pjtok) (set prevslot 1))
+                  (set prevof 0)
+                  (if (and (== k 2) (== skip 1)) (set prevof 1))))
+            (if (== k 0)
+              (if (and (== (- e i) 1) (== (cells-at tx i) 47)) (set sepof 1))
+              (set sepof 0))
+            (set tok (+ tok 1))
+            (set i e))))
+    (return (- (cells-len ft) start))))
+
+(defn ^I32 fu-pagenum-slot [^Cells tx ^Cells cd ^Cells sl ^I32 r ^I32 lone]
+  (comment "For a candidate that is in no template group: the slot of its page number when the line says `page` in so many words")
+  (comment "(a page word, and nothing else but numbers, \"of\" words and punctuation: `Seite 12`, `Page iv of x`), or is a number alone")
+  (comment "and equal to the page's index (`12` on page 12); else -1.")
+  (let [^I32 bs (cd-get cd r 11)
+        ^I32 end (+ bs (cd-get cd r 12))
+        ^I32 first (cd-get cd r 13)
+        ^I32 ns (cd-get cd r 7)
+        ^:mut ^I32 i bs
+        ^:mut ^I32 e 0
+        ^:mut ^I32 cs 0
+        ^:mut ^I32 ce 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 words 0
+        ^:mut ^I32 ntok 0
+        ^:mut ^I32 j 0]
+    (if (< ns 1) (return -1))
+    (while (< i end)
+      (if (== (cells-at tx i) 32)
+        (set i (+ i 1))
+        (do (set e i)
+            (while (and (< e end) (!= (cells-at tx e) 32))
+              (set e (+ e 1)))
+            (set cs (fu-cs tx i e))
+            (set ce (fu-ce tx cs e))
+            (set k (fu-tclass tx cs ce))
+            (if (and (== k 5) (< (fu-prefixed tx cs ce) 0)) (return -1))
+            (if (== k 1) (set words (+ words 1)))
+            (if (!= k 0) (set ntok (+ ntok 1)))
+            (set i e))))
+    (if (== words 0)
+      (do (if (and (== ntok 1) (== lone 1) (!= (sl-get sl first 1) 3)) (return 0))
+          (if (and (== ntok 1) (and (== (sl-get sl first 1) 1) (== (sl-get sl first 2) (cd-get cd r 1))))
+            (return 0))
+          (if (and (== ntok 1) (== (sl-get sl first 1) 4)) (return 0))
+          (return -1)))
+    (while (< j ns)
+      (do (if (!= (sl-get sl (+ first j) 1) 3) (return j))
+          (set j (+ j 1))))
+    (return -1)))
+
+(defn ^I32 fu-pad [^Cells ord ^Cells cd ^Cells sl ^Cells gr ^I32 g ^I32 ej]
+  (comment "The width W of a zero-padded embedded number (`ACME-01`): every member has W digits and some value is shorter")
+  (comment "than W digits; else 0 (the template is `{n}`).")
+  (let [^I32 f (gr-get gr g 0)
+        ^I32 m (gr-get gr g 1)
+        ^I32 w (sl-get sl (+ (cd-get cd (cells-at ord f) 13) ej) 6)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 lim 1
+        ^:mut ^I32 padded 0
+        ^:mut ^I32 s 0]
+    (if (or (< w 2) (> w 9)) (return 0))
+    (while (< (+ i 1) w)
+      (do (set lim (* lim 10))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i m)
+      (do (set r (cells-at ord (+ f i)))
+          (set s (+ (cd-get cd r 13) ej))
+          (if (!= (sl-get sl s 6) w) (return 0))
+          (if (< (sl-get sl s 2) lim) (set padded 1))
+          (set i (+ i 1))))
+    (if (== padded 1) (return w))
+    (return 0)))
+
+;; ---------------------------------------------------------------------- the outcomes
+;; fo (FO = 12): 0 kind (1 ledger row, 2 furniture), then for 1: 1 reason, 2 page, 3-6 box, 7 conf, 8 src, 9 text start in `ft`,
+;; 10 text length; for 2: 1 role, 2 conf, 3 src, 4 template start in `ft`, 5 its length, 6 first row in `fp`, 7 rows.
+;; fp (FP = 5): page, x0, y0, x1, y1. pl (3 per page): the best label's score, start in `ft`, length.
+
+(defn ^I32 fu-out-ledger [^:mut ^Cells fo ^I32 reason ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 conf ^I32 src ^I32 ts ^I32 tl]
+  (let [^I32 r (fu-push-row fo 12)]
+    (cells-set fo (+ (* r 12) 0) 1)
+    (cells-set fo (+ (* r 12) 1) reason)
+    (cells-set fo (+ (* r 12) 2) page)
+    (cells-set fo (+ (* r 12) 3) x0)
+    (cells-set fo (+ (* r 12) 4) y0)
+    (cells-set fo (+ (* r 12) 5) x1)
+    (cells-set fo (+ (* r 12) 6) y1)
+    (cells-set fo (+ (* r 12) 7) conf)
+    (cells-set fo (+ (* r 12) 8) src)
+    (cells-set fo (+ (* r 12) 9) ts)
+    (cells-set fo (+ (* r 12) 10) tl)
+    (return r)))
+
+(defn ^I32 fu-out-furniture [^:mut ^Cells fo ^I32 role ^I32 conf ^I32 src ^I32 ts ^I32 tl ^I32 f0 ^I32 cnt]
+  (let [^I32 r (fu-push-row fo 12)]
+    (cells-set fo (+ (* r 12) 0) 2)
+    (cells-set fo (+ (* r 12) 1) role)
+    (cells-set fo (+ (* r 12) 2) conf)
+    (cells-set fo (+ (* r 12) 3) src)
+    (cells-set fo (+ (* r 12) 4) ts)
+    (cells-set fo (+ (* r 12) 5) tl)
+    (cells-set fo (+ (* r 12) 6) f0)
+    (cells-set fo (+ (* r 12) 7) cnt)
+    (return r)))
+
+(defn ^I32 fu-fp-push [^:mut ^Cells fp ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (cells-push fp page)
+  (cells-push fp x0)
+  (cells-push fp y0)
+  (cells-push fp x1)
+  (cells-push fp y1)
+  (return 0))
+
+(defn ^I32 fu-copy [^Cells src ^I32 s ^I32 n ^:mut ^Cells ft]
+  (comment "Append src[s, s+n) to `ft`; answer where it starts.")
+  (let [^I32 at (cells-len ft)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (cells-push ft (cells-at src (+ s i)))
+          (set i (+ i 1))))
+    (return at)))
+
+(defn ^I32 fu-label [^:mut ^Cells pl ^I32 page ^I32 score ^I32 ts ^I32 tl]
+  (comment "Offer a page's label; the best score keeps it, the first of equals.")
+  (let [^I32 at (* (- page 1) 3)]
+    (if (> score (cells-at pl at))
+      (do (cells-set pl at score)
+          (cells-set pl (+ at 1) ts)
+          (cells-set pl (+ at 2) tl)))
+    (return 0)))
+
+(defn ^I32 fu-role [^I32 zone]
+  (if (== zone 1) (return (rl-header)))
+  (if (== zone 2) (return (rl-footer)))
+  (return (rl-margin)))
+
+(defn ^I32 fu-emit-group [^Cells ln ^:mut ^Cells cd ^Cells sl ^Cells gr ^Cells ord ^Cells tx ^Cells bh
+                          ^:mut ^Cells fo ^:mut ^Cells fp ^:mut ^Cells ft ^:mut ^Cells pl ^I32 g ^I32 mode]
+  (comment "Decide a qualified group (SPEC 10.2 step 3) and write the outcomes: per member the page label and the ledger rows,")
+  (comment "and the furniture rows. A template group whose members are the same beyond the page (not `varying`) is one furniture")
+  (comment "row for all of them; a style group, or a group with a varying slot, is decomposed member by member. `mode` 2 drops what")
+  (comment "policy would keep (a `running-title` row says so). Marks the members' lines for removal (cd 15). Answers 0.")
+  (let [^I32 f (gr-get gr g 0)
+        ^I32 m (gr-get gr g 1)
+        ^I32 rep (cells-at ord f)
+        ^I32 kind (gr-get gr g 5)
+        ^I32 pj (gr-get gr g 6)
+        ^I32 ej (gr-get gr g 7)
+        ^I32 varying (gr-get gr g 12)
+        ^I32 score (gr-get gr g 8)
+        ^I32 role (fu-role (gr-get gr g 3))
+        ^:mut ^I32 src (+ (sr-text) (sr-infer))
+        ^:mut ^I32 rs 0
+        ^:mut ^I32 rl 0
+        ^:mut ^I32 tm 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 mrs 0
+        ^:mut ^I32 mrl 0
+        ^:mut ^I32 mtm 0
+        ^:mut ^I32 mpj 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 ds 0
+        ^:mut ^I32 dl 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 f0 0
+        ^:mut ^I32 pad 0
+        ^:mut ^I32 usej 0]
+    (if (> (gr-get gr g 10) 0) (set src (+ src (sr-struct))))
+    (if (and (== kind 1) (== varying 0))
+      (do (set rs (cells-len ft))
+          (set rl (fu-decomp tx cd sl rep pj -1 0 ft))
+          (if (> rl 0) (set tm (fu-title-match bh ft rs rl)))))
+    (while (< i m)
+      (do (set r (cells-at ord (+ f i)))
+          (if (== (cd-get cd r 15) 0)
+            (do (set l (cd-get cd r 0))
+                (set page (cd-get cd r 1))
+                (set x0 (ln-get ln l (lh-x0)))
+                (set y0 (ln-get ln l (lh-y0)))
+                (set x1 (ln-get ln l (lh-x1)))
+                (set y1 (ln-get ln l (lh-y1)))
+                (if (== kind 1)
+                  (set mpj pj)
+                  (set mpj (fu-pagenum-slot tx cd sl r 0)))
+                (if (and (== kind 1) (== varying 0))
+                  (do (set mrs rs) (set mrl rl) (set mtm tm))
+                  (do (set mrs (cells-len ft))
+                      (set mrl (fu-decomp tx cd sl r mpj -1 0 ft))
+                      (set mtm 0)
+                      (if (> mrl 0) (set mtm (fu-title-match bh ft mrs mrl)))))
+                (if (>= mpj 0)
+                  (do (set ds (+ (cd-get cd r 11) (sl-get sl (+ (cd-get cd r 13) mpj) 3)))
+                      (set dl (sl-get sl (+ (cd-get cd r 13) mpj) 4))
+                      (set ts (fu-copy tx ds dl ft))
+                      (fu-label pl page score ts dl)
+                      (if (== mrl 0)
+                        (fu-out-ledger fo (dr-page-number) page x0 y0 x1 y1 score src
+                                       (fu-copy tx (cd-get cd r 11) (cd-get cd r 12) ft) (cd-get cd r 12))
+                        (fu-out-ledger fo (dr-page-number) page x0 y0 x1 y1 score src ts dl)))
+                  (if (== mrl 0)
+                    (fu-out-ledger fo (dr-running-title) page x0 y0 x1 y1 score src
+                                   (fu-copy tx (cd-get cd r 11) (cd-get cd r 12) ft) (cd-get cd r 12))))
+                (if (> mrl 0)
+                  (if (or (== mtm 1) (== mode 2))
+                    (fu-out-ledger fo (dr-running-title) page x0 y0 x1 y1 score src mrs mrl)
+                    (if (or (== varying 1) (== kind 2))
+                      (do (set f0 (quot (cells-len fp) 5))
+                          (fu-fp-push fp page x0 y0 x1 y1)
+                          (fu-out-furniture fo role score src mrs mrl f0 1)))))
+                (cd-set cd r 15 kind)))
+          (set i (+ i 1))))
+    ;; the same on every page: one furniture row
+    (if (and (== kind 1) (and (== varying 0) (and (> rl 0) (and (== tm 0) (!= mode 2)))))
+      (do (if (and (>= ej 0) (== (gr-get gr g 15) 1))
+            (do (set usej ej)
+                (set pad (fu-pad ord cd sl gr g ej)))
+            (set usej -1))
+          (set ts (cells-len ft))
+          (let [^I32 tl (fu-decomp tx cd sl rep pj usej pad ft)]
+            (set f0 (quot (cells-len fp) 5))
+            (set i 0)
+            (while (< i m)
+              (do (set r (cells-at ord (+ f i)))
+                  (set l (cd-get cd r 0))
+                  (fu-fp-push fp (cd-get cd r 1) (ln-get ln l (lh-x0)) (ln-get ln l (lh-y0)) (ln-get ln l (lh-x1)) (ln-get ln l (lh-y1)))
+                  (set i (+ i 1))))
+            (fu-out-furniture fo role score src ts tl f0 m))))
+    (return 0)))
+
+;; ---------------------------------------------------------------------- the style groups
+(defn ^I32 fu-sort-nums [^:mut ^Cells c]
+  (comment "Shell sort of the numbers in `c`, ascending.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at c i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at c (- j h)))
+                      (if (< v u)
+                        (do (cells-set c j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set c j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 fu-body-size [^Cells wd ^Cells ln ^Cells cd ^I32 ncd ^:mut ^Cells bh]
+  (comment "The most common size (to a fifth of a point) of the first word of the lines that are not candidates: the body text's.")
+  (comment "0 when there is none. `bh` is scratch.")
+  (cells-drop bh 0)
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bestn 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w0 0]
+    (while (< l nl)
+      (do (if (>= (ln-get ln l (lh-count)) 1)
+            (do (set q (fu-cd-find cd ncd l))
+                (if (< q 0)
+                  (do (set w0 (ln-get ln l (lh-first)))
+                      (cells-push bh (quot (wd-get wd w0 (wf-size)) 20))))))
+          (set l (+ l 1))))
+    (fu-sort-nums bh)
+    (set i 0)
+    (while (< i (cells-len bh))
+      (do (set v (cells-at bh i))
+          (if (and (> i 0) (== v (cells-at bh (- i 1))))
+            (set run (+ run 1))
+            (set run 1))
+          (if (> run bestn)
+            (do (set bestn run)
+                (set best v)))
+          (set i (+ i 1))))
+    (cells-drop bh 0)
+    (return (* best 20))))
+
+(defn ^I32 fu-style-pass [^Cells wd ^Cells ln ^Cells et ^Cells txt ^Cells md ^:mut ^Cells cd ^I32 ncd ^Cells sl ^:mut ^Cells gr ^:mut ^Cells ord ^Cells tx ^:mut ^Cells bh
+                          ^:mut ^Cells fo ^:mut ^Cells fp ^:mut ^Cells ft ^:mut ^Cells pl ^Cells pages
+                          ^I32 npages ^I32 trust ^I32 bsz ^I32 mode]
+  (comment "SPEC 10.2's recurrence for running text that VARIES (evidence 6): among the candidates in the tighter bands, groups")
+  (comment "of the same size (to half a point) at the same vertical position, on at least FU_SCOVER per cent of the pages and")
+  (comment "isolated on FU_SISO per cent of them, no larger than the body text, are furniture whose text changes (a chapter title,")
+  (comment "an odd/even pair). Members already taken by a template group count toward the coverage and are left alone. Answers 0.")
+  (let [^:mut ^I32 r 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 cy2 0
+        ^:mut ^I32 ng 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 iso 0
+        ^:mut ^I32 free 0
+        ^:mut ^I32 ok 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 con 0
+        ^:mut ^I32 capt 0
+        ^:mut ^I32 longest 0]
+    (set r 0)
+    (while (< r ncd)
+      (do (set h (page-h pages (- (cd-get cd r 1) 1)))
+          (set cy2 (+ (cd-get cd r 3) (cd-get cd r 4)))
+          (if (== (cd-get cd r 2) 1)
+            (if (>= cy2 (quot (* h FU_STOP) 500)) (cd-set cd r 2 0)))
+          (if (== (cd-get cd r 2) 2)
+            (if (<= cy2 (quot (* h FU_SBOT) 500)) (cd-set cd r 2 0)))
+          (if (== (cd-get cd r 2) 3) (cd-set cd r 2 0))
+          (set r (+ r 1))))
+    ;; what the output will say, once the tight-band candidates are out of it: a header must not be its own title
+    (set r 0)
+    (while (< r ncd)
+      (do (if (and (> (cd-get cd r 2) 0) (== (cd-get cd r 15) 0)) (cd-set cd r 15 3))
+          (set r (+ r 1))))
+    (fu-body-hashes wd ln et cd ncd txt md bh)
+    (set r 0)
+    (while (< r ncd)
+      (do (if (== (cd-get cd r 15) 3) (cd-set cd r 15 0))
+          (set r (+ r 1))))
+    (cells-drop ord 0)
+    (set r 0)
+    (while (< r ncd)
+      (do (cells-push ord r)
+          (set r (+ r 1))))
+    (set ng (fu-cluster ord cd gr pages 2))
+    (fu-sort ord cd 1)
+    (fu-stats ord cd gr)
+    (set g 0)
+    (while (< g ng)
+      (do (if (> (gr-get gr g 3) 0)
+            (do (set f (gr-get gr g 0))
+                (set m (gr-get gr g 1))
+                (set c (gr-get gr g 2))
+                (set iso 0)
+                (set free 0)
+                (set longest 0)
+                (set capt 0)
+                (set con (gr-get gr g 11))
+                (set i 0)
+                (while (< i m)
+                  (do (set r (cells-at ord (+ f i)))
+                      (if (>= (cd-get cd r 10) FU_SISOGAP) (set iso (+ iso 1)))
+                      (if (== (cd-get cd r 15) 0) (set free (+ free 1)))
+                      (if (> (cd-get cd r 12) longest) (set longest (cd-get cd r 12)))
+                      (if (== (fu-caption-lead tx cd r) 1) (set capt (+ capt 1)))
+                      (set i (+ i 1))))
+                (set ok 1)
+                (if (< c 2) (set ok 0))
+                (if (< (* c 100) (* npages FU_SCOVER)) (set ok 0))
+                ;; a one-page document has no recurrence to find: a small isolated line in the tight band is a footer or a header
+                (if (and (== npages 1) (and (> bsz 0) (<= (* (cd-get cd (cells-at ord f) 14) 100) (* bsz 95)))) (set ok 1))
+                (if (< (* iso 100) (* m FU_SISO)) (set ok 0))
+                (if (== free 0) (set ok 0))
+                (if (> longest FU_SPCLEN) (set ok 0))
+                (if (>= (* capt 2) m) (set ok 0))
+                (if (and (> bsz 0) (> (* (cd-get cd (cells-at ord f) 14) 100) (* bsz 103))) (set ok 0))
+                (if (and (>= trust 500) (>= (* con 1000) (* m 800))) (set ok 0))
+                (if (== ok 1)
+                  (do (gr-set gr g 4 1)
+                      (gr-set gr g 8 (fu-min 1000 (+ 500 (* 100 c))))
+                      (gr-set gr g 12 1)
+                      (gr-set gr g 6 -1)
+                      (gr-set gr g 7 -1)
+                      (fu-emit-group ln cd sl gr ord tx bh fo fp ft pl g mode)))))
+          (set g (+ g 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------------ the driver
+(defn ^I32 fu-watermarks [^Cells wd ^:mut ^Cells ln ^Cells et ^I32 npages ^I32 bsz ^:mut ^Cells fo ^:mut ^Cells ft]
+  (comment "Large text set on the diagonal (at least 3 degrees off every right angle) and at least two and a half times the body")
+  (comment "size, a few words long: a watermark (`DRAFT`, `CONFIDENTIAL`). It is not content: it is taken out of the flow and the")
+  (comment "ledger says `watermark`. (Visibility and the tree's /Watermark artifacts, P3.5-P3.7, are the sharper evidence; this is")
+  (comment "the geometry.) Answers the number of lines taken.")
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 dev 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 taken 0]
+    (if (<= bsz 0) (return 0))
+    (while (< l nl)
+      (do (set p (ln-get ln l (lh-page)))
+          (if (and (>= p 1) (<= p npages))
+            (do (set rot (rem (ln-get ln l (lh-rot)) 9000))
+                (set dev rot)
+                (if (> (- 9000 rot) 0) (if (< (- 9000 rot) dev) (set dev (- 9000 rot))))
+                (set w0 (ln-get ln l (lh-first)))
+                (if (and (>= dev 300) (and (>= (ln-get ln l (lh-count)) 1) (<= (ln-get ln l (lh-count)) 4)))
+                  (if (>= (* (wd-get wd w0 (wf-size)) 100) (* bsz 250))
+                    (do (set ts (cells-len ft))
+                        (set tl (fu-line-text wd ln et ft l))
+                        (if (and (> tl 0) (<= tl 40))
+                          (do (fu-out-ledger fo (dr-watermark) p (ln-get ln l (lh-x0)) (ln-get ln l (lh-y0))
+                                             (ln-get ln l (lh-x1)) (ln-get ln l (lh-y1)) 600 (+ (sr-text) (sr-infer)) ts tl)
+                              (ln-set ln l (lh-page) -7)
+                              (set taken (+ taken 1)))
+                          (cells-drop ft ts)))))))
+          (set l (+ l 1))))
+    (return taken)))
+
+(defn ^I32 fu-fo-key [^Cells fo ^Cells fp ^I32 r ^I32 k]
+  (if (== k 0) (return (fo-get fo r 9)))
+  (if (== k 1) (return (fo-get fo r 8)))
+  (if (== k 2) (return (fo-get fo r 1)))
+  (return (cells-at fp (* (fo-get fo r 6) 5))))
+
+(defn ^I32 fu-fo-before [^Cells fo ^Cells fp ^I32 a ^I32 b]
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< k 4)
+      (do (set x (fu-fo-key fo fp a k))
+          (set y (fu-fo-key fo fp b k))
+          (if (< x y) (return 1))
+          (if (> x y) (return 0))
+          (set k (+ k 1))))
+    (if (< a b) (return 1))
+    (return 0)))
+
+(defn ^I32 fu-merge-furniture [^:mut ^Cells fo ^:mut ^Cells fp ^Cells ft ^:mut ^Cells ord]
+  (comment "Furniture kept once is kept ONCE (SPEC 10.2): rows with the same role and the same text, found on different pages or")
+  (comment "at different heights, become one row whose pages and regions are all of theirs, in page order. `ord` is scratch.")
+  (cells-drop ord 0)
+  (let [^I32 nr (quot (cells-len fo) 12)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 h 1
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 f0 0
+        ^:mut ^I32 m 0
+        ^:mut ^I64 hh 0]
+    (while (< r nr)
+      (do (if (== (fo-get fo r 0) 2)
+            (do (set ts (fo-get fo r 4))
+                (set tl (fo-get fo r 5))
+                (set hh (fu-basis))
+                (set i 0)
+                (while (< i tl)
+                  (do (set hh (fu-step hh (cells-at ft (+ ts i))))
+                      (set i (+ i 1))))
+                (cells-set fo (+ (* r 12) 8) (i32 hh))
+                (cells-set fo (+ (* r 12) 9) (i32 (shr64 hh 32)))
+                (cells-push ord r)))
+          (set r (+ r 1))))
+    (set n (cells-len ord))
+    (if (< n 2) (return 0))
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at ord i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at ord (- j h)))
+                      (if (== (fu-fo-before fo fp v u) 1)
+                        (do (cells-set ord j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set ord j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (set i 0)
+    (while (< i n)
+      (do (set first (cells-at ord i))
+          (set j (+ i 1))
+          (while (and (< j n) (and (== (fo-get fo (cells-at ord j) 8) (fo-get fo first 8))
+                                    (and (== (fo-get fo (cells-at ord j) 9) (fo-get fo first 9))
+                                         (and (== (fo-get fo (cells-at ord j) 1) (fo-get fo first 1))
+                                              (== (fo-get fo (cells-at ord j) 5) (fo-get fo first 5))))))
+            (set j (+ j 1)))
+          (if (> (- j i) 1)
+            (do (set f0 (quot (cells-len fp) 5))
+                (set cnt 0)
+                (set t i)
+                (while (< t j)
+                  (do (set r (cells-at ord t))
+                      (set m 0)
+                      (while (< m (fo-get fo r 7))
+                        (do (fu-fp-push fp (cells-at fp (* (+ (fo-get fo r 6) m) 5))
+                                        (cells-at fp (+ (* (+ (fo-get fo r 6) m) 5) 1))
+                                        (cells-at fp (+ (* (+ (fo-get fo r 6) m) 5) 2))
+                                        (cells-at fp (+ (* (+ (fo-get fo r 6) m) 5) 3))
+                                        (cells-at fp (+ (* (+ (fo-get fo r 6) m) 5) 4)))
+                            (set cnt (+ cnt 1))
+                            (set m (+ m 1))))
+                      (if (> t i) (cells-set fo (* r 12) 0))
+                      (set t (+ t 1))))
+                (cells-set fo (+ (* first 12) 6) f0)
+                (cells-set fo (+ (* first 12) 7) cnt)))
+          (set i j)))
+    (return 0)))
+
+(defn ^I32 fu-compact [^:mut ^Cells ln ^Cells cd ^I32 ncd]
+  (comment "Take the lines of every candidate that was taken (cd 15 not 0) out of `ln`, keeping the order of the rest.")
+  (let [^:mut ^I32 r 0
+        ^:mut ^I32 nl (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 any 0]
+    (while (< r ncd)
+      (do (if (> (cd-get cd r 15) 0)
+            (do (ln-set ln (cd-get cd r 0) (lh-page) -7)
+                (set any 1)))
+          (set r (+ r 1))))
+    (while (< l nl)
+      (do (if (!= (ln-get ln l (lh-page)) -7)
+            (do (if (!= j l)
+                  (do (set k 0)
+                      (while (< k 16)
+                        (do (set v (ln-get ln l k))
+                            (ln-set ln j k v)
+                            (set k (+ k 1))))))
+                (set j (+ j 1))))
+          (set l (+ l 1))))
+    (cells-drop ln (* j 16))
+    (return 0)))
+
+(defn ^:pub ^I32 fu-find [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells gl ^Cells mk ^Cells pages ^I32 npages
+                          ^Cells txt ^Cells md ^Cells lb ^I32 trust ^I32 mode
+                          ^:mut ^Cells cd ^:mut ^Cells sl ^:mut ^Cells gr ^:mut ^Cells ord ^:mut ^Cells tx ^:mut ^Cells bh
+                          ^:mut ^Cells fo ^:mut ^Cells fp ^:mut ^Cells ft ^:mut ^Cells pl]
+  (comment "Find the running furniture of the document, take its lines out of `ln`, and leave the decisions in `fo fp ft pl` for")
+  (comment "`fu-write` (see the head of this file). `txt md lb` are P3.9's (`md` and `lb` empty when it did not run), `trust` the")
+  (comment "tagged tree's score (0 when there is none), `mode` 0 policy, 1 keep, 2 skip. All the other arenas are scratch or output,")
+  (comment "cleared here. Answers the number of lines taken out of `ln`.")
+  (cells-drop cd 0)
+  (cells-drop sl 0)
+  (cells-drop gr 0)
+  (cells-drop ord 0)
+  (cells-drop tx 0)
+  (cells-drop bh 0)
+  (cells-drop fo 0)
+  (cells-drop fp 0)
+  (cells-drop ft 0)
+  (cells-drop pl 0)
+  (let [^:mut ^I32 p 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 ng 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 before (ln-count ln)
+        ^:mut ^I32 bsz 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 nn 0]
+    (while (< p npages)
+      (do (cells-push pl 0)
+          (cells-push pl -1)
+          (cells-push pl 0)
+          (set p (+ p 1))))
+    ;; /PageLabels, when the catalogue has them, wins over every printed number (SPEC 10.2)
+    (if (and (> (cells-len md) FU_MD_RANGES) (> (cells-at md FU_MD_RANGES) 0))
+      (do (set p 0)
+          (while (< p npages)
+            (do (set ts (cells-len ft))
+                (set nn (pm-label-cells txt lb p ft))
+                (if (> nn 0) (fu-label pl (+ p 1) 5000 ts nn))
+                (set p (+ p 1))))))
+    (if (== mode 1) (return 0))
+    (set n (fu-scan wd ln et gl mk pages npages cd sl tx))
+    (if (< n 0) (return 0))
+    (if (>= n 1)
+      (do (set r 0)
+          (while (< r n)
+            (do (cells-push ord r)
+                (set r (+ r 1))))
+          (set ng (fu-cluster ord cd gr pages 0))
+          (fu-sort ord cd 1)
+          (fu-stats ord cd gr)
+          (fu-iso ln cd gr n)
+          (fu-iso-count ord cd gr)
+          (set g 0)
+          (while (< g ng)
+            (do (fu-analyze ord cd sl gr g)
+                ;; one page, and the tree says it is in place: its page number, when the line has the shape of one
+                (if (and (== (gr-get gr g 2) 1) (and (>= trust 300) (>= (* (gr-get gr g 10) 1000) (* (gr-get gr g 1) 800))))
+                  (do (set r (cells-at ord (gr-get gr g 0)))
+                      (set nn (fu-pagenum-slot tx cd sl r 1))
+                      (gr-set gr g 6 nn)))
+                (fu-qualify ord cd sl tx gr g npages trust)
+                (if (== (gr-get gr g 4) 1)
+                  (do (set r 0)
+                      (while (< r (gr-get gr g 1))
+                        (do (cd-set cd (cells-at ord (+ (gr-get gr g 0) r)) 15 1)
+                            (set r (+ r 1))))))
+                (set g (+ g 1))))
+          (fu-body-hashes wd ln et cd n txt md bh)
+          ;; the groups that qualified were marked 1 for the body hashes; the emission marks them for removal itself
+          (set r 0)
+          (while (< r n)
+            (do (if (== (cd-get cd r 15) 1) (cd-set cd r 15 0))
+                (set r (+ r 1))))
+          (set g 0)
+          (while (< g ng)
+            (do (if (== (gr-get gr g 4) 1)
+                  (fu-emit-group ln cd sl gr ord tx bh fo fp ft pl g mode))
+                (set g (+ g 1))))))
+    (set bsz (fu-body-size wd ln cd n bh))
+    (if (>= n 1)
+      (fu-style-pass wd ln et txt md cd n sl gr ord tx bh fo fp ft pl pages npages trust bsz mode))
+    (fu-watermarks wd ln et npages bsz fo ft)
+    (fu-merge-furniture fo fp ft ord)
+    (fu-compact ln cd n)
+    (return (- before (ln-count ln)))))
+
+;; ------------------------------------------------------------------------ into the Model
+(defn ^:pub ^I32 fu-write [^Cells fo ^Cells fp ^Cells ft ^Cells pl ^I32 npages
+                           ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                           ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells tmp]
+  (comment "Write what `fu-find` decided into the Model, after the paragraph stage: each page's label (page table), the")
+  (comment "ledger rows, the `furniture` roots (parent -1: kept once, not in the flow) and the `label` of every `break`")
+  (comment "milestone. The text goes through NFC and the ligature fold like every other text (SPEC 3.6). Answers 0.")
+  (let [^:mut ^I32 p 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 prevpage 0
+        ^:mut ^I32 nf 0]
+    (while (< p npages)
+      (do (if (and (> (cells-at pl (* p 3)) 0) (> (cells-at pl (+ (* p 3) 2)) 0))
+            (do (set t0 (cells-len text))
+                (set i 0)
+                (while (< i (cells-at pl (+ (* p 3) 2)))
+                  (do (text-append-cp text (cells-at ft (+ (cells-at pl (+ (* p 3) 1)) i)))
+                      (set i (+ i 1))))
+                (page-set-label pages p t0 (cells-at pl (+ (* p 3) 2)))))
+          (set p (+ p 1))))
+    (set r 0)
+    (while (< r (quot (cells-len fo) 12))
+      (do (if (== (fo-get fo r 0) 1)
+            (do (set l (ledger-add ledger (fo-get fo r 1) (fo-get fo r 2) (fo-get fo r 3) (fo-get fo r 4)
+                                   (fo-get fo r 5) (fo-get fo r 6) (fo-get fo r 7) (fo-get fo r 8)))
+                (set t0 (cells-len text))
+                (nz-nfc ft (fo-get fo r 9) (+ (fo-get fo r 9) (fo-get fo r 10)) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+                (ledger-set-text ledger l t0 (- (cells-len text) t0))))
+          (if (== (fo-get fo r 0) 2)
+            (do (set nf (node-new nodes (nk-furniture) -1))
+                (node-set-sub nodes nf (fo-get fo r 1))
+                (set t0 (cells-len text))
+                (nz-nfc ft (fo-get fo r 4) (+ (fo-get fo r 4) (fo-get fo r 5)) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+                (node-set-text nodes nf t0 (- (cells-len text) t0))
+                (node-set-conf nodes nf (fo-get fo r 2))
+                (node-add-src nodes nf (fo-get fo r 3))
+                (set prevpage 0)
+                (set i 0)
+                (while (< i (fo-get fo r 7))
+                  (do (set q (* (+ (fo-get fo r 6) i) 5))
+                      (node-add-region nodes regions nf (cells-at fp q) (cells-at fp (+ q 1)) (cells-at fp (+ q 2))
+                                       (cells-at fp (+ q 3)) (cells-at fp (+ q 4)))
+                      (if (!= (cells-at fp q) prevpage)
+                        (do (node-add-attr-int nodes attrs nf (fk-pages) (cells-at fp q))
+                            (set prevpage (cells-at fp q))))
+                      (set i (+ i 1))))))
+          (set r (+ r 1))))
+    ;; the printed label of every page milestone
+    (set n (node-count nodes))
+    (set i 0)
+    (while (< i n)
+      (do (if (== (node-kind nodes i) (nk-break))
+            (do (set p (node-sub nodes i))
+                (if (and (>= p 1) (<= p (page-count pages)))
+                  (if (> (page-label-len pages (- p 1)) 0)
+                    (node-set-attr-text nodes attrs i (fk-label) (page-label-start pages (- p 1)) (page-label-len pages (- p 1)))))))
+          (set i (+ i 1))))
+    (return 0)))
