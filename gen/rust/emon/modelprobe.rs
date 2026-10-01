@@ -5,8 +5,8 @@ use crate::emon::json::*;
 use crate::emon::model::*;
 use crate::emon::splitmix::*;
 
-pub fn probe_build(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
-    model_init(nodes, attrs, regions, text, pages, ledger);
+pub fn probe_build(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells) -> i32 {
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     node_new(nodes, nk_paragraph(), 0);
     text_append_cp(text, 72);
     text_append_cp(text, 105);
@@ -23,15 +23,15 @@ pub fn probe_build(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::po
     ledger_set_text(ledger, 0, 2, 1);
     return 0;
 }
-pub fn probe_hash(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells) -> i32 {
+pub fn probe_hash(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
     // `model: HI LO`, the two signed 32-bit halves of `model-hash`.
-    let h: i64 = model_hash(nodes, attrs, regions, text, pages, ledger);
+    let h: i64 = model_hash(nodes, attrs, regions, text, pages, ledger, layout);
     crate::port::text_ascii(t, "model: ");
     crate::port::text_i32(t, sm_hi(h));
     crate::port::text_ascii(t, " ");
     crate::port::text_i32(t, sm_lo(h));
     return 0;
 }
-pub fn probe_json(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells) -> i32 {
-    return js_emit(t, 0, nodes, attrs, regions, text, pages, ledger);
+pub fn probe_json(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
+    return js_emit(t, 0, nodes, attrs, regions, text, pages, ledger, layout);
 }

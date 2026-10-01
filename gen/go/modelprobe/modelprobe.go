@@ -11,8 +11,8 @@ import (
 	"strings"
 )
 
-func ProbeBuild(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells) int32 {
-	model.ModelInit(nodes, attrs, regions, text, pages, ledger)
+func ProbeBuild(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	model.NodeNew(nodes, model.NkParagraph(), 0)
 	model.TextAppendCp(text, 72)
 	model.TextAppendCp(text, 105)
@@ -30,9 +30,9 @@ func ProbeBuild(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text 
 	return 0
 }
 
-func ProbeHash(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells) int32 {
+func ProbeHash(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
 	// `model: HI LO`, the two signed 32-bit halves of `model-hash`.
-	var h int64 = model.ModelHash(nodes, attrs, regions, text, pages, ledger)
+	var h int64 = model.ModelHash(nodes, attrs, regions, text, pages, ledger, layout)
 	port.TextAscii(t, "model: ")
 	port.TextI32(t, splitmix.SmHi(h))
 	port.TextAscii(t, " ")
@@ -40,6 +40,6 @@ func ProbeHash(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions
 	return 0
 }
 
-func ProbeJson(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells) int32 {
-	return json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger)
+func ProbeJson(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
+	return json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout)
 }

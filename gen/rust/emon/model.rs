@@ -76,6 +76,9 @@ pub fn nk_ref() -> i32 {
 pub fn nk_linebreak() -> i32 {
     return 25;
 }
+pub fn nk_initial() -> i32 {
+    return 26;
+}
 pub fn nk_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "document");
@@ -175,6 +178,10 @@ pub fn nk_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 25 {
         crate::port::text_ascii(t, "linebreak");
+        return 1;
+    }
+    if code == 26 {
+        crate::port::text_ascii(t, "initial");
         return 1;
     }
     return 0;
@@ -403,6 +410,24 @@ pub fn fk_checked() -> i32 {
 }
 pub fn fk_subkind() -> i32 {
     return 75;
+}
+pub fn fk_form() -> i32 {
+    return 76;
+}
+pub fn fk_lines() -> i32 {
+    return 77;
+}
+pub fn fk_layout() -> i32 {
+    return 78;
+}
+pub fn fk_band() -> i32 {
+    return 79;
+}
+pub fn fk_col() -> i32 {
+    return 80;
+}
+pub fn fk_box() -> i32 {
+    return 81;
 }
 pub fn fk_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
@@ -705,6 +730,30 @@ pub fn fk_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "subkind");
         return 1;
     }
+    if code == 76 {
+        crate::port::text_ascii(t, "form");
+        return 1;
+    }
+    if code == 77 {
+        crate::port::text_ascii(t, "lines");
+        return 1;
+    }
+    if code == 78 {
+        crate::port::text_ascii(t, "layout");
+        return 1;
+    }
+    if code == 79 {
+        crate::port::text_ascii(t, "band");
+        return 1;
+    }
+    if code == 80 {
+        crate::port::text_ascii(t, "col");
+        return 1;
+    }
+    if code == 81 {
+        crate::port::text_ascii(t, "box");
+        return 1;
+    }
     return 0;
 }
 pub fn sr_text() -> i32 {
@@ -939,6 +988,9 @@ pub fn rl_header() -> i32 {
 pub fn rl_footer() -> i32 {
     return 8;
 }
+pub fn rl_sidebar() -> i32 {
+    return 9;
+}
 pub fn rl_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "head");
@@ -970,6 +1022,34 @@ pub fn rl_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 8 {
         crate::port::text_ascii(t, "footer");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "sidebar");
+        return 1;
+    }
+    return 0;
+}
+pub fn ifm_drop() -> i32 {
+    return 1;
+}
+pub fn ifm_raised() -> i32 {
+    return 2;
+}
+pub fn ifm_margin() -> i32 {
+    return 3;
+}
+pub fn ifm_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "drop");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "raised");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "margin");
         return 1;
     }
     return 0;
@@ -1262,6 +1342,9 @@ pub fn mc_bad_page() -> i32 {
 pub fn mc_bad_ledger() -> i32 {
     return 12;
 }
+pub fn mc_bad_layout() -> i32 {
+    return 13;
+}
 pub fn mc_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "ok");
@@ -1315,6 +1398,10 @@ pub fn mc_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "bad-ledger");
         return 1;
     }
+    if code == 13 {
+        crate::port::text_ascii(t, "bad-layout");
+        return 1;
+    }
     return 0;
 }
 pub fn av_int() -> i32 {
@@ -1343,6 +1430,9 @@ pub fn pages_stride() -> i32 {
 }
 pub fn ledger_stride() -> i32 {
     return 10;
+}
+pub fn layout_stride() -> i32 {
+    return 8;
 }
 pub fn max_depth() -> i32 {
     return 200;
@@ -1414,7 +1504,8 @@ pub fn node_has_text(nodes: &mut crate::port::Cells, n: i32) -> i32 {
 }
 pub fn nk_is_inline(kind: i32) -> i32 {
     // 1 for the kinds that live inside a block's text: text, span, link,
-    // ref, linebreak (SPEC 3.2). A `break` is a milestone, not an inline.
+    // ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an
+    // inline.
     if kind == nk_text() {
         return 1;
     }
@@ -1428,6 +1519,9 @@ pub fn nk_is_inline(kind: i32) -> i32 {
         return 1;
     }
     if kind == nk_linebreak() {
+        return 1;
+    }
+    if kind == nk_initial() {
         return 1;
     }
     return 0;
@@ -1459,7 +1553,7 @@ pub fn node_new(mut nodes: &mut crate::port::Cells, kind: i32, parent: i32) -> i
     // (absent), `flags` 0, `sub` 0, `aux` 0.
     let n: i32 = crate::port::cells_len(nodes) / 16;
     let mut last: i32 = -1;
-    if (kind < 1) || (kind > 25) {
+    if (kind < 1) || (kind > 26) {
         return -1;
     }
     if parent < -1 {
@@ -1500,14 +1594,15 @@ pub fn node_new(mut nodes: &mut crate::port::Cells, kind: i32, parent: i32) -> i
     }
     return n;
 }
-pub fn model_init(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
-    // Empty all six arenas and create the `document` root, node 0.
+pub fn model_init(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells) -> i32 {
+    // Empty all seven arenas and create the `document` root, node 0.
     crate::port::cells_drop(nodes, 0);
     crate::port::cells_drop(attrs, 0);
     crate::port::cells_drop(regions, 0);
     crate::port::cells_drop(text, 0);
     crate::port::cells_drop(pages, 0);
     crate::port::cells_drop(ledger, 0);
+    crate::port::cells_drop(layout, 0);
     node_new(nodes, nk_document(), -1);
     return 0;
 }
@@ -1790,6 +1885,28 @@ pub fn node_set_attr_text(mut nodes: &mut crate::port::Cells, mut attrs: &mut cr
     // The value is the run [start, start+length) of the text arena.
     return attr_put(nodes, attrs, n, key, 1, start, ln, 1);
 }
+pub fn node_set_align(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, n: i32, v: i32) -> i32 {
+    // Set the alignment of a paragraph (its `sub`), heading, caption or cell
+    // (the attribute `fk-align`), a logical `al` code (D110). Answers 0, or -1
+    // when the value is not an `al` code, the node is not one of those kinds,
+    // or it is a cell and the value is `justify`.
+    let kind: i32 = nget(nodes, n, 0);
+    if (v < 1) || (v > 4) {
+        return -1;
+    }
+    if kind == nk_paragraph() {
+        nput(nodes, n, 14, v);
+        return 0;
+    }
+    if (kind == nk_cell()) && (v == al_justify()) {
+        return -1;
+    }
+    if (kind == nk_heading()) || (kind == nk_caption()) || (kind == nk_cell()) {
+        attr_put(nodes, attrs, n, fk_align(), 0, v, 0, 1);
+        return 0;
+    }
+    return -1;
+}
 pub fn node_add_attr_int(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, n: i32, key: i32, v: i32) -> i32 {
     // Append, even if the key is already there (a repeated key).
     return attr_put(nodes, attrs, n, key, 0, v, 0, 0);
@@ -1837,6 +1954,12 @@ pub fn page_set_resolution(mut pages: &mut crate::port::Cells, p: i32, dpi: i32,
     pset(pages, p, 8, dpi);
     pset(pages, p, 9, pxw);
     return pset(pages, p, 10, pxh);
+}
+pub fn page_layout_first(pages: &mut crate::port::Cells, p: i32) -> i32 {
+    return pget(pages, p, 11);
+}
+pub fn page_layout_count(pages: &mut crate::port::Cells, p: i32) -> i32 {
+    return pget(pages, p, 12);
 }
 pub fn page_count(pages: &mut crate::port::Cells) -> i32 {
     return crate::port::cells_len(pages) / 16;
@@ -1930,6 +2053,67 @@ pub fn ledger_conf(ledger: &mut crate::port::Cells, l: i32) -> i32 {
 pub fn ledger_src(ledger: &mut crate::port::Cells, l: i32) -> i32 {
     return lget(ledger, l, 9);
 }
+pub fn lay_add(mut layout: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, p: i32, band: i32, col: i32, role: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // Append a cell to page index p's run and answer its row, or -1 when p
+    // is not a page, the role is not body, margin or sidebar, or the page's
+    // run is not at the end of the arena.
+    let r: i32 = crate::port::cells_len(layout) / 8;
+    let mut cnt: i32 = 0;
+    let mut num: i32 = 0;
+    if (p < 0) || (p >= (crate::port::cells_len(pages) / 16)) {
+        return -1;
+    }
+    if (role != rl_body()) && (role != rl_margin()) && (role != rl_sidebar()) {
+        return -1;
+    }
+    cnt = pget(pages, p, 12);
+    num = pget(pages, p, 0);
+    if cnt == 0 {
+        pset(pages, p, 11, r);
+    } else if (pget(pages, p, 11) + cnt) != r {
+        return -1;
+    }
+    pset(pages, p, 12, cnt + 1);
+    crate::port::cells_push(layout, num);
+    crate::port::cells_push(layout, band);
+    crate::port::cells_push(layout, col);
+    crate::port::cells_push(layout, role);
+    crate::port::cells_push(layout, x0);
+    crate::port::cells_push(layout, y0);
+    crate::port::cells_push(layout, x1);
+    crate::port::cells_push(layout, y1);
+    return r;
+}
+pub(crate) fn yget(layout: &mut crate::port::Cells, r: i32, f: i32) -> i32 {
+    return crate::port::cells_at(layout, (r * 8) + f);
+}
+pub fn layout_count(layout: &mut crate::port::Cells) -> i32 {
+    return crate::port::cells_len(layout) / 8;
+}
+pub fn layout_page(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 0);
+}
+pub fn layout_band(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 1);
+}
+pub fn layout_col(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 2);
+}
+pub fn layout_role(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 3);
+}
+pub fn layout_x0(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 4);
+}
+pub fn layout_y0(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 5);
+}
+pub fn layout_x1(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 6);
+}
+pub fn layout_y1(layout: &mut crate::port::Cells, r: i32) -> i32 {
+    return yget(layout, r, 7);
+}
 pub(crate) fn mc_fail(mut st: &mut crate::port::Cells, code: i32, at: i32) -> i32 {
     crate::port::cells_set(st, 0, at);
     return code;
@@ -1977,7 +2161,7 @@ pub(crate) fn mc_check_node(nodes: &mut crate::port::Cells, attrs: &mut crate::p
     let na: i32 = crate::port::cells_len(attrs) / 5;
     let nr: i32 = crate::port::cells_len(regions) / 6;
     let tl: i32 = crate::port::cells_len(text);
-    if (kind < 1) || (kind > 25) {
+    if (kind < 1) || (kind > 26) {
         return mc_bad_kind();
     }
     if mc_link_ok(nget(nodes, n, 1), nn) == 0 {
@@ -2107,8 +2291,10 @@ pub(crate) fn mc_check_order(nodes: &mut crate::port::Cells, nn: i32, mut st: &m
     }
     return 0;
 }
-pub fn model_check(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
+pub fn model_check(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     let nn: i32 = crate::port::cells_len(nodes) / 16;
+    let nlay: i32 = crate::port::cells_len(layout) / 8;
+    let mut j: i32 = 0;
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
     let mut kids: i32 = 0;
@@ -2130,6 +2316,9 @@ pub fn model_check(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cell
         return mc_fail(st, mc_bad_stride(), 0);
     }
     if (crate::port::cells_len(ledger) % 10) != 0 {
+        return mc_fail(st, mc_bad_stride(), 0);
+    }
+    if (crate::port::cells_len(layout) % 8) != 0 {
         return mc_fail(st, mc_bad_stride(), 0);
     }
     if nn < 1 {
@@ -2184,6 +2373,31 @@ pub fn model_check(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cell
         }
         i += 1;
     }
+    i = 0;
+    while i < (crate::port::cells_len(pages) / 16) {
+        if pget(pages, i, 12) < 0 {
+            return mc_fail(st, mc_bad_layout(), i);
+        }
+        if pget(pages, i, 12) > 0 {
+            if pget(pages, i, 11) < 0 {
+                return mc_fail(st, mc_bad_layout(), i);
+            }
+            if pget(pages, i, 11) > (nlay - pget(pages, i, 12)) {
+                return mc_fail(st, mc_bad_layout(), i);
+            }
+            j = 0;
+            while j < pget(pages, i, 12) {
+                if yget(layout, pget(pages, i, 11) + j, 0) != pget(pages, i, 0) {
+                    return mc_fail(st, mc_bad_layout(), i);
+                }
+                if (yget(layout, pget(pages, i, 11) + j, 3) != rl_body()) && (yget(layout, pget(pages, i, 11) + j, 3) != rl_margin()) && (yget(layout, pget(pages, i, 11) + j, 3) != rl_sidebar()) {
+                    return mc_fail(st, mc_bad_layout(), i);
+                }
+                j += 1;
+            }
+        }
+        i += 1;
+    }
     return 0;
 }
 pub(crate) fn mh_fold(h: i64, c: &mut crate::port::Cells) -> i64 {
@@ -2198,9 +2412,9 @@ pub(crate) fn mh_fold(h: i64, c: &mut crate::port::Cells) -> i64 {
     }
     return (acc ^ (crate::port::cells_len(c) as i64)).wrapping_mul(1099511628211);
 }
-pub fn model_hash(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells) -> i64 {
+pub fn model_hash(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i64 {
     // A 64-bit fingerprint of the whole Model: the gate's proof that four
-    // targets built the same six arenas. FNV-1a, offset basis
+    // targets built the same seven arenas. FNV-1a, offset basis
     // 14695981039346656037 (as a signed value) and prime 1099511628211.
     let mut h: i64 = -3750763034362895579;
     h = mh_fold(h, nodes);
@@ -2209,5 +2423,6 @@ pub fn model_hash(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells
     h = mh_fold(h, text);
     h = mh_fold(h, pages);
     h = mh_fold(h, ledger);
+    h = mh_fold(h, layout);
     return h;
 }

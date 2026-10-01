@@ -49,7 +49,16 @@
                                 mc-bad-text mc-bad-attr mc-bad-region
                                 mc-bad-conf mc-not-preorder mc-bad-page
                                 mc-bad-ledger mc-no-root mc-bad-stride
-                                av-int av-text av-node av-bool sy-bold sy-sup]]
+                                av-int av-text av-node av-bool sy-bold sy-sup
+                                node-set-align lay-add page-layout-first
+                                page-layout-count layout-count layout-page
+                                layout-band layout-col layout-role layout-x0
+                                layout-y0 layout-x1 layout-y1 rl-body rl-margin
+                                rl-sidebar rl-emit-name al-start al-center
+                                al-end al-justify ifm-emit-name nk-initial
+                                nk-cell nk-caption mc-bad-layout fk-align
+                                fk-form fk-lines fk-layout fk-band fk-col
+                                fk-box]]
             [kin.lang :refer [defn return let set while if do comment + - * < >= == != and or]]))
 
 ;; `n` placeholder code points, so a run inside the arena is a real run.
@@ -75,8 +84,8 @@
 ;;     10 section
 
 (defn ^I32 mt-tree [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                    ^:mut ^Cells text ^:mut ^Cells pages ^:mut ^Cells ledger]
-  (model-init nodes attrs regions text pages ledger)
+                    ^:mut ^Cells text ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout]
+  (model-init nodes attrs regions text pages ledger layout)
   (node-new nodes (nk-section) 0)
   (node-new nodes (nk-heading) 1)
   (node-new nodes (nk-paragraph) 1)
@@ -95,8 +104,9 @@
         ^Cells regions (new-cells)
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
-        ^Cells ledger (new-cells)]
-    (model-init nodes attrs regions text pages ledger)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
     (assert-eq (node-count nodes) 1 "one node")
     (assert-eq (cells-len nodes) 16 "a node is sixteen cells")
     (assert-eq (node-kind nodes 0) 1 "the root is a document, code 1")
@@ -121,7 +131,7 @@
     (assert-eq (cells-len text) 0 "text empty")
     (assert-eq (page-count pages) 0 "no pages")
     (assert-eq (ledger-count ledger) 0 "nothing dropped")
-    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "well formed")))
 
 (deftest test-model-init-empties-a-used-model
   (let [^Cells nodes (new-cells)
@@ -129,12 +139,13 @@
         ^Cells regions (new-cells)
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
-        ^Cells ledger (new-cells)]
-    (mt-tree nodes attrs regions text pages ledger)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger layout)
     (text-append-cp text 65)
     (page-new pages 1 100 100 0 1)
     (ledger-add ledger 1 1 0 0 1 1 500 0)
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (assert-eq (node-count nodes) 1 "back to the root")
     (assert-eq (cells-len text) 0 "text cleared")
     (assert-eq (page-count pages) 0 "pages cleared")
@@ -146,8 +157,9 @@
         ^Cells regions (new-cells)
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
-        ^Cells ledger (new-cells)]
-    (mt-tree nodes attrs regions text pages ledger)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger layout)
     (assert-eq (node-count nodes) 11 "eleven nodes")
     (assert-eq (node-first-child nodes 0) 1 "document first child")
     (assert-eq (node-last-child nodes 0) 10 "document last child")
@@ -174,7 +186,7 @@
     (assert-eq (node-depth nodes 6) 4 "depth of the innermost text")
     (assert-eq (node-kind nodes 5) 22 "span is code 22")
     (assert-eq (node-kind nodes 7) 5 "list is code 5")
-    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "well formed")))
 
 (deftest test-node-new-refuses-what-it-cannot-place
   (let [^Cells nodes (new-cells)
@@ -182,12 +194,13 @@
         ^Cells regions (new-cells)
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
-        ^Cells ledger (new-cells)]
-    (model-init nodes attrs regions text pages ledger)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
     (assert-eq (node-new nodes (nk-paragraph) 5) -1 "a parent that does not exist")
     (assert-eq (node-new nodes (nk-paragraph) -2) -1 "a parent below -1")
     (assert-eq (node-new nodes 0 0) -1 "kind 0 is unknown")
-    (assert-eq (node-new nodes 26 0) -1 "kind 26 is unknown")
+    (assert-eq (node-new nodes 27 0) -1 "kind 27 is unknown")
     (assert-eq (node-count nodes) 1 "a refusal adds nothing")
     (assert-eq (node-new nodes (nk-furniture) -1) 1 "a second root is allowed")
     (assert-eq (node-parent nodes 1) -1 "furniture has no parent")
@@ -200,14 +213,15 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^:mut ^I32 at 0
         ^:mut ^I32 made 0]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (while (!= at -1)
       (do (set at (node-new nodes (nk-section) at))
           (if (!= at -1) (set made (+ made 1)))))
     (assert-eq made (- (max-depth) 1) "a chain of sections ends at max-depth - 1 below the root")
-    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "still well formed")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "still well formed")))
 
 (deftest test-fields-are-set-and-read-back
   (let [^Cells nodes (new-cells)
@@ -215,8 +229,9 @@
         ^Cells regions (new-cells)
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
-        ^Cells ledger (new-cells)]
-    (mt-tree nodes attrs regions text pages ledger)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger layout)
     (node-set-text nodes 3 7 5)
     (assert-eq (node-text-start nodes 3) 7 "text start")
     (assert-eq (node-text-len nodes 3) 5 "text len")
@@ -261,8 +276,9 @@
         ^Cells regions (new-cells)
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
-        ^Cells ledger (new-cells)]
-    (mt-tree nodes attrs regions text pages ledger)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (mt-tree nodes attrs regions text pages ledger layout)
     (assert-eq (node-add-region nodes regions 3 1 7200 9000 54000 11000) 0 "first region is 0")
     (assert-eq (node-add-region nodes regions 2 1 100 200 300 400) 1 "another node's region is 1")
     (assert-eq (node-add-region nodes regions 3 2 7200 6000 54000 8000) 2 "a second page for the paragraph")
@@ -282,7 +298,7 @@
     (assert-eq (region-page regions 1) 1 "the heading's page")
     (assert-eq (node-region-head nodes 2) 1 "the heading's head")
     (assert-eq (node-region-head nodes 4) -1 "a node with none")
-    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "well formed")))
 
 (deftest test-attributes-set-replace-and-repeat
   (let [^Cells nodes (new-cells)
@@ -291,8 +307,9 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^:mut ^I32 a 0]
-    (mt-tree nodes attrs regions text pages ledger)
+    (mt-tree nodes attrs regions text pages ledger layout)
     (mt-text text 20)
     (assert-eq (node-attr nodes attrs 2 (fk-level)) -1 "no attribute yet")
     (assert-eq (node-attr-int-or nodes attrs 2 (fk-level) 77) 77 "default when absent")
@@ -338,7 +355,7 @@
     (assert-eq (attr-find-next attrs a (fk-pages)) -1 "no fourth")
     (assert-eq (node-attr nodes attrs 7 (fk-alt)) -1 "a key never set")
     (assert-eq (node-attr nodes attrs 3 (fk-pages)) -1 "another node's chain is its own")
-    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "well formed")))
 
 (deftest test-text-arena-holds-scalar-values-only
   (let [^Cells text (new-cells)]
@@ -454,14 +471,14 @@
     (emit-ascii t " ")
     (fk-emit-name t 74)
     (assert-text t "paragraph linebreak id checked" "spellings")
-    (assert-eq (nk-emit-name t 26) 0 "an unknown kind writes nothing")
+    (assert-eq (nk-emit-name t 27) 0 "an unknown kind writes nothing")
     (assert-eq (nk-emit-name t 0) 0 "kind 0 is unknown")))
 
 ;; ---------------------------------------------------- the fingerprint
 
 (defn ^I32 mt-tiny [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                    ^:mut ^Cells text ^:mut ^Cells pages ^:mut ^Cells ledger]
-  (model-init nodes attrs regions text pages ledger)
+                    ^:mut ^Cells text ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout]
+  (model-init nodes attrs regions text pages ledger layout)
   (node-new nodes (nk-paragraph) 0)
   (text-append-cp text 72)
   (text-append-cp text 105)
@@ -482,8 +499,9 @@
         ^Cells regions (new-cells)
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
-        ^Cells ledger (new-cells)]
-    (mt-tiny nodes attrs regions text pages ledger)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (mt-tiny nodes attrs regions text pages ledger layout)
     (assert-eq (cells-len nodes) 32 "two nodes")
     (assert-eq (cells-at nodes 2) 1 "root first child")
     (assert-eq (cells-at nodes 3) 1 "root last child")
@@ -501,8 +519,8 @@
     (assert-eq (cells-len pages) 16 "one page")
     (assert-eq (cells-at pages 7) 987 "page health")
     (assert-eq (cells-len ledger) 10 "one ledger row")
-    (assert-eq (model-check nodes attrs regions text pages ledger (new-cells)) 0 "well formed")
-    (assert-eq64 (model-hash nodes attrs regions text pages ledger) -413424005450145991 "fingerprint")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "well formed")
+    (assert-eq64 (model-hash nodes attrs regions text pages ledger layout) -4136225311394902565 "fingerprint (the old one times the FNV prime: an empty layout arena folds as one more multiply)")))
 
 ;; ---------------------------------------------------------- the checker
 
@@ -513,48 +531,49 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Cells st (new-cells)]
-    (mt-tree nodes attrs regions text pages ledger)
+    (mt-tree nodes attrs regions text pages ledger layout)
     (text-append-cp text 65)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "well formed to begin with")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "well formed to begin with")
     (cells-push nodes 0)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-stride) "a stray cell")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-stride) "a stray cell")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (cells-set nodes 17 99)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-link) "a parent out of range")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-link) "a parent out of range")
     (assert-eq (cells-at st 0) 1 "names node 1")
-    (mt-tree nodes attrs regions text pages ledger)
+    (mt-tree nodes attrs regions text pages ledger layout)
     (cells-set nodes (+ (* 3 16) 1) 2)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-tree) "a child that points at another parent")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-tree) "a child that points at another parent")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (cells-set nodes (+ (* 3 16) 7) 0)
     (cells-set nodes (+ (* 3 16) 8) 5)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-text) "a text run past the arena")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-text) "a text run past the arena")
     (assert-eq (cells-at st 0) 3 "names node 3")
-    (mt-tree nodes attrs regions text pages ledger)
+    (mt-tree nodes attrs regions text pages ledger layout)
     (node-set-conf nodes 3 10)
     (cells-set nodes (+ (* 3 16) 12) 1001)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-conf) "a confidence of 1001")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-conf) "a confidence of 1001")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (cells-set nodes 0 2)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-no-root) "a root that is not a document")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-no-root) "a root that is not a document")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (cells-set nodes (+ (* 4 16) 0) 40)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) 3 "an unknown kind is mc-bad-kind")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 3 "an unknown kind is mc-bad-kind")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (node-set-attr-text nodes attrs 3 (fk-label) 0 4)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-attr) "an attribute run past the arena")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-attr) "an attribute run past the arena")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (node-add-region nodes regions 3 1 0 0 1 1)
     (cells-set nodes (+ (* 3 16) 10) 2)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-region) "a region count that is not the chain")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-region) "a region count that is not the chain")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (page-new pages 1 100 100 0 1)
     (page-set-label pages 0 0 3)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-page) "a page label past the arena")
-    (mt-tree nodes attrs regions text pages ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-page) "a page label past the arena")
+    (mt-tree nodes attrs regions text pages ledger layout)
     (ledger-add ledger 1 1 0 0 1 1 2000 0)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-bad-ledger) "a ledger confidence of 2000")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-ledger) "a ledger confidence of 2000")))
 
 (deftest test-check-requires-preorder-ids
   (let [^Cells nodes (new-cells)
@@ -563,12 +582,13 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Cells st (new-cells)]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (node-new nodes (nk-section) 0)
     (node-new nodes (nk-section) 0)
     (node-new nodes (nk-paragraph) 1)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-not-preorder) "a child created after its parent's next sibling")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-not-preorder) "a child created after its parent's next sibling")
     (assert-eq (cells-at st 0) 3 "names node 3")))
 
 (deftest test-check-accepts-furniture-as-a-second-root
@@ -578,12 +598,133 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Cells st (new-cells)]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (node-new nodes (nk-paragraph) 0)
     (node-new nodes (nk-furniture) -1)
     (node-new nodes (nk-paragraph) 2)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "two trees, each in pre-order")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "two trees, each in pre-order")
     (node-new nodes (nk-furniture) -1)
     (node-new nodes (nk-paragraph) 0)
-    (assert-eq (model-check nodes attrs regions text pages ledger st) (mc-not-preorder) "a body node added after the furniture")))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-not-preorder) "a body node added after the furniture")))
+
+;; ------------------------------------------------- initials, align, layout (P1.13)
+
+(deftest test-the-new-codes-are-where-D050-put-them
+  (let [^Text t (new-text)]
+    (assert-eq (nk-initial) 26 "initial is kind 26")
+    (assert-eq (nk-is-inline (nk-initial)) 1 "an initial is an inline")
+    (assert-eq (fk-form) 76 "form")
+    (assert-eq (fk-lines) 77 "lines")
+    (assert-eq (fk-layout) 78 "layout")
+    (assert-eq (fk-band) 79 "band")
+    (assert-eq (fk-col) 80 "col")
+    (assert-eq (fk-box) 81 "box")
+    (assert-eq (rl-sidebar) 9 "sidebar is role 9")
+    (nk-emit-name t 26)
+    (emit-ascii t " ")
+    (ifm-emit-name t 1)
+    (emit-ascii t " ")
+    (ifm-emit-name t 2)
+    (emit-ascii t " ")
+    (ifm-emit-name t 3)
+    (emit-ascii t " ")
+    (rl-emit-name t 9)
+    (emit-ascii t " ")
+    (fk-emit-name t 78)
+    (assert-text t "initial drop raised margin sidebar layout" "the names")))
+
+(deftest test-an-initial-is-an-inline-with-form-and-lines
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (node-new nodes (nk-paragraph) 0)
+    (assert-eq (node-new nodes (nk-initial) 1) 2 "an initial under a paragraph")
+    (node-set-sub nodes 2 2)
+    (node-set-aux nodes 2 3)
+    (assert-eq (node-new nodes (nk-text) 2) 3 "its text")
+    (assert-eq (node-new nodes 27 1) -1 "27 is not a kind")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "well formed")))
+
+(deftest test-align-is-a-sub-on-a-paragraph-and-an-attribute-elsewhere
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (node-new nodes (nk-paragraph) 0)
+    (node-new nodes (nk-heading) 0)
+    (node-new nodes (nk-cell) 0)
+    (node-new nodes (nk-caption) 0)
+    (node-new nodes (nk-section) 0)
+    (node-set-sub nodes 2 3)
+    (assert-eq (node-set-align nodes attrs 1 (al-center)) 0 "a paragraph")
+    (assert-eq (node-sub nodes 1) 2 "in its sub")
+    (assert-eq (node-set-align nodes attrs 2 (al-end)) 0 "a heading")
+    (assert-eq (node-sub nodes 2) 3 "its level is untouched")
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-align) 0) 3 "the alignment is an attribute")
+    (assert-eq (node-set-align nodes attrs 2 (al-start)) 0 "set again")
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-align) 0) 1 "replaced, not repeated")
+    (assert-eq (attr-count attrs) 1 "one attribute")
+    (assert-eq (node-set-align nodes attrs 3 (al-justify)) -1 "a cell is never justified")
+    (assert-eq (node-set-align nodes attrs 3 (al-center)) 0 "a cell may be centred")
+    (assert-eq (node-set-align nodes attrs 4 (al-justify)) 0 "a caption")
+    (assert-eq (node-set-align nodes attrs 5 (al-start)) -1 "a section has none")
+    (assert-eq (node-set-align nodes attrs 1 0) -1 "0 is not a value")
+    (assert-eq (node-set-align nodes attrs 1 5) -1 "5 is not a value")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "well formed")))
+
+(deftest test-a-pages-layout-is-one-contiguous-run
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells st (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (page-new pages 2 61200 79200 0 (pk-vector))
+    (assert-eq (page-layout-count pages 0) 0 "no map yet")
+    (assert-eq (lay-add layout pages 0 0 0 (rl-body) 7200 9000 30000 75000) 0 "first cell")
+    (assert-eq (lay-add layout pages 0 0 1 (rl-sidebar) 31200 9000 54000 75000) 1 "second cell")
+    (assert-eq (lay-add layout pages 1 0 0 (rl-margin) 100 200 300 400) 2 "the next page's run")
+    (assert-eq (lay-add layout pages 0 1 0 (rl-body) 0 0 1 1) -1 "page 1's run is no longer last")
+    (assert-eq (lay-add layout pages 1 0 1 3 0 0 1 1) -1 "a role that is no layout role")
+    (assert-eq (lay-add layout pages 2 0 0 (rl-body) 0 0 1 1) -1 "no such page")
+    (assert-eq (cells-len layout) 24 "eight cells each, three rows")
+    (assert-eq (layout-count layout) 3 "three rows")
+    (assert-eq (page-layout-first pages 0) 0 "page 1 starts at row 0")
+    (assert-eq (page-layout-count pages 0) 2 "and has two")
+    (assert-eq (page-layout-first pages 1) 2 "page 2 starts at row 2")
+    (assert-eq (page-layout-count pages 1) 1 "and has one")
+    (assert-eq (layout-page layout 2) 2 "the page number")
+    (assert-eq (layout-band layout 1) 0 "band")
+    (assert-eq (layout-col layout 1) 1 "col")
+    (assert-eq (layout-role layout 1) 9 "role")
+    (assert-eq (layout-x0 layout 1) 31200 "x0")
+    (assert-eq (layout-y0 layout 1) 9000 "y0")
+    (assert-eq (layout-x1 layout 1) 54000 "x1")
+    (assert-eq (layout-y1 layout 1) 75000 "y1")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "well formed")
+    (cells-set pages 12 5)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-layout) "a run past the arena")
+    (cells-set pages 12 2)
+    (cells-set layout 3 3)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-layout) "a role that is not body, margin or sidebar")
+    (cells-set layout 3 9)
+    (cells-set layout 0 7)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-layout) "a cell of another page")
+    (cells-set layout 0 1)
+    (cells-push layout 0)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-stride) "a stray cell")))

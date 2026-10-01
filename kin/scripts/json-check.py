@@ -39,8 +39,9 @@ KINDS = {1: "document", 2: "section", 3: "heading", 4: "paragraph", 5: "list",
          6: "item", 7: "table", 8: "rowgroup", 9: "row", 10: "cell",
          11: "caption", 12: "figure", 13: "seal", 14: "formula", 15: "code",
          16: "quote", 17: "note", 18: "field", 19: "furniture", 20: "break",
-         21: "text", 22: "span", 23: "link", 24: "ref", 25: "linebreak"}
-INLINE = {"text", "span", "link", "ref", "linebreak"}
+         21: "text", 22: "span", 23: "link", 24: "ref", 25: "linebreak",
+         26: "initial"}
+INLINE = {"text", "span", "link", "ref", "linebreak", "initial"}
 KEYS = {1: "id", 2: "kind", 3: "level", 4: "number", 5: "numbering", 6: "text",
         7: "inlines", 8: "children", 9: "at", 10: "src", 11: "conf",
         12: "flags", 13: "align", 14: "ordered", 15: "scheme", 16: "start",
@@ -56,7 +57,8 @@ KEYS = {1: "id", 2: "kind", 3: "level", 4: "number", 5: "numbering", 6: "text",
         61: "tagged", 62: "encrypted", 63: "locale", 64: "ocr", 65: "detail",
         66: "author", 67: "subject", 68: "keywords", 69: "creator",
         70: "producer", 71: "created", 72: "modified", 73: "type",
-        74: "checked", 75: "subkind"}
+        74: "checked", 75: "subkind", 76: "form", 77: "lines", 78: "layout",
+        79: "band", 80: "col", 81: "box"}
 K = {v: k for k, v in KEYS.items()}
 SRC = [(1, "text"), (2, "hidden-text"), (4, "ocr"), (8, "trace"), (16, "vector"),
        (32, "struct"), (64, "annot"), (128, "outline"), (256, "infer")]
@@ -66,7 +68,8 @@ STYLE = [(1, "bold"), (2, "italic"), (4, "underline"), (8, "strike"), (16, "sub"
          (32, "sup"), (64, "mono"), (128, "smallcaps")]
 ALIGN = {1: "start", 2: "center", 3: "end", 4: "justify"}
 ROLE = {1: "head", 2: "body", 3: "foot", 4: "footnote", 5: "endnote",
-        6: "margin", 7: "header", 8: "footer"}
+        6: "margin", 7: "header", 8: "footer", 9: "sidebar"}
+IFORM = {1: "drop", 2: "raised", 3: "margin"}
 FIG = {1: "chart", 2: "diagram", 3: "photo", 4: "logo", 5: "map",
        6: "illustration", 7: "screenshot", 8: "qr", 9: "barcode", 10: "unknown"}
 SEAL = {1: "seal", 2: "stamp", 3: "signature", 4: "initials", 5: "digital-signature"}
@@ -133,6 +136,8 @@ def unescape(s):
 def build(path):
     nodes = [Node(1, -1)]
     pages, ledger = [], []
+    # the script's refusals, as the builder's (a refused line is a failure)
+    refused = []
     for raw in open(path, encoding="utf-8").read().split("\n"):
         if not raw or raw.startswith("#"):
             continue
@@ -177,10 +182,34 @@ def build(path):
                     break
             else:
                 at.append((k, "text", val))
+        elif cmd == "al":
+            (n, v), _t = ints(2)
+            kind = KINDS[nodes[n].kind]
+            if not 1 <= v <= 4 or (kind == "cell" and v == 4) or \
+                    kind not in ("paragraph", "heading", "caption", "cell"):
+                refused.append(raw)
+            elif kind == "paragraph":
+                nodes[n].sub = v
+            else:
+                at = nodes[n].attrs
+                for i, (ak, _, _) in enumerate(at):
+                    if ak == K["align"]:
+                        at[i] = (ak, "int", v)
+                        break
+                else:
+                    at.append((K["align"], "int", v))
+        elif cmd == "ly":
+            (i, band, col, role, x0, y0, x1, y1), _t = ints(8)
+            if role not in (2, 6, 9):
+                refused.append(raw)
+            else:
+                pages[i]["layout"].append({"band": band, "col": col, "role": role,
+                                           "box": (x0, y0, x1, y1)})
         elif cmd == "pg":
             (num, w, h, rot, kind), _t = ints(5)
             pages.append({"n": num, "w": w, "h": h, "rot": rot, "kind": kind,
-                          "label": None, "health": -1, "dpi": 0, "px": (0, 0)})
+                          "label": None, "health": -1, "dpi": 0, "px": (0, 0),
+                          "layout": []})
         elif cmd == "pl":
             (i,), t = ints(1)
             pages[i]["label"] = unescape(t)
@@ -199,6 +228,8 @@ def build(path):
             ledger[i]["text"] = unescape(t)
         else:
             raise ValueError("unknown command " + raw)
+    if refused:
+        raise ValueError("the builder refuses: " + refused[0])
     return nodes, pages, ledger
 
 
@@ -224,6 +255,12 @@ def put_attr(d, node, key, name=None):
         d[name or key] = bool(a[1]) if a[0] == "bool" else a[1]
 
 
+def put_align_attr(d, node):
+    a = attr(node, "align")
+    if a is not None and a[1] > 0:
+        d["align"] = ALIGN.get(a[1], "")
+
+
 def kind_fields(d, node, kind):
     sub = node.sub
     if kind in ("section", "heading") and sub > 0:
@@ -231,6 +268,7 @@ def kind_fields(d, node, kind):
     if kind == "heading":
         put_attr(d, node, "number")
         put_attr(d, node, "numbering")
+        put_align_attr(d, node)
     if kind == "paragraph" and sub > 0:
         d["align"] = ALIGN.get(sub, "")
     if kind == "list":
@@ -255,9 +293,11 @@ def kind_fields(d, node, kind):
             d["header"] = HEADER.get(sub, "")
         if node.aux == 1:
             d["empty"] = True
+        put_align_attr(d, node)
     if kind == "caption":
         put_attr(d, node, "label")
         put_attr(d, node, "target")
+        put_align_attr(d, node)
     if kind == "figure":
         if sub > 0:
             d["subkind"] = FIG.get(sub, "")
@@ -295,6 +335,11 @@ def kind_fields(d, node, kind):
     if kind == "ref":
         put_attr(d, node, "marker")
         put_attr(d, node, "target")
+    if kind == "initial":
+        if node.sub > 0:
+            d["form"] = IFORM.get(node.sub, "")
+        if node.aux > 0:
+            d["lines"] = node.aux
 
 
 def tail(d, node):
@@ -350,7 +395,7 @@ def node_json(nodes, n):
 
 def model_json(nodes, pages, ledger):
     root = nodes[0]
-    out = {"emon": "1.0"}
+    out = {"emon": "1.1"}
     put_attr(out, root, "generator")
     src = {}
     for k in ("format", "version", "pages", "tagged", "encrypted", "lang"):
@@ -385,6 +430,10 @@ def model_json(nodes, pages, ledger):
             d["dpi"] = p["dpi"]
         if p["px"][0] > 0 or p["px"][1] > 0:
             d["px"] = list(p["px"])
+        if p["layout"]:
+            d["layout"] = [{"band": c["band"], "col": c["col"],
+                            "role": ROLE.get(c["role"], ""),
+                            "box": [Cpt(x) for x in c["box"]]} for c in p["layout"]]
         pl.append(d)
     out["pages"] = pl
     out["body"] = node_json(nodes, 0)

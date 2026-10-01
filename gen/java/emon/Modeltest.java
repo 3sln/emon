@@ -13,8 +13,8 @@ public final class Modeltest {
         }
         return 0;
     }
-    public static int mtTree(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+    public static int mtTree(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeNew(nodes, Model.nkSection(), 0);
         Model.nodeNew(nodes, Model.nkHeading(), 1);
         Model.nodeNew(nodes, Model.nkParagraph(), 1);
@@ -34,7 +34,8 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertEq(Model.nodeCount(nodes), 1, "one node");
         emon.Testport.assertEq(emon.Port.cellsLen(nodes), 16, "a node is sixteen cells");
         emon.Testport.assertEq(Model.nodeKind(nodes, 0), 1, "the root is a document, code 1");
@@ -59,7 +60,7 @@ public final class Modeltest {
         emon.Testport.assertEq(emon.Port.cellsLen(text), 0, "text empty");
         emon.Testport.assertEq(Model.pageCount(pages), 0, "no pages");
         emon.Testport.assertEq(Model.ledgerCount(ledger), 0, "nothing dropped");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.newCells()), 0, "well formed");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "well formed");
     }
     public static void testModelInitEmptiesAUsedModel() {
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -68,11 +69,12 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.newCells();
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.textAppendCp(text, 65);
         Model.pageNew(pages, 1, 100, 100, 0, 1);
         Model.ledgerAdd(ledger, 1, 1, 0, 0, 1, 1, 500, 0);
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertEq(Model.nodeCount(nodes), 1, "back to the root");
         emon.Testport.assertEq(emon.Port.cellsLen(text), 0, "text cleared");
         emon.Testport.assertEq(Model.pageCount(pages), 0, "pages cleared");
@@ -85,7 +87,8 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.newCells();
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertEq(Model.nodeCount(nodes), 11, "eleven nodes");
         emon.Testport.assertEq(Model.nodeFirstChild(nodes, 0), 1, "document first child");
         emon.Testport.assertEq(Model.nodeLastChild(nodes, 0), 10, "document last child");
@@ -112,7 +115,7 @@ public final class Modeltest {
         emon.Testport.assertEq(Model.nodeDepth(nodes, 6), 4, "depth of the innermost text");
         emon.Testport.assertEq(Model.nodeKind(nodes, 5), 22, "span is code 22");
         emon.Testport.assertEq(Model.nodeKind(nodes, 7), 5, "list is code 5");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.newCells()), 0, "well formed");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "well formed");
     }
     public static void testNodeNewRefusesWhatItCannotPlace() {
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -121,11 +124,12 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertEq(Model.nodeNew(nodes, Model.nkParagraph(), 5), -1, "a parent that does not exist");
         emon.Testport.assertEq(Model.nodeNew(nodes, Model.nkParagraph(), -2), -1, "a parent below -1");
         emon.Testport.assertEq(Model.nodeNew(nodes, 0, 0), -1, "kind 0 is unknown");
-        emon.Testport.assertEq(Model.nodeNew(nodes, 26, 0), -1, "kind 26 is unknown");
+        emon.Testport.assertEq(Model.nodeNew(nodes, 27, 0), -1, "kind 27 is unknown");
         emon.Testport.assertEq(Model.nodeCount(nodes), 1, "a refusal adds nothing");
         emon.Testport.assertEq(Model.nodeNew(nodes, Model.nkFurniture(), -1), 1, "a second root is allowed");
         emon.Testport.assertEq(Model.nodeParent(nodes, 1), -1, "furniture has no parent");
@@ -138,9 +142,10 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         int at = 0;
         int made = 0;
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (at != -1) {
             at = Model.nodeNew(nodes, Model.nkSection(), at);
             if (at != -1) {
@@ -148,7 +153,7 @@ public final class Modeltest {
             }
         }
         emon.Testport.assertEq(made, Model.maxDepth() - 1, "a chain of sections ends at max-depth - 1 below the root");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.newCells()), 0, "still well formed");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "still well formed");
     }
     public static void testFieldsAreSetAndReadBack() {
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -157,7 +162,8 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.newCells();
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeSetText(nodes, 3, 7, 5);
         emon.Testport.assertEq(Model.nodeTextStart(nodes, 3), 7, "text start");
         emon.Testport.assertEq(Model.nodeTextLen(nodes, 3), 5, "text len");
@@ -203,7 +209,8 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.newCells();
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertEq(Model.nodeAddRegion(nodes, regions, 3, 1, 7200, 9000, 54000, 11000), 0, "first region is 0");
         emon.Testport.assertEq(Model.nodeAddRegion(nodes, regions, 2, 1, 100, 200, 300, 400), 1, "another node's region is 1");
         emon.Testport.assertEq(Model.nodeAddRegion(nodes, regions, 3, 2, 7200, 6000, 54000, 8000), 2, "a second page for the paragraph");
@@ -223,7 +230,7 @@ public final class Modeltest {
         emon.Testport.assertEq(Model.regionPage(regions, 1), 1, "the heading's page");
         emon.Testport.assertEq(Model.nodeRegionHead(nodes, 2), 1, "the heading's head");
         emon.Testport.assertEq(Model.nodeRegionHead(nodes, 4), -1, "a node with none");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.newCells()), 0, "well formed");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "well formed");
     }
     public static void testAttributesSetReplaceAndRepeat() {
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -232,8 +239,9 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         int a = 0;
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         mtText(text, 20);
         emon.Testport.assertEq(Model.nodeAttr(nodes, attrs, 2, Model.fkLevel()), -1, "no attribute yet");
         emon.Testport.assertEq(Model.nodeAttrIntOr(nodes, attrs, 2, Model.fkLevel(), 77), 77, "default when absent");
@@ -279,7 +287,7 @@ public final class Modeltest {
         emon.Testport.assertEq(Model.attrFindNext(attrs, a, Model.fkPages()), -1, "no fourth");
         emon.Testport.assertEq(Model.nodeAttr(nodes, attrs, 7, Model.fkAlt()), -1, "a key never set");
         emon.Testport.assertEq(Model.nodeAttr(nodes, attrs, 3, Model.fkPages()), -1, "another node's chain is its own");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.newCells()), 0, "well formed");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "well formed");
     }
     public static void testTextArenaHoldsScalarValuesOnly() {
         emon.Port.Cells text = emon.Port.newCells();
@@ -395,11 +403,11 @@ public final class Modeltest {
         emon.Port.textAscii(t, " ");
         Model.fkEmitName(t, 74);
         emon.Testport.assertText(t, "paragraph linebreak id checked", "spellings");
-        emon.Testport.assertEq(Model.nkEmitName(t, 26), 0, "an unknown kind writes nothing");
+        emon.Testport.assertEq(Model.nkEmitName(t, 27), 0, "an unknown kind writes nothing");
         emon.Testport.assertEq(Model.nkEmitName(t, 0), 0, "kind 0 is unknown");
     }
-    public static int mtTiny(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+    public static int mtTiny(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeNew(nodes, Model.nkParagraph(), 0);
         Model.textAppendCp(text, 72);
         Model.textAppendCp(text, 105);
@@ -421,7 +429,8 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
-        mtTiny(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.newCells();
+        mtTiny(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertEq(emon.Port.cellsLen(nodes), 32, "two nodes");
         emon.Testport.assertEq(emon.Port.cellsAt(nodes, 2), 1, "root first child");
         emon.Testport.assertEq(emon.Port.cellsAt(nodes, 3), 1, "root last child");
@@ -439,8 +448,8 @@ public final class Modeltest {
         emon.Testport.assertEq(emon.Port.cellsLen(pages), 16, "one page");
         emon.Testport.assertEq(emon.Port.cellsAt(pages, 7), 987, "page health");
         emon.Testport.assertEq(emon.Port.cellsLen(ledger), 10, "one ledger row");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.newCells()), 0, "well formed");
-        emon.Testport.assertEq64(Model.modelHash(nodes, attrs, regions, text, pages, ledger), -413424005450145991L, "fingerprint");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "well formed");
+        emon.Testport.assertEq64(Model.modelHash(nodes, attrs, regions, text, pages, ledger, layout), -4136225311394902565L, "fingerprint (the old one times the FNV prime: an empty layout arena folds as one more multiply)");
     }
     public static void testCheckNamesEachWayAModelCanBeWrong() {
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -449,48 +458,49 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.textAppendCp(text, 65);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "well formed to begin with");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed to begin with");
         emon.Port.cellsPush(nodes, 0);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadStride(), "a stray cell");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadStride(), "a stray cell");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.cellsSet(nodes, 17, 99);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadLink(), "a parent out of range");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadLink(), "a parent out of range");
         emon.Testport.assertEq(emon.Port.cellsAt(st, 0), 1, "names node 1");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.cellsSet(nodes, (3 * 16) + 1, 2);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadTree(), "a child that points at another parent");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadTree(), "a child that points at another parent");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.cellsSet(nodes, (3 * 16) + 7, 0);
         emon.Port.cellsSet(nodes, (3 * 16) + 8, 5);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadText(), "a text run past the arena");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadText(), "a text run past the arena");
         emon.Testport.assertEq(emon.Port.cellsAt(st, 0), 3, "names node 3");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeSetConf(nodes, 3, 10);
         emon.Port.cellsSet(nodes, (3 * 16) + 12, 1001);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadConf(), "a confidence of 1001");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadConf(), "a confidence of 1001");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.cellsSet(nodes, 0, 2);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcNoRoot(), "a root that is not a document");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcNoRoot(), "a root that is not a document");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.cellsSet(nodes, (4 * 16) + 0, 40);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 3, "an unknown kind is mc-bad-kind");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 3, "an unknown kind is mc-bad-kind");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeSetAttrText(nodes, attrs, 3, Model.fkLabel(), 0, 4);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadAttr(), "an attribute run past the arena");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadAttr(), "an attribute run past the arena");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeAddRegion(nodes, regions, 3, 1, 0, 0, 1, 1);
         emon.Port.cellsSet(nodes, (3 * 16) + 10, 2);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadRegion(), "a region count that is not the chain");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadRegion(), "a region count that is not the chain");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.pageNew(pages, 1, 100, 100, 0, 1);
         Model.pageSetLabel(pages, 0, 0, 3);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadPage(), "a page label past the arena");
-        mtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadPage(), "a page label past the arena");
+        mtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.ledgerAdd(ledger, 1, 1, 0, 0, 1, 1, 2000, 0);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcBadLedger(), "a ledger confidence of 2000");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadLedger(), "a ledger confidence of 2000");
     }
     public static void testCheckRequiresPreorderIds() {
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -499,12 +509,13 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeNew(nodes, Model.nkSection(), 0);
         Model.nodeNew(nodes, Model.nkSection(), 0);
         Model.nodeNew(nodes, Model.nkParagraph(), 1);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcNotPreorder(), "a child created after its parent's next sibling");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcNotPreorder(), "a child created after its parent's next sibling");
         emon.Testport.assertEq(emon.Port.cellsAt(st, 0), 3, "names node 3");
     }
     public static void testCheckAcceptsFurnitureAsASecondRoot() {
@@ -514,14 +525,133 @@ public final class Modeltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.nodeNew(nodes, Model.nkParagraph(), 0);
         Model.nodeNew(nodes, Model.nkFurniture(), -1);
         Model.nodeNew(nodes, Model.nkParagraph(), 2);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "two trees, each in pre-order");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "two trees, each in pre-order");
         Model.nodeNew(nodes, Model.nkFurniture(), -1);
         Model.nodeNew(nodes, Model.nkParagraph(), 0);
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.mcNotPreorder(), "a body node added after the furniture");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcNotPreorder(), "a body node added after the furniture");
+    }
+    public static void testTheNewCodesAreWhereD050PutThem() {
+        StringBuilder t = emon.Testport.newText();
+        emon.Testport.assertEq(Model.nkInitial(), 26, "initial is kind 26");
+        emon.Testport.assertEq(Model.nkIsInline(Model.nkInitial()), 1, "an initial is an inline");
+        emon.Testport.assertEq(Model.fkForm(), 76, "form");
+        emon.Testport.assertEq(Model.fkLines(), 77, "lines");
+        emon.Testport.assertEq(Model.fkLayout(), 78, "layout");
+        emon.Testport.assertEq(Model.fkBand(), 79, "band");
+        emon.Testport.assertEq(Model.fkCol(), 80, "col");
+        emon.Testport.assertEq(Model.fkBox(), 81, "box");
+        emon.Testport.assertEq(Model.rlSidebar(), 9, "sidebar is role 9");
+        Model.nkEmitName(t, 26);
+        emon.Port.textAscii(t, " ");
+        Model.ifmEmitName(t, 1);
+        emon.Port.textAscii(t, " ");
+        Model.ifmEmitName(t, 2);
+        emon.Port.textAscii(t, " ");
+        Model.ifmEmitName(t, 3);
+        emon.Port.textAscii(t, " ");
+        Model.rlEmitName(t, 9);
+        emon.Port.textAscii(t, " ");
+        Model.fkEmitName(t, 78);
+        emon.Testport.assertText(t, "initial drop raised margin sidebar layout", "the names");
+    }
+    public static void testAnInitialIsAnInlineWithFormAndLines() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        emon.Testport.assertEq(Model.nodeNew(nodes, Model.nkInitial(), 1), 2, "an initial under a paragraph");
+        Model.nodeSetSub(nodes, 2, 2);
+        Model.nodeSetAux(nodes, 2, 3);
+        emon.Testport.assertEq(Model.nodeNew(nodes, Model.nkText(), 2), 3, "its text");
+        emon.Testport.assertEq(Model.nodeNew(nodes, 27, 1), -1, "27 is not a kind");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "well formed");
+    }
+    public static void testAlignIsASubOnAParagraphAndAnAttributeElsewhere() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeNew(nodes, Model.nkHeading(), 0);
+        Model.nodeNew(nodes, Model.nkCell(), 0);
+        Model.nodeNew(nodes, Model.nkCaption(), 0);
+        Model.nodeNew(nodes, Model.nkSection(), 0);
+        Model.nodeSetSub(nodes, 2, 3);
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 1, Model.alCenter()), 0, "a paragraph");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 1), 2, "in its sub");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 2, Model.alEnd()), 0, "a heading");
+        emon.Testport.assertEq(Model.nodeSub(nodes, 2), 3, "its level is untouched");
+        emon.Testport.assertEq(Model.nodeAttrIntOr(nodes, attrs, 2, Model.fkAlign(), 0), 3, "the alignment is an attribute");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 2, Model.alStart()), 0, "set again");
+        emon.Testport.assertEq(Model.nodeAttrIntOr(nodes, attrs, 2, Model.fkAlign(), 0), 1, "replaced, not repeated");
+        emon.Testport.assertEq(Model.attrCount(attrs), 1, "one attribute");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 3, Model.alJustify()), -1, "a cell is never justified");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 3, Model.alCenter()), 0, "a cell may be centred");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 4, Model.alJustify()), 0, "a caption");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 5, Model.alStart()), -1, "a section has none");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 1, 0), -1, "0 is not a value");
+        emon.Testport.assertEq(Model.nodeSetAlign(nodes, attrs, 1, 5), -1, "5 is not a value");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "well formed");
+    }
+    public static void testAPagesLayoutIsOneContiguousRun() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
+        emon.Testport.assertEq(Model.pageLayoutCount(pages, 0), 0, "no map yet");
+        emon.Testport.assertEq(Model.layAdd(layout, pages, 0, 0, 0, Model.rlBody(), 7200, 9000, 30000, 75000), 0, "first cell");
+        emon.Testport.assertEq(Model.layAdd(layout, pages, 0, 0, 1, Model.rlSidebar(), 31200, 9000, 54000, 75000), 1, "second cell");
+        emon.Testport.assertEq(Model.layAdd(layout, pages, 1, 0, 0, Model.rlMargin(), 100, 200, 300, 400), 2, "the next page's run");
+        emon.Testport.assertEq(Model.layAdd(layout, pages, 0, 1, 0, Model.rlBody(), 0, 0, 1, 1), -1, "page 1's run is no longer last");
+        emon.Testport.assertEq(Model.layAdd(layout, pages, 1, 0, 1, 3, 0, 0, 1, 1), -1, "a role that is no layout role");
+        emon.Testport.assertEq(Model.layAdd(layout, pages, 2, 0, 0, Model.rlBody(), 0, 0, 1, 1), -1, "no such page");
+        emon.Testport.assertEq(emon.Port.cellsLen(layout), 24, "eight cells each, three rows");
+        emon.Testport.assertEq(Model.layoutCount(layout), 3, "three rows");
+        emon.Testport.assertEq(Model.pageLayoutFirst(pages, 0), 0, "page 1 starts at row 0");
+        emon.Testport.assertEq(Model.pageLayoutCount(pages, 0), 2, "and has two");
+        emon.Testport.assertEq(Model.pageLayoutFirst(pages, 1), 2, "page 2 starts at row 2");
+        emon.Testport.assertEq(Model.pageLayoutCount(pages, 1), 1, "and has one");
+        emon.Testport.assertEq(Model.layoutPage(layout, 2), 2, "the page number");
+        emon.Testport.assertEq(Model.layoutBand(layout, 1), 0, "band");
+        emon.Testport.assertEq(Model.layoutCol(layout, 1), 1, "col");
+        emon.Testport.assertEq(Model.layoutRole(layout, 1), 9, "role");
+        emon.Testport.assertEq(Model.layoutX0(layout, 1), 31200, "x0");
+        emon.Testport.assertEq(Model.layoutY0(layout, 1), 9000, "y0");
+        emon.Testport.assertEq(Model.layoutX1(layout, 1), 54000, "x1");
+        emon.Testport.assertEq(Model.layoutY1(layout, 1), 75000, "y1");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+        emon.Port.cellsSet(pages, 12, 5);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadLayout(), "a run past the arena");
+        emon.Port.cellsSet(pages, 12, 2);
+        emon.Port.cellsSet(layout, 3, 3);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadLayout(), "a role that is not body, margin or sidebar");
+        emon.Port.cellsSet(layout, 3, 9);
+        emon.Port.cellsSet(layout, 0, 7);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadLayout(), "a cell of another page");
+        emon.Port.cellsSet(layout, 0, 1);
+        emon.Port.cellsPush(layout, 0);
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadStride(), "a stray cell");
     }
 }

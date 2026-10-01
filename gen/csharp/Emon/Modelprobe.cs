@@ -5,8 +5,8 @@ namespace emon;
 
 
 public static class Modelprobe {
-    public static int ProbeBuild(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+    public static int ProbeBuild(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeNew(nodes, Model.NkParagraph(), 0);
         Model.TextAppendCp(text, 72);
         Model.TextAppendCp(text, 105);
@@ -23,16 +23,16 @@ public static class Modelprobe {
         Model.LedgerSetText(ledger, 0, 2, 1);
         return 0;
     }
-    public static int ProbeHash(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
+    public static int ProbeHash(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
         // `model: HI LO`, the two signed 32-bit halves of `model-hash`.
-        long h = Model.ModelHash(nodes, attrs, regions, text, pages, ledger);
+        long h = Model.ModelHash(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.TextAscii(t, "model: ");
         emon.Port.TextI32(t, Splitmix.SmHi(h));
         emon.Port.TextAscii(t, " ");
         emon.Port.TextI32(t, Splitmix.SmLo(h));
         return 0;
     }
-    public static int ProbeJson(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
-        return Json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger);
+    public static int ProbeJson(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+        return Json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout);
     }
 }

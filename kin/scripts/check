@@ -53,7 +53,7 @@ want4='0=? 1=document 2=? 3=paragraph 4=text 5=? 6=? 7=break 8=? sum:15'
 # P1.1: FNV-1a over the six arenas of the model `test/json/probe.model` builds
 # (kin/modelprobe.kin), as the two signed halves. Worked out independently in
 # Python from the arena layout in kin/model.kin, not printed by a target.
-want5='model: -540963052 -987379065'
+want5='model: 1538303818 -13163675'
 # P1.2: that model's canonical JSON, from the committed golden (the reference
 # serializer `kin/scripts/json-check.py` agrees with it, and so must every target).
 want6=$(cat test/json/probe.json)
@@ -123,13 +123,13 @@ fn main() {
     let mut e = String::new();
     emon::enumprobe::probe(&mut e);
     println!("{}", e);
-    let (mut mn, mut ma, mut mr, mut mt, mut mp, mut ml) = (port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new());
-    emon::modelprobe::probe_build(&mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml);
+    let (mut mn, mut ma, mut mr, mut mt, mut mp, mut ml, mut my) = (port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new());
+    emon::modelprobe::probe_build(&mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml, &mut my);
     let mut h = String::new();
-    emon::modelprobe::probe_hash(&mut h, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml);
+    emon::modelprobe::probe_hash(&mut h, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml, &mut my);
     println!("{}", h);
     let mut j = String::new();
-    emon::modelprobe::probe_json(&mut j, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml);
+    emon::modelprobe::probe_json(&mut j, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml, &mut my);
     println!("{}", j);
     let (mut qws, mut qrow, mut qst, mut qpal, mut qdig) = (port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new());
     let (mut qo, mut qz, mut qr) = (port::Buf::new(), port::Buf::new(), port::Buf::new());
@@ -184,13 +184,13 @@ func main() {
 	var e strings.Builder
 	enumprobe.Probe(&e)
 	fmt.Println(e.String())
-	mn, ma, mr, mt, mp, ml := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
-	modelprobe.ProbeBuild(mn, ma, mr, mt, mp, ml)
+	mn, ma, mr, mt, mp, ml, my := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
+	modelprobe.ProbeBuild(mn, ma, mr, mt, mp, ml, my)
 	var h strings.Builder
-	modelprobe.ProbeHash(&h, mn, ma, mr, mt, mp, ml)
+	modelprobe.ProbeHash(&h, mn, ma, mr, mt, mp, ml, my)
 	fmt.Println(h.String())
 	var j strings.Builder
-	modelprobe.ProbeJson(&j, mn, ma, mr, mt, mp, ml)
+	modelprobe.ProbeJson(&j, mn, ma, mr, mt, mp, ml, my)
 	fmt.Println(j.String())
 	qws, qrow, qst, qpal, qdig := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
 	qo, qz, qr := port.NewBuf(), port.NewBuf(), port.NewBuf()
@@ -236,13 +236,13 @@ public class Main {
         emon.Enumprobe.probe(pe);
         out.println(pe.toString());
         emon.Port.Cells mn = emon.Port.newCells(), ma = emon.Port.newCells(), mr = emon.Port.newCells(),
-            mt = emon.Port.newCells(), mp = emon.Port.newCells(), ml = emon.Port.newCells();
-        emon.Modelprobe.probeBuild(mn, ma, mr, mt, mp, ml);
+            mt = emon.Port.newCells(), mp = emon.Port.newCells(), ml = emon.Port.newCells(), my = emon.Port.newCells();
+        emon.Modelprobe.probeBuild(mn, ma, mr, mt, mp, ml, my);
         StringBuilder ph = new StringBuilder();
-        emon.Modelprobe.probeHash(ph, mn, ma, mr, mt, mp, ml);
+        emon.Modelprobe.probeHash(ph, mn, ma, mr, mt, mp, ml, my);
         out.println(ph.toString());
         StringBuilder pj = new StringBuilder();
-        emon.Modelprobe.probeJson(pj, mn, ma, mr, mt, mp, ml);
+        emon.Modelprobe.probeJson(pj, mn, ma, mr, mt, mp, ml, my);
         out.println(pj.toString());
         emon.Port.Cells qws = emon.Port.newCells(), qrow = emon.Port.newCells(), qst = emon.Port.newCells(),
             qpal = emon.Port.newCells(), qdig = emon.Port.newCells();
@@ -284,13 +284,13 @@ var e = new System.Text.StringBuilder();
 emon.Enumprobe.Probe(e);
 System.Console.WriteLine(e.ToString());
 var mn = emon.Port.NewCells(); var ma = emon.Port.NewCells(); var mr = emon.Port.NewCells();
-var mt = emon.Port.NewCells(); var mp = emon.Port.NewCells(); var ml = emon.Port.NewCells();
-emon.Modelprobe.ProbeBuild(mn, ma, mr, mt, mp, ml);
+var mt = emon.Port.NewCells(); var mp = emon.Port.NewCells(); var ml = emon.Port.NewCells(); var my = emon.Port.NewCells();
+emon.Modelprobe.ProbeBuild(mn, ma, mr, mt, mp, ml, my);
 var h = new System.Text.StringBuilder();
-emon.Modelprobe.ProbeHash(h, mn, ma, mr, mt, mp, ml);
+emon.Modelprobe.ProbeHash(h, mn, ma, mr, mt, mp, ml, my);
 System.Console.WriteLine(h.ToString());
 var j = new System.Text.StringBuilder();
-emon.Modelprobe.ProbeJson(j, mn, ma, mr, mt, mp, ml);
+emon.Modelprobe.ProbeJson(j, mn, ma, mr, mt, mp, ml, my);
 System.Console.WriteLine(j.ToString());
 var qws = emon.Port.NewCells(); var qrow = emon.Port.NewCells(); var qst = emon.Port.NewCells();
 var qpal = emon.Port.NewCells(); var qdig = emon.Port.NewCells();

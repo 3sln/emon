@@ -6,7 +6,7 @@
 ;; honest: `<b>`/`<i>` because emon knows the text was bold, not that the
 ;; author meant importance; no `<img>`; no CSS; a live `<input>` never.
 ;;
-;; `html-emit` writes the six arenas of `emon.model` to a `Text` sink, and the
+;; `html-emit` writes the seven arenas of `emon.model` to a `Text` sink, and the
 ;; four targets must write the SAME BYTES (the same claim as `emon.json`,
 ;; SPEC 4.1). Nothing formats a number or a string for a host to disagree
 ;; about: integers are `text-i32`, code points are `text-cp`, centipoints are
@@ -14,6 +14,12 @@
 ;; else is an ASCII literal through `emit-ascii`.
 ;;
 ;; OPTIONS (SPEC 5.2) are a bitset, `ho-*` below, and a confidence threshold.
+;; INITIALS, ALIGNMENT, ASIDES AND COLUMNS (P1.13, D133): an `initial` is a
+;; span (`ho-initials-plain` writes its text bare); `data-emon-align` goes where
+;; the Model has an alignment and `ho-align-style` adds the style and `dir`; a
+;; `margin` or `sidebar` note is an `<aside data-emon-role>` with an `fn-` id only
+;; when something points at it; `ho-geometry` adds `data-emon-col(s)` from the
+;; page's column map.
 ;; Defaults are CLEAN HTML: no ids, no geometry, policy furniture, milestones
 ;; on, compact. `pretty` puts every BLOCK element on its own line, indented
 ;; two spaces a level (inline content stays on its element's line).
@@ -41,7 +47,12 @@
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
                                 node-has-text node-region-head
-                                node-region-count node-conf node-sub
+                                node-region-count node-conf node-sub node-aux
+                                page-count page-number page-layout-first
+                                page-layout-count layout-count layout-page
+                                layout-band layout-col layout-x0 layout-y0
+                                layout-x1 layout-y1 ifm-emit-name nk-initial
+                                fk-align
                                 node-attr attr-find attr-find-next attr-vkind
                                 attr-value attr-len nk-is-inline nk-emit-name
                                 fk-emit-name rl-emit-name fg-emit-name
@@ -82,10 +93,12 @@
 (defn ^:pub ^I32 ho-pretty [] (return 16))
 (defn ^:pub ^I32 ho-furniture-drop [] (return 32))
 (defn ^:pub ^I32 ho-no-milestones [] (return 64))
+(defn ^:pub ^I32 ho-initials-plain [] (return 128))
+(defn ^:pub ^I32 ho-align-style [] (return 256))
 
-;; THE OPTIONS TRAVEL AS ONE INTEGER, `o`: the bits above in the low byte, and
+;; THE OPTIONS TRAVEL AS ONE INTEGER, `o`: the bits above in the low ten bits, and
 ;; the confidence threshold (nodes with 0 <= conf < it get `data-emon-conf`)
-;; times 256 above them. One parameter fewer through every function.
+;; times 1024 above them. One parameter fewer through every function.
 (defn ^I32 h-on [^I32 o ^I32 bit]
   (if (!= (bit-and o bit) 0) (return 1))
   (return 0))
@@ -145,7 +158,74 @@
 
 ;; -------------------------------------------------- what every element has
 
-(defn ^I32 h-common [^:mut ^Text t ^I32 o ^Cells nodes ^Cells regions ^I32 n]
+(defn ^I32 h-find-cell [^Cells pages ^Cells layout ^I32 pg ^I32 cx ^I32 cy]
+  (comment "The first cell of the column map of page NUMBER pg that contains the")
+  (comment "point (edges included), as a `layout` row, or -1 (D113).")
+  (let [^:mut ^I32 p 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 r 0]
+    (while (< p (page-count pages))
+      (do (if (== (page-number pages p) pg)
+            (do (set j 0)
+                (while (< j (page-layout-count pages p))
+                  (do (set r (+ (page-layout-first pages p) j))
+                      (if (and (>= cx (layout-x0 layout r)) (<= cx (layout-x1 layout r))
+                               (>= cy (layout-y0 layout r)) (<= cy (layout-y1 layout r)))
+                        (return r))
+                      (set j (+ j 1))))
+                (return -1)))
+          (set p (+ p 1))))
+    (return -1)))
+
+(defn ^I32 h-region-cell [^Cells regions ^Cells pages ^Cells layout ^I32 r]
+  (comment "The column cell holding the centre of region r (halved per edge, so")
+  (comment "no sum can overflow), or -1.")
+  (return (h-find-cell pages layout (region-page regions r)
+                       (+ (quot (region-x0 regions r) 2) (quot (region-x1 regions r) 2))
+                       (+ (quot (region-y0 regions r) 2) (quot (region-y1 regions r) 2)))))
+
+(defn ^I32 h-cell-name [^:mut ^Text t ^Cells layout ^I32 c]
+  (text-i32 t (layout-page layout c))
+  (emit-ascii t ":")
+  (text-i32 t (layout-band layout c))
+  (emit-ascii t ":")
+  (text-i32 t (layout-col layout c))
+  (return 0))
+
+(defn ^I32 h-columns [^:mut ^Text t ^Cells nodes ^Cells regions ^Cells pages
+                      ^Cells layout ^I32 n]
+  (comment "`data-emon-col=\"page:band:col\"` (the first fragment that lies in a")
+  (comment "cell) and, when more than one does, `data-emon-cols` (every one, in")
+  (comment "order, space-separated): D113. Nothing when the page has no map.")
+  (let [^:mut ^I32 r (node-region-head nodes n)
+        ^:mut ^I32 c 0
+        ^:mut ^I32 first -1
+        ^:mut ^I32 k 0]
+    (while (>= r 0)
+      (do (set c (h-region-cell regions pages layout r))
+          (if (>= c 0)
+            (do (if (== k 0) (set first c))
+                (set k (+ k 1))))
+          (set r (region-next regions r))))
+    (if (== k 0) (return 0))
+    (emit-ascii t " data-emon-col=\"")
+    (h-cell-name t layout first)
+    (emit-ascii t "\"")
+    (if (> k 1)
+      (do (emit-ascii t " data-emon-cols=\"")
+          (set r (node-region-head nodes n))
+          (set k 0)
+          (while (>= r 0)
+            (do (set c (h-region-cell regions pages layout r))
+                (if (>= c 0)
+                  (do (if (> k 0) (emit-ascii t " "))
+                      (h-cell-name t layout c)
+                      (set k (+ k 1))))
+                (set r (region-next regions r))))
+          (emit-ascii t "\"")))
+    (return 0)))
+
+(defn ^I32 h-common [^:mut ^Text t ^I32 o ^Cells nodes ^Cells regions ^Cells pages ^Cells layout ^I32 n]
   (comment "The attributes the options add to the element of node n, last in")
   (comment "the tag: `id` (blocks only, and never on a note, which has `fn-N`),")
   (comment "`data-emon-at` (`page,x0,y0,x1,y1` per region, `;` between) and")
@@ -175,10 +255,47 @@
                 (set i (+ i 1))
                 (set r (region-next regions r))))
           (emit-ascii t "\"")))
-    (if (and (== (h-on o 4) 1) (>= cf 0) (< cf (quot o 256)))
+    (if (and (== (h-on o 2) 1) (== (nk-is-inline kind) 0)
+             (> (node-region-count nodes n) 0) (> (layout-count layout) 0))
+      (h-columns t nodes regions pages layout n))
+    (if (and (== (h-on o 4) 1) (>= cf 0) (< cf (quot o 1024)))
       (do (emit-ascii t " data-emon-conf=\"")
           (text-i32 t cf)
           (emit-ascii t "\"")))
+    (return 0)))
+
+(defn ^I32 h-align [^:mut ^Text t ^I32 o ^I32 v]
+  (comment "`data-emon-align` for an `al` code (D069), and with `ho-align-style` the")
+  (comment "style that shows it and `dir=\"auto\"`, so start and end resolve for")
+  (comment "right-to-left text in a browser (D110). Nothing for 0.")
+  (if (<= v 0) (return 0))
+  (emit-ascii t " data-emon-align=\"")
+  (al-emit-name t v)
+  (emit-ascii t "\"")
+  (if (== (h-on o 256) 1)
+    (do (emit-ascii t " style=\"text-align:")
+        (al-emit-name t v)
+        (emit-ascii t "\" dir=\"auto\"")))
+  (return 0))
+
+(defn ^I32 h-align-attr [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs ^I32 n]
+  (comment "The alignment of a heading, caption or cell: the `align` attribute.")
+  (let [^I32 a (h-iattr nodes attrs n (fk-align))]
+    (if (< a 0) (return 0))
+    (return (h-align t o (attr-value attrs a)))))
+
+(defn ^I32 h-targeted [^Cells nodes ^Cells attrs ^I32 n]
+  (comment "1 when a `ref` or a `link` points at node n: only then does a margin or")
+  (comment "sidebar note get an `id` (`fn-N`), as a footnote always does (D113).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 a -1
+        ^:mut ^I32 k 0]
+    (while (< i (node-count nodes))
+      (do (set k (node-kind nodes i))
+          (if (or (== k (nk-ref)) (== k (nk-link)))
+            (do (set a (h-iattr nodes attrs i (fk-target)))
+                (if (and (>= a 0) (== (attr-value attrs a) n)) (return 1))))
+          (set i (+ i 1))))
     (return 0)))
 
 (defn ^I32 h-has-inline [^Cells nodes ^I32 n]
@@ -209,7 +326,7 @@
 
 ;; ---------------------------------------------------------------- inlines
 
-(defn ^I32 h-span-open [^:mut ^Text t ^I32 o ^Cells nodes ^Cells regions
+(defn ^I32 h-span-open [^:mut ^Text t ^I32 o ^Cells nodes ^Cells regions ^Cells pages ^Cells layout
                         ^I32 n ^I32 bit ^I32 first]
   (comment "Open the element of one style bit. The options' attributes go on")
   (comment "the first element opened. Answers the new `first` (0).")
@@ -221,7 +338,7 @@
   (if (== bit 32) (emit-ascii t "<sup"))
   (if (== bit 64) (emit-ascii t "<code"))
   (if (== bit 128) (emit-ascii t "<span data-emon-style=\"smallcaps\""))
-  (if (== first 1) (h-common t o nodes regions n))
+  (if (== first 1) (h-common t o nodes regions pages layout n))
   (emit-ascii t ">")
   (return 0))
 
@@ -237,14 +354,14 @@
   (return 0))
 
 (defn ^I32 h-inner [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                    ^Cells regions ^Cells text ^I32 n]
+                    ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n]
   (comment "The content of an inline node or of a block's own line of text: its")
   (comment "inline children if it has any, else its own run.")
   (let [^:mut ^I32 c (node-first-child nodes n)]
     (if (== (h-has-inline nodes n) 1)
       (do (while (>= c 0)
             (do (if (== (nk-is-inline (node-kind nodes c)) 1)
-                  (h-inline t o nodes attrs regions text c))
+                  (h-inline t o nodes attrs regions pages layout text c))
                 (set c (node-next nodes c))))
           (return 0)))
     (if (== (node-has-text nodes n) 1)
@@ -263,7 +380,7 @@
 
 
 (defn ^I32 h-inline [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                     ^Cells regions ^Cells text ^I32 n]
+                     ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n]
   (comment "One inline node: text, span, link, ref or linebreak (SPEC 5.1).")
   (let [^I32 kind (node-kind nodes n)
         ^I32 sub (node-sub nodes n)
@@ -275,25 +392,43 @@
       (do (if (== (node-has-text nodes n) 1)
             (h-run t text (node-text-start nodes n) (node-text-len nodes n)))
           (return 0)))
+    (if (== kind (nk-initial))
+      (do (if (== (h-on o 128) 1)
+            (do (h-inner t o nodes attrs regions pages layout text n)
+                (return 0)))
+          (emit-ascii t "<span data-emon=\"initial\"")
+          (if (> sub 0)
+            (do (emit-ascii t " data-emon-form=\"")
+                (ifm-emit-name t sub)
+                (emit-ascii t "\"")))
+          (if (> (node-aux nodes n) 0)
+            (do (emit-ascii t " data-emon-lines=\"")
+                (text-i32 t (node-aux nodes n))
+                (emit-ascii t "\"")))
+          (h-common t o nodes regions pages layout n)
+          (emit-ascii t ">")
+          (h-inner t o nodes attrs regions pages layout text n)
+          (emit-ascii t "</span>")
+          (return 0)))
     (if (== kind (nk-linebreak))
       (do (emit-ascii t "<br")
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
           (return 0)))
     (if (== kind (nk-span))
       (do (if (== sub 0)
             (do (emit-ascii t "<span")
-                (h-common t o nodes regions n)
+                (h-common t o nodes regions pages layout n)
                 (emit-ascii t ">")
-                (h-inner t o nodes attrs regions text n)
+                (h-inner t o nodes attrs regions pages layout text n)
                 (emit-ascii t "</span>")
                 (return 0)))
           (while (< b 8)
             (do (set bit (shl32 1 b))
                 (if (!= (bit-and sub bit) 0)
-                  (set first (h-span-open t o nodes regions n bit first)))
+                  (set first (h-span-open t o nodes regions pages layout n bit first)))
                 (set b (+ b 1))))
-          (h-inner t o nodes attrs regions text n)
+          (h-inner t o nodes attrs regions pages layout text n)
           (set b 7)
           (while (>= b 0)
             (do (set bit (shl32 1 b))
@@ -312,9 +447,9 @@
                   (do (emit-ascii t " href=\"")
                       (h-target-href t nodes (attr-value attrs a))
                       (emit-ascii t "\"")))))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (h-inner t o nodes attrs regions text n)
+          (h-inner t o nodes attrs regions pages layout text n)
           (emit-ascii t "</a>")
           (return 0)))
     (if (== kind (nk-ref))
@@ -324,10 +459,10 @@
                 (h-target-href t nodes (attr-value attrs a))
                 (emit-ascii t "\"")))
           (if (< a 0) (emit-ascii t "<span role=\"doc-noteref\""))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
           (if (or (== (h-has-inline nodes n) 1) (== (node-has-text nodes n) 1))
-            (h-inner t o nodes attrs regions text n)
+            (h-inner t o nodes attrs regions pages layout text n)
             (do (set b (h-tattr nodes attrs n (fk-marker)))
                 (if (>= b 0)
                   (h-run t text (attr-value attrs b) (attr-len attrs b)))))
@@ -339,25 +474,25 @@
 ;; ----------------------------------------------------------------- blocks
 
 (defn ^I32 h-blocks [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                     ^Cells regions ^Cells text ^I32 n ^I32 d]
+                     ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n ^I32 d]
   (comment "Every non-inline child of n as a block at depth d. Answers how many")
   (comment "wrote anything (a milestone turned off writes nothing).")
   (let [^:mut ^I32 c (node-first-child nodes n)
         ^:mut ^I32 k 0]
     (while (>= c 0)
       (do (if (== (nk-is-inline (node-kind nodes c)) 0)
-            (set k (+ k (h-block t o nodes attrs regions text c d))))
+            (set k (+ k (h-block t o nodes attrs regions pages layout text c d))))
           (set c (node-next nodes c))))
     (return k)))
 
 (defn ^I32 h-body [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                   ^Cells regions ^Cells text ^I32 n ^I32 d]
+                   ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n ^I32 d]
   (comment "What goes inside a block's element: its line of text (inline")
   (comment "children, else its own run), then its block children at depth d.")
   (comment "Answers how many block children were written, so the caller knows")
   (comment "whether its closing tag starts a new line (pretty mode).")
-  (h-inner t o nodes attrs regions text n)
-  (return (h-blocks t o nodes attrs regions text n d)))
+  (h-inner t o nodes attrs regions pages layout text n)
+  (return (h-blocks t o nodes attrs regions pages layout text n d)))
 
 (defn ^I32 h-list-type [^:mut ^Text t ^Cells nodes ^Cells attrs ^Cells text ^I32 n]
   (comment "An ordered list's `type` from its scheme: `lower-alpha` a,")
@@ -388,7 +523,7 @@
   (return 0))
 
 (defn ^I32 h-block [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                    ^Cells regions ^Cells text ^I32 n ^I32 d]
+                    ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n ^I32 d]
   (comment "One node as a block element at depth d (SPEC 5.1), on its own line")
   (comment "in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline")
   (comment "kind met where a block belongs is written as itself.")
@@ -402,7 +537,7 @@
         ^:mut ^I32 pk 0]
     (if (== (nk-is-inline kind) 1)
       (do (h-nl t o d)
-          (h-inline t o nodes attrs regions text n)
+          (h-inline t o nodes attrs regions pages layout text n)
           (return 1)))
     ;; ---- break: an empty milestone
     (if (== kind (nk-break))
@@ -416,16 +551,16 @@
             (do (emit-ascii t " data-emon-page-label=\"")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t "></span>")
           (return 1)))
     (h-nl t o d)
     ;; ---- section
     (if (== kind (nk-section))
       (do (emit-ascii t "<section")
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</section>")
           (return 1)))
@@ -447,12 +582,13 @@
             (do (emit-ascii t " data-emon-number=\"")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-align-attr t o nodes attrs n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
           (if (>= a 0)
             (do (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t " ")))
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</h")
           (text-i32 t pk)
@@ -461,13 +597,10 @@
     ;; ---- paragraph
     (if (== kind (nk-paragraph))
       (do (emit-ascii t "<p")
-          (if (> sub 0)
-            (do (emit-ascii t " data-emon-align=\"")
-                (al-emit-name t sub)
-                (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-align t o sub)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</p>")
           (return 1)))
@@ -482,9 +615,9 @@
                       (emit-ascii t "\"")))
                 (h-list-type t nodes attrs text n)))
           (if (!= sub 2) (emit-ascii t "<ul"))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (== sub 2) (emit-ascii t "</ol>"))
           (if (!= sub 2) (emit-ascii t "</ul>"))
@@ -501,26 +634,26 @@
             (do (emit-ascii t " data-emon-marker=\"")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</li>")
           (return 1)))
     ;; ---- table: the caption first (HTML wants it first), then the groups
     (if (== kind (nk-table))
       (do (emit-ascii t "<table")
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
           (set c (node-first-child nodes n))
           (while (>= c 0)
             (do (if (== (node-kind nodes c) (nk-caption))
-                  (h-block t o nodes attrs regions text c (+ d 1)))
+                  (h-block t o nodes attrs regions pages layout text c (+ d 1)))
                 (set c (node-next nodes c))))
           (set c (node-first-child nodes n))
           (while (>= c 0)
             (do (if (!= (node-kind nodes c) (nk-caption))
-                  (h-block t o nodes attrs regions text c (+ d 1)))
+                  (h-block t o nodes attrs regions pages layout text c (+ d 1)))
                 (set c (node-next nodes c))))
           (h-nl t o d)
           (emit-ascii t "</table>")
@@ -529,9 +662,9 @@
       (do (if (== sub 1) (emit-ascii t "<thead"))
           (if (== sub 3) (emit-ascii t "<tfoot"))
           (if (and (!= sub 1) (!= sub 3)) (emit-ascii t "<tbody"))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (== sub 1) (emit-ascii t "</thead>"))
           (if (== sub 3) (emit-ascii t "</tfoot>"))
@@ -540,9 +673,9 @@
     (if (== kind (nk-row))
       (do (emit-ascii t "<tr")
           (if (== sub 1) (emit-ascii t " data-emon-repeated=\"true\""))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</tr>")
           (return 1)))
@@ -562,9 +695,10 @@
             (do (emit-ascii t " colspan=\"")
                 (text-i32 t (attr-value attrs a))
                 (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-align-attr t o nodes attrs n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (> sub 0) (emit-ascii t "</th>"))
           (if (<= sub 0) (emit-ascii t "</td>"))
@@ -584,9 +718,10 @@
             (do (emit-ascii t " data-emon-label=\"")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-align-attr t o nodes attrs n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (== pk (nk-table)) (emit-ascii t "</caption>"))
           (if (== pk (nk-figure)) (emit-ascii t "</figcaption>"))
@@ -609,16 +744,16 @@
             (do (emit-ascii t " data-emon-label=\"")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (h-inner t o nodes attrs regions text n)
+          (h-inner t o nodes attrs regions pages layout text n)
           (set a (node-attr nodes attrs n (fk-labels)))
           (while (>= a 0)
             (do (emit-ascii t "<span data-emon=\"label\">")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "</span>")
                 (set a (attr-find-next attrs a (fk-labels)))))
-          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</figure>")
           (return 1)))
@@ -652,7 +787,7 @@
           (if (and (== (node-has-text nodes n) 0) (>= a 0))
             (h-run t text (attr-value attrs a) (attr-len attrs a)))
           (emit-ascii t "\"")
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t "></figure>")
           (return 1)))
     ;; ---- formula: the linear text in aria-label (MathML is parked)
@@ -665,7 +800,7 @@
           (emit-ascii t " aria-label=\"")
           (h-plain t nodes text n)
           (emit-ascii t "\"")
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t "></figure>")
           (return 1)))
     ;; ---- code: <pre><code> (the `<code>` between them is also why a text
@@ -673,36 +808,46 @@
     ;; comes right after `<pre>`)
     (if (== kind (nk-code))
       (do (emit-ascii t "<pre")
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t "><code>")
-          (h-inner t o nodes attrs regions text n)
+          (h-inner t o nodes attrs regions pages layout text n)
           (emit-ascii t "</code>")
-          (set hb (h-blocks t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</pre>")
           (return 1)))
     (if (== kind (nk-quote))
       (do (emit-ascii t "<blockquote")
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</blockquote>")
           (return 1)))
     ;; ---- note: a footnote is reached by `ref` as #fn-N
     (if (== kind (nk-note))
-      (do (if (== sub 5) (emit-ascii t "<aside role=\"doc-endnote\" id=\"fn-"))
-          (if (!= sub 5) (emit-ascii t "<aside role=\"doc-footnote\" id=\"fn-"))
-          (text-i32 t n)
-          (emit-ascii t "\"")
+      (do (if (or (== sub 6) (== sub 9))
+            (do (emit-ascii t "<aside data-emon-role=\"")
+                (rl-emit-name t sub)
+                (emit-ascii t "\"")
+                (if (== (h-targeted nodes attrs n) 1)
+                  (do (emit-ascii t " id=\"fn-")
+                      (text-i32 t n)
+                      (emit-ascii t "\"")))))
+          (if (== sub 5) (emit-ascii t "<aside role=\"doc-endnote\" id=\"fn-"))
+          (if (and (!= sub 5) (!= sub 6) (!= sub 9))
+            (emit-ascii t "<aside role=\"doc-footnote\" id=\"fn-"))
+          (if (and (!= sub 6) (!= sub 9))
+            (do (text-i32 t n)
+                (emit-ascii t "\"")))
           (set a (h-tattr nodes attrs n (fk-marker)))
           (if (>= a 0)
             (do (emit-ascii t " data-emon-marker=\"")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "\"")))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</aside>")
           (return 1)))
@@ -725,24 +870,24 @@
                   (emit-ascii t " data-emon-checked=\"true\""))
                 (if (== (attr-value attrs a) 0)
                   (emit-ascii t " data-emon-checked=\"false\""))))
-          (h-common t o nodes regions n)
+          (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
           (set a (h-tattr nodes attrs n (fk-value)))
           (if (>= a 0)
             (h-run t text (attr-value attrs a) (attr-len attrs a)))
-          (if (< a 0) (h-inner t o nodes attrs regions text n))
+          (if (< a 0) (h-inner t o nodes attrs regions pages layout text n))
           (emit-ascii t "</span>")
           (return 1)))
     ;; ---- furniture: an aside (once, at the top of <main>, or in place)
     (if (== kind (nk-furniture))
-      (do (h-furniture-open t o nodes attrs regions text n)
+      (do (h-furniture-open t o nodes attrs regions pages layout text n)
           (if (== (node-has-text nodes n) 1)
             (do (h-nl t o (+ d 1))
                 (emit-ascii t "<p>")
                 (h-run t text (node-text-start nodes n) (node-text-len nodes n))
                 (emit-ascii t "</p>")
                 (set hb 1)))
-          (set hb (+ hb (h-blocks t o nodes attrs regions text n (+ d 1))))
+          (set hb (+ hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1))))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</aside>")
           (return 1)))
@@ -751,15 +896,15 @@
     (emit-ascii t "<div data-emon-kind=\"")
     (nk-emit-name t kind)
     (emit-ascii t "\"")
-    (h-common t o nodes regions n)
+    (h-common t o nodes regions pages layout n)
     (emit-ascii t ">")
-    (set hb (h-body t o nodes attrs regions text n (+ d 1)))
+    (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
     (if (> hb 0) (h-nl t o d))
     (emit-ascii t "</div>")
     (return 1)))
 
 (defn ^I32 h-furniture-open [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                             ^Cells regions ^Cells text ^I32 n]
+                             ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n]
   (comment "`<aside data-emon=\"furniture\" data-emon-role=\"header\" ...>`:")
   (comment "the role, the pages it was seen on, then the options' attributes.")
   (let [^I32 sub (node-sub nodes n)
@@ -778,7 +923,7 @@
                 (set i (+ i 1))
                 (set a (attr-find-next attrs a (fk-pages)))))
           (emit-ascii t "\"")))
-    (h-common t o nodes regions n)
+    (h-common t o nodes regions pages layout n)
     (emit-ascii t ">")
     (return 0)))
 
@@ -800,13 +945,13 @@
 
 (defn ^:pub ^I32 html-emit [^:mut ^Text t ^I32 opts ^I32 conf-below ^Cells nodes
                             ^Cells attrs ^Cells regions ^Cells text
-                            ^Cells ledger]
+                            ^Cells pages ^Cells ledger ^Cells layout]
   (comment "Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;")
   (comment "`conf-below` is the threshold for `ho-confidence` (nodes with a")
   (comment "conf under it get `data-emon-conf`). The root (node 0) must be a")
   (comment "document: run `model-check` first on a Model of unknown origin.")
   (comment "Answers 0.")
-  (let [^I32 o (+ (bit-and opts 255) (* conf-below 256))
+  (let [^I32 o (+ (bit-and opts 1023) (* conf-below 1024))
         ^I32 nn (node-count nodes)
         ^I32 nl (ledger-count ledger)
         ^:mut ^I32 a -1
@@ -850,9 +995,9 @@
           (while (< i nn)
             (do (if (and (== (node-kind nodes i) (nk-furniture))
                          (== (node-parent nodes i) -1))
-                  (h-block t o nodes attrs regions text i 3))
+                  (h-block t o nodes attrs regions pages layout text i 3))
                 (set i (+ i 1))))))
-    (h-blocks t o nodes attrs regions text 0 3)
+    (h-blocks t o nodes attrs regions pages layout text 0 3)
     ;; the ledger: what was dropped, inert but present
     (if (== (h-on o 8) 1)
       (do (set i 0)

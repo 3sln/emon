@@ -26,6 +26,12 @@ public static class Html {
     public static int HoNoMilestones() {
         return 64;
     }
+    public static int HoInitialsPlain() {
+        return 128;
+    }
+    public static int HoAlignStyle() {
+        return 256;
+    }
     internal static int HOn(int o, int bit) {
         if ((o & bit) != 0) {
             return 1;
@@ -116,7 +122,85 @@ public static class Html {
         }
         return a;
     }
-    internal static int HCommon(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, int n) {
+    internal static int HFindCell(emon.Port.Cells pages, emon.Port.Cells layout, int pg, int cx, int cy) {
+        // The first cell of the column map of page NUMBER pg that contains the
+        // point (edges included), as a `layout` row, or -1 (D113).
+        int p = 0;
+        int j = 0;
+        int r = 0;
+        while (p < Model.PageCount(pages)) {
+            if (Model.PageNumber(pages, p) == pg) {
+                j = 0;
+                while (j < Model.PageLayoutCount(pages, p)) {
+                    r = Model.PageLayoutFirst(pages, p) + j;
+                    if ((cx >= Model.LayoutX0(layout, r)) && (cx <= Model.LayoutX1(layout, r)) && (cy >= Model.LayoutY0(layout, r)) && (cy <= Model.LayoutY1(layout, r))) {
+                        return r;
+                    }
+                    j += 1;
+                }
+                return -1;
+            }
+            p += 1;
+        }
+        return -1;
+    }
+    internal static int HRegionCell(emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int r) {
+        // The column cell holding the centre of region r (halved per edge, so
+        // no sum can overflow), or -1.
+        return HFindCell(pages, layout, Model.RegionPage(regions, r), (Model.RegionX0(regions, r) / 2) + (Model.RegionX1(regions, r) / 2), (Model.RegionY0(regions, r) / 2) + (Model.RegionY1(regions, r) / 2));
+    }
+    internal static int HCellName(System.Text.StringBuilder t, emon.Port.Cells layout, int c) {
+        emon.Port.TextI32(t, Model.LayoutPage(layout, c));
+        emon.Port.TextAscii(t, ":");
+        emon.Port.TextI32(t, Model.LayoutBand(layout, c));
+        emon.Port.TextAscii(t, ":");
+        emon.Port.TextI32(t, Model.LayoutCol(layout, c));
+        return 0;
+    }
+    internal static int HColumns(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int n) {
+        // `data-emon-col="page:band:col"` (the first fragment that lies in a
+        // cell) and, when more than one does, `data-emon-cols` (every one, in
+        // order, space-separated): D113. Nothing when the page has no map.
+        int r = Model.NodeRegionHead(nodes, n);
+        int c = 0;
+        int first = -1;
+        int k = 0;
+        while (r >= 0) {
+            c = HRegionCell(regions, pages, layout, r);
+            if (c >= 0) {
+                if (k == 0) {
+                    first = c;
+                }
+                k += 1;
+            }
+            r = Model.RegionNext(regions, r);
+        }
+        if (k == 0) {
+            return 0;
+        }
+        emon.Port.TextAscii(t, " data-emon-col=\"");
+        HCellName(t, layout, first);
+        emon.Port.TextAscii(t, "\"");
+        if (k > 1) {
+            emon.Port.TextAscii(t, " data-emon-cols=\"");
+            r = Model.NodeRegionHead(nodes, n);
+            k = 0;
+            while (r >= 0) {
+                c = HRegionCell(regions, pages, layout, r);
+                if (c >= 0) {
+                    if (k > 0) {
+                        emon.Port.TextAscii(t, " ");
+                    }
+                    HCellName(t, layout, c);
+                    k += 1;
+                }
+                r = Model.RegionNext(regions, r);
+            }
+            emon.Port.TextAscii(t, "\"");
+        }
+        return 0;
+    }
+    internal static int HCommon(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int n) {
         // The attributes the options add to the element of node n, last in
         // the tag: `id` (blocks only, and never on a note, which has `fn-N`),
         // `data-emon-at` (`page,x0,y0,x1,y1` per region, `;` between) and
@@ -151,10 +235,56 @@ public static class Html {
             }
             emon.Port.TextAscii(t, "\"");
         }
-        if ((HOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 256))) {
+        if ((HOn(o, 2) == 1) && (Model.NkIsInline(kind) == 0) && (Model.NodeRegionCount(nodes, n) > 0) && (Model.LayoutCount(layout) > 0)) {
+            HColumns(t, nodes, regions, pages, layout, n);
+        }
+        if ((HOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024))) {
             emon.Port.TextAscii(t, " data-emon-conf=\"");
             emon.Port.TextI32(t, cf);
             emon.Port.TextAscii(t, "\"");
+        }
+        return 0;
+    }
+    internal static int HAlign(System.Text.StringBuilder t, int o, int v) {
+        // `data-emon-align` for an `al` code (D069), and with `ho-align-style` the
+        // style that shows it and `dir="auto"`, so start and end resolve for
+        // right-to-left text in a browser (D110). Nothing for 0.
+        if (v <= 0) {
+            return 0;
+        }
+        emon.Port.TextAscii(t, " data-emon-align=\"");
+        Model.AlEmitName(t, v);
+        emon.Port.TextAscii(t, "\"");
+        if (HOn(o, 256) == 1) {
+            emon.Port.TextAscii(t, " style=\"text-align:");
+            Model.AlEmitName(t, v);
+            emon.Port.TextAscii(t, "\" dir=\"auto\"");
+        }
+        return 0;
+    }
+    internal static int HAlignAttr(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, int n) {
+        // The alignment of a heading, caption or cell: the `align` attribute.
+        int a = HIattr(nodes, attrs, n, Model.FkAlign());
+        if (a < 0) {
+            return 0;
+        }
+        return HAlign(t, o, Model.AttrValue(attrs, a));
+    }
+    internal static int HTargeted(emon.Port.Cells nodes, emon.Port.Cells attrs, int n) {
+        // 1 when a `ref` or a `link` points at node n: only then does a margin or
+        // sidebar note get an `id` (`fn-N`), as a footnote always does (D113).
+        int i = 0;
+        int a = -1;
+        int k = 0;
+        while (i < Model.NodeCount(nodes)) {
+            k = Model.NodeKind(nodes, i);
+            if ((k == Model.NkRef()) || (k == Model.NkLink())) {
+                a = HIattr(nodes, attrs, i, Model.FkTarget());
+                if ((a >= 0) && (Model.AttrValue(attrs, a) == n)) {
+                    return 1;
+                }
+            }
+            i += 1;
         }
         return 0;
     }
@@ -194,7 +324,7 @@ public static class Html {
         }
         return 0;
     }
-    internal static int HSpanOpen(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, int n, int bit, int first) {
+    internal static int HSpanOpen(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int n, int bit, int first) {
         // Open the element of one style bit. The options' attributes go on
         // the first element opened. Answers the new `first` (0).
         if (bit == 1) {
@@ -222,7 +352,7 @@ public static class Html {
             emon.Port.TextAscii(t, "<span data-emon-style=\"smallcaps\"");
         }
         if (first == 1) {
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
         }
         emon.Port.TextAscii(t, ">");
         return 0;
@@ -254,14 +384,14 @@ public static class Html {
         }
         return 0;
     }
-    internal static int HInner(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n) {
+    internal static int HInner(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
         // The content of an inline node or of a block's own line of text: its
         // inline children if it has any, else its own run.
         int c = Model.NodeFirstChild(nodes, n);
         if (HHasInline(nodes, n) == 1) {
             while (c >= 0) {
                 if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 1) {
-                    HInline(t, o, nodes, attrs, regions, text, c);
+                    HInline(t, o, nodes, attrs, regions, pages, layout, text, c);
                 }
                 c = Model.NodeNext(nodes, c);
             }
@@ -284,7 +414,7 @@ public static class Html {
         emon.Port.TextI32(t, target);
         return 0;
     }
-    internal static int HInline(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n) {
+    internal static int HInline(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
         // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
         int kind = Model.NodeKind(nodes, n);
         int sub = Model.NodeSub(nodes, n);
@@ -298,29 +428,51 @@ public static class Html {
             }
             return 0;
         }
+        if (kind == Model.NkInitial()) {
+            if (HOn(o, 128) == 1) {
+                HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+                return 0;
+            }
+            emon.Port.TextAscii(t, "<span data-emon=\"initial\"");
+            if (sub > 0) {
+                emon.Port.TextAscii(t, " data-emon-form=\"");
+                Model.IfmEmitName(t, sub);
+                emon.Port.TextAscii(t, "\"");
+            }
+            if (Model.NodeAux(nodes, n) > 0) {
+                emon.Port.TextAscii(t, " data-emon-lines=\"");
+                emon.Port.TextI32(t, Model.NodeAux(nodes, n));
+                emon.Port.TextAscii(t, "\"");
+            }
+            HCommon(t, o, nodes, regions, pages, layout, n);
+            emon.Port.TextAscii(t, ">");
+            HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+            emon.Port.TextAscii(t, "</span>");
+            return 0;
+        }
         if (kind == Model.NkLinebreak()) {
             emon.Port.TextAscii(t, "<br");
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
             return 0;
         }
         if (kind == Model.NkSpan()) {
             if (sub == 0) {
                 emon.Port.TextAscii(t, "<span");
-                HCommon(t, o, nodes, regions, n);
+                HCommon(t, o, nodes, regions, pages, layout, n);
                 emon.Port.TextAscii(t, ">");
-                HInner(t, o, nodes, attrs, regions, text, n);
+                HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
                 emon.Port.TextAscii(t, "</span>");
                 return 0;
             }
             while (b < 8) {
                 bit = (1) << (b);
                 if ((sub & bit) != 0) {
-                    first = HSpanOpen(t, o, nodes, regions, n, bit, first);
+                    first = HSpanOpen(t, o, nodes, regions, pages, layout, n, bit, first);
                 }
                 b += 1;
             }
-            HInner(t, o, nodes, attrs, regions, text, n);
+            HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             b = 7;
             while (b >= 0) {
                 bit = (1) << (b);
@@ -346,9 +498,9 @@ public static class Html {
                     emon.Port.TextAscii(t, "\"");
                 }
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            HInner(t, o, nodes, attrs, regions, text, n);
+            HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             emon.Port.TextAscii(t, "</a>");
             return 0;
         }
@@ -362,10 +514,10 @@ public static class Html {
             if (a < 0) {
                 emon.Port.TextAscii(t, "<span role=\"doc-noteref\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
             if ((HHasInline(nodes, n) == 1) || (Model.NodeHasText(nodes, n) == 1)) {
-                HInner(t, o, nodes, attrs, regions, text, n);
+                HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             } else {
                 b = HTattr(nodes, attrs, n, Model.FkMarker());
                 if (b >= 0) {
@@ -382,26 +534,26 @@ public static class Html {
         }
         return 0;
     }
-    internal static int HBlocks(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n, int d) {
+    internal static int HBlocks(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n, int d) {
         // Every non-inline child of n as a block at depth d. Answers how many
         // wrote anything (a milestone turned off writes nothing).
         int c = Model.NodeFirstChild(nodes, n);
         int k = 0;
         while (c >= 0) {
             if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 0) {
-                k += HBlock(t, o, nodes, attrs, regions, text, c, d);
+                k += HBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d);
             }
             c = Model.NodeNext(nodes, c);
         }
         return k;
     }
-    internal static int HBody(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n, int d) {
+    internal static int HBody(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n, int d) {
         // What goes inside a block's element: its line of text (inline
         // children, else its own run), then its block children at depth d.
         // Answers how many block children were written, so the caller knows
         // whether its closing tag starts a new line (pretty mode).
-        HInner(t, o, nodes, attrs, regions, text, n);
-        return HBlocks(t, o, nodes, attrs, regions, text, n, d);
+        HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+        return HBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d);
     }
     internal static int HListType(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int n) {
         // An ordered list's `type` from its scheme: `lower-alpha` a,
@@ -455,7 +607,7 @@ public static class Html {
         }
         return 0;
     }
-    internal static int HBlock(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n, int d) {
+    internal static int HBlock(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n, int d) {
         // One node as a block element at depth d (SPEC 5.1), on its own line
         // in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline
         // kind met where a block belongs is written as itself.
@@ -469,7 +621,7 @@ public static class Html {
         int pk = 0;
         if (Model.NkIsInline(kind) == 1) {
             HNl(t, o, d);
-            HInline(t, o, nodes, attrs, regions, text, n);
+            HInline(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 1;
         }
         if (kind == Model.NkBreak()) {
@@ -486,16 +638,16 @@ public static class Html {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, "\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, "></span>");
             return 1;
         }
         HNl(t, o, d);
         if (kind == Model.NkSection()) {
             emon.Port.TextAscii(t, "<section");
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -524,13 +676,14 @@ public static class Html {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, "\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HAlignAttr(t, o, nodes, attrs, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
             if (a >= 0) {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, " ");
             }
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -541,14 +694,10 @@ public static class Html {
         }
         if (kind == Model.NkParagraph()) {
             emon.Port.TextAscii(t, "<p");
-            if (sub > 0) {
-                emon.Port.TextAscii(t, " data-emon-align=\"");
-                Model.AlEmitName(t, sub);
-                emon.Port.TextAscii(t, "\"");
-            }
-            HCommon(t, o, nodes, regions, n);
+            HAlign(t, o, sub);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -569,9 +718,9 @@ public static class Html {
             if (sub != 2) {
                 emon.Port.TextAscii(t, "<ul");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -597,9 +746,9 @@ public static class Html {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, "\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -608,19 +757,19 @@ public static class Html {
         }
         if (kind == Model.NkTable()) {
             emon.Port.TextAscii(t, "<table");
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
             c = Model.NodeFirstChild(nodes, n);
             while (c >= 0) {
                 if (Model.NodeKind(nodes, c) == Model.NkCaption()) {
-                    HBlock(t, o, nodes, attrs, regions, text, c, d + 1);
+                    HBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
                 }
                 c = Model.NodeNext(nodes, c);
             }
             c = Model.NodeFirstChild(nodes, n);
             while (c >= 0) {
                 if (Model.NodeKind(nodes, c) != Model.NkCaption()) {
-                    HBlock(t, o, nodes, attrs, regions, text, c, d + 1);
+                    HBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
                 }
                 c = Model.NodeNext(nodes, c);
             }
@@ -638,9 +787,9 @@ public static class Html {
             if ((sub != 1) && (sub != 3)) {
                 emon.Port.TextAscii(t, "<tbody");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -660,9 +809,9 @@ public static class Html {
             if (sub == 1) {
                 emon.Port.TextAscii(t, " data-emon-repeated=\"true\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -690,9 +839,10 @@ public static class Html {
                 emon.Port.TextI32(t, Model.AttrValue(attrs, a));
                 emon.Port.TextAscii(t, "\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HAlignAttr(t, o, nodes, attrs, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -725,9 +875,10 @@ public static class Html {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, "\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HAlignAttr(t, o, nodes, attrs, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -763,9 +914,9 @@ public static class Html {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, "\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            HInner(t, o, nodes, attrs, regions, text, n);
+            HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             a = Model.NodeAttr(nodes, attrs, n, Model.FkLabels());
             while (a >= 0) {
                 emon.Port.TextAscii(t, "<span data-emon=\"label\">");
@@ -773,7 +924,7 @@ public static class Html {
                 emon.Port.TextAscii(t, "</span>");
                 a = Model.AttrFindNext(attrs, a, Model.FkLabels());
             }
-            hb = HBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -819,7 +970,7 @@ public static class Html {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
             }
             emon.Port.TextAscii(t, "\"");
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, "></figure>");
             return 1;
         }
@@ -833,17 +984,17 @@ public static class Html {
             emon.Port.TextAscii(t, " aria-label=\"");
             HPlain(t, nodes, text, n);
             emon.Port.TextAscii(t, "\"");
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, "></figure>");
             return 1;
         }
         if (kind == Model.NkCode()) {
             emon.Port.TextAscii(t, "<pre");
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, "><code>");
-            HInner(t, o, nodes, attrs, regions, text, n);
+            HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             emon.Port.TextAscii(t, "</code>");
-            hb = HBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -852,9 +1003,9 @@ public static class Html {
         }
         if (kind == Model.NkQuote()) {
             emon.Port.TextAscii(t, "<blockquote");
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -862,23 +1013,35 @@ public static class Html {
             return 1;
         }
         if (kind == Model.NkNote()) {
+            if ((sub == 6) || (sub == 9)) {
+                emon.Port.TextAscii(t, "<aside data-emon-role=\"");
+                Model.RlEmitName(t, sub);
+                emon.Port.TextAscii(t, "\"");
+                if (HTargeted(nodes, attrs, n) == 1) {
+                    emon.Port.TextAscii(t, " id=\"fn-");
+                    emon.Port.TextI32(t, n);
+                    emon.Port.TextAscii(t, "\"");
+                }
+            }
             if (sub == 5) {
                 emon.Port.TextAscii(t, "<aside role=\"doc-endnote\" id=\"fn-");
             }
-            if (sub != 5) {
+            if ((sub != 5) && (sub != 6) && (sub != 9)) {
                 emon.Port.TextAscii(t, "<aside role=\"doc-footnote\" id=\"fn-");
             }
-            emon.Port.TextI32(t, n);
-            emon.Port.TextAscii(t, "\"");
+            if ((sub != 6) && (sub != 9)) {
+                emon.Port.TextI32(t, n);
+                emon.Port.TextAscii(t, "\"");
+            }
             a = HTattr(nodes, attrs, n, Model.FkMarker());
             if (a >= 0) {
                 emon.Port.TextAscii(t, " data-emon-marker=\"");
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
                 emon.Port.TextAscii(t, "\"");
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
-            hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -908,20 +1071,20 @@ public static class Html {
                     emon.Port.TextAscii(t, " data-emon-checked=\"false\"");
                 }
             }
-            HCommon(t, o, nodes, regions, n);
+            HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
             a = HTattr(nodes, attrs, n, Model.FkValue());
             if (a >= 0) {
                 HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
             }
             if (a < 0) {
-                HInner(t, o, nodes, attrs, regions, text, n);
+                HInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             }
             emon.Port.TextAscii(t, "</span>");
             return 1;
         }
         if (kind == Model.NkFurniture()) {
-            HFurnitureOpen(t, o, nodes, attrs, regions, text, n);
+            HFurnitureOpen(t, o, nodes, attrs, regions, pages, layout, text, n);
             if (Model.NodeHasText(nodes, n) == 1) {
                 HNl(t, o, d + 1);
                 emon.Port.TextAscii(t, "<p>");
@@ -929,7 +1092,7 @@ public static class Html {
                 emon.Port.TextAscii(t, "</p>");
                 hb = 1;
             }
-            hb += HBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb += HBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);
             }
@@ -939,16 +1102,16 @@ public static class Html {
         emon.Port.TextAscii(t, "<div data-emon-kind=\"");
         Model.NkEmitName(t, kind);
         emon.Port.TextAscii(t, "\"");
-        HCommon(t, o, nodes, regions, n);
+        HCommon(t, o, nodes, regions, pages, layout, n);
         emon.Port.TextAscii(t, ">");
-        hb = HBody(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if (hb > 0) {
             HNl(t, o, d);
         }
         emon.Port.TextAscii(t, "</div>");
         return 1;
     }
-    internal static int HFurnitureOpen(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n) {
+    internal static int HFurnitureOpen(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
         // `<aside data-emon="furniture" data-emon-role="header" ...>`:
         // the role, the pages it was seen on, then the options' attributes.
         int sub = Model.NodeSub(nodes, n);
@@ -972,7 +1135,7 @@ public static class Html {
             }
             emon.Port.TextAscii(t, "\"");
         }
-        HCommon(t, o, nodes, regions, n);
+        HCommon(t, o, nodes, regions, pages, layout, n);
         emon.Port.TextAscii(t, ">");
         return 0;
     }
@@ -991,13 +1154,13 @@ public static class Html {
         emon.Port.TextAscii(t, "\">");
         return 1;
     }
-    public static int HtmlEmit(System.Text.StringBuilder t, int opts, int confBelow, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ledger) {
+    public static int HtmlEmit(System.Text.StringBuilder t, int opts, int confBelow, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
         // Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;
         // `conf-below` is the threshold for `ho-confidence` (nodes with a
         // conf under it get `data-emon-conf`). The root (node 0) must be a
         // document: run `model-check` first on a Model of unknown origin.
         // Answers 0.
-        int o = (opts & 255) + (confBelow * 256);
+        int o = (opts & 1023) + (confBelow * 1024);
         int nn = Model.NodeCount(nodes);
         int nl = Model.LedgerCount(ledger);
         int a = -1;
@@ -1041,12 +1204,12 @@ public static class Html {
             i = 0;
             while (i < nn) {
                 if ((Model.NodeKind(nodes, i) == Model.NkFurniture()) && (Model.NodeParent(nodes, i) == -1)) {
-                    HBlock(t, o, nodes, attrs, regions, text, i, 3);
+                    HBlock(t, o, nodes, attrs, regions, pages, layout, text, i, 3);
                 }
                 i += 1;
             }
         }
-        HBlocks(t, o, nodes, attrs, regions, text, 0, 3);
+        HBlocks(t, o, nodes, attrs, regions, pages, layout, text, 0, 3);
         if (HOn(o, 8) == 1) {
             i = 0;
             while (i < nl) {

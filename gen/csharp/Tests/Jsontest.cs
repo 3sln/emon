@@ -13,13 +13,14 @@ public static class Jsontest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
         System.Text.StringBuilder compact = emon.Testport.NewText();
         System.Text.StringBuilder pretty = emon.Testport.NewText();
-        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/minimal.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/minimal.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("json/minimal.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/minimal.json")), "compact", 0);
         emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("json/minimal.pretty.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/minimal.pretty.json")), "pretty", 0);
     }
@@ -31,13 +32,14 @@ public static class Jsontest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
         System.Text.StringBuilder compact = emon.Testport.NewText();
         System.Text.StringBuilder pretty = emon.Testport.NewText();
-        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/sample.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/sample.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("json/sample.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/sample.json")), "compact", 0);
         emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("json/sample.pretty.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/sample.pretty.json")), "pretty", 0);
     }
@@ -49,13 +51,14 @@ public static class Jsontest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
         System.Text.StringBuilder compact = emon.Testport.NewText();
         System.Text.StringBuilder pretty = emon.Testport.NewText();
-        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/kinds.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/kinds.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("json/kinds.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/kinds.json")), "compact", 0);
         emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("json/kinds.pretty.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/kinds.pretty.json")), "pretty", 0);
     }
@@ -67,13 +70,14 @@ public static class Jsontest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
         System.Text.StringBuilder compact = emon.Testport.NewText();
         System.Text.StringBuilder pretty = emon.Testport.NewText();
-        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/corners.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile("json/corners.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertTextSpan(compact, emon.Testport.TestFile("json/corners.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/corners.json")), "compact", 0);
         emon.Testport.AssertTextSpan(pretty, emon.Testport.TestFile("json/corners.pretty.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("json/corners.pretty.json")), "pretty", 0);
     }
@@ -137,16 +141,17 @@ public static class Jsontest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
         System.Text.StringBuilder compact = emon.Testport.NewText();
         System.Text.StringBuilder pretty = emon.Testport.NewText();
         int at = 0;
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (at != -1) {
             at = Model.NodeNew(nodes, Model.NkSection(), at);
         }
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "well formed");
-        emon.Testport.AssertEq(Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger), 0, "compact");
-        emon.Testport.AssertEq(Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger), 0, "pretty");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+        emon.Testport.AssertEq(Json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "compact");
+        emon.Testport.AssertEq(Json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout), 0, "pretty");
     }
 }

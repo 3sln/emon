@@ -319,6 +319,25 @@ pub(crate) fn js_e_align(mut t: &mut String, pr: i32, d: i32, started: i32, v: i
     crate::port::text_ascii(t, "\"");
     return 1;
 }
+pub(crate) fn js_e_form(mut t: &mut String, pr: i32, d: i32, started: i32, v: i32) -> i32 {
+    if v <= 0 {
+        return started;
+    }
+    js_begin(t, pr, d, started, fk_form());
+    crate::port::text_ascii(t, "\"");
+    ifm_emit_name(t, v);
+    crate::port::text_ascii(t, "\"");
+    return 1;
+}
+pub(crate) fn js_f_align(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, n: i32, started: i32) -> i32 {
+    // The `align` ATTRIBUTE of a heading, caption or cell (D110): an `al`
+    // code in an int attribute, written as its name.
+    let a: i32 = node_attr(nodes, attrs, n, fk_align());
+    if a < 0 {
+        return started;
+    }
+    return js_e_align(t, pr, d, started, attr_value(attrs, a));
+}
 pub(crate) fn js_e_header(mut t: &mut String, pr: i32, d: i32, started: i32, v: i32) -> i32 {
     if v <= 0 {
         return started;
@@ -377,6 +396,7 @@ pub(crate) fn js_kfields(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate:
     if kind == nk_heading() {
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_number(), s);
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_numbering(), s);
+        s = js_f_align(t, pr, d, nodes, attrs, n, s);
     }
     if kind == nk_paragraph() {
         s = js_e_align(t, pr, d, s, sub);
@@ -415,10 +435,12 @@ pub(crate) fn js_kfields(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate:
             s = js_begin(t, pr, d, s, fk_empty());
             crate::port::text_ascii(t, "true");
         }
+        s = js_f_align(t, pr, d, nodes, attrs, n, s);
     }
     if kind == nk_caption() {
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_label(), s);
         s = js_fint(t, pr, d, nodes, attrs, n, fk_target(), s);
+        s = js_f_align(t, pr, d, nodes, attrs, n, s);
     }
     if kind == nk_figure() {
         s = js_e_figure(t, pr, d, s, sub);
@@ -467,6 +489,13 @@ pub(crate) fn js_kfields(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate:
     if kind == nk_ref() {
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_marker(), s);
         s = js_fint(t, pr, d, nodes, attrs, n, fk_target(), s);
+    }
+    if kind == nk_initial() {
+        s = js_e_form(t, pr, d, s, sub);
+        if aux > 0 {
+            s = js_begin(t, pr, d, s, fk_lines());
+            crate::port::text_i32(t, aux);
+        }
     }
     return s;
 }
@@ -668,10 +697,37 @@ pub(crate) fn js_furniture(mut t: &mut String, pr: i32, d: i32, nodes: &mut crat
     js_close(t, pr, d, s);
     return 0;
 }
-pub(crate) fn js_page(mut t: &mut String, pr: i32, d: i32, pages: &mut crate::port::Cells, text: &mut crate::port::Cells, p: i32) -> i32 {
-    // One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,
-    // `health`, `dpi`, `px` (the pixel size of a raster page).
+pub(crate) fn js_layout(mut t: &mut String, pr: i32, d: i32, layout: &mut crate::port::Cells, r: i32) -> i32 {
+    // One cell of a page's column map: `band`, `col`, `role`, `box`.
     let mut s: i32 = 0;
+    crate::port::text_ascii(t, "{");
+    s = js_begin(t, pr, d, s, fk_band());
+    crate::port::text_i32(t, layout_band(layout, r));
+    s = js_begin(t, pr, d, s, fk_col());
+    crate::port::text_i32(t, layout_col(layout, r));
+    s = js_begin(t, pr, d, s, fk_role());
+    crate::port::text_ascii(t, "\"");
+    rl_emit_name(t, layout_role(layout, r));
+    crate::port::text_ascii(t, "\"");
+    s = js_begin(t, pr, d, s, fk_box());
+    crate::port::text_ascii(t, "[");
+    js_cpt(t, layout_x0(layout, r));
+    js_fsep(t, pr, 1);
+    js_cpt(t, layout_y0(layout, r));
+    js_fsep(t, pr, 1);
+    js_cpt(t, layout_x1(layout, r));
+    js_fsep(t, pr, 1);
+    js_cpt(t, layout_y1(layout, r));
+    crate::port::text_ascii(t, "]");
+    js_close(t, pr, d, s);
+    return 0;
+}
+pub(crate) fn js_page(mut t: &mut String, pr: i32, d: i32, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, p: i32) -> i32 {
+    // One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,
+    // `health`, `dpi`, `px` (the pixel size of a raster page), `layout` (the
+    // page's column map, when it has one).
+    let mut s: i32 = 0;
+    let mut i: i32 = 0;
     crate::port::text_ascii(t, "{");
     s = js_begin(t, pr, d, s, fk_n());
     crate::port::text_i32(t, page_number(pages, p));
@@ -706,6 +762,16 @@ pub(crate) fn js_page(mut t: &mut String, pr: i32, d: i32, pages: &mut crate::po
         js_fsep(t, pr, 1);
         crate::port::text_i32(t, page_px_h(pages, p));
         crate::port::text_ascii(t, "]");
+    }
+    if page_layout_count(pages, p) > 0 {
+        s = js_begin(t, pr, d, s, fk_layout());
+        crate::port::text_ascii(t, "[");
+        while i < page_layout_count(pages, p) {
+            js_aelem(t, pr, d + 1, i);
+            js_layout(t, pr, d + 2, layout, page_layout_first(pages, p) + i);
+            i += 1;
+        }
+        js_aend(t, pr, d + 1, i);
     }
     js_close(t, pr, d, s);
     return 0;
@@ -800,7 +866,7 @@ pub(crate) fn js_meta(mut t: &mut String, pr: i32, nodes: &mut crate::port::Cell
     js_close(t, pr, 1, s);
     return 0;
 }
-pub fn js_emit(mut t: &mut String, pretty: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells) -> i32 {
+pub fn js_emit(mut t: &mut String, pretty: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
     // Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1
     // for the indented form, 0 for the compact one. The root (node 0)
     // must be a document: run `model-check` first on a Model of unknown
@@ -813,7 +879,7 @@ pub fn js_emit(mut t: &mut String, pretty: i32, nodes: &mut crate::port::Cells, 
     let nl: i32 = ledger_count(ledger);
     crate::port::text_ascii(t, "{");
     s = js_begin(t, pretty, 0, s, fk_emon());
-    crate::port::text_ascii(t, "\"1.0\"");
+    crate::port::text_ascii(t, "\"1.1\"");
     s = js_ftext(t, pretty, 0, nodes, attrs, text, 0, fk_generator(), s);
     if (js_has(nodes, attrs, fk_format()) == 1) || (js_has(nodes, attrs, fk_version()) == 1) || (js_has(nodes, attrs, fk_pages()) == 1) || (js_has(nodes, attrs, fk_tagged()) == 1) || (js_has(nodes, attrs, fk_encrypted()) == 1) || (js_has(nodes, attrs, fk_lang()) == 1) {
         s = js_begin(t, pretty, 0, s, fk_source());
@@ -831,7 +897,7 @@ pub fn js_emit(mut t: &mut String, pretty: i32, nodes: &mut crate::port::Cells, 
     crate::port::text_ascii(t, "[");
     while i < np {
         js_aelem(t, pretty, 1, i);
-        js_page(t, pretty, 2, pages, text, i);
+        js_page(t, pretty, 2, pages, layout, text, i);
         i += 1;
     }
     js_aend(t, pretty, 1, np);

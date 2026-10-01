@@ -34,6 +34,13 @@ pd 1 300 2480 3508
 pg 3 59500 84100 0 3
 pg 4 100000 100000 270 4
 pd 3 72 800 800
+# THE COLUMN MAP (D111) of pages 1 and 2: every role. Page 1: two body columns and
+# a sidebar; page 2: one body column and a margin. ly IDX BAND COL ROLE X0 Y0 X1 Y1
+ly 0 0 0 2 7200 9000 30000 75000
+ly 0 0 1 2 31200 9000 54000 75000
+ly 0 0 2 9 55000 9000 61000 75000
+ly 1 0 0 2 7200 9000 50000 55000
+ly 1 1 0 6 51000 9000 79000 55000
 # THE BODY.
 # 1 section, level 1, on two pages
 n 2 0
@@ -181,17 +188,84 @@ r 43 1 1000 2000 1500 2500
 n 21 42
 t 44 words
 r 44 1 1600 2000 2400 2500
+# 45 paragraph aligned to the centre, in the first column: 46 a drop initial of
+# three lines (47 its text) and 48 the rest
+n 4 22
+al 45 2
+r 45 1 7200 9000 30000 20000
+n 26 45
+s 46 1
+x 46 3
+r 46 1 7200 9000 9000 12000
+sr 46 1
+n 21 46
+t 47 O
+n 21 45
+t 48 nce upon a time
+# 49 a paragraph with a raised initial (50, no lines) and a ref to the margin note
+# (67): 53
+n 4 22
+n 26 49
+s 50 2
+n 21 50
+t 51 T
+n 21 49
+t 52 he end
+n 24 49
+at 53 17 *
+an 53 29 67
+# 54 a paragraph with a margin initial of two lines, read by OCR, in two columns
+n 4 22
+r 54 1 7200 30000 30000 40000
+r 54 1 31200 30000 54000 40000
+n 26 54
+s 55 3
+x 55 2
+sr 55 260
+f 55 1
+c 55 400
+n 21 55
+t 56 A
+n 21 54
+t 57 \u0020long time
+# 58 a heading aligned to the end; 59 a table, its caption aligned to the start
+# (60), a cell aligned to the centre (63) and one to the end (64)
+n 3 22
+s 58 2
+al 58 3
+t 58 Aligned heading
+n 7 22
+n 11 59
+al 60 1
+t 60 Aligned caption
+n 8 59
+n 9 61
+n 10 62
+al 63 2
+t 63 mid
+n 10 62
+al 64 3
+t 64 1.5
+# 65 a sidebar note holding a paragraph (66); 67 a margin note
+n 17 22
+s 65 9
+n 4 65
+t 66 Sidebar text
+n 17 22
+s 67 6
+at 67 17 *
+t 67 Margin note
 # FURNITURE, after the body: two more roots.
 n 19 -1
-s 45 8
-t 45 Page template
-ni 45 42 1
-ni 45 42 2
-ni 45 42 3
-n 4 45
-t 46 child
+s 68 8
+t 68 Page template
+ni 68 42 1
+ni 68 42 2
+ni 68 42 3
+n 4 68
+t 69 child
 n 19 -1
-s 47 6
+s 70 6
 # THE LEDGER.
 d 1 1 1000 2000 99000 50000 870 12
 dt 0 DRAFT

@@ -26,6 +26,12 @@ public final class Html {
     public static int hoNoMilestones() {
         return 64;
     }
+    public static int hoInitialsPlain() {
+        return 128;
+    }
+    public static int hoAlignStyle() {
+        return 256;
+    }
     public static int hOn(int o, int bit) {
         if ((o & bit) != 0) {
             return 1;
@@ -116,7 +122,85 @@ public final class Html {
         }
         return a;
     }
-    public static int hCommon(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, int n) {
+    public static int hFindCell(emon.Port.Cells pages, emon.Port.Cells layout, int pg, int cx, int cy) {
+        // The first cell of the column map of page NUMBER pg that contains the
+        // point (edges included), as a `layout` row, or -1 (D113).
+        int p = 0;
+        int j = 0;
+        int r = 0;
+        while (p < Model.pageCount(pages)) {
+            if (Model.pageNumber(pages, p) == pg) {
+                j = 0;
+                while (j < Model.pageLayoutCount(pages, p)) {
+                    r = Model.pageLayoutFirst(pages, p) + j;
+                    if ((cx >= Model.layoutX0(layout, r)) && (cx <= Model.layoutX1(layout, r)) && (cy >= Model.layoutY0(layout, r)) && (cy <= Model.layoutY1(layout, r))) {
+                        return r;
+                    }
+                    j += 1;
+                }
+                return -1;
+            }
+            p += 1;
+        }
+        return -1;
+    }
+    public static int hRegionCell(emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int r) {
+        // The column cell holding the centre of region r (halved per edge, so
+        // no sum can overflow), or -1.
+        return hFindCell(pages, layout, Model.regionPage(regions, r), (Model.regionX0(regions, r) / 2) + (Model.regionX1(regions, r) / 2), (Model.regionY0(regions, r) / 2) + (Model.regionY1(regions, r) / 2));
+    }
+    public static int hCellName(StringBuilder t, emon.Port.Cells layout, int c) {
+        emon.Port.textI32(t, Model.layoutPage(layout, c));
+        emon.Port.textAscii(t, ":");
+        emon.Port.textI32(t, Model.layoutBand(layout, c));
+        emon.Port.textAscii(t, ":");
+        emon.Port.textI32(t, Model.layoutCol(layout, c));
+        return 0;
+    }
+    public static int hColumns(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int n) {
+        // `data-emon-col="page:band:col"` (the first fragment that lies in a
+        // cell) and, when more than one does, `data-emon-cols` (every one, in
+        // order, space-separated): D113. Nothing when the page has no map.
+        int r = Model.nodeRegionHead(nodes, n);
+        int c = 0;
+        int first = -1;
+        int k = 0;
+        while (r >= 0) {
+            c = hRegionCell(regions, pages, layout, r);
+            if (c >= 0) {
+                if (k == 0) {
+                    first = c;
+                }
+                k += 1;
+            }
+            r = Model.regionNext(regions, r);
+        }
+        if (k == 0) {
+            return 0;
+        }
+        emon.Port.textAscii(t, " data-emon-col=\"");
+        hCellName(t, layout, first);
+        emon.Port.textAscii(t, "\"");
+        if (k > 1) {
+            emon.Port.textAscii(t, " data-emon-cols=\"");
+            r = Model.nodeRegionHead(nodes, n);
+            k = 0;
+            while (r >= 0) {
+                c = hRegionCell(regions, pages, layout, r);
+                if (c >= 0) {
+                    if (k > 0) {
+                        emon.Port.textAscii(t, " ");
+                    }
+                    hCellName(t, layout, c);
+                    k += 1;
+                }
+                r = Model.regionNext(regions, r);
+            }
+            emon.Port.textAscii(t, "\"");
+        }
+        return 0;
+    }
+    public static int hCommon(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int n) {
         // The attributes the options add to the element of node n, last in
         // the tag: `id` (blocks only, and never on a note, which has `fn-N`),
         // `data-emon-at` (`page,x0,y0,x1,y1` per region, `;` between) and
@@ -151,10 +235,56 @@ public final class Html {
             }
             emon.Port.textAscii(t, "\"");
         }
-        if ((hOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 256))) {
+        if ((hOn(o, 2) == 1) && (Model.nkIsInline(kind) == 0) && (Model.nodeRegionCount(nodes, n) > 0) && (Model.layoutCount(layout) > 0)) {
+            hColumns(t, nodes, regions, pages, layout, n);
+        }
+        if ((hOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024))) {
             emon.Port.textAscii(t, " data-emon-conf=\"");
             emon.Port.textI32(t, cf);
             emon.Port.textAscii(t, "\"");
+        }
+        return 0;
+    }
+    public static int hAlign(StringBuilder t, int o, int v) {
+        // `data-emon-align` for an `al` code (D069), and with `ho-align-style` the
+        // style that shows it and `dir="auto"`, so start and end resolve for
+        // right-to-left text in a browser (D110). Nothing for 0.
+        if (v <= 0) {
+            return 0;
+        }
+        emon.Port.textAscii(t, " data-emon-align=\"");
+        Model.alEmitName(t, v);
+        emon.Port.textAscii(t, "\"");
+        if (hOn(o, 256) == 1) {
+            emon.Port.textAscii(t, " style=\"text-align:");
+            Model.alEmitName(t, v);
+            emon.Port.textAscii(t, "\" dir=\"auto\"");
+        }
+        return 0;
+    }
+    public static int hAlignAttr(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, int n) {
+        // The alignment of a heading, caption or cell: the `align` attribute.
+        int a = hIattr(nodes, attrs, n, Model.fkAlign());
+        if (a < 0) {
+            return 0;
+        }
+        return hAlign(t, o, Model.attrValue(attrs, a));
+    }
+    public static int hTargeted(emon.Port.Cells nodes, emon.Port.Cells attrs, int n) {
+        // 1 when a `ref` or a `link` points at node n: only then does a margin or
+        // sidebar note get an `id` (`fn-N`), as a footnote always does (D113).
+        int i = 0;
+        int a = -1;
+        int k = 0;
+        while (i < Model.nodeCount(nodes)) {
+            k = Model.nodeKind(nodes, i);
+            if ((k == Model.nkRef()) || (k == Model.nkLink())) {
+                a = hIattr(nodes, attrs, i, Model.fkTarget());
+                if ((a >= 0) && (Model.attrValue(attrs, a) == n)) {
+                    return 1;
+                }
+            }
+            i += 1;
         }
         return 0;
     }
@@ -194,7 +324,7 @@ public final class Html {
         }
         return 0;
     }
-    public static int hSpanOpen(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, int n, int bit, int first) {
+    public static int hSpanOpen(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, int n, int bit, int first) {
         // Open the element of one style bit. The options' attributes go on
         // the first element opened. Answers the new `first` (0).
         if (bit == 1) {
@@ -222,7 +352,7 @@ public final class Html {
             emon.Port.textAscii(t, "<span data-emon-style=\"smallcaps\"");
         }
         if (first == 1) {
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
         }
         emon.Port.textAscii(t, ">");
         return 0;
@@ -254,14 +384,14 @@ public final class Html {
         }
         return 0;
     }
-    public static int hInner(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n) {
+    public static int hInner(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
         // The content of an inline node or of a block's own line of text: its
         // inline children if it has any, else its own run.
         int c = Model.nodeFirstChild(nodes, n);
         if (hHasInline(nodes, n) == 1) {
             while (c >= 0) {
                 if (Model.nkIsInline(Model.nodeKind(nodes, c)) == 1) {
-                    hInline(t, o, nodes, attrs, regions, text, c);
+                    hInline(t, o, nodes, attrs, regions, pages, layout, text, c);
                 }
                 c = Model.nodeNext(nodes, c);
             }
@@ -284,7 +414,7 @@ public final class Html {
         emon.Port.textI32(t, target);
         return 0;
     }
-    public static int hInline(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n) {
+    public static int hInline(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
         // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
         int kind = Model.nodeKind(nodes, n);
         int sub = Model.nodeSub(nodes, n);
@@ -298,29 +428,51 @@ public final class Html {
             }
             return 0;
         }
+        if (kind == Model.nkInitial()) {
+            if (hOn(o, 128) == 1) {
+                hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+                return 0;
+            }
+            emon.Port.textAscii(t, "<span data-emon=\"initial\"");
+            if (sub > 0) {
+                emon.Port.textAscii(t, " data-emon-form=\"");
+                Model.ifmEmitName(t, sub);
+                emon.Port.textAscii(t, "\"");
+            }
+            if (Model.nodeAux(nodes, n) > 0) {
+                emon.Port.textAscii(t, " data-emon-lines=\"");
+                emon.Port.textI32(t, Model.nodeAux(nodes, n));
+                emon.Port.textAscii(t, "\"");
+            }
+            hCommon(t, o, nodes, regions, pages, layout, n);
+            emon.Port.textAscii(t, ">");
+            hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+            emon.Port.textAscii(t, "</span>");
+            return 0;
+        }
         if (kind == Model.nkLinebreak()) {
             emon.Port.textAscii(t, "<br");
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
             return 0;
         }
         if (kind == Model.nkSpan()) {
             if (sub == 0) {
                 emon.Port.textAscii(t, "<span");
-                hCommon(t, o, nodes, regions, n);
+                hCommon(t, o, nodes, regions, pages, layout, n);
                 emon.Port.textAscii(t, ">");
-                hInner(t, o, nodes, attrs, regions, text, n);
+                hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
                 emon.Port.textAscii(t, "</span>");
                 return 0;
             }
             while (b < 8) {
                 bit = (1) << (b);
                 if ((sub & bit) != 0) {
-                    first = hSpanOpen(t, o, nodes, regions, n, bit, first);
+                    first = hSpanOpen(t, o, nodes, regions, pages, layout, n, bit, first);
                 }
                 b += 1;
             }
-            hInner(t, o, nodes, attrs, regions, text, n);
+            hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             b = 7;
             while (b >= 0) {
                 bit = (1) << (b);
@@ -346,9 +498,9 @@ public final class Html {
                     emon.Port.textAscii(t, "\"");
                 }
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hInner(t, o, nodes, attrs, regions, text, n);
+            hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             emon.Port.textAscii(t, "</a>");
             return 0;
         }
@@ -362,10 +514,10 @@ public final class Html {
             if (a < 0) {
                 emon.Port.textAscii(t, "<span role=\"doc-noteref\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
             if ((hHasInline(nodes, n) == 1) || (Model.nodeHasText(nodes, n) == 1)) {
-                hInner(t, o, nodes, attrs, regions, text, n);
+                hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             } else {
                 b = hTattr(nodes, attrs, n, Model.fkMarker());
                 if (b >= 0) {
@@ -382,26 +534,26 @@ public final class Html {
         }
         return 0;
     }
-    public static int hBlocks(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n, int d) {
+    public static int hBlocks(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n, int d) {
         // Every non-inline child of n as a block at depth d. Answers how many
         // wrote anything (a milestone turned off writes nothing).
         int c = Model.nodeFirstChild(nodes, n);
         int k = 0;
         while (c >= 0) {
             if (Model.nkIsInline(Model.nodeKind(nodes, c)) == 0) {
-                k += hBlock(t, o, nodes, attrs, regions, text, c, d);
+                k += hBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d);
             }
             c = Model.nodeNext(nodes, c);
         }
         return k;
     }
-    public static int hBody(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n, int d) {
+    public static int hBody(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n, int d) {
         // What goes inside a block's element: its line of text (inline
         // children, else its own run), then its block children at depth d.
         // Answers how many block children were written, so the caller knows
         // whether its closing tag starts a new line (pretty mode).
-        hInner(t, o, nodes, attrs, regions, text, n);
-        return hBlocks(t, o, nodes, attrs, regions, text, n, d);
+        hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
+        return hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d);
     }
     public static int hListType(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int n) {
         // An ordered list's `type` from its scheme: `lower-alpha` a,
@@ -455,7 +607,7 @@ public final class Html {
         }
         return 0;
     }
-    public static int hBlock(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n, int d) {
+    public static int hBlock(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n, int d) {
         // One node as a block element at depth d (SPEC 5.1), on its own line
         // in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline
         // kind met where a block belongs is written as itself.
@@ -469,7 +621,7 @@ public final class Html {
         int pk = 0;
         if (Model.nkIsInline(kind) == 1) {
             hNl(t, o, d);
-            hInline(t, o, nodes, attrs, regions, text, n);
+            hInline(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 1;
         }
         if (kind == Model.nkBreak()) {
@@ -486,16 +638,16 @@ public final class Html {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, "\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, "></span>");
             return 1;
         }
         hNl(t, o, d);
         if (kind == Model.nkSection()) {
             emon.Port.textAscii(t, "<section");
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -524,13 +676,14 @@ public final class Html {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, "\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hAlignAttr(t, o, nodes, attrs, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
             if (a >= 0) {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, " ");
             }
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -541,14 +694,10 @@ public final class Html {
         }
         if (kind == Model.nkParagraph()) {
             emon.Port.textAscii(t, "<p");
-            if (sub > 0) {
-                emon.Port.textAscii(t, " data-emon-align=\"");
-                Model.alEmitName(t, sub);
-                emon.Port.textAscii(t, "\"");
-            }
-            hCommon(t, o, nodes, regions, n);
+            hAlign(t, o, sub);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -569,9 +718,9 @@ public final class Html {
             if (sub != 2) {
                 emon.Port.textAscii(t, "<ul");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -597,9 +746,9 @@ public final class Html {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, "\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -608,19 +757,19 @@ public final class Html {
         }
         if (kind == Model.nkTable()) {
             emon.Port.textAscii(t, "<table");
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
             c = Model.nodeFirstChild(nodes, n);
             while (c >= 0) {
                 if (Model.nodeKind(nodes, c) == Model.nkCaption()) {
-                    hBlock(t, o, nodes, attrs, regions, text, c, d + 1);
+                    hBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
                 }
                 c = Model.nodeNext(nodes, c);
             }
             c = Model.nodeFirstChild(nodes, n);
             while (c >= 0) {
                 if (Model.nodeKind(nodes, c) != Model.nkCaption()) {
-                    hBlock(t, o, nodes, attrs, regions, text, c, d + 1);
+                    hBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
                 }
                 c = Model.nodeNext(nodes, c);
             }
@@ -638,9 +787,9 @@ public final class Html {
             if ((sub != 1) && (sub != 3)) {
                 emon.Port.textAscii(t, "<tbody");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -660,9 +809,9 @@ public final class Html {
             if (sub == 1) {
                 emon.Port.textAscii(t, " data-emon-repeated=\"true\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -690,9 +839,10 @@ public final class Html {
                 emon.Port.textI32(t, Model.attrValue(attrs, a));
                 emon.Port.textAscii(t, "\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hAlignAttr(t, o, nodes, attrs, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -725,9 +875,10 @@ public final class Html {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, "\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hAlignAttr(t, o, nodes, attrs, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -763,9 +914,9 @@ public final class Html {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, "\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hInner(t, o, nodes, attrs, regions, text, n);
+            hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             a = Model.nodeAttr(nodes, attrs, n, Model.fkLabels());
             while (a >= 0) {
                 emon.Port.textAscii(t, "<span data-emon=\"label\">");
@@ -773,7 +924,7 @@ public final class Html {
                 emon.Port.textAscii(t, "</span>");
                 a = Model.attrFindNext(attrs, a, Model.fkLabels());
             }
-            hb = hBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -819,7 +970,7 @@ public final class Html {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
             }
             emon.Port.textAscii(t, "\"");
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, "></figure>");
             return 1;
         }
@@ -833,17 +984,17 @@ public final class Html {
             emon.Port.textAscii(t, " aria-label=\"");
             hPlain(t, nodes, text, n);
             emon.Port.textAscii(t, "\"");
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, "></figure>");
             return 1;
         }
         if (kind == Model.nkCode()) {
             emon.Port.textAscii(t, "<pre");
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, "><code>");
-            hInner(t, o, nodes, attrs, regions, text, n);
+            hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             emon.Port.textAscii(t, "</code>");
-            hb = hBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -852,9 +1003,9 @@ public final class Html {
         }
         if (kind == Model.nkQuote()) {
             emon.Port.textAscii(t, "<blockquote");
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -862,23 +1013,35 @@ public final class Html {
             return 1;
         }
         if (kind == Model.nkNote()) {
+            if ((sub == 6) || (sub == 9)) {
+                emon.Port.textAscii(t, "<aside data-emon-role=\"");
+                Model.rlEmitName(t, sub);
+                emon.Port.textAscii(t, "\"");
+                if (hTargeted(nodes, attrs, n) == 1) {
+                    emon.Port.textAscii(t, " id=\"fn-");
+                    emon.Port.textI32(t, n);
+                    emon.Port.textAscii(t, "\"");
+                }
+            }
             if (sub == 5) {
                 emon.Port.textAscii(t, "<aside role=\"doc-endnote\" id=\"fn-");
             }
-            if (sub != 5) {
+            if ((sub != 5) && (sub != 6) && (sub != 9)) {
                 emon.Port.textAscii(t, "<aside role=\"doc-footnote\" id=\"fn-");
             }
-            emon.Port.textI32(t, n);
-            emon.Port.textAscii(t, "\"");
+            if ((sub != 6) && (sub != 9)) {
+                emon.Port.textI32(t, n);
+                emon.Port.textAscii(t, "\"");
+            }
             a = hTattr(nodes, attrs, n, Model.fkMarker());
             if (a >= 0) {
                 emon.Port.textAscii(t, " data-emon-marker=\"");
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
                 emon.Port.textAscii(t, "\"");
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
-            hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -908,20 +1071,20 @@ public final class Html {
                     emon.Port.textAscii(t, " data-emon-checked=\"false\"");
                 }
             }
-            hCommon(t, o, nodes, regions, n);
+            hCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.textAscii(t, ">");
             a = hTattr(nodes, attrs, n, Model.fkValue());
             if (a >= 0) {
                 hRun(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
             }
             if (a < 0) {
-                hInner(t, o, nodes, attrs, regions, text, n);
+                hInner(t, o, nodes, attrs, regions, pages, layout, text, n);
             }
             emon.Port.textAscii(t, "</span>");
             return 1;
         }
         if (kind == Model.nkFurniture()) {
-            hFurnitureOpen(t, o, nodes, attrs, regions, text, n);
+            hFurnitureOpen(t, o, nodes, attrs, regions, pages, layout, text, n);
             if (Model.nodeHasText(nodes, n) == 1) {
                 hNl(t, o, d + 1);
                 emon.Port.textAscii(t, "<p>");
@@ -929,7 +1092,7 @@ public final class Html {
                 emon.Port.textAscii(t, "</p>");
                 hb = 1;
             }
-            hb += hBlocks(t, o, nodes, attrs, regions, text, n, d + 1);
+            hb += hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
             if (hb > 0) {
                 hNl(t, o, d);
             }
@@ -939,16 +1102,16 @@ public final class Html {
         emon.Port.textAscii(t, "<div data-emon-kind=\"");
         Model.nkEmitName(t, kind);
         emon.Port.textAscii(t, "\"");
-        hCommon(t, o, nodes, regions, n);
+        hCommon(t, o, nodes, regions, pages, layout, n);
         emon.Port.textAscii(t, ">");
-        hb = hBody(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if (hb > 0) {
             hNl(t, o, d);
         }
         emon.Port.textAscii(t, "</div>");
         return 1;
     }
-    public static int hFurnitureOpen(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int n) {
+    public static int hFurnitureOpen(StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
         // `<aside data-emon="furniture" data-emon-role="header" ...>`:
         // the role, the pages it was seen on, then the options' attributes.
         int sub = Model.nodeSub(nodes, n);
@@ -972,7 +1135,7 @@ public final class Html {
             }
             emon.Port.textAscii(t, "\"");
         }
-        hCommon(t, o, nodes, regions, n);
+        hCommon(t, o, nodes, regions, pages, layout, n);
         emon.Port.textAscii(t, ">");
         return 0;
     }
@@ -991,13 +1154,13 @@ public final class Html {
         emon.Port.textAscii(t, "\">");
         return 1;
     }
-    public static int htmlEmit(StringBuilder t, int opts, int confBelow, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ledger) {
+    public static int htmlEmit(StringBuilder t, int opts, int confBelow, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
         // Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;
         // `conf-below` is the threshold for `ho-confidence` (nodes with a
         // conf under it get `data-emon-conf`). The root (node 0) must be a
         // document: run `model-check` first on a Model of unknown origin.
         // Answers 0.
-        int o = (opts & 255) + (confBelow * 256);
+        int o = (opts & 1023) + (confBelow * 1024);
         int nn = Model.nodeCount(nodes);
         int nl = Model.ledgerCount(ledger);
         int a = -1;
@@ -1041,12 +1204,12 @@ public final class Html {
             i = 0;
             while (i < nn) {
                 if ((Model.nodeKind(nodes, i) == Model.nkFurniture()) && (Model.nodeParent(nodes, i) == -1)) {
-                    hBlock(t, o, nodes, attrs, regions, text, i, 3);
+                    hBlock(t, o, nodes, attrs, regions, pages, layout, text, i, 3);
                 }
                 i += 1;
             }
         }
-        hBlocks(t, o, nodes, attrs, regions, text, 0, 3);
+        hBlocks(t, o, nodes, attrs, regions, pages, layout, text, 0, 3);
         if (hOn(o, 8) == 1) {
             i = 0;
             while (i < nl) {

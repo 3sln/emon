@@ -11,8 +11,8 @@ pub(crate) fn mt_text(mut text: &mut crate::port::Cells, n: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn mt_tree(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
-    model_init(nodes, attrs, regions, text, pages, ledger);
+pub(crate) fn mt_tree(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells) -> i32 {
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     node_new(nodes, nk_section(), 0);
     node_new(nodes, nk_heading(), 1);
     node_new(nodes, nk_paragraph(), 1);
@@ -33,7 +33,8 @@ fn test_a_new_model_is_one_document_root() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_eq(node_count(nodes), 1, "one node");
     crate::testport::assert_eq(crate::port::cells_len(nodes), 16, "a node is sixteen cells");
     crate::testport::assert_eq(node_kind(nodes, 0), 1, "the root is a document, code 1");
@@ -58,7 +59,7 @@ fn test_a_new_model_is_one_document_root() {
     crate::testport::assert_eq(crate::port::cells_len(text), 0, "text empty");
     crate::testport::assert_eq(page_count(pages), 0, "no pages");
     crate::testport::assert_eq(ledger_count(ledger), 0, "nothing dropped");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, &mut crate::port::Cells::new()), 0, "well formed");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "well formed");
 }
 #[test]
 fn test_model_init_empties_a_used_model() {
@@ -68,11 +69,12 @@ fn test_model_init_empties_a_used_model() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     text_append_cp(text, 65);
     page_new(pages, 1, 100, 100, 0, 1);
     ledger_add(ledger, 1, 1, 0, 0, 1, 1, 500, 0);
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_eq(node_count(nodes), 1, "back to the root");
     crate::testport::assert_eq(crate::port::cells_len(text), 0, "text cleared");
     crate::testport::assert_eq(page_count(pages), 0, "pages cleared");
@@ -86,7 +88,8 @@ fn test_the_tree_links_agree_in_every_direction() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_eq(node_count(nodes), 11, "eleven nodes");
     crate::testport::assert_eq(node_first_child(nodes, 0), 1, "document first child");
     crate::testport::assert_eq(node_last_child(nodes, 0), 10, "document last child");
@@ -113,7 +116,7 @@ fn test_the_tree_links_agree_in_every_direction() {
     crate::testport::assert_eq(node_depth(nodes, 6), 4, "depth of the innermost text");
     crate::testport::assert_eq(node_kind(nodes, 5), 22, "span is code 22");
     crate::testport::assert_eq(node_kind(nodes, 7), 5, "list is code 5");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, &mut crate::port::Cells::new()), 0, "well formed");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "well formed");
 }
 #[test]
 fn test_node_new_refuses_what_it_cannot_place() {
@@ -123,11 +126,12 @@ fn test_node_new_refuses_what_it_cannot_place() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_eq(node_new(nodes, nk_paragraph(), 5), -1, "a parent that does not exist");
     crate::testport::assert_eq(node_new(nodes, nk_paragraph(), -2), -1, "a parent below -1");
     crate::testport::assert_eq(node_new(nodes, 0, 0), -1, "kind 0 is unknown");
-    crate::testport::assert_eq(node_new(nodes, 26, 0), -1, "kind 26 is unknown");
+    crate::testport::assert_eq(node_new(nodes, 27, 0), -1, "kind 27 is unknown");
     crate::testport::assert_eq(node_count(nodes), 1, "a refusal adds nothing");
     crate::testport::assert_eq(node_new(nodes, nk_furniture(), -1), 1, "a second root is allowed");
     crate::testport::assert_eq(node_parent(nodes, 1), -1, "furniture has no parent");
@@ -141,9 +145,10 @@ fn test_nesting_stops_at_max_depth() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mut at: i32 = 0;
     let mut made: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     while at != -1 {
         at = node_new(nodes, nk_section(), at);
         if at != -1 {
@@ -151,7 +156,7 @@ fn test_nesting_stops_at_max_depth() {
         }
     }
     crate::testport::assert_eq(made, max_depth() - 1, "a chain of sections ends at max-depth - 1 below the root");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, &mut crate::port::Cells::new()), 0, "still well formed");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "still well formed");
 }
 #[test]
 fn test_fields_are_set_and_read_back() {
@@ -161,7 +166,8 @@ fn test_fields_are_set_and_read_back() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     node_set_text(nodes, 3, 7, 5);
     crate::testport::assert_eq(node_text_start(nodes, 3), 7, "text start");
     crate::testport::assert_eq(node_text_len(nodes, 3), 5, "text len");
@@ -209,7 +215,8 @@ fn test_regions_chain_in_the_order_added() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_eq(node_add_region(nodes, regions, 3, 1, 7200, 9000, 54000, 11000), 0, "first region is 0");
     crate::testport::assert_eq(node_add_region(nodes, regions, 2, 1, 100, 200, 300, 400), 1, "another node's region is 1");
     crate::testport::assert_eq(node_add_region(nodes, regions, 3, 2, 7200, 6000, 54000, 8000), 2, "a second page for the paragraph");
@@ -229,7 +236,7 @@ fn test_regions_chain_in_the_order_added() {
     crate::testport::assert_eq(region_page(regions, 1), 1, "the heading's page");
     crate::testport::assert_eq(node_region_head(nodes, 2), 1, "the heading's head");
     crate::testport::assert_eq(node_region_head(nodes, 4), -1, "a node with none");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, &mut crate::port::Cells::new()), 0, "well formed");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "well formed");
 }
 #[test]
 fn test_attributes_set_replace_and_repeat() {
@@ -239,8 +246,9 @@ fn test_attributes_set_replace_and_repeat() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mut a: i32 = 0;
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     mt_text(text, 20);
     crate::testport::assert_eq(node_attr(nodes, attrs, 2, fk_level()), -1, "no attribute yet");
     crate::testport::assert_eq(node_attr_int_or(nodes, attrs, 2, fk_level(), 77), 77, "default when absent");
@@ -286,7 +294,7 @@ fn test_attributes_set_replace_and_repeat() {
     crate::testport::assert_eq(attr_find_next(attrs, a, fk_pages()), -1, "no fourth");
     crate::testport::assert_eq(node_attr(nodes, attrs, 7, fk_alt()), -1, "a key never set");
     crate::testport::assert_eq(node_attr(nodes, attrs, 3, fk_pages()), -1, "another node's chain is its own");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, &mut crate::port::Cells::new()), 0, "well formed");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "well formed");
 }
 #[test]
 fn test_text_arena_holds_scalar_values_only() {
@@ -407,11 +415,11 @@ fn test_names_come_from_the_tables() {
     crate::port::text_ascii(t, " ");
     fk_emit_name(t, 74);
     crate::testport::assert_text(t, "paragraph linebreak id checked", "spellings");
-    crate::testport::assert_eq(nk_emit_name(t, 26), 0, "an unknown kind writes nothing");
+    crate::testport::assert_eq(nk_emit_name(t, 27), 0, "an unknown kind writes nothing");
     crate::testport::assert_eq(nk_emit_name(t, 0), 0, "kind 0 is unknown");
 }
-pub(crate) fn mt_tiny(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
-    model_init(nodes, attrs, regions, text, pages, ledger);
+pub(crate) fn mt_tiny(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells) -> i32 {
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     node_new(nodes, nk_paragraph(), 0);
     text_append_cp(text, 72);
     text_append_cp(text, 105);
@@ -434,7 +442,8 @@ fn test_the_tiny_model_has_the_arenas_the_layout_says() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    mt_tiny(nodes, attrs, regions, text, pages, ledger);
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    mt_tiny(nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_eq(crate::port::cells_len(nodes), 32, "two nodes");
     crate::testport::assert_eq(crate::port::cells_at(nodes, 2), 1, "root first child");
     crate::testport::assert_eq(crate::port::cells_at(nodes, 3), 1, "root last child");
@@ -452,8 +461,8 @@ fn test_the_tiny_model_has_the_arenas_the_layout_says() {
     crate::testport::assert_eq(crate::port::cells_len(pages), 16, "one page");
     crate::testport::assert_eq(crate::port::cells_at(pages, 7), 987, "page health");
     crate::testport::assert_eq(crate::port::cells_len(ledger), 10, "one ledger row");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, &mut crate::port::Cells::new()), 0, "well formed");
-    crate::testport::assert_eq64(model_hash(nodes, attrs, regions, text, pages, ledger), -413424005450145991, "fingerprint");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "well formed");
+    crate::testport::assert_eq64(model_hash(nodes, attrs, regions, text, pages, ledger, layout), -4136225311394902565, "fingerprint (the old one times the FNV prime: an empty layout arena folds as one more multiply)");
 }
 #[test]
 fn test_check_names_each_way_a_model_can_be_wrong() {
@@ -463,48 +472,49 @@ fn test_check_names_each_way_a_model_can_be_wrong() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     text_append_cp(text, 65);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "well formed to begin with");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed to begin with");
     crate::port::cells_push(nodes, 0);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_stride(), "a stray cell");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_stride(), "a stray cell");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     crate::port::cells_set(nodes, 17, 99);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_link(), "a parent out of range");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_link(), "a parent out of range");
     crate::testport::assert_eq(crate::port::cells_at(st, 0), 1, "names node 1");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     crate::port::cells_set(nodes, (3 * 16) + 1, 2);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_tree(), "a child that points at another parent");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_tree(), "a child that points at another parent");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     crate::port::cells_set(nodes, (3 * 16) + 7, 0);
     crate::port::cells_set(nodes, (3 * 16) + 8, 5);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_text(), "a text run past the arena");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_text(), "a text run past the arena");
     crate::testport::assert_eq(crate::port::cells_at(st, 0), 3, "names node 3");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     node_set_conf(nodes, 3, 10);
     crate::port::cells_set(nodes, (3 * 16) + 12, 1001);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_conf(), "a confidence of 1001");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_conf(), "a confidence of 1001");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     crate::port::cells_set(nodes, 0, 2);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_no_root(), "a root that is not a document");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_no_root(), "a root that is not a document");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     crate::port::cells_set(nodes, (4 * 16) + 0, 40);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 3, "an unknown kind is mc-bad-kind");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 3, "an unknown kind is mc-bad-kind");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     node_set_attr_text(nodes, attrs, 3, fk_label(), 0, 4);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_attr(), "an attribute run past the arena");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_attr(), "an attribute run past the arena");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     node_add_region(nodes, regions, 3, 1, 0, 0, 1, 1);
     crate::port::cells_set(nodes, (3 * 16) + 10, 2);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_region(), "a region count that is not the chain");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_region(), "a region count that is not the chain");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     page_new(pages, 1, 100, 100, 0, 1);
     page_set_label(pages, 0, 0, 3);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_page(), "a page label past the arena");
-    mt_tree(nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_page(), "a page label past the arena");
+    mt_tree(nodes, attrs, regions, text, pages, ledger, layout);
     ledger_add(ledger, 1, 1, 0, 0, 1, 1, 2000, 0);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_bad_ledger(), "a ledger confidence of 2000");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_ledger(), "a ledger confidence of 2000");
 }
 #[test]
 fn test_check_requires_preorder_ids() {
@@ -514,12 +524,13 @@ fn test_check_requires_preorder_ids() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     node_new(nodes, nk_section(), 0);
     node_new(nodes, nk_section(), 0);
     node_new(nodes, nk_paragraph(), 1);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_not_preorder(), "a child created after its parent's next sibling");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_not_preorder(), "a child created after its parent's next sibling");
     crate::testport::assert_eq(crate::port::cells_at(st, 0), 3, "names node 3");
 }
 #[test]
@@ -530,13 +541,136 @@ fn test_check_accepts_furniture_as_a_second_root() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     node_new(nodes, nk_paragraph(), 0);
     node_new(nodes, nk_furniture(), -1);
     node_new(nodes, nk_paragraph(), 2);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "two trees, each in pre-order");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "two trees, each in pre-order");
     node_new(nodes, nk_furniture(), -1);
     node_new(nodes, nk_paragraph(), 0);
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), mc_not_preorder(), "a body node added after the furniture");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_not_preorder(), "a body node added after the furniture");
+}
+#[test]
+fn test_the_new_codes_are_where_D050_put_them() {
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(nk_initial(), 26, "initial is kind 26");
+    crate::testport::assert_eq(nk_is_inline(nk_initial()), 1, "an initial is an inline");
+    crate::testport::assert_eq(fk_form(), 76, "form");
+    crate::testport::assert_eq(fk_lines(), 77, "lines");
+    crate::testport::assert_eq(fk_layout(), 78, "layout");
+    crate::testport::assert_eq(fk_band(), 79, "band");
+    crate::testport::assert_eq(fk_col(), 80, "col");
+    crate::testport::assert_eq(fk_box(), 81, "box");
+    crate::testport::assert_eq(rl_sidebar(), 9, "sidebar is role 9");
+    nk_emit_name(t, 26);
+    crate::port::text_ascii(t, " ");
+    ifm_emit_name(t, 1);
+    crate::port::text_ascii(t, " ");
+    ifm_emit_name(t, 2);
+    crate::port::text_ascii(t, " ");
+    ifm_emit_name(t, 3);
+    crate::port::text_ascii(t, " ");
+    rl_emit_name(t, 9);
+    crate::port::text_ascii(t, " ");
+    fk_emit_name(t, 78);
+    crate::testport::assert_text(t, "initial drop raised margin sidebar layout", "the names");
+}
+#[test]
+fn test_an_initial_is_an_inline_with_form_and_lines() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    node_new(nodes, nk_paragraph(), 0);
+    crate::testport::assert_eq(node_new(nodes, nk_initial(), 1), 2, "an initial under a paragraph");
+    node_set_sub(nodes, 2, 2);
+    node_set_aux(nodes, 2, 3);
+    crate::testport::assert_eq(node_new(nodes, nk_text(), 2), 3, "its text");
+    crate::testport::assert_eq(node_new(nodes, 27, 1), -1, "27 is not a kind");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "well formed");
+}
+#[test]
+fn test_align_is_a_sub_on_a_paragraph_and_an_attribute_elsewhere() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    node_new(nodes, nk_paragraph(), 0);
+    node_new(nodes, nk_heading(), 0);
+    node_new(nodes, nk_cell(), 0);
+    node_new(nodes, nk_caption(), 0);
+    node_new(nodes, nk_section(), 0);
+    node_set_sub(nodes, 2, 3);
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 1, al_center()), 0, "a paragraph");
+    crate::testport::assert_eq(node_sub(nodes, 1), 2, "in its sub");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 2, al_end()), 0, "a heading");
+    crate::testport::assert_eq(node_sub(nodes, 2), 3, "its level is untouched");
+    crate::testport::assert_eq(node_attr_int_or(nodes, attrs, 2, fk_align(), 0), 3, "the alignment is an attribute");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 2, al_start()), 0, "set again");
+    crate::testport::assert_eq(node_attr_int_or(nodes, attrs, 2, fk_align(), 0), 1, "replaced, not repeated");
+    crate::testport::assert_eq(attr_count(attrs), 1, "one attribute");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 3, al_justify()), -1, "a cell is never justified");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 3, al_center()), 0, "a cell may be centred");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 4, al_justify()), 0, "a caption");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 5, al_start()), -1, "a section has none");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 1, 0), -1, "0 is not a value");
+    crate::testport::assert_eq(node_set_align(nodes, attrs, 1, 5), -1, "5 is not a value");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "well formed");
+}
+#[test]
+fn test_a_pages_layout_is_one_contiguous_run() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    page_new(pages, 2, 61200, 79200, 0, pk_vector());
+    crate::testport::assert_eq(page_layout_count(pages, 0), 0, "no map yet");
+    crate::testport::assert_eq(lay_add(layout, pages, 0, 0, 0, rl_body(), 7200, 9000, 30000, 75000), 0, "first cell");
+    crate::testport::assert_eq(lay_add(layout, pages, 0, 0, 1, rl_sidebar(), 31200, 9000, 54000, 75000), 1, "second cell");
+    crate::testport::assert_eq(lay_add(layout, pages, 1, 0, 0, rl_margin(), 100, 200, 300, 400), 2, "the next page's run");
+    crate::testport::assert_eq(lay_add(layout, pages, 0, 1, 0, rl_body(), 0, 0, 1, 1), -1, "page 1's run is no longer last");
+    crate::testport::assert_eq(lay_add(layout, pages, 1, 0, 1, 3, 0, 0, 1, 1), -1, "a role that is no layout role");
+    crate::testport::assert_eq(lay_add(layout, pages, 2, 0, 0, rl_body(), 0, 0, 1, 1), -1, "no such page");
+    crate::testport::assert_eq(crate::port::cells_len(layout), 24, "eight cells each, three rows");
+    crate::testport::assert_eq(layout_count(layout), 3, "three rows");
+    crate::testport::assert_eq(page_layout_first(pages, 0), 0, "page 1 starts at row 0");
+    crate::testport::assert_eq(page_layout_count(pages, 0), 2, "and has two");
+    crate::testport::assert_eq(page_layout_first(pages, 1), 2, "page 2 starts at row 2");
+    crate::testport::assert_eq(page_layout_count(pages, 1), 1, "and has one");
+    crate::testport::assert_eq(layout_page(layout, 2), 2, "the page number");
+    crate::testport::assert_eq(layout_band(layout, 1), 0, "band");
+    crate::testport::assert_eq(layout_col(layout, 1), 1, "col");
+    crate::testport::assert_eq(layout_role(layout, 1), 9, "role");
+    crate::testport::assert_eq(layout_x0(layout, 1), 31200, "x0");
+    crate::testport::assert_eq(layout_y0(layout, 1), 9000, "y0");
+    crate::testport::assert_eq(layout_x1(layout, 1), 54000, "x1");
+    crate::testport::assert_eq(layout_y1(layout, 1), 75000, "y1");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+    crate::port::cells_set(pages, 12, 5);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_layout(), "a run past the arena");
+    crate::port::cells_set(pages, 12, 2);
+    crate::port::cells_set(layout, 3, 3);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_layout(), "a role that is not body, margin or sidebar");
+    crate::port::cells_set(layout, 3, 9);
+    crate::port::cells_set(layout, 0, 7);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_layout(), "a cell of another page");
+    crate::port::cells_set(layout, 0, 1);
+    crate::port::cells_push(layout, 0);
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_stride(), "a stray cell");
 }

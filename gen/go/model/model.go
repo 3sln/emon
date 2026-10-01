@@ -83,6 +83,9 @@ func NkRef() int32 {
 func NkLinebreak() int32 {
 	return 25
 }
+func NkInitial() int32 {
+	return 26
+}
 func NkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "document")
@@ -182,6 +185,10 @@ func NkEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 25 {
 		port.TextAscii(t, "linebreak")
+		return 1
+	}
+	if code == 26 {
+		port.TextAscii(t, "initial")
 		return 1
 	}
 	return 0
@@ -411,6 +418,24 @@ func FkChecked() int32 {
 }
 func FkSubkind() int32 {
 	return 75
+}
+func FkForm() int32 {
+	return 76
+}
+func FkLines() int32 {
+	return 77
+}
+func FkLayout() int32 {
+	return 78
+}
+func FkBand() int32 {
+	return 79
+}
+func FkCol() int32 {
+	return 80
+}
+func FkBox() int32 {
+	return 81
 }
 func FkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
@@ -713,6 +738,30 @@ func FkEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "subkind")
 		return 1
 	}
+	if code == 76 {
+		port.TextAscii(t, "form")
+		return 1
+	}
+	if code == 77 {
+		port.TextAscii(t, "lines")
+		return 1
+	}
+	if code == 78 {
+		port.TextAscii(t, "layout")
+		return 1
+	}
+	if code == 79 {
+		port.TextAscii(t, "band")
+		return 1
+	}
+	if code == 80 {
+		port.TextAscii(t, "col")
+		return 1
+	}
+	if code == 81 {
+		port.TextAscii(t, "box")
+		return 1
+	}
 	return 0
 }
 
@@ -952,6 +1001,9 @@ func RlHeader() int32 {
 func RlFooter() int32 {
 	return 8
 }
+func RlSidebar() int32 {
+	return 9
+}
 func RlEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "head")
@@ -983,6 +1035,35 @@ func RlEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 8 {
 		port.TextAscii(t, "footer")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "sidebar")
+		return 1
+	}
+	return 0
+}
+
+func IfmDrop() int32 {
+	return 1
+}
+func IfmRaised() int32 {
+	return 2
+}
+func IfmMargin() int32 {
+	return 3
+}
+func IfmEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "drop")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "raised")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "margin")
 		return 1
 	}
 	return 0
@@ -1282,6 +1363,9 @@ func McBadPage() int32 {
 func McBadLedger() int32 {
 	return 12
 }
+func McBadLayout() int32 {
+	return 13
+}
 func McEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "ok")
@@ -1335,6 +1419,10 @@ func McEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "bad-ledger")
 		return 1
 	}
+	if code == 13 {
+		port.TextAscii(t, "bad-layout")
+		return 1
+	}
 	return 0
 }
 
@@ -1372,6 +1460,10 @@ func PagesStride() int32 {
 
 func LedgerStride() int32 {
 	return 10
+}
+
+func LayoutStride() int32 {
+	return 8
 }
 
 func MaxDepth() int32 {
@@ -1465,7 +1557,8 @@ func NodeHasText(nodes *port.Cells, n int32) int32 {
 
 func NkIsInline(kind int32) int32 {
 	// 1 for the kinds that live inside a block's text: text, span, link,
-	// ref, linebreak (SPEC 3.2). A `break` is a milestone, not an inline.
+	// ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an
+	// inline.
 	if kind == NkText() {
 		return 1
 	}
@@ -1479,6 +1572,9 @@ func NkIsInline(kind int32) int32 {
 		return 1
 	}
 	if kind == NkLinebreak() {
+		return 1
+	}
+	if kind == NkInitial() {
 		return 1
 	}
 	return 0
@@ -1513,7 +1609,7 @@ func NodeNew(nodes *port.Cells, kind int32, parent int32) int32 {
 	// (absent), `flags` 0, `sub` 0, `aux` 0.
 	var n int32 = port.CellsLen(nodes) / 16
 	var last int32 = -1
-	if (kind < 1) || (kind > 25) {
+	if (kind < 1) || (kind > 26) {
 		return -1
 	}
 	if parent < -1 {
@@ -1555,14 +1651,15 @@ func NodeNew(nodes *port.Cells, kind int32, parent int32) int32 {
 	return n
 }
 
-func ModelInit(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells) int32 {
-	// Empty all six arenas and create the `document` root, node 0.
+func ModelInit(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
+	// Empty all seven arenas and create the `document` root, node 0.
 	port.CellsDrop(nodes, 0)
 	port.CellsDrop(attrs, 0)
 	port.CellsDrop(regions, 0)
 	port.CellsDrop(text, 0)
 	port.CellsDrop(pages, 0)
 	port.CellsDrop(ledger, 0)
+	port.CellsDrop(layout, 0)
 	NodeNew(nodes, NkDocument(), -1)
 	return 0
 }
@@ -1883,6 +1980,29 @@ func NodeSetAttrText(nodes *port.Cells, attrs *port.Cells, n int32, key int32, s
 	return attrPut(nodes, attrs, n, key, 1, start, ln, 1)
 }
 
+func NodeSetAlign(nodes *port.Cells, attrs *port.Cells, n int32, v int32) int32 {
+	// Set the alignment of a paragraph (its `sub`), heading, caption or cell
+	// (the attribute `fk-align`), a logical `al` code (D110). Answers 0, or -1
+	// when the value is not an `al` code, the node is not one of those kinds,
+	// or it is a cell and the value is `justify`.
+	var kind int32 = nget(nodes, n, 0)
+	if (v < 1) || (v > 4) {
+		return -1
+	}
+	if kind == NkParagraph() {
+		nput(nodes, n, 14, v)
+		return 0
+	}
+	if (kind == NkCell()) && (v == AlJustify()) {
+		return -1
+	}
+	if (kind == NkHeading()) || (kind == NkCaption()) || (kind == NkCell()) {
+		attrPut(nodes, attrs, n, FkAlign(), 0, v, 0, 1)
+		return 0
+	}
+	return -1
+}
+
 func NodeAddAttrInt(nodes *port.Cells, attrs *port.Cells, n int32, key int32, v int32) int32 {
 	// Append, even if the key is already there (a repeated key).
 	return attrPut(nodes, attrs, n, key, 0, v, 0, 0)
@@ -1937,6 +2057,14 @@ func PageSetResolution(pages *port.Cells, p int32, dpi int32, pxw int32, pxh int
 	pset(pages, p, 8, dpi)
 	pset(pages, p, 9, pxw)
 	return pset(pages, p, 10, pxh)
+}
+
+func PageLayoutFirst(pages *port.Cells, p int32) int32 {
+	return pget(pages, p, 11)
+}
+
+func PageLayoutCount(pages *port.Cells, p int32) int32 {
+	return pget(pages, p, 12)
 }
 
 func PageCount(pages *port.Cells) int32 {
@@ -2057,6 +2185,78 @@ func LedgerSrc(ledger *port.Cells, l int32) int32 {
 	return lget(ledger, l, 9)
 }
 
+func LayAdd(layout *port.Cells, pages *port.Cells, p int32, band int32, col int32, role int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// Append a cell to page index p's run and answer its row, or -1 when p
+	// is not a page, the role is not body, margin or sidebar, or the page's
+	// run is not at the end of the arena.
+	var r int32 = port.CellsLen(layout) / 8
+	var cnt int32 = 0
+	var num int32 = 0
+	if (p < 0) || (p >= (port.CellsLen(pages) / 16)) {
+		return -1
+	}
+	if (role != RlBody()) && (role != RlMargin()) && (role != RlSidebar()) {
+		return -1
+	}
+	cnt = pget(pages, p, 12)
+	num = pget(pages, p, 0)
+	if cnt == 0 {
+		pset(pages, p, 11, r)
+	} else if (pget(pages, p, 11) + cnt) != r {
+		return -1
+	}
+	pset(pages, p, 12, cnt+1)
+	port.CellsPush(layout, num)
+	port.CellsPush(layout, band)
+	port.CellsPush(layout, col)
+	port.CellsPush(layout, role)
+	port.CellsPush(layout, x0)
+	port.CellsPush(layout, y0)
+	port.CellsPush(layout, x1)
+	port.CellsPush(layout, y1)
+	return r
+}
+
+func yget(layout *port.Cells, r int32, f int32) int32 {
+	return port.CellsAt(layout, (r*8)+f)
+}
+
+func LayoutCount(layout *port.Cells) int32 {
+	return port.CellsLen(layout) / 8
+}
+
+func LayoutPage(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 0)
+}
+
+func LayoutBand(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 1)
+}
+
+func LayoutCol(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 2)
+}
+
+func LayoutRole(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 3)
+}
+
+func LayoutX0(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 4)
+}
+
+func LayoutY0(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 5)
+}
+
+func LayoutX1(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 6)
+}
+
+func LayoutY1(layout *port.Cells, r int32) int32 {
+	return yget(layout, r, 7)
+}
+
 func mcFail(st *port.Cells, code int32, at int32) int32 {
 	port.CellsSet(st, 0, at)
 	return code
@@ -2107,7 +2307,7 @@ func mcCheckNode(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text
 	var na int32 = port.CellsLen(attrs) / 5
 	var nr int32 = port.CellsLen(regions) / 6
 	var tl int32 = port.CellsLen(text)
-	if (kind < 1) || (kind > 25) {
+	if (kind < 1) || (kind > 26) {
 		return McBadKind()
 	}
 	if mcLinkOk(nget(nodes, n, 1), nn) == 0 {
@@ -2240,8 +2440,10 @@ func mcCheckOrder(nodes *port.Cells, nn int32, st *port.Cells) int32 {
 	return 0
 }
 
-func ModelCheck(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, st *port.Cells) int32 {
+func ModelCheck(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, st *port.Cells) int32 {
 	var nn int32 = port.CellsLen(nodes) / 16
+	var nlay int32 = port.CellsLen(layout) / 8
+	var j int32 = 0
 	var i int32 = 0
 	var rc int32 = 0
 	var kids int32 = 0
@@ -2263,6 +2465,9 @@ func ModelCheck(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text 
 		return mcFail(st, McBadStride(), 0)
 	}
 	if (port.CellsLen(ledger) % 10) != 0 {
+		return mcFail(st, McBadStride(), 0)
+	}
+	if (port.CellsLen(layout) % 8) != 0 {
 		return mcFail(st, McBadStride(), 0)
 	}
 	if nn < 1 {
@@ -2317,6 +2522,31 @@ func ModelCheck(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text 
 		}
 		i += 1
 	}
+	i = 0
+	for i < (port.CellsLen(pages) / 16) {
+		if pget(pages, i, 12) < 0 {
+			return mcFail(st, McBadLayout(), i)
+		}
+		if pget(pages, i, 12) > 0 {
+			if pget(pages, i, 11) < 0 {
+				return mcFail(st, McBadLayout(), i)
+			}
+			if pget(pages, i, 11) > (nlay - pget(pages, i, 12)) {
+				return mcFail(st, McBadLayout(), i)
+			}
+			j = 0
+			for j < pget(pages, i, 12) {
+				if yget(layout, pget(pages, i, 11)+j, 0) != pget(pages, i, 0) {
+					return mcFail(st, McBadLayout(), i)
+				}
+				if (yget(layout, pget(pages, i, 11)+j, 3) != RlBody()) && (yget(layout, pget(pages, i, 11)+j, 3) != RlMargin()) && (yget(layout, pget(pages, i, 11)+j, 3) != RlSidebar()) {
+					return mcFail(st, McBadLayout(), i)
+				}
+				j += 1
+			}
+		}
+		i += 1
+	}
 	return 0
 }
 
@@ -2333,9 +2563,9 @@ func mhFold(h int64, c *port.Cells) int64 {
 	return (acc ^ int64(port.CellsLen(c))) * 1099511628211
 }
 
-func ModelHash(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells) int64 {
+func ModelHash(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int64 {
 	// A 64-bit fingerprint of the whole Model: the gate's proof that four
-	// targets built the same six arenas. FNV-1a, offset basis
+	// targets built the same seven arenas. FNV-1a, offset basis
 	// 14695981039346656037 (as a signed value) and prime 1099511628211.
 	var h int64 = -3750763034362895579
 	h = mhFold(h, nodes)
@@ -2344,5 +2574,6 @@ func ModelHash(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *
 	h = mhFold(h, text)
 	h = mhFold(h, pages)
 	h = mhFold(h, ledger)
+	h = mhFold(h, layout)
 	return h
 }

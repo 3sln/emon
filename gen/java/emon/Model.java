@@ -79,6 +79,9 @@ public final class Model {
     public static int nkLinebreak() {
         return 25;
     }
+    public static int nkInitial() {
+        return 26;
+    }
     public static int nkEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "document");
@@ -178,6 +181,10 @@ public final class Model {
         }
         if (code == 25) {
             emon.Port.textAscii(t, "linebreak");
+            return 1;
+        }
+        if (code == 26) {
+            emon.Port.textAscii(t, "initial");
             return 1;
         }
         return 0;
@@ -406,6 +413,24 @@ public final class Model {
     }
     public static int fkSubkind() {
         return 75;
+    }
+    public static int fkForm() {
+        return 76;
+    }
+    public static int fkLines() {
+        return 77;
+    }
+    public static int fkLayout() {
+        return 78;
+    }
+    public static int fkBand() {
+        return 79;
+    }
+    public static int fkCol() {
+        return 80;
+    }
+    public static int fkBox() {
+        return 81;
     }
     public static int fkEmitName(StringBuilder t, int code) {
         if (code == 1) {
@@ -708,6 +733,30 @@ public final class Model {
             emon.Port.textAscii(t, "subkind");
             return 1;
         }
+        if (code == 76) {
+            emon.Port.textAscii(t, "form");
+            return 1;
+        }
+        if (code == 77) {
+            emon.Port.textAscii(t, "lines");
+            return 1;
+        }
+        if (code == 78) {
+            emon.Port.textAscii(t, "layout");
+            return 1;
+        }
+        if (code == 79) {
+            emon.Port.textAscii(t, "band");
+            return 1;
+        }
+        if (code == 80) {
+            emon.Port.textAscii(t, "col");
+            return 1;
+        }
+        if (code == 81) {
+            emon.Port.textAscii(t, "box");
+            return 1;
+        }
         return 0;
     }
     public static int srText() {
@@ -942,6 +991,9 @@ public final class Model {
     public static int rlFooter() {
         return 8;
     }
+    public static int rlSidebar() {
+        return 9;
+    }
     public static int rlEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "head");
@@ -973,6 +1025,34 @@ public final class Model {
         }
         if (code == 8) {
             emon.Port.textAscii(t, "footer");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.textAscii(t, "sidebar");
+            return 1;
+        }
+        return 0;
+    }
+    public static int ifmDrop() {
+        return 1;
+    }
+    public static int ifmRaised() {
+        return 2;
+    }
+    public static int ifmMargin() {
+        return 3;
+    }
+    public static int ifmEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "drop");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "raised");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.textAscii(t, "margin");
             return 1;
         }
         return 0;
@@ -1265,6 +1345,9 @@ public final class Model {
     public static int mcBadLedger() {
         return 12;
     }
+    public static int mcBadLayout() {
+        return 13;
+    }
     public static int mcEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "ok");
@@ -1318,6 +1401,10 @@ public final class Model {
             emon.Port.textAscii(t, "bad-ledger");
             return 1;
         }
+        if (code == 13) {
+            emon.Port.textAscii(t, "bad-layout");
+            return 1;
+        }
         return 0;
     }
     public static int avInt() {
@@ -1346,6 +1433,9 @@ public final class Model {
     }
     public static int ledgerStride() {
         return 10;
+    }
+    public static int layoutStride() {
+        return 8;
     }
     public static int maxDepth() {
         return 200;
@@ -1417,7 +1507,8 @@ public final class Model {
     }
     public static int nkIsInline(int kind) {
         // 1 for the kinds that live inside a block's text: text, span, link,
-        // ref, linebreak (SPEC 3.2). A `break` is a milestone, not an inline.
+        // ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an
+        // inline.
         if (kind == nkText()) {
             return 1;
         }
@@ -1431,6 +1522,9 @@ public final class Model {
             return 1;
         }
         if (kind == nkLinebreak()) {
+            return 1;
+        }
+        if (kind == nkInitial()) {
             return 1;
         }
         return 0;
@@ -1462,7 +1556,7 @@ public final class Model {
         // (absent), `flags` 0, `sub` 0, `aux` 0.
         int n = emon.Port.cellsLen(nodes) / 16;
         int last = -1;
-        if ((kind < 1) || (kind > 25)) {
+        if ((kind < 1) || (kind > 26)) {
             return -1;
         }
         if (parent < -1) {
@@ -1503,14 +1597,15 @@ public final class Model {
         }
         return n;
     }
-    public static int modelInit(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
-        // Empty all six arenas and create the `document` root, node 0.
+    public static int modelInit(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+        // Empty all seven arenas and create the `document` root, node 0.
         emon.Port.cellsDrop(nodes, 0);
         emon.Port.cellsDrop(attrs, 0);
         emon.Port.cellsDrop(regions, 0);
         emon.Port.cellsDrop(text, 0);
         emon.Port.cellsDrop(pages, 0);
         emon.Port.cellsDrop(ledger, 0);
+        emon.Port.cellsDrop(layout, 0);
         nodeNew(nodes, nkDocument(), -1);
         return 0;
     }
@@ -1793,6 +1888,28 @@ public final class Model {
         // The value is the run [start, start+length) of the text arena.
         return attrPut(nodes, attrs, n, key, 1, start, ln, 1);
     }
+    public static int nodeSetAlign(emon.Port.Cells nodes, emon.Port.Cells attrs, int n, int v) {
+        // Set the alignment of a paragraph (its `sub`), heading, caption or cell
+        // (the attribute `fk-align`), a logical `al` code (D110). Answers 0, or -1
+        // when the value is not an `al` code, the node is not one of those kinds,
+        // or it is a cell and the value is `justify`.
+        int kind = nget(nodes, n, 0);
+        if ((v < 1) || (v > 4)) {
+            return -1;
+        }
+        if (kind == nkParagraph()) {
+            nput(nodes, n, 14, v);
+            return 0;
+        }
+        if ((kind == nkCell()) && (v == alJustify())) {
+            return -1;
+        }
+        if ((kind == nkHeading()) || (kind == nkCaption()) || (kind == nkCell())) {
+            attrPut(nodes, attrs, n, fkAlign(), 0, v, 0, 1);
+            return 0;
+        }
+        return -1;
+    }
     public static int nodeAddAttrInt(emon.Port.Cells nodes, emon.Port.Cells attrs, int n, int key, int v) {
         // Append, even if the key is already there (a repeated key).
         return attrPut(nodes, attrs, n, key, 0, v, 0, 0);
@@ -1840,6 +1957,12 @@ public final class Model {
         pset(pages, p, 8, dpi);
         pset(pages, p, 9, pxw);
         return pset(pages, p, 10, pxh);
+    }
+    public static int pageLayoutFirst(emon.Port.Cells pages, int p) {
+        return pget(pages, p, 11);
+    }
+    public static int pageLayoutCount(emon.Port.Cells pages, int p) {
+        return pget(pages, p, 12);
     }
     public static int pageCount(emon.Port.Cells pages) {
         return emon.Port.cellsLen(pages) / 16;
@@ -1933,6 +2056,67 @@ public final class Model {
     public static int ledgerSrc(emon.Port.Cells ledger, int l) {
         return lget(ledger, l, 9);
     }
+    public static int layAdd(emon.Port.Cells layout, emon.Port.Cells pages, int p, int band, int col, int role, int x0, int y0, int x1, int y1) {
+        // Append a cell to page index p's run and answer its row, or -1 when p
+        // is not a page, the role is not body, margin or sidebar, or the page's
+        // run is not at the end of the arena.
+        int r = emon.Port.cellsLen(layout) / 8;
+        int cnt = 0;
+        int num = 0;
+        if ((p < 0) || (p >= (emon.Port.cellsLen(pages) / 16))) {
+            return -1;
+        }
+        if ((role != rlBody()) && (role != rlMargin()) && (role != rlSidebar())) {
+            return -1;
+        }
+        cnt = pget(pages, p, 12);
+        num = pget(pages, p, 0);
+        if (cnt == 0) {
+            pset(pages, p, 11, r);
+        } else if ((pget(pages, p, 11) + cnt) != r) {
+            return -1;
+        }
+        pset(pages, p, 12, cnt + 1);
+        emon.Port.cellsPush(layout, num);
+        emon.Port.cellsPush(layout, band);
+        emon.Port.cellsPush(layout, col);
+        emon.Port.cellsPush(layout, role);
+        emon.Port.cellsPush(layout, x0);
+        emon.Port.cellsPush(layout, y0);
+        emon.Port.cellsPush(layout, x1);
+        emon.Port.cellsPush(layout, y1);
+        return r;
+    }
+    public static int yget(emon.Port.Cells layout, int r, int f) {
+        return emon.Port.cellsAt(layout, (r * 8) + f);
+    }
+    public static int layoutCount(emon.Port.Cells layout) {
+        return emon.Port.cellsLen(layout) / 8;
+    }
+    public static int layoutPage(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 0);
+    }
+    public static int layoutBand(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 1);
+    }
+    public static int layoutCol(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 2);
+    }
+    public static int layoutRole(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 3);
+    }
+    public static int layoutX0(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 4);
+    }
+    public static int layoutY0(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 5);
+    }
+    public static int layoutX1(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 6);
+    }
+    public static int layoutY1(emon.Port.Cells layout, int r) {
+        return yget(layout, r, 7);
+    }
     public static int mcFail(emon.Port.Cells st, int code, int at) {
         emon.Port.cellsSet(st, 0, at);
         return code;
@@ -1980,7 +2164,7 @@ public final class Model {
         int na = emon.Port.cellsLen(attrs) / 5;
         int nr = emon.Port.cellsLen(regions) / 6;
         int tl = emon.Port.cellsLen(text);
-        if ((kind < 1) || (kind > 25)) {
+        if ((kind < 1) || (kind > 26)) {
             return mcBadKind();
         }
         if (mcLinkOk(nget(nodes, n, 1), nn) == 0) {
@@ -2110,8 +2294,10 @@ public final class Model {
         }
         return 0;
     }
-    public static int modelCheck(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells st) {
+    public static int modelCheck(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells st) {
         int nn = emon.Port.cellsLen(nodes) / 16;
+        int nlay = emon.Port.cellsLen(layout) / 8;
+        int j = 0;
         int i = 0;
         int rc = 0;
         int kids = 0;
@@ -2133,6 +2319,9 @@ public final class Model {
             return mcFail(st, mcBadStride(), 0);
         }
         if ((emon.Port.cellsLen(ledger) % 10) != 0) {
+            return mcFail(st, mcBadStride(), 0);
+        }
+        if ((emon.Port.cellsLen(layout) % 8) != 0) {
             return mcFail(st, mcBadStride(), 0);
         }
         if (nn < 1) {
@@ -2187,6 +2376,31 @@ public final class Model {
             }
             i += 1;
         }
+        i = 0;
+        while (i < (emon.Port.cellsLen(pages) / 16)) {
+            if (pget(pages, i, 12) < 0) {
+                return mcFail(st, mcBadLayout(), i);
+            }
+            if (pget(pages, i, 12) > 0) {
+                if (pget(pages, i, 11) < 0) {
+                    return mcFail(st, mcBadLayout(), i);
+                }
+                if (pget(pages, i, 11) > (nlay - pget(pages, i, 12))) {
+                    return mcFail(st, mcBadLayout(), i);
+                }
+                j = 0;
+                while (j < pget(pages, i, 12)) {
+                    if (yget(layout, pget(pages, i, 11) + j, 0) != pget(pages, i, 0)) {
+                        return mcFail(st, mcBadLayout(), i);
+                    }
+                    if ((yget(layout, pget(pages, i, 11) + j, 3) != rlBody()) && (yget(layout, pget(pages, i, 11) + j, 3) != rlMargin()) && (yget(layout, pget(pages, i, 11) + j, 3) != rlSidebar())) {
+                        return mcFail(st, mcBadLayout(), i);
+                    }
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
         return 0;
     }
     public static long mhFold(long h, emon.Port.Cells c) {
@@ -2201,9 +2415,9 @@ public final class Model {
         }
         return (acc ^ ((long) emon.Port.cellsLen(c))) * 1099511628211L;
     }
-    public static long modelHash(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
+    public static long modelHash(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
         // A 64-bit fingerprint of the whole Model: the gate's proof that four
-        // targets built the same six arenas. FNV-1a, offset basis
+        // targets built the same seven arenas. FNV-1a, offset basis
         // 14695981039346656037 (as a signed value) and prime 1099511628211.
         long h = -3750763034362895579L;
         h = mhFold(h, nodes);
@@ -2212,6 +2426,7 @@ public final class Model {
         h = mhFold(h, text);
         h = mhFold(h, pages);
         h = mhFold(h, ledger);
+        h = mhFold(h, layout);
         return h;
     }
 }
