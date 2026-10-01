@@ -1031,3 +1031,48 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
     pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000);
     return 0;
 }
+pub(crate) fn pa_dump_num(mut t: &mut String, v: i32) -> i32 {
+    crate::port::text_cp(t, 32);
+    crate::port::text_i32(t, v);
+    return 0;
+}
+pub fn pa_dump(mut t: &mut String, cf: &mut crate::port::Cells, dbg: &mut crate::port::Cells) -> i32 {
+    // The column stage's evidence as debug lines (SPEC 10.1.1; D152, D153), from what `pa-build` was given:
+    // one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,
+    // in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one
+    // `J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the
+    // points against `JOIN_MIN`). Not a contract.
+    let nf: i32 = crate::port::cells_len(cf) / CF_STRIDE;
+    let nj: i32 = crate::port::cells_len(dbg) / 8;
+    let mut r: i32 = 0;
+    let mut f: i32 = 0;
+    let mut j: i32 = 0;
+    let mut k: i32 = 0;
+    while r < nf {
+        if k > 0 {
+            crate::port::text_cp(t, 10);
+        }
+        k += 1;
+        crate::port::text_ascii(t, "F");
+        f = 0;
+        while f < 11 {
+            pa_dump_num(t, crate::port::cells_at(cf, (r * CF_STRIDE) + f));
+            f += 1;
+        }
+        r += 1;
+    }
+    while j < nj {
+        if k > 0 {
+            crate::port::text_cp(t, 10);
+        }
+        k += 1;
+        crate::port::text_ascii(t, "J");
+        f = 0;
+        while f < 4 {
+            pa_dump_num(t, crate::port::cells_at(dbg, (j * 8) + f));
+            f += 1;
+        }
+        j += 1;
+    }
+    return 0;
+}

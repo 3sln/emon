@@ -10,6 +10,7 @@ import (
 	"emon/normalize"
 	"emon/pdfdoc"
 	"emon/port"
+	"strings"
 )
 
 const paGapNum int32 = 3
@@ -1112,5 +1113,52 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 		p += 1
 	}
 	paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000)
+	return 0
+}
+
+func paDumpNum(t *strings.Builder, v int32) int32 {
+	port.TextCp(t, 32)
+	port.TextI32(t, v)
+	return 0
+}
+
+func PaDump(t *strings.Builder, cf *port.Cells, dbg *port.Cells) int32 {
+	// The column stage's evidence as debug lines (SPEC 10.1.1; D152, D153), from what `pa-build` was given:
+	// one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,
+	// in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one
+	// `J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the
+	// points against `JOIN_MIN`). Not a contract.
+	var nf int32 = port.CellsLen(cf) / cfStride
+	var nj int32 = port.CellsLen(dbg) / 8
+	var r int32 = 0
+	var f int32 = 0
+	var j int32 = 0
+	var k int32 = 0
+	for r < nf {
+		if k > 0 {
+			port.TextCp(t, 10)
+		}
+		k += 1
+		port.TextAscii(t, "F")
+		f = 0
+		for f < 11 {
+			paDumpNum(t, port.CellsAt(cf, (r*cfStride)+f))
+			f += 1
+		}
+		r += 1
+	}
+	for j < nj {
+		if k > 0 {
+			port.TextCp(t, 10)
+		}
+		k += 1
+		port.TextAscii(t, "J")
+		f = 0
+		for f < 4 {
+			paDumpNum(t, port.CellsAt(dbg, (j*8)+f))
+			f += 1
+		}
+		j += 1
+	}
 	return 0
 }

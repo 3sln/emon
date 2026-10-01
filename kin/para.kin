@@ -39,8 +39,8 @@
 ;; has `src` {text, infer} and `conf` 500 (its structure is inferred; Phase 10 calibrates), every text
 ;; inline `src` {text} and `conf` 1000 (a glyph's own text); the milestone `src` {infer} and 500.
 (ns emon.para
-  (:require [emon.lang :refer [I32 Bool Cells]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+  (:require [emon.lang :refer [I32 Bool Cells Text emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
                                    lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
             [emon.columns :refer [lc-copy lc-page]]
@@ -927,4 +927,43 @@
                 (set i (+ i 1))))
           (set p (+ p 1))))
     (pa-close wd lt et nodes attrs regions text raw tmp fr cf lo gp med pend nf 1000000000)
+    (return 0)))
+
+;; ------------------------------------------------------------------------------ the debug dump
+
+(defn ^I32 pa-dump-num [^:mut ^Text t ^I32 v]
+  (text-cp t 32)
+  (text-i32 t v)
+  (return 0))
+
+(defn ^:pub ^I32 pa-dump [^:mut ^Text t ^Cells cf ^Cells dbg]
+  (comment "The column stage's evidence as debug lines (SPEC 10.1.1; D152, D153), from what `pa-build` was given:")
+  (comment "one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,")
+  (comment "in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one")
+  (comment "`J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the")
+  (comment "points against `JOIN_MIN`). Not a contract.")
+  (let [^I32 nf (quot (cells-len cf) CF_STRIDE)
+        ^I32 nj (quot (cells-len dbg) 8)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0]
+    (while (< r nf)
+      (do (if (> k 0) (text-cp t 10))
+          (set k (+ k 1))
+          (emit-ascii t "F")
+          (set f 0)
+          (while (< f 11)
+            (do (pa-dump-num t (cells-at cf (+ (* r CF_STRIDE) f)))
+                (set f (+ f 1))))
+          (set r (+ r 1))))
+    (while (< j nj)
+      (do (if (> k 0) (text-cp t 10))
+          (set k (+ k 1))
+          (emit-ascii t "J")
+          (set f 0)
+          (while (< f 4)
+            (do (pa-dump-num t (cells-at dbg (+ (* j 8) f)))
+                (set f (+ f 1))))
+          (set j (+ j 1))))
     (return 0)))

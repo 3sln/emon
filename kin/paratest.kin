@@ -27,7 +27,7 @@
             [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new wf-size wf-font hd-x0 hd-x1]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
-            [emon.para :refer [pa-pages pa-build]]
+            [emon.para :refer [pa-pages pa-build pa-dump]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -141,6 +141,24 @@
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)]
     (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
                       lt ls sd it io rw gu ac tm cf lo pr dbg))))
+
+(defn ^I32 pt-dump [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Text t]
+  (comment "`pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.")
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+        ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
+        ^:mut ^I32 p 1]
+    (model-init nodes attrs regions text pages ledger layout)
+    (while (<= p npages)
+      (do (page-new pages p 61200 79200 0 (pk-vector))
+          (set p (+ p 1))))
+    (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
+              lt ls sd it io rw gu ac tm cf lo pr dbg)
+    (pa-dump t cf dbg)
+    (return 0)))
 
 (defn ^I32 pt-run [^Cells wd ^Cells ln ^Cells et ^I32 npages
                    ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
@@ -413,6 +431,16 @@
     (pt-brief t1 nodes regions text)
     (assert-text t1 "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;" "the left column, then the right")
     (assert-eq (page-layout-count pages 0) 2 "two cells")))
+
+(deftest test-the-stage-says-what-it-decided-in-debug-lines
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Text t1 (new-text)]
+    (comment "The fragments (the cut tree's leaves, body ones in reading order) and every join decision, as lines: the left")
+    (comment "column ends in a full line without a full stop and the right starts in lowercase: score 9 (the edge 2, no")
+    (comment "full stop 2, lowercase 3, the column is full 1, the words follow in the stream 1), against `join-min` 4.")
+    (pt-two-columns wd ln et (text-blob "l6a l6b l6c l6d") (text-blob "r1a r1b r1c r1d"))
+    (assert-eq (pt-dump wd ln et 1 t1) 0 "dump")
+    (assert-text-span t1 (test-file "para/two-columns.dump") 0 (jt-end (test-file "para/two-columns.dump")) "the debug lines" 0)))
 
 (deftest test-a-table-spans-the-gutter-and-a-gap-ends-the-columns
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)

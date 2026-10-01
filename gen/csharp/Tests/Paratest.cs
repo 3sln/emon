@@ -126,6 +126,43 @@ public static class Paratest {
         emon.Port.Cells dbg = emon.Port.NewCells();
         return Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg);
     }
+    internal static int PtDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, System.Text.StringBuilder t) {
+        // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ls = emon.Port.NewCells();
+        emon.Port.Cells sd = emon.Port.NewCells();
+        emon.Port.Cells it = emon.Port.NewCells();
+        emon.Port.Cells io = emon.Port.NewCells();
+        emon.Port.Cells rw = emon.Port.NewCells();
+        emon.Port.Cells gu = emon.Port.NewCells();
+        emon.Port.Cells ac = emon.Port.NewCells();
+        emon.Port.Cells tm = emon.Port.NewCells();
+        emon.Port.Cells cf = emon.Port.NewCells();
+        emon.Port.Cells lo = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells dbg = emon.Port.NewCells();
+        int p = 1;
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        while (p <= npages) {
+            Model.PageNew(pages, p, 61200, 79200, 0, Model.PkVector());
+            p += 1;
+        }
+        Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg);
+        Para.PaDump(t, cf, dbg);
+        return 0;
+    }
     internal static int PtRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
         int p = 1;
@@ -472,6 +509,19 @@ public static class Paratest {
         PtBrief(t1, nodes, regions, text);
         emon.Testport.AssertText(t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;", "the left column, then the right");
         emon.Testport.AssertEq(Model.PageLayoutCount(pages, 0), 2, "two cells");
+    }
+    [Xunit.Fact]
+    public static void TestTheStageSaysWhatItDecidedInDebugLines() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        // The fragments (the cut tree's leaves, body ones in reading order) and every join decision, as lines: the left
+        // column ends in a full line without a full stop and the right starts in lowercase: score 9 (the edge 2, no
+        // full stop 2, lowercase 3, the column is full 1, the words follow in the stream 1), against `join-min` 4.
+        PtTwoColumns(wd, ln, et, emon.Testport.TextBlob("l6a l6b l6c l6d"), emon.Testport.TextBlob("r1a r1b r1c r1d"));
+        emon.Testport.AssertEq(PtDump(wd, ln, et, 1, t1), 0, "dump");
+        emon.Testport.AssertTextSpan(t1, emon.Testport.TestFile("para/two-columns.dump"), 0, Mscript.JtEnd(emon.Testport.TestFile("para/two-columns.dump")), "the debug lines", 0);
     }
     [Xunit.Fact]
     public static void TestATableSpansTheGutterAndAGapEndsTheColumns() {

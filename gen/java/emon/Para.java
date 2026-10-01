@@ -1029,4 +1029,49 @@ public final class Para {
         paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, cf, lo, gp, med, pend, nf, 1000000000);
         return 0;
     }
+    public static int paDumpNum(StringBuilder t, int v) {
+        emon.Port.textCp(t, 32);
+        emon.Port.textI32(t, v);
+        return 0;
+    }
+    public static int paDump(StringBuilder t, emon.Port.Cells cf, emon.Port.Cells dbg) {
+        // The column stage's evidence as debug lines (SPEC 10.1.1; D152, D153), from what `pa-build` was given:
+        // one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,
+        // in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one
+        // `J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the
+        // points against `JOIN_MIN`). Not a contract.
+        int nf = emon.Port.cellsLen(cf) / CF_STRIDE;
+        int nj = emon.Port.cellsLen(dbg) / 8;
+        int r = 0;
+        int f = 0;
+        int j = 0;
+        int k = 0;
+        while (r < nf) {
+            if (k > 0) {
+                emon.Port.textCp(t, 10);
+            }
+            k += 1;
+            emon.Port.textAscii(t, "F");
+            f = 0;
+            while (f < 11) {
+                paDumpNum(t, emon.Port.cellsAt(cf, (r * CF_STRIDE) + f));
+                f += 1;
+            }
+            r += 1;
+        }
+        while (j < nj) {
+            if (k > 0) {
+                emon.Port.textCp(t, 10);
+            }
+            k += 1;
+            emon.Port.textAscii(t, "J");
+            f = 0;
+            while (f < 4) {
+                paDumpNum(t, emon.Port.cellsAt(dbg, (j * 8) + f));
+                f += 1;
+            }
+            j += 1;
+        }
+        return 0;
+    }
 }

@@ -126,6 +126,43 @@ public final class Paratest {
         emon.Port.Cells dbg = emon.Port.newCells();
         return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg);
     }
+    public static int ptDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, StringBuilder t) {
+        // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells sd = emon.Port.newCells();
+        emon.Port.Cells it = emon.Port.newCells();
+        emon.Port.Cells io = emon.Port.newCells();
+        emon.Port.Cells rw = emon.Port.newCells();
+        emon.Port.Cells gu = emon.Port.newCells();
+        emon.Port.Cells ac = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        emon.Port.Cells cf = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells dbg = emon.Port.newCells();
+        int p = 1;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        while (p <= npages) {
+            Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
+            p += 1;
+        }
+        Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg);
+        Para.paDump(t, cf, dbg);
+        return 0;
+    }
     public static int ptRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
         int p = 1;
@@ -466,6 +503,18 @@ public final class Paratest {
         ptBrief(t1, nodes, regions, text);
         emon.Testport.assertText(t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;", "the left column, then the right");
         emon.Testport.assertEq(Model.pageLayoutCount(pages, 0), 2, "two cells");
+    }
+    public static void testTheStageSaysWhatItDecidedInDebugLines() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        // The fragments (the cut tree's leaves, body ones in reading order) and every join decision, as lines: the left
+        // column ends in a full line without a full stop and the right starts in lowercase: score 9 (the edge 2, no
+        // full stop 2, lowercase 3, the column is full 1, the words follow in the stream 1), against `join-min` 4.
+        ptTwoColumns(wd, ln, et, emon.Testport.textBlob("l6a l6b l6c l6d"), emon.Testport.textBlob("r1a r1b r1c r1d"));
+        emon.Testport.assertEq(ptDump(wd, ln, et, 1, t1), 0, "dump");
+        emon.Testport.assertTextSpan(t1, emon.Testport.testFile("para/two-columns.dump"), 0, Mscript.jtEnd(emon.Testport.testFile("para/two-columns.dump")), "the debug lines", 0);
     }
     public static void testATableSpansTheGutterAndAGapEndsTheColumns() {
         emon.Port.Cells wd = emon.Port.newCells();

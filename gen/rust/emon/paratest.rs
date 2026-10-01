@@ -131,6 +131,43 @@ pub(crate) fn pt_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     return pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg);
 }
+pub(crate) fn pt_dump(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut t: &mut String) -> i32 {
+    // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let it: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let io: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gu: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ac: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut p: i32 = 1;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    while p <= npages {
+        page_new(pages, p, 61200, 79200, 0, pk_vector());
+        p += 1;
+    }
+    pa_build(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg);
+    pa_dump(t, cf, dbg);
+    return 0;
+}
 pub(crate) fn pt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
     let mut p: i32 = 1;
@@ -477,6 +514,19 @@ fn test_a_line_written_across_the_gutter_is_split_at_it() {
     pt_brief(t1, nodes, regions, text);
     crate::testport::assert_text(t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;", "the left column, then the right");
     crate::testport::assert_eq(page_layout_count(pages, 0), 2, "two cells");
+}
+#[test]
+fn test_the_stage_says_what_it_decided_in_debug_lines() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1: &mut String = &mut crate::port::new_text();
+    // The fragments (the cut tree's leaves, body ones in reading order) and every join decision, as lines: the left
+    // column ends in a full line without a full stop and the right starts in lowercase: score 9 (the edge 2, no
+    // full stop 2, lowercase 3, the column is full 1, the words follow in the stream 1), against `join-min` 4.
+    pt_two_columns(wd, ln, et, &crate::testport::text_blob("l6a l6b l6c l6d")[..], &crate::testport::text_blob("r1a r1b r1c r1d")[..]);
+    crate::testport::assert_eq(pt_dump(wd, ln, et, 1, t1), 0, "dump");
+    crate::testport::assert_text_span(t1, &crate::testport::test_file("para/two-columns.dump")[..], 0, jt_end(&crate::testport::test_file("para/two-columns.dump")[..]), "the debug lines", 0);
 }
 #[test]
 fn test_a_table_spans_the_gutter_and_a_gap_ends_the_columns() {

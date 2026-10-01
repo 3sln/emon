@@ -145,6 +145,44 @@ func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg)
 }
 
+func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *strings.Builder) int32 {
+	// `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var lt *port.Cells = port.NewCells()
+	var ls *port.Cells = port.NewCells()
+	var sd *port.Cells = port.NewCells()
+	var it *port.Cells = port.NewCells()
+	var io *port.Cells = port.NewCells()
+	var rw *port.Cells = port.NewCells()
+	var gu *port.Cells = port.NewCells()
+	var ac *port.Cells = port.NewCells()
+	var tm *port.Cells = port.NewCells()
+	var cf *port.Cells = port.NewCells()
+	var lo *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var dbg *port.Cells = port.NewCells()
+	var p int32 = 1
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	for p <= npages {
+		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
+		p += 1
+	}
+	para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg)
+	para.PaDump(t, cf, dbg)
+	return 0
+}
+
 func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {
 	// Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
 	var p int32 = 1
@@ -495,6 +533,19 @@ func TestALineWrittenAcrossTheGutterIsSplitAtIt(emonT *testing.T) {
 	ptBrief(t1, nodes, regions, text)
 	port.AssertText(emonT, t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;", "the left column, then the right")
 	port.AssertEq(emonT, model.PageLayoutCount(pages, 0), 2, "two cells")
+}
+
+func TestTheStageSaysWhatItDecidedInDebugLines(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	// The fragments (the cut tree's leaves, body ones in reading order) and every join decision, as lines: the left
+	// column ends in a full line without a full stop and the right starts in lowercase: score 9 (the edge 2, no
+	// full stop 2, lowercase 3, the column is full 1, the words follow in the stream 1), against `join-min` 4.
+	ptTwoColumns(wd, ln, et, port.TextBlob("l6a l6b l6c l6d"), port.TextBlob("r1a r1b r1c r1d"))
+	port.AssertEq(emonT, ptDump(wd, ln, et, 1, t1), 0, "dump")
+	port.AssertTextSpan(emonT, t1, port.TestFile("para/two-columns.dump"), 0, mscript.JtEnd(port.TestFile("para/two-columns.dump")), "the debug lines", 0)
 }
 
 func TestATableSpansTheGutterAndAGapEndsTheColumns(emonT *testing.T) {
