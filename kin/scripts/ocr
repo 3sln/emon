@@ -15,7 +15,9 @@
 ;;   2. the evidence is the answer's whole extension: 150+ words, one run, the 24 lines, every symbol
 ;;      and every alternative with its full text, alternatives on most of the words;
 ;;   3. a first CER of that evidence against the page's gold, under a ceiling;
-;;   4. a replay never guesses: a changed request is `transcript-miss` on both.
+;;   4. a replay never guesses: a changed request is `transcript-miss` on both;
+;;   5. (P6.5) the committed SCAN transcripts of test/ocr/scan/, through the WHOLE Engine on Rust and on Go to one Model, the Model's
+;;      provenance, `transcript-miss` for a changed request, the no-engine conversion, and the `emon-replay` accuracy ratchet.
 (require '[babashka.fs :as fs]
          '[babashka.classpath :as cp]
          '[babashka.process :refer [shell process]]
@@ -135,6 +137,71 @@
         (let [r (run prog tam)]
           (check (and (= 3 (:exit r)) (= "error: transcript-miss" (:out r)))
                  name " replay of a changed request (psm 3 -> 4): transcript-miss, nothing guessed"))))))
+
+;; ---------------------------------------------------------------------------------------------------------------------------
+;; 5. THE COMMITTED SCANS, through the whole Engine (P6.5, D211-D216). `tools/ocr/record-scan.clj` recorded each of test/ocr/scan/ID/
+;; live on Rust (a slim transcript: the engine's answers and its `:producer`, no bitmaps). Here the Rust Engine and the Go Engine each
+;; REPLAY it from the scan's own bytes: no Ocr port, no Tesseract. What must hold:
+;;   * both give the identical bundle (JSON compact and pretty, HTML default and full, evidence, intake);
+;;   * the Model says where the text came from (`settings.ocr`, `scanned` pages, `ocr` sources) and has the text;
+;;   * a changed request (the engine's `psm`) is `transcript-miss` on both: a replay never guesses;
+;;   * with NO transcript and no port the same scan converts, to pages with no text, identically on both (`unsupported` is an answer);
+;;   * `bb accuracy --predictor emon-replay` over these documents holds its ratchet (the scoreboard's `emon-replay`).
+(def scan-dir "test/ocr/scan")
+(def scan-ids (when (fs/exists? scan-dir) (vec (sort (map fs/file-name (filter fs/directory? (fs/list-dir scan-dir)))))))
+
+(defn build-driver [script env what]
+  (let [r @(process {:out :string :err :string :extra-env env} script)]
+    (if (zero? (:exit r))
+      (str/trim (:out r))
+      (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
+
+(when (seq scan-ids)
+  (let [rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" {} "Rust"))
+        gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))]
+    (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
+    (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+    (when (and rdrv gdrv)
+      (let [drive (fn [drv & a] (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+                                  {:exit (:exit r) :out (:out r) :err (:err r)}))
+            same? (fn [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))]
+        (doseq [id scan-ids]
+          (let [pdf (abs (str "test/corpus/synth/scan/" id ".pdf"))
+                dir (abs (str scan-dir "/" id))
+                rr (drive rdrv "--out=bundle" (str "--replay=" dir) pdf)
+                rg (drive gdrv "--out=bundle" (str "--replay=" dir) pdf)
+                edn (slurp (str dir "/transcript.edn"))
+                tam (str work "/tamper-" id)]
+            (check (and (zero? (:exit rr)) (same? rr rg))
+                   id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle ("
+                   (count (:out rr)) " bytes: JSON, HTML, evidence)")
+            (check (and (str/includes? (:out rr) "\"ocr\":\"always\"") (str/includes? (:out rr) "\"kind\":\"scanned\"")
+                        (str/includes? (:out rr) "\"src\":[\"ocr\",\"infer\"]") (str/includes? (:out rr) "\"ocr-only\""))
+                   id ": the Model says where the text came from (settings.ocr, scanned pages, ocr sources, ocr-only)")
+            (check (and (str/includes? edn ":producer {:engine \"tesseract\"") (not (str/includes? edn ":bitmap")))
+                   id ": the transcript names its engine and carries no bitmap")
+            ;; a changed request
+            (fs/create-dirs tam)
+            (spit (str tam "/transcript.edn") (str/replace edn #"(:kind :ocr :req \[\d+ 3 \d+ \d+ )3 " (fn [[_ p]] (str p "4 "))))
+            (let [tr (drive rdrv "--out=bundle" (str "--replay=" tam) pdf)
+                  tg (drive gdrv "--out=bundle" (str "--replay=" tam) pdf)]
+              (check (and (not= edn (slurp (str tam "/transcript.edn")))
+                          (= 4 (:exit tr)) (= 4 (:exit tg))
+                          (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss"))
+                     id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines, nothing guessed"))
+            ;; no transcript, no port
+            (let [nr (drive rdrv "--out=bundle" pdf)
+                  ng (drive gdrv "--out=bundle" pdf)]
+              (check (and (zero? (:exit nr)) (same? nr ng) (not (str/includes? (:out nr) "\"ocr\":\"always\""))
+                          (not (str/includes? (:out nr) "\"kind\":\"scanned\"")))
+                     id ": with no engine the same scan converts to pages with no text, the same on both (`unsupported` is an answer)"))))
+        ;; the ratchet
+        (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay" "--variants" "scan"
+                          "--ids" (str/join "," scan-ids))]
+          (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-replay]") (not (str/includes? (:out r) "FAIL")))
+                 "accuracy[emon-replay]: the committed transcripts, replayed, hold their scoreboard entry"
+                 (when-let [l (some #(when (str/includes? % "accuracy[emon-replay]") (str/trim %)) (str/split-lines (:out r)))]
+                   (str " (" (str/replace l #"^ok +accuracy\[emon-replay\]: " "") ")"))))))))
 
 (when (pos? @fails) (System/exit 1))
 (when (and rust go (zero? @fails))

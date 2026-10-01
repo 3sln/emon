@@ -1,4 +1,4 @@
-;; The text layer's own triage and health, before any OCR (P7.0; SPEC 8.1, 8.4.5, 9.3 "without OCR", 9.4 rule 1, 9.7; D203, D208, D211-D213).
+;; The text layer's own triage and health, before any OCR (P7.0; SPEC 8.1, 8.4.5, 9.3 "without OCR", 9.4 rule 1, 9.7; D203, D208, D218-D220).
 ;; emon's own module (D039).
 ;;
 ;;   (th-run pg gl et mk fnt wd ln im epages feats fw fl fa hl sc)
@@ -9,7 +9,7 @@
 ;;   (th-write fa wd et ledger text tmp tt)
 ;;       after `fu-write`: the `fa` rows become ledger rows (a line's run of words of one reason is one row, its words joined by a space).
 ;;
-;; WHAT A WORD'S HEALTH IS, in per-mille components of its (font, page) pooled over the glyphs (D211): MAPPED (glyphs whose Unicode came
+;; WHAT A WORD'S HEALTH IS, in per-mille components of its (font, page) pooled over the glyphs (D218): MAPPED (glyphs whose Unicode came
 ;; from a `ToUnicode` or an encoding), GARBAGE (Private Use Area, control, U+FFFD or no code point), OVERLAP (the worst overlap of
 ;; neighbouring glyph boxes, a word's, averaged), GAP (the worst gap inside a word over the font's space width, averaged). The score is
 ;; the weighted harmonic mean of D150's shape: components 1000 - garbage, mapped, a ramp of the overlap and a ramp of the gap, each
@@ -173,7 +173,7 @@
 (defn ^:pub ^I32 ev-feat-text [^:mut ^Cells feats ^Cells epages ^Cells et ^Cells gl ^Cells fnt ^Cells mk
                                ^Cells wd ^Cells ln ^I32 w ^I32 l ^I32 dom ^I32 medh]
   (comment "Stage 1 features of text-layer word w, of line l (SPEC 8.4.5): a new `feats` row (answered; the caller points the flow's copy of the")
-  (comment "word at it: the interpreter's own `words` are the evidence and stay as they were, D213), columns")
+  (comment "word at it: the interpreter's own `words` are the evidence and stay as they were, D220), columns")
   (comment "2-9, 16, 17, 19-21, 28, 29 (18 is -1 until P4.2's size inventory; 10-15, 22-27 are later stages'; 13 is `th-health`'s).")
   (comment "2 glyphs mapped by ToUnicode or an encoding; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap")
   (comment "of neighbouring glyph boxes (a combining mark is not a neighbour); 5 the worst gap between a glyph's advance and the next origin,")
@@ -299,7 +299,7 @@
 (defn ^I32 th-set-aside [^Cells gl ^Cells mk ^Cells wd ^I32 w]
   (comment "The ledger reason of a word set aside as `invisible` (white, zero-size, transparent, off by an optional-content group,")
   (comment "occluded): `watermark` when it is also what a watermark is, an /Artifact of subtype Watermark or text on the diagonal")
-  (comment "(the page hides its watermark; it is still a watermark, as the furniture stage's geometry would have said, D212).")
+  (comment "(the page hides its watermark; it is still a watermark, as the furniture stage's geometry would have said, D219).")
   (let [^I32 g0 (wd-get wd w (wf-gfirst))
         ^I32 art (mk-artifact-of mk (gl-get gl g0 (gf-mark)))]
     (if (and (> art 0) (== (rem art 16) (as-watermark))) (return (dr-watermark)))
@@ -391,7 +391,7 @@
     (cells-set fl (+ (* l 16) 8) (cells-at fw (+ (* (+ first (- cnt 1)) 24) 8)))
     (return 0)))
 
-;; ------------------------------------------------------------- health (D211)
+;; ------------------------------------------------------------- health (D218)
 
 (defn ^I32 th-ramp [^I32 v ^I32 ok ^I32 bad]
   (comment "1000 up to `ok`, 0 from `bad`, linear between.")
@@ -567,6 +567,29 @@
                 (set l (+ l 1))))))
     (th-health feats fw hl)
     (return 0)))
+
+(defn ^:pub ^I32 th-append [^Cells wd ^Cells ln ^:mut ^Cells fw ^:mut ^Cells fl ^I32 l0]
+  (comment "The lines `l0` onward of `ln` (and their words), copied as they are onto the flow `fw`/`fl`: the OCR lines of the scanned")
+  (comment "pages (P6.5), which join `wd`/`ln` after the text layer's own and have no glyphs to triage. Answers the lines copied.")
+  (let [^I32 nl (ln-count ln)
+        ^:mut ^I32 l l0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 wend 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 lc 0
+        ^:mut ^I32 lrow 0]
+    (while (< l nl)
+      (do (set w (ln-get ln l (lh-first)))
+          (set lc (ln-get ln l (lh-count)))
+          (set wend (+ w lc))
+          (set first (fw-count fw))
+          (set lrow (fl-count fl))
+          (while (< w wend)
+            (do (fw-copy-word fw wd w lrow)
+                (set w (+ w 1))))
+          (fl-copy-line fl ln l first lc)
+          (set l (+ l 1))))
+    (return (- nl l0))))
 
 ;; ------------------------------------------------------------- the ledger (after `fu-write`)
 

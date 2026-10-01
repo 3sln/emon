@@ -49,6 +49,8 @@ public final class Tlhealthtest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells tmp = emon.Port.newCells();
         emon.Port.Cells tt = emon.Port.newCells();
+        emon.Port.Cells fw2 = emon.Port.newCells();
+        emon.Port.Cells fl2 = emon.Port.newCells();
         emon.Port.Src src = emon.Port.srcOfBlob(file);
         int o = Pdfdoc.pdOpen(src, ar, dc, a, b, st);
         int status = 0;
@@ -115,6 +117,10 @@ public final class Tlhealthtest {
         emon.Testport.assertEqAt(total, Player.fwCount(fw), "the lines hold every word", ctx);
         emon.Testport.assertThatAt(Player.flCount(fl) <= Evidence.lnCount(ln), "no line is made", ctx);
         emon.Testport.assertEqAt(Player.plCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the layer is sound", ctx);
+        // the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied
+        emon.Testport.assertEqAt(Tlhealth.thAppend(wd, ln, fw2, fl2, 0), Evidence.lnCount(ln), "every line is copied", ctx);
+        emon.Testport.assertEqAt(Player.fwCount(fw2), Evidence.wdCount(wd), "and every word", ctx);
+        emon.Testport.assertEqAt(Player.plCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the copy is sound", ctx);
         // the ledger
         rows = Tlhealth.thWrite(fa, wd, et, ledger, text, tmp, tt);
         emon.Testport.assertEqAt(rows, wantRows, "ledger rows", ctx);
@@ -163,7 +169,7 @@ public final class Tlhealthtest {
         ttFixture(0, emon.Testport.testFile("vis/spaces.pdf"), 2, 0, 2, 17);
     }
     public static void testAWatermarkInAnOptionalContentGroupIsStillAWatermark() {
-        // off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D212), as it did before the triage
+        // off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D219), as it did before the triage
         ttFixture(0, emon.Testport.testFile("corpus/synth/pdf/wm-ocg.pdf"), 2, 0, 2, 18);
     }
     public static void testAHiddenOcrLayerStays() {

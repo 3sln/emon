@@ -4,13 +4,16 @@
 (ns emon.rasterintest
   (:require [emon.lang :refer [I32 Cells Src]]
             [emon.test :refer [deftest assert-eq assert-that new-cells hex-blob]]
-            [emon.port :refer [cells-len cells-at src-of-blob]]
+            [emon.port :refer [cells-len cells-at cells-push src-of-blob]]
+            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
+            [emon.evidence :refer [wd-count wd-get ln-count ln-get ol-count ow-count or-count ep-new wf-size hd-tstart hd-tlen
+                                   lh-first lh-count lh-rot lh-y0 lh-y1]]
             [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
-                               us-requests pk-decode flt-none]]
+                               us-requests pk-decode pk-ocr flt-none an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
             [emon.model :refer [model-init node-flags node-attr-int-or page-count page-number page-w page-h
                                 page-kind page-dpi page-px-w page-px-h pk-image fl-dpi-unknown fk-pages]]
             [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-tiff rs-unit rs-cpt rs-undecodable
-                                   rs-unsupported]]
+                                   rs-unsupported rs-ocr-id]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -28,12 +31,19 @@
   (assert-eq (rs-cpt 2481 30000) 59544 "A4 at 300 dpi, rounded")
   (assert-eq (rs-cpt 1 100000000) 1 "never zero"))
 
-(defn ^I32 unit-of [^Cells ans ^Cells rq ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^I32 info]
+(defn ^I32 unit-pol [^Cells ans ^Cells rq ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^I32 info ^I32 policy
+                     ^Cells loc ^Cells mask ^Cells et ^Cells wd ^Cells ln ^Cells oruns ^Cells olines ^Cells owords]
   (let [^Cells regions (new-cells)
         ^Cells ledger (new-cells)
         ^Cells layout (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
-    (return (rs-unit (src-of-blob (hex-blob "49492a0008000000")) 7 (rs-tiff) info ans rq nodes attrs text pages))))
+    (return (rs-unit (src-of-blob (hex-blob "49492a0008000000")) 7 (rs-tiff) info ans rq nodes attrs text pages
+                     policy loc mask (new-cells) (new-cells) et (new-cells) (new-cells) oruns (new-cells) olines owords
+                     (new-cells) (new-cells) wd ln (new-cells)))))
+
+(defn ^I32 unit-of [^Cells ans ^Cells rq ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^I32 info]
+  (return (unit-pol ans rq nodes attrs text pages info 0 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                    (new-cells) (new-cells) (new-cells))))
 
 (deftest test-the-first-round-asks-for-frame-zero-and-nothing-more
   (let [^Cells ans (new-cells)
@@ -100,3 +110,99 @@
     (an-decode a3 1 10 10 1 0 0 2)
     (an-fail a3 (pk-decode) 2 (ps-failed))
     (assert-eq (unit-of a3 rq (new-cells) (new-cells) (new-cells) (new-cells) 0) (rs-undecodable) "a later frame that fails fails the unit")))
+
+;; ------------------------------------------------------------------------------------------------ OCR (P6.5, D211)
+
+(defn ^I32 fake-ocr [^Cells ans ^I32 id]
+  (comment "An OCR answer for one line holding the word \"Hi\": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.")
+  (let [^I32 at (an-ocr ans id)
+        ^I32 w (an-ocr-word ans at 10 20 30 40 900 0 0)]
+    (an-ocr-cp ans w 72)
+    (an-ocr-cp ans w 105)
+    (ox-begin ans 0 0 0 0 -1 0 -1 -1 1 1 0 0 0)
+    (ox-line ans 10 20 30 40 10 55 40 55 0 0 0 20 14 6)
+    (ox-block ans 10 20 30 40 0 0 0)
+    (let [^I32 x (ox-word ans 0 0 -1 0)
+          ^I32 s0 (ox-sym ans x 10 20 15 40 900)]
+      (ox-sym-cp ans s0 72)
+      (let [^I32 s1 (ox-sym ans x 25 20 15 40 900)]
+        (ox-sym-cp ans s1 105)))
+    (an-ocr-end ans at)
+    (return at)))
+
+(deftest test-with-the-policy-on-the-second-round-asks-for-ocr-of-the-decoded-frame
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)]
+    (an-decode ans 1 463 894 1 0 1 1)
+    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0 2 (new-cells) (new-cells)
+                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
+    (assert-eq (rec-kind rq 0) (pk-ocr) "an OCR request")
+    (assert-eq (rec-id rq 0) (rs-ocr-id 1 0) "after every decode's id")
+    (assert-eq (rec-id rq 0) 2 "one frame: id 2")
+    (assert-eq (rq-arg rq 0 0) 1 "of the bitmap of decode 1")
+    (assert-eq (rq-arg rq 0 1) 3 "psm 3")
+    (assert-eq (rq-arg rq 0 2) (+ 3 (* 300 256)) "symbols, OSD, and the 300 dpi it assumed as a hint")
+    (assert-eq (ocf-dpi (rq-arg rq 0 2)) 300 "read back")
+    (assert-eq (rq-arg rq 0 5) 0 "the whole bitmap")
+    (assert-eq (rq-nargs rq 0) 7 "and no language: no locale was given")))
+
+(deftest test-a-locale-hint-names-the-language
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells loc (new-cells)]
+    (cells-push loc 100)
+    (cells-push loc 101)
+    (cells-push loc 45)
+    (cells-push loc 67)
+    (cells-push loc 72)
+    (an-decode ans 1 463 894 1 20000 1 1)
+    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0 2 loc (new-cells)
+                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
+    (assert-eq (rq-arg rq 0 2) (+ 3 (* 200 256)) "the stated 200 dpi")
+    (assert-eq (rq-nargs rq 0) 8 "one language")
+    (assert-eq (rq-arg rq 0 7) 1684370688 "`de-CH` is `deu`")))
+
+(deftest test-never-and-the-header-only-form-ask-for-no-ocr
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells mask (new-cells)]
+    (an-decode ans 1 463 894 1 20000 1 1)
+    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0 0 (new-cells) mask
+                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) 0 "never: done")
+    (assert-eq (cells-len rq) 0 "no request")
+    (assert-eq (cells-at mask 0) 0 "the page was not OCR'd"))
+  (let [^Cells ans2 (new-cells)
+        ^Cells rq2 (new-cells)]
+    (an-decode ans2 1 463 894 1 20000 1 1)
+    (assert-eq (unit-pol ans2 rq2 (new-cells) (new-cells) (new-cells) (new-cells) 1 2 (new-cells) (new-cells)
+                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) 0 "intake: done")
+    (assert-eq (cells-len rq2) 0 "intake never asks for OCR")))
+
+(deftest test-an-ocr-answer-becomes-evidence-and-the-pipelines-lines
+  (let [^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells mask (new-cells)
+        ^Cells et (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells pages (new-cells)]
+    (an-decode ans 1 600 800 1 30000 1 1)
+    (fake-ocr ans 2)
+    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) pages 0 2 (new-cells) mask
+                         et wd ln oruns olines owords) 0 "done")
+    (assert-eq (cells-at mask 0) 1 "the page's text came from OCR")
+    (assert-eq (or-count oruns) 1 "one OCR run")
+    (assert-eq (ol-count olines) 1 "one OCR line")
+    (assert-eq (ow-count owords) 1 "one OCR word")
+    (assert-eq (ln-count ln) 1 "one line for the pipeline")
+    (assert-eq (wd-count wd) 1 "one word for the pipeline")
+    (assert-eq (wd-get wd 0 (hd-tlen)) 2 "its text is `Hi`")
+    (assert-eq (wd-get wd 0 (wf-size)) 1117 "the line's size: (x-height 20 + ascenders 14 px at 24 cpt) / 0.73")
+    (assert-eq (ln-get ln 0 (lh-first)) 0 "the line's first word")
+    (assert-eq (ln-get ln 0 (lh-count)) 1 "and its one word")
+    (assert-eq (ln-get ln 0 (lh-rot)) 0 "upright")
+    (assert-eq (ln-get ln 0 (lh-y0)) (- (* 55 24) (* 34 24)) "the box's top is the baseline less x-height and ascenders")
+    (assert-eq (ln-get ln 0 (lh-y1)) (+ (* 55 24) (* 6 24)) "and its bottom the baseline plus descenders")))

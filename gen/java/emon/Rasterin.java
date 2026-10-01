@@ -106,10 +106,42 @@ public final class Rasterin {
         Model.nodeSetAttrText(nodes, attrs, 0, Model.fkFormat(), start, emon.Port.cellsLen(text) - start);
         return 0;
     }
-    public static int rsUnit(emon.Port.Src src, int input, int fmt, int info, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages) {
-        // One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the
-        // host. Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's
-        // `format` and `pages` and one page row per frame written.
+    public static int rsEffDpi100(int dpi100) {
+        // The resolution a frame is read at: its own, or 300 dpi when it states none.
+        if (dpi100 <= 0) {
+            return rsDefaultDpi100();
+        }
+        return dpi100;
+    }
+    public static int rsOcrId(int frames, int f) {
+        // The request id of the OCR of frame `f` of a `frames`-frame input: after every decode's.
+        return (frames + f) + 1;
+    }
+    public static int rsWantOcr(int info, int policy) {
+        // 1 when this attempt asks for OCR: not a header-only intake, and the policy is not `never`.
+        if (info == 1) {
+            return 0;
+        }
+        if (policy == 0) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int rsReadPage(emon.Port.Cells ans, int ao, int ad, int page, int oid, emon.Port.Cells loc, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr) {
+        // The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).
+        int w = Plan.anArg(ans, ad, 0);
+        int h = Plan.anArg(ans, ad, 1);
+        int eff = rsEffDpi100(Plan.anArg(ans, ad, 3));
+        int wc = rsCpt(w, eff);
+        int hc = rsCpt(h, eff);
+        return Scan.scPage(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, Scan.scLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+    }
+    public static int rsUnit(emon.Port.Src src, int input, int fmt, int info, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr) {
+        // One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are
+        // the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points
+        // (empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and
+        // `pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and
+        // `lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.
         int nbytes = Pdfsrc.psLen(src);
         int a0 = Plan.anFind(ans, 1);
         if (a0 < 0) {
@@ -120,8 +152,11 @@ public final class Rasterin {
             return rsFail(ans, a0);
         }
         int frames = Plan.anArg(ans, a0, 5);
+        int want = rsWantOcr(info, policy);
         int f = 1;
         int asked = 0;
+        int da = 0;
+        int dd = 0;
         if (frames < 1) {
             return rsUndecodable();
         }
@@ -135,11 +170,26 @@ public final class Rasterin {
             }
             f += 1;
         }
+        if (want == 1) {
+            f = 0;
+            while (f < frames) {
+                da = Plan.anFind(ans, f + 1);
+                if ((da >= 0) && (Plan.anFind(ans, rsOcrId(frames, f)) < 0)) {
+                    if (Plan.anOk(ans, da) == 1) {
+                        dd = rsEffDpi100(Plan.anArg(ans, da, 3));
+                        Scan.scRequest(rq, rsOcrId(frames, f), f + 1, (dd + 50) / 100, loc);
+                        asked = 1;
+                    }
+                }
+                f += 1;
+            }
+        }
         if (asked == 1) {
             return Plan.usRequests();
         }
         rsFormatName(nodes, attrs, text, fmt);
         Model.nodeSetAttrInt(nodes, attrs, 0, Model.fkPages(), frames);
+        emon.Port.cellsDrop(mask, 0);
         f = 0;
         while (f < frames) {
             int a = Plan.anFind(ans, f + 1);
@@ -162,7 +212,22 @@ public final class Rasterin {
             }
             int p = Model.pageNew(pages, f + 1, rsCpt(w, eff), rsCpt(h, eff), 0, Model.pkImage());
             Model.pageSetResolution(pages, p, (dpi100 + 50) / 100, w, h);
+            emon.Port.cellsPush(mask, 0);
             f += 1;
+        }
+        if (want == 1) {
+            f = 0;
+            while (f < frames) {
+                da = Plan.anFind(ans, rsOcrId(frames, f));
+                if (da >= 0) {
+                    if (Plan.anOk(ans, da) == 1) {
+                        dd = Plan.anFind(ans, f + 1);
+                        rsReadPage(ans, da, dd, f + 1, rsOcrId(frames, f), loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+                        emon.Port.cellsSet(mask, f, 1);
+                    }
+                }
+                f += 1;
+            }
         }
         return 0;
     }

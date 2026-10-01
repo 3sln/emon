@@ -49,6 +49,8 @@ public static class Tlhealthtest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells tmp = emon.Port.NewCells();
         emon.Port.Cells tt = emon.Port.NewCells();
+        emon.Port.Cells fw2 = emon.Port.NewCells();
+        emon.Port.Cells fl2 = emon.Port.NewCells();
         emon.Port.Src src = emon.Port.SrcOfBlob(file);
         int o = Pdfdoc.PdOpen(src, ar, dc, a, b, st);
         int status = 0;
@@ -115,6 +117,10 @@ public static class Tlhealthtest {
         emon.Testport.AssertEqAt(total, Player.FwCount(fw), "the lines hold every word", ctx);
         emon.Testport.AssertThatAt(Player.FlCount(fl) <= Evidence.LnCount(ln), "no line is made", ctx);
         emon.Testport.AssertEqAt(Player.PlCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the layer is sound", ctx);
+        // the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied
+        emon.Testport.AssertEqAt(Tlhealth.ThAppend(wd, ln, fw2, fl2, 0), Evidence.LnCount(ln), "every line is copied", ctx);
+        emon.Testport.AssertEqAt(Player.FwCount(fw2), Evidence.WdCount(wd), "and every word", ctx);
+        emon.Testport.AssertEqAt(Player.PlCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the copy is sound", ctx);
         // the ledger
         rows = Tlhealth.ThWrite(fa, wd, et, ledger, text, tmp, tt);
         emon.Testport.AssertEqAt(rows, wantRows, "ledger rows", ctx);
@@ -169,7 +175,7 @@ public static class Tlhealthtest {
     }
     [Xunit.Fact]
     public static void TestAWatermarkInAnOptionalContentGroupIsStillAWatermark() {
-        // off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D212), as it did before the triage
+        // off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D219), as it did before the triage
         TtFixture(0, emon.Testport.TestFile("corpus/synth/pdf/wm-ocg.pdf"), 2, 0, 2, 18);
     }
     [Xunit.Fact]

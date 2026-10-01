@@ -222,7 +222,7 @@ func thLineMedian(wd *port.Cells, first int32, cnt int32) int32 {
 
 func EvFeatText(feats *port.Cells, epages *port.Cells, et *port.Cells, gl *port.Cells, fnt *port.Cells, mk *port.Cells, wd *port.Cells, ln *port.Cells, w int32, l int32, dom int32, medh int32) int32 {
 	// Stage 1 features of text-layer word w, of line l (SPEC 8.4.5): a new `feats` row (answered; the caller points the flow's copy of the
-	// word at it: the interpreter's own `words` are the evidence and stay as they were, D213), columns
+	// word at it: the interpreter's own `words` are the evidence and stay as they were, D220), columns
 	// 2-9, 16, 17, 19-21, 28, 29 (18 is -1 until P4.2's size inventory; 10-15, 22-27 are later stages'; 13 is `th-health`'s).
 	// 2 glyphs mapped by ToUnicode or an encoding; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap
 	// of neighbouring glyph boxes (a combining mark is not a neighbour); 5 the worst gap between a glyph's advance and the next origin,
@@ -393,7 +393,7 @@ func thDiagonal(rot int32) int32 {
 func thSetAside(gl *port.Cells, mk *port.Cells, wd *port.Cells, w int32) int32 {
 	// The ledger reason of a word set aside as `invisible` (white, zero-size, transparent, off by an optional-content group,
 	// occluded): `watermark` when it is also what a watermark is, an /Artifact of subtype Watermark or text on the diagonal
-	// (the page hides its watermark; it is still a watermark, as the furniture stage's geometry would have said, D212).
+	// (the page hides its watermark; it is still a watermark, as the furniture stage's geometry would have said, D219).
 	var g0 int32 = evidence.WdGet(wd, w, evidence.WfGfirst())
 	var art int32 = evidence.MkArtifactOf(mk, evidence.GlGet(gl, g0, evidence.GfMark()))
 	if (art > 0) && ((art % 16) == evidence.AsWatermark()) {
@@ -741,6 +741,32 @@ func ThRun(pg *port.Cells, gl *port.Cells, et *port.Cells, mk *port.Cells, fnt *
 	}
 	ThHealth(feats, fw, hl)
 	return 0
+}
+
+func ThAppend(wd *port.Cells, ln *port.Cells, fw *port.Cells, fl *port.Cells, l0 int32) int32 {
+	// The lines `l0` onward of `ln` (and their words), copied as they are onto the flow `fw`/`fl`: the OCR lines of the scanned
+	// pages (P6.5), which join `wd`/`ln` after the text layer's own and have no glyphs to triage. Answers the lines copied.
+	var nl int32 = evidence.LnCount(ln)
+	var l int32 = l0
+	var w int32 = 0
+	var wend int32 = 0
+	var first int32 = 0
+	var lc int32 = 0
+	var lrow int32 = 0
+	for l < nl {
+		w = evidence.LnGet(ln, l, evidence.LhFirst())
+		lc = evidence.LnGet(ln, l, evidence.LhCount())
+		wend = w + lc
+		first = player.FwCount(fw)
+		lrow = player.FlCount(fl)
+		for w < wend {
+			player.FwCopyWord(fw, wd, w, lrow)
+			w += 1
+		}
+		player.FlCopyLine(fl, ln, l, first, lc)
+		l += 1
+	}
+	return nl - l0
 }
 
 func ThWrite(fa *port.Cells, wd *port.Cells, et *port.Cells, ledger *port.Cells, text *port.Cells, tmp *port.Cells, tt *port.Cells) int32 {

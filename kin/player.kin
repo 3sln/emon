@@ -12,7 +12,7 @@
 ;;
 ;;   cgf- cg  fvf- fv  faf- fa  fxf- fx  hlf- hl  slf- sl
 ;;
-;; WHAT DIFFERS FROM THE SPEC'S TABLE (D211): `cg`'s `tlines` reference is ONE cell (its arena is known), which is what makes the
+;; WHAT DIFFERS FROM THE SPEC'S TABLE (D218): `cg`'s `tlines` reference is ONE cell (its arena is known), which is what makes the
 ;; stride 16 hold the three runs, two similarities and the flags; `fa` has one spare cell, not two (its reference is two cells).
 ;;
 ;; APPEND (`pl-append`): a page's arenas, and its own `etext` and `refs` (the text of its OCR-won words, the references of its

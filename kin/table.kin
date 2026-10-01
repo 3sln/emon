@@ -1140,10 +1140,11 @@
     (set i 0)
     (while (< i n)
       (do (let [^I32 w0i (cells-at wl i)
-                ^I32 ref (wd-get wd w0i (hd-by1))
                 ^I32 tol (quot (* 3 (tb-max 500 (wd-get wd w0i (wf-size)))) 10)]
+            (comment "A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline")
+            (comment "order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).")
             (set j (+ i 1))
-            (while (and (< j n) (<= (tb-abs (- (wd-get wd (cells-at wl j) (hd-by1)) ref)) tol))
+            (while (and (< j n) (<= (tb-abs (- (wd-get wd (cells-at wl j) (hd-by1)) (wd-get wd (cells-at wl (- j 1)) (hd-by1)))) tol))
               (set j (+ j 1)))
             (tb-sort-words wl wd i j 1)
             ;; the row

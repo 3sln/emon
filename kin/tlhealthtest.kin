@@ -1,4 +1,4 @@
-;; Laws for `emon.tlhealth` (P7.0; SPEC 8.1, 8.4.5, 9.3, 9.7; D203, D208, D211-D213), on every target.
+;; Laws for `emon.tlhealth` (P7.0; SPEC 8.1, 8.4.5, 9.3, 9.7; D203, D208, D218-D220), on every target.
 ;;
 ;; THE FIXTURES are P3.6's (test/vis/, whose by-hand expectations `emon.pdfvistest` holds the classifications to) and P6.6's
 ;; broken-encoding documents (test/corpus/synth/pdf/tl-broken-*.pdf): each is run as the Engine runs it (`pd-open`,
@@ -22,7 +22,7 @@
             [emon.evidence :refer [gl-get wd-get wd-count ln-count ln-get fe-get ep-get ep-count
                                    wf-gfirst gf-vis xt-vis xt-length epf-width epf-height vz-occluded]]
             [emon.player :refer [fw-count fl-count fa-count fa-get hl-count hl-get hlf-score hlf-mapped hlf-garbage pl-check]]
-            [emon.tlhealth :refer [th-run th-write th-score th-trusted th-auto-health]]
+            [emon.tlhealth :refer [th-run th-write th-append th-score th-trusted th-auto-health]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and]]))
 
@@ -70,6 +70,8 @@
         ^Cells text (new-cells)
         ^Cells tmp (new-cells)
         ^Cells tt (new-cells)
+        ^Cells fw2 (new-cells)
+        ^Cells fl2 (new-cells)
         ^Src src (src-of-blob file)
         ^I32 o (pd-open src ar dc a b st)
         ^:mut ^I32 status 0
@@ -125,6 +127,10 @@
     (assert-eq-at total (fw-count fw) "the lines hold every word" ctx)
     (assert-that-at (<= (fl-count fl) (ln-count ln)) "no line is made" ctx)
     (assert-eq-at (pl-check cg fw fl fv fa fx hl fpa sl et refs gl) 0 "the layer is sound" ctx)
+    (comment "the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied")
+    (assert-eq-at (th-append wd ln fw2 fl2 0) (ln-count ln) "every line is copied" ctx)
+    (assert-eq-at (fw-count fw2) (wd-count wd) "and every word" ctx)
+    (assert-eq-at (pl-check cg fw2 fl2 fv fa fx hl fpa sl et refs gl) 0 "the copy is sound" ctx)
     (comment "the ledger")
     (set rows (th-write fa wd et ledger text tmp tt))
     (assert-eq-at rows want-rows "ledger rows" ctx)
@@ -173,7 +179,7 @@
   (tt-fixture (test-t) (test-file "vis/spaces.pdf") 2 0 2 17))
 
 (deftest test-a-watermark-in-an-optional-content-group-is-still-a-watermark
-  (comment "off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D212), as it did before the triage")
+  (comment "off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D219), as it did before the triage")
   (tt-fixture (test-t) (test-file "corpus/synth/pdf/wm-ocg.pdf") 2 0 2 18))
 
 (deftest test-a-hidden-ocr-layer-stays

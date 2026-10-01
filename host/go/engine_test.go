@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	_ "emon/pngenc" // the canonical PNG writer: a transcript's files need it
+	"emon/ocr"
+	"emon/plan"
 	"emon/port"
 )
 
@@ -541,9 +543,11 @@ func TestAnImageBecomesPagesAndAMultiPageTiffSeveral(t *testing.T) {
 	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
 		t.Errorf("pages %v, want %v", got, want)
 	}
-	// the body of an image page is empty until OCR is wired (P6.5)
-	if len(m.Root().Children()) != 0 {
-		t.Error("an image page has text before OCR")
+	// with no Ocr port an image page has no text: the body is the page milestones the paragraph stage writes between pages (P6.5)
+	for _, c := range m.Root().Children() {
+		if c.Kind().Name() != "break" {
+			t.Errorf("an image page has a %s with no OCR port", c.Kind().Name())
+		}
 	}
 }
 
@@ -563,13 +567,20 @@ func TestAnImageRecordsItsPixelsAndReplaysWithoutACodec(t *testing.T) {
 	in := imageFx(t, "tiff-multi3-gray-none.tif")
 	m, tr, err := e.Record(one(BytesInput(in)), DefaultOptions())
 	m = must(t, m, err)
-	// three decode requests, round two asking for frames 1 and 2 together; each answer carries its bitmap
-	if len(tr.Entries) != 3 || tr.Entries[0].Round != 0 || tr.Entries[1].Round != 1 || tr.Entries[2].Round != 1 {
+	// three decode requests, round two asking for frames 1 and 2 together (and for OCR of frame 0), each decode answer carrying
+	// its bitmap; then OCR of frames 1 and 2 (P6.5, D211): no Ocr port is configured, so each is answered `unsupported`
+	if len(tr.Entries) != 6 {
 		t.Fatalf("entries: %d", len(tr.Entries))
 	}
-	for _, en := range tr.Entries {
-		if en.Bitmap == nil {
-			t.Error("an answer without its pixels")
+	for i, want := range [][2]int32{{0, 2}, {1, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 3}} {
+		if tr.Entries[i].Round != want[0] || tr.Entries[i].Req[1] != want[1] {
+			t.Errorf("entry %d: round %d kind %d", i, tr.Entries[i].Round, tr.Entries[i].Req[1])
+		}
+		if (tr.Entries[i].Req[1] == 2) != (tr.Entries[i].Bitmap != nil) {
+			t.Errorf("entry %d: a decode keeps its pixels and an unsupported OCR has none", i)
+		}
+		if tr.Entries[i].Req[1] == 3 && tr.Entries[i].Ans[3] != 2 {
+			t.Errorf("entry %d: OCR without a port is `unsupported`", i)
 		}
 	}
 	// the transcript's files survive a round trip (the pixels as canonical PNG), and replaying them gives the same Model
@@ -593,6 +604,140 @@ func TestAnImageRecordsItsPixelsAndReplaysWithoutACodec(t *testing.T) {
 	c, err := e.Convert(one(BytesInput(in)), DefaultOptions())
 	if c = must(t, c, err); js(c) != js(m) {
 		t.Error("convert differs from record")
+	}
+}
+
+// ------------------------------------------------------------------------------------- OCR (P6.5, D211-D216)
+//
+// A FAKE `Ocr` port: it answers every request with the word `Hello` in one line, through the same kin builders a real engine's
+// adapter uses, so the whole path (the request kin builds, the answer kin reads, the evidence, the pipeline's lines, the Model's
+// provenance) runs without Tesseract. What the real engine does to a real page is `bb ocr` (a replayed transcript) and `bb ocr-live`.
+type fakeOcr struct{}
+
+func (fakeOcr) Fulfil(req port.PlanRequest, _ port.PlanBitmaps, _ bool) (port.PlanAnswer, error) {
+	c := port.NewCells()
+	at := plan.AnOcr(c, req.ID())
+	w := plan.AnOcrWord(c, at, 10, 10, 100, 30, 900, 0, 0)
+	for _, ch := range "Hello" {
+		plan.AnOcrCp(c, w, int32(ch))
+	}
+	ocr.OxBegin(c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0)
+	ocr.OxLine(c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6)
+	ocr.OxBlock(c, 10, 10, 100, 30, 0, 0, 0)
+	ocr.OxWord(c, 0, 0, -1, 0)
+	plan.AnOcrEnd(c, at)
+	return port.PlanAnswer{Rec: cellsVec(c)}, nil
+}
+
+func (fakeOcr) Producer() [][2]string { return [][2]string{{"engine", "fake"}} }
+
+func withOcr() *Engine {
+	c := DefaultConfig()
+	c.Ocr = fakeOcr{}
+	return NewEngine(c)
+}
+
+func kinds(tr *Transcript) []int32 {
+	var k []int32
+	for _, en := range tr.Entries {
+		k = append(k, en.Req[1])
+	}
+	return k
+}
+
+func TestAnImageIsReadByTheOcrPortAndItsTranscriptReplaysWithoutIt(t *testing.T) {
+	in := imageFx(t, "png-phys300.png")
+	o := DefaultOptions()
+	m, tr, err := withOcr().Record(one(BytesInput(in)), o)
+	m = must(t, m, err)
+	j := js(m)
+	for _, want := range []string{`"text": "Hello"`, `"ocr": "always"`, `"ocr-only"`} {
+		if !strings.Contains(j, want) {
+			t.Errorf("%s is not in %s", want, j)
+		}
+	}
+	// decode, then ocr; the transcript says whose engine answered
+	if k := kinds(tr); len(k) != 2 || k[0] != 2 || k[1] != 3 {
+		t.Errorf("kinds %v", k)
+	}
+	if len(tr.Producer) != 1 || tr.Producer[0] != [2]string{"engine", "fake"} {
+		t.Errorf("producer %v", tr.Producer)
+	}
+	// a replay needs no port, and gives the same Model; the files of the transcript survive a round trip
+	files := map[string][]byte{}
+	for _, f := range tr.ToFiles() {
+		files[f.Name] = f.Bytes
+	}
+	if !strings.Contains(string(files["transcript.edn"]), `:producer {:engine "fake"}`) {
+		t.Errorf("the producer is not in the file: %s", files["transcript.edn"])
+	}
+	t2, err := port.TranscriptFromFiles(files)
+	if err != nil || len(t2.Producer) != 1 {
+		t.Fatalf("%v %v", err, t2)
+	}
+	r, err := NewEngine(DefaultConfig()).Replay(one(BytesInput(in)), o, t2)
+	if js(must(t, r, err)) != j {
+		t.Error("the replay differs from the recording")
+	}
+	// `never` asks for nothing: no OCR request, no text and no setting
+	never := o
+	never.Ocr = OcrNever
+	mn, tn, err := withOcr().Record(one(BytesInput(in)), never)
+	jn := js(must(t, mn, err))
+	if k := kinds(tn); len(k) != 1 || k[0] != 2 || strings.Contains(jn, "Hello") || strings.Contains(jn, `"ocr"`) {
+		t.Errorf("never: %v %s", k, jn)
+	}
+	// with no port the request is answered `unsupported` and the page has no text, as before OCR existed
+	mp, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(in)), o)
+	if js(must(t, mp, err)) != jn {
+		t.Error("no port is not `never`")
+	}
+}
+
+func TestAScannedPDFPageIsOcredAndABornDigitalOneKeepsItsTextLayer(t *testing.T) {
+	scan := read(t, "test/corpus/synth/scan/h-keyword.pdf")
+	o := DefaultOptions()
+	m, tr, err := withOcr().Record(one(BytesInput(scan)), o)
+	m = must(t, m, err)
+	// the stream's own bytes (filter DCT, kind 2), then OCR of that bitmap (kind 3): two rounds
+	if k := kinds(tr); len(k) != 2 || k[0] != 2 || k[1] != 3 || tr.Entries[0].Round != 0 || tr.Entries[1].Round != 1 {
+		t.Fatalf("kinds %v", k)
+	}
+	if tr.Entries[0].Req[6] != 1 || tr.Entries[0].Bitmap == nil {
+		t.Error("the DCT filter, with the pixels an engine will read")
+	}
+	j := js(m)
+	if !strings.Contains(j, `"kind": "scanned"`) || !strings.Contains(j, "Hello") {
+		t.Errorf("%s", j)
+	}
+	files := map[string][]byte{}
+	for _, f := range tr.ToFiles() {
+		files[f.Name] = f.Bytes
+	}
+	t2, err := port.TranscriptFromFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewEngine(DefaultConfig()).Replay(one(BytesInput(scan)), o, t2)
+	if js(must(t, r, err)) != j {
+		t.Error("the replay differs from the recording")
+	}
+	// no port: the page is there and has no text, and the Model says nothing about OCR
+	mn, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(scan)), o)
+	none := js(must(t, mn, err))
+	if strings.Contains(none, "Hello") || strings.Contains(none, `"ocr"`) || !strings.Contains(none, `"kind": "vector"`) {
+		t.Errorf("%s", none)
+	}
+	// a born-digital page keeps its text layer under `always`: no request, the same Model with or without a port (D212)
+	born := synth(t, "h-plain")
+	mb, tb, err := withOcr().Record(one(BytesInput(born)), o)
+	mb = must(t, mb, err)
+	if len(tb.Entries) != 0 {
+		t.Error("a text layer is read as it is: nothing is asked")
+	}
+	mp, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(born)), o)
+	if js(must(t, mp, err)) != js(mb) {
+		t.Error("the port changed a born-digital Model")
 	}
 }
 

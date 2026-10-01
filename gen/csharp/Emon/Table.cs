@@ -1316,10 +1316,11 @@ public static class Table {
         i = 0;
         while (i < n) {
             int w0i = emon.Port.CellsAt(wl, i);
-            int @ref = Evidence.WdGet(wd, w0i, Evidence.HdBy1());
             int tol = (3 * TbMax(500, Evidence.WdGet(wd, w0i, Evidence.WfSize()))) / 10;
+            // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
+            // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
             j = i + 1;
-            while ((j < n) && (TbAbs(Evidence.WdGet(wd, emon.Port.CellsAt(wl, j), Evidence.HdBy1()) - @ref) <= tol)) {
+            while ((j < n) && (TbAbs(Evidence.WdGet(wd, emon.Port.CellsAt(wl, j), Evidence.HdBy1()) - Evidence.WdGet(wd, emon.Port.CellsAt(wl, j - 1), Evidence.HdBy1())) <= tol)) {
                 j += 1;
             }
             TbSortWords(wl, wd, i, j, 1);

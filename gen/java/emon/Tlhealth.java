@@ -198,7 +198,7 @@ public final class Tlhealth {
     }
     public static int evFeatText(emon.Port.Cells feats, emon.Port.Cells epages, emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells fnt, emon.Port.Cells mk, emon.Port.Cells wd, emon.Port.Cells ln, int w, int l, int dom, int medh) {
         // Stage 1 features of text-layer word w, of line l (SPEC 8.4.5): a new `feats` row (answered; the caller points the flow's copy of the
-        // word at it: the interpreter's own `words` are the evidence and stay as they were, D213), columns
+        // word at it: the interpreter's own `words` are the evidence and stay as they were, D220), columns
         // 2-9, 16, 17, 19-21, 28, 29 (18 is -1 until P4.2's size inventory; 10-15, 22-27 are later stages'; 13 is `th-health`'s).
         // 2 glyphs mapped by ToUnicode or an encoding; 3 glyphs that are PUA, control, U+FFFD or have no code point; 4 the worst overlap
         // of neighbouring glyph boxes (a combining mark is not a neighbour); 5 the worst gap between a glyph's advance and the next origin,
@@ -367,7 +367,7 @@ public final class Tlhealth {
     public static int thSetAside(emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells wd, int w) {
         // The ledger reason of a word set aside as `invisible` (white, zero-size, transparent, off by an optional-content group,
         // occluded): `watermark` when it is also what a watermark is, an /Artifact of subtype Watermark or text on the diagonal
-        // (the page hides its watermark; it is still a watermark, as the furniture stage's geometry would have said, D212).
+        // (the page hides its watermark; it is still a watermark, as the furniture stage's geometry would have said, D219).
         int g0 = Evidence.wdGet(wd, w, Evidence.wfGfirst());
         int art = Evidence.mkArtifactOf(mk, Evidence.glGet(gl, g0, Evidence.gfMark()));
         if ((art > 0) && ((art % 16) == Evidence.asWatermark())) {
@@ -704,6 +704,31 @@ public final class Tlhealth {
         }
         thHealth(feats, fw, hl);
         return 0;
+    }
+    public static int thAppend(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells fw, emon.Port.Cells fl, int l0) {
+        // The lines `l0` onward of `ln` (and their words), copied as they are onto the flow `fw`/`fl`: the OCR lines of the scanned
+        // pages (P6.5), which join `wd`/`ln` after the text layer's own and have no glyphs to triage. Answers the lines copied.
+        int nl = Evidence.lnCount(ln);
+        int l = l0;
+        int w = 0;
+        int wend = 0;
+        int first = 0;
+        int lc = 0;
+        int lrow = 0;
+        while (l < nl) {
+            w = Evidence.lnGet(ln, l, Evidence.lhFirst());
+            lc = Evidence.lnGet(ln, l, Evidence.lhCount());
+            wend = w + lc;
+            first = Player.fwCount(fw);
+            lrow = Player.flCount(fl);
+            while (w < wend) {
+                Player.fwCopyWord(fw, wd, w, lrow);
+                w += 1;
+            }
+            Player.flCopyLine(fl, ln, l, first, lc);
+            l += 1;
+        }
+        return nl - l0;
     }
     public static int thWrite(emon.Port.Cells fa, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ledger, emon.Port.Cells text, emon.Port.Cells tmp, emon.Port.Cells tt) {
         // The set-aside words as ledger rows: a run of `fa` rows of one reason, page and line is ONE row, its box the union of theirs,

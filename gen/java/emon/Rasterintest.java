@@ -19,12 +19,15 @@ public final class Rasterintest {
         emon.Testport.assertEq(Rasterin.rsCpt(2481, 30000), 59544, "A4 at 300 dpi, rounded");
         emon.Testport.assertEq(Rasterin.rsCpt(1, 100000000), 1, "never zero");
     }
-    public static int unitOf(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, int info) {
+    public static int unitPol(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, int info, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
         emon.Port.Cells regions = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
         emon.Port.Cells layout = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
-        return Rasterin.rsUnit(emon.Port.srcOfBlob(emon.Testport.hexBlob("49492a0008000000")), 7, Rasterin.rsTiff(), info, ans, rq, nodes, attrs, text, pages);
+        return Rasterin.rsUnit(emon.Port.srcOfBlob(emon.Testport.hexBlob("49492a0008000000")), 7, Rasterin.rsTiff(), info, ans, rq, nodes, attrs, text, pages, policy, loc, mask, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells());
+    }
+    public static int unitOf(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, int info) {
+        return unitPol(ans, rq, nodes, attrs, text, pages, info, 0, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
     }
     public static void testTheFirstRoundAsksForFrameZeroAndNothingMore() {
         emon.Port.Cells ans = emon.Port.newCells();
@@ -91,5 +94,94 @@ public final class Rasterintest {
         Plan.anDecode(a3, 1, 10, 10, 1, 0, 0, 2);
         Plan.anFail(a3, Plan.pkDecode(), 2, Plan.psFailed());
         emon.Testport.assertEq(unitOf(a3, rq, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 0), Rasterin.rsUndecodable(), "a later frame that fails fails the unit");
+    }
+    public static int fakeOcr(emon.Port.Cells ans, int id) {
+        // An OCR answer for one line holding the word "Hi": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.
+        int at = Plan.anOcr(ans, id);
+        int w = Plan.anOcrWord(ans, at, 10, 20, 30, 40, 900, 0, 0);
+        Plan.anOcrCp(ans, w, 72);
+        Plan.anOcrCp(ans, w, 105);
+        Ocr.oxBegin(ans, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
+        Ocr.oxLine(ans, 10, 20, 30, 40, 10, 55, 40, 55, 0, 0, 0, 20, 14, 6);
+        Ocr.oxBlock(ans, 10, 20, 30, 40, 0, 0, 0);
+        int x = Ocr.oxWord(ans, 0, 0, -1, 0);
+        int s0 = Ocr.oxSym(ans, x, 10, 20, 15, 40, 900);
+        Ocr.oxSymCp(ans, s0, 72);
+        int s1 = Ocr.oxSym(ans, x, 25, 20, 15, 40, 900);
+        Ocr.oxSymCp(ans, s1, 105);
+        Plan.anOcrEnd(ans, at);
+        return at;
+    }
+    public static void testWithThePolicyOnTheSecondRoundAsksForOcrOfTheDecodedFrame() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        Plan.anDecode(ans, 1, 463, 894, 1, 0, 1, 1);
+        emon.Testport.assertEq(unitPol(ans, rq, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 0, 2, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), Plan.usRequests(), "it asks");
+        emon.Testport.assertEq(Plan.recKind(rq, 0), Plan.pkOcr(), "an OCR request");
+        emon.Testport.assertEq(Plan.recId(rq, 0), Rasterin.rsOcrId(1, 0), "after every decode's id");
+        emon.Testport.assertEq(Plan.recId(rq, 0), 2, "one frame: id 2");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), 1, "of the bitmap of decode 1");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 3, "psm 3");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 2), 3 + (300 * 256), "symbols, OSD, and the 300 dpi it assumed as a hint");
+        emon.Testport.assertEq(Ocr.ocfDpi(Plan.rqArg(rq, 0, 2)), 300, "read back");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 5), 0, "the whole bitmap");
+        emon.Testport.assertEq(Plan.rqNargs(rq, 0), 7, "and no language: no locale was given");
+    }
+    public static void testALocaleHintNamesTheLanguage() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells loc = emon.Port.newCells();
+        emon.Port.cellsPush(loc, 100);
+        emon.Port.cellsPush(loc, 101);
+        emon.Port.cellsPush(loc, 45);
+        emon.Port.cellsPush(loc, 67);
+        emon.Port.cellsPush(loc, 72);
+        Plan.anDecode(ans, 1, 463, 894, 1, 20000, 1, 1);
+        emon.Testport.assertEq(unitPol(ans, rq, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 0, 2, loc, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), Plan.usRequests(), "it asks");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 2), 3 + (200 * 256), "the stated 200 dpi");
+        emon.Testport.assertEq(Plan.rqNargs(rq, 0), 8, "one language");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 7), 1684370688, "`de-CH` is `deu`");
+    }
+    public static void testNeverAndTheHeaderOnlyFormAskForNoOcr() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        Plan.anDecode(ans, 1, 463, 894, 1, 20000, 1, 1);
+        emon.Testport.assertEq(unitPol(ans, rq, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 0, 0, emon.Port.newCells(), mask, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "never: done");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq), 0, "no request");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 0, "the page was not OCR'd");
+        emon.Port.Cells ans2 = emon.Port.newCells();
+        emon.Port.Cells rq2 = emon.Port.newCells();
+        Plan.anDecode(ans2, 1, 463, 894, 1, 20000, 1, 1);
+        emon.Testport.assertEq(unitPol(ans2, rq2, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 1, 2, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "intake: done");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq2), 0, "intake never asks for OCR");
+    }
+    public static void testAnOcrAnswerBecomesEvidenceAndThePipelinesLines() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        Plan.anDecode(ans, 1, 600, 800, 1, 30000, 1, 1);
+        fakeOcr(ans, 2);
+        emon.Testport.assertEq(unitPol(ans, rq, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, 0, 2, emon.Port.newCells(), mask, et, wd, ln, oruns, olines, owords), 0, "done");
+        emon.Testport.assertEq(emon.Port.cellsAt(mask, 0), 1, "the page's text came from OCR");
+        emon.Testport.assertEq(Evidence.orCount(oruns), 1, "one OCR run");
+        emon.Testport.assertEq(Evidence.olCount(olines), 1, "one OCR line");
+        emon.Testport.assertEq(Evidence.owCount(owords), 1, "one OCR word");
+        emon.Testport.assertEq(Evidence.lnCount(ln), 1, "one line for the pipeline");
+        emon.Testport.assertEq(Evidence.wdCount(wd), 1, "one word for the pipeline");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdTlen()), 2, "its text is `Hi`");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.wfSize()), 1117, "the line's size: (x-height 20 + ascenders 14 px at 24 cpt) / 0.73");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhFirst()), 0, "the line's first word");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhCount()), 1, "and its one word");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhRot()), 0, "upright");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY0()), (55 * 24) - (34 * 24), "the box's top is the baseline less x-height and ascenders");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY1()), (55 * 24) + (6 * 24), "and its bottom the baseline plus descenders");
     }
 }

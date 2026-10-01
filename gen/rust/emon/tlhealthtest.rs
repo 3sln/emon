@@ -52,6 +52,8 @@ pub(crate) fn tt_fixture(emon_t: i32, file: &[u8], want_fa: i32, want_hidden: i3
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let src: &crate::port::Src = &crate::port::src_of_blob(file);
     let o: i32 = pd_open(src, ar, dc, a, b, st);
     let mut status: i32 = 0;
@@ -118,6 +120,10 @@ pub(crate) fn tt_fixture(emon_t: i32, file: &[u8], want_fa: i32, want_hidden: i3
     crate::testport::assert_eq_at(total, fw_count(fw), "the lines hold every word", ctx);
     crate::testport::assert_that_at(fl_count(fl) <= ln_count(ln), "no line is made", ctx);
     crate::testport::assert_eq_at(pl_check(cg, fw, fl, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the layer is sound", ctx);
+    // the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied
+    crate::testport::assert_eq_at(th_append(wd, ln, fw2, fl2, 0), ln_count(ln), "every line is copied", ctx);
+    crate::testport::assert_eq_at(fw_count(fw2), wd_count(wd), "and every word", ctx);
+    crate::testport::assert_eq_at(pl_check(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the copy is sound", ctx);
     // the ledger
     rows = th_write(fa, wd, et, ledger, text, tmp, tt);
     crate::testport::assert_eq_at(rows, want_rows, "ledger rows", ctx);
@@ -172,7 +178,7 @@ fn test_visible_text_stays_and_pages_have_rows() {
 }
 #[test]
 fn test_a_watermark_in_an_optional_content_group_is_still_a_watermark() {
-    // off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D212), as it did before the triage
+    // off by default, so it is invisible; set on the diagonal, so the ledger says what it is (D219), as it did before the triage
     tt_fixture(0, &crate::testport::test_file("corpus/synth/pdf/wm-ocg.pdf")[..], 2, 0, 2, 18);
 }
 #[test]
