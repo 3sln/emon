@@ -1390,10 +1390,11 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 	i = 0
 	for i < n {
 		var w0i int32 = port.CellsAt(wl, i)
-		var ref int32 = evidence.WdGet(wd, w0i, evidence.HdBy1())
 		var tol int32 = (3 * tbMax(500, evidence.WdGet(wd, w0i, evidence.WfSize()))) / 10
+		// A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
+		// order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
 		j = i + 1
-		for (j < n) && (tbAbs(evidence.WdGet(wd, port.CellsAt(wl, j), evidence.HdBy1())-ref) <= tol) {
+		for (j < n) && (tbAbs(evidence.WdGet(wd, port.CellsAt(wl, j), evidence.HdBy1())-evidence.WdGet(wd, port.CellsAt(wl, j-1), evidence.HdBy1())) <= tol) {
 			j += 1
 		}
 		tbSortWords(wl, wd, i, j, 1)

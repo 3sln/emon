@@ -1,0 +1,368 @@
+;; Laws for `emon.scan` (P6.5, P6.5a; D211-D215): the language a locale hint names, the OCR request it builds, an answer's evidence
+;; and the pipeline's lines made from it (size, box and rotation of a line, D213), and the provenance of OCR text in the Model.
+(ns emon.scantest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at cells-push]]
+            [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
+            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
+            [emon.evidence :refer [wd-count wd-get ln-count ln-get ol-count ol-get ow-count ow-get or-count or-get
+                                   ob-count ob-get vw-px-to-cpt
+                                   lh-first lh-count lh-rot lh-dir lh-x0 lh-x1 lh-y0 lh-y1 lh-by0 lh-by1
+                                   wf-size wf-style wf-gap wf-wbreak wf-src wf-font lf-src lf-order hd-tstart hd-tlen hd-line
+                                   hd-x0 hd-x1 hd-conf olf-xheight olf-asc olf-desc owf-psize owf-flags
+                                   orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
+                                   obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
+                                   epf-page epf-flags eg-raster ep-count]]
+            [emon.scan :refer [sc-lang sc-request sc-page sc-tag]]
+            [emon.model :refer [model-init node-new node-add-src node-set-conf node-src node-conf node-flags
+                                node-add-region node-set-text node-attr attr-len page-new page-kind
+                                nk-paragraph nk-text nk-document sr-text sr-ocr sr-infer fl-ocr-only pk-vector pk-scanned
+                                pk-image fk-ocr]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------------------------------------------- the language
+
+(defn ^I32 lang-of [^I32 a ^I32 b ^I32 c ^I32 d ^I32 e ^I32 f ^I32 g ^I32 h ^I32 i ^I32 j]
+  (comment "The language of the locale spelled by these code points; a 0 ends the spelling.")
+  (let [^Cells loc (new-cells)]
+    (if (> a 0) (cells-push loc a))
+    (if (> b 0) (cells-push loc b))
+    (if (> c 0) (cells-push loc c))
+    (if (> d 0) (cells-push loc d))
+    (if (> e 0) (cells-push loc e))
+    (if (> f 0) (cells-push loc f))
+    (if (> g 0) (cells-push loc g))
+    (if (> h 0) (cells-push loc h))
+    (if (> i 0) (cells-push loc i))
+    (if (> j 0) (cells-push loc j))
+    (return (sc-lang loc))))
+
+(deftest test-a-locale-hint-names-an-iso-639-3-language
+  (assert-eq (lang-of 100 101 0 0 0 0 0 0 0 0) 6579573 "de is deu")
+  (assert-eq (lang-of 100 101 45 67 72 0 0 0 0 0) 6579573 "de-CH is deu")
+  (assert-eq (lang-of 68 69 0 0 0 0 0 0 0 0) 6579573 "DE is deu: case does not matter")
+  (assert-eq (lang-of 101 110 45 85 83 0 0 0 0 0) 6647399 "en-US is eng")
+  (assert-eq (lang-of 112 116 95 66 82 0 0 0 0 0) 7368562 "pt_BR is por")
+  (assert-eq (lang-of 106 97 0 0 0 0 0 0 0 0) 6975598 "ja is jpn")
+  (assert-eq (lang-of 97 114 0 0 0 0 0 0 0 0) 6386273 "ar is ara")
+  (assert-eq (lang-of 100 101 117 0 0 0 0 0 0 0) 6579573 "a three-letter code is taken as it is")
+  (assert-eq (lang-of 102 114 97 45 67 65 0 0 0 0) 6713953 "fra-CA is fra"))
+
+(deftest test-chinese-is-simplified-or-traditional-by-script-or-region
+  (assert-eq (lang-of 122 104 0 0 0 0 0 0 0 0) 6514803 "zh is chs")
+  (assert-eq (lang-of 122 104 45 67 78 0 0 0 0 0) 6514803 "zh-CN is chs")
+  (assert-eq (lang-of 122 104 45 72 97 110 115 0 0 0) 6514803 "zh-Hans is chs")
+  (assert-eq (lang-of 122 104 45 72 97 110 116 0 0 0) 6514804 "zh-Hant is cht")
+  (assert-eq (lang-of 122 104 45 72 97 110 116 45 84 87) 6514804 "zh-Hant-TW is cht")
+  (assert-eq (lang-of 122 104 45 84 87 0 0 0 0 0) 6514804 "zh-TW is cht")
+  (assert-eq (lang-of 122 104 45 72 75 0 0 0 0 0) 6514804 "zh-HK is cht")
+  (assert-eq (lang-of 122 104 111 0 0 0 0 0 0 0) 6514803 "zho is chs"))
+
+(deftest test-no-hint-or-no-name-is-no-language
+  (assert-eq (lang-of 0 0 0 0 0 0 0 0 0 0) 0 "no hint: the port reads with every model it has (D038)")
+  (assert-eq (lang-of 120 0 0 0 0 0 0 0 0 0) 0 "one letter says nothing")
+  (assert-eq (lang-of 113 113 0 0 0 0 0 0 0 0) 0 "an unknown two-letter code")
+  (assert-eq (lang-of 49 50 51 0 0 0 0 0 0 0) 0 "digits are no language")
+  (assert-eq (lang-of 45 101 110 0 0 0 0 0 0 0) 0 "a separator first"))
+
+(deftest test-the-request-carries-the-resolution-and-the-language
+  (let [^Cells rq (new-cells)
+        ^Cells loc (new-cells)]
+    (cells-push loc 102)
+    (cells-push loc 114)
+    (sc-request rq 9 4 150 loc)
+    (assert-eq (rec-kind rq 0) (pk-ocr) "an OCR request")
+    (assert-eq (rec-id rq 0) 9 "its id")
+    (assert-eq (rq-arg rq 0 0) 4 "the bitmap of request 4")
+    (assert-eq (rq-arg rq 0 1) 3 "psm 3")
+    (assert-eq (ocf-dpi (rq-arg rq 0 2)) 150 "150 dpi")
+    (assert-eq (rq-arg rq 0 2) (+ 3 (* 150 256)) "symbols and OSD below it")
+    (assert-eq (rq-nargs rq 0) 8 "one language")
+    (assert-eq (rq-arg rq 0 7) 1718771968 "fra, packed `f r a 0`")))
+
+;; ------------------------------------------------------------------------- an answer as evidence and as lines
+
+(defn ^I32 three-lines [^Cells an ^I32 id]
+  (comment "An answer: three lines, one word each. Pixels, at 300 dpi (24 cpt a pixel). Lines 0 and 1 have the same baseline slope")
+  (comment "(6 px down over 300), line 2 is level; the lines have row attributes 20/14/6, block 0 is at 90 degrees clockwise.")
+  (let [^I32 at (an-ocr an id)
+        ^I32 w0 (an-ocr-word an at 10 20 300 40 900 0 0)]
+    (an-ocr-cp an w0 65)
+    (let [^I32 w1 (an-ocr-word an at 10 100 300 40 800 1 0)]
+      (an-ocr-cp an w1 66)
+      (let [^I32 w2 (an-ocr-word an at 10 180 300 40 0 2 0)]
+        (an-ocr-cp an w2 67)
+        (ox-begin an 1 0 0 -115 90 1231 17 187 3 1 1 640 480)
+        (ox-line an 10 20 300 46 10 55 310 61 0 0 0 20 14 6)
+        (ox-line an 10 100 300 46 10 135 310 141 0 0 0 20 14 6)
+        (ox-line an 10 180 300 40 10 215 310 215 0 0 0 20 14 6)
+        (ox-block an 10 20 300 200 1 2 0)
+        (let [^I32 x0 (ox-word an 0 6647399 11 3)
+              ^I32 s0 (ox-sym an x0 10 20 20 40 900)]
+          (ox-sym-cp an s0 65))
+        (let [^I32 x1 (ox-word an 0 6647399 -1 0)
+              ^I32 s1 (ox-sym an x1 10 100 20 40 800)]
+          (ox-sym-cp an s1 66))
+        (let [^I32 x2 (ox-word an 0 6647399 -1 1)
+              ^I32 s2 (ox-sym an x2 10 180 20 40 0)]
+          (ox-sym-cp an s2 67))
+        (an-ocr-end an at)
+        (return at)))))
+
+(defn ^I32 page-of [^Cells an ^I32 at ^Cells epages ^Cells views ^Cells etext ^Cells feats ^Cells images ^Cells oruns
+                    ^Cells oblocks ^Cells olines ^Cells owords ^Cells wd ^Cells ln]
+  (return (sc-page an at 1 2 1 17712 22848 738 952 30000 0 0 0 0 0 17712 22848 6579573
+                   epages views etext feats images oruns oblocks olines owords (new-cells) (new-cells) wd ln (new-cells))))
+
+(deftest test-an-answers-evidence-keeps-the-engines-numbers
+  (let [^Cells an (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells views (new-cells)
+        ^Cells et (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells oblocks (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^I32 at (three-lines an 2)]
+    (assert-eq (page-of an at epages views et (new-cells) (new-cells) oruns oblocks olines owords wd ln) 3 "three lines")
+    (assert-eq (or-count oruns) 1 "one run")
+    (assert-eq (or-get oruns 0 (orf-osd)) 90 "the engine's OSD degrees, verbatim")
+    (assert-eq (or-get oruns 0 (orf-script)) 1231 "and the script")
+    (assert-eq (or-get oruns 0 (orf-langlen)) 3 "the language the request named is recorded")
+    (assert-eq (or-get oruns 0 (orf-bview)) 1 "the engine's thresholded image is a view of its own")
+    (assert-eq (ep-count epages) 1 "one page row")
+    (assert-eq (ow-count owords) 3 "three words")
+    (assert-eq (ow-get owords 0 (owf-psize)) 1100 "the engine's point size is in centipoints")
+    (assert-eq (ow-get owords 1 (owf-psize)) -1 "unknown stays -1")
+    (assert-eq (ow-get owords 0 (owf-flags)) 3 "dictionary and numeric")
+    (assert-eq (ow-get owords 2 (hd-conf)) 0 "a confidence of 0 is carried as it is (D130)")
+    (assert-eq (ol-get olines 0 (olf-xheight)) 480 "x-height 20 px is 480 cpt")
+    (assert-eq (ol-get olines 0 (olf-asc)) 336 "ascenders 14 px")
+    (assert-eq (ol-get olines 0 (olf-desc)) 144 "descenders 6 px")
+    (assert-eq (ob-count oblocks) 2 "one block and its one paragraph")
+    (assert-eq (ob-get oblocks 0 (obf-orient)) 1 "the block's own orientation, from the block table")
+    (assert-eq (ob-get oblocks 0 (obf-wdir)) 2 "and writing direction")))
+
+(deftest test-the-pipelines-lines-are-the-lines-size-box-and-rotation
+  (let [^Cells an (new-cells)
+        ^Cells et (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^I32 at (three-lines an 2)]
+    (page-of an at (new-cells) (new-cells) et (new-cells) (new-cells) oruns (new-cells) olines owords wd ln)
+    (assert-eq (ln-count ln) 3 "a line for each")
+    (assert-eq (wd-count wd) 3 "a word for each")
+    (assert-eq (wd-get wd 0 (wf-size)) 1117 "size: (480 + 336) / 0.73")
+    (assert-eq (wd-get wd 2 (wf-size)) 1117 "the same for every line of the same row attributes")
+    (assert-eq (wd-get wd 0 (hd-line)) 0 "the word's line")
+    (assert-eq (wd-get wd 0 (wf-font)) -1 "no font")
+    (assert-eq (wd-get wd 0 (wf-gap)) -1 "a lone word has no gap to the next")
+    (assert-eq (wd-get wd 0 (wf-wbreak)) (wb-line-end) "it ends its line")
+    (assert-eq (wd-get wd 0 (wf-src)) 4 "from OCR")
+    (assert-eq (ln-get ln 1 (lf-src)) 4 "the line too")
+    (assert-eq (ln-get ln 2 (lf-order)) 2 "lines in the engine's reading order")
+    (assert-eq (ln-get ln 0 (lh-rot)) 0 "the two tilted lines are the page's dominant angle: upright")
+    (assert-eq (ln-get ln 1 (lh-rot)) 0 "so is the second")
+    (assert-that (!= (ln-get ln 2 (lh-rot)) 0) "the level one is not")
+    (assert-eq (ln-get ln 0 (lh-y1)) (+ (* 58 24) (* 6 24)) "the box's bottom is the baseline's middle (58 px) plus descenders, not the tilted box's")
+    (assert-eq (ln-get ln 0 (lh-y0)) (- (* 58 24) (* 34 24)) "and its top the middle less x-height and ascenders")
+    (assert-eq (ln-get ln 0 (lh-x0)) (* 10 24) "the extent along the line is the engine's")))
+
+;; --------------------------------------------------------------------------------------------------- the Model
+
+(deftest test-ocr-text-is-tagged-as-ocr-on-the-pages-that-were-read
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells mask (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (page-new pages 2 61200 79200 0 (pk-vector))
+    (let [^I32 p1 (node-new nodes (nk-paragraph) 0)
+          ^I32 t1 (node-new nodes (nk-text) p1)
+          ^I32 p2 (node-new nodes (nk-paragraph) 0)
+          ^I32 t2 (node-new nodes (nk-text) p2)]
+      (node-add-region nodes regions p1 1 0 0 100 100)
+      (node-add-region nodes regions p2 2 0 0 100 100)
+      (node-add-src nodes p1 (sr-text))
+      (node-add-src nodes p1 (sr-infer))
+      (node-add-src nodes t1 (sr-text))
+      (node-set-conf nodes t1 1000)
+      (node-add-src nodes p2 (sr-text))
+      (node-add-src nodes t2 (sr-text))
+      (node-set-conf nodes t2 1000)
+      (cells-push mask 2)
+      (cells-push mask 0)
+      (assert-eq (sc-tag nodes attrs text regions pages mask 2) 1 "something was tagged")
+      (assert-eq (node-src nodes p1) (+ (sr-ocr) (sr-infer)) "page 1's paragraph: `ocr` for `text`, `infer` kept")
+      (assert-eq (node-src nodes t1) (sr-ocr) "its text")
+      (assert-eq (node-conf nodes t1) 500 "an engine's word is not a glyph's own text: uncalibrated 500")
+      (assert-eq (node-flags nodes p1) (fl-ocr-only) "the block says it is OCR only")
+      (assert-eq (node-flags nodes t1) 0 "an inline is not flagged")
+      (assert-eq (node-src nodes p2) (sr-text) "page 2 was not OCR'd: untouched")
+      (assert-eq (node-conf nodes t2) 1000 "and so is its confidence")
+      (assert-eq (page-kind pages 0) (pk-scanned) "a PDF page that was read is `scanned`")
+      (assert-eq (page-kind pages 1) (pk-vector) "the other is not")
+      (let [^I32 a (node-attr nodes attrs 0 (fk-ocr))]
+        (assert-that (>= a 0) "settings.ocr is written")
+        (assert-eq (attr-len attrs a) 6 "`always`")))))
+
+(deftest test-with-no-page-read-nothing-is-tagged
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells mask (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-image))
+    (let [^I32 p1 (node-new nodes (nk-paragraph) 0)]
+      (node-add-region nodes regions p1 1 0 0 100 100)
+      (node-add-src nodes p1 (sr-text))
+      (cells-push mask 0)
+      (assert-eq (sc-tag nodes attrs text regions pages mask 2) 0 "nothing to do")
+      (assert-eq (node-src nodes p1) (sr-text) "untouched")
+      (assert-eq (node-attr nodes attrs 0 (fk-ocr)) -1 "and no `settings.ocr`"))))
+
+;; --------------------------------------------------------------- metrics measured from the symbols (D213)
+
+(defn ^I32 sym1 [^Cells an ^I32 wx ^I32 x ^I32 y ^I32 h ^I32 cp]
+  (comment "A symbol of the word begun at `wx`: a box 15 px wide at (x, y) and h px high, confidence 900, one code point.")
+  (let [^I32 s (ox-sym an wx x y 15 h 900)]
+    (ox-sym-cp an s cp)
+    (return 0)))
+
+(defn ^I32 no-row-attributes [^Cells an ^I32 id ^I32 withasc]
+  (comment "An answer whose engine gives no row attributes: one line, its baseline level at y = 100 px, and the words `none` (x-height")
+  (comment "letters, tops at 80), with `withasc` 1 `bldh` (tops at 66: 34 px above the baseline) and `gyp` (bottoms at 106).")
+  (let [^I32 at (an-ocr an id)
+        ^I32 w0 (an-ocr-word an at 10 80 70 20 900 0 0)]
+    (an-ocr-cp an w0 110)
+    (if (== withasc 1)
+      (let [^I32 w1 (an-ocr-word an at 90 66 70 34 900 0 0)]
+        (an-ocr-cp an w1 98)
+        (let [^I32 w2 (an-ocr-word an at 170 80 50 26 900 0 0)]
+          (an-ocr-cp an w2 103))))
+    (ox-begin an 0 0 0 0 -1 0 -1 -1 1 1 0 0 0)
+    (ox-line an 10 66 210 46 10 100 220 100 0 0 0 -1 -1 -1)
+    (ox-block an 10 66 210 46 0 0 0)
+    (let [^I32 x0 (ox-word an 0 0 -1 0)]
+      (sym1 an x0 10 80 20 110)
+      (sym1 an x0 25 80 20 111)
+      (sym1 an x0 40 80 20 110)
+      (sym1 an x0 55 80 20 101))
+    (if (== withasc 1)
+      (do (let [^I32 x1 (ox-word an 0 0 -1 0)]
+            (sym1 an x1 90 66 34 98)
+            (sym1 an x1 105 66 34 108)
+            (sym1 an x1 120 66 34 100)
+            (sym1 an x1 135 66 34 104))
+          (let [^I32 x2 (ox-word an 0 0 -1 0)]
+            (sym1 an x2 170 80 26 103)
+            (sym1 an x2 185 80 26 121)
+            (sym1 an x2 200 80 26 112))))
+    (an-ocr-end an at)
+    (return at)))
+
+(deftest test-a-line-is-measured-from-its-symbols-when-the-engine-gives-no-row-attributes
+  (let [^Cells an (new-cells)
+        ^Cells et (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^I32 at (no-row-attributes an 2 1)]
+    (sc-page an at 1 2 1 17712 22848 738 952 30000 0 0 0 0 0 17712 22848 6579573
+             (new-cells) (new-cells) et (new-cells) (new-cells) oruns (new-cells) olines owords osyms (new-cells) wd ln (new-cells))
+    (assert-eq (ol-get olines 0 (olf-xheight)) -1 "the evidence keeps what the engine said: nothing")
+    (assert-eq (wd-count wd) 3 "three words")
+    (assert-eq (wd-get wd 0 (wf-size)) 1117 "the tall letters reach 34 px: 816 cpt, over 0.73")
+    (assert-eq (ln-get ln 0 (lh-y0)) (- 2400 816) "the box's top is the baseline less the ascender line")
+    (assert-eq (ln-get ln 0 (lh-y1)) (+ 2400 144) "and its bottom the baseline plus the median depth of g, y, p: 6 px")))
+
+(deftest test-with-no-tall-letters-the-ascender-line-is-the-x-height-times-1-5
+  (let [^Cells an (new-cells)
+        ^Cells et (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^I32 at (no-row-attributes an 2 0)]
+    (sc-page an at 1 2 1 17712 22848 738 952 30000 0 0 0 0 0 17712 22848 6579573
+             (new-cells) (new-cells) et (new-cells) (new-cells) oruns (new-cells) olines owords osyms (new-cells) wd ln (new-cells))
+    (assert-eq (wd-count wd) 1 "one word")
+    (assert-eq (wd-get wd 0 (wf-size)) 986 "x-height 480 cpt, no page ratio to go by: ascender line 720, size 986")
+    (assert-eq (ln-get ln 0 (lh-y0)) (- 2400 720) "the box's top")
+    (assert-eq (ln-get ln 0 (lh-y1)) (+ 2400 194) "and its bottom: 0.27 of the ascender line")))
+
+;; ------------------------------------------------------------------ sizes are a page's, not a line's
+
+(defn ^I32 sized-lines [^Cells an ^I32 id]
+  (comment "Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,")
+  (comment "30+22 (a heading, 1.5 times as tall) and 20+14 again.")
+  (let [^I32 at (an-ocr an id)
+        ^I32 w0 (an-ocr-word an at 10 20 100 40 900 0 0)]
+    (an-ocr-cp an w0 65)
+    (let [^I32 w1 (an-ocr-word an at 10 100 100 40 900 1 0)]
+      (an-ocr-cp an w1 66)
+      (let [^I32 w2 (an-ocr-word an at 10 180 100 40 900 2 0)]
+        (an-ocr-cp an w2 67)
+        (let [^I32 w3 (an-ocr-word an at 10 260 100 60 900 3 0)]
+          (an-ocr-cp an w3 68)
+          (let [^I32 w4 (an-ocr-word an at 10 360 100 40 900 4 0)]
+            (an-ocr-cp an w4 69)
+            (ox-begin an 0 0 0 0 -1 0 -1 -1 5 1 0 0 0)
+            (ox-line an 10 20 100 40 10 55 110 55 0 0 0 20 14 6)
+            (ox-line an 10 100 100 40 10 135 110 135 0 0 0 20 15 6)
+            (ox-line an 10 180 100 40 10 215 110 215 0 0 0 20 14 6)
+            (ox-line an 10 260 100 60 10 305 110 305 0 0 0 30 22 8)
+            (ox-line an 10 360 100 40 10 395 110 395 0 0 0 20 14 6)
+            (ox-block an 10 20 100 380 0 0 0)
+            (let [^I32 x0 (ox-word an 0 0 -1 0)]
+              (sym1 an x0 10 20 20 65))
+            (let [^I32 x1 (ox-word an 0 0 -1 0)]
+              (sym1 an x1 10 100 20 66))
+            (let [^I32 x2 (ox-word an 0 0 -1 0)]
+              (sym1 an x2 10 180 20 67))
+            (let [^I32 x3 (ox-word an 0 0 -1 0)]
+              (sym1 an x3 10 260 20 68))
+            (let [^I32 x4 (ox-word an 0 0 -1 0)]
+              (sym1 an x4 10 360 20 69))
+            (an-ocr-end an at)
+            (return at)))))))
+
+(deftest test-a-pages-lines-of-one-size-measured-a-pixel-apart-get-one-size
+  (let [^Cells an (new-cells)
+        ^Cells et (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells olines (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells osyms (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^I32 at (sized-lines an 2)]
+    (sc-page an at 1 2 1 17712 22848 738 952 30000 0 0 0 0 0 17712 22848 6579573
+             (new-cells) (new-cells) et (new-cells) (new-cells) oruns (new-cells) olines owords osyms (new-cells) wd ln (new-cells))
+    (assert-eq (wd-count wd) 5 "five words")
+    (assert-eq (wd-get wd 0 (wf-size)) 1117 "the body line: 34 px, 816 cpt, over 0.73")
+    (assert-eq (wd-get wd 1 (wf-size)) 1117 "35 px is the same size: within a cluster")
+    (assert-eq (wd-get wd 2 (wf-size)) 1117 "34 px again")
+    (assert-eq (wd-get wd 4 (wf-size)) 1117 "and the last body line")
+    (assert-eq (wd-get wd 3 (wf-size)) 1676 "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)")))

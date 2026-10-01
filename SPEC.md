@@ -851,6 +851,16 @@ count: stage 0 of a raster input, §2.0). Its answer is `status w h channels dpi
 frames`, and `status` is `ok`, `failed`, `unsupported` or `limit` (the host's pixel bound,
 which kin names as the `pixels` limit).
 
+**`ocr`** 3 (`bitmap psm flags x y w h lang...`; D211, D214) is `Ocr`: `bitmap` names the `render` or `decode` request whose
+bitmap is read, `w` 0 the whole of it; `flags` bit 1 asks for symbols and their alternatives, bit 2 for orientation and script
+detection, and the flags above the low byte are the bitmap's resolution in dpi, a hint (`flags / 256`); each `lang` is an ISO
+639-3 code of up to four ASCII chars (`chs`/`cht` for simplified and traditional Chinese): none means every model the engine has
+(D038). The answer is `status nwords word...` and then, in the same record, the extension `emon.ocr` version 2 (`kin/ocr.kin`:
+lines with baselines, a block table with each block's own orientation, symbols and alternatives, each word's dictionary and
+numeric flags and point size, orientation, script, and whether the answer's `bitmap` is the engine's thresholded image). A host with
+no `Ocr` port answers `unsupported`, which is an answer (a page then has no text); a transcript names the engine that answered in
+`:producer`. A `decode` of a PDF's embedded JPEG has `filter` 1 (DCT): the span is a JPEG file.
+
 Assets (D117) add two kinds, both transcribed like `render`: **`crop`** 5
 (`input page dpi layer px py pw ph`, answered as a render) and
 **`decode-img`** 6 (a PDF image codestream with the parameters a codec
@@ -874,7 +884,7 @@ strip) as its bitmap; its record then carries the view's FNV-1a 64-bit pixel
 hash (two cells, by the `bitmap-hash` form), so the transcript is keyed by
 what was asked and never stores kin's pixels (they are a function of the
 transcribed answers). **A transcript carries every answered bitmap kin
-reads**: a "slim" transcript (D187) replays only units that read no pixels,
+reads**: a "slim" transcript (D214) replays only units that read no pixels,
 which from P6.3 on is none that has a raster.
 `max-rounds` is 5 per page unit (D207): render or decode; the first OCR pass;
 targeted passes (§8.3); their answers; one spare.
@@ -1024,7 +1034,7 @@ cheaply (text rendered as outlines, images of tables, scanned inserts).
   existing layer's colour and the paper joins that layer unless it holds
   `ink-spike` of the page (a flat watermark does, an edge does not), and a
   bin outside every layer's core (half of `ink-merge`) goes to the layer
-  whose ink-to-paper segment it lies nearest (D217).
+  whose ink-to-paper segment it lies nearest (D218).
   Each layer's role (`ir`) is guessed from lightness, chroma and coverage:
   `body` (every low-chroma layer darker than `ink-light`: black headings and
   dark-grey text are two clusters of one kind of ink), `light`
@@ -1044,7 +1054,7 @@ cheaply (text rendered as outlines, images of tables, scanned inserts).
   construction): projection profiles of the ink runs of the body layers' mask
   (each run by its midpoint, weighted by its length, on every few rows) at
   candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`; the angle
-  goes to the decode view and every view derived from it (D218). Kin
+  goes to the decode view and every view derived from it (D219). Kin
   never resamples for its own analysis; it maps coordinates through the
   view. **Orientation** (0/90/180/270) is OSD's when its confidence passes
   `osd-conf`, else the `tlines`' dominant direction; a page not upright is
@@ -1081,8 +1091,8 @@ raster stages run once per round that has OCR answers (§7.3):
 
 | Page | First-pass requests (round 2) |
 | --- | --- |
-| Image, scanned PDF page | the whole decode or render, `psm` 3, OSD (D184) |
-| Born-digital, `ocr-scope: full` (default) | the whole `with-text` render, `psm` 3; languages from the locale, else from the text layer's scripts (`emon.mscript`) mapped to installed models, else every model (D188) |
+| Image, scanned PDF page | the whole decode or render, `psm` 3, OSD (D211) |
+| Born-digital, `ocr-scope: full` (default) | the whole `with-text` render, `psm` 3; languages from the locale, else from the text layer's scripts (`emon.mscript`) mapped to installed models, else every model (D215) |
 | Born-digital, `ocr-scope: witness` | the whole `no-text` render, `psm` 3 (text the text layer lacks); plus **witness lines**: for every (font, page) pair, `witness-lines` (3) of its lines chosen by a fixed rule (the first, the median and the last by `order`), each an `ocr` request of the `with-text` render's region around the line, `psm` 7 |
 | Born-digital, `ocr: auto` | nothing, unless the page's text-layer health (§9.3, without OCR) is under `auto-health`, or images cover over `auto-image` of it, or it has `hidden-text`: then as `full` |
 
@@ -1620,7 +1630,7 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on):
 | --- | --- | --- |
 | `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (2 cells), similarity (case kept), similarity (case-folded letters), flags (`gf`: text-only, OCR-only, split, merged, in-figure, in-seal), spare |
 | `fw` | 24 | **the layout of `words`** (word head 16, style, glyph run, font, size, gap, `wbreak`, `src`): `src` is the sources bitset (`sr`: text, hidden-text, ocr, trace), the glyph run is the text-layer word's when it won, empty otherwise |
-| `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D186 measures an OCR line |
+| `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D213 measures an OCR line |
 | `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |
 | `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (2) |
 | `fx` | 4 | explanation: group, rule, feature column, value read — a run per group, every column the deciding rule read |

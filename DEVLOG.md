@@ -1918,7 +1918,7 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: the laws (each bulk form against its reference over random bitmaps; banded Sauvola equal to `ras-sauvola`
   on three pages; a two-colour fixture separates into exactly two layers with the right roles; a page of known skew)
   pass on all four targets; `bb ink` meets the targets above; the bench table is in this entry.
-  *Done (D217-D219), as written except where said.* **Files**: `kin/norm.kin` (`emon.norm`), `kin/normtest.kin` (31 laws),
+  *Done (D218-D220), as written except where said.* **Files**: `kin/norm.kin` (`emon.norm`), `kin/normtest.kin` (31 laws),
   the five bulk forms in section `;; P6.3 bulk forms` of the four port files (`bitmap-gray-into`, `-hist-rgb`, `-lut-into`,
   `-hash`, `-quarter-into`; each held byte-identical to its kin reference `nm-ref-*` by law, the hash against FNV-1a values
   computed in babashka), `bench/{norm.sh,norm_report.clj,mknorm.clj,mains/norm.rs,norm.go,Norm.java,NormProgram.cs}` (`bench/run.sh N
@@ -1927,8 +1927,8 @@ analysis beyond "top-to-bottom lines on a single column".
   `views` rows (gray, binary, one ink-mask per layer) and `inks` rows that P7.U attaches `bms-put` bitmaps to (wiring point in the
   header of `kin/norm.kin`). `nm-feat-ocr`/`nm-feat-text` fill `xo` 10-13, 16 and `xt` 10-12 from pixel boxes (`nm-box-px` maps a
   page box through a view); `nm-orient` is OSD's quarter turns when confident. Deviations from the brief: the skew is read off the
-  BODY mask's ink RUNS (weighted by length, two-pixel rows, differenced), not run-cluster centres (D218), and every dark neutral
-  layer is `body` (D217).
+  BODY mask's ink RUNS (weighted by length, two-pixel rows, differenced), not run-cluster centres (D219), and every dark neutral
+  layer is `body` (D218).
   *Measured* (`bb ink`, 22 fusion documents, 39 scan-ovl pages at 130 dpi RGB q45 skewed ±3°, truth from the overlays drawn alone
   through the same rotation; Rust and Go agree on every page): body glyph ink in body layers **0.974** (target 0.98: MISS; 0.981
   on the clean documents, 0.93-0.95 on pages with bg-texture, seal over text and signatures); the COPY watermark's ink OUTSIDE body
@@ -1991,9 +1991,31 @@ analysis beyond "top-to-bottom lines on a single column".
   baseline P7.7 must keep (no target yet). Rust ≤ 0.15 s a page.
   *Done when*: laws on hand-built bitmaps (two touching runs one component; a ring; a dashed rule; a 30° line of letters)
   on all four targets; `bb trace` meets the targets; timing in this entry.
-- [ ] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
-  first-pass plan; OCR-only pipeline for images and scanned PDFs (D033).
-- [ ] P6.5a — The OCR answer extension v2 (D095 open items, D096): `ox`
+- [x] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
+  first-pass plan; OCR-only pipeline for images and scanned PDFs (D033). *Done (D211-D216), minus the `Renderer` (P6.2: a PDF page
+  that is not one upright JPEG covering it is not OCR'd), fusion (P7: a born-digital page keeps its text layer, D212) and acting
+  on OSD.* `kin/scan.kin` (`emon.scan`: the OCR request, the answer's evidence, the pipeline's lines, the Model's provenance, the
+  scanned pages of a PDF), `kin/rasterin.kin` (`rs-unit` now decodes, then OCR), `Config::ocr` / `Config.Ocr` (the port; none:
+  `unsupported`, an answer), `host/rust/src/tess.rs` (Cargo feature `tesseract`) and `host/go/tess.go` (cgo, build tag
+  `tesseract`) binding Tesseract 5.5.3, both live only (`EMON_RS_LIVE=1 kin/scripts/emon-rs-build`, `EMON_GO_LIVE=1
+  kin/scripts/emon-go-build`; the drivers take `--tesseract`). An image page (PNG, JPEG, TIFF frames) and a scanned PDF page (no
+  text layer, one upright DCT image covering it) go decode -> `ocr` plan request -> the host's engine -> kin's evidence ->
+  lines -> furniture -> headings -> paragraphs and columns -> the Model, the same pipeline as a born-digital page, in both Engines.
+  `settings.ocr`, `scanned` pages, `ocr` sources and `ocr-only` say where the text came from. `bb ocr` (a gate) replays five
+  committed scan transcripts (`test/ocr/scan/`) on Rust AND Go through the whole Engine to one bundle (JSON, HTML, evidence),
+  holds `transcript-miss` for a changed request and the `emon-replay` ratchet; `bb ocr-live` (not a gate) scores the 55 scans
+  through live Tesseract (the scoreboard's `emon-live`) and a sample of FUNSD, SROIE and CORD gold. **Scan variants, BEFORE (no
+  OCR) -> AFTER (live Tesseract)**: scan/all CER 1.0000 -> 0.0878, WER 1.0000 -> 0.1676, bag-of-words F1 0.00 -> 0.87, heading F1 0.00 -> 0.70 (P 0.71, R 0.69), paragraph-boundary F1 0.00 -> 0.47, furniture F1 0.00 -> 0.38 (the text-layer variants of the same documents: CER 0.012, WER 0.021, heading F1 0.99); by family: headings CER 0.024 / heading F1 0.80, furniture CER 0.023 / heading F1 0.96 / paragraph F1 0.81, columns CER 0.081, lists CER 0.068, tables CER 0.105, scripts CER 0.80 (only eng and osd installed). *Left*: the Renderer for the pages that are not a lone JPEG; bold (a bold-only
+  heading has its body's size: stroke width is ink, P6.3); non-Latin scripts (only `eng` and `osd` are installed here; the request
+  already carries any language); tables and lists on a scan are whatever P4/P5 make of OCR lines; the estimate of an unstated
+  resolution (D215); live Go and Rust agree only through a transcript (D211).
+  *Learnt*: Tesseract's C API exports no `RowAttributes`, and a symbol's box is sometimes its whole word's height (a third of the
+  x-height letters of a body line), so the line size is a low percentile of a letter class's heights, the page's ratio, then
+  clustered (D213); `go build` with cgo on this macOS leaves a binary whose linker signature fails its own check (SIGKILL at launch);
+  the two hosts' JPEG decoders (D190) move Tesseract's answer (`Chapter1` against `Chapter 1`), so a live comparison of the hosts
+  proves nothing and the transcript is the identity; a replay of a slim transcript (no bitmaps) is as exact as a whole one.
+  *Commit*: on branch `worktree-agent-afd782ca8bc66f033` (D037).
+- [x] P6.5a — The OCR answer extension v2 (D095 open items, D096): `ox`
   version 2 carries the engine's thresholded image as a bitmap answer (a
   `views` row of kind engine-binary, named by the `oruns` row), per-line
   row attributes (x-height, ascenders, descenders), per-block box,
@@ -2002,6 +2024,13 @@ analysis beyond "top-to-bottom lines on a single column".
   model hashes); the word-confidence-of-0 finding of P1.12 step 6 is fixed
   in `tess.rs` if it is a reading bug. Re-record `test/ocr/h-keyword/` live
   (Rust only) and fill `xo-*` column 11 and 12 once P6.3 has kin's ink.
+  fields are in the extension and answered -1; kin measures them, D213).* Version 2 of `emon.ocr` (14-cell header, 14-cell lines, a
+  block table, a word's `psize` and `dflags`, the thresholded image as the answer's bitmap); the evidence takes the blocks' own
+  orientation and box, the words' point size and dictionary/numeric flags (so `xo-engine-flags` is filled) and a `views` row of kind
+  `engine-binary` named by the run; `transcript.edn` has `:producer` (both hosts write the same bytes; a replay never reads it);
+  `test/ocr/h-keyword/` was re-recorded live on Rust (`bb tools/ocr/record.clj`), and `bb ocr` holds its dump on Rust and Go as
+  before (199 words, 24 lines, 972 symbols, CER 2.05 per cent). D130 stands: the zero confidences are Tesseract's and are carried verbatim.
+  *Commit*: with P6.5.
 - [x] **P6.6 — The fusion corpus: degraded and colour scans, watermark/seal/stamp fixtures, the scorer's fusion
   metrics** (SPEC §14.3.1, §14.2, D206, D209). **Wave 1**, no kin: parallel with everything. Depends on nothing new.
   *Brief*:
@@ -2110,7 +2139,7 @@ the `Renderer` port, image intake); D195-D210 record the reconciliation and SPEC
 §12.3 and §14.2 say it normatively.
 
 **M0 — before any item below (coordinator, not a brief).** Merge `worktree-agent-afd782ca8bc66f033` (P6.1 + P6.5 +
-P6.5a: image intake, the `Ocr` port, `emon.scan`, D173-D176 and D184-D189) and `worktree-agent-aac8530d7436e2eec`
+P6.5a: image intake, the `Ocr` port, `emon.scan`, D187-D190 and D211-D216) and `worktree-agent-aac8530d7436e2eec`
 (P6.2: the `Renderer` port and pdfium, D191-D194) into main, renumbering their decisions after the highest on main, and
 the P4.5/P4.6 and initials branches as they come. Every brief below assumes that main.
 
@@ -2186,10 +2215,10 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
      own `answers`/`rq`, and its own `BitmapSet`; then the *document unit* (stage 3 on the appended PageLayers). A page
      unit reads the document pass's arenas and never the input (a scanned page's `decode` names the input by index, as
      today; the host reads it). The raster path (`attempt_raster`, `rs-unit`) takes the same shape: the document pass is
-     the header-only intake (D173), a page unit per frame.
+     the header-only intake (D187), a page unit per frame.
   2. **`pu-run` today** does what the page did before: a born-digital page asks nothing and its PageLayer is its text-layer
      words and lines copied into `fw`/`fl` (P7.0's compaction, if merged, else a copy); a scanned PDF page or an image frame
-     asks `decode` then `ocr` (D184's requests, now per page) and its PageLayer is `sc-emit-lines`' lines (D186). `pl-append`
+     asks `decode` then `ocr` (D211's requests, now per page) and its PageLayer is `sc-emit-lines`' lines (D213). `pl-append`
      (in `kin/player.kin`, P7.0's; a stub here if P7.0 is not merged) concatenates pages, re-basing every index.
   3. **Ids** (D207): page `p` (0-based) issues ids `(p + 1) * 256 + k`, `k` < 256 (`k` 1 render with-text, 2 render no-text,
      3 render text-only, 4 decode, 16-127 OCR, 128-255 crops and later kinds); kin-made views are `KIN_VIEW_BASE` (2^24)
@@ -2303,7 +2332,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
      the text layer won), `fv` (group, winner, rule, confidence: 1000 for a text-layer win with agreement, 900 without OCR
      witness, the scorecard-less first values for OCR, flags), `fx` (the rule's columns and the values read), `fa` (a
      ledger row for a rule that sets one); lines `fl`: a text-layer line keeps its geometry; a line of OCR-won words is
-     measured by D186's measure (the `emon.scan` line-size function, made a library call); an OCR-only group joins the
+     measured by D213's measure (the `emon.scan` line-size function, made a library call); an OCR-only group joins the
      text-layer line it lies on (baseline within 45 % of the size) or makes a new line.
   3. **Wiring** in `pu-run`: when the page has raster answers, `nm-view` per raster (P6.3; kin-made views by `bms-put`),
      `tr-page` on the `no-text` render or the decode (P6.4), OCR evidence and `nm-feat-*`, then `al-page`, `hl-page`,
@@ -2418,7 +2447,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Done when*: the above in this entry.
 
 - [ ] **P7.S — The switch: born-digital pages OCR'd under `always`; the `bb fusion` gate; the cost** (SPEC §8.3 first
-  pass, §9.8, §12.3; D038, D185 (3) superseded, D200, D201, D210). **Wave 5, the end of the critical path.** Depends on
+  pass, §9.8, §12.3; D038, D212 (3) superseded, D200, D201, D210). **Wave 5, the end of the critical path.** Depends on
   P7.3, P7.5, P6.6 (P7.4, P7.6, P7.7 are not required for the switch and land when ready).
   *Brief*:
   1. `kin/rasterplan.kin` (`emon.rasterplan`), `rp-plan` at `;; HOOK P7.S`: the first-pass requests of SPEC §8.3's table
@@ -6671,7 +6700,7 @@ of the language's words (SPEC 17.4: the maintainer's call, still open); a space 
 **Alternatives**: a pure-kin JPEG decoder (the host's job, D058); refusing to compare JPEG (a live difference of 60 would have passed unseen); a tolerance of 2 (fails the hard-edged synthetic: 5).
 - [ ] **Signed off** (maintainer)
 
-### D195 — Fusion is a page unit that answers a PageLayer in the text layer's own word and line layouts; stage 3 does not change; fusion over one source is the identity (P7 plan; SPEC 2.2, 9.7, 12.1; D014, D022, D186)
+### D195 — Fusion is a page unit that answers a PageLayer in the text layer's own word and line layouts; stage 3 does not change; fusion over one source is the identity (P7 plan; SPEC 2.2, 9.7, 12.1; D014, D022, D213)
 **Decision**: (1) `attempt()` becomes three parts in both Engines: the **document pass** (everything that reads the input:
 the text layer, P7.0's triage and health, the catalogue, the tagged tree, the annotations), a **page unit** per page
 (`pu-run`, its own plan/fulfil loop and its own bitmaps: render or decode, normalization, tracer, OCR evidence,
@@ -6679,7 +6708,7 @@ alignment, health, arbitration, targeted rounds) and the **document unit** (stag
 the head of Phase 7. (2) The PageLayer's words and lines are `fw` and `fl`, **with the layouts of `words` and `lines`**;
 stage 3 (furniture, tables, headings, paragraphs and columns) is handed `fw`/`fl` (and the fused graphics `fpa`, with the
 layout of `paths`) where it was handed `wd`/`ln`/`pa`, and no stage 3 signature changes. (3) With one source a page's
-PageLayer is its words (the text layer's after triage, or the OCR lines D186 measures), so a run with no engine gives every
+PageLayer is its words (the text layer's after triage, or the OCR lines D213 measures), so a run with no engine gives every
 gate the Model it gave before (a law and gate G1 of P7.3). (4) OCR words stay in the OCR arenas; the pipeline's arenas no
 longer receive them directly (P6.5's `sc-emit-lines` appended them to `wd`/`ln`: that becomes the one-source path of the
 arbiter, and `sc-tag`'s per-page mask becomes per-word provenance from `fv`).
@@ -6692,10 +6721,10 @@ an adapter in every stage 3 module (every module touched for nothing); fusion af
 on unfused text).
 - [ ] **Signed off** (maintainer)
 
-### D196 — Pixels reach kin through a `BitmapSet`; a transcript carries every bitmap kin reads; a kin-made view is OCR'd by naming it and its hash (P7.U, P7.4; SPEC 7.3; D008, D089, D092, D117, D187)
+### D196 — Pixels reach kin through a `BitmapSet`; a transcript carries every bitmap kin reads; a kin-made view is OCR'd by naming it and its hash (P7.U, P7.4; SPEC 7.3; D008, D089, D092, D117, D214)
 **Decision**: (1) A page unit gets its answered bitmaps as a `BitmapSet` port (`bms-get`, `bms-has`, `bms-put`), declared
 in all four host trees; kin allocates derived views with `bms-put` at ids ≥ `KIN_VIEW_BASE` (2^24). (2) From P6.3 on kin
-reads pixels, so **a transcript must carry every render and decode bitmap a unit reads**; D187's slim transcripts replay
+reads pixels, so **a transcript must carry every render and decode bitmap a unit reads**; D214's slim transcripts replay
 only units that read none (there will be none with a raster), and the committed scan transcripts are re-recorded whole.
 The engine's thresholded image is carried when recorded (it is `xo` 11 and 12's input). (3) An `ocr` request may name a
 kin-made view (the body-ink layer, a quarter-turned page, later a polar seal strip): its record carries the view's
@@ -6737,12 +6766,12 @@ for "thin" against "thick" and bold against regular: to be confirmed by the meas
 (duplicates the text layer and mixes glyph ink into rule detection).
 - [ ] **Signed off** (maintainer)
 
-### D199 — An Engine with no `Renderer` answers `render` and `crop` `unsupported` (revises D191 (5)); a born-digital page's rasters are a `with-text` and a `no-text` render at 300 dpi; OCR languages from the text layer's scripts (P7.U, P7.S; SPEC 7.2, 8.3; D184, D188, D191, D193)
-**Decision**: (1) As D184 made a missing `Ocr` an answer, a missing `Renderer` is an `unsupported` answer, transcribed: a
+### D199 — An Engine with no `Renderer` answers `render` and `crop` `unsupported` (revises D191 (5)); a born-digital page's rasters are a `with-text` and a `no-text` render at 300 dpi; OCR languages from the text layer's scripts (P7.U, P7.S; SPEC 7.2, 8.3; D211, D215, D191, D193)
+**Decision**: (1) As D211 made a missing `Ocr` an answer, a missing `Renderer` is an `unsupported` answer, transcribed: a
 gate with no engines then converts every page as fusion over the sources it has. (2) Under `always` a born-digital page asks
 round 1 `render` layer 0 and layer 1 at 300 dpi; the watermark layers are never asked of pdfium (D193 found it cannot make
 them); `text-only` (layer 2) is asked only by the targeted round for an unhealthy font (P7.4). (3) On a born-digital page the
-OCR request's languages are the locale's, else the models of the text layer's scripts, else every model (D188's default).
+OCR request's languages are the locale's, else the models of the text layer's scripts, else every model (D215's default).
 **Why**: D191's `fulfil-failed` was right while nothing asked for a render without wanting one; once every born-digital page
 asks under `always`, a missing renderer must degrade, not fail. Two renders because the tracer wants the page without text
 and OCR wants it with; the text layer's scripts are an exact script detection that costs nothing.
@@ -6750,8 +6779,8 @@ and OCR wants it with; the text layer's scripts are an exact script detection th
 inexact); OSD first, then languages (an engine pass more, on a noisier answer).
 - [ ] **Signed off** (maintainer)
 
-### D200 — The OCR policy once fusion exists: `always` means every page has an OCR witness; `ocr-scope` `full` (default) or `witness`; `auto` defined; D185 (3) superseded at P7.S (SPEC 8.3, 9.8; D038, D185)
-**Decision**: (1) At P7.S, born-digital pages are OCR'd under `always` (D185 (3) said they would be once fusion existed, and
+### D200 — The OCR policy once fusion exists: `always` means every page has an OCR witness; `ocr-scope` `full` (default) or `witness`; `auto` defined; D212 (3) superseded at P7.S (SPEC 8.3, 9.8; D038, D212)
+**Decision**: (1) At P7.S, born-digital pages are OCR'd under `always` (D212 (3) said they would be once fusion existed, and
 it now does). (2) `always`'s promise is coverage: every region of ink the text layer does not explain is read by OCR, and
 every (font, page) of the text layer is checked against OCR. (3) `ocr-scope: full` (default) reads every page's whole
 `with-text` render; `ocr-scope: witness` reads the `no-text` render whole plus three witness lines per (font, page),
@@ -6837,14 +6866,14 @@ text layer kept where reliable) each need a number, and a win rate is a descript
 **Alternatives**: win rates as ratcheted metrics (a better fusion can lower the text layer's win rate legitimately).
 - [ ] **Signed off** (maintainer)
 
-### D207 — Ids per page unit, `KIN_VIEW_BASE`, and five rounds a page unit (P7.U; SPEC 7.3; D184)
+### D207 — Ids per page unit, `KIN_VIEW_BASE`, and five rounds a page unit (P7.U; SPEC 7.3; D211)
 **Decision**: page `p` asks ids `(p + 1) * 256 + k` (render with-text 1, no-text 2, text-only 3, decode 4, OCR 16-127,
 crops and later kinds 128-255); kin-made views are `2^24 + p * 256 + k`; `max-rounds` is 5 per page unit (render or decode;
 first OCR pass; targeted requests including a `text-only` render; their OCR; one spare); `fetch-rounds` stays the document
-pass's. D184's ids are replaced and its transcripts re-recorded.
+pass's. D211's ids are replaced and its transcripts re-recorded.
 **Why**: per-page id ranges make a page unit's requests independent of how many pages precede it in a round, and leave room
 for every request kind planned; the round count follows from the plan (a `text-only` render and its OCR are two rounds).
-**Alternatives**: keeping D184's `2i + 1` scheme (no room for more than two requests a page).
+**Alternatives**: keeping D211's `2i + 1` scheme (no room for more than two requests a page).
 - [ ] **Signed off** (maintainer)
 
 ### D208 — Visibility triage: a word that failed a P3.6 check leaves the flow for the ledger, before stage 3, with or without OCR; a word occluded by a page-sized image is a hidden OCR layer (P7.0; SPEC 8.1, 9.4; D155, D157)
@@ -6879,9 +6908,49 @@ concurrent in the host).
 **Why**: OCR is seconds a page and everything else is a tenth of that; the budget says where the tenth must stay, so a slow
 kin stage is noticed, and the scope switch is the one lever that changes the seconds.
 **Alternatives**: a gate on time (machine-dependent, as D194 found for pixels).
+
+### D211 — The `Ocr` port as wired: a request kin builds, a port the embedder brings, `unsupported` without one, Tesseract live behind a feature in Rust and a build tag in Go (P6.5; D008, D089-D091, D095, D038, D187)
+**Decision**: (1) **kin asks, the host answers.** An image input (`emon.rasterin`'s `rs-unit`) and a PDF page that is a scan (`emon.scan`'s `sc-pdf-unit`) ask for OCR as a plan request (`rq-ocr`, built by `sc-request`: the whole bitmap of the decode request named, `psm` 3, flags symbols + OSD, no region, the language the locale hint names, if any) and are re-run on the answers; the evidence, the lines and the Model are made from the answer by kin alone. Request ids are derived from what is asked: an image's decode of frame `f` is `f + 1` as before (D187) and its OCR `frames + f + 1`; a PDF page `i`'s decode of the embedded stream is `2 i + 1` and its OCR `2 i + 2`. The rounds are three for an image (frame 0; the other frames and OCR of frame 0; OCR of the rest) and two for a PDF whatever its length (every scanned page's stream; every one's OCR), both within `max-rounds` 3. (2) **The port.** Rust: `trait Ocr { fn fulfil(&self, &Request, &Bitmaps, keep_binary: bool) -> Result<Answer, PlanError>; fn producer(&self) -> Vec<(String, String)> }` in `Config::ocr: Option<OcrPort>`; Go: `type Ocr interface { Fulfil(PlanRequest, PlanBitmaps, keepBinary bool) (PlanAnswer, error); Producer() [][2]string }` in `Config.Ocr`. With no port an `ocr` request is answered `unsupported` (a failure is an answer too, D089) and the page keeps the text it has (none, for a scan): so every gate, which has no engine, converts a scan as it did before OCR existed, and a recording made so says it. An engine that panics on a page answers `failed` for it. (3) **Pixels are kept when somebody will read them**: a decode answer carries its bitmap when a transcript is being recorded or an `Ocr` port is configured; a decode of a PDF's embedded DCT stream (kept only for an engine: a recording of a scan with no engine has no 450 KB PNG a page, and the two hosts' JPEG decoders, which differ in the last bits, D190, leave no difference between their transcripts). The engine's own thresholded image goes in the OCR answer's bitmap only when recording. (4) **A DCT stream is a JPEG file**: the `decode` request's `filter` may now be `flt-dct`, and the host reads the span in place with the same decoder (orientation and resolution tags of an embedded stream are not honoured by a PDF viewer and are not here either, which is a follow-up: P6.1a owns the other PDF image filters). (5) **Tesseract** is bound by hand to the C API in both hosts, LIVE only: Rust `host/rust/src/tess.rs` under the Cargo feature `tesseract` (`EMON_RS_LIVE=1 kin/scripts/emon-rs-build` builds `.cache/emon-rs-live`, `-L $EMON_TESS_LIB`), Go `host/go/tess.go` under the build tag `tesseract` with cgo (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, `.cache/emon-go-live`; the script signs the binary again on macOS, whose linker's signature fails its own check) with `tess_stub.go` for every other build. The two drivers take `--tesseract[=TESSDATA]`. Nothing in `bb gates` builds either (a gate replays a transcript, D095). One engine sits behind a mutex (Tesseract's API objects are not thread safe). **Live outputs of the two hosts are not identical and cannot be asked to be**: the Rust and Go JPEG decoders agree to a few bits per byte (D190) and Tesseract's answer moves with them (a live Go conversion of `h-keyword` read `Chapter1` where Rust read `Chapter 1`); the identity is the transcript's, recorded on one host and replayed on the other, byte for byte (`bb ocr`).
+**Why**: SPEC 7.3 and D008 (kin never calls an expensive port; the answer is the transcript); a port is what an embedder brings, so the library names no engine and no filesystem; `unsupported` is the honest answer of a host with no engine and keeps every existing gate meaning what it meant.
+**Alternatives**: OCR through a `Renderer` stand-in (P6.2 is not here; the page's own image is the bitmap); a crate or cgo wrapper for Tesseract (a build script and a pinned Leptonica; the C API is 40 declarations); the live engine in `bb gates` (D008: whose Tesseract is installed would decide a gate); making the two live hosts agree by sharing a JPEG decoder (not on the table: D189).
 - [ ] **Signed off** (maintainer)
 
-### D217 — Ink layers as built: paper by mass, seeds by mass with a spike rule, edges by ink-to-paper segment, every dark neutral layer is body (P6.3; SPEC 8.2; D197)
+### D212 — Which pages are OCR'd: images and scanned PDF pages; a born-digital page keeps its text layer under `always` until fusion exists (P6.5; D038, SPEC 9)
+**Decision**: (1) `ocr: never` asks for nothing, on any input. `auto` and `always` OCR an image page (it has no text layer to prefer) and a PDF page that is a scan. (2) **A scanned PDF page** is a page with no `words` row at all (a hidden one counts: a "searchable scan" is a page with a text layer) and an image placement that is upright and not skewed, a real XObject (not inline, not a stencil mask), at least 16 pixels each way, covering at least half the page, whose stream's whole filter chain is one `DCTDecode` in a file that is not encrypted; the page has no `/Rotate`. Of its placements the largest wins. Its pixels are the stream's own (D211). Everything else is left to the `Renderer` (P6.2): a Flate or CCITT page image, a tiled scan, a rotated one, an encrypted file, a page with the scan AND a text layer. (3) **A born-digital page is not OCR'd under `always`, though D038 says every page is**: D038's reason for it (catch broken encodings, text in images, outlined text, give the health scores an agreement rate) is a FUSION of the text layer with OCR (SPEC 9), and fusion is P7, which is not built. Without it a second reading has nowhere to go: it could only replace the text layer, which is authoritative (D038's own words for every case but the failures fusion exists to find), or be dropped. So the text layer stays authoritative and nothing is asked of a page that has one; P7 will turn the page's text layer + OCR into fused evidence, and the setting stays as it is. `auto` therefore equals `always` here. (4) **Where OCR gave the text, the Model says so** (`emon.scan`'s `sc-tag`, after the paragraphs and the furniture are written): its `text` source becomes `ocr`, an inline text's confidence 1000 (a glyph's own text) becomes 500 (an engine's word is uncalibrated, D130, Phase 10), a block that had `text` gets the `ocr-only` flag, a scanned PDF page's kind is `scanned`, and the document's `settings.ocr` is `always` or `auto`. A Model with no OCR in it is byte for byte what it was.
+**Why**: (3) is the maintainer's `always` read at its word: OCR on every page needs fusion to mean anything; recording the choice is the brief's ("record that fusion (P7) isn't built, so the text layer stays authoritative").
+**Alternatives**: OCR a born-digital page and keep only the text layer (a cost with no use); OCR it and let OCR win (D038 says the opposite); OCR it and write both (two bodies); decoding any page image (P6.2).
+- [ ] **Signed off** (maintainer)
+
+### D213 — An OCR line is a pipeline line: its size, its box and its rotation are the line's, measured (P6.5; D096, D134, D135, SPEC 8.4)
+**Decision**: the evidence rows (`olines`, `owords`, `osyms`, `oalts`, `feats`) keep the engine's numbers. The pipeline's rows (`lines`, `words`, `etext`) are made from them by `sc-emit-lines`, in the SAME arenas the text layer fills, so furniture, initials, headings, paragraphs, columns, tables and the Model read an OCR page as they read a born-digital one (SPEC 9.1). Three things differ from a text-layer line and are decided once: **size**, **box** and **rotation**. (1) **A word has no font size.** The stages that read sizes (the paragraph stage breaks a paragraph at a 5 per cent change; the heading stage ranks sizes) read a line's dominant word's `wf-size`, so every word of an OCR line gets the LINE's size, `1.37 x` the ascender line `A` (an em is about `A / 0.73`), in centipoints. **`A` is measured, not given**: the Tesseract C API does not export `RowAttributes` (x-height, ascenders, descenders: `capi.h` has no such function), and a measurement is one implementation for every engine. An engine that does give them (ext v2's `xheight asc desc`) is used; otherwise from the symbols' boxes: `X` the 30th percentile of the HEIGHT of the boxes of the x-height letters (`a c e m n o r s u v w x z`, at least 4 of them), `T` that of the tall ones (`b d f h k l`, else capitals and digits x 1.06, at least 3), `D` the 30th percentile of the hanging letters' bottoms below the baseline. Why heights and not tops above the baseline: the engine's baseline is fitted to a whole line and is a pixel or two off at either end of a tilted one. Why a LOW percentile: a symbol's box is its own component's most of the time and the whole word's height some of the time (in a body line of `columns-two` a third of the x-height letters have the height of an ascender), and those are always too tall; no mean and not the median survives that. Why `X`, and not `T`: a line has dozens of x-height letters and a handful of tall ones (a heading may have none). So a line's `A` is its `X` times THE PAGE'S ratio `A / X` (the median over the lines that have both: one typeface per page; 1.5 with none). The sizes of a page are then CLUSTERED: the densest window `[A, 1.10 A]` over the lines not yet placed takes the median of its members' `A` and `D`, and so on over the rest: the measure is good to 3 or 4 per cent, the paragraph stage breaks at 5. Two sizes less than 10 per cent apart are one size here; the engine could not tell them apart either (a `Chapter` heading of `h-keyword` is 10 per cent over its body). Where nothing is measurable (a script the classes do not know) the size is 1.08 x the box's height. (2) **The box of a line** is its words' extent along it and, across it, `A` above the baseline's middle and `D` below it: not the axis-aligned box of a tilted line, which a 1.2 degree scan makes 20 pixels taller across 1000 and which would swallow the gap between lines that the paragraph stage measures. (3) **The rotation of a line** is its baseline's angle less the page's (the lower median of the run's lines, as `xo-angle` is): a scan fed in a degree off is a page of upright lines, and a line that is not upright is still not. Also: a word's `gap` and `wbreak` as the text layer's (`space`, `line-end`); `lf-order` is the engine's reading order; a line and its words carry `sr-ocr`. The page's `epages` row has the raster flag and the resolution; the decoded raster is a `views` row (kind `decode`, exact at 150, 200, 300 dpi); a scanned PDF page's raster is placed by the image's box (a crop and a dpi).
+**Why**: measured with `bb ocr-live` on the 55 scans: this took the headings of the scan variants from the first-draft 0.3-0.6 F1 to the 0.9s, and the paragraph boundaries from 0.4-0.5 to 0.8-0.98 on the documents of plain prose (`h-numbered`, `h-plain`, `furn-odd-even`); the number of paragraph breaks no longer depends on whether a line has an `f` in it.
+**Alternatives**: the word box's height as the size (a `was` is half the size of a `Which`); the engine's `pointsize` (0 for LSTM); a median or a trimmed mean (both lost to the oversized boxes); no clustering (a paragraph breaks every time a line measures a pixel different); a window of 14 per cent (hides a 10 per cent heading).
+- [ ] **Signed off** (maintainer)
+
+### D214 — The OCR answer, version 2 (P6.5a): row-less lines measured by kin, a block table, a word's point size and dictionary flags, the thresholded image as the answer's bitmap, a `:producer` map in the transcript, and slim transcripts (P6.5a; D095, D096, D130)
+**Decision**: (1) **Version 2 replaces version 1** (`ox-version` 2; `ox-find` answers -1 for version 1, which the one committed transcript, re-recorded, was). Header 14 cells (`nblocks binary bw bh` after `nlines`); a line 14 (`xheight asc desc`, pixels, -1 unknown); a BLOCK TABLE after the lines, one row per block id (box, orientation, writing direction, line order AT that block: they differ per block, and the evidence's `oblocks` now carries them, with the block's own box); a word `flags lang psize dflags nsym` (`psize` the engine's point size, -1 unknown, in the evidence `owf-psize` in centipoints; `dflags` bit 1 the engine's dictionary, bit 2 numeric: the evidence's `owf-flags`, which `xo-engine-flags` already reads). (2) **The thresholded image**: `binary` 1 says the OCR ANSWER carries a bitmap (1-channel, 0 ink, 255 paper, `bw x bh`), which the transcript stores like a decode's (`bitmap-NNNN.png`) and kin records as a `views` row of kind `engine-binary` named by the run's `orf-bview`; D096's provenance. The record says `binary` 1 whether or not the bitmap is kept (it is, only when recording: a conversion's Model cannot depend on it). (3) **`:producer`**: `transcript.edn` gains `:producer {:engine \"tesseract\" :version \"5.5.3\" :leptonica ... :models \"eng:4113088:fnv64=... osd:...\" ...}` when the port says (`Ocr::producer`), after `:emon-transcript 1`; a replay never reads it (it depends on the answers, not on whose they are); a transcript with none is byte for byte what it was; both hosts write the same bytes (the Go reader keeps the file's order). `test/ocr/PRODUCER.json`'s note is superseded. (4) **The two row-attribute facts the C API does not give** (x-height and ascenders; the page's deskew is read from the iterator's orientation) are answered -1 and kin measures them (D213); D130's finding stands (nothing was changed in `tess.rs` for the 0 confidences: they are Tesseract's, carried verbatim). (5) **`test/ocr/h-keyword/`** was re-recorded live on Rust with version 2 (`bb tools/ocr/record.clj`; `.dump` rewritten, evidence 274,562 bytes; the gate holds 199 words, 24 lines, 23 blocks and paragraphs, 972 symbols, 2,139 alternatives, CER 2.05 per cent, as before). `xo-*` columns 11 and 12 (engine-ink, Jaccard) are NOT filled: they want kin's ink (P6.3). (6) **Committed transcripts are slim**: `test/ocr/scan/ID/transcript.edn` of five scans, recorded by `tools/ocr/record-scan.clj` and stripped of their bitmaps (a replay returns the recorded answers and reads no pixel); each is about 57 KB a page. Slim or whole, a transcript replays on Rust and Go to one Model (`bb ocr`).
+**Why**: the extension was designed to be extended (D095); the row attributes and the block table are what the engine reports and the evidence has room for (D096); a producer is what a transcript is evidence OF.
+**Alternatives**: patching version 1 in place (every reader of the line stride would drift); an EDN reader that keeps order for Go's maps (a scanner of one map is smaller); storing the pixels of 50 scans (30 MB).
+- [ ] **Signed off** (maintainer)
+
+### D215 — The locale hint chooses the OCR language; with none, every installed model; the resolution is a hint in the flags; an unstated resolution is 300 dpi, not estimated (P6.5; D038, D187, SPEC 3.4)
+**Decision**: (1) `Options::locale` (a BCP 47 tag) is passed to kin as code points and `sc-lang` maps its primary subtag to an ISO 639-3 code (the 79 languages of the table in `emon.scan`: `de`, `de-CH`, `deu` all name `deu`); Chinese is `chs` or `cht` by its script (`Hant`) or region (`TW`, `HK`, `MO`), which the adapter turns into `chi_sim` and `chi_tra`; a tag that names nothing is no language. The request carries the language as one more `rq-ocr-lang` cell and the run's `oruns` row records it. The adapter drops the languages it has no model for and, if none is left, reads with every model it has. **With no hint, no language is assumed (D038)**: the engine is loaded with every installed model but `osd` and `snum` (here: `eng`), each word says which model read it, and OSD runs in the same request (orientation, script and their confidences go to `oruns`); a script-specific second pass (Latin models for a Latin page, and so on) and acting on OSD (a page at 180 degrees reads as noise until it is re-rendered rotated: P6.2) are follow-ups. (2) **The resolution is a hint**: the request's flags above the low byte carry it in dots per inch (`ocf-dpi`), from the raster (the frame's, or an embedded image's pixels over the placement's inches), since Tesseract's size heuristics need it and its own default is 70; the recorded `h-keyword` request is flag 38403 (3 + 150 x 256). (3) **A frame that states no resolution is read as 300 dpi and flagged `dpi-unknown`, and the estimate SPEC 3.4 wants from the text size is not made**: it would turn the page's size in the Model into an OCR estimate (a page 612 or 1224 points wide by the median line height), changing the geometry every later stage reads; the 300 is the engine's own default and the pixel size is in the page table either way. Follow-up with P6.3.
+**Why**: SPEC's "without assuming English"; Tesseract's `eng` default is exactly that assumption.
+**Alternatives**: `eng` by default (D038 says not); running OSD first and choosing models by the script it names (two engine passes, a decision on a noisy answer; the cost belongs to the fusion item); estimating the dpi in kin from the line heights (above).
+- [ ] **Signed off** (maintainer)
+
+### D216 — Measuring scans: `bb ocr-live` (not a gate), `bb ocr` (a gate over committed transcripts), the scoreboard's `emon-live` and `emon-replay`, what the first numbers say (P6.5; D145, D077, D095)
+**Decision**: (1) `bb accuracy` gains `--variants` and `--ids` and two predictors: `emon-live` (the Rust Engine with Tesseract, `tools/accuracy/predict-emon-live.sh`; `bb ocr-live`: the scan variants, ratcheted) and `emon-replay` (the Rust Engine replaying `test/ocr/scan/ID/`, no engine; a gate's, `bb ocr`: the documents that have a transcript). The default predictor `emon` is unchanged and still scores `scan/*` with no OCR (CER 1.0), which is what a gate with no engine can claim. (2) `bb ocr` now also holds, over the committed scan transcripts: the Rust and the Go Engine replay each to the identical bundle (JSON, HTML, evidence), the Model says `ocr` where the text came from, a changed request is `transcript-miss` on both, and the `emon-replay` ratchet. (3) **First numbers** (BEFORE: no OCR, scan/all CER 1.0000, WER 1.0000, heading F1 0, paragraph-boundary F1 0; AFTER, live Tesseract 5.5.3 on the 55 scan variants, this machine; see the scoreboard's `emon-live`): scan/all CER 1.0000 -> 0.0878, WER 1.0000 -> 0.1676, bag-of-words F1 0.00 -> 0.87, heading F1 0.00 -> 0.70 (P 0.71, R 0.69), paragraph-boundary F1 0.00 -> 0.47, furniture F1 0.00 -> 0.38 (the text-layer variants of the same documents: CER 0.012, WER 0.021, heading F1 0.99); by family: headings CER 0.024 / heading F1 0.80, furniture CER 0.023 / heading F1 0.96 / paragraph F1 0.81, columns CER 0.081, lists CER 0.068, tables CER 0.105, scripts CER 0.80 (only eng and osd installed). The pdf variants of the same documents: CER 0, headings 0.8-1.0, boundaries 0.87-1.0. What remains, in order of cost: bold-only headings (a bold run of body size has the same measure; bold is stroke width, P6.3's ink); lists and tables (P4 and P5, which the scan inherits when they land); non-Latin scripts (only `eng` and `osd` are installed here); a heading 10 per cent over its body (D213). FUNSD, SROIE and CORD (`corpus/_gold`) are sampled by `bb ocr-live` (after the scans): CER of the OCR text against the datasets' words (not a gate): 15 documents each: SROIE (receipt photographs, line-level transcription) CER 0.443, WER 0.664, bag-of-words F1 0.517; FUNSD heading P 0.14, R 0.20, F1 0.165 (no text claim in its gold); CORD claims no text and no kind this scorer measures here (word boxes only) so it reports nothing, and its photographs are the hardest input (Tesseract itself reads nothing on several).
+**Why**: D095: the gate replays, the measure is live; both are needed and neither may be mistaken for the other.
+**Merged with the table, initials and alignment stages (D178-D185, after P6.1)**: both Engines' raster unit now runs the same stages as the PDF unit (`TbBuild`, `LcCopy`/`InDetect`, headings on the copy, `PaBuild` with tables, initials and alignment, `FuWrite`); OCR words have no glyph or font evidence, so no initial is found in a scan (P6.7 is for that). A scan's rows slope (0.6 degree here), so one table row's baselines spread over several points: `tb-rows` groups a row as a chain of baselines (each within a third of the size of the one before it) instead of a distance from the first word, which lost the `Total` label of `table-simple-ruled` (a one-word row of its own is no table row); identical on a text layer (a row's baselines agree). `emon-replay` `scan/all` after the merge: CER 0.0324, WER 0.0894, heading F1 0.886 (before: 0.0331, 0.0903, 0.886); table, caption and paragraph-boundary metrics now score (`block-table-f1` 0.0 to 1.0, `para-boundary-f1` 0.774 to 0.819).
+- [ ] **Signed off** (maintainer)
+
+### D217 — The C# arm of `bb unit` is built in Release: two laws were 12.7 of its 13.5 minutes in Debug, and a cap kill says "timed out" (P0.5; D044)
+
+**Decision**: `kin/scripts/unit` runs `dotnet test -c Release`. `finish` reports a `kin/scripts/cap` kill (124) as `FAIL <arm>    timed out`, and in `red` mode a timeout is a failure, not a law that failed.
+**Why (measured)**: `bb unit csharp` alone was not slow because of the build (7 s) or the 3.5 MB of generated CJK CMap tables (they compile in seconds); the 379 laws took 13 m 25 s in Debug, and two of them took 9 m 35 s (`TestTheThreeFixturesAndTheRealFilesAreTheSameThroughAnAsyncSourceOf512ByteChunks`) and 3 m 08 s (`TestRealFilesMakeTheGlyphStreamsPdfminerAgreedWith`): tight loops over megabytes of PDF, unoptimised. Under `bb gates` on a loaded machine that crossed the 900 s cap, and the old script then showed a bare FAIL with a count of 0. In Release the same two take 46 s together and the whole `bb unit csharp` (checks, restore, build, 379 laws) 4 m 47 s under load. The cap stays 900 s as a hang detector.
+
+### D218 — Ink layers as built: paper by mass, seeds by mass with a spike rule, edges by ink-to-paper segment, every dark neutral layer is body (P6.3; SPEC 8.2; D197)
 **Decision**: the histogram clustering of D197 as follows (all integer, settings `nm-ink-*`): paper is the heaviest bin among the
 lightest and every bin within `ink-paper` (24) of it; seeds are the heaviest non-paper bins (ties by bin index, bins under n/40000
 pixels never seed) farther than `ink-merge` (40, L1 in lightness, r-g, (r+g)/2-b) from every seed so far AND either off every seed's
@@ -6897,7 +6966,7 @@ anti-aliasing ramps; each rule above removed one of those. Measured in P6.3's en
 **Alternatives**: k-means over pixels (D197); seeding on every heavy bin (eight seeds spent on a grey ramp); one body layer (loses headings).
 - [ ] **Signed off** (maintainer)
 
-### D218 — Deskew from the body mask's ink runs, in two-pixel rows, scored by squared steps; the angle goes to the view and every view derived from it (P6.3; SPEC 8.2)
+### D219 — Deskew from the body mask's ink runs, in two-pixel rows, scored by squared steps; the angle goes to the view and every view derived from it (P6.3; SPEC 8.2)
 **Decision**: on a decode view, the body layers' mask (borrowing `binary`'s buffer before Sauvola overwrites it) is read by
 `bitmap-next-nonzero` into ink runs (midpoint x, row, length) on every `h/800+1`-th row; for each angle from -5 to 5 degrees at 0.1,
 then 0.01 around the best, a run goes to the row `(y cos + x sin) >> 17` (two pixels) with its length as weight and the score is the
@@ -6910,7 +6979,7 @@ and squared differences gain 2x to 10x at the true angle; reading only body ink 
 **Alternatives**: Hough over components (the tracer's, later); component centres (tried: stacks); one-pixel rows (stair artefact).
 - [ ] **Signed off** (maintainer)
 
-### D219 — normalization allocates no bitmap: the caller owns gray, binary and masks; banded Sauvola on rings of integral rows; the measurement is bb ink on known overlays (P6.3; D092, D093, D196)
+### D220 — normalization allocates no bitmap: the caller owns gray, binary and masks; banded Sauvola on rings of integral rows; the measurement is bb ink on known overlays (P6.3; D092, D093, D196)
 **Decision**: `nm-view` (and every `nm-*` stage) takes the bitmaps it fills; kin cannot hold one in `Cells`, so P7.U makes them with
 `bms-put` at ids >= `KIN_VIEW_BASE` for the `views` rows `nm-view` appended (`nm-gray-view`, `nm-binary-view`, `ikf-mask`), and a mask is
 one `nm-mask-into` / `nm-role-mask-into` call per row. Sauvola keeps rings of `2r+2` integral rows (sum and square), equal to

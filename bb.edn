@@ -28,8 +28,10 @@
           :task (apply shell "bb" "kin/scripts/repeat" *command-line-args*)}
   fuzz {:doc "Mutate the PDF fixtures (truncation, byte flips, corrupt xref/Length/headers/stream boundaries), run every mutant through Rust and Go (memory and a 512-byte async source): no panic, no hang, hosts agree, async = memory (P2.12). No args: the fixed-seed smoke subset (a gate).  bb fuzz [--long N] [--seed S] [--cases N] [--hosts all] [--only I --dump F] [--replay FILE...]"
         :task (apply shell "bb" "tools/fuzz/fuzz.clj" *command-line-args*)}
-  ocr  {:doc "A real Tesseract transcript (one scanned page) replayed on Rust and Go: identical evidence, a first CER (P2.6). Recording it is tools/ocr/record.clj (live, not a gate)."
+  ocr  {:doc "Real Tesseract transcripts replayed on Rust and Go (P2.6, P6.5): the spike's page to one evidence dump and a CER, and the committed scans (test/ocr/scan/) through the whole Engine to one Model, JSON and HTML, with the accuracy ratchet of `emon-replay`; no engine runs. Recording is tools/ocr/record.clj and record-scan.clj (live, not gates)."
         :task (shell "kin/scripts/ocr")}
+  ocr-live {:doc "LIVE Tesseract over the 55 synthetic scans (the scoreboard's emon-live, ratcheted) and a sample of FUNSD, SROIE and CORD gold: NOT a gate (needs Tesseract, takes minutes; P6.5, D216).  bb ocr-live [--update] [--no-gold] [--gold-n N]"
+            :task (apply shell "bb" "tools/ocr/live.clj" *command-line-args*)}
   png-check {:doc "Do independent decoders (ImageMagick, java.util.zip) read emon's canonical PNGs to the same pixels; size against zlib level 6 (P3.11, D117).  bb png-check [--update-digests]"
              :task (apply shell "kin/scripts/png-check" *command-line-args*)}
   ink {:doc "How well do kin's ink layers separate body ink from stamps, seals, signatures and watermarks, and how close is the deskew, on P6.6's colour and overlay scans of known truth (P6.3, D197). NOT a gate; needs poppler, ImageMagick and corpus/.  bb ink [--go] [--limit N] [--rebuild]"

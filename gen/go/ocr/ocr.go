@@ -16,6 +16,24 @@ func OcfOsd() int32 {
 	return 2
 }
 
+func OcfDpiUnit() int32 {
+	return 256
+}
+
+func OcfDpi(flags int32) int32 {
+	// The resolution the request says its bitmap has, dots per inch; 0 none. A hint for the engine's size
+	// heuristics: the flags above the low byte.
+	return flags / OcfDpiUnit()
+}
+
+func OcwDict() int32 {
+	return 1
+}
+
+func OcwNumeric() int32 {
+	return 2
+}
+
 func BtText() int32 {
 	return 0
 }
@@ -37,21 +55,25 @@ func BtOther() int32 {
 }
 
 func OxVersion() int32 {
-	return 1
+	return 2
 }
 
 func OxHeader() int32 {
-	return 10
+	return 14
 }
 
 func OxLineStride() int32 {
-	return 11
+	return 14
 }
 
-func OxBegin(c *port.Cells, orient int32, wdir int32, tlorder int32, deskew int32, osd int32, script int32, sconf int32, oconf int32, nlines int32) int32 {
-	// Start the extension after the LAST word of an answer; then `nlines`
-	// calls of `ox-line`, then per word `ox-word` and its `ox-sym`s. The
-	// answer's own length is fixed by `an-ocr-end`, as ever.
+func OxBlockStride() int32 {
+	return 7
+}
+
+func OxBegin(c *port.Cells, orient int32, wdir int32, tlorder int32, deskew int32, osd int32, script int32, sconf int32, oconf int32, nlines int32, nblocks int32, binary int32, bw int32, bh int32) int32 {
+	// Start the extension after the LAST word of an answer; then `nlines` calls of `ox-line`,
+	// `nblocks` of `ox-block`, then per word `ox-word` and its `ox-sym`s. The answer's own length is
+	// fixed by `an-ocr-end`, as ever.
 	var at int32 = port.CellsLen(c)
 	port.CellsPush(c, OxVersion())
 	port.CellsPush(c, orient)
@@ -63,10 +85,14 @@ func OxBegin(c *port.Cells, orient int32, wdir int32, tlorder int32, deskew int3
 	port.CellsPush(c, sconf)
 	port.CellsPush(c, oconf)
 	port.CellsPush(c, nlines)
+	port.CellsPush(c, nblocks)
+	port.CellsPush(c, binary)
+	port.CellsPush(c, bw)
+	port.CellsPush(c, bh)
 	return at
 }
 
-func OxLine(c *port.Cells, x int32, y int32, w int32, h int32, bx0 int32, by0 int32, bx1 int32, by1 int32, block int32, par int32, btype int32) int32 {
+func OxLine(c *port.Cells, x int32, y int32, w int32, h int32, bx0 int32, by0 int32, bx1 int32, by1 int32, block int32, par int32, btype int32, xheight int32, asc int32, desc int32) int32 {
 	port.CellsPush(c, x)
 	port.CellsPush(c, y)
 	port.CellsPush(c, w)
@@ -78,14 +104,30 @@ func OxLine(c *port.Cells, x int32, y int32, w int32, h int32, bx0 int32, by0 in
 	port.CellsPush(c, block)
 	port.CellsPush(c, par)
 	port.CellsPush(c, btype)
+	port.CellsPush(c, xheight)
+	port.CellsPush(c, asc)
+	port.CellsPush(c, desc)
 	return 0
 }
 
-func OxWord(c *port.Cells, flags int32, lang int32) int32 {
+func OxBlock(c *port.Cells, x int32, y int32, w int32, h int32, orient int32, wdir int32, tlorder int32) int32 {
+	port.CellsPush(c, x)
+	port.CellsPush(c, y)
+	port.CellsPush(c, w)
+	port.CellsPush(c, h)
+	port.CellsPush(c, orient)
+	port.CellsPush(c, wdir)
+	port.CellsPush(c, tlorder)
+	return 0
+}
+
+func OxWord(c *port.Cells, flags int32, lang int32, psize int32, dflags int32) int32 {
 	// Start a word's extension; answers its start, which `ox-sym` wants.
 	var at int32 = port.CellsLen(c)
 	port.CellsPush(c, flags)
 	port.CellsPush(c, lang)
+	port.CellsPush(c, psize)
+	port.CellsPush(c, dflags)
 	port.CellsPush(c, 0)
 	return at
 }
@@ -94,7 +136,7 @@ func OxSym(c *port.Cells, word int32, x int32, y int32, w int32, h int32, conf i
 	// Start a symbol of the word begun at `word`; answers the symbol's start.
 	// Add its code points with `ox-sym-cp` THEN its alternatives with `ox-alt`.
 	var at int32 = port.CellsLen(c)
-	port.CellsSet(c, word+2, port.CellsAt(c, word+2)+1)
+	port.CellsSet(c, word+4, port.CellsAt(c, word+4)+1)
 	port.CellsPush(c, x)
 	port.CellsPush(c, y)
 	port.CellsPush(c, w)
@@ -128,7 +170,7 @@ func OxAltCp(c *port.Cells, alt int32, cp int32) int32 {
 
 func OxFind(c *port.Cells, at int32) int32 {
 	// The start of the extension of the OCR answer at `at`, or -1 when it has
-	// none (or is not version 1). Walks the words to find it.
+	// none (or is not version 2). Walks the words to find it.
 	var end int32 = at + port.CellsAt(c, at)
 	var n int32 = plan.AnOcrCount(c, at)
 	var w int32 = plan.AnOcrFirst(c, at)
@@ -186,14 +228,36 @@ func OxNlines(c *port.Cells, ext int32) int32 {
 	return port.CellsAt(c, ext+9)
 }
 
+func OxNblocks(c *port.Cells, ext int32) int32 {
+	return port.CellsAt(c, ext+10)
+}
+
+func OxBinary(c *port.Cells, ext int32) int32 {
+	return port.CellsAt(c, ext+11)
+}
+
+func OxBw(c *port.Cells, ext int32) int32 {
+	return port.CellsAt(c, ext+12)
+}
+
+func OxBh(c *port.Cells, ext int32) int32 {
+	return port.CellsAt(c, ext+13)
+}
+
 func OxLineAt(c *port.Cells, ext int32, k int32) int32 {
 	return (ext + OxHeader()) + (k * OxLineStride())
 }
 
+func OxBlockAt(c *port.Cells, ext int32, k int32) int32 {
+	// The start of block `k`'s row in the block table, which follows the lines.
+	var n int32 = OxNlines(c, ext)
+	return OxLineAt(c, ext, n) + (k * OxBlockStride())
+}
+
 func OxFirstWord(c *port.Cells, ext int32) int32 {
 	// The start of the first word's extension.
-	var n int32 = OxNlines(c, ext)
-	return OxLineAt(c, ext, n)
+	var n int32 = OxNblocks(c, ext)
+	return OxBlockAt(c, ext, n)
 }
 
 func OxWflags(c *port.Cells, w int32) int32 {
@@ -204,12 +268,20 @@ func OxWlang(c *port.Cells, w int32) int32 {
 	return port.CellsAt(c, w+1)
 }
 
-func OxNsym(c *port.Cells, w int32) int32 {
+func OxWpsize(c *port.Cells, w int32) int32 {
 	return port.CellsAt(c, w+2)
 }
 
+func OxWdflags(c *port.Cells, w int32) int32 {
+	return port.CellsAt(c, w+3)
+}
+
+func OxNsym(c *port.Cells, w int32) int32 {
+	return port.CellsAt(c, w+4)
+}
+
 func OxFirstSym(c *port.Cells, w int32) int32 {
-	return w + 3
+	return w + 5
 }
 
 func OxAltNext(c *port.Cells, alt int32) int32 {
@@ -233,7 +305,7 @@ func OxSymNext(c *port.Cells, sym int32) int32 {
 }
 
 func OxWordNext(c *port.Cells, w int32) int32 {
-	var n int32 = port.CellsAt(c, w+2)
+	var n int32 = port.CellsAt(c, w+4)
 	var s int32 = OxFirstSym(c, w)
 	var i int32 = 0
 	for i < n {

@@ -27,10 +27,14 @@
 ;; hosts spell it alike.
 ;;
 ;;   render  args  input page dpi layer          (`lay`: 0 with text, 1 without, 2 text only)
-;;   decode  args  input offset length filter frame   (filter `flt`; 0 = the bytes are a whole image file)
+;;   decode  args  input offset length filter frame   (filter `flt`; 0 = the bytes are a whole image file; 1 =
+;;                 a PDF's DCT stream, which IS a JPEG file: the span is read in place, D211)
 ;;   ocr     args  bitmap psm flags x y w h lang...   (bitmap = the id of the render/decode request
 ;;                 whose bitmap to read; w = 0 means the whole bitmap; flags bit 1 = symbol
-;;                 alternatives; each lang is up to four ASCII chars packed big-endian, "eng")
+;;                 alternatives, bit 2 = orientation and script detection, and the flags above the low
+;;                 byte the bitmap's resolution in dpi, a hint (`ocf-dpi`, D211); each lang is an ISO 639-3
+;;                 code of up to four ASCII chars packed big-endian, "deu"; none = every model the engine
+;;                 has, D038. The answer's extension is `emon.ocr`'s, version 2, D214)
 ;;   bytes   args  input offset length
 ;;
 ;;   render answer  status w h channels dpi        (pixels are the host's; the bitmap's handle

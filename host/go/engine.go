@@ -50,6 +50,7 @@ import (
 	"emon/plan"
 	"emon/port"
 	"emon/rasterin"
+	"emon/scan"
 )
 
 // Transcript is the plan/fulfil transcript (SPEC 13): per input its index and length, and every request
@@ -174,7 +175,9 @@ func planError(p *port.PlanError) *Error {
 
 // ----------------------------------------------------------------- options
 
-// OcrPolicy is SPEC 13's OCR setting (D038). NOT WIRED IN THIS SLICE: accepted, kept, and without effect.
+// OcrPolicy is SPEC 13's OCR setting (D038). WIRED (P6.5, D211-D215): OcrNever asks for no OCR; OcrAuto and OcrAlways OCR an
+// image and a scanned PDF page, and a born-digital page (a page with a text layer) keeps its text layer under both, because
+// fusion (P7) does not exist yet to weigh a second reading against it (D212).
 type OcrPolicy int
 
 const (
@@ -182,6 +185,29 @@ const (
 	OcrAuto
 	OcrNever
 )
+
+// code is kin's: 0 never, 1 auto, 2 always (`emon.scan`, `emon.rasterin`).
+func (p OcrPolicy) code() int32 {
+	switch p {
+	case OcrNever:
+		return 0
+	case OcrAuto:
+		return 1
+	}
+	return 2
+}
+
+// Ocr is THE `Ocr` PORT (SPEC 7.2; D008, D095, D211): it fulfils one `ocr` request. A host brings its engine (Tesseract through
+// `tess.go` under the `tesseract` build tag; anything else that answers in the layout of `emon.ocr`). It is LIVE only: a gate
+// replays a transcript and never calls it. With no port a request is answered `unsupported`, a page then has no text, and
+// nothing is guessed.
+type Ocr interface {
+	// Fulfil answers req, whose bitmap is in bitmaps. keepBinary: the caller records, so the engine's thresholded image, when it
+	// has one, goes in the answer's Bitmap (the record says it has one either way).
+	Fulfil(req port.PlanRequest, bitmaps port.PlanBitmaps, keepBinary bool) (port.PlanAnswer, error)
+	// Producer is what this engine is, for the transcript's `:producer` (D214): name/value pairs.
+	Producer() [][2]string
+}
 
 // Assets is SPEC 13's `assets` (D117). Only AssetsNone is implemented; the others are refused, not ignored.
 type Assets int
@@ -236,6 +262,8 @@ type Config struct {
 	SimulateAsync bool
 	MaxRounds     int32
 	FetchRounds   int32
+	// Ocr is the `Ocr` port, if the embedder has one (D211). nil: no live OCR; a replay needs none.
+	Ocr Ocr
 }
 
 // DefaultConfig is SPEC 13.1's defaults.
@@ -589,13 +617,26 @@ func (s spanSource) ReadAt(p []byte, off int64) (int, error) {
 	return got, err
 }
 
-// imageFulfiller is the `ImageDecode` port as a fulfiller (SPEC 7.2, D187): it answers `decode` requests for
-// this input from the host's codecs, and nothing else (no Renderer or Ocr port is configured). `keep` holds
-// the pixels in the answer (a recording wants them, as canonical PNG; a plain conversion needs only the numbers).
-func imageFulfiller(source ByteSource, idx int, keep bool) *port.PlanSync {
-	return &port.PlanSync{F: func(req port.PlanRequest, _ port.PlanBitmaps) (port.PlanAnswer, error) {
+// portFulfiller is the LIVE ports as a fulfiller (SPEC 7.2): `ImageDecode` (D187) answers `decode` requests for this input
+// from the host's codecs; `Ocr` (D211) answers `ocr` requests from the embedder's engine, or `unsupported` when it has none.
+// No Renderer is configured (P6.2). `keep` holds the pixels in a decode answer (a recording wants them, as canonical PNG,
+// and so does a live OCR engine; a plain conversion needs only the numbers); `recording` also keeps the OCR engine's
+// thresholded image, which only a transcript wants (D211).
+func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr) *port.PlanSync {
+	return &port.PlanSync{F: func(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
+		if req.Kind() == port.PlanKindOcr {
+			failed := func(status int32) (port.PlanAnswer, error) {
+				c := port.NewCells()
+				plan.AnFail(c, port.PlanKindOcr, req.ID(), status)
+				return port.PlanAnswer{Rec: cellsVec(c)}, nil
+			}
+			if ocr == nil {
+				return failed(plan.PsUnsupported())
+			}
+			return ocrSafe(ocr, req, bm, recording, failed)
+		}
 		if req.Kind() != port.PlanKindDecode {
-			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no Renderer or Ocr port is configured (only ImageDecode is)"}
+			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no Renderer port is configured (only ImageDecode and Ocr are)"}
 		}
 		input, off, n, filter, frame := req.Arg(0), req.Arg(1), req.Arg(2), req.Arg(3), req.Arg(4)
 		if int(input) != idx || off < 0 || n < 0 || int64(off)+int64(n) > source.Size() {
@@ -606,8 +647,9 @@ func imageFulfiller(source ByteSource, idx int, keep bool) *port.PlanSync {
 			plan.AnFail(c, port.PlanKindDecode, req.ID(), status)
 			return port.PlanAnswer{Rec: cellsVec(c)}, nil
 		}
-		if filter != plan.FltNone() {
-			// the PDF image filters (DCT, JPX, JBIG2, CCITT) are P6.1a's
+		// a DCT stream is a JPEG file: the span is read in place (a scanned PDF page's image, D212); the other PDF
+		// image filters (JPX, JBIG2, CCITT) are P6.1a's
+		if filter != plan.FltNone() && filter != plan.FltDct() {
 			return fail(plan.PsUnsupported())
 		}
 		span := spanSource{src: source, off: int64(off), len: int64(n)}
@@ -635,11 +677,21 @@ func imageFulfiller(source ByteSource, idx int, keep bool) *port.PlanSync {
 		}
 		plan.AnDecode(c, req.ID(), d.W, d.H, d.Ch, d.Dpi100, bl, d.Frames)
 		a := port.PlanAnswer{Rec: cellsVec(c)}
-		if keep && d.Pixels != nil {
+		if keep && (filter != plan.FltDct() || ocr != nil) && d.Pixels != nil {
 			a.Bitmap = port.BitmapFromBytes(d.W, d.H, d.Ch, d.Pixels)
 		}
 		return a, nil
 	}}
+}
+
+// ocrSafe calls the Ocr port; an engine that panics on a page is a failed OCR of it, not a crashed process.
+func ocrSafe(ocr Ocr, req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool, failed func(int32) (port.PlanAnswer, error)) (a port.PlanAnswer, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			a, err = failed(port.PlanStatusFailed)
+		}
+	}()
+	return ocr.Fulfil(req, bm, keepBinary)
 }
 
 // imgDecodeSafe is imgDecode, a panic of a codec on damage being a damaged image and not a crashed process.
@@ -658,11 +710,46 @@ type rstep struct {
 	out            outcome
 }
 
-// attemptRaster is ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF.
-func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int32, intakeOnly bool, n uint64) rstep {
+// evArenas are the evidence arenas the OCR stages fill (SPEC 8.4.6: the arenas `emon.scan` writes and `EvEmit` dumps). A PDF's
+// text layer fills `gl`, `mk`, `fnt` and the word and line arenas; an image's OCR fills the `o*` ones and the same word and
+// line arenas (D213), so the rest are empty and only dumped.
+type evArenas struct {
+	epages, views, pts, refs, feats, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tlines *port.Cells
+}
+
+func newEvArenas() *evArenas {
+	e := newCellsN(18)
+	return &evArenas{e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8], e[9], e[10], e[11], e[12], e[13], e[14], e[15], e[16], e[17]}
+}
+
+// localeCells is the locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
+func localeCells(opts Options) *port.Cells {
+	c := port.NewCells()
+	for _, ch := range opts.Locale {
+		port.CellsPush(c, int32(ch))
+	}
+	return c
+}
+
+// evidenceDump is the evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
+func evidenceDump(ev *evArenas, et, gl, wd, ln, mk, fnt *port.Cells) string {
+	var sb strings.Builder
+	evidence.EvEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines)
+	return sb.String()
+}
+
+// attemptRaster is ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF. An image's pages
+// are made by kin's `RsUnit` (decode, then OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213):
+// the stages below are `attempt`'s, in its order, with the glyph-fed ones given empty arenas.
+func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int32, opts Options, intakeOnly bool, n uint64) rstep {
 	m := newArenas()
 	model.ModelInit(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout)
-	status := rasterin.RsUnit(view, int32(idx), format, boolInt(intakeOnly), answers, rq, m.nodes, m.attrs, m.text, m.pages)
+	ev := newEvArenas()
+	x := newCellsN(5)
+	et, wd, ln, mask, scr := x[0], x[1], x[2], x[3], x[4]
+	loc := localeCells(opts)
+	status := rasterin.RsUnit(view, int32(idx), format, boolInt(intakeOnly), answers, rq, m.nodes, m.attrs, m.text, m.pages, opts.Ocr.code(), loc, mask,
+		ev.epages, ev.views, et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, wd, ln, scr)
 	if view.Missed() {
 		return rstep{miss: true}
 	}
@@ -691,11 +778,56 @@ func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int3
 	if intakeOnly {
 		return rstep{out: outcome{intake: &info}}
 	}
-	chk := port.NewCells()
-	if c := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); c != 0 {
-		return rstep{out: outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", c, port.CellsAt(chk, 0))}}}
+	g := newCellsN(3)
+	gl, mk, fnt := g[0], g[1], g[2]
+	var evs *string
+	if opts.KeepEvidence {
+		s := evidenceDump(ev, et, gl, wd, ln, mk, fnt)
+		evs = &s
 	}
-	return rstep{out: outcome{built: &built{arenas: m, intake: info}}}
+	np := model.PageCount(m.pages)
+	// Running furniture (P4.3), as `attempt` runs it: an image has no catalogue (no Info, no page labels, no tagged tree), so those
+	// arenas are empty and the stage reads the lines and the pages alone.
+	q := newCellsN(5)
+	qtxt, md, lb, ol, ss := q[0], q[1], q[2], q[3], q[4]
+	trust := pdfstruct.TgTrust(ss)
+	fc := newCellsN(10)
+	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
+	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
+	// Tables (P5), as `attempt` finds them: before the paragraphs, from the OCR lines like any others; an image has no vector
+	// paths (`pa` is empty), so only the text-based profiles can find one.
+	pa := port.NewCells()
+	tb := newCellsN(24)
+	table.TbBuild(wd, ln, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	t := newCellsN(5)
+	c := newCellsN(13)
+	// initials (P4.10) on the lines' copy, before the headings read it, exactly as `attempt` does; OCR words have no glyph or
+	// font evidence (`gl`, `fnt` are empty), which the detector reads as no initial
+	ia := newCellsN(3)
+	for _, ch := range opts.Locale {
+		port.CellsPush(ia[0], int32(ch))
+	}
+	columns.LcCopy(ln, c[0])
+	initial.InDetect(wd, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
+	h := newCellsN(7)
+	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
+	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
+	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
+	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
+	if opts.Locale != "" {
+		start := port.CellsLen(m.text)
+		for _, ch := range opts.Locale {
+			model.TextAppendCp(m.text, int32(ch))
+		}
+		model.NodeSetAttrText(m.nodes, m.attrs, 0, model.FkLocale(), start, port.CellsLen(m.text)-start)
+	}
+	chk := port.NewCells()
+	if code := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); code != 0 {
+		return rstep{out: outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", code, port.CellsAt(chk, 0))}}}
+	}
+	return rstep{out: outcome{built: &built{arenas: m, evidence: evs, intake: info}}}
 }
 
 func boolInt(b bool) int32 {
@@ -723,10 +855,10 @@ func dispatch(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options
 		return rstep{miss: true}
 	}
 	if format != rasterin.RsNone() {
-		return attemptRaster(view, answers, rq, idx, format, intakeOnly, n)
+		return attemptRaster(view, answers, rq, idx, format, opts, intakeOnly, n)
 	}
-	a := attempt(view, pw, idx, opts, intakeOnly, n)
-	return rstep{miss: a.miss, out: a.out}
+	a := attempt(view, pw, answers, rq, idx, opts, intakeOnly, n)
+	return rstep{miss: a.miss, requests: a.requests, out: a.out}
 }
 
 // ------------------------------------------------------------------- stats
@@ -853,10 +985,11 @@ func textOf(c *port.Cells, start, n int32) string {
 	return sb.String()
 }
 
-// step is one attempt's end: it missed (discard it, fetch, re-run) or it finished.
+// step is one attempt's end: it missed (discard it, fetch, re-run), asked for something (OCR of a scanned page: the loop
+// fulfils it and re-runs the unit on the answers) or it finished.
 type step struct {
-	miss bool
-	out  outcome
+	miss, requests bool
+	out            outcome
 }
 
 func newCellsN(n int) []*port.Cells {
@@ -871,7 +1004,7 @@ func newCellsN(n int) []*port.Cells {
 // view and fresh arenas. A miss at any checkpoint ends it at once: what a missed attempt computed is never
 // looked at, and a failure or a panic in one that missed is a miss, never reported (SPEC 13.1). THIS IS THE
 // ONE PLACE the Engine calls the text-layer stages; when their signatures grow this is what changes.
-func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint64) step {
+func attempt(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options, intakeOnly bool, n uint64) step {
 	a := newCellsN(6)
 	ar, dc, ca, cb, st, pg := a[0], a[1], a[2], a[3], a[4], a[5]
 	ostatus := pdfdoc.PdOpenPw(view, pw, ar, dc, ca, cb, st)
@@ -908,12 +1041,25 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	}
 	np := pdfdoc.PdPgCount(pg)
 	info := intake(np)
+	// SCANNED PAGES (P6.5, D212): a page with no text layer and one JPEG image that covers it is asked for as OCR (a `decode` of
+	// the stream, then an `ocr` of its bitmap: two rounds whatever the page count); where the answers are in, its OCR lines are
+	// appended to wd and ln beside the text layer's, and mask says which pages. A page with a text layer is left as the text
+	// layer made it (fusion, P7, is what would weigh a second reading).
+	evs := newEvArenas()
+	sx := newCellsN(2)
+	mask, sp := sx[0], sx[1]
+	loc := localeCells(opts)
+	sstatus := scan.ScPdfUnit(view, int32(idx), ar, dc, ca, cb, st, pg, im, answers, rq, opts.Ocr.code(), loc, mask, sp,
+		evs.epages, evs.views, et, evs.feats, evs.images, evs.oruns, evs.oblocks, evs.olines, evs.owords, evs.osyms, evs.oalts, wd, ln)
+	if view.Missed() {
+		return step{miss: true}
+	}
+	if sstatus == plan.UsRequests() {
+		return step{requests: true}
+	}
 	var ev *string
 	if opts.KeepEvidence {
-		e := newCellsN(18)
-		var sb strings.Builder
-		evidence.EvEmit(&sb, 0, e[0], e[1], e[2], e[3], et, e[4], gl, wd, ln, mk, fnt, e[5], e[6], e[7], e[8], e[9], e[10], e[11], e[12], e[13], e[14], e[15], e[16], e[17])
-		s := sb.String()
+		s := evidenceDump(evs, et, gl, wd, ln, mk, fnt)
 		ev = &s
 	}
 	m := newArenas()
@@ -962,6 +1108,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
+	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
 		for _, ch := range opts.Locale {
@@ -1104,12 +1251,15 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	}
 	pcfg := port.PlanConfig{MaxRounds: e.cfg.MaxRounds, FetchRounds: e.cfg.FetchRounds}
 	thisInput := [][2]int32{{int32(idx), int32(size)}}
-	// the live ports: ImageDecode only (a Renderer and an Ocr come with P6.2 and P6.5); pixels are kept in the
-	// answers only when a transcript is being recorded
-	var ports port.PlanFulfiller = imageFulfiller(in.Source, idx, rec != nil)
+	// the live ports: ImageDecode, and Ocr when the Engine was given one (a Renderer comes with P6.2); pixels are kept in
+	// the answers when a transcript is being recorded or an OCR engine will read them
+	var ports port.PlanFulfiller = portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr)
 	var replayer *port.Replayer
 	if rec != nil {
 		rec.Inputs = thisInput
+		if e.cfg.Ocr != nil {
+			rec.Producer = e.cfg.Ocr.Producer()
+		}
 	}
 	if replay != nil {
 		if err := replay.CheckInputs(thisInput); err != nil {

@@ -23,9 +23,10 @@ public static class Ocrtest {
         Plan.AnOcrCp(c, w0, 105);
         int w1 = Plan.AnOcrWord(c, at, 50, 20, 30, 40, 800, 0, 0);
         Plan.AnOcrCp(c, w1, 33);
-        Ocr.OxBegin(c, 1, 2, 3, -85, 90, 1281455214, 17, 187, 1);
-        Ocr.OxLine(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 1);
-        int x0 = Ocr.OxWord(c, 65, 1701734144);
+        Ocr.OxBegin(c, 1, 2, 3, -85, 90, 1281455214, 17, 187, 1, 1, 1, 640, 480);
+        Ocr.OxLine(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 1, 22, 14, 6);
+        Ocr.OxBlock(c, 5, 15, 80, 50, 1, 2, 3);
+        int x0 = Ocr.OxWord(c, 65, 1701734144, 11, 3);
         int s0 = Ocr.OxSym(c, x0, 10, 20, 15, 40, 950);
         Ocr.OxSymCp(c, s0, 72);
         int a0 = Ocr.OxAlt(c, s0, 120);
@@ -35,7 +36,7 @@ public static class Ocrtest {
         Ocr.OxAltCp(c, a1, 77);
         int s1 = Ocr.OxSym(c, x0, 25, 20, 15, 40, 900);
         Ocr.OxSymCp(c, s1, 105);
-        int x1 = Ocr.OxWord(c, 0, 0);
+        int x1 = Ocr.OxWord(c, 0, 0, -1, 0);
         int s2 = Ocr.OxSym(c, x1, 50, 20, 30, 40, 800);
         Ocr.OxSymCp(c, s2, 33);
         Plan.AnOcrEnd(c, at);
@@ -57,10 +58,25 @@ public static class Ocrtest {
         emon.Testport.AssertEq(l, ext + Ocr.OxHeader(), "the line list follows the header");
         emon.Testport.AssertEq(emon.Port.CellsAt(c, l + 6), 80, "baseline end x");
         emon.Testport.AssertEq(emon.Port.CellsAt(c, l + 10), 1, "block type");
-        emon.Testport.AssertEq(Ocr.OxFirstWord(c, ext), l + Ocr.OxLineStride(), "the word list follows the lines");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, l + 11), 22, "x-height");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, l + 12), 14, "ascenders");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, l + 13), 6, "descenders");
+        emon.Testport.AssertEq(Ocr.OxBlockAt(c, ext, 0), l + Ocr.OxLineStride(), "the block table follows the lines");
+        emon.Testport.AssertEq(Ocr.OxFirstWord(c, ext), Ocr.OxBlockAt(c, ext, 0) + Ocr.OxBlockStride(), "the word list follows the blocks");
+        emon.Testport.AssertEq(Ocr.OxNblocks(c, ext), 1, "one block");
+        emon.Testport.AssertEq(Ocr.OxBinary(c, ext), 1, "the thresholded image is there");
+        emon.Testport.AssertEq(Ocr.OxBw(c, ext), 640, "its width");
+        emon.Testport.AssertEq(Ocr.OxBh(c, ext), 480, "its height");
+        int bl = Ocr.OxBlockAt(c, ext, 0);
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, bl), 5, "block x");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, bl + 4), 1, "block orientation");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, bl + 5), 2, "block writing direction");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, bl + 6), 3, "block line order");
         int wx0 = Ocr.OxFirstWord(c, ext);
         emon.Testport.AssertEq(Ocr.OxWflags(c, wx0), 65, "bold and mono");
         emon.Testport.AssertEq(Ocr.OxWlang(c, wx0), 1701734144, "eng");
+        emon.Testport.AssertEq(Ocr.OxWpsize(c, wx0), 11, "point size");
+        emon.Testport.AssertEq(Ocr.OxWdflags(c, wx0), 3, "dictionary and numeric");
         emon.Testport.AssertEq(Ocr.OxNsym(c, wx0), 2, "two symbols");
         int sy0 = Ocr.OxFirstSym(c, wx0);
         emon.Testport.AssertEq(emon.Port.CellsAt(c, sy0 + 4), 950, "symbol confidence");
@@ -80,5 +96,30 @@ public static class Ocrtest {
         int s = Ocr.OxFirstSym(c, wx1);
         emon.Testport.AssertEq(emon.Port.CellsAt(c, s + 7), 33, "!");
         emon.Testport.AssertEq(Ocr.OxWordNext(c, wx1), emon.Port.CellsLen(c), "and is the last thing in the answer");
+    }
+    [Xunit.Fact]
+    public static void TestTheResolutionHintIsTheFlagsAboveTheLowByte() {
+        emon.Testport.AssertEq(Ocr.OcfDpi(Ocr.OcfSymbols() + Ocr.OcfOsd()), 0, "no hint in the low flags");
+        emon.Testport.AssertEq(Ocr.OcfDpi(3 + (150 * 256)), 150, "150 dpi");
+        emon.Testport.AssertEq(Ocr.OcfDpi(3 + (300 * 256)), 300, "300 dpi");
+    }
+    [Xunit.Fact]
+    public static void TestAVersionOneExtensionIsNotRead() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        int at = Plan.AnOcr(c, 3);
+        int w = Plan.AnOcrWord(c, at, 10, 20, 30, 40, 900, 0, 0);
+        Plan.AnOcrCp(c, w, 97);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        Plan.AnOcrEnd(c, at);
+        emon.Testport.AssertEq(Ocr.OxFind(c, at), -1, "version 1 reads as no extension");
     }
 }
