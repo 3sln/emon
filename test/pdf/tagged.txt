@@ -1,0 +1,12 @@
+# emon P3.7: the fixtures of tools/synth/tagged_pair.clj and the Chrome-tagged synthetic documents, read by kin/pdfstructtest.kin.
+# file (relative to test/) <TAB> its golden (kin/scripts/struct-goldens)
+pdf/tagged/good.pdf	pdf/tagged/good.json
+pdf/tagged/bad.pdf	pdf/tagged/bad.json
+pdf/tagged/bad-allp.pdf	pdf/tagged/bad-allp.json
+pdf/tagged/bad-levels.pdf	pdf/tagged/bad-levels.json
+pdf/tagged/bad-artifacts.pdf	pdf/tagged/bad-artifacts.json
+pdf/tagged/bad-order.pdf	pdf/tagged/bad-order.json
+pdf/tagged/odd.pdf	pdf/tagged/odd.json
+corpus/synth/pdf-tagged/h-inverted.pdf	pdf/tagged/chrome-h-inverted.json
+corpus/synth/pdf-tagged/lists-basic.pdf	pdf/tagged/chrome-lists-basic.json
+corpus/synth/pdf-tagged/table-simple-ruled.pdf	pdf/tagged/chrome-table-simple-ruled.json

@@ -10,6 +10,8 @@ import (
 	"emon/pdffont"
 	"emon/pdflex"
 	"emon/pdfsrc"
+	"emon/pdfstruct"
+	"emon/pdfx"
 	"emon/port"
 	"strings"
 )
@@ -84,6 +86,23 @@ func fzContent(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	var fnt *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
+	var idx *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var w *port.Cells = port.NewCells()
+	var seen *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var ss *port.Cells = port.NewCells()
+	var se *port.Cells = port.NewCells()
+	var sk *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var so *port.Cells = port.NewCells()
+	var sa *port.Cells = port.NewCells()
+	var wk *port.Cells = port.NewCells()
+	var ha *port.Cells = port.NewCells()
+	var hb *port.Cells = port.NewCells()
+	var hh *port.Cells = port.NewCells()
+	var ts int32 = 0
+	var tj int32 = 0
 	var s int32 = pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln)
 	var g int32 = 0
 	var h int32 = 7
@@ -106,6 +125,19 @@ func fzContent(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 		port.TextI32(t, evidence.MkCount(mk))
 		port.TextAscii(t, " cps=")
 		port.TextI32(t, h)
+		pdfx.PxIndexBuild(src, ar, dc, a, b, st, pg, idx)
+		ts = pdfstruct.TgRead(src, ar, dc, a, b, st, pg, idx, txt, w, seen, ss, se, sk, sc, so, wk, md)
+		port.TextAscii(t, " tags=")
+		port.TextI32(t, ts)
+		if ts > 0 {
+			tj = pdfstruct.TgJoin(ss, se, sk, sc, so, sa, gl, mk, fnt, pg, ha, hb, hh)
+			port.TextAscii(t, ":")
+			port.TextI32(t, tj)
+			port.TextAscii(t, ":")
+			port.TextI32(t, port.CellsAt(ss, 54))
+			port.TextAscii(t, ":")
+			port.TextI32(t, port.CellsLen(sc))
+		}
 	}
 	return s
 }

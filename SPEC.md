@@ -1249,8 +1249,20 @@ stride, strings as runs of an `etext`-shaped arena, absent is -1).
 `/Lang` are read once, at stage 0, into `emon.pdfmeta`'s arenas (`md`, `xm`, `ol`, `lb`, `nd`), and
 join the Source (§2.0) as facts about the document, not observations on a page.
 
-**Not held yet**: the structure tree (P3.7 joins on
-`marks.mcid`; the tree is P3.7's arena), shadings as painted regions beyond
+**The tagged tree has its own arenas too (P3.7, D134-D137)**, in `emon.pdfstruct` (`kin/pdfstruct.kin`), joined to the
+text layer by `marks`: `se` (the StructTreeRoot as row 0, then every structure element in pre-order: its role as written and
+the standard type it resolves to through the RoleMap, how, heading level and level prior, page, `/Alt` `/ActualText` `/E`
+`/Lang` `/ID` `/T`, Scope, Headers, RowSpan, ColSpan, Summary, ListNumbering, its subtree's glyphs, sizes and box, a table's
+rows and columns, a list's labels), `sk` (the kids in order: element, marked content, object reference, skipped), `sc` (each
+`/MCR` or bare MCID, joined on `(page, Form XObject, MCID)` to its `marks` row, with the glyphs it owns), `so` (`/OBJR`) and
+`sa` (one row per outermost artifact span: where its text sits, and whether it is what its Type and Subtype say). A glyph's
+owner is the element of its innermost marked content that carries an MCID, or artifact, or neither. The tree is READ whole and
+then CHECKED against the page (D034): the score's components are coverage, role diversity, reading order against geometry,
+heading roles against type size, heading levels, artifacts against position and the nesting of table and list roles; the
+PDF/UA identification (`pdfuaid:part`) raises the prior and the trust, never the score. Their `ea` codes are appended after
+`annots` (29 to 33) when the bundles take them.
+
+**Not held yet**: shadings as painted regions beyond
 their box (a `paths` row of kind `other` until P3.5), the VALUES of a font's `/CapHeight`
 and `/XHeight` (their cells exist and are -1 until P4.10 reads them, D108), the Model-level
 page source kind (analysis, not evidence), and fusion's own output
@@ -1291,8 +1303,12 @@ for the text layer):
   and the engine's own binarisation (a word over blank paper is a ghost),
   its ink layer, and whether the region overlaps a seal, watermark or
   background layer.
-* **Structure tree**: role diversity; agreement of its reading order with
-  geometry; coverage (fraction of visible text reachable from it).
+* **Structure tree** (P3.7, D135): role diversity; agreement of its reading order with
+  geometry; coverage (fraction of visible text reachable from it); and the checks of
+  what it claims against the page: heading roles against type size, heading levels
+  against each other, artifacts against their position, table and list roles against
+  where the standard puts them. Integer per-mille components, a weighted harmonic mean,
+  scaled by the weakest check; PDF/UA raises the trust and never the score.
 
 ### 9.4 Arbitration
 

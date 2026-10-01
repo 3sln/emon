@@ -61,6 +61,10 @@ command -v python3 > /dev/null && python3 kin/scripts/ucd.py --check
 command -v python3 > /dev/null && python3 kin/scripts/pdfnames.py --check
 # THE CATALOGUE READERS' NAME TABLE (P3.8, P3.9) is generated too, in babashka (D094), and checked the same way.
 bb tools/pdfxnames.clj --check
+# THE TAG-TREE READER'S NAME TABLE (P3.7, D134) likewise, and the synthetic tagged pairs it is tested on (a correctly
+# tagged document and mis-tagged twins, written byte for byte by babashka, D136).
+bb tools/pdfsnames.clj --check
+bb tools/synth/tagged_pair.clj --check
 # THE FONT TABLES (P1.6): the Adobe Glyph List, the encodings and the
 # standard-14 metrics are generated from test/fonts/; the glyph-name and CMap
 # row corpora are written by scripts (each cross-checked against pdfminer.six

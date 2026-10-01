@@ -629,7 +629,7 @@ public static class Pdfx {
         if (num <= 0) {
             return -1;
         }
-        if ((IxHead + num) >= emon.Port.CellsLen(idx)) {
+        if (num >= (emon.Port.CellsLen(idx) - IxHead)) {
             return -1;
         }
         return emon.Port.CellsAt(idx, IxHead + num) - 1;

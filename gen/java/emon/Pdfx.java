@@ -629,7 +629,7 @@ public final class Pdfx {
         if (num <= 0) {
             return -1;
         }
-        if ((IX_HEAD + num) >= emon.Port.cellsLen(idx)) {
+        if (num >= (emon.Port.cellsLen(idx) - IX_HEAD)) {
             return -1;
         }
         return emon.Port.cellsAt(idx, IX_HEAD + num) - 1;

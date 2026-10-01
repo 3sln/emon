@@ -668,7 +668,7 @@ func PxPageOf(idx *port.Cells, num int32) int32 {
 	if num <= 0 {
 		return -1
 	}
-	if (ixHead + num) >= port.CellsLen(idx) {
+	if num >= (port.CellsLen(idx) - ixHead) {
 		return -1
 	}
 	return port.CellsAt(idx, ixHead+num) - 1

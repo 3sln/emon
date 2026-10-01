@@ -1,0 +1,2420 @@
+;; Tagged PDF (P3.7, D134-D136): the structure tree read into arenas, joined to the marked content the
+;; content interpreter recorded, and scored for how much it can be believed. emon's own module (D039),
+;; from ISO 32000-1 14.6-14.8 (marked content, the structure tree, standard structure types and
+;; attributes) and ISO 14289-1 (PDF/UA). Evidence, not truth (D034): a tree is READ whole, JOINED to the
+;; page by `(page, Form XObject, MCID)`, and then CHECKED against the geometry of the text it claims to
+;; describe. Nothing here decides what a heading is; the score says how far the author's answer agrees
+;; with the page.
+;;
+;;   (tg-read src ar dc a b st pg idx txt w seen ss se sk sc so wk md)   the tree (needs the document)
+;;   (tg-join ss se sk sc so sa gl mk fnt pg ha hb hh)                    the join and the score (needs the
+;;                                                                        text layer's `gl mk fnt`)
+;;   (tg-dump t txt ss se sk sc so sa)                                    the canonical JSON dump
+;;
+;; THE ARENAS are `Cells`, rows of a fixed stride, strings as runs of `txt` (`emon.pdfx`); SPEC 8.4.7 says
+;; the tree has arenas of its own, joined to the evidence by `marks.mcid`. Absent is -1.
+;;
+;;   `se`  structure elements, pre-order, `SE_STRIDE` (64) cells. ROW 0 IS THE StructTreeRoot. 0 object
+;;         number (0: a direct dictionary), 1 parent row (-1), 2 depth, 3-4 /S as written (run), 5 role
+;;         (`sr`, the standard type it resolves to, 0 none), 6 how (`sh`), 7 heading level of H1..Hn, 8
+;;         heading level PRIOR (H1..Hn: n; plain H: the number of Sect ancestors, at least 1, at most
+;;         6, bit 1 of `bits` says it was derived), 9 page (0-based; the element's /Pg or the nearest
+;;         ancestor's, -1), 10 1 when the /Pg is its own, 11-12 its kids as `sk` rows first count, 13
+;;         element kids, 14 marked-content kids, 15 object-reference kids, 16-17 /Alt, 18-19
+;;         /ActualText, 20-21 /E, 22-23 /Lang as written, 24 the row that supplies its EFFECTIVE
+;;         language (itself or the nearest ancestor with a /Lang, -1: the catalog's), 25-26 /ID, 27-28
+;;         /T, 29 Scope (0 none, 1 Row, 2 Column, 3 Both), 30 RowSpan, 31 ColSpan (-1 absent), 32-33
+;;         Headers (the /ID strings, a space between), 34-35 Summary, 36 ListNumbering (`ln`), 37 bits
+;;         (1 heading level derived, 2 has /A, 4 has /C, 8 a direct dictionary, 16 /S is shadowed by
+;;         the RoleMap, 32 kids not read, 64 has /K), 38 Sect ancestors, 39 inside a heading (1), 40
+;;         subtree rows (itself included), then, filled by `tg-join`: 41 own glyphs, 42 their sizes
+;;         summed in tenths of a point, 43 own bold glyphs, 44 glyphs in the subtree, 45 sizes, 46 bold,
+;;         47 content rows (marked content and object references) in the subtree, 48 the first content
+;;         row (in tree order) that holds text, 49 its page, 50-53 the box of the subtree's text on that
+;;         page (cpt, page space), 54 table rows, 55 table columns (Table), 56 1 when every row has as
+;;         many columns, 57 list items, 58 items with a label, 59 labels that agree with
+;;         ListNumbering, 60 labels that do not, 61 what the first label looks like (`lk` bits).
+;;   `sk`  kids in document order, 4 cells: 0 kind (`sk`: element, content, object reference, skipped),
+;;         1 target row (`se`, `sc` or `so`), 2 why it was skipped (`kx`), 3 spare.
+;;   `sc`  marked-content references (an /MCR or a bare MCID), `SC_STRIDE` (24): 0 element, 1 kind (1 /MCR
+;;         dictionary, 2 bare integer), 2 page (0-based, -1), 3 MCID, 4 object number of the Form XObject
+;;         (/Stm; 0 the page's own content), 5 the `marks` row it joined (-1), 6-7 that mark's first glyph
+;;         and glyph count, 8 /StmOwn, 9 flags (`sf`), then `tg-join`: 10 glyphs it owns (the glyphs whose
+;;         innermost marked content with an MCID is its mark), 11 their sizes in tenths of a point, 12
+;;         bold glyphs, 13-16 their box, 17-18 the first and last glyph owned, 19-23 spare.
+;;   `so`  object references (/OBJR), 8 cells: 0 element, 1 page, 2 object number, 3 what it is (`ok`),
+;;         4 the ParentTree agrees (1), disagrees (2), has no entry (3), 5-7 spare.
+;;   `sa`  furniture evidence, `SA_STRIDE` (16): one row per OUTERMOST artifact span: 0 `marks` row, 1 page
+;;         (0-based), 2 /Type (`ar`), 3 /Subtype (`as`), 4 glyphs, 5-8 their box (page space), 9 where
+;;         it sits (`ab`), 10 rotation of its first glyph (centi-degrees), 11 its mean size (cpt), 12
+;;         the verdict (`av`), 13 mean luminance of its glyphs (0..255, -1), 14-15 spare.
+;;   `ss`  the document: `SS_SIZE` (96) cells, named below and printed by `tg-dump`.
+;;
+;; THE JOIN is exact and has no tolerance: an MCR names `(page, stm, MCID)` and `marks` has at most one row
+;; for it (`marks.stm` is the Form XObject, D101). Every glyph is then OWNED by the structure element of
+;; its innermost marked content that carries an MCID, or is an artifact, or is neither.
+;;
+;; THE SCORE (D135) is a weighted harmonic mean of integer per-mille components, each a check of the
+;; tree against the page: coverage, role diversity, reading order against geometry, headings against type
+;; size, heading levels, artifacts against position, and the nesting of table and list roles.
+;;
+;; BOUNDS: 1,000,000 elements, depth 64, 2,000,000 marked-content references; a loop or a shared element
+;; is read once and noted. Nothing here recurses without a depth.
+(ns emon.pdfstruct
+  (:require [emon.lang :refer [I32 Src Cells Text defenum emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+                               text-cp text-i32]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfsnames :refer [sn-k sn-s sn-p sn-pg sn-obj sn-stm sn-stm-own sn-mcid sn-type
+                                    sn-struct-elem sn-mcr sn-objr sn-struct-tree-root sn-role-map
+                                    sn-class-map sn-parent-tree sn-id sn-c sn-a sn-o sn-lang sn-alt
+                                    sn-actual-text sn-e sn-t sn-nums sn-kids sn-mark-info sn-marked
+                                    sn-suspects sn-user-properties sn-struct-parent sn-struct-parents
+                                    sn-subtype sn-link sn-widget sn-form sn-image sn-scope sn-headers
+                                    sn-row-span sn-col-span sn-summary sn-list-numbering sn-row
+                                    sn-column sn-both sn-none sn-unordered sn-ordered sn-disc
+                                    sn-circle sn-square sn-decimal sn-upper-roman sn-lower-roman
+                                    sn-upper-alpha sn-lower-alpha sn-layout sn-list sn-print-field
+                                    sn-table sn-hyperlink sn-span-at sn-chars-at
+                                    sr-offs-count sr-offs-at sr-chars-at sr-emit-name]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-count pl-dict-find
+                                 pl-name-entry pl-name-len pl-name-byte pl-str-len pl-str-byte
+                                 pl-stream-dict]]
+            [emon.pdfdoc :refer [pd-get pd-resolve pd-root pd-pg-count pd-pg-node pd-pg-crop
+                                 pd-pg-rotate pd-object-count]]
+            [emon.pdfx :refer [px-int-of px-text-push px-seen-begin px-seen-mark px-page-of px-nth px-json-box
+                               px-json-run px-json-cp]]
+            [emon.evidence :refer [gl-count gl-get mk-count mk-get fo-get gf-mark gf-font gf-size gf-fill gf-rot ch-x0 ch-y0 ch-x1 ch-y1 ch-cp mkf-page mkf-kind mkf-parent mkf-mcid mkf-arsub mkf-artype mkf-gfirst mkf-gcount mkf-stm fnf-style]]
+            [kin.lang :refer [defn defconst declarefn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; ---------------------------------------------------------------- layouts
+
+(defconst ^I32 SE_STRIDE 64)
+(defconst ^I32 SK_STRIDE 4)
+(defconst ^I32 SC_STRIDE 24)
+(defconst ^I32 SO_STRIDE 8)
+(defconst ^I32 SA_STRIDE 16)
+(defconst ^I32 SS_SIZE 96)
+
+(defconst ^I32 SE_OBJ 0)
+(defconst ^I32 SE_PARENT 1)
+(defconst ^I32 SE_DEPTH 2)
+(defconst ^I32 SE_ROLES 3)
+(defconst ^I32 SE_ROLE 5)
+(defconst ^I32 SE_HOW 6)
+(defconst ^I32 SE_LEVEL 7)
+(defconst ^I32 SE_HLEV 8)
+(defconst ^I32 SE_PG 9)
+(defconst ^I32 SE_PGOWN 10)
+(defconst ^I32 SE_KFIRST 11)
+(defconst ^I32 SE_KCOUNT 12)
+(defconst ^I32 SE_NELEM 13)
+(defconst ^I32 SE_NCONT 14)
+(defconst ^I32 SE_NOBJR 15)
+(defconst ^I32 SE_ALT 16)
+(defconst ^I32 SE_ACT 18)
+(defconst ^I32 SE_EXP 20)
+(defconst ^I32 SE_LANG 22)
+(defconst ^I32 SE_LANGSRC 24)
+(defconst ^I32 SE_ID 25)
+(defconst ^I32 SE_TITLE 27)
+(defconst ^I32 SE_SCOPE 29)
+(defconst ^I32 SE_ROWSPAN 30)
+(defconst ^I32 SE_COLSPAN 31)
+(defconst ^I32 SE_HEADS 32)
+(defconst ^I32 SE_SUMM 34)
+(defconst ^I32 SE_LISTNUM 36)
+(defconst ^I32 SE_BITS 37)
+(defconst ^I32 SE_SDEPTH 38)
+(defconst ^I32 SE_INH 39)
+(defconst ^I32 SE_SIZE 40)
+(defconst ^I32 SE_OWNG 41)
+(defconst ^I32 SE_OWNSZ 42)
+(defconst ^I32 SE_OWNBD 43)
+(defconst ^I32 SE_SUBG 44)
+(defconst ^I32 SE_SUBSZ 45)
+(defconst ^I32 SE_SUBBD 46)
+(defconst ^I32 SE_SUBC 47)
+(defconst ^I32 SE_FSC 48)
+(defconst ^I32 SE_FPG 49)
+(defconst ^I32 SE_BX0 50)
+(defconst ^I32 SE_TROWS 54)
+(defconst ^I32 SE_TCOLS 55)
+(defconst ^I32 SE_TREG 56)
+(defconst ^I32 SE_LITEMS 57)
+(defconst ^I32 SE_LLBL 58)
+(defconst ^I32 SE_LOK 59)
+(defconst ^I32 SE_LBAD 60)
+(defconst ^I32 SE_LKIND 61)
+
+(defconst ^I32 SC_ELEM 0)
+(defconst ^I32 SC_KIND 1)
+(defconst ^I32 SC_PAGE 2)
+(defconst ^I32 SC_MCID 3)
+(defconst ^I32 SC_STM 4)
+(defconst ^I32 SC_MARK 5)
+(defconst ^I32 SC_GFIRST 6)
+(defconst ^I32 SC_GCOUNT 7)
+(defconst ^I32 SC_STMOWN 8)
+(defconst ^I32 SC_FLAGS 9)
+(defconst ^I32 SC_OWNG 10)
+(defconst ^I32 SC_OWNSZ 11)
+(defconst ^I32 SC_OWNBD 12)
+(defconst ^I32 SC_BX0 13)
+(defconst ^I32 SC_FIRSTG 17)
+(defconst ^I32 SC_LASTG 18)
+
+;; the document header `ss`
+(defconst ^I32 SS_PRESENT 0)
+(defconst ^I32 SS_ROOTOBJ 1)
+(defconst ^I32 SS_MARKED 2)
+(defconst ^I32 SS_SUSPECTS 3)
+(defconst ^I32 SS_USERPROPS 4)
+(defconst ^I32 SS_UAPART 5)
+(defconst ^I32 SS_UAREV 6)
+(defconst ^I32 SS_LANG 7)
+(defconst ^I32 SS_ELEMS 9)
+(defconst ^I32 SS_CONTENT 10)
+(defconst ^I32 SS_OBJRS 11)
+(defconst ^I32 SS_MAXDEPTH 12)
+(defconst ^I32 SS_LIMITS 13)
+(defconst ^I32 SS_ROLEMAPN 14)
+(defconst ^I32 SS_CLASSMAPN 15)
+(defconst ^I32 SS_CUSTOM 16)
+(defconst ^I32 SS_UNRESOLVED 17)
+(defconst ^I32 SS_SHADOWED 18)
+(defconst ^I32 SS_PTKEYS 19)
+(defconst ^I32 SS_PTOK 20)
+(defconst ^I32 SS_PTBAD 21)
+(defconst ^I32 SS_PTNONE 22)
+(defconst ^I32 SS_JOINED 23)
+(defconst ^I32 SS_UNJOINED 24)
+(defconst ^I32 SS_DUPS 25)
+(defconst ^I32 SS_GLYPHS 26)
+(defconst ^I32 SS_COVERED 27)
+(defconst ^I32 SS_ARTG 28)
+(defconst ^I32 SS_UNTAGGED 29)
+(defconst ^I32 SS_UNCLAIMED 30)
+(defconst ^I32 SS_TRANS 31)
+(defconst ^I32 SS_TRANSOK 32)
+(defconst ^I32 SS_CLASSES 33)
+(defconst ^I32 SS_NCLASSES 34)
+(defconst ^I32 SS_HEADS 35)
+(defconst ^I32 SS_HEADSOK 36)
+(defconst ^I32 SS_BIG 37)
+(defconst ^I32 SS_BIGHEAD 38)
+(defconst ^I32 SS_BODY 39)
+(defconst ^I32 SS_NEST 40)
+(defconst ^I32 SS_NESTOK 41)
+(defconst ^I32 SS_ARTS 42)
+(defconst ^I32 SS_ARTOK 43)
+(defconst ^I32 SS_ARTBAD 44)
+(defconst ^I32 SS_LVPAIRS 45)
+(defconst ^I32 SS_LVOK 46)
+(defconst ^I32 SS_COV 47)
+(defconst ^I32 SS_DIV 48)
+(defconst ^I32 SS_ORD 49)
+(defconst ^I32 SS_HDR 50)
+(defconst ^I32 SS_LV 51)
+(defconst ^I32 SS_ART 52)
+(defconst ^I32 SS_NESTR 53)
+(defconst ^I32 SS_SCORE 54)
+(defconst ^I32 SS_TRUST 55)
+(defconst ^I32 SS_PRIOR 56)
+(defconst ^I32 SS_PAGES 57)
+(defconst ^I32 SS_TABLES 58)
+(defconst ^I32 SS_LISTS 59)
+(defconst ^I32 SS_STATUS 60)
+(defconst ^I32 SS_ROLEMAP 62)
+(defconst ^I32 SS_CLASSMAP 63)
+(defconst ^I32 SS_ROOT 64)
+(defconst ^I32 SS_BUDGET 65)
+(defconst ^I32 SS_CBUDGET 66)
+(defconst ^I32 SS_ARTGLYPHS 67)
+(defconst ^I32 SS_MARKS 68)
+
+(defconst ^I32 TG_MAXDEPTH 64)
+(defconst ^I32 TG_MAXELEMS 1000000)
+(defconst ^I32 TG_MAXSC 2000000)
+(defconst ^I32 TG_MAXPT 200000)
+(defconst ^I32 TG_FLOOR 50)
+(defconst ^I32 TG_MINPAIRS 4)   ;; fewer pairs of anything than this is noise, not evidence
+
+(defconst ^I32 SS_WSUM 70)
+(defconst ^I32 SS_HSUM 71)
+(defconst ^I32 SS_MINC 72)
+
+;; the standard structure types the checks name (codes of `sr`, tools/pdfsnames.clj)
+(defconst ^I32 RO_PART 3)
+(defconst ^I32 RO_ART 4)
+(defconst ^I32 RO_SECT 5)
+(defconst ^I32 RO_ASIDE 7)
+(defconst ^I32 RO_BLOCKQUOTE 10)
+(defconst ^I32 RO_CAPTION 11)
+(defconst ^I32 RO_TOC 12)
+(defconst ^I32 RO_TOCI 13)
+(defconst ^I32 RO_INDEX 14)
+(defconst ^I32 RO_H 16)
+(defconst ^I32 RO_HN 17)
+(defconst ^I32 RO_TITLE 18)
+(defconst ^I32 RO_L 19)
+(defconst ^I32 RO_LI 20)
+(defconst ^I32 RO_LBL 21)
+(defconst ^I32 RO_LBODY 22)
+(defconst ^I32 RO_QUOTE 24)
+(defconst ^I32 RO_NOTE 25)
+(defconst ^I32 RO_FENOTE 26)
+(defconst ^I32 RO_REF 27)
+(defconst ^I32 RO_BIB 28)
+(defconst ^I32 RO_CODE 29)
+(defconst ^I32 RO_LINK 30)
+(defconst ^I32 RO_ANNOT 31)
+(defconst ^I32 RO_TABLE 42)
+(defconst ^I32 RO_TR 43)
+(defconst ^I32 RO_TH 44)
+(defconst ^I32 RO_TD 45)
+(defconst ^I32 RO_THEAD 46)
+(defconst ^I32 RO_TBODY 47)
+(defconst ^I32 RO_TFOOT 48)
+(defconst ^I32 RO_FIGURE 49)
+(defconst ^I32 RO_FORMULA 50)
+(defconst ^I32 RO_FORM 51)
+
+;; how a role was found
+(defenum ^:pub tg-how
+  [[tgh-direct 0 "standard"]
+   [tgh-rolemap 1 "rolemap"]
+   [tgh-custom 2 "custom"]
+   [tgh-loop 3 "rolemap-loop"]
+   [tgh-absent 4 "no-role"]
+   [tgh-shadowed 5 "standard-shadowed"]
+   [tgh-root 6 "root"]])
+
+;; what a kid is
+(defenum ^:pub tg-kind
+  [[tgk-element 1 "element"]
+   [tgk-content 2 "content"]
+   [tgk-objr 3 "objr"]
+   [tgk-skipped 4 "skipped"]])
+
+;; why a kid was skipped (`sk` cell 2)
+(defenum ^:pub tg-skip
+  [[tgs-none 0 "none"]
+   [tgs-shape 1 "not a dictionary or an integer"]
+   [tgs-shared 2 "an element already read (shared or a loop)"]
+   [tgs-depth 3 "depth limit"]
+   [tgs-elems 4 "element limit"]
+   [tgs-content 5 "content limit"]
+   [tgs-unknown 6 "a dictionary that is none of element, MCR, OBJR"]])
+
+;; flags of a marked-content reference
+(defenum ^:pub tg-flag
+  [[tgf-bare 1 "bare"]
+   [tgf-nopage 2 "no-page"]
+   [tgf-nomark 4 "no-mark"]
+   [tgf-dup 8 "duplicate"]
+   [tgf-ptok 16 "parent-tree-ok"]
+   [tgf-ptbad 32 "parent-tree-differs"]
+   [tgf-ptnone 64 "parent-tree-none"]
+   [tgf-nomcid 128 "no-mcid"]])
+
+;; ListNumbering
+(defenum ^:pub tg-listnum
+  [[tgn-absent 0 "absent"]
+   [tgn-none 1 "None"]
+   [tgn-unordered 2 "Unordered"]
+   [tgn-ordered 3 "Ordered"]
+   [tgn-disc 4 "Disc"]
+   [tgn-circle 5 "Circle"]
+   [tgn-square 6 "Square"]
+   [tgn-decimal 7 "Decimal"]
+   [tgn-upper-roman 8 "UpperRoman"]
+   [tgn-lower-roman 9 "LowerRoman"]
+   [tgn-upper-alpha 10 "UpperAlpha"]
+   [tgn-lower-alpha 11 "LowerAlpha"]
+   [tgn-other 12 "other"]])
+
+;; what an /OBJR points at
+(defenum ^:pub tg-objr
+  [[tgo-other 0 "other"]
+   [tgo-link 1 "Link"]
+   [tgo-widget 2 "Widget"]
+   [tgo-form 3 "Form"]
+   [tgo-image 4 "Image"]
+   [tgo-annot 5 "annotation"]])
+
+;; where an artifact sits on its page
+(defenum ^:pub tg-band
+  [[tgb-none 0 "none"]
+   [tgb-body 1 "body"]
+   [tgb-top 2 "top"]
+   [tgb-bottom 3 "bottom"]
+   [tgb-side 4 "side"]])
+
+;; the verdict on an artifact span
+(defenum ^:pub tg-verdict
+  [[tgv-unchecked 0 "unchecked"]
+   [tgv-consistent 1 "consistent"]
+   [tgv-inconsistent 2 "inconsistent"]])
+
+;; what a list label looks like (bits)
+(defenum ^:pub tg-label
+  [[tgl-bullet 1 "bullet"]
+   [tgl-decimal 2 "decimal"]
+   [tgl-lower-alpha 4 "lower-alpha"]
+   [tgl-upper-alpha 8 "upper-alpha"]
+   [tgl-lower-roman 16 "lower-roman"]
+   [tgl-upper-roman 32 "upper-roman"]])
+
+;; ------------------------------------------------------------------ names
+
+(defn ^I32 tg-is [^Cells ar ^I32 h ^I32 id]
+  (comment "1 when h is a name object whose bytes are row `id` of the `sn` table.")
+  (if (== h 0) (return 0))
+  (if (!= (pl-kind-of ar h) 4) (return 0))
+  (let [^I32 n (sn-span-at 0 id 1)
+        ^I32 o (sn-span-at 0 id 0)
+        ^:mut ^I32 i 0]
+    (if (!= (pl-name-len ar h) n) (return 0))
+    (while (< i n)
+      (do (if (!= (pl-name-byte ar h i) (sn-chars-at 0 (+ o i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 tg-get [^Cells ar ^I32 dict ^I32 id]
+  (comment "The RAW value under the key whose bytes are row `id` of the `sn` table, 0 when absent;")
+  (comment "a key that occurs twice answers its last. A stream answers from its dictionary.")
+  (if (== dict 0) (return 0))
+  (let [^:mut ^I32 d dict
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 found 0]
+    (if (== (pl-kind-of ar d) 8) (set d (pl-stream-dict ar d)))
+    (if (!= (pl-kind-of ar d) 7) (return 0))
+    (set k (pl-first ar d))
+    (while (!= k 0)
+      (do (set v (pl-next ar k))
+          (if (== (tg-is ar k id) 1) (set found v))
+          (if (== v 0)
+            (set k 0)
+            (set k (pl-next ar v)))))
+    (return found)))
+
+(defn ^I32 tg-dget [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^I32 dict ^I32 id]
+  (comment "The RESOLVED value under a key of the `sn` table, 0 when absent.")
+  (let [^I32 v (tg-get ar dict id)]
+    (if (== v 0) (return 0))
+    (return (pd-resolve src ar dc a b st v))))
+
+(defn ^I32 tg-name-row [^Cells ar ^I32 h ^I32 first ^I32 count]
+  (comment "Which of the `sn` rows first .. first+count-1 the name h is, else -1.")
+  (let [^:mut ^I32 i 0]
+    (if (== h 0) (return -1))
+    (while (< i count)
+      (do (if (== (tg-is ar h (+ first i)) 1) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 tg-role-code [^Cells ar ^I32 h]
+  (comment "The standard structure type a name object spells: its code (`sr`) plus 256 times the level")
+  (comment "for H1, H2, ...; 0 when it is none of them (a custom type). `Hn` is matched by its numerals.")
+  (if (== h 0) (return 0))
+  (if (!= (pl-kind-of ar h) 4) (return 0))
+  (let [^I32 n (pl-name-len ar h)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 same 0]
+    (if (and (>= n 2) (<= n 5))
+      (if (== (pl-name-byte ar h 0) 72)
+        (do (while (< i n)
+              (do (set c (pl-name-byte ar h i))
+                  (if (or (< c 48) (> c 57)) (set ok 0))
+                  (if (== ok 1) (set lv (+ (* lv 10) (- c 48))))
+                  (set i (+ i 1))))
+            (if (and (== ok 1) (>= lv 1) (!= (pl-name-byte ar h 1) 48))
+              (return (+ 17 (* lv 256)))))))
+    (set r 0)
+    (while (< r (sr-offs-count 0))
+      (do (if (!= (+ r 1) 17)
+            (do (set o (sr-offs-at 0 r 0))
+                (set m (sr-offs-at 0 r 1))
+                (if (== m n)
+                  (do (set same 1)
+                      (set j 0)
+                      (while (< j m)
+                        (do (if (!= (pl-name-byte ar h j) (sr-chars-at 0 (+ o j))) (set same 0))
+                            (set j (+ j 1))))
+                      (if (== same 1) (return (+ r 1)))))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 tg-resolve-role [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                            ^:mut ^Cells st ^Cells ss ^I32 nameh]
+  (comment "Resolve a /S name to a standard structure type, following the RoleMap: the answer is the")
+  (comment "code, plus 256 times how (`sh`), plus 65536 times the level of an Hn. A name that IS a")
+  (comment "standard type is used as it is (poppler and pdf.js do the same) and the RoleMap entry that")
+  (comment "would remap it is noted (how 5, bit 16); a custom name is followed through the RoleMap")
+  (comment "to the first standard type, at most 24 steps (how 3: a loop).")
+  (let [^I32 rm (cells-at ss SS_ROLEMAP)
+        ^:mut ^I32 cur nameh
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 ent 0
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 how 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 next 0]
+    (while (< steps 25)
+      (do (set rc (tg-role-code ar cur))
+          (set ent (pl-name-entry ar cur))
+          (if (!= rc 0)
+            (do (set how 0)
+                (if (> steps 0) (set how 1))
+                (if (and (== steps 0) (!= rm 0))
+                  (if (!= (pl-dict-find ar rm ent) 0) (set how 5)))
+                (return (+ (+ (rem rc 256) (* how 256)) (* (quot rc 256) 65536)))))
+          (if (== rm 0) (return 512))
+          (set v (pl-dict-find ar rm ent))
+          (if (== v 0) (return 512))
+          (set next (pd-resolve src ar dc a b st v))
+          (if (== next 0) (return 512))
+          (if (!= (pl-kind-of ar next) 4) (return 512))
+          (set cur next)
+          (set steps (+ steps 1))))
+    (return 768)))
+
+;; ----------------------------------------------------------- small helpers
+
+(defn ^I32 tg-max [^I32 x ^I32 y]
+  (if (> x y) (return x))
+  (return y))
+
+(defn ^I32 tg-min [^I32 x ^I32 y]
+  (if (< x y) (return x))
+  (return y))
+
+(defn ^I32 tg-pm [^I32 x ^I32 y]
+  (comment "x per mille of y (y > 0), without overflow.")
+  (if (<= y 0) (return 0))
+  (if (<= x 2000000) (return (quot (* x 1000) y)))
+  (return (quot x (+ (quot y 1000) 1))))
+
+(defn ^I32 tg-text [^Cells ar ^I32 h ^:mut ^Cells txt ^:mut ^Cells se ^I32 at]
+  (comment "Decode a string (or name) into `txt` and put its run in se[at], se[at+1]. 1 if it was one.")
+  (if (== h 0) (return 0))
+  (if (and (!= (pl-kind-of ar h) 5) (!= (pl-kind-of ar h) 4)) (return 0))
+  (let [^I32 s (cells-len txt)
+        ^I32 n (px-text-push ar h txt)]
+    (cells-set se at s)
+    (cells-set se (+ at 1) n)
+    (return 1)))
+
+(defn ^I32 tg-ht-init [^:mut ^Cells h ^I32 n]
+  (comment "An open-addressing table of (k1, k2, k3) -> value, room for n keys: 0 cap, 1 count, then 4")
+  (comment "cells a slot (k1 k2 k3 value+1; 0 is empty).")
+  (cells-drop h 0)
+  (let [^I32 hcap (+ (* n 2) 17)
+        ^:mut ^I32 i 0]
+    (cells-push h hcap)
+    (cells-push h 0)
+    (while (< i (* hcap 4))
+      (do (cells-push h 0)
+          (set i (+ i 1))))
+    (return hcap)))
+
+(defn ^I32 tg-ht-slot [^I32 k1 ^I32 k2 ^I32 k3 ^I32 hcap]
+  (let [^:mut ^I32 x (+ (+ (* (rem (bit-and k1 2147483647) 1048573) 1021)
+                           (* (rem (bit-and k2 2147483647) 1048573) 77))
+                        (* (rem (bit-and k3 2147483647) 1048573) 3))]
+    (set x (rem x hcap))
+    (return x)))
+
+(defn ^I32 tg-ht-put [^:mut ^Cells h ^I32 k1 ^I32 k2 ^I32 k3 ^I32 v]
+  (comment "Store v under the key; 1 when the key was already there (and nothing is stored), else 0.")
+  (let [^I32 hcap (cells-at h 0)
+        ^:mut ^I32 s (tg-ht-slot k1 k2 k3 hcap)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 guard 0]
+    (while (< guard hcap)
+      (do (set at (+ 2 (* s 4)))
+          (if (== (cells-at h (+ at 3)) 0)
+            (do (cells-set h at k1)
+                (cells-set h (+ at 1) k2)
+                (cells-set h (+ at 2) k3)
+                (cells-set h (+ at 3) (+ v 1))
+                (cells-set h 1 (+ (cells-at h 1) 1))
+                (return 0)))
+          (if (and (== (cells-at h at) k1) (== (cells-at h (+ at 1)) k2) (== (cells-at h (+ at 2)) k3))
+            (return 1))
+          (set s (rem (+ s 1) hcap))
+          (set guard (+ guard 1))))
+    (return 1)))
+
+(defn ^I32 tg-ht-get [^Cells h ^I32 k1 ^I32 k2 ^I32 k3]
+  (comment "The value under the key, -1 when absent.")
+  (let [^I32 hcap (cells-at h 0)
+        ^:mut ^I32 s (tg-ht-slot k1 k2 k3 hcap)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 guard 0]
+    (while (< guard hcap)
+      (do (set at (+ 2 (* s 4)))
+          (if (== (cells-at h (+ at 3)) 0) (return -1))
+          (if (and (== (cells-at h at) k1) (== (cells-at h (+ at 1)) k2) (== (cells-at h (+ at 2)) k3))
+            (return (- (cells-at h (+ at 3)) 1)))
+          (set s (rem (+ s 1) hcap))
+          (set guard (+ guard 1))))
+    (return -1)))
+
+;; ----------------------------------------------------------------- rows
+
+(defn ^I32 tg-se-new [^:mut ^Cells se ^I32 obj ^I32 parent ^I32 depth]
+  (comment "Append an element row with every field at its default. Answers its row.")
+  (let [^I32 row (quot (cells-len se) SE_STRIDE)
+        ^I32 at (* row SE_STRIDE)
+        ^:mut ^I32 i 0]
+    (while (< i SE_STRIDE)
+      (do (cells-push se 0)
+          (set i (+ i 1))))
+    (cells-set se (+ at SE_OBJ) obj)
+    (cells-set se (+ at SE_PARENT) parent)
+    (cells-set se (+ at SE_DEPTH) depth)
+    (cells-set se (+ at SE_ROLES) -1)
+    (cells-set se (+ at SE_PG) -1)
+    (cells-set se (+ at SE_KFIRST) -1)
+    (cells-set se (+ at SE_ALT) -1)
+    (cells-set se (+ at SE_ACT) -1)
+    (cells-set se (+ at SE_EXP) -1)
+    (cells-set se (+ at SE_LANG) -1)
+    (cells-set se (+ at SE_LANGSRC) -1)
+    (cells-set se (+ at SE_ID) -1)
+    (cells-set se (+ at SE_TITLE) -1)
+    (cells-set se (+ at SE_ROWSPAN) -1)
+    (cells-set se (+ at SE_COLSPAN) -1)
+    (cells-set se (+ at SE_HEADS) -1)
+    (cells-set se (+ at SE_SUMM) -1)
+    (cells-set se (+ at SE_FSC) -1)
+    (cells-set se (+ at SE_FPG) -1)
+    (cells-set se (+ at SE_TREG) -1)
+    (return row)))
+
+(defn ^I32 tg-sc-new [^:mut ^Cells sc ^I32 elem ^I32 kind ^I32 page ^I32 mcid ^I32 stm ^I32 stmown]
+  (let [^I32 row (quot (cells-len sc) SC_STRIDE)
+        ^I32 at (* row SC_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 fl 0]
+    (while (< i SC_STRIDE)
+      (do (cells-push sc 0)
+          (set i (+ i 1))))
+    (if (== kind 2) (set fl 1))
+    (if (< page 0) (set fl (+ fl 2)))
+    (if (< mcid 0) (set fl (+ fl 128)))
+    (cells-set sc (+ at SC_ELEM) elem)
+    (cells-set sc (+ at SC_KIND) kind)
+    (cells-set sc (+ at SC_PAGE) page)
+    (cells-set sc (+ at SC_MCID) mcid)
+    (cells-set sc (+ at SC_STM) stm)
+    (cells-set sc (+ at SC_MARK) -1)
+    (cells-set sc (+ at SC_GFIRST) -1)
+    (cells-set sc (+ at SC_STMOWN) stmown)
+    (cells-set sc (+ at SC_FLAGS) fl)
+    (cells-set sc (+ at SC_BX0) 0)
+    (cells-set sc (+ at SC_FIRSTG) -1)
+    (cells-set sc (+ at SC_LASTG) -1)
+    (return row)))
+
+;; ------------------------------------------------------------- attributes
+
+(defn ^I32 tg-owner [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                     ^:mut ^Cells st ^I32 d]
+  (comment "An attribute object's owner: 0 none, 1 Layout, 2 List, 3 PrintField, 4 Table, 5 Hyperlink, 6 other.")
+  (let [^I32 o (tg-dget src ar dc a b st d (sn-o))]
+    (if (== o 0) (return 0))
+    (if (!= (pl-kind-of ar o) 4) (return 6))
+    (if (== (tg-is ar o (sn-layout)) 1) (return 1))
+    (if (== (tg-is ar o (sn-list)) 1) (return 2))
+    (if (== (tg-is ar o (sn-print-field)) 1) (return 3))
+    (if (== (tg-is ar o (sn-table)) 1) (return 4))
+    (if (== (tg-is ar o (sn-hyperlink)) 1) (return 5))
+    (return 6)))
+
+(defn ^I32 tg-ad-add [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                      ^:mut ^Cells st ^:mut ^Cells ad ^I32 v]
+  (comment "Add the attribute object v (a dictionary, or an array of them) to the list `ad` (handle,")
+  (comment "owner), at most 12.")
+  (if (== v 0) (return 0))
+  (if (== (pl-kind-of ar v) 7)
+    (do (if (< (cells-len ad) 24)
+          (do (let [^I32 ow (tg-owner src ar dc a b st v)]
+                (cells-push ad v)
+                (cells-push ad ow))))
+        (return 0)))
+  (if (== (pl-kind-of ar v) 6)
+    (do (let [^:mut ^I32 e (pl-first ar v)
+              ^:mut ^I32 eh 0
+              ^:mut ^I32 ow2 0]
+          (while (!= e 0)
+            (do (set eh (pd-resolve src ar dc a b st e))
+                (if (and (!= eh 0) (== (pl-kind-of ar eh) 7))
+                  (if (< (cells-len ad) 24)
+                    (do (set ow2 (tg-owner src ar dc a b st eh))
+                        (cells-push ad eh)
+                        (cells-push ad ow2))))
+                (set e (pl-next ar e)))))))
+  (return 0))
+
+(defn ^I32 tg-attrs [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                     ^:mut ^Cells st ^Cells ss ^:mut ^Cells ad ^I32 eh]
+  (comment "Gather an element's attribute objects, its own /A first and then the classes its /C names")
+  (comment "through the ClassMap, into `ad` (handle, owner pairs).")
+  (cells-drop ad 0)
+  (let [^I32 av (tg-dget src ar dc a b st eh (sn-a))
+        ^I32 cv (tg-dget src ar dc a b st eh (sn-c))
+        ^I32 cm (cells-at ss SS_CLASSMAP)
+        ^:mut ^I32 e 0
+        ^:mut ^I32 nh 0
+        ^:mut ^I32 ent 0
+        ^:mut ^I32 vv 0]
+    (tg-ad-add src ar dc a b st ad av)
+    (if (and (!= cv 0) (!= cm 0))
+      (do (if (== (pl-kind-of ar cv) 4)
+            (do (set ent (pl-name-entry ar cv))
+                (set vv (pl-dict-find ar cm ent))
+                (set vv (pd-resolve src ar dc a b st vv))
+                (tg-ad-add src ar dc a b st ad vv)))
+          (if (== (pl-kind-of ar cv) 6)
+            (do (set e (pl-first ar cv))
+                (while (!= e 0)
+                  (do (set nh (pd-resolve src ar dc a b st e))
+                      (if (and (!= nh 0) (== (pl-kind-of ar nh) 4))
+                        (do (set ent (pl-name-entry ar nh))
+                            (set vv (pl-dict-find ar cm ent))
+                            (set vv (pd-resolve src ar dc a b st vv))
+                            (tg-ad-add src ar dc a b st ad vv)))
+                      (set e (pl-next ar e))))))))
+    (return 0)))
+
+(defn ^I32 tg-attr [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^Cells ad ^I32 owner ^I32 key]
+  (comment "The resolved value of attribute `key` in the first attribute object whose owner is `owner`")
+  (comment "(or names none) that has it, 0 when no object does.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 ow 0]
+    (while (< i (cells-len ad))
+      (do (set ow (cells-at ad (+ i 1)))
+          (if (or (== ow owner) (== ow 0))
+            (do (set v (tg-dget src ar dc a b st (cells-at ad i) key))
+                (if (!= v 0) (return v))))
+          (set i (+ i 2))))
+    (return 0)))
+
+(defn ^I32 tg-read-attrs [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                          ^:mut ^Cells st ^:mut ^Cells txt ^Cells ss ^:mut ^Cells se ^:mut ^Cells ad
+                          ^I32 row ^I32 eh ^I32 role]
+  (comment "The attributes P3.7 reads, by role: Scope Headers RowSpan ColSpan (TH, TD), Summary (Table),")
+  (comment "ListNumbering (L). Looked up in the element's own /A, then its classes.")
+  (let [^I32 at (* row SE_STRIDE)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 eh2 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 any 0]
+    (if (or (== role RO_TH) (== role RO_TD) (== role RO_TABLE) (== role RO_L))
+      (do (tg-attrs src ar dc a b st ss ad eh)
+          (if (> (cells-len ad) 0)
+            (do (if (or (== role RO_TH) (== role RO_TD))
+                  (do (set v (tg-attr src ar dc a b st ad 4 (sn-scope)))
+                      (if (!= v 0)
+                        (do (if (== (tg-is ar v (sn-row)) 1) (cells-set se (+ at SE_SCOPE) 1))
+                            (if (== (tg-is ar v (sn-column)) 1) (cells-set se (+ at SE_SCOPE) 2))
+                            (if (== (tg-is ar v (sn-both)) 1) (cells-set se (+ at SE_SCOPE) 3))))
+                      (set v (tg-attr src ar dc a b st ad 4 (sn-row-span)))
+                      (if (and (!= v 0) (== (pl-kind-of ar v) 2))
+                        (cells-set se (+ at SE_ROWSPAN) (pl-int-value ar v)))
+                      (set v (tg-attr src ar dc a b st ad 4 (sn-col-span)))
+                      (if (and (!= v 0) (== (pl-kind-of ar v) 2))
+                        (cells-set se (+ at SE_COLSPAN) (pl-int-value ar v)))
+                      (set v (tg-attr src ar dc a b st ad 4 (sn-headers)))
+                      (if (and (!= v 0) (== (pl-kind-of ar v) 6))
+                        (do (set s (cells-len txt))
+                            (set e (pl-first ar v))
+                            (while (!= e 0)
+                              (do (set eh2 (pd-resolve src ar dc a b st e))
+                                  (if (and (!= eh2 0) (== (pl-kind-of ar eh2) 5))
+                                    (do (if (> any 0) (do (cells-push txt 32) (set n (+ n 1))))
+                                        (set n (+ n (px-text-push ar eh2 txt)))
+                                        (set any (+ any 1))))
+                                  (set e (pl-next ar e))))
+                            (if (> any 0)
+                              (do (cells-set se (+ at SE_HEADS) s)
+                                  (cells-set se (+ at (+ SE_HEADS 1)) n)))))))
+                (if (== role RO_TABLE)
+                  (do (set v (tg-attr src ar dc a b st ad 4 (sn-summary)))
+                      (tg-text ar v txt se (+ at SE_SUMM))))
+                (if (== role RO_L)
+                  (do (set v (tg-attr src ar dc a b st ad 2 (sn-list-numbering)))
+                      (if (!= v 0)
+                        (do (cells-set se (+ at SE_LISTNUM) 12)
+                            (if (== (tg-is ar v (sn-none)) 1) (cells-set se (+ at SE_LISTNUM) 1))
+                            (if (== (tg-is ar v (sn-unordered)) 1) (cells-set se (+ at SE_LISTNUM) 2))
+                            (if (== (tg-is ar v (sn-ordered)) 1) (cells-set se (+ at SE_LISTNUM) 3))
+                            (if (== (tg-is ar v (sn-disc)) 1) (cells-set se (+ at SE_LISTNUM) 4))
+                            (if (== (tg-is ar v (sn-circle)) 1) (cells-set se (+ at SE_LISTNUM) 5))
+                            (if (== (tg-is ar v (sn-square)) 1) (cells-set se (+ at SE_LISTNUM) 6))
+                            (if (== (tg-is ar v (sn-decimal)) 1) (cells-set se (+ at SE_LISTNUM) 7))
+                            (if (== (tg-is ar v (sn-upper-roman)) 1) (cells-set se (+ at SE_LISTNUM) 8))
+                            (if (== (tg-is ar v (sn-lower-roman)) 1) (cells-set se (+ at SE_LISTNUM) 9))
+                            (if (== (tg-is ar v (sn-upper-alpha)) 1) (cells-set se (+ at SE_LISTNUM) 10))
+                            (if (== (tg-is ar v (sn-lower-alpha)) 1) (cells-set se (+ at SE_LISTNUM) 11))))))))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the walk
+
+(declarefn tg-elem)
+(declarefn tg-kids)
+
+(defn ^I32 tg-page-of [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                       ^:mut ^Cells st ^Cells idx ^I32 d]
+  (comment "The page index a /Pg of dictionary d names (a reference to a page), -1 when it has none.")
+  (let [^I32 raw (tg-get ar d (sn-pg))]
+    (if (== raw 0) (return -1))
+    (if (!= (pl-kind-of ar raw) 9) (return -1))
+    (return (px-page-of idx (pl-int-value ar raw)))))
+
+(defn ^I32 tg-obj-of [^Cells ar ^I32 raw]
+  (comment "The object number a raw value refers to, 0 when it is not a reference.")
+  (if (== raw 0) (return 0))
+  (if (!= (pl-kind-of ar raw) 9) (return 0))
+  (return (pl-int-value ar raw)))
+
+(defn ^I32 tg-kid [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                   ^:mut ^Cells st ^Cells idx ^:mut ^Cells txt ^:mut ^Cells seen ^:mut ^Cells ss
+                   ^:mut ^Cells se ^:mut ^Cells sk ^:mut ^Cells sc ^:mut ^Cells so ^:mut ^Cells ad
+                   ^I32 parent ^I32 skrow ^I32 raw ^I32 depth]
+  (comment "One entry of a /K: an element (read, recursively), a marked-content reference, an object")
+  (comment "reference, or something that is none of them (kept as skipped). -1 when the source missed.")
+  (let [^I32 eh (pd-resolve src ar dc a b st raw)
+        ^I32 sat (* skrow SK_STRIDE)
+        ^I32 pat (* parent SE_STRIDE)
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 isel 0
+        ^:mut ^I32 ismcr 0
+        ^:mut ^I32 isobjr 0
+        ^:mut ^I32 obj 0
+        ^:mut ^I32 child 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 pgi 0
+        ^:mut ^I32 stmraw 0
+        ^:mut ^I32 stmo 0
+        ^:mut ^I32 stmown 0
+        ^:mut ^I32 mcidv 0
+        ^:mut ^I32 mv 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 oh 0
+        ^:mut ^I32 okind 0
+        ^:mut ^I32 sub 0]
+    (if (ps-missed src) (return -1))
+    (cells-set sk (+ sat 0) 4)
+    (cells-set sk (+ sat 1) -1)
+    (cells-set sk (+ sat 2) 1)
+    (if (== eh 0) (return 0))
+    (set kind (pl-kind-of ar eh))
+    ;; a bare integer is a marked-content id on the element's page
+    (if (== kind 2)
+      (do (set pgi (cells-at se (+ pat SE_PG)))
+          (if (< (quot (cells-len sc) SC_STRIDE) TG_MAXSC)
+            (do (set row (tg-sc-new sc parent 2 pgi (pl-int-value ar eh) 0 0))
+                (cells-set sk (+ sat 0) 2)
+                (cells-set sk (+ sat 1) row)
+                (cells-set sk (+ sat 2) 0)
+                (cells-set se (+ pat SE_NCONT) (+ (cells-at se (+ pat SE_NCONT)) 1)))
+            (do (cells-set sk (+ sat 2) 5)
+                (cells-set ss SS_LIMITS (bit-or (cells-at ss SS_LIMITS) 4))))
+          (return 0)))
+    (if (!= kind 7) (return 0))
+    ;; a dictionary: by /Type, then by its keys
+    (set ty (tg-dget src ar dc a b st eh (sn-type)))
+    (if (== (tg-is ar ty (sn-mcr)) 1) (set ismcr 1))
+    (if (== (tg-is ar ty (sn-objr)) 1) (set isobjr 1))
+    (if (== (tg-is ar ty (sn-struct-elem)) 1) (set isel 1))
+    (if (and (== isel 0) (== ismcr 0) (== isobjr 0))
+      (do (if (!= (tg-get ar eh (sn-s)) 0) (set isel 1))
+          (if (and (== isel 0) (!= (tg-get ar eh (sn-mcid)) 0)) (set ismcr 1))
+          (if (and (== isel 0) (== ismcr 0) (!= (tg-get ar eh (sn-obj)) 0)) (set isobjr 1))))
+    (if (== ismcr 1)
+      (do (if (>= (quot (cells-len sc) SC_STRIDE) TG_MAXSC)
+            (do (cells-set sk (+ sat 2) 5)
+                (cells-set ss SS_LIMITS (bit-or (cells-at ss SS_LIMITS) 4))
+                (return 0)))
+          (set pgi (tg-page-of src ar dc a b st idx eh))
+          (if (< pgi 0) (set pgi (cells-at se (+ pat SE_PG))))
+          (set mv (tg-dget src ar dc a b st eh (sn-mcid)))
+          (set stmraw (tg-get ar eh (sn-stm)))
+          (set stmo (tg-obj-of ar stmraw))
+          (set stmraw (tg-get ar eh (sn-stm-own)))
+          (set stmown (tg-obj-of ar stmraw))
+          (set mcidv (px-int-of ar mv -1))
+          (set row (tg-sc-new sc parent 1 pgi mcidv stmo stmown))
+          (cells-set sk (+ sat 0) 2)
+          (cells-set sk (+ sat 1) row)
+          (cells-set sk (+ sat 2) 0)
+          (cells-set se (+ pat SE_NCONT) (+ (cells-at se (+ pat SE_NCONT)) 1))
+          (return 0)))
+    (if (== isobjr 1)
+      (do (set pgi (tg-page-of src ar dc a b st idx eh))
+          (if (< pgi 0) (set pgi (cells-at se (+ pat SE_PG))))
+          (set ph (tg-get ar eh (sn-obj)))
+          (set oh (pd-resolve src ar dc a b st ph))
+          (set okind 0)
+          (if (and (!= oh 0) (or (== (pl-kind-of ar oh) 7) (== (pl-kind-of ar oh) 8)))
+            (do (set sub (tg-dget src ar dc a b st oh (sn-subtype)))
+                (set okind 5)
+                (if (== (tg-is ar sub (sn-link)) 1) (set okind 1))
+                (if (== (tg-is ar sub (sn-widget)) 1) (set okind 2))
+                (if (== (tg-is ar sub (sn-form)) 1) (set okind 3))
+                (if (== (tg-is ar sub (sn-image)) 1) (set okind 4))))
+          (set row (quot (cells-len so) SO_STRIDE))
+          (cells-push so parent)
+          (cells-push so pgi)
+          (cells-push so (tg-obj-of ar ph))
+          (cells-push so okind)
+          (cells-push so 0)
+          (cells-push so 0)
+          (cells-push so 0)
+          (cells-push so 0)
+          (cells-set sk (+ sat 0) 3)
+          (cells-set sk (+ sat 1) row)
+          (cells-set sk (+ sat 2) 0)
+          (cells-set se (+ pat SE_NOBJR) (+ (cells-at se (+ pat SE_NOBJR)) 1))
+          (return 0)))
+    (if (== isel 1)
+      (do (if (>= (+ (quot (cells-len se) SE_STRIDE) 1) TG_MAXELEMS)
+            (do (cells-set sk (+ sat 2) 4)
+                (cells-set ss SS_LIMITS (bit-or (cells-at ss SS_LIMITS) 1))
+                (return 0)))
+          (if (>= (+ depth 1) TG_MAXDEPTH)
+            (do (cells-set sk (+ sat 2) 3)
+                (cells-set ss SS_LIMITS (bit-or (cells-at ss SS_LIMITS) 2))
+                (cells-set se (+ pat SE_BITS) (bit-or (cells-at se (+ pat SE_BITS)) 32))
+                (return 0)))
+          (set obj (tg-obj-of ar raw))
+          (if (> obj 0)
+            (if (== (px-seen-mark seen obj) 1)
+              (do (cells-set sk (+ sat 2) 2)
+                  (cells-set ss SS_LIMITS (bit-or (cells-at ss SS_LIMITS) 8))
+                  (return 0))))
+          (set child (tg-elem src ar dc a b st idx txt seen ss se sk sc so ad eh obj parent (+ depth 1)))
+          (if (< child 0) (return -1))
+          (cells-set sk (+ sat 0) 1)
+          (cells-set sk (+ sat 1) child)
+          (cells-set sk (+ sat 2) 0)
+          (cells-set se (+ pat SE_NELEM) (+ (cells-at se (+ pat SE_NELEM)) 1))
+          (return 0)))
+    (cells-set sk (+ sat 2) 6)
+    (return 0)))
+
+(defn ^I32 tg-kids [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^Cells idx ^:mut ^Cells txt ^:mut ^Cells seen ^:mut ^Cells ss
+                    ^:mut ^Cells se ^:mut ^Cells sk ^:mut ^Cells sc ^:mut ^Cells so ^:mut ^Cells ad
+                    ^I32 row ^I32 kraw ^I32 depth]
+  (comment "Read element `row`'s /K (raw value kraw): reserve one `sk` row per entry, then read each.")
+  (let [^I32 kh (pd-resolve src ar dc a b st kraw)
+        ^I32 at (* row SE_STRIDE)
+        ^I32 first (quot (cells-len sk) SK_STRIDE)
+        ^:mut ^I32 n 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 r 0]
+    (if (== kh 0) (return 0))
+    (if (== (pl-kind-of ar kh) 6) (set n (pl-count ar kh)))
+    (if (> n 1000000) (set n 1000000))
+    (while (< i (* n SK_STRIDE))
+      (do (cells-push sk 0)
+          (set i (+ i 1))))
+    (cells-set se (+ at SE_KFIRST) first)
+    (cells-set se (+ at SE_KCOUNT) n)
+    (if (== (pl-kind-of ar kh) 6)
+      (do (set e (pl-first ar kh))
+          (set i 0)
+          (while (and (!= e 0) (< i n))
+            (do (set r (tg-kid src ar dc a b st idx txt seen ss se sk sc so ad row (+ first i) e depth))
+                (if (< r 0) (return -1))
+                (set i (+ i 1))
+                (set e (pl-next ar e)))))
+      (do (set r (tg-kid src ar dc a b st idx txt seen ss se sk sc so ad row first kraw depth))
+          (if (< r 0) (return -1))))
+    (return 0)))
+
+(defn ^I32 tg-elem [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^Cells idx ^:mut ^Cells txt ^:mut ^Cells seen ^:mut ^Cells ss
+                    ^:mut ^Cells se ^:mut ^Cells sk ^:mut ^Cells sc ^:mut ^Cells so ^:mut ^Cells ad
+                    ^I32 eh ^I32 obj ^I32 parent ^I32 depth]
+  (comment "Read the structure element dictionary eh (object number obj, 0 direct) as a child of row")
+  (comment "`parent`, then its kids. Answers its row, or -1 when the source missed.")
+  (let [^I32 row (tg-se-new se obj parent depth)
+        ^I32 at (* row SE_STRIDE)
+        ^I32 pat (* parent SE_STRIDE)
+        ^:mut ^I32 sh 0
+        ^:mut ^I32 rr 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 how 0
+        ^:mut ^I32 lvl 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 pgi 0
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 sd 0
+        ^:mut ^I32 hl 0
+        ^:mut ^I32 prole 0
+        ^:mut ^I32 kraw 0
+        ^:mut ^I32 rc 0]
+    (if (> depth (cells-at ss SS_MAXDEPTH)) (cells-set ss SS_MAXDEPTH depth))
+    (cells-set ss SS_ELEMS (+ (cells-at ss SS_ELEMS) 1))
+    ;; the role
+    (set sh (tg-dget src ar dc a b st eh (sn-s)))
+    (if (and (!= sh 0) (== (pl-kind-of ar sh) 4))
+      (do (tg-text ar sh txt se (+ at SE_ROLES))
+          (set rr (tg-resolve-role src ar dc a b st ss sh))
+          (set code (rem rr 256))
+          (set how (rem (quot rr 256) 256))
+          (set lvl (quot rr 65536)))
+      (set how 4))
+    (cells-set se (+ at SE_ROLE) code)
+    (cells-set se (+ at SE_HOW) how)
+    (cells-set se (+ at SE_LEVEL) lvl)
+    (if (== how 1) (cells-set ss SS_CUSTOM (+ (cells-at ss SS_CUSTOM) 1)))
+    (if (or (== how 2) (== how 3)) (cells-set ss SS_UNRESOLVED (+ (cells-at ss SS_UNRESOLVED) 1)))
+    (if (== how 5)
+      (do (set bits (bit-or bits 16))
+          (cells-set ss SS_SHADOWED (+ (cells-at ss SS_SHADOWED) 1))))
+    ;; the page: its own, else the nearest ancestor's
+    (set pgi (tg-page-of src ar dc a b st idx eh))
+    (if (>= pgi 0)
+      (do (cells-set se (+ at SE_PG) pgi)
+          (cells-set se (+ at SE_PGOWN) 1))
+      (cells-set se (+ at SE_PG) (cells-at se (+ pat SE_PG))))
+    ;; text properties
+    (set v (tg-dget src ar dc a b st eh (sn-alt)))
+    (tg-text ar v txt se (+ at SE_ALT))
+    (set v (tg-dget src ar dc a b st eh (sn-actual-text)))
+    (tg-text ar v txt se (+ at SE_ACT))
+    (set v (tg-dget src ar dc a b st eh (sn-e)))
+    (tg-text ar v txt se (+ at SE_EXP))
+    (set v (tg-dget src ar dc a b st eh (sn-lang)))
+    (tg-text ar v txt se (+ at SE_LANG))
+    (set v (tg-dget src ar dc a b st eh (sn-id)))
+    (tg-text ar v txt se (+ at SE_ID))
+    (set v (tg-dget src ar dc a b st eh (sn-t)))
+    (tg-text ar v txt se (+ at SE_TITLE))
+    (if (>= (cells-at se (+ at SE_LANG)) 0)
+      (cells-set se (+ at SE_LANGSRC) row)
+      (cells-set se (+ at SE_LANGSRC) (cells-at se (+ pat SE_LANGSRC))))
+    ;; heading context
+    (set prole (cells-at se (+ pat SE_ROLE)))
+    (set sd (cells-at se (+ pat SE_SDEPTH)))
+    (if (== prole RO_SECT) (set sd (+ sd 1)))
+    (cells-set se (+ at SE_SDEPTH) sd)
+    (if (or (== code RO_H) (== code RO_HN) (== code RO_TITLE))
+      (cells-set se (+ at SE_INH) 1)
+      (cells-set se (+ at SE_INH) (cells-at se (+ pat SE_INH))))
+    (if (== code RO_HN) (cells-set se (+ at SE_HLEV) (tg-min lvl 99)))
+    (if (== code RO_H)
+      (do (set hl (tg-min (tg-max sd 1) 6))
+          (cells-set se (+ at SE_HLEV) hl)
+          (set bits (bit-or bits 1))))
+    (if (!= (tg-get ar eh (sn-a)) 0) (set bits (bit-or bits 2)))
+    (if (!= (tg-get ar eh (sn-c)) 0) (set bits (bit-or bits 4)))
+    (if (== obj 0) (set bits (bit-or bits 8)))
+    (set kraw (tg-get ar eh (sn-k)))
+    (if (!= kraw 0) (set bits (bit-or bits 64)))
+    (cells-set se (+ at SE_BITS) (bit-or (cells-at se (+ at SE_BITS)) bits))
+    (set rc (tg-read-attrs src ar dc a b st txt ss se ad row eh code))
+    (if (ps-missed src) (return -1))
+    (if (!= kraw 0)
+      (do (set rc (tg-kids src ar dc a b st idx txt seen ss se sk sc so ad row kraw depth))
+          (if (< rc 0) (return -1))))
+    (cells-set se (+ at SE_SIZE) (- (quot (cells-len se) SE_STRIDE) row))
+    (return row)))
+
+;; ----------------------------------------------------- the parent tree
+
+(declarefn tg-nums)
+
+(defn ^I32 tg-nums [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                    ^:mut ^Cells st ^:mut ^Cells ss ^I32 node ^I32 depth ^:mut ^Cells out]
+  (comment "Every (integer key, raw value) of a number tree, appended to `out` two cells a pair: the")
+  (comment "ParentTree. At most 12 deep and `TG_MAXPT` nodes; a loop costs that and no more.")
+  (if (> depth 12) (return 0))
+  (if (== node 0) (return 0))
+  (if (!= (pl-kind-of ar node) 7) (return 0))
+  (let [^I32 left (cells-at ss SS_BUDGET)]
+    (if (<= left 0) (return 0))
+    (cells-set ss SS_BUDGET (- left 1)))
+  (let [^I32 nums (tg-dget src ar dc a b st node (sn-nums))
+        ^I32 kids (tg-dget src ar dc a b st node (sn-kids))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 kr 0]
+    (if (and (!= nums 0) (== (pl-kind-of ar nums) 6))
+      (do (set k (pl-first ar nums))
+          (while (!= k 0)
+            (do (set v (pl-next ar k))
+                (if (== v 0)
+                  (set k 0)
+                  (do (set kr (pd-resolve src ar dc a b st k))
+                      (if (and (!= kr 0) (== (pl-kind-of ar kr) 2))
+                        (do (cells-push out (pl-int-value ar kr))
+                            (cells-push out v)))
+                      (set k (pl-next ar v))))))))
+    (if (and (!= kids 0) (== (pl-kind-of ar kids) 6))
+      (do (set k (pl-first ar kids))
+          (while (!= k 0)
+            (do (set kr (pd-resolve src ar dc a b st k))
+                (tg-nums src ar dc a b st ss kr (+ depth 1) out)
+                (set k (pl-next ar k))))))
+    (return 0)))
+
+(defn ^I32 tg-key-of [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                      ^:mut ^Cells st ^I32 d ^I32 id]
+  (comment "The integer under key `id` of dictionary d (/StructParents, /StructParent), -1 when absent.")
+  (let [^I32 v (tg-dget src ar dc a b st d id)]
+    (if (== v 0) (return -1))
+    (return (px-int-of ar v -1))))
+
+(defn ^I32 tg-parent-tree [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                           ^:mut ^Cells st ^Cells pg ^:mut ^Cells w ^:mut ^Cells ss ^:mut ^Cells se
+                           ^:mut ^Cells sc ^:mut ^Cells so ^:mut ^Cells wk ^I32 rooth]
+  (comment "Verify the tree against its ParentTree: for every marked-content reference, the entry the")
+  (comment "ParentTree holds for (the page's or the Form XObject's /StructParents, MCID) must be the")
+  (comment "element that claims it; for every object reference, the object's /StructParent entry.")
+  (cells-drop w 0)
+  (let [^I32 ptree (tg-dget src ar dc a b st rooth (sn-parent-tree))
+        ^I32 nsc (quot (cells-len sc) SC_STRIDE)
+        ^I32 nso (quot (cells-len so) SO_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 key 0
+        ^:mut ^I32 pi 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 stm 0
+        ^:mut ^I32 mcid 0
+        ^:mut ^I32 dict 0
+        ^:mut ^I32 vh 0
+        ^:mut ^I32 ent 0
+        ^:mut ^I32 want 0
+        ^:mut ^I32 flag 0
+        ^:mut ^I32 npairs 0
+        ^:mut ^I32 got 0]
+    (cells-set ss SS_BUDGET TG_MAXPT)
+    (tg-nums src ar dc a b st ss ptree 0 w)
+    (if (ps-missed src) (return -1))
+    (set npairs (quot (cells-len w) 2))
+    (cells-set ss SS_PTKEYS npairs)
+    (tg-ht-init wk npairs)
+    (set i 0)
+    (while (< i npairs)
+      (do (tg-ht-put wk (cells-at w (* i 2)) 0 0 i)
+          (set i (+ i 1))))
+    ;; marked content
+    (set i 0)
+    (while (< i nsc)
+      (do (set at (* i SC_STRIDE))
+          (set pi (cells-at sc (+ at SC_PAGE)))
+          (set stm (cells-at sc (+ at SC_STM)))
+          (set mcid (cells-at sc (+ at SC_MCID)))
+          (set flag 0)
+          (set key -1)
+          (if (and (>= mcid 0) (>= pi 0) (< pi (pd-pg-count pg)))
+            (do (if (== stm 0)
+                  (set dict (pd-resolve src ar dc a b st (pd-pg-node pg pi)))
+                  (set dict (pd-get src ar dc a b st stm)))
+                (if (!= dict 0) (set key (tg-key-of src ar dc a b st dict (sn-struct-parents))))))
+          (if (>= key 0)
+            (do (set got (tg-ht-get wk key 0 0))
+                (if (>= got 0)
+                  (do (set vh (pd-resolve src ar dc a b st (cells-at w (+ (* got 2) 1))))
+                      (if (and (!= vh 0) (== (pl-kind-of ar vh) 6))
+                        (do (set ent (px-nth ar vh mcid))
+                            (set want (cells-at se (+ (* (cells-at sc (+ at SC_ELEM)) SE_STRIDE) SE_OBJ)))
+                            (if (and (!= ent 0) (== (pl-kind-of ar ent) 9))
+                              (if (or (== want 0) (== (pl-int-value ar ent) want))
+                                (set flag 16)
+                                (set flag 32))
+                              (set flag 64)))
+                        (set flag 64)))
+                  (set flag 64)))
+            (set flag 64))
+          (if (== (bit-and (cells-at sc (+ at SC_FLAGS)) 128) 128) (set flag 0))
+          (if (== flag 16) (cells-set ss SS_PTOK (+ (cells-at ss SS_PTOK) 1)))
+          (if (== flag 32) (cells-set ss SS_PTBAD (+ (cells-at ss SS_PTBAD) 1)))
+          (if (== flag 64) (cells-set ss SS_PTNONE (+ (cells-at ss SS_PTNONE) 1)))
+          (cells-set sc (+ at SC_FLAGS) (bit-or (cells-at sc (+ at SC_FLAGS)) flag))
+          (set i (+ i 1))))
+    ;; object references
+    (set i 0)
+    (while (< i nso)
+      (do (set at (* i SO_STRIDE))
+          (set want (cells-at se (+ (* (cells-at so at) SE_STRIDE) SE_OBJ)))
+          (set dict (pd-get src ar dc a b st (cells-at so (+ at 2))))
+          (set key -1)
+          (if (!= dict 0) (set key (tg-key-of src ar dc a b st dict (sn-struct-parent))))
+          (set flag 3)
+          (if (>= key 0)
+            (do (set got (tg-ht-get wk key 0 0))
+                (if (>= got 0)
+                  (do (set ent (cells-at w (+ (* got 2) 1)))
+                      (if (and (!= ent 0) (== (pl-kind-of ar ent) 9))
+                        (if (or (== want 0) (== (pl-int-value ar ent) want))
+                          (set flag 1)
+                          (set flag 2)))))))
+          (cells-set so (+ at 4) flag)
+          (set i (+ i 1))))
+    (if (ps-missed src) (return -1))
+    (return 0)))
+
+;; ----------------------------------------------------------- the reader
+
+(defn ^:pub ^I32 tg-read [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b
+                          ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells idx ^:mut ^Cells txt
+                          ^:mut ^Cells w ^:mut ^Cells seen ^:mut ^Cells ss ^:mut ^Cells se
+                          ^:mut ^Cells sk ^:mut ^Cells sc ^:mut ^Cells so ^:mut ^Cells wk
+                          ^Cells md]
+  (comment "The structure tree of an opened document (`pd-open` 0, `pd-pages`, `px-index-build`): the")
+  (comment "catalog's /MarkInfo and /Lang, the StructTreeRoot, its RoleMap and ClassMap, every element, and")
+  (comment "the ParentTree check. `ss se sk sc so` are cleared; `txt` is APPENDED to; `w` and `wk` are scratch;")
+  (comment "`md` is `emon.pdfmeta`'s header (empty when it has not run: the PDF/UA part is then -1).")
+  (comment "Answers the number of elements (0 when the document is not tagged), or -1 when the source missed")
+  (comment "(re-run on a fresh view; nothing here is kept).")
+  (cells-drop ss 0)
+  (cells-drop se 0)
+  (cells-drop sk 0)
+  (cells-drop sc 0)
+  (cells-drop so 0)
+  (let [^:mut ^I32 i 0
+        ^I32 root (pd-root dc)
+        ^:mut ^I32 mi 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 sroot 0
+        ^:mut ^I32 rm 0
+        ^:mut ^I32 cm 0
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 kraw 0
+        ^:mut ^I32 robj 0]
+    (while (< i SS_SIZE)
+      (do (cells-push ss 0)
+          (set i (+ i 1))))
+    (cells-set ss SS_MARKED -1)
+    (cells-set ss SS_SUSPECTS -1)
+    (cells-set ss SS_USERPROPS -1)
+    (cells-set ss SS_UAPART -1)
+    (cells-set ss SS_UAREV -1)
+    (cells-set ss SS_LANG -1)
+    (cells-set ss SS_COV -1)
+    (cells-set ss SS_DIV -1)
+    (cells-set ss SS_ORD -1)
+    (cells-set ss SS_HDR -1)
+    (cells-set ss SS_LV -1)
+    (cells-set ss SS_ART -1)
+    (cells-set ss SS_NESTR -1)
+    (cells-set ss SS_ROOTOBJ 0)
+    (cells-set ss SS_PAGES (pd-pg-count pg))
+    (if (== root 0) (return 0))
+    ;; the catalog's own statements
+    (set mi (tg-dget src ar dc a b st root (sn-mark-info)))
+    (if (and (!= mi 0) (== (pl-kind-of ar mi) 7))
+      (do (set v (tg-dget src ar dc a b st mi (sn-marked)))
+          (if (and (!= v 0) (== (pl-kind-of ar v) 1)) (cells-set ss SS_MARKED (pl-int-value ar v)))
+          (set v (tg-dget src ar dc a b st mi (sn-suspects)))
+          (if (and (!= v 0) (== (pl-kind-of ar v) 1)) (cells-set ss SS_SUSPECTS (pl-int-value ar v)))
+          (set v (tg-dget src ar dc a b st mi (sn-user-properties)))
+          (if (and (!= v 0) (== (pl-kind-of ar v) 1)) (cells-set ss SS_USERPROPS (pl-int-value ar v)))))
+    (if (> (cells-len md) 59)
+      (do (cells-set ss SS_UAPART (cells-at md 42))
+          (cells-set ss SS_UAREV (cells-at md 59))
+          (cells-set ss SS_LANG (cells-at md 0))
+          (cells-set ss (+ SS_LANG 1) (cells-at md 1))))
+    (set sroot (tg-dget src ar dc a b st root (sn-struct-tree-root)))
+    (if (ps-missed src) (return -1))
+    (if (== sroot 0) (return 0))
+    (if (!= (pl-kind-of ar sroot) 7) (return 0))
+    (cells-set ss SS_PRESENT 1)
+    (cells-set ss SS_ROOT sroot)
+    (px-seen-begin seen (pd-object-count dc))
+    ;; the RoleMap and the ClassMap
+    (set rm (tg-dget src ar dc a b st sroot (sn-role-map)))
+    (if (and (!= rm 0) (== (pl-kind-of ar rm) 7))
+      (do (cells-set ss SS_ROLEMAP rm)
+          (cells-set ss SS_ROLEMAPN (quot (pl-count ar rm) 2))))
+    (set cm (tg-dget src ar dc a b st sroot (sn-class-map)))
+    (if (and (!= cm 0) (== (pl-kind-of ar cm) 7))
+      (do (cells-set ss SS_CLASSMAP cm)
+          (cells-set ss SS_CLASSMAPN (quot (pl-count ar cm) 2))))
+    ;; row 0 is the root
+    (set robj (tg-get ar root (sn-struct-tree-root)))
+    (set robj (tg-obj-of ar robj))
+    (tg-se-new se robj -1 0)
+    (cells-set ss SS_ROOTOBJ (cells-at se SE_OBJ))
+    (cells-set se SE_HOW 6)
+    (cells-set se SE_BITS 0)
+    (cells-set ss SS_ELEMS 1)
+    (cells-set ss SS_CBUDGET 0)
+    (set kraw (tg-get ar sroot (sn-k)))
+    (if (!= kraw 0)
+      (do (cells-set se SE_BITS 64)
+          (set rc (tg-kids src ar dc a b st idx txt seen ss se sk sc so w 0 kraw 0))
+          (if (< rc 0) (return -1))))
+    (cells-set se SE_SIZE (quot (cells-len se) SE_STRIDE))
+    (cells-set ss SS_CONTENT (quot (cells-len sc) SC_STRIDE))
+    (cells-set ss SS_OBJRS (quot (cells-len so) SO_STRIDE))
+    (if (ps-missed src) (return -1))
+    (set rc (tg-parent-tree src ar dc a b st pg w ss se sc so wk sroot))
+    (if (< rc 0) (return -1))
+    (return (quot (cells-len se) SE_STRIDE))))
+
+;; ------------------------------------------------------------- the join
+
+(defn ^I32 tg-j-marks [^:mut ^Cells ss ^:mut ^Cells sc ^Cells mk ^:mut ^Cells ha ^:mut ^Cells hb]
+  (comment "Index the text layer's marked content by (page, Form XObject, MCID) and join every marked-")
+  (comment "content reference to its `marks` row. A mark claimed twice keeps its first claimer (the other")
+  (comment "reference is flagged `duplicate`); the rest is `no-mark`.")
+  (let [^I32 nmk (mk-count mk)
+        ^I32 nsc (quot (cells-len sc) SC_STRIDE)
+        ^:mut ^I32 m 0
+        ^:mut ^I32 mc 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 pi 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 dup 0]
+    (tg-ht-init ha nmk)
+    (cells-drop hb 0)
+    (while (< m nmk)
+      (do (cells-push hb -1)
+          (set mc (mk-get mk m (mkf-mcid)))
+          (if (>= mc 0)
+            (set dup (tg-ht-put ha (mk-get mk m (mkf-page)) (mk-get mk m (mkf-stm)) mc m)))
+          (set m (+ m 1))))
+    (cells-set ss SS_MARKS nmk)
+    (while (< i nsc)
+      (do (set at (* i SC_STRIDE))
+          (set pi (cells-at sc (+ at SC_PAGE)))
+          (set fl (cells-at sc (+ at SC_FLAGS)))
+          (set got -1)
+          (if (and (>= pi 0) (>= (cells-at sc (+ at SC_MCID)) 0))
+            (set got (tg-ht-get ha (+ pi 1) (cells-at sc (+ at SC_STM)) (cells-at sc (+ at SC_MCID)))))
+          (if (>= got 0)
+            (do (cells-set sc (+ at SC_MARK) got)
+                (cells-set sc (+ at SC_GFIRST) (mk-get mk got (mkf-gfirst)))
+                (cells-set sc (+ at SC_GCOUNT) (mk-get mk got (mkf-gcount)))
+                (if (>= (cells-at hb got) 0)
+                  (do (set fl (bit-or fl 8))
+                      (cells-set ss SS_DUPS (+ (cells-at ss SS_DUPS) 1)))
+                  (cells-set hb got i))
+                (cells-set ss SS_JOINED (+ (cells-at ss SS_JOINED) 1)))
+            (do (set fl (bit-or fl 4))
+                (cells-set ss SS_UNJOINED (+ (cells-at ss SS_UNJOINED) 1))))
+          (cells-set sc (+ at SC_FLAGS) fl)
+          (set i (+ i 1))))
+    (return dup)))
+
+(defn ^I32 tg-j-glyphs [^:mut ^Cells ss ^:mut ^Cells sc ^Cells gl ^Cells mk ^Cells fnt ^Cells hb
+                        ^:mut ^Cells hh]
+  (comment "Give every glyph its owner: the structure element of its innermost marked content that carries an")
+  (comment "MCID (through the reference that claimed it), or `artifact` (innermost /Artifact), or neither. The")
+  (comment "owning reference collects the glyph's size, boldness and box; the type-size histogram `hh` (0.5 pt")
+  (comment "buckets) collects every tagged glyph, for the body size.")
+  (let [^I32 ng (gl-count gl)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 decided 0
+        ^:mut ^I32 own -1
+        ^:mut ^I32 at 0
+        ^:mut ^I32 sz 0
+        ^:mut ^I32 bold 0
+        ^:mut ^I32 font 0
+        ^:mut ^I32 bk 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 n 0]
+    (cells-drop hh 0)
+    (while (< n 4200)
+      (do (cells-push hh 0)
+          (set n (+ n 1))))
+    (cells-set ss SS_GLYPHS ng)
+    (while (< g ng)
+      (do (set m (gl-get gl g (gf-mark)))
+          (set decided 0)
+          (set own -1)
+          (while (and (>= m 0) (== decided 0))
+            (do (if (== (mk-get mk m (mkf-kind)) 1)
+                  (set decided 2)
+                  (if (>= (mk-get mk m (mkf-mcid)) 0)
+                    (do (set decided 1)
+                        (set own (cells-at hb m)))))
+                (if (== decided 0) (set m (mk-get mk m (mkf-parent))))))
+          (if (== decided 2) (cells-set ss SS_ARTG (+ (cells-at ss SS_ARTG) 1)))
+          (if (== decided 0) (cells-set ss SS_UNTAGGED (+ (cells-at ss SS_UNTAGGED) 1)))
+          (if (and (== decided 1) (< own 0))
+            (cells-set ss SS_UNCLAIMED (+ (cells-at ss SS_UNCLAIMED) 1)))
+          (if (and (== decided 1) (>= own 0))
+            (do (cells-set ss SS_COVERED (+ (cells-at ss SS_COVERED) 1))
+                (set at (* own SC_STRIDE))
+                (set sz (gl-get gl g (gf-size)))
+                (set bk (tg-min (quot sz 50) 4095))
+                (if (< bk 0) (set bk 0))
+                (cells-set hh bk (+ (cells-at hh bk) 1))
+                (set sz (quot (+ (tg-min (tg-max sz 0) 6000) 5) 10))
+                (set font (gl-get gl g (gf-font)))
+                (set bold 0)
+                (if (>= font 0)
+                  (if (== (bit-and (fo-get fnt font (fnf-style)) 1) 1) (set bold 1)))
+                (set x0 (gl-get gl g (ch-x0)))
+                (set y0 (gl-get gl g (ch-y0)))
+                (set x1 (gl-get gl g (ch-x1)))
+                (set y1 (gl-get gl g (ch-y1)))
+                (if (== (cells-at sc (+ at SC_OWNG)) 0)
+                  (do (cells-set sc (+ at SC_BX0) x0)
+                      (cells-set sc (+ at (+ SC_BX0 1)) y0)
+                      (cells-set sc (+ at (+ SC_BX0 2)) x1)
+                      (cells-set sc (+ at (+ SC_BX0 3)) y1)
+                      (cells-set sc (+ at SC_FIRSTG) g))
+                  (do (cells-set sc (+ at SC_BX0) (tg-min (cells-at sc (+ at SC_BX0)) x0))
+                      (cells-set sc (+ at (+ SC_BX0 1)) (tg-min (cells-at sc (+ at (+ SC_BX0 1))) y0))
+                      (cells-set sc (+ at (+ SC_BX0 2)) (tg-max (cells-at sc (+ at (+ SC_BX0 2))) x1))
+                      (cells-set sc (+ at (+ SC_BX0 3)) (tg-max (cells-at sc (+ at (+ SC_BX0 3))) y1))))
+                (cells-set sc (+ at SC_LASTG) g)
+                (cells-set sc (+ at SC_OWNG) (+ (cells-at sc (+ at SC_OWNG)) 1))
+                (cells-set sc (+ at SC_OWNSZ) (+ (cells-at sc (+ at SC_OWNSZ)) sz))
+                (cells-set sc (+ at SC_OWNBD) (+ (cells-at sc (+ at SC_OWNBD)) bold))))
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^I32 tg-j-sub [^:mut ^Cells ss ^:mut ^Cells se ^Cells sc ^Cells so]
+  (comment "Roll every marked-content reference's glyphs up its element's ancestors: the element's own")
+  (comment "numbers, then the subtree's, the first reference (in tree order) that holds text and the box of")
+  (comment "the subtree's text on that reference's page.")
+  (let [^I32 nsc (quot (cells-len sc) SC_STRIDE)
+        ^I32 nso (quot (cells-len so) SO_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 ea 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 pgx 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0]
+    (while (< i nsc)
+      (do (set at (* i SC_STRIDE))
+          (set e (cells-at sc (+ at SC_ELEM)))
+          (set g (cells-at sc (+ at SC_OWNG)))
+          (set pgx (cells-at sc (+ at SC_PAGE)))
+          (set x0 (cells-at sc (+ at SC_BX0)))
+          (set y0 (cells-at sc (+ at (+ SC_BX0 1))))
+          (set x1 (cells-at sc (+ at (+ SC_BX0 2))))
+          (set y1 (cells-at sc (+ at (+ SC_BX0 3))))
+          (set ea (* e SE_STRIDE))
+          (cells-set se (+ ea SE_OWNG) (+ (cells-at se (+ ea SE_OWNG)) g))
+          (cells-set se (+ ea SE_OWNSZ) (+ (cells-at se (+ ea SE_OWNSZ)) (cells-at sc (+ at SC_OWNSZ))))
+          (cells-set se (+ ea SE_OWNBD) (+ (cells-at se (+ ea SE_OWNBD)) (cells-at sc (+ at SC_OWNBD))))
+          (while (>= e 0)
+            (do (set ea (* e SE_STRIDE))
+                (cells-set se (+ ea SE_SUBC) (+ (cells-at se (+ ea SE_SUBC)) 1))
+                (if (> g 0)
+                  (do (cells-set se (+ ea SE_SUBG) (+ (cells-at se (+ ea SE_SUBG)) g))
+                      (cells-set se (+ ea SE_SUBSZ) (+ (cells-at se (+ ea SE_SUBSZ)) (cells-at sc (+ at SC_OWNSZ))))
+                      (cells-set se (+ ea SE_SUBBD) (+ (cells-at se (+ ea SE_SUBBD)) (cells-at sc (+ at SC_OWNBD))))
+                      (if (< (cells-at se (+ ea SE_FSC)) 0)
+                        (do (cells-set se (+ ea SE_FSC) i)
+                            (cells-set se (+ ea SE_FPG) pgx)
+                            (cells-set se (+ ea SE_BX0) x0)
+                            (cells-set se (+ ea (+ SE_BX0 1)) y0)
+                            (cells-set se (+ ea (+ SE_BX0 2)) x1)
+                            (cells-set se (+ ea (+ SE_BX0 3)) y1))
+                        (if (== (cells-at se (+ ea SE_FPG)) pgx)
+                          (do (cells-set se (+ ea SE_BX0) (tg-min (cells-at se (+ ea SE_BX0)) x0))
+                              (cells-set se (+ ea (+ SE_BX0 1)) (tg-min (cells-at se (+ ea (+ SE_BX0 1))) y0))
+                              (cells-set se (+ ea (+ SE_BX0 2)) (tg-max (cells-at se (+ ea (+ SE_BX0 2))) x1))
+                              (cells-set se (+ ea (+ SE_BX0 3)) (tg-max (cells-at se (+ ea (+ SE_BX0 3))) y1)))))))
+                (set e (cells-at se (+ ea SE_PARENT)))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nso)
+      (do (set e (cells-at so (* i SO_STRIDE)))
+          (while (>= e 0)
+            (do (set ea (* e SE_STRIDE))
+                (cells-set se (+ ea SE_SUBC) (+ (cells-at se (+ ea SE_SUBC)) 1))
+                (set e (cells-at se (+ ea SE_PARENT)))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 tg-j-order [^:mut ^Cells ss ^Cells sc ^Cells gl]
+  (comment "Reading order against geometry: for each pair of consecutive marked-content references that hold")
+  (comment "upright text on the same page, the tree is right when the second starts no more than half a line")
+  (comment "above where the first ended (down the page, or along the line), or entirely to the right of it (the")
+  (comment "next column). The glyph boxes are in page space, y down.")
+  (let [^I32 nsc (quot (cells-len sc) SC_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 prev -1
+        ^:mut ^I32 ga 0
+        ^:mut ^I32 gb 0
+        ^:mut ^I32 ah 0
+        ^:mut ^I32 bh 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 up 0
+        ^:mut ^I32 agree 0]
+    (while (< i nsc)
+      (do (if (> (cells-at sc (+ (* i SC_STRIDE) SC_OWNG)) 0)
+            (do (if (>= prev 0)
+                  (if (== (cells-at sc (+ (* prev SC_STRIDE) SC_PAGE)) (cells-at sc (+ (* i SC_STRIDE) SC_PAGE)))
+                    (do (set ga (cells-at sc (+ (* prev SC_STRIDE) SC_LASTG)))
+                        (set gb (cells-at sc (+ (* i SC_STRIDE) SC_FIRSTG)))
+                        (if (and (== (gl-get gl ga (gf-rot)) 0) (== (gl-get gl gb (gf-rot)) 0))
+                          (do (set ah (- (gl-get gl ga (ch-y1)) (gl-get gl ga (ch-y0))))
+                              (set bh (- (gl-get gl gb (ch-y1)) (gl-get gl gb (ch-y0))))
+                              (set h (tg-min ah bh))
+                              (if (<= h 0) (set h (tg-max ah bh)))
+                              (set up (- (+ (gl-get gl ga (ch-y0)) (gl-get gl ga (ch-y1)))
+                                         (+ (gl-get gl gb (ch-y0)) (gl-get gl gb (ch-y1)))))
+                              (set agree 0)
+                              (if (<= up h) (set agree 1))
+                              (if (>= (gl-get gl gb (ch-x0)) (gl-get gl ga (ch-x1))) (set agree 1))
+                              (cells-set ss SS_TRANS (+ (cells-at ss SS_TRANS) 1))
+                              (cells-set ss SS_TRANSOK (+ (cells-at ss SS_TRANSOK) agree)))))))
+                (set prev i)))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------- roles, tables and lists
+
+(defn ^I32 tg-class-bit [^I32 role]
+  (comment "The class of informative structure a role belongs to, as a bit: 1 heading, 2 list, 4 table,")
+  (comment "8 figure, 16 section, 32 note-like (caption, quote, note, reference, code), 64 link, 128")
+  (comment "table of contents. A paragraph, a span and the grouping types say nothing beyond blocks.")
+  (if (or (== role RO_H) (== role RO_HN) (== role RO_TITLE)) (return 1))
+  (if (and (>= role RO_L) (<= role RO_LBODY)) (return 2))
+  (if (and (>= role RO_TABLE) (<= role RO_TFOOT)) (return 4))
+  (if (or (== role RO_FIGURE) (== role RO_FORMULA) (== role RO_FORM)) (return 8))
+  (if (or (== role RO_PART) (== role RO_ART) (== role RO_SECT) (== role RO_ASIDE)) (return 16))
+  (if (or (== role RO_BLOCKQUOTE) (== role RO_CAPTION) (== role RO_QUOTE) (== role RO_NOTE)) (return 32))
+  (if (or (== role RO_FENOTE) (== role RO_REF) (== role RO_BIB) (== role RO_CODE)) (return 32))
+  (if (or (== role RO_LINK) (== role RO_ANNOT)) (return 64))
+  (if (and (>= role RO_TOC) (<= role RO_INDEX)) (return 128))
+  (return 0))
+
+(defn ^I32 tg-nest-ok [^I32 role ^I32 prole]
+  (comment "Whether a role sits where the standard puts it: 1 yes, 0 no, -1 the standard says nothing.")
+  (if (== role RO_TR)
+    (do (if (or (== prole RO_TABLE) (== prole RO_THEAD) (== prole RO_TBODY) (== prole RO_TFOOT)) (return 1))
+        (return 0)))
+  (if (or (== role RO_TH) (== role RO_TD))
+    (do (if (== prole RO_TR) (return 1))
+        (return 0)))
+  (if (or (== role RO_THEAD) (== role RO_TBODY) (== role RO_TFOOT))
+    (do (if (== prole RO_TABLE) (return 1))
+        (return 0)))
+  (if (== role RO_LI)
+    (do (if (== prole RO_L) (return 1))
+        (return 0)))
+  (if (or (== role RO_LBL) (== role RO_LBODY))
+    (do (if (== prole RO_LI) (return 1))
+        (return 0)))
+  (if (== role RO_TOCI)
+    (do (if (or (== prole RO_TOC) (== prole RO_TOCI)) (return 1))
+        (return 0)))
+  (return -1))
+
+(defn ^I32 tg-j-classes [^:mut ^Cells ss ^:mut ^Cells se]
+  (comment "Which classes of structure the tree uses (over elements that hold content), and how many of the")
+  (comment "roles the standard places are where it places them.")
+  (let [^I32 nse (quot (cells-len se) SE_STRIDE)
+        ^:mut ^I32 r 1
+        ^:mut ^I32 at 0
+        ^:mut ^I32 par 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 mask 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 n 0]
+    (while (< r nse)
+      (do (set at (* r SE_STRIDE))
+          (set role (cells-at se (+ at SE_ROLE)))
+          (set par (cells-at se (+ at SE_PARENT)))
+          (if (> (cells-at se (+ at SE_SUBC)) 0)
+            (set mask (bit-or mask (tg-class-bit role))))
+          (set v (tg-nest-ok role (cells-at se (+ (* par SE_STRIDE) SE_ROLE))))
+          (if (>= v 0)
+            (do (cells-set ss SS_NEST (+ (cells-at ss SS_NEST) 1))
+                (cells-set ss SS_NESTOK (+ (cells-at ss SS_NESTOK) v))))
+          (if (== role RO_TABLE) (cells-set ss SS_TABLES (+ (cells-at ss SS_TABLES) 1)))
+          (if (== role RO_L) (cells-set ss SS_LISTS (+ (cells-at ss SS_LISTS) 1)))
+          (set r (+ r 1))))
+    (cells-set ss SS_CLASSES mask)
+    (set bits mask)
+    (while (> bits 0)
+      (do (set n (+ n (rem bits 2)))
+          (set bits (quot bits 2))))
+    (cells-set ss SS_NCLASSES n)
+    (return 0)))
+
+(defn ^I32 tg-j-tables [^Cells sk ^:mut ^Cells se]
+  (comment "Each table's shape from its rows: how many, how many columns (the sum of ColSpan over a row's")
+  (comment "cells), and whether every row has as many (`regular`). Rows are found under the Table or its")
+  (comment "THead, TBody and TFoot.")
+  (let [^I32 nse (quot (cells-len se) SE_STRIDE)
+        ^:mut ^I32 r 1
+        ^:mut ^I32 at 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 pr 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 kn 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 cols 0
+        ^:mut ^I32 cs 0
+        ^:mut ^I32 tat 0]
+    (while (< r nse)
+      (do (set at (* r SE_STRIDE))
+          (if (== (cells-at se (+ at SE_ROLE)) RO_TR)
+            (do (set p (cells-at se (+ at SE_PARENT)))
+                (set pr (cells-at se (+ (* p SE_STRIDE) SE_ROLE)))
+                (if (or (== pr RO_THEAD) (== pr RO_TBODY) (== pr RO_TFOOT))
+                  (do (set p (cells-at se (+ (* p SE_STRIDE) SE_PARENT)))
+                      (set pr (cells-at se (+ (* p SE_STRIDE) SE_ROLE)))))
+                (if (== pr RO_TABLE)
+                  (do (set cols 0)
+                      (set k (cells-at se (+ at SE_KFIRST)))
+                      (set kn (cells-at se (+ at SE_KCOUNT)))
+                      (set c 0)
+                      (while (and (>= k 0) (< c kn))
+                        (do (if (== (cells-at sk (* (+ k c) SK_STRIDE)) 1)
+                              (do (set cs (* (cells-at sk (+ (* (+ k c) SK_STRIDE) 1)) SE_STRIDE))
+                                  (if (or (== (cells-at se (+ cs SE_ROLE)) RO_TH) (== (cells-at se (+ cs SE_ROLE)) RO_TD))
+                                    (set cols (+ cols (tg-max (cells-at se (+ cs SE_COLSPAN)) 1))))))
+                            (set c (+ c 1))))
+                      (set tat (* p SE_STRIDE))
+                      (cells-set se (+ tat SE_TROWS) (+ (cells-at se (+ tat SE_TROWS)) 1))
+                      (if (== (cells-at se (+ tat SE_TROWS)) 1)
+                        (do (cells-set se (+ tat SE_TCOLS) cols)
+                            (cells-set se (+ tat SE_TREG) 1))
+                        (if (!= cols (cells-at se (+ tat SE_TCOLS)))
+                          (do (cells-set se (+ tat SE_TREG) 0)
+                              (cells-set se (+ tat SE_TCOLS) (tg-max cols (cells-at se (+ tat SE_TCOLS)))))))))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 tg-label-kind [^Cells gl ^I32 g0 ^I32 g1]
+  (comment "What a list label's first glyphs look like, as `lk` bits: a bullet, decimal digits, a letter (a")
+  (comment "Roman numeral's letters count for both), several Roman letters; 0 when it is none. Leading")
+  (comment "parentheses and spaces, a trailing period, the first space or `)` `:` `]` are not part of it.")
+  (let [^:mut ^I32 g g0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 sym 0
+        ^:mut ^I32 dig 0
+        ^:mut ^I32 low 0
+        ^:mut ^I32 upr 0
+        ^:mut ^I32 rl 0
+        ^:mut ^I32 ru 0
+        ^:mut ^I32 stop 0
+        ^:mut ^I32 mask 0]
+    (while (and (<= g g1) (< g (+ g0 12)) (== stop 0))
+      (do (set cp (gl-get gl g (ch-cp)))
+          (if (or (== cp 32) (== cp 160) (== cp 41) (== cp 58) (== cp 93) (== cp 40) (== cp 91))
+            (if (> n 0) (set stop 1))
+            (if (!= cp 46)
+              (do (set n (+ n 1))
+                  (if (and (>= cp 48) (<= cp 57)) (set dig (+ dig 1)))
+                  (if (and (>= cp 97) (<= cp 122))
+                    (do (set low (+ low 1))
+                        (if (or (== cp 105) (== cp 118) (== cp 120) (== cp 108) (== cp 99) (== cp 100) (== cp 109))
+                          (set rl (+ rl 1)))))
+                  (if (and (>= cp 65) (<= cp 90))
+                    (do (set upr (+ upr 1))
+                        (if (or (== cp 73) (== cp 86) (== cp 88) (== cp 76) (== cp 67) (== cp 68) (== cp 77))
+                          (set ru (+ ru 1)))))
+                  (if (and (>= cp 0) (< cp 48)) (set sym (+ sym 1)))
+                  (if (and (> cp 57) (< cp 65)) (set sym (+ sym 1)))
+                  (if (and (> cp 90) (< cp 97)) (set sym (+ sym 1)))
+                  (if (and (> cp 122) (< cp 128)) (set sym (+ sym 1)))
+                  (if (and (>= cp 8192) (<= cp 11263)) (set sym (+ sym 1)))
+                  (if (and (>= cp 57344) (<= cp 63743)) (set sym (+ sym 1))))))
+          (set g (+ g 1))))
+    (if (== n 0) (return 0))
+    (if (== sym n) (return 1))
+    (if (== dig n) (return 2))
+    (if (== low n)
+      (do (set mask 4)
+          (if (== rl n) (set mask 20))
+          (return mask)))
+    (if (== upr n)
+      (do (set mask 8)
+          (if (== ru n) (set mask 40))
+          (return mask)))
+    (return 0)))
+
+(defn ^I32 tg-list-want [^I32 ln]
+  (comment "The label kinds (`lk` bits) a ListNumbering value allows; 0 when it says nothing to check.")
+  (if (or (== ln 2) (== ln 4) (== ln 5) (== ln 6)) (return 1))
+  (if (== ln 3) (return 62))
+  (if (== ln 7) (return 2))
+  (if (== ln 8) (return 32))
+  (if (== ln 9) (return 16))
+  (if (== ln 10) (return 8))
+  (if (== ln 11) (return 4))
+  (return 0))
+
+(defn ^I32 tg-j-lists [^Cells sk ^:mut ^Cells se ^Cells sc ^Cells gl]
+  (comment "Each list: its items, the items with a label, and whether the first glyphs of each label look like")
+  (comment "what the list's ListNumbering says (a bullet for Disc, digits for Decimal, ...).")
+  (let [^I32 nse (quot (cells-len se) SE_STRIDE)
+        ^:mut ^I32 r 1
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 kn 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 li 0
+        ^:mut ^I32 lat 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 jn 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 bl 0
+        ^:mut ^I32 bat 0
+        ^:mut ^I32 haslbl 0
+        ^:mut ^I32 want 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 fsc 0
+        ^:mut ^I32 sat 0]
+    (while (< r nse)
+      (do (set at (* r SE_STRIDE))
+          (if (== (cells-at se (+ at SE_ROLE)) RO_L)
+            (do (set want (tg-list-want (cells-at se (+ at SE_LISTNUM))))
+                (set k (cells-at se (+ at SE_KFIRST)))
+                (set kn (cells-at se (+ at SE_KCOUNT)))
+                (set c 0)
+                (while (and (>= k 0) (< c kn))
+                  (do (if (== (cells-at sk (* (+ k c) SK_STRIDE)) 1)
+                        (do (set li (cells-at sk (+ (* (+ k c) SK_STRIDE) 1)))
+                            (set lat (* li SE_STRIDE))
+                            (if (== (cells-at se (+ lat SE_ROLE)) RO_LI)
+                              (do (cells-set se (+ at SE_LITEMS) (+ (cells-at se (+ at SE_LITEMS)) 1))
+                                  (set haslbl 0)
+                                  (set j (cells-at se (+ lat SE_KFIRST)))
+                                  (set jn (cells-at se (+ lat SE_KCOUNT)))
+                                  (set d 0)
+                                  (while (and (>= j 0) (< d jn) (== haslbl 0))
+                                    (do (if (== (cells-at sk (* (+ j d) SK_STRIDE)) 1)
+                                          (do (set bl (cells-at sk (+ (* (+ j d) SK_STRIDE) 1)))
+                                              (set bat (* bl SE_STRIDE))
+                                              (if (== (cells-at se (+ bat SE_ROLE)) RO_LBL)
+                                                (do (set haslbl 1)
+                                                    (cells-set se (+ at SE_LLBL) (+ (cells-at se (+ at SE_LLBL)) 1))
+                                                    (set fsc (cells-at se (+ bat SE_FSC)))
+                                                    (set kind 0)
+                                                    (if (>= fsc 0)
+                                                      (do (set sat (* fsc SC_STRIDE))
+                                                          (set kind (tg-label-kind gl (cells-at sc (+ sat SC_FIRSTG)) (cells-at sc (+ sat SC_LASTG))))))
+                                                    (if (== (cells-at se (+ at SE_LKIND)) 0)
+                                                      (cells-set se (+ at SE_LKIND) kind))
+                                                    (if (and (> want 0) (> kind 0))
+                                                      (if (> (bit-and want kind) 0)
+                                                        (cells-set se (+ at SE_LOK) (+ (cells-at se (+ at SE_LOK)) 1))
+                                                        (cells-set se (+ at SE_LBAD) (+ (cells-at se (+ at SE_LBAD)) 1))))))))
+                                        (set d (+ d 1))))))))
+                    (set c (+ c 1))))))
+          (set r (+ r 1))))
+    (return 0)))
+
+;; ---------------------------------------------------------------- headings
+
+(defn ^I32 tg-mean [^I32 sum ^I32 n]
+  (comment "sum * 10 / n in centipoints (sums are tenths of a point), without overflow.")
+  (if (<= n 0) (return 0))
+  (return (+ (* (quot sum n) 10) (quot (* (rem sum n) 10) n))))
+
+(defn ^I32 tg-j-headings [^:mut ^Cells ss ^Cells se ^:mut ^Cells hh]
+  (comment "Heading roles against the page. The BODY SIZE is the most common size of tagged text. A heading")
+  (comment "(an element inside H, Hn or Title, with text of its own) is verified when its type is clearly larger")
+  (comment "than the body or is bold and not smaller; a BIG element is short text at least 1.25 times the body")
+  (comment "that is not a table cell, a label, a figure or a formula, and is a miss when it is no heading. Heading")
+  (comment "LEVELS are checked two ways: in document order a level may not jump by more than one, and a")
+  (comment "lower level number may not be set smaller than a higher one.")
+  (let [^I32 nse (quot (cells-len se) SE_STRIDE)
+        ^:mut ^I32 b 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bestn 0
+        ^:mut ^I32 body 0
+        ^:mut ^I32 r 1
+        ^:mut ^I32 at 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 mean 0
+        ^:mut ^I32 bold 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 inh 0
+        ^:mut ^I32 lvl 0
+        ^:mut ^I32 prevl 0
+        ^:mut ^I32 skip 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 pl 0
+        ^:mut ^I32 pmean 0
+        ^:mut ^I32 cmean 0]
+    (while (< b 4096)
+      (do (if (> (cells-at hh b) bestn)
+            (do (set bestn (cells-at hh b))
+                (set best b)))
+          (set b (+ b 1))))
+    (if (> bestn 0) (set body (+ (* best 50) 25)))
+    (cells-set ss SS_BODY body)
+    (if (== body 0) (return 0))
+    (while (< r nse)
+      (do (set at (* r SE_STRIDE))
+          (set g (cells-at se (+ at SE_OWNG)))
+          (set role (cells-at se (+ at SE_ROLE)))
+          (set inh (cells-at se (+ at SE_INH)))
+          (if (> g 0)
+            (do (set mean (tg-mean (cells-at se (+ at SE_OWNSZ)) g))
+                (set bold (tg-pm (cells-at se (+ at SE_OWNBD)) g))
+                (set skip 0)
+                (if (or (== role RO_TH) (== role RO_TD) (== role RO_LBL) (== role RO_FORMULA) (== role RO_FIGURE))
+                  (set skip 1))
+                (if (and (== skip 0) (== inh 1))
+                  (do (cells-set ss SS_HEADS (+ (cells-at ss SS_HEADS) 1))
+                      (if (>= (* mean 100) (* body 108))
+                        (cells-set ss SS_HEADSOK (+ (cells-at ss SS_HEADSOK) 1))
+                        (if (and (>= bold 700) (>= (* mean 100) (* body 95)))
+                          (cells-set ss SS_HEADSOK (+ (cells-at ss SS_HEADSOK) 1))))))
+                (if (and (== skip 0) (<= g 300) (>= (* mean 100) (* body 125)))
+                  (do (cells-set ss SS_BIG (+ (cells-at ss SS_BIG) 1))
+                      (if (== inh 1) (cells-set ss SS_BIGHEAD (+ (cells-at ss SS_BIGHEAD) 1)))))))
+          (if (and (== role RO_HN) (> (cells-at se (+ at SE_SUBG)) 0))
+            (do (set lvl (cells-at se (+ at SE_LEVEL)))
+                (set mean (tg-mean (cells-at se (+ at SE_SUBSZ)) (cells-at se (+ at SE_SUBG))))
+                (if (and (>= lvl 1) (<= lvl 6))
+                  (do (cells-set hh (+ 4096 (* lvl 2)) (+ (cells-at hh (+ 4096 (* lvl 2))) mean))
+                      (cells-set hh (+ 4097 (* lvl 2)) (+ (cells-at hh (+ 4097 (* lvl 2))) 1))))
+                (if (> prevl 0)
+                  (do (cells-set ss SS_LVPAIRS (+ (cells-at ss SS_LVPAIRS) 1))
+                      (if (<= lvl (+ prevl 1)) (cells-set ss SS_LVOK (+ (cells-at ss SS_LVOK) 1)))))
+                (set prevl lvl)))
+          (set r (+ r 1))))
+    (set l 1)
+    (while (<= l 6)
+      (do (if (> (cells-at hh (+ 4097 (* l 2))) 0)
+            (do (set cmean (quot (cells-at hh (+ 4096 (* l 2))) (cells-at hh (+ 4097 (* l 2)))))
+                (if (> pl 0)
+                  (do (cells-set ss SS_LVPAIRS (+ (cells-at ss SS_LVPAIRS) 1))
+                      (if (>= (* pmean 100) (* cmean 97)) (cells-set ss SS_LVOK (+ (cells-at ss SS_LVOK) 1)))))
+                (set pl l)
+                (set pmean cmean)))
+          (set l (+ l 1))))
+    (return 0)))
+
+;; --------------------------------------------------------------- artifacts
+
+(defn ^I32 tg-j-artifacts [^:mut ^Cells ss ^:mut ^Cells sa ^Cells gl ^Cells mk ^Cells pg]
+  (comment "One `sa` row per OUTERMOST artifact span: where its text sits on the page, and whether what it")
+  (comment "says it is (a header, a footer, pagination, a watermark) agrees: a header lies in the top 12 per cent")
+  (comment "of the page, a footer in the bottom 12, other furniture in a margin, a watermark is turned, light or")
+  (comment "large. A span with no text is `unchecked`: a rule or a shading says nothing to verify.")
+  (cells-drop sa 0)
+  (let [^I32 nmk (mk-count mk)
+        ^I32 npg (pd-pg-count pg)
+        ^:mut ^I32 m 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 nested 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 pi 0
+        ^:mut ^I32 g0 0
+        ^:mut ^I32 gn 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 szs 0
+        ^:mut ^I32 lum 0
+        ^:mut ^I32 fill 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 rt 0
+        ^:mut ^I32 band 0
+        ^:mut ^I32 verdict 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 marginal 0
+        ^:mut ^I32 wm 0
+        ^:mut ^I32 meansz 0
+        ^:mut ^I32 meanlum 0
+        ^:mut ^I32 i 0]
+    (while (< m nmk)
+      (do (if (== (mk-get mk m (mkf-kind)) 1)
+            (do (set nested 0)
+                (set p (mk-get mk m (mkf-parent)))
+                (while (>= p 0)
+                  (do (if (== (mk-get mk p (mkf-kind)) 1) (set nested 1))
+                      (set p (mk-get mk p (mkf-parent)))))
+                (if (== nested 0)
+                  (do (set pi (- (mk-get mk m (mkf-page)) 1))
+                      (set g0 (mk-get mk m (mkf-gfirst)))
+                      (set gn (mk-get mk m (mkf-gcount)))
+                      (set cnt 0)
+                      (set x0 0)
+                      (set y0 0)
+                      (set x1 0)
+                      (set y1 0)
+                      (set szs 0)
+                      (set lum 0)
+                      (set rot 0)
+                      (set g 0)
+                      (while (< g gn)
+                        (do (if (== cnt 0)
+                              (do (set x0 (gl-get gl (+ g0 g) (ch-x0)))
+                                  (set y0 (gl-get gl (+ g0 g) (ch-y0)))
+                                  (set x1 (gl-get gl (+ g0 g) (ch-x1)))
+                                  (set y1 (gl-get gl (+ g0 g) (ch-y1)))
+                                  (set rot (gl-get gl (+ g0 g) (gf-rot))))
+                              (do (set x0 (tg-min x0 (gl-get gl (+ g0 g) (ch-x0))))
+                                  (set y0 (tg-min y0 (gl-get gl (+ g0 g) (ch-y0))))
+                                  (set x1 (tg-max x1 (gl-get gl (+ g0 g) (ch-x1))))
+                                  (set y1 (tg-max y1 (gl-get gl (+ g0 g) (ch-y1))))))
+                            (set szs (+ szs (quot (tg-min (tg-max (gl-get gl (+ g0 g) (gf-size)) 0) 6000) 10)))
+                            (set fill (gl-get gl (+ g0 g) (gf-fill)))
+                            (if (>= fill 0)
+                              (set lum (+ lum (quot (+ (+ (* (bit-and (quot fill 65536) 255) 299)
+                                                          (* (bit-and (quot fill 256) 255) 587))
+                                                       (* (bit-and fill 255) 114))
+                                                    1000))))
+                            (set cnt (+ cnt 1))
+                            (set g (+ g 1))))
+                      (set sub (mk-get mk m (mkf-arsub)))
+                      (set band 0)
+                      (set verdict 0)
+                      (set meansz 0)
+                      (set meanlum -1)
+                      (if (> cnt 0)
+                        (do (set meansz (tg-mean szs cnt))
+                            (set meanlum (quot lum cnt))
+                            (set pw 0)
+                            (set ph 0)
+                            (if (and (>= pi 0) (< pi npg))
+                              (do (set pw (- (pd-pg-crop pg pi 2) (pd-pg-crop pg pi 0)))
+                                  (set ph (- (pd-pg-crop pg pi 3) (pd-pg-crop pg pi 1)))
+                                  (set rt (pd-pg-rotate pg pi))
+                                  (if (or (== rt 90) (== rt 270))
+                                    (do (set i pw) (set pw ph) (set ph i)))))
+                            (set band 1)
+                            (if (> pw 0)
+                              (do (if (< (* (+ y0 y1) 100) (* ph 24)) (set band 2))
+                                  (if (> (* (+ y0 y1) 100) (* ph 176)) (set band 3))
+                                  (if (== band 1)
+                                    (if (or (< (* (+ x0 x1) 100) (* pw 16)) (> (* (+ x0 x1) 100) (* pw 184)))
+                                      (set band 4)))))
+                            (set marginal 0)
+                            (if (> band 1) (set marginal 1))
+                            (set wm 0)
+                            (if (or (!= rot 0) (>= meanlum 170) (>= meansz 3600)) (set wm 1))
+                            (if (== sub 1)
+                              (if (== band 2) (set verdict 1) (set verdict 2)))
+                            (if (== sub 2)
+                              (if (== band 3) (set verdict 1) (set verdict 2)))
+                            (if (== sub 3)
+                              (if (== wm 1) (set verdict 1) (set verdict 2)))
+                            (if (and (!= sub 1) (!= sub 2) (!= sub 3))
+                              (if (or (== marginal 1) (== wm 1)) (set verdict 1) (set verdict 2)))
+                            (if (== verdict 1) (cells-set ss SS_ARTOK (+ (cells-at ss SS_ARTOK) 1)))
+                            (if (== verdict 2) (cells-set ss SS_ARTBAD (+ (cells-at ss SS_ARTBAD) 1)))
+                            (cells-set ss SS_ARTGLYPHS (+ (cells-at ss SS_ARTGLYPHS) cnt))))
+                      (set row (quot (cells-len sa) SA_STRIDE))
+                      (set at (* row SA_STRIDE))
+                      (set i 0)
+                      (while (< i SA_STRIDE)
+                        (do (cells-push sa 0)
+                            (set i (+ i 1))))
+                      (cells-set sa (+ at 0) m)
+                      (cells-set sa (+ at 1) pi)
+                      (cells-set sa (+ at 2) (mk-get mk m (mkf-artype)))
+                      (cells-set sa (+ at 3) sub)
+                      (cells-set sa (+ at 4) cnt)
+                      (cells-set sa (+ at 5) x0)
+                      (cells-set sa (+ at 6) y0)
+                      (cells-set sa (+ at 7) x1)
+                      (cells-set sa (+ at 8) y1)
+                      (cells-set sa (+ at 9) band)
+                      (cells-set sa (+ at 10) rot)
+                      (cells-set sa (+ at 11) meansz)
+                      (cells-set sa (+ at 12) verdict)
+                      (cells-set sa (+ at 13) meanlum)
+                      (cells-set ss SS_ARTS (+ (cells-at ss SS_ARTS) 1))))))
+          (set m (+ m 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------- score
+
+(defn ^I32 tg-hv [^:mut ^Cells ss ^I32 v ^I32 w ^I32 gate]
+  (comment "Add one component to the weighted harmonic mean: `SS_WSUM` is the weights' sum, `SS_HSUM` the sum of")
+  (comment "weight / value (value floored at `TG_FLOOR`, in millionths) and `SS_MINC` the weakest of the components that")
+  (comment "verify something (`gate` 1: all but the diversity, which is a prior about the document, not a check).")
+  (if (< v 0) (return 0))
+  (if (and (== gate 1) (< v (cells-at ss SS_MINC))) (cells-set ss SS_MINC v))
+  (cells-set ss SS_WSUM (+ (cells-at ss SS_WSUM) w))
+  (cells-set ss SS_HSUM (+ (cells-at ss SS_HSUM) (quot (* w 1000000) (tg-max v TG_FLOOR))))
+  (return 0))
+
+(defn ^I32 tg-chance [^I32 agree]
+  (comment "An agreement rate between two orders, corrected for chance: a coin flip agrees half the time, so half")
+  (comment "is 0 and all is 1000.")
+  (return (tg-max 0 (- (* agree 2) 1000))))
+
+(defn ^I32 tg-div [^I32 classes]
+  (comment "Role diversity per mille from the number of informative classes in use: none 0 (every block")
+  (comment "a paragraph says nothing about the document), one 500, two 750, three or more 1000.")
+  (if (<= classes 0) (return 0))
+  (if (== classes 1) (return 500))
+  (if (== classes 2) (return 750))
+  (return 1000))
+
+(defn ^I32 tg-j-score [^:mut ^Cells ss]
+  (comment "The components (per mille, -1 when there is nothing to check), their weighted harmonic mean, and that mean")
+  (comment "scaled by (1000 + the weakest check) / 2000: no tree is better than its weakest check.")
+  (let [^I32 glyphs (cells-at ss SS_GLYPHS)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 hp 0
+        ^:mut ^I32 hn 0
+        ^:mut ^I32 hdr -1
+        ^:mut ^I32 score 0
+        ^:mut ^I32 trust 0
+        ^:mut ^I32 prior 0
+        ^:mut ^I32 ua 0]
+    (cells-set ss SS_WSUM 0)
+    (cells-set ss SS_HSUM 0)
+    (cells-set ss SS_MINC 1000)
+    (if (== (cells-at ss SS_PRESENT) 0) (return 0))
+    (set prior 300)
+    (if (== (cells-at ss SS_MARKED) 1) (set prior 500))
+    (if (and (== (cells-at ss SS_MARKED) 1) (>= (cells-at ss SS_UAPART) 1))
+      (do (set prior 700)
+          (set ua 1)))
+    (cells-set ss SS_PRIOR prior)
+    (if (== glyphs 0)
+      (do (cells-set ss SS_STATUS 1)
+          (return 0)))
+    (cells-set ss SS_STATUS 2)
+    (cells-set ss SS_COV (tg-pm (+ (cells-at ss SS_COVERED) (cells-at ss SS_ARTG)) glyphs))
+    (cells-set ss SS_DIV (tg-div (cells-at ss SS_NCLASSES)))
+    (if (>= (cells-at ss SS_TRANS) TG_MINPAIRS)
+      (cells-set ss SS_ORD (tg-chance (tg-pm (cells-at ss SS_TRANSOK) (cells-at ss SS_TRANS)))))
+    (if (> (cells-at ss SS_HEADS) 0)
+      (do (set hp (tg-pm (cells-at ss SS_HEADSOK) (cells-at ss SS_HEADS)))
+          (set hn (+ hn 1))))
+    (if (> (cells-at ss SS_BIG) 0)
+      (do (set v (tg-pm (cells-at ss SS_BIGHEAD) (cells-at ss SS_BIG)))
+          (set hp (+ hp v))
+          (set hn (+ hn 1))))
+    (if (> hn 0) (set hdr (quot hp hn)))
+    (cells-set ss SS_HDR hdr)
+    (if (>= (cells-at ss SS_LVPAIRS) TG_MINPAIRS)
+      (cells-set ss SS_LV (tg-chance (tg-pm (cells-at ss SS_LVOK) (cells-at ss SS_LVPAIRS)))))
+    (if (> (+ (cells-at ss SS_ARTOK) (cells-at ss SS_ARTBAD)) 0)
+      (cells-set ss SS_ART (tg-pm (cells-at ss SS_ARTOK) (+ (cells-at ss SS_ARTOK) (cells-at ss SS_ARTBAD)))))
+    (if (> (cells-at ss SS_NEST) 0)
+      (cells-set ss SS_NESTR (tg-pm (cells-at ss SS_NESTOK) (cells-at ss SS_NEST))))
+    (tg-hv ss (cells-at ss SS_COV) 3 1)
+    (tg-hv ss (cells-at ss SS_DIV) 2 0)
+    (tg-hv ss (cells-at ss SS_ORD) 2 1)
+    (tg-hv ss (cells-at ss SS_HDR) 2 1)
+    (tg-hv ss (cells-at ss SS_LV) 2 1)
+    (tg-hv ss (cells-at ss SS_ART) 2 1)
+    (tg-hv ss (cells-at ss SS_NESTR) 1 1)
+    (if (> (cells-at ss SS_HSUM) 0)
+      (set score (quot (* (cells-at ss SS_WSUM) 1000000) (cells-at ss SS_HSUM))))
+    (set score (quot (* score (+ 1000 (tg-max 0 (cells-at ss SS_MINC)))) 2000))
+    (set score (tg-min score 1000))
+    (cells-set ss SS_SCORE score)
+    (set trust score)
+    (if (== ua 1) (set trust (tg-min 1000 (+ score (quot score 10)))))
+    (cells-set ss SS_TRUST trust)
+    (return 0)))
+
+(defn ^:pub ^I32 tg-join [^:mut ^Cells ss ^:mut ^Cells se ^Cells sk ^:mut ^Cells sc ^Cells so
+                          ^:mut ^Cells sa ^Cells gl ^Cells mk ^Cells fnt ^Cells pg
+                          ^:mut ^Cells ha ^:mut ^Cells hb ^:mut ^Cells hh]
+  (comment "Join the tree to the text layer and score it, after `tg-read` and the content interpreter")
+  (comment "(`gl mk fnt` are its glyphs, marked content and fonts; `pg` the page table). `sa` is cleared; `ha hb")
+  (comment "hh` are scratch. Answers 0, or -1 when the tree is absent or the text layer too large (3,000,000")
+  (comment "glyphs) for the sums to fit.")
+  (if (== (cells-at ss SS_PRESENT) 0)
+    (do (tg-j-score ss) (return -1)))
+  (if (> (gl-count gl) 3000000) (return -1))
+  (tg-j-marks ss sc mk ha hb)
+  (tg-j-glyphs ss sc gl mk fnt hb hh)
+  (tg-j-sub ss se sc so)
+  (tg-j-order ss sc gl)
+  (tg-j-classes ss se)
+  (tg-j-tables sk se)
+  (tg-j-lists sk se sc gl)
+  (tg-j-headings ss se hh)
+  (tg-j-artifacts ss sa gl mk pg)
+  (tg-j-score ss)
+  (return 0))
+
+;; ------------------------------------------------------------------- dump
+
+(defn ^I32 tg-dump-run [^:mut ^Text t ^Cells txt ^Cells c ^I32 at]
+  (px-json-run t txt (cells-at c at) (cells-at c (+ at 1)))
+  (return 0))
+
+(defn ^I32 tg-dump-elem [^:mut ^Text t ^Cells txt ^Cells se ^Cells sk ^I32 row]
+  (let [^I32 at (* row SE_STRIDE)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 kn 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0]
+    (emit-ascii t "{\"obj\":")
+    (text-i32 t (cells-at se (+ at SE_OBJ)))
+    (emit-ascii t ",\"parent\":")
+    (text-i32 t (cells-at se (+ at SE_PARENT)))
+    (emit-ascii t ",\"depth\":")
+    (text-i32 t (cells-at se (+ at SE_DEPTH)))
+    (emit-ascii t ",\"s\":")
+    (tg-dump-run t txt se (+ at SE_ROLES))
+    (emit-ascii t ",\"role\":")
+    (if (== (cells-at se (+ at SE_ROLE)) 0)
+      (emit-ascii t "null")
+      (do (emit-ascii t "\"")
+          (if (== (cells-at se (+ at SE_ROLE)) RO_HN)
+            (do (emit-ascii t "H")
+                (text-i32 t (cells-at se (+ at SE_LEVEL))))
+            (sr-emit-name t (cells-at se (+ at SE_ROLE))))
+          (emit-ascii t "\"")))
+    (emit-ascii t ",\"how\":\"")
+    (tg-how-emit-name t (cells-at se (+ at SE_HOW)))
+    (emit-ascii t "\"")
+    (if (> (cells-at se (+ at SE_HLEV)) 0)
+      (do (emit-ascii t ",\"hlevel\":")
+          (text-i32 t (cells-at se (+ at SE_HLEV)))))
+    (if (>= (cells-at se (+ at SE_PG)) 0)
+      (do (emit-ascii t ",\"page\":")
+          (text-i32 t (cells-at se (+ at SE_PG)))))
+    (emit-ascii t ",\"kids\":[")
+    (set k (cells-at se (+ at SE_KFIRST)))
+    (set kn (cells-at se (+ at SE_KCOUNT)))
+    (set j 0)
+    (while (and (>= k 0) (< j kn))
+      (do (if (> j 0) (emit-ascii t ","))
+          (set v (* (+ k j) SK_STRIDE))
+          (emit-ascii t "[\"")
+          (tg-kind-emit-name t (cells-at sk v))
+          (emit-ascii t "\",")
+          (text-i32 t (cells-at sk (+ v 1)))
+          (emit-ascii t "]")
+          (set j (+ j 1))))
+    (emit-ascii t "]")
+    (if (>= (cells-at se (+ at SE_ALT)) 0)
+      (do (emit-ascii t ",\"alt\":")
+          (tg-dump-run t txt se (+ at SE_ALT))))
+    (if (>= (cells-at se (+ at SE_ACT)) 0)
+      (do (emit-ascii t ",\"actualText\":")
+          (tg-dump-run t txt se (+ at SE_ACT))))
+    (if (>= (cells-at se (+ at SE_EXP)) 0)
+      (do (emit-ascii t ",\"expansion\":")
+          (tg-dump-run t txt se (+ at SE_EXP))))
+    (if (>= (cells-at se (+ at SE_LANG)) 0)
+      (do (emit-ascii t ",\"lang\":")
+          (tg-dump-run t txt se (+ at SE_LANG))))
+    (if (!= (cells-at se (+ at SE_LANGSRC)) -1)
+      (do (emit-ascii t ",\"langFrom\":")
+          (text-i32 t (cells-at se (+ at SE_LANGSRC)))))
+    (if (>= (cells-at se (+ at SE_ID)) 0)
+      (do (emit-ascii t ",\"id\":")
+          (tg-dump-run t txt se (+ at SE_ID))))
+    (if (>= (cells-at se (+ at SE_TITLE)) 0)
+      (do (emit-ascii t ",\"title\":")
+          (tg-dump-run t txt se (+ at SE_TITLE))))
+    (if (> (cells-at se (+ at SE_SCOPE)) 0)
+      (do (emit-ascii t ",\"scope\":")
+          (text-i32 t (cells-at se (+ at SE_SCOPE)))))
+    (if (>= (cells-at se (+ at SE_ROWSPAN)) 0)
+      (do (emit-ascii t ",\"rowSpan\":")
+          (text-i32 t (cells-at se (+ at SE_ROWSPAN)))))
+    (if (>= (cells-at se (+ at SE_COLSPAN)) 0)
+      (do (emit-ascii t ",\"colSpan\":")
+          (text-i32 t (cells-at se (+ at SE_COLSPAN)))))
+    (if (>= (cells-at se (+ at SE_HEADS)) 0)
+      (do (emit-ascii t ",\"headers\":")
+          (tg-dump-run t txt se (+ at SE_HEADS))))
+    (if (>= (cells-at se (+ at SE_SUMM)) 0)
+      (do (emit-ascii t ",\"summary\":")
+          (tg-dump-run t txt se (+ at SE_SUMM))))
+    (if (> (cells-at se (+ at SE_LISTNUM)) 0)
+      (do (emit-ascii t ",\"listNumbering\":\"")
+          (tg-listnum-emit-name t (cells-at se (+ at SE_LISTNUM)))
+          (emit-ascii t "\"")))
+    (emit-ascii t ",\"bits\":")
+    (text-i32 t (cells-at se (+ at SE_BITS)))
+    (emit-ascii t ",\"size\":")
+    (text-i32 t (cells-at se (+ at SE_SIZE)))
+    (if (> (cells-at se (+ at SE_SUBC)) 0)
+      (do (emit-ascii t ",\"content\":")
+          (text-i32 t (cells-at se (+ at SE_SUBC)))))
+    (if (> (cells-at se (+ at SE_SUBG)) 0)
+      (do (emit-ascii t ",\"glyphs\":")
+          (text-i32 t (cells-at se (+ at SE_SUBG)))
+          (emit-ascii t ",\"ownGlyphs\":")
+          (text-i32 t (cells-at se (+ at SE_OWNG)))
+          (emit-ascii t ",\"meanSize\":")
+          (px-json-cp t (tg-mean (cells-at se (+ at SE_SUBSZ)) (cells-at se (+ at SE_SUBG))))
+          (emit-ascii t ",\"bold\":")
+          (text-i32 t (tg-pm (cells-at se (+ at SE_SUBBD)) (cells-at se (+ at SE_SUBG))))
+          (emit-ascii t ",\"firstPage\":")
+          (text-i32 t (cells-at se (+ at SE_FPG)))
+          (emit-ascii t ",\"box\":")
+          (px-json-box t se (+ at SE_BX0))))
+    (if (> (cells-at se (+ at SE_TROWS)) 0)
+      (do (emit-ascii t ",\"rows\":")
+          (text-i32 t (cells-at se (+ at SE_TROWS)))
+          (emit-ascii t ",\"cols\":")
+          (text-i32 t (cells-at se (+ at SE_TCOLS)))
+          (emit-ascii t ",\"regular\":")
+          (text-i32 t (cells-at se (+ at SE_TREG)))))
+    (if (> (cells-at se (+ at SE_LITEMS)) 0)
+      (do (emit-ascii t ",\"items\":")
+          (text-i32 t (cells-at se (+ at SE_LITEMS)))
+          (emit-ascii t ",\"labelled\":")
+          (text-i32 t (cells-at se (+ at SE_LLBL)))
+          (emit-ascii t ",\"labelsAgree\":")
+          (text-i32 t (cells-at se (+ at SE_LOK)))
+          (emit-ascii t ",\"labelsDiffer\":")
+          (text-i32 t (cells-at se (+ at SE_LBAD)))
+          (emit-ascii t ",\"labelKind\":")
+          (text-i32 t (cells-at se (+ at SE_LKIND)))))
+    (emit-ascii t "}")
+    (return 0)))
+
+(defn ^I32 tg-dump-content [^:mut ^Text t ^Cells sc ^I32 row]
+  (let [^I32 at (* row SC_STRIDE)]
+    (emit-ascii t "{\"elem\":")
+    (text-i32 t (cells-at sc (+ at SC_ELEM)))
+    (emit-ascii t ",\"kind\":")
+    (text-i32 t (cells-at sc (+ at SC_KIND)))
+    (emit-ascii t ",\"page\":")
+    (text-i32 t (cells-at sc (+ at SC_PAGE)))
+    (emit-ascii t ",\"mcid\":")
+    (text-i32 t (cells-at sc (+ at SC_MCID)))
+    (emit-ascii t ",\"stm\":")
+    (text-i32 t (cells-at sc (+ at SC_STM)))
+    (emit-ascii t ",\"mark\":")
+    (text-i32 t (cells-at sc (+ at SC_MARK)))
+    (emit-ascii t ",\"glyphs\":")
+    (text-i32 t (cells-at sc (+ at SC_GCOUNT)))
+    (emit-ascii t ",\"owned\":")
+    (text-i32 t (cells-at sc (+ at SC_OWNG)))
+    (emit-ascii t ",\"flags\":")
+    (text-i32 t (cells-at sc (+ at SC_FLAGS)))
+    (emit-ascii t "}")
+    (return 0)))
+
+(defn ^I32 tg-dump-kv [^:mut ^Text t ^Cells ss ^I32 cell]
+  (text-i32 t (cells-at ss cell))
+  (return 0))
+
+(defn ^:pub ^I32 tg-dump [^:mut ^Text t ^Cells txt ^Cells ss ^Cells se ^Cells sk ^Cells sc ^Cells so
+                          ^Cells sa]
+  (comment "The tree, the join and the score as one canonical JSON object: `{\"tree\":{..},\"score\":{..},")
+  (comment "\"elements\":[..],\"content\":[..],\"objr\":[..],\"artifacts\":[..]}`, rows in arena order.")
+  (comment "Not a public contract (the Model says what it needs of these): what the laws and the oracle compare.")
+  (let [^I32 nse (quot (cells-len se) SE_STRIDE)
+        ^I32 nsc (quot (cells-len sc) SC_STRIDE)
+        ^I32 nso (quot (cells-len so) SO_STRIDE)
+        ^I32 nsa (quot (cells-len sa) SA_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0]
+    (emit-ascii t "{\"tree\":{\"present\":")
+    (tg-dump-kv t ss SS_PRESENT)
+    (emit-ascii t ",\"marked\":")
+    (tg-dump-kv t ss SS_MARKED)
+    (emit-ascii t ",\"suspects\":")
+    (tg-dump-kv t ss SS_SUSPECTS)
+    (emit-ascii t ",\"userProperties\":")
+    (tg-dump-kv t ss SS_USERPROPS)
+    (emit-ascii t ",\"pdfuaPart\":")
+    (tg-dump-kv t ss SS_UAPART)
+    (emit-ascii t ",\"pdfuaRev\":")
+    (tg-dump-kv t ss SS_UAREV)
+    (emit-ascii t ",\"lang\":")
+    (tg-dump-run t txt ss SS_LANG)
+    (emit-ascii t ",\"elements\":")
+    (tg-dump-kv t ss SS_ELEMS)
+    (emit-ascii t ",\"content\":")
+    (tg-dump-kv t ss SS_CONTENT)
+    (emit-ascii t ",\"objr\":")
+    (tg-dump-kv t ss SS_OBJRS)
+    (emit-ascii t ",\"depth\":")
+    (tg-dump-kv t ss SS_MAXDEPTH)
+    (emit-ascii t ",\"limits\":")
+    (tg-dump-kv t ss SS_LIMITS)
+    (emit-ascii t ",\"roleMap\":")
+    (tg-dump-kv t ss SS_ROLEMAPN)
+    (emit-ascii t ",\"classMap\":")
+    (tg-dump-kv t ss SS_CLASSMAPN)
+    (emit-ascii t ",\"customRoles\":")
+    (tg-dump-kv t ss SS_CUSTOM)
+    (emit-ascii t ",\"unresolvedRoles\":")
+    (tg-dump-kv t ss SS_UNRESOLVED)
+    (emit-ascii t ",\"shadowedRoles\":")
+    (tg-dump-kv t ss SS_SHADOWED)
+    (emit-ascii t ",\"parentTree\":[")
+    (tg-dump-kv t ss SS_PTKEYS)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_PTOK)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_PTBAD)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_PTNONE)
+    (emit-ascii t "],\"tables\":")
+    (tg-dump-kv t ss SS_TABLES)
+    (emit-ascii t ",\"lists\":")
+    (tg-dump-kv t ss SS_LISTS)
+    (emit-ascii t "},\"score\":{\"status\":")
+    (tg-dump-kv t ss SS_STATUS)
+    (emit-ascii t ",\"marks\":")
+    (tg-dump-kv t ss SS_MARKS)
+    (emit-ascii t ",\"joined\":")
+    (tg-dump-kv t ss SS_JOINED)
+    (emit-ascii t ",\"unjoined\":")
+    (tg-dump-kv t ss SS_UNJOINED)
+    (emit-ascii t ",\"duplicates\":")
+    (tg-dump-kv t ss SS_DUPS)
+    (emit-ascii t ",\"glyphs\":[")
+    (tg-dump-kv t ss SS_GLYPHS)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_COVERED)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_ARTG)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_UNTAGGED)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_UNCLAIMED)
+    (emit-ascii t "],\"order\":[")
+    (tg-dump-kv t ss SS_TRANS)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_TRANSOK)
+    (emit-ascii t "],\"classes\":")
+    (tg-dump-kv t ss SS_CLASSES)
+    (emit-ascii t ",\"headings\":[")
+    (tg-dump-kv t ss SS_HEADS)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_HEADSOK)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_BIG)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_BIGHEAD)
+    (emit-ascii t "],\"bodySize\":")
+    (px-json-cp t (cells-at ss SS_BODY))
+    (emit-ascii t ",\"levels\":[")
+    (tg-dump-kv t ss SS_LVPAIRS)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_LVOK)
+    (emit-ascii t "],\"nesting\":[")
+    (tg-dump-kv t ss SS_NEST)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_NESTOK)
+    (emit-ascii t "],\"artifacts\":[")
+    (tg-dump-kv t ss SS_ARTS)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_ARTOK)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_ARTBAD)
+    (emit-ascii t ",")
+    (tg-dump-kv t ss SS_ARTGLYPHS)
+    (emit-ascii t "],\"coverage\":")
+    (tg-dump-kv t ss SS_COV)
+    (emit-ascii t ",\"diversity\":")
+    (tg-dump-kv t ss SS_DIV)
+    (emit-ascii t ",\"readingOrder\":")
+    (tg-dump-kv t ss SS_ORD)
+    (emit-ascii t ",\"headingFit\":")
+    (tg-dump-kv t ss SS_HDR)
+    (emit-ascii t ",\"levelFit\":")
+    (tg-dump-kv t ss SS_LV)
+    (emit-ascii t ",\"artifactFit\":")
+    (tg-dump-kv t ss SS_ART)
+    (emit-ascii t ",\"nestingFit\":")
+    (tg-dump-kv t ss SS_NESTR)
+    (emit-ascii t ",\"score\":")
+    (tg-dump-kv t ss SS_SCORE)
+    (emit-ascii t ",\"prior\":")
+    (tg-dump-kv t ss SS_PRIOR)
+    (emit-ascii t ",\"trust\":")
+    (tg-dump-kv t ss SS_TRUST)
+    (emit-ascii t "},\"elements\":[")
+    (while (< i nse)
+      (do (if (> i 0) (emit-ascii t ","))
+          (tg-dump-elem t txt se sk i)
+          (set i (+ i 1))))
+    (emit-ascii t "],\"content\":[")
+    (set i 0)
+    (while (< i nsc)
+      (do (if (> i 0) (emit-ascii t ","))
+          (tg-dump-content t sc i)
+          (set i (+ i 1))))
+    (emit-ascii t "],\"objr\":[")
+    (set i 0)
+    (while (< i nso)
+      (do (if (> i 0) (emit-ascii t ","))
+          (set at (* i SO_STRIDE))
+          (emit-ascii t "[")
+          (text-i32 t (cells-at so at))
+          (emit-ascii t ",")
+          (text-i32 t (cells-at so (+ at 1)))
+          (emit-ascii t ",")
+          (text-i32 t (cells-at so (+ at 2)))
+          (emit-ascii t ",\"")
+          (tg-objr-emit-name t (cells-at so (+ at 3)))
+          (emit-ascii t "\",")
+          (text-i32 t (cells-at so (+ at 4)))
+          (emit-ascii t "]")
+          (set i (+ i 1))))
+    (emit-ascii t "],\"artifactSpans\":[")
+    (set i 0)
+    (while (< i nsa)
+      (do (if (> i 0) (emit-ascii t ","))
+          (set at (* i SA_STRIDE))
+          (emit-ascii t "{\"mark\":")
+          (text-i32 t (cells-at sa at))
+          (emit-ascii t ",\"page\":")
+          (text-i32 t (cells-at sa (+ at 1)))
+          (emit-ascii t ",\"type\":")
+          (text-i32 t (cells-at sa (+ at 2)))
+          (emit-ascii t ",\"subtype\":")
+          (text-i32 t (cells-at sa (+ at 3)))
+          (emit-ascii t ",\"glyphs\":")
+          (text-i32 t (cells-at sa (+ at 4)))
+          (if (> (cells-at sa (+ at 4)) 0)
+            (do (emit-ascii t ",\"box\":")
+                (px-json-box t sa (+ at 5))
+                (emit-ascii t ",\"rot\":")
+                (text-i32 t (cells-at sa (+ at 10)))
+                (emit-ascii t ",\"size\":")
+                (px-json-cp t (cells-at sa (+ at 11)))
+                (emit-ascii t ",\"luminance\":")
+                (text-i32 t (cells-at sa (+ at 13)))))
+          (emit-ascii t ",\"where\":\"")
+          (tg-band-emit-name t (cells-at sa (+ at 9)))
+          (emit-ascii t "\",\"verdict\":\"")
+          (tg-verdict-emit-name t (cells-at sa (+ at 12)))
+          (emit-ascii t "\"}")
+          (set i (+ i 1))))
+    (emit-ascii t "]}")
+    (return 0)))
