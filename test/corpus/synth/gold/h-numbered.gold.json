@@ -6,7 +6,8 @@
   "pdf": "pdf/h-numbered.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/h-numbered.pdf"
+   "scan": "scan/h-numbered.pdf",
+   "scan-color": "scan-color/h-numbered.pdf"
   }
  },
  "annotated": {

@@ -1,0 +1,449 @@
+{
+ "emon-gold": "1.0",
+ "id": "seal-over-text",
+ "provenance": {
+  "html": "html/seal-over-text.html",
+  "pdf": "pdf/seal-over-text.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/seal-over-text.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Notice of Registration"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Think night man our heard got against two but himself name come. Best want words while five money make as. Go important if again should review word high who men never than. Now cut new just later such look need where live the better got now said. Between again revenue soon that heard no same against seen keep look knew."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "Overview"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "We end every form place has sure thought down. Himself going and every find best never young picture. Work more report country took even below might several some example those food may here used. We its few important door such study set even. Live since only change set money on very where come again."
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Can men then life set red who growth me. Door told see part have father might figure did not point. Saw and hear never little good off but car give done sample toward being want try. Morning try each an may off when to house side said one never have. Above or long us last learn would on each people."
+        },
+        {
+         "id": 8,
+         "kind": "seal",
+         "subkind": "seal",
+         "name": "Harbor County Clerk",
+         "date": "2026-04-02",
+         "color": "blue",
+         "text": "HARBOR COUNTY CLERK OFFICIAL SEAL"
+        }
+       ]
+      },
+      {
+       "id": 9,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 10,
+         "kind": "heading",
+         "level": 2,
+         "text": "Findings"
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "text": "Us second sure we where method their page work never policy name hard right heard time. Who went below might after take sample turned boy even. New region did she got back all example line picture below with air upon found. Or left told say well where like himself my let. Didn't why not me often over pay sentence done got quarter my soon."
+        },
+        {
+         "id": 12,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 4,
+         "children": [
+          {
+           "id": 13,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 14,
+             "kind": "row",
+             "children": [
+              {
+               "id": 15,
+               "kind": "cell",
+               "header": "col",
+               "text": "Invoice"
+              },
+              {
+               "id": 16,
+               "kind": "cell",
+               "header": "col",
+               "text": "Description"
+              },
+              {
+               "id": 17,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              },
+              {
+               "id": 18,
+               "kind": "cell",
+               "header": "col",
+               "text": "Status"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 19,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 20,
+             "kind": "row",
+             "children": [
+              {
+               "id": 21,
+               "kind": "cell",
+               "text": "INV-1041"
+              },
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "Consulting, March"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "1,200.00"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "text": "Open"
+              }
+             ]
+            },
+            {
+             "id": 25,
+             "kind": "row",
+             "children": [
+              {
+               "id": 26,
+               "kind": "cell",
+               "text": "INV-1042"
+              },
+              {
+               "id": 27,
+               "kind": "cell",
+               "text": "Consulting, April"
+              },
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "1,350.00"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "Open"
+              }
+             ]
+            },
+            {
+             "id": 30,
+             "kind": "row",
+             "children": [
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "INV-1043"
+              },
+              {
+               "id": 32,
+               "kind": "cell",
+               "text": "Training days"
+              },
+              {
+               "id": 33,
+               "kind": "cell",
+               "text": "2,400.00"
+              },
+              {
+               "id": 34,
+               "kind": "cell",
+               "text": "Settled"
+              }
+             ]
+            },
+            {
+             "id": 35,
+             "kind": "row",
+             "children": [
+              {
+               "id": 36,
+               "kind": "cell",
+               "text": "INV-1044"
+              },
+              {
+               "id": 37,
+               "kind": "cell",
+               "text": "Licences"
+              },
+              {
+               "id": 38,
+               "kind": "cell",
+               "text": "980.00"
+              },
+              {
+               "id": 39,
+               "kind": "cell",
+               "text": "Open"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 40,
+         "kind": "seal",
+         "subkind": "stamp",
+         "color": "red",
+         "text": "PAID 2026-04-02"
+        },
+        {
+         "id": 41,
+         "kind": "paragraph",
+         "text": "Feet tell let what she car has review city say. Light an took budget and thing most than usually put after make work. My let money can then its your these play may city again. Point want words turn went big then by sun friend down feet still sure men. Hear whole or below growth told asked city color great across hear without."
+        },
+        {
+         "id": 42,
+         "kind": "seal",
+         "subkind": "seal",
+         "color": "purple",
+         "text": "UNIVERSITY REGISTRAR OFFICIAL"
+        }
+       ]
+      },
+      {
+       "id": 43,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 44,
+         "kind": "heading",
+         "level": 2,
+         "text": "Recommendations"
+        },
+        {
+         "id": 45,
+         "kind": "paragraph",
+         "text": "Into their still help which hand so said since after today figure still always can. New has if the morning get animal place again try food without could usually. Revenue way used high sample white leave body got year for three small each made. Any change find sound four we night high. House other way kind down saw results say far word different do has."
+        },
+        {
+         "id": 46,
+         "kind": "paragraph",
+         "text": "Across thought above air hear move sometimes while but true seen show. Another between big here play sample their but at form. Read budget its way father which every using every big quarter as. Should second house often into took pay would side sample top. Our same let measure better at still house second air during for room."
+        },
+        {
+         "id": 47,
+         "kind": "seal",
+         "subkind": "signature",
+         "color": "blue",
+         "text": ""
+        },
+        {
+         "id": 48,
+         "kind": "paragraph",
+         "text": "From how name just end because next way side why boy good do earth market. Your the about using every earth true himself color then those should end no. Use both knew change upon method made what so. Me report four pay results going do not all. Part picture land report figure all method children let cut mother that once many."
+        }
+       ]
+      },
+      {
+       "id": 49,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 50,
+         "kind": "heading",
+         "level": 2,
+         "text": "Annex"
+        },
+        {
+         "id": 51,
+         "kind": "paragraph",
+         "text": "World why turned know another seen food four old growth play place. Animal now together your any said know were did where sure end before. Right number body red if which first young still put know every long does. Since word people turn little large that use so sea not got air being. Put father measure much off too never your earth picture those will of we sun always."
+        },
+        {
+         "id": 52,
+         "kind": "paragraph",
+         "text": "Sample room measure upon live until than it learn red as both. Once something form across from face different air can red door. Looked all your second until very thing set said still page through later usually. Something sound heard high mother no body an car time today going father sun most. Word no several which along family budget using world other best."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   },
+   {
+    "reason": "watermark",
+    "page": 2,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Notice of Registration"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

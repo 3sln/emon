@@ -34,6 +34,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.9375
         :heading-level-acc 0.733333
         :heading-level-e2e 0.647059
@@ -48,6 +49,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 0.971429
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.359574}
       "pdf-tagged/headings" {
         :block-heading-f1 0.923077
@@ -63,6 +65,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.923077
         :heading-level-acc 0.666667
         :heading-level-e2e 0.571429
@@ -74,6 +77,7 @@
         :para-boundary-f1 0.928571
         :para-boundary-p 0.866667
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.400662}
       "pdf-tagged/lists" {
         :block-heading-f1 1.0
@@ -95,6 +99,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -106,6 +111,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.333333}
       "pdf-tagged/tables" {
         :block-caption-f1 1.0
@@ -127,6 +133,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -141,6 +148,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 0.971429
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.25}
       "pdf/align" {
         :align-acc 0.0
@@ -177,6 +185,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.764706
         :heading-level-e2e 0.764706
@@ -192,6 +201,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 0.981818
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.164859}
       "pdf/all" {
         :align-acc 0.0
@@ -211,9 +221,9 @@
         :block-figure-f1 1.0
         :block-figure-p 1.0
         :block-figure-r 1.0
-        :block-heading-f1 0.92
-        :block-heading-p 0.90393
-        :block-heading-r 0.936652
+        :block-heading-f1 0.934932
+        :block-heading-p 0.925424
+        :block-heading-r 0.944637
         :block-item-f1 1.0
         :block-item-p 1.0
         :block-item-r 1.0
@@ -223,31 +233,32 @@
         :block-note-f1 1.0
         :block-note-p 1.0
         :block-note-r 1.0
-        :block-paragraph-f1 0.892473
-        :block-paragraph-p 0.922222
-        :block-paragraph-r 0.864583
+        :block-paragraph-f1 0.899899
+        :block-paragraph-p 0.932914
+        :block-paragraph-r 0.869141
         :block-seal-f1 1.0
         :block-seal-p 1.0
         :block-seal-r 1.0
         :block-table-f1 1.0
         :block-table-p 1.0
         :block-table-r 1.0
-        :bow-f1 0.886028
-        :bow-p 0.894046
-        :bow-r 0.878154
-        :cer 0.019372
+        :bow-f1 0.882575
+        :bow-p 0.890865
+        :bow-r 0.874438
+        :cer 0.020546
         :figure-subkind-acc 1.0
         :first-word-acc 0.0
         :frag-col-acc 0.0
-        :furniture-f1 0.765957
+        :furniture-f1 0.807018
         :furniture-p 1.0
-        :furniture-r 0.62069
-        :heading-f1 0.92
-        :heading-level-acc 0.73913
-        :heading-level-e2e 0.692308
+        :furniture-r 0.676471
+        :ghost-rate 0.0
+        :heading-f1 0.934932
+        :heading-level-acc 0.74359
+        :heading-level-e2e 0.702422
         :heading-level-near 1.0
-        :heading-p 0.90393
-        :heading-r 0.936652
+        :heading-p 0.925424
+        :heading-r 0.944637
         :hyphen-acc 0.87037
         :initial-f1 0.0
         :initial-false-heading 0.869565
@@ -259,14 +270,16 @@
         :join-r 0.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.913349
-        :para-boundary-p 0.939759
-        :para-boundary-r 0.888383
+        :para-boundary-f1 0.917209
+        :para-boundary-p 0.948077
+        :para-boundary-r 0.888288
+        :seal-leak 0.0
         :table-continued-acc 1.0
-        :table-teds-lite 0.9551
+        :table-teds-lite 0.961786
         :table-teds-struct-lite 1.0
-        :watermark-leak 0.001006
-        :wer 0.122754}
+        :tl-override 0.0
+        :watermark-leak 0.002047
+        :wer 0.12637}
       "pdf/columns" {
         :block-caption-f1 1.0
         :block-caption-p 1.0
@@ -295,6 +308,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.949153
         :heading-level-acc 0.75
         :heading-level-e2e 0.677419
@@ -313,6 +327,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 0.95
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.147838}
       "pdf/figures" {
         :block-caption-f1 1.0
@@ -335,6 +350,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -346,6 +362,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.111111}
       "pdf/footnotes" {
         :block-heading-f1 1.0
@@ -364,6 +381,7 @@
         :furniture-f1 0.666667
         :furniture-p 1.0
         :furniture-r 0.5
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -375,6 +393,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.138462}
       "pdf/forms" {
         :block-heading-f1 1.0
@@ -393,6 +412,7 @@
         :furniture-f1 0.909091
         :furniture-p 1.0
         :furniture-r 0.833333
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.8
         :heading-level-e2e 0.8
@@ -407,6 +427,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 0.918375
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.013131}
       "pdf/furniture" {
         :block-heading-f1 1.0
@@ -422,6 +443,7 @@
         :furniture-f1 0.8
         :furniture-p 1.0
         :furniture-r 0.666667
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.666667
         :heading-level-e2e 0.666667
@@ -433,33 +455,42 @@
         :para-boundary-f1 0.824561
         :para-boundary-p 1.0
         :para-boundary-r 0.701493
+        :tl-override 0.0
         :wer 0.148658}
       "pdf/headings" {
-        :block-heading-f1 0.930818
+        :block-heading-f1 0.933333
         :block-heading-p 1.0
-        :block-heading-r 0.870588
-        :block-paragraph-f1 0.939227
-        :block-paragraph-p 0.885417
-        :block-paragraph-r 1.0
-        :bow-f1 0.88755
-        :bow-p 0.894134
-        :bow-r 0.881063
-        :cer 0.018044
+        :block-heading-r 0.875
+        :block-paragraph-f1 0.934673
+        :block-paragraph-p 0.894231
+        :block-paragraph-r 0.978947
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.88397
+        :bow-p 0.891029
+        :bow-r 0.877023
+        :cer 0.019433
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.930818
-        :heading-level-acc 0.662162
-        :heading-level-e2e 0.576471
+        :ghost-rate 0.0
+        :heading-f1 0.933333
+        :heading-level-acc 0.662338
+        :heading-level-e2e 0.579545
         :heading-level-near 1.0
         :heading-p 1.0
-        :heading-r 0.870588
+        :heading-r 0.875
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.934911
-        :para-boundary-p 0.877778
-        :para-boundary-r 1.0
-        :wer 0.118937}
+        :para-boundary-f1 0.92973
+        :para-boundary-p 0.886598
+        :para-boundary-r 0.977273
+        :table-continued-acc 1.0
+        :table-teds-lite 0.975
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.122977}
       "pdf/initials" {
         :block-heading-f1 0.521739
         :block-heading-p 0.352941
@@ -476,6 +507,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.521739
         :heading-level-acc 0.916667
         :heading-level-e2e 0.916667
@@ -495,6 +527,7 @@
         :para-boundary-f1 0.745763
         :para-boundary-p 0.814815
         :para-boundary-r 0.6875
+        :tl-override 0.0
         :wer 0.161501}
       "pdf/lists" {
         :block-heading-f1 1.0
@@ -516,6 +549,7 @@
         :furniture-f1 0.5
         :furniture-p 1.0
         :furniture-r 0.333333
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.875
         :heading-level-e2e 0.875
@@ -527,6 +561,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.120205}
       "pdf/scripts" {
         :block-heading-f1 1.0
@@ -551,6 +586,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.733333
         :heading-level-e2e 0.733333
@@ -565,36 +601,46 @@
         :table-continued-acc 1.0
         :table-teds-lite 0.918519
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.102662}
       "pdf/seals" {
         :block-heading-f1 1.0
         :block-heading-p 1.0
         :block-heading-r 1.0
-        :block-paragraph-f1 1.0
-        :block-paragraph-p 1.0
-        :block-paragraph-r 1.0
+        :block-paragraph-f1 0.897959
+        :block-paragraph-p 0.956522
+        :block-paragraph-r 0.846154
         :block-seal-f1 1.0
         :block-seal-p 1.0
         :block-seal-r 1.0
-        :bow-f1 0.903846
-        :bow-p 0.903846
-        :bow-r 0.903846
-        :cer 0.014881
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.871003
+        :bow-p 0.879536
+        :bow-r 0.862633
+        :cer 0.022658
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
-        :heading-level-acc 1.0
-        :heading-level-e2e 1.0
+        :heading-level-acc 0.818182
+        :heading-level-e2e 0.818182
         :heading-level-near 1.0
         :heading-p 1.0
         :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 1.0
+        :para-boundary-f1 0.930233
         :para-boundary-p 1.0
-        :para-boundary-r 1.0
-        :wer 0.096154}
+        :para-boundary-r 0.869565
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.9625
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.137367}
       "pdf/tables" {
         :block-caption-f1 1.0
         :block-caption-p 1.0
@@ -615,6 +661,7 @@
         :furniture-f1 0.571429
         :furniture-p 1.0
         :furniture-r 0.4
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.9
         :heading-level-e2e 0.9
@@ -629,34 +676,910 @@
         :table-continued-acc 1.0
         :table-teds-lite 0.981213
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.015873}
+      "pdf/textlayer" {
+        :block-heading-f1 0.958333
+        :block-heading-p 1.0
+        :block-heading-r 0.92
+        :block-paragraph-f1 0.914286
+        :block-paragraph-p 0.914286
+        :block-paragraph-r 0.914286
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.872589
+        :bow-p 0.884049
+        :bow-r 0.861423
+        :cer 0.022182
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.958333
+        :heading-level-acc 0.695652
+        :heading-level-e2e 0.64
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.92
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.9375
+        :para-boundary-p 0.9375
+        :para-boundary-r 0.9375
+        :table-continued-acc 1.0
+        :table-teds-lite 0.975
+        :table-teds-struct-lite 1.0
+        :wer 0.138577}
       "pdf/watermarks" {
         :block-heading-f1 1.0
         :block-heading-p 1.0
         :block-heading-r 1.0
-        :block-paragraph-f1 0.72
-        :block-paragraph-p 0.9
-        :block-paragraph-r 0.6
-        :bow-f1 0.864088
-        :bow-p 0.871795
-        :bow-r 0.856517
-        :cer 0.024179
+        :block-paragraph-f1 0.906475
+        :block-paragraph-p 0.984375
+        :block-paragraph-r 0.84
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.871966
+        :bow-p 0.880126
+        :bow-r 0.863955
+        :cer 0.024935
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
-        :heading-level-acc 0.666667
-        :heading-level-e2e 0.666667
+        :heading-level-acc 0.777778
+        :heading-level-e2e 0.777778
         :heading-level-near 1.0
         :heading-p 1.0
         :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.782609
+        :para-boundary-f1 0.912
         :para-boundary-p 1.0
-        :para-boundary-r 0.642857
-        :watermark-leak 0.001006
-        :wer 0.144578}
+        :para-boundary-r 0.838235
+        :table-continued-acc 1.0
+        :table-teds-lite 0.975
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.002047
+        :wer 0.137077}
+      "scan-color/all" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 0.972727
+        :block-heading-p 1.0
+        :block-heading-r 0.946903
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 0.873995
+        :block-paragraph-p 0.905556
+        :block-paragraph-r 0.84456
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.652024
+        :bow-p 0.670162
+        :bow-r 0.634842
+        :cer 0.058566
+        :figure-subkind-acc 1.0
+        :furniture-f1 0.956522
+        :furniture-p 1.0
+        :furniture-r 0.916667
+        :ghost-rate 0.0
+        :heading-f1 0.972727
+        :heading-level-acc 0.747664
+        :heading-level-e2e 0.707965
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.946903
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.930748
+        :para-boundary-p 0.965517
+        :para-boundary-r 0.898396
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.850342
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.002047
+        :wer 0.36571}
+      "scan-color/columns" {
+        :block-heading-f1 0.923077
+        :block-heading-p 1.0
+        :block-heading-r 0.857143
+        :block-paragraph-f1 0.833333
+        :block-paragraph-p 0.833333
+        :block-paragraph-r 0.833333
+        :bow-f1 0.610526
+        :bow-p 0.627706
+        :bow-r 0.594262
+        :cer 0.063941
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.923077
+        :heading-level-acc 0.666667
+        :heading-level-e2e 0.571429
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.857143
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.909091
+        :para-boundary-p 0.909091
+        :para-boundary-r 0.909091
+        :tl-override 0.0
+        :wer 0.405738}
+      "scan-color/figures" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :bow-f1 0.638655
+        :bow-p 0.655172
+        :bow-r 0.622951
+        :cer 0.05988
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :tl-override 0.0
+        :wer 0.377049}
+      "scan-color/forms" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.882323
+        :bow-p 0.890031
+        :bow-r 0.874747
+        :cer 0.022092
+        :furniture-f1 0.909091
+        :furniture-p 1.0
+        :furniture-r 0.833333
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 0.8
+        :heading-level-e2e 0.8
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.739846
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.125253}
+      "scan-color/headings" {
+        :block-heading-f1 0.933333
+        :block-heading-p 1.0
+        :block-heading-r 0.875
+        :block-paragraph-f1 0.920635
+        :block-paragraph-p 0.90625
+        :block-paragraph-r 0.935484
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.627237
+        :bow-p 0.646516
+        :bow-r 0.609073
+        :cer 0.060208
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.933333
+        :heading-level-acc 0.666667
+        :heading-level-e2e 0.583333
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.875
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.915254
+        :para-boundary-p 0.9
+        :para-boundary-r 0.931034
+        :table-continued-acc 1.0
+        :table-teds-lite 0.85
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.390927}
+      "scan-color/lists" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :bow-f1 0.680851
+        :bow-p 0.695652
+        :bow-r 0.666667
+        :cer 0.049412
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :tl-override 0.0
+        :wer 0.333333}
+      "scan-color/scripts" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.8
+        :bow-p 0.83871
+        :bow-r 0.764706
+        :cer 0.067308
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.95
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.235294}
+      "scan-color/seals" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.857143
+        :block-paragraph-p 0.913043
+        :block-paragraph-r 0.807692
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.620235
+        :bow-p 0.639456
+        :bow-r 0.602135
+        :cer 0.062152
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 0.818182
+        :heading-level-e2e 0.818182
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.930233
+        :para-boundary-p 1.0
+        :para-boundary-r 0.869565
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.85
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.397865}
+      "scan-color/tables" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.765957
+        :bow-p 0.782609
+        :bow-r 0.75
+        :cer 0.049383
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.971429
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.25}
+      "scan-color/textlayer" {
+        :block-heading-f1 0.958333
+        :block-heading-p 1.0
+        :block-heading-r 0.92
+        :block-paragraph-f1 0.914286
+        :block-paragraph-p 0.914286
+        :block-paragraph-r 0.914286
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.630393
+        :bow-p 0.650931
+        :bow-r 0.611111
+        :cer 0.061114
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.958333
+        :heading-level-acc 0.695652
+        :heading-level-e2e 0.64
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.92
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.9375
+        :para-boundary-p 0.9375
+        :para-boundary-r 0.9375
+        :table-continued-acc 1.0
+        :table-teds-lite 0.875
+        :table-teds-struct-lite 1.0
+        :wer 0.388889}
+      "scan-color/watermarks" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.820144
+        :block-paragraph-p 0.890625
+        :block-paragraph-r 0.76
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.628396
+        :bow-p 0.646507
+        :bow-r 0.611272
+        :cer 0.064328
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 0.777778
+        :heading-level-e2e 0.777778
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.912
+        :para-boundary-p 1.0
+        :para-boundary-r 0.838235
+        :table-continued-acc 1.0
+        :table-teds-lite 0.879167
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.002047
+        :wer 0.389967}
+      "scan-ovl/all" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 0.972727
+        :block-heading-p 1.0
+        :block-heading-r 0.946903
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 0.912929
+        :block-paragraph-p 0.930108
+        :block-paragraph-r 0.896373
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.651946
+        :bow-p 0.669459
+        :bow-r 0.635325
+        :cer 0.059708
+        :figure-subkind-acc 1.0
+        :furniture-f1 0.983871
+        :furniture-p 1.0
+        :furniture-r 0.968254
+        :ghost-rate 0.0
+        :heading-f1 0.972727
+        :heading-level-acc 0.747664
+        :heading-level-e2e 0.707965
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.946903
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.948229
+        :para-boundary-p 0.966667
+        :para-boundary-r 0.930481
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.850342
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.001804
+        :wer 0.366502}
+      "scan-ovl/columns" {
+        :block-heading-f1 0.923077
+        :block-heading-p 1.0
+        :block-heading-r 0.857143
+        :block-paragraph-f1 0.833333
+        :block-paragraph-p 0.833333
+        :block-paragraph-r 0.833333
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :bow-f1 0.610879
+        :bow-p 0.627507
+        :bow-r 0.595109
+        :cer 0.065009
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.923077
+        :heading-level-acc 0.666667
+        :heading-level-e2e 0.571429
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.857143
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.909091
+        :para-boundary-p 0.909091
+        :para-boundary-r 0.909091
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.000984
+        :wer 0.40625}
+      "scan-ovl/figures" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :bow-f1 0.640625
+        :bow-p 0.650794
+        :bow-r 0.630769
+        :cer 0.072423
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.010989
+        :wer 0.384615}
+      "scan-ovl/forms" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.880892
+        :bow-p 0.88764
+        :bow-r 0.874245
+        :cer 0.023749
+        :furniture-f1 0.933333
+        :furniture-p 1.0
+        :furniture-r 0.875
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 0.8
+        :heading-level-e2e 0.8
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.739846
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.001271
+        :wer 0.126761}
+      "scan-ovl/headings" {
+        :block-heading-f1 0.933333
+        :block-heading-p 1.0
+        :block-heading-r 0.875
+        :block-paragraph-f1 0.920635
+        :block-paragraph-p 0.90625
+        :block-paragraph-r 0.935484
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.627219
+        :bow-p 0.645685
+        :bow-r 0.609779
+        :cer 0.061645
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.933333
+        :heading-level-acc 0.666667
+        :heading-level-e2e 0.583333
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.875
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.915254
+        :para-boundary-p 0.9
+        :para-boundary-r 0.931034
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.85
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.001351
+        :wer 0.392138}
+      "scan-ovl/lists" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :bow-f1 0.68
+        :bow-p 0.689189
+        :bow-r 0.671053
+        :cer 0.059603
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.008734
+        :wer 0.342105}
+      "scan-ovl/scripts" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.783784
+        :bow-p 0.805556
+        :bow-r 0.763158
+        :cer 0.085837
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.95
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.017467
+        :wer 0.236842}
+      "scan-ovl/seals" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.980392
+        :block-paragraph-p 1.0
+        :block-paragraph-r 0.961538
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.620414
+        :bow-p 0.638743
+        :bow-r 0.603107
+        :cer 0.0638
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 0.818182
+        :heading-level-e2e 0.818182
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.977778
+        :para-boundary-p 1.0
+        :para-boundary-r 0.956522
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.85
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.001504
+        :wer 0.399011}
+      "scan-ovl/tables" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.761421
+        :bow-p 0.773196
+        :bow-r 0.75
+        :cer 0.058594
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.971429
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.007797
+        :wer 0.26}
+      "scan-ovl/textlayer" {
+        :block-heading-f1 0.958333
+        :block-heading-p 1.0
+        :block-heading-r 0.92
+        :block-paragraph-f1 0.914286
+        :block-paragraph-p 0.914286
+        :block-paragraph-r 0.914286
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.630093
+        :bow-p 0.649901
+        :bow-r 0.611457
+        :cer 0.062747
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.958333
+        :heading-level-acc 0.695652
+        :heading-level-e2e 0.64
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.92
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.9375
+        :para-boundary-p 0.9375
+        :para-boundary-r 0.9375
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.875
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.001354
+        :wer 0.390411}
+      "scan-ovl/watermarks" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.881119
+        :block-paragraph-p 0.926471
+        :block-paragraph-r 0.84
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.628535
+        :bow-p 0.646548
+        :bow-r 0.611499
+        :cer 0.06435
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 0.777778
+        :heading-level-e2e 0.777778
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.945736
+        :para-boundary-p 1.0
+        :para-boundary-r 0.897059
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 0.879167
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.001901
+        :wer 0.389938}
       "scan/align" {
         :align-acc 0.0
         :align-acc-caption 0.0
@@ -692,6 +1615,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.764706
         :heading-level-e2e 0.764706
@@ -757,6 +1681,7 @@
         :furniture-f1 0.765957
         :furniture-p 1.0
         :furniture-r 0.62069
+        :ghost-rate 0.0
         :heading-f1 0.92
         :heading-level-acc 0.73913
         :heading-level-e2e 0.692308
@@ -777,6 +1702,7 @@
         :para-boundary-f1 0.901639
         :para-boundary-p 0.927711
         :para-boundary-r 0.876993
+        :seal-leak 0.0
         :table-continued-acc 1.0
         :table-teds-lite 0.880597
         :table-teds-struct-lite 1.0
@@ -810,6 +1736,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.949153
         :heading-level-acc 0.75
         :heading-level-e2e 0.677419
@@ -850,6 +1777,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -879,6 +1807,7 @@
         :furniture-f1 0.666667
         :furniture-p 1.0
         :furniture-r 0.5
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -908,6 +1837,7 @@
         :furniture-f1 0.909091
         :furniture-p 1.0
         :furniture-r 0.833333
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.8
         :heading-level-e2e 0.8
@@ -937,6 +1867,7 @@
         :furniture-f1 0.8
         :furniture-p 1.0
         :furniture-r 0.666667
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.666667
         :heading-level-e2e 0.666667
@@ -963,6 +1894,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.930818
         :heading-level-acc 0.662162
         :heading-level-e2e 0.576471
@@ -991,6 +1923,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.521739
         :heading-level-acc 0.916667
         :heading-level-e2e 0.916667
@@ -1031,6 +1964,7 @@
         :furniture-f1 0.5
         :furniture-p 1.0
         :furniture-r 0.333333
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.875
         :heading-level-e2e 0.875
@@ -1066,6 +2000,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.733333
         :heading-level-e2e 0.733333
@@ -1098,6 +2033,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1109,6 +2045,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :seal-leak 0.0
         :wer 0.442308}
       "scan/tables" {
         :block-caption-f1 1.0
@@ -1130,6 +2067,7 @@
         :furniture-f1 0.571429
         :furniture-p 1.0
         :furniture-r 0.4
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.9
         :heading-level-e2e 0.9
@@ -1159,6 +2097,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 0.666667
         :heading-level-e2e 0.666667
@@ -1199,6 +2138,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1210,9 +2150,11 @@
         :para-boundary-f1 0.72
         :para-boundary-p 0.9
         :para-boundary-r 0.6
+        :src-ocr-share 0.0
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.093617}
       "pdf-tagged/headings" {
         :block-heading-f1 1.0
@@ -1228,6 +2170,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1239,6 +2182,8 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :src-ocr-share 0.0
+        :tl-override 0.0
         :wer 0.125828}
       "pdf-tagged/lists" {
         :block-heading-f1 1.0
@@ -1260,6 +2205,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1271,6 +2217,8 @@
         :para-boundary-f1 0.3
         :para-boundary-p 0.6
         :para-boundary-r 0.2
+        :src-ocr-share 0.0
+        :tl-override 0.0
         :wer 0.083333}
       "pdf-tagged/tables" {
         :block-caption-f1 1.0
@@ -1292,6 +2240,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1303,9 +2252,11 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :src-ocr-share 0.0
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/align" {
         :align-acc 1.0
@@ -1344,6 +2295,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1356,9 +2308,11 @@
         :para-boundary-f1 0.744186
         :para-boundary-p 0.615385
         :para-boundary-r 0.941176
+        :src-ocr-share 0.0
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.019523}
       "pdf/all" {
         :align-acc 1.0
@@ -1378,9 +2332,9 @@
         :block-figure-f1 0.0
         :block-figure-p 0.0
         :block-figure-r 0.0
-        :block-heading-f1 0.98861
-        :block-heading-p 0.995413
-        :block-heading-r 0.9819
+        :block-heading-f1 0.957597
+        :block-heading-p 0.978339
+        :block-heading-r 0.937716
         :block-item-f1 0.0
         :block-item-p 0.0
         :block-item-r 0.0
@@ -1390,30 +2344,31 @@
         :block-note-f1 0.5
         :block-note-p 0.75
         :block-note-r 0.375
-        :block-paragraph-f1 0.780437
-        :block-paragraph-p 0.649913
-        :block-paragraph-r 0.976562
+        :block-paragraph-f1 0.749004
+        :block-paragraph-p 0.632571
+        :block-paragraph-r 0.917969
         :block-seal-f1 0.0
         :block-seal-p 0.0
         :block-seal-r 0.0
-        :block-table-f1 0.941176
+        :block-table-f1 0.964286
         :block-table-p 1.0
-        :block-table-r 0.888889
-        :bow-f1 0.990307
-        :bow-p 0.98474
-        :bow-r 0.995938
-        :cer 0.00909
+        :block-table-r 0.931034
+        :bow-f1 0.955227
+        :bow-p 0.961895
+        :bow-r 0.948651
+        :cer 0.044339
         :first-word-acc 0.652174
         :frag-col-acc 0.712766
-        :furniture-f1 1.0
+        :furniture-f1 0.969697
         :furniture-p 1.0
-        :furniture-r 1.0
-        :heading-f1 0.98861
-        :heading-level-acc 0.976959
-        :heading-level-e2e 0.959276
+        :furniture-r 0.941176
+        :ghost-rate 0.0
+        :heading-f1 0.957597
+        :heading-level-acc 0.98155
+        :heading-level-e2e 0.920415
         :heading-level-near 1.0
-        :heading-p 0.995413
-        :heading-r 0.9819
+        :heading-p 0.978339
+        :heading-r 0.937716
         :hyphen-acc 0.981481
         :initial-f1 0.930233
         :initial-false-heading 0.0
@@ -1425,14 +2380,17 @@
         :join-r 0.909091
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.682573
-        :para-boundary-p 0.626667
-        :para-boundary-r 0.749431
-        :table-continued-acc 0.888889
-        :table-teds-lite 0.830984
-        :table-teds-struct-lite 0.885305
+        :para-boundary-f1 0.687196
+        :para-boundary-p 0.624448
+        :para-boundary-r 0.763964
+        :seal-leak 0.00449
+        :src-ocr-share 0.0
+        :table-continued-acc 0.931034
+        :table-teds-lite 0.895093
+        :table-teds-struct-lite 0.92881
+        :tl-override 0.0
         :watermark-leak 0.0
-        :wer 0.017489}
+        :wer 0.062272}
       "pdf/columns" {
         :block-caption-f1 0.5
         :block-caption-p 1.0
@@ -1455,11 +2413,12 @@
         :bow-f1 0.99682
         :bow-p 0.994252
         :bow-r 0.999402
-        :cer 0.005341
+        :cer 0.005487
         :frag-col-acc 0.693182
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.949153
         :heading-level-acc 0.821429
         :heading-level-e2e 0.741935
@@ -1475,9 +2434,11 @@
         :para-boundary-f1 0.841026
         :para-boundary-p 0.759259
         :para-boundary-r 0.942529
+        :src-ocr-share 0.0
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.007372}
       "pdf/figures" {
         :block-caption-f1 0.0
@@ -1499,6 +2460,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1510,6 +2472,8 @@
         :para-boundary-f1 0.2
         :para-boundary-p 0.129032
         :para-boundary-r 0.444444
+        :src-ocr-share 0.0
+        :tl-override 0.0
         :wer 0.236111}
       "pdf/footnotes" {
         :block-heading-f1 1.0
@@ -1528,6 +2492,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1539,6 +2504,8 @@
         :para-boundary-f1 0.7
         :para-boundary-p 0.777778
         :para-boundary-r 0.636364
+        :src-ocr-share 0.0
+        :tl-override 0.0
         :wer 0.042308}
       "pdf/forms" {
         :block-heading-f1 1.0
@@ -1557,6 +2524,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1568,9 +2536,11 @@
         :para-boundary-f1 0.434783
         :para-boundary-p 0.277778
         :para-boundary-r 1.0
+        :src-ocr-share 0.0
         :table-continued-acc 0.5
         :table-teds-lite 0.5
         :table-teds-struct-lite 0.5
+        :tl-override 0.0
         :wer 0.012121}
       "pdf/furniture" {
         :block-heading-f1 1.0
@@ -1586,6 +2556,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1597,33 +2568,44 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :src-ocr-share 0.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/headings" {
-        :block-heading-f1 1.0
+        :block-heading-f1 0.988506
         :block-heading-p 1.0
-        :block-heading-r 1.0
+        :block-heading-r 0.977273
         :block-paragraph-f1 1.0
         :block-paragraph-p 1.0
         :block-paragraph-r 1.0
-        :bow-f1 0.985536
-        :bow-p 0.975277
-        :bow-r 0.996013
-        :cer 0.003678
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.988743
+        :bow-p 0.982648
+        :bow-r 0.994914
+        :cer 0.005506
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.988506
         :heading-level-acc 1.0
-        :heading-level-e2e 1.0
+        :heading-level-e2e 0.977273
         :heading-level-near 1.0
         :heading-p 1.0
-        :heading-r 1.0
+        :heading-r 0.977273
         :order-tau 1.0
         :page-label-acc 1.0
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
-        :wer 0.025249}
+        :src-ocr-share 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.01988}
       "pdf/initials" {
         :block-heading-f1 1.0
         :block-heading-p 1.0
@@ -1640,6 +2622,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1659,6 +2642,8 @@
         :para-boundary-f1 0.9375
         :para-boundary-p 0.9375
         :para-boundary-r 0.9375
+        :src-ocr-share 0.0
+        :tl-override 0.0
         :wer 0.009642}
       "pdf/lists" {
         :block-heading-f1 1.0
@@ -1680,6 +2665,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1691,6 +2677,8 @@
         :para-boundary-f1 0.047059
         :para-boundary-p 0.04878
         :para-boundary-r 0.045455
+        :src-ocr-share 0.0
+        :tl-override 0.0
         :wer 0.067349}
       "pdf/scripts" {
         :block-heading-f1 0.933333
@@ -1715,6 +2703,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.933333
         :heading-level-acc 1.0
         :heading-level-e2e 0.933333
@@ -1726,39 +2715,51 @@
         :para-boundary-f1 0.594595
         :para-boundary-p 0.647059
         :para-boundary-r 0.55
+        :src-ocr-share 0.0
         :table-continued-acc 1.0
         :table-teds-lite 0.674074
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.285171}
       "pdf/seals" {
-        :block-heading-f1 1.0
-        :block-heading-p 1.0
+        :block-heading-f1 0.956522
+        :block-heading-p 0.916667
         :block-heading-r 1.0
-        :block-paragraph-f1 0.157895
-        :block-paragraph-p 0.085714
-        :block-paragraph-r 1.0
+        :block-paragraph-f1 0.446429
+        :block-paragraph-p 0.290698
+        :block-paragraph-r 0.961538
         :block-seal-f1 0.0
         :block-seal-p 0.0
         :block-seal-r 0.0
-        :bow-f1 0.734375
-        :bow-p 0.618421
-        :bow-r 0.903846
-        :cer 0.318452
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.976532
+        :bow-p 0.961379
+        :bow-r 0.992171
+        :cer 0.027342
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.956522
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
         :heading-level-near 1.0
-        :heading-p 1.0
+        :heading-p 0.916667
         :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.111111
-        :para-boundary-p 0.058824
+        :para-boundary-f1 0.433962
+        :para-boundary-p 0.277108
         :para-boundary-r 1.0
-        :wer 0.653846}
+        :seal-leak 0.00449
+        :src-ocr-share 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.04911}
       "pdf/tables" {
         :block-caption-f1 1.0
         :block-caption-p 1.0
@@ -1779,6 +2780,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1790,10 +2792,46 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :src-ocr-share 0.0
         :table-continued-acc 1.0
         :table-teds-lite 0.992832
         :table-teds-struct-lite 0.992832
+        :tl-override 0.0
         :wer 0.0}
+      "pdf/textlayer" {
+        :block-heading-f1 0.619048
+        :block-heading-p 0.764706
+        :block-heading-r 0.52
+        :block-paragraph-f1 0.075
+        :block-paragraph-p 0.066667
+        :block-paragraph-r 0.085714
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 0.184519
+        :bow-p 0.246862
+        :bow-r 0.147316
+        :cer 0.668628
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.619048
+        :heading-level-acc 1.0
+        :heading-level-e2e 0.52
+        :heading-level-near 1.0
+        :heading-p 0.764706
+        :heading-r 0.52
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.297297
+        :para-boundary-p 0.261905
+        :para-boundary-r 0.34375
+        :src-ocr-share 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :wer 0.853308}
       "pdf/watermarks" {
         :block-heading-f1 1.0
         :block-heading-p 1.0
@@ -1801,13 +2839,17 @@
         :block-paragraph-f1 1.0
         :block-paragraph-p 1.0
         :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
         :bow-f1 1.0
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
-        :furniture-f1 1.0
+        :furniture-f1 0.8
         :furniture-p 1.0
-        :furniture-r 1.0
+        :furniture-r 0.666667
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -1819,8 +2861,777 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :src-ocr-share 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :watermark-leak 0.0
         :wer 0.0}
+      "scan-color/all" {
+        :block-caption-f1 0.0
+        :block-caption-p 0.0
+        :block-caption-r 0.0
+        :block-figure-f1 0.0
+        :block-figure-p 0.0
+        :block-figure-r 0.0
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-item-f1 0.0
+        :block-item-p 0.0
+        :block-item-r 0.0
+        :block-list-f1 0.0
+        :block-list-p 0.0
+        :block-list-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 0.923077
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-color/columns" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/figures" {
+        :block-caption-f1 0.0
+        :block-caption-p 0.0
+        :block-caption-r 0.0
+        :block-figure-f1 0.0
+        :block-figure-p 0.0
+        :block-figure-r 0.0
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/forms" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 0.25
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/headings" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/lists" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-item-f1 0.0
+        :block-item-p 0.0
+        :block-item-r 0.0
+        :block-list-f1 0.0
+        :block-list-p 0.0
+        :block-list-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/scripts" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/seals" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/tables" {
+        :block-caption-f1 0.0
+        :block-caption-p 0.0
+        :block-caption-r 0.0
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :wer 1.0}
+      "scan-color/textlayer" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :wer 1.0}
+      "scan-color/watermarks" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/all" {
+        :block-caption-f1 0.0
+        :block-caption-p 0.0
+        :block-caption-r 0.0
+        :block-figure-f1 0.0
+        :block-figure-p 0.0
+        :block-figure-r 0.0
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-item-f1 0.0
+        :block-item-p 0.0
+        :block-item-r 0.0
+        :block-list-f1 0.0
+        :block-list-p 0.0
+        :block-list-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 0.923077
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/columns" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/figures" {
+        :block-caption-f1 0.0
+        :block-caption-p 0.0
+        :block-caption-r 0.0
+        :block-figure-f1 0.0
+        :block-figure-p 0.0
+        :block-figure-r 0.0
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/forms" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 0.25
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/headings" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/lists" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-item-f1 0.0
+        :block-item-p 0.0
+        :block-item-r 0.0
+        :block-list-f1 0.0
+        :block-list-p 0.0
+        :block-list-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/scripts" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/seals" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/tables" {
+        :block-caption-f1 0.0
+        :block-caption-p 0.0
+        :block-caption-r 0.0
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/textlayer" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
+      "scan-ovl/watermarks" {
+        :block-heading-f1 0.0
+        :block-heading-p 0.0
+        :block-heading-r 0.0
+        :block-paragraph-f1 0.0
+        :block-paragraph-p 0.0
+        :block-paragraph-r 0.0
+        :block-seal-f1 0.0
+        :block-seal-p 0.0
+        :block-seal-r 0.0
+        :block-table-f1 0.0
+        :block-table-p 0.0
+        :block-table-r 0.0
+        :bow-f1 0.0
+        :bow-p 0.0
+        :bow-r 0.0
+        :cer 1.0
+        :furniture-f1 0.0
+        :furniture-p 0.0
+        :furniture-r 0.0
+        :ghost-rate 0.0
+        :heading-f1 0.0
+        :heading-level-e2e 0.0
+        :heading-p 0.0
+        :heading-r 0.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.0
+        :para-boundary-p 0.0
+        :para-boundary-r 0.0
+        :seal-leak 0.0
+        :table-continued-acc 0.0
+        :table-teds-lite 0.0
+        :table-teds-struct-lite 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 1.0}
       "scan/align" {
         :align-acc 0.0
         :align-acc-caption 0.0
@@ -1855,6 +3666,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -1916,6 +3728,7 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -1933,6 +3746,7 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :seal-leak 0.0
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
@@ -1965,6 +3779,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2001,6 +3816,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2027,6 +3843,7 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2053,6 +3870,7 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2079,6 +3897,7 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2102,6 +3921,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2127,6 +3947,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2164,6 +3985,7 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2196,6 +4018,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2225,6 +4048,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2233,6 +4057,7 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :seal-leak 0.0
         :wer 1.0}
       "scan/tables" {
         :block-caption-f1 0.0
@@ -2254,6 +4079,7 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2280,6 +4106,7 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
+        :ghost-rate 0.0
         :heading-f1 0.0
         :heading-level-e2e 0.0
         :heading-p 0.0
@@ -2317,6 +4144,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2331,6 +4159,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf-tagged/headings" {
         :block-heading-f1 1.0
@@ -2346,6 +4175,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2357,6 +4187,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf-tagged/lists" {
         :block-heading-f1 1.0
@@ -2378,6 +4209,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2389,6 +4221,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf-tagged/tables" {
         :block-caption-f1 1.0
@@ -2410,6 +4243,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2424,6 +4258,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/align" {
         :align-acc 1.0
@@ -2460,6 +4295,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2475,6 +4311,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/all" {
         :align-acc 1.0
@@ -2525,6 +4362,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2545,9 +4383,11 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :seal-leak 0.0
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :watermark-leak 0.0
         :wer 0.0}
       "pdf/columns" {
@@ -2578,6 +4418,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2596,6 +4437,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/figures" {
         :block-caption-f1 1.0
@@ -2618,6 +4460,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2629,6 +4472,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/footnotes" {
         :block-heading-f1 1.0
@@ -2647,6 +4491,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2658,6 +4503,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/forms" {
         :block-heading-f1 1.0
@@ -2676,6 +4522,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2690,6 +4537,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/furniture" {
         :block-heading-f1 1.0
@@ -2705,6 +4553,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2716,6 +4565,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/headings" {
         :block-heading-f1 1.0
@@ -2724,6 +4574,9 @@
         :block-paragraph-f1 1.0
         :block-paragraph-p 1.0
         :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
         :bow-f1 1.0
         :bow-p 1.0
         :bow-r 1.0
@@ -2731,6 +4584,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2742,6 +4596,10 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/initials" {
         :block-heading-f1 1.0
@@ -2759,6 +4617,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2778,6 +4637,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/lists" {
         :block-heading-f1 1.0
@@ -2799,6 +4659,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2810,6 +4671,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/scripts" {
         :block-heading-f1 1.0
@@ -2834,6 +4696,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2848,6 +4711,7 @@
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/seals" {
         :block-heading-f1 1.0
@@ -2859,6 +4723,9 @@
         :block-seal-f1 1.0
         :block-seal-p 1.0
         :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
         :bow-f1 1.0
         :bow-p 1.0
         :bow-r 1.0
@@ -2866,6 +4733,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2877,6 +4745,11 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :wer 0.0}
       "pdf/tables" {
         :block-caption-f1 1.0
@@ -2898,6 +4771,41 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "pdf/textlayer" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2920,6 +4828,9 @@
         :block-paragraph-f1 1.0
         :block-paragraph-p 1.0
         :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
         :bow-f1 1.0
         :bow-p 1.0
         :bow-r 1.0
@@ -2927,6 +4838,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -2938,6 +4850,844 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-color/all" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-color/columns" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/figures" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/forms" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/headings" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/lists" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/scripts" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/seals" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/tables" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "scan-color/textlayer" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :wer 0.0}
+      "scan-color/watermarks" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/all" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/columns" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/figures" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/forms" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/headings" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/lists" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-item-f1 1.0
+        :block-item-p 1.0
+        :block-item-r 1.0
+        :block-list-f1 1.0
+        :block-list-p 1.0
+        :block-list-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/scripts" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/seals" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/tables" {
+        :block-caption-f1 1.0
+        :block-caption-p 1.0
+        :block-caption-r 1.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/textlayer" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
+        :watermark-leak 0.0
+        :wer 0.0}
+      "scan-ovl/watermarks" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :block-seal-f1 1.0
+        :block-seal-p 1.0
+        :block-seal-r 1.0
+        :block-table-f1 1.0
+        :block-table-p 1.0
+        :block-table-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :seal-leak 0.0
+        :table-continued-acc 1.0
+        :table-teds-lite 1.0
+        :table-teds-struct-lite 1.0
+        :tl-override 0.0
         :watermark-leak 0.0
         :wer 0.0}
       "scan/align" {
@@ -2975,6 +5725,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3040,6 +5791,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3060,6 +5812,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :seal-leak 0.0
         :table-continued-acc 1.0
         :table-teds-lite 1.0
         :table-teds-struct-lite 1.0
@@ -3093,6 +5846,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3133,6 +5887,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3162,6 +5917,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3191,6 +5947,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3220,6 +5977,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3246,6 +6004,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3274,6 +6033,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3314,6 +6074,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3349,6 +6110,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3381,6 +6143,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3392,6 +6155,7 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :seal-leak 0.0
         :wer 0.0}
       "scan/tables" {
         :block-caption-f1 1.0
@@ -3413,6 +6177,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -3442,6 +6207,7 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.0
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0

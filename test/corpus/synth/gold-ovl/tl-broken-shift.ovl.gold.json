@@ -1,0 +1,538 @@
+{
+ "emon-gold": "1.0",
+ "id": "tl-broken-shift",
+ "provenance": {
+  "html": "html/tl-broken-shift.html",
+  "pdf": "pdf/tl-broken-shift.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/tl-broken-shift.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Maintenance Log"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "End same which asked work red better give place. Left change all not will page called every hard would here. See also on under old all us between no may try might sometimes done room. Show children it earth enough my about change revenue your. Turned find those who boy animal how method time took without find learn paper."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "Overview"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Face me went live air move now across using himself through. When heard time whole still page toward over found seen house my many long many say. No him some old both sun family may. Heard their does move water the its so. Help quarter white move like place how going leave study sample."
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Room for house of while every different almost under. Along its be some report or high learn away change through end called find. Who would ever new land both that own some see pay learn. True may line learn never last kind will what study. Paper far side used will knew color water such find do had."
+        }
+       ]
+      },
+      {
+       "id": 8,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 9,
+         "kind": "heading",
+         "level": 2,
+         "text": "Findings"
+        },
+        {
+         "id": 10,
+         "kind": "paragraph",
+         "text": "Should then line growth color us young revenue take paper took let to. Hand thought page at asked under small morning at an sample sun sure enough me. Study world will over men let almost young down leave upon read have. Cut whole put down might when right seen say. Without each were no an for like red on young."
+        },
+        {
+         "id": 11,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 5,
+         "children": [
+          {
+           "id": 12,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 13,
+             "kind": "row",
+             "children": [
+              {
+               "id": 14,
+               "kind": "cell",
+               "header": "col",
+               "text": "Ref"
+              },
+              {
+               "id": 15,
+               "kind": "cell",
+               "header": "col",
+               "text": "Item"
+              },
+              {
+               "id": 16,
+               "kind": "cell",
+               "header": "col",
+               "text": "Category"
+              },
+              {
+               "id": 17,
+               "kind": "cell",
+               "header": "col",
+               "text": "Qty"
+              },
+              {
+               "id": 18,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 19,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 20,
+             "kind": "row",
+             "children": [
+              {
+               "id": 21,
+               "kind": "cell",
+               "text": "F0001"
+              },
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "Color year to"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "Training"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "text": "35"
+              },
+              {
+               "id": 25,
+               "kind": "cell",
+               "text": "944.94"
+              }
+             ]
+            },
+            {
+             "id": 26,
+             "kind": "row",
+             "children": [
+              {
+               "id": 27,
+               "kind": "cell",
+               "text": "F0002"
+              },
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "Face change have"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 30,
+               "kind": "cell",
+               "text": "3"
+              },
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "3828.07"
+              }
+             ]
+            },
+            {
+             "id": 32,
+             "kind": "row",
+             "children": [
+              {
+               "id": 33,
+               "kind": "cell",
+               "text": "F0003"
+              },
+              {
+               "id": 34,
+               "kind": "cell",
+               "text": "Large almost line"
+              },
+              {
+               "id": 35,
+               "kind": "cell",
+               "text": "Training"
+              },
+              {
+               "id": 36,
+               "kind": "cell",
+               "text": "31"
+              },
+              {
+               "id": 37,
+               "kind": "cell",
+               "text": "4866.30"
+              }
+             ]
+            },
+            {
+             "id": 38,
+             "kind": "row",
+             "children": [
+              {
+               "id": 39,
+               "kind": "cell",
+               "text": "F0004"
+              },
+              {
+               "id": 40,
+               "kind": "cell",
+               "text": "Him heard red"
+              },
+              {
+               "id": 41,
+               "kind": "cell",
+               "text": "Travel"
+              },
+              {
+               "id": 42,
+               "kind": "cell",
+               "text": "27"
+              },
+              {
+               "id": 43,
+               "kind": "cell",
+               "text": "8872.77"
+              }
+             ]
+            },
+            {
+             "id": 44,
+             "kind": "row",
+             "children": [
+              {
+               "id": 45,
+               "kind": "cell",
+               "text": "F0005"
+              },
+              {
+               "id": 46,
+               "kind": "cell",
+               "text": "Man has why"
+              },
+              {
+               "id": 47,
+               "kind": "cell",
+               "text": "Services"
+              },
+              {
+               "id": 48,
+               "kind": "cell",
+               "text": "17"
+              },
+              {
+               "id": 49,
+               "kind": "cell",
+               "text": "8714.99"
+              }
+             ]
+            },
+            {
+             "id": 50,
+             "kind": "row",
+             "children": [
+              {
+               "id": 51,
+               "kind": "cell",
+               "text": "F0006"
+              },
+              {
+               "id": 52,
+               "kind": "cell",
+               "text": "City come across"
+              },
+              {
+               "id": 53,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 54,
+               "kind": "cell",
+               "text": "39"
+              },
+              {
+               "id": 55,
+               "kind": "cell",
+               "text": "1329.22"
+              }
+             ]
+            },
+            {
+             "id": 56,
+             "kind": "row",
+             "children": [
+              {
+               "id": 57,
+               "kind": "cell",
+               "text": "F0007"
+              },
+              {
+               "id": 58,
+               "kind": "cell",
+               "text": "Might words said"
+              },
+              {
+               "id": 59,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 60,
+               "kind": "cell",
+               "text": "6"
+              },
+              {
+               "id": 61,
+               "kind": "cell",
+               "text": "633.88"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 62,
+         "kind": "paragraph",
+         "text": "Which very often head its sentence seen here body our. Method give review want page sure hear to. Some see going earth did we well feet might market quarter. Make no words set water above sentence where toward quarter very important second. Write soon air without but few color about at while morning but come until."
+        }
+       ]
+      },
+      {
+       "id": 63,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 64,
+         "kind": "heading",
+         "level": 2,
+         "text": "Recommendations"
+        },
+        {
+         "id": 65,
+         "kind": "paragraph",
+         "text": "Every budget school want made at well every said. During picture four new small for could large there results five each method. Father heard know toward cut knew time paper hand may. Other if side big us measure country did not every. Still work done where need big old method feet whole above."
+        },
+        {
+         "id": 66,
+         "kind": "paragraph",
+         "text": "Place an go way often soon did us so now place could if sure red may. Last car many city in learn an write know not them from number go say. Both it made should its leave had new turn find him use kind young these called. Even change home with live end only over quarter feet like took do not. Ever by paper away learn story could often or."
+        },
+        {
+         "id": 67,
+         "kind": "paragraph",
+         "text": "Don't one himself and far know may an important need make year school side. In heard come usually review sure too white large our help did so into men. Our own move men or region often one end no out. Review also my move high above because next across still name quarter right. Hand work get began picture few quarter then see life."
+        }
+       ]
+      },
+      {
+       "id": 68,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 69,
+         "kind": "heading",
+         "level": 2,
+         "text": "Annex"
+        },
+        {
+         "id": 70,
+         "kind": "paragraph",
+         "text": "Almost policy place these sentence hand region come below all people. Any later part together have some told earth air found last. Say land night during because thought be day them going know show high. Body red has saw once each she came then using keep together so. Make year end into family different report never if make face sun body sure need."
+        },
+        {
+         "id": 71,
+         "kind": "paragraph",
+         "text": "Still because and people school more first soon. Here set about large results story live sea through answer after try. No using against many part cut have been for even small words. Each have these asked something do not so sometimes did not. As but policy sun got came any top down want their after then people your friend."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   },
+   {
+    "reason": "watermark",
+    "page": 2,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Maintenance Log"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

@@ -6,7 +6,8 @@
   "pdf": "pdf/columns-two.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/columns-two.pdf"
+   "scan": "scan/columns-two.pdf",
+   "scan-color": "scan-color/columns-two.pdf"
   }
  },
  "annotated": {

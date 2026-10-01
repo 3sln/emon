@@ -44,7 +44,9 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
 (def CONTAINERS #{"figure" "table" "list" "note"})
 (def IOU 0.5)
 (def SIM 0.5)
-(def LOWER-IS-BETTER #{"cer" "wer" "watermark-leak" "initial-false-heading" "align-wrong"})
+(def LOWER-IS-BETTER #{"cer" "wer" "watermark-leak" "initial-false-heading" "align-wrong"
+                       ;; the fusion metrics (D206, SPEC 14.2)
+                       "ghost-rate" "seal-leak" "src-ocr-share" "tl-override"})
 
 ;; ------------------------------------------------------------ python-isms ----
 
@@ -639,11 +641,93 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                                   (boolean (and j (str/includes? (ptext j) (norm (get h (if nolocale "printed" "word"))))))))
                               hy))))))))
 
+;; ---------------------------------------------------------------- fusion ----
+;; The fusion metrics (D206, SPEC 14.2). They read PROVENANCE: a node's (or an inline's) `src` and
+;; `flags`, at the finest level the JSON has: an inline's own `src`/`flags` when it has them, else those of
+;; the nearest enclosing inline or block. `seal` nodes are outside every one of these counts (their text is
+;; judged by the seal metrics, and OCR is the right source for a stamp).
+
+(defn- prov-segments
+  "[{:text norm-text :src #{..} :flags #{..}}] of every text segment of a leaf node, finest level first."
+  [n src flags]
+  (let [src (if (contains? n "src") (set (get n "src")) src)
+        flags (if (contains? n "flags") (set (get n "flags")) flags)
+        kids (get n "inlines")]
+    (cond
+      (and (= "text" (get n "kind")) (string? (get n "text")))
+      [{:text (norm (get n "text")) :src src :flags flags}]
+      (seq kids) (vec (mapcat #(prov-segments % src flags) kids))
+      (seq (get n "children")) (vec (mapcat #(prov-segments % src flags) (get n "children")))
+      (string? (get n "text")) [{:text (norm (get n "text")) :src src :flags flags}]
+      :else [])))
+
+(defn- text-nodes
+  "Every text-bearing node of the body outside `seal` nodes, in reading order."
+  [body]
+  (for [n (walk body) :when (and (contains? TEXT-KINDS (get n "kind")) (not= "seal" (get n "kind"))
+                                 (string? (get n "text")))]
+    n))
+
+(defn- body-segments [body]
+  (vec (for [n (text-nodes body)
+             s (prov-segments (dissoc n "children") (set (get n "src")) (set (get n "flags")))]
+         s)))
+
+(defn- non-seal-text [body]
+  (norm (str/join "\n" (map #(get % "text") (text-nodes body)))))
+
+(def TL-SRC #{"text" "hidden-text"})
+
+(defn- has-prov? [segs] (boolean (some #(or (seq (:src %)) (seq (:flags %))) segs)))
+
+(defn fusion-counts!
+  "Adds the fusion counts of one document. `opts` {:variant \"pdf\"|\"scan\"|...}: `tl-override` is a
+  born-digital measure, so scans do not count it, and a gold whose `facts.tl-untrusted` is true (a text layer
+  that is wrong or older on purpose: overriding it is right) does not either."
+  [add gold pred opts]
+  (let [gold-body (get-in gold ["model" "body"])
+        gb (let [hy (get-in gold ["facts" "hyphens"])]
+             (if (and (seq hy) (nil? (get-in pred ["settings" "locale"]))) (rewrite-hyphens gold-body hy) gold-body))
+        pb (or (get pred "body") {"id" 0 "kind" "document"})
+        segs (body-segments pb)
+        gt (non-seal-text gb)
+        pt (non-seal-text pb)
+        pw (split-ws pt)
+        cg (frequencies (split-ws gt))
+        cp (frequencies pw)
+        ;; ghost words: OCR-only words beyond what the gold body has, by count (as watermark-leak counts)
+        ocr-only? (fn [s] (and (contains? (:src s) "ocr") (not-any? TL-SRC (:src s))))
+        ocr-only (frequencies (for [s segs :when (ocr-only? s) w (split-ws (:text s))] w))
+        ghosts (reduce + 0 (for [[w n] ocr-only] (min n (max 0 (- (get cp w 0) (get cg w 0))))))
+        chars (fn [pred-seg] (reduce + 0 (for [s segs :when (pred-seg s)] (nlen (str/join "" (split-ws (:text s)))))))
+        body-chars (chars (constantly true))]
+    (add "fusion.body-words" (count pw))
+    (add "fusion.ghost-words" ghosts)
+    (when (has-prov? segs)
+      (add "fusion.src-ocr-chars" (chars ocr-only?))
+      (add "fusion.src-chars" body-chars))
+    (when (and (not= "scan" (get opts :variant)) (not (get-in gold ["facts" "tl-untrusted"])))
+      (add "fusion.tl-susp-chars" (chars #(contains? (:flags %) "text-layer-suspect")))
+      (add "fusion.tl-chars" body-chars))
+    ;; seal leak: characters of the gold's seal and stamp words that reach the body OUTSIDE seal nodes,
+    ;; beyond the gold body's own count of them, over the body's characters
+    (let [sw (set (for [n (walk gb) :when (= "seal" (get n "kind")) w (split-ws (norm (get n "text" "")))] w))]
+      (when (seq sw)
+        (add "fusion.seal-leak-chars" (reduce + 0 (for [w sw] (* (nlen w) (max 0 (- (get cp w 0) (get cg w 0)))))))
+        (add "fusion.seal-body-chars" (nlen pt))))))
+
 ;; ----------------------------------------------------------------- score ----
 
+(declare score*)
+
 (defn score
-  "Counts for one document. `pred` is an emon-1 Model map, `gold` a gold map."
-  [pred gold]
+  "Counts for one document. `pred` is an emon-1 Model map, `gold` a gold map. `opts` {:variant v} is the
+  committed input form (pdf, scan, ...), which only the born-digital fusion metric reads."
+  ([pred gold] (score pred gold {}))
+  ([pred gold opts] (score* pred gold opts)))
+
+(defn- score*
+  [pred gold opts]
   (let [ann (get gold "annotated")
         gm (get gold "model")
         gb (let [b (get gm "body") hy (get-in gold ["facts" "hyphens"])]
@@ -707,6 +791,7 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                 (add "table.continued.n" ng)
                 (add "table.continued.ok"
                      (count (filter (fn [[i j]] (pyeq (get-in g [i "continued"] 1) (get-in p [j "continued"] 1))) tp_)))))))))
+    (when (get ann "text") (fusion-counts! add gold pred opts))
     ;; paragraph boundaries
     (when (and (get ann "text") (contains? (set (get ann "structure")) "paragraph"))
       (doseq [[k v] (boundary-counts gb pb)] (add k v)))
@@ -821,6 +906,18 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
             m)
         m (if (contains? c "contam.leak-chars")
             (set* m "watermark-leak" (or (ratio (c "contam.leak-chars") (c "contam.body-chars")) 0.0))
+            m)
+        m (if (contains? c "fusion.body-words")
+            (set* m "ghost-rate" (or (ratio (c "fusion.ghost-words") (c "fusion.body-words")) 0.0))
+            m)
+        m (if (contains? c "fusion.seal-leak-chars")
+            (set* m "seal-leak" (or (ratio (c "fusion.seal-leak-chars") (c "fusion.seal-body-chars")) 0.0))
+            m)
+        m (if (contains? c "fusion.src-chars")
+            (set* m "src-ocr-share" (or (ratio (c "fusion.src-ocr-chars") (c "fusion.src-chars")) 0.0))
+            m)
+        m (if (contains? c "fusion.tl-chars")
+            (set* m "tl-override" (or (ratio (c "fusion.tl-susp-chars") (c "fusion.tl-chars")) 0.0))
             m)]
     m))
 

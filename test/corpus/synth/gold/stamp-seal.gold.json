@@ -6,7 +6,8 @@
   "pdf": "pdf/stamp-seal.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/stamp-seal.pdf"
+   "scan": "scan/stamp-seal.pdf",
+   "scan-color": "scan-color/stamp-seal.pdf"
   }
  },
  "annotated": {

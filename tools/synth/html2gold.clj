@@ -452,12 +452,17 @@
       (if (and (el? k) (= (etag k) "span") (some #{"num"} (cls k)))
         (vreset! num (heading-number (text-content k)))
         (.add ^ArrayList (ekids holder) k)))
+    ;; a heading DRAWN as paths (D209): `data-outline-text` is the text the picture shows; the gold has it
+    (when (truthy? (eget e "data-outline-text"))
+      (.clear ^ArrayList (ekids holder))
+      (.add ^ArrayList (ekids holder) (eget e "data-outline-text")))
     (let [extra (cond-> [["level" lvl]]
                   (truthy? @num) (into [["number" @num]
                                         ["numbering" (let [v (eget e "data-numbering")] (if (truthy? v) v (numbering-scheme @num)))]])
                   true (into (align-fields cv "heading" e)))]
       (let [n (leaf "heading" holder (:notes cv) extra)]
-        (.put ^java.util.IdentityHashMap (:raw-map cv) n (text-content e))
+        (.put ^java.util.IdentityHashMap (:raw-map cv) n
+              (if (truthy? (eget e "data-outline-text")) (norm-ws (eget e "data-outline-text")) (text-content e)))
         n))))
 
 (defn- conv-list [cv e depth]
@@ -792,8 +797,8 @@
                                              "text" true "inlines" true
                                              "furniture" true "dropped" REASONS "pages" ["n" "w" "h" "label"])
                                    layout? (assoc "layout" true)))
-         (seq (select-keys facts ["frags" "lines" "hyphens"]))
-         (assoc "facts" (apply om (mapcat (fn [k] (when (contains? facts k) [k (get facts k)])) ["frags" "lines" "hyphens"]))))
+         (seq (select-keys facts ["frags" "lines" "hyphens" "tl-untrusted"]))
+         (assoc "facts" (apply om (mapcat (fn [k] (when (contains? facts k) [k (get facts k)])) ["frags" "lines" "hyphens" "tl-untrusted"]))))
        "model" (ordered model))))))
 
 (defn- all-blocks

@@ -1973,7 +1973,7 @@ analysis beyond "top-to-bottom lines on a single column".
   model hashes); the word-confidence-of-0 finding of P1.12 step 6 is fixed
   in `tess.rs` if it is a reading bug. Re-record `test/ocr/h-keyword/` live
   (Rust only) and fill `xo-*` column 11 and 12 once P6.3 has kin's ink.
-- [ ] **P6.6 — The fusion corpus: degraded and colour scans, watermark/seal/stamp fixtures, the scorer's fusion
+- [x] **P6.6 — The fusion corpus: degraded and colour scans, watermark/seal/stamp fixtures, the scorer's fusion
   metrics** (SPEC §14.3.1, §14.2, D206, D209). **Wave 1**, no kin: parallel with everything. Depends on nothing new.
   *Brief*:
   1. **New born-digital synthetic documents** (`tools/synth/make_html.clj` + `print.sh`, Chrome, gold by `html2gold`),
@@ -2022,6 +2022,45 @@ analysis beyond "top-to-bottom lines on a single column".
   CER ≥ 0.5 on `emon` (the text layer is wrong, as intended) and every other new `pdf/` document CER ≤ 0.02 except
   `outlined-heading` (its headings are missing: say its CER here); the new metrics have laws; the six seals and the
   overlay boxes are listed in MANIFEST.
+  *Done (D206, D209), as written except where said.* **Files**: `tools/synth/{make_html,html2gold,build,degrade,print.sh}` extended;
+  new `outline.clj` (+ `outlines.edn`: Chrome and `pdftocairo` turn two heading texts into glyph paths), `assets.clj`
+  (`html/img/wm-sample.png`, `bg-texture.jpg`), `wm_pdf.clj` (+ `hidden_ocr_words.edn`), `degrade_fusion.clj`;
+  `tools/accuracy/{score,accuracy,fusion_report,test_score}.clj`; `tools/fusion/{live-sets.edn,fusion_live.clj}`;
+  `bb fusion-report`, `bb fusion-live` (neither a gate; listed in `not_gates`); schema `facts.tl-untrusted`.
+  **Corpus**: 12 new documents (`wm-gray-behind`, `wm-image-behind`, `bg-texture`, `seal-over-text`, `sig-over-name`,
+  `outlined-heading`, and the six of item 2: `wm-marked`, `wm-ocg`, `wm-annot`, `tl-broken-shift`, `tl-broken-unmapped`,
+  `hidden-older-ocr`), each two pages (`hidden-older-ocr` is `h-plain`'s HTML and scan); 67 documents in all. Every item-2
+  file is its source plus ONE appended incremental update, so `wm_pdf.clj check` (in `bb unit`) recovers the source from the file's
+  own first `%%EOF` and requires the update to be what the script writes (qpdf finds all six valid). The FUSION set is 22 stems
+  (`test/corpus/synth/FUSION`: the brief's ten, with `script-mixed` for the brief's `scripts-mixed`, which does not exist, and
+  the 12 new ones). `scan-color/` and `scan-ovl/` of those 22, `gold-ovl/STEM.ovl.gold.json` for the overlay scans (the gold plus
+  a `watermark` COPY entry a page and the `seal` nodes: one of six seals, one signature, placed after the paragraph whose printed
+  line they cover; facts dropped because ids change), `scan-ovl/FACTS.json` (skews, turns, overlay boxes, seal ids; copied into
+  MANIFEST `facts.{skew,skew-ovl,turns,overlays,seal,watermark,bleed}`), checked by `degrade_fusion --check` in `bb unit`.
+  **Deviations**: (1) the six seals are drawn by `magick` from a table (ring, inner ring, letters placed round the arc, a
+  centre word), not rasterised from SVG: magick's SVG reader has no `textPath`; (2) the 12 new documents have NO plain `scan/`
+  (grey, 150 dpi): colour and overlay scans replace it, for the pixel budget; (3) **scan-color and scan-ovl are 130 dpi RGB,
+  JPEG 45, noise `attenuate 0.03`** (the brief's 200 dpi / q80 would be about 25 MB; its fall-back to 150 dpi was still
+  about 10 MB for the two variants): the committed new pixels measure 3.4 MB (`scan-color`) + 3.7 MB (`scan-ovl`) + 0.7 MB of PDFs +
+  0.4 MB of gold-ovl, about 8.2 MB, under the ~10 MB cap of D209; (4) the two turned pages are `table-simple-ruled` page 1
+  (90 degrees) and `h-numbered` page 2 (180); bleed-through is on `bank-statement` and `columns-two`.
+  **Metrics** (`score.clj`, lower is better, in `LOWER-IS-BETTER`; counts at an inline's own `src`/`flags`, else its block's;
+  seal nodes are outside them): `ghost-rate` = OCR-only words (src has `ocr`, no `text`/`hidden-text`) beyond the gold body's count
+  of that word, over predicted body words; `seal-leak` = characters of the gold's seal words found in the body OUTSIDE seal nodes
+  beyond the gold body's own count, over body characters (absent when the gold has no seal text); `src-ocr-share` (absent when the
+  prediction carries no `src` at all, so a prediction that says nothing has no share rather than 0); `tl-override` = chars under
+  `text-layer-suspect` over body chars, not counted for the `scan*` variants nor for a gold with `facts.tl-untrusted` (the three
+  documents whose text layer is wrong or older ON PURPOSE, where overriding it is right). Hand-computed laws in `test_score.clj`
+  (`ghost-rate`, `seal-leak`, `src-ocr-share`, `tl-override`, direction table); the oracle scores 0 on all of them on every
+  variant (`bb accuracy --predictor oracle`). `fusion_report.clj --self-test` and `fusion_live.clj --self-test` (stamp-ghost,
+  YOLO boxes) are in `bb unit`; **the dump's field names there are guesses from SPEC 9.7** (`cg` `text`/`ocr`, `fv` `group`/`src`/`rule`,
+  `fx`, `fa` `defence`/`reason`) that P7.1/P7.3 must reconcile in that one file.
+  **Measured on `emon` today (the baseline `bb accuracy --update` recorded; `degraded` and `emon` entries re-recorded, because
+  pooled categories changed with the new documents)**: `tl-broken-shift` CER 0.712; `tl-broken-unmapped` 0.885; `hidden-older-ocr`
+  0.080 (its 5 % substitutions, by design: the three are the documents where the text layer is wrong); `outlined-heading` 0.0099
+  (its two headings are missing); `seal-over-text` 0.030 (a miss of the 0.02 bar: the seal's arc text and the stamp's PAID arrive
+  in the text layer's order instead of as `seal` nodes, which is P7.7's, D205); every other new `pdf/` document 0.0000; every
+  `scan*` variant 1.0000 (no OCR yet).
 - [ ] P6.7 — Initials from ink (SPEC 10.9, D108): the geometry test of P4.10 over non-text ink (a vector path cluster, an
   image placement, a Type 3 glyph without Unicode, the tracer's components on raster pages); the letter from
   `/ActualText` or `/Alt`, then a planned OCR request of pass kind `initial` (`op` row 9, added to `emon.evidence`; psm 10,
@@ -6790,10 +6829,13 @@ searchable scan would lose its only text before OCR).
 - [ ] **Signed off** (maintainer)
 
 ### D209 — The fusion corpus: colour and overlay scans of a fusion set, new watermark/seal/signature/broken-encoding documents; mapo80 measured live only (P6.6; SPEC 14.3)
-**Decision**: as P6.6's brief. The fusion set is about 16 documents; `scan-color/` (200 dpi RGB) and `scan-ovl/` (generated
-watermarks, seals, signatures, bleed-through, turned pages) exist only for it; the new committed files stay under 12 MB.
+**Decision**: as P6.6's brief. The fusion set is 22 documents (as built); `scan-color/` (200 dpi RGB) and `scan-ovl/` (generated
+watermarks, seals, signatures, bleed-through, turned pages) exist only for it; the new committed pixels stay near 10 MB (below).
 The six seals are generated by us; nothing from mapo80 (an aggregate of unverified licences, with research-only `neg_*`
 images) is committed.
+**Pixel budget (coordinator, answering the plan's open question)**: **committed pixels <= ~10 MB** for this item (measured: about
+8.2 MB); **larger fixture sets go to the S3 corpus store** (`bb corpus-push`, `tools/corpus.clj`, D085) under a new corpus category
+and are used only by non-gate long runs; **no LFS**. (The 12 MB of the brief is superseded.)
 **Why**: the 150-dpi gray `scan/` variants cannot test colour ink layers, and the synthetic set had one watermark and one
 non-overlapping seal; truth stays known because every overlay is ours.
 **Alternatives**: colour variants of all 55 (about 50 MB); pasting mapo80 stamps into fixtures (licence).

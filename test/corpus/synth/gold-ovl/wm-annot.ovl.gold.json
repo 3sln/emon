@@ -1,0 +1,562 @@
+{
+ "emon-gold": "1.0",
+ "id": "wm-annot",
+ "provenance": {
+  "html": "html/wm-annot.html",
+  "pdf": "pdf/wm-annot.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/wm-annot.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Product Brief"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Have together children sometimes today leave big at even but try did not end there for. To ever morning money me we using may second were left quarter true hand it two. Take world what all know is three study today can looked that them not something several. Think high learn why knew not children red family high as used many above. True what pay big under let good color show."
+      },
+      {
+       "id": 4,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 5,
+         "kind": "heading",
+         "level": 2,
+         "text": "Overview"
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Should another this small house side however animal new saw this policy place. Had children this growth with above usually region how here so red words come out. Many right four other family policy paper got in good. Sure room turned to market large she other went day day word. Top for back during today turn form them above life cut figure that used but study."
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Each find when another give on off then not when good day. My almost into however himself way learn sentence sea. Up true them feet her long next money began sound even study. Found too because who went example better my method paper seen end method seen the. Earth knew great like up would several sample keep."
+        }
+       ]
+      },
+      {
+       "id": 8,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 9,
+         "kind": "heading",
+         "level": 2,
+         "text": "Findings"
+        },
+        {
+         "id": 10,
+         "kind": "paragraph",
+         "text": "Make that three growth in same country word it small will land. Hear home leave people going is words first. There enough looked night four some think well or. Toward want kind do growth together big until if see such country big along was always. Only put to play around sound do not set."
+        },
+        {
+         "id": 11,
+         "kind": "seal",
+         "subkind": "seal",
+         "color": "purple",
+         "text": "UNIVERSITY REGISTRAR OFFICIAL"
+        },
+        {
+         "id": 12,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 5,
+         "children": [
+          {
+           "id": 13,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 14,
+             "kind": "row",
+             "children": [
+              {
+               "id": 15,
+               "kind": "cell",
+               "header": "col",
+               "text": "Ref"
+              },
+              {
+               "id": 16,
+               "kind": "cell",
+               "header": "col",
+               "text": "Item"
+              },
+              {
+               "id": 17,
+               "kind": "cell",
+               "header": "col",
+               "text": "Category"
+              },
+              {
+               "id": 18,
+               "kind": "cell",
+               "header": "col",
+               "text": "Qty"
+              },
+              {
+               "id": 19,
+               "kind": "cell",
+               "header": "col",
+               "text": "Amount"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 20,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 21,
+             "kind": "row",
+             "children": [
+              {
+               "id": 22,
+               "kind": "cell",
+               "text": "F0001"
+              },
+              {
+               "id": 23,
+               "kind": "cell",
+               "text": "School is without"
+              },
+              {
+               "id": 24,
+               "kind": "cell",
+               "text": "Software"
+              },
+              {
+               "id": 25,
+               "kind": "cell",
+               "text": "20"
+              },
+              {
+               "id": 26,
+               "kind": "cell",
+               "text": "1129.57"
+              }
+             ]
+            },
+            {
+             "id": 27,
+             "kind": "row",
+             "children": [
+              {
+               "id": 28,
+               "kind": "cell",
+               "text": "F0002"
+              },
+              {
+               "id": 29,
+               "kind": "cell",
+               "text": "To own such"
+              },
+              {
+               "id": 30,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 31,
+               "kind": "cell",
+               "text": "23"
+              },
+              {
+               "id": 32,
+               "kind": "cell",
+               "text": "6932.52"
+              }
+             ]
+            },
+            {
+             "id": 33,
+             "kind": "row",
+             "children": [
+              {
+               "id": 34,
+               "kind": "cell",
+               "text": "F0003"
+              },
+              {
+               "id": 35,
+               "kind": "cell",
+               "text": "Take change home"
+              },
+              {
+               "id": 36,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 37,
+               "kind": "cell",
+               "text": "32"
+              },
+              {
+               "id": 38,
+               "kind": "cell",
+               "text": "723.78"
+              }
+             ]
+            },
+            {
+             "id": 39,
+             "kind": "row",
+             "children": [
+              {
+               "id": 40,
+               "kind": "cell",
+               "text": "F0004"
+              },
+              {
+               "id": 41,
+               "kind": "cell",
+               "text": "Done form can"
+              },
+              {
+               "id": 42,
+               "kind": "cell",
+               "text": "Training"
+              },
+              {
+               "id": 43,
+               "kind": "cell",
+               "text": "3"
+              },
+              {
+               "id": 44,
+               "kind": "cell",
+               "text": "4559.15"
+              }
+             ]
+            },
+            {
+             "id": 45,
+             "kind": "row",
+             "children": [
+              {
+               "id": 46,
+               "kind": "cell",
+               "text": "F0005"
+              },
+              {
+               "id": 47,
+               "kind": "cell",
+               "text": "Two might how"
+              },
+              {
+               "id": 48,
+               "kind": "cell",
+               "text": "Training"
+              },
+              {
+               "id": 49,
+               "kind": "cell",
+               "text": "15"
+              },
+              {
+               "id": 50,
+               "kind": "cell",
+               "text": "5942.14"
+              }
+             ]
+            },
+            {
+             "id": 51,
+             "kind": "row",
+             "children": [
+              {
+               "id": 52,
+               "kind": "cell",
+               "text": "F0006"
+              },
+              {
+               "id": 53,
+               "kind": "cell",
+               "text": "Last saw different"
+              },
+              {
+               "id": 54,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 55,
+               "kind": "cell",
+               "text": "2"
+              },
+              {
+               "id": 56,
+               "kind": "cell",
+               "text": "3238.38"
+              }
+             ]
+            },
+            {
+             "id": 57,
+             "kind": "row",
+             "children": [
+              {
+               "id": 58,
+               "kind": "cell",
+               "text": "F0007"
+              },
+              {
+               "id": 59,
+               "kind": "cell",
+               "text": "High sentence come"
+              },
+              {
+               "id": 60,
+               "kind": "cell",
+               "text": "Supplies"
+              },
+              {
+               "id": 61,
+               "kind": "cell",
+               "text": "20"
+              },
+              {
+               "id": 62,
+               "kind": "cell",
+               "text": "3040.89"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 63,
+         "kind": "paragraph",
+         "text": "World study land again where this out we help give. Light however would have work father point over top. Small us is never both using time such through against always place. And near below story turn make face but our room only men few body. Go money tell since another after be using know here how both results."
+        }
+       ]
+      },
+      {
+       "id": 64,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 65,
+         "kind": "heading",
+         "level": 2,
+         "text": "Recommendations"
+        },
+        {
+         "id": 66,
+         "kind": "paragraph",
+         "text": "It us morning report it get there heard. City find much between young began whole their if. Where did used kind hand also other do soon. Did world hear cut need along have home big story the but than. Color did not only small take paper red using said any friend us made."
+        },
+        {
+         "id": 67,
+         "kind": "paragraph",
+         "text": "By report always what men face face in what animal take boy did not hard time look. Away sound from was body play my going and asked growth know in need small. Have read and next since later part together enough important people. Few which its left method said always results for above is the soon some said. Keep himself made it part other go some hear our."
+        },
+        {
+         "id": 68,
+         "kind": "seal",
+         "subkind": "signature",
+         "color": "blue",
+         "text": ""
+        },
+        {
+         "id": 69,
+         "kind": "paragraph",
+         "text": "The up if of looked pay children only all cut. Me home is against region try way it important high just what door. Hard every my just again only when year. Whole make make of him picture first asked make. Turned something whole left boy will since knew come money life say must told first."
+        }
+       ]
+      },
+      {
+       "id": 70,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 71,
+         "kind": "heading",
+         "level": 2,
+         "text": "Annex"
+        },
+        {
+         "id": 72,
+         "kind": "paragraph",
+         "text": "Again life my small people will will can take. Often few second see again growth two is went show. By looked important turned some went thought different be us them said try. This got pay why leave have both school get line point great. Room when life study before year day large could sometimes above animal point three family."
+        },
+        {
+         "id": 73,
+         "kind": "paragraph",
+         "text": "Find is true point night feet same sample budget her old want below us. Told put off since food soon that number got better does her. Think great went sure sound same day began toward family form hard. Back off picture pay has life friend body face. Color different light room keep always help at little better example life."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "page": 1,
+    "reason": "watermark",
+    "text": "SPECIMEN"
+   },
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   },
+   {
+    "page": 2,
+    "reason": "watermark",
+    "text": "SPECIMEN"
+   },
+   {
+    "reason": "watermark",
+    "page": 2,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Product Brief"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}
