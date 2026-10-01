@@ -1384,6 +1384,41 @@ analysis beyond "top-to-bottom lines on a single column".
   `hidden-text` source and a Tr 3 OCR layer over a scan is never dropped or "occluded". 17 fixtures (3,278 hand
   or independently computed expectations) on every target; poppler's text and page agree on the real corpus (D156).
   `bb gates` green; `bb unit red` fails on every arm.
+- [ ] **P3.6a — Path visibility and whole path geometry** (SPEC §8.1, §8.4.3; D218; graphics fusion, D217). **Wave 1**
+  of the Phase 7 table; depends on nothing new; parallel with everything in wave 1.
+  *Brief*:
+  1. **Paths get `vis`, `vby`, `vchk`** in `paths` cells 19, 20, 21, and the backdrop colour the white check found in cell
+     22 (0xRRGGBB, -1 unknown; cell 23 stays spare). `pv-page` (`kin/pdfvis.kin`) already takes `pa`: add a pass over the
+     page's `paths` rows from `p0` that are not clips (`pg-clip`) and not shadings (`pg-shading`: `vchk` 0), running the
+     glyph checks in the glyph order on the path's painted region (its box intersected with its clip's box; a stroked
+     rectangle's box shrunk by half its width, as the occluder test already does): clip (no overlap with the clip box),
+     offpage, white (ink = stroke colour if stroked, fill colour if filled, both if both; against the same backdrop search
+     as a glyph: the nearest EARLIER opaque axis-aligned rectangle fill covering the whole region, else the page white;
+     write the backdrop found, -1 when the search went silent), zero-size (the region is empty BOTH ways: a 0-width stroke is
+     a hairline and is NOT zero-size), occlusion (a LATER exactly known opaque paint covers the whole region; `vby` its `z`),
+     ocg (`ocgdef` 0 on the `ocg` chain), transparent (every painted component's alpha 0). Bits 128/256 (blend, soft mask)
+     are set by the interpreter for paths as for glyphs (check `pc-op`'s paint path sets them in `pf-flags` today: copy them
+     into `vchk`). The 4,096-row look-back bound applies.
+  2. **Whole geometry for straight paths**: `PATH_KEEP` (`kin/pdfcontent.kin`, 128) stays for a path with any curve; a path
+     made only of `m l h re` keeps up to `PATH_KEEP_STRAIGHT` (4096) points; a path cut short sets the new flag
+     `pg-truncated` (512) and keeps its box (D152's rule). A page's `pts` rows are bounded by `PTS_PAGE` (1,000,000; past
+     it every later path is truncated, warning 1024 as for paths).
+  3. **Evidence**: `kin/evidence.kin`: `pf-vis` 19, `pf-vby` 20, `pf-vchk` 21, `pf-backdrop` 22 accessors, the `pg-truncated`
+     row of the `pg` enum, and the dump's `ev-fd` names for the four cells (the dump changes; the Model does not).
+  4. **Fixtures** (`kin/scripts/vis-fixtures`, new expectation rows, `test/vis/paths.pdf`): per class, a horizontal rule
+     and a thin filled rectangle that are clipped away, half clipped (visible: §9.9 trims it), off the page, white on
+     white, white on a black rectangle (visible), occluded by a later white rectangle and by a later image, under an OCG
+     that is off, under an `/AS` print-only OCG (visible, `ocgdef` 2), at alpha 0, with a Multiply blend and with a soft
+     mask (visible, bits 128/256), a 0-width hairline (visible), and a grid of 30 `re` subpaths in one path (geometry kept,
+     not truncated) and one of 1,100 (truncated).
+  *Files*: `kin/pdfvis.kin`, `kin/pdfcontent.kin` (the constant, the straight-path test, the flag), `kin/evidence.kin` (the
+  paths section and the `pg` enum only), `kin/pdfvistest.kin`, `kin/pdfcontenttest.kin` (the async run of the new fixture),
+  `kin/scripts/vis-fixtures`, `test/vis/`, the evidence goldens that print `paths` (regenerated; list them in this entry).
+  *Measured*: `kin/scripts/vis-check --render` on the new fixture: every path expected visible leaves ink in poppler's
+  render and every path expected hidden leaves none; `tools/vis/corpus-vis.clj` gains a paths column: per class, the count
+  of paths and of rule-like paths (D179's sizes) on the 899 files, recorded here.
+  *Done when*: the laws on four targets; every Model of every gate byte-identical (only evidence dumps move); `bb gates`
+  green.
 - [x] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
   `/Alt`, `/ActualText` (use it when present — it is the author's answer),
   informativeness score (D034). Also (D076): Artifact subtypes as
@@ -1826,9 +1861,73 @@ analysis beyond "top-to-bottom lines on a single column".
 - [x] P5.4 — Tables across pages: with and without recurring headers,
   "continued" markers, split rows (D019). **Done** (D174) except split rows and a free-standing "(continued)" line: the
   synthetic multi-page documents score TEDS-lite 1.0 and `table-continued-acc` 1.0.
-- [ ] P5.5 — `struct` (tagged) tables verified against geometry; `form`
-  profile.
-- [ ] P5.6 — TEDS in `bb accuracy`; PubTabNet/FinTabNet/ICDAR scored.
+- [ ] **P5.5a — The fused-graphics arenas and the vector source; `emon.table` reads `grl`/`gfl`, never `paths`** (SPEC
+  §9.7, §9.9 "Vector candidates", §10.5 "What the profiles read"; D217, D219). **Wave 2** of the Phase 7 table. Depends on
+  P3.6a (step B only) and P7.0 (`kin/player.kin`); parallel with P6.4, P7.1, P7.2.
+  *Brief*:
+  1. `kin/glayer.kin` (`emon.glayer`, new): the layouts of `grl` (24), `gfl` (16), `ggp` (12), `grg` (16) exactly as SPEC
+     §9.7, their accessors and builders, the enums `go` (h 1, v 2, slant 3), `gq` (the flags of §9.7, one bit each in the
+     order written there), `gk` (rule 1, fill 2, region 3), `rk` (table-in-image 1, figure 2, table-hint 3), `gl-check` (every
+     run and reference, as `ev-check`) and `gl-emit` (table driven like `ev-fd`; dump version "2", keys after `hl` in the `ea`
+     order of SPEC §9.7). In `kin/player.kin`, in ONE block below P7.0's code headed `;; P5.5a graphics arenas`:
+     `pl-append`, `pl-check` and `pl-emit` call the `gl-*` functions (re-basing `refs` runs and `ggp` indices).
+  2. `kin/gvec.kin` (`emon.gvec`, new), `gv-page`: the page's vector candidates into a scratch `Cells` (stride 16: kind
+     rule/fill, `paths` row, first `pts` row of the segment (-1 for a box-only candidate), page, box, endpoints, thickness,
+     colour, style, flags), in TWO modes chosen by an argument: **`legacy`** reproduces `tb-collect-one` exactly (a path's
+     box is one candidate; a stroked rectangle four edges; "mean channel under 240"; no visibility), and **`segments`** is
+     SPEC §9.9's (per segment and subpath from `pts`; flat curves as lines; `pg-truncated` paths as their box; clip trimming;
+     `vis` ≠ 0 kept but flagged so `gf-page` can record it; contrast against `backdrop` ≥ `gf-contrast` 16; dash → style;
+     thin visible image placements as `from-image` rules; `/Artifact` type from the `mark` chain via `mk-artifact-of`).
+  3. `kin/gfuse.kin` (`emon.gfuse`, new; P7.G extends it), `gf-page` in its **vector-only form**: candidates → `grl`/`gfl`
+     rows through rows 501, 505, 514, 560, 562 (as code, the `fr` number written into the row; P7.G moves them into
+     `kin/fuserules.kin` as data). Collinear vector candidates that touch (D179's 3 pt) are NOT merged here: `tb-build` merges
+     them as it does today, so the identity holds.
+  4. `kin/table.kin`: `tb-collect`/`tb-collect-one` become a reader of `grl` (orientation h/v only, `artifact-pagination`
+     skipped) and `gfl`; `tb-build`'s `pa` argument becomes `grl gfl`. Nothing else in the file changes.
+  5. **Engines**: in both `attempt()`s, per page and before `tb-build`, `gv-page` + `gf-page`; if P7.U has merged, in
+     `pu-run` (D195's place, SPEC §9.9) and `pl-append` carries them; `tb-build` takes the document's `grl gfl`.
+  **Step A (identity)**: with `legacy`, every Model of every gate byte-identical (`bb slice`, `bb accuracy`'s `emon`
+  unchanged, `bb identity`, `bb ocr`, `bb image`); commit. **Step B**: switch the default to `segments`; record BEFORE (step
+  A) and AFTER on `pdf/all` and every table category (`table-teds-lite`, `table-teds-struct-lite`, `block-table` P/R),
+  on ICDAR 2013 live (D182: P 0.78 R 0.86, TEDS-lite 0.48, struct 0.68), and the 88-PDF survey (no panic); P6.8's `gfx-*`
+  fixtures: `gfx-hidden-rules` a 3 × 3 lattice (not 4 × 4), `gfx-onepath-grid` and `gfx-curve-lines` their lattices,
+  `table-white-rules` its header's columns ruled; explain every changed table document by document here.
+  *Files*: `kin/glayer.kin`, `kin/gvec.kin`, `kin/gfuse.kin` (+ `glayertest.kin`, `gvectest.kin`, `gfusetest.kin`),
+  `kin/table.kin` (the collector and `tb-build`'s argument only), `kin/player.kin` (the block above), the two Engines (the
+  calls above).
+  *Done when*: step A's identity and step B's numbers in this entry; laws (a path of 30 `re` subpaths gives 30 rules in
+  `segments` and one fill in `legacy`; a clipped half rule is trimmed; a white rule on black is a rule; a hidden rule is
+  flagged; `gl-check` 0 on a hand-built two-page layer) on four targets; `bb gates` green.
+- [ ] **P5.5 — `struct` (tagged) tables verified against geometry** (SPEC §10.5 "Tagged tables"; D224, D034, D148-D150).
+  **Wave 3** of the Phase 7 table, parallel with P7.3 (disjoint files). Depends on P5.5a and P6.8's tagged-table
+  fixtures. `form` moved to P5.5b.
+  *Brief*:
+  1. `kin/tagtable.kin` (`emon.tagtable`, new): `tt-grids` (every `Table` element with `tg-trust` ≥ `tb-tag-trust` 300
+     and a passing nesting check → a tagged grid: rows, cells placed by `ColSpan`/`RowSpan` into the first free slot, head
+     (`THead` rows, rows of `TH` with `Scope` Column or Both), row headers (`TH` `Scope` Row), foot (`TFoot`)); `tt-words`
+     (a word's cell: its first glyph's `mark` → the `sc` joined on `(page, stm, MCID)` → the element → its nearest `TH`/`TD`
+     ancestor; build a `marks` row → `sc` row index once a document); `tt-verify` (the six checks and the score of SPEC
+     §10.5, D150's harmonic mean and weakest-check scale, the verdict). Settings `tb-tag-trust` 300, `tb-struct-ok` 800,
+     `tb-struct-bad` 500, `tb-tag-win` 700, `tb-tag-veto-trust` 800, `tb-tag-veto` 150, `tb-tie` 25 in the file's head.
+  2. `kin/table.kin`: the struct candidate (profile `struct`, case 3), the arbitration of SPEC §10.5 cases 1-7 in
+     `tb-select`, the tags' head rows, row headers and spans applied to the chosen candidate, OCR `table-hint` regions as
+     the tie-breaker (they are empty until P7.G: the code path is tested by laws), and the table's provenance in `tb`'s
+     spare cells: 20 sources (`sr` bits), 21 the `se` row (-1), 22 the verdict, 23 the score; `tb-emit` adds `struct` to the
+     table node's `src` when the tags shaped it and flags `struct-disagree` / `tag-span-conflict`.
+  3. **Engines**: `tb-build` also takes `se sc ss` (the tagged tree's arenas, already in the document pass) in both.
+  *Files*: `kin/tagtable.kin`, `kin/tagtabletest.kin`, `kin/table.kin` (`tb-select`, the struct candidate, `tb-emit`'s
+  provenance), the two Engines (the `tb-build` call), `test/table/` goldens of the tagged fixtures.
+  *Measured* (BEFORE = P5.5a, AFTER = this): `tag-verdict-acc` 1.0 on P6.8's `ttab-*` fixtures (each fixture's declared
+  verdict); `ttab-good` and `ttab-good-ws` `table-teds-lite` 1.0, with the untagged twin of `ttab-good-ws` recorded beside it
+  (the gain the tags give a ruleless table); `ttab-bad-*`, `ttab-allp`, `ttab-layout`: the same TEDS as their untagged twins
+  (a wrong tag costs nothing); `pdf-tagged/all` table metrics ≥ `pdf/all`'s; `pdf/all` unchanged (no tags); the 504 tagged
+  corpus PDFs: `tag-table-agree` and the verdict histogram recorded here, with ten contradicted tables looked at by eye.
+  *Done when*: the above; laws (a correct grid confirmed; two visual rows in one `TR` fail `row-band`; a span across a
+  closed edge flags `tag-span-conflict`; prose tagged `Table` refused) on four targets; `bb gates` green.
+- [ ] P5.5b — `form` profile (key/value grids: label cells and value cells, often ruled; SPEC 10.5), moved out of P5.5
+  unchanged; reads `grl`/`gfl` like every profile. The `bank-statement` miss of D182 is its first fixture.
+- [ ] P5.6 — TEDS in `bb accuracy`; PubTabNet/FinTabNet/ICDAR scored. ICDAR 2013's adjacency F1 (`table-adj-f1`) comes
+  with P6.8.
 
 ## Phase 6 — Raster, tracer, OCR
 
@@ -1962,6 +2061,18 @@ analysis beyond "top-to-bottom lines on a single column".
   baseline P7.7 must keep (no target yet). Rust ≤ 0.15 s a page.
   *Done when*: laws on hand-built bitmaps (two touching runs one component; a ring; a dashed rule; a 30° line of letters)
   on all four targets; `bb trace` meets the targets; timing in this entry.
+  **Graphics amendment (D225, for P7.G; same item, same files):** (3a) in `tr-rules`, VERTICAL rules come from stacks of
+  short row runs whose x-range agrees within ±1 px over at least `rule-min` rows (a vertical rule is never a long row run),
+  and rules are found on the RUNS of every component, not only of rule-like ones (a table grid is one `large` component;
+  its edges must still be rules); a rule's `confidence` is fixed as: 1000 minus the per-mille of its length that is gap
+  (dashes excepted), minus 300 when its thickness varies by more than half along it, never below 0; (4a) `tr-tints`: on
+  each `light` and `background` ink-mask view (P6.3), row runs at least `fill-min` (6 pt) long merged into rectangles whose
+  consecutive rows share their x-extent within `fill-tol` (2 px), at least `fill-min` tall, become `prims` rows of kind
+  `rect` with flags `filled` + `tint` (SPEC §8.4.4), the colour the layer's centroid, fill per-mille the mask's coverage of
+  the box, confidence that coverage. *Measured, added to `bb trace`*: vertical-rule recall reported apart from horizontal
+  (each ≥ 0.98 against the vector truth); **tints against vector fills** (a `paths` fill larger than 5 pt each way, visible,
+  colour lightness ≥ 600) on the `no-text` renders of `table-shaded`, P6.8's `table-zebra`, `table-header-fill` and
+  `gfx-shading-bands`: area recall ≥ 0.95, area precision ≥ 0.95; on their `scan/` variants recorded.
 - [x] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
   first-pass plan; OCR-only pipeline for images and scanned PDFs (D033). *Done (D211-D216), minus the `Renderer` (P6.2: a PDF page
   that is not one upright JPEG covering it is not OCR'd), fusion (P7: a born-digital page keeps its text layer, D212) and acting
@@ -2060,6 +2171,60 @@ analysis beyond "top-to-bottom lines on a single column".
   geometry test), one `op` row. *Done when*: `initial-image` and `initial-vector` score `initial-r` 1.0 and
   `first-word-acc` 1.0 on `pdf/` and `scan/` under `emon-replay` of their committed transcripts, and the scanned variants of
   every P2.13 initials document have no single-letter heading.
+- [ ] **P6.8 — The graphics corpus, rule truth from an oracle, and the graphics metrics** (SPEC §14.2 "Graphics",
+  §14.3 "Rule and fill truth"; D226). **Wave 1**, no kin: parallel with everything. Depends on nothing new; if P6.6 has
+  not merged, take only new files and rebase onto it for the shared ones (named below).
+  *Brief*:
+  1. **Born-digital (Chrome) table documents** (entries in `tools/synth/make_html.clj`, gold by `html2gold` as today):
+     `table-dashed` (dashed inner rules, solid outer), `table-double` (a double rule under the head), `table-zebra` (bands
+     only, no rule), `table-header-fill` (a filled dark header with white text, no rule), `table-white-rules` (white
+     column separators on the dark header, dark rules below), `table-slanted-header` (a diagonal rule in the top-left
+     header cell). Each two pages: prose, then the table, then prose.
+  2. **Hand-made PDFs** (`tools/synth/gfx_pdf.clj`, bytes written by bb as `tagged_pair.clj` does, `--check`ed by `bb
+     unit`): `gfx-onepath-grid` (a 5 × 4 grid as ONE path of `m l` pairs, and a 12 × 10 grid as one path of 1,100 points:
+     the second is truncated by design and must still be a table through its box and the tracer), `gfx-hidden-rules` (a
+     table whose visible rules make 3 × 3 and whose extra rules, clipped away, in an OCG that is off, white on white,
+     painted over by a later white rectangle and at alpha 0, would make it 4 × 4), `gfx-shading-bands` (zebra bands as
+     axial `sh` shadings), `gfx-pattern-bands` (bands as tiling-pattern fills), `gfx-curve-lines` (a ruled table whose rules
+     are `c` curves with collinear control points), `gfx-image-rules` (a ruled table whose rules are 1-pixel-tall images),
+     `gfx-softmask-rule` (a ruled table plus one rule under a soft mask that hides it: rendered without it). Golds by hand
+     in the generator (the table's HTML), as `tagged_pair.clj`'s are.
+  3. **Mixed pages** (`tools/synth/mixed.clj`): `mixed-table-image` (Chrome: prose, then an `<img>` of `table-simple-ruled`'s
+     table rendered at 200 dpi by `pdftoppm`, degraded by `degrade.clj`'s noise and a 0.7° skew, 60 % of the page width,
+     then prose), `mixed-table-image-shaded` (the same with `table-zebra`'s table), `mixed-two-tables` (one vector table and
+     one image table on one page). The gold holds both tables; the rules of an image table are written in the image's
+     pixels by the generator and mapped through the placement it chose.
+  4. **Scanned twins**: the GRAPHICS set (`test/corpus/synth/GRAPHICS`, one stem a line: every `table-*` document, `invoice`,
+     `bank-statement`, every new document of 1-3) gets `scan/` (as today) and `scan-color/` variants by `degrade.clj`.
+  5. **Tagged tables** (`tools/synth/tagged_tables.clj`, bytes like `tagged_pair.clj`; MANIFEST `facts.tag-verdict` per
+     document): `ttab-good` (ruled; `TH` with `Scope` Column; a `ColSpan` 2 header; a `RowSpan` 2 first-column cell:
+     confirmed), `ttab-good-ws` (a whitespace table, no rule, correctly tagged: confirmed), `ttab-bad-spans` (`ColSpan` 3
+     where the rules close at 2: partial, `tag-span-conflict`), `ttab-bad-rows` (two visual rows in one `TR`:
+     contradicted), `ttab-allp` (cells tagged `P`: no grid, and the whitespace candidate is not vetoed unless trust ≥ 800),
+     `ttab-layout` (two columns of prose tagged `Table`/`TR`/`TD`: contradicted or refused as prose), `ttab-th-as-td`
+     (headers as `TD`: confirmed, no head from tags, the bold rule still finds it), `ttab-missing-row` (the last row an
+     artifact: partial, `cover` low); and an untagged twin of each (`ttab-*-untagged`) for the BEFORE column.
+  6. **Rule truth** (`tools/oracle/rules.py`, pdfplumber from `~/.cache/emon/pylib`, D094's exception): per page the
+     `lines`, `rects` (edges and fills) and straight `curves`, kept where `pdftoppm -r 150` has ink under them (fills: a
+     colour difference from white ≥ 16), written to `test/corpus/synth/gold/STEM.rules.json` (rules: page, endpoints in
+     cpt, thickness; fills: box, colour); a scan variant's truth is its twin's mapped through MANIFEST's dpi, `facts.skew`
+     and `facts.turns`; a mixed document's image table adds the generator's rules.
+  7. **Metrics** (`tools/accuracy/graphics.clj`, new; one section at the END of `tools/accuracy/score.clj` that calls
+     it): `rule-p`, `rule-r`, `fill-p`, `fill-r` from the evidence dump's `grl`/`gfl` (version "2") against the rule
+     truth, exactly as SPEC §14.2 defines them (higher is better); `twin-gap` (recorded); `table-adj-f1` (ICDAR 2013's
+     adjacency relations, from the gold's cells and the Model's: for every non-empty cell its nearest non-empty right and
+     down neighbours, a relation (text, text, direction) with text normalized; P/R/F1 over relations); `tag-verdict-acc`
+     (the dump's `tb` verdicts against MANIFEST `facts.tag-verdict`); `tag-table-agree` (recorded only, in `bb
+     fusion-report`). Laws in `tools/accuracy/test_graphics.clj` with hand-written dumps and golds for each metric.
+  **Budget**: new committed files ≤ 6 MB (measure; the mixed documents' images at 200 dpi JPEG quality 80).
+  *Files*: `tools/synth/gfx_pdf.clj`, `tools/synth/tagged_tables.clj`, `tools/synth/mixed.clj` (new); entries in
+  `tools/synth/make_html.clj` and the `degrade.clj` set list (shared with P6.6: rebase); `tools/oracle/rules.py`;
+  `tools/accuracy/graphics.clj`, `tools/accuracy/test_graphics.clj`, the end section of `tools/accuracy/score.clj`;
+  `test/corpus/synth/{html,pdf,scan,scan-color,gold,GRAPHICS,MANIFEST.json}`; `test/scoreboard.edn` only by `bb accuracy
+  --update`.
+  *Done when*: `bb unit` and `bb accuracy` green with the new documents (their `emon` scores recorded as the baseline:
+  today `gfx-hidden-rules` is expected 4 × 4, wrong, and that is the point); the rule truth of the 12 existing table
+  documents checked by eye on one page each against the render (list them); the metric laws pass; the budget measured.
 
 ## Phase 7 — Fusion and artifacts
 
@@ -2068,7 +2233,9 @@ run, fusion compares them region by region and keeps the best; watermarks, backg
 are set aside; seals and signatures become placeholders. This phase is now the critical path. It is planned against what
 was built after SPEC §8-9 were written (evidence v2, visibility, the tagged tree, furniture, tables, the `Ocr` port,
 the `Renderer` port, image intake); D195-D210 record the reconciliation and SPEC §2.2, §7.2-7.3, §8.2-8.3, §9.2-9.8,
-§12.3 and §14.2 say it normatively.
+§12.3 and §14.2 say it normatively. **Graphics fusion** (the maintainer's request of 2026-10-01: rules, boxes and fills fused from the PDF's
+paths, the tracer, OCR's layout blocks and the tagged tree, by the same steps as words) is D217-D227, SPEC §9.9 and §10.5,
+and the items P3.6a, P6.8, P5.5a, P5.5 and P7.G placed in the waves below.
 
 **M0 — before any item below (coordinator, not a brief).** Merge `worktree-agent-afd782ca8bc66f033` (P6.1 + P6.5 +
 P6.5a: image intake, the `Ocr` port, `emon.scan`, D187-D190 and D211-D216) and `worktree-agent-aac8530d7436e2eec`
@@ -2079,15 +2246,17 @@ the P4.5/P4.6 and initials branches as they come. Every brief below assumes that
 
 | wave | items | needs |
 | --- | --- | --- |
-| 1 | **P7.U** (page units), **P7.0** (text-layer triage and health), **P6.3** (normalization), **P6.6** (corpus and metrics) | M0 |
-| 2 | **P6.4** (tracer), **P7.1** (alignment), **P7.2** (health) | P6.3; P7.0 |
-| 3 | **P7.3** (arbitration, the PageLayer, the stages wired into the page unit) | P7.U, P7.1, P7.2, P6.3, P6.4 |
-| 4 | **P7.5** (watermarks, backgrounds, ghosts), **P7.7** (seal and signature placeholders), **P7.6** (`hidden-text`), **P7.4** (targeted rounds) | P7.3 (P7.7 and P7.5 also P6.4) |
-| 5 | **P7.S** (the policy switch: born-digital pages OCR'd under `always`; `bb fusion` gate; the performance budget) | P7.3, P7.5, P6.6 |
-| 6 | P6.7 (initials from ink), P6.3a / P10.3 (acceleration, only if over budget) | P7.4 |
+| 1 | **P7.U** (page units), **P7.0** (text-layer triage and health), **P6.3** (normalization), **P6.6** (corpus and metrics), **P3.6a** (path visibility and geometry), **P6.8** (graphics corpus, rule truth, metrics) | M0 |
+| 2 | **P6.4** (tracer, with D225's graphics amendment), **P7.1** (alignment), **P7.2** (health), **P5.5a** (fused-graphics arenas, the vector source, `emon.table` on `grl`/`gfl`) | P6.3; P7.0; P3.6a (P5.5a's step B) |
+| 3 | **P7.3** (arbitration, the PageLayer, the stages wired into the page unit), **P5.5** (tagged tables verified against geometry) | P7.U, P7.1, P7.2, P6.3, P6.4, P5.5a; P5.5: P5.5a, P6.8 |
+| 4 | **P7.5** (watermarks, backgrounds, ghosts), **P7.7** (seal and signature placeholders), **P7.6** (`hidden-text`), **P7.4** (targeted rounds), **P7.G** (graphics fusion: tracer and OCR witnesses) | P7.3 (P7.7 and P7.5 also P6.4; P7.G also P6.4, P5.5a, P6.8) |
+| 5 | **P7.S** (the policy switch: born-digital pages OCR'd under `always`; `bb fusion` gate; the performance budget) | P7.3, P7.5, P6.6 (P7.G when merged: its contract joins the gate) |
+| 6 | P6.7 (initials from ink), P6.3a / P10.3 (acceleration, only if over budget), P5.5b (`form`) | P7.4 |
 
 The critical path is M0 → P7.U → P7.3 → P7.5 → P7.S; P6.3 → P6.4 and P7.0 → P7.1/P7.2 feed P7.3 and are not on it if
-they keep pace.
+they keep pace. **Graphics fusion (D217-D227)** runs beside it: P3.6a and P6.8 (wave 1) → P5.5a (wave 2) → P5.5 (wave 3)
+and P7.G (wave 4); P5.5a feeds P7.3 (the document unit's `tb-build` reads `grl`/`gfl`) and must keep pace with it, the
+rest is off the critical path.
 
 **Who edits what** (an item edits only its row; a shared file is edited only at the place named):
 
@@ -2095,18 +2264,26 @@ they keep pace.
 | --- | --- | --- |
 | `kin/norm.kin`, `kin/normtest.kin` | P6.3 | — |
 | `kin/trace.kin`, `kin/tracetest.kin` | P6.4 | — |
-| `kin/tlhealth.kin`, `kin/player.kin` (+ tests) | P7.0 | P7.3 adds `fv`/`fx` builders below P7.0's in `player.kin` |
-| `kin/pageunit.kin` (+ test) | P7.U | P7.3 fills its stage calls; P7.4, P7.5, P7.6, P7.7, P7.S each add ONE call at the hook comment `;; HOOK P7.n` P7.3 leaves |
+| `kin/tlhealth.kin`, `kin/player.kin` (+ tests) | P7.0 | P7.3 adds `fv`/`fx` builders below P7.0's in `player.kin`; P5.5a adds ONE block `;; P5.5a graphics arenas` (the `gl-*` calls in `pl-append`/`pl-check`/`pl-emit`) |
+| `kin/pageunit.kin` (+ test) | P7.U | P7.3 fills its stage calls (including `gv-page` + `gf-page` before `al-page`); P7.4, P7.5, P7.6, P7.7, P7.S each add ONE call at the hook comment `;; HOOK P7.n` P7.3 leaves; P7.G changes only the arguments of the `gf-page` call |
 | `kin/align.kin` / `kin/health.kin` / `kin/arbiter.kin` | P7.1 / P7.2 / P7.3 | — |
-| `kin/fuserules.kin` | P7.3 (rows 100-199, 500-599, the block headers) | P7.5 rows 200-299, P7.6 300-399, P7.7 400-499, each inside its own block |
+| `kin/fuserules.kin` | P7.3 (rows 100-199, the block headers of 100-699, `fr-order` 400, 600, 200, 300, 100) | P7.5 rows 200-299, P7.6 300-399, P7.7 400-499, P7.G 500-599 and 600-699, each inside its own block |
+| `kin/glayer.kin`, `kin/gvec.kin` (+ tests) | P5.5a | — |
+| `kin/gfuse.kin` (+ test) | P5.5a (the vector-only `gf-page`) | P7.G (everything else in it) |
+| `kin/tagtable.kin` (+ test) | P5.5 | — |
+| `kin/table.kin` | P5.5a (the collector and `tb-build`'s inputs), then P5.5 (`tb-select`, the struct candidate, `tb-emit`'s provenance) | — (P5.5b after both) |
+| `kin/pdfvis.kin`, `kin/pdfcontent.kin` | P3.6a | — |
+| `kin/evidence.kin` | P3.6a (the `paths` section and the `pg` enum) | P6.7 (one `op` row) |
+| `kin/model.kin`, `schema/emon-1.json` | — | P7.G (the ledger reason `rule-ghost`, flags `in-table-image`, `struct-disagree`, `tag-span-conflict`: additive, D055), P5.5 (the last two if it lands first) |
 | `kin/artifact.kin` / `kin/hidden.kin` / `kin/sealmark.kin` / `kin/retarget.kin` / `kin/rasterplan.kin` | P7.5 / P7.6 / P7.7 / P7.4 / P7.S | — |
 | `kin/scan.kin` | P7.U (per-page split) | P7.3 (its line measure becomes a library call; `sc-tag` retired) |
 | `kin/plan.kin` | P7.U (`KIN_VIEW_BASE`, ids) | P7.4 (`rq-ocr-view`) |
 | `host/*/port*` (four trees) | P6.3 (section `P6.3 bulk forms`), P7.U (section `P7.U BitmapSet`), both appended at the end; the second to merge rebases | — |
-| `host/rust/src/engine.rs`, `host/go/engine.go` | P7.U | P7.0 (one call, merged before P7.U), P7.3 (the document tail), P7.5 (`pa-run` in the document pass), P7.S (options) |
+| `host/rust/src/engine.rs`, `host/go/engine.go` | P7.U | P7.0 (one call, merged before P7.U), P7.3 (the document tail), P7.5 (`pa-run` in the document pass), P7.S (options), P5.5a (`gv-page` + `gf-page` before `tb-build`, until P7.U/P7.3 move them into `pu-run`), P5.5 (the `tb-build` call takes `se sc ss`) |
 | `host/rust/src/plan.rs`, `host/go/port/plan.go` | P7.U | P7.4 (fulfilling an OCR of a kin-made view) |
-| `tools/synth/`, `tools/accuracy/`, `test/corpus/synth/` | P6.6 | P7.S (scoreboard updates through `bb accuracy --update` only) |
-| `tools/fusion/`, `test/fusion/`, `kin/scripts/fusion*` | P6.6 creates `tools/fusion/` | P7.1 (`test/fusion/align/`), P7.3 (`test/fusion/replay/`), P7.S (the gate and the bench) |
+| `tools/synth/`, `tools/accuracy/`, `test/corpus/synth/` | P6.6 | P7.S (scoreboard updates through `bb accuracy --update` only); P6.8 (its new files; entries in `make_html.clj` and the `degrade.clj` set list; the END section of `score.clj`) |
+| `tools/oracle/rules.py` | P6.8 | — |
+| `tools/fusion/`, `test/fusion/`, `kin/scripts/fusion*` | P6.6 creates `tools/fusion/` | P7.1 (`test/fusion/align/`), P7.3 (`test/fusion/replay/`), P7.S (the gate and the bench), P7.G (`test/fusion/graphics/`, `tools/fusion/record-graphics.clj`, `kin/scripts/gfuse`) |
 
 **Every brief is held to the same conventions.** (1) *Identity*: kin modules generate to Rust, Go, Java and C#; laws in
 `emon.test` run on all four (`bb unit`); the Engine wiring is made in BOTH `engine.rs` and `engine.go` at the place D195's
@@ -2131,11 +2308,13 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
       rp-plan                                 P7.S (before it: scanned pages as P6.5, born-digital pages ask nothing)
       nm-view, tr-page                        P6.3, P6.4 (only when the page has raster answers)
       sc evidence + nm-feat-*                 OCR evidence (P6.5) and its raster features
-      al-page, hl-page, ar-page               P7.1, P7.2, P7.3 (+ P7.5/P7.6/P7.7 rule blocks)
+      gv-page, gf-page                        P5.5a (vector only, every page) / P7.G (+ tracer, OCR blocks, regions,
+                                              xo 30-31): grl gfl ggp grg, graphics hl rows (SPEC 9.9, D217)
+      al-page, hl-page, ar-page               P7.1, P7.2, P7.3 (+ P7.5/P7.6/P7.7/P7.G rule blocks)
       rt-plan                                 P7.4 (targeted requests while rounds remain)
-      -> the page's PageLayer (fw fl fv fa cg fx hl fpa sl, SPEC 9.7)
+      -> the page's PageLayer (fw fl fv fa cg fx hl grl gfl ggp grg sl, SPEC 9.7)
     document unit (no pixels):
-      pl-append (pages in order), ar-recur (P7.5 defence 2), then stage 3 on fw/fl/fpa:
+      pl-append (pages in order), ar-recur (P7.5 defence 2), then stage 3 on fw/fl/grl/gfl (+ se sc ss for P5.5):
       fu-find, tb-build, hd-analyze, pa-build, fu-write, sm-write (P7.7), fz-write (provenance, ledger; replaces sc-tag)
 
 - [ ] **P7.U — Page units: one plan/fulfil loop per page, `BitmapSet`, an absent `Renderer` answers `unsupported`, five
@@ -2178,8 +2357,9 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 - [ ] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
   D208). **Wave 1.** Depends on M0. Merge BEFORE P7.U (it adds one call to `attempt()`; P7.U rebases on it).
   *Brief*: `kin/tlhealth.kin` (`emon.tlhealth`) and `kin/player.kin` (`emon.player`).
-  1. `player.kin`: the §9.7 layouts (`cg fw fl fv fa fx hl fpa sl`; `fw`/`fl`/`fpa` reuse the `words`/`lines`/`paths`
-     accessors of `emon.evidence`), builders, `pl-append` (concatenate a page's arenas onto the document's, re-basing
+  1. `player.kin`: the §9.7 layouts (`cg fw fl fv fa fx hl sl`; `fw`/`fl` reuse the `words`/`lines` accessors of
+     `emon.evidence`; `fpa` is gone, D217: the graphics arenas `grl gfl ggp grg` are P5.5a's `emon.glayer`, hooked into
+     `pl-append`/`pl-check`/`pl-emit` by P5.5a's block), builders, `pl-append` (concatenate a page's arenas onto the document's, re-basing
      `etext` runs, word/line runs, `refs`, glyph runs are NOT re-based: they point into the document pass's `glyphs`),
      `pl-check` (as `ev-check`: every run and reference), `pl-emit` (the dump's version "2" keys after the evidence's, table
      driven like `ev-fd`). Laws: a hand-built two-page layer appends and checks; every cell is printed or named spare.
@@ -2245,20 +2425,23 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   healthy elsewhere; an OCR block over blank paper) on four targets and the numbers above in this entry.
 
 - [ ] **P7.3 — Arbitration, the PageLayer, and the stages wired into the page unit** (SPEC §9.4 with the born-digital
-  contract, §9.7; D014, D195, D201, D203). **Wave 3, critical path.** Depends on P7.U, P7.1, P7.2, P6.3, P6.4.
+  contract, §9.7; D014, D195, D201, D203). **Wave 3, critical path.** Depends on P7.U, P7.1, P7.2, P6.3, P6.4, P5.5a (`grl`/`gfl` and the
+  vector-only `gf-page`).
   *Brief*:
   1. `kin/fuserules.kin`: the `fr` rule table (`defdata`: number, block, winner, ledger reason, flags, up to six
      `(column, comparison, setting)` predicates) with the block headers 100-199 (core), 200-299 (P7.5), 300-399 (P7.6),
-     400-499 (P7.7), 500-599 (graphics), the settings' defaults, and `fr-order`, the order in which blocks are tried for a
-     group: 400 (seal ownership), 200 (watermarks, backgrounds, ghosts), 300 (`hidden-text`), 100 (core); 500 runs on
-     graphics, not on groups. Rows 100-199 implement SPEC §9.4's table and the
+     400-499 (P7.7), 500-599 (graphics, P7.G), 600-699 (graphics meeting words, P7.G), the settings' defaults, and
+     `fr-order`, the order in which blocks are tried for a group: 400 (seal ownership), 600 (rule ghosts, text of a table in
+     an image: empty until P7.G), 200 (watermarks, backgrounds, ghosts), 300 (`hidden-text`), 100 (core); 500 runs on
+     graphics groups, not on word groups (D223). Rows 100-199 implement SPEC §9.4's table and the
      born-digital contract: 101 one candidate (the identity: a sole text-layer candidate wins, a sole OCR candidate on a
      page with no text layer wins), 110 healthy font wins (`tl-trusted`), 120 garbage glyphs + plausible OCR → OCR with
      `text-layer-suspect`, 130 unhealthy font + plausible OCR → OCR with `text-layer-suspect`, 140 OCR-only admitted
      (body ink, outside every visible text-layer box, plausible, not `in-figure` unless the image covers ≥ `scan-region`),
      150 OCR-only in a figure → held with `in-figure` (not emitted), 160 two OCR runs → better (support and margins), 190
-     the default (the text layer if any, else OCR, `low-conf`). 501: a tracer rule no vector path explains (overlap of the
-     two boxes under 800) and not inside a glyph box joins `fpa` with flag `traced`.
+     the default (the text layer if any, else OCR, `low-conf`). Rule 140's "vector-figure cluster" is a `grg` `figure`
+     region (empty until P7.G: until then an image placement alone). D217: the old row 501 (tracer rules into `fpa`) is
+     NOT built here; graphics are P5.5a's `gf-page` (vector only) and P7.G's rows 500-699.
   2. `kin/arbiter.kin` (`emon.arbiter`), `ar-page`: per group the first rule whose predicates all hold; writes `fw` (the
      winner's word, its text into `etext`, `src` the bitset of every source that had a candidate, the glyph run kept when
      the text layer won), `fv` (group, winner, rule, confidence: 1000 for a text-layer win with agreement, 900 without OCR
@@ -2267,9 +2450,10 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
      measured by D213's measure (the `emon.scan` line-size function, made a library call); an OCR-only group joins the
      text-layer line it lies on (baseline within 45 % of the size) or makes a new line.
   3. **Wiring** in `pu-run`: when the page has raster answers, `nm-view` per raster (P6.3; kin-made views by `bms-put`),
-     `tr-page` on the `no-text` render or the decode (P6.4), OCR evidence and `nm-feat-*`, then `al-page`, `hl-page`,
-     `ar-page`; the hook comments `;; HOOK P7.4` … `;; HOOK P7.S` left in place. The document unit: `pl-append`, stage 3 on
-     `fw`/`fl`/`fpa` (`tb-build` reads `fpa`), and `fz-write` writes provenance from `fv` onto the Model's blocks and
+     `tr-page` on the `no-text` render or the decode (P6.4), OCR evidence and `nm-feat-*`, then `gv-page` + `gf-page`
+     (P5.5a's, on EVERY page, raster answers or not: moved here from where P5.5a put them in `attempt()`), then `al-page`,
+     `hl-page`, `ar-page`; the hook comments `;; HOOK P7.4` … `;; HOOK P7.S` left in place. The document unit: `pl-append`,
+     stage 3 on `fw`/`fl`/`grl`/`gfl` (`tb-build` reads `grl gfl`, P5.5a), and `fz-write` writes provenance from `fv` onto the Model's blocks and
      inlines (`src`, `conf`, `ocr-only`, `text-layer-suspect`, `low-conf`) and the `fa` ledger rows; `sc-tag` retired
      (its page mask is what `fz-write` computes per word). Born-digital pages are not yet OCR'd by default (P7.S); a hidden
      test setting `ocr-born-digital` (off) makes the page unit ask what P7.S will ask (the `full` row of SPEC §8.3), so
@@ -2298,7 +2482,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Brief*: `kin/retarget.kin` (`emon.retarget`), `rt-plan` at `;; HOOK P7.4`, run when the page has its first-pass OCR
   and rounds remain; it asks, in this order and within `rt-max` (24) requests a page: (1) `op-line`, `psm` 7, on the
   `with-text` render or decode around each line of a group that P7.3 decided with `low-conf` or `text-layer-suspect`
-  (≤ `rt-lines` 16); (2) `op-cell`, `psm` 7, per table cell (from `tb`'s geometry or `fpa` lattices) when a first-pass OCR
+  (≤ `rt-lines` 16); (2) `op-cell`, `psm` 7, per table cell (from `tb`'s geometry or the lattices of `grl` rules, including `in-image` ones) when a first-pass OCR
   line crosses a cell border; (3) `op-text-only`: OCR of the `text-only` render (layer 2, a new render request in the same
   round) of a page whose text layer has an unhealthy font: the broken text re-read with no background; (4) `op-body-ink`:
   OCR of a **kin-made view** (D196: the render or decode with every non-body ink layer painted the paper colour, made by
@@ -2378,6 +2562,70 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   recall ≥ P6.4's baseline and `stamp-ghost` ≤ 0.1.
   *Done when*: the above in this entry.
 
+- [ ] **P7.G — Graphics fusion: the tracer and OCR as witnesses of rules and fills; health per region; regions;
+  where graphics meet words** (SPEC §9.9, §9.3, §9.7, §8.4.5 columns 30-31; D217, D220-D223, D227). **Wave 4.** Depends
+  on P7.3 (`fuserules.kin`, the `gf-page` call in `pu-run`), P6.4 with D225's amendment (rules from runs, tints), P5.5a
+  (`emon.glayer`, `emon.gvec`, the vector-only `gf-page`) and P6.8 (fixtures, rule truth, metrics). Parallel with P7.4,
+  P7.5, P7.6, P7.7.
+  *Brief* (`kin/gfuse.kin`, extending P5.5a's `gf-page`; nothing in `gvec.kin` changes unless a law shows a vector bug):
+  1. **Candidates of the other sources**: the page's `rules` rows (trace; their `style`, `confidence`, colour), `prims`
+     rows of kind `rect` with flag `tint` (trace fills) and, as four `box-edge` rules, `rect` prims that are not filled and
+     not `tint`; `oblocks` rows of kind block with `bt-line` (OCR line separators: an `h` or `v` candidate along the long
+     axis of the block's box) and `bt-table` / `bt-image` (region candidates only). All in page space (`rules` endpoints
+     are already cpt; `prims` boxes too).
+  2. **Alignment** exactly as SPEC §9.9 (D220): a per-page 64 × 64 grid over candidate boxes (the `emon.align` grid
+     helper if P7.1 exported it, else a copy named `gf-grid-*`), near pairs by `gf-angle` 150, `gf-perp` 120 + half the
+     thicknesses, `gf-gap` 300; groups by union-find over candidate indices (smaller root wins); per group the axis, the
+     projected endpoints sorted (ties by source then index), the elementary intervals with their coverage bitset, the
+     runs of equal verdict; `ggp` rows with their three `refs` runs (vector members as `(paths, i)` + `(pts, k)` pairs).
+     Fills: near at box IoU ≥ `gf-fill-iou` 700, groups the same way.
+  3. **Health** (D222): the regions R0 and Rᵢ (visible `images` rows ≥ `gf-img-min` 2 cm each way; a raster page is one
+     region); per region an `hl` row of subject kind `graphics-region` (subject index: -1 for R0, the `images` row for Rᵢ;
+     add the `hl` subject-kind code in `emon.glayer`, not in P7.0's file) with the six components of SPEC §9.7 and the
+     score of D150's shape (weights: vector witness 3, tracer precision 3, skew 2, tracer confidence 2; counts are not
+     weighed).
+  4. **Arbitration**: rows 501-571 of SPEC §9.9's table into `kin/fuserules.kin`'s block 500 as data (the `gmz` measure
+     codes ≥ 100 named in `gfuse.kin`: `gmz-vec-exact`, `gmz-vec-uncertain`, `gmz-vec-hidden`, `gmz-trace`, `gmz-trace-conf`,
+     `gmz-ocr-line`, `gmz-in-image`, `gmz-raster`, `gmz-region-score`, `gmz-vec-witness`, `gmz-tprec`, `gmz-in-glyph`,
+     `gmz-in-ocr-word`, `gmz-contrast`, `gmz-fill-colour-known`, `gmz-tint`, and as many more as the rows need); P5.5a's
+     coded rows are removed from `gfuse.kin` in favour of the data; `fx` rows name the `ggp` group; the settings
+     `gf-axis` 100, `gf-angle` 150, `gf-perp` 120, `gf-gap` 300, `gf-fill-iou` 700, `gf-img-min` 5669 (2 cm), `gf-agree-min`
+     900, `gf-trace-min` 600, `gf-ocr-bonus` 150, `gf-img-health` 500, `gf-tprec-min` 900, `gf-contrast` 16, `gf-flat` 50 at
+     the head of `fuserules.kin`'s block 500.
+  5. **Regions** (D227): `grg` rows `table-in-image` (the lattice test of D179 without its text test over the region's
+     `in-image` `h`/`v` rules, or three `in-image` fills of one extent stacked), `figure` (SPEC §9.9's sources merged at IoU
+     ≥ 500; the tagged `Figure` owner of a path or image through `mark` → `sc` → `se`, the index built once a document like
+     P5.5's), `table-hint` (OCR `bt-table` blocks, confidence 300; tagged `Table` boxes, confidence `tg-trust`).
+  6. **Words**: `xo` columns 30 (share of the box in a `table-in-image` region) and 31 (rule-likeness, SPEC §8.4.5) for every
+     OCR word of the page, written before `al-page` runs; rows 601 (`rule-ghost` to the ledger: add `dr-rule-ghost` to
+     `kin/model.kin`'s `dr` enum, schema additive) and 610 (`in-table-image`: a word flag, additive) in block 600 of
+     `fuserules.kin`; the `gf-page` call in `pu-run` gets its new arguments.
+  7. **Transcripts and the gate**: `test/fusion/graphics/`: first pages of the GRAPHICS set's `pdf/` (with
+     `ocr-born-digital`), `scan-color/` and the three `mixed-*` documents, and `gfx-softmask-rule`, recorded live on Rust
+     with pdfium and Tesseract by `tools/fusion/record-graphics.clj` (≤ 3 MB: the coordinator's pixel budget, SPEC §17 (6));
+     `bb gfuse` (`kin/scripts/gfuse`, joins `bb gates` after `fusion-replay`) replays them on Rust and Go to the identical
+     bundle and ratchets `rule-p`, `rule-r`, `fill-p`, `fill-r`, `table-teds-lite` under a predictor `emon-gfuse`.
+  *Files*: `kin/gfuse.kin`, `kin/gfusetest.kin`, `kin/glayer.kin` (the `hl` subject code only), `kin/fuserules.kin` (blocks
+  500 and 600), `kin/pageunit.kin` (the `gf-page` call's arguments), `kin/model.kin` + `schema/emon-1.json` (additive),
+  `tools/fusion/record-graphics.clj`, `test/fusion/graphics/`, `kin/scripts/gfuse`, `kin/scripts/gates` (one line).
+  *Measured* (BEFORE = P7.3 + P5.5a, i.e. vector only; AFTER = this; `emon-live` and replay; P6.8's metrics):
+  **born-digital** (`pdf/`, `ocr-born-digital` on): `rule-p` ≥ 0.995 and `rule-r` ≥ 0.99 against the pdfplumber truth;
+  every table of every `pdf/` document without images byte-identical to BEFORE (the graphics contract, D221) except
+  `gfx-softmask-rule` (its hidden rule gone: say so) and the `gfx-pattern-bands` tints (their colour); **scans**
+  (`scan/`, `scan-color/`): `rule-r` ≥ 0.95, `rule-p` ≥ 0.95, `fill-r` ≥ 0.85, and `table-teds-lite` on the GRAPHICS set
+  recorded BEFORE and AFTER with `twin-gap` per document (target: the median `twin-gap` ≤ 0.10); **mixed**:
+  `mixed-table-image` and `mixed-two-tables` image tables found (`block-table` R 1.0) with `table-teds-lite` ≥ 0.85, their
+  OCR words in the cells (`in-table-image`), not in a figure's labels; **rule ghosts**: no body `|` on the scan variants of
+  the ruled documents whose gold has none (count BEFORE and AFTER); **ICDAR 2013** live: `table-adj-f1`, `block-table`
+  P/R and TEDS-lite against D182's numbers; `bb fusion-report`'s per-rule counts for block 500/600; `gf-page` ≤ 5 ms a
+  page (Rust).
+  *Done when*: laws on four targets (a vector rule witnessed; a vector rule under a soft mask not witnessed, dropped
+  only when the region's witness ≥ 900; a Chrome border drawn cell by cell against one tracer line: one group, the vector
+  pieces kept as they are, no gap bridged; an open edge of a vector table stays open even where the tracer saw ink across
+  it (row 520); a tracer
+  rule inside a glyph box dropped; a `|` OCR word on a vertical rule to the ledger; a lattice in an image a
+  `table-in-image` region); `bb gfuse` green in `bb gates`; the numbers above in this entry.
+
 - [ ] **P7.S — The switch: born-digital pages OCR'd under `always`; the `bb fusion` gate; the cost** (SPEC §8.3 first
   pass, §9.8, §12.3; D038, D212 (3) superseded, D200, D201, D210). **Wave 5, the end of the critical path.** Depends on
   P7.3, P7.5, P6.6 (P7.4, P7.6, P7.7 are not required for the switch and land when ready).
@@ -2393,8 +2641,10 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   2. **The gate `bb fusion`** (`kin/scripts/fusion`, joins `bb gates` after `ocr`): replays `test/fusion/replay/`
      (re-recorded with the switch on) on Rust and Go, requires the identical bundle, `transcript-miss` for a changed request,
      and the ratchet of a new predictor `emon-fusion` over those documents; plus **the born-digital contract per document**:
-     each healthy `pdf/` document's CER under `emon-fusion` ≤ its `emon` CER + 0.0005, `tl-override` = 0. `bb ink` and
-     `bb trace` (P6.3, P6.4) switch to the transcripts' render bitmaps and join the gates with their targets as ratchets.
+     each healthy `pdf/` document's CER under `emon-fusion` ≤ its `emon` CER + 0.0005, `tl-override` = 0; and, when P7.G
+     has merged, **the graphics contract per document** (D221): every table of a `pdf/` document without images is the one
+     `emon` gives (`table-teds-lite` equal, cell for cell). `bb ink` and `bb trace` (P6.3, P6.4) switch to the transcripts'
+     render bitmaps and join the gates with their targets as ratchets.
   3. **`bb fusion-live`** (not a gate): `emon-live` with the switch on over every `pdf/`, `pdf-tagged/`, `scan/`,
      `scan-color/`, `scan-ovl/` document and the live sets; recorded in the scoreboard (`emon-live`).
   4. **`bb fusion-bench`** (not a gate): per stage wall time and peak memory a page (`RunStats` gains per-kind fulfil time
@@ -2412,7 +2662,8 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 
 ## Phase 8 — Figures, seals, signatures
 
-- [ ] P8.1 — Figure classification and placeholders (SPEC §10.6, D020).
+- [ ] P8.1 — Figure classification and placeholders (SPEC §10.6, D020). Its candidate regions are P7.G's `grg` `figure`
+  rows and its graphics evidence the fused `grl`/`gfl` inside them (D227).
 - [ ] P8.2 — Seals and stamps: detection, polar unwarp, targeted OCR, name
   and date extraction (D016). Refines P7.7's `seal` nodes (D205): the polar strip is a kin-made view OCR'd as
   `op-seal-strip` through D196's mechanism.
@@ -6874,6 +7125,155 @@ kin stage is noticed, and the scope switch is the one lever that changes the sec
 **Merged with the table, initials and alignment stages (D178-D185, after P6.1)**: both Engines' raster unit now runs the same stages as the PDF unit (`TbBuild`, `LcCopy`/`InDetect`, headings on the copy, `PaBuild` with tables, initials and alignment, `FuWrite`); OCR words have no glyph or font evidence, so no initial is found in a scan (P6.7 is for that). A scan's rows slope (0.6 degree here), so one table row's baselines spread over several points: `tb-rows` groups a row as a chain of baselines (each within a third of the size of the one before it) instead of a distance from the first word, which lost the `Total` label of `table-simple-ruled` (a one-word row of its own is no table row); identical on a text layer (a row's baselines agree). `emon-replay` `scan/all` after the merge: CER 0.0324, WER 0.0894, heading F1 0.886 (before: 0.0331, 0.0903, 0.886); table, caption and paragraph-boundary metrics now score (`block-table-f1` 0.0 to 1.0, `para-boundary-f1` 0.774 to 0.819).
 - [ ] **Signed off** (maintainer)
 
+### D217 — Graphics fusion is text fusion's counterpart: rules and fills from every source are aligned, health-scored and arbitrated by `fr` rows, and ONE fused set (`grl`, `gfl`) is all the table stage reads; `fpa` and rule 501 are retired (SPEC 2.2, 9.7, 9.9, 10.5; D014, D179, D195, D203)
+**Decision**: the maintainer's request (2026-10-01): table borders and the like come from the PDF's drawing language where it
+has them, from the tracer where it does not, with OCR's layout analysis and the tagged tree as further knowledge sources,
+"the same process as for text". So: (1) the fused objects are **rules** (h, v, slant; the edges of boxes), **fills**
+(shading bands, header and cell fills) and **regions** (D227); (2) the sources are the PDF's paths (`vector`), the tracer
+(`trace`), OCR's block types (`ocr`: line separators and tables, a tie-breaker only) and the tagged tree (`struct`: a prior on
+tables, verified in stage 3, D224); (3) the steps are the text's: one space (centipoints), alignment (D220), health per
+region (D222), arbitration by data rows (blocks 500 and 600 of `fr`, D221, D223), a confidence and an explanation in `fx`;
+(4) the PageLayer carries `grl`, `gfl`, `ggp`, `grg` (SPEC 9.7), `grl` taking `fpa`'s planned `ea` code; (5) `emon.table`
+reads `grl`/`gfl` and never `paths` (P5.5a), so a born-digital table, its scan, and a scanned table inside a born-digital PDF
+go through one table code; (6) `gf-page` runs in the page unit on EVERY page, after the tracer and OCR evidence and before
+`al-page`; over the vector source alone it is the identity (P5.5a proves it byte for byte). This revises D195 (2): stage 3
+is handed `grl`/`gfl`, not a `paths`-shaped `fpa`.
+**Why**: `fpa` ("vector paths plus tracer rules no vector path explains", P7.3's rule 501) was one rule of one direction: it
+could not say a vector rule is hidden, could not let the render witness paint emon cannot model, had no fills from scans,
+no per-region trust, and fed the table stage `paths` rows whose box is the only geometry (a grid drawn as one path was one
+box). Accuracy on tables is the same problem as accuracy on words: several imperfect witnesses of one page.
+**Alternatives**: keeping `fpa` and rule 501 (above); fusing at the table level only (whole candidate tables per source,
+then pick: a scan's table would never get the vector's exact rules on a mixed page, and two half-right tables cannot be
+combined); a learned layout model (SPEC 1.1: parked).
+- [ ] **Signed off** (maintainer)
+
+### D218 — Paths get P3.6's visibility checks and keep their whole straight geometry; a segment, not a path, is the unit of vector graphics (P3.6a; SPEC 8.1, 8.4.3; D152, D155)
+**Decision**: `paths` cells 19-22 become `vis`, `vby`, `vchk` and `backdrop`; `pv-page` runs the glyph checks on every painted
+path (not clips, not shadings), on the path's painted region, with two path-specific readings: a zero-width stroke is a
+hairline and not `zero-size`, and the white check keeps the backdrop it found so a consumer can ask for CONTRAST (a white
+rule on a dark header is visible). A path made only of `m l h re` keeps up to 4,096 points (`PATH_KEEP_STRAIGHT`); a path
+with a curve keeps D152's 128; a cut path sets `pg-truncated` (512); `pts` is bounded at 1,000,000 rows a page. A path whose
+`vis` is 0 and whose `vchk` lacks the blend and soft-mask bits is "exactly known".
+**Why**: D179's rule test reads a path's box, colour and alpha, so a rule clipped away, hidden in an OCG, painted over by a
+later white rectangle, or white on white is a rule today, and a table built on it has a row or column that is not on the
+page; and a grid drawn as one path (ReportLab, Excel exports, some PDF/UA tools) is one box, not a lattice. Both are
+silent errors of the kind accuracy forbids. P3.6's checks are already exact and conservative; extending them to paths
+costs one pass.
+**Alternatives**: visibility inside `emon.table` (the backdrop search and the occlusion test would be written twice); an
+unbounded point arena (one malicious path could hold the page's memory); recording every subpath as its own `paths` row
+(paint order and the dash state are per path; `pts` already holds the geometry).
+- [ ] **Signed off** (maintainer)
+
+### D219 — The vector source's candidates: D179's sizes per segment and subpath, clip-trimmed, flat curves as lines, thin images as rules, contrast for colour, dash for style; identity first (P5.5a; SPEC 9.9)
+**Decision**: as SPEC 9.9 "Vector candidates". `gv-page` has a `legacy` mode equal to `tb-collect-one` (step A: every Model
+byte-identical) and a `segments` mode that becomes the default in step B, measured before and after. Collinear touching
+pieces are not merged by `gv-page`: `tb-build` keeps merging them (D179), so the table stage's behaviour moves only where a
+candidate changes.
+**Why**: proving the new input path equal to the old one before changing the definition separates a plumbing bug from a
+better rule; each change in step B (segments, visibility, contrast, trimming, curves, thin images) is then attributable.
+**Alternatives**: changing input and definition in one step (an ICDAR delta could not be explained); merging in `gv-page`
+(the table stage's merge tolerances would live in two places).
+- [ ] **Signed off** (maintainer)
+
+### D220 — Graphics alignment is a sweep along each rule's axis: near pairs by angle, perpendicular distance and gap; groups; elementary intervals with a coverage per source; no gap is bridged (P7.G; SPEC 9.9)
+**Decision**: near = |Δangle| ≤ `gf-angle` (150 centi-degrees), perpendicular distance ≤ half the summed thicknesses +
+`gf-perp` (120 cpt), axis extents overlapping or within `gf-gap` (300 cpt); groups by union-find; the axis is the vector
+members' thickness-weighted position, else the tracer's; endpoints projected on it cut it into intervals, each with a
+coverage bitset (exactly known vector, uncertain vector, hidden vector, trace, OCR line); runs of one verdict become `grl`
+rows. Fills: box IoU ≥ 700. Grid: the 64 × 64 page grid of D202.
+**Why**: rules are one-dimensional: an interval sweep is exact, deterministic and linear in the members, and it handles the
+cases word alignment needs a dynamic program for (Chrome's cell-by-cell border against one tracer line is 1:n; a tracer line
+broken by a dropout against one vector rule is n:1) without a cost function. Never bridging keeps open edges open: in a
+ruled table a missing stretch of rule IS the span (D179).
+**Alternatives**: box overlap as for words (a thin rule's box overlap is meaningless across a 1 pt offset); Hough-space
+matching (floating point, and nothing a sweep cannot do here); bridging small gaps (closes real spans).
+- [ ] **Signed off** (maintainer)
+
+### D221 — Arbitration of graphics and the graphics contract: an exactly known visible vector is untouchable; the render witnesses what is not exactly known; the tracer adds only where the vector is silent; OCR only breaks ties (P7.G, P5.5a; SPEC 9.9 rows 501-571)
+**Decision**: rows 501-571 of SPEC 9.9, in that order. The contract, as D201's for text: a visible, exactly known vector rule
+or fill is never removed by another source (rows 510, 511, 560), and on a born-digital page without images every table is
+the one the vector source alone gives (gated in `bb fusion` from P7.S, D221's half of the born-digital contract). The render
+decides only where the vector source admits it cannot know: blend modes, soft masks, colour -1 (patterns, shadings), thin
+images (rows 512, 513, 561, 562); row 513 drops an unwitnessed uncertain rule only when the same region's exactly known rules
+are ≥ 90 % witnessed, i.e. when the tracer is demonstrably reliable there. Inside an image or on a raster page the tracer is
+the source (530, 531, 570), weighed by the region's health; in R0 of a born-digital page a tracer-only rule is admitted only
+outside glyphs and words and when the page's own tracer precision is ≥ 900 (532), and never inside a group a vector member
+bounds (520). OCR's `bt-line` lowers the tracer's bar by 150 and does nothing alone (540).
+**Why**: the vector source is exact where it is sure, and the tracer's errors (letter strokes, noise, Sauvola washout) are
+real; asymmetric trust is what makes adding a source safe. Measuring the tracer's precision against the vector truth on the
+same page is the strongest per-page reliability estimate available and costs nothing.
+**Alternatives**: majority vote (two weak sources outvoting an exact one); always trusting the render (pdfium's antialiasing
+and Sauvola lose hairlines and light rules); never dropping an unwitnessed vector rule (row 513's alternative: open question
+SPEC 17 (8)).
+- [ ] **Signed off** (maintainer)
+
+### D222 — Graphics health is per region: the page outside images and each image placement; vector witness, tracer precision, skew spread, tracer confidence; D150's shape (P7.G; SPEC 9.3, 9.9)
+**Decision**: as SPEC 9.9 "Health per region", written as `hl` rows of subject kind `graphics-region` (subject -1 for R0, the
+`images` row for Rᵢ). An image region's score borrows its page's tracer precision; weights vector witness 3, tracer precision
+3, skew 2, confidence 2; first values, P10.1 calibrates.
+**Why**: the reliability of the tracer differs most between "a render of vector art" and "a photographed table pasted into a
+report", and the image placement is exactly that boundary, known from the text layer without pixels; a scanned table's own
+rules agree on one skew angle and a noisy image's do not.
+**Alternatives**: per page only (a mixed page would average a perfect R0 with a noisy image); per table candidate (the table
+is stage 3's, after fusion).
+- [ ] **Signed off** (maintainer)
+
+### D223 — Where graphics meet words: block 600 (rule ghosts, the text of a table in an image), tried after seals and before artifacts; `xo` columns 30 and 31 (P7.G, P7.3; SPEC 9.4, 9.9, 8.4.5)
+**Decision**: rows 601 (`rule-ghost`: an OCR-only word of at most two rule-like glyphs lying on a fused rule's box, ≥ 700
+per-mille, to the ledger) and 610 (an OCR-only word inside a `table-in-image` region, with kin ink and plausibility, is body,
+flag `in-table-image`, which rule 150 would otherwise hold as a figure's label); `fr-order` 400, 600, 200, 300, 100; the
+spare `xo` columns 30 and 31 carry the two measures (`xt` 30-31 stay spare); `dr` gains `rule-ghost` (additive).
+**Why**: Tesseract reads scanned borders as `|`, `l`, `I` (the P6.5 scans' table CER of 0.105 is partly that), and D201
+rule 150, right for charts, would keep a scanned table in a born-digital PDF out of the body entirely. Both are decisions
+about words that only graphics can make, so they are rows like any other and the dump explains them.
+**Alternatives**: removing `|` characters by text pattern (a real `|` in a cell is lost); a scanned-table exception inside
+row 150 (P7.3's block would read graphics; ownership blurs); a new `feats` stride (every arena width changes).
+- [ ] **Signed off** (maintainer)
+
+### D224 — Tagged tables are verified at the table level, in stage 3: a tagged grid, six checks against the page, D150's score, three verdicts; confirmed tags give header scope and spans, contradicted tags cost nothing; OCR table blocks only break ties (P5.5; SPEC 10.5; D034, D148-D150)
+**Decision**: as SPEC 10.5 "Tagged tables": `tb-tag-trust` 300 to be read at all; the checks `row-band`, `col-band`,
+`order`, `cover`, `rules` (against `grl`) and `geo` (against the overlapping geometric candidate); verdicts at 800 and 500;
+the seven arbitration cases in `tb-select`; provenance in `tb` cells 20-23 and the table node's `src` (`struct`) and flags
+(`struct-disagree`, `tag-span-conflict`). The `form` profile, P5.5's other half, moves to P5.5b unchanged.
+**Why**: D034: the author's answer is evidence, verified, never obeyed. A tagged table is the only source that knows header
+scope (`Scope`, `Headers`) and the spans of a ruleless table, and the only one that can rescue a whitespace table a
+geometric profile scores under its threshold; it is also often wrong (layout tables tagged `Table`, two rows in one `TR`,
+cells tagged `P`), which the checks catch on the page itself. Tags speak about tables, not about rules, so the verification
+is the table stage's, over the fused rules.
+**Alternatives**: tags as rule candidates (a TD's text box says nothing about where its border is); obeying a PDF/UA
+document's tags (D150: PDF/UA raises the trust, never the score); vetoing ruled candidates with a "not a table" tree (a rule
+is seen; only `whitespace` has nothing to vouch for it).
+- [ ] **Signed off** (maintainer)
+
+### D225 — The tracer's share of graphics: vertical rules from stacked runs, rules found inside large components, rule confidence defined, shading as `tint` rectangles from the light and background masks (P6.4 amendment; SPEC 8.2, 8.4.4)
+**Decision**: as P6.4's "Graphics amendment". No new arena: a tint is a `prims` `rect` with flags `filled` + `tint`.
+**Why**: a table grid is one component and Sauvola removes uniform tints, so without the amendment the tracer gives P7.G
+neither the inner rules of a scanned grid nor its shading; both are what `table-shaded` and its scans need.
+**Alternatives**: a `tfills` arena (one more `ea` code for what `prims` already says); fills from the gray view by a second
+threshold (the ink layers already separate a tint by lightness).
+- [ ] **Signed off** (maintainer)
+
+### D226 — Graphics are measured against an oracle that is not emon: pdfplumber's lines and rectangles kept where poppler draws ink, inherited by scan twins through their known transform; rule and fill P/R by length and area; ICDAR adjacency F1; tagged verdict accuracy (P6.8; SPEC 14.2, 14.3; D094, D100)
+**Decision**: as P6.8's brief and SPEC 14.2-14.3. `rule-p/r`, `fill-p/r`, `table-adj-f1`, `tag-verdict-acc` are ratcheted;
+`twin-gap` and `tag-table-agree` are recorded only. The new fixtures: six Chrome table documents, seven hand-made `gfx-*` PDFs,
+three mixed documents, eight tagged-table pairs, and the GRAPHICS set's scan twins (≤ 6 MB).
+**Why**: rule truth from emon's own vector reading would make P5.5a's step B unmeasurable (D100: emon cannot be its own
+oracle); pdfplumber reads paths independently and poppler's render says what is seen; the scan twins make the "same table
+scanned" comparison exact. ICDAR 2013 has cell content regions and adjacency relations, not rules, so its measure is the
+competition's own.
+**Alternatives**: hand-labelled rules (slow, and the twins give them for free); TEDS only (a table can be right while a
+rule is wrong, and P7.G's errors would hide inside the profile's tolerance).
+- [ ] **Signed off** (maintainer)
+
+### D227 — Graphic regions (`grg`): a table drawn in an image, figure candidates fused from five sources, and table hints; P8.1 consumes figures, nothing reaches the Model before it (P7.G; SPEC 9.9, 10.6)
+**Decision**: as SPEC 9.9 "Regions". Rule 140's "vector-figure cluster" becomes a `figure` region; rule 610 and stage 3 read
+`table-in-image`; stage 3's tie-break reads `table-hint`.
+**Why**: "is this image a table?" must be answered in the page unit, before word arbitration decides whether the image's OCR
+text is body; and five sources already say where figures are, so fusing them once spares P8.1 a second alignment.
+**Alternatives**: deciding table-in-image in stage 3 (too late: rule 150 has held its words); leaving figures to P8.1
+entirely (rule 140 needs them now).
+- [ ] **Signed off** (maintainer)
+
 ## Found in kin, not ours to fix here
 
 **Audit (2026-09-30, coordinator; checked against kin's source and nome):**
@@ -7001,6 +7401,12 @@ them; offer them upstream when they have proved general.
 - [x] **Provisional seal text** (D205) — *coordinator (2026-10-01): yes, the Model may carry it, flagged `low-conf` + provisional, until P8.2; sign-off via D205.* P7.7 emits `seal` nodes with raw OCR text (`low-conf`) before P8.2's unwarp and
   name/date extraction. May a crawler-facing Model carry that provisional text, or should P7.7 keep it in the ledger until
   P8.2?
+- [ ] **Tags without geometry** (D224, SPEC 17 (7)): may a confirmed tagged table that no geometric profile found become a
+  `struct` table on the tags alone (proposed: yes, scored 850 × trust, refused when it reads as prose), and may trusted tags
+  (≥ 700) override a disagreeing geometry's rows and columns? Does not block P5.5 (the cases are switchable settings).
+- [ ] **Unseen vector paint** (D221 row 513, SPEC 17 (8)): drop an uncertain (blend, soft mask, pattern) vector rule the
+  render does not show when the region's exactly known rules are ≥ 90 % witnessed (proposed), or always keep it flagged
+  `unwitnessed`? Does not block P7.G.
 
 ## Parking lot
 

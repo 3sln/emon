@@ -195,6 +195,16 @@ fused page exactly as it reads a born-digital one today; fusion over one
 source is the identity (a born-digital page with no OCR answer gives the
 Model it gave before fusion, byte for byte).
 
+**Graphics are fused too (D217).** Rules (horizontal, vertical and slanted),
+the edges of boxes and filled regions (shading bands, header fills) are
+aligned across their sources (the PDF's own paths, the tracer, OCR's line and
+table blocks) by the same steps as words: one space, alignment within
+centipoint tolerances, health per region, arbitration by `fr` rows, a
+confidence. The PageLayer carries ONE fused rule set and ONE fused fill set
+(`grl`, `gfl`, §9.7, §9.9), and the table stage reads only those, so one table
+code serves born-digital, scanned and mixed pages. The tagged tree's tables are
+a prior verified at the table level, in stage 3 (§10.5, D224).
+
 ### 2.3 Stage 3 — Analysis
 
 Document-wide structure recovery (§10): running furniture detection across
@@ -970,6 +980,12 @@ Visibility is decided here, because the text layer lies in characteristic ways:
 * **`/Artifact` marked content** with `/Pagination` or `/Watermark`
   subtypes, and **Watermark annotations** → pre-classified artifacts (§9.5).
 
+Paths are judged by the same checks (P3.6a, D218): a rule that is clipped
+away, hidden in an optional-content group, the colour of what is behind it,
+painted over by a later opaque fill or image, or transparent is no rule, and a
+table built on it is wrong. A path's geometry is kept segment by segment (a grid
+drawn as one path of many `m l` pairs is many rules, not one box).
+
 Words are formed from glyphs by gap analysis against the font's space width
 and the `TJ` adjustments; lines by baseline and direction; the content-stream
 order is kept as one weak reading-order signal.
@@ -1013,7 +1029,19 @@ then:
 For a **born-digital** PDF the tracer's job shrinks: rules and fills are
 already present as vector paths (source `vector`), which are exact. The tracer
 still runs on the rendered page to see what the vector list cannot express
-cheaply (text rendered as outlines, images of tables, scanned inserts).
+cheaply (text rendered as outlines, images of tables, scanned inserts), and
+its rules are the render's witness of the vector rules (§9.9: a vector rule the
+render does not show, when the vector paint is not exactly known, is not seen).
+
+**Graphics the tracer must find for §9.9 (D225).** Rules come from long
+horizontal row runs AND from stacks of short row runs with the same x-range
+(±1 px) over at least `rule-min` (a vertical rule is a column of 1-4 px runs,
+not a long run): a table grid is ONE component, so its edges are found from
+runs, not from the component's shape. **Fills** (shading bands, header fills)
+are not ink to Sauvola, which removes a uniform background: they come from the
+`light` and `background` ink-mask views (§8.4.4) as filled `rect` primitives,
+the row runs of a mask merged into rectangles whose rows share their x-extent
+within `fill-tol` (2 px), at least `fill-min` (6 pt) each way.
 
 **As designed for P6.3/P6.4 (D197, D198), on the P2.7 measurements (D092):**
 
@@ -1192,7 +1220,7 @@ linear-part cells.
 | `lines` | 16 | line head (13); `src`; `order` (content-stream index of its first glyph, the weak reading-order signal); spare |
 | `marks` | 24 | page, kind (`mk`: artifact, optional-content, tag), tag `tstart tlen`, parent span, `mcid`, artifact `/Type` (`ar`), artifact `/Subtype` (`as`), `/ActualText`, `/Alt`, `/E`, `/Lang` (each an `etext` run: 8 cells), OCG or OCMD object number, its default state (1 on, 0 off, -1 unknown), `gfirst gcount` (glyphs inside), `zfirst zlast` (painted objects inside), flags (`/Properties` reference, inline dictionary, name not found, closed by the page end), `stm` (the object number of the Form XObject whose stream the span is in, 0 the page's: P3.7 joins a structure element's MCID on `(stm, mcid)`, D101) |
 | `fonts` | 16 | object number, subtype (`ft`), descriptor `/Flags` verbatim, embedded program kind (0 none), has `ToUnicode`, base encoding, `/BaseFont` `tstart tlen`, ascent, descent (1/1000 em), space width (D083 units), italic angle (centi-degrees), `/StemV`, style (`sy` inferred from flags and name), `/CapHeight`, `/XHeight` (1/1000 em, -1 absent: the initials rule of §10.9 needs them, P4.10 reads them into the two cells that were spare) |
-| `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row, filled, stroked, shading, pattern fill, non-Normal blend, soft mask in force), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), spare |
+| `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row, filled, stroked, shading, pattern fill, non-Normal blend, soft mask in force, **truncated**: its geometry in `pts` is cut, D218), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), `vis`, `vby`, `vchk` (P3.6a, D218: as a glyph's), backdrop (the colour behind it that the white check found, 0xRRGGBB, -1 unknown), spare |
 | `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`: stencil mask, /SMask, inline, /Mask, blend, soft mask in force), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, spare |
 
 **Visibility hooks (P3.6, D155).** `vis` is the `vz` code of the FIRST check that failed (0 none): `clipped` 1,
@@ -1204,6 +1232,13 @@ the `z` of the paint that covers an `occluded` glyph or image. So `vis` 0 means 
 said only when it is certain from what was recorded. Render modes 3 and 7 are never `vis` (they are the `hidden-text`
 source, and paint nothing, so the paint checks white, occlusion and transparent do not apply to them; clip, offpage,
 zero-size and ocg still do). A word never mixes visibilities or hidden-ness: the grouping breaks where either changes.
+**Paths (P3.6a, D218)** get the same three cells from the same checks on their painted region (the box, intersected with
+the clip's, a stroked rectangle's shrunk by half its width): clip, offpage, white (the stroke colour of a stroked path, the
+fill of a filled one, both for both; the backdrop it found is kept in `backdrop`, so fusion can ask for contrast rather than
+for "not white"), zero-size (a path whose box is empty both ways; a zero-width stroke is the thinnest line a device can
+draw and is NOT zero-size), occlusion (as for a glyph; `vby` the occluder's `z`), ocg, transparent. A clip row and a
+shading's own region are not checked (`vchk` 0). A path whose `vis` is 0 and whose `vchk` lacks 128 and 256 (no blend
+mode, no soft mask) is **exactly known**; §9.9 treats the others as needing the render's witness.
 A `paths` row that is a clip has `z` -1 and a box that is the intersection of every clip on its chain (D152); a clip
 that does not shrink the region has no row. `marks.ocgdef` is 1 on, 0 off, 2 on in the configuration but off by the
 group's `/Usage /View /ViewState` (an `/AS` auto state: Acrobat hides it, poppler, Ghostscript and pdf.js draw it, so it is
@@ -1237,7 +1272,7 @@ structure tree; §9.5 defence 1 walks a glyph's `mark` chain for an
 | `inks` | 12 | page, view clustered, centroid colour, lightness (0..1000), chroma, pixel count, role guess (`ir`: body, light, colour, background, unknown), mask view (-1), spread, spare |
 | `components` | 24 | page, box, view, pixel box x y w h, ink pixels, fill (per-mille of the box), stroke width (cpt, distance transform), colour, ink row, kind (`ck`), confidence, flags, contour `pfirst pcount`, parent (the component it lies in, -1), holes, mean gray of its ink (0..255), spare |
 | `rules` | 20 | page, box, view, centre-line endpoints x0 y0 x1 y1 (cpt), thickness (cpt), colour, ink row, style (`rs`: solid, dashed, dotted, double), confidence, member components `rfirst rcount`, flags, spare |
-| `prims` | 24 | page, box, view, kind (`pm`: rect, ellipse, circle, arrow, curve, polygon, ring), centre x y, radii rx ry, `rot`, stroke width, colour, ink row, fill (per-mille), confidence, fitted outline `pfirst pcount`, members `rfirst rcount`, flags (closed, filled, double ring), spare |
+| `prims` | 24 | page, box, view, kind (`pm`: rect, ellipse, circle, arrow, curve, polygon, ring), centre x y, radii rx ry, `rot`, stroke width, colour, ink row, fill (per-mille), confidence, fitted outline `pfirst pcount`, members `rfirst rcount`, flags (closed, filled, double ring, **tint**: a filled `rect` found on a `light` or `background` mask, a shading band, D225), spare |
 | `tlines` | 20 | line head (13; `first count` is a `refs` run of its text-like components); ink row; mean component height (cpt); mean gap (cpt); confidence; spare |
 
 **Hierarchy.** An OCR run's blocks, paragraphs, lines, words, symbols and
@@ -1295,7 +1330,8 @@ stage that can compute it has run:
 | 27 | pages on which the same text recurs at the same place (stage 3 feedback) | the same | P4.3 / P7.5 |
 | 28 | its code point count | its code point count | stage 1 |
 | 29 | distance to the nearest page edge (cpt) | the same | stage 1 |
-| 30-31 | spare (zero) | spare | — |
+| 30 | share of its box inside a fused table region drawn in an image (`grg` kind `table-in-image`, §9.9), per-mille | spare | P7.G |
+| 31 | rule-likeness: for a word of at most 2 code points, all of them in the rule-glyph set (U+007C vertical bar, `l I 1 ! [ ] _ -`, U+2010-U+2015), the share of its box covered by fused rules' boxes, per-mille; -1 otherwise | spare | P7.G |
 
 Components, rules and primitives carry their own statistics as fields
 (ink, fill, stroke width, gray, confidence of a fit) and have no `feats`
@@ -1391,7 +1427,8 @@ PDF/UA identification (`pdfuaid:part`) raises the prior and the trust, never the
 `annots` (29 to 33) when the bundles take them.
 
 **Not held yet**: shadings as painted regions beyond
-their box (a `paths` row of kind `other` until P3.5), the VALUES of a font's `/CapHeight`
+their box (a `paths` row of kind `other` flagged `shading`, its colour -1: §9.9 takes a shading band's colour from the
+tracer's tint primitive over it), the VALUES of a font's `/CapHeight`
 and `/XHeight` (their cells exist and are -1 until P4.10 reads them, D108), the Model-level
 page source kind (analysis, not evidence), and fusion's own output
 (correspondence groups and the PageLayer are P7.1's arenas, built on the
@@ -1455,6 +1492,10 @@ for the text layer):
   against each other, artifacts against their position, table and list roles against
   where the standard puts them. Integer per-mille components, a weighted harmonic mean,
   scaled by the weakest check; PDF/UA raises the trust and never the score.
+* **Graphics** (D222, §9.9): per region (the page outside images, each image
+  placement): how much of the exactly known vector paint the tracer
+  witnesses, the tracer's precision on the same page, the skew spread and
+  confidence of the tracer's rules.
 
 **As designed (P7.0, P7.2, D203).** The text layer's health is computed in
 two steps. **Without OCR** (P7.0, the document pass): per (font, page) the
@@ -1520,9 +1561,12 @@ it reads with their named thresholds, the winner, the flags and ledger reason
 it sets. Numbers are assigned in blocks so that independent items never
 renumber each other's rows: 100-199 the core rules of the table above,
 200-299 watermarks, backgrounds and ghosts (§9.5), 300-399 `hidden-text`,
-400-499 seals and signatures, 500-599 graphics. The blocks are tried for a
-group in the order 400, 200, 300, 100 (`fr-order`): what belongs to a seal or
-an artifact is decided before which source reads it best.
+400-499 seals and signatures, 500-599 graphics (rules and fills, §9.9: they
+run on graphics groups, not on word groups), 600-699 where graphics meet words
+(§9.9: a border OCR read as `|`, the text of a table drawn in an image). The
+blocks are tried for a word group in the order 400, 600, 200, 300, 100
+(`fr-order`, D223): what belongs to a seal, to a rule's ink or to an artifact
+is decided before which source reads it best.
 
 ### 9.5 Watermarks, backgrounds and ghosts (D015)
 
@@ -1615,7 +1659,8 @@ diagram in the DEVLOG entry.
 Integer `Cells` like the evidence (§8.4: absent -1, runs `first count`,
 references `(ea, index)` in `refs`), made by the page unit, appended to the
 document's by `pl-append` (which re-bases every index), and dumped with the
-evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on):
+evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `cg fw fl fv fa fx hl` 34-40,
+`grl` 41 (the code planned for `fpa`), `sl` 42, `gfl ggp grg` 43-45, D217):
 
 | arena | stride | fields |
 | --- | --- | --- |
@@ -1625,15 +1670,22 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on):
 | `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |
 | `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (2) |
 | `fx` | 4 | explanation: group, rule, feature column, value read — a run per group, every column the deciding rule read |
-| `hl` | 12 | health: subject kind (font-page, OCR block, region), page, subject index, components (6: mapped, garbage, overlap, gap, agreement, ink), score |
-| `fpa` | the layout of `paths` | the fused graphics: the vector paths, plus tracer rules no vector path explains (flag `traced`), which is what the table stage reads on a raster page |
+| `hl` | 12 | health: subject kind (font-page, OCR block, region, **graphics-region**), page, subject index, components (6: mapped, garbage, overlap, gap, agreement, ink; for a graphics region: vector witness, tracer precision, skew spread, tracer confidence, rules, fills, D222), score |
+| `grl` | 24 | **the fused rules** (D217, §9.9; replaces D195's `fpa`, taking its `ea` code): page, box, centre-line endpoints `ex0 ey0 ex1 ey1` (cpt), thickness (cpt), orientation (`go`: h, v, slant), angle (centi-degrees, `ev-angle`), colour (0xRRGGBB, -1), style (`rs`), sources (`sr` bitset: vector, trace, ocr), winning source, rule (`fr` number), confidence (per-mille), flags (`gq`: traced, unwitnessed, in-image, box-edge, from-fill, artifact-layout, artifact-pagination, in-figure), group (`ggp` row), `z` (the vector member's, -1), spare (3) |
+| `gfl` | 16 | **the fused fills**: page, box, colour, lightness (0..1000), sources, winning source, rule, confidence, flags (`gq`: shading, pattern, in-image, tint-coloured: the colour came from the tracer), group, `z`, spare (2) |
+| `ggp` | 12 | **graphics groups** (the `cg` of graphics): page, kind (`gk`: rule, fill, region), vector members (`refs` run of `(paths, i)` and `(pts, k)` pairs: the path and the first point of the segment), tracer members (`refs` run of `rules` or `prims` rows), OCR members (`refs` run of `oblocks` rows), flags, spare (3) |
+| `grg` | 16 | **graphic regions**: page, box, kind (`rk`: table-in-image, figure, table-hint), sources (`sr`: vector, trace, ocr, struct, plus image), subject (`(ea, index)`: the image placement, the `oblocks` block, the `se` element, -1), fused rules inside (count), fills inside (count), confidence, flags, spare (2) |
 | `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference, confidence, OCR words inside (a `refs` run), flags, spare |
 
 `fr`, the rule table, is `defdata` in `kin/fuserules.kin`: per row its
 number, its block, the winner, the ledger reason, flags to set, and up to
 six `(feature column, comparison, setting name)` predicates, all of which
 must hold. The thresholds are named settings (§13) whose defaults sit in the
-same file, so a tuning is a reviewed diff of one file.
+same file, so a tuning is a reviewed diff of one file. A row of block 500
+reads **graphics measures** instead of feature columns (graphics have no
+`feats` row): codes 100 and up in the same predicate cells, named by the `gmz`
+table of `kin/gfuse.kin` (§9.9), and `fx` rows of a 5xx rule name a `ggp`
+group, not a `cg` one.
 
 ### 9.8 What `ocr` costs, and what may be skipped (D200, D210)
 
@@ -1665,6 +1717,157 @@ Lossless savings, taken in every scope:
 `ocr: auto` OCRs a born-digital page only when the health without OCR, the
 image coverage or `hidden-text` call for it (§8.3), and `never` asks for
 nothing; both are cheaper than `always` by design and weaker by design.
+
+### 9.9 Graphics fusion (D217-D223, D227)
+
+Words are not the only thing three sources see. A table's borders, a header's
+fill, a zebra band, a box around a note are drawn by the PDF's paths, seen by
+the tracer in a render or a scan, and sometimes reported by OCR's layout
+analysis; the tagged tree may say a region is a table. Graphics fusion does for
+these what §9.2-9.4 do for words, and its single output, the fused rules
+`grl` and fills `gfl` (§9.7), is all the table stage reads (§10.5). A
+born-digital table, the same table scanned, and a scanned table pasted into a
+born-digital PDF then go through one table code.
+
+**Objects.** A **rule**: a straight stroke with a centre line (two points), a
+thickness, an orientation (`h` within `gf-axis` (100 centi-degrees) of
+horizontal, `v` of vertical, else `slant`), a colour and a style (`rs`:
+solid, dashed, dotted, double). The edges of a **box** are rules flagged
+`box-edge`. A **fill**: an axis-aligned filled rectangle (a shading band, a
+header fill, a cell background) with a colour. A **region** (`grg`): a box
+that is a table drawn in an image, a figure, or a hint (D227).
+
+**The sources, and what each is trusted for:**
+
+| source | gives | trusted for | arenas |
+| --- | --- | --- | --- |
+| PDF paths (`vector`) | exact geometry, colour, dash, paint order | everything it draws, when visible and exactly known (§8.4.3) | `paths`, `pts`, `images` (a thin image placement is a rule) |
+| the tracer (`trace`) | what the render or scan shows | raster-only content: scans, images of tables, tiling patterns emon does not interpret; the render's witness of vector paint that is not exactly known | `rules`, `prims` (`rect`, and `tint` fills, D225) |
+| OCR layout (`ocr`) | Tesseract's line-separator and table blocks (`oblocks` `bt-line`, `bt-table`) | a tie-breaker only: never a rule or a table on its own | `oblocks` |
+| the tagged tree (`struct`) | that a region is a table; its rows, header scope, spans | a prior, verified against geometry and weighed by `tg-trust` (D034, D224); used in stage 3, at the table level, not per rule | `se`, `sc` |
+
+**Vector candidates (D219).** `gv-page` decomposes each painted `paths` row
+(not a clip) into segments by its `pts`: an `m`..`l` run is straight segments;
+a closed four-point axis-aligned subpath is a rectangle; a curve whose control
+points lie within `gf-flat` (50 cpt) of its chord is a straight segment (some
+producers draw rules as curves), any other curve is figure material. Then, with
+D179's sizes per segment or subpath: a stroked segment is a rule (thickness the
+stroke width; a zero width is drawn as one device pixel and counts as 24 cpt);
+a filled rectangle at most `RULE_T` (4 pt) thick and at least `RULE_MIN` (5
+pt) long is a rule along its long axis; a stroked rectangle larger than that
+is four `box-edge` rules; a filled rectangle larger both ways is a fill; a
+shading (`sh`) or pattern fill is a fill of colour -1 over its region. A
+visible image placement at most 4 pt thick and at least 5 pt long is a rule
+candidate of the vector source too (flag `from-image`, colour unknown). Each
+candidate is **trimmed to its clip's box** (a border drawn past a clipped
+cell ends where the clip does) and carries its path's `vis`, `vchk`, `z`,
+`dash` (a dash at most twice the thickness is `dotted`, else `dashed`), the
+`/Artifact` type of its `mark` chain (`artifact-pagination` rules are a
+header's or footer's, never a table's) and its **contrast**: the luminance
+difference between its ink and the `backdrop` P3.6a found, or against white
+when the backdrop is unknown; under `gf-contrast` (16 of 255) it is not a rule
+(this replaces D179's "mean channel under 240", so white separators on a dark
+header are rules). A truncated path (`pg-truncated`) contributes its box only,
+as D179 did, and is flagged.
+
+**Alignment (D220).** Graphics are aligned per orientation class. Two
+candidates of different sources are **near** when their angles differ by at
+most `gf-angle` (150 centi-degrees), the perpendicular distance between their
+centre lines is at most half the sum of their thicknesses plus `gf-perp` (120
+cpt), and their extents along the axis overlap or come within `gf-gap` (300
+cpt). Near pairs are found through the same 64 × 64 page grid as words (§9.2);
+a **group** (`ggp`) is a connected set of near candidates (union-find, the
+smaller root wins). A group's **axis** is its vector members' (the
+thickness-weighted mean position), else its tracer members'. Every member's
+endpoints are projected on the axis, which they cut into **elementary
+intervals**; each interval records which kinds of member cover it: exactly
+known visible vector, visible vector not exactly known, invisible vector,
+trace, OCR line block. Intervals with the same verdict (below) and no gap
+merge, and each merged run is one `grl` row. Gaps are never bridged by fusion:
+a missing stretch of a vector rule is an open edge, which is how a ruled table
+says "span" (D179); the tracer bridges its own dropouts (`rule-gap`) before
+fusion sees them. Fills are aligned by box: a pair is near at IoU ≥
+`gf-fill-iou` (700). Tolerances are in centipoints, so a 150-dpi scan and a
+300-dpi render are aligned by the same numbers.
+
+**Health per region (D222).** The page is cut into **regions**: R0 the page
+outside every visible image placement, and one Rᵢ per visible image placement
+at least `gf-img-min` (2 cm) each way (a raster page is one region). Each gets
+an `hl` row of subject kind `graphics-region` whose components are: **vector
+witness** (R0 with raster answers: the length of exactly known visible vector
+rules the tracer witnesses, over their length; -1 without raster); **tracer
+precision** (R0 of a born-digital page: the length of tracer rules explained
+by a vector candidate of any visibility, or lying in glyph or word boxes, over
+all tracer rule length: the tracer's precision measured on this very page);
+**skew spread** (Rᵢ and raster pages: the spread of the angles of its `h` and
+`v` tracer rules, 1000 at ≤ 30 centi-degrees falling linearly to 0 at 300);
+**tracer confidence** (the mean of its rules'); and the counts of rules and
+fills. The region's score is D150's shape (a weighted harmonic mean scaled by
+the weakest component), and a raster region's score borrows the page's
+tracer precision when the page has R0.
+
+**Arbitration (D221)** is rows 500-599 of `fr`, tried in order per merged
+interval run (rules) or per fill group, each reading graphics measures (the
+`gmz` codes, §9.7):
+
+| row | situation | outcome |
+| --- | --- | --- |
+| 501 | exactly known visible vector, the page has no raster answer | vector, confidence 900: **the identity** (514 is its counterpart for paint not exactly known) |
+| 505 | a vector member whose `vis` ≠ 0 | contributes nothing; recorded in `fx` (a hidden rule is not a rule, whatever else is there) |
+| 510 | exactly known visible vector, trace witness | vector geometry, sources vector + trace, 1000 |
+| 511 | exactly known visible vector, no witness, raster answered | vector, flag `unwitnessed`, 800 |
+| 512 | vector not exactly known (blend, soft mask, colour -1, a `from-image` rule), trace witness | vector geometry, the tracer's colour when the vector's is -1, 950 |
+| 513 | vector not exactly known, no witness, raster answered | the region's vector witness ≥ `gf-agree-min` (900): **not seen**, no rule; else vector, `unwitnessed`, 600 |
+| 514 | vector not exactly known, no raster | vector, 700 |
+| 520 | trace only, in R0, in a group that has an exactly known visible vector member | dropped: the vector says where its rule ends, and a stretch it leaves open is a span (D179), not a dropout |
+| 530 | trace only, inside an image region Rᵢ | a rule (`traced`, `in-image`) when the tracer's confidence ≥ `gf-trace-min` (600), lowered by `gf-ocr-bonus` (150) when an OCR `bt-line` block covers ≥ 500 per-mille of it (the tie-breaker), and the region's score ≥ `gf-img-health` (500); confidence: the tracer's × the region's / 1000 |
+| 531 | trace only, raster page | as 530, without `in-image` |
+| 532 | trace only, R0 of a born-digital page | dropped when ≥ 500 per-mille of its box lies in glyph cells or text-layer word boxes (strokes of letters); else a rule (`traced`, 600) only when the page's tracer precision ≥ `gf-tprec-min` (900) |
+| 533 | trace only, ≥ 800 per-mille of its box inside one OCR word of ≥ 3 code points not of the rule-glyph set | dropped (the bar of a large `E` or `T`) |
+| 540 | OCR line block only | never a rule; recorded |
+| 560 | visible vector fill with contrast | vector box and colour, 1000 (900 without raster) |
+| 561 | vector fill of colour -1 (shading, pattern) with a `tint` witness | vector box, the tint's colour (`tint-coloured`), 950 |
+| 562 | vector fill of colour -1, no witness | vector box, colour -1, 600 |
+| 570 | `tint` only, in Rᵢ or on a raster page, region score ≥ `gf-img-health` | a fill (`in-image` in Rᵢ), 700 |
+| 571 | `tint` only, R0 of a born-digital page | a fill, 500, when the page's tracer precision ≥ `gf-tprec-min` (a tiling pattern emon does not interpret); else dropped |
+
+**The graphics contract (D221)**, the counterpart of D201: a visible, exactly
+known vector rule or fill is **untouchable**: the tracer and OCR add what the
+vector source lacks and witness what it cannot be sure of, and never remove
+what it is sure of. On a born-digital page without images, every table is
+therefore the one the vector source alone gives, with or without OCR.
+
+**Where graphics meet words (D223)**, rows 600-699, tried for word groups after
+the seal block (`fr-order` 400, 600, 200, 300, 100): **601** an OCR-only word
+whose rule-likeness (`xo` 31) is at least `rg-cover` (700) goes to the ledger
+as `rule-ghost` (Tesseract reads a scanned border as `|`, `l` or `I`); **610**
+an OCR-only word inside a table drawn in an image (`xo` 30 ≥ 500) with kin ink
+(`xo` 10 ≥ `ghost-ink`) and plausibility (`xo` 8 ≤ `ghost-implausible`) is
+body text, flag `in-table-image`: a scanned table in a born-digital PDF is
+read as a table, not held as a figure's labels (rule 150).
+
+**Regions (D227).** `grg` rows: **table-in-image**, a visible image placement
+whose fused rules make a lattice (two `h` and two `v` rules touching within 3
+pt: D179's component test without its text test) or whose fused fills make a
+stack of three bands of one extent; **figure**, merged at IoU ≥ 500 from
+visible image placements that are not tables, clusters of at least
+`fig-min-paths` (8) vector paths that are curves, polygons or slanted rules
+within `fig-gap` (6 pt) of each other, the tracer's `large` components on
+raster pages, OCR `bt-image` blocks, and the tagged `Figure` elements whose
+marked content owns paths or images (their box, through `mark` → `sc` →
+`se`); **table-hint**, an OCR `bt-table` block (confidence 300) or a tagged
+`Table` element's box (confidence `tg-trust`). Rules 140 and 150 read
+`figure` regions as their "vector-figure cluster"; stage 3 reads
+`table-in-image` and `table-hint`; P8.1 reads `figure`. None changes the
+Model before P8.1.
+
+**Placement and cost.** `gf-page` runs in the page unit after the tracer and
+the OCR evidence and before `al-page` (D195's order, as amended), so rules 140,
+150, 601, 610 and the seal candidates (P7.7) can read `grl` and `grg`. A page
+with no raster answer runs it over the vector source alone (rows 501, 505,
+514, 560, 562), which is the identity: `tb-build` over `grl`/`gfl` gives the
+tables `tb-build` over `paths` gave (P5.5a proves it byte for byte before it
+improves anything). Budget: ≤ 5 ms a page (Rust), inside §12.3's fusion line.
 
 ---
 
@@ -1896,7 +2099,64 @@ analysis, which runs first.
 | `shaded` | alternating row fills or header fills, columns from alignment |
 | `whitespace` | no rules: ≥ 2 columns of consistent alignment across ≥ 3 lines, gaps wider than word gaps, numeric-column regularity |
 | `form` | key/value grids (label cells + value cells), often ruled |
-| `struct` | tagged-PDF `Table` roles, verified against geometry |
+| `struct` | tagged-PDF `Table` roles, verified against geometry (D224, below) |
+
+**What the profiles read (D217).** Rules and fills are the fused `grl` and
+`gfl` of §9.9, never `paths`: a rule is a `grl` row of orientation `h` or `v`
+(slanted rules are figure material), a fill a `gfl` row; a rule flagged
+`artifact-pagination` is a running header's or footer's and is not read. A
+table's `src` is the union of the sources of the rules and fills it used
+(`vector`, `trace`, `ocr`), plus `struct` when the tags shaped it, plus `text`
+or `ocr` for its words; its confidence is the profile score scaled by the mean
+confidence of those rules.
+
+**Tagged tables (D224).** A `Table` element on the page, when `tg-trust` ≥
+`tb-tag-trust` (300) and the tree's nesting check holds for it, is read into a
+**tagged grid**: rows are its `TR`s in order (under `THead`, `TBody`, `TFoot`
+or the table), cells its `TH`/`TD`s placed by `ColSpan`/`RowSpan` into the
+first free slot (HTML's algorithm); a word belongs to the cell whose subtree
+owns its first glyph (D149's ownership). The grid is then **checked against
+the page**, each check per-mille (-1 when there is nothing to check):
+`row-band` (pairs of non-empty cells of one row whose text boxes share a
+vertical band), `col-band` (likewise for columns, horizontally), `order`
+(cells of a row in reading direction, chance-corrected as D150), `cover`
+(words inside the table's box that it owns, over the words inside its box),
+`rules` (non-empty cells whose text no fused `h`/`v` rule of confidence ≥ 800
+crosses) and `geo` (when a geometric candidate overlaps it at IoU ≥ 500: the
+share of the table's words whose tagged row and column map one-to-one onto
+the candidate's under the majority mapping). The **score** is D150's shape
+(weights 2, 2, 1, 2, 2, 3); the **verdict** is `confirmed` at ≥
+`tb-struct-ok` (800), `contradicted` under `tb-struct-bad` (500), else
+`partial`. Then, in `tb-select`:
+
+1. *Confirmed, a geometric candidate agrees* (`geo` ≥ 900): the geometric
+   cells (exact boxes) with the tags' head rows, row headers (`TH` with
+   `Scope` `Row`) and header scope; spans: a ruled table keeps its lattice's
+   (rules are seen; a tagged span across a closed edge sets
+   `tag-span-conflict`), any other profile takes the tagged spans (no rule says
+   where its spans end, D181).
+2. *Confirmed, a geometric candidate disagrees*: the tagged rows and columns
+   win when `tg-trust` ≥ `tb-tag-win` (700), else the geometry; either way the
+   table is flagged `struct-disagree`.
+3. *Confirmed, no geometric candidate*: a `struct` table whose cells are the
+   cells' text boxes grown to their row and column bands, scored 850 ×
+   `tg-trust` / 1000, still subject to D180's refusals (prose tagged `Table`
+   is a layout table and is refused).
+4. *Partial*: the geometry decides; the tagged head is used when its row count
+   equals the geometry's.
+5. *Contradicted*: ignored, and never lowers a geometric candidate; the
+   verdict and score stay in the table arena and the dump.
+6. A **trusted tree that says "not a table"** (`tg-trust` ≥
+   `tb-tag-veto-trust` (800) and every word of a `whitespace` candidate owned
+   by `P`, `L`, `LI` or `H*` elements) lowers that candidate by `tb-tag-veto`
+   (150). Only `whitespace`: it alone has no rule or fill to vouch for it.
+7. **OCR's table blocks** break ties only: of two overlapping candidates
+   within `tb-tie` (25) of each other, the one whose box has the higher IoU
+   with a `table-hint` region from OCR wins.
+
+**Mixed pages.** A table drawn in an image of a born-digital page is found by
+the same profiles over the fused rules inside it (`in-image`, rule 530) and
+the OCR words admitted by rule 610; its `src` says `trace` and `ocr`.
 
 **Cells**: text assigned to cells by containment; spanning cells from
 missing internal rules (ruled) or from text crossing column boundaries
@@ -1947,6 +2207,12 @@ diagram labels) is **not** body text; it may be kept as the figure's
 `labels` (setting `figure-text: omit|labels`, default `labels` — a chart's
 axis titles are often exactly what a scraper wanted). An image the PDF gives
 alt text for (`/Alt` in the structure tree) keeps it as `alt`.
+
+The candidate regions are fusion's `figure` regions (§9.9, D227): image
+placements, vector clusters, the tracer's large components, OCR's image
+blocks and the tagged `Figure` elements, merged; classification reads the
+fused rules and fills inside them (a chart's axes are two perpendicular
+`grl` rules).
 
 ### 10.7 Seals, stamps and signatures (D016)
 
@@ -2410,7 +2676,7 @@ record):
 | render, `with-text` + `no-text` (pdfium) | ≤ 0.3 s |
 | normalization (gray, histogram, layers, Sauvola band, deskew) | ≤ 0.12 s Rust, ≤ 2× that in Go |
 | tracer (runs, components, contours, rules, primitives, `tlines`) | ≤ 0.15 s Rust, ≤ 2× in Go |
-| alignment + health + arbitration + defences | ≤ 0.03 s |
+| alignment + health + arbitration + defences (graphics fusion included, ≤ 5 ms of it, §9.9) | ≤ 0.03 s |
 | OCR, born-digital, `full` | measured (Tesseract's, about 1-3 s) |
 | OCR, born-digital, `witness` | ≤ 30 % of `full` on the median page |
 | OCR, scanned page, first pass + targeted | ≤ 1.5 × the first pass |
@@ -2603,7 +2869,8 @@ commit (the ratchet). Metrics:
 | Reading order | Kendall τ over matched blocks |
 | Blocks | per-kind precision/recall at IoU ≥ 0.5 (DocLayNet classes mapped to Model kinds) |
 | Headings | detection P/R; level accuracy; hierarchy TEDS |
-| Tables | TEDS and TEDS-structure-only; cross-page merge P/R |
+| Tables | TEDS and TEDS-structure-only; cross-page merge P/R; ICDAR 2013's own **adjacency-relation F1** (`table-adj-f1`, D226) |
+| Graphics (D226) | `rule-p`, `rule-r`: length-weighted, a predicted `grl` stretch matching a truth rule of its orientation (≤ 150 centi-degrees) within half their thicknesses plus max(1 pt, 1 px of the variant's dpi); `fill-p`, `fill-r` by area; `twin-gap` (a document's `pdf/` table TEDS-lite minus its scan variant's, recorded); `tag-verdict-acc` (tagged-table verdicts equal to the fixture's declared truth); `tag-table-agree` (the share of tagged `Table` elements confirmed, on the real corpus: recorded, not ratcheted) |
 | Furniture | P/R of dropped running elements; label accuracy |
 | Figures | detection P/R; `kind` accuracy |
 | Seals/signatures | detection P/R; `name`/`text` CER |
@@ -2642,6 +2909,14 @@ commit (the ratchet). Metrics:
    Importers convert each into emon's **gold format**: a partial emon JSON
    Model with a per-corpus declaration of what is and is not annotated
    (DocLayNet has no heading levels; a metric that needs them skips it).
+   **Rule and fill truth (D226)** does not come from emon (D100): for a
+   born-digital document it is `pdfplumber`'s lines, rectangles and curves
+   (pdfminer.six, D094's third-party-oracle exception) kept where poppler's
+   render (`pdftoppm`) has ink under them, written once into
+   `gold/STEM.rules.json`; the document's scan variants inherit it through
+   the variant's known transform (dpi, MANIFEST `facts.skew`, `facts.turns`);
+   a table drawn in an image takes its rules from the generator that drew it,
+   mapped through the placement the generator chose.
 3. **A hand-labelled real-world set**, small and hard: court filings (Bates
    numbers, stamps), invoices, annual reports (multi-page tables), scientific
    papers (two columns, formulas), government forms (seals, signatures),
@@ -2784,4 +3059,16 @@ in one conversion; D058).
    whether `witness` becomes the default.
 6. **Committed pixels** (D196): fusion gates replay transcripts that must
    hold their renders; plain files in the repository within a stated
-   budget, or a fetched, hash-pinned archive?
+   budget, or a fetched, hash-pinned archive? (The coordinator's answer, no LFS and
+   about 10 MB of gate pixels, binds `bb gfuse` (P7.G) too: first pages and
+   crops, ≤ 3 MB; the rest is measured live from the corpus store.)
+7. **Tags without geometry** (D224 case 3): may a confirmed tagged table with
+   no geometric candidate become a `struct` table on the tags' word alone
+   (proposed: yes, scored 850 × trust, still refused when it reads as prose)?
+   And may trusted tags override a disagreeing geometry's rows and columns
+   (case 2, proposed at `tg-trust` ≥ 700)?
+8. **Unseen vector paint** (D221 row 513): a rule whose paint is not exactly
+   known (blend, soft mask, pattern) and that the render does not show is
+   dropped when the page's other rules are all witnessed. Is the render the
+   arbiter there, as proposed, or should an unwitnessed vector rule always
+   stay (flagged)?
