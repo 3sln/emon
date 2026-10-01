@@ -148,10 +148,25 @@ func paCloser(cp int32) bool {
 }
 
 func paEndsSentence(raw *port.Cells) bool {
-	// Does the text so far end a sentence: a closing mark, or a closer after one.
+	// Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
+	// three digits after a mark that follows a letter: `thing.3`) is not read.
 	var n int32 = port.CellsLen(raw)
+	var d int32 = 0
 	if n < 1 {
 		return 0 == 1
+	}
+	for (n > 2) && (d < 3) && (port.CellsAt(raw, n-1) >= 48) && (port.CellsAt(raw, n-1) <= 57) {
+		n -= 1
+		d += 1
+	}
+	if d > 0 {
+		if (n == 0) || !paFinalMark(port.CellsAt(raw, n-1)) {
+			return 0 == 1
+		}
+		if (port.CellsAt(raw, n-2) >= 48) && (port.CellsAt(raw, n-2) <= 57) {
+			return 0 == 1
+		}
+		return 1 == 1
 	}
 	var c int32 = port.CellsAt(raw, n-1)
 	if paFinalMark(c) {
@@ -748,7 +763,7 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 		}
 	}
 	if ncol >= 3 {
-		if evidence.LnGet(ln, a, evidence.LhX1()) >= (colx1 - (sa / 2)) {
+		if ((colx1 - evidence.LnGet(ln, a, evidence.LhX1())) * 100) <= (paEdgePct * (colx1 - colx0)) {
 			pts += jsEdge
 		}
 		if ((colx1 - evidence.LnGet(ln, a, evidence.LhX1())) * 5) > (colx1 - colx0) {
@@ -947,12 +962,14 @@ func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, 
 	return 0
 }
 
-func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells) int32 {
+func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells) int32 {
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
 	// `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
 	// Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
 	// stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not
-	// upright). Answers 0.
+	// upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the
+	// fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).
+	// Answers 0.
 	var med int32 = 0
 	var indents int32 = 0
 	var p int32 = 1
@@ -984,6 +1001,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	port.CellsDrop(gp, 0)
 	port.CellsDrop(raw, 0)
 	port.CellsDrop(fr, 0)
+	port.CellsDrop(dbg, 0)
 	for p <= npages {
 		paCollect(ord, lt, p)
 		n = port.CellsLen(ord)
@@ -1017,6 +1035,14 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 				cont = 0
 				if open == 1 {
 					score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents)
+					port.CellsPush(dbg, i)
+					port.CellsPush(dbg, prev)
+					port.CellsPush(dbg, b)
+					port.CellsPush(dbg, score)
+					port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfX0))
+					port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfX1))
+					port.CellsPush(dbg, evidence.LnGet(lt, prev, evidence.LhX1()))
+					port.CellsPush(dbg, port.CellsAt(cf, (prevfr*cfStride)+cfCount))
 					if score >= joinMin {
 						cont = 1
 					}

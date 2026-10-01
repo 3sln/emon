@@ -60,13 +60,24 @@ fn main() {
     let mut lt = port::Cells::new(); let mut ls = port::Cells::new(); let mut sd = port::Cells::new();
     let mut it = port::Cells::new(); let mut io = port::Cells::new(); let mut rw = port::Cells::new();
     let mut gu = port::Cells::new(); let mut ac = port::Cells::new(); let mut tm = port::Cells::new();
-    let mut cf = port::Cells::new(); let mut lo = port::Cells::new(); let mut pr = port::Cells::new();
+    let mut cf = port::Cells::new(); let mut lo = port::Cells::new(); let mut pr = port::Cells::new(); let mut dbg = port::Cells::new();
     model_init(&mut nodes, &mut attrs, &mut regions, &mut text, &mut pages, &mut ledger, &mut layout);
-    let np = pd_pg_count(&mut pg);
+    let np = if std::env::args().nth(2).as_deref() == Some("cols") { std::env::args().nth(3).map(|s| s.parse::<i32>().unwrap()).unwrap_or(pd_pg_count(&mut pg)) } else { pd_pg_count(&mut pg) };
     pa_pages(&mut pg, &mut pages);
     pa_build(&mut wd, &mut ln, &mut et, np, &mut pages, &mut layout, &mut nodes, &mut attrs, &mut regions, &mut text,
              &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
-             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr);
+             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg);
+    if std::env::args().nth(2).as_deref() == Some("cols") {
+        // debugging: the last page's gutters (x0 x1 top bot rows lrows rrows lsum rsum flag) and every fragment
+        let ng = port::cells_len(&gu) / 10;
+        for g in 0..ng { let v: Vec<String> = (0..10).map(|f| port::cells_at(&gu, g * 10 + f).to_string()).collect(); println!("gutter {}", v.join(" ")); }
+        { let v: Vec<String> = (0..12).map(|f| port::cells_at(&pr, f).to_string()).collect(); println!("pr {}", v.join(" ")); }
+        for i in 0..(port::cells_len(&it) / 7) { let v: Vec<String> = (0..7).map(|f| port::cells_at(&it, i * 7 + f).to_string()).collect(); if port::cells_at(&it, i * 7 + 3) < 1000 { println!("item {}", v.join(" ")); } }
+        for j in 0..(port::cells_len(&dbg) / 8) { let v: Vec<String> = (0..8).map(|f| port::cells_at(&dbg, j * 8 + f).to_string()).collect(); println!("join frag/a/b/score/x0/x1/ax1/n {}", v.join(" ")); }
+        let nf = port::cells_len(&cf) / 12;
+        for r in 0..nf { let v: Vec<String> = (0..12).map(|f| port::cells_at(&cf, r * 12 + f).to_string()).collect(); println!("frag {}", v.join(" ")); }
+        return;
+    }
     let c = model_check(&mut nodes, &mut attrs, &mut regions, &mut text, &mut pages, &mut ledger, &mut layout, &mut chk);
     if c != 0 { eprintln!("model-check {} at {}", c, port::cells_at(&chk, 0)); std::process::exit(5); }
     let mut t = String::new();

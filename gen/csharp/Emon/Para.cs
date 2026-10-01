@@ -102,10 +102,25 @@ public static class Para {
         return (cp == 41) || ((cp == 93) || ((cp == 34) || ((cp == 39) || ((cp == 8221) || ((cp == 8217) || (cp == 187))))));
     }
     internal static bool PaEndsSentence(emon.Port.Cells raw) {
-        // Does the text so far end a sentence: a closing mark, or a closer after one.
+        // Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
+        // three digits after a mark that follows a letter: `thing.3`) is not read.
         int n = emon.Port.CellsLen(raw);
+        int d = 0;
         if (n < 1) {
             return 0 == 1;
+        }
+        while ((n > 2) && (d < 3) && (emon.Port.CellsAt(raw, n - 1) >= 48) && (emon.Port.CellsAt(raw, n - 1) <= 57)) {
+            n -= 1;
+            d += 1;
+        }
+        if (d > 0) {
+            if ((n == 0) || !PaFinalMark(emon.Port.CellsAt(raw, n - 1))) {
+                return 0 == 1;
+            }
+            if ((emon.Port.CellsAt(raw, n - 2) >= 48) && (emon.Port.CellsAt(raw, n - 2) <= 57)) {
+                return 0 == 1;
+            }
+            return 1 == 1;
         }
         int c = emon.Port.CellsAt(raw, n - 1);
         if (PaFinalMark(c)) {
@@ -675,7 +690,7 @@ public static class Para {
             }
         }
         if (ncol >= 3) {
-            if (Evidence.LnGet(ln, a, Evidence.LhX1()) >= (colx1 - (sa / 2))) {
+            if (((colx1 - Evidence.LnGet(ln, a, Evidence.LhX1())) * 100) <= (PaEdgePct * (colx1 - colx0))) {
                 pts += JsEdge;
             }
             if (((colx1 - Evidence.LnGet(ln, a, Evidence.LhX1())) * 5) > (colx1 - colx0)) {
@@ -867,12 +882,14 @@ public static class Para {
         }
         return 0;
     }
-    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr) {
+    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg) {
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
         // `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
         // Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
         // stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not
-        // upright). Answers 0.
+        // upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the
+        // fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).
+        // Answers 0.
         int med = 0;
         int indents = 0;
         int p = 1;
@@ -904,6 +921,7 @@ public static class Para {
         emon.Port.CellsDrop(gp, 0);
         emon.Port.CellsDrop(raw, 0);
         emon.Port.CellsDrop(fr, 0);
+        emon.Port.CellsDrop(dbg, 0);
         while (p <= npages) {
             PaCollect(ord, lt, p);
             n = emon.Port.CellsLen(ord);
@@ -937,6 +955,14 @@ public static class Para {
                     cont = 0;
                     if (open == 1) {
                         score = PaJoinScore(wd, lt, et, raw, prev, b, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1), emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount), mg, indents);
+                        emon.Port.CellsPush(dbg, i);
+                        emon.Port.CellsPush(dbg, prev);
+                        emon.Port.CellsPush(dbg, b);
+                        emon.Port.CellsPush(dbg, score);
+                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX0));
+                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfX1));
+                        emon.Port.CellsPush(dbg, Evidence.LnGet(lt, prev, Evidence.LhX1()));
+                        emon.Port.CellsPush(dbg, emon.Port.CellsAt(cf, (prevfr * CfStride) + CfCount));
                         if (score >= JoinMin) {
                             cont = 1;
                         }

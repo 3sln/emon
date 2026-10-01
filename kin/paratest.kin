@@ -20,10 +20,11 @@
             [emon.mscript :refer [jt-end]]
             [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind
                                 node-text-start node-text-len node-region-count node-sub text-at
-                                text-append-utf8 nk-paragraph nk-break nk-text]]
+                                text-append-utf8 nk-paragraph nk-break nk-text nk-note
+                                page-layout-count page-layout-first layout-band layout-col layout-role layout-x0]]
             [emon.json :refer [js-emit]]
             [emon.html :refer [html-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new wf-size wf-font]]
+            [emon.evidence :refer [wd-new wd-set wd-get wd-count ln-new wf-size wf-font hd-x0 hd-x1]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build]]
@@ -54,6 +55,77 @@
     (ln-new ln page x0 y0 x1 y1 x0 (- y1 200) x1 (- y1 200) rot dir w0 (- (wd-count wd) w0))
     (return 0)))
 
+(defn ^I32 pt-words [^:mut ^Cells wd ^:mut ^Cells et ^Blob b ^I32 page ^I32 x ^I32 y ^I32 step ^I32 size]
+  (comment "The words of b (split at spaces) from x, `step` apart, appended to `words`, as `pt-cline`'s.")
+  (let [^I32 n (blob-len b)
+        ^I32 y1 (+ y (+ size 200))
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0]
+    (while (<= k n)
+      (do (if (or (== k n) (== (blob-u8 b k) 32))
+            (do (if (> k s)
+                  (do (let [^I32 ts (cells-len et)
+                            ^I32 wx (+ x (* i step))
+                            ^I32 wx1 (+ wx (quot (* step 3) 4))]
+                        (text-append-utf8 et b s k)
+                        (let [^I32 tl (- (cells-len et) ts)
+                              ^I32 r (wd-new wd page wx y wx1 y1 wx (- y1 200) wx1 (- y1 200) 0 0 ts tl -1 -1 -1)]
+                          (wd-set wd r (wf-size) size)
+                          (wd-set wd r (wf-font) 0))
+                        (set i (+ i 1)))))
+                (set s (+ k 1))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 pt-mline [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b1 ^Blob b2 ^I32 page ^I32 x1 ^I32 x2 ^I32 y
+                     ^I32 step ^I32 size]
+  (comment "ONE line holding two runs of words, as a producer that writes the rows across the columns does: the")
+  (comment "words of b1 from x1 and of b2 from x2, a gap between that no wider than D104's two sizes would keep apart.")
+  (let [^I32 w0 (wd-count wd)]
+    (pt-words wd et b1 page x1 y step size)
+    (pt-words wd et b2 page x2 y step size)
+    (let [^I32 wl (- (wd-count wd) 1)
+          ^I32 lx0 (wd-get wd w0 (hd-x0))
+          ^I32 lx1 (wd-get wd wl (hd-x1))
+          ^I32 y1 (+ y (+ size 200))]
+      (ln-new ln page lx0 y lx1 y1 lx0 (- y1 200) lx1 (- y1 200) 0 0 w0 (- (wd-count wd) w0))
+      (return 0))))
+
+(defn ^I32 pt-cline-dir [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 x ^I32 y
+                         ^I32 step ^I32 size ^I32 dir]
+  (comment "One line whose words stand apart (`step` from each word's left edge to the next's; a word is three")
+  (comment "quarters of that wide): what the column stage reads, its words' own boxes. Its box is the words', the")
+  (comment "baseline 2 pt above the bottom.")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 n (blob-len b)
+        ^I32 y1 (+ y (+ size 200))
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 xe x]
+    (while (<= k n)
+      (do (if (or (== k n) (== (blob-u8 b k) 32))
+            (do (if (> k s)
+                  (do (let [^I32 ts (cells-len et)
+                            ^I32 wx (+ x (* i step))
+                            ^I32 wx1 (+ wx (quot (* step 3) 4))]
+                        (text-append-utf8 et b s k)
+                        (let [^I32 tl (- (cells-len et) ts)
+                              ^I32 r (wd-new wd page wx y wx1 y1 wx (- y1 200) wx1 (- y1 200) 0 dir ts tl -1 -1 -1)]
+                          (wd-set wd r (wf-size) size)
+                          (wd-set wd r (wf-font) 0))
+                        (set xe wx1)
+                        (set i (+ i 1)))))
+                (set s (+ k 1))))
+          (set k (+ k 1))))
+    (ln-new ln page x y xe y1 x (- y1 200) xe (- y1 200) 0 dir w0 (- (wd-count wd) w0))
+    (return 0)))
+
+(defn ^I32 pt-cline [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 x ^I32 y
+                     ^I32 step ^I32 size]
+  (return (pt-cline-dir wd ln et b page x y step size 0)))
+
 (defn ^I32 pt-clear [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et]
   (cells-drop wd 0)
   (cells-drop ln 0)
@@ -66,9 +138,9 @@
   (comment "`pa-build`, with the column stage's scratch (`emon.columns`) made here.")
   (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
-        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells)]
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)]
     (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr))))
+                      lt ls sd it io rw gu ac tm cf lo pr dbg))))
 
 (defn ^I32 pt-run [^Cells wd ^Cells ln ^Cells et ^I32 npages
                    ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
@@ -99,6 +171,10 @@
           (if (== kind (nk-text))
             (do (text-cp t 84)
                 (text-cp t 58)))
+          (if (== kind (nk-note))
+            (do (text-cp t 78)
+                (text-i32 t (node-sub nodes i))
+                (text-cp t 59)))
           (if (== kind (nk-break))
             (do (text-cp t 66)
                 (text-i32 t (node-sub nodes i))))
@@ -261,6 +337,124 @@
     (assert-text t5 "P1:a long line that runs on;B2;B3;P1:on the third;" "an empty page keeps its milestone")))
 
 ;; ------------------------------------------------------------- the whole Model
+
+;; ------------------------------------------------------------------------- columns
+
+(defn ^I32 pt-two-columns-dir [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob last-l ^Blob first-r ^I32 dir]
+  (comment "Six rows of two columns of four words: the left column from x = 72 pt, the right from 318 pt, 15 pt")
+  (comment "apart in y; the last line of the left column and the first of the right are the arguments.")
+  (pt-cline-dir wd ln et (text-blob "l1a l1b l1c l1d") 1 7200 10000 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "l2a l2b l2c l2d") 1 7200 11500 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "l3a l3b l3c l3d") 1 7200 13000 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "l4a l4b l4c l4d") 1 7200 14500 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "l5a l5b l5c l5d") 1 7200 16000 1200 1000 dir)
+  (pt-cline-dir wd ln et last-l 1 7200 17500 1200 1000 dir)
+  (pt-cline-dir wd ln et first-r 1 31860 10000 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "r2a r2b r2c r2d") 1 31860 11500 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "r3a r3b r3c r3d") 1 31860 13000 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "r4a r4b r4c r4d") 1 31860 14500 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "r5a r5b r5c r5d") 1 31860 16000 1200 1000 dir)
+  (pt-cline-dir wd ln et (text-blob "r6a r6b r6c r6d.") 1 31860 17500 1200 1000 dir)
+  
+  (return 0))
+
+(defn ^I32 pt-two-columns [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob last-l ^Blob first-r]
+  (return (pt-two-columns-dir wd ln et last-l first-r 0)))
+
+(deftest test-columns-are-read-one-after-the-other-and-joined-by-their-signals
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text)]
+    (comment "A gutter between two columns: the left column first, whole, then the right (not row by row). The left")
+    (comment "column ends in a full line with a full stop: no join. The page's `layout` is two cells, band 0, cols 0, 1.")
+    (pt-two-columns wd ln et (text-blob "l6a l6b l6c l6d.") (text-blob "R1a R1b R1c R1d"))
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "columns: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;" "the left column, then the right")
+    (assert-eq (page-layout-count pages 0) 2 "two cells")
+    (assert-eq (layout-band layout (page-layout-first pages 0)) 0 "band 0")
+    (assert-eq (layout-col layout (page-layout-first pages 0)) 0 "left column is col 0")
+    (assert-eq (layout-col layout (+ (page-layout-first pages 0) 1)) 1 "right column is col 1")
+    (assert-eq (layout-role layout (page-layout-first pages 0)) 2 "role body")
+    (comment "The left column ends mid-sentence in a full line and the right starts in lowercase: one paragraph, one")
+    (comment "region per column fragment; the column break is a space.")
+    (pt-clear wd ln et)
+    (pt-two-columns wd ln et (text-blob "l6a l6b l6c l6d") (text-blob "r1a r1b r1c r1d"))
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "join: well formed")
+    (pt-brief t2 nodes regions text)
+    (assert-text t2 "P2:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d r1a r1b r1c r1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;" "a paragraph goes on in the next column")
+    (comment "A hyphen at the break, a lowercase start: joined without a space, the hyphen kept (no locale, SPEC 3.6).")
+    (pt-clear wd ln et)
+    (pt-two-columns wd ln et (text-blob "l6a l6b l6c con-") (text-blob "tinues r1b r1c r1d"))
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "hyphen: well formed")
+    (pt-brief t3 nodes regions text)
+    (assert-text t3 "P2:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c con-tinues r1b r1c r1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;" "the hyphen at the break")))
+
+(deftest test-a-line-written-across-the-gutter-is-split-at-it
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text)]
+    (comment "Producers that write a row across two columns give one line with a gap in it: the words, not the")
+    (comment "lines, find the gutter, and the lines are split at it (SPEC 10.1.1 steps 1-2).")
+    (pt-mline wd ln et (text-blob "l1a l1b l1c l1d") (text-blob "R1a R1b R1c R1d") 1 7200 14400 10000 1200 1000)
+    (pt-mline wd ln et (text-blob "l2a l2b l2c l2d") (text-blob "r2a r2b r2c r2d") 1 7200 14400 11500 1200 1000)
+    (pt-mline wd ln et (text-blob "l3a l3b l3c l3d") (text-blob "r3a r3b r3c r3d") 1 7200 14400 13000 1200 1000)
+    (pt-mline wd ln et (text-blob "l4a l4b l4c l4d.") (text-blob "r4a r4b r4c r4d") 1 7200 14400 14500 1200 1000)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "split: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;" "the left column, then the right")
+    (assert-eq (page-layout-count pages 0) 2 "two cells")))
+
+(deftest test-a-right-to-left-page-is-read-right-column-first
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text)]
+    (comment "The same page, its lines running right to left: the right column is read first (SPEC 10.1.1 step 5).")
+    (pt-two-columns-dir wd ln et (text-blob "l6a l6b l6c l6d.") (text-blob "R1a R1b R1c R1d") 1)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "rtl: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;" "the right column first")
+    (assert-eq (layout-x0 layout (page-layout-first pages 0)) 31860 "the first cell is the right column")))
+
+(deftest test-a-title-across-the-gutter-is-its-own-band-and-margin-notes-are-notes
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text)]
+    (comment "A title whose words stand across the gutter ends it: the title is band 0, the columns band 1.")
+    (pt-cline wd ln et (text-blob "Title a b c d e f g h i j k l m n o p q r s t u v w") 1 7200 6000 1200 1000)
+    (pt-two-columns wd ln et (text-blob "l6a l6b l6c l6d.") (text-blob "R1a R1b R1c R1d"))
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "title: well formed")
+    (pt-brief t1 nodes regions text)
+    (assert-text t1 "P1:Title a b c d e f g h i j k l m n o p q r s t u v w;P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;" "the title first")
+    (assert-eq (page-layout-count pages 0) 3 "three cells")
+    (assert-eq (layout-band layout (page-layout-first pages 0)) 0 "the title is band 0")
+    (assert-eq (layout-band layout (+ (page-layout-first pages 0) 1)) 1 "the columns are band 1")
+    (comment "Two short notes in small type right of a column of body lines: margin notes (role 6), each after the")
+    (comment "paragraph where it begins, never inside it.")
+    (pt-clear wd ln et)
+    (pt-cline wd ln et (text-blob "b1a b1b b1c b1d b1e b1f") 1 7200 10000 1200 1000)
+    (pt-cline wd ln et (text-blob "b2a b2b b2c b2d b2e b2f") 1 7200 11500 1200 1000)
+    (pt-cline wd ln et (text-blob "b3a b3b b3c b3d b3e b3f.") 1 7200 13000 1200 1000)
+    (pt-cline wd ln et (text-blob "b4a b4b b4c b4d b4e b4f") 1 7200 16500 1200 1000)
+    (pt-cline wd ln et (text-blob "b5a b5b b5c b5d b5e b5f") 1 7200 18000 1200 1000)
+    (pt-cline wd ln et (text-blob "b6a b6b b6c b6d b6e b6f.") 1 7200 19500 1200 1000)
+    (pt-cline wd ln et (text-blob "note one") 1 40000 10200 700 800)
+    (pt-cline wd ln et (text-blob "note two") 1 40000 16700 700 800)
+    (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "margin: well formed")
+    (pt-brief t2 nodes regions text)
+    (assert-text t2 "P1:b1a b1b b1c b1d b1e b1f b2a b2b b2c b2d b2e b2f b3a b3b b3c b3d b3e b3f.;N6;P1:note one;P1:b4a b4b b4c b4d b4e b4f b5a b5b b5c b5d b5e b5f b6a b6b b6c b6d b6e b6f.;N6;P1:note two;" "each note after the paragraph it begins beside")))
 
 (deftest test-the-model-of-one-paragraph-on-two-pages-in-json
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)

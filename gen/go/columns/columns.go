@@ -33,6 +33,10 @@ const lcRunGap int32 = 2
 
 const lcNoteLines int32 = 4
 
+const lcTableRuns int32 = 4
+
+const lcTableWords int32 = 3
+
 const lcTightNum int32 = 4
 
 const lcTightDen int32 = 5
@@ -151,8 +155,8 @@ func lcIsBody(size int32, dom int32) bool {
 }
 
 func lcIsClass(size int32, dom int32) bool {
-	// Column-class type: between 3/4 and 1.35 of the dominant size (captions and notes, headings).
-	return ((size * 4) >= (dom * 3)) && ((size * 20) <= (dom * 27))
+	// Column-class type: between 17/20 and 1.35 of the dominant size (captions, headings; not footnotes).
+	return ((size * 20) >= (dom * 17)) && ((size * 20) <= (dom * 27))
 }
 
 func lcBefore(lt *port.Cells, a int32, b int32) bool {
@@ -598,6 +602,35 @@ func lcCloseAll(gu *port.Cells, ac *port.Cells) int32 {
 	return 0
 }
 
+func lcCloseWithin(gu *port.Cells, ac *port.Cells, rx0 int32, rx1 int32) int32 {
+	// A table row spans the active intervals inside its extent: they end here (a table is a spanning element).
+	var na int32 = port.CellsLen(ac) / guStride
+	var a int32 = 0
+	var wi int32 = 0
+	var c int32 = 0
+	for a < na {
+		var ab int32 = a * guStride
+		var ax0 int32 = port.CellsAt(ac, ab)
+		var ax1 int32 = port.CellsAt(ac, ab+1)
+		if (rx0 < ax0) && (ax1 < rx1) {
+			lcClose(gu, ac, a)
+		} else {
+			if wi != a {
+				c = 0
+				for c < guStride {
+					var v int32 = port.CellsAt(ac, ab+c)
+					port.CellsSet(ac, (wi*guStride)+c, v)
+					c += 1
+				}
+			}
+			wi += 1
+		}
+		a += 1
+	}
+	port.CellsDrop(ac, wi*guStride)
+	return 0
+}
+
 func lcBestPiece(it *port.Cells, io *port.Cells, s int32, e int32, ax0 int32, ax1 int32, tm *port.Cells) int32 {
 	// The widest part of [ax0, ax1] that no item of the row io[s..e) (sorted by x) touches: its ends are
 	// put in tm[0] and tm[1], its width answered (0 when none).
@@ -705,6 +738,12 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 	var lc int32 = 0
 	var rc int32 = 0
 	var hit int32 = 0
+	var nrun int32 = 1
+	var cur int32 = 1
+	var maxrun int32 = 1
+	var tab int32 = 0
+	var rx0 int32 = 0
+	var rx1 int32 = 0
 	port.CellsDrop(rw, 0)
 	for k < e {
 		var ix int32 = port.CellsAt(io, k)
@@ -718,6 +757,39 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 		med = port.CellsAt(rw, (port.CellsLen(rw)-1)/2)
 	}
 	gmin = lcMax((size*lcGutNum)/lcGutDen, (med*3)/2)
+	reach = port.CellsAt(it, (port.CellsAt(io, s)*itStride)+1)
+	k = s + 1
+	for k < e {
+		var ix int32 = port.CellsAt(io, k)
+		var x0 int32 = port.CellsAt(it, ix*itStride)
+		if (x0 - reach) >= ((size * 3) / 2) {
+			nrun += 1
+			cur = 1
+		} else {
+			cur += 1
+			if cur > maxrun {
+				maxrun = cur
+			}
+		}
+		reach = lcMax(reach, port.CellsAt(it, (ix*itStride)+1))
+		k += 1
+	}
+	if (nrun >= lcTableRuns) && (maxrun <= lcTableWords) {
+		tab = 1
+		rx0 = port.CellsAt(it, port.CellsAt(io, s)*itStride)
+		rx1 = reach
+		port.CellsPush(gu, rx0)
+		port.CellsPush(gu, rx1)
+		port.CellsPush(gu, ry0)
+		port.CellsPush(gu, ry1)
+		port.CellsPush(gu, 0)
+		port.CellsPush(gu, 0)
+		port.CellsPush(gu, 0)
+		port.CellsPush(gu, 0)
+		port.CellsPush(gu, 0)
+		port.CellsPush(gu, 2)
+		lcCloseWithin(gu, ac, rx0, rx1)
+	}
 	var na int32 = port.CellsLen(ac) / guStride
 	a = 0
 	for a < na {
@@ -763,7 +835,7 @@ func lcRow(it *port.Cells, io *port.Cells, s int32, e int32, size int32, ry0 int
 		a += 1
 	}
 	port.CellsDrop(ac, wi*guStride)
-	if hasclass == 1 {
+	if (hasclass == 1) && (tab == 0) {
 		reach = port.CellsAt(it, (port.CellsAt(io, s)*itStride)+1)
 		k = s + 1
 		for k < e {
@@ -825,7 +897,7 @@ func lcSweep(wd *port.Cells, lt *port.Cells, ls *port.Cells, dom int32, it *port
 		var y0 int32 = port.CellsAt(it, (i0*itStride)+2)
 		var sz0 int32 = port.CellsAt(it, (i0*itStride)+3)
 		e = s + 1
-		for (e < m) && ((port.CellsAt(it, (port.CellsAt(io, e)*itStride)+2) - y0) <= sz0) {
+		for (e < m) && ((port.CellsAt(it, (port.CellsAt(io, e)*itStride)+2) - y0) <= lcMin(sz0, port.CellsAt(it, (port.CellsAt(io, e)*itStride)+3))) {
 			e += 1
 		}
 		lcSortItems(it, io, s, e, 1)
@@ -848,7 +920,7 @@ func lcSweep(wd *port.Cells, lt *port.Cells, ls *port.Cells, dom int32, it *port
 		if (hasclass == 1) && ((ry0 - prevq) > (lcHole * dom)) {
 			lcCloseAll(gu, ac)
 		}
-		lcRow(it, io, s, e, size, ry0, ry1, hasclass, ac, gu, tm, rw)
+		lcRow(it, io, s, e, lcMin(size, dom), ry0, ry1, hasclass, ac, gu, tm, rw)
 		if hasclass == 1 {
 			prevq = lcMax(prevq, ry1)
 		}
@@ -902,7 +974,7 @@ func lcMerge(gu *port.Cells, dom int32) int32 {
 	}
 	i = 0
 	for i < n {
-		if port.CellsAt(gu, (i*guStride)+guFlag) == 0 {
+		if port.CellsAt(gu, (i*guStride)+guFlag) != 1 {
 			if wi != i {
 				f = 0
 				for f < guStride {
@@ -961,7 +1033,7 @@ func lcSplitAll(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells) 
 		var top2 int32 = 2 * port.CellsAt(gu, gb+guTop)
 		var bot2 int32 = 2 * port.CellsAt(gu, gb+guBot)
 		i = 0
-		for i < port.CellsLen(ls) {
+		for (i < port.CellsLen(ls)) && (port.CellsAt(gu, gb+guFlag) == 0) {
 			var l int32 = port.CellsAt(ls, i)
 			var ym int32 = lcYm2(lt, l)
 			if (ym >= top2) && (ym <= bot2) {
@@ -1018,6 +1090,20 @@ func lcBelow(lt *port.Cells, ls *port.Cells, l int32) int32 {
 	return best
 }
 
+func lcInTable(lt *port.Cells, gu *port.Cells, l int32, gx0 int32, gx1 int32) bool {
+	// Does the line lie in a table row that spans the gutter (the marks of `lc-row`, flag 2): a spanning element.
+	var ng int32 = port.CellsLen(gu) / guStride
+	var g int32 = 0
+	for g < ng {
+		var gb int32 = g * guStride
+		if (port.CellsAt(gu, gb+guFlag) == 2) && (port.CellsAt(gu, gb) < gx0) && (gx1 < port.CellsAt(gu, gb+1)) && (evidence.LnGet(lt, l, evidence.LhY0()) < port.CellsAt(gu, gb+guBot)) && (evidence.LnGet(lt, l, evidence.LhY1()) > port.CellsAt(gu, gb+guTop)) {
+			return 1 == 1
+		}
+		g += 1
+	}
+	return 0 == 1
+}
+
 func lcExtendUp(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells, dom int32) int32 {
 	// A gutter's extent goes up through the lines of body size that lie on one side of it (a heading or
 	// the first lines of one column before the other starts), until a line crosses it or a gap of `hole`
@@ -1036,11 +1122,14 @@ func lcExtendUp(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells, 
 		var top0 int32 = port.CellsAt(gu, gb+guTop)
 		cur = top0
 		done = 0
+		if port.CellsAt(gu, gb+guFlag) != 0 {
+			done = 1
+		}
 		i = n - 1
 		for (i >= 0) && (done == 0) {
 			var l int32 = port.CellsAt(ls, i)
 			if lcYm2(lt, l) < (2 * top0) {
-				if lcCrosses(lt, l, gx0, gx1) {
+				if lcCrosses(lt, l, gx0, gx1) || lcInTable(lt, gu, l, gx0, gx1) {
 					done = 1
 				} else if lcIsClass(lcSize(wd, lt, l), dom) {
 					if (cur - evidence.LnGet(lt, l, evidence.LhY1())) > (lcHole * dom) {
@@ -1077,6 +1166,9 @@ func lcTrimBottom(wd *port.Cells, lt *port.Cells, ls *port.Cells, gu *port.Cells
 	var hasprev int32 = 0
 	for g < ng {
 		again = 1
+		if port.CellsAt(gu, (g*guStride)+guFlag) != 0 {
+			again = 0
+		}
 		for again == 1 {
 			again = 0
 			var gb int32 = g * guStride
@@ -1190,7 +1282,7 @@ func lcVcut(lt *port.Cells, ls *port.Cells, gu *port.Cells, a int32, b int32, pr
 		var gb int32 = g * guStride
 		var gx0 int32 = port.CellsAt(gu, gb)
 		var gx1 int32 = port.CellsAt(gu, gb+1)
-		if (xmin < gx0) && (gx1 < xmax) && ((2 * port.CellsAt(gu, gb+guTop)) <= ymin) && ((2 * port.CellsAt(gu, gb+guBot)) >= ymax) {
+		if (xmin < gx0) && (gx1 < xmax) && (port.CellsAt(gu, gb+guFlag) == 0) && ((2 * port.CellsAt(gu, gb+guTop)) <= ymin) && ((2 * port.CellsAt(gu, gb+guBot)) >= ymax) {
 			if (lcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (lcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0) {
 				return g
 			}
@@ -1216,7 +1308,7 @@ func lcHcut(lt *port.Cells, ls *port.Cells, gu *port.Cells, a int32, b int32, pr
 		var gx1 int32 = port.CellsAt(gu, gb+1)
 		var top int32 = port.CellsAt(gu, gb+guTop)
 		var bot int32 = port.CellsAt(gu, gb+guBot)
-		if (xmin < gx0) && (gx1 < xmax) {
+		if (xmin < gx0) && (gx1 < xmax) && (port.CellsAt(gu, gb+guFlag) == 0) {
 			if (lcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (lcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0) {
 				if ((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best)) {
 					best = top

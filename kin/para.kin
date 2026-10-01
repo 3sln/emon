@@ -147,9 +147,18 @@
   (return (or (== cp 41) (or (== cp 93) (or (== cp 34) (or (== cp 39) (or (== cp 8221) (or (== cp 8217) (== cp 187)))))))))
 
 (defn ^Bool pa-ends-sentence [^Cells raw]
-  (comment "Does the text so far end a sentence: a closing mark, or a closer after one.")
-  (let [^I32 n (cells-len raw)]
+  (comment "Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to")
+  (comment "three digits after a mark that follows a letter: `thing.3`) is not read.")
+  (let [^:mut ^I32 n (cells-len raw)
+        ^:mut ^I32 d 0]
     (if (< n 1) (return (== 0 1)))
+    (while (and (> n 2) (< d 3) (>= (cells-at raw (- n 1)) 48) (<= (cells-at raw (- n 1)) 57))
+      (do (set n (- n 1))
+          (set d (+ d 1))))
+    (if (> d 0)
+      (do (if (or (== n 0) (not (pa-final-mark (cells-at raw (- n 1))))) (return (== 0 1)))
+          (if (and (>= (cells-at raw (- n 2)) 48) (<= (cells-at raw (- n 2)) 57)) (return (== 0 1)))
+          (return (== 1 1))))
     (let [^I32 c (cells-at raw (- n 1))]
       (if (pa-final-mark c) (return (== 1 1)))
       (if (and (pa-closer c) (>= n 2))
@@ -604,7 +613,7 @@
       (if (and (or (== last 45) (== last 173)) (>= n 2))
         (if (pa-letter (cells-at raw (- n 2))) (set pts (+ pts JS_HYPHEN)))))
     (if (>= ncol 3)
-      (do (if (>= (ln-get ln a (lh-x1)) (- colx1 (quot sa 2)))
+      (do (if (<= (* (- colx1 (ln-get ln a (lh-x1))) 100) (* PA_EDGE_PCT (- colx1 colx0)))
             (set pts (+ pts JS_EDGE)))
           (if (> (* (- colx1 (ln-get ln a (lh-x1))) 5) (- colx1 colx0))
             (set pts (+ pts JS_SHORT)))))
@@ -786,12 +795,14 @@
                            ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
                            ^:mut ^Cells lt ^:mut ^Cells ls ^:mut ^Cells sd ^:mut ^Cells it ^:mut ^Cells io
                            ^:mut ^Cells rw ^:mut ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
-                           ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr]
+                           ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^:mut ^Cells dbg]
   (comment "Append every page's lines to the Model as paragraphs under the document root (node 0, made by")
   (comment "`model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the")
   (comment "Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column")
   (comment "stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not")
-  (comment "upright). Answers 0.")
+  (comment "upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the")
+  (comment "fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).")
+  (comment "Answers 0.")
   (let [^:mut ^I32 med 0
         ^:mut ^I32 indents 0
         ^:mut ^I32 p 1
@@ -821,6 +832,7 @@
     (cells-drop gp 0)
     (cells-drop raw 0)
     (cells-drop fr 0)
+    (cells-drop dbg 0)
     (while (<= p npages)
       (do (pa-collect ord lt p)
           (set n (cells-len ord))
@@ -854,6 +866,14 @@
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_X1))
                                                       (cells-at cf (+ (* prevfr CF_STRIDE) CF_COUNT))
                                                       mg indents))
+                            (cells-push dbg i)
+                            (cells-push dbg prev)
+                            (cells-push dbg b)
+                            (cells-push dbg score)
+                            (cells-push dbg (cells-at cf (+ (* prevfr CF_STRIDE) CF_X0)))
+                            (cells-push dbg (cells-at cf (+ (* prevfr CF_STRIDE) CF_X1)))
+                            (cells-push dbg (ln-get lt prev (lh-x1)))
+                            (cells-push dbg (cells-at cf (+ (* prevfr CF_STRIDE) CF_COUNT)))
                             (if (>= score JOIN_MIN) (set cont 1))))
                       (if (== cont 0)
                         (do (set ty (ln-get lt b (lh-y0)))

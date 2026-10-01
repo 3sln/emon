@@ -104,10 +104,25 @@ pub(crate) fn pa_closer(cp: i32) -> bool {
     return (cp == 41) || ((cp == 93) || ((cp == 34) || ((cp == 39) || ((cp == 8221) || ((cp == 8217) || (cp == 187))))));
 }
 pub(crate) fn pa_ends_sentence(raw: &mut crate::port::Cells) -> bool {
-    // Does the text so far end a sentence: a closing mark, or a closer after one.
-    let n: i32 = crate::port::cells_len(raw);
+    // Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
+    // three digits after a mark that follows a letter: `thing.3`) is not read.
+    let mut n: i32 = crate::port::cells_len(raw);
+    let mut d: i32 = 0;
     if n < 1 {
         return 0 == 1;
+    }
+    while (n > 2) && (d < 3) && (crate::port::cells_at(raw, n - 1) >= 48) && (crate::port::cells_at(raw, n - 1) <= 57) {
+        n -= 1;
+        d += 1;
+    }
+    if d > 0 {
+        if (n == 0) || !pa_final_mark(crate::port::cells_at(raw, n - 1)) {
+            return 0 == 1;
+        }
+        if (crate::port::cells_at(raw, n - 2) >= 48) && (crate::port::cells_at(raw, n - 2) <= 57) {
+            return 0 == 1;
+        }
+        return 1 == 1;
     }
     let c: i32 = crate::port::cells_at(raw, n - 1);
     if pa_final_mark(c) {
@@ -677,7 +692,7 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
         }
     }
     if ncol >= 3 {
-        if ln_get(ln, a, lh_x1()) >= (colx1 - (sa / 2)) {
+        if ((colx1 - ln_get(ln, a, lh_x1())) * 100) <= (PA_EDGE_PCT * (colx1 - colx0)) {
             pts += JS_EDGE;
         }
         if ((colx1 - ln_get(ln, a, lh_x1())) * 5) > (colx1 - colx0) {
@@ -869,12 +884,14 @@ pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
     }
     return 0;
 }
-pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells) -> i32 {
+pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut dbg: &mut crate::port::Cells) -> i32 {
     // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
     // `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
     // Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
     // stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not
-    // upright). Answers 0.
+    // upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the
+    // fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).
+    // Answers 0.
     let mut med: i32 = 0;
     let mut indents: i32 = 0;
     let mut p: i32 = 1;
@@ -906,6 +923,7 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
     crate::port::cells_drop(gp, 0);
     crate::port::cells_drop(raw, 0);
     crate::port::cells_drop(fr, 0);
+    crate::port::cells_drop(dbg, 0);
     while p <= npages {
         pa_collect(ord, lt, p);
         n = crate::port::cells_len(ord);
@@ -939,6 +957,14 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
                 cont = 0;
                 if open == 1 {
                     score = pa_join_score(wd, lt, et, raw, prev, b, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1), crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT), mg, indents);
+                    crate::port::cells_push(dbg, i);
+                    crate::port::cells_push(dbg, prev);
+                    crate::port::cells_push(dbg, b);
+                    crate::port::cells_push(dbg, score);
+                    crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X0));
+                    crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_X1));
+                    crate::port::cells_push(dbg, ln_get(lt, prev, lh_x1()));
+                    crate::port::cells_push(dbg, crate::port::cells_at(cf, (prevfr * CF_STRIDE) + CF_COUNT));
                     if score >= JOIN_MIN {
                         cont = 1;
                     }

@@ -42,6 +42,84 @@ func ptLine(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, page int32
 	return 0
 }
 
+func ptWords(wd *port.Cells, et *port.Cells, b []byte, page int32, x int32, y int32, step int32, size int32) int32 {
+	// The words of b (split at spaces) from x, `step` apart, appended to `words`, as `pt-cline`'s.
+	var n int32 = port.BlobLen(b)
+	var y1 int32 = y + (size + 200)
+	var s int32 = 0
+	var k int32 = 0
+	var i int32 = 0
+	for k <= n {
+		if (k == n) || (port.BlobU8(b, k) == 32) {
+			if k > s {
+				var ts int32 = port.CellsLen(et)
+				var wx int32 = x + (i * step)
+				var wx1 int32 = wx + ((step * 3) / 4)
+				model.TextAppendUtf8(et, b, s, k)
+				var tl int32 = port.CellsLen(et) - ts
+				var r int32 = evidence.WdNew(wd, page, wx, y, wx1, y1, wx, y1-200, wx1, y1-200, 0, 0, ts, tl, -1, -1, -1)
+				evidence.WdSet(wd, r, evidence.WfSize(), size)
+				evidence.WdSet(wd, r, evidence.WfFont(), 0)
+				i += 1
+			}
+			s = k + 1
+		}
+		k += 1
+	}
+	return 0
+}
+
+func ptMline(wd *port.Cells, ln *port.Cells, et *port.Cells, b1 []byte, b2 []byte, page int32, x1 int32, x2 int32, y int32, step int32, size int32) int32 {
+	// ONE line holding two runs of words, as a producer that writes the rows across the columns does: the
+	// words of b1 from x1 and of b2 from x2, a gap between that no wider than D104's two sizes would keep apart.
+	var w0 int32 = evidence.WdCount(wd)
+	ptWords(wd, et, b1, page, x1, y, step, size)
+	ptWords(wd, et, b2, page, x2, y, step, size)
+	var wl int32 = evidence.WdCount(wd) - 1
+	var lx0 int32 = evidence.WdGet(wd, w0, evidence.HdX0())
+	var lx1 int32 = evidence.WdGet(wd, wl, evidence.HdX1())
+	var y1 int32 = y + (size + 200)
+	evidence.LnNew(ln, page, lx0, y, lx1, y1, lx0, y1-200, lx1, y1-200, 0, 0, w0, evidence.WdCount(wd)-w0)
+	return 0
+}
+
+func ptClineDir(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, page int32, x int32, y int32, step int32, size int32, dir int32) int32 {
+	// One line whose words stand apart (`step` from each word's left edge to the next's; a word is three
+	// quarters of that wide): what the column stage reads, its words' own boxes. Its box is the words', the
+	// baseline 2 pt above the bottom.
+	var w0 int32 = evidence.WdCount(wd)
+	var n int32 = port.BlobLen(b)
+	var y1 int32 = y + (size + 200)
+	var s int32 = 0
+	var k int32 = 0
+	var i int32 = 0
+	var xe int32 = x
+	for k <= n {
+		if (k == n) || (port.BlobU8(b, k) == 32) {
+			if k > s {
+				var ts int32 = port.CellsLen(et)
+				var wx int32 = x + (i * step)
+				var wx1 int32 = wx + ((step * 3) / 4)
+				model.TextAppendUtf8(et, b, s, k)
+				var tl int32 = port.CellsLen(et) - ts
+				var r int32 = evidence.WdNew(wd, page, wx, y, wx1, y1, wx, y1-200, wx1, y1-200, 0, dir, ts, tl, -1, -1, -1)
+				evidence.WdSet(wd, r, evidence.WfSize(), size)
+				evidence.WdSet(wd, r, evidence.WfFont(), 0)
+				xe = wx1
+				i += 1
+			}
+			s = k + 1
+		}
+		k += 1
+	}
+	evidence.LnNew(ln, page, x, y, xe, y1, x, y1-200, xe, y1-200, 0, dir, w0, evidence.WdCount(wd)-w0)
+	return 0
+}
+
+func ptCline(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, page int32, x int32, y int32, step int32, size int32) int32 {
+	return ptClineDir(wd, ln, et, b, page, x, y, step, size, 0)
+}
+
 func ptClear(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
 	port.CellsDrop(wd, 0)
 	port.CellsDrop(ln, 0)
@@ -63,7 +141,8 @@ func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var cf *port.Cells = port.NewCells()
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
-	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
+	var dbg *port.Cells = port.NewCells()
+	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg)
 }
 
 func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {
@@ -95,6 +174,11 @@ func ptBrief(t *strings.Builder, nodes *port.Cells, regions *port.Cells, text *p
 		if kind == model.NkText() {
 			port.TextCp(t, 84)
 			port.TextCp(t, 58)
+		}
+		if kind == model.NkNote() {
+			port.TextCp(t, 78)
+			port.TextI32(t, model.NodeSub(nodes, i))
+			port.TextCp(t, 59)
 		}
 		if kind == model.NkBreak() {
 			port.TextCp(t, 66)
@@ -309,6 +393,174 @@ func TestAPageEndIsAMilestoneBetweenBlocksOrInsideAParagraph(emonT *testing.T) {
 	port.AssertEq(emonT, ptRun(wd, ln, et, 3, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "empty page: well formed")
 	ptBrief(t5, nodes, regions, text)
 	port.AssertText(emonT, t5, "P1:a long line that runs on;B2;B3;P1:on the third;", "an empty page keeps its milestone")
+}
+
+func ptTwoColumnsDir(wd *port.Cells, ln *port.Cells, et *port.Cells, lastL []byte, firstR []byte, dir int32) int32 {
+	// Six rows of two columns of four words: the left column from x = 72 pt, the right from 318 pt, 15 pt
+	// apart in y; the last line of the left column and the first of the right are the arguments.
+	ptClineDir(wd, ln, et, port.TextBlob("l1a l1b l1c l1d"), 1, 7200, 10000, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("l2a l2b l2c l2d"), 1, 7200, 11500, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("l3a l3b l3c l3d"), 1, 7200, 13000, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("l4a l4b l4c l4d"), 1, 7200, 14500, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("l5a l5b l5c l5d"), 1, 7200, 16000, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, lastL, 1, 7200, 17500, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, firstR, 1, 31860, 10000, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("r2a r2b r2c r2d"), 1, 31860, 11500, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("r3a r3b r3c r3d"), 1, 31860, 13000, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("r4a r4b r4c r4d"), 1, 31860, 14500, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("r5a r5b r5c r5d"), 1, 31860, 16000, 1200, 1000, dir)
+	ptClineDir(wd, ln, et, port.TextBlob("r6a r6b r6c r6d."), 1, 31860, 17500, 1200, 1000, dir)
+	return 0
+}
+
+func ptTwoColumns(wd *port.Cells, ln *port.Cells, et *port.Cells, lastL []byte, firstR []byte) int32 {
+	return ptTwoColumnsDir(wd, ln, et, lastL, firstR, 0)
+}
+
+func TestColumnsAreReadOneAfterTheOtherAndJoinedByTheirSignals(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	// A gutter between two columns: the left column first, whole, then the right (not row by row). The left
+	// column ends in a full line with a full stop: no join. The page's `layout` is two cells, band 0, cols 0, 1.
+	ptTwoColumns(wd, ln, et, port.TextBlob("l6a l6b l6c l6d."), port.TextBlob("R1a R1b R1c R1d"))
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "columns: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "the left column, then the right")
+	port.AssertEq(emonT, model.PageLayoutCount(pages, 0), 2, "two cells")
+	port.AssertEq(emonT, model.LayoutBand(layout, model.PageLayoutFirst(pages, 0)), 0, "band 0")
+	port.AssertEq(emonT, model.LayoutCol(layout, model.PageLayoutFirst(pages, 0)), 0, "left column is col 0")
+	port.AssertEq(emonT, model.LayoutCol(layout, model.PageLayoutFirst(pages, 0)+1), 1, "right column is col 1")
+	port.AssertEq(emonT, model.LayoutRole(layout, model.PageLayoutFirst(pages, 0)), 2, "role body")
+	// The left column ends mid-sentence in a full line and the right starts in lowercase: one paragraph, one
+	// region per column fragment; the column break is a space.
+	ptClear(wd, ln, et)
+	ptTwoColumns(wd, ln, et, port.TextBlob("l6a l6b l6c l6d"), port.TextBlob("r1a r1b r1c r1d"))
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "join: well formed")
+	ptBrief(t2, nodes, regions, text)
+	port.AssertText(emonT, t2, "P2:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d r1a r1b r1c r1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "a paragraph goes on in the next column")
+	// A hyphen at the break, a lowercase start: joined without a space, the hyphen kept (no locale, SPEC 3.6).
+	ptClear(wd, ln, et)
+	ptTwoColumns(wd, ln, et, port.TextBlob("l6a l6b l6c con-"), port.TextBlob("tinues r1b r1c r1d"))
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "hyphen: well formed")
+	ptBrief(t3, nodes, regions, text)
+	port.AssertText(emonT, t3, "P2:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c con-tinues r1b r1c r1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "the hyphen at the break")
+}
+
+func TestALineWrittenAcrossTheGutterIsSplitAtIt(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	// Producers that write a row across two columns give one line with a gap in it: the words, not the
+	// lines, find the gutter, and the lines are split at it (SPEC 10.1.1 steps 1-2).
+	ptMline(wd, ln, et, port.TextBlob("l1a l1b l1c l1d"), port.TextBlob("R1a R1b R1c R1d"), 1, 7200, 14400, 10000, 1200, 1000)
+	ptMline(wd, ln, et, port.TextBlob("l2a l2b l2c l2d"), port.TextBlob("r2a r2b r2c r2d"), 1, 7200, 14400, 11500, 1200, 1000)
+	ptMline(wd, ln, et, port.TextBlob("l3a l3b l3c l3d"), port.TextBlob("r3a r3b r3c r3d"), 1, 7200, 14400, 13000, 1200, 1000)
+	ptMline(wd, ln, et, port.TextBlob("l4a l4b l4c l4d."), port.TextBlob("r4a r4b r4c r4d"), 1, 7200, 14400, 14500, 1200, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "split: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;", "the left column, then the right")
+	port.AssertEq(emonT, model.PageLayoutCount(pages, 0), 2, "two cells")
+}
+
+func TestARightToLeftPageIsReadRightColumnFirst(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	// The same page, its lines running right to left: the right column is read first (SPEC 10.1.1 step 5).
+	ptTwoColumnsDir(wd, ln, et, port.TextBlob("l6a l6b l6c l6d."), port.TextBlob("R1a R1b R1c R1d"), 1)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;", "the right column first")
+	port.AssertEq(emonT, model.LayoutX0(layout, model.PageLayoutFirst(pages, 0)), 31860, "the first cell is the right column")
+}
+
+func TestATitleAcrossTheGutterIsItsOwnBandAndMarginNotesAreNotes(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	// A title whose words stand across the gutter ends it: the title is band 0, the columns band 1.
+	ptCline(wd, ln, et, port.TextBlob("Title a b c d e f g h i j k l m n o p q r s t u v w"), 1, 7200, 6000, 1200, 1000)
+	ptTwoColumns(wd, ln, et, port.TextBlob("l6a l6b l6c l6d."), port.TextBlob("R1a R1b R1c R1d"))
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "title: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:Title a b c d e f g h i j k l m n o p q r s t u v w;P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "the title first")
+	port.AssertEq(emonT, model.PageLayoutCount(pages, 0), 3, "three cells")
+	port.AssertEq(emonT, model.LayoutBand(layout, model.PageLayoutFirst(pages, 0)), 0, "the title is band 0")
+	port.AssertEq(emonT, model.LayoutBand(layout, model.PageLayoutFirst(pages, 0)+1), 1, "the columns are band 1")
+	// Two short notes in small type right of a column of body lines: margin notes (role 6), each after the
+	// paragraph where it begins, never inside it.
+	ptClear(wd, ln, et)
+	ptCline(wd, ln, et, port.TextBlob("b1a b1b b1c b1d b1e b1f"), 1, 7200, 10000, 1200, 1000)
+	ptCline(wd, ln, et, port.TextBlob("b2a b2b b2c b2d b2e b2f"), 1, 7200, 11500, 1200, 1000)
+	ptCline(wd, ln, et, port.TextBlob("b3a b3b b3c b3d b3e b3f."), 1, 7200, 13000, 1200, 1000)
+	ptCline(wd, ln, et, port.TextBlob("b4a b4b b4c b4d b4e b4f"), 1, 7200, 16500, 1200, 1000)
+	ptCline(wd, ln, et, port.TextBlob("b5a b5b b5c b5d b5e b5f"), 1, 7200, 18000, 1200, 1000)
+	ptCline(wd, ln, et, port.TextBlob("b6a b6b b6c b6d b6e b6f."), 1, 7200, 19500, 1200, 1000)
+	ptCline(wd, ln, et, port.TextBlob("note one"), 1, 40000, 10200, 700, 800)
+	ptCline(wd, ln, et, port.TextBlob("note two"), 1, 40000, 16700, 700, 800)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed")
+	ptBrief(t2, nodes, regions, text)
+	port.AssertText(emonT, t2, "P1:b1a b1b b1c b1d b1e b1f b2a b2b b2c b2d b2e b2f b3a b3b b3c b3d b3e b3f.;N6;P1:note one;P1:b4a b4b b4c b4d b4e b4f b5a b5b b5c b5d b5e b5f b6a b6b b6c b6d b6e b6f.;N6;P1:note two;", "each note after the paragraph it begins beside")
 }
 
 func TestTheModelOfOneParagraphOnTwoPagesInJson(emonT *testing.T) {

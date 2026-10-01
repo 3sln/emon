@@ -57,6 +57,8 @@
 (defconst ^I32 LC_SMALL_DEN 20)
 (defconst ^I32 LC_RUN_GAP 2)       ;; a side run ends at a gap of more than 2 sizes
 (defconst ^I32 LC_NOTE_LINES 4)    ;; a margin note is at most 4 lines
+(defconst ^I32 LC_TABLE_RUNS 4)     ;; a row of this many runs of ink, none of more than 3 words, is a table row
+(defconst ^I32 LC_TABLE_WORDS 3)
 (defconst ^I32 LC_TIGHT_NUM 4)     ;; a line is tight under another when the gap is under 4/5 of the size
 (defconst ^I32 LC_TIGHT_DEN 5)
 
@@ -137,8 +139,8 @@
   (return (<= (* (lc-abs (- size dom)) LC_BODY_DEN) dom)))
 
 (defn ^Bool lc-is-class [^I32 size ^I32 dom]
-  (comment "Column-class type: between 3/4 and 1.35 of the dominant size (captions and notes, headings).")
-  (return (and (>= (* size 4) (* dom 3)) (<= (* size 20) (* dom 27)))))
+  (comment "Column-class type: between 17/20 and 1.35 of the dominant size (captions, headings; not footnotes).")
+  (return (and (>= (* size 20) (* dom 17)) (<= (* size 20) (* dom 27)))))
 
 (defn ^Bool lc-before [^Cells lt ^I32 a ^I32 b]
   (comment "Does line a come before line b in the rows of a fragment: higher (baselines), then further left, then")
@@ -499,6 +501,29 @@
     (cells-drop ac 0)
     (return 0)))
 
+(defn ^I32 lc-close-within [^:mut ^Cells gu ^:mut ^Cells ac ^I32 rx0 ^I32 rx1]
+  (comment "A table row spans the active intervals inside its extent: they end here (a table is a spanning element).")
+  (let [^I32 na (quot (cells-len ac) GU_STRIDE)
+        ^:mut ^I32 a 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 c 0]
+    (while (< a na)
+      (do (let [^I32 ab (* a GU_STRIDE)
+                ^I32 ax0 (cells-at ac ab)
+                ^I32 ax1 (cells-at ac (+ ab 1))]
+            (if (and (< rx0 ax0) (< ax1 rx1))
+              (lc-close gu ac a)
+              (do (if (!= wi a)
+                    (do (set c 0)
+                        (while (< c GU_STRIDE)
+                          (do (let [^I32 v (cells-at ac (+ ab c))]
+                                (cells-set ac (+ (* wi GU_STRIDE) c) v))
+                              (set c (+ c 1))))))
+                  (set wi (+ wi 1)))))
+          (set a (+ a 1))))
+    (cells-drop ac (* wi GU_STRIDE))
+    (return 0)))
+
 (defn ^I32 lc-best-piece [^Cells it ^Cells io ^I32 s ^I32 e ^I32 ax0 ^I32 ax1 ^:mut ^Cells tm]
   (comment "The widest part of [ax0, ax1] that no item of the row io[s..e) (sorted by x) touches: its ends are")
   (comment "put in tm[0] and tm[1], its width answered (0 when none).")
@@ -585,7 +610,13 @@
         ^:mut ^I32 bw 0
         ^:mut ^I32 lc 0
         ^:mut ^I32 rc 0
-        ^:mut ^I32 hit 0]
+        ^:mut ^I32 hit 0
+        ^:mut ^I32 nrun 1
+        ^:mut ^I32 cur 1
+        ^:mut ^I32 maxrun 1
+        ^:mut ^I32 tab 0
+        ^:mut ^I32 rx0 0
+        ^:mut ^I32 rx1 0]
     (cells-drop rw 0)
     (while (< k e)
       (do (let [^I32 ix (cells-at io k)
@@ -597,6 +628,26 @@
     (if (>= (cells-len rw) 3)
       (set med (cells-at rw (quot (- (cells-len rw) 1) 2))))
     (set gmin (lc-max (quot (* size LC_GUT_NUM) LC_GUT_DEN) (quot (* med 3) 2)))
+    ;; a TABLE row: four runs of ink or more, none of more than three words (cells), is a spanning element
+    (set reach (cells-at it (+ (* (cells-at io s) IT_STRIDE) 1)))
+    (set k (+ s 1))
+    (while (< k e)
+      (do (let [^I32 ix (cells-at io k)
+                ^I32 x0 (cells-at it (* ix IT_STRIDE))]
+            (if (>= (- x0 reach) (quot (* size 3) 2))
+              (do (set nrun (+ nrun 1))
+                  (set cur 1))
+              (do (set cur (+ cur 1))
+                  (if (> cur maxrun) (set maxrun cur))))
+            (set reach (lc-max reach (cells-at it (+ (* ix IT_STRIDE) 1)))))
+          (set k (+ k 1))))
+    (if (and (>= nrun LC_TABLE_RUNS) (<= maxrun LC_TABLE_WORDS))
+      (do (set tab 1)
+          (set rx0 (cells-at it (* (cells-at io s) IT_STRIDE)))
+          (set rx1 reach)
+          (cells-push gu rx0) (cells-push gu rx1) (cells-push gu ry0) (cells-push gu ry1) (cells-push gu 0)
+          (cells-push gu 0) (cells-push gu 0) (cells-push gu 0) (cells-push gu 0) (cells-push gu 2)
+          (lc-close-within gu ac rx0 rx1)))
     ;; the active intervals, cut down by this row's ink
     (let [^I32 na (quot (cells-len ac) GU_STRIDE)]
       (set a 0)
@@ -636,7 +687,7 @@
             (set a (+ a 1))))
       (cells-drop ac (* wi GU_STRIDE)))
     ;; the gaps no active interval touches begin new ones
-    (if (== hasclass 1)
+    (if (and (== hasclass 1) (== tab 0))
       (do (set reach (cells-at it (+ (* (cells-at io s) IT_STRIDE) 1)))
           (set k (+ s 1))
           (while (< k e)
@@ -693,7 +744,7 @@
                   ^I32 sz0 (cells-at it (+ (* i0 IT_STRIDE) 3))]
               (set e (+ s 1))
               (while (and (< e m)
-                          (<= (- (cells-at it (+ (* (cells-at io e) IT_STRIDE) 2)) y0) sz0))
+                          (<= (- (cells-at it (+ (* (cells-at io e) IT_STRIDE) 2)) y0) (lc-min sz0 (cells-at it (+ (* (cells-at io e) IT_STRIDE) 3)))))
                 (set e (+ e 1))))
             (lc-sort-items it io s e 1)
             (set size 0)
@@ -711,7 +762,7 @@
                   (set k (+ k 1))))
             (if (and (== hasclass 1) (> (- ry0 prevq) (* LC_HOLE dom)))
               (lc-close-all gu ac))
-            (lc-row it io s e size ry0 ry1 hasclass ac gu tm rw)
+            (lc-row it io s e (lc-min size dom) ry0 ry1 hasclass ac gu tm rw)
             (if (== hasclass 1) (set prevq (lc-max prevq ry1)))
             (set s e))))
     (lc-close-all gu ac)
@@ -760,7 +811,7 @@
           (set i (+ i 1))))
     (set i 0)
     (while (< i n)
-      (do (if (== (cells-at gu (+ (* i GU_STRIDE) GU_FLAG)) 0)
+      (do (if (!= (cells-at gu (+ (* i GU_STRIDE) GU_FLAG)) 1)
             (do (if (!= wi i)
                   (do (set f 0)
                       (while (< f GU_STRIDE)
@@ -808,7 +859,7 @@
                 ^I32 top2 (* 2 (cells-at gu (+ gb GU_TOP)))
                 ^I32 bot2 (* 2 (cells-at gu (+ gb GU_BOT)))]
             (set i 0)
-            (while (< i (cells-len ls))
+            (while (and (< i (cells-len ls)) (== (cells-at gu (+ gb GU_FLAG)) 0))
               (do (let [^I32 l (cells-at ls i)
                         ^I32 ym (lc-ym2 lt l)]
                     (if (and (>= ym top2) (<= ym bot2))
@@ -854,6 +905,20 @@
           (set i (+ i 1))))
     (return best)))
 
+(defn ^Bool lc-in-table [^Cells lt ^Cells gu ^I32 l ^I32 gx0 ^I32 gx1]
+  (comment "Does the line lie in a table row that spans the gutter (the marks of `lc-row`, flag 2): a spanning element.")
+  (let [^I32 ng (quot (cells-len gu) GU_STRIDE)
+        ^:mut ^I32 g 0]
+    (while (< g ng)
+      (do (let [^I32 gb (* g GU_STRIDE)]
+            (if (and (== (cells-at gu (+ gb GU_FLAG)) 2)
+                     (< (cells-at gu gb) gx0) (< gx1 (cells-at gu (+ gb 1)))
+                     (< (ln-get lt l (lh-y0)) (cells-at gu (+ gb GU_BOT)))
+                     (> (ln-get lt l (lh-y1)) (cells-at gu (+ gb GU_TOP))))
+              (return (== 1 1))))
+          (set g (+ g 1))))
+    (return (== 0 1))))
+
 (defn ^I32 lc-extend-up [^Cells wd ^Cells lt ^Cells ls ^:mut ^Cells gu ^I32 dom]
   (comment "A gutter's extent goes up through the lines of body size that lie on one side of it (a heading or")
   (comment "the first lines of one column before the other starts), until a line crosses it or a gap of `hole`")
@@ -872,11 +937,12 @@
                 ^I32 top0 (cells-at gu (+ gb GU_TOP))]
             (set cur top0)
             (set done 0)
+            (if (!= (cells-at gu (+ gb GU_FLAG)) 0) (set done 1))
             (set i (- n 1))
             (while (and (>= i 0) (== done 0))
               (do (let [^I32 l (cells-at ls i)]
                     (if (< (lc-ym2 lt l) (* 2 top0))
-                      (if (lc-crosses lt l gx0 gx1)
+                      (if (or (lc-crosses lt l gx0 gx1) (lc-in-table lt gu l gx0 gx1))
                         (set done 1)
                         (if (lc-is-class (lc-size wd lt l) dom)
                           (if (> (- cur (ln-get lt l (lh-y1))) (* LC_HOLE dom))
@@ -906,6 +972,7 @@
         ^:mut ^I32 hasprev 0]
     (while (< g ng)
       (do (set again 1)
+          (if (!= (cells-at gu (+ (* g GU_STRIDE) GU_FLAG)) 0) (set again 0))
           (while (== again 1)
             (do (set again 0)
                 (let [^I32 gb (* g GU_STRIDE)
@@ -999,7 +1066,7 @@
       (do (let [^I32 gb (* g GU_STRIDE)
                 ^I32 gx0 (cells-at gu gb)
                 ^I32 gx1 (cells-at gu (+ gb 1))]
-            (if (and (< xmin gx0) (< gx1 xmax)
+            (if (and (< xmin gx0) (< gx1 xmax) (== (cells-at gu (+ gb GU_FLAG)) 0)
                      (<= (* 2 (cells-at gu (+ gb GU_TOP))) ymin)
                      (>= (* 2 (cells-at gu (+ gb GU_BOT))) ymax))
               (if (and (> (lc-count-side lt ls a b gx0 gx1 0) 0) (> (lc-count-side lt ls a b gx0 gx1 1) 0))
@@ -1023,7 +1090,7 @@
                 ^I32 gx1 (cells-at gu (+ gb 1))
                 ^I32 top (cells-at gu (+ gb GU_TOP))
                 ^I32 bot (cells-at gu (+ gb GU_BOT))]
-            (if (and (< xmin gx0) (< gx1 xmax))
+            (if (and (< xmin gx0) (< gx1 xmax) (== (cells-at gu (+ gb GU_FLAG)) 0))
               (if (and (> (lc-count-side lt ls a b gx0 gx1 0) 0) (> (lc-count-side lt ls a b gx0 gx1 1) 0))
                 (do (if (and (> (* 2 top) ymin) (<= (* 2 top) ymax) (or (< best 0) (< top best)))
                       (set best top))

@@ -29,6 +29,80 @@ public final class Paratest {
         Evidence.lnNew(ln, page, x0, y0, x1, y1, x0, y1 - 200, x1, y1 - 200, rot, dir, w0, Evidence.wdCount(wd) - w0);
         return 0;
     }
+    public static int ptWords(emon.Port.Cells wd, emon.Port.Cells et, byte[] b, int page, int x, int y, int step, int size) {
+        // The words of b (split at spaces) from x, `step` apart, appended to `words`, as `pt-cline`'s.
+        int n = emon.Port.blobLen(b);
+        int y1 = y + (size + 200);
+        int s = 0;
+        int k = 0;
+        int i = 0;
+        while (k <= n) {
+            if ((k == n) || (emon.Port.blobU8(b, k) == 32)) {
+                if (k > s) {
+                    int ts = emon.Port.cellsLen(et);
+                    int wx = x + (i * step);
+                    int wx1 = wx + ((step * 3) / 4);
+                    Model.textAppendUtf8(et, b, s, k);
+                    int tl = emon.Port.cellsLen(et) - ts;
+                    int r = Evidence.wdNew(wd, page, wx, y, wx1, y1, wx, y1 - 200, wx1, y1 - 200, 0, 0, ts, tl, -1, -1, -1);
+                    Evidence.wdSet(wd, r, Evidence.wfSize(), size);
+                    Evidence.wdSet(wd, r, Evidence.wfFont(), 0);
+                    i += 1;
+                }
+                s = k + 1;
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int ptMline(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b1, byte[] b2, int page, int x1, int x2, int y, int step, int size) {
+        // ONE line holding two runs of words, as a producer that writes the rows across the columns does: the
+        // words of b1 from x1 and of b2 from x2, a gap between that no wider than D104's two sizes would keep apart.
+        int w0 = Evidence.wdCount(wd);
+        ptWords(wd, et, b1, page, x1, y, step, size);
+        ptWords(wd, et, b2, page, x2, y, step, size);
+        int wl = Evidence.wdCount(wd) - 1;
+        int lx0 = Evidence.wdGet(wd, w0, Evidence.hdX0());
+        int lx1 = Evidence.wdGet(wd, wl, Evidence.hdX1());
+        int y1 = y + (size + 200);
+        Evidence.lnNew(ln, page, lx0, y, lx1, y1, lx0, y1 - 200, lx1, y1 - 200, 0, 0, w0, Evidence.wdCount(wd) - w0);
+        return 0;
+    }
+    public static int ptClineDir(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int page, int x, int y, int step, int size, int dir) {
+        // One line whose words stand apart (`step` from each word's left edge to the next's; a word is three
+        // quarters of that wide): what the column stage reads, its words' own boxes. Its box is the words', the
+        // baseline 2 pt above the bottom.
+        int w0 = Evidence.wdCount(wd);
+        int n = emon.Port.blobLen(b);
+        int y1 = y + (size + 200);
+        int s = 0;
+        int k = 0;
+        int i = 0;
+        int xe = x;
+        while (k <= n) {
+            if ((k == n) || (emon.Port.blobU8(b, k) == 32)) {
+                if (k > s) {
+                    int ts = emon.Port.cellsLen(et);
+                    int wx = x + (i * step);
+                    int wx1 = wx + ((step * 3) / 4);
+                    Model.textAppendUtf8(et, b, s, k);
+                    int tl = emon.Port.cellsLen(et) - ts;
+                    int r = Evidence.wdNew(wd, page, wx, y, wx1, y1, wx, y1 - 200, wx1, y1 - 200, 0, dir, ts, tl, -1, -1, -1);
+                    Evidence.wdSet(wd, r, Evidence.wfSize(), size);
+                    Evidence.wdSet(wd, r, Evidence.wfFont(), 0);
+                    xe = wx1;
+                    i += 1;
+                }
+                s = k + 1;
+            }
+            k += 1;
+        }
+        Evidence.lnNew(ln, page, x, y, xe, y1, x, y1 - 200, xe, y1 - 200, 0, dir, w0, Evidence.wdCount(wd) - w0);
+        return 0;
+    }
+    public static int ptCline(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int page, int x, int y, int step, int size) {
+        return ptClineDir(wd, ln, et, b, page, x, y, step, size, 0);
+    }
     public static int ptClear(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et) {
         emon.Port.cellsDrop(wd, 0);
         emon.Port.cellsDrop(ln, 0);
@@ -49,7 +123,8 @@ public final class Paratest {
         emon.Port.Cells cf = emon.Port.newCells();
         emon.Port.Cells lo = emon.Port.newCells();
         emon.Port.Cells pr = emon.Port.newCells();
-        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr);
+        emon.Port.Cells dbg = emon.Port.newCells();
+        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg);
     }
     public static int ptRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
@@ -79,6 +154,11 @@ public final class Paratest {
             if (kind == Model.nkText()) {
                 emon.Port.textCp(t, 84);
                 emon.Port.textCp(t, 58);
+            }
+            if (kind == Model.nkNote()) {
+                emon.Port.textCp(t, 78);
+                emon.Port.textI32(t, Model.nodeSub(nodes, i));
+                emon.Port.textCp(t, 59);
             }
             if (kind == Model.nkBreak()) {
                 emon.Port.textCp(t, 66);
@@ -289,6 +369,168 @@ public final class Paratest {
         emon.Testport.assertEq(ptRun(wd, ln, et, 3, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "empty page: well formed");
         ptBrief(t5, nodes, regions, text);
         emon.Testport.assertText(t5, "P1:a long line that runs on;B2;B3;P1:on the third;", "an empty page keeps its milestone");
+    }
+    public static int ptTwoColumnsDir(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] lastL, byte[] firstR, int dir) {
+        // Six rows of two columns of four words: the left column from x = 72 pt, the right from 318 pt, 15 pt
+        // apart in y; the last line of the left column and the first of the right are the arguments.
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("l1a l1b l1c l1d"), 1, 7200, 10000, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("l2a l2b l2c l2d"), 1, 7200, 11500, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("l3a l3b l3c l3d"), 1, 7200, 13000, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("l4a l4b l4c l4d"), 1, 7200, 14500, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("l5a l5b l5c l5d"), 1, 7200, 16000, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, lastL, 1, 7200, 17500, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, firstR, 1, 31860, 10000, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("r2a r2b r2c r2d"), 1, 31860, 11500, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("r3a r3b r3c r3d"), 1, 31860, 13000, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("r4a r4b r4c r4d"), 1, 31860, 14500, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("r5a r5b r5c r5d"), 1, 31860, 16000, 1200, 1000, dir);
+        ptClineDir(wd, ln, et, emon.Testport.textBlob("r6a r6b r6c r6d."), 1, 31860, 17500, 1200, 1000, dir);
+        return 0;
+    }
+    public static int ptTwoColumns(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] lastL, byte[] firstR) {
+        return ptTwoColumnsDir(wd, ln, et, lastL, firstR, 0);
+    }
+    public static void testColumnsAreReadOneAfterTheOtherAndJoinedByTheirSignals() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        StringBuilder t3 = emon.Testport.newText();
+        // A gutter between two columns: the left column first, whole, then the right (not row by row). The left
+        // column ends in a full line with a full stop: no join. The page's `layout` is two cells, band 0, cols 0, 1.
+        ptTwoColumns(wd, ln, et, emon.Testport.textBlob("l6a l6b l6c l6d."), emon.Testport.textBlob("R1a R1b R1c R1d"));
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "columns: well formed");
+        ptBrief(t1, nodes, regions, text);
+        emon.Testport.assertText(t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "the left column, then the right");
+        emon.Testport.assertEq(Model.pageLayoutCount(pages, 0), 2, "two cells");
+        emon.Testport.assertEq(Model.layoutBand(layout, Model.pageLayoutFirst(pages, 0)), 0, "band 0");
+        emon.Testport.assertEq(Model.layoutCol(layout, Model.pageLayoutFirst(pages, 0)), 0, "left column is col 0");
+        emon.Testport.assertEq(Model.layoutCol(layout, Model.pageLayoutFirst(pages, 0) + 1), 1, "right column is col 1");
+        emon.Testport.assertEq(Model.layoutRole(layout, Model.pageLayoutFirst(pages, 0)), 2, "role body");
+        // The left column ends mid-sentence in a full line and the right starts in lowercase: one paragraph, one
+        // region per column fragment; the column break is a space.
+        ptClear(wd, ln, et);
+        ptTwoColumns(wd, ln, et, emon.Testport.textBlob("l6a l6b l6c l6d"), emon.Testport.textBlob("r1a r1b r1c r1d"));
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "join: well formed");
+        ptBrief(t2, nodes, regions, text);
+        emon.Testport.assertText(t2, "P2:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d r1a r1b r1c r1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "a paragraph goes on in the next column");
+        // A hyphen at the break, a lowercase start: joined without a space, the hyphen kept (no locale, SPEC 3.6).
+        ptClear(wd, ln, et);
+        ptTwoColumns(wd, ln, et, emon.Testport.textBlob("l6a l6b l6c con-"), emon.Testport.textBlob("tinues r1b r1c r1d"));
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "hyphen: well formed");
+        ptBrief(t3, nodes, regions, text);
+        emon.Testport.assertText(t3, "P2:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c con-tinues r1b r1c r1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "the hyphen at the break");
+    }
+    public static void testALineWrittenAcrossTheGutterIsSplitAtIt() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        // Producers that write a row across two columns give one line with a gap in it: the words, not the
+        // lines, find the gutter, and the lines are split at it (SPEC 10.1.1 steps 1-2).
+        ptMline(wd, ln, et, emon.Testport.textBlob("l1a l1b l1c l1d"), emon.Testport.textBlob("R1a R1b R1c R1d"), 1, 7200, 14400, 10000, 1200, 1000);
+        ptMline(wd, ln, et, emon.Testport.textBlob("l2a l2b l2c l2d"), emon.Testport.textBlob("r2a r2b r2c r2d"), 1, 7200, 14400, 11500, 1200, 1000);
+        ptMline(wd, ln, et, emon.Testport.textBlob("l3a l3b l3c l3d"), emon.Testport.textBlob("r3a r3b r3c r3d"), 1, 7200, 14400, 13000, 1200, 1000);
+        ptMline(wd, ln, et, emon.Testport.textBlob("l4a l4b l4c l4d."), emon.Testport.textBlob("r4a r4b r4c r4d"), 1, 7200, 14400, 14500, 1200, 1000);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "split: well formed");
+        ptBrief(t1, nodes, regions, text);
+        emon.Testport.assertText(t1, "P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d;", "the left column, then the right");
+        emon.Testport.assertEq(Model.pageLayoutCount(pages, 0), 2, "two cells");
+    }
+    public static void testARightToLeftPageIsReadRightColumnFirst() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        // The same page, its lines running right to left: the right column is read first (SPEC 10.1.1 step 5).
+        ptTwoColumnsDir(wd, ln, et, emon.Testport.textBlob("l6a l6b l6c l6d."), emon.Testport.textBlob("R1a R1b R1c R1d"), 1);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed");
+        ptBrief(t1, nodes, regions, text);
+        emon.Testport.assertText(t1, "P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;", "the right column first");
+        emon.Testport.assertEq(Model.layoutX0(layout, Model.pageLayoutFirst(pages, 0)), 31860, "the first cell is the right column");
+    }
+    public static void testATitleAcrossTheGutterIsItsOwnBandAndMarginNotesAreNotes() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        StringBuilder t1 = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        // A title whose words stand across the gutter ends it: the title is band 0, the columns band 1.
+        ptCline(wd, ln, et, emon.Testport.textBlob("Title a b c d e f g h i j k l m n o p q r s t u v w"), 1, 7200, 6000, 1200, 1000);
+        ptTwoColumns(wd, ln, et, emon.Testport.textBlob("l6a l6b l6c l6d."), emon.Testport.textBlob("R1a R1b R1c R1d"));
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "title: well formed");
+        ptBrief(t1, nodes, regions, text);
+        emon.Testport.assertText(t1, "P1:Title a b c d e f g h i j k l m n o p q r s t u v w;P1:l1a l1b l1c l1d l2a l2b l2c l2d l3a l3b l3c l3d l4a l4b l4c l4d l5a l5b l5c l5d l6a l6b l6c l6d.;P1:R1a R1b R1c R1d r2a r2b r2c r2d r3a r3b r3c r3d r4a r4b r4c r4d r5a r5b r5c r5d r6a r6b r6c r6d.;", "the title first");
+        emon.Testport.assertEq(Model.pageLayoutCount(pages, 0), 3, "three cells");
+        emon.Testport.assertEq(Model.layoutBand(layout, Model.pageLayoutFirst(pages, 0)), 0, "the title is band 0");
+        emon.Testport.assertEq(Model.layoutBand(layout, Model.pageLayoutFirst(pages, 0) + 1), 1, "the columns are band 1");
+        // Two short notes in small type right of a column of body lines: margin notes (role 6), each after the
+        // paragraph where it begins, never inside it.
+        ptClear(wd, ln, et);
+        ptCline(wd, ln, et, emon.Testport.textBlob("b1a b1b b1c b1d b1e b1f"), 1, 7200, 10000, 1200, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("b2a b2b b2c b2d b2e b2f"), 1, 7200, 11500, 1200, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("b3a b3b b3c b3d b3e b3f."), 1, 7200, 13000, 1200, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("b4a b4b b4c b4d b4e b4f"), 1, 7200, 16500, 1200, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("b5a b5b b5c b5d b5e b5f"), 1, 7200, 18000, 1200, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("b6a b6b b6c b6d b6e b6f."), 1, 7200, 19500, 1200, 1000);
+        ptCline(wd, ln, et, emon.Testport.textBlob("note one"), 1, 40000, 10200, 700, 800);
+        ptCline(wd, ln, et, emon.Testport.textBlob("note two"), 1, 40000, 16700, 700, 800);
+        emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed");
+        ptBrief(t2, nodes, regions, text);
+        emon.Testport.assertText(t2, "P1:b1a b1b b1c b1d b1e b1f b2a b2b b2c b2d b2e b2f b3a b3b b3c b3d b3e b3f.;N6;P1:note one;P1:b4a b4b b4c b4d b4e b4f b5a b5b b5c b5d b5e b5f b6a b6b b6c b6d b6e b6f.;N6;P1:note two;", "each note after the paragraph it begins beside");
     }
     public static void testTheModelOfOneParagraphOnTwoPagesInJson() {
         emon.Port.Cells wd = emon.Port.newCells();

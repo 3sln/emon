@@ -17,6 +17,8 @@ public static class Columns {
     internal const int LcSmallDen = 20;
     internal const int LcRunGap = 2;
     internal const int LcNoteLines = 4;
+    internal const int LcTableRuns = 4;
+    internal const int LcTableWords = 3;
     internal const int LcTightNum = 4;
     internal const int LcTightDen = 5;
     internal const int PrDom = 0;
@@ -95,8 +97,8 @@ public static class Columns {
         return (LcAbs(size - dom) * LcBodyDen) <= dom;
     }
     internal static bool LcIsClass(int size, int dom) {
-        // Column-class type: between 3/4 and 1.35 of the dominant size (captions and notes, headings).
-        return ((size * 4) >= (dom * 3)) && ((size * 20) <= (dom * 27));
+        // Column-class type: between 17/20 and 1.35 of the dominant size (captions, headings; not footnotes).
+        return ((size * 20) >= (dom * 17)) && ((size * 20) <= (dom * 27));
     }
     internal static bool LcBefore(emon.Port.Cells lt, int a, int b) {
         // Does line a come before line b in the rows of a fragment: higher (baselines), then further left, then
@@ -525,6 +527,34 @@ public static class Columns {
         emon.Port.CellsDrop(ac, 0);
         return 0;
     }
+    internal static int LcCloseWithin(emon.Port.Cells gu, emon.Port.Cells ac, int rx0, int rx1) {
+        // A table row spans the active intervals inside its extent: they end here (a table is a spanning element).
+        int na = emon.Port.CellsLen(ac) / GuStride;
+        int a = 0;
+        int wi = 0;
+        int c = 0;
+        while (a < na) {
+            int ab = a * GuStride;
+            int ax0 = emon.Port.CellsAt(ac, ab);
+            int ax1 = emon.Port.CellsAt(ac, ab + 1);
+            if ((rx0 < ax0) && (ax1 < rx1)) {
+                LcClose(gu, ac, a);
+            } else {
+                if (wi != a) {
+                    c = 0;
+                    while (c < GuStride) {
+                        int v = emon.Port.CellsAt(ac, ab + c);
+                        emon.Port.CellsSet(ac, (wi * GuStride) + c, v);
+                        c += 1;
+                    }
+                }
+                wi += 1;
+            }
+            a += 1;
+        }
+        emon.Port.CellsDrop(ac, wi * GuStride);
+        return 0;
+    }
     internal static int LcBestPiece(emon.Port.Cells it, emon.Port.Cells io, int s, int e, int ax0, int ax1, emon.Port.Cells tm) {
         // The widest part of [ax0, ax1] that no item of the row io[s..e) (sorted by x) touches: its ends are
         // put in tm[0] and tm[1], its width answered (0 when none).
@@ -629,6 +659,12 @@ public static class Columns {
         int lc = 0;
         int rc = 0;
         int hit = 0;
+        int nrun = 1;
+        int cur = 1;
+        int maxrun = 1;
+        int tab = 0;
+        int rx0 = 0;
+        int rx1 = 0;
         emon.Port.CellsDrop(rw, 0);
         while (k < e) {
             int ix = emon.Port.CellsAt(io, k);
@@ -642,6 +678,39 @@ public static class Columns {
             med = emon.Port.CellsAt(rw, (emon.Port.CellsLen(rw) - 1) / 2);
         }
         gmin = LcMax((size * LcGutNum) / LcGutDen, (med * 3) / 2);
+        reach = emon.Port.CellsAt(it, (emon.Port.CellsAt(io, s) * ItStride) + 1);
+        k = s + 1;
+        while (k < e) {
+            int ix = emon.Port.CellsAt(io, k);
+            int x0 = emon.Port.CellsAt(it, ix * ItStride);
+            if ((x0 - reach) >= ((size * 3) / 2)) {
+                nrun += 1;
+                cur = 1;
+            } else {
+                cur += 1;
+                if (cur > maxrun) {
+                    maxrun = cur;
+                }
+            }
+            reach = LcMax(reach, emon.Port.CellsAt(it, (ix * ItStride) + 1));
+            k += 1;
+        }
+        if ((nrun >= LcTableRuns) && (maxrun <= LcTableWords)) {
+            tab = 1;
+            rx0 = emon.Port.CellsAt(it, emon.Port.CellsAt(io, s) * ItStride);
+            rx1 = reach;
+            emon.Port.CellsPush(gu, rx0);
+            emon.Port.CellsPush(gu, rx1);
+            emon.Port.CellsPush(gu, ry0);
+            emon.Port.CellsPush(gu, ry1);
+            emon.Port.CellsPush(gu, 0);
+            emon.Port.CellsPush(gu, 0);
+            emon.Port.CellsPush(gu, 0);
+            emon.Port.CellsPush(gu, 0);
+            emon.Port.CellsPush(gu, 0);
+            emon.Port.CellsPush(gu, 2);
+            LcCloseWithin(gu, ac, rx0, rx1);
+        }
         int na = emon.Port.CellsLen(ac) / GuStride;
         a = 0;
         while (a < na) {
@@ -687,7 +756,7 @@ public static class Columns {
             a += 1;
         }
         emon.Port.CellsDrop(ac, wi * GuStride);
-        if (hasclass == 1) {
+        if ((hasclass == 1) && (tab == 0)) {
             reach = emon.Port.CellsAt(it, (emon.Port.CellsAt(io, s) * ItStride) + 1);
             k = s + 1;
             while (k < e) {
@@ -748,7 +817,7 @@ public static class Columns {
             int y0 = emon.Port.CellsAt(it, (i0 * ItStride) + 2);
             int sz0 = emon.Port.CellsAt(it, (i0 * ItStride) + 3);
             e = s + 1;
-            while ((e < m) && ((emon.Port.CellsAt(it, (emon.Port.CellsAt(io, e) * ItStride) + 2) - y0) <= sz0)) {
+            while ((e < m) && ((emon.Port.CellsAt(it, (emon.Port.CellsAt(io, e) * ItStride) + 2) - y0) <= LcMin(sz0, emon.Port.CellsAt(it, (emon.Port.CellsAt(io, e) * ItStride) + 3)))) {
                 e += 1;
             }
             LcSortItems(it, io, s, e, 1);
@@ -771,7 +840,7 @@ public static class Columns {
             if ((hasclass == 1) && ((ry0 - prevq) > (LcHole * dom))) {
                 LcCloseAll(gu, ac);
             }
-            LcRow(it, io, s, e, size, ry0, ry1, hasclass, ac, gu, tm, rw);
+            LcRow(it, io, s, e, LcMin(size, dom), ry0, ry1, hasclass, ac, gu, tm, rw);
             if (hasclass == 1) {
                 prevq = LcMax(prevq, ry1);
             }
@@ -824,7 +893,7 @@ public static class Columns {
         }
         i = 0;
         while (i < n) {
-            if (emon.Port.CellsAt(gu, (i * GuStride) + GuFlag) == 0) {
+            if (emon.Port.CellsAt(gu, (i * GuStride) + GuFlag) != 1) {
                 if (wi != i) {
                     f = 0;
                     while (f < GuStride) {
@@ -881,7 +950,7 @@ public static class Columns {
             int top2 = 2 * emon.Port.CellsAt(gu, gb + GuTop);
             int bot2 = 2 * emon.Port.CellsAt(gu, gb + GuBot);
             i = 0;
-            while (i < emon.Port.CellsLen(ls)) {
+            while ((i < emon.Port.CellsLen(ls)) && (emon.Port.CellsAt(gu, gb + GuFlag) == 0)) {
                 int l = emon.Port.CellsAt(ls, i);
                 int ym = LcYm2(lt, l);
                 if ((ym >= top2) && (ym <= bot2)) {
@@ -934,6 +1003,19 @@ public static class Columns {
         }
         return best;
     }
+    internal static bool LcInTable(emon.Port.Cells lt, emon.Port.Cells gu, int l, int gx0, int gx1) {
+        // Does the line lie in a table row that spans the gutter (the marks of `lc-row`, flag 2): a spanning element.
+        int ng = emon.Port.CellsLen(gu) / GuStride;
+        int g = 0;
+        while (g < ng) {
+            int gb = g * GuStride;
+            if ((emon.Port.CellsAt(gu, gb + GuFlag) == 2) && (emon.Port.CellsAt(gu, gb) < gx0) && (gx1 < emon.Port.CellsAt(gu, gb + 1)) && (Evidence.LnGet(lt, l, Evidence.LhY0()) < emon.Port.CellsAt(gu, gb + GuBot)) && (Evidence.LnGet(lt, l, Evidence.LhY1()) > emon.Port.CellsAt(gu, gb + GuTop))) {
+                return 1 == 1;
+            }
+            g += 1;
+        }
+        return 0 == 1;
+    }
     internal static int LcExtendUp(emon.Port.Cells wd, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells gu, int dom) {
         // A gutter's extent goes up through the lines of body size that lie on one side of it (a heading or
         // the first lines of one column before the other starts), until a line crosses it or a gap of `hole`
@@ -952,11 +1034,14 @@ public static class Columns {
             int top0 = emon.Port.CellsAt(gu, gb + GuTop);
             cur = top0;
             done = 0;
+            if (emon.Port.CellsAt(gu, gb + GuFlag) != 0) {
+                done = 1;
+            }
             i = n - 1;
             while ((i >= 0) && (done == 0)) {
                 int l = emon.Port.CellsAt(ls, i);
                 if (LcYm2(lt, l) < (2 * top0)) {
-                    if (LcCrosses(lt, l, gx0, gx1)) {
+                    if (LcCrosses(lt, l, gx0, gx1) || LcInTable(lt, gu, l, gx0, gx1)) {
                         done = 1;
                     } else if (LcIsClass(LcSize(wd, lt, l), dom)) {
                         if ((cur - Evidence.LnGet(lt, l, Evidence.LhY1())) > (LcHole * dom)) {
@@ -992,6 +1077,9 @@ public static class Columns {
         int hasprev = 0;
         while (g < ng) {
             again = 1;
+            if (emon.Port.CellsAt(gu, (g * GuStride) + GuFlag) != 0) {
+                again = 0;
+            }
             while (again == 1) {
                 again = 0;
                 int gb = g * GuStride;
@@ -1098,7 +1186,7 @@ public static class Columns {
             int gb = g * GuStride;
             int gx0 = emon.Port.CellsAt(gu, gb);
             int gx1 = emon.Port.CellsAt(gu, gb + 1);
-            if ((xmin < gx0) && (gx1 < xmax) && ((2 * emon.Port.CellsAt(gu, gb + GuTop)) <= ymin) && ((2 * emon.Port.CellsAt(gu, gb + GuBot)) >= ymax)) {
+            if ((xmin < gx0) && (gx1 < xmax) && (emon.Port.CellsAt(gu, gb + GuFlag) == 0) && ((2 * emon.Port.CellsAt(gu, gb + GuTop)) <= ymin) && ((2 * emon.Port.CellsAt(gu, gb + GuBot)) >= ymax)) {
                 if ((LcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (LcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0)) {
                     return g;
                 }
@@ -1123,7 +1211,7 @@ public static class Columns {
             int gx1 = emon.Port.CellsAt(gu, gb + 1);
             int top = emon.Port.CellsAt(gu, gb + GuTop);
             int bot = emon.Port.CellsAt(gu, gb + GuBot);
-            if ((xmin < gx0) && (gx1 < xmax)) {
+            if ((xmin < gx0) && (gx1 < xmax) && (emon.Port.CellsAt(gu, gb + GuFlag) == 0)) {
                 if ((LcCountSide(lt, ls, a, b, gx0, gx1, 0) > 0) && (LcCountSide(lt, ls, a, b, gx0, gx1, 1) > 0)) {
                     if (((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best))) {
                         best = top;

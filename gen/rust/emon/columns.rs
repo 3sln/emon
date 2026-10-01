@@ -16,6 +16,8 @@ pub(crate) const LC_SMALL_NUM: i32 = 19;
 pub(crate) const LC_SMALL_DEN: i32 = 20;
 pub(crate) const LC_RUN_GAP: i32 = 2;
 pub(crate) const LC_NOTE_LINES: i32 = 4;
+pub(crate) const LC_TABLE_RUNS: i32 = 4;
+pub(crate) const LC_TABLE_WORDS: i32 = 3;
 pub(crate) const LC_TIGHT_NUM: i32 = 4;
 pub(crate) const LC_TIGHT_DEN: i32 = 5;
 pub(crate) const PR_DOM: i32 = 0;
@@ -94,8 +96,8 @@ pub(crate) fn lc_is_body(size: i32, dom: i32) -> bool {
     return (lc_abs(size - dom) * LC_BODY_DEN) <= dom;
 }
 pub(crate) fn lc_is_class(size: i32, dom: i32) -> bool {
-    // Column-class type: between 3/4 and 1.35 of the dominant size (captions and notes, headings).
-    return ((size * 4) >= (dom * 3)) && ((size * 20) <= (dom * 27));
+    // Column-class type: between 17/20 and 1.35 of the dominant size (captions, headings; not footnotes).
+    return ((size * 20) >= (dom * 17)) && ((size * 20) <= (dom * 27));
 }
 pub(crate) fn lc_before(lt: &mut crate::port::Cells, a: i32, b: i32) -> bool {
     // Does line a come before line b in the rows of a fragment: higher (baselines), then further left, then
@@ -524,6 +526,34 @@ pub(crate) fn lc_close_all(mut gu: &mut crate::port::Cells, mut ac: &mut crate::
     crate::port::cells_drop(ac, 0);
     return 0;
 }
+pub(crate) fn lc_close_within(mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, rx0: i32, rx1: i32) -> i32 {
+    // A table row spans the active intervals inside its extent: they end here (a table is a spanning element).
+    let na: i32 = crate::port::cells_len(ac) / GU_STRIDE;
+    let mut a: i32 = 0;
+    let mut wi: i32 = 0;
+    let mut c: i32 = 0;
+    while a < na {
+        let ab: i32 = a * GU_STRIDE;
+        let ax0: i32 = crate::port::cells_at(ac, ab);
+        let ax1: i32 = crate::port::cells_at(ac, ab + 1);
+        if (rx0 < ax0) && (ax1 < rx1) {
+            lc_close(gu, ac, a);
+        } else {
+            if wi != a {
+                c = 0;
+                while c < GU_STRIDE {
+                    let v: i32 = crate::port::cells_at(ac, ab + c);
+                    crate::port::cells_set(ac, (wi * GU_STRIDE) + c, v);
+                    c += 1;
+                }
+            }
+            wi += 1;
+        }
+        a += 1;
+    }
+    crate::port::cells_drop(ac, wi * GU_STRIDE);
+    return 0;
+}
 pub(crate) fn lc_best_piece(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s: i32, e: i32, ax0: i32, ax1: i32, mut tm: &mut crate::port::Cells) -> i32 {
     // The widest part of [ax0, ax1] that no item of the row io[s..e) (sorted by x) touches: its ends are
     // put in tm[0] and tm[1], its width answered (0 when none).
@@ -628,6 +658,12 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
     let mut lc: i32 = 0;
     let mut rc: i32 = 0;
     let mut hit: i32 = 0;
+    let mut nrun: i32 = 1;
+    let mut cur: i32 = 1;
+    let mut maxrun: i32 = 1;
+    let mut tab: i32 = 0;
+    let mut rx0: i32 = 0;
+    let mut rx1: i32 = 0;
     crate::port::cells_drop(rw, 0);
     while k < e {
         let ix: i32 = crate::port::cells_at(io, k);
@@ -641,6 +677,39 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
         med = crate::port::cells_at(rw, (crate::port::cells_len(rw) - 1) / 2);
     }
     gmin = lc_max((size * LC_GUT_NUM) / LC_GUT_DEN, (med * 3) / 2);
+    reach = crate::port::cells_at(it, (crate::port::cells_at(io, s) * IT_STRIDE) + 1);
+    k = s + 1;
+    while k < e {
+        let ix: i32 = crate::port::cells_at(io, k);
+        let x0: i32 = crate::port::cells_at(it, ix * IT_STRIDE);
+        if (x0 - reach) >= ((size * 3) / 2) {
+            nrun += 1;
+            cur = 1;
+        } else {
+            cur += 1;
+            if cur > maxrun {
+                maxrun = cur;
+            }
+        }
+        reach = lc_max(reach, crate::port::cells_at(it, (ix * IT_STRIDE) + 1));
+        k += 1;
+    }
+    if (nrun >= LC_TABLE_RUNS) && (maxrun <= LC_TABLE_WORDS) {
+        tab = 1;
+        rx0 = crate::port::cells_at(it, crate::port::cells_at(io, s) * IT_STRIDE);
+        rx1 = reach;
+        crate::port::cells_push(gu, rx0);
+        crate::port::cells_push(gu, rx1);
+        crate::port::cells_push(gu, ry0);
+        crate::port::cells_push(gu, ry1);
+        crate::port::cells_push(gu, 0);
+        crate::port::cells_push(gu, 0);
+        crate::port::cells_push(gu, 0);
+        crate::port::cells_push(gu, 0);
+        crate::port::cells_push(gu, 0);
+        crate::port::cells_push(gu, 2);
+        lc_close_within(gu, ac, rx0, rx1);
+    }
     let na: i32 = crate::port::cells_len(ac) / GU_STRIDE;
     a = 0;
     while a < na {
@@ -686,7 +755,7 @@ pub(crate) fn lc_row(it: &mut crate::port::Cells, io: &mut crate::port::Cells, s
         a += 1;
     }
     crate::port::cells_drop(ac, wi * GU_STRIDE);
-    if hasclass == 1 {
+    if (hasclass == 1) && (tab == 0) {
         reach = crate::port::cells_at(it, (crate::port::cells_at(io, s) * IT_STRIDE) + 1);
         k = s + 1;
         while k < e {
@@ -747,7 +816,7 @@ pub(crate) fn lc_sweep(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells,
         let y0: i32 = crate::port::cells_at(it, (i0 * IT_STRIDE) + 2);
         let sz0: i32 = crate::port::cells_at(it, (i0 * IT_STRIDE) + 3);
         e = s + 1;
-        while (e < m) && ((crate::port::cells_at(it, (crate::port::cells_at(io, e) * IT_STRIDE) + 2) - y0) <= sz0) {
+        while (e < m) && ((crate::port::cells_at(it, (crate::port::cells_at(io, e) * IT_STRIDE) + 2) - y0) <= lc_min(sz0, crate::port::cells_at(it, (crate::port::cells_at(io, e) * IT_STRIDE) + 3))) {
             e += 1;
         }
         lc_sort_items(it, io, s, e, 1);
@@ -770,7 +839,7 @@ pub(crate) fn lc_sweep(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells,
         if (hasclass == 1) && ((ry0 - prevq) > (LC_HOLE * dom)) {
             lc_close_all(gu, ac);
         }
-        lc_row(it, io, s, e, size, ry0, ry1, hasclass, ac, gu, tm, rw);
+        lc_row(it, io, s, e, lc_min(size, dom), ry0, ry1, hasclass, ac, gu, tm, rw);
         if hasclass == 1 {
             prevq = lc_max(prevq, ry1);
         }
@@ -823,7 +892,7 @@ pub(crate) fn lc_merge(mut gu: &mut crate::port::Cells, dom: i32) -> i32 {
     }
     i = 0;
     while i < n {
-        if crate::port::cells_at(gu, (i * GU_STRIDE) + GU_FLAG) == 0 {
+        if crate::port::cells_at(gu, (i * GU_STRIDE) + GU_FLAG) != 1 {
             if wi != i {
                 f = 0;
                 while f < GU_STRIDE {
@@ -880,7 +949,7 @@ pub(crate) fn lc_split_all(wd: &mut crate::port::Cells, mut lt: &mut crate::port
         let top2: i32 = 2 * crate::port::cells_at(gu, gb + GU_TOP);
         let bot2: i32 = 2 * crate::port::cells_at(gu, gb + GU_BOT);
         i = 0;
-        while i < crate::port::cells_len(ls) {
+        while (i < crate::port::cells_len(ls)) && (crate::port::cells_at(gu, gb + GU_FLAG) == 0) {
             let l: i32 = crate::port::cells_at(ls, i);
             let ym: i32 = lc_ym2(lt, l);
             if (ym >= top2) && (ym <= bot2) {
@@ -933,6 +1002,19 @@ pub(crate) fn lc_below(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells,
     }
     return best;
 }
+pub(crate) fn lc_in_table(lt: &mut crate::port::Cells, gu: &mut crate::port::Cells, l: i32, gx0: i32, gx1: i32) -> bool {
+    // Does the line lie in a table row that spans the gutter (the marks of `lc-row`, flag 2): a spanning element.
+    let ng: i32 = crate::port::cells_len(gu) / GU_STRIDE;
+    let mut g: i32 = 0;
+    while g < ng {
+        let gb: i32 = g * GU_STRIDE;
+        if (crate::port::cells_at(gu, gb + GU_FLAG) == 2) && (crate::port::cells_at(gu, gb) < gx0) && (gx1 < crate::port::cells_at(gu, gb + 1)) && (ln_get(lt, l, lh_y0()) < crate::port::cells_at(gu, gb + GU_BOT)) && (ln_get(lt, l, lh_y1()) > crate::port::cells_at(gu, gb + GU_TOP)) {
+            return 1 == 1;
+        }
+        g += 1;
+    }
+    return 0 == 1;
+}
 pub(crate) fn lc_extend_up(wd: &mut crate::port::Cells, lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, dom: i32) -> i32 {
     // A gutter's extent goes up through the lines of body size that lie on one side of it (a heading or
     // the first lines of one column before the other starts), until a line crosses it or a gap of `hole`
@@ -951,11 +1033,14 @@ pub(crate) fn lc_extend_up(wd: &mut crate::port::Cells, lt: &mut crate::port::Ce
         let top0: i32 = crate::port::cells_at(gu, gb + GU_TOP);
         cur = top0;
         done = 0;
+        if crate::port::cells_at(gu, gb + GU_FLAG) != 0 {
+            done = 1;
+        }
         i = n - 1;
         while (i >= 0) && (done == 0) {
             let l: i32 = crate::port::cells_at(ls, i);
             if lc_ym2(lt, l) < (2 * top0) {
-                if lc_crosses(lt, l, gx0, gx1) {
+                if lc_crosses(lt, l, gx0, gx1) || lc_in_table(lt, gu, l, gx0, gx1) {
                     done = 1;
                 } else if lc_is_class(lc_size(wd, lt, l), dom) {
                     if (cur - ln_get(lt, l, lh_y1())) > (LC_HOLE * dom) {
@@ -991,6 +1076,9 @@ pub(crate) fn lc_trim_bottom(wd: &mut crate::port::Cells, lt: &mut crate::port::
     let mut hasprev: i32 = 0;
     while g < ng {
         again = 1;
+        if crate::port::cells_at(gu, (g * GU_STRIDE) + GU_FLAG) != 0 {
+            again = 0;
+        }
         while again == 1 {
             again = 0;
             let gb: i32 = g * GU_STRIDE;
@@ -1097,7 +1185,7 @@ pub(crate) fn lc_vcut(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, 
         let gb: i32 = g * GU_STRIDE;
         let gx0: i32 = crate::port::cells_at(gu, gb);
         let gx1: i32 = crate::port::cells_at(gu, gb + 1);
-        if (xmin < gx0) && (gx1 < xmax) && ((2 * crate::port::cells_at(gu, gb + GU_TOP)) <= ymin) && ((2 * crate::port::cells_at(gu, gb + GU_BOT)) >= ymax) {
+        if (xmin < gx0) && (gx1 < xmax) && (crate::port::cells_at(gu, gb + GU_FLAG) == 0) && ((2 * crate::port::cells_at(gu, gb + GU_TOP)) <= ymin) && ((2 * crate::port::cells_at(gu, gb + GU_BOT)) >= ymax) {
             if (lc_count_side(lt, ls, a, b, gx0, gx1, 0) > 0) && (lc_count_side(lt, ls, a, b, gx0, gx1, 1) > 0) {
                 return g;
             }
@@ -1122,7 +1210,7 @@ pub(crate) fn lc_hcut(lt: &mut crate::port::Cells, ls: &mut crate::port::Cells, 
         let gx1: i32 = crate::port::cells_at(gu, gb + 1);
         let top: i32 = crate::port::cells_at(gu, gb + GU_TOP);
         let bot: i32 = crate::port::cells_at(gu, gb + GU_BOT);
-        if (xmin < gx0) && (gx1 < xmax) {
+        if (xmin < gx0) && (gx1 < xmax) && (crate::port::cells_at(gu, gb + GU_FLAG) == 0) {
             if (lc_count_side(lt, ls, a, b, gx0, gx1, 0) > 0) && (lc_count_side(lt, ls, a, b, gx0, gx1, 1) > 0) {
                 if ((2 * top) > ymin) && ((2 * top) <= ymax) && ((best < 0) || (top < best)) {
                     best = top;
