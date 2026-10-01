@@ -15,6 +15,7 @@ import (
 	"emon/evidence"
 	"emon/ocrprobe"
 	"emon/plan"
+	_ "emon/pngenc"
 	"emon/port"
 )
 

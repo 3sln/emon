@@ -61,6 +61,8 @@
     (fs/copy-tree "gen/go" d)
     (fs/create-dirs (str d "/port"))
     (doseq [f (fs/glob "host/go/port" "*.go")] (fs/copy f (str d "/port/" (fs/file-name f))))
+    (fs/create-dirs (str d "/pngenc"))
+    (fs/copy "host/go/pngenc/pngenc.go" (str d "/pngenc/pngenc.go"))
     (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")
     (fs/copy "test/plan/go/main.go" (str d "/main.go"))
     (let [r (exec d "go" "build" "-o" "prog" ".")]

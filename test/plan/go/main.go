@@ -18,6 +18,7 @@ import (
 	"emon/evidence"
 	"emon/plan"
 	"emon/planprobe"
+	_ "emon/pngenc"
 	"emon/port"
 )
 

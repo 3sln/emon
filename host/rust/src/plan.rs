@@ -689,12 +689,33 @@ impl Edn {
 }
 
 // ------------------------------------------------------------------- PNG
-// Lossless, 8 bits, gray (1) or RGB (3), no interlace, filter 0, and the zlib
-// stream in STORED blocks: no compressor is needed, the bytes are a function of
-// the pixels alone (so two hosts write the same file), and any PNG reader opens
-// it. The decoder reads what this writes and any stored-block PNG with the five
-// filters; a compressed PNG is `png-compressed` for now (a compressed writer is
-// a follow-up: a real page is 8.7 MB per gray 300-dpi A4 this way).
+// Writing: emon's own canonical PNG encoder (`emon.png`, D124, SPEC 10.11),
+// compressed and byte-identical on all four targets, so a recording is a
+// function of the pixels and every host writes the same file (D125 revises
+// D090). The encoder is kin; this only feeds it rows.
+// Reading: any valid non-interlaced PNG (gray, gray+alpha, RGB, RGBA, palette,
+// depths 1 to 16), whoever wrote it; the alpha channel is dropped and a palette
+// is expanded, so the bitmap is gray (1) or RGB (3).
+
+pub fn png_encode(b: &Bitmap) -> Vec<u8> {
+    use crate::emon::png::{png_begin, png_end, png_row};
+    use crate::port::{cells_drop, Buf};
+    let (w, h, ch) = (b.width(), b.height(), b.channels());
+    let px = b.to_bytes();
+    let (mut ws, mut out, mut z, mut pal, mut row) =
+        (Cells::new(), Buf::new(), Buf::new(), Cells::new(), Cells::new());
+    png_begin(&mut ws, &mut out, &mut z, w, h, if ch == 1 { 0 } else { 2 }, 8, 0, &mut pal, 0, 0);
+    let n = (w * ch) as usize;
+    for y in 0..h as usize {
+        cells_drop(&mut row, 0);
+        for &v in &px[y * n..(y + 1) * n] {
+            cells_push(&mut row, v as i32);
+        }
+        png_row(&mut ws, &mut out, &mut z, &mut row, 0);
+    }
+    png_end(&mut ws, &mut out, &mut z);
+    out.0
+}
 
 fn crc32(data: &[u8]) -> u32 {
     let mut c: u32 = 0xFFFF_FFFF;
@@ -716,52 +737,203 @@ fn adler32(data: &[u8]) -> u32 {
     (b << 16) | a
 }
 
-fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
-    out.extend_from_slice(&(body.len() as u32).to_be_bytes());
-    let mut c = kind.to_vec();
-    c.extend_from_slice(body);
-    out.extend_from_slice(&c);
-    out.extend_from_slice(&crc32(&c).to_be_bytes());
+// RFC 1951, after zlib's puff: canonical Huffman decoding by code length counts.
+struct Bits<'a> {
+    d: &'a [u8],
+    pos: usize,
+    bit: u32,
+    cnt: u32,
 }
 
-pub fn png_encode(b: &Bitmap) -> Vec<u8> {
-    let (w, h, ch) = (b.width() as usize, b.height() as usize, b.channels() as usize);
-    let pixels = b.to_bytes();
-    let mut raw = Vec::with_capacity(h * (1 + w * ch));
-    for y in 0..h {
-        raw.push(0);
-        raw.extend_from_slice(&pixels[y * w * ch..(y + 1) * w * ch]);
+impl<'a> Bits<'a> {
+    fn need(&mut self, n: u32) -> Result<u32, String> {
+        while self.cnt < n {
+            if self.pos >= self.d.len() {
+                return Err("a truncated zlib stream".to_string());
+            }
+            self.bit |= (self.d[self.pos] as u32) << self.cnt;
+            self.pos += 1;
+            self.cnt += 8;
+        }
+        let v = self.bit & ((1u32 << n) - 1);
+        self.bit >>= n;
+        self.cnt -= n;
+        Ok(v)
     }
-    let mut z = vec![0x78, 0x01];
-    if raw.is_empty() {
-        z.extend_from_slice(&[1, 0, 0, 0xFF, 0xFF]);
+}
+
+struct Huff {
+    count: [u16; 16],
+    symbol: Vec<u16>,
+}
+
+fn huff(lengths: &[u8]) -> Result<Huff, String> {
+    let mut count = [0u16; 16];
+    for &l in lengths {
+        count[l as usize] += 1;
     }
-    let mut i = 0;
-    while i < raw.len() {
-        let n = std::cmp::min(65535, raw.len() - i);
-        z.push(if i + n == raw.len() { 1 } else { 0 });
-        z.extend_from_slice(&(n as u16).to_le_bytes());
-        z.extend_from_slice(&(!(n as u16)).to_le_bytes());
-        z.extend_from_slice(&raw[i..i + n]);
-        i += n;
+    let mut left: i32 = 1;
+    for len in 1..16 {
+        left = (left << 1) - count[len] as i32;
+        if left < 0 {
+            return Err("a zlib stream with an over-subscribed code".to_string());
+        }
     }
-    z.extend_from_slice(&adler32(&raw).to_be_bytes());
-    let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
-    let mut ihdr = Vec::new();
-    ihdr.extend_from_slice(&(b.width() as u32).to_be_bytes());
-    ihdr.extend_from_slice(&(b.height() as u32).to_be_bytes());
-    ihdr.extend_from_slice(&[8, if ch == 1 { 0 } else { 2 }, 0, 0, 0]);
-    chunk(&mut out, b"IHDR", &ihdr);
-    chunk(&mut out, b"IDAT", &z);
-    chunk(&mut out, b"IEND", &[]);
-    out
+    let mut offs = [0u16; 16];
+    for len in 1..15 {
+        offs[len + 1] = offs[len] + count[len];
+    }
+    let mut symbol = vec![0u16; lengths.len()];
+    for (s, &l) in lengths.iter().enumerate() {
+        if l != 0 {
+            symbol[offs[l as usize] as usize] = s as u16;
+            offs[l as usize] += 1;
+        }
+    }
+    Ok(Huff { count, symbol })
+}
+
+fn decode_sym(b: &mut Bits, h: &Huff) -> Result<usize, String> {
+    let (mut code, mut first, mut index) = (0i32, 0i32, 0i32);
+    for len in 1..16 {
+        code |= b.need(1)? as i32;
+        let count = h.count[len] as i32;
+        if code - count < first {
+            return Ok(h.symbol[(index + (code - first)) as usize] as usize);
+        }
+        index += count;
+        first += count;
+        first <<= 1;
+        code <<= 1;
+    }
+    Err("a zlib stream with a bad code".to_string())
+}
+
+const LBASE: [u16; 29] = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+const LEXT: [u8; 29] = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+const DBASE: [u16; 30] = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+const DEXT: [u8; 30] = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+
+fn inflate_codes(b: &mut Bits, out: &mut Vec<u8>, lit: &Huff, dist: &Huff) -> Result<(), String> {
+    loop {
+        let s = decode_sym(b, lit)?;
+        if s < 256 {
+            out.push(s as u8);
+        } else if s == 256 {
+            return Ok(());
+        } else {
+            let s = s - 257;
+            if s >= 29 {
+                return Err("a zlib stream with a bad length code".to_string());
+            }
+            let len = LBASE[s] as usize + b.need(LEXT[s] as u32)? as usize;
+            let ds = decode_sym(b, dist)?;
+            if ds >= 30 {
+                return Err("a zlib stream with a bad distance code".to_string());
+            }
+            let d = DBASE[ds] as usize + b.need(DEXT[ds] as u32)? as usize;
+            if d > out.len() {
+                return Err("a zlib stream that reaches before its start".to_string());
+            }
+            for _ in 0..len {
+                out.push(out[out.len() - d]);
+            }
+        }
+    }
+}
+
+fn zlib_inflate(z: &[u8]) -> Result<Vec<u8>, String> {
+    if z.len() < 6 || z[0] & 15 != 8 || ((z[0] as u32) << 8 | z[1] as u32) % 31 != 0 || z[1] & 0x20 != 0 {
+        return Err("a bad zlib header".to_string());
+    }
+    let mut b = Bits { d: z, pos: 2, bit: 0, cnt: 0 };
+    let mut out: Vec<u8> = Vec::new();
+    loop {
+        let last = b.need(1)?;
+        match b.need(2)? {
+            0 => {
+                b.bit = 0;
+                b.cnt = 0;
+                if b.pos + 4 > z.len() {
+                    return Err("a truncated stored block".to_string());
+                }
+                let n = u16::from_le_bytes([z[b.pos], z[b.pos + 1]]) as usize;
+                let nn = u16::from_le_bytes([z[b.pos + 2], z[b.pos + 3]]) as usize;
+                if n != (!nn & 0xFFFF) || b.pos + 4 + n > z.len() {
+                    return Err("a truncated stored block".to_string());
+                }
+                out.extend_from_slice(&z[b.pos + 4..b.pos + 4 + n]);
+                b.pos += 4 + n;
+            }
+            1 => {
+                let mut l = [0u8; 288];
+                for i in 0..288 {
+                    l[i] = if i < 144 { 8 } else if i < 256 { 9 } else if i < 280 { 7 } else { 8 };
+                }
+                inflate_codes(&mut b, &mut out, &huff(&l)?, &huff(&[5u8; 30])?)?;
+            }
+            2 => {
+                let nlen = b.need(5)? as usize + 257;
+                let ndist = b.need(5)? as usize + 1;
+                let ncode = b.need(4)? as usize + 4;
+                if nlen > 286 || ndist > 30 {
+                    return Err("a zlib stream with bad code counts".to_string());
+                }
+                const ORDER: [usize; 19] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+                let mut cl = [0u8; 19];
+                for i in 0..ncode {
+                    cl[ORDER[i]] = b.need(3)? as u8;
+                }
+                let ch = huff(&cl)?;
+                let mut lens = vec![0u8; nlen + ndist];
+                let mut i = 0;
+                while i < nlen + ndist {
+                    let s = decode_sym(&mut b, &ch)?;
+                    if s < 16 {
+                        lens[i] = s as u8;
+                        i += 1;
+                    } else {
+                        let (v, rep) = match s {
+                            16 => {
+                                if i == 0 {
+                                    return Err("a zlib stream repeating nothing".to_string());
+                                }
+                                (lens[i - 1], 3 + b.need(2)? as usize)
+                            }
+                            17 => (0, 3 + b.need(3)? as usize),
+                            _ => (0, 11 + b.need(7)? as usize),
+                        };
+                        if i + rep > nlen + ndist {
+                            return Err("a zlib stream with too many code lengths".to_string());
+                        }
+                        for _ in 0..rep {
+                            lens[i] = v;
+                            i += 1;
+                        }
+                    }
+                }
+                inflate_codes(&mut b, &mut out, &huff(&lens[..nlen])?, &huff(&lens[nlen..])?)?;
+            }
+            _ => return Err("a zlib stream with a bad block type".to_string()),
+        }
+        if last == 1 {
+            break;
+        }
+    }
+    let j = b.pos;
+    if j + 4 > z.len() || u32::from_be_bytes([z[j], z[j + 1], z[j + 2], z[j + 3]]) != adler32(&out) {
+        return Err("a zlib stream fails its checksum".to_string());
+    }
+    Ok(out)
 }
 
 pub fn png_decode(p: &[u8]) -> Result<Bitmap, String> {
     if p.len() < 8 || p[..8] != [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A] {
         return Err("not a PNG".to_string());
     }
-    let (mut w, mut h, mut ch) = (0usize, 0usize, 0usize);
+    let (mut w, mut h, mut depth, mut ct) = (0usize, 0usize, 0usize, 255u8);
+    let mut have_ihdr = false;
+    let mut plte: Vec<u8> = Vec::new();
     let mut idat: Vec<u8> = Vec::new();
     let mut i = 8;
     while i + 12 <= p.len() {
@@ -777,62 +949,58 @@ pub fn png_decode(p: &[u8]) -> Result<Bitmap, String> {
         }
         match kind {
             b"IHDR" => {
+                if n < 13 {
+                    return Err("a truncated PNG header".to_string());
+                }
                 w = u32::from_be_bytes([body[0], body[1], body[2], body[3]]) as usize;
                 h = u32::from_be_bytes([body[4], body[5], body[6], body[7]]) as usize;
-                if body[8] != 8 || body[10] != 0 || body[11] != 0 || body[12] != 0 {
-                    return Err("png-unsupported: only 8-bit, unfiltered-method, non-interlaced".to_string());
+                depth = body[8] as usize;
+                ct = body[9];
+                if body[10] != 0 || body[11] != 0 || body[12] != 0 {
+                    return Err("png-unsupported: only filter method 0 and no interlace".to_string());
                 }
-                ch = match body[9] {
-                    0 => 1,
-                    2 => 3,
-                    _ => return Err("png-unsupported: only gray and RGB".to_string()),
-                };
+                have_ihdr = true;
             }
+            b"PLTE" => plte = body.to_vec(),
             b"IDAT" => idat.extend_from_slice(body),
             b"IEND" => break,
             _ => {}
         }
         i += 12 + n;
     }
-    if ch == 0 || idat.len() < 6 {
+    if !have_ihdr || idat.is_empty() {
         return Err("a PNG without header or data".to_string());
     }
-    // zlib, stored blocks only.
-    let mut raw: Vec<u8> = Vec::new();
-    let mut j = 2;
-    loop {
-        if j + 5 > idat.len() {
-            return Err("a truncated zlib stream".to_string());
-        }
-        let hdr = idat[j];
-        if hdr & 6 != 0 {
-            return Err("png-compressed: only stored deflate blocks are read".to_string());
-        }
-        let n = u16::from_le_bytes([idat[j + 1], idat[j + 2]]) as usize;
-        if j + 5 + n > idat.len() {
-            return Err("a truncated stored block".to_string());
-        }
-        raw.extend_from_slice(&idat[j + 5..j + 5 + n]);
-        j += 5 + n;
-        if hdr & 1 == 1 {
-            break;
-        }
+    let chan = match ct {
+        0 | 3 => 1,
+        2 => 3,
+        4 => 2,
+        6 => 4,
+        _ => return Err("png-unsupported: colour type".to_string()),
+    };
+    let ok = match ct {
+        0 => matches!(depth, 1 | 2 | 4 | 8 | 16),
+        3 => matches!(depth, 1 | 2 | 4 | 8),
+        _ => matches!(depth, 8 | 16),
+    };
+    if !ok {
+        return Err("png-unsupported: bit depth".to_string());
     }
-    if j + 4 > idat.len() || u32::from_be_bytes([idat[j], idat[j + 1], idat[j + 2], idat[j + 3]]) != adler32(&raw) {
-        return Err("a zlib stream fails its checksum".to_string());
-    }
-    let stride = w * ch;
-    if raw.len() != h * (1 + stride) {
+    let raw = zlib_inflate(&idat)?;
+    let bits = chan * depth;
+    let rowb = (w * bits + 7) / 8;
+    let bpp = std::cmp::max(1, bits / 8);
+    if raw.len() != h * (1 + rowb) {
         return Err("a PNG whose data does not fit its size".to_string());
     }
-    let mut px = vec![0u8; h * stride];
+    let mut sl = vec![0u8; h * rowb];
     for y in 0..h {
-        let f = raw[y * (1 + stride)];
-        for x in 0..stride {
-            let v = raw[y * (1 + stride) + 1 + x] as i32;
-            let a = if x >= ch { px[y * stride + x - ch] as i32 } else { 0 };
-            let b = if y > 0 { px[(y - 1) * stride + x] as i32 } else { 0 };
-            let c = if x >= ch && y > 0 { px[(y - 1) * stride + x - ch] as i32 } else { 0 };
+        let f = raw[y * (1 + rowb)];
+        for x in 0..rowb {
+            let v = raw[y * (1 + rowb) + 1 + x] as i32;
+            let a = if x >= bpp { sl[y * rowb + x - bpp] as i32 } else { 0 };
+            let b = if y > 0 { sl[(y - 1) * rowb + x] as i32 } else { 0 };
+            let c = if x >= bpp && y > 0 { sl[(y - 1) * rowb + x - bpp] as i32 } else { 0 };
             let pred = match f {
                 0 => 0,
                 1 => a,
@@ -845,8 +1013,43 @@ pub fn png_decode(p: &[u8]) -> Result<Bitmap, String> {
                 }
                 _ => return Err("a PNG row with an unknown filter".to_string()),
             };
-            px[y * stride + x] = (v + pred) as u8;
+            sl[y * rowb + x] = (v + pred) as u8;
         }
     }
-    Ok(Bitmap::from_bytes(w as i32, h as i32, ch as i32, &px))
+    // sample `k` of row `y` as 0..255 (sub-byte scaled up, 16-bit high byte)
+    let sample = |y: usize, k: usize| -> u32 {
+        let r = &sl[y * rowb..(y + 1) * rowb];
+        match depth {
+            8 => r[k] as u32,
+            16 => r[2 * k] as u32,
+            d => {
+                let per = 8 / d;
+                let v = (r[k / per] as u32 >> (8 - d * (k % per + 1))) & ((1 << d) - 1);
+                if ct == 3 { v } else { v * 255 / ((1 << d) - 1) }
+            }
+        }
+    };
+    let out_ch = if ct == 0 || ct == 4 { 1 } else { 3 };
+    let mut px = Vec::with_capacity(w * h * out_ch);
+    for y in 0..h {
+        for x in 0..w {
+            match ct {
+                0 => px.push(sample(y, x) as u8),
+                4 => px.push(sample(y, 2 * x) as u8),
+                2 | 6 => {
+                    for c in 0..3 {
+                        px.push(sample(y, chan * x + c) as u8);
+                    }
+                }
+                _ => {
+                    let idx = sample(y, x) as usize;
+                    if idx * 3 + 3 > plte.len() {
+                        return Err("a PNG pixel beyond its palette".to_string());
+                    }
+                    px.extend_from_slice(&plte[idx * 3..idx * 3 + 3]);
+                }
+            }
+        }
+    }
+    Ok(Bitmap::from_bytes(w as i32, h as i32, out_ch as i32, &px))
 }

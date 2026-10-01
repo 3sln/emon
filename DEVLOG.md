@@ -3797,6 +3797,7 @@ ordinary transcribed kind (breaks identity across sources, D058).
 - [ ] **Signed off** (maintainer)
 
 ### D090 — The transcript: a directory of `transcript.edn` and one lossless PNG per bitmap, keyed by the whole request record
+*(The stored-block writer below is revised by D125: bitmaps are now written by the canonical compressed kin encoder, and any valid PNG is read.)*
 **Decision**: `transcript.edn` is `{:emon-transcript 1 :inputs [{:index :length}...]
 :entries [{:round :kind :req [...] :ans [...] :bitmap "bitmap-NNNN.png"}...]}`, one
 entry per line, a fixed spelling (EDN subset: maps, vectors, keywords, integers,
@@ -4797,4 +4798,27 @@ anyway); (4) separate length code runs for the two trees, as zlib writes them (o
 boundary, no gain); (5) moving D090's transcript PNGs to this writer now: **not done**, every
 committed transcript would change, and D090's writer is stored-block only and stays until a decision
 says otherwise.
+- [ ] **Signed off** (maintainer)
+
+### D125 — Transcript bitmaps are written by the canonical kin PNG encoder; any valid PNG is read (revises D090; P3.11, D124)
+**Decision**: the Rust and Go transcript writers (`png_encode` in `host/rust/src/plan.rs`,
+`PngEncode` in `host/go/port/plan.go`) call `emon.png` (D124): 8-bit gray or RGB, no pHYs,
+adaptive filters, `emon.deflate`. The file is still a function of the pixels alone and every
+host writes the same bytes (`bb plan` checks Rust against Go, PNGs included), but it is now
+compressed. Go's `port` package cannot import kin's generated packages (they import it), so
+`host/go/pngenc` registers the encoder in `port.PngEncoder`; a Go program that writes
+transcripts links it with `import _ "emon/pngenc"` (the plan and ocr drivers do; `kin/scripts/plan`
+and `kin/scripts/ocr` copy it). The readers accept ANY valid non-interlaced PNG: Rust has its own
+RFC 1951 inflater (stored, fixed and dynamic blocks), Go uses `compress/zlib`; colour types 0, 2,
+3, 4, 6 at the depths the format allows, all five filters; alpha is dropped and palettes expanded,
+so a bitmap is gray or RGB as before. Old stored-block transcripts still replay. The format
+version (`:emon-transcript 1`) does not change: `transcript.edn` is byte for byte what it was.
+**Re-encoded, not re-recorded**: `test/ocr/h-keyword/bitmap-0000.png` was decoded and encoded again
+(`ocrdriver reencode DIR`, no Tesseract): 2,105,628 -> 272,174 bytes (7.7 times smaller; the pixel hash
+`8787ffdb` is unchanged), and `test/ocr/h-keyword.dump` and `test/ocr/PRODUCER.json` carry the new file
+hash (`40abd3ac`) and a note. `test/plan/` holds drivers, not a recording (the gate records afresh).
+**Why**: D090 left the writer as a follow-up and D124 supplied it; recordings of a real 300-dpi A4
+page were 8.7 MB each.
+**Alternatives**: a host zlib (bytes differ by host, which is what D090 ruled out); a version
+bump of the transcript format (nothing in the EDN changed, and the reader is a superset).
 - [ ] **Signed off** (maintainer)

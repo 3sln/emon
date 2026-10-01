@@ -17,10 +17,11 @@ package port
 
 import (
 	"bytes"
+	"compress/zlib"
 	"errors"
 	"fmt"
-	"hash/adler32"
 	"hash/crc32"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -699,71 +700,37 @@ func (p *ednParser) value() (any, error) {
 }
 
 // ------------------------------------------------------------------- PNG
-// Lossless, 8 bits, gray (1) or RGB (3), no interlace, filter 0, the zlib
-// stream in STORED blocks: no compressor is needed, the bytes are a function of
-// the pixels alone (so two hosts write the same file), and any PNG reader opens
-// it. The decoder reads what this writes and any stored-block PNG with the five
-// filters; a compressed PNG is `png-compressed` for now (a compressed writer is
-// a follow-up: a real page is 8.7 MB per gray 300-dpi A4 this way).
+// Writing: emon's own canonical PNG encoder (`emon.png`, D124, SPEC 10.11),
+// compressed and byte-identical on all four targets, so a recording is a
+// function of the pixels and every host writes the same file (D125 revises
+// D090). The encoder is kin, and kin's generated packages import this one, so
+// this package cannot import it back: package `emon/pngenc` registers it here
+// (`PngEncoder`), and a program that writes transcripts links it in.
+// Reading: any valid non-interlaced PNG (gray, gray+alpha, RGB, RGBA, palette,
+// depths 1 to 16), whoever wrote it; the alpha channel is dropped and a palette
+// is expanded, so the bitmap is gray (1) or RGB (3).
 
-func pngChunk(out *bytes.Buffer, kind string, body []byte) {
-	var n [4]byte
-	n[0], n[1], n[2], n[3] = byte(len(body)>>24), byte(len(body)>>16), byte(len(body)>>8), byte(len(body))
-	out.Write(n[:])
-	c := append([]byte(kind), body...)
-	out.Write(c)
-	sum := crc32.ChecksumIEEE(c)
-	out.Write([]byte{byte(sum >> 24), byte(sum >> 16), byte(sum >> 8), byte(sum)})
-}
+// PngEncoder is set by package pngenc.
+var PngEncoder func(*Bitmap) []byte
 
-// PngEncode writes a bitmap as a lossless PNG.
+// PngEncode writes a bitmap as a canonical, compressed, lossless PNG.
 func PngEncode(b *Bitmap) []byte {
-	w, h, ch := int(b.W), int(b.H), int(b.Ch)
-	raw := make([]byte, 0, h*(1+w*ch))
-	for y := 0; y < h; y++ {
-		raw = append(raw, 0)
-		raw = append(raw, b.D[y*int(b.Stride):y*int(b.Stride)+w*ch]...)
+	if PngEncoder == nil {
+		panic("port.PngEncoder is not set: import _ \"emon/pngenc\"")
 	}
-	z := []byte{0x78, 0x01}
-	if len(raw) == 0 {
-		z = append(z, 1, 0, 0, 0xFF, 0xFF)
-	}
-	for i := 0; i < len(raw); {
-		n := len(raw) - i
-		if n > 65535 {
-			n = 65535
-		}
-		fin := byte(0)
-		if i+n == len(raw) {
-			fin = 1
-		}
-		z = append(z, fin, byte(n), byte(n>>8), byte(^uint16(n)), byte(^uint16(n)>>8))
-		z = append(z, raw[i:i+n]...)
-		i += n
-	}
-	ad := adler32.Checksum(raw)
-	z = append(z, byte(ad>>24), byte(ad>>16), byte(ad>>8), byte(ad))
-	var out bytes.Buffer
-	out.Write([]byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A})
-	ct := byte(0)
-	if ch == 3 {
-		ct = 2
-	}
-	ihdr := []byte{byte(w >> 24), byte(w >> 16), byte(w >> 8), byte(w), byte(h >> 24), byte(h >> 16), byte(h >> 8), byte(h), 8, ct, 0, 0, 0}
-	pngChunk(&out, "IHDR", ihdr)
-	pngChunk(&out, "IDAT", z)
-	pngChunk(&out, "IEND", nil)
-	return out.Bytes()
+	return PngEncoder(b)
 }
 
-// PngDecode reads a PNG written by PngEncode (or any stored-block gray/RGB PNG).
+// PngDecode reads any non-interlaced PNG into a gray or RGB bitmap.
 func PngDecode(p []byte) (*Bitmap, error) {
 	sig := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
 	if len(p) < 8 || !bytes.Equal(p[:8], sig) {
 		return nil, errors.New("not a PNG")
 	}
-	var w, h, ch int
-	var idat []byte
+	var w, h, depth int
+	var ct byte = 255
+	haveIhdr := false
+	var plte, idat []byte
 	i := 8
 loop:
 	for i+12 <= len(p) {
@@ -779,19 +746,19 @@ loop:
 		}
 		switch kind {
 		case "IHDR":
+			if n < 13 {
+				return nil, errors.New("a truncated PNG header")
+			}
 			w = int(body[0])<<24 | int(body[1])<<16 | int(body[2])<<8 | int(body[3])
 			h = int(body[4])<<24 | int(body[5])<<16 | int(body[6])<<8 | int(body[7])
-			if body[8] != 8 || body[10] != 0 || body[11] != 0 || body[12] != 0 {
-				return nil, errors.New("png-unsupported: only 8-bit, unfiltered-method, non-interlaced")
+			depth = int(body[8])
+			ct = body[9]
+			if body[10] != 0 || body[11] != 0 || body[12] != 0 {
+				return nil, errors.New("png-unsupported: only filter method 0 and no interlace")
 			}
-			switch body[9] {
-			case 0:
-				ch = 1
-			case 2:
-				ch = 3
-			default:
-				return nil, errors.New("png-unsupported: only gray and RGB")
-			}
+			haveIhdr = true
+		case "PLTE":
+			plte = append([]byte(nil), body...)
 		case "IDAT":
 			idat = append(idat, body...)
 		case "IEND":
@@ -799,50 +766,65 @@ loop:
 		}
 		i += 12 + n
 	}
-	if ch == 0 || len(idat) < 6 {
+	if !haveIhdr || len(idat) == 0 {
 		return nil, errors.New("a PNG without header or data")
 	}
-	var raw []byte
-	j := 2
-	for {
-		if j+5 > len(idat) {
-			return nil, errors.New("a truncated zlib stream")
-		}
-		hdr := idat[j]
-		if hdr&6 != 0 {
-			return nil, errors.New("png-compressed: only stored deflate blocks are read")
-		}
-		n := int(idat[j+1]) | int(idat[j+2])<<8
-		if j+5+n > len(idat) {
-			return nil, errors.New("a truncated stored block")
-		}
-		raw = append(raw, idat[j+5:j+5+n]...)
-		j += 5 + n
-		if hdr&1 == 1 {
-			break
-		}
+	var chans int
+	switch ct {
+	case 0, 3:
+		chans = 1
+	case 2:
+		chans = 3
+	case 4:
+		chans = 2
+	case 6:
+		chans = 4
+	default:
+		return nil, errors.New("png-unsupported: colour type")
 	}
-	if j+4 > len(idat) || (uint32(idat[j])<<24|uint32(idat[j+1])<<16|uint32(idat[j+2])<<8|uint32(idat[j+3])) != adler32.Checksum(raw) {
-		return nil, errors.New("a zlib stream fails its checksum")
+	okDepth := false
+	switch ct {
+	case 0:
+		okDepth = depth == 1 || depth == 2 || depth == 4 || depth == 8 || depth == 16
+	case 3:
+		okDepth = depth == 1 || depth == 2 || depth == 4 || depth == 8
+	default:
+		okDepth = depth == 8 || depth == 16
 	}
-	stride := w * ch
-	if len(raw) != h*(1+stride) {
+	if !okDepth {
+		return nil, errors.New("png-unsupported: bit depth")
+	}
+	zr, err := zlib.NewReader(bytes.NewReader(idat))
+	if err != nil {
+		return nil, errors.New("a bad zlib header")
+	}
+	raw, err := io.ReadAll(zr)
+	if err != nil {
+		return nil, errors.New("a bad zlib stream: " + err.Error())
+	}
+	bits := chans * depth
+	rowb := (w*bits + 7) / 8
+	bpp := bits / 8
+	if bpp < 1 {
+		bpp = 1
+	}
+	if len(raw) != h*(1+rowb) {
 		return nil, errors.New("a PNG whose data does not fit its size")
 	}
-	px := make([]byte, h*stride)
+	sl := make([]byte, h*rowb)
 	for y := 0; y < h; y++ {
-		f := raw[y*(1+stride)]
-		for x := 0; x < stride; x++ {
-			v := int(raw[y*(1+stride)+1+x])
+		f := raw[y*(1+rowb)]
+		for x := 0; x < rowb; x++ {
+			v := int(raw[y*(1+rowb)+1+x])
 			a, b, c := 0, 0, 0
-			if x >= ch {
-				a = int(px[y*stride+x-ch])
+			if x >= bpp {
+				a = int(sl[y*rowb+x-bpp])
 			}
 			if y > 0 {
-				b = int(px[(y-1)*stride+x])
+				b = int(sl[(y-1)*rowb+x])
 			}
-			if x >= ch && y > 0 {
-				c = int(px[(y-1)*stride+x-ch])
+			if x >= bpp && y > 0 {
+				c = int(sl[(y-1)*rowb+x-bpp])
 			}
 			pred := 0
 			switch f {
@@ -866,10 +848,51 @@ loop:
 			default:
 				return nil, errors.New("a PNG row with an unknown filter")
 			}
-			px[y*stride+x] = byte(v + pred)
+			sl[y*rowb+x] = byte(v + pred)
 		}
 	}
-	return BitmapFromBytes(int32(w), int32(h), int32(ch), px), nil
+	// sample k of row y as 0..255 (sub-byte scaled up, 16-bit high byte)
+	sample := func(y, k int) int {
+		r := sl[y*rowb : (y+1)*rowb]
+		switch depth {
+		case 8:
+			return int(r[k])
+		case 16:
+			return int(r[2*k])
+		}
+		per := 8 / depth
+		v := (int(r[k/per]) >> (8 - depth*(k%per+1))) & ((1 << depth) - 1)
+		if ct == 3 {
+			return v
+		}
+		return v * 255 / ((1 << depth) - 1)
+	}
+	outCh := 3
+	if ct == 0 || ct == 4 {
+		outCh = 1
+	}
+	px := make([]byte, 0, w*h*outCh)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			switch ct {
+			case 0:
+				px = append(px, byte(sample(y, x)))
+			case 4:
+				px = append(px, byte(sample(y, 2*x)))
+			case 2, 6:
+				for c := 0; c < 3; c++ {
+					px = append(px, byte(sample(y, chans*x+c)))
+				}
+			default:
+				idx := sample(y, x)
+				if idx*3+3 > len(plte) {
+					return nil, errors.New("a PNG pixel beyond its palette")
+				}
+				px = append(px, plte[idx*3:idx*3+3]...)
+			}
+		}
+	}
+	return BitmapFromBytes(int32(w), int32(h), int32(outCh), px), nil
 }
 
 func planAbs(x int) int {

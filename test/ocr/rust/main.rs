@@ -64,8 +64,25 @@ fn fail(e: &PlanError) -> ! {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    // reencode DIR: decode each bitmap-*.png and write it again with the canonical
+    // encoder (D125). No engine runs; the pixels are the recording's own.
+    if args.len() == 3 && args[1] == "reencode" {
+        for e in std::fs::read_dir(&args[2]).unwrap() {
+            let p = e.unwrap().path();
+            let name = p.file_name().unwrap().to_string_lossy().to_string();
+            if name.starts_with("bitmap-") && name.ends_with(".png") {
+                let old = std::fs::read(&p).unwrap();
+                let bm = png_decode(&old).unwrap();
+                let new = png_encode(&bm);
+                assert_eq!(png_decode(&new).unwrap().to_bytes(), bm.to_bytes());
+                std::fs::write(&p, &new).unwrap();
+                println!("{}: {} -> {} bytes", name, old.len(), new.len());
+            }
+        }
+        return;
+    }
     if args.len() < 4 {
-        eprintln!("usage: ocrdriver replay DIR PDF | record DIR PDF PGM DPI [TESSDATA]");
+        eprintln!("usage: ocrdriver reencode DIR | replay DIR PDF | record DIR PDF PGM DPI [TESSDATA]");
         std::process::exit(2);
     }
     let (mode, dir, pdf) = (args[1].clone(), args[2].clone(), args[3].clone());
