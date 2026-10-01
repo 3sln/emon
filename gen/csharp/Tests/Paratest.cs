@@ -878,10 +878,10 @@ public static class Paratest {
         emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed");
         PtBrief(t3, nodes, regions, text);
         emon.Testport.AssertText(t3, "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;", "a margin initial");
-        int ini = PtFind(nodes, Model.NkInitial(), 0);
-        emon.Testport.AssertEq(Model.NodeSub(nodes, ini), Model.IfmMargin(), "the form is margin");
-        emon.Testport.AssertEq(Model.NodeAux(nodes, ini), 2, "of two lines");
-        emon.Testport.AssertEq(Model.NodeFlags(nodes, ini), 0, "a `Q` is no word: the join is sure");
+        int ini2 = PtFind(nodes, Model.NkInitial(), 0);
+        emon.Testport.AssertEq(Model.NodeSub(nodes, ini2), Model.IfmMargin(), "the form is margin");
+        emon.Testport.AssertEq(Model.NodeAux(nodes, ini2), 2, "of two lines");
+        emon.Testport.AssertEq(Model.NodeFlags(nodes, ini2), 0, "a `Q` is no word: the join is sure");
     }
     [Xunit.Fact]
     public static void TestARightToLeftInitialIsMirrored() {
@@ -911,8 +911,8 @@ public static class Paratest {
         emon.Testport.AssertEq(PtRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed");
         PtBrief(t1, nodes, regions, text);
         emon.Testport.AssertText(t1, "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;", "a right-to-left initial");
-        int ini = PtFind(nodes, Model.NkInitial(), 0);
-        emon.Testport.AssertEq(Model.NodeSub(nodes, ini), Model.IfmDrop(), "a drop");
+        int ini3 = PtFind(nodes, Model.NkInitial(), 0);
+        emon.Testport.AssertEq(Model.NodeSub(nodes, ini3), Model.IfmDrop(), "a drop");
     }
     [Xunit.Fact]
     public static void TestAParagraphsAlignmentIsMeasuredAgainstItsFragment() {

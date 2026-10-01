@@ -727,15 +727,15 @@ pub(crate) fn in_try_inline(wd: &mut crate::port::Cells, gl: &mut crate::port::C
             let top: i32 = crate::port::cells_at(sq, above - 1);
             let tsize: i32 = in_lsize(wd, lt, top);
             let d: i32 = captop - in_captop(wd, lt, fo, et, top, tsize);
-            let l2: i32 = in_next(lt, sc, l, s, cs - (body / IN_BACK_DIV), ce + (body * 2));
+            let lb: i32 = in_next(lt, sc, l, s, cs - (body / IN_BACK_DIV), ce + (body * 2));
             if (d * IN_CAP_TOP_DIV) > body {
                 return 0;
             }
             if ((d + up) * IN_CAP_TOP_DIV) < (0 - body) {
                 return 0;
             }
-            if l2 >= 0 {
-                if (in_abs(in_start(lt, l2, s) - cs) * IN_BACK_DIV) > in_lsize(wd, lt, l2) {
+            if lb >= 0 {
+                if (in_abs(in_start(lt, lb, s) - cs) * IN_BACK_DIV) > in_lsize(wd, lt, lb) {
                     return 0;
                 }
             }

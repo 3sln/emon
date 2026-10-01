@@ -5,7 +5,7 @@ package emon;
 
 
 public final class Align {
-    public static final int AL_MIN = 800;
+    public static final int AL_FLOOR = 800;
     public static final int AL_STRIDE = 4;
     public static final int AL_BIG = 100000000;
     public static final int AL_CLASSES = 64;
@@ -305,7 +305,7 @@ public final class Align {
                 int v = alJudge(al, f, n);
                 emon.Port.cellsSet(al, (r * AL_STRIDE) + 2, 0);
                 if (v > 0) {
-                    if (alConf(v) >= AL_MIN) {
+                    if (alConf(v) >= AL_FLOOR) {
                         if (Model.nodeSetAlign(nodes, attrs, node, alCode(v)) == 0) {
                             got += 1;
                         }

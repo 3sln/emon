@@ -864,10 +864,10 @@ public final class Paratest {
         emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed");
         ptBrief(t3, nodes, regions, text);
         emon.Testport.assertText(t3, "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;", "a margin initial");
-        int ini = ptFind(nodes, Model.nkInitial(), 0);
-        emon.Testport.assertEq(Model.nodeSub(nodes, ini), Model.ifmMargin(), "the form is margin");
-        emon.Testport.assertEq(Model.nodeAux(nodes, ini), 2, "of two lines");
-        emon.Testport.assertEq(Model.nodeFlags(nodes, ini), 0, "a `Q` is no word: the join is sure");
+        int ini2 = ptFind(nodes, Model.nkInitial(), 0);
+        emon.Testport.assertEq(Model.nodeSub(nodes, ini2), Model.ifmMargin(), "the form is margin");
+        emon.Testport.assertEq(Model.nodeAux(nodes, ini2), 2, "of two lines");
+        emon.Testport.assertEq(Model.nodeFlags(nodes, ini2), 0, "a `Q` is no word: the join is sure");
     }
     public static void testARightToLeftInitialIsMirrored() {
         emon.Port.Cells wd = emon.Port.newCells();
@@ -896,8 +896,8 @@ public final class Paratest {
         emon.Testport.assertEq(ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed");
         ptBrief(t1, nodes, regions, text);
         emon.Testport.assertText(t1, "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;", "a right-to-left initial");
-        int ini = ptFind(nodes, Model.nkInitial(), 0);
-        emon.Testport.assertEq(Model.nodeSub(nodes, ini), Model.ifmDrop(), "a drop");
+        int ini3 = ptFind(nodes, Model.nkInitial(), 0);
+        emon.Testport.assertEq(Model.nodeSub(nodes, ini3), Model.ifmDrop(), "a drop");
     }
     public static void testAParagraphsAlignmentIsMeasuredAgainstItsFragment() {
         emon.Port.Cells wd = emon.Port.newCells();

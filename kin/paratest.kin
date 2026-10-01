@@ -674,10 +674,10 @@
     (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "margin: well formed")
     (pt-brief t3 nodes regions text)
     (assert-text t3 "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;" "a margin initial")
-    (let [^I32 ini (pt-find nodes (nk-initial) 0)]
-      (assert-eq (node-sub nodes ini) (ifm-margin) "the form is margin")
-      (assert-eq (node-aux nodes ini) 2 "of two lines")
-      (assert-eq (node-flags nodes ini) 0 "a `Q` is no word: the join is sure"))))
+    (let [^I32 ini2 (pt-find nodes (nk-initial) 0)]
+      (assert-eq (node-sub nodes ini2) (ifm-margin) "the form is margin")
+      (assert-eq (node-aux nodes ini2) 2 "of two lines")
+      (assert-eq (node-flags nodes ini2) 0 "a `Q` is no word: the join is sure"))))
 
 (deftest test-a-right-to-left-initial-is-mirrored
   (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
@@ -695,8 +695,8 @@
     (assert-eq (pt-run wd ln et 1 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "rtl: well formed")
     (pt-brief t1 nodes regions text)
     (assert-text t1 "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;" "a right-to-left initial")
-    (let [^I32 ini (pt-find nodes (nk-initial) 0)]
-      (assert-eq (node-sub nodes ini) (ifm-drop) "a drop"))))
+    (let [^I32 ini3 (pt-find nodes (nk-initial) 0)]
+      (assert-eq (node-sub nodes ini3) (ifm-drop) "a drop"))))
 
 ;; ------------------------------------------------------------------ alignment (P4.11)
 

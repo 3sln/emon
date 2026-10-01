@@ -904,10 +904,10 @@ func TestADropInitialJoinsItsFirstWordAndTheParagraphIsOne(emonT *testing.T) {
 	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed")
 	ptBrief(t3, nodes, regions, text)
 	port.AssertText(emonT, t3, "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;", "a margin initial")
-	var ini int32 = ptFind(nodes, model.NkInitial(), 0)
-	port.AssertEq(emonT, model.NodeSub(nodes, ini), model.IfmMargin(), "the form is margin")
-	port.AssertEq(emonT, model.NodeAux(nodes, ini), 2, "of two lines")
-	port.AssertEq(emonT, model.NodeFlags(nodes, ini), 0, "a `Q` is no word: the join is sure")
+	var ini2 int32 = ptFind(nodes, model.NkInitial(), 0)
+	port.AssertEq(emonT, model.NodeSub(nodes, ini2), model.IfmMargin(), "the form is margin")
+	port.AssertEq(emonT, model.NodeAux(nodes, ini2), 2, "of two lines")
+	port.AssertEq(emonT, model.NodeFlags(nodes, ini2), 0, "a `Q` is no word: the join is sure")
 }
 
 func TestARightToLeftInitialIsMirrored(emonT *testing.T) {
@@ -937,8 +937,8 @@ func TestARightToLeftInitialIsMirrored(emonT *testing.T) {
 	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed")
 	ptBrief(t1, nodes, regions, text)
 	port.AssertText(emonT, t1, "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;", "a right-to-left initial")
-	var ini int32 = ptFind(nodes, model.NkInitial(), 0)
-	port.AssertEq(emonT, model.NodeSub(nodes, ini), model.IfmDrop(), "a drop")
+	var ini3 int32 = ptFind(nodes, model.NkInitial(), 0)
+	port.AssertEq(emonT, model.NodeSub(nodes, ini3), model.IfmDrop(), "a drop")
 }
 
 func TestAParagraphsAlignmentIsMeasuredAgainstItsFragment(emonT *testing.T) {

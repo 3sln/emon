@@ -5,7 +5,7 @@ namespace emon;
 
 
 public static class Align {
-    internal const int AlMin = 800;
+    internal const int AlFloor = 800;
     internal const int AlStride = 4;
     internal const int AlBig = 100000000;
     internal const int AlClasses = 64;
@@ -305,7 +305,7 @@ public static class Align {
                 int v = AlJudge(al, f, n);
                 emon.Port.CellsSet(al, (r * AlStride) + 2, 0);
                 if (v > 0) {
-                    if (AlConf(v) >= AlMin) {
+                    if (AlConf(v) >= AlFloor) {
                         if (Model.NodeSetAlign(nodes, attrs, node, AlCode(v)) == 0) {
                             got += 1;
                         }

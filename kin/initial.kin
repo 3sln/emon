@@ -621,11 +621,11 @@
                   (let [^I32 top (cells-at sq (- above 1))
                         ^I32 tsize (in-lsize wd lt top)
                         ^I32 d (- captop (in-captop wd lt fo et top tsize))
-                        ^I32 l2 (in-next lt sc l s (- cs (quot body IN_BACK_DIV)) (+ ce (* body 2)))]
+                        ^I32 lb (in-next lt sc l s (- cs (quot body IN_BACK_DIV)) (+ ce (* body 2)))]
                     (if (> (* d IN_CAP_TOP_DIV) body) (return 0))
                     (if (< (* (+ d up) IN_CAP_TOP_DIV) (- 0 body)) (return 0))
-                    (if (>= l2 0)
-                      (if (> (* (in-abs (- (in-start lt l2 s) cs)) IN_BACK_DIV) (in-lsize wd lt l2)) (return 0)))
+                    (if (>= lb 0)
+                      (if (> (* (in-abs (- (in-start lt lb s) cs)) IN_BACK_DIV) (in-lsize wd lt lb)) (return 0)))
                     (if (in-taken ii top) (return 0))
                     (cells-set lt (+ (* l 16) (lh-y0)) y0)
                     (cells-set lt (+ (* l 16) (lh-y1)) y1)

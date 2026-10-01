@@ -728,15 +728,15 @@ public static class Initial {
                 int top = emon.Port.CellsAt(sq, above - 1);
                 int tsize = InLsize(wd, lt, top);
                 int d = captop - InCaptop(wd, lt, fo, et, top, tsize);
-                int l2 = InNext(lt, sc, l, s, cs - (body / InBackDiv), ce + (body * 2));
+                int lb = InNext(lt, sc, l, s, cs - (body / InBackDiv), ce + (body * 2));
                 if ((d * InCapTopDiv) > body) {
                     return 0;
                 }
                 if (((d + up) * InCapTopDiv) < (0 - body)) {
                     return 0;
                 }
-                if (l2 >= 0) {
-                    if ((InAbs(InStart(lt, l2, s) - cs) * InBackDiv) > InLsize(wd, lt, l2)) {
+                if (lb >= 0) {
+                    if ((InAbs(InStart(lt, lb, s) - cs) * InBackDiv) > InLsize(wd, lt, lb)) {
                         return 0;
                     }
                 }

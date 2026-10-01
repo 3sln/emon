@@ -797,15 +797,15 @@ func inTryInline(wd *port.Cells, gl *port.Cells, lt *port.Cells, fo *port.Cells,
 			var top int32 = port.CellsAt(sq, above-1)
 			var tsize int32 = inLsize(wd, lt, top)
 			var d int32 = captop - inCaptop(wd, lt, fo, et, top, tsize)
-			var l2 int32 = inNext(lt, sc, l, s, cs-(body/inBackDiv), ce+(body*2))
+			var lb int32 = inNext(lt, sc, l, s, cs-(body/inBackDiv), ce+(body*2))
 			if (d * inCapTopDiv) > body {
 				return 0
 			}
 			if ((d + up) * inCapTopDiv) < (0 - body) {
 				return 0
 			}
-			if l2 >= 0 {
-				if (inAbs(inStart(lt, l2, s)-cs) * inBackDiv) > inLsize(wd, lt, l2) {
+			if lb >= 0 {
+				if (inAbs(inStart(lt, lb, s)-cs) * inBackDiv) > inLsize(wd, lt, lb) {
 					return 0
 				}
 			}

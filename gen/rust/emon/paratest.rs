@@ -883,10 +883,10 @@ fn test_a_drop_initial_joins_its_first_word_and_the_paragraph_is_one() {
     crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed");
     pt_brief(t3, nodes, regions, text);
     crate::testport::assert_text(t3, "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;", "a margin initial");
-    let ini: i32 = pt_find(nodes, nk_initial(), 0);
-    crate::testport::assert_eq(node_sub(nodes, ini), ifm_margin(), "the form is margin");
-    crate::testport::assert_eq(node_aux(nodes, ini), 2, "of two lines");
-    crate::testport::assert_eq(node_flags(nodes, ini), 0, "a `Q` is no word: the join is sure");
+    let ini2: i32 = pt_find(nodes, nk_initial(), 0);
+    crate::testport::assert_eq(node_sub(nodes, ini2), ifm_margin(), "the form is margin");
+    crate::testport::assert_eq(node_aux(nodes, ini2), 2, "of two lines");
+    crate::testport::assert_eq(node_flags(nodes, ini2), 0, "a `Q` is no word: the join is sure");
 }
 #[test]
 fn test_a_right_to_left_initial_is_mirrored() {
@@ -916,8 +916,8 @@ fn test_a_right_to_left_initial_is_mirrored() {
     crate::testport::assert_eq(pt_run(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed");
     pt_brief(t1, nodes, regions, text);
     crate::testport::assert_text(t1, "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;", "a right-to-left initial");
-    let ini: i32 = pt_find(nodes, nk_initial(), 0);
-    crate::testport::assert_eq(node_sub(nodes, ini), ifm_drop(), "a drop");
+    let ini3: i32 = pt_find(nodes, nk_initial(), 0);
+    crate::testport::assert_eq(node_sub(nodes, ini3), ifm_drop(), "a drop");
 }
 #[test]
 fn test_a_paragraphs_alignment_is_measured_against_its_fragment() {

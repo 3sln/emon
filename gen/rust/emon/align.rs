@@ -3,7 +3,7 @@
 
 use crate::emon::model::*;
 
-pub(crate) const AL_MIN: i32 = 800;
+pub(crate) const AL_FLOOR: i32 = 800;
 pub(crate) const AL_STRIDE: i32 = 4;
 pub(crate) const AL_BIG: i32 = 100000000;
 pub(crate) const AL_CLASSES: i32 = 64;
@@ -303,7 +303,7 @@ pub fn al_pass(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::
             let v: i32 = al_judge(al, f, n);
             crate::port::cells_set(al, (r * AL_STRIDE) + 2, 0);
             if v > 0 {
-                if al_conf(v) >= AL_MIN {
+                if al_conf(v) >= AL_FLOOR {
                     if node_set_align(nodes, attrs, node, al_code(v)) == 0 {
                         got += 1;
                     }

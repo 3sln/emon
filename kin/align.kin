@@ -38,7 +38,7 @@
             [kin.lang :refer [defn defconst return let set while if do comment
                               + - * < > <= >= == != and or not quot rem]]))
 
-(defconst ^I32 AL_MIN 800)          ;; align-min, per mille (D110: a default of 800 while uncalibrated)
+(defconst ^I32 AL_FLOOR 800)          ;; align-min, per mille (D110: a default of 800 while uncalibrated)
 (defconst ^I32 AL_STRIDE 4)
 (defconst ^I32 AL_BIG 100000000)    ;; a gap is held to +-10^8: a hostile file's box must not overflow the sums
 (defconst ^I32 AL_CLASSES 64)       ;; the style classes tallied: more than this many in one document are ignored
@@ -252,7 +252,7 @@
                   ^I32 v (al-judge al f n)]
               (cells-set al (+ (* r AL_STRIDE) 2) 0)
               (if (> v 0)
-                (if (>= (al-conf v) AL_MIN)
+                (if (>= (al-conf v) AL_FLOOR)
                   (do (if (== (node-set-align nodes attrs node (al-code v)) 0)
                         (set got (+ got 1)))
                       (cells-set al (+ (* r AL_STRIDE) 2) (al-code v))

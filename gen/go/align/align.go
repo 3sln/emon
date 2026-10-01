@@ -8,7 +8,7 @@ import (
 	"emon/port"
 )
 
-const alMin int32 = 800
+const alFloor int32 = 800
 
 const alStride int32 = 4
 
@@ -332,7 +332,7 @@ func AlPass(nodes *port.Cells, attrs *port.Cells, al *port.Cells, cl *port.Cells
 			var v int32 = AlJudge(al, f, n)
 			port.CellsSet(al, (r*alStride)+2, 0)
 			if v > 0 {
-				if AlConf(v) >= alMin {
+				if AlConf(v) >= alFloor {
 					if model.NodeSetAlign(nodes, attrs, node, AlCode(v)) == 0 {
 						got += 1
 					}
