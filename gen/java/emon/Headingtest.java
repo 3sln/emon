@@ -66,7 +66,11 @@ public final class Headingtest {
         emon.Port.Cells lo = emon.Port.newCells();
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
-        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc);
+        emon.Port.Cells ii = emon.Port.newCells();
+        emon.Port.Cells al = emon.Port.newCells();
+        // The lines' copy, and no initials in it: these laws read hand-made evidence and the heading analysis has run on `ln`.
+        Columns.lcCopy(ln, lt);
+        return Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al);
     }
     public static int htModel(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells hc, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // The Model of the evidence with the heading analysis in `hc`; answers `model-check`'s verdict.

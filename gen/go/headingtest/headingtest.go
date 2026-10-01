@@ -4,6 +4,7 @@
 package headingtest
 
 import (
+	"emon/columns"
 	"emon/evidence"
 	"emon/heading"
 	"emon/json"
@@ -83,7 +84,11 @@ func htPa(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *p
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
-	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc)
+	var ii *port.Cells = port.NewCells()
+	var al *port.Cells = port.NewCells()
+	// The lines' copy, and no initials in it: these laws read hand-made evidence and the heading analysis has run on `ln`.
+	columns.LcCopy(ln, lt)
+	return para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al)
 }
 
 func htModel(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, hc *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {

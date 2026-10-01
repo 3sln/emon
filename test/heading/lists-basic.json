@@ -34,6 +34,7 @@
             "id": 2,
             "kind": "heading",
             "level": 1,
+            "align": "start",
             "text": "Packing Checklist",
             "at": [[1, 72, 94.58, 243.39, 119.57]],
             "src": ["text", "infer"],
@@ -42,6 +43,7 @@
           {
             "id": 3,
             "kind": "paragraph",
+            "align": "start",
             "text": "Young seen since word take see part turned been some night family own have.",
             "at": [[1, 72, 130.17, 449.15, 142.66]],
             "src": ["text", "infer"],
@@ -72,6 +74,7 @@
                 "id": 7,
                 "kind": "heading",
                 "level": 2,
+                "align": "start",
                 "text": "Steps",
                 "at": [[1, 72, 315.62, 111.49, 334.36]],
                 "src": ["text", "infer"],
