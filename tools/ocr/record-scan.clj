@@ -9,9 +9,9 @@
 ;; run wrote is committed AS A REPLAY INPUT: `transcript.edn` (the decode and the OCR request and answer of every page, and the
 ;; `:producer` that says whose engine answered) and NOT the bitmaps. A replay returns the recorded answers and reads no pixel (the
 ;; decoded page and the engine's thresholded image are what the engine read and saw, not what a replay needs), so a page that costs
-;; 450 KB of PNG costs nothing here; `--keep-bitmaps` keeps them, for a transcript someone will look at. The conversion's JSON of
-;; the recording is written beside it as `model.json` (the Model the recording gave), which `bb ocr` requires a replay on Rust and
-;; on Go to reproduce byte for byte.
+;; 450 KB of PNG costs nothing here; `--keep-bitmaps` keeps them, for a transcript someone will look at. Before it is kept the
+;; transcript is replayed on Rust and its JSON must be the recording's, byte for byte (the recording is not kept: the Model is the
+;; pipeline's, which moves, and the transcript is the engine's, which does not).
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [shell sh]]
          '[clojure.string :as str])
@@ -40,8 +40,11 @@
       (when-not (zero? (:exit r))
         (println "FAIL" id "exited" (:exit r))
         (System/exit (:exit r)))
-      (spit (str out "/model.json") (:out r)))
-    (when-not keep?
-      (spit (str out "/transcript.edn") (strip-bitmaps (slurp (str out "/transcript.edn"))))
-      (doseq [f (fs/glob out "bitmap-*.png")] (fs/delete f)))
+      (when-not keep?
+        (spit (str out "/transcript.edn") (strip-bitmaps (slurp (str out "/transcript.edn"))))
+        (doseq [f (fs/glob out "bitmap-*.png")] (fs/delete f)))
+      (let [rp (sh {:err :inherit} bin (str "--replay=" out) pdf)]
+        (when-not (and (zero? (:exit rp)) (= (:out r) (:out rp)))
+          (println "FAIL" id "the replay is not the recording")
+          (System/exit 1))))
     (println (format "recorded %s: %d bytes of transcript, %d ms" out (fs/size (str out "/transcript.edn")) (- (System/currentTimeMillis) t0)))))
