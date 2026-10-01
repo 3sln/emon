@@ -1,0 +1,186 @@
+#!/usr/bin/env bb
+;; IDENTITY: every driver arm, every document, one answer.   kin/scripts/identity   (DEVLOG P2.2, SPEC 14.1.5)
+;;
+;; The corpus is a list of (input, transcript) pairs. Every host's driver (`emon-rs` on Rust, `emon-go` on Go)
+;; converts each input and prints the BUNDLE (`--out=bundle`: the compact and the pretty JSON, the default and
+;; the full HTML, the text layer's evidence dump and the stage-0 intake line, one conversion). What must hold,
+;; per input, in bytes:
+;;
+;;   1. every ARM gives the reference's bundle: the same host's other byte-source adapters (Rust: bytes, Read +
+;;      Seek, spooled Read; Go: bytes, `*os.File` as `io.ReaderAt`, io.ReadSeeker, spooled io.Reader), the other
+;;      host's, and each host over a 512-byte-chunk ASYNC source (the cache misses, the loop fetches and re-runs:
+;;      D058). Exit code and stderr are part of the answer, so an input that fails (damaged, encrypted, an image,
+;;      a wrong password) must fail the same way, by the same name, on every arm;
+;;   2. the TRANSCRIPT, empty in this phase (the slice issues no requests, D089) but not absent: each host's
+;;      `--record` writes the same directory, byte for byte, and each host REPLAYS the other's to the reference
+;;      bundle (SPEC 14.1.5: the pair is (input bytes, transcript), replayed anywhere).
+;;
+;; The corpus: the committed synthetic documents (`test/corpus/synth/{pdf,scan,pdf-tagged}`), every PDF fixture of
+;; `test/pdf` (with each (file, password) row of `test/pdf/p3.txt`, wrong passwords included), and two non-PDF
+;; inputs (images are `unsupported-format`, D144).
+;;
+;;   bb identity                        the gate: every document, the five-and-four arms above, in parallel
+;;   bb identity --full                 also: more chunk sizes (7, 100, 4096) async and sync, on both hosts
+;;   bb identity --corpus [--limit N] [--sample K]   INSTEAD the PDFs of `corpus/` (never committed): a non-gate, slow
+;;   bb identity --only SUBSTR          documents whose path contains SUBSTR
+;;
+;; A difference prints the first differing section and byte offset, and the arms.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process shell destroy-tree]]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+
+(def args (vec *command-line-args*))
+(def full? (some #{"--full"} args))
+(def corpus? (some #{"--corpus"} args))
+(defn opt [k] (some->> (map-indexed vector args) (some (fn [[i a]] (when (= a k) (get args (inc i)))))))
+(def only (opt "--only"))
+(def limit (some-> (opt "--limit") parse-long))
+(def sample (some-> (opt "--sample") parse-long))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+(defn build [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r))
+      (str/trim (:out r))
+      (do (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1)))))
+(def rust (build "kin/scripts/emon-rs-build" "Rust"))
+(def go (build "kin/scripts/emon-go-build" "Go"))
+
+;; ---------------------------------------------------------------- the corpus
+
+(defn p3-rows []
+  (->> (str/split-lines (slurp "test/pdf/p3.txt"))
+       (remove #(or (str/blank? %) (str/starts-with? % "#")))
+       (map #(str/split % #"\t"))
+       (map (fn [[f pw]] {:file (str "test/" f) :pw (when (not= pw "-") pw)}))
+       distinct))
+
+(defn globs [dir pat] (sort (map str (fs/glob dir pat))))
+
+(def corpus
+  (if corpus?
+    ;; the never-committed public corpus (a symlink in a worktree: follow it)
+    (let [all (sort (map str (fs/glob "corpus" "**/*.pdf" {:follow-links true})))
+          all (if sample (take-nth (max 1 (quot (count all) sample)) all) all)]
+      (mapv (fn [f] {:file f :pw nil}) (cond->> all limit (take limit))))
+    (let [p3 (p3-rows)
+          p3files (set (map :file p3))
+          plain (fn [fs] (map (fn [f] {:file f :pw nil}) fs))]
+      (vec (concat (plain (globs "test/corpus/synth/pdf" "*.pdf"))
+                   (plain (globs "test/corpus/synth/scan" "*.pdf"))
+                   (plain (globs "test/corpus/synth/pdf-tagged" "*.pdf"))
+                   (plain (globs "test/pdf" "*.pdf"))
+                   (plain (remove p3files (globs "test/pdf/p3" "*.pdf")))
+                   p3
+                   (plain ["test/ocr/h-keyword/bitmap-0000.png" "test/corpus/synth/html/img/initial-W.png"]))))))
+
+(def corpus* (if only (filterv #(str/includes? (:file %) only) corpus) corpus))
+
+;; ------------------------------------------------------------------ the arms
+
+(def chunk-arms
+  (if full?
+    [["async7" ["--chunk=7" "--async"]] ["async100" ["--chunk=100" "--async"]] ["async4096" ["--chunk=4096" "--async"]]
+     ["sync64" ["--chunk=64" "--source=seek"]]]
+    []))
+
+;; [host name args]; the first is the reference
+(def arms
+  (vec (concat
+        [[:rust "bytes" []]
+         [:rust "seek" ["--source=seek"]]
+         [:rust "spool" ["--source=spool"]]
+         [:rust "async512" ["--chunk=512" "--async"]]
+         [:go "bytes" []]
+         [:go "readerat" ["--source=readerat"]]
+         [:go "seek" ["--source=seek"]]
+         [:go "spool" ["--source=spool"]]
+         [:go "async512" ["--chunk=512" "--async"]]]
+        (for [h [:rust :go] [n a] chunk-arms] [h n a]))))
+
+(defn drive
+  "Run a driver: {:exit :out (bytes) :err}. A run that takes over two minutes is killed (our own process)."
+  [host args {:keys [file pw]}]
+  (let [exe (if (= host :rust) rust go)
+        p (apply process {:out :bytes :err :string}
+                 exe "--out=bundle" (concat args (when pw [(str "--password=" pw)]) [file]))
+        r (deref p 120000 ::timeout)]
+    (if (= r ::timeout)
+      (do (destroy-tree p) {:exit -1 :out (byte-array 0) :err "TIMEOUT"})
+      {:exit (:exit r) :out (let [o (:out r)] (if (bytes? o) o (.getBytes (str o)))) :err (:err r)})))
+
+(defn same? [a b]
+  (and (= (:exit a) (:exit b)) (= (:err a) (:err b)) (java.util.Arrays/equals ^bytes (:out a) ^bytes (:out b))))
+
+(defn first-diff
+  "Where two answers first differ: the section of the bundle and the byte offset in it."
+  [a b]
+  (cond
+    (not= (:exit a) (:exit b)) (str "exit " (:exit a) " vs " (:exit b))
+    (not= (:err a) (:err b)) (str "stderr " (pr-str (subs (:err a) 0 (min 120 (count (:err a))))) " vs " (pr-str (subs (:err b) 0 (min 120 (count (:err b))))))
+    :else (let [x ^bytes (:out a) y ^bytes (:out b)
+                n (min (alength x) (alength y))
+                i (or (first (filter #(not= (aget x %) (aget y %)) (range n))) n)
+                head (String. x 0 (int i) "UTF-8")
+                section (or (last (re-seq #"(?m)^== (\S+)$" head)) [nil "(start)"])]
+            (str "section " (second section) ", byte " i " of " (alength x) " vs " (alength y)))))
+
+(defn dir-files [d]
+  (when (fs/exists? d)
+    (into (sorted-map) (for [f (fs/list-dir d)] [(fs/file-name f) (vec (fs/read-all-bytes f))]))))
+
+(def work (str (fs/create-temp-dir {:dir (fs/create-dirs ".cache/identity") :prefix "run."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+
+(defn one
+  "Every arm and the transcript trip for one input: {:probs [problem strings, empty when identical] :outcome :document | the error's name}."
+  [i item]
+  (let [ref (drive :rust [] item)
+        probs (atom [])
+        note (fn [& xs] (swap! probs conj (apply str xs)))]
+    (when (= -1 (:exit ref)) (note "the reference timed out"))
+    (doseq [[host name a] (rest arms)]
+      (let [r (drive host a item)]
+        (when-not (same? ref r)
+          (note (clojure.core/name host) "/" name " differs from rust/bytes: " (first-diff ref r)))))
+    ;; the transcript: record on each, compare the directories, replay each on the other
+    (when (zero? (:exit ref))
+      (let [rd (str work "/" i "-rust") gd (str work "/" i "-go")
+            rr (drive :rust [(str "--record=" rd)] item)
+            gr (drive :go [(str "--record=" gd)] item)]
+        (when-not (same? ref rr) (note "rust --record changes the answer: " (first-diff ref rr)))
+        (when-not (same? ref gr) (note "go --record changes the answer: " (first-diff ref gr)))
+        (when-not (= (dir-files rd) (dir-files gd))
+          (note "the transcripts differ: rust " (some-> (dir-files rd) keys vec) " go " (some-> (dir-files gd) keys vec)))
+        (let [gp (drive :go [(str "--replay=" rd)] item)
+              rp (drive :rust [(str "--replay=" gd)] item)]
+          (when-not (same? ref gp) (note "go replaying rust's transcript differs: " (first-diff ref gp)))
+          (when-not (same? ref rp) (note "rust replaying go's transcript differs: " (first-diff ref rp))))
+        (fs/delete-tree rd) (fs/delete-tree gd)))
+    {:probs @probs
+     :outcome (if (zero? (:exit ref)) :document (or (second (re-find #"error: (\S+)" (:err ref))) :other))}))
+
+;; ----------------------------------------------------------------- the run
+
+(println (str "  identity: " (count corpus*) " inputs x " (count arms) " arms + the transcript trip"
+              (when full? " (--full)") (when corpus? " (--corpus: the public corpus, not the committed one)")))
+(def t0 (System/currentTimeMillis))
+(def results (doall (pmap (fn [[i item]] [item (one i item)]) (map-indexed vector corpus*))))
+(doseq [[item {:keys [probs]}] results :when (seq probs)]
+  (bad (:file item) (when (:pw item) (str " (password " (:pw item) ")")) ": " (str/join "; " probs)))
+
+(when (zero? @fails)
+  (let [outcomes (frequencies (map (comp :outcome second) results))
+        docs (get outcomes :document 0)]
+    (ok "IDENTITY: " (count results) " inputs (" docs " converted, " (- (count results) docs) " refused by name: "
+        (str/join ", " (for [[k v] (sort-by (comp str key) (dissoc outcomes :document))] (str k " " v)))
+        "), " (count arms) " arms each, byte-identical bundles (JSON compact and pretty, HTML default and full, evidence, intake) and exit and stderr; "
+        "the record/replay trip across hosts is the same (" (quot (- (System/currentTimeMillis) t0) 1000) " s)")))
+
+(if (zero? @fails)
+  (System/exit 0)
+  (do (println "  FAIL" @fails "input(s) differ") (System/exit 1)))

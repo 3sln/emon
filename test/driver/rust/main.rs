@@ -4,17 +4,25 @@
 //
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
 //             [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool]
-//             [--chunk=N --async] [--stats] FILE
+//             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE
 //
 //   --out=json       the canonical JSON (compact; --pretty indents)           (default)
 //   --out=html       the HTML; OPTS is a comma list of ids,geometry,confidence=N,ledger,pretty,
 //                    drop-furniture,no-milestones,initials-plain,align-style
 //   --out=evidence   the text layer's evidence dump (compact JSON)
+//   --out=bundle     one conversion, every output, for `bb identity`: sections `== json`, `== json-pretty`, `== html`,
+//                    `== html-full` (ids,geometry,confidence=950,ledger,pretty), `== evidence`, `== intake`, each a line
+//                    `== NAME` then the text and a newline (the flags --pretty and --html are ignored)
 //   --out=intake     stage 0 only: `pdf VERSION pages=N encrypted=BOOL bytes=N`
 //   --source=        which adapter reads FILE: `bytes` (in memory), `seek` (Read + Seek: a File), `spool` (Read, spooled)
 //   --chunk=N        the source cache's chunk size; with --async the cache behaves like a browser Blob (it
 //                    misses, the loop fetches and re-runs): the output must equal the in-memory run's
 //   --stats          print the loop's attempts, fetch rounds and bytes fetched on stderr
+//   --record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
+//   --replay=DIR     convert from the transcript in DIR (no port is called)
+//   --parallel=N     run N conversions at once on one Engine; all N must give the same answer (`bb repeat`)
+//
+// `test/driver/go/main.go` is its twin: the same flags (it adds `--source=readerat`), stdout and exit codes (`bb identity`).
 //
 // Exit: 0 ok; 2 usage; 4 a named emon error (`error: NAME` on stderr, nothing on stdout); 1 anything else.
 use emon::{Assets, Config, Engine, HtmlOptions, Input, JsonOptions, OcrPolicy, Options, Output};
@@ -22,7 +30,7 @@ use std::io::Read;
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
     std::process::exit(2);
 }
 
@@ -47,6 +55,31 @@ fn html_options(list: &str) -> HtmlOptions {
     o
 }
 
+// The text of `--out=NAME` (or the whole bundle) for a converted Model.
+fn render(engine: &Engine, input: &Input, model: &emon::Model, out: &str, pretty: bool, html: HtmlOptions) -> String {
+    match out {
+        "json" => model.serialize(&Output::Json(JsonOptions { pretty })),
+        "html" => model.serialize(&Output::Html(html)),
+        "evidence" => model.evidence().unwrap_or("").to_string(),
+        _ => {
+            let full = HtmlOptions { ids: true, geometry: true, confidence_below: Some(950), ledger: true, pretty: true, ..HtmlOptions::default() };
+            let intake = match engine.intake(input.clone()) {
+                Ok(v) => v.iter().map(|i| format!("{} {}.{} pages={} encrypted={} bytes={}", i.format, i.version.0, i.version.1, i.pages, i.encrypted, i.bytes)).collect::<Vec<_>>().join("\n"),
+                Err(e) => format!("error: {}", e.name()),
+            };
+            format!(
+                "== json\n{}\n== json-pretty\n{}\n== html\n{}\n== html-full\n{}\n== evidence\n{}\n== intake\n{}\n",
+                model.serialize(&Output::Json(JsonOptions { pretty: false })),
+                model.serialize(&Output::Json(JsonOptions { pretty: true })),
+                model.serialize(&Output::Html(HtmlOptions::default())),
+                model.serialize(&Output::Html(full)),
+                model.evidence().unwrap_or(""),
+                intake
+            )
+        }
+    }
+}
+
 fn main() {
     let mut out = "json".to_string();
     let mut pretty = false;
@@ -57,6 +90,9 @@ fn main() {
     let mut source = "bytes".to_string();
     let mut stats = false;
     let mut file: Option<String> = None;
+    let mut record: Option<String> = None;
+    let mut replay: Option<String> = None;
+    let mut parallel: usize = 1;
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
             out = v.to_string();
@@ -90,6 +126,12 @@ fn main() {
             cfg.simulate_async = true;
         } else if a == "--stats" {
             stats = true;
+        } else if let Some(v) = a.strip_prefix("--record=") {
+            record = Some(v.to_string());
+        } else if let Some(v) = a.strip_prefix("--replay=") {
+            replay = Some(v.to_string());
+        } else if let Some(v) = a.strip_prefix("--parallel=") {
+            parallel = v.parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--parallel=N wants a positive number"));
         } else if a.starts_with("--") {
             usage(&format!("unknown flag {}", a));
         } else if file.is_none() {
@@ -99,7 +141,13 @@ fn main() {
         }
     }
     let file = file.unwrap_or_else(|| usage("no FILE"));
-    opts.keep_evidence = out == "evidence";
+    if record.is_some() && replay.is_some() {
+        usage("--record and --replay are two ways");
+    }
+    if (record.is_some() || replay.is_some()) && parallel > 1 {
+        usage("--record and --replay are one conversion");
+    }
+    opts.keep_evidence = out == "evidence" || out == "bundle";
 
     // THE DRIVER READS THE FILE (the library never does): three ways of handing the Engine the same bytes.
     let io = |e: std::io::Error| -> ! {
@@ -146,7 +194,65 @@ fn main() {
         }
         return;
     }
-    let (model, rs) = match engine.convert_stats(input, &opts) {
+    if !matches!(out.as_str(), "json" | "html" | "evidence" | "bundle") {
+        usage("--out is json, html, evidence or intake");
+    }
+    let transcript = replay.as_ref().map(|dir| {
+        let mut files = std::collections::BTreeMap::new();
+        for e in std::fs::read_dir(dir).unwrap_or_else(|e| io(e)) {
+            let e = e.unwrap_or_else(|e| io(e));
+            files.insert(e.file_name().to_string_lossy().to_string(), std::fs::read(e.path()).unwrap_or_else(|e| io(e)));
+        }
+        emon::Transcript::from_files(&files).unwrap_or_else(|e| fail(emon::Error::Plan(e)))
+    });
+    // one conversion's whole answer: the text (and what the loop did, and the transcript recorded), or the error
+    type Answer = Result<(String, emon::RunStats), emon::Error>;
+    let one = || -> Answer {
+        let (model, rs) = if let Some(t) = &transcript {
+            (engine.replay(input.clone(), &opts, t)?, emon::RunStats::default())
+        } else if let Some(dir) = &record {
+            let (m, t) = engine.record(input.clone(), &opts)?;
+            std::fs::create_dir_all(dir).unwrap_or_else(|e| io(e));
+            for (name, bytes) in t.to_files() {
+                std::fs::write(std::path::Path::new(dir).join(name), bytes).unwrap_or_else(|e| io(e));
+            }
+            (m, emon::RunStats::default())
+        } else {
+            engine.convert_stats(input.clone(), &opts)?
+        };
+        let text = render(&engine, &input, &model, &out, pretty, html);
+        Ok((text, rs))
+    };
+    // the parallel arm owns no transcript (a Transcript is not Send)
+    let plain = || -> Answer {
+        let (model, rs) = engine.convert_stats(input.clone(), &opts)?;
+        let text = render(&engine, &input, &model, &out, pretty, html);
+        Ok((text, rs))
+    };
+    let mut results: Vec<Answer> = Vec::new();
+    if parallel == 1 {
+        results.push(one());
+    } else {
+        std::thread::scope(|s| {
+            let hs: Vec<_> = (0..parallel).map(|_| s.spawn(|| plain())).collect();
+            for h in hs {
+                results.push(h.join().unwrap());
+            }
+        });
+    }
+    for (i, r) in results.iter().enumerate().skip(1) {
+        let same = match (&results[0], r) {
+            (Ok(a), Ok(b)) => a.0 == b.0,
+            (Err(a), Err(b)) => a.to_string() == b.to_string(),
+            _ => false,
+        };
+        if !same {
+            eprintln!("error: nondeterministic");
+            eprintln!("conversion {} of {} differs from conversion 0", i, parallel);
+            std::process::exit(1);
+        }
+    }
+    let (text, rs) = match results.swap_remove(0) {
         Ok(x) => x,
         Err(e) => fail(e),
     };
@@ -156,11 +262,5 @@ fn main() {
             rs.attempts, rs.fetch_rounds, rs.bytes_requests, rs.source_reads, rs.bytes_fetched, rs.input_bytes, rs.requests
         );
     }
-    let text = match out.as_str() {
-        "json" => model.serialize(&Output::Json(JsonOptions { pretty })),
-        "html" => model.serialize(&Output::Html(html)),
-        "evidence" => model.evidence().unwrap_or("").to_string(),
-        _ => usage("--out is json, html, evidence or intake"),
-    };
     print!("{}", text);
 }

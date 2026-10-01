@@ -13,6 +13,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // ------------------------------------------------------------------ the Blob
@@ -434,6 +436,11 @@ func TextI32(s *strings.Builder, v int32) {
 
 // @kin:link:form:limit-of: {:template "port.LimitOf({0})" :import "emon/port" :arity 1}
 func LimitOf(kind int32) int32 {
+	if ov := limitOverrides.Load(); ov != nil {
+		if v, ok := (*ov)[kind]; ok {
+			return v
+		}
+	}
 	name, def := limitSpec(kind)
 	if v, ok := os.LookupEnv("EMON_LIMIT_" + name); ok {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -441,6 +448,35 @@ func LimitOf(kind int32) int32 {
 		}
 	}
 	return def
+}
+
+// THE ENGINE'S LIMITS (P2.1, SPEC 13: `Config` carries the limits): the Rust half installs a per-thread
+// override table; Go has no goroutine-local state, so the table is process-wide and WithLimits keeps it
+// honest: a conversion with overrides holds the lock EXCLUSIVELY (it runs alone), one without holds it
+// shared (it never sees an override). `LimitOf` consults the table before `EMON_LIMIT_*`; kin still reads
+// a bound only through `limit-of`.
+var (
+	limitMu        sync.RWMutex
+	limitOverrides atomic.Pointer[map[int32]int32]
+)
+
+// WithLimits runs f with the given (kind, value) overrides in force.
+func WithLimits(overrides [][2]int32, f func()) {
+	if len(overrides) == 0 {
+		limitMu.RLock()
+		defer limitMu.RUnlock()
+		f()
+		return
+	}
+	limitMu.Lock()
+	defer limitMu.Unlock()
+	m := map[int32]int32{}
+	for _, o := range overrides {
+		m[o[0]] = o[1]
+	}
+	limitOverrides.Store(&m)
+	defer limitOverrides.Store(nil)
+	f()
 }
 
 // @kin:link:form:limit-breach: {:template "port.LimitBreach({0}, {1})" :import "emon/port" :arity 2}
