@@ -6927,14 +6927,14 @@ them; offer them upstream when they have proved general.
 - [x] **Inputs**: Blob-like byte sources with async slice reads; lazy range
   reading required; PDFs and images may be mixed in one conversion (D058
   revised).
-- [?] **Default `ocr-scope`** (D200): born-digital pages under `always` read the whole page (`full`, the default as
+- [x] **Default `ocr-scope`** (D200) — *coordinator, per maintainer's "drive it" mandate (2026-10-01): `full` stays default until P7.S measures both; pick by the measured table then; sign-off via D200.* born-digital pages under `always` read the whole page (`full`, the default as
   planned) or the `no-text` render plus witness lines (`witness`, a fraction of the OCR time). P7.S measures both on the
   fusion set; the maintainer decides the default from that table. Does not block P7.S.
-- [?] **Committed pixels for the fusion gates** (D196, D209): once kin reads pixels, a replayable transcript must hold its
+- [x] **Committed pixels for the fusion gates** (D196, D209) — *coordinator (2026-10-01): no LFS (maintainer's quota). Committed pixels ≤ ~10 MB total for gates (first pages, small crops); larger fusion sets go to the S3 corpus store (`bb corpus-push`, D085) and run only in non-gate long runs. Sign-off via D209.* once kin reads pixels, a replayable transcript must hold its
   renders and decodes (a 300-dpi RGB page is roughly 0.3-1 MB as kin's PNG), and the fusion corpus adds colour scans.
   Planned budget: the corpus additions ≤ 12 MB, `test/fusion/` ≤ 25 MB (first pages only where needed). Acceptable in the
   repository as plain files, or should these be LFS or a fetched, hash-pinned archive like `corpus/`? Does not block wave 1.
-- [?] **Provisional seal text** (D205): P7.7 emits `seal` nodes with raw OCR text (`low-conf`) before P8.2's unwarp and
+- [x] **Provisional seal text** (D205) — *coordinator (2026-10-01): yes, the Model may carry it, flagged `low-conf` + provisional, until P8.2; sign-off via D205.* P7.7 emits `seal` nodes with raw OCR text (`low-conf`) before P8.2's unwarp and
   name/date extraction. May a crawler-facing Model carry that provisional text, or should P7.7 keep it in the ledger until
   P8.2?
 
