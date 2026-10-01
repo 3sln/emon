@@ -1,0 +1,44 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 10 0 R >> /ExtGState << /A0 << /ca 0 /CA 1 >> /S0 << /ca 1 /CA 0 >> /B0 << /ca 0 /CA 0 >> /A5 << /ca 0.5 /CA 0.5 >> /A1 << /ca 1 /CA 1 >> >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 506 >>
+stream
+q /A0 gs BT /F1 14 Tf 50 740 Td (Fill alpha zero) Tj ET Q
+q /A5 gs BT /F1 14 Tf 50 710 Td (Fill alpha half) Tj ET Q
+q /S0 gs BT /F1 14 Tf 50 680 Td (Stroke alpha zero but filled) Tj ET Q
+q /S0 gs 0 G BT 1 Tr /F1 14 Tf 50 650 Td (Stroke only with stroke alpha zero) Tj 0 Tr ET Q
+q /B0 gs 0 G BT 2 Tr /F1 14 Tf 50 620 Td (Fill and stroke both alpha zero) Tj 0 Tr ET Q
+q /A0 gs 0 G BT 2 Tr /F1 14 Tf 50 590 Td (Fill alpha zero but stroked) Tj 0 Tr ET Q
+q /A1 gs BT /F1 14 Tf 50 560 Td (Back to opaque) Tj ET Q
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000379 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000937 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+1035
+%%EOF

@@ -78,6 +78,10 @@ public final class Pdfstructtest {
         emon.Port.Cells fnt = emon.Port.newCells();
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gx = emon.Port.newCells();
         emon.Port.Cells ss = emon.Port.newCells();
         emon.Port.Cells se = emon.Port.newCells();
         emon.Port.Cells sk = emon.Port.newCells();
@@ -99,7 +103,7 @@ public final class Pdfstructtest {
         if (status != 0) {
             return status;
         }
-        r = Pdfcontent.pcDocument(pdf, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+        r = Pdfcontent.pcDocument(pdf, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
         if (r != 0) {
             return -1;
         }

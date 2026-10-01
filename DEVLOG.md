@@ -1336,14 +1336,24 @@ analysis beyond "top-to-bottom lines on a single column".
   1,288 corpus files against pdfminer.six: shown-character agreement 99.92% before and after, `unknown` 1.50% -> 0.40% of
   shown characters; CJK documents 99.94% -> 99.97% (D143). **Gates**: `bb unit` on every arm; `bb unit red` fails on every
   arm. Out: `/CIDToGIDMap` and a reverse cmap for composite TrueType fonts; `pdfcontent` reading `/W2`.
-- [ ] P3.5 — Full graphics state: clipping paths (visibility), colour spaces
+- [x] P3.5 — Full graphics state: clipping paths (visibility), colour spaces
   (to classify ink colour), `ExtGState` alpha, render modes, paths recorded as
   `vector` evidence (lines, rects, fills), image placements (`Do` image,
-  inline `BI…EI`), shadings as filled regions.
-- [ ] P3.6 — Visibility classification (SPEC §8.1): clipped, off-page,
+  inline `BI…EI`), shadings as filled regions. **Done** (D152-D154): the
+  interpreter reads `m l c v y h re S s f F f* B B* b b* n W W* sh w d`, the stroking colours and
+  every colour space of `emon.pdfgfx`, `gs` (`ca CA BM SMask LW`), Form XObject `/BBox` clips, image
+  placements (XObject and inline) and `/OC` spans; the evidence has `paths` rows with their geometry in `pts`,
+  `images` rows, clip rows, and the glyph's stroke colour, stroke alpha, clip and blend/soft-mask bits. Not done: a
+  tiling pattern's own content, `/Font` in an ExtGState, a soft mask's group (its presence is recorded and makes
+  paint "not exactly known"), exact (non-bounding-box) clipping by a non-rectangular path.
+- [x] P3.6 — Visibility classification (SPEC §8.1): clipped, off-page,
   white-on-white, covered-by-later-opaque-paint, invisible mode. Writes the
   evidence hooks `vis`, `vby` (the occluder's `z`) and `vchk` on glyphs and
-  images (SPEC §8.4.3, D096).
+  images (SPEC §8.4.3, D096). **Done** (D155, D156): `emon.pdfvis`, run at the end of each page; classes clipped,
+  offpage, white-on-white, zero-size (under one point), occluded, ocg-hidden, transparent; render modes 3 and 7 stay the
+  `hidden-text` source and a Tr 3 OCR layer over a scan is never dropped or "occluded". 17 fixtures (3,278 hand
+  or independently computed expectations) on every target; poppler's text and page agree on the real corpus (D156).
+  `bb gates` green; `bb unit red` fails on every arm.
 - [x] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
   `/Alt`, `/ActualText` (use it when present — it is the author's answer),
   informativeness score (D034). Also (D076): Artifact subtypes as
@@ -5445,6 +5455,82 @@ run (a span with a nested MCID span would double-count); strict left-to-right (a
 **Alternatives**: qpdf's JSON for the tree (it lists objects, not the tree's resolved roles); comparing whole dumps (a format change would be an oracle change); real mis-tagged files only (nobody knows their truth).
 - [ ] **Signed off** (maintainer)
 
+### D152 — The graphics state as built: paths, clips as the intersection box, images, `pa im pts gx` (P3.5; D096, D102, D126)
+**Decision**: `pc-page`/`pc-document`/`pc-run`/`pc-do`/`pc-op` take four more arenas after `ln`: the evidence's `paths` (`pa`),
+`images` (`im`), `pts`, and `gx`, the colour and optional-content workspace of `emon.pdfgfx` (one `Cells`, D153). A graphics state is 64 cells
+(was 32): stroking colour and alpha, both colour-space keys and classes, the clip in force (a `paths` row, -1 none), blend mode,
+soft mask in force, line width, first dash length. PATHS: `m l c v y h re` build a path in page space (D009) in `pts` (the first
+128 points of a path; a longer one keeps its box and no geometry), its box and kind (a rectangle is one subpath of four
+corners axis-aligned to a centipoint, with or without the closing line; else curve, single line, other). A paint operator makes a `paths` row (flags
+`filled stroked pattern blend softmask closed evenodd`, fill and stroke colour, alpha, stroke width and dash in centipoints, `z`, `clip`,
+`mark`, `ocg`, geometry); the box grows by half the stroke width. 200,000 paths or images a page are recorded (the rest set warning 1024).
+A CLIP IS A ROW WHOSE BOX IS THE INTERSECTION of the new clip with the one in force (so a glyph's `clip` names the whole region's bounding box and
+P3.6 never walks a chain); a clip that does not shrink the region makes no row; `W`/`W*` is pending until the next paint operator or
+`n`. A Form XObject's `/BBox` is a clip, and glyphs shown in a clipping render mode (4-7) clip, at `ET`, to the union of their cells. THE
+LIMIT: a clip by a non-rectangular path is its bounding box (a glyph in the corner a triangle leaves out is not clipped), and an even-odd
+clip is its box: conservative, never a false "clipped". An IMAGE placement (`Do` and inline `BI`, whose dictionary is read for `W H IM`) is a
+row: the unit square through the CTM, `rot` of its x axis, `skewed` unless its axes are within half a degree of a right angle, flags `mask smask
+masked inline blend softmask`. `sh` is a `paths` row of kind `other` flagged `shading`, over the clip region. Alpha: `ca` and `CA`; blend modes and soft
+masks are recorded as bits (`pg-blend pg-softmask`, `mg-blend mg-softmask`, `vc-blend vc-softmask`) and make a paint "not exactly known". `rg`
+and `k` now set the colour-space class (D127 said they did and they did not: the Chrome goldens changed from `gray` to `rgb`).
+**Why**: the visibility pass (D155) needs exactly this and nothing more; everything else of a graphics state is already evidence.
+**Alternatives**: a clip chain walked by the reader; polygon clipping (a bounded add-on to `emon.pdfvis` if a crawler's trick ever needs it).
+- [ ] **Signed off** (maintainer)
+
+### D153 — Colour spaces and PDF functions (`emon.pdfgfx`, P3.5)
+**Decision**: the ink colour of every painted object is 0xRRGGBB or -1 (unknown), and the colour-space class is `gray rgb cmyk spot pattern other`.
+DeviceGray, DeviceRGB, DeviceCMYK, CalGray and CalRGB (read as gray and RGB: no gamma, no matrix), Lab (through XYZ and sRGB's transfer function, by
+integer arithmetic, from the white point and range; D50's and D65's published matrices), ICCBased by `/N` (no profile is read), Indexed (its whole
+palette is converted when it is first seen, from any base), Separation and DeviceN by the alternate space and the tint transform (a Separation's
+256-colour palette is evaluated once), Pattern (-1). Functions are compiled into cells and run: type 2 (any real exponent, by squaring and square
+roots), 3 (stitching), 0 (sampled: linear for one input, the nearest sample for more) and 4 (the whole PostScript calculator language but `ln`, `log` and `exp`
+with a negative base and a fractional exponent, which make the function unusable and the colour -1). CMYK is `(1-c)(1-k)`. A space that is not read, and a
+colour that cannot be converted, is -1: P3.6 never calls an unknown colour white. A cache of 24 spaces keyed by the object's handle, replaced round
+robin. **Validated**: `test/vis/spaces.pdf` holds 27 colours (every space above, stitched, sampled, calculator and gamma-exponent tint transforms,
+a Lab alternate); their expected values are computed by a SECOND implementation in `kin/scripts/vis-fixtures` (double precision, a Clojure
+PostScript interpreter) and every target is within two levels a channel.
+**Alternatives**: reading ICC profiles (a separate task, and the white test needs only the hit at 1 1 1); exact CalRGB.
+- [ ] **Signed off** (maintainer)
+
+### D154 — Optional content: `ocgdef`, OCMD and `/VE`, form and image `/OC`, `/AS` is not "off" (P3.5)
+**Decision**: `/OCProperties /D` is read once a document: `/BaseState`, `/ON`, `/OFF`. A `BDC /OC` mark's `ocgdef` is 1 on, 0 off (an OCG by its configured
+state; an OCMD by `/VE` (`And Or Not`, depth 8) or its policy `AllOn AnyOn AnyOff AllOff`). An `/OC` entry of a Form XObject or an image is a `marks` row
+of its own (`mc-xobject`) around the form's run or the image's row. A group whose configuration is on but whose `/Usage /View /ViewState` is OFF
+(an `/AS` auto state: a "print only" layer) is `ocgdef` 2: poppler and Ghostscript both DRAW it (checked on `test/vis/ocg.pdf`; Ghostscript also warns that it ignores
+`/VE`), Acrobat hides it, so it is not `off` for P3.6 and fusion can read it as a watermark hint. A glyph or image inside any span whose state is 0 on its chain is `ocg-hidden`.
+- [ ] **Signed off** (maintainer)
+
+### D155 — Visibility classification (`emon.pdfvis`, P3.6; SPEC 8.1, 8.4.3)
+**Decision**: after a page's content is read, every glyph and image gets `vis`, `vby`, `vchk` (SPEC 8.4.3 as amended): `clipped`, `offpage`,
+`white-on-white` (the ink is within 4 levels a channel of the backdrop: the page's white, or the NEAREST EARLIER opaque axis-aligned rectangle that covers the whole glyph;
+any other earlier paint that touches the cell, an image, a shading, a pattern, a translucent or blended fill, a partial cover, makes the backdrop unknown and the check silent),
+`zero-size` (under one point), `occluded` (a LATER opaque paint covers the visible cell: a rectangle fill at alpha 1 with a known colour, no blend or soft mask and itself visible, or an
+image with no stencil, `/SMask` or `/Mask`, alpha 1 and an axis-aligned placement; `vby` is its `z`), `ocg-hidden`, `transparent` (alpha 0). The first failing check names the class and
+later checks do not run. Render modes 3 and 7 are NOT a class: they paint nothing, so white, occlusion and transparent do not apply (a hidden OCR layer over its scan is never "occluded" by it), while clip, offpage,
+zero-size and ocg still do. A word never mixes visibilities: `pc-continues` breaks where `vis` or hidden-ness changes, and `hidden-text` is the source of a word whose glyphs are all mode 3 or 7. At most
+4,096 rows are looked at each way per object (past that: "cannot tell"). TEXT UNDER A SCAN drawn in a visible mode (some older producers' OCR layers) is `occluded` with `vby` the scan's `z`: the ledger keeps its text, and fusion (P7.6)
+may read an occluder that is a page-sized image as "this is an OCR layer".
+**Limits**: a glyph is its CELL (ascent to descent), not its ink; a clip by a non-rectangle is its box (D152); a rotated picture is not an exact occluder.
+- [ ] **Signed off** (maintainer)
+
+### D156 — How P3.5 and P3.6 were validated
+**Decision**: (1) `kin/scripts/vis-fixtures` (bb) writes 17 PDFs (`test/vis/`) and 3,278 expectation rows: one fixture per class (white in gray, RGB, CMYK, Separation, Lab, Indexed, ICC, DeviceN, on a same-colour rectangle; clipped by a rectangle, a form box,
+a nested clip; off the page, off the crop box, on a rotated page; sizes 0, 0.5, 0.9, 1 pt and a `cm` scale; painted over by a rectangle, a picture, a page wall; NOT occluded by a translucent rectangle, a Multiply blend, a soft mask, a stencil, a colour-key image, a clipped-away
+or layer-hidden rectangle, a partial cover, a rotated picture; every OCMD policy and `/VE`; alpha 0; Tr 3 and 7 OCR layers before and after a scan; and `spam.pdf`, one page with every trick). Every row is what the operators MEAN. (2) The laws of
+`kin/pdfvistest.kin` (all four targets: 278 laws each, `bb unit red` fails on all) check each glyph's `vis`, `vby`, its word's source, the colour and class, `ocgdef`, image rows, counts, `ev-check`, and that no word mixes visibilities; `pdfcontenttest` runs the same files through
+the 512-byte async source (paths, images, points and the colour workspace cell for cell) and corrupts and cuts five of them. (3) `kin/scripts/vis-check [--render]`: the generated Rust against the same rows, and the poppler RENDERER (`pdftoppm`): what is expected to be seen leaves ink in its box and what is expected to be hidden leaves none: 1,333 visible and 911 hidden glyphs agree,
+every one. (4) `tools/vis/corpus-vis.clj` on the real corpus (899 files, the first three pages): see D157.
+**Found**: the corruption law found a fault (a mutated `/Domain` that is not an array was walked as one in `gx-read-nums`: an index out of bounds); fixed, and 9,600 more random mutants of 12 fixtures through the Rust sweep fault nowhere. Two of my own expectations were wrong in the way
+a per-glyph classifier is right and a per-string expectation is not (text partly over a rectangle is some glyphs seen and some not); the fixtures now use single straddling glyphs.
+- [ ] **Signed off** (maintainer)
+
+### D157 — Hidden-text detection against poppler on the real corpus
+**Result** (`bb tools/vis/corpus-vis.clj --n 900 --max-kb 1500`, 899 files judged, first 3 pages, 2.78M text glyphs): the VISIBLE glyphs are in poppler's text 99.75% (2,768,799 of 2,775,784) and leave ink on poppler's rendered page 99.83% (2,751,832 of 2,756,629). OFFPAGE: 330 of 330 are also dropped by `pdftotext`. CLIPPED: 26,620 glyphs, 26,617 (99.99%) are also not in
+`pdftotext`'s words: poppler clips too. `hidden-text` (Tr 3, 7): 68,429 glyphs, 67,180 (98.2%) are in poppler's text (it extracts OCR layers; the rest it drops were not examined). WHITE (349 glyphs, in 6 files) and OCCLUDED (536, 8 files): `pdftotext` keeps all, as it does not look at paint; the renderer cannot judge them because something else is
+drawn where they are (a picture, a patch, the same text again) for all but 3 of the 27,505 glyphs of the hidden classes (those 3 had no ink, as claimed): the fixtures (D156) are the witness for those classes. ZERO-SIZE: 137. No sampled file had transparent or `ocg-hidden` text. Pdfminer.six does not reason about visibility at all (it extracts Tr 3 text and white text); the glyph streams were already held to it (D127: 99.6% of 2.0M characters).
+**Also found**: poppler and Ghostscript ignore the `/AS` View state (D154); `pdftotext` drops clipped text; the corpus's white and occluded text is in a handful of files (white text in a brochure, text under white patches in a form).
+- [ ] **Signed off** (maintainer)
+
 ## Found in kin, not ours to fix here
 
 **Audit (2026-09-30, coordinator; checked against kin's source and nome):**
@@ -5546,6 +5632,7 @@ them; offer them upstream when they have proved general.
   `&mut Cells` tag again (two mutable borrows in one call): every one of P3.8's and P3.9's Rust errors
   was that or a `let` that was assigned later without `^:mut`. The `CellsRo` tag of the audit above
   would have removed the first kind outright.
+- P3.5/P3.6 (`pdfgfx`, `pdfvis`, `pdfcontent`): the Rust `&mut` rule is wider than the audit says: EVERY kin function that takes a `Cells` is `&mut` in Rust (only the `emon.port` primitives `cells-at` etc. take `&`), so `(f cells (g cells))` fails when `g` is a kin reader (`fx-get`, `pl-first`, `px-nth`, `gl-get`), not only a writer: 40-odd sites were hoisted into `let`s. `close` is a Go builtin (refused at generation time, clear); a `defconst GX_SIZE` and a `defn gx-size` are both `GxSize` in C# (again nothing at generation time says so: the `PG`/`pg` case, found by the C# build only). A `^:mut` local that is only assigned and never read is a Go error too.
 
 ## Open questions for the maintainer
 

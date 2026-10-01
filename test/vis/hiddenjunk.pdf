@@ -1,0 +1,54 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [20 0 R] /D << /BaseState /ON /OFF [20 0 R] >> >> >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 10 0 R >> /Properties << /Off 20 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 283 >>
+stream
+q BT 3 Tr /F1 14 Tf 2000 740 Td (Hidden and off the page) Tj 0 Tr ET Q
+q BT 3 Tr /F1 0.5 Tf 50 710 Td (Hidden and tiny) Tj 0 Tr ET Q
+q /OC /Off BDC BT 3 Tr /F1 14 Tf 50 680 Td (Hidden in a layer that is off) Tj 0 Tr ET EMC Q
+q BT /F1 14 Tf 50 650 Td (Visible after all of it) Tj ET Q
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+20 0 obj
+<< /Type /OCG /Name (Off) >>
+endobj
+xref
+0 21
+0000000000 65535 f 
+0000000015 00000 n 
+0000000137 00000 n 
+0000000194 00000 n 
+0000000351 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000686 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000784 00000 n 
+trailer
+<< /Size 21 /Root 1 0 R >>
+startxref
+829
+%%EOF

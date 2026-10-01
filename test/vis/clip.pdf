@@ -1,0 +1,67 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 10 0 R >> /XObject << /Fm0 11 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 716 >>
+stream
+q 40 704 200 40 re W n
+q BT /F1 14 Tf 50 740 Td (Inside the clip rectangle) Tj ET Q
+Q
+q 40 668 20 50 re W n
+q BT /F1 14 Tf 56 710 Td (a) Tj ET Q
+Q
+q 300 600 100 40 re W n
+q BT /F1 14 Tf 50 680 Td (Outside the clip) Tj ET Q
+Q
+q BT /F1 14 Tf 50 650 Td (After Q the clip is gone) Tj ET Q
+q 40 560 20 20 re W n
+q BT /F1 14 Tf 50 620 Td (Clipped to a tiny hole elsewhere) Tj ET Q
+Q
+q 40 400 m 140 400 l 90 500 l h W n
+q BT /F1 8 Tf 60 415 Td (Inside a triangle) Tj ET Q
+q BT /F1 14 Tf 300 560 Td (Far from the triangle) Tj ET Q
+Q
+q 40 450 100 40 re W n 0 0 500 500 re W n
+q BT /F1 14 Tf 200 530 Td (Nested clip keeps the smaller) Tj ET Q
+Q
+q /Fm0 Do Q
+q BT /F1 14 Tf 50 500 Td (Text after the form is not clipped) Tj ET Q
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+11 0 obj
+<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [1 0 0 1 400 640] /Length 87 >>
+stream
+BT /F1 14 Tf 5 50 Td (Inside) Tj ET
+BT /F1 14 Tf 150 50 Td (Outside the form box) Tj ET
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000275 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000001043 00000 n 
+0000001141 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+1355
+%%EOF

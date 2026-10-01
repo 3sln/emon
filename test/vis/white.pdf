@@ -1,0 +1,110 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 10 0 R >> /ColorSpace << /Sep 11 0 R /CalW 12 0 R /LabW 13 0 R /Idx 14 0 R /Icc [/ICCBased 15 0 R] /DevN 16 0 R /SepBlack 17 0 R >> /XObject << /Im0 19 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 1810 >>
+stream
+q 1 g BT /F1 14 Tf 50 740 Td (White gray on white) Tj ET Q
+q 1 1 1 rg BT /F1 14 Tf 50 710 Td (White rgb on white) Tj ET Q
+q 0 0 0 0 k BT /F1 14 Tf 50 680 Td (White cmyk on white) Tj ET Q
+q 0.99 g BT /F1 14 Tf 50 650 Td (Almost white on white) Tj ET Q
+q 0.9 g BT /F1 14 Tf 50 620 Td (Light gray is seen) Tj ET Q
+q /Sep cs 0 scn BT /F1 14 Tf 50 590 Td (Separation tint 0 is paper white) Tj ET Q
+q /Sep cs 1 scn BT /F1 14 Tf 50 560 Td (Separation tint 1 is black) Tj ET Q
+q /CalW cs 1 1 1 sc BT /F1 14 Tf 50 530 Td (CalRGB white) Tj ET Q
+q /LabW cs 100 0 0 sc BT /F1 14 Tf 50 500 Td (Lab white) Tj ET Q
+q /LabW cs 0 0 0 sc BT /F1 14 Tf 50 470 Td (Lab black is seen) Tj ET Q
+q /Idx cs 1 sc BT /F1 14 Tf 50 440 Td (Indexed white) Tj ET Q
+q /Idx cs 0 sc BT /F1 14 Tf 50 410 Td (Indexed red is seen) Tj ET Q
+q /Icc cs 1 1 1 sc BT /F1 14 Tf 50 380 Td (ICC based white) Tj ET Q
+q /DevN cs 1 1 scn BT /F1 14 Tf 50 350 Td (DeviceN white from a calculator function) Tj ET Q
+q /DevN cs 0 0 scn BT /F1 14 Tf 50 320 Td (DeviceN black from a calculator function) Tj ET Q
+q /SepBlack cs 0 scn BT /F1 14 Tf 50 290 Td (A separation of gray that starts white) Tj ET Q
+q 1 g 40 252 540 24 re f Q
+q 1 g BT /F1 14 Tf 50 260 Td (White text on a white rectangle) Tj ET Q
+q 1 0 0 rg 40 222 540 24 re f Q
+q 1 0 0 rg BT /F1 14 Tf 50 230 Td (Red text on a red rectangle) Tj ET Q
+q 1 0 0 rg 40 192 540 24 re f Q
+q 1 0.6 0.6 rg BT /F1 14 Tf 50 200 Td (Pink text on a red rectangle is seen) Tj ET Q
+q 0 0 0 rg 40 162 60 24 re f Q
+q 1 g BT /F1 14 Tf 50 170 Td (Wh) Tj ET Q
+q 1 g 1 G BT 2 Tr /F1 14 Tf 50 140 Td (White stroke and fill) Tj 0 Tr ET Q
+q 1 g 0 G BT 2 Tr /F1 14 Tf 50 110 Td (White fill, black stroke is seen) Tj 0 Tr ET Q
+q 540 0 0 24 40 72 cm /Im0 Do Q
+q 1 g BT /F1 14 Tf 50 80 Td (White text over a picture is not hidden) Tj ET Q
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+11 0 obj
+[/Separation /Paper /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 0 1] /N 1 >>]
+endobj
+12 0 obj
+[/CalRGB << /WhitePoint [0.9505 1 1.089] /Gamma [2.2 2.2 2.2] >>]
+endobj
+13 0 obj
+[/Lab << /WhitePoint [0.9642 1 0.8249] /Range [-128 127 -128 127] >>]
+endobj
+14 0 obj
+[/Indexed /DeviceRGB 2 <FF0000 FFFFFF 000000>]
+endobj
+15 0 obj
+<< /N 3 /Alternate /DeviceRGB /Length 28 >>
+stream
+profile bytes are never read
+endstream
+endobj
+16 0 obj
+[/DeviceN [/A /B] /DeviceRGB 18 0 R]
+endobj
+17 0 obj
+[/Separation /Ink /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>]
+endobj
+18 0 obj
+<< /FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1] /Length 21 >>
+stream
+{ add 2 div dup dup }
+endstream
+endobj
+19 0 obj
+<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length 25 >>
+stream
+808080808080808080808080>
+endstream
+endobj
+xref
+0 20
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000397 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000002260 00000 n 
+0000002358 00000 n 
+0000002476 00000 n 
+0000002558 00000 n 
+0000002644 00000 n 
+0000002707 00000 n 
+0000002813 00000 n 
+0000002866 00000 n 
+0000002970 00000 n 
+0000003097 00000 n 
+trailer
+<< /Size 20 /Root 1 0 R >>
+startxref
+3290
+%%EOF

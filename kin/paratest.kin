@@ -287,9 +287,13 @@
   (cells-drop wd 0)
   (cells-drop ln 0)
   (let [^Src src (src-of-blob pdf)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
         ^I32 o (pd-open src ar dc a b st)]
     (if (!= o 0) (return 1))
-    (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln) 0) (return 2))
+    (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0) (return 2))
     (model-init nodes attrs regions text pages ledger layout)
     (pa-pages pg pages)
     (let [^I32 np (quot (cells-len pages) 16)]

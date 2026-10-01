@@ -65,6 +65,12 @@ func VzZeroSize() int32 {
 func VzOccluded() int32 {
 	return 5
 }
+func VzOcgHidden() int32 {
+	return 6
+}
+func VzTransparent() int32 {
+	return 7
+}
 func VzEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "clipped")
@@ -84,6 +90,14 @@ func VzEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 5 {
 		port.TextAscii(t, "occluded")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "ocg-hidden")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "transparent")
 		return 1
 	}
 	return 0
@@ -293,6 +307,24 @@ func PgEvenodd() int32 {
 func PgClip() int32 {
 	return 4
 }
+func PgFilled() int32 {
+	return 8
+}
+func PgStroked() int32 {
+	return 16
+}
+func PgShading() int32 {
+	return 32
+}
+func PgPattern() int32 {
+	return 64
+}
+func PgBlend() int32 {
+	return 128
+}
+func PgSoftmask() int32 {
+	return 256
+}
 func PgEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "closed")
@@ -304,6 +336,30 @@ func PgEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 4 {
 		port.TextAscii(t, "clip")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "filled")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "stroked")
+		return 1
+	}
+	if code == 32 {
+		port.TextAscii(t, "shading")
+		return 1
+	}
+	if code == 64 {
+		port.TextAscii(t, "pattern")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "blend")
+		return 1
+	}
+	if code == 256 {
+		port.TextAscii(t, "softmask")
 		return 1
 	}
 	return 0
@@ -318,6 +374,15 @@ func MgSmask() int32 {
 func MgInline() int32 {
 	return 4
 }
+func MgMasked() int32 {
+	return 8
+}
+func MgBlend() int32 {
+	return 16
+}
+func MgSoftmask() int32 {
+	return 32
+}
 func MgEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "mask")
@@ -329,6 +394,18 @@ func MgEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 4 {
 		port.TextAscii(t, "inline")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "masked")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "blend")
+		return 1
+	}
+	if code == 32 {
+		port.TextAscii(t, "softmask")
 		return 1
 	}
 	return 0
@@ -346,6 +423,9 @@ func McUnresolved() int32 {
 func McUnterminated() int32 {
 	return 8
 }
+func McXobject() int32 {
+	return 16
+}
 func McEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "inline")
@@ -361,6 +441,10 @@ func McEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 8 {
 		port.TextAscii(t, "unterminated")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "xobject")
 		return 1
 	}
 	return 0
@@ -481,6 +565,18 @@ func VcZeroSize() int32 {
 func VcOcclusion() int32 {
 	return 16
 }
+func VcOcg() int32 {
+	return 32
+}
+func VcTransparent() int32 {
+	return 64
+}
+func VcBlend() int32 {
+	return 128
+}
+func VcSoftmask() int32 {
+	return 256
+}
 func VcEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "clip")
@@ -500,6 +596,22 @@ func VcEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 16 {
 		port.TextAscii(t, "occlusion")
+		return 1
+	}
+	if code == 32 {
+		port.TextAscii(t, "ocg")
+		return 1
+	}
+	if code == 64 {
+		port.TextAscii(t, "transparent")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "blend")
+		return 1
+	}
+	if code == 256 {
+		port.TextAscii(t, "softmask")
 		return 1
 	}
 	return 0
@@ -6538,7 +6650,7 @@ func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 	}
 	if which > 3 {
 		port.TextAscii(t, "[")
-		for b < 8 {
+		for b < 16 {
 			if (v & bit) != 0 {
 				json.JsFsep(t, pr, k)
 				port.TextAscii(t, "\"")

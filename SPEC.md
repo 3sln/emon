@@ -1074,16 +1074,22 @@ linear-part cells.
 | `lines` | 16 | line head (13); `src`; `order` (content-stream index of its first glyph, the weak reading-order signal); spare |
 | `marks` | 24 | page, kind (`mk`: artifact, optional-content, tag), tag `tstart tlen`, parent span, `mcid`, artifact `/Type` (`ar`), artifact `/Subtype` (`as`), `/ActualText`, `/Alt`, `/E`, `/Lang` (each an `etext` run: 8 cells), OCG or OCMD object number, its default state (1 on, 0 off, -1 unknown), `gfirst gcount` (glyphs inside), `zfirst zlast` (painted objects inside), flags (`/Properties` reference, inline dictionary, name not found, closed by the page end), `stm` (the object number of the Form XObject whose stream the span is in, 0 the page's: P3.7 joins a structure element's MCID on `(stm, mcid)`, D101) |
 | `fonts` | 16 | object number, subtype (`ft`), descriptor `/Flags` verbatim, embedded program kind (0 none), has `ToUnicode`, base encoding, `/BaseFont` `tstart tlen`, ascent, descent (1/1000 em), space width (D083 units), italic angle (centi-degrees), `/StemV`, style (`sy` inferred from flags and name), `/CapHeight`, `/XHeight` (1/1000 em, -1 absent: the initials rule of §10.9 needs them, P4.10 reads them into the two cells that were spare) |
-| `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), spare |
-| `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, spare |
+| `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row, filled, stroked, shading, pattern fill, non-Normal blend, soft mask in force), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), spare |
+| `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`: stencil mask, /SMask, inline, /Mask, blend, soft mask in force), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, spare |
 
-**Visibility hooks (P3.6).** P1.7 writes `vis` 0, `vby` -1, `vchk` 0 (nothing
-checked). Each P3.6 check sets its `vchk` bit when it has run (`clip` 1,
-`offpage` 2, `white` 4, `zero-size` 8, `occlusion` 16); `vis` names the first
-check that failed, `vby` the occluder's `z`. So `vis` 0 means "passed the
-checks in `vchk`", never "visible" outright, and fusion can tell an
-unchecked glyph from a checked one. Render mode 3 is never `vis`: it is the
-`hidden-text` source (§3.5).
+**Visibility hooks (P3.6, D155).** `vis` is the `vz` code of the FIRST check that failed (0 none): `clipped` 1,
+`offpage` 2, `white-on-white` 3, `zero-size` 4, `occluded` 5, `ocg-hidden` 6, `transparent` 7. `vchk` has one bit for each
+check that ran: clip 1, offpage 2, white 4, zero-size 8, occlusion 16, ocg 32, transparent 64; the interpreter also sets
+128 (a non-Normal blend mode is in force) and 256 (a soft mask is). A check after the failing one has not run. `vby` is
+the `z` of the paint that covers an `occluded` glyph or image. So `vis` 0 means "passed the checks in `vchk`", never
+"visible" outright, and fusion can tell an unchecked glyph from a checked one. Every check is conservative: invisible is
+said only when it is certain from what was recorded. Render modes 3 and 7 are never `vis` (they are the `hidden-text`
+source, and paint nothing, so the paint checks white, occlusion and transparent do not apply to them; clip, offpage,
+zero-size and ocg still do). A word never mixes visibilities or hidden-ness: the grouping breaks where either changes.
+A `paths` row that is a clip has `z` -1 and a box that is the intersection of every clip on its chain (D152); a clip
+that does not shrink the region has no row. `marks.ocgdef` is 1 on, 0 off, 2 on in the configuration but off by the
+group's `/Usage /View /ViewState` (an `/AS` auto state: Acrobat hides it, poppler, Ghostscript and pdf.js draw it, so it is
+not `off`), -1 unknown; an `/OC` on a Form XObject or an image is a `marks` row of its own (flag `xobject`).
 
 **Colour and layer.** A glyph's ink is its fill colour for modes 0, 2, 4, 6
 and its stroke colour for 1, 5 (both for 2, 6); the colour-space class says

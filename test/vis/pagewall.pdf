@@ -1,0 +1,41 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 10 0 R >>  >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<<  /Length 223 >>
+stream
+q BT /F1 14 Tf 50 740 Td (Covered by a page sized white rectangle) Tj ET Q
+q BT /F1 14 Tf 50 710 Td (and so is this line) Tj ET Q
+q 1 g 0 0 612 792 re f Q
+q BT /F1 14 Tf 50 680 Td (Drawn after the page wall is seen) Tj ET Q
+endstream
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000249 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000524 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+622
+%%EOF

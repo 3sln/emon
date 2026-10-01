@@ -1,0 +1,612 @@
+#!/usr/bin/env bb
+;; Write the visibility fixtures and their expectations (DEVLOG P3.5, P3.6; D152-D157).
+;;
+;;     kin/scripts/vis-fixtures            write test/vis/*.pdf and test/vis/rows.txt
+;;     kin/scripts/vis-fixtures --check    fail if the committed files are not what this writes
+;;
+;; A DEVELOPMENT SCRIPT that `bb unit` also runs with --check, like the other fixture writers. Nothing here is
+;; emon: it WRITES small PDFs, one per visibility class and one per hidden-text trick a crawler is fed, and it
+;; says by hand, string by string, what each glyph must be classified as. Every expectation is from what the
+;; operators MEAN (ISO 32000-1 8, 9, 11), not from what emon answers; `kin/scripts/vis-check` holds the same
+;; expectations to an independent witness, the poppler renderer (`pdftoppm`): an item expected to be seen must
+;; leave ink in its box and an item expected to be hidden must leave none.
+;;
+;; THE EXPECTATION FILE (test/vis/rows.txt), tab-separated, read by kin/pdfvistest.kin:
+;;   F  path                       run the file
+;;   G  vis vby src ncp text       the next ncp glyphs have this `vis` (the evidence's `vz` code; 0 none) and `vby`
+;;                                 (-1 none, else the `z` of the occluder), and their words this `src` (1 text,
+;;                                 2 hidden-text); `text` is for a person
+;;   C  rgb cls vis ncp text       the next ncp glyphs are filled with this colour (rrggbb, or -1 unknown) within two levels a
+;;                                 channel, are of this colour-space class (`cs`; 0 none) and have this `vis`
+;;   O  ocgdef ncp                 the innermost optional-content span of the ncp glyphs just given has this `ocgdef` (1 on,
+;;                                 0 off, 2 on in the configuration but off by the group's /Usage /View /ViewState)
+;;   I  vis vby                    the next image placement
+;;   N  glyphs images              the page(s) made this many glyph rows and image rows
+;;
+;; THE LINES. A text item sits on a line k of a page: baseline 740 - 36 k, x 50, 14 pt Helvetica (a glyph's cell
+;; is its baseline - 2.9 to + 10.1). A `rect` covers a line (x 40..580, baseline - 8 .. + 16) or part of it.
+;; Paint numbers (`z`) count every glyph, path and image in the order painted, from 0 on each page.
+(require '[clojure.string :as str]
+         '[clojure.java.io :as io])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+(def out-dir (str root "/test/vis"))
+
+;; ------------------------------------------------------------------ the PDF writer
+
+(defn latin1 ^bytes [^String s] (.getBytes s "ISO-8859-1"))
+
+(defn build-pdf [objs]
+  (let [buf (java.io.ByteArrayOutputStream.)
+        offs (atom {})
+        w (fn [s] (.write buf (latin1 s)))]
+    (w "%PDF-1.7\n%âãÏÓ\n")
+    (doseq [n (sort (keys objs))]
+      (swap! offs assoc n (.size buf))
+      (let [b (objs n)]
+        (w (str n " 0 obj\n"))
+        (if (vector? b)
+          (let [[_ dict data] b]
+            (w (str "<< " dict " /Length " (count (latin1 data)) " >>\nstream\n"))
+            (w data)
+            (w "\nendstream"))
+          (w b))
+        (w "\nendobj\n")))
+    (let [xref (.size buf)
+          n (inc (apply max (keys objs)))]
+      (w (str "xref\n0 " n "\n0000000000 65535 f \n"))
+      (doseq [i (range 1 n)]
+        (w (if-let [o (@offs i)] (format "%010d 00000 n \n" o) "0000000000 65535 f \n")))
+      (w (str "trailer\n<< /Size " n " /Root 1 0 R >>\nstartxref\n" xref "\n%%EOF\n")))
+    (.toByteArray buf)))
+
+(defn stream [dict data] [:stream dict data])
+
+;; ------------------------------------------------------------------- the items
+
+(defn base-y [k] (- 740 (* 30 k)))
+
+(defn fmt [x] (if (integer? x) (str x) (let [s (format "%.2f" (double x))] (str/replace (str/replace s #"0+$" "") #"\.$" ""))))
+
+(defn text-item
+  "A text item on line k, in its own q/Q. opts: :pre (operators before BT), :post (after ET), :size, :x, :y, :mode,
+  :vis, :by (the name of the paint that covers it), :src (1 text, 2 hidden-text), :font, :name."
+  [k s {:keys [pre post size x y mode vis by src font name ocgdef] :or {pre "" post "" size 14 x 50 vis 0 font "F1"}}]
+  {:kind :text :text s :name name :by by :vis vis :ocgdef ocgdef
+   :src (or src (if (#{3 7} mode) 2 1))
+   :ops (str "q " pre (when (seq pre) " ")
+             "BT " (when mode (str mode " Tr "))
+             "/" font " " (fmt size) " Tf " (fmt x) " " (fmt (or y (base-y k))) " Td (" s ") Tj"
+             (when mode " 0 Tr") " ET" (when (seq post) (str " " post)) " Q")
+   :z (count s)})
+
+(defn ghost
+  "Glyphs a Form XObject shows: expected, but written by the form, not by the page's own content."
+  [s vis] {:kind :text :text s :vis vis :by nil :src 1 :ops "" :z (count s)})
+
+(defn paint [name ops & [{:keys [n] :or {n 1}}]] {:kind :paint :name name :ops ops :z n})
+(defn raw [ops] {:kind :raw :ops ops :z 0})
+(defn image-item [name ops {:keys [vis by] :or {vis 0}}] {:kind :image :name name :ops ops :vis vis :by by :z 1})
+
+(defn line-rect
+  "A filled rectangle over line k (the whole line, or from x0 to x1) in the colour operators `col`, with the
+  graphics-state operators `gs` first, all in a q/Q."
+  ([name k col] (line-rect name k col 40 580 ""))
+  ([name k col x0 x1] (line-rect name k col x0 x1 ""))
+  ([name k col x0 x1 gs]
+   (paint name (str "q " gs (when (seq gs) " ") col " " x0 " " (- (base-y k) 8) " " (- x1 x0) " 24 re f Q"))))
+
+(defn img-over
+  "A picture (the XObject /imname) exactly over line k."
+  [name k imname opts]
+  (image-item name (str "q 540 0 0 24 40 " (- (base-y k) 8) " cm /" imname " Do Q") opts))
+
+(defn assemble
+  "A page's items to [content-stream rows], resolving names to paint numbers."
+  [items]
+  (let [zs (reduce (fn [{:keys [z m]} it]
+                     {:z (+ z (:z it)) :m (cond-> m (:name it) (assoc (:name it) z))})
+                   {:z 0 :m {}} items)
+        names (:m zs)
+        rows (keep (fn [it]
+                     (case (:kind it)
+                       :text (str "G\t" (:vis it) "\t" (if (:by it) (get names (:by it)) -1) "\t" (:src it) "\t"
+                                  (count (:text it)) "\t" (:text it)
+                                  (when (:ocgdef it) (str "\nO\t" (:ocgdef it) "\t" (count (:text it)))))
+                       :ctext (:crow it)
+                       :image (str "I\t" (:vis it) "\t" (if (:by it) (get names (:by it)) -1))
+                       nil))
+                   items)]
+    (when-let [bad (first (remove (fn [it] (or (nil? (:by it)) (contains? names (:by it)))) items))]
+      (throw (ex-info "unknown occluder" {:by (:by bad)})))
+    [(str/join "\n" (remove empty? (map :ops items))) (vec rows)]))
+
+;; ------------------------------------------------------------------- the files
+
+(def font-obj "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
+
+(defn img-rgb [w h hex]
+  (stream (str "/Type /XObject /Subtype /Image /Width " w " /Height " h
+               " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode") (str hex ">")))
+
+(def img-uniform ;; 2x2, every pixel 0x808080
+  (img-rgb 2 2 "808080808080808080808080"))
+
+(defn simple-doc
+  "One-page documents: a map of objects built from resources and a content string."
+  [{:keys [content resources media crop rotate extra catalog-extra]
+    :or {resources "" media "[0 0 612 792]"}}]
+  (merge
+   {1 (str "<< /Type /Catalog /Pages 2 0 R" catalog-extra " >>")
+    2 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"
+    3 (str "<< /Type /Page /Parent 2 0 R /MediaBox " media (when crop (str " /CropBox " crop))
+           (when rotate (str " /Rotate " rotate))
+           " /Resources << /Font << /F1 10 0 R >> " resources " >> /Contents 4 0 R >>")
+    4 (stream "" content)
+    10 font-obj}
+   extra))
+
+(def fixtures (atom []))   ;; [file-name objs rows glyphs images]
+(defn counts [items]
+  [(reduce + (map #(if (#{:text :ctext} (:kind %)) (count (:text %)) 0) items))
+   (count (filter #(= :image (:kind %)) items))])
+
+(defn counts-all [page-items]
+  (reduce (fn [[g i] items] (let [[a b] (counts items)] [(+ g a) (+ i b)])) [0 0] page-items))
+
+(defn fixture! [file doc-map items]
+  (let [[content rows] (assemble items)
+        [ng ni] (counts items)]
+    (swap! fixtures conj [file (simple-doc (assoc doc-map :content content)) rows ng ni])))
+
+(defn fixture-pages! [file objs-fn page-items]
+  (let [assembled (mapv assemble page-items)
+        cs (counts-all page-items)]
+    (swap! fixtures conj [file (objs-fn (mapv first assembled)) (vec (mapcat second assembled)) (first cs) (second cs)])))
+
+;; 1. what is visible: the control, and what only looks like the hidden cases ---------------------------
+(fixture! "visible.pdf" {}
+  [(text-item 0 "Black text on the page" {})
+   (text-item 1 "Dark gray text" {:pre "0.3 g"})
+   (text-item 2 "Light gray text, not hidden" {:pre "0.9 g"})
+   (line-rect :yellow 3 "1 1 0 rg")
+   (text-item 3 "Black text on a yellow rectangle" {:pre "0 g"})
+   (line-rect :dark 4 "0.1 0.1 0.3 rg")
+   (text-item 4 "White text on a dark rectangle" {:pre "1 g"})
+   (line-rect :half 5 "0 0 0 rg" 40 100)
+   (text-item 5 "Wh" {:pre "1 g"})
+   (text-item 6 "Red text" {:pre "1 0 0 rg"})
+   (text-item 7 "Stroked text outline" {:pre "0 G 0.5 w" :mode 1})
+   (text-item 8 "Fill and stroke" {:pre "0 g 0 G" :mode 2})
+   (text-item 9 "Small text of two points" {:pre "0 g" :size 2})
+   (text-item 10 "A light gray well past the tolerance" {:pre "0.93 g"})
+   (line-rect :edge 11 "0 0 0 rg" 40 100)
+   (text-item 11 "a" {:pre "1 g" :x 96})
+   (text-item 11 "b" {:pre "1 g" :x 104 :vis 3})])
+
+;; 2. white on white and the same colour as the background ----------------------------------------------
+(fixture! "white.pdf"
+  {:resources "/ColorSpace << /Sep 11 0 R /CalW 12 0 R /LabW 13 0 R /Idx 14 0 R /Icc [/ICCBased 15 0 R] /DevN 16 0 R /SepBlack 17 0 R >> /XObject << /Im0 19 0 R >>"
+   :extra {11 "[/Separation /Paper /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 0 1] /N 1 >>]"
+           12 "[/CalRGB << /WhitePoint [0.9505 1 1.089] /Gamma [2.2 2.2 2.2] >>]"
+           13 "[/Lab << /WhitePoint [0.9642 1 0.8249] /Range [-128 127 -128 127] >>]"
+           14 "[/Indexed /DeviceRGB 2 <FF0000 FFFFFF 000000>]"
+           15 (stream "/N 3 /Alternate /DeviceRGB" "profile bytes are never read")
+           16 "[/DeviceN [/A /B] /DeviceRGB 18 0 R]"
+           17 "[/Separation /Ink /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>]"
+           18 (stream "/FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1]" "{ add 2 div dup dup }")
+           19 img-uniform}}
+  [(text-item 0 "White gray on white" {:pre "1 g" :vis 3})
+   (text-item 1 "White rgb on white" {:pre "1 1 1 rg" :vis 3})
+   (text-item 2 "White cmyk on white" {:pre "0 0 0 0 k" :vis 3})
+   (text-item 3 "Almost white on white" {:pre "0.99 g" :vis 3})
+   (text-item 4 "Light gray is seen" {:pre "0.9 g"})
+   (text-item 5 "Separation tint 0 is paper white" {:pre "/Sep cs 0 scn" :vis 3})
+   (text-item 6 "Separation tint 1 is black" {:pre "/Sep cs 1 scn"})
+   (text-item 7 "CalRGB white" {:pre "/CalW cs 1 1 1 sc" :vis 3})
+   (text-item 8 "Lab white" {:pre "/LabW cs 100 0 0 sc" :vis 3})
+   (text-item 9 "Lab black is seen" {:pre "/LabW cs 0 0 0 sc"})
+   (text-item 10 "Indexed white" {:pre "/Idx cs 1 sc" :vis 3})
+   (text-item 11 "Indexed red is seen" {:pre "/Idx cs 0 sc"})
+   (text-item 12 "ICC based white" {:pre "/Icc cs 1 1 1 sc" :vis 3})
+   (text-item 13 "DeviceN white from a calculator function" {:pre "/DevN cs 1 1 scn" :vis 3})
+   (text-item 14 "DeviceN black from a calculator function" {:pre "/DevN cs 0 0 scn"})
+   (text-item 15 "A separation of gray that starts white" {:pre "/SepBlack cs 0 scn" :vis 3})
+   (line-rect :white 16 "1 g")
+   (text-item 16 "White text on a white rectangle" {:pre "1 g" :vis 3})
+   (line-rect :red 17 "1 0 0 rg")
+   (text-item 17 "Red text on a red rectangle" {:pre "1 0 0 rg" :vis 3})
+   (line-rect :red2 18 "1 0 0 rg")
+   (text-item 18 "Pink text on a red rectangle is seen" {:pre "1 0.6 0.6 rg"})
+   (line-rect :half 19 "0 0 0 rg" 40 100)
+   (text-item 19 "Wh" {:pre "1 g"})
+   (text-item 20 "White stroke and fill" {:pre "1 g 1 G" :mode 2 :vis 3})
+   (text-item 21 "White fill, black stroke is seen" {:pre "1 g 0 G" :mode 2})
+   (img-over :photo 22 "Im0" {})
+   (text-item 22 "White text over a picture is not hidden" {:pre "1 g"})])
+
+;; 3. clipped out ---------------------------------------------------------------------------------------
+(fixture! "clip.pdf"
+  {:resources "/XObject << /Fm0 11 0 R >>"
+   :extra {11 (stream "/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [1 0 0 1 400 640]"
+                      "BT /F1 14 Tf 5 50 Td (Inside) Tj ET\nBT /F1 14 Tf 150 50 Td (Outside the form box) Tj ET")}}
+  [(raw "q 40 704 200 40 re W n")
+   (text-item 0 "Inside the clip rectangle" {})
+   (raw "Q")
+   (raw "q 40 668 20 50 re W n")
+   (text-item 1 "a" {:x 56 :vis 0})
+   (raw "Q")
+   (raw "q 300 600 100 40 re W n")
+   (text-item 2 "Outside the clip" {:vis 1})
+   (raw "Q")
+   (text-item 3 "After Q the clip is gone" {})
+   (raw "q 40 560 20 20 re W n")
+   (text-item 4 "Clipped to a tiny hole elsewhere" {:vis 1})
+   (raw "Q")
+   (raw "q 40 400 m 140 400 l 90 500 l h W n")
+   (text-item 5 "Inside a triangle" {:x 60 :y 415 :size 8 :vis 0})
+   (text-item 6 "Far from the triangle" {:x 300 :vis 1})
+   (raw "Q")
+   (raw "q 40 450 100 40 re W n 0 0 500 500 re W n")
+   (text-item 7 "Nested clip keeps the smaller" {:x 200 :vis 1})
+   (raw "Q")
+   (raw "q /Fm0 Do Q")
+   (ghost "Inside" 0)
+   (ghost "Outside the form box" 1)
+   (text-item 8 "Text after the form is not clipped" {})])
+
+;; 4. off the page --------------------------------------------------------------------------------------
+(fixture! "offpage.pdf" {}
+  [(text-item 0 "Left of the page" {:x -500 :vis 2})
+   (text-item 1 "Above the page" {:y 2000 :vis 2})
+   (text-item 2 "Far to the right" {:x 5000 :vis 2})
+   (text-item 3 "Below the page" {:y -100 :vis 2})
+   (text-item 4 "A" {:x -4 :vis 0})
+   (text-item 5 "On the page" {})])
+
+(fixture! "offcrop.pdf" {:crop "[100 100 500 700]"}
+  [(text-item 0 "In the crop box" {:x 150 :y 650})
+   (text-item 1 "Left of crop" {:x 5 :y 650 :vis 2})
+   (text-item 2 "Above the crop box" {:x 150 :y 750 :vis 2})
+   (text-item 3 "Inside again" {:x 150 :y 300})])
+
+(fixture! "rotated.pdf" {:rotate 90}
+  [(text-item 0 "On a page turned a quarter" {:x 100 :y 400})
+   (text-item 1 "Past the turned page" {:x 100 :y 900 :vis 2})])
+
+;; 5. size ----------------------------------------------------------------------------------------------
+(fixture! "size.pdf" {}
+  [(text-item 0 "Zero size" {:size 0 :vis 4})
+   (text-item 1 "Half a point" {:size 0.5 :vis 4})
+   (text-item 2 "Nine tenths of a point" {:size 0.9 :vis 4})
+   (text-item 3 "Exactly one point" {:size 1 :vis 0})
+   (text-item 4 "Fourteen points" {})
+   (raw "q 0.01 0 0 0.01 0 0 cm")
+   (text-item 5 "Scaled to nothing by cm" {:size 14 :x 5000 :y 74000 :vis 4})
+   (raw "Q")
+   (text-item 6 "Tz makes it wide, not small" {:pre "50 Tz"})])
+
+;; 6. painted over by a later opaque paint --------------------------------------------------------------
+(fixture! "occluded.pdf"
+  {:resources "/ExtGState << /Plain << /ca 1 /CA 1 /BM /Normal /SMask /None >> /Half << /ca 0.5 >> /Mult << /BM /Multiply >> /Soft << /SMask << /Type /Mask /S /Luminosity /G 12 0 R >> >> >> /XObject << /Im0 11 0 R /Im1 13 0 R /Im2 14 0 R /Im3 15 0 R >> /Properties << /Off 20 0 R >>"
+   :catalog-extra " /OCProperties << /OCGs [20 0 R] /D << /BaseState /ON /OFF [20 0 R] >> >>"
+   :extra {11 img-uniform
+           12 (stream "/Type /XObject /Subtype /Form /BBox [0 0 612 792] /Group << /S /Transparency /CS /DeviceGray >>" "0.5 g 0 0 612 792 re f")
+           13 (stream "/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 16 0 R /Filter /ASCIIHexDecode" "808080808080808080808080>")
+           14 (stream "/Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true /BitsPerComponent 1 /Filter /ASCIIHexDecode" "AA55AA55AA55AA55>")
+           15 (stream "/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Mask [128 128 128 128 128 128] /Filter /ASCIIHexDecode" "808080808080808080808080>")
+           16 (stream "/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode" "80808080>")
+           20 "<< /Type /OCG /Name (Hidden) >>"}}
+  [(text-item 0 "Covered by a white rectangle" {:vis 5 :by :wall1})
+   (line-rect :wall1 0 "1 g")
+   (text-item 1 "Covered by a picture" {:vis 5 :by :pic1})
+   (img-over :pic1 1 "Im0" {})
+   (text-item 2 "Covered by a half transparent rectangle" {})
+   (line-rect :glass 2 "1 g" 40 580 "/Half gs")
+   (text-item 3 "Under a multiply blend" {})
+   (line-rect :mult 3 "1 g" 40 580 "/Mult gs")
+   (text-item 4 "Covered only in part by a rectangle" {})
+   (line-rect :part 4 "1 g" 40 53)
+   (text-item 5 "Under a picture with a soft mask" {})
+   (img-over :smaskpic 5 "Im1" {})
+   (text-item 6 "Under a stencil mask" {})
+   (img-over :stencil 6 "Im2" {})
+   (text-item 7 "Under a picture with a colour key" {})
+   (img-over :keyed 7 "Im3" {})
+   (text-item 8 "Under a rectangle that is clipped away" {})
+   (paint :clipped (str "q 300 0 100 100 re W n 1 g 40 " (- (base-y 8) 8) " 540 24 re f Q"))
+   (text-item 9 "Under a rectangle in a layer that is off" {})
+   (paint :offwall (str "q /OC /Off BDC 1 g 40 " (- (base-y 9) 8) " 540 24 re f EMC Q"))
+   (text-item 10 "Under a rectangle under a soft mask" {})
+   (line-rect :softwall 10 "1 g" 40 580 "/Soft gs")
+   (text-item 11 "Covered by a stroked and filled rectangle" {:vis 5 :by :framed})
+   (paint :framed (str "q 1 g 0 G 4 w 40 " (- (base-y 11) 8) " 540 24 re B Q"))
+   (text-item 12 "Under a rotated picture, which is not exact" {})
+   (image-item :turned (str "q 0.9 0.4 -0.4 0.9 60 " (+ (base-y 12) 2) " cm 6 0 0 6 0 0 cm /Im0 Do Q") {})
+   (text-item 13 "Text over the white rectangle is seen" {})])
+
+(fixture! "pagewall.pdf" {}
+  [(text-item 0 "Covered by a page sized white rectangle" {:vis 5 :by :page})
+   (text-item 1 "and so is this line" {:vis 5 :by :page})
+   (paint :page "q 1 g 0 0 612 792 re f Q")
+   (text-item 2 "Drawn after the page wall is seen" {})])
+
+;; 7. optional content ----------------------------------------------------------------------------------
+(def oc-resources "/Properties << /On 20 0 R /Off 21 0 R /M1 22 0 R /M2 23 0 R /M3 24 0 R /M4 25 0 R /Pr 26 0 R >> /XObject << /Fm0 11 0 R /Im0 12 0 R >>")
+(fixture! "ocg.pdf"
+  {:resources oc-resources
+   :catalog-extra " /OCProperties << /OCGs [20 0 R 21 0 R 26 0 R] /D << /BaseState /ON /OFF [21 0 R] /AS [<< /Event /View /Category [/View] /OCGs [26 0 R] >>] >> >>"
+   :extra {11 (stream "/Type /XObject /Subtype /Form /BBox [0 0 612 792] /OC 21 0 R" "BT /F1 14 Tf 50 200 Td (Text in a form whose layer is off) Tj ET")
+           12 (stream "/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /OC 21 0 R /Filter /ASCIIHexDecode" "808080808080808080808080>")
+           20 "<< /Type /OCG /Name (Shown) >>"
+           21 "<< /Type /OCG /Name (Hidden) >>"
+           22 "<< /Type /OCMD /OCGs [20 0 R 21 0 R] /P /AllOn >>"
+           23 "<< /Type /OCMD /OCGs [20 0 R 21 0 R] /P /AnyOn >>"
+           24 "<< /Type /OCMD /VE [/Not 21 0 R] >>"
+           25 "<< /Type /OCMD /VE [/And 20 0 R [/Not 21 0 R]] >>"
+           26 "<< /Type /OCG /Name (Print only) /Usage << /View << /ViewState /OFF >> /Print << /PrintState /ON >> >> >>"}}
+  [(text-item 0 "In a layer that is on" {:pre "/OC /On BDC" :post "EMC"})
+   (text-item 1 "In a layer that is off" {:pre "/OC /Off BDC" :post "EMC" :vis 6})
+   (text-item 2 "In an on layer inside an off layer" {:pre "/OC /Off BDC /OC /On BDC" :post "EMC EMC" :vis 6})
+   (text-item 3 "Membership AllOn with one off" {:pre "/OC /M1 BDC" :post "EMC" :vis 6})
+   (text-item 4 "Membership AnyOn with one on" {:pre "/OC /M2 BDC" :post "EMC"})
+   (text-item 5 "Expression Not off" {:pre "/OC /M3 BDC" :post "EMC"})
+   (text-item 6 "Expression And on, Not off" {:pre "/OC /M4 BDC" :post "EMC"})
+   (text-item 7 "A print only layer is shown by renderers" {:pre "/OC /Pr BDC" :post "EMC" :ocgdef 2})
+   (text-item 8 "Marked content that is not a layer" {:pre "/P << /MCID 0 >> BDC" :post "EMC"})
+   (raw "/Fm0 Do")
+   (ghost "Text in a form whose layer is off" 6)
+   (image-item :hiddenpic "q 100 0 0 100 40 300 cm /Im0 Do Q" {:vis 6})
+   (text-item 9 "Back in the page" {})])
+
+;; 8. alpha ---------------------------------------------------------------------------------------------
+(fixture! "alpha.pdf" {:resources "/ExtGState << /A0 << /ca 0 /CA 1 >> /S0 << /ca 1 /CA 0 >> /B0 << /ca 0 /CA 0 >> /A5 << /ca 0.5 /CA 0.5 >> /A1 << /ca 1 /CA 1 >> >>"}
+  [(text-item 0 "Fill alpha zero" {:pre "/A0 gs" :vis 7})
+   (text-item 1 "Fill alpha half" {:pre "/A5 gs"})
+   (text-item 2 "Stroke alpha zero but filled" {:pre "/S0 gs"})
+   (text-item 3 "Stroke only with stroke alpha zero" {:pre "/S0 gs 0 G" :mode 1 :vis 7})
+   (text-item 4 "Fill and stroke both alpha zero" {:pre "/B0 gs 0 G" :mode 2 :vis 7})
+   (text-item 5 "Fill alpha zero but stroked" {:pre "/A0 gs 0 G" :mode 2})
+   (text-item 6 "Back to opaque" {:pre "/A1 gs"})])
+
+;; 9. hidden text: render mode 3 and 7 are a source, not a class -----------------------------------------
+(def scan-resources "/XObject << /Scan 11 0 R >>")
+(def scan-obj (img-rgb 2 2 "F0F0F0F0F0F0F0F0F0F0F0F0"))
+(fixture! "ocrlayer.pdf" {:resources scan-resources :extra {11 scan-obj}}
+  [(image-item :scan "q 612 0 0 792 0 0 cm /Scan Do Q" {})
+   (text-item 0 "A hidden OCR layer over the scan" {:mode 3})
+   (text-item 1 "keeps being text, not a class" {:mode 3})
+   (text-item 2 "Mode seven clips and shows nothing" {:mode 7})
+   (text-item 3 "A line the OCR got wrong" {:mode 3})
+   (text-item 4 "And a visible stamp over the scan" {:pre "1 0 0 rg"})])
+
+(fixture! "ocrfirst.pdf" {:resources scan-resources :extra {11 scan-obj}}
+  [(text-item 0 "Hidden text drawn before the scan" {:mode 3})
+   (text-item 1 "is not occluded by the scan it describes" {:mode 3})
+   (text-item 2 "Visible text drawn before the scan is covered" {:vis 5 :by :scan})
+   (image-item :scan "q 612 0 0 792 0 0 cm /Scan Do Q" {})])
+
+(fixture! "hiddenjunk.pdf" {:resources "/Properties << /Off 20 0 R >>"
+                            :catalog-extra " /OCProperties << /OCGs [20 0 R] /D << /BaseState /ON /OFF [20 0 R] >> >>"
+                            :extra {20 "<< /Type /OCG /Name (Off) >>"}}
+  [(text-item 0 "Hidden and off the page" {:mode 3 :x 2000 :vis 2})
+   (text-item 1 "Hidden and tiny" {:mode 3 :size 0.5 :vis 4})
+   (text-item 2 "Hidden in a layer that is off" {:mode 3 :pre "/OC /Off BDC" :post "EMC" :vis 6})
+   (text-item 3 "Visible after all of it" {})])
+
+;; 10. a page as a crawler is fed it --------------------------------------------------------------------
+(fixture! "spam.pdf"
+  {:resources "/ExtGState << /Clear << /ca 0 >> >> /XObject << /Wall 11 0 R >> /Properties << /Off 20 0 R >>"
+   :catalog-extra " /OCProperties << /OCGs [20 0 R] /D << /BaseState /ON /OFF [20 0 R] >> >>"
+   :extra {11 img-uniform
+           20 "<< /Type /OCG /Name (Keywords) >>"}}
+  [(text-item 0 "The article a person reads: a plain heading" {})
+   (text-item 1 "buy cheap pills online casino loans white keyword stuffing" {:pre "1 g" :vis 3})
+   (text-item 2 "and the article goes on with its second line of prose" {:pre "0 g"})
+   (text-item 3 "tiny keyword stuffing at one half point size" {:size 0.5 :vis 4})
+   (text-item 4 "keywords parked far off the page" {:x -3000 :vis 2})
+   (text-item 5 "keywords under a picture of the same page" {:vis 5 :by :cover})
+   (img-over :cover 5 "Wall" {})
+   (text-item 6 "keywords in an invisible layer" {:pre "/OC /Off BDC" :post "EMC" :vis 6})
+   (text-item 7 "keywords with zero alpha" {:pre "/Clear gs" :vis 7})
+   (raw "q 40 410 100 24 re W n")
+   (text-item 8 "keywords clipped away entirely, then the last line" {:x 300 :vis 1})
+   (raw "Q")
+   (text-item 9 "The article ends here for the reader" {:pre "0 g"})])
+
+;; 11. colour spaces: the colour each one gives a glyph, from an independent evaluator ---------------------
+;;
+;; The expected colours are computed HERE, in double precision, from the same numbers the PDF holds: the
+;; transfer function of sRGB written out, Lab through XYZ with the published D50 and D65 matrices, and PDF
+;; functions of types 0, 2, 3 and 4 by a second small interpreter. kin/pdfvistest.kin holds emon's integer
+;; arithmetic to them within two levels a channel.
+
+(defn clamp01 [x] (max 0.0 (min 1.0 (double x))))
+(defn byte-of [x] (long (Math/floor (+ (* 255.0 (clamp01 x)) 0.5))))
+(defn rgb-hex [[r g b]] (format "%02X%02X%02X" (byte-of r) (byte-of g) (byte-of b)))
+(defn compand [c] (let [c (clamp01 c)] (if (<= c 0.0031308) (* 12.92 c) (- (* 1.055 (Math/pow c (/ 1.0 2.4))) 0.055))))
+
+(defn lab->rgb [[l a b] [xw yw zw]]
+  (let [fy (/ (+ l 16.0) 116.0) fx (+ fy (/ a 500.0)) fz (- fy (/ b 200.0))
+        finv (fn [t] (if (> t (/ 6.0 29.0)) (* t t t) (* (/ 108.0 841.0) (- t (/ 4.0 29.0)))))
+        x (* xw (finv fx)) y (* yw (finv fy)) z (* zw (finv fz))
+        m (if (> xw 0.957)
+            [[3.1338561 -1.6168667 -0.4906146] [-0.9787684 1.9161415 0.0334540] [0.0719453 -0.2289914 1.4052427]]
+            [[3.2404542 -1.5371385 -0.4985314] [-0.9692660 1.8760108 0.0415560] [0.0556434 -0.2040259 1.0572252]])]
+    (mapv (fn [[p q r]] (compand (+ (* p x) (* q y) (* r z)))) m)))
+
+(defn cmyk->rgb [[c m y k]] [(* (- 1 c) (- 1 k)) (* (- 1 m) (- 1 k)) (* (- 1 y) (- 1 k))])
+
+;; PDF functions, as data, evaluated on a vector of inputs
+(defn fn-eval [f xs]
+  (case (:type f)
+    2 (let [x (Math/pow (first xs) (:n f))] (mapv (fn [c0 c1] (+ c0 (* x (- c1 c0)))) (:c0 f) (:c1 f)))
+    0 (let [{:keys [size samples nout]} f
+            [d0 d1] (:domain f)
+            x (first xs)
+            e (max 0.0 (min (double (dec size)) (* (/ (- x d0) (- d1 d0)) (dec size))))
+            i0 (long (Math/floor e)) i1 (min (dec size) (inc i0)) fr (- e i0)]
+        (mapv (fn [j] (let [s0 (nth samples (+ (* i0 nout) j)) s1 (nth samples (+ (* i1 nout) j))]
+                        (/ (+ s0 (* fr (- s1 s0))) 255.0)))
+              (range nout)))
+    3 (let [x (first xs) [d0 d1] (:domain f) bounds (:bounds f)
+            i (count (take-while #(>= x %) bounds))
+            lo (if (zero? i) d0 (nth bounds (dec i))) hi (if (< i (count bounds)) (nth bounds i) d1)
+            [e0 e1] (nth (:encode f) i)
+            x' (if (= hi lo) e0 (+ e0 (* (- x lo) (/ (- e1 e0) (- hi lo)))))]
+        (fn-eval (nth (:fns f) i) [x']))
+    4 (let [run (fn run [prog stack]
+                  (reduce (fn [st t]
+                            (cond
+                              (number? t) (conj st t)
+                              (vector? t) (conj st t)   ;; a block, consumed by if/ifelse below
+                              :else
+                              (case t
+                                add (let [[a b] (take-last 2 st)] (conj (vec (drop-last 2 st)) (+ a b)))
+                                sub (let [[a b] (take-last 2 st)] (conj (vec (drop-last 2 st)) (- a b)))
+                                mul (let [[a b] (take-last 2 st)] (conj (vec (drop-last 2 st)) (* a b)))
+                                div (let [[a b] (take-last 2 st)] (conj (vec (drop-last 2 st)) (/ a b)))
+                                dup (conj st (peek st))
+                                exch (let [[a b] (take-last 2 st)] (conj (vec (drop-last 2 st)) b a))
+                                pop (pop st)
+                                gt (let [[a b] (take-last 2 st)] (conj (vec (drop-last 2 st)) (> a b)))
+                                lt (let [[a b] (take-last 2 st)] (conj (vec (drop-last 2 st)) (< a b)))
+                                sin (conj (pop st) (Math/sin (Math/toRadians (peek st))))
+                                cos (conj (pop st) (Math/cos (Math/toRadians (peek st))))
+                                abs (conj (pop st) (Math/abs (double (peek st))))
+                                neg (conj (pop st) (- (peek st)))
+                                roll (let [[n j] (take-last 2 st) st (vec (drop-last 2 st))
+                                           top (vec (take-last (long n) st)) rest' (vec (drop-last (long n) st))
+                                           j (mod (long j) (long n))
+                                           rolled (vec (concat (take-last j top) (drop-last j top)))]
+                                       (into rest' rolled))
+                                if (let [[b blk] (take-last 2 st)] (let [st' (vec (drop-last 2 st))] (if b (run blk st') st')))
+                                ifelse (let [[b b1 b2] (take-last 3 st) st' (vec (drop-last 3 st))] (run (if b b1 b2) st')))))
+                          stack prog))
+            out (run (:prog f) (vec xs))]
+        (vec (take-last (:nout f) out)))))
+
+(defn model-rgb [model comps lab-params]
+  (case model
+    :gray (let [g (first comps)] [g g g])
+    :rgb (vec (take 3 comps))
+    :cmyk (cmyk->rgb comps)
+    :lab (lab->rgb comps lab-params)))
+
+(def d50 [0.9642 1.0 0.8249])
+(def d65 [0.9505 1.0 1.089])
+
+(def spaces-fns
+  {31 {:type 0 :domain [0 1] :size 3 :nout 3 :samples [255 255 255 128 0 0 0 0 0]
+       :obj (stream "/FunctionType 0 /Domain [0 1] /Range [0 1 0 1 0 1] /Size [3] /BitsPerSample 8 /Filter /ASCIIHexDecode" "FFFFFF 800000 000000>")}
+   32 {:type 3 :domain [0 1] :bounds [0.5] :encode [[0 1] [0 1]]
+       :fns [{:type 2 :c0 [0 0 0 0] :c1 [1 0 0 0] :n 1.0} {:type 2 :c0 [1 0 0 0] :c1 [1 1 1 1] :n 2.0}]
+       :obj "<< /FunctionType 3 /Domain [0 1] /Functions [<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [1 0 0 0] /N 1 >> << /FunctionType 2 /Domain [0 1] /C0 [1 0 0 0] /C1 [1 1 1 1] /N 2 >>] /Bounds [0.5] /Encode [0 1 0 1] >>"}
+   33 {:type 4 :nout 3 :prog '[add add 3 div dup 0.5 gt [pop 1 0.25 0] [0.75 mul dup dup] ifelse]
+       :obj (stream "/FunctionType 4 /Domain [0 1 0 1 0 1] /Range [0 1 0 1 0 1]" "{ add add 3 div dup 0.5 gt { pop 1 0.25 0 } { 0.75 mul dup dup } ifelse }")}
+   37 {:type 4 :nout 3 :prog '[dup 0.5 mul exch 1 exch sub 1 3 1 roll]
+       :obj (stream "/FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1]" "{ dup 0.5 mul exch 1 exch sub 1 3 1 roll }")}
+   38 {:type 4 :nout 3 :prog '[180 mul cos 1 add 2 div dup dup]
+       :obj (stream "/FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1]" "{ 180 mul cos 1 add 2 div dup dup }")}
+   39 {:type 2 :c0 [1 1 1] :c1 [0 0.5 1] :n 2.2
+       :obj "<< /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [0 0.5 1] /N 2.2 >>"}
+   40 {:type 2 :c0 [100 0 0] :c1 [30 60 40] :n 1.0 ;; a Lab alternate's tint: a ramp in Lab
+       :obj "<< /FunctionType 2 /Domain [0 1] /C0 [100 0 0] /C1 [30 60 40] /N 1 >>"}})
+
+(defn color-item
+  "A three-letter label shown in the colour the operators `pre` set, expected to be `rgb` (a [r g b] in 0..1, or nil
+  for unknown) of colour-space class `cls` (1 gray, 2 rgb, 3 cmyk, 4 spot, 5 pattern, 6 other)."
+  [k label pre rgb cls]
+  (assoc (text-item (mod k 22) label {:pre pre :x (if (< k 22) 50 330)})
+         :kind :ctext
+         :crow (str "C\t" (if rgb (rgb-hex rgb) "-1") "\t" cls "\t"
+                    (if (and rgb (every? #(>= (byte-of %) 251) rgb)) 3 0) "\t" (count label) "\t" label)))
+
+(defn spaces-items []
+  (let [lab50 [(/ 0 1) 0 0]
+        sep (fn [t fnum model-fn] (model-fn (fn-eval (spaces-fns fnum) [t])))
+        ramp #(fn-eval {:type 2 :c0 [100 0 0] :c1 [30 60 40] :n 1.0} [%])]
+    [(color-item 0 "C00" "0.5 g" [0.5 0.5 0.5] 1)
+     (color-item 1 "C01" "0.25 0.5 0.75 rg" [0.25 0.5 0.75] 2)
+     (color-item 2 "C02" "0.1 0.2 0.3 0.4 k" (cmyk->rgb [0.1 0.2 0.3 0.4]) 3)
+     (color-item 3 "C03" "/Lab50 cs 50 20 -30 sc" (lab->rgb [50 20 -30] d50) 6)
+     (color-item 4 "C04" "/Lab50 cs 80 -60 70 sc" (lab->rgb [80 -60 70] d50) 6)
+     (color-item 5 "C05" "/Lab65 cs 40 10 -20 sc" (lab->rgb [40 10 -20] d65) 6)
+     (color-item 6 "C06" "/IdxK cs 1 sc" (cmyk->rgb [1 0 0 0]) 6)
+     (color-item 7 "C07" "/IdxK cs 2 sc" (cmyk->rgb [0 1 0 1]) 6)
+     (color-item 8 "C08" "/SepS cs 0.25 scn" (fn-eval (spaces-fns 31) [0.25]) 4)
+     (color-item 9 "C09" "/SepS cs 0.8 scn" (fn-eval (spaces-fns 31) [0.8]) 4)
+     (color-item 10 "C10" "/SepT cs 0.3 scn" (cmyk->rgb (fn-eval (spaces-fns 32) [0.3])) 4)
+     (color-item 11 "C11" "/SepT cs 0.9 scn" (cmyk->rgb (fn-eval (spaces-fns 32) [0.9])) 4)
+     (color-item 12 "C12" "/DevN3 cs 0.9 0.8 0.7 scn" (fn-eval (spaces-fns 33) [0.9 0.8 0.7]) 4)
+     (color-item 13 "C13" "/DevN3 cs 0.3 0.2 0.1 scn" (fn-eval (spaces-fns 33) [0.3 0.2 0.1]) 4)
+     (color-item 14 "C14" "/SepR cs 0.4 scn" (fn-eval (spaces-fns 37) [0.4]) 4)
+     (color-item 15 "C15" "/SepCos cs 0.25 scn" (fn-eval (spaces-fns 38) [0.25]) 4)
+     (color-item 16 "C16" "/SepGamma cs 0.6 scn" (fn-eval (spaces-fns 39) [0.6]) 4)
+     (color-item 17 "C17" "/SepLab cs 0.5 scn" (lab->rgb (ramp 0.5) d50) 4)
+     (color-item 18 "C18" "/Icc4 cs 0.2 0.1 0.4 0.3 sc" (cmyk->rgb [0.2 0.1 0.4 0.3]) 3)
+     (color-item 19 "C19" "/Icc1 cs 0.7 sc" [0.7 0.7 0.7] 1)
+     (color-item 20 "C20" "/CalG cs 0.6 sc" [0.6 0.6 0.6] 1)
+     (color-item 21 "C21" "/Pat cs /P1 scn" nil 5)
+     (color-item 22 "C22" "/Lab50 cs 100 0 0 sc" (lab->rgb [100 0 0] d50) 6)
+     (color-item 23 "C23" "/SepS cs 0 scn" [1 1 1] 4)
+     (color-item 24 "C24" "/DeviceRGB cs 0.2 0.4 0.6 sc" [0.2 0.4 0.6] 2)
+     (color-item 25 "C25" "0.2 0.4 0.6 0.1 K 0.3 0.5 0.1 rg" [0.3 0.5 0.1] 2)
+     (color-item 26 "C26" "/Unknown cs 0.5 sc" nil 0)]))
+
+(fixture! "spaces.pdf"
+  {:resources "/ColorSpace << /Lab50 [/Lab << /WhitePoint [0.9642 1 0.8249] /Range [-128 127 -128 127] >>] /Lab65 [/Lab << /WhitePoint [0.9505 1 1.089] /Range [-100 100 -100 100] >>] /IdxK [/Indexed /DeviceCMYK 2 <00000000 FF000000 00FF00FF>] /SepS [/Separation /Spot /DeviceRGB 31 0 R] /SepT [/Separation /Stitched /DeviceCMYK 32 0 R] /DevN3 [/DeviceN [/C1 /C2 /C3] /DeviceRGB 33 0 R] /SepR [/Separation /Rolled /DeviceRGB 37 0 R] /SepCos [/Separation /Cos /DeviceRGB 38 0 R] /SepGamma [/Separation /Gam /DeviceRGB 39 0 R] /SepLab [/Separation /LabInk [/Lab << /WhitePoint [0.9642 1 0.8249] /Range [-128 127 -128 127] >>] 40 0 R] /Icc4 [/ICCBased 34 0 R] /Icc1 [/ICCBased 35 0 R] /CalG [/CalGray << /WhitePoint [0.9505 1 1.089] /Gamma 2.2 >>] /Pat [/Pattern] >>"
+   :extra (merge (into {} (map (fn [[k v]] [k (:obj v)]) spaces-fns))
+                 {34 (stream "/N 4" "x") 35 (stream "/N 1" "x")})}
+  (spaces-items))
+
+;; ---------------------------------------------------------------- the multi-page one
+
+(fixture-pages! "pages.pdf"
+  (fn [contents]
+    (merge {1 "<< /Type /Catalog /Pages 2 0 R >>"
+            2 (str "<< /Type /Pages /Kids [" (str/join " " (map #(str (+ 3 %) " 0 R") (range (count contents)))) "] /Count " (count contents) " >>")
+            10 font-obj}
+           (into {} (map-indexed (fn [i c] [(+ 3 i) (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 10 0 R >> >> /Contents " (+ 30 i) " 0 R >>")]) contents))
+           (into {} (map-indexed (fn [i c] [(+ 30 i) (stream "" c)]) contents))))
+  [[(text-item 0 "Page one is plain" {})
+    (text-item 1 "white on page one" {:pre "1 g" :vis 3})]
+   [(text-item 0 "Page two starts again at paint number zero" {:vis 5 :by :wall})
+    (paint :wall "q 1 g 0 0 612 792 re f Q")
+    (text-item 1 "drawn after the wall" {:pre "0 g"})]])
+
+;; ---------------------------------------------------------------- the writer
+
+(defn files []
+  (let [fs @fixtures]
+    (mapv (fn [[f objs rows ng ni]]
+            {:file f
+             :bytes (build-pdf objs)
+             :rows (str "F\tvis/" f "\n" (str/join "\n" rows) "\nN\t" ng "\t" ni "\n")})
+          fs)))
+
+(defn run []
+  (let [fs (files)
+        rows (str "# GENERATED by kin/scripts/vis-fixtures -- do not edit. See that script for what the rows mean.\n"
+                  (str/join "" (map :rows fs)))
+        check? (some #{"--check"} *command-line-args*)
+        bad (atom [])]
+    (when-not check? (.mkdirs (io/file out-dir)))
+    (doseq [{:keys [file bytes]} fs]
+      (let [f (io/file out-dir file)]
+        (if check?
+          (when-not (and (.exists f) (java.util.Arrays/equals ^bytes (java.nio.file.Files/readAllBytes (.toPath f)) ^bytes bytes))
+            (swap! bad conj file))
+          (with-open [o (io/output-stream f)] (.write o ^bytes bytes)))))
+    (let [f (io/file out-dir "rows.txt")]
+      (if check?
+        (when-not (and (.exists f) (= rows (slurp f))) (swap! bad conj "rows.txt"))
+        (spit f rows)))
+    (if check?
+      (if (empty? @bad)
+        (println (str "  ok   vis-fixtures: " (count fs) " PDFs and rows.txt are what the script writes"))
+        (do (println (str "  FAIL vis-fixtures: stale " (str/join ", " @bad) " (run kin/scripts/vis-fixtures)"))
+            (System/exit 1)))
+      (println (str "wrote " (count fs) " PDFs to test/vis")))))
+
+(run)

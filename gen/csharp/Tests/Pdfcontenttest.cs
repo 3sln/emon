@@ -83,20 +83,32 @@ public static class Pdfcontenttest {
         emon.Testport.AssertThatAt(d <= 3, law, row);
         return 0;
     }
-    internal static int CtRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
+    internal static int CtRun2(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells pts, emon.Port.Cells gx) {
         // Open the file and run every page: 0 when both went well, 100 + the open
-        // status when it did not open, else `pc-document`'s (7: the source missed).
+        // status when it did not open, else `pc-document`'s (7: the source missed). The paths, images, their
+        // points and the colour workspace are the caller's too.
         emon.Port.CellsDrop(gl, 0);
         emon.Port.CellsDrop(et, 0);
         emon.Port.CellsDrop(mk, 0);
         emon.Port.CellsDrop(fnt, 0);
         emon.Port.CellsDrop(wd, 0);
         emon.Port.CellsDrop(ln, 0);
+        emon.Port.CellsDrop(pa, 0);
+        emon.Port.CellsDrop(im, 0);
+        emon.Port.CellsDrop(pts, 0);
         int o = Pdfdoc.PdOpen(src, ar, dc, a, b, st);
         if (o != 0) {
             return 100 + o;
         }
-        return Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+        return Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
+    }
+    internal static int CtRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
+        // `ct-run2` with arenas of its own for the paths, images, points and colours.
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells gx = emon.Port.NewCells();
+        return CtRun2(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
     }
     internal static int CtGRow(int emonT, byte[] rows, int s, int e, emon.Port.Cells gl, emon.Port.Cells vals, int g, int line) {
         // One G row against glyph g: the code point exactly, the geometry within a
@@ -321,6 +333,7 @@ public static class Pdfcontenttest {
         emon.Port.Cells rules = emon.Port.NewCells();
         emon.Port.Cells prims = emon.Port.NewCells();
         emon.Port.Cells tlines = emon.Port.NewCells();
+        emon.Port.Cells gx = emon.Port.NewCells();
         int n = emon.Port.BlobLen(rows);
         int pos = 0;
         int line = 0;
@@ -334,7 +347,7 @@ public static class Pdfcontenttest {
             if ((pos < e) && (emon.Port.BlobU8(rows, pos) != 35)) {
                 tb = CtTab(rows, pos, e);
                 files += 1;
-                status = CtRun(emon.Port.SrcOfBlob(emon.Testport.TestFileSpan(rows, pos, tb)), ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+                status = CtRun2(emon.Port.SrcOfBlob(emon.Testport.TestFileSpan(rows, pos, tb)), ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, paths, images, pts, gx);
                 emon.Testport.AssertEqAt(status, 0, "the file ran", line);
                 emon.Testport.AssertEqAt(Evidence.EvCheck(epages, views, pts, refs, et, feats, gl, wd, ln, mk, fnt, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines), 0, "the evidence is well formed", line);
                 System.Text.StringBuilder t = emon.Testport.NewText();
@@ -365,7 +378,7 @@ public static class Pdfcontenttest {
         }
         return -1;
     }
-    internal static int CtAsync(byte[] bytes, int chunk, emon.Port.Cells ctr, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln) {
+    internal static int CtAsync(byte[] bytes, int chunk, emon.Port.Cells ctr, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells pg, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells pts, emon.Port.Cells gx) {
         // Run `bytes` through an async source of `chunk`-byte chunks, re-running on a fresh
         // view after each fetch until an attempt does not miss. `ctr` gets [rounds, attempts
         // that missed and answered something other than need-bytes].
@@ -378,7 +391,7 @@ public static class Pdfcontenttest {
         emon.Port.CellsPush(ctr, 0);
         while (more == 1) {
             emon.Port.Src v = emon.Testport.SrcView(@base);
-            status = CtRun(v, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
+            status = CtRun2(v, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
             if (Pdfsrc.PsMissed(v)) {
                 if ((status != 7) && (status != 0) && (status < 100)) {
                     emon.Port.CellsSet(ctr, 1, emon.Port.CellsAt(ctr, 1) + 1);
@@ -439,6 +452,14 @@ public static class Pdfcontenttest {
         emon.Port.Cells pg2 = emon.Port.NewCells();
         emon.Port.Cells wd2 = emon.Port.NewCells();
         emon.Port.Cells ln2 = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells gx = emon.Port.NewCells();
+        emon.Port.Cells pa2 = emon.Port.NewCells();
+        emon.Port.Cells im2 = emon.Port.NewCells();
+        emon.Port.Cells pts2 = emon.Port.NewCells();
+        emon.Port.Cells gx2 = emon.Port.NewCells();
         emon.Port.Cells ctr = emon.Port.NewCells();
         int n = emon.Port.BlobLen(rows);
         int pos = 0;
@@ -465,8 +486,8 @@ public static class Pdfcontenttest {
             if (s >= 0) {
                 q = CtTab(rows, s, e);
                 files += 1;
-                s1 = CtRun(emon.Port.SrcOfBlob(emon.Testport.TestFileSpan(rows, s, q)), ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln);
-                s2 = CtAsync(emon.Testport.TestFileSpan(rows, s, q), chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, mk2, fnt2, pg2, wd2, ln2);
+                s1 = CtRun2(emon.Port.SrcOfBlob(emon.Testport.TestFileSpan(rows, s, q)), ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx);
+                s2 = CtAsync(emon.Testport.TestFileSpan(rows, s, q), chunk, ctr, ar2, dc2, a2, b2, st2, cx2, ox2, cs2, out2, f02, f12, f22, f32, gl2, et2, mk2, fnt2, pg2, wd2, ln2, pa2, im2, pts2, gx2);
                 emon.Testport.AssertEqAt(s2, s1, "the kept attempt's status is the in-memory run's", line);
                 emon.Testport.AssertEqAt(CtDiff(gl, gl2), -1, "glyphs", line);
                 emon.Testport.AssertEqAt(CtDiff(et, et2), -1, "evidence text", line);
@@ -474,6 +495,10 @@ public static class Pdfcontenttest {
                 emon.Testport.AssertEqAt(CtDiff(fnt, fnt2), -1, "fonts", line);
                 emon.Testport.AssertEqAt(CtDiff(wd, wd2), -1, "words", line);
                 emon.Testport.AssertEqAt(CtDiff(ln, ln2), -1, "lines", line);
+                emon.Testport.AssertEqAt(CtDiff(pa, pa2), -1, "paths", line);
+                emon.Testport.AssertEqAt(CtDiff(im, im2), -1, "images", line);
+                emon.Testport.AssertEqAt(CtDiff(pts, pts2), -1, "path points", line);
+                emon.Testport.AssertEqAt(CtDiff(gx, gx2), -1, "the colour workspace", line);
                 emon.Testport.AssertEqAt(Pdfcontent.PcWarn(cx2), Pdfcontent.PcWarn(cx), "warnings", line);
                 emon.Testport.AssertEqAt(emon.Port.CellsAt(ctr, 1), 0, "a missed attempt answered only need-bytes", line);
                 emon.Testport.AssertThatAt(emon.Port.CellsAt(ctr, 0) <= 24, "within 24 rounds", line);
@@ -648,5 +673,20 @@ public static class Pdfcontenttest {
         emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("content/fonts.pdf"), 300, 37) > 300, "fonts.pdf");
         emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("content/damaged.pdf"), 300, 29) > 300, "damaged.pdf");
         emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("pdf/html-chrome.pdf"), 100, 401) > 100, "a Chrome file");
+    }
+    [Xunit.Fact]
+    public static void TestTheVisibilityFixturesAreTheSameThroughAnAsyncSourceOf512ByteChunks() {
+        // Paths, images, their points and the colour workspace too, cell for cell (D075).
+        int r = CtAsyncRows(0, emon.Testport.TestFile("vis/rows.txt"), 0, 512);
+        emon.Testport.AssertThat(r >= 1700, "seventeen files were run");
+    }
+    [Xunit.Fact]
+    public static void TestCorruptedAndCutVisibilityFixturesNeverFault() {
+        // Colour spaces, functions, clips, optional content and soft masks, damaged: no fault, whatever they say.
+        emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("vis/spaces.pdf"), 300, 53) > 300, "spaces.pdf");
+        emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("vis/white.pdf"), 300, 61) > 300, "white.pdf");
+        emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("vis/ocg.pdf"), 300, 59) > 300, "ocg.pdf");
+        emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("vis/occluded.pdf"), 300, 67) > 300, "occluded.pdf");
+        emon.Testport.AssertThat(CtFuzzFile(0, emon.Testport.TestFile("vis/clip.pdf"), 300, 47) > 300, "clip.pdf");
     }
 }
