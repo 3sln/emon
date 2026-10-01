@@ -654,4 +654,30 @@ public final class Modeltest {
         emon.Port.cellsPush(layout, 0);
         emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.mcBadStride(), "a stray cell");
     }
+    public static void testAMilestoneIsAnInlineOnlyBesideAnInline() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        // document; a paragraph of text, break, text; a break between two blocks; a paragraph of a lone break.
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeNew(nodes, Model.nkText(), 1);
+        Model.nodeNew(nodes, Model.nkBreak(), 1);
+        Model.nodeNew(nodes, Model.nkText(), 1);
+        Model.nodeNew(nodes, Model.nkBreak(), 0);
+        Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        Model.nodeNew(nodes, Model.nkBreak(), 6);
+        emon.Testport.assertEq(Model.nodeIsInline(nodes, 2), 1, "text is an inline");
+        emon.Testport.assertEq(Model.nodeIsInline(nodes, 3), 1, "a break between two texts is an inline");
+        emon.Testport.assertEq(Model.nodeIsInline(nodes, 1), 0, "a paragraph is a block");
+        emon.Testport.assertEq(Model.nodeIsInline(nodes, 5), 0, "a break between two blocks is a block");
+        emon.Testport.assertEq(Model.nodeIsInline(nodes, 7), 0, "a break with no sibling at all is a block");
+        emon.Testport.assertEq(Model.nkIsInline(Model.nkBreak()), 0, "the KIND says block, always");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+    }
 }

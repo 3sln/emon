@@ -1529,6 +1529,32 @@ public final class Model {
         }
         return 0;
     }
+    public static int nodeIsInline(emon.Port.Cells nodes, int n) {
+        // 1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page
+        // milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,
+        // with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.
+        int kind = nget(nodes, n, 0);
+        int pv = nget(nodes, n, 5);
+        int nx = nget(nodes, n, 4);
+        if (nkIsInline(kind) == 1) {
+            return 1;
+        }
+        if (kind == nkBreak()) {
+            if (pv >= 0) {
+                int pkind = nget(nodes, pv, 0);
+                if (nkIsInline(pkind) == 1) {
+                    return 1;
+                }
+            }
+            if (nx >= 0) {
+                int nkind = nget(nodes, nx, 0);
+                if (nkIsInline(nkind) == 1) {
+                    return 1;
+                }
+            }
+        }
+        return 0;
+    }
     public static int nodeChildCount(emon.Port.Cells nodes, int n) {
         int c = nget(nodes, n, 2);
         int k = 0;

@@ -208,7 +208,7 @@ pub(crate) fn h_common(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
     let mut i: i32 = 0;
     let kind: i32 = node_kind(nodes, n);
     let cf: i32 = node_conf(nodes, n);
-    if (h_on(o, 1) == 1) && (nk_is_inline(kind) == 0) && (kind != nk_note()) {
+    if (h_on(o, 1) == 1) && (node_is_inline(nodes, n) == 0) && (kind != nk_note()) {
         crate::port::text_ascii(t, " id=\"emon-");
         crate::port::text_i32(t, n);
         crate::port::text_ascii(t, "\"");
@@ -234,7 +234,7 @@ pub(crate) fn h_common(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
         }
         crate::port::text_ascii(t, "\"");
     }
-    if (h_on(o, 2) == 1) && (nk_is_inline(kind) == 0) && (node_region_count(nodes, n) > 0) && (layout_count(layout) > 0) {
+    if (h_on(o, 2) == 1) && (node_is_inline(nodes, n) == 0) && (node_region_count(nodes, n) > 0) && (layout_count(layout) > 0) {
         h_columns(t, nodes, regions, pages, layout, n);
     }
     if (h_on(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024)) {
@@ -290,7 +290,7 @@ pub(crate) fn h_targeted(nodes: &mut crate::port::Cells, attrs: &mut crate::port
 pub(crate) fn h_has_inline(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     let mut c: i32 = node_first_child(nodes, n);
     while c >= 0 {
-        if nk_is_inline(node_kind(nodes, c)) == 1 {
+        if node_is_inline(nodes, c) == 1 {
             return 1;
         }
         c = node_next(nodes, c);
@@ -389,7 +389,7 @@ pub(crate) fn h_inner(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     let mut c: i32 = node_first_child(nodes, n);
     if h_has_inline(nodes, n) == 1 {
         while c >= 0 {
-            if nk_is_inline(node_kind(nodes, c)) == 1 {
+            if node_is_inline(nodes, c) == 1 {
                 h_inline(t, o, nodes, attrs, regions, pages, layout, text, c);
             }
             c = node_next(nodes, c);
@@ -413,6 +413,22 @@ pub(crate) fn h_target_href(mut t: &mut String, nodes: &mut crate::port::Cells, 
     crate::port::text_i32(t, target);
     return 0;
 }
+pub(crate) fn h_milestone(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+    // A page milestone, between blocks or (D134) inside a paragraph: an empty span.
+    let mut a: i32 = -1;
+    crate::port::text_ascii(t, "<span data-emon-page=\"");
+    crate::port::text_i32(t, node_sub(nodes, n));
+    crate::port::text_ascii(t, "\"");
+    a = h_tattr(nodes, attrs, n, fk_label());
+    if a >= 0 {
+        crate::port::text_ascii(t, " data-emon-page-label=\"");
+        h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
+        crate::port::text_ascii(t, "\"");
+    }
+    h_common(t, o, nodes, regions, pages, layout, n);
+    crate::port::text_ascii(t, "></span>");
+    return 0;
+}
 pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
     // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
     let kind: i32 = node_kind(nodes, n);
@@ -424,6 +440,12 @@ pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
     if kind == nk_text() {
         if node_has_text(nodes, n) == 1 {
             h_run(t, text, node_text_start(nodes, n), node_text_len(nodes, n));
+        }
+        return 0;
+    }
+    if kind == nk_break() {
+        if h_on(o, 64) == 0 {
+            h_milestone(t, o, nodes, attrs, regions, pages, layout, text, n);
         }
         return 0;
     }
@@ -539,7 +561,7 @@ pub(crate) fn h_blocks(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
     let mut c: i32 = node_first_child(nodes, n);
     let mut k: i32 = 0;
     while c >= 0 {
-        if nk_is_inline(node_kind(nodes, c)) == 0 {
+        if node_is_inline(nodes, c) == 0 {
             k += h_block(t, o, nodes, attrs, regions, pages, layout, text, c, d);
         }
         c = node_next(nodes, c);
@@ -618,7 +640,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     let mut c: i32 = 0;
     let mut lv: i32 = 0;
     let mut pk: i32 = 0;
-    if nk_is_inline(kind) == 1 {
+    if node_is_inline(nodes, n) == 1 {
         h_nl(t, o, d);
         h_inline(t, o, nodes, attrs, regions, pages, layout, text, n);
         return 1;
@@ -628,17 +650,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             return 0;
         }
         h_nl(t, o, d);
-        crate::port::text_ascii(t, "<span data-emon-page=\"");
-        crate::port::text_i32(t, sub);
-        crate::port::text_ascii(t, "\"");
-        a = h_tattr(nodes, attrs, n, fk_label());
-        if a >= 0 {
-            crate::port::text_ascii(t, " data-emon-page-label=\"");
-            h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
-            crate::port::text_ascii(t, "\"");
-        }
-        h_common(t, o, nodes, regions, pages, layout, n);
-        crate::port::text_ascii(t, "></span>");
+        h_milestone(t, o, nodes, attrs, regions, pages, layout, text, n);
         return 1;
     }
     h_nl(t, o, d);

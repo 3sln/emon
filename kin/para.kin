@@ -1,0 +1,610 @@
+;; Naive analysis: lines -> paragraphs (P1.8; SPEC 3.2, 3.6; D134-D139). emon's own module (D039).
+;;
+;;   (pa-pages pg pages)                              the Model's page table, from the document layer's
+;;   (pa-build wd ln et npages nodes attrs regions text ord raw tmp fr gp)
+;;                                                    every line of the evidence as paragraphs
+;;
+;; The Model is made by the caller (`model-init`, one `page-new` each, or `pa-pages`); this appends to it.
+;;
+;; WHAT IT READS is the text layer's v2 `words` and `lines` and `etext` (SPEC 8.4.3): nothing of the
+;; glyphs, nothing of the stream order. A line's place is its box and its baseline; the order lines
+;; are READ in is made here, from where they are (a page's lines sorted by baseline, then by left edge),
+;; never from the order they were painted: Chrome paints every float (a drop cap) before the text of the
+;; page (D108 (a)), so the first line of a paragraph is not the first one shown.
+;;
+;; THE BRIEF is a single column, lines top to bottom, and nothing else: no columns (P4.1), no initials
+;; (P4.10: they are found right after lines and before this, so a line this module sees may already be
+;; one), no alignment (P4.11), no heading, list or table (P4), no furniture (P5). Every line of a page
+;; becomes the text of some paragraph, whatever it is. THE PARAGRAPH BOUNDARIES (D135) are
+;;   * a line not below the one before it (a table row, a second column, a second paragraph on the
+;;     same baseline), or not overlapping it horizontally;
+;;   * a vertical gap larger than 1.5 times the line gap of the document (the whitespace between a line's
+;;     box and the next one's; the LOWER QUARTILE of every such gap, not the median: a short document's
+;;     median is its paragraph gaps), and larger than an eighth of a line's height (a document set solid
+;;     has a gap of zero or less, and 1.5 times that is nothing);
+;;   * an INDENT: the line starts further in than the line before it, by more than half the size, when
+;;     the line before starts at the page's margin (centred and ragged text starts anywhere);
+;;   * a change of the dominant style (bold, italic, ...) or of the size (one twentieth); not of the font,
+;;     because a producer that subsets (Skia) gives one face several font rows;
+;;   * a line that is not upright, or runs the other way: it stands alone, after the page's upright lines (D136).
+;; A paragraph that goes on across a page's end is one paragraph (D137): the line before is a long one that
+;; does not close a sentence, and the next page's first line does not start further in than its page's margin. Its text is then `text`, `break`, `text` inlines, the milestone INLINE
+;; (SPEC 5.1); a page's end between two paragraphs puts the milestone between the blocks; page 1 has none.
+;;
+;; `text` (SPEC 3.6, D138): a line's words joined by a space, the lines joined by a space, except that a
+;; line ending in `-` before a line starting with a lowercase letter, and one ending in a soft hyphen,
+;; join WITHOUT one (the hyphen kept, the soft hyphen dropped: no dehyphenation without a locale and a
+;; dictionary), then NFC and the seven Latin ligatures decomposed (`emon.normalize`). `at` is a LIST of
+;; regions, one per page the paragraph is on (one per column fragment after P4.1, D112). Every block
+;; has `src` {text, infer} and `conf` 500 (its structure is inferred; Phase 10 calibrates), every text
+;; inline `src` {text} and `conf` 1000 (a glyph's own text); the milestone `src` {infer} and 500.
+(ns emon.para
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
+                                   lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
+            [emon.model :refer [node-new node-set-text node-set-sub node-set-conf node-add-src
+                                node-add-region page-new nk-paragraph nk-break nk-text sr-text
+                                sr-infer pk-vector]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures]]
+            [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem]]))
+
+;; thresholds, all in the units of the line they judge (D135)
+(defconst ^I32 PA_GAP_NUM 3)        ;; the gap beyond which a line starts a paragraph: 3/2 of the median gap
+(defconst ^I32 PA_GAP_DEN 2)
+(defconst ^I32 PA_TINY_DIV 8)       ;; ... and more than 1/8 of the line's height beyond it
+(defconst ^I32 PA_INDENT_DIV 2)     ;; an indent: more than 1/2 of the size
+(defconst ^I32 PA_SIZE_DIV 20)      ;; a size change: more than 1/20
+(defconst ^I32 PA_ROT_SLOP 100)     ;; upright: within one degree of 0
+(defconst ^I32 PA_WIDE_NUM 3)       ;; a long line: 3/5 of the longest line of its page
+(defconst ^I32 PA_WIDE_DEN 5)
+
+;; frag rows (`fr`): page x0 y0 x1 y1 raw-start
+(defconst ^I32 FR_STRIDE 6)
+
+;; ---------------------------------------------------------------- the page table
+
+(defn ^:pub ^I32 pa-pages [^Cells pg ^:mut ^Cells pages]
+  (comment "One Model page per page of the document layer's table: the crop box's size AS DISPLAYED")
+  (comment "(`/Rotate` turns it), centipoints, the page's own turn in degrees, `vector`.")
+  (let [^I32 n (pd-pg-count pg)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (let [^I32 x0 (pd-pg-crop pg i 0)
+                ^I32 y0 (pd-pg-crop pg i 1)
+                ^I32 x1 (pd-pg-crop pg i 2)
+                ^I32 y1 (pd-pg-crop pg i 3)
+                ^I32 rot (pd-pg-rotate pg i)
+                ^I32 w (- x1 x0)
+                ^I32 h (- y1 y0)]
+            (if (or (== rot 90) (== rot 270))
+              (page-new pages (+ i 1) h w rot (pk-vector))
+              (page-new pages (+ i 1) w h rot (pk-vector))))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------ small tests
+
+(defn ^I32 pa-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^Bool pa-upright [^Cells ln ^I32 l]
+  (comment "Within PA_ROT_SLOP centi-degrees of the page's x axis.")
+  (let [^I32 r (ln-get ln l (lh-rot))]
+    (return (or (< r PA_ROT_SLOP) (> r (- 36000 PA_ROT_SLOP))))))
+
+(defn ^I32 pa-flag [^Cells ln ^I32 l]
+  (comment "0 for an upright line, 1 for any other: the sort's first key.")
+  (if (pa-upright ln l) (return 0))
+  (return 1))
+
+(defn ^Bool pa-lower [^I32 cp]
+  (comment "A lowercase letter, for the line-end hyphen rule: Basic Latin, Latin-1, Greek, Cyrillic.")
+  (if (and (>= cp 97) (<= cp 122)) (return (== 1 1)))
+  (if (and (>= cp 223) (and (<= cp 255) (!= cp 247))) (return (== 1 1)))
+  (if (and (>= cp 945) (<= cp 969)) (return (== 1 1)))
+  (if (and (>= cp 1072) (<= cp 1119)) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^Bool pa-final-mark [^I32 cp]
+  (comment "A mark that closes a sentence: . ! ? : ; the ellipsis and the full-width forms.")
+  (return (or (== cp 46) (or (== cp 33) (or (== cp 63) (or (== cp 58) (or (== cp 59)
+              (or (== cp 8230) (or (== cp 12290) (or (== cp 65281) (or (== cp 65311) (== cp 65306))))))))))))
+
+(defn ^Bool pa-closer [^I32 cp]
+  (comment "A closing bracket or quotation mark, which may follow the mark that ends a sentence.")
+  (return (or (== cp 41) (or (== cp 93) (or (== cp 34) (or (== cp 39) (or (== cp 8221) (or (== cp 8217) (== cp 187)))))))))
+
+(defn ^Bool pa-ends-sentence [^Cells raw]
+  (comment "Does the text so far end a sentence: a closing mark, or a closer after one.")
+  (let [^I32 n (cells-len raw)]
+    (if (< n 1) (return (== 0 1)))
+    (let [^I32 c (cells-at raw (- n 1))]
+      (if (pa-final-mark c) (return (== 1 1)))
+      (if (and (pa-closer c) (>= n 2))
+        (let [^I32 d (cells-at raw (- n 2))]
+          (return (pa-final-mark d))))
+      (return (== 0 1)))))
+
+;; ------------------------------------------------------- a line's dominant word
+
+(defn ^I32 pa-dom [^Cells wd ^Cells ln ^I32 l]
+  (comment "The word whose (font, size) the most words of the line share, the earliest on a tie; -1 for")
+  (comment "a line of no words. Only the first 32 words vote (the count is quadratic).")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^:mut ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestc 0]
+    (if (> wn 32) (set wn 32))
+    (while (< i wn)
+      (do (set c 0)
+          (set j 0)
+          (while (< j wn)
+            (do (let [^I32 fi (wd-get wd (+ w0 i) (wf-font))
+                      ^I32 si (wd-get wd (+ w0 i) (wf-size))
+                      ^I32 fj (wd-get wd (+ w0 j) (wf-font))
+                      ^I32 sj (wd-get wd (+ w0 j) (wf-size))]
+                  (if (and (== fi fj) (== si sj)) (set c (+ c 1))))
+                (set j (+ j 1))))
+          (if (> c bestc)
+            (do (set bestc c)
+                (set best (+ w0 i))))
+          (set i (+ i 1))))
+    (return best)))
+
+(defn ^I32 pa-size [^Cells wd ^Cells ln ^I32 l]
+  (comment "The size of the line's dominant word; the line's height when it has none.")
+  (let [^I32 d (pa-dom wd ln l)]
+    (if (< d 0) (return (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0)))))
+    (return (wd-get wd d (wf-size)))))
+
+(defn ^I32 pa-style [^Cells wd ^Cells ln ^I32 l]
+  (comment "The style bits (`sy`: bold, italic, mono, ...) of the line's dominant word. NOT the font: a producer")
+  (comment "that subsets (Skia) gives one face several font rows, and two lines of one paragraph may show")
+  (comment "different ones.")
+  (let [^I32 d (pa-dom wd ln l)]
+    (if (< d 0) (return -1))
+    (return (wd-get wd d (wf-style)))))
+
+;; ------------------------------------------------------------------ geometry
+
+(defn ^I32 pa-start [^Cells ln ^I32 l]
+  (comment "Where the line starts, as a distance that grows INWARD: x0 for a line that reads left to right,")
+  (comment "minus x1 for one that reads right to left.")
+  (if (== (ln-get ln l (lh-dir)) 1) (return (- 0 (ln-get ln l (lh-x1)))))
+  (return (ln-get ln l (lh-x0))))
+
+(defn ^I32 pa-ymid2 [^Cells ln ^I32 l]
+  (comment "Twice the baseline's mean y: the order key, exact.")
+  (return (+ (ln-get ln l (lh-by0)) (ln-get ln l (lh-by1)))))
+
+(defn ^Bool pa-before [^Cells ln ^I32 a ^I32 b]
+  (comment "Does line a come before line b in reading order: upright lines first (D136), then higher on the")
+  (comment "page, then further left, then the earlier row. A TOTAL order.")
+  (let [^I32 ya (pa-ymid2 ln a)
+        ^I32 yb (pa-ymid2 ln b)
+        ^I32 ua (pa-flag ln a)
+        ^I32 ub (pa-flag ln b)]
+    (if (!= ua ub) (return (< ua ub)))
+    (if (!= ya yb) (return (< ya yb)))
+    (let [^I32 xa (ln-get ln a (lh-x0))
+          ^I32 xb (ln-get ln b (lh-x0))]
+      (if (!= xa xb) (return (< xa xb)))
+      (return (< a b)))))
+
+(defn ^I32 pa-sort-lines [^:mut ^Cells ord ^Cells ln]
+  (comment "Shell sort of the line indices in `ord` into reading order (Knuth's gaps).")
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at ord i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at ord (- j h)))
+                      (if (pa-before ln v u)
+                        (do (cells-set ord j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set ord j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 pa-sort-nums [^:mut ^Cells c]
+  (comment "Shell sort of the numbers in `c`, ascending.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at c i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at c (- j h)))
+                      (if (< v u)
+                        (do (cells-set c j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set c j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 pa-collect [^:mut ^Cells ord ^Cells ln ^I32 page]
+  (comment "The page's lines in reading order, as indices into `ln`.")
+  (let [^I32 n (ln-count ln)
+        ^:mut ^I32 l 0]
+    (cells-drop ord 0)
+    (while (< l n)
+      (do (if (== (ln-get ln l (lh-page)) page)
+            (cells-push ord l))
+          (set l (+ l 1))))
+    (pa-sort-lines ord ln)
+    (return 0)))
+
+(defn ^I32 pa-gap [^Cells ln ^I32 a ^I32 b]
+  (comment "The whitespace between line a's box and line b's, below it: negative when they overlap.")
+  (return (- (ln-get ln b (lh-y0)) (ln-get ln a (lh-y1)))))
+
+(defn ^Bool pa-below [^Cells ln ^I32 a ^I32 b]
+  (comment "Is b below a, by at least half its own height (between baselines): the same row is not.")
+  (let [^I32 hb (- (ln-get ln b (lh-y1)) (ln-get ln b (lh-y0)))
+        ^I32 d2 (- (pa-ymid2 ln b) (pa-ymid2 ln a))]
+    (return (>= d2 hb))))
+
+(defn ^Bool pa-overlaps [^Cells ln ^I32 a ^I32 b]
+  (comment "Do the two lines' extents overlap across the page?")
+  (return (and (< (ln-get ln b (lh-x0)) (ln-get ln a (lh-x1)))
+               (< (ln-get ln a (lh-x0)) (ln-get ln b (lh-x1))))))
+
+(defn ^I32 pa-median [^Cells ln ^:mut ^Cells ord ^:mut ^Cells gp ^I32 npages]
+  (comment "The median line gap of the document: every pair of consecutive lines of a page (in reading")
+  (comment "order) that are upright, read the same way and the second below the first. 0 when there is none.")
+  (let [^:mut ^I32 p 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0]
+    (cells-drop gp 0)
+    (while (<= p npages)
+      (do (pa-collect ord ln p)
+          (set n (cells-len ord))
+          (set i 1)
+          (while (< i n)
+            (do (let [^I32 a (cells-at ord (- i 1))
+                      ^I32 b (cells-at ord i)]
+                  (if (and (pa-upright ln a) (and (pa-upright ln b)
+                       (and (== (ln-get ln a (lh-dir)) (ln-get ln b (lh-dir)))
+                            (pa-below ln a b))))
+                    (cells-push gp (pa-gap ln a b))))
+                (set i (+ i 1))))
+          (set p (+ p 1))))
+    (if (== (cells-len gp) 0) (return 0))
+    (pa-sort-nums gp)
+    (return (cells-at gp (quot (cells-len gp) 4)))))
+
+(defn ^Bool pa-new-par [^Cells wd ^Cells ln ^I32 a ^I32 b ^I32 med ^I32 margin]
+  (comment "Does line b, the next one on the page, start a paragraph after line a (D135).")
+  (if (not (pa-upright ln a)) (return (== 1 1)))
+  (if (not (pa-upright ln b)) (return (== 1 1)))
+  (if (!= (ln-get ln a (lh-dir)) (ln-get ln b (lh-dir))) (return (== 1 1)))
+  (if (not (pa-below ln a b)) (return (== 1 1)))
+  (if (not (pa-overlaps ln a b)) (return (== 1 1)))
+  (let [^I32 g (pa-gap ln a b)
+        ^I32 hb (- (ln-get ln b (lh-y1)) (ln-get ln b (lh-y0)))
+        ^I32 sa (pa-size wd ln a)
+        ^I32 sb (pa-size wd ln b)
+        ^I32 ds (- sa sb)]
+    (if (and (> (* g PA_GAP_DEN) (* med PA_GAP_NUM))
+             (> (* (- g med) PA_TINY_DIV) hb))
+      (return (== 1 1)))
+    (if (and (> (* (- (pa-start ln b) (pa-start ln a)) PA_INDENT_DIV) sb)
+             (<= (* (- (pa-start ln a) margin) PA_INDENT_DIV) sb))
+      (return (== 1 1)))
+    (if (> (* (pa-abs ds) PA_SIZE_DIV) sa)
+      (return (== 1 1)))
+    (if (!= (pa-style wd ln a) (pa-style wd ln b))
+      (return (== 1 1)))
+    (return (== 0 1))))
+
+;; -------------------------------------------------------------------- the text
+
+(defn ^I32 pa-first-cp [^Cells wd ^Cells ln ^Cells et ^I32 l]
+  (comment "The first code point of the line's text, -1 when it has none.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0]
+    (while (< k wn)
+      (do (let [^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
+                ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
+            (if (and (>= ts 0) (> tl 0))
+              (return (cells-at et ts))))
+          (set k (+ k 1))))
+    (return -1)))
+
+(defn ^I32 pa-join [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells raw ^I32 l]
+  (comment "What goes between the text so far and the line l: nothing after a soft hyphen (which goes), nothing")
+  (comment "after a hyphen when the line starts in lowercase (the hyphen stays), else one space.")
+  (let [^I32 n (cells-len raw)]
+    (if (== n 0) (return 0))
+    (let [^I32 last (cells-at raw (- n 1))]
+      (if (== last 173)
+        (do (cells-drop raw (- n 1)) (return 0)))
+      (if (== last 45)
+        (do (let [^I32 f (pa-first-cp wd ln et l)]
+              (if (pa-lower f) (return 0)))))
+      (cells-push raw 32)
+      (return 0))))
+
+(defn ^I32 pa-add-line [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells raw ^I32 l]
+  (comment "Append the line's words, a space between two.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 started 0]
+    (while (< k wn)
+      (do (let [^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
+                ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
+            (if (and (>= ts 0) (> tl 0))
+              (do (if (== started 1) (cells-push raw 32))
+                  (set started 1)
+                  (set j 0)
+                  (while (< j tl)
+                    (do (let [^I32 c (cells-at et (+ ts j))]
+                          (cells-push raw c))
+                        (set j (+ j 1)))))))
+          (set k (+ k 1))))
+    (return 0)))
+
+;; ----------------------------------------------------- the paragraph being built
+
+(defn ^I32 pa-frag-open [^:mut ^Cells fr ^Cells ln ^I32 page ^I32 l ^I32 rawstart]
+  (comment "A new fragment of the open paragraph: this page, this line's box, the text so far.")
+  (cells-push fr page)
+  (cells-push fr (ln-get ln l (lh-x0)))
+  (cells-push fr (ln-get ln l (lh-y0)))
+  (cells-push fr (ln-get ln l (lh-x1)))
+  (cells-push fr (ln-get ln l (lh-y1)))
+  (cells-push fr rawstart)
+  (return 0))
+
+(defn ^I32 pa-frag-extend [^:mut ^Cells fr ^Cells ln ^I32 l]
+  (comment "The last fragment takes in the line's box.")
+  (let [^I32 base (* (- (quot (cells-len fr) FR_STRIDE) 1) FR_STRIDE)
+        ^I32 ox0 (cells-at fr (+ base 1))
+        ^I32 oy0 (cells-at fr (+ base 2))
+        ^I32 ox1 (cells-at fr (+ base 3))
+        ^I32 oy1 (cells-at fr (+ base 4))
+        ^I32 lx0 (ln-get ln l (lh-x0))
+        ^I32 ly0 (ln-get ln l (lh-y0))
+        ^I32 lx1 (ln-get ln l (lh-x1))
+        ^I32 ly1 (ln-get ln l (lh-y1))]
+    (if (< lx0 ox0) (cells-set fr (+ base 1) lx0))
+    (if (< ly0 oy0) (cells-set fr (+ base 2) ly0))
+    (if (> lx1 ox1) (cells-set fr (+ base 3) lx1))
+    (if (> ly1 oy1) (cells-set fr (+ base 4) ly1))
+    (return 0)))
+
+(defn ^I32 pa-flush [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                     ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr]
+  (comment "Close the open paragraph, if there is one: its node (own `text` when it is on one page, else")
+  (comment "`text`, `break`, `text` inlines), `at` one region per page, `src`, `conf`. Empties `raw` and `fr`.")
+  (let [^I32 nfr (quot (cells-len fr) FR_STRIDE)
+        ^I32 rawn (cells-len raw)]
+    (if (== nfr 0)
+      (do (cells-drop raw 0) (return 0)))
+    (let [^I32 par (node-new nodes (nk-paragraph) 0)
+          ^:mut ^I32 k 0
+          ^:mut ^I32 from 0
+          ^:mut ^I32 to 0
+          ^:mut ^I32 base 0
+          ^:mut ^I32 t0 0
+          ^:mut ^I32 child 0]
+      (node-set-conf nodes par 500)
+      (node-add-src nodes par (sr-text))
+      (node-add-src nodes par (sr-infer))
+      (while (< k nfr)
+        (do (set base (* k FR_STRIDE))
+            (set from (cells-at fr (+ base 5)))
+            (set to rawn)
+            (if (< (+ k 1) nfr)
+              (set to (cells-at fr (+ (* (+ k 1) FR_STRIDE) 5))))
+            (let [^I32 pg (cells-at fr base)
+                  ^I32 rx0 (cells-at fr (+ base 1))
+                  ^I32 ry0 (cells-at fr (+ base 2))
+                  ^I32 rx1 (cells-at fr (+ base 3))
+                  ^I32 ry1 (cells-at fr (+ base 4))]
+              (node-add-region nodes regions par pg rx0 ry0 rx1 ry1)
+              (if (> nfr 1)
+                (do (if (> k 0)
+                      (do (set child (node-new nodes (nk-break) par))
+                          (node-set-sub nodes child pg)
+                          (node-set-conf nodes child 500)
+                          (node-add-src nodes child (sr-infer))))
+                    (set child (node-new nodes (nk-text) par))
+                    (set t0 (cells-len text))
+                    (nz-nfc raw from to text tmp (nz-flag-ligatures))
+                    (let [^I32 tn (- (cells-len text) t0)]
+                      (node-set-text nodes child t0 tn))
+                    (node-set-conf nodes child 1000)
+                    (node-add-src nodes child (sr-text))
+                    (node-add-region nodes regions child pg rx0 ry0 rx1 ry1))
+                (do (set t0 (cells-len text))
+                    (nz-nfc raw from to text tmp (nz-flag-ligatures))
+                    (let [^I32 tn2 (- (cells-len text) t0)]
+                      (node-set-text nodes par t0 tn2)))))
+            (set k (+ k 1))))
+      (cells-drop raw 0)
+      (cells-drop fr 0)
+      (return 0))))
+
+(defn ^I32 pa-milestone [^:mut ^Cells nodes ^I32 page]
+  (comment "A page milestone between two blocks.")
+  (let [^I32 b (node-new nodes (nk-break) 0)]
+    (node-set-sub nodes b page)
+    (node-set-conf nodes b 500)
+    (node-add-src nodes b (sr-infer))
+    (return 0)))
+
+;; ----------------------------------------------------------- across a page's end
+
+(defn ^I32 pa-maxw [^Cells ln ^Cells ord]
+  (comment "The widest upright line of the page (0 when there is none).")
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 m 0]
+    (while (< i n)
+      (do (let [^I32 l (cells-at ord i)]
+            (if (pa-upright ln l)
+              (do (let [^I32 w (- (ln-get ln l (lh-x1)) (ln-get ln l (lh-x0)))]
+                    (if (> w m) (set m w))))))
+          (set i (+ i 1))))
+    (return m)))
+
+(defn ^I32 pa-margin [^Cells ln ^Cells ord]
+  (comment "The page's margin, in `pa-start`'s terms: the least start of an upright line (0 when none).")
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 any 0]
+    (while (< i n)
+      (do (let [^I32 l (cells-at ord i)]
+            (if (pa-upright ln l)
+              (do (let [^I32 s (pa-start ln l)]
+                    (if (or (== any 0) (< s m)) (set m s))
+                    (set any 1)))))
+          (set i (+ i 1))))
+    (return m)))
+
+(defn ^Bool pa-continues [^Cells wd ^Cells ln ^Cells raw ^I32 a ^I32 b ^I32 amaxw ^I32 bmargin]
+  (comment "Does the paragraph that ended the last page (its last line a) go on with line b, the first of the")
+  (comment "next (D137): both upright and one way; a is long (3/5 of its page's longest) and does not close")
+  (comment "a sentence; b is not indented past the margin of its page.")
+  (if (not (pa-upright ln a)) (return (== 0 1)))
+  (if (not (pa-upright ln b)) (return (== 0 1)))
+  (if (!= (ln-get ln a (lh-dir)) (ln-get ln b (lh-dir))) (return (== 0 1)))
+  (if (pa-ends-sentence raw) (return (== 0 1)))
+  (let [^I32 wa (- (ln-get ln a (lh-x1)) (ln-get ln a (lh-x0)))
+        ^I32 sb (pa-size wd ln b)]
+    (if (< (* wa PA_WIDE_DEN) (* amaxw PA_WIDE_NUM)) (return (== 0 1)))
+    (if (> (* (- (pa-start ln b) bmargin) PA_INDENT_DIV) sb) (return (== 0 1)))
+    (return (== 1 1))))
+
+;; --------------------------------------------------------------------- the build
+
+(defn ^I32 pa-flush-all [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                         ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr
+                         ^Cells wd ^Cells ln ^Cells et ^:mut ^Cells dq]
+  (comment "Close the open paragraph, then make a paragraph of each line queued in `dq` (the lines that are not")
+  (comment "upright, D136) and empty the queue.")
+  (let [^I32 nq (cells-len dq)
+        ^:mut ^I32 k 0]
+    (pa-flush nodes attrs regions text raw tmp fr)
+    (while (< k nq)
+      (do (let [^I32 l (cells-at dq k)
+                ^I32 pg (ln-get ln l (lh-page))]
+            (pa-frag-open fr ln pg l 0)
+            (pa-add-line wd ln et raw l)
+            (pa-flush nodes attrs regions text raw tmp fr))
+          (set k (+ k 1))))
+    (cells-drop dq 0)
+    (return 0)))
+
+(defn ^I32 pa-upright-count [^Cells ln ^Cells ord]
+  (comment "How many lines at the head of the sorted `ord` are upright (`pa-before` puts them first).")
+  (let [^I32 n (cells-len ord)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (let [^I32 l (cells-at ord i)]
+            (if (not (pa-upright ln l)) (return i)))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^:pub ^I32 pa-build [^Cells wd ^Cells ln ^Cells et ^I32 npages
+                           ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                           ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp]
+  (comment "Append every page's lines to the Model as paragraphs under the document root (node 0, made by")
+  (comment "`model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the")
+  (comment "queue of lines that are not upright). Answers 0.")
+  (let [^I32 med (pa-median ln ord gp npages)
+        ^:mut ^I32 p 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 nu 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 prev -1
+        ^:mut ^I32 open 0
+        ^:mut ^I32 cont 0
+        ^:mut ^I32 prevmaxw 0
+        ^:mut ^I32 pm 0
+        ^:mut ^I32 rs 0]
+    (cells-drop gp 0)
+    (cells-drop raw 0)
+    (cells-drop fr 0)
+    (while (<= p npages)
+      (do (pa-collect ord ln p)
+          (set n (cells-len ord))
+          (set nu (pa-upright-count ln ord))
+          (set pm (pa-margin ln ord))
+          (if (== nu 0)
+            (do (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
+                (set open 0)
+                (set prev -1)
+                (if (> p 1) (pa-milestone nodes p)))
+            (do (set b (cells-at ord 0))
+                (set cont 0)
+                (if (== open 1)
+                  (if (pa-continues wd ln raw prev b prevmaxw pm)
+                    (set cont 1)))
+                (if (== cont 0)
+                  (do (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
+                      (if (> p 1) (pa-milestone nodes p))
+                      (pa-frag-open fr ln p b 0))
+                  (do (pa-join wd ln et raw b)
+                      (set rs (cells-len raw))
+                      (pa-frag-open fr ln p b rs)))
+                (set open 1)
+                (pa-add-line wd ln et raw b)
+                (set prev b)
+                (set i 1)
+                (while (< i nu)
+                  (do (set b (cells-at ord i))
+                      (if (pa-new-par wd ln prev b med pm)
+                        (do (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
+                            (pa-frag-open fr ln p b 0))
+                        (do (pa-join wd ln et raw b)
+                            (pa-frag-extend fr ln b)))
+                      (pa-add-line wd ln et raw b)
+                      (set prev b)
+                      (set i (+ i 1))))
+                (set prevmaxw (pa-maxw ln ord))))
+          (set i nu)
+          (while (< i n)
+            (do (cells-push gp (cells-at ord i))
+                (set i (+ i 1))))
+          (set p (+ p 1))))
+    (pa-flush-all nodes attrs regions text raw tmp fr wd ln et gp)
+    (return 0)))

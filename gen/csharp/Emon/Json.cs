@@ -506,7 +506,7 @@ public static class Json {
         // not a plain `text` node, or has a geometry of its own (SPEC 4.2).
         int c = Model.NodeFirstChild(nodes, n);
         while (c >= 0) {
-            if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 1) {
+            if (Model.NodeIsInline(nodes, c) == 1) {
                 if (Model.NodeKind(nodes, c) != Model.NkText()) {
                     return 1;
                 }
@@ -521,7 +521,7 @@ public static class Json {
     internal static int JsHasInline(emon.Port.Cells nodes, int n) {
         int c = Model.NodeFirstChild(nodes, n);
         while (c >= 0) {
-            if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 1) {
+            if (Model.NodeIsInline(nodes, c) == 1) {
                 return 1;
             }
             c = Model.NodeNext(nodes, c);
@@ -605,7 +605,7 @@ public static class Json {
         // others as `children`; an inline writes all of its children as
         // `children`. Recursive: `node-new` bounds the depth.
         int kind = Model.NodeKind(nodes, n);
-        int inl = Model.NkIsInline(kind);
+        int inl = Model.NodeIsInline(nodes, n);
         int s = 0;
         int c = 0;
         int k = 0;
@@ -635,7 +635,7 @@ public static class Json {
             emon.Port.TextAscii(t, "[");
             c = Model.NodeFirstChild(nodes, n);
             while (c >= 0) {
-                if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 1) {
+                if (Model.NodeIsInline(nodes, c) == 1) {
                     JsAelem(t, pr, d + 1, k);
                     JsNode(t, pr, d + 2, nodes, attrs, regions, text, c);
                     k += 1;
@@ -647,7 +647,7 @@ public static class Json {
         k = 0;
         c = Model.NodeFirstChild(nodes, n);
         while (c >= 0) {
-            if ((inl == 1) || (Model.NkIsInline(Model.NodeKind(nodes, c)) == 0)) {
+            if ((inl == 1) || (Model.NodeIsInline(nodes, c) == 0)) {
                 if (k == 0) {
                     s = JsBegin(t, pr, d, s, Model.FkChildren());
                     emon.Port.TextAscii(t, "[");

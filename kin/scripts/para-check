@@ -1,0 +1,96 @@
+#!/usr/bin/env bb
+;; The paragraph stage's independent witness (DEVLOG P1.8; babashka, reads only committed files).
+;;
+;;     kin/scripts/para-check
+;;
+;; For every golden `test/para/NAME.json` (what `kin/scripts/para-goldens` wrote from the generated Rust),
+;; the paragraphs of the Model equal, in order, the text of the `<h1>`..`<h6>` and `<p>` elements of the
+;; HTML the document was printed from (`test/corpus/synth/html/NAME.html`): the HTML's text with its tags
+;; removed and entities decoded, then NFC, the seven Latin ligatures decomposed, soft hyphens removed and
+;; every run of white space made one space (the same on both sides). The stage knows nothing of headings, so
+;; a heading is a paragraph here (D134); what is checked is that no line of text is lost, joined to
+;; another block's or cut in two, and that the order is the page's. Also: every page of the document has
+;; its milestone (`break`, from page 2), every region is on a page of the Model, and the Model's `text` is
+;; NFC.
+;;
+;; Prints `  ok ` lines (the score `bb unit` wants) and exits 1 on the first difference.
+(require '[clojure.java.io :as io]
+         '[clojure.string :as str]
+         '[cheshire.core :as json]
+         '[nfc])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+
+(def LIGS {"ﬀ" "ff" "ﬁ" "fi" "ﬂ" "fl" "ﬃ" "ffi" "ﬄ" "ffl" "ﬅ" "st" "ﬆ" "st"})
+
+(defn norm [s]
+  (let [s (nfc/normalize s)
+        s (reduce (fn [s [a b]] (str/replace s a b)) s LIGS)
+        s (str/replace s "­" "")]
+    (str/trim (str/replace s #"[\s ]+" " "))))
+
+(defn entities [s]
+  (-> s
+      (str/replace #"&#x([0-9a-fA-F]+);" (fn [[_ h]] (String. (Character/toChars (Integer/parseInt h 16)))))
+      (str/replace #"&#([0-9]+);" (fn [[_ d]] (String. (Character/toChars (Integer/parseInt d)))))
+      (str/replace "&lt;" "<") (str/replace "&gt;" ">") (str/replace "&quot;" "\"")
+      (str/replace "&nbsp;" " ") (str/replace "&amp;" "&")))
+
+(defn html-blocks [html]
+  (let [body (second (str/split html #"<body[^>]*>" 2))]
+    (->> (re-seq #"(?s)<(p|h[1-6])\b[^>]*>(.*?)</\1>" body)
+         (map (fn [[_ _ inner]] (norm (entities (str/replace inner #"<[^>]+>" "")))))
+         (remove str/blank?)
+         vec)))
+
+(defn text-of [n]
+  (or (get n "text")
+      (apply str (map #(get % "text" "") (or (get n "inlines") (get n "children"))))))
+
+(defn paragraphs [model]
+  (letfn [(walk [n] (concat (when (= "paragraph" (get n "kind")) [n]) (mapcat walk (get n "children"))))]
+    (vec (walk (get model "body")))))
+
+(defn milestones [model]
+  (letfn [(walk [n] (concat (when (= "break" (get n "kind")) [(get n "page")])
+                            (mapcat walk (concat (get n "children") (get n "inlines")))))]
+    (set (walk (get model "body")))))
+
+(def fails (atom 0))
+(defn fail [& xs] (println "  FAIL" (apply str xs)) (swap! fails inc))
+
+(def goldens (->> (.listFiles (io/file root "test" "para"))
+                  (filter #(str/ends-with? (.getName %) ".json")) sort))
+
+(when (empty? goldens) (fail "no goldens in test/para"))
+
+(doseq [f goldens]
+  (let [name (str/replace (.getName f) #"\.json$" "")
+        model (json/parse-string (slurp f :encoding "UTF-8"))
+        want (html-blocks (slurp (io/file root "test" "corpus" "synth" "html" (str name ".html")) :encoding "UTF-8"))
+        ps (paragraphs model)
+        got (mapv (comp norm text-of) ps)
+        npages (count (get model "pages"))
+        pages (set (map #(get % "n") (get model "pages")))
+        miles (milestones model)]
+    (cond
+      (not= got want)
+      (let [i (or (first (filter #(not= (get got % ::none) (get want % ::none)) (range (max (count got) (count want))))) 0)]
+        (fail name ": paragraph " i " differs from the HTML's: got " (pr-str (get got i)) ", want " (pr-str (get want i))
+              " (" (count got) " paragraphs, the HTML has " (count want) ")"))
+
+      (some #(not= (get % "text") (when (get % "text") (nfc/normalize (get % "text")))) ps)
+      (fail name ": a paragraph's text is not NFC")
+
+      (not= miles (set (range 2 (inc npages))))
+      (fail name ": the page milestones are " (sort miles) ", want pages 2.." npages)
+
+      (some (fn [p] (some #(not (contains? pages (first %))) (get p "at"))) ps)
+      (fail name ": a region on a page the Model does not have")
+
+      :else
+      (println (format "  ok   %s: %d paragraphs = the HTML's <h1>-<h6>/<p>, %d pages with their milestones" name (count got) npages)))))
+
+(if (pos? @fails)
+  (System/exit 1)
+  (println (format "  ok   para-check: %d goldens match their source HTML" (count goldens))))

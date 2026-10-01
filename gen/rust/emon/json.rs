@@ -504,7 +504,7 @@ pub(crate) fn js_informative(nodes: &mut crate::port::Cells, regions: &mut crate
     // not a plain `text` node, or has a geometry of its own (SPEC 4.2).
     let mut c: i32 = node_first_child(nodes, n);
     while c >= 0 {
-        if nk_is_inline(node_kind(nodes, c)) == 1 {
+        if node_is_inline(nodes, c) == 1 {
             if node_kind(nodes, c) != nk_text() {
                 return 1;
             }
@@ -519,7 +519,7 @@ pub(crate) fn js_informative(nodes: &mut crate::port::Cells, regions: &mut crate
 pub(crate) fn js_has_inline(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     let mut c: i32 = node_first_child(nodes, n);
     while c >= 0 {
-        if nk_is_inline(node_kind(nodes, c)) == 1 {
+        if node_is_inline(nodes, c) == 1 {
             return 1;
         }
         c = node_next(nodes, c);
@@ -603,7 +603,7 @@ pub(crate) fn js_node(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate::po
     // others as `children`; an inline writes all of its children as
     // `children`. Recursive: `node-new` bounds the depth.
     let kind: i32 = node_kind(nodes, n);
-    let inl: i32 = nk_is_inline(kind);
+    let inl: i32 = node_is_inline(nodes, n);
     let mut s: i32 = 0;
     let mut c: i32 = 0;
     let mut k: i32 = 0;
@@ -633,7 +633,7 @@ pub(crate) fn js_node(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate::po
         crate::port::text_ascii(t, "[");
         c = node_first_child(nodes, n);
         while c >= 0 {
-            if nk_is_inline(node_kind(nodes, c)) == 1 {
+            if node_is_inline(nodes, c) == 1 {
                 js_aelem(t, pr, d + 1, k);
                 js_node(t, pr, d + 2, nodes, attrs, regions, text, c);
                 k += 1;
@@ -645,7 +645,7 @@ pub(crate) fn js_node(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate::po
     k = 0;
     c = node_first_child(nodes, n);
     while c >= 0 {
-        if (inl == 1) || (nk_is_inline(node_kind(nodes, c)) == 0) {
+        if (inl == 1) || (node_is_inline(nodes, c) == 0) {
             if k == 0 {
                 s = js_begin(t, pr, d, s, fk_children());
                 crate::port::text_ascii(t, "[");

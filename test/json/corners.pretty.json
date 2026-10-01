@@ -534,6 +534,29 @@
             "kind": "note",
             "role": "margin",
             "text": "margin, not targeted"
+          },
+          {
+            "id": 82,
+            "kind": "paragraph",
+            "text": "ends here,goes on",
+            "inlines": [
+              {
+                "kind": "text",
+                "text": "ends here,",
+                "at": [[1, 72, 900, 540, 910]]
+              },
+              {
+                "kind": "break",
+                "page": 2,
+                "src": ["infer"],
+                "conf": 500
+              },
+              {
+                "kind": "text",
+                "text": "goes on",
+                "at": [[2, 72, 72, 540, 80]]
+              }
+            ]
           }
         ]
       }
@@ -541,7 +564,7 @@
   },
   "furniture": [
     {
-      "id": 82
+      "id": 86
     }
   ],
   "dropped": [

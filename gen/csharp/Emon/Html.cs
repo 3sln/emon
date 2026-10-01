@@ -209,7 +209,7 @@ public static class Html {
         int i = 0;
         int kind = Model.NodeKind(nodes, n);
         int cf = Model.NodeConf(nodes, n);
-        if ((HOn(o, 1) == 1) && (Model.NkIsInline(kind) == 0) && (kind != Model.NkNote())) {
+        if ((HOn(o, 1) == 1) && (Model.NodeIsInline(nodes, n) == 0) && (kind != Model.NkNote())) {
             emon.Port.TextAscii(t, " id=\"emon-");
             emon.Port.TextI32(t, n);
             emon.Port.TextAscii(t, "\"");
@@ -235,7 +235,7 @@ public static class Html {
             }
             emon.Port.TextAscii(t, "\"");
         }
-        if ((HOn(o, 2) == 1) && (Model.NkIsInline(kind) == 0) && (Model.NodeRegionCount(nodes, n) > 0) && (Model.LayoutCount(layout) > 0)) {
+        if ((HOn(o, 2) == 1) && (Model.NodeIsInline(nodes, n) == 0) && (Model.NodeRegionCount(nodes, n) > 0) && (Model.LayoutCount(layout) > 0)) {
             HColumns(t, nodes, regions, pages, layout, n);
         }
         if ((HOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024))) {
@@ -291,7 +291,7 @@ public static class Html {
     internal static int HHasInline(emon.Port.Cells nodes, int n) {
         int c = Model.NodeFirstChild(nodes, n);
         while (c >= 0) {
-            if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 1) {
+            if (Model.NodeIsInline(nodes, c) == 1) {
                 return 1;
             }
             c = Model.NodeNext(nodes, c);
@@ -390,7 +390,7 @@ public static class Html {
         int c = Model.NodeFirstChild(nodes, n);
         if (HHasInline(nodes, n) == 1) {
             while (c >= 0) {
-                if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 1) {
+                if (Model.NodeIsInline(nodes, c) == 1) {
                     HInline(t, o, nodes, attrs, regions, pages, layout, text, c);
                 }
                 c = Model.NodeNext(nodes, c);
@@ -414,6 +414,22 @@ public static class Html {
         emon.Port.TextI32(t, target);
         return 0;
     }
+    internal static int HMilestone(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
+        // A page milestone, between blocks or (D134) inside a paragraph: an empty span.
+        int a = -1;
+        emon.Port.TextAscii(t, "<span data-emon-page=\"");
+        emon.Port.TextI32(t, Model.NodeSub(nodes, n));
+        emon.Port.TextAscii(t, "\"");
+        a = HTattr(nodes, attrs, n, Model.FkLabel());
+        if (a >= 0) {
+            emon.Port.TextAscii(t, " data-emon-page-label=\"");
+            HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
+            emon.Port.TextAscii(t, "\"");
+        }
+        HCommon(t, o, nodes, regions, pages, layout, n);
+        emon.Port.TextAscii(t, "></span>");
+        return 0;
+    }
     internal static int HInline(System.Text.StringBuilder t, int o, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int n) {
         // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
         int kind = Model.NodeKind(nodes, n);
@@ -425,6 +441,12 @@ public static class Html {
         if (kind == Model.NkText()) {
             if (Model.NodeHasText(nodes, n) == 1) {
                 HRun(t, text, Model.NodeTextStart(nodes, n), Model.NodeTextLen(nodes, n));
+            }
+            return 0;
+        }
+        if (kind == Model.NkBreak()) {
+            if (HOn(o, 64) == 0) {
+                HMilestone(t, o, nodes, attrs, regions, pages, layout, text, n);
             }
             return 0;
         }
@@ -540,7 +562,7 @@ public static class Html {
         int c = Model.NodeFirstChild(nodes, n);
         int k = 0;
         while (c >= 0) {
-            if (Model.NkIsInline(Model.NodeKind(nodes, c)) == 0) {
+            if (Model.NodeIsInline(nodes, c) == 0) {
                 k += HBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d);
             }
             c = Model.NodeNext(nodes, c);
@@ -619,7 +641,7 @@ public static class Html {
         int c = 0;
         int lv = 0;
         int pk = 0;
-        if (Model.NkIsInline(kind) == 1) {
+        if (Model.NodeIsInline(nodes, n) == 1) {
             HNl(t, o, d);
             HInline(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 1;
@@ -629,17 +651,7 @@ public static class Html {
                 return 0;
             }
             HNl(t, o, d);
-            emon.Port.TextAscii(t, "<span data-emon-page=\"");
-            emon.Port.TextI32(t, sub);
-            emon.Port.TextAscii(t, "\"");
-            a = HTattr(nodes, attrs, n, Model.FkLabel());
-            if (a >= 0) {
-                emon.Port.TextAscii(t, " data-emon-page-label=\"");
-                HRun(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
-                emon.Port.TextAscii(t, "\"");
-            }
-            HCommon(t, o, nodes, regions, pages, layout, n);
-            emon.Port.TextAscii(t, "></span>");
+            HMilestone(t, o, nodes, attrs, regions, pages, layout, text, n);
             return 1;
         }
         HNl(t, o, d);

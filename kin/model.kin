@@ -360,6 +360,23 @@
   (if (== kind (nk-initial)) (return 1))
   (return 0))
 
+(defn ^:pub ^I32 node-is-inline [^Cells nodes ^I32 n]
+  (comment "1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page")
+  (comment "milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,")
+  (comment "with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.")
+  (let [^I32 kind (nget nodes n 0)
+        ^I32 pv (nget nodes n 5)
+        ^I32 nx (nget nodes n 4)]
+    (if (== (nk-is-inline kind) 1) (return 1))
+    (if (== kind (nk-break))
+      (do (if (>= pv 0)
+            (do (let [^I32 pkind (nget nodes pv 0)]
+                  (if (== (nk-is-inline pkind) 1) (return 1)))))
+          (if (>= nx 0)
+            (do (let [^I32 nkind (nget nodes nx 0)]
+                  (if (== (nk-is-inline nkind) 1) (return 1)))))))
+    (return 0)))
+
 (defn ^:pub ^I32 node-child-count [^Cells nodes ^I32 n]
   (let [^:mut ^I32 c (nget nodes n 2)
         ^:mut ^I32 k 0]

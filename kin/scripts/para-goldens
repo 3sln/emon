@@ -1,0 +1,35 @@
+#!/usr/bin/env bb
+;; Write the paragraph stage's goldens from the generated Rust (DEVLOG P1.8).
+;;
+;;     kin/scripts/para-goldens            write test/para/NAME.json (pretty canonical JSON) for each document below
+;;
+;; A DEVELOPMENT SCRIPT, run by a person after the stage changed on purpose; no gate runs it. The laws in
+;; `kin/paratest.kin` hold every target to what this wrote (PDF -> content -> paragraphs -> Model -> JSON,
+;; byte for byte), and `kin/scripts/para-check` holds the goldens to the source HTML: what makes a golden of
+;; kin's own output worth anything. The driver is `tools/accuracy/naive/main.rs` (built by
+;; `tools/accuracy/predict-naive.sh`, the temporary predictor of the P1.8 measurement).
+;;
+;; THE DOCUMENTS are the Chrome-printed synthetic ones whose paragraphs and headings are all there is on the
+;; page (single column, no list, table or initial the naive stage would have to guess at): the paragraphs the
+;; stage writes are exactly the HTML's `<h1>`..`<h6>` and `<p>`, in order.
+(require '[clojure.java.io :as io]
+         '[clojure.java.shell :as sh]
+         '[clojure.string :as str])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+
+(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "footnotes-endnotes" "initial-image" "initial-vector"])
+
+(defn run [& args]
+  (let [r (apply sh/sh (concat args [:dir root]))]
+    (when-not (zero? (:exit r)) (println (:err r)) (System/exit 1))
+    (:out r)))
+
+;; builds .cache/naive when gen/rust changed (its own stamp), by asking it for a document
+(run "tools/accuracy/predict-naive.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
+
+(.mkdirs (io/file root "test" "para"))
+(doseq [d docs]
+  (let [out (run ".cache/naive" (str "test/corpus/synth/pdf/" d ".pdf") "pretty")]
+    (spit (io/file root "test" "para" (str d ".json")) (str out "\n") :encoding "UTF-8")
+    (println "  wrote test/para/" (str d ".json") (count out) "bytes")))

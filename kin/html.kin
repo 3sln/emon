@@ -54,7 +54,7 @@
                                 layout-x1 layout-y1 ifm-emit-name nk-initial
                                 fk-align
                                 node-attr attr-find attr-find-next attr-vkind
-                                attr-value attr-len nk-is-inline nk-emit-name
+                                attr-value attr-len nk-is-inline node-is-inline nk-emit-name
                                 fk-emit-name rl-emit-name fg-emit-name
                                 sl-emit-name dp-emit-name al-emit-name
                                 dr-emit-name ch-emit-name
@@ -234,7 +234,7 @@
         ^:mut ^I32 i 0
         ^I32 kind (node-kind nodes n)
         ^I32 cf (node-conf nodes n)]
-    (if (and (== (h-on o 1) 1) (== (nk-is-inline kind) 0) (!= kind (nk-note)))
+    (if (and (== (h-on o 1) 1) (== (node-is-inline nodes n) 0) (!= kind (nk-note)))
       (do (emit-ascii t " id=\"emon-")
           (text-i32 t n)
           (emit-ascii t "\"")))
@@ -255,7 +255,7 @@
                 (set i (+ i 1))
                 (set r (region-next regions r))))
           (emit-ascii t "\"")))
-    (if (and (== (h-on o 2) 1) (== (nk-is-inline kind) 0)
+    (if (and (== (h-on o 2) 1) (== (node-is-inline nodes n) 0)
              (> (node-region-count nodes n) 0) (> (layout-count layout) 0))
       (h-columns t nodes regions pages layout n))
     (if (and (== (h-on o 4) 1) (>= cf 0) (< cf (quot o 1024)))
@@ -301,7 +301,7 @@
 (defn ^I32 h-has-inline [^Cells nodes ^I32 n]
   (let [^:mut ^I32 c (node-first-child nodes n)]
     (while (>= c 0)
-      (do (if (== (nk-is-inline (node-kind nodes c)) 1) (return 1))
+      (do (if (== (node-is-inline nodes c) 1) (return 1))
           (set c (node-next nodes c))))
     (return 0)))
 
@@ -360,7 +360,7 @@
   (let [^:mut ^I32 c (node-first-child nodes n)]
     (if (== (h-has-inline nodes n) 1)
       (do (while (>= c 0)
-            (do (if (== (nk-is-inline (node-kind nodes c)) 1)
+            (do (if (== (node-is-inline nodes c) 1)
                   (h-inline t o nodes attrs regions pages layout text c))
                 (set c (node-next nodes c))))
           (return 0)))
@@ -379,6 +379,22 @@
   (return 0))
 
 
+(defn ^I32 h-milestone [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
+                        ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n]
+  (comment "A page milestone, between blocks or (D134) inside a paragraph: an empty span.")
+  (let [^:mut ^I32 a -1]
+    (emit-ascii t "<span data-emon-page=\"")
+    (text-i32 t (node-sub nodes n))
+    (emit-ascii t "\"")
+    (set a (h-tattr nodes attrs n (fk-label)))
+    (if (>= a 0)
+      (do (emit-ascii t " data-emon-page-label=\"")
+          (h-run t text (attr-value attrs a) (attr-len attrs a))
+          (emit-ascii t "\"")))
+    (h-common t o nodes regions pages layout n)
+    (emit-ascii t "></span>")
+    (return 0)))
+
 (defn ^I32 h-inline [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
                      ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n]
   (comment "One inline node: text, span, link, ref or linebreak (SPEC 5.1).")
@@ -391,6 +407,10 @@
     (if (== kind (nk-text))
       (do (if (== (node-has-text nodes n) 1)
             (h-run t text (node-text-start nodes n) (node-text-len nodes n)))
+          (return 0)))
+    (if (== kind (nk-break))
+      (do (if (== (h-on o 64) 0)
+            (h-milestone t o nodes attrs regions pages layout text n))
           (return 0)))
     (if (== kind (nk-initial))
       (do (if (== (h-on o 128) 1)
@@ -480,7 +500,7 @@
   (let [^:mut ^I32 c (node-first-child nodes n)
         ^:mut ^I32 k 0]
     (while (>= c 0)
-      (do (if (== (nk-is-inline (node-kind nodes c)) 0)
+      (do (if (== (node-is-inline nodes c) 0)
             (set k (+ k (h-block t o nodes attrs regions pages layout text c d))))
           (set c (node-next nodes c))))
     (return k)))
@@ -535,7 +555,7 @@
         ^:mut ^I32 c 0
         ^:mut ^I32 lv 0
         ^:mut ^I32 pk 0]
-    (if (== (nk-is-inline kind) 1)
+    (if (== (node-is-inline nodes n) 1)
       (do (h-nl t o d)
           (h-inline t o nodes attrs regions pages layout text n)
           (return 1)))
@@ -543,16 +563,7 @@
     (if (== kind (nk-break))
       (do (if (== (h-on o 64) 1) (return 0))
           (h-nl t o d)
-          (emit-ascii t "<span data-emon-page=\"")
-          (text-i32 t sub)
-          (emit-ascii t "\"")
-          (set a (h-tattr nodes attrs n (fk-label)))
-          (if (>= a 0)
-            (do (emit-ascii t " data-emon-page-label=\"")
-                (h-run t text (attr-value attrs a) (attr-len attrs a))
-                (emit-ascii t "\"")))
-          (h-common t o nodes regions pages layout n)
-          (emit-ascii t "></span>")
+          (h-milestone t o nodes attrs regions pages layout text n)
           (return 1)))
     (h-nl t o d)
     ;; ---- section

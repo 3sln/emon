@@ -38,7 +38,7 @@
                                 ledger-x1 ledger-y1 ledger-text-start
                                 ledger-text-len ledger-conf ledger-src
                                 model-check model-hash max-depth
-                                nk-is-inline nk-emit-name fk-emit-name
+                                nk-is-inline node-is-inline nk-emit-name fk-emit-name
                                 nk-document nk-section nk-heading nk-paragraph
                                 nk-list nk-item nk-text nk-span nk-furniture
                                 nk-linebreak nk-break nk-linebreak
@@ -728,3 +728,29 @@
     (cells-set layout 0 1)
     (cells-push layout 0)
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) (mc-bad-stride) "a stray cell")))
+
+(deftest test-a-milestone-is-an-inline-only-beside-an-inline
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells st (new-cells)]
+    (comment "document; a paragraph of text, break, text; a break between two blocks; a paragraph of a lone break.")
+    (model-init nodes attrs regions text pages ledger layout)
+    (node-new nodes (nk-paragraph) 0)
+    (node-new nodes (nk-text) 1)
+    (node-new nodes (nk-break) 1)
+    (node-new nodes (nk-text) 1)
+    (node-new nodes (nk-break) 0)
+    (node-new nodes (nk-paragraph) 0)
+    (node-new nodes (nk-break) 6)
+    (assert-eq (node-is-inline nodes 2) 1 "text is an inline")
+    (assert-eq (node-is-inline nodes 3) 1 "a break between two texts is an inline")
+    (assert-eq (node-is-inline nodes 1) 0 "a paragraph is a block")
+    (assert-eq (node-is-inline nodes 5) 0 "a break between two blocks is a block")
+    (assert-eq (node-is-inline nodes 7) 0 "a break with no sibling at all is a block")
+    (assert-eq (nk-is-inline (nk-break)) 0 "the KIND says block, always")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "well formed")))

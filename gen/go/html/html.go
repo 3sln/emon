@@ -233,7 +233,7 @@ func hCommon(t *strings.Builder, o int32, nodes *port.Cells, regions *port.Cells
 	var i int32 = 0
 	var kind int32 = model.NodeKind(nodes, n)
 	var cf int32 = model.NodeConf(nodes, n)
-	if (hOn(o, 1) == 1) && (model.NkIsInline(kind) == 0) && (kind != model.NkNote()) {
+	if (hOn(o, 1) == 1) && (model.NodeIsInline(nodes, n) == 0) && (kind != model.NkNote()) {
 		port.TextAscii(t, " id=\"emon-")
 		port.TextI32(t, n)
 		port.TextAscii(t, "\"")
@@ -259,7 +259,7 @@ func hCommon(t *strings.Builder, o int32, nodes *port.Cells, regions *port.Cells
 		}
 		port.TextAscii(t, "\"")
 	}
-	if (hOn(o, 2) == 1) && (model.NkIsInline(kind) == 0) && (model.NodeRegionCount(nodes, n) > 0) && (model.LayoutCount(layout) > 0) {
+	if (hOn(o, 2) == 1) && (model.NodeIsInline(nodes, n) == 0) && (model.NodeRegionCount(nodes, n) > 0) && (model.LayoutCount(layout) > 0) {
 		hColumns(t, nodes, regions, pages, layout, n)
 	}
 	if (hOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024)) {
@@ -319,7 +319,7 @@ func hTargeted(nodes *port.Cells, attrs *port.Cells, n int32) int32 {
 func hHasInline(nodes *port.Cells, n int32) int32 {
 	var c int32 = model.NodeFirstChild(nodes, n)
 	for c >= 0 {
-		if model.NkIsInline(model.NodeKind(nodes, c)) == 1 {
+		if model.NodeIsInline(nodes, c) == 1 {
 			return 1
 		}
 		c = model.NodeNext(nodes, c)
@@ -422,7 +422,7 @@ func hInner(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 	var c int32 = model.NodeFirstChild(nodes, n)
 	if hHasInline(nodes, n) == 1 {
 		for c >= 0 {
-			if model.NkIsInline(model.NodeKind(nodes, c)) == 1 {
+			if model.NodeIsInline(nodes, c) == 1 {
 				hInline(t, o, nodes, attrs, regions, pages, layout, text, c)
 			}
 			c = model.NodeNext(nodes, c)
@@ -448,6 +448,23 @@ func hTargetHref(t *strings.Builder, nodes *port.Cells, target int32) int32 {
 	return 0
 }
 
+func hMilestone(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, n int32) int32 {
+	// A page milestone, between blocks or (D134) inside a paragraph: an empty span.
+	var a int32 = -1
+	port.TextAscii(t, "<span data-emon-page=\"")
+	port.TextI32(t, model.NodeSub(nodes, n))
+	port.TextAscii(t, "\"")
+	a = hTattr(nodes, attrs, n, model.FkLabel())
+	if a >= 0 {
+		port.TextAscii(t, " data-emon-page-label=\"")
+		hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
+		port.TextAscii(t, "\"")
+	}
+	hCommon(t, o, nodes, regions, pages, layout, n)
+	port.TextAscii(t, "></span>")
+	return 0
+}
+
 func hInline(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, n int32) int32 {
 	// One inline node: text, span, link, ref or linebreak (SPEC 5.1).
 	var kind int32 = model.NodeKind(nodes, n)
@@ -459,6 +476,12 @@ func hInline(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, 
 	if kind == model.NkText() {
 		if model.NodeHasText(nodes, n) == 1 {
 			hRun(t, text, model.NodeTextStart(nodes, n), model.NodeTextLen(nodes, n))
+		}
+		return 0
+	}
+	if kind == model.NkBreak() {
+		if hOn(o, 64) == 0 {
+			hMilestone(t, o, nodes, attrs, regions, pages, layout, text, n)
 		}
 		return 0
 	}
@@ -575,7 +598,7 @@ func hBlocks(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, 
 	var c int32 = model.NodeFirstChild(nodes, n)
 	var k int32 = 0
 	for c >= 0 {
-		if model.NkIsInline(model.NodeKind(nodes, c)) == 0 {
+		if model.NodeIsInline(nodes, c) == 0 {
 			k += hBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d)
 		}
 		c = model.NodeNext(nodes, c)
@@ -658,7 +681,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 	var c int32 = 0
 	var lv int32 = 0
 	var pk int32 = 0
-	if model.NkIsInline(kind) == 1 {
+	if model.NodeIsInline(nodes, n) == 1 {
 		hNl(t, o, d)
 		hInline(t, o, nodes, attrs, regions, pages, layout, text, n)
 		return 1
@@ -668,17 +691,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			return 0
 		}
 		hNl(t, o, d)
-		port.TextAscii(t, "<span data-emon-page=\"")
-		port.TextI32(t, sub)
-		port.TextAscii(t, "\"")
-		a = hTattr(nodes, attrs, n, model.FkLabel())
-		if a >= 0 {
-			port.TextAscii(t, " data-emon-page-label=\"")
-			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
-			port.TextAscii(t, "\"")
-		}
-		hCommon(t, o, nodes, regions, pages, layout, n)
-		port.TextAscii(t, "></span>")
+		hMilestone(t, o, nodes, attrs, regions, pages, layout, text, n)
 		return 1
 	}
 	hNl(t, o, d)

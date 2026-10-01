@@ -674,3 +674,30 @@ fn test_a_pages_layout_is_one_contiguous_run() {
     crate::port::cells_push(layout, 0);
     crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), mc_bad_stride(), "a stray cell");
 }
+#[test]
+fn test_a_milestone_is_an_inline_only_beside_an_inline() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // document; a paragraph of text, break, text; a break between two blocks; a paragraph of a lone break.
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    node_new(nodes, nk_paragraph(), 0);
+    node_new(nodes, nk_text(), 1);
+    node_new(nodes, nk_break(), 1);
+    node_new(nodes, nk_text(), 1);
+    node_new(nodes, nk_break(), 0);
+    node_new(nodes, nk_paragraph(), 0);
+    node_new(nodes, nk_break(), 6);
+    crate::testport::assert_eq(node_is_inline(nodes, 2), 1, "text is an inline");
+    crate::testport::assert_eq(node_is_inline(nodes, 3), 1, "a break between two texts is an inline");
+    crate::testport::assert_eq(node_is_inline(nodes, 1), 0, "a paragraph is a block");
+    crate::testport::assert_eq(node_is_inline(nodes, 5), 0, "a break between two blocks is a block");
+    crate::testport::assert_eq(node_is_inline(nodes, 7), 0, "a break with no sibling at all is a block");
+    crate::testport::assert_eq(nk_is_inline(nk_break()), 0, "the KIND says block, always");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+}

@@ -99,6 +99,11 @@ bb -cp tools:tools/lib tools/accuracy/test_score.clj
 kin/scripts/content-fixtures --check
 kin/scripts/content-check
 
+# THE PARAGRAPH STAGE'S INDEPENDENT WITNESS (P1.8, D134-D139; babashka, reads only committed files): the
+# paragraphs of each golden Model in test/para are, in order, the text of the <h1>-<h6> and <p> of the HTML the
+# document was printed from, with every page's milestone.
+kin/scripts/para-check
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then

@@ -741,7 +741,7 @@ analysis beyond "top-to-bottom lines on a single column".
   ink and tracer features (P6.3, P6.4), fusion's arenas (P7.1), calibration
   (P10.1).
 
-- [ ] **P1.8 — Naive analysis: lines → paragraphs** (`kin/para.kin`).
+- [x] **P1.8 — Naive analysis: lines → paragraphs** (`kin/para.kin`).
   *Brief*: single-column assumption; lines in top-to-bottom order; a new
   paragraph on a vertical gap larger than 1.5× the median line gap or on an
   indent change; `break` milestones at page boundaries (inline when a
@@ -758,6 +758,20 @@ analysis beyond "top-to-bottom lines on a single column".
   of regions (one per page now, one per column fragment after P4.1), and do
   not read the first line of a paragraph from content-stream order (Chrome
   paints every float, e.g. a drop cap, before the page's text: D108 (a)).
+  *Done (P1.8, D134-D139).* `kin/para.kin` (`emon.para`: `pa-pages`, `pa-build`) reads v2 `words`, `lines` and `etext` and appends
+  paragraphs to a Model the caller made; `kin/paratest.kin` has 6 laws (what it decides, on hand-made evidence, and six real
+  documents PDF -> content -> paragraphs -> Model -> pretty JSON byte for byte against `test/para/NAME.json`, which
+  `kin/scripts/para-goldens` writes). **Done-when, met**: `kin/scripts/para-check` (babashka, run by `bb unit`) holds each golden's
+  paragraphs to the text of the `<h1>`-`<h6>` and `<p>` of the HTML the document was printed from, in order, with every page's
+  milestone: 6 documents equal. Where it departs from the brief: the line gap is the lower QUARTILE of the gaps, an indent counts only
+  from a line at the margin, a change of STYLE (not of font id: Skia subsets) breaks a paragraph (D135); rotated lines stand alone after
+  the page's upright ones (D136); and a `break` with an inline neighbour is an INLINE (`node-is-inline`; `json.kin`, `html.kin`, the
+  schema and both Python references learnt it, `corners` has one), because the SPEC's "inline or between blocks" had no
+  representation for the first (D134). **Measured** (D139; the temporary predictor `tools/accuracy/predict-naive.sh`, NOT the Engine,
+  nothing in the scoreboard) over the 55 synthetic documents, pdf variant: CER 18.5 per cent, WER 24.2, paragraph-boundary P/R/F1
+  0.069/0.629/0.125, paragraph-block P/R 0.069/0.724; 245 of 384 gold paragraphs exact, and most of the rest are columns (P4.1), drop
+  caps (P4.10), notes (P4.6) and the text layer's CJK radical forms (D139). *Not in this item*: columns, initials, alignment, headings,
+  lists, tables, furniture (P4, P5); dehyphenation (needs a locale).
 
 - [x] **P1.9 — HTML emitter** (`kin/html.kin`, `emon.html`; SPEC §5).
   *Brief*: the §5.1 mapping for the kinds that exist (and stubs for the rest
@@ -4949,6 +4963,114 @@ only thing `fn-N` would add; a margin note is not a footnote).
 **Alternatives**: a second options parameter for the new bits (a signature every caller changes for the sake of two
 bits); the centre by `(x0 + x1) / 2` (overflows at the extremes the goldens use on purpose); `data-emon-col` also on inline
 nodes (an inline at `detail: words` has regions of its own, and the block already says which column it began in).
+- [ ] **Signed off** (maintainer)
+
+### D134 — The paragraph stage: what it reads, what it makes, and a page milestone inside a paragraph is an inline (P1.8; D050-D053, D108, D112)
+**Decision**: `emon.para` reads the text layer's `words`, `lines` and `etext` and nothing else (no glyph, no stream order, no fonts
+row), and APPENDS to a Model the caller made (`model-init`, a `page-new` per page: `pa-pages` does it from the document layer's page
+table, the crop box AS DISPLAYED, `/Rotate` turning width and height). `pa-build wd ln et npages nodes attrs regions text ord raw tmp
+fr gp`: the last five are scratch (a Rust `Cells` cannot be shared). Every block is a `paragraph` under the root: the stage knows
+no heading, list, table or furniture (P4, P5), so a heading is a paragraph here and the check script says so. A paragraph on one page
+has its own `text` run; one that goes on across a page has `text`, `break`, `text` inline children (each text with its own region); the
+paragraph's `at` is a LIST, one region per page (D108; one per column fragment after P4.1), and its `text` is derived (D052). `src` of a
+block is {text, infer} and `conf` 500 (its structure is inferred: Phase 10 calibrates), of a text inline {text} and 1000 (a glyph's own
+text), of a milestone {infer} and 500 (it has no geometry). Page 1 has no milestone, every other page has one, an EMPTY page too.
+**THE MODEL CHANGE**: SPEC 3.2 and 5.1 say `break` is a milestone "inline or between blocks", but `nk-is-inline` is a function of the
+KIND and a `break` was a block: inside a paragraph the JSON wrote `inlines:[text, text]` and `children:[break]`, the order lost, and the
+HTML would put the milestone after the paragraph. `node-is-inline nodes n` (additive, in `model.kin`) is 1 for an inline kind and for a
+`break` with an inline neighbour (the sibling before or after); `nk-is-inline` of the kind is unchanged (a law still says a break is not
+an inline), and `json.kin` and `html.kin` ask the node (11 call sites; `h-milestone` is the one writer of the span). An inline milestone
+is written in `inlines`, in its place, with no `id` (D052); `schema/emon-1.json` allows `break` (with `page`, `label`) in `inline`;
+`json-check.py` and `html-check.py` (the independent references) learnt the same and wrote `test/json/corners` and its HTML goldens again
+(a paragraph of text, break, text, before the furniture, so the furniture's id is 86 now); `modeltest` has the law.
+**Why**: a milestone that cannot say where in the paragraph it is is not a milestone; the neighbour rule needs no kind list and keeps a
+break between blocks what it was.
+**Alternatives**: the milestone as a child of the paragraph written after its inlines (loses the place); two paragraphs and a block
+milestone (D112 says one paragraph); a kind-level change of `nk-is-inline` (every break between blocks would become an inline and lose
+its `id`).
+- [ ] **Signed off** (maintainer)
+
+### D135 — Where a paragraph ends: the line gap is the lower quartile, an indent counts from the margin, style and size, not the font
+**Decision**: a page's lines are sorted into reading order (D136), and line b follows line a in the same paragraph unless: b is not
+BELOW a (the distance between their baselines is less than b's height: a table row, two columns), or does not overlap it across the
+page; or the gap between a's box and b's (`y0 b - y1 a`) is more than 3/2 of the document's line gap AND more than an eighth of b's
+height beyond it; or b starts further in than a by more than half its size while a starts at the margin; or the dominant style (bold,
+italic, mono, ...) or the size (one twentieth) changes; or either is not upright or they read in other directions. **The line gap of
+the document is the LOWER QUARTILE (element `n/4` of the sorted gaps) of every such gap**, pooled over the pages, not the median the
+brief says: of `stamp-seal`'s seven gaps four are between blocks and the median is one of them (857 against a line gap of 401), and a
+short document is what most files are; the quartile is the line gap whenever a quarter of the gaps are inside paragraphs. The "eighth
+of the height" keeps a document set solid (boxes overlap, gap zero or negative, 1.5 times that is nothing) from breaking at noise.
+**An indent is a break only from the margin** (the least start of the page): a centred or right-aligned paragraph has lines that start
+further in than the one before, and is one paragraph (the plain rule cut `align-paragraphs` into pieces at every last line; the start is
+`x0`, or minus `x1` for a line that runs right to left). A LESS indented line never breaks (a first-line indent, a hanging indent).
+**Style and size, not the font**: Skia gives one face several font rows (a subset per 256 glyphs), so two lines of one paragraph have
+different font ids (`script-cjk`: 15 pieces from 4 paragraphs); a size within 5 per cent is the same size. All thresholds are
+`defconst`s of `kin/para.kin`. The dominant word of a line is the one whose (font, size) the most words of the line share.
+**Why**: each was found on the 55 documents with the predictor of D139 and the count of exact paragraphs.
+**Alternatives**: the median (the brief); the baseline pitch against its median (Chrome's `<p>` margin of 0.7 em makes a paragraph pitch
+of 1.48 times the line pitch, under 1.5); an indent against the previous line only (splits every centred paragraph); the font id.
+- [ ] **Signed off** (maintainer)
+
+### D136 — Reading order from position; lines that are not upright stand alone, after the page's upright ones
+**Decision**: a page's lines are ordered by the sum of their baseline's two y values, then `x0`, then the evidence row, with every
+UPRIGHT line (within one degree of the page's x axis) before every other (`pa-before`, a total order, by a Shell sort in a `Cells`):
+the order they were painted in is never read, so a drop cap or any float painted first does not become the first line of its paragraph
+(D108 (a); a law gives the lines in the wrong order). A line that is not upright is a paragraph of its own (one per line), written
+AFTER the paragraph that is open when its page's lines end, wherever that ends: queued in `gp`, made by `pa-flush-all` at the next
+flush. Rotated text in the middle of a page (a `DRAFT` watermark, the letters of a seal's circle) no longer cuts the paragraph it lies
+across, nor ends the paragraph that goes on to the next page. Rotated and vertical text proper is the layout stage's and P5's.
+**Why**: sorted by y alone, `watermark-draft`'s DRAFT sat between two lines of a paragraph and cut it; closing the open paragraph at
+the rotated lines would have cut the continuation of every watermarked page.
+**Alternatives**: the rotated lines in the order of their baseline (the cut above); dropping them (they are for P3.5 and P5 to judge).
+- [ ] **Signed off** (maintainer)
+
+### D137 — A paragraph across a page's end: a long last line that closes no sentence, a first line not indented past the margin
+**Decision**: the paragraph open at the end of page p goes on with page p+1's first upright line when the line before it is long (at
+least 3/5 of its page's longest upright line), the text so far does not end in a sentence mark (`. ! ? : ;`, the ellipsis, the
+full-width forms, a closing bracket or quote after one allowed), both lines are upright and read the same way, and the new line does
+not start further in than half its size past the margin of ITS page. The joint is then a line end for the hyphen rule (SPEC 3.6, D112)
+and the paragraph is `text`, `break`, `text` (D134). Otherwise the paragraph is closed and the milestone goes between the blocks. A page
+with no upright line closes it. A running header is not known here (P5): `furn-odd-even` joins `Handbook for New Staff` to the paragraph
+it interrupts (it is the page's first line), and `furn-fixed-dom` does not continue at all; taking furniture out BEFORE paragraphs is
+the furniture stage's.
+**Why**: the first line after a page break has no gap to measure; what can be seen is that the sentence did not end and that the line
+before ran to the margin.
+**Alternatives**: continuing whenever the next page does not start indented (joins every list item and table cell that ends a page); a
+tagged tree (P3.7, later).
+- [ ] **Signed off** (maintainer)
+
+### D138 — The text of a paragraph: spaces, the line-end hyphen, NFC
+**Decision**: words of a line are joined by one space, lines by one space, except that after a line that ends in `-` the next line,
+when it starts with a lowercase letter (Basic Latin, Latin-1, Greek, Cyrillic: `pa-lower`), is joined with NO space and the hyphen is
+kept (SPEC 3.6: no locale, no dehyphenation; `oppor-` + `tunities` is `oppor-tunities`, which the scorer's gold reads as printed, D114),
+and after a line that ends in a soft hyphen U+00AD that character is dropped and nothing is put between. A hyphen before a capital is
+a dash and a space follows. The text of each block (or each text inline) is NFC with the seven Latin ligatures decomposed, through
+`nz-nfc` (flag 1); soft hyphens inside a line stay, because SPEC 3.6 removes them "at line ends". Words with an empty text run are
+skipped. The text is built in a scratch `Cells` (`raw`) and written to the Model's text arena once.
+**Why**: each case is a law (`test-line-ends-join-per-spec-3-6`); `align-justify-hyphen`'s lines are the real case.
+**Alternatives**: removing every U+00AD; joining after any hyphen (`Smith-` `Jones`); lowercase of Latin only.
+- [ ] **Signed off** (maintainer)
+
+### D139 — How P1.8 was measured, and the largest errors it leaves (the temporary predictor)
+**Decision**: `tools/accuracy/naive/main.rs` (one Rust `main`: open, interpret, paragraphs, JSON) and `tools/accuracy/predict-naive.sh`
+(builds it into `.cache/` from `gen/rust`; for the scan variant it answers an empty document so a run over every variant completes) are
+TEMPORARY: P1.10 replaces them with the Engine and `predict-emon.sh`, and `test/scoreboard.edn` has no `naive` or `emon` entry (D078).
+**Over the 55 synthetic documents, pdf variant**: CER 0.1848, WER 0.2423, paragraph-boundary P 0.0694 R 0.6287 F1 0.1250,
+paragraph-block P 0.0689 R 0.7240. By family, CER: headings 0.038, furniture 0.023, footnotes 0.012, tables 0.008, lists 0.046,
+initials 0.069, scripts 0.167, align 0.336, **columns 0.598**. Precision is low because every heading, cell, list item and caption is a
+paragraph here: 4,033 predicted against 384 gold paragraphs (more than 2,000 of them cells of tables and statements). Of the 384 gold
+paragraphs 245 come out exactly, and `kin/scripts/para-check` holds the pure single-column documents to their HTML. Of the 139 that do
+not, by cause: columns interleave 94 (P4.1: the single-column assumption of the brief, including `align-justify-hyphen`, which is
+two-column), drop caps 22 (P4.10), a footnote mark or note in the way 9 (P4.6), a running header 3 (P5), a `<br>` block the gold keeps as
+one paragraph 3 (`invoice`, `stamp-seal`: P4), a paragraph set right-to-left but aligned left 1 (`align-rtl`: P4.11), and 7 that are
+the TEXT's, not the stage's: **(1) CJK text from Skia comes out in Kangxi radical forms** (U+2F57 for U+5341, the block U+2F00-2FD5),
+which NFC does not fold and SPEC 3.6 does not let NFKC fold: `script-cjk` and `initial-cjk` CER 0.18 and 0.11 are almost all this (a
+fold of the radical block to the unified ideographs would be an amendment of SPEC 3.6, the maintainer's to make); **(2) `script-hebrew`:
+`2026,` comes out `,2026`** (D104's right-to-left reordering moves a neutral that follows a number run); **(3) Devanagari conjuncts that
+Skia gave no ToUnicode** (D105 counts 37 characters). All three are the text layer's (P1.7). The paragraph is the first place whole
+sentences are compared with the source, which is why they showed here.
+**Why**: these are the numbers P1.10 and P4 have to beat; the predictor is deliberately not an Engine API.
+**Alternatives**: updating the scoreboard now (D078: P1.10's); a hand-picked subset.
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

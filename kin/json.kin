@@ -48,7 +48,7 @@
                                 node-region-count node-src node-conf node-flags
                                 node-sub node-aux node-attr attr-find
                                 attr-find-next attr-vkind attr-value attr-len
-                                nk-is-inline nk-emit-name fk-emit-name sr-emit-name
+                                nk-is-inline node-is-inline nk-emit-name fk-emit-name sr-emit-name
                                 fl-emit-name sy-emit-name al-emit-name
                                 rl-emit-name fg-emit-name sl-emit-name
                                 dp-emit-name ch-emit-name pk-emit-name
@@ -507,7 +507,7 @@
   (comment "not a plain `text` node, or has a geometry of its own (SPEC 4.2).")
   (let [^:mut ^I32 c (node-first-child nodes n)]
     (while (>= c 0)
-      (do (if (== (nk-is-inline (node-kind nodes c)) 1)
+      (do (if (== (node-is-inline nodes c) 1)
             (do (if (!= (node-kind nodes c) (nk-text)) (return 1))
                 (if (> (node-region-count nodes c) 0) (return 1))))
           (set c (node-next nodes c))))
@@ -516,7 +516,7 @@
 (defn ^I32 js-has-inline [^Cells nodes ^I32 n]
   (let [^:mut ^I32 c (node-first-child nodes n)]
     (while (>= c 0)
-      (do (if (== (nk-is-inline (node-kind nodes c)) 1) (return 1))
+      (do (if (== (node-is-inline nodes c) 1) (return 1))
           (set c (node-next nodes c))))
     (return 0)))
 
@@ -588,7 +588,7 @@
   (comment "others as `children`; an inline writes all of its children as")
   (comment "`children`. Recursive: `node-new` bounds the depth.")
   (let [^I32 kind (node-kind nodes n)
-        ^I32 inl (nk-is-inline kind)
+        ^I32 inl (node-is-inline nodes n)
         ^:mut ^I32 s 0
         ^:mut ^I32 c 0
         ^:mut ^I32 k 0
@@ -616,7 +616,7 @@
           (emit-ascii t "[")
           (set c (node-first-child nodes n))
           (while (>= c 0)
-            (do (if (== (nk-is-inline (node-kind nodes c)) 1)
+            (do (if (== (node-is-inline nodes c) 1)
                   (do (js-aelem t pr (+ d 1) k)
                       (js-node t pr (+ d 2) nodes attrs regions text c)
                       (set k (+ k 1))))
@@ -625,7 +625,7 @@
     (set k 0)
     (set c (node-first-child nodes n))
     (while (>= c 0)
-      (do (if (or (== inl 1) (== (nk-is-inline (node-kind nodes c)) 0))
+      (do (if (or (== inl 1) (== (node-is-inline nodes c) 0))
             (do (if (== k 0)
                   (do (set s (js-begin t pr d s (fk-children)))
                       (emit-ascii t "[")))

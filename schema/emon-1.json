@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://emon.dev/schema/emon-1.json",
-  "title": "emon document model, JSON form, versions 1.0 and 1.1 (SPEC 4; D012, D055; 1.1 adds the initial inline, align on heading, caption and cell, note role sidebar and page layout, D108-D113)",
+  "title": "emon document model, JSON form, versions 1.0 and 1.1 (SPEC 4; D012, D055; 1.1 adds the initial inline, a `break` milestone inside a paragraph (D134), align on heading, caption and cell, note role sidebar and page layout, D108-D113)",
   "description": "Canonical JSON for an emon Model. Every field not listed in `required` is omitted when absent (SPEC 4.2). Closed: an unknown key is a failure of THIS version's output; consumers of a later minor version must ignore what they do not know (SPEC 4.4), which is why a minor version edits this file additively.",
   "type": "object",
   "required": [
@@ -1299,7 +1299,8 @@
             "link",
             "ref",
             "linebreak",
-            "initial"
+            "initial",
+            "break"
           ]
         },
         "text": {
@@ -1361,9 +1362,41 @@
         "lines": {
           "type": "integer",
           "minimum": 2
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "label": {
+          "type": "string"
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "break"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "propertyNames": {
+              "enum": [
+                "kind",
+                "at",
+                "src",
+                "conf",
+                "flags",
+                "page",
+                "label"
+              ]
+            }
+          }
+        },
         {
           "if": {
             "properties": {

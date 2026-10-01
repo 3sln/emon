@@ -541,7 +541,7 @@ func jsInformative(nodes *port.Cells, regions *port.Cells, n int32) int32 {
 	// not a plain `text` node, or has a geometry of its own (SPEC 4.2).
 	var c int32 = model.NodeFirstChild(nodes, n)
 	for c >= 0 {
-		if model.NkIsInline(model.NodeKind(nodes, c)) == 1 {
+		if model.NodeIsInline(nodes, c) == 1 {
 			if model.NodeKind(nodes, c) != model.NkText() {
 				return 1
 			}
@@ -557,7 +557,7 @@ func jsInformative(nodes *port.Cells, regions *port.Cells, n int32) int32 {
 func jsHasInline(nodes *port.Cells, n int32) int32 {
 	var c int32 = model.NodeFirstChild(nodes, n)
 	for c >= 0 {
-		if model.NkIsInline(model.NodeKind(nodes, c)) == 1 {
+		if model.NodeIsInline(nodes, c) == 1 {
 			return 1
 		}
 		c = model.NodeNext(nodes, c)
@@ -645,7 +645,7 @@ func jsNode(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *por
 	// others as `children`; an inline writes all of its children as
 	// `children`. Recursive: `node-new` bounds the depth.
 	var kind int32 = model.NodeKind(nodes, n)
-	var inl int32 = model.NkIsInline(kind)
+	var inl int32 = model.NodeIsInline(nodes, n)
 	var s int32 = 0
 	var c int32 = 0
 	var k int32 = 0
@@ -675,7 +675,7 @@ func jsNode(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *por
 		port.TextAscii(t, "[")
 		c = model.NodeFirstChild(nodes, n)
 		for c >= 0 {
-			if model.NkIsInline(model.NodeKind(nodes, c)) == 1 {
+			if model.NodeIsInline(nodes, c) == 1 {
 				JsAelem(t, pr, d+1, k)
 				jsNode(t, pr, d+2, nodes, attrs, regions, text, c)
 				k += 1
@@ -687,7 +687,7 @@ func jsNode(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *por
 	k = 0
 	c = model.NodeFirstChild(nodes, n)
 	for c >= 0 {
-		if (inl == 1) || (model.NkIsInline(model.NodeKind(nodes, c)) == 0) {
+		if (inl == 1) || (model.NodeIsInline(nodes, c) == 0) {
 			if k == 0 {
 				s = jsBegin(t, pr, d, s, model.FkChildren())
 				port.TextAscii(t, "[")

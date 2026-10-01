@@ -676,4 +676,31 @@ public static class Modeltest {
         emon.Port.CellsPush(layout, 0);
         emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadStride(), "a stray cell");
     }
+    [Xunit.Fact]
+    public static void TestAMilestoneIsAnInlineOnlyBesideAnInline() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        // document; a paragraph of text, break, text; a break between two blocks; a paragraph of a lone break.
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeNew(nodes, Model.NkText(), 1);
+        Model.NodeNew(nodes, Model.NkBreak(), 1);
+        Model.NodeNew(nodes, Model.NkText(), 1);
+        Model.NodeNew(nodes, Model.NkBreak(), 0);
+        Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeNew(nodes, Model.NkBreak(), 6);
+        emon.Testport.AssertEq(Model.NodeIsInline(nodes, 2), 1, "text is an inline");
+        emon.Testport.AssertEq(Model.NodeIsInline(nodes, 3), 1, "a break between two texts is an inline");
+        emon.Testport.AssertEq(Model.NodeIsInline(nodes, 1), 0, "a paragraph is a block");
+        emon.Testport.AssertEq(Model.NodeIsInline(nodes, 5), 0, "a break between two blocks is a block");
+        emon.Testport.AssertEq(Model.NodeIsInline(nodes, 7), 0, "a break with no sibling at all is a block");
+        emon.Testport.AssertEq(Model.NkIsInline(Model.NkBreak()), 0, "the KIND says block, always");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+    }
 }

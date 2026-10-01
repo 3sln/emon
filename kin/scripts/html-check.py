@@ -129,7 +129,7 @@ class R:
 
     def common(self, n):
         s = ""
-        inline = n["kind"] in BLOCKLESS
+        inline = n["kind"] in BLOCKLESS or "id" not in n    # an inline milestone has no id (D134)
         if self.on(IDS) and not inline and n["kind"] != "note":
             s += ' id="emon-%d"' % n["id"]
         if self.on(GEOM) and n.get("at"):
@@ -167,6 +167,12 @@ class R:
             s += self.attr("data-emon-form", n, "form")
             s += self.attr("data-emon-lines", n, "lines", str)
             return s + self.common(n) + ">" + self.inner(n) + "</span>"
+        if k == "break":                # a milestone inside a paragraph (D134)
+            if self.on(NO_MILE):
+                return ""
+            s = '<span data-emon-page="%d"' % n["page"]
+            s += self.attr("data-emon-page-label", n, "label")
+            return s + self.common(n) + "></span>"
         if k == "linebreak":
             return "<br%s>" % self.common(n)
         if k == "span":

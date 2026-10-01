@@ -1580,6 +1580,33 @@ func NkIsInline(kind int32) int32 {
 	return 0
 }
 
+func NodeIsInline(nodes *port.Cells, n int32) int32 {
+	// 1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page
+	// milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,
+	// with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.
+	var kind int32 = nget(nodes, n, 0)
+	var pv int32 = nget(nodes, n, 5)
+	var nx int32 = nget(nodes, n, 4)
+	if NkIsInline(kind) == 1 {
+		return 1
+	}
+	if kind == NkBreak() {
+		if pv >= 0 {
+			var pkind int32 = nget(nodes, pv, 0)
+			if NkIsInline(pkind) == 1 {
+				return 1
+			}
+		}
+		if nx >= 0 {
+			var nkind int32 = nget(nodes, nx, 0)
+			if NkIsInline(nkind) == 1 {
+				return 1
+			}
+		}
+	}
+	return 0
+}
+
 func NodeChildCount(nodes *port.Cells, n int32) int32 {
 	var c int32 = nget(nodes, n, 2)
 	var k int32 = 0

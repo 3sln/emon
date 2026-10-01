@@ -683,3 +683,30 @@ func TestAPagesLayoutIsOneContiguousRun(emonT *testing.T) {
 	port.CellsPush(layout, 0)
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), model.McBadStride(), "a stray cell")
 }
+
+func TestAMilestoneIsAnInlineOnlyBesideAnInline(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	// document; a paragraph of text, break, text; a break between two blocks; a paragraph of a lone break.
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.NodeNew(nodes, model.NkParagraph(), 0)
+	model.NodeNew(nodes, model.NkText(), 1)
+	model.NodeNew(nodes, model.NkBreak(), 1)
+	model.NodeNew(nodes, model.NkText(), 1)
+	model.NodeNew(nodes, model.NkBreak(), 0)
+	model.NodeNew(nodes, model.NkParagraph(), 0)
+	model.NodeNew(nodes, model.NkBreak(), 6)
+	port.AssertEq(emonT, model.NodeIsInline(nodes, 2), 1, "text is an inline")
+	port.AssertEq(emonT, model.NodeIsInline(nodes, 3), 1, "a break between two texts is an inline")
+	port.AssertEq(emonT, model.NodeIsInline(nodes, 1), 0, "a paragraph is a block")
+	port.AssertEq(emonT, model.NodeIsInline(nodes, 5), 0, "a break between two blocks is a block")
+	port.AssertEq(emonT, model.NodeIsInline(nodes, 7), 0, "a break with no sibling at all is a block")
+	port.AssertEq(emonT, model.NkIsInline(model.NkBreak()), 0, "the KIND says block, always")
+	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed")
+}

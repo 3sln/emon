@@ -248,7 +248,7 @@ API expose.
 | `note` | blocks | `role`: `footnote` / `endnote` / `margin` / `sidebar` (§10.1.1, D111); `marker` |
 | `field` | inlines | form field: `name`, `type`, `value`, `checked` |
 | `furniture` | blocks | running header/footer kept by policy (§10.2): `role`, `pages` |
-| `break` | — | page milestone: `page`, `label` (the printed page label) |
+| `break` | — | page milestone: `page`, `label` (the printed page label). Between two blocks it is a block (it has an `id`); with an inline sibling, INSIDE a paragraph, it is an inline, written in `inlines` in its place with no `id` (D134) |
 | `text` | — | a run of characters (inline) |
 | `span` | inlines | `style` flags: `bold`, `italic`, `underline`, `strike`, `sub`, `sup`, `mono`, `smallcaps` |
 | `link` | inlines | `href` (URI) or `target` (node id, internal) |

@@ -1526,6 +1526,32 @@ pub fn nk_is_inline(kind: i32) -> i32 {
     }
     return 0;
 }
+pub fn node_is_inline(nodes: &mut crate::port::Cells, n: i32) -> i32 {
+    // 1 when node n is an inline: an inline KIND, or a `break` with an inline neighbour (D134). A page
+    // milestone INSIDE a paragraph (text, break, text) is an inline -- written in `inlines`, in order,
+    // with no `id` -- and BETWEEN two blocks it is a block, as `nk-is-inline` of its kind says.
+    let kind: i32 = nget(nodes, n, 0);
+    let pv: i32 = nget(nodes, n, 5);
+    let nx: i32 = nget(nodes, n, 4);
+    if nk_is_inline(kind) == 1 {
+        return 1;
+    }
+    if kind == nk_break() {
+        if pv >= 0 {
+            let pkind: i32 = nget(nodes, pv, 0);
+            if nk_is_inline(pkind) == 1 {
+                return 1;
+            }
+        }
+        if nx >= 0 {
+            let nkind: i32 = nget(nodes, nx, 0);
+            if nk_is_inline(nkind) == 1 {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
 pub fn node_child_count(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     let mut c: i32 = nget(nodes, n, 2);
     let mut k: i32 = 0;

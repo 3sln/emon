@@ -353,6 +353,18 @@ def tail(d, node):
         d["flags"] = names(node.flags, FLAGS)
 
 
+def is_inline(nodes, c):
+    """An inline kind, or a `break` with an inline neighbour (D134): the milestone inside a paragraph."""
+    k = KINDS[nodes[c].kind]
+    if k in INLINE:
+        return True
+    if k == "break" and nodes[c].parent is not None and nodes[c].parent >= 0:
+        sib = nodes[nodes[c].parent].children
+        i = sib.index(c)
+        return any(0 <= j < len(sib) and KINDS[nodes[sib[j]].kind] in INLINE for j in (i - 1, i + 1))
+    return False
+
+
 def derived(nodes, n):
     out = []
     for c in nodes[n].children:
@@ -370,23 +382,23 @@ def derived(nodes, n):
 def node_json(nodes, n):
     node = nodes[n]
     kind = KINDS[node.kind]
-    inline = kind in INLINE
+    inline = is_inline(nodes, n)
     d = {}
     if not inline:
         d["id"] = n
     d["kind"] = kind
     kind_fields(d, node, kind)
     kids = node.children
-    has_inline = any(KINDS[nodes[c].kind] in INLINE for c in kids)
+    has_inline = any(is_inline(nodes, c) for c in kids)
     informative = any(KINDS[nodes[c].kind] != "text" or nodes[c].regions
-                      for c in kids if KINDS[nodes[c].kind] in INLINE)
+                      for c in kids if is_inline(nodes, c))
     if node.text is not None:
         d["text"] = node.text
     elif not inline and has_inline:
         d["text"] = derived(nodes, n)
     if not inline and informative:
-        d["inlines"] = [node_json(nodes, c) for c in kids if KINDS[nodes[c].kind] in INLINE]
-    blocks = kids if inline else [c for c in kids if KINDS[nodes[c].kind] not in INLINE]
+        d["inlines"] = [node_json(nodes, c) for c in kids if is_inline(nodes, c)]
+    blocks = kids if inline else [c for c in kids if not is_inline(nodes, c)]
     if blocks:
         d["children"] = [node_json(nodes, c) for c in blocks]
     tail(d, node)
