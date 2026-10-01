@@ -184,6 +184,17 @@ classified non-text regions (rules, graphics, images, seal candidates) and
 the **artifacts** that were set aside (watermarks, backgrounds, bleed-through)
 with the reason.
 
+**As planned against what is built (D195, D196).** Stages 1b, 1c and 2 run as
+**page units**: after the document pass (the text layer, the catalogue, the
+tagged tree, all of which read the input and none of which reads a pixel), the
+Engine runs one plan/fulfil loop per page, holding only that page's bitmaps,
+and the page unit answers its page's PageLayer. The PageLayer's words and
+lines are written in arenas of **the same layout as the text layer's
+`words` and `lines`** (`fw`, `fl`, §9.7), so every stage 3 module reads a
+fused page exactly as it reads a born-digital one today; fusion over one
+source is the identity (a born-digital page with no OCR answer gives the
+Model it gave before fusion, byte for byte).
+
 ### 2.3 Stage 3 — Analysis
 
 Document-wide structure recovery (§10): running furniture detection across
@@ -762,7 +773,16 @@ host implement it however it likes.
   cut out, never a re-fit — with annotations' normal appearances painted (a
   stamp is often an annotation). pdfium does this directly
   (`FPDF_RenderPageBitmapWithMatrix` with a translation and a clip); an
-  engine that cannot may render the page and cut.
+  engine that cannot may render the page and cut. **As built** (D191-D194):
+  pdfium makes `no-text` and `text-only` by removing page objects, and
+  answers the watermark layers (`lay-no-watermark`, `lay-watermark-only`)
+  `unsupported`, because pdfium cannot read the NAME values of an
+  `/Artifact`'s `/Subtype`; kin therefore never relies on a watermark-free
+  render (§9.5 defence 1 classifies from the text layer instead). A crop is
+  the fulfiller's cut of the whole-page render it keeps. **An Engine with no
+  `Renderer` answers `render` and `crop` `unsupported`** (D199, revising
+  D191's `fulfil-failed`), as an Engine with no `Ocr` answers `ocr`: a gate
+  with no engine converts every born-digital page as fusion over one source.
 * **`Ocr`** must: take a `Bitmap` and a request (languages, page-segmentation
   mode, region, whether symbol alternatives are wanted); return integers only
   — boxes in the *request bitmap's* pixels, confidences ×10 as integers,
@@ -827,6 +847,21 @@ input-derived, like a `bytes` answer, so it is never written to a transcript.
 
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.
+
+**Pixels reach kin, and kin's pixels reach the engine (D196).** A page unit
+is handed the answered bitmaps as a **`BitmapSet`** (`bms-get set id`, a
+borrow of the answer's `Bitmap`, 0×0 when the answer carries none;
+`bms-put set id w h channels`, a host-allocated `Bitmap` kin fills, at an id
+of `KIN_VIEW_BASE` (2^24) or above). An `ocr` request may name such a
+**kin-made view** (a body-ink layer, a quarter-turned page, a polar seal
+strip) as its bitmap; its record then carries the view's FNV-1a 64-bit pixel
+hash (two cells, by the `bitmap-hash` form), so the transcript is keyed by
+what was asked and never stores kin's pixels (they are a function of the
+transcribed answers). **A transcript carries every answered bitmap kin
+reads**: a "slim" transcript (D187) replays only units that read no pixels,
+which from P6.3 on is none that has a raster.
+`max-rounds` is 5 per page unit (D207): render or decode; the first OCR pass;
+targeted passes (§8.3); their answers; one spare.
 
 **Reading the input is a plan/fulfil request when the source is async**
 (D058, §13.1): a `Src` read that misses the host's chunk cache poisons the
@@ -954,6 +989,50 @@ already present as vector paths (source `vector`), which are exact. The tracer
 still runs on the rendered page to see what the vector list cannot express
 cheaply (text rendered as outlines, images of tables, scanned inserts).
 
+**As designed for P6.3/P6.4 (D197, D198), on the P2.7 measurements (D092):**
+
+* **Views.** A born-digital page has two renders, `with-text` (layer 0) and
+  `no-text` (layer 1), both RGB at the OCR resolution (300 dpi); a raster
+  page has its decode. Every derived raster is a `views` row whose parent
+  chain ends at a render or decode (§8.4.2).
+* **Grayscale** is `(77 r + 150 g + 29 b + 128) >> 8` by the bulk form
+  `bitmap-gray-into`; a 1-channel source is its own gray.
+* **Ink layers** are found on a **4096-bin colour histogram** (`r>>4, g>>4,
+  b>>4`, the bulk form `bitmap-hist-rgb`), never by iterating pixels in kin:
+  the paper is the bin cluster holding the most pixels among the lightest;
+  every other bin is assigned to a cluster by integer distance in an
+  opponent space (`L = gray`, `a = r - g`, `b = (r + g)/2 - b`), seeded
+  deterministically (heaviest bin first, ties by bin index) and merged while
+  two centroids are within `ink-merge` (a named setting); at most 8 layers.
+  Each layer's role (`ir`) is guessed from lightness, chroma and coverage:
+  `body` (the darkest low-chroma layer holding most text-like ink), `light`
+  (low chroma, lightness over `ink-light`), `colour` (chroma over
+  `ink-chroma`: blue, red, purple seal inks), `background` (large connected
+  coverage), else `unknown`. A layer's mask is one `bitmap-lut-into` pass (a
+  4096-entry table from bin to mask value). On a **gray** source (a 1-channel
+  scan) only lightness separates layers: `colour` cannot occur, and
+  watermark separation rests on lightness, geometry and recurrence.
+* **Binarisation** is Sauvola (`r` 15 px at 300 dpi, scaled with the dpi;
+  `k` 87/256) computed over a **band of rows** (`2r + 2` rows of the two
+  integral images at a time), equal by law to the whole-page `ras-sauvola`
+  of P2.7 and costing `O(w r)` memory instead of 70 MB. Bilevel decodes
+  skip it.
+* **Deskew** runs only on decode views (a render is unskewed by
+  construction): projection profiles of the body layer's component centres
+  at candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`. Kin
+  never resamples for its own analysis; it maps coordinates through the
+  view. **Orientation** (0/90/180/270) is OSD's when its confidence passes
+  `osd-conf`, else the `tlines`' dominant direction; a page not upright is
+  re-read by a quarter-turned kin-made view (§7.3, P7.4).
+* **Components** are labelled from **row runs** (`bitmap-next-nonzero`
+  walks), never a per-pixel label image: memory is proportional to ink
+  (1-3 % of a page), and the statistics of §8.4.4 are computed per run set.
+  Contours are traced on the component's runs; Douglas-Peucker in integers.
+* On a born-digital page the tracer reads the **no-text** render: the text
+  layer already gives exact glyph geometry, and what the tracer must find is
+  what the text layer lacks (outlined text, text in images, scanned inserts,
+  rules of an image table, seals, signatures, image watermarks).
+
 ### 8.3 OCR (D033)
 
 * **Default engine**: Tesseract (LSTM), bound natively in each host (Rust:
@@ -970,6 +1049,19 @@ cheaply (text rendered as outlines, images of tables, scanned inserts).
   own scripts via emon's `script`) and choose the installed models for those
   scripts. With nothing detectable, the engine's default is used and the
   Model records which languages were actually applied.
+
+**The first pass, page by kind, once fusion exists (D199, D200).** A pass is
+planned from the Source and the text layer only, never from pixels, so the
+raster stages run once per round that has OCR answers (§7.3):
+
+| Page | First-pass requests (round 2) |
+| --- | --- |
+| Image, scanned PDF page | the whole decode or render, `psm` 3, OSD (D184) |
+| Born-digital, `ocr-scope: full` (default) | the whole `with-text` render, `psm` 3; languages from the locale, else from the text layer's scripts (`emon.mscript`) mapped to installed models, else every model (D188) |
+| Born-digital, `ocr-scope: witness` | the whole `no-text` render, `psm` 3 (text the text layer lacks); plus **witness lines**: for every (font, page) pair, `witness-lines` (3) of its lines chosen by a fixed rule (the first, the median and the last by `order`), each an `ocr` request of the `with-text` render's region around the line, `psm` 7 |
+| Born-digital, `ocr: auto` | nothing, unless the page's text-layer health (§9.3, without OCR) is under `auto-health`, or images cover over `auto-image` of it, or it has `hidden-text`: then as `full` |
+
+Targeted passes (round 3, §9.4 / P7.4) follow fusion's flags.
 
 ### 8.4 The evidence schema, v2 (D056, revised by D096)
 
@@ -1297,6 +1389,24 @@ along each line (a word in source A may correspond to two in source B — split
 words and merged words are common). The result is a set of **correspondence
 groups**, each with 0..n candidates per source.
 
+**As designed (P7.1, D202).** Candidates are the visible text-layer words
+(`vis` 0, not `hidden-text`), the `hidden-text` words, every OCR run's words
+and the `tlines`. A per-page grid (64 × 64 cells over the page box) indexes
+the word heads; a pair is a candidate when `ev-overlap-small` ≥
+`align-overlap` (500 per-mille) and the angles differ by at most
+`align-angle` (300 centi-degrees). Along each text-layer line, the OCR words
+that overlap it are ordered by their position along the line's baseline and
+aligned to its words by a dynamic program over the two sequences whose steps
+are 1:1, 1:2, 2:1, 1:0 and 0:1 (costs: 1000 minus the overlap of the merged
+boxes, and `align-gap` for an unmatched word), ties broken toward 1:1 then
+toward the earlier word. A group is a connected set of the chosen steps; an
+OCR word in no text-layer line forms a group of its own (OCR-only), as does
+a text-layer word no OCR word touched (text-only). Text similarity is `1000 -
+1000 * lev / max(len)` over NFC code points with case kept (`xt` / `xo`
+column 24) and over case-folded letters only (kept in the group, for the
+broken-encoding test of §9.4). Every group's text-layer candidates in
+content-stream order and OCR candidates in engine order are runs of `refs`.
+
 ### 9.3 Health
 
 Before comparing words, each source is scored **per region** (per font × page
@@ -1320,6 +1430,20 @@ for the text layer):
   where the standard puts them. Integer per-mille components, a weighted harmonic mean,
   scaled by the weakest check; PDF/UA raises the trust and never the score.
 
+**As designed (P7.0, P7.2, D203).** The text layer's health is computed in
+two steps. **Without OCR** (P7.0, the document pass): per (font, page) the
+pooled stage-1 `xt` columns (mapped share, PUA/control/U+FFFD share, worst
+overlap, worst gap anomaly) give `tl-health`, a per-mille in the `hl` arena,
+and fill `xt` column 13; this alone drives `ocr: auto` and is what a run with
+no OCR engine has. **With OCR** (P7.2, the page unit): the agreement rate of
+the (font, page) — groups with a text-layer and an OCR candidate whose
+case-folded similarity is at least `agree-sim` (900), over groups with both
+— joins as a component, and a font whose agreement is low on **every** page
+is unhealthy everywhere (a font's encoding is a document fact). An OCR
+**region** (an `oblocks` block) is scored from its words' `xo` columns (ink
+support 10-13, plausibility 8, script 9, layer 13, artifact and seal overlap
+22-23). Every component and the score are rows of `hl`, so the dump says why.
+
 ### 9.4 Arbitration
 
 Per correspondence group, in order:
@@ -1337,6 +1461,42 @@ Per correspondence group, in order:
 Rules are **explicit, ordered and data-driven**: thresholds are named
 settings with defaults tuned against the corpora, not literals in code.
 Every decision can be explained from the evidence dump.
+
+**The born-digital contract (D201).** Accuracy on born-digital PDFs is
+emon's best number (the synthetic `pdf/all` CER is under 1 %), and OCR on
+those pages exists to catch what the text layer gets wrong, never to
+second-guess what it gets right. So, in the order the rules are tried:
+
+1. **Visibility first.** A text-layer word whose glyphs failed a P3.6 check
+   (`vis` ≠ 0) is never a body candidate: it goes to the ledger as
+   `clipped`, `offpage` or `invisible` (P7.0, D208), whatever OCR says.
+2. **A healthy font is untouchable.** A visible text-layer word of a (font,
+   page) whose health is at least `tl-trusted` wins its group whatever OCR
+   reads; disagreement only lowers its confidence and counts against the
+   agreement rate. OCR replaces text-layer words only where the font is
+   unhealthy (garbage, unmapped, or an agreement rate under `agree-min` on
+   every page of the document), or where the word itself has unmapped,
+   PUA or U+FFFD glyphs and OCR is plausible. The only other things that
+   take such a word out of the body are the PDF's own say (§9.5 defence 1),
+   recurrence (defence 2, and the furniture stage), and a seal's arc text
+   (defence 5): never its colour, angle or ink, which judge OCR-only text.
+3. **OCR-only text is admitted only where the text layer cannot be.** An
+   OCR-only group becomes body text when its ink is on the body layer, it
+   lies outside every visible text-layer word's box, it is plausible (§9.5
+   defence 6), and it is NOT inside an image placement or vector-figure
+   cluster smaller than `scan-region` (half the page): text in a picture is
+   the figure's (`labels`, P8.1), held in the PageLayer with flag `in-figure`
+   and not emitted to the body until P8.1 consumes it. Outlined text and a
+   scanned insert are the cases it admits.
+
+Every rule is a row of the `fr` table (§9.7): its number, the feature columns
+it reads with their named thresholds, the winner, the flags and ledger reason
+it sets. Numbers are assigned in blocks so that independent items never
+renumber each other's rows: 100-199 the core rules of the table above,
+200-299 watermarks, backgrounds and ghosts (§9.5), 300-399 `hidden-text`,
+400-499 seals and signatures, 500-599 graphics. The blocks are tried for a
+group in the order 400, 200, 300, 100 (`fr-order`): what belongs to a seal or
+an artifact is decided before which source reads it best.
 
 ### 9.5 Watermarks, backgrounds and ghosts (D015)
 
@@ -1371,6 +1531,50 @@ Bleed-through (text from the reverse side of a scanned page) is the same
 problem mirrored: very light, mirrored glyph shapes, no text-layer support —
 classified by (3) and (6).
 
+**Against what is built (P7.5, D204).**
+
+1. *The PDF says so* reads the text layer, not the renderer: a glyph's
+   `mark` chain (`mk-artifact-of`: subtype `watermark`, type `background`),
+   its `ocg` span (an OCG off by default or with an `/AS` view state, D154,
+   or named like a watermark), Watermark annotations and Stamp annotations
+   from `emon.pdfannot` (wired into the document pass by P7.5), alpha under
+   `wm-alpha` on text or images covering over `wm-cover` of the page, and
+   the tagged tree's verified Watermark artifacts (D149, weighed by trust).
+   pdfium cannot render without them (D193), so the classified text-layer
+   words go to the ledger directly, and the OCR words their glyph boxes
+   cover (aligned to them, §9.2) go with them: **an OCR word is never body
+   text when it is aligned only to a watermark-classified text-layer word.**
+   On a born-digital page the `no-text` render already lacks every text
+   watermark; an image watermark is in it and is defence 3's.
+2. *Recurrence* is a second arbitration pass, document-wide, after every
+   page unit has answered: the furniture stage's watermark rule (D173-D177:
+   a diagonal line ≥ 2.5× the body size, at most four words) and a new
+   recurrence of OCR-only groups (the same case-folded text within
+   `wm-recur-pos` of the same place on ≥ `wm-recur-pages` of the pages,
+   outside the furniture bands) mark the groups; their words move to the
+   ledger as `watermark` on every page.
+3. *Ink layers*: a word's body-ink share (`xo`/`xt` column 13) under
+   `wm-body-share` with its ink on a `light` or `colour` layer is attributed
+   to that layer. The **body-ink OCR pass** (`op-body-ink`, P7.4) OCRs a
+   kin-made view in which every non-body layer is painted paper (§7.3); a
+   word in the first pass with no counterpart in the body-ink pass is the
+   other layer's.
+4. *Geometry*: column 19 (angle to the page's text) over `wm-angle` with a
+   matching `tlines` row on a non-body layer; column 18 over `wm-size`.
+5. *Seal overlap*: until P8.2, a seal candidate is a P6.4 primitive (`ring`,
+   `circle`, `ellipse`, or a `rect` with a border on a `colour` layer) or a
+   cluster of `colour`-layer components; OCR words whose centres are inside
+   it go to the seal placeholder's `text` (P7.7), never to the body.
+6. *Plausibility*: an OCR-only word with kin ink (column 10) under
+   `ghost-ink` is an `ocr-ghost` whatever its engine confidence; one with
+   engine ink (11) but no kin ink (10) is the engine's artefact; low
+   plausibility (8) together with low symbol margins (5) and no text-layer
+   support goes to the ledger as `ocr-ghost`.
+
+Each defence is a block of `fr` rows (200-299), so the dump names the
+defence that removed a word, and the ledger entry carries the reason
+(`watermark`, `background`, `bleed-through`, `ocr-ghost`).
+
 ### 9.6 Confidence calibration
 
 Raw scores from each rule are combined and **calibrated per node kind** by
@@ -1379,6 +1583,62 @@ isotonic mapping fitted on the evaluation corpora (§14), then committed as a
 scorecard over the feature columns of §8.4.5 (D096); an engine's own
 confidence is one column of it, never the answer. Recalibration is a reviewed change with its reliability
 diagram in the DEVLOG entry.
+
+### 9.7 The PageLayer arenas (D195, D203)
+
+Integer `Cells` like the evidence (§8.4: absent -1, runs `first count`,
+references `(ea, index)` in `refs`), made by the page unit, appended to the
+document's by `pl-append` (which re-bases every index), and dumped with the
+evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on):
+
+| arena | stride | fields |
+| --- | --- | --- |
+| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (2 cells), similarity (case kept), similarity (case-folded letters), flags (`gf`: text-only, OCR-only, split, merged, in-figure, in-seal), spare |
+| `fw` | 24 | **the layout of `words`** (word head 16, style, glyph run, font, size, gap, `wbreak`, `src`): `src` is the sources bitset (`sr`: text, hidden-text, ocr, trace), the glyph run is the text-layer word's when it won, empty otherwise |
+| `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D186 measures an OCR line |
+| `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |
+| `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (2) |
+| `fx` | 4 | explanation: group, rule, feature column, value read — a run per group, every column the deciding rule read |
+| `hl` | 12 | health: subject kind (font-page, OCR block, region), page, subject index, components (6: mapped, garbage, overlap, gap, agreement, ink), score |
+| `fpa` | the layout of `paths` | the fused graphics: the vector paths, plus tracer rules no vector path explains (flag `traced`), which is what the table stage reads on a raster page |
+| `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference, confidence, OCR words inside (a `refs` run), flags, spare |
+
+`fr`, the rule table, is `defdata` in `kin/fuserules.kin`: per row its
+number, its block, the winner, the ledger reason, flags to set, and up to
+six `(feature column, comparison, setting name)` predicates, all of which
+must hold. The thresholds are named settings (§13) whose defaults sit in the
+same file, so a tuning is a reviewed diff of one file.
+
+### 9.8 What `ocr` costs, and what may be skipped (D200, D210)
+
+`ocr: always` (D038) promises that **every page has an OCR witness**: every
+region of ink that the text layer does not explain is read by OCR, and every
+(font, page) of the text layer is checked against OCR. Under `ocr-scope:
+full` (the default) every page's whole render is read, which keeps the
+promise trivially; under `ocr-scope: witness` the no-text render plus
+witness lines keep it at a fraction of the cost (§8.3), and a font whose
+witnesses disagree escalates to its every line in the targeted round. The
+default stays `full` until `bb fusion-bench` shows `witness` equal on every
+accuracy metric of the fusion set (D200: the maintainer decides the flip).
+
+Lossless savings, taken in every scope:
+
+1. The raster stages run on a page only in the rounds that have its OCR
+   answers (the first pass is planned without pixels), so a page's kin raster
+   work runs at most twice (first pass, targeted pass).
+2. Deskew runs only on decode views; the tracer reads only the `no-text`
+   render of a born-digital page; ink layers are found on a 4096-bin
+   histogram, not per pixel.
+3. On a born-digital page the OCR languages are the text layer's scripts'
+   models (plus the locale's), not every installed model.
+4. Bitmaps live only as long as their page unit (§2.2), so memory is one
+   page's renders, not a document's.
+5. The host may run page units concurrently (§12.1); results merge in page
+   order.
+
+`ocr: auto` OCRs a born-digital page only when the health without OCR, the
+image coverage or `hidden-text` call for it (§8.3), and `never` asks for
+nothing; both are cheaper than `always` by design and weaker by design.
 
 ---
 
@@ -2114,6 +2374,25 @@ the hand-written Rust comparator in every target for every stage except the
 streaming ones (threshold, zero-fill), which are what the four bulk forms
 above replace; the tracer stays in kin.
 
+**The page budget once fusion exists (D210).** Per A4 page at 300 dpi, Rust
+host, the reference machine (Apple M1 Pro), measured by `bb fusion-bench`
+(not a gate; a regression of more than 25 % on a stage is a finding to
+record):
+
+| stage | budget |
+| --- | --- |
+| render, `with-text` + `no-text` (pdfium) | ≤ 0.3 s |
+| normalization (gray, histogram, layers, Sauvola band, deskew) | ≤ 0.12 s Rust, ≤ 2× that in Go |
+| tracer (runs, components, contours, rules, primitives, `tlines`) | ≤ 0.15 s Rust, ≤ 2× in Go |
+| alignment + health + arbitration + defences | ≤ 0.03 s |
+| OCR, born-digital, `full` | measured (Tesseract's, about 1-3 s) |
+| OCR, born-digital, `witness` | ≤ 30 % of `full` on the median page |
+| OCR, scanned page, first pass + targeted | ≤ 1.5 × the first pass |
+| peak memory of a page unit | ≤ 120 MB (two RGB renders are 50 MB) |
+
+Kin raster work above budget is answered by a bulk form only under D092's
+rule (a pure whole-page map or reduce, measured over 2×).
+
 ---
 
 ## 13. Public API and settings
@@ -2307,6 +2586,7 @@ commit (the ratchet). Metrics:
 | Alignment | accuracy and coverage per kind (paragraph, heading, cell) (D115) |
 | Columns | fragment column accuracy; continuation join P/R; hyphen resolution at breaks (D115) |
 | Confidence | expected calibration error per kind |
+| Fusion (D206) | `ghost-rate` (body words with OCR and no text-layer source that the gold body does not have, over predicted body words); `seal-leak` (characters of the gold's seal and stamp text found in the body, over body characters, as `watermark-leak` is for watermarks); `src-ocr-share` (body characters whose source has `ocr` and not `text`) and `tl-override` (on born-digital variants: body characters under the `text-layer-suspect` flag, which §9.4 sets exactly where OCR replaced a text-layer candidate, over body characters); per-source win rates and per-rule counts from the evidence dump's `fv` and `fx` (`bb fusion-report`: recorded, never ratcheted, as they have no better direction) |
 
 ### 14.3 Ground truth
 
@@ -2473,3 +2753,9 @@ in one conversion; D058).
    used only when a locale hint is given) to decide whether a one-letter
    initial is a word (`A` + `long` vs `A` + `t the`)? Without one, it is
    joined and flagged.
+5. **`ocr-scope` default** (D200, §9.8): `full` (every born-digital page's
+   whole render OCR'd) until P7.S's measurement; then the maintainer decides
+   whether `witness` becomes the default.
+6. **Committed pixels** (D196): fusion gates replay transcripts that must
+   hold their renders; plain files in the repository within a stated
+   budget, or a fetched, hash-pinned archive?
