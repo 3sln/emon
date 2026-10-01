@@ -559,7 +559,10 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
         pairs (vec pairs)
         gtext (mapv block-text g) ptext (mapv block-text p)
         by-g (into {} pairs)
-        ikinds (set (filter #(and (contains? structure %) (attr? ann % "initial")) BLOCK-KINDS))]
+        ;; the committed gold declares the attribute on the inline kind: attributes.initial = [form lines]
+        ikinds (if (or (attr? ann "initial" "form") (attr? ann "initial" "lines"))
+                 (set (filter #(contains? structure %) BLOCK-KINDS))
+                 (set (filter #(and (contains? structure %) (attr? ann % "initial")) BLOCK-KINDS)))]
     ;; ---- initials
     (when (seq ikinds)
       (let [gi (vec (for [[i n] (map-indexed vector g) :when (and (ikinds (get n "kind")) (initial-of n))] i))

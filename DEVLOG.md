@@ -1175,6 +1175,13 @@ analysis beyond "top-to-bottom lines on a single column".
   `test/scoreboard.edn` does not change; the first run over the P2.13 corpus must be
   `bb accuracy --predictor fixtures --update` (oracle perfect first). Not done here: the
   corpus run itself (needs P2.13).
+  *Merge note (P2.13 + P2.14)*: the committed gold declares the initial attribute on the inline
+  kind (`annotated.attributes.initial = [form lines]`), not on a block kind, so `score.clj` now
+  gates the initial metrics on that (block-kind declaration still accepted); with it the initial,
+  alignment, frag-col, join and hyphen metrics are all computed on the 19 new documents and the
+  oracle is perfect on all 55. `test/scoreboard.edn` was re-recorded (oracle and degraded) because
+  the corpus grew from 36 to 55 documents, so the degraded baseline legitimately moved and the
+  new metrics gained entries.
 
 ## Phase 3 — PDF breadth
 
