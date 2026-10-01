@@ -295,9 +295,21 @@ public final class Restruct {
         int cx = (Model.regionX0(orr, r) + Model.regionX1(orr, r)) / 2;
         int cy = (Model.regionY0(orr, r) + Model.regionY1(orr, r)) / 2;
         int n = Model.layoutCount(lay);
+        int lo = 0;
+        int hi = n;
         int i = 0;
-        while (i < n) {
-            if ((Model.layoutPage(lay, i) == pg) && (Model.layoutRole(lay, i) == Model.rlBody()) && (cx >= Model.layoutX0(lay, i)) && (cx <= Model.layoutX1(lay, i)) && (cy >= Model.layoutY0(lay, i)) && (cy <= Model.layoutY1(lay, i))) {
+        // the rows of a page are one run, the pages in order: find the first row of the item's page by bisection
+        while (lo < hi) {
+            i = (lo + hi) / 2;
+            if (Model.layoutPage(lay, i) < pg) {
+                lo = i + 1;
+            } else {
+                hi = i;
+            }
+        }
+        i = lo;
+        while ((i < n) && (Model.layoutPage(lay, i) == pg)) {
+            if ((Model.layoutRole(lay, i) == Model.rlBody()) && (cx >= Model.layoutX0(lay, i)) && (cx <= Model.layoutX1(lay, i)) && (cy >= Model.layoutY0(lay, i)) && (cy <= Model.layoutY1(lay, i))) {
                 return Model.layoutX0(lay, i);
             }
             i += 1;

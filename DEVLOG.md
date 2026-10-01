@@ -1723,8 +1723,19 @@ analysis beyond "top-to-bottom lines on a single column".
   PDF/A files (no panic; every drop a page number or text the body says). Wired into the Go Engine too and visibility left for later: D177; a header on one page of a short document is found only by the style rule.
 - [x] P4.4 — Headings: candidates, numbering schemes, priors (tagged, outline,
   TOC detection), global level assignment, sections (D018). *Done (D167-D171), wired into both Engines (D172), minus the tagged prior (D172) and TOC detection; the outline prior wired and mastheads demoted (D177).* `kin/heading.kin`; `kin/para.kin` takes `hc`; with the real `emon` predictor on the 160 synthetic documents (all variants) the heading P/R on `pdf/all` are 0.986/0.982, level accuracy 0.963, end to end 0.946; `kin/scripts/heading-check` holds 8 goldens (`test/heading`) to the gold.
-- [ ] P4.5 — Lists: markers, nesting, continuation across breaks.
-- [ ] P4.6 — Footnotes/endnotes and references; captions; bare URLs.
+- [x] P4.5 — Lists: markers, nesting, continuation across breaks. *Done (D178-D181), wired into both Engines.* `kin/lists.kin`
+  (`emon.lists`: markers read from the characters in no language, bullets drawn as vector shapes, a marker alone on its line, right to
+  left lists, confirmation by neighbours or a hanging indent) and `kin/restruct.kin` (`emon.restruct`: the finished body copied into new
+  arenas, items grouped into lists nested by the x of their text inside their column, a list that goes on across a column or a page
+  one list, `start` and `value`, the list's `at`); laws in `kin/listtest.kin`. `bb accuracy`: `pdf/lists` block list/item P/R 0 -> 1.0,
+  paragraph-boundary F1 0.047 -> 1.0, CER/WER 0.045/0.067 -> 0/0; `pdf/all` item and list P/R 1.0.
+- [x] P4.6 — Footnotes/endnotes and references; captions; bare URLs. *Done (D182-D185), wired into both Engines.* `kin/notes.kin`
+  (`emon.notes`: caption keywords and numbers, label/text split by D073.2, footnote references as superscript runs a note body stands
+  behind, endnotes, notes that print no marker), `kin/links.kin` (`emon.links`: a conservative recogniser of URLs and addresses), and
+  `emon.restruct` (captions bound to the table or figure beside them, an unbound figure caption wrapped in an empty `figure`, a `ref`'s
+  `target` the next unclaimed note body with its marker, bare links made `link` inlines). *Not in this item*: link annotations onto words
+  (P4.7: this stage never touches text under a `link`, so P4.7's links win), the figure's own text as `labels`, table captions bound to
+  tables (P5: the rule is in `rs-run`), locale keyword tables (P4.8).
 - [ ] P4.7 — Inline styles (bold/italic from font flags, names and stem
   widths; sub/sup from baseline shift; mono; small caps), links onto words.
 - [ ] P4.8 — Locale: keyword tables (start with en, de, fr, es, pt, it, nl,

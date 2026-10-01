@@ -177,6 +177,78 @@ pub(crate) fn nt_style_apart(sf: &mut crate::port::Cells, sc: &mut crate::port::
     }
     return 0;
 }
+pub(crate) fn nt_lastw(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32) -> i32 {
+    // The last word with text of line l; -1 when there is none.
+    let w0: i32 = ln_get(ln, l, lh_first());
+    let mut i: i32 = (w0 + ln_get(ln, l, lh_count())) - 1;
+    while i >= w0 {
+        if ls_wl(wd, i) > 0 {
+            return i;
+        }
+        i -= 1;
+    }
+    return -1;
+}
+pub(crate) fn nt_all_digits(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
+    // 1 when word w is nothing but decimal digits (a page number).
+    let tl: i32 = ls_wl(wd, w);
+    let mut i: i32 = 0;
+    if tl < 1 {
+        return 0;
+    }
+    while i < tl {
+        if ls_digit(ls_wc(wd, et, w, i)) < 0 {
+            return 0;
+        }
+        i += 1;
+    }
+    return 1;
+}
+pub(crate) fn nt_toc_like(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, sf: &mut crate::port::Cells, l: i32) -> i32 {
+    // 1 when caption candidate l is an entry of a list of figures or tables: a page number alone on its row to the right
+    // (the text layer made it a line of its own), or at the end of the line after leader dots.
+    let lw: i32 = nt_lastw(wd, ln, l);
+    let n: i32 = ln_count(ln);
+    let mut m: i32 = ls_max(0, l - 40);
+    while (m < n) && (m <= (l + 40)) {
+        if (m != l) && (ln_get(ln, m, lh_page()) == ln_get(ln, l, lh_page())) {
+            let sw: i32 = ls_first_word(wd, ln, m);
+            if (sw >= 0) && (ls_second_word(wd, ln, m) < 0) && (nt_all_digits(wd, et, sw) == 1) && (ln_get(ln, m, lh_x0()) >= ln_get(ln, l, lh_x1())) && (ln_get(ln, m, lh_y0()) < ln_get(ln, l, lh_y1())) && (ln_get(ln, m, lh_y1()) > ln_get(ln, l, lh_y0())) {
+                return 1;
+            }
+        }
+        m += 1;
+    }
+    if (lw >= 0) && (nt_all_digits(wd, et, lw) == 1) {
+        let w0: i32 = ln_get(ln, l, lh_first());
+        let mut pw: i32 = lw - 1;
+        while (pw >= w0) && (ls_wl(wd, pw) == 0) {
+            pw -= 1;
+        }
+        if pw >= w0 {
+            let pl: i32 = ls_wl(wd, pw);
+            let c: i32 = ls_wc(wd, et, pw, pl - 1);
+            if (c == 46) || (c == 8230) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+pub(crate) fn nt_in_run(sf: &mut crate::port::Cells, ln: &mut crate::port::Cells, hc: &mut crate::port::Cells, l: i32) -> i32 {
+    // 1 when caption candidate l has another (flag 8 or 64) directly above or below it, a line gap and a half away at
+    // most: the entries of a list of figures or of tables, not captions. A real caption has its figure or its text between.
+    let sz: i32 = ls_line_size(sf, ln, l);
+    let b: i32 = st_get(sf, l, sfk_below());
+    let a: i32 = st_get(sf, l, sfk_above());
+    if (b >= 0) && ((ls_get(hc, b, ls_k_flags()) & 72) != 0) && ((ls_cap(st_get(sf, l, sfk_gap_below())) * 10) <= (sz * 15)) {
+        return 1;
+    }
+    if (a >= 0) && ((ls_get(hc, a, ls_k_flags()) & 72) != 0) && ((ls_cap(st_get(sf, l, sfk_gap_above())) * 10) <= (sz * 15)) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn nt_after(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32, w: i32) -> i32 {
     // The word with text that follows word w in line l; -1 when there is none.
     let w0: i32 = ln_get(ln, l, lh_first());
@@ -190,8 +262,8 @@ pub(crate) fn nt_after(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
     }
     return -1;
 }
-pub(crate) fn nt_caption(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, l: i32) -> i32 {
-    // If line l begins a caption, rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
+pub(crate) fn nt_caption(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, ln: &mut crate::port::Cells, sf: &mut crate::port::Cells, sc: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, l: i32, doit: i32) -> i32 {
+    // With doit 0: does line l begin a caption (1 or 0), changing nothing. With doit 1, if it does: rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
     // words it used are emptied), flag the line, and answer 1; else 0.
     let w0: i32 = ls_first_word(wd, ln, l);
     let w1: i32 = ls_second_word(wd, ln, l);
@@ -242,6 +314,9 @@ pub(crate) fn nt_caption(mut wd: &mut crate::port::Cells, mut et: &mut crate::po
     }
     if (left <= 0) && (next < 0) && !((punct == 1) && (apart == 1)) {
         return 0;
+    }
+    if doit == 0 {
+        return 1;
     }
     // rewrite: the group in the first word, the label's other words emptied
     let s: i32 = ls_wrap_begin(et, ls_s_cap(), kind, -1);
@@ -1068,10 +1143,31 @@ pub fn nt_analyze(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cel
     let mut l: i32 = 0;
     let mut nhl: i32 = -1;
     let mut found: i32 = 0;
-    // captions first: a caption is never a note body
+    // captions first: a caption is never a note body. Found first (flag 8, nothing rewritten), then the candidates that
+    // stand in a run (a list of figures: entries one under another, a line gap apart) are let go, then the rest rewritten.
     while l < n {
-        if ls_upright(ln, l) && (hd_level(hc, l) == 0) && (ls_get(hc, l, ls_k_flags()) == 0) {
-            found += nt_caption(wd, et, ln, sf, sc, hc, l);
+        if ls_upright(ln, l) && (hd_level(hc, l) == 0) && (ls_get(hc, l, ls_k_flags()) == 0) && (nt_caption(wd, et, ln, sf, sc, hc, l, 0) == 1) {
+            ls_put(hc, l, ls_k_flags(), ls_f_cap());
+        }
+        l += 1;
+    }
+    l = 0;
+    while l < n {
+        if ls_get(hc, l, ls_k_flags()) == ls_f_cap() {
+            if (nt_in_run(sf, ln, hc, l) == 1) || (nt_toc_like(wd, ln, et, sf, l) == 1) {
+                ls_put(hc, l, ls_k_flags(), 64);
+            }
+        }
+        l += 1;
+    }
+    l = 0;
+    while l < n {
+        let fl: i32 = ls_get(hc, l, ls_k_flags());
+        if (fl == ls_f_cap()) || (fl == 64) {
+            ls_put(hc, l, ls_k_flags(), 0);
+            if fl == ls_f_cap() {
+                found += nt_caption(wd, et, ln, sf, sc, hc, l, 1);
+            }
         }
         l += 1;
     }

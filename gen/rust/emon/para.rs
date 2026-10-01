@@ -1046,7 +1046,7 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     if pa_lower(pa_first_cp(wd, ln, et, b)) {
         pts += JS_LOWER;
     }
-    if (indents == 1) && (((pa_start(ln, b) - bmargin) * PA_INDENT_DIV) > sb) {
+    if (indents == 1) && (((pa_start(ln, b) - bmargin) * PA_INDENT_DIV) > sb) && (ls_hang_col(hc, ln, a, b, colx0, bmargin) == 0) {
         pts += JS_INDENT;
     }
     if pa_marker(wd, ln, et, b) {

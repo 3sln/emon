@@ -1042,7 +1042,7 @@ public final class Para {
         if (paLower(paFirstCp(wd, ln, et, b))) {
             pts += JS_LOWER;
         }
-        if ((indents == 1) && (((paStart(ln, b) - bmargin) * PA_INDENT_DIV) > sb)) {
+        if ((indents == 1) && (((paStart(ln, b) - bmargin) * PA_INDENT_DIV) > sb) && (Lists.lsHangCol(hc, ln, a, b, colx0, bmargin) == 0)) {
             pts += JS_INDENT;
         }
         if (paMarker(wd, ln, et, b)) {

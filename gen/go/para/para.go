@@ -1134,7 +1134,7 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	if paLower(paFirstCp(wd, ln, et, b)) {
 		pts += jsLower
 	}
-	if (indents == 1) && (((paStart(ln, b) - bmargin) * paIndentDiv) > sb) {
+	if (indents == 1) && (((paStart(ln, b) - bmargin) * paIndentDiv) > sb) && (lists.LsHangCol(hc, ln, a, b, colx0, bmargin) == 0) {
 		pts += jsIndent
 	}
 	if paMarker(wd, ln, et, b) {

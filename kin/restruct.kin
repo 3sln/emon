@@ -275,9 +275,18 @@
           ^I32 cx (quot (+ (region-x0 orr r) (region-x1 orr r)) 2)
           ^I32 cy (quot (+ (region-y0 orr r) (region-y1 orr r)) 2)
           ^I32 n (layout-count lay)
+          ^:mut ^I32 lo 0
+          ^:mut ^I32 hi n
           ^:mut ^I32 i 0]
-      (while (< i n)
-        (do (if (and (== (layout-page lay i) pg) (== (layout-role lay i) (rl-body))
+      (comment "the rows of a page are one run, the pages in order: find the first row of the item's page by bisection")
+      (while (< lo hi)
+        (do (set i (quot (+ lo hi) 2))
+            (if (< (layout-page lay i) pg)
+              (set lo (+ i 1))
+              (set hi i))))
+      (set i lo)
+      (while (and (< i n) (== (layout-page lay i) pg))
+        (do (if (and (== (layout-role lay i) (rl-body))
                      (>= cx (layout-x0 lay i)) (<= cx (layout-x1 lay i))
                      (>= cy (layout-y0 lay i)) (<= cy (layout-y1 lay i)))
               (return (layout-x0 lay i)))

@@ -175,6 +175,78 @@ public final class Notes {
         }
         return 0;
     }
+    public static int ntLastw(emon.Port.Cells wd, emon.Port.Cells ln, int l) {
+        // The last word with text of line l; -1 when there is none.
+        int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
+        int i = (w0 + Evidence.lnGet(ln, l, Evidence.lhCount())) - 1;
+        while (i >= w0) {
+            if (Lists.lsWl(wd, i) > 0) {
+                return i;
+            }
+            i -= 1;
+        }
+        return -1;
+    }
+    public static int ntAllDigits(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when word w is nothing but decimal digits (a page number).
+        int tl = Lists.lsWl(wd, w);
+        int i = 0;
+        if (tl < 1) {
+            return 0;
+        }
+        while (i < tl) {
+            if (Lists.lsDigit(Lists.lsWc(wd, et, w, i)) < 0) {
+                return 0;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    public static int ntTocLike(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, int l) {
+        // 1 when caption candidate l is an entry of a list of figures or tables: a page number alone on its row to the right
+        // (the text layer made it a line of its own), or at the end of the line after leader dots.
+        int lw = ntLastw(wd, ln, l);
+        int n = Evidence.lnCount(ln);
+        int m = Lists.lsMax(0, l - 40);
+        while ((m < n) && (m <= (l + 40))) {
+            if ((m != l) && (Evidence.lnGet(ln, m, Evidence.lhPage()) == Evidence.lnGet(ln, l, Evidence.lhPage()))) {
+                int sw = Lists.lsFirstWord(wd, ln, m);
+                if ((sw >= 0) && (Lists.lsSecondWord(wd, ln, m) < 0) && (ntAllDigits(wd, et, sw) == 1) && (Evidence.lnGet(ln, m, Evidence.lhX0()) >= Evidence.lnGet(ln, l, Evidence.lhX1())) && (Evidence.lnGet(ln, m, Evidence.lhY0()) < Evidence.lnGet(ln, l, Evidence.lhY1())) && (Evidence.lnGet(ln, m, Evidence.lhY1()) > Evidence.lnGet(ln, l, Evidence.lhY0()))) {
+                    return 1;
+                }
+            }
+            m += 1;
+        }
+        if ((lw >= 0) && (ntAllDigits(wd, et, lw) == 1)) {
+            int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
+            int pw = lw - 1;
+            while ((pw >= w0) && (Lists.lsWl(wd, pw) == 0)) {
+                pw -= 1;
+            }
+            if (pw >= w0) {
+                int pl = Lists.lsWl(wd, pw);
+                int c = Lists.lsWc(wd, et, pw, pl - 1);
+                if ((c == 46) || (c == 8230)) {
+                    return 1;
+                }
+            }
+        }
+        return 0;
+    }
+    public static int ntInRun(emon.Port.Cells sf, emon.Port.Cells ln, emon.Port.Cells hc, int l) {
+        // 1 when caption candidate l has another (flag 8 or 64) directly above or below it, a line gap and a half away at
+        // most: the entries of a list of figures or of tables, not captions. A real caption has its figure or its text between.
+        int sz = Lists.lsLineSize(sf, ln, l);
+        int b = Style.stGet(sf, l, Style.sfkBelow());
+        int a = Style.stGet(sf, l, Style.sfkAbove());
+        if ((b >= 0) && ((Lists.lsGet(hc, b, Lists.lsKFlags()) & 72) != 0) && ((Lists.lsCap(Style.stGet(sf, l, Style.sfkGapBelow())) * 10) <= (sz * 15))) {
+            return 1;
+        }
+        if ((a >= 0) && ((Lists.lsGet(hc, a, Lists.lsKFlags()) & 72) != 0) && ((Lists.lsCap(Style.stGet(sf, l, Style.sfkGapAbove())) * 10) <= (sz * 15))) {
+            return 1;
+        }
+        return 0;
+    }
     public static int ntAfter(emon.Port.Cells wd, emon.Port.Cells ln, int l, int w) {
         // The word with text that follows word w in line l; -1 when there is none.
         int w0 = Evidence.lnGet(ln, l, Evidence.lhFirst());
@@ -188,8 +260,8 @@ public final class Notes {
         }
         return -1;
     }
-    public static int ntCaption(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc, int l) {
-        // If line l begins a caption, rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
+    public static int ntCaption(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc, int l, int doit) {
+        // With doit 0: does line l begin a caption (1 or 0), changing nothing. With doit 1, if it does: rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
         // words it used are emptied), flag the line, and answer 1; else 0.
         int w0 = Lists.lsFirstWord(wd, ln, l);
         int w1 = Lists.lsSecondWord(wd, ln, l);
@@ -240,6 +312,9 @@ public final class Notes {
         }
         if ((left <= 0) && (next < 0) && !((punct == 1) && (apart == 1))) {
             return 0;
+        }
+        if (doit == 0) {
+            return 1;
         }
         // rewrite: the group in the first word, the label's other words emptied
         int s = Lists.lsWrapBegin(et, Lists.lsSCap(), kind, -1);
@@ -1066,10 +1141,31 @@ public final class Notes {
         int l = 0;
         int nhl = -1;
         int found = 0;
-        // captions first: a caption is never a note body
+        // captions first: a caption is never a note body. Found first (flag 8, nothing rewritten), then the candidates that
+        // stand in a run (a list of figures: entries one under another, a line gap apart) are let go, then the rest rewritten.
         while (l < n) {
-            if (Lists.lsUpright(ln, l) && (Heading.hdLevel(hc, l) == 0) && (Lists.lsGet(hc, l, Lists.lsKFlags()) == 0)) {
-                found += ntCaption(wd, et, ln, sf, sc, hc, l);
+            if (Lists.lsUpright(ln, l) && (Heading.hdLevel(hc, l) == 0) && (Lists.lsGet(hc, l, Lists.lsKFlags()) == 0) && (ntCaption(wd, et, ln, sf, sc, hc, l, 0) == 1)) {
+                Lists.lsPut(hc, l, Lists.lsKFlags(), Lists.lsFCap());
+            }
+            l += 1;
+        }
+        l = 0;
+        while (l < n) {
+            if (Lists.lsGet(hc, l, Lists.lsKFlags()) == Lists.lsFCap()) {
+                if ((ntInRun(sf, ln, hc, l) == 1) || (ntTocLike(wd, ln, et, sf, l) == 1)) {
+                    Lists.lsPut(hc, l, Lists.lsKFlags(), 64);
+                }
+            }
+            l += 1;
+        }
+        l = 0;
+        while (l < n) {
+            int fl = Lists.lsGet(hc, l, Lists.lsKFlags());
+            if ((fl == Lists.lsFCap()) || (fl == 64)) {
+                Lists.lsPut(hc, l, Lists.lsKFlags(), 0);
+                if (fl == Lists.lsFCap()) {
+                    found += ntCaption(wd, et, ln, sf, sc, hc, l, 1);
+                }
             }
             l += 1;
         }

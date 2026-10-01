@@ -29,7 +29,7 @@
             [emon.evidence :refer [wd-get wd-set ln-get ln-set ln-count gl-get
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-first lh-count
                                    hd-tstart hd-tlen hd-x0 wf-gfirst wf-gcount gf-size gf-by0 ch-cp ch-tstart ch-tlen]]
-            [emon.style :refer [st-get st-hget sc-get sfk-size sfk-bits sfh-body sfh-size sck-bits sfk-below sfk-gap-above
+            [emon.style :refer [st-get st-hget sc-get sfk-size sfk-bits sfh-body sfh-size sck-bits sfk-below sfk-above sfk-gap-above sfk-gap-below sfk-sibline
                                 sfh-gap sfk-height]]
             [emon.model :refer [page-h]]
             [emon.heading :refer [hd-level hd-rows-end]]
@@ -146,6 +146,65 @@
       (if (!= (bit-and bits 3) (bit-and bbits 3)) (return 1))
       (return 0))))
 
+(defn ^I32 nt-lastw [^Cells wd ^Cells ln ^I32 l]
+  (comment "The last word with text of line l; -1 when there is none.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^:mut ^I32 i (- (+ w0 (ln-get ln l (lh-count))) 1)]
+    (while (>= i w0)
+      (do (if (> (ls-wl wd i) 0) (return i))
+          (set i (- i 1))))
+    (return -1)))
+
+(defn ^I32 nt-all-digits [^Cells wd ^Cells et ^I32 w]
+  (comment "1 when word w is nothing but decimal digits (a page number).")
+  (let [^I32 tl (ls-wl wd w)
+        ^:mut ^I32 i 0]
+    (if (< tl 1) (return 0))
+    (while (< i tl)
+      (do (if (< (ls-digit (ls-wc wd et w i)) 0) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 nt-toc-like [^Cells wd ^Cells ln ^Cells et ^Cells sf ^I32 l]
+  (comment "1 when caption candidate l is an entry of a list of figures or tables: a page number alone on its row to the right")
+  (comment "(the text layer made it a line of its own), or at the end of the line after leader dots.")
+  (let [^I32 lw (nt-lastw wd ln l)
+        ^I32 n (ln-count ln)
+        ^:mut ^I32 m (ls-max 0 (- l 40))]
+    (while (and (< m n) (<= m (+ l 40)))
+      (do (if (and (!= m l) (== (ln-get ln m (lh-page)) (ln-get ln l (lh-page))))
+            (do (let [^I32 sw (ls-first-word wd ln m)]
+                  (if (and (>= sw 0) (< (ls-second-word wd ln m) 0) (== (nt-all-digits wd et sw) 1)
+                           (>= (ln-get ln m (lh-x0)) (ln-get ln l (lh-x1)))
+                           (< (ln-get ln m (lh-y0)) (ln-get ln l (lh-y1)))
+                           (> (ln-get ln m (lh-y1)) (ln-get ln l (lh-y0))))
+                    (return 1)))))
+          (set m (+ m 1))))
+    (if (and (>= lw 0) (== (nt-all-digits wd et lw) 1))
+      (do (let [^I32 w0 (ln-get ln l (lh-first))
+                ^:mut ^I32 pw (- lw 1)]
+            (while (and (>= pw w0) (== (ls-wl wd pw) 0))
+              (set pw (- pw 1)))
+            (if (>= pw w0)
+              (do (let [^I32 pl (ls-wl wd pw)
+                        ^I32 c (ls-wc wd et pw (- pl 1))]
+                    (if (or (== c 46) (== c 8230)) (return 1))))))))
+    (return 0)))
+
+(defn ^I32 nt-in-run [^Cells sf ^Cells ln ^Cells hc ^I32 l]
+  (comment "1 when caption candidate l has another (flag 8 or 64) directly above or below it, a line gap and a half away at")
+  (comment "most: the entries of a list of figures or of tables, not captions. A real caption has its figure or its text between.")
+  (let [^I32 sz (ls-line-size sf ln l)
+        ^I32 b (st-get sf l (sfk-below))
+        ^I32 a (st-get sf l (sfk-above))]
+    (if (and (>= b 0) (!= (bit-and (ls-get hc b (ls-k-flags)) 72) 0)
+             (<= (* (ls-cap (st-get sf l (sfk-gap-below))) 10) (* sz 15)))
+      (return 1))
+    (if (and (>= a 0) (!= (bit-and (ls-get hc a (ls-k-flags)) 72) 0)
+             (<= (* (ls-cap (st-get sf l (sfk-gap-above))) 10) (* sz 15)))
+      (return 1))
+    (return 0)))
+
 (defn ^I32 nt-after [^Cells wd ^Cells ln ^I32 l ^I32 w]
   (comment "The word with text that follows word w in line l; -1 when there is none.")
   (let [^I32 w0 (ln-get ln l (lh-first))
@@ -156,8 +215,8 @@
           (set i (+ i 1))))
     (return -1)))
 
-(defn ^I32 nt-caption [^:mut ^Cells wd ^:mut ^Cells et ^Cells ln ^Cells sf ^Cells sc ^:mut ^Cells hc ^I32 l]
-  (comment "If line l begins a caption, rewrite its words (the label becomes an `S_CAP` group in the first word's text, the")
+(defn ^I32 nt-caption [^:mut ^Cells wd ^:mut ^Cells et ^Cells ln ^Cells sf ^Cells sc ^:mut ^Cells hc ^I32 l ^I32 doit]
+  (comment "With doit 0: does line l begin a caption (1 or 0), changing nothing. With doit 1, if it does: rewrite its words (the label becomes an `S_CAP` group in the first word's text, the")
   (comment "words it used are emptied), flag the line, and answer 1; else 0.")
   (let [^I32 w0 (ls-first-word wd ln l)
         ^I32 w1 (ls-second-word wd ln l)]
@@ -192,6 +251,7 @@
                 ^I32 apart (nt-style-apart sf sc l)]
             (if (and (== punct 0) (== apart 0)) (return 0))
             (if (and (<= left 0) (< next 0) (not (and (== punct 1) (== apart 1)))) (return 0))
+            (if (== doit 0) (return 1))
             (comment "rewrite: the group in the first word, the label's other words emptied")
             (let [^I32 s (ls-wrap-begin et (ls-s-cap) kind -1)
                   ^I32 ts0 (wd-get wd w0 (hd-tstart))
@@ -825,10 +885,26 @@
         ^:mut ^I32 l 0
         ^:mut ^I32 nhl -1
         ^:mut ^I32 found 0]
-    (comment "captions first: a caption is never a note body")
+    (comment "captions first: a caption is never a note body. Found first (flag 8, nothing rewritten), then the candidates that")
+    (comment "stand in a run (a list of figures: entries one under another, a line gap apart) are let go, then the rest rewritten.")
     (while (< l n)
-      (do (if (and (ls-upright ln l) (== (hd-level hc l) 0) (== (ls-get hc l (ls-k-flags)) 0))
-            (set found (+ found (nt-caption wd et ln sf sc hc l))))
+      (do (if (and (ls-upright ln l) (== (hd-level hc l) 0) (== (ls-get hc l (ls-k-flags)) 0)
+                   (== (nt-caption wd et ln sf sc hc l 0) 1))
+            (ls-put hc l (ls-k-flags) (ls-f-cap)))
+          (set l (+ l 1))))
+    (set l 0)
+    (while (< l n)
+      (do (if (== (ls-get hc l (ls-k-flags)) (ls-f-cap))
+            (do (if (or (== (nt-in-run sf ln hc l) 1) (== (nt-toc-like wd ln et sf l) 1))
+                  (ls-put hc l (ls-k-flags) 64))))
+          (set l (+ l 1))))
+    (set l 0)
+    (while (< l n)
+      (do (let [^I32 fl (ls-get hc l (ls-k-flags))]
+            (if (or (== fl (ls-f-cap)) (== fl 64))
+              (do (ls-put hc l (ls-k-flags) 0)
+                  (if (== fl (ls-f-cap))
+                    (set found (+ found (nt-caption wd et ln sf sc hc l 1)))))))
           (set l (+ l 1))))
     (nt-scan wd ln et gl sf pages hc rf nb mk)
     (set nhl (nt-first-notes-heading wd ln et hc rf))

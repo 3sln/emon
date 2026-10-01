@@ -294,9 +294,21 @@ pub(crate) fn rs_column_x(lay: &mut crate::port::Cells, on: &mut crate::port::Ce
     let cx: i32 = (region_x0(orr, r) + region_x1(orr, r)) / 2;
     let cy: i32 = (region_y0(orr, r) + region_y1(orr, r)) / 2;
     let n: i32 = layout_count(lay);
+    let mut lo: i32 = 0;
+    let mut hi: i32 = n;
     let mut i: i32 = 0;
-    while i < n {
-        if (layout_page(lay, i) == pg) && (layout_role(lay, i) == rl_body()) && (cx >= layout_x0(lay, i)) && (cx <= layout_x1(lay, i)) && (cy >= layout_y0(lay, i)) && (cy <= layout_y1(lay, i)) {
+    // the rows of a page are one run, the pages in order: find the first row of the item's page by bisection
+    while lo < hi {
+        i = (lo + hi) / 2;
+        if layout_page(lay, i) < pg {
+            lo = i + 1;
+        } else {
+            hi = i;
+        }
+    }
+    i = lo;
+    while (i < n) && (layout_page(lay, i) == pg) {
+        if (layout_role(lay, i) == rl_body()) && (cx >= layout_x0(lay, i)) && (cx <= layout_x1(lay, i)) && (cy >= layout_y0(lay, i)) && (cy <= layout_y1(lay, i)) {
             return layout_x0(lay, i);
         }
         i += 1;

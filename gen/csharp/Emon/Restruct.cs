@@ -295,9 +295,21 @@ public static class Restruct {
         int cx = (Model.RegionX0(orr, r) + Model.RegionX1(orr, r)) / 2;
         int cy = (Model.RegionY0(orr, r) + Model.RegionY1(orr, r)) / 2;
         int n = Model.LayoutCount(lay);
+        int lo = 0;
+        int hi = n;
         int i = 0;
-        while (i < n) {
-            if ((Model.LayoutPage(lay, i) == pg) && (Model.LayoutRole(lay, i) == Model.RlBody()) && (cx >= Model.LayoutX0(lay, i)) && (cx <= Model.LayoutX1(lay, i)) && (cy >= Model.LayoutY0(lay, i)) && (cy <= Model.LayoutY1(lay, i))) {
+        // the rows of a page are one run, the pages in order: find the first row of the item's page by bisection
+        while (lo < hi) {
+            i = (lo + hi) / 2;
+            if (Model.LayoutPage(lay, i) < pg) {
+                lo = i + 1;
+            } else {
+                hi = i;
+            }
+        }
+        i = lo;
+        while ((i < n) && (Model.LayoutPage(lay, i) == pg)) {
+            if ((Model.LayoutRole(lay, i) == Model.RlBody()) && (cx >= Model.LayoutX0(lay, i)) && (cx <= Model.LayoutX1(lay, i)) && (cy >= Model.LayoutY0(lay, i)) && (cy <= Model.LayoutY1(lay, i))) {
                 return Model.LayoutX0(lay, i);
             }
             i += 1;

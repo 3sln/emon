@@ -151,6 +151,18 @@
   (comment "paragraph (an item, a note, a caption starts there).")
   (return (ls-start hc b)))
 
+(defn ^:pub ^I32 ls-hang-col [^Cells hc ^Cells ln ^I32 a ^I32 b ^I32 amargin ^I32 bmargin]
+  (comment "The same question as `ls-hang` for line b at the head of the NEXT column or page, where line a ended an item: b sits")
+  (comment "where an item's text sits when both are measured from the left edge of their own column (`amargin`, `bmargin`).")
+  (let [^I32 fa (ls-get hc a (ls-k-flags))]
+    (if (== (bit-and fa 3) 0) (return 0))
+    (if (!= (ls-start hc b) 0) (return 0))
+    (let [^I32 ra (- (ls-cap (ls-get hc a (ls-k-textx))) (ls-cap amargin))
+          ^I32 rb (- (ls-cap (ln-get ln b (lh-x0))) (ls-cap bmargin))
+          ^I32 tl (ls-get hc a (ls-k-tol))]
+      (if (<= (ls-abs (- ra rb)) tl) (return 1))
+      (return 0))))
+
 (defn ^:pub ^I32 ls-hang [^Cells hc ^Cells ln ^I32 a ^I32 b]
   (comment "1 when line b is further in than line a only because a is an item (or goes on one) whose text starts")
   (comment "there: a hanging indent, not the first-line indent of a new paragraph.")
@@ -707,8 +719,8 @@
           ^I32 tx1 (ls-cap (ln-get ln t (lh-x1)))
           ^I32 db (ls-abs (- (ls-cap (ln-get ln l (lh-by0))) (ls-cap (ln-get ln t (lh-by0)))))]
       (if (> (* db 3) sz) (return -1))
-      (if (and (>= (+ tx0 (quot sz 4)) mx1) (<= (* (- tx0 mx1) 10) (* sz 25))) (return t))
-      (if (and (<= (- tx1 (quot sz 4)) mx0) (<= (* (- mx0 tx1) 10) (* sz 25))) (return t))
+      (if (and (>= (+ tx0 (quot sz 4)) mx1) (<= (* (- tx0 mx1) 10) (* sz 100))) (return t))
+      (if (and (<= (- tx1 (quot sz 4)) mx0) (<= (* (- mx0 tx1) 10) (* sz 100))) (return t))
       (return -1))))
 
 (defn ^I32 ls-collect [^Cells wd ^Cells ln ^Cells et ^Cells sf ^Cells hc ^:mut ^Cells cd ^:mut ^Cells ws]

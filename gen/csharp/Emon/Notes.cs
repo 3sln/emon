@@ -175,6 +175,78 @@ public static class Notes {
         }
         return 0;
     }
+    internal static int NtLastw(emon.Port.Cells wd, emon.Port.Cells ln, int l) {
+        // The last word with text of line l; -1 when there is none.
+        int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+        int i = (w0 + Evidence.LnGet(ln, l, Evidence.LhCount())) - 1;
+        while (i >= w0) {
+            if (Lists.LsWl(wd, i) > 0) {
+                return i;
+            }
+            i -= 1;
+        }
+        return -1;
+    }
+    internal static int NtAllDigits(emon.Port.Cells wd, emon.Port.Cells et, int w) {
+        // 1 when word w is nothing but decimal digits (a page number).
+        int tl = Lists.LsWl(wd, w);
+        int i = 0;
+        if (tl < 1) {
+            return 0;
+        }
+        while (i < tl) {
+            if (Lists.LsDigit(Lists.LsWc(wd, et, w, i)) < 0) {
+                return 0;
+            }
+            i += 1;
+        }
+        return 1;
+    }
+    internal static int NtTocLike(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells sf, int l) {
+        // 1 when caption candidate l is an entry of a list of figures or tables: a page number alone on its row to the right
+        // (the text layer made it a line of its own), or at the end of the line after leader dots.
+        int lw = NtLastw(wd, ln, l);
+        int n = Evidence.LnCount(ln);
+        int m = Lists.LsMax(0, l - 40);
+        while ((m < n) && (m <= (l + 40))) {
+            if ((m != l) && (Evidence.LnGet(ln, m, Evidence.LhPage()) == Evidence.LnGet(ln, l, Evidence.LhPage()))) {
+                int sw = Lists.LsFirstWord(wd, ln, m);
+                if ((sw >= 0) && (Lists.LsSecondWord(wd, ln, m) < 0) && (NtAllDigits(wd, et, sw) == 1) && (Evidence.LnGet(ln, m, Evidence.LhX0()) >= Evidence.LnGet(ln, l, Evidence.LhX1())) && (Evidence.LnGet(ln, m, Evidence.LhY0()) < Evidence.LnGet(ln, l, Evidence.LhY1())) && (Evidence.LnGet(ln, m, Evidence.LhY1()) > Evidence.LnGet(ln, l, Evidence.LhY0()))) {
+                    return 1;
+                }
+            }
+            m += 1;
+        }
+        if ((lw >= 0) && (NtAllDigits(wd, et, lw) == 1)) {
+            int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
+            int pw = lw - 1;
+            while ((pw >= w0) && (Lists.LsWl(wd, pw) == 0)) {
+                pw -= 1;
+            }
+            if (pw >= w0) {
+                int pl = Lists.LsWl(wd, pw);
+                int c = Lists.LsWc(wd, et, pw, pl - 1);
+                if ((c == 46) || (c == 8230)) {
+                    return 1;
+                }
+            }
+        }
+        return 0;
+    }
+    internal static int NtInRun(emon.Port.Cells sf, emon.Port.Cells ln, emon.Port.Cells hc, int l) {
+        // 1 when caption candidate l has another (flag 8 or 64) directly above or below it, a line gap and a half away at
+        // most: the entries of a list of figures or of tables, not captions. A real caption has its figure or its text between.
+        int sz = Lists.LsLineSize(sf, ln, l);
+        int b = Style.StGet(sf, l, Style.SfkBelow());
+        int a = Style.StGet(sf, l, Style.SfkAbove());
+        if ((b >= 0) && ((Lists.LsGet(hc, b, Lists.LsKFlags()) & 72) != 0) && ((Lists.LsCap(Style.StGet(sf, l, Style.SfkGapBelow())) * 10) <= (sz * 15))) {
+            return 1;
+        }
+        if ((a >= 0) && ((Lists.LsGet(hc, a, Lists.LsKFlags()) & 72) != 0) && ((Lists.LsCap(Style.StGet(sf, l, Style.SfkGapAbove())) * 10) <= (sz * 15))) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int NtAfter(emon.Port.Cells wd, emon.Port.Cells ln, int l, int w) {
         // The word with text that follows word w in line l; -1 when there is none.
         int w0 = Evidence.LnGet(ln, l, Evidence.LhFirst());
@@ -188,8 +260,8 @@ public static class Notes {
         }
         return -1;
     }
-    internal static int NtCaption(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc, int l) {
-        // If line l begins a caption, rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
+    internal static int NtCaption(emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells sf, emon.Port.Cells sc, emon.Port.Cells hc, int l, int doit) {
+        // With doit 0: does line l begin a caption (1 or 0), changing nothing. With doit 1, if it does: rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
         // words it used are emptied), flag the line, and answer 1; else 0.
         int w0 = Lists.LsFirstWord(wd, ln, l);
         int w1 = Lists.LsSecondWord(wd, ln, l);
@@ -240,6 +312,9 @@ public static class Notes {
         }
         if ((left <= 0) && (next < 0) && !((punct == 1) && (apart == 1))) {
             return 0;
+        }
+        if (doit == 0) {
+            return 1;
         }
         // rewrite: the group in the first word, the label's other words emptied
         int s = Lists.LsWrapBegin(et, Lists.LsSCap(), kind, -1);
@@ -1066,10 +1141,31 @@ public static class Notes {
         int l = 0;
         int nhl = -1;
         int found = 0;
-        // captions first: a caption is never a note body
+        // captions first: a caption is never a note body. Found first (flag 8, nothing rewritten), then the candidates that
+        // stand in a run (a list of figures: entries one under another, a line gap apart) are let go, then the rest rewritten.
         while (l < n) {
-            if (Lists.LsUpright(ln, l) && (Heading.HdLevel(hc, l) == 0) && (Lists.LsGet(hc, l, Lists.LsKFlags()) == 0)) {
-                found += NtCaption(wd, et, ln, sf, sc, hc, l);
+            if (Lists.LsUpright(ln, l) && (Heading.HdLevel(hc, l) == 0) && (Lists.LsGet(hc, l, Lists.LsKFlags()) == 0) && (NtCaption(wd, et, ln, sf, sc, hc, l, 0) == 1)) {
+                Lists.LsPut(hc, l, Lists.LsKFlags(), Lists.LsFCap());
+            }
+            l += 1;
+        }
+        l = 0;
+        while (l < n) {
+            if (Lists.LsGet(hc, l, Lists.LsKFlags()) == Lists.LsFCap()) {
+                if ((NtInRun(sf, ln, hc, l) == 1) || (NtTocLike(wd, ln, et, sf, l) == 1)) {
+                    Lists.LsPut(hc, l, Lists.LsKFlags(), 64);
+                }
+            }
+            l += 1;
+        }
+        l = 0;
+        while (l < n) {
+            int fl = Lists.LsGet(hc, l, Lists.LsKFlags());
+            if ((fl == Lists.LsFCap()) || (fl == 64)) {
+                Lists.LsPut(hc, l, Lists.LsKFlags(), 0);
+                if (fl == Lists.LsFCap()) {
+                    found += NtCaption(wd, et, ln, sf, sc, hc, l, 1);
+                }
             }
             l += 1;
         }

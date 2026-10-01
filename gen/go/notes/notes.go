@@ -195,6 +195,82 @@ func ntStyleApart(sf *port.Cells, sc *port.Cells, l int32) int32 {
 	return 0
 }
 
+func ntLastw(wd *port.Cells, ln *port.Cells, l int32) int32 {
+	// The last word with text of line l; -1 when there is none.
+	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+	var i int32 = (w0 + evidence.LnGet(ln, l, evidence.LhCount())) - 1
+	for i >= w0 {
+		if lists.LsWl(wd, i) > 0 {
+			return i
+		}
+		i -= 1
+	}
+	return -1
+}
+
+func ntAllDigits(wd *port.Cells, et *port.Cells, w int32) int32 {
+	// 1 when word w is nothing but decimal digits (a page number).
+	var tl int32 = lists.LsWl(wd, w)
+	var i int32 = 0
+	if tl < 1 {
+		return 0
+	}
+	for i < tl {
+		if lists.LsDigit(lists.LsWc(wd, et, w, i)) < 0 {
+			return 0
+		}
+		i += 1
+	}
+	return 1
+}
+
+func ntTocLike(wd *port.Cells, ln *port.Cells, et *port.Cells, sf *port.Cells, l int32) int32 {
+	// 1 when caption candidate l is an entry of a list of figures or tables: a page number alone on its row to the right
+	// (the text layer made it a line of its own), or at the end of the line after leader dots.
+	var lw int32 = ntLastw(wd, ln, l)
+	var n int32 = evidence.LnCount(ln)
+	var m int32 = lists.LsMax(0, l-40)
+	for (m < n) && (m <= (l + 40)) {
+		if (m != l) && (evidence.LnGet(ln, m, evidence.LhPage()) == evidence.LnGet(ln, l, evidence.LhPage())) {
+			var sw int32 = lists.LsFirstWord(wd, ln, m)
+			if (sw >= 0) && (lists.LsSecondWord(wd, ln, m) < 0) && (ntAllDigits(wd, et, sw) == 1) && (evidence.LnGet(ln, m, evidence.LhX0()) >= evidence.LnGet(ln, l, evidence.LhX1())) && (evidence.LnGet(ln, m, evidence.LhY0()) < evidence.LnGet(ln, l, evidence.LhY1())) && (evidence.LnGet(ln, m, evidence.LhY1()) > evidence.LnGet(ln, l, evidence.LhY0())) {
+				return 1
+			}
+		}
+		m += 1
+	}
+	if (lw >= 0) && (ntAllDigits(wd, et, lw) == 1) {
+		var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
+		var pw int32 = lw - 1
+		for (pw >= w0) && (lists.LsWl(wd, pw) == 0) {
+			pw -= 1
+		}
+		if pw >= w0 {
+			var pl int32 = lists.LsWl(wd, pw)
+			var c int32 = lists.LsWc(wd, et, pw, pl-1)
+			if (c == 46) || (c == 8230) {
+				return 1
+			}
+		}
+	}
+	return 0
+}
+
+func ntInRun(sf *port.Cells, ln *port.Cells, hc *port.Cells, l int32) int32 {
+	// 1 when caption candidate l has another (flag 8 or 64) directly above or below it, a line gap and a half away at
+	// most: the entries of a list of figures or of tables, not captions. A real caption has its figure or its text between.
+	var sz int32 = lists.LsLineSize(sf, ln, l)
+	var b int32 = style.StGet(sf, l, style.SfkBelow())
+	var a int32 = style.StGet(sf, l, style.SfkAbove())
+	if (b >= 0) && ((lists.LsGet(hc, b, lists.LsKFlags()) & 72) != 0) && ((lists.LsCap(style.StGet(sf, l, style.SfkGapBelow())) * 10) <= (sz * 15)) {
+		return 1
+	}
+	if (a >= 0) && ((lists.LsGet(hc, a, lists.LsKFlags()) & 72) != 0) && ((lists.LsCap(style.StGet(sf, l, style.SfkGapAbove())) * 10) <= (sz * 15)) {
+		return 1
+	}
+	return 0
+}
+
 func ntAfter(wd *port.Cells, ln *port.Cells, l int32, w int32) int32 {
 	// The word with text that follows word w in line l; -1 when there is none.
 	var w0 int32 = evidence.LnGet(ln, l, evidence.LhFirst())
@@ -209,8 +285,8 @@ func ntAfter(wd *port.Cells, ln *port.Cells, l int32, w int32) int32 {
 	return -1
 }
 
-func ntCaption(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells, l int32) int32 {
-	// If line l begins a caption, rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
+func ntCaption(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, sc *port.Cells, hc *port.Cells, l int32, doit int32) int32 {
+	// With doit 0: does line l begin a caption (1 or 0), changing nothing. With doit 1, if it does: rewrite its words (the label becomes an `S_CAP` group in the first word's text, the
 	// words it used are emptied), flag the line, and answer 1; else 0.
 	var w0 int32 = lists.LsFirstWord(wd, ln, l)
 	var w1 int32 = lists.LsSecondWord(wd, ln, l)
@@ -261,6 +337,9 @@ func ntCaption(wd *port.Cells, et *port.Cells, ln *port.Cells, sf *port.Cells, s
 	}
 	if (left <= 0) && (next < 0) && !((punct == 1) && (apart == 1)) {
 		return 0
+	}
+	if doit == 0 {
+		return 1
 	}
 	// rewrite: the group in the first word, the label's other words emptied
 	var s int32 = lists.LsWrapBegin(et, lists.LsSCap(), kind, -1)
@@ -1123,10 +1202,31 @@ func NtAnalyze(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, s
 	var l int32 = 0
 	var nhl int32 = -1
 	var found int32 = 0
-	// captions first: a caption is never a note body
+	// captions first: a caption is never a note body. Found first (flag 8, nothing rewritten), then the candidates that
+	// stand in a run (a list of figures: entries one under another, a line gap apart) are let go, then the rest rewritten.
 	for l < n {
-		if lists.LsUpright(ln, l) && (heading.HdLevel(hc, l) == 0) && (lists.LsGet(hc, l, lists.LsKFlags()) == 0) {
-			found += ntCaption(wd, et, ln, sf, sc, hc, l)
+		if lists.LsUpright(ln, l) && (heading.HdLevel(hc, l) == 0) && (lists.LsGet(hc, l, lists.LsKFlags()) == 0) && (ntCaption(wd, et, ln, sf, sc, hc, l, 0) == 1) {
+			lists.LsPut(hc, l, lists.LsKFlags(), lists.LsFCap())
+		}
+		l += 1
+	}
+	l = 0
+	for l < n {
+		if lists.LsGet(hc, l, lists.LsKFlags()) == lists.LsFCap() {
+			if (ntInRun(sf, ln, hc, l) == 1) || (ntTocLike(wd, ln, et, sf, l) == 1) {
+				lists.LsPut(hc, l, lists.LsKFlags(), 64)
+			}
+		}
+		l += 1
+	}
+	l = 0
+	for l < n {
+		var fl int32 = lists.LsGet(hc, l, lists.LsKFlags())
+		if (fl == lists.LsFCap()) || (fl == 64) {
+			lists.LsPut(hc, l, lists.LsKFlags(), 0)
+			if fl == lists.LsFCap() {
+				found += ntCaption(wd, et, ln, sf, sc, hc, l, 1)
+			}
 		}
 		l += 1
 	}

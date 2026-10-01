@@ -49,7 +49,7 @@
                                 sr-infer pk-vector lay-add rl-body nk-heading node-set-attr-text
                                 fk-number fk-numbering nk-item nk-caption nk-ref node-set-aux node-kind
                                 fk-marker fk-label fk-box node-set-attr-int text-append-cp]]
-            [emon.lists :refer [ls-split ls-hang ls-start ls-get ls-k-textx ls-s-item ls-s-end ls-s-note ls-s-cap ls-s-ref
+            [emon.lists :refer [ls-split ls-hang ls-hang-col ls-start ls-get ls-k-textx ls-s-item ls-s-end ls-s-note ls-s-cap ls-s-ref
                                 ls-s-sep ls-s-base]]
             [emon.heading :refer [hd-level hd-field hd-opinion hd-parent hd-cur hd-put-scheme
                                   hck-nstart hck-nlen hck-skip hck-scheme]]
@@ -877,7 +877,8 @@
             (set pts (+ pts JS_SHORT)))))
     (if (not (pa-ends-sentence raw)) (set pts (+ pts JS_NOTERM)))
     (if (pa-lower (pa-first-cp wd ln et b)) (set pts (+ pts JS_LOWER)))
-    (if (and (== indents 1) (> (* (- (pa-start ln b) bmargin) PA_INDENT_DIV) sb))
+    (if (and (== indents 1) (> (* (- (pa-start ln b) bmargin) PA_INDENT_DIV) sb)
+             (== (ls-hang-col hc ln a b colx0 bmargin) 0))
       (set pts (+ pts JS_INDENT)))
     (if (pa-marker wd ln et b) (set pts (+ pts JS_MARKER)))
     (if (or (> (* (pa-abs (- sa sb)) PA_SIZE_DIV) sa)

@@ -182,6 +182,24 @@ public final class Lists {
         // paragraph (an item, a note, a caption starts there).
         return lsStart(hc, b);
     }
+    public static int lsHangCol(emon.Port.Cells hc, emon.Port.Cells ln, int a, int b, int amargin, int bmargin) {
+        // The same question as `ls-hang` for line b at the head of the NEXT column or page, where line a ended an item: b sits
+        // where an item's text sits when both are measured from the left edge of their own column (`amargin`, `bmargin`).
+        int fa = lsGet(hc, a, lsKFlags());
+        if ((fa & 3) == 0) {
+            return 0;
+        }
+        if (lsStart(hc, b) != 0) {
+            return 0;
+        }
+        int ra = lsCap(lsGet(hc, a, lsKTextx())) - lsCap(amargin);
+        int rb = lsCap(Evidence.lnGet(ln, b, Evidence.lhX0())) - lsCap(bmargin);
+        int tl = lsGet(hc, a, lsKTol());
+        if (lsAbs(ra - rb) <= tl) {
+            return 1;
+        }
+        return 0;
+    }
     public static int lsHang(emon.Port.Cells hc, emon.Port.Cells ln, int a, int b) {
         // 1 when line b is further in than line a only because a is an item (or goes on one) whose text starts
         // there: a hanging indent, not the first-line indent of a new paragraph.
@@ -962,10 +980,10 @@ public final class Lists {
         if ((db * 3) > sz) {
             return -1;
         }
-        if (((tx0 + (sz / 4)) >= mx1) && (((tx0 - mx1) * 10) <= (sz * 25))) {
+        if (((tx0 + (sz / 4)) >= mx1) && (((tx0 - mx1) * 10) <= (sz * 100))) {
             return t;
         }
-        if (((tx1 - (sz / 4)) <= mx0) && (((mx0 - tx1) * 10) <= (sz * 25))) {
+        if (((tx1 - (sz / 4)) <= mx0) && (((mx0 - tx1) * 10) <= (sz * 100))) {
             return t;
         }
         return -1;

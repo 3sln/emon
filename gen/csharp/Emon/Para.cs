@@ -1042,7 +1042,7 @@ public static class Para {
         if (PaLower(PaFirstCp(wd, ln, et, b))) {
             pts += JsLower;
         }
-        if ((indents == 1) && (((PaStart(ln, b) - bmargin) * PaIndentDiv) > sb)) {
+        if ((indents == 1) && (((PaStart(ln, b) - bmargin) * PaIndentDiv) > sb) && (Lists.LsHangCol(hc, ln, a, b, colx0, bmargin) == 0)) {
             pts += JsIndent;
         }
         if (PaMarker(wd, ln, et, b)) {

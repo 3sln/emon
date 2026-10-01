@@ -182,6 +182,24 @@ pub fn ls_split(hc: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
     // paragraph (an item, a note, a caption starts there).
     return ls_start(hc, b);
 }
+pub fn ls_hang_col(hc: &mut crate::port::Cells, ln: &mut crate::port::Cells, a: i32, b: i32, amargin: i32, bmargin: i32) -> i32 {
+    // The same question as `ls-hang` for line b at the head of the NEXT column or page, where line a ended an item: b sits
+    // where an item's text sits when both are measured from the left edge of their own column (`amargin`, `bmargin`).
+    let fa: i32 = ls_get(hc, a, ls_k_flags());
+    if (fa & 3) == 0 {
+        return 0;
+    }
+    if ls_start(hc, b) != 0 {
+        return 0;
+    }
+    let ra: i32 = ls_cap(ls_get(hc, a, ls_k_textx())) - ls_cap(amargin);
+    let rb: i32 = ls_cap(ln_get(ln, b, lh_x0())) - ls_cap(bmargin);
+    let tl: i32 = ls_get(hc, a, ls_k_tol());
+    if ls_abs(ra - rb) <= tl {
+        return 1;
+    }
+    return 0;
+}
 pub fn ls_hang(hc: &mut crate::port::Cells, ln: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
     // 1 when line b is further in than line a only because a is an item (or goes on one) whose text starts
     // there: a hanging indent, not the first-line indent of a new paragraph.
@@ -962,10 +980,10 @@ pub(crate) fn ls_partner(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     if (db * 3) > sz {
         return -1;
     }
-    if ((tx0 + (sz / 4)) >= mx1) && (((tx0 - mx1) * 10) <= (sz * 25)) {
+    if ((tx0 + (sz / 4)) >= mx1) && (((tx0 - mx1) * 10) <= (sz * 100)) {
         return t;
     }
-    if ((tx1 - (sz / 4)) <= mx0) && (((mx0 - tx1) * 10) <= (sz * 25)) {
+    if ((tx1 - (sz / 4)) <= mx0) && (((mx0 - tx1) * 10) <= (sz * 100)) {
         return t;
     }
     return -1;

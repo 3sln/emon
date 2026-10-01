@@ -317,9 +317,21 @@ func rsColumnX(lay *port.Cells, on *port.Cells, orr *port.Cells, c int32) int32 
 	var cx int32 = (model.RegionX0(orr, r) + model.RegionX1(orr, r)) / 2
 	var cy int32 = (model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2
 	var n int32 = model.LayoutCount(lay)
+	var lo int32 = 0
+	var hi int32 = n
 	var i int32 = 0
-	for i < n {
-		if (model.LayoutPage(lay, i) == pg) && (model.LayoutRole(lay, i) == model.RlBody()) && (cx >= model.LayoutX0(lay, i)) && (cx <= model.LayoutX1(lay, i)) && (cy >= model.LayoutY0(lay, i)) && (cy <= model.LayoutY1(lay, i)) {
+	// the rows of a page are one run, the pages in order: find the first row of the item's page by bisection
+	for lo < hi {
+		i = (lo + hi) / 2
+		if model.LayoutPage(lay, i) < pg {
+			lo = i + 1
+		} else {
+			hi = i
+		}
+	}
+	i = lo
+	for (i < n) && (model.LayoutPage(lay, i) == pg) {
+		if (model.LayoutRole(lay, i) == model.RlBody()) && (cx >= model.LayoutX0(lay, i)) && (cx <= model.LayoutX1(lay, i)) && (cy >= model.LayoutY0(lay, i)) && (cy <= model.LayoutY1(lay, i)) {
 			return model.LayoutX0(lay, i)
 		}
 		i += 1
