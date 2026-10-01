@@ -414,6 +414,37 @@ func TestARunningHeaderIsNotAHeading(emonT *testing.T) {
 	port.AssertEq(emonT, heading.HdLevel(hc, 4), 1, "`Overview`")
 }
 
+func TestAMastheadAboveALargerTitleIsNotAHeading(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 3000
+	htHeading(wd, ln, et, port.TextBlob("Marlow Savings Bank"), y, 1500, 1)
+	y += 2700
+	htHeading(wd, ln, et, port.TextBlob("Statement of Account"), y, 1800, 1)
+	y += 3000
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Transactions"), y, 1200, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 2)
+	y += 900
+	htHeading(wd, ln, et, port.TextBlob("Summary"), y, 1200, 1)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 2)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings: the masthead is none of them")
+	port.AssertEq(emonT, heading.HdLevel(hc, 0), 0, "the masthead is not a heading: a larger title follows it directly")
+	port.AssertEq(emonT, heading.HdLevel(hc, 1), 1, "the title is level 1")
+	port.AssertEq(emonT, heading.HdLevel(hc, 4), 2, "`Transactions` is level 2")
+}
+
 func TestSectionsNestByLevel(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

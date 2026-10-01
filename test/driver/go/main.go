@@ -5,7 +5,7 @@
 // or a spooled `io.Reader` (D058).
 //
 //	emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//	        [--ocr=always|auto|never] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT]
+//	        [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT]
 //	        [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
 //	        [--record=DIR | --replay=DIR] [--parallel=N] FILE
 //
@@ -40,7 +40,7 @@ import (
 
 func usage(msg string) {
 	fmt.Fprintf(os.Stderr, "emon-go: %s\n", msg)
-	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
+	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
 	os.Exit(2)
 }
 
@@ -135,6 +135,17 @@ func main() {
 				opts.Ocr = emon.OcrNever
 			default:
 				usage("--ocr is always, auto or never")
+			}
+		case strings.HasPrefix(a, "--furniture="):
+			switch strings.TrimPrefix(a, "--furniture=") {
+			case "policy":
+				opts.Furniture = emon.FurniturePolicy
+			case "keep":
+				opts.Furniture = emon.FurnitureKeep
+			case "drop":
+				opts.Furniture = emon.FurnitureDrop
+			default:
+				usage("--furniture is policy, keep or drop")
 			}
 		case strings.HasPrefix(a, "--assets="):
 			switch strings.TrimPrefix(a, "--assets=") {

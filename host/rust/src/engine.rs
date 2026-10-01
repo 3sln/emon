@@ -40,6 +40,7 @@ use crate::emon::evidence::*;
 use crate::emon::heading::*;
 use crate::emon::html::*;
 use crate::emon::json::*;
+use crate::emon::furniture::{fu_find, fu_write};
 use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::rasterin::*;
@@ -47,6 +48,9 @@ use crate::emon::scan::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::imgdec;
+use crate::emon::pdfmeta::pm_run;
+use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
+use crate::emon::pdfx::px_index_build;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
 use crate::port::{self, cells_at, cells_len, cells_push, Cells, Src, SrcBacking};
 use crate::source::{ByteSource, Input, Inputs};
@@ -189,6 +193,26 @@ pub enum Assets {
     Figures,
 }
 
+// SPEC 13's `furniture` (D017, D153): `Policy` drops what the output already says and keeps the rest as asides, `Keep` leaves
+// every running header, footer and page number in the flow, `Drop` takes them all out (the ledger says what).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Furniture {
+    Policy,
+    Keep,
+    Drop,
+}
+
+impl Furniture {
+    // The `mode` of `kin/furniture.kin`'s `fu-find`.
+    pub(crate) fn mode(&self) -> i32 {
+        match self {
+            Furniture::Policy => 0,
+            Furniture::Keep => 1,
+            Furniture::Drop => 2,
+        }
+    }
+}
+
 // What a conversion is asked to do. `Default` is SPEC 13's defaults.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -196,13 +220,14 @@ pub struct Options {
     pub locale: Option<String>,
     pub ocr: OcrPolicy,
     pub assets: Assets,
+    pub furniture: Furniture,
     // Keep the text layer's evidence dump (`Model::evidence`): a test and debugging aid.
     pub keep_evidence: bool,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, keep_evidence: false }
+        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, furniture: Furniture::Policy, keep_evidence: false }
     }
 }
 
@@ -726,13 +751,22 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     let (mut gl, mut mk, mut fnt) = (Cells::new(), Cells::new(), Cells::new());
     let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
     let np = page_count(&mut m.pages);
+    // Running furniture (P4.3), as `attempt` runs it: an image has no catalogue (no Info, no page labels, no tagged tree), so those
+    // arenas are empty and the stage reads the lines and the pages alone.
+    let (mut txt, mut md, mut lb, mut ol, mut ss) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let trust = tg_trust(&mut ss);
+    let (mut cd, mut sl, mut gr, mut ford, mut tx, mut bh) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut fo, mut fp, mut ft, mut pl) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    fu_find(&mut wd, &mut ln, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
     hd_analyze(&mut wd, &mut ln, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
     pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc);
+    fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
@@ -985,19 +1019,40 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
         return Step::Requests;
     }
     let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
+    // The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
+    // (D076), which the furniture stage weighs the tree's /Artifact marks by.
+    let (mut idx, mut txt, mut w, mut seen) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut md, mut xm, mut ol, mut lb, mut nd, mut nt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut ss, mut se, mut sk, mut sc, mut so, mut sa, mut wk) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut ha, mut hb, mut hh) = (Cells::new(), Cells::new(), Cells::new());
+    px_index_build(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx);
+    pm_run(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut md, &mut xm, &mut ol, &mut lb, &mut nd, &mut nt);
+    tg_read(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut wk, &mut md);
+    tg_join(&mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut sa, &mut gl, &mut mk, &mut fnt, &mut pg, &mut ha, &mut hb, &mut hh);
+    if view.missed() {
+        return Step::Miss;
+    }
+    let trust = tg_trust(&mut ss);
     let mut m = Arenas::new();
     model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
     pa_pages(&mut pg, &mut m.pages);
+    // Running furniture (P4.3): found BEFORE the paragraphs, which then never see it, and written after them.
+    let (mut cd, mut sl, mut gr, mut ford, mut tx, mut bh) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut fo, mut fp, mut ft, mut pl) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    fu_find(&mut wd, &mut ln, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     // the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
-    // paragraph stage builds; its priors (the tagged roles, the outline) are empty here: follow-up (D172)
+    // paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
     let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    // the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
+    hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
     hd_analyze(&mut wd, &mut ln, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
     pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc);
+    fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
@@ -1518,4 +1573,3 @@ impl<'a> Node<'a> {
         })
     }
 }
-

@@ -362,7 +362,7 @@ pub fn sc_lang(loc: &mut crate::port::Cells) -> i32 {
 pub fn sc_request(mut rq: &mut crate::port::Cells, id: i32, bitmap: i32, dpi: i32, loc: &mut crate::port::Cells) -> i32 {
     // The OCR request for page-sized bitmap `bitmap` (a decode or render request's id): the whole bitmap, `psm` 3 (fully
     // automatic page segmentation), symbols with their alternatives and orientation and script detection wanted, the
-    // resolution `dpi` as a hint in the flags (D177), and the language the locale hint names, if any.
+    // resolution `dpi` as a hint in the flags (D184), and the language the locale hint names, if any.
     let q: i32 = rq_ocr(rq, id, bitmap, 3, (ocf_symbols() + ocf_osd()) + (dpi * ocf_dpi_unit()), 0, 0, 0, 0);
     let lg: i32 = sc_lang(loc);
     if lg > 0 {
@@ -845,7 +845,7 @@ pub(crate) fn sc_sample(olines: &mut crate::port::Cells, owords: &mut crate::por
 pub(crate) fn sc_metrics(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0
     // and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);
-    // else MEASURED from the symbols' boxes and the baseline (D179): the Tesseract C API does not export its row attributes, and
+    // else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and
     // a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the
     // median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.
     let xh: i32 = ol_get(olines, l, olf_xheight());
@@ -876,7 +876,7 @@ pub(crate) fn sc_metrics(olines: &mut crate::port::Cells, owords: &mut crate::po
 }
 pub(crate) fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
     // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
-    // the text layer fills (D179: size, box and rotation are the line's, see the head of this file). The words' text is
+    // the text layer fills (D186: size, box and rotation are the line's, see the head of this file). The words' text is
     // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
     let mut k: i32 = 0;
     let mut made: i32 = 0;
@@ -1163,7 +1163,7 @@ pub fn sc_pdf_unit(src: &crate::port::Src, input: i32, mut ar: &mut crate::port:
     // `sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),
     // then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers
     // are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left
-    // exactly as the text layer made it (D178). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
+    // exactly as the text layer made it (D185). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
     // else `us-done`. `sp` is two cells of scratch.
     let np: i32 = pd_pg_count(pg);
     let nw: i32 = wd_count(words);

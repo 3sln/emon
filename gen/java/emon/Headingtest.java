@@ -382,6 +382,36 @@ public final class Headingtest {
         emon.Testport.assertEq(Heading.hdLevel(hc, 0), 0, "the running header on page 1");
         emon.Testport.assertEq(Heading.hdLevel(hc, 4), 1, "`Overview`");
     }
+    public static void testAMastheadAboveALargerTitleIsNotAHeading() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        int y = 3000;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Marlow Savings Bank"), y, 1500, 1);
+        y += 2700;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Statement of Account"), y, 1800, 1);
+        y += 3000;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Transactions"), y, 1200, 1);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        htHeading(wd, ln, et, emon.Testport.textBlob("Summary"), y, 1200, 1);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 2);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings: the masthead is none of them");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 0), 0, "the masthead is not a heading: a larger title follows it directly");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 1), 1, "the title is level 1");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 4), 2, "`Transactions` is level 2");
+    }
     public static void testSectionsNestByLevel() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

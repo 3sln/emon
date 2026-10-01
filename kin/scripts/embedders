@@ -208,11 +208,11 @@
 
 (def go-const-prefix
   "Go enums are a named int and constants `<Prefix><Variant>`; Rust's are variants `Type.Variant`."
-  {"OcrPolicy" "Ocr" "Assets" "Assets" "ErrorKind" "Err" "AttrKind" "Attr"})
+  {"OcrPolicy" "Ocr" "Assets" "Assets" "Furniture" "Furniture" "ErrorKind" "Err" "AttrKind" "Attr"})
 
 (def go-const-type-as
   "The Rust enum a Go constant type stands for."
-  {"OcrPolicy" "OcrPolicy" "Assets" "Assets" "ErrorKind" "Error" "AttrKind" "Attr"})
+  {"OcrPolicy" "OcrPolicy" "Assets" "Assets" "Furniture" "Furniture" "ErrorKind" "Error" "AttrKind" "Attr"})
 
 (def go-struct-as-enum
   "A Rust enum with payloads is, in Go, a struct with one field per variant (set or nil) and, for Attr, a tag."

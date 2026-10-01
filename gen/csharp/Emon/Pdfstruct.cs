@@ -3250,4 +3250,12 @@ public static class Pdfstruct {
         emon.Port.TextAscii(t, "]}");
         return 0;
     }
+    public static int TgTrust(emon.Port.Cells ss) {
+        // The tree's TRUST (D150): the informativeness score, raised a tenth by a PDF/UA claim; 0 when there is no tree, no
+        // text to check, or `tg-join` has not run. What other stages weigh the tree's word by (D034, D076).
+        if (emon.Port.CellsLen(ss) <= SsTrust) {
+            return 0;
+        }
+        return emon.Port.CellsAt(ss, SsTrust);
+    }
 }

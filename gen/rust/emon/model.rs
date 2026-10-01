@@ -1977,7 +1977,7 @@ pub fn page_set_health(mut pages: &mut crate::port::Cells, p: i32, v: i32) -> i3
     return pset(pages, p, 7, v);
 }
 pub fn page_set_kind(mut pages: &mut crate::port::Cells, p: i32, kind: i32) -> i32 {
-    // A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D178).
+    // A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D185).
     return pset(pages, p, 6, kind);
 }
 pub fn page_set_resolution(mut pages: &mut crate::port::Cells, p: i32, dpi: i32, pxw: i32, pxh: i32) -> i32 {

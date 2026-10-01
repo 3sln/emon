@@ -358,7 +358,7 @@ public final class Scan {
     public static int scRequest(emon.Port.Cells rq, int id, int bitmap, int dpi, emon.Port.Cells loc) {
         // The OCR request for page-sized bitmap `bitmap` (a decode or render request's id): the whole bitmap, `psm` 3 (fully
         // automatic page segmentation), symbols with their alternatives and orientation and script detection wanted, the
-        // resolution `dpi` as a hint in the flags (D177), and the language the locale hint names, if any.
+        // resolution `dpi` as a hint in the flags (D184), and the language the locale hint names, if any.
         int q = Plan.rqOcr(rq, id, bitmap, 3, (Ocr.ocfSymbols() + Ocr.ocfOsd()) + (dpi * Ocr.ocfDpiUnit()), 0, 0, 0, 0);
         int lg = scLang(loc);
         if (lg > 0) {
@@ -841,7 +841,7 @@ public final class Scan {
     public static int scMetrics(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l, emon.Port.Cells scr) {
         // The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0
         // and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);
-        // else MEASURED from the symbols' boxes and the baseline (D179): the Tesseract C API does not export its row attributes, and
+        // else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and
         // a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the
         // median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.
         int xh = Evidence.olGet(olines, l, Evidence.olfXheight());
@@ -872,7 +872,7 @@ public final class Scan {
     }
     public static int scEmitLines(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l0, int nl, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines) {
         // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
-        // the text layer fills (D179: size, box and rotation are the line's, see the head of this file). The words' text is
+        // the text layer fills (D186: size, box and rotation are the line's, see the head of this file). The words' text is
         // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
         int k = 0;
         int made = 0;
@@ -1159,7 +1159,7 @@ public final class Scan {
         // `sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),
         // then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers
         // are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left
-        // exactly as the text layer made it (D178). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
+        // exactly as the text layer made it (D185). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
         // else `us-done`. `sp` is two cells of scratch.
         int np = Pdfdoc.pdPgCount(pg);
         int nw = Evidence.wdCount(words);

@@ -1561,6 +1561,16 @@ Mechanics:
 4. Every drop goes to the ledger. Every decision is a setting that can be
    overridden (`furniture: drop|keep|policy`).
 
+As built (P4.3, D173-D176): the stage runs BEFORE paragraphs and takes the
+furniture's lines out of `lines`; its evidence is position, recurrence on a
+template with a per-slot analysis (constant, follows the page, varies), isolation
+from the body, the tagged tree weighed by its trust (D076), and, for text that
+varies, style and position; a number is a page number only as a whole token
+(`ACME-01` is an identifier, kept as the template `ACME-{n:02}`); a part of a
+line that the body already says (the Info `/Title`, or a line of the body) is
+dropped, anything else is kept; the page's `label` is `/PageLabels` when the
+catalogue has it, else the number as printed.
+
 ### 10.3 Headings and their levels (D018)
 
 Visual size alone is a trap: a document's chapter titles can be smaller than

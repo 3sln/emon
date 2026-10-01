@@ -34,12 +34,16 @@ import (
 	"sync"
 
 	"emon/evidence"
+	"emon/furniture"
 	"emon/heading"
 	"emon/html"
 	"emon/model"
 	"emon/para"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
+	"emon/pdfmeta"
+	"emon/pdfstruct"
+	"emon/pdfx"
 	"emon/plan"
 	"emon/port"
 	"emon/rasterin"
@@ -211,19 +215,34 @@ const (
 	AssetsFigures
 )
 
+// Furniture is SPEC 13's `furniture` (D017, D153): Policy drops what the output already says and keeps the rest as asides, Keep leaves
+// every running header, footer and page number in the flow, Drop takes them all out (the ledger says what).
+type Furniture int
+
+const (
+	FurniturePolicy Furniture = iota
+	FurnitureKeep
+	FurnitureDrop
+)
+
+// mode is the `mode` of kin/furniture.kin's fu-find.
+func (f Furniture) mode() int32 { return int32(f) }
+
 // Options is what a conversion is asked to do. DefaultOptions is SPEC 13's defaults.
 type Options struct {
 	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides nothing yet.
 	Locale string
 	Ocr    OcrPolicy
 	Assets Assets
+	// Furniture is what to do with running headers, footers and page numbers (SPEC 10.2).
+	Furniture Furniture
 	// KeepEvidence keeps the text layer's evidence dump (`Model.Evidence`): a test and debugging aid.
 	KeepEvidence bool
 }
 
 // DefaultOptions is SPEC 13's defaults.
 func DefaultOptions() Options {
-	return Options{Ocr: OcrAlways, Assets: AssetsNone}
+	return Options{Ocr: OcrAlways, Assets: AssetsNone, Furniture: FurniturePolicy}
 }
 
 // Config is the ports and bounds an Engine is made with. Limits are SPEC 7.4's `port.LimitOf` kinds
@@ -763,12 +782,22 @@ func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int3
 		evs = &s
 	}
 	np := model.PageCount(m.pages)
+	// Running furniture (P4.3), as `attempt` runs it: an image has no catalogue (no Info, no page labels, no tagged tree), so those
+	// arenas are empty and the stage reads the lines and the pages alone.
+	q := newCellsN(5)
+	qtxt, md, lb, ol, ss := q[0], q[1], q[2], q[3], q[4]
+	trust := pdfstruct.TgTrust(ss)
+	fc := newCellsN(10)
+	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
+	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	t := newCellsN(5)
 	c := newCellsN(13)
 	h := newCellsN(7)
+	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
 	heading.HdAnalyze(wd, ln, et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
 	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2])
+	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
@@ -1019,15 +1048,37 @@ func attempt(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options,
 	m := newArenas()
 	model.ModelInit(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout)
 	para.PaPages(pg, m.pages)
+	// The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
+	// (D076), which the furniture stage weighs the tree's /Artifact marks by.
+	q := newCellsN(24)
+	qidx, qtxt, qw, qseen := q[0], q[1], q[2], q[3]
+	md, xm, ol, lb, nd, nt := q[4], q[5], q[6], q[7], q[8], q[9]
+	ss, se, sk, sc, so, sa, wk := q[10], q[11], q[12], q[13], q[14], q[15], q[16]
+	ha, hb, hh := q[17], q[18], q[19]
+	pdfx.PxIndexBuild(view, ar, dc, ca, cb, st, pg, qidx)
+	pdfmeta.PmRun(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, qseen, md, xm, ol, lb, nd, nt)
+	pdfstruct.TgRead(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, qseen, ss, se, sk, sc, so, wk, md)
+	pdfstruct.TgJoin(ss, se, sk, sc, so, sa, gl, mk, fnt, pg, ha, hb, hh)
+	if view.Missed() {
+		return step{miss: true}
+	}
+	trust := pdfstruct.TgTrust(ss)
+	// Running furniture (P4.3): found BEFORE the headings and paragraphs, which then never see it, and written after them.
+	fc := newCellsN(10)
+	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
+	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
 	// the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
-	// paragraph stage builds; its priors (the tagged roles, the outline) are empty here: follow-up (D172)
+	// paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
 	h := newCellsN(7)
+	// the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
+	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
 	heading.HdAnalyze(wd, ln, et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
 	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2])
+	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)

@@ -371,7 +371,7 @@ func ScLang(loc *port.Cells) int32 {
 func ScRequest(rq *port.Cells, id int32, bitmap int32, dpi int32, loc *port.Cells) int32 {
 	// The OCR request for page-sized bitmap `bitmap` (a decode or render request's id): the whole bitmap, `psm` 3 (fully
 	// automatic page segmentation), symbols with their alternatives and orientation and script detection wanted, the
-	// resolution `dpi` as a hint in the flags (D177), and the language the locale hint names, if any.
+	// resolution `dpi` as a hint in the flags (D184), and the language the locale hint names, if any.
 	var q int32 = plan.RqOcr(rq, id, bitmap, 3, (ocr.OcfSymbols()+ocr.OcfOsd())+(dpi*ocr.OcfDpiUnit()), 0, 0, 0, 0)
 	var lg int32 = ScLang(loc)
 	if lg > 0 {
@@ -865,7 +865,7 @@ func scSample(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int32
 func scMetrics(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int32, scr *port.Cells) int32 {
 	// The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0
 	// and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);
-	// else MEASURED from the symbols' boxes and the baseline (D179): the Tesseract C API does not export its row attributes, and
+	// else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and
 	// a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the
 	// median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.
 	var xh int32 = evidence.OlGet(olines, l, evidence.OlfXheight())
@@ -897,7 +897,7 @@ func scMetrics(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int3
 
 func scEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
 	// Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
-	// the text layer fills (D179: size, box and rotation are the line's, see the head of this file). The words' text is
+	// the text layer fills (D186: size, box and rotation are the line's, see the head of this file). The words' text is
 	// the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
 	var k int32 = 0
 	var made int32 = 0
@@ -1190,7 +1190,7 @@ func ScPdfUnit(src *port.Src, input int32, ar *port.Cells, dc *port.Cells, a *po
 	// `sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),
 	// then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers
 	// are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left
-	// exactly as the text layer made it (D178). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
+	// exactly as the text layer made it (D185). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
 	// else `us-done`. `sp` is two cells of scratch.
 	var np int32 = pdfdoc.PdPgCount(pg)
 	var nw int32 = evidence.WdCount(words)

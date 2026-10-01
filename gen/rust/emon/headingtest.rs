@@ -398,6 +398,37 @@ fn test_a_running_header_is_not_a_heading() {
     crate::testport::assert_eq(hd_level(hc, 4), 1, "`Overview`");
 }
 #[test]
+fn test_a_masthead_above_a_larger_title_is_not_a_heading() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 3000;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Marlow Savings Bank")[..], y, 1500, 1);
+    y += 2700;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Statement of Account")[..], y, 1800, 1);
+    y += 3000;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Transactions")[..], y, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    y += 900;
+    ht_heading(wd, ln, et, &crate::testport::text_blob("Summary")[..], y, 1200, 1);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 2);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings: the masthead is none of them");
+    crate::testport::assert_eq(hd_level(hc, 0), 0, "the masthead is not a heading: a larger title follows it directly");
+    crate::testport::assert_eq(hd_level(hc, 1), 1, "the title is level 1");
+    crate::testport::assert_eq(hd_level(hc, 4), 2, "`Transactions` is level 2");
+}
+#[test]
 fn test_sections_nest_by_level() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();

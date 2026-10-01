@@ -2081,7 +2081,7 @@ func PageSetHealth(pages *port.Cells, p int32, v int32) int32 {
 }
 
 func PageSetKind(pages *port.Cells, p int32, kind int32) int32 {
-	// A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D178).
+	// A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D185).
 	return pset(pages, p, 6, kind)
 }
 

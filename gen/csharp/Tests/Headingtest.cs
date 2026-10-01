@@ -392,6 +392,37 @@ public static class Headingtest {
         emon.Testport.AssertEq(Heading.HdLevel(hc, 4), 1, "`Overview`");
     }
     [Xunit.Fact]
+    public static void TestAMastheadAboveALargerTitleIsNotAHeading() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 3000;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Marlow Savings Bank"), y, 1500, 1);
+        y += 2700;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Statement of Account"), y, 1800, 1);
+        y += 3000;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Transactions"), y, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        y += 900;
+        HtHeading(wd, ln, et, emon.Testport.TextBlob("Summary"), y, 1200, 1);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 2);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 3, "three headings: the masthead is none of them");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 0), 0, "the masthead is not a heading: a larger title follows it directly");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 1), 1, "the title is level 1");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 4), 2, "`Transactions` is level 2");
+    }
+    [Xunit.Fact]
     public static void TestSectionsNestByLevel() {
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();

@@ -30,6 +30,8 @@ const wTwin int32 = 2
 
 const wProm int32 = 1
 
+const kickerRatio int32 = 110
+
 const hdKmax int32 = 16
 
 const hdExhaustive int32 = 6
@@ -1065,6 +1067,34 @@ func hdLone(ws *port.Cells, sf *port.Cells, u int32, nu int32) int32 {
 	return 0
 }
 
+func hdKicker(ws *port.Cells, sf *port.Cells, u int32, nu int32) int32 {
+	// A masthead, letterhead or kicker: an unnumbered unit set directly above a unit of a clearly larger size
+	// (no text between them, one page), where both are one-offs: each of the two styles is set once in the
+	// document. What stands over the title is the publisher's name or the series, not a section of the
+	// document. A title above recurring heads that print larger (letter dividers) is a title: the larger
+	// style recurs, so it is a rank of the document's own. 1 = a kicker.
+	if (u + 1) < nu {
+		var last int32 = hdUn(ws, u, 1)
+		var nxt int32 = hdUn(ws, u+1, 0)
+		var sz int32 = style.StGet(sf, hdUn(ws, u, 0), style.SfkSize())
+		var cu int32 = style.StGet(sf, hdUn(ws, u, 0), style.SfkClass())
+		var cn int32 = style.StGet(sf, nxt, style.SfkClass())
+		var v int32 = 0
+		if (hdUn(ws, u, 5) == 0) && ((style.StGet(sf, last, style.SfkBelow()) == nxt) && ((hdUn(ws, u, 10) == hdUn(ws, u+1, 10)) && ((style.StGet(sf, nxt, style.SfkSize()) * 100) > (sz * kickerRatio)))) {
+			for v < nu {
+				if (v != u) && (v != (u + 1)) {
+					if (style.StGet(sf, hdUn(ws, v, 0), style.SfkClass()) == cu) || (style.StGet(sf, hdUn(ws, v, 0), style.SfkClass()) == cn) {
+						return 0
+					}
+				}
+				v += 1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
 func hdDropLone(ws *port.Cells, sf *port.Cells, n int32) int32 {
 	// Remove the lone letter-numbered units (`hd-lone`) from the table and from the lines. Answers how many
 	// units are left.
@@ -1078,7 +1108,7 @@ func hdDropLone(ws *port.Cells, sf *port.Cells, n int32) int32 {
 		return nu
 	}
 	for u < nu {
-		if (hdLone(ws, sf, u, nu) == 1) || (hdRecurs(ws, u, nu) == 1) {
+		if (hdLone(ws, sf, u, nu) == 1) || ((hdRecurs(ws, u, nu) == 1) || (hdKicker(ws, sf, u, nu) == 1)) {
 			port.CellsPush(ws, -2)
 		} else {
 			port.CellsPush(ws, w)
