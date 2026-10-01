@@ -7,6 +7,7 @@ import (
 	"emon/align"
 	"emon/columns"
 	"emon/evidence"
+	"emon/heading"
 	"emon/initial"
 	"emon/model"
 	"emon/normalize"
@@ -83,15 +84,15 @@ const cfDone int32 = 11
 
 const cfRef int32 = 12
 
-const frStride int32 = 10
+const frStride int32 = 11
 
-const frNcp int32 = 6
+const frNcp int32 = 7
 
-const frForm int32 = 7
+const frForm int32 = 8
 
-const frLines int32 = 8
+const frLines int32 = 9
 
-const frFlag int32 = 9
+const frFlag int32 = 10
 
 const paBig int32 = 100000000
 
@@ -471,8 +472,16 @@ func paIndents(wd *port.Cells, ln *port.Cells, cf *port.Cells, lo *port.Cells) i
 	return n
 }
 
-func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margin int32) bool {
-	// Does line b, the next one on the page, start a paragraph after line a (D135).
+func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margin int32, hc *port.Cells) bool {
+	// Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
+	// (P4.4) decides first where it has an opinion: a heading is a block of its own (D167).
+	var op int32 = heading.HdOpinion(hc, a, b)
+	if op == 1 {
+		return 0 == 1
+	}
+	if op == 2 {
+		return 1 == 1
+	}
 	if !paUpright(ln, a) {
 		return 1 == 1
 	}
@@ -603,6 +612,7 @@ func paFragOpen(fr *port.Cells, ln *port.Cells, page int32, l int32, rawstart in
 	port.CellsPush(fr, evidence.LnGet(ln, l, evidence.LhX1()))
 	port.CellsPush(fr, evidence.LnGet(ln, l, evidence.LhY1()))
 	port.CellsPush(fr, rawstart)
+	port.CellsPush(fr, l)
 	port.CellsPush(fr, 0)
 	port.CellsPush(fr, 0)
 	port.CellsPush(fr, 0)
@@ -706,22 +716,49 @@ func paFragExtend(fr *port.Cells, ln *port.Cells, l int32) int32 {
 	return 0
 }
 
-func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, parent int32) int32 {
+func paHeadingNumber(nodes *port.Cells, attrs *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, par int32, from int32, to int32, hc *port.Cells, hl int32) int32 {
+	// A numbered heading (D167): the number goes to the `number` attribute and its scheme to `numbering`,
+	// and the text starts after them. Answers how many code points of `raw` the title is further on (0: the
+	// line is kept whole).
+	var skip int32 = heading.HdField(hc, hl, heading.HckSkip())
+	var ns int32 = heading.HdField(hc, hl, heading.HckNstart())
+	var nl int32 = heading.HdField(hc, hl, heading.HckNlen())
+	if (skip <= 0) || ((from + skip) >= to) {
+		return 0
+	}
+	if (nl < 1) || ((ns + nl) > skip) {
+		return 0
+	}
+	var t0 int32 = port.CellsLen(text)
+	normalize.NzNfc(raw, from+ns, (from+ns)+nl, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+	model.NodeSetAttrText(nodes, attrs, par, model.FkNumber(), t0, port.CellsLen(text)-t0)
+	var t1 int32 = port.CellsLen(text)
+	var n int32 = heading.HdPutScheme(text, heading.HdField(hc, hl, heading.HckScheme()))
+	model.NodeSetAttrText(nodes, attrs, par, model.FkNumbering(), t1, n)
+	return skip
+}
+
+func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, hc *port.Cells, parent int32) int32 {
 	// Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
 	// column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
 	// inline per page it is on with a `break` milestone between two, a column break being only a new region
-	// (SPEC 10.1.2). A paragraph that an initial opens (`fr`'s first row, P4.10) has an `initial` inline first, holding
-	// the initial's text, and the rest of its text as a `text` inline (also when it is on one page, where it has its own
-	// `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`, `al-pass` decides at the
-	// end). Empties `raw` and `fr`.
+	// (SPEC 10.1.2). Under the root (parent 0) a paragraph the heading analysis found a heading in is a `heading` of its
+	// level under the open section it belongs in (D167). A paragraph that an initial opens (`fr`'s first row, P4.10) has an
+	// `initial` inline first, holding the initial's text, and the rest of its text as a `text` inline (also when it is on one
+	// page, where it has its own `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`,
+	// `al-pass` decides at the end). Empties `raw` and `fr`.
 	var nfr int32 = port.CellsLen(fr) / frStride
 	var rawn int32 = port.CellsLen(raw)
 	if nfr == 0 {
 		port.CellsDrop(raw, 0)
 		return 0
 	}
-	var par int32 = model.NodeNew(nodes, model.NkParagraph(), parent)
+	var hl int32 = port.CellsAt(fr, 6)
 	var ncp int32 = port.CellsAt(fr, frNcp)
+	var lev int32 = 0
+	var sect int32 = parent
+	var kind int32 = model.NkParagraph()
+	var par int32 = 0
 	var k int32 = 0
 	var kend int32 = 0
 	var runs int32 = 1
@@ -732,6 +769,17 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	var ini int32 = 0
 	var t0 int32 = 0
 	var child int32 = 0
+	if parent == 0 {
+		lev = heading.HdLevel(hc, hl)
+		sect = heading.HdParent(hc, nodes, lev)
+	}
+	if lev > 0 {
+		kind = model.NkHeading()
+	}
+	par = model.NodeNew(nodes, kind, sect)
+	if lev > 0 {
+		model.NodeSetSub(nodes, par, lev)
+	}
 	model.NodeSetConf(nodes, par, 500)
 	model.NodeAddSrc(nodes, par, model.SrText())
 	model.NodeAddSrc(nodes, par, model.SrInfer())
@@ -804,6 +852,9 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 				model.NodeSetText(nodes, par, t0, tn1)
 			}
 		} else {
+			if lev > 0 {
+				from += paHeadingNumber(nodes, attrs, text, raw, tmp, par, from, to, hc, hl)
+			}
 			t0 = port.CellsLen(text)
 			normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 			var tn2 int32 = port.CellsLen(text) - t0
@@ -828,9 +879,9 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	return 0
 }
 
-func paMilestone(nodes *port.Cells, page int32) int32 {
-	// A page milestone between two blocks.
-	var b int32 = model.NodeNew(nodes, model.NkBreak(), 0)
+func paMilestone(nodes *port.Cells, page int32, hc *port.Cells) int32 {
+	// A page milestone between two blocks, in the open section when there is one (D167).
+	var b int32 = model.NodeNew(nodes, model.NkBreak(), heading.HdCur(hc))
 	model.NodeSetSub(nodes, b, page)
 	model.NodeSetConf(nodes, b, 500)
 	model.NodeAddSrc(nodes, b, model.SrInfer())
@@ -925,7 +976,7 @@ func paMaxi(a int32, b int32) int32 {
 	return b
 }
 
-func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, a int32, b int32, colx0 int32, colx1 int32, ncol int32, bmargin int32, indents int32, bottom int32, bx0 int32, bx1 int32, bn int32) int32 {
+func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells, a int32, b int32, colx0 int32, colx1 int32, ncol int32, bmargin int32, indents int32, bottom int32, bx0 int32, bx1 int32, bn int32, hc *port.Cells) int32 {
 	// The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
 	// on with line b, the first of the next fragment (SPEC 10.1.2, D164). `colx0`..`colx1` is the extent of a's
 	// fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
@@ -935,6 +986,9 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	var sb int32 = paSize(wd, ln, b)
 	var pts int32 = 0
 	if n < 1 {
+		return -100
+	}
+	if (heading.HdLevel(hc, a) > 0) || (heading.HdLevel(hc, b) > 0) {
 		return -100
 	}
 	var last int32 = port.CellsAt(raw, n-1)
@@ -978,14 +1032,14 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	return pts
 }
 
-func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, r int32, med int32) int32 {
-	// The side fragment (row r of `cf`) as a `note` block of its role, under the root, its lines made
+func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, r int32, med int32, hc *port.Cells) int32 {
+	// The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
 	// paragraphs as any fragment's (D113).
 	var base int32 = r * cfStride
 	var first int32 = port.CellsAt(cf, base+cfFirst)
 	var cnt int32 = port.CellsAt(cf, base+cfCount)
 	var page int32 = port.CellsAt(cf, base+cfPage)
-	var note int32 = model.NodeNew(nodes, model.NkNote(), 0)
+	var note int32 = model.NodeNew(nodes, model.NkNote(), heading.HdCur(hc))
 	var mg int32 = paFmargin(ln, lo, first, cnt)
 	var i int32 = 1
 	var prev int32 = port.CellsAt(lo, first)
@@ -1001,8 +1055,8 @@ func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, a
 	paAlAdd(wd, ln, al, prev, port.CellsAt(cf, base+cfX0), port.CellsAt(cf, base+cfX1))
 	for i < cnt {
 		var b int32 = port.CellsAt(lo, first+i)
-		if (initial.InRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg) {
-			paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, note)
+		if (initial.InRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc) {
+			paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note)
 			paFragOpen(fr, ln, page, b, 0)
 			paIniStart(wd, ln, et, raw, fr, ii, b)
 		} else {
@@ -1014,11 +1068,11 @@ func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, a
 		prev = b
 		i += 1
 	}
-	paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, note)
+	paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note)
 	return 0
 }
 
-func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, med int32, from int32, cur int32, ty int32) int32 {
+func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, med int32, from int32, cur int32, ty int32, hc *port.Cells) int32 {
 	// Write the side fragments that have been read to: those beside a body fragment before row `cur`, and
 	// those beside `cur` that begin at or above y `ty`, each once, in the order of `cf`, after the paragraph
 	// that was open where they begin (D111). Scans from row `from`; answers the first side row not written yet
@@ -1031,7 +1085,7 @@ func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 		if (port.CellsAt(cf, base+cfRole) != model.RlBody()) && (port.CellsAt(cf, base+cfDone) == 0) {
 			if (port.CellsAt(cf, base+cfAssoc) < cur) || ((port.CellsAt(cf, base+cfAssoc) == cur) && (port.CellsAt(cf, base+cfY0) <= ty)) {
 				port.CellsSet(cf, base+cfDone, 1)
-				paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med)
+				paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc)
 			} else if pend > r {
 				pend = r
 			}
@@ -1041,21 +1095,21 @@ func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 	return pend
 }
 
-func paClose(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, dq *port.Cells, med int32, from int32, cur int32, ty int32) int32 {
+func paClose(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, dq *port.Cells, med int32, from int32, cur int32, ty int32, hc *port.Cells) int32 {
 	// Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a
 	// paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.
 	// Answers the first side row not written yet.
 	var nq int32 = port.CellsLen(dq)
 	var k int32 = 0
 	var pend int32 = 0
-	paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, 0)
-	pend = paNotes(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, med, from, cur, ty)
+	paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, 0)
+	pend = paNotes(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, med, from, cur, ty, hc)
 	for k < nq {
 		var l int32 = port.CellsAt(dq, k)
 		var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
 		paFragOpen(fr, ln, pg, l, 0)
 		paAddLine(wd, ln, et, raw, l)
-		paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, 0)
+		paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, 0)
 		k += 1
 	}
 	port.CellsDrop(dq, 0)
@@ -1152,17 +1206,18 @@ func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, 
 	return 0
 }
 
-func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, gl *port.Cells, fo *port.Cells, loc *port.Cells, ii *port.Cells, al *port.Cells) int32 {
+func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, hc *port.Cells, ii *port.Cells, al *port.Cells) int32 {
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
 	// `model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the
 	// Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column
 	// stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not
 	// upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the
 	// fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).
-	// `gl` (the glyphs) and `fo` (the fonts) are read by the initials (P4.10, `emon.initial`), which run right after
-	// the lines are copied and before anything measures them; `loc` is the locale tag as code points (empty for none)
-	// and `ii` the initials' table, `al` the open paragraph's alignment rows (P4.11).
-	// Answers 0.
+	// `hc` is the heading analysis (`emon.heading`, P4.4, D167): an EMPTY `hc` means none and the paragraphs are
+	// what they were; it is also where the open sections are kept.
+	// `lt` is PREPARED by the caller: the lines copied (`lc-copy`), the initials found in the copy (`in-detect`, P4.10:
+	// before the style and heading analysis reads the lines, so a big first letter is never a heading), and `hc` made from
+	// it; `ii` is the initials' table, `al` the open paragraph's alignment rows (P4.11). Answers 0.
 	var med int32 = 0
 	var indents int32 = 0
 	var p int32 = 1
@@ -1184,8 +1239,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var mg int32 = 0
 	var ty int32 = 0
 	var score int32 = 0
-	columns.LcCopy(ln, lt)
-	initial.InDetect(wd, gl, fo, et, npages, loc, lt, ls, lo, tm, ii)
+	initial.InRetire(lt, ii)
 	paColumns(wd, et, npages, pages, layout, lt, ord, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr)
 	nf = port.CellsLen(cf) / cfStride
 	med = paMedian(lt, cf, lo, gp)
@@ -1209,11 +1263,11 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 			r1 += 1
 		}
 		if r == r1 {
-			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000)
+			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc)
 			open = 0
 			prev = -1
 			if p > 1 {
-				paMilestone(nodes, p)
+				paMilestone(nodes, p, hc)
 			}
 		} else {
 			i = r
@@ -1224,7 +1278,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 				b = port.CellsAt(lo, first)
 				cont = 0
 				if open == 1 {
-					score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents, paBottom(cf, prevfr), port.CellsAt(cf, (i*cfStride)+cfX0), port.CellsAt(cf, (i*cfStride)+cfX1), port.CellsAt(cf, (i*cfStride)+cfCount))
+					score = paJoinScore(wd, lt, et, raw, prev, b, port.CellsAt(cf, (prevfr*cfStride)+cfX0), port.CellsAt(cf, (prevfr*cfStride)+cfX1), port.CellsAt(cf, (prevfr*cfStride)+cfCount), mg, indents, paBottom(cf, prevfr), port.CellsAt(cf, (i*cfStride)+cfX0), port.CellsAt(cf, (i*cfStride)+cfX1), port.CellsAt(cf, (i*cfStride)+cfCount), hc)
 					port.CellsPush(dbg, i)
 					port.CellsPush(dbg, prev)
 					port.CellsPush(dbg, b)
@@ -1242,9 +1296,9 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 				}
 				if cont == 0 {
 					ty = evidence.LnGet(lt, b, evidence.LhY0())
-					pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty)
+					pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc)
 					if (i == r) && (p > 1) {
-						paMilestone(nodes, p)
+						paMilestone(nodes, p, hc)
 					}
 					paFragOpen(fr, lt, p, b, 0)
 					paIniStart(wd, lt, et, raw, fr, ii, b)
@@ -1261,9 +1315,9 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 				cont = 1
 				for cont < cnt {
 					b = port.CellsAt(lo, first+cont)
-					if (initial.InRow(lt, b) >= 0) || paNewPar(wd, lt, prev, b, med, mg) {
+					if (initial.InRow(lt, b) >= 0) || paNewPar(wd, lt, prev, b, med, mg, hc) {
 						ty = evidence.LnGet(lt, b, evidence.LhY0())
-						pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty)
+						pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, hc)
 						paFragOpen(fr, lt, p, b, 0)
 						paIniStart(wd, lt, et, raw, fr, ii, b)
 					} else {
@@ -1285,7 +1339,7 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 		}
 		p += 1
 	}
-	paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000)
+	paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, hc)
 	align.AlPass(nodes, attrs, al, tm)
 	return 0
 }

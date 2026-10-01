@@ -1,4 +1,4 @@
-;; Alignment of a block from its lines (P4.11; SPEC 10.10; D110, D168). emon's own module (D039).
+;; Alignment of a block from its lines (P4.11; SPEC 10.10; D110, D174). emon's own module (D039).
 ;;
 ;;   (al-line al s e size style)  append one line's measure to the stream `al` (rows of 4): its start gap, its end gap, its
 ;;                                size, its style (`sy` bits)

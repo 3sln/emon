@@ -28,7 +28,10 @@
 //
 // NOTHING IN THIS FILE NAMES A FILESYSTEM (D058): inputs are `source::ByteSource`s.
 
+use crate::emon::columns::lc_copy;
+use crate::emon::initial::in_detect;
 use crate::emon::evidence::*;
+use crate::emon::heading::*;
 use crate::emon::html::*;
 use crate::emon::json::*;
 use crate::emon::model::*;
@@ -705,17 +708,23 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    // the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an initial joins
-    // its first word); `ii` is their table and `al` the alignment rows of the open paragraph (kin/align.kin, P4.11)
+    // the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an initial
+    // joins its first word); `ii` is their table and `al` the alignment rows of the open paragraph (kin/align.kin, P4.11). They are
+    // found in the copy of the lines BEFORE the heading analysis reads it: a big first letter must never be a heading
     let (mut loc, mut ii, mut al) = (Cells::new(), Cells::new(), Cells::new());
     if let Some(l) = &opts.locale {
         for ch in l.chars() {
             cells_push(&mut loc, ch as i32);
         }
     }
-    pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
-             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg,
-             &mut gl, &mut fnt, &mut loc, &mut ii, &mut al);
+    lc_copy(&mut ln, &mut lt);
+    in_detect(&mut wd, &mut gl, &mut fnt, &mut et, np, &mut loc, &mut lt, &mut ls, &mut lo, &mut tm, &mut ii);
+    // the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
+    // paragraph stage builds; its priors (the tagged roles, the outline) are empty here: follow-up (D172)
+    let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    hd_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
+    pa_build(&mut wd, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
+             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut ii, &mut al);
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
         for ch in loc.chars() {

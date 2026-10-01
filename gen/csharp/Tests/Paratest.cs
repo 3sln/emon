@@ -109,10 +109,20 @@ public static class Paratest {
         emon.Port.CellsDrop(et, 0);
         return 0;
     }
-    internal static int PtBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells gl, emon.Port.Cells fo) {
-        // `pa-build`, with the column stage's scratch (`emon.columns`) and the initials' and alignment's made here; `gl`
-        // and `fo` are the glyphs and fonts (empty for hand-made evidence), the locale none.
-        emon.Port.Cells lt = emon.Port.NewCells();
+    internal static int PtPrep(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells gl, emon.Port.Cells fo, emon.Port.Cells lt, emon.Port.Cells ii) {
+        // The lines' copy `lt` and the initials found in it (`in-detect`), as the Engine prepares them before the heading
+        // analysis; no locale. Answers the initials found.
+        emon.Port.Cells loc = emon.Port.NewCells();
+        emon.Port.Cells ls = emon.Port.NewCells();
+        emon.Port.Cells lo = emon.Port.NewCells();
+        emon.Port.Cells tm = emon.Port.NewCells();
+        Columns.LcCopy(ln, lt);
+        return Initial.InDetect(wd, gl, fo, et, npages, loc, lt, ls, lo, tm, ii);
+    }
+    internal static int PtBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells hc, emon.Port.Cells lt, emon.Port.Cells ii) {
+        // `pa-build`, with the column stage's scratch (`emon.columns`) and the alignment's made here; `hc` is the heading
+        // analysis (`emon.heading`), empty for the paragraphs alone; `lt` and `ii` are the lines' copy and the initials' table,
+        // prepared by `pt-prep` (the heading analysis reads the same copy).
         emon.Port.Cells ls = emon.Port.NewCells();
         emon.Port.Cells sd = emon.Port.NewCells();
         emon.Port.Cells it = emon.Port.NewCells();
@@ -125,10 +135,8 @@ public static class Paratest {
         emon.Port.Cells lo = emon.Port.NewCells();
         emon.Port.Cells pr = emon.Port.NewCells();
         emon.Port.Cells dbg = emon.Port.NewCells();
-        emon.Port.Cells loc = emon.Port.NewCells();
-        emon.Port.Cells ii = emon.Port.NewCells();
         emon.Port.Cells al = emon.Port.NewCells();
-        return Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al);
+        return Para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al);
     }
     internal static int PtDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, System.Text.StringBuilder t) {
         // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -157,9 +165,9 @@ public static class Paratest {
         emon.Port.Cells lo = emon.Port.NewCells();
         emon.Port.Cells pr = emon.Port.NewCells();
         emon.Port.Cells dbg = emon.Port.NewCells();
-        emon.Port.Cells gl = emon.Port.NewCells();
-        emon.Port.Cells fo = emon.Port.NewCells();
-        emon.Port.Cells loc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells g0 = emon.Port.NewCells();
+        emon.Port.Cells f0 = emon.Port.NewCells();
         emon.Port.Cells ii = emon.Port.NewCells();
         emon.Port.Cells al = emon.Port.NewCells();
         int p = 1;
@@ -168,21 +176,26 @@ public static class Paratest {
             Model.PageNew(pages, p, 61200, 79200, 0, Model.PkVector());
             p += 1;
         }
-        Para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al);
+        PtPrep(wd, ln, et, npages, g0, f0, lt, ii);
+        Para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al);
         Para.PaDump(t, cf, dbg);
         return 0;
     }
     internal static int PtRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
         int p = 1;
+        emon.Port.Cells hc = emon.Port.NewCells();
         emon.Port.Cells g0 = emon.Port.NewCells();
         emon.Port.Cells f0 = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ii = emon.Port.NewCells();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (p <= npages) {
             Model.PageNew(pages, p, 61200, 79200, 0, Model.PkVector());
             p += 1;
         }
-        PtBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, g0, f0);
+        PtPrep(wd, ln, et, npages, g0, f0, lt, ii);
+        PtBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii);
         return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
     internal static int PtBrief(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text) {
@@ -696,7 +709,18 @@ public static class Paratest {
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.PaPages(pg, pages);
         int np = emon.Port.CellsLen(pages) / 16;
-        PtBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, gl, fnt);
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells htmp = emon.Port.NewCells();
+        emon.Port.Cells hpr = emon.Port.NewCells();
+        emon.Port.Cells hptxt = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ii = emon.Port.NewCells();
+        PtPrep(wd, ln, et, np, gl, fnt, lt, ii);
+        Heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
+        PtBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii);
         if (Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0) {
             return 3;
         }
@@ -759,8 +783,8 @@ public static class Paratest {
     }
     [Xunit.Fact]
     public static void TestRealInitialDocumentsMakeTheGoldenModels() {
-        // P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D167; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
-        // initial inline, and the `align` of the paragraphs (D168), byte for byte (`para-check` holds them to the HTML).
+        // P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D173; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
+        // initial inline, and the `align` of the paragraphs (D174), byte for byte (`para-check` holds them to the HTML).
         emon.Port.Cells ar = emon.Port.NewCells();
         emon.Port.Cells dc = emon.Port.NewCells();
         emon.Port.Cells a = emon.Port.NewCells();

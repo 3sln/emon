@@ -109,10 +109,20 @@ public final class Paratest {
         emon.Port.cellsDrop(et, 0);
         return 0;
     }
-    public static int ptBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells gl, emon.Port.Cells fo) {
-        // `pa-build`, with the column stage's scratch (`emon.columns`) and the initials' and alignment's made here; `gl`
-        // and `fo` are the glyphs and fonts (empty for hand-made evidence), the locale none.
-        emon.Port.Cells lt = emon.Port.newCells();
+    public static int ptPrep(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells gl, emon.Port.Cells fo, emon.Port.Cells lt, emon.Port.Cells ii) {
+        // The lines' copy `lt` and the initials found in it (`in-detect`), as the Engine prepares them before the heading
+        // analysis; no locale. Answers the initials found.
+        emon.Port.Cells loc = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        Columns.lcCopy(ln, lt);
+        return Initial.inDetect(wd, gl, fo, et, npages, loc, lt, ls, lo, tm, ii);
+    }
+    public static int ptBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells hc, emon.Port.Cells lt, emon.Port.Cells ii) {
+        // `pa-build`, with the column stage's scratch (`emon.columns`) and the alignment's made here; `hc` is the heading
+        // analysis (`emon.heading`), empty for the paragraphs alone; `lt` and `ii` are the lines' copy and the initials' table,
+        // prepared by `pt-prep` (the heading analysis reads the same copy).
         emon.Port.Cells ls = emon.Port.newCells();
         emon.Port.Cells sd = emon.Port.newCells();
         emon.Port.Cells it = emon.Port.newCells();
@@ -125,10 +135,8 @@ public final class Paratest {
         emon.Port.Cells lo = emon.Port.newCells();
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
-        emon.Port.Cells loc = emon.Port.newCells();
-        emon.Port.Cells ii = emon.Port.newCells();
         emon.Port.Cells al = emon.Port.newCells();
-        return Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al);
+        return Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al);
     }
     public static int ptDump(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, StringBuilder t) {
         // `pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.
@@ -157,9 +165,9 @@ public final class Paratest {
         emon.Port.Cells lo = emon.Port.newCells();
         emon.Port.Cells pr = emon.Port.newCells();
         emon.Port.Cells dbg = emon.Port.newCells();
-        emon.Port.Cells gl = emon.Port.newCells();
-        emon.Port.Cells fo = emon.Port.newCells();
-        emon.Port.Cells loc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells g0 = emon.Port.newCells();
+        emon.Port.Cells f0 = emon.Port.newCells();
         emon.Port.Cells ii = emon.Port.newCells();
         emon.Port.Cells al = emon.Port.newCells();
         int p = 1;
@@ -168,21 +176,26 @@ public final class Paratest {
             Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
             p += 1;
         }
-        Para.paBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al);
+        ptPrep(wd, ln, et, npages, g0, f0, lt, ii);
+        Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al);
         Para.paDump(t, cf, dbg);
         return 0;
     }
     public static int ptRun(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells st) {
         // Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
         int p = 1;
+        emon.Port.Cells hc = emon.Port.newCells();
         emon.Port.Cells g0 = emon.Port.newCells();
         emon.Port.Cells f0 = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (p <= npages) {
             Model.pageNew(pages, p, 61200, 79200, 0, Model.pkVector());
             p += 1;
         }
-        ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, g0, f0);
+        ptPrep(wd, ln, et, npages, g0, f0, lt, ii);
+        ptBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
     public static int ptBrief(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells text) {
@@ -685,7 +698,18 @@ public final class Paratest {
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
-        ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, gl, fnt);
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells htmp = emon.Port.newCells();
+        emon.Port.Cells hpr = emon.Port.newCells();
+        emon.Port.Cells hptxt = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
+        ptPrep(wd, ln, et, np, gl, fnt, lt, ii);
+        Heading.hdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
+        ptBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii);
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0) {
             return 3;
         }
@@ -746,8 +770,8 @@ public final class Paratest {
         emon.Testport.assertTextSpan(t6, emon.Testport.testFile("para/initial-vector.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/initial-vector.json")), "initial-vector", 0);
     }
     public static void testRealInitialDocumentsMakeTheGoldenModels() {
-        // P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D167; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
-        // initial inline, and the `align` of the paragraphs (D168), byte for byte (`para-check` holds them to the HTML).
+        // P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D173; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
+        // initial inline, and the `align` of the paragraphs (D174), byte for byte (`para-check` holds them to the HTML).
         emon.Port.Cells ar = emon.Port.newCells();
         emon.Port.Cells dc = emon.Port.newCells();
         emon.Port.Cells a = emon.Port.newCells();

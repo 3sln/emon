@@ -1,4 +1,4 @@
-;; Initials on the text layer: drop caps and their kin (P4.10; SPEC 10.9; D108, D109, D167). emon's own module (D039).
+;; Initials on the text layer: drop caps and their kin (P4.10; SPEC 10.9; D108, D109, D173). emon's own module (D039).
 ;;
 ;;   (in-detect wd gl fo et npages loc lt sc sq tm ii)      every page's initials, found right after lines
 ;;   (in-join loc cp rest-first rest-len)                  how the initial joins the first word: 0 joined, 1 joined and
@@ -8,8 +8,9 @@
 ;; statistics, and the heading measures read them (SPEC 10.9: "detection runs per page right after lines"). So a huge
 ;; first glyph never becomes a heading and never splits its paragraph: the lines are the stage's COPY `lt` (the
 ;; evidence is not touched), and detection rewrites the copy:
-;;   * a DROP or MARGIN initial is a line of its own in the text layer (its baseline is on no line's). Its row's page
-;;     becomes 0, so no later stage sees it as a line; lines 1..N (a drop's) start at the initial's start edge (SPEC
+;;   * a DROP or MARGIN initial is a line of its own in the text layer (its baseline is on no line's). Its row is turned a
+;;     quarter turn (`rot` 9000: not upright, so the style and heading stages, which read upright lines, take no notice of it)
+;;     and `in-retire` takes it off its page when the paragraph builder begins (page 0); lines 1..N (a drop's) start at the initial's start edge (SPEC
 ;;     10.9, "Effects"), so the indent rule and the column box see a paragraph whose lines all start at the margin;
 ;;   * a RAISED initial is the first glyph(s) of line 1's first word (D104 put it there): the line's box is made the box
 ;;     of its other glyphs (a raised initial's top is not where the line begins: the paragraph gap is measured from line
@@ -327,7 +328,7 @@
         ^I32 cy (in-ymid2 lt cur)]
     (while (< i n)
       (do (let [^I32 m (cells-at sc i)]
-            (if (and (!= m cur) (and (!= (ln-get lt m (lh-page)) 0) (== (in-dirv lt m) s)))
+            (if (and (!= m cur) (and (in-upright lt m) (== (in-dirv lt m) s)))
               (let [^I32 st (in-start lt m s)
                     ^I32 hm (- (in-get lt m (lh-y1)) (in-get lt m (lh-y0)))
                     ^I32 d2 (- (in-ymid2 lt m) cy)]
@@ -378,7 +379,7 @@
         ^:mut ^I32 by 0]
     (while (< i n)
       (do (let [^I32 l (cells-at sc i)]
-            (if (and (!= l c) (and (!= (ln-get lt l (lh-page)) 0) (== (in-dirv lt l) s)))
+            (if (and (!= l c) (and (in-upright lt l) (== (in-dirv lt l) s)))
               (let [^I32 b (in-lsize wd lt l)
                     ^I32 gap (- (in-start lt l s) ce)]
                 (if (and (> b 0)
@@ -488,7 +489,7 @@
         ^I32 cy (in-ymid2 lt cur)]
     (while (< i n)
       (do (let [^I32 m (cells-at sc i)]
-            (if (and (!= m cur) (and (!= (ln-get lt m (lh-page)) 0) (== (in-dirv lt m) s)))
+            (if (and (!= m cur) (and (in-upright lt m) (== (in-dirv lt m) s)))
               (let [^I32 st (in-start lt m s)
                     ^I32 hm (- (in-get lt m (lh-y1)) (in-get lt m (lh-y0)))
                     ^I32 d2 (- cy (in-ymid2 lt m))]
@@ -710,7 +711,7 @@
                       (if (== got 1)
                         (let [^I32 rr (* r0 II_STRIDE)]
                           (in-apply lt sq (cells-at ii (+ rr II_FORM)) (cells-at ii (+ rr II_LINES)) c s)
-                          (cells-set lt (+ (* c 16) (lh-page)) 0)))
+                          (cells-set lt (+ (* c 16) (lh-rot)) 9000)))
                       (set s (+ s 1))))))
           (set i (+ i 1))))
     ;; the lines that are still on the page, for the raised ones
@@ -1049,6 +1050,21 @@
                 (cells-set lt (+ (* t 16) 15) v))))
           (set r (+ r 1))))
     (return q)))
+
+(defn ^:pub ^I32 in-retire [^:mut ^Cells lt ^Cells ii]
+  (comment "The lines of their own that initials were found in (`ii`: an initial's line that holds no other text) leave the page, so")
+  (comment "no stage that builds from the pages sees them. Answers how many.")
+  (let [^I32 n (quot (cells-len ii) II_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 got 0]
+    (while (< r n)
+      (do (let [^I32 il (cells-at ii (+ (* r II_STRIDE) II_IL))]
+            (if (>= il 0)
+              (if (>= (cells-at lt (+ (* il 16) 15)) 0)
+                (do (cells-set lt (+ (* il 16) (lh-page)) 0)
+                    (set got (+ got 1))))))
+          (set r (+ r 1))))
+    (return got)))
 
 (defn ^:pub ^I32 in-get-ii [^Cells ii ^I32 r ^I32 f]
   (return (cells-at ii (+ (* r II_STRIDE) f))))

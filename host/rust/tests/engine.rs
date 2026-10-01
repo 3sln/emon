@@ -267,13 +267,17 @@ fn the_model_can_be_walked() {
     assert_eq!(root.kind().name(), "document");
     assert_eq!(root.attr("locale"), Some(emon::Attr::Text("en-GB".to_string())));
     assert!(m.to_json(&JsonOptions::default()).contains("\"locale\":\"en-GB\""));
-    let kids = root.children();
+    // the title is a heading (the heading analysis, D172) at the head of a section of level 1
+    let top = root.children();
+    assert_eq!(top[0].kind().name(), "section");
+    let sec = top[0].index();
+    let kids = top[0].children();
     assert!(kids.len() > 2);
-    assert_eq!(kids[0].kind().name(), "paragraph");
+    assert_eq!(kids[0].kind().name(), "heading");
     assert_eq!(kids[0].text(), "Field Notes on Soil Moisture");
     assert_eq!(kids[0].sources(), vec!["text".to_string(), "infer".to_string()]);
     assert_eq!(kids[0].conf(), 500);
-    assert_eq!(kids[0].parent().map(|p| p.index()), Some(0));
+    assert_eq!(kids[0].parent().map(|p| p.index()), Some(sec));
     let regions = kids[0].regions();
     assert_eq!(regions.len(), 1);
     assert_eq!((regions[0].page, regions[0].x0, regions[0].y0), (1, 7200, 9781));

@@ -29,6 +29,9 @@
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages pa-build pa-dump]]
+            [emon.columns :refer [lc-copy]]
+            [emon.initial :refer [in-detect]]
+            [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -133,18 +136,26 @@
   (cells-drop et 0)
   (return 0))
 
-(defn ^I32 pt-build [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
+(defn ^I32 pt-prep [^Cells wd ^Cells ln ^Cells et ^I32 npages ^Cells gl ^Cells fo ^:mut ^Cells lt ^:mut ^Cells ii]
+  (comment "The lines' copy `lt` and the initials found in it (`in-detect`), as the Engine prepares them before the heading")
+  (comment "analysis; no locale. Answers the initials found.")
+  (let [^Cells loc (new-cells) ^Cells ls (new-cells) ^Cells lo (new-cells) ^Cells tm (new-cells)]
+    (lc-copy ln lt)
+    (return (in-detect wd gl fo et npages loc lt ls lo tm ii))))
+
+(defn ^I32 pt-build [^Cells wd ^Cells et ^I32 npages ^:mut ^Cells pages ^:mut ^Cells layout
                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
-                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
-                    ^Cells gl ^Cells fo]
-  (comment "`pa-build`, with the column stage's scratch (`emon.columns`) and the initials' and alignment's made here; `gl`")
-  (comment "and `fo` are the glyphs and fonts (empty for hand-made evidence), the locale none.")
-  (let [^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells hc
+                    ^:mut ^Cells lt ^:mut ^Cells ii]
+  (comment "`pa-build`, with the column stage's scratch (`emon.columns`) and the alignment's made here; `hc` is the heading")
+  (comment "analysis (`emon.heading`), empty for the paragraphs alone; `lt` and `ii` are the lines' copy and the initials' table,")
+  (comment "prepared by `pt-prep` (the heading analysis reads the same copy).")
+  (let [^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
-        ^Cells loc (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)]
-    (return (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-                      lt ls sd it io rw gu ac tm cf lo pr dbg gl fo loc ii al))))
+        ^Cells al (new-cells)]
+    (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
+                      lt ls sd it io rw gu ac tm cf lo pr dbg hc ii al))))
 
 (defn ^I32 pt-dump [^Cells wd ^Cells ln ^Cells et ^I32 npages ^:mut ^Text t]
   (comment "`pa-build` over the evidence on a fresh Model and the stage's debug lines (`pa-dump`) in t.")
@@ -154,14 +165,15 @@
         ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
         ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
         ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells)
-        ^Cells gl (new-cells) ^Cells fo (new-cells) ^Cells loc (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
+        ^Cells hc (new-cells) ^Cells g0 (new-cells) ^Cells f0 (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
         ^:mut ^I32 p 1]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
-    (pa-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp
-              lt ls sd it io rw gu ac tm cf lo pr dbg gl fo loc ii al)
+    (pt-prep wd ln et npages g0 f0 lt ii)
+    (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
+              lt ls sd it io rw gu ac tm cf lo pr dbg hc ii al)
     (pa-dump t cf dbg)
     (return 0)))
 
@@ -171,13 +183,13 @@
                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells st]
   (comment "Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.")
   (let [^:mut ^I32 p 1
-        ^Cells g0 (new-cells)
-        ^Cells f0 (new-cells)]
+        ^Cells hc (new-cells) ^Cells g0 (new-cells) ^Cells f0 (new-cells) ^Cells lt (new-cells) ^Cells ii (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
-    (pt-build wd ln et npages pages layout nodes attrs regions text ord raw tmp fr gp g0 f0)
+    (pt-prep wd ln et npages g0 f0 lt ii)
+    (pt-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp hc lt ii)
     (return (model-check nodes attrs regions text pages ledger layout st))))
 
 (defn ^I32 pt-brief [^:mut ^Text t ^Cells nodes ^Cells regions ^Cells text]
@@ -566,8 +578,13 @@
     (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0) (return 2))
     (model-init nodes attrs regions text pages ledger layout)
     (pa-pages pg pages)
-    (let [^I32 np (quot (cells-len pages) 16)]
-      (pt-build wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp gl fnt))
+    (let [^I32 np (quot (cells-len pages) 16)
+          ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells)
+          ^Cells htmp (new-cells) ^Cells hpr (new-cells) ^Cells hptxt (new-cells)
+          ^Cells lt (new-cells) ^Cells ii (new-cells)]
+      (pt-prep wd ln et np gl fnt lt ii)
+      (hd-analyze wd lt et gl sf sc hc ws htmp hpr hptxt)
+      (pt-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp hc lt ii))
     (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
     (js-emit t 1 nodes attrs regions text pages ledger layout)
     (return 0)))
@@ -597,8 +614,8 @@
     (assert-text-span t6 (test-file "para/initial-vector.json") 0 (jt-end (test-file "para/initial-vector.json")) "initial-vector" 0)))
 
 (deftest test-real-initial-documents-make-the-golden-models
-  (comment "P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D167; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its")
-  (comment "initial inline, and the `align` of the paragraphs (D168), byte for byte (`para-check` holds them to the HTML).")
+  (comment "P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D173; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its")
+  (comment "initial inline, and the `align` of the paragraphs (D174), byte for byte (`para-check` holds them to the HTML).")
   (let [^Cells ar (new-cells) ^Cells dc (new-cells) ^Cells a (new-cells) ^Cells b (new-cells) ^Cells st (new-cells)
         ^Cells cx (new-cells) ^Cells ox (new-cells) ^Cells cs (new-cells) ^Cells out (new-cells)
         ^Cells f0 (new-cells) ^Cells f1 (new-cells) ^Cells f2 (new-cells) ^Cells f3 (new-cells)

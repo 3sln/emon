@@ -1,0 +1,240 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 84.42, 529.4, 486.91]
+        }
+      ]
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "text": "Maintenance Manual",
+            "at": [[1, 72, 84.42, 191.74, 96.91]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "Keep red budget soon place above try many different used soon took word room water. Market two let always way face and part told me up market.",
+            "at": [[1, 72, 103.17, 529.4, 132.16]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 4,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 5,
+                "kind": "heading",
+                "level": 2,
+                "text": "Safety",
+                "at": [[1, 72, 146.67, 106.84, 159.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 6,
+                "kind": "paragraph",
+                "text": "Between money over good something men soon told. As into market away young how say one tell does went review.",
+                "at": [[1, 72, 165.42, 523.58, 193.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 7,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 8,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Lockout procedure",
+                    "at": [[1, 100.79, 208.17, 209.13, 220.66]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 9,
+                    "kind": "paragraph",
+                    "text": "Five keep four over came your night your over men sun along morning as never came.",
+                    "at": [[1, 72, 227.67, 486.87, 240.16]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 10,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 11,
+                        "kind": "heading",
+                        "level": 4,
+                        "text": "Verification",
+                        "at": [[1, 129.6, 254.67, 188.1, 267.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 12,
+                        "kind": "paragraph",
+                        "text": "Hear such head thought look of hear along however friend called study with.",
+                        "at": [[1, 72, 274.17, 441.27, 286.66]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              },
+              {
+                "id": 13,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 14,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Personal protective equipment",
+                    "at": [[1, 100.79, 301.17, 277.18, 313.66]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 15,
+                    "kind": "paragraph",
+                    "text": "Along revenue but school make against money face.",
+                    "at": [[1, 72, 319.92, 321.86, 332.41]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 16,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 17,
+                "kind": "heading",
+                "level": 2,
+                "text": "Routine service",
+                "at": [[1, 72, 346.92, 160.01, 359.41]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 18,
+                "kind": "paragraph",
+                "text": "Own high world until one story high part room called found us later end might. Didn't found later water old all himself hard have.",
+                "at": [[1, 72, 366.42, 519.05, 394.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 19,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 20,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Daily checks",
+                    "at": [[1, 100.79, 409.17, 173.36, 421.66]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 21,
+                    "kind": "paragraph",
+                    "text": "Above would off five five point day that and white than word important.",
+                    "at": [[1, 72, 428.67, 419.1, 441.16]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      },
+      {
+        "id": 22,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 23,
+            "kind": "heading",
+            "level": 1,
+            "text": "Appendix",
+            "at": [[1, 72, 455.67, 126.31, 468.16]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 24,
+            "kind": "paragraph",
+            "text": "Find five hand write people come review the keep.",
+            "at": [[1, 72, 474.42, 314.48, 486.91]],
+            "src": ["text", "infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [],
+  "dropped": []
+}

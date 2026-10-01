@@ -1,4 +1,4 @@
-;; Laws for `emon.align` (P4.11; SPEC 10.10; D110, D168), on every target.
+;; Laws for `emon.align` (P4.11; SPEC 10.10; D110, D174), on every target.
 ;;
 ;; The verdict of a block from the rows its lines make (a start gap, an end gap, a size, a style: centipoints, a size of
 ;; 1000 is 10 pt, so t, a quarter of it, is 250): every row of the table of SPEC 10.10, the single-line rules, the first-line

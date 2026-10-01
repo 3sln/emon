@@ -4,8 +4,11 @@
 package paratest
 
 import (
+	"emon/columns"
 	"emon/evidence"
+	"emon/heading"
 	"emon/html"
+	"emon/initial"
 	"emon/json"
 	"emon/model"
 	"emon/mscript"
@@ -127,10 +130,21 @@ func ptClear(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
 	return 0
 }
 
-func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, gl *port.Cells, fo *port.Cells) int32 {
-	// `pa-build`, with the column stage's scratch (`emon.columns`) and the initials' and alignment's made here; `gl`
-	// and `fo` are the glyphs and fonts (empty for hand-made evidence), the locale none.
-	var lt *port.Cells = port.NewCells()
+func ptPrep(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, gl *port.Cells, fo *port.Cells, lt *port.Cells, ii *port.Cells) int32 {
+	// The lines' copy `lt` and the initials found in it (`in-detect`), as the Engine prepares them before the heading
+	// analysis; no locale. Answers the initials found.
+	var loc *port.Cells = port.NewCells()
+	var ls *port.Cells = port.NewCells()
+	var lo *port.Cells = port.NewCells()
+	var tm *port.Cells = port.NewCells()
+	columns.LcCopy(ln, lt)
+	return initial.InDetect(wd, gl, fo, et, npages, loc, lt, ls, lo, tm, ii)
+}
+
+func ptBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, hc *port.Cells, lt *port.Cells, ii *port.Cells) int32 {
+	// `pa-build`, with the column stage's scratch (`emon.columns`) and the alignment's made here; `hc` is the heading
+	// analysis (`emon.heading`), empty for the paragraphs alone; `lt` and `ii` are the lines' copy and the initials' table,
+	// prepared by `pt-prep` (the heading analysis reads the same copy).
 	var ls *port.Cells = port.NewCells()
 	var sd *port.Cells = port.NewCells()
 	var it *port.Cells = port.NewCells()
@@ -143,10 +157,8 @@ func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
-	var loc *port.Cells = port.NewCells()
-	var ii *port.Cells = port.NewCells()
 	var al *port.Cells = port.NewCells()
-	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al)
+	return para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al)
 }
 
 func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *strings.Builder) int32 {
@@ -176,9 +188,9 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
-	var gl *port.Cells = port.NewCells()
-	var fo *port.Cells = port.NewCells()
-	var loc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var g0 *port.Cells = port.NewCells()
+	var f0 *port.Cells = port.NewCells()
 	var ii *port.Cells = port.NewCells()
 	var al *port.Cells = port.NewCells()
 	var p int32 = 1
@@ -187,7 +199,8 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al)
+	ptPrep(wd, ln, et, npages, g0, f0, lt, ii)
+	para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, ii, al)
 	para.PaDump(t, cf, dbg)
 	return 0
 }
@@ -195,14 +208,18 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {
 	// Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
 	var p int32 = 1
+	var hc *port.Cells = port.NewCells()
 	var g0 *port.Cells = port.NewCells()
 	var f0 *port.Cells = port.NewCells()
+	var lt *port.Cells = port.NewCells()
+	var ii *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	for p <= npages {
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, g0, f0)
+	ptPrep(wd, ln, et, npages, g0, f0, lt, ii)
+	ptBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
 
@@ -721,7 +738,18 @@ func ptGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, gl, fnt)
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var htmp *port.Cells = port.NewCells()
+	var hpr *port.Cells = port.NewCells()
+	var hptxt *port.Cells = port.NewCells()
+	var lt *port.Cells = port.NewCells()
+	var ii *port.Cells = port.NewCells()
+	ptPrep(wd, ln, et, np, gl, fnt, lt, ii)
+	heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
+	ptBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc, lt, ii)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
 		return 3
 	}
@@ -784,8 +812,8 @@ func TestRealDocumentsMakeTheGoldenModels(emonT *testing.T) {
 }
 
 func TestRealInitialDocumentsMakeTheGoldenModels(emonT *testing.T) {
-	// P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D167; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
-	// initial inline, and the `align` of the paragraphs (D168), byte for byte (`para-check` holds them to the HTML).
+	// P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D173; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
+	// initial inline, and the `align` of the paragraphs (D174), byte for byte (`para-check` holds them to the HTML).
 	var ar *port.Cells = port.NewCells()
 	var dc *port.Cells = port.NewCells()
 	var a *port.Cells = port.NewCells()

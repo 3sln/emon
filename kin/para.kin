@@ -13,12 +13,12 @@
 ;; page (D108 (a)), so the first line of a paragraph is not the first one shown.
 ;;
 ;; THE BRIEF is lines to paragraphs and nothing else: no heading, list or table (P4), no furniture (P5). Every line
-;; of a page becomes the text of some paragraph, whatever it is. TWO STAGES RUN AROUND IT. The INITIALS (P4.10, D167,
+;; of a page becomes the text of some paragraph, whatever it is. TWO STAGES RUN AROUND IT. The INITIALS (P4.10, D173,
 ;; `emon.initial`) are found right after the lines are copied and before the column stage or anything else measures
 ;; them, on the copy: the initial's line leaves the page, a raised or in-line one is corrected in its line's row, and a
 ;; paragraph that an initial opens is told so (cell 15 of its first line's row, `in-row`): its first fragment row (`fr`)
 ;; carries the initial, `pa-flush` writes the `initial` inline and `pa-ini-start` puts the text of a drop initial at the
-;; head of the paragraph's. The ALIGNMENT (P4.11, D168, `emon.align`) is measured per line against the box of the fragment
+;; head of the paragraph's. The ALIGNMENT (P4.11, D174, `emon.align`) is measured per line against the box of the fragment
 ;; (`pa-al-add`, rows in `al`, a marker per block at its flush) and decided by `al-pass` at the end, over every block of
 ;; the stream. THE PARAGRAPH BOUNDARIES (D135) are
 ;;   * a line not below the one before it (a table row, a second column, a second paragraph on the
@@ -49,12 +49,15 @@
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
                                    lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
             [emon.columns :refer [lc-copy lc-page]]
-            [emon.initial :refer [in-detect in-row in-get-ii]]
+            [emon.initial :refer [in-retire in-row in-get-ii]]
             [emon.align :refer [al-line al-mark al-pass]]
             [emon.model :refer [node-new node-set-text node-set-sub node-set-conf node-add-src
                                 node-add-region page-new nk-paragraph nk-break nk-text nk-note sr-text
                                 sr-infer pk-vector lay-add rl-body nk-initial node-set-aux node-add-flag
-                                fl-low-conf node-set-align]]
+                                fl-low-conf node-set-align nk-heading node-set-attr-text
+                                fk-number fk-numbering]]
+            [emon.heading :refer [hd-level hd-field hd-opinion hd-parent hd-cur hd-put-scheme
+                                  hck-nstart hck-nlen hck-skip hck-scheme]]
             [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
             [kin.lang :refer [defn defconst return let set while if do comment
@@ -100,13 +103,14 @@
 (defconst ^I32 CF_DONE 11)
 (defconst ^I32 CF_REF 12)
 
-;; frag rows (`fr`): page x0 y0 x1 y1 raw-start, then (the paragraph's first row only) the initial: the code points of its
-;; text at the start of the paragraph's raw text (0 for none), its form (`ifm`), its lines, 1 when its join is low-conf
-(defconst ^I32 FR_STRIDE 10)
-(defconst ^I32 FR_NCP 6)
-(defconst ^I32 FR_FORM 7)
-(defconst ^I32 FR_LINES 8)
-(defconst ^I32 FR_FLAG 9)
+;; frag rows (`fr`): page x0 y0 x1 y1 raw-start, the paragraph's first line (the heading analysis's), then (the paragraph's first
+;; row only) the initial: the code points of its text at the start of the paragraph's raw text (0 for none), its form (`ifm`),
+;; its lines, 1 when its join is low-conf
+(defconst ^I32 FR_STRIDE 11)
+(defconst ^I32 FR_NCP 7)
+(defconst ^I32 FR_FORM 8)
+(defconst ^I32 FR_LINES 9)
+(defconst ^I32 FR_FLAG 10)
 
 ;; the largest a coordinate is held to where the alignment is measured: a hostile file's must not overflow a difference
 (defconst ^I32 PA_BIG 100000000)
@@ -402,8 +406,12 @@
           (set r (+ r 1))))
     (return n)))
 
-(defn ^Bool pa-new-par [^Cells wd ^Cells ln ^I32 a ^I32 b ^I32 med ^I32 margin]
-  (comment "Does line b, the next one on the page, start a paragraph after line a (D135).")
+(defn ^Bool pa-new-par [^Cells wd ^Cells ln ^I32 a ^I32 b ^I32 med ^I32 margin ^Cells hc]
+  (comment "Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis")
+  (comment "(P4.4) decides first where it has an opinion: a heading is a block of its own (D167).")
+  (let [^I32 op (hd-opinion hc a b)]
+    (if (== op 1) (return (== 0 1)))
+    (if (== op 2) (return (== 1 1))))
   (if (not (pa-upright ln a)) (return (== 1 1)))
   (if (not (pa-upright ln b)) (return (== 1 1)))
   (if (!= (ln-get ln a (lh-dir)) (ln-get ln b (lh-dir))) (return (== 1 1)))
@@ -503,6 +511,7 @@
   (cells-push fr (ln-get ln l (lh-x1)))
   (cells-push fr (ln-get ln l (lh-y1)))
   (cells-push fr rawstart)
+  (cells-push fr l)
   (cells-push fr 0)
   (cells-push fr 0)
   (cells-push fr 0)
@@ -573,21 +582,44 @@
     (if (> ly1 oy1) (cells-set fr (+ base 4) ly1))
     (return 0)))
 
+(defn ^I32 pa-heading-number [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^Cells raw ^:mut ^Cells tmp
+                              ^I32 par ^I32 from ^I32 to ^Cells hc ^I32 hl]
+  (comment "A numbered heading (D167): the number goes to the `number` attribute and its scheme to `numbering`,")
+  (comment "and the text starts after them. Answers how many code points of `raw` the title is further on (0: the")
+  (comment "line is kept whole).")
+  (let [^I32 skip (hd-field hc hl (hck-skip))
+        ^I32 ns (hd-field hc hl (hck-nstart))
+        ^I32 nl (hd-field hc hl (hck-nlen))]
+    (if (or (<= skip 0) (>= (+ from skip) to)) (return 0))
+    (if (or (< nl 1) (> (+ ns nl) skip)) (return 0))
+    (let [^I32 t0 (cells-len text)]
+      (nz-nfc raw (+ from ns) (+ (+ from ns) nl) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+      (node-set-attr-text nodes attrs par (fk-number) t0 (- (cells-len text) t0))
+      (let [^I32 t1 (cells-len text)
+            ^I32 n (hd-put-scheme text (hd-field hc hl (hck-scheme)))]
+        (node-set-attr-text nodes attrs par (fk-numbering) t1 n)))
+    (return skip)))
+
 (defn ^I32 pa-flush [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
-                     ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^I32 parent]
+                     ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^:mut ^Cells hc ^I32 parent]
   (comment "Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a")
   (comment "column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`")
   (comment "inline per page it is on with a `break` milestone between two, a column break being only a new region")
-  (comment "(SPEC 10.1.2). A paragraph that an initial opens (`fr`'s first row, P4.10) has an `initial` inline first, holding")
-  (comment "the initial's text, and the rest of its text as a `text` inline (also when it is on one page, where it has its own")
-  (comment "`text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`, `al-pass` decides at the")
-  (comment "end). Empties `raw` and `fr`.")
+  (comment "(SPEC 10.1.2). Under the root (parent 0) a paragraph the heading analysis found a heading in is a `heading` of its")
+  (comment "level under the open section it belongs in (D167). A paragraph that an initial opens (`fr`'s first row, P4.10) has an")
+  (comment "`initial` inline first, holding the initial's text, and the rest of its text as a `text` inline (also when it is on one")
+  (comment "page, where it has its own `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`,")
+  (comment "`al-pass` decides at the end). Empties `raw` and `fr`.")
   (let [^I32 nfr (quot (cells-len fr) FR_STRIDE)
         ^I32 rawn (cells-len raw)]
     (if (== nfr 0)
       (do (cells-drop raw 0) (return 0)))
-    (let [^I32 par (node-new nodes (nk-paragraph) parent)
+    (let [^I32 hl (cells-at fr 6)
           ^I32 ncp (cells-at fr FR_NCP)
+          ^:mut ^I32 lev 0
+          ^:mut ^I32 sect parent
+          ^:mut ^I32 kind (nk-paragraph)
+          ^:mut ^I32 par 0
           ^:mut ^I32 k 0
           ^:mut ^I32 kend 0
           ^:mut ^I32 runs 1
@@ -598,6 +630,12 @@
           ^:mut ^I32 ini 0
           ^:mut ^I32 t0 0
           ^:mut ^I32 child 0]
+      (if (== parent 0)
+        (do (set lev (hd-level hc hl))
+            (set sect (hd-parent hc nodes lev))))
+      (if (> lev 0) (set kind (nk-heading)))
+      (set par (node-new nodes kind sect))
+      (if (> lev 0) (node-set-sub nodes par lev))
       (node-set-conf nodes par 500)
       (node-add-src nodes par (sr-text))
       (node-add-src nodes par (sr-infer))
@@ -656,7 +694,9 @@
                           (nz-nfc raw from to text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
                           (let [^I32 tn1 (- (cells-len text) t0)]
                             (node-set-text nodes par t0 tn1)))))
-                (do (set t0 (cells-len text))
+                (do (if (> lev 0)
+                      (set from (+ from (pa-heading-number nodes attrs text raw tmp par from to hc hl))))
+                    (set t0 (cells-len text))
                     (nz-nfc raw from to text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
                     (let [^I32 tn2 (- (cells-len text) t0)]
                       (node-set-text nodes par t0 tn2))))
@@ -676,9 +716,9 @@
       (cells-drop fr 0)
       (return 0))))
 
-(defn ^I32 pa-milestone [^:mut ^Cells nodes ^I32 page]
-  (comment "A page milestone between two blocks.")
-  (let [^I32 b (node-new nodes (nk-break) 0)]
+(defn ^I32 pa-milestone [^:mut ^Cells nodes ^I32 page ^Cells hc]
+  (comment "A page milestone between two blocks, in the open section when there is one (D167).")
+  (let [^I32 b (node-new nodes (nk-break) (hd-cur hc))]
     (node-set-sub nodes b page)
     (node-set-conf nodes b 500)
     (node-add-src nodes b (sr-infer))
@@ -738,7 +778,7 @@
 
 (defn ^I32 pa-join-score [^Cells wd ^Cells ln ^Cells et ^Cells raw ^I32 a ^I32 b
                           ^I32 colx0 ^I32 colx1 ^I32 ncol ^I32 bmargin ^I32 indents ^I32 bottom
-                          ^I32 bx0 ^I32 bx1 ^I32 bn]
+                          ^I32 bx0 ^I32 bx1 ^I32 bn ^Cells hc]
   (comment "The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going")
   (comment "on with line b, the first of the next fragment (SPEC 10.1.2, D164). `colx0`..`colx1` is the extent of a's")
   (comment "fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether")
@@ -748,6 +788,7 @@
         ^I32 sb (pa-size wd ln b)
         ^:mut ^I32 pts 0]
     (if (< n 1) (return -100))
+    (if (or (> (hd-level hc a) 0) (> (hd-level hc b) 0)) (return -100))
     (let [^I32 last (cells-at raw (- n 1))]
       (if (and (or (== last 45) (== last 173)) (>= n 2))
         (if (pa-letter (cells-at raw (- n 2))) (set pts (+ pts JS_HYPHEN)))))
@@ -778,14 +819,14 @@
 (defn ^I32 pa-note [^Cells wd ^Cells ln ^Cells et
                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                     ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^Cells ii
-                    ^Cells cf ^Cells lo ^I32 r ^I32 med]
-  (comment "The side fragment (row r of `cf`) as a `note` block of its role, under the root, its lines made")
+                    ^Cells cf ^Cells lo ^I32 r ^I32 med ^:mut ^Cells hc]
+  (comment "The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made")
   (comment "paragraphs as any fragment's (D113).")
   (let [^I32 base (* r CF_STRIDE)
         ^I32 first (cells-at cf (+ base CF_FIRST))
         ^I32 cnt (cells-at cf (+ base CF_COUNT))
         ^I32 page (cells-at cf (+ base CF_PAGE))
-        ^I32 note (node-new nodes (nk-note) 0)
+        ^I32 note (node-new nodes (nk-note) (hd-cur hc))
         ^I32 mg (pa-fmargin ln lo first cnt)
         ^:mut ^I32 i 1
         ^:mut ^I32 prev (cells-at lo first)]
@@ -802,8 +843,8 @@
     (pa-al-add wd ln al prev (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_X1)))
     (while (< i cnt)
       (do (let [^I32 b (cells-at lo (+ first i))]
-            (if (or (>= (in-row ln b) 0) (pa-new-par wd ln prev b med mg))
-              (do (pa-flush nodes attrs regions text raw tmp fr al note)
+            (if (or (>= (in-row ln b) 0) (pa-new-par wd ln prev b med mg hc))
+              (do (pa-flush nodes attrs regions text raw tmp fr al hc note)
                   (pa-frag-open fr ln page b 0)
                   (pa-ini-start wd ln et raw fr ii b))
               (do (pa-join wd ln et raw b)
@@ -812,13 +853,13 @@
             (pa-al-add wd ln al b (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_X1)))
             (set prev b))
           (set i (+ i 1))))
-    (pa-flush nodes attrs regions text raw tmp fr al note)
+    (pa-flush nodes attrs regions text raw tmp fr al hc note)
     (return 0)))
 
 (defn ^I32 pa-notes [^Cells wd ^Cells ln ^Cells et
                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                      ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^Cells ii
-                     ^:mut ^Cells cf ^Cells lo ^I32 med ^I32 from ^I32 cur ^I32 ty]
+                     ^:mut ^Cells cf ^Cells lo ^I32 med ^I32 from ^I32 cur ^I32 ty ^:mut ^Cells hc]
   (comment "Write the side fragments that have been read to: those beside a body fragment before row `cur`, and")
   (comment "those beside `cur` that begin at or above y `ty`, each once, in the order of `cf`, after the paragraph")
   (comment "that was open where they begin (D111). Scans from row `from`; answers the first side row not written yet")
@@ -834,7 +875,7 @@
                       (and (== (cells-at cf (+ base CF_ASSOC)) cur)
                            (<= (cells-at cf (+ base CF_Y0)) ty)))
                 (do (cells-set cf (+ base CF_DONE) 1)
-                    (pa-note wd ln et nodes attrs regions text raw tmp fr al ii cf lo r med))
+                    (pa-note wd ln et nodes attrs regions text raw tmp fr al ii cf lo r med hc))
                 (if (> pend r) (set pend r)))))
           (set r (+ r 1))))
     (return pend)))
@@ -844,21 +885,21 @@
 (defn ^I32 pa-close [^Cells wd ^Cells ln ^Cells et
                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                      ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^Cells ii
-                     ^:mut ^Cells cf ^Cells lo ^:mut ^Cells dq ^I32 med ^I32 from ^I32 cur ^I32 ty]
+                     ^:mut ^Cells cf ^Cells lo ^:mut ^Cells dq ^I32 med ^I32 from ^I32 cur ^I32 ty ^:mut ^Cells hc]
   (comment "Close the open paragraph, then write the side fragments that were read to (`pa-notes`), then make a")
   (comment "paragraph of each line queued in `dq` (the lines that are not upright, D136) and empty the queue.")
   (comment "Answers the first side row not written yet.")
   (let [^I32 nq (cells-len dq)
         ^:mut ^I32 k 0
         ^:mut ^I32 pend 0]
-    (pa-flush nodes attrs regions text raw tmp fr al 0)
-    (set pend (pa-notes wd ln et nodes attrs regions text raw tmp fr al ii cf lo med from cur ty))
+    (pa-flush nodes attrs regions text raw tmp fr al hc 0)
+    (set pend (pa-notes wd ln et nodes attrs regions text raw tmp fr al ii cf lo med from cur ty hc))
     (while (< k nq)
       (do (let [^I32 l (cells-at dq k)
                 ^I32 pg (ln-get ln l (lh-page))]
             (pa-frag-open fr ln pg l 0)
             (pa-add-line wd ln et raw l)
-            (pa-flush nodes attrs regions text raw tmp fr al 0))
+            (pa-flush nodes attrs regions text raw tmp fr al hc 0))
           (set k (+ k 1))))
     (cells-drop dq 0)
     (return pend)))
@@ -936,24 +977,25 @@
           (set p (+ p 1))))
     (return 0)))
 
-(defn ^:pub ^I32 pa-build [^Cells wd ^Cells ln ^Cells et ^I32 npages
+(defn ^:pub ^I32 pa-build [^Cells wd ^Cells et ^I32 npages
                            ^:mut ^Cells pages ^:mut ^Cells layout
                            ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                            ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
                            ^:mut ^Cells lt ^:mut ^Cells ls ^:mut ^Cells sd ^:mut ^Cells it ^:mut ^Cells io
                            ^:mut ^Cells rw ^:mut ^Cells gu ^:mut ^Cells ac ^:mut ^Cells tm
-                           ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^:mut ^Cells dbg
-                           ^Cells gl ^Cells fo ^Cells loc ^:mut ^Cells ii ^:mut ^Cells al]
+                           ^:mut ^Cells cf ^:mut ^Cells lo ^:mut ^Cells pr ^:mut ^Cells dbg ^:mut ^Cells hc
+                           ^:mut ^Cells ii ^:mut ^Cells al]
   (comment "Append every page's lines to the Model as paragraphs under the document root (node 0, made by")
   (comment "`model-init`), in the reading order of `emon.columns`, and write each page's `layout`; `pages` is the")
   (comment "Model's page table (`pa-pages`). `lt` (the lines, copied), `ls sd it io rw gu ac tm cf lo pr` (the column")
   (comment "stage's), `ord raw tmp fr gp` are scratch (`gp` first holds the gaps, then the queue of lines that are not")
   (comment "upright). `dbg` is the debug log, the stage's evidence dump: every join decision, a row of eight (the")
   (comment "fragment, the lines a and b as rows of `lt`, the score, a's fragment x0 and x1, a's x1, its line count).")
-  (comment "`gl` (the glyphs) and `fo` (the fonts) are read by the initials (P4.10, `emon.initial`), which run right after")
-  (comment "the lines are copied and before anything measures them; `loc` is the locale tag as code points (empty for none)")
-  (comment "and `ii` the initials' table, `al` the open paragraph's alignment rows (P4.11).")
-  (comment "Answers 0.")
+  (comment "`hc` is the heading analysis (`emon.heading`, P4.4, D167): an EMPTY `hc` means none and the paragraphs are")
+  (comment "what they were; it is also where the open sections are kept.")
+  (comment "`lt` is PREPARED by the caller: the lines copied (`lc-copy`), the initials found in the copy (`in-detect`, P4.10:")
+  (comment "before the style and heading analysis reads the lines, so a big first letter is never a heading), and `hc` made from")
+  (comment "it; `ii` is the initials' table, `al` the open paragraph's alignment rows (P4.11). Answers 0.")
   (let [^:mut ^I32 med 0
         ^:mut ^I32 indents 0
         ^:mut ^I32 p 1
@@ -975,8 +1017,7 @@
         ^:mut ^I32 mg 0
         ^:mut ^I32 ty 0
         ^:mut ^I32 score 0]
-    (lc-copy ln lt)
-    (in-detect wd gl fo et npages loc lt ls lo tm ii)
+    (in-retire lt ii)
     (pa-columns wd et npages pages layout lt ord ls sd it io rw gu ac tm cf lo pr)
     (set nf (quot (cells-len cf) CF_STRIDE))
     (set med (pa-median lt cf lo gp))
@@ -998,10 +1039,10 @@
                       (== (cells-at cf (+ (* r1 CF_STRIDE) CF_ROLE)) (rl-body)))
             (set r1 (+ r1 1)))
           (if (== r r1)
-            (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000))
+            (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 hc))
                 (set open 0)
                 (set prev -1)
-                (if (> p 1) (pa-milestone nodes p)))
+                (if (> p 1) (pa-milestone nodes p hc)))
             (do (set i r)
                 (while (< i r1)
                   (do (set first (cells-at cf (+ (* i CF_STRIDE) CF_FIRST)))
@@ -1017,7 +1058,7 @@
                                                       mg indents (pa-bottom cf prevfr)
                                                       (cells-at cf (+ (* i CF_STRIDE) CF_X0))
                                                       (cells-at cf (+ (* i CF_STRIDE) CF_X1))
-                                                      (cells-at cf (+ (* i CF_STRIDE) CF_COUNT))))
+                                                      (cells-at cf (+ (* i CF_STRIDE) CF_COUNT)) hc))
                             (cells-push dbg i)
                             (cells-push dbg prev)
                             (cells-push dbg b)
@@ -1030,8 +1071,8 @@
                       (if (>= (in-row lt b) 0) (set cont 0))
                       (if (== cont 0)
                         (do (set ty (ln-get lt b (lh-y0)))
-                            (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty))
-                            (if (and (== i r) (> p 1)) (pa-milestone nodes p))
+                            (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty hc))
+                            (if (and (== i r) (> p 1)) (pa-milestone nodes p hc))
                             (pa-frag-open fr lt p b 0)
                             (pa-ini-start wd lt et raw fr ii b))
                         (do (pa-join wd lt et raw b)
@@ -1045,9 +1086,9 @@
                       (set cont 1)
                       (while (< cont cnt)
                         (do (set b (cells-at lo (+ first cont)))
-                            (if (or (>= (in-row lt b) 0) (pa-new-par wd lt prev b med mg))
+                            (if (or (>= (in-row lt b) 0) (pa-new-par wd lt prev b med mg hc))
                               (do (set ty (ln-get lt b (lh-y0)))
-                                  (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty))
+                                  (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty hc))
                                   (pa-frag-open fr lt p b 0)
                                   (pa-ini-start wd lt et raw fr ii b))
                               (do (pa-join wd lt et raw b)
@@ -1064,7 +1105,7 @@
             (do (cells-push gp (cells-at ord i))
                 (set i (+ i 1))))
           (set p (+ p 1))))
-    (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000)
+    (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 hc)
     (al-pass nodes attrs al tm)
     (return 0)))
 

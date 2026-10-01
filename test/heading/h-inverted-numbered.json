@@ -1,0 +1,530 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 82.32, 522.76, 711.91]
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 73.17, 490.35, 226.66]
+        }
+      ]
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "number": "I",
+            "numbering": "upper-roman",
+            "text": "GOVERNANCE",
+            "at": [[1, 72, 82.32, 172.3, 91.32]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "There below something go under sound work being soon.",
+            "at": [[1, 72, 96.42, 348.97, 108.91]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 4,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 5,
+                "kind": "heading",
+                "level": 2,
+                "number": "A",
+                "numbering": "upper-alpha",
+                "text": "Board structure",
+                "at": [[1, 72, 130.16, 241.6, 147.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 6,
+                "kind": "paragraph",
+                "text": "After below want too also better boy do find.",
+                "at": [[1, 72, 154.92, 286.58, 167.41]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 7,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 8,
+                    "kind": "heading",
+                    "level": 3,
+                    "number": "1",
+                    "numbering": "decimal",
+                    "text": "Audit",
+                    "at": [[1, 72, 182.76, 131.94, 194.76]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 9,
+                    "kind": "paragraph",
+                    "text": "Along page of say while near went being today.",
+                    "at": [[1, 72, 200.67, 298.2, 213.16]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 10,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 11,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "a",
+                        "numbering": "lower-alpha",
+                        "text": "Charter",
+                        "at": [[1, 72, 226.17, 137.54, 238.66]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 12,
+                        "kind": "paragraph",
+                        "text": "Four think small with much almost seen answer own may.",
+                        "at": [[1, 72, 244.17, 353.77, 256.66]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 13,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 14,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "b",
+                        "numbering": "lower-alpha",
+                        "text": "Membership",
+                        "at": [[1, 72, 269.67, 160.8, 282.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 15,
+                        "kind": "paragraph",
+                        "text": "Large began big money country think head had such too even them little old body report.",
+                        "at": [[1, 72, 287.67, 502.18, 300.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              },
+              {
+                "id": 16,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 17,
+                    "kind": "heading",
+                    "level": 3,
+                    "number": "2",
+                    "numbering": "decimal",
+                    "text": "Risk",
+                    "at": [[1, 72, 315.51, 127.07, 327.51]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 18,
+                    "kind": "paragraph",
+                    "text": "Near head write new animal we far father study from play along used must.",
+                    "at": [[1, 72, 334.17, 436.1, 346.66]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 19,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 20,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "a",
+                        "numbering": "lower-alpha",
+                        "text": "Charter",
+                        "at": [[1, 72, 359.67, 137.54, 372.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 21,
+                        "kind": "paragraph",
+                        "text": "Through today best as form more red on put those money.",
+                        "at": [[1, 72, 376.92, 353.84, 389.41]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 22,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 23,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "b",
+                        "numbering": "lower-alpha",
+                        "text": "Membership",
+                        "at": [[1, 72, 402.42, 160.8, 414.91]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 24,
+                        "kind": "paragraph",
+                        "text": "Word through such well could thought down off end earth body quarter.",
+                        "at": [[1, 72, 420.42, 421.23, 432.91]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 25,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 26,
+                "kind": "heading",
+                "level": 2,
+                "number": "B",
+                "numbering": "upper-alpha",
+                "text": "Committees",
+                "at": [[1, 72, 454.16, 211.39, 471.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 27,
+                "kind": "paragraph",
+                "text": "Family room example over took during there like what sometimes however world earth going when how.",
+                "at": [[1, 72, 478.92, 522.76, 507.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 28,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 29,
+                    "kind": "heading",
+                    "level": 3,
+                    "number": "1",
+                    "numbering": "decimal",
+                    "text": "Audit",
+                    "at": [[1, 72, 523.26, 131.94, 535.26]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 30,
+                    "kind": "paragraph",
+                    "text": "Today these himself thing hard another top know these new came make used quarter.",
+                    "at": [[1, 72, 541.17, 486.07, 553.66]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 31,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 32,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "a",
+                        "numbering": "lower-alpha",
+                        "text": "Charter",
+                        "at": [[1, 72, 566.67, 137.54, 579.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 33,
+                        "kind": "paragraph",
+                        "text": "Word small line this by today around let country.",
+                        "at": [[1, 72, 584.67, 309.64, 597.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 34,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 35,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "b",
+                        "numbering": "lower-alpha",
+                        "text": "Membership",
+                        "at": [[1, 72, 610.17, 160.8, 622.66]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 36,
+                        "kind": "paragraph",
+                        "text": "Together country much without five example time using of method thought by him.",
+                        "at": [[1, 72, 628.17, 475.74, 640.66]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              },
+              {
+                "id": 37,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 38,
+                    "kind": "heading",
+                    "level": 3,
+                    "number": "2",
+                    "numbering": "decimal",
+                    "text": "Risk",
+                    "at": [[1, 72, 656.01, 127.07, 668.01]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 39,
+                    "kind": "paragraph",
+                    "text": "About line around than think place through below.",
+                    "at": [[1, 72, 673.92, 317.3, 686.41]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 40,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 41,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "a",
+                        "numbering": "lower-alpha",
+                        "text": "Charter",
+                        "at": [[1, 72, 699.42, 137.54, 711.91]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 42,
+                        "kind": "break",
+                        "page": 2,
+                        "src": ["infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 43,
+                        "kind": "paragraph",
+                        "text": "Most sample who before going my in get on usually great.",
+                        "at": [[2, 72, 73.17, 350.29, 85.66]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 44,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 45,
+                        "kind": "heading",
+                        "level": 4,
+                        "number": "b",
+                        "numbering": "lower-alpha",
+                        "text": "Membership",
+                        "at": [[2, 72, 98.67, 160.8, 111.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 46,
+                        "kind": "paragraph",
+                        "text": "This body report region all called going both feet morning soon later those then show.",
+                        "at": [[2, 72, 116.67, 486.59, 129.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      },
+      {
+        "id": 47,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 48,
+            "kind": "heading",
+            "level": 1,
+            "number": "II",
+            "numbering": "upper-roman",
+            "text": "REMUNERATION",
+            "at": [[2, 72, 141.57, 183.33, 150.57]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 49,
+            "kind": "paragraph",
+            "text": "From last over city left from school two.",
+            "at": [[2, 72, 155.67, 264.59, 168.16]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 50,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 51,
+                "kind": "heading",
+                "level": 2,
+                "number": "A",
+                "numbering": "upper-alpha",
+                "text": "Principles",
+                "at": [[2, 72, 189.41, 195.35, 206.41]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 52,
+                "kind": "paragraph",
+                "text": "Into large your word market car little help again show now for after three answer hear.",
+                "at": [[2, 72, 214.17, 490.35, 226.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [],
+  "dropped": []
+}

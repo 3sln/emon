@@ -1743,7 +1743,7 @@ a raised initial's top; the initial's box is part of the paragraph's region;
 its glyphs are left out of the style inventory, the body-size statistics and
 feature column 18 of its line.
 
-**As built (P4.10, D167, D169).** `kin/initial.kin` runs right after the lines are copied for the column stage and
+**As built (P4.10, D173, D175).** `kin/initial.kin` runs right after the lines are copied for the column stage and
 before anything measures them, on that copy: a drop or margin initial's line leaves the page and lines 1..N of a drop start at
 its start edge; a raised initial's line takes the box of its other glyphs and its first word does not vote on the line's size or
 style. *Candidates* are one-word lines of at most 12 code points (a letter or digit among them) at least `initial-min` (2.0)
@@ -1790,7 +1790,7 @@ decimal-aligned column whose end edges disagree gets none (there is no
 `decimal` value: the numbers read the same). Headings and captions are
 tested like paragraphs.
 
-**As built (P4.11, D168).** `kin/align.kin`: the caller makes, for every line of a block, its start and end gaps against
+**As built (P4.11, D174).** `kin/align.kin`: the caller makes, for every line of a block, its start and end gaps against
 the box of the fragment it sits in (`cf`'s box, each from the line's own side, so a right-to-left line is measured from the
 right and `start`/`end` are logical), its size and style bits, and closes the block with a marker; `al-pass` decides at the
 end of the stage. The tests are the table's, with *t* a quarter of the first line's size, a first-line indent taken out of line

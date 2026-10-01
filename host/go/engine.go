@@ -31,7 +31,10 @@ import (
 	"strings"
 	"sync"
 
+	"emon/columns"
 	"emon/evidence"
+	"emon/initial"
+	"emon/heading"
 	"emon/html"
 	"emon/model"
 	"emon/para"
@@ -736,14 +739,20 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
 	// the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an
-	// initial joins its first word); ia is their table and the open paragraph's alignment rows (kin/align.kin, P4.11)
+	// initial joins its first word); ia is their table and the open paragraph's alignment rows (kin/align.kin, P4.11). They are
+	// found in the copy of the lines BEFORE the heading analysis reads it: a big first letter must never be a heading
 	ia := newCellsN(3)
 	for _, ch := range opts.Locale {
 		port.CellsPush(ia[0], int32(ch))
 	}
-	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
-		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12],
-		gl, fnt, ia[0], ia[1], ia[2])
+	columns.LcCopy(ln, c[0])
+	initial.InDetect(wd, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
+	// the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
+	// paragraph stage builds; its priors (the tagged roles, the outline) are empty here: follow-up (D172)
+	h := newCellsN(7)
+	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], ia[1], ia[2])
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
 		for _, ch := range opts.Locale {

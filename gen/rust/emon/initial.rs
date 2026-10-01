@@ -349,7 +349,7 @@ pub(crate) fn in_next(lt: &mut crate::port::Cells, sc: &mut crate::port::Cells, 
     let cy: i32 = in_ymid2(lt, cur);
     while i < n {
         let m: i32 = crate::port::cells_at(sc, i);
-        if (m != cur) && ((ln_get(lt, m, lh_page()) != 0) && (in_dirv(lt, m) == s)) {
+        if (m != cur) && (in_upright(lt, m) && (in_dirv(lt, m) == s)) {
             let st: i32 = in_start(lt, m, s);
             let hm: i32 = in_get(lt, m, lh_y1()) - in_get(lt, m, lh_y0());
             let d2: i32 = in_ymid2(lt, m) - cy;
@@ -401,7 +401,7 @@ pub(crate) fn in_first_line(wd: &mut crate::port::Cells, lt: &mut crate::port::C
     let mut by: i32 = 0;
     while i < n {
         let l: i32 = crate::port::cells_at(sc, i);
-        if (l != c) && ((ln_get(lt, l, lh_page()) != 0) && (in_dirv(lt, l) == s)) {
+        if (l != c) && (in_upright(lt, l) && (in_dirv(lt, l) == s)) {
             let b: i32 = in_lsize(wd, lt, l);
             let gap: i32 = in_start(lt, l, s) - ce;
             if (b > 0) && ((csize * 10) >= (IN_MIN * b)) && ((gap * IN_SLACK_DIV) >= (0 - b)) && ((gap * IN_GAP_DEN) <= (b * IN_GAP_NUM)) {
@@ -536,7 +536,7 @@ pub(crate) fn in_prev(lt: &mut crate::port::Cells, sc: &mut crate::port::Cells, 
     let cy: i32 = in_ymid2(lt, cur);
     while i < n {
         let m: i32 = crate::port::cells_at(sc, i);
-        if (m != cur) && ((ln_get(lt, m, lh_page()) != 0) && (in_dirv(lt, m) == s)) {
+        if (m != cur) && (in_upright(lt, m) && (in_dirv(lt, m) == s)) {
             let st: i32 = in_start(lt, m, s);
             let hm: i32 = in_get(lt, m, lh_y1()) - in_get(lt, m, lh_y0());
             let d2: i32 = cy - in_ymid2(lt, m);
@@ -847,7 +847,7 @@ pub(crate) fn in_page(wd: &mut crate::port::Cells, gl: &mut crate::port::Cells, 
                 if got == 1 {
                     let rr: i32 = r0 * II_STRIDE;
                     in_apply(lt, sq, crate::port::cells_at(ii, rr + II_FORM), crate::port::cells_at(ii, rr + II_LINES), c, s);
-                    crate::port::cells_set(lt, (c * 16) + lh_page(), 0);
+                    crate::port::cells_set(lt, (c * 16) + lh_rot(), 9000);
                 }
                 s += 1;
             }
@@ -1128,6 +1128,24 @@ pub fn in_detect(wd: &mut crate::port::Cells, gl: &mut crate::port::Cells, fo: &
         r += 1;
     }
     return q;
+}
+pub fn in_retire(mut lt: &mut crate::port::Cells, ii: &mut crate::port::Cells) -> i32 {
+    // The lines of their own that initials were found in (`ii`: an initial's line that holds no other text) leave the page, so
+    // no stage that builds from the pages sees them. Answers how many.
+    let n: i32 = crate::port::cells_len(ii) / II_STRIDE;
+    let mut r: i32 = 0;
+    let mut got: i32 = 0;
+    while r < n {
+        let il: i32 = crate::port::cells_at(ii, (r * II_STRIDE) + II_IL);
+        if il >= 0 {
+            if crate::port::cells_at(lt, (il * 16) + 15) >= 0 {
+                crate::port::cells_set(lt, (il * 16) + lh_page(), 0);
+                got += 1;
+            }
+        }
+        r += 1;
+    }
+    return got;
 }
 pub fn in_get_ii(ii: &mut crate::port::Cells, r: i32, f: i32) -> i32 {
     return crate::port::cells_at(ii, (r * II_STRIDE) + f);

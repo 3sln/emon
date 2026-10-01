@@ -1,4 +1,4 @@
-;; Laws for `emon.initial`'s join (P4.10; SPEC 10.9; D108, D167), on every target.
+;; Laws for `emon.initial`'s join (P4.10; SPEC 10.9; D108, D173), on every target.
 ;;
 ;; WHAT THE PAGE CANNOT SAY is whether a one-letter initial is a word of its own: `A` + `long` and `Along` are the same
 ;; 4.5 pt gap and no space glyph. `in-join` answers 0 (joined, sure), 1 (joined, flagged low-conf) or 2 (a space): joined

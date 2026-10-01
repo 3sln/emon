@@ -29,7 +29,7 @@
     (:out r)))
 
 ;; builds the driver when gen/ or host/ changed (predict-emon.sh's stamp), by asking it for a document
-(run "tools/accuracy/predict-emon.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
+(run "sh" "tools/accuracy/predict-emon.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
 
 (.mkdirs (io/file root "test" "para"))
 (doseq [d docs]

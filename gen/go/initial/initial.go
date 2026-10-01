@@ -411,7 +411,7 @@ func inNext(lt *port.Cells, sc *port.Cells, cur int32, s int32, xlo int32, xhi i
 	var cy int32 = inYmid2(lt, cur)
 	for i < n {
 		var m int32 = port.CellsAt(sc, i)
-		if (m != cur) && ((evidence.LnGet(lt, m, evidence.LhPage()) != 0) && (inDirv(lt, m) == s)) {
+		if (m != cur) && (inUpright(lt, m) && (inDirv(lt, m) == s)) {
 			var st int32 = inStart(lt, m, s)
 			var hm int32 = inGet(lt, m, evidence.LhY1()) - inGet(lt, m, evidence.LhY0())
 			var d2 int32 = inYmid2(lt, m) - cy
@@ -466,7 +466,7 @@ func inFirstLine(wd *port.Cells, lt *port.Cells, fo *port.Cells, et *port.Cells,
 	var by int32 = 0
 	for i < n {
 		var l int32 = port.CellsAt(sc, i)
-		if (l != c) && ((evidence.LnGet(lt, l, evidence.LhPage()) != 0) && (inDirv(lt, l) == s)) {
+		if (l != c) && (inUpright(lt, l) && (inDirv(lt, l) == s)) {
 			var b int32 = inLsize(wd, lt, l)
 			var gap int32 = inStart(lt, l, s) - ce
 			if (b > 0) && ((csize * 10) >= (inMin * b)) && ((gap * inSlackDiv) >= (0 - b)) && ((gap * inGapDen) <= (b * inGapNum)) {
@@ -605,7 +605,7 @@ func inPrev(lt *port.Cells, sc *port.Cells, cur int32, s int32, xlo int32, xhi i
 	var cy int32 = inYmid2(lt, cur)
 	for i < n {
 		var m int32 = port.CellsAt(sc, i)
-		if (m != cur) && ((evidence.LnGet(lt, m, evidence.LhPage()) != 0) && (inDirv(lt, m) == s)) {
+		if (m != cur) && (inUpright(lt, m) && (inDirv(lt, m) == s)) {
 			var st int32 = inStart(lt, m, s)
 			var hm int32 = inGet(lt, m, evidence.LhY1()) - inGet(lt, m, evidence.LhY0())
 			var d2 int32 = cy - inYmid2(lt, m)
@@ -918,7 +918,7 @@ func inPage(wd *port.Cells, gl *port.Cells, fo *port.Cells, et *port.Cells, lt *
 				if got == 1 {
 					var rr int32 = r0 * iiStride
 					inApply(lt, sq, port.CellsAt(ii, rr+iiForm), port.CellsAt(ii, rr+iiLines), c, s)
-					port.CellsSet(lt, (c*16)+evidence.LhPage(), 0)
+					port.CellsSet(lt, (c*16)+evidence.LhRot(), 9000)
 				}
 				s += 1
 			}
@@ -1217,6 +1217,25 @@ func InDetect(wd *port.Cells, gl *port.Cells, fo *port.Cells, et *port.Cells, np
 		r += 1
 	}
 	return q
+}
+
+func InRetire(lt *port.Cells, ii *port.Cells) int32 {
+	// The lines of their own that initials were found in (`ii`: an initial's line that holds no other text) leave the page, so
+	// no stage that builds from the pages sees them. Answers how many.
+	var n int32 = port.CellsLen(ii) / iiStride
+	var r int32 = 0
+	var got int32 = 0
+	for r < n {
+		var il int32 = port.CellsAt(ii, (r*iiStride)+iiIl)
+		if il >= 0 {
+			if port.CellsAt(lt, (il*16)+15) >= 0 {
+				port.CellsSet(lt, (il*16)+evidence.LhPage(), 0)
+				got += 1
+			}
+		}
+		r += 1
+	}
+	return got
 }
 
 func InGetIi(ii *port.Cells, r int32, f int32) int32 {

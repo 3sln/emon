@@ -39,102 +39,112 @@
     "children": [
       {
         "id": 1,
-        "kind": "paragraph",
-        "text": "Drop Caps in Columns",
-        "at": [[1, 72, 95.6, 287.51, 115.6]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 2,
-        "kind": "paragraph",
-        "align": "start",
-        "text": "Does father food these other and who report show night the think. Our over day words again sun still tell that before children your father if word. Point him people year review without how about old think animal kind revenue might.",
-        "at": [[1, 72, 124.17, 286.29, 216.91]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 3,
-        "kind": "paragraph",
-        "align": "start",
-        "text": "Everything about the harbour had been measured, and nothing about it was certain. Words those but enough again right hand red three does later. Land face and to during right using so only asked it and. Turn need during during well for come house door whole sentence last well. Use air us heard began above seen look too her.",
-        "inlines": [
+        "kind": "section",
+        "level": 1,
+        "children": [
           {
-            "kind": "initial",
-            "form": "drop",
-            "lines": 3,
-            "children": [
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "text": "Drop Caps in Columns",
+            "at": [[1, 72, 95.6, 287.51, 115.6]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Does father food these other and who report show night the think. Our over day words again sun still tell that before children your father if word. Point him people year review without how about old think animal kind revenue might.",
+            "at": [[1, 72, 124.17, 286.29, 216.91]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 4,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Everything about the harbour had been measured, and nothing about it was certain. Words those but enough again right hand red three does later. Land face and to during right using so only asked it and. Turn need during during well for come house door whole sentence last well. Use air us heard began above seen look too her.",
+            "inlines": [
+              {
+                "kind": "initial",
+                "form": "drop",
+                "lines": 3,
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "E",
+                    "src": ["text"],
+                    "conf": 1000
+                  }
+                ],
+                "src": ["text", "infer"],
+                "conf": 500,
+                "flags": ["low-conf"]
+              },
               {
                 "kind": "text",
-                "text": "E",
+                "text": "verything about the harbour had been measured, and nothing about it was certain. Words those but enough again right hand red three does later. Land face and to during right using so only asked it and. Turn need during during well for come house door whole sentence last well. Use air us heard began above seen look too her.",
                 "src": ["text"],
                 "conf": 1000
               }
             ],
+            "at": [[1, 72, 215.38, 290.33, 367.66]],
             "src": ["text", "infer"],
-            "conf": 500,
-            "flags": ["low-conf"]
+            "conf": 500
           },
           {
-            "kind": "text",
-            "text": "verything about the harbour had been measured, and nothing about it was certain. Words those but enough again right hand red three does later. Land face and to during right using so only asked it and. Turn need during during well for come house door whole sentence last well. Use air us heard began above seen look too her.",
-            "src": ["text"],
-            "conf": 1000
-          }
-        ],
-        "at": [[1, 72, 215.38, 290.33, 367.66]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 7,
-        "kind": "paragraph",
-        "align": "start",
-        "text": "Make up near want country night get pay father against. Their color country would good of during could upon together. Year do not was word figure two often them no done most be picture all.",
-        "at": [[1, 72, 379.17, 286.01, 455.41]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 8,
-        "kind": "paragraph",
-        "align": "start",
-        "text": "Nobody argued with the tide, which came in twice a day and left the evidence. Is when by very high little around told study no or. Look review said end too give went have long country me point told little. Told method with want never market example may big life answer let. Going it often take its did go too good try should part great city. She results an began color get let above away can against found show with in.",
-        "inlines": [
+            "id": 8,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Make up near want country night get pay father against. Their color country would good of during could upon together. Year do not was word figure two often them no done most be picture all.",
+            "at": [[1, 72, 379.17, 286.01, 455.41]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
           {
-            "kind": "initial",
-            "form": "drop",
-            "lines": 3,
-            "children": [
+            "id": 9,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Nobody argued with the tide, which came in twice a day and left the evidence. Is when by very high little around told study no or. Look review said end too give went have long country me point told little. Told method with want never market example may big life answer let. Going it often take its did go too good try should part great city. She results an began color get let above away can against found show with in.",
+            "inlines": [
+              {
+                "kind": "initial",
+                "form": "drop",
+                "lines": 3,
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "N",
+                    "src": ["text"],
+                    "conf": 1000
+                  }
+                ],
+                "src": ["text", "infer"],
+                "conf": 800
+              },
               {
                 "kind": "text",
-                "text": "N",
+                "text": "obody argued with the tide, which came in twice a day and left the evidence. Is when by very high little around told study no or. Look review said end too give went have long country me point told little. Told method with want never market example may big life answer let. Going it often take its did go too good try should part great city. She results an began color get let above away can against found show with in.",
                 "src": ["text"],
                 "conf": 1000
               }
             ],
+            "at": [[1, 320.4, 111.88, 536.3, 296.41]],
             "src": ["text", "infer"],
-            "conf": 800
+            "conf": 500
           },
           {
-            "kind": "text",
-            "text": "obody argued with the tide, which came in twice a day and left the evidence. Is when by very high little around told study no or. Look review said end too give went have long country me point told little. Told method with want never market example may big life answer let. Going it often take its did go too good try should part great city. She results an began color get let above away can against found show with in.",
-            "src": ["text"],
-            "conf": 1000
+            "id": 13,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Being was however thing right must policy policy much last night other do not. Had do story go paper world let with change knew take too. Mother has sea head second while many made air long revenue. Something city cut work several long friend has which near.",
+            "at": [[1, 320.4, 307.92, 536.46, 399.91]],
+            "src": ["text", "infer"],
+            "conf": 500
           }
         ],
-        "at": [[1, 320.4, 111.88, 536.3, 296.41]],
-        "src": ["text", "infer"],
-        "conf": 500
-      },
-      {
-        "id": 12,
-        "kind": "paragraph",
-        "align": "start",
-        "text": "Being was however thing right must policy policy much last night other do not. Had do story go paper world let with change knew take too. Mother has sea head second while many made air long revenue. Something city cut work several long friend has which near.",
-        "at": [[1, 320.4, 307.92, 536.46, 399.91]],
-        "src": ["text", "infer"],
+        "src": ["infer"],
         "conf": 500
       }
     ]

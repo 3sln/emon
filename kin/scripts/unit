@@ -132,6 +132,12 @@ kin/scripts/para-check
 # (the colours of the colour-space fixture come from its second evaluator). The laws of kin/pdfvistest.kin are the gate.
 kin/scripts/vis-fixtures --check
 
+# THE HEADING STAGE'S INDEPENDENT WITNESS (P4.2, P4.4, D167-D171; babashka, reads only committed files): the
+# headings of each golden Model in test/heading are, in order, the headings of the synthetic gold (the HTML's
+# own): text, level, number and numbering scheme; each is the first child of a section of its own level, and
+# the sections nest by level.
+kin/scripts/heading-check
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then

@@ -350,7 +350,7 @@ public static class Initial {
         int cy = InYmid2(lt, cur);
         while (i < n) {
             int m = emon.Port.CellsAt(sc, i);
-            if ((m != cur) && ((Evidence.LnGet(lt, m, Evidence.LhPage()) != 0) && (InDirv(lt, m) == s))) {
+            if ((m != cur) && (InUpright(lt, m) && (InDirv(lt, m) == s))) {
                 int st = InStart(lt, m, s);
                 int hm = InGet(lt, m, Evidence.LhY1()) - InGet(lt, m, Evidence.LhY0());
                 int d2 = InYmid2(lt, m) - cy;
@@ -402,7 +402,7 @@ public static class Initial {
         int by = 0;
         while (i < n) {
             int l = emon.Port.CellsAt(sc, i);
-            if ((l != c) && ((Evidence.LnGet(lt, l, Evidence.LhPage()) != 0) && (InDirv(lt, l) == s))) {
+            if ((l != c) && (InUpright(lt, l) && (InDirv(lt, l) == s))) {
                 int b = InLsize(wd, lt, l);
                 int gap = InStart(lt, l, s) - ce;
                 if ((b > 0) && ((csize * 10) >= (InMin * b)) && ((gap * InSlackDiv) >= (0 - b)) && ((gap * InGapDen) <= (b * InGapNum))) {
@@ -537,7 +537,7 @@ public static class Initial {
         int cy = InYmid2(lt, cur);
         while (i < n) {
             int m = emon.Port.CellsAt(sc, i);
-            if ((m != cur) && ((Evidence.LnGet(lt, m, Evidence.LhPage()) != 0) && (InDirv(lt, m) == s))) {
+            if ((m != cur) && (InUpright(lt, m) && (InDirv(lt, m) == s))) {
                 int st = InStart(lt, m, s);
                 int hm = InGet(lt, m, Evidence.LhY1()) - InGet(lt, m, Evidence.LhY0());
                 int d2 = cy - InYmid2(lt, m);
@@ -848,7 +848,7 @@ public static class Initial {
                     if (got == 1) {
                         int rr = r0 * IiStride;
                         InApply(lt, sq, emon.Port.CellsAt(ii, rr + IiForm), emon.Port.CellsAt(ii, rr + IiLines), c, s);
-                        emon.Port.CellsSet(lt, (c * 16) + Evidence.LhPage(), 0);
+                        emon.Port.CellsSet(lt, (c * 16) + Evidence.LhRot(), 9000);
                     }
                     s += 1;
                 }
@@ -1129,6 +1129,24 @@ public static class Initial {
             r += 1;
         }
         return q;
+    }
+    public static int InRetire(emon.Port.Cells lt, emon.Port.Cells ii) {
+        // The lines of their own that initials were found in (`ii`: an initial's line that holds no other text) leave the page, so
+        // no stage that builds from the pages sees them. Answers how many.
+        int n = emon.Port.CellsLen(ii) / IiStride;
+        int r = 0;
+        int got = 0;
+        while (r < n) {
+            int il = emon.Port.CellsAt(ii, (r * IiStride) + IiIl);
+            if (il >= 0) {
+                if (emon.Port.CellsAt(lt, (il * 16) + 15) >= 0) {
+                    emon.Port.CellsSet(lt, (il * 16) + Evidence.LhPage(), 0);
+                    got += 1;
+                }
+            }
+            r += 1;
+        }
+        return got;
     }
     public static int InGetIi(emon.Port.Cells ii, int r, int f) {
         return emon.Port.CellsAt(ii, (r * IiStride) + f);

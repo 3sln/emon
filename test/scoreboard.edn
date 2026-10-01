@@ -1177,17 +1177,17 @@
         :block-caption-f1 0.0
         :block-caption-p 0.0
         :block-caption-r 0.0
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
         :block-item-f1 0.0
         :block-item-p 0.0
         :block-item-r 0.0
         :block-list-f1 0.0
         :block-list-p 0.0
         :block-list-r 0.0
-        :block-paragraph-f1 0.387097
-        :block-paragraph-p 0.24
+        :block-paragraph-f1 0.473684
+        :block-paragraph-p 0.310345
         :block-paragraph-r 1.0
         :block-table-f1 0.0
         :block-table-p 0.0
@@ -1199,25 +1199,27 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.333333
-        :para-boundary-p 0.236111
+        :para-boundary-f1 0.4
+        :para-boundary-p 0.309091
         :para-boundary-r 0.566667
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
         :wer 0.097872}
       "pdf-tagged/headings" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.666667
-        :block-paragraph-p 0.5
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
         :block-paragraph-r 1.0
         :bow-f1 0.930818
         :bow-p 0.886228
@@ -1226,28 +1228,30 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.65
-        :para-boundary-p 0.481481
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
         :para-boundary-r 1.0
         :wer 0.125828}
       "pdf-tagged/lists" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
         :block-item-f1 0.0
         :block-item-p 0.0
         :block-item-r 0.0
         :block-list-f1 0.0
         :block-list-p 0.0
         :block-list-r 0.0
-        :block-paragraph-f1 0.4
-        :block-paragraph-p 0.25
+        :block-paragraph-f1 0.5
+        :block-paragraph-p 0.333333
         :block-paragraph-r 1.0
         :bow-f1 0.96
         :bow-p 0.923077
@@ -1256,25 +1260,27 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.272727
-        :para-boundary-p 0.428571
+        :para-boundary-f1 0.3
+        :para-boundary-p 0.6
         :para-boundary-r 0.2
         :wer 0.083333}
       "pdf-tagged/tables" {
         :block-caption-f1 0.0
         :block-caption-p 0.0
         :block-caption-r 0.0
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.097561
-        :block-paragraph-p 0.051282
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.1
+        :block-paragraph-p 0.052632
         :block-paragraph-r 1.0
         :block-table-f1 0.0
         :block-table-p 0.0
@@ -1286,14 +1292,16 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.05
-        :para-boundary-p 0.026316
+        :para-boundary-f1 0.051282
+        :para-boundary-p 0.027027
         :para-boundary-r 0.5
         :table-continued-acc 0.0
         :table-teds-lite 0.0
@@ -1317,14 +1325,14 @@
         :block-figure-f1 0.0
         :block-figure-p 0.0
         :block-figure-r 0.0
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
         :block-note-f1 0.0
         :block-note-p 0.0
         :block-note-r 0.0
-        :block-paragraph-f1 0.327869
-        :block-paragraph-p 0.196078
+        :block-paragraph-f1 0.380952
+        :block-paragraph-p 0.235294
         :block-paragraph-r 1.0
         :block-table-f1 0.0
         :block-table-p 0.0
@@ -1336,15 +1344,17 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :hyphen-acc 0.967742
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.278261
-        :para-boundary-p 0.163265
+        :para-boundary-f1 0.326531
+        :para-boundary-p 0.197531
         :para-boundary-r 0.941176
         :table-continued-acc 0.0
         :table-teds-lite 0.0
@@ -1368,9 +1378,9 @@
         :block-figure-f1 0.0
         :block-figure-p 0.0
         :block-figure-r 0.0
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 0.984127
+        :block-heading-p 0.986364
+        :block-heading-r 0.9819
         :block-item-f1 0.0
         :block-item-p 0.0
         :block-item-r 0.0
@@ -1380,28 +1390,30 @@
         :block-note-f1 0.5
         :block-note-p 0.75
         :block-note-r 0.375
-        :block-paragraph-f1 0.202875
-        :block-paragraph-p 0.11323
-        :block-paragraph-r 0.973958
+        :block-paragraph-f1 0.215981
+        :block-paragraph-p 0.121498
+        :block-paragraph-r 0.971354
         :block-seal-f1 0.0
         :block-seal-p 0.0
         :block-seal-r 0.0
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
-        :bow-f1 0.983949
-        :bow-p 0.972246
+        :bow-f1 0.985298
+        :bow-p 0.974883
         :bow-r 0.995938
-        :cer 0.021929
+        :cer 0.019396
         :first-word-acc 0.652174
         :frag-col-acc 0.712766
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 0.984127
+        :heading-level-acc 0.963134
+        :heading-level-e2e 0.945701
+        :heading-level-near 1.0
+        :heading-p 0.986364
+        :heading-r 0.9819
         :hyphen-acc 0.981481
         :initial-f1 0.930233
         :initial-false-heading 0.0
@@ -1413,14 +1425,14 @@
         :join-r 0.909091
         :order-tau 1.0
         :page-label-acc 0.706522
-        :para-boundary-f1 0.17738
-        :para-boundary-p 0.100677
+        :para-boundary-f1 0.189346
+        :para-boundary-p 0.108458
         :para-boundary-r 0.744875
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
         :watermark-leak 0.00201
-        :wer 0.031154}
+        :wer 0.028383}
       "pdf/columns" {
         :block-caption-f1 0.0
         :block-caption-p 0.0
@@ -1428,14 +1440,14 @@
         :block-figure-f1 0.0
         :block-figure-p 0.0
         :block-figure-r 0.0
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 0.949153
+        :block-heading-p 1.0
+        :block-heading-r 0.903226
         :block-note-f1 0.8
         :block-note-p 1.0
         :block-note-r 0.666667
-        :block-paragraph-f1 0.703125
-        :block-paragraph-p 0.54878
+        :block-paragraph-f1 0.789474
+        :block-paragraph-p 0.661765
         :block-paragraph-r 0.978261
         :block-table-f1 0.0
         :block-table-p 0.0
@@ -1448,18 +1460,20 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 0.949153
+        :heading-level-acc 0.821429
+        :heading-level-e2e 0.741935
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 0.903226
         :hyphen-acc 1.0
         :join-f1 0.952381
         :join-p 1.0
         :join-r 0.909091
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.666667
-        :para-boundary-p 0.519231
+        :para-boundary-f1 0.753488
+        :para-boundary-p 0.632812
         :para-boundary-r 0.931034
         :table-continued-acc 0.0
         :table-teds-lite 0.0
@@ -1472,11 +1486,11 @@
         :block-figure-f1 0.0
         :block-figure-p 0.0
         :block-figure-r 0.0
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.285714
-        :block-paragraph-p 0.166667
+        :block-heading-f1 0.857143
+        :block-heading-p 0.75
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.315789
+        :block-paragraph-p 0.1875
         :block-paragraph-r 1.0
         :bow-f1 0.89441
         :bow-p 0.808989
@@ -1485,25 +1499,27 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 0.857143
+        :heading-level-acc 0.666667
+        :heading-level-e2e 0.666667
+        :heading-level-near 1.0
+        :heading-p 0.75
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.186047
-        :para-boundary-p 0.117647
+        :para-boundary-f1 0.205128
+        :para-boundary-p 0.133333
         :para-boundary-r 0.444444
         :wer 0.236111}
       "pdf/footnotes" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
         :block-note-f1 0.0
         :block-note-p 0.0
         :block-note-r 0.0
-        :block-paragraph-f1 0.466667
-        :block-paragraph-p 0.411765
+        :block-paragraph-f1 0.538462
+        :block-paragraph-p 0.538462
         :block-paragraph-r 0.538462
         :bow-f1 0.961977
         :bow-p 0.951128
@@ -1512,23 +1528,25 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 0.333333
-        :para-boundary-f1 0.538462
-        :para-boundary-p 0.466667
+        :para-boundary-f1 0.636364
+        :para-boundary-p 0.636364
         :para-boundary-r 0.636364
         :wer 0.05}
       "pdf/forms" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.015674
+        :block-heading-f1 0.909091
+        :block-heading-p 0.833333
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.012618
         :block-paragraph-p 0.007924
-        :block-paragraph-r 0.714286
+        :block-paragraph-r 0.571429
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
@@ -1539,25 +1557,27 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 0.909091
+        :heading-level-acc 0.6
+        :heading-level-e2e 0.6
+        :heading-level-near 1.0
+        :heading-p 0.833333
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 0.25
-        :para-boundary-f1 0.015773
-        :para-boundary-p 0.007949
+        :para-boundary-f1 0.015873
+        :para-boundary-p 0.008
         :para-boundary-r 1.0
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
         :wer 0.1}
       "pdf/furniture" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.739583
-        :block-paragraph-p 0.586777
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.845238
+        :block-paragraph-p 0.731959
         :block-paragraph-r 1.0
         :bow-f1 0.989358
         :bow-p 0.97894
@@ -1566,46 +1586,50 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 0.363636
-        :para-boundary-f1 0.728261
-        :para-boundary-p 0.57265
+        :para-boundary-f1 0.8375
+        :para-boundary-p 0.72043
         :para-boundary-r 1.0
         :wer 0.021513}
       "pdf/headings" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.634328
-        :block-paragraph-p 0.464481
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
         :block-paragraph-r 1.0
-        :bow-f1 0.967097
-        :bow-p 0.939812
+        :bow-f1 0.985536
+        :bow-p 0.975277
         :bow-r 0.996013
-        :cer 0.038386
+        :cer 0.003678
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.617188
-        :para-boundary-p 0.446328
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
         :para-boundary-r 1.0
-        :wer 0.063787}
+        :wer 0.025249}
       "pdf/initials" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.87234
-        :block-paragraph-p 0.773585
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
         :block-paragraph-r 1.0
         :bow-f1 0.993819
         :bow-p 0.991096
@@ -1616,10 +1640,12 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :initial-f1 0.930233
         :initial-false-heading 0.0
         :initial-form-acc 1.0
@@ -1630,22 +1656,22 @@
         :join-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.789474
-        :para-boundary-p 0.681818
+        :para-boundary-f1 0.9375
+        :para-boundary-p 0.9375
         :para-boundary-r 0.9375
         :wer 0.009642}
       "pdf/lists" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
         :block-item-f1 0.0
         :block-item-p 0.0
         :block-item-r 0.0
         :block-list-f1 0.0
         :block-list-p 0.0
         :block-list-r 0.0
-        :block-paragraph-f1 0.08
-        :block-paragraph-p 0.041667
+        :block-paragraph-f1 0.086957
+        :block-paragraph-p 0.045455
         :block-paragraph-r 1.0
         :bow-f1 0.966227
         :bow-p 0.934661
@@ -1654,28 +1680,30 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 0.4
-        :para-boundary-f1 0.044199
-        :para-boundary-p 0.043011
+        :para-boundary-f1 0.046243
+        :para-boundary-p 0.047059
         :para-boundary-r 0.045455
         :wer 0.069906}
       "pdf/scripts" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
+        :block-heading-f1 0.933333
+        :block-heading-p 0.933333
+        :block-heading-r 0.933333
         :block-item-f1 0.0
         :block-item-p 0.0
         :block-item-r 0.0
         :block-list-f1 0.0
         :block-list-p 0.0
         :block-list-r 0.0
-        :block-paragraph-f1 0.298851
-        :block-paragraph-p 0.175676
+        :block-paragraph-f1 0.361111
+        :block-paragraph-p 0.220339
         :block-paragraph-r 1.0
         :block-table-f1 0.0
         :block-table-p 0.0
@@ -1687,25 +1715,27 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 0.933333
+        :heading-level-acc 1.0
+        :heading-level-e2e 0.933333
+        :heading-level-near 1.0
+        :heading-p 0.933333
+        :heading-r 0.933333
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.247191
-        :para-boundary-p 0.15942
+        :para-boundary-f1 0.297297
+        :para-boundary-p 0.203704
         :para-boundary-r 0.55
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
         :wer 0.346008}
       "pdf/seals" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.153846
-        :block-paragraph-p 0.083333
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.157895
+        :block-paragraph-p 0.085714
         :block-paragraph-r 1.0
         :block-seal-f1 0.0
         :block-seal-p 0.0
@@ -1717,25 +1747,27 @@
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.108108
-        :para-boundary-p 0.057143
+        :para-boundary-f1 0.111111
+        :para-boundary-p 0.058824
         :para-boundary-r 1.0
         :wer 0.653846}
       "pdf/tables" {
         :block-caption-f1 0.0
         :block-caption-p 0.0
         :block-caption-r 0.0
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.015739
-        :block-paragraph-p 0.007932
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.015828
+        :block-paragraph-p 0.007977
         :block-paragraph-r 1.0
         :block-table-f1 0.0
         :block-table-p 0.0
@@ -1747,25 +1779,27 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 0.333333
-        :para-boundary-f1 0.007932
-        :para-boundary-p 0.003984
+        :para-boundary-f1 0.007977
+        :para-boundary-p 0.004007
         :para-boundary-r 0.875
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
         :wer 0.01096}
       "pdf/watermarks" {
-        :block-heading-f1 0.0
-        :block-heading-p 0.0
-        :block-heading-r 0.0
-        :block-paragraph-f1 0.789474
-        :block-paragraph-p 0.652174
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.9375
+        :block-paragraph-p 0.882353
         :block-paragraph-r 1.0
         :bow-f1 0.998906
         :bow-p 0.997814
@@ -1774,14 +1808,16 @@
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
-        :heading-f1 0.0
-        :heading-level-e2e 0.0
-        :heading-p 0.0
-        :heading-r 0.0
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.777778
-        :para-boundary-p 0.636364
+        :para-boundary-f1 0.933333
+        :para-boundary-p 0.875
         :para-boundary-r 1.0
         :watermark-leak 0.00201
         :wer 0.002191}
