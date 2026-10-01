@@ -1198,3 +1198,134 @@ fn aes_decrypt_block(rk: &[u8], st: &mut [u8; 16]) {
         }
     }
 }
+
+// ;; P6.3 bulk forms (D197): whole-page maps and reduces for normalization. Each has a kin reference in
+// `emon.norm` (`nm-ref-*`) that a law holds byte-identical on all four targets (D093). Every one answers 0.
+//
+// @kin:link:form:bitmap-gray-into: {:template "crate::port::bitmap_gray_into({0}, {1})" :arity 2}
+//
+// `dst`'s channel 0 := `(77 r + 150 g + 29 b + 128) >> 8` of every `src` pixel; a source of fewer than three channels
+// is copied (its channel 0). `dst` is 1-channel and the same width and height (else a panic).
+pub fn bitmap_gray_into(src: &Bitmap, dst: &Bitmap) -> i32 {
+    assert!(src.w == dst.w && src.h == dst.h && dst.ch == 1);
+    let (w, ch) = (src.w as usize, src.ch as usize);
+    for y in 0..src.h as usize {
+        let s = &src.d[y * src.stride as usize..][..w * ch];
+        let d = &dst.d[y * dst.stride as usize..][..w];
+        if ch < 3 {
+            for (a, o) in s.chunks_exact(ch).zip(d) {
+                o.set(a[0].get());
+            }
+        } else {
+            for (px, o) in s.chunks_exact(ch).zip(d) {
+                let v = (77 * px[0].get() as u32 + 150 * px[1].get() as u32 + 29 * px[2].get() as u32 + 128) >> 8;
+                o.set(v as u8);
+            }
+        }
+    }
+    0
+}
+
+// @kin:link:form:bitmap-hist-rgb: {:template "crate::port::bitmap_hist_rgb({0}, {1}, {2})" :arity 3}
+//
+// ADDS the count of each colour bin `(r >> 4) << 8 | (g >> 4) << 4 | (b >> 4)` to `cells[off + bin]` (4096 cells must
+// exist); a source of fewer than three channels uses `v >> 4` for all three.
+pub fn bitmap_hist_rgb(src: &Bitmap, cells: &mut Cells, off: i32) -> i32 {
+    let o = off as usize;
+    let bins = &mut cells.v[o..o + 4096];
+    let (w, ch) = (src.w as usize, src.ch as usize);
+    for y in 0..src.h as usize {
+        let s = &src.d[y * src.stride as usize..][..w * ch];
+        if ch < 3 {
+            for a in s.chunks_exact(ch) {
+                let v = (a[0].get() >> 4) as usize;
+                bins[v * 273] += 1;
+            }
+        } else {
+            for px in s.chunks_exact(ch) {
+                let i = ((px[0].get() as usize >> 4) << 8) | ((px[1].get() as usize >> 4) << 4) | (px[2].get() as usize >> 4);
+                bins[i] += 1;
+            }
+        }
+    }
+    0
+}
+
+// @kin:link:form:bitmap-lut-into: {:template "crate::port::bitmap_lut_into({0}, {1}, {2}, {3})" :arity 4}
+//
+// `dst`'s channel 0 := the low 8 bits of `lut[off + bin]`, `bin` being the pixel's colour bin as in `bitmap-hist-rgb`.
+// `dst` is 1-channel and the same width and height of `src`.
+pub fn bitmap_lut_into(src: &Bitmap, lut: &Cells, off: i32, dst: &Bitmap) -> i32 {
+    assert!(src.w == dst.w && src.h == dst.h && dst.ch == 1);
+    let o = off as usize;
+    let t = &lut.v[o..o + 4096];
+    let (w, ch) = (src.w as usize, src.ch as usize);
+    for y in 0..src.h as usize {
+        let s = &src.d[y * src.stride as usize..][..w * ch];
+        let d = &dst.d[y * dst.stride as usize..][..w];
+        if ch < 3 {
+            for (a, q) in s.chunks_exact(ch).zip(d) {
+                q.set(t[(a[0].get() >> 4) as usize * 273] as u8);
+            }
+        } else {
+            for (px, q) in s.chunks_exact(ch).zip(d) {
+                let i = ((px[0].get() as usize >> 4) << 8) | ((px[1].get() as usize >> 4) << 4) | (px[2].get() as usize >> 4);
+                q.set(t[i] as u8);
+            }
+        }
+    }
+    0
+}
+
+// @kin:link:form:bitmap-hash: {:template "crate::port::bitmap_hash({0}, {1}, {2})" :arity 3}
+//
+// FNV-1a 64 (offset basis 0xcbf29ce484222325, prime 0x100000001b3) over `w`, `h` and `channels` (each four bytes, little
+// endian) and then the pixel bytes row by row, `w * channels` a row (a stride's padding is not hashed). The high 32 bits
+// go to `out[off]` and the low 32 to `out[off + 1]` (two cells that exist), each as a signed 32-bit cell.
+pub fn bitmap_hash(b: &Bitmap, out: &mut Cells, off: i32) -> i32 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for v in [b.w, b.h, b.ch] {
+        for k in 0..4 {
+            h = (h ^ (((v as u32) >> (8 * k)) & 255) as u64).wrapping_mul(0x100000001b3);
+        }
+    }
+    let n = b.w as usize * b.ch as usize;
+    for y in 0..b.h as usize {
+        for c in &b.d[y * b.stride as usize..][..n] {
+            h = (h ^ c.get() as u64).wrapping_mul(0x100000001b3);
+        }
+    }
+    out.v[off as usize] = (h >> 32) as u32 as i32;
+    out.v[off as usize + 1] = h as u32 as i32;
+    0
+}
+
+// @kin:link:form:bitmap-quarter-into: {:template "crate::port::bitmap_quarter_into({0}, {1}, {2})" :arity 3}
+//
+// `dst` := `src` turned `turns` (mod 4) quarter turns CLOCKWISE, exactly. `dst` has the same channels, and the swapped
+// width and height for an odd count (else a panic). Clockwise one turn: `dst(X, Y) = src(Y, h - 1 - X)`; two:
+// `src(w - 1 - X, h - 1 - Y)`; three: `src(w - 1 - Y, X)`.
+pub fn bitmap_quarter_into(src: &Bitmap, dst: &Bitmap, turns: i32) -> i32 {
+    let q = turns.rem_euclid(4);
+    let (sw, sh, ch) = (src.w as usize, src.h as usize, src.ch as usize);
+    assert!(src.ch == dst.ch);
+    if q % 2 == 0 {
+        assert!(src.w == dst.w && src.h == dst.h);
+    } else {
+        assert!(src.w == dst.h && src.h == dst.w);
+    }
+    for y in 0..dst.h as usize {
+        for x in 0..dst.w as usize {
+            let (sx, sy) = match q {
+                0 => (x, y),
+                1 => (y, sh - 1 - x),
+                2 => (sw - 1 - x, sh - 1 - y),
+                _ => (sw - 1 - y, x),
+            };
+            for c in 0..ch {
+                dst.d[y * dst.stride as usize + x * ch + c].set(src.d[sy * src.stride as usize + sx * ch + c].get());
+            }
+        }
+    }
+    0
+}

@@ -1,0 +1,245 @@
+#!/usr/bin/env bb
+;; INK: how well do kin's ink layers (P6.3, SPEC 8.2) separate body ink from stamps, seals, signatures and watermarks, and how
+;; well does the deskew find the angle a scan was made at?        bb ink [--go] [--limit N] [--rebuild] [--no-build]
+;;
+;; NOT A GATE (DEVLOG P6.3: a ratchet is P7.S's). It reads P6.6's colour and overlay scans (`test/corpus/synth/scan-ovl/`,
+;; `scan-color/`, D209), whose overlays are ours, so their truth is known exactly:
+;;
+;;   * the page images are the scans' own JPEGs (`pdfimages`), 130 dpi RGB, skewed by `FACTS.json` `skew-ovl` degrees;
+;;   * the TRUTH of an overlay is that overlay drawn ALONE on white, by the very commands `tools/synth/degrade_fusion.clj`
+;;     pasted it with, and put through the same rotation (`magick -rotate`, centre crop, the same quarter turn): its ink
+;;     is every pixel of that render under a lightness threshold, and it lines up with the scan pixel for pixel (the
+;;     scan then had noise, blur and JPEG, which are the evidence the layers must survive);
+;;   * the truth of the BODY ink is the clean render of the document (`pdftoppm`, 130 dpi) put through that rotation,
+;;     its pixels under lightness 110, minus the seal's and the signature's (which were pasted over the text).
+;;
+;; Per page the Rust (and with --go the Go) benchmark driver (`bench/mains/norm.rs`, `norm.go`) runs `nm-view` on the scan
+;; and counts each truth mask's pixels by the layer they fell in. Pooled over pages, the measures (DEVLOG P6.3 "Measured"):
+;;
+;;   body-in-body      share of body glyph ink in the layer the guess calls `body`                     target >= 0.98
+;;   watermark-out     share of the COPY watermark's ink OUTSIDE `body`                                target >= 0.95
+;;   seal-colour       share of the seal's ink in `colour` layers (and, `seal-out`, outside `body`)    target >= 0.95
+;;   signature-colour  the same for the pen signature (blue)
+;;   deskew            |error| of the angle on the scans of known skew, on pages not turned            <= 0.1 deg on 95 %, <= 0.3 deg on all
+;;
+;; The truth masks and the page rasters are cached under .cache/ink (ignored); --rebuild makes them again. Needs poppler,
+;; ImageMagick, and the drivers (`bench/norm.sh`), which this builds. Time per page is the driver's, best of one.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [shell process]]
+         '[cheshire.core :as json]
+         '[clojure.string :as str]
+         '[synth.degrade-fusion :as df])
+
+(def args (set *command-line-args*))
+(def go? (contains? args "--go"))
+(def rebuild? (contains? args "--rebuild"))
+(def limit (some->> (second (drop-while #(not= % "--limit") *command-line-args*)) parse-long))
+
+(def CORPUS df/CORPUS)
+(def DPI df/DPI)
+(def CACHE ".cache/ink")
+
+(defn run [& cmd]
+  (let [r (apply shell {:out :string :err :string :continue true} cmd)]
+    (when-not (zero? (:exit r)) (throw (ex-info (str "failed: " (str/join " " cmd) "\n" (:err r)) {})))
+    (:out r)))
+
+(defn dims [f] (mapv parse-long (str/split (str/trim (run "magick" "identify" "-format" "%w %h" f)) #" ")))
+
+;; ---------------------------------------------------------------- truth for one stem
+(defn rot-args
+  "magick args that do what `finish!` does to a page image, minus noise, blur and JPEG: the quarter turn, then the skew
+   about the centre and the crop to the scan's size."
+  [turn angle [w h]]
+  (vec (concat (when turn ["-rotate" (str turn)])
+               ["-background" "white" "-rotate" (format "%.3f" (double angle)) "-gravity" "center"
+                "-crop" (format "%dx%d+0+0" w h) "+repage"])))
+
+(defn mask! [out src thr-pct]
+  (run "magick" src "-colorspace" "Gray" "-threshold" thr-pct "-negate" "-depth" "8" out))
+
+(defn raw! [out png] (run "magick" png "-depth" "8" (str "gray:" out)))
+
+(defn build-stem!
+  "Writes dir/STEM/ with, per page i: o<i>.rgb (the overlay scan), c<i>.rgb (the colour scan), and the truth masks
+   t<i>-body.gray t<i>-wm.gray [t<i>-seal.gray] [t<i>-sig.gray]; answers the page records."
+  [stem facts]
+  (let [dir (str CACHE "/" stem)
+        done (str dir "/done.edn")]
+    (if (and (fs/exists? done) (not rebuild?))
+      (read-string (slurp done))
+      (let [_ (fs/delete-tree dir) _ (fs/create-dirs dir)
+            pdf (str CORPUS "/pdf/" stem ".pdf")
+            np (get facts "pages")
+            _ (run "pdftoppm" "-r" (str DPI) "-png" pdf (str dir "/p"))
+            _ (run "pdfimages" "-png" (str CORPUS "/scan-ovl/" stem ".pdf") (str dir "/o"))
+            _ (run "pdfimages" "-png" (str CORPUS "/scan-color/" stem ".pdf") (str dir "/c"))
+            ppng (vec (sort (filter #(re-find #"/p-\d+\.png$" %) (map str (fs/list-dir dir)))))
+            opng (vec (sort (filter #(re-find #"/o-\d+\.png$" %) (map str (fs/list-dir dir)))))
+            cpng (vec (sort (filter #(re-find #"/c-\d+\.png$" %) (map str (fs/list-dir dir)))))
+            turns (get facts "turns")
+            ovls (get facts "overlays")
+            wm-l (get-in facts ["watermark" "lightness"])
+            seal (nth df/SEALS (get facts "seal"))
+            overlay (fn [kind] (first (filter #(= kind (get % "kind")) ovls)))]
+        (assert (= np (count ppng) (count opng) (count cpng)) (str stem ": page images " (count ppng) (count opng) (count cpng) " of " np))
+        (vec
+         (for [i (range 1 (inc np))
+               :let [p (nth ppng (dec i)) [w h] (dims p)
+                     turn (get turns (str i))
+                     scan-dims (dims (nth opng (dec i)))
+                     angle (nth (get facts "skew-ovl") (dec i))
+                     pre (fn [n] (str dir "/" n i))
+                     canvas (fn [out & more] (apply run "magick" "-size" (format "%dx%d" w h) "xc:white" (concat more [out])))
+                     rot (fn [src out] (apply run "magick" src (concat (rot-args turn angle scan-dims) [out])))
+                     seal-box (when (= i 1) (get (overlay "seal") "box"))
+                     sig-box (when (= i (get (overlay "signature") "page" -1)) (get (overlay "signature") "box"))]]
+           (do
+             (run "magick" (nth opng (dec i)) "-depth" "8" (str "rgb:" (pre "o") ".rgb"))
+             (run "magick" (nth cpng (dec i)) "-depth" "8" (str "rgb:" (pre "c") ".rgb"))
+             (rot p (str (pre "clean") ".png"))
+             (canvas (str (pre "wm") ".png") "-font" df/FONT "-pointsize" (str (Math/round (* 140 df/PX)))
+                     "-fill" (format "rgb(%d,%d,%d)" wm-l wm-l wm-l) "-gravity" "center" "-annotate" "-35x-35+0+0" "COPY")
+             (when seal-box
+               (let [[x0 y0 x1 y1] seal-box]
+                 (apply canvas (str (pre "seal") ".png")
+                        (df/seal-args seal (* df/PX (/ (+ x0 x1) 2.0)) (* df/PX (/ (+ y0 y1) 2.0)) (* df/PX 34)))))
+             (when sig-box
+               (let [[x0 y0 x1 y1] sig-box]
+                 (apply canvas (str (pre "sig") ".png")
+                        (df/signature-args (* df/PX x0) (* df/PX y0) (* df/PX (- x1 x0)) (* df/PX (- y1 y0))))))
+             (doseq [k ["wm" "seal" "sig"] :when (fs/exists? (str (pre k) ".png"))]
+               (rot (str (pre k) ".png") (str (pre k) "-rot.png")))
+             (let [clean (str (pre "clean") ".png")
+                   ;; masks: 255 where the (rotated) render is darker than the lightness threshold
+                   _ (mask! (str (pre "m-body") ".png") clean "43%")
+                   _ (mask! (str (pre "m-text200") ".png") clean "78%")
+                   _ (mask! (str (pre "m-wm") ".png") (str (pre "wm") "-rot.png") "96%")
+                   seal? (fs/exists? (str (pre "seal") "-rot.png"))
+                   sig? (fs/exists? (str (pre "sig") "-rot.png"))
+                   _ (when seal? (mask! (str (pre "m-seal") ".png") (str (pre "seal") "-rot.png") "78%"))
+                   _ (when sig? (mask! (str (pre "m-sig") ".png") (str (pre "sig") "-rot.png") "78%"))
+                   ;; the overlays pasted OVER the text: their union
+                   union (str (pre "m-union") ".png")
+                   _ (cond (and seal? sig?) (run "magick" (str (pre "m-seal") ".png") (str (pre "m-sig") ".png") "-compose" "Lighten" "-composite" union)
+                           seal? (fs/copy (str (pre "m-seal") ".png") union {:replace-existing true})
+                           sig? (fs/copy (str (pre "m-sig") ".png") union {:replace-existing true})
+                           :else (run "magick" "-size" (format "%dx%d" (first scan-dims) (second scan-dims)) "xc:black" union))
+                   minus (fn [a b out] (run "magick" a "(" b "-negate" ")" "-compose" "Multiply" "-composite" "-depth" "8" out))
+                   ;; saturated pixels of the clean render (the document's OWN seals and stamps are not body ink)
+                   _ (run "magick" clean "-colorspace" "HSB" "-channel" "G" "-separate" "+channel" "-threshold" "24%" "-depth" "8" (str (pre "m-sat") ".png"))
+                   _ (minus (str (pre "m-body") ".png") (str (pre "m-sat") ".png") (str (pre "t-body0") ".png"))
+                   _ (minus (str (pre "t-body0") ".png") union (str (pre "t-body") ".png"))
+                   _ (run "magick" (str (pre "m-text200") ".png") (str (pre "m-sat") ".png") "-compose" "Multiply" "-composite" "-depth" "8" (str (pre "t-doc0") ".png"))
+                   _ (minus (str (pre "t-doc0") ".png") union (str (pre "t-doc") ".png"))
+                   _ (minus (str (pre "m-wm") ".png") (str (pre "m-text200") ".png") (str (pre "t-wm0") ".png"))
+                   _ (minus (str (pre "t-wm0") ".png") union (str (pre "t-wm") ".png"))]
+               (raw! (str (pre "t-body") ".gray") (str (pre "t-body") ".png"))
+               (raw! (str (pre "t-wm") ".gray") (str (pre "t-wm") ".png"))
+               (raw! (str (pre "t-doc") ".gray") (str (pre "t-doc") ".png"))
+               (when seal? (raw! (str (pre "t-seal") ".gray") (str (pre "m-seal") ".png")))
+               (when sig? (raw! (str (pre "t-sig") ".gray") (str (pre "m-sig") ".png"))))
+             {:stem stem :page i :w (first scan-dims) :h (second scan-dims) :turn turn :angle angle
+              :cangle (nth (get facts "skew") (dec i))
+              :o (str (pre "o") ".rgb") :c (str (pre "c") ".rgb") :cdims (dims (nth cpng (dec i)))
+              :truths (vec (concat [[:body (str (pre "t-body") ".gray")] [:wm (str (pre "t-wm") ".gray")] [:doc (str (pre "t-doc") ".gray")]]
+                                   (when (fs/exists? (str (pre "t-seal") ".gray")) [[:seal (str (pre "t-seal") ".gray")]])
+                                   (when (fs/exists? (str (pre "t-sig") ".gray")) [[:sig (str (pre "t-sig") ".gray")]])))})))
+        ))))
+
+(defn page-records [stem facts]
+  (let [recs (build-stem! stem facts)]
+    (spit (str CACHE "/" stem "/done.edn") (pr-str recs))
+    recs))
+
+;; ---------------------------------------------------------------- the drivers
+(defn driver [exe rgb [w h] truths]
+  (let [out (apply run exe rgb (str w) (str h) "3" "1" (str (* DPI 100)) (map second truths))]
+    {:T (into {} (for [l (str/split-lines out) :when (str/starts-with? l "T ")] (let [[_ k v] (str/split l #" ")] [k (parse-double v)])))
+     :S (mapv parse-long (rest (str/split (first (filter #(str/starts-with? % "S ") (str/split-lines out))) #" ")))
+     :L (vec (for [l (str/split-lines out) :when (str/starts-with? l "L ")] (mapv parse-long (rest (str/split l #" ")))))
+     :X (vec (for [l (str/split-lines out) :when (str/starts-with? l "X ")] (mapv parse-long (rest (str/split l #" ")))))
+     :lines (vec (remove #(str/starts-with? % "T ") (str/split-lines out)))}))
+
+(def ROLE {1 :body 2 :light 3 :color 4 :background 5 :unknown})
+
+(defn by-role
+  "{role count} of one truth mask's pixels: layer 0 is the paper."
+  [layers [_ total & counts]]
+  (reduce (fn [m [i c]] (update m (if (zero? i) :paper (get ROLE (nth (nth layers (dec i)) 2))) (fnil + 0) c))
+          {:total total} (map-indexed vector counts)))
+
+(defn share [m & roles] (let [t (:total m)] (if (pos? t) (/ (double (reduce + (map #(get m % 0) roles))) t) Double/NaN)))
+
+(defn pool [ms] (apply merge-with + ms))
+
+;; ---------------------------------------------------------------- main
+(def stems (cond->> (df/fusion-stems) limit (take limit)))
+(def facts-all (json/parse-string (slurp (str CORPUS "/scan-ovl/FACTS.json"))))
+
+(when-not (contains? args "--no-build")
+  (shell {:out :string :err :string} "env" "ONLY=rg" "sh" "bench/norm.sh" "1" "build"))
+(def rust "bench/work/norm/rust/prog")
+(def gop "bench/work/norm/go/prog")
+
+(def recs (vec (mapcat #(page-records % (get facts-all %)) stems)))
+(println (format "  %d pages of %d documents (scan-ovl at %d dpi)" (count recs) (count stems) DPI))
+
+(def results
+  (vec (for [r recs]
+         (let [res (driver rust (:o r) [(:w r) (:h r)] (:truths r))
+               gres (when go? (driver gop (:o r) [(:w r) (:h r)] (:truths r)))
+               cres (driver rust (:c r) (:cdims r) [])]
+           (when (and gres (not= (:lines res) (:lines gres)))
+             (println (format "  FAIL %s p%d: Go and Rust disagree" (:stem r) (:page r))) (System/exit 1))
+           (assoc r :res res :cres cres)))))
+
+(defn truth-by-role [kind]
+  (pool (for [r results
+              :let [i (first (keep-indexed (fn [i [k _]] (when (= k kind) i)) (:truths r)))]
+              :when i]
+          (by-role (get-in r [:res :L]) (nth (get-in r [:res :X]) i [])))))
+
+(let [body (truth-by-role :body) wm (truth-by-role :wm) seal (truth-by-role :seal) sig (truth-by-role :sig) doc (truth-by-role :doc)
+      row (fn [name m] (println (format "  %-10s %8d px   body %.3f  light %.3f  colour %.3f  background %.3f  unknown %.3f  paper %.3f"
+                                        name (:total m) (share m :body) (share m :light) (share m :color) (share m :background)
+                                        (share m :unknown) (share m :paper))))
+      verdict (fn [ok name v target] (println (format "  %s %-18s %.4f  (target %s %.2f)" (if ok "ok  " "MISS") name v (if (= name "body-in-body") ">=" ">=") target)))]
+  (println "\n  where each truth's ink fell (pooled over pages; shares of the truth's pixels):")
+  (row "body" body) (row "doc-ink" doc) (row "watermark" wm) (row "seal" seal) (row "signature" sig)
+  (println "")
+  (let [v (share body :body)] (verdict (>= v 0.98) "body-in-body" v 0.98))
+  (let [v (- 1.0 (share wm :body))] (verdict (>= v 0.95) "watermark-out" v 0.95))
+  (let [v (share doc :color)] (verdict (>= v 0.95) "doc-seal-colour" v 0.95))
+  (let [v (share seal :color)] (verdict (>= v 0.95) "seal-colour" v 0.95))
+  (let [v (- 1.0 (share seal :body))] (verdict (>= v 0.95) "seal-out" v 0.95))
+  (let [v (share sig :color)] (verdict (>= v 0.95) "signature-colour" v 0.95))
+  (let [v (- 1.0 (share sig :body))] (verdict (>= v 0.95) "signature-out" v 0.95)))
+
+;; deskew: the scans' known skew; magick -rotate is clockwise, deskew's sign is counter-clockwise lines rising right
+(defn skew-errs [rows get-angle get-deskew]
+  (vec (for [r rows :when (not (:turn r))]
+         (Math/abs (- (get-deskew r) (- (Math/round (* 100.0 (get-angle r)))))))))
+
+(let [pct (fn [errs tol] (if (seq errs) (/ (count (filter #(<= % tol) errs)) (double (count errs))) Double/NaN))
+      show (fn [name errs]
+             (println (format "  %s %-22s %3d pages: within 0.1 deg %.3f (target >= 0.95), within 0.3 deg %.3f (target 1.0), worst %.2f deg"
+                              (if (and (>= (pct errs 10) 0.95) (>= (pct errs 30) 1.0)) "ok  " "MISS") name (count errs) (pct errs 10) (pct errs 30)
+                              (/ (double (apply max 0 errs)) 100))))]
+  (println "")
+  (show "deskew scan-ovl" (skew-errs results :angle #(second (:S (:res %)))))
+  (show "deskew scan-color" (skew-errs results :cangle #(second (:S (:cres %))))))
+
+;; time per page
+(let [ts (keep #(get-in % [:res :T "view"]) results)]
+  (println (format "\n  nm-view per page (rust, 1 run, %d x %d at %d dpi): mean %.1f ms, max %.1f ms%s"
+                   (:w (first results)) (:h (first results)) DPI (/ (reduce + ts) (count ts)) (apply max ts)
+                   (if go? (format "; go mean %.1f ms" (let [gs (for [r results] (get-in (driver gop (:o r) [(:w r) (:h r)] []) [:T "view"]))] (/ (reduce + gs) (count gs)))) ""))))
+
+(when (contains? args "--verbose")
+  (println "\n  per page: stem page | true skew (cdeg: scan-ovl, scan-color) | estimated (ovl, color) | layers | body share")
+  (doseq [r results]
+    (println (format "  %-24s p%d turn %-4s true %5d %5d  est %5d %5d  layers %d  body-in-body %.3f"
+                     (:stem r) (:page r) (:turn r) (- (Math/round (* 100.0 (:angle r)))) (- (Math/round (* 100.0 (:cangle r))))
+                     (second (:S (:res r))) (second (:S (:cres r))) (first (:S (:res r)))
+                     (let [m (by-role (get-in r [:res :L]) (nth (get-in r [:res :X]) 0 []))] (share m :body))))))
