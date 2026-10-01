@@ -159,7 +159,10 @@ counts=""
 finish() {
   arm=$1; rc=$2; count=$3; out=$4
   if [ "$mode" = red ]; then
-    if [ "$rc" -ne 0 ]; then
+    if [ "$rc" -eq 124 ]; then
+      echo "  FAIL $arm    timed out (a hang is not a failing law)"
+      fails=$((fails+1))
+    elif [ "$rc" -ne 0 ]; then
       echo "  ok   $arm    broken laws fail ($count laws inverted)"
     else
       echo "  FAIL $arm    every law was inverted and the arm still passed"
@@ -168,6 +171,11 @@ finish() {
   elif [ "$rc" -eq 0 ]; then
     echo "  ok   $arm    $count laws"
     counts="$counts $count"
+  elif [ "$rc" -eq 124 ]; then
+    # kin/scripts/cap reports a watchdog kill as 124: say so, rather than a bare FAIL with no count.
+    echo "  FAIL $arm    timed out (killed by kin/scripts/cap)"
+    printf '%s\n' "$out" | sed 's/^/    /' | tail -10
+    fails=$((fails+1))
   else
     echo "  FAIL $arm"
     printf '%s\n' "$out" | sed 's/^/    /' | head -40
@@ -305,7 +313,12 @@ case "$arms" in *csharp*)
   </ItemGroup>
 </Project>
 PROJ
-    rc=0; out=$(cd "$work/cs" && "$emon_cap" 900 dotnet test -v q --nologo 2>&1) || rc=$?
+    # RELEASE, NOT DEBUG: the arm is 379 laws and two of them (the 512-byte async source over the real PDFs, and the
+    # glyph streams pdfminer agreed with) are tight loops over megabytes of PDF. Unoptimised (Debug) they took 9.5 and 3.2
+    # minutes of a 13.5-minute arm (measured, D217): the whole arm sat near the 900 s cap and, on a loaded machine
+    # with the other arms before it, went over it. Optimised, the same two take under 50 s together and the arm
+    # about 1.5 minutes. The cap stays at 900 s: it is now a hang detector with ten times the headroom.
+    rc=0; out=$(cd "$work/cs" && "$emon_cap" 900 dotnet test -c Release -v q --nologo 2>&1) || rc=$?
     n=$(printf '%s\n' "$out" | grep -o '\(Passed\|Failed\): *[0-9]*' | grep -o '[0-9]*$' | awk '{n+=$1} END {print n+0}')
     finish csharp "$rc" "$n" "$out"
   else

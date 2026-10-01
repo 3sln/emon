@@ -6874,6 +6874,11 @@ kin stage is noticed, and the scope switch is the one lever that changes the sec
 **Merged with the table, initials and alignment stages (D178-D185, after P6.1)**: both Engines' raster unit now runs the same stages as the PDF unit (`TbBuild`, `LcCopy`/`InDetect`, headings on the copy, `PaBuild` with tables, initials and alignment, `FuWrite`); OCR words have no glyph or font evidence, so no initial is found in a scan (P6.7 is for that). A scan's rows slope (0.6 degree here), so one table row's baselines spread over several points: `tb-rows` groups a row as a chain of baselines (each within a third of the size of the one before it) instead of a distance from the first word, which lost the `Total` label of `table-simple-ruled` (a one-word row of its own is no table row); identical on a text layer (a row's baselines agree). `emon-replay` `scan/all` after the merge: CER 0.0324, WER 0.0894, heading F1 0.886 (before: 0.0331, 0.0903, 0.886); table, caption and paragraph-boundary metrics now score (`block-table-f1` 0.0 to 1.0, `para-boundary-f1` 0.774 to 0.819).
 - [ ] **Signed off** (maintainer)
 
+### D217 — The C# arm of `bb unit` is built in Release: two laws were 12.7 of its 13.5 minutes in Debug, and a cap kill says "timed out" (P0.5; D044)
+
+**Decision**: `kin/scripts/unit` runs `dotnet test -c Release`. `finish` reports a `kin/scripts/cap` kill (124) as `FAIL <arm>    timed out`, and in `red` mode a timeout is a failure, not a law that failed.
+**Why (measured)**: `bb unit csharp` alone was not slow because of the build (7 s) or the 3.5 MB of generated CJK CMap tables (they compile in seconds); the 379 laws took 13 m 25 s in Debug, and two of them took 9 m 35 s (`TestTheThreeFixturesAndTheRealFilesAreTheSameThroughAnAsyncSourceOf512ByteChunks`) and 3 m 08 s (`TestRealFilesMakeTheGlyphStreamsPdfminerAgreedWith`): tight loops over megabytes of PDF, unoptimised. Under `bb gates` on a loaded machine that crossed the 900 s cap, and the old script then showed a bare FAIL with a count of 0. In Release the same two take 46 s together and the whole `bb unit csharp` (checks, restore, build, 379 laws) 4 m 47 s under load. The cap stays 900 s as a hang detector.
+
 ## Found in kin, not ours to fix here
 
 **Audit (2026-09-30, coordinator; checked against kin's source and nome):**
