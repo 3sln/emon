@@ -323,6 +323,30 @@ fn test_a_list_goes_on_across_a_page_milestone() {
     crate::testport::assert_eq(node_parent(nodes, 5), 1, "and the next item is in the same list");
     crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
 }
+#[test]
+fn test_the_next_value_goes_on_the_list_whatever_its_first_line_indent() {
+    let on: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let orr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(on, oa, orr, text, pages, ledger, layout);
+    lt_item(on, oa, text, 0, &crate::testport::text_blob("(a)")[..], &crate::testport::text_blob("one")[..], ls_sc_lower_alpha(), 1, 9000);
+    lt_item(on, oa, text, 0, &crate::testport::text_blob("(b)")[..], &crate::testport::text_blob("two")[..], ls_sc_lower_alpha(), 2, 9000);
+    lt_item(on, oa, text, 0, &crate::testport::text_blob("(c)")[..], &crate::testport::text_blob("three, its first line indented")[..], ls_sc_lower_alpha(), 3, 11100);
+    lt_item(on, oa, text, 0, &crate::testport::text_blob("(a)")[..], &crate::testport::text_blob("nested at last")[..], ls_sc_lower_alpha(), 1, 11100);
+    crate::testport::assert_eq(lt_rs(on, oa, orr, text, nodes, attrs, regions), 7, "one list of three items, and the new `(a)` deep enough in is a list in the third");
+    crate::testport::assert_eq(node_parent(nodes, 4), 1, "the indented `(c)` is in the list of `(a)` and `(b)`: its value is the next");
+    crate::testport::assert_eq(node_kind(nodes, 5), nk_list(), "and a numbering that starts again, as far in, is a list inside it");
+    crate::testport::assert_eq(node_parent(nodes, 5), 4, "in `(c)`");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
+}
 pub(crate) fn lt_caption(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, parent: i32, kind: i32) -> i32 {
     // A caption of the old Model (its kind in `aux`) with a label and a text.
     let c: i32 = node_new(nodes, nk_caption(), parent);

@@ -340,6 +340,30 @@ func TestAListGoesOnAcrossAPageMilestone(emonT *testing.T) {
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order")
 }
 
+func TestTheNextValueGoesOnTheListWhateverItsFirstLineIndent(emonT *testing.T) {
+	var on *port.Cells = port.NewCells()
+	var oa *port.Cells = port.NewCells()
+	var orr *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	model.ModelInit(on, oa, orr, text, pages, ledger, layout)
+	ltItem(on, oa, text, 0, port.TextBlob("(a)"), port.TextBlob("one"), lists.LsScLowerAlpha(), 1, 9000)
+	ltItem(on, oa, text, 0, port.TextBlob("(b)"), port.TextBlob("two"), lists.LsScLowerAlpha(), 2, 9000)
+	ltItem(on, oa, text, 0, port.TextBlob("(c)"), port.TextBlob("three, its first line indented"), lists.LsScLowerAlpha(), 3, 11100)
+	ltItem(on, oa, text, 0, port.TextBlob("(a)"), port.TextBlob("nested at last"), lists.LsScLowerAlpha(), 1, 11100)
+	port.AssertEq(emonT, ltRs(on, oa, orr, text, nodes, attrs, regions), 7, "one list of three items, and the new `(a)` deep enough in is a list in the third")
+	port.AssertEq(emonT, model.NodeParent(nodes, 4), 1, "the indented `(c)` is in the list of `(a)` and `(b)`: its value is the next")
+	port.AssertEq(emonT, model.NodeKind(nodes, 5), model.NkList(), "and a numbering that starts again, as far in, is a list inside it")
+	port.AssertEq(emonT, model.NodeParent(nodes, 5), 4, "in `(c)`")
+	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order")
+}
+
 func ltCaption(nodes *port.Cells, attrs *port.Cells, text *port.Cells, parent int32, kind int32) int32 {
 	// A caption of the old Model (its kind in `aux`) with a label and a text.
 	var c int32 = model.NodeNew(nodes, model.NkCaption(), parent)

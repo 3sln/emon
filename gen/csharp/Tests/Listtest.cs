@@ -319,6 +319,30 @@ public static class Listtest {
         emon.Testport.AssertEq(Model.NodeParent(nodes, 5), 1, "and the next item is in the same list");
         emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
     }
+    [Xunit.Fact]
+    public static void TestTheNextValueGoesOnTheListWhateverItsFirstLineIndent() {
+        emon.Port.Cells on = emon.Port.NewCells();
+        emon.Port.Cells oa = emon.Port.NewCells();
+        emon.Port.Cells orr = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        Model.ModelInit(on, oa, orr, text, pages, ledger, layout);
+        LtItem(on, oa, text, 0, emon.Testport.TextBlob("(a)"), emon.Testport.TextBlob("one"), Lists.LsScLowerAlpha(), 1, 9000);
+        LtItem(on, oa, text, 0, emon.Testport.TextBlob("(b)"), emon.Testport.TextBlob("two"), Lists.LsScLowerAlpha(), 2, 9000);
+        LtItem(on, oa, text, 0, emon.Testport.TextBlob("(c)"), emon.Testport.TextBlob("three, its first line indented"), Lists.LsScLowerAlpha(), 3, 11100);
+        LtItem(on, oa, text, 0, emon.Testport.TextBlob("(a)"), emon.Testport.TextBlob("nested at last"), Lists.LsScLowerAlpha(), 1, 11100);
+        emon.Testport.AssertEq(LtRs(on, oa, orr, text, nodes, attrs, regions), 7, "one list of three items, and the new `(a)` deep enough in is a list in the third");
+        emon.Testport.AssertEq(Model.NodeParent(nodes, 4), 1, "the indented `(c)` is in the list of `(a)` and `(b)`: its value is the next");
+        emon.Testport.AssertEq(Model.NodeKind(nodes, 5), Model.NkList(), "and a numbering that starts again, as far in, is a list inside it");
+        emon.Testport.AssertEq(Model.NodeParent(nodes, 5), 4, "in `(c)`");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
+    }
     internal static int LtCaption(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int parent, int kind) {
         // A caption of the old Model (its kind in `aux`) with a label and a text.
         int c = Model.NodeNew(nodes, Model.NkCaption(), parent);

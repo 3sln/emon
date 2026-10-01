@@ -309,6 +309,21 @@
     (assert-eq (node-parent nodes 5) 1 "and the next item is in the same list")
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))
 
+(deftest test-the-next-value-goes-on-the-list-whatever-its-first-line-indent
+  (let [^Cells on (new-cells) ^Cells oa (new-cells) ^Cells orr (new-cells) ^Cells text (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (model-init on oa orr text pages ledger layout)
+    (lt-item on oa text 0 (text-blob "(a)") (text-blob "one") (ls-sc-lower-alpha) 1 9000)
+    (lt-item on oa text 0 (text-blob "(b)") (text-blob "two") (ls-sc-lower-alpha) 2 9000)
+    (lt-item on oa text 0 (text-blob "(c)") (text-blob "three, its first line indented") (ls-sc-lower-alpha) 3 11100)
+    (lt-item on oa text 0 (text-blob "(a)") (text-blob "nested at last") (ls-sc-lower-alpha) 1 11100)
+    (assert-eq (lt-rs on oa orr text nodes attrs regions) 7 "one list of three items, and the new `(a)` deep enough in is a list in the third")
+    (assert-eq (node-parent nodes 4) 1 "the indented `(c)` is in the list of `(a)` and `(b)`: its value is the next")
+    (assert-eq (node-kind nodes 5) (nk-list) "and a numbering that starts again, as far in, is a list inside it")
+    (assert-eq (node-parent nodes 5) 4 "in `(c)`")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))
+
 (defn ^I32 lt-caption [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 parent ^I32 kind]
   (comment "A caption of the old Model (its kind in `aux`) with a label and a text.")
   (let [^I32 c (node-new nodes (nk-caption) parent)

@@ -311,6 +311,29 @@ public final class Listtest {
         emon.Testport.assertEq(Model.nodeParent(nodes, 5), 1, "and the next item is in the same list");
         emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
     }
+    public static void testTheNextValueGoesOnTheListWhateverItsFirstLineIndent() {
+        emon.Port.Cells on = emon.Port.newCells();
+        emon.Port.Cells oa = emon.Port.newCells();
+        emon.Port.Cells orr = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        Model.modelInit(on, oa, orr, text, pages, ledger, layout);
+        ltItem(on, oa, text, 0, emon.Testport.textBlob("(a)"), emon.Testport.textBlob("one"), Lists.lsScLowerAlpha(), 1, 9000);
+        ltItem(on, oa, text, 0, emon.Testport.textBlob("(b)"), emon.Testport.textBlob("two"), Lists.lsScLowerAlpha(), 2, 9000);
+        ltItem(on, oa, text, 0, emon.Testport.textBlob("(c)"), emon.Testport.textBlob("three, its first line indented"), Lists.lsScLowerAlpha(), 3, 11100);
+        ltItem(on, oa, text, 0, emon.Testport.textBlob("(a)"), emon.Testport.textBlob("nested at last"), Lists.lsScLowerAlpha(), 1, 11100);
+        emon.Testport.assertEq(ltRs(on, oa, orr, text, nodes, attrs, regions), 7, "one list of three items, and the new `(a)` deep enough in is a list in the third");
+        emon.Testport.assertEq(Model.nodeParent(nodes, 4), 1, "the indented `(c)` is in the list of `(a)` and `(b)`: its value is the next");
+        emon.Testport.assertEq(Model.nodeKind(nodes, 5), Model.nkList(), "and a numbering that starts again, as far in, is a list inside it");
+        emon.Testport.assertEq(Model.nodeParent(nodes, 5), 4, "in `(c)`");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "in document order");
+    }
     public static int ltCaption(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int parent, int kind) {
         // A caption of the old Model (its kind in `aux`) with a label and a text.
         int c = Model.nodeNew(nodes, Model.nkCaption(), parent);
