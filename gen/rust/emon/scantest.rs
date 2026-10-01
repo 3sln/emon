@@ -301,7 +301,7 @@ fn test_a_line_is_measured_from_its_symbols_when_the_engine_gives_no_row_attribu
     crate::testport::assert_eq(ln_get(ln, 0, lh_y1()), 2400 + 144, "and its bottom the baseline plus the median depth of g, y, p: 6 px");
 }
 #[test]
-fn test_with_no_tall_letters_the_ascender_line_is_the_x_height_times_1_46() {
+fn test_with_no_tall_letters_the_ascender_line_is_the_x_height_times_1_5() {
     let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -313,7 +313,60 @@ fn test_with_no_tall_letters_the_ascender_line_is_the_x_height_times_1_46() {
     let at: i32 = no_row_attributes(an, 2, 0);
     sc_page(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, 6579573, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, osyms, &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new());
     crate::testport::assert_eq(wd_count(wd), 1, "one word");
-    crate::testport::assert_eq(wd_get(wd, 0, wf_size()), 959, "x-height 480 cpt: ascender line 700, size 959");
-    crate::testport::assert_eq(ln_get(ln, 0, lh_y0()), 2400 - 700, "the box's top");
-    crate::testport::assert_eq(ln_get(ln, 0, lh_y1()), 2400 + 189, "and its bottom: 0.27 of the ascender line");
+    crate::testport::assert_eq(wd_get(wd, 0, wf_size()), 986, "x-height 480 cpt, no page ratio to go by: ascender line 720, size 986");
+    crate::testport::assert_eq(ln_get(ln, 0, lh_y0()), 2400 - 720, "the box's top");
+    crate::testport::assert_eq(ln_get(ln, 0, lh_y1()), 2400 + 194, "and its bottom: 0.27 of the ascender line");
+}
+pub(crate) fn sized_lines(an: &mut crate::port::Cells, id: i32) -> i32 {
+    // Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,
+    // 30+22 (a heading, 1.5 times as tall) and 20+14 again.
+    let at: i32 = an_ocr(an, id);
+    let w0: i32 = an_ocr_word(an, at, 10, 20, 100, 40, 900, 0, 0);
+    an_ocr_cp(an, w0, 65);
+    let w1: i32 = an_ocr_word(an, at, 10, 100, 100, 40, 900, 1, 0);
+    an_ocr_cp(an, w1, 66);
+    let w2: i32 = an_ocr_word(an, at, 10, 180, 100, 40, 900, 2, 0);
+    an_ocr_cp(an, w2, 67);
+    let w3: i32 = an_ocr_word(an, at, 10, 260, 100, 60, 900, 3, 0);
+    an_ocr_cp(an, w3, 68);
+    let w4: i32 = an_ocr_word(an, at, 10, 360, 100, 40, 900, 4, 0);
+    an_ocr_cp(an, w4, 69);
+    ox_begin(an, 0, 0, 0, 0, -1, 0, -1, -1, 5, 1, 0, 0, 0);
+    ox_line(an, 10, 20, 100, 40, 10, 55, 110, 55, 0, 0, 0, 20, 14, 6);
+    ox_line(an, 10, 100, 100, 40, 10, 135, 110, 135, 0, 0, 0, 20, 15, 6);
+    ox_line(an, 10, 180, 100, 40, 10, 215, 110, 215, 0, 0, 0, 20, 14, 6);
+    ox_line(an, 10, 260, 100, 60, 10, 305, 110, 305, 0, 0, 0, 30, 22, 8);
+    ox_line(an, 10, 360, 100, 40, 10, 395, 110, 395, 0, 0, 0, 20, 14, 6);
+    ox_block(an, 10, 20, 100, 380, 0, 0, 0);
+    let x0: i32 = ox_word(an, 0, 0, -1, 0);
+    sym1(an, x0, 10, 20, 20, 65);
+    let x1: i32 = ox_word(an, 0, 0, -1, 0);
+    sym1(an, x1, 10, 100, 20, 66);
+    let x2: i32 = ox_word(an, 0, 0, -1, 0);
+    sym1(an, x2, 10, 180, 20, 67);
+    let x3: i32 = ox_word(an, 0, 0, -1, 0);
+    sym1(an, x3, 10, 260, 20, 68);
+    let x4: i32 = ox_word(an, 0, 0, -1, 0);
+    sym1(an, x4, 10, 360, 20, 69);
+    an_ocr_end(an, at);
+    return at;
+}
+#[test]
+fn test_a_pages_lines_of_one_size_measured_a_pixel_apart_get_one_size() {
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let osyms: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = sized_lines(an, 2);
+    sc_page(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, 6579573, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, osyms, &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new());
+    crate::testport::assert_eq(wd_count(wd), 5, "five words");
+    crate::testport::assert_eq(wd_get(wd, 0, wf_size()), 1117, "the body line: 34 px, 816 cpt, over 0.73");
+    crate::testport::assert_eq(wd_get(wd, 1, wf_size()), 1117, "35 px is the same size: within a cluster");
+    crate::testport::assert_eq(wd_get(wd, 2, wf_size()), 1117, "34 px again");
+    crate::testport::assert_eq(wd_get(wd, 4, wf_size()), 1117, "and the last body line");
+    crate::testport::assert_eq(wd_get(wd, 3, wf_size()), 1676, "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)");
 }

@@ -744,9 +744,14 @@ public final class Scan {
         }
         return run;
     }
+    public static int scCap() {
+        return 400;
+    }
     public static int scPrep(emon.Port.Cells scr) {
-        // The scratch of `sc-sample`: 242 cells (two for the metrics and 240 samples), made once.
-        while (emon.Port.cellsLen(scr) < 242) {
+        // The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
+        // `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
+        // cluster's members; made once.
+        while (emon.Port.cellsLen(scr) < (242 + (5 * scCap()))) {
             emon.Port.cellsPush(scr, 0);
         }
         return 0;
@@ -770,8 +775,9 @@ public final class Scan {
     }
     public static int scClass(int cp) {
         // What a letter says about a line's metrics: 1 a letter that stands on the baseline and reaches the x-height only (a c e m n
-        // o r s u v w x z), 2 one that reaches the ascender line (b d f h k l, the digits and the capitals), 3 one that hangs below the
-        // baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know measures nothing.
+        // o r s u v w x z), 2 one that reaches the ascender line (b d f h k l), 4 one that reaches the cap height (the digits and the
+        // capitals), 3 one that hangs below the baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know
+        // measures nothing.
         if ((cp == 97) || ((cp == 99) || ((cp == 101) || ((cp == 109) || ((cp == 110) || ((cp == 111) || ((cp == 114) || (cp == 115)))))))) {
             return 1;
         }
@@ -782,20 +788,29 @@ public final class Scan {
             return 2;
         }
         if ((cp >= 48) && (cp <= 57)) {
-            return 2;
+            return 4;
         }
         if ((cp >= 65) && (cp <= 90)) {
-            return 2;
+            return 4;
         }
         if ((cp == 103) || ((cp == 106) || ((cp == 112) || ((cp == 113) || (cp == 121))))) {
             return 3;
         }
         return 0;
     }
+    public static int scLowq(emon.Port.Cells c, int from, int n) {
+        // The 30th percentile of the `n` sorted cells that start at `from`. A symbol's box is its own component's most of the time and
+        // the whole WORD's height some of the time (the engine does not always split a word's height among its letters: in a body line,
+        // a third of the x-height letters can have the height of an ascender), and those are always TOO TALL, so the estimate leans low:
+        // neither a mean nor the median survives that, a low percentile does.
+        return emon.Port.cellsAt(c, from + ((n * 3) / 10));
+    }
     public static int scSample(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l, int cls, emon.Port.Cells scr) {
-        // The lower median, in centipoints, of one class of symbol on line `l`: for classes 1 and 2 the symbol's top above the line's
-        // baseline at its centre, for class 3 its bottom below it; -1 with fewer than `3` symbols (2 for class 3). `scr` is scratch
-        // from cell 2 on and is overwritten.
+        // The 30th PERCENTILE (`sc-lowq`: why not a mean), in centipoints, of one class of symbol on line `l`: for classes 1, 2 and 4
+        // the height of its box (these letters stand on the baseline, so the box's height is their height, and the engine's baseline,
+        // which is fitted to the whole line and is a pixel or two off at either end of a tilted one, is not in it), for class 3 its
+        // bottom below the baseline; -1 with fewer than 4 symbols (x-height), 2 (hanging) or 3. `scr` is scratch from cell 2 on and is
+        // overwritten.
         int w0 = Evidence.olGet(olines, l, Evidence.lhFirst());
         int cnt = Evidence.olGet(olines, l, Evidence.lhCount());
         int bx0 = Evidence.olGet(olines, l, Evidence.lhBx0());
@@ -812,16 +827,19 @@ public final class Scan {
         if (cls == 3) {
             need = 2;
         }
+        if (cls == 1) {
+            need = 4;
+        }
         while ((j < cnt) && (n < 240)) {
             s = Evidence.owGet(owords, w0 + j, Evidence.owfSfirst());
             s1 = s + Evidence.owGet(owords, w0 + j, Evidence.owfScount());
             while ((s < s1) && (n < 240)) {
                 if (scClass(Evidence.osGet(osyms, s, Evidence.chCp())) == cls) {
-                    yb = Evidence.evBaselineAt(bx0, by0, bx1, by1, (Evidence.osGet(osyms, s, Evidence.chX0()) + Evidence.osGet(osyms, s, Evidence.chX1())) / 2);
                     if (cls == 3) {
+                        yb = Evidence.evBaselineAt(bx0, by0, bx1, by1, (Evidence.osGet(osyms, s, Evidence.chX0()) + Evidence.osGet(osyms, s, Evidence.chX1())) / 2);
                         v = Evidence.osGet(osyms, s, Evidence.chY1()) - yb;
                     } else {
-                        v = yb - Evidence.osGet(osyms, s, Evidence.chY0());
+                        v = Evidence.osGet(osyms, s, Evidence.chY1()) - Evidence.osGet(osyms, s, Evidence.chY0());
                     }
                     if (v > 0) {
                         emon.Port.cellsSet(scr, 2 + n, v);
@@ -836,14 +854,15 @@ public final class Scan {
             return -1;
         }
         scIsort(scr, 2, n);
-        return emon.Port.cellsAt(scr, 2 + ((n - 1) / 2));
+        return scLowq(scr, 2, n);
     }
     public static int scMetrics(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l, emon.Port.Cells scr) {
         // The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0
-        // and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);
-        // else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and
-        // a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the
-        // median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.
+        // and 1 of `scr` (-1 unknown), and answers its x-height `X` (-1 unknown). The engine's own row attributes when the answer has
+        // them (x-height + ascenders, x-height, descenders); else MEASURED from the symbols' boxes and the baseline (D186): the
+        // Tesseract C API does not export its row attributes, and a measurement is one implementation for every engine. A is the trimmed
+        // mean top of the tall letters (b d f h k l; else the capitals and digits x 1.06), X that of the letters that stand on the
+        // x-height (a c e m n o r s u v w x z), D the trimmed mean bottom of the hanging letters (g j p q y).
         int xh = Evidence.olGet(olines, l, Evidence.olfXheight());
         int asc = Evidence.olGet(olines, l, Evidence.olfAsc());
         int dsc = Evidence.olGet(olines, l, Evidence.olfDesc());
@@ -852,23 +871,153 @@ public final class Scan {
         int x = -1;
         if ((xh > 0) && (asc >= 0)) {
             a = xh + asc;
+            x = xh;
             d = dsc;
         } else {
             a = scSample(olines, owords, osyms, l, 2, scr);
             if (a < 0) {
-                x = scSample(olines, owords, osyms, l, 1, scr);
-                if (x > 0) {
-                    a = (x * 146) / 100;
+                a = scSample(olines, owords, osyms, l, 4, scr);
+                if (a > 0) {
+                    a = (a * 106) / 100;
                 }
             }
+            x = scSample(olines, owords, osyms, l, 1, scr);
             d = scSample(olines, owords, osyms, l, 3, scr);
-        }
-        if ((d < 0) && (a > 0)) {
-            d = (a * 27) / 100;
         }
         emon.Port.cellsSet(scr, 0, a);
         emon.Port.cellsSet(scr, 1, d);
+        return x;
+    }
+    public static int scCluster(emon.Port.Cells scr, int n) {
+        // Sizes are a property of a page's TYPE, not of each line: the ascender lines `A` of the first `n` lines (cells 242 + 3 k, 0 or
+        // less for none) are measured to a pixel or two, which is 5 per cent of a body line at 150 dpi, and the paragraph stage breaks
+        // a paragraph at a 5 per cent change. So they are clustered: the densest window [A, 1.05 A] over the lines not yet placed is a
+        // cluster, its members take the cluster's median of A and of D (their descender depth), and the next window is looked for among
+        // the rest. The measure (`sc-sample`) is good to a per cent or two, so two sizes less than 5 per cent apart are one size here.
+        int left = 0;
+        int i = 0;
+        int j = 0;
+        int best = -1;
+        int bestc = 0;
+        int c = 0;
+        int a = 0;
+        int m = 0;
+        int medA = 0;
+        int medD = 0;
+        while (i < n) {
+            if (emon.Port.cellsAt(scr, 242 + (4 * i)) > 0) {
+                left += 1;
+            }
+            i += 1;
+        }
+        while (left > 0) {
+            best = -1;
+            bestc = 0;
+            i = 0;
+            while (i < n) {
+                a = emon.Port.cellsAt(scr, 242 + (4 * i));
+                if ((a > 0) && (emon.Port.cellsAt(scr, 244 + (4 * i)) == 0)) {
+                    c = 0;
+                    j = 0;
+                    while (j < n) {
+                        if ((emon.Port.cellsAt(scr, 244 + (4 * j)) == 0) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) >= a) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) * 100) <= (a * 110)))) {
+                            c += 1;
+                        }
+                        j += 1;
+                    }
+                    if (c > bestc) {
+                        bestc = c;
+                        best = i;
+                    }
+                }
+                i += 1;
+            }
+            if (best < 0) {
+                left = 0;
+            } else {
+                a = emon.Port.cellsAt(scr, 242 + (4 * best));
+                m = 0;
+                j = 0;
+                while (j < n) {
+                    if ((emon.Port.cellsAt(scr, 244 + (4 * j)) == 0) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) >= a) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) * 100) <= (a * 110)))) {
+                        emon.Port.cellsSet(scr, (242 + (4 * scCap())) + m, emon.Port.cellsAt(scr, 242 + (4 * j)));
+                        m += 1;
+                    }
+                    j += 1;
+                }
+                scIsort(scr, 242 + (4 * scCap()), m);
+                medA = emon.Port.cellsAt(scr, (242 + (4 * scCap())) + ((m - 1) / 2));
+                m = 0;
+                j = 0;
+                while (j < n) {
+                    if ((emon.Port.cellsAt(scr, 244 + (4 * j)) == 0) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) >= a) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) * 100) <= (a * 110)))) {
+                        emon.Port.cellsSet(scr, (242 + (4 * scCap())) + m, emon.Port.cellsAt(scr, 243 + (4 * j)));
+                        m += 1;
+                    }
+                    j += 1;
+                }
+                scIsort(scr, 242 + (4 * scCap()), m);
+                medD = emon.Port.cellsAt(scr, (242 + (4 * scCap())) + ((m - 1) / 2));
+                j = 0;
+                while (j < n) {
+                    if ((emon.Port.cellsAt(scr, 244 + (4 * j)) == 0) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) >= a) && ((emon.Port.cellsAt(scr, 242 + (4 * j)) * 100) <= (a * 110)))) {
+                        emon.Port.cellsSet(scr, 242 + (4 * j), medA);
+                        emon.Port.cellsSet(scr, 243 + (4 * j), medD);
+                        emon.Port.cellsSet(scr, 244 + (4 * j), 1);
+                        left -= 1;
+                    }
+                    j += 1;
+                }
+            }
+        }
         return 0;
+    }
+    public static int scFit(emon.Port.Cells scr, int n) {
+        // A page's line sizes from what `sc-metrics` measured (cells 242 + 4 k: A, D, clustered, X). A line's x-height has dozens of
+        // letters behind it and a tall-letter line a handful (a heading may have none), so a line's size is its X times the PAGE's
+        // ratio of A to X (the median over the lines that have both: one typeface, one ratio; 1.5 when no line has both), and A itself only
+        // where X is unknown. The sizes are then clustered (`sc-cluster`). Answers the ratio, per thousand.
+        int i = 0;
+        int m = 0;
+        int r = 1500;
+        int a = 0;
+        int x = 0;
+        int d = 0;
+        int mm = 0;
+        while (i < n) {
+            a = emon.Port.cellsAt(scr, 242 + (4 * i));
+            x = emon.Port.cellsAt(scr, 245 + (4 * i));
+            if ((a > 0) && (x > 0)) {
+                emon.Port.cellsSet(scr, (242 + (4 * scCap())) + m, (a * 1000) / x);
+                m += 1;
+            }
+            i += 1;
+        }
+        if (m >= 1) {
+            scIsort(scr, 242 + (4 * scCap()), m);
+            r = emon.Port.cellsAt(scr, (242 + (4 * scCap())) + ((m - 1) / 2));
+        }
+        i = 0;
+        while (i < n) {
+            a = emon.Port.cellsAt(scr, 242 + (4 * i));
+            x = emon.Port.cellsAt(scr, 245 + (4 * i));
+            d = emon.Port.cellsAt(scr, 243 + (4 * i));
+            mm = -1;
+            if (x > 0) {
+                mm = (x * r) / 1000;
+            }
+            if ((mm <= 0) && (a > 0)) {
+                mm = a;
+            }
+            if ((d < 0) && (mm > 0)) {
+                d = (mm * 27) / 100;
+            }
+            emon.Port.cellsSet(scr, 242 + (4 * i), mm);
+            emon.Port.cellsSet(scr, 243 + (4 * i), d);
+            i += 1;
+        }
+        scCluster(scr, n);
+        return r;
     }
     public static int scEmitLines(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l0, int nl, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines) {
         // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
@@ -902,7 +1051,31 @@ public final class Scan {
         int ox = 0;
         int ox1 = 0;
         int nx0 = 0;
+        int xm = 0;
         int nx1 = 0;
+        // Pass 1: every line's metrics, then their sizes clustered over the page.
+        while (k < nl) {
+            if (k < scCap()) {
+                l = l0 + k;
+                emon.Port.cellsSet(scr, 244 + (4 * k), 0);
+                emon.Port.cellsSet(scr, 242 + (4 * k), -1);
+                emon.Port.cellsSet(scr, 243 + (4 * k), -1);
+                emon.Port.cellsSet(scr, 245 + (4 * k), -1);
+                if (Evidence.olGet(olines, l, Evidence.lhCount()) > 0) {
+                    xm = scMetrics(olines, owords, osyms, l, scr);
+                    emon.Port.cellsSet(scr, 245 + (4 * k), xm);
+                    emon.Port.cellsSet(scr, 242 + (4 * k), emon.Port.cellsAt(scr, 0));
+                    emon.Port.cellsSet(scr, 243 + (4 * k), emon.Port.cellsAt(scr, 1));
+                }
+            }
+            k += 1;
+        }
+        if (nl < scCap()) {
+            scFit(scr, nl);
+        } else {
+            scFit(scr, scCap());
+        }
+        k = 0;
         while (k < nl) {
             l = l0 + k;
             cnt = Evidence.olGet(olines, l, Evidence.lhCount());
@@ -917,9 +1090,17 @@ public final class Scan {
                 bx1 = Evidence.olGet(olines, l, Evidence.lhBx1());
                 by1 = Evidence.olGet(olines, l, Evidence.lhBy1());
                 dir = Evidence.olGet(olines, l, Evidence.lhDir());
-                scMetrics(olines, owords, osyms, l, scr);
-                asc = emon.Port.cellsAt(scr, 0);
-                dsc = emon.Port.cellsAt(scr, 1);
+                if (k < scCap()) {
+                    asc = emon.Port.cellsAt(scr, 242 + (4 * k));
+                    dsc = emon.Port.cellsAt(scr, 243 + (4 * k));
+                } else {
+                    scMetrics(olines, owords, osyms, l, scr);
+                    asc = emon.Port.cellsAt(scr, 0);
+                    dsc = emon.Port.cellsAt(scr, 1);
+                    if (dsc < 0) {
+                        dsc = (asc * 27) / 100;
+                    }
+                }
                 ymid = (by0 + by1) / 2;
                 if (asc > 0) {
                     size = (asc * 137) / 100;

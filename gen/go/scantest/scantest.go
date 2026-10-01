@@ -311,7 +311,7 @@ func TestALineIsMeasuredFromItsSymbolsWhenTheEngineGivesNoRowAttributes(emonT *t
 	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhY1()), 2400+144, "and its bottom the baseline plus the median depth of g, y, p: 6 px")
 }
 
-func TestWithNoTallLettersTheAscenderLineIsTheXHeightTimes146(emonT *testing.T) {
+func TestWithNoTallLettersTheAscenderLineIsTheXHeightTimes15(emonT *testing.T) {
 	var an *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
 	var oruns *port.Cells = port.NewCells()
@@ -323,7 +323,61 @@ func TestWithNoTallLettersTheAscenderLineIsTheXHeightTimes146(emonT *testing.T) 
 	var at int32 = noRowAttributes(an, 2, 0)
 	scan.ScPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, 6579573, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, osyms, port.NewCells(), wd, ln, port.NewCells())
 	port.AssertEq(emonT, evidence.WdCount(wd), 1, "one word")
-	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.WfSize()), 959, "x-height 480 cpt: ascender line 700, size 959")
-	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhY0()), 2400-700, "the box's top")
-	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhY1()), 2400+189, "and its bottom: 0.27 of the ascender line")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.WfSize()), 986, "x-height 480 cpt, no page ratio to go by: ascender line 720, size 986")
+	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhY0()), 2400-720, "the box's top")
+	port.AssertEq(emonT, evidence.LnGet(ln, 0, evidence.LhY1()), 2400+194, "and its bottom: 0.27 of the ascender line")
+}
+
+func sizedLines(an *port.Cells, id int32) int32 {
+	// Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,
+	// 30+22 (a heading, 1.5 times as tall) and 20+14 again.
+	var at int32 = plan.AnOcr(an, id)
+	var w0 int32 = plan.AnOcrWord(an, at, 10, 20, 100, 40, 900, 0, 0)
+	plan.AnOcrCp(an, w0, 65)
+	var w1 int32 = plan.AnOcrWord(an, at, 10, 100, 100, 40, 900, 1, 0)
+	plan.AnOcrCp(an, w1, 66)
+	var w2 int32 = plan.AnOcrWord(an, at, 10, 180, 100, 40, 900, 2, 0)
+	plan.AnOcrCp(an, w2, 67)
+	var w3 int32 = plan.AnOcrWord(an, at, 10, 260, 100, 60, 900, 3, 0)
+	plan.AnOcrCp(an, w3, 68)
+	var w4 int32 = plan.AnOcrWord(an, at, 10, 360, 100, 40, 900, 4, 0)
+	plan.AnOcrCp(an, w4, 69)
+	ocr.OxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 5, 1, 0, 0, 0)
+	ocr.OxLine(an, 10, 20, 100, 40, 10, 55, 110, 55, 0, 0, 0, 20, 14, 6)
+	ocr.OxLine(an, 10, 100, 100, 40, 10, 135, 110, 135, 0, 0, 0, 20, 15, 6)
+	ocr.OxLine(an, 10, 180, 100, 40, 10, 215, 110, 215, 0, 0, 0, 20, 14, 6)
+	ocr.OxLine(an, 10, 260, 100, 60, 10, 305, 110, 305, 0, 0, 0, 30, 22, 8)
+	ocr.OxLine(an, 10, 360, 100, 40, 10, 395, 110, 395, 0, 0, 0, 20, 14, 6)
+	ocr.OxBlock(an, 10, 20, 100, 380, 0, 0, 0)
+	var x0 int32 = ocr.OxWord(an, 0, 0, -1, 0)
+	sym1(an, x0, 10, 20, 20, 65)
+	var x1 int32 = ocr.OxWord(an, 0, 0, -1, 0)
+	sym1(an, x1, 10, 100, 20, 66)
+	var x2 int32 = ocr.OxWord(an, 0, 0, -1, 0)
+	sym1(an, x2, 10, 180, 20, 67)
+	var x3 int32 = ocr.OxWord(an, 0, 0, -1, 0)
+	sym1(an, x3, 10, 260, 20, 68)
+	var x4 int32 = ocr.OxWord(an, 0, 0, -1, 0)
+	sym1(an, x4, 10, 360, 20, 69)
+	plan.AnOcrEnd(an, at)
+	return at
+}
+
+func TestAPagesLinesOfOneSizeMeasuredAPixelApartGetOneSize(emonT *testing.T) {
+	var an *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var oruns *port.Cells = port.NewCells()
+	var olines *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var osyms *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var at int32 = sizedLines(an, 2)
+	scan.ScPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, 6579573, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, osyms, port.NewCells(), wd, ln, port.NewCells())
+	port.AssertEq(emonT, evidence.WdCount(wd), 5, "five words")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.WfSize()), 1117, "the body line: 34 px, 816 cpt, over 0.73")
+	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.WfSize()), 1117, "35 px is the same size: within a cluster")
+	port.AssertEq(emonT, evidence.WdGet(wd, 2, evidence.WfSize()), 1117, "34 px again")
+	port.AssertEq(emonT, evidence.WdGet(wd, 4, evidence.WfSize()), 1117, "and the last body line")
+	port.AssertEq(emonT, evidence.WdGet(wd, 3, evidence.WfSize()), 1676, "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)")
 }

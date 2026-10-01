@@ -289,7 +289,7 @@ public final class Scantest {
         emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY0()), 2400 - 816, "the box's top is the baseline less the ascender line");
         emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY1()), 2400 + 144, "and its bottom the baseline plus the median depth of g, y, p: 6 px");
     }
-    public static void testWithNoTallLettersTheAscenderLineIsTheXHeightTimes146() {
+    public static void testWithNoTallLettersTheAscenderLineIsTheXHeightTimes15() {
         emon.Port.Cells an = emon.Port.newCells();
         emon.Port.Cells et = emon.Port.newCells();
         emon.Port.Cells oruns = emon.Port.newCells();
@@ -301,8 +301,60 @@ public final class Scantest {
         int at = noRowAttributes(an, 2, 0);
         Scan.scPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, 6579573, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, osyms, emon.Port.newCells(), wd, ln, emon.Port.newCells());
         emon.Testport.assertEq(Evidence.wdCount(wd), 1, "one word");
-        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.wfSize()), 959, "x-height 480 cpt: ascender line 700, size 959");
-        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY0()), 2400 - 700, "the box's top");
-        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY1()), 2400 + 189, "and its bottom: 0.27 of the ascender line");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.wfSize()), 986, "x-height 480 cpt, no page ratio to go by: ascender line 720, size 986");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY0()), 2400 - 720, "the box's top");
+        emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY1()), 2400 + 194, "and its bottom: 0.27 of the ascender line");
+    }
+    public static int sizedLines(emon.Port.Cells an, int id) {
+        // Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,
+        // 30+22 (a heading, 1.5 times as tall) and 20+14 again.
+        int at = Plan.anOcr(an, id);
+        int w0 = Plan.anOcrWord(an, at, 10, 20, 100, 40, 900, 0, 0);
+        Plan.anOcrCp(an, w0, 65);
+        int w1 = Plan.anOcrWord(an, at, 10, 100, 100, 40, 900, 1, 0);
+        Plan.anOcrCp(an, w1, 66);
+        int w2 = Plan.anOcrWord(an, at, 10, 180, 100, 40, 900, 2, 0);
+        Plan.anOcrCp(an, w2, 67);
+        int w3 = Plan.anOcrWord(an, at, 10, 260, 100, 60, 900, 3, 0);
+        Plan.anOcrCp(an, w3, 68);
+        int w4 = Plan.anOcrWord(an, at, 10, 360, 100, 40, 900, 4, 0);
+        Plan.anOcrCp(an, w4, 69);
+        Ocr.oxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 5, 1, 0, 0, 0);
+        Ocr.oxLine(an, 10, 20, 100, 40, 10, 55, 110, 55, 0, 0, 0, 20, 14, 6);
+        Ocr.oxLine(an, 10, 100, 100, 40, 10, 135, 110, 135, 0, 0, 0, 20, 15, 6);
+        Ocr.oxLine(an, 10, 180, 100, 40, 10, 215, 110, 215, 0, 0, 0, 20, 14, 6);
+        Ocr.oxLine(an, 10, 260, 100, 60, 10, 305, 110, 305, 0, 0, 0, 30, 22, 8);
+        Ocr.oxLine(an, 10, 360, 100, 40, 10, 395, 110, 395, 0, 0, 0, 20, 14, 6);
+        Ocr.oxBlock(an, 10, 20, 100, 380, 0, 0, 0);
+        int x0 = Ocr.oxWord(an, 0, 0, -1, 0);
+        sym1(an, x0, 10, 20, 20, 65);
+        int x1 = Ocr.oxWord(an, 0, 0, -1, 0);
+        sym1(an, x1, 10, 100, 20, 66);
+        int x2 = Ocr.oxWord(an, 0, 0, -1, 0);
+        sym1(an, x2, 10, 180, 20, 67);
+        int x3 = Ocr.oxWord(an, 0, 0, -1, 0);
+        sym1(an, x3, 10, 260, 20, 68);
+        int x4 = Ocr.oxWord(an, 0, 0, -1, 0);
+        sym1(an, x4, 10, 360, 20, 69);
+        Plan.anOcrEnd(an, at);
+        return at;
+    }
+    public static void testAPagesLinesOfOneSizeMeasuredAPixelApartGetOneSize() {
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells oruns = emon.Port.newCells();
+        emon.Port.Cells olines = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells osyms = emon.Port.newCells();
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        int at = sizedLines(an, 2);
+        Scan.scPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, 6579573, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), oruns, emon.Port.newCells(), olines, owords, osyms, emon.Port.newCells(), wd, ln, emon.Port.newCells());
+        emon.Testport.assertEq(Evidence.wdCount(wd), 5, "five words");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.wfSize()), 1117, "the body line: 34 px, 816 cpt, over 0.73");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.wfSize()), 1117, "35 px is the same size: within a cluster");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 2, Evidence.wfSize()), 1117, "34 px again");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 4, Evidence.wfSize()), 1117, "and the last body line");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 3, Evidence.wfSize()), 1676, "the heading is its own size: its x-height (30 px) times the page's ratio of ascender line to x-height (1.7)");
     }
 }

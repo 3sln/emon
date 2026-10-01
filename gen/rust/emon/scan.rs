@@ -748,9 +748,14 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
     }
     return run;
 }
+pub(crate) fn sc_cap() -> i32 {
+    return 400;
+}
 pub(crate) fn sc_prep(mut scr: &mut crate::port::Cells) -> i32 {
-    // The scratch of `sc-sample`: 242 cells (two for the metrics and 240 samples), made once.
-    while crate::port::cells_len(scr) < 242 {
+    // The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
+    // `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
+    // cluster's members; made once.
+    while crate::port::cells_len(scr) < (242 + (5 * sc_cap())) {
         crate::port::cells_push(scr, 0);
     }
     return 0;
@@ -774,8 +779,9 @@ pub(crate) fn sc_isort(mut c: &mut crate::port::Cells, from: i32, n: i32) -> i32
 }
 pub(crate) fn sc_class(cp: i32) -> i32 {
     // What a letter says about a line's metrics: 1 a letter that stands on the baseline and reaches the x-height only (a c e m n
-    // o r s u v w x z), 2 one that reaches the ascender line (b d f h k l, the digits and the capitals), 3 one that hangs below the
-    // baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know measures nothing.
+    // o r s u v w x z), 2 one that reaches the ascender line (b d f h k l), 4 one that reaches the cap height (the digits and the
+    // capitals), 3 one that hangs below the baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know
+    // measures nothing.
     if (cp == 97) || ((cp == 99) || ((cp == 101) || ((cp == 109) || ((cp == 110) || ((cp == 111) || ((cp == 114) || (cp == 115))))))) {
         return 1;
     }
@@ -786,20 +792,29 @@ pub(crate) fn sc_class(cp: i32) -> i32 {
         return 2;
     }
     if (cp >= 48) && (cp <= 57) {
-        return 2;
+        return 4;
     }
     if (cp >= 65) && (cp <= 90) {
-        return 2;
+        return 4;
     }
     if (cp == 103) || ((cp == 106) || ((cp == 112) || ((cp == 113) || (cp == 121)))) {
         return 3;
     }
     return 0;
 }
+pub(crate) fn sc_lowq(c: &mut crate::port::Cells, from: i32, n: i32) -> i32 {
+    // The 30th percentile of the `n` sorted cells that start at `from`. A symbol's box is its own component's most of the time and
+    // the whole WORD's height some of the time (the engine does not always split a word's height among its letters: in a body line,
+    // a third of the x-height letters can have the height of an ascender), and those are always TOO TALL, so the estimate leans low:
+    // neither a mean nor the median survives that, a low percentile does.
+    return crate::port::cells_at(c, from + ((n * 3) / 10));
+}
 pub(crate) fn sc_sample(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l: i32, cls: i32, mut scr: &mut crate::port::Cells) -> i32 {
-    // The lower median, in centipoints, of one class of symbol on line `l`: for classes 1 and 2 the symbol's top above the line's
-    // baseline at its centre, for class 3 its bottom below it; -1 with fewer than `3` symbols (2 for class 3). `scr` is scratch
-    // from cell 2 on and is overwritten.
+    // The 30th PERCENTILE (`sc-lowq`: why not a mean), in centipoints, of one class of symbol on line `l`: for classes 1, 2 and 4
+    // the height of its box (these letters stand on the baseline, so the box's height is their height, and the engine's baseline,
+    // which is fitted to the whole line and is a pixel or two off at either end of a tilted one, is not in it), for class 3 its
+    // bottom below the baseline; -1 with fewer than 4 symbols (x-height), 2 (hanging) or 3. `scr` is scratch from cell 2 on and is
+    // overwritten.
     let w0: i32 = ol_get(olines, l, lh_first());
     let cnt: i32 = ol_get(olines, l, lh_count());
     let bx0: i32 = ol_get(olines, l, lh_bx0());
@@ -816,16 +831,19 @@ pub(crate) fn sc_sample(olines: &mut crate::port::Cells, owords: &mut crate::por
     if cls == 3 {
         need = 2;
     }
+    if cls == 1 {
+        need = 4;
+    }
     while (j < cnt) && (n < 240) {
         s = ow_get(owords, w0 + j, owf_sfirst());
         s1 = s + ow_get(owords, w0 + j, owf_scount());
         while (s < s1) && (n < 240) {
             if sc_class(os_get(osyms, s, ch_cp())) == cls {
-                yb = ev_baseline_at(bx0, by0, bx1, by1, (os_get(osyms, s, ch_x0()) + os_get(osyms, s, ch_x1())) / 2);
                 if cls == 3 {
+                    yb = ev_baseline_at(bx0, by0, bx1, by1, (os_get(osyms, s, ch_x0()) + os_get(osyms, s, ch_x1())) / 2);
                     v = os_get(osyms, s, ch_y1()) - yb;
                 } else {
-                    v = yb - os_get(osyms, s, ch_y0());
+                    v = os_get(osyms, s, ch_y1()) - os_get(osyms, s, ch_y0());
                 }
                 if v > 0 {
                     crate::port::cells_set(scr, 2 + n, v);
@@ -840,14 +858,15 @@ pub(crate) fn sc_sample(olines: &mut crate::port::Cells, owords: &mut crate::por
         return -1;
     }
     sc_isort(scr, 2, n);
-    return crate::port::cells_at(scr, 2 + ((n - 1) / 2));
+    return sc_lowq(scr, 2, n);
 }
 pub(crate) fn sc_metrics(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0
-    // and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);
-    // else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and
-    // a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the
-    // median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.
+    // and 1 of `scr` (-1 unknown), and answers its x-height `X` (-1 unknown). The engine's own row attributes when the answer has
+    // them (x-height + ascenders, x-height, descenders); else MEASURED from the symbols' boxes and the baseline (D186): the
+    // Tesseract C API does not export its row attributes, and a measurement is one implementation for every engine. A is the trimmed
+    // mean top of the tall letters (b d f h k l; else the capitals and digits x 1.06), X that of the letters that stand on the
+    // x-height (a c e m n o r s u v w x z), D the trimmed mean bottom of the hanging letters (g j p q y).
     let xh: i32 = ol_get(olines, l, olf_xheight());
     let asc: i32 = ol_get(olines, l, olf_asc());
     let dsc: i32 = ol_get(olines, l, olf_desc());
@@ -856,23 +875,153 @@ pub(crate) fn sc_metrics(olines: &mut crate::port::Cells, owords: &mut crate::po
     let mut x: i32 = -1;
     if (xh > 0) && (asc >= 0) {
         a = xh + asc;
+        x = xh;
         d = dsc;
     } else {
         a = sc_sample(olines, owords, osyms, l, 2, scr);
         if a < 0 {
-            x = sc_sample(olines, owords, osyms, l, 1, scr);
-            if x > 0 {
-                a = (x * 146) / 100;
+            a = sc_sample(olines, owords, osyms, l, 4, scr);
+            if a > 0 {
+                a = (a * 106) / 100;
             }
         }
+        x = sc_sample(olines, owords, osyms, l, 1, scr);
         d = sc_sample(olines, owords, osyms, l, 3, scr);
-    }
-    if (d < 0) && (a > 0) {
-        d = (a * 27) / 100;
     }
     crate::port::cells_set(scr, 0, a);
     crate::port::cells_set(scr, 1, d);
+    return x;
+}
+pub(crate) fn sc_cluster(mut scr: &mut crate::port::Cells, n: i32) -> i32 {
+    // Sizes are a property of a page's TYPE, not of each line: the ascender lines `A` of the first `n` lines (cells 242 + 3 k, 0 or
+    // less for none) are measured to a pixel or two, which is 5 per cent of a body line at 150 dpi, and the paragraph stage breaks
+    // a paragraph at a 5 per cent change. So they are clustered: the densest window [A, 1.05 A] over the lines not yet placed is a
+    // cluster, its members take the cluster's median of A and of D (their descender depth), and the next window is looked for among
+    // the rest. The measure (`sc-sample`) is good to a per cent or two, so two sizes less than 5 per cent apart are one size here.
+    let mut left: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut best: i32 = -1;
+    let mut bestc: i32 = 0;
+    let mut c: i32 = 0;
+    let mut a: i32 = 0;
+    let mut m: i32 = 0;
+    let mut medA: i32 = 0;
+    let mut medD: i32 = 0;
+    while i < n {
+        if crate::port::cells_at(scr, 242 + (4 * i)) > 0 {
+            left += 1;
+        }
+        i += 1;
+    }
+    while left > 0 {
+        best = -1;
+        bestc = 0;
+        i = 0;
+        while i < n {
+            a = crate::port::cells_at(scr, 242 + (4 * i));
+            if (a > 0) && (crate::port::cells_at(scr, 244 + (4 * i)) == 0) {
+                c = 0;
+                j = 0;
+                while j < n {
+                    if (crate::port::cells_at(scr, 244 + (4 * j)) == 0) && ((crate::port::cells_at(scr, 242 + (4 * j)) >= a) && ((crate::port::cells_at(scr, 242 + (4 * j)) * 100) <= (a * 110))) {
+                        c += 1;
+                    }
+                    j += 1;
+                }
+                if c > bestc {
+                    bestc = c;
+                    best = i;
+                }
+            }
+            i += 1;
+        }
+        if best < 0 {
+            left = 0;
+        } else {
+            a = crate::port::cells_at(scr, 242 + (4 * best));
+            m = 0;
+            j = 0;
+            while j < n {
+                if (crate::port::cells_at(scr, 244 + (4 * j)) == 0) && ((crate::port::cells_at(scr, 242 + (4 * j)) >= a) && ((crate::port::cells_at(scr, 242 + (4 * j)) * 100) <= (a * 110))) {
+                    crate::port::cells_set(scr, (242 + (4 * sc_cap())) + m, crate::port::cells_at(scr, 242 + (4 * j)));
+                    m += 1;
+                }
+                j += 1;
+            }
+            sc_isort(scr, 242 + (4 * sc_cap()), m);
+            medA = crate::port::cells_at(scr, (242 + (4 * sc_cap())) + ((m - 1) / 2));
+            m = 0;
+            j = 0;
+            while j < n {
+                if (crate::port::cells_at(scr, 244 + (4 * j)) == 0) && ((crate::port::cells_at(scr, 242 + (4 * j)) >= a) && ((crate::port::cells_at(scr, 242 + (4 * j)) * 100) <= (a * 110))) {
+                    crate::port::cells_set(scr, (242 + (4 * sc_cap())) + m, crate::port::cells_at(scr, 243 + (4 * j)));
+                    m += 1;
+                }
+                j += 1;
+            }
+            sc_isort(scr, 242 + (4 * sc_cap()), m);
+            medD = crate::port::cells_at(scr, (242 + (4 * sc_cap())) + ((m - 1) / 2));
+            j = 0;
+            while j < n {
+                if (crate::port::cells_at(scr, 244 + (4 * j)) == 0) && ((crate::port::cells_at(scr, 242 + (4 * j)) >= a) && ((crate::port::cells_at(scr, 242 + (4 * j)) * 100) <= (a * 110))) {
+                    crate::port::cells_set(scr, 242 + (4 * j), medA);
+                    crate::port::cells_set(scr, 243 + (4 * j), medD);
+                    crate::port::cells_set(scr, 244 + (4 * j), 1);
+                    left -= 1;
+                }
+                j += 1;
+            }
+        }
+    }
     return 0;
+}
+pub(crate) fn sc_fit(mut scr: &mut crate::port::Cells, n: i32) -> i32 {
+    // A page's line sizes from what `sc-metrics` measured (cells 242 + 4 k: A, D, clustered, X). A line's x-height has dozens of
+    // letters behind it and a tall-letter line a handful (a heading may have none), so a line's size is its X times the PAGE's
+    // ratio of A to X (the median over the lines that have both: one typeface, one ratio; 1.5 when no line has both), and A itself only
+    // where X is unknown. The sizes are then clustered (`sc-cluster`). Answers the ratio, per thousand.
+    let mut i: i32 = 0;
+    let mut m: i32 = 0;
+    let mut r: i32 = 1500;
+    let mut a: i32 = 0;
+    let mut x: i32 = 0;
+    let mut d: i32 = 0;
+    let mut mm: i32 = 0;
+    while i < n {
+        a = crate::port::cells_at(scr, 242 + (4 * i));
+        x = crate::port::cells_at(scr, 245 + (4 * i));
+        if (a > 0) && (x > 0) {
+            crate::port::cells_set(scr, (242 + (4 * sc_cap())) + m, (a * 1000) / x);
+            m += 1;
+        }
+        i += 1;
+    }
+    if m >= 1 {
+        sc_isort(scr, 242 + (4 * sc_cap()), m);
+        r = crate::port::cells_at(scr, (242 + (4 * sc_cap())) + ((m - 1) / 2));
+    }
+    i = 0;
+    while i < n {
+        a = crate::port::cells_at(scr, 242 + (4 * i));
+        x = crate::port::cells_at(scr, 245 + (4 * i));
+        d = crate::port::cells_at(scr, 243 + (4 * i));
+        mm = -1;
+        if x > 0 {
+            mm = (x * r) / 1000;
+        }
+        if (mm <= 0) && (a > 0) {
+            mm = a;
+        }
+        if (d < 0) && (mm > 0) {
+            d = (mm * 27) / 100;
+        }
+        crate::port::cells_set(scr, 242 + (4 * i), mm);
+        crate::port::cells_set(scr, 243 + (4 * i), d);
+        i += 1;
+    }
+    sc_cluster(scr, n);
+    return r;
 }
 pub(crate) fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
     // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
@@ -906,7 +1055,31 @@ pub(crate) fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate:
     let mut ox: i32 = 0;
     let mut ox1: i32 = 0;
     let mut nx0: i32 = 0;
+    let mut xm: i32 = 0;
     let mut nx1: i32 = 0;
+    // Pass 1: every line's metrics, then their sizes clustered over the page.
+    while k < nl {
+        if k < sc_cap() {
+            l = l0 + k;
+            crate::port::cells_set(scr, 244 + (4 * k), 0);
+            crate::port::cells_set(scr, 242 + (4 * k), -1);
+            crate::port::cells_set(scr, 243 + (4 * k), -1);
+            crate::port::cells_set(scr, 245 + (4 * k), -1);
+            if ol_get(olines, l, lh_count()) > 0 {
+                xm = sc_metrics(olines, owords, osyms, l, scr);
+                crate::port::cells_set(scr, 245 + (4 * k), xm);
+                crate::port::cells_set(scr, 242 + (4 * k), crate::port::cells_at(scr, 0));
+                crate::port::cells_set(scr, 243 + (4 * k), crate::port::cells_at(scr, 1));
+            }
+        }
+        k += 1;
+    }
+    if nl < sc_cap() {
+        sc_fit(scr, nl);
+    } else {
+        sc_fit(scr, sc_cap());
+    }
+    k = 0;
     while k < nl {
         l = l0 + k;
         cnt = ol_get(olines, l, lh_count());
@@ -921,9 +1094,17 @@ pub(crate) fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate:
             bx1 = ol_get(olines, l, lh_bx1());
             by1 = ol_get(olines, l, lh_by1());
             dir = ol_get(olines, l, lh_dir());
-            sc_metrics(olines, owords, osyms, l, scr);
-            asc = crate::port::cells_at(scr, 0);
-            dsc = crate::port::cells_at(scr, 1);
+            if k < sc_cap() {
+                asc = crate::port::cells_at(scr, 242 + (4 * k));
+                dsc = crate::port::cells_at(scr, 243 + (4 * k));
+            } else {
+                sc_metrics(olines, owords, osyms, l, scr);
+                asc = crate::port::cells_at(scr, 0);
+                dsc = crate::port::cells_at(scr, 1);
+                if dsc < 0 {
+                    dsc = (asc * 27) / 100;
+                }
+            }
             ymid = (by0 + by1) / 2;
             if asc > 0 {
                 size = (asc * 137) / 100;

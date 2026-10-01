@@ -593,9 +593,13 @@
 
 ;; ======================================================= the pipeline's lines
 
+(defn ^I32 sc-cap [] (return 400))   ;; the lines of a page whose size is clustered; later ones keep their own
+
 (defn ^I32 sc-prep [^:mut ^Cells scr]
-  (comment "The scratch of `sc-sample`: 242 cells (two for the metrics and 240 samples), made once.")
-  (while (< (cells-len scr) 242)
+  (comment "The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first")
+  (comment "`sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a")
+  (comment "cluster's members; made once.")
+  (while (< (cells-len scr) (+ 242 (* 5 (sc-cap))))
     (cells-push scr 0))
   (return 0))
 
@@ -616,24 +620,34 @@
 
 (defn ^I32 sc-class [^I32 cp]
   (comment "What a letter says about a line's metrics: 1 a letter that stands on the baseline and reaches the x-height only (a c e m n")
-  (comment "o r s u v w x z), 2 one that reaches the ascender line (b d f h k l, the digits and the capitals), 3 one that hangs below the")
-  (comment "baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know measures nothing.")
+  (comment "o r s u v w x z), 2 one that reaches the ascender line (b d f h k l), 4 one that reaches the cap height (the digits and the")
+  (comment "capitals), 3 one that hangs below the baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know")
+  (comment "measures nothing.")
   (if (or (== cp 97) (or (== cp 99) (or (== cp 101) (or (== cp 109) (or (== cp 110) (or (== cp 111) (or (== cp 114) (== cp 115))))))))
     (return 1))
   (if (or (== cp 117) (or (== cp 118) (or (== cp 119) (or (== cp 120) (== cp 122)))))
     (return 1))
   (if (or (== cp 98) (or (== cp 100) (or (== cp 102) (or (== cp 104) (or (== cp 107) (== cp 108))))))
     (return 2))
-  (if (and (>= cp 48) (<= cp 57)) (return 2))
-  (if (and (>= cp 65) (<= cp 90)) (return 2))
+  (if (and (>= cp 48) (<= cp 57)) (return 4))
+  (if (and (>= cp 65) (<= cp 90)) (return 4))
   (if (or (== cp 103) (or (== cp 106) (or (== cp 112) (or (== cp 113) (== cp 121)))))
     (return 3))
   (return 0))
 
+(defn ^I32 sc-lowq [^Cells c ^I32 from ^I32 n]
+  (comment "The 30th percentile of the `n` sorted cells that start at `from`. A symbol's box is its own component's most of the time and")
+  (comment "the whole WORD's height some of the time (the engine does not always split a word's height among its letters: in a body line,")
+  (comment "a third of the x-height letters can have the height of an ascender), and those are always TOO TALL, so the estimate leans low:")
+  (comment "neither a mean nor the median survives that, a low percentile does.")
+  (return (cells-at c (+ from (quot (* n 3) 10)))))
+
 (defn ^I32 sc-sample [^Cells olines ^Cells owords ^Cells osyms ^I32 l ^I32 cls ^:mut ^Cells scr]
-  (comment "The lower median, in centipoints, of one class of symbol on line `l`: for classes 1 and 2 the symbol's top above the line's")
-  (comment "baseline at its centre, for class 3 its bottom below it; -1 with fewer than `3` symbols (2 for class 3). `scr` is scratch")
-  (comment "from cell 2 on and is overwritten.")
+  (comment "The 30th PERCENTILE (`sc-lowq`: why not a mean), in centipoints, of one class of symbol on line `l`: for classes 1, 2 and 4")
+  (comment "the height of its box (these letters stand on the baseline, so the box's height is their height, and the engine's baseline,")
+  (comment "which is fitted to the whole line and is a pixel or two off at either end of a tilted one, is not in it), for class 3 its")
+  (comment "bottom below the baseline; -1 with fewer than 4 symbols (x-height), 2 (hanging) or 3. `scr` is scratch from cell 2 on and is")
+  (comment "overwritten.")
   (let [^I32 w0 (ol-get olines l (lh-first))
         ^I32 cnt (ol-get olines l (lh-count))
         ^I32 bx0 (ol-get olines l (lh-bx0))
@@ -648,15 +662,16 @@
         ^:mut ^I32 v 0
         ^:mut ^I32 need 3]
     (if (== cls 3) (set need 2))
+    (if (== cls 1) (set need 4))
     (while (and (< j cnt) (< n 240))
       (do (set s (ow-get owords (+ w0 j) (owf-sfirst)))
           (set s1 (+ s (ow-get owords (+ w0 j) (owf-scount))))
           (while (and (< s s1) (< n 240))
             (do (if (== (sc-class (os-get osyms s (ch-cp))) cls)
-                  (do (set yb (ev-baseline-at bx0 by0 bx1 by1 (quot (+ (os-get osyms s (ch-x0)) (os-get osyms s (ch-x1))) 2)))
-                      (if (== cls 3)
-                        (set v (- (os-get osyms s (ch-y1)) yb))
-                        (set v (- yb (os-get osyms s (ch-y0)))))
+                  (do (if (== cls 3)
+                        (do (set yb (ev-baseline-at bx0 by0 bx1 by1 (quot (+ (os-get osyms s (ch-x0)) (os-get osyms s (ch-x1))) 2)))
+                            (set v (- (os-get osyms s (ch-y1)) yb)))
+                        (set v (- (os-get osyms s (ch-y1)) (os-get osyms s (ch-y0)))))
                       (if (> v 0)
                         (do (cells-set scr (+ 2 n) v)
                             (set n (+ n 1))))))
@@ -664,14 +679,15 @@
           (set j (+ j 1))))
     (if (< n need) (return -1))
     (sc-isort scr 2 n)
-    (return (cells-at scr (+ 2 (quot (- n 1) 2))))))
+    (return (sc-lowq scr 2 n))))
 
 (defn ^I32 sc-metrics [^Cells olines ^Cells owords ^Cells osyms ^I32 l ^:mut ^Cells scr]
   (comment "The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0")
-  (comment "and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);")
-  (comment "else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and")
-  (comment "a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the")
-  (comment "median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.")
+  (comment "and 1 of `scr` (-1 unknown), and answers its x-height `X` (-1 unknown). The engine's own row attributes when the answer has")
+  (comment "them (x-height + ascenders, x-height, descenders); else MEASURED from the symbols' boxes and the baseline (D186): the")
+  (comment "Tesseract C API does not export its row attributes, and a measurement is one implementation for every engine. A is the trimmed")
+  (comment "mean top of the tall letters (b d f h k l; else the capitals and digits x 1.06), X that of the letters that stand on the")
+  (comment "x-height (a c e m n o r s u v w x z), D the trimmed mean bottom of the hanging letters (g j p q y).")
   (let [^I32 xh (ol-get olines l (olf-xheight))
         ^I32 asc (ol-get olines l (olf-asc))
         ^I32 dsc (ol-get olines l (olf-desc))
@@ -680,16 +696,121 @@
         ^:mut ^I32 x -1]
     (if (and (> xh 0) (>= asc 0))
       (do (set a (+ xh asc))
+          (set x xh)
           (set d dsc))
       (do (set a (sc-sample olines owords osyms l 2 scr))
           (if (< a 0)
-            (do (set x (sc-sample olines owords osyms l 1 scr))
-                (if (> x 0) (set a (quot (* x 146) 100)))))
+            (do (set a (sc-sample olines owords osyms l 4 scr))
+                (if (> a 0) (set a (quot (* a 106) 100)))))
+          (set x (sc-sample olines owords osyms l 1 scr))
           (set d (sc-sample olines owords osyms l 3 scr))))
-    (if (and (< d 0) (> a 0)) (set d (quot (* a 27) 100)))
     (cells-set scr 0 a)
     (cells-set scr 1 d)
+    (return x)))
+
+(defn ^I32 sc-cluster [^:mut ^Cells scr ^I32 n]
+  (comment "Sizes are a property of a page's TYPE, not of each line: the ascender lines `A` of the first `n` lines (cells 242 + 3 k, 0 or")
+  (comment "less for none) are measured to a pixel or two, which is 5 per cent of a body line at 150 dpi, and the paragraph stage breaks")
+  (comment "a paragraph at a 5 per cent change. So they are clustered: the densest window [A, 1.05 A] over the lines not yet placed is a")
+  (comment "cluster, its members take the cluster's median of A and of D (their descender depth), and the next window is looked for among")
+  (comment "the rest. The measure (`sc-sample`) is good to a per cent or two, so two sizes less than 5 per cent apart are one size here.")
+  (let [^:mut ^I32 left 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestc 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 medA 0
+        ^:mut ^I32 medD 0]
+    (while (< i n)
+      (do (if (> (cells-at scr (+ 242 (* 4 i))) 0) (set left (+ left 1)))
+          (set i (+ i 1))))
+    (while (> left 0)
+      (do (set best -1)
+          (set bestc 0)
+          (set i 0)
+          (while (< i n)
+            (do (set a (cells-at scr (+ 242 (* 4 i))))
+                (if (and (> a 0) (== (cells-at scr (+ 244 (* 4 i))) 0))
+                  (do (set c 0)
+                      (set j 0)
+                      (while (< j n)
+                        (do (if (and (== (cells-at scr (+ 244 (* 4 j))) 0) (and (>= (cells-at scr (+ 242 (* 4 j))) a) (<= (* (cells-at scr (+ 242 (* 4 j))) 100) (* a 110))))
+                              (set c (+ c 1)))
+                            (set j (+ j 1))))
+                      (if (> c bestc)
+                        (do (set bestc c)
+                            (set best i)))))
+                (set i (+ i 1))))
+          (if (< best 0)
+            (set left 0)
+            (do (set a (cells-at scr (+ 242 (* 4 best))))
+                (set m 0)
+                (set j 0)
+                (while (< j n)
+                  (do (if (and (== (cells-at scr (+ 244 (* 4 j))) 0) (and (>= (cells-at scr (+ 242 (* 4 j))) a) (<= (* (cells-at scr (+ 242 (* 4 j))) 100) (* a 110))))
+                        (do (cells-set scr (+ (+ 242 (* 4 (sc-cap))) m) (cells-at scr (+ 242 (* 4 j))))
+                            (set m (+ m 1))))
+                      (set j (+ j 1))))
+                (sc-isort scr (+ 242 (* 4 (sc-cap))) m)
+                (set medA (cells-at scr (+ (+ 242 (* 4 (sc-cap))) (quot (- m 1) 2))))
+                (set m 0)
+                (set j 0)
+                (while (< j n)
+                  (do (if (and (== (cells-at scr (+ 244 (* 4 j))) 0) (and (>= (cells-at scr (+ 242 (* 4 j))) a) (<= (* (cells-at scr (+ 242 (* 4 j))) 100) (* a 110))))
+                        (do (cells-set scr (+ (+ 242 (* 4 (sc-cap))) m) (cells-at scr (+ 243 (* 4 j))))
+                            (set m (+ m 1))))
+                      (set j (+ j 1))))
+                (sc-isort scr (+ 242 (* 4 (sc-cap))) m)
+                (set medD (cells-at scr (+ (+ 242 (* 4 (sc-cap))) (quot (- m 1) 2))))
+                (set j 0)
+                (while (< j n)
+                  (do (if (and (== (cells-at scr (+ 244 (* 4 j))) 0) (and (>= (cells-at scr (+ 242 (* 4 j))) a) (<= (* (cells-at scr (+ 242 (* 4 j))) 100) (* a 110))))
+                        (do (cells-set scr (+ 242 (* 4 j)) medA)
+                            (cells-set scr (+ 243 (* 4 j)) medD)
+                            (cells-set scr (+ 244 (* 4 j)) 1)
+                            (set left (- left 1))))
+                      (set j (+ j 1))))))))
     (return 0)))
+
+(defn ^I32 sc-fit [^:mut ^Cells scr ^I32 n]
+  (comment "A page's line sizes from what `sc-metrics` measured (cells 242 + 4 k: A, D, clustered, X). A line's x-height has dozens of")
+  (comment "letters behind it and a tall-letter line a handful (a heading may have none), so a line's size is its X times the PAGE's")
+  (comment "ratio of A to X (the median over the lines that have both: one typeface, one ratio; 1.5 when no line has both), and A itself only")
+  (comment "where X is unknown. The sizes are then clustered (`sc-cluster`). Answers the ratio, per thousand.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 r 1500
+        ^:mut ^I32 a 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 mm 0]
+    (while (< i n)
+      (do (set a (cells-at scr (+ 242 (* 4 i))))
+          (set x (cells-at scr (+ 245 (* 4 i))))
+          (if (and (> a 0) (> x 0))
+            (do (cells-set scr (+ (+ 242 (* 4 (sc-cap))) m) (quot (* a 1000) x))
+                (set m (+ m 1))))
+          (set i (+ i 1))))
+    (if (>= m 1)
+      (do (sc-isort scr (+ 242 (* 4 (sc-cap))) m)
+          (set r (cells-at scr (+ (+ 242 (* 4 (sc-cap))) (quot (- m 1) 2))))))
+    (set i 0)
+    (while (< i n)
+      (do (set a (cells-at scr (+ 242 (* 4 i))))
+          (set x (cells-at scr (+ 245 (* 4 i))))
+          (set d (cells-at scr (+ 243 (* 4 i))))
+          (set mm -1)
+          (if (> x 0) (set mm (quot (* x r) 1000)))
+          (if (and (<= mm 0) (> a 0)) (set mm a))
+          (if (and (< d 0) (> mm 0)) (set d (quot (* mm 27) 100)))
+          (cells-set scr (+ 242 (* 4 i)) mm)
+          (cells-set scr (+ 243 (* 4 i)) d)
+          (set i (+ i 1))))
+    (sc-cluster scr n)
+    (return r)))
 
 (defn ^I32 sc-emit-lines [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
                           ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
@@ -724,7 +845,26 @@
         ^:mut ^I32 ox 0
         ^:mut ^I32 ox1 0
         ^:mut ^I32 nx0 0
+        ^:mut ^I32 xm 0
         ^:mut ^I32 nx1 0]
+    (comment "Pass 1: every line's metrics, then their sizes clustered over the page.")
+    (while (< k nl)
+      (do (if (< k (sc-cap))
+            (do (set l (+ l0 k))
+                (cells-set scr (+ 244 (* 4 k)) 0)
+                (cells-set scr (+ 242 (* 4 k)) -1)
+                (cells-set scr (+ 243 (* 4 k)) -1)
+                (cells-set scr (+ 245 (* 4 k)) -1)
+                (if (> (ol-get olines l (lh-count)) 0)
+                  (do (set xm (sc-metrics olines owords osyms l scr))
+                      (cells-set scr (+ 245 (* 4 k)) xm)
+                      (cells-set scr (+ 242 (* 4 k)) (cells-at scr 0))
+                      (cells-set scr (+ 243 (* 4 k)) (cells-at scr 1))))))
+          (set k (+ k 1))))
+    (if (< nl (sc-cap))
+      (sc-fit scr nl)
+      (sc-fit scr (sc-cap)))
+    (set k 0)
     (while (< k nl)
       (do (set l (+ l0 k))
           (set cnt (ol-get olines l (lh-count)))
@@ -739,9 +879,13 @@
                 (set bx1 (ol-get olines l (lh-bx1)))
                 (set by1 (ol-get olines l (lh-by1)))
                 (set dir (ol-get olines l (lh-dir)))
-                (sc-metrics olines owords osyms l scr)
-                (set asc (cells-at scr 0))
-                (set dsc (cells-at scr 1))
+                (if (< k (sc-cap))
+                  (do (set asc (cells-at scr (+ 242 (* 4 k))))
+                      (set dsc (cells-at scr (+ 243 (* 4 k)))))
+                  (do (sc-metrics olines owords osyms l scr)
+                      (set asc (cells-at scr 0))
+                      (set dsc (cells-at scr 1))
+                      (if (< dsc 0) (set dsc (quot (* asc 27) 100)))))
                 (set ymid (quot (+ by0 by1) 2))
                 (if (> asc 0)
                   (do (set size (quot (* asc 137) 100))

@@ -764,9 +764,15 @@ func ScAnswer(an *port.Cells, at int32, page int32, view int32, request int32, l
 	return run
 }
 
+func scCap() int32 {
+	return 400
+}
+
 func scPrep(scr *port.Cells) int32 {
-	// The scratch of `sc-sample`: 242 cells (two for the metrics and 240 samples), made once.
-	for port.CellsLen(scr) < 242 {
+	// The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
+	// `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
+	// cluster's members; made once.
+	for port.CellsLen(scr) < (242 + (5 * scCap())) {
 		port.CellsPush(scr, 0)
 	}
 	return 0
@@ -792,8 +798,9 @@ func scIsort(c *port.Cells, from int32, n int32) int32 {
 
 func scClass(cp int32) int32 {
 	// What a letter says about a line's metrics: 1 a letter that stands on the baseline and reaches the x-height only (a c e m n
-	// o r s u v w x z), 2 one that reaches the ascender line (b d f h k l, the digits and the capitals), 3 one that hangs below the
-	// baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know measures nothing.
+	// o r s u v w x z), 2 one that reaches the ascender line (b d f h k l), 4 one that reaches the cap height (the digits and the
+	// capitals), 3 one that hangs below the baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know
+	// measures nothing.
 	if (cp == 97) || ((cp == 99) || ((cp == 101) || ((cp == 109) || ((cp == 110) || ((cp == 111) || ((cp == 114) || (cp == 115))))))) {
 		return 1
 	}
@@ -804,10 +811,10 @@ func scClass(cp int32) int32 {
 		return 2
 	}
 	if (cp >= 48) && (cp <= 57) {
-		return 2
+		return 4
 	}
 	if (cp >= 65) && (cp <= 90) {
-		return 2
+		return 4
 	}
 	if (cp == 103) || ((cp == 106) || ((cp == 112) || ((cp == 113) || (cp == 121)))) {
 		return 3
@@ -815,10 +822,20 @@ func scClass(cp int32) int32 {
 	return 0
 }
 
+func scLowq(c *port.Cells, from int32, n int32) int32 {
+	// The 30th percentile of the `n` sorted cells that start at `from`. A symbol's box is its own component's most of the time and
+	// the whole WORD's height some of the time (the engine does not always split a word's height among its letters: in a body line,
+	// a third of the x-height letters can have the height of an ascender), and those are always TOO TALL, so the estimate leans low:
+	// neither a mean nor the median survives that, a low percentile does.
+	return port.CellsAt(c, from+((n*3)/10))
+}
+
 func scSample(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int32, cls int32, scr *port.Cells) int32 {
-	// The lower median, in centipoints, of one class of symbol on line `l`: for classes 1 and 2 the symbol's top above the line's
-	// baseline at its centre, for class 3 its bottom below it; -1 with fewer than `3` symbols (2 for class 3). `scr` is scratch
-	// from cell 2 on and is overwritten.
+	// The 30th PERCENTILE (`sc-lowq`: why not a mean), in centipoints, of one class of symbol on line `l`: for classes 1, 2 and 4
+	// the height of its box (these letters stand on the baseline, so the box's height is their height, and the engine's baseline,
+	// which is fitted to the whole line and is a pixel or two off at either end of a tilted one, is not in it), for class 3 its
+	// bottom below the baseline; -1 with fewer than 4 symbols (x-height), 2 (hanging) or 3. `scr` is scratch from cell 2 on and is
+	// overwritten.
 	var w0 int32 = evidence.OlGet(olines, l, evidence.LhFirst())
 	var cnt int32 = evidence.OlGet(olines, l, evidence.LhCount())
 	var bx0 int32 = evidence.OlGet(olines, l, evidence.LhBx0())
@@ -835,16 +852,19 @@ func scSample(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int32
 	if cls == 3 {
 		need = 2
 	}
+	if cls == 1 {
+		need = 4
+	}
 	for (j < cnt) && (n < 240) {
 		s = evidence.OwGet(owords, w0+j, evidence.OwfSfirst())
 		s1 = s + evidence.OwGet(owords, w0+j, evidence.OwfScount())
 		for (s < s1) && (n < 240) {
 			if scClass(evidence.OsGet(osyms, s, evidence.ChCp())) == cls {
-				yb = evidence.EvBaselineAt(bx0, by0, bx1, by1, (evidence.OsGet(osyms, s, evidence.ChX0())+evidence.OsGet(osyms, s, evidence.ChX1()))/2)
 				if cls == 3 {
+					yb = evidence.EvBaselineAt(bx0, by0, bx1, by1, (evidence.OsGet(osyms, s, evidence.ChX0())+evidence.OsGet(osyms, s, evidence.ChX1()))/2)
 					v = evidence.OsGet(osyms, s, evidence.ChY1()) - yb
 				} else {
-					v = yb - evidence.OsGet(osyms, s, evidence.ChY0())
+					v = evidence.OsGet(osyms, s, evidence.ChY1()) - evidence.OsGet(osyms, s, evidence.ChY0())
 				}
 				if v > 0 {
 					port.CellsSet(scr, 2+n, v)
@@ -859,15 +879,16 @@ func scSample(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int32
 		return -1
 	}
 	scIsort(scr, 2, n)
-	return port.CellsAt(scr, 2+((n-1)/2))
+	return scLowq(scr, 2, n)
 }
 
 func scMetrics(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int32, scr *port.Cells) int32 {
 	// The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0
-	// and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);
-	// else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and
-	// a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the
-	// median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.
+	// and 1 of `scr` (-1 unknown), and answers its x-height `X` (-1 unknown). The engine's own row attributes when the answer has
+	// them (x-height + ascenders, x-height, descenders); else MEASURED from the symbols' boxes and the baseline (D186): the
+	// Tesseract C API does not export its row attributes, and a measurement is one implementation for every engine. A is the trimmed
+	// mean top of the tall letters (b d f h k l; else the capitals and digits x 1.06), X that of the letters that stand on the
+	// x-height (a c e m n o r s u v w x z), D the trimmed mean bottom of the hanging letters (g j p q y).
 	var xh int32 = evidence.OlGet(olines, l, evidence.OlfXheight())
 	var asc int32 = evidence.OlGet(olines, l, evidence.OlfAsc())
 	var dsc int32 = evidence.OlGet(olines, l, evidence.OlfDesc())
@@ -876,23 +897,155 @@ func scMetrics(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l int3
 	var x int32 = -1
 	if (xh > 0) && (asc >= 0) {
 		a = xh + asc
+		x = xh
 		d = dsc
 	} else {
 		a = scSample(olines, owords, osyms, l, 2, scr)
 		if a < 0 {
-			x = scSample(olines, owords, osyms, l, 1, scr)
-			if x > 0 {
-				a = (x * 146) / 100
+			a = scSample(olines, owords, osyms, l, 4, scr)
+			if a > 0 {
+				a = (a * 106) / 100
 			}
 		}
+		x = scSample(olines, owords, osyms, l, 1, scr)
 		d = scSample(olines, owords, osyms, l, 3, scr)
-	}
-	if (d < 0) && (a > 0) {
-		d = (a * 27) / 100
 	}
 	port.CellsSet(scr, 0, a)
 	port.CellsSet(scr, 1, d)
+	return x
+}
+
+func scCluster(scr *port.Cells, n int32) int32 {
+	// Sizes are a property of a page's TYPE, not of each line: the ascender lines `A` of the first `n` lines (cells 242 + 3 k, 0 or
+	// less for none) are measured to a pixel or two, which is 5 per cent of a body line at 150 dpi, and the paragraph stage breaks
+	// a paragraph at a 5 per cent change. So they are clustered: the densest window [A, 1.05 A] over the lines not yet placed is a
+	// cluster, its members take the cluster's median of A and of D (their descender depth), and the next window is looked for among
+	// the rest. The measure (`sc-sample`) is good to a per cent or two, so two sizes less than 5 per cent apart are one size here.
+	var left int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var best int32 = -1
+	var bestc int32 = 0
+	var c int32 = 0
+	var a int32 = 0
+	var m int32 = 0
+	var meda int32 = 0
+	var medd int32 = 0
+	for i < n {
+		if port.CellsAt(scr, 242+(4*i)) > 0 {
+			left += 1
+		}
+		i += 1
+	}
+	for left > 0 {
+		best = -1
+		bestc = 0
+		i = 0
+		for i < n {
+			a = port.CellsAt(scr, 242+(4*i))
+			if (a > 0) && (port.CellsAt(scr, 244+(4*i)) == 0) {
+				c = 0
+				j = 0
+				for j < n {
+					if (port.CellsAt(scr, 244+(4*j)) == 0) && ((port.CellsAt(scr, 242+(4*j)) >= a) && ((port.CellsAt(scr, 242+(4*j)) * 100) <= (a * 110))) {
+						c += 1
+					}
+					j += 1
+				}
+				if c > bestc {
+					bestc = c
+					best = i
+				}
+			}
+			i += 1
+		}
+		if best < 0 {
+			left = 0
+		} else {
+			a = port.CellsAt(scr, 242+(4*best))
+			m = 0
+			j = 0
+			for j < n {
+				if (port.CellsAt(scr, 244+(4*j)) == 0) && ((port.CellsAt(scr, 242+(4*j)) >= a) && ((port.CellsAt(scr, 242+(4*j)) * 100) <= (a * 110))) {
+					port.CellsSet(scr, (242+(4*scCap()))+m, port.CellsAt(scr, 242+(4*j)))
+					m += 1
+				}
+				j += 1
+			}
+			scIsort(scr, 242+(4*scCap()), m)
+			meda = port.CellsAt(scr, (242+(4*scCap()))+((m-1)/2))
+			m = 0
+			j = 0
+			for j < n {
+				if (port.CellsAt(scr, 244+(4*j)) == 0) && ((port.CellsAt(scr, 242+(4*j)) >= a) && ((port.CellsAt(scr, 242+(4*j)) * 100) <= (a * 110))) {
+					port.CellsSet(scr, (242+(4*scCap()))+m, port.CellsAt(scr, 243+(4*j)))
+					m += 1
+				}
+				j += 1
+			}
+			scIsort(scr, 242+(4*scCap()), m)
+			medd = port.CellsAt(scr, (242+(4*scCap()))+((m-1)/2))
+			j = 0
+			for j < n {
+				if (port.CellsAt(scr, 244+(4*j)) == 0) && ((port.CellsAt(scr, 242+(4*j)) >= a) && ((port.CellsAt(scr, 242+(4*j)) * 100) <= (a * 110))) {
+					port.CellsSet(scr, 242+(4*j), meda)
+					port.CellsSet(scr, 243+(4*j), medd)
+					port.CellsSet(scr, 244+(4*j), 1)
+					left -= 1
+				}
+				j += 1
+			}
+		}
+	}
 	return 0
+}
+
+func scFit(scr *port.Cells, n int32) int32 {
+	// A page's line sizes from what `sc-metrics` measured (cells 242 + 4 k: A, D, clustered, X). A line's x-height has dozens of
+	// letters behind it and a tall-letter line a handful (a heading may have none), so a line's size is its X times the PAGE's
+	// ratio of A to X (the median over the lines that have both: one typeface, one ratio; 1.5 when no line has both), and A itself only
+	// where X is unknown. The sizes are then clustered (`sc-cluster`). Answers the ratio, per thousand.
+	var i int32 = 0
+	var m int32 = 0
+	var r int32 = 1500
+	var a int32 = 0
+	var x int32 = 0
+	var d int32 = 0
+	var mm int32 = 0
+	for i < n {
+		a = port.CellsAt(scr, 242+(4*i))
+		x = port.CellsAt(scr, 245+(4*i))
+		if (a > 0) && (x > 0) {
+			port.CellsSet(scr, (242+(4*scCap()))+m, (a*1000)/x)
+			m += 1
+		}
+		i += 1
+	}
+	if m >= 1 {
+		scIsort(scr, 242+(4*scCap()), m)
+		r = port.CellsAt(scr, (242+(4*scCap()))+((m-1)/2))
+	}
+	i = 0
+	for i < n {
+		a = port.CellsAt(scr, 242+(4*i))
+		x = port.CellsAt(scr, 245+(4*i))
+		d = port.CellsAt(scr, 243+(4*i))
+		mm = -1
+		if x > 0 {
+			mm = (x * r) / 1000
+		}
+		if (mm <= 0) && (a > 0) {
+			mm = a
+		}
+		if (d < 0) && (mm > 0) {
+			d = (mm * 27) / 100
+		}
+		port.CellsSet(scr, 242+(4*i), mm)
+		port.CellsSet(scr, 243+(4*i), d)
+		i += 1
+	}
+	scCluster(scr, n)
+	return r
 }
 
 func scEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
@@ -927,7 +1080,31 @@ func scEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 i
 	var ox int32 = 0
 	var ox1 int32 = 0
 	var nx0 int32 = 0
+	var xm int32 = 0
 	var nx1 int32 = 0
+	// Pass 1: every line's metrics, then their sizes clustered over the page.
+	for k < nl {
+		if k < scCap() {
+			l = l0 + k
+			port.CellsSet(scr, 244+(4*k), 0)
+			port.CellsSet(scr, 242+(4*k), -1)
+			port.CellsSet(scr, 243+(4*k), -1)
+			port.CellsSet(scr, 245+(4*k), -1)
+			if evidence.OlGet(olines, l, evidence.LhCount()) > 0 {
+				xm = scMetrics(olines, owords, osyms, l, scr)
+				port.CellsSet(scr, 245+(4*k), xm)
+				port.CellsSet(scr, 242+(4*k), port.CellsAt(scr, 0))
+				port.CellsSet(scr, 243+(4*k), port.CellsAt(scr, 1))
+			}
+		}
+		k += 1
+	}
+	if nl < scCap() {
+		scFit(scr, nl)
+	} else {
+		scFit(scr, scCap())
+	}
+	k = 0
 	for k < nl {
 		l = l0 + k
 		cnt = evidence.OlGet(olines, l, evidence.LhCount())
@@ -942,9 +1119,17 @@ func scEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 i
 			bx1 = evidence.OlGet(olines, l, evidence.LhBx1())
 			by1 = evidence.OlGet(olines, l, evidence.LhBy1())
 			dir = evidence.OlGet(olines, l, evidence.LhDir())
-			scMetrics(olines, owords, osyms, l, scr)
-			asc = port.CellsAt(scr, 0)
-			dsc = port.CellsAt(scr, 1)
+			if k < scCap() {
+				asc = port.CellsAt(scr, 242+(4*k))
+				dsc = port.CellsAt(scr, 243+(4*k))
+			} else {
+				scMetrics(olines, owords, osyms, l, scr)
+				asc = port.CellsAt(scr, 0)
+				dsc = port.CellsAt(scr, 1)
+				if dsc < 0 {
+					dsc = (asc * 27) / 100
+				}
+			}
 			ymid = (by0 + by1) / 2
 			if asc > 0 {
 				size = (asc * 137) / 100
