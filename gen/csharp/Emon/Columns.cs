@@ -273,6 +273,9 @@ public static class Columns {
             emon.Port.CellsPush(lt, v);
             f += 1;
         }
+        // Cell 15 of a row is the initials' (P4.10, `emon.initial`): the piece that is new does not open the paragraph its
+        // parent does, and its first word is not a raised initial's.
+        emon.Port.CellsSet(lt, (nl * 16) + 15, 0);
         LcPiece(wd, lt, l, w0, cut);
         LcPiece(wd, lt, nl, w0 + cut, wn - cut);
         emon.Port.CellsPush(ls, nl);

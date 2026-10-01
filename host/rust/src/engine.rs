@@ -36,7 +36,7 @@ use crate::emon::para::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
-use crate::port::{self, cells_at, cells_len, Cells, Src, SrcBacking};
+use crate::port::{self, cells_at, cells_len, cells_push, Cells, Src, SrcBacking};
 use crate::source::{ByteSource, Input, Inputs};
 use std::collections::BTreeSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -705,8 +705,17 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    // the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an initial joins
+    // its first word); `ii` is their table and `al` the alignment rows of the open paragraph (kin/align.kin, P4.11)
+    let (mut loc, mut ii, mut al) = (Cells::new(), Cells::new(), Cells::new());
+    if let Some(l) = &opts.locale {
+        for ch in l.chars() {
+            cells_push(&mut loc, ch as i32);
+        }
+    }
     pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
-             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg);
+             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg,
+             &mut gl, &mut fnt, &mut loc, &mut ii, &mut al);
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
         for ch in loc.chars() {

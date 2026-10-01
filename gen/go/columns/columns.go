@@ -344,6 +344,9 @@ func lcSplit(wd *port.Cells, lt *port.Cells, ls *port.Cells, l int32, gx0 int32,
 		port.CellsPush(lt, v)
 		f += 1
 	}
+	// Cell 15 of a row is the initials' (P4.10, `emon.initial`): the piece that is new does not open the paragraph its
+	// parent does, and its first word is not a raised initial's.
+	port.CellsSet(lt, (nl*16)+15, 0)
 	lcPiece(wd, lt, l, w0, cut)
 	lcPiece(wd, lt, nl, w0+cut, wn-cut)
 	port.CellsPush(ls, nl)

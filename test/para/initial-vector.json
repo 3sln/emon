@@ -28,6 +28,7 @@
       {
         "id": 1,
         "kind": "paragraph",
+        "align": "start",
         "text": "Vector Initials",
         "at": [[1, 72, 95.6, 202.03, 115.6]],
         "src": ["text", "infer"],
@@ -36,6 +37,7 @@
       {
         "id": 2,
         "kind": "paragraph",
+        "align": "start",
         "text": "Out best far live another but boy who region may did something where out. Made report hear could just first another is place second went sea year it down across. Then money paper almost such white thing then there well read page any. Work did both growth better night own this results red face results sure play region her. Answer form this school year hard us time up long were in.",
         "at": [[1, 72, 124.17, 530.09, 200.41]],
         "src": ["text", "infer"],

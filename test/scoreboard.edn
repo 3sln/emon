@@ -1300,16 +1300,16 @@
         :table-teds-struct-lite 0.0
         :wer 0.020833}
       "pdf/align" {
-        :align-acc 0.0
+        :align-acc 1.0
         :align-acc-caption 0.0
         :align-acc-cell 0.0
-        :align-acc-heading 0.0
-        :align-acc-paragraph 0.0
-        :align-cov 0.0
+        :align-acc-heading 1.0
+        :align-acc-paragraph 1.0
+        :align-cov 0.39759
         :align-cov-caption 0.0
         :align-cov-cell 0.0
-        :align-cov-heading 0.0
-        :align-cov-paragraph 0.0
+        :align-cov-heading 0.941176
+        :align-cov-paragraph 0.85
         :align-wrong 0.0
         :block-caption-f1 0.0
         :block-caption-p 0.0
@@ -1351,16 +1351,16 @@
         :table-teds-struct-lite 0.0
         :wer 0.019523}
       "pdf/all" {
-        :align-acc 0.0
+        :align-acc 1.0
         :align-acc-caption 0.0
         :align-acc-cell 0.0
-        :align-acc-heading 0.0
-        :align-acc-paragraph 0.0
-        :align-cov 0.0
+        :align-acc-heading 1.0
+        :align-acc-paragraph 1.0
+        :align-cov 0.39759
         :align-cov-caption 0.0
         :align-cov-cell 0.0
-        :align-cov-heading 0.0
-        :align-cov-paragraph 0.0
+        :align-cov-heading 0.941176
+        :align-cov-paragraph 0.85
         :align-wrong 0.0
         :block-caption-f1 0.0
         :block-caption-p 0.0
@@ -1380,20 +1380,20 @@
         :block-note-f1 0.5
         :block-note-p 0.75
         :block-note-r 0.375
-        :block-paragraph-f1 0.199139
-        :block-paragraph-p 0.111044
-        :block-paragraph-r 0.963542
+        :block-paragraph-f1 0.202875
+        :block-paragraph-p 0.11323
+        :block-paragraph-r 0.973958
         :block-seal-f1 0.0
         :block-seal-p 0.0
         :block-seal-r 0.0
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
-        :bow-f1 0.983459
-        :bow-p 0.97147
-        :bow-r 0.995747
-        :cer 0.022508
-        :first-word-acc 0.043478
+        :bow-f1 0.983949
+        :bow-p 0.972246
+        :bow-r 0.995938
+        :cer 0.021929
+        :first-word-acc 0.652174
         :frag-col-acc 0.712766
         :furniture-f1 0.0
         :furniture-p 0.0
@@ -1403,24 +1403,24 @@
         :heading-p 0.0
         :heading-r 0.0
         :hyphen-acc 0.981481
-        :initial-f1 0.0
+        :initial-f1 0.930233
         :initial-false-heading 0.0
-        :initial-form-acc 0.0
-        :initial-p 0.0
-        :initial-r 0.0
+        :initial-form-acc 1.0
+        :initial-p 1.0
+        :initial-r 0.869565
         :join-f1 0.952381
         :join-p 1.0
         :join-r 0.909091
         :order-tau 1.0
         :page-label-acc 0.706522
-        :para-boundary-f1 0.174381
-        :para-boundary-p 0.098871
-        :para-boundary-r 0.738041
+        :para-boundary-f1 0.17738
+        :para-boundary-p 0.100677
+        :para-boundary-r 0.744875
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
         :watermark-leak 0.00201
-        :wer 0.032349}
+        :wer 0.031154}
       "pdf/columns" {
         :block-caption-f1 0.0
         :block-caption-p 0.0
@@ -1604,14 +1604,14 @@
         :block-heading-f1 0.0
         :block-heading-p 0.0
         :block-heading-r 0.0
-        :block-paragraph-f1 0.601626
-        :block-paragraph-p 0.45122
-        :block-paragraph-r 0.902439
-        :bow-f1 0.990235
-        :bow-p 0.985339
-        :bow-r 0.995179
-        :cer 0.005534
-        :first-word-acc 0.043478
+        :block-paragraph-f1 0.87234
+        :block-paragraph-p 0.773585
+        :block-paragraph-r 1.0
+        :bow-f1 0.993819
+        :bow-p 0.991096
+        :bow-r 0.996556
+        :cer 0.001383
+        :first-word-acc 0.652174
         :frag-col-acc 1.0
         :furniture-f1 1.0
         :furniture-p 1.0
@@ -1620,20 +1620,20 @@
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
-        :initial-f1 0.0
+        :initial-f1 0.930233
         :initial-false-heading 0.0
-        :initial-form-acc 0.0
-        :initial-p 0.0
-        :initial-r 0.0
+        :initial-form-acc 1.0
+        :initial-p 1.0
+        :initial-r 0.869565
         :join-f1 1.0
         :join-p 1.0
         :join-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.514286
-        :para-boundary-p 0.369863
-        :para-boundary-r 0.84375
-        :wer 0.018251}
+        :para-boundary-f1 0.789474
+        :para-boundary-p 0.681818
+        :para-boundary-r 0.9375
+        :wer 0.009642}
       "pdf/lists" {
         :block-heading-f1 0.0
         :block-heading-p 0.0

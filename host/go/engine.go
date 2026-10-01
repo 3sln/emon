@@ -183,7 +183,8 @@ const (
 
 // Options is what a conversion is asked to do. DefaultOptions is SPEC 13's defaults.
 type Options struct {
-	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides nothing yet.
+	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides how an initial
+	// (a drop cap) joins its first word when the letter could be a word of its own (SPEC 10.9).
 	Locale string
 	Ocr    OcrPolicy
 	Assets Assets
@@ -734,8 +735,15 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
+	// the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an
+	// initial joins its first word); ia is their table and the open paragraph's alignment rows (kin/align.kin, P4.11)
+	ia := newCellsN(3)
+	for _, ch := range opts.Locale {
+		port.CellsPush(ia[0], int32(ch))
+	}
 	para.PaBuild(wd, ln, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
-		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12])
+		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12],
+		gl, fnt, ia[0], ia[1], ia[2])
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
 		for _, ch := range opts.Locale {

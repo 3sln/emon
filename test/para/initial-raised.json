@@ -1,0 +1,212 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 95.6, 539.85, 704.41]
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 73.17, 533.58, 133.66]
+        }
+      ]
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "paragraph",
+        "align": "start",
+        "text": "Raised Initials",
+        "at": [[1, 72, 95.6, 206.46, 115.6]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 2,
+        "kind": "paragraph",
+        "align": "start",
+        "text": "The morning train was late again, and the platform filled slowly with people who knew better than to complain. Sound asked did night take together some form water soon school much me earth last. Money earth city play different she friend first for even change around city without for where. Soon air still knew best away took keep him white up would people between. Study an set until new color first until part pay sound being school end market. Where large did answer come story door between found turned should form like below as pay the. Light large got soon small few long long heard often since country between.",
+        "inlines": [
+          {
+            "kind": "initial",
+            "form": "raised",
+            "children": [
+              {
+                "kind": "text",
+                "text": "T",
+                "src": ["text"],
+                "conf": 1000
+              }
+            ],
+            "src": ["text", "infer"],
+            "conf": 800
+          },
+          {
+            "kind": "text",
+            "text": "he morning train was late again, and the platform filled slowly with people who knew better than to complain. Sound asked did night take together some form water soon school much me earth last. Money earth city play different she friend first for even change around city without for where. Soon air still knew best away took keep him white up would people between. Study an set until new color first until part pay sound being school end market. Where large did answer come story door between found turned should form like below as pay the. Light large got soon small few long long heard often since country between.",
+            "src": ["text"],
+            "conf": 1000
+          }
+        ],
+        "at": [[1, 72, 116.02, 539.78, 240.91]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 6,
+        "kind": "paragraph",
+        "align": "start",
+        "text": "If went some put across school morning leave was each time. Going play name said home can name much got upon quarter figure young play has used himself. Little such even school or through against knew began write day more true way form word go. Before from almost one use done another should since many thing paper let large head been at. Animal should soon second morning got number we did not an life new something leave said.",
+        "at": [[1, 72, 252.42, 535.41, 328.66]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 7,
+        "kind": "paragraph",
+        "align": "start",
+        "text": "Somewhere beyond the orchard the river turned south, and nobody who lived there had ever followed it to the sea. Before keep family show thought almost through if later country him made measure over. Study morning head every because use far important how take found. However long away we air from several usually learn it keep has. Learn usually here into animal that old door true while have work color will same before three. The began its their to side do since food where well your after little. Used also right car body both for began each told other after light is by money upon.",
+        "inlines": [
+          {
+            "kind": "initial",
+            "form": "raised",
+            "children": [
+              {
+                "kind": "text",
+                "text": "S",
+                "src": ["text"],
+                "conf": 1000
+              }
+            ],
+            "src": ["text", "infer"],
+            "conf": 800
+          },
+          {
+            "kind": "text",
+            "text": "omewhere beyond the orchard the river turned south, and nobody who lived there had ever followed it to the sea. Before keep family show thought almost through if later country him made measure over. Study morning head every because use far important how take found. However long away we air from several usually learn it keep has. Learn usually here into animal that old door true while have work color will same before three. The began its their to side do since food where well your after little. Used also right car body both for began each told other after light is by money upon.",
+            "src": ["text"],
+            "conf": 1000
+          }
+        ],
+        "at": [[1, 72, 331.27, 539.85, 456.91]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 11,
+        "kind": "paragraph",
+        "align": "start",
+        "text": "Later that week the council met to discuss the bridge, the budget and the vexed question of the clock. Want could without hand change old looked went place been is cut upon together. Over leave between write two in found in put sample page great all. Near pay budget hard about show about own group two just year but. Because away during much better door but do little up high figure read hard below sentence. Back go every change kind near body far people new can almost market hand. Revenue keep to we once off down keep were white results during still seen.",
+        "inlines": [
+          {
+            "kind": "initial",
+            "form": "raised",
+            "children": [
+              {
+                "kind": "text",
+                "text": "L",
+                "src": ["text"],
+                "conf": 1000
+              }
+            ],
+            "src": ["text", "infer"],
+            "conf": 800
+          },
+          {
+            "kind": "text",
+            "text": "ater that week the council met to discuss the bridge, the budget and the vexed question of the clock. Want could without hand change old looked went place been is cut upon together. Over leave between write two in found in put sample page great all. Near pay budget hard about show about own group two just year but. Because away during much better door but do little up high figure read hard below sentence. Back go every change kind near body far people new can almost market hand. Revenue keep to we once off down keep were white results during still seen.",
+            "src": ["text"],
+            "conf": 1000
+          }
+        ],
+        "at": [[1, 72, 459.52, 535.11, 585.16]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 15,
+        "kind": "paragraph",
+        "align": "start",
+        "text": "Top friend need policy too would answer very air from sample white. Big well looked year told often all play room region back picture. Against did not own almost just below turn both side from him. Quarter we home end family head that must been several be revenue color as. Growth next better world usually write food measure end air be turn long.",
+        "at": [[1, 72, 595.92, 537.64, 656.41]],
+        "src": ["text", "infer"],
+        "conf": 500
+      },
+      {
+        "id": 16,
+        "kind": "paragraph",
+        "align": "start",
+        "text": "Many of the letters were never answered, though the postmaster kept every one of them in a drawer by the stove. Show very that important took if went see once sun first revenue say before. Across growth might budget sample be me sound report will head give move. This also turn color not kind say see something second later hard being day sure. Play into story used be every around study house if part up. Method part could however house seen leave next hard some children side below now. Don't any play kind four children way quarter story used without.",
+        "inlines": [
+          {
+            "kind": "initial",
+            "form": "raised",
+            "children": [
+              {
+                "kind": "text",
+                "text": "M",
+                "src": ["text"],
+                "conf": 1000
+              }
+            ],
+            "src": ["text", "infer"],
+            "conf": 800
+          },
+          {
+            "kind": "text",
+            "text": "any of the letters were never answered, though the postmaster kept every one of them in a drawer by the stove. Show very that important took if went see once sun first revenue say before. ",
+            "at": [[1, 72, 659.02, 538.5, 704.41]],
+            "src": ["text"],
+            "conf": 1000
+          },
+          {
+            "kind": "break",
+            "page": 2,
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "kind": "text",
+            "text": "Across growth might budget sample be me sound report will head give move. This also turn color not kind say see something second later hard being day sure. Play into story used be every around study house if part up. Method part could however house seen leave next hard some children side below now. Don't any play kind four children way quarter story used without.",
+            "at": [[2, 72, 73.17, 533.58, 133.66]],
+            "src": ["text"],
+            "conf": 1000
+          }
+        ],
+        "at": [[1, 72, 659.02, 538.5, 704.41], [2, 72, 73.17, 533.58, 133.66]],
+        "src": ["text", "infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [],
+  "dropped": []
+}

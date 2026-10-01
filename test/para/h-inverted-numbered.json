@@ -43,6 +43,7 @@
       {
         "id": 1,
         "kind": "paragraph",
+        "align": "start",
         "text": "I. GOVERNANCE",
         "at": [[1, 72, 82.32, 172.3, 91.32]],
         "src": ["text", "infer"],
@@ -51,6 +52,7 @@
       {
         "id": 2,
         "kind": "paragraph",
+        "align": "start",
         "text": "There below something go under sound work being soon.",
         "at": [[1, 72, 96.42, 348.97, 108.91]],
         "src": ["text", "infer"],
@@ -59,6 +61,7 @@
       {
         "id": 3,
         "kind": "paragraph",
+        "align": "start",
         "text": "A. Board structure",
         "at": [[1, 72, 130.16, 241.6, 147.16]],
         "src": ["text", "infer"],
@@ -67,6 +70,7 @@
       {
         "id": 4,
         "kind": "paragraph",
+        "align": "start",
         "text": "After below want too also better boy do find.",
         "at": [[1, 72, 154.92, 286.58, 167.41]],
         "src": ["text", "infer"],
@@ -75,6 +79,7 @@
       {
         "id": 5,
         "kind": "paragraph",
+        "align": "start",
         "text": "1. Audit",
         "at": [[1, 72, 182.76, 131.94, 194.76]],
         "src": ["text", "infer"],
@@ -83,6 +88,7 @@
       {
         "id": 6,
         "kind": "paragraph",
+        "align": "start",
         "text": "Along page of say while near went being today.",
         "at": [[1, 72, 200.67, 298.2, 213.16]],
         "src": ["text", "infer"],
@@ -91,6 +97,7 @@
       {
         "id": 7,
         "kind": "paragraph",
+        "align": "start",
         "text": "a) Charter",
         "at": [[1, 72, 226.17, 137.54, 238.66]],
         "src": ["text", "infer"],
@@ -99,6 +106,7 @@
       {
         "id": 8,
         "kind": "paragraph",
+        "align": "start",
         "text": "Four think small with much almost seen answer own may.",
         "at": [[1, 72, 244.17, 353.77, 256.66]],
         "src": ["text", "infer"],
@@ -107,6 +115,7 @@
       {
         "id": 9,
         "kind": "paragraph",
+        "align": "start",
         "text": "b) Membership",
         "at": [[1, 72, 269.67, 160.8, 282.16]],
         "src": ["text", "infer"],
@@ -115,6 +124,7 @@
       {
         "id": 10,
         "kind": "paragraph",
+        "align": "start",
         "text": "Large began big money country think head had such too even them little old body report.",
         "at": [[1, 72, 287.67, 502.18, 300.16]],
         "src": ["text", "infer"],
@@ -123,6 +133,7 @@
       {
         "id": 11,
         "kind": "paragraph",
+        "align": "start",
         "text": "2. Risk",
         "at": [[1, 72, 315.51, 127.07, 327.51]],
         "src": ["text", "infer"],
@@ -131,6 +142,7 @@
       {
         "id": 12,
         "kind": "paragraph",
+        "align": "start",
         "text": "Near head write new animal we far father study from play along used must.",
         "at": [[1, 72, 334.17, 436.1, 346.66]],
         "src": ["text", "infer"],
@@ -139,6 +151,7 @@
       {
         "id": 13,
         "kind": "paragraph",
+        "align": "start",
         "text": "a) Charter",
         "at": [[1, 72, 359.67, 137.54, 372.16]],
         "src": ["text", "infer"],
@@ -147,6 +160,7 @@
       {
         "id": 14,
         "kind": "paragraph",
+        "align": "start",
         "text": "Through today best as form more red on put those money.",
         "at": [[1, 72, 376.92, 353.84, 389.41]],
         "src": ["text", "infer"],
@@ -155,6 +169,7 @@
       {
         "id": 15,
         "kind": "paragraph",
+        "align": "start",
         "text": "b) Membership",
         "at": [[1, 72, 402.42, 160.8, 414.91]],
         "src": ["text", "infer"],
@@ -163,6 +178,7 @@
       {
         "id": 16,
         "kind": "paragraph",
+        "align": "start",
         "text": "Word through such well could thought down off end earth body quarter.",
         "at": [[1, 72, 420.42, 421.23, 432.91]],
         "src": ["text", "infer"],
@@ -171,6 +187,7 @@
       {
         "id": 17,
         "kind": "paragraph",
+        "align": "start",
         "text": "B. Committees",
         "at": [[1, 72, 454.16, 211.39, 471.16]],
         "src": ["text", "infer"],
@@ -187,6 +204,7 @@
       {
         "id": 19,
         "kind": "paragraph",
+        "align": "start",
         "text": "1. Audit",
         "at": [[1, 72, 523.26, 131.94, 535.26]],
         "src": ["text", "infer"],
@@ -195,6 +213,7 @@
       {
         "id": 20,
         "kind": "paragraph",
+        "align": "start",
         "text": "Today these himself thing hard another top know these new came make used quarter.",
         "at": [[1, 72, 541.17, 486.07, 553.66]],
         "src": ["text", "infer"],
@@ -203,6 +222,7 @@
       {
         "id": 21,
         "kind": "paragraph",
+        "align": "start",
         "text": "a) Charter",
         "at": [[1, 72, 566.67, 137.54, 579.16]],
         "src": ["text", "infer"],
@@ -211,6 +231,7 @@
       {
         "id": 22,
         "kind": "paragraph",
+        "align": "start",
         "text": "Word small line this by today around let country.",
         "at": [[1, 72, 584.67, 309.64, 597.16]],
         "src": ["text", "infer"],
@@ -219,6 +240,7 @@
       {
         "id": 23,
         "kind": "paragraph",
+        "align": "start",
         "text": "b) Membership",
         "at": [[1, 72, 610.17, 160.8, 622.66]],
         "src": ["text", "infer"],
@@ -227,6 +249,7 @@
       {
         "id": 24,
         "kind": "paragraph",
+        "align": "start",
         "text": "Together country much without five example time using of method thought by him.",
         "at": [[1, 72, 628.17, 475.74, 640.66]],
         "src": ["text", "infer"],
@@ -235,6 +258,7 @@
       {
         "id": 25,
         "kind": "paragraph",
+        "align": "start",
         "text": "2. Risk",
         "at": [[1, 72, 656.01, 127.07, 668.01]],
         "src": ["text", "infer"],
@@ -243,6 +267,7 @@
       {
         "id": 26,
         "kind": "paragraph",
+        "align": "start",
         "text": "About line around than think place through below.",
         "at": [[1, 72, 673.92, 317.3, 686.41]],
         "src": ["text", "infer"],
@@ -251,6 +276,7 @@
       {
         "id": 27,
         "kind": "paragraph",
+        "align": "start",
         "text": "a) Charter",
         "at": [[1, 72, 699.42, 137.54, 711.91]],
         "src": ["text", "infer"],
@@ -266,6 +292,7 @@
       {
         "id": 29,
         "kind": "paragraph",
+        "align": "start",
         "text": "Most sample who before going my in get on usually great.",
         "at": [[2, 72, 73.17, 350.29, 85.66]],
         "src": ["text", "infer"],
@@ -274,6 +301,7 @@
       {
         "id": 30,
         "kind": "paragraph",
+        "align": "start",
         "text": "b) Membership",
         "at": [[2, 72, 98.67, 160.8, 111.16]],
         "src": ["text", "infer"],
@@ -282,6 +310,7 @@
       {
         "id": 31,
         "kind": "paragraph",
+        "align": "start",
         "text": "This body report region all called going both feet morning soon later those then show.",
         "at": [[2, 72, 116.67, 486.59, 129.16]],
         "src": ["text", "infer"],
@@ -290,6 +319,7 @@
       {
         "id": 32,
         "kind": "paragraph",
+        "align": "start",
         "text": "II. REMUNERATION",
         "at": [[2, 72, 141.57, 183.33, 150.57]],
         "src": ["text", "infer"],
@@ -298,6 +328,7 @@
       {
         "id": 33,
         "kind": "paragraph",
+        "align": "start",
         "text": "From last over city left from school two.",
         "at": [[2, 72, 155.67, 264.59, 168.16]],
         "src": ["text", "infer"],
@@ -306,6 +337,7 @@
       {
         "id": 34,
         "kind": "paragraph",
+        "align": "start",
         "text": "A. Principles",
         "at": [[2, 72, 189.41, 195.35, 206.41]],
         "src": ["text", "infer"],

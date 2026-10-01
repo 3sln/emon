@@ -43,6 +43,7 @@
       {
         "id": 1,
         "kind": "paragraph",
+        "align": "start",
         "text": "Field Notes on Soil Moisture",
         "at": [[1, 72, 97.81, 367.76, 119.81]],
         "src": ["text", "infer"],
@@ -59,6 +60,7 @@
       {
         "id": 3,
         "kind": "paragraph",
+        "align": "start",
         "text": "Background",
         "at": [[1, 72, 178.93, 165.33, 194.93]],
         "src": ["text", "infer"],
@@ -67,6 +69,7 @@
       {
         "id": 4,
         "kind": "paragraph",
+        "align": "start",
         "text": "Far however red for man white told tell. Have turned try while will well asked not page people.",
         "at": [[1, 72, 202.17, 528.24, 214.66]],
         "src": ["text", "infer"],
@@ -75,6 +78,7 @@
       {
         "id": 5,
         "kind": "paragraph",
+        "align": "start",
         "text": "Site selection",
         "at": [[1, 72, 232.24, 155.79, 245.24]],
         "src": ["text", "infer"],
@@ -91,6 +95,7 @@
       {
         "id": 7,
         "kind": "paragraph",
+        "align": "start",
         "text": "Calibration",
         "at": [[1, 72, 294.53, 129.42, 305.53]],
         "src": ["text", "infer"],
@@ -99,6 +104,7 @@
       {
         "id": 8,
         "kind": "paragraph",
+        "align": "start",
         "text": "Friend point this even say man than always great country by play first can used.",
         "at": [[1, 72, 310.92, 456.89, 323.41]],
         "src": ["text", "infer"],
@@ -107,6 +113,7 @@
       {
         "id": 9,
         "kind": "paragraph",
+        "align": "start",
         "text": "Logging",
         "at": [[1, 72, 338.03, 115.35, 349.03]],
         "src": ["text", "infer"],
@@ -115,6 +122,7 @@
       {
         "id": 10,
         "kind": "paragraph",
+        "align": "start",
         "text": "Sound work very feet red small family great children red in well as light.",
         "at": [[1, 72, 354.42, 419.93, 366.91]],
         "src": ["text", "infer"],
@@ -123,6 +131,7 @@
       {
         "id": 11,
         "kind": "paragraph",
+        "align": "start",
         "text": "Instruments",
         "at": [[1, 72, 383.74, 146.39, 396.74]],
         "src": ["text", "infer"],
@@ -139,6 +148,7 @@
       {
         "id": 13,
         "kind": "paragraph",
+        "align": "start",
         "text": "Calibration",
         "at": [[1, 72, 446.03, 129.42, 457.03]],
         "src": ["text", "infer"],
@@ -147,6 +157,7 @@
       {
         "id": 14,
         "kind": "paragraph",
+        "align": "start",
         "text": "Every made white want so second growth whole.",
         "at": [[1, 72, 462.42, 306.73, 474.91]],
         "src": ["text", "infer"],
@@ -155,6 +166,7 @@
       {
         "id": 15,
         "kind": "paragraph",
+        "align": "start",
         "text": "Logging",
         "at": [[1, 72, 489.53, 115.35, 500.53]],
         "src": ["text", "infer"],
@@ -163,6 +175,7 @@
       {
         "id": 16,
         "kind": "paragraph",
+        "align": "start",
         "text": "Turned seen him where food another still by another him group in would use.",
         "at": [[1, 72, 505.92, 447.21, 518.41]],
         "src": ["text", "infer"],
@@ -171,6 +184,7 @@
       {
         "id": 17,
         "kind": "paragraph",
+        "align": "start",
         "text": "Method",
         "at": [[1, 72, 538.93, 128.87, 554.93]],
         "src": ["text", "infer"],
@@ -187,6 +201,7 @@
       {
         "id": 19,
         "kind": "paragraph",
+        "align": "start",
         "text": "Site selection",
         "at": [[1, 72, 607.99, 155.79, 620.99]],
         "src": ["text", "infer"],
@@ -203,6 +218,7 @@
       {
         "id": 21,
         "kind": "paragraph",
+        "align": "start",
         "text": "Calibration",
         "at": [[1, 72, 670.28, 129.42, 681.28]],
         "src": ["text", "infer"],
@@ -211,6 +227,7 @@
       {
         "id": 22,
         "kind": "paragraph",
+        "align": "start",
         "text": "Again do not part better might out usually never around turn out way those these those.",
         "at": [[1, 72, 686.67, 496.21, 699.16]],
         "src": ["text", "infer"],
@@ -226,6 +243,7 @@
       {
         "id": 24,
         "kind": "paragraph",
+        "align": "start",
         "text": "Logging",
         "at": [[2, 72, 73.28, 115.35, 84.28]],
         "src": ["text", "infer"],
@@ -234,6 +252,7 @@
       {
         "id": 25,
         "kind": "paragraph",
+        "align": "start",
         "text": "Example upon water even work upon take animal morning ever morning.",
         "at": [[2, 72, 89.67, 427.14, 102.16]],
         "src": ["text", "infer"],
@@ -242,6 +261,7 @@
       {
         "id": 26,
         "kind": "paragraph",
+        "align": "start",
         "text": "Instruments",
         "at": [[2, 72, 118.99, 146.39, 131.99]],
         "src": ["text", "infer"],
@@ -258,6 +278,7 @@
       {
         "id": 28,
         "kind": "paragraph",
+        "align": "start",
         "text": "Calibration",
         "at": [[2, 72, 182.03, 129.42, 193.03]],
         "src": ["text", "infer"],
@@ -266,6 +287,7 @@
       {
         "id": 29,
         "kind": "paragraph",
+        "align": "start",
         "text": "Soon example however turned asked second at from after few been.",
         "at": [[2, 72, 197.67, 398.26, 210.16]],
         "src": ["text", "infer"],
@@ -274,6 +296,7 @@
       {
         "id": 30,
         "kind": "paragraph",
+        "align": "start",
         "text": "Logging",
         "at": [[2, 72, 224.78, 115.35, 235.78]],
         "src": ["text", "infer"],
@@ -282,6 +305,7 @@
       {
         "id": 31,
         "kind": "paragraph",
+        "align": "start",
         "text": "Light later home however knew food think night might red.",
         "at": [[2, 72, 241.17, 358.84, 253.66]],
         "src": ["text", "infer"],

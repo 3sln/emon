@@ -127,8 +127,9 @@ func ptClear(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
 	return 0
 }
 
-func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells) int32 {
-	// `pa-build`, with the column stage's scratch (`emon.columns`) made here.
+func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, gl *port.Cells, fo *port.Cells) int32 {
+	// `pa-build`, with the column stage's scratch (`emon.columns`) and the initials' and alignment's made here; `gl`
+	// and `fo` are the glyphs and fonts (empty for hand-made evidence), the locale none.
 	var lt *port.Cells = port.NewCells()
 	var ls *port.Cells = port.NewCells()
 	var sd *port.Cells = port.NewCells()
@@ -142,7 +143,10 @@ func ptBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, pages
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
-	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg)
+	var loc *port.Cells = port.NewCells()
+	var ii *port.Cells = port.NewCells()
+	var al *port.Cells = port.NewCells()
+	return para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al)
 }
 
 func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *strings.Builder) int32 {
@@ -172,13 +176,18 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 	var lo *port.Cells = port.NewCells()
 	var pr *port.Cells = port.NewCells()
 	var dbg *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var fo *port.Cells = port.NewCells()
+	var loc *port.Cells = port.NewCells()
+	var ii *port.Cells = port.NewCells()
+	var al *port.Cells = port.NewCells()
 	var p int32 = 1
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	for p <= npages {
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg)
+	para.PaBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, gl, fo, loc, ii, al)
 	para.PaDump(t, cf, dbg)
 	return 0
 }
@@ -186,12 +195,14 @@ func ptDump(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, t *str
 func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {
 	// Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
 	var p int32 = 1
+	var g0 *port.Cells = port.NewCells()
+	var f0 *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	for p <= npages {
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	ptBuild(wd, ln, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, g0, f0)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
 
@@ -710,7 +721,7 @@ func ptGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	ptBuild(wd, ln, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, gl, fnt)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
 		return 3
 	}
@@ -770,4 +781,228 @@ func TestRealDocumentsMakeTheGoldenModels(emonT *testing.T) {
 	port.AssertTextSpan(emonT, t5, port.TestFile("para/initial-image.json"), 0, mscript.JtEnd(port.TestFile("para/initial-image.json")), "initial-image", 0)
 	port.AssertEq(emonT, ptGolden(port.TestFile("corpus/synth/pdf/initial-vector.pdf"), t6, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-vector runs")
 	port.AssertTextSpan(emonT, t6, port.TestFile("para/initial-vector.json"), 0, mscript.JtEnd(port.TestFile("para/initial-vector.json")), "initial-vector", 0)
+}
+
+func TestRealInitialDocumentsMakeTheGoldenModels(emonT *testing.T) {
+	// P4.10 and P4.11 on files: the raised, first-word, column and right-to-left initials (D167; a CJK one is in the accuracy gate: its lines join with a space, which is not this stage's), each with its
+	// initial inline, and the `align` of the paragraphs (D168), byte for byte (`para-check` holds them to the HTML).
+	var ar *port.Cells = port.NewCells()
+	var dc *port.Cells = port.NewCells()
+	var a *port.Cells = port.NewCells()
+	var b *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var cx *port.Cells = port.NewCells()
+	var ox *port.Cells = port.NewCells()
+	var cs *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var f0 *port.Cells = port.NewCells()
+	var f1 *port.Cells = port.NewCells()
+	var f2 *port.Cells = port.NewCells()
+	var f3 *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var fnt *port.Cells = port.NewCells()
+	var pg *port.Cells = port.NewCells()
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var mst *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	var t4 *strings.Builder = port.NewText()
+	port.AssertEq(emonT, ptGolden(port.TestFile("corpus/synth/pdf/initial-raised.pdf"), t1, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-raised runs")
+	port.AssertTextSpan(emonT, t1, port.TestFile("para/initial-raised.json"), 0, mscript.JtEnd(port.TestFile("para/initial-raised.json")), "initial-raised", 0)
+	port.AssertEq(emonT, ptGolden(port.TestFile("corpus/synth/pdf/initial-firstword.pdf"), t2, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-firstword runs")
+	port.AssertTextSpan(emonT, t2, port.TestFile("para/initial-firstword.json"), 0, mscript.JtEnd(port.TestFile("para/initial-firstword.json")), "initial-firstword", 0)
+	port.AssertEq(emonT, ptGolden(port.TestFile("corpus/synth/pdf/initial-columns.pdf"), t3, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-columns runs")
+	port.AssertTextSpan(emonT, t3, port.TestFile("para/initial-columns.json"), 0, mscript.JtEnd(port.TestFile("para/initial-columns.json")), "initial-columns", 0)
+	port.AssertEq(emonT, ptGolden(port.TestFile("corpus/synth/pdf/initial-rtl.pdf"), t4, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, mst), 0, "initial-rtl runs")
+	port.AssertTextSpan(emonT, t4, port.TestFile("para/initial-rtl.json"), 0, mscript.JtEnd(port.TestFile("para/initial-rtl.json")), "initial-rtl", 0)
+}
+
+func ptFind(nodes *port.Cells, kind int32, after int32) int32 {
+	// The first node of that kind with an index above `after`, -1 for none.
+	var n int32 = model.NodeCount(nodes)
+	var i int32 = after + 1
+	for i < n {
+		if model.NodeKind(nodes, i) == kind {
+			return i
+		}
+		i += 1
+	}
+	return -1
+}
+
+func TestADropInitialJoinsItsFirstWordAndTheParagraphIsOne(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	// An `O` 36 pt on 10 pt text: its cap top is the first line's (within half a size), its baseline in line 2's band,
+	// lines 1 and 2 start after it, line 3 back at its start edge. One paragraph, `Once upon ...`, the initial an
+	// inline `initial` (a drop of two lines) holding `O`, then the rest as text; justified, since lines 1 and 2 count
+	// from the initial's edge. Without a locale the join is flagged: `O` is a word in some language.
+	ptLine(wd, ln, et, port.TextBlob("O"), 1, 7200, 10200, 9400, 13000, 0, 0, 3600)
+	ptLine(wd, ln, et, port.TextBlob("nce upon a time"), 1, 9800, 10000, 50000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("there was a mill"), 1, 9800, 11500, 50000, 12700, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("that nobody saw"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("the end of it"), 1, 7200, 14500, 30000, 15700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "drop: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:Once upon a time there was a mill that nobody saw the end of it;;T:O;T:nce upon a time there was a mill that nobody saw the end of it;", "a drop initial: one paragraph, joined, no space")
+	var ini int32 = ptFind(nodes, model.NkInitial(), 0)
+	port.AssertEq(emonT, model.NodeSub(nodes, ini), model.IfmDrop(), "the form is drop")
+	port.AssertEq(emonT, model.NodeAux(nodes, ini), 2, "of two lines")
+	port.AssertEq(emonT, model.NodeFlags(nodes, ini), model.FlLowConf(), "and the join is in doubt")
+	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlJustify(), "justified: lines 1 and 2 start at the initial's edge")
+	// A letter divider: a big letter with nothing wrapping it. The line below starts at the same edge, not after the
+	// letter, so it is no initial and stays a block of its own.
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("A"), 1, 7200, 10000, 9500, 13400, 0, 0, 3000)
+	ptLine(wd, ln, et, port.TextBlob("Aardvark an animal here"), 1, 7200, 14000, 50000, 15200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("that digs at night"), 1, 7200, 15500, 50000, 16700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "divider: well formed")
+	ptBrief(t2, nodes, regions, text)
+	port.AssertText(emonT, t2, "P1:A;P1:Aardvark an animal here that digs at night;", "a letter divider is no initial")
+	port.AssertEq(emonT, ptFind(nodes, model.NkInitial(), 0), -1, "no initial inline")
+	// A margin initial: it hangs left of the column (its end edge before the lines' start), the lines are not
+	// indented, and there are lines after its two.
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("Q"), 1, 3000, 10200, 6200, 13000, 0, 0, 3600)
+	ptLine(wd, ln, et, port.TextBlob("uiet nights in town"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("were rare that year"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("and the lamps burned"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("low until dawn"), 1, 7200, 14500, 40000, 15700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "margin: well formed")
+	ptBrief(t3, nodes, regions, text)
+	port.AssertText(emonT, t3, "P1:Quiet nights in town were rare that year and the lamps burned low until dawn;;T:Q;T:uiet nights in town were rare that year and the lamps burned low until dawn;", "a margin initial")
+	var ini int32 = ptFind(nodes, model.NkInitial(), 0)
+	port.AssertEq(emonT, model.NodeSub(nodes, ini), model.IfmMargin(), "the form is margin")
+	port.AssertEq(emonT, model.NodeAux(nodes, ini), 2, "of two lines")
+	port.AssertEq(emonT, model.NodeFlags(nodes, ini), 0, "a `Q` is no word: the join is sure")
+}
+
+func TestARightToLeftInitialIsMirrored(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var t1 *strings.Builder = port.NewText()
+	// The initial at the right (a start edge of -x1), the first two lines to its left, the third back at the right edge.
+	ptLine(wd, ln, et, port.TextBlob("B"), 1, 43000, 10200, 45000, 13000, 0, 1, 3600)
+	ptLine(wd, ln, et, port.TextBlob("ab cd ef gh"), 1, 7200, 10000, 42500, 11200, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ij kl mn op"), 1, 7200, 11500, 42500, 12700, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("qr st uv wx"), 1, 7200, 13000, 45000, 14200, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("yz ab cd ef"), 1, 7200, 14500, 45000, 15700, 0, 1, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl: well formed")
+	ptBrief(t1, nodes, regions, text)
+	port.AssertText(emonT, t1, "P1:Bab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;;T:B;T:ab cd ef gh ij kl mn op qr st uv wx yz ab cd ef;", "a right-to-left initial")
+	var ini int32 = ptFind(nodes, model.NkInitial(), 0)
+	port.AssertEq(emonT, model.NodeSub(nodes, ini), model.IfmDrop(), "a drop")
+}
+
+func TestAParagraphsAlignmentIsMeasuredAgainstItsFragment(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var ord *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var fr *port.Cells = port.NewCells()
+	var gp *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	// Justified: three lines flush at both edges of the fragment, the last short.
+	ptLine(wd, ln, et, port.TextBlob("aa bb cc dd"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ee ff gg hh"), 1, 7200, 11500, 50000, 12700, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("mm nn"), 1, 7200, 14500, 20000, 15700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "justify: well formed")
+	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlJustify(), "justify")
+	// Left-aligned: a ragged end edge, every start at the edge (the fragment's box is the widest line's).
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("aa bb cc dd"), 1, 7200, 10000, 45000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ee ff gg hh"), 1, 7200, 11500, 42000, 12700, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("mm nn"), 1, 7200, 14500, 30000, 15700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "start: well formed")
+	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlStart(), "start")
+	// Right-aligned: a ragged start edge, every end at the edge.
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("aa bb cc dd"), 1, 12200, 10000, 50000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ee ff gg hh"), 1, 15200, 11500, 50000, 12700, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("mm nn"), 1, 33000, 14500, 50000, 15700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "end: well formed")
+	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlEnd(), "end")
+	// Centred: equal gaps either side, and the lines differ in width.
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("aa bb cc dd"), 1, 17200, 10000, 40000, 11200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ee ff gg hh"), 1, 12200, 11500, 45000, 12700, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 0, 1000)
+	ptLine(wd, ln, et, port.TextBlob("mm nn"), 1, 25000, 14500, 32200, 15700, 0, 0, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "center: well formed")
+	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlCenter(), "center")
+	// Right to left, every line ending at the box's LEFT edge (a right-to-left line's end): LOGICALLY `end`, though these
+	// are the lines the left-to-right case calls `start`; and the same page set flush right is `start`.
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("aa bb cc dd"), 1, 7200, 10000, 45000, 11200, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ee ff gg hh"), 1, 7200, 11500, 42000, 12700, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("mm nn"), 1, 7200, 14500, 30000, 15700, 0, 1, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl end: well formed")
+	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlEnd(), "right-to-left, flush left: end")
+	ptClear(wd, ln, et)
+	ptLine(wd, ln, et, port.TextBlob("aa bb cc dd"), 1, 12200, 10000, 50000, 11200, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ee ff gg hh"), 1, 15200, 11500, 50000, 12700, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("ii jj kk ll"), 1, 7200, 13000, 50000, 14200, 0, 1, 1000)
+	ptLine(wd, ln, et, port.TextBlob("mm nn"), 1, 33000, 14500, 50000, 15700, 0, 1, 1000)
+	port.AssertEq(emonT, ptRun(wd, ln, et, 1, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "rtl start: well formed")
+	port.AssertEq(emonT, model.NodeSub(nodes, 1), model.AlStart(), "right-to-left, flush right: start")
 }
