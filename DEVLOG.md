@@ -39,6 +39,9 @@ and in the phase item both.
 5. [x] **P1.1 — The Model in kin** (`emon.model`): arenas, builder, accessors,
    and laws in `bb unit`.
 
+**The fusion critical path** (P6.3-P7.S) has its own ordered wave table at the head of Phase 7; for that work it
+supersedes this list.
+
 After these: P1.2 (canonical JSON) → P1.10 in order, with P1.12 (evidence
 v2, D096) taken right after P1.7 merges (P1.11, the `Src`
 port of D058, went in before P1.4/P1.5 closed: done), which completes the
@@ -1808,16 +1811,97 @@ analysis beyond "top-to-bottom lines on a single column".
 - [ ] P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
   available (D007); pdfium loads through its custom-loader callback over the
   byte source, not a path or a whole-file copy (D058).
-- [ ] P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew,
-  orientation (SPEC §8.2.1).
-- [ ] P6.3a — Raster kernels as host-accelerable whole-stage forms (D093).
-  Measure which normalization/tracer stages dominate (ink-layer separation,
-  Sauvola, morphology, binarise+label), then define whole-stage forms (e.g.
-  `ink-mask`, `binarise-label`) with an exact integer spec and a kin
-  reference implementation. Hosts may accelerate (SIMD first; optional GPU:
-  wgpu in Rust, WebGPU in the browser). Gate: every accelerated
-  implementation is bit-identical to the kin reference over the corpus.
-- [ ] P6.4 — Tracer: components, contours, rules, primitives (SPEC §8.2.2).
+- [ ] **P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew, orientation** (SPEC §8.2 "As designed", D092,
+  D093, D096, D197). **Critical path, wave 1.** Depends on: P6.2 and P6.5 merged to main (renders and the evidence's
+  `views`). Parallel with P7.0, P7.U, P6.6 (different files; see "Who edits what" under Phase 7).
+  *Brief*: a kin module `emon.norm` that turns ONE raster (a render or a decode, given as a `Bitmap` plus its `views`
+  row) into the derived views and the ink layers, and fills the raster feature columns. No Engine wiring here (P7.U
+  calls it from the page unit); everything is laws and a bench.
+  1. **Bulk forms** (D092's rule; each a pure whole-page map or reduce, with a kin reference implementation in
+     `emon.norm` that a law holds bit-identical on all four targets, D093): `bitmap-gray-into (src, dst)` (`(77r + 150g
+     + 29b + 128) >> 8`; a 1-channel source copied); `bitmap-hist-rgb (src, cells, off)` (4096 bins of `r>>4, g>>4,
+     b>>4`, gray sources use `v>>4` on all three); `bitmap-lut-into (src, lut cells, off, dst)` (per pixel, the LUT cell
+     of its 4096-bin index, low 8 bits, into a 1-channel `dst`); `bitmap-hash (b)` -> FNV-1a 64 over w, h, channels
+     and the pixel bytes, answered in two cells by an out `Cells` (D196's key of a kin-made view); `bitmap-quarter-into
+     (src, dst, turns)` (clockwise quarter turns, exact). Declared in `host/rust/src/port.rs`, `host/go/port/port.go`,
+     `host/java/emon/Port.java`, `host/csharp/Emon/Port.cs`, in ONE new section at the end of each file headed
+     `;; P6.3 bulk forms`; `bb hosts` agrees.
+  2. **`nm-view`** (`emon.norm`): given `epages views` and the raster's `views` row, writes a `gray` view (`vk-gray`), the
+     ink layers (`inks` rows: centroid, lightness, chroma, pixel count, `ir` role, mask view, spread) by histogram
+     clustering exactly as SPEC §8.2 says (settings `ink-merge`, `ink-light`, `ink-chroma` named in the file's head
+     with their defaults), one `ink-mask` view per non-paper layer, and a `binary` view by **banded Sauvola** (`2r + 2`
+     rows of integral images at a time; `r` = 15 at 300 dpi scaled by `dpi/300`, `k` 87/256; bilevel decodes skip it).
+     Kin-made bitmaps are allocated with `bitmap-new` here (P7.U switches them to `bms-put` so the host keeps them).
+  3. **Deskew** (`nm-deskew`, decode views only): projection profiles of the body layer's component centres (from the
+     binary view's row runs; P6.4's labeller is not needed, a centre per run cluster is enough) over ±5° at 0.1°, then
+     ±0.1° at 0.01°, `ev-sin`/`ev-cos`; the angle goes to the view's `deskew` and the `oruns.deskew` of later runs; no
+     resampled bitmap is made. **Orientation** (`nm-orient`): OSD's quarter turns when `oruns` OSD confidence ≥
+     `osd-conf` (named, default 20 = 2.0), else -1 (P6.4's `tlines` decide later).
+  4. **Features** (`nm-feat-ocr`, `nm-feat-text`): `xo` 10 (kin ink under the OCR word's box on the source view's binary,
+     per-mille), 11 (engine-binary ink, when the run has an `engine-binary` view; else -1), 12 (Jaccard of the two inside
+     the box), 13 (share of its ink on the body layer), 16 (mean gray of its ink against the layer-paper gray); `xt` 10
+     (ink under the word on the `with-text` render), 11 (ink under it on the `no-text` render), 12 (share of its ink on
+     the body layer). Boxes map through the view (`vw-cpt-to-px`); counts read the masks with `bitmap-next-nonzero`
+     runs, never per pixel over the box.
+  5. **Bench**: `bench/run.sh` gains a `norm` workload (gray, hist, layers, banded Sauvola on `inv_00007.noise.png` and on
+     a 300-dpi RGB render of `watermark-draft`) in all four targets; record the table in this entry as D092 did.
+  *Inputs*: `Bitmap`(s), `epages views inks feats` and the OCR/text word heads. *Outputs*: `views` rows (gray, binary,
+  ink-mask), `inks` rows, `feats` columns above. *Files*: `kin/norm.kin`, `kin/normtest.kin` (new); the four port files
+  (section above); `bench/`. Nothing else.
+  *Measured* (`bb ink`, a new bb script over the 55 `pdf/` documents, rendered once by `bb render-record` into an ignored
+  cache, NOT a gate until it is ratcheted by P7.S): **ink-layer purity from the text layer's own truth** — each visible
+  text-layer glyph box on the `with-text` render: the share of its ink pixels in the body layer. Targets: body glyphs
+  (opaque, upright, `vis` 0) ≥ 0.98 in `body`; the `watermark-draft` DRAFT glyphs (alpha 13 %) ≥ 0.95 outside `body`;
+  the `stamp-seal` seal and stamp glyphs (blue, red) ≥ 0.95 in `colour` layers. Deskew on the P6.6 skewed variants
+  (known angles): |error| ≤ 0.1° on 95 % of pages, ≤ 0.3° on all. Bench: within D092's 2× everywhere; Rust total ≤ 0.12 s
+  a page (SPEC 12.3 budget).
+  *Done when*: the laws (each bulk form against its reference over random bitmaps; banded Sauvola equal to `ras-sauvola`
+  on three pages; a two-colour fixture separates into exactly two layers with the right roles; a page of known skew)
+  pass on all four targets; `bb ink` meets the targets above; the bench table is in this entry.
+- [ ] P6.3a — Raster kernels as host-accelerable whole-stage forms (D093): SIMD and GPU implementations of the P6.3 and
+  P6.4 bulk forms behind the same declarations. **Not on the fusion path**: taken under P10.3 only if `bb fusion-bench`
+  shows a raster stage over its SPEC 12.3 budget. Gate: every accelerated implementation bit-identical to the kin
+  reference over the corpus.
+- [ ] **P6.4 — Tracer: runs, components, contours, rules, primitives, text lines without OCR** (SPEC §8.2, §8.4.4, D198).
+  **Wave 2.** Depends on P6.3 (binary and ink-mask views). Parallel with P7.1 and P7.2.
+  *Brief*: a kin module `emon.trace` over a page's binary view and ink masks, writing the trace bundle.
+  1. **Runs and components** (`tr-runs`, `tr-components`): row runs of the binary view (via `bitmap-next-nonzero`; a run is
+     `y x0 x1` in a scratch `Cells`), 8-connected components by union-find OVER RUNS (two runs of adjacent rows join when
+     their x-ranges touch with one pixel's slack), the smaller root wins (D092's determinism rule), components sorted by
+     (top, left, size). Per component the `components` row of SPEC §8.4.4: box (pixels and page), ink pixels, fill,
+     **stroke width** (the median horizontal and vertical run length inside it, not a distance transform: integer, cheap,
+     measured against the distance transform on the fixtures; record the error), colour and ink row (the majority layer
+     of its pixels, via the masks), mean gray, holes (background runs enclosed), parent (containment by box then by
+     runs), `kind` (`ck`: text-like, rule-like, large, noise) by named size and aspect thresholds relative to the page's
+     median text-like height. Bound: `trace-components` (200,000) a page, the rest counted (warning).
+  2. **Contours** (`tr-contour`): the outer boundary of each component that is not text-like or noise, traced on its runs
+     (Moore neighbourhood on a component-local bitmap of at most `trace-contour-px` pixels), simplified by integer
+     Douglas-Peucker at `dp-eps` (1.5 px), written to `pts`.
+  3. **Rules** (`tr-rules`): long thin components and long horizontal/vertical runs merged along their axis (gap ≤
+     `rule-gap`), plus near-horizontal/vertical lines found by integer voting over the endpoints of rule-like components
+     (angles within ±2°); centre-line endpoints, thickness, style (dashed and dotted from the gap pattern; double from two
+     parallel rules within 3 thicknesses), member components in `refs`.
+  4. **Primitives** (`tr-prims`): from contours: `rect` (four dominant directions, right angles ± 3°), `circle` /
+     `ellipse` (algebraic fit in integers on the contour points, residual per-mille), `ring` (a circle with a concentric
+     inner contour: a seal's double border), `arrow`, else `polygon`/`curve`; members in `refs`; confidence = fit
+     residual mapped to per-mille.
+  5. **Text lines without OCR** (`tr-tlines`): text-like components of one ink layer chained along their dominant
+     direction (nearest neighbour within 1.5 heights, angle consistent within 3°), a baseline fitted to the bottoms
+     (integer least squares over the members, then `ev-angle`), mean height and gap; a diagonal DRAFT is one `tlines`
+     row at its angle on its layer. Orientation fallback for P6.3: the dominant `tlines` direction.
+  6. **Features**: `xo`/`xt` 14 (text-like components centred in the box), 15 (components over symbols/glyphs), `xt` 23
+     (overlap with a `tlines` row at another angle).
+  *Inputs*: the views of P6.3, `inks`, `epages`. *Outputs*: `components rules prims tlines pts refs`, `feats` 14, 15, 23.
+  *Files*: `kin/trace.kin`, `kin/tracetest.kin` (new). Nothing else.
+  *Measured* (`bb trace`, a bb script over cached renders like `bb ink`; not a gate until P7.S): on the `no-text` renders
+  of the 55 `pdf/` documents, **rules against the vector paths** (a `paths` row that is a stroked line or a thin filled
+  rectangle is truth): recall ≥ 0.98, precision ≥ 0.98, endpoint error ≤ 2 px at 300 dpi; on the `with-text` renders,
+  **`tlines` against the text layer's lines** (IoU ≥ 0.5): recall ≥ 0.97; DRAFT on `watermark-draft` found as one row at
+  -30° ± 0.5° on a non-body layer; `stamp-seal`: the seal as `ring` and the stamp as `rect` (2 of 2); **mapo80** (live
+  only, `corpus/seals/mapo80-stamps/images/val`, YOLO labels): seal-candidate recall at IoU ≥ 0.5 recorded as the
+  baseline P7.7 must keep (no target yet). Rust ≤ 0.15 s a page.
+  *Done when*: laws on hand-built bitmaps (two touching runs one component; a ring; a dashed rule; a 30° line of letters)
+  on all four targets; `bb trace` meets the targets; timing in this entry.
 - [ ] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
   first-pass plan; OCR-only pipeline for images and scanned PDFs (D033).
 - [ ] P6.5a — The OCR answer extension v2 (D095 open items, D096): `ox`
@@ -1829,39 +1913,422 @@ analysis beyond "top-to-bottom lines on a single column".
   model hashes); the word-confidence-of-0 finding of P1.12 step 6 is fixed
   in `tess.rs` if it is a reading bug. Re-record `test/ocr/h-keyword/` live
   (Rust only) and fill `xo-*` column 11 and 12 once P6.3 has kin's ink.
-- [ ] P6.6 — Degraded corpus from the synthetic round trip (SPEC §14.3.1);
-  scanned-document baselines in the scoreboard.
-- [ ] P6.7 — Initials from ink (SPEC 10.9, D108): the geometry test of P4.10
-  over non-text ink (a vector path cluster, an image placement, a Type 3
-  glyph without Unicode, the tracer's components on raster pages); the
-  letter from `/ActualText` or `/Alt`, then a planned OCR request of pass kind
-  `initial` (a new `op` row; psm 10, the paragraph's script) on the
-  region, then the tracer; U+FFFD and `low-conf` when nothing passes; the
-  ornament is not a `figure`. *After P6.4, P6.5a and P7.4* (targeted
-  rounds). *Done when*: `initial-image` and `initial-vector` score
-  `initial-r` 1.0 and `first-word-acc` 1.0 on `pdf/` and `scan/`, and the
-  scanned variants of every P2.13 initials document have no single-letter
-  heading.
+- [ ] **P6.6 — The fusion corpus: degraded and colour scans, watermark/seal/stamp fixtures, the scorer's fusion
+  metrics** (SPEC §14.3.1, §14.2, D206, D209). **Wave 1**, no kin: parallel with everything. Depends on nothing new.
+  *Brief*:
+  1. **New born-digital synthetic documents** (`tools/synth/make_html.clj` + `print.sh`, Chrome, gold by `html2gold`),
+     each two pages of ordinary prose, headings and one table so the CER is meaningful: `wm-gray-behind` (CONFIDENTIAL,
+     opaque `#d0d0d0`, -45°, 110 pt, `z-index:-1`, crossing body lines on both pages), `wm-image-behind` (a PNG of the word
+     SAMPLE at 20 % opacity behind the text: no text-layer witness), `bg-texture` (a full-page light texture image under
+     the text), `seal-over-text` (a blue `ring` seal with arc text over the end of a paragraph, and a red rotated PAID
+     stamp over a table cell; `data-seal` gold as `stamp-seal` has), `sig-over-name` (an SVG pen-stroke signature crossing
+     the typed name above a `Signature` rule; gold `seal` subkind `signature`), `outlined-heading` (two headings drawn as
+     SVG `path` outlines made at dev time from a system font by `tools/synth/outline.clj`, so the text layer lacks them;
+     the gold has their text).
+  2. **Hand-made PDFs** (`tools/synth/wm_pdf.clj`, bytes written by bb like `tagged_pair.clj`, `--check`ed by `bb unit`):
+     `wm-marked` (SPECIMEN in `/Artifact <</Subtype /Watermark>>` marked content), `wm-ocg` (the same in an OCG named
+     `Watermark` with `/AS` print-only), `wm-annot` (a Watermark annotation), `tl-broken-shift` (a Chrome PDF whose one
+     body font's ToUnicode is rewritten so every letter maps to the next letter: plausible garbage, every glyph `how`
+     `tounicode`), `tl-broken-unmapped` (the same font's ToUnicode removed: `how` unknown), `hidden-older-ocr` (the
+     `scan/h-plain.pdf` pages with a render-mode-3 text layer of the gold text with 5 % of letters substituted by a seeded
+     rule: a worse previous OCR). Golds are the source documents' golds.
+  3. **Degraded variants** (`tools/synth/degrade.clj`): keep `scan/` as it is (150 dpi gray, the P6.5 baseline); add
+     `scan-color/STEM.pdf` for the FUSION SET ONLY (below): 200 dpi RGB, JPEG quality 80, skew from the stem's seed in
+     ±3° (the angle written into MANIFEST `facts.skew` per page), light noise; and **overlay** variants `scan-ovl/STEM.pdf`
+     of the same set: a light-gray diagonal `COPY` watermark (lightness 200-215), a generated seal (one of six SVG seals:
+     rings with arc text, blue/red/purple, rasterised by `magick`) pasted over body text at a seeded box, a pen signature,
+     and on two documents bleed-through (the mirrored next page at 10 % darkness); the overlays are added to the gold
+     (`dropped` watermark per page, `seal` nodes with `text`, `color`, `subkind`). Two documents also get pages turned 90°
+     and 180° (`facts.turns`). The FUSION SET (`test/corpus/synth/FUSION`, one stem a line): `watermark-draft`,
+     `stamp-seal`, `figures-logo-screenshot`, `bank-statement`, `invoice`, `columns-two`, `h-numbered`,
+     `table-simple-ruled`, `lists-basic`, `scripts-mixed` and every new document of 1 and 2. **Budget**: the new committed
+     files ≤ 12 MB in all (measure; if over, lower the dpi of `scan-color` to 150 and say so here).
+  4. **Scorer metrics** (`tools/accuracy/score.clj`, D206): `ghost-rate`, `seal-leak`, `src-ocr-share`, `tl-override` as
+     SPEC §14.2 defines them (lower is better: add them to the ratchet's direction table beside `cer`); counts at the
+     finest level the JSON has (an inline's `src`/`flags` when present, else its block's); `test_score.clj` laws with
+     hand-written predictions for each. `bb fusion-report` (`tools/accuracy/fusion_report.clj`, not a gate): reads
+     evidence dumps (version "2", §9.7) and prints per-source win rates (`fv` winner over groups with both candidates),
+     per-rule counts and per-defence ledger counts, per document and pooled.
+  5. **Live sets, never committed** (`tools/fusion/live-sets.edn`): the SROIE derived `*.watermark.png`, `*.stamp.png`,
+     `*.ocr-layer.pdf` with their SROIE gold text (`corpus/_gold`); mapo80 `val` (785 images) with the YOLO stamp boxes, for
+     the metric `stamp-ghost` (OCR words whose centre lies in a labelled stamp box and that reach the body, over OCR words
+     whose centre lies in one), computed from the evidence dump by `bb fusion-live --stamps`. mapo80 is an aggregate of
+     unverified licences and its `neg_*` images are research-only: **nothing from it is committed**, it is measured live
+     only (D209).
+  *Files*: `tools/synth/*`, `tools/accuracy/score.clj`, `tools/accuracy/test_score.clj`, `tools/accuracy/fusion_report.clj`,
+  `tools/fusion/` (new), `test/corpus/synth/{html,pdf,scan-color,scan-ovl,gold,FUSION,MANIFEST.json}`,
+  `test/scoreboard.edn` (only by `bb accuracy --update`: the new documents enter the `emon` baseline as they are today).
+  *Done when*: `bb unit` and `bb accuracy` green with the new documents and variants recorded; `tl-broken-shift` scores
+  CER ≥ 0.5 on `emon` (the text layer is wrong, as intended) and every other new `pdf/` document CER ≤ 0.02 except
+  `outlined-heading` (its headings are missing: say its CER here); the new metrics have laws; the six seals and the
+  overlay boxes are listed in MANIFEST.
+- [ ] P6.7 — Initials from ink (SPEC 10.9, D108): the geometry test of P4.10 over non-text ink (a vector path cluster, an
+  image placement, a Type 3 glyph without Unicode, the tracer's components on raster pages); the letter from
+  `/ActualText` or `/Alt`, then a planned OCR request of pass kind `initial` (`op` row 9, added to `emon.evidence`; psm 10,
+  the paragraph's script) on the region of the page's `with-text` render or decode, then the tracer; U+FFFD and `low-conf`
+  when nothing passes; the ornament is not a `figure`. **Wave 4**, after P6.4 and P7.4 (it is a targeted round: it rides
+  P7.4's `rt-plan` with one more request kind and adds no round). *Files*: `kin/initials.kin` (or wherever P4.10 put the
+  geometry test), one `op` row. *Done when*: `initial-image` and `initial-vector` score `initial-r` 1.0 and
+  `first-word-acc` 1.0 on `pdf/` and `scan/` under `emon-replay` of their committed transcripts, and the scanned variants of
+  every P2.13 initials document have no single-letter heading.
 
 ## Phase 7 — Fusion and artifacts
 
-- [ ] P7.1 — Alignment and correspondence groups (SPEC §9.2).
-- [ ] P7.2 — Health scores per source and region (SPEC §9.3).
-- [ ] P7.3 — Arbitration rules as data; explanation in the evidence dump
-  (SPEC §9.4, D014).
-- [ ] P7.4 — Targeted re-OCR rounds (text-only renders, body-ink layer,
-  single-line cells).
-- [ ] P7.5 — Watermarks, backgrounds, bleed-through, ghosts: the six
-  defences of SPEC §9.5 (D015); contamination rate in the scoreboard.
-- [ ] P7.6 — `hidden-text` handling (prior OCR layers).
+The maintainer's strategy (D014, D015, D038): for every PDF page and every image, the text layer, OCR and the tracer
+run, fusion compares them region by region and keeps the best; watermarks, backgrounds and the ghosts OCR reads in them
+are set aside; seals and signatures become placeholders. This phase is now the critical path. It is planned against what
+was built after SPEC §8-9 were written (evidence v2, visibility, the tagged tree, furniture, tables, the `Ocr` port,
+the `Renderer` port, image intake); D195-D210 record the reconciliation and SPEC §2.2, §7.2-7.3, §8.2-8.3, §9.2-9.8,
+§12.3 and §14.2 say it normatively.
+
+**M0 — before any item below (coordinator, not a brief).** Merge `worktree-agent-afd782ca8bc66f033` (P6.1 + P6.5 +
+P6.5a: image intake, the `Ocr` port, `emon.scan`, D173-D176 and D184-D189) and `worktree-agent-aac8530d7436e2eec`
+(P6.2: the `Renderer` port and pdfium, D191-D194) into main, renumbering their decisions after the highest on main, and
+the P4.5/P4.6 and initials branches as they come. Every brief below assumes that main.
+
+**Order and what runs in parallel** (each wave's items touch disjoint files, "Who edits what" below):
+
+| wave | items | needs |
+| --- | --- | --- |
+| 1 | **P7.U** (page units), **P7.0** (text-layer triage and health), **P6.3** (normalization), **P6.6** (corpus and metrics) | M0 |
+| 2 | **P6.4** (tracer), **P7.1** (alignment), **P7.2** (health) | P6.3; P7.0 |
+| 3 | **P7.3** (arbitration, the PageLayer, the stages wired into the page unit) | P7.U, P7.1, P7.2, P6.3, P6.4 |
+| 4 | **P7.5** (watermarks, backgrounds, ghosts), **P7.7** (seal and signature placeholders), **P7.6** (`hidden-text`), **P7.4** (targeted rounds) | P7.3 (P7.7 and P7.5 also P6.4) |
+| 5 | **P7.S** (the policy switch: born-digital pages OCR'd under `always`; `bb fusion` gate; the performance budget) | P7.3, P7.5, P6.6 |
+| 6 | P6.7 (initials from ink), P6.3a / P10.3 (acceleration, only if over budget) | P7.4 |
+
+The critical path is M0 → P7.U → P7.3 → P7.5 → P7.S; P6.3 → P6.4 and P7.0 → P7.1/P7.2 feed P7.3 and are not on it if
+they keep pace.
+
+**Who edits what** (an item edits only its row; a shared file is edited only at the place named):
+
+| file | owner | others |
+| --- | --- | --- |
+| `kin/norm.kin`, `kin/normtest.kin` | P6.3 | — |
+| `kin/trace.kin`, `kin/tracetest.kin` | P6.4 | — |
+| `kin/tlhealth.kin`, `kin/player.kin` (+ tests) | P7.0 | P7.3 adds `fv`/`fx` builders below P7.0's in `player.kin` |
+| `kin/pageunit.kin` (+ test) | P7.U | P7.3 fills its stage calls; P7.4, P7.5, P7.6, P7.7, P7.S each add ONE call at the hook comment `;; HOOK P7.n` P7.3 leaves |
+| `kin/align.kin` / `kin/health.kin` / `kin/arbiter.kin` | P7.1 / P7.2 / P7.3 | — |
+| `kin/fuserules.kin` | P7.3 (rows 100-199, 500-599, the block headers) | P7.5 rows 200-299, P7.6 300-399, P7.7 400-499, each inside its own block |
+| `kin/artifact.kin` / `kin/hidden.kin` / `kin/sealmark.kin` / `kin/retarget.kin` / `kin/rasterplan.kin` | P7.5 / P7.6 / P7.7 / P7.4 / P7.S | — |
+| `kin/scan.kin` | P7.U (per-page split) | P7.3 (its line measure becomes a library call; `sc-tag` retired) |
+| `kin/plan.kin` | P7.U (`KIN_VIEW_BASE`, ids) | P7.4 (`rq-ocr-view`) |
+| `host/*/port*` (four trees) | P6.3 (section `P6.3 bulk forms`), P7.U (section `P7.U BitmapSet`), both appended at the end; the second to merge rebases | — |
+| `host/rust/src/engine.rs`, `host/go/engine.go` | P7.U | P7.0 (one call, merged before P7.U), P7.3 (the document tail), P7.5 (`pa-run` in the document pass), P7.S (options) |
+| `host/rust/src/plan.rs`, `host/go/port/plan.go` | P7.U | P7.4 (fulfilling an OCR of a kin-made view) |
+| `tools/synth/`, `tools/accuracy/`, `test/corpus/synth/` | P6.6 | P7.S (scoreboard updates through `bb accuracy --update` only) |
+| `tools/fusion/`, `test/fusion/`, `kin/scripts/fusion*` | P6.6 creates `tools/fusion/` | P7.1 (`test/fusion/align/`), P7.3 (`test/fusion/replay/`), P7.S (the gate and the bench) |
+
+**Every brief is held to the same conventions.** (1) *Identity*: kin modules generate to Rust, Go, Java and C#; laws in
+`emon.test` run on all four (`bb unit`); the Engine wiring is made in BOTH `engine.rs` and `engine.go` at the place D195's
+order names, and `bb identity`, `bb embedders` and `bb repeat` stay green; a bulk form is declared in all four host trees
+with a law equal to its kin reference (`bb hosts`, D093); anything a live engine produced (renders, OCR) reaches a gate only
+through a transcript recorded live on Rust and replayed on Rust and Go to the identical bundle (JSON, HTML, evidence dump)
+(D008, D095, D194). (2) *Gates*: `bb gates` green; the `emon` scoreboard (no engine) does not move unless the brief says
+it moves and why. (3) *kin's known traps* (the "Found in kin" list): bind every inner read of a `Cells` before an outer
+call (Rust `&mut`), unique `let` names per function (Java, C#), no `len`/`cap`/`new`/`go`/`var`/`close` as names,
+predicates `^Bool`, no constant named like a function. (4) *Thresholds* are named settings with defaults at the head of
+the module (SPEC §9.4); a first value is a first value, P10.1 calibrates. (5) *Measurement first*: an item that changes
+what reaches the Model records BEFORE and AFTER for its metrics in its entry, live (`emon-live`) and replayed.
+
+**D195's stage order** (what `attempt()` becomes; the names are the kin entry points):
+
+    document pass (reads the input; no pixels; re-run on byte misses as today):
+      pd-open, pc-document                    text layer evidence
+      th-run                                  P7.0: epages, xt stage-1 features, visibility triage, tl-health
+      px-index-build, pm-run, tg-read, tg-join catalogue, tagged tree, trust
+      pa-run                                  P7.5: annotations (Watermark, Stamp)
+    page units, one per page, each its own plan/fulfil loop (P7.U), holding only its page's bitmaps:
+      rp-plan                                 P7.S (before it: scanned pages as P6.5, born-digital pages ask nothing)
+      nm-view, tr-page                        P6.3, P6.4 (only when the page has raster answers)
+      sc evidence + nm-feat-*                 OCR evidence (P6.5) and its raster features
+      al-page, hl-page, ar-page               P7.1, P7.2, P7.3 (+ P7.5/P7.6/P7.7 rule blocks)
+      rt-plan                                 P7.4 (targeted requests while rounds remain)
+      -> the page's PageLayer (fw fl fv fa cg fx hl fpa sl, SPEC 9.7)
+    document unit (no pixels):
+      pl-append (pages in order), ar-recur (P7.5 defence 2), then stage 3 on fw/fl/fpa:
+      fu-find, tb-build, hd-analyze, pa-build, fu-write, sm-write (P7.7), fz-write (provenance, ledger; replaces sc-tag)
+
+- [ ] **P7.U — Page units: one plan/fulfil loop per page, `BitmapSet`, an absent `Renderer` answers `unsupported`, five
+  rounds** (SPEC §2.2, §7.3, §12.1; D195, D196, D199, D207). **Wave 1, critical path.** Depends on M0.
+  *Brief*: restructure both Engines so that stages 1b, 1c and 2 run per page, with NO change to any Model.
+  1. **Split `attempt()`** (Rust) and `attempt` (Go) into the *document pass* (everything that reads the input: today's
+     `pd-open` … `tg-join`, re-run on byte misses as now, answering the evidence and catalogue arenas) and, for each page
+     in order, a *page unit* `pu-run` (`kin/pageunit.kin`, new) with its own plan/fulfil loop (`plan::run` per unit), its
+     own `answers`/`rq`, and its own `BitmapSet`; then the *document unit* (stage 3 on the appended PageLayers). A page
+     unit reads the document pass's arenas and never the input (a scanned page's `decode` names the input by index, as
+     today; the host reads it). The raster path (`attempt_raster`, `rs-unit`) takes the same shape: the document pass is
+     the header-only intake (D173), a page unit per frame.
+  2. **`pu-run` today** does what the page did before: a born-digital page asks nothing and its PageLayer is its text-layer
+     words and lines copied into `fw`/`fl` (P7.0's compaction, if merged, else a copy); a scanned PDF page or an image frame
+     asks `decode` then `ocr` (D184's requests, now per page) and its PageLayer is `sc-emit-lines`' lines (D186). `pl-append`
+     (in `kin/player.kin`, P7.0's; a stub here if P7.0 is not merged) concatenates pages, re-basing every index.
+  3. **Ids** (D207): page `p` (0-based) issues ids `(p + 1) * 256 + k`, `k` < 256 (`k` 1 render with-text, 2 render no-text,
+     3 render text-only, 4 decode, 16-127 OCR, 128-255 crops and later kinds); kin-made views are `KIN_VIEW_BASE` (2^24)
+     + `p * 256 + k`. Every committed transcript whose ids change is re-recorded (`test/ocr/scan/`, `test/ocr/h-keyword/`,
+     `test/render/`: say which, and that their dumps are otherwise unchanged).
+  4. **`BitmapSet`** (D196): a port tag in all four host trees (section `P7.U BitmapSet`): `bms-get set id` (a borrow of the
+     answer's `Bitmap`, 0×0 when absent), `bms-has set id`, `bms-put set id w h channels` (a host-allocated zeroed bitmap kin
+     fills; Rust `&Bitmap` over `Cell<u8>` as D092 found necessary). The Engine fills it from the unit's answers and drops it
+     when the unit ends, so peak memory is one page's bitmaps. P6.3's `bitmap-new` allocations in `nm-view` become
+     `bms-put` here if P6.3 has merged, else in P7.3.
+  5. **No `Renderer` → `unsupported`** (D199, revising D191 (5)): `render` and `crop` without a configured renderer are
+     answered `unsupported` and transcribed, as `ocr` is without an engine.
+  6. **`max-rounds` 5 per page unit** (D207); `fetch-rounds` stays the document pass's.
+  *Inputs/outputs*: the document pass's arenas in; per page `fw fl` (+ the evidence rows the page unit made) out; the
+  document unit is today's tail. *Files*: `host/rust/src/engine.rs`, `host/rust/src/plan.rs`, `host/go/engine.go`,
+  `host/go/port/plan.go`, the four port trees (section above), `kin/pageunit.kin` (+ `pageunittest.kin`), `kin/scan.kin`
+  (`sc-pdf-unit` split into a per-page call), `kin/rasterin.kin` (per frame), `kin/plan.kin` (`KIN_VIEW_BASE`, id helpers).
+  *Measured*: nothing may move: every Model and evidence dump of every gate byte-identical to before (`bb slice`, `bb ocr`
+  after re-recording, `bb image`, `bb render`, `bb identity`, `bb accuracy`); peak RSS of a conversion of
+  `corpus/formats/derived/scanned-receipts-6p.pdf` and of a 40-page scanned PDF from `corpus/scanned/` with live Tesseract,
+  before and after (after: one page's bitmaps, under 120 MB); `bb repeat` serial vs. pages in reverse order.
+  *Done when*: all of the above; a law that a page unit with no answers asks the same requests on every target; the
+  Go and Rust Engines' `RunStats` agree on rounds and requests per page.
+
+- [ ] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
+  D208). **Wave 1.** Depends on M0. Merge BEFORE P7.U (it adds one call to `attempt()`; P7.U rebases on it).
+  *Brief*: `kin/tlhealth.kin` (`emon.tlhealth`) and `kin/player.kin` (`emon.player`).
+  1. `player.kin`: the §9.7 layouts (`cg fw fl fv fa fx hl fpa sl`; `fw`/`fl`/`fpa` reuse the `words`/`lines`/`paths`
+     accessors of `emon.evidence`), builders, `pl-append` (concatenate a page's arenas onto the document's, re-basing
+     `etext` runs, word/line runs, `refs`, glyph runs are NOT re-based: they point into the document pass's `glyphs`),
+     `pl-check` (as `ev-check`: every run and reference), `pl-emit` (the dump's version "2" keys after the evidence's, table
+     driven like `ev-fd`). Laws: a hand-built two-page layer appends and checks; every cell is printed or named spare.
+  2. `th-epages`: an `epages` row for EVERY page (size as displayed, quarter turns, `has-text-layer`), not only scanned ones.
+  3. `ev-feat-text` (stage 1 `xt` columns 2-9, 16, 17, 19-21, 28, 29 of SPEC §8.4.5; 18 from the size inventory if P4.2's
+     `sf` is at hand, else -1): a `feats` row per visible or hidden text-layer word.
+  4. `th-health`: per (font, page) the pooled columns 2-5 → `hl` rows (subject font-page, components mapped, garbage,
+     overlap, gap) and a score (the weighted harmonic mean of D150's shape, weights first values), written into each word's
+     `xt` 13. Settings `tl-trusted` (700), `auto-health` (500).
+  5. `th-triage` (D208): a visible-text word whose glyphs failed a P3.6 check (`vis` ≠ 0) is taken out of the flow and
+     written to the ledger (`clipped`, `offpage`, `invisible` for `white-on-white`, `zero-size`, `transparent`,
+     `ocg-hidden`), EXCEPT a word `occluded` by an image placement covering at least half the page, which becomes a
+     `hidden-text` word (D155: an older producer's OCR layer under its scan). `hidden-text` words stay in the flow (P7.6
+     decides about them). The flow is COPIED into `fw`/`fl` without the triaged words (a line loses them and is re-measured
+     from its remaining words; an emptied line is dropped), and stage 3 reads `fw`/`fl` from now on: in `attempt()` of both
+     hosts, `th-run` after `pc-document`, and `fw`/`fl` passed where `wd`/`ln` were (`fu-find`, `tb-build`, `hd-analyze`,
+     `pa-build`); the ledger rows are written after `fu-write` by `th-write`.
+  *Files*: `kin/tlhealth.kin`, `kin/player.kin` (+ tests), the two Engines (the calls above only).
+  *Measured*: `bb accuracy` `emon` BEFORE and AFTER on every category (expected: unchanged on the Chrome documents; any
+  change is explained word by word in this entry); the P3.6 fixtures (`test/vis/`) give one ledger row per hidden glyph
+  class; the corpus by eye on the D157 files with white and occluded text (the brochure, the patched form): their hidden
+  text is in the ledger, not the body. `tl-health` on the 55 `pdf/` documents: every font ≥ `tl-trusted`; on P6.6's
+  `tl-broken-unmapped`: the broken font < 300 (`tl-broken-shift` is NOT caught here: its mapping is plausible; that is
+  what OCR agreement in P7.2 is for, and this entry says so).
+  *Done when*: the above, and `pl-check` answers 0 on the layers of every gate document.
+
+- [ ] **P7.1 — Alignment and correspondence groups** (SPEC §9.2 "As designed", D202). **Wave 2.** Depends on P7.0
+  (`player.kin`, `fw`); not on P7.U (it is tested through a probe).
+  *Brief*: `kin/align.kin` (`emon.align`), `al-page`: one page's candidates (the visible text-layer words of `words` with
+  their `vis` and `src`; `hidden-text` words; every `owords` run of the page; `tlines`) → `cg` rows with their `refs` runs,
+  similarities in both forms, the flags (text-only, OCR-only, split, merged), and `xt`/`xo` columns 24 and 25. The grid
+  index, the per-line dynamic program and its tie-breaks exactly as SPEC §9.2 says; settings `align-overlap` 500,
+  `align-angle` 300, `align-gap` 400. OCR words of several runs on the same page (round 3) align to the same groups (a group
+  holds every run's candidates).
+  **Fixtures**: (a) laws on hand-built heads: 1:1, a split (`Chapter 1` / `Chapter1`), a merge, a missing word each way,
+  a 30° line, a right-to-left line (logical order on both sides), two OCR runs over one line; (b) `test/fusion/align/`:
+  six documents of the fusion set (`h-numbered`, `columns-two`, `table-simple-ruled`, `watermark-draft`, `stamp-seal`,
+  `tl-broken-shift`) rendered at 300 dpi `with-text` by pdfium and OCR'd by Tesseract, recorded live by
+  `tools/fusion/record-align.clj` (the render and OCR drivers of P6.2/P6.5, no Engine), committed whole; `kin/alignprobe.kin`
+  builds the text layer from the PDF and the OCR evidence from the transcript (the `emon.scan` builders) and aligns; its
+  dump is held on Rust and Go (`bb align`, a gate).
+  *Measured*: **coverage** (visible text-layer words in a group with an OCR candidate) ≥ 0.99 on the five healthy
+  documents; **precision** (1:1 groups with case-folded similarity ≥ 800) ≥ 0.98; splits and merges counted; on
+  `tl-broken-shift` ≥ 90 % of the shifted font's words grouped (geometry) with similarity < 300; ≤ 10 ms a page (Rust).
+  *Files*: `kin/align.kin`, `kin/aligntest.kin`, `kin/alignprobe.kin`, `kin/scripts/align`, `tools/fusion/record-align.clj`,
+  `test/fusion/align/`.
+  *Done when*: the laws on four targets, `bb align` green on Rust and Go, the measured numbers in this entry.
+
+- [ ] **P7.2 — Health per source and region** (SPEC §9.3 "As designed", D203). **Wave 2.** Depends on P7.0; uses P7.1's
+  `cg` and P6.3's ink columns when present (laws build them by hand, so it can start with P7.1).
+  *Brief*: `kin/health.kin` (`emon.health`), `hl-page`: (1) the text layer per (font, page): P7.0's components plus the
+  **agreement rate** (groups with both candidates whose case-folded similarity ≥ `agree-sim` 900, over groups with both;
+  -1 with no OCR), and a document-wide pass `hl-doc` that marks a font unhealthy on every page when its agreement is under
+  `agree-min` (600) on every page that has ≥ `agree-words` (8) groups; (2) each OCR block (`oblocks` kind block): its words'
+  ink support (`xo` 10, 11, 12), plausibility (8), script consistency (9), body-ink share (13), artifact and seal overlap
+  (22, 23) pooled → a score; (3) `xt` 13 rewritten with the agreement-aware score. Every component a cell of the `hl` row.
+  *Files*: `kin/health.kin`, `kin/healthtest.kin`.
+  *Measured* (on `test/fusion/align/` through the probe, and live on the fusion set): every font of the healthy documents
+  ≥ `tl-trusted`; the shifted font of `tl-broken-shift` and the unmapped font of `tl-broken-unmapped` < 300 on every page;
+  the OCR blocks over the watermark, seal and texture areas of `scan-ovl` score below every body block of the same page on
+  ≥ 95 % of pages (live).
+  *Done when*: laws (a healthy font; a shifted font that agrees on nothing; a font that is bad on one page only and stays
+  healthy elsewhere; an OCR block over blank paper) on four targets and the numbers above in this entry.
+
+- [ ] **P7.3 — Arbitration, the PageLayer, and the stages wired into the page unit** (SPEC §9.4 with the born-digital
+  contract, §9.7; D014, D195, D201, D203). **Wave 3, critical path.** Depends on P7.U, P7.1, P7.2, P6.3, P6.4.
+  *Brief*:
+  1. `kin/fuserules.kin`: the `fr` rule table (`defdata`: number, block, winner, ledger reason, flags, up to six
+     `(column, comparison, setting)` predicates) with the block headers 100-199 (core), 200-299 (P7.5), 300-399 (P7.6),
+     400-499 (P7.7), 500-599 (graphics), the settings' defaults, and `fr-order`, the order in which blocks are tried for a
+     group: 400 (seal ownership), 200 (watermarks, backgrounds, ghosts), 300 (`hidden-text`), 100 (core); 500 runs on
+     graphics, not on groups. Rows 100-199 implement SPEC §9.4's table and the
+     born-digital contract: 101 one candidate (the identity: a sole text-layer candidate wins, a sole OCR candidate on a
+     page with no text layer wins), 110 healthy font wins (`tl-trusted`), 120 garbage glyphs + plausible OCR → OCR with
+     `text-layer-suspect`, 130 unhealthy font + plausible OCR → OCR with `text-layer-suspect`, 140 OCR-only admitted
+     (body ink, outside every visible text-layer box, plausible, not `in-figure` unless the image covers ≥ `scan-region`),
+     150 OCR-only in a figure → held with `in-figure` (not emitted), 160 two OCR runs → better (support and margins), 190
+     the default (the text layer if any, else OCR, `low-conf`). 501: a tracer rule no vector path explains (overlap of the
+     two boxes under 800) and not inside a glyph box joins `fpa` with flag `traced`.
+  2. `kin/arbiter.kin` (`emon.arbiter`), `ar-page`: per group the first rule whose predicates all hold; writes `fw` (the
+     winner's word, its text into `etext`, `src` the bitset of every source that had a candidate, the glyph run kept when
+     the text layer won), `fv` (group, winner, rule, confidence: 1000 for a text-layer win with agreement, 900 without OCR
+     witness, the scorecard-less first values for OCR, flags), `fx` (the rule's columns and the values read), `fa` (a
+     ledger row for a rule that sets one); lines `fl`: a text-layer line keeps its geometry; a line of OCR-won words is
+     measured by D186's measure (the `emon.scan` line-size function, made a library call); an OCR-only group joins the
+     text-layer line it lies on (baseline within 45 % of the size) or makes a new line.
+  3. **Wiring** in `pu-run`: when the page has raster answers, `nm-view` per raster (P6.3; kin-made views by `bms-put`),
+     `tr-page` on the `no-text` render or the decode (P6.4), OCR evidence and `nm-feat-*`, then `al-page`, `hl-page`,
+     `ar-page`; the hook comments `;; HOOK P7.4` … `;; HOOK P7.S` left in place. The document unit: `pl-append`, stage 3 on
+     `fw`/`fl`/`fpa` (`tb-build` reads `fpa`), and `fz-write` writes provenance from `fv` onto the Model's blocks and
+     inlines (`src`, `conf`, `ocr-only`, `text-layer-suspect`, `low-conf`) and the `fa` ledger rows; `sc-tag` retired
+     (its page mask is what `fz-write` computes per word). Born-digital pages are not yet OCR'd by default (P7.S); a hidden
+     test setting `ocr-born-digital` (off) makes the page unit ask what P7.S will ask (the `full` row of SPEC §8.3), so
+     this item can measure born-digital fusion before the switch.
+  4. Dump version "2" (`pl-emit` after `ev-emit`).
+  5. **Transcripts**: `test/fusion/replay/`: the fusion set's `pdf/` variants with `ocr-born-digital` on and its
+     `scan-color/` and `scan-ovl/` variants, recorded live on Rust with pdfium and Tesseract (`tools/fusion/record.clj`),
+     whole (every render and decode bitmap: kin reads pixels now, D196); replayed by `bb fusion-replay` on Rust and Go.
+     Budget ≤ 25 MB committed (measure the PNGs first; take first pages only where needed and list them; the maintainer's
+     open question on committed pixels may move this to a fetched archive).
+  *Files*: `kin/fuserules.kin`, `kin/arbiter.kin` (+ tests), `kin/pageunit.kin` (the stage calls), `kin/player.kin`
+  (`fv`/`fx` builders), `kin/scan.kin` (line measure as a library function; `sc-tag` removed), the two Engines (document
+  tail), `tools/fusion/record.clj`, `test/fusion/replay/`, `kin/scripts/fusion-replay`.
+  *Measured* (BEFORE = P7.0's main; AFTER = this): **G1, identity of one source**: with no engine, every gate's Model and
+  JSON byte-identical to BEFORE (the 55 `pdf/`, `pdf-tagged/`, `bb slice`, `bb ocr` replays): fusion over one candidate is
+  the identity. **Scans** (`emon-live`): `scan/all` CER ≤ 0.0878 (P6.5's) and heading F1 ≥ 0.70; `scan-color/all` and
+  `scan-ovl/all` recorded as their baseline. **Born-digital with `ocr-born-digital`** (`emon-live`, all 55 `pdf/` and the
+  new P6.6 documents): `pdf/all` CER ≤ `emon`'s (0.0097 at the time of writing; re-read the scoreboard) and no category
+  worse by more than 0.001; `tl-override` 0 on every document but `tl-broken-*`; `tl-broken-shift` and `tl-broken-unmapped`
+  CER ≤ 0.03; `outlined-heading` CER ≤ 0.01; `ghost-rate` ≤ 0.002 (P7.5 brings it down); `bb fusion-report` per-source win
+  rates and per-rule counts recorded in this entry. Fusion's kin time ≤ 30 ms a page (Rust).
+  *Done when*: all of the above, `bb fusion-replay` green on Rust and Go and in `bb gates`.
+
+- [ ] **P7.4 — Targeted re-OCR rounds** (SPEC §8.3 targeted passes, §7.3 kin-made views; D196, D207). **Wave 4.**
+  Depends on P7.3. Parallel with P7.5, P7.6, P7.7.
+  *Brief*: `kin/retarget.kin` (`emon.retarget`), `rt-plan` at `;; HOOK P7.4`, run when the page has its first-pass OCR
+  and rounds remain; it asks, in this order and within `rt-max` (24) requests a page: (1) `op-line`, `psm` 7, on the
+  `with-text` render or decode around each line of a group that P7.3 decided with `low-conf` or `text-layer-suspect`
+  (≤ `rt-lines` 16); (2) `op-cell`, `psm` 7, per table cell (from `tb`'s geometry or `fpa` lattices) when a first-pass OCR
+  line crosses a cell border; (3) `op-text-only`: OCR of the `text-only` render (layer 2, a new render request in the same
+  round) of a page whose text layer has an unhealthy font: the broken text re-read with no background; (4) `op-body-ink`:
+  OCR of a **kin-made view** (D196: the render or decode with every non-body ink layer painted the paper colour, made by
+  `bitmap-lut-into` into `bms-put`) when a `light`/`colour`/`background` layer holds ≥ `rt-layer-min` (5 %) of the page's ink
+  and first-pass OCR words overlap it; (5) `op-re-rotated`: OCR of a quarter-turned kin-made view (`bitmap-quarter-into`)
+  when P6.3/P6.4's orientation is not 0. `kin/plan.kin` gains `rq-ocr-view` (the bitmap id ≥ `KIN_VIEW_BASE` followed by
+  its `bitmap-hash` in two cells); the hosts fulfil it from the `BitmapSet`'s kin-made entry, and the transcript keys it by
+  the record (the hash) and never stores the pixels. The new runs join alignment (P7.1 groups all runs) and rule 160.
+  *Files*: `kin/retarget.kin` (+ test), `kin/plan.kin` (`rq-ocr-view`), `host/rust/src/plan.rs`, `host/go/port/plan.go`
+  (fulfil a kin view), the hook line, re-recorded `test/fusion/replay/`.
+  *Measured* (`emon-live` and replay): `scan/all`, `scan-color/all`, `scan-ovl/all` CER at least 10 % lower (relative)
+  than after P7.3 + P7.5; `watermark-leak` on `scan-ovl` lower than P7.5's; the turned pages read as well as their
+  upright twins (CER within 0.005); targeted requests a page median ≤ 12, OCR time ≤ 1.5× the first pass
+  (`bb fusion-bench`); a replay of a kin-made-view request with one changed pixel is `transcript-miss` (law).
+  *Done when*: the above in this entry; rounds never exceed 5.
+
+- [ ] **P7.5 — Watermarks, backgrounds, bleed-through, ghosts: the six defences** (SPEC §9.5 "Against what is built",
+  D015, D204). **Wave 4, critical path.** Depends on P7.3 and P6.4.
+  *Brief*: `kin/artifact.kin` (`emon.artifact`) and rows 200-299 of `fr`: (1) the PDF says so: `mk-artifact-of`
+  watermark/background marks, `ocg` spans off by default or `/AS`-hidden or named like a watermark (`watermark`,
+  `draft`, `wasserzeichen`, … a short committed list, case-folded), alpha < `wm-alpha` (500) on text or on images covering
+  ≥ `wm-cover` (40 %) of the page, Watermark and Stamp annotations (`emon.pdfannot`'s `pa-run`, wired into the document
+  pass by this item: it was never called), the tagged tree's verified Watermark artifacts weighed by `tg-trust`; the
+  classified text-layer words AND the OCR words aligned only to them go to `fa` as `watermark` (or `background`); (2)
+  recurrence: `ar-recur` in the document unit, after `pl-append` and before `fu-find`: OCR-only groups with the same
+  case-folded text within `wm-recur-pos` (2 % of the page) of the same place on ≥ `wm-recur-pages` (60 %, at least 3) of
+  the pages, outside the furniture bands, go to the ledger as `watermark` on every page, and the furniture stage's
+  diagonal rule stays as it is; (3) ink layers: column 13 < `wm-body-share` (300) with its ink on a `light`/`colour` layer,
+  and (with P7.4) absence from the `op-body-ink` run; (4) geometry: column 19 > `wm-angle` (1500 centi-degrees) with a
+  `tlines` row on a non-body layer, or column 18 > `wm-size` (2500); (5) seal overlap is P7.7's block (400s), which `fr-order` tries before this one; (6) plausibility and ink: `ocr-ghost` for an OCR-only word
+  with column 10 < `ghost-ink` (50) or (11 high and 10 low), or with column 8 > `ghost-implausible` and column 5 <
+  `ghost-margin`, and no text-layer support; bleed-through: an OCR-only word on a `light` layer whose components are
+  mirrored (the tracer's `tlines` direction is reversed) or whose engine confidence and margins are low → `bleed-through`.
+  **Defences 3, 4 and 6 judge OCR-only groups only**: a visible text-layer word of a healthy font is removed only by
+  defence 1 (the PDF says so), defence 2 (recurrence) or the furniture stage, never by its colour, angle or ink (D201).
+  *Files*: `kin/artifact.kin` (+ test), `kin/fuserules.kin` rows 200-299, the hook, the Engines'
+  document pass (`pa-run`).
+  *Measured* (`emon-live`, replay, and the live sets): `watermark-leak` 0 on every `pdf/` document including `wm-*`;
+  ≤ 0.002 on `scan/` and `scan-color/`, ≤ 0.005 on `scan-ovl/`; `ghost-rate` ≤ 0.002 on every variant; SROIE
+  `*.watermark.png`: no watermark word in the body; `bow-r` on `pdf/all` and `scan/all` not lower than P7.3's (no body word
+  lost: a removed word the gold has is listed in this entry); mapo80 `stamp-ghost` recorded (first target ≤ 0.2, P7.7 lowers
+  it); the per-defence ledger counts from `bb fusion-report`.
+  *Done when*: the above; every ledger row of the fusion set names its defence in the dump.
+
+- [ ] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
+  *Brief*: `kin/hidden.kin` and rows 300-399: `hidden-text` words (and P7.0's `occluded`-under-a-scan words) are
+  candidates of their groups; (301) with no OCR on the page, `hidden-text` is the text, `src` hidden-text, confidence 600 (as
+  before P7.0, now explicit); (310) hidden and OCR agree (case-folded similarity ≥ `agree-sim`) → the hidden text's code
+  points (it may come from a better engine), `src` both, confidence up; (320) they disagree → this run's OCR, unless the OCR
+  word's margins (column 5) are under `hid-margin` and the hidden word's box has better kin-ink agreement (its glyph
+  cells' ink coverage on the decode against the OCR word's), then the hidden word, flagged `low-conf`; (330) a hidden word
+  with no OCR counterpart and ink under it → kept, `low-conf`; without ink → ledger `invisible`.
+  *Files*: `kin/hidden.kin` (+ test), rows 300-399, the hook.
+  *Measured*: `hidden-older-ocr` (P6.6) CER ≤ 0.02 and below both the hidden-only and the OCR-only CER; the SROIE
+  `*.ocr-layer.pdf` live: CER against SROIE's gold ≤ the lower of the two sources'; the D157 corpus files with Tr 3 layers by
+  eye.
+  *Done when*: the above in this entry.
+
+- [ ] **P7.7 — Seal, stamp and signature placeholders before P8** (SPEC §9.5 defence 5, §10.7; D016, D205). **Wave 4.**
+  Depends on P7.3 and P6.4. P8.2/P8.3 later fill name, date and arc text; this item puts the node where it belongs and
+  keeps its text out of the body.
+  *Brief*: `kin/sealmark.kin` (`emon.sealmark`) and rows 400-499. Candidates (`sl`): a P6.4 `ring`, `circle` or
+  `ellipse` (radius ≥ `seal-min` 8 mm) on any layer, a `rect` with a border ≥ 1.5 pt on a `colour` layer, a cluster of
+  `colour`-layer components ≥ `stamp-min-ink` (kind `seal` or `stamp`); a **signature**: stroke-like components (median
+  stroke width ≤ 1.2 pt, run length variance high, aspect and density in the named bounds, not text-like by the tracer, OCR
+  plausibility low or no OCR) within 3 line heights of a cue (a text line whose words include `signature`, `signed`,
+  `sign here`, `by:`, case-folded, or a rule with a short label under it). Rows 4xx: an OCR word whose centre is inside a
+  candidate becomes the candidate's text (`refs` run), never body; a text-layer word inside a seal candidate whose glyphs
+  are on its arc or ring (rotation varying along the ring: the `stamp-seal` arc text) likewise; ordinary body text
+  under a translucent stamp stays body (its glyphs are visible and its font healthy: rule 110 has already won it). The
+  document unit writes a `seal` node per candidate (`subkind` seal, stamp or signature; `color` from the ink centroid by a
+  12-hue name table; `text` the words in reading order, flagged `low-conf`) inserted in reading order at its top by the
+  P4.5 copying mechanism (`kin/restruct.kin`'s, not by changing `pa-build`'s signature); `name`/`date` are P8.2's.
+  *Files*: `kin/sealmark.kin` (+ test), rows 400-499, the hook, `sm-write` in the document unit.
+  *Measured*: `block-seal` P/R ≥ 0.9 on `stamp-seal`, `seal-over-text`, `sig-over-name` (`pdf/` and `scan-ovl/`); `seal-leak`
+  0 on `pdf/`, ≤ 0.005 on scans; `pdf/seals` CER ≤ 0.10 (0.318 now); seal `color` accuracy ≥ 0.9; mapo80 live: candidate
+  recall ≥ P6.4's baseline and `stamp-ghost` ≤ 0.1.
+  *Done when*: the above in this entry.
+
+- [ ] **P7.S — The switch: born-digital pages OCR'd under `always`; the `bb fusion` gate; the cost** (SPEC §8.3 first
+  pass, §9.8, §12.3; D038, D185 (3) superseded, D200, D201, D210). **Wave 5, the end of the critical path.** Depends on
+  P7.3, P7.5, P6.6 (P7.4, P7.6, P7.7 are not required for the switch and land when ready).
+  *Brief*:
+  1. `kin/rasterplan.kin` (`emon.rasterplan`), `rp-plan` at `;; HOOK P7.S`: the first-pass requests of SPEC §8.3's table
+     for each page kind, policy and scope: `always` + `full` (the default) asks `with-text` and `no-text` renders at 300
+     dpi in round 1 and OCR of the whole `with-text` render in round 2 (languages: the locale's, else the text layer's
+     scripts through `emon.mscript` mapped to the installed models by the adapter, else every model); `always` + `witness`
+     asks the `no-text` OCR and the witness lines; `auto` asks only when `tl-health` < `auto-health`, images cover ≥
+     `auto-image` (30 %), or the page has `hidden-text`; `never` nothing. The tracer reads the `no-text` render. The
+     hidden test setting of P7.3 is removed. `Options::ocr_scope` / `Options.OcrScope` (`full` | `witness`) in both
+     Engines, `--ocr-scope=` on both drivers, `settings.ocr-scope` in the Model when not `full` (schema additive, D055).
+  2. **The gate `bb fusion`** (`kin/scripts/fusion`, joins `bb gates` after `ocr`): replays `test/fusion/replay/`
+     (re-recorded with the switch on) on Rust and Go, requires the identical bundle, `transcript-miss` for a changed request,
+     and the ratchet of a new predictor `emon-fusion` over those documents; plus **the born-digital contract per document**:
+     each healthy `pdf/` document's CER under `emon-fusion` ≤ its `emon` CER + 0.0005, `tl-override` = 0. `bb ink` and
+     `bb trace` (P6.3, P6.4) switch to the transcripts' render bitmaps and join the gates with their targets as ratchets.
+  3. **`bb fusion-live`** (not a gate): `emon-live` with the switch on over every `pdf/`, `pdf-tagged/`, `scan/`,
+     `scan-color/`, `scan-ovl/` document and the live sets; recorded in the scoreboard (`emon-live`).
+  4. **`bb fusion-bench`** (not a gate): per stage wall time and peak memory a page (`RunStats` gains per-kind fulfil time
+     in both hosts) on the fusion set, `full` against `witness`, and the accuracy of both: the table goes in this entry and
+     the maintainer decides the default scope (D200).
+  *Files*: `kin/rasterplan.kin` (+ test), the hook, the Engines' options, `kin/scripts/fusion`, `kin/scripts/gates`,
+  `tools/fusion/{live,bench}.clj`, `tools/accuracy/predict-emon-fusion.sh`, `test/fusion/replay/` (re-recorded),
+  `test/scoreboard.edn` (by `--update`), `schema/emon-1.json` (additive).
+  *Measured — the born-digital non-regression contract (D201)*: under `emon-live` with the switch on, `pdf/all` CER ≤
+  `emon`'s `pdf/all` CER, every `pdf/` category within 0.001 of `emon`'s, `pdf-tagged/all` likewise; `tl-override` 0 on
+  every document but `tl-broken-*`; `ghost-rate` ≤ 0.001 and `watermark-leak` 0 on `pdf/`; the gains recorded:
+  `tl-broken-*` and `outlined-heading` (P7.3's numbers held), `pdf/figures` and `pdf/seals`. *The cost*: SPEC §12.3's
+  budget table filled in; `witness` ≤ 30 % of `full`'s OCR time on the median born-digital page.
+  *Done when*: `bb fusion` green in `bb gates`; the contract above holds; D200's comparison table is in this entry.
 
 ## Phase 8 — Figures, seals, signatures
 
 - [ ] P8.1 — Figure classification and placeholders (SPEC §10.6, D020).
 - [ ] P8.2 — Seals and stamps: detection, polar unwarp, targeted OCR, name
-  and date extraction (D016).
+  and date extraction (D016). Refines P7.7's `seal` nodes (D205): the polar strip is a kin-made view OCR'd as
+  `op-seal-strip` through D196's mechanism.
 - [ ] P8.3 — Handwritten signatures and initials; digital signatures (from
-  P3.8) into `seal` nodes.
+  P3.8) into `seal` nodes. Refines P7.7's signature candidates (D205).
 - [ ] P8.4 — Logos, including recurrence across pages (and their removal from
   furniture templates).
 - [ ] **P8.5 — Region assets at `figures`: cropped and rendered** (D117, SPEC
@@ -5961,6 +6428,213 @@ page from the Engine (it would hold the open paragraph across calls: the paragra
 **Held to**: `table-multipage-thead`, `-no-thead`, `-nohead-repeat` (TEDS-lite 1.0, `table-continued-acc` 1.0) and `table-consecutive-distinct` (two tables on consecutive pages that must stay two).
 - [ ] **Signed off** (maintainer)
 
+### D195 — Fusion is a page unit that answers a PageLayer in the text layer's own word and line layouts; stage 3 does not change; fusion over one source is the identity (P7 plan; SPEC 2.2, 9.7, 12.1; D014, D022, D186)
+**Decision**: (1) `attempt()` becomes three parts in both Engines: the **document pass** (everything that reads the input:
+the text layer, P7.0's triage and health, the catalogue, the tagged tree, the annotations), a **page unit** per page
+(`pu-run`, its own plan/fulfil loop and its own bitmaps: render or decode, normalization, tracer, OCR evidence,
+alignment, health, arbitration, targeted rounds) and the **document unit** (stage 3). The stage order is the one written at
+the head of Phase 7. (2) The PageLayer's words and lines are `fw` and `fl`, **with the layouts of `words` and `lines`**;
+stage 3 (furniture, tables, headings, paragraphs and columns) is handed `fw`/`fl` (and the fused graphics `fpa`, with the
+layout of `paths`) where it was handed `wd`/`ln`/`pa`, and no stage 3 signature changes. (3) With one source a page's
+PageLayer is its words (the text layer's after triage, or the OCR lines D186 measures), so a run with no engine gives every
+gate the Model it gave before (a law and gate G1 of P7.3). (4) OCR words stay in the OCR arenas; the pipeline's arenas no
+longer receive them directly (P6.5's `sc-emit-lines` appended them to `wd`/`ln`: that becomes the one-source path of the
+arbiter, and `sc-tag`'s per-page mask becomes per-word provenance from `fv`).
+**Why**: SPEC 12.1 already says stage 1 and 2 are per page; the measured cost of a 300-dpi RGB render is 25 MB, two a
+page, and a whole-document unit would hold every page's bitmaps at once and recompute every page's raster work in every
+round. Writing the PageLayer in the existing layouts is what lets P4/P5's stages, which took a phase to tune, run on fused
+text unchanged, and it is the seam P6.5 already proved (an OCR page through the born-digital pipeline).
+**Alternatives**: one unit per document (memory above; raster work repeated per round); a new PageLayer word layout and
+an adapter in every stage 3 module (every module touched for nothing); fusion after stage 3 (the structure would be built
+on unfused text).
+- [ ] **Signed off** (maintainer)
+
+### D196 — Pixels reach kin through a `BitmapSet`; a transcript carries every bitmap kin reads; a kin-made view is OCR'd by naming it and its hash (P7.U, P7.4; SPEC 7.3; D008, D089, D092, D117, D187)
+**Decision**: (1) A page unit gets its answered bitmaps as a `BitmapSet` port (`bms-get`, `bms-has`, `bms-put`), declared
+in all four host trees; kin allocates derived views with `bms-put` at ids ≥ `KIN_VIEW_BASE` (2^24). (2) From P6.3 on kin
+reads pixels, so **a transcript must carry every render and decode bitmap a unit reads**; D187's slim transcripts replay
+only units that read none (there will be none with a raster), and the committed scan transcripts are re-recorded whole.
+The engine's thresholded image is carried when recorded (it is `xo` 11 and 12's input). (3) An `ocr` request may name a
+kin-made view (the body-ink layer, a quarter-turned page, later a polar seal strip): its record carries the view's
+FNV-1a-64 pixel hash (`bitmap-hash`, a bulk form), so the transcript is keyed by what was asked, a changed view is a
+`transcript-miss`, and the view's pixels are never stored (they are a function of transcribed answers), D117's payload
+rule for `decode-img` applied to bitmaps.
+**Why**: kin cannot see an answer's pixels today (the Engine never passes them), the tracer and the ink features must,
+and SPEC 9.5's body-ink pass and P8.2's polar strips need the engine to read pixels kin made. Hashing rather than storing
+keeps transcripts the size of what the hosts answered.
+**Alternatives**: a host-side `derive` request (the host would implement ink layers four times, against D092); storing
+kin-made bitmaps in transcripts (larger, and redundant); keeping slim transcripts by making kin's raster stages optional
+(then the gates would not test them).
+- [ ] **Signed off** (maintainer)
+
+### D197 — Normalization as designed: three bulk forms and a hash, ink layers on a 4096-bin histogram, banded Sauvola, deskew only of decodes (P6.3; SPEC 8.2; D092, D093)
+**Decision**: as SPEC 8.2's "As designed" list: `bitmap-gray-into`, `bitmap-hist-rgb`, `bitmap-lut-into`, `bitmap-hash` and
+`bitmap-quarter-into` are the new bulk forms (each a pure whole-page map or reduce with a kin reference held equal by law,
+declared in all four hosts); ink layers are clusters of the 4096 colour bins in an integer opponent space, at most 8, roles
+guessed by named thresholds; masks are one LUT pass each; Sauvola runs over a band of `2r + 2` rows, equal by law to P2.7's
+whole-page `ras-sauvola`; deskew is measured on decode views only (renders are unskewed); kin never resamples for analysis.
+The purity of the layers is measured against the text layer's own truth on renders (`bb ink`).
+**Why**: D092 measured that per-pixel kin over `Cells` is within 2× except on pure streaming passes, flagged RGB-to-gray and
+ink masks as unmeasured, and found the 70 MB of whole-page integral images to be the real cost; a histogram is how
+clustering stays independent of the page size; born-digital renders give a free ground truth for ink layers.
+**Alternatives**: k-means over pixels in kin (seconds a page, and float-free k-means still iterates over 8.7 M pixels);
+clustering in the host (four implementations of a heuristic); whole-page integrals (memory); a colour model with ICC
+(no colour management in kin; the renders are sRGB-ish already).
+- [ ] **Signed off** (maintainer)
+
+### D198 — The tracer as designed: union-find over row runs, stroke width from runs, contours on runs, born-digital pages traced on the `no-text` render (P6.4; SPEC 8.2, 8.4.4; D092)
+**Decision**: as P6.4's brief: components from runs (memory proportional to ink, no per-pixel label image), stroke width as
+the median run length inside a component (measured against a distance transform on the fixtures, its error recorded),
+contours traced on a component-local bitmap, integer Douglas-Peucker, rules from merged runs plus integer voting, primitive
+fits in integers, `tlines` per ink layer. On a born-digital page only the `no-text` render is traced.
+**Why**: D092's point 4 (35 MB of labels a page) and point 3 (work proportional to ink); the text layer already gives exact
+glyph geometry, and what the tracer must add on a born-digital page is everything that is not text in the text layer.
+**Alternatives**: per-pixel labels (memory); a distance transform per component (cost, and the run median is good enough
+for "thin" against "thick" and bold against regular: to be confirmed by the measurement); tracing the `with-text` render
+(duplicates the text layer and mixes glyph ink into rule detection).
+- [ ] **Signed off** (maintainer)
+
+### D199 — An Engine with no `Renderer` answers `render` and `crop` `unsupported` (revises D191 (5)); a born-digital page's rasters are a `with-text` and a `no-text` render at 300 dpi; OCR languages from the text layer's scripts (P7.U, P7.S; SPEC 7.2, 8.3; D184, D188, D191, D193)
+**Decision**: (1) As D184 made a missing `Ocr` an answer, a missing `Renderer` is an `unsupported` answer, transcribed: a
+gate with no engines then converts every page as fusion over the sources it has. (2) Under `always` a born-digital page asks
+round 1 `render` layer 0 and layer 1 at 300 dpi; the watermark layers are never asked of pdfium (D193 found it cannot make
+them); `text-only` (layer 2) is asked only by the targeted round for an unhealthy font (P7.4). (3) On a born-digital page the
+OCR request's languages are the locale's, else the models of the text layer's scripts, else every model (D188's default).
+**Why**: D191's `fulfil-failed` was right while nothing asked for a render without wanting one; once every born-digital page
+asks under `always`, a missing renderer must degrade, not fail. Two renders because the tracer wants the page without text
+and OCR wants it with; the text layer's scripts are an exact script detection that costs nothing.
+**Alternatives**: one `with-text` render and kin masking the glyph boxes (anti-aliasing and overlapping paint make that
+inexact); OSD first, then languages (an engine pass more, on a noisier answer).
+- [ ] **Signed off** (maintainer)
+
+### D200 — The OCR policy once fusion exists: `always` means every page has an OCR witness; `ocr-scope` `full` (default) or `witness`; `auto` defined; D185 (3) superseded at P7.S (SPEC 8.3, 9.8; D038, D185)
+**Decision**: (1) At P7.S, born-digital pages are OCR'd under `always` (D185 (3) said they would be once fusion existed, and
+it now does). (2) `always`'s promise is coverage: every region of ink the text layer does not explain is read by OCR, and
+every (font, page) of the text layer is checked against OCR. (3) `ocr-scope: full` (default) reads every page's whole
+`with-text` render; `ocr-scope: witness` reads the `no-text` render whole plus three witness lines per (font, page),
+escalating a font whose witnesses disagree to all its lines in the targeted round. (4) The default stays `full` until
+`bb fusion-bench` shows `witness` equal on every accuracy metric of the fusion set; **the maintainer decides the flip**. (5)
+`auto` OCRs a born-digital page only when its health without OCR is under `auto-health`, images cover ≥ `auto-image` of it,
+or it has `hidden-text`; `never` asks nothing. (6) The lossless savings of SPEC 9.8 are taken in every scope.
+**Why**: D038 chose accuracy over cost and said why (broken encodings, text in images, outlined text, an agreement rate on
+every page); `witness` keeps all four reasons (the `no-text` render holds images and outlines, the witness lines give the
+agreement rate, and a broken font is escalated) at a fraction of the OCR time, but "keeps" is a claim to measure, not to
+assume.
+**Alternatives**: `witness` as the default now (unmeasured); sampling pages rather than lines (a broken font on an unsampled
+page is missed); OCR only text-free regions (no agreement rate, so a plausible wrong ToUnicode is never caught).
+- [ ] **Signed off** (maintainer)
+
+### D201 — The born-digital contract: a healthy text layer is untouchable; three measured guarantees (P7.3, P7.5, P7.S; SPEC 9.4; D014, D038, D145)
+**Decision**: (1) Arbitration never replaces a visible text-layer word of a font whose health is ≥ `tl-trusted`; only the
+PDF's own say, recurrence (and the furniture stage) and a seal's arc text remove such a word from the body; colour, angle
+and ink judge OCR-only text alone. (2) OCR-only text enters the body only on the body ink layer, outside every visible
+text-layer box, plausible, and not inside a picture smaller than half the page (that text is the figure's, held for P8.1).
+(3) Three guarantees, each a measurement: **G1** with no engine every gate's Model is byte-identical to before fusion; **G2**
+`bb fusion` (a gate) holds each healthy born-digital document of the fusion set to its `emon` CER + 0.0005 and
+`tl-override` 0; **G3** `bb fusion-live` (before the switch merges) holds `pdf/all` CER ≤ `emon`'s and every category within
+0.001.
+**Why**: born-digital text is emon's most accurate output (CER under 1 % on the synthetic set) and the bulk of a crawler's
+input; OCR on those pages earns its cost only by catching what is broken, and a rule that let a plausible OCR misreading
+beat a healthy font would trade a 0.01 CER for a worse one.
+**Alternatives**: let OCR win on disagreement when its confidence is high (D130: Tesseract's confidence is not a
+probability); per-character fusion of the two (no case where the text layer of a healthy font is wrong per character
+and right per word has been seen).
+- [ ] **Signed off** (maintainer)
+
+### D202 — Alignment: a grid, overlap and angle, a per-line dynamic program with 1:1, 1:2, 2:1 and gaps, two similarities (P7.1; SPEC 9.2)
+**Decision**: as SPEC 9.2's "As designed". Groups hold every OCR run's candidates; similarity is kept with case and
+case-folded over letters, both in the group.
+**Why**: the shared heads (D096) make one alignment for every source; 1:2 and 2:1 cover the splits and merges the P2.6 spike
+saw (`Chapter 1` / `Chapter1`); the case-folded letters-only similarity is what separates a broken mapping (low on it) from
+OCR's own case and punctuation errors (high on it).
+**Alternatives**: character-level alignment of whole lines (costlier, and fusion decides per word); Hungarian matching on
+overlap alone (ignores order along the line).
+- [ ] **Signed off** (maintainer)
+
+### D203 — Health and arbitration are data: `hl` rows with their components, the `fr` table in blocks, `fv`/`fx`/`fa` explain every decision in dump version "2" (P7.0, P7.2, P7.3; SPEC 9.3, 9.4, 9.7)
+**Decision**: health per (font, page) is computed twice (without OCR in the document pass, with agreement in the page unit);
+the rule table is `defdata` in `kin/fuserules.kin` in numbered blocks owned by one item each and tried in the order 400,
+200, 300, 100; every word's winner, rule, confidence and the columns its rule read are in `fv` and `fx`, every removal in
+`fa`, and the evidence dump becomes version "2" with the PageLayer arenas after the evidence's.
+**Why**: SPEC 9.4's "every decision can be explained from the evidence dump"; blocks let P7.5, P7.6 and P7.7 be written at
+once without renumbering each other; the order puts ownership (seal, artifact) before reading quality.
+**Alternatives**: rules as kin code (no table to diff, no explanation for free); one ordered list (parallel items would
+collide on numbers).
+- [ ] **Signed off** (maintainer)
+
+### D204 — The six defences on what is built: the PDF's say from marks, OCGs, alpha, annotations and the tree, never from a masked render; OCR words aligned to a watermark go with it; recurrence is a document pass (P7.5; SPEC 9.5; D015, D149, D154, D173-D177, D193)
+**Decision**: as SPEC 9.5's "Against what is built". pdfium cannot make the watermark layers (D193), so defence 1 classifies
+from the text layer and the annotations, and takes the OCR words aligned only to classified words with them; `pa-run`
+(annotations, P3.8) is wired into the document pass, where it had never been called; recurrence of OCR-only text is a
+document-unit pass before the furniture stage, beside the furniture stage's diagonal rule; defences 3, 4 and 6 judge
+OCR-only groups only (D201).
+**Why**: the strongest signal is the file's own and costs nothing; the next strongest is that a watermark repeats; colour,
+angle and plausibility are last because they are what a real body word can also have.
+**Alternatives**: waiting for a renderer that can mask marks (pdfium cannot, and MuPDF is not bound); a mark-key heuristic in
+the renderer (drops headers, D193).
+- [ ] **Signed off** (maintainer)
+
+### D205 — Seal, stamp and signature placeholders come with fusion (P7.7), before P8: candidates from the tracer, text inside kept out of the body, `seal` nodes with subkind, colour and raw text (SPEC 10.7; D016)
+**Decision**: P7.7 makes `seal` nodes (seal, stamp, signature) from P6.4's primitives and colour components and from
+stroke-like components near signature cues, attaches the OCR words (and a seal's arc text from the text layer) inside them
+as the node's `text` with `low-conf`, and inserts the node in reading order without changing `pa-build`. P8.2 (polar unwarp,
+name, date) and P8.3 (signature association, digital signatures) refine the same nodes.
+**Why**: the maintainer's strategy names placeholders for seals and signatures as part of fusion, and defence 5 needs the
+regions anyway; a seal's arc text in the body is today `pdf/seals`' CER of 0.318.
+**Alternatives**: leaving seals to P8 (their text leaks into the body until then); detecting seals only on colour (a black
+notary seal is common).
+- [ ] **Signed off** (maintainer)
+
+### D206 — The scorer's fusion metrics: `ghost-rate`, `seal-leak`, `src-ocr-share`, `tl-override`; per-source win rates recorded, not ratcheted (P6.6; SPEC 14.2)
+**Decision**: the four metrics of SPEC 14.2 join the scorer, lower is better, in the ratchet's direction table; `bb
+fusion-report` reads the dump's `fv`/`fx`/`fa` for win rates, per-rule and per-defence counts, which are recorded in DEVLOG
+entries and never gated (no direction is better); `stamp-ghost` on mapo80 is computed live from the dump.
+**Why**: `watermark-leak` measures one artifact kind; the strategy's claims (ghosts dropped, seals out of the body, the
+text layer kept where reliable) each need a number, and a win rate is a description, not a quality.
+**Alternatives**: win rates as ratcheted metrics (a better fusion can lower the text layer's win rate legitimately).
+- [ ] **Signed off** (maintainer)
+
+### D207 — Ids per page unit, `KIN_VIEW_BASE`, and five rounds a page unit (P7.U; SPEC 7.3; D184)
+**Decision**: page `p` asks ids `(p + 1) * 256 + k` (render with-text 1, no-text 2, text-only 3, decode 4, OCR 16-127,
+crops and later kinds 128-255); kin-made views are `2^24 + p * 256 + k`; `max-rounds` is 5 per page unit (render or decode;
+first OCR pass; targeted requests including a `text-only` render; their OCR; one spare); `fetch-rounds` stays the document
+pass's. D184's ids are replaced and its transcripts re-recorded.
+**Why**: per-page id ranges make a page unit's requests independent of how many pages precede it in a round, and leave room
+for every request kind planned; the round count follows from the plan (a `text-only` render and its OCR are two rounds).
+**Alternatives**: keeping D184's `2i + 1` scheme (no room for more than two requests a page).
+- [ ] **Signed off** (maintainer)
+
+### D208 — Visibility triage: a word that failed a P3.6 check leaves the flow for the ledger, before stage 3, with or without OCR; a word occluded by a page-sized image is a hidden OCR layer (P7.0; SPEC 8.1, 9.4; D155, D157)
+**Decision**: as P7.0's brief: `vis` ≠ 0 → ledger (`clipped`, `offpage`, `invisible`), except `occluded` by an image covering
+half the page or more, which is `hidden-text`. Render modes 3 and 7 stay in the flow as `hidden-text` (P7.6 decides). The
+flow is copied into `fw`/`fl`, which stage 3 reads from P7.0 on.
+**Why**: SPEC 8.1 always said invisible text goes to the ledger, P3.6 computes it, and no stage reads it (white-on-white and
+clipped text reach the body today); D157 measured that the classes are what a renderer would show.
+**Alternatives**: waiting for P7.3 (the change is independent of OCR and measurable alone); dropping `hidden-text` too (a
+searchable scan would lose its only text before OCR).
+- [ ] **Signed off** (maintainer)
+
+### D209 — The fusion corpus: colour and overlay scans of a fusion set, new watermark/seal/signature/broken-encoding documents; mapo80 measured live only (P6.6; SPEC 14.3)
+**Decision**: as P6.6's brief. The fusion set is about 16 documents; `scan-color/` (200 dpi RGB) and `scan-ovl/` (generated
+watermarks, seals, signatures, bleed-through, turned pages) exist only for it; the new committed files stay under 12 MB.
+The six seals are generated by us; nothing from mapo80 (an aggregate of unverified licences, with research-only `neg_*`
+images) is committed.
+**Why**: the 150-dpi gray `scan/` variants cannot test colour ink layers, and the synthetic set had one watermark and one
+non-overlapping seal; truth stays known because every overlay is ours.
+**Alternatives**: colour variants of all 55 (about 50 MB); pasting mapo80 stamps into fixtures (licence).
+- [ ] **Signed off** (maintainer)
+
+### D210 — The page budget with fusion, and where cost is cut without breaking `always` (P7.S; SPEC 9.8, 12.3)
+**Decision**: SPEC 12.3's table is the budget (render ≤ 0.3 s, normalization ≤ 0.12 s, tracer ≤ 0.15 s, fusion ≤ 0.03 s a page
+on Rust; Go within 2× on kin stages; `witness` OCR ≤ 30 % of `full`; a page unit ≤ 120 MB), measured by `bb fusion-bench`,
+not gated; the lossless savings of SPEC 9.8 are design rules (first pass planned without pixels, deskew only of decodes,
+tracer on `no-text`, histogram clustering, OCR languages from the text layer, bitmaps freed per page, page units
+concurrent in the host).
+**Why**: OCR is seconds a page and everything else is a tenth of that; the budget says where the tenth must stay, so a slow
+kin stage is noticed, and the scope switch is the one lever that changes the seconds.
+**Alternatives**: a gate on time (machine-dependent, as D194 found for pixels).
+- [ ] **Signed off** (maintainer)
+
 ## Found in kin, not ours to fix here
 
 **Audit (2026-09-30, coordinator; checked against kin's source and nome):**
@@ -6078,6 +6752,16 @@ them; offer them upstream when they have proved general.
 - [x] **Inputs**: Blob-like byte sources with async slice reads; lazy range
   reading required; PDFs and images may be mixed in one conversion (D058
   revised).
+- [?] **Default `ocr-scope`** (D200): born-digital pages under `always` read the whole page (`full`, the default as
+  planned) or the `no-text` render plus witness lines (`witness`, a fraction of the OCR time). P7.S measures both on the
+  fusion set; the maintainer decides the default from that table. Does not block P7.S.
+- [?] **Committed pixels for the fusion gates** (D196, D209): once kin reads pixels, a replayable transcript must hold its
+  renders and decodes (a 300-dpi RGB page is roughly 0.3-1 MB as kin's PNG), and the fusion corpus adds colour scans.
+  Planned budget: the corpus additions ≤ 12 MB, `test/fusion/` ≤ 25 MB (first pages only where needed). Acceptable in the
+  repository as plain files, or should these be LFS or a fetched, hash-pinned archive like `corpus/`? Does not block wave 1.
+- [?] **Provisional seal text** (D205): P7.7 emits `seal` nodes with raw OCR text (`low-conf`) before P8.2's unwarp and
+  name/date extraction. May a crawler-facing Model carry that provisional text, or should P7.7 keep it in the ledger until
+  P8.2?
 
 ## Parking lot
 
